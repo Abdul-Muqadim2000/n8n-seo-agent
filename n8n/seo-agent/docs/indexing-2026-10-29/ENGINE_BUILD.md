@@ -227,3 +227,63 @@ contract changed (the e2e helper now drives one website per execution, Search An
    `inspected` 0, figures from the last check, the note says why).
 5. `pages_json` positions (`before_pos`, `after_pos`) may be `null` = no data.
 6. A Manual Run with no website is now the dispatch (it skips websites already checked today); give `{ domain }` for one website.
+
+## Fix wave 2 (2026-10-29)
+
+Branch `ix/engine` at the integration head `3b0a8cab`. The engine findings of REVIEW_2.md (N1-N7, N9-N13) and the engine half of its
+"partly" rows (E10, X2, X8, X17). Nothing deployed, no paid API, nothing pushed. Among the generated workflows only
+`workflows/SEO_Agent_Index_Coverage.json` changes (156 nodes, was 135); the catch-up did not need to change.
+
+**How it was tested.** Docker did not answer on this machine (another session's containers), so the whole harness ran with the host's
+Node 22 (`~/.local/node-v22.11.0-darwin-arm64/bin/node`) in a copy of `n8n/seo-agent`: `cd <copy>/harness && CODE_DIR=<copy>/harness/code_v4
+OUT_DIR=<copy>/harness/out node scenarios_v5.js`. Every scenario ran there (none needs an n8n-only module). Integration head on the same
+host Node: **13788 passed, 0 failed**. After: see the last line of this section. New `harness/scenarios_index_fix2.js` (IXW1-IXW14): a
+website is run DAY AFTER DAY through the generated Code nodes with a pinned clock, the rows each day writes are applied as the Data Table
+nodes would (upsert on `site_id + url` over every matching row, delete by url, history re-pointed) and the next day starts from them. Run
+alone against the integration head's `code_v4` (`CODE_DIR=<head>/harness/code_v4 node scenarios_index_fix2.js`) it gives **12 passed,
+34 failed**: every scenario fails at least one check except IXW11 (N11, a control: no code change). Updated: IX8 (the summary keys, N12),
+IX9 (the second run of the day is an on-demand run: a chain part now skips a site done today, N9), IXF4 / IX e2e (the upsert's answer is
+mocked, N1), IXF6 (9 fetch nodes), IXF12 (prune entries carry `why`); the two helpers run Page First Reads.
+
+### Per finding
+| id | status | how | harness |
+|---|---|---|---|
+| N1 | fixed | The redirect's final URL wins: a row moved by a same-site slash / case / www redirect (our read's `moved_to`, or Google's "Page with redirect" to the same key) gets the source `final`, and `merge` keeps a `final` row's address while the sitemap lists the other form (the sitemap form maps onto it; no flip-flop). A move clears the reading of the redirecting form (no prior row: state `unknown`, no `inspect_at`, so it is planned as never inspected; a prior row keeps its own reading and gets `next_check_at` = now). Deletes are the NET moves (stored url -> url now; a row moved by the merge and back by the redirect did not move) and never an address that is a row of this run; `Index Delete Rows` and `Index History Moves` act only when the new row is in `Save Index Pages`' answer. | IXW1 (6- and 5-day runs, failed save) |
+| N2 | fixed | `next_check_at` is recomputed only after a Google reading (an inspection, or the Site Tracker's reused one), a failed inspection, or a move. A day with only our own read never moves it; a fix newly seen only brings it forward. Site-fix pages read daily, `fix_seen_at` pages and `links` pages are inspected on their schedule again, so `checks` grows and `needs_person` trips. | IXW2 (90 / 40 / 70 days) |
+| N3 | fixed | `IX.fixState`: when a Google reading of the SAME cause has `last_crawl` after `fix_seen_at`, the fix expired: `fix_seen_at` cleared, `fix_failed_at` = that crawl, the step is `site_fix` again with the note "Google read this page again on <date>, after the change we saw on your site, and still sees the same problem. It may only be shown to Google's crawler (by a plugin, a CDN or a server rule). ..." No new `fix_seen_at` from the same fixed read while `fix_failed_at` is set; our read seeing the problem again (or Google's reason changing, or the page indexed) clears it, and a later fix is seen again. The re-checks count toward `needs_person`. | IXW3 (15 days) |
+| N4 | fixed (engine side) | THE SHARED RULE, enforced in `Index Diagnose`: `fix_seen_at` non-empty = "fixed on your site, waiting for Google" = action `wait`, whatever the order of `fix_seen_at` and `inspect_at` (a page inspected in the same run or later keeps it while Google's crawl is older); the engine alone sets and clears it; cleared when Google reports the cause gone / the page indexed (never on an indexed row) or per N3. The app must read it the same way (`action wait && fix_seen_at` = pending, no `fix > inspected` test). | IXW4, IXW14 |
+| N5 | fixed | Done today = a finished `seo_index_runs` row today, or two runs of the day that never finished (their reservations; the site waits for tomorrow). A site whose only row is a crashed run's reservation is taken again, last. The day's WATCH: after every dispatch (05:15, the catch-up, a Manual Run with no site, a watch) `Settle Run Ledger (Index)` -> `Index Watch Plan` -> `Wait (Index Watch)` (50 min; the waiting execution holds no guard slot and n8n keeps it across a restart) -> `Start Index Watch` (this workflow, `ix_watch: { date, n }`). The watch dispatch restarts the chain for the sites not done today; while a chain still runs it is refused by the guard and `Retry Index Part` starts it again 30 minutes later (a refused 05:15 dispatch the same way, instead of losing the day). A watch of another day does nothing; at most 30 a day; each watch starts the list one place further, so a site that always crashes before its reservation cannot hold the others. `Dispatch Start`'s comment now says this. Why 50 minutes: if n8n counted a wait in the 3,600 s execution limit, the dispatch still ends inside it. | IXW5 |
+| N6 / X8 | fixed | New column `ask_google_at` (when a page was last newly marked, kept after the mark ends). At most 5 pages carry the mark at once and at most 5 are NEWLY marked per site in any 7 days (rolling); a marked page keeps its mark while it qualifies. The Monday reselect is gone. | IXW6 |
+| N7 / E10 / X2 | fixed | Sitemaps: 7 rounds; a round reads a bounded batch (`IX.sitemapBatch`: 2 while nothing is known, then the addresses left under the cap divided by what a sitemap held so far, at most 10), nothing once 5,000 addresses are read; round 1 reads home, robots.txt and 2 roots and queues the other roots; unread items carry over. An index of 49 children of 6,000 addresses now reads 2 children (was 49 at once). Every sitemap and page fetch answers as a FILE (`responseFormat: file`, property `data`; production keeps binaries on disk, `N8N_DEFAULT_BINARY_DATA_MODE=filesystem`), so no body is in the run's saved data; `Sitemap Read n` and the new `Page First Reads` (after `Fetch Page (Index)`) read at most 8 MB / 3 MB of each with `this.helpers.getBinaryDataBuffer` and pass on only what they found; `Page Signals` reads the redirect hops' files the same way. A sitemap longer than 8 MB is read in part and the tree marked capped. | IXW7 |
+| N9 | fixed | A chain part whose site is done today (a finished run row) does nothing ("already checked today") and the chain goes on. | IXW9 |
+| N10 | fixed | `merge` keeps the NEWEST stored row of an address (`updated_at` / `inspect_at` / `fetch_at`) and prunes an older row on another form of the address by its exact url (`why: duplicate`); two rows with the very same url are never deleted (a delete by url would take both; the upsert writes both). | IXW10 |
+| N11 | not changed (documented) | The engine cannot resolve or pin DNS: Code nodes run in the external task runner with no built-in modules allowed (`NODE_FUNCTION_ALLOW_BUILTIN` is not set in `deploy/gcp/compose.prod.yml`, so `require('dns')` fails), and the HTTP Request node has no option that refuses private addresses. What holds: only the site's own registrable domain is fetched, every URL is rebuilt from a strict parse (no userinfo, no backslash, no IP literal in any form, no `localhost` / `.local` / `.internal` / `.arpa`, ports 80 / 443 only), no fetch follows a redirect, and the domain is verified by its owner in the app. Residual risk accepted: a verified domain whose DNS points at an internal address is fetched on 80 / 443 (titles and canonicals stored). The real fix is outside the engine: an egress rule on the VM that denies RFC 1918, loopback and link-local (169.254.0.0/16, the metadata server) to the n8n and runner containers; or a DNS-over-HTTPS lookup (one HTTP node) before the fetches, which catches a static internal record but not rebinding. | IXW11 (control) |
+| N12 | fixed | The callback of a run that could not read the website carries `summary.failed: true`, `checked: false`, `note` ("We could not check this website today: ... The figures are from the last check.") and `figures_from: 'last_check'` (a checked run: `failed: false`, `checked: true`, the run's note, `figures_from: 'today'`). The renderer warning is the app's (N-app-6). | IXW12, IX8 |
+| N13 | fixed | Our own reader (`IX.xRobotsNoindex`, `IX.metaNoindex`; the shared `PW.signals` is untouched): an X-Robots-Tag rule is noindex only with no crawler named or named `googlebot` (`bingbot: noindex` is not; `max-snippet:-1, noindex` and `unavailable_after: ..., noindex` are); a `robots` or `googlebot` meta tag. | IXW13 (incl. a 3-day run) |
+| X17 | engine side done | IXW14 writes `index_coverage_contract_rows.json` (OUT_DIR) from the real nodes: a page fixed on the site and inspected in the same run (`inspect_at >= fix_seen_at`), a fix Google did not take (`fix_failed_at`), an "ask Google" page with `ask_google_at`, a `redirect_error` row and a reservation run row. A copy is `docs/indexing-2026-10-29/contract_rows_wave2.json` for the app's fixture. | IXW14 |
+
+### Contract changes for the app (all additive)
+1. **THE SHARED RULE**: `fix_seen_at` non-empty = "Fixed on your site, waiting for Google" (action `wait`), regardless of `inspect_at`. Only the
+   engine sets and clears it.
+2. New `seo_index_pages` columns (`sync_tables.py` adds them on deploy): `fix_failed_at` (ISO of Google's crawl after the fix that still
+   saw the cause; the row is `site_fix` and its note says so) and `ask_google_at` (when the page was last newly marked).
+3. `sources` may contain `final` (the row lives where a listed form redirects to).
+4. Callback `summary` gains `failed`, `checked`, `note`, `figures_from` ('today' | 'last_check').
+5. More executions of `SEOagentIndexCv1` per day (the watch: at most 30, usually 1-3, mode `integrated`). The app's missed-run count
+   (N-app-5) should be measured from `seo_index_runs`, not from the execution list.
+6. A run row whose `sitemaps_json.reservation` is true and is the only row of its site today means that run did not finish; the site is
+   retried by the watch.
+
+### Deploy notes (owner, not done here)
+`deploy_engine.py --apply` runs `sync_tables.py` first (the two new columns). The fetch nodes now answer as files: the production
+instance already keeps binaries on disk (`N8N_DEFAULT_BINARY_DATA_MODE: filesystem`); n8n prunes them with the executions. First run
+small, as before (Manual Run `{ "domain": "techand.ai", "cap": 20 }`), then read one dispatch's watch execution (it waits 50 minutes, then
+starts `ix_watch`).
+
+### What could not be tested offline
+The HTTP node's file answer under `fullResponse` + `neverError` (read from n8n's HttpRequestV3 source: `statusCode` / `headers` in the JSON,
+the body in binary `data`; the Code nodes also accept a text body), the Wait node with an expression amount, and whether n8n counts a
+waiting execution's wait in `executionTimeout` (the 50-minute wait is chosen so it does not matter).
+
+**Result**: full harness on the host Node, **13844 passed, 0 failed** (integration head 13788; +56: IXW1-IXW14 with 46 checks, and the
+updated IX / IXF checks). Two builds of the same sources are byte-identical (the rebuild after the last source change left no diff).
