@@ -934,7 +934,9 @@ that fails answers `status: 'unreadable'` with a sentence, never an error, and n
   `inspect_at` and `fix_seen_at`; each cause is read as its `site_fix` and `wait` rows only; the engine's reading that decided a step is kept
   on the row, so a late or failed index read never sends a step back to "to do"; a step with more pages than the 10 our check opens is
   never done by it ("the first 10 of N are fixed", 409 `site_partial` on a click); robots.txt we could not read makes the sitemap read
-  partial; robots.txt or sitemaps that redirect to another host are not trusted.
+  partial; robots.txt or sitemaps that redirect to another host are not trusted. Fix wave 3: a step whose pages Google read again after a fix
+  we saw and still sees with the problem (engine `fix_failed_at`) carries `googleStillSees` in its payload, stays to do (warning), and is
+  never closed by the own check (a click that finds it fixed answers 409 `google_still_sees`, the daily check records nothing).
 - Recommendations `ix:<action>:<cause>`: a site fix while its step is to do (not when an audit finding already asks for the same fix, matched on
   the finding's key: `findingAsksSameFix`), `ix:site_fix:sitemap`, `ix:ask_google` (the pages to ask Google about, with the guide
   `index-request-indexing`; never automated), links
