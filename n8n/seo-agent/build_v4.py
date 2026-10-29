@@ -864,7 +864,20 @@ patch('Merge Keyword Data', "const prev = $('Parse Analysis').first().json;\ncon
 patch('Merge Keyword Data', "    competitors_summary,\n    keyword_data\n", "    competitors_summary,\n    keyword_data,\n    site_authority\n")
 set_prompt('Verdict Agent', 'verdict.txt')
 sv = get_schema('Parser — Verdict'); sv['properties'].update({'what_must_change': ARR, 'expected_monthly_visits_top3': {'type': 'number'}, 'time_to_rank_months': {'type': 'number'}}); set_schema('Parser — Verdict', sv)
-patch('Parse Verdict', "    secondary_keywords: verdict.secondary_keywords || []\n  }", "    secondary_keywords: verdict.secondary_keywords || [],\n    verdict_changes: verdict.what_must_change || [],\n    expected_visits_top3: verdict.expected_monthly_visits_top3 ?? null,\n    time_to_rank_months: verdict.time_to_rank_months ?? null\n  }")
+# ---- 1b-PV (2026-10-29, page-quality programme pre-Wave-0 step 1; REVIEW_CODE H5): *Parse Verdict* is built from ONE file ----
+# It was the v3 node changed by 19 anchored patch() calls and 4 setcode() calls spread over this file (sections 1, 35, 39, 56, 77, 102,
+# 130, 131, 145), so two agents patching it in parallel broke each other on merge. Its whole code now lives in v5/code/Parse_Verdict.js
+# (the final text those patches produced, extracted byte for byte); edit that file directly, never add a patch('Parse Verdict', ...).
+# The shared kits it needs are named by a marker each and inlined here in ONE pass, so a marker inside a kit is never expanded.
+PV_KITS = {'EXCLUSIONS': 'code/_exclusions.js', 'SITE_MODEL': 'code/_site_model.js', 'OWN_COVER': 'code/_own_cover.js',
+           'REACH': 'code/_reach.js', 'KW_INPUTS': 'code/_kw_inputs.js', 'PAGE_TYPE': 'code/_page_type.js',
+           'PAGE_CLAIMS': 'code/_page_claims.js', 'VERDICT_OWN': 'code/_verdict_own.js', 'REMEASURE': 'code/_remeasure.js'}
+def pv_source():
+    src = _rd0('code/Parse_Verdict.js')
+    for _k in PV_KITS:
+        assert src.count('/*__' + _k + '__*/') == 1, 'Parse_Verdict.js: marker /*__' + _k + '__*/ must appear exactly once'
+    return re.sub(r'/\*__([A-Z_]+)__\*/', lambda m: _rd0(PV_KITS[m.group(1)]).rstrip('\n') if m.group(1) in PV_KITS else m.group(0), src)
+setcode('Parse Verdict', pv_source())
 set_prompt('Strategy Brief', 'strategy_brief.txt')
 sb = get_schema('Parser — Strategy Brief')
 OBJ = lambda props: {'type': 'array', 'items': {'type': 'object', 'properties': props}}
@@ -2771,10 +2784,7 @@ log('Site description (2026-10-11, FIX_PLAN D22): the homepage AND up to 5 of it
 #          vendor-neutral comparison, cost and compliance sections") travels on as page_notes and reaches the brief.
 # =============================================================================
 # 5: the verdict's free-text page type -> one fixed option + page_notes
-patch('Parse Verdict', "const allowed = ['GO', 'GO_WITH_CHANGES', 'AVOID'];",
-      PAGE_TYPE_SRC + "\n// 2026-10-12 (FIX_PLAN D10): the verdict answers in free text; the fixed option decides the length band, the schema and\n// meta.json, and the sentence itself travels on as page_notes so the brief still hears what the verdict asked for.\nconst allowed = ['GO', 'GO_WITH_CHANGES', 'AVOID'];")
-patch('Parse Verdict', "    recommended_page: verdict.recommended_page || prev.page_type,",
-      "    recommended_page: PT.of(verdict.recommended_page || prev.page_type, prev.page_type),\n    page_notes: PT.notes(verdict.recommended_page, PT.of(verdict.recommended_page || prev.page_type, prev.page_type)),")
+# (Parse Verdict's part of this fix is in v5/code/Parse_Verdict.js since 2026-10-29: edit that file, see section 1b-PV near line 867)
 assert 'const PT = (() =>' in code('Parse Verdict') and 'PT.notes(' in code('Parse Verdict')
 # 3 + 2: the brief's length and angle are held to what the data supports
 patch('Parse Brief', "// Word count check\nconst totalWords = (brief.outline || []).reduce((s, sec) => s + (Number(sec.target_words) || 0), 0);",
@@ -3229,9 +3239,7 @@ assert 'ownUrl(p.url)' in code('Blog Package') and 'ownUrlQA(p.url)' in code('Co
 # P2-4: the comment sits at the end of the statement, so the .map() runs
 assert '.map(b => ({ keyword: b.keyword, started_at:' in rd('code/Site_Plan.js'), 'Site Plan: pending_publish has no days (P2-4)'
 # P2-5: the verdict improves a page the site already has
-patch('Parse Verdict', "const allowed = ['GO', 'GO_WITH_CHANGES', 'AVOID'];\nif (!allowed.includes(verdict.verdict)) verdict.verdict = 'GO_WITH_CHANGES';",
-      "const allowed = ['GO', 'GO_WITH_CHANGES', 'AVOID'];\nif (!allowed.includes(verdict.verdict)) verdict.verdict = 'GO_WITH_CHANGES';\n\n" + rd('code/_verdict_existing.js').rstrip('\n'))
-patch('Parse Verdict', "    verdict_changes: verdict.what_must_change || [],", "    verdict_changes,\n    existing_page_action,")
+# (Parse Verdict's part of this fix is in v5/code/Parse_Verdict.js since 2026-10-29: edit that file, see section 1b-PV near line 867)
 assert 'existing_page_action' in code('Parse Verdict') and 'NEW_URL_RE' in code('Parse Verdict'), 'Parse Verdict: the existing page is not enforced (P2-5)'
 assert 'SM.matchPage' in code('Client Page Requests') and 'inventoryPage' in code('Collect Client Pages'), 'the verdict path still ignores the page inventory (P2-5)'
 assert 'THE SITE ALREADY HAS A PAGE FOR THIS SEARCH' in nodes['Verdict Agent']['parameters']['text'] and 'never recommend a new page' in nodes['Verdict Agent']['parameters']['text'].lower(), 'verdict.txt does not forbid a second page (P2-5)'
@@ -5454,38 +5462,7 @@ patch('Merge Keyword Data', """    keyword_data,
     site_authority""")
 
 # ---------- C. the refusal: no score on evidence nobody could read ----------
-patch('Parse Verdict', "const EXP = (prev.existing_page && prev.existing_page.url) ? prev.existing_page : null;",
-"""// ---- R18 (2026-10-14, FIX_PLAN §3.12): a feasibility score computed on a results page nobody could read ----
-// Execution 549: both SERP calls answered 40101 inside an HTTP 200, were billed, ran once — and the run still said
-// "winnable, GO_WITH_CHANGES 68" and wrote a page. The retry is wired above; when it fails too, the competition was never seen,
-// so there is no verdict and no number — only what was tried, and the suggestion to run the check again.
-const EV56 = (() => {
-  const sf = prev.serp_features || {}; const ev = prev.serp_evidence || null; const kd = prev.keyword_data_evidence || null;
-  const out = !!(sf.unavailable || (ev && ev.unavailable));
-  const why = String((ev && ev.error) || sf.error || 'no answer from the search data provider').slice(0, 160);
-  const again = (ev && ev.retried) ? ' The search was sent again once and failed again.' : '';
-  return {
-    withheld: out,
-    evidence: { serp: out ? 'unavailable' : 'read', error: out ? why : '', asked: ev ? ev.asked : 1, checked: ev ? ev.checked : (out ? 0 : 1),
-      retried: ev ? ev.retried : 0, keyword_data: (kd && kd.unavailable) ? 'unavailable' : 'read' },
-    reason: out ? 'No score is given for this keyword: the live Google results could not be read (' + why + ').' + again
-      + ' Nobody has seen the pages that rank, the featured snippet or the AI Overview, so any number here would be invented. Run the check again.' : ''
-  };
-})();
-const EXP = (prev.existing_page && prev.existing_page.url) ? prev.existing_page : null;""")
-patch('Parse Verdict', """    verdict: verdict.verdict,
-    verdict_score: verdict.score ?? null,
-    verdict_reasons: verdict.reasons || [],""",
-"""    verdict: EV56.withheld ? 'NOT_CHECKED' : verdict.verdict,
-    verdict_score: EV56.withheld ? null : (verdict.score ?? null),
-    verdict_evidence: EV56.evidence,
-    score_withheld: EV56.withheld,
-    score_withheld_reason: EV56.reason,
-    verdict_reasons: EV56.withheld ? [EV56.reason, ...(verdict.reasons || [])] : (verdict.reasons || []),""")
-patch('Parse Verdict', """    expected_visits_top3: verdict.expected_monthly_visits_top3 ?? null,
-    time_to_rank_months: verdict.time_to_rank_months ?? null""",
-"""    expected_visits_top3: EV56.withheld ? null : (verdict.expected_monthly_visits_top3 ?? null),
-    time_to_rank_months: EV56.withheld ? null : (verdict.time_to_rank_months ?? null)""")
+# (Parse Verdict's part of this fix is in v5/code/Parse_Verdict.js since 2026-10-29: edit that file, see section 1b-PV near line 867)
 # the keyword report and the callback say "not scored", never "N/A" beside a verdict that was never formed
 patch('Build Word File', "const verdictLabel = { GO: 'GO — Target This Keyword', GO_WITH_CHANGES: 'GO, WITH CHANGES', AVOID: 'AVOID' }[d.verdict] || esc(d.verdict);",
       "const verdictLabel = { GO: 'GO — Target This Keyword', GO_WITH_CHANGES: 'GO, WITH CHANGES', AVOID: 'AVOID', NOT_CHECKED: 'NOT CHECKED — the live Google results could not be read' }[d.verdict] || esc(d.verdict);")
@@ -8092,53 +8069,8 @@ assert 'KWI.CLICK_LOSS.ai_overview.source' in code('Build Keyword Strategy'), 'B
 # ---------- A. the verdict measures the keyword against this site, on this topic ----------
 # the two shared kits the verdict now needs: the reach model (difficulty for this site, plan, months, chance) and the discovery
 # inputs (the click-loss model behind a traffic figure). One copy each, as everywhere else.
-patch('Parse Verdict', "const prev = $('Merge Keyword Data').first().json;",
-      REACH_SRC_77 + '\n' + KW_INPUTS_SRC + "\nconst prev = $('Merge Keyword Data').first().json;")
-patch('Parse Verdict', "const EXP = (prev.existing_page && prev.existing_page.url) ? prev.existing_page : null;", """// ---- B1-1 (2026-10-15, benchmark area 1): the two numbers the keyword report puts in front of a customer ----
-// They used to be whatever the Verdict Agent typed into its JSON. The same run computes both properly: `_reach.js` turns a keyword
-// difficulty and this site's reach into a plan with a month RANGE and an uncalibrated chance band against a published base rate, and
-// `KWI.calibrate` turns a monthly volume into visits through the measured click loss of the results page that was actually read.
-const KD77 = (prev.keyword_data || {}).keyword_difficulty ?? null;
-const VOL77 = (prev.keyword_data || {}).search_volume ?? null;
-const SF77 = prev.serp_features || {};
-const SERP_READ77 = SF77.unavailable !== true;
-let CACHE77 = []; try { CACHE77 = $('Load Site Cache').all().map(i => i.json); } catch (e) { CACHE77 = []; }
-// the site's reach: the stored measurement (30 days, same market) or, failing that, the size tier of the authority this run already
-// read. Never a fresh paid pull: a keyword report does not buy the ranked-keywords list.
-const RI77 = reachCached(CACHE77, prev.domain, prev.location_code) || { ...reachFrom(null, prev.site_authority || null), ranked: null, cached: false };
-const TA77 = reachTopic(RI77.ranked === undefined ? null : RI77.ranked, prev.keyword, RI77.reach, { domain: prev.domain || 'your site',
-  reason_missing: RI77.cached ? 'the reach of your site was measured on ' + String(RI77.cached_at || '').slice(0, 10) + ' across all your keywords, not this topic, so this report cannot say how strong you are on this topic in particular'
-    : 'a keyword report does not buy the list of keywords your site ranks for (the keyword research and the ladder do)' });
-const DIFF77 = prev.domain ? difficultyForYou(KD77, TA77.reach, {}) : null;
-const PLAN77 = DIFF77 ? reachPlan(DIFF77, reachStrong(RI77, null), reachMeasured(TA77 && TA77.used ? { used: true } : RI77, null)) : null;   // R49: no chance band on a reach no measured ranking supports
-const FORYOU77 = !DIFF77 ? null : { difficulty_for_you: DIFF77, plan_type: PLAN77.plan_type, months: PLAN77.months, months_range: PLAN77.months_range,
-  stretch: PLAN77.stretch, chance: PLAN77.chance, reach_used: TA77.reach, reach_basis: TA77.used ? 'topic' : 'site',
-  site_reach: TA77.site_reach, topic_reach: TA77.topic_reach, kd_known: KD77 != null,
-  label: reachLabel(DIFF77, PLAN77.plan_type === 'none' ? null : PLAN77) + (TA77.used ? ' \\u00b7 measured on this topic' : ''),
-  note: TA77.note + (KD77 == null ? ' This keyword has no measured difficulty either, so it is counted as that reach + ' + REACH_CFG.unknown_kd + '.' : '') };
-const TTR77 = (!PLAN77 || PLAN77.plan_type === 'none') ? null : { months: PLAN77.months, months_range: PLAN77.months_range, basis: 'modelled',
-  chance: PLAN77.chance, note: reachChanceText(PLAN77), base_rate: REACH_BASE_RATE, model_months: verdict.time_to_rank_months ?? null };
-// the visits a page in the top three would take. A results page nobody could read yields NO estimate: what it takes in clicks before
-// anyone reaches a link is exactly what was not seen.
-const VIS77 = (() => {
-  const model = verdict.expected_monthly_visits_top3 ?? null;
-  if (!SERP_READ77) return { visits: null, basis: 'unknown', basis_text: 'not estimated: the live results page could not be read, so the clicks it takes before anyone reaches a link are unknown',
-    note: 'No visit estimate: the live Google results could not be read (' + String(SF77.error || 'no answer').slice(0, 120) + ').', model_estimate: model, loss_applied: '' };
-  const c = KWI.calibrate({ volume: VOL77, serp_types: SF77.features_present || [] }, {});
-  const basis_text = c.traffic_basis === 'calibrated' ? 'calibrated with your own Search Console data'
-    : c.traffic_basis === 'modelled' ? 'modelled from the provider\\'s monthly volume, after this results page\\'s click loss'
-    : 'not estimated: no monthly search volume was measured for this keyword';
-  return { visits: c.traffic_potential, basis: c.traffic_basis, basis_text, note: c.traffic_note, model_estimate: model, loss_applied: KWI.lossText(SF77.features_present || []) };
-})();
-const EXP = (prev.existing_page && prev.existing_page.url) ? prev.existing_page : null;""")
-patch('Parse Verdict', """    expected_visits_top3: EV56.withheld ? null : (verdict.expected_monthly_visits_top3 ?? null),
-    time_to_rank_months: EV56.withheld ? null : (verdict.time_to_rank_months ?? null)""",
-"""    expected_visits_top3: EV56.withheld ? null : (VIS77.visits ?? null),
-    expected_visits: EV56.withheld ? null : VIS77,
-    time_to_rank_months: EV56.withheld ? null : (verdict.time_to_rank_months ?? null),   // kept for the ladder and older readers: it is the MODEL's own number and every surface now says so
-    time_to_rank: EV56.withheld ? null : TTR77,
-    for_you: EV56.withheld ? null : FORYOU77,
-    reach_info: FORYOU77 ? { reach: RI77.reach, method: RI77.method, cached: !!RI77.cached, cached_at: RI77.cached_at || null, evidence_kept: !!RI77.ranked } : null""")
+# (Parse Verdict's part of this fix is in v5/code/Parse_Verdict.js since 2026-10-29: edit that file, see section 1b-PV near line 867)
+# (Parse Verdict's part of this fix is in v5/code/Parse_Verdict.js since 2026-10-29: edit that file, see section 1b-PV near line 867)
 
 # ---------- B. the delivered document says which figure is which ----------
 patch('Build Word File', """    ['Expected visits/month at #1-3', d.expected_visits_top3 != null ? num(d.expected_visits_top3) : (d.score_withheld ? 'not estimated' : 'N/A')],
@@ -9450,25 +9382,7 @@ log('The verdict reads the whole page before it says what the page lacks (2026-1
 #        Federal Tax Authority administers the tax. The wording came from competitors' pages (their snippets say "FTA-accredited"), so the
 #        prompts say it (verdict.txt, competitor_analyzer.txt, copywriter.txt) and the kit rewrites it in the verdict's reasons, risks and
 #        changes and in the analyzer's output.
-_pv = code('Parse Verdict')
-_a = "verdict.reasons = (Array.isArray(verdict.reasons) ? verdict.reasons : []).map(noFaqSchema);"
-assert _pv.count(_a) == 1
-patch('Parse Verdict', _a, _a + "\n" + _PC102 + """
-// ---- R38 / R48 (2026-10-16): what the verdict says about the client's own page is checked against what was measured on that page ----
-// Exec 608: reasons[3] said "Its visible text has no mandate dates, ... no tables, ... no author or date" about a page that has all three.
-// The Verdict Agent now reads the page's facts; this removes any sentence of its reasons / risks that the digest still contradicts (or that
-// the digest says could not be checked) and says so in `page_claims_dropped`. R48: "FTA-accredited" -> the Ministry of Finance's framework.
-const PCD = prev.existing_page_digest || null;
-const page_claims_dropped = [];
-const pcClean = (arr) => (Array.isArray(arr) ? arr : []).map(x => { const r = PC.filterText(x, PCD, {}); r.dropped.forEach(d => page_claims_dropped.push(d)); return PC.fta(r.text); }).filter(Boolean);
-verdict.risks = pcClean(verdict.risks);
-verdict.reasons = pcClean(verdict.reasons);""")
-_b = "let verdict_changes = Array.isArray(verdict.what_must_change) ? verdict.what_must_change.map(x => noFaqSchema(x)).filter(Boolean) : [];"
-assert code('Parse Verdict').count(_b) == 1
-patch('Parse Verdict', _b, "let verdict_changes = Array.isArray(verdict.what_must_change) ? verdict.what_must_change.map(x => PC.fta(noFaqSchema(x))).filter(Boolean) : [];")
-_c = "    verdict_changes,\n    existing_page_action,"
-assert code('Parse Verdict').count(_c) == 1
-patch('Parse Verdict', _c, "    verdict_changes,\n    page_claims_dropped,\n    existing_page_action,")
+# (Parse Verdict's part of this fix is in v5/code/Parse_Verdict.js since 2026-10-29: edit that file, see section 1b-PV near line 867)
 for _a103 in ['const PCD = prev.existing_page_digest', 'PC.filterText(x, PCD', 'PC.fta(noFaqSchema(x))', 'page_claims_dropped,']:
     assert _a103 in code('Parse Verdict'), 'R38 / R48: Parse Verdict is missing ' + _a103
 for _f in ('verdict.txt', 'competitor_analyzer.txt', 'copywriter.txt'):
@@ -11387,13 +11301,7 @@ for _a130, _b130 in [('Prepare Keyword Run', 'Load Ladders (Run)'), ('Load Ladde
 assert 'const OWN = (() => {' in code('Own Coverage (Run)') and 'const SM = (() => {' in code('Own Coverage (Run)') and 'fitStored(r,' in code('Own Coverage (Run)'), 'A-5: Own Coverage (Run) is missing a kit or the gate'
 assert 'own_coverage_text' in nodes['Verdict Agent']['parameters']['text'], 'A-5: the verdict prompt does not read what the site already holds'
 # A-5 / A-6 / A-23: Parse Verdict checks the advice against it (secondary keywords, "build a page", sections, amounts already on the page)
-_pv130 = code('Parse Verdict')
-assert _pv130.count("    secondary_keywords: verdict.secondary_keywords || [],") == 1 and _pv130.count("\nreturn [{\n  json: {\n    ...prev,") == 1, 'A-5: Parse Verdict return moved'
-_pv130 = _pv130.replace("\nreturn [{\n  json: {\n    ...prev,", "\n" + _rd0('code/_verdict_own.js').rstrip('\n') + "\nreturn [{\n  json: {\n    ...prev,")
-_pv130 = _pv130.replace("    secondary_keywords: verdict.secondary_keywords || [],",
-    "    secondary_keywords: OWNV.secondary,\n    secondary_covered: OWNV.covered,   // A-5: the searches the site already holds elsewhere, kept off this page and named\n"
-    "    existing_related: OWNV.related, sections_covered: OWNV.sections, already_on_page: OWNV.already_on_page, keyword_covered: OWNV.keyword_covered, own_coverage_checked: OWNV.checked,")
-setcode('Parse Verdict', SITE_MODEL_SRC + '\n' + OWN_COVER_SRC + '\n' + _pv130)
+# (Parse Verdict's part of this fix is in v5/code/Parse_Verdict.js since 2026-10-29: edit that file, see section 1b-PV near line 867)
 assert 'let verdict_changes' in code('Parse Verdict') and 'OWNV.secondary' in code('Parse Verdict'), 'A-5: Parse Verdict did not take the own-coverage check'
 log('What the site already holds, read before any keyword advice (2026-10-17, F-A3): v5/code/_own_cover.js (OWN) answers whether a page, a keyword ladder or an unpublished draft already holds a search - A-25: discovery marks "erp system dubai" / "erp systems in uae" as the ladder "erp software uae"\'s searches in other words (Covered) and keeps a close variant or the same topic for another place in the plan with the ladder named in "Where to start", "Build first" and the tier table; the ladder rows are read back through the fit gate. A-5 / A-6 / A-23: the keyword path loads the ladders, their settings and the content log right after Prepare Keyword Run (Load Ladders / Load Ladder Settings / Load Drafts (Run) -> Own Coverage (Run), gated), the Verdict Agent reads what the site already has on the topic, and Parse Verdict (v5/code/_verdict_own.js) says first when the search itself is a ladder\'s or a draft\'s, names the live pages on the topic before any "build a page", takes the secondary keywords another page / ladder / draft holds off the page and names them, answers a section a rung covers with that rung and its page, and moves an amount the page already states out of the request')
 # <<< 130 (F-A3)
@@ -11414,12 +11322,7 @@ patch('Normalize Input', "   // R15: the URL the ladder planned for this page\n"
       "      score: (p2.ladder_measure.score === null || p2.ladder_measure.score === '' || !Number.isFinite(Number(p2.ladder_measure.score))) ? null : Number(p2.ladder_measure.score),\n"
       "      checked_at: String(p2.ladder_measure.checked_at || '').slice(0, 40), ai_overview: p2.ladder_measure.ai_overview === true,\n"
       "      features: Array.isArray(p2.ladder_measure.features) ? p2.ladder_measure.features.slice(0, 12).map(x => String(x).slice(0, 40)) : [] } : null,   // A-21: what the ladder run measured for this keyword\n")
-_pv131 = code('Parse Verdict')
-_ret131 = "\nreturn [{\n  json: {\n    ...prev,\n    verdict: EV56.withheld"
-assert _pv131.count(_ret131) == 1, 'A-21: the Parse Verdict return moved'
-assert _pv131.count("    verdict_evidence: EV56.evidence,\n") == 1, 'A-21: verdict_evidence line moved'
-setcode('Parse Verdict', _pv131.replace(_ret131, "\n" + rd('code/_remeasure.js').rstrip('\n') + "\n" + _ret131)
-        .replace("    verdict_evidence: EV56.evidence,\n", "    verdict_evidence: EV56.evidence,\n    ladder_remeasure,   // A-21\n"))
+# (Parse Verdict's part of this fix is in v5/code/Parse_Verdict.js since 2026-10-29: edit that file, see section 1b-PV near line 867)
 assert 'ladder_measure: measureOf(p)' in code('Spawn Page Runs') and 'ladder_remeasure' in code('Parse Verdict') and 'ladder_measure:' in code('Normalize Input'), 'A-21: the re-measure note is not wired'
 # A-9 / A-10 / A-11 / A-8 / A-12 in the generated nodes
 assert 'via: best.via' in code('Ladder Plan') or 'c.attach !== false' in code('Ladder Plan'), 'A-9: the ladder clusters compare only with the head'
@@ -11516,9 +11419,7 @@ assert 'CVG.namesBrand(s, subBest, subOpts)' in code('Content QA') and 'labels: 
 assert 'EXC.prune(brief.outline' in code('Parse Brief') and 'EXC.check(' in code('Content QA'), 'A-18: the exclusions do not reach the brief or the gate'
 # A-18: the verdict names what to skip, and Parse Verdict carries it on
 _sv130 = get_schema('Parser — Verdict'); _sv130['properties']['topics_to_skip'] = ARR; set_schema('Parser — Verdict', _sv130)
-setcode('Parse Verdict', EXCLUSIONS_SRC + '\n' + code('Parse Verdict'))
-patch('Parse Verdict', "    page_claims_dropped,\n    existing_page_action,",
-      "    page_claims_dropped,\n    verdict_exclusions: EXC.fromVerdict(verdict_changes, verdict.topics_to_skip),   // A-18: what this page must not cover\n    existing_page_action,")
+# (Parse Verdict's part of this fix is in v5/code/Parse_Verdict.js since 2026-10-29: edit that file, see section 1b-PV near line 867)
 for _p130 in ('Strategy Brief', 'Copywriter'):
     assert 'verdict_exclusions' in json.dumps(nodes[_p130]['parameters']), 'A-18: the %s prompt does not print the exclusions' % _p130
 # A-14: the outbound links, fetched on every QA round
@@ -11845,18 +11746,7 @@ patch('Analyze Competitor Pages', "  'OTHER SERP FEATURES: ' + (serp_features.fe
       "  SERP_LIGHT ? 'RESULTS READ: the top 10 only, on a lighter third request (the full request failed twice). The AI Overview was not requested: do not state or assume whether one appears, and do not describe results below position 10.' : ''\n"
       "].filter(Boolean).join('\\n');")
 # the verdict: how many times it was sent, and in plain words that an outage is not about the keyword
-patch('Parse Verdict', "const again = (ev && ev.retried) ? ' The search was sent again once and failed again.' : '';",
-      "const again = (ev && ev.retried) ? (Number(ev.attempts) > 2 ? ' The search was sent ' + ev.attempts + ' times (the last time as a lighter request) and failed every time.'"
-      " : ' The search was sent again once and failed again.') : '';   // F-SERP: up to three attempts")
-patch('Parse Verdict', "so any number here would be invented. Run the check again.' : ''",
-      "so any number here would be invented.' + (sf.retryable === false ? ' Run the check again.'"
-      " : ' This is a temporary problem with the search data provider, not with your keyword. Run the check again later.') : ''")
-patch('Parse Verdict', "retried: ev ? ev.retried : 0, keyword_data:",
-      "retried: ev ? ev.retried : 0, attempts: ev ? (Number(ev.attempts) || 1 + (Number(ev.retried) || 0)) : 1, read_light: !!sf.light_read, keyword_data:")
-patch('Parse Verdict', "  return { visits: c.traffic_potential, basis: c.traffic_basis, basis_text, note: c.traffic_note,",
-      "  return { visits: c.traffic_potential, basis: c.traffic_basis,\n"
-      "    basis_text: basis_text + ((SF77.ai_overview || {}).not_read ? ' (the AI Overview was not read on this attempt, so any clicks it takes are not counted)' : ''),   // F-SERP\n"
-      "    note: c.traffic_note,")
+# (Parse Verdict's part of this fix is in v5/code/Parse_Verdict.js since 2026-10-29: edit that file, see section 1b-PV near line 867)
 # the keyword report and the ladder report: "not read on this attempt", never "None"
 patch('Build Word File', "['AI Overview', esc(aioObserved([{ seen: aio.present == null ? null : !!aio.present, at: aio.seen_at || sf.checked_at }]).text.replace(/^./, c => c.toUpperCase()))",
       "['AI Overview', (aio.not_read ? esc('Not read on this attempt: the results page was read on a lighter third request that did not ask for it, so whether one appears is unknown')"
