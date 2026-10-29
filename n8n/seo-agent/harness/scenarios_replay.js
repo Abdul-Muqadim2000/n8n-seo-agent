@@ -95,7 +95,7 @@ module.exports = async (ctx) => {
     const rec = F.runs['Content QA'][2];
     const input = clone(rec.input); input[0].json = { ...input[0].json, ...pb, output: G.live_markdown, qa_round: 1 };
     const pf = clone(F.nodes['Page Fix']['2'].items); pf[0].json.output = G.live_markdown;
-    const g = await R.replay(F, 'Content QA', 2, { input, mocks: { 'Parse Brief': [pb], 'Page Fix': pf }, runIndex: 0 });
+    const g = await R.replay(F, 'Content QA', 2, { input, mocks: { 'Parse Brief': [pb], 'Page Fix': pf, 'Promise Candidates': null }, runIndex: 0 });   // W0-C: without this mock Content QA read 3299's own draft through Promise Candidates (PCJ), so the "guide" was 3299's page under the guide's keyword
     const s = await R.replay(F, 'Content QA', 2);
     const qg = g.first.content_qa || {}, qs = s.first.content_qa || {};
     before('949 guide content score / breakdown', { content_score: qg.content_score, breakdown: qg.score_breakdown, words: qg.main_content_words, not_ready_reasons: (qg.not_ready_reasons || []).length });

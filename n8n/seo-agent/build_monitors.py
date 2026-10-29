@@ -1147,7 +1147,8 @@ RR.write('SEO_Agent_Reply_Reader.json')
 _FIN_MAIN = {n['name']: n['parameters'].get('jsCode', '') for n in MAIN_WF['nodes'] if n['type'] == 'n8n-nodes-base.code'}
 assert _FIN_MAIN.get('Content QA') and _FIN_MAIN.get('Originality Check'), 'H3: the main workflow has no Content QA / Originality Check to reuse'
 assert "$('Parse Brief').first().json" in _FIN_MAIN['Content QA'], 'H3: Content QA no longer reads its context from Parse Brief - the finalize check would pass it nothing'
-_FIN_KITS = {'/*__PAGE_FIX__*/': rd('code/_page_fix.js').rstrip('\n'), '/*__FACT_ANSWERS__*/': rd('code/_fact_answers.js').rstrip('\n'), '/*__COST_CAL__*/': rd('code/_cost_cal.js').rstrip('\n')}
+_FIN_KITS = {'/*__PAGE_FIX__*/': rd('code/_page_fix.js').rstrip('\n'), '/*__FACT_ANSWERS__*/': rd('code/_fact_answers.js').rstrip('\n'), '/*__COST_CAL__*/': rd('code/_cost_cal.js').rstrip('\n'),
+             '/*__GRADE__*/': rd('code/_grade.js').rstrip('\n')}   # W0-C (2026-10-29): the grade kit, for Finalize Verdict's GR.cap / GR.deliver
 def _fin(f):
     s = rd('code/' + f)
     for k, v in _FIN_KITS.items(): s = s.replace(k, v)

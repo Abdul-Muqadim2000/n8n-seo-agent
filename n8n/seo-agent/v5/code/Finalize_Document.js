@@ -73,7 +73,7 @@ const label = S(del.label) || (status === 'not_ready' ? 'Not ready to publish' :
 const score = (body.grade || {}).score;
 const facts = [];
 if (label) facts.push('<span class="status status-' + esc(status || 'unknown') + '">' + esc(label) + '</span>');
-if (score != null && Number.isFinite(Number(score))) facts.push('<span>Grade ' + Math.round(Number(score)) + ' of 100</span>');
+if (score != null && Number.isFinite(Number(score))) facts.push('<span>Grade ' + esc(S((body.grade || {}).display) || String(Math.round(Number(score)))) + ' of 100</span>');   // W0-C: "95+" from 95, never 100
 const rows = [];
 if (title && title !== h1Text) rows.push(['Title in search results', title]);
 if (desc) rows.push(['Search description', desc]);
@@ -94,7 +94,7 @@ const inner = header + '\n<article>\n<h1>' + inline(h1Text) + '</h1>\n' + out.jo
 const css = 'body{font-family:Arial,Helvetica,sans-serif;font-size:11pt;line-height:1.55;color:#1d2433;margin:0}'
   + 'header.final{border:1px solid #d6dbe4;border-radius:6px;padding:10px 14px;margin:0 0 18px;background:#f5f7fa;font-size:9.5pt}'
   + '.kicker{margin:0 0 4px;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:#2f5bd3;font-size:8.5pt}'
-  + '.facts{margin:0 0 6px}.sep{margin:0 6px;color:#8a93a3}.status{font-weight:bold}.status-not_ready{color:#b42318}.status-ready{color:#067647}'
+  + '.facts{margin:0 0 6px}.sep{margin:0 6px;color:#8a93a3}.status{font-weight:bold}.status-not_ready{color:#b42318}.status-needs_work{color:#b54708}.status-ready{color:#067647}'
   + 'dl{margin:0}dt{font-weight:bold;margin-top:4px}dd{margin:0 0 2px}'
   + 'h1{font-size:20pt;line-height:1.25;margin:0 0 12px}h2{font-size:15pt;margin:20px 0 8px}h3{font-size:12.5pt;margin:16px 0 6px}h4{font-size:11pt;margin:14px 0 6px}'
   + 'p{margin:0 0 9px}ul,ol{margin:0 0 10px 22px;padding:0}li{margin:0 0 4px}a{color:#2f5bd3}'

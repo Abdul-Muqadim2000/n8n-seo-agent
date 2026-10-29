@@ -1,4 +1,5 @@
 /*__PAGE_FIX__*/
+/*__GRADE__*/
 /*__COST_CAL__*/
 // H3 (2026-10-28, page review): the answer of `POST /webhook/seo-page-finalize` (the app's FinalizeResult, app/shared/src/page-review.ts).
 // The final version went through the content gate (*Content QA* + *Originality Check*, the content run's own node code). This node reads its
@@ -100,17 +101,25 @@ if (decision) del.advisory.unshift({ code: 'duplicate_decision', text: decision.
   : 'You chose to publish this as a separate page from ' + (decision.pages[0] || 'the page your website has') + ': "' + decision.reason + '". Two pages for one search can compete with each other, so the grade keeps its limit for fit' });
 // W0-B: a page written before the length band was kept with it takes the length points its page run measured against the pages that rank
 // (Finalize Parse Brief `length_points`), never 15 of 15 for matching its own word count
+// W0-C (2026-10-29, page-quality PLAN Fix 3): on the grade kit's scale length carries no points (advice only), so the length points the
+// page run measured are no longer put back into the number; a grade from a check before the kit keeps the rule above
+const GD = qa.grade_detail || null;
 let score0 = qa.content_score == null ? null : Number(qa.content_score); let breakdown0 = qa.score_breakdown ? { ...qa.score_breakdown } : null;
-if (PR.length_from === 'first_check' && PR.length_points != null && breakdown0 && score0 != null && Number.isFinite(Number(breakdown0.length))) {
+if (!GD && PR.length_from === 'first_check' && PR.length_points != null && breakdown0 && score0 != null && Number.isFinite(Number(breakdown0.length))) {
   score0 = Math.max(0, Math.min(100, Math.round(score0 - Number(breakdown0.length) + Number(PR.length_points)))); breakdown0.length = Math.round(Number(PR.length_points)); }
-const grade = { score: score0, of: 100, breakdown: breakdown0,
-  basis: 'measured on this final version, after your answers and the last full check (structure, readability, specificity, plain language, length), '
+// W0-C: the grade of THIS version with the caps only this node knows: a blocker still open (at most 59), the page the website already has
+// (fit at most 30% while it is open, and after "this page differs" too: D2 keeps the limit), and the floors (a page with no blocker that is
+// under half its points in a part is "Needs work: <part>", never "Ready to publish")
+const grade = GR.cap({ score: score0, of: 100, breakdown: breakdown0,
+  basis: 'measured on this final version, after your answers and the last full check (' + (GD ? GR.basis : 'structure, readability, specificity, plain language, length') + '), '
     + (PR.length_from === 'page_run' ? 'against the length band, topic terms and sources of the page run'
-      : PR.length_from === 'first_check' ? 'with the length as the first check measured it against the pages that rank (the page run\'s research was not kept with this page)'
+      : PR.length_from === 'first_check' ? (GD ? 'with the length as the first check measured it against the pages that rank, as advice only (the page run\'s research was not kept with this page)' : 'with the length as the first check measured it against the pages that rank (the page run\'s research was not kept with this page)')
         : 'against the usual length for this kind of page (the page run\'s research was not kept with this page)'),
-  blocking: del.blocking.length, advice: del.advisory.length,
-  // D2: a page published beside the website's page for the same search keeps the fit limit; the grade kit (W0-C, GR.cap) applies it
-  ...(decision && decision.choice === 'differs' ? { fit_cap: { kept: true, why: 'published as a separate page beside ' + (decision.pages[0] || 'a page for the same search') + ', with your reason recorded' } } : {}) };
+  blocking: del.blocking.length, advice: del.advisory.length, ...(GD ? { notes: GD.notes || [] } : {}),
+  // D2: a page published beside the website's page for the same search keeps the fit limit (GR.cap applies it)
+  ...(decision && decision.choice === 'differs' ? { fit_cap: { kept: true, why: 'published as a separate page beside ' + (decision.pages[0] || 'a page for the same search') + ', with your reason recorded' } } : {}) },
+  del.blocking, { w0c: GD, decision });
+Object.assign(del, GR.deliver(del, grade));
 // the answer: the Markdown the caller sent, without the meta lines it did not send
 let out = md;
 if (!P.had_meta) { const lines = out.split('\n'); let i = 0; while (i < lines.length && (/^(Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary Keywords)\s*:/i.test(lines[i].trim()) || !lines[i].trim())) i++; out = lines.slice(i).join('\n'); }
@@ -128,7 +137,7 @@ const body = {
   decision, page_run: { received: !!PR.received, gating_missing: PR.gating_missing || [], grading_missing: PR.grading_missing || [], kept_open: carried.map(x => x.code), resolved },
   applied: (FM.applied || []).map(a => ({ id: a.id, how: a.how, section: S(a.section) })), sections_rewritten: FM.sections_rewritten || [], changes: changes.slice(0, 60),
   delivery_status: del.status,
-  delivery: { status: del.status, label: del.label, blocking: del.blocking, advisory: del.advisory, next_step: del.next_step, grade },
+  delivery: { status: del.status, label: del.label, blocking: del.blocking, advisory: del.advisory, next_step: del.next_step, grade, ...(del.needs_work ? { needs_work: del.needs_work } : {}) },
   client_questions, grade, cost, notes: (FM.notes || []).slice(0, 10), content_score: grade.score,
   basis: 'the content gate of a content run (Content QA + Originality Check, the same node code) over the final version, with your answers and the sentences you wrote counted as on file; no research, no new page',
   writes: 'none'

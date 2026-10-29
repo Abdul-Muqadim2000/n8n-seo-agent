@@ -3946,7 +3946,7 @@ await guard('content correctness', async () => {
   const qF = await qaRun(QA_FAQ);
   console.log('   G2 structure points -> without FAQ', QA.score_breakdown.structure, '| with FAQ', qF.content_qa.score_breakdown.structure);
   check('G2: the structure score is the same with and without an FAQ section (question headings are what counts), and no warning asks for FAQs',
-    QA.score_breakdown.structure === qF.content_qa.score_breakdown.structure && QA.score_breakdown.structure >= 22
+    QA.copy_breakdown.structure === qF.content_qa.copy_breakdown.structure && QA.copy_breakdown.structure >= 22 && QA.score_breakdown.structure === qF.content_qa.score_breakdown.structure
     && QA.question_headings >= 3 && QA.answered_questions >= 3
     && !QA.warnings.some(w => /complete FAQs/.test(w)) && !qF.content_qa.warnings.some(w => /complete FAQs/.test(w)), JSON.stringify({ a: QA.score_breakdown, b: qF.content_qa.score_breakdown, qh: QA.question_headings, w: QA.warnings }));
 
@@ -6686,7 +6686,7 @@ await guard('originality, produced images, coverage target', async () => {
     && CQ.coverage.measured_on === 'this page\'s own term list, on both the draft and that competitor page',
     JSON.stringify(CQ.coverage));
   check('G33: the 25 coverage points are scored against that target, and the warning names the subtopics the best page covers and this draft does not',
-    CQ.score_breakdown.coverage === Math.round(25 * Math.min(1, (CQ.coverage.pct / 100) / 0.8))
+    CQ.copy_breakdown.coverage === Math.round(25 * Math.min(1, (CQ.coverage.pct / 100) / 0.8))
     && CQ.coverage.subtopics_missing.includes('Who must comply in the first wave')
     && CQ.warnings.some(w => /^Subtopics the best competitor page covers and this draft does not: "Who must comply in the first wave"/.test(w))
     && (CQ.coverage.pct >= 80 || CQ.warnings.some(w => /^Topic coverage \d+% against a target of 80% \(cleartax\.ae covers 80%\)/.test(w))),
@@ -15781,7 +15781,7 @@ await guard('S119 R43 draft coverage and the benchmark on one measure', async ()
     && !(Q.warnings || []).some(w => /used 7 times/.test(w)), JSON.stringify({ below: C.below_brief, note: C.counts_note }));
   check('R43: the basis names the measure and both figures on it',
     /uses 20 of the 20 terms/.test(C.basis) && /vendasta\.com.*uses 18 of the 20/.test(C.basis) && /a term counts once it appears/.test(C.basis), C.basis);
-  check('R43: the content score\'s coverage points come from the same comparison (25 of 25 at 100% against 90%)', Q.score_breakdown.coverage === 25, JSON.stringify(Q.score_breakdown));
+  check('R43: the content score\'s coverage points come from the same comparison (25 of 25 at 100% against 90%)', Q.copy_breakdown.coverage === 25 && Q.score_breakdown.coverage === 15, JSON.stringify([Q.copy_breakdown, Q.score_breakdown]));
 
   // terms that really are absent still fail, named by the measure
   const DROP = ['budget', 'training', 'customer service', 'custom solution'];
@@ -17977,7 +17977,7 @@ await guard('S151 B3-4 the readability band is read off the pages that rank, nev
     && R.band.low <= R.band.median && R.band.high >= R.band.median && /pages that rank for this search/.test(R.basis || ''), JSON.stringify(R));
   check('B3-4: the band is the median Flesch of the pages read, 10 harder to 15 easier, lower edge inside 20-60',
     R.band && R.band.low === Math.min(60, Math.max(20, Math.round(R.band.median - 10))) && R.band.high === Math.max(R.band.low, Math.round(R.band.median + 15)), JSON.stringify(R.band));
-  const pts = (out.content_qa.score_breakdown || {}).readability;
+  const pts = (out.content_qa.copy_breakdown || {}).readability;   // W0-C: the band rule lives on in the copy check (old scale, 15 points); the grade scales it to 10
   check('B3-4: the 15 readability points follow the band (in band or plainer 15, up to 10 harder 10, else 4)',
     pts === (R.flesch >= R.band.low ? 15 : (R.flesch >= R.band.low - 10 ? 10 : 4)), JSON.stringify({ pts, flesch: R.flesch, band: R.band }));
   // the same draft, two results pages: the band moves with the topic (a constant band could not)
@@ -17985,9 +17985,9 @@ await guard('S151 B3-4 the readability band is read off the pages that rank, nev
   // like a specialist page, and that is the draft whose verdict a constant band could not move
   const medDraft = W3B_RA7.r616.draft_round2.replace(/\*\*Quick answer:\*\*/, w3bRepeat(W3B_HARD, 150) + '\n\n**Quick answer:**');
   const easy = (await w3bQA(null, medDraft, w3bPool(W3B_EASY))).content_qa, hard = (await w3bQA(null, medDraft, w3bPool(W3B_HARD))).content_qa;
-  console.log('   easy pool ->', JSON.stringify(easy.readability.band), easy.score_breakdown.readability, '| hard pool ->', JSON.stringify(hard.readability.band), hard.score_breakdown.readability);
+  console.log('   easy pool ->', JSON.stringify(easy.readability.band), easy.copy_breakdown.readability, '| hard pool ->', JSON.stringify(hard.readability.band), hard.copy_breakdown.readability);
   check('B3-4: against a results page of plain prose the draft is "harder" and loses points; against specialist prose it is in the band (or plainer) and keeps 15',
-    easy.readability.flesch >= 20 && easy.readability.flesch < 60 && easy.readability.position === 'harder' && easy.score_breakdown.readability < 15 && hard.score_breakdown.readability === 15 && hard.readability.position !== 'harder', JSON.stringify([easy.readability, hard.readability]));
+    easy.readability.flesch >= 20 && easy.readability.flesch < 60 && easy.readability.position === 'harder' && easy.copy_breakdown.readability < 15 && hard.copy_breakdown.readability === 15 && hard.readability.position !== 'harder', JSON.stringify([easy.readability, hard.readability]));
   check('B3-4: the band is clamped — very plain competitors do not ask for more than 60, specialist ones do not allow less than 20',
     easy.readability.band.low === 60 && hard.readability.band.low === 20 && easy.readability.band.clamped && hard.readability.band.clamped, JSON.stringify([easy.readability.band, hard.readability.band]));
   check('B3-4: "harder than the band" is advice in the readability note, never a warning (no refusal)',
@@ -19729,6 +19729,7 @@ await require('./scenarios_hold')({ H, run, mock, store, guard, reset, begin });
 await require('./scenarios_w0b')({ H, run, mock, store, guard, reset, begin });   // W0B1-W0B9 (W0-B 2026-10-29, docs/page-quality-2026-10-29/PLAN.md Fix 2 + D2): the final version keeps every blocker of the page run - page_run in every content callback, finalize 3336 with an old-format original not ready because of the duplicate (never because of "not checked"), no page run never ready, grading fields advice only, the client's decision (update of that page / a recorded reason, fit limit kept), the carried blockers, the ranking guide 949 never held back
 await require('./scenarios_w0e')({ H, run, mock, store, guard, reset, begin });   // W0E1-W0E8 (W0-E 2026-10-29, docs/page-quality-2026-10-29/PLAN.md Fix 5): answers go into the sentence they change - suggestions never a slogan, chrome or a question and only of the question's type, the brief's questions as objects, a removed statement's anchor, finalize 3336's slots and host sentences, appended edits refused and nothing appended, the ranking guide 949 untouched
 await require('./scenarios_w0g')({ H, run, mock, store, guard, reset, begin });   // W0G1-W0G5 (W0-G 2026-10-29, docs/page-quality-2026-10-29/PLAN.md Fix 7): the final version's own PDF and Word file - three Finalize-only nodes after Finalize Verdict (read, never edited), finalize 3336 printed whole with the grade of this version, a PDF only when one was rendered, the ranking guide 949 printed in full with its answer unchanged, a safe document
-await require('./scenarios_w0h')({ H, run, mock, store, guard, reset, begin });   // W0H1-W0H8 (W0-H 2026-10-29, docs/page-quality-2026-10-29/PLAN.md Fix 3b): the prompt lines that made padding and repetition are gone, a figure whose only source is weak is a soft blocker the system removes, a blind second read of the delivered page (gates for runs a person started, shadow for the system's own), not checked on a refusal, the final version keeps its blocker while the words are there, the ranking guide 949 untouched
+await require('./scenarios_w0h')({ H, run, mock, store, guard, reset, begin });
+await require('./scenarios_w0c')({ H, run, mock, store, guard, reset, begin });   // W0C1-W0C8 (W0-C 2026-10-29, docs/page-quality-2026-10-29/PLAN.md Fix 3, 5.2): the interim reviewer-aligned grade (one scale out of 100, sources and fit in it, repetition and list labels off structure, length advice only), caps as shares, the floors ("Needs work"), "95+"; the 3336 pins; the ranking guide 949 above every version of the ms 365 erp page and through every floor; the editor round unchanged   // W0H1-W0H8 (W0-H 2026-10-29, docs/page-quality-2026-10-29/PLAN.md Fix 3b): the prompt lines that made padding and repetition are gone, a figure whose only source is weak is a soft blocker the system removes, a blind second read of the delivered page (gates for runs a person started, shadow for the system's own), not checked on a refusal, the final version keeps its blocker while the words are there, the ranking guide 949 untouched
 H.report();
 })();

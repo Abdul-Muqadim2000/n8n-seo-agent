@@ -291,12 +291,17 @@ module.exports = async (ctx) => {
       length_band: { ok: true, source: 'serp', low: 1800, high: 3000, median: 2898, target_word_count: 2900, sample: 5, kind: 'guide' } });
     pb.content_brief = { ...(pb.content_brief || {}), target_word_count: 2900, secondary_keywords: [] };
     const rec = F99.runs['Content QA'][2];
-    const input = clone(rec.input); input[0].json = { ...input[0].json, ...pb, output: G.live_markdown, qa_round: 1 };
-    const pfi = clone(F99.nodes['Page Fix']['2'].items); pfi[0].json.output = G.live_markdown;
-    const g = await R.replay(F99, 'Content QA', 2, { input, mocks: { 'Parse Brief': [pb], 'Page Fix': pfi }, runIndex: 0 });
+    // W0-C (2026-10-29): with Promise Candidates mocked out (below) Content QA reads the guide itself, not 3299's draft; the live capture ends
+    // with the site's author box and tag line, which the cut-off check reads as a page that stops mid-way (W0B9's note), so the guide is
+    // judged ending on its last complete line, as it was delivered
+    const gl = G.live_markdown.replace(/\s+$/, '').split('\n'); let gLast = gl.length - 1; while (gLast > 0 && !/[.!?]["')\]*_]*$|\]\([^()\s]*\)$/.test(gl[gLast].trim())) gLast--;
+    const GMD = gl.slice(0, gLast + 1).join('\n') + '\n';
+    const input = clone(rec.input); input[0].json = { ...input[0].json, ...pb, output: GMD, qa_round: 1 };
+    const pfi = clone(F99.nodes['Page Fix']['2'].items); pfi[0].json.output = GMD;
+    const g = await R.replay(F99, 'Content QA', 2, { input, mocks: { 'Parse Brief': [pb], 'Page Fix': pfi, 'Promise Candidates': null }, runIndex: 0 });   // W0-C: Content QA reads its draft through Promise Candidates when that node ran; null makes it read the guide
     const s = await R.replay(F99, 'Content QA', 2);
     const qg = g.first.content_qa || {}; const qs = s.first.content_qa || {};
-    const md = G.live_markdown;
+    const md = GMD;
     const ctx = await pf('ctxOf', [pb, {}]);
     const wf = await pf('weakFigures', [md, qg, ctx]);
     show('949 outbound links by tier', (qg.outbound_links || []).reduce((m, x) => ({ ...m, [x.tier]: (m[x.tier] || 0) + 1 }), {}));

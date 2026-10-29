@@ -1,4 +1,5 @@
 /*__PAGE_FIX__*/
+/*__GRADE__*/
 // H1 (2026-10-27, docs/content-quality-2026-10-27/R1 §3.1, §6 rec. 1, 2, 5, 9; R2 §6): never deliver a worse draft than one the run
 // already had, and say what the client really receives. Runs after every quality check (Content QA -> Outbound Link Check -> Originality
 // Check). Production: in 3 of 4 page runs the one full-page edit made the page worse (exec 949 kept its length but lost the keyword in
@@ -80,14 +81,20 @@ if (came === 'finalize') {
   // W0-E (REVIEW_CODE M4): the brief's questions are { question, section, category } objects since section 156, plain strings before it
   const briefQs = (Array.isArray(brief.questions_for_client) ? brief.questions_for_client : []).filter(q => q && (typeof q === 'string' || (typeof q === 'object' && q.question)));
   const qs = PF.questions({ claims: claimsAll, brief: briefQs, brackets: seeds, business: ctx.business, names: ctx.names, final_md: finalMd, docs, stored });
-  const del = PF.deliver(finalCls, { questions: qs });
-  const ready = del.status !== 'not_ready';
+  const del0 = PF.deliver(finalCls, { questions: qs });
+  const ready = del0.status !== 'not_ready';
   const deliveredFrom = (state0.best || {}).source || 'copywriter draft';
-  const grade = { score: qa.content_score == null ? null : Number(qa.content_score), of: 100, breakdown: qa.score_breakdown || null,
-    basis: 'measured on the page you receive, after every fix and the last full check (structure, topic coverage, readability, specificity, plain language, length)',
-    blocking: del.blocking.length, advice: del.advisory.length, first_draft_review: critique && critique.score != null ? Number(critique.score) : null,
-    first_draft_review_note: critique && critique.score != null ? 'the reviewer\'s score of the first draft, before any fix; it does not describe the page you receive' : '' };
-  const delivery = { status: del.status, label: del.label, blocking: del.blocking, advisory: del.advisory, client_questions: qs, grade, next_step: del.next_step,
+  // W0-C (PLAN Fix 3, REVIEW_CODE H3): the grade of the page you receive, on the grade kit's scale, with the caps only this node knows (an
+  // open blocker: at most 59; the page the website already has: fit at most 30%) and the floors; a page with no blocker that fails a floor
+  // is "Needs work: <part>" (still publishable), never "Ready to publish"
+  const GD = qa.grade_detail || null;
+  const grade = GR.cap({ score: qa.content_score == null ? null : Number(qa.content_score), of: 100, breakdown: qa.score_breakdown || null,
+    basis: 'measured on the page you receive, after every fix and the last full check: ' + (GD ? GR.basis : 'structure, topic coverage, readability, specificity, plain language, length'),
+    blocking: del0.blocking.length, advice: del0.advisory.length, first_draft_review: critique && critique.score != null ? Number(critique.score) : null,
+    first_draft_review_note: critique && critique.score != null ? 'the reviewer\'s score of the first draft, before any fix; it does not describe the page you receive' : '',
+    ...(GD ? { notes: GD.notes || [] } : {}) }, del0.blocking, { w0c: GD });
+  const del = GR.deliver(del0, grade);
+  const delivery = { status: del.status, label: del.label, blocking: del.blocking, advisory: del.advisory, client_questions: qs, grade, next_step: del.next_step, ...(del.needs_work ? { needs_work: del.needs_work } : {}),
     delivered_from: deliveredFrom, edits, candidates: history, stop_reason: state0.stop_reason || '',
     changes: { fixes: fixes.slice(0, 40), removed: allRemoved.map(r => ({ what: r.code, text: PF.clean(String(r.sentence || '')).slice(0, 220), how: r.how || 'removed', now: r.text || '' })).slice(0, 30),
       brackets_removed: removed.filter(r => r && r.token).map(r => ({ token: r.token.slice(0, 160), question: r.question || '', research: r.research || '' })).slice(0, 20) },

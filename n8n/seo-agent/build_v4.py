@@ -13079,6 +13079,80 @@ sticky("""### The second read (W0-H, 2026-10-29)
 log('The causes the grade now counts are removed, and the page the client receives is read once more (W0-H, 2026-10-29, section 158; PLAN Fix 3b, R4 G9 / G12 / G13 / G14 / G18, REVIEW_EVIDENCE H1): the brief takes People Also Ask questions only about the same reading of the search (a Guide up to 8 so the ranking guide keeps its shape, a Service / Location / Pricing page 3-5, a Case Study none) and gives each point one home; the copywriter writes a FAQ heading only when its answer is new, the keyword in the H1, the first sentence and the last section (an H2 only where natural) and no market or compliance figure on a blog alone; PF.classify makes a market, adoption, cost or compliance figure whose only linked source is weak a soft blocker (rewrite without the number, else the system removes the sentence; Finalize re-measures it); a blind Sonnet 5.5 second read of the delivered page (measured cost, about $0.05) turns each high fact / source / claim / local problem whose quote is on the page into a soft blocker for runs a person started, reports it only for runs the system started (shadow mode, D17) and is "not checked" when refused, cut, failed or unreadable; the callback carries qa_second_read')
 
 # =============================================================================
+# 159. THE GRADE COUNTS WHAT A REVIEWER COUNTS, SO IT CANNOT SAY 100 ON A PAGE LIKE 3299 (W0-C, page-quality programme 2026-10-29,
+#      docs/page-quality-2026-10-29/PLAN.md Fix 3, 2.6, 2.9; REVIEW_CODE H3 / L1 / L5; REVIEW_EVIDENCE H2 / H3 / M1). Page run 3299 ("ms 365
+#      erp") was graded 92 and its final version 3336 100 "Ready to publish"; the client's expert reviewer gave it 63. The grade counted
+#      structure 25, coverage 25, readability 15, specificity 10, clean language 10 and length 15, and the only part that moved 92 -> 100 was
+#      length. Now (v5/code/_grade.js, GR):
+#      * Content QA computes the interim grade on ONE scale out of 100: structure 20 (a statement made 3+ times across sections costs 3, one
+#        label for two lists costs 2; a statement made 4+ times caps structure at 50%), coverage 15, readability 10, specificity 10, clean
+#        language 10, sources 15 (share of cited sentences and figures on an official body, a research house, major press or vendor docs;
+#        a weak-only market / cost / compliance figure costs a third; a weak-only compliance figure caps it at 8), fit 20 (half the verdict,
+#        half "no open duplicate"; a verdict under 50 caps it at 40%, also after "Write it anyway"; a null verdict is "not checked", full
+#        points), length 0 (advice). The old six parts stay as `copy_score`, the measure the editor round and "passed" are decided on,
+#        UNCHANGED, so no page is edited more, shortened or held by this section (owner priority: the guide of exec 949 ranks).
+#      * Page Candidates, Finalize Verdict and Apply Second Read build the grade object the client sees with GR.cap (an open blocker: at most
+#        59; an open duplicate page, or one published beside it with a reason (D2): fit at most 30%) and the floors: a page with no blocker
+#        under half its points in any part is "Needs work: <part>" (delivery status `needs_work`, still publishable), never "Ready". The fit
+#        floor is waived after an acknowledgement and for ladder pages, case studies, AI answer pages and refreshes, and only recorded for
+#        runs the system started (D17 shadow). Shown as "95+" from 95, never 100.
+#      * The results page's shapes (KWI.serpPageTypes on the top-10 organic results Pick Top 6 read) are recorded on Parse Analysis as
+#        `serp_shapes` (the PRC grading field W0-B carries), with no points until Wave 1.
+#      * The Word / PDF report prints the same grade (the Build Word File content-score row, section 8's patch).
+# =============================================================================
+GRADE_SRC159 = _rd0('code/_grade.js').rstrip('\n')
+assert GRADE_SRC159.startswith('// ---- grade kit (W0-C') and 'const GR = (() => {' in GRADE_SRC159, 'W0-C: the grade kit is missing'
+for _bad159 in ('—', '–', '“', '”', '…', '‘', '’'):
+    assert _bad159 not in GRADE_SRC159, 'W0-C: customer wording rule (no em dash, curly quote or ellipsis character) broken in _grade.js'
+for _n159 in ('Content QA', 'Page Candidates', 'Apply Second Read'):
+    assert code(_n159).count('/*__GRADE__*/') == 1, 'W0-C: ' + _n159 + ' must carry the /*__GRADE__*/ marker exactly once'
+    setcode(_n159, code(_n159).replace('/*__GRADE__*/', GRADE_SRC159))
+    assert 'const GR = (() => {' in code(_n159) and '/*__GRADE__*/' not in code(_n159), 'W0-C: the grade kit is not inlined in ' + _n159
+_cq159 = code('Content QA')
+for _k159 in ("const copy_score = Math.round(structure_pts + coverage_pts + readability_pts + specificity_pts + banned_pts + length_pts);", 'const grade_detail = GR.local(',
+              'const content_score = grade_detail.score;', 'copy_score >= 80 && lenOk', '!(copy_score >= 90 && crit.score', 'score_breakdown: grade_detail.breakdown, grade_detail,'):
+    assert _k159 in _cq159, 'W0-C: Content QA lacks ' + _k159
+assert 'content_score >= 80 && lenOk' not in _cq159, 'W0-C: the editor round must stay on the copy check, not on the new grade'
+for _n159, _k159 in (('Page Candidates', 'const grade = GR.cap('), ('Page Candidates', 'const del = GR.deliver(del0, grade);'), ('Apply Second Read', 'GR.cap(D.grade, D.blocking')):
+    assert _k159 in code(_n159), 'W0-C: ' + _n159 + ' lacks ' + _k159
+for _k159 in ('const grade = GR.cap(', 'Object.assign(del, GR.deliver(del, grade));', '/*__GRADE__*/'):
+    assert _k159 in _rd0('code/Finalize_Verdict.js'), 'W0-C: Finalize_Verdict.js lacks ' + _k159
+# ---------- the results page's shapes, recorded (no points yet) ----------
+patch('Pick Top 6', "const items = task.result?.[0]?.items || [];\n",
+      "const items = task.result?.[0]?.items || [];\n"
+      "// W0-C (section 159): the top-10 organic results as read (address and title), for the shapes of the results page (Parse Analysis serp_shapes)\n"
+      "const __top10 = items.filter(x => x && x.type === 'organic' && x.url).sort((a, b) => (a.rank_group || 99) - (b.rank_group || 99)).slice(0, 10).map(x => ({ url: String(x.url), title: String(x.title || '') }));\n")
+patch('Pick Top 6', "      no_competitors: true,\n", "      no_competitors: true, serp_top10: __top10,\n")
+patch('Pick Top 6', "return picked.map(p => ({ json: { ...p, no_competitors: false } }));", "return picked.map((p, i) => ({ json: { ...p, no_competitors: false, ...(i === 0 ? { serp_top10: __top10 } : {}) } }));")
+assert 'const KWI = (() => {' not in code('Parse Analysis'), 'W0-C: Parse Analysis already carries the KW inputs kit'
+setcode('Parse Analysis', KW_INPUTS_SRC + '\n' + code('Parse Analysis'))
+patch('Parse Analysis', "return [{\n  json: {\n    ...prev,\n    competitor_digest: undefined,\n",
+      "// W0-C (section 159, PLAN Fix 3, REVIEW_CODE H3.2): what kind of page Google ranks for this search, read from the top-10 results Pick Top 6\n"
+      "// read (KWI.serpPageTypes: title and address of each result, nothing guessed); recorded with the run and carried to the final version\n"
+      "// (PRC grading field serp_shapes), no points in the grade until Wave 1\n"
+      "let __serp_shapes = null;\n"
+      "try { const t10 = (($('Pick Top 6').first() || {}).json || {}).serp_top10;\n"
+      "  if (Array.isArray(t10) && t10.length) { const sp = KWI.serpPageTypes(t10, { page_type: prev.page_type || prev.recommended_page || '' });\n"
+      "    __serp_shapes = { read: sp.read, counts: sp.counts, dominant: sp.dominant, dominant_share: sp.dominant_share, ours: sp.ours, mismatch: sp.mismatch, text: sp.text,\n"
+      "      top10: t10.map(x => ({ url: x.url, title: String(x.title || '').slice(0, 160), shape: KWI.shapeOf(x.url, x.title) })), points: 0, note: 'recorded only: the shapes of the results page carry no points until Wave 1' }; } } catch (e) { __serp_shapes = null; }\n"
+      "return [{\n  json: {\n    ...prev,\n    competitor_digest: undefined,\n    serp_shapes: __serp_shapes,\n")
+# ---------- the Word / PDF report prints the grade the client sees ----------
+patch('Build Word File', "    ['Content score', qa.content_score != null ? '<b>' + qa.content_score + '/100</b>' + (qa.score_breakdown ? ' (structure ' + qa.score_breakdown.structure + '/25, topic coverage ' + qa.score_breakdown.coverage + '/25, readability ' + qa.score_breakdown.readability + '/15, specificity ' + qa.score_breakdown.specificity + '/10, clean language ' + qa.score_breakdown.clean_language + '/10, length ' + qa.score_breakdown.length + '/15)' : '') : 'N/A'],",
+      "    ['Content score', (() => { const g = (qa.delivery && qa.delivery.grade && typeof qa.delivery.grade === 'object') ? qa.delivery.grade : null; const sc = g && g.score != null ? g.score : qa.content_score;   // W0-C (section 159): the grade the client sees\n"
+      "      if (sc == null) return 'N/A'; const b = (g && g.breakdown) || qa.score_breakdown || {}; const M = (g && g.max) || (qa.grade_detail || {}).max || null; const shown = (g && g.display) || (Number(sc) >= 95 ? '95+' : String(sc));\n"
+      "      if (!M) return '<b>' + esc(shown) + '/100</b>';\n"
+      "      const fl = g && g.floors ? (g.floors.ok ? '' : ' · needs work: ' + g.floors.failing.map(x => x.label).join(', ')) : '';\n"
+      "      return '<b>' + esc(shown) + '/100</b> (structure ' + b.structure + '/' + M.structure + ', topic coverage ' + b.coverage + '/' + M.coverage + ', readability ' + b.readability + '/' + M.readability + ', specificity ' + b.specificity + '/' + M.specificity\n"
+      "        + ', plain language ' + b.clean_language + '/' + M.clean_language + ', sources ' + b.sources + '/' + M.sources + ', fit with the search ' + b.fit + '/' + M.fit + '; length is advice only)' + esc(fl); })()],")
+# ---------- the harness: the kit as a runnable shim ({ fn, args } -> { r }; '__SRC__' in args is { tier, figures } of the source kit) ----------
+open(os.path.join(OUT_CODE, '_grade.js'), 'w').write("// harness shim (written by build_v4.py section 159): the grade kit, { fn, args } -> { r } ('__SRC__' in args is the source kit's tier / figures)\n"
+    + SOURCES_SRC + '\n' + GRADE_SRC159
+    + "\nreturn $input.all().map(i => { const j = i.json || {}; const a = (j.args || []).map(x => x === '__SRC__' ? { tier: SRC.tier, figures: SRC.figures } : (x && typeof x === 'object' && x.__src__ ? { ...x, tier: SRC.tier, figures: SRC.figures, __src__: undefined } : x)); return { json: { r: GR[j.fn].apply(null, a) } }; });\n")
+sticky("""### The grade (W0-C, 2026-10-29)
+**Content QA** grades the page on one scale out of 100: structure 20, coverage 15, readability 10, specificity 10, plain language 10, **sources 15**, **fit 20**, length advice only (repetition and list labels cost structure points). The old six parts decide the editor round, unchanged. **Page Candidates** / **Apply Second Read** cap it (a blocker: 59; a duplicate page: fit 30%) and apply the floors: under half in any part = **Needs work**, never Ready. Shown as 95+, never 100.""", pos('Page Candidates')[0] - 40, pos('Page Candidates')[1] + 420, 760, 180, 5)
+log('The grade counts what a reviewer counts (W0-C, 2026-10-29, section 159; PLAN Fix 3, REVIEW_CODE H3 / L1 / L5, REVIEW_EVIDENCE H2 / H3 / M1): Content QA grades on one scale out of 100 with the grade kit v5/code/_grade.js (structure 20 less repetition and list-label collisions, coverage 15, readability 10, specificity 10, plain language 10, sources 15 from the tier of what each cited sentence and figure rests on, fit 20 from the verdict and the duplicate page; length advice only) while the old six parts stay as copy_score for the editor round, unchanged; Page Candidates, Finalize Verdict and Apply Second Read cap it (an open blocker 59, an open duplicate or a page published beside it fit 30%) and apply the floors (under half in any part = "Needs work: <part>", delivery status needs_work, still publishable; the fit floor waived after "Write it anyway" and for ladder pages, case studies, AI pages and refreshes, shadow for automatic runs); shown as "95+"; Parse Analysis records the results page\'s shapes (serp_shapes, no points); the Word / PDF report prints the same grade')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;

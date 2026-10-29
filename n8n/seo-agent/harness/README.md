@@ -114,6 +114,16 @@ duplicate page or failed originality becomes the blocker, everything else is mea
 again (duplicate page until `duplicate_decision`, copied passages, a still-linked dead link, a still-present left-out section, the business name
 without the style guide, unknown codes) and is never ready when `qa_blocking` or `duplicate_targets` is missing.
 
+**Built (W0-C, 2026-10-29, `scenarios_w0c.js` W0C1-W0C8; the grade).** The grade kit `v5/code/_grade.js` (GR, build section 159; harness shim
+`code_v4/_grade.js`, `{ fn, args }`, `'__SRC__'` in args = the source kit's tier / figures) grades on one scale out of 100: structure 20,
+coverage 15, readability 10, specificity 10, plain language 10, sources 15, fit 20, length 0 (advice). Content QA writes it as `content_score`
+/ `score_breakdown` / `grade_detail`; the old six parts stay as `copy_score` / `copy_breakdown` and still decide the editor round and
+`passed` (a test about the old rules reads `copy_breakdown`). Page Candidates, Apply Second Read and Finalize Verdict build the delivered grade
+with `GR.cap` (blocker 59, duplicate fit 30%, floors) and the status with `GR.deliver` (`needs_work`: a part under half, publishable). Pick Top 6
+keeps `serp_top10` on its first item and Parse Analysis records `serp_shapes` (no points). A replay of the ranking guide through Content QA must
+null the `Promise Candidates` mock: Content QA reads its draft through that node when it ran, so without it the "guide" is 3299's own draft (RPL4
+and W0H8 did this until W0-C).
+
 ## Replay fixtures (page-quality programme 2026-10-29, PLAN §3.0 step 4, REVIEW_CODE M9)
 
 `replay.js` replays recorded production node runs on the current generated code: `const R = require('./replay')(H); const fx =

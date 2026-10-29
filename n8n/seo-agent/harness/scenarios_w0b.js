@@ -89,7 +89,9 @@ module.exports = async (ctx) => {
       && /update of that page/.test(b.delivery.blocking[0].action) && /how this page differs/.test(b.delivery.blocking[0].action), J(b.delivery.blocking[0]));
     check('not because something was not checked: no not_checked blocker (the gating fields were all there)', !codes(b.delivery.blocking).includes('not_checked') && b.page_run.gating_missing.length === 0, J(b.page_run));
     check('the missing grading fields are advice ("Not checked: ..."), never a block', b.delivery.advisory.filter(a => a.code === 'not_checked').length >= 3 && b.delivery.advisory.some(a => /^Not checked: the length of the pages that rank/.test(a.text)), J(b.delivery.advisory));
-    check('length is advice only, and no longer 15 of 15 against the page itself: the length points the page run measured against the pages that rank (7)', !codes(b.delivery.blocking).includes('length') && len(b) === CB.qa_grade.breakdown.length && len(b) < 15
+    // W0-C (section 159): on the grade kit's scale length carries no points at all (advice only), so neither 15 of 15 against the page itself
+    // nor the page run's 7 come back into the number; the page run's band is still what the length advice is measured against
+    check('length is advice only, and no longer 15 of 15 against the page itself: no length points in the grade (W0-C), the band from the page run\'s first check', !codes(b.delivery.blocking).includes('length') && len(b) === 0
       && r.pb.prc.length_from === 'first_check', J({ b: b.grade.breakdown, from: r.pb.prc.length_from }));
     const r0 = await chain({ ...clone(BODY), page_run: { ...gatingOf(CB), length_points: null } });
     check('a report with no stored grade either: judged against the usual band for a service page (900-2,400)', r0.pb.prc.length_from === 'page_type' && r0.pb.length_band.low === 900 && r0.pb.length_band.high === 2400 && r0.body.delivery_status === 'not_ready', J(r0.pb.length_band));
