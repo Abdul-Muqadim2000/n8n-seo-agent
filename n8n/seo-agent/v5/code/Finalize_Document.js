@@ -37,6 +37,11 @@ const flush = () => { if (para.length) { out.push('<p>' + inline(para.join(' '))
 const closeList = () => { if (list) { out.push('</' + list + '>'); list = null; } };
 const closeTable = () => { if (table) { out.push('</tbody></table>'); table = false; } };
 const cells = (l) => l.replace(/^\s*\||\|\s*$/g, '').split('|').map(c => c.trim());
+// fu-finalize-toc (2026-10-30): each H2 carries the id the page package gives it (Blog Package anchorOf: one per heading text, "-2" for a
+// repeat), so the contents list's "#anchor" links land on their sections in the final version's documents too
+const hIds = new Map(), hUsed = [];
+const hId = (t) => { const k = S(t).trim(); if (hIds.has(k)) return hIds.get(k); const a = k.toLowerCase().replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'section';
+  let id = a, n = 2; while (hUsed.includes(id)) id = a + '-' + (n++); hIds.set(k, id); hUsed.push(id); return id; };
 for (let k = 0; k < md.length; k++) {
   const raw = md[k]; const l = raw.trim();
   if (fence !== null) { if (/^(```|~~~)/.test(l)) { out.push('<pre>' + esc(fence) + '</pre>'); fence = null; } else fence += (fence ? '\n' : '') + raw; continue; }
@@ -50,7 +55,7 @@ for (let k = 0; k < md.length; k++) {
   if (!l) { flush(); closeList(); continue; }
   let x;
   if ((x = l.match(/^#\s+(.+)$/))) { flush(); closeList(); if (!h1) { h1 = x[1].trim(); continue; } out.push('<h2>' + inline(x[1]) + '</h2>'); continue; }
-  if ((x = l.match(/^(#{2,6})\s+(.+)$/))) { flush(); closeList(); const h = Math.min(4, x[1].length); out.push('<h' + h + '>' + inline(x[2]) + '</h' + h + '>'); continue; }
+  if ((x = l.match(/^(#{2,6})\s+(.+)$/))) { flush(); closeList(); const h = Math.min(4, x[1].length); out.push('<h' + h + (h === 2 ? ' id="' + esc(hId(x[2])) + '"' : '') + '>' + inline(x[2]) + '</h' + h + '>'); continue; }
   if (/^(-{3,}|\*{3,}|_{3,})$/.test(l)) { flush(); closeList(); out.push('<hr>'); continue; }
   if ((x = l.match(/^>\s?(.*)$/))) { flush(); closeList(); out.push('<blockquote><p>' + inline(x[1]) + '</p></blockquote>'); continue; }
   if ((x = l.match(/^[-*+]\s+(.+)$/))) { flush(); if (list !== 'ul') { closeList(); out.push('<ul>'); list = 'ul'; } out.push('<li>' + inline(x[1].replace(/^\[[ xX]\]\s+/, '')) + '</li>'); continue; }

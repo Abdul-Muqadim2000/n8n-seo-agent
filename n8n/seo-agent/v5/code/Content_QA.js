@@ -264,6 +264,9 @@ let internalLinks = 0, externalLinks = 0, cleanedLinks = 0;
 // attribution stays and the figure it carried is checked like any other uncited figure (§9).
 const redirectsResolved = [], redirectsDropped = [];
 md = md.replace(/\[([^\[\]]+)\]\(([^)\s]+)\)/g, (m, text, url) => {
+  // fu-finalize-toc (2026-10-30, BASELINE "Finalize strips table-of-contents links", 3 of 3): a link to a heading of this page (the contents
+  // list's "#anchor") is no citation and no page of the site; read as a weak source with no host, entries 2-8 were unlinked as "repeats"
+  if (/^#[^\s#]*$/.test(url.trim())) return m;
   if (SRC.isRedirect(url.trim())) { const t = SRC.unwrap(url.trim()); if (!t) { redirectsDropped.push(url.trim()); return text; } redirectsResolved.push(t); }
   let u = SRC.clean(url.trim()); if (u !== url.trim() && !SRC.isRedirect(url.trim())) cleanedLinks++;
   const isRelative = u.startsWith('/');

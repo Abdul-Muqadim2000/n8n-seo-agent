@@ -45,5 +45,8 @@ for (const j of (FAx.jobs || [])) { if (rewritten.includes(j.id)) continue;
   (j.answers || []).forEach((id, i) => { const x = applied.find(a => a.id === id); if (!x || (x.how !== 'woven' && x.how !== 'placed')) return; const t = S(texts[i] || '');
     if (t && norm(md).includes(norm(t))) return; x.how = 'not_placed';
     notes.push('Not placed: your answer' + (t ? ' "' + t.slice(0, 80) + '"' : '') + ' did not fit a sentence of "' + (j.heading || 'the introduction') + '". Tell us where it belongs on the page.'); }); }
+// fu-finalize-toc (2026-10-30, BASELINE "Finalize strips table-of-contents links"): the page's linked contents list is kept and follows
+// its headings (a lost link back from the page the client sent, a renamed heading's entry renamed, a gone section's entry dropped)
+const T = PF.toc(md, S((A.finalize || {}).input_markdown)); md = T.md;
 return [{ json: { ...A, output: md, finalize_merge: { editor_ran: ran, editor_answered: !!answer, sections_rewritten: rewritten, sections_kept: kept, notes, applied, changes,
   prompt_chars: S(A.editor_prompt).length, output_chars: typeof raw === 'string' ? raw.length : raw ? JSON.stringify(raw).length : 0 } } }];
