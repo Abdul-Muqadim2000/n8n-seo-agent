@@ -431,6 +431,9 @@ const IX = (() => {
     watch_minutes: 50, watch_refused_minutes: 30, watch_max: 30,   // N5: the day's chain is watched (every 50 minutes, so the waiting
                                                    //     dispatch stays inside the 3,600 s execution limit even if n8n counted the wait) until every website is done
     gave_up_after: 2,                              // N5: a website whose run of the day did not finish twice is left for tomorrow
+    // fix wave 3 (2026-10-30, ENGINE_BUILD.md "Fix wave 3")
+    sitemap_batch_deep: 8,                         // R3: unknown-size sitemaps read at once after an index of indexes was read (three-level trees)
+    run_max_minutes: 62,                           // R8: an unfinished run row younger than this may still be running (executionTimeout 3,600 s)
   };
   // ---- URLs: strict parsing (E11), canonical host, host-agnostic keys, own host only ----
   // A URL is read only when it is plain http(s)://host[:80|443]/path?query: no userinfo, no backslash, no whitespace, no IP literal, no bare
@@ -556,7 +559,7 @@ const IX = (() => {
       const abs = /^\//.test(loc) && !/^\/\//.test(loc) ? 'https://' + hostOf(asked.url) + loc : loc;
       // the same sitemap on the other host / with a slash (example.com -> www.example.com): read it there, once
       if (safe(abs, site) && same(abs, asked.url) && safe(abs, site) !== safe(asked.url, site) && !asked.redirected_from) st.fetched = st.fetched.filter(x => x !== k);
-      if (safe(abs, site)) { if (!sitemapQueue(st, abs, asked.from, site, { redirected_from: asked.url }) && !st.fetched.includes(key(abs)) && !st.next.some(x => same(x.url, abs))) st.errors.push({ url: asked.url, error: 'redirects to another sitemap that was not read (cap)' }); }
+      if (safe(abs, site)) { if (!sitemapQueue(st, abs, asked.from, site, { redirected_from: asked.url, ...(n0(asked.depth) ? { depth: n0(asked.depth) } : {}) }) && !st.fetched.includes(key(abs)) && !st.next.some(x => same(x.url, abs))) st.errors.push({ url: asked.url, error: 'redirects to another sitemap that was not read (cap)' }); }
       else st.errors.push({ url: asked.url, error: 'redirects off the site (' + status + ')' });
       return st;
     }
@@ -564,6 +567,9 @@ const IX = (() => {
     const doc = parseSitemap(body);
     if (doc.kind === 'unknown') { st.errors.push({ url: asked.url, error: 'not a sitemap (no urlset / sitemapindex)' }); return st; }
     st.read++; if (doc.kind === 'urlset') st.sets = n0(st.sets) + 1;
+    // R3 (fix wave 3): an index found BELOW the roots (an index of indexes) says the tree has a third level: its leaves are many and an
+    // index answer is a short list, so the first leaves are read in a larger batch (sitemapBatch) and the rounds are not used up by the indexes
+    if (doc.kind === 'index' && n0(asked.depth) >= 1) st.deep_index = true;
     const fromGsc = asked.from === 'gsc' || !!asked.gsc;
     const have = new Set(st.urls.map(x => key(x.loc)));
     for (const u of doc.urls) {
@@ -576,7 +582,7 @@ const IX = (() => {
     for (const c of doc.sitemaps) {
       if (!safe(c.loc, site)) continue;
       if (st.urls.length >= CFG.urls_max) { st.capped = true; break; }
-      sitemapQueue(st, c.loc, fromGsc ? 'gsc' : 'child', site, { lastmod: c.lastmod });
+      sitemapQueue(st, c.loc, fromGsc ? 'gsc' : 'child', site, { lastmod: c.lastmod, depth: n0(asked.depth) + 1 });
       if (st.capped_sitemaps) break;
     }
     return st;
@@ -588,20 +594,53 @@ const IX = (() => {
    * sitemap_batch_max, and nothing once the cap is reached. With the answers read as files (bodies on disk, not in the run's saved data) and
    * at most sitemap_read_bytes of one answer read, a tree of 49 children of 50,000 addresses costs one or two children, not all of them.
    */
+  // R3 (fix wave 3): the rounds spent on indexes do not count against the leaves. Wave 2 read 2 unknown sitemaps a round until the first
+  // urlset was read, so a root index -> 2 sub-indexes -> 46 leaves spent rounds 2 AND 3 at 2 and could read at most 42 leaves in 7 rounds
+  // (it was complete in wave 1). Once an index of indexes was read (st.deep_index), the first leaves are read sitemap_batch_deep at once;
+  // the memory stays bounded because Sitemap Read reads one answer at a time and refuses a file above sitemap_read_bytes (R6).
   const sitemapBatch = (st) => {
     const x = st || {}; const left = CFG.urls_max - (x.urls || []).length; if (left <= 0) return 0;
-    const sets = n0(x.sets); if (!sets) return CFG.sitemap_batch_first;
+    const sets = n0(x.sets); if (!sets) return x.deep_index ? CFG.sitemap_batch_deep : CFG.sitemap_batch_first;
     const avg = Math.max(1, (x.urls || []).length / sets);
     return Math.max(1, Math.min(CFG.sitemap_batch_max, Math.floor(left / avg)));
   };
-  /** N7 / X2: the text of a fetched answer - the JSON body (text response) or the file the HTTP node wrote (read here, at most `max` bytes). */
+  /**
+   * N7 / X2: the text of a fetched answer - the JSON body (text response) or the file the HTTP node wrote (read here, at most `max` bytes).
+   * R6 (fix wave 3): n8n has no way to read PART of a file from a Code node: the task runner's getBinaryDataBuffer sends the WHOLE file over
+   * its RPC as JSON (one array element per byte, ~10x the file in the runner's 512 MB), and a getBinaryStream cannot cross that RPC. So the
+   * size is known BEFORE reading - the binary's `bytes` (n8n 2.41 writes it on every stored file), its `fileSize` text, or the answer's
+   * Content-Length - and a file above `max` is NOT read: { text: '', cut: true, too_large: true, bytes }. The caller turns that into a clean
+   * partial reading (a sitemap tree that is not complete, a page that could not be checked), never a crash before the run's rows are saved.
+   * The download itself streams to disk (HTTP Request V3 `useStream` for file answers), so the n8n main process is not the limit either.
+   */
+  const sizeOf = (r, b) => {
+    const prettyBytes = (v) => { const m = S(v).match(/^([\d.]+)\s*(B|kB|KB|MB|GB)$/i); if (!m) return 0; const u = { b: 1, kb: 1e3, mb: 1e6, gb: 1e9 }[m[2].toLowerCase()]; return Math.round(Number(m[1]) * u) || 0; };
+    const h = (r && r.headers) || {}; const k = Object.keys(h).find(x => x.toLowerCase() === 'content-length');
+    return Math.max(n0(b && b.bytes), prettyBytes(b && b.fileSize), k ? n0(Array.isArray(h[k]) ? h[k][0] : h[k]) : 0);
+  };
   const answerText = async (r, item, i, helpers, max) => {
-    const t = (r && (r.body ?? r.data)); if (t != null && (typeof t === 'string' ? t !== '' : true)) return { text: typeof t === 'string' ? t : JSON.stringify(t), cut: false };
+    const t = (r && (r.body ?? r.data)); if (t != null && (typeof t === 'string' ? t !== '' : true)) { const x = typeof t === 'string' ? t : JSON.stringify(t); const cut = x.length > max; return { text: cut ? x.slice(0, max) : x, cut }; }
     const b = item && item.binary && (item.binary.data || Object.values(item.binary)[0]);
-    if (!b || !helpers || typeof helpers.getBinaryDataBuffer !== 'function') return { text: '', cut: false };
+    if (!b) return { text: '', cut: false };
+    const bytes = sizeOf(r, b);
+    if (bytes > max) return { text: '', cut: true, too_large: true, bytes };   // R6: never sent through the runner's RPC
+    if (!helpers || typeof helpers.getBinaryDataBuffer !== 'function') return { text: '', cut: false };
     const prop = item.binary.data ? 'data' : Object.keys(item.binary)[0];
-    try { const buf = await helpers.getBinaryDataBuffer(i, prop); const cut = buf.length > max; return { text: (cut ? buf.subarray(0, max) : buf).toString('utf8'), cut }; }
+    try { const buf = await helpers.getBinaryDataBuffer(i, prop); const cut = buf.length > max; return { text: (cut ? buf.subarray(0, max) : buf).toString('utf8'), cut, ...(cut ? { too_large: true, bytes: buf.length } : {}) }; }
     catch (e) { return { text: '', cut: false }; }
+  };
+  /**
+   * R5 (fix wave 3): the reason a website could not be checked, as the client reads it (the run row's note, the callback's summary.note, the
+   * report). Never a fragment of an internal error: the raw message stays in `why_detail` (the execution's data, and the run row's
+   * sitemaps_json.error_detail for ops). A reason this kit or the nodes wrote in plain words passes; anything that looks like an exception
+   * ("TypeError", "x.y is undefined", "failed:", a stack line, braces) becomes the plain sentence.
+   */
+  const PLAIN_FAIL = 'something went wrong on our side while reading it';
+  const plainWhy = (w) => {
+    const s = S(w).replace(/\s+/g, ' ');
+    if (!s) return 'not checked';
+    if (/failed:|\b[A-Z][a-z]+Error\b|\bexception\b|undefined|\bnull\b|\bNaN\b|is not a function|cannot read|\bat [\w$.<>]+ \(|[{}\[\]<>]|=>|\$\(|\bnode\b|\bstack\b/i.test(s)) return PLAIN_FAIL;
+    return s.slice(0, 200);
   };
   /**
    * E1 (FIX_CONTRACT decision 2): was the whole tree read? Only then is "not in the sitemap" a fact. Any sitemap that failed (an error, a
@@ -1504,7 +1543,7 @@ const IX = (() => {
     stateOf, ACTION, CAUSES, laneOf, anchorOf, noteOf, plan, inProperty, nextCheck, capOf, isGone, askGoogle, homeLinks, linkSuggestions, topicOf, kindOf, parseEvents,
     eventRows, policyText, policyEvent, POLICY_URL, freeze, impactWindows, impactDue, impactCompare, impactNote, PAGE_COLS, rowOut, rowSig, changed, summarize,
     reportMarkdown, groupNote, isoDay, DAY, merge, ts,
-    fixState, xRobotsNoindex, metaNoindex, sitemapBatch, answerText };
+    fixState, xRobotsNoindex, metaNoindex, sitemapBatch, answerText, sizeOf, plainWhy, PLAIN_FAIL };
 })();
 const S = (v) => String(v == null ? '' : v).trim();
 const now = Date.now();
@@ -1527,7 +1566,7 @@ for (const s of sites) {
   const mineStored = stored.filter(r => r.site_id === s.site_id);
   if (!s.gsc_connected) {
     // E14: nothing is checked, nothing is called zero: the stored rows stand, the run says why
-    out.push({ json: { site_id: s.site_id, domain: s.domain, site: s, failed: false, no_access: true, why: S(s.gsc_error), pages: mineStored.map(slimStored), take: [], reuse: [] } });
+    out.push({ json: { site_id: s.site_id, domain: s.domain, site: s, failed: false, no_access: true, why: IX.plainWhy(s.gsc_error), why_detail: S(s.gsc_error_detail || s.gsc_error), pages: mineStored.map(slimStored), take: [], reuse: [] } });
     continue;
   }
   try {
@@ -1566,6 +1605,8 @@ for (const s of sites) {
         complete, left: (st.next || []).length, robots_status: st.robots_status || 0, home_host: S(site.home_host) },
       gsc_sitemaps: gscSitemaps, search: { read: saOk, rows: ev.rows, end: ev.end, truncated: ev.truncated, truncated_windows: ev.truncated_windows, why: saOk ? '' : saWhy },
       quota_stop, failed: false } });
-  } catch (e) { out.push({ json: { site_id: s.site_id, domain: s.domain, site: s, failed: true, why: 'inventory failed: ' + S(e && e.message).slice(0, 160), pages: mineStored.map(slimStored), take: [], reuse: [] } }); }
+  } catch (e) {
+    // R5 (fix wave 3): the client reads a plain reason; the exception stays in why_detail (ops: the execution, the run row's sitemaps_json.error_detail)
+    out.push({ json: { site_id: s.site_id, domain: s.domain, site: s, failed: true, why: IX.PLAIN_FAIL, why_detail: 'inventory failed: ' + S(e && e.message).slice(0, 160), pages: mineStored.map(slimStored), take: [], reuse: [] } }); }
 }
 return out.length ? out : [{ json: { skip: true, reason: 'no website' } }];
