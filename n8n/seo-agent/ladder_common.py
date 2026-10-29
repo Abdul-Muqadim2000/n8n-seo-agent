@@ -196,7 +196,11 @@ MONITORS_COLS = [('site_id', 'string'), ('domain', 'string'), ('ai_visibility', 
                  # AI-FOCUS (2026-10-27): what the daily pulse asks ('focus' = the questions of the ladders and pages the client works on + the pinned
                  # ones; 'all' or empty = the whole panel, the default of every site stored before the release) and whether the panel follows the
                  # client's focus ('off' = never added to or retired automatically; empty = on). Run sync_tables.py after deploying.
-                 ('ai_pulse_scope', 'string'), ('ai_focus_mode', 'string')]
+                 ('ai_pulse_scope', 'string'), ('ai_focus_mode', 'string'),
+                 # Index coverage (2026-10-29, docs/indexing-2026-10-29/DESIGN.md §2.6): the daily index watch of the website (empty = on) and how many
+                 # URL Inspections it may spend a day (empty = 300, kept 20-1,200 so the Site Tracker and the audits keep their share of Google's
+                 # 2,000 a day per property). Written and validated by Site Admin `monitors`. Run sync_tables.py after deploying.
+                 ('index_watch', 'boolean'), ('index_daily_cap', 'number')]
 AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('keyword', 'string'), ('source', 'string'), ('status', 'string'), ('created_at', 'string'),
                    ('stage', 'string'), ('cluster', 'string'), ('volume', 'number'), ('origin', 'string'), ('updated_at', 'string'),
                    # G6 (2026-10-18): who asks it (buyer role), in which market (CC-lang), pinned by the owner (never retired by the writer),
@@ -379,6 +383,47 @@ PAGE_WATCH_COLS = [('site_id', 'string'), ('domain', 'string'), ('url', 'string'
                    ('inspect_at', 'string'), ('index_state', 'string'), ('indexed', 'string'), ('coverage', 'string'), ('google_canonical', 'string'),
                    ('last_crawl', 'string'), ('mobile', 'string'), ('rich_results', 'string'), ('inspect_error', 'string')]
 
+# ---- Index coverage (2026-10-29, docs/indexing-2026-10-29/DESIGN.md §2): which pages Google left out, why, and what to do. Written ONLY by
+# SEO Agent - Index Coverage (build_index_coverage.py, SEOagentIndexCv1, daily), read by the web app's Indexing page. It reads the Site Tracker's
+# seo_pages / seo_page_watch and the content log / ladders, and writes none of them. Run sync_tables.py after deploying (new tables are created by
+# the workflow's own Ensure nodes; columns added later reach a live table only through sync_tables.py).
+# seo_index_pages: one row per website and URL (upsert on site_id + url, changed rows only). `state` indexed | not_indexed | excluded | unknown
+# (never checked) | error (the last check failed); `cause` a DESIGN §4 code ('' when simply indexed); `action` none | site_fix | links | quality |
+# duplicate | wait | leave_out; the raw URL Inspection fields beside our own read of the page; `link_from` a JSON list (<= 5) of indexed pages
+# that could link here; `note` the client's sentence.
+INDEX_PAGES_TABLE = 'seo_index_pages'
+INDEX_PAGES_COLS = [('site_id', 'string'), ('domain', 'string'), ('url', 'string'), ('lane', 'string'), ('sources', 'string'), ('in_sitemap', 'boolean'),
+                    ('sitemap_lastmod', 'string'), ('first_seen_at', 'string'), ('published_at', 'string'), ('impressions_28d', 'number'), ('clicks_28d', 'number'),
+                    ('last_impression_at', 'string'), ('state', 'string'), ('evidence', 'string'), ('cause', 'string'), ('action', 'string'),
+                    ('verdict', 'string'), ('coverage', 'string'), ('indexing_state', 'string'), ('robots_state', 'string'), ('page_fetch_state', 'string'), ('crawled_as', 'string'),
+                    ('google_canonical', 'string'), ('user_canonical', 'string'), ('last_crawl', 'string'), ('referring_count', 'number'), ('google_sitemaps', 'number'),
+                    ('inspect_at', 'string'), ('fetch_at', 'string'), ('http_status', 'number'), ('final_url', 'string'), ('noindex', 'string'), ('page_canonical', 'string'),
+                    ('words', 'number'), ('title', 'string'), ('indexed_since', 'string'), ('dropped_at', 'string'), ('checks', 'number'), ('next_check_at', 'string'),
+                    ('needs_person', 'boolean'), ('link_from', 'string'), ('merge_into', 'string'), ('note', 'string'), ('updated_at', 'string')]
+# seo_index_history: insert only, one row per state / cause change of a page
+INDEX_HISTORY_TABLE = 'seo_index_history'
+INDEX_HISTORY_COLS = [('site_id', 'string'), ('url', 'string'), ('at', 'string'), ('state', 'string'), ('cause', 'string'), ('evidence', 'string'), ('verdict', 'string'), ('coverage', 'string')]
+# seo_index_runs: one row per website and run (the app's hero and history; the next run of the same day reads `inspected` to stay inside the day's cap)
+INDEX_RUNS_TABLE = 'seo_index_runs'
+INDEX_RUNS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_at', 'string'), ('request_id', 'string'), ('known', 'number'), ('indexed', 'number'),
+                   ('not_indexed', 'number'), ('excluded', 'number'), ('unknown', 'number'), ('errors', 'number'), ('new_pages', 'number'), ('new_indexed', 'number'),
+                   ('inspected', 'number'), ('reused', 'number'), ('fetched', 'number'), ('quota_cap', 'number'), ('backlog_left', 'number'),
+                   ('by_cause_json', 'string'), ('by_action_json', 'string'), ('dropped_json', 'string'), ('freeze', 'boolean'), ('freeze_reason', 'string'), ('note', 'string'),
+                   # an addition to DESIGN §2.3 (docs/indexing-2026-10-29/ENGINE_BUILD.md "Contract changes"): what the sitemap reading found, so the app can
+                   # raise its "no sitemap submitted" / "sitemap errors" step (DESIGN §8) from a field, not from the note's words. JSON:
+                   # { submitted: n | null (not read), submitted_errors, submitted_warnings, pending, read, fetched, urls, capped, robots_status, errors: [{url, error}] }
+                   ('sitemaps_json', 'string')]
+# seo_google_events: global (not per website), upsert on event_id - Google's Search Status Dashboard incidents (`gssd:<id>`) and the spam-policies
+# page fingerprint (`spam_policies:<hash>`). kind core | spam | policy_doc | other; status rolling_out | complete | changed.
+GOOGLE_EVENTS_TABLE = 'seo_google_events'
+GOOGLE_EVENTS_COLS = [('event_id', 'string'), ('source', 'string'), ('kind', 'string'), ('title', 'string'), ('started_at', 'string'), ('ended_at', 'string'),
+                      ('status', 'string'), ('url', 'string'), ('seen_at', 'string'), ('updated_at', 'string')]
+# seo_update_impact: upsert on site_id + event_id - what a finished core / spam update did to the website's pages (before vs after, by page)
+UPDATE_IMPACT_TABLE = 'seo_update_impact'
+UPDATE_IMPACT_COLS = [('site_id', 'string'), ('domain', 'string'), ('event_id', 'string'), ('event_title', 'string'), ('compared_at', 'string'), ('before_from', 'string'),
+                      ('before_to', 'string'), ('after_from', 'string'), ('after_to', 'string'), ('pages', 'number'), ('dropped', 'number'), ('stable', 'number'),
+                      ('gained', 'number'), ('pages_json', 'string'), ('note', 'string')]
+
 # ---- reuse instead of repeat (v4.6): one key/value cache for results that do not need to be fetched again ----
 # keys: 'age:<domain>' (registration date, 365 days), 'desc:<domain>' (site description, 30 days), 'sitemap:<site_id>' (sitemap fingerprint)
 # v4.9: 'ai_brands:<site_id>' (brand names AI uses for competitors -> their domain, learned by the Answer Analyst), 'ai_index:<site_id>' (the monthly AI-answer database view)
@@ -505,6 +550,9 @@ LEDGER_EST = {
     # R32's companion (2026-10-14, FIX_PLAN §3.13): the daily key-page watch spends nothing (25 plain GETs, no DataForSEO, no Claude) but
     # kept no row at all, so it was invisible to the guard and to the day's reconciliation. It reserves nothing and settles nothing.
     'page_watch':      {'ai': 0.0,  'dfs': 0.0},
+    # Index coverage (2026-10-29, docs/indexing-2026-10-29/DESIGN.md): free - Google's Search Console APIs and plain GETs only, no DataForSEO, no
+    # Claude. It keeps a $0 row so the run guard and the day's reconciliation see that it ran (the Page Watch's reason).
+    'index_coverage':  {'ai': 0.0,  'dfs': 0.0},
     # W3-F (2026-10-17): the Reply Reader classifies ONE reply with Haiku (about 1k tokens in, 300 out); the web app calls it per reply and waits
     'reply_read':      {'ai': 0.003, 'dfs': 0.0},
     # H3 (2026-10-28): "Make the final version" of a written page - at most one Claude Sonnet call over the sections an answer touches

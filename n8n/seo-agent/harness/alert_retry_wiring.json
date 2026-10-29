@@ -454,6 +454,62 @@
     "severity"
    ]
   },
+  "SEO Agent \u2014 Index Coverage": {
+   "guard": {
+    "gate": "After Run Ledger (Index)",
+    "if": "Run Allowed? (Index)",
+    "kit": "RG",
+    "load": "Load Open Runs (Index)",
+    "notice": "Refusal Notice (Index)",
+    "post": "Post Refusal (Index)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Index)",
+     "Refusal Notice (Index)",
+     "Refuse Run Ledger (Index)",
+     "Tell Caller (Index)?"
+    ],
+    "refuse": "Refuse Run Ledger (Index)",
+    "tell": "Tell Caller (Index)?"
+   },
+   "if_outputs": [
+    [
+     "Fetch Google Incidents"
+    ],
+    [
+     "Refuse Run Ledger (Index)"
+    ]
+   ],
+   "refuse_values": [
+    "cost_basis",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_at",
+    "settled_usd",
+    "status"
+   ],
+   "retry": {
+    "from": "Settle Run Ledger (Index)",
+    "gate": "Any Alert Retry (Index)?",
+    "load": "Load Open Alerts (Index)",
+    "plan": "Alert Retry Plan (Index)",
+    "post": "Post Alert Retry (Index)",
+    "result": "Alert Retry Result (Index)",
+    "save": "Save Alert Retry (Index)",
+    "table": "seo_ops_alerts"
+   },
+   "writes": [
+    "attempt_log",
+    "attempts",
+    "channels",
+    "delivered",
+    "last_attempt_at",
+    "next_attempt_at",
+    "notes",
+    "severity"
+   ]
+  },
   "SEO Agent \u2014 Link Builder": {
    "guard": {
     "gate": "After Run Ledger (LB)",
