@@ -246,7 +246,7 @@ describe('the weekly autopilot guides', () => {
 
 describe('every keyword-first ask has a guide', () => {
   // every kind the server builds (services/pipeline.ts, ladders.ts, autopilot.ts)
-  const KINDS: NeedsYouItem['kind'][] = ['publish', 'approve', 'overlap', 'duplicate', 'failed', 'connection', 'pileup', 'keyword', 'proposal', 'recheck', 'level', 'profile', 'ai_panel', 'questions', 'site_task'];
+  const KINDS: NeedsYouItem['kind'][] = ['publish', 'approve', 'overlap', 'duplicate', 'failed', 'connection', 'pileup', 'keyword', 'proposal', 'recheck', 'level', 'profile', 'ai_panel', 'questions', 'site_task', 'hold'];
   it('each Needs-you kind maps to a guide that exists', () => {
     expect(Object.keys(GUIDE_FOR_NEEDS_YOU_KIND).sort()).toEqual([...KINDS].sort());
     for (const k of KINDS) expect(guideById(GUIDE_FOR_NEEDS_YOU_KIND[k]), k).toBeDefined();

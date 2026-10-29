@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { format, isValid, parseISO } from 'date-fns';
-import { ArrowRight, BarChart3, FileSearch, FileText, Lightbulb, ListChecks, MousePointerClick, PenLine, Rocket, Search, ShieldAlert, Tags, TrendingUp, Workflow } from 'lucide-react';
+import { ArrowRight, BarChart3, FileSearch, FileText, Hand, Lightbulb, ListChecks, MousePointerClick, PenLine, Rocket, Search, ShieldAlert, Tags, TrendingUp, Workflow } from 'lucide-react';
 import type { ReportDetail } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
@@ -11,7 +11,7 @@ import { ChartCard, TimeSeriesChart } from '@/components/charts';
 import { CountUp, HeroStat, Stagger } from '@/components/insight';
 import { absolutePageUrl, ArticleViewer, findPlaceholders } from './article';
 import { CmsPublishPanel } from './CmsPublish';
-import { cleanMetaDescription, deliveryOf, draftNextStep, ownerEdits } from '@seo/shared';
+import { cleanMetaDescription, deliveryOf, draftNextStep, holdButtons, holdOf, holdTitle, ownerEdits, type HoldInfo } from '@seo/shared';
 import { DeliveryCallout, PageReview } from './review/ReviewPanels';
 import { Block, Bullets, Chips, Facts, has, CreditsCard, n, num, obj, objs, str, strs, usd, verdictLabel, type P } from './kit';
 import { keywordPrefill } from './meta';
@@ -69,6 +69,10 @@ export function ContentReport({ report }: { report: ReportDetail }) {
   const words = num(meta.word_count);
   const contentScore = num(meta.content_score);
   const avoid = verdict.toUpperCase() === 'AVOID';
+  // W0-D (2026-10-29): a page the engine held for the client's OK before writing (nothing written, only the check used), or, for a page the
+  // autopilot started, what the same check would have asked (trial mode: the page is written)
+  const hold = useMemo(() => holdOf(p), [p]);
+  const held = !!hold && hold.held && !html;
   // H3 (2026-10-28): a page written since H1 says what the client receives (ready / ready with questions / not ready) and its grade is
   // measured on the DELIVERED page. Older reports keep the finish-by-hand path below.
   const hasDelivery = !!html && !!(str(p.qa_delivery_status) || str(meta.delivery_status) || str(quality.delivery_status));
@@ -108,7 +112,7 @@ export function ContentReport({ report }: { report: ReportDetail }) {
       Answer {delivery.questionCount} {delivery.questionCount === 1 ? 'question' : 'questions'}
     </ButtonLink>
   );
-  const writeLink = !html && can('member') && keyword && !avoid && (
+  const writeLink = !html && !held && can('member') && keyword && !avoid && (
     <ButtonLink
       to={paths.tool(org.id, 'keyword', { siteId: report.siteId, prefill: keywordPrefill({ keyword, pageType: p.recommended_page, country }) })}
       variant="primary"
@@ -132,7 +136,7 @@ export function ContentReport({ report }: { report: ReportDetail }) {
       <ReportHero
         report={report}
         eyebrow={eyebrowExtra ? <span className="normal-case">{eyebrowExtra}</span> : undefined}
-        title={hasDelivery ? <>"{keyword || 'Your page'}": {delivery.headline}</> : html ? (notReady ? <>The draft for "{keyword || 'this keyword'}" needs your edits before you publish it</> : <>The page for "{keyword || 'this keyword'}" is written</>) : verdict ? <>{verdictLabel(verdict)}: "{keyword || 'Keyword'}"</> : keyword || 'Keyword'}
+        title={held && hold ? <>{holdTitle(keyword, hold)}</> : hasDelivery ? <>"{keyword || 'Your page'}": {delivery.headline}</> : html ? (notReady ? <>The draft for "{keyword || 'this keyword'}" needs your edits before you publish it</> : <>The page for "{keyword || 'this keyword'}" is written</>) : verdict ? <>{verdictLabel(verdict)}: "{keyword || 'Keyword'}"</> : keyword || 'Keyword'}
         description={details.length ? details.join(' · ') : undefined}
         aside={
           hasDelivery ? (
@@ -206,6 +210,13 @@ export function ContentReport({ report }: { report: ReportDetail }) {
           </>
         }
       />
+
+      {held && hold && <HoldPanel hold={hold} keyword={keyword} pageType={str(p.recommended_page) || str(meta.page_type)} country={country} siteId={report.siteId} />}
+      {hold && !hold.held && html && (
+        <Callout tone="info" title="Our check before writing would have asked you first">
+          {hold.reasons.join(' ')} This page was started automatically, so it was written as before; while this check is new, automatic pages are only checked.
+        </Callout>
+      )}
 
       {(reasons.length > 0 || risks.length > 0) && (
         <div className="grid gap-5 lg:grid-cols-2">
@@ -346,7 +357,7 @@ export function ContentReport({ report }: { report: ReportDetail }) {
           <ArticleViewer html={html} markdown={markdown} meta={meta} files={report.files} slug={slug} />
         </Block>
       ) : (
-        verdict && (
+        verdict && !held && (
           <Callout tone="info" title="No page in this report">
             This run checked the keyword without writing a page.
             {avoid ? ' The verdict advises against a page for this keyword: pick one of the secondary keywords or run keyword discovery.' : ' "Write this page" starts the full run with competitor research, the brief and a QA-checked page.'}
@@ -482,4 +493,45 @@ function ExistingPage({ page }: { page: P }) {
       value: Array.isArray(v) ? strs(v).join(', ') || `${v.length} items` : /^https?:\/\//.test(String(v)) ? <ExternalLink href={String(v)} /> : String(v),
     }));
   return <KeyValue items={items} />;
+}
+
+/**
+ * W0-D (2026-10-29): a page held for the client's OK. Nothing was written and only the check was used; the three ways forward each open the
+ * Write a page form ready to start: the page the website already has (improved at its own address), the search our verdict recommends, or
+ * this page as asked ("Write it anyway", which the report of the written page then records).
+ */
+function HoldPanel({ hold, keyword, pageType, country, siteId }: { hold: HoldInfo; keyword: string; pageType: string; country: string; siteId: string | null }) {
+  const { org, can } = useOrgCtx();
+  const buttons = holdButtons(hold, { keyword, pageType, country });
+  return (
+    <Block title="Needs your OK" description="Nothing was written and only the check was used" icon={<Hand />} iconTone="warning">
+      <Bullets items={hold.reasons} tone="warning" />
+      {hold.duplicates.length > 0 && (
+        <p className="mt-3 text-[13px] leading-relaxed text-ink-2">
+          Your page for this search:{' '}
+          {hold.duplicates.map((d, i) => (
+            <span key={d.url}>
+              {i > 0 && ', '}
+              <ExternalLink href={d.url}>{d.title || d.url}</ExternalLink>
+            </span>
+          ))}
+        </p>
+      )}
+      {can('member') ? (
+        <ul role="list" className="mt-4 space-y-3">
+          {buttons.map((b, i) => (
+            <li key={b.id} className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+              <ButtonLink to={paths.tool(org.id, 'keyword', { siteId, prefill: b.prefill })} size="sm" variant={i === 0 ? 'primary' : 'secondary'} icon={<ArrowRight className="size-4" />}>
+                {b.label}
+              </ButtonLink>
+              {b.why && <span className="text-[13px] leading-snug text-ink-3">{b.why.charAt(0).toUpperCase() + b.why.slice(1)}.</span>}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-[13px] text-ink-3">A member of your team chooses what to do with this page.</p>
+      )}
+      <p className="mt-4 text-xs leading-relaxed text-ink-3">{hold.rule}</p>
+    </Block>
+  );
 }

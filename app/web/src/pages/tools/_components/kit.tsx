@@ -279,6 +279,8 @@ export interface ShellProps {
   onUsePlan?: (plan: NonNullable<PipelineNotice['usePlan']>) => void;
   /** MKT: Accept on a warning, its correction written into the form (useRunSubmit's onAccept) */
   onAccept?: (set: Record<string, unknown>) => void;
+  /** W0-D (2026-10-29): one more line under the price (Write a page: what a held keyword uses) */
+  priceNote?: ReactNode;
   children: ReactNode;
 }
 
@@ -487,7 +489,7 @@ function CreditsMeter({ cost }: { cost: number }) {
 }
 
 /** The form with its sticky summary (right column on desktop, a bar at the bottom on phones). */
-export function ToolShell({ mode, site, cost, eta, emailCopy, extras = [], onSubmit, pending, error, submitLabel = 'Start the run', blocked: blockedBy, values = {}, onUsePlan, onAccept, children }: ShellProps) {
+export function ToolShell({ mode, site, cost, eta, emailCopy, extras = [], onSubmit, pending, error, submitLabel = 'Start the run', blocked: blockedBy, values = {}, onUsePlan, onAccept, priceNote, children }: ShellProps) {
   const { org, can, me } = useOrgCtx();
   const providers = useProviders();
   const showEmail = emailCopy && !!providers.data?.engineEmails;
@@ -530,6 +532,7 @@ export function ToolShell({ mode, site, cost, eta, emailCopy, extras = [], onSub
               <CostValue usd={cost} />
             </span>
             {cost > 0 && <span className="block text-xs text-ink-3">Held while it runs; charged what it uses, never more</span>}
+            {priceNote && <span className="mt-1 block text-xs text-ink-3">{priceNote}</span>}
           </SummaryRow>
           <SummaryRow icon={<Clock />} label="Time">
             <span className="text-ink-2">{etaLabel(eta)}</span>

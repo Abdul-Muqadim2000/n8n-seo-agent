@@ -121,3 +121,12 @@ and prints the BEFORE numbers Wave 0 changes.
 * Anonymised for the public repo: brand Nova&, domain novaand.example (the domain label equals the brand, as on the real site, so brand
   detection behaves the same), the client's own page prose cut to lines of 10 words or fewer (headings and slogans stay), competitor page
   bodies removed, hook token, API key and company id replaced. Our generated drafts keep their text with the identity swapped.
+
+**W0-D, the hold before the brief (`scenarios_hold.js`, W0D1-W0D9, 2026-10-29).** *Parse Verdict* holds a page run for the client's OK when
+the verdict scored the keyword under 50 or the website already has a page for the search (kit `v5/code/_dup_targets.js`, shared with the
+late *Originality Check*). Checked on the fixtures above: 3299 is held with both reasons and its three ways forward; `hold_ack` passes; a
+run the cadence, a ladder or the tracker started is only logged (`hold_shadow`, shadow mode, D17); case studies, AI answer pages, refreshes
+and keyword-ladder pages are not held for the score, a null score is never a hold; the guide that ranks (949) is never held and never its
+own duplicate at any score, however it is started; production's two 2026-10-29 service pages for the guide's searches are recognised as
+overlapping it (shadow-logged); the late check finds what production found on 3299; *Content Log Row* writes `held`; the cadence skips a
+held keyword for 90 days and takes the next candidate (D1); the callback keeps stage `content` with `hold` and `verdict_acknowledged`.

@@ -41,6 +41,7 @@ export const changelog: ChangelogEntry[] = [
       'Fixes to how written pages are checked and finished, so a page we call ready to publish is ready in every part, including what people see in search results.',
     highlights: [
       'Every written page has a real search description, the text under your title in search results: when a draft has none, a short one or a broken one, we write it from your brief or from the page\'s quick answer, and it never names a price, a promise or a number that your business details and the page do not back. A page whose description we cannot write is not marked ready to publish, and pages written earlier with a broken description get a new one when you make the final version',
+      'We ask before writing a page that is unlikely to pay off: when our verdict scores the keyword under 50 out of 100, or your website already has a page for the same search, the page waits for your OK in Needs you. Choose "Write it anyway", the search we recommend instead, or "Improve the existing page". Nothing is written and only the check is used, about 9 credits instead of about 114 for a written page. Pages your autopilot writes are only checked for now, and a keyword that waited is not picked again for 90 days',
     ],
     features: ['content'],
   },

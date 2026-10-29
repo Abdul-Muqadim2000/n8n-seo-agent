@@ -146,6 +146,9 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         ...(input.aiTarget
           ? { ai_target: { question: input.aiTarget.question, kind: input.aiTarget.kind, target_id: input.aiTarget.targetId, fanout: input.aiTarget.fanout, sources: input.aiTarget.sources.map((x) => ({ u: x.url, t: x.title })), competitors: input.aiTarget.competitors } }
           : {}),
+        // W0-D (2026-10-29): the client chose "Write it anyway" on a held page (exact key, after the fuzzy-matched head; Normalize Input passes it
+        // through as hold_ack: { score }, harness S23)
+        ...(input.holdAck ? { hold_ack: { score: input.holdAck.score ?? null } } : {}),
       };
     }
 

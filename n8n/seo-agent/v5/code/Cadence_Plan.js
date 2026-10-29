@@ -204,6 +204,11 @@ for (const s of list) {
   const cfg = { mode: lc(siteRow.mode) === 'manual' ? 'manual' : 'auto', opportunities: lc(siteRow.opportunities) === 'manual' ? 'manual' : 'auto', max_active: posInt(siteRow.max_active, CONFIG.max_active, 20), max_waiting: posInt(siteRow.max_waiting, CONFIG.max_waiting, 100) };
   const slog = logs.filter(l => normD(l.domain) === s.domain);
   const recent = new Set(slog.filter(l => l.status === 'published' || (at - new Date(l.started_at || 0)) < CONFIG.skip_recent_days * 864e5).map(l => norm(l.keyword)));
+  // W0-D (page-quality 2026-10-29, REVIEW_CODE M3, owner D1): a keyword a page run HELD for the client's OK (verdict under 50, or a page the
+  // website already has for the search) is not picked again for HELD_RECHECK_DAYS: the cadence takes its next candidate instead, and never
+  // writes it on its own (only the client's "Write it anyway", a run with hold_ack, does). A held row writes nothing, so it spends no page.
+  const HELD_RECHECK_DAYS = 90;   // mirrored in app/server/src/services/cadence.ts (CADENCE.heldRecheckDays)
+  for (const l of slog) if (String(l.status || '') === 'held' && (at - new Date(l.started_at || 0)) < HELD_RECHECK_DAYS * 864e5) recent.add(norm(l.keyword));
   const publishedKw = new Set(slog.filter(l => l.published_url).map(l => norm(l.keyword)));
   const lrows = ladders.filter(l => normD(l.domain) === s.domain).sort(byRung);
   const ladderKw = new Set(lrows.map(l => norm(l.keyword)));

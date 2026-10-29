@@ -289,6 +289,80 @@
     }
   },
   {
+    "name": "keyword: written anyway after a hold (hold_ack)",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "keyword",
+      "keyword": "ms 365 erp",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "customers": "distributors, wholesalers, finance teams",
+      "page_type": "Service Page",
+      "existing_page_url": "",
+      "local_area": "",
+      "business_facts": "12 years in the UAE; 40 ERP rollouts; Odoo Gold Partner",
+      "cta": "Book a free scoping call",
+      "tone": "Professional and direct",
+      "goal": "Get leads and enquiries",
+      "features": [],
+      "receive": [
+        "Keyword Report",
+        "Page Content"
+      ],
+      "hold_ack": {
+        "score": 42
+      }
+    },
+    "expect": {
+      "mode": "keyword",
+      "email": "",
+      "hold_ack": {
+        "score": 42
+      },
+      "include_content": true,
+      "force_content": false,
+      "page_type": "Service Page"
+    }
+  },
+  {
+    "name": "keyword: a page run without an acknowledgement carries none",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "keyword",
+      "keyword": "ms 365 erp",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "customers": "distributors, wholesalers, finance teams",
+      "page_type": "Service Page",
+      "existing_page_url": "",
+      "local_area": "",
+      "business_facts": "12 years in the UAE; 40 ERP rollouts; Odoo Gold Partner",
+      "cta": "Book a free scoping call",
+      "tone": "Professional and direct",
+      "goal": "Get leads and enquiries",
+      "features": [],
+      "receive": [
+        "Keyword Report",
+        "Page Content"
+      ]
+    },
+    "expect": {
+      "mode": "keyword",
+      "hold_ack": null,
+      "include_content": true
+    }
+  },
+  {
     "name": "discover with site + audit follow-up",
     "headers": {
       "x-forwarded-for": "app:7a1c2d3e-org"

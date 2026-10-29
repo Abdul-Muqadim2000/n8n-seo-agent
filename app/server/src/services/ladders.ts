@@ -716,7 +716,7 @@ function nextStep(
 /** the same words: "e invoicing in uae" and "UAE e-invoicing" */
 const sameSearch = (a: string, b: string) => keywordTokens(a).sort().join(' ') === keywordTokens(b).sort().join(' ');
 
-const KIND_RANK: Record<NeedsYouItem['kind'], number> = { connection: 0, keyword: 1, profile: 1.5, proposal: 2, level: 3, recheck: 4, pileup: 5, publish: 6, failed: 7, duplicate: 8, overlap: 9, approve: 10, ai_panel: 11, questions: 6.5, site_task: 6.8 };   // site tasks: a step on the website comes after the pages and their questions   // H3: questions on a written page come after the pages to publish   // AI-FOCUS: the AI panel's decisions come after the pages
+const KIND_RANK: Record<NeedsYouItem['kind'], number> = { connection: 0, keyword: 1, profile: 1.5, proposal: 2, level: 3, recheck: 4, pileup: 5, publish: 6, failed: 7, duplicate: 8, overlap: 9, approve: 10, ai_panel: 11, questions: 6.5, site_task: 6.8, hold: 5.5 };   // W0-D: a page that waits for the client's OK comes before the pages to publish   // site tasks: a step on the website comes after the pages and their questions   // H3: questions on a written page come after the pages to publish   // AI-FOCUS: the AI panel's decisions come after the pages
 
 /** Most urgent first: warnings, then by kind. */
 export function sortNeedsYou(items: NeedsYouItem[]): NeedsYouItem[] {
