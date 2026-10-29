@@ -2,6 +2,22 @@
 
 Read this first if you are picking the work up. Owner's ask: OWNER_BRIEF.md. Contract: DESIGN.md + FIX_CONTRACT.md.
 
+## CURRENT STATE (2026-10-30) — read this block first
+- Fix waves 1-3 merged (wave 3: engine 72ef110e..98f462fc, app 0409a89b..95e32f0d; merges 59676b17, ab25cf1b). REVIEW_3's blockers R1/R2
+  fixed with failing-then-passing checks. Docker checks on the merge: harness **13891 / 0**; typecheck clean; shared 952, server 1552
+  (+46 skipped), web 275, web build OK. CLAUDE.md status + RUNBOOK updated (c17715fb). Everything pushed on `feature/indexing`.
+- Tutorial (A17) being made by an agent at save time: demo checkout /Users/abdul.muqadim/n8n_devaicon-demo, video-skills repo
+  ~/Downloads/hiresuite-video-skills; it commits the website tutorials page on feature/indexing. If it stopped: check both repos' git log.
+- Then: ask the owner to deploy. Sequence (REVIEW_CROSS §deploy, adjusted): backup (`deploy/gcp/backup.sh`); not on a Monday, ≥ 2 h before
+  05:15 New York; `deploy/gcp/tunnel.sh`; from a checkout of `feature/indexing`: `python3 deploy/gcp/deploy_engine.py` (dry run: expect the
+  new SEOagentIndexCv1, Site Admin, main v4 Monitor Row (Track), the catch-up, 10 schema-only workflows, 2 new seo_monitors columns), then
+  `--apply --create-missing`; pin `{"domain":"techand.ai","cap":20}` on Manual Run once, check seo_index_runs / seo_index_pages, the $0
+  ledger row and the watch execution 50 min later; API on the VM from feature/indexing (detached checkout, `up -d --build app`, no
+  migration); web via PR feature/indexing -> main (Vercel). Next day watch the 05:15 run. Then merge feature/indexing into
+  feature/seo-agent-v4.5 (coordinate with the page-quality session) so later deploys keep it.
+- Rollback: deactivate SEOagentIndexCv1 (API) or index_watch=false per site; delete `site_tasks` rows of kind `indexing` BEFORE reverting
+  the API image (the old app checks unknown kinds as redirects); revert the PR for the web.
+
 ## Where everything is
 - Integration branch **`feature/indexing`** (worktree `/Users/abdul.muqadim/n8n_devaicon-indexing`, pushed to GitHub). Head 3abcbcd3 at save time.
 - Build worktrees (branches `ix/engine`, `ix/app`, `ix/mkt`): `/Users/abdul.muqadim/n8n_devaicon-ix-engine`, `…-ix-app`, `…-ix-mkt`.
