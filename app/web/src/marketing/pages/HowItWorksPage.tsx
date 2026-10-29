@@ -97,6 +97,7 @@ const STAGES: Stage[] = [
       'A page that failed its checks is never sent to your CMS',
       'Planned pages are found in your sitemap by slug and title',
       'The live check confirms what search engines will see',
+      'Every day, which of your pages Google left out of its index, and why',
       'New and updated pages go to Bing and IndexNow that week',
     ],
     visual: <PublishCheckMockup />,

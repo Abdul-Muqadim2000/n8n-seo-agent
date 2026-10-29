@@ -41,6 +41,7 @@ export const pricingTiers: PricingTier[] = [
       'Three autopilot levels, and "Coming up" two days before anything is written',
       'Monthly technical audit with a fix pack',
       'Search Console, GA4 and Trends tracking, with weekly rank checks',
+      'Index coverage every day: which of your pages Google left out, why, and what to do', // PLACEHOLDER, confirm the plan
       'A weekly report on your website\'s own weekday, alerts and share links',
       'Reports delivered by e-mail or webhook, on your schedule',
       'Alerts in Slack or Teams, and findings as Jira, Linear or Asana tickets',
@@ -322,6 +323,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Daily key-page check and pre-release check', hint: 'Your build asks whether a release candidate is safe to publish', values: [true, true, true] },
       { label: 'What only appears after JavaScript', hint: 'Key pages read twice, so content a crawler cannot see is flagged', values: [true, true, true] },
       { label: 'Search Console, GA4 and Trends', values: [true, true, true] },
+      { label: 'Index coverage, every day', hint: 'Which of your pages Google left out of its index, why, and what to do; free to run on your connected Search Console', values: [true, true, true] }, // PLACEHOLDER, confirm the plan
       { label: 'AI search visibility', hint: 'ChatGPT, Gemini, Perplexity, Claude, AI Mode, AI Overviews; Copilot and the ChatGPT and Gemini APIs on request', values: [false, '50 a website included, up to 500', 'Up to 500 questions'] }, // a bigger panel uses extra credits, shown before saving
       { label: 'Questions by buyer role and market', hint: 'Rates per topic, buyer role and market with 95% ranges; import your own list as CSV', values: [false, true, true] }, // PLACEHOLDER, confirm
       { label: 'Every AI answer, opened up', hint: 'The whole answer, brands in order, every source cited, searches run; each question across assistants and over time; CSV downloads', values: [false, true, true] },

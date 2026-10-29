@@ -10,6 +10,7 @@ const APP_PATH: Record<string, string> = {
   'keyword-ladders': 'pipeline/ladders',
   content: 'content',
   'technical-audits': 'technical',
+  'index-coverage': 'indexing',
   'site-tracking': 'overview',
   'ai-visibility': 'ai-visibility',
   'ai-growth': 'ai-visibility#ai-growth',
