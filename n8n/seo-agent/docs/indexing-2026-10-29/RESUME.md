@@ -83,7 +83,7 @@ Third review (REVIEW_3.md) running at save time: verify wave 2, hunt regressions
 - Versioned policy checklist with AI-drafted changes. Default: the watcher only alerts on a spam-policies page change.
 
 ## OWNER DECISIONS 2026-10-30: the next builds after Index coverage is deployed
-1. **Safe auto-fixes on client pages** (YES): WordPress first; remove a wrong noindex, fix canonicals, add redirects; backup before every
+1. **Safe auto-fixes on client pages** (PAUSED by the owner 2026-10-30: do NOT build now; kept here as a note for later; estimate 3-5 days): WordPress first; remove a wrong noindex, fix canonicals, add redirects; backup before every
    change, one-click undo, the client approves each change (approval default). Needs new CMS-connector work (today it only creates /
    updates articles by slug). Steps on your website stay the fallback for sites without a connection.
 2. **Search Console access level per website, chosen by the client** (YES, opt-in): an option to give the application FULL access to
