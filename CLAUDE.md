@@ -3,6 +3,7 @@
 Enterprise SEO automation built as n8n workflows: keyword research, keyword verdicts, long-form content with QA, technical site audits, full SEO reports, AI-visibility checks. Everything lives in `n8n/seo-agent/`; the stack runs locally with Docker Compose from `n8n/`.
 
 ## Read first
+- **`n8n/seo-agent/docs/indexing-2026-10-29/RESUME.md` — Index coverage (2026-10-30, branch `feature/indexing`, not deployed): finding clients' pages Google left out, why, and what to do.**
 - **`n8n/seo-agent/docs/system-review-2026-10-17/RESUME.md` — START HERE (2026-10-18): the fourth re-rating (6/10, market 4.2, enterprise 1.5), every fix and the five enterprise capabilities merged but NOT deployed, the deploy checklist (§9), the live checks (§5), owner decisions (§6) and launch blockers.**
 - `n8n/seo-agent/docs/system-review-2026-10-15/NEXT_WAVE_BENCHMARK_ROWS.md` — (previous) the 28 open benchmark rows of FIX_PLAN §3.16 that are in reach, grouped into 8 parallel agents (model per agent), the leftovers, the orchestration rules, numbers, deploy and live-check rules. Every R34–R119 defect is already fixed.**
 - `n8n/seo-agent/docs/system-review-2026-10-15/DEFECTS.md` — (done 2026-10-16) to fix the defects: every defect of the third re-rating (5.5/10, 2026-10-16) re-verified with its root cause at file:line, the fix order by family, and an offline + live acceptance test per defect (dossiers in `defects/`). 15 High, 39 Medium, 28 Low, R53 withdrawn, R117–R119 added.** The run itself: `RESULTS.md`, `parts/`, `SCORECARD.md`; register FIX_PLAN §3.17.
@@ -61,7 +62,24 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-10-28 midday, GA4 + autopilot steps fix from a client report — latest)
+## Status (2026-10-30, Index coverage: clients' old pages Google left out — latest, NOT deployed)
+Owner asked: our new pages get indexed, but many clients' older pages are not; find them, say why and what to do, carefully (production).
+Prod read 2026-10-29: devaicon.com 19 of 29 sitemap pages with no impressions. **Built, reviewed three times, fixed in three waves, NOT
+deployed**, on branch **`feature/indexing`** (worktree `../n8n_devaicon-indexing`; not merged into `feature/seo-agent-v4.5`). Read
+**`n8n/seo-agent/docs/indexing-2026-10-29/RESUME.md`** (state, deploy sequence, rollback) — DESIGN.md + FIX_CONTRACT.md (contract),
+RESEARCH.md (Google facts: inspection only reads, no API requests indexing, the Indexing API is jobs/livestreams only, an unchanged sitemap
+resubmit does nothing, crawled-not-indexed is a quality judgement), REVIEW_ENGINE/APP/CROSS + REVIEW_2/3. New free daily workflow
+**`SEOagentIndexCv1`** (05:15, one execution per website, cap `index_daily_cap` 300/day/property of Google's shared 2,000, reservation +
+attempt rows, catch-up covered), tables `seo_index_pages` / `_history` / `_runs`, `seo_google_events` (Search Status Dashboard feed +
+spam-policies fingerprint, freeze while an update rolls out), `seo_update_impact`; `seo_monitors.index_watch` / `index_daily_cap`. App:
+Indexing page, site-task kind `indexing:<cause>` (done only on the exact fix; `fix_seen_at` = waiting for Google; `fix_failed_at` = Google
+still sees it), `ix:*` recommendations ("Improve this page" approval-only, "Ask Google to read it" manual), stage `index_coverage` (0
+credits), 14 guides, marketing capability. Out of scope (owner decisions): sitemap submit (needs a write scope), changing client pages,
+automatic rewrites, versioned policy checklist. Checks: harness **13891 / 0**, app shared 952 / server 1552 / web 275, typecheck, build.
+Deploy from `feature/indexing` (production = 003bb9cb has no engine change before its base), engine first, not on a Monday, then merge it
+into `feature/seo-agent-v4.5`.
+
+## Status (2026-10-28 midday, GA4 + autopilot steps fix from a client report — previous)
 devaicon.com reported "Connect GA4" in Recommendations while GA4 was connected, and the first audit offered as a manual step though the
 autopilot runs it. Both ours (verified on prod): the GA4 id saved in the app never reached the engine's `seo_sites` row, and setup
 recommendations ignored the autopilot. **Deployed 2026-10-28 ~10:23 UTC**: API on the VM at `0221f921` (backup `pg/2026-10-28/*T102249Z`,

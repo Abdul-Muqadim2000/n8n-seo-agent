@@ -245,8 +245,8 @@ two ways, and the second needs no Vercel work per agency:
   - A run in progress dies. Its ledger row goes stale after 2 hours and holds nothing; the customer sees the run fail.
   - A cycle due while the VM was down starts at the dispatcher's next sweep (its own "Instance Started" door, or the 5-minute
     sweep): it is a row in `seo_cycles`, not an in-memory fire. A job the VM killed is seen dead in the run ledger and n8n's
-    executions and started again (three attempts). The two daily crons left (AI Pulse, Page Watch) are replayed by the
-    **Schedule Catch-up** (`SEOagentCatchUp1`), which also watches the dispatcher (alert after 20 minutes without a sweep).
+    executions and started again (three attempts). The three daily crons left (AI Pulse, Page Watch, Index Coverage) are replayed by
+    the **Schedule Catch-up** (`SEOagentCatchUp1`), which also watches the dispatcher (alert after 20 minutes without a sweep).
 - **Test it:** `gcloud compute instances stop alaventra-vm-1 --zone me-central1-a`. The group repairs it; watch
   `gcloud compute instance-groups managed list-instances alaventra-mig --zone me-central1-a`.
 
