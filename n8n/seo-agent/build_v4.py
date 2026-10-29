@@ -12723,6 +12723,163 @@ assert "'held'" in code('Content Log Row') and "$('Parse Verdict')" in code('Con
 log('Ask before writing (W0-D, 2026-10-29, section 153): Parse Verdict holds a page run for the client\'s OK before the brief when the verdict scored the keyword under 50 or the website already has a page for the search (the DUP kit, shared with the late Originality Check); case studies, AI answer pages, refreshes and keyword-ladder pages are not held for the score, a null score is never a hold, hold_ack ("Write it anyway") passes; automatic runs only log the hold (shadow mode, D17); Need Content? sends a hold to the report-only delivery, the callback keeps stage content with hold / hold_shadow / verdict_acknowledged, Content Log Row writes `held` and the cadence skips the keyword for 90 days')
 
 # =============================================================================
+# 154. LOCAL REGULATORY FACTS ARE RESEARCHED, DATED AND NEVER STALE (W0-F, page-quality programme 2026-10-29,
+#      docs/page-quality-2026-10-29/PLAN.md §3 Fix 6; R4 D7, REVIEW_EVIDENCE H5, REVIEW_CODE M6 / L6). Page run 3299 ("ms 365 erp", a UAE
+#      ERP partner) never learned the UAE e-invoicing timeline: the only facts search stripped every country name. And the 30 October 2026
+#      provider deadline is itself an amendment (Ministerial Decision No. 66 of 2026 replaced 31 July 2026 in Decision No. 244 of 2025), so a
+#      step that reads "the official page" can state a superseded date, and from 31 October a page must say that deadline has passed.
+#      * v5/data/regulators.json: market (ISO) -> topics -> official domains, trigger words, searches, and `known` dated obligations a person
+#        read on the official text (url + verbatim paragraph + checked_on, used until `fresh_until`). AE, SA, PK first (owner decision D4).
+#      * Analyze Competitor Pages -> Regulatory Plan -> Any Regulatory Topics? -> Search Regulatory Pages (SearXNG, free) -> Regulatory
+#        Candidates -> Regulatory Search Down? -> [Regulatory SERP (DataForSEO, only when SearXNG answered nothing; in-200 gate, on every
+#        ledger list) -> Regulatory SERP Candidates] -> Any Regulatory Pages? -> Read Regulatory Pages (the reader) -> Collect Regulatory
+#        Facts -> Facts SERP. The chain sits IN FRONT of the facts search, not between Collect Facts and the analyzer, so *Collect Facts*
+#        stays the one node the Competitor Analyzer, its token counter (sections 62 / 76) and *Parse Analysis* (the patch at section 1) read
+#        (REVIEW_CODE L6): Collect Facts carries `regulatory` / `regulatory_facts` on and puts the regulatory sources first in `facts`, so the
+#        figure check, the money mask and the evidence plan know them.
+#      * The latest dated official source wins and records what it supersedes; with no official text, two independent secondary sources
+#        that agree (labelled as reported by them); one alone never; else "none could be confirmed". The status (upcoming / passed / in
+#        force) is computed against the day the page is written, in the market's own time zone.
+#      * The Strategy Brief and the Copywriter print the REGULATORY FACTS block, read from $('Collect Regulatory Facts') explicitly inside a
+#        try/catch (RC M6: no field has to survive every node between); Content QA records `regulatory` {required, stated, status,
+#        source_tier, missing, stale, passed_as_upcoming} with no score (Wave 2's accuracy items read it).
+#      * Nothing here can stop a page run: every node of the chain answers on failure, and the run goes on without the block.
+# =============================================================================
+REG_SRC153 = _rd0('code/_regulatory.js').rstrip('\n')
+assert 'const REG = (() => {' in REG_SRC153
+REGULATORS153 = json.loads(_rd0('data/regulators.json'))
+REGULATORS_SRC153 = 'const REGULATORS = ' + json.dumps(REGULATORS153, ensure_ascii=False, separators=(',', ':')) + ';   // v5/data/regulators.json (build section 154)'
+# the data the build ships: every market names official domains; the UAE e-invoicing rows are the official text, with the amendment
+for _iso153, _m153 in REGULATORS153['markets'].items():
+    assert _m153.get('official') and _m153.get('topics') and isinstance(_m153.get('utc_offset_hours'), int), 'W0-F: market ' + _iso153 + ' has no official domains, topics or time zone'
+    for _tid153, _t153 in _m153['topics'].items():
+        assert _t153.get('triggers') and _t153.get('search'), 'W0-F: ' + _iso153 + '/' + _tid153 + ' has no trigger words or search'
+        for _k153 in _t153.get('known') or []:
+            assert re.match(r'^\d{4}-\d{2}-\d{2}$', _k153['date']) and _k153.get('paragraph') and _k153.get('checked_on') and _k153.get('source_date'), ('W0-F: a known row without its date, paragraph, source date or check date', _k153)
+            assert any(re.match(r'^https://(www\.)?' + re.escape(d) + r'/', _k153['url']) for d in (_t153.get('official') or _m153['official'])), ('W0-F: a known row is not on an official domain', _k153['url'])
+            assert _t153.get('fresh_until'), 'W0-F: ' + _iso153 + '/' + _tid153 + ' carries known rows with no fresh_until'
+_ae153 = {(k['verb'], k['subject_class']): k for k in REGULATORS153['markets']['AE']['topics']['e-invoicing']['known']}
+assert _ae153[('appoint', 'ge:50000000')]['date'] == '2026-10-30' and _ae153[('appoint', 'ge:50000000')]['supersedes'] == '2026-07-31' and _ae153[('implement', 'ge:50000000')]['date'] == '2027-01-01', \
+    'W0-F: the UAE phase 1 rows are not Ministerial Decision No. 66 of 2026 (30 October 2026, superseding 31 July 2026; live 1 January 2027)'
+for _bad153 in ('—', '–', '“', '”', '…'):
+    for _f153 in ('code/_regulatory.js', 'code/Regulatory_Plan.js', 'code/Regulatory_Candidates.js', 'code/Regulatory_SERP_Candidates.js', 'code/Collect_Regulatory_Facts.js', 'data/regulators.json'):
+        assert _bad153 not in _rd0(_f153), 'W0-F: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f153
+def _kit153(src):
+    for _mk153 in ('/*__REGULATORS__*/', '/*__REGULATORY__*/'):
+        assert src.count(_mk153) == 1, 'W0-F: marker ' + _mk153 + ' must appear exactly once'
+    return src.replace('/*__REGULATORS__*/', REGULATORS_SRC153).replace('/*__REGULATORY__*/', REG_SRC153)
+
+# ---------- A. the chain, in front of the facts search ----------
+assert [t['node'] for l in conns['Analyze Competitor Pages']['main'] for t in l] == ['Facts SERP'], 'W0-F: Analyze Competitor Pages no longer feeds Facts SERP alone'
+assert "const prev = $('Analyze Competitor Pages').first().json;" in code('Collect Facts'), 'W0-F: Collect Facts no longer reads Analyze Competitor Pages'
+_fs153 = pos('Facts SERP'); _x153, _y153 = _fs153[0] - 200, _fs153[1] + 380
+add_node('Regulatory Plan', 'n8n-nodes-base.code', 2, {'jsCode': _kit153(_rd0('code/Regulatory_Plan.js'))}, [_x153, _y153])
+if_node('Any Regulatory Topics?', "{{ !$json.skip }}", [_x153 + 180, _y153])
+add_node('Search Regulatory Pages', 'n8n-nodes-base.httpRequest', 4.5, {
+    'method': 'GET', 'url': '={{ $json.url }}', 'sendHeaders': True,
+    'headerParameters': {'parameters': [{'name': 'Accept', 'value': 'application/json'}, {'name': 'User-Agent', 'value': 'SEO-Agent-Regulatory/1.0'}]},
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 1000}}, 'timeout': 20000}},
+    [_x153 + 360, _y153 - 80], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, **retry_lint.RETRY})
+add_node('Regulatory Candidates', 'n8n-nodes-base.code', 2, {'jsCode': _kit153(_rd0('code/Regulatory_Candidates.js'))}, [_x153 + 540, _y153 - 80])
+if_node('Regulatory Search Down?', "{{ $json.dfs_fallback === true }}", [_x153 + 720, _y153 - 80])
+_rs153 = copy.deepcopy(nodes['Facts SERP']); _rs153['name'] = 'Regulatory SERP'; _rs153['id'] = nid('Regulatory SERP'); _rs153['position'] = [_x153 + 900, _y153 - 260]
+_rs153['parameters']['jsonBody'] = "={{ JSON.stringify([{ keyword: String($json.keyword || ''), location_code: $json.location_code, language_code: $json.language_code || 'en', depth: 10 }]) }}"
+_rs153['parameters']['options'] = {'timeout': 60000}
+for _k153 in ('retryOnFail', 'maxTries', 'waitBetweenTries'): _rs153.pop(_k153, None)   # N3: a paid call that can carry two items has no node-level retry; the in-200 gate re-sends the failed item
+_rs153['onError'] = 'continueRegularOutput'
+nodes['Regulatory SERP'] = _rs153
+add_node('Regulatory SERP Candidates', 'n8n-nodes-base.code', 2, {'jsCode': _kit153(_rd0('code/Regulatory_SERP_Candidates.js'))}, [_x153 + 1080, _y153 - 260])
+if_node('Any Regulatory Pages?', "{{ !$json.skip }}", [_x153 + 1260, _y153 - 80])
+_rr153 = copy.deepcopy(nodes['Read Competitor Pages']); _rr153['name'] = 'Read Regulatory Pages'; _rr153['id'] = nid('Read Regulatory Pages'); _rr153['position'] = [_x153 + 1440, _y153 - 160]
+_rr153['parameters']['options']['batching']['batch']['batchInterval'] = 1500
+_rr153['alwaysOutputData'] = True; _rr153['onError'] = 'continueRegularOutput'
+nodes['Read Regulatory Pages'] = _rr153
+add_node('Collect Regulatory Facts', 'n8n-nodes-base.code', 2, {'jsCode': _kit153(_rd0('code/Collect_Regulatory_Facts.js'))}, [_x153 + 1620, _y153])
+disconnect('Analyze Competitor Pages', 'Facts SERP')
+connect('Analyze Competitor Pages', 'Regulatory Plan'); connect('Regulatory Plan', 'Any Regulatory Topics?')
+connect('Any Regulatory Topics?', 'Search Regulatory Pages', 0); connect('Any Regulatory Topics?', 'Collect Regulatory Facts', 1)
+connect('Search Regulatory Pages', 'Regulatory Candidates'); connect('Regulatory Candidates', 'Regulatory Search Down?')
+connect('Regulatory Search Down?', 'Regulatory SERP', 0); connect('Regulatory Search Down?', 'Any Regulatory Pages?', 1)
+connect('Regulatory SERP', 'Regulatory SERP Candidates'); connect('Regulatory SERP Candidates', 'Any Regulatory Pages?')
+connect('Any Regulatory Pages?', 'Read Regulatory Pages', 0); connect('Any Regulatory Pages?', 'Collect Regulatory Facts', 1)
+connect('Read Regulatory Pages', 'Collect Regulatory Facts'); connect('Collect Regulatory Facts', 'Facts SERP')
+for _k153 in ('retryOnFail', 'maxTries', 'waitBetweenTries'):
+    assert nodes['Search Regulatory Pages'].get(_k153) and nodes['Read Regulatory Pages'].get(_k153), 'W0-F: a free regulatory read lost the retry rule (' + _k153 + ')'
+assert 'searxng:8080' in code('Regulatory Plan') and 'r.jina.ai' in nodes['Read Regulatory Pages']['parameters']['url'], 'W0-F: the regulatory search is not the stack\'s own SearXNG, or the read is not the reader'
+
+# ---------- B. the paid fallback: behind the in-200 gate, never retried node-level, counted on every ledger list that reaches it ----------
+_g153 = _gate75('Regulatory SERP', "the paid search for this page's official rules and dates (asked only when the free search is down)", 'search')
+assert [t['node'] for l in conns[_g153['answers']]['main'] for t in l] == ['Regulatory SERP Candidates'], 'W0-F: the gated answers do not reach Regulatory SERP Candidates'
+assert not nodes['Regulatory SERP'].get('retryOnFail') and not nodes[_g153['retry']].get('retryOnFail'), 'W0-F: the paid fallback re-bills on a node-level retry'
+_rev153 = {}
+for _s153, _o153 in conns.items():
+    for _l153 in (_o153.get('main') or []):
+        for _t153 in (_l153 or []): _rev153.setdefault(_t153['node'], set()).add(_s153)
+def _anc153(start):
+    seen, stack = set(), [start]
+    while stack:
+        for p in _rev153.get(stack.pop(), ()):
+            if p not in seen: seen.add(p); stack.append(p)
+    return seen
+_LRE153 = re.compile(r"const __LEDGER_NODES = \[([^\]]*)\];")
+_ledger153 = []
+for _nm153 in sorted(nm for nm in nodes if _LRE153.search(nodes[nm]['parameters'].get('jsCode', '') or '')):
+    _anc_set153 = _anc153(_nm153)
+    _need153 = [x for x in ('Regulatory SERP', _g153['retry']) if x in _anc_set153]
+    if not _need153: continue
+    _m153 = _LRE153.search(code(_nm153)); _listed153 = re.findall(r"'([^']+)'", _m153.group(1))
+    _new153 = _listed153 + [x for x in _need153 if x not in _listed153]
+    setcode(_nm153, code(_nm153).replace(_m153.group(0), "const __LEDGER_NODES = [" + ', '.join("'" + x + "'" for x in _new153) + "];", 1))
+    assert "__dfsOnce(t)" in code(_nm153), 'W0-F: ' + _nm153 + ' would count an attempt and its retry twice'
+    _ledger153.append(_nm153)
+assert _ledger153, 'W0-F: no ledger list reaches the paid fallback, so its money would go unseen'
+
+# ---------- C. Collect Facts carries the regulatory facts on, the official sources first in the run's verified facts ----------
+patch('Collect Facts', "const prev = $('Analyze Competitor Pages').first().json;",
+      "const prev = (() => { const p = $('Analyze Competitor Pages').first().json; let r = null; try { r = $('Collect Regulatory Facts').first().json; } catch (e) { r = null; }\n"
+      "  return (r && r.regulatory) ? { ...p, regulatory: r.regulatory, regulatory_facts: r.regulatory_facts || [], regulatory_sources: r.regulatory_sources || [] } : p; })();   // W0-F (section 154): the regulatory facts travel on from here")
+patch('Collect Facts', "return [{ json: { ...prev, facts: kept.slice(0, 10), facts_found: facts.length,",
+      "const regFacts = (prev.regulatory_sources || []).filter(f => f && f.url).map(f => ({ ...f, url: SRC.clean(f.url), tier: SRC.tier(f.url) }));   // W0-F: the official rules and dates, first\n"
+      "const regKeys = new Set(regFacts.map(f => SRC.key(f.url)));\n"
+      "const prevOut = { ...prev }; delete prevOut.regulatory_sources;\n"
+      "return [{ json: { ...prevOut, facts: regFacts.concat(kept.filter(f => !regKeys.has(SRC.key(f.url))).slice(0, 10)), facts_found: facts.length,")
+
+# ---------- D. the brief and the writer print the block; Content QA records what the page says ----------
+for _p153 in ('Strategy Brief', 'Copywriter'):
+    assert "$('Collect Regulatory Facts').first().json.regulatory" in nodes[_p153]['parameters']['text'] and 'catch (e)' in nodes[_p153]['parameters']['text'], \
+        'W0-F: the ' + _p153 + ' prompt does not print the REGULATORY FACTS block'
+    _pc153 = next((a for a in nodes['Prompt For Count (' + _p153 + ')']['parameters']['assignments']['assignments'] if a['name'] == '__prompt'), None)
+    assert _pc153 and "$('Collect Regulatory Facts').first().json.regulatory" in _pc153['value'], 'W0-F: the counted ' + _p153 + ' prompt is not the prompt sent'
+setcode('Content QA', REG_SRC153 + '\n' + code('Content QA'))
+patch('Content QA', "    intent, refresh_check,   // B3-6",
+      "    regulatory: (() => { try { return REG.qa(md, $('Collect Regulatory Facts').first().json.regulatory || null); } catch (e) { return REG.qa(md, prev.regulatory || null); } })(),   // W0-F (section 154): recorded, never scored\n"
+      "    intent, refresh_check,   // B3-6")
+
+# ---------- E. the proof, on the generated graph: one path, every route ends in Collect Regulatory Facts, and it reaches the brief ----------
+_rev153b = {}
+for _s153, _o153 in conns.items():
+    for _l153 in (_o153.get('main') or []):
+        for _t153 in (_l153 or []): _rev153b.setdefault(_t153['node'], set()).add(_s153)
+assert sorted(_rev153b.get('Collect Regulatory Facts', ())) == ['Any Regulatory Pages?', 'Any Regulatory Topics?', 'Read Regulatory Pages'], ('W0-F: unexpected inputs to Collect Regulatory Facts', _rev153b.get('Collect Regulatory Facts'))
+assert sorted(_rev153b.get('Facts SERP', ())) == ['Collect Regulatory Facts'], 'W0-F: Facts SERP is fed by something other than Collect Regulatory Facts'
+def _reach153(a, b):
+    seen, stack = set(), [a]
+    while stack:
+        n = stack.pop()
+        for l in ((conns.get(n) or {}).get('main') or []):
+            for t in (l or []):
+                if t['node'] == b: return True
+                if t['node'] not in seen: seen.add(t['node']); stack.append(t['node'])
+    return False
+for _d153 in ('Collect Facts', 'Competitor Analyzer', 'Parse Analysis', 'Strategy Brief', 'Copywriter', 'Content QA'):
+    assert _reach153('Collect Regulatory Facts', _d153), 'W0-F: Collect Regulatory Facts does not reach ' + _d153 + ' along main'
+# harness shim (scenario W0F): the kit and the data as a plain module
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_regulatory_kit.js'), 'w', encoding='utf-8').write('// harness shim (written by build_v4.py section 154): the regulatory kit and its data as a module\n'
+    + REGULATORS_SRC153 + '\n' + REG_SRC153 + '\nmodule.exports = { REG, REGULATORS };\n')
+log('Local regulatory facts are researched, dated and never stale (W0-F, 2026-10-29, section 154; PLAN Fix 6): v5/data/regulators.json maps each market (AE, SA, PK) to its regulated topics, official domains and, for UAE e-invoicing, the dated obligations read on the Ministry of Finance\'s own decisions (No. 244 of 2025 and its amendment No. 66 of 2026: phase 1 appoints a provider by 30 October 2026, superseding 31 July 2026, and goes live 1 January 2027); a page run searches the official sites (SearXNG, free; one gated DataForSEO search per topic only when SearXNG is down), reads the official text, an amendment search and two independent secondary sources, and Collect Regulatory Facts keeps the latest dated official source with what it supersedes, or two agreeing secondary sources, or says none could be confirmed; each fact carries its source, source date, as-of date and status (upcoming / passed / in force) on the day the page is written. The brief and the writer print a REGULATORY FACTS block, the official sources lead the run\'s verified facts, the client\'s own posts are checked for an old date, and Content QA records whether the page states the current dates (no score). Ledger lists reached: ' + ', '.join(_ledger153))
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;

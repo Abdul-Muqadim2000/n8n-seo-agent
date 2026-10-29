@@ -118,6 +118,12 @@ and prints the BEFORE numbers Wave 0 changes.
 * `fixtures/ranking_guide_949.json`: the guide that ranks (exec 949, ladder rung 2, 319 impressions in its first week, one query at #12):
   the live page in the draft format, its brief, site model, critique and QA rounds, and its search outcome. Its verdict score is not
   stored in the repo: a hold rule must not depend on it.
+* `fixtures/regulatory_pages.json` (W0-F, Fix 6): short passages of the UAE Ministry of Finance's own texts as the reader returns them
+  (Ministerial Decision No. 244 of 2025 Article 5, its amendment No. 66 of 2026, the news item of 10 May 2026), with the line breaks a
+  PDF keeps, plus synthetic secondary pages. Scenario `scenarios_w0f.js` (W0F1-W0F9): the regulatory kit (`code_v4/_regulatory_kit.js`,
+  a shim written by build section 154), the plan on 3299's own Analyze Competitor Pages item, the amendment beating its original,
+  passed / in-force status in the market's time zone, the two-source tier and "none could be confirmed", the paid fallback when SearXNG
+  is down, Collect Facts carrying the facts on, Content QA's record (never a score change) and the 949 guide's guard.
 * Anonymised for the public repo: brand Nova&, domain novaand.example (the domain label equals the brand, as on the real site, so brand
   detection behaves the same), the client's own page prose cut to lines of 10 words or fewer (headings and slogans stay), competitor page
   bodies removed, hook token, API key and company id replaced. Our generated drafts keep their text with the identity swapped.

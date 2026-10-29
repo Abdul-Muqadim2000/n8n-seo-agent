@@ -348,6 +348,7 @@ export const features: Feature[] = [
       'One search, one page: a search a live page of yours already answers is written as a refresh of that page',
       'Check any page before you publish: paste a page (or send it from your build) and get the same quality verdict our own pages must pass (placeholders, invented prices, unsourced figures, coverage, readability, a direct answer first), with every reason named and what could not be checked. Free, and nothing is stored',
       'Refreshed pages re-check their facts: the cited sources are read again, and figures a source no longer states are flagged',
+      'Local rules with their current dates: a page on a regulated topic in your market (for example UAE e-invoicing) states the timeline from the government\'s own published text, the newest decision first, with any deadline that has passed said as passed and the source linked',
       'Readability measured against the pages that rank for your search, not against a fixed score',
       'Each page says plainly where it stands: ready to publish and waiting for your OK, ready and stronger with your input, or not ready and why, with the grade of the page you actually receive',
       'Questions only you can answer, ranked by how much they matter: the top three first, the rest optional, most of them filled in from your own website so one click answers them',
@@ -387,6 +388,10 @@ export const features: Feature[] = [
       {
         q: 'Can I tell it how we write?',
         a: 'Yes. Your profile holds a style guide: exactly how your name is written (Tech&, never "Tech and" or "techand"), British or American spelling, the words you never want used and the tone. Every page is written to it, and the quality check reads the finished draft against it. Your own name written the wrong way is a real finding and is corrected before you see the page; the spelling variant, the banned words and the tone are reported beside the page as advice, and never hold a page back on their own.',
+      },
+      {
+        q: 'How do you keep legal dates and deadlines right?',
+        a: 'When a page touches a rule in your market, such as UAE e-invoicing, VAT or corporate tax, we read the government\'s own published text on the day the page is written. When a later decision moved a date, the newer date is used and the old one is never written as current, and a deadline that has already passed is written as passed. If the official text cannot be read, a date is used only when two independent sources agree, and the page names them; otherwise the page gives no date rather than a guess.',
       },
       {
         q: 'Which spelling do the pages use?',
