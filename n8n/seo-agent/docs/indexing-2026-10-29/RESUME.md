@@ -2,6 +2,19 @@
 
 Read this first if you are picking the work up. Owner's ask: OWNER_BRIEF.md. Contract: DESIGN.md + FIX_CONTRACT.md.
 
+## ENGINE DEPLOYED 2026-10-29 23:10 UTC (owner said "deploy")
+- Backup first: gs://alaventra-prod-backups/pg/2026-10-29/{app,n8n}-2026-10-29T230455Z.dump.
+- `deploy_engine.py --no-build --apply --create-missing` from feature/indexing e222cfb0: sync_tables added seo_monitors.index_watch /
+  index_daily_cap; 16 workflows updated (verified before: only the documented nodes + the alert-webhook placeholder line differ), 
+  SEOagentIndexCv1 imported (createdAt 2026-10-29T23:10:55.505Z, 183 nodes, active, daily 05:15 America/New_York = 09:15 UTC), 28 published.
+  Dispatcher mode start, 2 sites (devaicon.com, techand.ai).
+- The pinned 20-check Manual Run was NOT possible (it needs the n8n editor UI / owner login): the first run is the scheduled one on
+  2026-10-30 09:15 UTC (14:15 PKT), ~115 known pages over 2 sites.
+- NOT yet deployed: the API on the VM and the web (PR to main). Plan: after the first run's rows are checked (seo_index_runs,
+  seo_index_pages, the $0 ledger row, the watch execution ~50 min later), deploy the API (detached checkout of feature/indexing,
+  `up -d --build app`, no migration) then the web via PR feature/indexing -> main. Then merge into feature/seo-agent-v4.5.
+- Rollback of the engine part: deactivate SEOagentIndexCv1 through the API (POST /api/v1/workflows/SEOagentIndexCv1/deactivate).
+
 ## REMAINING CHECKLIST (owner asked for a reminder after one day, set 2026-10-30)
 Index coverage is built, reviewed, fixed and tested. Before clients see it:
 1. Browser check of the final Indexing page (fix waves 2 and 3 changed it; last browser pass was after wave 1): 375 / 1440, light / dark,
