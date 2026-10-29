@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { orgAccess, siteAccess } from '../auth/access';
-import { acceptPrefilled, approve, deleteFact, deleteVersion, getFacts, getReview, putAnswers, putFact, putVersion, startFinalize } from '../services/pageReview';
+import { acceptPrefilled, approve, deleteFact, deleteVersion, getFacts, getReview, putAnswers, putDecision, putFact, putVersion, startFinalize } from '../services/pageReview';
 
 /**
  * H3 (2026-10-28): the review of a written page (services/pageReview.ts, app/API.md "Page review"). Everybody in the company reads it;
@@ -20,6 +20,12 @@ export async function pageReviewRoutes(app: FastifyInstance) {
   app.put('/api/orgs/:orgId/reports/:reportId/review/answers', { config: perUser(60) }, async (req) => {
     const p = req.params as P;
     return putAnswers(await orgAccess(req, p.orgId, 'member'), req, p.reportId, req.body);
+  });
+
+  // W0-B (owner decision D2): the client's reason for publishing a page beside the website's page for the same search (or null to take it back)
+  app.put('/api/orgs/:orgId/reports/:reportId/review/decision', { config: perUser(30) }, async (req) => {
+    const p = req.params as P;
+    return putDecision(await orgAccess(req, p.orgId, 'member'), req, p.reportId, req.body);
   });
 
   app.post('/api/orgs/:orgId/reports/:reportId/review/accept-prefilled', { config: perUser(20) }, async (req) => {

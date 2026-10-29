@@ -42,7 +42,9 @@ module.exports = async (ctx) => {
   const answer = (id, decision, text) => ({ ...Q[id], decision, text: text != null ? text : decision === 'yes' ? Q[id].original : '' });
   const bodyOf = (over) => ({ mode: 'finalize', request_id: 'app-fin-test', domain: 'novaand-demo.com', site_id: 'site_novaand-demo-com', keyword: 'dynamics 365 partner uae', country: 'United Arab Emirates', page_type: 'Blog Post / Guide',
     markdown: DELIVERED, delivered_markdown: DELIVERED, client_edited: false, meta: { title: 'Dynamics 365 Partner UAE: How to Choose', meta_description: 'What to check before you choose a Dynamics 365 partner in the UAE: credentials, VAT experience, support and references.', slug: 'dynamics-365-partner-uae', h1: 'How to choose a Dynamics 365 partner in the UAE' },
-    answers: [], business_facts: 'Nova& is a Microsoft partner based in Ajman with offices in Faisalabad. Contact is by consultation request.', business_facts_kv: {}, stored_fact_keys: [], content_request_id: 'exec-1', ...(over || {}) });
+    answers: [], business_facts: 'Nova& is a Microsoft partner based in Ajman with offices in Faisalabad. Contact is by consultation request.', business_facts_kv: {}, stored_fact_keys: [], content_request_id: 'exec-1',
+    // W0-B (2026-10-29): the app sends the page run's gating fields with every finalize (app/shared/src/page-review.ts pageRunOf); this page run found no blocker
+    page_run: { qa_blocking: [], duplicate_targets: [], verdict: 'GO', score: 70, score_withheld: false, page_type: 'Blog Post / Guide', verdict_acknowledged: false, copied_passages: [], length_points: null, missing: [], content_request_id: 'exec-1' }, ...(over || {}) });
   const editorSays = (sections) => mock('Finalize Editor', [{ json: { output: sections == null ? '' : { sections } } }]);
   const finalize = async (body, editor) => {
     reset(); delete store['Finalize Editor'];

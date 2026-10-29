@@ -357,6 +357,7 @@ export const features: Feature[] = [
       'Your final version made for you: after you answer, only the parts your answers change are rewritten and the whole page is checked again',
       'Edit the page yourself in the app, headings, paragraphs, lists, tables and links, with a preview, a comparison with the version we delivered, undo and a check before you publish',
       'One click to approve, then send it to your website or publish it yourself and we check it live',
+      'A final version is checked with the same research as the first draft, and stays not ready while a problem from the first check is open, such as a page your website already has for the same search',
     ],
     steps: [
       { title: 'Decide', body: 'Before anything is written we check the keyword. If our verdict scores it under 50 out of 100, or your website already has a page for the same search, the page waits for your OK: write it anyway, use the search we recommend, or improve the page you have.' },
@@ -388,6 +389,10 @@ export const features: Feature[] = [
       {
         q: 'Can I tell it how we write?',
         a: 'Yes. Your profile holds a style guide: exactly how your name is written (Tech&, never "Tech and" or "techand"), British or American spelling, the words you never want used and the tone. Every page is written to it, and the quality check reads the finished draft against it. Your own name written the wrong way is a real finding and is corrected before you see the page; the spelling variant, the banned words and the tone are reported beside the page as advice, and never hold a page back on their own.',
+      },
+      {
+        q: 'What if my website already has a page for the same search?',
+        a: 'Two pages for one search compete with each other, so we do not call the new page ready to publish. You can have us rewrite your existing page as an update, which keeps its address and what it has already earned, or tell us how the new page differs. Your reason is kept with the page and shown on its final version.',
       },
       {
         q: 'How do you keep legal dates and deadlines right?',

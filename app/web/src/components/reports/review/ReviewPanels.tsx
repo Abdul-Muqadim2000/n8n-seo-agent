@@ -1,9 +1,11 @@
 import { lazy, Suspense, useId, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { BadgeCheck, CheckCircle2, CircleHelp, FileCheck2, Loader2, PenLine, Sparkles, Wand2 } from 'lucide-react';
+import { ArrowRight, BadgeCheck, CheckCircle2, CircleHelp, Copy, FileCheck2, Loader2, PenLine, Sparkles, Wand2 } from 'lucide-react';
 import {
   answerProblem,
   DECISION_LABEL,
+  DUPLICATE_REASON_MAX,
+  duplicateReasonProblem,
   formatCredits,
   REVIEW_STAGE_LABEL,
   REVIEW_STAGE_TONE,
@@ -22,10 +24,12 @@ import { Dialog } from '@/components/ui/overlay';
 import { errorMessage, toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
-import { useAcceptPrefilled, useApprovePage, useFinalizePage, usePageReview, useReport, useSaveAnswers } from '@/lib/queries';
+import { useAcceptPrefilled, useApprovePage, useDuplicateDecision, useFinalizePage, usePageReview, useReport, useSaveAnswers } from '@/lib/queries';
 import { cn, fmtDateTime } from '@/lib/utils';
 import { CmsPublishPanel } from '../CmsPublish';
+import { ExternalLink } from '@/components/ui/misc';
 import { Block } from '../kit';
+import { keywordPrefill } from '../meta';
 import { answeredCount, byPerson, choicesFor, contextLines, currentChoice, groupQuestions, type ReviewQuestion } from './model';
 
 const PageEditor = lazy(() => import('./PageEditor'));
@@ -99,11 +103,102 @@ export function ReviewBody({ view, report, publishLink }: { view: PageReviewView
           .
         </Callout>
       )}
+      {view.duplicate && view.duplicate.pages.length > 0 && <DuplicateCard view={view} />}
       {view.questions.length > 0 && <QuestionsPanel view={view} domain={report.siteDomain ?? ''} />}
       <EditCard view={view} />
       <FinalVersionCard view={view} />
       <ApproveCard view={view} report={report} publishLink={publishLink} />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// W0-B (2026-10-29, owner decision D2): the website already has a page for the same search
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+/**
+ * Two pages for one search compete with each other, so the page is not ready until the client chooses: rewrite the website's page as an
+ * update (a new page run that keeps its address, priced on the form) or say how this page differs (saved, sent with the next final
+ * version and shown on it; the grade keeps its limit for fit).
+ */
+export function DuplicateCard({ view }: { view: PageReviewView }) {
+  const { org, can } = useOrgCtx();
+  const save = useDuplicateDecision(org.id, view.reportId);
+  const d = view.duplicate!;
+  const first = d.pages[0]!;
+  const [reason, setReason] = useState(d.decision?.reason ?? '');
+  const ids = useId();
+  const editable = can('member') && !view.approval;
+  const problem = duplicateReasonProblem(reason);
+  const dirty = reason.trim() !== (d.decision?.reason ?? '').trim();
+  const send = async (choice: 'differs' | null) => {
+    try {
+      await save.mutateAsync(choice ? { choice, reason: reason.trim() } : { choice: null });
+      if (!choice) setReason('');
+      toast.success(choice ? 'Reason saved' : 'Reason taken back', { description: choice ? 'Make the final version to apply it.' : 'The page waits for your choice again.' });
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  return (
+    <section id="duplicate" aria-labelledby={`${ids}-dup`} className="scroll-mt-20">
+      <Block
+        title={<span id={`${ids}-dup`}>Your website already has a page for this search</span>}
+        description="Two pages for one search compete with each other in Google. Publish this one as an update of your page, or tell us how it differs."
+        icon={<Copy />}
+        iconTone="warning"
+      >
+        <ul className="space-y-1 text-[13px] text-ink-2 [overflow-wrap:anywhere]">
+          {d.pages.map((p) => (
+            <li key={p.url}>
+              <ExternalLink href={p.url}>{p.title || p.url}</ExternalLink>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-xl border border-line bg-surface p-4">
+            <h3 className="font-display text-[15px] font-semibold text-ink">Update your page instead</h3>
+            <p className="mt-1 text-[13px] leading-snug text-ink-2">
+              We write a new version of your page at its own address, so it keeps what it has already earned. This is a new page, priced on the next screen.
+            </p>
+            {can('member') && d.rewrite.keyword && view.siteId && (
+              <ButtonLink
+                className="mt-3"
+                size="sm"
+                icon={<ArrowRight className="size-4" />}
+                to={paths.tool(org.id, 'keyword', { siteId: view.siteId, prefill: keywordPrefill({ keyword: d.rewrite.keyword, pageType: d.rewrite.pageType, country: d.rewrite.country, existingPageUrl: first.url }) })}
+              >
+                Rewrite it as an update of your page
+              </ButtonLink>
+            )}
+          </div>
+          <div className="rounded-xl border border-line bg-surface p-4">
+            <h3 className="font-display text-[15px] font-semibold text-ink">Or tell us how this page differs</h3>
+            <p className="mt-1 text-[13px] leading-snug text-ink-2">
+              We keep your reason with the page and show it on the final version. The page can then be ready, but its grade keeps a limit for fit.
+            </p>
+            <fieldset className="mt-3" disabled={!editable || save.isPending}>
+              <Field label="How this page differs" hint="For example: who it is for, or what it covers that your other page does not." error={dirty && reason.trim() && problem ? problem : undefined}>
+                {(p) => <Textarea {...p} rows={3} value={reason} maxLength={DUPLICATE_REASON_MAX} onChange={(e) => setReason(e.target.value)} />}
+              </Field>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="secondary" disabled={!dirty || !!problem} loading={save.isPending} onClick={() => send('differs')}>
+                  Save my reason
+                </Button>
+                {d.decision && (
+                  <Button size="sm" variant="ghost" onClick={() => send(null)}>
+                    Take my reason back
+                  </Button>
+                )}
+              </div>
+            </fieldset>
+            <p className="mt-1.5 min-h-4 text-xs text-ink-3" role="status" aria-live="polite">
+              {d.decision && !dirty ? `Saved ${fmtDateTime(d.decision.at)}${byPerson(view, d.decision.by)}. Make the final version to apply it.` : ''}
+            </p>
+          </div>
+        </div>
+      </Block>
+    </section>
   );
 }
 

@@ -103,6 +103,17 @@ no report delivered before that carries them, and `seo_content_log` holds none o
 | `regulatory_facts[]` | *Collect Regulatory Facts* (Fix 6, W0-F): `{date, obligation, subject, threshold, url, paragraph, source_tier, source_date, as_of, supersedes, status}`; the example entry is illustrative |
 | `content_request_id` | the run's request id (3299 sent `content_request_id: ""`, a form run: fall back to `request_id`) |
 
+**Built (W0-B, 2026-10-29, `scenarios_w0b.js` W0B1-W0B9).** *Build Webhook Response* (build section 155) sends the grading fields as
+`page_run: { prc: 1, ... }` on every content callback that carries a page (`null` otherwise); `length_band` also carries the brief's `target`,
+and `regulatory_topics` (`{id, relevance}`) travels beside `regulatory_facts` so the final check can record the regulatory status again. The app
+(`app/shared/src/page-review.ts` `pageRunOf`) sends `FinalizeBody.page_run` = the gating fields of the ORIGINAL report + that `page_run`, with
+three app-derived gating extras: `copied_passages` (the failing originality passages), `length_points` (the page run's own length points, used
+for a report with no `length_band`) and `missing` (gating fields the stored report lacks). Reports from before `qa_blocking` existed
+(2026-10-28; the ranking guide of exec 949 is one) are read from their gate (`qa_not_ready` / `qa_publishable`) and `meta.originality`: a
+duplicate page or failed originality becomes the blocker, everything else is measured again. Page Finalize keeps open what it cannot measure
+again (duplicate page until `duplicate_decision`, copied passages, a still-linked dead link, a still-present left-out section, the business name
+without the style guide, unknown codes) and is never ready when `qa_blocking` or `duplicate_targets` is missing.
+
 ## Replay fixtures (page-quality programme 2026-10-29, PLAN §3.0 step 4, REVIEW_CODE M9)
 
 `replay.js` replays recorded production node runs on the current generated code: `const R = require('./replay')(H); const fx =
