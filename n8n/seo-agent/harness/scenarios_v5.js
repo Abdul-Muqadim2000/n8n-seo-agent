@@ -19726,5 +19726,6 @@ await require('./scenarios_finalize')({ H, run, mock, store, guard, reset, begin
 await require('./scenarios_replay')({ H, run, mock, store, guard, reset, begin });   // RPL1-RPL4 (2026-10-29, docs/page-quality-2026-10-29/PLAN.md §3.0): anonymised replays of page run 3299, finalize 3336 and the ranking guide 949 on the current code; the PRC contract fixture
 await require('./scenarios_index')({ H, run, mock, store, guard, reset, begin });   // IX1-IX12 (Index coverage, 2026-10-29, docs/indexing-2026-10-29/DESIGN.md): every cause, the plan and caps, evidence without quota, sitemaps / hosts / low value, link suggestions, Google events + freeze, update impact, techand.ai end to end, the callback rule, drop-outs / needs a person, Site Admin, the generated workflow
 await require('./scenarios_index_fix')({ H, run, mock, store, guard, reset, begin });   // IXF1-IXF12 (Index coverage fix wave 1, 2026-10-29, docs/indexing-2026-10-29/FIX_CONTRACT.md): one check per review finding (E1-E16, X1-X4, X7, X8, X13, X16), each failing on the reviewed code
+await require('./scenarios_index_fix2')({ H, run, mock, store, guard, reset, begin });   // IXW1-IXW14 (Index coverage fix wave 2, 2026-10-29, REVIEW_2.md N1-N13): multi-day runs through the generated nodes with a pinned clock, each failing on the integration head (3b0a8cab)
 H.report();
 })();
