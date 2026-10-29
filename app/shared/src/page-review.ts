@@ -168,11 +168,29 @@ export interface ClientQuestion {
   neutral: string;
   in_page: 'neutral' | 'cta' | 'left_out';
   section: string;
+  /** W0-E: where the answer belongs in the page (cta | credential | proof | pricing | timeline | named; '' on older reports) */
+  slot: string;
+  /** W0-E: for a statement the page run removed, where it stood, so a "yes" puts it back there (null on older reports) */
+  anchor: QuestionAnchor | null;
   answer_type: 'choice' | 'text';
   prefill: string;
   prefill_source: string;
   use_for_future_pages: boolean;
 }
+
+/** W0-E (page-quality PLAN Fix 5.3): the sentence before / after a removed statement on its line, else the line above it, in its section. */
+export interface QuestionAnchor {
+  section: string;
+  before: string;
+  after: string;
+  line_before: string;
+}
+const SLOTS = ['cta', 'credential', 'proof', 'pricing', 'timeline', 'named'];
+const anchorOf = (v: unknown): QuestionAnchor | null => {
+  const a = obj(v);
+  const x: QuestionAnchor = { section: s(a.section).slice(0, 300), before: s(a.before).slice(0, 400), after: s(a.after).slice(0, 400), line_before: s(a.line_before).slice(0, 400) };
+  return x.before || x.after || x.line_before ? x : null;
+};
 
 export const TOP_QUESTIONS = 3;
 
@@ -202,6 +220,8 @@ export function questionsOf(payload: P | null | undefined): ClientQuestion[] {
         neutral: plainWords(s(q.neutral)),
         in_page: inPage === 'neutral' || inPage === 'cta' ? inPage : 'left_out',
         section: plainWords(s(q.section)),
+        slot: SLOTS.includes(s(q.slot)) ? s(q.slot) : '',
+        anchor: anchorOf(q.anchor),
         answer_type: source === 'claim' ? 'choice' : 'text',
         prefill: plainWords(s(q.prefill)),
         prefill_source: plainWords(s(q.prefill_source)),
@@ -278,10 +298,14 @@ export function answerText(q: Pick<ClientQuestion, 'original'>, decision: Answer
   return '';
 }
 
-/** The answer a one-click "Accept all suggestions" gives a question (null: nothing to accept). */
+/**
+ * The answer a one-click "Accept all suggestions" gives a question (null: nothing to accept). W0-E (2026-10-29, page-quality PLAN Fix 5.5):
+ * only a yes / no question about a statement is confirmed in one click; a question that needs the client's own words (proof, a credential,
+ * how an engagement starts) is never answered with a suggestion, because one click stored a homepage slogan as proof of projects (3299).
+ */
 export function prefilledAnswer(q: ClientQuestion): { decision: AnswerDecision; text: string } | null {
-  if (!q.prefill) return null;
-  return q.answer_type === 'choice' ? { decision: 'yes', text: '' } : { decision: 'answer', text: q.prefill.slice(0, ANSWER_TEXT_MAX) };
+  if (!q.prefill || q.answer_type !== 'choice') return null;
+  return { decision: 'yes', text: '' };
 }
 
 /** The business fact an answer stores (null: skip, or the question is for this page only). */
@@ -335,6 +359,11 @@ export interface FinalizeAnswer {
   neutral: string;
   in_page: ClientQuestion['in_page'];
   section: string;
+  /** W0-E: the question's category and slot, so the engine works the answer into the sentence it changes */
+  category: string;
+  slot: string;
+  /** W0-E: where a removed statement stood (a "yes" goes back there and nowhere else); null when unknown */
+  anchor: QuestionAnchor | null;
 }
 
 /**
@@ -503,7 +532,8 @@ export function finalizeBody(o: {
   for (const q of o.questions) {
     const a = o.answers[q.id];
     if (!a || a.decision === 'skip') continue;
-    ans.push({ id: q.id, fact_key: q.fact_key, source: q.source, decision: a.decision, text: answerText(q, a.decision, a.text), question: q.question, original: q.original, neutral: q.neutral, in_page: q.in_page, section: q.section });
+    ans.push({ id: q.id, fact_key: q.fact_key, source: q.source, decision: a.decision, text: answerText(q, a.decision, a.text), question: q.question, original: q.original, neutral: q.neutral, in_page: q.in_page, section: q.section,
+      category: q.category, slot: q.slot, anchor: q.anchor });
   }
   const f = factsForEngine(o.facts);
   return {
@@ -1038,7 +1068,15 @@ export function finalReportPayload(
   const questions = arr(result.client_questions);
   const ready = status === 'ready' || status === 'ready_with_questions';
   const blocking = items(del.blocking);
-  const advisory = items(del.advisory);
+  // W0-E (2026-10-29, page-quality PLAN Fix 5.2): an answer the engine could not work into a sentence is never appended to the page; the
+  // client is told it was not placed, so they can say where it belongs
+  const asked = new Map(questionsOf(original).map((q) => [q.id, q.question]));
+  const notPlaced: PageDeliveryItem[] = arr(result.applied)
+    .map(obj)
+    .filter((a) => s(a.how) === 'not_placed')
+    .slice(0, 10)
+    .map((a) => ({ code: 'not_placed', text: plainWords(`Not placed: your answer to "${(asked.get(s(a.id)) ?? 'a question').slice(0, 160)}" did not fit a sentence of the page${s(a.section) ? ` (${s(a.section).slice(0, 120)})` : ''}. Tell us where it belongs, then make the final version again`) }));
+  const advisory = [...items(del.advisory), ...notPlaced];
   const grade = obj(result.grade ?? del.grade);
   const label = plainWords(s(del.label)) || deliveryHeadline(status, questions.length, blocking[0] ?? null).headline;
   const reasons = ready ? [] : blocking.map((b) => b.text).slice(0, 8);

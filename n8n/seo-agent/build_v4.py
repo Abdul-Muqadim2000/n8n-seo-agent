@@ -12927,6 +12927,41 @@ for _f155 in ('Finalize_Parse_Brief.js', 'Finalize_Verdict.js'):
 log('The final version is judged with the page run\'s context (W0-B, 2026-10-29, section 155; PLAN Fix 2, REVIEW_CODE H2 / M8, D2): every content callback carries page_run (length band with the brief\'s target, coverage target, terms, facts, sources cited, style guide, site URLs, SERP shapes, regulatory facts, content request id); Page Finalize reads it with the gating fields the app derives from the original report, keeps the page run\'s duplicate-page, copied-passage, dead-link and unknown blockers open until they are gone or the client decides (update of that page, or a recorded reason with the fit limit kept), and a request without the page run\'s blockers is never ready; a missing grading field is advice')
 
 # =============================================================================
+# 156. ANSWERS GO INTO THE SENTENCE THEY CHANGE; NO SLOGAN IS OFFERED AS PROOF (W0-E, page-quality programme 2026-10-29,
+#      docs/page-quality-2026-10-29/PLAN.md Fix 5; R4 D6 / G15; REVIEW_CODE M4 / L2). Finalize 3336 appended "At Nova&, consultation is
+#      free of charge." to a section about product names, wove the homepage slogan "Deep UAE & GCC knowledge" (offered as proof of UAE
+#      projects and accepted in one click) into a checklist item, and swapped a confirmed claim into an unrelated checklist sentence that a
+#      word-overlap match had taken for its "neutral" wording.
+#      * The Strategy Brief returns `questions_for_client` as { question, section, category } (this section: the parser schema; the prompt
+#        line in v5/prompts/strategy_brief.txt). Page Candidates and PF.questions still read a plain string (briefs stored before it).
+#      * PF.prefillOf only offers a sentence (6+ words, a verb, not a question), never chrome or a listing page, never a slogan, and only
+#        one that answers the question's type (proof: a project / client / sector with an outcome, or a number or a link; credential: a
+#        credential noun); the business facts first.
+#      * A statement the system removes carries its anchor (PF.anchorAt), no guessed neutral wording; Finalize Apply puts a "yes" back at
+#        that anchor only. Answers go to their slot (PF.slotIn) and the editor is told which sentence to rewrite; Finalize Merge refuses an
+#        edit that only appends an answer (PF.appendedIn) and never appends one itself: an unplaced answer is "not placed: tell us where".
+#      * Old reports: an answer about the page's head (its search description) changes nothing in the body (REVIEW_CODE L2).
+# =============================================================================
+_sb156 = get_schema('Parser — Strategy Brief')
+assert _sb156['properties']['questions_for_client'] == {'type': 'array', 'items': {'type': 'string'}, 'description': 'questions only the client can answer that would make the page stronger (0-5)'}, 'W0-E: the questions_for_client schema changed under section 156'
+_sb156['properties']['questions_for_client'] = {'type': 'array', 'description': 'questions only the client can answer that would make the page stronger (0-5), each with the section its answer changes and its category',
+    'items': {'type': 'object', 'properties': {'question': {'type': 'string'}, 'section': {'type': 'string', 'description': 'the exact H2 whose sentence the answer would change, or the call-to-action section'},
+                                               'category': {'type': 'string', 'description': 'proof, credential, terms, pricing, timeline or detail'}}, 'required': ['question']}}
+set_schema('Parser — Strategy Brief', _sb156)
+assert '"questions_for_client": [{ "question":' in nodes['Strategy Brief']['parameters']['text'] and '"category": "one of: proof' in nodes['Strategy Brief']['parameters']['text'], 'W0-E: the Strategy Brief prompt does not ask for question objects'
+for _n156 in ('Page Candidates',):
+    _c156 = code(_n156)
+    for _k156 in ('const anchorAt = ', 'const slotIn = ', 'const appendedIn = ', 'const prefillProblem = ', "r.how === 'removed')).map(r =>", 'names: ctx.names'):
+        assert _k156 in _c156, 'W0-E: ' + _n156 + ' lacks ' + _k156
+for _f156, _ks156 in {'Finalize_Apply.js': ('PF.slotIn(md', 'restoreAt(anchor, text)', "how: 'head_line'", 'const neutralHit = '),
+                      'Finalize_Merge.js': ('PF.appendedIn(before.text, after.text, t)', "x.how = 'not_placed'"),
+                      'Finalize_Parse_Brief.js': ("slot: ['cta', 'credential', 'proof', 'pricing', 'timeline', 'named']", 'anchor: a.anchor &&')}.items():
+    for _k156 in _ks156:
+        assert _k156 in _rd0('code/' + _f156), 'W0-E: ' + _f156 + ' lacks ' + _k156
+assert "part.text.replace(/\\s+$/, '') + '\\n\\n' + S(t).trim()" not in _rd0('code/Finalize_Merge.js'), 'W0-E: Finalize Merge still appends an unplaced answer as its own paragraph'
+log('Answers go into the sentence they change and no slogan is offered as proof (W0-E, 2026-10-29, section 156; PLAN Fix 5, R4 D6 / G15, REVIEW_CODE M4 / L2): the Strategy Brief returns questions_for_client as { question, section, category } (strings still read); a suggested answer must be a sentence that answers the question\'s type (proof names a project or client with an outcome, or a number or a link; a credential names one), never chrome, a listing page or a slogan, the business facts first; a removed statement keeps its anchor and no guessed neutral sentence, and a "yes" goes back there only; each answer goes to its slot (call to action, the sentence naming the business, the decision section, the named section) with the sentence to rewrite named; an edit that only appends an answer is refused and nothing is appended: an unplaced answer is reported "not placed"; an old report\'s answer about the search description changes nothing in the body')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;

@@ -43,26 +43,62 @@ const relink = (text, neutralRaw, cta) => { let t = S(text).trim(); if (!/[.!?][
     if (i >= 0 && !/\]\(/.test(t)) t = t.slice(0, i) + '[' + t.slice(i, i + l.anchor.length) + '](' + l.url + ')' + t.slice(i + l.anchor.length); else keep.push(l); }
   return cta && keep.length ? t + '\n\nNext step: [' + keep[0].anchor + '](' + keep[0].url + ').' : t; };
 const applied = [], changes = [], tasks = new Map();
+// W0-E (2026-10-29, page-quality PLAN Fix 5, R4 D6 / G15, REVIEW_CODE L2): finalize 3336 appended "At Nova&, consultation is free of charge."
+// to a section about product names, wove a homepage slogan into a checklist item, placed the page's own search description into the body
+// and swapped a confirmed claim into an unrelated checklist sentence. Now:
+//   * an answer to a brief question goes to its SLOT (PF.slotIn: the call to action, the sentence naming the business, the decision section,
+//     the section the brief named) and the editor is told which sentence to rewrite (the host), never "work this in";
+//   * a statement the system removed goes back at its anchor (the sentence before / after it), deterministically, and nowhere else;
+//   * a neutral wording found outside the statement's own section is not its neutral wording (old reports: neutralIn guessed it);
+//   * an answer about the page's head (its search description, an old report's question) changes nothing in the body.
+const NAMES = [...new Set([...(PF.ctxOf(P, {}).names || []), S((P.style_guide || {}).brand_form).replace(/\s*\([^)]*\)\s*$/, ''),
+  (md.match(/^Title:.*\s\|\s*([^|\n]{2,40})$/m) || [])[1] || ''].map(x => S(x).trim()).filter(x => x.length >= 3))];
+const headSet = new Set([md, S(F.delivered_markdown), S(F.input_markdown)].flatMap(t => S(t).split('\n')).map(l => l.trim()).filter(l => META.test(l)).map(l => norm(l.replace(/^[^:]*:/, ''))).filter(x => x.length > 12));
+const bodyNorm = norm(PF.split(md).parts.map(p => p.text).join('\n'));
+const isHead = (a) => a.source === 'claim' && (S(a.where) === 'head' || headSet.has(norm(a.original))
+  || (!S(a.section).trim() && !a.anchor && a.in_page === 'left_out' && !!norm(a.original) && !bodyNorm.includes(norm(a.original))));
+const partOf = (at) => PF.split(md).parts.find(p => at >= p.start && at < p.end) || null;
+const sectionExists = (h) => !!norm(h) && PF.split(md).parts.some(p => norm(p.heading) === norm(h));
+// the claim's neutral wording, only where the claim stood (its section, when that section is still on the page)
+const neutralHit = (a, neutral) => { const h = neutral ? find(md, neutral) : null; if (!h) return null;
+  if (sectionExists(a.section)) { const p = partOf(h.at); if (p && norm(p.heading) !== norm(a.section)) return null; } return h; };
+// put a removed statement back where it stood: after the sentence before it, else before the sentence after it, else on its own line after
+// the line above it, inside its own section only. Returns the section heading, or null when the anchor is not on the page any more
+const restoreAt = (anchor, text) => { const sp = PF.split(md); const h = norm(anchor.section);
+  const part = h ? sp.parts.find(p => norm(p.heading) === h) : null; if (h && !part) return null;
+  const scope = part || { start: 0, text: md };
+  const at = (x) => { if (!S(x).trim()) return null; const r = find(scope.text, x); return r ? { at: scope.start + r.at, len: r.len } : null; };
+  let t = S(text).trim(); if (!/[.!?]["')]*$/.test(t)) t += '.';
+  let r = at(anchor.before); if (r) { const e = r.at + r.len; md = md.slice(0, e) + ' ' + t + md.slice(e); return part ? part.heading : ''; }
+  r = at(anchor.after); if (r) { md = md.slice(0, r.at) + t + ' ' + md.slice(r.at); return part ? part.heading : ''; }
+  r = at(anchor.line_before); if (r) { let le = md.indexOf('\n', r.at + r.len); if (le < 0) le = md.length; md = md.slice(0, le) + '\n\n' + t + md.slice(le); return part ? part.heading : ''; }
+  return null; };
 const sectionFor = (heading, hint) => { const sp = PF.split(md); const h = norm(heading);
   let part = h ? sp.parts.find(p => norm(p.heading) === h) || sp.parts.find(p => h.length > 8 && (norm(p.heading).includes(h) || h.includes(norm(p.heading)))) : null;
   if (!part) { const body = sp.parts.slice(1).filter(p => p !== sp.parts[sp.parts.length - 1] || sp.parts.length <= 2);
     const ranked = body.map(p => ({ p, s: PF.overlap(hint, p.heading + ' ' + p.text.slice(0, 1500)) })).sort((a, b) => b.s - a.s);
     part = ranked.length && ranked[0].s > 0 ? ranked[0].p : sp.parts[0]; }
   return part; };
-const task = (part, line, a) => { if (!part) return; const t = tasks.get(part.id) || { id: part.id, heading: part.heading, tasks: [], answers: [], must_contain: [], weave: [] }; t.tasks.push(line); t.answers.push(a.id);
+const task = (part, line, a, host) => { if (!part) return; const t = tasks.get(part.id) || { id: part.id, heading: part.heading, tasks: [], answers: [], must_contain: [], weave: [], hosts: [], texts: [] }; t.tasks.push(line); t.answers.push(a.id); t.texts.push(a.text);
+  if (host) t.hosts.push(host);
   if (a.decision === 'yes' || a.decision === 'edit') t.must_contain.push(a.text); else t.weave.push(a.text); tasks.set(part.id, t); };
 
 for (const a of (F.answers || [])) {
   const neutral = S(a.neutral).trim();
   if (a.decision === 'skip') { applied.push({ id: a.id, how: 'skipped', section: a.section }); continue; }
   if (a.decision === 'general') { applied.push({ id: a.id, how: 'left_general', section: a.section }); continue; }
+  if (isHead(a)) { applied.push({ id: a.id, how: 'head_line', section: '' }); continue; }   // REVIEW_CODE L2: the search description is written from the page
   if (a.source !== 'claim' || a.decision === 'answer') {
     if (a.decision === 'remove') { applied.push({ id: a.id, how: 'removed', section: a.section }); continue; }   // a fact the client does not want said: nothing to add
-    const part = sectionFor(a.section, a.question + ' ' + a.text);
-    task(part, 'Work in this fact from the business, stating only what it says, in the business\'s own voice where it fits: "' + a.text + '"' + (a.question ? ' (you asked: ' + a.question + ')' : ''), a);
-    applied.push({ id: a.id, how: 'woven', section: part ? part.heading : '' }); continue; }
+    const slot = PF.slotIn(md, { ...a, text: a.text }, NAMES);
+    const part = slot.part || sectionFor(a.section, a.question + ' ' + a.text);
+    const asked = a.question ? ' (you asked: ' + a.question + ')' : '';
+    task(part, slot.part && slot.host
+      ? 'Rewrite this sentence so it also states the fact below, in the same place, keeping its links and everything else it says: "' + slot.host + '". The fact, confirmed by the business (state only what it says): "' + a.text + '"' + asked + '. Do not add the fact as a separate sentence.'
+      : 'Work this fact from the business into the paragraph it belongs to, stating only what it says, in the business\'s own voice: "' + a.text + '"' + asked + '. Never add it as a separate sentence at the end of a paragraph or as a paragraph of its own.', a, slot.part ? slot.host : '');
+    applied.push({ id: a.id, how: 'woven', section: part ? part.heading : '', slot: slot.slot }); continue; }
   // a statement about the business
-  const hit = neutral ? find(md, neutral) : null;
+  const hit = neutralHit(a, neutral);
   if (a.decision === 'remove') {
     if (hit && a.in_page !== 'cta') { const before = md; md = PF.removeAt(md, hit.at, hit.len); if (md !== before) changes.push({ section: a.section, what: 'removed at your request', before: hit.raw, after: '' }); }
     const orig = a.original ? find(md, a.original) : null; if (orig) { md = PF.removeAt(md, orig.at, orig.len); changes.push({ section: a.section, what: 'removed at your request', before: orig.raw, after: '' }); }
@@ -75,9 +111,16 @@ for (const a of (F.answers || [])) {
     changes.push({ section: a.section, what: a.decision === 'yes' ? 'your confirmed sentence restored' : 'your wording', before: hit.raw, after: repl });
     applied.push({ id: a.id, how: a.decision === 'yes' ? 'kept_original' : 'client_wording', section: a.section }); continue; }
   if (find(md, text)) { applied.push({ id: a.id, how: a.decision === 'yes' ? 'kept_original' : 'client_wording', section: a.section }); continue; }   // already there (the client typed it)
-  const part = sectionFor(a.section, (a.original || '') + ' ' + text);
-  task(part, 'Put this sentence into this section where it fits best, word for word (it is confirmed by the business): "' + text + '"', { ...a, text });
-  applied.push({ id: a.id, how: 'placed', section: part ? part.heading : a.section });
+  // W0-E (Fix 5.3): a statement the system removed goes back at its anchor, with no model call; when the anchor is gone, its own section only
+  const anchor = a.anchor && typeof a.anchor === 'object' ? a.anchor : null;
+  if (anchor) { const where = restoreAt(anchor, text);
+    if (where != null) { changes.push({ section: where || a.section, what: a.decision === 'yes' ? 'your confirmed sentence put back where it was' : 'your wording put where the sentence was', before: '', after: text });
+      applied.push({ id: a.id, how: a.decision === 'yes' ? 'kept_original' : 'client_wording', section: where || a.section }); continue; } }
+  const home = anchor && norm(anchor.section) ? anchor.section : a.section;
+  const part = sectionExists(home) ? PF.split(md).parts.find(p => norm(p.heading) === norm(home)) : anchor ? null : sectionFor(a.section, (a.original || '') + ' ' + text);
+  if (!part) { applied.push({ id: a.id, how: 'not_placed', section: home || '' }); continue; }
+  task(part, 'Put this sentence into this section, word for word (it is confirmed by the business), inside the paragraph it belongs to, never as a paragraph of its own at the end: "' + text + '"', { ...a, text });
+  applied.push({ id: a.id, how: 'placed', section: part.heading });
 }
 md = PF.tidy(md);
 const sp = PF.split(md);
@@ -93,6 +136,8 @@ const editor_prompt = !sections.length ? '' : [
   '- Make each task with as few changed words as possible; keep every other sentence, link, list, table and figure as it is.',
   '- A sentence marked KEEP WORD FOR WORD was written by the business: keep it exactly.',
   '- A confirmed sentence you are asked to put in must appear word for word.',
+  '- A fact from the business goes INTO the sentence named for it: rewrite that sentence so it also says the fact, and keep everything else it says.',
+  '- Never add a fact as a new sentence at the end of a paragraph, or as a paragraph of its own: such an edit is not used.',
   '- State only what the facts given say. Add no other claim about the business, no number, no link, no bracket.',
   '- Plain words: no em dashes, no curly quotes, no ellipsis character.',
   '',
@@ -101,5 +146,5 @@ const editor_prompt = !sections.length ? '' : [
   ...sections.map(s => ['=== SECTION ' + s.id + ' (' + (s.heading || 'introduction') + ') ===', 'TASKS:', ...s.tasks.map((t, i) => (i + 1) + '. ' + t),
     ...(s.keep.length ? ['KEEP WORD FOR WORD:', ...s.keep.map(k => '- ' + k)] : []), 'CURRENT TEXT:', s.text.trim(), '=== END ' + s.id + ' ===', ''].join('\n'))
 ].join('\n');
-return [{ json: { ...P, output: md, finalize_apply: { applied, changes, jobs: sections.map(s => ({ id: s.id, heading: s.heading, text: s.text, tasks: s.tasks, answers: s.answers, must_contain: s.must_contain, weave: s.weave, keep: s.keep, problems: s.tasks })) },
+return [{ json: { ...P, output: md, finalize_apply: { applied, changes, jobs: sections.map(s => ({ id: s.id, heading: s.heading, text: s.text, tasks: s.tasks, answers: s.answers, must_contain: s.must_contain, weave: s.weave, hosts: s.hosts, texts: s.texts, keep: s.keep, problems: s.tasks })) },
   needs_editor: sections.length > 0, editor_prompt } }];
