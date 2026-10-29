@@ -163,7 +163,8 @@ export const creditRules: { title: string; body: string }[] = [
  */
 export const creditExamples: { label: string; credits: string }[] = [
   { label: 'A keyword verdict', credits: 'about 12 credits' },
-  { label: 'A written page, checked and ready to publish', credits: 'about 51 credits' },
+  { label: 'A written page, checked and ready to publish', credits: 'about 114 credits' },
+  { label: 'A page that waits for your OK before writing (only the check)', credits: 'about 9 credits' },
   { label: 'One website with every monitor on, including the daily AI Pulse, for a month', credits: 'about 1,530 credits' },
 ];
 
@@ -422,7 +423,7 @@ export const pricingFaqs: FaqItem[] = [
   },
   {
     q: 'What is a credit?',
-    a: 'The unit everything in Alaventra is priced in. Research, writing, audits, AI answer checks and backlink checks each use credits; a credit lists at $0.05 in a pack. As a guide, a keyword verdict uses about 12 credits and a written page about 51.', // PLACEHOLDER, confirm the list price
+    a: 'The unit everything in Alaventra is priced in. Research, writing, audits, AI answer checks and backlink checks each use credits; a credit lists at $0.05 in a pack. As a guide, a keyword verdict uses about 12 credits and a written page about 114. A page that waits for your OK before writing uses only the check, about 9.', // PLACEHOLDER, confirm the list price
   },
   {
     q: 'What uses credits?',

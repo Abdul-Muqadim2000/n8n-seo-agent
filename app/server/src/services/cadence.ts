@@ -87,8 +87,9 @@ export const CADENCE = {
   /** the n8n cadence reports 4 as `upcoming`; the app shows a few more */
   upcoming: 4,
   later: 8,
-  /** the engine's shipped price of a content run (Claude $0.80 + DataForSEO $0.04) when no calibration is known */
-  defaultPageUsd: 0.84,
+  /** what a written page is quoted at when no figure is passed (D8, 2026-10-29: its measured cost, shared/src/cost.ts COST_TABLE.content;
+   *  was the engine's shipped $0.84) */
+  defaultPageUsd: 1.9,
 } as const;
 
 const STATUSES = ['active', 'queued', 'paused', 'won', 'stuck', 'archived'] as const;

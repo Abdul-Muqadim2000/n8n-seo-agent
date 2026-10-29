@@ -44,10 +44,12 @@ describe('R100: the pre-run figure is what the engine reserves (the seo_cache ro
     expect(Object.keys(cal.ai)).toEqual(['content']);
     expect(Object.keys(cal.dfs).sort()).toEqual(['content', 'crawl']);
   });
-  it('a written page is 1.0983 x 1.25 + 0.0301 = 1.4030 (the app showed about 0.84)', () => {
-    expect(estimateRunCost('keyword', {}, cal)).toBeGreaterThan(1.4029);
-    expect(estimateRunCost('keyword', {}, cal)).toBeLessThan(1.4031);
-    expect(estimateRunCost('keyword', {})).toBeLessThan(0.9);
+  it('a written page: the engine reserves 1.0983 x 1.25 + 0.0301 = 1.4030, and since D8 (2026-10-29) it is quoted no lower than its measured $1.90', () => {
+    expect(estOf('ai', 'content', cal).usd).toBeCloseTo(1.86, 4);   // the rolling 1.3729 is under the measured floor
+    expect(estimateRunCost('keyword', {}, cal)).toBe(1.9);
+    expect(estimateRunCost('keyword', {})).toBe(1.9);
+    // a key with no floor still follows the engine's rolling figure (the verdict below, the crawl beside it)
+    expect(estOf('dfs', 'crawl', cal).usd).toBeCloseTo(0.1125, 4);
   });
   it('a technical audit is the crawl at 0.09 x 1.25 = 0.1125', () => {
     expect(Math.abs(estimateRunCost('audit', { reportType: 'technical' }, cal) - 0.1125)).toBeLessThan(0.0001);
