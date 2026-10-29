@@ -208,7 +208,13 @@ module.exports = async (ctx) => {
     const F = f3299();
     const base = await R.replay(F, 'Content QA', 2, { mocks: { 'Collect Regulatory Facts': null } });
     const q0 = base.first.content_qa || {};
-    check('without the step, Content QA records "not checked" and keeps its grade', q0.regulatory && q0.regulatory.status === 'not_checked' && q0.content_score === (base.recordedFirst.content_qa || {}).content_score, J(q0.regulatory));
+    // the grade production recorded, less W0-A's own correction (Fix 1): production read the slug as round 2's meta description, which is empty,
+    // and scored structure on it; today the empty field is read as empty (S-META2), and that is the only part allowed to differ
+    const rec0 = base.recordedFirst.content_qa || {}, b0 = q0.score_breakdown || {}, rb0 = rec0.score_breakdown || {};
+    const metaMisread = (base.recordedFirst.meta || {}).description === 'Slug: ms-365-erp-uae' && (base.first.meta || {}).description === '';
+    const sameGrade = Object.keys(rb0).every(k => k === 'structure' ? (b0[k] === rb0[k] || (metaMisread && b0[k] < rb0[k] && rb0[k] - b0[k] <= 2)) : b0[k] === rb0[k])
+      && q0.content_score === rec0.content_score - ((rb0.structure || 0) - (b0.structure || 0));
+    check('without the step, Content QA records "not checked" and keeps its grade (W0-A\'s meta read aside)', q0.regulatory && q0.regulatory.status === 'not_checked' && sameGrade, J({ reg: q0.regulatory, now: q0.content_score, recorded: rec0.content_score, metaMisread }));
     const acp = acp3299();
     const { c } = await chain(acp, () => searx([]), readOf({}));
     const withReg = await R.replay(F, 'Content QA', 2, { mocks: { 'Collect Regulatory Facts': [{ json: c }] } });
