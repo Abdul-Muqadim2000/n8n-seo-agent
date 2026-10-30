@@ -166,8 +166,8 @@ Third review (REVIEW_3.md) running at save time: verify wave 2, hunt regressions
 - Deploy plan (owner approval first; not a Monday; ≥ 2 h before 05:15 NY): backup (`sudo systemctl start alaventra-backup.service`);
   tunnel; `deploy_engine.py --no-build` dry run (expect: Index Coverage, Site Admin monitor nodes, Monitor Row (Track), the monitors column
   lists; tables: seo_index_pages.linked_by / asked_google_at / google_read_after_ask_at, seo_monitors.index_sitemap_submit; credential
-  SEOcredGoogleSvcW missing) then `--apply --credentials --create-missing` (check first that --credentials only writes what .env holds
-  and that prod's credential values come from the same .env; else create only SEOcredGoogleSvcW); API on the VM (fetch feature/indexing,
+  SEOcredGoogleSvcW missing) then `--apply --credentials --only-credentials SEOcredGoogleSvcW --create-missing` (the new filter: every other
+  production credential stays exactly as it is); API on the VM (fetch feature/indexing,
   checkout FETCH_HEAD, `up -d --build app`); web via PR to main; then one test fire and check devaicon: the 7 industry pages as a site step,
   already-linked pages as "not visited yet", privacy / cookies / security as utility, ask-Google picks capability pages.
 - Sitemap submission stays OFF for every site until the owner switches it on for one (first live submission to be watched).
