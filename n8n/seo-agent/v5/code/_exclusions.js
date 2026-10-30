@@ -53,7 +53,13 @@ const EXC = (() => {
   const textSet = (t) => { const set = new Set(toks(t)); for (const w of raw(t)) if (isAcr(w)) set.add('#' + w.toLowerCase()); return set; };
   const phraseIn = (text, phrase) => !!phrase && (' ' + phraseOf(text) + ' ').includes(' ' + phrase + ' ');
   // the page's keyword family: the keyword, or a list of strings (keywords, the site's services)
-  const famSet = (family) => { const f = new Set(); for (const s of (Array.isArray(family) ? family : [family])) for (const w of terms(s).req) f.add(w); return f; };
+  // W06 integration (2026-10-30): a two-letter word of the family counts as its acronym whatever its case (the keyword "ai consultant" is
+  // typed in lowercase, the topic "AI consultant certification" keeps "#ai"). Such an acronym is the page's own context, not the topic's
+  // signal: it is never required in the text (an address or a heading may spell it out: "artificial-intelligence-certifications"), as
+  // the length filter never required it before W06-A (EQA4, exec 42). The topic's own acronyms (GP, SL) are still required, in capitals.
+  const famSet = (family) => { const f = new Set(); for (const s of (Array.isArray(family) ? family : [family])) {
+    for (const w of terms(s).req) f.add(w);
+    for (const w of raw(s)) { const lw = w.toLowerCase(); if (w.length === 2 && /^[a-z]{2}$/.test(lw) && !SHORT_STOP.has(lw)) f.add('#' + lw); } } return f; };
   const familyOf = (prev, siteModel) => { const p = prev || {}; const b = p.content_brief || {}; const m = siteModel || p.site_model || {};
     const sec = Array.isArray(b.secondary_keywords) ? b.secondary_keywords : [];
     const sv = Array.isArray(m.services) ? m.services : [];
@@ -88,7 +94,7 @@ const EXC = (() => {
     if (phraseIn(text, T.phrase)) return 'phrase';
     if (T.lost || !own.length) return '';               // lost a short word, or only family words: the full phrase or nothing
     const H = textSet(text);
-    return T.req.every(w => H.has(w)) ? 'words' : '';
+    return T.req.every(w => H.has(w) || (w[0] === '#' && fam.has(w))) ? 'words' : '';
   };
   const match = (text, ex, family) => !!how(text, ex, family);
   const check = (headings, list, keyword) => {

@@ -156,8 +156,13 @@ const stop_reason = edits >= PF.EDIT_MAX ? 'all ' + PF.EDIT_MAX + ' editing roun
   : (came === 'edit' && !cmp.better) ? 'the last edit did not improve the page, so the editing stopped'
     : !worth ? 'nothing is left that an edit can improve' : '';
 const claims_seen = cmp.better ? mergeClaims(claimsSeen0, claimsIn(qa, md)) : claimsSeen0;
+// W06 integration (2026-10-30): the first draft's H2 sections that carry text of their own. A section that held only a bracketed prompt
+// for the author ("## Building the business case" + "[Author insight: ...]") is emptied by the bracket fix and dropped; that is no lost
+// content, so it is not counted among the sections "lost in editing" that cap coverage and fit (GR.removedCap). Replay 2552 (PFX6).
+const contentH2 = (m) => PF.split(m).parts.slice(1).filter(p => String(p.text || '').replace(/^#{2,6}\s.*$/gm, ' ')
+  .replace(/!?\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/\[[^\[\]]*\]/g, ' ').split(/\s+/).filter(w => /[A-Za-z0-9]/.test(w)).length >= 5).length;
 const common = { v: 1, round, edits, history, best, sources, claims_seen, searched: state0 ? state0.searched || [] : [], removed, fixes, qa_marks, qa_figure_marks, contract_version: (prev.page_contract || {}).version || 1,
-  first: first || { h2: Number((cand.protect || {}).h2) || 0, words: Number((cand.protect || {}).words) || 0 }, exclusions_removed: exRemoved, exclusions_kept: exKept };   // W06-A
+  first: first || { h2: contentH2(md), words: Number((cand.protect || {}).words) || 0 }, exclusions_removed: exRemoved, exclusions_kept: exKept };   // W06-A
 if (!stop_reason) {
   const page_fix = { ...common, next: 'edit', came_from: 'edit', edit_job: job };
   return [{ json: { ...d0, ...keep(best), output: base, content_qa: bq, page_fix } }];
