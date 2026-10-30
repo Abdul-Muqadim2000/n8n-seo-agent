@@ -406,8 +406,8 @@ against the engine's contract in ENGINE_BUILD.md "Wave 2 review fixes" (ix/engin
 6. `links.suggested` / `links.unread_parents` in the run row: not shown (optional).
 
 ### Tests (each fails on fb6bdbf3)
-New `shared/src/indexing.wave2-review.test.ts` (18), `web/test/indexingWave2Review.test.tsx` (7), a W1 case in `server/test/indexingWave2.test.ts`,
-the parity test rewritten (list + behaviour + rule). Run against a clean `git archive fb6bdbf3` with these tests: shared 13 of 13 review cases fail (the
+New `shared/src/indexing.wave2-review.test.ts` (17), `web/test/indexingWave2Review.test.tsx` (7), a W1 case in `server/test/indexingWave2.test.ts`,
+the parity test rewritten (list + behaviour + rule). Run against a clean `git archive fb6bdbf3` with these tests: shared 13 of 13 fail (12 review cases + the parity rule case; the
 contract cases were added after), web 6 of 6, server the new case fails. Updated for the new rules: `indexing.wave2.test.ts` (`/en/privacy-policy` is
 a content page; a held refusal is `refused`), `web/test/indexingWave2.test.tsx` (the promise needs `will_submit`).
 
