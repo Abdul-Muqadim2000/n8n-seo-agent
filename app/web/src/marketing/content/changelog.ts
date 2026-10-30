@@ -63,6 +63,7 @@ export const changelog: ChangelogEntry[] = [
       'The final version of a page keeps its linked contents list: a renamed section renames its entry, a removed section drops out, and every entry still jumps to its section, also in the Word file and the PDF',
       'Websites that load their text with scripts are now read after the page has loaded, so your services and your key pages are found when a page is written for you, even when your website\'s first response is nearly empty',
       'A phone number, opening hours or an address in your call to action is no longer counted as a figure that needs a source, so it does not lower the grade of your page',
+      'When our verdict says to leave a topic out of a page, only the sections that are really about that topic are removed: the heading has to name it, or the section has to keep talking about it, and short names such as "GP" or "AI" count as part of the topic. Otherwise at most one short section is removed, never a large part of the page, and we keep a record of each section removed or kept, and why. A page that lost several of its sections is marked "Needs work", never "Ready to publish", and a page that makes the same point four or more times in different places loses a little of its structure grade',
     ],
     features: ['content'],
   },

@@ -13388,6 +13388,54 @@ for _f173, _ks173 in {'prompts/copywriter.txt': ('6c. Headings carry content', '
             assert not any(_b173 in _l173 for _b173 in ('\u2014', '\u2013', '\u201c', '\u201d', '\u2026')), 'W05-C: a new line of ' + _f173 + ' carries an em dash, a curly quote or an ellipsis character'
 log('A sourced figure is never made vague, no padding is added, and the final version keeps the page\'s shape (W05-C, 2026-10-30, section 173): Content QA records the figures a cited source states; a figure its own source states is kept and attributed, never rewritten into a vague word; no subtopic while a page is over its length and never a rhetorical heading; client facts out of technical sections; Finalize never puts a fragment or heading into prose, keeps list markers, adds no second call to action and repairs the final version against its source page; at most 8 de-duplicated questions')
 # =============================================================================
+# 177. THE VERDICT'S EXCLUSIONS NEVER DELETE A PAGE'S CORE, AND THE GRADE KNOWS WHAT WAS TAKEN OUT (W06-A, page-quality wave 0.6,
+#      2026-10-30; docs/page-quality-2026-10-29/WAVE05.md 3.1 and "Deploy readiness" items 1 and 4). Live (W05 run, K1 "ms 365 erp") the
+#      verdict said to skip "Dynamics GP and SL": EXC.match dropped the tokens under 3 characters, the topic became the single word "dynamic",
+#      nine headings matched it and Page Candidates deleted six core sections (2,407 words -> 1,023). The grade still read 79 "Ready" with
+#      fit 20 of 20. Pre-existing (A-18, 2026-10-17), so also in production. Now:
+#      * EXC.match (v5/code/_exclusions.js) keeps acronyms written in capitals (GP, SL, AI, ML) and tokens with a digit, matching them only
+#        in capitals; a topic that lost a short word matches on its full phrase or not at all; a one-word topic that is a word of the page's
+#        keyword FAMILY (keyword, primary and secondary keywords, the site's main services: EXC.familyOf) never matches, and a topic made
+#        only of such words needs its full phrase;
+#      * the deletion budget (EXC.decide, in Content QA; EXC.guard again in Page Candidates on the page as it is): a section is deleted when
+#        its heading names the topic's phrase or its text names the topic's own words twice ("a second signal"); without one at most ONE
+#        section of at most 20% of the words; never more than 40% of the page in all. Every deletion and every kept section is recorded
+#        (content_qa.excluded_sections / excluded_sections_kept, page_fix.exclusions_removed / exclusions_kept, delivery.changes);
+#      * the grade (v5/code/_grade.js): 2+ sections or 20%+ of the words taken out (by exclusions, or H2s the edits lost) cap coverage and
+#        fit at 40% and the fit floor is then never waived, so such a page is "Needs work", never "Ready"; an idea restated 4+ times in 3+
+#        places (GR.ideas, a deterministic near-duplicate check) costs 2 points of structure, up to 4, never below half the part.
+#      Pinned by harness/scenarios_w06a.js (W06A1-W06A6) on an anonymised replay of the K1 execution (fixtures/replay_w05_k1.json.gz), the
+#      ranking guide 949 and synthetic K3 / K4-shaped pages.
+# =============================================================================
+assert '/*__EXCLUSIONS__*/' in _rd0('code/Page_Candidates.js') and code('Page Candidates').count('/*__EXCLUSIONS__*/') == 1, 'W06-A: Page Candidates lacks the EXCLUSIONS marker'
+setcode('Page Candidates', code('Page Candidates').replace('/*__EXCLUSIONS__*/', EXCLUSIONS_SRC))
+_ex177 = _rd0('code/_exclusions.js')
+for _k177 in ('const isAcr = (w) =>', 'if (T.lost || !own.length) return', 'const decide = (md, list, family, opts) =>', 'const guard = (md, flagged, list, family) =>',
+              'const removedOf = (state) =>', 'const familyOf = (prev, siteModel) =>', "BUDGET = { weak_sections: 1, weak_share: 0.2, total_share: 0.4"):
+    assert _k177 in _ex177, 'W06-A: the exclusions kit lacks ' + _k177
+for _n177 in ('Page Candidates', 'Content QA', 'Parse Verdict', 'Parse Brief', 'Brief Context'):
+    if '/*__EXCLUSIONS__*/' in code(_n177) or 'const EXC = (() => {' in code(_n177):
+        assert code(_n177).count('const EXC = (() => {') == 1 and 'const decide = (md, list, family, opts) =>' in code(_n177) and '/*__EXCLUSIONS__*/' not in code(_n177), 'W06-A: ' + _n177 + ' does not carry the new exclusions kit exactly once'
+_pc177 = code('Page Candidates')
+for _k177 in ('const EXG = EXC.guard(base, bq.excluded_sections || [], EXL, EXF);', 'exclusions_removed: exRemoved, exclusions_kept: exKept', "{ w0c: GD, removed: removedRun }", 'sections_removed: ((state0.exclusions_removed || []).length'):
+    assert _k177 in _pc177, 'W06-A: Page Candidates lacks ' + _k177
+assert 'for (const x of (bq.excluded_sections || [])) { const r = PF.deleteSection(' not in _pc177, 'W06-A: Page Candidates still deletes every flagged section without the budget'
+_cq177 = code('Content QA')
+for _k177 in ('const excDecision = EXC.decide(md, verdict_exclusions, excFamily);', 'excluded_sections_kept', 'removed: removed_run', 'EXC.removedOf(st)'):
+    assert _k177 in _cq177, 'W06-A: Content QA lacks ' + _k177
+_gr177 = _rd0('code/_grade.js')
+for _k177 in ('const ideas = (md, ctx) =>', 'const removedCap = (rm, max) =>', 'removed: 0.4', '!RMrec && (F.acknowledged || F.exempt)', 'const RM = removedCap(c.removed, M);'):
+    assert _k177 in _gr177, 'W06-A: the grade kit lacks ' + _k177
+for _n177 in ('Content QA', 'Page Candidates', 'Apply Second Read'):
+    assert 'const removedCap = (rm, max) =>' in code(_n177), 'W06-A: ' + _n177 + ' carries an old grade kit'
+for _f177 in ('code/_grade.js', 'code/Page_Candidates.js'):
+    for _bad177 in ('—', '–', '“', '”', '…'):
+        assert _bad177 not in _rd0(_f177), 'W06-A: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f177
+# the harness: the kit as a runnable shim ({ fn, args } -> { r })
+open(os.path.join(OUT_CODE, '_exclusions.js'), 'w').write("// harness shim (written by build_v4.py section 177): the verdict exclusions kit, { fn, args } -> { r }\n"
+    + EXCLUSIONS_SRC + "\nreturn $input.all().map(i => { const j = i.json || {}; return { json: { r: EXC[j.fn].apply(null, j.args || []) } }; });\n")
+log('The verdict\'s exclusions never delete a page\'s core, and the grade knows what was taken out (W06-A, 2026-10-30, section 177): acronyms kept in capitals, a topic that lost a short word matched on its full phrase only, one word of the keyword family never a match; at most one section without a second signal and never 40% of the page, every deletion and kept section recorded; 2+ sections or a fifth of the words taken out cap coverage and fit at 40% (no fit waiver), an idea restated 4+ times costs structure points (never below half)')
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;
