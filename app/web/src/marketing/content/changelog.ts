@@ -35,7 +35,7 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-31',
-    version: '4.5',
+    version: '4.7',
     title: 'Written pages you can publish with confidence',
     summary:
       'Fixes to how written pages are checked and finished, so a page we call ready to publish is ready in every part, including what people see in search results.',
@@ -71,6 +71,42 @@ export const changelog: ChangelogEntry[] = [
       'When the service we use to read web pages stops answering, we read your pages and the pages that rank another way. If they still cannot be read, nothing is decided on guesses: no verdict, no score, no question about an existing page and no written page, only the check is used, and the report says which pages could not be read so you can run it again later',
     ],
     features: ['content'],
+  },
+  {
+    date: '2026-10-30',
+    version: '4.6',
+    title: 'Index coverage: the right step for each page, and every step checked',
+    summary:
+      'Index coverage now tells apart the pages Google has not visited yet from the pages that need a link, finds pages that name another page as their main version, and leaves policy pages alone. Every step it asks of you can be marked done and is checked, and you can let us submit your sitemap.',
+    highlights: [
+      'Pages your website already links to that Google has not visited yet are shown apart, with what helps, instead of a request to add links you already have',
+      'Internal links to add are one step on your website: each page to link to, the page of yours to add the link on, and our check that each link is there',
+      'Pages with a title of their own that name another page as their main version are found, with a step to let them stand on their own',
+      'Privacy, cookie, terms and login pages are shown as fine to leave out, never as pages to improve',
+      'The pages worth asking Google to read again put your most valuable pages first; press I asked Google and the page shows when Google read it again',
+      'Optional sitemap submission: switch it on and give us Full access in Search Console, and we submit your sitemap when it is missing or has changed, and nothing else',
+    ],
+    features: ['index-coverage'],
+  },
+  {
+    date: '2026-10-29',
+    version: '4.5',
+    title: 'Index coverage',
+    summary:
+      'A new page for every website with Search Console connected: which of your pages Google has left out of its index, why, and what to do. We look every day at the pages Google left out, each page is read again on its own schedule, and it is free to run.',
+    highlights: [
+      'Every day, which of your pages Google has left out of its index, your older pages as well as the new ones we write',
+      'Why each page was left out, in plain words, with the pages grouped by the reason so one fix covers the whole group',
+      'What to do for each group: steps on your website that we then check for you, internal links to add, pages worth improving one at a time with your approval, and pages that are fine to leave out',
+      'You hear when a page we saw in Google\'s index drops out of it, the day our check notices',
+      'A page you fixed shows as fixed while Google catches up, and we look up Google\'s reading of it again within a day or two',
+      'A short list of the pages worth asking Google to read again in Search Console, which you do yourself in a few clicks',
+      'A step on your website when Search Console has no sitemap for it, or reports errors in one',
+      'Google\'s announced ranking updates followed for you: suggestions to change pages wait while an update rolls out, and after it finishes you see which of your pages lost, held or gained',
+      'New pages and existing pages on their own tabs, with each page\'s last check and history',
+      'Free to run on your connected Search Console: no credits',
+    ],
+    features: ['index-coverage'],
   },
   {
     date: '2026-10-28',

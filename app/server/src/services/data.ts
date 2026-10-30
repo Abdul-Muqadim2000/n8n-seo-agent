@@ -1,5 +1,8 @@
 import {
   creditsFor,
+  clampIndexDailyCap,
+  indexWatchOn,
+  indexSitemapSubmitOn,
   gscConnectionState,
   ga4ConnectionState,
   aiAlertsOf,
@@ -1692,6 +1695,11 @@ export function monitorsFromRow(r: MonitorsRow | undefined): (MonitorSettings & 
     // AI-FOCUS (2026-10-27): a stored row with no scope asks the whole panel (the engine's rule for a site from before the release)
     aiPulseScope: (s(r.ai_pulse_scope) === 'focus' ? 'focus' : 'all') as MonitorSettings['aiPulseScope'],
     aiFocusMode: (s(r.ai_focus_mode) === 'off' ? 'off' : 'auto') as MonitorSettings['aiFocusMode'],
+    // Index coverage (2026-10-29): read back only when the engine stored the column (empty = on, 300 a day)
+    ...(r.index_watch != null && (r.index_watch as unknown) !== '' ? { indexWatch: indexWatchOn(r.index_watch) } : {}),
+    ...(r.index_daily_cap != null && (r.index_daily_cap as unknown) !== '' && Number(r.index_daily_cap) > 0 ? { indexDailyCap: clampIndexDailyCap(r.index_daily_cap) } : {}),
+    // wave 2 (DESIGN_WAVE2 §2.5): read back only when stored (empty = off)
+    ...(r.index_sitemap_submit != null && (r.index_sitemap_submit as unknown) !== '' ? { indexSitemapSubmit: indexSitemapSubmitOn(r.index_sitemap_submit) } : {}),
     competitors: splitList(r.competitors),
     updatedAt: s(r.updated_at),
   };

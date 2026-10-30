@@ -224,6 +224,7 @@ export function TrackingForm({
                 disabled={readOnly}
                 enginesError={errors.monitors?.aiEngines?.message}
                 aiMeasured={aiMeasuredFrom(ai.data)}
+                domain={site.domain}
               />
             </div>
 

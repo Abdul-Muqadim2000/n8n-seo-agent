@@ -11,6 +11,7 @@ import { CrawlersMockup } from './mockups/CrawlersMockup';
 import { DashboardMockup } from './mockups/DashboardMockup';
 import { DeliveryMockup } from './mockups/DeliveryMockup';
 import { GuideMockup } from './mockups/GuideMockup';
+import { IndexCoverageMockup } from './mockups/IndexCoverageMockup';
 import { IntegrationsMockup } from './mockups/IntegrationsMockup';
 import { KeywordVerdictMockup } from './mockups/KeywordVerdictMockup';
 import { LadderMockup } from './mockups/LadderMockup';
@@ -54,6 +55,8 @@ export function FeatureVisual({ kind, className }: { kind: VisualKey; className?
       return <GrowthLoopDiagram className={className} />;
     case 'link-sources':
       return <LinkSourcesDiagram className={className} />;
+    case 'index-coverage':
+      return <IndexCoverageMockup className={className} />;
     case 'crawlers':
       return <CrawlersMockup className={className} />;
     case 'ai-engines':

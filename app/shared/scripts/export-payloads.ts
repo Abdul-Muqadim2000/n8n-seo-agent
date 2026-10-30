@@ -343,6 +343,22 @@ const adminCases: AdminCase[] = [
     stored: ALL_ON,
     expect: { ...ALL_ON, ai_alert_rules_json: [{ ...RULE, enabled: true }], ai_prompts_max: 30, competitors: 'rival.com' },
   },
+  {
+    // Index coverage (2026-10-29, DESIGN.md §2.6): the daily index check switched off and its daily checks changed, saved from the website
+    // settings; Monitor Row (Admin) stores both columns (an empty column means on, 300 a day)
+    name: 'index coverage: switched off, 500 checks a day',
+    monitors: { indexWatch: false, indexDailyCap: 500 },
+    stored: {},
+    expect: { index_watch: false, index_daily_cap: 500 },
+  },
+  {
+    // Index coverage wave 2 (DESIGN_WAVE2 §2.5): sitemap submission switched on from Tracking & monitors; Monitor Row (Admin) stores it (an
+    // empty column means off)
+    name: 'index coverage: sitemap submission switched on',
+    monitors: { indexSitemapSubmit: true },
+    stored: {},
+    expect: { index_sitemap_submit: true },
+  },
 ];
 const adminFixtures = adminCases.map((c) => {
   const parsed = monitorSettingsSchema.partial().safeParse(c.monitors);

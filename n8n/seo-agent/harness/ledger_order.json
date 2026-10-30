@@ -265,6 +265,39 @@
    ],
    "tag": "Cadence"
   },
+  "SEO Agent \u2014 Index Coverage": {
+   "always_output": [
+    "Ensure Run Ledger (Index)",
+    "Reserve Run Ledger (Index)"
+   ],
+   "ensure_out": [
+    "DFS Balance (Index)"
+   ],
+   "est": {
+    "ai": 0.0,
+    "dfs": 0.0
+   },
+   "plan": "Index Plan",
+   "plan_out": [
+    "Ensure Run Ledger (Index)"
+   ],
+   "reserve_out": [
+    "After Run Ledger (Index)"
+   ],
+   "resume": "After Run Ledger (Index)",
+   "resume_out": [
+    "Run Allowed? (Index)"
+   ],
+   "row_out": [
+    "Reserve Run Ledger (Index)"
+   ],
+   "settle": "Settle Run Ledger (Index)",
+   "settle_from": [
+    "Index Report",
+    "Refuse Run Ledger (Index)"
+   ],
+   "tag": "Index"
+  },
   "SEO Agent \u2014 Link Builder": {
    "always_output": [
     "Ensure Run Ledger (LB)",

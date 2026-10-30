@@ -18,6 +18,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ENV_FILE = os.path.join(HERE, '..', '.env')
 CONTAINER, PROJECT = 'n8n-n8n-1', 'wo1WpMiHjdduGvfl'
 SCOPES = 'https://www.googleapis.com/auth/webmasters.readonly https://www.googleapis.com/auth/analytics.readonly'
+SCOPES_WRITE = 'https://www.googleapis.com/auth/webmasters'   # wave 2: sitemap submission only (SEOcredGoogleSvcW)
 # id, name, type, secret fields (field -> env var), fixed fields, optional transform per field (expression, value)
 CREDS = [
     ('SEOcredDataForSE', 'DataForSEO', 'httpBasicAuth', {'user': 'SEO_DATAFORSEO_LOGIN', 'password': 'SEO_DATAFORSEO_PASSWORD'}, {}),
@@ -30,6 +31,10 @@ CREDS = [
     ('SEOcredSmtpGmail', 'Gmail SMTP (SEO Agent)', 'smtp', {'user': 'SEO_SMTP_USER', 'password': 'SEO_SMTP_PASSWORD', 'host': 'SEO_SMTP_HOST'}, {'port': 465, 'secure': True, 'disableStartTls': False}),
     ('SEOcredImapGmail', 'Gmail IMAP (SEO Agent)', 'imap', {'user': 'SEO_IMAP_USER', 'password': 'SEO_IMAP_PASSWORD', 'host': 'SEO_IMAP_HOST'}, {'port': 993, 'secure': True, 'allowUnauthorizedCerts': False}),
     ('SEOcredGoogleSvc', 'Google Service Account (SEO Agent)', 'googleApi', {'email': 'SEO_GOOGLE_SA_EMAIL', 'privateKey': 'SEO_GOOGLE_SA_PRIVATE_KEY'}, {'region': 'global', 'inpersonate': False, 'delegatedEmail': '', 'httpNode': True, 'scopes': SCOPES}),
+    # Index coverage wave 2 (2026-10-30, docs/indexing-2026-10-29/DESIGN_WAVE2.md §2.5): the SAME service account with the write scope, used by
+    # ONE node only (Index Coverage's `Submit Sitemap (Index)`, sitemaps.submit) and only for a website whose owner switched sitemap submission
+    # on and gave the account Full access in Search Console. Every other node keeps the read-only credential above.
+    ('SEOcredGoogleSvcW', 'Google Service Account, sitemap submission (SEO Agent)', 'googleApi', {'email': 'SEO_GOOGLE_SA_EMAIL', 'privateKey': 'SEO_GOOGLE_SA_PRIVATE_KEY'}, {'region': 'global', 'inpersonate': False, 'delegatedEmail': '', 'httpNode': True, 'scopes': SCOPES_WRITE}),
     ('SEOcredWordPress', 'WordPress (SEO Agent)', 'wordpressApi', {'url': 'SEO_WORDPRESS_URL', 'username': 'SEO_WORDPRESS_USER', 'password': 'SEO_WORDPRESS_APP_PASSWORD'}, {}),
     # v4.10 (BACKLINKS_SPEC.md): optional free link sources; without the key the Backlink Monitor is built with the source switched off
     ('SEOcredBingWebm', 'Bing Webmaster API', 'httpQueryAuth', {'value': 'SEO_BING_WEBMASTER_API_KEY'}, {'name': 'apikey'}),

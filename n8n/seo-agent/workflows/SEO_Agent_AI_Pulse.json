@@ -175,6 +175,18 @@
               {
                 "name": "ai_focus_mode",
                 "type": "string"
+              },
+              {
+                "name": "index_watch",
+                "type": "boolean"
+              },
+              {
+                "name": "index_daily_cap",
+                "type": "number"
+              },
+              {
+                "name": "index_sitemap_submit",
+                "type": "boolean"
               }
             ]
           },

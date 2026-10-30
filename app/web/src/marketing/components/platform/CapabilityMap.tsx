@@ -6,7 +6,7 @@ import { jumpTo } from './kit';
 const GROUPS: { label: string; slugs: string[] }[] = [
   { label: 'Plan', slugs: ['keyword-research', 'keyword-ladders'] },
   { label: 'Create', slugs: ['content', 'autopilot'] },
-  { label: 'Measure', slugs: ['technical-audits', 'site-tracking', 'ai-visibility', 'crawler-analytics', 'backlinks'] },
+  { label: 'Measure', slugs: ['technical-audits', 'index-coverage', 'site-tracking', 'ai-visibility', 'crawler-analytics', 'backlinks'] },
   { label: 'Grow', slugs: ['ai-growth', 'link-building'] },
   { label: 'Run', slugs: ['reports', 'report-delivery', 'integrations', 'guided-setup', 'enterprise', 'agency-portal'] },
 ];

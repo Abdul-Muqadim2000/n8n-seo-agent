@@ -17,7 +17,8 @@ async function loadClient() {
 afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); });
 
 describe('the engine\'s repeat flag reaches the app', () => {
-  it('carries duplicate and first_seen_at from a 202', async () => {
+  // the first test pays for the cold import of the client and the shared barrel (see the note below): over 5 s under Docker on a laptop
+  it('carries duplicate and first_seen_at from a 202', { timeout: 30_000 }, async () => {
     vi.stubGlobal('fetch', vi.fn(async () => OK202({ request_id: '511', duplicate: true, first_seen_at: '2026-10-15T10:00:00Z', estimated_minutes: 4 })));
     const { startRun } = await loadClient();
     const res = await startRun({}, 'org');

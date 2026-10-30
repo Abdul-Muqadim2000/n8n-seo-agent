@@ -26,7 +26,7 @@ export default function RecommendationsPage() {
       <PageHeader
         icon={<Lightbulb />}
         title="Recommendations"
-        description="Every next step the SEO engine sees for this website, from tracking, audits, rankings, AI answers and backlinks. The most important come first."
+        description="Every next step we see for this website, from tracking, audits, rankings, AI answers and backlinks. The most important come first."
         actions={<RunAnalysisMenu />}
       />
       <DataGate

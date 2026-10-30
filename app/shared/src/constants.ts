@@ -317,7 +317,7 @@ export const MODE_CATEGORIES: Record<ModeCategory, string> = {
 };
 
 /** Callback stages sent by scheduled workflows (no run started them from the app). */
-export const SCHEDULED_STAGES = ['site_tracker', 'rank_tracker', 'content_cadence', 'console_alert', 'ai_visibility', 'ai_pulse', 'ai_growth', 'backlinks', 'link_builder', 'site_audit'] as const;
+export const SCHEDULED_STAGES = ['site_tracker', 'rank_tracker', 'content_cadence', 'console_alert', 'ai_visibility', 'ai_pulse', 'ai_growth', 'backlinks', 'link_builder', 'site_audit', 'index_coverage'] as const;
 
 export const STAGE_LABELS: Record<string, string> = {
   site_description: 'Site description',
@@ -348,6 +348,9 @@ export const STAGE_LABELS: Record<string, string> = {
   // W2-FIX (2026-10-23): the AI repeat pilot, priced first (the price is a note, not a report), then its result
   ai_pilot_quote: 'AI repeat pilot price',
   ai_pilot: 'AI repeat pilot',
+  // Index coverage (2026-10-29): the daily index check's weekly report (and the same-day one when a page drops out or a Google update
+  // starts or ends); free, Google data only
+  index_coverage: 'Index coverage',
 };
 
 /** Monthly cost of the background monitors per site (HANDOVER.md §1, v4.6 reuse rules; AI visibility: estimateAiVisibilityCost, v4.9). */
@@ -460,6 +463,8 @@ export interface AutomationInfo {
    * due before it is not a missed fire, the delivery rate counted 57 of its 72 "missed" fires before the workflow was even created.
    */
   since?: string;
+  /** X10: the start is read from the engine's data (`created` in the delivery report); without it the schedule is not measured */
+  sinceFromData?: boolean;
 }
 
 export const AUTOMATIONS: AutomationInfo[] = [
@@ -575,7 +580,7 @@ export const AUTOMATIONS: AutomationInfo[] = [
  * website switches on (it has no report stage and no settings tab of its own), so it is not in `AUTOMATIONS`; it is a schedule all the
  * same, and a schedule that does not fire is a missed fire.
  */
-export type ScheduleId = AutomationId | 'page_watch';
+export type ScheduleId = AutomationId | 'page_watch' | 'index_coverage';
 export type ScheduleInfo = Omit<AutomationInfo, 'id'> & { id: ScheduleId };
 
 export const PAGE_WATCH_SCHEDULE: ScheduleInfo = {
@@ -590,7 +595,26 @@ export const PAGE_WATCH_SCHEDULE: ScheduleInfo = {
   since: '2026-10-13T06:16:00.000Z',
 };
 
-export const SCHEDULES: ScheduleInfo[] = [...AUTOMATIONS, PAGE_WATCH_SCHEDULE];
+/**
+ * Index coverage (2026-10-29, fix wave 1, X10): the daily index check (`SEOagentIndexCv1`, 05:15 in n8n's timezone, every day). Like Page
+ * Watch it is not an automation a website switches on in the Pipeline (on/off lives in the tracking settings, results on the Indexing
+ * page), but it is a schedule, and one that stops firing is a missed fire. It has NO built-in `since`: the delivery report counts it from
+ * the first `seo_index_runs` row of any website (services/delivery.ts), so nothing before the deploy counts as missed, and a schedule with
+ * no start at all is not measured.
+ */
+export const INDEX_COVERAGE_SCHEDULE: ScheduleInfo = {
+  id: 'index_coverage',
+  title: 'Daily index check',
+  summary: 'Reads from Search Console which of your pages Google left out of search and why, new pages first, within Google\'s daily limit.',
+  cadence: 'Every day 05:15',
+  schedule: { kind: 'daily', weekdays: [0, 1, 2, 3, 4, 5, 6], hour: 5, minute: 15 },
+  workflow: 'SEOagentIndexCv1',
+  stage: 'index_coverage',
+  settingsTab: 'tracking',
+  sinceFromData: true,
+};
+
+export const SCHEDULES: ScheduleInfo[] = [...AUTOMATIONS, PAGE_WATCH_SCHEDULE, INDEX_COVERAGE_SCHEDULE];
 
 /**
  * The next time a schedule runs after `from` (DST-safe, no libraries). `daily` / `weekly` / `monthly` fire on the engine's clock `tz`. A

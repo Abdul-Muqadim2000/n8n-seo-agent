@@ -4,6 +4,7 @@ import { Callout } from '@/components/ui/feedback';
 import { AiGrowthReport, AiPulseReport, AiVisibilityReport } from './ai';
 import { AuditReport } from './audit';
 import { BacklinksReport } from './backlinks';
+import { IndexCoverageReport } from './indexing';
 import { ContentReport } from './content';
 import { RenderBoundary } from './kit';
 import { LadderReport } from './ladder';
@@ -49,6 +50,7 @@ const RENDERERS: Record<string, (p: { report: ReportDetail }) => ReactNode> = {
   rejected: RejectedReport,
   site_description: DescriptionReport,
   console_alert: ConsoleAlertReport,
+  index_coverage: IndexCoverageReport,
 };
 
 /** The documents of a report as download cards (fix-pack files are listed in their own section). */

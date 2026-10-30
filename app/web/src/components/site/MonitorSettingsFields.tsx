@@ -3,12 +3,14 @@ import { useCycleDay } from '@/lib/cycle-day';
 import { PRICES } from '@/lib/prices';
 import { creditsLabel, formatCredits, toCredits } from '@/lib/credits';
 import { useId, type ReactNode } from 'react';
-import { Bot, Gauge, Link2, Send, Wallet } from 'lucide-react';
+import { Bot, CheckCircle2, FileSearch, Gauge, Link2, Send, Wallet } from 'lucide-react';
 import {
   AI_ENGINES,
   AI_PROMPTS_MAX,
   AI_PULSE_ENGINES,
   CRAWL_PAGE_OPTIONS,
+  INDEX_DAILY_CAP,
+  INDEX_DAILY_CAP_OPTIONS,
   AI_PAGES_MAX,
   autopilotRows,
   aiPanelOptionsOf,
@@ -17,8 +19,13 @@ import {
   monitorSettingsSchema,
   type AiEngine,
   type AutopilotPlan,
+  sitemapBlockedText,
+  type IndexSitemapAccess,
   type MonitorSettings,
+  type SitemapBlocked,
 } from '@seo/shared';
+import { Callout } from '@/components/ui/feedback';
+import { fmtDay } from '@/lib/utils';
 import { GuideButton } from '@/components/guide';
 import { AiPrecisionTable, type AiMeasuredSample } from '@/components/site/AiPrecision';
 import { Checkbox, Field, Select } from '@/components/ui/field';
@@ -63,7 +70,57 @@ export function completeMonitors(m: Partial<MonitorSettings> | null | undefined)
     // AI-FOCUS (2026-10-27): what the daily check asks and whether the questions follow the keywords (kept only when stored or chosen here)
     ...(m?.aiPulseScope !== undefined ? { aiPulseScope: m.aiPulseScope } : {}),
     ...(m?.aiFocusMode !== undefined ? { aiFocusMode: m.aiFocusMode } : {}),
+    // Index coverage (2026-10-29): kept only when stored or chosen here (absent = the engine's default: on, 300 a day)
+    ...(m?.indexWatch !== undefined ? { indexWatch: m.indexWatch } : {}),
+    ...(m?.indexDailyCap !== undefined ? { indexDailyCap: m.indexDailyCap } : {}),
+    // wave 2 (DESIGN_WAVE2 §3.2): kept only when stored or chosen here (absent = the engine's default: off)
+    ...(m?.indexSitemapSubmit !== undefined ? { indexSitemapSubmit: m.indexSitemapSubmit } : {}),
   };
+}
+
+/** wave 2: what Google reports about our access, from the newest daily index check that read it (null: not read yet). Wave 2 review W1:
+ *  `blocked` is the engine's reason it will not submit on its next run (shown only with the switch on). */
+export type SitemapAccessInfo = { access: IndexSitemapAccess; at: string | null; blocked?: SitemapBlocked | '' } | null;
+
+/** The line next to the sitemap switch: whether Google lets us submit (Full access), or the warning and the guide; with the switch on, the
+ *  engine's reason it will not submit (W1). */
+export function SitemapAccessLine({ info, domain, on }: { info: SitemapAccessInfo | undefined; domain: string; on: boolean }) {
+  const access = info?.access ?? 'unknown';
+  // W1: the reasons the access line itself does not already say (read-only access and a refusal have their own callouts)
+  const blocked = on && info?.blocked && info.blocked !== 'switch_off' && info.blocked !== 'not_full_access' && info.blocked !== 'refused' ? info.blocked : '';
+  const why = blocked ? sitemapBlockedText(blocked) : '';
+  if (access === 'refused')
+    return (
+      // W7: Google reports Full access for us but refused the submission: not read-only access, and Full access is not the fix
+      <Callout tone={on ? 'warning' : 'info'} title="Google refused our sitemap submission">
+        {sitemapBlockedText('refused')} Google reports Full access for us{info?.at ? ` (daily index check of ${fmtDay(info.at)})` : ''}, so there is nothing to change in your access.
+      </Callout>
+    );
+  if (access === 'full')
+    return (
+      <>
+        <p className="flex items-start gap-1.5 text-[13px] text-ink-2">
+          <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-good-text" aria-hidden />
+          <span>
+            {why ? 'Google' : 'We can submit your sitemap: Google'} reports Full access for us{info?.at ? ` (daily index check of ${fmtDay(info.at)})` : ''}.
+          </span>
+        </p>
+        {why && <p className="text-[13px] text-ink-2">{why}</p>}
+      </>
+    );
+  if (access === 'restricted')
+    return (
+      <Callout tone={on ? 'warning' : 'info'} title="We cannot submit your sitemap">
+        Google gives us read-only access, so we cannot submit your sitemap. Give us Full access in Search Console, or submit it yourself.{' '}
+        <GuideButton id="search-console-full-access" vars={{ domain }} label="Give us Full access" />
+      </Callout>
+    );
+  return (
+    <>
+      <p className="text-[13px] text-ink-3">We will know after the next daily check whether Google lets us submit it (it needs Full access in Search Console).</p>
+      {why && <p className="text-[13px] text-ink-2">{why}</p>}
+    </>
+  );
 }
 
 /**
@@ -91,6 +148,9 @@ export function MonitorSettingsFields({
   showBrandNames = true,
   enginesError,
   aiMeasured,
+  sitemapAccess,
+  sitemapSwitch = false,
+  domain = 'your website',
 }: {
   value: MonitorSettings;
   onChange: (v: MonitorSettings) => void;
@@ -99,6 +159,13 @@ export function MonitorSettingsFields({
   enginesError?: string;
   /** B8-7: the latest AI visibility run's own sample, so the precision table is measured rather than modelled */
   aiMeasured?: AiMeasuredSample | null;
+  /** wave 2: the access Google reports for us (from the daily index check); absent: not known here */
+  sitemapAccess?: SitemapAccessInfo;
+  /** wave 2 review W6: show the Indexing row (on / off, checks a day) and "Let Alaventra submit your sitemap to Google". Only the Growth
+   *  monitors card of Website settings saves them (Site Admin `monitors`); the onboarding and "Start weekly tracking" forms save through
+   *  Track my site, which does not carry them, so they never show settings that would be dropped (new sites start with Indexing on, 300 a day) */
+  sitemapSwitch?: boolean;
+  domain?: string;
 }) {
   useEngineCal();   // R99 / R100: re-render with the engine's own prices once they arrive
   const day = useCycleDay();
@@ -265,6 +332,47 @@ export function MonitorSettingsFields({
         disabled={disabled}
       />
       </MonitorRow>
+
+      {sitemapSwitch && (   // the Indexing row saves only through Site Admin (Website settings); onboarding / "Start weekly tracking" go through Track my site, which does not carry it
+      <MonitorRow icon={<FileSearch />} on={value.indexWatch ?? true}>
+      <SwitchRow
+        title="Indexing"
+        description="Every day we read Search Console to see which of your pages Google left out of search, with the reason and what to do; each page is read again on its own schedule. Free: it uses Google's data only. Needs Search Console connected."
+        checked={value.indexWatch ?? true}
+        onCheckedChange={(v) => set({ indexWatch: v })}
+        disabled={disabled}
+        extra={
+          (value.indexWatch ?? true) && (
+            <div className="mt-3">
+              <Field label="Pages checked with Google a day" hint="Google allows 2,000 a day for each website, shared by every tool you use. More finishes the first full check sooner; fewer leaves room for your other tools.">
+                {(p) => (
+                  <Select {...p} value={value.indexDailyCap ?? INDEX_DAILY_CAP.default} disabled={disabled} onChange={(e) => set({ indexDailyCap: Number(e.target.value) })}>
+                    {[...new Set([...INDEX_DAILY_CAP_OPTIONS, value.indexDailyCap ?? INDEX_DAILY_CAP.default])].sort((x, y) => x - y).map((c) => (
+                      <option key={c} value={c}>
+                        {c.toLocaleString('en-US')} a day{c === INDEX_DAILY_CAP.default ? ' (recommended)' : ''}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              {sitemapSwitch && (
+                <div className="mt-3 space-y-2">
+                  <Checkbox
+                    label="Let Alaventra submit your sitemap to Google"
+                    description="Off unless you switch it on. When your sitemap is missing from Search Console, or has changed, we submit it there for you, at most once a week. We only read your Search Console, unless you switch this on, which lets us submit your sitemap and nothing else. Google still decides which pages it keeps."
+                    checked={value.indexSitemapSubmit ?? false}
+                    disabled={disabled}
+                    onChange={(e) => set({ indexSitemapSubmit: e.target.checked })}
+                  />
+                  <SitemapAccessLine info={sitemapAccess} domain={domain} on={value.indexSitemapSubmit ?? false} />
+                </div>
+              )}
+            </div>
+          )
+        }
+      />
+      </MonitorRow>
+      )}
 
       <MonitorRow icon={<Gauge />} on={value.auditMonthly}>
       <SwitchRow

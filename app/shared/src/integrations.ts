@@ -181,6 +181,16 @@ export function eventsFor(f: CallbackFacts): { type: WebhookEvent; data: P }[] {
     if (alerts.length && d.code !== 'interim') out.push({ type: 'alert.raised', data: { source: f.stage, alerts, report } });
   }
 
+  // ---- Index coverage (2026-10-29): pages that dropped out of Google search are an alert of their own ----
+  if (f.stage === 'index_coverage') {
+    const dropped = arr(obj(p.summary).dropped).map(obj).filter((x) => text(x.url));
+    if (dropped.length)
+      out.push({
+        type: 'alert.raised',
+        data: { source: 'index_coverage', alerts: [{ level: 'high', text: `${dropped.length} page${dropped.length === 1 ? '' : 's'} dropped out of Google search: ${dropped.slice(0, 3).map((x) => text(x.url).replace(/^https?:\/\/[^/]+/i, '') || '/').join(', ')}${dropped.length > 3 ? ` and ${dropped.length - 3} more` : ''}` }], report },
+      });
+  }
+
   // ---- new audit findings (only against the previous audit of the same type: the engine's diff already says so) ----
   if (f.stage === 'site_audit' || f.stage === 'full_report') {
     const diff = obj(p.audit_diff ?? obj(p.site_audit).audit_diff);

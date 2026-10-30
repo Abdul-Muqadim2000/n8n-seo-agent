@@ -37,10 +37,18 @@ import {
   autopilotRuns,
   redirectTaskKey,
   type SiteTask,
+  findingAsksSameFix,
+  INDEX_CAUSE_INFO,
+  INDEXING_SITEMAP_KEY,
+  indexingCauseOfKey,
+  indexPath,
+  improveKeywordOf,
+  type IndexingForRecs,
 } from '@seo/shared';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { aiData, alertsData, backlinksData, contentData, ga4Now, gscNow, previousOfType, rankingsData, searchData, settingsData, technicalData } from './data';
 import { latestReport, reportsList } from './runs';
+import { indexingForRecs } from './indexing';
 
 // Next steps for a website, from everything stored about it: setup gaps, Search Console opportunities, open audit issues, AI
 // answers lost to competitors, links to reclaim, pages to publish, ladder rungs to write, plus the actions the SEO engine itself
@@ -62,10 +70,12 @@ export interface SiteBundle {
   links?: { drafted: number; mailbox: boolean; repliesWaiting: number; listingsMissing: { name: string; competitors: string[] }[] };
   /** keyword-first: when the website's latest keyword research arrived (null: none yet) */
   researchAt?: string | null;
+  /** Index coverage (2026-10-29): the daily index check's newest counts (null: not run yet, or it could not be read) */
+  indexing?: IndexingForRecs | null;
 }
 
 export async function loadBundle(org: OrgRow, site: SiteRow): Promise<SiteBundle> {
-  const [search, rankings, content, technical, ai, backlinks, alerts, settings, rank, links, research] = await Promise.all([
+  const [search, rankings, content, technical, ai, backlinks, alerts, settings, rank, links, research, indexing] = await Promise.all([
     searchData(org, site),
     rankingsData(site),
     contentData(org, site),
@@ -77,6 +87,8 @@ export async function loadBundle(org: OrgRow, site: SiteRow): Promise<SiteBundle
     latestReport(org.id, site.id, ['rank_tracker']),
     linkSummary(org, site),
     latestReport(org.id, site.id, ['keyword_strategy']).catch(() => null),
+    // Index coverage: its own reads, and a failure is "no index items", never a broken Recommendations or Overview page
+    site.verifiedAt ? indexingForRecs(site).catch(() => null) : Promise.resolve(null),
   ]);
   const reportsElsewhere = settings.tracking.tracked && settings.tracking.status === 'active' && !settings.tracking.reportsToThisApp;
   let rankNext: EngineAction | null = null;
@@ -94,7 +106,7 @@ export async function loadBundle(org: OrgRow, site: SiteRow): Promise<SiteBundle
       apiBody: (rank.payload.api_body as Record<string, unknown>) ?? null,
     };
   }
-  return { search, rankings, content, technical, ai, backlinks, alerts, settings, rankNext, reportsElsewhere, links, researchAt: research?.report.receivedAt ?? null };
+  return { search, rankings, content, technical, ai, backlinks, alerts, settings, rankNext, reportsElsewhere, links, researchAt: research?.report.receivedAt ?? null, indexing };
 }
 
 const PAGE_TYPES = new Set<string>(PAGE_TYPE_VALUES);
@@ -350,6 +362,9 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
   if (latestAudit && Date.now() - Date.parse(latestAudit.auditedAt) > staleDays * 864e5)
     add({ id: 'tech:stale', category: 'technical', priority: 'low', title: 'Re-audit the site', detail: auto.audit ? `The last audit is more than ${staleDays} days old although the monthly audit is on; run one now and check the Pipeline for why it did not run.` : 'The last audit is more than 45 days old and the monthly audit is switched off.', action: { label: 'Run audit', mode: 'audit' } });
 
+  // ---------- index coverage (2026-10-29, DESIGN.md §6.3) ----------
+  indexingRecommendations(x.indexing, tasks, out, add);
+
   // ---------- AI visibility ----------
   // engine fix round (2026-10-23): a named rate the engine could not measure is stored null; no recommendation is made from it (never 0%)
   const lastAi0 = x.ai.runs[x.ai.runs.length - 1];
@@ -438,6 +453,103 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
 
   // One queue: blocking setup first, then by impact x confidence / effort, then the items nothing measured yet (`queue.ts`).
   return queueOrder(out).slice(0, 60);
+}
+
+/**
+ * Index coverage (2026-10-29): one recommendation per cause (`ix:<action>:<cause>`), each opening the Indexing page.
+ * - A cause only the client can fix is its step on the website (`taskKey`): listed while the step is to do, and NOT listed when an audit
+ *   finding already asks for the same fix (its `tech:*` item stays the one ask; matched on the finding's key, never on any word of a
+ *   title, A24). The sitemap step (Search Console has no sitemap, or reports errors) is one too.
+ * - Pages where a manual "Request indexing" in Search Console is the right next step (the engine marks at most 5): one recommendation
+ *   with the guide, never automated (FIX_CONTRACT, X8).
+ * - Pages Google read and left out get "Improve this page" (the Write-a-page form with the page's address: the click is the approval,
+ *   normal credits); none while a Google core or spam update is rolling out.
+ * - Nothing when the check is switched off or has not run.
+ */
+export function indexingRecommendations(
+  ix: IndexingForRecs | null | undefined,
+  tasks: readonly SiteTask[] | undefined,
+  out: readonly Recommendation[],
+  add: (r: Recommendation, score?: ScoreInput) => void,
+): void {
+  if (!ix || !ix.on || !ix.runAt) return;
+  const findingKeys = out.filter((r) => r.id.startsWith('tech:')).map((r) => r.id.slice('tech:'.length));
+  for (const t of (tasks ?? []).filter((t) => t.kind === 'indexing' && t.state === 'todo')) {
+    if (t.key === INDEXING_SITEMAP_KEY) {
+      add({ id: 'ix:site_fix:sitemap', taskKey: t.key, category: 'technical', priority: 'medium', title: t.title, detail: t.detail, action: { label: 'See the step', page: 'pipeline' }, guideVars: t.guideVars });
+      continue;
+    }
+    const cause = indexingCauseOfKey(t.key);
+    if (!cause) continue;
+    if (findingKeys.some((k) => findingAsksSameFix(cause, k))) continue;
+    add({
+      id: `ix:site_fix:${cause}`,
+      taskKey: t.key,
+      category: 'technical',
+      priority: t.severity === 'warning' ? 'high' : 'medium',
+      title: t.title,
+      detail: INDEX_CAUSE_INFO[cause].meaning,
+      evidence: t.values.map((v) => indexPath(v.value)).slice(0, 3).join(' · ') || undefined,
+      action: { label: 'See the pages', page: 'indexing' },
+      guideVars: t.guideVars,
+    });
+  }
+  // wave 2 (DESIGN_WAVE2 §3.2): pages that need a link from another page of the website are one step with its own check
+  for (const t of (tasks ?? []).filter((t) => t.kind === 'index_links' && t.state === 'todo'))
+    add({
+      id: 'ix:links',
+      taskKey: t.key,
+      category: 'technical',
+      priority: 'medium',
+      title: t.title,
+      detail: t.detail,
+      evidence: t.values.map((v) => indexPath(v.value)).slice(0, 3).join(' · ') || undefined,
+      action: { label: 'See the step', page: 'pipeline' },
+      guideVars: t.guideVars,
+    });
+  if (ix.askGoogle.length) {
+    const n = ix.askGoogle.length;
+    add({
+      id: 'ix:ask_google',
+      category: 'technical',
+      priority: 'low',
+      title: `Ask Google to read ${n === 1 ? 'this page' : `these ${n} pages`} again`,
+      detail: 'Search Console lets you ask Google to read a page again, a few pages a day. For these pages it is the right next step: new pages of yours that are not in search yet, pages you fixed, and important pages Google has not read. You do it in Search Console; we never do it for you, and Google still decides.',
+      evidence: ix.askGoogle.map((p) => indexPath(p.url)).slice(0, 5).join(' · '),
+      action: { label: 'See the pages', page: 'indexing' },
+      guideVars: { pageUrl: ix.askGoogle[0].url },
+    });
+  }
+  for (const o of ix.other) {
+    const info = INDEX_CAUSE_INFO[o.cause];
+    const pages = `${o.total} page${o.total === 1 ? '' : 's'}`;
+    if (o.action === 'quality') {
+      // a Google update is rolling out: nothing is rewritten until it is over (Google's own advice; RESEARCH.md §F)
+      if (ix.freeze.on) continue;
+      const top = ix.quality[0];
+      add({
+        id: `ix:quality:${o.cause}`,
+        category: 'content',
+        priority: 'medium',
+        title: `Google read ${pages} and left ${o.total === 1 ? 'it' : 'them'} out of search`,
+        detail: `${info.meaning} Improve one page at a time: we rewrite the page you choose, and nothing changes on your website until you publish it.`,
+        evidence: top ? `Start with ${indexPath(top.url)}${top.impressions28d ? ` (${top.impressions28d} impressions in 28 days)` : ''}` : undefined,
+        action: top
+          ? { label: 'Improve this page', mode: 'keyword', prefill: { keyword: improveKeywordOf(top.title, top.url), existingPageUrl: top.url } }
+          : { label: 'See the pages', page: 'indexing' },
+        ...(top ? { secondary: { label: 'See all pages', page: 'indexing' } } : {}),
+      });
+      continue;
+    }
+    add({
+      id: `ix:${o.action}:${o.cause}`,
+      category: 'technical',
+      priority: o.action === 'duplicate' ? 'medium' : 'low',
+      title: `${info.label}: ${pages}`,
+      detail: `${info.meaning} ${info.youDo}`,
+      action: { label: 'See the pages', page: 'indexing' },
+    });
+  }
 }
 
 // ---------------- overview ----------------

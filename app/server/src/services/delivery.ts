@@ -1,6 +1,7 @@
 import { gte } from 'drizzle-orm';
 import {
   SCHEDULES,
+  INDEX_COVERAGE_SCHEDULE,
   cycleOverdue,
   n8nSiteId,
   nextScheduledRun,
@@ -16,7 +17,7 @@ import {
 } from '@seo/shared';
 import { config } from '../config';
 import { db, schema } from '../db';
-import { executions, rows, type ExecutionSummary } from '../n8n/client';
+import { executionsSince, rows, type ExecutionSummary } from '../n8n/client';
 import { JOB_LABELS } from './cycles';
 
 // G21 (2026-10-13, system review FIX_PLAN G21; it depends on D25a and on R6): nothing measured whether what should have run did run,
@@ -296,7 +297,8 @@ export interface DeliveryInput {
 
 /** The whole report, from facts only, no database, no n8n. */
 export function deliveryReport(input: DeliveryInput): DeliveryReport {
-  const automations = input.automations ?? SCHEDULES;
+  // X10: a schedule with no known start (no built-in `since`, no start read from the engine) is not measured at all, never "missed forever"
+  const automations = (input.automations ?? SCHEDULES).filter((a) => !a.sinceFromData || a.since || input.created?.[a.workflow]);
   const notes = [...(input.notes ?? [])];
   const weeks: DeliveryWeek[] = weeksBack(input.weeks, input.now).map((from) => {
     const to = new Date(from.getTime() + 7 * DAY_MS);
@@ -329,15 +331,28 @@ export async function loadDeliveryReport(now = new Date()): Promise<DeliveryRepo
   const execs: Record<string, ExecutionSummary[]> = {};
   const notes: string[] = [];
   const failedWorkflows: string[] = [];
-  const daily = SCHEDULES.filter((a) => a.schedule.kind !== 'cycle');
+  // X10: the daily index check is counted from its first run row (any website); before that it is not measured
+  const created: Record<string, string> = {};
+  try {
+    const first = (await rows<{ run_at?: string }>('indexRuns', { sortBy: 'run_at:asc', max: 1 }))[0];
+    if (first?.run_at && Number.isFinite(Date.parse(String(first.run_at)))) created[INDEX_COVERAGE_SCHEDULE.workflow] = String(first.run_at);
+  } catch {
+    /* not known: the schedule is left out (no start) */
+  }
+  const daily = SCHEDULES.filter((a) => a.schedule.kind !== 'cycle' && (!a.sinceFromData || a.since || created[a.workflow]));
+  const partly: string[] = [];
   for (const wf of [...new Set(daily.map((a) => a.workflow))]) {
     try {
-      const [ok, bad] = await Promise.all([executions(wf, 'success', 150), executions(wf, 'error', 50)]);
-      execs[wf] = [...ok, ...bad];
+      // N-app-5: every execution of the weeks shown, paged, not the newest 150: a workflow that runs one execution per website a day
+      // (the daily index check) would otherwise cover only the last few days and every older fire would read as missed
+      const [ok, bad] = await Promise.all([executionsSince(wf, 'success', from), executionsSince(wf, 'error', from)]);
+      execs[wf] = [...ok.list, ...bad.list];
+      if (!ok.complete || !bad.complete) partly.push(wf);
     } catch {
       failedWorkflows.push(wf);
     }
   }
+  if (partly.length) notes.push(`The engine's execution history was read only in part for ${partly.length} daily schedule${partly.length === 1 ? '' : 's'}, so a fire in the oldest days may show as missed.`);
   if (failedWorkflows.length) notes.push(`The engine did not answer for ${failedWorkflows.length} of ${new Set(daily.map((a) => a.workflow)).size} daily schedules, so their weeks are unmeasured rather than perfect.`);
   let cycles: DeliveryInput['cycles'] = null;
   try {
@@ -357,5 +372,5 @@ export async function loadDeliveryReport(now = new Date()): Promise<DeliveryRepo
   } catch {
     notes.push('The ops-alert table could not be read, so the alert delivery rate is unknown.');
   }
-  return deliveryReport({ now, weeks: WEEKS, runs: runRows.map((r) => ({ ...r, reportCount: Number(r.reportCount ?? 0) })), execs, alerts, timezone: config.n8nTimezone, notes, cycles });
+  return deliveryReport({ now, weeks: WEEKS, runs: runRows.map((r) => ({ ...r, reportCount: Number(r.reportCount ?? 0) })), execs, alerts, timezone: config.n8nTimezone, notes, cycles, created });
 }

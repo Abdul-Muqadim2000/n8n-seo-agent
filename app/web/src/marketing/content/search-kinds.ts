@@ -76,6 +76,7 @@ export const featureSearchKinds: Record<string, SearchKindId[]> = {
   'keyword-ladders': ['seo', 'aeo'],
   content: ['seo', 'aeo', 'geo'],
   'technical-audits': ['seo'],
+  'index-coverage': ['seo'],
   'site-tracking': ['seo'],
   'ai-visibility': ['aeo', 'geo'],
   'ai-growth': ['aeo', 'geo'],

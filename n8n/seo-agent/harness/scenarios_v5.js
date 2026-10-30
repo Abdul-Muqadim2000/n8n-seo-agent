@@ -4941,7 +4941,7 @@ await guard('retries, AI data, sister domains and the fact base', async () => {
   check('G1: the nodes inherited from v3 keep the same rule (the DataForSEO reads, PageSpeed, RDAP, the probes, the Gotenberg renders)', ['Keyword Data', 'Find Competitors', 'PageSpeed', 'RDAP Lookup', 'Run Probes', 'Render PDF Report', 'Read Website', 'SERP Top 10 (Retry)'].every(nm => { const x = httpNode('SEO Agent v4', nm); return x && (x.per_item ? perItemOk(x) : keepsRule(x)); }), JSON.stringify(['Keyword Data', 'PageSpeed', 'RDAP Lookup', 'SERP Top 10 (Retry)'].map(nm => nm + ':' + JSON.stringify(httpNode('SEO Agent v4', nm)))));
   // R-E14 (2026-10-23): + the AI tracker's three notice callbacks (a `rejected` answer that closes the caller's request), at one try like every report callback
   const NOTICES = ['Post Open Run Notices', 'Post Busy Notices', 'Post Stop Notices'];
-  check('G1: the allow-list holds only what is not idempotent — the report callbacks, the AI tracker\'s notice callbacks and the WordPress draft — each with its reason, and those nodes really carry no retry', Object.keys(RW.allow).length === 16 && Object.keys(RW.allow).every(k => /^POST /.test(k) || k === 'Create WP Draft' || NOTICES.includes(k)) && Object.values(RW.allow).every(v => String(v).length > 20) && httpNode('SEO Agent v4', 'POST Callback').retryOnFail === false && httpNode('SEO Agent — Publish to WordPress', 'Create WP Draft').retryOnFail === false
+  check('G1: the allow-list holds only what is not idempotent — the report callbacks, the AI tracker\'s notice callbacks and the WordPress draft — each with its reason, and those nodes really carry no retry', Object.keys(RW.allow).length === 17 && Object.keys(RW.allow).every(k => /^POST /.test(k) || k === 'Create WP Draft' || NOTICES.includes(k)) && Object.values(RW.allow).every(v => String(v).length > 20) && httpNode('SEO Agent v4', 'POST Callback').retryOnFail === false && httpNode('SEO Agent — Publish to WordPress', 'Create WP Draft').retryOnFail === false
     && NOTICES.every(nm => { const x = httpNode('SEO Agent — AI Visibility Tracker', nm); return x && !x.retryOnFail; }), JSON.stringify(Object.keys(RW.allow)) + ' ' + JSON.stringify(NOTICES.map(nm => httpNode('SEO Agent — AI Visibility Tracker', nm))));
   check('G1: the lint bites — it flags an HTTP node with no retry and one with a weaker retry, honours its allow-list and leaves other node types alone (self-test run by build_v4.py section 37)', RW.selftest.flags_node_without_retry === true && RW.selftest.flags_weaker_retry === true && RW.selftest.honours_allow_list === true && RW.selftest.ignores_other_nodes === true, JSON.stringify(RW.selftest));
   const GATE = ['Run AI Requests', 'AI Retry Requests', 'Any AI Retries?', 'Wait Before AI Retry', 'Run AI Retries', 'Merge AI Answers', 'Parse AI Answers'];
@@ -9642,7 +9642,7 @@ await guard('R17 R28 R29 ledger order, money and secrets', async () => {
   // R32 (2026-10-14, section 59): Page Watch joined them — free today (25 plain GETs), and the one workflow the guard and the day's
   // reconciliation could not see at all.
   check('R17: all ten scheduled workflows are covered — the AI Visibility Tracker, the AI Pulse, AI Growth, the Backlink Monitor, the Audit Scheduler, the Link Builder, the Rank Tracker, the Site Tracker, the Content Cadence and Page Watch',
-    MON.length === 11 && ['AI Growth', 'AI Pulse', 'AI Visibility Tracker', 'Audit Scheduler', 'Backlink Monitor', 'Content Cadence', 'Link Builder', 'Rank Tracker', 'Site Tracker', 'Page Watch', 'Reply Reader']   // W3-F: the Reply Reader reserves a row since 2026-10-17
+    MON.length === 12 && ['AI Growth', 'AI Pulse', 'AI Visibility Tracker', 'Audit Scheduler', 'Backlink Monitor', 'Content Cadence', 'Link Builder', 'Rank Tracker', 'Site Tracker', 'Page Watch', 'Reply Reader', 'Index Coverage']   // W3-F: the Reply Reader reserves a row since 2026-10-17; Index Coverage (daily, free) since 2026-10-29
       .every(n => MON.some(m => m.endsWith(n))), JSON.stringify(MON));
   const badChain = MON.filter(w => {
     const c = LO.monitors[w];
@@ -10119,7 +10119,7 @@ await guard('R31 R32 R33 the money a run reports is the money that happened', as
     mixedRow.est_usd === 0.05 && mixedRow.dfs_est_usd === 0.05 && /1 free-only site\(s\)/.test(mixedRow.cost_basis), JSON.stringify(mixedRow));
 
   // ---------- 4. what the build proved about the schedules (the three "also seen" items of the live check) ----------
-  const MON69 = Object.keys(CT.monitors).filter(w => !/Reply Reader|AI Repeat Pilot|Page Finalize/.test(w)).sort();   // H3: the Page Finalize calls no DataForSEO either (FIN1)
+  const MON69 = Object.keys(CT.monitors).filter(w => !/Reply Reader|AI Repeat Pilot|Page Finalize|Index Coverage/.test(w)).sort();   // Index coverage (2026-10-29): no DataForSEO, its balance probes are no-ops (scenarios_index.js IX12)   // H3: the Page Finalize calls no DataForSEO either (FIN1)
     // W2-E2: the on-demand pilot is not a schedule   // W3-F: the Reply Reader calls no DataForSEO, so its two balance probes are no-ops (own scenario S177)
   check('R32: all ten scheduled workflows take the free `appendix/user_data` reading on their own ledger chain — until now only main-workflow runs did, so the monitors (where most of the DataForSEO money goes) reconciled against nothing',
     MON69.length === 10 && MON69.every(w => CT.monitors[w].balance === 'DFS Balance (' + CT.monitors[w].tag + ')'),
@@ -10769,7 +10769,7 @@ await guard('B-A7 B-A9 the alert retry, the escalation and the shared concurrenc
   const MON74 = Object.keys(WIRE74.monitors).filter(w => !/AI Repeat Pilot|Page Finalize/.test(w)).sort();   // H3: the Page Finalize is on demand (FIN1)
     // W2-E2 (2026-10-23): the AI Repeat Pilot keeps a ledger row too, but it is on demand only (never scheduled) - its own scenario W2E2-PILOT
   check('B-A7: all ten scheduled workflows end by sweeping the alerts nobody has — that is the retry\'s schedule: Page Watch daily at 05:45, the AI Pulse daily at 06:30, the weekly jobs and the monthly audit in each website\'s own cycle (2026-10-19; it was six on Monday morning and the audit on the 1st)',
-    MON74.length === 11 && ['AI Growth', 'AI Pulse', 'AI Visibility Tracker', 'Audit Scheduler', 'Backlink Monitor', 'Content Cadence', 'Link Builder', 'Rank Tracker', 'Site Tracker', 'Page Watch', 'Reply Reader']   // W3-F
+    MON74.length === 12 && ['AI Growth', 'AI Pulse', 'AI Visibility Tracker', 'Audit Scheduler', 'Backlink Monitor', 'Content Cadence', 'Link Builder', 'Rank Tracker', 'Site Tracker', 'Page Watch', 'Reply Reader', 'Index Coverage']   // W3-F; Index Coverage since 2026-10-29
       .every(n => MON74.some(m => m.endsWith(n))), JSON.stringify(MON74));
   const badSweep = MON74.filter(w => { const r = WIRE74.monitors[w].retry; return !r.post_full_response && false || !['attempts', 'attempt_log', 'next_attempt_at', 'delivered', 'severity'].every(k => WIRE74.monitors[w].writes.includes(k)); });
   check('B-A7: each of them writes the whole retry state back on the row, not just whether it worked',
@@ -14731,7 +14731,8 @@ const R94 = (() => {
   const ORDER = ['SEOagentAIVisib1', 'SEOagentBacklnk1', 'SEOagentTracker1', 'SEOagentSiteTrk1', 'SEOagentAIGrow1', 'SEOagentCadence1', 'SEOagentLinkBld1', 'SEOagentAuditSc1', 'SEOagentAIPulse1', 'SEOagentPageWch1'];
   const FIVE = ['SEOagentTracker1', 'SEOagentSiteTrk1', 'SEOagentAIGrow1', 'SEOagentCadence1', 'SEOagentLinkBld1'];
   const MODE = { SEOagentAIVisib1: 'ai_visibility', SEOagentBacklnk1: 'backlinks', SEOagentTracker1: 'rank_tracker', SEOagentSiteTrk1: 'site_tracker', SEOagentAIGrow1: 'ai_growth',
-    SEOagentCadence1: 'content_cadence', SEOagentLinkBld1: 'link_builder', SEOagentAuditSc1: 'audit_schedule', SEOagentAIPulse1: 'ai_pulse', SEOagentPageWch1: 'page_watch' };
+    SEOagentCadence1: 'content_cadence', SEOagentLinkBld1: 'link_builder', SEOagentAuditSc1: 'audit_schedule', SEOagentAIPulse1: 'ai_pulse', SEOagentPageWch1: 'page_watch',
+    SEOagentIndexCv1: 'index_coverage' };   // Index coverage (2026-10-29): the third daily cron
   const rec = (key, v) => ({ json: { id: 1, key, kind: 'catchup', site_id: '', value: JSON.stringify(v), updated_at: v.started_at || v.armed_at || '' } });
   const ARMED = rec('catchup:armed', { armed_at: '2026-10-01T00:00:00.000Z' });
   // plan(o): the whole evidence path as n8n runs it - Entry -> the two API reads (mocked from the fixture as of `now`) -> records / ledger -> Plan
@@ -14765,7 +14766,7 @@ await guard('S126 R94 the planner on 2026-10-12', async () => {
   const { plan, row, missedIds, started, FIVE, ORDER, WIRE, rec, ARMED } = R94;
   // 2026-10-19: the GENERATED table is the two daily crons; the replay below uses the ten-slot table of that week (R94.HIST)
   check('cycle (2026-10-19): the generated catch-up carries exactly the two daily crons - the AI Pulse every day 06:30 and the Page Watch 05:45 - each with its manual entry and its ledger mode, in America/New_York',
-    (WIRE.schedules || []).length === 2 && ['SEOagentAIPulse1', 'SEOagentPageWch1'].every(id => (WIRE.schedules || []).some(s => s.id === id && s.entry_node && s.mode === R94.MODE[id] && s.kind === 'daily'))
+    (WIRE.schedules || []).length === 3 && ['SEOagentAIPulse1', 'SEOagentPageWch1', 'SEOagentIndexCv1'].every(id => (WIRE.schedules || []).some(s => s.id === id && s.entry_node && s.mode === R94.MODE[id] && s.kind === 'daily'))
     && (WIRE.schedules || []).find(s => s.id === 'SEOagentAIPulse1').cron === '30 6 * * *' && WIRE.tz === 'America/New_York',
     JSON.stringify((WIRE.schedules || []).map(s => [s.id, s.cron, s.kind, s.entry_node, s.mode])));
   check('cycle (2026-10-19): the seven weekly workflows and the Audit Scheduler are in no catch-up table - each website\'s cycle runs them (build section 98)',
@@ -14936,7 +14937,7 @@ await guard('S128 R94 record then start, the scheduled path', async () => {
     && !T.some(t => /key|token|secret/i.test(t.json.wf_url + t.json.ex_url)), JSON.stringify(T[0].json));
   const TG = await R94.CU_GEN('Catch-up Targets', [{ json: {} }]);
   check('cycle (2026-10-19): the generated catch-up reads two workflows only - the AI Pulse and the Page Watch, the daily crons left',
-    TG.length === 2 && TG.map(t => t.json.workflow_id).sort().join() === 'SEOagentAIPulse1,SEOagentPageWch1', JSON.stringify(TG.map(t => t.json.workflow_id)));
+    TG.length === 3 && TG.map(t => t.json.workflow_id).sort().join() === 'SEOagentAIPulse1,SEOagentIndexCv1,SEOagentPageWch1', JSON.stringify(TG.map(t => t.json.workflow_id)));
   // ---- record, then start ----
   const P = await plan({ entry: 'init', now: '2026-10-12T16:41:00.000Z', updatedAt: '2026-10-12T16:38:30.000Z', ex: { SEOagentAIPulse1: { extra: [{ id: 'p11', mode: 'trigger', status: 'success', startedAt: '2026-10-11T10:31:00.000Z' }] } } });
   const SI = await CU_RUN('Catch-up Start Items', [{ json: { id: 3 } }]);
@@ -14977,7 +14978,7 @@ await guard('S128 R94 record then start, the scheduled path', async () => {
     REP.key === 'catchup:last' && RS.schedules.length === 10 && RS.started.length === 2 && RS.started.some(s => s.status === 'start_failed') && RS.counts.start === 2 && RS.entry === 'init',
     JSON.stringify({ key: REP.key, counts: RS.counts, started: RS.started }));
   check('R94 (build section 98): on the generated workflow every path to the start passes the saved record, the start does not wait, and the catch-up and every workflow it starts are published by apply_env.py',
-    WIRE.record_then_start === true && JSON.stringify(WIRE.published || []) === JSON.stringify(['SEOagentAIPulse1', 'SEOagentPageWch1']) && WIRE.workflow && WIRE.workflow.id === 'SEOagentCatchUp1' && WIRE.credential === 'SEOcredN8nApiKey' && WIRE.compose_tz_default === 'America/New_York',
+    WIRE.record_then_start === true && JSON.stringify(WIRE.published || []) === JSON.stringify(['SEOagentAIPulse1', 'SEOagentIndexCv1', 'SEOagentPageWch1']) && WIRE.workflow && WIRE.workflow.id === 'SEOagentCatchUp1' && WIRE.credential === 'SEOcredN8nApiKey' && WIRE.compose_tz_default === 'America/New_York',
     JSON.stringify({ rts: WIRE.record_then_start, published: WIRE.published, tz: WIRE.compose_tz_default }));
   check('R94 (2026-10-19): the Monday 07:00-12:00 deploy guard is gone with the Monday crons - the cycle\'s guard replaced it (deploy_guard.py, scenarios_cycle.js CY12 / CY23)',
     !WIRE.deploy_guard, JSON.stringify(WIRE.deploy_guard || null));
@@ -15028,7 +15029,7 @@ await guard('S129 R94 AI Growth dry run', async () => {
   // has a dry-run switch, and the weekly workflows that have one (AI Growth, the cadence) are not in the table any more: a website's cycle runs them
   const DG = await plan({ gen: true, entry: 'manual', dry_run: true, now: '2026-10-19T16:41:00.000Z', updatedAt: '2026-10-19T09:00:00.000Z', records: [ARMED, rec('catchup:instance', { started_at: '2026-10-19T09:00:00.000Z' })] });
   check('cycle (2026-10-19): on the generated table a dry-run catch-up starts nothing - the two daily crons have no dry-run switch and are reported, AI Growth and the cadence are no schedule of its any more',
-    DG.start.length === 0 && (DG.rows || []).length === 2 && (DG.rows || []).every(r => ['dry_run_skipped', 'fired', 'caught_up', 'before_arm', 'late_pending', 'not_created'].includes(r.verdict))
+    DG.start.length === 0 && (DG.rows || []).length === 3 && (DG.rows || []).every(r => ['dry_run_skipped', 'fired', 'caught_up', 'before_arm', 'late_pending', 'not_created'].includes(r.verdict))
     && !(DG.rows || []).some(r => r.workflow_id === 'SEOagentAIGrow1' || r.workflow_id === 'SEOagentCadence1'), JSON.stringify((DG.rows || []).map(r => [r.label, r.verdict])));
   mock('Catch-up Plan', [{ json: D }]);
   const SI = await CU_RUN('Catch-up Start Items', [{ json: {} }]);
@@ -16012,7 +16013,7 @@ await guard('S115 R116 R96 — a refused on-demand monitor tells its caller, and
     return !Array.isArray(p) || !p.includes(g.notice) || !p.includes(g.post) || p.some(n => /^DFS Balance|^Load Run Ledger|^Ledger Settle|^Settle Run Ledger|^Ensure Ops Alerts/.test(n)) || g.post_max_tries !== 3; });
   console.log('   refusal path (BL) ->', JSON.stringify((W.monitors['SEO Agent — Backlink Monitor'].guard || {}).refusal_path));
   check('R96 (dossier test a): in all ten scheduled workflows no path from Refuse Run Ledger reaches a DataForSEO node or the settle — exec 624 waited 5 min 33 s on a balance read it did not need, then computed $0.45 and dropped it',
-    MON.length === 10 && bad.length === 0, JSON.stringify(bad));
+    MON.length === 11 && bad.length === 0, JSON.stringify(bad));   // Index coverage (2026-10-29): + the daily index watch
   check('R96: the refused row is settled by the refusal itself (status refused, $0, settled_at, the reason) — no second write is needed or attempted',
     MON.every(w => ['status', 'settled_usd', 'dfs_usd', 'settled_at', 'cost_basis'].every(c => W.monitors[w].refuse_values.includes(c))), JSON.stringify(W.monitors[MON[0]].refuse_values));
   reset();
@@ -19742,5 +19743,10 @@ await require('./scenarios_w07b')({ H, run, mock, store, guard, reset, begin });
 await require('./scenarios_fusv')({ H, run, mock, store, guard, reset, begin });   // FUSV1-FUSV6 (2026-10-29, page-quality BEFORE run, BASELINE.md rows not covered): search-engine redirects never cited, one byline, the client's own voice
 await require('./scenarios_furender')({ H, run, mock, store, guard, reset, begin });   // FUR1-FUR5 (FU-R1 2026-10-29, docs/page-quality-2026-10-29/BASELINE.md, BEFORE K7 / K8): a client-rendered website is read after its scripts ran (the render kit, the real nodes, at most 3 renders, a failed render said so, a server-rendered site unchanged against the frozen pre-change node, the wiring)
 await require('./scenarios_toc')({ H, run, mock, store, guard, reset, begin });   // TOC1-TOC6 (fu-finalize-toc 2026-10-30, docs/page-quality-2026-10-29/BASELINE.md): the final version keeps the linked contents list (in-page links kept by Content QA, PF.toc follows renamed / gone / lost headings, H2 ids in the documents) and raises no false cut-off on an author box or an end the delivered page already had; a truly cut page is still cut
+await require('./scenarios_index')({ H, run, mock, store, guard, reset, begin });   // IX1-IX12 (Index coverage, 2026-10-29, docs/indexing-2026-10-29/DESIGN.md): every cause, the plan and caps, evidence without quota, sitemaps / hosts / low value, link suggestions, Google events + freeze, update impact, techand.ai end to end, the callback rule, drop-outs / needs a person, Site Admin, the generated workflow
+await require('./scenarios_index_fix')({ H, run, mock, store, guard, reset, begin });   // IXF1-IXF12 (Index coverage fix wave 1, 2026-10-29, docs/indexing-2026-10-29/FIX_CONTRACT.md): one check per review finding (E1-E16, X1-X4, X7, X8, X13, X16), each failing on the reviewed code
+await require('./scenarios_index_fix2')({ H, run, mock, store, guard, reset, begin });   // IXW1-IXW14 (Index coverage fix wave 2, 2026-10-29, REVIEW_2.md N1-N13): multi-day runs through the generated nodes with a pinned clock, each failing on the integration head (3b0a8cab)
+await require('./scenarios_index_fix3')({ H, run, mock, store, guard, reset, begin });   // IXR2-IXR8 (Index coverage fix wave 3, 2026-10-30, REVIEW_3.md R2-R8): each scenario fails on ix/engine 7777e17d
+await require('./scenarios_index_wave2')({ H, run, mock, store, guard, reset, begin });   // IXV1-IXV7 (Index coverage wave 2, 2026-10-30, DESIGN_WAVE2.md): devaicon.com's real pages end to end (site links, wait, canonical with its own title, utility pages, ask-Google order), "I asked Google" over 30 days, the sitemap-submission gate, the write credential on one node; every non-control check fails on 35c24b03
 H.report();
 })();

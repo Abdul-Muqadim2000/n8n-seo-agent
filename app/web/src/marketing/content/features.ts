@@ -6,6 +6,7 @@ import {
   Building2,
   ChartLine,
   ChartNoAxesColumnIncreasing,
+  FileSearch,
   FileText,
   Handshake,
   LifeBuoy,
@@ -40,6 +41,7 @@ export type VisualKey =
   | 'link-sources'
   | 'ai-engines'
   | 'crawlers'
+  | 'index-coverage'
   | 'agency-portal'
   | 'ai-growth'
   | 'outreach';
@@ -444,7 +446,7 @@ export const features: Feature[] = [
       'A pre-release check your build can call: the same page checks run against a staging address or a list of URLs and answer pass or fail, so a release never takes a page out of Google',
       'Mark a fix done and that one issue is re-checked the next morning, not at the next monthly audit',
       'The fix pack comes with a guide for putting each file where it belongs: robots.txt, llms.txt, redirects, schema and the internal links',
-      'Google\'s own view of every key page: indexed or not, the canonical Google chose, its last crawl, mobile usability and rich results',
+      'Google\'s own view of every key page: indexed or not, the canonical Google chose, its last crawl and rich results',
       'What crawlers see before JavaScript runs: your key pages read twice, so anything only a browser can see is named',
       'The same before-and-after comparison runs across the crawl, on up to 25 pages, not only on your key pages',
       'Hreflang checks for the language versions of your pages',
@@ -501,7 +503,7 @@ export const features: Feature[] = [
       },
       {
         q: 'How do you know whether Google has indexed a page?',
-        a: 'Alaventra asks Search Console\'s URL Inspection about your key pages: whether the page is in the index and why not, which canonical Google chose against the one your page names, when Google last crawled it, mobile usability and the rich results it detected. Google allows 2,000 of these a day per property, so the pages rotate with the oldest inspection first, and whatever a run did not reach is shown as not checked rather than assumed fine.',
+        a: 'Alaventra asks Search Console\'s URL Inspection about your key pages: whether the page is in the index and why not, which canonical Google chose against the one your page names, when Google last crawled it and the rich results it detected. Google allows 2,000 of these a day per property, so the pages rotate with the oldest inspection first, and whatever a run did not reach is shown as not checked rather than assumed fine. For every page of your site, grouped by the reason Google left it out, see Index coverage.',
       },
       {
         q: 'How is the fix list ordered?',
@@ -512,12 +514,74 @@ export const features: Feature[] = [
         a: 'They are folded into one "minor items" line with the count: a title one character too long, the link count of a navigation page, a cosmetic tag. Nothing is removed: they still count in the score, they are stored with the audit, and they open with one click in the app and sit in that one line in the report.',
       },
     ],
-    related: ['site-tracking', 'content', 'reports'],
+    related: ['site-tracking', 'index-coverage', 'content'],
     image: 'analyticsMonitor',
     visual: 'audit',
     story: {
       title: 'Findings your developers can apply the same day.',
       body: 'An audit only helps once it is fixed, and only if you fix the right thing first. Issues are ranked by the traffic they put at risk, every audit delivers the files developers need, and the next audit shows what changed, so progress is visible, not assumed.',
+    },
+  },
+  {
+    slug: 'index-coverage',
+    name: 'Index coverage',
+    shortName: 'Indexing',
+    tagline: 'Which of your pages Google left out of its index, why, and what to do. Looked at every day, each page on its own schedule.',
+    summary:
+      'A page Google has left out of its index cannot rank. Every day Alaventra looks at which of your pages Google left out, your older pages as well as the new ones we write, and groups them by the reason. Each group says what helps: a step on your website that we then check for you, internal links to add, a page worth improving with your approval, or nothing, because some pages are fine to leave out. It helps Google find and choose your pages, and it is free to run on your connected Search Console.',
+    icon: FileSearch,
+    benefits: [
+      'Every day, which of your pages Google has left out of its index: the pages you already had as well as the new ones we write for you',
+      'Why each page was left out, in plain words, with the pages grouped by the reason so one fix covers the whole group',
+      'What to do for each group: steps on your own website that we then check for you, internal links to add from pages Google already shows, pages worth improving one at a time with your approval, and pages that are fine to leave out',
+      'You hear when a page drops out of Google\'s index, the day our check notices it (each page is read again on its own schedule)',
+      'A page you fixed shows as fixed while Google catches up, and a short list of your most valuable pages worth asking Google to read again in Search Console, which you do yourself: say when you have, and the page shows when Google read it again',
+      'Pages your website already links to that Google has not visited yet are shown apart, with what helps, instead of a request to add links you already have',
+      'Internal links to add are one step on your website: each page to link to, the page of yours to add the link on, and our check that each link is there',
+      'Pages with a title of their own that name another page as their main version are found, with a step to let them stand on their own',
+      'Privacy, cookie, terms and login pages are shown as fine to leave out, never as pages to improve',
+      'Optional sitemap submission: switch it on and give us Full access in Search Console, and we submit your sitemap when it is missing or has changed, and nothing else',
+      'Google\'s announced ranking updates followed for you: while one rolls out we hold back suggestions to change pages, and after it finishes you see which of your pages lost, held or gained, so you change pages only where there is evidence',
+      'New pages and existing pages on their own tabs, each page with its last check and its history, and how long the rest of your site will take to check',
+      'A page we could not check is shown as not checked, never as fine and never as left out',
+      'Free to run: it reads your connected Search Console and uses no credits',
+    ],
+    steps: [
+      { title: 'Connect Search Console', body: 'Index coverage reads the Search Console you already connected. Nothing to install, and it uses no credits.' },
+      { title: 'Checked on a schedule', body: 'Your pages are checked with Google a set at a time, new pages first. Each page is read again on its own schedule and keeps its history, so a page that drops out is noticed.' },
+      { title: 'Grouped by reason', body: 'The pages Google left out are grouped by the reason, each group with what it means, what we do and what you do.' },
+      { title: 'Act where there is evidence', body: 'Make the steps on your website and we check them. Approve improvements one page at a time. After a Google update, review only the pages that lost.' },
+    ],
+    facts: [
+      { value: 'Daily', label: 'check of which pages Google left out, and why' },
+      { value: 300, label: 'pages checked with Google a day by default, and you can change it' },
+      { value: 'Free', label: 'to run on your connected Search Console' },
+    ],
+    faqs: [
+      {
+        q: 'Will this get my pages indexed?',
+        a: 'No tool can promise that: Google alone decides which pages go in its index, and it does not index every page it finds. What Alaventra does is help Google find and choose your pages. It shows which pages were left out and why, and points at the changes that remove a reason, such as a noindex tag on a page you want in search, a page missing from your sitemap, or a page no other page of yours links to. Some pages are fine to leave out, and we say so.',
+      },
+      {
+        q: 'Do you change my website or send my pages to Google?',
+        a: 'We never change your website. Changes on it are steps you or your developer make, listed under Steps on your website; once you say a step is done we check it, and we keep checking every day. We only read your Search Console, unless you switch on sitemap submission, which lets us submit your sitemap and nothing else; it is off until you switch it on. We never send your pages to Google: asking Google to read a page again is something you do in Search Console, and you tell us when you have. Improving a page is a suggestion you approve one page at a time, and it uses the usual credits for a page.',
+      },
+      {
+        q: 'What happens during a Google update?',
+        a: 'Google announces its ranking updates on its Search Status Dashboard, and we follow it. While an update is rolling out, rankings move for many websites, so Alaventra holds back suggestions to improve pages. Once it has finished and there is enough data, it compares your pages before and after and shows which lost, held or gained, so you change only the pages where there is evidence.',
+      },
+      {
+        q: 'How many pages are checked, and what does it cost?',
+        a: 'Google allows each website a limited number of page checks a day, shared with every tool you use, so Alaventra checks up to 300 of your pages a day by default, new pages first, then the rest of your site in turn. Pages that already appear in Google\'s search results are counted from your search data without using a check. The page tells you how many of your existing pages have been checked and about how long the rest will take. It uses no credits; it needs Search Console connected.',
+      },
+    ],
+    related: ['technical-audits', 'site-tracking', 'content'],
+    image: 'overheadDesk',
+    visual: 'index-coverage',
+    story: {
+      eyebrow: 'Why it matters',
+      title: 'A page Google left out cannot rank.',
+      body: 'Older pages that never made it into Google\'s index are easy to miss, because nobody looks at them again. Index coverage finds them, says why each one was left out, and keeps changes to the pages where they can help.',
     },
   },
   {
@@ -559,7 +623,7 @@ export const features: Feature[] = [
       { value: 'Live', label: 'rank checks where Search Console has no data' },
     ],
     faqs: [
-      { q: 'What access does Alaventra need?', a: 'You add Alaventra\'s service account as a user in Search Console and GA4. It reads your data; it does not change your settings.' },
+      { q: 'What access does Alaventra need?', a: 'You add Alaventra\'s service account as a user in Search Console and GA4. We only read your Search Console, unless you switch on sitemap submission, which lets us submit your sitemap and nothing else. GA4 is read only.' },
       {
         q: 'What if nobody here has done this before?',
         a: 'Every ask in Alaventra has a "Show me how" button next to it. It opens the job as numbered steps you tick off, with your own values in copy boxes, the page to open, and tabs for the provider or CMS you actually use. If the person who can do it is someone else (whoever manages your DNS, usually), one button sends them the whole thing by e-mail, values filled in, no account needed.',
@@ -1031,7 +1095,7 @@ export const features: Feature[] = [
       { title: 'Alaventra checks the result', body: 'The button at the end runs the check (verified, connected, file found), so nobody is left guessing whether it worked.' },
     ],
     facts: [
-      { value: 71, label: 'guides, one for each thing we ask of you' },
+      { value: 87, label: 'guides, one for each thing we ask of you' },
       { value: 'Your values', label: 'in every copy box, not an example' },
       { value: 'One e-mail', label: 'hands a guide to the person who can do it' },
     ],

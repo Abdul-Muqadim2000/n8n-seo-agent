@@ -126,7 +126,7 @@ describe('no fixed Monday in customer copy (shared, server, web app and business
       for (const l of literals(f)) if (/\bMondays?\b/.test(l.text) && !ALLOWED(l.text)) bad.push(`${rel}:${l.line}: ${l.text.trim().slice(0, 100)}`);
     }
     expect(bad).toEqual([]);
-  });
+  }, 30_000); // it reads every source file: 3-4 s alone, over the 5 s default when the machine is busy
   it('the pending list only shrinks: every file on it still exists', () => {
     for (const rel of PENDING) expect(files.some(([r]) => r === rel)).toBe(true);
   });

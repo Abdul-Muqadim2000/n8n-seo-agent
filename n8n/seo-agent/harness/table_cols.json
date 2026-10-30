@@ -220,7 +220,10 @@
   "ai_fanout_check",
   "ai_demand_market",
   "ai_pulse_scope",
-  "ai_focus_mode"
+  "ai_focus_mode",
+  "index_watch",
+  "index_daily_cap",
+  "index_sitemap_submit"
  ],
  "AI_VIS": [
   "site_id",

@@ -8,6 +8,8 @@ tunnel. It is apply_env.py for a remote instance: no `docker exec`, no restart.
 
   --no-build            use the generated workflows/*.json as they are (default: run build_v4.py first, which needs n8n/.env)
   --credentials         also rewrite the credential records from n8n/.env (PATCH by their fixed ids; values never printed)
+  --only-credentials IDS  with --credentials: touch only these credential ids (comma list), e.g. a new credential, leaving every
+                        other production credential exactly as it is
   --create-missing      a workflow or credential the remote does not have yet is imported through IAP SSH with n8n's CLI
                         (the public API cannot create a record with a fixed id; the workflows reference each other by id).
                         Without it a workflow missing remotely FAILS the deploy (F-ENG 2026-10-20) - on the first deploy of the
@@ -278,7 +280,10 @@ def main():
         sys.path.insert(0, ENGINE)
         import sync_credentials as SC
         done, skipped, cmiss = [], [], []
+        only = set(x.strip() for x in (opt('--only-credentials', '') or '').split(',') if x.strip())
+        if only and not only <= {c[0] for c in SC.CREDS}: sys.exit('--only-credentials: unknown id(s): ' + ', '.join(sorted(only - {c[0] for c in SC.CREDS})))
         for cid, name, ctype, secrets_, fixed in SC.CREDS:
+            if only and cid not in only: continue
             if any(not ENV.get(v) for v in secrets_.values()): skipped.append(cid); continue
             data = dict(fixed)
             for field, var in secrets_.items(): data[field] = SC.PREFIX.get((cid, field), '') + ENV[var]

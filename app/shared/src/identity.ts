@@ -615,6 +615,8 @@ export const AUDIT_ACTIONS = {
   'site_task.checked': { label: 'Checked a step on the website', category: 'websites' },
   'site_task.skipped': { label: 'Skipped a step on the website', category: 'websites' },
   'site_task.restored': { label: 'Brought back a skipped step on the website', category: 'websites' },
+  // Index coverage wave 2 (DESIGN_WAVE2 §3.2): the client says they asked Google (in Search Console) to read a page again
+  'indexing.asked_google': { label: 'Said Google was asked to read a page again', category: 'websites' },
   'crawler.push_key_created': { label: 'Made a crawler log push key', category: 'integrations' },
   'crawler.push_key_revoked': { label: 'Switched crawler log pushes off', category: 'integrations' },
   'crawler.log_uploaded': { label: 'Uploaded a server log', category: 'integrations' },

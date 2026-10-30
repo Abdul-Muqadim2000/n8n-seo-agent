@@ -915,6 +915,73 @@
     "Send Cadence Note"
    ]
   },
+  "SEO Agent \u2014 Index Coverage": {
+   "ai_nodes": [],
+   "alert_retry": {
+    "from": "Settle Run Ledger (Index)",
+    "gate": "Any Alert Retry (Index)?",
+    "load": "Load Open Alerts (Index)",
+    "plan": "Alert Retry Plan (Index)",
+    "post": "Post Alert Retry (Index)",
+    "result": "Alert Retry Result (Index)",
+    "save": "Save Alert Retry (Index)",
+    "table": "seo_ops_alerts"
+   },
+   "balance": "DFS Balance (Index)",
+   "balance_end": "DFS Balance End (Index)",
+   "callbacks": [
+    {
+     "fed_settle_directly": [],
+     "has_callback": "Has Callback (Index)?",
+     "join": "Ledger Join (Index)",
+     "ledger": "Callback Ledger (Index)",
+     "post": "POST Index Report",
+     "preds": [
+      [
+       "Index Report",
+       0
+      ]
+     ],
+     "settle": "Ledger Settle (Index)"
+    }
+   ],
+   "catchup_records": "Load Catch-up Records (Index)",
+   "est": {
+    "ai": 0.0,
+    "dfs": 0.0
+   },
+   "guard": {
+    "gate": "After Run Ledger (Index)",
+    "if": "Run Allowed? (Index)",
+    "kit": "RG",
+    "load": "Load Open Runs (Index)",
+    "notice": "Refusal Notice (Index)",
+    "post": "Post Refusal (Index)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (Index)",
+     "Refusal Notice (Index)",
+     "Refuse Run Ledger (Index)",
+     "Tell Caller (Index)?"
+    ],
+    "refuse": "Refuse Run Ledger (Index)",
+    "tell": "Tell Caller (Index)?"
+   },
+   "ledger_load": "Load Run Ledger (Index)",
+   "measured": "",
+   "mode": "index_coverage",
+   "no_dfs": true,
+   "open_runs": "Load Open Runs (Index)",
+   "plan": "Index Plan",
+   "reserve": "Run Ledger Row (Index)",
+   "resume": "After Run Ledger (Index)",
+   "settle": "Settle Run Ledger (Index)",
+   "settle_from": [
+    "Index Report",
+    "Refuse Run Ledger (Index)"
+   ],
+   "settle_from_ends": []
+  },
   "SEO Agent \u2014 Link Builder": {
    "ai_calls": [
     {

@@ -90,6 +90,7 @@
    }
   ],
   "SEO Agent \u2014 Content Cadence": [],
+  "SEO Agent \u2014 Index Coverage": [],
   "SEO Agent \u2014 Link Builder": [
    {
     "model_node": "Claude \u2014 Outreach Sequence Writer",
@@ -318,6 +319,37 @@
      "settle": "Ledger Settle (Cadence)"
     },
     "settle": "Ledger Settle (Cadence)"
+   }
+  ],
+  "SEO Agent \u2014 Index Coverage": [
+   {
+    "fed_settle_directly": [],
+    "has_callback": "Has Callback (Index)?",
+    "join": "Ledger Join (Index)",
+    "ledger": "Callback Ledger (Index)",
+    "post": "POST Index Report",
+    "preds": [
+     [
+      "Index Report",
+      0
+     ]
+    ],
+    "proof": {
+     "bypass": false,
+     "input0": [
+      "Index Report"
+     ],
+     "input1": [
+      "Ledger Settle (Index)"
+     ],
+     "merge": true,
+     "preds": [
+      "Index Report"
+     ],
+     "reachable": true,
+     "settle": "Ledger Settle (Index)"
+    },
+    "settle": "Ledger Settle (Index)"
    }
   ],
   "SEO Agent \u2014 Link Builder": [
@@ -684,6 +716,7 @@
   "SEO Agent \u2014 Audit Scheduler": "",
   "SEO Agent \u2014 Backlink Monitor": "Parse Backlinks",
   "SEO Agent \u2014 Content Cadence": "",
+  "SEO Agent \u2014 Index Coverage": "",
   "SEO Agent \u2014 Link Builder": "!Run LB DFS Answers",
   "SEO Agent \u2014 Page Finalize": "",
   "SEO Agent \u2014 Page Watch": "",
