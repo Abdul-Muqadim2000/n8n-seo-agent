@@ -159,6 +159,15 @@ Third review (REVIEW_3.md) running at save time: verify wave 2, hunt regressions
 3. Automatic content rewrites: NO (scaled content abuse risk); "Improve this page" stays approval-only.
 4. AI-drafted versioned policy checklist: not chosen now (later, small).
 
+## WAVE 2 IN PROGRESS (2026-10-30, owner: "do the devaicon fix, then full-access sitemap; check back every client action; carefully")
+Design: DESIGN_WAVE2.md (35c24b03). Agents building: engine in ../n8n_devaicon-ix-engine (ix/engine), app in ../n8n_devaicon-ix-app
+(ix/app), both from 35c24b03; each appends "Wave 2 (DESIGN_WAVE2)" to ENGINE_BUILD.md / APP_BUILD.md. Then: merge both into
+feature/indexing, rebuild, full harness + app suites in Docker, one independent review, fix, then ASK THE OWNER before deploying
+(engine: sync_tables + `deploy_engine.py --credentials` for SEOcredGoogleSvcW + `--apply`; API on the VM from feature/indexing; web via
+PR to main). Live sitemap submission only after the owner switches it on for one site. Production 2026-10-30 10:22 UTC check: healthy
+(09:15 dispatch skipped both sites as checked today; all ledger rows $0); one Cycle Dispatcher alert at 01:13 UTC (an unsettled cycle
+run after the two spot preemptions), not Index coverage.
+
 ## devaicon.com advice check 2026-10-30 (owner asked "are the recommendations right?") - FIX PROPOSED, NOT STARTED
 Right: 9 in Google / 20 left out (Google's own readings), sitemap submitted with 0 errors, the blog post is indexed, engagement-models
 "improve" is fair. Wrong / weak (live, the client sees it):
