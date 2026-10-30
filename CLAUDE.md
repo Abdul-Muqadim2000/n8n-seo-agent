@@ -84,6 +84,9 @@ rule; $0 spent. **Before any deploy from this branch, merge `main` into it** (In
 **W06-C (`df9126da`, rebuilt `b447c71f`, harness 14900 / 0) closed the two open items offline** (final version keeps the "sections removed" cap;
 brief steps match exclusions on the keyword family). **Paid K1 re-check 2026-10-30 on `b447c71f` stopped at the hold ($0.0845): the page reader
 (Jina) key answers 402 out of balance on every read** (likely production too: recharge, check prod page runs); no new page, no judge score (WAVE06 §9).
+**Finished on the owner's new reader key (WAVE06 §10, $1.36 of $3 in all): new K1 kept 8 of 8 sections at its own address `/ms-365-erp`; judges 65.5
+(W05 56.5, AFTER 70.0, same session); our grade 81 delivered and final (+15.5). Open: reader fallback + ops alert on 401/402, the write-anyway title
+equals the existing page's; then merge origin/main, full test, PR to main, owner's deploy go-ahead.**
 
 ## Status (2026-10-28 midday, GA4 + autopilot steps fix from a client report — previous)
 devaicon.com reported "Connect GA4" in Recommendations while GA4 was connected, and the first audit offered as a manual step though the

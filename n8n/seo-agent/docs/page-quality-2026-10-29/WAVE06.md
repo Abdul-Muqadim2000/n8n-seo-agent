@@ -9,7 +9,11 @@ site). Evidence (executions, page texts, judge files, the blind keys) stays in t
   (`fed34d3c`, `BEFORE_AFTER.md`).
 - **Nothing deployed. Production not touched.**
 
-## 0. Status: the paid re-check ran, and stopped at the hold (page reader out of balance)
+## 0. Status: the paid re-check stopped at the hold (page reader out of balance), then finished on the new reader key (section 10)
+
+**Update, 14:46-15:12 UTC the same day: the owner replaced the reader key and K1 was re-run as a new run. Section 10 has the result**
+(judges' mean 65.5 for the new K1, between W05's 56.5 and AFTER's 70.0 in the same judging session; 8 sections kept, none removed; its own
+new address; our grade 81 delivered and final, 15.5 over the judges). The two paragraphs below are the record of the first try.
 
 After the owner freed disk space, the K1 re-check ran on the isolated `alvrun-*` stack rebuilt from **`b447c71f`** (2026-10-30 12:53-13:04
 UTC). The stack, the restore and the seeding were exactly as in Wave 0.5. **But the page reader account that every page read goes through
@@ -41,7 +45,9 @@ broken page and leave the good pages alone; they do **not** calibrate the grade 
 | W05 (`1e705b72`) delivered | 1,023 / 3 | 79 ready with questions | **60.5** (59 / 62) | no |
 | W05 final | same text | 83 ready | 60.5 (59 / 62) | no |
 | W05 delivered, **re-graded by W06 offline** | 1,023 / 3 (same text) | **72 Needs work** | 60.5 (the judged text) | no |
-| **W06 delivered (new run, `b447c71f`)** | **not written**: held, page reader out of balance (section 9) | - | **not measured** | - |
+| W06 first try (`b447c71f`) | **not written**: held, page reader out of balance (section 9) | - | not measured | - |
+| **W06 delivered, new run on the new reader key (`b447c71f`)** | **2,845 / 8, none removed** (section 10) | **81 ready with questions** | **65.5** (66 / 65), blind06 session | no |
+| W06 final | same text | 81 ready | 65.5 (66 / 65) | no |
 
 - **Our grade vs the judges on K1**: in the W05 run +18.5 (79 vs 60.5) and a wrong "Ready"; W06 on the same text +11.5 (72 vs 60.5) and
   the right call (not ready). Still over by 11 points: the rest is the general generosity Wave 2 calibrates.
@@ -61,8 +67,9 @@ broken page and leave the good pages alone; they do **not** calibrate the grade 
 
 ## 4. Spend
 
-**$0.0845 of the $3 stop**: the K1 hold check only (Claude $0.0604 + DataForSEO $0.0241; the DataForSEO balance moved by exactly the
-ledger's $0.0241). The two disk-blocked attempts and the harness: $0 (SPEND.md "WAVE 0.6" and "WAVE 0.6 paid re-check").
+**$1.3622 of the $3 stop**: the first K1 hold check $0.0845 (Claude $0.0604 + DataForSEO $0.0241, reader 402) and the finish on the new
+reader key $1.2777 (section 10). Claude $1.3059 + DataForSEO $0.0563; the DataForSEO balance moved by exactly the ledger's dfs_usd. The two
+disk-blocked attempts, the harness and the two blind judges: $0 (SPEND.md "WAVE 0.6", "WAVE 0.6 paid re-check" and its "finish").
 
 ## 5. DEPLOY CHECKLIST (for the owner)
 
@@ -195,8 +202,10 @@ Owner rule of 2026-10-30 (on `main`): no filming during the app revamp; this lis
 
 ## 7. Risks left after Wave 0.6
 
-- The K1 fix and the grade guards are proven offline only; the paid re-check stopped at the hold because the page reader is out of
-  balance (section 9).
+- The K1 fix is now proven live (section 10: 8 sections kept, none removed), but the new K1 page is judged 65.5, still 4.5 under AFTER's
+  70.0 in the same session (repetition, thin proof, fit), and our grade reads it 81 / "Ready" on the final: 15.5 over the judges.
+- A "Write it anyway" page reuses the existing page's title tag word for word (section 10, finding 1): two pages, one title, one search.
+- The engine has no fallback when the page reader refuses (401 / 402): the reads fail silently (section 9 finding 2, section 10).
 - A run whose page reads all fail is not flagged: no ops alert, a wrong reason to the client (section 9, finding 2).
 - Our grade is still about 11 to 17 points above the judges on normal pages (Wave 2 calibration).
 - Fit unchanged: a service page on an explainer results page (Wave 1).
@@ -258,5 +267,63 @@ Owner rule of 2026-10-30 (on `main`): no filming during the app revamp; this lis
 
 **To finish the re-check** (after the reader is funded): one free probe of the key; K1 as a **new** run (this run's hold was decided
 without page reads; expect W05's path, held as a duplicate), "Write it anyway", collect, finalize, blind set and the two judges. About
-$1.10; $2.92 of the $3 stop is left. The alvrun stack is left running and idle on `b447c71f`.
+$1.10; $2.92 of the $3 stop is left. The alvrun stack is left running and idle on `b447c71f`. **Done the same day: section 10.**
 
+## 10. K1 live re-check (new reader key)
+
+**Why a second try.** The page reader key in use until 2026-10-30 ran out of balance between about 10:13 and 12:56 UTC (HTTP 402 on every
+read, section 9). The owner replaced it the same afternoon: the new key is in `n8n/.env` and in the reader credential of the isolated stack
+and of production (credential only, no deploy; production's secret store still holds the old value, the owner's step). A free probe of
+the new key answered 200. K1 was then run again as a **new** run on the same `b447c71f` stack, with the same request as W05 and the first
+try (2026-10-30 14:46-15:12 UTC). Nothing published, no e-mail, dispatcher plan_only, AI pulse off, only `alvrun-*` containers.
+
+**The hold, with the pages read.** Client pages 4/4, competitor pages 3/3, regulatory pages 9/9, none refused. K1 was held on two reasons:
+the score (48, under 50 with about 10 searches a month) and as a duplicate of client A's existing service page `/ms-365-erp-uae`, which
+was read and confirmed this time. Choices shown: Improve the existing page / Use the recommended target / Write it anyway (W05's path plus
+the score reason). "Write it anyway" was chosen, as in W05.
+
+**The page.**
+
+| K1 (client A, service page) | Address | Words / H2 | Sections removed | Our grade, delivered | Our grade, final | Judges' mean (editor / strategist) | Ready (judges) |
+|---|---|---|---|---|---|---|---|
+| AFTER (`fed34d3c`) delivered | `/ms-365-erp-uae` (the existing page's) | 2,734 / - | - | 59 not ready | - | **70.0** (71 / 69) | strategist yes, editor no |
+| W05 (`1e705b72`) delivered | `/ms-365-erp-uae` (the existing page's) | 1,023 / 3 | 6 | 79 ready with questions | 83 ready | **56.5** (59 / 54) | no |
+| **W06 (`b447c71f`), new run** | **`/ms-365-erp`, its own new address** | **2,845 / 8** | **0** (8 written, 8 kept) | **81 ready with questions** | **81 ready** | **65.5** (66 / 65) | no |
+
+- **Judges.** Two blind judges (editor, strategist) scored the four pages together (W06 delivered and final, W05 delivered, AFTER
+  delivered, shuffled; one SERP file with the three readings). Same-session means: **AFTER 70.0 > W06 65.5 > W05 56.5** (strategist's
+  ranking the same). The W06 final has the same text as the delivered page and the same scores. Earlier sessions put W05 at 60.5 and AFTER
+  at 66.5 / 70.5, so the absolute numbers move by about 4 between sessions; the order within one session is the reliable reading.
+- **What the fix bought.** The new K1 keeps every section (W05 lost 6 of its sections to the exclusion matcher; the verdict's "Microsoft
+  365 licensing" exclusion did not take out "Is Microsoft 365 an ERP?" this time): +9 over W05 in the same session, mostly on usefulness (+4
+  editor, +6 strategist) with small gains in fit and proof; the editor scored its structure lower than W05's (9 vs 11, repetition). It confirms the offline pins of sections 1 and 8 live.
+- **Why it is still under AFTER (-4.5).** Both judges capped structure for repetition (the "Microsoft 365 holds no ledger, stock or VAT
+  records" idea and the Business Central vs Finance split each stated 4 or more times), proof is slogan-level for a service page (partner
+  with no tier or link, "20+ years", "24/7", a sector list, "free consultation"; no case or named client), the first e-invoicing appointment
+  date (30 October 2026) is printed as a future deadline, and the SAP vs D365 answer is hedged. AFTER had the stronger decision help
+  (demo tests, legacy migration map, quote line items). The editor noted that a new URL beside the ranking page would cap fit at 6 of 20
+  (cannibalisation) but did not apply it; applied, the W06 page would read 60 on the editor's sheet (mean 62.5). The strategist capped fit
+  at 10 on every page (service page on an explainer results page) and said this page should replace the existing URL, not go next to it.
+- **Our grade vs the judges.** Delivered 81 vs 65.5 (+15.5); final 81 "Ready" vs 65.5, neither judge would publish it: the guards of
+  section 1 did not fire because no section was removed (correct), and the general generosity (+11 to +17 on normal pages, Wave 2) is what
+  is left. For comparison, the same session reads W05's 79 as +22.5 and AFTER's 59 as -11.
+- **Spend.** The finish: hold check $0.1143 + page $1.1634 + finalize $0 = **$1.2777**; Wave 0.6 in all **$1.3622 of the $3 stop**
+  (Claude $1.3059 + DataForSEO $0.0563, the DataForSEO balance moved by exactly the ledger's dfs_usd). Judges $0.
+
+**Findings from the finish**
+
+1. **MEDIUM (ranking): the new page's title tag is the existing page's title tag, word for word.** The client chose a separate page, but
+   two pages with one title for one search is the cannibalisation the hold warns about, and no review step flags it (the H1 differs). Fix:
+   on "Write it anyway" after a duplicate hold, the title and H1 must differ from the existing page's, checked in QA.
+2. **LOW: the new page does not link to the existing page**, although the writer was told to link to it where it helps the reader.
+3. **LOW: the second read advised using the existing page's slug**, against the client's choice; the engine did not apply it and the
+   client did not see it, but the reviewer is not told about the choice.
+4. Final = delivered again ("Accept all" with general answers changes nothing), as in W05.
+
+**Open resilience item (not fixed in this wave): the engine must fall back and alert when the page reader refuses.** The 402 run in
+section 9 showed that when the reader answers 401 / 402 every page read fails silently: no ops alert, nothing in the client's report, a
+wrong reason to the client ("has no title, main heading or Search Console search on file") and a verdict scored on search data alone.
+Wanted: on a 401 / 402 / 429 from the reader, (a) retry the read through a fallback (the same reader without the key answered 200 in the
+probe, or a direct fetch of the page), (b) raise an ops alert like a DataForSEO balance problem, and (c) when the fallback also fails,
+mark the run "pages could not be read" instead of deciding a hold, a verdict or a grade without them. This is the next engine item,
+before the merge of `main` and the deploy (section 5).
