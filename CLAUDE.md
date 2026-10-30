@@ -61,7 +61,17 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-10-28 midday, GA4 + autopilot steps fix from a client report — latest)
+## Status (2026-10-30, page quality Wave 0: paid before/after run, blind-judged — latest)
+Owner priority: page quality and ranking must never drop. Wave 0 + follow-ups (`fed34d3c`, harness 14221 / 0) run against BEFORE (`8caf2467`) on
+the isolated `alvrun-*` stack, same 8 keywords on 3 sites, both builds' pages + 3 published controls judged together blind (2 Claude judges).
+Read **`n8n/seo-agent/docs/page-quality-2026-10-29/BEFORE_AFTER.md`** (and `BASELINE.md`, `PLAN.md`). **Pages better**: judges' mean
+delivered 68.4 -> 74.5, finals 66.0 -> 73.4, gains in proof and local accuracy; fit unchanged; K6 -3. **Our grade over-corrected**: +23.9 ->
+-10.9 signed, 7 of 8 "Not ready" (second-read item caps at 59) while the strategist would publish 7; the only "Ready" (K4) is written onto
+another service page's URL (slug-only match, now hold-exempt). Finalize -3.6 -> -1.8 (still down); Accept all 400 leaves 3 pages with no
+final; false "already written" after a hold; K3 held wrongly. Spend $11.20 of $30. **NOT deployed, not ready to deploy**: fix the 5 items
+in BEFORE_AFTER "Next", re-check K1 K3 K4 K8 (~$6), then ask the owner. Then Waves 1 (fit) and 2 (calibration).
+
+## Status (2026-10-28 midday, GA4 + autopilot steps fix from a client report — previous)
 devaicon.com reported "Connect GA4" in Recommendations while GA4 was connected, and the first audit offered as a manual step though the
 autopilot runs it. Both ours (verified on prod): the GA4 id saved in the app never reached the engine's `seo_sites` row, and setup
 recommendations ignored the autopilot. **Deployed 2026-10-28 ~10:23 UTC**: API on the VM at `0221f921` (backup `pg/2026-10-28/*T102249Z`,
