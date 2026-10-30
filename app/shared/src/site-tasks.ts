@@ -5,19 +5,27 @@
 import { AI_ANSWER_BOTS } from './robots';
 import {
   INDEX_BLOCKING_CAUSES,
+  INDEX_CANONICAL_PARENT,
   INDEX_CAUSE_INFO,
+  INDEXING_LINKS_KEY,
+  INDEXING_LINKS_MAX_PAIRS,
   INDEXING_SITEMAP_KEY,
   INDEXING_TASK_MAX_URLS,
   indexingCauseOfKey,
   indexingTaskKey,
   indexPath,
+  samePageUrl,
   type IndexingCauseReading,
+  type IndexingLinksReading,
   type IndexingSitemapReading,
   type IndexSiteFixCause,
 } from './indexing';
 
-export type SiteTaskKind = 'indexnow' | 'ai_crawlers' | 'redirect' | 'indexing';
-export const SITE_TASK_KINDS: readonly SiteTaskKind[] = ['indexnow', 'ai_crawlers', 'redirect', 'indexing'];
+/** `index_links` (wave 2, DESIGN_WAVE2 §3.2): the one step `indexing:links`, pages that need a link from another page of the website */
+export type SiteTaskKind = 'indexnow' | 'ai_crawlers' | 'redirect' | 'indexing' | 'index_links';
+export const SITE_TASK_KINDS: readonly SiteTaskKind[] = ['indexnow', 'ai_crawlers', 'redirect', 'indexing', 'index_links'];
+/** The kinds the daily index check feeds (their own share of each daily tick, A27). */
+export const INDEX_TASK_KINDS: readonly SiteTaskKind[] = ['indexing', 'index_links'];
 export type SiteTaskState = 'todo' | 'done' | 'skipped';
 /** who made a reading: the client's own "check now", the app's daily check, the engine's weekly / monthly run, or the engine's daily
  *  index check (Index coverage, 2026-10-29: Google's own inspection of the pages, read by the engine every day) */
@@ -67,7 +75,16 @@ export interface SiteTaskInputs {
   reclaim: { receivedAt: string; items: { brokenUrl: string; redirectTo: string; links: number; domains: string[] }[] } | null;
   /** Index coverage (2026-10-29): the engine's daily index check, its pages grouped by the cause only the client can fix (absent or null:
    *  the check has not run for this website, or could not be read; a step already stored keeps its last state then) */
-  indexing?: { runAt: string; causes: IndexingCauseReading[]; sitemap?: IndexingSitemapReading | null } | null;
+  indexing?: {
+    runAt: string;
+    causes: IndexingCauseReading[];
+    sitemap?: IndexingSitemapReading | null;
+    /** wave 2: the pages that need a link from another page of the website (absent or null: not read; a stored step keeps its state) */
+    links?: IndexingLinksReading | null;
+    /** wave 2: the client switched sitemap submission on AND Google reports Full access for us: Alaventra submits a missing sitemap, so
+     *  there is no "submit your sitemap" step (errors in a submitted sitemap are still the client's to fix) */
+    sitemapAuto?: boolean;
+  } | null;
 }
 
 /** One stored row (services/siteTasks.ts), in the shape this rule reads. */
@@ -214,7 +231,15 @@ function indexingDrafts(ix: SiteTaskInputs['indexing'], stored: StoredSiteTask[]
             ? `Google read ${still === 1 ? 'a page' : `${still} pages`} again after the change we saw on your website and still sees the problem.`
             : `Google's newest reading still lists ${total} page${total === 1 ? '' : 's'} with this problem.`,
         },
-        payload: { cause: c.cause, urls: urls.slice(0, INDEXING_TASK_MAX_URLS), total, ...(c.pending ? { pending: c.pending } : {}), ...(still ? { googleStillSees: still } : {}) },
+        payload: {
+          cause: c.cause,
+          urls: urls.slice(0, INDEXING_TASK_MAX_URLS),
+          total,
+          ...(c.pending ? { pending: c.pending } : {}),
+          ...(still ? { googleStillSees: still } : {}),
+          // wave 2: the listed pages with a title of their own (canonical to another page): our check closes them only on a canonical naming the page
+          ...(c.ownTitle?.length ? { ownTitle: c.ownTitle.filter((u) => urls.slice(0, INDEXING_TASK_MAX_URLS).includes(u)) } : {}),
+        },
       });
       continue;
     }
@@ -240,7 +265,8 @@ function indexingDrafts(ix: SiteTaskInputs['indexing'], stored: StoredSiteTask[]
   // the sitemap step (X5): Search Console has no sitemap, or reports errors in one
   const sm = ix?.sitemap ?? null;
   const smStored = stored.find((x) => x.key === INDEXING_SITEMAP_KEY);
-  if (sm && (sm.submitted === 0 || sm.errors > 0)) {
+  const auto = !!ix?.sitemapAuto && !!sm && sm.submitted === 0 && sm.errors === 0;
+  if (sm && !auto && (sm.submitted === 0 || sm.errors > 0)) {
     handled.add(INDEXING_SITEMAP_KEY);
     out.push({
       key: INDEXING_SITEMAP_KEY,
@@ -271,6 +297,62 @@ function storedDone(st: StoredSiteTask, runAt: string): Draft {
   return { key: st.key, kind: 'indexing', engine: later ? { at: runAt, ok: true, by: 'index', message: INDEXING_NONE_LEFT } : null, payload: st.payload };
 }
 
+/** A pair of the links step: the page to link to, the page to add the link on, and when the pair was first listed (ISO). */
+export interface IndexLinkPair {
+  target: string;
+  source: string;
+  since: string;
+}
+export function linkPairsOf(p: Record<string, unknown> | null | undefined): IndexLinkPair[] {
+  return (Array.isArray(p?.pairs) ? (p!.pairs as Record<string, unknown>[]) : [])
+    .map((x) => ({ target: str(x?.target), source: str(x?.source), since: str(x?.since) }))
+    .filter((x) => /^https?:\/\//i.test(x.target) && /^https?:\/\//i.test(x.source))
+    .slice(0, INDEXING_LINKS_MAX_PAIRS);
+}
+const LINKS_NONE_LEFT = 'The daily index check lists no page that still needs a link from another page of your website.';
+
+/**
+ * wave 2 (DESIGN_WAVE2 §3.2): the one step for the pages that need a link from another page of the website (`indexing:links`), listing up to
+ * 10 (page to link to, page to add the link on) pairs. The rules:
+ * - Our own check opens the pages to add the link on and looks for the link; it decides (the engine reads only the home page and parent
+ *   pages, so it cannot see a link added on an article).
+ * - The engine's reading only closes pairs: a page no longer in its list (linked from the home page or a parent, in search, gone) leaves the
+ *   step; when none is left the step is done by the daily index check.
+ * - The pairs are kept as they were listed (the page to add the link on does not change under the client); new pages join the list while
+ *   the step is to do. A pair listed after our last check makes the engine's reading "not checked yet", so a done step never stands for
+ *   pairs nobody checked.
+ */
+function linksDraft(l: IndexingLinksReading | null | undefined, st: StoredSiteTask | undefined): Draft | null {
+  const key = INDEXING_LINKS_KEY;
+  if (!l) return st ? { key, kind: 'index_links', engine: null, payload: st.payload } : null;
+  const prev = linkPairsOf(st?.payload);
+  const open = l.targets;
+  const pairs: IndexLinkPair[] = [];
+  // a fresh pair is dated after the stored row's last reading, so it is never covered by a check that did not open it
+  const lastAt = st?.lastCheck?.at ?? '';
+  const fresh = lastAt && lastAt >= l.runAt ? new Date(Date.parse(lastAt) + 1).toISOString() : l.runAt;
+  for (const x of prev) if (open.some((t) => samePageUrl(t.url, x.target))) pairs.push(x);
+  for (const t of open) {
+    if (pairs.length >= INDEXING_LINKS_MAX_PAIRS) break;
+    if (!t.sources.length || pairs.some((x) => samePageUrl(x.target, t.url))) continue;
+    pairs.push({ target: t.url, source: t.sources[0], since: fresh });
+  }
+  const total = open.filter((t) => t.sources.length || pairs.some((x) => samePageUrl(x.target, t.url))).length;
+  if (!pairs.length) {
+    if (!st) return null;
+    // the engine's list holds no page left to link to (from a complete read, made after the step was stored): done by that reading
+    const later = l.complete && l.runAt > st.createdAt;
+    return { key, kind: 'index_links', engine: later ? { at: l.runAt, ok: true, by: 'index', message: LINKS_NONE_LEFT } : null, payload: st.payload };
+  }
+  const ownAt = st?.lastCheck && !engineBy(st.lastCheck.by) ? st.lastCheck.at : '';
+  const unchecked = st ? pairs.filter((x) => !ownAt || x.since > ownAt) : [];
+  const engine: SiteTaskCheck | null =
+    st && unchecked.length && (ownAt || st.lastCheck)
+      ? { at: unchecked.map((x) => x.since).sort().pop() || l.runAt, ok: false, by: 'index', message: `${unchecked.length === 1 ? 'One more page needs' : `${unchecked.length} more pages need`} a link from another page of your website.` }
+      : null;
+  return { key, kind: 'index_links', engine, payload: { pairs, total: Math.max(total, pairs.length) } };
+}
+
 const isSitemapStep = (p: Record<string, unknown>) => str(p.cause) === 'sitemap';
 /** R1: how many of a step's pages Google read again after a fix we saw and still sees with the problem (0: none, or not an indexing step) */
 export const googleStillSees = (p: Record<string, unknown> | null | undefined): number => Math.max(0, Number(p?.googleStillSees) || 0);
@@ -284,7 +366,7 @@ const INDEXING_DONE: Record<IndexSiteFixCause, string> = {
   access_denied: 'These pages open for everyone (200).',
   not_found: 'Each address opens a page again, or redirects permanently to a page of yours that opens.',
   soft_404: 'These pages have real content now, or answer 404 as a page that is gone should.',
-  canonical_elsewhere: 'Your sitemap and these pages agree on the main version.',
+  canonical_elsewhere: 'Each page names itself as the main version, or your sitemap no longer lists the copy.',
   redirect: 'Your sitemap no longer lists addresses that redirect.',
   redirect_error: 'Each address now ends on a page of yours that opens.',
   not_in_sitemap: 'Your sitemap lists these pages.',
@@ -314,6 +396,11 @@ function doneDetail(d: Draft, domain: string): string {
       if (d.engine?.ok && d.engine.by === 'index') return `${INDEXING_NONE_LEFT} It keeps watching these pages.`;
       return `${what} The daily index check keeps watching them.`;
     }
+    case 'index_links': {
+      if (d.engine?.ok && d.engine.by === 'index') return `${LINKS_NONE_LEFT} Google finds a page sooner when your other pages link to it.`;
+      const n = linkPairsOf(p).length;
+      return `${n === 1 ? 'The link is' : `All ${n} links are`} in place. Google finds a page sooner when your other pages link to it; the daily index check keeps watching these pages.`;
+    }
     default: {
       const never: never = d.kind;
       return String(never);
@@ -331,6 +418,8 @@ function present(d: Draft, domain: string): Pick<SiteTask, 'title' | 'detail' | 
       return presentRedirect(d.payload);
     case 'indexing':
       return presentIndexing(d.payload, domain);
+    case 'index_links':
+      return presentLinks(d.payload);
     default: {
       const never: never = d.kind;
       throw new Error(`Unknown step kind ${String(never)}`);
@@ -355,7 +444,7 @@ function presentIndexing(p: Record<string, unknown>, domain: string): Pick<SiteT
     return {
       title: none ? 'Submit your sitemap in Search Console' : 'Fix the errors Search Console reports in your sitemap',
       detail: none
-        ? 'Search Console lists no sitemap for this website. Submitting it there is how Google learns which pages you want found, and Search Console then reports on it. Only someone with access to your Search Console can do it; the daily index check sees it the day after.'
+        ? 'Search Console lists no sitemap for this website. Submitting it there is how Google learns which pages you want found, and Search Console then reports on it. Someone with access to your Search Console can do it, or you can let Alaventra submit it: switch on sitemap submission in Tracking & monitors and give us Full access in Search Console. The daily index check sees it the day after.'
         : `Search Console reports ${errors} error${errors === 1 ? '' : 's'} in a sitemap you submitted, so Google may skip some of the pages in it. Search Console names each error; the daily index check sees the fix the day after it is resubmitted.`,
       values: [{ label: 'Your sitemap', value: `https://${domain}/sitemap.xml` }],
       guide: 'index-submit-sitemap',
@@ -363,8 +452,13 @@ function presentIndexing(p: Record<string, unknown>, domain: string): Pick<SiteT
     };
   }
   const cause = indexingCauseOf(p);
-  const info = INDEX_CAUSE_INFO[cause];
   const urls = (Array.isArray(p.urls) ? p.urls : []).map(str).filter(Boolean);
+  // wave 2 (DESIGN_WAVE2 §3.1): canonical pages outside the sitemap have their own words; a step with both kinds says both
+  const outside = cause === 'canonical_elsewhere' ? strs(p.ownTitle).filter((u) => urls.includes(u)) : [];
+  const allOutside = outside.length > 0 && outside.length === urls.length;
+  const base = INDEX_CAUSE_INFO[cause];
+  const info = allOutside ? { ...base, meaning: INDEX_CANONICAL_PARENT.meaning, youDo: INDEX_CANONICAL_PARENT.youDo, taskTitle: INDEX_CANONICAL_PARENT.taskTitle } : base;
+  const mixed = outside.length > 0 && !allOutside ? ` ${outside.length === 1 ? 'One of these pages has' : `${outside.length} of these pages have`} a title of ${outside.length === 1 ? 'its' : 'their'} own and name${outside.length === 1 ? 's' : ''} another page as the main version: if such a page should be found on its own, point its canonical tag to the page itself, and add it to your sitemap if it is not there.` : '';
   const total = Math.max(Number(p.total) || 0, urls.length);
   const shown = urls.slice(0, 5);
   const more = total - shown.length;
@@ -372,10 +466,26 @@ function presentIndexing(p: Record<string, unknown>, domain: string): Pick<SiteT
   const still = googleStillSees(p);
   return {
     title: info.taskTitle ?? info.label,
-    detail: `${info.meaning} ${info.youDo} ${total === 1 ? 'It concerns 1 page' : `It concerns ${total} pages`}${more > 0 ? `; the first ${shown.length} are below, every one is on the Indexing page` : ''}.${still ? ` ${googleStillSeesText(still)}` : ''}${pending ? ` We already saw ${pending} more fixed on your site; ${pending === 1 ? 'it waits' : 'they wait'} for Google to read ${pending === 1 ? 'it' : 'them'} again.` : ''}`,
+    detail: `${info.meaning} ${info.youDo}${mixed} ${total === 1 ? 'It concerns 1 page' : `It concerns ${total} pages`}${more > 0 ? `; the first ${shown.length} are below, every one is on the Indexing page` : ''}.${still ? ` ${googleStillSeesText(still)}` : ''}${pending ? ` We already saw ${pending} more fixed on your site; ${pending === 1 ? 'it waits' : 'they wait'} for Google to read ${pending === 1 ? 'it' : 'them'} again.` : ''}`,
     values: shown.map((u, i) => ({ label: `Page ${i + 1}`, value: u })),
     guide: info.guide ?? 'index-coverage',
     guideVars: { pageUrl: shown[0] ?? '', pagePath: shown[0] ? indexPath(shown[0]) : '' },
+  };
+}
+
+function presentLinks(p: Record<string, unknown>): Pick<SiteTask, 'title' | 'detail' | 'values' | 'guide' | 'guideVars'> {
+  const pairs = linkPairsOf(p);
+  const total = Math.max(Number(p.total) || 0, pairs.length);
+  const more = total - pairs.length;
+  return {
+    title: 'Link to pages Google cannot find yet',
+    detail:
+      `Google has not found ${pairs.length === 1 ? 'this page' : 'these pages'} yet, and no other page of your website links to ${pairs.length === 1 ? 'it' : 'them'}. ` +
+      `Add a link to each one from the page of yours we name next to it: ${pairs.length === 1 ? 'a page' : 'pages'} already in Google search, on the same subject. ` +
+      `We open those pages and tick this step off once every link is there.${more > 0 ? ` ${more} more page${more === 1 ? '' : 's'} follow once these are done.` : ''}`,
+    values: pairs.map((x) => ({ label: `On ${indexPath(x.source)}, add a link to`, value: x.target })),
+    guide: 'index-add-internal-links',
+    guideVars: { pageUrl: pairs[0]?.target ?? '', sourceUrl: pairs[0]?.source ?? '' },
   };
 }
 
@@ -432,7 +542,13 @@ function presentRedirect(p: Record<string, unknown>): Pick<SiteTask, 'title' | '
 export function deriveSiteTasks(inputs: SiteTaskInputs, stored: StoredSiteTask[]): SiteTask[] {
   const byKey = new Map(stored.map((s) => [s.key, s]));
   const redirects = redirectDrafts(inputs.reclaim, stored);
-  const drafts = [indexnowDraft(inputs.indexnow, byKey.get('indexnow')), crawlerDraft(inputs.access, byKey.get('ai_crawlers')), ...redirects, ...indexingDrafts(inputs.indexing, stored, new Set(redirects.map((r) => r.key)))].filter(
+  const drafts = [
+    indexnowDraft(inputs.indexnow, byKey.get('indexnow')),
+    crawlerDraft(inputs.access, byKey.get('ai_crawlers')),
+    ...redirects,
+    ...indexingDrafts(inputs.indexing, stored, new Set(redirects.map((r) => r.key))),
+    linksDraft(inputs.indexing?.links, byKey.get(INDEXING_LINKS_KEY)),
+  ].filter(
     (d): d is Draft => !!d,
   );
   const out: SiteTask[] = drafts.map((d) => {
@@ -447,7 +563,8 @@ export function deriveSiteTasks(inputs: SiteTaskInputs, stored: StoredSiteTask[]
     const decided = indexStale ? own : googleSees ? newest([d.engine, s?.lastCheck?.ok ? null : s?.lastCheck]) : newest([d.engine, s?.lastCheck]);
     const lastDone = [s?.doneAt ?? null, d.engine?.ok ? d.engine.at : null, s?.lastCheck?.ok ? s.lastCheck.at : null].filter((x): x is string => !!x).sort().pop() ?? null;
     const done = !!decided?.ok;
-    const reopened = !done && !!lastDone && !!decided && lastDone < decided.at;
+    // wave 2: new pages joining the links step are the next pages to link, not a link that went missing
+    const reopened = !done && !!lastDone && !!decided && lastDone < decided.at && !(d.kind === 'index_links' && decided.by === 'index');
     const state: SiteTaskState = s?.skippedAt ? 'skipped' : done ? 'done' : 'todo';
     const shown = present(d, inputs.domain);
     const searchBlocked =
@@ -493,6 +610,9 @@ export function siteTaskPayload(inputs: SiteTaskInputs, stored: StoredSiteTask[]
       d = indexingDrafts(inputs.indexing, stored, skip).find((x) => x.key === key) ?? null;
       break;
     }
+    case 'index_links':
+      d = linksDraft(inputs.indexing?.links, byKey.get(key));
+      break;
     default: {
       const never: never = kind;
       return never;
@@ -506,6 +626,7 @@ export function siteTaskKindOfKey(key: string): SiteTaskKind | null {
   if (key === 'indexnow') return 'indexnow';
   if (key === 'ai_crawlers') return 'ai_crawlers';
   if (key.startsWith('redirect:')) return 'redirect';
+  if (key === INDEXING_LINKS_KEY) return 'index_links';
   if (indexingCauseOfKey(key) || key === INDEXING_SITEMAP_KEY) return 'indexing';
   return null;
 }

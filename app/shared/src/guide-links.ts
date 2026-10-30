@@ -39,6 +39,8 @@ export const INDEXING_GUIDE: Record<string, GuideId> = {
   redirect: 'index-sitemap-redirects',
   redirect_error: 'index-fix-redirect-error',
   sitemap: 'index-submit-sitemap',
+  // wave 2 (DESIGN_WAVE2 §3.2): the step `indexing:links`
+  links: 'index-add-internal-links',
 };
 
 /** The guide that answers one Needs-you item: its kind's, refined by what the id says (a refused plan, a draft to fix, an announcement). */
