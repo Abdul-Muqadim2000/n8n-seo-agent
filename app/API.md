@@ -958,6 +958,37 @@ that fails answers `status: 'unreadable'` with a sentence, never an error, and n
   `seo_index_runs`, `seo_update_impact` and (by the engine site id) `seo_index_history`; `seo_google_events` is global and stays.
 - Rollback (X11): before reverting the API to a build without this feature, delete or skip the `site_tasks` rows with `kind = 'indexing'`
   (an older build reads an unknown kind as a redirect step).
+- **Wave 2 (2026-10-30, `n8n/seo-agent/docs/indexing-2026-10-29/DESIGN_WAVE2.md` §3).** Engine columns read (all optional; an engine without
+  them reads as before): `seo_index_pages.linked_by` (JSON list of up to 3 pages of the website that link to the page; '' none; 'unread' not
+  read), `asked_google_at` (written by the APP, below), `google_read_after_ask_at`; `seo_monitors.index_sitemap_submit`;
+  `seo_index_runs.sitemaps_json.permission` / `.submissions[{path, at, status, reason}]` / `.list|listed|sitemaps[{path, lastSubmitted,
+  lastDownloaded}]`.
+  - `IndexPage` adds `linkedBy`, `linkedRead`, `askedGoogleAt`, `googleReadAfterAskAt`, `utility` (a policy / utility page, `isUtilityPage`,
+    the list of DESIGN_WAVE2 §2.4 in `INDEX_UTILITY_SEGMENTS`: never "Improve this page", never asked about, never a page to link from).
+    Group causes add `linked_waiting` (the engine's `wait` on `unknown_to_google` / `discovered_not_crawled`: already linked, no step),
+    `canonical_parent` (`canonical_elsewhere` with a title of its own, `canonicalOwnTitle`: part of the step `indexing:canonical_elsewhere`) and `utility` (left out
+    on purpose). `IndexingData` adds `askedGoogle` (pages asked about in the last 45 days that left the engine's list, with what happened)
+    and `sitemap` (`{ submitOn, access: 'full' | 'restricted' | 'unknown', permission, accessAt, submissions[{ path, at, status: 'ok' |
+    'refused' | 'error', reason, listedAt, readAt }] }`). The canonical step's payload adds `ownTitle` (its pages with a title of their own: not in the sitemap, or
+    the engine's note "This page tells Google it is a copy of"; the own check closes them only when the page names itself).
+  - `POST …/data/indexing/asked-google` (member, 30 / 10 min per person) `{ url }` → `{ page }`: "I asked Google" (the client asked in
+    Search Console themselves; nothing is sent to Google). Writes `asked_google_at` on that page's `seo_index_pages` row (n8n Data Table
+    `rows/update`, filter `site_id` + `url`), audit `indexing.asked_google`. 404 for an address of another website or a page the check does
+    not know, 409 `already_in_search`, 503 when the write fails (nothing saved). A second click within a day keeps the first time. The page
+    then reads "Waiting for Google to read it again", "Google read it again on <day>" once the engine writes `google_read_after_ask_at`,
+    or after 14 days "You asked Google on <day>; Google has not read it again yet. There is nothing more to do on your side for now."
+  - Step kind `index_links`, key `indexing:links` (one per website): payload `{ pairs: [{ target, source, since }] (10 at most), total }`
+    from the engine's `links` rows with a suggested page (never a utility page, never a page already linked). Its own check opens each
+    page to add the link on (own host, the safe fetcher, 4 at a time) and looks for an `<a href>` to the target (`pageLinksTo`: resolved,
+    host without www., no fragment, a query only when the target has one); done when every pair has its link, otherwise "N of M links
+    found" (recorded). A page that does not answer records nothing (503); a firewall or an off-site redirect is 409 `site_unsure`. The
+    engine's reading only closes it (no page left that needs a link, from a complete read made after the step was stored) or marks pairs
+    listed after the last own check as not checked yet (to do, never "needed again"). It shares the indexing third of the daily tick.
+    Recommendation `ix:links` (with `taskKey`); the count-based `ix:links:<cause>` items are no longer made.
+  - Settings: `indexSitemapSubmit` (boolean, optional, no default) → Site Admin `monitors` `index_sitemap_submit`, sent last; empty in the
+    engine = off. With it on and Google reporting Full access (`siteOwner` / `siteFullUser`) there is no `indexing:sitemap` step for a
+    missing sitemap (errors in a submitted one stay the client's). The report counts the pages that need a link from `by_action.links`.
+  - Rollback: an API from before wave 2 ignores `site_tasks` rows with `kind = 'index_links'` (an unknown kind reads and records nothing).
 
 ## Page review: questions, business details, the editor, the final version, approval (H3, 2026-10-28; `shared/src/page-review.ts`, `server/src/services/pageReview.ts`)
 For a written page (a `content` report that carries the page; anything else is 404, as is another company's report). Every write answers the

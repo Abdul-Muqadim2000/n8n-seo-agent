@@ -12,7 +12,8 @@ import { ReportHero, StatusMark } from './visuals';
 const isCause = (c: string): c is IndexCause => (INDEX_CAUSES as readonly string[]).includes(c);
 const fmt = (v: number | null) => (v == null ? '-' : v.toLocaleString('en-US'));
 /** A18: a cause in words; a code this build does not know is never printed raw */
-const causeLabel = (c: string) => (isCause(c) ? INDEX_CAUSE_INFO[c].label : 'A reason we do not recognise yet');
+const LINKS_ROW = 'links:need_a_link';
+const causeLabel = (c: string) => (c === LINKS_ROW ? 'Need a link from another page of yours' : isCause(c) ? INDEX_CAUSE_INFO[c].label : 'A reason we do not recognise yet');
 /** final browser check: a day as the rest of the app writes it ("29 Oct"), never an ISO string; a status in words, never a raw code */
 const day = (v: unknown) => (str(v) ? indexDayText(str(v)) : '');
 const EVENT_STATUS: Record<string, string> = { rolling_out: 'rolling out', complete: 'finished', changed: 'policy page changed' };
@@ -35,10 +36,15 @@ export function IndexCoverageReport({ report }: { report: ReportDetail }) {
   const rolling = events.find((e) => str(e.status) === 'rolling_out');
   const impact = obj(m.impact);
   // A18: only the reasons that ask something of the client (never pages left out on purpose, waiting, or not checked)
-  const causes = Object.entries(byCause)
-    .map(([c, v]) => ({ cause: c, count: num(v) ?? 0 }))
-    .filter((x) => x.count > 0 && (!isCause(x.cause) || INDEX_ACTIONS_NEED_YOU.has(INDEX_CAUSE_INFO[x.cause].action)))
-    .sort((a, b) => b.count - a.count);
+  // wave 2 (DESIGN_WAVE2 §3.1): "Google has not found it yet" and "knows it but has not read it" also count pages the website already
+  // links to (they wait for Google, nothing to do), so those two reasons are shown as the pages that need a link, from the action count
+  const linksNeeded = num(byAction.links) ?? 0;
+  const causes = [
+    ...Object.entries(byCause)
+      .map(([c, v]) => ({ cause: c, count: num(v) ?? 0 }))
+      .filter((x) => x.count > 0 && (!isCause(x.cause) || (INDEX_ACTIONS_NEED_YOU.has(INDEX_CAUSE_INFO[x.cause].action) && INDEX_CAUSE_INFO[x.cause].action !== 'links'))),
+    ...(linksNeeded > 0 ? [{ cause: LINKS_ROW, count: linksNeeded }] : []),
+  ].sort((a, b) => b.count - a.count);
   const siteLink = report.siteId ? `/o/${org.id}/sites/${report.siteId}/indexing` : null;
   // N-app-6 / N12: a run that could not check the website. Its note says why; any figures are the last check's, never today's
   const failed = indexingReportFailed(m);

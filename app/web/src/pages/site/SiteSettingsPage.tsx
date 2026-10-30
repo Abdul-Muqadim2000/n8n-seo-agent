@@ -35,7 +35,7 @@ import { autopilotGuideVars } from '@/lib/guide-vars';
 import { errorMessage, toastError } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
-import { qk, useDeleteSite, useSiteAdmin, useSiteData, useStartRun, useUpdateSite } from '@/lib/queries';
+import { qk, useDeleteSite, useIndexing, useSiteAdmin, useSiteData, useStartRun, useUpdateSite } from '@/lib/queries';
 import { fmtAgo, fmtDate } from '@/lib/utils';
 import { SiteWarnings } from '@/components/warnings/SiteWarnings';
 
@@ -457,6 +457,9 @@ function MonitorsCard({
   const [enginesError, setEnginesError] = useState<string | undefined>();
   const ai = useSiteData(org.id, site.id, 'ai');   // B8-7: the precision table reads the latest run's measured sample
   const pipelineQ = useSiteData(org.id, site.id, 'pipeline');   // B4: the forecast's plan (level, keyword pages, rank checks)
+  // wave 2 (DESIGN_WAVE2 §3.2): the access Google reports for us, read by the daily index check (shown next to the sitemap switch)
+  const ix = useIndexing(org.id, site.id);
+  const sitemapAccess = ix.data && 'sitemap' in ix.data && ix.data.sitemap ? { access: ix.data.sitemap.access, at: ix.data.sitemap.accessAt } : null;
   const dirty = JSON.stringify(monitors) !== JSON.stringify(initial) || JSON.stringify(competitors) !== JSON.stringify(initialCompetitors);
 
   const save = () => {
@@ -484,7 +487,7 @@ function MonitorsCard({
       <CardBody>
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0 space-y-5">
-            <MonitorSettingsFields value={monitors} onChange={setMonitors} disabled={!admin} enginesError={enginesError} aiMeasured={aiMeasuredFrom(ai.data)} />
+            <MonitorSettingsFields value={monitors} onChange={setMonitors} disabled={!admin} enginesError={enginesError} aiMeasured={aiMeasuredFrom(ai.data)} sitemapAccess={sitemapAccess} domain={site.domain} />
             <Field
               label="Competitors"
               optional

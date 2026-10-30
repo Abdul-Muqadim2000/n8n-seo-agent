@@ -34,6 +34,22 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-10-30',
+    version: '4.6',
+    title: 'Index coverage: the right step for each page, and every step checked',
+    summary:
+      'Index coverage now tells apart the pages Google has not visited yet from the pages that need a link, finds pages that name another page as their main version, and leaves policy pages alone. Every step it asks of you can be marked done and is checked, and you can let us submit your sitemap.',
+    highlights: [
+      'Pages your website already links to that Google has not visited yet are shown apart, with what helps, instead of a request to add links you already have',
+      'Internal links to add are one step on your website: each page to link to, the page of yours to add the link on, and our check that each link is there',
+      'Pages with a title of their own that name another page as their main version are found, with a step to let them stand on their own',
+      'Privacy, cookie, terms and login pages are shown as fine to leave out, never as pages to improve',
+      'The pages worth asking Google to read again put your most valuable pages first; press I asked Google and the page shows when Google read it again',
+      'Optional sitemap submission: switch it on and give us Full access in Search Console, and we submit your sitemap when it is missing or has changed, and nothing else',
+    ],
+    features: ['index-coverage'],
+  },
+  {
     date: '2026-10-29',
     version: '4.5',
     title: 'Index coverage',
