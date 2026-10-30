@@ -10,7 +10,7 @@
 const __main = () => {
   const prev = $input.first().json || {};
   const market = REG.marketOf(REGULATORS, prev.country_iso);
-  const as_of = REG.asOfFor(prev.started_at, market ? market.utc_offset_hours : 0);
+  const as_of = REG.dayFor(prev.started_at, prev.country_iso, market);   // W05-A: the market day in its own time zone (Asia/Dubai for the UAE), for every market
   const year = as_of.slice(0, 4);
   const urls = (Array.isArray(prev.site_urls) ? prev.site_urls : []).map(String);
   const pages = ((prev.site_model || {}).pages || []).filter(p => p && p.url);

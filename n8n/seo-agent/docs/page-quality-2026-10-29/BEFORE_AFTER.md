@@ -197,3 +197,62 @@ these 31 judged pages plus human raters as the gold set, per-dimension grading i
 **Deploy readiness: not yet.** Page quality, the owner's priority, is up on 7 of 8 keywords. But a client would today get a wrong-URL page
 labelled Ready, Not ready on pages an expert would publish with no way to clear it, a false "already written" warning and pages with no
 final version.
+
+## Wave 0.5, grade calibration (W05-A, 2026-10-30): the AFTER pages replayed offline
+
+What changed (build section 172; `v5/code/_critic_reread.js`, `_grade.js`, `Apply_Second_Read.js`, `Second_Read_Plan.js`,
+`Finalize_Parse_Brief.js`, `Finalize_Verdict.js`, `_regulatory.js`, `Regulatory_Plan.js`, `Content_QA.js`, `Blog_Package.js`; app
+`shared/src/page-review.ts`):
+
+- The second read **blocks only a factual error the page states**: a count that does not match its own list (checked on the quoted words),
+  an unsupported claim about the business, a statement its own source contradicts, a fact or local rule it calls wrong or out of date
+  without hedging. A deadline that only falls on the day the page is written is advice (the page is read after that day).
+- Everything else it shows is **advice with a deduction on its part**: 3 points a high item, 1.5 a medium one (fact, source, claim, local
+  -> sources; repetition, structure, link -> structure; depth -> specificity; style -> plain language; intent -> fit), at most a quarter of
+  the part and never below half of it, so advice alone never makes a page "Needs work" and never caps it at 59. Enforce mode only: shadow
+  reads (the system's own runs, the client's keyword ladder, so the guide that ranks) change nothing.
+- The deduction travels to the final version (`page_run.second_read`) and Finalize Verdict keeps it while the quoted words are on the
+  page: the grade does not rise at Finalize for nothing.
+- **"Today" is the market day** in the website's own time zone (`REG.dayFor`, Asia/Dubai for the UAE) for the regulatory status, the
+  second read (told "Today in <country>: <date>") and the page's "Updated" and schema dates. The K1 / K2 runs started 22:31 / 22:37 UTC
+  on 29 October: 30 October in the UAE, the date the read assumed, while the byline said 29 October (UTC).
+
+Replay: the recorded answers of the 8 second reads through today's code (harness W05A2, fixture `harness/fixtures/w05a_after_reads.json`,
+anonymised). Judges = the blind judges' mean (editor raw / strategist) of this report; ready = the strategist.
+
+| K | Judges (ready) | As recorded | Now | What still blocks | Advice taken off |
+|---|---|---|---|---|---|
+| K1 | 70.5 (yes) | 59 not ready | 92 ready | none (the same-day deadline is advice) | sources 3, structure 3 |
+| K2 | 76.0 (yes) | 59 not ready | 71 ready | none (the same-day "past" date and the unlinked decisions are advice) | sources 3 |
+| K3 | 80.5 (yes) | 59 not ready | 59 not ready | an unsupported claim about the business ("built on", 24/7 support) | sources 3 |
+| K4 | 77.5 (yes) | 95+ ready | 88 ready | none (the wrong URL is the page matcher's fix, not this one) | fit 3, structure 5 |
+| K5 | 71.0 (yes) | 59 not ready | 59 not ready | capabilities stated as the business's own, not on file | sources 3, structure 3 |
+| K6 | 74.0 (yes) | 59 not ready | 91 ready | none (the vague market figure is advice) | sources 3, specificity 2 |
+| K7 | 74.5 (yes) | 59 not ready | 90 ready | none (the statistics note is advice) | sources 3, specificity 1 |
+| K8 | 72.0 (no) | 59 not ready | 59 not ready | "six engines" followed by seven names; features not on file | specificity 2 |
+
+| Set | n | Ours | Judges | MAE | Signed | Spearman | Ready agreement |
+|---|---|---|---|---|---|---|---|
+| AFTER delivered, as recorded | 8 | 63.6 | 74.5 | 15.5 | -10.9 | 0.41 | 2 / 8 |
+| **AFTER delivered, W05-A** | 8 | **76.1** | 74.5 | **14.5** | **+1.6** | -0.27 | **6 / 8** |
+| AFTER final, as recorded | 5 | 59.0 | 73.4 | 14.4 | -14.4 | n/a | 3 / 5 |
+| **AFTER final, W05-A** | 5 | **74.0** | 73.4 | 14.4 | **+0.6** | -0.10 | 2 / 5 |
+| BEFORE delivered, today's kit, no second read | 8 | 90.5 | 68.4 | 22.1 | +22.1 | 0.23 | 7 / 8 |
+
+Read with care:
+
+- **Targets met**: signed error +1.6 (target +/-5), ready agreement 6 of 8 (target 6 or more). The two disagreements are K3 and K5, held
+  for an unsupported claim about the business, the one kind of error the brief keeps blocking; the judges did not weigh it (they did not
+  see the facts on file). Every final keeps its delivered grade (K2 71, K6 91, K7 90 on both): no rise at Finalize. On the finals the
+  strategist's "no" on K2 and K7 is Finalize damage (BEFORE_AFTER "Finalize"), which this wave does not touch.
+- **Not met, and not this wave's**: MAE barely moves (15.5 -> 14.5) and the rank order is worse (Spearman -0.27). The unblocked pages keep
+  the deterministic parts that saturate (coverage, readability, specificity and plain language at full marks on all 8), so K1 grades 92
+  against the judges' 70.5 (its fit problem, an explainer results page and the site's own ranking page, is Wave 1's), and the judges' best
+  page (K3) is held by its claim. Separating pages by quality is Wave 2's per-dimension grade.
+- **BEFORE pages**: nothing a BEFORE page goes through changed in this wave except its dates. Replayed through today's grade kit without a
+  second read (they never had one), they grade 90.5, as high as the AFTER pages before their read (89.5 uncapped): the deterministic kit
+  does not tell the two builds apart, only the second read does. Whether a BEFORE page stays below an AFTER page once it is read too can
+  only be measured with its own read, so the paid re-check should read 2 or 3 BEFORE pages as well (about $0.10 each). The 3299 / 3336
+  pins (W0C) and the ranking guide 949 (W0C, W0H8, RPL4, W0B9, W05A7: shadow mode, no deduction) pass unchanged.
+- The replay re-uses the recorded answers. A new read is told the market day, so the same-day items should become rarer, and its answers
+  vary from run to run (the reader scored 66 on 6 of 8 pages).

@@ -120,7 +120,10 @@ const grade = GR.cap({ score: score0, of: 100, breakdown: breakdown0,
   blocking: del.blocking.length, advice: del.advisory.length, ...(GD ? { notes: GD.notes || [] } : {}),
   // D2: a page published beside the website's page for the same search keeps the fit limit (GR.cap applies it)
   ...(decision && decision.choice === 'differs' ? { fit_cap: { kept: true, why: 'published as a separate page beside ' + (decision.pages[0] || 'a page for the same search') + ', with your reason recorded' } } : {}) },
-  del.blocking, { w0c: GD, decision });
+  del.blocking, { w0c: GD, decision,
+    // W05-A (wave 0.5): the page run's second-read advice still costs its points while its quoted words are on this version (the grade does
+    // not rise at Finalize for nothing); advice the client has edited away costs nothing
+    review: Array.isArray(PR.second_read) ? { mode: 'enforce', status: 'checked', advice: PR.second_read.filter(a => a && a.location && PF.onPage(a.location, md)) } : null });
 Object.assign(del, GR.deliver(del, grade));
 // M3: the version of a legacy request is never "Ready to publish" (what only the first check could see is unknown), but it is not held back
 // either: "Needs work" with what to do, the grade not capped, nothing blocking. A page that is not ready for its own reasons stays so.

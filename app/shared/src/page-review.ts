@@ -442,7 +442,9 @@ export interface PageRunContext {
   [grading: string]: unknown;
 }
 
-const PRC_GRADING = ['length_band', 'coverage_target', 'terms', 'facts', 'sources_cited', 'style_guide', 'site_urls', 'serp_shapes', 'regulatory_facts', 'regulatory_topics'] as const;
+// `second_read` (wave 0.5, 2026-10-30): the second read's advice on the delivered page (severity, kind, the quoted words); the final version
+// keeps its grade deduction while those words are still on the page
+const PRC_GRADING = ['length_band', 'coverage_target', 'terms', 'facts', 'sources_cited', 'style_guide', 'site_urls', 'serp_shapes', 'regulatory_facts', 'regulatory_topics', 'second_read'] as const;
 
 /** The page-run context of a stored content payload (the original report; a final version keeps its own copy in `page_run_context`). */
 export function pageRunOf(payload: P | null | undefined): PageRunContext {
