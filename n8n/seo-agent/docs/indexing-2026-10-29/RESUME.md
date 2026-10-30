@@ -158,3 +158,18 @@ Third review (REVIEW_3.md) running at save time: verify wave 2, hunt regressions
    Indexing API is for job postings / livestreams only and is never used. "Ask Google to read it" stays a guided client step.
 3. Automatic content rewrites: NO (scaled content abuse risk); "Improve this page" stays approval-only.
 4. AI-drafted versioned policy checklist: not chosen now (later, small).
+
+## devaicon.com advice check 2026-10-30 (owner asked "are the recommendations right?") - FIX PROPOSED, NOT STARTED
+Right: 9 in Google / 20 left out (Google's own readings), sitemap submitted with 0 errors, the blog post is indexed, engagement-models
+"improve" is fair. Wrong / weak (live, the client sees it):
+1. "Add internal links" for 18 pages already linked in plain HTML (home links every capability page, whatwedo, industries, about,
+   insights articles; /careers links every job; open-edx-services links its two subpages). Real reason: Google has not visited them yet
+   (young site, low crawl demand). Link suggestions are generic (same 5 pages, cookies from a data-sovereignty article).
+2. Missed: all 7 industry pages (bfsi, hospitality, manufacturing, retail, public-sector, nonprofit, professional-services) have
+   canonical -> /industries with their own titles, not in the sitemap; we know only bfsi and call it "alternate, fine to leave out".
+3. "Ask Google" picks /cookies, /security, /about over the capability pages.
+4. "Improve this page" for /privacy.
+Proposed engine fix: read the home page's links once per run (linked set + discover linked pages missing from the sitemap); already-linked
+unknown / discovered pages -> wait with a plain note, no internal-link suggestions; canonical to a parent page with its own distinct title
+-> site_fix even when not in the sitemap; ask_google ranked by value, never legal / utility pages; legal pages crawled-not-indexed ->
+leave_out. App: wording for the "already linked, not visited yet" group if needed.
