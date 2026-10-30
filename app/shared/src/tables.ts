@@ -126,6 +126,8 @@ export interface MonitorsRow extends DtRow {
   ai_demand_market?: boolean | null;
   /** Index coverage (2026-10-29): the daily index check (empty = on) and its URL inspections a day (empty = 300, 20 to 1,200) */
   index_watch?: boolean | string | null; index_daily_cap?: number | string | null;
+  /** Index coverage wave 2 (DESIGN_WAVE2 §2.5): the website's owner lets Alaventra submit its sitemap in Search Console (empty = off) */
+  index_sitemap_submit?: boolean | string | null;
 }
 export interface AiPromptRow extends DtRow {
   prompt_id: string; site_id: string; domain: string; prompt: string; kind: string; topic: string; keyword: string;
@@ -370,6 +372,13 @@ export interface IndexPageRow extends DtRow {
   fix_failed_at?: string;
   /** fix wave 2 (N6): when the page was last newly marked `ask_google` (kept after the mark ends; engine-only, the app does not read it) */
   ask_google_at?: string;
+  /** wave 2 (DESIGN_WAVE2 §2.1): JSON list of up to 3 pages of the website that link to this one today ('' = none found; 'unread' = the
+   *  home page could not be read this run, so nothing is concluded) */
+  linked_by?: string;
+  /** wave 2 (§2.3): ISO, written by the APP when the client says they asked Google (Search Console, Request indexing) to read the page */
+  asked_google_at?: string;
+  /** wave 2 (§2.3): ISO of Google's crawl after `asked_google_at` (engine) */
+  google_read_after_ask_at?: string;
 }
 /** One row per state / cause change of a page (insert only). */
 export interface IndexHistoryRow extends DtRow {

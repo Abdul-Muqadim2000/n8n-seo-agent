@@ -284,3 +284,157 @@ change).
 **Left:** the "I've done it, check now" button stays on a step Google still sees after the fix (by design, R1: the click answers 409 with a
 plain explanation); the step's detail is long on a phone. The tutorials backlog row for these wording changes (7.11, 5.9, the
 Recommendations header) is still to add in the video-skills repo.
+
+## Wave 2 (DESIGN_WAVE2)
+
+Branch `ix/app` from `35c24b03`, worktree `n8n_devaicon-ix-app`. DESIGN_WAVE2.md §3 / §4 (app). Not deployed, not pushed, no production
+access. No app migration (the new step kind is text in `site_tasks.kind`, the new setting lives in `seo_monitors`). Aligned with the engine's
+wave 2 (`ix/engine` ed3dc2a5 / 91296577 / 1630d708, ENGINE_BUILD.md "Wave 2", contract details 1-13) after it landed.
+
+### What, where
+| Piece | Where |
+|---|---|
+| Columns read: `seo_index_pages.linked_by` / `asked_google_at` / `google_read_after_ask_at`, `seo_monitors.index_sitemap_submit`, `seo_index_runs.sitemaps_json.permission` / `permission_full` / `submissions[]` / `list` (all optional) | `shared/src/tables.ts`, `indexRunOf` / `runSitemapsOf` in `shared/src/indexing.ts` |
+| The utility list, a mirror of the engine's `IX.UTILITY` (segments, `/security` top level only, job directories; whole segment, any case, any depth, `.html` / `.php` / `.asp` dropped): `INDEX_UTILITY_SEGMENTS`, `INDEX_UTILITY_TOP_ONLY`, `INDEX_JOB_PARENTS`, `isUtilityPage`, `isJobPosting`. Never "Improve this page" (page and recommendations), never asked about, never a link source (job postings too); job postings are NOT utility pages | `shared/src/indexing.ts`; parity test `shared/src/indexing.utility-parity.test.ts` reads `n8n/seo-agent/v5/code/_index_kit.js` (skipped on a tree whose kit has no `UTILITY`; `IX_KIT_PATH` points it elsewhere) |
+| §3.1 groups: `linked_waiting` ("Google has not visited these yet": the engine's `wait` on `unknown_to_google` / `discovered_not_crawled`; no step, no suggestions, what helps: links from other websites, asking Google), `canonical_parent` ("Pages that say they are a copy of another page", part of the step `indexing:canonical_elsewhere`), `utility` ("Policy and utility pages: fine to leave out"); the `links` groups link to `indexing:links`; each page row says where it is linked from | `indexGroupCauseOf`, `INDEX_LINKED_WAITING`, `INDEX_CANONICAL_PARENT`, `INDEX_UTILITY_GROUP`, `canonicalOwnTitle`; `web/src/pages/site/IndexingPage.tsx` |
+| §3.2 step kind `index_links`, key `indexing:links`: up to 10 (target, source) pairs, kept as listed; own check opens the source pages (own host, safe fetcher, 4 at a time, 45 s cap) and looks for the `<a href>` (`pageLinksTo`); "N of M links found"; unreachable = 503 / nothing daily; wall = 409 `site_unsure`; the engine's reading only closes it (complete read, no page left) or marks pairs listed after the last own check "not checked yet" (to do, never "needed again"); a third of the tick shared with `indexing` (`INDEX_TASK_KINDS`); exhaustive switches; guide `index-add-internal-links`; recommendation `ix:links` (the count-based `ix:links:<cause>` are no longer made: those counts hold already-linked pages) | `shared/src/site-tasks.ts` (`linksDraft`, `presentLinks`, `linkPairsOf`), `server/src/services/siteTasks.ts` (`readIndexing` + links read, `checkLinks`, tick), `server/src/services/recommendations.ts`, `server/src/services/indexing.ts` |
+| Canonical to another page with its own title: payload `ownTitle`; the own check closes those pages ONLY when the canonical names the page itself (`indexingPageFixed(..., { ownTitle })`); step and guide extended ("point the canonical tag to the page itself, and add it to your sitemap if it is not there") | `indexingCauseReadings`, `presentIndexing`, guide `index-canonical-sitemap` |
+| "I asked Google": `POST …/data/indexing/asked-google` (member+, verified, 30 / 10 min per person, audit `indexing.asked_google`), writes ONLY `asked_google_at` on that page's row through the Data Table `rows/update` (filter `site_id` + `url`, the same client the ladder settings use); 404 / 409 `already_in_search` / 503 (nothing saved); the page then reads "Waiting for Google to read it again", "Google read it again on <day>", the 14-day note, or "not recorded" (below); pages asked about stay listed 45 days with the outcome | `markAskedGoogle` (server `services/indexing.ts`), route in `routes/indexing.ts`, `askGoogleStatus`, `useAskedGoogle`, `AskGooglePanel` |
+| Sitemap switch: `indexSitemapSubmit` (schema optional, no default; payload `index_sitemap_submit` last; read back in `monitorsFromRow`; `npm run export:payloads` added the Site Admin case "index coverage: sitemap submission switched on" to `fixtures_platform_admin.json`, request bodies unchanged); "Let Alaventra submit your sitemap to Google" under Indexing in Tracking & monitors with the access line (Full: "We can submit your sitemap"; read-only: warning + guide `search-console-full-access`; not read: "We will know after the next daily check") | `shared/src/schemas.ts`, `shared/src/payload.ts`, `server/src/services/data.ts`, `web/src/components/site/MonitorSettingsFields.tsx` (`SitemapAccessLine`), `SiteSettingsPage.tsx` |
+| Indexing page card "Your sitemap in Search Console": the switch, the access, each submission (submitted / refused / not submitted, why in words, the day Search Console listed it and the day Google read it) and "We will submit it on the next daily check" when Search Console lists none | `indexSitemapState`, `SitemapPanel` |
+| `indexing:sitemap` step: not raised for a MISSING sitemap when the switch is on and Google reports Full access (`sitemapAuto`); errors in a submitted sitemap stay the client's; its text names the switch as the other way | `indexingDrafts`, `presentIndexing` |
+| Report: the pages that need a link are counted from `by_action.links` ("Need a link from another page of yours"), never the two link causes (which count already-linked pages) | `web/src/components/reports/indexing.tsx` |
+| Copy: the read-only promise rewritten to "We only read your Search Console, unless you switch on sitemap submission, which lets us submit your sitemap and nothing else." (setup guide `search-console-access`, connection screens `ServiceAccountSteps` / `GoogleConnectionPanel`, marketing Security page steps / FAQ / heading, privacy draft, the index-coverage FAQ); new guides `search-console-full-access`, `index-add-internal-links`; guides `index-request-indexing`, `index-submit-sitemap`, `index-coverage` extended | `shared/src/guides.ts`, `guide-links.ts`, web |
+| Marketing: index-coverage registry (benefits, FAQ), changelog 4.6, pricing hint, guided-setup count 86 | `web/src/marketing/content/*`, `SecurityPage.tsx`, `legal.ts` |
+| Docs | `app/API.md` (Index coverage, "Wave 2"), `app/docs/SITE_TASKS.md` §7 |
+
+### The engine's app-contract points (coordinator, 2026-10-30) and how each is handled
+1. **Write only `asked_google_at`**: `updateRows` (`PATCH rows/update`, filter `site_id` + `url`, data `{ asked_google_at }`), never an upsert. The
+   race (an engine run that loaded the row before the write saves it back): the app keeps its own record of every press (the audit log,
+   `indexing.asked_google`, last 45 days, read by `askedByApp`); a page whose row does not hold the press (or holds an older one by more than a
+   minute) shows **"Not recorded"** with "You told us on <day> that you asked Google, but the daily index check did not keep it. Press I asked
+   Google again." and the button is back; a press within a day is not rewritten unless the row lost it. Tests: shared "a press the engine did
+   not keep", server "a press an overlapping engine run wrote back".
+2. **No own-title flag**: `canonicalOwnTitle` = not in the sitemap OR the note starts "This page tells Google it is a copy of"; such pages go
+   to the `canonical_parent` group and the payload `ownTitle` (own check: canonical names the page itself, nothing else).
+3. **`IX.UTILITY` mirrored exactly** (also the extension rule); `indexing.utility-parity.test.ts` passes against ix/engine's kit
+   (`IX_KIT_PATH`) and bites once the trees are merged.
+4. **`{}` = no sitemap, so the `indexing:sitemap` step will appear for such sites**: its title / detail already had both cases (none
+   submitted / errors) and now names sitemap submission as the other way; with the switch on and Full access (`permission_full` when sent,
+   else `siteOwner` / `siteFullUser`) there is no step, and the Indexing card says "We will submit it on the next daily check; there is
+   nothing to do on your side."
+5. **Job postings**: never asked about, never a link source, never a utility page (they keep their cause and group).
+6. **Re-checks every 3 days for 14 days**: the `index-request-indexing` guide says so; the page shows "Waiting for Google to read it again"
+   until the engine's `google_read_after_ask_at`, then the 14-day note.
+Also read from the engine's shape: submission statuses `submitted` / `confirmed` / `read` (ok), `denied` / `refused` (refused), `failed`;
+`confirmed_at` / `read_at` win over the `list` dates; reason codes `not_listed` / `errors_changed` / `changed` in words (an unknown code is
+not shown); a reservation row is never the access reading.
+
+### Tests
+New: `shared/src/indexing.wave2.test.ts` (29), `shared/src/indexing.utility-parity.test.ts` (2), `server/test/indexingWave2.test.ts` (11),
+`web/test/indexingWave2.test.tsx` (8). Run against a clean copy of `35c24b03` (git archive, `npm ci`): shared 31 of 31 fail, server 11 of
+11, web 8 of 8 (the parity test with `IX_KIT_PATH` at ix/engine's kit).
+
+### Checks (Docker `node:22-bookworm-slim`, `TZ=UTC`, the whole repo mounted, `npm ci`)
+| | before (35c24b03, fix wave 3 + final check) | after (ix/app, wave 2) |
+|---|---|---|
+| typecheck shared / server / web | clean | clean |
+| shared | 960 passed | **986 passed, 1 skipped** (59 files; the skip is the parity case on this tree, whose engine kit has no `UTILITY` yet; it passes against ix/engine's kit with `IX_KIT_PATH`) |
+| server | 1552 passed, 46 skipped | **1563 passed, 46 skipped** (78 files, 3 skipped) |
+| web | 277 passed | **285 passed** (29 files) |
+| web build | ok | ok |
+
+### Browser pass (fixtures, no backend)
+`app/scripts/ix_indexing_fixture.ts <out> wave2 | wave2-restricted` (devaicon.com's shape, anonymised: 9 pages in search, 8 already linked
+and not visited, 3 that need a link with one own check "1 of 3 links found", the 7 /industries/* pages naming /industries, /privacy /cookies
+/security, an article to improve, two pages to ask Google about (one asked two days ago), one asked and read again, sitemap submission on with
+Full access and a submission Google read; then the same with read-only access) and `app/scripts/ix_indexing_shots.mjs wave2` on the built
+`web/dist`, Playwright 1.55: 6 views (Indexing x 2, the Pipeline's Steps on your website, Recommendations, Tracking & monitors x 2) at 1440
+and 375, light and dark (24). No console error, no horizontal overflow, one h1 on every view. The only failed reads are `/costs` and
+`/data/ai` on Website settings (reads the fixture server does not answer; not part of this work). The audit's hits are the known ones of
+the final check (the blue hero's contrast read off its layer, the logo link, screen-reader spans) plus "we submit" in the sitemap card when
+the switch is on and Google gives Full access, which is the one allowed case; the pass found the card saying "we submit it" with read-only
+access too, now "nothing can be submitted until Google gives us Full access". Screenshots in `shots/`: `indexing-wave2-desktop-light.png`,
+`indexing-wave2-phone-dark.png`, `indexing-wave2-restricted-desktop-light.png`, `indexing-wave2-waiting-desktop-light.png`,
+`steps-wave2-{desktop-light,phone-dark}.png`, `recommendations-wave2-desktop-light.png`, `tracking-wave2-desktop-light.png`,
+`tracking-wave2-restricted-{desktop-light,phone-dark}.png`.
+
+### Contract changes / notes for the engine
+- No change to DESIGN_WAVE2's columns. The app reads, beyond them, the engine's `sitemaps_json.permission_full`, `submissions[].confirmed_at`
+  / `read_at` and the optional `list` / `listed` / `sitemaps` array (`path`, `lastSubmitted`, `lastDownloaded`) as a fallback for the dates.
+- The app filters `seo_index_pages` with `asked_google_at gte <ISO>` (a string column) for the pages asked about lately.
+- `fixtures_platform_admin.json` gains "index coverage: sitemap submission switched on" (`index_sitemap_submit: true` must be stored; ix/engine's
+  `Monitor_Row_Admin.js` does).
+- The app never writes anything else to an engine table here; the asked-google write is `rows/update` of one column on one row.
+
+### Not done / left
+- Not run: `app/scripts/smoke.py`, a real dev stack, the engine harness (no engine change in this branch), a live sitemap submission.
+- Tutorials: a backlog row was added (video-skills repo, commit f573223, not pushed), no filming (owner rule).
+- The links step lists only targets the engine could suggest a page for; a page with no suggestion stays on the Indexing page ("Google has not
+  found it yet") without a step of its own.
+- "I asked Google" accepts any not-in-search page the check knows (the button is only shown for the listed ones).
+
+## Wave 2 review fixes (REVIEW_WAVE2.md, app findings, 2026-10-30)
+
+Branch `ix/app` from `fb6bdbf3`, worktree `n8n_devaicon-ix-app`. Not deployed, not pushed, no production access, no app migration. Built
+against the engine's contract in ENGINE_BUILD.md "Wave 2 review fixes" (ix/engine 48c2bbcc / 0c72d716 / a599a9e9). Commits `b91874c5`
+(shared), `5517fb98` (server), `81372d91` (web), then scripts + this section.
+
+### Per finding
+| W | Fix | Where |
+|---|---|---|
+| W1 | `runSitemapsOf` reads `sitemaps_json.submit.will_submit` (only an explicit `true` counts; an older row without it promises nothing) and `submit.blocked` (one of `SITEMAP_BLOCKED`; an unknown code is no reason). `indexSitemapState` gains `willSubmit` (switch on AND the NEWEST run says so) and `blocked`. The server's `sitemapAuto` = switch on AND `willSubmit` (was: switch on AND Full access); `sitemapBlocked` goes into the `indexing:sitemap` step's payload, whose text then says "You switched on sitemap submission, but we will not submit it." + the reason (`sitemapBlockedText`: switch off / read-only access + the `search-console-full-access` guide / paused on our side / no readable sitemap / outside the Search Console property / unchanged / submitted in the last 7 days / Google refused / not set up on our side). The Indexing card says "We will submit it on the next daily check" only on `willSubmit` (a listed sitemap that changed: "We will submit it again"); otherwise the reason and "it stays a step for you under Steps on your website"; with a reason that stops every submission (paused, no sitemap, outside the property, not set up) the card's description no longer describes what we would submit. The access line beside the switch (Website settings) shows the reason too | `shared/src/indexing.ts`, `shared/src/site-tasks.ts`, `server/src/services/siteTasks.ts`, `web/src/pages/site/IndexingPage.tsx`, `web/src/components/site/MonitorSettingsFields.tsx`, `SiteSettingsPage.tsx` |
+| W3 | `isUtilityPage` = the engine's matcher exactly: segments g (split, decoded, lower case, `.html` / `.htm` / `.php` / `.asp` / `.aspx` dropped); utility when g is non-empty and ((one segment in `top_level_only`) or `dirs` has g[0] or `segments` has g[0]). New `INDEX_UTILITY_DIRS = ['legal', 'policies']` (the directory page included). `/industries/legal`, `/features/search`, `/solutions/accessibility`, `/blog/thanks`, `/en/cookie-policy` are content pages; `/policies`, `/policies/cookies` are utility pages. The parity test compares the lists (now also `dirs`) AND runs the engine kit's own `IX.isUtility` / `IX.isJobPosting` against the app's over 46 addresses (skipped only on a kit that still matches at any depth, i.e. this tree until ix/engine is merged); with `IX_KIT_PATH` at ix/engine's kit: 3 of 3 pass | `shared/src/indexing.ts`, `indexing.utility-parity.test.ts` |
+| W6 | The checkbox "Let Alaventra submit your sitemap to Google" (and its access line) is rendered only with `sitemapSwitch` (Website settings > Growth monitors, saved through Site Admin `monitors`); the onboarding and "Start weekly tracking" forms (Track my site) no longer show it. Left as before: `indexWatch` / `indexDailyCap` in those forms (same pattern, not in this review's scope) | `MonitorSettingsFields.tsx`, `SiteSettingsPage.tsx` |
+| W7 | Access `refused` = Google reports a Full level (siteOwner / siteFullUser) AND (`blocked: 'refused'` or an older row's `permission_full: false`). The card / access line: "Google refused our sitemap submission ... so there is nothing to change in your access", never "read-only access", no Full access guide; the step says "Google refused our last submission of your sitemap" | `indexSitemapState`, `SitemapAccessLine`, `SitemapPanel` |
+| W9 | App part: `askGoogleStatus` takes the page's action; past 14 days a page whose action needs the client reads "Asking again will not help for now: this page has something to fix first, shown with it." `indexPageOf` drops the engine's "There is nothing more to do on your side for now." from the note of such a page (older rows; the engine's W9 stops writing it) | `shared/src/indexing.ts` |
+| W10 | Rewritten: onboarding VerifyStep tip (incl. "we never change anything in your accounts"), Website settings > Verification, the `search-console-access` guide's note ("It reads your property and nothing else"), the site-tracking FAQ ("it does not change your settings"). Grep of web / shared / server once more: the remaining "read-only" texts are the owner's own Google sign-in for ownership (true), shared report links, API keys, viewers; the pre-release check's "never changes anything in your account" is true of that check | `VerifyStep.tsx`, `SiteSettingsPage.tsx`, `shared/src/guides.ts`, `marketing/content/features.ts` |
+| W11 | The links step: "we did not find a link to them on the pages of your website we read (your home page and the related pages)" | `presentLinks` in `shared/src/site-tasks.ts` |
+| W14 | `pageLinksTo` (the own check of `indexing:links`) skips an `<a>` whose `rel` holds `nofollow` (any order, quoted or not), resolves against the first `<base href>` (itself resolved against the page; a base on another site makes relative links not ours), and removes `<script>` / `<style>` contents (an unclosed one to the end) as well as comments | `shared/src/indexing.ts` |
+
+### The engine's review-fix contract (coordinator, 2026-10-30) and how each point is handled
+1. `blocked: ''` while `submit.gate` is `not_checked` / `list_not_read`: the app reads it as its own code `not_read` ("We could not read your
+   Search Console today, so we do not know yet whether your sitemap needs submitting. We look again on the next daily check."); never a
+   promise. The step is kept whenever `will_submit` is not true (a stored step stays; a list not read raises no new step, as before).
+2. A 403 keeps `permission_full` true with `blocked: 'refused'`: shown as `refused` (W7); an older row's `permission_full: false` at a Full
+   level reads the same.
+3. Submission statuses `pending` (new display status: badge "Last attempt, not confirmed", "Search Console has not listed it since", neutral
+   tone, never "Submitted" or a read date) and `not_set_up` ("Not submitted").
+4. `IX.UTILITY` `rule: 'first_segment'` + `dirs`: mirrored exactly (W3 above); verified against ix/engine's kit with `IX_KIT_PATH`.
+5. `linked_by: 'unread'` for an unread parent: already read as `linkedRead: false`, nothing concluded (no new text depends on it); doc comment
+   updated; test.
+6. `links.suggested` / `links.unread_parents` in the run row: not shown (optional).
+
+### Tests (each fails on fb6bdbf3)
+New `shared/src/indexing.wave2-review.test.ts` (17), `web/test/indexingWave2Review.test.tsx` (7), a W1 case in `server/test/indexingWave2.test.ts`,
+the parity test rewritten (list + behaviour + rule). Run against a clean `git archive fb6bdbf3` with these tests: shared 13 of 13 fail (12 review cases + the parity rule case; the
+contract cases were added after), web 6 of 6, server the new case fails. Updated for the new rules: `indexing.wave2.test.ts` (`/en/privacy-policy` is
+a content page; a held refusal is `refused`), `web/test/indexingWave2.test.tsx` (the promise needs `will_submit`).
+
+### Checks (Docker `node:22-bookworm-slim`, `TZ=UTC`)
+| | fb6bdbf3 (REVIEW_WAVE2) | ix/app after |
+|---|---|---|
+| typecheck shared / server / web | clean | clean |
+| shared | 987 | **1004 passed, 1 skipped** (the behavioural parity case on this tree; 3 / 3 with `IX_KIT_PATH` at ix/engine's kit) |
+| server | 1563 passed, 46 skipped | **1564 passed, 46 skipped** (one full run timed out `runIdempotency` "only when the engine said duplicate" at 35 s under load; alone 4 / 4, next full run clean) |
+| web | 285 | **292 passed** |
+| web build | ok | ok |
+
+### Browser pass
+`ix_indexing_fixture.ts <out> wave2-will | wave2-blocked | wave2-refused` (new; `wave2-restricted` and `wave2` now carry the engine's `submit`
+object) and `ix_indexing_shots.mjs w2review` (new): the sitemap card, Steps on your website and Website settings > Tracking & monitors for
+"will submit", "no readable sitemap", "Google refused" and read-only access, 1440 and 375, light and dark (44 views). No horizontal overflow,
+no page error, one h1 per view; failed reads only `/costs` and `/data/ai` on Website settings (not answered by the fixture server, as before).
+Copy audit: "we submit" only on the Indexing card of the "will submit" view and in the switch's own description (the allowed case); the other
+hits are the known ones (blue hero contrast, logo link, screen-reader spans, "engine" in the AI visibility hint "Empty: the engine picks.",
+outside this work). The pass found two contradictions, fixed before the commit: "Nothing submitted yet. Search Console already lists your
+sitemap" under a card that says it lists none, and "we submit it, at most once a week" above a reason that stops every submission.
+Screenshots in `shots/`: `indexing-w2review-{will,blocked,restricted}-desktop-light.png`, `indexing-w2review-refused-phone-dark.png`,
+`steps-w2review-blocked-desktop-light.png`, `steps-w2review-refused-phone-dark.png`, `tracking-w2review-blocked-desktop-light.png`,
+`tracking-w2review-refused-phone-dark.png`.
+
+### Left
+- W6's same pattern for `indexWatch` / `indexDailyCap` in Track my site forms (not in scope).
+- W11's second half (a link the client adds on a suggested source page) is the engine's (W11 engine: suggested sources are read now).
+- Tutorials: no new screen; the sitemap switch moved out of onboarding, so the tutorial that shows onboarding's monitors (if it shows the
+  Indexing row) needs a re-capture after the deploy; not filmed (owner rule).

@@ -6,6 +6,7 @@
 /*__PAGE_WATCH__*/
 /*__INDEX_KIT__*/
 const S = (v) => String(v == null ? '' : v).trim();
+const KILL_OFF = '__SITEMAP_SUBMIT__' === 'off';
 const inv = (() => { try { return $('Index Inventory').all().map(i => i.json).filter(x => x && x.site_id && !x.failed && !x.no_access); } catch (e) { return []; } })();
 let g = {}; try { g = $('Google Events').first().json || {}; } catch (e) { g = {}; }
 const fr = g.freeze || {};
@@ -22,6 +23,10 @@ for (const v of inv) {
     note: ('Today\'s check started at ' + at.slice(11, 16) + ' UTC and had not finished when this row was written; the figures are from before today\'s inspections. '
       + 'It holds today\'s ' + (v.take || []).length + ' planned inspection(s), so a repeat of the run stays inside the daily limit.').slice(0, 1500),
     // R2 (fix wave 3): Save Index Reservation UPSERTS on site_id + run_at, so this row replaces the run's attempt row (Index Attempt)
-    sitemaps_json: JSON.stringify({ reservation: true, complete: !!(v.sitemap || {}).complete, home_host: S((v.sitemap || {}).home_host), chain_id: S(s.chain_id) }) } });
+    // wave 2 (§2.5): the submission history travels on the reservation too, so a run that crashes after it never loses the 7-day spacing;
+    // wave 2 review W13: with TODAY's attempts first, as 'pending' (written before the PUT; Index Run Rows replaces them with the answers)
+    sitemaps_json: JSON.stringify({ reservation: true, complete: !!(v.sitemap || {}).complete, home_host: S((v.sitemap || {}).home_host), chain_id: S(s.chain_id),
+      permission: S((v.submit || {}).permission), permission_full: !!(v.submit || {}).permission_full, submissions: IX.submitPending(v, KILL_OFF, Date.now()),
+      tree_fp: (v.submit || {}).tree_fp || null, submit_denied: (v.submit || {}).submit_denied || null }) } });
 }
 return out.length ? out : [{ json: { skip: true, reason: 'no website to inspect' } }];

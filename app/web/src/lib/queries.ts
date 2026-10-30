@@ -69,6 +69,7 @@ import type {
   CrawlerData,
   IndexHistoryEntry,
   IndexingData,
+  IndexPage,
   IndexPagesPage,
   CrawlerSettingsInput,
   LogPushKeyCreated,
@@ -1527,6 +1528,15 @@ export function useIndexing(orgId: string, siteId: string) {
     placeholderData: keepPreviousData,
     retry: noRetryOn4xx,
     staleTime: 60_000,
+  });
+}
+
+/** wave 2 (DESIGN_WAVE2 §3.2): "I asked Google" for one page (members and up); the page then waits for Google's next reading. */
+export function useAskedGoogle(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (url: string) => api<{ page: IndexPage }>(`/api/orgs/${orgId}/sites/${siteId}/data/indexing/asked-google`, { method: 'POST', body: { url } }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: indexingKey(siteId) }),
   });
 }
 

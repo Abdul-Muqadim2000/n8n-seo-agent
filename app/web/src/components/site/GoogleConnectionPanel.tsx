@@ -101,7 +101,7 @@ function ConnectionBody({ orgId, site, conn, canEdit }: { orgId: string; site: S
             {restricted && (
               <Callout tone="warning" action={<GuideButton id="search-console-access" vars={{ domain: site.domain, serviceAccount: conn.serviceAccountEmail }} label="Show me where" />}>
                 The service account has restricted access. Change it to <strong className="font-medium">Full</strong> in Search Console (Settings, then Users and permissions) so
-                audits can read sitemaps and page indexing.
+                audits can read sitemaps and page indexing. We only read your Search Console, unless you switch on sitemap submission, which lets us submit your sitemap and nothing else.
               </Callout>
             )}
           </div>

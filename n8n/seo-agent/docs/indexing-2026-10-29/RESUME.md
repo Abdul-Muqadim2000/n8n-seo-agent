@@ -2,6 +2,15 @@
 
 Read this first if you are picking the work up. Owner's ask: OWNER_BRIEF.md. Contract: DESIGN.md + FIX_CONTRACT.md.
 
+## FULLY LIVE 2026-10-30 ~01:15 UTC
+- API on the VM from feature/indexing fd32c0b4 (fetch + checkout FETCH_HEAD in /mnt/data/repo, `up -d --build app`, healthy, no migration);
+  `/api/orgs/:orgId/sites/:siteId/data/indexing` answers 401 signed out. Web: PR #48 merged -> main 99718dd0, Vercel live (IndexingPage
+  chunk served, marketing /platform/index-coverage 200). Harness IXF6 clock fix 5987fe9d.
+- CI on the PR: the only failures are pre-existing (cmsRoutes real-Postgres 409 vs 400, npm audit fast-uri, S51 P34-5 at 00-03 UTC).
+- LEFT: merge main into feature/seo-agent-v4.5 before ANY engine/API deploy from it (memory index-coverage-live-merge-before-deploy).
+  The VM repo checkout is detached at fd32c0b4; its startup script re-checks out feature/seo-agent-v4.5 on boot (rebuilds only if the
+  image is missing). Next feature (owner approved): opt-in full Search Console access for sitemap submission.
+
 ## ENGINE FIX DEPLOYED + VERIFIED 2026-10-30 00:33 UTC (owner approved)
 - `deploy_engine.py --no-build --apply` (7d577be9 + docs): SEOagentIndexCv1 updated, 28 published. The 6 wrong techand rows were reset
   to unknown (seo_index_pages PATCH), the no-op 00:16 run rows deleted, one test fire at 20:33 NY: techand.ai 48 known / 44 indexed / 4
@@ -149,3 +158,40 @@ Third review (REVIEW_3.md) running at save time: verify wave 2, hunt regressions
    Indexing API is for job postings / livestreams only and is never used. "Ask Google to read it" stays a guided client step.
 3. Automatic content rewrites: NO (scaled content abuse risk); "Improve this page" stays approval-only.
 4. AI-drafted versioned policy checklist: not chosen now (later, small).
+
+## WAVE 2 BUILT, REVIEWED, FIXED, GREEN (2026-10-30 ~18:00 UTC) - NOT DEPLOYED, waiting for the owner's OK
+- Merges: wave 2 0710fd79 + da511f84, review fixes 2551a456 + 010e3db8, Indexing row only in Website settings (this commit).
+  REVIEW_WAVE2.md W1-W14 all fixed (ENGINE_BUILD.md / APP_BUILD.md "Wave 2 review fixes"). Harness 14050 / 0; app typecheck clean,
+  shared 1005, server 1564 (+46 skipped), web 293, web build OK.
+- Deploy plan (owner approval first; not a Monday; ≥ 2 h before 05:15 NY): backup (`sudo systemctl start alaventra-backup.service`);
+  tunnel; `deploy_engine.py --no-build` dry run (expect: Index Coverage, Site Admin monitor nodes, Monitor Row (Track), the monitors column
+  lists; tables: seo_index_pages.linked_by / asked_google_at / google_read_after_ask_at, seo_monitors.index_sitemap_submit; credential
+  SEOcredGoogleSvcW missing) then `--apply --credentials --only-credentials SEOcredGoogleSvcW --create-missing` (the new filter: every other
+  production credential stays exactly as it is); API on the VM (fetch feature/indexing,
+  checkout FETCH_HEAD, `up -d --build app`); web via PR to main; then one test fire and check devaicon: the 7 industry pages as a site step,
+  already-linked pages as "not visited yet", privacy / cookies / security as utility, ask-Google picks capability pages.
+- Sitemap submission stays OFF for every site until the owner switches it on for one (first live submission to be watched).
+
+## WAVE 2 IN PROGRESS (2026-10-30, owner: "do the devaicon fix, then full-access sitemap; check back every client action; carefully")
+Design: DESIGN_WAVE2.md (35c24b03). Agents building: engine in ../n8n_devaicon-ix-engine (ix/engine), app in ../n8n_devaicon-ix-app
+(ix/app), both from 35c24b03; each appends "Wave 2 (DESIGN_WAVE2)" to ENGINE_BUILD.md / APP_BUILD.md. Then: merge both into
+feature/indexing, rebuild, full harness + app suites in Docker, one independent review, fix, then ASK THE OWNER before deploying
+(engine: sync_tables + `deploy_engine.py --credentials` for SEOcredGoogleSvcW + `--apply`; API on the VM from feature/indexing; web via
+PR to main). Live sitemap submission only after the owner switches it on for one site. Production 2026-10-30 10:22 UTC check: healthy
+(09:15 dispatch skipped both sites as checked today; all ledger rows $0); one Cycle Dispatcher alert at 01:13 UTC (an unsettled cycle
+run after the two spot preemptions), not Index coverage.
+
+## devaicon.com advice check 2026-10-30 (owner asked "are the recommendations right?") - FIX PROPOSED, NOT STARTED
+Right: 9 in Google / 20 left out (Google's own readings), sitemap submitted with 0 errors, the blog post is indexed, engagement-models
+"improve" is fair. Wrong / weak (live, the client sees it):
+1. "Add internal links" for 18 pages already linked in plain HTML (home links every capability page, whatwedo, industries, about,
+   insights articles; /careers links every job; open-edx-services links its two subpages). Real reason: Google has not visited them yet
+   (young site, low crawl demand). Link suggestions are generic (same 5 pages, cookies from a data-sovereignty article).
+2. Missed: all 7 industry pages (bfsi, hospitality, manufacturing, retail, public-sector, nonprofit, professional-services) have
+   canonical -> /industries with their own titles, not in the sitemap; we know only bfsi and call it "alternate, fine to leave out".
+3. "Ask Google" picks /cookies, /security, /about over the capability pages.
+4. "Improve this page" for /privacy.
+Proposed engine fix: read the home page's links once per run (linked set + discover linked pages missing from the sitemap); already-linked
+unknown / discovered pages -> wait with a plain note, no internal-link suggestions; canonical to a parent page with its own distinct title
+-> site_fix even when not in the sitemap; ask_google ranked by value, never legal / utility pages; legal pages crawled-not-indexed ->
+leave_out. App: wording for the "already linked, not visited yet" group if needed.

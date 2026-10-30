@@ -130,7 +130,7 @@ const ROLE_ROWS: { action: string; allowed: [boolean, boolean, boolean, boolean]
 
 const GOOGLE_STEPS = [
   { title: 'You add Alaventra as a user', body: 'In Search Console and GA4, you add Alaventra\'s service account to the properties you choose, nothing else.' },
-  { title: 'Alaventra reads, read-only', body: 'Search performance, index coverage, sitemaps and traffic. Alaventra asks Google for read access only, so it cannot change your settings.' },
+  { title: 'Alaventra reads', body: 'Search performance, index coverage, sitemaps and traffic. We only read your Search Console, unless you switch on sitemap submission, which lets us submit your sitemap and nothing else. GA4 is read only.' },
   { title: 'You stay in charge', body: 'Remove the service account in Google at any time to stop access. Error messages never list other customers\' properties.' },
 ];
 
@@ -141,7 +141,7 @@ const FAQS: FaqItem[] = [
   },
   {
     q: 'What access does Alaventra need to Google?',
-    a: 'Read-only access to Search Console and GA4, through a service account you add as a user to the properties you choose. To prove ownership with Google, you sign in yourself; Alaventra\'s own access never counts as proof.',
+    a: 'Access to Search Console and GA4 through a service account you add as a user to the properties you choose. We only read your Search Console, unless you switch on sitemap submission, which lets us submit your sitemap and nothing else; it is off until you switch it on, and it needs Full access in Search Console. GA4 is read only. To prove ownership with Google, you sign in yourself; Alaventra\'s own access never counts as proof.',
   },
   {
     q: 'Who can see our data?',
@@ -207,8 +207,8 @@ function GoogleAccess() {
         <SectionHeading
           id="google-title"
           eyebrow="Your Google data"
-          title="Read-only access, on the properties you choose."
-          lead="Search Console and GA4 are where your most sensitive search data lives. Alaventra reads them; it never writes to them."
+          title="Access you choose, on the properties you choose."
+          lead="Search Console and GA4 are where your most sensitive search data lives. Alaventra reads them. The one exception is yours to switch on: sitemap submission lets us submit your sitemap in Search Console, and nothing else."
         />
         <ol className="relative space-y-4">
           {GOOGLE_STEPS.map((s, i) => (

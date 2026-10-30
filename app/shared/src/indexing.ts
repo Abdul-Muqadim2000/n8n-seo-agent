@@ -288,7 +288,7 @@ export const INDEX_ACTION_INFO: Record<IndexAction, { label: string; summary: st
   quality: { label: 'Improve the page', summary: 'Google read these pages and left them out. Improve them one at a time, when you choose.' },
   duplicate: { label: 'Choose the main version', summary: 'Google sees these pages as copies of others.' },
   links: { label: 'Help Google find it', summary: 'Links from your pages that are already in search help Google find and choose these pages.' },
-  wait: { label: 'Give it time', summary: 'New pages Google has not got to yet. This is normal for the first weeks.' },
+  wait: { label: 'Give it time', summary: 'Pages Google has not got to yet, or will read again soon. Nothing to do on these pages now.' },
   leave_out: { label: 'Left out, and that is fine', summary: 'Pages that are normally kept out of search, or that you keep out on purpose.' },
   review: { label: 'Check in Search Console', summary: 'Google left these pages out for a reason it does not document. Search Console shows its own words.' },
   retry: { label: 'Could not check, we try again', summary: 'Google\'s inspection did not answer for these pages. They are counted neither as in search nor as left out.' },
@@ -309,6 +309,61 @@ export const clampIndexDailyCap = (v: unknown): number => {
 };
 /** `index_watch` as stored: empty = on (DESIGN §2.6). */
 export const indexWatchOn = (v: unknown): boolean => !(v === false || v === 'false' || v === 0 || v === '0');
+/** wave 2 (DESIGN_WAVE2 §2.5): `index_sitemap_submit` as stored: empty = OFF (we write to the client's Search Console only when they say so). */
+export const indexSitemapSubmitOn = (v: unknown): boolean => v === true || v === 'true' || v === 1 || v === '1';
+
+// ---------------------------------------------------------------- utility pages (DESIGN_WAVE2 §2.4)
+
+/**
+ * The ONE list of policy and utility pages, a mirror of the engine's `IX.UTILITY` (DESIGN_WAVE2 §2.4, `n8n/seo-agent/v5/code/_index_kit.js`;
+ * `indexing.utility-parity.test.ts` compares the two). Wave 2 review W3 (engine W3): a page is a utility page only when its FIRST path segment
+ * is one of these words (whole segment, any case, `.html` / `.php` / `.asp` dropped), or it is /legal or /policies or under them; `security` only
+ * as the whole path /security. `/industries/legal`, `/features/search` or `/blog/thanks` are content pages. A utility page does not need to
+ * be in Google: never "Improve this page", never a page to ask Google about, never a page we suggest a link from, shown under "Policy and
+ * utility pages: fine to leave out". Job postings are NOT utility pages (a job page may want to be found): they are only never asked about
+ * and never a link source.
+ */
+export const INDEX_UTILITY_SEGMENTS = [
+  'privacy', 'privacy-policy', 'cookies', 'cookie-policy', 'terms', 'terms-of-service', 'terms-and-conditions', 'legal', 'imprint', 'impressum',
+  'disclaimer', 'accessibility', 'sitemap', 'login', 'signin', 'sign-in', 'register', 'signup', 'account', 'cart', 'checkout', 'search',
+  'thank-you', 'thanks',
+] as const;
+/** Segments that count only as the whole path (`/security`, never `/services/security`). */
+export const INDEX_UTILITY_TOP_ONLY = ['security'] as const;
+/** Directories whose pages are all policy pages (`/policies`, `/legal/terms`, `/policies/refund`): the engine's `IX.UTILITY.dirs`. */
+export const INDEX_UTILITY_DIRS = ['legal', 'policies'] as const;
+/** Job postings: a page under one of these with a further segment (the listing page `/careers` itself is a normal page). */
+export const INDEX_JOB_PARENTS = ['careers', 'jobs'] as const;
+
+const pathSegments = (url: string): string[] =>
+  String(url ?? '')
+    .replace(/^https?:\/\/[^/]+/i, '')
+    .replace(/[?#].*$/, '')
+    .split('/')
+    .filter(Boolean)
+    .map((x) => {
+      let y = x;
+      try {
+        y = decodeURIComponent(x);
+      } catch {
+        y = x;
+      }
+      // the engine's rule (IX.UTILITY): `privacy.html` is `privacy`
+      return y.toLowerCase().replace(/\.(?:html?|php|aspx?)$/, '');
+    });
+/** A policy or utility page (DESIGN_WAVE2 §2.4). */
+export function isUtilityPage(url: string): boolean {
+  const seg = pathSegments(url);
+  if (!seg.length) return false;
+  if (seg.length === 1 && (INDEX_UTILITY_TOP_ONLY as readonly string[]).includes(seg[0])) return true;
+  // W3 (the engine's `rule: 'first_segment'`): the FIRST segment only (a segment deeper down is a content page's subject: /industries/legal)
+  return (INDEX_UTILITY_DIRS as readonly string[]).includes(seg[0]) || (INDEX_UTILITY_SEGMENTS as readonly string[]).includes(seg[0]);
+}
+/** A job posting (DESIGN_WAVE2 §2.4): never a page to ask Google about. */
+export function isJobPosting(url: string): boolean {
+  const seg = pathSegments(url);
+  return seg.length >= 2 && (INDEX_JOB_PARENTS as readonly string[]).includes(seg[0]);
+}
 
 // ---------------------------------------------------------------- what the app sends to the page
 
@@ -361,10 +416,23 @@ export interface IndexPage {
   fixFailedAt: string;
   /** FIX_CONTRACT `ask_google`: a manual "Request indexing" in Search Console is the right next step (at most 5 a site a week) */
   askGoogle: boolean;
+  /** wave 2 (`linked_by`): pages of the website that link to this one today (up to 3); empty = none found, or not read (`linkedRead`) */
+  linkedBy: string[];
+  /** false when the engine could not read the home page, or (wave 2 review W5) this page's parent page, this run, or the parent was past its
+   *  10-page cap (`linked_by` = 'unread'): nothing is concluded about links */
+  linkedRead: boolean;
+  /** wave 2: when the client said they asked Google to read it again ('' = never), and when Google read it after that ('' = not yet) */
+  askedGoogleAt: string;
+  googleReadAfterAskAt: string;
+  /** ENGINE_BUILD wave 2 contract 6: the client said "I asked Google" (the app's audit log) but the page's row does not hold it (an engine
+   *  run that overlapped the write put the old value back): the time they said it, '' = nothing lost. They can press again. */
+  askNotRecorded: string;
+  /** a policy or utility page (DESIGN_WAVE2 §2.4): fine to leave out of search */
+  utility: boolean;
 }
 
 /** What a group is about: a cause, a code the app does not know, or pages fixed on the site that Google has not read again yet. */
-export type IndexGroupCause = IndexCause | 'other' | 'fixed_on_site';
+export type IndexGroupCause = IndexCause | 'other' | 'fixed_on_site' | 'linked_waiting' | 'canonical_parent' | 'utility';
 
 export interface IndexGroup {
   /** `<lane>:<action>:<cause>` */
@@ -448,6 +516,30 @@ export interface IndexRunSitemaps {
   /** engine fix wave 1: false = the website was not checked in this run (its figures are carried from the last check); null: not sent */
   checked: boolean | null;
   reservation: boolean;
+  /** wave 2 (DESIGN_WAVE2 §2.5): the access Search Console reports for us (`siteOwner`, `siteFullUser`, `siteRestrictedUser` ...; '' = not sent) */
+  permission: string;
+  /** the engine's own verdict (ENGINE_BUILD wave 2, contract 8): Full access AND no refusal holding (null: not sent) */
+  permissionFull: boolean | null;
+  /** wave 2: the sitemaps this run submitted for the client (only with the switch on and Full access) */
+  submissions: IndexSitemapSubmissionRow[];
+  /** wave 2: Search Console's own list of the website's sitemaps as this run read it (the dates Google gives) */
+  listed: { path: string; lastSubmitted: string; lastDownloaded: string }[];
+  /** wave 2 review W1: the engine says it WILL submit a sitemap on its next run (`submit.will_submit`; false when not sent: an older row) */
+  willSubmit: boolean;
+  /** wave 2 review W1: why the engine will not submit (`submit.blocked`, one of SITEMAP_BLOCKED; '' = nothing blocks, or not sent / unknown) */
+  blocked: SitemapBlocked | '';
+}
+
+/** One sitemap submission the engine made (`sitemaps_json.submissions[]`: path, at, status, reason). */
+export interface IndexSitemapSubmissionRow {
+  path: string;
+  at: string;
+  /** the engine's: submitted | confirmed | read | denied (403) | refused (other 4xx) | failed */
+  status: string;
+  /** the engine's code for why it submitted: not_listed | errors_changed | changed */
+  reason: string;
+  confirmedAt: string;
+  readAt: string;
 }
 
 export interface GoogleEvent {
@@ -505,6 +597,10 @@ export interface IndexingData {
   sitemapPartial: boolean;
   /** pages where a manual "Request indexing" in Search Console is the right next step (the engine marks at most 5), most important first */
   askGoogle: IndexPage[];
+  /** wave 2: pages the client said they asked Google about (last 45 days) that are no longer in `askGoogle`, newest first */
+  askedGoogle: IndexPage[];
+  /** wave 2: the sitemap switch, the access Google reports for us and the submissions we made */
+  sitemap: IndexSitemapState;
   totals: IndexLaneSummary & { backlogLeft: number; daysToFinish: number | null };
   lanes: Record<IndexLane, IndexLaneSummary>;
   groups: IndexGroup[];
@@ -569,6 +665,14 @@ function displayAction(raw: string, c: IndexCause | 'other', st: IndexState): In
   return a;
 }
 
+/** wave 2: `linked_by` as the engine stores it (a JSON list, '' = none found, 'unread' = not read this run). */
+function linkedByOf(v: unknown): { urls: string[]; read: boolean } {
+  const raw = s(v).trim();
+  if (raw.toLowerCase() === 'unread') return { urls: [], read: false };
+  const xs = json<unknown[]>(raw, []);
+  return { urls: (Array.isArray(xs) ? xs : []).map((x) => s(x && typeof x === 'object' ? (x as P).url : x)).filter((u) => /^https?:\/\//i.test(u)).slice(0, 3), read: true };
+}
+
 /**
  * Fix wave 2 (N4 / N-app-1, the shared rule with the engine): a non-empty `fix_seen_at` means "fixed on your site, waiting for Google",
  * whatever the order of `inspect_at` and `fix_seen_at`. The engine re-inspects such a page within a day or two while it keeps the first
@@ -576,6 +680,8 @@ function displayAction(raw: string, c: IndexCause | 'other', st: IndexState): In
  * when Google reports the cause gone, or when Google crawled after the fix and still reports the cause (the row is then `site_fix` again).
  */
 const fixSeen = (fix: string): string => fix.trim();
+/** The sentence of the engine's 14-day "asked Google" note that is wrong for a page that needs the client (W9). */
+const NOTHING_MORE_TO_DO = /\s*There is nothing more to do on your side for now\.?/;
 
 export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
   const cause = s(r.cause);
@@ -589,8 +695,14 @@ export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
   const failedAt = st === 'indexed' ? '' : s(r.fix_failed_at).trim();
   const fixFailedAt = failedAt && (!seen || failedAt >= seen) ? failedAt : '';
   const fixSeenAt = fixFailedAt ? '' : seen;
+  const utility = isUtilityPage(s(r.url));
+  // wave 2 (DESIGN_WAVE2 §2.4): the engine files policy and utility pages under `leave_out` (low_value); the app keeps the engine's action
+  // (its counts are the page's), and only never offers "Improve this page", "ask Google" or a link from such a page
   const raw = displayAction(s(r.action), c, st);
+  const linked = linkedByOf(r.linked_by);
   const action = fixFailedAt && raw === 'wait' && isCause(c) && INDEX_CAUSE_INFO[c].action === 'site_fix' ? 'site_fix' : raw;
+  // the engine sets `wait` with `fix_seen_at`; an older engine row is read the same way
+  const shown = fixSeenAt && action === 'site_fix' ? 'wait' : action;
   return {
     url: s(r.url),
     path: indexPath(s(r.url)),
@@ -598,8 +710,7 @@ export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
     lane: s(r.lane) === 'new' ? 'new' : 'existing',
     state: st,
     cause: c,
-    // the engine sets `wait` with `fix_seen_at`; an older engine row is read the same way
-    action: fixSeenAt && action === 'site_fix' ? 'wait' : action,
+    action: shown,
     inSitemap: b(r.in_sitemap),
     impressions28d: n(r.impressions_28d),
     clicks28d: n(r.clicks_28d),
@@ -622,15 +733,25 @@ export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
     linkFrom: (Array.isArray(linkFrom) ? linkFrom : [])
       .map((x) => ({ url: s(x?.url), title: s(x?.title).slice(0, 200) }))
       .filter((x) => /^https?:\/\//i.test(x.url))
+      // wave 2: a policy or utility page is never suggested as a page to link from (an older row's "/cookies")
+      .filter((x) => !isUtilityPage(x.url) && !isJobPosting(x.url))
       .slice(0, 5),
     mergeInto: s(r.merge_into),
-    note: s(r.note).slice(0, 500),
+    // wave 2 review W9: the engine's 14-day "asked Google" note replaced the whole note, whatever the action; a page that now needs the client
+    // (a fix on the website, a link...) never reads "nothing more to do on your side"
+    note: (INDEX_ACTIONS_NEED_YOU.has(shown) ? s(r.note).replace(NOTHING_MORE_TO_DO, '').trim() : s(r.note)).slice(0, 500),
     publishedAt: s(r.published_at),
     inspectedAt: s(r.inspect_at),
     fetchedAt: s(r.fetch_at),
     fixSeenAt,
     fixFailedAt,
-    askGoogle: b(r.ask_google) && st !== 'indexed',
+    askGoogle: b(r.ask_google) && st !== 'indexed' && !utility && !isJobPosting(s(r.url)),
+    linkedBy: linked.urls,
+    linkedRead: linked.read,
+    askedGoogleAt: s(r.asked_google_at).trim(),
+    googleReadAfterAskAt: s(r.google_read_after_ask_at).trim(),
+    askNotRecorded: '',
+    utility,
   };
 }
 
@@ -676,7 +797,171 @@ function runSitemapsOf(v: unknown): IndexRunSitemaps | null {
   const errors = Array.isArray(x.errors) ? x.errors.length : n(x.errors);
   // an explicit flag from a newer engine wins; otherwise a failed sitemap or a cap means the tree was read only in part
   const partial = x.complete === false || x.partial === true ? true : x.complete === true ? false : b(x.capped) || errors > 0;
-  return { submitted: num('submitted'), submittedErrors: num('submitted_errors'), read: n(x.read), partial, checked: x.checked === true ? true : x.checked === false ? false : null, reservation: b(x.reservation) };
+  const subs = Array.isArray(x.submissions) ? (x.submissions as P[]) : [];
+  const list = [x.list, x.listed, x.sitemaps].find(Array.isArray) as P[] | undefined;
+  return {
+    submitted: num('submitted'),
+    submittedErrors: num('submitted_errors'),
+    read: n(x.read),
+    partial,
+    checked: x.checked === true ? true : x.checked === false ? false : null,
+    reservation: b(x.reservation),
+    permission: s(x.permission).trim().slice(0, 40),
+    permissionFull: x.permission_full === true || x.permission_full === 'true' ? true : x.permission_full === false || x.permission_full === 'false' ? false : null,
+    submissions: subs
+      .map((y) => ({ path: s(y?.path).slice(0, 500), at: s(y?.at), status: s(y?.status).slice(0, 40), reason: s(y?.reason).slice(0, 300), confirmedAt: s(y?.confirmed_at), readAt: s(y?.read_at) }))
+      .filter((y) => y.path && y.at)
+      .slice(0, 10),
+    listed: (list ?? [])
+      .filter((y) => y && typeof y === 'object')
+      .map((y) => ({ path: s(y.path).slice(0, 500), lastSubmitted: s(y.lastSubmitted ?? y.last_submitted), lastDownloaded: s(y.lastDownloaded ?? y.last_downloaded) }))
+      .filter((y) => y.path)
+      .slice(0, 20),
+    // W1: only an explicit true from the engine is "we will submit" (an older row without the field never promises a submission)
+    willSubmit: x.submit && typeof x.submit === 'object' ? (x.submit as P).will_submit === true : false,
+    blocked: x.submit && typeof x.submit === 'object' ? sitemapBlockedOf((x.submit as P).blocked, (x.submit as P).gate) : '',
+  };
+}
+
+/**
+ * Wave 2 review W1: the engine's reason it will not submit the website's sitemap on its next run (`sitemaps_json.submit.blocked`). An unknown
+ * code reads as '' (no reason shown, and still no promise: only `will_submit === true` promises a submission).
+ */
+export const SITEMAP_BLOCKED = ['switch_off', 'not_full_access', 'paused', 'no_sitemap', 'outside_property', 'unchanged', 'too_soon', 'refused', 'not_set_up', 'not_read'] as const;
+/** The engine's codes, plus the app's `not_read`: `blocked` '' while `submit.gate` is `not_checked` (Google's access level not read today) or
+ *  `list_not_read` (Search Console's sitemap list not read today): nothing is concluded, and the client is told we could not read it. */
+export type SitemapBlocked = (typeof SITEMAP_BLOCKED)[number];
+const sitemapBlockedOf = (v: unknown, gate: unknown): SitemapBlocked | '' => {
+  const x = s(v).trim();
+  if (x && x !== 'not_read') return (SITEMAP_BLOCKED as readonly string[]).includes(x) ? (x as SitemapBlocked) : '';
+  return /^(not_checked|list_not_read)$/.test(s(gate).trim()) ? 'not_read' : '';
+};
+/**
+ * The plain reason we will not submit the sitemap, for a client who switched sitemap submission on ('' for `switch_off` and unknown codes:
+ * the switch line says it is off). Never a promise about Google, never "we ask Google".
+ */
+export function sitemapBlockedText(code: SitemapBlocked | '' | undefined): string {
+  switch (code) {
+    case 'not_full_access':
+      return 'Google gives us read-only access to your Search Console, so we cannot submit your sitemap. Give us Full access in Search Console, or submit it yourself.';
+    case 'paused':
+      return 'Sitemap submission is paused on our side for now, so we will not submit it. You can submit it yourself in Search Console.';
+    case 'no_sitemap':
+      return 'We could not read a sitemap on your website (robots.txt names none, and /sitemap.xml is not one), so there is nothing we can submit. Name your sitemap in robots.txt, or submit it yourself in Search Console.';
+    case 'outside_property':
+      return 'Your sitemap is outside the Search Console property we can read (for example on www. while the property is for the address without it), so we cannot submit it there. Submit it yourself in the property that covers it.';
+    case 'unchanged':
+      return 'Your sitemap has not changed since it was last submitted, so there is nothing to submit.';
+    case 'too_soon':
+      return 'We submitted your sitemap in the last 7 days. We submit it at most once a week.';
+    case 'refused':
+      return 'Google refused our last submission of your sitemap, so we are not trying again for now. You can submit it yourself in Search Console.';
+    case 'not_set_up':
+      return 'Sitemap submission is not set up on our side yet, so we will not submit it for now. You can submit it yourself in Search Console.';
+    case 'not_read':
+      return 'We could not read your Search Console today, so we do not know yet whether your sitemap needs submitting. We look again on the next daily check.';
+    default:
+      return '';
+  }
+}
+
+/** wave 2: Full access in Search Console (the only access that can submit a sitemap). */
+export const SITEMAP_FULL_ACCESS: ReadonlySet<string> = new Set(['siteOwner', 'siteFullUser']);
+/** full: we can submit; restricted: Google gives us read-only access; refused (W7): Google reports Full access but refused our submission */
+export type IndexSitemapAccess = 'full' | 'restricted' | 'refused' | 'unknown';
+
+/** One sitemap submission as the Indexing page shows it. */
+export interface IndexSitemapSubmission {
+  path: string;
+  at: string;
+  /** ok: Google accepted it; refused: Google answered that we may not; pending (wave 2 review W13): our attempt, recorded before Google's
+   *  answer, with no answer kept (never shown as done); error: anything else (`failed`, `not_set_up`: nothing reached Google) */
+  status: 'ok' | 'refused' | 'pending' | 'error';
+  /** why we submitted it, in words ('' when the engine gave no reason we know) */
+  reason: string;
+  /** Search Console's list shows it submitted on or after `at` ('' = not seen yet) */
+  listedAt: string;
+  /** Google read (downloaded) the sitemap after `at` ('' = not yet) */
+  readAt: string;
+}
+
+export interface IndexSitemapState {
+  /** the client's switch (seo_monitors `index_sitemap_submit`, empty = off) */
+  submitOn: boolean;
+  /** the access Google reports for us, from the newest run that read it ('unknown': no run read it yet) */
+  access: IndexSitemapAccess;
+  permission: string;
+  accessAt: string | null;
+  /** newest first, at most 10 */
+  submissions: IndexSitemapSubmission[];
+  /** sitemaps Search Console lists and the errors it reports in them, from the newest run that read the list (null: not read) */
+  submitted: number | null;
+  errors: number | null;
+  /** W1: the newest daily check says it will submit a sitemap on its next run (only then does the app say "we will submit it") */
+  willSubmit: boolean;
+  /** W1: why it will not ('' = nothing blocks, or the newest check did not say) */
+  blocked: SitemapBlocked | '';
+}
+
+const submissionStatus = (v: string): IndexSitemapSubmission['status'] =>
+  /^(ok|done|success|submitted|confirmed|read|accepted|2\d\d)$/i.test(v.trim())
+    ? 'ok'
+    : /^pending$/i.test(v.trim())
+      ? 'pending'
+      : /forbidden|refused|denied|permission|^4\d\d$/i.test(v)
+        ? 'refused'
+        : 'error';
+/** The engine's reason codes in words (an unknown code is not shown). */
+const SUBMISSION_REASON: Record<string, string> = {
+  not_listed: 'Search Console did not list your sitemap',
+  errors_changed: 'Search Console reported errors and your sitemap has changed since',
+  changed: 'your sitemap changed (pages added or removed)',
+};
+
+/** The sitemap card's facts from the runs (newest first or not; reservations are skipped). Pure. */
+export function indexSitemapState(runs: readonly IndexRun[], submitOn: boolean): IndexSitemapState {
+  const xs = [...runs].filter((r) => r.runAt && !r.reservation && r.sitemaps).sort((a, b) => (b.runAt > a.runAt ? 1 : -1));
+  const withAccess = xs.find((r) => r.sitemaps!.permission);
+  const permission = withAccess?.sitemaps?.permission ?? '';
+  const listed = xs.find((r) => r.sitemaps!.listed.length)?.sitemaps?.listed ?? [];
+  const seen = new Set<string>();
+  const submissions: IndexSitemapSubmission[] = [];
+  for (const r of xs)
+    for (const sub of r.sitemaps!.submissions) {
+      const k = `${sub.path}|${sub.at}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const l = listed.find((y) => samePageUrl(y.path, sub.path));
+      submissions.push({
+        path: sub.path,
+        at: sub.at,
+        status: submissionStatus(sub.status),
+        reason: SUBMISSION_REASON[sub.reason] ?? '',
+        listedAt: sub.confirmedAt || (l && l.lastSubmitted && l.lastSubmitted >= sub.at ? l.lastSubmitted : ''),
+        readAt: sub.readAt || (l && l.lastDownloaded && l.lastDownloaded > sub.at ? l.lastDownloaded : ''),
+      });
+    }
+  submissions.sort((a, b) => b.at.localeCompare(a.at));
+  const list = xs.find((r) => !r.failed && r.sitemaps!.submitted != null)?.sitemaps ?? null;
+  // W1: the newest check's own word on its next run (an older row without the fields: no promise)
+  const newest = xs[0]?.sitemaps ?? null;
+  const willSubmit = submitOn && !!newest?.willSubmit;
+  const blocked = willSubmit ? '' : (newest?.blocked ?? '');
+  // W7: Google reports a Full level, but a refusal of our submission still holds (the engine's `permission_full` false, or `blocked`
+  // refused): Google refused the submission, which is not read-only access
+  const fullLevel = SITEMAP_FULL_ACCESS.has(permission);
+  const refusedNow = fullLevel && (withAccess?.sitemaps?.permissionFull === false || blocked === 'refused');
+  return {
+    submitOn,
+    access: !permission ? 'unknown' : !fullLevel ? (withAccess?.sitemaps?.permissionFull === true ? 'full' : 'restricted') : refusedNow ? 'refused' : 'full',
+    permission,
+    accessAt: withAccess?.runAt ?? null,
+    submissions: submissions.slice(0, 10),
+    submitted: list?.submitted ?? null,
+    errors: list?.submittedErrors ?? null,
+    willSubmit,
+    blocked,
+  };
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -772,19 +1057,101 @@ export function rollingOutEvent(events: readonly GoogleEvent[]): GoogleEvent | n
   return [...events].filter((e) => e.status === 'rolling_out' && (e.kind === 'core' || e.kind === 'spam')).sort((a, b) => (b.startedAt > a.startedAt ? 1 : -1))[0] ?? null;
 }
 
+/** wave 2 (DESIGN_WAVE2 §3.1): pages Google has not visited although the website already links to them (the engine's `wait` on
+ *  `unknown_to_google` / `discovered_not_crawled`). No suggestions and no step: adding more links from the same website is not the answer. */
+export const INDEX_LINKED_WAITING = {
+  label: 'Google has not visited these yet',
+  meaning: 'Your website already links to these pages, so Google can find them. Google has not visited them yet, which is common for a young website: Google visits a new website slowly at first.',
+  weDo: 'We look up Google\'s reading of them again on the usual schedule and tell you when they are in search.',
+  youDo: 'Nothing on these pages. What helps: links from other websites to yours, and asking Google in Search Console to read your most important pages.',
+} as const;
+
+/** wave 2 (§2.2): pages with a title of their own whose canonical tag names another page (`canonical_elsewhere` outside the sitemap, or with
+ *  the engine's note "This page tells Google it is a copy of ..."; the engine stores no flag for it, ENGINE_BUILD wave 2 contract 3). */
+export const INDEX_CANONICAL_PARENT = {
+  label: 'Pages that say they are a copy of another page',
+  meaning: 'These pages have a title of their own, but their canonical tag names another page as the main version, so Google shows that page instead.',
+  weDo: 'We open the pages every day and tick the step off once each one names itself as the main version.',
+  youDo: 'If a page should be found on its own, point its canonical tag to the page itself, and add it to your sitemap if it is not there. If it really is a copy of the other page, skip the step.',
+  taskTitle: 'Let pages with a title of their own name themselves as the main version',
+} as const;
+
+/** wave 2 (§2.4): policy and utility pages left out of search. */
+export const INDEX_UTILITY_GROUP = {
+  label: 'Policy and utility pages: fine to leave out',
+  meaning: 'Privacy, cookie and terms pages, logins, carts and search pages do not need to be in Google. Nothing is wrong.',
+  weDo: 'Nothing. We look again every 8 weeks.',
+  youDo: 'Nothing.',
+} as const;
+
 const groupLabel = (c: IndexGroupCause): Pick<IndexCauseInfo, 'label' | 'meaning' | 'weDo' | 'youDo'> =>
   c === 'fixed_on_site'
     ? INDEX_FIXED_ON_SITE
-    : c === 'other'
+    : c === 'linked_waiting'
+      ? INDEX_LINKED_WAITING
+      : c === 'canonical_parent'
+        ? INDEX_CANONICAL_PARENT
+        : c === 'utility'
+          ? INDEX_UTILITY_GROUP
+          : c === 'other'
       ? { label: 'Other', meaning: 'A reading we do not have words for yet.', weDo: 'We keep checking.', youDo: 'Open the address in Search Console (URL Inspection) to read Google\'s own words.' }
       : INDEX_CAUSE_INFO[c];
+
+const groupGuide = (c: IndexGroupCause): string | null =>
+  c === 'fixed_on_site' || c === 'linked_waiting' || c === 'other'
+    ? 'index-request-indexing'
+    : c === 'canonical_parent'
+      ? 'index-canonical-sitemap'
+      : c === 'utility'
+        ? null
+        : c === 'unknown_to_google' || c === 'discovered_not_crawled'
+          ? 'index-add-internal-links'
+          : (INDEX_CAUSE_INFO[c].guide ?? null);
 
 /** How many pages a group carries in the summary; the rest page in. */
 export const INDEX_GROUP_PREVIEW = 25;
 
 /** The group a page is shown in (pages fixed on the site have their own), and whether it is in one at all. One rule for the summary and
  *  the paged lists (A19): pages in search with nothing to do, and pages not checked yet that the engine did not file, are in none. */
-export const indexGroupCauseOf = (p: IndexPage): IndexGroupCause => (p.fixSeenAt ? 'fixed_on_site' : p.cause);
+export const indexGroupCauseOf = (p: IndexPage): IndexGroupCause => {
+  if (p.fixSeenAt) return 'fixed_on_site';
+  // wave 2 (DESIGN_WAVE2 §3.1): the engine's `wait` on a page it found already linked, apart from the pages that need a link
+  if (p.action === 'wait' && (p.cause === 'unknown_to_google' || p.cause === 'discovered_not_crawled')) return 'linked_waiting';
+  if (p.cause === 'canonical_elsewhere' && p.action === 'site_fix' && canonicalOwnTitle(p)) return 'canonical_parent';
+  if (p.utility && p.action === 'leave_out') return 'utility';
+  return p.cause;
+};
+
+/** The engine's note on an own-title canonical (ENGINE_BUILD wave 2, contract 3). */
+export const INDEX_OWN_TITLE_NOTE = 'This page tells Google it is a copy of';
+/** wave 2: a `canonical_elsewhere` page with a title of its own: not in the sitemap, or the engine's note says so. Its fix is ONLY a
+ *  canonical tag that names the page itself (never "the sitemap no longer lists it"). */
+export const canonicalOwnTitle = (p: Pick<IndexPage, 'inSitemap' | 'note'>): boolean => !p.inSitemap || p.note.trim().startsWith(INDEX_OWN_TITLE_NOTE);
+
+// ---------------------------------------------------------------- "I asked Google" (DESIGN_WAVE2 §2.3 / §3.2)
+
+/** After this many days with no newer crawl the page says so (the engine's 14-day note); it may be offered again after 28. */
+export const INDEX_ASK_QUIET_DAYS = 14;
+/** How long a page the client asked about stays in the "you asked Google" list once it left the engine's list. */
+export const INDEX_ASKED_SHOWN_DAYS = 45;
+
+/** What happened after the client said they asked Google to read a page again. */
+export function askGoogleStatus(p: Pick<IndexPage, 'askedGoogleAt' | 'googleReadAfterAskAt'> & { askNotRecorded?: string; action?: IndexAction }, now = Date.now()): { state: 'none' | 'waiting' | 'read' | 'quiet' | 'lost'; text: string } {
+  if (p.askNotRecorded)
+    return { state: 'lost', text: `You told us on ${indexDayText(p.askNotRecorded)} that you asked Google, but the daily index check did not keep it. Press I asked Google again.` };
+  const asked = Date.parse(p.askedGoogleAt);
+  if (!p.askedGoogleAt || !Number.isFinite(asked)) return { state: 'none', text: '' };
+  if (p.googleReadAfterAskAt && p.googleReadAfterAskAt >= p.askedGoogleAt) return { state: 'read', text: `Google read it again on ${indexDayText(p.googleReadAfterAskAt)}.` };
+  if (now - asked >= INDEX_ASK_QUIET_DAYS * 864e5)
+    return {
+      state: 'quiet',
+      // wave 2 review W9: a page that now needs something from the client (a fix on the website, a link...) is never told "nothing more to do"
+      text: p.action && INDEX_ACTIONS_NEED_YOU.has(p.action)
+        ? `You asked Google on ${indexDayText(p.askedGoogleAt)}; Google has not read it again yet. Asking again will not help for now: this page has something to fix first, shown with it.`
+        : `You asked Google on ${indexDayText(p.askedGoogleAt)}; Google has not read it again yet. There is nothing more to do on your side for now.`,
+    };
+  return { state: 'waiting', text: `Waiting for Google to read it again (you asked on ${indexDayText(p.askedGoogleAt)}).` };
+}
 export const inIndexGroup = (p: IndexPage): boolean => p.action !== 'none' && !(p.state === 'unknown' && p.cause === 'other');
 const byImportance = (a: IndexPage, b: IndexPage) => b.impressions28d - a.impressions28d || b.clicks28d - a.clicks28d || a.path.localeCompare(b.path);
 
@@ -804,8 +1171,22 @@ export function buildIndexingData(input: {
   taskKeys?: ReadonlySet<string>;
   /** the in-search pages left out of `rows`, per lane (from the newest run that read the website) */
   indexedCounts?: { all: number; newLane: number };
+  /** wave 2: the client's sitemap switch (seo_monitors `index_sitemap_submit`, empty = off) */
+  sitemapSubmit?: boolean;
+  /** wave 2: the newest "I asked Google" per page from the app's own audit log (address -> ISO), to tell a write the engine lost */
+  askedByApp?: Readonly<Record<string, string>>;
+  /** for tests: the time "now" is (the 14-day note, the asked list) */
+  now?: number;
 }): IndexingData {
   const pages = input.rows.map(indexPageOf).filter((p) => p.url);
+  // ENGINE_BUILD wave 2 contract 6: a page the client said they asked about whose row does not hold it (or holds an older ask, by more than
+  // a minute), and that is not in search: the write was lost to an overlapping engine run
+  for (const p of pages) {
+    const app = input.askedByApp?.[p.url];
+    if (!app || p.state === 'indexed') continue;
+    const row = Date.parse(p.askedGoogleAt);
+    if (!Number.isFinite(row) || Date.parse(app) - row > 60_000) p.askNotRecorded = app;
+  }
   const allRuns = [...input.runs].map(indexRunOf).filter((r) => r.runAt).sort((a, b) => (b.runAt > a.runAt ? 1 : -1));
   // engine fix wave 1: a reservation row is a run that had not finished (or crashed): never a reading, never the latest figures
   const unfinished = allRuns[0]?.reservation ? allRuns[0] : null;
@@ -859,7 +1240,9 @@ export function buildIndexingData(input: {
   const groups: IndexGroup[] = [...byGroup.entries()].map(([id, xs]) => {
     const [ln, action, cause] = id.split(':') as [IndexLane, IndexAction, IndexGroupCause];
     const info = groupLabel(cause);
-    const taskKey = action === 'site_fix' && isSiteFixCause(cause) ? indexingTaskKey(cause) : null;
+    // wave 2: the canonical pages outside the sitemap are part of the `indexing:canonical_elsewhere` step; the pages that need a link have
+    // one step of their own (`indexing:links`)
+    const taskKey = action === 'site_fix' && cause === 'canonical_parent' ? indexingTaskKey('canonical_elsewhere') : action === 'site_fix' && isSiteFixCause(cause) ? indexingTaskKey(cause) : action === 'links' ? INDEXING_LINKS_KEY : null;
     return {
       id,
       lane: ln,
@@ -870,7 +1253,7 @@ export function buildIndexingData(input: {
       meaning: info.meaning,
       weDo: info.weDo,
       youDo: info.youDo,
-      guide: cause === 'fixed_on_site' ? 'index-request-indexing' : cause !== 'other' ? (INDEX_CAUSE_INFO[cause].guide ?? null) : 'index-request-indexing',
+      guide: groupGuide(cause),
       taskKey: taskKey && (!input.taskKeys || input.taskKeys.has(taskKey)) ? taskKey : null,
       pages: [...xs].sort(byImportance).slice(0, INDEX_GROUP_PREVIEW),
     };
@@ -883,6 +1266,13 @@ export function buildIndexingData(input: {
     .slice(0, 50);
   // FIX_CONTRACT (X8): never a page left out on purpose, never a rewrite while an update rolls out
   const askGoogle = pages.filter((p) => p.askGoogle && p.action !== 'leave_out' && !(freeze.on && p.action === 'quality')).sort(byImportance).slice(0, 5);
+  // wave 2 (§3.2): pages the client said they asked Google about that left the engine's list, with what happened since (newest first)
+  const askedSince = (input.now ?? Date.now()) - INDEX_ASKED_SHOWN_DAYS * 864e5;
+  const askedAt = (p: IndexPage) => p.askNotRecorded || p.askedGoogleAt;
+  const askedGoogle = pages
+    .filter((p) => askedAt(p) && Date.parse(askedAt(p)) >= askedSince && !askGoogle.some((x) => x.url === p.url))
+    .sort((a, b) => askedAt(b).localeCompare(askedAt(a)))
+    .slice(0, 10);
   const checkedAt = good?.runAt || pages.map((p) => p.checkedAt).filter(Boolean).sort().pop() || null;
   const notice: IndexingData['notice'] = unfinished && !latest?.failed
     ? { tone: 'info', title: 'The latest check had not finished', text: `The check that started ${indexDayText(unfinished.runAt, true)} had not finished when this page was read, so the figures are from the check before.`, failed: false, accessLost: false, at: unfinished.runAt }
@@ -907,6 +1297,8 @@ export function buildIndexingData(input: {
     notice,
     sitemapPartial: !!sm?.partial,
     askGoogle,
+    askedGoogle,
+    sitemap: indexSitemapState(runs, !!input.sitemapSubmit),
     totals: { ...all, backlogLeft, daysToFinish },
     lanes: { new: lane('new'), existing },
     groups,
@@ -953,6 +1345,11 @@ export function indexingCauseOfKey(key: string): IndexSiteFixCause | null {
   const c = key.slice(INDEXING_TASK_PREFIX.length);
   return isSiteFixCause(c) ? c : null;
 }
+/** wave 2 (DESIGN_WAVE2 §3.2): the one step for the pages that need a link from another page of the website (kind `index_links`). */
+export const INDEXING_LINKS_KEY = 'indexing:links';
+/** The (page to link to, page to add the link on) pairs that step lists, and our own check opens (the source pages) at most. */
+export const INDEXING_LINKS_MAX_PAIRS = 10;
+
 /** How many addresses a step lists (and the app's own check opens at most INDEXING_CHECK_MAX of them). */
 export const INDEXING_TASK_MAX_URLS = 25;
 export const INDEXING_CHECK_MAX_URLS = 10;
@@ -982,6 +1379,10 @@ export interface IndexingCauseReading {
   googleStillSees?: number;
   /** the newest of those Google readings */
   googleStillSeesAt?: string;
+  /** wave 2 (DESIGN_WAVE2 §2.2, `canonical_elsewhere` only): the listed pages with a title of their own that name another page as their main
+   *  version (not in the sitemap, or the engine's own-title note). For them only a canonical tag that names the page itself is the fix, never
+   *  "the sitemap no longer lists it" (absent: none) */
+  ownTitle?: string[];
 }
 
 /**
@@ -991,7 +1392,11 @@ export interface IndexingCauseReading {
  */
 export function indexingCauseReadings(rows: readonly Partial<IndexPageRow>[], opts: { capped?: ReadonlySet<string>; read?: readonly IndexSiteFixCause[] } = {}): IndexingCauseReading[] {
   const by = new Map<IndexSiteFixCause, { open: IndexPage[]; pending: IndexPage[] }>();
+  const ownTitle = new Set<string>();
   for (const c of opts.read ?? []) if (isSiteFixCause(c)) by.set(c, { open: [], pending: [] });
+  // only an explicit `false` is "not in the sitemap" (an empty value says nothing); or the engine's own-title note
+  for (const r of rows)
+    if (r.url && (r.in_sitemap === false || (r.in_sitemap as unknown) === 'false' || (r.in_sitemap as unknown) === 0 || s(r.note).trim().startsWith(INDEX_OWN_TITLE_NOTE))) ownTitle.add(s(r.url));
   for (const p of rows.map(indexPageOf)) {
     if (!isSiteFixCause(p.cause) || !p.url) continue;
     const isPending = !!p.fixSeenAt && p.action === 'wait';
@@ -1003,6 +1408,7 @@ export function indexingCauseReadings(rows: readonly Partial<IndexPageRow>[], op
   return [...by.entries()].map(([cause, g]) => {
     const failed = g.open.filter((p) => p.fixFailedAt);
     const sorted = [...g.open].sort((a, b) => b.impressions28d - a.impressions28d || b.clicks28d - a.clicks28d || a.url.localeCompare(b.url));
+    const own = cause === 'canonical_elsewhere' ? sorted.slice(0, INDEXING_READING_URLS).map((p) => p.url).filter((u) => ownTitle.has(u)) : [];
     return {
       cause,
       total: g.open.length,
@@ -1012,8 +1418,78 @@ export function indexingCauseReadings(rows: readonly Partial<IndexPageRow>[], op
       pendingAt: g.pending.map((p) => p.fixSeenAt).sort().pop() ?? '',
       complete: !opts.capped?.has(cause),
       ...(failed.length ? { googleStillSees: failed.length, googleStillSeesAt: failed.map((p) => p.fixFailedAt).sort().pop() ?? '' } : {}),
+      ...(own.length ? { ownTitle: own } : {}),
     };
   });
+}
+
+/** One page that needs a link from another page of the website (the engine's `links` rows), with the pages it suggests. */
+export interface IndexingLinksTarget {
+  url: string;
+  title: string;
+  /** suggested pages to add the link on (indexed, on topic, never a utility page), best first; empty: none we could suggest */
+  sources: string[];
+}
+/** The engine's `links` pages of one website, as the `indexing:links` step needs them (DESIGN_WAVE2 §3.2). */
+export interface IndexingLinksReading {
+  /** the run the reading comes from */
+  runAt: string;
+  /** false: the read hit its cap, so "no page needs a link any more" is never concluded from it */
+  complete: boolean;
+  /** most important first */
+  targets: IndexingLinksTarget[];
+}
+/** The pages that need a link, from the engine's rows (rows of other actions, utility pages and pages already linked are left out). */
+export function indexingLinksReading(rows: readonly Partial<IndexPageRow>[], opts: { runAt: string; capped?: boolean }): IndexingLinksReading {
+  const targets = rows
+    .map(indexPageOf)
+    .filter((p) => p.url && p.action === 'links' && !p.utility && p.state !== 'indexed' && !p.linkedBy.length)
+    .sort(byImportance)
+    .map((p) => ({ url: p.url, title: p.title, sources: p.linkFrom.map((l) => l.url).filter((u) => !samePageUrl(u, p.url)).slice(0, 3) }));
+  return { runAt: opts.runAt, complete: !opts.capped, targets };
+}
+
+/**
+ * Whether a page's HTML holds an `<a href>` to the target page (DESIGN_WAVE2 §3.2): resolved against the page's address (or its `<base href>`,
+ * wave 2 review W14), compared without the host's www., the scheme, a fragment or a trailing slash; a query counts only when the target has
+ * one. Comments and the insides of `<script>` / `<style>` are skipped (an `<a href>` in a script string is not a link), and so is a link
+ * marked `rel="nofollow"` (W14: Google is told not to follow it, so it does not help Google find the page).
+ */
+export function pageLinksTo(html: string, pageUrl: string, targetUrl: string): boolean {
+  const wantQuery = s(targetUrl).includes('?');
+  const body = s(html)
+    .slice(0, 1_000_000)
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
+    .replace(/<(script|style)\b[^>]*>[\s\S]*$/i, ' ');
+  // W14: the first <base href> sets the address relative links resolve against (itself resolved against the page's address)
+  let base = s(pageUrl);
+  const baseHref = body.match(/<base\b[^>]*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/i);
+  if (baseHref) {
+    try {
+      const b = new URL((baseHref[1] ?? baseHref[2] ?? baseHref[3] ?? '').trim().replace(/&amp;/g, '&'), base);
+      if (b.protocol === 'https:' || b.protocol === 'http:') base = b.href;
+    } catch {
+      // an unreadable <base href> is ignored, as browsers do
+    }
+  }
+  for (const m of body.matchAll(/<a\b[^>]*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))[^>]*>/gi)) {
+    const rel = m[0].match(/\srel\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/i);
+    if (rel && /(^|\s)nofollow(\s|$)/i.test((rel[1] ?? rel[2] ?? rel[3] ?? '').trim())) continue;
+    const href = (m[1] ?? m[2] ?? m[3] ?? '').trim().replace(/&amp;/g, '&');
+    if (!href || href.startsWith('#') || /^(mailto|tel|javascript|data):/i.test(href)) continue;
+    let abs: URL;
+    try {
+      abs = new URL(href, base);
+    } catch {
+      continue;
+    }
+    if (abs.protocol !== 'https:' && abs.protocol !== 'http:') continue;
+    abs.hash = '';
+    if (!wantQuery) abs.search = '';
+    if (samePageUrl(abs.href, targetUrl)) return true;
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------- the app's own check of a step (pure parts)
@@ -1148,7 +1624,7 @@ export function realPage(f: IndexingFetch): boolean {
 const wall = (f: IndexingFetch, own403 = false): boolean =>
   (!own403 && (f.status === 401 || f.status === 403)) || f.status === 429 || (f.status === 503 && (!f.text || challengePage(f))) || challengePage(f);
 
-export function indexingPageFixed(cause: IndexSiteFixCause, f: IndexingFetch, inSitemap: boolean | null): IndexingPageVerdict {
+export function indexingPageFixed(cause: IndexSiteFixCause, f: IndexingFetch, inSitemap: boolean | null, opts: { ownTitle?: boolean } = {}): IndexingPageVerdict {
   const p = indexPath(f.url);
   const status = f.status ?? 0;
   const unknown = (why: string): IndexingPageVerdict => ({ fixed: false, unknown: true, why });
@@ -1195,6 +1671,16 @@ export function indexingPageFixed(cause: IndexSiteFixCause, f: IndexingFetch, in
       if (inSitemap === null) return unknown(`${p} still redirects, and ${notListed}.`);
       return { fixed: false, why: `${p} is still in your sitemap and redirects to ${indexPath(f.finalUrl)}.` };
     case 'canonical_elsewhere': {
+      // wave 2: a page with a title of its own that names another page as its main version: its absence from the sitemap is never the fix
+      // (it may never have been there); only a canonical tag that names the page itself is
+      if (opts.ownTitle) {
+        if (wall(f)) return walled();
+        if (offSite) return unknown(`${p} sent us on to another website, so we could not read the page.`);
+        if (!realPage(f)) return status === 200 ? unknown(`${p} did not send us a readable page, so we could not tell.`) : { fixed: false, why: `${p} answers ${status}.` };
+        const own = pageCanonicalOf(f.text, f.finalUrl || f.url);
+        if (own && samePageUrl(own, f.url)) return { fixed: true, why: `${p} names itself as the main version.` };
+        return { fixed: false, why: own ? `${p} still names ${indexPath(own)} as the main version.` : `${p} names no main version yet. Set its canonical tag to its own address.` };
+      }
       if (inSitemap === false) return { fixed: true, why: `${p} is no longer in your sitemap.` };
       if (wall(f)) return walled();
       if (offSite) return unknown(`${p} sent us on to another website, so we could not read the page.`);

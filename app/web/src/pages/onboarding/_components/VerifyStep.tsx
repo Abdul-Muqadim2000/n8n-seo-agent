@@ -18,7 +18,8 @@ export function VerifyStep() {
         verified ? undefined : (
           <>
             <strong className="font-medium text-ink">Tip:</strong> verifying shows that this website is yours, so only your company sees its data. Then you connect Search
-            Console and GA4 by adding our read-only service account as a user; we never change anything in your accounts.
+            Console and GA4 by adding our service account as a user. We only read your Search Console, unless you switch on sitemap submission, which lets us
+            submit your sitemap and nothing else. GA4 is read only.
           </>
         )
       }

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 import type { FastifyRequest } from 'fastify';
 import {
   cleanDomain,
@@ -6,7 +6,15 @@ import {
   googleStillSees,
   indexingCauseOfKey,
   indexingCauseReadings,
+  indexingLinksReading,
   indexingPageFixed,
+  indexSitemapState,
+  indexSitemapSubmitOn,
+  INDEX_TASK_KINDS,
+  INDEXING_LINKS_MAX_PAIRS,
+  linkPairsOf,
+  pageLinksTo,
+  challengePage,
   INDEXING_CHECK_MAX_URLS,
   INDEXING_FETCHES_PAGES,
   INDEXING_NEEDS_SITEMAP,
@@ -26,6 +34,7 @@ import {
   type AiGrowthRow,
   type IndexPageRow,
   type IndexRunRow,
+  type MonitorsRow,
   type AiVisibilityRow,
   type SiteTask,
   type SiteTaskCheck,
@@ -151,18 +160,37 @@ async function readIndexing(domain: string): Promise<SiteTaskInputs['indexing']>
   // skipped when the run counted no page waiting at all.
   const actions: ('site_fix' | 'wait')[] = Object.keys(good.byAction).length && !(good.byAction.wait > 0) ? ['site_fix'] : ['site_fix', 'wait'];
   const plan = causes.flatMap((c) => actions.map((a) => ({ c, a })));
-  const reads = await Promise.all(
-    plan.map(({ c, a }) =>
-      n8nRows<IndexPageRow>('indexPages', {
-        filters: [bySite, { columnName: 'cause', condition: 'eq', value: c }, { columnName: 'action', condition: 'eq', value: a }],
-        sortBy: 'impressions_28d:desc',
-        max: INDEXING_CAUSE_READ_MAX,
-      }),
+  // wave 2 (DESIGN_WAVE2 §3.2): the pages that need a link (one read, skipped when the run counted none) and the sitemap switch
+  const wantLinks = !Object.keys(good.byAction).length || (good.byAction.links ?? 0) > 0;
+  const [reads, linkRows, monitors] = await Promise.all([
+    Promise.all(
+      plan.map(({ c, a }) =>
+        n8nRows<IndexPageRow>('indexPages', {
+          filters: [bySite, { columnName: 'cause', condition: 'eq', value: c }, { columnName: 'action', condition: 'eq', value: a }],
+          sortBy: 'impressions_28d:desc',
+          max: INDEXING_CAUSE_READ_MAX,
+        }),
+      ),
     ),
-  );
+    wantLinks
+      ? n8nRows<IndexPageRow>('indexPages', { filters: [bySite, { columnName: 'action', condition: 'eq', value: 'links' }], sortBy: 'impressions_28d:desc', max: INDEXING_CAUSE_READ_MAX })
+      : Promise.resolve([] as IndexPageRow[]),
+    siteRows<MonitorsRow>('monitors', domain, { max: 5 }).catch(() => [] as MonitorsRow[]),
+  ]);
   // a read that hit the cap makes its cause incomplete: never "none any more" or "all fixed" from it (A6)
   const capped = new Set(plan.filter((_, i) => reads[i].length >= INDEXING_CAUSE_READ_MAX).map((x) => x.c));
-  return { runAt: good.runAt, causes: indexingCauseReadings(mine(reads.flat()), { capped, read: causes }), sitemap: indexingSitemapReading(runs) };
+  const submitOn = indexSitemapSubmitOn(monitors[0]?.index_sitemap_submit);
+  const smState = indexSitemapState(runs.map(indexRunOf), submitOn);
+  return {
+    runAt: good.runAt,
+    causes: indexingCauseReadings(mine(reads.flat()), { capped, read: causes }),
+    sitemap: indexingSitemapReading(runs),
+    links: indexingLinksReading(mine(linkRows), { runAt: good.runAt, capped: linkRows.length >= INDEXING_CAUSE_READ_MAX }),
+    // wave 2 review W1: only when the engine says it WILL submit on its next run is the client not asked to (Full access alone is not
+    // enough: the kill switch, no readable sitemap or a sitemap outside the property stop it); otherwise the step says why
+    sitemapAuto: submitOn && smState.willSubmit,
+    sitemapBlocked: submitOn ? smState.blocked : '',
+  };
 }
 
 /** two payloads alike whatever their key order (Postgres jsonb stores keys in its own order) */
@@ -249,7 +277,9 @@ async function materialize(org: OrgRow, site: SiteRow, st: TaskState, log?: Log)
 const whenOf = (iso: string): Date => (Number.isFinite(Date.parse(iso)) ? new Date(iso) : new Date());
 function engineIndexReading(t: SiteTask, row: SiteTaskRow | undefined): SiteTaskCheck | null {
   const c = t.lastCheck;
-  if (t.kind !== 'indexing' || !c || c.by !== 'index') return null;
+  if (!c || c.by !== 'index') return null;
+  // wave 2: the links step keeps only the engine's "none left" (its "not checked yet" is about pairs our own check has not opened)
+  if (t.kind !== 'indexing' && !(t.kind === 'index_links' && c.ok)) return null;
   const had = row?.lastCheck ?? null;
   if (had && (had.at > c.at || (had.at === c.at && had.ok === c.ok && had.by === c.by && had.message === c.message))) return null;
   return c;
@@ -472,7 +502,9 @@ async function checkIndexing(domain: string, payload: Record<string, unknown>, o
   if (answers) {
     const silent = urls.filter((_, i) => !answers[i]);
     if (silent.length) return { ok: false, reached: false, message: `We could not open ${silent[0]}${silent.length > 1 ? ` and ${silent.length - 1} more` : ''} (no answer from the website).` };
-    urls.forEach((u, i) => results.push(indexingPageFixed(cause, answers[i]!, inSitemap(u))));
+    // wave 2: a page with a title of its own is fixed only when it names itself (its absence from the sitemap is never the fix)
+    const ownTitle = new Set((Array.isArray(payload.ownTitle) ? payload.ownTitle : []).map(String).map((u) => u.replace(/^http:\/\//i, 'https://')));
+    urls.forEach((u, i) => results.push(indexingPageFixed(cause, answers[i]!, inSitemap(u), { ownTitle: ownTitle.has(u) })));
   } else {
     if (!sitemap) return { ok: false, reached: false, unsure: true, message: `We could not read a sitemap at https://${cleanDomain(domain)}/sitemap.xml or in your robots.txt.` };
     for (const u of urls) results.push(indexingPageFixed(cause, { url: u, status: 200, finalUrl: u, redirectStatus: 0, text: '' }, inSitemap(u)));
@@ -485,6 +517,53 @@ async function checkIndexing(domain: string, payload: Record<string, unknown>, o
   // N-app-7: the step is done only when every page it lists was checked; otherwise it says how far we got and stays as it is
   if (listedTotal > urls.length) return partialOutcome(urls.length, listedTotal, `The first ${urls.length} pages of ${listedTotal} are fixed.`);
   return { ok: true, reached: true, message: urls.length === 1 ? results[0].why : `All ${urls.length} pages are fixed.` };
+}
+
+/**
+ * wave 2 (DESIGN_WAVE2 §3.2): the links step's own check. Opens each page the client was asked to add a link on (own host, the safe
+ * fetcher, at most 10, four at a time) and looks for an `<a href>` to the page it should link to. Done when every listed link is there;
+ * otherwise it says how many it found. A page that did not answer at all records nothing (the website did not answer); a firewall, a
+ * challenge page or a page that went to another website is "could not tell".
+ */
+async function checkLinks(domain: string, payload: Record<string, unknown>): Promise<CheckOutcome> {
+  const https = (u: string) => u.replace(/^http:\/\//i, 'https://');
+  const pairs = linkPairsOf(payload)
+    .map((x) => ({ target: https(x.target), source: https(x.source) }))
+    .filter((x) => onSite(x.target, domain) && onSite(x.source, domain))
+    .slice(0, INDEXING_LINKS_MAX_PAIRS);
+  if (!pairs.length) return { ok: false, reached: false, unsure: true, message: 'This step lists no link on your website we can check; the daily index check reads it.' };
+  const sources = [...new Set(pairs.map((x) => x.source))];
+  const answers = await fetchAllPages(sources);
+  const silent = sources.filter((_, i) => !answers[i]);
+  if (silent.length) return { ok: false, reached: false, message: `We could not open ${silent[0]}${silent.length > 1 ? ` and ${silent.length - 1} more` : ''} (no answer from the website).` };
+  const bySource = new Map(sources.map((u, i) => [u, answers[i]!]));
+  const missing: string[] = [];
+  const unsure: string[] = [];
+  let found = 0;
+  for (const x of pairs) {
+    const a = bySource.get(x.source)!;
+    const from = shortPath(x.source);
+    const to = shortPath(x.target);
+    if (a.status === 401 || a.status === 403 || a.status === 429 || (a.status === 503 && (!a.text || challengePage(a))) || challengePage(a)) {
+      unsure.push(`${from} answered ${a.status} to us (often a firewall that lets Google in but not other visitors), so we could not tell.`);
+      continue;
+    }
+    if (!onSite(a.finalUrl || x.source, domain)) {
+      unsure.push(`${from} sent us on to another website, so we could not read it.`);
+      continue;
+    }
+    if (a.status !== 200) {
+      missing.push(`${from} answers ${a.status}, so the link to ${to} is not there.`);
+      continue;
+    }
+    if (pageLinksTo(a.text, a.finalUrl || x.source, x.target)) found++;
+    else missing.push(`${from} has no link to ${to} yet.`);
+  }
+  const n = pairs.length;
+  if (missing.length)
+    return { ok: false, reached: true, message: `${found} of ${n} link${n === 1 ? '' : 's'} found. ${missing.slice(0, 3).join(' ')}${missing.length > 3 ? ` And ${missing.length - 3} more.` : ''}` };
+  if (unsure.length) return { ok: false, reached: false, unsure: true, message: `We could not tell for ${unsure.length} of ${n}: ${unsure[0]}` };
+  return { ok: true, reached: true, message: n === 1 ? `${shortPath(pairs[0].source)} links to ${shortPath(pairs[0].target)}.` : `All ${n} links are in place.` };
 }
 
 /**
@@ -547,6 +626,8 @@ function checkOf(domain: string, kind: SiteTaskKind, payload: Record<string, unk
       return checkRedirect(domain, payload);
     case 'indexing':
       return checkIndexing(domain, payload, opts).then((out) => googleStillSeesOutcome(payload, out));
+    case 'index_links':
+      return checkLinks(domain, payload);
     default: {
       const never: never = kind;
       // a row of a kind this build does not know (written by a newer one): nothing is read and nothing recorded
@@ -745,7 +826,8 @@ async function tick(log: Log, opts: { sites?: number; checks?: number }): Promis
               // a paused website is not read every day (its steps keep their last state)
               eq(schema.sites.trackingStatus, 'active'),
               or(isNull(schema.siteTasks.lastCheckAt), lt(schema.siteTasks.lastCheckAt, new Date(now - DAY))),
-              kinds === 'indexing' ? eq(schema.siteTasks.kind, 'indexing') : ne(schema.siteTasks.kind, 'indexing'),
+              // wave 2: the links step is fed by the daily index check too, so it shares the indexing third
+              kinds === 'indexing' ? inArray(schema.siteTasks.kind, [...INDEX_TASK_KINDS]) : notInArray(schema.siteTasks.kind, [...INDEX_TASK_KINDS]),
             ),
           )
           .orderBy(sql`${schema.siteTasks.lastCheckAt} asc nulls first`, asc(schema.siteTasks.createdAt))

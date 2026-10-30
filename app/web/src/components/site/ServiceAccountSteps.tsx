@@ -63,7 +63,7 @@ export function SearchConsoleSteps({ email, domain }: { email: string | null; do
         start={4}
         steps={[
           <>
-            Set <Ui>Permission</Ui> to <Ui>Full</Ui> and click <Ui>Add</Ui>. Full lets us read sitemaps and check whether your pages are indexed; we never change anything.
+            Set <Ui>Permission</Ui> to <Ui>Full</Ui> and click <Ui>Add</Ui>. Full lets us read sitemaps and check whether your pages are indexed. We only read your Search Console, unless you switch on sitemap submission, which lets us submit your sitemap and nothing else.
           </>,
         ]}
       />

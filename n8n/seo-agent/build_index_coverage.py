@@ -36,6 +36,12 @@ SCHEDULE = {'hour': 5, 'minute': 15}   # free slot: Page Watch 05:45, AI Pulse 0
 NS = uuid.UUID('3b7c1e52-9a40-4f0e-8d6b-1dc0e0a1c0de')
 nid = lambda name: str(uuid.uuid5(NS, 'indexcov:' + name))
 GOOGLE = {'googleApi': {'id': 'SEOcredGoogleSvc', 'name': 'Google Service Account (SEO Agent)'}}   # read-only scope (sync_credentials.py); never changed here
+# wave 2 (DESIGN_WAVE2.md §2.5): the SAME service account with the write scope `webmasters`, used by ONE node only (Submit Sitemap (Index)),
+# and only when the client switched sitemap submission on AND Google reports full access (Index Inventory, Sitemap Submit Requests)
+GOOGLE_W = {'googleApi': {'id': 'SEOcredGoogleSvcW', 'name': 'Google Service Account, sitemap submission (SEO Agent)'}}
+SUBMIT_NODE = 'Submit Sitemap (Index)'
+from env_settings import ENV as _ENVS
+SITEMAP_SUBMIT = 'off' if (_ENVS.get('SEO_SITEMAP_SUBMIT') or '').strip().lower() == 'off' else 'on'   # the kill switch, baked at build (default on)
 INSPECT_URL = 'https://searchconsole.googleapis.com/v1/urlInspection/index:inspect'
 INCIDENTS_URL = 'https://status.search.google.com/incidents.json'
 POLICY_URL = 'https://developers.google.com/search/docs/essentials/spam-policies'
@@ -58,7 +64,8 @@ def _fill(src, round_no=None, start=None, sub=None):
     for k_, v_ in (sub or {}).items():
         s = s.replace(k_, v_)
     s = s.replace('/*__ALERT_RETRY__*/', AR_SRC).replace('__ALERT_WEBHOOK_URL__', ALERT_WEBHOOK_PLACEHOLDER)
-    for ph in ('/*__PAGE_WATCH__*/', '/*__INDEX_KIT__*/', '/*__OPS_ALERT__*/', '/*__ALERT_RETRY__*/', '__ENGINE_TZ__', '__ROUND__', '__START__', '__G__', '__LB__', '__ALERT_WEBHOOK_URL__'):
+    s = s.replace('__SITEMAP_SUBMIT__', SITEMAP_SUBMIT)
+    for ph in ('/*__PAGE_WATCH__*/', '/*__INDEX_KIT__*/', '/*__OPS_ALERT__*/', '/*__ALERT_RETRY__*/', '__ENGINE_TZ__', '__ROUND__', '__START__', '__G__', '__LB__', '__ALERT_WEBHOOK_URL__', '__SITEMAP_SUBMIT__'):
         assert ph not in s, ph + ' left in a node of ' + NAME
     return s
 
@@ -156,7 +163,10 @@ iff('Any Sites (Index)?', "{{ !$('Index Sites').first().json.skip }}", at(32, 1)
 node('Nothing To Do (Index)', 'n8n-nodes-base.noOp', 1, {}, at(33, 2))
 # ---- Search Console (submitted sitemaps, pages with impressions: by page per window, a second page when the first was full) ----
 code('Sitemaps List Requests', rd('IX_Sitemaps_List_Requests.js'), at(33, 1)); iff('Any Sitemaps List?', '{{ !$json.skip }}', at(34, 1))
-node('GSC Sitemaps List', 'n8n-nodes-base.httpRequest', 4.5, google('GET', '={{ $json.url }}'), at(35, 0), credentials=GOOGLE, **HTTP_X)
+# Wave 2 review W2: the list is read WITH its status code (fullResponse): an empty 502 also comes out of n8n as `{}`, which is Google's own
+# answer for "no sitemap" only on a 200 (IX.sitemapsListOf); an HTML error page is { body: '<html...' } and is "not read"
+_gsl = google('GET', '={{ $json.url }}'); _gsl['options']['response']['response']['fullResponse'] = True
+node('GSC Sitemaps List', 'n8n-nodes-base.httpRequest', 4.5, _gsl, at(35, 0), credentials=GOOGLE, **HTTP_X)
 code('Pages Query Requests', rd('IX_Pages_Query_Requests.js'), at(36, 1)); iff('Any Pages Query?', '{{ !$json.skip }}', at(37, 1))
 node('GSC Pages Query', 'n8n-nodes-base.httpRequest', 4.5, google('POST', '={{ $json.url }}'), at(38, 0), credentials=GOOGLE, **HTTP_X)
 code('Pages Query More', rd('IX_Pages_Query_More.js'), at(39, 1)); iff('Any Pages Query More?', '{{ !$json.skip }}', at(40, 1))
@@ -170,11 +180,24 @@ for r in range(1, ROUNDS + 1):
     iff('Any Sitemaps ' + str(r) + '?', '{{ !$json.skip }}', at(x + 2, 3))
     node('Fetch Sitemaps ' + str(r), 'n8n-nodes-base.httpRequest', 4.5, text_get('={{ $json.url }}', follow=False, as_file=True), at(x + 3, 2), **HTTP_X)
     code('Sitemap Read ' + str(r), rd('IX_Sitemap_Read.js', round_no=r), at(x + 4, 3))
+# ---- wave 2 (DESIGN_WAVE2.md §2.1): the website's own links - the home page (read by round 1) and up to 10 parent pages ----
+code('Link Read Requests', rd('IX_Link_Read_Requests.js'), at(67, 5)); iff('Any Link Reads?', '{{ !$json.skip }}', at(68, 5))
+node('Fetch Link Pages', 'n8n-nodes-base.httpRequest', 4.5, text_get('={{ $json.url }}', follow=False, timeout=20000, as_file=True), at(69, 6), **HTTP_X)
+code('Site Links', rd('IX_Site_Links.js'), at(69, 5))
 # ---- inventory, the reservation, inspections, our own reads ----
 code('Index Inventory', rd('IX_Inventory.js'), at(70, 4))
 code('Index Reservation', rd('IX_Reservation.js'), at(71, 4)); iff('Any Reservation?', '{{ !$json.skip }}', at(72, 4))
 # R2 (fix wave 3): an upsert on site_id + run_at - the reservation replaces this run's attempt row (Save Index Attempt), never a second row
 node('Save Index Reservation', DT_TYPE, DT_VERSION, dt_upsert_params_keys(INDEX_RUNS_TABLE, INDEX_RUNS_COLS, ['site_id', 'run_at']), at(73, 3), **SAVE)
+# wave 2 (§2.5): the opt-in sitemap submission - the ONE write to a client's Search Console (sitemaps.submit), on the write-scope credential.
+# neverError + fullResponse: a 4xx is an answer (recorded: a 403 holds the next try), never retried; the retry rule covers only a failed call
+code('Sitemap Submit Requests', rd('IX_Sitemap_Submit_Requests.js'), at(73, 5)); iff('Any Sitemap Submit?', '{{ !$json.skip }}', at(73, 6))
+node(SUBMIT_NODE, 'n8n-nodes-base.httpRequest', 4.5, {'method': 'PUT', 'url': '={{ $json.url }}', 'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'googleApi',
+     'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 1000}}, 'timeout': 60000, 'response': {'response': {'fullResponse': True, 'neverError': True}}}},
+     at(73, 7), credentials=GOOGLE_W, **HTTP_X)
+node('Load Submit Alerts', DT_TYPE, DT_VERSION, dt_get_all_where_params(OPS_ALERTS_TABLE, [('workflow', 'eq', NAME)]), at(73, 8), **LOAD)
+code('Submit Setup Alert', rd('IX_Submit_Alert.js'), at(74, 8), executeOnce=True); iff('Any Submit Alert?', '{{ !$json.skip }}', at(75, 8))
+node('Save Submit Alert', DT_TYPE, DT_VERSION, dt_upsert_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, 'alert_key'), at(76, 8), **SAVE)
 code('Index Probe Requests', rd('IX_Probe_Requests.js'), at(74, 4)); iff('Any Probes?', '{{ !$json.skip }}', at(75, 4))
 node('Inspect URL (Probe)', 'n8n-nodes-base.httpRequest', 4.5, google('POST', INSPECT_URL), at(76, 3), credentials=GOOGLE, **HTTP_X)
 code('Index Inspect Requests', rd('IX_Inspect_Requests.js'), at(77, 4)); iff('Any Inspections (Index)?', '{{ !$json.skip }}', at(78, 4))
@@ -225,10 +248,11 @@ code('Index Watch Plan', rd('IX_Watch_Plan.js'), at(20, 11), executeOnce=True); 
 node('Wait (Index Watch)', 'n8n-nodes-base.wait', 1.1, {'amount': '={{ Number($json.wait_minutes) || 50 }}', 'unit': 'minutes'}, at(22, 11), webhookId=nid('Wait (Index Watch):hook'), executeOnce=True)
 SELF('Start Index Watch', at(23, 11))
 node('Note', 'n8n-nodes-base.stickyNote', 1, {'content': """## SEO Agent — Index Coverage (2026-10-29, fix wave 1)
-Every day at **05:15** (n8n's clock) and on demand (*Manual Run* `{ domain | site_id, callback_url?, request_id?, cap? }`). **Free**: Google's Search Console APIs (read-only) and plain GETs, no DataForSEO, no Claude; a $0 run-ledger row per execution.
+Every day at **05:15** (n8n's clock) and on demand (*Manual Run* `{ domain | site_id, callback_url?, request_id?, cap? }`). **Free**: Google's Search Console APIs (read-only, except the opt-in sitemap submission below) and plain GETs, no DataForSEO, no Claude; a $0 run-ledger row per execution.
+**Wave 2 (2026-10-30, DESIGN_WAVE2.md):** the home page and up to 10 parent pages are read for the website's own links (`linked_by`, pages found there join the inventory); a page already linked that Google has not visited waits; a canonical to another page from a page with its own title is a site step; policy / utility pages are left out; "ask Google" is ranked by value and "I asked Google" is checked back. **Sitemap submission** (`Submit Sitemap (Index)`, credential `SEOcredGoogleSvcW`, the ONLY write to Search Console) runs only when the client switched `index_sitemap_submit` on AND Google reports full access; never an unchanged resubmit; `SEO_SITEMAP_SUBMIT=off` in n8n/.env switches it off for the engine.
 **One execution per website.** The 05:15 run (or the catch-up, or a Manual Run naming no website) is the *dispatch*: it reads Google's news, prunes history older than 400 days and starts the first website's own execution (`ix_chain`); each website saves its rows, then starts the next one - one at a time. Before its first URL Inspection a website writes its **reservation** (`seo_index_runs` row with the planned count), replaced by the final row, so no crash or replay can spend past the daily cap (`index_daily_cap`, default 300, 20-1,200).
 Per website: the sitemap tree (complete or not: only a complete read says "not in the sitemap"), the submitted sitemaps, Search Console pages (by page, four windows, paged), the inventory, our own pages -> **one cause per page** (DESIGN §4), its action and one sentence; Google's documented fields beat our own read; a bot wall is "could not check". `fix_seen_at` when our read sees the step done; `ask_google` on up to 5 pages a week.
-Writes only `seo_index_pages`, `seo_index_history`, `seo_index_runs`, `seo_google_events`, `seo_update_impact`. Callback `index_coverage` on Mondays, or the day a page drops out or an update starts / finishes. Never submits to Google, never changes a site, never says a page "will be indexed".""",
+Writes only `seo_index_pages`, `seo_index_history`, `seo_index_runs`, `seo_google_events`, `seo_update_impact`. Callback `index_coverage` on Mondays, or the day a page drops out or an update starts / finishes. Never submits a URL to Google (no Indexing API), never changes a site, never says a page "will be indexed".""",
      'height': 460, 'width': 1300, 'color': 5}, [16 * 220 - 40, -600])
 
 # ---- wiring ----
@@ -252,9 +276,15 @@ gate('Pages Query Requests', 'Any Pages Query?', 'GSC Pages Query', 'Pages Query
 gate('Pages Query More', 'Any Pages Query More?', 'GSC Pages Query 2', 'Sitemap Requests 1')
 for r in range(1, ROUNDS + 1):
     gate('Sitemap Requests %d' % r, 'Any Sitemaps %d?' % r, 'Fetch Sitemaps %d' % r, 'Sitemap Read %d' % r)
-    link('Sitemap Read %d' % r, 'Sitemap Requests %d' % (r + 1) if r < ROUNDS else 'Index Inventory')
+    link('Sitemap Read %d' % r, 'Sitemap Requests %d' % (r + 1) if r < ROUNDS else 'Link Read Requests')
+gate('Link Read Requests', 'Any Link Reads?', 'Fetch Link Pages', 'Site Links')
+link('Site Links', 'Index Inventory')
 link('Index Inventory', 'Index Reservation')
-gate('Index Reservation', 'Any Reservation?', 'Save Index Reservation', 'Index Probe Requests')
+gate('Index Reservation', 'Any Reservation?', 'Save Index Reservation', 'Sitemap Submit Requests')
+# Wave 2 review W8: after the PUTs, a missing write credential (n8n's own error item, nothing reached Google) raises ONE ops alert for the run
+chain('Sitemap Submit Requests', 'Any Sitemap Submit?'); link('Any Sitemap Submit?', SUBMIT_NODE, 0); link('Any Sitemap Submit?', 'Index Probe Requests', 1)
+chain(SUBMIT_NODE, 'Load Submit Alerts', 'Submit Setup Alert', 'Any Submit Alert?')
+link('Any Submit Alert?', 'Save Submit Alert', 0); link('Any Submit Alert?', 'Index Probe Requests', 1); link('Save Submit Alert', 'Index Probe Requests')
 gate('Index Probe Requests', 'Any Probes?', 'Inspect URL (Probe)', 'Index Inspect Requests')
 gate('Index Inspect Requests', 'Any Inspections (Index)?', 'Inspect URL (Index)', 'Inspect Retry Requests')
 chain('Inspect Retry Requests', 'Any Rate Retry?'); link('Any Rate Retry?', 'Wait (Index Rate Limit)', 0); link('Any Rate Retry?', 'Page Fetch Requests', 1)
@@ -281,7 +311,7 @@ for _n, _s in _src.items():
     for _ref in re.findall(r"\$\('([^']+)'\)", _s):
         assert _ref in _names or _ref == 'After Run Ledger (' + TAG + ')' or _ref.startswith('Sitemap Read ') or _ref.startswith('Sitemap Requests ') or _ref.startswith('Fetch Sitemaps '), _n + ' reads a node that does not exist: ' + _ref
 for _n in ('Index Plan', 'Google Events', 'Index Inventory', 'Index Diagnose', 'Index Report', 'Update Impact Rows', 'Index Run Rows', 'Index Probe Requests', 'Index Inspect Requests',
-           'Page Fetch Requests', 'Update Impact Requests', 'Sitemap Requests 1', 'Sitemap Read 1'):
+           'Page Fetch Requests', 'Update Impact Requests', 'Sitemap Requests 1', 'Sitemap Read 1', 'Link Read Requests', 'Site Links', 'Sitemap Submit Requests'):
     assert 'const IX = (() => {' in _src[_n] and 'const PW = (() => {' in _src[_n], _n + ': the index kit or the page-watch kit is not inlined'
 # the kit's row is exactly the table's columns (the upsert maps every input field)
 _kit_cols = re.search(r"const PAGE_COLS = \[([^\]]*)\]", IX_SRC).group(1)
@@ -405,11 +435,22 @@ assert not _foreign, 'Index Coverage writes a table that is not its own: ' + str
 assert 'DFS Balance (Index)' in by and by['DFS Balance (Index)']['type'] == 'n8n-nodes-base.code', 'no DataForSEO in this workflow: the balance probe is a no-op'
 assert not any('dataforseo' in json.dumps(n.get('parameters')).lower() for n in N if n['type'] == 'n8n-nodes-base.httpRequest'), 'a DataForSEO call in Index Coverage'
 assert not any('anthropic' in json.dumps(n.get('credentials') or {}).lower() or 'api.anthropic.com' in str((n.get('parameters') or {}).get('url')) or 'langchain' in n['type'] for n in N), 'a Claude call in Index Coverage'
+_google_nodes = [n for n in N if n['type'] == 'n8n-nodes-base.httpRequest' and (n['parameters'].get('nodeCredentialType') == 'googleApi' or 'googleapis.com' in str(n['parameters'].get('url')))]
 for n in N:
-    if n['type'] == 'n8n-nodes-base.httpRequest' and 'googleapis.com' in str(n['parameters'].get('url')) + str(n['parameters'].get('url')):
-        assert n.get('credentials') == GOOGLE, n['name'] + ': the Google calls use the shared read-only service account'
-    if n['type'] == 'n8n-nodes-base.httpRequest' and n['parameters'].get('method') in ('PUT', 'DELETE', 'PATCH'):
-        raise AssertionError(n['name'] + ': Index Coverage never changes anything outside its tables')
+    if n['type'] != 'n8n-nodes-base.httpRequest': continue
+    if n['name'] == SUBMIT_NODE:
+        # wave 2 (§2.5): the one write, on the write-scope credential, a PUT to sitemaps.submit built by Sitemap Submit Requests, 4xx never retried
+        assert n.get('credentials') == GOOGLE_W and n['parameters'].get('method') == 'PUT' and n['parameters'].get('url') == '={{ $json.url }}', SUBMIT_NODE + ': PUT on SEOcredGoogleSvcW only'
+        assert n['parameters']['options']['response']['response'] == {'fullResponse': True, 'neverError': True}, SUBMIT_NODE + ': a 4xx is an answer, read with its status code'
+        assert outs('Sitemap Submit Requests') == ['Any Sitemap Submit?'] and outs('Any Sitemap Submit?')[0] == SUBMIT_NODE, SUBMIT_NODE + ': only Sitemap Submit Requests feeds it'
+        continue
+    if n in _google_nodes:
+        assert n.get('credentials') == GOOGLE, n['name'] + ': every other Google call uses the shared read-only service account'
+    if n['parameters'].get('method') in ('PUT', 'DELETE', 'PATCH'):
+        raise AssertionError(n['name'] + ': Index Coverage changes nothing outside its tables (the sitemap submission is the one PUT)')
+assert [n['name'] for n in N if (n.get('credentials') or {}).get('googleApi', {}).get('id') == 'SEOcredGoogleSvcW'] == [SUBMIT_NODE], 'the write credential is on exactly one node'
+_isrc = by['Sitemap Submit Requests']['parameters']['jsCode']
+assert "const KILL_OFF = '" + SITEMAP_SUBMIT + "' === 'off';" in _isrc and 'webmasters/v3/sites/' in _isrc and '/sitemaps/' in _isrc, 'Sitemap Submit Requests: the kill switch is baked and only sitemaps.submit is built'
 assert by['Inspect URL (Index)']['parameters']['options']['batching']['batch'] == {'batchSize': 1, 'batchInterval': 150}, '150 ms between inspections'
 assert 'Callback Ledger (' + TAG + ')' in by and outs('Callback Ledger (' + TAG + ')') == ['Has Callback (Index)?'], 'R115: the callback waits for the settle'
 
@@ -433,6 +474,8 @@ json.dump({'workflow': WID, 'name': NAME, 'file': FILE, 'schedule': dict(SCHEDUL
            'connections': {s_: [[t_['node'] for t_ in l_] for l_ in o_.get('main', [])] for s_, o_ in sorted(C.items())},
            'writes': {t: sorted(v) for t, v in sorted(_writes.items())}, 'own_tables': sorted(_own), 'shared_tables': sorted(_shared),
            'external': _external, 'inspect_batch': by['Inspect URL (Index)']['parameters']['options']['batching']['batch'],
+           'write_credential': {'id': 'SEOcredGoogleSvcW', 'nodes': [n['name'] for n in N if (n.get('credentials') or {}).get('googleApi', {}).get('id') == 'SEOcredGoogleSvcW'],
+                                'method': by[SUBMIT_NODE]['parameters']['method'], 'from': outs('Any Sitemap Submit?')[:1], 'kill_switch': SITEMAP_SUBMIT},
            'callback': {'has': 'Has Callback (Index)?', 'post': 'POST Index Report', 'body': by['POST Index Report']['parameters']['jsonBody']},
            'page_cols': [c for c, _ in INDEX_PAGES_COLS], 'run_cols': [c for c, _ in INDEX_RUNS_COLS], 'impact_cols': [c for c, _ in UPDATE_IMPACT_COLS],
            'event_cols': [c for c, _ in GOOGLE_EVENTS_COLS], 'history_cols': [c for c, _ in INDEX_HISTORY_COLS]},

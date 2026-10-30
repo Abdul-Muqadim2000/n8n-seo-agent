@@ -514,7 +514,12 @@ export const features: Feature[] = [
       'Why each page was left out, in plain words, with the pages grouped by the reason so one fix covers the whole group',
       'What to do for each group: steps on your own website that we then check for you, internal links to add from pages Google already shows, pages worth improving one at a time with your approval, and pages that are fine to leave out',
       'You hear when a page drops out of Google\'s index, the day our check notices it (each page is read again on its own schedule)',
-      'A page you fixed shows as fixed while Google catches up, and a short list of pages worth asking Google to read again in Search Console, which you do yourself',
+      'A page you fixed shows as fixed while Google catches up, and a short list of your most valuable pages worth asking Google to read again in Search Console, which you do yourself: say when you have, and the page shows when Google read it again',
+      'Pages your website already links to that Google has not visited yet are shown apart, with what helps, instead of a request to add links you already have',
+      'Internal links to add are one step on your website: each page to link to, the page of yours to add the link on, and our check that each link is there',
+      'Pages with a title of their own that name another page as their main version are found, with a step to let them stand on their own',
+      'Privacy, cookie, terms and login pages are shown as fine to leave out, never as pages to improve',
+      'Optional sitemap submission: switch it on and give us Full access in Search Console, and we submit your sitemap when it is missing or has changed, and nothing else',
       'Google\'s announced ranking updates followed for you: while one rolls out we hold back suggestions to change pages, and after it finishes you see which of your pages lost, held or gained, so you change pages only where there is evidence',
       'New pages and existing pages on their own tabs, each page with its last check and its history, and how long the rest of your site will take to check',
       'A page we could not check is shown as not checked, never as fine and never as left out',
@@ -538,7 +543,7 @@ export const features: Feature[] = [
       },
       {
         q: 'Do you change my website or send my pages to Google?',
-        a: 'No. Index coverage only reads. Changes on your website are steps you or your developer make, listed under Steps on your website; once you say a step is done we check it, and we keep checking every day. Nothing is submitted to Google for you. Improving a page is a suggestion you approve one page at a time, and it uses the usual credits for a page.',
+        a: 'We never change your website. Changes on it are steps you or your developer make, listed under Steps on your website; once you say a step is done we check it, and we keep checking every day. We only read your Search Console, unless you switch on sitemap submission, which lets us submit your sitemap and nothing else; it is off until you switch it on. We never send your pages to Google: asking Google to read a page again is something you do in Search Console, and you tell us when you have. Improving a page is a suggestion you approve one page at a time, and it uses the usual credits for a page.',
       },
       {
         q: 'What happens during a Google update?',
@@ -597,7 +602,7 @@ export const features: Feature[] = [
       { value: 'Live', label: 'rank checks where Search Console has no data' },
     ],
     faqs: [
-      { q: 'What access does Alaventra need?', a: 'You add Alaventra\'s service account as a user in Search Console and GA4. It reads your data; it does not change your settings.' },
+      { q: 'What access does Alaventra need?', a: 'You add Alaventra\'s service account as a user in Search Console and GA4. We only read your Search Console, unless you switch on sitemap submission, which lets us submit your sitemap and nothing else. GA4 is read only.' },
       {
         q: 'What if nobody here has done this before?',
         a: 'Every ask in Alaventra has a "Show me how" button next to it. It opens the job as numbered steps you tick off, with your own values in copy boxes, the page to open, and tabs for the provider or CMS you actually use. If the person who can do it is someone else (whoever manages your DNS, usually), one button sends them the whole thing by e-mail, values filled in, no account needed.',
@@ -1069,7 +1074,7 @@ export const features: Feature[] = [
       { title: 'Alaventra checks the result', body: 'The button at the end runs the check (verified, connected, file found), so nobody is left guessing whether it worked.' },
     ],
     facts: [
-      { value: 84, label: 'guides, one for each thing we ask of you' },
+      { value: 86, label: 'guides, one for each thing we ask of you' },
       { value: 'Your values', label: 'in every copy box, not an example' },
       { value: 'One e-mail', label: 'hands a guide to the person who can do it' },
     ],

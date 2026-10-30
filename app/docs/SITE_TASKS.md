@@ -156,3 +156,30 @@ and how many there are. Every rule above holds:
   (the engine clears `fix_failed_at`) closes it. A `fix_seen_at` newer than `fix_failed_at` is a later fix, waiting for Google again.
 - An empty canonical (`href=""`) is no canonical, never resolved to an address.
 
+## 7. Kind `index_links`, key `indexing:links` (Index coverage wave 2, 2026-10-30)
+
+`n8n/seo-agent/docs/indexing-2026-10-29/DESIGN_WAVE2.md` §3.2. The pages Google has not found that no other page of the website links to
+(the engine's `links` rows), as ONE step listing up to 10 pairs: the page to link to and the page of the website to add the link on (the
+engine's first suggestion: indexed, on topic, never a policy or utility page). Pages the website already links to are the engine's `wait`:
+they are never in this step and get no suggestion (devaicon.com was told to add links that were already there). Every rule above holds:
+
+- **Our own check decides.** "I've done it, check now" and the daily check open each page to add the link on (own host, the safe fetcher,
+  https, at most 10, four at a time, inside the 45 s cap) and look for an `<a href>` to the target (resolved against the page, host without
+  `www.`, no fragment; a query counts only when the target has one; comments skipped). Done when every pair has its link; otherwise "3 of 5
+  links found" with the missing ones, recorded like any miss (two misses an hour apart reopen a done step).
+- **Unreachable never records**: a page that does not answer is 503 on a click and nothing daily; a firewall, a challenge page or a page that
+  went to another website is "could not tell" (409 `site_unsure`, nothing recorded).
+- **The engine's reading only closes**: the engine reads the home page and parent pages, so it cannot see a link added on an article. Its
+  reading closes the step when its complete list (made after the step was stored) holds no page that needs a link; a capped or missing read
+  keeps the step as it is. A pair listed after the last own check makes the engine's reading "not checked yet" (to do, never "needed again").
+- **The pairs stay as listed**: a stored pair keeps its page to add the link on while its target still needs a link; a target the engine no
+  longer lists leaves the step; new targets join while the step is to do (or reopen it as "not checked yet").
+- **Tick fairness**: `index_links` shares the indexing third of each daily tick with `indexing` (`INDEX_TASK_KINDS`).
+- **Exhaustive switches**: `present`, `doneDetail`, `siteTaskPayload`, `siteTaskKindOfKey` and `runSiteTaskCheck` name the kind; the guide is
+  `index-add-internal-links`; Needs-you `task:indexing:links` and the recommendation `ix:links` open it.
+- **Rollback**: an API from before wave 2 reads a row of this kind as an unknown kind (it reads and records nothing).
+
+Also in wave 2: `indexing:canonical_elsewhere` lists pages with a title of their own whose canonical names another page (not in the sitemap,
+or the engine's note "This page tells Google it is a copy of"; payload `ownTitle`); for those the own check counts only a canonical tag that
+names the page itself (their absence from the sitemap is never the fix). `indexing:sitemap` is not listed for a missing sitemap when the client switched on sitemap submission and Google
+reports Full access for us (Alaventra submits it then).

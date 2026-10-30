@@ -2,6 +2,7 @@ import {
   creditsFor,
   clampIndexDailyCap,
   indexWatchOn,
+  indexSitemapSubmitOn,
   gscConnectionState,
   ga4ConnectionState,
   aiAlertsOf,
@@ -1697,6 +1698,8 @@ export function monitorsFromRow(r: MonitorsRow | undefined): (MonitorSettings & 
     // Index coverage (2026-10-29): read back only when the engine stored the column (empty = on, 300 a day)
     ...(r.index_watch != null && (r.index_watch as unknown) !== '' ? { indexWatch: indexWatchOn(r.index_watch) } : {}),
     ...(r.index_daily_cap != null && (r.index_daily_cap as unknown) !== '' && Number(r.index_daily_cap) > 0 ? { indexDailyCap: clampIndexDailyCap(r.index_daily_cap) } : {}),
+    // wave 2 (DESIGN_WAVE2 §2.5): read back only when stored (empty = off)
+    ...(r.index_sitemap_submit != null && (r.index_sitemap_submit as unknown) !== '' ? { indexSitemapSubmit: indexSitemapSubmitOn(r.index_sitemap_submit) } : {}),
     competitors: splitList(r.competitors),
     updatedAt: s(r.updated_at),
   };

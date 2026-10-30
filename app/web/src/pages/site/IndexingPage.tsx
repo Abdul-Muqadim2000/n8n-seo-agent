@@ -3,12 +3,16 @@
 // pages that dropped out; Google's own updates and what they did to this website. Read only: the engine's daily index check writes the
 // data; the client's fixes are "Steps on your website" (checked by us) and a rewrite is always the client's click.
 import { useState } from 'react';
-import { ArrowRight, CalendarClock, CheckCircle2, CircleDashed, FileSearch, History, Link2, ListChecks, MousePointerClick, SearchCheck, Settings2, Sparkles, TrendingDown, TriangleAlert } from 'lucide-react';
+import { ArrowRight, CalendarClock, CheckCircle2, CircleDashed, FileSearch, History, Link2, ListChecks, Map as MapIcon, MousePointerClick, SearchCheck, Settings2, Sparkles, TrendingDown, TriangleAlert } from 'lucide-react';
+import { toast } from 'sonner';
 import {
+  askGoogleStatus,
   INDEX_ACTION_INFO,
   INDEX_GROUP_PREVIEW,
   improveKeywordOf,
   indexInSearchLine,
+  indexPath,
+  type IndexSitemapState,
   type GoogleEvent,
   type IndexGroup,
   type IndexingData,
@@ -23,7 +27,9 @@ import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout, EmptyState } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/misc';
 import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
-import { useIndexing, useIndexingHistory, useIndexingPages } from '@/lib/queries';
+import { SitemapAccessLine } from '@/components/site/MonitorSettingsFields';
+import { toastError } from '@/lib/api';
+import { useAskedGoogle, useIndexing, useIndexingHistory, useIndexingPages } from '@/lib/queries';
 import { paths } from '@/lib/paths';
 import { fmtDay } from '@/lib/utils';
 import { DataGate, Panel, useSitePage } from './_components/kit';
@@ -176,7 +182,7 @@ function IndexingBody({ d, orgId, siteId, domain, member }: { d: IndexingData; o
         ))}
       </Tabs>
 
-      {d.askGoogle.length > 0 && <AskGooglePanel items={d.askGoogle} domain={domain} />}
+      {(d.askGoogle.length > 0 || (d.askedGoogle?.length ?? 0) > 0) && <AskGooglePanel items={d.askGoogle} asked={d.askedGoogle ?? []} domain={domain} orgId={orgId} siteId={siteId} member={member} />}
 
       {d.dropped.length > 0 && (
         <Panel icon={<TrendingDown />} iconTone="warning" title="Dropped out of Google search" description={`${pages(d.dropped.length)} that ${d.dropped.length === 1 ? 'was' : 'were'} in search before`} flush>
@@ -188,6 +194,7 @@ function IndexingBody({ d, orgId, siteId, domain, member }: { d: IndexingData; o
         </Panel>
       )}
 
+      {d.sitemap && <SitemapPanel s={d.sitemap} domain={domain} orgId={orgId} siteId={siteId} />}
       <UpdatesPanel events={d.events} impacts={d.impacts} rolling={d.rollingOut} />
       <SettingsCard d={d} orgId={orgId} siteId={siteId} />
     </Stagger>
@@ -203,29 +210,139 @@ function UpdateBanner({ e, frozen }: { e: GoogleEvent; frozen: boolean }) {
   );
 }
 
-/** FIX_CONTRACT (X8): the few pages where asking Google to read them again in Search Console is the right next step. Never automated. */
-function AskGooglePanel({ items, domain }: { items: IndexPage[]; domain: string }) {
+/** FIX_CONTRACT (X8) + wave 2 (DESIGN_WAVE2 §3.2): the few pages where asking Google to read them again in Search Console is the right next
+ *  step. Never automated: the client asks Google, presses "I asked Google", and the page then follows Google's next reading. */
+function AskGooglePanel({ items, asked, domain, orgId, siteId, member }: { items: IndexPage[]; asked: IndexPage[]; domain: string; orgId: string; siteId: string; member: boolean }) {
+  const mark = useAskedGoogle(orgId, siteId);
+  const why = (p: IndexPage) => (p.fixSeenAt ? 'fixed on your site, Google has not read it again yet' : p.lane === 'new' ? 'a new page Google has not put in search yet' : 'an important page Google has not read yet');
   return (
     <Panel
       icon={<MousePointerClick />}
       iconTone="blue"
       title="Ask Google to read these pages again"
-      description="A few pages a day, by hand in Search Console. We never do it for you, and Google still decides."
-      actions={<GuideButton id="index-request-indexing" vars={{ domain, pageUrl: items[0]?.url ?? '' }} />}
+      description="A few pages a day, by hand in Search Console. We never do it for you, and Google still decides. Press I asked Google once you have: we then follow what Google does."
+      actions={<GuideButton id="index-request-indexing" vars={{ domain, pageUrl: items[0]?.url ?? asked[0]?.url ?? '' }} />}
       flush
     >
       <ul className="divide-y divide-line border-t border-line">
-        {items.map((p) => (
-          <InsightItem
-            key={p.url}
-            tone="blue"
-            icon={<SearchCheck className="size-4" />}
-            title={<span className="break-all">{p.path}</span>}
-            titleAttr={p.title || p.url}
-            description={p.fixSeenAt ? 'fixed on your site, Google has not read it again yet' : p.lane === 'new' ? 'a new page Google has not put in search yet' : 'an important page Google has not read yet'}
-          />
-        ))}
+        {[...items, ...asked].map((p) => {
+          const st = askGoogleStatus(p);
+          // ENGINE_BUILD wave 2 contract 6: a press the daily check did not keep ("lost") can be pressed again
+          const canMark = member && ((items.includes(p) && (st.state === 'none' || st.state === 'quiet')) || st.state === 'lost');
+          return (
+            <InsightItem
+              key={p.url}
+              tone={st.state === 'read' ? 'good' : 'blue'}
+              icon={<SearchCheck className="size-4" />}
+              meta={st.state === 'read' ? <StatusBadge tone="good">Read again</StatusBadge> : st.state === 'waiting' ? <StatusBadge tone="accent">Waiting for Google</StatusBadge> : st.state === 'lost' ? <StatusBadge tone="warning">Not recorded</StatusBadge> : undefined}
+              title={<span className="break-all">{p.path}</span>}
+              titleAttr={p.title || p.url}
+              description={st.text ? `${st.text}${st.state === 'read' ? ` ${p.state === 'indexed' ? 'It is in Google search now.' : 'Google has not put it in search yet; the groups above say why.'}` : ''}` : why(p)}
+              actionPosition="side"
+              action={
+                canMark ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<CheckCircle2 className="size-4" />}
+                    loading={mark.isPending && mark.variables === p.url}
+                    onClick={() =>
+                      mark.mutate(p.url, {
+                        onSuccess: () => toast.success(`Noted. ${indexPath(p.url)} is waiting for Google to read it again.`),
+                        onError: (e) => toastError(e),
+                      })
+                    }
+                  >
+                    I asked Google
+                  </Button>
+                ) : undefined
+              }
+            />
+          );
+        })}
       </ul>
+    </Panel>
+  );
+}
+
+const SUBMISSION_STATUS: Record<IndexSitemapState['submissions'][number]['status'], { tone: Tone; label: string }> = {
+  ok: { tone: 'good', label: 'Submitted' },
+  refused: { tone: 'warning', label: 'Refused by Google' },
+  // wave 2 review W13: an attempt recorded before Google's answer, with no answer kept: never shown as done
+  pending: { tone: 'neutral', label: 'Last attempt, not confirmed' },
+  error: { tone: 'warning', label: 'Not submitted' },
+};
+
+/** Wave 2 review W1: reasons that stop every submission until something changes (the card does not describe what we would submit then). */
+const HELD: ReadonlySet<string> = new Set(['paused', 'no_sitemap', 'outside_property', 'not_set_up']);
+
+/** wave 2 (DESIGN_WAVE2 §3.2): the sitemap switch, the access Google reports for us, and every submission with Google's read date. */
+function SitemapPanel({ s, domain, orgId, siteId }: { s: IndexSitemapState; domain: string; orgId: string; siteId: string }) {
+  // wave 2 review W1: "we will submit it" ONLY when the engine's newest check says it will (`submit.will_submit === true`); otherwise,
+  // with the switch on, the engine's reason in words, and the "Submit your sitemap" step stays on Steps on your website
+  const willSubmit = s.submitOn && s.willSubmit;
+  if (!s.submitOn && !s.submissions.length && s.access !== 'restricted' && s.access !== 'refused') return null;
+  return (
+    <Panel
+      icon={<MapIcon />}
+      title="Your sitemap in Search Console"
+      description={
+        !s.submitOn
+          ? 'Sitemap submission is off: you submit your sitemap in Search Console yourself.'
+          : s.access === 'refused'
+            ? 'Sitemap submission is on, but Google refused our last submission, so nothing is submitted for now.'
+            : s.access === 'full' && HELD.has(s.blocked)
+              ? 'Sitemap submission is on, but we will not submit your sitemap on the next daily check. Why is below.'
+              : s.access === 'full'
+                ? 'Sitemap submission is on: when your sitemap is missing from Search Console or has changed, we submit it, at most once a week.'
+              : 'Sitemap submission is on, but nothing can be submitted until Google gives us Full access.'
+      }
+      actions={
+        <ButtonLink size="sm" variant="secondary" to={paths.site(orgId, siteId, 'settings/tracking')}>
+          Change
+        </ButtonLink>
+      }
+      flush
+    >
+      <div className="space-y-2 border-t border-line px-5 py-3">
+        <SitemapAccessLine info={{ access: s.access, at: s.accessAt, blocked: s.blocked }} domain={domain} on={s.submitOn} />
+        {willSubmit &&
+          (s.submitted === 0 ? (
+            <p className="text-[13px] text-ink-2">Search Console lists no sitemap for {domain} yet. We will submit it on the next daily check; there is nothing to do on your side.</p>
+          ) : (
+            <p className="text-[13px] text-ink-2">Your sitemap changed since it was last submitted. We will submit it again on the next daily check; there is nothing to do on your side.</p>
+          ))}
+        {s.submitOn && !willSubmit && s.submitted === 0 && (
+          <p className="text-[13px] text-ink-2">
+            Search Console lists no sitemap for {domain}, and we will not submit it on the next daily check, so it stays a step for you under Steps on your website.
+          </p>
+        )}
+      </div>
+      {s.submissions.length > 0 ? (
+        <ul className="divide-y divide-line border-t border-line">
+          {s.submissions.map((x) => (
+            <InsightItem
+              key={`${x.path}-${x.at}`}
+              tone={x.status === 'ok' ? 'good' : x.status === 'pending' ? 'neutral' : 'warning'}
+              icon={<MapIcon className="size-4" />}
+              meta={<StatusBadge tone={SUBMISSION_STATUS[x.status].tone}>{SUBMISSION_STATUS[x.status].label}</StatusBadge>}
+              title={<span className="break-all">{indexPath(x.path)}</span>}
+              titleAttr={x.path}
+              description={[
+                `${x.status === 'ok' ? 'Submitted' : 'Tried'} on ${fmtDay(x.at)}`,
+                x.status === 'pending' ? 'Search Console has not listed it since' : null,
+                x.reason ? `because ${x.reason}` : null,
+                x.status === 'ok' ? (x.readAt ? `Google read your sitemap on ${fmtDay(x.readAt)}` : 'Google has not read it since') : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            />
+          ))}
+        </ul>
+      ) : (
+        // W1: only when nothing else on the card already says why (a listed sitemap, no reason from the engine)
+        s.submitOn && s.submitted !== 0 && !s.blocked && !s.willSubmit && <p className="border-t border-line px-5 py-3 text-[13px] text-ink-3">Nothing submitted yet. Search Console already lists your sitemap, or the daily check has not run since you switched it on.</p>
+      )}
     </Panel>
   );
 }
@@ -354,9 +471,12 @@ function PageRow({ p, orgId, siteId, member, freeze }: { p: IndexPage; orgId: st
     p.fixFailedAt ? `Google read it again on ${fmtDay(p.fixFailedAt)}, after the change we saw, and still sees the problem` : null,
     p.impressions28d ? `${n(p.impressions28d)} impressions in 28 days` : null,
     p.inSitemap ? 'in your sitemap' : 'not in your sitemap',
+    // wave 2: which pages of the website link to it (the engine reads the home page and the parent pages)
+    p.linkedBy.length ? `linked from ${p.linkedBy.map(indexPath).join(', ')}` : null,
+    askGoogleStatus(p).text || null,
     p.needsPerson ? 'unchanged after 4 checks: worth a closer look' : null,
   ].filter(Boolean);
-  const improve = p.action === 'quality' && !freeze && member;
+  const improve = p.action === 'quality' && !freeze && member && !p.utility;
   return (
     <InsightItem
       tone={p.state === 'indexed' ? 'good' : p.action === 'site_fix' ? 'warning' : 'blue'}

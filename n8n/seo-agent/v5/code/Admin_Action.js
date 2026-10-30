@@ -81,5 +81,14 @@ const monitors = (t.monitors && typeof t.monitors === 'object') ? t.monitors : (
     const n = Number(String(c).trim());
     if (!Number.isFinite(n) || Math.floor(n) !== n) throw new Error('index_daily_cap must be a whole number of URL inspections a day (20-1,200)');
     monitors.index_daily_cap = Math.min(1200, Math.max(20, n));
+  }
+  // Index coverage wave 2 (2026-10-30, DESIGN_WAVE2.md §2.5): the client's opt-in for sitemap submission (a yes / no like index_watch; '' or
+  // null keeps the stored value, empty = OFF). Anything else is refused with its reason and nothing is stored.
+  const ss = monitors.index_sitemap_submit;
+  if (ss !== undefined && ss !== null && ss !== '') {
+    if (typeof ss === 'boolean') { /* kept */ }
+    else if (/^(true|1|yes|on)$/i.test(String(ss).trim())) monitors.index_sitemap_submit = true;
+    else if (/^(false|0|no|off)$/i.test(String(ss).trim())) monitors.index_sitemap_submit = false;
+    else throw new Error('index_sitemap_submit must be true or false');
   } }
 return [{ json: { fact_answers_sent, fact_answers_json, fact_answers_count: Object.keys(FAP.answers).length, fact_answers_dropped: FAP.dropped, action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, on_prompts, pin_prompts, unpin_prompts, edit_prompts, accept_prompts, retire_prompts, monitors, content_groups_json, business_facts, market_country: market.country, market_location_code: market.location_code, market_language_code: market.language_code, market_iso: market.country_iso, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];

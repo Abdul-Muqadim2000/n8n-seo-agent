@@ -94,4 +94,9 @@ return [{ json: { site_id: sid, domain: normD(s.domain), canonical_host: S(s.can
   callback_url: S(trigger.callback_url) || S(s.callback_url), request_id: S(trigger.request_id) || S(s.request_id), cap, used_today, quota_hit, on_demand,
   index_watch: flag(m.index_watch, true), trigger: S(trigger.trigger), run_at,
   prev_complete: pj.complete === true, prev_complete_at: pj.complete === true ? S(prev.run_at) : '', home_host_prev: S(pj.home_host),
-  chain_part: chain ? (Number(chain.part) || 1) : 0, chain_id: myChain } }];
+  chain_part: chain ? (Number(chain.part) || 1) : 0, chain_id: myChain,
+  // wave 2 (DESIGN_WAVE2.md §2.5): the client's opt-in for sitemap submission (empty = OFF) and what the last run recorded of it (the
+  // submissions to check back and to space 7 days apart, the sitemap tree's fingerprint, a 403 that holds the next submission)
+  sitemap_submit: flag(m.index_sitemap_submit, false),
+  prev_submissions: Array.isArray(pj.submissions) ? pj.submissions : [], prev_tree_fp: pj.tree_fp && typeof pj.tree_fp === 'object' ? pj.tree_fp : null,
+  prev_submit_denied: pj.submit_denied && typeof pj.submit_denied === 'object' ? pj.submit_denied : null } }];

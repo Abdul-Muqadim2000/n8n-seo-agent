@@ -22,7 +22,7 @@ if (ROUND === 1) {
     const s = { ...s0, home_host: S(s0.home_host_prev) };
     const i = reqs.findIndex(q => q.site_id === s.site_id);
     const ans = i >= 0 ? (lists[i] || {}) : {};
-    const gsc = Array.isArray(ans.sitemap) ? ans.sitemap.map(x => S(x.path)).filter(Boolean) : [];
+    const gsc = (IX.sitemapsListOf(ans) || []).map(x => x.path);   // W2: a full response now (status code read); only a real list
     const host = IX.siteHost(s);
     out.push({ json: { site_id: s.site_id, url: 'https://' + host + '/', from: 'home', home: true } });
     out.push({ json: { site_id: s.site_id, url: 'https://' + host + '/robots.txt', from: 'robots_txt', robots: true } });

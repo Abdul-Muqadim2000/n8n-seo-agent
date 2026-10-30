@@ -2,7 +2,8 @@
 // (chatgpt, perplexity, gemini, claude, ai_overview, ai_mode, copilot, chatgpt_api, gemini_api), ai_prompts_max (3-500, G6), ai_personas / ai_markets
 // (G6: buyer roles and extra markets, CC-lang), ai_pulse_mode ('' auto | sample | full) + ai_pulse_per_week (1-6, empty = auto), ai_pulse (daily AI Pulse, v4.9), ai_growth (weekly AI Growth loop) + ai_pages_month (0-8, v4.12), link_builder (weekly Link Builder, v4.13), stuck_weeks (2-26, G32), backlinks, audit_monthly, audit_pages (50-1000), audit_js,
 // competitors (domains), brand_names; W2-E3: ai_claude_weekly, ai_pulse_engines, ai_persona_context, ai_fanout_check (0-200), ai_demand_market;
-// Index coverage (2026-10-29): index_watch (daily index watch, empty = on), index_daily_cap (20-1,200 URL inspections a day, empty = 300).
+// Index coverage (2026-10-29): index_watch (daily index watch, empty = on), index_daily_cap (20-1,200 URL inspections a day, empty = 300);
+// wave 2 (2026-10-30): index_sitemap_submit (the client's opt-in for sitemap submission, empty = OFF).
 const a = $('Admin Action').first().json; const m = a.monitors || {};
 let old = {}; try { old = $('Load Monitors (Admin)').all().map(i => i.json).find(x => x && x.site_id === a.site_id) || {}; } catch (e) {}
 const has = (k) => m[k] !== undefined && m[k] !== null && m[k] !== '';
@@ -42,5 +43,8 @@ Object.assign(__row, { ai_pulse_scope: has('ai_pulse_scope') ? (['focus', 'all']
 // Index coverage (2026-10-29): the daily index watch (empty = on) and its daily inspection cap (empty = 300), validated in Admin Action - kept as stored unless given
 Object.assign(__row, { index_watch: has('index_watch') ? (m.index_watch === true || /^(true|1|yes|on)$/i.test(String(m.index_watch))) : (old.index_watch === '' || old.index_watch == null ? null : !(old.index_watch === false || old.index_watch === 'false')),
   index_daily_cap: m.index_daily_cap === '' ? null : has('index_daily_cap') ? Math.min(1200, Math.max(20, parseInt(m.index_daily_cap, 10) || 300)) : (old.index_daily_cap === '' || old.index_daily_cap == null ? null : Number(old.index_daily_cap)) });
+// Index coverage wave 2 (2026-10-30, DESIGN_WAVE2.md §2.5): the opt-in for sitemap submission (validated in Admin Action; empty = off) - kept as stored unless given
+Object.assign(__row, { index_sitemap_submit: has('index_sitemap_submit') ? (m.index_sitemap_submit === true || /^(true|1|yes|on)$/i.test(String(m.index_sitemap_submit)))
+  : (old.index_sitemap_submit === '' || old.index_sitemap_submit == null ? null : (old.index_sitemap_submit === true || old.index_sitemap_submit === 'true')) });
 if (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit
 return [{ json: __row }];

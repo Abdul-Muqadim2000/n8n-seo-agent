@@ -111,6 +111,14 @@
     "Inspect Retry Requests"
    ]
   ],
+  "Any Link Reads?": [
+   [
+    "Fetch Link Pages"
+   ],
+   [
+    "Site Links"
+   ]
+  ],
   "Any Next Part?": [
    [
     "Start Next Index Part"
@@ -164,7 +172,7 @@
     "Save Index Reservation"
    ],
    [
-    "Index Probe Requests"
+    "Sitemap Submit Requests"
    ]
   ],
   "Any Retry Part?": [
@@ -178,6 +186,14 @@
    ],
    [
     "Next Index Part"
+   ]
+  ],
+  "Any Sitemap Submit?": [
+   [
+    "Submit Sitemap (Index)"
+   ],
+   [
+    "Index Probe Requests"
    ]
   ],
   "Any Sitemaps 1?": [
@@ -278,6 +294,14 @@
     "Index Report"
    ]
   ],
+  "Any Submit Alert?": [
+   [
+    "Save Submit Alert"
+   ],
+   [
+    "Index Probe Requests"
+   ]
+  ],
   "Any Update Impact?": [
    [
     "Save Update Impact"
@@ -367,6 +391,11 @@
   "Fetch Hop Requests": [
    [
     "Any Hops?"
+   ]
+  ],
+  "Fetch Link Pages": [
+   [
+    "Site Links"
    ]
   ],
   "Fetch Page (Final)": [
@@ -606,6 +635,11 @@
     "Ledger Join (Index)"
    ]
   ],
+  "Link Read Requests": [
+   [
+    "Any Link Reads?"
+   ]
+  ],
   "Load Catch-up Records (Index)": [
    [
     "Run Ledger Row (Index)"
@@ -684,6 +718,11 @@
   "Load Start Alerts (Watch)": [
    [
     "Index Start Alert (Watch)"
+   ]
+  ],
+  "Load Submit Alerts": [
+   [
+    "Submit Setup Alert"
    ]
   ],
   "Load Update Impact": [
@@ -830,7 +869,7 @@
   ],
   "Save Index Reservation": [
    [
-    "Index Probe Requests"
+    "Sitemap Submit Requests"
    ]
   ],
   "Save Index Runs": [
@@ -851,6 +890,11 @@
   "Save Index Start Delivery (Before Settle)": [
    [
     "Index Report"
+   ]
+  ],
+  "Save Submit Alert": [
+   [
+    "Index Probe Requests"
    ]
   ],
   "Save Update Impact": [
@@ -875,6 +919,11 @@
    [
     "Ensure Ops Alerts (Index)",
     "Index Watch Plan"
+   ]
+  ],
+  "Site Links": [
+   [
+    "Index Inventory"
    ]
   ],
   "Site To Check? (Index)": [
@@ -917,7 +966,7 @@
   ],
   "Sitemap Read 7": [
    [
-    "Index Inventory"
+    "Link Read Requests"
    ]
   ],
   "Sitemap Requests 1": [
@@ -955,6 +1004,11 @@
     "Any Sitemaps 7?"
    ]
   ],
+  "Sitemap Submit Requests": [
+   [
+    "Any Sitemap Submit?"
+   ]
+  ],
   "Sitemaps List Requests": [
    [
     "Any Sitemaps List?"
@@ -973,6 +1027,16 @@
   "Start Next Index Part": [
    [
     "Load Start Alerts (Next)"
+   ]
+  ],
+  "Submit Setup Alert": [
+   [
+    "Any Submit Alert?"
+   ]
+  ],
+  "Submit Sitemap (Index)": [
+   [
+    "Load Submit Alerts"
    ]
   ],
   "Tell Caller (Index)?": [
@@ -1021,6 +1085,7 @@
  ],
  "external": [
   "Fetch Google Incidents",
+  "Fetch Link Pages",
   "Fetch Page (Final)",
   "Fetch Page (Index)",
   "Fetch Sitemaps 1",
@@ -1043,7 +1108,8 @@
   "Post Alert Retry (Index)",
   "Post Index Start Alert (After Settle)",
   "Post Index Start Alert (Before Settle)",
-  "Post Refusal (Index)"
+  "Post Refusal (Index)",
+  "Submit Sitemap (Index)"
  ],
  "file": "SEO_Agent_Index_Coverage.json",
  "history_cols": [
@@ -1095,6 +1161,7 @@
   "Any Index Rows?",
   "Any Index Watch?",
   "Any Inspections (Index)?",
+  "Any Link Reads?",
   "Any Next Part?",
   "Any Page Fetches?",
   "Any Pages Query More?",
@@ -1104,6 +1171,7 @@
   "Any Reservation?",
   "Any Retry Part?",
   "Any Run Rows?",
+  "Any Sitemap Submit?",
   "Any Sitemaps 1?",
   "Any Sitemaps 2?",
   "Any Sitemaps 3?",
@@ -1117,6 +1185,7 @@
   "Any Start Alert (Before Settle)?",
   "Any Start Delivery? (After Settle)",
   "Any Start Delivery? (Before Settle)",
+  "Any Submit Alert?",
   "Any Update Impact?",
   "Callback Ledger (Index)",
   "DFS Balance (Index)",
@@ -1134,6 +1203,7 @@
   "Ensure Update Impact Table",
   "Fetch Google Incidents",
   "Fetch Hop Requests",
+  "Fetch Link Pages",
   "Fetch Page (Final)",
   "Fetch Page (Index)",
   "Fetch Sitemaps 1",
@@ -1181,6 +1251,7 @@
   "Inspect URL (Retry)",
   "Ledger Join (Index)",
   "Ledger Settle (Index)",
+  "Link Read Requests",
   "Load Catch-up Records (Index)",
   "Load Content Log (Index)",
   "Load Google Events",
@@ -1197,6 +1268,7 @@
   "Load Start Alerts (Part)",
   "Load Start Alerts (Restart)",
   "Load Start Alerts (Watch)",
+  "Load Submit Alerts",
   "Load Update Impact",
   "Manual Run",
   "Move Index History",
@@ -1233,10 +1305,12 @@
   "Save Index Start Alert (Before Settle)",
   "Save Index Start Delivery (After Settle)",
   "Save Index Start Delivery (Before Settle)",
+  "Save Submit Alert",
   "Save Update Impact",
   "Send Start Webhook? (After Settle)",
   "Send Start Webhook? (Before Settle)",
   "Settle Run Ledger (Index)",
+  "Site Links",
   "Site To Check? (Index)",
   "Sitemap Read 1",
   "Sitemap Read 2",
@@ -1252,10 +1326,13 @@
   "Sitemap Requests 5",
   "Sitemap Requests 6",
   "Sitemap Requests 7",
+  "Sitemap Submit Requests",
   "Sitemaps List Requests",
   "Start Index Part",
   "Start Index Watch",
   "Start Next Index Part",
+  "Submit Setup Alert",
+  "Submit Sitemap (Index)",
   "Tell Caller (Index)?",
   "Update Impact Requests",
   "Update Impact Rows",
@@ -1318,7 +1395,10 @@
   "fix_seen_at",
   "ask_google",
   "fix_failed_at",
-  "ask_google_at"
+  "ask_google_at",
+  "linked_by",
+  "asked_google_at",
+  "google_read_after_ask_at"
  ],
  "run_cols": [
   "site_id",
@@ -1357,6 +1437,17 @@
  ],
  "tz": "America/New_York",
  "workflow": "SEOagentIndexCv1",
+ "write_credential": {
+  "from": [
+   "Submit Sitemap (Index)"
+  ],
+  "id": "SEOcredGoogleSvcW",
+  "kill_switch": "on",
+  "method": "PUT",
+  "nodes": [
+   "Submit Sitemap (Index)"
+  ]
+ },
  "writes": {
   "seo_google_events": [
    "Ensure Google Events Table",
@@ -1386,7 +1477,8 @@
    "Save Index Start Alert (After Settle)",
    "Save Index Start Alert (Before Settle)",
    "Save Index Start Delivery (After Settle)",
-   "Save Index Start Delivery (Before Settle)"
+   "Save Index Start Delivery (Before Settle)",
+   "Save Submit Alert"
   ],
   "seo_run_ledger": [
    "Ensure Run Ledger (Index)",
