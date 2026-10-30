@@ -1343,14 +1343,19 @@ const IX = (() => {
     const R = rows || [];
     const wasMarked = (r) => !!(r._prev ? r._prev.ask_google : yes(r.ask_google));
     const markedAt = (r) => S(r._prev && S(r._prev.ask_google_at) ? r._prev.ask_google_at : r.ask_google_at);
-    const kept = R.filter(r => wasMarked(r) && eligible(r) > 0).slice(0, CFG.ask_max);
+    // wave 2 follow-up (production 2026-10-30, devaicon.com): one ranking for marked and unmarked pages, so a capability page takes the slot of
+    // a lower-value page the client has not asked about yet; only NEW marks spend the weekly budget, and a mark the current rules no longer
+    // allow (a utility page, a job posting, a page left out) does not count against the week
+    const countsForWeek = (r) => { const t = ts(markedAt(r)); return t && now - t < CFG.ask_window_days * DAY && !isUtility(r.url) && !isJobPosting(r.url) && S(r.action) !== 'leave_out'; };
+    let budget = Math.max(0, CFG.ask_max - R.filter(countsForWeek).length);
+    const pool = R.map(r => ({ r, w: eligible(r), v: askValue(r, home), m: wasMarked(r) })).filter(x => x.w > 0)
+      .sort((a, b) => ((b.w === 3) - (a.w === 3)) || a.v - b.v || (b.m - a.m) || n0(b.r.impressions_28d) - n0(a.r.impressions_28d) || depth(a.r.url) - depth(b.r.url) || S(a.r.url).localeCompare(S(b.r.url)));
+    const kept = [], fresh = [];
+    for (const x of pool) {
+      if (kept.length + fresh.length >= CFG.ask_max) break;
+      if (x.m) kept.push(x.r); else if (budget > 0) { fresh.push(x.r); budget--; }
+    }
     const keptKeys = new Set(kept.map(r => key(r.url)));
-    const recentNew = R.filter(r => { const t = ts(markedAt(r)); return t && now - t < CFG.ask_window_days * DAY; }).length;
-    const room = Math.max(0, Math.min(CFG.ask_max - kept.length, CFG.ask_max - recentNew));
-    // wave 2 (§2.3): by value - a fix seen on the site first, then (1) service / product / capability / solution / industry pages linked from
-    // the home page, (2) articles, (3) other content pages; ties: impressions, then the shallower path
-    const fresh = R.filter(r => !keptKeys.has(key(r.url))).map(r => ({ r, w: eligible(r), v: askValue(r, home) })).filter(x => x.w > 0)
-      .sort((a, b) => ((b.w === 3) - (a.w === 3)) || a.v - b.v || n0(b.r.impressions_28d) - n0(a.r.impressions_28d) || depth(a.r.url) - depth(b.r.url) || S(a.r.url).localeCompare(S(b.r.url))).slice(0, room).map(x => x.r);
     const freshKeys = new Set(fresh.map(r => key(r.url)));
     for (const r of R) {
       const k = key(r.url);

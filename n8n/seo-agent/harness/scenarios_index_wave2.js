@@ -606,6 +606,28 @@ module.exports = async (ctx) => {
       gsc: [{ path: DEV + '/sitemap.xml', errors: 0, last_submitted: iso(tW + 60e3), last_downloaded: '' }], prev: { submissions: jr.submissions } }));
     check('a pending attempt Search Console lists afterwards is confirmed', later && (later.submissions || [])[0] && later.submissions[0].status === 'confirmed', J(later && later.submissions));
   });
+  // =================================================================================================================================
+  await guard('IXV8 ask-Google slots after the rules changed (production devaicon.com 2026-10-30)', async () => {
+    const SN = 'IXV8 (wave 2 follow-up, production devaicon.com 2026-10-30) pages marked under the old rule (/about, /cookies, /insights, /security, /industries the day before) must not keep the capability pages out: marks the rules no longer allow do not count against the week, and a higher-value page takes the slot of a lower-value page the client has not asked about';
+    begin(SN); const check = mkCheck(SN);
+    const D1 = T0 - 1 * DAY;
+    const home = new Set(['/about-devaicon', '/insights', '/industries', '/capabilities/intelligent-systems-data', '/capabilities/infrastructure-enterprise-systems', '/whatwedo', '/cookies', '/security'].map(p => IX.key(DEV + p)));
+    const mk = (p, o) => ({ url: DEV + p, domain: 'devaicon.com', state: 'not_indexed', cause: 'discovered_not_crawled', action: 'wait', in_sitemap: true, linked_by: J([DEV + '/']), title: '', ask_google: false, ask_google_at: '', ...(o || {}) });
+    const old = { ask_google: true, ask_google_at: new Date(D1).toISOString() };
+    const rs = [mk('/about-devaicon', old), mk('/insights', old), mk('/industries', old),
+      mk('/cookies', { ...old, state: 'excluded', cause: 'low_value', action: 'leave_out' }), mk('/security', { ...old, state: 'excluded', cause: 'low_value', action: 'leave_out' }),
+      mk('/capabilities/intelligent-systems-data', { cause: 'unknown_to_google' }), mk('/capabilities/infrastructure-enterprise-systems'), mk('/whatwedo', { cause: 'unknown_to_google' })];
+    const n = T(() => IX.askGoogle(rs, { now: T0, home_keys: home, freeze: { freeze: false } }));
+    const on = rs.filter(r => r.ask_google).map(r => P(r.url));
+    check('the two free slots go to service pages linked from the home page (shallowest first: /whatwedo, then a capability page), not blocked by the two utility marks', on.includes('/whatwedo') && on.includes('/capabilities/infrastructure-enterprise-systems') && on.includes('/industries'), J(on));
+    check('never the utility pages, at most 5 marked', !on.includes('/cookies') && !on.includes('/security') && n <= 5 && on.length <= 5, J([n, on]));
+    check('the weekly budget still holds: at most 2 NEW marks (5 minus the 3 old marks that still count)', rs.filter(r => r.ask_google && r.ask_google_at === new Date(T0).toISOString()).length <= 2, J(rs.map(r => [P(r.url), r.ask_google, r.ask_google_at])));
+    // a page the client already asked Google about is never displaced (it is not offered again for the re-offer window anyway)
+    const asked = mk('/industries', { ...old, asked_google_at: new Date(D1).toISOString() });
+    const rs2 = [asked, mk('/capabilities/intelligent-systems-data')];
+    T(() => IX.askGoogle(rs2, { now: T0, home_keys: home, freeze: { freeze: false } }));
+    check('a page the client already asked about is not re-offered within the re-offer window', asked.ask_google === false, J(asked));
+  });
 };
 
 if (require.main === module) {
