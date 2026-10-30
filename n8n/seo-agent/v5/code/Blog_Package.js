@@ -115,7 +115,13 @@ let bodyHtml = mdToHtml(md); let mdOut = md;
 const role = d.page_role || 'standard'; const pt = String(d.recommended_page || d.page_type || '').toLowerCase();
 const articleLike = d.article_like != null ? !!d.article_like : /blog|guide|article|pillar|hub|case stud/.test(pt);
 const AU = d.author || null, RV = d.reviewer || null, P = d.site_profile || null, V = d.video && d.video.url ? d.video : null, CS = d.case_study || null;
-const today = new Date().toISOString().slice(0, 10);
+// W05-A (wave 0.5, 2026-10-30): the visible "Updated" date is the website's market day (Regulatory Plan's as_of, in the market's time
+// zone: Asia/Dubai for the UAE), the day the second read and the regulatory status take as today. A run at 22:31 UTC on 29 October dated
+// a UAE page 29 October while the read and the deadlines said 30 October. UTC only when no market day is known.
+const today = (() => { const ok = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
+  try { const r0 = ($('Parse Brief').first().json.regulatory || {}).as_of; if (ok(r0)) return String(r0); } catch (e) {}
+  try { const r1 = $('Collect Regulatory Facts').first().json.regulatory.as_of; if (ok(r1)) return String(r1); } catch (e) {}
+  return new Date().toISOString().slice(0, 10); })();
 const dateText = new Date(today + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 const a = (href, text, rel) => href ? '<a href="' + esc(href) + '"' + (rel ? ' rel="' + rel + '"' : '') + '>' + esc(text) + '</a>' : esc(text);
 const authorName = AU ? AU.name : '[Author Name]', authorUrl = AU ? (AU.url || '') : '[Author Page URL]';

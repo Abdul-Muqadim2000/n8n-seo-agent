@@ -167,14 +167,17 @@ module.exports = async (ctx) => {
     const it = DELIVERED(); const md = it.output; const q = it.content_qa || {};
     const quote = firstWords(md, 10);
     check('a sentence of the delivered page to quote', quote.split(' ').length >= 8, quote);
-    const HIGH = { severity: 'high', kind: 'source', location: quote, issue: 'This market figure rests only on an agency blog.', fix: 'Remove the figure or cite an official source.' };
+    // W05-A (wave 0.5, 2026-10-30): only a factual error the page states blocks (here: an unsupported claim about the business); a figure
+    // resting on an agency blog is advice that costs its part of the grade (scenarios_w05a.js)
+    const HIGH = { severity: 'high', kind: 'claim', location: quote, issue: 'Nothing on file says the business does this.', fix: 'Say it as advice to the reader.' };
+    const SRCADV = { severity: 'high', kind: 'source', location: quote, issue: 'This market figure rests only on an agency blog.', fix: 'Remove the figure or cite an official source.' };
     const DEPTH = { severity: 'high', kind: 'depth', location: quote, issue: 'The answer is generic for a regulated bank.', fix: 'Add a short scenario for a bank.' };
     const GONE = { severity: 'high', kind: 'fact', location: 'this sentence is not on the page at all, anywhere in it', issue: 'Wrong.', fix: 'Fix it.' };
     const P = { skip: false, mode: 'enforce', model: 'claude-sonnet-5-5' };
-    const r1 = await rr('read', [answer([HIGH, DEPTH, GONE]), md, P, '__PF__']);
+    const r1 = await rr('read', [answer([HIGH, SRCADV, DEPTH, GONE]), md, P, '__PF__']);
     show('read (enforce)', { status: r1.status, gates: r1.gates.length, advice: r1.advice.length, not_shown: r1.not_shown, usage: r1.usage });
-    check('checked: the high source problem quoted on the page gates, the high depth problem is advice, the quote that is not on the page is not shown',
-      r1.status === 'checked' && r1.gates.length === 1 && r1.gates[0].kind === 'source' && r1.advice.length === 1 && r1.advice[0].kind === 'depth' && r1.not_shown === 1, J(r1));
+    check('checked: the high claim quoted on the page gates (an unsupported claim about the business), the high source and depth problems are advice (W05-A), the quote that is not on the page is not shown',
+      r1.status === 'checked' && r1.gates.length === 1 && r1.gates[0].kind === 'claim' && r1.gates[0].error === 'claim' && r1.advice.length === 2 && r1.advice.map(a => a.kind).join() === 'source,depth' && r1.not_shown === 1, J(r1));
     check('the usage Anthropic reported is kept (the cost is measured)', r1.usage && r1.usage.input_tokens === 9100 && r1.usage.output_tokens === 1400);
     const before = q.delivery || {};
     const qa1 = await rr('apply', [q, r1, '__PF__']);
@@ -185,7 +188,8 @@ module.exports = async (ctx) => {
     check('the review blocker quotes the words and says how to fix them, in plain words', (d1.blocking || []).filter(b => b.code === 'review').every(b => b.text.includes(quote.slice(0, 30)) && /correct or remove/.test(b.action) && !PLAIN.test(b.text + b.action)), J(d1.blocking));
     check('every blocker of the page run is kept with its own action', (before.blocking || []).every(b => (d1.blocking || []).some(x => x.code === b.code && x.text === b.text && x.action === b.action)), J({ before: before.blocking, after: d1.blocking }));
     check('the grade is the one Page Candidates gave (only its count of blocking items moves)', (d1.grade || {}).score === (before.grade || {}).score && (d1.grade || {}).blocking === (d1.blocking || []).length, J({ b: before.grade, a: d1.grade }));
-    check('the advice of the read is shown (the depth problem)', (d1.advisory || []).some(a => a.code === 'second_read' && /generic for a regulated bank/.test(a.text)));
+    check('the advice of the read is shown (the depth problem, and the agency-blog figure as something to fix before publishing)', (d1.advisory || []).some(a => a.code === 'second_read' && /generic for a regulated bank/.test(a.text))
+      && (d1.advisory || []).some(a => a.code === 'second_read' && /^A second read of the page found something to fix before publishing at/.test(a.text) && /agency blog/.test(a.text)));
     check('the record of the read travels with the check (qa.critic_reread)', qa1.critic_reread && qa1.critic_reread.status === 'checked' && qa1.critic_reread.gates.length === 1 && qa1.critic_reread.mode === 'enforce');
     // shadow mode
     const r2 = await rr('read', [answer([HIGH, DEPTH]), md, { ...P, mode: 'shadow' }, '__PF__']);

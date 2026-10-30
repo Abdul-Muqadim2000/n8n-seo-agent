@@ -13268,6 +13268,47 @@ for _f171 in ('code/_page_fix.js', 'code/Finalize_Apply.js', 'code/_regulatory.j
 log('The follow-up branches meet Wave 0 (2026-10-30, section 171): voice flags go to the editor as section problems, the Finalize editor carries the own-voice / one-byline / no-redirect rules, regulatory search results are read through a redirect to their target and an opaque redirect is never a regulatory source')
 
 # =============================================================================
+# 172. THE SECOND READ BLOCKS ONLY A FACTUAL ERROR; THE REST IS ADVICE THAT COSTS ITS PART (W05-A, wave 0.5 of the page-quality programme,
+#      2026-10-30; docs/page-quality-2026-10-29/BEFORE_AFTER.md "Our second-read blockers against the judges"). On the 8 AFTER pages the read
+#      held 7 at "Not ready 59" while the blind strategist judge would publish 7 (signed error -10.9, ready agreement 2 of 8):
+#      * RR.read (v5/code/_critic_reread.js) blocks only a factual error the page states: a count that does not match its list (checked on the
+#        quote), an unsupported claim about the business, a statement its own source contradicts, a fact or local rule the read calls wrong
+#        or out of date without hedging. A deadline that only falls on the day the page is written is advice (the page is read after it);
+#      * everything else it shows is advice and GR.cap (v5/code/_grade.js) takes it off its part: 3 points a high item, 1.5 a medium one, at
+#        most a quarter of the part and never below half of it (advice alone never makes a page "Needs work"); enforce mode only, so the guide
+#        that ranks (a ladder page, shadow mode) is never marked down by it;
+#      * the page run's advice travels to the final version in page_run.second_read, and Finalize Verdict keeps the deduction while the quoted
+#        words are on the page (the grade never rises at Finalize for nothing);
+#      * "today" is the website's market day in its own time zone (REG.dayFor; Asia/Dubai for the UAE) for the regulatory status, the second
+#        read, the page's "Updated" date and its schema dates: the 22:31 UTC run of 29 October was a 30 October run in the UAE.
+# =============================================================================
+patch('Build Webhook Response', "        content_request_id: T(pb.content_request_id || d.request_id, 120) } }; })(),",
+      "        // W05-A (section 172): the second read's advice (enforce mode, read and checked), so the final version keeps its deduction while the words are there\n"
+      "        second_read: (() => { const R = d.qa_second_read || null; if (!R || R.mode !== 'enforce' || R.status !== 'checked') return null;\n"
+      "          return A(R.advice).filter(a => a && a.location).map(a => ({ severity: T(a.severity, 10), kind: T(a.kind, 20), location: T(a.location, 300) })).slice(0, 12); })(),\n"
+      "        content_request_id: T(pb.content_request_id || d.request_id, 120) } }; })(),")
+assert code('Build Webhook Response').count('second_read: (() => { const R = d.qa_second_read') == 1
+_rr172 = _rd0('code/_critic_reread.js')
+for _k172 in ('const errorOf = (p, today) =>', 'const countMismatch = (quote) =>', 'const sameDay = (p, today) =>', "const error = errorOf(q, S(pl.today)); return { ...q, error, gates: !!error }; });",
+              "if (p.kind === 'claim') return 'claim';", '!CONTRA_NONE.test(issue) && SRC_CONTRA.test(issue)'):
+    assert _k172 in _rr172, 'W05-A: _critic_reread.js lacks ' + _k172
+assert 'gates: severity === \'high\' && GATING.has(kind) && on_page' not in _rr172, 'W05-A: every high fact / source / claim / local problem blocks again'
+_gr172 = _rd0('code/_grade.js')
+for _k172 in ('const reviewCut = (rv, b, M) =>', 'review_share: 0.25', "if (R.mode !== 'enforce'", 'Math.max(0, (Number(b[k]) || 0) - M[k] * CFG.floor)'):
+    assert _k172 in _gr172, 'W05-A: _grade.js lacks ' + _k172
+assert 'review: content_qa.critic_reread || null' in code('Apply Second Read'), 'W05-A: Apply Second Read does not pass the read to the grade'
+assert "review: Array.isArray(PR.second_read)" in _rd0('code/Finalize_Verdict.js') and 'PF.onPage(a.location, md)' in _rd0('code/Finalize_Verdict.js'), 'W05-A: Finalize Verdict does not keep the advice deduction'
+assert 'second_read: (prc.grading || {}).second_read || null' in _rd0('code/Finalize_Parse_Brief.js'), 'W05-A: Finalize Parse Brief does not read page_run.second_read'
+assert 'REG.dayFor(prev.started_at, prev.country_iso, market)' in _rd0('code/Regulatory_Plan.js') and 'const dayFor = (startedAt, iso, market) =>' in REG_SRC153, 'W05-A: the regulatory day is not the market day'
+for _n172 in ('Second Read Plan', 'Content QA', 'Blog Package'):
+    assert "$('Collect Regulatory Facts').first().json" in code(_n172) and ('as_of' in code(_n172)), 'W05-A: ' + _n172 + ' does not read the market day'
+for _f172 in ('code/_critic_reread.js', 'code/_grade.js', 'code/Second_Read_Plan.js', 'code/Apply_Second_Read.js', 'code/Finalize_Verdict.js', 'code/Finalize_Parse_Brief.js',
+              'code/_regulatory.js', 'code/Regulatory_Plan.js'):   # Blog_Package.js maps those characters away on purpose, so it carries them
+    for _bad172 in ('—', '–', '“', '”', '…'):
+        assert _bad172 not in _rd0(_f172), 'W05-A: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f172
+log('The second read blocks only a factual error (W05-A, wave 0.5, 2026-10-30, section 172): a count that does not match its list, an unsupported claim about the business, a statement its own source contradicts, or a fact the read calls wrong or out of date (not on the day the page is written); the rest is advice that takes 3 / 1.5 points off its part (at most a quarter, never below half), travels to the final version while its words are there, and never caps the grade at 59; "today" is the website\'s market day in its own time zone for the regulatory status, the second read and the page\'s dates')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;

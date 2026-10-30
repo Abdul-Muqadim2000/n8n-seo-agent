@@ -102,7 +102,11 @@ const prc = (() => {
   const regTopics = Array.isArray(g.regulatory_topics) ? g.regulatory_topics.filter(isObj).map(t => ({ id: S(t.id).slice(0, 60), relevance: S(t.relevance).slice(0, 20) })).filter(t => t.id).slice(0, 12) : null;
   const grading = { length_band: lb, coverage_target: isObj(g.coverage_target) ? g.coverage_target : null, terms, facts: factsIn, sources_cited: cited,
     style_guide: isObj(g.style_guide) ? g.style_guide : null, site_urls: siteUrls, serp_shapes: isObj(g.serp_shapes) ? g.serp_shapes : null,
-    regulatory_facts: regFacts, regulatory_topics: regTopics };
+    regulatory_facts: regFacts, regulatory_topics: regTopics,
+    // W05-A (wave 0.5): the page run's second-read advice (severity, kind, the quoted words), so the final version keeps its deduction while
+    // those words are still on the page and the grade never rises at Finalize for nothing; optional, never "missing" (older reports lack it)
+    second_read: Array.isArray(g.second_read) ? g.second_read.filter(isObj).map(a => ({ severity: S(a.severity).toLowerCase().slice(0, 10), kind: S(a.kind).toLowerCase().slice(0, 20),
+      location: S(a.location).replace(/\s+/g, ' ').trim().slice(0, 300) })).filter(a => a.location && /^(high|medium)$/.test(a.severity)).slice(0, 12) : null };
   const grading_missing = PRC_GRADING.filter(k => grading[k] == null);
   return { received: !!pr, legacy, legacy_unknown: legacy ? ['duplicate_targets', 'copied_passages', 'dead_links'] : [], gating, gating_missing, blocks_known: gating_missing.length === 0, grading, grading_missing,
     content_request_id: S(g.content_request_id || b.content_request_id).trim().slice(0, 120) };
@@ -220,6 +224,7 @@ return [{ json: {
   request_id: S(b.request_id).slice(0, 120), content_request_id: S(prc.content_request_id || b.content_request_id).slice(0, 120), site_id: S(b.site_id).slice(0, 120),
   prc: { received: prc.received, legacy: prc.legacy, legacy_unknown: prc.legacy_unknown, gating: prc.gating, gating_missing: prc.gating_missing, blocks_known: prc.blocks_known, grading_missing: prc.grading_missing, length_from: LEN.from,
     length_points: LEN.points == null ? null : LEN.points,
+    second_read: (prc.grading || {}).second_read || null,   // W05-A: the page run's second-read advice (Finalize Verdict deducts what is still on the page)
     duplicate_urls: dupUrls, duplicate_decision },
   finalize: { answers, client_edited, client_sentences, delivered_markdown: delivered, input_markdown: markdown, answer_texts: answerTexts, stored_keys: stored,
     answered_keys: answers.filter(a => a.decision !== 'skip' && a.fact_key).map(a => a.fact_key),

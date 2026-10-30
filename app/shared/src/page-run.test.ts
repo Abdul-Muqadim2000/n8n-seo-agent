@@ -91,6 +91,13 @@ describe('the page-run context (PRC) of a stored report', () => {
     const kept = pageRunOf({ qa_blocking: [{ code: 'not_checked', text: 'the final version\'s own list' }], page_run_context: pr });
     expect(kept).toEqual(pr);
   });
+  it('wave 0.5: the second read\'s advice travels with the page run, so the final version keeps its deduction while the words are there', () => {
+    const advice = [{ severity: 'high', kind: 'source', location: 'Business Central publishes per-user licence tiers' }];
+    const pr = pageRunOf({ ...ORIGINAL_3299, page_run: { prc: 1, second_read: advice, content_request_id: '3298' } });
+    expect(pr.second_read).toEqual(advice);
+    expect(pr.missing).toEqual([]);
+    expect('second_read' in pageRunOf({ ...ORIGINAL_3299, page_run: { prc: 1, second_read: null } })).toBe(false);
+  });
 });
 
 describe('the finalize request carries the page run of the ORIGINAL report', () => {

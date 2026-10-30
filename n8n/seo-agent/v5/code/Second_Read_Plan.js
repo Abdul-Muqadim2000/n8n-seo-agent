@@ -7,7 +7,11 @@
 const it = $input.first().json || {};
 let prev = {}; try { prev = $('Parse Brief').first().json || {}; } catch (e) { prev = {}; }
 let ip = ''; try { ip = String(($('Normalize Input').first().json || {}).client_ip || ''); } catch (e) { ip = ''; }
-let reg = ''; try { const r = $('Collect Regulatory Facts').first().json.regulatory; if (r && typeof r.digest === 'string') reg = r.digest; } catch (e) { reg = ''; }
+let reg = '', asOf = ''; try { const r = $('Collect Regulatory Facts').first().json.regulatory; if (r && typeof r.digest === 'string') reg = r.digest; if (r && r.as_of) asOf = String(r.as_of); } catch (e) { reg = ''; }
 if (!reg) reg = String(((prev.regulatory || {}).digest) || '');
-const second_read = RR.plan(it, { ...prev, client_ip: prev.client_ip || ip }, { regulatory_digest: reg });
+// W05-A (wave 0.5): "today" is the website's market day (Regulatory Plan's as_of, in the market's time zone), the date the page carries;
+// a run with no as_of falls back to the UTC day the run started
+if (!/^\d{4}-\d{2}-\d{2}$/.test(asOf)) asOf = String(((prev.regulatory || {}).as_of) || '');
+if (!/^\d{4}-\d{2}-\d{2}$/.test(asOf)) { const t = Date.parse(String(prev.started_at || '')); asOf = new Date(isNaN(t) ? Date.now() : t).toISOString().slice(0, 10); }
+const second_read = RR.plan(it, { ...prev, client_ip: prev.client_ip || ip }, { regulatory_digest: reg, today: asOf });
 return [{ json: { ...it, second_read } }];
