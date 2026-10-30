@@ -86,6 +86,7 @@ const WE_DO: Record<string, string> = {
   author_profile: 'We left the author box empty rather than invent it.',
   weak_figure: 'We asked for the sentence to be rewritten without the number; this one is still there.',
   review: 'A second read of the finished page quoted these words; we did not change them on our own.',
+  same_title: "We tried every title we could write for this page; none was different enough from your existing page's.",
 };
 const YOU_DO: Record<string, string> = {
   cut_off: 'Ask us to write the page again: a new run is needed.',
@@ -103,6 +104,7 @@ const YOU_DO: Record<string, string> = {
   testimonial: 'Delete the testimonial in the editor.',
   weak_figure: 'Rewrite the sentence without the number in the editor, or cite an official body, a research house or major press that states it.',
   review: 'Check the quoted words against a source you trust, then correct or remove them in the editor.',
+  same_title: "Give this page a title of its own in the editor, different from your existing page's, so the two pages do not compete for one search.",
 };
 
 export function deliveryHeadline(status: PageDeliveryStatus, questions: number, firstBlocking?: PageDeliveryItem | null, needsWork?: PageDeliveryItem[]): { headline: string; detail: string } {
