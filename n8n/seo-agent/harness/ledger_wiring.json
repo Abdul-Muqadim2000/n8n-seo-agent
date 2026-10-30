@@ -633,10 +633,12 @@
     "AI Report",
     "Chunk Part Done",
     "Nothing To Do (AI)",
-    "Refuse Run Ledger (AI)"
+    "Refuse Run Ledger (AI)",
+    "Save Reader Alert Delivery"
    ],
    "settle_from_ends": [
-    "Nothing To Do (AI)"
+    "Nothing To Do (AI)",
+    "Save Reader Alert Delivery"
    ]
   },
   "SEO Agent \u2014 Audit Scheduler": {
@@ -819,10 +821,12 @@
    "settle_from": [
     "BL Report",
     "Nothing To Do (BL)",
-    "Refuse Run Ledger (BL)"
+    "Refuse Run Ledger (BL)",
+    "Save Reader Alert Delivery"
    ],
    "settle_from_ends": [
-    "Nothing To Do (BL)"
+    "Nothing To Do (BL)",
+    "Save Reader Alert Delivery"
    ]
   },
   "SEO Agent \u2014 Content Cadence": {

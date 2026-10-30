@@ -760,6 +760,185 @@ const OWN = (() => {
   };
   return { tokens, relate, ladders, drafts, ladderOf, draftOf, claim, sayOf, distinct, text, HOW, PLACES, ukey };
 })();
+// ---- the page reader's fallback (W07-A, 2026-10-31, docs/page-quality-2026-10-29/WAVE06.md "Open resilience item") ----
+// Every page this engine reads goes through one reader (Jina Reader, credential SEOcredJinaReade). On 2026-10-30 its account ran out of
+// balance: between about 10:13 and 12:56 UTC every read answered HTTP 402 "please recharge". Nothing noticed. The HTTP nodes are
+// `continueRegularOutput`, so each refusal became an error item that the next node read as "this page could not be read": a page run was
+// held on its search score alone and told the client "/ms-365-erp-uae has no title, main heading or Search Console search on file" about a
+// page nobody had looked at (K1, WAVE06 section 9), and no ops alert was raised.
+// This kit is what each reader node is followed by now (*<reader>*, the Code node that took the reader's name; the HTTP node is
+// *<reader> (reader)*):
+//   * `refusal(item)`: did the READER refuse (401 / 402 / 429, or 403 with the reader's own key / balance / rate words), as opposed to the
+//     page itself failing? A page that is down, blocked or slow is not a refusal and is left exactly as it was.
+//   * `recover(helpers, ctx)`: for the refused reads only, (1) the same reader WITHOUT the key (it answered 200 in the 2026-10-30 probe; its
+//     limit is about 20 reads a minute, so the calls are spaced and capped), then (2) for a text read, a direct fetch of the page turned into
+//     the reader's own line format by the HTML-to-text path the client-render reading already uses (CRK.linesOf). A render read (the page
+//     after its scripts ran) is never replaced by the plain HTML: that would make "what only exists after JavaScript" read as "nothing".
+//     A read nothing could recover stays unread, with the reason, and is marked `reader_fallback.via: 'none'`.
+//   * Items the reader answered are returned as the very same objects: with a funded key nothing here changes a byte.
+// Every touched item carries `reader_fallback` ({ via, refused, path, node, why }), which is what *Reader Refusals* (the ops alert, one per
+// run) and the content run's decisions (`pagesUnread`: no hold, verdict, existing-page match or grade on pages nobody read) look at.
+const RD = (() => {
+  const CFG = { keyless_gap_ms: 3200, keyless_max: 12, direct_max: 25, budget_ms: 120000, keyless_timeout_ms: 40000, direct_timeout_ms: 20000,
+    min_text_chars: 200, max_html_chars: 4000000 };
+  const READER = 'https://r.jina.ai/';
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+  const S = (v) => String(v == null ? '' : v);
+  const T = (v) => S(v).trim();
+  const CODES = [401, 402, 403, 429];
+  // the reader's own words for a key, balance or rate problem (its error names, and its messages)
+  const NAME_RE = /InsufficientBalance|AuthenticationRequired|AuthenticationFailed|InvalidApiKey|InvalidToken|Unauthori[sz]ed|RateLimit|TooManyRequests|Quota|Budget|PaymentRequired/i;
+  const TEXT_RE = /\bbalance\b|recharge|quota|rate.?limit|too many requests|api.?key|unauthori[sz]ed|payment required|insufficient|credentials/i;
+  const clean = (s) => T(S(s).replace(/\(uid:[^)]*\)/gi, '').replace(/\s+/g, ' '));
+  const parseBody = (b) => {
+    if (b && typeof b === 'object' && !Array.isArray(b)) return b;
+    const t = T(b);
+    if (!t.startsWith('{') || t.length > 20000) return null;
+    try { const o = JSON.parse(t); return o && typeof o === 'object' ? o : null; } catch (e) { return null; }
+  };
+  const fromBody = (status, body) => {
+    const o = parseBody(body);
+    const name = o ? T(o.name) : '';
+    const message = clean(o ? (o.readableMessage || o.message || '') : S(body).slice(0, 300)).replace(/^[A-Za-z]+Error:\s*/, '');
+    const code = Number(status) || (o ? Number(o.code) || 0 : 0);
+    return { status: code, name, message: message.slice(0, 240) };
+  };
+  const isRefusal = (r) => !!r && CODES.includes(r.status) && (r.status !== 403 || NAME_RE.test(r.name) || TEXT_RE.test(r.message) || /^(?:insufficient|account|api key)/i.test(r.message));
+  // the reader's body in an output field: a JSON error object of its own (code + name / readableMessage), never a page's text
+  const errorBody = (v) => { const o = parseBody(v); if (!o) return null; const code = Number(o.code); if (!CODES.includes(code) || !(o.name || o.readableMessage)) return null; return fromBody(code, o); };
+  // what the HTTP node handed on: an error item (`continueRegularOutput`), a full response (`fullResponse` + `neverError`), or a body kept
+  // in its output field (`neverError` alone answers the reader's error JSON as if it were the page)
+  const refusal = (item, prop) => {
+    const j = (item && item.json && typeof item.json === 'object') ? item.json : (item || {});
+    if (!j || typeof j !== 'object') return null;
+    if (j.error) {
+      const e = typeof j.error === 'object' ? j.error : { message: S(j.error) };
+      const msg = S(e.message);
+      const m = msg.match(/^\s*(\d{3})\s*-\s*([\s\S]*)$/);
+      const status = Number(e.httpCode || e.statusCode || e.status || (m && m[1])) || 0;
+      const body = m ? m[2] : (e.description || msg);
+      let r = fromBody(status, body);
+      if (!r.name && !r.message) r = { status, name: T(e.name), message: clean(msg).slice(0, 240) };
+      return isRefusal(r) ? r : null;
+    }
+    const sc = Number(j.statusCode);
+    if (Number.isFinite(sc) && sc > 0 && ('body' in j || 'data' in j)) { if (sc < 400) return null; const r = fromBody(sc, j.body != null ? j.body : j.data); return isRefusal(r) ? r : null; }
+    for (const k of [prop, 'data', 'page_text', 'site_text', 'body'].filter(Boolean)) { if (j[k] == null) continue; const r = errorBody(j[k]); if (r) return r; }
+    return null;
+  };
+  const describe = (r) => !r ? '' : ('HTTP ' + r.status + (r.name ? ' ' + r.name : '') + (r.message ? ': ' + r.message.replace(/[.\s]+$/, '') : '')).slice(0, 220);
+  const brief = (r) => r ? { status: r.status, name: r.name, message: r.message.slice(0, 160) } : null;
+
+  // the page's own HTML in the reader's line format (CRK.linesOf: header, menu, footer, aside, forms and cookie banners removed, headings as
+  // "#" lines), with the reader's three head lines; `links` adds the site's own links first (a homepage read keeps its menu for the nav pages)
+  const toReaderText = (html, url, opts) => {
+    const o = opts || {};
+    const h = S(html).slice(0, CFG.max_html_chars);
+    const title = typeof LK !== 'undefined' ? LK.text(((h.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '')).slice(0, 300) : '';
+    const lines = typeof CRK !== 'undefined' ? CRK.linesOf(h) : [];
+    const menu = (o.links && typeof CRK !== 'undefined') ? CRK.links(h, url, o.domain || (typeof LK !== 'undefined' ? LK.hostOf(url) : '')).slice(0, 40).map(l => '[' + T(l.title || l.path).replace(/[\[\]]/g, '') + '](' + l.url + ')') : [];
+    return 'Title: ' + title + '\n\nURL Source: ' + url + '\n\nMarkdown Content:\n' + [...menu, ...lines].join('\n\n');
+  };
+  const plainLen = (t) => S(t).replace(/^(Title|URL Source|Markdown Content):.*$/gm, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/^#+\s*/gm, '').replace(/\s+/g, ' ').trim().length;
+  const bodyText = (b) => b == null ? '' : (typeof b === 'string' ? b : (typeof Buffer !== 'undefined' && Buffer.isBuffer(b) ? b.toString('utf8') : JSON.stringify(b)));
+  const msgOf = (e) => clean((e && (e.message || e.description)) || e).slice(0, 160);
+
+  // ctx: { reqs: the request items (json, aligned with res by position), res: the reader's output (json), mode: 'text' | 'html',
+  //        full: the reader answers a full response (statusCode / body), prop: its output field, headers: the reader's own headers,
+  //        target(q, i): the page's address, links / domain(q): keep the site's own links (a homepage read), path / node: names for the
+  //        report, sleep(ms) and now(): injectable (the harness), cfg: overrides of CFG }
+  const recover = async (helpers, ctx) => {
+    const c = ctx || {};
+    const C = { ...CFG, ...(c.cfg || {}) };
+    const res = Array.isArray(c.res) ? c.res : [];
+    const reqs = Array.isArray(c.reqs) ? c.reqs : [];
+    const prop = T(c.prop);
+    const refused = [];
+    res.forEach((j, i) => { const r = refusal(j, prop); if (r) refused.push([i, r]); });
+    if (!refused.length) return { items: res, report: null };
+    const now = typeof c.now === 'function' ? c.now : () => Date.now();
+    const sleep = typeof c.sleep === 'function' ? c.sleep : (ms) => new Promise(ok => setTimeout(ok, ms));
+    const H = helpers || {};
+    const http = typeof H.httpRequest === 'function' ? (o) => H.httpRequest(o) : null;
+    const out = res.slice();
+    const report = { reader: 'Jina Reader', path: T(c.path), node: T(c.node), asked: res.length, refused: refused.length, first: brief(refused[0][1]),
+      recovered_keyless: 0, recovered_direct: 0, unread: [], keyless_refused: null, keyless_tried: 0, direct_tried: 0, out_of_time: 0 };
+    const t0 = now();
+    let keylessOk = !!http, lastKeyless = 0;
+    for (const [i, r] of refused) {
+      const q = reqs[i] || {};
+      let url = '';
+      try { url = T(typeof c.target === 'function' ? c.target(q, i) : (q.url || '')); } catch (e) { url = ''; }
+      if (/^https?:\/\/r\.jina\.ai\//i.test(url)) url = url.replace(/^https?:\/\/r\.jina\.ai\//i, '');
+      const why = [];
+      let got = null;
+      const over = () => now() - t0 > C.budget_ms;
+      if (!url) why.push('the request carried no page address');
+      else if (!http) why.push('no fallback reader is available here');
+      if (url && http && keylessOk && report.keyless_tried < C.keyless_max && !over()) {
+        const wait = lastKeyless ? C.keyless_gap_ms - (now() - lastKeyless) : 0;
+        if (wait > 0) await sleep(wait);
+        report.keyless_tried++; lastKeyless = now();
+        try {
+          const x = await http({ method: 'GET', url: READER + url, headers: { ...(c.headers || {}) }, timeout: C.keyless_timeout_ms, returnFullResponse: true, ignoreHttpStatusErrors: true, json: false });
+          const st = Number(x && x.statusCode) || 0; const body = bodyText(x && x.body);
+          if (st >= 200 && st < 300 && T(body) && !errorBody(body)) got = { via: 'reader_keyless', body };
+          else { const rr = fromBody(st, body); if (isRefusal(rr)) { keylessOk = false; report.keyless_refused = brief(rr); }
+            why.push('the reader without the key answered ' + (st ? 'HTTP ' + st : 'nothing') + (rr.name ? ' ' + rr.name : '')); }
+        } catch (e) { why.push('the reader without the key failed: ' + msgOf(e)); }
+      } else if (url && http && !keylessOk) why.push('the reader without the key refused too (' + describe(report.keyless_refused) + ')');
+      else if (url && http && report.keyless_tried >= C.keyless_max) why.push('the reader without the key was already used ' + C.keyless_max + ' times in this step (its rate limit)');
+      if (!got && url && http && c.mode !== 'html' && report.direct_tried < C.direct_max && !over()) {
+        report.direct_tried++;
+        try {
+          const x = await http({ method: 'GET', url, headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml' }, timeout: C.direct_timeout_ms, returnFullResponse: true, ignoreHttpStatusErrors: true, json: false });
+          const st = Number(x && x.statusCode) || 0; const html = bodyText(x && x.body);
+          const blocked = typeof LK !== 'undefined' ? LK.challenge(st, html) : /just a moment|access denied|captcha/i.test(html.slice(0, 3000));
+          if (st >= 200 && st < 300 && /<html|<body|<head|<p[\s>]|<div[\s>]/i.test(html) && !blocked) {
+            const text = toReaderText(html, url, { links: !!c.links, domain: typeof c.domain === 'function' ? T(c.domain(q)) : '' });
+            if (plainLen(text) >= C.min_text_chars) got = { via: 'direct', text, html };
+            else why.push('a direct fetch of the page found almost no text (' + plainLen(text) + ' characters)');
+          } else why.push('a direct fetch of the page answered ' + (st ? 'HTTP ' + st : 'nothing') + (blocked ? ' (a bot check)' : ''));
+        } catch (e) { why.push('a direct fetch of the page failed: ' + msgOf(e)); }
+      } else if (!got && c.mode === 'html') why.push('a render (the page after its scripts ran) has no plain-HTML stand-in');
+      if (!got && over()) { report.out_of_time++; why.push('the fallback ran out of time for this step'); }
+      const mark = { via: got ? got.via : 'none', refused: brief(r), path: report.path, node: report.node };
+      if (got && got.via === 'reader_keyless') report.recovered_keyless++;
+      if (got && got.via === 'direct') report.recovered_direct++;
+      if (got) {
+        const body = got.via === 'direct' ? got.text : got.body;
+        out[i] = c.mode === 'html' ? (c.full ? { statusCode: 200, body, headers: {}, reader_fallback: mark } : { [prop || 'data']: body, reader_fallback: mark })
+          : { [prop || 'data']: body, reader_fallback: mark };
+      } else {
+        const text = 'the page reader refused (' + describe(r) + ') and the fallback could not read the page' + (why.length ? ': ' + why.join('; ') : '');
+        out[i] = { error: { message: text.slice(0, 600), reader_refused: true, status: r.status }, reader_fallback: { ...mark, why: why.join('; ').slice(0, 400) } };
+        report.unread.push({ index: i, url, why: why.join('; ').slice(0, 300) });
+      }
+    }
+    return { items: out, report };
+  };
+
+  // ---- what a run's own reads say (the content run's decisions read this) ----
+  const marks = (items) => (items || []).map(j => (j && j.json && typeof j.json === 'object' ? j.json : j) || {}).map(j => j.reader_fallback || null).filter(Boolean);
+  const refusedIn = (items) => marks(items).filter(m => m.refused);
+  const unreadIn = (items) => marks(items).filter(m => m.refused && m.via === 'none');
+  // the first refusal seen in a list of node outputs (for the reason the client reads)
+  const firstRefusal = (lists) => { for (const l of lists || []) { const m = refusedIn(l)[0]; if (m) return m.refused; } return null; };
+  const reasonText = (r) => 'the page reader we use refused to read pages' + (r ? ' (' + describe(r) + ')' : '') + ', and reading them another way failed too';
+  // the same, in words a client reads (no vendor, no error code: those are in the run's record and the ops alert)
+  const clientReason = (r) => {
+    const st = r ? Number(r.status) : 0;
+    return (st === 402 ? 'the service we use to read web pages stopped answering us because of an account problem on our side'
+      : st === 401 || st === 403 ? 'the service we use to read web pages refused our access, a problem on our side'
+      : st === 429 ? 'the service we use to read web pages asked us to slow down'
+      : 'the service we use to read web pages did not answer') + ', and reading the pages another way did not work either';
+  };
+  // a path that reads several hosts' pages through the reader wants one address form (the reader node of a homepage read asks for the bare
+  // host, `https://<domain>`, and so does its fallback; redirects are followed by both)
+  const homeOf = (host) => { const h = T(host); return /^https?:\/\//i.test(h) ? h : (h ? 'https://' + h.replace(/^\/+/, '') : ''); };
+
+  return { CFG, refusal, recover, describe, brief, toReaderText, plainLen, marks, refusedIn, unreadIn, firstRefusal, reasonText, clientReason, homeOf, isRefusal, fromBody, errorBody };
+})();
 // Accepts an object (from the Structured Output Parser) or a string with/without code fences or surrounding text
 const parseAgentJson = (raw) => {
   if (raw && typeof raw === 'object') return raw;
@@ -1580,16 +1759,49 @@ verdict.reasons = pcClean(verdict.reasons);
 // Execution 549: both SERP calls answered 40101 inside an HTTP 200, were billed, ran once — and the run still said
 // "winnable, GO_WITH_CHANGES 68" and wrote a page. The retry is wired above; when it fails too, the competition was never seen,
 // so there is no verdict and no number — only what was tried, and the suggestion to run the check again.
+// ---- W07-A (2026-10-31, docs/page-quality-2026-10-29/WAVE06.md "Open resilience item"): the pages it stands on, unread ----
+// The K1 run of 2026-10-30 (WAVE06 section 9): the page reader's account was out of balance, every read answered HTTP 402, and this node
+// still scored the keyword 38, held it on that score and told the client "/ms-365-erp-uae has no title, main heading or Search Console search
+// on file" about a page nobody had read. Each reader node now reads a refused page again another way (v5/code/_reader.js); when that failed
+// too for the pages this verdict stands on (the page the website already has for the search, the site's own pages, the pages that rank),
+// there is no verdict, no score, no hold, no duplicate or existing-page decision and no page: the run says the pages could not be read and
+// why, and is charged only for the check. A page that is simply down or blocked is not a refusal and is judged as before.
+const PU = (() => {
+  if (typeof RD === 'undefined') return null;
+  const all = (n) => { try { return $(n).all().map(i => (i && i.json) || {}); } catch (e) { return null; } };
+  const client = all('Read Client Pages'), comp = all('Read Competitor Pages'), retry = all('Retry Blocked Pages');
+  if (![client, comp, retry].some(l => l && RD.refusedIn(l).length)) return null;
+  const first = RD.firstRefusal([client, comp, retry]);
+  let acp = {}; try { acp = $('Analyze Competitor Pages').first().json || {}; } catch (e) { acp = {}; }
+  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const compAsked = comp ? comp.filter(j => j && Object.keys(j).length).length : 0;
+  const compRead = n0(acp.competitors_read != null ? acp.competitors_read : prev.competitors_read);
+  const clientAsked = client ? client.filter(j => j && Object.keys(j).length).length : 0;
+  const clientRead = n0(prev.client_pages_read);
+  const ex = (prev.existing_page_unread && prev.existing_page_unread.url) ? prev.existing_page_unread : null;
+  const missing = [];
+  if (ex) missing.push('the page your website already has for this search (' + ex.url + ')');
+  if (clientAsked && !clientRead) missing.push('your own pages');
+  if (compAsked && !compRead) missing.push('the pages that rank for it');
+  if (!missing.length) return null;
+  const writesPU = prev.include_content === true && !prev.verdict_only && String(prev.mode || 'keyword').trim() === 'keyword';
+  const why = RD.clientReason(first);
+  return { refused: first, missing, existing: ex, client: { asked: clientAsked, read: clientRead }, competitors: { asked: compAsked, read: compRead }, client_reason: why,
+    reason: 'No verdict is given for this keyword: ' + why + ', so ' + missing.join(' and ') + ' could not be read. Nobody has looked at them, so a score, '
+      + 'a hold or a match with a page you already have would be invented.' + (writesPU ? ' Nothing was written and only the check was charged.' : '')
+      + ' This is a problem on our side, not with your keyword: run it again later.' };
+})();
 const EV56 = (() => {
   const sf = prev.serp_features || {}; const ev = prev.serp_evidence || null; const kd = prev.keyword_data_evidence || null;
   const out = !!(sf.unavailable || (ev && ev.unavailable));
   const why = String((ev && ev.error) || sf.error || 'no answer from the search data provider').slice(0, 160);
   const again = (ev && ev.retried) ? (Number(ev.attempts) > 2 ? ' The search was sent ' + ev.attempts + ' times (the last time as a lighter request) and failed every time.' : ' The search was sent again once and failed again.') : '';   // F-SERP: up to three attempts
   return {
-    withheld: out,
+    withheld: out || !!PU,   // W07-A: the pages it stands on could not be read
     evidence: { serp: out ? 'unavailable' : 'read', error: out ? why : '', asked: ev ? ev.asked : 1, checked: ev ? ev.checked : (out ? 0 : 1),
-      retried: ev ? ev.retried : 0, attempts: ev ? (Number(ev.attempts) || 1 + (Number(ev.retried) || 0)) : 1, read_light: !!sf.light_read, keyword_data: (kd && kd.unavailable) ? 'unavailable' : 'read' },
-    reason: out ? 'No score is given for this keyword: the live Google results could not be read (' + why + ').' + again
+      retried: ev ? ev.retried : 0, attempts: ev ? (Number(ev.attempts) || 1 + (Number(ev.retried) || 0)) : 1, read_light: !!sf.light_read, keyword_data: (kd && kd.unavailable) ? 'unavailable' : 'read',
+      ...(PU ? { pages: 'unread', pages_error: RD.describe(PU.refused) } : {}) },
+    reason: (!out && PU) ? PU.reason : out ? 'No score is given for this keyword: the live Google results could not be read (' + why + ').' + again
       + ' Nobody has seen the pages that rank, the featured snippet or the AI Overview, so any number here would be invented.' + (sf.retryable === false ? ' Run the check again.' : ' This is a temporary problem with the search data provider, not with your keyword. Run the check again later.') : ''
   };
 })();
@@ -1940,7 +2152,8 @@ const HOLD = (() => {
   const second = dupHit || existingHit || lowDemand;
   // ---- the value gate ----
   let valueHit = false; let notChecked = '';
-  if (score == null) notChecked = EV56.withheld ? 'the verdict could not score this keyword (' + (EV56.evidence.error || 'the live results could not be read') + '), so nothing was held for it'
+  if (score == null) notChecked = PU ? 'the pages this check needs could not be read, so nothing was held for it: ' + PU.client_reason
+    : EV56.withheld ? 'the verdict could not score this keyword (' + (EV56.evidence.error || 'the live results could not be read') + '), so nothing was held for it'
     : 'the verdict gave no score, so nothing was held for it';
   else if (!exemptScore && (score < CFG.clear || (score < CFG.threshold && second))) valueHit = true;
   const band = score == null ? 'not checked' : score < CFG.clear ? 'clearly low' : score < CFG.threshold ? 'near the line' : 'above the line';
@@ -1948,7 +2161,7 @@ const HOLD = (() => {
     second_signal: { low_demand: lowDemand, duplicate: dupHit, existing_page: existingHit, volume, impressions: gsc.read ? gsc.impressions : null, search_console_read: gsc.read },
     decision: !writes ? 'no page in this run' : ack ? 'acknowledged by the client' + (ackScore != null && runScore != null && ackScore !== runScore ? ': this run read ' + runScore + ', the acknowledged ' + ackScore + ' is kept' : '')
       : score == null ? 'not checked' : valueHit ? (score < CFG.clear ? 'held: clearly low' : 'held: near the line with a second signal') : score < CFG.threshold ? (exemptScore ? 'not held: ' + exemptScore : 'not held: near the line, no second signal') : 'not held for the score' };
-  const would = writes && !ack && (valueHit || dupHit || existingHit);
+  const would = writes && !ack && !PU && (valueHit || dupHit || existingHit);   // W07-A: never a hold (score, duplicate or existing page) on pages nobody read
   const mode = !writes ? 'off' : automatic ? CFG.automatic : 'enforce';
   const kw = S(prev.keyword);
   const reasons = [];
@@ -2025,14 +2238,14 @@ return [{
     ladder_remeasure,   // A-21
     score_withheld: EV56.withheld,
     score_withheld_reason: EV56.reason,
-    verdict_reasons: EV56.withheld ? [EV56.reason, ...(verdict.reasons || [])] : (verdict.reasons || []),
-    verdict_risks: verdict.risks || [],
+    verdict_reasons: EV56.withheld ? [EV56.reason, ...(PU ? [] : (verdict.reasons || []))] : (verdict.reasons || []),   // W07-A: the model's reasons on pages nobody read are not shown
+    verdict_risks: PU ? [] : (verdict.risks || []),
     recommended_page: PT.of(verdict.recommended_page || prev.page_type, prev.page_type),
     page_notes: PT.notes(verdict.recommended_page, PT.of(verdict.recommended_page || prev.page_type, prev.page_type)),
     secondary_keywords: OWNV.secondary,
     secondary_covered: OWNV.covered,   // A-5: the searches the site already holds elsewhere, kept off this page and named
     existing_related: OWNV.related, sections_covered: OWNV.sections, already_on_page: OWNV.already_on_page, keyword_covered: OWNV.keyword_covered, own_coverage_checked: OWNV.checked,
-    verdict_changes,
+    verdict_changes: PU ? [] : verdict_changes,   // W07-A: no advice on pages nobody read
     page_claims_dropped,
     verdict_exclusions: EXC.fromVerdict(verdict_changes, verdict.topics_to_skip),   // A-18: what this page must not cover
     existing_page_action,
@@ -2054,6 +2267,8 @@ return [{
     hold_ack: HOLD.ack,
     hold_recheck_days: HOLD.recheck_days,
     verdict_acknowledged: !!HOLD.ack,
-    duplicate_check: HOLD.applies ? HOLD.duplicate_check : null
+    duplicate_check: HOLD.applies ? (PU ? { checked: false, targets: [], partial: [], self: [], basis: 'not checked: ' + PU.client_reason } : HOLD.duplicate_check) : null,
+    // W07-A: the pages this verdict stands on could not be read; a page run stops before the brief (*Need Content?*) and says why
+    ...(PU ? { pages_unread: PU, pages_unread_stop: HOLD.applies } : {})
   }
 }];

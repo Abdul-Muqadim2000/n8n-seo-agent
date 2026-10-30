@@ -292,6 +292,9 @@ const PF = (() => {
       'PAGE TYPE (' + (S(p.page_type) || kind) + '): ' + PT_TARGETS[kind].text + '.',
       'WHAT BLOCKS PUBLISHING: an unsupported statement about the business, a figure its source does not state, a market, adoption, cost or compliance figure whose only source is a vendor or agency blog, a bracket in the text, a dead link, a wrong brand name, copied text, a fake testimonial or guarantee, a page cut off before its end. Everything else (length, term coverage, headings, tables, readability) is advice.'
     ];
+    // W07-B (2026-10-31): a separate new page beside a page the client kept says so to everyone who writes or reviews it (only then)
+    const apart = typeof PGA !== 'undefined' ? PGA.contractLine(PGA.of(p)) : '';
+    if (apart) rules.push(apart);
     return { version: 1, band, kind, h2_range: PT_TARGETS[kind].h2, business: biz, length_text, text: rules.join('\n') };
   };
 
@@ -600,6 +603,11 @@ const PF = (() => {
         t = t.replace(re, (m0, pre) => { n++; return pre + brand; }); }
       t = t.replace(/\u0000(\d+)\u0000/g, (m0, i) => masked[Number(i)]);
       if (n) { md = t; fixes.push('Wrote the business name as "' + brand + '" in ' + n + ' place(s)'); } }
+    // i. W07-B (2026-10-31, WAVE06 section 10, K1): a separate new page written beside a page the client kept ("Write it anyway") gets a
+    //    title tag and an H1 of its own (never the kept page's, word for word or nearly) and one link to the kept page where it helps the
+    //    reader. The kit (_page_apart.js) is inlined where the run writes a page; a node without it (Finalize) changes nothing here.
+    if (c.apart && typeof PGA !== 'undefined') { const A = PGA.fix(md, c.apart, { keyword: kw, business: c.business, brand: c.brand, brief_title: c.brief_title, brief_h1: c.brief_h1,
+      title_variants: c.title_variants, split, join }); md = A.md; fixes.push(...A.fixes); }
     return { md: tidy(md), fixes, removed };
   };
 
@@ -682,6 +690,12 @@ const PF = (() => {
     // W0-A (PLAN Fix 1.5, R4 G22): a meta description PF.meta could not repair is a publish error (it reaches the HTML head, Open Graph and
     // the schema), no longer a 0.25 advisory; the check reads it from Content QA's field rule (content_qa.meta_error)
     if (S(qa.meta_error).trim()) B('meta', S(qa.meta_error).trim() + ', and it could not be written from the brief or the Quick answer', 'hard');
+    // W07-B (2026-10-31, WAVE06 section 10 finding 1): a separate new page whose title tag is still the title tag (or main heading) of the page
+    // the client kept beside it competes with that page for one search; PF.fix gives it a title of its own, so this blocks only when no
+    // title of its own could be written. The same main heading alone is advice.
+    { const PI = qa.page_identity && typeof qa.page_identity === 'object' ? qa.page_identity : null; const sa = PI && PI.same_as ? PI.same_as : null;
+      if (PI && PI.title_same) B('same_title', 'The meta title is the same as the ' + (sa && sa.field === 'h1' ? 'main heading' : 'title tag') + ' of your existing page ' + S((sa && sa.url) || PI.url) + ', so the two pages would compete for one search', 'hard');
+      else if (PI && PI.h1_same) A('same_h1', 'The main heading is the same as your existing page ' + S((sa && sa.url) || PI.url) + '\'s: give this page a heading of its own', 0.5); }
     if (Number(qa.profile_placeholders) > 0) B('author_profile', 'The author box needs the author\'s details (name, job title, short bio): add them once to the business profile', 'hard');
     // soft: facts and trust. The system rewrites or removes each one itself before delivery (PF.neutralize)
     const promises = (qa.business_promises || []).concat(qa.business_claims || []).filter(p => p && p.sentence);
@@ -1059,6 +1073,7 @@ const PF = (() => {
     brand: 'write the business name the way you write it where the check found another form',
     author_profile: 'add the author\'s name, job title and a short bio to the business profile once',
     meta: 'write a meta description of 120 to 155 characters that says what the page answers',
+    same_title: 'give this page a title tag of its own, different from your existing page\'s',   // W07-B
     claim: 'delete the statement or confirm it in your business facts', figure: 'take out the figure or cite the page that states it',
     statistic: 'take out the number or cite the page that states it', bracket: 'fill in or delete the bracket', dead_link: 'replace or remove the link',
     off_topic: 'delete the section', guarantee: 'delete the guarantee', testimonial: 'delete the testimonial',
@@ -1107,7 +1122,9 @@ const PF = (() => {
       brief_meta: S(b.meta_description).trim(),   // W0-A: PF.meta rebuilds a broken description from it first
       planned_slug: !!(p.ladder_id && S(p.ladder_target_url).trim()), ai_target: !!(p.ai_target && p.ai_target.question), snippet_targets: b.snippet_targets || [], outline: b.outline || [],
       internal_links: links, own_text: S(o.own_text || [p.business_facts, p.case_facts_text, p.proof_context].filter(Boolean).join(' ')), termRe: o.termRe || null,
-      critique: o.critique || null, qa_marks: o.qa_marks || [], qa_figure_marks: o.qa_figure_marks || [] }; };
+      critique: o.critique || null, qa_marks: o.qa_marks || [], qa_figure_marks: o.qa_figure_marks || [],
+      // W07-B: the page the client kept beside this one, and the brief's own title lines to choose a title of its own from
+      apart: typeof PGA !== 'undefined' ? PGA.of(p) : null, brief_title: S(b.meta_title).trim(), brief_h1: S(b.h1).trim(), title_variants: Array.isArray(b.title_variants) ? b.title_variants.map(S) : [] }; };
   // ---------- 9. the contents list (fu-finalize-toc, 2026-10-30, docs/page-quality-2026-10-29/BASELINE.md) ----------
   // The page package (Blog Package) puts a linked contents list above the first H2: "**Contents**", then "1. [Heading](#heading-id)", the id
   // being the H2's text as its anchorOf makes it (lower case, a-z0-9 runs joined by "-", cut at 60 characters, "-2" for a repeat). Finalize

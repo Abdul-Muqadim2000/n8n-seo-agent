@@ -2099,7 +2099,7 @@
    {
     "allowed": false,
     "maxTries": 3,
-    "name": "Read Site (AI)",
+    "name": "Read Site (AI) (reader)",
     "onError": "continueRegularOutput",
     "paid": false,
     "per_item": false,
@@ -2249,6 +2249,17 @@
     "retryOnFail": false,
     "timeout": 150000,
     "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Reader Alert",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 15000,
+    "waitBetweenTries": 5000
    },
    {
     "allowed": false,
@@ -2556,7 +2567,7 @@
    {
     "allowed": false,
     "maxTries": 3,
-    "name": "Render Pages",
+    "name": "Render Pages (reader)",
     "onError": "continueRegularOutput",
     "paid": false,
     "per_item": false,
@@ -2651,6 +2662,17 @@
     "retryOnFail": false,
     "timeout": 120000,
     "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Reader Alert",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 15000,
+    "waitBetweenTries": 5000
    },
    {
     "allowed": false,

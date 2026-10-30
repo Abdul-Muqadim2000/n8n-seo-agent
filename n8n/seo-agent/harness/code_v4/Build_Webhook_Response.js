@@ -34,7 +34,11 @@ return [{
       const g = (k) => (d[k] !== undefined ? d[k] : pv[k]);
       return { hold: g('hold') || null, hold_shadow: g('hold_shadow') || null, verdict_acknowledged: g('verdict_acknowledged') === true,
         hold_exempt: g('hold_exempt') || '', hold_not_checked: g('hold_not_checked') || '',
-        verdict_readings: g('verdict_readings') || null, existing_page_unconfirmed: g('existing_page_unconfirmed') || null }; })(),   // W05-B (section 175)
+        verdict_readings: g('verdict_readings') || null, existing_page_unconfirmed: g('existing_page_unconfirmed') || null,
+        // W07-A (section 179): the pages the verdict stands on could not be read (the page reader refused, its fallback failed too)
+        pages_unread: g('pages_unread') ? { reason: String(g('pages_unread').reason || ''), client_reason: String(g('pages_unread').client_reason || ''), missing: g('pages_unread').missing || [],
+          existing: g('pages_unread').existing || null, client: g('pages_unread').client || null, competitors: g('pages_unread').competitors || null } : null,
+        existing_page_unread: g('existing_page_unread') || null }; })(),   // W05-B (section 175)
     evidence: d.verdict_evidence || null,
     reasons: d.verdict_reasons || [],
     risks: d.verdict_risks || [],

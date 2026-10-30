@@ -1414,6 +1414,17 @@
      ]
     ]
    },
+   "Any Reader Refusal?": {
+    "main": [
+     [
+      {
+       "index": 0,
+       "node": "Load Ops Alerts (Reader)",
+       "type": "main"
+      }
+     ]
+    ]
+   },
    "Any Run AI Extra Requests Retries?": {
     "main": [
      [
@@ -2242,6 +2253,17 @@
      ]
     ]
    },
+   "Load Ops Alerts (Reader)": {
+    "main": [
+     [
+      {
+       "index": 0,
+       "node": "Reader Alert Plan",
+       "type": "main"
+      }
+     ]
+    ]
+   },
    "Load Pages (AI)": {
     "main": [
      [
@@ -2335,7 +2357,7 @@
      [
       {
        "index": 0,
-       "node": "Read Site (AI)",
+       "node": "Read Site (AI) (reader)",
        "type": "main"
       }
      ],
@@ -2464,6 +2486,17 @@
       {
        "index": 0,
        "node": "Site Text Jobs",
+       "type": "main"
+      }
+     ]
+    ]
+   },
+   "Post Reader Alert": {
+    "main": [
+     [
+      {
+       "index": 0,
+       "node": "Reader Alert Delivery",
        "type": "main"
       }
      ]
@@ -2607,6 +2640,66 @@
       {
        "index": 0,
        "node": "Discovery Requests",
+       "type": "main"
+      },
+      {
+       "index": 0,
+       "node": "Reader Refusals",
+       "type": "main"
+      }
+     ]
+    ]
+   },
+   "Read Site (AI) (reader)": {
+    "main": [
+     [
+      {
+       "index": 0,
+       "node": "Read Site (AI)",
+       "type": "main"
+      }
+     ]
+    ]
+   },
+   "Reader Alert Delivery": {
+    "main": [
+     [
+      {
+       "index": 0,
+       "node": "Save Reader Alert Delivery",
+       "type": "main"
+      }
+     ]
+    ]
+   },
+   "Reader Alert Plan": {
+    "main": [
+     [
+      {
+       "index": 0,
+       "node": "Save Reader Alert",
+       "type": "main"
+      }
+     ]
+    ]
+   },
+   "Reader Alert Send": {
+    "main": [
+     [
+      {
+       "index": 0,
+       "node": "Send Reader Alert?",
+       "type": "main"
+      }
+     ]
+    ]
+   },
+   "Reader Refusals": {
+    "main": [
+     [
+      {
+       "index": 0,
+       "node": "Any Reader Refusal?",
        "type": "main"
       }
      ]
@@ -2949,6 +3042,28 @@
      ]
     ]
    },
+   "Save Reader Alert": {
+    "main": [
+     [
+      {
+       "index": 0,
+       "node": "Reader Alert Send",
+       "type": "main"
+      }
+     ]
+    ]
+   },
+   "Save Reader Alert Delivery": {
+    "main": [
+     [
+      {
+       "index": 0,
+       "node": "DFS Balance End (AI)",
+       "type": "main"
+      }
+     ]
+    ]
+   },
    "Save Run Alert": {
     "main": [
      [
@@ -2966,6 +3081,17 @@
       {
        "index": 0,
        "node": "Run Alert Rows",
+       "type": "main"
+      }
+     ]
+    ]
+   },
+   "Send Reader Alert?": {
+    "main": [
+     [
+      {
+       "index": 0,
+       "node": "Post Reader Alert",
        "type": "main"
       }
      ]
@@ -3545,6 +3671,20 @@
     "operation": "get",
     "table": "seo_run_ledger"
    },
+   "Load Ops Alerts (Reader)": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "alert_key",
+       "keyValue": "={{ $json.alert_key }}"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_ops_alerts"
+   },
    "Load Pages (AI)": {
     "filters": {
      "conditions": [
@@ -3859,6 +3999,34 @@
     "mapping": "autoMapInputData",
     "operation": "upsert",
     "table": "seo_ai_prompts"
+   },
+   "Save Reader Alert": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "alert_key",
+       "keyValue": "={{ $json.alert_key }}"
+      }
+     ]
+    },
+    "mapping": "autoMapInputData",
+    "operation": "upsert",
+    "table": "seo_ops_alerts"
+   },
+   "Save Reader Alert Delivery": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "alert_key",
+       "keyValue": "={{ $json.alert_key }}"
+      }
+     ]
+    },
+    "mapping": "defineBelow",
+    "operation": "update",
+    "table": "seo_ops_alerts"
    },
    "Save Run Alert": {
     "filters": {
@@ -4220,6 +4388,20 @@
     "operation": "get",
     "table": "seo_run_ledger"
    },
+   "Load Ops Alerts (Reader)": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "alert_key",
+       "keyValue": "={{ $json.alert_key }}"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_ops_alerts"
+   },
    "Load Profiles": {
     "filters": null,
     "mapping": null,
@@ -4333,6 +4515,34 @@
     "mapping": "autoMapInputData",
     "operation": "upsert",
     "table": "seo_link_prospects"
+   },
+   "Save Reader Alert": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "alert_key",
+       "keyValue": "={{ $json.alert_key }}"
+      }
+     ]
+    },
+    "mapping": "autoMapInputData",
+    "operation": "upsert",
+    "table": "seo_ops_alerts"
+   },
+   "Save Reader Alert Delivery": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "alert_key",
+       "keyValue": "={{ $json.alert_key }}"
+      }
+     ]
+    },
+    "mapping": "defineBelow",
+    "operation": "update",
+    "table": "seo_ops_alerts"
    },
    "Settle Run Ledger (BL)": {
     "filters": {

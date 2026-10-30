@@ -962,11 +962,11 @@ parts.push(`
 
 // ===== KEYWORD VERDICT =====
 if (wantVerdict) {
-  const verdictLabel = { GO: 'GO — Target This Keyword', GO_WITH_CHANGES: 'GO, WITH CHANGES', AVOID: 'AVOID', NOT_CHECKED: 'NOT CHECKED — the live Google results could not be read' }[d.verdict] || esc(d.verdict);
+  const verdictLabel = { GO: 'GO — Target This Keyword', GO_WITH_CHANGES: 'GO, WITH CHANGES', AVOID: 'AVOID', NOT_CHECKED: d.pages_unread ? 'NOT CHECKED: the pages it needs could not be read' : 'NOT CHECKED — the live Google results could not be read' }[d.verdict] || esc(d.verdict);
   const verdictClass = d.verdict === 'GO' ? 'ok' : (d.verdict === 'AVOID' ? 'bad' : '');
   parts.push(h2('Keyword Verdict') + kv([
     ['Verdict', '<span class="' + verdictClass + '">' + esc(verdictLabel) + '</span>'],
-    ['Score', d.verdict_score != null ? d.verdict_score + '/100' : (d.score_withheld ? 'not scored — the live Google results could not be read' : 'N/A')],
+    ['Score', d.verdict_score != null ? d.verdict_score + '/100' : (d.score_withheld ? (d.pages_unread ? 'not scored: the pages it needs could not be read' : 'not scored — the live Google results could not be read') : 'N/A')],
     ['Recommended Page Type', esc(d.recommended_page || d.page_type || 'N/A')],
     ['Difficulty for your site', d.for_you ? esc(d.for_you.label) : (d.domain ? 'not measured for this request' : 'no website on this request')],
     ['Expected visits/month at #1-3', d.expected_visits ? (d.expected_visits.visits != null ? num(d.expected_visits.visits) + ' \u2014 ' + esc(d.expected_visits.basis_text) : esc(d.expected_visits.basis_text)) : (d.score_withheld ? 'not estimated' : 'N/A')],
@@ -1153,7 +1153,7 @@ if (wantAudit) {
 // carried its sources into the .doc the customer opens. Only the sections this document actually contains are listed.
 const lineage = [];
 if (wantVerdict) lineage.push(d.score_withheld
-  ? LN.unknown('The verdict, its score, expected visits and time to rank', 'the live Google results could not be read for this keyword, so nothing was scored')
+  ? LN.unknown('The verdict, its score, expected visits and time to rank', d.pages_unread ? 'the pages it stands on could not be read (' + String(d.pages_unread.client_reason || '') + '), so nothing was scored' : 'the live Google results could not be read for this keyword, so nothing was scored')
   : LN.of('The verdict, its score, expected visits and time to rank', 'model', { basis: 'modelled', period: LN.asOf(today), sample: 'one keyword in ' + String(d.country || ''),
       note: 'our own 0-100 score from the demand, the difficulty and who ranks now; the visits are modelled from click-share curves, never measured clicks' }));
 if (wantSeo) {

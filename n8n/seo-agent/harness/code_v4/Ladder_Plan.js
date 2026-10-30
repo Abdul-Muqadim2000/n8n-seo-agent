@@ -3000,11 +3000,16 @@ else if (serpOut) {
       + 'A ladder plan is a bet on who ranks for the keyword, so none was planned, nothing was scored and no page was written. '
       + (transient ? 'Please try again later (in an hour or so).' : 'Please try again later; if it keeps happening, contact support.') };
 }
+// W07-A (2026-10-31, WAVE06 "Open resilience item"): the pages the plan stands on (the ones that rank, the site's own) could not be read because
+// the page reader refused and its fallback failed too (Parse Verdict's `pages_unread`): no ladder is planned on pages nobody read
+else if (base.pages_unread && base.pages_unread.reason) refusal = { reason: 'pages_unread', short: 'the pages the plan needs could not be read', detail: String(base.pages_unread.client_reason || '').slice(0, 300),
+  message: 'We could not read the pages a ladder plan stands on for "' + head + '" right now: ' + String(base.pages_unread.client_reason || 'the service we use to read web pages did not answer') + '. '
+    + 'It is not a problem with your keyword, and it says nothing about whether "' + head + '" is a good choice. No pages were planned, nothing was scored and no page was written. Please try again later.' };
 else if (thinPool) refusal = { reason: 'thin_data', short: 'the keyword research returned too little data', pool_size: poolSize, minimum: LADDER_MIN_POOL, head_measured: headMeasured,
   message: 'The keyword research returned only ' + poolSize + ' keyword' + (poolSize === 1 ? '' : 's') + ' around "' + head + '" in ' + (base.country || 'this market')
     + (headMeasured ? ' (a ladder needs at least ' + LADDER_MIN_POOL + ' to pick rungs from)' : ', and the search data provider has no search volume and no difficulty for "' + head + '" itself')
     + ', so there is not enough data to plan one. No pages were planned and none was written: check the destination keyword, or run it again if the search data provider was failing.' };
-const dataRefused = !!(refusal && (refusal.reason === 'serp_unchecked' || refusal.reason === 'thin_data'));
+const dataRefused = !!(refusal && (refusal.reason === 'serp_unchecked' || refusal.reason === 'thin_data' || refusal.reason === 'pages_unread'));   // W07-A: pages_unread
 const plan_type = refusal ? 'none' : plan.plan_type;
 const planned = !refusal;
 
