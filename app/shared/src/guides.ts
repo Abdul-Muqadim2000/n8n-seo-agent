@@ -2515,7 +2515,7 @@ export const GUIDES = [
     steps: [
       {
         title: 'Read why it waits',
-        body: 'The report says which of the two it is: the keyword scored under 50 out of 100 in our verdict (few searches, the wrong kind of page for what Google shows, or competition your website cannot beat yet), or your website already has a page aimed at the same search. Two pages for one search compete with each other in Google.',
+        body: 'The report says which of the two it is: the keyword scored under 40 out of 100 in our verdict, or under 50 when few people search for it (the wrong kind of page for what Google shows, or competition your website cannot beat yet), or your website already has a page aimed at the same search. Two pages for one search compete with each other in Google.',
       },
       {
         title: 'Improve the existing page',

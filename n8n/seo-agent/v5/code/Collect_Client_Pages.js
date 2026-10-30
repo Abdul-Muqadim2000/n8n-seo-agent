@@ -1,3 +1,4 @@
+/*__SITE_MODEL__*/
 // Cleans the client's pages and extracts cheap trust signals (phone, email, years, certifications, counts).
 // R38 (2026-10-16): the verdict told a customer their page "has no mandate dates, no tables, no author or date" about a page that has all
 // three — three cuts (9,000 characters here, 3,500 in the analyzer's prompt, 5,000 in the copywriter's) and a reader (Jina, with the header /
@@ -129,6 +130,7 @@ const digestOf = (req, raw, text, html, given) => {
 };
 
 let existingDigest = null;
+let existingReaderTitle = null;
 const pages = reqs.map((r, i) => {
   const j = res[i] || {};
   let rawText = String(j.page_text || j.data || '');
@@ -139,6 +141,7 @@ const pages = reqs.map((r, i) => {
   if (!viaRender && (j.error || text.length < 200 || /just a moment|access denied|captcha/i.test(text.slice(0, 400)))) return null;
   const cap = r.kind === 'existing' ? CONFIG.existing_chars : CONFIG.other_chars;
   const h = htmlRes[i] || {};
+  if (r.kind === 'existing' && !existingReaderTitle) existingReaderTitle = { url: r.url, title: ((String(j.page_text || j.data || '').match(/^Title:[ \t]*(.+)$/m) || [])[1] || '').trim() };   // W05-B: the reader's own title line
   if (r.kind === 'existing' && !existingDigest) existingDigest = digestOf(r, rawText, text, viaRender ? rr.html : (h.error ? '' : (h.page_html != null ? h.page_html : (h.data != null ? h.data : h.body))), Math.min(cap, text.length));
   return { url: r.url, kind: r.kind, words: text.split(/\s+/).length, text: text.slice(0, cap), ...(viaRender ? { read_via: 'rendered' } : {}) };
 }).filter(Boolean);
@@ -173,8 +176,38 @@ const client_signals = {
   numbers: uniq(all.match(/\b\d[\d,.]*\+?\s?(clients?|customers?|projects?|users?|countries|offices|employees|staff|locations|installations?|reviews?)\b/gi)).slice(0, 6),
   locations: uniq(all.match(/\b(Dubai|Abu Dhabi|Sharjah|Riyadh|Jeddah|London|Manchester|New York|Toronto|Sydney|Singapore|Karachi|Lahore|Islamabad|Mumbai|Delhi|Bangalore|Berlin|Paris|Madrid|Amsterdam)\b/g)).slice(0, 5)
 };
+// ---- W05-B (2026-10-30, page-quality BEFORE_AFTER K4): the page this run would rewrite is confirmed by its OWN words first ----
+// K4 ("dynamics 365 partner dubai") took /dynamics-365-project-operations-uae as the page to improve: matched by its address alone (its title
+// not on file), so the partner page was written onto the Project Operations page's address and called Ready. A page the inventory or the
+// sitemap matched (never one the client or the pipeline named) must be confirmed by its title or main heading (on file, or read in this very
+// run) or a Search Console search it earns impressions for (SM.confirmPage). When it is not, this run writes a NEW page at its own address,
+// reads the other page as a related page only, and says so (`existing_page_unconfirmed`, shown in the report and the brief).
+const EXCONF = (() => {
+  const cand = inventoryPage || ((ctx.existing_page && ctx.existing_page.url) ? ctx.existing_page : null);
+  if (!cand || ignoredReq || String(cand.source || '') === 'provided' || String(ctx.existing_page_url || '').trim()) return null;
+  if (typeof SM === 'undefined') return null;
+  const key = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  if (String(ctx.ladder_target_url || '').trim() && key(ctx.ladder_target_url) === key(cand.url)) return null;   // the keyword ladder planned this very address for the keyword
+  let model = (ctx.site_model && typeof ctx.site_model === 'object') ? ctx.site_model : null;
+  if (!model) { try { model = ($('Site Model').first().json || {}).site_model || null; } catch (e) { model = null; } }
+  const inv = model ? SM.pages(model).find(p => key(p.url) === key(cand.url)) : null;
+  const page = { url: cand.url, title: (inv && inv.title) || cand.title || '', h1: (inv && inv.h1) || '', queries: (inv && inv.queries) || [] };
+  const readNow = existingDigest && key(existingDigest.url) === key(cand.url) ? existingDigest : null;
+  const rdTitle = existingReaderTitle && key(existingReaderTitle.url) === key(cand.url) ? existingReaderTitle.title : '';
+  const htmlTitle = readNow ? String(readNow.html_title || '').replace(/&amp;/g, '&') : '';
+  const texts = [{ text: htmlTitle || rdTitle, by: 'its title' }, { text: readNow ? (readNow.headings || [])[0] || '' : '', by: 'its main heading' }].filter(t => t.text);
+  const c = SM.confirmPage(model || { pages: [] }, page, ctx.keyword, { texts });
+  const title = page.title || (htmlTitle || rdTitle).replace(/\s*[|]\s*[^|]{1,40}$/, '').trim();
+  return { ok: c.ok, cand, title, by: c.by, evidence: c.evidence, why: c.why };
+})();
+const unconfirmed = EXCONF && !EXCONF.ok ? { url: EXCONF.cand.url, title: EXCONF.title, matched_by: EXCONF.cand.matched_by || (EXCONF.cand.source === 'sitemap' ? 'address' : ''), source: EXCONF.cand.source || '',
+  why: EXCONF.why, note: 'Written as a new page at its own address: ' + EXCONF.why + '.' } : null;
+if (unconfirmed) for (const p of pages) if (p.kind === 'existing') p.kind = 'related';
+const confirmedPage = EXCONF && EXCONF.ok ? { ...EXCONF.cand, ...(EXCONF.title && !EXCONF.cand.title ? { title: EXCONF.title } : {}), confirmed_by: EXCONF.evidence } : null;
 return [{ json: { ...ctx, ...(inventoryPage ? { existing_page: inventoryPage, existing_page_url: ctx.existing_page_url || inventoryPage.url } : {}),
   ...(ignoredReq ? { existing_page: null, existing_page_ignored: ignoredReq.ignored_existing } : {}),
-  client_pages: pages, client_pages_read: pages.length, existing_page_text: existing ? existing.text : '', existing_page_tables: existingDigest ? existingDigest.tables_block : '', existing_page_digest: existingDigest,
-  existing_page_facts_text: existingDigest ? existingDigest.facts_text : '', client_signals,
+  ...(confirmedPage ? { existing_page: confirmedPage } : {}),
+  ...(unconfirmed ? { existing_page: null, existing_page_url: String(ctx.existing_page_url || ''), existing_page_unconfirmed: unconfirmed } : {}),
+  client_pages: pages, client_pages_read: pages.length, existing_page_text: (existing && !unconfirmed) ? existing.text : '', existing_page_tables: (existingDigest && !unconfirmed) ? existingDigest.tables_block : '', existing_page_digest: unconfirmed ? null : existingDigest,
+  existing_page_facts_text: (existingDigest && !unconfirmed) ? existingDigest.facts_text : '', client_signals,
   ...(linkCands ? { internal_link_candidates: linkCands } : {}), ...(clientRender ? { client_render: clientRender } : {}) } }];

@@ -97,8 +97,16 @@ export type WaitingEntry = PipelineData['queue']['waiting'][number];
  * it, but carries `needsFix` and the QA reasons, so nothing downstream offers to publish it.
  */
 export function waitingPages(logs: ContentLogRow[], now = Date.now()): WaitingEntry[] {
-  return logs
-    .filter((l) => l.status !== 'published' && !l.published_url) // D5: 'started' (the run was spawned) and 'written' (the page exists) both wait
+  // W05-B (2026-10-30, BEFORE_AFTER "Holds"): a keyword held for the client's OK wrote nothing, so it never waits to be published, and a
+  // keyword counts once (its held row and the row of the page "Write it anyway" then wrote were listed twice: "5 pages are already waiting")
+  const live = logs.filter((l) => l.status !== 'published' && !l.published_url && l.status !== 'held'); // D5: 'started' (the run was spawned) and 'written' (the page exists) both wait
+  const newest = new Map<string, ContentLogRow>();
+  for (const [i, l] of live.entries()) {
+    const k = norm(l.keyword || '') || `#${i}`;
+    const cur = newest.get(k);
+    if (!cur || String(l.started_at || '') > String(cur.started_at || '')) newest.set(k, l);
+  }
+  return [...newest.values()]
     .map((l) => {
       const qa = draftQa([l]);
       return {
@@ -467,7 +475,8 @@ export function cadenceDetail(next: QueueItem[], plan: CadenceWeek, build: Pick<
 export function writtenPages(logs: ContentLogRow[], ladders: LadderRow[], now = Date.now()): PipelineData['written'] {
   const all: PipelineData['written'] = [
     ...logs
-      .filter((l) => l.keyword && (l.status === 'published' || now - Date.parse(l.started_at || '1970-01-01') < 180 * 864e5))
+      // W05-B: a held keyword wrote nothing (only the check ran), so it is never "a page already written" ("Write it anyway" warned falsely)
+      .filter((l) => l.keyword && l.status !== 'held' && (l.status === 'published' || now - Date.parse(l.started_at || '1970-01-01') < 180 * 864e5))
       .map((l) => ({
         keyword: l.keyword,
         status: (l.status === 'published' ? 'published' : 'started') as 'published' | 'started',

@@ -330,7 +330,7 @@ export const features: Feature[] = [
       'Every page goes through a writer, a critic and an editor, then an SEO check that measures it against the best page in the results and compares it, word for word, with the pages it was researched from and with your own. Pages carry real expertise signals (an author byline, an expert reviewer, your experience notes and schema) and arrive as a publish-ready package with their three images already made.',
     icon: PenLine,
     benefits: [
-      'Asked before writing: a page our verdict scores under 50 out of 100, or a search your website already has a page for, waits for your OK, and uses only the check',
+      'Asked before writing: a page our verdict scores under 40 out of 100 (under 50 when few people search for it), or a search your website already has a page for, waits for your OK, and uses only the check',
       'Writer, critic and editor passes, then an SEO quality check',
       'E-E-A-T built in: author byline and box, expert reviewer, experience notes and schema',
       'Your house style, stored once and followed: how your name is written, British or American spelling, words to avoid and the tone. Your own name written the wrong way is corrected before delivery',
@@ -364,7 +364,7 @@ export const features: Feature[] = [
       'Your final version comes with its own downloads: the page as a Word file and a PDF, as HTML and Markdown with its meta.json, and the images',
     ],
     steps: [
-      { title: 'Decide', body: 'Before anything is written we check the keyword. If our verdict scores it under 50 out of 100, or your website already has a page for the same search, the page waits for your OK: write it anyway, use the search we recommend, or improve the page you have.' },
+      { title: 'Decide', body: 'Before anything is written we check the keyword. If our verdict scores it under 40 out of 100, or under 50 when few people search for it, or your website already has a page for the same search, the page waits for your OK: write it anyway, use the search we recommend, or improve the page you have.' },
       { title: 'Brief', body: 'Keyword, intent and outline, with facts from your business profile, your case studies and your style guide.' },
       { title: 'Write and critique', body: 'A draft, a critic\'s review and an editor\'s pass that acts on it. When the page is finished, a reviewer that has not seen the drafts reads it once more.' },
       { title: 'Check', body: 'SEO checks on every page, against a coverage target read off the best page in the results. Every figure is looked up in the source it cites, and anything that is not there is marked for you to confirm. A page that repeats a competitor or one of your own pages goes back for a rewrite.' },
@@ -383,7 +383,7 @@ export const features: Feature[] = [
       },
       {
         q: 'Will you write a page for any keyword I give you?',
-        a: 'We check it first. When our verdict scores the keyword under 50 out of 100, or your website already has a page for the same search, the page waits for your OK instead of being written, and only the check is used. You can write it anyway, take the search we recommend, or improve the page you already have. Two pages for one search compete with each other, so improving the existing page is often the faster way up.',
+        a: 'We check it first. When our verdict scores the keyword under 40 out of 100, or under 50 when few people search for it, or your website already has a page for the same search, the page waits for your OK instead of being written, and only the check is used. You can write it anyway, take the search we recommend, or improve the page you already have. Two pages for one search compete with each other, so improving the existing page is often the faster way up.',
       },
       {
         q: 'What if a page says something about us that you could not check?',

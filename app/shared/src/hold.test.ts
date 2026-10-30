@@ -88,3 +88,27 @@ describe('copy rules', () => {
     expect(HOLD_RULE).toMatch(/under 50/);
   });
 });
+
+describe('W05-B (2026-10-30): the page the website has and the page Google shows', () => {
+  const K1 = {
+    ...HELD,
+    hold: {
+      ...HELD.hold,
+      score: 52,
+      kinds: ['duplicate'],
+      alternatives: [
+        { kind: 'improve', label: 'Improve the existing page', url: 'https://www.novaand.example/ms-365-erp-uae', keyword: 'ms 365 erp', why: 'your website already has this page for the search' },
+        { kind: 'improve', label: 'Improve the page Google shows', url: 'https://www.novaand.example/insights/is-microsoft-dynamics-365-an-erp-system', keyword: 'ms 365 erp', why: 'Google already shows this page for the search (40 impressions in Search Console)' },
+      ],
+    },
+  };
+  it('two improve choices keep their own labels and addresses; "Write it anyway" says a separate page is written', () => {
+    const b = holdButtons(holdOf(K1)!, { keyword: 'ms 365 erp' });
+    expect(b.map((x) => x.label)).toEqual(['Improve the existing page', 'Improve the page Google shows', 'Write it anyway']);
+    expect(b.map((x) => x.prefill.existingPageUrl)).toEqual(['https://www.novaand.example/ms-365-erp-uae', 'https://www.novaand.example/insights/is-microsoft-dynamics-365-an-erp-system', undefined]);
+    expect(b[2].why).toMatch(/separate new page/);
+  });
+  it('the rule names both lines in plain words', () => {
+    expect(HOLD_RULE).toMatch(/under 40 out of 100, or under 50 when few people search for it/);
+  });
+});

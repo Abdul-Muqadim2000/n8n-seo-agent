@@ -7,9 +7,11 @@
 import { HOLD_CHECK_USD } from './cost';
 
 export const HOLD_THRESHOLD = 50;
+/** W05-B (2026-10-30): under this the score alone holds a page; from here to HOLD_THRESHOLD only with a second signal (little demand, or a page the website already has) */
+export const HOLD_CLEAR = 40;
 /** The rule as the forms say it (REVIEW_CODE M2: the score itself is shown only in the hold, the Keyword Check has no verdict score). */
 export const HOLD_RULE =
-  'Before writing, we check the keyword. A page waits for your OK when our verdict scores the keyword under 50 out of 100, or when your website already has a page for the same search. A held keyword uses only the check.';
+  'Before writing, we check the keyword. A page waits for your OK when our verdict scores the keyword under 40 out of 100, or under 50 when few people search for it, or when your website already has a page for the same search. A held keyword uses only the check.';
 /** What a hold costs, the check alone (owner decision D8), in US dollars of provider cost (credits through the billing settings). */
 export const HOLD_COST_USD = HOLD_CHECK_USD;
 
@@ -101,7 +103,8 @@ export function holdButtons(h: HoldInfo, base: { keyword: string; pageType?: str
   const out: HoldButton[] = [];
   for (const a of h.alternatives) {
     if (a.kind === 'improve')
-      out.push({ id: 'improve', label: 'Improve the existing page', why: a.why, prefill: { keyword: base.keyword, existingPageUrl: a.url, ...common(base.pageType) } });
+      // W05-B: the engine may offer the page Google shows for the search beside the page the website has for it, each with its own label
+      out.push({ id: 'improve', label: a.label || 'Improve the existing page', why: a.why, prefill: { keyword: base.keyword, existingPageUrl: a.url, ...common(base.pageType) } });
     else if (a.kind === 'retarget')
       out.push({ id: 'retarget', label: 'Use the recommended target', why: a.why, prefill: { keyword: a.keyword, ...common(a.pageType || base.pageType) } });
     else out.push({ id: 'rung', label: 'Write the planned page', why: a.why, prefill: { keyword: a.keyword, ...common(base.pageType) } });
@@ -109,7 +112,7 @@ export function holdButtons(h: HoldInfo, base: { keyword: string; pageType?: str
   out.push({
     id: 'write_anyway',
     label: 'Write it anyway',
-    why: h.kinds.includes('duplicate') ? 'a second page for the same search competes with the one you have; it is your call' : 'you know this keyword is worth a page',
+    why: h.kinds.includes('duplicate') ? 'a separate new page is written and your existing page stays as it is; two pages for the same search compete with each other, so it is your call' : 'you know this keyword is worth a page',
     prefill: { keyword: base.keyword, ...common(base.pageType), holdAck: { score: h.score } },
   });
   return out;
