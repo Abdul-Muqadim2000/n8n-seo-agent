@@ -16,6 +16,8 @@ module.exports = async (ctx) => {
     return new Function('URL', 'structuredClone', body + '\nreturn { ' + names.join(', ') + ' };')(undefined, undefined); };
   const { IX } = kits('Index_Diagnose.js', ['PW', 'IX']);
   const DAY = 864e5; const NOW = Date.now(); const iso = (ms) => new Date(ms).toISOString();
+  // a moment earlier TODAY (UTC): the engine's 'checked today' is the UTC date, so 'an hour ago' just after midnight would be yesterday
+  const earlierToday = (ms) => iso(Math.max(Date.parse(iso(NOW).slice(0, 10)), NOW - ms));
   const SITE = { site_id: 'site_example-com', domain: 'example.com', canonical_host: 'www.example.com', gsc_property: 'sc-domain:example.com' };
   const W = 'https://www.example.com';
   const insp = (o) => ({ inspectionResult: { indexStatusResult: { verdict: 'NEUTRAL', coverageState: '', robotsTxtState: 'ALLOWED', indexingState: 'INDEXING_ALLOWED', pageFetchState: 'SUCCESSFUL', ...o } } });
@@ -196,7 +198,7 @@ module.exports = async (ctx) => {
     const SN = 'IXF6 (E6 / X1 / X2 / E10, decision 1) one execution per website: the dispatch starts a chain, each website saves its rows then starts the next; before inspecting, a reservation row holds the planned inspections so a crash or replay never spends past the cap; no reservation, no inspection';
     reset(); begin(SN); const check = mkCheck(SN);
     reset(); mock('Load Sites (Index)', [{ json: ROW }, { json: { ...ROW, site_id: 'site_two-com', domain: 'two.com', canonical_host: '' } }, { json: { ...ROW, site_id: 'site_three-com', domain: 'three.com' } }]);
-    mock('Load Monitors (Index)', [{ json: {} }]); mock('Load Index Runs', [{ json: { site_id: 'site_three-com', run_at: iso(NOW - 3600e3), inspected: 300 } }]);
+    mock('Load Monitors (Index)', [{ json: {} }]); mock('Load Index Runs', [{ json: { site_id: 'site_three-com', run_at: earlierToday(3600e3), inspected: 300 } }]);
     const dp = (await run('Index Plan', [{ json: {} }]))[0].json;
     check('the dispatch (no website named): one item, the chain of websites not yet checked today (three.com was), nothing inspected here', dp.dispatch === true && J(dp.chain) === J(['site_example-com', 'site_two-com']), J(dp));
     mock('Google Events', [{ json: { started: [], completed: [], policy_news: null } }]);
@@ -208,7 +210,7 @@ module.exports = async (ctx) => {
       res.inspected === 20 && /had not finished/.test(res.note || '') && res.run_at && res.run_at === ((X.runRows || [])[0] || {}).json.run_at, J(res));
     const nx = Array.isArray(X.next) ? X.next[0].json : {};
     check('after its saves the website starts the next one of the chain', nx.site_id === 'site_two-com' && nx.ix_chain && nx.ix_chain.part === 2, J(nx));
-    const RP = await one({ cap: 20, runs: [{ site_id: SITE.site_id, run_at: iso(NOW - 600e3), inspected: 20, note: 'Today\'s check started ... had not finished', sitemaps_json: '{"reservation":true}' }], urls: [W + '/a', W + '/b'] });
+    const RP = await one({ cap: 20, runs: [{ site_id: SITE.site_id, run_at: earlierToday(600e3), inspected: 20, note: 'Today\'s check started ... had not finished', sitemaps_json: '{"reservation":true}' }], urls: [W + '/a', W + '/b'] });
     check('a replay after a crash: the crashed run\'s reservation counts, so nothing more is inspected today', RP.plan[0].json.used_today === 20 && RP.pr[0].json.skip === true, J([RP.plan[0].json.used_today, RP.pr[0].json]));
     const RF = await one({ reserveFail: true, urls: [W + '/a', W + '/b'] });
     check('a reservation that could not be saved: no inspection at all', RF.pr[0].json.skip === true && /reservation/.test(RF.pr[0].json.reason || ''), J(RF.pr[0].json));
