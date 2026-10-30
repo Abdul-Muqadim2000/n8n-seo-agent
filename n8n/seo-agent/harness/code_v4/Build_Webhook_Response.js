@@ -69,6 +69,14 @@ return [{
         site_urls: A(pb.site_urls).map(u => String(u || '')).filter(u => /^https?:\/\//i.test(u)).slice(0, 300),
         serp_shapes: pb.serp_shapes || cq.serp_shapes || null,
         regulatory_facts: regFacts.slice(0, 40), regulatory_topics: A((reg || {}).topics).map(t => ({ id: T((t || {}).id, 60), relevance: T((t || {}).relevance, 20) })).filter(t => t.id).slice(0, 12),
+        // W06-C (section 178): what the run took out of the page (the counts the delivered grade capped on, the share of the words and why), so
+        // the final version keeps the cap while those sections are missing; null from a check before W06-C (the final version says "not checked")
+        sections_removed: (() => { const dl = cq.delivery || {}; const ch = dl.changes || {}; const rr = ch.removed_run; if (!rr || typeof rr !== 'object') return null;
+          const N = (v) => Math.max(0, Math.round(Number(v) || 0)); const gr = (dl.grade || {}).removed || null;
+          const byEdits = N(rr.h2_before) > 0 ? Math.max(0, N(rr.h2_before) - N(rr.h2_removed) - N(rr.h2_now)) : 0;
+          return { sections: N(rr.sections), words: N(rr.words), words_before: N(rr.words_before), h2_before: N(rr.h2_before), h2_removed: N(rr.h2_removed), h2_delivered: N(rr.h2_now),
+            by_edits: gr && gr.by_edits != null ? N(gr.by_edits) : byEdits, share_pct: N(rr.words_before) && N(rr.words) ? Math.round(100 * N(rr.words) / N(rr.words_before)) : 0, capped: !!(gr && gr.capped),
+            list: A(ch.sections_removed).filter(x => x && x.heading).map(x => ({ heading: T(x.heading, 200), topic: T(x.topic, 120), words: N(x.words), level: N(x.level), why: T(x.why || x.signal, 200) })).slice(0, 12) }; })(),
         // W05-A (section 172): the second read's advice (enforce mode, read and checked), so the final version keeps its deduction while the words are there
         second_read: (() => { const R = d.qa_second_read || null; if (!R || R.mode !== 'enforce' || R.status !== 'checked') return null;
           return A(R.advice).filter(a => a && a.location).map(a => ({ severity: T(a.severity, 10), kind: T(a.kind, 20), location: T(a.location, 300) })).slice(0, 12); })(),

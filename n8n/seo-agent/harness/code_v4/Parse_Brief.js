@@ -267,13 +267,17 @@ if (prev.pricing_facts !== undefined || prev.timeline_facts !== undefined) {
 //    writer is never asked for it. Live (exec 771) the verdict said "Skip the consultancy-licence and start-an-IT-company questions" and
 //    the page carried "How Much Is a Consultancy Licence in Dubai?" (the brief never saw the instruction). EXC is the verdict-exclusions
 //    kit; Content QA checks the finished draft by the same rule.
+//    W06-C (2026-10-30, WAVE06 Open 2): matched against the page's whole keyword FAMILY (the keyword, this brief's primary and secondary
+//    keywords, the site's main services: EXC.familyOf), as Content QA and Page Candidates do, so the brief never leaves out a section about
+//    the page's own subject ("e-invoicing" on a page whose secondary keyword is "Dynamics 365 e-invoicing UAE" and the site sells it).
 {
   const EXL = Array.isArray(prev.verdict_exclusions) ? prev.verdict_exclusions : EXC.fromVerdict(prev.verdict_changes, []);
+  const EXFB = EXC.familyOf({ ...prev, content_brief: brief }, null);
   if (EXL.length) {
-    const pr = EXC.prune(brief.outline, EXL, prev.keyword || '');
+    const pr = EXC.prune(brief.outline, EXL, EXFB);
     if (pr.dropped.length) { brief.outline = pr.kept; adjustments.push('Outline section(s) the verdict said to leave out were removed: ' + pr.dropped.map(d => '"' + d.h2 + '" (skip ' + d.topic + ')').join('; ')); }
     if (Array.isArray(brief.snippet_targets)) {
-      const SNIP = brief.snippet_targets.filter(t => !EXL.some(e => EXC.match(String((t && t.question) || ''), e, prev.keyword || '')));
+      const SNIP = brief.snippet_targets.filter(t => !EXL.some(e => EXC.match(String((t && t.question) || ''), e, EXFB)));
       if (SNIP.length !== brief.snippet_targets.length) { adjustments.push('Removed ' + (brief.snippet_targets.length - SNIP.length) + ' snippet question(s) about a topic the verdict said to leave out'); brief.snippet_targets = SNIP; }
     }
   }
