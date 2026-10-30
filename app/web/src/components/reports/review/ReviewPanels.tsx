@@ -7,6 +7,7 @@ import {
   DUPLICATE_REASON_MAX,
   duplicateReasonProblem,
   formatCredits,
+  OWN_WORDS_NOTE,
   prefilledAnswer,
   REVIEW_STAGE_LABEL,
   REVIEW_STAGE_TONE,
@@ -222,13 +223,23 @@ export function QuestionsPanel({ view, domain = '' }: { view: PageReviewView; do
   const accept = useAcceptPrefilled(org.id, view.reportId);
   const { top, optional, stored } = groupQuestions(view.questions);
   const { answered, total } = answeredCount(view);
-  // W0-E: only yes / no questions are confirmed in one click; a question that needs the client's own words keeps its "Use this answer" button
-  const prefilled = [...top, ...optional].filter((x) => !!prefilledAnswer(x) && !view.answers[x.id]).length;
+  // W0-E: only yes / no questions are confirmed in one click; a question that needs the client's own words keeps its "Use this answer" button.
+  // W05-C: the other open questions are left general for this page by the same click, so the final version can always be made
+  const open = [...top, ...optional].filter((x) => !view.answers[x.id] || view.answers[x.id]!.decision === 'skip');
+  const prefilled = open.filter((x) => !!prefilledAnswer(x)).length;
+  const general = open.length - prefilled;
   const editable = can('member') && !view.approval;
   const acceptAll = async () => {
     try {
       await accept.mutateAsync();
-      toast.success('Suggestions accepted', { description: 'Each answer is kept in your business details for later pages.' });
+      toast.success(prefilled ? 'Suggestions accepted' : 'Questions left general', {
+        description: [
+          prefilled ? 'Each confirmed answer is kept in your business details for later pages.' : '',
+          general ? `${general} ${general === 1 ? 'question that needs' : 'questions that need'} your own words ${general === 1 ? 'was' : 'were'} left general on this page. You can still make the final version, and we will ask again on a later page.` : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
+      });
     } catch (e) {
       toastError(e);
     }
@@ -242,14 +253,20 @@ export function QuestionsPanel({ view, domain = '' }: { view: PageReviewView; do
         actions={
           <span className="flex flex-wrap items-center gap-2">
             <GuideButton id={QUESTIONS_GUIDE} vars={{ domain }} />
-            {editable && prefilled > 0 && (
+            {editable && open.length > 0 && (
               <Button size="sm" variant="secondary" icon={<Sparkles className="size-4" />} loading={accept.isPending} onClick={acceptAll}>
-                Accept all suggestions ({prefilled})
+                {prefilled > 0 ? `Accept all suggestions (${prefilled})` : `Leave the open questions general (${open.length})`}
               </Button>
             )}
           </span>
         }
       >
+        {editable && general > 0 && (
+          <p className="mb-4 text-[13px] leading-snug text-ink-3 [overflow-wrap:anywhere]">
+            {prefilled > 0 ? 'Accept all confirms the suggestions above it can. ' : ''}
+            {general === 1 ? 'The question that needs' : `The ${general} questions that need`} your own words {general === 1 ? 'is' : 'are'} left general on this page by that button: the page keeps its general wording, nothing is stored for later pages, and you can still make the final version.
+          </p>
+        )}
         {top.length > 0 && (
           <div>
             <h3 className="mb-2 font-display text-[15px] font-semibold text-ink">{top.length === 1 ? 'This one matters most' : `These ${top.length} matter most`}</h3>
@@ -357,6 +374,7 @@ export function QuestionCard({ q, view, editable, highlight }: { q: ReviewQuesti
               {q.prefill_source && /^https?:\/\//.test(q.prefill_source) ? <span className="text-ink-3"> ({q.prefill_source.replace(/^https?:\/\/(www\.)?/, '')})</span> : null}
             </p>
           )}
+          {q.prefill && q.answer_type === 'text' && <p className="mt-1.5 text-xs leading-snug text-ink-3 [overflow-wrap:anywhere]">{OWN_WORDS_NOTE}</p>}
 
           <fieldset className="mt-3" disabled={!editable || save.isPending}>
             <legend className="sr-only">Your answer to question {q.rank}</legend>

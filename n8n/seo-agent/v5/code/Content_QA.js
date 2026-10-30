@@ -377,13 +377,16 @@ const stats = [...statHits].filter(s => !/^(19|20)\d\d/.test(s)).filter(s => !ow
 //     the client's own facts carry needs no external source; a sentence whose sources we never read is left alone (nothing to check against).
 // (`srcText` / `ownFacts` are built in §2b, above the money mask, so both checks read the same source corpus — B3-1.)
 const unverified_figures = [];
+// W05-C (2026-10-30, BEFORE_AFTER K6): the figures a cited source DOES state, with the host that states them. PF.weakFigures reads them: a
+// figure its own linked source states is a sourced figure, never rewritten into a vague word ("rose sharply" for "39% to 66%", K6 round 3)
+const verified_figures = [];
 // B3-8: the check is one function, so the live page a refresh starts from is checked by exactly the rule the draft is
 const citedFigureCheck = (text, limit) => {
   const pad = (x) => ' '.repeat(x.length);
   // a full stop between two digits is a decimal point, not the end of a sentence ("23.5%" must stay whole)
   const isBreak = (t, i) => { const c = t[i]; if (c === '\n' || c === '|' || c === '!' || c === '?') return true; if (c !== '.') return false; return !(/\d/.test(t[i - 1] || '') && /\d/.test(t[i + 1] || '')); };
   const bounds = (t, at, len) => { let a = at, b = at + len; while (a > 0 && !isBreak(t, a - 1)) a--; while (b < t.length && !isBreak(t, b)) b++; return [a, b]; };
-  const seen = new Set(); const found = []; let checked = 0;
+  const seen = new Set(); const found = []; const ok = []; let checked = 0;
   for (const m of [...String(text).matchAll(/\[[^\[\]]+\]\((https?:\/\/[^)\s]+)\)/g)]) {
     const [a, b] = bounds(text, m.index, m[0].length); const id = a + ':' + b; if (seen.has(id)) continue; seen.add(id);
     const sent = text.slice(a, b);
@@ -396,7 +399,7 @@ const citedFigureCheck = (text, limit) => {
     // (B3-8: a source a refresh re-read whole carries no cut marker unless FRESH_CAP cut it — see §2b.)
     for (const f of SRC.figures(body)) {
       checked++;
-      if (texts.some(t => SRC.hasFigure(f, t))) continue;
+      if (texts.some(t => SRC.hasFigure(f, t))) { if (ok.length < 40) ok.push({ figure: f.raw, sources: [...new Set(urls.filter(u => SRC.hasFigure(f, srcText.get(SRC.key(u)) || '')).map(u => SRC.host(u)))] }); continue; }
       if (SRC.hasFigure(f, ownFacts) || clientNums.includes(String(f.raw).toLowerCase()) || SRC.hasFigure(f, OWN_TEXT)) continue;   // A-19: the business's own pages vouch for its own figures
       found.push({ figure: f.raw, sources: [...new Set(urls.map(u => SRC.host(u)))], reason: texts.some(t => SRC.cutShort(t)) ? 'not_in_excerpt' : 'absent',
         start: a + f.index, end: a + f.index + f.length, raw: f.raw, context: plain(sent).slice(0, 160),
@@ -405,11 +408,12 @@ const citedFigureCheck = (text, limit) => {
     }
     if (found.length >= limit) break;
   }
-  return { found, checked };
+  return { found, checked, ok };
 };
 {
   const r9b = citedFigureCheck(md, 12);
   const marks = r9b.found.map(x => ({ start: x.start, end: x.end, raw: x.raw }));
+  r9b.ok.forEach(x => verified_figures.push(x));
   r9b.found.forEach(x => unverified_figures.push({ figure: x.figure, sources: x.sources, reason: x.reason, ...(x.refreshed ? { refreshed_source: true } : {}) }));
   marks.sort((x, y) => y.start - x.start);
   for (const t of marks) md = md.slice(0, t.start) + '[Confirm: ' + t.raw + ']' + md.slice(t.end);
@@ -1114,7 +1118,7 @@ return [{ json: { ...prev, output: md, qa_round: round, editor_rounds, meta: { t
     passed_copy, profile_placeholders, profile_placeholder_fields: PROFILE_PH, placeholders_total: placeholder_count + profile_placeholders,
     keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, question_headings: questionHeadings, answered_questions: answeredQuestions, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),
     source_quality: externalUrls.reduce((m, e) => ({ ...m, [e.tier]: (m[e.tier] || 0) + 1 }), {}), weak_sources_unlinked: [...new Set(weakRepeats)], links_to_add_when_published: plannedLinksQA.map(p => ({ keyword: p.keyword || '', url: p.url, role: p.role, anchor: anchorText(p) })),
-    answer_block_words: answerWords, meta_title_length: metaTitle.length, meta_description_length: metaDesc.length, meta_error, unverified_statistics: stats, unverified_figures,
+    answer_block_words: answerWords, meta_title_length: metaTitle.length, meta_description_length: metaDesc.length, meta_error, unverified_statistics: stats, unverified_figures, verified_figures,
     trusted_sources, banned_phrases: banned_found, readability: { flesch, avg_sentence_words: avgSentence, long_sentences: longSentences, passive_pct, position: read_position, basis: read_basis, band_line: read_band_line, note: read_note,
       band: RBAND.ok ? { low: RBAND.low, high: RBAND.high, median: RBAND.median, p25: RBAND.p25, p75: RBAND.p75, pages_measured: RBAND.pages_measured, pages: RBAND.pages, clamped: RBAND.clamped } : null,
       band_source: RBAND.ok ? 'competitor_pages' : 'fixed', advice_only: true },   // B3-4: the band and its basis; advice, never in `warnings`

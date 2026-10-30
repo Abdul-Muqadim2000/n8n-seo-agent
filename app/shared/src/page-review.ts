@@ -355,9 +355,27 @@ export function prefilledAnswer(q: ClientQuestion): { decision: AnswerDecision; 
   return { decision: 'yes', text: '' };
 }
 
+/**
+ * W05-C (2026-10-30, page-quality BEFORE_AFTER: "Accept all" was refused on three of eight pages, so they never got a final version):
+ * what one click does with every open question. A yes / no question with a suggestion is confirmed; every other one (a question that needs
+ * the client's own words, or one with no suggestion) is left general on this page: the page keeps its general wording, nothing is stored
+ * for later pages, and a later page may ask it again.
+ */
+export function acceptAllPlan(open: readonly ClientQuestion[]): { questionId: string; decision: AnswerDecision; text: string }[] {
+  return open.map((q) => {
+    const p = prefilledAnswer(q);
+    return p ? { questionId: q.id, decision: p.decision, text: p.text } : { questionId: q.id, decision: 'general' as AnswerDecision, text: '' };
+  });
+}
+
+/** Why a question needs the client's own words (shown beside a suggestion that one click never accepts). */
+export const OWN_WORDS_NOTE =
+  'We need this in your own words: your answer is published as a fact about your business, and a line taken from your website can be a slogan or a heading rather than a fact. Check the suggestion, then use it or write your own.';
+
 /** The business fact an answer stores (null: skip, or the question is for this page only). */
-export function factOf(q: ClientQuestion, a: Pick<PageAnswer, 'decision' | 'text' | 'at' | 'by'>, reportId: string | null): FactAnswer | null {
+export function factOf(q: ClientQuestion, a: Pick<PageAnswer, 'decision' | 'text' | 'at' | 'by'> & { fromPrefill?: boolean }, reportId: string | null): FactAnswer | null {
   if (a.decision === 'skip' || !q.use_for_future_pages) return null;
+  if (a.decision === 'general' && a.fromPrefill) return null;   // W05-C: left general by "Accept all", for this page only
   return { decision: a.decision, text: answerText(q, a.decision, a.text), question: q.question, category: q.category, at: a.at, by: a.by, reportId };
 }
 
@@ -385,8 +403,12 @@ export const FACT_DECISION_LABEL: Record<FactAnswer['decision'], string> = {
   general: 'Keep it general',
 };
 
-/** True when the answers (or the client's own edits) change the page, so a final version is worth making. */
-export function finalizeNeeded(answers: readonly Pick<PageAnswer, 'decision'>[], clientEdited: boolean): boolean {
+/**
+ * True when the answers (or the client's own edits) change the page, so a final version is worth making. W05-C: also the FIRST final
+ * version once every question is decided (`allDecided`), even when each one was left general: the client gets the final files to publish.
+ */
+export function finalizeNeeded(answers: readonly Pick<PageAnswer, 'decision'>[], clientEdited: boolean, allDecided = false): boolean {
+  if (allDecided && answers.some((a) => a.decision !== 'skip')) return true;
   return clientEdited || answers.some((a) => a.decision === 'yes' || a.decision === 'edit' || a.decision === 'remove' || a.decision === 'answer');
 }
 
@@ -613,8 +635,8 @@ export interface FinalizeResult {
   request_id: string;
   /** the final article Markdown */
   markdown: string;
-  /** per answer: kept_original | client_wording | removed | woven | left_general | not_found */
-  applied: { id: string; how: string; section: string }[];
+  /** per answer: kept_original | client_wording | removed | woven | left_general | not_placed | already_covered (W05-C) */
+  applied: { id: string; how: string; section: string; why?: string }[];
   /** the sections the editor rewrote (s0 = introduction) */
   sections_rewritten: string[];
   changes: { section: string; what: string; before: string; after: string }[];
@@ -1125,7 +1147,7 @@ export function finalReportPayload(
     .map(obj)
     .filter((a) => s(a.how) === 'not_placed')
     .slice(0, 10)
-    .map((a) => ({ code: 'not_placed', text: plainWords(`Not placed: your answer to "${(asked.get(s(a.id)) ?? 'a question').slice(0, 160)}" did not fit a sentence of the page${s(a.section) ? ` (${s(a.section).slice(0, 120)})` : ''}. Tell us where it belongs, then make the final version again`) }));
+    .map((a) => ({ code: 'not_placed', text: plainWords(`Not placed: your answer to "${(asked.get(s(a.id)) ?? 'a question').slice(0, 160)}" ${s(a.why) ? `is ${s(a.why).slice(0, 120)}, so it was not put into a paragraph` : 'did not fit a sentence of the page'}${s(a.section) ? ` (${s(a.section).slice(0, 120)})` : ''}. Tell us where it belongs, or add it in the page editor, then make the final version again`) }));
   const advisory = [...items(del.advisory), ...notPlaced];
   const grade = obj(result.grade ?? del.grade);
   const label = plainWords(s(del.label)) || deliveryHeadline(status, questions.length, blocking[0] ?? null).headline;

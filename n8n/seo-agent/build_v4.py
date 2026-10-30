@@ -13268,6 +13268,52 @@ for _f171 in ('code/_page_fix.js', 'code/Finalize_Apply.js', 'code/_regulatory.j
 log('The follow-up branches meet Wave 0 (2026-10-30, section 171): voice flags go to the editor as section problems, the Finalize editor carries the own-voice / one-byline / no-redirect rules, regulatory search results are read through a redirect to their target and an opaque redirect is never a regulatory source')
 
 # =============================================================================
+# 172. A SOURCED FIGURE IS NEVER MADE VAGUE, NO PADDING IS ADDED, AND THE FINAL VERSION KEEPS THE PAGE'S SHAPE (W05-C, page-quality
+#      programme 2026-10-30, docs/page-quality-2026-10-29/BEFORE_AFTER.md K6 row, "Finalize" table, headline item 5). Wave 0 cost the guide
+#      both judges liked best 3 points, and the final version still took 1.8 points off a page. The causes, read off the BEFORE / AFTER
+#      executions, each fixed where it starts:
+#      * "39% to 66%" became "rose sharply": PF.weakFigures told the editor "rewrite the sentence without the number" for a figure its own
+#        linked source states. Content QA now records the figures a cited source states (verified_figures); such a figure with its source
+#        named in the sentence is advice, one with a generic link has the link named after its source instead of being taken out, an edit
+#        that drops a sourced figure is not kept (PF.protect / PF.better), and the Critic's "drop the figure" is not passed on for it;
+#      * two padding H3s and one point made three times: PF.plan asked for a competitor's rhetorical headings ("Why ... is ripe for AI
+#        disruption") as "a paragraph or an H3" while the same job cut 130 words. No subtopic while the page is over its length, no
+#        rhetorical or already-covered heading, a paragraph by default; the brief, copywriter and editor say the same;
+#      * a sales line in a code section: the brief placed a client fact in a technical how-to; client facts now go to the trust line, a
+#        "who does the work" section or the call to action;
+#      * Finalize: a fragment or a heading is never put into prose and never replaces a full sentence (PF.fragment), a list item keeps its
+#        marker, an invitation to get in touch is not added twice (PF.ctaSentence), an edit that loses a heading or a list item or adds a
+#        label is refused, and PF.finalGuard repairs the whole final version against the page it was made from;
+#      * the questions: near-duplicates go, a heading is never asked about, at most 8, ranked (PF.questions).
+#      The pins are harness/scenarios_w05c.js W05C1-W05C7 (anonymised K-shaped cases and the ranking guide 949).
+# =============================================================================
+_pf172 = _rd0('code/_page_fix.js')
+for _k172 in ("A('weak_figure_named'", "how: 'attributed'", "verified_figures", "out.push('the sourced figure'", "const RHETORIC = ",
+              "const QUESTION_MAX = 8;", "const finalGuard = ", "const fragment = ", "const ctaSentence = ", "Never replace the number with a vague word"):
+    assert _k172 in _pf172, 'W05-C: the page kit lacks ' + _k172
+assert "Give this subtopic a paragraph or an H3 inside this section" not in _pf172, 'W05-C: PF.plan still asks for a subtopic as an H3 by default'
+assert 'verified_figures' in _rd0('code/Content_QA.js') and 'r9b.ok.forEach(x => verified_figures.push(x));' in _rd0('code/Content_QA.js'), 'W05-C: Content QA does not record the figures a cited source states'
+_fa172 = _rd0('code/Finalize_Apply.js'); _fm172 = _rd0('code/Finalize_Merge.js')
+for _k172 in ("PF.fragment(text)", "PF.ctaSentence(text, NAMES)", "how: 'already_covered'", "if (lead && !/^\\s*(?:[-*+]|\\d{1,3}[.)])\\s+/.test(repl)) repl = lead + repl;", "'- One call to action:"):
+    assert _k172 in _fa172, 'W05-C: Finalize Apply lacks ' + _k172
+for _k172 in ("PF.finalGuard(ref0, md, NAMES)", "const broke = (b, a) =>", "notes = (FAx.notes || []).slice()"):
+    assert _k172 in _fm172, 'W05-C: Finalize Merge lacks ' + _k172
+for _f172, _ks172 in {'prompts/copywriter.txt': ('6c. Headings carry content', '6d. The business in its place', 'Never put a vague word'),
+                      'prompts/editor.txt': ('A figure that carries its source link stays exactly as written', 'Add no heading unless a problem asks for one by name', 'Lines about the business'),
+                      'prompts/strategy_brief.txt': ('Client facts go where a reader decides who does the work', 'Every h3 answers a question')}.items():
+    for _k172 in _ks172:
+        assert _k172 in _rd0(_f172), 'W05-C: ' + _f172 + ' lacks ' + _k172
+for _n172 in ('Strategy Brief', 'Copywriter'):
+    assert ('Client facts go where a reader decides' if _n172 == 'Strategy Brief' else '6d. The business in its place') in nodes[_n172]['parameters']['text'], 'W05-C: the built prompt of ' + _n172 + ' lacks its new line'
+for _f172 in ('code/_page_fix.js', 'code/Finalize_Apply.js', 'code/Finalize_Merge.js', 'prompts/editor.txt'):   # copywriter / strategy_brief carry older dashes; their W05-C lines are checked below
+    for _bad172 in ('—', '–', '“', '”', '…'):
+        assert _bad172 not in _rd0(_f172), 'W05-C: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f172
+for _f172, _ks172 in {'prompts/copywriter.txt': ('6c. Headings carry content', '6d. The business in its place', 'Never put a vague word'), 'prompts/strategy_brief.txt': ('Client facts go where a reader decides', 'Every h3 answers a question')}.items():
+    for _l172 in _rd0(_f172).split('\n'):
+        if any(_k172 in _l172 for _k172 in _ks172):
+            assert not any(_b172 in _l172 for _b172 in ('\u2014', '\u2013', '\u201c', '\u201d', '\u2026')), 'W05-C: a new line of ' + _f172 + ' carries an em dash, a curly quote or an ellipsis character'
+log('A sourced figure is never made vague, no padding is added, and the final version keeps the page\'s shape (W05-C, 2026-10-30, section 172): Content QA records the figures a cited source states; a figure its own source states is kept and attributed, never rewritten into a vague word; no subtopic while a page is over its length and never a rhetorical heading; client facts out of technical sections; Finalize never puts a fragment or heading into prose, keeps list markers, adds no second call to action and repairs the final version against its source page; at most 8 de-duplicated questions')
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;

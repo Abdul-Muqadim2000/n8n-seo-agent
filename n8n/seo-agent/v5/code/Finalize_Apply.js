@@ -42,7 +42,11 @@ const relink = (text, neutralRaw, cta) => { let t = S(text).trim(); if (!/[.!?][
   for (const l of linksIn(neutralRaw)) { const i = t.toLowerCase().indexOf(l.anchor.toLowerCase());
     if (i >= 0 && !/\]\(/.test(t)) t = t.slice(0, i) + '[' + t.slice(i, i + l.anchor.length) + '](' + l.url + ')' + t.slice(i + l.anchor.length); else keep.push(l); }
   return cta && keep.length ? t + '\n\nNext step: [' + keep[0].anchor + '](' + keep[0].url + ').' : t; };
-const applied = [], changes = [], tasks = new Map();
+const applied = [], changes = [], notes = [], tasks = new Map();
+const anchor0 = (a) => (a && a.anchor && typeof a.anchor === 'object' ? a.anchor : null);
+// W05-C: the page already invites the reader to get in touch (its last section, or any line linking the business's contact page)
+const invites = () => { const sp0 = PF.split(md); const last = sp0.parts.length > 1 ? sp0.parts[sp0.parts.length - 1] : null;
+  return !!last && PF.sentencesOf(last.text.replace(/\n+/g, ' ')).some(x => PF.ctaSentence(x, NAMES)); };
 // W0-E (2026-10-29, page-quality PLAN Fix 5, R4 D6 / G15, REVIEW_CODE L2): finalize 3336 appended "At Nova&, consultation is free of charge."
 // to a section about product names, wove a homepage slogan into a checklist item, placed the page's own search description into the body
 // and swapped a confirmed claim into an unrelated checklist sentence. Now:
@@ -105,8 +109,27 @@ for (const a of (F.answers || [])) {
     applied.push({ id: a.id, how: 'removed', section: a.section }); continue; }
   // yes / edit
   const text = a.decision === 'yes' ? (a.original || a.text) : a.text;
+  // W05-C (2026-10-30, BEFORE_AFTER "Finalize"): three of the five splices the judges named came from here. A line that is not a sentence
+  // (a heading, a label, a list item with no verb) is never put into prose: it replaces only a list item, or goes back into the list it
+  // came from, else it is reported (K5 "How <client> measures up", K7 "The fixes planned for the next cycle, each with a named owner.").
+  // An invitation to get in touch is not added to a page that already invites the reader (K2, K3: a second call to action).
+  const frag = PF.fragment(text); const hitLine = hit ? PF.lineOf(md, hit.at) : null;
+  if (frag && !(hitLine && hitLine.list)) {
+    const al = anchor0(a) && S(anchor0(a).line_before).trim() ? find(md, anchor0(a).line_before) : null; const L0 = al ? PF.lineOf(md, al.at) : null;
+    if (!hit && L0 && L0.list) { const item = L0.marker + PF.plain(text).replace(/^\s*(?:[-*+]|\d{1,3}[.)])\s+/, '');
+      md = md.slice(0, L0.end) + '\n' + item + md.slice(L0.end);
+      changes.push({ section: a.section, what: 'your confirmed line put back in its list', before: '', after: item });
+      applied.push({ id: a.id, how: a.decision === 'yes' ? 'kept_original' : 'client_wording', section: a.section }); continue; }
+    notes.push('Not placed: "' + S(text).slice(0, 100) + '" reads as a heading or a list line, not a sentence, so it was not put into a paragraph' + (hit ? ' in place of a full sentence' : '') + '. Add it to the list where it belongs in the page editor, or tell us where it goes.');
+    applied.push({ id: a.id, how: 'not_placed', section: a.section, why: 'a heading or a list line, not a sentence' }); continue; }
+  if (!hit && PF.ctaSentence(text, NAMES) && invites()) {
+    notes.push('Already on the page: your page already invites the reader to get in touch, so "' + S(text).slice(0, 100) + '" was not added as a second call to action.');
+    applied.push({ id: a.id, how: 'already_covered', section: a.section }); continue; }
   if (hit) {
-    const repl = relink(text, hit.raw, a.in_page === 'cta');
+    let repl = relink(text, hit.raw, a.in_page === 'cta');
+    // a list item keeps its marker: the neutral wording may carry the "- " the confirmed sentence does not (K6: a test-set item lost its bullet)
+    const lead = (hit.raw.match(/^\s*(?:[-*+]|\d{1,3}[.)])\s+/) || [''])[0];
+    if (lead && !/^\s*(?:[-*+]|\d{1,3}[.)])\s+/.test(repl)) repl = lead + repl;
     md = md.slice(0, hit.at) + repl + md.slice(hit.at + hit.len);
     changes.push({ section: a.section, what: a.decision === 'yes' ? 'your confirmed sentence restored' : 'your wording', before: hit.raw, after: repl });
     applied.push({ id: a.id, how: a.decision === 'yes' ? 'kept_original' : 'client_wording', section: a.section }); continue; }
@@ -139,6 +162,9 @@ const editor_prompt = !sections.length ? '' : [
   '- A fact from the business goes INTO the sentence named for it: rewrite that sentence so it also says the fact, and keep everything else it says.',
   '- Never add a fact as a new sentence at the end of a paragraph, or as a paragraph of its own: such an edit is not used.',
   '- State only what the facts given say. Add no other claim about the business, no number, no link, no bracket.',
+  '- Keep the page\'s shape: every heading on its own line, every list item a list item with its marker ("- " or "1."), every table as it is. Never join a heading or a list item to a paragraph.',
+  '- Every sentence you write is a full sentence with its verb; never leave a fragment or a label at the end of a paragraph.',
+  '- One call to action: the page already invites the reader to get in touch in its last section; never add a second invitation ("get in touch", "book a consultation", "contact us") anywhere.',
   '- Plain words: no em dashes, no curly quotes, no ellipsis character.',
   '- Our own voice: the page is published on the business\'s own website. Write its facts with "we" / "our team", or as a plain statement with the business as the subject; never "its website states", "the website says", "according to its site" or "the company says".',
   '- One byline: the system prints the author, the updated date and the reviewer under the H1 and the author box at the end. Never add a "Written by ..." or "Reviewed by ..." line or sentence.',
@@ -149,5 +175,5 @@ const editor_prompt = !sections.length ? '' : [
   ...sections.map(s => ['=== SECTION ' + s.id + ' (' + (s.heading || 'introduction') + ') ===', 'TASKS:', ...s.tasks.map((t, i) => (i + 1) + '. ' + t),
     ...(s.keep.length ? ['KEEP WORD FOR WORD:', ...s.keep.map(k => '- ' + k)] : []), 'CURRENT TEXT:', s.text.trim(), '=== END ' + s.id + ' ===', ''].join('\n'))
 ].join('\n');
-return [{ json: { ...P, output: md, finalize_apply: { applied, changes, jobs: sections.map(s => ({ id: s.id, heading: s.heading, text: s.text, tasks: s.tasks, answers: s.answers, must_contain: s.must_contain, weave: s.weave, hosts: s.hosts, texts: s.texts, keep: s.keep, problems: s.tasks })) },
+return [{ json: { ...P, output: md, finalize_apply: { applied, changes, notes, jobs: sections.map(s => ({ id: s.id, heading: s.heading, text: s.text, tasks: s.tasks, answers: s.answers, must_contain: s.must_contain, weave: s.weave, hosts: s.hosts, texts: s.texts, keep: s.keep, problems: s.tasks })) },
   needs_editor: sections.length > 0, editor_prompt } }];

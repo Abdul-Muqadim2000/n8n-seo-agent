@@ -241,7 +241,13 @@ module.exports = async (ctx) => {
     for (const id of IDS) {
       const d = decisions[id]; const seen = d ? (d.pc2.page_fix.claims_seen || []) : [];
       const v = verdicts[id]; if (!v) continue;
-      check(id + ': every statement flagged in the delivered lineage (' + seen.length + ') is a question', v.questions >= seen.length, J({ seen: seen.length, q: v.questions }));
+      // W05-C (2026-10-30, BEFORE_AFTER: 20 questions on one page): every flagged statement is a question, except a heading or a label (never
+      // a statement), an ask that repeats the same question in the same section a third time, or one past the eight most useful
+      const own = await pf('questions', [{ claims: seen, brief: [], brackets: [], business: 'the business', final_md: '', docs: [], stored: [] }]);
+      const left = []; for (const c of seen) { const o = await pf('clean', [await pf('plain', [c.sentence])]); if (own.some(q => q.original === o)) continue;
+        left.push({ s: String(c.sentence).slice(0, 90), heading: await pf('headingLike', [c.sentence]) }); }
+      if (left.length) console.log('   PFX7 ' + id + ' statements not asked: ' + J(left));
+      check(id + ': the delivered page asks every question its flagged statements (' + seen.length + ') make, at most 8 of them, near-duplicates and labels left out', v.questions >= own.length && own.length <= 8 && own.length >= Math.min(1, seen.length - left.filter(x => x.heading).length), J({ seen: seen.length, own: own.length, q: v.questions, left }));
     }
     const cs = [{ sentence: 'We are a Microsoft partner, so weigh our view of SAP with that in mind.', kind: 'credential', section: 'How does Dynamics 365 compare' },
       { sentence: 'Book a consultation and we will test your shortlist against these criteria: [speak to our ERP consultants](https://www.novaand-demo.com/contact-us).', kind: 'process', how: 'cta', neutral: 'Next step: [speak to our ERP consultants](https://www.novaand-demo.com/contact-us).' }];

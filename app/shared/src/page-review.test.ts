@@ -10,6 +10,8 @@ import {
   deliveryOf,
   diffBlocks,
   factOf,
+  acceptAllPlan,
+  OWN_WORDS_NOTE,
   factsForEngine,
   finalizeBody,
   finalizeCostUsd,
@@ -224,6 +226,23 @@ describe('answers become business facts, kept once and reused', () => {
     expect(finalizeNeeded([{ decision: 'general' }, { decision: 'skip' }], false)).toBe(false);
     expect(finalizeNeeded([{ decision: 'general' }], true)).toBe(true);
     for (const d of ['yes', 'edit', 'remove', 'answer'] as const) expect(finalizeNeeded([{ decision: d }], false)).toBe(true);
+  });
+  it('W05-C: the first final version once every question is decided, even when all were left general; never on skips alone', () => {
+    expect(finalizeNeeded([{ decision: 'general' }, { decision: 'general' }], false, true)).toBe(true);
+    expect(finalizeNeeded([{ decision: 'general' }], false, false)).toBe(false);
+    expect(finalizeNeeded([{ decision: 'skip' }], false, true)).toBe(false);
+    expect(finalizeNeeded([], false, true)).toBe(false);
+  });
+  it('W05-C: Accept all confirms the yes / no questions it can and leaves every other open question general, for this page only', () => {
+    const plan = acceptAllPlan(qs);
+    expect(plan.map((x) => [x.questionId, x.decision])).toEqual(qs.map((q) => [q.id, prefilledAnswer(q) ? 'yes' : 'general']));
+    expect(plan.some((x) => x.decision === 'general')).toBe(true);
+    const gen = qs.find((q) => !prefilledAnswer(q))!;
+    expect(factOf(gen, { decision: 'general', text: '', at, by: null, fromPrefill: true }, 'r1')).toBeNull();   // a later page may ask it again
+    expect(factOf(gen, { decision: 'general', text: '', at, by: null }, 'r1')).toMatchObject({ decision: 'general' });   // the client's own choice is kept
+    expect(acceptAllPlan([])).toEqual([]);
+    expect(OWN_WORDS_NOTE).toMatch(/own words/);
+    expect(OWN_WORDS_NOTE).not.toMatch(/[\u2014\u2013\u2026\u201C\u201D]/);
   });
 });
 
