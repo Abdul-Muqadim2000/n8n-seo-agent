@@ -161,9 +161,9 @@ export function MonitorSettingsFields({
   aiMeasured?: AiMeasuredSample | null;
   /** wave 2: the access Google reports for us (from the daily index check); absent: not known here */
   sitemapAccess?: SitemapAccessInfo;
-  /** wave 2 review W6: show "Let Alaventra submit your sitemap to Google". Only the Growth monitors card of Website settings saves it (Site
-   *  Admin `monitors`); the onboarding and "Start weekly tracking" forms save through Track my site, which does not carry it, so they never
-   *  show a checkbox that would be dropped */
+  /** wave 2 review W6: show the Indexing row (on / off, checks a day) and "Let Alaventra submit your sitemap to Google". Only the Growth
+   *  monitors card of Website settings saves them (Site Admin `monitors`); the onboarding and "Start weekly tracking" forms save through
+   *  Track my site, which does not carry them, so they never show settings that would be dropped (new sites start with Indexing on, 300 a day) */
   sitemapSwitch?: boolean;
   domain?: string;
 }) {
@@ -333,6 +333,7 @@ export function MonitorSettingsFields({
       />
       </MonitorRow>
 
+      {sitemapSwitch && (   // the Indexing row saves only through Site Admin (Website settings); onboarding / "Start weekly tracking" go through Track my site, which does not carry it
       <MonitorRow icon={<FileSearch />} on={value.indexWatch ?? true}>
       <SwitchRow
         title="Indexing"
@@ -371,6 +372,7 @@ export function MonitorSettingsFields({
         }
       />
       </MonitorRow>
+      )}
 
       <MonitorRow icon={<Gauge />} on={value.auditMonthly}>
       <SwitchRow

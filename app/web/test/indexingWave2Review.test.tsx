@@ -100,6 +100,12 @@ describe('W6: the sitemap switch only where it is saved', () => {
     expect(src('components/site/TrackingForm.tsx')).not.toContain('sitemapSwitch');
     expect(src('pages/site/SiteSettingsPage.tsx')).toMatch(/<MonitorSettingsFields[^>]*sitemapSwitch/);
   });
+  it('the Indexing on / off and checks-a-day settings follow the same rule (Track my site drops them too; new sites start on, 300 a day)', () => {
+    const fields = (sitemapSwitch?: boolean) =>
+      text(wrap(<MonitorSettingsFields value={{ ...DEFAULT_MONITORS, indexWatch: true }} onChange={() => {}} domain={D} {...(sitemapSwitch ? { sitemapSwitch } : {})} />));
+    expect(fields()).not.toContain('Pages checked with Google a day');
+    expect(fields(true)).toContain('Pages checked with Google a day');
+  });
 });
 
 describe('W10: no read-only promise left', () => {
