@@ -2,6 +2,15 @@
 
 Read this first if you are picking the work up. Owner's ask: OWNER_BRIEF.md. Contract: DESIGN.md + FIX_CONTRACT.md.
 
+## FULLY LIVE 2026-10-30 ~01:15 UTC
+- API on the VM from feature/indexing fd32c0b4 (fetch + checkout FETCH_HEAD in /mnt/data/repo, `up -d --build app`, healthy, no migration);
+  `/api/orgs/:orgId/sites/:siteId/data/indexing` answers 401 signed out. Web: PR #48 merged -> main 99718dd0, Vercel live (IndexingPage
+  chunk served, marketing /platform/index-coverage 200). Harness IXF6 clock fix 5987fe9d.
+- CI on the PR: the only failures are pre-existing (cmsRoutes real-Postgres 409 vs 400, npm audit fast-uri, S51 P34-5 at 00-03 UTC).
+- LEFT: merge main into feature/seo-agent-v4.5 before ANY engine/API deploy from it (memory index-coverage-live-merge-before-deploy).
+  The VM repo checkout is detached at fd32c0b4; its startup script re-checks out feature/seo-agent-v4.5 on boot (rebuilds only if the
+  image is missing). Next feature (owner approved): opt-in full Search Console access for sitemap submission.
+
 ## ENGINE FIX DEPLOYED + VERIFIED 2026-10-30 00:33 UTC (owner approved)
 - `deploy_engine.py --no-build --apply` (7d577be9 + docs): SEOagentIndexCv1 updated, 28 published. The 6 wrong techand rows were reset
   to unknown (seo_index_pages PATCH), the no-op 00:16 run rows deleted, one test fire at 20:33 NY: techand.ai 48 known / 44 indexed / 4
