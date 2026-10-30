@@ -15,6 +15,9 @@
 // the sitemap, policy pages, pages to ask Google about (one asked and waiting, one read again and now in search), sitemap submission on with
 // Full access and a submission Google read; `wave2-restricted`: the same with read-only access. Both also write `-tasks.json`,
 // `-recs.json` and `-settings.json` (Tracking & monitors with the switch on).
+// wave 2 review (W1 / W7): `wave2-will` (Search Console lists no sitemap, the engine says it will submit it), `wave2-blocked` (Full access,
+// switch on, no sitemap listed, the engine will not submit: no readable sitemap), `wave2-refused` (Full access, but Google refused the last
+// submission).
 import { writeFileSync } from 'node:fs';
 import { buildIndexingData, indexingCauseReadings, indexingLinksReading, indexingSitemapReading, indexSitemapState, indexRunOf, isSiteFixCause, type IndexPageRow, type IndexSiteFixCause } from '../shared/src/indexing';
 import { deriveSiteTasks, type StoredSiteTask } from '../shared/src/site-tasks';
@@ -26,7 +29,8 @@ const U = (p: string) => `https://www.${D}${p}`;
 const day = (d: number) => new Date(Date.UTC(2026, 9, 29) - d * 864e5).toISOString();
 
 if ((process.argv[3] ?? '').startsWith('wave2')) {
-  const restricted = process.argv[3] === 'wave2-restricted';
+  const variant = (process.argv[3] ?? '').replace(/^wave2-?/, '');
+  const restricted = variant === 'restricted';
   const now = new Date();
   const ago = (d: number) => new Date(now.getTime() - d * 864e5).toISOString();
   const R: Partial<IndexPageRow>[] = [];
@@ -49,19 +53,28 @@ if ((process.argv[3] ?? '').startsWith('wave2')) {
   for (const r of R) if (r.url === U('/capabilities/ml-ops')) Object.assign(r, { ask_google: true, asked_google_at: ago(2) });
   for (const r of R) if (r.url === U('/capabilities/data-platforms')) Object.assign(r, { asked_google_at: ago(9), google_read_after_ask_at: ago(6) });
   const sm = restricted
-    ? { submitted: 1, submitted_errors: 0, read: 1, complete: true, checked: true, permission: 'siteRestrictedUser' }
-    : { submitted: 1, submitted_errors: 0, read: 1, complete: true, checked: true, permission: 'siteFullUser', submissions: [{ path: U('/sitemap.xml'), at: ago(3), status: 'ok', reason: '' }], list: [{ path: U('/sitemap.xml'), lastSubmitted: ago(3), lastDownloaded: ago(2) }] };
+    ? { submitted: 1, submitted_errors: 0, read: 1, complete: true, checked: true, permission: 'siteRestrictedUser', submit: { on: true, gate: 'not_full_access', will_submit: false, blocked: 'not_full_access' } }
+    : variant === 'will'
+      ? { submitted: 0, submitted_errors: 0, read: 1, complete: true, checked: true, permission: 'siteFullUser', permission_full: true, submit: { on: true, gate: 'ok', will_submit: true, blocked: '' } }
+      : variant === 'blocked'
+        ? { submitted: 0, submitted_errors: 0, read: 0, complete: true, checked: true, permission: 'siteFullUser', permission_full: true, submit: { on: true, gate: 'ok', will_submit: false, blocked: 'no_sitemap' } }
+        : variant === 'refused'
+          ? { submitted: 0, submitted_errors: 0, read: 1, complete: true, checked: true, permission: 'siteFullUser', permission_full: true, submit: { on: true, gate: 'denied_before', will_submit: false, blocked: 'refused' }, submissions: [{ path: U('/sitemap.xml'), at: ago(4), status: 'denied', reason: 'not_listed', http_status: 403 }] }
+          : { submitted: 1, submitted_errors: 0, read: 1, complete: true, checked: true, permission: 'siteFullUser', submit: { on: true, gate: 'ok', will_submit: false, blocked: 'unchanged' }, submissions: [{ path: U('/sitemap.xml'), at: ago(3), status: 'ok', reason: '' }], list: [{ path: U('/sitemap.xml'), lastSubmitted: ago(3), lastDownloaded: ago(2) }] };
   const runs = [{ run_at: ago(0.2), known: R.length, indexed: 9, inspected: R.length, by_cause_json: JSON.stringify({ unknown_to_google: 7, discovered_not_crawled: 3, canonical_elsewhere: 7, low_value: 3, crawled_not_indexed: 1 }), by_action_json: JSON.stringify({ wait: 8, links: 3, site_fix: 7, leave_out: 3, quality: 1 }), freeze: false, sitemaps_json: JSON.stringify(sm) }];
   const readCauses = [...new Set(R.map((r) => String(r.cause ?? '')).filter(isSiteFixCause))] as IndexSiteFixCause[];
   const submitOn = true;
-  const auto = submitOn && indexSitemapState(runs.map(indexRunOf), submitOn).access === 'full';
+  // wave 2 review W1: the step goes away only when the engine says it will submit (the server's rule, services/siteTasks.ts)
+  const smState = indexSitemapState(runs.map(indexRunOf), submitOn);
+  const auto = submitOn && smState.willSubmit;
+  const sitemapBlocked = submitOn ? smState.blocked : '';
   const links = indexingLinksReading(R, { runAt: runs[0].run_at });
   // the links step was checked once by the client: one of the three links is in place
   const stored: StoredSiteTask[] = [];
-  const first = deriveSiteTasks({ domain: D, indexnow: null, access: null, reclaim: null, indexing: { runAt: runs[0].run_at, causes: indexingCauseReadings(R, { read: readCauses }), sitemap: indexingSitemapReading(runs as never), links, sitemapAuto: auto } }, []);
+  const first = deriveSiteTasks({ domain: D, indexnow: null, access: null, reclaim: null, indexing: { runAt: runs[0].run_at, causes: indexingCauseReadings(R, { read: readCauses }), sitemap: indexingSitemapReading(runs as never), links, sitemapAuto: auto, sitemapBlocked } }, []);
   const lt = first.find((t) => t.key === 'indexing:links');
   if (lt) stored.push({ key: lt.key, kind: 'index_links', payload: { pairs: lt.values.map((v, i) => ({ target: v.value, source: [U('/capabilities/open-edx-services'), U('/capabilities/open-edx-services'), U('/insights/data-sovereignty')][i], since: runs[0].run_at })), total: 3 }, lastCheck: { at: ago(0.1), ok: false, message: '1 of 3 links found. /capabilities/open-edx-services has no link to /capabilities/open-edx-services/plugins yet. /insights/data-sovereignty has no link to /insights/sovereign-cloud-checklist yet.', by: 'you', who: 'Sample Owner' }, doneAt: null, skippedAt: null, skippedBy: null, createdAt: ago(0.15) });
-  const tasks = deriveSiteTasks({ domain: D, indexnow: null, access: null, reclaim: null, indexing: { runAt: runs[0].run_at, causes: indexingCauseReadings(R, { read: readCauses }), sitemap: indexingSitemapReading(runs as never), links, sitemapAuto: auto } }, stored);
+  const tasks = deriveSiteTasks({ domain: D, indexnow: null, access: null, reclaim: null, indexing: { runAt: runs[0].run_at, causes: indexingCauseReadings(R, { read: readCauses }), sitemap: indexingSitemapReading(runs as never), links, sitemapAuto: auto, sitemapBlocked } }, stored);
   const d = buildIndexingData({ taskKeys: new Set(tasks.map((t) => t.key)), rows: R, runs, events: [], impacts: [], settings: { on: true, dailyCap: 300 }, sitemapSubmit: submitOn });
   const out = process.argv[2];
   const base = out.replace(/\.json$/, '');

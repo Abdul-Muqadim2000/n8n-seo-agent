@@ -105,8 +105,8 @@ describe('Indexing page, wave 2', () => {
     expect(full).toContain('We can submit your sitemap');
     expect(full).toContain('/sitemap.xml');
     expect(full).toContain('Google read your sitemap on');
-    // ENGINE_BUILD wave 2 contract 11: no sitemap in Search Console, switch on, Full access: we submit it, nothing to do
-    const will = text(wrap(<Indexing d={data({ run: sitemaps({ permission: 'siteFullUser', permission_full: true, submitted: 0 }), submit: true })} {...props} member />));
+    // ENGINE_BUILD wave 2 contract 11: no sitemap in Search Console, switch on, and (wave 2 review W1) the engine says it will submit it
+    const will = text(wrap(<Indexing d={data({ run: sitemaps({ permission: 'siteFullUser', permission_full: true, submitted: 0, submit: { on: true, will_submit: true, blocked: '' } }), submit: true })} {...props} member />));
     expect(will).toContain('We will submit it on the next daily check; there is nothing to do on your side.');
     // switched off, Full access and nothing submitted: no card at all
     expect(text(wrap(<Indexing d={data({ run: sitemaps({ permission: 'siteFullUser' }) })} {...props} member />))).not.toContain('Your sitemap in Search Console');

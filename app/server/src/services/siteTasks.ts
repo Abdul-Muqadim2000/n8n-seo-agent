@@ -180,13 +180,16 @@ async function readIndexing(domain: string): Promise<SiteTaskInputs['indexing']>
   // a read that hit the cap makes its cause incomplete: never "none any more" or "all fixed" from it (A6)
   const capped = new Set(plan.filter((_, i) => reads[i].length >= INDEXING_CAUSE_READ_MAX).map((x) => x.c));
   const submitOn = indexSitemapSubmitOn(monitors[0]?.index_sitemap_submit);
+  const smState = indexSitemapState(runs.map(indexRunOf), submitOn);
   return {
     runAt: good.runAt,
     causes: indexingCauseReadings(mine(reads.flat()), { capped, read: causes }),
     sitemap: indexingSitemapReading(runs),
     links: indexingLinksReading(mine(linkRows), { runAt: good.runAt, capped: linkRows.length >= INDEXING_CAUSE_READ_MAX }),
-    // wave 2: with the switch on and Full access, Alaventra submits a missing sitemap, so the client is not asked to
-    sitemapAuto: submitOn && indexSitemapState(runs.map(indexRunOf), submitOn).access === 'full',
+    // wave 2 review W1: only when the engine says it WILL submit on its next run is the client not asked to (Full access alone is not
+    // enough: the kill switch, no readable sitemap or a sitemap outside the property stop it); otherwise the step says why
+    sitemapAuto: submitOn && smState.willSubmit,
+    sitemapBlocked: submitOn ? smState.blocked : '',
   };
 }
 

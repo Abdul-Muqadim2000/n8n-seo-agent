@@ -39,8 +39,9 @@ const page = (o: Partial<IndexPageRow>): Partial<IndexPageRow> => ({ lane: 'exis
 
 describe('utility pages (DESIGN_WAVE2 §2.4)', () => {
   it('whole segments, any case; /security only as the whole path; job postings under /careers or /jobs', () => {
-    for (const p of ['/privacy', '/legal/terms', '/Cookies', '/en/privacy-policy', '/account/settings', '/security', '/thank-you']) expect(isUtilityPage(U(p)), p).toBe(true);
-    for (const p of ['/services/security', '/blog/search-engine-tips', '/privacy-first-design-x', '/capabilities/data', '/']) expect(isUtilityPage(U(p)), p).toBe(false);
+    for (const p of ['/privacy', '/legal/terms', '/Cookies', '/account/settings', '/security', '/thank-you']) expect(isUtilityPage(U(p)), p).toBe(true);
+    // wave 2 review W3: the first path segment only (`/en/privacy-policy` is a content page by the shared rule)
+    for (const p of ['/services/security', '/blog/search-engine-tips', '/privacy-first-design-x', '/capabilities/data', '/', '/en/privacy-policy']) expect(isUtilityPage(U(p)), p).toBe(false);
     expect(isJobPosting(U('/careers/frontend-engineer'))).toBe(true);
     expect(isJobPosting(U('/careers'))).toBe(false);
     expect(isJobPosting(U('/jobs/1'))).toBe(true);
@@ -201,8 +202,9 @@ describe('the sitemap switch, Google\'s access and the submissions (§2.5 / §3.
       ['error', '', '', ''],
     ]);
     expect(s2).toMatchObject({ access: 'full', submitted: 0, errors: 0 });
-    // Full access, but a refusal still holding: the engine says not full, so we do not say "we can submit"
-    expect(indexSitemapState([indexRunOf(run({ permission: 'siteFullUser', permission_full: false }))], true).access).toBe('restricted');
+    // Full access, but a refusal still holding: the engine says not full, so we do not say "we can submit"; wave 2 review W7: and it is a
+    // refusal, not read-only access
+    expect(indexSitemapState([indexRunOf(run({ permission: 'siteFullUser', permission_full: false }))], true).access).toBe('refused');
   });
   it('the setting is sent last and only when set; the schema takes it', () => {
     expect(monitorsBody({ backlinks: true })).toEqual({ backlinks: true });

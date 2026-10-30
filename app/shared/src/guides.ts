@@ -198,7 +198,7 @@ export const GUIDES = [
         title: 'Add our reading address as a user',
         body: 'Click **Add user** and paste this address into **Email address**:',
         copy: [{ label: 'Address to add', value: '{{serviceAccount}}', hint: 'Paste into Search Console\'s "Email address" box' }],
-        note: 'It is a service account, not a person: it has no inbox, so it never gets or sends mail. It reads your property and nothing else.',
+        note: 'It is a service account, not a person: it has no inbox, so it never gets or sends mail. It only reads your property, unless you switch on sitemap submission, which lets it submit your sitemap and nothing else.',
       },
       {
         title: 'Set the permission to Full, then Add',

@@ -69,7 +69,10 @@ async function api(route) {
 }
 
 const FINAL = process.argv[2] === 'final';
-const WAVE2 = process.argv[2] === 'wave2';
+// wave 2 review (W1 / W7): `w2review` takes the fixtures `wave2-will`, `wave2-blocked`, `wave2-refused` (and the read-only one) of
+// ix_indexing_fixture.ts: the sitemap card, the Steps on your website and Tracking & monitors, screenshots `*-w2review-*.png`
+const W2REVIEW = process.argv[2] === 'w2review';
+const WAVE2 = process.argv[2] === 'wave2' || W2REVIEW;
 let W2 = 'indexing-wave2';
 const readFx = (f) => JSON.parse(readFileSync(join(FX, f), 'utf8'));
 // small answers for the other reads of the Pipeline, Recommendations and report pages (nothing about indexing)
@@ -228,7 +231,12 @@ if (FINAL) {
 }
 if (WAVE2) {
   const SIZES = { desktop: { width: 1440, height: 900 }, phone: { width: 375, height: 812 } };
-  const views = [
+  const TRACK = 'text=Let Alaventra submit your sitemap to Google';
+  const views = W2REVIEW ? ['will', 'blocked', 'refused', 'restricted'].flatMap((x) => [
+    { name: `indexing-w2review-${x}`, w2: `indexing-wave2-${x}`, url: `/o/${ORG}/sites/${SITE}/indexing`, el: 'text=Your sitemap in Search Console' },
+    ...(x === 'will' ? [] : [{ name: `steps-w2review-${x}`, w2: `indexing-wave2-${x}`, url: `/o/${ORG}/sites/${SITE}/pipeline#site-tasks`, el: '#site-tasks' }]),
+    { name: `tracking-w2review-${x}`, w2: `indexing-wave2-${x}`, url: `/o/${ORG}/sites/${SITE}/settings/tracking`, el: TRACK },
+  ]) : [
     { name: 'indexing-wave2', w2: 'indexing-wave2', url: `/o/${ORG}/sites/${SITE}/indexing` },
     { name: 'indexing-wave2-restricted', w2: 'indexing-wave2-restricted', url: `/o/${ORG}/sites/${SITE}/indexing` },
     { name: 'steps-wave2', w2: 'indexing-wave2', url: `/o/${ORG}/sites/${SITE}/pipeline#site-tasks`, el: '#site-tasks' },
@@ -256,7 +264,17 @@ if (WAVE2) {
         const h1 = await page.evaluate(() => [...document.querySelectorAll('h1')].map((h) => h.textContent.trim()).join(' / '));
         const a = await audit(page);
         const file = `${OUT}/${v.name}-${size}-${theme}.png`;
-        if (v.el?.startsWith('text=')) {
+        if (v.el === 'text=Your sitemap in Search Console') {
+          // the sitemap card of the Indexing page
+          const card = page.locator('text=Your sitemap in Search Console').first();
+          if (await card.count()) {
+            await card.scrollIntoViewIfNeeded();
+            await page.screenshot({ path: file });
+          } else {
+            findings.push(`${tag}: no sitemap card`);
+            await page.screenshot({ path: file, fullPage: true });
+          }
+        } else if (v.el?.startsWith('text=')) {
           // the Indexing row of Tracking & monitors: the fieldset around the switch
           const box = page.locator('fieldset', { hasText: v.el.slice(5) }).first();
           if (await box.count()) {
