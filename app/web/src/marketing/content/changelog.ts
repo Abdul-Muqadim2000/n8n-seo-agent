@@ -34,7 +34,7 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
-    date: '2026-10-30',
+    date: '2026-10-31',
     version: '4.5',
     title: 'Written pages you can publish with confidence',
     summary:
@@ -67,6 +67,7 @@ export const changelog: ChangelogEntry[] = [
       'Websites that load their text with scripts are now read after the page has loaded, so your services and your key pages are found when a page is written for you, even when your website\'s first response is nearly empty',
       'A phone number, opening hours or an address in your call to action is no longer counted as a figure that needs a source, so it does not lower the grade of your page',
       'When our verdict says to leave a topic out of a page, only the sections that are really about that topic are removed: the heading has to name it, or the section has to keep talking about it, and short names such as "GP" or "AI" count as part of the topic. Otherwise at most one short section is removed, never a large part of the page, and we keep a record of each section removed or kept, and why. A page that lost several of its sections is marked "Needs work", never "Ready to publish", and a page that makes the same point four or more times in different places loses a little of its structure grade',
+      'When the service we use to read web pages stops answering, we read your pages and the pages that rank another way. If they still cannot be read, nothing is decided on guesses: no verdict, no score, no question about an existing page and no written page, only the check is used, and the report says which pages could not be read so you can run it again later',
     ],
     features: ['content'],
   },

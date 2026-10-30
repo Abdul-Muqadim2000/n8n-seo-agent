@@ -1,6 +1,7 @@
 /*__EXCLUSIONS__*/
 /*__SITE_MODEL__*/
 /*__OWN_COVER__*/
+/*__READER__*/
 // Accepts an object (from the Structured Output Parser) or a string with/without code fences or surrounding text
 const parseAgentJson = (raw) => {
   if (raw && typeof raw === 'object') return raw;
@@ -63,16 +64,49 @@ verdict.reasons = pcClean(verdict.reasons);
 // Execution 549: both SERP calls answered 40101 inside an HTTP 200, were billed, ran once — and the run still said
 // "winnable, GO_WITH_CHANGES 68" and wrote a page. The retry is wired above; when it fails too, the competition was never seen,
 // so there is no verdict and no number — only what was tried, and the suggestion to run the check again.
+// ---- W07-A (2026-10-31, docs/page-quality-2026-10-29/WAVE06.md "Open resilience item"): the pages it stands on, unread ----
+// The K1 run of 2026-10-30 (WAVE06 section 9): the page reader's account was out of balance, every read answered HTTP 402, and this node
+// still scored the keyword 38, held it on that score and told the client "/ms-365-erp-uae has no title, main heading or Search Console search
+// on file" about a page nobody had read. Each reader node now reads a refused page again another way (v5/code/_reader.js); when that failed
+// too for the pages this verdict stands on (the page the website already has for the search, the site's own pages, the pages that rank),
+// there is no verdict, no score, no hold, no duplicate or existing-page decision and no page: the run says the pages could not be read and
+// why, and is charged only for the check. A page that is simply down or blocked is not a refusal and is judged as before.
+const PU = (() => {
+  if (typeof RD === 'undefined') return null;
+  const all = (n) => { try { return $(n).all().map(i => (i && i.json) || {}); } catch (e) { return null; } };
+  const client = all('Read Client Pages'), comp = all('Read Competitor Pages'), retry = all('Retry Blocked Pages');
+  if (![client, comp, retry].some(l => l && RD.refusedIn(l).length)) return null;
+  const first = RD.firstRefusal([client, comp, retry]);
+  let acp = {}; try { acp = $('Analyze Competitor Pages').first().json || {}; } catch (e) { acp = {}; }
+  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const compAsked = comp ? comp.filter(j => j && Object.keys(j).length).length : 0;
+  const compRead = n0(acp.competitors_read != null ? acp.competitors_read : prev.competitors_read);
+  const clientAsked = client ? client.filter(j => j && Object.keys(j).length).length : 0;
+  const clientRead = n0(prev.client_pages_read);
+  const ex = (prev.existing_page_unread && prev.existing_page_unread.url) ? prev.existing_page_unread : null;
+  const missing = [];
+  if (ex) missing.push('the page your website already has for this search (' + ex.url + ')');
+  if (clientAsked && !clientRead) missing.push('your own pages');
+  if (compAsked && !compRead) missing.push('the pages that rank for it');
+  if (!missing.length) return null;
+  const writesPU = prev.include_content === true && !prev.verdict_only && String(prev.mode || 'keyword').trim() === 'keyword';
+  const why = RD.clientReason(first);
+  return { refused: first, missing, existing: ex, client: { asked: clientAsked, read: clientRead }, competitors: { asked: compAsked, read: compRead }, client_reason: why,
+    reason: 'No verdict is given for this keyword: ' + why + ', so ' + missing.join(' and ') + ' could not be read. Nobody has looked at them, so a score, '
+      + 'a hold or a match with a page you already have would be invented.' + (writesPU ? ' Nothing was written and only the check was charged.' : '')
+      + ' This is a problem on our side, not with your keyword: run it again later.' };
+})();
 const EV56 = (() => {
   const sf = prev.serp_features || {}; const ev = prev.serp_evidence || null; const kd = prev.keyword_data_evidence || null;
   const out = !!(sf.unavailable || (ev && ev.unavailable));
   const why = String((ev && ev.error) || sf.error || 'no answer from the search data provider').slice(0, 160);
   const again = (ev && ev.retried) ? (Number(ev.attempts) > 2 ? ' The search was sent ' + ev.attempts + ' times (the last time as a lighter request) and failed every time.' : ' The search was sent again once and failed again.') : '';   // F-SERP: up to three attempts
   return {
-    withheld: out,
+    withheld: out || !!PU,   // W07-A: the pages it stands on could not be read
     evidence: { serp: out ? 'unavailable' : 'read', error: out ? why : '', asked: ev ? ev.asked : 1, checked: ev ? ev.checked : (out ? 0 : 1),
-      retried: ev ? ev.retried : 0, attempts: ev ? (Number(ev.attempts) || 1 + (Number(ev.retried) || 0)) : 1, read_light: !!sf.light_read, keyword_data: (kd && kd.unavailable) ? 'unavailable' : 'read' },
-    reason: out ? 'No score is given for this keyword: the live Google results could not be read (' + why + ').' + again
+      retried: ev ? ev.retried : 0, attempts: ev ? (Number(ev.attempts) || 1 + (Number(ev.retried) || 0)) : 1, read_light: !!sf.light_read, keyword_data: (kd && kd.unavailable) ? 'unavailable' : 'read',
+      ...(PU ? { pages: 'unread', pages_error: RD.describe(PU.refused) } : {}) },
+    reason: (!out && PU) ? PU.reason : out ? 'No score is given for this keyword: the live Google results could not be read (' + why + ').' + again
       + ' Nobody has seen the pages that rank, the featured snippet or the AI Overview, so any number here would be invented.' + (sf.retryable === false ? ' Run the check again.' : ' This is a temporary problem with the search data provider, not with your keyword. Run the check again later.') : ''
   };
 })();
@@ -214,7 +248,8 @@ const HOLD = (() => {
   const second = dupHit || existingHit || lowDemand;
   // ---- the value gate ----
   let valueHit = false; let notChecked = '';
-  if (score == null) notChecked = EV56.withheld ? 'the verdict could not score this keyword (' + (EV56.evidence.error || 'the live results could not be read') + '), so nothing was held for it'
+  if (score == null) notChecked = PU ? 'the pages this check needs could not be read, so nothing was held for it: ' + PU.client_reason
+    : EV56.withheld ? 'the verdict could not score this keyword (' + (EV56.evidence.error || 'the live results could not be read') + '), so nothing was held for it'
     : 'the verdict gave no score, so nothing was held for it';
   else if (!exemptScore && (score < CFG.clear || (score < CFG.threshold && second))) valueHit = true;
   const band = score == null ? 'not checked' : score < CFG.clear ? 'clearly low' : score < CFG.threshold ? 'near the line' : 'above the line';
@@ -222,7 +257,7 @@ const HOLD = (() => {
     second_signal: { low_demand: lowDemand, duplicate: dupHit, existing_page: existingHit, volume, impressions: gsc.read ? gsc.impressions : null, search_console_read: gsc.read },
     decision: !writes ? 'no page in this run' : ack ? 'acknowledged by the client' + (ackScore != null && runScore != null && ackScore !== runScore ? ': this run read ' + runScore + ', the acknowledged ' + ackScore + ' is kept' : '')
       : score == null ? 'not checked' : valueHit ? (score < CFG.clear ? 'held: clearly low' : 'held: near the line with a second signal') : score < CFG.threshold ? (exemptScore ? 'not held: ' + exemptScore : 'not held: near the line, no second signal') : 'not held for the score' };
-  const would = writes && !ack && (valueHit || dupHit || existingHit);
+  const would = writes && !ack && !PU && (valueHit || dupHit || existingHit);   // W07-A: never a hold (score, duplicate or existing page) on pages nobody read
   const mode = !writes ? 'off' : automatic ? CFG.automatic : 'enforce';
   const kw = S(prev.keyword);
   const reasons = [];
@@ -299,14 +334,14 @@ return [{
     ladder_remeasure,   // A-21
     score_withheld: EV56.withheld,
     score_withheld_reason: EV56.reason,
-    verdict_reasons: EV56.withheld ? [EV56.reason, ...(verdict.reasons || [])] : (verdict.reasons || []),
-    verdict_risks: verdict.risks || [],
+    verdict_reasons: EV56.withheld ? [EV56.reason, ...(PU ? [] : (verdict.reasons || []))] : (verdict.reasons || []),   // W07-A: the model's reasons on pages nobody read are not shown
+    verdict_risks: PU ? [] : (verdict.risks || []),
     recommended_page: PT.of(verdict.recommended_page || prev.page_type, prev.page_type),
     page_notes: PT.notes(verdict.recommended_page, PT.of(verdict.recommended_page || prev.page_type, prev.page_type)),
     secondary_keywords: OWNV.secondary,
     secondary_covered: OWNV.covered,   // A-5: the searches the site already holds elsewhere, kept off this page and named
     existing_related: OWNV.related, sections_covered: OWNV.sections, already_on_page: OWNV.already_on_page, keyword_covered: OWNV.keyword_covered, own_coverage_checked: OWNV.checked,
-    verdict_changes,
+    verdict_changes: PU ? [] : verdict_changes,   // W07-A: no advice on pages nobody read
     page_claims_dropped,
     verdict_exclusions: EXC.fromVerdict(verdict_changes, verdict.topics_to_skip),   // A-18: what this page must not cover
     existing_page_action,
@@ -328,6 +363,8 @@ return [{
     hold_ack: HOLD.ack,
     hold_recheck_days: HOLD.recheck_days,
     verdict_acknowledged: !!HOLD.ack,
-    duplicate_check: HOLD.applies ? HOLD.duplicate_check : null
+    duplicate_check: HOLD.applies ? (PU ? { checked: false, targets: [], partial: [], self: [], basis: 'not checked: ' + PU.client_reason } : HOLD.duplicate_check) : null,
+    // W07-A: the pages this verdict stands on could not be read; a page run stops before the brief (*Need Content?*) and says why
+    ...(PU ? { pages_unread: PU, pages_unread_stop: HOLD.applies } : {})
   }
 }];

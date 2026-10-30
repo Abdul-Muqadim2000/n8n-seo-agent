@@ -87,6 +87,13 @@ describe('deliveryDecision, a report the run marked not ready is never sent', ()
     expect(d.reason).toContain('could not be read');
   });
 
+  it('holds a verdict whose pages could not be read, and says so rather than blaming the search results (W07-A)', () => {
+    const d = deliveryDecision(ready({ verdict: 'NOT_CHECKED', pages_unread: { reason: 'No verdict is given for this keyword: the service we use to read web pages stopped answering us.', missing: ['your own pages'] } }));
+    expect(d.code).toBe('unavailable');
+    expect(d.reason).toContain('pages this check needs could not be read');
+    expect(d.reason).not.toContain('search results');
+  });
+
   it('holds a plan whose feasibility was not checked', () => {
     expect(deliveryDecision({ stage: 'ladder_plan', status: 'completed', payload: { feasibility: { status: 'not_checked' } } }).code).toBe('unavailable');
   });

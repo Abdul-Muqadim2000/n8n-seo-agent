@@ -74,7 +74,12 @@ async function runNode(node, input, opts = {}) {
     // setPrototypeOf into silent no-ops and has no structuredClone. AI Metrics hid its competitor stats with defineProperty, which worked
     // here and crashed every live AI visibility run with a competitor ("reading 'named'"). Measured in a real n8n 2.41.4 Code node.
     const fn = new AsyncFunction('$input', '$', '$runIndex', '$getWorkflowStaticData', '$now', '$execution', '$workflow', '$json', 'URL', 'Object', 'structuredClone', src);
-    const thisArg = { helpers: { getBinaryDataBuffer: async (i, prop) => { const b = inputItems[i] && inputItems[i].binary && inputItems[i].binary[prop]; if (!b || !b.data) throw new Error('no binary ' + prop); return Buffer.from(b.data, 'base64'); } } };
+    const thisArg = { helpers: { getBinaryDataBuffer: async (i, prop) => { const b = inputItems[i] && inputItems[i].binary && inputItems[i].binary[prop]; if (!b || !b.data) throw new Error('no binary ' + prop); return Buffer.from(b.data, 'base64'); },
+      // W07-A (2026-10-31): a Code node that reads a page itself (the page reader's fallback) gets the scenario's fake network (opts.http),
+      // and with none the harness has no network at all: the call throws, as an unreachable host does
+      httpRequest: async (o) => { if (typeof opts.http !== 'function') throw new Error('no network in the harness: ' + String((o && o.url) || '')); return opts.http(o); },
+      // and the wait between two reads is recorded instead of slept (n8n's helpers have no `sleep`, so the node waits with setTimeout there)
+      sleep: async (ms) => { if (typeof opts.sleep === 'function') return opts.sleep(ms); } } };
     // opts.execId: the execution id n8n would give this run (scenarios_integration.js: every workflow run of a client's life has its own)
     const out = await fn.call(thisArg, wrap(inputItems), $, opts.runIndex || 0, () => staticData, new Date(), { id: String(opts.execId || 'test-exec') }, { id: 'wf', name: 'test' }, inputItems[0] && inputItems[0].json, undefined, SANDBOX_OBJECT, undefined);
     const items = toItems(out);

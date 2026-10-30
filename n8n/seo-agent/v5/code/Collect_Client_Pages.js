@@ -198,9 +198,16 @@ const EXCONF = (() => {
   const texts = [{ text: htmlTitle || rdTitle, by: 'its title' }, { text: readNow ? (readNow.headings || [])[0] || '' : '', by: 'its main heading' }].filter(t => t.text);
   const c = SM.confirmPage(model || { pages: [] }, page, ctx.keyword, { texts });
   const title = page.title || (htmlTitle || rdTitle).replace(/\s*[|]\s*[^|]{1,40}$/, '').trim();
+  // W07-A (2026-10-31, WAVE06 section 9, the 402 run): what is on file did not confirm the page AND the page reader refused to read it (its
+  // fallback failed too). "Has no title, main heading or Search Console search on file" is then not a finding about the page: nobody read
+  // it. The check says the page could not be read, and the run decides nothing on it (Parse Verdict's `pages_unread`).
+  const unreadMark = !c.ok ? reqs.map((r0, k) => ({ r0, j: res[k] || {} })).find(x => x.r0 && key(x.r0.url) === key(cand.url) && x.j.reader_fallback && x.j.reader_fallback.via === 'none') : null;
+  if (unreadMark) return { ok: false, unread: true, cand, title, why: 'it could not be read: ' + (typeof RD !== 'undefined' ? RD.clientReason(unreadMark.j.reader_fallback.refused) : 'the service we use to read web pages did not answer') };
   return { ok: c.ok, cand, title, by: c.by, evidence: c.evidence, why: c.why };
 })();
-const unconfirmed = EXCONF && !EXCONF.ok ? { url: EXCONF.cand.url, title: EXCONF.title, matched_by: EXCONF.cand.matched_by || (EXCONF.cand.source === 'sitemap' ? 'address' : ''), source: EXCONF.cand.source || '',
+const unreadExisting = EXCONF && EXCONF.unread ? { url: EXCONF.cand.url, title: EXCONF.title, source: EXCONF.cand.source || '', why: EXCONF.why,
+  note: 'The page your website already has for this search (' + EXCONF.cand.url + ') could not be read, so nothing was decided about it.' } : null;
+const unconfirmed = EXCONF && !EXCONF.ok && !EXCONF.unread ? { url: EXCONF.cand.url, title: EXCONF.title, matched_by: EXCONF.cand.matched_by || (EXCONF.cand.source === 'sitemap' ? 'address' : ''), source: EXCONF.cand.source || '',
   why: EXCONF.why, note: 'Written as a new page at its own address: ' + EXCONF.why + '.' } : null;
 if (unconfirmed) for (const p of pages) if (p.kind === 'existing') p.kind = 'related';
 const confirmedPage = EXCONF && EXCONF.ok ? { ...EXCONF.cand, ...(EXCONF.title && !EXCONF.cand.title ? { title: EXCONF.title } : {}), confirmed_by: EXCONF.evidence } : null;
@@ -208,6 +215,7 @@ return [{ json: { ...ctx, ...(inventoryPage ? { existing_page: inventoryPage, ex
   ...(ignoredReq ? { existing_page: null, existing_page_ignored: ignoredReq.ignored_existing } : {}),
   ...(confirmedPage ? { existing_page: confirmedPage } : {}),
   ...(unconfirmed ? { existing_page: null, existing_page_url: String(ctx.existing_page_url || ''), existing_page_unconfirmed: unconfirmed } : {}),
+  ...(unreadExisting ? { existing_page: null, existing_page_url: String(ctx.existing_page_url || ''), existing_page_unread: unreadExisting } : {}),   // W07-A
   client_pages: pages, client_pages_read: pages.length, existing_page_text: (existing && !unconfirmed) ? existing.text : '', existing_page_tables: (existingDigest && !unconfirmed) ? existingDigest.tables_block : '', existing_page_digest: unconfirmed ? null : existingDigest,
   existing_page_facts_text: (existingDigest && !unconfirmed) ? existingDigest.facts_text : '', client_signals,
   ...(linkCands ? { internal_link_candidates: linkCands } : {}), ...(clientRender ? { client_render: clientRender } : {}) } }];

@@ -189,15 +189,19 @@ module.exports = async (ctx) => {
     reset(); clean(); const SN = 'FUR5 (FU-R1 2026-10-29) the generated main workflow: the render chain sits between Read Client Page HTML and Collect Client Pages, through the browser render'; begin(SN); const check = mkCheck(SN);
     const wf = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'workflows', 'SEO_Agent_v4.json'), 'utf8'))[0];
     const by = Object.fromEntries(wf.nodes.map(n => [n.name, n])); const C = wf.connections;
-    const outs = (n, i) => (((C[n] || {}).main || [])[i] || []).map(t => t.node);
+    // W07-A (2026-10-31, build section 179): a reader node is now `<name> (reader)` followed by its fallback `<name>`, which also feeds the one
+    // page-reader alert chain; the chain below reads through both, and the HTTP checks look at the reader node itself
+    const outs = (n, i) => (((C[n] || {}).main || [])[i] || []).map(t => t.node).map(x => /^Render (?:More )?Client Pages \(reader\)$/.test(x) ? x.replace(/ \(reader\)$/, '') : x).filter(x => x !== 'Reader Refusals');
     check('Read Client Page HTML -> Client Render Plan -> Any Client Render?', J(outs('Read Client Page HTML', 0)) === J(['Client Render Plan']) && J(outs('Client Render Plan', 0)) === J(['Any Client Render?']));
     check('render branch: Render Client Pages -> Client Render More -> Any More Client Render? -> Render More Client Pages -> Collect Client Pages', J(outs('Any Client Render?', 0)) === J(['Render Client Pages']) && J(outs('Render Client Pages', 0)) === J(['Client Render More'])
       && J(outs('Any More Client Render?', 0)) === J(['Render More Client Pages']) && J(outs('Render More Client Pages', 0)) === J(['Collect Client Pages']));
     check('both "nothing to render" branches go straight to Collect Client Pages', J(outs('Any Client Render?', 1)) === J(['Collect Client Pages']) && J(outs('Any More Client Render?', 1)) === J(['Collect Client Pages']));
     for (const n of ['Render Client Pages', 'Render More Client Pages']) {
-      const h = Object.fromEntries(by[n].parameters.headerParameters.parameters.map(p => [p.name, p.value]));
-      check(n + ': the browser render as HTML, never failing the run, the retry rule, the Jina credential', h['X-Engine'] === 'browser' && h['X-Return-Format'] === 'html' && by[n].onError === 'continueRegularOutput' && by[n].alwaysOutputData === true
-        && by[n].retryOnFail === true && by[n].maxTries >= 3 && by[n].credentials && by[n].credentials.httpHeaderAuth && by[n].credentials.httpHeaderAuth.id === 'SEOcredJinaReade', J(by[n]).slice(0, 400));
+      const r = by[n + ' (reader)'];
+      const h = Object.fromEntries(r.parameters.headerParameters.parameters.map(p => [p.name, p.value]));
+      check(n + ': the browser render as HTML, never failing the run, the retry rule, the Jina credential', h['X-Engine'] === 'browser' && h['X-Return-Format'] === 'html' && r.onError === 'continueRegularOutput' && r.alwaysOutputData === true
+        && r.retryOnFail === true && r.maxTries >= 3 && r.credentials && r.credentials.httpHeaderAuth && r.credentials.httpHeaderAuth.id === 'SEOcredJinaReade'
+        && by[n].type === 'n8n-nodes-base.code' && J(((C[n + ' (reader)'] || {}).main || [])[0].map(t => t.node)) === J([n]), J(r).slice(0, 400));
     }
   });
   clean();
