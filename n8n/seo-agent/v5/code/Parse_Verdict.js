@@ -233,7 +233,7 @@ const HOLD = (() => {
   if (writes && dupHit) reasons.push('Your website already has a page aimed at this search: ' + dup.targets.map(t => t.url).join(', ')
     + '. A second page would compete with it for the same search; improving that page is usually the faster way up.');
   if (writes && existingHit) reasons.push('Your website already has a page for this search: ' + EXP.url + (S(EXP.title) ? ' ("' + S(EXP.title).replace(/[“”"]/g, '') + '")' : '')
-    + '. This run would rewrite that page at its own address. Choose "Improve the existing page" to do that, or "Write it anyway" for a separate new page.');
+    + '. Choose "Improve the existing page" to rewrite that page at its own address (it keeps what it has already earned), or "Write it anyway" for a separate new page at a new address of its own; your existing page then stays as it is.');   // W06-B (WAVE05 3.3): the copy says exactly what each choice does
   const shown = gsc.pages.filter(p => !EXP || p.url.toLowerCase().replace(/\/+$/, '') !== String(EXP.url).toLowerCase().replace(/\/+$/, ''));
   if (writes && (dupHit || existingHit) && shown[0]) reasons.push('Google already shows ' + shown[0].url + ' for this search (' + shown[0].impressions + ' impressions in Search Console).');
   // ---- what to do instead (up to three, each one click in the app) ----

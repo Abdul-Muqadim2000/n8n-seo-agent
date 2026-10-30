@@ -97,9 +97,14 @@ module.exports = async (ctx) => {
     check('a cut draft goes back to the Copywriter with the SAME brief (its prompt reads the brief), and the reason is recorded', r1.llm_check.retry === true && r1.keyword === F.keyword && r1.page_type === 'Service Page' && /stopped before the end of the page/.test(r1.llm_check.note) && r1.output === undefined, J(r1.llm_check));
     const r2 = (await run('Draft Check (Copywriter)', [{ json: { output: F.copywriter_output } }], { runIndex: 1 }))[0].json;
     check('the second answer is complete: it is used, and the note says the first one was cut', r2.output === F.copywriter_output && r2.llm_check.complete === true && /wrote the page again/.test(r2.llm_check.note), J(r2.llm_check));
-    let threw = null; try { await run('Draft Check (Copywriter)', [{ json: { output: cutDraft } }], { runIndex: 1, expectError: true }); } catch (e) { threw = e; }
+    // W06-B (2026-10-30): the second cut no longer throws inside the check (the ledger row stayed reserved at $0 and the app's opening
+    // content-log row stayed `started`): it hands a failed item to the failure path, and *Stop Failed Run* ends the run with the same reason
+    const r3 = (await run('Draft Check (Copywriter)', [{ json: { output: cutDraft } }], { runIndex: 1 }))[0].json;
+    check('cut twice: the check marks the run failed with a plain reason (no page delivered) and no output text goes on', r3.llm_check.failed === true && r3.llm_check.retry === false && r3.output === undefined
+      && /could not be written in full/.test(r3.llm_check.error) && /No page was delivered/.test(r3.llm_check.error), J(r3.llm_check));
+    let threw = null; try { await run('Stop Failed Run', [{ json: {} }], { expectError: true }); } catch (e) { threw = e; }
     const last = H.results[H.results.length - 1];
-    check('cut twice: the run stops with a plain reason, no page delivered', last && last.ok === false && /could not be written in full/.test(last.error) && /No page was delivered/.test(last.error), J(last && last.error));
+    check('cut twice: the run then stops (after its settle) with that same plain reason', last && last.ok === false && /could not be written in full/.test(last.error) && /No page was delivered/.test(last.error), J(last && last.error));
     if (last && last.ok === false) { last.ok = true; last.error = 'threw as expected: ' + String(last.error).slice(0, 90); }
   });
 
@@ -182,8 +187,10 @@ module.exports = async (ctx) => {
     reset(); begin(SN); const check = mkCheck(SN);
     const W = wf('SEO_Agent_v4.json'), C = W.connections, N = Object.fromEntries(W.nodes.map(n => [n.name, n]));
     const outs = (n) => ((C[n] || {}).main || []).map(l => (l || []).map(t => t.node));
-    check('After Count (Copywriter) -> Draft Check (Copywriter) -> Draft Complete? (Copywriter) -> [Critic] / [Copywriter]',
-      J(outs('After Count (Copywriter)')) === J([['Draft Check (Copywriter)']]) && J(outs('Draft Check (Copywriter)')) === J([['Draft Complete? (Copywriter)']]) && J(outs('Draft Complete? (Copywriter)')) === J([['Critic'], ['Copywriter']]), J([outs('After Count (Copywriter)'), outs('Draft Complete? (Copywriter)')]));
+    // W06-B (2026-10-30): a page cut twice takes the failure path (the content-log row, the ledger settle, then the stop)
+    check('After Count (Copywriter) -> Draft Check (Copywriter) -> Draft Written? (Copywriter) -> [Draft Complete? (Copywriter) -> [Critic] / [Copywriter]] / [the failure path]',
+      J(outs('After Count (Copywriter)')) === J([['Draft Check (Copywriter)']]) && J(outs('Draft Check (Copywriter)')) === J([['Draft Written? (Copywriter)']])
+      && J(outs('Draft Written? (Copywriter)')) === J([['Draft Complete? (Copywriter)'], ['Load Content Log (Failed)']]) && J(outs('Draft Complete? (Copywriter)')) === J([['Critic'], ['Copywriter']]), J([outs('After Count (Copywriter)'), outs('Draft Written? (Copywriter)'), outs('Draft Complete? (Copywriter)')]));
     // H1 (2026-10-27, build section 151): a complete edit goes through Page Fix (the deterministic fixes) before Promise Candidates
     check('After Count (Editor) -> Edit Check (Editor) -> Edit Complete? (Editor) -> [Page Fix -> Promise Candidates] / [Editor]',
       J(outs('After Count (Editor)')) === J([['Edit Check (Editor)']]) && J(outs('Edit Check (Editor)')) === J([['Edit Complete? (Editor)']]) && J(outs('Edit Complete? (Editor)')) === J([['Page Fix'], ['Editor']]) && J(outs('Page Fix')) === J([['Promise Candidates']]), J(outs('Edit Complete? (Editor)')));

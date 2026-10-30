@@ -13387,6 +13387,85 @@ for _f173, _ks173 in {'prompts/copywriter.txt': ('6c. Headings carry content', '
         if any(_k173 in _l173 for _k173 in _ks173):
             assert not any(_b173 in _l173 for _b173 in ('\u2014', '\u2013', '\u201c', '\u201d', '\u2026')), 'W05-C: a new line of ' + _f173 + ' carries an em dash, a curly quote or an ellipsis character'
 log('A sourced figure is never made vague, no padding is added, and the final version keeps the page\'s shape (W05-C, 2026-10-30, section 173): Content QA records the figures a cited source states; a figure its own source states is kept and attributed, never rewritten into a vague word; no subtopic while a page is over its length and never a rhetorical heading; client facts out of technical sections; Finalize never puts a fragment or heading into prose, keeps list markers, adds no second call to action and repairs the final version against its source page; at most 8 de-duplicated questions')
+
+# =============================================================================
+# 176. A COMPLETE PAGE IS NEVER FAILED FOR ITS CALL TO ACTION, A FAILED RUN LEAVES NO "WRITTEN" ROW AND SETTLES WHAT IT SPENT, AND A
+#      SEPARATE NEW PAGE GETS ITS OWN ADDRESS (W06-B, page-quality programme 2026-10-30, docs/page-quality-2026-10-29/WAVE05.md 3.2 / 3.3,
+#      "Deploy readiness" items 2 and 3):
+#      * K4 first try (exec 379): the writer twice answered a complete ~2,100-word page whose last line is the bare button text "Book a
+#        consultation"; *Draft Check (Copywriter)* read it as a sentence with no ending and failed the run ($0.85 of Claude lost). CK.text
+#        (v5/code/_complete.js) accepts a final short call-to-action line on its own after a clean paragraph, when it is the brief's call to
+#        action or reads as a button whose every word is a word of the last section; a cut line is still caught. Draft Check passes the CTA.
+#      * The same run threw inside Draft Check, so its ledger row stayed `reserved` at $0 and the app's opening content-log row stayed
+#        `started` (the app then said "a page ... was already written" and counted it as waiting). The second cut now emits a failed item:
+#        *Draft Written? (Copywriter)* sends it to *Load Content Log (Failed)* -> *Page Run Failed Row* -> *Mark Page Run Failed* (the run's
+#        own `started` row, by request id AND keyword, becomes `failed` with the reason) -> the settle chain (DFS Balance End ... Run Ledger
+#        Settle settles what it spent, says the run failed, and Cost Calibration Row learns nothing from it) -> *Stop Failed Run* ends the
+#        execution with the same error as before (n8n failed status, the error handler, the app's failure watcher, no charge).
+#      * K1 "Write it anyway": the Strategy Brief gave the new page the existing page's slug (/ms-365-erp-uae), so the suggested address was
+#        the page the client chose to keep. *Parse Brief* moves a new page's slug off any address the website already has (the page left
+#        alone, the sitemap, the link candidates), never for a rewrite or a keyword-ladder page with its planned address; the hold copy says
+#        what each choice does.
+# =============================================================================
+_ck176 = _rd0('code/_complete.js')
+assert 'const ctaEnd = (lines, o) => {' in _ck176 and '} else if (ctaEnd(lines, o)) {' in _ck176 and 'text(after, { cta: o.cta })' in _ck176, 'W06-B: the completeness kit does not accept a final call to action'
+for _g176 in ('Draft Check (Copywriter)', 'Edit Check (Editor)', 'Content QA'):
+    assert 'const ctaEnd = (lines, o) => {' in code(_g176), 'W06-B: ' + _g176 + ' carries an older completeness kit'
+assert 'CK.text(md, { min_words: tw > 0 ? Math.round(tw * 0.35) : 0, cta });' in code('Draft Check (Copywriter)') and 'failed: true' in code('Draft Check (Copywriter)') \
+    and 'throw new Error' not in code('Draft Check (Copywriter)'), 'W06-B: Draft Check still throws on a second cut page'
+open(os.path.join(OUT_CODE, '_complete.js'), 'w').write("// harness shim (written by build_v4.py section 150): the completeness kit, { fn, args } -> { r }\n" + _ck176.rstrip('\n')
+    + "\nreturn $input.all().map(i => ({ json: { r: CK[i.json.fn].apply(null, i.json.args || []) } }));\n")
+# ---- the failure path ----
+_dc176 = pos('Draft Check (Copywriter)')
+assert [t['node'] for l in conns['Draft Check (Copywriter)']['main'] for t in l] == ['Draft Complete? (Copywriter)'], 'W06-B: Draft Check no longer feeds Draft Complete? alone'
+if_node('Draft Written? (Copywriter)', '{{ !($json.llm_check && $json.llm_check.failed) }}', [_dc176[0] + 100, _dc176[1] - 200])
+disconnect('Draft Check (Copywriter)', 'Draft Complete? (Copywriter)')
+connect('Draft Check (Copywriter)', 'Draft Written? (Copywriter)'); connect('Draft Written? (Copywriter)', 'Draft Complete? (Copywriter)', 0)
+_RID176 = "={{ String($('Normalize Input').first().json.request_id || '') || '__no_request__' }}"
+add_node('Load Content Log (Failed)', DT_TYPE, DT_VERSION, dt_get_where_params(LOG_TABLE, 'request_id', 'eq', _RID176), [_dc176[0] + 320, _dc176[1] - 360],
+         {'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+add_node('Page Run Failed Row', 'n8n-nodes-base.code', 2, {'jsCode': _rd0('code/Page_Run_Failed_Row.js')}, [_dc176[0] + 540, _dc176[1] - 360], {'executeOnce': True})
+add_node('Mark Page Run Failed', DT_TYPE, DT_VERSION, dt_update_where_params(LOG_TABLE, LOG_COLS,
+         [('request_id', 'eq', '={{ $json.request_id }}'), ('keyword', 'eq', '={{ $json.keyword }}'), ('status', 'eq', 'started')],
+         {'status': '={{ $json.status }}', 'qa_reasons': '={{ $json.qa_reasons }}'}),
+         [_dc176[0] + 760, _dc176[1] - 360], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+connect('Draft Written? (Copywriter)', 'Load Content Log (Failed)', 1)
+connect('Load Content Log (Failed)', 'Page Run Failed Row'); connect('Page Run Failed Row', 'Mark Page Run Failed'); connect('Mark Page Run Failed', 'DFS Balance End')
+assert "$('Load Content Log (Failed)')" in code('Page Run Failed Row') and "String(r.status || '') === 'started'" in code('Page Run Failed Row'), 'W06-B: the failed row is not this run\'s own started row'
+_srl176 = pos('Settle Run Ledger')
+add_node('Stop Failed Run', 'n8n-nodes-base.code', 2, {'jsCode': _rd0('code/Stop_Failed_Run.js')}, [_srl176[0] + 220, _srl176[1] + 360], {'executeOnce': True})
+connect('Settle Run Ledger', 'Stop Failed Run')
+assert 'run_failed: !!__failed' in code('Run Ledger Settle') and '__failNote + __llmNote' in code('Run Ledger Settle'), 'W06-B: the settle does not record a failed run'
+assert 'const learn = !s.run_failed;' in code('Cost Calibration Row'), 'W06-B: a failed run would teach the cost calibration'
+# ---- a separate new page never takes an address the website already has ----
+patch('Parse Brief', "\n// 5. M1 (2026-10-21, pre-launch run exec 42): a ladder's top page", r"""
+// 4b. W06-B (2026-10-30, docs/page-quality-2026-10-29/WAVE05.md 3.3, K1 "ms 365 erp"): after "Write it anyway" on the page the website
+//     already has for the search, the Strategy Brief gave the separate new page that page's own slug (ms-365-erp-uae), so the delivered
+//     page's suggested address was the very page the client chose to leave as it is: publishing it there would overwrite a page that
+//     already earns its place. A NEW page (no page to rewrite, no address the client or a ladder named) never takes the address of a page
+//     the website has: the page left alone, the sitemap, the link candidates. Its slug moves to the keyword's own, else a free variant.
+(() => {
+  const pathK = (u) => String(u || '').trim().toLowerCase().replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/^\/+|\/+$/g, '');
+  if ((prev.existing_page && prev.existing_page.url) || String(prev.existing_page_url || '').trim() || (prev.ladder_id && String(prev.ladder_target_url || '').trim())) return;
+  const asked = pathK(brief.slug);
+  if (!asked) return;
+  const ign = pathK((prev.existing_page_ignored || {}).url);
+  const taken = new Set([ign, ...(prev.site_urls || []).map(pathK), ...(prev.internal_link_candidates || []).map(c => pathK(c && c.url))].filter(Boolean));
+  if (!taken.has(asked)) return;
+  const slugify = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
+  const type = String(prev.page_type || '').toLowerCase();
+  const word = /blog|guide|article|pillar|hub/.test(type) ? 'guide' : /compar/.test(type) ? 'comparison' : /service/.test(type) ? 'services' : 'page';
+  const cut = asked.lastIndexOf('/'), dir = cut >= 0 ? asked.slice(0, cut + 1) : '', base = asked.slice(cut + 1), kwS = slugify(prev.keyword);
+  const next = [kwS, base + '-' + word, kwS && kwS + '-' + word, base + '-2', base + '-3', base + '-4'].filter(Boolean).map(c => dir + c).find(c => c !== asked && !taken.has(c));
+  if (!next) return;
+  adjustments.push('Slug "' + asked + '" -> "' + next + '": your website already has a page at /' + asked + (ign === asked ? ' (the page you chose to leave as it is)' : '')
+    + ', so this separate new page gets an address of its own and the existing page is not overwritten');
+  brief.slug = next;
+})();
+
+// 5. M1 (2026-10-21, pre-launch run exec 42): a ladder's top page""")
+assert 'your website already has a page at /' in code('Parse Brief'), 'W06-B: Parse Brief does not move a new page off an existing address'
+log('A complete page is never failed for its call to action, a failed run leaves no "written" row and settles what it spent, and a separate new page gets its own address (W06-B, 2026-10-30, section 176): CK.text accepts a final short call-to-action line ("Book a consultation") after a clean paragraph when it is the brief\'s CTA or a button made of the last section\'s words, and still catches a cut line; a second cut page takes a failure path that marks the run\'s own started content-log row failed, settles the ledger row with the measured spend (no calibration) and then stops with the same error; Parse Brief moves a new page\'s slug off any address the website already has; the hold copy says what "Write it anyway" does')
 # =============================================================================
 # 177. THE VERDICT'S EXCLUSIONS NEVER DELETE A PAGE'S CORE, AND THE GRADE KNOWS WHAT WAS TAKEN OUT (W06-A, page-quality wave 0.6,
 #      2026-10-30; docs/page-quality-2026-10-29/WAVE05.md 3.1 and "Deploy readiness" items 1 and 4). Live (W05 run, K1 "ms 365 erp") the

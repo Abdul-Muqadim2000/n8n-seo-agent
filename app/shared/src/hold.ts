@@ -112,7 +112,7 @@ export function holdButtons(h: HoldInfo, base: { keyword: string; pageType?: str
   out.push({
     id: 'write_anyway',
     label: 'Write it anyway',
-    why: h.kinds.includes('duplicate') ? 'a separate new page is written and your existing page stays as it is; two pages for the same search compete with each other, so it is your call' : 'you know this keyword is worth a page',
+    why: h.kinds.includes('duplicate') ? 'a separate new page is written at a new address of its own and your existing page stays as it is; two pages for the same search compete with each other, so it is your call' : 'you know this keyword is worth a page',
     prefill: { keyword: base.keyword, ...common(base.pageType), holdAck: { score: h.score } },
   });
   return out;

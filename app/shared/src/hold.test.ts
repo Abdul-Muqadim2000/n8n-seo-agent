@@ -107,6 +107,7 @@ describe('W05-B (2026-10-30): the page the website has and the page Google shows
     expect(b.map((x) => x.label)).toEqual(['Improve the existing page', 'Improve the page Google shows', 'Write it anyway']);
     expect(b.map((x) => x.prefill.existingPageUrl)).toEqual(['https://www.novaand.example/ms-365-erp-uae', 'https://www.novaand.example/insights/is-microsoft-dynamics-365-an-erp-system', undefined]);
     expect(b[2].why).toMatch(/separate new page/);
+    expect(b[2].why).toMatch(/at a new address of its own and your existing page stays as it is/); // W06-B (WAVE05 3.3): the new page gets its own address
   });
   it('the rule names both lines in plain words', () => {
     expect(HOLD_RULE).toMatch(/under 40 out of 100, or under 50 when few people search for it/);
