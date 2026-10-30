@@ -268,14 +268,20 @@ function AskGooglePanel({ items, asked, domain, orgId, siteId, member }: { items
 const SUBMISSION_STATUS: Record<IndexSitemapState['submissions'][number]['status'], { tone: Tone; label: string }> = {
   ok: { tone: 'good', label: 'Submitted' },
   refused: { tone: 'warning', label: 'Refused by Google' },
+  // wave 2 review W13: an attempt recorded before Google's answer, with no answer kept: never shown as done
+  pending: { tone: 'neutral', label: 'Last attempt, not confirmed' },
   error: { tone: 'warning', label: 'Not submitted' },
 };
 
+/** Wave 2 review W1: reasons that stop every submission until something changes (the card does not describe what we would submit then). */
+const HELD: ReadonlySet<string> = new Set(['paused', 'no_sitemap', 'outside_property', 'not_set_up']);
+
 /** wave 2 (DESIGN_WAVE2 §3.2): the sitemap switch, the access Google reports for us, and every submission with Google's read date. */
 function SitemapPanel({ s, domain, orgId, siteId }: { s: IndexSitemapState; domain: string; orgId: string; siteId: string }) {
-  // ENGINE_BUILD wave 2 contract 11: Search Console lists no sitemap; with the switch on and Full access we submit it, nothing to do
-  const willSubmit = s.submitOn && s.access === 'full' && s.submitted === 0;
-  if (!s.submitOn && !s.submissions.length && s.access !== 'restricted') return null;
+  // wave 2 review W1: "we will submit it" ONLY when the engine's newest check says it will (`submit.will_submit === true`); otherwise,
+  // with the switch on, the engine's reason in words, and the "Submit your sitemap" step stays on Steps on your website
+  const willSubmit = s.submitOn && s.willSubmit;
+  if (!s.submitOn && !s.submissions.length && s.access !== 'restricted' && s.access !== 'refused') return null;
   return (
     <Panel
       icon={<MapIcon />}
@@ -283,9 +289,13 @@ function SitemapPanel({ s, domain, orgId, siteId }: { s: IndexSitemapState; doma
       description={
         !s.submitOn
           ? 'Sitemap submission is off: you submit your sitemap in Search Console yourself.'
-          : s.access === 'full'
-            ? 'Sitemap submission is on: when your sitemap is missing from Search Console or has changed, we submit it, at most once a week.'
-            : 'Sitemap submission is on, but nothing can be submitted until Google gives us Full access.'
+          : s.access === 'refused'
+            ? 'Sitemap submission is on, but Google refused our last submission, so nothing is submitted for now.'
+            : s.access === 'full' && HELD.has(s.blocked)
+              ? 'Sitemap submission is on, but we will not submit your sitemap on the next daily check. Why is below.'
+              : s.access === 'full'
+                ? 'Sitemap submission is on: when your sitemap is missing from Search Console or has changed, we submit it, at most once a week.'
+              : 'Sitemap submission is on, but nothing can be submitted until Google gives us Full access.'
       }
       actions={
         <ButtonLink size="sm" variant="secondary" to={paths.site(orgId, siteId, 'settings/tracking')}>
@@ -295,21 +305,32 @@ function SitemapPanel({ s, domain, orgId, siteId }: { s: IndexSitemapState; doma
       flush
     >
       <div className="space-y-2 border-t border-line px-5 py-3">
-        <SitemapAccessLine info={{ access: s.access, at: s.accessAt }} domain={domain} on={s.submitOn} />
-        {willSubmit && <p className="text-[13px] text-ink-2">Search Console lists no sitemap for {domain} yet. We will submit it on the next daily check; there is nothing to do on your side.</p>}
+        <SitemapAccessLine info={{ access: s.access, at: s.accessAt, blocked: s.blocked }} domain={domain} on={s.submitOn} />
+        {willSubmit &&
+          (s.submitted === 0 ? (
+            <p className="text-[13px] text-ink-2">Search Console lists no sitemap for {domain} yet. We will submit it on the next daily check; there is nothing to do on your side.</p>
+          ) : (
+            <p className="text-[13px] text-ink-2">Your sitemap changed since it was last submitted. We will submit it again on the next daily check; there is nothing to do on your side.</p>
+          ))}
+        {s.submitOn && !willSubmit && s.submitted === 0 && (
+          <p className="text-[13px] text-ink-2">
+            Search Console lists no sitemap for {domain}, and we will not submit it on the next daily check, so it stays a step for you under Steps on your website.
+          </p>
+        )}
       </div>
       {s.submissions.length > 0 ? (
         <ul className="divide-y divide-line border-t border-line">
           {s.submissions.map((x) => (
             <InsightItem
               key={`${x.path}-${x.at}`}
-              tone={x.status === 'ok' ? 'good' : 'warning'}
+              tone={x.status === 'ok' ? 'good' : x.status === 'pending' ? 'neutral' : 'warning'}
               icon={<MapIcon className="size-4" />}
               meta={<StatusBadge tone={SUBMISSION_STATUS[x.status].tone}>{SUBMISSION_STATUS[x.status].label}</StatusBadge>}
               title={<span className="break-all">{indexPath(x.path)}</span>}
               titleAttr={x.path}
               description={[
                 `${x.status === 'ok' ? 'Submitted' : 'Tried'} on ${fmtDay(x.at)}`,
+                x.status === 'pending' ? 'Search Console has not listed it since' : null,
                 x.reason ? `because ${x.reason}` : null,
                 x.status === 'ok' ? (x.readAt ? `Google read your sitemap on ${fmtDay(x.readAt)}` : 'Google has not read it since') : null,
               ]
@@ -319,7 +340,8 @@ function SitemapPanel({ s, domain, orgId, siteId }: { s: IndexSitemapState; doma
           ))}
         </ul>
       ) : (
-        s.submitOn && <p className="border-t border-line px-5 py-3 text-[13px] text-ink-3">Nothing submitted yet. Search Console already lists your sitemap, or the daily check has not run since you switched it on.</p>
+        // W1: only when nothing else on the card already says why (a listed sitemap, no reason from the engine)
+        s.submitOn && s.submitted !== 0 && !s.blocked && !s.willSubmit && <p className="border-t border-line px-5 py-3 text-[13px] text-ink-3">Nothing submitted yet. Search Console already lists your sitemap, or the daily check has not run since you switched it on.</p>
       )}
     </Panel>
   );

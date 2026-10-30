@@ -602,7 +602,7 @@ export const features: Feature[] = [
       { value: 'Live', label: 'rank checks where Search Console has no data' },
     ],
     faqs: [
-      { q: 'What access does Alaventra need?', a: 'You add Alaventra\'s service account as a user in Search Console and GA4. It reads your data; it does not change your settings.' },
+      { q: 'What access does Alaventra need?', a: 'You add Alaventra\'s service account as a user in Search Console and GA4. We only read your Search Console, unless you switch on sitemap submission, which lets us submit your sitemap and nothing else. GA4 is read only.' },
       {
         q: 'What if nobody here has done this before?',
         a: 'Every ask in Alaventra has a "Show me how" button next to it. It opens the job as numbered steps you tick off, with your own values in copy boxes, the page to open, and tabs for the provider or CMS you actually use. If the person who can do it is someone else (whoever manages your DNS, usually), one button sends them the whole thing by e-mail, values filled in, no account needed.',

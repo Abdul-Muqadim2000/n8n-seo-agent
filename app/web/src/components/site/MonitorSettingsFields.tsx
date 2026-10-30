@@ -19,8 +19,10 @@ import {
   monitorSettingsSchema,
   type AiEngine,
   type AutopilotPlan,
+  sitemapBlockedText,
   type IndexSitemapAccess,
   type MonitorSettings,
+  type SitemapBlocked,
 } from '@seo/shared';
 import { Callout } from '@/components/ui/feedback';
 import { fmtDay } from '@/lib/utils';
@@ -76,18 +78,35 @@ export function completeMonitors(m: Partial<MonitorSettings> | null | undefined)
   };
 }
 
-/** wave 2: what Google reports about our access, from the newest daily index check that read it (null: not read yet). */
-export type SitemapAccessInfo = { access: IndexSitemapAccess; at: string | null } | null;
+/** wave 2: what Google reports about our access, from the newest daily index check that read it (null: not read yet). Wave 2 review W1:
+ *  `blocked` is the engine's reason it will not submit on its next run (shown only with the switch on). */
+export type SitemapAccessInfo = { access: IndexSitemapAccess; at: string | null; blocked?: SitemapBlocked | '' } | null;
 
-/** The line next to the sitemap switch: whether Google lets us submit (Full access), or the warning and the guide. */
+/** The line next to the sitemap switch: whether Google lets us submit (Full access), or the warning and the guide; with the switch on, the
+ *  engine's reason it will not submit (W1). */
 export function SitemapAccessLine({ info, domain, on }: { info: SitemapAccessInfo | undefined; domain: string; on: boolean }) {
   const access = info?.access ?? 'unknown';
+  // W1: the reasons the access line itself does not already say (read-only access and a refusal have their own callouts)
+  const blocked = on && info?.blocked && info.blocked !== 'switch_off' && info.blocked !== 'not_full_access' && info.blocked !== 'refused' ? info.blocked : '';
+  const why = blocked ? sitemapBlockedText(blocked) : '';
+  if (access === 'refused')
+    return (
+      // W7: Google reports Full access for us but refused the submission: not read-only access, and Full access is not the fix
+      <Callout tone={on ? 'warning' : 'info'} title="Google refused our sitemap submission">
+        {sitemapBlockedText('refused')} Google reports Full access for us{info?.at ? ` (daily index check of ${fmtDay(info.at)})` : ''}, so there is nothing to change in your access.
+      </Callout>
+    );
   if (access === 'full')
     return (
-      <p className="flex items-start gap-1.5 text-[13px] text-ink-2">
-        <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-good-text" aria-hidden />
-        <span>We can submit your sitemap: Google reports Full access for us{info?.at ? ` (daily index check of ${fmtDay(info.at)})` : ''}.</span>
-      </p>
+      <>
+        <p className="flex items-start gap-1.5 text-[13px] text-ink-2">
+          <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-good-text" aria-hidden />
+          <span>
+            {why ? 'Google' : 'We can submit your sitemap: Google'} reports Full access for us{info?.at ? ` (daily index check of ${fmtDay(info.at)})` : ''}.
+          </span>
+        </p>
+        {why && <p className="text-[13px] text-ink-2">{why}</p>}
+      </>
     );
   if (access === 'restricted')
     return (
@@ -96,7 +115,12 @@ export function SitemapAccessLine({ info, domain, on }: { info: SitemapAccessInf
         <GuideButton id="search-console-full-access" vars={{ domain }} label="Give us Full access" />
       </Callout>
     );
-  return <p className="text-[13px] text-ink-3">We will know after the next daily check whether Google lets us submit it (it needs Full access in Search Console).</p>;
+  return (
+    <>
+      <p className="text-[13px] text-ink-3">We will know after the next daily check whether Google lets us submit it (it needs Full access in Search Console).</p>
+      {why && <p className="text-[13px] text-ink-2">{why}</p>}
+    </>
+  );
 }
 
 /**
@@ -125,6 +149,7 @@ export function MonitorSettingsFields({
   enginesError,
   aiMeasured,
   sitemapAccess,
+  sitemapSwitch = false,
   domain = 'your website',
 }: {
   value: MonitorSettings;
@@ -136,6 +161,10 @@ export function MonitorSettingsFields({
   aiMeasured?: AiMeasuredSample | null;
   /** wave 2: the access Google reports for us (from the daily index check); absent: not known here */
   sitemapAccess?: SitemapAccessInfo;
+  /** wave 2 review W6: show "Let Alaventra submit your sitemap to Google". Only the Growth monitors card of Website settings saves it (Site
+   *  Admin `monitors`); the onboarding and "Start weekly tracking" forms save through Track my site, which does not carry it, so they never
+   *  show a checkbox that would be dropped */
+  sitemapSwitch?: boolean;
   domain?: string;
 }) {
   useEngineCal();   // R99 / R100: re-render with the engine's own prices once they arrive
@@ -325,16 +354,18 @@ export function MonitorSettingsFields({
                   </Select>
                 )}
               </Field>
-              <div className="mt-3 space-y-2">
-                <Checkbox
-                  label="Let Alaventra submit your sitemap to Google"
-                  description="Off unless you switch it on. When your sitemap is missing from Search Console, or has changed, we submit it there for you, at most once a week. We only read your Search Console, unless you switch this on, which lets us submit your sitemap and nothing else. Google still decides which pages it keeps."
-                  checked={value.indexSitemapSubmit ?? false}
-                  disabled={disabled}
-                  onChange={(e) => set({ indexSitemapSubmit: e.target.checked })}
-                />
-                <SitemapAccessLine info={sitemapAccess} domain={domain} on={value.indexSitemapSubmit ?? false} />
-              </div>
+              {sitemapSwitch && (
+                <div className="mt-3 space-y-2">
+                  <Checkbox
+                    label="Let Alaventra submit your sitemap to Google"
+                    description="Off unless you switch it on. When your sitemap is missing from Search Console, or has changed, we submit it there for you, at most once a week. We only read your Search Console, unless you switch this on, which lets us submit your sitemap and nothing else. Google still decides which pages it keeps."
+                    checked={value.indexSitemapSubmit ?? false}
+                    disabled={disabled}
+                    onChange={(e) => set({ indexSitemapSubmit: e.target.checked })}
+                  />
+                  <SitemapAccessLine info={sitemapAccess} domain={domain} on={value.indexSitemapSubmit ?? false} />
+                </div>
+              )}
             </div>
           )
         }
