@@ -63,6 +63,14 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
+## Status (2026-10-31, page-quality Waves 0-0.7 DEPLOYED to production - latest)
+Deployed 2026-10-30 21:43-22:15 UTC with the owner's go-ahead: backup `pg/2026-10-30/*T214343Z.dump`; API on the VM at `c28203f2` (rollback image
+`alaventra-app:rollback-05002d55`), healthy, no migration; web via PR #50 -> main `f5dbbeb1` (Vercel live: "about 114 credits" in the bundle);
+engine `deploy_engine.py --no-build --apply` (guard ok, 20 updated, 28 published, 29 active, 0 missing; remaining dry-run diffs are only the
+alert-webhook placeholder). Index coverage (wave 2) kept. Jina key replaced on prod's credential (Secret Manager copy still old: owner decision,
+load_secrets.sh would also push a differing app/.env). Evidence: docs/page-quality-2026-10-29/ (BEFORE_AFTER, WAVE05, WAVE06, DEPLOY_READINESS).
+Next: post-deploy day-1 checks (DEPLOY_READINESS section 5), engine page estimate $1.90 (N2), D17 review after two cadence cycles, Wave 1-2, tutorials backlog.
+
 ## Status (2026-10-30, page quality Waves 0, 0.5, 0.6: blind-judged runs, fixes, deploy checklist — latest)
 Owner priority: page quality and ranking must never drop. Wave 0 + follow-ups (`fed34d3c`, harness 14221 / 0) run against BEFORE (`8caf2467`) on
 the isolated `alvrun-*` stack, same 8 keywords on 3 sites, both builds' pages + 3 published controls judged together blind (2 Claude judges).
