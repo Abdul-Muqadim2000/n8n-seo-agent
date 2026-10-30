@@ -2,6 +2,16 @@
 
 Read this first if you are picking the work up. Owner's ask: OWNER_BRIEF.md. Contract: DESIGN.md + FIX_CONTRACT.md.
 
+## ENGINE FIX DEPLOYED + VERIFIED 2026-10-30 00:33 UTC (owner approved)
+- `deploy_engine.py --no-build --apply` (7d577be9 + docs): SEOagentIndexCv1 updated, 28 published. The 6 wrong techand rows were reset
+  to unknown (seo_index_pages PATCH), the no-op 00:16 run rows deleted, one test fire at 20:33 NY: techand.ai 48 known / 44 indexed / 4
+  links, the 6 pages now indexed (evidence search); devaicon.com unchanged (30 / 9 / 20 / 1). Schedule restored to 05:15 NY and published.
+- Today (2026-10-30 UTC) both sites are already checked, so the 09:15 UTC fire skips them; the next full daily check is 2026-10-31 09:15 UTC.
+- Spot VM preempted twice (00:21, 00:28 UTC) and recreated by the MIG; not related to this feature. Waiting watch executions 4171 / 4213
+  survive (stored).
+- NEXT: owner's OK for the API on the VM (detached checkout of feature/indexing, `up -d --build app`, no migration) and the web (PR
+  feature/indexing -> main, Vercel), then merge into feature/seo-agent-v4.5.
+
 ## FIRST PRODUCTION RUN 2026-10-29 23:55 UTC (test fire, schedule moved to 19:55 NY and published) + fix 7d577be9 NOT YET DEPLOYED
 - Executions 4171 (trigger, waiting = the watch), 4172 / 4173 (one per site) success. devaicon.com 30 known / 9 indexed / 20 not (12 unknown
   to Google, 6 discovered, 2 crawled-not-indexed) / 1 excluded; techand.ai 48 / 38 / 4 / 6; 77 readings reused, 1 inspection; 0 errors,
