@@ -872,7 +872,8 @@ sv = get_schema('Parser — Verdict'); sv['properties'].update({'what_must_chang
 PV_KITS = {'EXCLUSIONS': 'code/_exclusions.js', 'SITE_MODEL': 'code/_site_model.js', 'OWN_COVER': 'code/_own_cover.js',
            'REACH': 'code/_reach.js', 'KW_INPUTS': 'code/_kw_inputs.js', 'PAGE_TYPE': 'code/_page_type.js',
            'PAGE_CLAIMS': 'code/_page_claims.js', 'VERDICT_OWN': 'code/_verdict_own.js', 'REMEASURE': 'code/_remeasure.js',
-           'DUP_TARGETS': 'code/_dup_targets.js'}   # W0-D (2026-10-29, section 153): the duplicate rule before the brief
+           'DUP_TARGETS': 'code/_dup_targets.js',   # W0-D (2026-10-29, section 153): the duplicate rule before the brief
+           'READER': 'code/_reader.js'}   # W07-A (2026-10-31, section 179): pages the page reader refused are never judged
 def pv_source():
     src = _rd0('code/Parse_Verdict.js')
     for _k in PV_KITS:
@@ -13559,6 +13560,80 @@ for _f178 in ('code/Finalize_Parse_Brief.js', 'code/Finalize_Verdict.js', 'code/
     for _bad178 in ('—', '–', '“', '”', '…'):
         assert _bad178 not in _rd0(_f178), 'W06-C: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f178
 log('The final version remembers what the page run took out, and the brief matches the topics to leave out against the whole keyword family (W06-C, 2026-10-30, section 178): page_run.sections_removed (counts, share of the words, why) travels through the app to Page Finalize, whose grade caps coverage and fit while those sections are missing (Needs work with the reason, never Ready; a report from before it is "not checked"); Parse Brief and Brief Context pass EXC.familyOf as Content QA does')
+
+# =============================================================================
+# 179. WHEN THE PAGE READER REFUSES, THE ENGINE READS ANOTHER WAY, RAISES ONE OPS ALERT AND DECIDES NOTHING ON PAGES NOBODY READ (W07-A,
+#      2026-10-31, docs/page-quality-2026-10-29/WAVE06.md "Open resilience item", section 9). On 2026-10-30 the reader account (Jina Reader,
+#      credential SEOcredJinaReade) ran out of balance: every read answered HTTP 402 between about 10:13 and 12:56 UTC. The HTTP nodes are
+#      `continueRegularOutput`, so each refusal became an error item that the next node read as "this page could not be read", silently:
+#      no ops alert, nothing in the client's report, K1 held on its search score alone (38) and the client told "/ms-365-erp-uae has no title,
+#      main heading or Search Console search on file" about a page nobody had read.
+#      * Every reader node (found by its credential, reader_fallback.find_readers: a new one cannot be missed) is renamed `<name> (reader)` and
+#        followed by a Code node that takes its name (v5/code/Reader_Fallback.js, kit v5/code/_reader.js): a REFUSED read (401 / 402 / 429, or
+#        403 in the reader's own words) is read again through the same reader without the key (capped, spaced: its free limit), then, for a
+#        text read, directly with the client-render path's HTML-to-text (CRK.linesOf). A render read has no plain-HTML stand-in. Everything
+#        the reader answered is handed on as the same objects, so a funded key changes nothing.
+#      * One alert chain (Reader Refusals -> ... -> Save Reader Alert Delivery) fed by every fallback node: recorded in seo_ops_alerts first,
+#        then the alert webhook, one alert per refusal and 30 minutes (OA's dedupe), delivered only on a 2xx (AR.posted).
+#      * The content run: Collect Client Pages says an existing page it could not confirm AND could not read "could not be read"
+#        (`existing_page_unread`), never "has no title"; Parse Verdict (PU) gives no verdict, score, hold, duplicate or existing-page decision
+#        when the pages it stands on were refused and not recovered (`pages_unread`), and a page run stops before the brief (*Need Content?*),
+#        its started row `failed` (Content Log Row), the callback carrying `pages_unread`; Ladder Plan refuses to plan on it.
+#      The AI Visibility Tracker's homepage read and the Backlink Monitor's render get the same fallback and alert (build_monitors.py).
+# =============================================================================
+import reader_fallback as _rf179
+_wf179 = {'id': 'SEOagentV4Full01', 'name': 'SEO Agent v4 — Audit, Keywords, Verdict & Content', 'nodes': list(nodes.values()), 'connections': conns}
+_specs179 = {
+    'Read Website': {'label': 'the homepage (site description)', 'target': 'RD.homeOf(q.domain)', 'domain': "String(q.domain || '')", 'links': True},
+    'Read Nav Pages': {'label': 'the homepage menu pages (site description)'},
+    'Read Client Pages': {'label': "the client's own pages"},
+    'Render Client Pages': {'label': "the client's pages after their scripts ran"},
+    'Render More Client Pages': {'label': "the client's pages after their scripts ran (more)"},
+    'Read Competitor Pages': {'label': 'the pages that rank (competitors)'},
+    'Retry Blocked Pages': {'label': 'the pages that rank (blocked-page retry)'},
+    'Read Competitor Homes': {'label': "the competitors' homepages"},
+    'Read Regulatory Pages': {'label': 'regulatory pages (verified facts)'},
+    'Fetch Refresh Sources': {'label': 'the sources a refreshed page cites'},
+    'Render Key Pages': {'label': 'key pages after their scripts ran (audit render check)'},
+}
+_wiring179 = _rf179.apply(_wf179, _specs179)
+nodes.clear(); nodes.update({n['name']: n for n in _wf179['nodes']})
+for _n179 in _specs179:
+    _h179 = nodes[_n179 + _rf179.SUFFIX]
+    assert _h179['type'] == 'n8n-nodes-base.httpRequest' and (_h179.get('credentials') or {}).get('httpHeaderAuth', {}).get('id') == 'SEOcredJinaReade', 'W07-A: ' + _n179 + ' (reader) lost its credential'
+    assert nodes[_n179]['type'] == 'n8n-nodes-base.code' and 'const RD = (() => {' in code(_n179) and 'await RD.recover(H,' in code(_n179), 'W07-A: ' + _n179 + ' is not the fallback'
+    assert [t['node'] for l in conns[_n179 + _rf179.SUFFIX]['main'] for t in l] == [_n179], 'W07-A: ' + _n179 + ' (reader) must feed its fallback only'
+    assert 'Reader Refusals' in [t['node'] for l in conns[_n179]['main'] for t in l], 'W07-A: ' + _n179 + ' does not feed the alert chain'
+assert _rf179.find_readers(_wf179) == [], 'W07-A: a reader node is left without its fallback: ' + str(_rf179.find_readers(_wf179))
+assert "{ reqs, res, mode: 'html'," in code('Render Key Pages') and "{ reqs, res, mode: 'html'," in code('Render Client Pages') and "{ reqs, res, mode: 'text'," in code('Read Client Pages'), 'W07-A: a render read must never fall back to the plain HTML'
+# the content run: the kit where the decisions are made, the router, the callback and the report
+if 'const RD = (() => {' not in code('Collect Client Pages'):
+    setcode('Collect Client Pages', _rd0('code/_reader.js').rstrip('\n') + '\n' + code('Collect Client Pages'))
+assert 'existing_page_unread: unreadExisting' in code('Collect Client Pages') and 'EXCONF.unread' in code('Collect Client Pages'), 'W07-A: Collect Client Pages still calls an unread page "no title on file"'
+_pv179 = code('Parse Verdict')
+for _k179 in ('const RD = (() => {', 'const PU = (() => {', 'withheld: out || !!PU', '!PU && (valueHit || dupHit || existingHit)', 'pages_unread: PU, pages_unread_stop: HOLD.applies'):
+    assert _k179 in _pv179, 'W07-A: Parse Verdict lacks ' + _k179
+_nc179 = nodes['Need Content?']['parameters']['conditions']['conditions']
+assert len(_nc179) == 1 and _nc179[0]['leftValue'] == '={{ !!$json.include_content && !$json.verdict_hold }}', 'W07-A: Need Content? changed under section 179: ' + str(_nc179)
+_nc179[0]['leftValue'] = '={{ !!$json.include_content && !$json.verdict_hold && !$json.pages_unread_stop }}'
+patch('Build Webhook Response', "        verdict_readings: g('verdict_readings') || null, existing_page_unconfirmed: g('existing_page_unconfirmed') || null }; })(),",
+      "        verdict_readings: g('verdict_readings') || null, existing_page_unconfirmed: g('existing_page_unconfirmed') || null,\n"
+      "        // W07-A (section 179): the pages the verdict stands on could not be read (the page reader refused, its fallback failed too)\n"
+      "        pages_unread: g('pages_unread') ? { reason: String(g('pages_unread').reason || ''), client_reason: String(g('pages_unread').client_reason || ''), missing: g('pages_unread').missing || [],\n"
+      "          existing: g('pages_unread').existing || null, client: g('pages_unread').client || null, competitors: g('pages_unread').competitors || null } : null,\n"
+      "        existing_page_unread: g('existing_page_unread') || null }; })(),")
+patch('Build Word File', "NOT_CHECKED: 'NOT CHECKED — the live Google results could not be read' }[d.verdict]",
+      "NOT_CHECKED: d.pages_unread ? 'NOT CHECKED: the pages it needs could not be read' : 'NOT CHECKED — the live Google results could not be read' }[d.verdict]")
+patch('Build Word File', "(d.score_withheld ? 'not scored — the live Google results could not be read' : 'N/A')",
+      "(d.score_withheld ? (d.pages_unread ? 'not scored: the pages it needs could not be read' : 'not scored — the live Google results could not be read') : 'N/A')")
+patch('Build Word File', "LN.unknown('The verdict, its score, expected visits and time to rank', 'the live Google results could not be read for this keyword, so nothing was scored')",
+      "LN.unknown('The verdict, its score, expected visits and time to rank', d.pages_unread ? 'the pages it stands on could not be read (' + String(d.pages_unread.client_reason || '') + '), so nothing was scored' : 'the live Google results could not be read for this keyword, so nothing was scored')")
+assert "unreadRun = PVH.pages_unread_stop === true" in code('Content Log Row') and "row.status = 'failed'" in code('Content Log Row'), 'W07-A: Content Log Row does not mark an unread run failed'
+assert "refusal.reason === 'pages_unread'" in code('Ladder Plan'), 'W07-A: Ladder Plan plans on pages nobody read'
+json.dump(_wiring179, open(os.path.join(HERE0, 'harness', 'reader_wiring.json'), 'w'), indent=1, sort_keys=True)
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_reader.js'), 'w').write(_rd0('code/_reader.js'))   # the kit on its own, for the harness (scenarios_w07a.js W07A1)
+log('When the page reader refuses (W07-A, 2026-10-31, section 179): every reader node (by its credential) is followed by a fallback that reads a refused page again through the reader without the key, then (text reads) directly with the client-render HTML-to-text; one ops alert per refusal (seo_ops_alerts first, then the alert webhook, OA dedupe, AR delivery); Collect Client Pages says an unconfirmed page it could not read "could not be read"; Parse Verdict decides no verdict, score, hold, duplicate or existing-page match on refused pages and a page run stops before the brief with the reason (callback pages_unread, content log failed); Ladder Plan refuses to plan on them')
 
 # =============================================================================
 # 9. WRITE

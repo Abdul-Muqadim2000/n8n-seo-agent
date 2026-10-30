@@ -105,7 +105,8 @@ from `feature/indexing`: API on the VM at `fd32c0b4`, web at main `99718dd0` (PR
 - **The final version**: Accept all always works; the final keeps the page's shape, its contents list, every open blocker of the first
   check; it has its own Word, PDF, HTML, Markdown and meta.json downloads.
 - **Reliability**: a complete page ending on a call-to-action line is no longer failed; a failed run never shows as "already written"
-  or as waiting; a failed run's cost is recorded.
+  or as waiting; a failed run's cost is recorded. W07-A (section 11): when the page reader refuses, pages are read another way, one ops
+  alert is raised, and nothing is decided on pages nobody read (the report says so; only the check is charged).
 - **Price**: a written page is quoted at about **114 credits** (was about 51) and a held keyword at about **9 credits** (D8, below).
 
 ### 5.2 What the deploy involves
@@ -114,6 +115,10 @@ from `feature/indexing`: API on the VM at `fd32c0b4`, web at main `99718dd0` (PR
 - **Data Table columns**: **none** from page quality (`ladder_common.py` unchanged since `003bb9cb`). New *values* only:
   `seo_content_log.status` `held` and `failed`. Index coverage's two columns are already on production; after the merge, the dry run
   must list no missing column.
+- **W07-A (section 11)**: no new workflow, table or column. The main workflow, the AI Visibility Tracker and the Backlink Monitor gain
+  a fallback node behind every page-reader node (the HTTP node is renamed `<name> (reader)`) and one alert chain each, which writes
+  `seo_ops_alerts` and posts to `SEO_ALERT_WEBHOOK_URL` (unset: the row waits for the retry sweep). Check after the deploy: a free
+  probe of the reader key answers 200, and `seo_ops_alerts` has no new "page reader" row.
 - **Workflows**: no new workflow from page quality (Page Finalize already exists). Changed: the main workflow (`SEO_Agent_v4.json`,
   most of the change), Page Finalize (own PDF through the production Gotenberg service, own files), Site Tracker, and a schema-only
   line in the other generated workflows. After the merge the manifest also carries `SEOagentIndexCv1`, which the dry run must show
@@ -326,4 +331,50 @@ wrong reason to the client ("has no title, main heading or Search Console search
 Wanted: on a 401 / 402 / 429 from the reader, (a) retry the read through a fallback (the same reader without the key answered 200 in the
 probe, or a direct fetch of the page), (b) raise an ops alert like a DataForSEO balance problem, and (c) when the fallback also fails,
 mark the run "pages could not be read" instead of deciding a hold, a verdict or a grade without them. This is the next engine item,
-before the merge of `main` and the deploy (section 5).
+before the merge of `main` and the deploy (section 5). **Done in code: section 11.**
+
+## 11. The page reader's fallback and alert (W07-A, 2026-10-31, branch `w07-reader`; closes the open resilience item above)
+
+Code only, $0, nothing deployed. Build section 179 (`build_v4.py`), `reader_fallback.py`, kit `v5/code/_reader.js`, nodes
+`v5/code/Reader_Fallback.js`, `Reader_Refusals.js`, `Reader_Alert_Plan.js`, `Reader_Alert_Send.js`, `Reader_Alert_Delivery.js`.
+
+- **Every read path is covered, found by the credential** (`SEOcredJinaReade`): 13 reader nodes. Main workflow: Read Website, Read Nav
+  Pages (site description), Read Client Pages, Render Client Pages, Render More Client Pages, Read Competitor Pages, Retry Blocked Pages,
+  Read Competitor Homes, Read Regulatory Pages (verified facts), Fetch Refresh Sources (a refresh's cited sources), Render Key Pages
+  (audit render check); AI Visibility Tracker: Read Site (AI); Backlink Monitor: Render Pages (link check). The publish check, AI
+  readiness and the link checks' plain fetches do not use the reader (they are direct GETs) and are unchanged. The build fails when a
+  reader node has no fallback.
+- **(a) Fallback.** Each reader node is renamed `<name> (reader)` and followed by a Code node that takes its name, so every downstream
+  node and `$('<name>')` reads the same items in the same order. Only a refusal (401 / 402 / 429, or 403 in the reader's own key /
+  balance / rate words) is read again: first the same reader without the key (at most 12 a step, 3.2 s apart, stopped at its first
+  refusal), then, for a text read, a direct fetch of the page turned into the reader's line format by the client-render path's
+  HTML-to-text (`CRK.linesOf`; a homepage read keeps the site's own menu links for the nav pages). A render read (the page after its
+  scripts ran) never falls back to the plain HTML. A page that is down, blocked or slow is not a refusal and is left exactly as it was.
+- **(b) One ops alert.** `Reader Refusals -> Load Ops Alerts (Reader) -> Reader Alert Plan (OA.plan) -> Save Reader Alert ->
+  Reader Alert Send -> Post Reader Alert (fullResponse + neverError) -> Reader Alert Delivery (AR.posted) -> Save Reader Alert Delivery`,
+  fed by every fallback node: recorded in `seo_ops_alerts` first, critical, named "The page reader refused reads: HTTP 402
+  InsufficientBalanceError" with what the fallback recovered and what to do; the same identity for every step and every run of the next
+  30 minutes (counted, not re-sent); delivered only on a 2xx (state_lint rule 4 passes).
+- **(c) Nothing decided on pages nobody read.** Collect Client Pages: an existing page the run could not confirm from what is on file
+  and could not read is `existing_page_unread` ("it could not be read: ..."), never "has no title, main heading or Search Console search
+  on file". Parse Verdict (`PU`): when the reader refused and the fallback failed for the page the site already has, the site's own
+  pages or the pages that rank, there is no verdict (`NOT_CHECKED`), no score, no hold, no shadow hold, no duplicate check, no advice,
+  and `pages_unread` names what was missing and why in plain words. A page run stops before the brief (*Need Content?*), its started
+  content-log row becomes `failed` (tried again, never `held`), the callback carries `pages_unread`, the Word / PDF report says the pages
+  could not be read, Ladder Plan refuses to plan (`pages_unread`). App: the report shows "We could not read the pages this check needs"
+  with the reason, and the report is not delivered by e-mail / webhook (`unavailable`). Changelog line in 4.5.
+- **Also fixed:** the Backlink Monitor's render (`neverError`, no full response) handed the reader's 402 error JSON on as the linking
+  page's HTML; it is now unread ("not checked", never "missing").
+- **Pins** (`harness/scenarios_w07a.js`, fixture `harness/fixtures/w07a_reader402.json`: the 402 run's 20 reader items, anonymised):
+  W07A1 refusal detection (the production item, full response, body field, 401 / 429 / 403; not a 422, a time-out, a blocked domain, a
+  page about balances); W07A2 the 402 replay with the fallback failing (recorded: GO_WITH_CHANGES 38 held, "no title on file"; now
+  NOT_CHECKED, no hold, stopped, "could not be read", content log failed); W07A3 recovery by the reader without the key and by a direct
+  read, the page confirmed by its own title and the verdict decided as before; W07A4 a funded key: the same objects, no call, Collect
+  Client Pages and Parse Verdict byte for byte the same; W07A5 render reads; W07A6 the alert; W07A7 the generated wiring. FUR5 updated
+  for the renamed render nodes.
+- **Checks:** build exit 0 (`--no-env`), full harness **14986 passed, 0 failed**; app typecheck (shared, web) clean, shared 910 / web 270.
+- **Live check still to do (after the deploy, free):** a refusal cannot be forced without breaking the key; the first real refusal is the
+  test. Optional on the isolated stack: set the reader credential to an invalid key, run one keyword check, expect one `seo_ops_alerts`
+  row and pages read through the fallback.
+- **Note for the integrator:** the HTTP node names changed (`<name> (reader)`); anything outside this repo that looks a reader node up by
+  name (none found in `app/` or `deploy/`) must follow.

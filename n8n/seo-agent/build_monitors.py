@@ -573,6 +573,11 @@ Per site (`seo_sites` + ladder domains; settings in `{MONITORS_TABLE}`: engines,
 *Answer Analyst* (Claude) reads the answers that matter: brands named in order (a competitor without a website counts; learned names in `{CACHE_TABLE}` `ai_brands:`), sentiment, **wrong claims** vs the business profile. *AI Metrics*: 7-day rates with **95% ranges** (weekly + pulse samples), changes tested for significance, **visibility score** (position + demand weighted), share of voice, stages / topics, fan-out searches, perception, **AI referral visits / key events / revenue** (GA4, service account), **AI crawler access** (robots.txt per bot, llms.txt, CDN block test), lost questions with demand and ready API bodies, alerts, actions → `{AI_VIS_TABLE}` (+ `ai_source` prospects) → Claude brief → report (e-mail + PDF + callback `stage: ai_visibility`). Answers older than 400 days are pruned.""", [-40, -1000], 1500, 460)
 # F1a (2026-10-23, E10): the Prompt Writer names no company (comparisons included), and Prompt Rows refuses a question that does (harness F1A-E10)
 assert 'no company or product names at all' in rd('prompts/ai_prompts.txt') and 'AIE.vendorIn(q.prompt' in rd('code/Prompt_Rows.js'), 'F1a E10: the panel gate against vendor-naming questions is gone'
+# W07-A (2026-10-31, build_v4.py section 179, reader_fallback.py): the homepage read behind the panel's topics falls back when the page reader
+# refuses (the reader without the key, then the page itself), and the refusal raises one ops alert
+import reader_fallback as _rf_w07
+_rfa_w07 = {'id': A.wid, 'name': A.name, 'nodes': A.N, 'connections': A.C}
+_rf_w07.apply(_rfa_w07, {'Read Site (AI)': {'label': 'the homepage (question topics)', 'target': 'RD.homeOf(q.domain)', 'domain': "String(q.domain || '')", 'links': True}})
 A.write('SEO_Agent_AI_Visibility.json')
 # F2 (2026-10-23): the tracker's wiring and its Data Table filters, for harness scenarios_f2.js (F2-6: answers stored before the analyst, the record
 # before paying, every AI-table read scoped to the site). Proves the GENERATED wiring, read back from the file just written.
@@ -785,6 +790,10 @@ B.sticky(f"""## SEO Agent — Backlink Monitor (v4.5; v4.10 every source merged 
 **Sources**: DataForSEO Backlinks (summary, lost, new; full runs: referring domains, one link per domain with details, anchors, most-linked pages, broken, history, Content Analysis mentions, competitors' new links, the quarterly gap); **free**: Bing Webmaster Tools (GetUrlLinks; when SEO_BING_WEBMASTER_API_KEY is set: {'on' if BING_ON else 'off'}), the Search Console Links exports uploaded in the app (`{LINK_IMPORTS_TABLE}`), GA4 referrals (links that send visits), the Common Crawl web graph (`{LINK_GRAPH_TABLE}`, monthly linkgraph job), Wikipedia, Hacker News, GDELT news, web search (SearXNG: mentions, "best X" lists, `site:` lookups); Ahrefs Domain Rating (free key; {'on' if AHREFS_ON else 'off'}).
 **Link check**: the linking pages are fetched (browser user agent; Jina renders bot-blocked / JavaScript pages): found / missing / gone / blocked, rel, placement, noindex, canonical. **Lost = two misses in a row**, with the reason. *Link Analyst* (Claude) labels the link type and relevance. Values per link: SEO / referral / brand. Ledger → `{LINKS_TABLE}` (changed rows only).
 Prospects (`{PROSPECT_TABLE}`): lost / mention (checked on the page) / list / comp_new / gap (DataForSEO + Common Crawl) / reclaim / ai_source, scored value × likelihood; contacts from the prospects' own pages; first drafts (8 a month) + follow-ups after 7 and 14 days; **won** only when the link is found. Snapshot → `{BL_SNAP_TABLE}`. Report: e-mail + PDF + `prospects.csv` + `disavow-candidates.txt` (review only) + callback `stage: backlinks`.""", [-40, -760], 1500, 440)
+# W07-A (2026-10-31): the render of a linking page the plain fetch could not read; a refused render is retried through the reader without the
+# key and otherwise stays unread ("not checked", never "missing"): a render has no plain-HTML stand-in (the plain fetch already failed)
+_rfb_w07 = {'id': B.wid, 'name': B.name, 'nodes': B.N, 'connections': B.C}
+_rf_w07.apply(_rfb_w07, {'Render Pages': {'label': 'linking pages after their scripts ran (link check)', 'target': "q.url || q.render_url"}})
 B.write('SEO_Agent_Backlink_Monitor.json')
 
 # =============================================================================

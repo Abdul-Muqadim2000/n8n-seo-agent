@@ -73,6 +73,10 @@ export function ContentReport({ report }: { report: ReportDetail }) {
   // autopilot started, what the same check would have asked (trial mode: the page is written)
   const hold = useMemo(() => holdOf(p), [p]);
   const held = !!hold && hold.held && !html;
+  // W07-A (2026-10-31): the pages this check stands on could not be read (the service that reads web pages refused, and the fallback read
+  // failed too), so there is no verdict, no score, no hold and no page; the report says why and asks for a run later
+  const unread = obj(p.pages_unread);
+  const pagesUnread = !html && !!str(unread.reason);
   // H3 (2026-10-28): a page written since H1 says what the client receives (ready / ready with questions / not ready) and its grade is
   // measured on the DELIVERED page. Older reports keep the finish-by-hand path below.
   const hasDelivery = !!html && !!(str(p.qa_delivery_status) || str(meta.delivery_status) || str(quality.delivery_status));
@@ -136,7 +140,7 @@ export function ContentReport({ report }: { report: ReportDetail }) {
       <ReportHero
         report={report}
         eyebrow={eyebrowExtra ? <span className="normal-case">{eyebrowExtra}</span> : undefined}
-        title={held && hold ? <>{holdTitle(keyword, hold)}</> : hasDelivery ? <>"{keyword || 'Your page'}": {delivery.headline}</> : html ? (notReady ? <>The draft for "{keyword || 'this keyword'}" needs your edits before you publish it</> : <>The page for "{keyword || 'this keyword'}" is written</>) : verdict ? <>{verdictLabel(verdict)}: "{keyword || 'Keyword'}"</> : keyword || 'Keyword'}
+        title={held && hold ? <>{holdTitle(keyword, hold)}</> : pagesUnread ? <>We could not read the pages this check needs for "{keyword || 'this keyword'}"</> : hasDelivery ? <>"{keyword || 'Your page'}": {delivery.headline}</> : html ? (notReady ? <>The draft for "{keyword || 'this keyword'}" needs your edits before you publish it</> : <>The page for "{keyword || 'this keyword'}" is written</>) : verdict ? <>{verdictLabel(verdict)}: "{keyword || 'Keyword'}"</> : keyword || 'Keyword'}
         description={details.length ? details.join(' · ') : undefined}
         aside={
           hasDelivery ? (
@@ -214,6 +218,12 @@ export function ContentReport({ report }: { report: ReportDetail }) {
       />
 
       {held && hold && <HoldPanel hold={hold} keyword={keyword} pageType={str(p.recommended_page) || str(meta.page_type)} country={country} siteId={report.siteId} />}
+      {pagesUnread && (
+        <Callout tone="warning" title="Nothing was decided and nothing was written">
+          {str(unread.reason)}
+          {strs(unread.missing).length > 0 && <span className="mt-1 block">Not read: {strs(unread.missing).join('; ')}.</span>}
+        </Callout>
+      )}
       {hold && !hold.held && html && (
         <Callout tone="info" title="Our check before writing would have asked you first">
           {hold.reasons.join(' ')} This page was started automatically, so it was written as before; while this check is new, automatic pages are only checked.
@@ -365,7 +375,7 @@ export function ContentReport({ report }: { report: ReportDetail }) {
           <ArticleViewer html={html} markdown={markdown} meta={meta} files={report.files} slug={slug} />
         </Block>
       ) : (
-        verdict && !held && (
+        verdict && !held && !pagesUnread && (
           <Callout tone="info" title="No page in this report">
             This run checked the keyword without writing a page.
             {avoid ? ' The verdict advises against a page for this keyword: pick one of the secondary keywords or run keyword discovery.' : ' "Write this page" starts the full run with competitor research, the brief and a QA-checked page.'}
