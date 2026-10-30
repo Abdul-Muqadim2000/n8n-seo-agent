@@ -59,7 +59,9 @@ const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const httpUrl = (u) => /^https?:\/\/[^\s<>"]+$/i.test(S(u).trim()) ? S(u).trim().slice(0, 600) : '';
 const pageKey = (u) => S(u).trim().toLowerCase().replace(/^https?:\/\/(?:www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
 const PRC_BLOCK = ['qa_blocking', 'duplicate_targets'];
-const PRC_GRADING = ['length_band', 'coverage_target', 'terms', 'facts', 'sources_cited', 'style_guide', 'site_urls', 'serp_shapes', 'regulatory_facts'];
+// W06-C (2026-10-30, WAVE06 Open 1): `sections_removed` (what the page run took out of the page: sections deleted as a topic the verdict
+// said to leave out, H2s the edits lost, their share of the words and why) is a grading field: a report from before it is "not checked"
+const PRC_GRADING = ['length_band', 'coverage_target', 'terms', 'facts', 'sources_cited', 'style_guide', 'site_urls', 'serp_shapes', 'regulatory_facts', 'sections_removed'];
 const pr = isObj(b.page_run) ? b.page_run : null;
 if (b.page_run != null && !pr) errors.push('page_run must be an object (the context of the page run the page came from)');
 // M3 (WAVE0_REVIEW 2026-10-30): a request with NO page_run at all comes from an app built before W0-B, so the engine can be deployed before
@@ -100,7 +102,14 @@ const prc = (() => {
   const siteUrls = Array.isArray(g.site_urls) ? g.site_urls.map(httpUrl).filter(Boolean).slice(0, LIMP.urls) : null;
   const regFacts = Array.isArray(g.regulatory_facts) ? g.regulatory_facts.filter(isObj).slice(0, LIMP.reg) : null;
   const regTopics = Array.isArray(g.regulatory_topics) ? g.regulatory_topics.filter(isObj).map(t => ({ id: S(t.id).slice(0, 60), relevance: S(t.relevance).slice(0, 20) })).filter(t => t.id).slice(0, 12) : null;
-  const grading = { length_band: lb, coverage_target: isObj(g.coverage_target) ? g.coverage_target : null, terms, facts: factsIn, sources_cited: cited,
+  // W06-C: what the page run took out of the page (Build Webhook Response `page_run.sections_removed`), read only in the contract's shape
+  const cnt = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Math.min(100000, Math.round(Number(v))) : 0);
+  const SR = isObj(g.sections_removed) ? g.sections_removed : null;
+  const sectionsRemoved = SR ? { sections: cnt(SR.sections), words: cnt(SR.words), words_before: cnt(SR.words_before), h2_before: cnt(SR.h2_before), h2_removed: cnt(SR.h2_removed),
+    h2_delivered: cnt(SR.h2_delivered), by_edits: cnt(SR.by_edits), share_pct: Math.min(100, cnt(SR.share_pct)), capped: SR.capped === true,
+    list: (Array.isArray(SR.list) ? SR.list : []).filter(isObj).map(x => ({ heading: clean(x.heading).slice(0, 200), topic: clean(x.topic).slice(0, 120), words: cnt(x.words), level: cnt(x.level), why: clean(x.why).slice(0, 200) }))
+      .filter(x => x.heading).slice(0, 12) } : null;
+  const grading = { length_band: lb, coverage_target: isObj(g.coverage_target) ? g.coverage_target : null, terms, facts: factsIn, sources_cited: cited, sections_removed: sectionsRemoved,
     style_guide: isObj(g.style_guide) ? g.style_guide : null, site_urls: siteUrls, serp_shapes: isObj(g.serp_shapes) ? g.serp_shapes : null,
     regulatory_facts: regFacts, regulatory_topics: regTopics,
     // W05-A (wave 0.5): the page run's second-read advice (severity, kind, the quoted words), so the final version keeps its deduction while
@@ -225,6 +234,7 @@ return [{ json: {
   prc: { received: prc.received, legacy: prc.legacy, legacy_unknown: prc.legacy_unknown, gating: prc.gating, gating_missing: prc.gating_missing, blocks_known: prc.blocks_known, grading_missing: prc.grading_missing, length_from: LEN.from,
     length_points: LEN.points == null ? null : LEN.points,
     second_read: (prc.grading || {}).second_read || null,   // W05-A: the page run's second-read advice (Finalize Verdict deducts what is still on the page)
+    sections_removed: (prc.grading || {}).sections_removed || null,   // W06-C: what the page run took out (Finalize Verdict caps coverage and fit while it is still missing)
     duplicate_urls: dupUrls, duplicate_decision },
   finalize: { answers, client_edited, client_sentences, delivered_markdown: delivered, input_markdown: markdown, answer_texts: answerTexts, stored_keys: stored,
     answered_keys: answers.filter(a => a.decision !== 'skip' && a.fact_key).map(a => a.fact_key),

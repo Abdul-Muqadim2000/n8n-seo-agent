@@ -102,6 +102,7 @@ no report delivered before that carries them, and `seo_content_log` holds none o
 | `serp_shapes` | `KWI.serpPageTypes` on the results page (W0-C carries the top-10 list; the example uses the 6 pages 3299 read) |
 | `regulatory_facts[]` | *Collect Regulatory Facts* (Fix 6, W0-F): `{date, obligation, subject, threshold, url, paragraph, source_tier, source_date, as_of, supersedes, status}`; the example entry is illustrative |
 | `content_request_id` | the run's request id (3299 sent `content_request_id: ""`, a form run: fall back to `request_id`) |
+| `sections_removed` | W06-C (2026-10-30): the delivered page's final check, `content_qa.delivery.changes.removed_run` + `sections_removed` + the grade's `removed`: `{sections, words, words_before, h2_before, h2_removed, h2_delivered, by_edits, share_pct, capped, list[{heading, topic, words, level, why}]}`. Finalize Verdict caps coverage and fit (GR.removedCap) while those sections are still missing on the final version; `null` from a check before W06-C (the final version says "Not checked") |
 
 **Built (W0-B, 2026-10-29, `scenarios_w0b.js` W0B1-W0B9).** *Build Webhook Response* (build section 155) sends the grading fields as
 `page_run: { prc: 1, ... }` on every content callback that carries a page (`null` otherwise); `length_band` also carries the brief's `target`,

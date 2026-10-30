@@ -461,12 +461,32 @@ export interface PageRunContext {
   /** gating fields the stored report does not have */
   missing: string[];
   content_request_id: string;
+  /** W06-C: what the page run took out of the page (absent on reports from before it: "not checked") */
+  sections_removed?: SectionsRemoved;
   [grading: string]: unknown;
 }
 
 // `second_read` (wave 0.5, 2026-10-30): the second read's advice on the delivered page (severity, kind, the quoted words); the final version
 // keeps its grade deduction while those words are still on the page
-const PRC_GRADING = ['length_band', 'coverage_target', 'terms', 'facts', 'sources_cited', 'style_guide', 'site_urls', 'serp_shapes', 'regulatory_facts', 'regulatory_topics', 'second_read'] as const;
+// `sections_removed` (wave 0.6, W06-C, 2026-10-30): what the page run took out of the page (sections deleted as a topic the verdict said to
+// leave out, H2s lost in editing, their share of the words and why). The final version keeps the grade's cap on coverage and fit while those
+// sections are still missing, so a page that lost its core never reads "Ready" after Accept all; a report from before it is "not checked"
+const PRC_GRADING = ['length_band', 'coverage_target', 'terms', 'facts', 'sources_cited', 'style_guide', 'site_urls', 'serp_shapes', 'regulatory_facts', 'regulatory_topics', 'second_read', 'sections_removed'] as const;
+
+/** W06-C: the page run's removals as the content callback sends them (`page_run.sections_removed`). */
+export interface SectionsRemoved {
+  sections: number;
+  words: number;
+  words_before: number;
+  h2_before: number;
+  h2_removed: number;
+  h2_delivered: number;
+  by_edits: number;
+  share_pct: number;
+  /** the delivered grade capped coverage and fit for it */
+  capped: boolean;
+  list: { heading: string; topic: string; words: number; level: number; why: string }[];
+}
 
 /** The page-run context of a stored content payload (the original report; a final version keeps its own copy in `page_run_context`). */
 export function pageRunOf(payload: P | null | undefined): PageRunContext {

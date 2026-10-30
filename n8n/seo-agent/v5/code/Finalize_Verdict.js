@@ -96,7 +96,8 @@ if (dupOpen) { const others = [...new Set(del.blocking.filter(x => x.code !== 'd
 else if (!PR.blocks_known && !PR.legacy) del.next_step = PF.clean('We could not read the first check of this page, so this version is not called ready. Make the final version again from the page in your content list, so its first check travels with it.');
 // W0-B: what this check could not measure because the page run's research did not travel with the page (pages written before it was kept)
 const NOT_CHECKED = { length_band: 'the length of the pages that rank for this search (the usual length for this kind of page was used)', terms: 'topic coverage against the pages that rank',
-  facts: 'the figures against the sources the page was written from', style_guide: 'your style guide (the business name and spelling)', site_urls: 'the links to your own pages against your full list of pages' };
+  facts: 'the figures against the sources the page was written from', style_guide: 'your style guide (the business name and spelling)', site_urls: 'the links to your own pages against your full list of pages',
+  sections_removed: 'whether the page run took sections out of this page (as a topic to leave out, or lost in editing)' };
 if (PR.received) for (const k of Object.keys(NOT_CHECKED)) if ((PR.grading_missing || []).includes(k)) del.advisory.push({ code: 'not_checked', text: 'Not checked: ' + NOT_CHECKED[k] + '. This page was written before we kept that with it' });
 if (decision) del.advisory.unshift({ code: 'duplicate_decision', text: decision.choice === 'update'
   ? 'You chose to publish this text as an update of ' + decision.url + ': publish it at that address, in place of the page there now, not as a new page'
@@ -106,6 +107,31 @@ if (decision) del.advisory.unshift({ code: 'duplicate_decision', text: decision.
 // W0-C (2026-10-29, page-quality PLAN Fix 3): on the grade kit's scale length carries no points (advice only), so the length points the
 // page run measured are no longer put back into the number; a grade from a check before the kit keeps the rule above
 const GD = qa.grade_detail || null;
+// W06-C (2026-10-30, WAVE06 Open 1): what the page run took out of the page travels with it (page_run.sections_removed), so a final version
+// made from a page that lost its core is "Needs work" with the reason, never "Ready": in Wave 0.5 the K1 page that lost six sections read
+// 79 delivered and 83 "Ready" as its final version, because this check re-graded it with no memory of the run. A section counts as written
+// back when a heading of this version carries (nearly) all of its heading's words; the H2s lost in editing are counted against this
+// version's H2s, as the page run's grade counts them. A report from before the field keeps the old behaviour ("Not checked" advice above).
+const SRm = PR.sections_removed && typeof PR.sections_removed === 'object' ? PR.sections_removed : null;
+const removedNow = (() => {
+  if (!SRm) return null;
+  const STOPH = new Set('the and for with what which how why who when your our are does can its from into that this you'.split(' '));
+  const tk = (t) => [...new Set(S(t).toLowerCase().replace(/&/g, ' ').replace(/[^a-z0-9]+/g, ' ').split(' ').filter(w => w.length >= 2 && !STOPH.has(w)))];
+  const heads = (S(md).match(/^#{2,4}[ \t]+.+$/gm) || []).map(h => new Set(tk(h.replace(/^#+\s*/, ''))));
+  const back = (h) => { const w = tk(h); return w.length > 0 && heads.some(H => w.filter(x => H.has(x)).length >= Math.max(1, Math.ceil(w.length * 0.75))); };
+  const list = Array.isArray(SRm.list) ? SRm.list : [];
+  const gone = list.filter(x => !back(x.heading)); const restored = list.filter(x => back(x.heading));
+  const listWords = list.reduce((t, x) => t + (Number(x.words) || 0), 0); const total = Number(SRm.words) || 0;
+  const words = listWords > 0 ? gone.reduce((t, x) => t + (Number(x.words) || 0), 0) + Math.max(0, total - listWords) : list.length ? Math.round(total * gone.length / list.length) : total;
+  const restoredH2 = restored.filter(x => Number(x.level) === 2).length;
+  const h2b = Number(SRm.h2_before) || 0; const h2r = Math.max(0, (Number(SRm.h2_removed) || 0) - restoredH2);
+  // the H2s the page run's edits lost, as delivered, can only go down here (sections written back); a section the client deleted in the
+  // editor is the client's choice, never counted as "lost in editing"
+  const h2Final = PF.split(md).parts.length - 1;
+  const h2Now = h2b > 0 ? Math.max(h2Final, h2b - h2r - (Number(SRm.by_edits) || 0)) : h2Final;
+  return { sections: gone.length + Math.max(0, (Number(SRm.sections) || 0) - list.length), words, words_before: Number(SRm.words_before) || 0, h2_before: h2b,
+    h2_removed: h2r, h2_now: h2Now, headings: gone.map(x => x.heading).slice(0, 8),
+    restored: restored.map(x => x.heading).slice(0, 8) }; })();
 let score0 = qa.content_score == null ? null : Number(qa.content_score); let breakdown0 = qa.score_breakdown ? { ...qa.score_breakdown } : null;
 if (!GD && PR.length_from === 'first_check' && PR.length_points != null && breakdown0 && score0 != null && Number.isFinite(Number(breakdown0.length))) {
   score0 = Math.max(0, Math.min(100, Math.round(score0 - Number(breakdown0.length) + Number(PR.length_points)))); breakdown0.length = Math.round(Number(PR.length_points)); }
@@ -120,11 +146,13 @@ const grade = GR.cap({ score: score0, of: 100, breakdown: breakdown0,
   blocking: del.blocking.length, advice: del.advisory.length, ...(GD ? { notes: GD.notes || [] } : {}),
   // D2: a page published beside the website's page for the same search keeps the fit limit (GR.cap applies it)
   ...(decision && decision.choice === 'differs' ? { fit_cap: { kept: true, why: 'published as a separate page beside ' + (decision.pages[0] || 'a page for the same search') + ', with your reason recorded' } } : {}) },
-  del.blocking, { w0c: GD, decision,
+  del.blocking, { w0c: GD, decision, removed: removedNow,   // W06-C: the page run's removals still missing on this version cap coverage and fit (GR.removedCap)
     // W05-A (wave 0.5): the page run's second-read advice still costs its points while its quoted words are on this version (the grade does
     // not rise at Finalize for nothing); advice the client has edited away costs nothing
     review: Array.isArray(PR.second_read) ? { mode: 'enforce', status: 'checked', advice: PR.second_read.filter(a => a && a.location && PF.onPage(a.location, md)) } : null });
 Object.assign(del, GR.deliver(del, grade));
+// W06-C: the reason in the advice too (the parts under half say what to write back; this says what the run took out)
+if (removedNow && grade.removed && grade.removed.capped && GD) { const RMn = GR.removedCap(removedNow, GD.max); if (RMn) del.advisory.unshift({ code: 'sections_removed', text: RMn.note }); }
 // M3: the version of a legacy request is never "Ready to publish" (what only the first check could see is unknown), but it is not held back
 // either: "Needs work" with what to do, the grade not capped, nothing blocking. A page that is not ready for its own reasons stays so.
 if (PR.legacy && !PR.blocks_known && del.status !== 'not_ready') {
@@ -150,7 +178,9 @@ const body = {
   meta: { title: S((d.meta || {}).title), meta_description: S((d.meta || {}).description), slug: S((d.meta || {}).slug),
     // W0-B (D2): published as an update of the website's page for this search: its address and slug
     ...(decision && decision.choice === 'update' ? { target_url: decision.url, slug: (decision.url.replace(/^https?:\/\/[^\/]+/i, '').replace(/[?#].*$/, '').replace(/\/+$/, '').split('/').pop() || S((d.meta || {}).slug)) } : {}) },
-  decision, page_run: { received: !!PR.received, legacy: !!PR.legacy, gating_missing: PR.gating_missing || [], grading_missing: PR.grading_missing || [], kept_open: carried.map(x => x.code), resolved },
+  decision, page_run: { received: !!PR.received, legacy: !!PR.legacy, gating_missing: PR.gating_missing || [], grading_missing: PR.grading_missing || [], kept_open: carried.map(x => x.code), resolved,
+    // W06-C: what the page run took out, as this version stands (still missing, written back, whether it capped the grade)
+    sections_removed: removedNow ? { checked: true, missing: removedNow.sections, missing_headings: removedNow.headings, restored: removedNow.restored, capped: !!(grade.removed && grade.removed.capped) } : { checked: false } },
   applied: (FM.applied || []).map(a => ({ id: a.id, how: a.how, section: S(a.section), ...(a.why ? { why: S(a.why).slice(0, 160) } : {}) })), sections_rewritten: FM.sections_rewritten || [], changes: changes.slice(0, 60),
   delivery_status: del.status,
   delivery: { status: del.status, label: del.label, blocking: del.blocking, advisory: del.advisory, next_step: del.next_step, grade, ...(del.needs_work ? { needs_work: del.needs_work } : {}) },

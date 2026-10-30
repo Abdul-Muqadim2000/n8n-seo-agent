@@ -113,7 +113,10 @@ if (came === 'finalize') {
     changes: { fixes: fixes.slice(0, 40), removed: allRemoved.map(r => ({ what: r.code, text: PF.clean(String(r.sentence || '')).slice(0, 220), how: r.how || 'removed', now: r.text || '' })).slice(0, 30),
       brackets_removed: removed.filter(r => r && r.token).map(r => ({ token: r.token.slice(0, 160), question: r.question || '', research: r.research || '' })).slice(0, 20),
       // W06-A: every section taken out as a topic the verdict said to leave out (with its words and why), and every one kept with the reason
-      sections_removed: ((state0.exclusions_removed || []).length ? state0.exclusions_removed : removedRun.headings.map(h => ({ heading: h, why: 'a topic the verdict said to leave out' }))).slice(0, 12), sections_kept: (state0.exclusions_kept || []).slice(0, 12) },
+      sections_removed: ((state0.exclusions_removed || []).length ? state0.exclusions_removed : removedRun.headings.map(h => ({ heading: h, why: 'a topic the verdict said to leave out' }))).slice(0, 12), sections_kept: (state0.exclusions_kept || []).slice(0, 12),
+      // W06-C (2026-10-30, WAVE06 Open 1): the counts the delivered grade capped on, so the callback's page_run can hand them to the final
+      // version (Finalize Verdict applies GR.removedCap from them); always present, zeros when the run took nothing out
+      removed_run: { sections: removedRun.sections, words: removedRun.words, words_before: removedRun.words_before, h2_before: removedRun.h2_before, h2_removed: removedRun.h2_removed, h2_now: removedRun.h2_now } },
     sources_verified: sources.map(v => ({ url: v.url, host: v.host, tier: v.tier, figure: v.figure || '', task: v.task })).slice(0, 20),
     contract: { band: (prev.page_contract || {}).band || PF.bandOf(prev), version: (prev.page_contract || {}).version || 1 } };
   const reasons = ready ? [] : del.blocking.map(b => b.text).slice(0, 8);

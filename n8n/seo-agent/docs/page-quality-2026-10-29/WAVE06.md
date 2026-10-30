@@ -197,3 +197,22 @@ Owner rule of 2026-10-30 (on `main`): no filming during the app revamp; this lis
 - Thin proof of the business on client A pages (Wave 3); a page can still be written with no outside source (K6).
 - Small Finalize faults seen in Wave 0.5: a lost referent, a doubled invitation.
 - n = 4 keywords in Wave 0.5: single-page differences under about 5 points are noise.
+
+## 8. The two open items, closed offline (W06-C, branch `w06-open-items`)
+
+- **A final version of a page that lost sections could read "Ready".** The content callback's `page_run` now carries `sections_removed`
+  (the counts the delivered grade capped on, the share of the words, each heading taken out and why); the app carries it on its
+  allow-list (`PRC_GRADING`) to the finalize request; Finalize Verdict caps coverage and fit (GR.removedCap) while those sections are
+  still missing on the final version. A section written back lifts the cap; a section the client deletes is never counted as "lost in
+  editing". A report from before the field keeps the old behaviour, with the advice "Not checked: whether the page run took sections
+  out of this page". Pinned on the anonymised K1 replay (W06C1-W06C3): the K1 final version reads **"Needs work", 72** (coverage 6 of 15,
+  fit 8 of 20, "6 sections were taken out") instead of **"Ready", 90** without the field; with the six sections pasted back it reads
+  Ready, 95.
+- **Two brief-building steps matched the topics to leave out against the keyword alone.** Parse Brief (`_brief_guard.js`) and Brief
+  Context now pass the keyword family (`EXC.familyOf`: keyword, the brief's primary and secondary keywords, the site's services), as
+  Content QA does (W06C5): K1's four core outline sections and two sections of its own family ("e-invoicing", "implementation") are kept,
+  and a section that names "Dynamics GP and SL" still goes.
+- The guide that ranks (949) through the final version with the field: Ready, 99, the same grade as without it (W06C4).
+- Checks: build section 178; full harness **14900 passed, 0 failed**; app typecheck clean, shared 909, the server and web finalize suites
+  green. No migration, no Data Table column, no new workflow. Deploy order unchanged (section 5): the API first, so the app carries the
+  new field; an engine without it ignores the field, and an app without it sends none ("Not checked").

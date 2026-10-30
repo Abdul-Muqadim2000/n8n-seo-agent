@@ -13515,6 +13515,52 @@ open(os.path.join(OUT_CODE, '_exclusions.js'), 'w').write("// harness shim (writ
     + EXCLUSIONS_SRC + "\nreturn $input.all().map(i => { const j = i.json || {}; return { json: { r: EXC[j.fn].apply(null, j.args || []) } }; });\n")
 log('The verdict\'s exclusions never delete a page\'s core, and the grade knows what was taken out (W06-A, 2026-10-30, section 177): acronyms kept in capitals, a topic that lost a short word matched on its full phrase only, one word of the keyword family never a match; at most one section without a second signal and never 40% of the page, every deletion and kept section recorded; 2+ sections or a fifth of the words taken out cap coverage and fit at 40% (no fit waiver), an idea restated 4+ times costs structure points (never below half)')
 # =============================================================================
+# 178. THE FINAL VERSION REMEMBERS WHAT THE PAGE RUN TOOK OUT, AND THE BRIEF MATCHES THE TOPICS TO LEAVE OUT AGAINST THE WHOLE KEYWORD
+#      FAMILY (W06-C, page-quality wave 0.6, 2026-10-30; docs/page-quality-2026-10-29/WAVE06.md, the two open items of section 7).
+#      * Open 1: a final version made from a page that had already lost sections could still read "Ready" (K1's final version read 83):
+#        Finalize re-graded the page with no memory of the run. Page Candidates now keeps the counts its delivered grade capped on
+#        (delivery.changes.removed_run); *Build Webhook Response* sends them as the grading field `page_run.sections_removed` (sections,
+#        words, words_before, h2_before, h2_removed, h2_delivered, by_edits, share_pct, capped, list of { heading, topic, words, level, why });
+#        the app carries it (app/shared/src/page-review.ts PRC_GRADING) to the finalize request; Finalize Parse Brief reads it and Finalize
+#        Verdict applies GR.removedCap to what is still missing on the final version (a section written back lifts it; a section the client
+#        deleted is never counted as lost in editing), so such a version is "Needs work" with the reason, never "Ready". A report from before
+#        the field: unchanged, with the advice "Not checked: whether the page run took sections out of this page".
+#      * Open 2: *Parse Brief* (_brief_guard.js) and *Brief Context* matched the verdict's topics to leave out against the keyword alone;
+#        they now pass EXC.familyOf (the keyword, the brief's primary and secondary keywords, the site's services), as Content QA and Page
+#        Candidates do, so the brief never drops a section or subtopic about the page's own subject.
+#      Pinned by harness/scenarios_w06c.js (W06C1-W06C4): the anonymised K1 replay (fixtures/replay_w05_k1.json.gz) through Page Candidates,
+#      the callback, the app's page-run context and Page Finalize; the guide that ranks (949) stays Ready.
+# =============================================================================
+patch('Build Webhook Response', "        // W05-A (section 172): the second read's advice",
+      "        // W06-C (section 178): what the run took out of the page (the counts the delivered grade capped on, the share of the words and why), so\n"
+      "        // the final version keeps the cap while those sections are missing; null from a check before W06-C (the final version says \"not checked\")\n"
+      "        sections_removed: (() => { const dl = cq.delivery || {}; const ch = dl.changes || {}; const rr = ch.removed_run; if (!rr || typeof rr !== 'object') return null;\n"
+      "          const N = (v) => Math.max(0, Math.round(Number(v) || 0)); const gr = (dl.grade || {}).removed || null;\n"
+      "          const byEdits = N(rr.h2_before) > 0 ? Math.max(0, N(rr.h2_before) - N(rr.h2_removed) - N(rr.h2_now)) : 0;\n"
+      "          return { sections: N(rr.sections), words: N(rr.words), words_before: N(rr.words_before), h2_before: N(rr.h2_before), h2_removed: N(rr.h2_removed), h2_delivered: N(rr.h2_now),\n"
+      "            by_edits: gr && gr.by_edits != null ? N(gr.by_edits) : byEdits, share_pct: N(rr.words_before) && N(rr.words) ? Math.round(100 * N(rr.words) / N(rr.words_before)) : 0, capped: !!(gr && gr.capped),\n"
+      "            list: A(ch.sections_removed).filter(x => x && x.heading).map(x => ({ heading: T(x.heading, 200), topic: T(x.topic, 120), words: N(x.words), level: N(x.level), why: T(x.why || x.signal, 200) })).slice(0, 12) }; })(),\n"
+      "        // W05-A (section 172): the second read's advice")
+_bwr178 = code('Build Webhook Response')
+assert _bwr178.count('sections_removed: (() => { const dl = cq.delivery || {}') == 1 and _bwr178.count('page_run:') == 2, 'W06-C: Build Webhook Response does not send page_run.sections_removed once'
+assert 'removed_run: { sections: removedRun.sections' in code('Page Candidates'), 'W06-C: Page Candidates does not keep the counts its grade capped on'
+_fpb178 = _rd0('code/Finalize_Parse_Brief.js'); _fv178 = _rd0('code/Finalize_Verdict.js')
+for _k178 in ("'regulatory_facts', 'sections_removed'];", 'sections_removed: sectionsRemoved,', 'sections_removed: (prc.grading || {}).sections_removed || null'):
+    assert _k178 in _fpb178, 'W06-C: Finalize_Parse_Brief.js lacks ' + _k178
+for _k178 in ('const removedNow = (() => {', 'removed: removedNow,', "sections_removed: 'whether the page run took sections out", "code: 'sections_removed', text: RMn.note"):
+    assert _k178 in _fv178, 'W06-C: Finalize_Verdict.js lacks ' + _k178
+_bg178 = _rd0('code/_brief_guard.js'); _bc178 = _rd0('code/Brief_Context.js')
+assert 'EXC.prune(brief.outline, EXL, EXFB)' in _bg178 and "EXC.match(String((t && t.question) || ''), e, EXFB)" in _bg178 and "prev.keyword || '')" not in _bg178.split('// 3. A-18')[1], 'W06-C: the brief guard still matches the keyword alone'
+assert 'const VEXF = EXC.familyOf(d, model);' in _bc178 and 'EXC.match(benchText, e, VEXF)' in _bc178 and 'EXC.match(st, x, VEXF)' in _bc178 and 'EXC.match(benchText, e, kw)' not in _bc178, 'W06-C: Brief Context still matches the keyword alone'
+for _n178 in ('Parse Brief', 'Brief Context'):
+    assert 'EXFB' in code(_n178) or 'VEXF' in code(_n178), 'W06-C: ' + _n178 + ' does not carry the family match'
+    assert code(_n178).count('const familyOf = (prev, siteModel) =>') == 1, 'W06-C: ' + _n178 + ' lacks the exclusions kit with familyOf'
+for _f178 in ('code/Finalize_Parse_Brief.js', 'code/Finalize_Verdict.js', 'code/Page_Candidates.js'):
+    for _bad178 in ('—', '–', '“', '”', '…'):
+        assert _bad178 not in _rd0(_f178), 'W06-C: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f178
+log('The final version remembers what the page run took out, and the brief matches the topics to leave out against the whole keyword family (W06-C, 2026-10-30, section 178): page_run.sections_removed (counts, share of the words, why) travels through the app to Page Finalize, whose grade caps coverage and fit while those sections are missing (Needs work with the reason, never Ready; a report from before it is "not checked"); Parse Brief and Brief Context pass EXC.familyOf as Content QA does')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;

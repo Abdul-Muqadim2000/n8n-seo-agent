@@ -167,15 +167,18 @@ const case_facts_text = caseFacts.replace(/\n/g, ' | ') + (proof_library.length 
 // certification" and "AI consultant course" while the brief was asked to cover a certification course's "Program Eligibility" and
 // "Program Curriculum". Here, after the verdict and before the brief, a subtopic about an excluded topic is dropped, and every subtopic
 // goes when the page to beat itself is about one (its title or address names it).
+// W06-C (2026-10-30, WAVE06 Open 2): matched against the page's keyword FAMILY (the keyword, any brief keywords the request carries, the
+// site's main services: EXC.familyOf), as Content QA does, so a subtopic about the page's own subject is never dropped for sharing a word.
 const VEX = Array.isArray(d.verdict_exclusions) ? d.verdict_exclusions : [];
+const VEXF = EXC.familyOf(d, model);
 let coverage_target = d.coverage_target && typeof d.coverage_target === 'object' ? d.coverage_target : null;
 let coverage_digest = s(d.coverage_digest);
 const subtopics_excluded = [];
 if (coverage_target && Array.isArray(coverage_target.subtopics) && coverage_target.subtopics.length && VEX.length) {
   const bestC = (d.competitors || []).find(c => c && coverage_target.best && c.url === coverage_target.best.url) || {};
   const benchText = s(bestC.title) + ' ' + s((coverage_target.best || {}).url).replace(/^https?:\/\/[^\/]+/i, '').replace(/[\/_-]+/g, ' ');
-  const benchHit = VEX.find(e => EXC.match(benchText, e, kw));
-  const kept = coverage_target.subtopics.filter(st => { const e = benchHit || VEX.find(x => EXC.match(st, x, kw));
+  const benchHit = VEX.find(e => EXC.match(benchText, e, VEXF));
+  const kept = coverage_target.subtopics.filter(st => { const e = benchHit || VEX.find(x => EXC.match(st, x, VEXF));
     if (e) subtopics_excluded.push({ subtopic: st, topic: s(e.topic != null ? e.topic : e), why: benchHit ? 'the page to beat is about it' : 'the subtopic is about it' }); return !e; });
   if (subtopics_excluded.length) {
     coverage_target = { ...coverage_target, subtopics: kept, subtopics_excluded };

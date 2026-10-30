@@ -98,6 +98,18 @@ describe('the page-run context (PRC) of a stored report', () => {
     expect(pr.missing).toEqual([]);
     expect('second_read' in pageRunOf({ ...ORIGINAL_3299, page_run: { prc: 1, second_read: null } })).toBe(false);
   });
+  it('wave 0.6: what the page run took out of the page travels with it, so the final version keeps the cap while those sections are missing', () => {
+    const removed = { sections: 6, words: 0, words_before: 2407, h2_before: 7, h2_removed: 0, h2_delivered: 3, by_edits: 0, share_pct: 0, capped: true,
+      list: [{ heading: 'Which Dynamics 365 ERP fits your UAE business?', topic: 'Dynamics GP and SL', words: 0, level: 2, why: 'a topic the verdict said to leave out' }] };
+    const pr = pageRunOf({ ...ORIGINAL_3299, page_run: { prc: 1, sections_removed: removed, content_request_id: '3298' } });
+    expect(pr.sections_removed).toEqual(removed);
+    expect(pr.missing).toEqual([]);
+    // a report from before the field: nothing is invented (the engine says "not checked")
+    expect('sections_removed' in pageRunOf({ ...ORIGINAL_3299, page_run: { prc: 1 } })).toBe(false);
+    // the final version's copy keeps it, so a second finalize still caps
+    const kept = pageRunOf({ qa_blocking: [], page_run_context: pr });
+    expect(kept.sections_removed).toEqual(removed);
+  });
 });
 
 describe('the finalize request carries the page run of the ORIGINAL report', () => {
