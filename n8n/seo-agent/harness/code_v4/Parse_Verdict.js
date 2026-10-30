@@ -380,6 +380,61 @@ const SM = (() => {
   const titleShare = (page, keyword) => { const p = page || {}; if (!S(p.title) && !S(p.h1)) return null;
     const want = uniq(termsOf(norm(keyword)).filter(t => !FILLER.has(t)).map(stem)); if (!want.length) return null; const set = matchTerms(S(p.title) + ' ' + S(p.h1));
     return { share: Math.round(shareIn(want, set) * 100) / 100, have: want.filter(t => covers(set, t)).length, of: want.length, missing: want.filter(t => !covers(set, t)) }; };
+  // ---- W05-B (2026-10-30, page-quality BEFORE_AFTER K4): is this page really THE page for the search, before a run rewrites its address? ----
+  // The content run took /dynamics-365-project-operations-uae (title not on file, matched by its address only: "dynamics", "365", "uae") as the
+  // page to improve for "dynamics 365 partner dubai", wrote the partner page onto that address, and the hold waved it through as a refresh.
+  // An address is not evidence of what a page is about. A page is confirmed only by its OWN words: its title or main heading (from the
+  // inventory or read in this run, `more.texts`), or a Search Console search it earns impressions for, where that text (1) carries every core
+  // word of the search, (2) carries 75% of all its words, and (3) is ABOUT the search: its rarest word on this site is one of the search's own,
+  // or the words it adds (not the brand, a place, the kind of service or the form of the page) weigh under a third of the whole. "Dynamics 365
+  // Project Operations Implementation UAE" adds "project" and "operations" (rare) to "dynamics 365" (on every page): about something else.
+  // Returns { ok, by, text, evidence, why }; never throws; with nothing to read, ok is false (the caller writes a new page and says so).
+  const confirmPage = (model, page, keyword, more) => {
+    const p = page || {}; const o = more || {};
+    const m = model || {}; const brands = brandWords(m);
+    const core = coreTerms(keyword, brands);
+    const want = uniq(termsOf(norm(keyword)).filter(t => !FILLER.has(t)).map(stem));
+    const shortUrl = pathOf(p.url);
+    if (!core.length || !want.length) return { ok: false, by: '', text: '', evidence: '', why: 'the search has no word that says what it is about, so no page can be confirmed as its page' };
+    // the kind of service ("implementation", "support") and the form of the page ("guide", "checklist", a year) say how a page answers, not what about
+    const FORM = ['guide', 'guides', 'buyer', 'buyers', 'complete', 'ultimate', 'definitive', 'explained', 'explain', 'overview', 'introduction', 'intro', 'checklist', 'faq', 'faqs',
+      'tip', 'tips', 'everything', 'know', 'need', 'basic', 'basics', 'beginner', 'beginners', 'step', 'steps', 'updated', 'latest'];
+    const kindStems = new Set([...Object.keys(KIND), ...FORM].map(stem));
+    const inv = pages(m); const N = inv.length || 1;
+    const docs = inv.map(x => fieldsOf(x, brands).own);
+    const wOf = (t) => { const df = docs.filter(d => covers(d, t)).length; return Math.log((N + 1) / (df + 1)) + 1; };
+    const cands = [];
+    const add = (text, by) => { const t = S(text).replace(/&amp;/g, '&'); if (t) cands.push({ text: t, by }); };
+    add(p.title, 'its title'); add(p.h1, 'its main heading');
+    for (const t of (Array.isArray(o.texts) ? o.texts : [])) if (t && S(t.text)) add(t.text, S(t.by) || 'its title as read now');
+    for (const q of (Array.isArray(p.queries) ? p.queries : queriesOf(p))) if ((Number((q || {}).impressions) || 0) > 0) add((q || {}).query || (q || {}).keyword, 'a search it earns impressions for in Search Console');
+    if (!cands.length) return { ok: false, by: '', text: '', evidence: '', why: shortUrl + ' has no title, main heading or Search Console search on file, and an address alone does not say what a page is about' };
+    let best = null;
+    for (const c of cands) {
+      const tt = coreTerms(c.text, brands); if (!tt.length) continue;
+      const allCore = core.every(t => covers(tt, t));
+      const share = shareIn(want, matchTerms(c.text));
+      const extra = uniq(tt.filter(t => !core.includes(t) && !kindStems.has(t) && !/^(?:19|20)\d\d$/.test(t)));
+      const own = core.filter(t => covers(tt, t)).reduce((a, t) => a + wOf(t), 0);
+      const add2 = extra.reduce((a, t) => a + wOf(t), 0);
+      const focus = own + add2 > 0 ? own / (own + add2) : 0;
+      // about the search: its rarest word is one of the search's own (an article title that only describes more, "the cost of non-compliance:
+      // UAE e-invoicing penalties and mitigation costs", keeps it), or what it adds weighs under a third ("d365 operations uae", 0.58 on
+      // client A's site, adds the rarer "operations" to "dynamics 365": not the page for "dynamics 365 partner dubai")
+      const ws = tt.filter(t => !kindStems.has(t) && !/^(?:19|20)\d\d$/.test(t)).map(t => [t, wOf(t)]);
+      const maxW = ws.reduce((mx, x) => Math.max(mx, x[1]), 0);
+      const rarestOwn = ws.some(([t, w]) => core.includes(t) && w + 1e-9 >= maxW);
+      const ok = allCore && share + 1e-9 >= MATCH_MIN && (rarestOwn || focus > 0.67 + 1e-9);
+      const said = uniq(tokensOf(norm(c.text)).filter(w => extra.includes(stem(w))));   // the page's own words, not their stems, for the reason
+      const r = { ok, by: c.by, text: c.text, focus: Math.round(focus * 100) / 100, share: Math.round(share * 100) / 100, extra: said.length ? said : extra };
+      if (!best || (r.ok && !best.ok)) best = r;   // the first text read (the title before the searches) explains a refusal
+      if (ok) break;
+    }
+    if (!best) return { ok: false, by: '', text: '', evidence: '', why: 'the title and searches of ' + shortUrl + ' say nothing about this search' };
+    if (best.ok) return { ok: true, by: best.by, text: best.text, evidence: best.by + ' "' + best.text + '" is about this search', why: '' };
+    return { ok: false, by: best.by, text: best.text, evidence: '',
+      why: best.by + ' "' + best.text + '" is about ' + (best.extra.length ? best.extra.map(t => '"' + t + '"').join(' and ') : 'something else') + ', not this search, so ' + shortUrl + ' is not the page for it' };
+  };
   // R34: the pages whose title was never read, so a caller can say what it judged on the address alone instead of reading nothing silently
   const titleGap = (model) => { const all = pages(model); const u = untitled(model);
     return { pages: all.length, untitled: u.length, urls: u.slice(0, 12).map(p => p.url),
@@ -437,7 +492,7 @@ const SM = (() => {
     return { state: 'planned', text: '' };
   };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, pageMatch, MATCH_CONF, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages,
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages, confirmPage,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms, coreTerms } };
 })();
 // ---- what the site already holds for a search: its pages, its keyword ladders and its unpublished drafts (2026-10-17, re-rating A-1 /
@@ -1469,6 +1524,13 @@ if (EXP) {
   if (lostWords && !verdict_changes.some(c => WORDS_RE.test(c))) verdict_changes.push('Aim for about ' + lostWords + ' words on that page.');
   verdict_changes.unshift('Improve the page the site already has for this search (' + EXP.url + '): update and expand it, keep its URL, and do not publish a second page for this keyword.');
 }
+// W05-B (2026-10-30, BEFORE_AFTER K4 / K1): a page matched by its address but not confirmed by its own title, heading or searches is not this
+// run's page (Collect Client Pages), and a page the client chose to write beside ("Write it anyway") is left as it is: the report and the brief
+// both say so, so nothing is written onto another page's address
+const EPU = (!EXP && prev.existing_page_unconfirmed && prev.existing_page_unconfirmed.url) ? prev.existing_page_unconfirmed : null;
+const EPI = (!EXP && prev.existing_page_ignored && prev.existing_page_ignored.url && !prev.existing_page_ignored.planned_url) ? prev.existing_page_ignored : null;
+if (EPU) verdict_changes.unshift('Write this as a new page at its own address. ' + EPU.url + ' was considered and is left as it is: ' + String(EPU.why || 'it is not the page for this search') + '.');
+if (EPI) verdict_changes.unshift('Write this as a separate new page at its own address, as you chose. ' + EPI.url + ' stays as it is; link to it where it helps the reader.');
 
 // ---- A-5 / A-6 / A-23 (2026-10-17, re-rating execs 760 / 765): the verdict's advice checked against what the site already holds ----
 // (inlined into *Parse Verdict* by build_v4.py section 130, after the existing-page rules; reads `prev.own_coverage` from *Own Coverage
@@ -1701,29 +1763,34 @@ const DUP = (() => {
 // started (the app, the form, the API) are asked ("Needs your OK"). A hold writes no brief, no copy and no edit: the run delivers the
 // verdict report with `hold: { score, reasons, alternatives }` on stage `content`, and its cost is what the verdict cost.
 const HOLD = (() => {
-  const CFG = { threshold: 50, automatic: 'shadow', recheck_days: 90 };   // D17: automatic -> 'enforce' after two cadence cycles of shadow logs (owner review of the first 20 holds, RE L4)
+  // W05-B (2026-10-30, BEFORE_AFTER "Holds"): the line at 50 sat inside the verdict's own noise (one keyword read 52, 42, then 46; K3 was held
+  // at 42 and its page was the best of 31). A score is now held on its own only when it is clearly low (under 40); between 40 and 50 only when
+  // a second signal agrees: little demand (under 20 searches a month and no Search Console impressions for the site) or a page the site
+  // already has for the search. Every reading is logged (`readings`), and a run the client acknowledged keeps the acknowledged reading.
+  const CFG = { threshold: 50, clear: 40, low_volume: 20, automatic: 'shadow', recheck_days: 90 };   // D17: automatic -> 'enforce' after two cadence cycles of shadow logs (owner review of the first 20 holds, RE L4)
   const S = (v) => String(v == null ? '' : v).trim();
   const ip = S(prev.client_ip).toLowerCase();
   const automatic = /^(cadence|ladder|tracker|casestudy|audit):/.test(ip);
   const writes = prev.include_content === true && !prev.verdict_only && S(prev.mode || 'keyword') === 'keyword';
   const ackRaw = prev.hold_ack;
   const ack = ackRaw && typeof ackRaw === 'object' && !Array.isArray(ackRaw) ? ackRaw : (ackRaw === true ? {} : null);
-  const scoreRaw = EV56.withheld ? null : verdict.score;
-  const score = (scoreRaw === '' || scoreRaw == null || !Number.isFinite(Number(scoreRaw))) ? null : Math.round(Number(scoreRaw));
+  const num = (v) => (v === '' || v == null || !Number.isFinite(Number(v))) ? null : Math.round(Number(v));
+  const runScore = EV56.withheld ? null : num(verdict.score);
+  const ackScore = ack ? num(ack.score) : null;
+  // the client said "Write it anyway" to the reading it was shown: the written run keeps THAT reading (the verdict is not moved by a re-read)
+  const score = (ack && ackScore != null && runScore != null) ? ackScore : runScore;
   const caseStudy = !!(S(prev.case_id) || (prev.case_study && typeof prev.case_study === 'object' && Object.keys(prev.case_study).length) || /case stud/i.test(S(prev.page_type)));
   const aiPage = !!(prev.ai_target && typeof prev.ai_target === 'object' && S(prev.ai_target.question));
-  const refresh = !!S(prev.existing_page_url);
+  // W05-B: a refresh is a page the client (or the pipeline) NAMED. A page this run found by itself (EXP from the inventory or the sitemap) is
+  // not a refresh the client asked for: K4 was waved through as "a refresh of a page your website already has" for a page it had matched
+  const found = !!EXP && S(EXP.source) !== '' && S(EXP.source) !== 'provided';
+  const refresh = !!S(prev.existing_page_url) && !found;
   const ladderPage = !!S(prev.ladder_id) && prev.ladder_rung != null && prev.ladder_rung !== '';
   const exemptScore = caseStudy ? 'a case study: its keyword is the case name, so a search score says nothing about it'
     : aiPage ? 'a page written to be cited in AI answers: chosen for the question, not for search volume'
     : refresh ? 'a refresh of a page your website already has'
     : ladderPage ? 'a page of your keyword ladder: the ladder checked its main keyword when it was planned' : '';
   const exemptDup = caseStudy ? 'a case study' : aiPage ? 'a page written for an AI answer' : refresh ? 'a refresh of a page your website already has' : '';
-  // ---- the value gate ----
-  let valueHit = false; let notChecked = '';
-  if (score == null) notChecked = EV56.withheld ? 'the verdict could not score this keyword (' + (EV56.evidence.error || 'the live results could not be read') + '), so nothing was held for it'
-    : 'the verdict gave no score, so nothing was held for it';
-  else if (score < CFG.threshold && !exemptScore) valueHit = true;
   // ---- the duplicate gate (the late check's rule, before the brief) ----
   let MODEL = prev.site_model && typeof prev.site_model === 'object' ? prev.site_model : null;
   if (!MODEL) { try { MODEL = ($('Site Model').first().json || {}).site_model || null; } catch (e) { MODEL = null; } }
@@ -1731,40 +1798,92 @@ const HOLD = (() => {
   const dup = (MODEL && !exemptDup) ? DUP.targets(prev.keyword, SM.pages(MODEL), { skip: [ownUrl, S(prev.existing_page_url)], self: [S(prev.ladder_target_url)], self_aware: true, slug_self: true, ladder: ladderPage })
     : { targets: [], partial: [], self: [], basis: MODEL ? '' : 'no page inventory of the website was available, so a duplicate could not be checked' };
   const dupHit = !EXP && dup.targets.length > 0;   // a page the verdict already redirected the run to (existing_page) is improved, not duplicated
-  const would = writes && !ack && (valueHit || dupHit);
+  // W05-B (BEFORE_AFTER K1): the page this run found for the search (confirmed by its own title, heading or searches in Collect Client Pages)
+  // used to be rewritten silently. A person who started the run is now asked first: improve that page, or write a separate new one.
+  const existingHit = found && !exemptDup && !ladderPage;
+  const kwn = (s) => S(s).toLowerCase().replace(/[^a-z0-9؀-ۿ]+/g, ' ').trim().split(/\s+/).filter(Boolean).sort().join(' ');
+  const kwKey = kwn(prev.keyword);
+  // the site's own Search Console reading for this search (the page inventory's searches): the impressions, and the pages Google shows for it
+  const gsc = (() => { const out = { read: false, impressions: 0, pages: [] };
+    for (const p of (MODEL ? SM.pages(MODEL) : [])) { const qs = Array.isArray(p.queries) ? p.queries : []; if (qs.length) out.read = true;
+      if (SM.isGone && SM.isGone(p)) continue;
+      const hit = qs.filter(q => kwn((q || {}).query || (q || {}).keyword) === kwKey).reduce((a, q) => a + (Number((q || {}).impressions) || 0), 0);
+      if (hit > 0) { out.impressions += hit; out.pages.push({ url: SM.canonUrl ? SM.canonUrl(MODEL, p.url) : p.url, title: S(p.title), impressions: hit }); } }
+    out.pages.sort((a, b) => b.impressions - a.impressions); return out; })();
+  const volume = num(((prev.keyword_data || {}).search_volume));
+  const lowDemand = volume != null && volume < CFG.low_volume && gsc.impressions === 0;
+  const second = dupHit || existingHit || lowDemand;
+  // ---- the value gate ----
+  let valueHit = false; let notChecked = '';
+  if (score == null) notChecked = EV56.withheld ? 'the verdict could not score this keyword (' + (EV56.evidence.error || 'the live results could not be read') + '), so nothing was held for it'
+    : 'the verdict gave no score, so nothing was held for it';
+  else if (!exemptScore && (score < CFG.clear || (score < CFG.threshold && second))) valueHit = true;
+  const band = score == null ? 'not checked' : score < CFG.clear ? 'clearly low' : score < CFG.threshold ? 'near the line' : 'above the line';
+  const readings = { this_run: runScore, acknowledged: ackScore, used: score, band, clear_under: CFG.clear, line: CFG.threshold,
+    second_signal: { low_demand: lowDemand, duplicate: dupHit, existing_page: existingHit, volume, impressions: gsc.read ? gsc.impressions : null, search_console_read: gsc.read },
+    decision: !writes ? 'no page in this run' : ack ? 'acknowledged by the client' + (ackScore != null && runScore != null && ackScore !== runScore ? ': this run read ' + runScore + ', the acknowledged ' + ackScore + ' is kept' : '')
+      : score == null ? 'not checked' : valueHit ? (score < CFG.clear ? 'held: clearly low' : 'held: near the line with a second signal') : score < CFG.threshold ? (exemptScore ? 'not held: ' + exemptScore : 'not held: near the line, no second signal') : 'not held for the score' };
+  const would = writes && !ack && (valueHit || dupHit || existingHit);
   const mode = !writes ? 'off' : automatic ? CFG.automatic : 'enforce';
   const kw = S(prev.keyword);
   const reasons = [];
-  if (writes && valueHit) reasons.push('Our verdict scored "' + kw + '" ' + score + ' out of 100, under the ' + CFG.threshold + ' we write without asking'
+  const demandText = 'little demand (' + (volume === 0 ? 'no measured searches' : 'about ' + volume + ' searches a month') + (gsc.read ? ' and no impressions for your site in Search Console' : '') + ')';
+  if (writes && valueHit) reasons.push('Our verdict scored "' + kw + '" ' + score + ' out of 100' + (score < CFG.clear ? ', clearly under the ' + CFG.threshold + ' we write without asking'
+    : ', under the ' + CFG.threshold + ' we write without asking, and ' + (lowDemand ? 'the search has ' + demandText : 'your website already has a page for it'))
     + ((verdict.reasons || [])[0] ? ': ' + String(verdict.reasons[0]).replace(/\s+/g, ' ').slice(0, 260) : '.'));
   if (writes && dupHit) reasons.push('Your website already has a page aimed at this search: ' + dup.targets.map(t => t.url).join(', ')
     + '. A second page would compete with it for the same search; improving that page is usually the faster way up.');
+  if (writes && existingHit) reasons.push('Your website already has a page for this search: ' + EXP.url + (S(EXP.title) ? ' ("' + S(EXP.title).replace(/[“”"]/g, '') + '")' : '')
+    + '. This run would rewrite that page at its own address. Choose "Improve the existing page" to do that, or "Write it anyway" for a separate new page.');
+  const shown = gsc.pages.filter(p => !EXP || p.url.toLowerCase().replace(/\/+$/, '') !== String(EXP.url).toLowerCase().replace(/\/+$/, ''));
+  if (writes && (dupHit || existingHit) && shown[0]) reasons.push('Google already shows ' + shown[0].url + ' for this search (' + shown[0].impressions + ' impressions in Search Console).');
   // ---- what to do instead (up to three, each one click in the app) ----
   const alternatives = [];
   const seen = new Set();
   const addAlt = (a) => { const k = a.kind + '|' + S(a.keyword).toLowerCase() + '|' + S(a.url).toLowerCase(); if (seen.has(k) || alternatives.length >= 3) return; seen.add(k); alternatives.push(a); };
-  if (writes && (valueHit || dupHit)) {
-    const improveUrl = (dup.targets[0] || {}).url || ((OWNV.related || [])[0] || {}).url || '';
+  // W05-B (BEFORE_AFTER item 4): a recommended target must be a search a person types, never a headline ("verify an ASP in 5 minutes") or a
+  // slash form ("AI development company Dubai/UAE": the first form is kept). The searches Google itself lists (related searches, People Also
+  // Ask) and the verdict's secondary keywords come first; a quoted phrase from the verdict's advice is used only when it passes the same test.
+  const searchOf = (raw) => {
+    let q = S(raw).replace(/[‘’“”"]/g, '').replace(/\s+/g, ' ').trim();
+    q = q.replace(/([A-Za-z0-9]+)(?:\s*\/\s*[A-Za-z0-9]+)+/g, '$1');   // "Dubai/UAE" -> "Dubai"
+    q = q.replace(/[.!,;:]+$/, '').trim();
+    if (!q || q.length > 80 || /[:;!|()[\]{}<>=+*#@]/.test(q)) return '';
+    const w = q.split(/\s+/);
+    if (w.length < 2 || w.length > 8) return '';
+    if (/\b(?:in|within|under)\s+\d+\s+(?:minutes?|mins?|steps?|days?|hours?|seconds?|weeks?)\b/i.test(q)) return '';   // a headline promise
+    if (/^\d+\s+(?:ways|tips|reasons|steps|things|mistakes|questions|signs)\b/i.test(q)) return '';
+    if (/^(?:verify|discover|learn|get|see|find out|choose|meet|unlock|boost|stop|start|build|make|read|download|book|talk|contact|hire|use|add|create|write|improve|try|let|why you|here)\b/i.test(q)) return '';
+    if (/\b(?:you|your|we|our|us)\b/i.test(q)) return '';   // a sentence to a reader, not a search
+    return q;
+  };
+  const known = new Set([...(((prev.serp_features || {}).related_searches) || []), ...(((prev.serp_features || {}).people_also_ask) || []), ...(OWNV.secondary || [])].map(s => kwn(searchOf(s))).filter(Boolean));
+  if (writes && (valueHit || dupHit || existingHit)) {
+    const improveUrl = existingHit ? EXP.url : ((dup.targets[0] || {}).url || ((OWNV.related || [])[0] || {}).url || '');
     if (improveUrl) addAlt({ kind: 'improve', label: 'Improve the existing page', url: improveUrl, keyword: kw,
-      why: dupHit ? 'your website already has this page for the search: a refresh keeps its address and what it has already earned' : 'your website has a page on this topic: strengthening it is cheaper than a new page' });
+      why: existingHit ? 'your website already has this page for the search: improving it keeps its address and what it has already earned'
+        : dupHit ? 'your website already has this page for the search: a refresh keeps its address and what it has already earned' : 'your website has a page on this topic: strengthening it is cheaper than a new page' });
+    if ((dupHit || existingHit) && shown[0] && shown[0].url !== improveUrl) addAlt({ kind: 'improve', label: 'Improve the page Google shows', url: shown[0].url, keyword: kw,
+      why: 'Google already shows this page for the search (' + shown[0].impressions + ' impressions in Search Console)' });
     // the verdict's own re-target: a quoted search in its first changes ("such as 'Microsoft Dynamics 365 ERP implementation partner UAE'"),
-    // else its first secondary keyword the site does not already hold elsewhere
-    const quoted = (() => { for (const c of verdict_changes.slice(0, 3)) { const re = /(?:^|[\s(])['‘“"]([^'’”"]{8,90})['’”"](?=[\s.,;:)]|$)/g; let m;
-      while ((m = re.exec(String(c || '')))) { const q = m[1].trim(); if (q.split(/\s+/).length >= 2 && q.toLowerCase() !== kw.toLowerCase() && !/[.!?]$/.test(q)) return q; } } return ''; })();
-    const retarget = quoted || (OWNV.secondary || []).find(s => S(s) && S(s).toLowerCase() !== kw.toLowerCase()) || '';
+    // else its first secondary keyword the site does not already hold elsewhere; either one only when it reads as a real search
+    const quoted = (() => { const out = []; for (const c of verdict_changes.filter(l => !/^Write this as (?:a new|a separate new) page/.test(String(l || ''))).slice(0, 3)) { const re = /(?:^|[\s(])['‘“"]([^'’”"]{8,90})['’”"](?=[\s.,;:)]|$)/g; let m;
+      while ((m = re.exec(String(c || '')))) { const q = m[1].trim(); if (q.split(/\s+/).length >= 2 && q.toLowerCase() !== kw.toLowerCase() && !/[.!?]$/.test(q)) out.push(q); } } return out; })();
+    const pool = [...quoted, ...(OWNV.secondary || [])].map(searchOf).filter(q => q && kwn(q) !== kwKey);
+    const retarget = pool.find(q => known.has(kwn(q)) && quoted.map(searchOf).includes(q)) || pool[0] || '';
     if (retarget) addAlt({ kind: 'retarget', label: 'Use the recommended target', keyword: retarget, page_type: PT.of(verdict.recommended_page || prev.page_type, prev.page_type),
       why: 'the verdict recommends this search instead of "' + kw + '"' });
     const kc = OWNV.keyword_covered;
     if (kc && S(kc.keyword) && S(kc.keyword).toLowerCase() !== kw.toLowerCase()) addAlt({ kind: 'rung', label: 'Write the planned page', keyword: S(kc.keyword), ladder_id: S(kc.ladder_id),
       why: S(kc.note) || 'this search is already planned on your website' });
   }
-  const hold = would ? { score, threshold: CFG.threshold, kinds: [valueHit ? 'score' : '', dupHit ? 'duplicate' : ''].filter(Boolean), reasons, alternatives,
-    duplicates: dupHit ? dup.targets : [], mode, held: mode === 'enforce',
-    rule: 'A page waits for your OK when our verdict scores its keyword under ' + CFG.threshold + ' out of 100, or when your website already has a page for the same search.',
+  const hold = would ? { score, threshold: CFG.threshold, clear: CFG.clear, kinds: [valueHit ? 'score' : '', (dupHit || existingHit) ? 'duplicate' : ''].filter(Boolean), reasons, alternatives,
+    duplicates: dupHit ? dup.targets : existingHit ? [{ url: EXP.url, title: S(EXP.title) }] : [], mode, held: mode === 'enforce', readings,
+    rule: 'A page waits for your OK when our verdict scores its keyword under ' + CFG.clear + ' out of 100, or under ' + CFG.threshold + ' when the search also has little demand, or when your website already has a page for the same search.',
     next: mode === 'enforce' ? 'Nothing was written and only the check was charged. Choose "Write it anyway", use the recommended target, or improve the existing page.'
       : 'Started automatically, so the page was written as before; this check only records what it would have asked you.' } : null;
   return {
-    applies: writes, mode, would, held: would && mode === 'enforce', hold, ack: ack ? { score: Number.isFinite(Number(ack.score)) ? Number(ack.score) : null } : null,
+    applies: writes, mode, would, held: would && mode === 'enforce', hold, ack: ack ? { score: ackScore } : null, score, readings,
     exempt: writes ? [exemptScore && ('score: ' + exemptScore), exemptDup && ('duplicate: ' + exemptDup)].filter(Boolean).join('; ') : '',
     not_checked: writes ? notChecked : '', duplicate_check: { checked: !!MODEL && !exemptDup, targets: dup.targets, partial: dup.partial, self: dup.self, basis: dup.basis },
     recheck_days: CFG.recheck_days
@@ -1775,7 +1894,8 @@ return [{
   json: {
     ...prev,
     verdict: EV56.withheld ? 'NOT_CHECKED' : verdict.verdict,
-    verdict_score: EV56.withheld ? null : (verdict.score ?? null),
+    verdict_score: EV56.withheld ? null : (HOLD.ack && HOLD.score != null ? HOLD.score : (verdict.score ?? null)),   // W05-B: after "Write it anyway" the acknowledged reading is kept
+    verdict_readings: HOLD.readings,
     verdict_evidence: EV56.evidence,
     ladder_remeasure,   // A-21
     score_withheld: EV56.withheld,

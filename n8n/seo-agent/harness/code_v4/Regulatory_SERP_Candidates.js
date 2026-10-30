@@ -213,6 +213,20 @@ const REG = (() => {
     if (m[3]) return iso; const y = +m[1], mo = +m[2]; let d = 31; while (d > 28 && !validDay(y, mo, d)) d--; return m[1] + '-' + m[2] + '-' + pad(d); };
   const asOfFor = (startedAt, offsetHours) => { const t = Date.parse(s(startedAt)); const ms = (isNaN(t) ? Date.now() : t) + (Number(offsetHours) || 0) * 3600000;
     return new Date(ms).toISOString().slice(0, 10); };
+  // W05-A (wave 0.5, 2026-10-30): the website's market day in its own time zone, for every market (not only the three in regulators.json):
+  // the page's "Updated" date, the second read's "today" and the regulatory status all use it. A market with an IANA zone here is read
+  // with Intl (summer time included); a market with only an offset in regulators.json uses the offset; anything else is UTC.
+  const ZONES = { AE: 'Asia/Dubai', SA: 'Asia/Riyadh', PK: 'Asia/Karachi', QA: 'Asia/Qatar', KW: 'Asia/Kuwait', BH: 'Asia/Bahrain', OM: 'Asia/Muscat',
+    EG: 'Africa/Cairo', JO: 'Asia/Amman', LB: 'Asia/Beirut', TR: 'Europe/Istanbul', IN: 'Asia/Kolkata', SG: 'Asia/Singapore', MY: 'Asia/Kuala_Lumpur',
+    GB: 'Europe/London', IE: 'Europe/Dublin', DE: 'Europe/Berlin', FR: 'Europe/Paris', NL: 'Europe/Amsterdam', ES: 'Europe/Madrid', IT: 'Europe/Rome',
+    US: 'America/New_York', CA: 'America/Toronto', AU: 'Australia/Sydney', NZ: 'Pacific/Auckland', ZA: 'Africa/Johannesburg', NG: 'Africa/Lagos', KE: 'Africa/Nairobi' };
+  const zoneOf = (iso, market) => { const z = s((market && market.tz) || ZONES[s(iso).toUpperCase()]); if (!z) return '';
+    try { new Intl.DateTimeFormat('en-US', { timeZone: z }).format(0); return z; } catch (e) { return ''; } };
+  const dayFor = (startedAt, iso, market) => { const z = zoneOf(iso, market);
+    if (!z) return asOfFor(startedAt, market ? market.utc_offset_hours : 0);
+    const t = Date.parse(s(startedAt)); const d = new Date(isNaN(t) ? Date.now() : t); const p = {};
+    for (const x of new Intl.DateTimeFormat('en-US', { timeZone: z, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d)) p[x.type] = x.value;
+    return p.year + '-' + p.month + '-' + p.day; };
   const addDays = (iso, n) => new Date(Date.parse(iso + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 
   // ---------- market and topics ----------
@@ -514,7 +528,7 @@ const REG = (() => {
       missing, stale, passed_as_upcoming: passed_as_upcoming.slice(0, 4) };
   };
 
-  return { MAX_TOPICS, MAX_FACTS_TOPIC, MAX_CONTEXT_FACTS, host, registrable, onDomain, urlKey, dates, fmt, endOf, asOfFor, addDays, marketOf, touches, topicsOf, officialOf,
+  return { MAX_TOPICS, MAX_FACTS_TOPIC, MAX_CONTEXT_FACTS, host, registrable, onDomain, urlKey, dates, fmt, endOf, asOfFor, zoneOf, dayFor, addDays, marketOf, touches, topicsOf, officialOf,
     queries, isSecondary, extract, sourceDate, pick, statusOf, resolve, ownConflicts, digest, qa, hasDate, sentencesOf };
 })();
 // W0-F (2026-10-29, PLAN Fix 6): the pages to read when SearXNG was down and DataForSEO searched instead (*Regulatory SERP*, behind its

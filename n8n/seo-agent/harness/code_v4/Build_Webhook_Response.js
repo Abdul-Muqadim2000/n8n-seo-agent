@@ -33,7 +33,8 @@ return [{
     ...(() => { let pv = {}; try { pv = $('Parse Verdict').first().json || {}; } catch (e) { pv = {}; }   // W0-D (section 153)
       const g = (k) => (d[k] !== undefined ? d[k] : pv[k]);
       return { hold: g('hold') || null, hold_shadow: g('hold_shadow') || null, verdict_acknowledged: g('verdict_acknowledged') === true,
-        hold_exempt: g('hold_exempt') || '', hold_not_checked: g('hold_not_checked') || '' }; })(),
+        hold_exempt: g('hold_exempt') || '', hold_not_checked: g('hold_not_checked') || '',
+        verdict_readings: g('verdict_readings') || null, existing_page_unconfirmed: g('existing_page_unconfirmed') || null }; })(),   // W05-B (section 175)
     evidence: d.verdict_evidence || null,
     reasons: d.verdict_reasons || [],
     risks: d.verdict_risks || [],
@@ -68,6 +69,9 @@ return [{
         site_urls: A(pb.site_urls).map(u => String(u || '')).filter(u => /^https?:\/\//i.test(u)).slice(0, 300),
         serp_shapes: pb.serp_shapes || cq.serp_shapes || null,
         regulatory_facts: regFacts.slice(0, 40), regulatory_topics: A((reg || {}).topics).map(t => ({ id: T((t || {}).id, 60), relevance: T((t || {}).relevance, 20) })).filter(t => t.id).slice(0, 12),
+        // W05-A (section 172): the second read's advice (enforce mode, read and checked), so the final version keeps its deduction while the words are there
+        second_read: (() => { const R = d.qa_second_read || null; if (!R || R.mode !== 'enforce' || R.status !== 'checked') return null;
+          return A(R.advice).filter(a => a && a.location).map(a => ({ severity: T(a.severity, 10), kind: T(a.kind, 20), location: T(a.location, 300) })).slice(0, 12); })(),
         content_request_id: T(pb.content_request_id || d.request_id, 120) } }; })(),   // 2026-10-21: what to edit by hand (the app's Needs-you can say it instead of "run it again")
     run_ledger: d.run_ledger || null,
     dfs_tasks: (d.run_ledger || {}).dataforseo_tasks ?? null,

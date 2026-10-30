@@ -20,9 +20,12 @@ HOW TO FIX THE USUAL PROBLEMS
 - A statement about the business that nothing on file supports: rewrite it as advice to the reader ("a sound migration starts with ...") or as a neutral fact about the topic, or delete it. Never "we do", "our process", "you get from us" unless the facts above say it.
 - A call to action: invite the reader to get in touch the way the facts say; never promise a deliverable, a timeline, a price or a result.
 - A figure the source does not state, or a number with no source: quote the number the source above states, with its link, or rewrite the sentence so it does not need the number.
+- A figure that carries its source link stays exactly as written. Never replace a sourced number with a vague word ("sharply", "significantly", "many", "a growing share"): keep the number and name who measured it, or cite a stronger source that states it.
 - "Cut about N words": take out repetition, restatements and secondary detail; keep every fact with its source, every link, the heading and any table.
 - "Add about N words": add specific, useful detail (an example, a step, a decision rule, a trade-off) from the facts and sources above; never filler.
 - Terms to work in, a subtopic to cover, a snippet question to answer: give each one real substance where it belongs, in our own words.
+- Add no heading unless a problem asks for one by name. A subtopic goes into a paragraph of the section; never a heading that only says why the topic matters ("Why X is ripe for ...", "The importance of ..."), and never a point another section of the page already makes.
+- Lines about the business (its services, engagement models, credentials, contact details) belong in the closing call to action or a section about who does the work: never inside a code, technical how-to, step or checklist section.
 - A question heading: "### <the question>" with a 40-60 word direct answer right under it. Never a "Frequently Asked Questions" block or a Q1: / A1: list.
 - Filler or cliche phrases: rewrite the sentence in plain, specific words.
 - PROTECTED: the **Quick answer:** line, every source link and the call to action stay in every section that has them.

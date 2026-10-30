@@ -206,7 +206,7 @@ const GR = (() => {
   // caps as shares of their part (REVIEW_EVIDENCE M1): verdict under 50 -> fit 40%; open duplicate -> fit 30%; a statement made 4+ times ->
   // structure 50%; a weak-only compliance figure -> sources 8 of 15
   const SHARE = { fit_verdict: 0.4, fit_duplicate: 0.3, structure_repeat: 0.5, sources_compliance: 8 / 15, weak_figure: 1 / 3, verdict_partial: 0.4, sources_none: 0.8, weak_cite: 0.5 };
-  const CFG = { sim: 0.6, min_words: 4, cluster: 3, cluster_cap: 4, blocker_cap: 59, verdict_bar: 50, display_top: 95, floor: 0.5 };
+  const CFG = { sim: 0.6, min_words: 4, cluster: 3, cluster_cap: 4, blocker_cap: 59, verdict_bar: 50, display_top: 95, floor: 0.5, review_share: 0.25 };
   const STOP = new Set(('the a an and or of for to in on with by at from about this that these those your our its it is are be how what which why when who you we they their them '
     + 'than then into over under more most can will does do not but any all one two also very just only such been being has have had was were each per may must should would '
     + 'could other some many much here there where while if so as up out own same both few no nor too yes use used using get gets make makes made need needs '
@@ -444,13 +444,38 @@ const GR = (() => {
   // grade0: the grade object those nodes build (score / breakdown from Content QA's content_score / score_breakdown; `w0c` = Content QA's
   // grade_detail). blocking: the delivered blocking items ({ code }). o.decision: the client's duplicate-page decision (W0-B, D2).
   // A grade without `w0c` (a check from before this kit) is returned as it was, with its display.
+  // W05-A (wave 0.5, 2026-10-30, BEFORE_AFTER.md): what the blind second read found that is not a factual error (an uncited contrast, a
+  // figure that wants a source, a vague market figure, a law with no link, a statistics note, a repeated point) is ADVICE: it never caps
+  // the total at 59 (only a blocker does), it takes points off the part it is about. Each advice item the client is shown costs 3 points
+  // (high) or 1.5 (medium) of its part, at most a quarter of the part, and never below half the part: advice alone never turns a page into
+  // "Needs work" (the floors judge what Content QA measured). Only an enforced read counts (shadow mode, the system's own runs and the
+  // client's keyword ladder, records it and changes nothing: the guide that ranks, a ladder page, is never marked down by it).
+  // o.review: the read's record (content_qa.critic_reread: { mode, status, advice: [{ severity, kind }] }); the deduction is kept on the
+  // grade (review.advice) so a later cap of the same grade applies it once, from the parts before it (pre_review).
+  const REVIEW_DIM = { fact: 'sources', source: 'sources', claim: 'sources', local: 'sources', repetition: 'structure', structure: 'structure', link: 'structure',
+    depth: 'specificity', intent: 'fit', style: 'clean_language' };
+  const REVIEW_PTS = { high: 3, medium: 1.5 };
+  const reviewCut = (rv, b, M) => {
+    const R = rv || {}; if (R.mode !== 'enforce' || (R.status && R.status !== 'checked')) return null;
+    const items = (Array.isArray(R.advice) ? R.advice : []).filter(a => a && REVIEW_DIM[S(a.kind)] && REVIEW_PTS[S(a.severity)]).map(a => ({ kind: S(a.kind), severity: S(a.severity) }));
+    if (!items.length) return null;
+    const want = {}; for (const a of items) { const k = REVIEW_DIM[a.kind]; want[k] = (want[k] || 0) + REVIEW_PTS[a.severity]; }
+    const cut = {}; let total = 0;
+    for (const k of Object.keys(want)) { if (!M[k]) continue; const room = Math.max(0, (Number(b[k]) || 0) - M[k] * CFG.floor);
+      const c = Math.floor(Math.min(want[k], M[k] * CFG.review_share, room)); if (c > 0) { cut[k] = c; total += c; } }
+    const parts = Object.keys(cut).map(k => LABEL[k] + ' -' + cut[k]);
+    return { mode: 'enforce', status: 'checked', advice: items, cut, total,
+      note: clean('A second read of the page found ' + items.length + ' thing' + (items.length === 1 ? '' : 's') + ' to improve before publishing' + (total ? ': ' + total + ' point' + (total === 1 ? '' : 's') + ' off (' + parts.join(', ') + ')' : ', already reflected in the parts')) }; };
   const cap = (grade0, blocking, o0) => {
     const g = { ...(grade0 || {}) }; const o = o0 || {}; const W = g.w0c || o.w0c || null;
     if (!W || !g.breakdown || g.score == null) return { ...g, display: display(g.score) };
-    const M = maxOf(W.max); const b = { ...g.breakdown }; const caps = (W.caps || []).slice(); const F = (W.items || {}).fit || {};
+    const M = maxOf(W.max); const b = { ...(g.pre_review && typeof g.pre_review === 'object' ? g.pre_review : g.breakdown) }; const caps = (W.caps || []).slice(); const F = (W.items || {}).fit || {};
     const codes = (blocking || []).map(x => S(x && x.code)).filter(Boolean);
     const dupOpen = codes.includes('duplicate_page'); const differs = !!(o.decision && o.decision.choice === 'differs');
     if (dupOpen || differs) { const fi = fit(F, { open: dupOpen, differs }, M.fit); for (const x of fi.caps) if (!caps.some(y => y.dim === x.dim && y.share === x.share)) caps.push(x); b.fit = Math.round(fi.points); }
+    // W05-A: the second read's advice, off its parts (from the parts before it, so it is applied once)
+    const pre = { ...b }; const rv = reviewCut(o.review !== undefined ? o.review : (g.review && Array.isArray(g.review.advice) ? g.review : null), b, M);
+    if (rv) for (const k of Object.keys(rv.cut)) b[k] = (Number(b[k]) || 0) - rv.cut[k];
     let total = DIMS.reduce((s, k) => s + (Number(b[k]) || 0), 0);
     if (codes.length && total > CFG.blocker_cap) { total = CFG.blocker_cap; caps.push({ dim: 'total', to: CFG.blocker_cap, why: codes.length + ' point' + (codes.length === 1 ? '' : 's') + ' still stop' + (codes.length === 1 ? 's' : '') + ' this page' }); }
     const failing = [], waived = [], shadow = [];
@@ -461,7 +486,8 @@ const GR = (() => {
       failing.push({ dim: k, label: LABEL[k], points: Number(b[k]) || 0, max: M[k], fix: clean(FIX[k](W)) });
     }
     const score = Math.round(total);
-    return { ...g, score, display: display(score), breakdown: b, max: M, scale: VERSION, caps,
+    const R0 = { ...g }; delete R0.review; delete R0.pre_review;
+    return { ...R0, ...(rv ? { review: rv, pre_review: pre } : {}), score, display: display(score), breakdown: b, max: M, scale: VERSION, caps,
       floors: { ok: failing.length === 0, failing, waived, shadow, rule: 'Ready needs no open blocker and every part at or above half its points' },
       ready: codes.length === 0 && failing.length === 0 };
   };
@@ -490,6 +516,6 @@ const GR = (() => {
   };
   const display = (n) => n == null || n === '' || !Number.isFinite(Number(n)) ? '' : Math.round(Number(n)) >= CFG.display_top ? CFG.display_top + '+' : String(Math.round(Number(n)));
   const basis = 'structure 20 (a statement made three or more times and one label for two lists cost points), topic coverage 15, readability 10, specificity 10, plain language 10, sources 15, fit with the search 20; length is advice only';
-  return { VERSION, MAX, DIMS, LABEL, SHARE, CFG, units, repetition, listLabels, sources, fitOf, fit, local, cap, deliver, display, basis };
+  return { VERSION, MAX, DIMS, LABEL, SHARE, CFG, REVIEW_DIM, REVIEW_PTS, reviewCut, units, repetition, listLabels, sources, fitOf, fit, local, cap, deliver, display, basis };
 })();
 return $input.all().map(i => { const j = i.json || {}; const a = (j.args || []).map(x => x === '__SRC__' ? { tier: SRC.tier, figures: SRC.figures } : (x && typeof x === 'object' && x.__src__ ? { ...x, tier: SRC.tier, figures: SRC.figures, __src__: undefined } : x)); return { json: { r: GR[j.fn].apply(null, a) } }; });
