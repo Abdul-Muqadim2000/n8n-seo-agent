@@ -80,7 +80,7 @@ module.exports = async (ctx) => {
     reset(); const SN = 'W2FIX-3 — the website settings\' Site Admin `monitors` bodies (built by the app\'s siteAdminMonitorsBody) store every wave-2 key under its own name: alert rules, share-of-voice set, Claude weekly, pulse engines, persona test, fan-out check, market trend; "Track my site" keeps the W2-E3 options';
     begin(SN); const check = mkCheck(SN);
     const A = readJson(path.join(__dirname, 'fixtures_platform_admin.json'));
-    check('the app exported its Site Admin monitors bodies (4 cases: the three wave-2 saves and the index coverage settings)', A.length === 4 && A.some(f => /index/i.test(f.name) && 'index_watch' in (f.expect || {}) && 'index_daily_cap' in (f.expect || {})), A.map(f => f.name).join(' | '));
+    check('the app exported its Site Admin monitors bodies (5 cases: the three wave-2 saves, the index coverage settings and the sitemap submission switch)', A.length === 5 && A.some(f => /index/i.test(f.name) && 'index_watch' in (f.expect || {}) && 'index_daily_cap' in (f.expect || {})) && A.some(f => (f.expect || {}).index_sitemap_submit === true), A.map(f => f.name).join(' | '));
     const MC = TC.MONITORS;
     for (const f of A) {
       reset();
