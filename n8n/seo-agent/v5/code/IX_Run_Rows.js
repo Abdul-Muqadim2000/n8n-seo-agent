@@ -4,6 +4,10 @@
 // Fix wave 1: the row REPLACES this run's reservation (Save Index Runs upserts on site_id + run_at, E6); a website that could not be checked
 // keeps the figures of its last check and says why (E14); the notes name a partial sitemap tree (E1), a per-minute limit that is not the
 // daily quota (E13), a cut Search Console answer (X3), the 6,000-page cap (E12) and addresses outside a URL-prefix property (E5).
+// Wave 2 (DESIGN_WAVE2.md §2.5): sitemaps_json also records the access Google reports for us (`permission`, raw; `permission_full`, after a
+// 403 on a submission: false), the opt-in (`submit`: on / gate / kill switch), every submission (`submissions`: { path, at, status, reason },
+// checked back the next runs from sitemaps.list: `confirmed_at` = Search Console's lastSubmitted, `read_at` = its lastDownloaded),
+// the sitemap tree's fingerprint (`tree_fp`) and a 403 that holds the next submission (`submit_denied`). And the run's link read (`links`).
 /*__PAGE_WATCH__*/
 /*__INDEX_KIT__*/
 const S = (v) => String(v == null ? '' : v).trim();
@@ -12,6 +16,8 @@ const nowIso = new Date().toISOString();
 const grab = (n) => { try { return $(n).all().map(i => i.json); } catch (e) { return []; } };
 const diag = grab('Index Diagnose').filter(x => x && x.site_id);
 const plan0 = grab('Index Plan')[0] || {};   // R8: the dispatch this run belongs to (chain_id), so another chain can see it was here
+const subReqs = grab('Sitemap Submit Requests').filter(q => q && !q.skip && q.site_id);
+const subRes = grab('Submit Sitemap (Index)');
 const out = [];
 for (const d of diag) {
   const sum = IX.summarize(d.all || [], {});
@@ -33,6 +39,16 @@ for (const d of diag) {
   if (d.capped) notes.push('This website has more than 6,000 known addresses; our own pages and the sitemap\'s are kept first and the rest are not followed.');
   if (n0((d.plan || {}).outside)) notes.push(n0(d.plan.outside) + ' address(es) are outside the Search Console property and are not checked.');
   if (n0(cnt.blocked)) notes.push(n0(cnt.blocked) + ' page(s) turned our reader away (a bot wall or a language redirect); Google\'s own reading is kept for them.');
+  // wave 2 (§2.5): the sitemap submission - what was asked today and what Google answered, carried with the earlier ones
+  const sp = d.submit || {};
+  const mineAsked = []; const mineAns = []; subReqs.forEach((q, i) => { if (q.site_id === d.site_id) { mineAsked.push(q); mineAns.push(subRes[i] || {}); } });
+  const sr = IX.submitResults(sp, mineAsked, mineAns, Date.parse(nowIso));
+  for (const t of sr.today) {
+    if (t.status === 'submitted') notes.push('We submitted your sitemap to Google today (' + t.path + ').');
+    else if (t.status === 'denied') notes.push('Google refused our sitemap submission (no full access for us), so it was not submitted; we try again only when Google reports full access.');
+    else notes.push('Google did not accept our sitemap submission today (' + t.path + (t.http_status ? ', answered ' + t.http_status : '') + '); we try again in 7 days.');
+  }
+  if (!d.failed && sp.on && sp.gate === 'not_full_access') notes.push('You switched on sitemap submission, but Google gives us read-only access, so we cannot submit your sitemap. Give us Full access in Search Console, or submit it yourself.');
   const fr = d.freeze || {};
   out.push({ json: { site_id: d.site_id, domain: S(d.domain), run_at: S(d.run_at) || nowIso, request_id: S(d.request_id),
     known: sum.known, indexed: sum.indexed, not_indexed: sum.not_indexed, excluded: sum.excluded, unknown: sum.unknown, errors: n0(cnt.errors) + sum.errors,
@@ -45,6 +61,9 @@ for (const d of diag) {
       pending: Array.isArray(d.gsc_sitemaps) ? d.gsc_sitemaps.filter(x => x.pending).length : null,
       read: n0(sm.read), fetched: n0(sm.fetched), urls: n0(sm.urls), capped: !!sm.capped, complete: d.failed ? null : sm.complete === true, robots_status: n0(sm.robots_status),
       home_host: S(sm.home_host), errors: (sm.errors || []).slice(0, 10), checked: !d.failed, chain_id: S(plan0.chain_id),
+      permission: S(sp.permission), permission_full: sr.permission_full, submit: { on: !!sp.on, gate: S(sp.gate), kill_switch: !!sp.kill_off, skipped: (sp.skipped || []).slice(0, 5) },
+      submissions: sr.submissions, tree_fp: sp.tree_fp || null, submit_denied: sr.submit_denied || null,
+      ...(d.links ? { links: { read: !!d.links.read, sources: n0(d.links.sources), found: n0(d.links.found), parents: (d.links.parents || []).slice(0, 10).map(x => ({ url: S(x.url), read: !!x.read })) } } : {}),
       ...(S(d.why_detail) ? { error_detail: S(d.why_detail).slice(0, 300) } : {}) }) } });
 }
 return out.length ? out : [{ json: { skip: true, reason: 'no website' } }];

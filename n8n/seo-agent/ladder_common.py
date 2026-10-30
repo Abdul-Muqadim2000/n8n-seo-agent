@@ -200,7 +200,11 @@ MONITORS_COLS = [('site_id', 'string'), ('domain', 'string'), ('ai_visibility', 
                  # Index coverage (2026-10-29, docs/indexing-2026-10-29/DESIGN.md §2.6): the daily index watch of the website (empty = on) and how many
                  # URL Inspections it may spend a day (empty = 300, kept 20-1,200 so the Site Tracker and the audits keep their share of Google's
                  # 2,000 a day per property). Written and validated by Site Admin `monitors`. Run sync_tables.py after deploying.
-                 ('index_watch', 'boolean'), ('index_daily_cap', 'number')]
+                 ('index_watch', 'boolean'), ('index_daily_cap', 'number'),
+                 # Index coverage wave 2 (2026-10-30, docs/indexing-2026-10-29/DESIGN_WAVE2.md §2.5): the client's opt-in for sitemap submission
+                 # (empty = OFF). Only with this on AND Google reporting full access (siteOwner / siteFullUser) does the engine submit the
+                 # website's sitemap (sitemaps.submit, nothing else). Written and validated by Site Admin `monitors`. Run sync_tables.py.
+                 ('index_sitemap_submit', 'boolean')]
 AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('keyword', 'string'), ('source', 'string'), ('status', 'string'), ('created_at', 'string'),
                    ('stage', 'string'), ('cluster', 'string'), ('volume', 'number'), ('origin', 'string'), ('updated_at', 'string'),
                    # G6 (2026-10-18): who asks it (buyer role), in which market (CC-lang), pinned by the owner (never retired by the writer),
@@ -407,7 +411,12 @@ INDEX_PAGES_COLS = [('site_id', 'string'), ('domain', 'string'), ('url', 'string
                     # (N3; ISO of that crawl, '' = none; no new fix_seen_at until our read sees the problem again or Google's reason changes),
                     # and when the page was last marked "ask Google to read it" (N6; kept after the mark ends, so at most 5 NEW marks a
                     # site in any 7 days)
-                    ('fix_failed_at', 'string'), ('ask_google_at', 'string')]
+                    ('fix_failed_at', 'string'), ('ask_google_at', 'string'),
+                    # wave 2 (DESIGN_WAVE2.md §2.1 / §2.3): which of the website's own pages link here today (JSON list of up to 3 source URLs
+                    # read from the home page and the page's parent; '' = none found; 'unread' = the home page could not be read this run,
+                    # nothing concluded); when the client said "I asked Google" (written by the APP only, ISO; the engine carries it) and
+                    # when Google read the page after that ask (the inspection's last crawl, written by the engine, ISO)
+                    ('linked_by', 'string'), ('asked_google_at', 'string'), ('google_read_after_ask_at', 'string')]
 # seo_index_history: insert only, one row per state / cause change of a page
 INDEX_HISTORY_TABLE = 'seo_index_history'
 INDEX_HISTORY_COLS = [('site_id', 'string'), ('url', 'string'), ('at', 'string'), ('state', 'string'), ('cause', 'string'), ('evidence', 'string'), ('verdict', 'string'), ('coverage', 'string')]

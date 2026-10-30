@@ -1,0 +1,10 @@
+User-Agent: *
+Allow: /
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /login
+Disallow: /legacy
+Disallow: /insights/preview/
+
+Host: https://devaicon.com
+Sitemap: https://devaicon.com/sitemap.xml

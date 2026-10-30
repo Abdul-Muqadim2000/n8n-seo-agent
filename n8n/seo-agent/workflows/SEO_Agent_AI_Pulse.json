@@ -183,6 +183,10 @@
               {
                 "name": "index_daily_cap",
                 "type": "number"
+              },
+              {
+                "name": "index_sitemap_submit",
+                "type": "boolean"
               }
             ]
           },

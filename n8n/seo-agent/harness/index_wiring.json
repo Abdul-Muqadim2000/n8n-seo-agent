@@ -111,6 +111,14 @@
     "Inspect Retry Requests"
    ]
   ],
+  "Any Link Reads?": [
+   [
+    "Fetch Link Pages"
+   ],
+   [
+    "Site Links"
+   ]
+  ],
   "Any Next Part?": [
    [
     "Start Next Index Part"
@@ -164,7 +172,7 @@
     "Save Index Reservation"
    ],
    [
-    "Index Probe Requests"
+    "Sitemap Submit Requests"
    ]
   ],
   "Any Retry Part?": [
@@ -178,6 +186,14 @@
    ],
    [
     "Next Index Part"
+   ]
+  ],
+  "Any Sitemap Submit?": [
+   [
+    "Submit Sitemap (Index)"
+   ],
+   [
+    "Index Probe Requests"
    ]
   ],
   "Any Sitemaps 1?": [
@@ -367,6 +383,11 @@
   "Fetch Hop Requests": [
    [
     "Any Hops?"
+   ]
+  ],
+  "Fetch Link Pages": [
+   [
+    "Site Links"
    ]
   ],
   "Fetch Page (Final)": [
@@ -606,6 +627,11 @@
     "Ledger Join (Index)"
    ]
   ],
+  "Link Read Requests": [
+   [
+    "Any Link Reads?"
+   ]
+  ],
   "Load Catch-up Records (Index)": [
    [
     "Run Ledger Row (Index)"
@@ -830,7 +856,7 @@
   ],
   "Save Index Reservation": [
    [
-    "Index Probe Requests"
+    "Sitemap Submit Requests"
    ]
   ],
   "Save Index Runs": [
@@ -877,6 +903,11 @@
     "Index Watch Plan"
    ]
   ],
+  "Site Links": [
+   [
+    "Index Inventory"
+   ]
+  ],
   "Site To Check? (Index)": [
    [
     "Index Attempt"
@@ -917,7 +948,7 @@
   ],
   "Sitemap Read 7": [
    [
-    "Index Inventory"
+    "Link Read Requests"
    ]
   ],
   "Sitemap Requests 1": [
@@ -955,6 +986,11 @@
     "Any Sitemaps 7?"
    ]
   ],
+  "Sitemap Submit Requests": [
+   [
+    "Any Sitemap Submit?"
+   ]
+  ],
   "Sitemaps List Requests": [
    [
     "Any Sitemaps List?"
@@ -973,6 +1009,11 @@
   "Start Next Index Part": [
    [
     "Load Start Alerts (Next)"
+   ]
+  ],
+  "Submit Sitemap (Index)": [
+   [
+    "Index Probe Requests"
    ]
   ],
   "Tell Caller (Index)?": [
@@ -1021,6 +1062,7 @@
  ],
  "external": [
   "Fetch Google Incidents",
+  "Fetch Link Pages",
   "Fetch Page (Final)",
   "Fetch Page (Index)",
   "Fetch Sitemaps 1",
@@ -1043,7 +1085,8 @@
   "Post Alert Retry (Index)",
   "Post Index Start Alert (After Settle)",
   "Post Index Start Alert (Before Settle)",
-  "Post Refusal (Index)"
+  "Post Refusal (Index)",
+  "Submit Sitemap (Index)"
  ],
  "file": "SEO_Agent_Index_Coverage.json",
  "history_cols": [
@@ -1095,6 +1138,7 @@
   "Any Index Rows?",
   "Any Index Watch?",
   "Any Inspections (Index)?",
+  "Any Link Reads?",
   "Any Next Part?",
   "Any Page Fetches?",
   "Any Pages Query More?",
@@ -1104,6 +1148,7 @@
   "Any Reservation?",
   "Any Retry Part?",
   "Any Run Rows?",
+  "Any Sitemap Submit?",
   "Any Sitemaps 1?",
   "Any Sitemaps 2?",
   "Any Sitemaps 3?",
@@ -1134,6 +1179,7 @@
   "Ensure Update Impact Table",
   "Fetch Google Incidents",
   "Fetch Hop Requests",
+  "Fetch Link Pages",
   "Fetch Page (Final)",
   "Fetch Page (Index)",
   "Fetch Sitemaps 1",
@@ -1181,6 +1227,7 @@
   "Inspect URL (Retry)",
   "Ledger Join (Index)",
   "Ledger Settle (Index)",
+  "Link Read Requests",
   "Load Catch-up Records (Index)",
   "Load Content Log (Index)",
   "Load Google Events",
@@ -1237,6 +1284,7 @@
   "Send Start Webhook? (After Settle)",
   "Send Start Webhook? (Before Settle)",
   "Settle Run Ledger (Index)",
+  "Site Links",
   "Site To Check? (Index)",
   "Sitemap Read 1",
   "Sitemap Read 2",
@@ -1252,10 +1300,12 @@
   "Sitemap Requests 5",
   "Sitemap Requests 6",
   "Sitemap Requests 7",
+  "Sitemap Submit Requests",
   "Sitemaps List Requests",
   "Start Index Part",
   "Start Index Watch",
   "Start Next Index Part",
+  "Submit Sitemap (Index)",
   "Tell Caller (Index)?",
   "Update Impact Requests",
   "Update Impact Rows",
@@ -1318,7 +1368,10 @@
   "fix_seen_at",
   "ask_google",
   "fix_failed_at",
-  "ask_google_at"
+  "ask_google_at",
+  "linked_by",
+  "asked_google_at",
+  "google_read_after_ask_at"
  ],
  "run_cols": [
   "site_id",
@@ -1357,6 +1410,17 @@
  ],
  "tz": "America/New_York",
  "workflow": "SEOagentIndexCv1",
+ "write_credential": {
+  "from": [
+   "Submit Sitemap (Index)"
+  ],
+  "id": "SEOcredGoogleSvcW",
+  "kill_switch": "on",
+  "method": "PUT",
+  "nodes": [
+   "Submit Sitemap (Index)"
+  ]
+ },
  "writes": {
   "seo_google_events": [
    "Ensure Google Events Table",

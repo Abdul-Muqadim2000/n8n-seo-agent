@@ -19728,5 +19728,6 @@ await require('./scenarios_index')({ H, run, mock, store, guard, reset, begin })
 await require('./scenarios_index_fix')({ H, run, mock, store, guard, reset, begin });   // IXF1-IXF12 (Index coverage fix wave 1, 2026-10-29, docs/indexing-2026-10-29/FIX_CONTRACT.md): one check per review finding (E1-E16, X1-X4, X7, X8, X13, X16), each failing on the reviewed code
 await require('./scenarios_index_fix2')({ H, run, mock, store, guard, reset, begin });   // IXW1-IXW14 (Index coverage fix wave 2, 2026-10-29, REVIEW_2.md N1-N13): multi-day runs through the generated nodes with a pinned clock, each failing on the integration head (3b0a8cab)
 await require('./scenarios_index_fix3')({ H, run, mock, store, guard, reset, begin });   // IXR2-IXR8 (Index coverage fix wave 3, 2026-10-30, REVIEW_3.md R2-R8): each scenario fails on ix/engine 7777e17d
+await require('./scenarios_index_wave2')({ H, run, mock, store, guard, reset, begin });   // IXV1-IXV7 (Index coverage wave 2, 2026-10-30, DESIGN_WAVE2.md): devaicon.com's real pages end to end (site links, wait, canonical with its own title, utility pages, ask-Google order), "I asked Google" over 30 days, the sitemap-submission gate, the write credential on one node; every non-control check fails on 35c24b03
 H.report();
 })();

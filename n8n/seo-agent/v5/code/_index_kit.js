@@ -46,6 +46,15 @@ const IX = (() => {
     // fix wave 3 (2026-10-30, ENGINE_BUILD.md "Fix wave 3")
     sitemap_batch_deep: 8,                         // R3: unknown-size sitemaps read at once after an index of indexes was read (three-level trees)
     run_max_minutes: 62,                           // R8: an unfinished run row younger than this may still be running (executionTimeout 3,600 s)
+    // wave 2 (2026-10-30, docs/indexing-2026-10-29/DESIGN_WAVE2.md)
+    parents_max: 10,                               // §2.1: parent pages (/a/b -> /a) read a run, besides the home page
+    linked_by_max: 3,                              // §2.1: source URLs kept in seo_index_pages.linked_by
+    link_from_max: 3, link_min_score: 1.0,         // §2.2: link suggestions: at most 3, each with a real topic overlap (IDF-weighted)
+    link_generic_share: 0.4,                       // §2.2: a word on more than 40% of the candidate pages (the site's name, its menu) says nothing
+    ask_reoffer_days: 28, ask_wait_note_days: 14,  // §2.3: a page the client asked Google about is offered again after 28 days; the 14-day note
+    ask_first_check_hours: 20, ask_recheck_days: 3, ask_read_note_days: 28,   // §2.3: the check-back inspections after "I asked Google"
+    submit_space_days: 7, submit_max: 3, submit_denied_days: 28,   // §2.5: one submission per sitemap per 7 days, 3 sitemaps a run; a 403 holds
+    submissions_keep: 10,                          // §2.5: submissions carried in seo_index_runs.sitemaps_json
   };
   // ---- URLs: strict parsing (E11), canonical host, host-agnostic keys, own host only ----
   // A URL is read only when it is plain http(s)://host[:80|443]/path?query: no userinfo, no backslash, no whitespace, no IP literal, no bare
@@ -179,6 +188,9 @@ const IX = (() => {
     const doc = parseSitemap(body);
     if (doc.kind === 'unknown') { st.errors.push({ url: asked.url, error: 'not a sitemap (no urlset / sitemapindex)' }); return st; }
     st.read++; if (doc.kind === 'urlset') st.sets = n0(st.sets) + 1;
+    // wave 2 (§2.5): the sitemaps read as real sitemaps, with where they came from (robots.txt, /sitemap.xml, Search Console, a child):
+    // only a sitemap we could read is ever submitted
+    st.ok = (st.ok || []); if (st.ok.length < CFG.sitemaps_max && !st.ok.some(x => same(x.url, asked.url))) st.ok.push({ url: safe(asked.url, site) || S(asked.url), from: S(asked.from) });
     // R3 (fix wave 3): an index found BELOW the roots (an index of indexes) says the tree has a third level: its leaves are many and an
     // index answer is a short list, so the first leaves are read in a larger batch (sitemapBatch) and the rounds are not used up by the indexes
     if (doc.kind === 'index' && n0(asked.depth) >= 1) st.deep_index = true;
@@ -607,13 +619,14 @@ const IX = (() => {
     if (cause === 'robots_blocked') return robots == null ? null : !!robots;
     if (cause === 'indexed_not_in_sitemap') return x.sitemap_complete === true ? !!row.in_sitemap : null;
     const smGone = x.sitemap_complete === true && !row.in_sitemap;
-    if (!f || !f.ok || f.blocked) return (cause === 'canonical_elsewhere' || (cause === 'redirect' && S(row.action) === 'site_fix')) && smGone ? true : null;
+    if (!f || !f.ok || f.blocked) return ((cause === 'canonical_elsewhere' && !row._own_title) || (cause === 'redirect' && S(row.action) === 'site_fix')) && smGone ? true : null;
     const st = n0(f.http_status); const ok200 = st >= 200 && st < 300 && !S(f.final_url);
     switch (cause) {
       case 'noindex': return ok200 && !f.noindex && n0(f.words) > 0;
       case 'server_error': case 'access_denied': return ok200;
       case 'not_found': return ok200 || (st >= 200 && st < 300 && !!S(f.final_url) && own(f.final_url, x.site));
-      case 'canonical_elsewhere': return smGone || (ok200 && !!S(f.page_canonical) && same(f.page_canonical, row.url));
+      // wave 2 (§2.2): a page with its own title that names another page as its canonical is fixed only when it names ITSELF
+      case 'canonical_elsewhere': return row._own_title ? (ok200 && !!S(f.page_canonical) && same(f.page_canonical, row.url)) : (smGone || (ok200 && !!S(f.page_canonical) && same(f.page_canonical, row.url)));
       case 'redirect': return S(row.action) === 'site_fix' ? (smGone || ok200) : null;
       case 'redirect_error': return ok200 || (st >= 200 && st < 300 && !!S(f.final_url));
       default: return null;
@@ -673,7 +686,9 @@ const IX = (() => {
       indexed_not_in_sitemap: 'Google has this page, but your sitemap does not list it. Add it to the sitemap so Google keeps finding it.',
       wait_new: 'This page is new and Google has not crawled it yet, which is normal in the first weeks. We check it again on a schedule.',
       unknown_to_google: 'Google does not know this page yet. Link to it from pages Google already has and keep it in your sitemap.',
-      not_in_sitemap: 'Google does not know this page and your sitemap does not list it. Add it to the sitemap and link to it from your other pages.',
+      not_in_sitemap: linkedList(row.linked_by).length
+        ? 'Google does not know this page and your sitemap does not list it. Add it to the sitemap; it is already linked from your website (' + pathOf(linkedList(row.linked_by)[0]) + ').'
+        : 'Google does not know this page and your sitemap does not list it. Add it to the sitemap and link to it from your other pages.',
       discovered_not_crawled: 'Google has found this page but has not crawled it yet. Links from your pages that Google already has help it decide to crawl it.',
       crawled_not_indexed: freeze
         ? 'Google read this page and chose not to add it for now. Google is rolling out an update (' + S(c.freeze.title) + '), so wait until it finishes before changing this page.'
@@ -703,12 +718,28 @@ const IX = (() => {
       unclassified: 'Google gave a reason we do not recognise ("' + S(row.coverage).slice(0, 80) + '"). Check this address in Search Console.',
     };
     let s = Object.prototype.hasOwnProperty.call(T, cause) ? T[cause] : 'We have not checked this page yet.';
+    // wave 2 (DESIGN_WAVE2.md §2.2): a page already linked from the website that Google has not visited yet; a page with a title of its own
+    // that tells Google it is a copy of another page; a policy / utility page
+    const lk = linkedList(row.linked_by);
+    if ((cause === 'unknown_to_google' || cause === 'discovered_not_crawled') && S(row.action) === 'wait' && lk.length)
+      s = 'Already linked from your website (' + pathOf(lk[0]) + ')' + (row.in_sitemap === true || row.in_sitemap === 'true' ? ' and listed in your sitemap' : '') + '. Google has not visited it yet, which is common for a young website. '
+        + 'What helps: links from other websites to your site, and asking Google to read your most important pages.';
+    if (cause === 'canonical_elsewhere' && row._own_title) {
+      const tgt = S(row.user_canonical) && own(row.user_canonical, c.site || { domain: row.domain }) && !same(row.user_canonical, row.url) ? S(row.user_canonical) : S(row.page_canonical) || S(row.user_canonical);
+      s = 'This page tells Google it is a copy of ' + pathOf(tgt) + ', so Google shows that page instead. If this page should be found on its own, point its canonical tag to itself'
+        + (row.in_sitemap === true || row.in_sitemap === 'true' ? '.' : ' and add it to your sitemap.');
+    }
+    if (cause === 'low_value' && isUtility(row.url)) s = 'Policy and utility pages do not need to be in Google.';
     if (S(row.state) === 'unknown') s = 'We have not checked this page with Google yet. It is in the queue.';
     if (S(row.fix_seen_at) && S(row.action) === 'wait') s = 'Fixed on your site. Waiting for Google to read it again.';
     // N3: Google read the page after the change we saw on the site and still reports the same reason
     else if (S(row.fix_failed_at) && S(row.action) === 'site_fix') s = 'Google read this page again on ' + S(row.fix_failed_at).slice(0, 10) + ', after the change we saw on your site, and still sees the same problem. '
       + 'It may only be shown to Google\'s crawler (by a plugin, a CDN or a server rule). ' + s;
     if (row.needs_person) s += ' We have checked it ' + CFG.person_after + ' times with no change, so it needs a person to look at it.';
+    // wave 2 (§2.3): the client asked Google to read the page (asked_google_at, written by the app): what Google did since
+    const ak = askState(row, c.now);
+    if (ak.state === 'read' && ak.days_since_read <= CFG.ask_read_note_days) s = 'Google read it again on ' + S(row.google_read_after_ask_at).slice(0, 10) + '. ' + s;
+    else if (ak.state === 'quiet') s = 'You asked Google on ' + S(row.asked_google_at).slice(0, 10) + '; Google has not read it again yet. There is nothing more to do on your side for now.';
     return s.replace(/[—–]/g, '-').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/…/g, '...');
   };
 
@@ -718,7 +749,8 @@ const IX = (() => {
   const slimPrev = (r) => ({ url: S(r.url), state: S(r.state), cause: S(r.cause), action: S(r.action), checks: n0(r.checks), inspect_at: S(r.inspect_at),
     indexed_since: S(r.indexed_since), dropped_at: S(r.dropped_at), lane: S(r.lane), in_sitemap: yes(r.in_sitemap), first_seen_at: S(r.first_seen_at),
     fix_seen_at: S(r.fix_seen_at), ask_google: yes(r.ask_google), next_check_at: S(r.next_check_at), sig: rowSig(r),
-    fix_failed_at: S(r.fix_failed_at), ask_google_at: S(r.ask_google_at), sources: S(r.sources) });
+    fix_failed_at: S(r.fix_failed_at), ask_google_at: S(r.ask_google_at), sources: S(r.sources),
+    linked_by: S(r.linked_by), asked_google_at: S(r.asked_google_at), google_read_after_ask_at: S(r.google_read_after_ask_at) });
   /**
    * c: { site, now, stored (seo_index_pages rows), inventory (seo_pages rows), sitemap: { read, complete, urls: [{loc, lastmod, gsc}] },
    * ours: [{url, published_at}], search: searchEvidence() result + { read }, watch: seo_page_watch rows, prev_complete, prev_complete_at }.
@@ -752,6 +784,9 @@ const IX = (() => {
     for (const u of (sm.urls || [])) { const loc = norm(u.loc, site); const p = get(loc); if (!p) continue; p._src.add('sitemap'); if (u.gsc) p._src.add('gsc'); p._lastmod = S(u.lastmod) || S(p._lastmod); p._insm = true; p._smLoc = p._smLoc || loc; }
     if (sr.by) for (const e of sr.by.values()) { if (!(n0(e.impr90) > 0 || n0(e.impr28) > 0)) continue; const p = get(e.url); if (p) { p._src.add('search'); p._search = e; } }
     for (const r of (c.inventory || [])) { if (!r || !S(r.url)) continue; const p = get(norm(r.url, site)); if (!p) continue; p._src.add('inventory'); p._inv = r; }
+    // wave 2 (§2.1): pages the home page or a parent links to; a page no other source names is added with the source `home`
+    const linkIdx = c.link_index || null; const linksRead = !!c.links_read && !!linkIdx;
+    for (const u of (c.linked || [])) { const loc = norm(u, site); if (!loc) continue; const had = pages.has(key(loc)); const p = get(loc); if (p && (!had || !p._src.size)) p._src.add('home'); }
     // A Site Tracker reading is borrowed only for the exact address it was taken for: `key` ignores www, but techand.ai/x (308 to www) and
     // www.techand.ai/x are different URLs to Google ("Page with redirect" vs indexed). Production, first run 2026-10-29.
     const watchBy = new Map(); for (const w of (c.watch || [])) if (w && S(w.url)) { const a = watchBy.get(key(w.url)) || []; a.push(w); watchBy.set(key(w.url), a); }
@@ -779,11 +814,12 @@ const IX = (() => {
       const src = new Set(p._src); const pv = prev || {}; if (keepFinal) src.add('final');
       if (!smComplete && !p._insm) for (const x of ['sitemap', 'gsc']) if (S(pv.sources).split(',').includes(x)) src.add(x);
       if ((!sr.read || (sr.truncated && !p._search)) && S(pv.sources).split(',').includes('search')) src.add('search');
+      if (!linksRead && !src.size && S(pv.sources).split(',').includes('home')) src.add('home');   // wave 2: an unread day keeps it
       const ev = sr.read ? (p._search || (sr.truncated ? null : ZERO)) : null;
       const keep = (f, fallback) => (ev && ev[f] != null) ? ev[f] : fallback;
       const inv = p._inv || {};
       const row = { ...pv, site_id: S(site.site_id), domain: bare(site.domain), url,
-        sources: ['sitemap', 'gsc', 'inventory', 'ours', 'search', 'final'].filter(x => src.has(x)).join(','),
+        sources: ['sitemap', 'gsc', 'inventory', 'ours', 'search', 'final', 'home'].filter(x => src.has(x)).join(','),
         in_sitemap: p._insm ? true : smComplete ? false : yes(pv.in_sitemap),
         sitemap_lastmod: p._insm ? S(p._lastmod) : smComplete ? '' : S(pv.sitemap_lastmod),
         first_seen_at: S(pv.first_seen_at) || nowIso,
@@ -795,6 +831,9 @@ const IX = (() => {
         state: S(pv.state) || 'unknown', checks: n0(pv.checks),
         _prev: prev ? slimPrev(prev) : null, _moved_from: prev && url !== S(prev.url) ? S(prev.url) : '',
         _search: ev, _impr7: ev && ev.impr7 != null ? ev.impr7 : 0, _watch: (watchBy.get(k) || []).find(w => hostOf(w.url) === hostOf(url)) || null };
+      // wave 2 (§2.1): who links here today (up to 3 sources); 'unread' when the home page could not be read: nothing is concluded
+      row.linked_by = linksRead ? (() => { const a = linkedOf(url, linkIdx).slice(0, CFG.linked_by_max); return a.length ? JSON.stringify(a) : ''; })() : 'unread';
+      if (!S(row.title) && c.titles && c.titles[k]) row.title = S(c.titles[k]).slice(0, 300);
       row.lane = laneOf(row, ctx);
       // our own sitemap check settles the sitemap half of a cause without waiting for Google (a complete read only)
       if (smComplete && row.in_sitemap && S(row.cause) === 'indexed_not_in_sitemap') Object.assign(row, { cause: '', action: 'none' });
@@ -846,6 +885,9 @@ const IX = (() => {
         if (m !== undefined && last < a + m * DAY) bucket = 1;
       }
       if (!bucket && S(p.fix_seen_at) && (!next || next <= now)) bucket = 1.5;
+      // wave 2 (§2.3): the client asked Google to read the page: inspected the day after (within 2 days), then every 3 days until Google
+      // has read it again or 14 days have passed
+      if (!bucket) { const ak = askState(p, now); if (ak.state === 'waiting' && (last < ak.asked ? now - ak.asked >= CFG.ask_first_check_hours * 3600e3 : now - last >= CFG.ask_recheck_days * DAY)) bucket = 1.6; }
       if (!bucket && state === 'indexed' && ev && opts.search_read !== false && ev.impr14 === 0 && n0(ev.impr_before) > 0 && now - last >= CFG.lost_recheck_days * DAY) bucket = 2;
       if (!bucket && state === 'unknown' && !last) bucket = 3;
       if (!bucket && (state === 'not_indexed' || state === 'excluded' || state === 'error') && (!next || next <= now)) bucket = 4;
@@ -890,13 +932,17 @@ const IX = (() => {
    */
   const askGoogle = (rows, o) => {
     const opts = o || {}; const now = n0(opts.now); const nowIso = new Date(now).toISOString(); const home = opts.home_keys || new Set(); const frz = !!(opts.freeze && opts.freeze.freeze);
+    // wave 2 (DESIGN_WAVE2.md §2.3): never a utility page or a job posting; a page the client already asked Google about waits ask_reoffer_days;
+    // important existing pages are the ones in the sitemap OR linked from the website (linked_by)
     const eligible = (r) => {
       if (S(r.state) === 'indexed' || S(r.action) === 'leave_out' || S(r.action) === 'none' && !S(r.fix_seen_at)) return 0;
       if (frz && S(r.action) === 'quality') return 0;
+      if (isUtility(r.url) || isJobPosting(r.url)) return 0;
+      const ak = ts(r.asked_google_at); if (ak && now - ak < CFG.ask_reoffer_days * DAY) return 0;
       if (S(r.fix_seen_at)) return 3;
       const pub = ts(r.published_at);
       if (S(r.sources).split(',').includes('ours') && pub && now - pub >= CFG.ask_ours_days * DAY) return 2;
-      if (r.in_sitemap && home.has(key(r.url)) && ['discovered_not_crawled', 'unknown_to_google'].includes(S(r.cause))) return 1;
+      if ((r.in_sitemap || linkedList(r.linked_by).length || home.has(key(r.url))) && ['discovered_not_crawled', 'unknown_to_google'].includes(S(r.cause))) return 1;
       return 0;
     };
     const R = rows || [];
@@ -906,8 +952,10 @@ const IX = (() => {
     const keptKeys = new Set(kept.map(r => key(r.url)));
     const recentNew = R.filter(r => { const t = ts(markedAt(r)); return t && now - t < CFG.ask_window_days * DAY; }).length;
     const room = Math.max(0, Math.min(CFG.ask_max - kept.length, CFG.ask_max - recentNew));
-    const fresh = R.filter(r => !keptKeys.has(key(r.url))).map(r => ({ r, w: eligible(r) })).filter(x => x.w > 0)
-      .sort((a, b) => b.w - a.w || n0(b.r.impressions_28d) - n0(a.r.impressions_28d) || depth(a.r.url) - depth(b.r.url) || S(a.r.url).localeCompare(S(b.r.url))).slice(0, room).map(x => x.r);
+    // wave 2 (§2.3): by value - a fix seen on the site first, then (1) service / product / capability / solution / industry pages linked from
+    // the home page, (2) articles, (3) other content pages; ties: impressions, then the shallower path
+    const fresh = R.filter(r => !keptKeys.has(key(r.url))).map(r => ({ r, w: eligible(r), v: askValue(r, home) })).filter(x => x.w > 0)
+      .sort((a, b) => ((b.w === 3) - (a.w === 3)) || a.v - b.v || n0(b.r.impressions_28d) - n0(a.r.impressions_28d) || depth(a.r.url) - depth(b.r.url) || S(a.r.url).localeCompare(S(b.r.url))).slice(0, room).map(x => x.r);
     const freshKeys = new Set(fresh.map(r => key(r.url)));
     for (const r of R) {
       const k = key(r.url);
@@ -931,16 +979,27 @@ const IX = (() => {
   const STOP = new Set('the and for with from that this your you our are was were has have had not but all any can will into about over more most how what why when who which their them they its it is in on of to a an or as at by be we us uae www com html php htm page pages index home amp'.split(' '));
   const words = (s) => (S(s).toLowerCase().replace(/https?:\/\/[^\/]+/g, ' ').match(/[\p{L}\p{N}]+/gu) || []).filter(w => w.length > 2 && !STOP.has(w) && !/^\d+$/.test(w));
   const topicOf = (p) => [...new Set(words(S(p.title) + ' ' + pathOf(p.url).replace(/[-_\/.]+/g, ' ')))];
-  /** <= links_max existing indexed pages that share topic words with the target (IDF-weighted overlap); never the page itself, never a not-indexed page. */
-  const linkSuggestions = (target, pages) => {
-    const cands = (pages || []).filter(q => q && S(q.state) === 'indexed' && !same(q.url, target.url) && !isLowValue(q.url));
+  /**
+   * <= link_from_max existing indexed pages that share real topic words with the target (IDF-weighted overlap of at least link_min_score);
+   * never the page itself, a not-indexed page, a listing / utility page or a job posting, never a page that already links to it (o.linked_from),
+   * and never a generic filler: the site's own name and the words on most pages (its menu, its title suffix) are not a topic, and an empty
+   * list is better than a wrong one (wave 2, DESIGN_WAVE2.md §2.2: devaicon.com got the same 5 pages for every target, through "devaicon").
+   */
+  const linkSuggestions = (target, pages, o) => {
+    const opts = o || {}; const already = new Set((opts.linked_from || []).map(key));
+    const brand = new Set(words(bare(S((opts.site || {}).domain) || hostOf(target.url)).split('.')[0]));
+    const cands = (pages || []).filter(q => q && S(q.state) === 'indexed' && !same(q.url, target.url) && !isLowValue(q.url) && !isUtility(q.url) && !isJobPosting(q.url) && !already.has(key(q.url)));
     if (!cands.length) return [];
-    const df = new Map(); for (const q of cands) for (const w of topicOf(q)) df.set(w, (df.get(w) || 0) + 1);
+    // the topic of a page is its title (without the site's name) and the LAST segment of its address: a section (/insights/, /capabilities/)
+    // says where a page sits, not what it is about, so two articles of one section do not share a topic through it
+    const tw0 = (p) => [...new Set(words(titleCore(p.title, opts.site || { domain: p.domain }) + ' ' + (pathOf(p.url).split('/').filter(Boolean).pop() || '').replace(/[-_.]+/g, ' ')))].filter(w => !brand.has(w));
+    const df = new Map(); for (const q of cands) for (const w of tw0(q)) df.set(w, (df.get(w) || 0) + 1);
     const N = cands.length;
-    const tw = topicOf(target);
-    const scored = cands.map(q => { const qw = new Set(topicOf(q)); let s = 0; for (const w of tw) if (qw.has(w)) s += Math.log((N + 1) / (df.get(w) || 1)); return { q, s }; })
-      .filter(x => x.s > 0).sort((a, b) => b.s - a.s || n0(b.q.impressions_28d) - n0(a.q.impressions_28d) || S(a.q.url).localeCompare(S(b.q.url)));
-    return scored.slice(0, CFG.links_max).map(x => ({ url: x.q.url, title: S(x.q.title).slice(0, 160) }));
+    const generic = (w) => N >= 3 && (df.get(w) || 0) / N > CFG.link_generic_share;
+    const tw = tw0(target).filter(w => !generic(w));
+    const scored = cands.map(q => { const qw = new Set(tw0(q)); let s = 0; for (const w of tw) if (qw.has(w)) s += Math.log((N + 1) / (df.get(w) || 1)); return { q, s }; })
+      .filter(x => x.s >= CFG.link_min_score).sort((a, b) => b.s - a.s || n0(b.q.impressions_28d) - n0(a.q.impressions_28d) || S(a.q.url).localeCompare(S(b.q.url)));
+    return scored.slice(0, CFG.link_from_max).map(x => ({ url: x.q.url, title: S(x.q.title).slice(0, 160) }));
   };
 
   // ---- Google's Search Status Dashboard and the spam-policies page ----
@@ -1078,7 +1137,7 @@ const IX = (() => {
     'last_impression_at', 'state', 'evidence', 'cause', 'action', 'verdict', 'coverage', 'indexing_state', 'robots_state', 'page_fetch_state', 'crawled_as',
     'google_canonical', 'user_canonical', 'last_crawl', 'referring_count', 'google_sitemaps', 'inspect_at', 'fetch_at', 'http_status', 'final_url', 'noindex',
     'page_canonical', 'words', 'title', 'indexed_since', 'dropped_at', 'checks', 'next_check_at', 'needs_person', 'link_from', 'merge_into', 'note', 'updated_at',
-    'fix_seen_at', 'ask_google', 'fix_failed_at', 'ask_google_at'];
+    'fix_seen_at', 'ask_google', 'fix_failed_at', 'ask_google_at', 'linked_by', 'asked_google_at', 'google_read_after_ask_at'];
   // fix wave 1 (FIX_CONTRACT.md): our fetch saw the site fix (X7), and "ask Google to read it" (X8); fix wave 2: Google read the page after
   // that fix and still saw the cause (N3), and when the page was last newly marked (N6)
   const NUM = ['impressions_28d', 'clicks_28d', 'referring_count', 'google_sitemaps', 'http_status', 'words', 'checks'];
@@ -1118,7 +1177,11 @@ const IX = (() => {
     access_denied: 'These pages ask for a login or turn visitors away, so Google cannot read them. Open them to everyone if you want them in Google.',
     noindex: 'These pages tell search engines not to index them. Remove the noindex if you want them in Google.',
     not_checked: 'We could not check these pages on the last try. We try again on the next run.', unclassified: 'Google gave a reason we do not recognise. Check these addresses in Search Console.' };
-  const groupNote = (row, ctx) => GROUP[S(row.cause)] && !(S(row.cause) === 'redirect' && S(row.action) !== 'site_fix') ? GROUP[S(row.cause)] : noteOf({ cause: row.cause, action: row.action, state: row.state }, ctx).replace(/ We have checked it [\s\S]*$/, '');
+  const groupNote = (row, ctx) => GROUP[S(row.cause)] && !(S(row.cause) === 'redirect' && S(row.action) !== 'site_fix') ? GROUP[S(row.cause)]
+    : (S(row.action) === 'wait' && (S(row.cause) === 'unknown_to_google' || S(row.cause) === 'discovered_not_crawled') && !S(row.fix_seen_at))
+      ? 'Already linked from your website. Google has not visited these pages yet, which is common for a young website. What helps: links from other websites to your site, and asking Google to read your most important pages.'
+    : (S(row.cause) === 'low_value' && isUtility(row.url)) ? 'Policy and utility pages do not need to be in Google.'
+    : noteOf({ cause: row.cause, action: row.action, state: row.state }, ctx).replace(/ We have checked it [\s\S]*$/, '');
   const lineOf = (r) => '  - ' + r.url + (S(r.merge_into) ? ' (Google uses ' + r.merge_into + ')' : '') + (S(r.final_url) ? ' (redirects to ' + r.final_url + ')' : '')
     + (n0(r.http_status) >= 400 ? ' (answers ' + n0(r.http_status) + ')' : '') + (r.needs_person ? ' (needs a person: checked ' + CFG.person_after + ' times with no change)' : '');
   const reportMarkdown = (site, sum, run, o) => {
@@ -1139,10 +1202,12 @@ const IX = (() => {
       const rows = (opts.rows || []).filter(r => a === 'fixed' ? (r.action === 'wait' && S(r.fix_seen_at)) : r.action === a && !(a === 'wait' && S(r.fix_seen_at)) && (a !== 'none' || (S(r.cause) && r.state !== 'indexed')));
       if (!rows.length) continue;
       L.push('## ' + ACTION_LABEL[a] + ' (' + rows.length + ')');
-      const causes = [...new Set(rows.map(r => r.cause))];
-      for (const c of causes) {
-        const cr = rows.filter(r => r.cause === c);
-        L.push('- **' + (CAUSE_LABEL[c] || c) + '** (' + cr.length + '): ' + (a === 'fixed' ? 'Fixed on your site. Waiting for Google to read these pages again.' : groupNote(cr[0], { freeze: opts.freeze })));
+      // wave 2: a canonical to another page from a page with its own title is a group of its own (another step than a non-main address in the sitemap)
+      const gk = (r) => S(r.cause) + (r.own_title ? '#own' : '');
+      const causes = [...new Set(rows.map(gk))];
+      for (const c0 of causes) {
+        const cr = rows.filter(r => gk(r) === c0); const c = S(cr[0].cause);
+        L.push('- **' + (cr[0].own_title ? 'Tells Google it is a copy of another page' : (CAUSE_LABEL[c] || c)) + '** (' + cr.length + '): ' + (a === 'fixed' ? 'Fixed on your site. Waiting for Google to read these pages again.' : cr[0].own_title ? 'These pages name another page as their main version although they have their own titles, so Google shows that page instead. If they should be found on their own, point each canonical tag to the page itself and list them in your sitemap.' : groupNote(cr[0], { freeze: opts.freeze })));
         for (const r of cr.slice(0, 5)) L.push(lineOf(r));
         if (cr.length > 5) L.push('  - and ' + (cr.length - 5) + ' more');
       }
@@ -1151,8 +1216,258 @@ const IX = (() => {
     if ((opts.dropped || []).length) { L.push('## Dropped out of Google (' + opts.dropped.length + ')'); for (const d of opts.dropped) L.push('- ' + d.url + ' (' + (CAUSE_LABEL[d.cause] || d.cause || 'reason not known yet') + ')'); L.push(''); }
     if ((opts.events || []).length) { L.push('## Google updates'); for (const e of opts.events) L.push('- ' + e.title + ': ' + (e.status === 'rolling_out' ? 'rolling out since ' + S(e.started_at).slice(0, 10) : e.status === 'complete' ? 'finished ' + S(e.ended_at).slice(0, 10) : 'seen ' + S(e.started_at).slice(0, 10))); L.push(''); }
     if (opts.impact && S(opts.impact.note)) { L.push('## What the last update did'); L.push(S(opts.impact.note)); L.push(''); }
-    L.push('We find which pages Google left out, why, and what to do. Google decides what it indexes; nothing here is submitted to Google or changed on your site.');
+    L.push(opts.submit_on
+      ? 'We find which pages Google left out, why, and what to do. Google decides what it indexes. We only read your Search Console, except your sitemap: you switched on sitemap submission, which lets us submit your sitemap and nothing else. Nothing on your site is changed.'
+      : 'We find which pages Google left out, why, and what to do. Google decides what it indexes; nothing here is submitted to Google or changed on your site.');
     return L.join('\n').replace(/[—–]/g, '-').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/…/g, '...');
+  };
+
+  // =================================================================================================================================
+  // wave 2 (2026-10-30, docs/indexing-2026-10-29/DESIGN_WAVE2.md): the site's own links, utility pages, a canonical to another page with
+  // its own title, "I asked Google" checked back, and the opt-in sitemap submission. Pure functions, like the rest of the kit.
+  // =================================================================================================================================
+  /**
+   * §2.4: utility pages - ONE list for the engine and the app (the app mirrors IX.UTILITY). A path segment matched whole and without case
+   * (`privacy`, `privacy.html`, `/legal/privacy`); `security` only as the whole path (/security, never /services/security). Job postings:
+   * a page under /careers/ or /jobs/ with a further segment (the listing /careers itself is a normal page). Job postings are not utility
+   * pages for the cause (a job page may well want to be found: it keeps its own cause and note) but are never offered to "ask Google" and
+   * never suggested as a link source.
+   */
+  const UTILITY = {
+    segments: ['privacy', 'privacy-policy', 'cookies', 'cookie-policy', 'terms', 'terms-of-service', 'terms-and-conditions', 'legal', 'imprint', 'impressum',
+      'disclaimer', 'accessibility', 'sitemap', 'login', 'signin', 'sign-in', 'register', 'signup', 'account', 'cart', 'checkout', 'search', 'thank-you', 'thanks'],
+    top_level_only: ['security'],
+    job_dirs: ['careers', 'jobs'],
+  };
+  const segsOf = (u) => pathOf(u).split('/').filter(Boolean).map(x => { let y = x; try { y = decodeURIComponent(x); } catch (e) { y = x; } return y.toLowerCase().replace(/\.(?:html?|php|aspx?)$/, ''); });
+  const isUtility = (u) => { const g = segsOf(u); if (!g.length) return false;
+    if (g.length === 1 && UTILITY.top_level_only.includes(g[0])) return true;
+    return g.some(x => UTILITY.segments.includes(x)); };
+  const isJobPosting = (u) => { const g = segsOf(u); return g.length >= 2 && UTILITY.job_dirs.includes(g[0]); };
+
+  // ---- §2.1: the links of the home page and of parent pages ----
+  const LINK_SKIP = /^(?:mailto|tel|javascript|data|sms|fax|ftp|whatsapp|skype|callto|intent|file):/i;
+  const NOT_PAGE = /\.(?:webmanifest|pdf|docx?|xlsx?|pptx?|csv|odt|ods|rtf|epub|dmg|exe|apk|msi|iso)$/i;
+  /** An <a href> value resolved against the page it is on (absolute, protocol-relative, root-relative, relative with ./ and ../, or "?q"). */
+  const resolveHref = (raw, base) => {
+    let s = S(raw).replace(/#[\s\S]*$/, ''); if (!s || LINK_SKIP.test(s) || !base) return '';
+    if (/^https?:\/\//i.test(s)) return s;
+    if (/^\/\//.test(s)) return 'https:' + s;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(s)) return '';
+    let q = ''; const qi = s.indexOf('?'); if (qi >= 0) { q = s.slice(qi); s = s.slice(0, qi); }
+    let path = s === '' ? base.path : s[0] === '/' ? s : base.path.replace(/[^\/]*$/, '') + s;
+    const parts = []; for (const seg of path.split('/')) { if (seg === '..') { if (parts.length > 1) parts.pop(); } else if (seg !== '.') parts.push(seg); }
+    path = parts.join('/'); if (path[0] !== '/') path = '/' + path;
+    return 'https://' + base.host + path + (q && q !== '?' ? q : '');
+  };
+  /** The same-site pages one page links to (plain HTML <a href>), on the canonical host, fragments dropped, files left out; bounded. */
+  const pageLinks = (html, pageUrl, site) => {
+    const base = parseUrl(pageUrl); if (!base) return [];
+    const out = []; const seen = new Set(); const h = S(html).slice(0, 600000);
+    const rx = /<a\b[^>]*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi; let m;
+    while ((m = rx.exec(h)) && out.length < CFG.home_links_max) {
+      const raw = decodeXml(m[1] != null ? m[1] : m[2] != null ? m[2] : (m[3] || ''));
+      const abs = resolveHref(raw, base); if (!abs) continue;
+      const n = norm(abs, site); if (!n || NOT_PAGE.test(pathOf(n))) continue;
+      const k = key(n); if (!k || seen.has(k)) continue; seen.add(k); out.push(n);
+    }
+    return out;
+  };
+  /**
+   * { key -> [source urls] } from the pages read (the home page, the parents): which pages link where. A link carrying a query also counts
+   * for the page without it; a page is matched with its query only when the page itself has one (§2.1). A page is never its own source.
+   */
+  const linkIndex = (sources) => {
+    const m = {}; let n = 0;
+    for (const s of (sources || [])) { const su = S(s && s.url); const sk = key(su); if (!sk) continue;
+      for (const l of (s.links || [])) {
+        const ks = [key(l)]; const nq = S(l).replace(/\?[\s\S]*$/, ''); if (nq !== S(l)) ks.push(key(nq));
+        for (const k of ks) {
+          if (!k || k === sk) continue;
+          let a = m[k]; if (!a) { if (n >= CFG.pages_max) continue; a = m[k] = []; n++; }
+          if (a.length < 5 && !a.includes(su)) a.push(su);
+        } } }
+    return m;
+  };
+  const linkedOf = (url, index) => ((index || {})[key(url)] || []).filter(x => !same(x, url));
+  /** The JSON list stored in linked_by ('' and 'unread' are no list). */
+  const linkedList = (v) => { const s = S(v); if (!s || s === 'unread' || s[0] !== '[') return []; try { const a = JSON.parse(s); return Array.isArray(a) ? a.filter(x => typeof x === 'string' && x) : []; } catch (e) { return []; } };
+  const parentOf = (u) => { const p = parseUrl(u); if (!p) return ''; const g = p.path.split('/').filter(Boolean); return g.length < 2 ? '' : 'https://' + p.host + '/' + g.slice(0, -1).join('/'); };
+  /**
+   * §2.1: the parent pages to read this run (/a/b -> /a): for each page not in Google (or not checked yet) whose parent is a page we know,
+   * that parent; never the home page (read already), never through a utility page; the parents with the most such children first, at most
+   * parents_max. known: [{ url, state }] - the stored rows first, then the sitemap's and the home page's addresses.
+   */
+  const parentPlan = (known, site) => {
+    const byKey = new Map(); for (const p of (known || [])) { const k = key(p && p.url); if (k && !byKey.has(k)) byKey.set(k, p); }
+    const cnt = new Map();
+    for (const p of byKey.values()) {
+      if (S(p.state) === 'indexed' || isUtility(p.url)) continue;
+      const par = parentOf(p.url); if (!par) continue;
+      const pk = key(par); if (!byKey.has(pk)) continue;
+      cnt.set(pk, (cnt.get(pk) || 0) + 1);
+    }
+    return [...cnt.entries()].map(([k, n]) => ({ url: safe(byKey.get(k).url, site), children: n })).filter(x => x.url)
+      .sort((a, b) => b.children - a.children || depth(a.url) - depth(b.url) || a.url.localeCompare(b.url)).slice(0, CFG.parents_max);
+  };
+  /** The page's own <title>, entities decoded. */
+  const titleOf = (html) => { const m = S(html).slice(0, 300000).match(/<title[^>]*>([\s\S]*?)<\/title>/i); return m ? decodeEnt(m[1]).replace(/\s+/g, ' ').trim().slice(0, 300) : ''; };
+  const decodeEnt = (t) => S(t).replace(/&#(\d+);/g, (x, d) => { const n = Number(d); return n > 0 && n < 0x110000 ? String.fromCharCode(n) : ' '; })
+    .replace(/&#x([0-9a-f]+);/gi, (x, h) => { const n = parseInt(h, 16); return n > 0 && n < 0x110000 ? String.fromCharCode(n) : ' '; })
+    .replace(/&amp;/gi, '&').replace(/&apos;/gi, "'").replace(/&quot;/gi, '"').replace(/&nbsp;/gi, ' ').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>');
+  /** A title without the site's name ("Banking & Financial Services Technology | Devaicon" -> "banking financial services technology"). */
+  const titleCore = (t, site) => {
+    const brand = bare(S((site || {}).domain)).split('.')[0].replace(/[^a-z0-9]/g, '');
+    const parts = decodeEnt(t).split(/\s+[|\-–—·:•»]\s+/).map(x => x.trim()).filter(Boolean);
+    const flat = (x) => x.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const keep = brand ? parts.filter(x => flat(x) !== brand && flat(x) !== brand + 'com') : parts;
+    return (keep.length ? keep : parts).join(' ').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  };
+  /**
+   * §2.2: does this page name ANOTHER page of the website as its canonical while having a title of its own? true = a page in its own right
+   * that tells Google it is a copy; false = the same title (a real duplicate, pagination, a tracking variant); null = cannot tell (no canonical
+   * to another page of the site, or a title we do not know). The canonical Google read (user_canonical) is the one Google acts on; our own
+   * read's canonical is used when Google has none. titles: Map(key -> title) of the website's pages (rows, our reads, the parents read).
+   */
+  const canonicalOwn = (row, titles, site) => {
+    const st = site || { domain: row.domain };
+    const g = S(row.user_canonical); const mine = S(row.page_canonical);
+    const target = g && own(g, st) && !same(g, row.url) ? g : (mine && own(mine, st) && !same(mine, row.url) ? mine : '');
+    if (!target) return null;
+    const a = titleCore(row.title, st); const b = titleCore((titles && typeof titles.get === 'function' ? titles.get(key(target)) : (titles || {})[key(target)]) || '', st);
+    if (!a || !b) return null;
+    return a !== b;
+  };
+  const UNSEEN = ['unknown_to_google', 'discovered_not_crawled'];
+  // §2.2: what a utility page keeps of its own cause: real faults of the address and causes that are already "nothing to do"
+  const UTILITY_KEEP = ['not_found', 'soft_404', 'server_error', 'redirect', 'redirect_error', 'robots_intended', 'noindex_intended', 'low_value', 'alternate'];
+  /**
+   * §2.2: the cause and action of one page Google does not have, after what the website's own links, its title and the utility list say.
+   * row: { url, domain, cause, action, state, title, page_canonical, user_canonical, in_sitemap, linked_by, fix_seen_at }; c: { titles, site,
+   * prev (the stored row's slim copy) } -> { cause, action, state, own_title, changed }. Indexed, never-checked and not-checked rows pass.
+   *  1. a canonical to another page of the site from a page with its own title -> canonical_elsewhere / site_fix (in the sitemap or not)
+   *  2. a utility page -> low_value / leave_out (never quality, never ask_google)
+   *  3. unknown to Google / found but not crawled AND already linked from the site -> action wait (no link suggestions); no link found ->
+   *     links; the home page unread today -> what was stored (nothing is concluded)
+   */
+  const refine = (row, c) => {
+    const x = c || {}; let cause = S(row.cause), action = S(row.action); let own_title = false;
+    const pass = { cause, action, state: S(row.state) || stateOf(cause), own_title: false, changed: false };
+    if (!cause || stateOf(cause) === 'indexed' || cause === 'not_checked' || S(row.state) === 'unknown' || S(row.state) === 'indexed') return pass;
+    if (cause === 'alternate' || cause === 'canonical_elsewhere') { if (canonicalOwn(row, x.titles, x.site) === true) { cause = 'canonical_elsewhere'; action = 'site_fix'; own_title = true; } }
+    if (isUtility(row.url) && !UTILITY_KEEP.includes(cause)) { cause = 'low_value'; action = 'leave_out'; own_title = false; }
+    if (UNSEEN.includes(cause) && (action === 'links' || action === 'wait') && !S(row.fix_seen_at)) {
+      const lb = S(row.linked_by);
+      if (lb === 'unread') { const p = x.prev; if (p && S(p.cause) === cause && (S(p.action) === 'wait' || S(p.action) === 'links')) action = S(p.action); }
+      else action = linkedList(lb).length ? 'wait' : 'links';
+    }
+    return { cause, action, state: stateOf(cause), own_title, changed: cause !== S(row.cause) || action !== S(row.action) };
+  };
+  /**
+   * §2.3: where a page stands after the client said "I asked Google" (asked_google_at, written by the app). -> { state, asked, read, ... }:
+   * 'none' (no ask), 'read' (Google's crawl after the ask: google_read_after_ask_at), 'waiting' (fewer than ask_wait_note_days since the ask),
+   * 'quiet' (ask_wait_note_days and more with no new crawl, until the page can be offered again), 'expired' (offered again).
+   */
+  const askState = (row, now) => {
+    const r = row || {}; const asked = ts(r.asked_google_at); const nw = n0(now) || Date.now();
+    if (!asked) return { state: 'none', asked: 0 };
+    const read = ts(r.google_read_after_ask_at);
+    if (read && read >= asked) return { state: 'read', asked, read, days_since_read: (nw - read) / DAY };
+    const age = (nw - asked) / DAY;
+    return { state: age < CFG.ask_wait_note_days ? 'waiting' : age < CFG.ask_reoffer_days ? 'quiet' : 'expired', asked, age };
+  };
+  /** §2.3: Google's crawl after the client's ask, from the page's reading (last_crawl after asked_google_at); '' while none. */
+  const readAfterAsk = (row) => { const a = ts(row && row.asked_google_at); const c = ts(row && row.last_crawl); const was = ts(row && row.google_read_after_ask_at);
+    if (was && was >= a) return S(row.google_read_after_ask_at); return a && c > a ? new Date(c).toISOString() : (was ? S(row.google_read_after_ask_at) : ''); };
+  // §2.3: the value classes of "ask Google to read it" - 1 a service / product / capability / solution / industry page linked from the home page,
+  // 2 an article (under /insights/, /blog/, /news/, /guides/ ..., or a dated path), 3 any other content page
+  const SERVICE_RX = /(?:^|[\s\/_-])(?:services?|products?|capabilit(?:y|ies)|solutions?|industr(?:y|ies)|whatwedo|what-we-do|offerings?|platforms?|features?)(?=$|[\s\/_-])/i;
+  const ARTICLE_RX = /^\/(?:[^\/]+\/)?(?:insights?|blog|blogs|news|guides?|articles?|posts?|stories)\/[^\/]+/i;
+  const DATED_RX = /\/(?:19|20)\d{2}\/\d{1,2}\/(?:\d{1,2}\/)?[^\/]+/;
+  const askValue = (r, home) => {
+    const p = pathOf(r.url);
+    if (home && home.has(key(r.url)) && (SERVICE_RX.test(p) || SERVICE_RX.test(' ' + titleCore(r.title, { domain: r.domain }) + ' '))) return 1;
+    if (ARTICLE_RX.test(p) || DATED_RX.test(p)) return 2;
+    return 3;
+  };
+
+  // ---- §2.5: the opt-in sitemap submission ----
+  const FULL_ACCESS = ['siteOwner', 'siteFullUser'];
+  /** The fingerprint of the whole sitemap tree (the addresses it lists), '' when the tree was not read completely. */
+  const treeFp = (urls, complete) => {
+    if (!complete) return '';
+    const t = (urls || []).map(u => key(u.loc || u)).filter(Boolean).sort().join('\n');
+    return ((typeof PW !== 'undefined') ? PW.hash(t) + PW.hash(t.length + '|' + t) : String(t.length)) + ':' + (urls || []).length;
+  };
+  const listedAs = (gsc, url) => (gsc || []).find(e => e && S(e.path) && same(e.path, url)) || null;
+  /**
+   * Which of the website's sitemaps to submit today. Writes to the client's Search Console only when EVERY gate passes: the client's switch
+   * (index_sitemap_submit), the build's kill switch (SEO_SITEMAP_SUBMIT), Google reporting FULL access (siteOwner / siteFullUser), no 403 on an
+   * earlier submission at the same access level (submit_denied_days), Search Console's list read today, and the property covering the address.
+   * The sitemap is the one robots.txt names, else /sitemap.xml - and only one we read as a real sitemap today. When: (a) Search Console does
+   * not list it; (b) it is listed with errors and its addresses changed since our last submission; (c) its addresses changed since Search
+   * Console's lastSubmitted and we did not submit it in the last 7 days. Never an unchanged resubmit, at most one submission per sitemap per
+   * 7 days, at most submit_max a run. A change is known only between two complete reads (the first reading is a baseline).
+   * o: { on, kill_off, permission, property, ok: [{url, from}], gsc: [{path, errors, last_submitted, last_downloaded}] | null, complete, urls,
+   *      prev: { submissions, tree_fp, submit_denied }, now }
+   */
+  const submitPlan = (o) => {
+    const x = o || {}; const now = n0(x.now); const nowIso = new Date(now).toISOString(); const prev = x.prev || {};
+    const fp = treeFp(x.urls, x.complete === true);
+    const pf = prev.tree_fp && typeof prev.tree_fp === 'object' ? prev.tree_fp : {};
+    const tree_fp = fp ? (!S(pf.fp) ? { fp, changed_at: '' } : S(pf.fp) !== fp ? { fp, changed_at: nowIso } : { fp, changed_at: S(pf.changed_at) }) : { fp: S(pf.fp), changed_at: S(pf.changed_at) };
+    // the submissions carried from the last run, checked back against today's sitemaps.list (lastSubmitted / lastDownloaded after ours)
+    const slack = 5 * 60e3;
+    const submissions = (Array.isArray(prev.submissions) ? prev.submissions : []).filter(e => e && S(e.path) && S(e.at)).slice(0, CFG.submissions_keep).map(e => {
+      const y = { ...e }; const l = Array.isArray(x.gsc) ? listedAs(x.gsc, e.path) : null;
+      if (l && /^(submitted|confirmed)$/.test(S(y.status))) {
+        if (ts(l.last_submitted) && ts(l.last_submitted) >= ts(y.at) - slack) { y.status = 'confirmed'; y.confirmed_at = S(l.last_submitted); }
+        if (ts(l.last_downloaded) && ts(l.last_downloaded) >= ts(y.at) - slack) { y.status = 'read'; y.read_at = S(l.last_downloaded); }
+      }
+      return y; });
+    const perm = S(x.permission);
+    const den = prev.submit_denied && typeof prev.submit_denied === 'object' ? prev.submit_denied : null;
+    const denied = !!(den && S(den.level) === perm && ts(den.at) && now - ts(den.at) < CFG.submit_denied_days * DAY);
+    const permission_full = FULL_ACCESS.includes(perm) && !denied;
+    const gate = !x.on ? 'off' : x.kill_off ? 'kill_switch' : !perm ? 'not_checked' : !FULL_ACCESS.includes(perm) ? 'not_full_access' : denied ? 'denied_before'
+      : !Array.isArray(x.gsc) ? 'list_not_read' : 'ok';
+    const out = { gate, on: !!x.on, kill_off: !!x.kill_off, permission: perm, permission_full, submit_denied: denied ? den : null, tree_fp, submissions, submit: [], skipped: [] };
+    if (gate !== 'ok') return out;
+    const ok = (x.ok || []).filter(e => e && S(e.url));
+    const robots = ok.filter(e => e.from === 'robots'); const pick0 = robots.length ? robots : ok.filter(e => e.from === 'default');
+    const seen = new Set(); const pick = pick0.filter(e => { const k = key(e.url); if (!k || seen.has(k)) return false; seen.add(k); return true; });
+    if (!pick.length) { out.skipped.push({ url: '', why: 'no sitemap read today (robots.txt names none and /sitemap.xml is not a sitemap)' }); return out; }
+    const changedAt = ts(tree_fp.changed_at);
+    for (const e of pick) {
+      if (out.submit.length >= CFG.submit_max) { out.skipped.push({ url: e.url, why: 'more than ' + CFG.submit_max + ' sitemaps' }); continue; }
+      if (!inProperty(e.url, x.property)) { out.skipped.push({ url: e.url, why: 'outside the Search Console property' }); continue; }
+      const l = listedAs(x.gsc, e.url);
+      const ours = submissions.filter(s => same(s.path, e.url)).sort((a, b) => S(b.at).localeCompare(S(a.at)))[0] || null;
+      if (ours && now - ts(ours.at) < CFG.submit_space_days * DAY) { out.skipped.push({ url: e.url, why: 'submitted on ' + S(ours.at).slice(0, 10) }); continue; }
+      const path = l ? S(l.path) : e.url;   // a listed sitemap is resubmitted under the address Search Console has it
+      if (!l) { out.submit.push({ url: path, reason: 'not_listed' }); continue; }
+      const since = ours ? ts(ours.at) : ts(l.last_submitted);
+      if (changedAt && n0(l.errors) > 0 && changedAt > since) out.submit.push({ url: path, reason: 'errors_changed' });
+      else if (changedAt && changedAt > ts(l.last_submitted)) out.submit.push({ url: path, reason: 'changed' });
+      else out.skipped.push({ url: path, why: 'unchanged' });
+    }
+    return out;
+  };
+  /**
+   * The submissions after today's answers: asked[i] ({ path, reason }: what Sitemap Submit Requests sent) was answered with answers[i] (full
+   * responses). 2xx = submitted; 403 = denied (the permission is recorded as not full until it reads otherwise or submit_denied_days pass;
+   * no retry before); any other answer = refused / failed. -> { submissions (newest first, at most submissions_keep), submit_denied,
+   * permission_full, today: [...] }
+   */
+  const submitResults = (plan, asked, answers, now) => {
+    const p = plan || {}; const nowIso = new Date(n0(now) || Date.now()).toISOString();
+    const today = (asked || []).map((q0, i) => { const q = { url: S(q0.path || q0.url), reason: S(q0.reason) }; const r = (answers || [])[i] || {};
+      const st = n0(r.statusCode ?? r.status ?? (r.error && typeof r.error === 'object' ? (r.error.httpCode || r.error.code) : 0));
+      const status = st >= 200 && st < 300 ? 'submitted' : st === 403 ? 'denied' : st >= 400 && st < 500 ? 'refused' : 'failed';
+      return { path: S(q.url), at: nowIso, status, reason: S(q.reason), http_status: st, fp: S((p.tree_fp || {}).fp) }; });
+    const deniedNow = today.some(t => t.status === 'denied');
+    const submit_denied = deniedNow ? { at: nowIso, level: S(p.permission) } : (p.submit_denied || null);
+    return { today, submissions: today.concat(p.submissions || []).slice(0, CFG.submissions_keep), submit_denied, permission_full: !!p.permission_full && !deniedNow };
   };
 
   return { CFG, key, same, norm, own, safe, parseUrl, siteHost, hostOf, bare, pathOf, depth, isLowValue, LOW_VALUE, robotsSitemaps, parseSitemap, sitemapRoots, sitemapAccept,
@@ -1160,5 +1475,7 @@ const IX = (() => {
     stateOf, ACTION, CAUSES, laneOf, anchorOf, noteOf, plan, inProperty, nextCheck, capOf, isGone, askGoogle, homeLinks, linkSuggestions, topicOf, kindOf, parseEvents,
     eventRows, policyText, policyEvent, POLICY_URL, freeze, impactWindows, impactDue, impactCompare, impactNote, PAGE_COLS, rowOut, rowSig, changed, summarize,
     reportMarkdown, groupNote, isoDay, DAY, merge, ts,
-    fixState, xRobotsNoindex, metaNoindex, sitemapBatch, answerText, sizeOf, plainWhy, PLAIN_FAIL };
+    fixState, xRobotsNoindex, metaNoindex, sitemapBatch, answerText, sizeOf, plainWhy, PLAIN_FAIL,
+    UTILITY, isUtility, isJobPosting, resolveHref, pageLinks, linkIndex, linkedOf, linkedList, parentOf, parentPlan, titleOf, titleCore, canonicalOwn,
+    refine, askState, readAfterAsk, askValue, FULL_ACCESS, treeFp, submitPlan, submitResults };
 })();
