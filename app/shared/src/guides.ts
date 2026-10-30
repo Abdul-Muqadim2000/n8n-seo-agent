@@ -126,6 +126,8 @@ const V = {
   redirectTo: { key: 'redirectTo', label: 'Where it should go', example: 'https://your-domain.com/new-page' },
   // Index coverage (2026-10-29): the first page a step lists (every page is on the Indexing page)
   pageUrl: { key: 'pageUrl', label: 'A page in this step', example: 'https://your-domain.com/a-page' },
+  // wave 2 (2026-10-30): the page of the website to add a link on
+  sourceUrl: { key: 'sourceUrl', label: 'The page to add the link on', example: 'https://your-domain.com/a-related-page' },
   // the weekly autopilot: each example reads as a sentence on its own, because the searchable catalogue opens a guide with no values
   weekday: { key: 'weekday', label: 'Your weekday', example: 'the weekday you finished setup' },
   timezone: { key: 'timezone', label: 'Your time zone', example: "your website's time zone" },
@@ -200,7 +202,7 @@ export const GUIDES = [
       },
       {
         title: 'Set the permission to Full, then Add',
-        body: 'Choose **Full** and click **Add**. Full is what lets us read sitemaps and whether your pages are indexed; **Restricted** hides both. Nothing is ever changed, submitted or removed in your account.',
+        body: 'Choose **Full** and click **Add**. Full is what lets us read sitemaps and whether your pages are indexed; **Restricted** hides both. We only read your Search Console, unless you switch on sitemap submission, which lets us submit your sitemap and nothing else.',
         warn: 'Pick **Full**, not **Owner**: ownership is yours, and we never need it.',
       },
       { title: 'Come back and press "Check again"', body: 'Alaventra re-reads the connection straight away and shows the property name and permission it found.' },
@@ -211,8 +213,49 @@ export const GUIDES = [
       { q: 'Alaventra says the access is restricted', a: 'Open the same screen, click the three dots next to our address and change the permission from **Restricted** to **Full**.' },
       { q: 'We have several properties for the same site', a: 'The **Domain** property (no https:// in front of the name) is the one to use: it covers www, the bare domain and every subdomain.' },
     ],
-    related: ['search-console-property', 'ga4-access'],
+    related: ['search-console-property', 'ga4-access', 'search-console-full-access'],
     keywords: ['gsc', 'service account', 'permission', 'connect google'],
+  },
+  {
+    // Index coverage wave 2 (DESIGN_WAVE2 §3.2): the access Google needs before we may submit a sitemap for the client
+    id: 'search-console-full-access',
+    area: 'google',
+    title: 'Give Alaventra Full access in Search Console',
+    why: 'Google lets only an address with Full access submit a sitemap. With Full access, and sitemap submission switched on, we submit your sitemap when it is missing or has changed, and nothing else.',
+    where: 'Google Search Console, Settings, Users and permissions',
+    who: 'An owner of the Search Console property',
+    minutes: 3,
+    vars: [V.domain, V.serviceAccount],
+    steps: [
+      {
+        title: 'Open the property for {{domain}}',
+        body: 'Open **Search Console** and pick the property for {{domain}} in the switcher at the top left.',
+        link: { label: 'Open Search Console', href: 'https://search.google.com/search-console' },
+      },
+      { title: 'Go to Users and permissions', body: 'Click **Settings** in the left menu, then **Users and permissions**.' },
+      {
+        title: 'Find our reading address',
+        body: 'Look for this address in the list. If it is there, click the three dots next to it and choose **Change permission**. If it is not there, click **Add user** and paste it.',
+        copy: [{ label: 'Our address', value: '{{serviceAccount}}', hint: 'The address in Users and permissions' }],
+      },
+      {
+        title: 'Choose Full and save',
+        body: 'Set the permission to **Full** and save.',
+        warn: 'Pick **Full**, not **Owner**: ownership is yours, and we never need it.',
+      },
+      {
+        title: 'Switch on sitemap submission',
+        body: 'In Alaventra, open **Website settings**, then **Tracking & monitors**, tick **Let Alaventra submit your sitemap to Google** under Indexing, and save.',
+        note: 'We only read your Search Console and submit your sitemap; nothing else is changed. Untick the option to stop the submissions, or set the access back in Search Console at any time.',
+      },
+    ],
+    done: 'After the next daily check, Tracking & monitors says **We can submit your sitemap**, and the Indexing page lists each submission and the day Google read your sitemap.',
+    trouble: [
+      { q: 'It still says Google gives us read-only access', a: 'The access is read by the daily index check, so it changes the day after you change it. If it still says so, check that the address in Users and permissions is exactly the one above and that its permission says **Full**.' },
+      { q: 'I would rather submit it myself', a: 'Leave the option off. The step on your Pipeline shows how to submit the sitemap in Search Console, and the daily index check ticks it off.' },
+    ],
+    related: ['search-console-access', 'index-submit-sitemap'],
+    keywords: ['full access', 'permission', 'submit sitemap', 'search console users', 'restricted', 'read-only'],
   },
   {
     id: 'search-console-owner',
@@ -614,7 +657,9 @@ export const GUIDES = [
     done: 'The groups that need you get shorter, and the hero shows more of your pages in Google search.',
     trouble: [
       { q: 'Many pages say "Not checked yet"', a: 'Google lets every website be checked a limited number of times a day, shared by every tool you use. We check new pages first, then work through the rest. The hero says about how many days that takes.' },
-      { q: 'A page is left out "and that is fine"', a: 'Tag archives, search results, carts, logins and pages you keep out on purpose are normally not in search. Nothing needs doing.' },
+      { q: 'A page is left out "and that is fine"', a: 'Privacy, cookie and terms pages, tag archives, search results, carts, logins and pages you keep out on purpose are normally not in search. Nothing needs doing.' },
+      { q: 'Google has not visited a page my website already links to', a: 'That is common for a young website: Google visits it slowly at first. Adding more links from your own pages does not change that. What helps: links from other websites to yours, and asking Google in Search Console to read your most important pages (the Indexing page lists the ones worth it).' },
+      { q: 'Can you submit my sitemap?', a: 'Yes, if you want: switch on **Let Alaventra submit your sitemap to Google** in Tracking & monitors and give us Full access in Search Console. We then submit it when it is missing or has changed, and nothing else.' },
     ],
     related: ['search-console-access', 'index-remove-noindex', 'index-add-to-sitemap'],
     keywords: ['index', 'indexing', 'not indexed', 'coverage', 'left out', 'search console pages', 'crawled not indexed'],
@@ -750,7 +795,7 @@ export const GUIDES = [
     id: 'index-canonical-sitemap',
     area: 'website',
     title: 'Make your sitemap list the main version of each page',
-    why: 'When a page names another address as its main version (its canonical tag), Google keeps that one. Listing the copy in your sitemap sends Google mixed signals.',
+    why: 'When a page names another address as its main version (its canonical tag), Google keeps that one. Listing the copy in your sitemap sends Google mixed signals, and a page with a title of its own that names another page is shown as that other page.',
     where: 'Your sitemap and the page\'s canonical tag',
     who: 'Whoever edits your website',
     minutes: 15,
@@ -765,9 +810,14 @@ export const GUIDES = [
         title: 'Make the two agree',
         body: 'If the page really is a copy, list the main address in your sitemap instead of this one. If this page is the main one, set its canonical tag to its own address.',
       },
+      {
+        title: 'A page with a title of its own',
+        body: 'Some pages have their own title and content but name a parent page as their main version (for example every page under /industries naming /industries). Google then shows only the parent. If such a page should be found on its own, point its canonical tag to the page itself, then add it to your sitemap.',
+        note: 'In most website builders and SEO plugins the canonical tag is a field in the page\'s SEO settings; leaving it empty usually makes the page name itself.',
+      },
       { title: 'Press "I\'ve done it, check now"', body: 'We read the pages and your sitemap on {{domain}} and tick the step off once they agree.' },
     ],
-    done: 'The step shows Done once each page we checked either names itself as the main version or has left your sitemap.',
+    done: 'The step shows Done once each page we checked names itself as the main version, or, for a copy in your sitemap, has left your sitemap.',
     trouble: [GOOGLE_SEES_OTHER],
     related: ['index-coverage', 'index-add-to-sitemap'],
     keywords: ['canonical', 'duplicate', 'alternate page', 'sitemap'],
@@ -933,6 +983,38 @@ export const GUIDES = [
     keywords: ['redirect loop', 'redirect chain', 'too many redirects', 'redirect error'],
   },
   {
+    // Index coverage wave 2 (DESIGN_WAVE2 §3.2): the step `indexing:links`
+    id: 'index-add-internal-links',
+    area: 'website',
+    title: 'Link to a page Google cannot find yet',
+    why: 'Google finds pages by following links. A page that no other page of your website links to is hard for Google to find, even when your sitemap lists it.',
+    where: 'The editor of your website',
+    who: 'Whoever edits your website',
+    minutes: 10,
+    vars: [V.domain, V.pageUrl, V.sourceUrl],
+    steps: [
+      {
+        title: 'Open the page to add the link on',
+        body: 'Start with {{sourceUrl}}: a page of yours that is already in Google search and on the same subject. Open it in your website\'s editor.',
+        copy: [{ label: 'Page to add the link on', value: '{{sourceUrl}}' }],
+      },
+      {
+        title: 'Add a link in the text',
+        body: 'Where the text mentions the subject of the other page, add a normal link to it. Use words that say what the page is about rather than "click here". A link in the main text helps more than one in the footer.',
+        copy: [{ label: 'Page to link to', value: '{{pageUrl}}' }],
+      },
+      { title: 'Publish, then do the next pair', body: 'Save and publish the page. The step on your Pipeline lists each page to link to next to the page to add the link on.' },
+      { title: 'Press "I\'ve done it, check now"', body: 'We open the pages of {{domain}} you added the links on and tick the step off once every link is there. Until then it says how many of the links we found.' },
+    ],
+    done: 'The step shows Done once we find every link. Google still decides when it visits the pages; the Indexing page shows when it has.',
+    trouble: [
+      { q: 'The page you suggest is not a good fit', a: 'Any page of yours on the same subject that is already in search works for Google. Our check only opens the page we named, so the step may stay open: press Skip once you have linked from somewhere else.' },
+      { q: 'You found only some of the links', a: 'The check names the links still missing. A link that a script adds after the page loads may not be seen by us; a plain link in the page itself is also the safest for Google.' },
+    ],
+    related: ['index-coverage', 'index-request-indexing'],
+    keywords: ['internal links', 'link to a page', 'orphan page', 'discovered not indexed', 'unknown to google'],
+  },
+  {
     id: 'index-submit-sitemap',
     area: 'website',
     title: 'Submit your sitemap in Search Console',
@@ -951,6 +1033,7 @@ export const GUIDES = [
         title: 'Add your sitemap address',
         body: 'Under **Add a new sitemap**, enter the address of your sitemap (usually sitemap.xml, or the one your SEO plugin names) and press **Submit**.',
         copy: [{ label: 'Usual address', value: 'https://{{domain}}/sitemap.xml' }],
+        note: 'Rather not do it by hand? Switch on **Let Alaventra submit your sitemap to Google** in Tracking & monitors and give us Full access in Search Console: we then submit it when it is missing or has changed, and nothing else.',
       },
       {
         title: 'If Search Console reports errors',
@@ -959,7 +1042,7 @@ export const GUIDES = [
       },
     ],
     done: 'The daily index check reads Search Console\'s list of sitemaps and ticks the step off the day after. Submitting a sitemap does not put pages in search by itself; Google still decides.',
-    related: ['index-add-to-sitemap', 'index-coverage', 'search-console-access'],
+    related: ['index-add-to-sitemap', 'index-coverage', 'search-console-full-access'],
     keywords: ['sitemap', 'submit sitemap', 'search console sitemaps', 'sitemap errors'],
   },
   {
@@ -984,11 +1067,15 @@ export const GUIDES = [
         warn: 'Asking again and again does not make Google read the page sooner, and Google still decides whether to keep it in search.',
       },
       {
+        title: 'Press "I asked Google" on the Indexing page',
+        body: 'Next to the page, press **I asked Google**. The page then says **Waiting for Google to read it again**, and the daily index check looks up Google\'s reading of it the next day, then every 3 days for two weeks.',
+      },
+      {
         title: 'Do the next page on the list',
         body: 'The Indexing page lists at most five pages a week for this. Do them one by one; when Search Console says the daily limit is reached, carry on the next day.',
       },
     ],
-    done: 'Nothing to tick: the daily index check reads Google\'s next reading of the page and the Indexing page follows it. We never send this request for you.',
+    done: 'The page says **Google read it again on** the day Google did, with what Google decided. After 14 days without a new reading it says so: there is nothing more to do on your side then. We never send this request for you.',
     trouble: [{ q: 'Search Console says the daily limit is reached', a: 'Try again the next day. Google allows only a few requests a day for each property.' }],
     related: ['index-coverage', 'search-console-access'],
     keywords: ['request indexing', 'url inspection', 'ask google', 'recrawl', 'reindex'],
@@ -3222,6 +3309,7 @@ const GUIDE_FOR_RECOMMENDATION_PREFIX: [prefix: string, id: GuideId][] = [
   ['ix:site_fix:redirect', 'index-sitemap-redirects'],
   ['ix:site_fix:sitemap', 'index-submit-sitemap'],
   ['ix:ask_google', 'index-request-indexing'],
+  ['ix:links', 'index-add-internal-links'],
   ['ix:', 'index-coverage'],
 ];
 

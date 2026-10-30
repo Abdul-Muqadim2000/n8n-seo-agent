@@ -147,6 +147,9 @@ export const monitorSettingsSchema = z.object({
   indexWatch: z.boolean().optional(),
   /** Index coverage: Google page inspections a day for this website (20 to 1,200; the engine's default is 300) */
   indexDailyCap: z.number().int().min(20, 'At least 20 a day').max(1200, 'At most 1,200 a day').optional(),
+  /** Index coverage wave 2 (DESIGN_WAVE2 §2.5): let Alaventra submit the website's sitemap in Search Console (needs Full access there).
+   *  Optional with no default and sent last: a body that does not set it sends nothing, and the engine reads an empty value as OFF */
+  indexSitemapSubmit: z.boolean().optional(),
 });
 export type MonitorSettings = z.output<typeof monitorSettingsSchema>;
 

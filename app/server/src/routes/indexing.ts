@@ -1,12 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { requireVerified, siteAccess } from '../auth/access';
 import { notFound } from '../lib/errors';
-import { indexingData, indexingHistory, indexingPages } from '../services/indexing';
+import { indexingData, indexingHistory, indexingPages, markAskedGoogle } from '../services/indexing';
 
 /**
  * Index coverage (2026-10-29, app/API.md "Index coverage"): the Indexing page's reads. Everybody in the company sees them (viewer and up,
- * verified websites only, not the client portal). Read only: the engine's daily index check writes every row. A read that fails answers
- * a "could not read" state for this page; it never fails another page.
+ * verified websites only, not the client portal). The engine's daily index check writes every row except one column: wave 2's "I asked
+ * Google" (members and up) writes `asked_google_at` on one page's row. A read that fails answers a "could not read" state for this page; it
+ * never fails another page.
  */
 
 type P = { orgId: string; siteId: string };
@@ -40,6 +41,15 @@ export async function indexingRoutes(app: FastifyInstance) {
       req.log.warn({ err: String((err as Error)?.message ?? err).slice(0, 200) }, 'index coverage pages not read');
       return { status: 'unreadable' as const, items: [], total: 0, page: 1, pageSize: 25 };
     }
+  });
+
+  // wave 2 (DESIGN_WAVE2 §3.2): "I asked Google" for one page ({ url }). Members and above; written to the audit log. The client asked Google
+  // in Search Console themselves: nothing is sent to Google, the engine reads Google's view of the page again within two days.
+  app.post('/api/orgs/:orgId/sites/:siteId/data/indexing/asked-google', { config: perUser(30) }, async (req) => {
+    const p = req.params as P;
+    const a = await siteAccess(req, p.orgId, p.siteId, 'member');
+    requireVerified(a.site);
+    return markAskedGoogle(a, req, req.body);
   });
 
   // what happened to one page over time: ?url=<an address on this website>

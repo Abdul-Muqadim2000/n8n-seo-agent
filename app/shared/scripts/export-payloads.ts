@@ -334,6 +334,14 @@ const adminCases: AdminCase[] = [
     stored: {},
     expect: { index_watch: false, index_daily_cap: 500 },
   },
+  {
+    // Index coverage wave 2 (DESIGN_WAVE2 §2.5): sitemap submission switched on from Tracking & monitors; Monitor Row (Admin) stores it (an
+    // empty column means off)
+    name: 'index coverage: sitemap submission switched on',
+    monitors: { indexSitemapSubmit: true },
+    stored: {},
+    expect: { index_sitemap_submit: true },
+  },
 ];
 const adminFixtures = adminCases.map((c) => {
   const parsed = monitorSettingsSchema.partial().safeParse(c.monitors);

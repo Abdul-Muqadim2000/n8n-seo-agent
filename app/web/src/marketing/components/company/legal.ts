@@ -50,7 +50,7 @@ export const privacyDoc: LegalDoc = {
         '• Account details, such as your name, e-mail address and a hash of your password, or your Google account identity if you sign in with Google.',
         '• Company and team details, such as company name, members, roles and invitations.',
         '• Website details you add, such as domains, ownership verification records, business profile and author details.',
-        '• Data from services you connect, such as Search Console and Google Analytics 4, read with read-only access.',
+        '• Data from services you connect, such as Search Console and Google Analytics 4. We only read them, unless you switch on sitemap submission, which lets us submit your sitemap in Search Console and nothing else.',
         '• Technical data, such as sign-in sessions, IP address and browser type, used to keep the service secure.',
         '[Complete and confirm the list of categories. To be completed by counsel.]',
       ],

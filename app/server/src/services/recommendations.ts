@@ -493,6 +493,19 @@ export function indexingRecommendations(
       guideVars: t.guideVars,
     });
   }
+  // wave 2 (DESIGN_WAVE2 §3.2): pages that need a link from another page of the website are one step with its own check
+  for (const t of (tasks ?? []).filter((t) => t.kind === 'index_links' && t.state === 'todo'))
+    add({
+      id: 'ix:links',
+      taskKey: t.key,
+      category: 'technical',
+      priority: 'medium',
+      title: t.title,
+      detail: t.detail,
+      evidence: t.values.map((v) => indexPath(v.value)).slice(0, 3).join(' · ') || undefined,
+      action: { label: 'See the step', page: 'pipeline' },
+      guideVars: t.guideVars,
+    });
   if (ix.askGoogle.length) {
     const n = ix.askGoogle.length;
     add({

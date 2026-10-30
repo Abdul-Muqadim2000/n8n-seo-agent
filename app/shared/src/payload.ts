@@ -73,6 +73,8 @@ export function monitorsBody(m: Partial<MonitorSettings>): Body {
   // Index coverage (2026-10-29, DESIGN.md §2.6): last, only when set (an absent key keeps the engine's default: on, 300 a day)
   if (m.indexWatch !== undefined) out.index_watch = m.indexWatch;
   if (m.indexDailyCap !== undefined) out.index_daily_cap = m.indexDailyCap;
+  // wave 2 (DESIGN_WAVE2 §2.5): after the index check's own two, only when set (absent = the engine's default: off)
+  if (m.indexSitemapSubmit !== undefined) out.index_sitemap_submit = m.indexSitemapSubmit;
   return out;
 }
 

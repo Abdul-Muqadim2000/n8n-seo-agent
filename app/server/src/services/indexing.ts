@@ -8,6 +8,10 @@ import {
   indexRunOf,
   indexingCauseOfKey,
   indexWatchOn,
+  indexSitemapSubmitOn,
+  isUtilityPage,
+  INDEX_ASK_QUIET_DAYS,
+  INDEX_ASKED_SHOWN_DAYS,
   INDEX_DAILY_CAP,
   n8nSiteId,
   urlOnHost,
@@ -17,6 +21,7 @@ import {
   type IndexHistoryRow,
   type IndexingData,
   type IndexingForRecs,
+  type IndexPage,
   type IndexPagesPage,
   type IndexPageRow,
   type IndexRunRow,
@@ -24,8 +29,14 @@ import {
   type MonitorsRow,
   type UpdateImpactRow,
 } from '@seo/shared';
+import type { FastifyRequest } from 'fastify';
+import type { SiteAccess } from '../auth/access';
+import { and, desc, eq, gte } from 'drizzle-orm';
+import { db, schema } from '../db';
 import type { SiteRow } from '../db/schema';
-import { rows, siteRows } from '../n8n/client';
+import { HttpError, notFound } from '../lib/errors';
+import { rows, siteRows, updateRows } from '../n8n/client';
+import { audit } from './audit';
 
 // Index coverage (2026-10-29, n8n/seo-agent/docs/indexing-2026-10-29/DESIGN.md §6): the app's reads of the engine's daily index check.
 // Read only (the engine writes every row); every read is bounded (pages capped, runs 12, events 12, impacts 3) and every failure is a
@@ -45,7 +56,7 @@ const quiet: Logger = { warn: (o, msg) => console.warn(JSON.stringify({ level: '
 /** The engine's rows of this website only: the tables are keyed by the engine's site id, and two domains can share one (engineIdCollides). */
 const mine = <T extends { domain?: string }>(domain: string, xs: T[]): T[] => xs.filter((r) => !r.domain || cleanDomain(r.domain) === cleanDomain(domain));
 const bySite = (domain: string) => ({ columnName: 'site_id', condition: 'eq' as const, value: n8nSiteId(domain) });
-type F = { columnName: string; condition: 'eq' | 'neq'; value: string | boolean };
+type F = { columnName: string; condition: 'eq' | 'neq' | 'gte'; value: string | boolean };
 
 /** The website's page rows (capped). */
 export async function indexPageRows(domain: string, extra: F[] = [], max = INDEX_PAGES_MAX): Promise<IndexPageRow[]> {
@@ -72,10 +83,21 @@ async function pageView(domain: string, runs: IndexRunRow[]): Promise<{ rows: In
 
 /** Indexing on/off and the daily checks, from the website's monitor row (empty = on, 300). */
 export async function indexSettings(domain: string): Promise<{ on: boolean; dailyCap: number }> {
+  return (await indexMonitor(domain)).settings;
+}
+/** The same row, with wave 2's sitemap switch (empty = off). */
+async function indexMonitor(domain: string): Promise<{ settings: { on: boolean; dailyCap: number }; sitemapSubmit: boolean }> {
   const m = (await siteRows<MonitorsRow>('monitors', domain, { max: 5 }).catch(() => [] as MonitorsRow[]))[0];
   const cap = m?.index_daily_cap;
-  return { on: indexWatchOn(m?.index_watch), dailyCap: cap == null || cap === '' ? INDEX_DAILY_CAP.default : clampIndexDailyCap(cap) };
+  return {
+    settings: { on: indexWatchOn(m?.index_watch), dailyCap: cap == null || cap === '' ? INDEX_DAILY_CAP.default : clampIndexDailyCap(cap) },
+    sitemapSubmit: indexSitemapSubmitOn(m?.index_sitemap_submit),
+  };
 }
+
+/** wave 2 (§3.2): the pages the client said they asked Google about lately (an engine without the column answers nothing, never an error). */
+const askedRows = (d: string) =>
+  indexPageRows(d, [{ columnName: 'asked_google_at', condition: 'gte', value: new Date(Date.now() - INDEX_ASKED_SHOWN_DAYS * 864e5).toISOString() }], 50);
 
 const unreadable = (settings: { on: boolean; dailyCap: number }, error: string): IndexingData => ({
   ...buildIndexingData({ rows: [], runs: [], events: [], impacts: [], settings }),
@@ -89,24 +111,52 @@ const runsOf = (d: string) => rows<IndexRunRow>('indexRuns', { filters: [bySite(
  * The Indexing page in one answer. The page rows and the runs decide whether the page can be shown; the Google events and the update
  * impact are extras (an unreadable events table leaves the timeline empty, never the page).
  */
-export async function indexingData(site: Pick<SiteRow, 'domain'>, log: Logger = quiet): Promise<IndexingData> {
+/**
+ * ENGINE_BUILD wave 2 contract 6: the newest "I asked Google" per page from the app's own audit log (last 45 days), so a write an
+ * overlapping engine run put back is shown as not recorded (the client presses again) instead of silently vanishing.
+ */
+async function askedByApp(orgId: string, siteId: string): Promise<Record<string, string>> {
+  const since = new Date(Date.now() - INDEX_ASKED_SHOWN_DAYS * 864e5);
+  const xs = await db
+    .select({ at: schema.auditEvents.at, details: schema.auditEvents.details })
+    .from(schema.auditEvents)
+    .where(and(eq(schema.auditEvents.orgId, orgId), eq(schema.auditEvents.action, 'indexing.asked_google'), eq(schema.auditEvents.targetId, siteId), gte(schema.auditEvents.at, since)))
+    .orderBy(desc(schema.auditEvents.at))
+    .limit(200);
+  const out: Record<string, string> = {};
+  for (const x of xs) {
+    const url = String((x.details as Record<string, unknown> | null)?.url ?? '');
+    if (url && !out[url]) out[url] = x.at.toISOString();
+  }
+  return out;
+}
+
+export async function indexingData(site: Pick<SiteRow, 'domain'> & Partial<Pick<SiteRow, 'id' | 'orgId'>>, log: Logger = quiet): Promise<IndexingData> {
   const d = site.domain;
-  const settings = await indexSettings(d).catch(() => ({ on: true, dailyCap: INDEX_DAILY_CAP.default }));
+  const mon = await indexMonitor(d).catch(() => ({ settings: { on: true, dailyCap: INDEX_DAILY_CAP.default }, sitemapSubmit: false }));
+  const settings = mon.settings;
   const runsP = runsOf(d);
-  const [view, runs, events, impacts] = await Promise.allSettled([
+  const [view, runs, events, impacts, asked, byApp] = await Promise.allSettled([
     runsP.then((r) => pageView(d, r)),
     runsP,
     rows<GoogleEventRow>('googleEvents', { sortBy: 'started_at:desc', max: 12 }),
     rows<UpdateImpactRow>('updateImpact', { filters: [bySite(d)], sortBy: 'compared_at:desc', max: 3 }),
+    askedRows(d),
+    site.id && site.orgId ? askedByApp(site.orgId, site.id) : Promise.resolve({}),
   ]);
   if (view.status === 'rejected' || runs.status === 'rejected') {
     const err = view.status === 'rejected' ? view.reason : (runs as PromiseRejectedResult).reason;
     log.warn({ site: d, err: String((err as Error)?.message ?? err).slice(0, 200) }, 'index coverage not read');
     return unreadable(settings, 'We could not read your index check just now. Nothing is lost; try again in a few minutes.');
   }
+  // the pages asked about that the page view did not read (in search now): added once each, so every figure stays the same
+  const seen = new Set(view.value.rows.map((r) => String(r.url)));
+  const extra = asked.status === 'fulfilled' ? asked.value.filter((r) => r.url && !seen.has(String(r.url))) : [];
   return buildIndexingData({
-    rows: view.value.rows,
+    rows: [...view.value.rows, ...extra],
     runs: runs.value,
+    sitemapSubmit: mon.sitemapSubmit,
+    askedByApp: byApp.status === 'fulfilled' ? byApp.value : undefined,
     events: events.status === 'fulfilled' ? events.value : [],
     impacts: impacts.status === 'fulfilled' ? mine(d, impacts.value) : [],
     settings,
@@ -172,9 +222,9 @@ async function readForRecs(d: string): Promise<IndexingForRecs | null> {
   const freeze = latest?.freeze ? { on: true, reason: latest.freezeReason } : { on: false, reason: '' };
   if (!run) return { on: settings.on, runAt: null, freeze, siteFix: [], other: [], quality: [], askGoogle: [] };
   const count = (c: IndexCause) => Math.max(0, Math.round(run.byCause[c] ?? 0));
+  // wave 2 (DESIGN_WAVE2 §3.2): pages that need a link are the `indexing:links` step's recommendation (the cause counts also hold pages the
+  // website already links to, which wait for Google with nothing to do)
   const other: IndexingForRecs['other'] = [
-    { action: 'links' as const, cause: 'unknown_to_google' as const, total: count('unknown_to_google') },
-    { action: 'links' as const, cause: 'discovered_not_crawled' as const, total: count('discovered_not_crawled') },
     { action: 'duplicate' as const, cause: 'google_chose_other' as const, total: count('google_chose_other') },
     { action: 'duplicate' as const, cause: 'duplicate_no_canonical' as const, total: count('duplicate_no_canonical') },
     { action: 'quality' as const, cause: 'crawled_not_indexed' as const, total: Math.max(count('crawled_not_indexed'), quality.length) },
@@ -187,18 +237,59 @@ async function readForRecs(d: string): Promise<IndexingForRecs | null> {
     siteFix: [],
     other,
     quality: quality
-      .filter((p) => p.url && String(p.state) !== 'indexed')
+      // wave 2 (DESIGN_WAVE2 §2.4): a policy or utility page is never a page to improve
+      .filter((p) => p.url && String(p.state) !== 'indexed' && !isUtilityPage(String(p.url)))
       .sort(byImpr)
       .slice(0, 3)
       .map((p) => ({ url: String(p.url), title: String(p.title ?? '').slice(0, 200), impressions28d: Number(p.impressions_28d) || 0 })),
     // FIX_CONTRACT (X8): at most 5, never a page left out on purpose, never a rewrite candidate while an update rolls out
     askGoogle: ask
       .map(indexPageOf)
-      .filter((p) => p.askGoogle && p.action !== 'leave_out' && !(freeze.on && p.action === 'quality'))
+      // wave 2: a page the client asked about in the last 14 days is waiting for Google, not asked for again
+      .filter((p) => p.askGoogle && p.action !== 'leave_out' && !(freeze.on && p.action === 'quality') && !askedLately(p))
       .sort((a, b) => b.impressions28d - a.impressions28d || a.url.localeCompare(b.url))
       .slice(0, 5)
       .map((p) => ({ url: p.url, title: p.title })),
   };
+}
+
+const askedLately = (p: IndexPage, now = Date.now()) => !!p.askedGoogleAt && now - Date.parse(p.askedGoogleAt) < INDEX_ASK_QUIET_DAYS * 864e5 && !(p.googleReadAfterAskAt >= p.askedGoogleAt);
+
+/**
+ * wave 2 (DESIGN_WAVE2 §3.2): "I asked Google" for one page. Members and above, verified websites only; the page must be a page of this
+ * website the daily index check knows. Writes `asked_google_at` on that page's row of the engine's table (the same Data Table write the app
+ * uses for the engine's other tables), which makes the engine read Google's view of the page again within two days. Written to the audit log.
+ * A second click within a day keeps the first time. Nothing is sent to Google: the client asked in Search Console themselves.
+ */
+export async function markAskedGoogle(a: SiteAccess, req: FastifyRequest, body: unknown): Promise<{ page: IndexPage }> {
+  const d = a.site.domain;
+  const url = String((body as Record<string, unknown> | null)?.url ?? '').trim();
+  if (!url || url.length > 2000 || !/^https?:\/\//i.test(url) || !urlOnHost(url, d)) throw notFound('That address is not a page of this website');
+  let found: IndexPageRow[];
+  try {
+    found = mine(d, await rows<IndexPageRow>('indexPages', { filters: [bySite(d), { columnName: 'url', condition: 'eq', value: url }], max: 1, fresh: true }));
+  } catch {
+    throw new HttpError(503, 'We could not reach your index check just now, so nothing was saved. Try again in a few minutes.', 'engine_unreachable');
+  }
+  const row = found[0];
+  if (!row) throw notFound('The daily index check does not know this page yet.');
+  const page = indexPageOf(row);
+  if (page.state === 'indexed') throw new HttpError(409, 'This page is in Google search already, so there is nothing to ask.', 'already_in_search');
+  const now = new Date();
+  const recent = !!page.askedGoogleAt && now.getTime() - Date.parse(page.askedGoogleAt) < 864e5 && !(page.googleReadAfterAskAt >= page.askedGoogleAt);
+  const at = recent ? page.askedGoogleAt : now.toISOString();
+  if (!recent) {
+    let ok = false;
+    try {
+      ok = await updateRows('indexPages', [bySite(d), { columnName: 'url', condition: 'eq', value: url }], { asked_google_at: at });
+    } catch {
+      ok = false;
+    }
+    // the engine's table without the column (an engine from before wave 2) or n8n not answering: nothing was saved, and the person is told
+    if (!ok) throw new HttpError(503, 'We could not save it just now, so nothing changed. Try again in a few minutes.', 'engine_not_saved');
+    await audit(req, a.org.id, { action: 'indexing.asked_google', target: { type: 'site', id: a.site.id, label: d }, details: { url: url.slice(0, 500) } });
+  }
+  return { page: indexPageOf({ ...row, asked_google_at: at }) };
 }
 
 /** The cause a task key names, for the recommendations (re-exported for one import). */
