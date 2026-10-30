@@ -149,7 +149,7 @@ module.exports = async (ctx) => {
     const k4 = await pv({ ...SITE0, keyword: 'dynamics 365 partner dubai', existing_page: { url: PO, title: '', match: 0.75, matched_by: 'slug', source: 'page inventory' }, existing_page_url: PO }, { score: 58 });
     check('a page the run FOUND is not "a refresh of a page your website already has": no exemption', !/refresh/.test(k4.hold_exempt), J(k4.hold_exempt));
     check('a person started it: held for the client\'s OK, "Improve the existing page" first', k4.verdict_hold === true && J(k4.hold.kinds) === J(['duplicate']) && k4.hold.alternatives[0].kind === 'improve' && k4.hold.alternatives[0].url === PO
-      && /would rewrite that page/.test(k4.hold.reasons.join(' ')) && /Write it anyway/.test(k4.hold.reasons.join(' ')), J(k4.hold));
+      && /rewrite that page at its own address/.test(k4.hold.reasons.join(' ')) && /a new address of its own/.test(k4.hold.reasons.join(' ')) && /Write it anyway/.test(k4.hold.reasons.join(' ')), J(k4.hold));
     const k4a = await pv({ ...SITE0, keyword: 'dynamics 365 partner dubai', client_ip: 'cadence:site_novaand-example', force_content: true, existing_page: { url: PO, title: '', source: 'page inventory' }, existing_page_url: PO }, { score: 58 });
     check('started automatically: only logged (shadow), written as before', k4a.verdict_hold === false && k4a.would_hold === true && k4a.hold_mode === 'shadow' && !!k4a.hold_shadow, J({ h: k4a.verdict_hold, w: k4a.would_hold }));
     // K4 after the matcher fix: Collect Client Pages left the page alone and said why

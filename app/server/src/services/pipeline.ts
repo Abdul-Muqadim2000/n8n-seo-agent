@@ -96,10 +96,27 @@ export type WaitingEntry = PipelineData['queue']['waiting'][number];
  * R111 (2026-10-16): a row the engine marked `not_ready` (its last quality round failed) still waits, the pile-up guard counts
  * it, but carries `needsFix` and the QA reasons, so nothing downstream offers to publish it.
  */
-export function waitingPages(logs: ContentLogRow[], now = Date.now()): WaitingEntry[] {
+/**
+ * W06-B (2026-10-30, docs/page-quality-2026-10-29/WAVE05.md 3.2, K4 first try): a page run that FAILED wrote no page. Its content-log row
+ * is `failed` once the engine's failure path or the app (releaseFailedPages) has marked it; a `started` row whose request id belongs to a
+ * run the app knows failed is the same thing, read before it was marked (a run that failed before this deploy, or a mark that did not
+ * land). Neither is "a page already written" nor a page waiting to be published.
+ */
+export function failedPageRow(l: Pick<ContentLogRow, 'status' | 'request_id'>, failedRequests?: ReadonlySet<string>): boolean {
+  if (l.status === 'failed') return true;
+  return l.status === 'started' && !!failedRequests && failedRequests.has(String(l.request_id ?? ''));
+}
+
+/** W06-B: the request ids of the website's page runs the app saw fail (their opening content-log rows wrote no page). */
+export function failedPageRequests(runs: Pick<SiteRun, 'mode' | 'status' | 'requestId'>[]): Set<string> {
+  return new Set(runs.filter((r) => r.mode === 'keyword' && r.status === 'failed' && r.requestId).map((r) => String(r.requestId)));
+}
+
+export function waitingPages(logs: ContentLogRow[], now = Date.now(), failedRequests?: ReadonlySet<string>): WaitingEntry[] {
   // W05-B (2026-10-30, BEFORE_AFTER "Holds"): a keyword held for the client's OK wrote nothing, so it never waits to be published, and a
   // keyword counts once (its held row and the row of the page "Write it anyway" then wrote were listed twice: "5 pages are already waiting")
-  const live = logs.filter((l) => l.status !== 'published' && !l.published_url && l.status !== 'held'); // D5: 'started' (the run was spawned) and 'written' (the page exists) both wait
+  // W06-B: nor does a page run that failed
+  const live = logs.filter((l) => l.status !== 'published' && !l.published_url && l.status !== 'held' && !failedPageRow(l, failedRequests)); // D5: 'started' (the run was spawned) and 'written' (the page exists) both wait
   const newest = new Map<string, ContentLogRow>();
   for (const [i, l] of live.entries()) {
     const k = norm(l.keyword || '') || `#${i}`;
@@ -472,11 +489,16 @@ export function cadenceDetail(next: QueueItem[], plan: CadenceWeek, build: Pick<
 }
 
 /** Pages already written for the website: published ones at any age, the others for 180 days (newest first, one per keyword). */
-export function writtenPages(logs: ContentLogRow[], ladders: LadderRow[], now = Date.now()): PipelineData['written'] {
+export function writtenPages(logs: ContentLogRow[], ladders: LadderRow[], now = Date.now(), failedRequests?: ReadonlySet<string>): PipelineData['written'] {
+  // W06-B (WAVE05 3.2, K4): a page run that failed wrote no page. On "Start it again" the app said "A page for ... was already written ...
+  // waiting to be published" about the run that had just failed. Its row is left out, and so is a ladder row the app moved to `writing` for
+  // that run while no other row of the keyword says a page exists or is on its way.
+  const failedKw = new Set(logs.filter((l) => l.keyword && failedPageRow(l, failedRequests)).map((l) => norm(l.keyword)));
+  const liveKw = new Set(logs.filter((l) => l.keyword && l.status !== 'held' && !failedPageRow(l, failedRequests)).map((l) => norm(l.keyword)));
   const all: PipelineData['written'] = [
     ...logs
       // W05-B: a held keyword wrote nothing (only the check ran), so it is never "a page already written" ("Write it anyway" warned falsely)
-      .filter((l) => l.keyword && l.status !== 'held' && (l.status === 'published' || now - Date.parse(l.started_at || '1970-01-01') < 180 * 864e5))
+      .filter((l) => l.keyword && l.status !== 'held' && !failedPageRow(l, failedRequests) && (l.status === 'published' || now - Date.parse(l.started_at || '1970-01-01') < 180 * 864e5))
       .map((l) => ({
         keyword: l.keyword,
         status: (l.status === 'published' ? 'published' : 'started') as 'published' | 'started',
@@ -487,6 +509,7 @@ export function writtenPages(logs: ContentLogRow[], ladders: LadderRow[], now = 
     ...ladders
       // A-20 (F-A1): `written` / `not_ready` are a ladder row whose page run finished; here they are a page that exists and is not live
       .filter((l) => l.keyword && (l.status === 'writing' || l.status === 'written' || l.status === 'not_ready' || l.status === 'published'))
+      .filter((l) => !(l.status === 'writing' && failedKw.has(norm(l.keyword)) && !liveKw.has(norm(l.keyword))))
       .map((l) => ({ keyword: l.keyword, status: (l.status === 'published' ? 'published' : 'writing') as 'writing' | 'published', startedAt: '', publishedUrl: l.status === 'published' ? l.target_url || '' : '', source: 'ladder' })),
   ];
   // one entry per keyword: a published page (with its address) wins, then the newest; the content log knows dates the ladder lacks
@@ -643,6 +666,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   const used = await usageSince(db, org.id, monthStartUtc()).catch(() => null);
   const creditsUsed = used ? Math.round((used.autopilot + used.onDemand) * 100) / 100 : 0;
   const ownRuns = activeRuns(app.runs);
+  const failedReq = failedPageRequests(app.runs); // W06-B: a page run that failed wrote no page (its opening content-log row is not one)
   const verified = !!site.verifiedAt;
   // site tasks (app/docs/SITE_TASKS.md): the steps on the website itself, done or to do (a failure to read them never fails the Pipeline)
   // undefined (not []) when they cannot be read: recommend() then keeps its own rules instead of reading "nothing left to do"
@@ -864,7 +888,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   const queue = {
     next: nextPicks,
     later: week0.candidates.filter((c) => !nextPicks.some((p) => p.keyword === c.keyword)).slice(0, CADENCE.later).map(priced),
-    waiting: waitingPages(logs, now),
+    waiting: waitingPages(logs, now, failedReq),
     suggestions: week0.suggestions.map(priced),
     paused: week0.pausedReason === 'pileup' ? { reason: 'pileup' as const, waiting: week0.waitingPublish, max: week0.config.maxWaiting } : null,
   };
@@ -1005,7 +1029,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     // a schedule run covers this website only while its automation is on for it
     running: runningHere,
     activeRuns: ownRuns,
-    written: writtenPages(logs, ladders),
+    written: writtenPages(logs, ladders, Date.now(), failedReq),
     ladders: ladderSummaries(ladders),
     ladderCards: build.cards,
     needsYou,

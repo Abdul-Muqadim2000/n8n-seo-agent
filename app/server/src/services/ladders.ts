@@ -135,6 +135,8 @@ export interface SiteRun {
   ladderId: string;
   costUsd: number;
   createdAt: string;
+  /** W06-B: the engine's request id, which the content-log row the app opened for a page run carries (a failed run's row is no page) */
+  requestId?: string | null;
 }
 
 export interface LadderSources {
@@ -887,6 +889,7 @@ export async function ladderAppSources(org: OrgRow, site: SiteRow): Promise<Pick
         status: schema.runs.status,
         title: schema.runs.title,
         error: schema.runs.error,
+        requestId: schema.runs.requestId,
         keyword: sql<string | null>`${schema.runs.input}->>'keyword'`,
         ladderId: sql<string | null>`${schema.runs.input}->'ladder'->>'id'`,
         est: schema.runs.estimatedCostUsd,
@@ -941,6 +944,7 @@ export async function ladderAppSources(org: OrgRow, site: SiteRow): Promise<Pick
       ladderId: s(r.ladderId),
       costUsd: r.act ?? r.est,
       createdAt: r.createdAt.toISOString(),
+      requestId: r.requestId,
     })),
   };
 }
