@@ -335,7 +335,7 @@ describe('sitemap submission (DESIGN_WAVE2 §2.5 / §3.2)', () => {
   it('switch on and Full access: no "submit your sitemap" step; read-only access: the step stays; the page shows the access and the submissions', async () => {
     const s = await setup();
     const at = new Date(Date.now() - 7_200_000).toISOString();
-    run(s, { byCause: {}, byAction: {}, sitemaps: { submitted: 0, submitted_errors: 0, read: 1, complete: true, permission: 'siteFullUser', submissions: [{ path: `https://${s.domain}/sitemap.xml`, at, status: 'ok', reason: '' }] } });
+    run(s, { byCause: {}, byAction: {}, sitemaps: { submitted: 0, submitted_errors: 0, read: 1, complete: true, permission: 'siteFullUser', submit: { on: true, gate: 'ok', will_submit: true, blocked: '' }, submissions: [{ path: `https://${s.domain}/sitemap.xml`, at, status: 'ok', reason: '' }] } });
     t.monitors.push({ site_id: s.sid, domain: s.domain, index_sitemap_submit: true });
     expect((await tasksOf(s)).some((x) => x.key === 'indexing:sitemap')).toBe(false);
     const d = (await s.u.c.get(`${s.base}/data/indexing`)).body as IndexingData;
@@ -347,6 +347,31 @@ describe('sitemap submission (DESIGN_WAVE2 §2.5 / §3.2)', () => {
     t.monitors.push({ site_id: r.sid, domain: r.domain, index_sitemap_submit: true });
     expect((await tasksOf(r)).some((x) => x.key === 'indexing:sitemap')).toBe(true);
     expect(((await r.u.c.get(`${r.base}/data/indexing`)).body as IndexingData).sitemap.access).toBe('restricted');
+  });
+  it('wave 2 review W1: Full access and the switch on, but the engine will not submit: the step stays and says why; an older row promises nothing', async () => {
+    // the engine cannot submit (no readable sitemap): the step stays, with the reason in words
+    const s = await setup();
+    run(s, { byCause: {}, byAction: {}, sitemaps: { submitted: 0, submitted_errors: 0, read: 0, complete: true, permission: 'siteFullUser', permission_full: true, submit: { on: true, gate: 'ok', will_submit: false, blocked: 'no_sitemap' } } });
+    t.monitors.push({ site_id: s.sid, domain: s.domain, index_sitemap_submit: true });
+    const step = (await tasksOf(s)).find((x) => x.key === 'indexing:sitemap');
+    expect(step).toMatchObject({ state: 'todo', guide: 'index-submit-sitemap' });
+    expect(step!.detail).toContain('You switched on sitemap submission, but we will not submit it. We could not read a sitemap on your website');
+    expect(((await s.u.c.get(`${s.base}/data/indexing`)).body as IndexingData).sitemap).toMatchObject({ access: 'full', willSubmit: false, blocked: 'no_sitemap' });
+
+    // a row from before the engine sent `will_submit` (Full access only): no promise, the step stays
+    const o = await setup();
+    run(o, { byCause: {}, byAction: {}, sitemaps: { submitted: 0, submitted_errors: 0, read: 1, complete: true, permission: 'siteOwner', permission_full: true } });
+    t.monitors.push({ site_id: o.sid, domain: o.domain, index_sitemap_submit: true });
+    expect((await tasksOf(o)).some((x) => x.key === 'indexing:sitemap')).toBe(true);
+    expect(((await o.u.c.get(`${o.base}/data/indexing`)).body as IndexingData).sitemap.willSubmit).toBe(false);
+
+    // read-only access reported by the engine: the Full access guide
+    const r = await setup();
+    run(r, { byCause: {}, byAction: {}, sitemaps: { submitted: 0, submitted_errors: 0, read: 1, complete: true, permission: 'siteRestrictedUser', submit: { on: true, gate: 'not_full_access', will_submit: false, blocked: 'not_full_access' } } });
+    t.monitors.push({ site_id: r.sid, domain: r.domain, index_sitemap_submit: true });
+    const rs = (await tasksOf(r)).find((x) => x.key === 'indexing:sitemap')!;
+    expect(rs.guide).toBe('search-console-full-access');
+    expect(rs.detail).toContain('Google gives us read-only access');
   });
 });
 
