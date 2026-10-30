@@ -81,6 +81,9 @@ fixes built and pinned offline on the recorded runs (K1 replay deletes 0 section
 page re-grades "Needs work" 72 vs judges 60.5); harness **14825 / 0**. The paid K1 re-check (~$1.10) did NOT run: disk 8-9 GB free vs the 15 GB
 rule; $0 spent. **Before any deploy from this branch, merge `main` into it** (Index coverage is live on production since 2026-10-30 from
 `feature/indexing`; 3 known conflicts), rebuild, retest; then backup, API, web PR, engine (WAVE06 §5). No app migration, no Data Table column.
+**W06-C (`df9126da`, rebuilt `b447c71f`, harness 14900 / 0) closed the two open items offline** (final version keeps the "sections removed" cap;
+brief steps match exclusions on the keyword family). **Paid K1 re-check 2026-10-30 on `b447c71f` stopped at the hold ($0.0845): the page reader
+(Jina) key answers 402 out of balance on every read** (likely production too: recharge, check prod page runs); no new page, no judge score (WAVE06 §9).
 
 ## Status (2026-10-28 midday, GA4 + autopilot steps fix from a client report — previous)
 devaicon.com reported "Connect GA4" in Recommendations while GA4 was connected, and the first audit offered as a manual step though the

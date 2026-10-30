@@ -4,20 +4,22 @@ Anonymised. Sites: **client A** (UAE Microsoft Dynamics partner), **client B** (
 site). Evidence (executions, page texts, judge files, the blind keys) stays in the run's local folder and is never committed.
 
 - Build: **W06** = Wave 0.6, `5d72a7d9` on `feature/seo-agent-v4.5` (W06-A `91b71099` exclusions + grade guards, W06-B `cb937e77`
-  reliability + "Write it anyway" address, integration `42fb9c22`). Compared with **W05** (`1e705b72`, `WAVE05.md`) and **AFTER**
+  reliability + "Write it anyway" address, integration `42fb9c22`), then **W06-C** `df9126da` (the two open items, section 8), rebuild
+  `b447c71f`. Compared with **W05** (`1e705b72`, `WAVE05.md`) and **AFTER**
   (`fed34d3c`, `BEFORE_AFTER.md`).
 - **Nothing deployed. Production not touched.**
 
-## 0. Status: the paid re-check did not run
+## 0. Status: the paid re-check ran, and stopped at the hold (page reader out of balance)
 
-The paid K1 re-check on the isolated `alvrun-*` stack was blocked twice by the run's hard rule "free disk above 15 GB": 9.1 GiB free at
-11:51 UTC and at the second attempt (11:52 UTC), 8.0 GiB at 11:58 UTC. Nothing was rebuilt, restored, started or spent. The space that is free to reclaim inside the
-run's own scope is about 1 GB (the W05 source copy and image); the rest belongs to other projects' Docker images (about 75 GB
-reclaimable) and 66 old agent worktrees (6.9 GB, almost all dirty), which the run may not remove. **To unblock: the owner frees about
-6 GB, or lowers the floor for this run (it needs 1 to 1.5 GB).** Then the re-check is K1 again, about $1.10, blind-judged as in Wave 0.5.
+After the owner freed disk space, the K1 re-check ran on the isolated `alvrun-*` stack rebuilt from **`b447c71f`** (2026-10-30 12:53-13:04
+UTC). The stack, the restore and the seeding were exactly as in Wave 0.5. **But the page reader account that every page read goes through
+had run out of balance** (HTTP 402 "please recharge" on every read, between 10:13 and 12:56 UTC that day). With no client, competitor or
+regulatory page read, K1 was held on its search score alone, and the run was stopped there on purpose: a page written without any page
+read would not be comparable with W05 or AFTER and would spend about $1 for nothing. Re-probed at 13:06 UTC: still 402.
 
-So there is **no new judge score in this file**. What is measured is offline: the recorded W05 executions replayed through the W06 code,
-and the full harness.
+So there is **still no new judge score in this file** (no blind set was made). What is measured is offline: the recorded W05 executions
+replayed through the W06 code, and the full harness. Section 9 has the run and what it found; earlier, two attempts were blocked by the
+15 GB disk rule ($0).
 
 ## 1. The four fixes and their offline pins
 
@@ -39,7 +41,7 @@ broken page and leave the good pages alone; they do **not** calibrate the grade 
 | W05 (`1e705b72`) delivered | 1,023 / 3 | 79 ready with questions | **60.5** (59 / 62) | no |
 | W05 final | same text | 83 ready | 60.5 (59 / 62) | no |
 | W05 delivered, **re-graded by W06 offline** | 1,023 / 3 (same text) | **72 Needs work** | 60.5 (the judged text) | no |
-| **W06 delivered (new run)** | **not run** (disk floor) | - | **not measured** | - |
+| **W06 delivered (new run, `b447c71f`)** | **not written**: held, page reader out of balance (section 9) | - | **not measured** | - |
 
 - **Our grade vs the judges on K1**: in the W05 run +18.5 (79 vs 60.5) and a wrong "Ready"; W06 on the same text +11.5 (72 vs 60.5) and
   the right call (not ready). Still over by 11 points: the rest is the general generosity Wave 2 calibrates.
@@ -59,7 +61,8 @@ broken page and leave the good pages alone; they do **not** calibrate the grade 
 
 ## 4. Spend
 
-**$0.00 of the $3 stop.** No paid call, no ledger row, no DataForSEO call (SPEND.md "WAVE 0.6"). The harness runs offline.
+**$0.0845 of the $3 stop**: the K1 hold check only (Claude $0.0604 + DataForSEO $0.0241; the DataForSEO balance moved by exactly the
+ledger's $0.0241). The two disk-blocked attempts and the harness: $0 (SPEND.md "WAVE 0.6" and "WAVE 0.6 paid re-check").
 
 ## 5. DEPLOY CHECKLIST (for the owner)
 
@@ -78,7 +81,8 @@ from `feature/indexing`: API on the VM at `fd32c0b4`, web at main `99718dd0` (PR
 2. The VM's startup script checks out `alaventra-ref` (`feature/seo-agent-v4.5`) on every boot and rebuilds the app image only if it is
    missing. The spot VM was preempted twice on 2026-10-30. Until the merge is done and deployed, a boot that rebuilds would serve
    this branch's API without Index coverage.
-3. Optional, the owner's call: the paid K1 re-check (about $1.10) once the Mac has more than 15 GB free.
+3. Optional, the owner's call: the paid K1 re-check (about $1.10). The disk is no longer the block; the page reader account must be
+   recharged first (section 9). **Check production's page reads before the deploy too** (section 9, finding 1).
 
 ### 5.1 What changes for clients (Waves 0, 0.5 and 0.6, all on written pages)
 
@@ -191,7 +195,9 @@ Owner rule of 2026-10-30 (on `main`): no filming during the app revamp; this lis
 
 ## 7. Risks left after Wave 0.6
 
-- The K1 fix and the grade guards are proven offline only; the paid re-check is blocked by disk.
+- The K1 fix and the grade guards are proven offline only; the paid re-check stopped at the hold because the page reader is out of
+  balance (section 9).
+- A run whose page reads all fail is not flagged: no ops alert, a wrong reason to the client (section 9, finding 2).
 - Our grade is still about 11 to 17 points above the judges on normal pages (Wave 2 calibration).
 - Fit unchanged: a service page on an explainer results page (Wave 1).
 - Thin proof of the business on client A pages (Wave 3); a page can still be written with no outside source (K6).
@@ -216,3 +222,41 @@ Owner rule of 2026-10-30 (on `main`): no filming during the app revamp; this lis
 - Checks: build section 178; full harness **14900 passed, 0 failed**; app typecheck clean, shared 909, the server and web finalize suites
   green. No migration, no Data Table column, no new workflow. Deploy order unchanged (section 5): the API first, so the app carries the
   new field; an engine without it ignores the field, and an app without it sends none ("Not checked").
+
+## 9. K1 live re-check (2026-10-30, `b447c71f`)
+
+| | W05 (`1e705b72`) | W06 (`b447c71f`), this run |
+|---|---|---|
+| Stack | alvrun, restored from the BEFORE snapshots, re-seeded | the same: build == committed workflows, image == rebuilt, 25 active, AI pulse off, dispatcher plan_only, nothing published, no e-mail |
+| Held? | yes, as a **duplicate** of client A's existing service page (score 52) | yes, but on the **score** (38, "clearly low"), not as a duplicate |
+| Existing page | read and confirmed | **not confirmed**: told the client it "has no title, main heading or Search Console search on file" |
+| Choices shown | Improve the existing page / Use the recommended target / Write it anyway | Use the recommended target / Write it anyway |
+| Page reads | client 4/4, competitors, regulatory: all read | **every read refused, 402** (client 4/4, competitors 3/3, retry 3/3, regulatory 10/10) |
+| Cost | $0.1244 | $0.0845 |
+
+- **Judges' mean, new K1 vs W05 vs AFTER**: not measured. W05 delivered 60.5, AFTER 66.5 (same session); no new page was written, so
+  there is nothing to judge and no blind set or key was made.
+- **Sections kept, the new page's address, our grade vs the judges (delivered and final)**: not produced. The offline pins stand
+  (sections 1, 2 and 8): the K1 replay deletes 0 sections and keeps 2,210 words; the W05 page re-grades "Needs work" 72 (judges 60.5);
+  its final version reads "Needs work" 72 with the new field instead of "Ready" 90.
+- **The two open items**: closed in code and offline (section 8, `df9126da`, rebuilt `b447c71f`); this run did not reach them (no page,
+  no final version), so they are not proven live yet.
+- **Full harness at `b447c71f`**: **14900 passed, 0 failed** (recorded with the rebuild); app typecheck clean, shared 909 / server 1536 /
+  web 270, web build OK.
+- **Spend**: $0.0845 of the $3 stop (section 4).
+
+**Findings from this run**
+
+1. **HIGH, probably in production too: the page reader account is out of balance.** Every page read fails with 402. If production uses
+   the same key (not checked: out of this run's scope), every page run, hold check, publish check, AI-readiness check and link check
+   there is running without reading any page. **Owner: recharge the reader account (or rotate to a funded key) and look at production's
+   page runs since about 10:00 UTC on 2026-10-30.**
+2. **MEDIUM: the engine degrades silently when page reads fail.** No ops alert, nothing in the client's report, and a wrong reason to the
+   client ("has no title, main heading or Search Console search on file" when the page simply could not be fetched); the verdict scored
+   on search data alone and held the keyword on that score. A 401 / 402 from the reader should flag the run ("pages could not be read")
+   and raise an ops alert, as DataForSEO balance problems already do. Not fixed in this wave.
+
+**To finish the re-check** (after the reader is funded): one free probe of the key; K1 as a **new** run (this run's hold was decided
+without page reads; expect W05's path, held as a duplicate), "Write it anyway", collect, finalize, blind set and the two judges. About
+$1.10; $2.92 of the $3 stop is left. The alvrun stack is left running and idle on `b447c71f`.
+
