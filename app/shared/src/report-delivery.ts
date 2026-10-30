@@ -280,6 +280,9 @@ export function deliveryDecision(c: DeliveryCandidate): DeliveryDecision {
 
   // Evidence the run could not read. A report built on it is worth reading in the app and worth not pushing.
   const verdict = text(p.verdict).toUpperCase();
+  // W07-A (2026-10-31): the pages the verdict stands on could not be read (the service that reads web pages refused); said before the
+  // generic NOT_CHECKED line, which is about the search results
+  if (text(isObj(p.pages_unread).reason)) return hold('unavailable', 'The pages this check needs could not be read, so there is no verdict to send. It can be run again later.');
   if (verdict === 'NOT_CHECKED') return hold('unavailable', 'The search results could not be read for this keyword, so there is no verdict to send.');
   if (text(isObj(p.feasibility).status) === 'not_checked') return hold('unavailable', 'The search data could not be read, so the plan was not scored.');
   if (isObj(p.serp_features).unavailable === true)

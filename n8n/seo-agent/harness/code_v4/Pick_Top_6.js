@@ -1,6 +1,8 @@
 const res = $input.first().json || {};
 const task = res.tasks?.[0] || {};
 const items = task.result?.[0]?.items || [];
+// W0-C (section 159): the top-10 organic results as read (address and title), for the shapes of the results page (Parse Analysis serp_shapes)
+const __top10 = items.filter(x => x && x.type === 'organic' && x.url).sort((a, b) => (a.rank_group || 99) - (b.rank_group || 99)).slice(0, 10).map(x => ({ url: String(x.url), title: String(x.title || '') }));
 
 let base;
 try { base = $('Prepare Keyword Run').first().json; }
@@ -50,7 +52,7 @@ if (!picked.length) {
   return [{
     json: {
       rank: null, url: null, domain: null, title: null, snippet: null,
-      no_competitors: true,
+      no_competitors: true, serp_top10: __top10,
       serp_status: task.status_message || res.status_message || 'no results',
       serp_results: items.length,
       skipped
@@ -58,4 +60,4 @@ if (!picked.length) {
   }];
 }
 
-return picked.map(p => ({ json: { ...p, no_competitors: false } }));
+return picked.map((p, i) => ({ json: { ...p, no_competitors: false, ...(i === 0 ? { serp_top10: __top10 } : {}) } }));

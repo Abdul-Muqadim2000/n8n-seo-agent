@@ -1494,6 +1494,9 @@ export const useAcceptPrefilled = (orgId: string, reportId: string) => useReview
 export const useSaveVersion = (orgId: string, reportId: string) => useReviewMutation<string>(orgId, reportId, (markdown) => ({ method: 'PUT', path: '/version', body: { markdown } }));
 export const useRevertVersion = (orgId: string, reportId: string) => useReviewMutation<void>(orgId, reportId, () => ({ method: 'DELETE', path: '/version' }));
 export const useFinalizePage = (orgId: string, reportId: string) => useReviewMutation<void>(orgId, reportId, () => ({ method: 'POST', path: '/finalize' }));
+/** W0-B (D2): the client's reason for publishing a page beside the website's page for the same search; null takes it back. */
+export const useDuplicateDecision = (orgId: string, reportId: string) =>
+  useReviewMutation<{ choice: 'differs' | null; reason?: string }>(orgId, reportId, (b) => ({ method: 'PUT', path: '/decision', body: b }));
 export const useApprovePage = (orgId: string, reportId: string) =>
   useReviewMutation<{ versionReportId?: string }>(orgId, reportId, (b) => ({ method: 'POST', path: '/approve', body: b ?? {} }));
 

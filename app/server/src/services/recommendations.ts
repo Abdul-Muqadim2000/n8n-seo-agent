@@ -426,7 +426,8 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
     const reasons = String((c as typeof c & { qaReasons?: string }).qaReasons ?? '').split(';').map((r) => r.trim()).filter(Boolean);
     add({ id: `content:fix:${c.keyword}`, category: 'content', priority: 'high', title: `Finish the draft for "${c.keyword}" by hand`, detail: `It did not pass the quality check${reasons.length ? `: ${reasons.slice(0, 3).join('; ')}` : ''}. ${DRAFT_BY_HAND}. ${NO_RERUN_NEEDED}`, evidence: c.startedAt ? `written ${Math.max(0, Math.round((now - Date.parse(c.startedAt)) / 864e5))} days ago` : undefined, action: draftAction(c.keyword) });
   }
-  for (const c of x.content.items.filter((c) => c.status !== 'published' && c.status !== 'not_ready' && c.startedAt && now - Date.parse(c.startedAt) > 3 * 864e5).slice(0, 4))
+  // W0-D (2026-10-29): a `held` row is a page that was never written (it waits for the client's OK), so it is never offered as "publish it"
+  for (const c of x.content.items.filter((c) => c.status !== 'published' && c.status !== 'not_ready' && c.status !== 'held' && c.startedAt && now - Date.parse(c.startedAt) > 3 * 864e5).slice(0, 4))
     add({ id: `content:publish:${c.keyword}`, category: 'content', priority: 'high', title: `Publish the page for "${c.keyword}"`, detail: 'It is written but not live; nothing can rank before it is published. Then report the URL so tracking and link suggestions start.', evidence: `written ${Math.round((now - Date.parse(c.startedAt)) / 864e5)} days ago`, action: { label: 'I published it', mode: 'published', prefill: { keyword: c.keyword } } });
   // keyword-first (SCHEDULING_KEYWORDS_PLAN.md §5.3): nothing is written without a keyword the client chose, so the first step is the keyword
   const ladderCount = x.rankings.ladders.length;

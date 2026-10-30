@@ -375,6 +375,61 @@ const SM = (() => {
   const titleShare = (page, keyword) => { const p = page || {}; if (!S(p.title) && !S(p.h1)) return null;
     const want = uniq(termsOf(norm(keyword)).filter(t => !FILLER.has(t)).map(stem)); if (!want.length) return null; const set = matchTerms(S(p.title) + ' ' + S(p.h1));
     return { share: Math.round(shareIn(want, set) * 100) / 100, have: want.filter(t => covers(set, t)).length, of: want.length, missing: want.filter(t => !covers(set, t)) }; };
+  // ---- W05-B (2026-10-30, page-quality BEFORE_AFTER K4): is this page really THE page for the search, before a run rewrites its address? ----
+  // The content run took /dynamics-365-project-operations-uae (title not on file, matched by its address only: "dynamics", "365", "uae") as the
+  // page to improve for "dynamics 365 partner dubai", wrote the partner page onto that address, and the hold waved it through as a refresh.
+  // An address is not evidence of what a page is about. A page is confirmed only by its OWN words: its title or main heading (from the
+  // inventory or read in this run, `more.texts`), or a Search Console search it earns impressions for, where that text (1) carries every core
+  // word of the search, (2) carries 75% of all its words, and (3) is ABOUT the search: its rarest word on this site is one of the search's own,
+  // or the words it adds (not the brand, a place, the kind of service or the form of the page) weigh under a third of the whole. "Dynamics 365
+  // Project Operations Implementation UAE" adds "project" and "operations" (rare) to "dynamics 365" (on every page): about something else.
+  // Returns { ok, by, text, evidence, why }; never throws; with nothing to read, ok is false (the caller writes a new page and says so).
+  const confirmPage = (model, page, keyword, more) => {
+    const p = page || {}; const o = more || {};
+    const m = model || {}; const brands = brandWords(m);
+    const core = coreTerms(keyword, brands);
+    const want = uniq(termsOf(norm(keyword)).filter(t => !FILLER.has(t)).map(stem));
+    const shortUrl = pathOf(p.url);
+    if (!core.length || !want.length) return { ok: false, by: '', text: '', evidence: '', why: 'the search has no word that says what it is about, so no page can be confirmed as its page' };
+    // the kind of service ("implementation", "support") and the form of the page ("guide", "checklist", a year) say how a page answers, not what about
+    const FORM = ['guide', 'guides', 'buyer', 'buyers', 'complete', 'ultimate', 'definitive', 'explained', 'explain', 'overview', 'introduction', 'intro', 'checklist', 'faq', 'faqs',
+      'tip', 'tips', 'everything', 'know', 'need', 'basic', 'basics', 'beginner', 'beginners', 'step', 'steps', 'updated', 'latest'];
+    const kindStems = new Set([...Object.keys(KIND), ...FORM].map(stem));
+    const inv = pages(m); const N = inv.length || 1;
+    const docs = inv.map(x => fieldsOf(x, brands).own);
+    const wOf = (t) => { const df = docs.filter(d => covers(d, t)).length; return Math.log((N + 1) / (df + 1)) + 1; };
+    const cands = [];
+    const add = (text, by) => { const t = S(text).replace(/&amp;/g, '&'); if (t) cands.push({ text: t, by }); };
+    add(p.title, 'its title'); add(p.h1, 'its main heading');
+    for (const t of (Array.isArray(o.texts) ? o.texts : [])) if (t && S(t.text)) add(t.text, S(t.by) || 'its title as read now');
+    for (const q of (Array.isArray(p.queries) ? p.queries : queriesOf(p))) if ((Number((q || {}).impressions) || 0) > 0) add((q || {}).query || (q || {}).keyword, 'a search it earns impressions for in Search Console');
+    if (!cands.length) return { ok: false, by: '', text: '', evidence: '', why: shortUrl + ' has no title, main heading or Search Console search on file, and an address alone does not say what a page is about' };
+    let best = null;
+    for (const c of cands) {
+      const tt = coreTerms(c.text, brands); if (!tt.length) continue;
+      const allCore = core.every(t => covers(tt, t));
+      const share = shareIn(want, matchTerms(c.text));
+      const extra = uniq(tt.filter(t => !core.includes(t) && !kindStems.has(t) && !/^(?:19|20)\d\d$/.test(t)));
+      const own = core.filter(t => covers(tt, t)).reduce((a, t) => a + wOf(t), 0);
+      const add2 = extra.reduce((a, t) => a + wOf(t), 0);
+      const focus = own + add2 > 0 ? own / (own + add2) : 0;
+      // about the search: its rarest word is one of the search's own (an article title that only describes more, "the cost of non-compliance:
+      // UAE e-invoicing penalties and mitigation costs", keeps it), or what it adds weighs under a third ("d365 operations uae", 0.58 on
+      // client A's site, adds the rarer "operations" to "dynamics 365": not the page for "dynamics 365 partner dubai")
+      const ws = tt.filter(t => !kindStems.has(t) && !/^(?:19|20)\d\d$/.test(t)).map(t => [t, wOf(t)]);
+      const maxW = ws.reduce((mx, x) => Math.max(mx, x[1]), 0);
+      const rarestOwn = ws.some(([t, w]) => core.includes(t) && w + 1e-9 >= maxW);
+      const ok = allCore && share + 1e-9 >= MATCH_MIN && (rarestOwn || focus > 0.67 + 1e-9);
+      const said = uniq(tokensOf(norm(c.text)).filter(w => extra.includes(stem(w))));   // the page's own words, not their stems, for the reason
+      const r = { ok, by: c.by, text: c.text, focus: Math.round(focus * 100) / 100, share: Math.round(share * 100) / 100, extra: said.length ? said : extra };
+      if (!best || (r.ok && !best.ok)) best = r;   // the first text read (the title before the searches) explains a refusal
+      if (ok) break;
+    }
+    if (!best) return { ok: false, by: '', text: '', evidence: '', why: 'the title and searches of ' + shortUrl + ' say nothing about this search' };
+    if (best.ok) return { ok: true, by: best.by, text: best.text, evidence: best.by + ' "' + best.text + '" is about this search', why: '' };
+    return { ok: false, by: best.by, text: best.text, evidence: '',
+      why: best.by + ' "' + best.text + '" is about ' + (best.extra.length ? best.extra.map(t => '"' + t + '"').join(' and ') : 'something else') + ', not this search, so ' + shortUrl + ' is not the page for it' };
+  };
   // R34: the pages whose title was never read, so a caller can say what it judged on the address alone instead of reading nothing silently
   const titleGap = (model) => { const all = pages(model); const u = untitled(model);
     return { pages: all.length, untitled: u.length, urls: u.slice(0, 12).map(p => p.url),
@@ -432,8 +487,88 @@ const SM = (() => {
     return { state: 'planned', text: '' };
   };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, pageMatch, MATCH_CONF, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages,
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages, confirmPage,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms, coreTerms } };
+})();
+// ---- DUP: "the site already has a page aimed at this search", one rule (page-quality W0-D, 2026-10-29; PLAN §2.1, RE M7, R4 G4) ----
+// Inlined by build_v4.py into *Parse Verdict* (before the brief: a hit asks the client first) and *Originality Check* (after the copy:
+// the safety net it always was; the Page Finalize and the Publish Check copy that node's code). Before this the rule lived only in the
+// late check, so run 3299 paid for a brief, a copy and three editor rounds before it learned the site already had a page for the search.
+// The rule: the keyword's words (3+ characters) against each inventory page's title, H1 and address. A page carrying 75% or more of them
+// is a duplicate target. Since W0-D the share must ALSO hold WEIGHTED by how rare each word is on this site (a word every page carries, "dynamics"
+// or "365" on a Dynamics partner's site, says less than one only a page or two carry, "system" or "erp"), so a guide asking "is
+// microsoft dynamics 365 an erp system" is not the duplicate of a Business Central service page that shares the site's own product words
+// (owner priority 2026-10-29: the ranking guide of exec 949 must never be held or flagged by this rule), while "microsoft dynamics erp"
+// and "dynamics 365 erp system" are recognised as the guide's own searches. With every word equally rare (a small site) it is the old
+// unweighted share. No URL constructor (n8n sandbox), no defineProperty.
+//   targets(keyword, pages, opts) -> { targets, partial, self, keyword_words, basis }
+//     opts.skip   URLs never compared (the pages this run read and compares by text, the page being improved)
+//     opts.self   URLs of this run's own page (the ladder's planned address); with opts.self_aware a page at one of them is this run's own
+//                 page: listed in `self`, never a duplicate of itself
+//     opts.slug_self  (before the brief only) a page whose last address segment is the keyword's own slug is the keyword's own page too:
+//                 the run improves it (the verdict's existing page) rather than duplicating it. Not in the late check: there, an unread
+//                 page at the keyword's own address IS the clearest duplicate (harness CTF5)
+//     opts.ladder a page of a keyword ladder: a page that carries only PART of the keyword's weight is the ladder's planned neighbour
+//                 (the rung links up to it), listed in `partial` as advice; only a page carrying all of it is a duplicate target
+//     opts.max    targets kept (3)
+const DUP = (() => {
+  const S = (v) => String(v == null ? '' : v);
+  const SHARE = 75, MAX = 3;
+  // the tokenizer of SHG (_shingle.js), character for character, so the late check finds what it always found
+  const norm = (t) => S(t)
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/https?:\/\/\S+|www\.\S+/g, ' ')
+    .replace(/[‘’ʼ]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-')
+    .toLowerCase().replace(/[^a-z0-9'\s]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const words = (t) => { const s = norm(t); return s ? s.split(' ') : []; };
+  const toks = (t) => new Set(words(t).filter(w => w.length > 2));
+  const keyOf = (u) => S(u).toLowerCase().replace(/[#?].*$/, '').replace(/\/+$/, '');
+  const pathKey = (u) => keyOf(u).replace(/^https?:\/\/[^\/]+/, '');
+  const slugOf = (u) => { const p = pathKey(u).split('/').filter(Boolean); return p.length ? p[p.length - 1].replace(/\.[a-z]{2,5}$/, '') : ''; };
+  const slugify = (k) => S(k).toLowerCase().replace(/[‘’ʼ']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  // the page's words: title + H1 + address (the address with its separators as spaces, exactly as the late check always read it)
+  const pageToks = (p) => toks(S(p && p.title) + ' ' + S(p && p.h1) + ' ' + S(p && p.url).replace(/[-_/]+/g, ' '));
+  const targets = (keyword, pages, opts) => {
+    const o = opts || {};
+    const kw = toks(keyword);
+    const out = { targets: [], partial: [], self: [], keyword_words: kw.size, basis: '' };
+    if (!kw.size) { out.basis = 'the keyword has no word of 3 letters or more to compare'; return out; }
+    const list = (Array.isArray(pages) ? pages : []).filter(p => p && S(p.url));
+    const sets = list.map(pageToks);
+    // how many of the site's pages carry each keyword word: the rarer, the more it says about a page
+    const N = sets.length;
+    const w = {};
+    for (const t of kw) { let df = 0; for (const s of sets) if (s.has(t)) df++; w[t] = Math.log((N + 1) / (df + 1)) + 1; }
+    const total = [...kw].reduce((a, t) => a + w[t], 0);
+    const skip = new Set([...(o.skip || [])].map(keyOf).filter(Boolean));
+    const selfP = new Set([...(o.self || [])].map(pathKey).filter(Boolean));
+    const kslug = slugify(keyword);
+    const max = Number(o.max) > 0 ? Number(o.max) : MAX;
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i]; const k = keyOf(p.url);
+      if (!k || skip.has(k)) continue;
+      const set = sets[i]; if (!set.size) continue;
+      let hit = 0, hw = 0;
+      for (const t of kw) if (set.has(t)) { hit++; hw += w[t]; }
+      const plain = Math.round((hit / kw.size) * 100);
+      const share = Math.round((hw / total) * 100);
+      // both measures must reach the bar: the weighting only ever REMOVES a match the plain share made (a page that shares only the site's
+      // common words), it never adds one the late check did not make before
+      if (plain < SHARE || share < SHARE) continue;
+      const row = { url: S(p.url), title: S(p.title), keyword_words_shared_pct: plain, weighted_pct: share };
+      if (o.self_aware && ((selfP.size && selfP.has(pathKey(p.url))) || (o.slug_self && kslug && slugOf(p.url) === kslug))) { out.self.push(row); continue; }
+      if (o.ladder && hit < kw.size) { out.partial.push(row); continue; }
+      out.targets.push(row);
+      if (out.targets.length >= max) break;
+    }
+    out.basis = 'the keyword\'s ' + kw.size + ' word(s) of 3+ letters against the title, main heading and address of ' + N + ' page(s) of the site, '
+      + 'a page carrying ' + SHARE + '% or more of those words, and of their weight when each word counts by how few of the site\'s pages carry it, is aimed at the same search';
+    return out;
+  };
+  return { targets, words, slugify, slugOf, SHARE, MAX };
 })();
 // Originality check (FIX_PLAN G5, 2026-10-13). Runs between *Content QA* and *Needs Revision?*, so a draft that repeats someone else's
 // words -- or our own page's -- never reaches the customer: the quality check fails, the editor is sent in with the passage named, and the
@@ -499,20 +634,11 @@ const measured = sources.map((s, i) => {
 let MODEL = null;
 try { MODEL = $('Site Model').first().json.site_model || null; } catch (e) {}
 if (!MODEL && d.site_model && typeof d.site_model === 'object') MODEL = d.site_model;
-const kwToks = new Set(SHG.words(d.keyword).filter(w => w.length > 2));
+// W0-D (page-quality 2026-10-29): the rule is the kit DUP (v5/code/_dup_targets.js), the one *Parse Verdict* now applies BEFORE the
+// brief; this late check stays as the safety net. Two refinements, both only ever removing a match: a page that shares only the site's
+// common words is not a duplicate (the weighted share), and the ladder's planned address for this very page is never its own duplicate.
 const readKeys = new Set(sources.map(s => keyOf(s.url)).filter(Boolean));
-const duplicate_targets = [];
-if (MODEL && kwToks.size) {
-  for (const p of SM.pages(MODEL)) {
-    const k = keyOf(p.url); if (!k || readKeys.has(k) || k === improving) continue;
-    const toks = new Set(SHG.words(S(p.title) + ' ' + S(p.h1) + ' ' + S(p.url).replace(/[-_/]+/g, ' ')).filter(w => w.length > 2));
-    if (!toks.size) continue;
-    let hit = 0; for (const t of kwToks) if (toks.has(t)) hit++;
-    const share = Math.round((hit / kwToks.size) * 100);
-    if (share >= 75) duplicate_targets.push({ url: S(p.url), title: S(p.title), keyword_words_shared_pct: share });
-    if (duplicate_targets.length >= 3) break;
-  }
-}
+const duplicate_targets = MODEL ? DUP.targets(d.keyword, SM.pages(MODEL), { skip: [...readKeys, improving], self: [d.ladder_target_url || ''], self_aware: true }).targets : [];
 
 const worst = measured.filter(m => m.kind !== 'improved')[0] || null;
 const failing = worst && worst.overlap_pct > THRESHOLD ? worst : null;

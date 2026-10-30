@@ -42,7 +42,9 @@ module.exports = async (ctx) => {
   const answer = (id, decision, text) => ({ ...Q[id], decision, text: text != null ? text : decision === 'yes' ? Q[id].original : '' });
   const bodyOf = (over) => ({ mode: 'finalize', request_id: 'app-fin-test', domain: 'novaand-demo.com', site_id: 'site_novaand-demo-com', keyword: 'dynamics 365 partner uae', country: 'United Arab Emirates', page_type: 'Blog Post / Guide',
     markdown: DELIVERED, delivered_markdown: DELIVERED, client_edited: false, meta: { title: 'Dynamics 365 Partner UAE: How to Choose', meta_description: 'What to check before you choose a Dynamics 365 partner in the UAE: credentials, VAT experience, support and references.', slug: 'dynamics-365-partner-uae', h1: 'How to choose a Dynamics 365 partner in the UAE' },
-    answers: [], business_facts: 'Nova& is a Microsoft partner based in Ajman with offices in Faisalabad. Contact is by consultation request.', business_facts_kv: {}, stored_fact_keys: [], content_request_id: 'exec-1', ...(over || {}) });
+    answers: [], business_facts: 'Nova& is a Microsoft partner based in Ajman with offices in Faisalabad. Contact is by consultation request.', business_facts_kv: {}, stored_fact_keys: [], content_request_id: 'exec-1',
+    // W0-B (2026-10-29): the app sends the page run's gating fields with every finalize (app/shared/src/page-review.ts pageRunOf); this page run found no blocker
+    page_run: { qa_blocking: [], duplicate_targets: [], verdict: 'GO', score: 70, score_withheld: false, page_type: 'Blog Post / Guide', verdict_acknowledged: false, copied_passages: [], length_points: null, missing: [], content_request_id: 'exec-1' }, ...(over || {}) });
   const editorSays = (sections) => mock('Finalize Editor', [{ json: { output: sections == null ? '' : { sections } } }]);
   const finalize = async (body, editor) => {
     reset(); delete store['Finalize Editor'];
@@ -58,8 +60,12 @@ module.exports = async (ctx) => {
     const vd = await run('Finalize Verdict', oc, { code: 'Finalize__Finalize_Verdict' });
     return { pb: pb[0].json, ap: ap[0].json, mg: mg[0].json, qa: qa[0].json.content_qa, body: vd[0].json.body, jobs };
   };
-  // a well-behaved section answer: the section with the task done (the fact as its own sentence at the end)
-  const goodEditor = (extra) => (jobs) => jobs.map(j => ({ id: j.id, text: j.text.replace(/\s+$/, '') + '\n\n' + j.tasks.map(t => (t.match(/"([^"]+)"/) || [])[1]).filter(Boolean).join(' ') + (extra || '') }));
+  // a well-behaved section answer: the section with the task done. W0-E (2026-10-29, PLAN Fix 5.2): the fact is worked into the first
+  // paragraph after its first sentence; an answer appended as its own paragraph at the end is refused now (FIN4 / scenarios_w0e.js)
+  const goodEditor = (extra) => (jobs) => jobs.map(j => { const facts = [...(j.must_contain || []), ...(j.weave || [])].join(' ') + (extra || '');
+    const lines = j.text.split('\n'); const i = lines.findIndex((l, k) => k > 0 && l.trim() && !/^#/.test(l));
+    if (i >= 0) { const m = lines[i].match(/^(.*?[.!?])\s+(.*)$/); lines[i] = m ? m[1] + ' ' + facts.trim() + ' ' + m[2] : lines[i] + ' ' + facts.trim(); }
+    return { id: j.id, text: lines.join('\n') }; });
   const KEYS = ['ok', 'request_id', 'markdown', 'applied', 'sections_rewritten', 'changes', 'delivery_status', 'delivery', 'client_questions', 'grade', 'cost'];
 
   // ---------- FIN1 the workflow as generated ----------
@@ -120,16 +126,22 @@ module.exports = async (ctx) => {
 
   // ---------- FIN4 a cut or unusable editor answer ----------
   await guard('FIN4 cut editor', async () => {
-    const SN = 'FIN4 (H3) a cut, unmarked or lossy editor answer never replaces a section: the deterministic page is kept and a confirmed sentence is still placed';
+    const SN = 'FIN4 (H3; W0-E 2026-10-29) a cut, unmarked or lossy editor answer never replaces a section: the deterministic page is kept; a confirmed sentence with its anchor is put back where it stood without the editor, one without an anchor is reported not placed (never appended)';
     reset(); begin(SN); const check = mkCheck(SN);
     const q1Left = { ...answer('q1', 'yes'), neutral: '', in_page: 'left_out' };
+    // W0-E (PLAN Fix 5.3): the page run records where a removed statement stood; this one stood after the designation sentence
+    const q1Anchored = { ...q1Left, anchor: { section: 'What a good partner brings', before: 'Look for a partner that holds a current Microsoft designation.', after: '', line_before: '' } };
     for (const [label, editor] of [['no answer at all', () => null], ['an answer with no section', () => [{ id: 's9', text: '## Other\n\nText.' }]],
       ['a section cut short', (jobs) => jobs.map(j => ({ id: j.id, text: j.text.split('\n')[0] + '\n\nAsk each' }))],
       ['a section that dropped the confirmed sentence', (jobs) => jobs.map(j => ({ id: j.id, text: j.text }))]]) {
       const R = await finalize(bodyOf({ answers: [q1Left, answer('q6', 'answer', RESULT)] }), editor);
       const how = Object.fromEntries(R.body.applied.map(a => [a.id, a.how]));
-      check(label + ': no section rewritten, the confirmed partner sentence still on the page, the client result reported as not placed', R.body.sections_rewritten.length === 0 && has(R.body.markdown, Q.q1.original) && how.q6 === 'not_placed'
-        && R.body.markdown.includes('Ask each partner how they handle data migration, training and the first month after go-live.'), J({ how, rw: R.body.sections_rewritten }));
+      check(label + ': no section rewritten, the confirmed sentence with no anchor NOT appended (reported not placed), the client result reported as not placed', R.body.sections_rewritten.length === 0 && !has(R.body.markdown, Q.q1.original) && how.q1 === 'not_placed' && how.q6 === 'not_placed'
+        && R.body.notes.some(n => /^Not placed: your answer/.test(n)) && R.body.markdown.includes('Ask each partner how they handle data migration, training and the first month after go-live.'), J({ how, rw: R.body.sections_rewritten, notes: R.body.notes }));
+      const R2 = await finalize(bodyOf({ answers: [q1Anchored, answer('q6', 'answer', RESULT)] }), editor);
+      const how2 = Object.fromEntries(R2.body.applied.map(a => [a.id, a.how]));
+      check(label + ': with its anchor the confirmed sentence is back right after the sentence it followed, with no editor job of its own', how2.q1 === 'kept_original' && R2.body.markdown.includes('Look for a partner that holds a current Microsoft designation. ' + Q.q1.original)
+        && !R2.jobs.some(j => (j.must_contain || []).length), J({ how2, md: R2.body.markdown.slice(0, 700) }));
     }
   });
 

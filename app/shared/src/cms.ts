@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { cleanDomain, domainOk, urlOnDomain } from './domain';
 import { findOpenBrackets, type OpenBracket } from './placeholders';
+import { cleanMetaDescription } from './meta-description';
 import { deliveryDecision } from './report-delivery';
 
 /**
@@ -389,7 +390,7 @@ export function cmsPage(payload: P): CmsPage {
     });
   const seoTitle = s(meta.title);
   const h1 = s(meta.h1) || seoTitle;
-  const description = s(meta.meta_description);
+  const description = cleanMetaDescription(meta.meta_description);   // W0-A (2026-10-29): "Slug: ..." or a stub is never published as the description
   const author = obj(meta.author);
   const ladder = obj(meta.ladder);
   const keyword = s(payload.keyword) || s(meta.primary_keyword);

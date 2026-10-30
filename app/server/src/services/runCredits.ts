@@ -1,5 +1,5 @@
 import { and, eq, sql } from 'drizzle-orm';
-import { creditRate, type PayloadCredits, type RunCredits } from '@seo/shared';
+import { creditRate, HOLD_CHECK_USD, type PayloadCredits, type RunCredits } from '@seo/shared';
 import { db, schema } from '../db';
 import type { RunRow } from '../db/schema';
 import { settingsRow } from './admin/settings';
@@ -13,6 +13,16 @@ import { execRows } from './admin/sqlRows';
 export function quoteOf(estimatedUsd: number, s: { creditValueUsd: number; markup: number }): number {
   if (!(estimatedUsd > 0)) return 0;
   return Math.max(1, Math.ceil(Math.round(estimatedUsd * creditRate(s) * 100) / 100 - 1e-9));
+}
+
+/**
+ * W05-B (2026-10-30, BEFORE_AFTER "Holds"): a page run the engine held for the client's OK wrote nothing and used only the check, so its
+ * quote becomes the check's quote (about 9 credits, owner decision D8), never more than it was quoted; a free run (0) stays 0. The written
+ * page ("Write it anyway") is a new run with its own page quote.
+ */
+export function heldQuote(quoted: number | null, s: { creditValueUsd: number; markup: number }): number {
+  const q = quoteOf(HOLD_CHECK_USD, s);
+  return quoted == null ? q : Math.min(quoted, q);
 }
 
 export interface RunCharge {

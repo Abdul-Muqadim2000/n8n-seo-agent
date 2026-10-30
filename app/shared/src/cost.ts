@@ -69,7 +69,10 @@ export interface CostRow {
 }
 
 export const COST_TABLE: Record<CostKey, CostRow> = {
-  content: { ai: 0.8, dfs: 0.04, measured: 0.609, basis: 'a written page, exec 521 ($0.438 of it the three streaming Opus nodes)' },
+  // D8 (owner, 2026-10-29, page-quality PLAN §6.2): a written page is quoted at what it measurably costs with the model's real thinking
+  // ($1.4-1.9 in October 2026, page runs 3299 and 949), about 114 credits, not the $0.84 the engine shipped; a page held for the client's
+  // OK uses only the check (HOLD_CHECK_USD). The quote is a cap: a run is charged what it used, never more.
+  content: { ai: 1.86, dfs: 0.04, measured: 1.9, basis: 'a written page as measured in October 2026 (page runs 3299 and 949, $1.4 to $1.9 with the model\'s real thinking); was $0.84 from exec 521' },
   report: { ai: 0.16, dfs: 0.04, measured: 0.127, basis: 'a keyword report, exec 519' },
   verdict: { ai: 0.16, dfs: 0.04, measured: 0.13, basis: 'a keyword verdict, exec 486' },
   discover: { ai: 0.24, dfs: 0.4, measured: 0.42, basis: 'keyword discovery, exec 518, with its 16 live results pages read 30 deep with the AI Overview ($0.006 each)' },
@@ -141,6 +144,9 @@ export function parseCalibration(rows: ReadonlyArray<{ key?: unknown; value?: un
   return cal;
 }
 
+/** D8 (2026-10-29): the keys whose shipped figure is the measured cost and therefore the lowest quote (a written page). */
+export const QUOTE_FLOOR_KEYS: ReadonlySet<CostKey> = new Set<CostKey>(['content']);
+
 /**
  * What the engine reserves for ONE estimate key and kind, `_cost_cal.js` `estOf`, same formula: the shipped default until the key has
  * history; then the rolling mean x 1.25 (never above five times the default), and never below the most the key recently cost.
@@ -152,8 +158,17 @@ export function estOf(kind: CostKind, key: CostKey, cal?: EngineCalibration | nu
   const recentMax = Math.max(st.max, ...st.recent);
   const rolling = round(st.mean * HEADROOM);
   const capped = def > 0 ? Math.min(rolling, def * CAP) : rolling;
-  return { usd: round(Math.max(capped, recentMax)), calibrated: true };
+  // D8: a key quoted at its measured cost is never quoted below it, whatever the engine's rolling figure (its streaming calls under-count)
+  return { usd: round(Math.max(capped, recentMax, QUOTE_FLOOR_KEYS.has(key) ? def : 0)), calibrated: true };
 }
+
+
+/**
+ * D8 (2026-10-29): what a page held for the client's OK costs, the check alone (research and the verdict, about $0.13 of Claude and $0.02 of
+ * search data, page-quality PLAN §6.1): about 9 credits at the list rate. The engine stops before the brief, so the run is charged what the
+ * check used (charges never exceed the quote and follow the usage).
+ */
+export const HOLD_CHECK_USD = 0.15;
 
 /** What the engine reserves for one estimate key (Claude + search data): its calibrated figure when `cal` is given, else the shipped default. */
 export const keyCost = (key: CostKey, cal?: EngineCalibration | null): number => round(estOf('ai', key, cal).usd + estOf('dfs', key, cal).usd);

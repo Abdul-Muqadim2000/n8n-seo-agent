@@ -1505,6 +1505,61 @@ const SM = (() => {
   const titleShare = (page, keyword) => { const p = page || {}; if (!S(p.title) && !S(p.h1)) return null;
     const want = uniq(termsOf(norm(keyword)).filter(t => !FILLER.has(t)).map(stem)); if (!want.length) return null; const set = matchTerms(S(p.title) + ' ' + S(p.h1));
     return { share: Math.round(shareIn(want, set) * 100) / 100, have: want.filter(t => covers(set, t)).length, of: want.length, missing: want.filter(t => !covers(set, t)) }; };
+  // ---- W05-B (2026-10-30, page-quality BEFORE_AFTER K4): is this page really THE page for the search, before a run rewrites its address? ----
+  // The content run took /dynamics-365-project-operations-uae (title not on file, matched by its address only: "dynamics", "365", "uae") as the
+  // page to improve for "dynamics 365 partner dubai", wrote the partner page onto that address, and the hold waved it through as a refresh.
+  // An address is not evidence of what a page is about. A page is confirmed only by its OWN words: its title or main heading (from the
+  // inventory or read in this run, `more.texts`), or a Search Console search it earns impressions for, where that text (1) carries every core
+  // word of the search, (2) carries 75% of all its words, and (3) is ABOUT the search: its rarest word on this site is one of the search's own,
+  // or the words it adds (not the brand, a place, the kind of service or the form of the page) weigh under a third of the whole. "Dynamics 365
+  // Project Operations Implementation UAE" adds "project" and "operations" (rare) to "dynamics 365" (on every page): about something else.
+  // Returns { ok, by, text, evidence, why }; never throws; with nothing to read, ok is false (the caller writes a new page and says so).
+  const confirmPage = (model, page, keyword, more) => {
+    const p = page || {}; const o = more || {};
+    const m = model || {}; const brands = brandWords(m);
+    const core = coreTerms(keyword, brands);
+    const want = uniq(termsOf(norm(keyword)).filter(t => !FILLER.has(t)).map(stem));
+    const shortUrl = pathOf(p.url);
+    if (!core.length || !want.length) return { ok: false, by: '', text: '', evidence: '', why: 'the search has no word that says what it is about, so no page can be confirmed as its page' };
+    // the kind of service ("implementation", "support") and the form of the page ("guide", "checklist", a year) say how a page answers, not what about
+    const FORM = ['guide', 'guides', 'buyer', 'buyers', 'complete', 'ultimate', 'definitive', 'explained', 'explain', 'overview', 'introduction', 'intro', 'checklist', 'faq', 'faqs',
+      'tip', 'tips', 'everything', 'know', 'need', 'basic', 'basics', 'beginner', 'beginners', 'step', 'steps', 'updated', 'latest'];
+    const kindStems = new Set([...Object.keys(KIND), ...FORM].map(stem));
+    const inv = pages(m); const N = inv.length || 1;
+    const docs = inv.map(x => fieldsOf(x, brands).own);
+    const wOf = (t) => { const df = docs.filter(d => covers(d, t)).length; return Math.log((N + 1) / (df + 1)) + 1; };
+    const cands = [];
+    const add = (text, by) => { const t = S(text).replace(/&amp;/g, '&'); if (t) cands.push({ text: t, by }); };
+    add(p.title, 'its title'); add(p.h1, 'its main heading');
+    for (const t of (Array.isArray(o.texts) ? o.texts : [])) if (t && S(t.text)) add(t.text, S(t.by) || 'its title as read now');
+    for (const q of (Array.isArray(p.queries) ? p.queries : queriesOf(p))) if ((Number((q || {}).impressions) || 0) > 0) add((q || {}).query || (q || {}).keyword, 'a search it earns impressions for in Search Console');
+    if (!cands.length) return { ok: false, by: '', text: '', evidence: '', why: shortUrl + ' has no title, main heading or Search Console search on file, and an address alone does not say what a page is about' };
+    let best = null;
+    for (const c of cands) {
+      const tt = coreTerms(c.text, brands); if (!tt.length) continue;
+      const allCore = core.every(t => covers(tt, t));
+      const share = shareIn(want, matchTerms(c.text));
+      const extra = uniq(tt.filter(t => !core.includes(t) && !kindStems.has(t) && !/^(?:19|20)\d\d$/.test(t)));
+      const own = core.filter(t => covers(tt, t)).reduce((a, t) => a + wOf(t), 0);
+      const add2 = extra.reduce((a, t) => a + wOf(t), 0);
+      const focus = own + add2 > 0 ? own / (own + add2) : 0;
+      // about the search: its rarest word is one of the search's own (an article title that only describes more, "the cost of non-compliance:
+      // UAE e-invoicing penalties and mitigation costs", keeps it), or what it adds weighs under a third ("d365 operations uae", 0.58 on
+      // client A's site, adds the rarer "operations" to "dynamics 365": not the page for "dynamics 365 partner dubai")
+      const ws = tt.filter(t => !kindStems.has(t) && !/^(?:19|20)\d\d$/.test(t)).map(t => [t, wOf(t)]);
+      const maxW = ws.reduce((mx, x) => Math.max(mx, x[1]), 0);
+      const rarestOwn = ws.some(([t, w]) => core.includes(t) && w + 1e-9 >= maxW);
+      const ok = allCore && share + 1e-9 >= MATCH_MIN && (rarestOwn || focus > 0.67 + 1e-9);
+      const said = uniq(tokensOf(norm(c.text)).filter(w => extra.includes(stem(w))));   // the page's own words, not their stems, for the reason
+      const r = { ok, by: c.by, text: c.text, focus: Math.round(focus * 100) / 100, share: Math.round(share * 100) / 100, extra: said.length ? said : extra };
+      if (!best || (r.ok && !best.ok)) best = r;   // the first text read (the title before the searches) explains a refusal
+      if (ok) break;
+    }
+    if (!best) return { ok: false, by: '', text: '', evidence: '', why: 'the title and searches of ' + shortUrl + ' say nothing about this search' };
+    if (best.ok) return { ok: true, by: best.by, text: best.text, evidence: best.by + ' "' + best.text + '" is about this search', why: '' };
+    return { ok: false, by: best.by, text: best.text, evidence: '',
+      why: best.by + ' "' + best.text + '" is about ' + (best.extra.length ? best.extra.map(t => '"' + t + '"').join(' and ') : 'something else') + ', not this search, so ' + shortUrl + ' is not the page for it' };
+  };
   // R34: the pages whose title was never read, so a caller can say what it judged on the address alone instead of reading nothing silently
   const titleGap = (model) => { const all = pages(model); const u = untitled(model);
     return { pages: all.length, untitled: u.length, urls: u.slice(0, 12).map(p => p.url),
@@ -1562,7 +1617,7 @@ const SM = (() => {
     return { state: 'planned', text: '' };
   };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, pageMatch, MATCH_CONF, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages,
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages, confirmPage,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms, coreTerms } };
 })();
 // ---- what the keyword research is allowed to use, and what its numbers mean (2026-10-13, FIX_PLAN G8; criteria K2 / K4 / K6 / K7) ----
@@ -2945,11 +3000,16 @@ else if (serpOut) {
       + 'A ladder plan is a bet on who ranks for the keyword, so none was planned, nothing was scored and no page was written. '
       + (transient ? 'Please try again later (in an hour or so).' : 'Please try again later; if it keeps happening, contact support.') };
 }
+// W07-A (2026-10-31, WAVE06 "Open resilience item"): the pages the plan stands on (the ones that rank, the site's own) could not be read because
+// the page reader refused and its fallback failed too (Parse Verdict's `pages_unread`): no ladder is planned on pages nobody read
+else if (base.pages_unread && base.pages_unread.reason) refusal = { reason: 'pages_unread', short: 'the pages the plan needs could not be read', detail: String(base.pages_unread.client_reason || '').slice(0, 300),
+  message: 'We could not read the pages a ladder plan stands on for "' + head + '" right now: ' + String(base.pages_unread.client_reason || 'the service we use to read web pages did not answer') + '. '
+    + 'It is not a problem with your keyword, and it says nothing about whether "' + head + '" is a good choice. No pages were planned, nothing was scored and no page was written. Please try again later.' };
 else if (thinPool) refusal = { reason: 'thin_data', short: 'the keyword research returned too little data', pool_size: poolSize, minimum: LADDER_MIN_POOL, head_measured: headMeasured,
   message: 'The keyword research returned only ' + poolSize + ' keyword' + (poolSize === 1 ? '' : 's') + ' around "' + head + '" in ' + (base.country || 'this market')
     + (headMeasured ? ' (a ladder needs at least ' + LADDER_MIN_POOL + ' to pick rungs from)' : ', and the search data provider has no search volume and no difficulty for "' + head + '" itself')
     + ', so there is not enough data to plan one. No pages were planned and none was written: check the destination keyword, or run it again if the search data provider was failing.' };
-const dataRefused = !!(refusal && (refusal.reason === 'serp_unchecked' || refusal.reason === 'thin_data'));
+const dataRefused = !!(refusal && (refusal.reason === 'serp_unchecked' || refusal.reason === 'thin_data' || refusal.reason === 'pages_unread'));   // W07-A: pages_unread
 const plan_type = refusal ? 'none' : plan.plan_type;
 const planned = !refusal;
 

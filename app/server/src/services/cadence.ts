@@ -65,6 +65,9 @@ import {
 export const CADENCE = {
   maxPerWeek: 3,
   skipRecentDays: 90,
+  /** W0-D (page-quality 2026-10-29, owner D1): a keyword a page run held for the client's OK (`seo_content_log.status = 'held'`) is not picked
+   *  again for this many days; the cadence takes its next candidate (the engine's Cadence_Plan.js HELD_RECHECK_DAYS) */
+  heldRecheckDays: 90,
   strikingMinImpressions: 30,
   strikingMin: 4,
   strikingMax: 20,
@@ -87,8 +90,9 @@ export const CADENCE = {
   /** the n8n cadence reports 4 as `upcoming`; the app shows a few more */
   upcoming: 4,
   later: 8,
-  /** the engine's shipped price of a content run (Claude $0.80 + DataForSEO $0.04) when no calibration is known */
-  defaultPageUsd: 0.84,
+  /** what a written page is quoted at when no figure is passed (D8, 2026-10-29: its measured cost, shared/src/cost.ts COST_TABLE.content;
+   *  was the engine's shipped $0.84) */
+  defaultPageUsd: 1.9,
 } as const;
 
 const STATUSES = ['active', 'queued', 'paused', 'won', 'stuck', 'archived'] as const;
@@ -492,6 +496,8 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   const aiQuota = Math.max(0, Math.floor(Number(input.aiPagesPerMonth ?? 0)));
   const slog = input.logs.filter((l) => l && l.keyword && (!l.domain || normD(l.domain) === domain));
   const recent = new Set(slog.filter((l) => l.status === 'published' || at - ms(l.started_at) < CADENCE.skipRecentDays * 864e5).map((l) => norm(l.keyword)));
+  // W0-D: a held keyword waits for the client's "Write it anyway" (a run with hold_ack) or the re-check; it is never written on its own
+  for (const l of slog) if (l.status === 'held' && at - ms(l.started_at) < CADENCE.heldRecheckDays * 864e5) recent.add(norm(l.keyword));
   const publishedKw = new Set(slog.filter((l) => l.published_url).map((l) => norm(l.keyword)));
   const lrows = input.ladders.filter((l) => l && l.ladder_id && l.keyword).sort(byRung);
   const ladderKw = new Set(lrows.map((l) => norm(l.keyword)));

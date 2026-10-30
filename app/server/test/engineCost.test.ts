@@ -21,7 +21,10 @@ describe('engineCostTable', () => {
     const info = await engineCostTable();
     expect(info.source).toBe('engine');
     expect(info.asOf).not.toBeNull();
-    expect(Math.abs(estimateRunCost('keyword', {}, info.calibration) - 1.403)).toBeLessThan(0.0001);
+    // the engine's reservation for a page is 1.0983 x 1.25 + 0.0301 = 1.403; since D8 (2026-10-29) a page is quoted no lower than its measured $1.90
+    expect(info.calibration?.ai.content?.mean).toBe(1.0983);
+    expect(estimateRunCost('keyword', { receiveContent: false }, info.calibration)).toBeLessThan(0.4);
+    expect(estimateRunCost('keyword', {}, info.calibration)).toBe(1.9);
     expect(rowsMock.mock.calls[0][0]).toBe('cache');
     expect(rowsMock.mock.calls[0][1].filters).toEqual([{ columnName: 'kind', condition: 'eq', value: 'cost' }]);
   });

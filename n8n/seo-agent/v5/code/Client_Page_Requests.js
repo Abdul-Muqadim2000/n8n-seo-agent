@@ -24,7 +24,11 @@ const add = (u, kind) => { u = String(u || '').trim(); if (!u || seen.has(u.repl
 const ukeyC = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
 const ladderNew = !!(d.ladder_id && String(d.ladder_target_url || '').trim() && !String(d.existing_page_url || '').trim());
 const existingCand = (d.existing_page && d.existing_page.url) ? d.existing_page.url : (matched ? matched.url : '');
-const ignoredExisting = ladderNew && existingCand && ukeyC(existingCand) !== ukeyC(d.ladder_target_url) ? existingCand : '';
+// W05-B (2026-10-30, BEFORE_AFTER K1): a page the site already has for the search is now a hold the client sees ("Improve the existing page"
+// or "Write it anyway"). "Write it anyway" (hold_ack) on a page this run FOUND (not one the client named) means a separate new page: the
+// found page is read as a related page and left as it is. "Improve the existing page" names its address, so it never reaches this rule.
+const ackNew = !!(d.hold_ack && typeof d.hold_ack === 'object') && !String(d.existing_page_url || '').trim() && !(d.existing_page && d.existing_page.source === 'provided');
+const ignoredExisting = existingCand && ((ladderNew && ukeyC(existingCand) !== ukeyC(d.ladder_target_url)) || (!ladderNew && ackNew)) ? existingCand : '';
 if (ignoredExisting) add(ignoredExisting, 'related');
 else if (d.existing_page && d.existing_page.url) add(d.existing_page.url, 'existing');
 else if (matched) add(matched.url, 'existing');
@@ -43,4 +47,5 @@ const sameSite = (u) => { const h = (String(u).match(/^https?:\/\/([^\/?#]+)/i) 
 const hub = hubPool.filter(u => sameSite(u) && HUB_RE.test(pathOfC(u))).sort((a, b) => pathOfC(a).length - pathOfC(b).length)[0];
 if (hub) add(SITE_MODEL && SM.canonUrl ? SM.canonUrl(SITE_MODEL, hub) : hub, 'services');
 return urls.slice(0, 4).map((u, i) => ({ json: { ...u, ...(matched && !ignoredExisting && u.kind === 'existing' ? { existing_page: matched } : {}),
-  ...(i === 0 && ignoredExisting ? { ignored_existing: { url: ignoredExisting, planned_url: String(d.ladder_target_url), why: 'the keyword ladder planned a new page for this keyword, so this page is read as a related page and left as it is' } } : {}) } }));
+  ...(i === 0 && ignoredExisting ? { ignored_existing: ladderNew ? { url: ignoredExisting, planned_url: String(d.ladder_target_url), why: 'the keyword ladder planned a new page for this keyword, so this page is read as a related page and left as it is' }
+    : { url: ignoredExisting, why: 'you chose "Write it anyway", so a separate new page is written and this page is read as a related page and left as it is' } } : {}) } }));

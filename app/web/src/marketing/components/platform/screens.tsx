@@ -63,7 +63,7 @@ const THIS_WEEK = [
   { kw: 'invoice approval workflow', why: 'Your page · losing visitors', icon: RefreshCcw, badge: <MockBadge tone="good">Ready</MockBadge> },
 ];
 const NEEDS_YOU = [
-  { what: 'Coming up: a new topic', kw: 'invoice approval checklist · about 51 credits', action: 'Approve' },
+  { what: 'Coming up: a new topic', kw: 'invoice approval checklist · about 114 credits', action: 'Approve' },
   { what: 'Choose your next keyword', kw: '3 suggestions with your chances', action: 'Review' },
 ];
 const ALWAYS_ON = ['AI Pulse · daily', 'Rank tracking · Wed', 'Audit · monthly'];

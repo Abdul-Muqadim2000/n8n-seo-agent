@@ -1,10 +1,14 @@
 import { lazy, Suspense, useId, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { BadgeCheck, CheckCircle2, CircleHelp, FileCheck2, Loader2, PenLine, Sparkles, Wand2 } from 'lucide-react';
+import { ArrowRight, BadgeCheck, CheckCircle2, CircleHelp, Copy, FileCheck2, Loader2, PenLine, Sparkles, Wand2 } from 'lucide-react';
 import {
   answerProblem,
   DECISION_LABEL,
+  DUPLICATE_REASON_MAX,
+  duplicateReasonProblem,
   formatCredits,
+  OWN_WORDS_NOTE,
+  prefilledAnswer,
   REVIEW_STAGE_LABEL,
   REVIEW_STAGE_TONE,
   type AnswerDecision,
@@ -22,10 +26,12 @@ import { Dialog } from '@/components/ui/overlay';
 import { errorMessage, toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
-import { useAcceptPrefilled, useApprovePage, useFinalizePage, usePageReview, useReport, useSaveAnswers } from '@/lib/queries';
+import { useAcceptPrefilled, useApprovePage, useDuplicateDecision, useFinalizePage, usePageReview, useReport, useSaveAnswers } from '@/lib/queries';
 import { cn, fmtDateTime } from '@/lib/utils';
 import { CmsPublishPanel } from '../CmsPublish';
+import { ExternalLink } from '@/components/ui/misc';
 import { Block } from '../kit';
+import { keywordPrefill } from '../meta';
 import { answeredCount, byPerson, choicesFor, contextLines, currentChoice, groupQuestions, type ReviewQuestion } from './model';
 
 const PageEditor = lazy(() => import('./PageEditor'));
@@ -44,10 +50,20 @@ export function StageBadge({ stage }: { stage: ReviewStage }) {
 
 /** The delivered status, said first on the page report: the headline, what we did and what you do, the blocking points. */
 export function DeliveryCallout({ delivery }: { delivery: PageDelivery }) {
-  const tone = delivery.status === 'not_ready' ? 'critical' : delivery.status === 'unknown' ? 'warning' : delivery.status === 'ready' ? 'good' : 'info';
+  const tone = delivery.status === 'not_ready' ? 'critical' : delivery.status === 'unknown' || delivery.status === 'needs_work' ? 'warning' : delivery.status === 'ready' ? 'good' : 'info';
   return (
     <Callout tone={tone} title={delivery.headline}>
       <p className="[overflow-wrap:anywhere]">{delivery.detail}</p>
+      {delivery.status === 'needs_work' && delivery.needsWork.length > 0 && (
+        <ul className="mt-1.5 list-disc space-y-0.5 pl-5 [overflow-wrap:anywhere]">
+          {delivery.needsWork.map((b, i) => (
+            <li key={`${i}-${b.code}`}>
+              {b.text}
+              {b.action ? <span className="text-ink-2"> What to do: {b.action}.</span> : null}
+            </li>
+          ))}
+        </ul>
+      )}
       {delivery.status === 'not_ready' && delivery.blocking.length > 0 && (
         <ul className="mt-1.5 list-disc space-y-0.5 pl-5 [overflow-wrap:anywhere]">
           {delivery.blocking.slice(0, 6).map((b, i) => (
@@ -96,14 +112,105 @@ export function ReviewBody({ view, report, publishLink }: { view: PageReviewView
           <a className="font-medium text-accent-text underline-offset-2 hover:underline" href={paths.report(org.id, view.finalOf)}>
             its own report
           </a>
-          .
+          . The downloads on this page are this version&apos;s own files, not the first version&apos;s.
         </Callout>
       )}
+      {view.duplicate && view.duplicate.pages.length > 0 && <DuplicateCard view={view} />}
       {view.questions.length > 0 && <QuestionsPanel view={view} domain={report.siteDomain ?? ''} />}
       <EditCard view={view} />
       <FinalVersionCard view={view} />
       <ApproveCard view={view} report={report} publishLink={publishLink} />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// W0-B (2026-10-29, owner decision D2): the website already has a page for the same search
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+/**
+ * Two pages for one search compete with each other, so the page is not ready until the client chooses: rewrite the website's page as an
+ * update (a new page run that keeps its address, priced on the form) or say how this page differs (saved, sent with the next final
+ * version and shown on it; the grade keeps its limit for fit).
+ */
+export function DuplicateCard({ view }: { view: PageReviewView }) {
+  const { org, can } = useOrgCtx();
+  const save = useDuplicateDecision(org.id, view.reportId);
+  const d = view.duplicate!;
+  const first = d.pages[0]!;
+  const [reason, setReason] = useState(d.decision?.reason ?? '');
+  const ids = useId();
+  const editable = can('member') && !view.approval;
+  const problem = duplicateReasonProblem(reason);
+  const dirty = reason.trim() !== (d.decision?.reason ?? '').trim();
+  const send = async (choice: 'differs' | null) => {
+    try {
+      await save.mutateAsync(choice ? { choice, reason: reason.trim() } : { choice: null });
+      if (!choice) setReason('');
+      toast.success(choice ? 'Reason saved' : 'Reason taken back', { description: choice ? 'Make the final version to apply it.' : 'The page waits for your choice again.' });
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  return (
+    <section id="duplicate" aria-labelledby={`${ids}-dup`} className="scroll-mt-20">
+      <Block
+        title={<span id={`${ids}-dup`}>Your website already has a page for this search</span>}
+        description="Two pages for one search compete with each other in Google. Publish this one as an update of your page, or tell us how it differs."
+        icon={<Copy />}
+        iconTone="warning"
+      >
+        <ul className="space-y-1 text-[13px] text-ink-2 [overflow-wrap:anywhere]">
+          {d.pages.map((p) => (
+            <li key={p.url}>
+              <ExternalLink href={p.url}>{p.title || p.url}</ExternalLink>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-xl border border-line bg-surface p-4">
+            <h3 className="font-display text-[15px] font-semibold text-ink">Update your page instead</h3>
+            <p className="mt-1 text-[13px] leading-snug text-ink-2">
+              We write a new version of your page at its own address, so it keeps what it has already earned. This is a new page, priced on the next screen.
+            </p>
+            {can('member') && d.rewrite.keyword && view.siteId && (
+              <ButtonLink
+                className="mt-3"
+                size="sm"
+                icon={<ArrowRight className="size-4" />}
+                to={paths.tool(org.id, 'keyword', { siteId: view.siteId, prefill: keywordPrefill({ keyword: d.rewrite.keyword, pageType: d.rewrite.pageType, country: d.rewrite.country, existingPageUrl: first.url }) })}
+              >
+                Rewrite it as an update of your page
+              </ButtonLink>
+            )}
+          </div>
+          <div className="rounded-xl border border-line bg-surface p-4">
+            <h3 className="font-display text-[15px] font-semibold text-ink">Or tell us how this page differs</h3>
+            <p className="mt-1 text-[13px] leading-snug text-ink-2">
+              We keep your reason with the page and show it on the final version. The page can then be ready, but its grade keeps a limit for fit.
+            </p>
+            <fieldset className="mt-3" disabled={!editable || save.isPending}>
+              <Field label="How this page differs" hint="For example: who it is for, or what it covers that your other page does not." error={dirty && reason.trim() && problem ? problem : undefined}>
+                {(p) => <Textarea {...p} rows={3} value={reason} maxLength={DUPLICATE_REASON_MAX} onChange={(e) => setReason(e.target.value)} />}
+              </Field>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="secondary" disabled={!dirty || !!problem} loading={save.isPending} onClick={() => send('differs')}>
+                  Save my reason
+                </Button>
+                {d.decision && (
+                  <Button size="sm" variant="ghost" onClick={() => send(null)}>
+                    Take my reason back
+                  </Button>
+                )}
+              </div>
+            </fieldset>
+            <p className="mt-1.5 min-h-4 text-xs text-ink-3" role="status" aria-live="polite">
+              {d.decision && !dirty ? `Saved ${fmtDateTime(d.decision.at)}${byPerson(view, d.decision.by)}. Make the final version to apply it.` : ''}
+            </p>
+          </div>
+        </div>
+      </Block>
+    </section>
   );
 }
 
@@ -116,12 +223,23 @@ export function QuestionsPanel({ view, domain = '' }: { view: PageReviewView; do
   const accept = useAcceptPrefilled(org.id, view.reportId);
   const { top, optional, stored } = groupQuestions(view.questions);
   const { answered, total } = answeredCount(view);
-  const prefilled = [...top, ...optional].filter((x) => x.prefill && !view.answers[x.id]).length;
+  // W0-E: only yes / no questions are confirmed in one click; a question that needs the client's own words keeps its "Use this answer" button.
+  // W05-C: the other open questions are left general for this page by the same click, so the final version can always be made
+  const open = [...top, ...optional].filter((x) => !view.answers[x.id] || view.answers[x.id]!.decision === 'skip');
+  const prefilled = open.filter((x) => !!prefilledAnswer(x)).length;
+  const general = open.length - prefilled;
   const editable = can('member') && !view.approval;
   const acceptAll = async () => {
     try {
       await accept.mutateAsync();
-      toast.success('Suggestions accepted', { description: 'Each answer is kept in your business details for later pages.' });
+      toast.success(prefilled ? 'Suggestions accepted' : 'Questions left general', {
+        description: [
+          prefilled ? 'Each confirmed answer is kept in your business details for later pages.' : '',
+          general ? `${general} ${general === 1 ? 'question that needs' : 'questions that need'} your own words ${general === 1 ? 'was' : 'were'} left general on this page. You can still make the final version, and we will ask again on a later page.` : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
+      });
     } catch (e) {
       toastError(e);
     }
@@ -135,14 +253,20 @@ export function QuestionsPanel({ view, domain = '' }: { view: PageReviewView; do
         actions={
           <span className="flex flex-wrap items-center gap-2">
             <GuideButton id={QUESTIONS_GUIDE} vars={{ domain }} />
-            {editable && prefilled > 0 && (
+            {editable && open.length > 0 && (
               <Button size="sm" variant="secondary" icon={<Sparkles className="size-4" />} loading={accept.isPending} onClick={acceptAll}>
-                Accept all suggestions ({prefilled})
+                {prefilled > 0 ? `Accept all suggestions (${prefilled})` : `Leave the open questions general (${open.length})`}
               </Button>
             )}
           </span>
         }
       >
+        {editable && general > 0 && (
+          <p className="mb-4 text-[13px] leading-snug text-ink-3 [overflow-wrap:anywhere]">
+            {prefilled > 0 ? 'Accept all confirms the suggestions above it can. ' : ''}
+            {general === 1 ? 'The question that needs' : `The ${general} questions that need`} your own words {general === 1 ? 'is' : 'are'} left general on this page by that button: the page keeps its general wording, nothing is stored for later pages, and you can still make the final version.
+          </p>
+        )}
         {top.length > 0 && (
           <div>
             <h3 className="mb-2 font-display text-[15px] font-semibold text-ink">{top.length === 1 ? 'This one matters most' : `These ${top.length} matter most`}</h3>
@@ -250,6 +374,7 @@ export function QuestionCard({ q, view, editable, highlight }: { q: ReviewQuesti
               {q.prefill_source && /^https?:\/\//.test(q.prefill_source) ? <span className="text-ink-3"> ({q.prefill_source.replace(/^https?:\/\/(www\.)?/, '')})</span> : null}
             </p>
           )}
+          {q.prefill && q.answer_type === 'text' && <p className="mt-1.5 text-xs leading-snug text-ink-3 [overflow-wrap:anywhere]">{OWN_WORDS_NOTE}</p>}
 
           <fieldset className="mt-3" disabled={!editable || save.isPending}>
             <legend className="sr-only">Your answer to question {q.rank}</legend>

@@ -301,9 +301,11 @@ const CL = (() => {
       const h = L.match(/^(#{1,6})\s+(.*)$/);
       if (h) { flushPara(); if (h[1].length <= 2 || !g) { g = { heads: [], items: [] }; groups.push(g); } g.heads.push(h[2]); headLead = h[2]; lastLead = null; g.items.push({ p: h[2], kind: 'head' }); continue; }
       if (!g) { g = { heads: [], items: [] }; groups.push(g); }
-      const meta = L.match(/^Meta Description:\s*(.*)$/i);
-      if (meta) { flushPara(); g.items.push({ p: meta[1], kind: 'meta' }); continue; }
-      if (!L || /^\[[^\]]*\]$/.test(L) || /^(?:Title|Slug|Primary Keyword|Secondary Keywords):/i.test(L)) { flushPara(); if (!L) { /* a blank line keeps the lead-in for the list below it */ } continue; }
+      // W0-A (2026-10-29, page-quality PLAN Fix 1, R4 D1): the meta description is search-result copy written from the brief, not a
+      // statement on the page. Read as a claim, its call to action ("then book a consultation with ...") was wrapped, emptied and asked as a
+      // client question (production run 3299). It is skipped like the title and the slug; PF.meta (_page_fix.js) gives it one narrow field
+      // check (a price, a guarantee, a timeline or a number not on file is dropped) instead.
+      if (!L || /^\[[^\]]*\]$/.test(L) || /^(?:Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary Keywords)\s*:/i.test(L)) { flushPara(); if (!L) { /* a blank line keeps the lead-in for the list below it */ } continue; }
       if (/^\|/.test(L)) { flushPara(); if (/^\|[\s:|-]+\|?$/.test(L)) { const hd = g.items[g.items.length - 1]; if (hd && hd.kind === 'table') g.items.pop(); continue; }   // the header row is labels, not a statement
         g.items.push({ p: L.replace(/^\||\|$/g, '').split('|').map(x => x.trim()).filter(Boolean).join('; ') + '.', kind: 'table' }); continue; }
       if (/^(?:[-*]|\d+[.)])\s+/.test(L)) { const leadIn = para.length ? para.join(' ') : null; flushPara(); g.items.push({ p: L.replace(/^(?:[-*]|\d+[.)])\s+/, ''), kind: 'li', lead: leadIn && /:\s*$/.test(leadIn) ? leadIn : lastLead, head: headLead }); continue; }
@@ -461,5 +463,100 @@ const CL = (() => {
     out.why = suggestion ? 'only the client can confirm it; the closest thing on file is offered as a starting point' : 'only the client can confirm it; nothing on file is close';
     return out;
   }
-  return { CLAIM_RE, keyOf, check, business, commitments, canon, numsOf, arNorm, backs, neutral };
+  // ---- FU-SV voice (2026-10-29, page-quality BEFORE run: 5 of 8 pages) ----
+  // The page is published on the client's own site, yet 5 of 8 delivered pages spoke about the client as an outsider would: "Its website
+  // states 20+ years of industry experience", "Devaicon's site reports 5 years of work", "its site states 5 years and 100+ projects",
+  // "Tech& lists Project Operations among its business applications". The business facts on file are often worded that way ("The website
+  // states ...") and the writer copied the frame. CL.voice(text, { names }) removes the frame and keeps the claim, said plainly with the
+  // business as its subject, so the claim check (CL.business, §9d) reads it as a statement in the business's name:
+  //   "<its | their | the | Name's> [own] website/site/homepage <states | says | reports | ...> that X"  ->  "X"
+  //   "... <states | reports | ...> <a figure>"            ->  "Name has <figure>"      (20+ years, 100+ projects; never a date)
+  //   "... <states | reports | ...> <services, support>"   ->  "Name offers <...>"
+  //   "according to <its | the | Name's> website, X"         ->  "X"
+  //   "Name lists X among its Y"                             ->  "Name's Y include X";   "Name lists X"  ->  "Name offers X"
+  // "its" / "their" / "the website" belong to the business only when the sentence starts with its name, or starts with "It" / "Its" /
+  // "The website" / "We" and the sentence before it does (up to four back, across paragraphs); and not when another organisation is
+  // named in between ("works with the FTA, and its website states ..."): that one is the FTA's, or unclear. Anything else in that shape,
+  // and "the company says / states", is returned in `flags` (whole sentences) for the editor; it is never guessed at.
+  // Headings, meta lines, table rows, block quotes and text inside double quotes are left alone.
+  function voice(text, opts = {}) {
+    const given = (opts.names || []).map(n => String(n || '').trim()).filter(n => n.length >= 3);
+    const names = [...new Set(given)].sort((a, b) => b.length - a.length);   // every name (not fullNames: "Nova&" inside "Nova& systems LLC" is still the business here)
+    const out = { text: String(text == null ? '' : text), fixed: [], flags: [] };
+    if (!names.length) return out;
+    const display = given.find(n => /[A-Z&]/.test(n) && !/\b(?:LLC|Ltd|Limited|Inc|FZ-?LLC|FZE|FZCO|GmbH|PLC|Corp)\b\.?/i.test(n)) || given.find(n => /[A-Z&]/.test(n)) || given[0];   // the name the business goes by, not its legal name
+    const NM = '(?<![\\w&])(?:' + names.map(escR).join('|') + ')(?![\\w&])';
+    const SITE = "(?:own\\s+)?(?:web\\s?site|site|homepage|home\\s+page|about(?:\\s+us)?\\s+page|services?\\s+page)";
+    const VERB = '(?:states|says|reports|claims|notes|mentions|cites|shows|highlights|describes|advertises|lists|names)';
+    const SUBJ = "(?:\\b(?:[Ii]ts|[Tt]heir|[Tt]he)\\s+|" + NM + "['’]s\\s+)" + SITE;
+    const POSS = new RegExp(NM + "['’]s", 'i');
+    const NM_START = new RegExp('^' + NM, 'i');
+    const CHAIN = /^(?:it|its|they|their|we|our|the\s+(?:web\s?site|site|company|team|firm|business))\b/i;
+    const OTHER_ORG = /\b(?:with|by|from|of|to|for|at|via|under)\s+(?:the\s+)?[A-Z][\w&.-]*/g;
+    const FIG = /^(?:over |more than |nearly |around |about |almost |up to |a |an )?\d/i;
+    const DATE = /^(?:\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|(?:19|20)\d{2}\b|\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})/i;
+    const OFFER = /\b(?:support|services?|consult\w*|implementation|training|maintenance|integration|migration|development|audits?|assessments?)\b/i;
+    const atStart = (pre) => /(?:^|[.!?:]\s+|^\s*(?:[-*+]|\d+[.)])\s+|^[*_]+)$/.test(pre);
+    const inQuotes = (line, at) => ((line.slice(0, at).match(/["“”]/g) || []).length % 2) === 1;
+    const sentenceAt = (line, at) => { const a = Math.max(line.lastIndexOf('. ', at), line.lastIndexOf('! ', at), line.lastIndexOf('? ', at)); const b0 = line.slice(at).search(/[.!?](?:\s|$)/); return line.slice(a < 0 ? 0 : a + 2, b0 < 0 ? line.length : at + b0 + 1).trim(); };
+    const skipLine = (l) => !String(l || '').trim() || /^\s*(?:#|>|\||Title:|Meta Description:|Slug:|Primary Keyword:|Secondary Keywords:)/i.test(l);
+    const starts = (l) => { const st = [0]; for (const m of String(l).matchAll(/[.!?]["')\]*_]*\s+/g)) st.push(m.index + m[0].length); return st; };
+    const lead = (t) => String(t).replace(/^\s*(?:(?:[-*+]|\d+[.)])\s+)?[*_("\[\s]*/, '');
+    const lines = out.text.split('\n');
+    // does the "its / their / the website" at `off` of line `li` belong to the business?
+    const owner = (li, off) => {
+      let st = starts(lines[li]); let k = st.filter(x => x <= off).length - 1; let L = li;
+      const sent0 = lead(lines[li].slice(st[k]));
+      if (!NM_START.test(sent0) && !CHAIN.test(sent0)) return false;
+      // another organisation named between the start of the sentence and "its" ("works with the FTA, and its website ...")
+      const between = lead(lines[li].slice(st[k], off)).replace(NM_START, ''); const others = [...between.matchAll(OTHER_ORG)].filter(m => !new RegExp(NM, 'i').test(m[0]));
+      if (others.length) return false;
+      for (let step = 0; step < 5; step++) {
+        const s = lead(lines[L].slice(st[k]));
+        if (NM_START.test(s)) return true;
+        if (!CHAIN.test(s)) return false;
+        k--;
+        if (k < 0) { L--; while (L >= 0 && !String(lines[L]).trim()) L--; if (L < 0 || skipLine(lines[L])) return false; st = starts(lines[L]); k = st.length - 1; }
+      }
+      return false;
+    };
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i];
+      if (skipLine(line)) continue;
+      const before = line;
+      // 1. "according to its website, X"
+      line = line.replace(new RegExp('\\b([Aa])ccording to (?:' + SUBJ + '|the company[\'’]s\\s+' + SITE + '),?\\s+', 'g'), (m, a, off, s) => {
+        const after = s.slice(off + m.length);   // "According to its website, Nova& ..." / "..., we ...": the clause that follows is the business's
+        if (inQuotes(s, off) || !(POSS.test(m) || NM_START.test(after) || /^(?:we|our)\b/i.test(after) || owner(i, off))) return m;
+        return a === 'A' ? '\u0000CAP' : ''; });
+      lines[i] = line;
+      // 2. "<subject> states that X" / "<subject> states <figure | services>"
+      line = line.replace(new RegExp('(' + SUBJ + ')(\\s+also)?\\s+(' + VERB + ')\\s+(that\\s+)?', 'g'), (m, subj, also, verb, that, off, s) => {
+        if (inQuotes(s, off)) return m;
+        const own = POSS.test(subj); if (!own && !owner(i, off)) return m;
+        const rest = s.slice(off + m.length);
+        const who = (own ? subj.match(new RegExp(NM, 'i'))[0] : display) + (also ? ' also' : '');
+        if (that) return atStart(s.slice(0, off)) ? '\u0000CAP' : '';
+        if (/^(?:lists|names)$/i.test(verb)) return m;
+        if (FIG.test(rest) && !DATE.test(rest)) return who + ' has ';
+        if (OFFER.test(rest.split(/[.!?](?:\s|$)/)[0])) return who + ' offers ';
+        return m; });
+      // 3. "Name lists X among its Y" / "Name (also) lists X"
+      line = line.replace(new RegExp('(' + NM + ')(\\s+also)?\\s+lists\\s+([^.;:\\n]{2,160}?)\\s+among\\s+its\\s+([^.;:\\n]{2,140}?)(?=[.;:]|$)', 'gi'), (m, nm, also, x, y, off, s) => inQuotes(s, off) ? m : nm + "'s " + y + (also ? ' also' : '') + ' include ' + x);
+      line = line.replace(new RegExp('(' + NM + ')(\\s+also)?\\s+lists\\s+(?!among\\b)', 'gi'), (m, nm, also, off, s) => inQuotes(s, off) ? m : nm + (also || '') + ' offers ');
+      line = line.replace(/\u0000CAP\s*(\S)/g, (m, c) => c.toUpperCase()).replace(/\u0000CAP/g, '');
+      lines[i] = line;
+      if (line !== before) out.fixed.push({ from: before.trim().slice(0, 400), to: line.trim().slice(0, 400) });
+      // what is still in that shape, and is the business's, is named for the editor
+      const left = new RegExp('(' + SUBJ + ')(?:\\s+also)?\\s+' + VERB + '\\b|\\bthe company\\s+(?:says|states|claims|reports)\\b', 'g');
+      for (const m of line.matchAll(left)) {
+        if (inQuotes(line, m.index)) continue;
+        if (!/the company/i.test(m[0]) && !POSS.test(m[0]) && !owner(i, m.index)) continue;
+        const sent = sentenceAt(line, m.index); if (sent && !out.flags.includes(sent)) out.flags.push(sent);
+      }
+    }
+    out.text = lines.join('\n');
+    return out;
+  }
+  return { CLAIM_RE, keyOf, check, business, commitments, canon, numsOf, arNorm, backs, neutral, voice };
 })();

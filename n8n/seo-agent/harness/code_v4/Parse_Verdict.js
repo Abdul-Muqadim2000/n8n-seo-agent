@@ -4,18 +4,66 @@
 // the delivered page carried the H2 "How Much Is a Consultancy Licence in Dubai?": the strategy brief prompt only ever printed the
 // verdict's reasons, never its changes, so the instruction reached nobody and nothing checked it.
 //   EXC.fromVerdict(changes, skips)  the topics to leave out: the verdict's structured `topics_to_skip`, plus every "skip / avoid /
-//                                    leave out / do not cover …" phrase in its free-text changes (the fallback for older answers)
-//   EXC.match(text, ex, keyword)     does a heading (or an outline section) cover that topic? every content word of the topic must be in it;
-//                                    a one-word topic that is also a word of the page's own keyword never matches (it would match everything)
+//                                    leave out / do not cover ..." phrase in its free-text changes (the fallback for older answers)
+//   EXC.match(text, ex, family)      does a heading (or an outline section) cover that topic? (rules below). `family` is the page's keyword
+//                                    (a string, as before) or a list of strings: the keyword, the brief's primary and secondary keywords,
+//                                    the site's main services (EXC.familyOf)
 //   EXC.check(headings, list, kw)    [{ heading, topic }] for every heading that covers an excluded topic
 //   EXC.prune(outline, list, kw)     the brief's outline without those sections, and the ones dropped
+//   EXC.decide(md, list, family)     W06-A: which matched sections may really be deleted, and which are kept with the reason (the budget below)
+//   EXC.guard(md, flagged, list, f)  W06-A: the same decision for a list of flagged headings a quality check handed over (Page Candidates)
+//   EXC.removedOf(state)             W06-A: what a page run's deletions took out (sections, words), for the grade
+// W06-A (page-quality wave 0.6, 2026-10-30, docs/page-quality-2026-10-29/WAVE05.md 3.1): live (W05 run, K1 "ms 365 erp") the verdict said to
+// skip "Dynamics GP and SL"; tokens under 3 characters were dropped, so the topic became the single word "dynamic", which is not a word of
+// the keyword, and nine headings matched it. Page Candidates deleted six core sections (2,407 words -> 1,023) and the grade still said 79
+// "Ready". Now:
+//   * a short token is kept when it is meaningful: an acronym written in capitals in the topic (GP, SL, AI, ML, UK) or a token with a digit;
+//     such a token only matches the same acronym in capitals in the heading ("Is it ..." never matches "IT");
+//   * a topic that lost a token to the length filter (a lowercase "ai" or "ml") matches on its FULL phrase or not at all;
+//   * a one-token topic that is a word of the page's keyword family or the site's main services never matches, not even as a phrase;
+//     a topic made only of such words matches on its full phrase only;
+//   * the full phrase of a topic in a heading is always a match (and the strongest signal).
+// And the deletion budget (EXC.decide): a section whose heading names the topic's full phrase, or whose text names the topic's own words
+// (those outside the keyword family) at least twice, is a section about it ("a second signal"). Without such a signal at most ONE matched
+// section is deleted, and only when it holds no more than 20% of the page's words; the others are kept and reported. Deletions never take
+// more than 40% of the page's words in all. Every decision is recorded (removed / kept, with the reason) in the run's evidence.
 // Regex only (the n8n Code sandbox has no URL constructor).
 const EXC = (() => {
   const S = (v) => String(v == null ? '' : v);
   const STOP = new Set('the a an and or of for to in on with by at from about any all each every their your our its it is are be this that these those how what which why when who much many do does can should would will questions question topics topic sections section queries query searches search angles angle content pages page posts post details detail things thing buyer buyers intent people readers reader'.split(' '));
+  // two-letter words that carry no topic (the rest of the short words a topic loses make it a phrase-only topic)
+  const SHORT_STOP = new Set('of to in on by at it is be do vs as if so no up an or we us my me am go oh ok'.split(' '));
   const norm = (w) => { let x = S(w).toLowerCase().replace(/licens/g, 'licenc');
     if (x.length > 5) x = x.replace(/(?:ings|ing|ies|es|ed|s)$/, ''); else if (x.length > 3) x = x.replace(/s$/, ''); return x; };
   const toks = (t) => S(t).toLowerCase().replace(/[’']/g, '').split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !STOP.has(w)).map(norm);
+  // the topic's words with the meaningful short ones (acronyms in capitals, tokens with a digit: "#gp", "#sl"), how many short words it
+  // lost, and its normalised phrase
+  const raw = (t) => S(t).replace(/[’']/g, '').split(/[^A-Za-z0-9]+/).filter(Boolean);
+  const isAcr = (w) => w.length === 2 && (/^[A-Z][A-Z0-9]$/.test(w) || /^[0-9][A-Z]$/.test(w) || /^[A-Z][0-9]$/.test(w));
+  const phraseOf = (t) => S(t).toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').replace(/^\s*the\s+/, '').trim();
+  const terms = (t) => { const req = [], seen = new Set(); let lost = 0;
+    for (const w of raw(t)) {
+      const lw = w.toLowerCase();
+      if (w.length >= 3) { if (STOP.has(lw)) continue; const n = norm(lw); if (!seen.has(n)) { seen.add(n); req.push(n); } continue; }
+      if (isAcr(w)) { const n = '#' + lw; if (!seen.has(n)) { seen.add(n); req.push(n); } continue; }
+      if (w.length === 2 && !SHORT_STOP.has(lw) && /[a-z]/i.test(w)) lost++;
+    }
+    return { req, lost, phrase: phraseOf(t) }; };
+  // a heading's words: every content word, plus the acronyms it writes in capitals
+  const textSet = (t) => { const set = new Set(toks(t)); for (const w of raw(t)) if (isAcr(w)) set.add('#' + w.toLowerCase()); return set; };
+  const phraseIn = (text, phrase) => !!phrase && (' ' + phraseOf(text) + ' ').includes(' ' + phrase + ' ');
+  // the page's keyword family: the keyword, or a list of strings (keywords, the site's services)
+  // W06 integration (2026-10-30): a two-letter word of the family counts as its acronym whatever its case (the keyword "ai consultant" is
+  // typed in lowercase, the topic "AI consultant certification" keeps "#ai"). Such an acronym is the page's own context, not the topic's
+  // signal: it is never required in the text (an address or a heading may spell it out: "artificial-intelligence-certifications"), as
+  // the length filter never required it before W06-A (EQA4, exec 42). The topic's own acronyms (GP, SL) are still required, in capitals.
+  const famSet = (family) => { const f = new Set(); for (const s of (Array.isArray(family) ? family : [family])) {
+    for (const w of terms(s).req) f.add(w);
+    for (const w of raw(s)) { const lw = w.toLowerCase(); if (w.length === 2 && /^[a-z]{2}$/.test(lw) && !SHORT_STOP.has(lw)) f.add('#' + lw); } } return f; };
+  const familyOf = (prev, siteModel) => { const p = prev || {}; const b = p.content_brief || {}; const m = siteModel || p.site_model || {};
+    const sec = Array.isArray(b.secondary_keywords) ? b.secondary_keywords : [];
+    const sv = Array.isArray(m.services) ? m.services : [];
+    return [p.keyword, b.primary_keyword].concat(sec, sv).map(x => S(x && typeof x === 'object' ? (x.name || x.title || '') : x)).filter(x => x.trim()).slice(0, 40); };
   const SKIP_RE = /\b(?:skip|avoid|leave out|drop|exclude|omit|ignore|steer clear of|stay away from|do not (?:cover|answer|target|include)|don['’]t (?:cover|answer|target|include)|no need to (?:cover|answer))\s+(?:the\s+|any\s+|all\s+)?([^.;:!?]+?)(?=\s*,\s*(?:which|as|because|since|they|these|it|that)\b|\s+(?:which|because|since|as they|as these)\b|[.;:!?]|$)/gi;
   const TAIL_RE = /\s+(?:questions?|topics?|sections?|queries|query|searches|angles?|content|pages?|posts?|subjects?|keywords?)\s*$/i;
   const fromText = (line) => {
@@ -31,24 +79,30 @@ const EXC = (() => {
   };
   const fromVerdict = (changes, skips) => {
     const seen = new Set(); const out = [];
-    const add = (topic, source) => { const k = toks(topic).join(' '); if (!k || seen.has(k)) return; seen.add(k); out.push({ topic: S(topic).trim(), source }); };
+    const add = (topic, source) => { const T = terms(topic); const k = T.req.length ? T.req.join(' ') + (T.lost ? '|' + T.phrase : '') : ''; if (!k || seen.has(k)) return; seen.add(k); out.push({ topic: S(topic).trim(), source }); };
     (Array.isArray(skips) ? skips : []).forEach(t => add(S(t).replace(/[-_]+/g, ' '), 'verdict'));
     (Array.isArray(changes) ? changes : []).forEach(c => fromText(c).forEach(t => add(t, 'verdict_changes')));
     return out.slice(0, 12);
   };
-  const match = (text, ex, keyword) => {
-    const T = toks(ex && ex.topic != null ? ex.topic : ex); if (!T.length) return false;
-    const kw = new Set(toks(keyword));
-    if (T.length === 1 && kw.has(T[0])) return false;
-    const H = new Set(toks(text));
-    return T.every(w => H.has(w));
+  const topicOf = (ex) => S(ex && typeof ex === 'object' && ex.topic != null ? ex.topic : ex);
+  // how a text covers a topic: 'phrase' (the full phrase is in it), 'words' (every word of the topic is in it), or '' (no match)
+  const how = (text, ex, family) => {
+    const T = terms(topicOf(ex)); if (!T.req.length) return '';
+    const fam = famSet(family);
+    const own = T.req.filter(w => !fam.has(w));
+    if (T.req.length === 1 && !own.length) return '';   // one shared word of the keyword family: never, not even as a phrase
+    if (phraseIn(text, T.phrase)) return 'phrase';
+    if (T.lost || !own.length) return '';               // lost a short word, or only family words: the full phrase or nothing
+    const H = textSet(text);
+    return T.req.every(w => H.has(w) || (w[0] === '#' && fam.has(w))) ? 'words' : '';
   };
+  const match = (text, ex, family) => !!how(text, ex, family);
   const check = (headings, list, keyword) => {
     const out = [];
     for (const h of (Array.isArray(headings) ? headings : [])) {
       const text = S(h).replace(/^#+\s*/, '').replace(/[*_`]+/g, '').trim(); if (!text) continue;
       const ex = (Array.isArray(list) ? list : []).find(e => match(text, e, keyword));
-      if (ex) out.push({ heading: text, topic: S(ex.topic != null ? ex.topic : ex) });
+      if (ex) out.push({ heading: text, topic: topicOf(ex) });
     }
     return out;
   };
@@ -56,11 +110,82 @@ const EXC = (() => {
     const kept = [], dropped = [];
     for (const sec of (Array.isArray(outline) ? outline : [])) {
       const ex = (Array.isArray(list) ? list : []).find(e => match(S(sec && sec.h2), e, keyword));
-      if (ex) dropped.push({ h2: S(sec.h2), topic: S(ex.topic) }); else kept.push(sec);
+      if (ex) dropped.push({ h2: S(sec.h2), topic: topicOf(ex) }); else kept.push(sec);
     }
     return { kept, dropped };
   };
-  return { fromVerdict, fromText, match, check, prune, toks };
+  // ---------- W06-A: the deletion budget ----------
+  const BUDGET = { weak_sections: 1, weak_share: 0.2, total_share: 0.4, named: 2 };
+  const META = /^(Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary Keywords)\s*:/i;
+  const wordsIn = (t) => S(t).replace(/!?\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[#*_`>|]+/g, ' ').split(/\s+/).filter(w => /[A-Za-z0-9]/.test(w)).length;
+  const cleanH = (h) => S(h).replace(/^#+\s*/, '').replace(/[*_`]+/g, '').trim();
+  // the page's H2 / H3 sections with their own text (an H2 holds its H3s) and the page's words (meta lines and headings left out)
+  const sectionsOf = (md) => {
+    const lines = S(md).replace(/\r/g, '').split('\n'); const heads = []; let fence = false;
+    lines.forEach((l, i) => { if (/^\s*(```|~~~)/.test(l)) { fence = !fence; return; } const m = !fence && l.match(/^(#{2,3})\s+(.+?)\s*$/); if (m) heads.push({ i, level: m[1].length, heading: cleanH(m[2]) }); });
+    const secs = heads.map((h, k) => { let end = lines.length; for (let j = k + 1; j < heads.length; j++) if (heads[j].level <= h.level) { end = heads[j].i; break; }
+      const body = lines.slice(h.i + 1, end).filter(l => !/^#{1,6}\s/.test(l)).join('\n'); return { ...h, end, body, words: wordsIn(body) }; });
+    const total = lines.filter(l => l.trim() && !META.test(l.trim()) && !/^#{1,6}\s/.test(l)).reduce((s, l) => s + wordsIn(l), 0);
+    return { secs, total };
+  };
+  // does the section's own text name the topic? at least two of its sentences carry every word of the topic outside the keyword family
+  // (its full phrase, for a topic that lost a short word)
+  const namedIn = (body, ex, family) => { const T = terms(topicOf(ex)); const fam = famSet(family); const own = T.req.filter(w => !fam.has(w)); if (!own.length) return false;
+    const sents = S(body).split(/(?<=[.!?])\s+|\n+/).filter(x => x.trim());
+    const n = sents.filter(x => T.lost ? phraseIn(x, T.phrase) : (() => { const H = textSet(x); return own.every(w => H.has(w)); })()).length;
+    return n >= BUDGET.named; };
+  const decide = (md, list, family, opts) => {
+    const o = opts || {}; const L = Array.isArray(list) ? list : []; const only = Array.isArray(o.only) ? new Set(o.only.map(h => cleanH(h).toLowerCase())) : null;
+    const { secs, total } = sectionsOf(md);
+    const hits = [];
+    for (const s of secs) {
+      if (only && !only.has(s.heading.toLowerCase())) continue;
+      let ex = null, hw = '';
+      for (const e of L) { const h = how(s.heading, e, family); if (h === 'phrase') { ex = e; hw = h; break; } if (h && !ex) { ex = e; hw = h; } }
+      if (!ex) continue;
+      const signal = hw === 'phrase' ? 'the heading names the topic' : namedIn(s.body, ex, family) ? 'the section names the topic' : '';
+      hits.push({ s, topic: topicOf(ex), signal });
+    }
+    const remove = [], keep = []; const gone = []; let removed = 0;
+    const inside = (s) => gone.some(g => s.i > g.i && s.i < g.end);
+    const pct = (w) => total ? Math.round(100 * w / total) : 0;
+    const take = (h, why) => { remove.push({ heading: h.s.heading, topic: h.topic, level: h.s.level, words: h.s.words, share_pct: pct(h.s.words), signal: h.signal || why }); gone.push(h.s); removed += h.s.words; };
+    const sorted = hits.slice().sort((a, b) => a.s.level - b.s.level || a.s.i - b.s.i);
+    for (const h of sorted.filter(x => x.signal)) {
+      if (inside(h.s)) continue;
+      if (total && removed + h.s.words > total * BUDGET.total_share) { keep.push({ heading: h.s.heading, topic: h.topic, words: h.s.words, why: 'deleting it would take more than ' + Math.round(BUDGET.total_share * 100) + '% of the page' }); continue; }
+      take(h, '');
+    }
+    const weak = sorted.filter(x => !x.signal && !inside(x.s));
+    if (weak.length > BUDGET.weak_sections) for (const h of weak) keep.push({ heading: h.s.heading, topic: h.topic, words: h.s.words,
+      why: weak.length + ' sections share words with "' + h.topic + '" and none of them names it: one topic cannot be that much of the page, so none is deleted' });
+    else for (const h of weak) {
+      if (total && h.s.words > total * BUDGET.weak_share) { keep.push({ heading: h.s.heading, topic: h.topic, words: h.s.words, why: 'it holds ' + pct(h.s.words) + '% of the page and does not name the topic, so it is not deleted' }); continue; }
+      if (total && removed + h.s.words > total * BUDGET.total_share) { keep.push({ heading: h.s.heading, topic: h.topic, words: h.s.words, why: 'deleting it would take more than ' + Math.round(BUDGET.total_share * 100) + '% of the page' }); continue; }
+      take(h, 'one short section that shares the topic\'s words');
+    }
+    return { remove, keep, words_total: total, words_removed: removed };
+  };
+  // a quality check handed over flagged headings (Content QA's excluded_sections): decided again here on the page as it is now, so a list
+  // from an older check (or a matcher that went too far) can never delete more than the budget allows
+  const guard = (md, flagged, list, family) => {
+    const F = (Array.isArray(flagged) ? flagged : []).map(x => cleanH(x && typeof x === 'object' ? x.heading : x)).filter(Boolean);
+    if (!F.length) return { remove: [], keep: [], words_total: 0, words_removed: 0 };
+    const d = decide(md, list, family, { only: F });
+    const named = new Set(d.remove.concat(d.keep).map(x => x.heading.toLowerCase()));
+    for (const h of F) if (!named.has(h.toLowerCase())) d.keep.push({ heading: h, topic: '', words: 0, why: 'on a closer reading it is not about a topic the verdict said to leave out' });
+    return d;
+  };
+  // what a page run's deletions took out, from its Page Candidates state (structured since W06-A, else read off its fix notes)
+  const removedOf = (state) => {
+    const st = state && typeof state === 'object' ? state : {}; const by = new Map();
+    for (const r of (Array.isArray(st.exclusions_removed) ? st.exclusions_removed : [])) if (r && r.heading) by.set(cleanH(r.heading).toLowerCase(), { heading: cleanH(r.heading), words: Number(r.words) || 0, level: Number(r.level) || 2, topic: S(r.topic) });
+    for (const f of (Array.isArray(st.fixes) ? st.fixes : [])) { const m = S(f).match(/removed the section "(.+)" \(a topic the verdict said to leave out/); if (m && !by.has(cleanH(m[1]).toLowerCase())) by.set(cleanH(m[1]).toLowerCase(), { heading: cleanH(m[1]), words: 0, level: 0, topic: '' }); }
+    const list = [...by.values()]; const words = list.reduce((s, x) => s + x.words, 0);
+    const first = st.first && typeof st.first === 'object' ? st.first : null;
+    return { sections: list.length, words, words_before: first ? Number(first.words) || 0 : 0, h2_before: first ? Number(first.h2) || 0 : 0, h2_removed: list.filter(x => x.level === 2).length, headings: list.map(x => x.heading).slice(0, 12) };
+  };
+  return { fromVerdict, fromText, match, how, check, prune, toks, terms, familyOf, decide, guard, removedOf, sectionsOf, BUDGET };
 })();
 // ---- the one site model (G19, 2026-10-12; see SITE_MODEL_SPEC.md; the builders inline this file where a node asks for the SITE_MODEL kit) ----
 // Every workflow reads the same facts about a site through SM: the canonical host, the business name / logo / NAP (seo_profiles ->
@@ -380,6 +505,61 @@ const SM = (() => {
   const titleShare = (page, keyword) => { const p = page || {}; if (!S(p.title) && !S(p.h1)) return null;
     const want = uniq(termsOf(norm(keyword)).filter(t => !FILLER.has(t)).map(stem)); if (!want.length) return null; const set = matchTerms(S(p.title) + ' ' + S(p.h1));
     return { share: Math.round(shareIn(want, set) * 100) / 100, have: want.filter(t => covers(set, t)).length, of: want.length, missing: want.filter(t => !covers(set, t)) }; };
+  // ---- W05-B (2026-10-30, page-quality BEFORE_AFTER K4): is this page really THE page for the search, before a run rewrites its address? ----
+  // The content run took /dynamics-365-project-operations-uae (title not on file, matched by its address only: "dynamics", "365", "uae") as the
+  // page to improve for "dynamics 365 partner dubai", wrote the partner page onto that address, and the hold waved it through as a refresh.
+  // An address is not evidence of what a page is about. A page is confirmed only by its OWN words: its title or main heading (from the
+  // inventory or read in this run, `more.texts`), or a Search Console search it earns impressions for, where that text (1) carries every core
+  // word of the search, (2) carries 75% of all its words, and (3) is ABOUT the search: its rarest word on this site is one of the search's own,
+  // or the words it adds (not the brand, a place, the kind of service or the form of the page) weigh under a third of the whole. "Dynamics 365
+  // Project Operations Implementation UAE" adds "project" and "operations" (rare) to "dynamics 365" (on every page): about something else.
+  // Returns { ok, by, text, evidence, why }; never throws; with nothing to read, ok is false (the caller writes a new page and says so).
+  const confirmPage = (model, page, keyword, more) => {
+    const p = page || {}; const o = more || {};
+    const m = model || {}; const brands = brandWords(m);
+    const core = coreTerms(keyword, brands);
+    const want = uniq(termsOf(norm(keyword)).filter(t => !FILLER.has(t)).map(stem));
+    const shortUrl = pathOf(p.url);
+    if (!core.length || !want.length) return { ok: false, by: '', text: '', evidence: '', why: 'the search has no word that says what it is about, so no page can be confirmed as its page' };
+    // the kind of service ("implementation", "support") and the form of the page ("guide", "checklist", a year) say how a page answers, not what about
+    const FORM = ['guide', 'guides', 'buyer', 'buyers', 'complete', 'ultimate', 'definitive', 'explained', 'explain', 'overview', 'introduction', 'intro', 'checklist', 'faq', 'faqs',
+      'tip', 'tips', 'everything', 'know', 'need', 'basic', 'basics', 'beginner', 'beginners', 'step', 'steps', 'updated', 'latest'];
+    const kindStems = new Set([...Object.keys(KIND), ...FORM].map(stem));
+    const inv = pages(m); const N = inv.length || 1;
+    const docs = inv.map(x => fieldsOf(x, brands).own);
+    const wOf = (t) => { const df = docs.filter(d => covers(d, t)).length; return Math.log((N + 1) / (df + 1)) + 1; };
+    const cands = [];
+    const add = (text, by) => { const t = S(text).replace(/&amp;/g, '&'); if (t) cands.push({ text: t, by }); };
+    add(p.title, 'its title'); add(p.h1, 'its main heading');
+    for (const t of (Array.isArray(o.texts) ? o.texts : [])) if (t && S(t.text)) add(t.text, S(t.by) || 'its title as read now');
+    for (const q of (Array.isArray(p.queries) ? p.queries : queriesOf(p))) if ((Number((q || {}).impressions) || 0) > 0) add((q || {}).query || (q || {}).keyword, 'a search it earns impressions for in Search Console');
+    if (!cands.length) return { ok: false, by: '', text: '', evidence: '', why: shortUrl + ' has no title, main heading or Search Console search on file, and an address alone does not say what a page is about' };
+    let best = null;
+    for (const c of cands) {
+      const tt = coreTerms(c.text, brands); if (!tt.length) continue;
+      const allCore = core.every(t => covers(tt, t));
+      const share = shareIn(want, matchTerms(c.text));
+      const extra = uniq(tt.filter(t => !core.includes(t) && !kindStems.has(t) && !/^(?:19|20)\d\d$/.test(t)));
+      const own = core.filter(t => covers(tt, t)).reduce((a, t) => a + wOf(t), 0);
+      const add2 = extra.reduce((a, t) => a + wOf(t), 0);
+      const focus = own + add2 > 0 ? own / (own + add2) : 0;
+      // about the search: its rarest word is one of the search's own (an article title that only describes more, "the cost of non-compliance:
+      // UAE e-invoicing penalties and mitigation costs", keeps it), or what it adds weighs under a third ("d365 operations uae", 0.58 on
+      // client A's site, adds the rarer "operations" to "dynamics 365": not the page for "dynamics 365 partner dubai")
+      const ws = tt.filter(t => !kindStems.has(t) && !/^(?:19|20)\d\d$/.test(t)).map(t => [t, wOf(t)]);
+      const maxW = ws.reduce((mx, x) => Math.max(mx, x[1]), 0);
+      const rarestOwn = ws.some(([t, w]) => core.includes(t) && w + 1e-9 >= maxW);
+      const ok = allCore && share + 1e-9 >= MATCH_MIN && (rarestOwn || focus > 0.67 + 1e-9);
+      const said = uniq(tokensOf(norm(c.text)).filter(w => extra.includes(stem(w))));   // the page's own words, not their stems, for the reason
+      const r = { ok, by: c.by, text: c.text, focus: Math.round(focus * 100) / 100, share: Math.round(share * 100) / 100, extra: said.length ? said : extra };
+      if (!best || (r.ok && !best.ok)) best = r;   // the first text read (the title before the searches) explains a refusal
+      if (ok) break;
+    }
+    if (!best) return { ok: false, by: '', text: '', evidence: '', why: 'the title and searches of ' + shortUrl + ' say nothing about this search' };
+    if (best.ok) return { ok: true, by: best.by, text: best.text, evidence: best.by + ' "' + best.text + '" is about this search', why: '' };
+    return { ok: false, by: best.by, text: best.text, evidence: '',
+      why: best.by + ' "' + best.text + '" is about ' + (best.extra.length ? best.extra.map(t => '"' + t + '"').join(' and ') : 'something else') + ', not this search, so ' + shortUrl + ' is not the page for it' };
+  };
   // R34: the pages whose title was never read, so a caller can say what it judged on the address alone instead of reading nothing silently
   const titleGap = (model) => { const all = pages(model); const u = untitled(model);
     return { pages: all.length, untitled: u.length, urls: u.slice(0, 12).map(p => p.url),
@@ -437,7 +617,7 @@ const SM = (() => {
     return { state: 'planned', text: '' };
   };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, pageMatch, MATCH_CONF, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages,
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages, confirmPage,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms, coreTerms } };
 })();
 // ---- what the site already holds for a search: its pages, its keyword ladders and its unpublished drafts (2026-10-17, re-rating A-1 /
@@ -579,6 +759,185 @@ const OWN = (() => {
     return lines.join('\n');
   };
   return { tokens, relate, ladders, drafts, ladderOf, draftOf, claim, sayOf, distinct, text, HOW, PLACES, ukey };
+})();
+// ---- the page reader's fallback (W07-A, 2026-10-31, docs/page-quality-2026-10-29/WAVE06.md "Open resilience item") ----
+// Every page this engine reads goes through one reader (Jina Reader, credential SEOcredJinaReade). On 2026-10-30 its account ran out of
+// balance: between about 10:13 and 12:56 UTC every read answered HTTP 402 "please recharge". Nothing noticed. The HTTP nodes are
+// `continueRegularOutput`, so each refusal became an error item that the next node read as "this page could not be read": a page run was
+// held on its search score alone and told the client "/ms-365-erp-uae has no title, main heading or Search Console search on file" about a
+// page nobody had looked at (K1, WAVE06 section 9), and no ops alert was raised.
+// This kit is what each reader node is followed by now (*<reader>*, the Code node that took the reader's name; the HTTP node is
+// *<reader> (reader)*):
+//   * `refusal(item)`: did the READER refuse (401 / 402 / 429, or 403 with the reader's own key / balance / rate words), as opposed to the
+//     page itself failing? A page that is down, blocked or slow is not a refusal and is left exactly as it was.
+//   * `recover(helpers, ctx)`: for the refused reads only, (1) the same reader WITHOUT the key (it answered 200 in the 2026-10-30 probe; its
+//     limit is about 20 reads a minute, so the calls are spaced and capped), then (2) for a text read, a direct fetch of the page turned into
+//     the reader's own line format by the HTML-to-text path the client-render reading already uses (CRK.linesOf). A render read (the page
+//     after its scripts ran) is never replaced by the plain HTML: that would make "what only exists after JavaScript" read as "nothing".
+//     A read nothing could recover stays unread, with the reason, and is marked `reader_fallback.via: 'none'`.
+//   * Items the reader answered are returned as the very same objects: with a funded key nothing here changes a byte.
+// Every touched item carries `reader_fallback` ({ via, refused, path, node, why }), which is what *Reader Refusals* (the ops alert, one per
+// run) and the content run's decisions (`pagesUnread`: no hold, verdict, existing-page match or grade on pages nobody read) look at.
+const RD = (() => {
+  const CFG = { keyless_gap_ms: 3200, keyless_max: 12, direct_max: 25, budget_ms: 120000, keyless_timeout_ms: 40000, direct_timeout_ms: 20000,
+    min_text_chars: 200, max_html_chars: 4000000 };
+  const READER = 'https://r.jina.ai/';
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+  const S = (v) => String(v == null ? '' : v);
+  const T = (v) => S(v).trim();
+  const CODES = [401, 402, 403, 429];
+  // the reader's own words for a key, balance or rate problem (its error names, and its messages)
+  const NAME_RE = /InsufficientBalance|AuthenticationRequired|AuthenticationFailed|InvalidApiKey|InvalidToken|Unauthori[sz]ed|RateLimit|TooManyRequests|Quota|Budget|PaymentRequired/i;
+  const TEXT_RE = /\bbalance\b|recharge|quota|rate.?limit|too many requests|api.?key|unauthori[sz]ed|payment required|insufficient|credentials/i;
+  const clean = (s) => T(S(s).replace(/\(uid:[^)]*\)/gi, '').replace(/\s+/g, ' '));
+  const parseBody = (b) => {
+    if (b && typeof b === 'object' && !Array.isArray(b)) return b;
+    const t = T(b);
+    if (!t.startsWith('{') || t.length > 20000) return null;
+    try { const o = JSON.parse(t); return o && typeof o === 'object' ? o : null; } catch (e) { return null; }
+  };
+  const fromBody = (status, body) => {
+    const o = parseBody(body);
+    const name = o ? T(o.name) : '';
+    const message = clean(o ? (o.readableMessage || o.message || '') : S(body).slice(0, 300)).replace(/^[A-Za-z]+Error:\s*/, '');
+    const code = Number(status) || (o ? Number(o.code) || 0 : 0);
+    return { status: code, name, message: message.slice(0, 240) };
+  };
+  const isRefusal = (r) => !!r && CODES.includes(r.status) && (r.status !== 403 || NAME_RE.test(r.name) || TEXT_RE.test(r.message) || /^(?:insufficient|account|api key)/i.test(r.message));
+  // the reader's body in an output field: a JSON error object of its own (code + name / readableMessage), never a page's text
+  const errorBody = (v) => { const o = parseBody(v); if (!o) return null; const code = Number(o.code); if (!CODES.includes(code) || !(o.name || o.readableMessage)) return null; return fromBody(code, o); };
+  // what the HTTP node handed on: an error item (`continueRegularOutput`), a full response (`fullResponse` + `neverError`), or a body kept
+  // in its output field (`neverError` alone answers the reader's error JSON as if it were the page)
+  const refusal = (item, prop) => {
+    const j = (item && item.json && typeof item.json === 'object') ? item.json : (item || {});
+    if (!j || typeof j !== 'object') return null;
+    if (j.error) {
+      const e = typeof j.error === 'object' ? j.error : { message: S(j.error) };
+      const msg = S(e.message);
+      const m = msg.match(/^\s*(\d{3})\s*-\s*([\s\S]*)$/);
+      const status = Number(e.httpCode || e.statusCode || e.status || (m && m[1])) || 0;
+      const body = m ? m[2] : (e.description || msg);
+      let r = fromBody(status, body);
+      if (!r.name && !r.message) r = { status, name: T(e.name), message: clean(msg).slice(0, 240) };
+      return isRefusal(r) ? r : null;
+    }
+    const sc = Number(j.statusCode);
+    if (Number.isFinite(sc) && sc > 0 && ('body' in j || 'data' in j)) { if (sc < 400) return null; const r = fromBody(sc, j.body != null ? j.body : j.data); return isRefusal(r) ? r : null; }
+    for (const k of [prop, 'data', 'page_text', 'site_text', 'body'].filter(Boolean)) { if (j[k] == null) continue; const r = errorBody(j[k]); if (r) return r; }
+    return null;
+  };
+  const describe = (r) => !r ? '' : ('HTTP ' + r.status + (r.name ? ' ' + r.name : '') + (r.message ? ': ' + r.message.replace(/[.\s]+$/, '') : '')).slice(0, 220);
+  const brief = (r) => r ? { status: r.status, name: r.name, message: r.message.slice(0, 160) } : null;
+
+  // the page's own HTML in the reader's line format (CRK.linesOf: header, menu, footer, aside, forms and cookie banners removed, headings as
+  // "#" lines), with the reader's three head lines; `links` adds the site's own links first (a homepage read keeps its menu for the nav pages)
+  const toReaderText = (html, url, opts) => {
+    const o = opts || {};
+    const h = S(html).slice(0, CFG.max_html_chars);
+    const title = typeof LK !== 'undefined' ? LK.text(((h.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '')).slice(0, 300) : '';
+    const lines = typeof CRK !== 'undefined' ? CRK.linesOf(h) : [];
+    const menu = (o.links && typeof CRK !== 'undefined') ? CRK.links(h, url, o.domain || (typeof LK !== 'undefined' ? LK.hostOf(url) : '')).slice(0, 40).map(l => '[' + T(l.title || l.path).replace(/[\[\]]/g, '') + '](' + l.url + ')') : [];
+    return 'Title: ' + title + '\n\nURL Source: ' + url + '\n\nMarkdown Content:\n' + [...menu, ...lines].join('\n\n');
+  };
+  const plainLen = (t) => S(t).replace(/^(Title|URL Source|Markdown Content):.*$/gm, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/^#+\s*/gm, '').replace(/\s+/g, ' ').trim().length;
+  const bodyText = (b) => b == null ? '' : (typeof b === 'string' ? b : (typeof Buffer !== 'undefined' && Buffer.isBuffer(b) ? b.toString('utf8') : JSON.stringify(b)));
+  const msgOf = (e) => clean((e && (e.message || e.description)) || e).slice(0, 160);
+
+  // ctx: { reqs: the request items (json, aligned with res by position), res: the reader's output (json), mode: 'text' | 'html',
+  //        full: the reader answers a full response (statusCode / body), prop: its output field, headers: the reader's own headers,
+  //        target(q, i): the page's address, links / domain(q): keep the site's own links (a homepage read), path / node: names for the
+  //        report, sleep(ms) and now(): injectable (the harness), cfg: overrides of CFG }
+  const recover = async (helpers, ctx) => {
+    const c = ctx || {};
+    const C = { ...CFG, ...(c.cfg || {}) };
+    const res = Array.isArray(c.res) ? c.res : [];
+    const reqs = Array.isArray(c.reqs) ? c.reqs : [];
+    const prop = T(c.prop);
+    const refused = [];
+    res.forEach((j, i) => { const r = refusal(j, prop); if (r) refused.push([i, r]); });
+    if (!refused.length) return { items: res, report: null };
+    const now = typeof c.now === 'function' ? c.now : () => Date.now();
+    const sleep = typeof c.sleep === 'function' ? c.sleep : (ms) => new Promise(ok => setTimeout(ok, ms));
+    const H = helpers || {};
+    const http = typeof H.httpRequest === 'function' ? (o) => H.httpRequest(o) : null;
+    const out = res.slice();
+    const report = { reader: 'Jina Reader', path: T(c.path), node: T(c.node), asked: res.length, refused: refused.length, first: brief(refused[0][1]),
+      recovered_keyless: 0, recovered_direct: 0, unread: [], keyless_refused: null, keyless_tried: 0, direct_tried: 0, out_of_time: 0 };
+    const t0 = now();
+    let keylessOk = !!http, lastKeyless = 0;
+    for (const [i, r] of refused) {
+      const q = reqs[i] || {};
+      let url = '';
+      try { url = T(typeof c.target === 'function' ? c.target(q, i) : (q.url || '')); } catch (e) { url = ''; }
+      if (/^https?:\/\/r\.jina\.ai\//i.test(url)) url = url.replace(/^https?:\/\/r\.jina\.ai\//i, '');
+      const why = [];
+      let got = null;
+      const over = () => now() - t0 > C.budget_ms;
+      if (!url) why.push('the request carried no page address');
+      else if (!http) why.push('no fallback reader is available here');
+      if (url && http && keylessOk && report.keyless_tried < C.keyless_max && !over()) {
+        const wait = lastKeyless ? C.keyless_gap_ms - (now() - lastKeyless) : 0;
+        if (wait > 0) await sleep(wait);
+        report.keyless_tried++; lastKeyless = now();
+        try {
+          const x = await http({ method: 'GET', url: READER + url, headers: { ...(c.headers || {}) }, timeout: C.keyless_timeout_ms, returnFullResponse: true, ignoreHttpStatusErrors: true, json: false });
+          const st = Number(x && x.statusCode) || 0; const body = bodyText(x && x.body);
+          if (st >= 200 && st < 300 && T(body) && !errorBody(body)) got = { via: 'reader_keyless', body };
+          else { const rr = fromBody(st, body); if (isRefusal(rr)) { keylessOk = false; report.keyless_refused = brief(rr); }
+            why.push('the reader without the key answered ' + (st ? 'HTTP ' + st : 'nothing') + (rr.name ? ' ' + rr.name : '')); }
+        } catch (e) { why.push('the reader without the key failed: ' + msgOf(e)); }
+      } else if (url && http && !keylessOk) why.push('the reader without the key refused too (' + describe(report.keyless_refused) + ')');
+      else if (url && http && report.keyless_tried >= C.keyless_max) why.push('the reader without the key was already used ' + C.keyless_max + ' times in this step (its rate limit)');
+      if (!got && url && http && c.mode !== 'html' && report.direct_tried < C.direct_max && !over()) {
+        report.direct_tried++;
+        try {
+          const x = await http({ method: 'GET', url, headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml' }, timeout: C.direct_timeout_ms, returnFullResponse: true, ignoreHttpStatusErrors: true, json: false });
+          const st = Number(x && x.statusCode) || 0; const html = bodyText(x && x.body);
+          const blocked = typeof LK !== 'undefined' ? LK.challenge(st, html) : /just a moment|access denied|captcha/i.test(html.slice(0, 3000));
+          if (st >= 200 && st < 300 && /<html|<body|<head|<p[\s>]|<div[\s>]/i.test(html) && !blocked) {
+            const text = toReaderText(html, url, { links: !!c.links, domain: typeof c.domain === 'function' ? T(c.domain(q)) : '' });
+            if (plainLen(text) >= C.min_text_chars) got = { via: 'direct', text, html };
+            else why.push('a direct fetch of the page found almost no text (' + plainLen(text) + ' characters)');
+          } else why.push('a direct fetch of the page answered ' + (st ? 'HTTP ' + st : 'nothing') + (blocked ? ' (a bot check)' : ''));
+        } catch (e) { why.push('a direct fetch of the page failed: ' + msgOf(e)); }
+      } else if (!got && c.mode === 'html') why.push('a render (the page after its scripts ran) has no plain-HTML stand-in');
+      if (!got && over()) { report.out_of_time++; why.push('the fallback ran out of time for this step'); }
+      const mark = { via: got ? got.via : 'none', refused: brief(r), path: report.path, node: report.node };
+      if (got && got.via === 'reader_keyless') report.recovered_keyless++;
+      if (got && got.via === 'direct') report.recovered_direct++;
+      if (got) {
+        const body = got.via === 'direct' ? got.text : got.body;
+        out[i] = c.mode === 'html' ? (c.full ? { statusCode: 200, body, headers: {}, reader_fallback: mark } : { [prop || 'data']: body, reader_fallback: mark })
+          : { [prop || 'data']: body, reader_fallback: mark };
+      } else {
+        const text = 'the page reader refused (' + describe(r) + ') and the fallback could not read the page' + (why.length ? ': ' + why.join('; ') : '');
+        out[i] = { error: { message: text.slice(0, 600), reader_refused: true, status: r.status }, reader_fallback: { ...mark, why: why.join('; ').slice(0, 400) } };
+        report.unread.push({ index: i, url, why: why.join('; ').slice(0, 300) });
+      }
+    }
+    return { items: out, report };
+  };
+
+  // ---- what a run's own reads say (the content run's decisions read this) ----
+  const marks = (items) => (items || []).map(j => (j && j.json && typeof j.json === 'object' ? j.json : j) || {}).map(j => j.reader_fallback || null).filter(Boolean);
+  const refusedIn = (items) => marks(items).filter(m => m.refused);
+  const unreadIn = (items) => marks(items).filter(m => m.refused && m.via === 'none');
+  // the first refusal seen in a list of node outputs (for the reason the client reads)
+  const firstRefusal = (lists) => { for (const l of lists || []) { const m = refusedIn(l)[0]; if (m) return m.refused; } return null; };
+  const reasonText = (r) => 'the page reader we use refused to read pages' + (r ? ' (' + describe(r) + ')' : '') + ', and reading them another way failed too';
+  // the same, in words a client reads (no vendor, no error code: those are in the run's record and the ops alert)
+  const clientReason = (r) => {
+    const st = r ? Number(r.status) : 0;
+    return (st === 402 ? 'the service we use to read web pages stopped answering us because of an account problem on our side'
+      : st === 401 || st === 403 ? 'the service we use to read web pages refused our access, a problem on our side'
+      : st === 429 ? 'the service we use to read web pages asked us to slow down'
+      : 'the service we use to read web pages did not answer') + ', and reading the pages another way did not work either';
+  };
+  // a path that reads several hosts' pages through the reader wants one address form (the reader node of a homepage read asks for the bare
+  // host, `https://<domain>`, and so does its fallback; redirects are followed by both)
+  const homeOf = (host) => { const h = T(host); return /^https?:\/\//i.test(h) ? h : (h ? 'https://' + h.replace(/^\/+/, '') : ''); };
+
+  return { CFG, refusal, recover, describe, brief, toReaderText, plainLen, marks, refusedIn, unreadIn, firstRefusal, reasonText, clientReason, homeOf, isRefusal, fromBody, errorBody };
 })();
 // Accepts an object (from the Structured Output Parser) or a string with/without code fences or surrounding text
 const parseAgentJson = (raw) => {
@@ -1400,16 +1759,49 @@ verdict.reasons = pcClean(verdict.reasons);
 // Execution 549: both SERP calls answered 40101 inside an HTTP 200, were billed, ran once — and the run still said
 // "winnable, GO_WITH_CHANGES 68" and wrote a page. The retry is wired above; when it fails too, the competition was never seen,
 // so there is no verdict and no number — only what was tried, and the suggestion to run the check again.
+// ---- W07-A (2026-10-31, docs/page-quality-2026-10-29/WAVE06.md "Open resilience item"): the pages it stands on, unread ----
+// The K1 run of 2026-10-30 (WAVE06 section 9): the page reader's account was out of balance, every read answered HTTP 402, and this node
+// still scored the keyword 38, held it on that score and told the client "/ms-365-erp-uae has no title, main heading or Search Console search
+// on file" about a page nobody had read. Each reader node now reads a refused page again another way (v5/code/_reader.js); when that failed
+// too for the pages this verdict stands on (the page the website already has for the search, the site's own pages, the pages that rank),
+// there is no verdict, no score, no hold, no duplicate or existing-page decision and no page: the run says the pages could not be read and
+// why, and is charged only for the check. A page that is simply down or blocked is not a refusal and is judged as before.
+const PU = (() => {
+  if (typeof RD === 'undefined') return null;
+  const all = (n) => { try { return $(n).all().map(i => (i && i.json) || {}); } catch (e) { return null; } };
+  const client = all('Read Client Pages'), comp = all('Read Competitor Pages'), retry = all('Retry Blocked Pages');
+  if (![client, comp, retry].some(l => l && RD.refusedIn(l).length)) return null;
+  const first = RD.firstRefusal([client, comp, retry]);
+  let acp = {}; try { acp = $('Analyze Competitor Pages').first().json || {}; } catch (e) { acp = {}; }
+  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const compAsked = comp ? comp.filter(j => j && Object.keys(j).length).length : 0;
+  const compRead = n0(acp.competitors_read != null ? acp.competitors_read : prev.competitors_read);
+  const clientAsked = client ? client.filter(j => j && Object.keys(j).length).length : 0;
+  const clientRead = n0(prev.client_pages_read);
+  const ex = (prev.existing_page_unread && prev.existing_page_unread.url) ? prev.existing_page_unread : null;
+  const missing = [];
+  if (ex) missing.push('the page your website already has for this search (' + ex.url + ')');
+  if (clientAsked && !clientRead) missing.push('your own pages');
+  if (compAsked && !compRead) missing.push('the pages that rank for it');
+  if (!missing.length) return null;
+  const writesPU = prev.include_content === true && !prev.verdict_only && String(prev.mode || 'keyword').trim() === 'keyword';
+  const why = RD.clientReason(first);
+  return { refused: first, missing, existing: ex, client: { asked: clientAsked, read: clientRead }, competitors: { asked: compAsked, read: compRead }, client_reason: why,
+    reason: 'No verdict is given for this keyword: ' + why + ', so ' + missing.join(' and ') + ' could not be read. Nobody has looked at them, so a score, '
+      + 'a hold or a match with a page you already have would be invented.' + (writesPU ? ' Nothing was written and only the check was charged.' : '')
+      + ' This is a problem on our side, not with your keyword: run it again later.' };
+})();
 const EV56 = (() => {
   const sf = prev.serp_features || {}; const ev = prev.serp_evidence || null; const kd = prev.keyword_data_evidence || null;
   const out = !!(sf.unavailable || (ev && ev.unavailable));
   const why = String((ev && ev.error) || sf.error || 'no answer from the search data provider').slice(0, 160);
   const again = (ev && ev.retried) ? (Number(ev.attempts) > 2 ? ' The search was sent ' + ev.attempts + ' times (the last time as a lighter request) and failed every time.' : ' The search was sent again once and failed again.') : '';   // F-SERP: up to three attempts
   return {
-    withheld: out,
+    withheld: out || !!PU,   // W07-A: the pages it stands on could not be read
     evidence: { serp: out ? 'unavailable' : 'read', error: out ? why : '', asked: ev ? ev.asked : 1, checked: ev ? ev.checked : (out ? 0 : 1),
-      retried: ev ? ev.retried : 0, attempts: ev ? (Number(ev.attempts) || 1 + (Number(ev.retried) || 0)) : 1, read_light: !!sf.light_read, keyword_data: (kd && kd.unavailable) ? 'unavailable' : 'read' },
-    reason: out ? 'No score is given for this keyword: the live Google results could not be read (' + why + ').' + again
+      retried: ev ? ev.retried : 0, attempts: ev ? (Number(ev.attempts) || 1 + (Number(ev.retried) || 0)) : 1, read_light: !!sf.light_read, keyword_data: (kd && kd.unavailable) ? 'unavailable' : 'read',
+      ...(PU ? { pages: 'unread', pages_error: RD.describe(PU.refused) } : {}) },
+    reason: (!out && PU) ? PU.reason : out ? 'No score is given for this keyword: the live Google results could not be read (' + why + ').' + again
       + ' Nobody has seen the pages that rank, the featured snippet or the AI Overview, so any number here would be invented.' + (sf.retryable === false ? ' Run the check again.' : ' This is a temporary problem with the search data provider, not with your keyword. Run the check again later.') : ''
   };
 })();
@@ -1469,6 +1861,13 @@ if (EXP) {
   if (lostWords && !verdict_changes.some(c => WORDS_RE.test(c))) verdict_changes.push('Aim for about ' + lostWords + ' words on that page.');
   verdict_changes.unshift('Improve the page the site already has for this search (' + EXP.url + '): update and expand it, keep its URL, and do not publish a second page for this keyword.');
 }
+// W05-B (2026-10-30, BEFORE_AFTER K4 / K1): a page matched by its address but not confirmed by its own title, heading or searches is not this
+// run's page (Collect Client Pages), and a page the client chose to write beside ("Write it anyway") is left as it is: the report and the brief
+// both say so, so nothing is written onto another page's address
+const EPU = (!EXP && prev.existing_page_unconfirmed && prev.existing_page_unconfirmed.url) ? prev.existing_page_unconfirmed : null;
+const EPI = (!EXP && prev.existing_page_ignored && prev.existing_page_ignored.url && !prev.existing_page_ignored.planned_url) ? prev.existing_page_ignored : null;
+if (EPU) verdict_changes.unshift('Write this as a new page at its own address. ' + EPU.url + ' was considered and is left as it is: ' + String(EPU.why || 'it is not the page for this search') + '.');
+if (EPI) verdict_changes.unshift('Write this as a separate new page at its own address, as you chose. ' + EPI.url + ' stays as it is; link to it where it helps the reader.');
 
 // ---- A-5 / A-6 / A-23 (2026-10-17, re-rating execs 760 / 765): the verdict's advice checked against what the site already holds ----
 // (inlined into *Parse Verdict* by build_v4.py section 130, after the existing-page rules; reads `prev.own_coverage` from *Own Coverage
@@ -1602,24 +2001,251 @@ if (LM21 && String(LM21.keyword || '').toLowerCase().trim() === String(prev.keyw
     now: { score: nowScore, checked_at: nowAt, ai_overview: nowAioRead ? nowAio : null, features: featsNow }, score_moved: moved, changed, text };
   verdict.reasons = [...(Array.isArray(verdict.reasons) ? verdict.reasons : []), text];
 }
+// ---- DUP: "the site already has a page aimed at this search", one rule (page-quality W0-D, 2026-10-29; PLAN §2.1, RE M7, R4 G4) ----
+// Inlined by build_v4.py into *Parse Verdict* (before the brief: a hit asks the client first) and *Originality Check* (after the copy:
+// the safety net it always was; the Page Finalize and the Publish Check copy that node's code). Before this the rule lived only in the
+// late check, so run 3299 paid for a brief, a copy and three editor rounds before it learned the site already had a page for the search.
+// The rule: the keyword's words (3+ characters) against each inventory page's title, H1 and address. A page carrying 75% or more of them
+// is a duplicate target. Since W0-D the share must ALSO hold WEIGHTED by how rare each word is on this site (a word every page carries, "dynamics"
+// or "365" on a Dynamics partner's site, says less than one only a page or two carry, "system" or "erp"), so a guide asking "is
+// microsoft dynamics 365 an erp system" is not the duplicate of a Business Central service page that shares the site's own product words
+// (owner priority 2026-10-29: the ranking guide of exec 949 must never be held or flagged by this rule), while "microsoft dynamics erp"
+// and "dynamics 365 erp system" are recognised as the guide's own searches. With every word equally rare (a small site) it is the old
+// unweighted share. No URL constructor (n8n sandbox), no defineProperty.
+//   targets(keyword, pages, opts) -> { targets, partial, self, keyword_words, basis }
+//     opts.skip   URLs never compared (the pages this run read and compares by text, the page being improved)
+//     opts.self   URLs of this run's own page (the ladder's planned address); with opts.self_aware a page at one of them is this run's own
+//                 page: listed in `self`, never a duplicate of itself
+//     opts.slug_self  (before the brief only) a page whose last address segment is the keyword's own slug is the keyword's own page too:
+//                 the run improves it (the verdict's existing page) rather than duplicating it. Not in the late check: there, an unread
+//                 page at the keyword's own address IS the clearest duplicate (harness CTF5)
+//     opts.ladder a page of a keyword ladder: a page that carries only PART of the keyword's weight is the ladder's planned neighbour
+//                 (the rung links up to it), listed in `partial` as advice; only a page carrying all of it is a duplicate target
+//     opts.max    targets kept (3)
+const DUP = (() => {
+  const S = (v) => String(v == null ? '' : v);
+  const SHARE = 75, MAX = 3;
+  // the tokenizer of SHG (_shingle.js), character for character, so the late check finds what it always found
+  const norm = (t) => S(t)
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/https?:\/\/\S+|www\.\S+/g, ' ')
+    .replace(/[‘’ʼ]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-')
+    .toLowerCase().replace(/[^a-z0-9'\s]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const words = (t) => { const s = norm(t); return s ? s.split(' ') : []; };
+  const toks = (t) => new Set(words(t).filter(w => w.length > 2));
+  const keyOf = (u) => S(u).toLowerCase().replace(/[#?].*$/, '').replace(/\/+$/, '');
+  const pathKey = (u) => keyOf(u).replace(/^https?:\/\/[^\/]+/, '');
+  const slugOf = (u) => { const p = pathKey(u).split('/').filter(Boolean); return p.length ? p[p.length - 1].replace(/\.[a-z]{2,5}$/, '') : ''; };
+  const slugify = (k) => S(k).toLowerCase().replace(/[‘’ʼ']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  // the page's words: title + H1 + address (the address with its separators as spaces, exactly as the late check always read it)
+  const pageToks = (p) => toks(S(p && p.title) + ' ' + S(p && p.h1) + ' ' + S(p && p.url).replace(/[-_/]+/g, ' '));
+  const targets = (keyword, pages, opts) => {
+    const o = opts || {};
+    const kw = toks(keyword);
+    const out = { targets: [], partial: [], self: [], keyword_words: kw.size, basis: '' };
+    if (!kw.size) { out.basis = 'the keyword has no word of 3 letters or more to compare'; return out; }
+    const list = (Array.isArray(pages) ? pages : []).filter(p => p && S(p.url));
+    const sets = list.map(pageToks);
+    // how many of the site's pages carry each keyword word: the rarer, the more it says about a page
+    const N = sets.length;
+    const w = {};
+    for (const t of kw) { let df = 0; for (const s of sets) if (s.has(t)) df++; w[t] = Math.log((N + 1) / (df + 1)) + 1; }
+    const total = [...kw].reduce((a, t) => a + w[t], 0);
+    const skip = new Set([...(o.skip || [])].map(keyOf).filter(Boolean));
+    const selfP = new Set([...(o.self || [])].map(pathKey).filter(Boolean));
+    const kslug = slugify(keyword);
+    const max = Number(o.max) > 0 ? Number(o.max) : MAX;
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i]; const k = keyOf(p.url);
+      if (!k || skip.has(k)) continue;
+      const set = sets[i]; if (!set.size) continue;
+      let hit = 0, hw = 0;
+      for (const t of kw) if (set.has(t)) { hit++; hw += w[t]; }
+      const plain = Math.round((hit / kw.size) * 100);
+      const share = Math.round((hw / total) * 100);
+      // both measures must reach the bar: the weighting only ever REMOVES a match the plain share made (a page that shares only the site's
+      // common words), it never adds one the late check did not make before
+      if (plain < SHARE || share < SHARE) continue;
+      const row = { url: S(p.url), title: S(p.title), keyword_words_shared_pct: plain, weighted_pct: share };
+      if (o.self_aware && ((selfP.size && selfP.has(pathKey(p.url))) || (o.slug_self && kslug && slugOf(p.url) === kslug))) { out.self.push(row); continue; }
+      if (o.ladder && hit < kw.size) { out.partial.push(row); continue; }
+      out.targets.push(row);
+      if (out.targets.length >= max) break;
+    }
+    out.basis = 'the keyword\'s ' + kw.size + ' word(s) of 3+ letters against the title, main heading and address of ' + N + ' page(s) of the site, '
+      + 'a page carrying ' + SHARE + '% or more of those words, and of their weight when each word counts by how few of the site\'s pages carry it, is aimed at the same search';
+    return out;
+  };
+  return { targets, words, slugify, slugOf, SHARE, MAX };
+})();
+
+// ---- W0-D (page-quality programme 2026-10-29, PLAN Fix 4 + §2.1, REVIEW_CODE H1 / M1 / M3, owner decisions D1 / D2 / D17) ----
+// Run 3299 wrote "ms 365 erp", a keyword this verdict scored 42 and called a poor use of effort, because the router stopped only on AVOID,
+// and the site already had pages for the same search, which the late duplicate check found only after the brief, the copy and three
+// editor rounds had been paid for. Now, BEFORE the brief, a page run is held for the client's OK when:
+//   * the verdict scored the keyword under 50 (a null score, NOT_CHECKED or withheld, is "not checked": never a hold, the reason printed);
+//   * or the site already has a page aimed at the same search (DUP.targets, the late check's own rule, moved before the brief).
+// Not held (the owner's priority: the pages that already rank are ladder pages, case studies and refreshes, and nothing here may stop them):
+//   * a case study (its keyword is the case name, so a search score says nothing), an AI answer page (`ai_target`: chosen for AI answers,
+//     often with no search volume), a refresh of an own page (`existing_page_url`), a page of a keyword ladder (the ladder checked its main
+//     keyword when it was planned; production exec 949, the guide that ranks, is one): no score hold;
+//   * a ladder page is still checked for a duplicate, but only a page carrying ALL of its words counts (the ladder's planned neighbour shares
+//     most of them on purpose), and never the keyword's own page (its slug, or the ladder's planned address);
+//   * a run started with `hold_ack` (the client chose "Write it anyway"): no hold, `verdict_acknowledged` true; the fit cap downstream stays.
+// Automatic runs (the cadence, a ladder's own page runs, the tracker, case-study spawns) are held in SHADOW mode first (D17: two cadence
+// cycles): `would_hold` and the reasons are logged in the run and reported in its callback, the page is written as before. Runs a person
+// started (the app, the form, the API) are asked ("Needs your OK"). A hold writes no brief, no copy and no edit: the run delivers the
+// verdict report with `hold: { score, reasons, alternatives }` on stage `content`, and its cost is what the verdict cost.
+const HOLD = (() => {
+  // W05-B (2026-10-30, BEFORE_AFTER "Holds"): the line at 50 sat inside the verdict's own noise (one keyword read 52, 42, then 46; K3 was held
+  // at 42 and its page was the best of 31). A score is now held on its own only when it is clearly low (under 40); between 40 and 50 only when
+  // a second signal agrees: little demand (under 20 searches a month and no Search Console impressions for the site) or a page the site
+  // already has for the search. Every reading is logged (`readings`), and a run the client acknowledged keeps the acknowledged reading.
+  const CFG = { threshold: 50, clear: 40, low_volume: 20, automatic: 'shadow', recheck_days: 90 };   // D17: automatic -> 'enforce' after two cadence cycles of shadow logs (owner review of the first 20 holds, RE L4)
+  const S = (v) => String(v == null ? '' : v).trim();
+  const ip = S(prev.client_ip).toLowerCase();
+  const automatic = /^(cadence|ladder|tracker|casestudy|audit):/.test(ip);
+  const writes = prev.include_content === true && !prev.verdict_only && S(prev.mode || 'keyword') === 'keyword';
+  const ackRaw = prev.hold_ack;
+  const ack = ackRaw && typeof ackRaw === 'object' && !Array.isArray(ackRaw) ? ackRaw : (ackRaw === true ? {} : null);
+  const num = (v) => (v === '' || v == null || !Number.isFinite(Number(v))) ? null : Math.round(Number(v));
+  const runScore = EV56.withheld ? null : num(verdict.score);
+  const ackScore = ack ? num(ack.score) : null;
+  // the client said "Write it anyway" to the reading it was shown: the written run keeps THAT reading (the verdict is not moved by a re-read)
+  const score = (ack && ackScore != null && runScore != null) ? ackScore : runScore;
+  const caseStudy = !!(S(prev.case_id) || (prev.case_study && typeof prev.case_study === 'object' && Object.keys(prev.case_study).length) || /case stud/i.test(S(prev.page_type)));
+  const aiPage = !!(prev.ai_target && typeof prev.ai_target === 'object' && S(prev.ai_target.question));
+  // W05-B: a refresh is a page the client (or the pipeline) NAMED. A page this run found by itself (EXP from the inventory or the sitemap) is
+  // not a refresh the client asked for: K4 was waved through as "a refresh of a page your website already has" for a page it had matched
+  const found = !!EXP && S(EXP.source) !== '' && S(EXP.source) !== 'provided';
+  const refresh = !!S(prev.existing_page_url) && !found;
+  const ladderPage = !!S(prev.ladder_id) && prev.ladder_rung != null && prev.ladder_rung !== '';
+  const exemptScore = caseStudy ? 'a case study: its keyword is the case name, so a search score says nothing about it'
+    : aiPage ? 'a page written to be cited in AI answers: chosen for the question, not for search volume'
+    : refresh ? 'a refresh of a page your website already has'
+    : ladderPage ? 'a page of your keyword ladder: the ladder checked its main keyword when it was planned' : '';
+  const exemptDup = caseStudy ? 'a case study' : aiPage ? 'a page written for an AI answer' : refresh ? 'a refresh of a page your website already has' : '';
+  // ---- the duplicate gate (the late check's rule, before the brief) ----
+  let MODEL = prev.site_model && typeof prev.site_model === 'object' ? prev.site_model : null;
+  if (!MODEL) { try { MODEL = ($('Site Model').first().json || {}).site_model || null; } catch (e) { MODEL = null; } }
+  const ownUrl = EXP ? EXP.url : '';
+  const dup = (MODEL && !exemptDup) ? DUP.targets(prev.keyword, SM.pages(MODEL), { skip: [ownUrl, S(prev.existing_page_url)], self: [S(prev.ladder_target_url)], self_aware: true, slug_self: true, ladder: ladderPage })
+    : { targets: [], partial: [], self: [], basis: MODEL ? '' : 'no page inventory of the website was available, so a duplicate could not be checked' };
+  const dupHit = !EXP && dup.targets.length > 0;   // a page the verdict already redirected the run to (existing_page) is improved, not duplicated
+  // W05-B (BEFORE_AFTER K1): the page this run found for the search (confirmed by its own title, heading or searches in Collect Client Pages)
+  // used to be rewritten silently. A person who started the run is now asked first: improve that page, or write a separate new one.
+  const existingHit = found && !exemptDup && !ladderPage;
+  const kwn = (s) => S(s).toLowerCase().replace(/[^a-z0-9؀-ۿ]+/g, ' ').trim().split(/\s+/).filter(Boolean).sort().join(' ');
+  const kwKey = kwn(prev.keyword);
+  // the site's own Search Console reading for this search (the page inventory's searches): the impressions, and the pages Google shows for it
+  const gsc = (() => { const out = { read: false, impressions: 0, pages: [] };
+    for (const p of (MODEL ? SM.pages(MODEL) : [])) { const qs = Array.isArray(p.queries) ? p.queries : []; if (qs.length) out.read = true;
+      if (SM.isGone && SM.isGone(p)) continue;
+      const hit = qs.filter(q => kwn((q || {}).query || (q || {}).keyword) === kwKey).reduce((a, q) => a + (Number((q || {}).impressions) || 0), 0);
+      if (hit > 0) { out.impressions += hit; out.pages.push({ url: SM.canonUrl ? SM.canonUrl(MODEL, p.url) : p.url, title: S(p.title), impressions: hit }); } }
+    out.pages.sort((a, b) => b.impressions - a.impressions); return out; })();
+  const volume = num(((prev.keyword_data || {}).search_volume));
+  const lowDemand = volume != null && volume < CFG.low_volume && gsc.impressions === 0;
+  const second = dupHit || existingHit || lowDemand;
+  // ---- the value gate ----
+  let valueHit = false; let notChecked = '';
+  if (score == null) notChecked = PU ? 'the pages this check needs could not be read, so nothing was held for it: ' + PU.client_reason
+    : EV56.withheld ? 'the verdict could not score this keyword (' + (EV56.evidence.error || 'the live results could not be read') + '), so nothing was held for it'
+    : 'the verdict gave no score, so nothing was held for it';
+  else if (!exemptScore && (score < CFG.clear || (score < CFG.threshold && second))) valueHit = true;
+  const band = score == null ? 'not checked' : score < CFG.clear ? 'clearly low' : score < CFG.threshold ? 'near the line' : 'above the line';
+  const readings = { this_run: runScore, acknowledged: ackScore, used: score, band, clear_under: CFG.clear, line: CFG.threshold,
+    second_signal: { low_demand: lowDemand, duplicate: dupHit, existing_page: existingHit, volume, impressions: gsc.read ? gsc.impressions : null, search_console_read: gsc.read },
+    decision: !writes ? 'no page in this run' : ack ? 'acknowledged by the client' + (ackScore != null && runScore != null && ackScore !== runScore ? ': this run read ' + runScore + ', the acknowledged ' + ackScore + ' is kept' : '')
+      : score == null ? 'not checked' : valueHit ? (score < CFG.clear ? 'held: clearly low' : 'held: near the line with a second signal') : score < CFG.threshold ? (exemptScore ? 'not held: ' + exemptScore : 'not held: near the line, no second signal') : 'not held for the score' };
+  const would = writes && !ack && !PU && (valueHit || dupHit || existingHit);   // W07-A: never a hold (score, duplicate or existing page) on pages nobody read
+  const mode = !writes ? 'off' : automatic ? CFG.automatic : 'enforce';
+  const kw = S(prev.keyword);
+  const reasons = [];
+  const demandText = 'little demand (' + (volume === 0 ? 'no measured searches' : 'about ' + volume + ' searches a month') + (gsc.read ? ' and no impressions for your site in Search Console' : '') + ')';
+  if (writes && valueHit) reasons.push('Our verdict scored "' + kw + '" ' + score + ' out of 100' + (score < CFG.clear ? ', clearly under the ' + CFG.threshold + ' we write without asking'
+    : ', under the ' + CFG.threshold + ' we write without asking, and ' + (lowDemand ? 'the search has ' + demandText : 'your website already has a page for it'))
+    + ((verdict.reasons || [])[0] ? ': ' + String(verdict.reasons[0]).replace(/\s+/g, ' ').slice(0, 260) : '.'));
+  if (writes && dupHit) reasons.push('Your website already has a page aimed at this search: ' + dup.targets.map(t => t.url).join(', ')
+    + '. A second page would compete with it for the same search; improving that page is usually the faster way up.');
+  if (writes && existingHit) reasons.push('Your website already has a page for this search: ' + EXP.url + (S(EXP.title) ? ' ("' + S(EXP.title).replace(/[“”"]/g, '') + '")' : '')
+    + '. Choose "Improve the existing page" to rewrite that page at its own address (it keeps what it has already earned), or "Write it anyway" for a separate new page at a new address of its own; your existing page then stays as it is.');   // W06-B (WAVE05 3.3): the copy says exactly what each choice does
+  const shown = gsc.pages.filter(p => !EXP || p.url.toLowerCase().replace(/\/+$/, '') !== String(EXP.url).toLowerCase().replace(/\/+$/, ''));
+  if (writes && (dupHit || existingHit) && shown[0]) reasons.push('Google already shows ' + shown[0].url + ' for this search (' + shown[0].impressions + ' impressions in Search Console).');
+  // ---- what to do instead (up to three, each one click in the app) ----
+  const alternatives = [];
+  const seen = new Set();
+  const addAlt = (a) => { const k = a.kind + '|' + S(a.keyword).toLowerCase() + '|' + S(a.url).toLowerCase(); if (seen.has(k) || alternatives.length >= 3) return; seen.add(k); alternatives.push(a); };
+  // W05-B (BEFORE_AFTER item 4): a recommended target must be a search a person types, never a headline ("verify an ASP in 5 minutes") or a
+  // slash form ("AI development company Dubai/UAE": the first form is kept). The searches Google itself lists (related searches, People Also
+  // Ask) and the verdict's secondary keywords come first; a quoted phrase from the verdict's advice is used only when it passes the same test.
+  const searchOf = (raw) => {
+    let q = S(raw).replace(/[‘’“”"]/g, '').replace(/\s+/g, ' ').trim();
+    q = q.replace(/([A-Za-z0-9]+)(?:\s*\/\s*[A-Za-z0-9]+)+/g, '$1');   // "Dubai/UAE" -> "Dubai"
+    q = q.replace(/[.!,;:]+$/, '').trim();
+    if (!q || q.length > 80 || /[:;!|()[\]{}<>=+*#@]/.test(q)) return '';
+    const w = q.split(/\s+/);
+    if (w.length < 2 || w.length > 8) return '';
+    if (/\b(?:in|within|under)\s+\d+\s+(?:minutes?|mins?|steps?|days?|hours?|seconds?|weeks?)\b/i.test(q)) return '';   // a headline promise
+    if (/^\d+\s+(?:ways|tips|reasons|steps|things|mistakes|questions|signs)\b/i.test(q)) return '';
+    if (/^(?:verify|discover|learn|get|see|find out|choose|meet|unlock|boost|stop|start|build|make|read|download|book|talk|contact|hire|use|add|create|write|improve|try|let|why you|here)\b/i.test(q)) return '';
+    if (/\b(?:you|your|we|our|us)\b/i.test(q)) return '';   // a sentence to a reader, not a search
+    return q;
+  };
+  const known = new Set([...(((prev.serp_features || {}).related_searches) || []), ...(((prev.serp_features || {}).people_also_ask) || []), ...(OWNV.secondary || [])].map(s => kwn(searchOf(s))).filter(Boolean));
+  if (writes && (valueHit || dupHit || existingHit)) {
+    const improveUrl = existingHit ? EXP.url : ((dup.targets[0] || {}).url || ((OWNV.related || [])[0] || {}).url || '');
+    if (improveUrl) addAlt({ kind: 'improve', label: 'Improve the existing page', url: improveUrl, keyword: kw,
+      why: existingHit ? 'your website already has this page for the search: improving it keeps its address and what it has already earned'
+        : dupHit ? 'your website already has this page for the search: a refresh keeps its address and what it has already earned' : 'your website has a page on this topic: strengthening it is cheaper than a new page' });
+    if ((dupHit || existingHit) && shown[0] && shown[0].url !== improveUrl) addAlt({ kind: 'improve', label: 'Improve the page Google shows', url: shown[0].url, keyword: kw,
+      why: 'Google already shows this page for the search (' + shown[0].impressions + ' impressions in Search Console)' });
+    // the verdict's own re-target: a quoted search in its first changes ("such as 'Microsoft Dynamics 365 ERP implementation partner UAE'"),
+    // else its first secondary keyword the site does not already hold elsewhere; either one only when it reads as a real search
+    const quoted = (() => { const out = []; for (const c of verdict_changes.filter(l => !/^Write this as (?:a new|a separate new) page/.test(String(l || ''))).slice(0, 3)) { const re = /(?:^|[\s(])['‘“"]([^'’”"]{8,90})['’”"](?=[\s.,;:)]|$)/g; let m;
+      while ((m = re.exec(String(c || '')))) { const q = m[1].trim(); if (q.split(/\s+/).length >= 2 && q.toLowerCase() !== kw.toLowerCase() && !/[.!?]$/.test(q)) out.push(q); } } return out; })();
+    const pool = [...quoted, ...(OWNV.secondary || [])].map(searchOf).filter(q => q && kwn(q) !== kwKey);
+    const retarget = pool.find(q => known.has(kwn(q)) && quoted.map(searchOf).includes(q)) || pool[0] || '';
+    if (retarget) addAlt({ kind: 'retarget', label: 'Use the recommended target', keyword: retarget, page_type: PT.of(verdict.recommended_page || prev.page_type, prev.page_type),
+      why: 'the verdict recommends this search instead of "' + kw + '"' });
+    const kc = OWNV.keyword_covered;
+    if (kc && S(kc.keyword) && S(kc.keyword).toLowerCase() !== kw.toLowerCase()) addAlt({ kind: 'rung', label: 'Write the planned page', keyword: S(kc.keyword), ladder_id: S(kc.ladder_id),
+      why: S(kc.note) || 'this search is already planned on your website' });
+  }
+  const hold = would ? { score, threshold: CFG.threshold, clear: CFG.clear, kinds: [valueHit ? 'score' : '', (dupHit || existingHit) ? 'duplicate' : ''].filter(Boolean), reasons, alternatives,
+    duplicates: dupHit ? dup.targets : existingHit ? [{ url: EXP.url, title: S(EXP.title) }] : [], mode, held: mode === 'enforce', readings,
+    rule: 'A page waits for your OK when our verdict scores its keyword under ' + CFG.clear + ' out of 100, or under ' + CFG.threshold + ' when the search also has little demand, or when your website already has a page for the same search.',
+    next: mode === 'enforce' ? 'Nothing was written and only the check was charged. Choose "Write it anyway", use the recommended target, or improve the existing page.'
+      : 'Started automatically, so the page was written as before; this check only records what it would have asked you.' } : null;
+  return {
+    applies: writes, mode, would, held: would && mode === 'enforce', hold, ack: ack ? { score: ackScore } : null, score, readings,
+    exempt: writes ? [exemptScore && ('score: ' + exemptScore), exemptDup && ('duplicate: ' + exemptDup)].filter(Boolean).join('; ') : '',
+    not_checked: writes ? notChecked : '', duplicate_check: { checked: !!MODEL && !exemptDup, targets: dup.targets, partial: dup.partial, self: dup.self, basis: dup.basis },
+    recheck_days: CFG.recheck_days
+  };
+})();
 
 return [{
   json: {
     ...prev,
     verdict: EV56.withheld ? 'NOT_CHECKED' : verdict.verdict,
-    verdict_score: EV56.withheld ? null : (verdict.score ?? null),
+    verdict_score: EV56.withheld ? null : (HOLD.ack && HOLD.score != null ? HOLD.score : (verdict.score ?? null)),   // W05-B: after "Write it anyway" the acknowledged reading is kept
+    verdict_readings: HOLD.readings,
     verdict_evidence: EV56.evidence,
     ladder_remeasure,   // A-21
     score_withheld: EV56.withheld,
     score_withheld_reason: EV56.reason,
-    verdict_reasons: EV56.withheld ? [EV56.reason, ...(verdict.reasons || [])] : (verdict.reasons || []),
-    verdict_risks: verdict.risks || [],
+    verdict_reasons: EV56.withheld ? [EV56.reason, ...(PU ? [] : (verdict.reasons || []))] : (verdict.reasons || []),   // W07-A: the model's reasons on pages nobody read are not shown
+    verdict_risks: PU ? [] : (verdict.risks || []),
     recommended_page: PT.of(verdict.recommended_page || prev.page_type, prev.page_type),
     page_notes: PT.notes(verdict.recommended_page, PT.of(verdict.recommended_page || prev.page_type, prev.page_type)),
     secondary_keywords: OWNV.secondary,
     secondary_covered: OWNV.covered,   // A-5: the searches the site already holds elsewhere, kept off this page and named
     existing_related: OWNV.related, sections_covered: OWNV.sections, already_on_page: OWNV.already_on_page, keyword_covered: OWNV.keyword_covered, own_coverage_checked: OWNV.checked,
-    verdict_changes,
+    verdict_changes: PU ? [] : verdict_changes,   // W07-A: no advice on pages nobody read
     page_claims_dropped,
     verdict_exclusions: EXC.fromVerdict(verdict_changes, verdict.topics_to_skip),   // A-18: what this page must not cover
     existing_page_action,
@@ -1628,6 +2254,21 @@ return [{
     time_to_rank_months: EV56.withheld ? null : (verdict.time_to_rank_months ?? null),   // kept for the ladder and older readers: it is the MODEL's own number and every surface now says so
     time_to_rank: EV56.withheld ? null : TTR77,
     for_you: EV56.withheld ? null : FORYOU77,
-    reach_info: FORYOU77 ? { reach: RI77.reach, method: RI77.method, cached: !!RI77.cached, cached_at: RI77.cached_at || null, evidence_kept: !!RI77.ranked } : null
+    reach_info: FORYOU77 ? { reach: RI77.reach, method: RI77.method, cached: !!RI77.cached, cached_at: RI77.cached_at || null, evidence_kept: !!RI77.ranked } : null,
+    // W0-D: the hold before the brief (the router *Need Content?* reads verdict_hold; the callback carries hold / hold_shadow)
+    verdict_hold: HOLD.held,
+    would_hold: HOLD.would,
+    hold_mode: HOLD.mode,
+    hold_reason: HOLD.would ? HOLD.hold.reasons.join(' ') : '',
+    hold: HOLD.held ? HOLD.hold : null,
+    hold_shadow: (HOLD.would && !HOLD.held) ? HOLD.hold : null,
+    hold_exempt: HOLD.exempt,
+    hold_not_checked: HOLD.not_checked,
+    hold_ack: HOLD.ack,
+    hold_recheck_days: HOLD.recheck_days,
+    verdict_acknowledged: !!HOLD.ack,
+    duplicate_check: HOLD.applies ? (PU ? { checked: false, targets: [], partial: [], self: [], basis: 'not checked: ' + PU.client_reason } : HOLD.duplicate_check) : null,
+    // W07-A: the pages this verdict stands on could not be read; a page run stops before the brief (*Need Content?*) and says why
+    ...(PU ? { pages_unread: PU, pages_unread_stop: HOLD.applies } : {})
   }
 }];

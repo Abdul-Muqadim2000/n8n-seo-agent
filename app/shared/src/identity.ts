@@ -609,6 +609,7 @@ export const AUDIT_ACTIONS = {
   'page.edit_reverted': { label: 'Went back to the delivered version of a page', category: 'websites' },
   'page.finalize_started': { label: 'Asked for the final version of a page', category: 'websites' },
   'page.approved': { label: 'Approved a page for publishing', category: 'websites' },
+  'page.duplicate_decision': { label: 'Said how a page differs from one the website already has', category: 'websites' },   // W0-B (2026-10-29, D2)
   'facts.changed': { label: 'Changed the business details', category: 'websites' },
   // site tasks (2026-10-28, app/docs/SITE_TASKS.md): the steps on the client's own website
   'site_task.checked': { label: 'Checked a step on the website', category: 'websites' },

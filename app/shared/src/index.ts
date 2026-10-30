@@ -13,6 +13,7 @@ export * from './cost';
 export * from './estimate';
 export * from './pipeline-notices';
 export * from './publish-verify';
+export * from './meta-description';   // W0-A (2026-10-29): the meta description's field rule, the same as the engine's PF.meta
 export * from './page-review';   // H3 (2026-10-28): delivery status, client questions, business facts kept once, the editor, finalise, approve   // 2026-10-27: "I published it" warns when the live page is not the page that was written
 export * from './ladders';
 export * from './keywords';
@@ -57,4 +58,5 @@ export * from './consistency-more';   // MKT (2026-10-27): the remaining cases (
 export * from './robots';   // site tasks: the engine's robots.txt matcher (v5/code/_ai_access_kit.js), ported line for line
 export * from './indexing';   // Index coverage (2026-10-29): which pages Google left out, why, and what to do (DESIGN.md in docs/indexing-2026-10-29)
 export * from './site-tasks';   // site tasks (2026-10-28, app/docs/SITE_TASKS.md): steps on the client's own website, checked by us
+export * from './hold';   // W0-D (2026-10-29): a page held for the client's OK before writing (verdict under 50, or a page the website already has)
 export * from './draft-fix';   // 2026-10-21: a not-ready draft is finished by hand (the engine's qa_next_step / qa_owner_edits), never re-run

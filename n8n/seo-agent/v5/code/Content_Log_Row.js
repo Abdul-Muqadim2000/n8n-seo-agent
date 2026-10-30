@@ -14,7 +14,20 @@ const norm = (s) => String(s || '').normalize('NFKC').toLowerCase().replace(/[^\
 // Report-only runs (a keyword report, a verdict) take the same delivery path, so the article itself has to say that a page exists:
 // the Blog Package passes a run without content through untouched.
 let page = {}; try { page = (($('Blog Package').first() || {}).json) || {}; } catch (e) { page = {}; }
-if (!String(page.article_html || page.page_markdown || '').trim()) return [{ json: { skip: true, reason: 'no page was written in this run (report only)' } }];
+// W0-D (page-quality 2026-10-29, REVIEW_CODE M3): a run *Parse Verdict* HELD for the client's OK wrote no page, and used to leave the
+// opening `started` row as it was. Once that row is older than the in-flight window the cadence picked the keyword again, held it again
+// and paid for the check again, every week. A held run now writes `held` with the score and the reasons in `qa_reasons`; the Content
+// Cadence and the app's mirror (cadence.ts) skip a held keyword until the client says "Write it anyway" (a run with hold_ack, which
+// writes the page and moves the row on) or 90 days pass (D1: the cycle then takes its next candidate). A hold in SHADOW mode wrote the
+// page as before, so its row is the page's row; nothing here changes for it. No new column: `held` is a status value.
+let PVH = {}; try { PVH = (($('Parse Verdict').first() || {}).json) || {}; } catch (e) { PVH = {}; }
+const heldRun = PVH.verdict_hold === true && !!PVH.hold;
+// W07-A (2026-10-31, WAVE06 "Open resilience item"): a page run that stopped because the pages it needs could not be read (the page reader
+// refused and its fallback failed too) wrote nothing and decided nothing. Its opening `started` row becomes `failed` with the reason, as a
+// failed page run's row does (W06-B), never `held` (a hold keeps the keyword off the cadence for 90 days; this is a problem on our side and
+// the keyword is tried again).
+const unreadRun = PVH.pages_unread_stop === true && !!PVH.pages_unread && !heldRun;
+if (!String(page.article_html || page.page_markdown || '').trim() && !heldRun && !unreadRun) return [{ json: { skip: true, reason: 'no page was written in this run (report only)' } }];
 const domain = normD(d.domain), keyword = String(d.keyword || '').trim();
 if (!domain || !keyword) return [{ json: { skip: true, reason: 'no website or no keyword: there is nothing to follow to publication' } }];
 const now = new Date().toISOString();
@@ -38,10 +51,20 @@ const rung = Number(d.ladder_rung != null && d.ladder_rung !== '' ? d.ladder_run
 // again" instead; `written` keeps meaning exactly "passed QA, waiting to be published". A package with no verdict at all (an older
 // path) is never invented as failed.
 const meta = page.article_meta || {};
-const notReady = page.qa_not_ready === true || (page.qa_not_ready == null && !!(meta.quality && meta.quality.not_ready === true));
-const reasons = (Array.isArray(page.qa_reasons) ? page.qa_reasons : (meta.quality && Array.isArray(meta.quality.reasons) ? meta.quality.reasons : []))
+const held = heldRun && !String(page.article_html || page.page_markdown || '').trim();
+const unread = unreadRun && !String(page.article_html || page.page_markdown || '').trim();
+if (unread && (!prior || !['', 'started', 'held', 'failed'].includes(String(prior.status || ''))))   // W07-A: only this run's own opening row, never a page that exists
+  return [{ json: { skip: true, reason: 'the pages could not be read and no page was written; ' + (prior ? 'the page this keyword already has keeps its row (' + String(prior.status) + ')' : 'no row of this keyword to mark') } }];
+// a hold wrote nothing, so it never takes the place of a page that exists: a written, not-ready or published row keeps its state
+if (held && prior && !['', 'started', 'held', 'failed'].includes(String(prior.status || '')))   // W06-B: a failed run's row is not a page either
+  return [{ json: { skip: true, reason: 'held for the client\'s OK; the page this keyword already has keeps its row (' + String(prior.status) + ')' } }];
+const notReady = !held && (page.qa_not_ready === true || (page.qa_not_ready == null && !!(meta.quality && meta.quality.not_ready === true)));
+const reasons = held
+  ? ['held for your OK' + (PVH.hold.score != null ? ': verdict score ' + PVH.hold.score + ' (under ' + (PVH.hold.threshold || 50) + ')' : ''),
+     ...(Array.isArray(PVH.hold.duplicates) && PVH.hold.duplicates.length ? ['your website already has a page for this search: ' + PVH.hold.duplicates.map(x => x.url).join(', ')] : [])]
+  : (Array.isArray(page.qa_reasons) ? page.qa_reasons : (meta.quality && Array.isArray(meta.quality.reasons) ? meta.quality.reasons : []))
   .map(x => String(x || '').trim()).filter(Boolean);
-return [{ json: {
+const row = {
   site_id: String((prior && prior.site_id) || ('site_' + domain.replace(/[^a-z0-9]+/g, '-'))),
   domain,
   keyword: String((prior && prior.keyword) || keyword),
@@ -58,4 +81,7 @@ return [{ json: {
   week: sameRun ? String(prior.week || now.slice(0, 10)) : now.slice(0, 10),
   qa_reasons: notReady ? reasons.join('; ').slice(0, 1500) : '',
   publish_note: ''   // 2026-10-27: a page written again waits again, so a note about how its earlier version was marked published no longer applies
-} }];
+};
+if (held) { row.status = 'held'; row.qa_reasons = reasons.join('; ').slice(0, 1500); }   // W0-D: what was held and why, for the cadence and the app
+if (unread) { row.status = 'failed'; row.qa_reasons = ('page run failed: the pages it needs could not be read, so nothing was written: ' + String(PVH.pages_unread.client_reason || 'the service we use to read web pages did not answer')).slice(0, 1500); }   // W07-A
+return [{ json: row }];

@@ -159,6 +159,16 @@ describe('review screens', () => {
     expect(t).not.toMatch(NO_TELLS);
   });
 
+  it('W05-C: a page whose suggestions all need the client\'s own words still offers one click (left general, the final version still possible) and says why the words are needed', () => {
+    const qs = [q('q2', 2), q('q5', 5, { source: 'brief', answer_type: 'text', question: 'Is there a client result you are happy to publish?', original: '', neutral: '', in_page: 'left_out', prefill: 'We moved a distributor to Business Central in 14 weeks.', prefill_source: 'your business facts' })];
+    const t = text(render(<ReviewBody view={baseView({ questions: qs, answers: {} })} report={page} />));
+    expect(t).toMatch(/Leave the open questions general \( ?2 ?\)/);
+    expect(t).not.toContain('Accept all suggestions');
+    expect(t).toContain('left general on this page by that button');
+    expect(t).toContain('We need this in your own words');
+    expect(t).not.toMatch(NO_TELLS);
+  });
+
   it('a viewer sees the questions but cannot answer, approve or start the final version', () => {
     const html = render(<ReviewBody view={baseView()} report={page} />, 'viewer');
     expect(html).toMatch(/<fieldset[^>]*disabled/);

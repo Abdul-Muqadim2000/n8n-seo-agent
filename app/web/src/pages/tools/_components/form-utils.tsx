@@ -37,6 +37,12 @@ export function withPrefill<T extends Record<string, unknown>>(defaults: T, pref
         };
       continue;
     }
+    // W0-D (2026-10-29): "Write it anyway" on a held page: kept only as { score } with a whole score 0-100 or none
+    if (k === 'holdAck') {
+      const h = v as { score?: unknown };
+      if (h && typeof h === 'object') out[k] = { score: typeof h.score === 'number' && Number.isInteger(h.score) && h.score >= 0 && h.score <= 100 ? h.score : null };
+      continue;
+    }
     const d = defaults[k];
     const same = Array.isArray(d) ? Array.isArray(v) && v.every((x) => typeof x === 'string') : d == null ? typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' : typeof d === typeof v;
     if (same) out[k] = v;

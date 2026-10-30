@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { format, isValid, parseISO } from 'date-fns';
-import { ArrowRight, BarChart3, FileSearch, FileText, Lightbulb, ListChecks, MousePointerClick, PenLine, Rocket, Search, ShieldAlert, Tags, TrendingUp, Workflow } from 'lucide-react';
+import { ArrowRight, BarChart3, FileSearch, FileText, Hand, Lightbulb, ListChecks, MousePointerClick, PenLine, Rocket, Search, ShieldAlert, Tags, TrendingUp, Workflow } from 'lucide-react';
 import type { ReportDetail } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
@@ -11,7 +11,7 @@ import { ChartCard, TimeSeriesChart } from '@/components/charts';
 import { CountUp, HeroStat, Stagger } from '@/components/insight';
 import { absolutePageUrl, ArticleViewer, findPlaceholders } from './article';
 import { CmsPublishPanel } from './CmsPublish';
-import { deliveryOf, draftNextStep, ownerEdits } from '@seo/shared';
+import { cleanMetaDescription, deliveryOf, draftNextStep, gradeDisplay, holdButtons, holdOf, holdTitle, ownerEdits, type HoldInfo } from '@seo/shared';
 import { DeliveryCallout, PageReview } from './review/ReviewPanels';
 import { Block, Bullets, Chips, Facts, has, CreditsCard, n, num, obj, objs, str, strs, usd, verdictLabel, type P } from './kit';
 import { keywordPrefill } from './meta';
@@ -69,6 +69,14 @@ export function ContentReport({ report }: { report: ReportDetail }) {
   const words = num(meta.word_count);
   const contentScore = num(meta.content_score);
   const avoid = verdict.toUpperCase() === 'AVOID';
+  // W0-D (2026-10-29): a page the engine held for the client's OK before writing (nothing written, only the check used), or, for a page the
+  // autopilot started, what the same check would have asked (trial mode: the page is written)
+  const hold = useMemo(() => holdOf(p), [p]);
+  const held = !!hold && hold.held && !html;
+  // W07-A (2026-10-31): the pages this check stands on could not be read (the service that reads web pages refused, and the fallback read
+  // failed too), so there is no verdict, no score, no hold and no page; the report says why and asks for a run later
+  const unread = obj(p.pages_unread);
+  const pagesUnread = !html && !!str(unread.reason);
   // H3 (2026-10-28): a page written since H1 says what the client receives (ready / ready with questions / not ready) and its grade is
   // measured on the DELIVERED page. Older reports keep the finish-by-hand path below.
   const hasDelivery = !!html && !!(str(p.qa_delivery_status) || str(meta.delivery_status) || str(quality.delivery_status));
@@ -108,7 +116,7 @@ export function ContentReport({ report }: { report: ReportDetail }) {
       Answer {delivery.questionCount} {delivery.questionCount === 1 ? 'question' : 'questions'}
     </ButtonLink>
   );
-  const writeLink = !html && can('member') && keyword && !avoid && (
+  const writeLink = !html && !held && can('member') && keyword && !avoid && (
     <ButtonLink
       to={paths.tool(org.id, 'keyword', { siteId: report.siteId, prefill: keywordPrefill({ keyword, pageType: p.recommended_page, country }) })}
       variant="primary"
@@ -132,15 +140,16 @@ export function ContentReport({ report }: { report: ReportDetail }) {
       <ReportHero
         report={report}
         eyebrow={eyebrowExtra ? <span className="normal-case">{eyebrowExtra}</span> : undefined}
-        title={hasDelivery ? <>"{keyword || 'Your page'}": {delivery.headline}</> : html ? (notReady ? <>The draft for "{keyword || 'this keyword'}" needs your edits before you publish it</> : <>The page for "{keyword || 'this keyword'}" is written</>) : verdict ? <>{verdictLabel(verdict)}: "{keyword || 'Keyword'}"</> : keyword || 'Keyword'}
+        title={held && hold ? <>{holdTitle(keyword, hold)}</> : pagesUnread ? <>We could not read the pages this check needs for "{keyword || 'this keyword'}"</> : hasDelivery ? <>"{keyword || 'Your page'}": {delivery.headline}</> : html ? (notReady ? <>The draft for "{keyword || 'this keyword'}" needs your edits before you publish it</> : <>The page for "{keyword || 'this keyword'}" is written</>) : verdict ? <>{verdictLabel(verdict)}: "{keyword || 'Keyword'}"</> : keyword || 'Keyword'}
         description={details.length ? details.join(' · ') : undefined}
         aside={
           hasDelivery ? (
             <ScoreMark
               score={delivery.grade}
+              display={delivery.gradeLabel === '95+' ? '95+' : undefined}
               label="Grade of the page you receive"
-              status={delivery.status === 'not_ready' ? 'Not ready' : delivery.status === 'unknown' ? 'Not checked' : 'Ready to publish'}
-              statusTone={delivery.status === 'not_ready' ? 'critical' : delivery.status === 'unknown' ? 'warning' : 'good'}
+              status={delivery.status === 'not_ready' ? 'Not ready' : delivery.status === 'needs_work' ? 'Needs work' : delivery.status === 'unknown' ? 'Not checked' : 'Ready to publish'}
+              statusTone={delivery.status === 'not_ready' ? 'critical' : delivery.status === 'needs_work' || delivery.status === 'unknown' ? 'warning' : 'good'}
               caption={delivery.firstDraftReview != null ? `Measured after every fix. The first draft, before any fix, was rated ${delivery.firstDraftReview}/100.` : 'Measured on the page you receive, after every fix.'}
             />
           ) : html && notReady ? (
@@ -154,6 +163,7 @@ export function ContentReport({ report }: { report: ReportDetail }) {
           ) : html ? (
             <ScoreMark
               score={contentScore}
+              display={gradeDisplay(contentScore) === '95+' ? '95+' : undefined}
               label="Content score"
               status={notReady ? 'Not ready to publish' : qa ? (qaOk ? 'Quality check passed' : 'To review') : undefined}
               statusTone={notReady ? 'critical' : qa ? (qaOk ? 'good' : 'warning') : undefined}
@@ -206,6 +216,25 @@ export function ContentReport({ report }: { report: ReportDetail }) {
           </>
         }
       />
+
+      {held && hold && <HoldPanel hold={hold} keyword={keyword} pageType={str(p.recommended_page) || str(meta.page_type)} country={country} siteId={report.siteId} />}
+      {pagesUnread && (
+        <Callout tone="warning" title="Nothing was decided and nothing was written">
+          {str(unread.reason)}
+          {strs(unread.missing).length > 0 && <span className="mt-1 block">Not read: {strs(unread.missing).join('; ')}.</span>}
+        </Callout>
+      )}
+      {hold && !hold.held && html && (
+        <Callout tone="info" title="Our check before writing would have asked you first">
+          {hold.reasons.join(' ')} This page was started automatically, so it was written as before; while this check is new, automatic pages are only checked.
+        </Callout>
+      )}
+      {/* W05-B (2026-10-30): a page of the website was considered as this page's address and left alone, because its own title is about something else */}
+      {html && !!str(obj(p.existing_page_unconfirmed).url) && (
+        <Callout tone="info" title="Written as a new page at its own address">
+          We looked at <ExternalLink href={str(obj(p.existing_page_unconfirmed).url)}>{str(obj(p.existing_page_unconfirmed).title) || str(obj(p.existing_page_unconfirmed).url)}</ExternalLink> as the page for this search, but it is about something else, so it stays as it is and this page has its own address.
+        </Callout>
+      )}
 
       {(reasons.length > 0 || risks.length > 0) && (
         <div className="grid gap-5 lg:grid-cols-2">
@@ -341,12 +370,12 @@ export function ContentReport({ report }: { report: ReportDetail }) {
         <Block
           title="The page"
           icon={<FileText />}
-          description={[words != null ? `${words.toLocaleString()} words` : '', str(meta.page_type), hasDelivery ? (delivery.grade != null ? `grade ${delivery.grade}/100` : '') : contentScore != null ? `content score ${contentScore}/100${notReady ? ', but the quality check did not pass' : ''}` : ''].filter(Boolean).join(' · ')}
+          description={[words != null ? `${words.toLocaleString()} words` : '', str(meta.page_type), hasDelivery ? (delivery.grade != null ? `grade ${delivery.gradeLabel}/100` : '') : contentScore != null ? `content score ${gradeDisplay(contentScore)}/100${notReady ? ', but the quality check did not pass' : ''}` : ''].filter(Boolean).join(' · ')}
         >
           <ArticleViewer html={html} markdown={markdown} meta={meta} files={report.files} slug={slug} />
         </Block>
       ) : (
-        verdict && (
+        verdict && !held && !pagesUnread && (
           <Callout tone="info" title="No page in this report">
             This run checked the keyword without writing a page.
             {avoid ? ' The verdict advises against a page for this keyword: pick one of the secondary keywords or run keyword discovery.' : ' "Write this page" starts the full run with competitor research, the brief and a QA-checked page.'}
@@ -374,7 +403,7 @@ function PageChecks({ html, meta, qa, qaOk, notReady, qaLabel, ledger }: { html:
   const placeholders = useMemo(() => findPlaceholders(`${html}\n${JSON.stringify(meta)}`), [html, meta]);
   const phCount = placeholders.reduce((s, x) => s + x.count, 0);
   const titleLen = num(meta.title_length) ?? (str(meta.title).length || null);
-  const descLen = num(meta.meta_description_length) ?? (str(meta.meta_description).length || null);
+  const descLen = cleanMetaDescription(meta.meta_description) ? (num(meta.meta_description_length) ?? (str(meta.meta_description).length || null)) : null;   // W0-A: "Slug: ..." is no description
   const internal = objs(meta.internal_links).length;
   const external = objs(meta.external_links).length;
   const schema = objs(meta.schema_blocks).length;
@@ -482,4 +511,45 @@ function ExistingPage({ page }: { page: P }) {
       value: Array.isArray(v) ? strs(v).join(', ') || `${v.length} items` : /^https?:\/\//.test(String(v)) ? <ExternalLink href={String(v)} /> : String(v),
     }));
   return <KeyValue items={items} />;
+}
+
+/**
+ * W0-D (2026-10-29): a page held for the client's OK. Nothing was written and only the check was used; the three ways forward each open the
+ * Write a page form ready to start: the page the website already has (improved at its own address), the search our verdict recommends, or
+ * this page as asked ("Write it anyway", which the report of the written page then records).
+ */
+function HoldPanel({ hold, keyword, pageType, country, siteId }: { hold: HoldInfo; keyword: string; pageType: string; country: string; siteId: string | null }) {
+  const { org, can } = useOrgCtx();
+  const buttons = holdButtons(hold, { keyword, pageType, country });
+  return (
+    <Block title="Needs your OK" description="Nothing was written and only the check was used" icon={<Hand />} iconTone="warning">
+      <Bullets items={hold.reasons} tone="warning" />
+      {hold.duplicates.length > 0 && (
+        <p className="mt-3 text-[13px] leading-relaxed text-ink-2">
+          Your page for this search:{' '}
+          {hold.duplicates.map((d, i) => (
+            <span key={d.url}>
+              {i > 0 && ', '}
+              <ExternalLink href={d.url}>{d.title || d.url}</ExternalLink>
+            </span>
+          ))}
+        </p>
+      )}
+      {can('member') ? (
+        <ul role="list" className="mt-4 space-y-3">
+          {buttons.map((b, i) => (
+            <li key={`${b.id}:${i}`} className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+              <ButtonLink to={paths.tool(org.id, 'keyword', { siteId, prefill: b.prefill })} size="sm" variant={i === 0 ? 'primary' : 'secondary'} icon={<ArrowRight className="size-4" />}>
+                {b.label}
+              </ButtonLink>
+              {b.why && <span className="text-[13px] leading-snug text-ink-3">{b.why.charAt(0).toUpperCase() + b.why.slice(1)}.</span>}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-[13px] text-ink-3">A member of your team chooses what to do with this page.</p>
+      )}
+      <p className="mt-4 text-xs leading-relaxed text-ink-3">{hold.rule}</p>
+    </Block>
+  );
 }

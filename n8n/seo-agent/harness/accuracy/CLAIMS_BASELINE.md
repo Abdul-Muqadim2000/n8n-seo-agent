@@ -100,6 +100,10 @@ promises "a fixed quote within 48 hours", unsupported) and `CL-R04` (a call to a
 not a claim) differ only in that T56 names a commercial term (a quote); the kit keeps that line, so a call to action that names a price,
 quote, fee or guarantee is still a term to confirm.
 
+**W0-A (2026-10-29, docs/page-quality-2026-10-29/PLAN.md Fix 1).** The meta description is no longer read as a statement about the
+business (it is search-result copy written from the brief; PF.meta gives it a narrow field check instead). `CL-Q18`, which sits in a
+`Meta Description:` line, is therefore no longer flagged on the kit and model paths, as its label says: its two rows were removed.
+
 ## Rows
 
 | Path | Case | Kind | Site | Label | Category | Sentence | Got: why |
@@ -117,14 +121,12 @@ quote, fee or guarantee is still a term to confirm.
 | model | CL-R13 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | A runbook is delivered at go-live. | as on the kit path: its page was left to the rules by the evaluation's spend cap (no recorded answer) |
 | model | CL-R14 | missed | techand.ai | unsupported_claim | deliverable (hold-out) | Monitoring dashboards are included in every engagement. | as on the kit path: its page was left to the rules by the evaluation's spend cap (no recorded answer) |
 | model | CL-L07 | missed | techand.ai/live-2026-10-22 | unsupported_claim | process (hold-out) | We recommend a go/no-go review at the end of each phase, so a full build is funded only once the ROI case exists. | as on the kit path (no recorded answer for its page; run 1's reader also left it unflagged) |
-| kit | CL-Q18 | false_flag | novaand-demo.com/prod-2026-10-27 | supported_claim | process | Nova& (legal name: Novaand systems LLC) helps UAE firms pick the right edition. | flagged: a paraphrase of the advisory phase on the services page ("guide investment decisions"); no sentence or paragraph on file carries its words (30%) |
 | kit | CL-Q19 | false_flag | novaand-demo.com/prod-2026-10-27 | supported_claim | scope | We also deliver multi-entity and global rollouts. | flagged: Global Rollouts is a service on the services page, but "multi-entity" and "deliver" are not in its paragraph (40%) |
 | kit | CL-Q20 | false_flag | novaand-demo.com/prod-2026-10-27 | supported_claim | process | We review your processes and recommend an edition. | flagged: the Assess and Shape phase in other words: only "processes" is on file |
 | kit | CL-Q21 | false_flag | novaand-demo.com/prod-2026-10-27 | supported_claim | process | We configure the system, set up UAE compliance, migrate data and test. | flagged: Build & Implement in other words: UAE, compliance and migration are on file, configure / data / test are not (50% of the paragraph, 65% needed) |
 | qa | CL-Q19 | false_flag | novaand-demo.com/prod-2026-10-27 | supported_claim | scope | We also deliver multi-entity and global rollouts. | flagged: Global Rollouts is a service on the services page, but "multi-entity" and "deliver" are not in its paragraph (40%) |
 | qa | CL-Q20 | false_flag | novaand-demo.com/prod-2026-10-27 | supported_claim | process | We review your processes and recommend an edition. | flagged: the Assess and Shape phase in other words: only "processes" is on file |
 | qa | CL-Q21 | false_flag | novaand-demo.com/prod-2026-10-27 | supported_claim | process | We configure the system, set up UAE compliance, migrate data and test. | flagged: Build & Implement in other words: UAE, compliance and migration are on file, configure / data / test are not (50% of the paragraph, 65% needed) |
-| model | CL-Q18 | false_flag | novaand-demo.com/prod-2026-10-27 | supported_claim | process | Nova& (legal name: Novaand systems LLC) helps UAE firms pick the right edition. | flagged: a paraphrase of the advisory phase on the services page ("guide investment decisions"); no sentence or paragraph on file carries its words (30%) |
 | model | CL-Q19 | false_flag | novaand-demo.com/prod-2026-10-27 | supported_claim | scope | We also deliver multi-entity and global rollouts. | flagged: Global Rollouts is a service on the services page, but "multi-entity" and "deliver" are not in its paragraph (40%) |
 | model | CL-Q20 | false_flag | novaand-demo.com/prod-2026-10-27 | supported_claim | process | We review your processes and recommend an edition. | flagged: the Assess and Shape phase in other words: only "processes" is on file |
 | model | CL-Q21 | false_flag | novaand-demo.com/prod-2026-10-27 | supported_claim | process | We configure the system, set up UAE compliance, migrate data and test. | flagged: Build & Implement in other words: UAE, compliance and migration are on file, configure / data / test are not (50% of the paragraph, 65% needed) |

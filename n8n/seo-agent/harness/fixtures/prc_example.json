@@ -325,12 +325,25 @@
     "status": "upcoming"
    }
   ],
+  "sections_removed": {
+   "sections": 0,
+   "words": 0,
+   "words_before": 0,
+   "h2_before": 0,
+   "h2_removed": 0,
+   "h2_delivered": 0,
+   "by_edits": 0,
+   "share_pct": 0,
+   "capped": false,
+   "list": []
+  },
   "content_request_id": "3298"
  },
  "notes": [
   "A missing GATING field can never produce Ready (Fix 2.3). Every gating field is present in every stored content report today, old ones included, so the app derives them from the ORIGINAL report payload (o.original), not o.base, and finalReportPayload copies them through.",
   "A missing GRADING field is advice \"not checked: <field>\" and never blocks Ready. None of them is in a report delivered before W0-B ships; there is no seo_content_log fallback (LOG_COLS hold none of them).",
   "3299 sent content_request_id \"\" (a form run): readers fall back to request_id.",
+  "sections_removed (W06-C, 2026-10-30): what the page run took out of the page (the counts its delivered grade capped on). 3299 ran before the field existed, so the example carries ILLUSTRATIVE zeros (a page run that took nothing out): a page run from W06-C on always sends the object; only a report from before it lacks it (\"not checked\").",
   "serp_shapes here is KWI.serpPageTypes on the 6 competitor pages the run read; the content run does not carry its SERP top-10 organic list to Parse Brief today (W0-C adds it)."
  ]
 }

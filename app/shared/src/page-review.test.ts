@@ -10,6 +10,8 @@ import {
   deliveryOf,
   diffBlocks,
   factOf,
+  acceptAllPlan,
+  OWN_WORDS_NOTE,
   factsForEngine,
   finalizeBody,
   finalizeCostUsd,
@@ -69,7 +71,7 @@ const PAYLOAD_READY_Q = {
   domain: 'novaand-demo.com',
   markdown: '# ERP systems in the UAE\n\nA sound selection starts with business discovery.\n\n## How to choose\n\nCompare the options.\n',
   html: '<article><h1>ERP systems in the UAE</h1></article>',
-  meta: { title: 'ERP Systems in UAE', meta_description: 'How to choose an ERP system in the UAE.', slug: 'erp-systems-uae', h1: 'ERP systems in the UAE', primary_keyword: 'erp systems in uae', page_type: 'Service Page', schema_blocks: [{ type: 'Article', json: { '@type': 'Article', headline: 'x</script><script>alert(1)</script>' } }] },
+  meta: { title: 'ERP Systems in UAE', meta_description: 'How to choose an ERP system in the UAE: the options, the VAT and e-invoicing checks and the questions to ask.', slug: 'erp-systems-uae', h1: 'ERP systems in the UAE', primary_keyword: 'erp systems in uae', page_type: 'Service Page', schema_blocks: [{ type: 'Article', json: { '@type': 'Article', headline: 'x</script><script>alert(1)</script>' } }] },
   qa_delivery_status: 'ready_with_questions',
   qa_client_questions: [Q_BRACKET, Q_CLAIM, Q_BRIEF],
   qa_grade: { score: 91.4, of: 100, first_draft_review: 62 },
@@ -137,6 +139,23 @@ describe('the delivered status', () => {
     expect(deliveryHeadline('ready_with_questions', 1).headline).toBe('Ready, and stronger with your input (1 question)');
     expect(plainWords('a \u2014 b \u201Cc\u201D d\u2026')).toBe('a: b "c" d...');
   });
+  it('says what we did and what the client does for a weak-only figure and for the second read (W0-H)', () => {
+    const w = deliveryHeadline('not_ready', 0, { code: 'weak_figure', text: 'A figure whose only source has no independent authority (blog.example): "2.1% of the market"' });
+    expect(w.headline).toMatch(/^Not ready: a figure whose only source has no independent authority/);
+    expect(w.detail).toMatch(/rewrite the sentence without the number/);
+    const r = deliveryHeadline('not_ready', 0, { code: 'review', text: 'A second read of the page found a problem at "Dynamics 365 holds a 2.1% share": the figure rests on a blog' });
+    expect(r.headline).toMatch(/^Not ready: a second read of the page found a problem/);
+    expect(r.detail).toMatch(/A second read of the finished page quoted these words/);
+    expect(r.detail).toMatch(/check the quoted words against a source you trust/);
+    for (const h of [w, r]) expect(h.headline + h.detail).not.toMatch(/[\u2014\u2013\u201C\u201D\u2018\u2019\u2026]/);
+  });
+  it('says what we did and what the client does when a separate new page keeps the existing page\'s title (W07-B)', () => {
+    const t = deliveryHeadline('not_ready', 0, { code: 'same_title', text: 'The meta title is the same as the title tag of your existing page https://www.novaand.example/ms-365-erp-uae, so the two pages would compete for one search' });
+    expect(t.headline).toMatch(/^Not ready: the meta title is the same as the title tag of your existing page/);
+    expect(t.detail).toMatch(/none was different enough from your existing page's/);
+    expect(t.detail).toMatch(/What you do: give this page a title of its own in the editor/);
+    expect(t.headline + t.detail).not.toMatch(/[\u2014\u2013\u201C\u201D\u2018\u2019\u2026]/);
+  });
 });
 
 describe('the client questions', () => {
@@ -173,9 +192,10 @@ describe('the client questions', () => {
     expect(answerText(qs[0]!, 'remove', 'x')).toBe('');
     expect(answerText(qs[0]!, 'general', 'x')).toBe('');
   });
-  it('prefilled answers: a claim is kept, a text question takes the suggestion, none without a prefill', () => {
+  it('prefilled answers (W0-E, Fix 5.5): a yes / no claim is confirmed, a text question is never answered with a suggestion, none without a prefill', () => {
     expect(prefilledAnswer(qs[0]!)).toEqual({ decision: 'yes', text: '' });
-    expect(prefilledAnswer(qs[2]!)).toEqual({ decision: 'answer', text: qs[2]!.prefill });
+    expect(qs[2]!.prefill).not.toBe('');
+    expect(prefilledAnswer(qs[2]!)).toBeNull();
     expect(prefilledAnswer(qs[1]!)).toBeNull();
   });
 });
@@ -214,6 +234,23 @@ describe('answers become business facts, kept once and reused', () => {
     expect(finalizeNeeded([{ decision: 'general' }], true)).toBe(true);
     for (const d of ['yes', 'edit', 'remove', 'answer'] as const) expect(finalizeNeeded([{ decision: d }], false)).toBe(true);
   });
+  it('W05-C: the first final version once every question is decided, even when all were left general; never on skips alone', () => {
+    expect(finalizeNeeded([{ decision: 'general' }, { decision: 'general' }], false, true)).toBe(true);
+    expect(finalizeNeeded([{ decision: 'general' }], false, false)).toBe(false);
+    expect(finalizeNeeded([{ decision: 'skip' }], false, true)).toBe(false);
+    expect(finalizeNeeded([], false, true)).toBe(false);
+  });
+  it('W05-C: Accept all confirms the yes / no questions it can and leaves every other open question general, for this page only', () => {
+    const plan = acceptAllPlan(qs);
+    expect(plan.map((x) => [x.questionId, x.decision])).toEqual(qs.map((q) => [q.id, prefilledAnswer(q) ? 'yes' : 'general']));
+    expect(plan.some((x) => x.decision === 'general')).toBe(true);
+    const gen = qs.find((q) => !prefilledAnswer(q))!;
+    expect(factOf(gen, { decision: 'general', text: '', at, by: null, fromPrefill: true }, 'r1')).toBeNull();   // a later page may ask it again
+    expect(factOf(gen, { decision: 'general', text: '', at, by: null }, 'r1')).toMatchObject({ decision: 'general' });   // the client's own choice is kept
+    expect(acceptAllPlan([])).toEqual([]);
+    expect(OWN_WORDS_NOTE).toMatch(/own words/);
+    expect(OWN_WORDS_NOTE).not.toMatch(/[\u2014\u2013\u2026\u201C\u201D]/);
+  });
 });
 
 describe('the finalize request', () => {
@@ -227,7 +264,7 @@ describe('the finalize request', () => {
   const body = finalizeBody({ requestId: 'app-fin-1', domain: 'novaand-demo.com', siteId: 'site_novaand-demo-com', payload: PAYLOAD_READY_Q, markdown: 'edited', clientEdited: true, questions: qs, answers, businessFacts: 'Microsoft partner', facts: {} });
   it('carries the version, the delivered text, the answers that change something and the stored facts', () => {
     expect(body).toMatchObject({ mode: 'finalize', request_id: 'app-fin-1', keyword: 'erp systems in uae', page_type: 'Service Page', markdown: 'edited', delivered_markdown: PAYLOAD_READY_Q.markdown, client_edited: true, content_request_id: '2575' });
-    expect(body.meta).toEqual({ title: 'ERP Systems in UAE', meta_description: 'How to choose an ERP system in the UAE.', slug: 'erp-systems-uae', h1: 'ERP systems in the UAE' });
+    expect(body.meta).toEqual({ title: 'ERP Systems in UAE', meta_description: 'How to choose an ERP system in the UAE: the options, the VAT and e-invoicing checks and the questions to ask.', slug: 'erp-systems-uae', h1: 'ERP systems in the UAE' });
     expect(body.answers.map((a) => [a.id, a.decision, a.text])).toEqual([
       ['q1', 'edit', 'We start every project with discovery.'],
       ['q3', 'answer', 'Microsoft Solutions Partner'],
@@ -446,5 +483,54 @@ describe('carryOpenQuestions: the final version keeps what is still open', () =>
   it('nothing open and nothing new gives no questions', () => {
     const base = questionsOf({ qa_client_questions: [Q_CLAIM] });
     expect(carryOpenQuestions(base, [], [base[0]!.id], [])).toEqual([]);
+  });
+});
+
+// W0-E (2026-10-29, page-quality PLAN Fix 5): answers go into the sentence they change, a slogan is never confirmed in one click, a removed
+// statement goes back where it stood, and an answer the engine could not place is reported, never appended.
+describe('W0-E: answers woven into their sentence, not appended', () => {
+  const ANCHOR = { section: 'How to choose a Dynamics 365 ERP partner', before: '', after: '', line_before: 'Managed services with 24/7 support' };
+  const Q_REMOVED = { ...Q_CLAIM, id: 'q5', neutral: '', in_page: 'left_out', section: 'How to choose a Dynamics 365 ERP partner', anchor: ANCHOR };
+  const Q_CTA = { ...Q_BRIEF, id: 'q6', category: 'detail', slot: 'cta', fact_key: 'detail.first_consultation_free', question: 'What does the first consultation cover, and is it free of charge?', prefill: 'Deep UAE and GCC knowledge across every sector we serve.' };
+  const qs = questionsOf({ qa_client_questions: [Q_REMOVED, Q_CTA] });
+  it('questionsOf reads the slot and the anchor; older reports carry none', () => {
+    expect(qs[0]).toMatchObject({ id: 'q5', in_page: 'left_out', neutral: '', anchor: ANCHOR, slot: '' });
+    expect(qs[1]).toMatchObject({ id: 'q6', slot: 'cta', anchor: null });
+    const old = questionsOf({ qa_client_questions: [Q_CLAIM] })[0]!;
+    expect(old.slot).toBe('');
+    expect(old.anchor).toBeNull();
+    expect(questionsOf({ qa_client_questions: [{ ...Q_BRIEF, slot: 'somewhere' }] })[0]!.slot).toBe('');
+  });
+  it('Accept all never answers a text question with a suggestion (3299: a homepage slogan was stored as proof of UAE projects)', () => {
+    expect(qs[1]!.prefill).not.toBe('');
+    expect(prefilledAnswer(qs[1]!)).toBeNull();
+    expect(prefilledAnswer({ ...qs[0]!, prefill: 'We run discovery first.' })).toEqual({ decision: 'yes', text: '' });
+  });
+  it('the finalize request carries the category, the slot and the anchor of each answer', () => {
+    const at = '2026-10-29T09:00:00.000Z';
+    const answers: Record<string, PageAnswer> = {
+      q5: { questionId: 'q5', factKey: qs[0]!.fact_key, decision: 'yes', text: '', at, by: null },
+      q6: { questionId: 'q6', factKey: qs[1]!.fact_key, decision: 'answer', text: 'The first consultation is free of charge.', at, by: null },
+    };
+    const body = finalizeBody({ requestId: 'app-fin-2', domain: 'novaand-demo.com', siteId: 's', payload: { ...PAYLOAD_READY_Q, qa_client_questions: [Q_REMOVED, Q_CTA] }, markdown: 'x', clientEdited: false, questions: qs, answers, businessFacts: '', facts: {} });
+    expect(body.answers.find((a) => a.id === 'q5')).toMatchObject({ decision: 'yes', text: Q_CLAIM.original, in_page: 'left_out', anchor: ANCHOR, category: 'service' });
+    expect(body.answers.find((a) => a.id === 'q6')).toMatchObject({ decision: 'answer', slot: 'cta', category: 'detail', anchor: null });
+  });
+  it('an answer the engine could not place is shown as advice naming the question, never as a blocker', () => {
+    const result: FinalizeResult = {
+      ok: true, request_id: 'app-fin-2', markdown: '# ERP systems in the UAE\n\nCompare the options.\n',
+      applied: [{ id: 'q6', how: 'not_placed', section: 'Talk to Nova&' }, { id: 'q5', how: 'kept_original', section: 'How to choose' }],
+      sections_rewritten: [], changes: [], delivery_status: 'ready_with_questions',
+      delivery: { status: 'ready_with_questions', label: 'Ready to publish', blocking: [], advisory: [], next_step: '', grade: { score: 90 } },
+      client_questions: [], grade: { score: 90 }, cost: { claude_usd: 0.02, dfs_usd: 0, estimated: true, model_calls: 1 },
+    };
+    const p = finalReportPayload({ ...PAYLOAD_READY_Q, qa_client_questions: [Q_REMOVED, Q_CTA] }, result, { originalReportId: 'rep-2', requestId: 'app-fin-2' });
+    const np = (p.qa_advisory as { code: string; text: string }[]).filter((x) => x.code === 'not_placed');
+    expect(np).toHaveLength(1);
+    expect(np[0]!.text).toContain('What does the first consultation cover');
+    expect(np[0]!.text).toMatch(/Tell us where it belongs/);
+    expect(np[0]!.text).not.toMatch(/[—–“”‘’…]/);
+    expect(p.qa_delivery_status).toBe('ready_with_questions');
+    expect(p.qa_blocking).toEqual([]);
   });
 });

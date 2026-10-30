@@ -1,10 +1,577 @@
+// ---- PGA: a separate new page stands apart from the page the client kept (W07-B, 2026-10-31; inlined by build_v4.py section 180) ----
+// docs/page-quality-2026-10-29/WAVE06.md section 10, findings 1-3 (K1 "ms 365 erp", the live re-check on the new reader key). After "Write it
+// anyway" next to a page the website already has, the new page got its own address (W06-B) but:
+//   1. its title tag was the existing page's title tag word for word ("MS 365 ERP in the UAE: Dynamics 365 Partner | <brand>"): two pages,
+//      one title, one search, the cannibalisation the hold warns about, and no review step flagged it;
+//   2. it did not link to the existing page, although the writer was told to link to it where it helps the reader;
+//   3. the blind second read advised "Use the slug ms-365-erp-uae" (the existing page's), and the brief itself said "Publish this brief as a
+//      replacement of that URL, not as a second page": both against the client's choice, because neither was told about it.
+// This kit is the one place the rule lives. The page the client kept is `existing_page_ignored` (Collect Client Pages: its title tag and
+// main heading as this run read them, else as the page inventory has them), plus, on a run the client acknowledged, the pages the duplicate
+// check found aimed at the same search. Nothing here ever edits the existing page: only the new page's own lines.
+//   PGA.of(prev)              the pages the new page must stand apart from, or null (a rewrite, a ladder page, an ordinary run: null)
+//   PGA.same(a, b) / clash    near-equal titles and headings (the brand suffix off, word for word or 80% of the words shared)
+//   PGA.fix(md, ap, o)        the new page's title tag and H1 made its own, and one link to the existing page where it helps the reader
+//   PGA.check(md, ap)         what Content QA records: still the same title or H1? linked?
+//   PGA.brief(brief, prev, o) the brief: its own title and H1, no line that advises replacing or taking over the kept page, the kept page
+//                            offered as a link
+//   PGA.contractLine(ap)      the line the page contract prints for the brief, the writer, the reviewer and the editor
+//   PGA.readerNote(ap, slug)  what the blind second read is told; PGA.againstChoice(text, ap): advice to take over the kept page
+// Pure: no clock, no network, no n8n globals, no URL constructor, no Object.defineProperty, no structuredClone (n8n sandbox rules).
+const PGA = (() => {
+  const S = (v) => String(v == null ? '' : v);
+  const CFG = { near: 0.8, title_max: 60, title_min: 15, h1_max: 100, h1_min: 15, anchor_max: 90 };
+  const escRe = (s) => S(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const decode = (s) => S(s).replace(/&amp;/gi, '&').replace(/&#0?39;|&apos;|&rsquo;/gi, "'").replace(/&quot;/gi, '"').replace(/&nbsp;/gi, ' ').replace(/&#x27;/gi, "'");
+  const plain = (s) => decode(s).replace(/!?\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`#>]+/g, '').replace(/\s+/g, ' ').trim();
+  // customer wording: no em / en dashes, curly quotes or the ellipsis character in anything this kit writes (owner rule, 2026-10-19)
+  const clean = (s) => S(s).replace(/\s*[\u2014\u2013]\s*/g, ': ').replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'").replace(/\u2026/g, '...').replace(/:\s*:/g, ':').trim();
+  const pathOf = (u) => S(u).trim().toLowerCase().replace(/^https?:\/\/[^\/?#]+/, '').replace(/[?#].*$/, '').replace(/\/+$/, '') || '/';
+  const hostOf = (u) => { const m = S(u).match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '') : ''; };
+  const slugOf = (u) => { const p = pathOf(u).split('/').filter(Boolean); return p.length ? p[p.length - 1] : ''; };
+  // a title without its brand suffix ("... | Nova&", "... - Nova&"): the part that competes in search
+  const core = (t) => { const x = plain(t); const m = x.match(/^(.*\S)\s+[|\u00B7\u2022-]\s+[^|\u00B7\u2022]{1,40}$/); return m && m[1].length >= 12 ? m[1].trim() : x; };
+  const suffixOf = (t) => { const x = plain(t); const m = x.match(/^.*\S\s+([|\u00B7\u2022-])\s+([^|\u00B7\u2022]{1,40})$/); return m && x.length - m[2].length - 3 >= 12 ? m[2].trim() : ''; };
+  const STOP = new Set('the a an and or of for to in on with by at from about this that these those your our its it is are be how what which why when who you we they their them than then into over under more most can will does do not but any all also very just only such'.split(' '));
+  const stem = (w) => (w.length > 4 && /s$/.test(w) && !/ss$/.test(w) ? w.slice(0, -1) : w);
+  const toks = (t) => [...new Set(core(t).toLowerCase().split(/[^\p{L}\p{N}&]+/u).filter(w => w && !STOP.has(w)).map(stem))];
+  const sim = (a, b) => { const A = toks(a), B = new Set(toks(b)); if (!A.length || !B.size) return 0; const n = A.filter(w => B.has(w)).length; return n / Math.max(A.length, B.size); };
+  const key = (t) => core(t).toLowerCase().replace(/[^\p{L}\p{N}&]+/gu, ' ').trim();
+  const same = (a, b) => !!plain(a) && !!plain(b) && (key(a) === key(b) || sim(a, b) >= CFG.near);
+  // the keyword as a phrase, or every one of its words (a title may say "ERP Software in the UAE" for "erp software uae")
+  const hasKw = (t, kw) => { const k = S(kw).toLowerCase().replace(/[^\p{L}\p{N}&]+/gu, ' ').trim(); if (!k) return true;
+    const x = ' ' + plain(t).toLowerCase().replace(/[^\p{L}\p{N}&]+/gu, ' ').trim() + ' '; if (x.includes(' ' + k + ' ')) return true;
+    const have = new Set(x.trim().split(' ').map(stem)); return k.split(' ').filter(w => !STOP.has(w)).every(w => have.has(stem(w))); };
+  const SMALL = new Set(['a', 'an', 'and', 'as', 'at', 'by', 'for', 'in', 'of', 'on', 'or', 'the', 'to', 'vs', 'with']);
+  const titleCase = (k) => S(k).split(/\s+/).filter(Boolean).map((w, i) => i > 0 && SMALL.has(w.toLowerCase()) ? w.toLowerCase()
+    : /^(erp|crm|ai|uae|ksa|gcc|vat|seo|sap|hr|it|b2b|saas|api|ms|iot|ml|pdf|faq|d365)$/i.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+  // ---------- the pages the new page stands apart from ----------
+  const of = (prev) => {
+    const p = prev || {};
+    if (p.existing_page && p.existing_page.url) return null;                       // "Improve the existing page": a rewrite at its own address
+    if (S(p.existing_page_url).trim()) return null;                                 // a page the client named: a refresh
+    if (S(p.ladder_id).trim() && S(p.ladder_target_url).trim()) return null;         // a keyword-ladder page: its ladder planned it (exec 949)
+    const pages = []; const seen = new Set();
+    const add = (url, title, h1, from, primary) => { const k = pathOf(url); if (!/^https?:\/\//i.test(S(url).trim()) || seen.has(k)) return; seen.add(k);
+      pages.push({ url: S(url).trim(), path: k, slug: slugOf(url), title: clean(plain(title)), h1: clean(plain(h1)), from: S(from), primary: !!primary }); };
+    const ign = p.existing_page_ignored;
+    if (ign && typeof ign === 'object' && S(ign.url).trim() && !S(ign.planned_url).trim()) add(ign.url, ign.title_tag || ign.title, ign.h1, ign.identity_from || '', true);
+    const dc = p.duplicate_check;
+    if (p.verdict_acknowledged && dc && Array.isArray(dc.targets)) for (const t of dc.targets) if (t && t.url) add(t.url, t.title, t.h1, 'the page inventory', false);
+    if (!pages.length) return null;
+    const first = pages[0];
+    return { url: first.url, path: first.path, slug: first.slug, title: first.title, h1: first.h1, from: first.from, pages,
+      checked: pages.some(x => x.title || x.h1), new_slug: S((p.content_brief || {}).slug).replace(/^\/+|\/+$/g, '') };
+  };
+  // the first page whose title tag or main heading the text equals or nearly equals
+  const clash = (text, ap) => { if (!ap || !plain(text)) return null;
+    for (const pg of ap.pages || []) for (const f of ['title', 'h1']) if (pg[f] && same(text, pg[f])) return { page: pg, field: f, text: pg[f] };
+    return null; };
+  const fieldName = (f) => (f === 'title' ? 'title tag' : 'main heading');
+  const pick = (cands, ap, ok) => { const tried = new Set();
+    for (const c0 of cands) { const c = clean(plain(c0)).replace(/[\s|:;,-]+$/, ''); if (!c || tried.has(c.toLowerCase())) continue; tried.add(c.toLowerCase());
+      if (ok(c) && !clash(c, ap)) return c; }
+    return ''; };
+  const afterColon = (t) => { const x = plain(t); const i = x.indexOf(':'); return i > 0 ? x.slice(i + 1).trim() : ''; };
+  const firstH2 = (md) => plain((S(md).match(/^## (.+)$/m) || [])[1] || '').replace(/\?+$/, '');
+  // a title of its own: the brief's variants first (the strategist wrote them for this page), then the page's own heading, then the keyword
+  // with the heading's second half or the first section's heading; each kept within 60 characters, with the brand suffix when it fits
+  const titleFor = (cur, ap, o) => {
+    const x = o || {}; const kw = S(x.keyword); const KW = titleCase(kw); const suf = suffixOf(cur) || S(x.brand).trim();
+    const base = [x.brief_title, ...(Array.isArray(x.title_variants) ? x.title_variants : []), x.h1, KW + ': ' + afterColon(x.h1), KW + ': ' + firstH2(x.md),
+      KW + (S(x.business).trim() ? ' | ' + S(x.business).trim() : '')].map(S).filter(c => plain(c) && !/:\s*$/.test(plain(c)));
+    const forms = []; for (const c of base) { const k = core(c); if (suf && (k + ' | ' + suf).length <= CFG.title_max) forms.push(k + ' | ' + suf); forms.push(c); forms.push(k); }
+    const ok = (c) => c.length >= CFG.title_min && c.length <= CFG.title_max && hasKw(c, kw) && !same(c, cur);
+    return pick(forms, ap, ok); };
+  const h1For = (cur, ap, o) => {
+    const x = o || {}; const kw = S(x.keyword); const KW = titleCase(kw);
+    const base = [x.brief_h1, ...(Array.isArray(x.title_variants) ? x.title_variants : []).map(core), core(x.title), KW + ': ' + afterColon(x.title), KW + ': ' + firstH2(x.md)]
+      .map(S).filter(c => plain(c) && !/:\s*$/.test(plain(c)));
+    const ok = (c) => c.length >= CFG.h1_min && c.length <= CFG.h1_max && hasKw(c, kw) && !same(c, cur);
+    return pick(base, ap, ok); };
+  // the link: a descriptive anchor (the kept page's own heading, else its title without the brand, else its address in words)
+  const anchorOf = (pg) => { let a = plain(pg.h1); if (a.length > CFG.anchor_max) a = a.split(':')[0].trim();
+    if (!a || a.length > CFG.anchor_max) a = core(pg.title); if (!a || a.length > CFG.anchor_max) a = titleCase(S(pg.slug).replace(/[-_]+/g, ' '));
+    return clean(a).replace(/[.:;,!?]+$/, ''); };
+  const linksIn = (md) => [...S(md).matchAll(/\]\(([^)\s]+)\)/g)].map(m => m[1]);
+  const linked = (md, pg) => { const h = hostOf(pg.url); return linksIn(md).some(u => pathOf(u) === pg.path && (!/^https?:/i.test(u) || hostOf(u) === h)); };
+  const sentenceFor = (pg) => 'For more on this, see our page [' + anchorOf(pg) + '](' + pg.url + ').';
+  // where it helps the reader: the section that talks most about what the kept page is about (never the introduction, the closing call to
+  // action or a questions block); one new short paragraph at the end of that section, so no sentence of the page is rewritten
+  const addLink = (md, pg, o) => {
+    const x = o || {}; if (typeof x.split !== 'function' || typeof x.join !== 'function') return { md, added: false, why: 'no section reader' };
+    const sp = x.split(md); const parts = sp.parts || [];
+    const pool = parts.filter((pt, i) => i > 0 && i < parts.length - 1 && !/\b(faq|frequently asked|questions)\b/i.test(S(pt.heading)));
+    const list = pool.length ? pool : parts.filter((pt, i) => i > 0 && i < parts.length - 1);
+    if (!list.length) return { md, added: false, why: 'the page has no middle section to place the link in' };
+    const about = S(pg.h1) + ' ' + S(pg.title) + ' ' + S(pg.slug).replace(/[-_]+/g, ' ');
+    let best = list[0], bs = -1; for (const pt of list) { const s = sim(about, S(pt.heading) + ' ' + plain(S(pt.text).slice(0, 600))) + sim(S(pt.heading), about); if (s > bs + 1e-9) { bs = s; best = pt; } }
+    const m = S(best.text).match(/\s*$/); const tail = m && m[0].length >= 2 ? m[0] : '\n\n';
+    best.text = S(best.text).replace(/\s*$/, '') + '\n\n' + sentenceFor(pg) + tail;
+    return { md: x.join(sp), added: true, section: plain(best.heading), anchor: anchorOf(pg) }; };
+
+  // ---------- the new page's own lines ----------
+  const TITLE_RE = /^Title:[ \t]*(.*)$/im;
+  const H1_RE = /^# (.+)$/m;
+  const fix = (md0, ap, o) => {
+    const x = o || {}; let md = S(md0); const fixes = []; const out = { title: null, h1: null, link: null };
+    if (!ap) return { md, fixes, ...out };
+    const tm = md.match(TITLE_RE); const title = tm ? tm[1].trim() : '';
+    const hm = md.match(H1_RE); const h1 = hm ? hm[1].trim() : '';
+    const ctx = { ...x, md, h1, title };
+    const tc = clash(title, ap);
+    if (tc) { const nt = titleFor(title, ap, ctx);
+      if (nt) { md = md.replace(TITLE_RE, () => 'Title: ' + nt); out.title = { from: title, to: nt, page: tc.page.url, field: tc.field };
+        fixes.push(clean('Gave the meta title its own wording ("' + nt + '"): your existing page ' + tc.page.path + ' already uses "' + plain(tc.text) + '" as its ' + fieldName(tc.field) + ', and two pages with one title compete for one search')); }
+      else out.title = { from: title, to: '', page: tc.page.url, field: tc.field, left: true }; }
+    const hc = clash(h1, ap);
+    if (hc) { const nh = h1For(h1, ap, { ...ctx, title: (md.match(TITLE_RE) || [])[1] || title });
+      if (nh) { md = md.replace(H1_RE, () => '# ' + nh); out.h1 = { from: h1, to: nh, page: hc.page.url, field: hc.field };
+        fixes.push(clean('Gave the main heading its own wording ("' + nh + '"): your existing page ' + hc.page.path + ' already uses "' + plain(hc.text) + '" as its ' + fieldName(hc.field))); }
+      else out.h1 = { from: h1, to: '', page: hc.page.url, field: hc.field, left: true }; }
+    const pg = (ap.pages || []).find(p => p.primary) || (ap.pages || [])[0];
+    if (pg && !linked(md, pg)) { const r = addLink(md, pg, x);
+      if (r.added) { md = r.md; out.link = { url: pg.url, anchor: r.anchor, section: r.section };
+        fixes.push(clean('Linked your existing page ' + pg.path + ' once, in the section "' + r.section + '", so readers and search engines see how the two pages relate')); } }
+    return { md, fixes, ...out };
+  };
+  const check = (md, ap) => {
+    if (!ap) return null;
+    const title = ((S(md).match(TITLE_RE) || [])[1] || '').trim(); const h1 = ((S(md).match(H1_RE) || [])[1] || '').trim();
+    const tc = clash(title, ap), hc = clash(h1, ap); const pg = (ap.pages || []).find(p => p.primary) || (ap.pages || [])[0];
+    return { url: ap.url, path: ap.path, pages: (ap.pages || []).map(p => ({ url: p.url, title: p.title, h1: p.h1, from: p.from })),
+      checked: !!ap.checked, title, h1, title_same: !!tc, h1_same: !!hc, same_as: tc ? { url: tc.page.url, field: tc.field, text: tc.text } : hc ? { url: hc.page.url, field: hc.field, text: hc.text } : null,
+      linked: !!(pg && linked(md, pg)),
+      basis: ap.checked ? 'the title tag and main heading of ' + (ap.pages || []).filter(p => p.title || p.h1).map(p => p.path + (p.from ? ' (' + p.from + ')' : '')).join(', ')
+        : 'not checked: the existing page could not be read in this run and has no title or main heading on file' };
+  };
+
+  // ---------- the brief ----------
+  // advice to take over the kept page: use its address or slug, replace it, merge into it, redirect it, publish this as its replacement
+  const TAKEOVER = /\b(?:slug|url|address|path|redirect\w*|merge\w*|replac\w*|consolidat\w*|canonical\w*|instead of (?:a|this) (?:second|new|separate) page|not as a (?:second|new|separate) page|second page)\b/i;
+  const mentions = (text, ap) => { const t = S(text).toLowerCase();
+    return (ap.pages || []).some(p => (p.slug && new RegExp('(^|[^\\w-])' + escRe(p.slug) + '(?![\\w-])').test(t)) || (p.path.length > 1 && t.includes(p.path)) || t.includes(S(p.url).toLowerCase().replace(/\/+$/, ''))); };
+  const ADVICE_KEYS = ['gaps_to_cover', 'information_gain', 'audience_pain_points', 'objections', 'voice_rules', 'experience_notes', 'proof_elements', 'questions_for_client', 'meta_variants'];
+  const againstChoice = (text, ap) => !!ap && mentions(text, ap) && TAKEOVER.test(S(text));
+  const brief = (b, prev, o) => {
+    const ap = of(prev); const adjustments = []; if (!ap || !b || typeof b !== 'object') return { ap, adjustments };
+    const x = o || {}; const kw = S(x.keyword || (prev || {}).keyword);
+    if (Array.isArray(b.title_variants)) { const kept = b.title_variants.filter(v => !clash(v, ap)); if (kept.length !== b.title_variants.length) { adjustments.push(clean('Took ' + (b.title_variants.length - kept.length) + ' title variant(s) off that repeat your existing page ' + ap.path + '\'s title or main heading')); b.title_variants = kept; } }
+    const tc = clash(b.meta_title, ap);
+    if (tc) { const nt = titleFor(S(b.meta_title), ap, { keyword: kw, brief_title: '', title_variants: b.title_variants, h1: b.h1, brand: x.brand, business: x.business, md: (b.outline || []).map(s => '## ' + S(s && s.h2)).join('\n') });
+      if (nt) { adjustments.push(clean('Meta title "' + plain(b.meta_title) + '" -> "' + nt + '": your existing page ' + tc.page.path + ' already uses it as its ' + fieldName(tc.field) + ', and two pages with one title compete for one search')); b.meta_title = nt; } }
+    const hc = clash(b.h1, ap);
+    if (hc) { const nh = h1For(S(b.h1), ap, { keyword: kw, brief_h1: '', title_variants: b.title_variants, title: b.meta_title, md: (b.outline || []).map(s => '## ' + S(s && s.h2)).join('\n') });
+      if (nh) { adjustments.push(clean('H1 "' + plain(b.h1) + '" -> "' + nh + '": your existing page ' + hc.page.path + ' already uses it as its ' + fieldName(hc.field))); b.h1 = nh; } }
+    // a line of the brief that advises taking over the kept page goes (the client chose a separate page; the hold already said what it costs)
+    let dropped = 0;
+    // only the brief's advice lists: never the client's facts, the keywords or the terms (a fact that names the kept page stays a fact)
+    for (const k of ADVICE_KEYS) { if (!Array.isArray(b[k]) || !b[k].every(v => typeof v === 'string')) continue;
+      const kept = b[k].filter(v => !againstChoice(v, ap)); dropped += b[k].length - kept.length; b[k] = kept; }
+    for (const k of ['unique_angle', 'information_gain', 'search_intent']) if (typeof b[k] === 'string' && againstChoice(b[k], ap)) { b[k] = S(b[k]).split(/(?<=[.!?])\s+/).filter(s => !againstChoice(s, ap)).join(' '); dropped++; }
+    if (dropped) adjustments.push(clean('Took ' + dropped + ' line(s) off the brief that advised replacing or taking over your existing page ' + ap.path + ': you chose a separate new page, and that page stays as it is'));
+    const pg = ap.pages.find(p => p.primary) || ap.pages[0];
+    const links = Array.isArray(b.internal_link_suggestions) ? b.internal_link_suggestions : [];
+    if (!links.some(l => l && pathOf(l.url) === pg.path)) { b.internal_link_suggestions = [{ anchor: anchorOf(pg), url: pg.url }, ...links];
+      adjustments.push(clean('Added your existing page ' + pg.path + ' to the internal links: the new page links to it once where it helps the reader')); }
+    return { ap, adjustments };
+  };
+  const contractLine = (ap) => !ap ? '' : clean('SEPARATE PAGE: the client chose a separate new page at its own address beside the existing page ' + ap.url
+    + (ap.title ? ' (title tag "' + ap.title + '"' + (ap.h1 ? ', main heading "' + ap.h1 + '"' : '') + ')' : ap.h1 ? ' (main heading "' + ap.h1 + '")' : '')
+    + ', which stays as it is. Give this page a title tag and an H1 of its own, never that page\'s; never suggest that page\'s address or slug for this page, never advise publishing this page as its replacement, merging the two or redirecting one to the other; link to that page once where it helps the reader, with a descriptive anchor.');
+  const readerNote = (ap, slug) => !ap ? '' : clean('THE CLIENT\'S CHOICE: this page is a separate new page at its own address' + (S(slug).trim() ? ' (/' + S(slug).replace(/^\/+/, '') + ')' : '')
+    + '. ' + ap.url + ' is the business\'s existing page on the same search, and the client chose to keep it as it is. Never suggest that this page take that page\'s address or slug, replace it, merge into it or redirect to it; a link to it is confirmed and wanted.');
+  return { CFG, of, same, sim, core, clash, titleFor, h1For, anchorOf, linked, addLink, fix, check, brief, againstChoice, contractLine, readerNote, pathOf, slugOf };
+})();
+// ---- regulatory facts kit (W0-F, page-quality programme 2026-10-29, PLAN §3 Fix 6; inlined through the __REGULATORY__ marker) ----
+// Page run 3299 ("ms 365 erp", a UAE ERP partner) never learned the UAE e-invoicing timeline: the only facts search stripped every country
+// name, so the dates the reader needed most (appoint an accredited provider by 30 October 2026, go live 1 January 2027) never reached the
+// brief, and an expert reviewer took points off for it. And the reviews found the next trap: the 30 October date is itself an AMENDMENT of
+// 31 July 2026, so "read the top official page" can state a superseded date, and from 31 October a page must say that deadline has passed.
+// This kit is the one rule for every market, driven by v5/data/regulators.json (no code per country):
+//   REG.marketOf(data, iso)                  the market's entry, or null (no entry = nothing is researched, nothing dated is said)
+//   REG.topicsOf(market, ctx)                the regulated topics this page touches: `core` (the keyword / AI question names it) or `context`
+//                                            (the business's own facts, its own posts or the ranking pages name it), at most MAX_TOPICS
+//   REG.queries(market, topic, year)         the searches: official domains + deadline words, official domains + amendment words, and a
+//                                            plain one for the secondary tier
+//   REG.dates(text)                          every full date ("30 October 2026", "October 30, 2026", "2026-10-30") and month ("July 2027")
+//   REG.extract(text, meta)                  dated obligations: {date, verb, obligation, subject, subject_class, threshold, paragraph,
+//                                            supersedes}; "from 31 July 2026 to 30 October 2026" gives the new date superseding the old one
+//   REG.sourceDate(url, text)                when the source was published (the reader's "Published Time", a dated upload path or file name)
+//   REG.statusOf(fact, asOf)                 upcoming / passed / in_force against the day the page is written (never a passed date as coming)
+//   REG.resolve(cands, opts)                 one fact per obligation: the latest dated official source wins and records what it supersedes;
+//                                            with no official text, two independent secondary sources that agree; else nothing
+//   REG.digest(reg)                          the REGULATORY FACTS block the brief and the writer print
+//   REG.qa(md, reg)                          what Content QA records: {required, stated, status, source_tier, missing, stale, passed_as_upcoming}
+// Regex only: the n8n Code sandbox has no URL constructor and no-ops Object.defineProperty.
+const REG = (() => {
+  const MAX_TOPICS = 2, MAX_FACTS_TOPIC = 8, MAX_CONTEXT_FACTS = 6;
+  const MON = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12 };
+  const MONTH_NAMES = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const MRE = '(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
+  const pad = (n) => String(n).padStart(2, '0');
+  const s = (v) => String(v == null ? '' : v);
+  const clean = (t) => s(t).replace(/\s+/g, ' ').trim();
+  const host = (u) => { const m = s(u).trim().match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '') : ''; };
+  const registrable = (h) => { const p = s(h).toLowerCase().split('.').filter(Boolean); if (p.length <= 2) return p.join('.');
+    return /^(gov|com|co|org|net|ac|edu|mil)$/.test(p[p.length - 2]) && p[p.length - 1].length === 2 ? p.slice(-3).join('.') : p.slice(-2).join('.'); };
+  const onDomain = (h, list) => (list || []).some(d => { const x = s(d).toLowerCase().replace(/^www\./, ''); return x && (h === x || h.endsWith('.' + x)); });
+  const urlKey = (u) => s(u).trim().toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const monthNo = (w) => MON[s(w).toLowerCase().slice(0, s(w).toLowerCase().startsWith('sept') ? 4 : 3)] || MON[s(w).toLowerCase().slice(0, 3)] || 0;
+  const validDay = (y, m, d) => m >= 1 && m <= 12 && d >= 1 && d <= [31, (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0)) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1];
+
+  // ---------- dates ----------
+  const dates = (text) => {
+    const t = s(text), out = [];
+    const take = (re, f) => { for (const m of t.matchAll(re)) { const r = f(m); if (!r) continue; const a = m.index, b = m.index + m[0].length;
+      if (out.some(o => a < o.end && b > o.index)) continue; out.push({ ...r, raw: m[0], index: a, end: b }); } };
+    take(new RegExp('\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?' + MRE + '\\.?,?\\s+(20\\d{2})\\b', 'gi'), (m) => { const d = +m[1], mo = monthNo(m[2]), y = +m[3];
+      return validDay(y, mo, d) ? { iso: y + '-' + pad(mo) + '-' + pad(d), precision: 'day' } : null; });
+    take(new RegExp('\\b' + MRE + '\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(20\\d{2})\\b', 'gi'), (m) => { const mo = monthNo(m[1]), d = +m[2], y = +m[3];
+      return validDay(y, mo, d) ? { iso: y + '-' + pad(mo) + '-' + pad(d), precision: 'day' } : null; });
+    take(/\b(20\d{2})-(\d{2})-(\d{2})\b/g, (m) => validDay(+m[1], +m[2], +m[3]) ? { iso: m[1] + '-' + m[2] + '-' + m[3], precision: 'day' } : null);
+    // a month alone, never the tail of a day that is not a date ("31 February 2027")
+    take(new RegExp('\\b' + MRE + '\\.?,?\\s+(20\\d{2})\\b', 'gi'), (m) => { const mo = monthNo(m[1]); if (/\d(?:st|nd|rd|th)?\s+(?:of\s+)?$/i.test(t.slice(Math.max(0, m.index - 10), m.index))) return null;
+      return mo ? { iso: m[2] + '-' + pad(mo), precision: 'month' } : null; });
+    return out.sort((a, b) => a.index - b.index);
+  };
+  const fmt = (iso) => { const m = s(iso).match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/); if (!m) return s(iso);
+    return (m[3] ? (+m[3]) + ' ' : '') + MONTH_NAMES[+m[2]] + ' ' + m[1]; };
+  // the last day a date covers (a month-only date runs to its end), for the status
+  const endOf = (iso) => { const m = s(iso).match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/); if (!m) return '';
+    if (m[3]) return iso; const y = +m[1], mo = +m[2]; let d = 31; while (d > 28 && !validDay(y, mo, d)) d--; return m[1] + '-' + m[2] + '-' + pad(d); };
+  const asOfFor = (startedAt, offsetHours) => { const t = Date.parse(s(startedAt)); const ms = (isNaN(t) ? Date.now() : t) + (Number(offsetHours) || 0) * 3600000;
+    return new Date(ms).toISOString().slice(0, 10); };
+  // W05-A (wave 0.5, 2026-10-30): the website's market day in its own time zone, for every market (not only the three in regulators.json):
+  // the page's "Updated" date, the second read's "today" and the regulatory status all use it. A market with an IANA zone here is read
+  // with Intl (summer time included); a market with only an offset in regulators.json uses the offset; anything else is UTC.
+  const ZONES = { AE: 'Asia/Dubai', SA: 'Asia/Riyadh', PK: 'Asia/Karachi', QA: 'Asia/Qatar', KW: 'Asia/Kuwait', BH: 'Asia/Bahrain', OM: 'Asia/Muscat',
+    EG: 'Africa/Cairo', JO: 'Asia/Amman', LB: 'Asia/Beirut', TR: 'Europe/Istanbul', IN: 'Asia/Kolkata', SG: 'Asia/Singapore', MY: 'Asia/Kuala_Lumpur',
+    GB: 'Europe/London', IE: 'Europe/Dublin', DE: 'Europe/Berlin', FR: 'Europe/Paris', NL: 'Europe/Amsterdam', ES: 'Europe/Madrid', IT: 'Europe/Rome',
+    US: 'America/New_York', CA: 'America/Toronto', AU: 'Australia/Sydney', NZ: 'Pacific/Auckland', ZA: 'Africa/Johannesburg', NG: 'Africa/Lagos', KE: 'Africa/Nairobi' };
+  const zoneOf = (iso, market) => { const z = s((market && market.tz) || ZONES[s(iso).toUpperCase()]); if (!z) return '';
+    try { new Intl.DateTimeFormat('en-US', { timeZone: z }).format(0); return z; } catch (e) { return ''; } };
+  const dayFor = (startedAt, iso, market) => { const z = zoneOf(iso, market);
+    if (!z) return asOfFor(startedAt, market ? market.utc_offset_hours : 0);
+    const t = Date.parse(s(startedAt)); const d = new Date(isNaN(t) ? Date.now() : t); const p = {};
+    for (const x of new Intl.DateTimeFormat('en-US', { timeZone: z, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d)) p[x.type] = x.value;
+    return p.year + '-' + p.month + '-' + p.day; };
+  const addDays = (iso, n) => new Date(Date.parse(iso + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
+
+  // ---------- market and topics ----------
+  const marketOf = (data, iso) => { const k = s(iso).toUpperCase(); const m = ((data || {}).markets || {})[k]; return m ? { ...m, iso: k } : null; };
+  const trigRe = (words) => new RegExp('(?:' + (words || []).map(w => { const x = s(w).toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return /^[a-z]{1,4}$/.test(x) ? '\\b' + x + '\\b' : '\\b' + x; }).join('|') + ')', 'i');
+  const touches = (topic, text) => !!s(text).trim() && trigRe(topic.triggers).test(s(text).replace(/[-_\/]+/g, (c) => c === '-' ? '-' : ' '));
+  // ctx: { keyword, ai_question, business_facts, own_titles[], terms }
+  const topicsOf = (market, ctx) => {
+    if (!market || !market.topics) return [];
+    const c = ctx || {}, out = [];
+    for (const [id, t] of Object.entries(market.topics)) {
+      const core = [], context = [];
+      if (touches(t, c.keyword)) core.push('the keyword');
+      if (touches(t, c.ai_question)) core.push('the AI question');
+      if (touches(t, c.business_facts)) context.push("the business's own facts");
+      const own = (c.own_titles || []).filter(x => touches(t, x));
+      if (own.length) context.push(own.length + ' of its own page(s)');
+      if (touches(t, c.terms)) context.push('the pages that rank for this search');
+      if (!core.length && !context.length) continue;
+      out.push({ id, label: t.label || id, relevance: core.length ? 'core' : 'context', because: core.concat(context), weight: core.length * 10 + context.length,
+        own_pages: (c.own_urls || []).filter(u => touches(t, u)).slice(0, 4) });
+    }
+    return out.sort((a, b) => b.weight - a.weight).slice(0, MAX_TOPICS);
+  };
+  const officialOf = (market, topicId) => { const t = ((market || {}).topics || {})[topicId] || {}; return (t.official && t.official.length ? t.official : (market || {}).official) || []; };
+  const queries = (market, topicId, year) => {
+    const t = ((market || {}).topics || {})[topicId] || {};
+    const site = officialOf(market, topicId).slice(0, 4).map(d => 'site:' + d).join(' OR ');
+    const subj = s(t.search || t.label || topicId);
+    return [
+      { kind: 'deadline', q: (site + ' ' + subj + ' deadline OR timeline OR phase OR "go-live" ' + year).trim() },
+      { kind: 'amendment', q: (site + ' ' + subj + ' amended OR extended OR postponed ' + year).trim() },
+      { kind: 'secondary', q: (subj + ' ' + s(market.name) + ' deadline ' + year).trim() }];
+  };
+  const isSecondary = (h, data) => onDomain(h, (((data || {}).secondary) || {}).hosts || []);
+
+  // ---------- extraction ----------
+  const MODAL = /\b(shall|must|will need to|will have to|are required to|is required to|are obliged to|is obliged to|need to|needs to|has to|have to|should|are expected to|is expected to)\b/i;
+  const VERBS = [['appoint', /\bappoint(?:s|ed|ing)?\b/i], ['register', /\bregist(?:er|ers|ered|ering|ration)\b/i], ['file', /\bfil(?:e|es|ed|ing)\b/i],
+    ['submit', /\bsubmi(?:t|ts|tted|tting|ssion)\b/i], ['implement', /\b(?:implement(?:s|ed|ing|ation)?|integrat(?:e|es|ed|ing|ion)|go(?:es)?[- ]live|went live|go-live|live with)\b/i],
+    ['comply', /\bcompl(?:y|ies|iance)\b/i], ['issue', /\bissu(?:e|es|ing)\b/i],
+    ['start', /\b(?:start(?:s|ed|ing)?|begin(?:s|ning)?|commenc(?:e|es|ed|ing)|come[s]? into (?:force|effect)|take[s]? effect|effective|apply|applies|in force)\b/i]];
+  const DEADLINE = /\b(deadline|due date|due by|no later than|by|before|from|as of|starting|effective|until|on)\b/i;
+  const AMEND = /\b(extend(?:s|ed|ing)?|extension|postpon(?:e|es|ed|ement)|amend(?:s|ed|ing|ment)|mov(?:e|es|ed)|push(?:ed)? back|replac(?:e|es|ed)|revis(?:e|es|ed|ion)|delay(?:s|ed)?|deferr?(?:ed|al)?)\b/i;
+  // a PDF read as text breaks a sentence at every printed line: lines are joined inside a paragraph, and a list item, a heading or a table
+  // row starts a new block
+  const sentencesOf = (text) => s(text).replace(/\r/g, '').split(/\n\s*\n+/)
+    .flatMap(p => p.split(/\n(?=\s*(?:[-*•#|]|\(?[a-z0-9]{1,3}[).]\s))/i))
+    .map(b => b.replace(/\n+/g, ' '))
+    .flatMap(b => b.split(/(?<=[.;!?])\s+(?=[A-Z(\[])/)).map(clean).filter(x => x.length >= 25 && x.length <= 900);
+  const AMOUNT = /\b(AED|Dhs?|SAR|SR|PKR|Rs\.?|USD|US\$|\$)\s?(\d[\d,]*(?:\.\d+)?)\s*(million|mn|m|billion|bn|b|thousand|k)?\b/i;
+  const amountValue = (m) => { const n = Number(s(m[2]).replace(/,/g, '')); const u = s(m[3]).toLowerCase();
+    return n * ({ million: 1e6, mn: 1e6, m: 1e6, billion: 1e9, bn: 1e9, b: 1e9, thousand: 1e3, k: 1e3 }[u] || 1); };
+  const thresholdOf = (sent) => {
+    const m = s(sent).match(AMOUNT); if (!m) return { threshold: '', cls: '' };
+    const v = amountValue(m); if (!(v >= 1000)) return { threshold: '', cls: '' };
+    // the qualifier is the one nearest the amount: in the few words before it ("exceeding SAR 750,000", "less than AED 50,000,000"), else
+    // right after it ("AED 50 million or more"); a word further back ("Under the latest notice, ...") is not about the amount
+    const before = s(sent).slice(Math.max(0, m.index - 40), m.index).toLowerCase(), after = s(sent).slice(m.index + m[0].length, m.index + m[0].length + 25).toLowerCase();
+    const last = (re) => { let k = -1; for (const x of before.matchAll(re)) k = x.index; return k; };
+    const kLt = last(/\b(less than|below|under|lower than|not exceed|does not exceed|up to)\b/g), kGe = last(/\b(equal to or exceed|exceed|exceeds|exceeding|at least|above|over|greater than)\b/g);
+    const lt = kLt > kGe || (kLt < 0 && kGe < 0 && /^\s*(or less|and below|or below)\b/.test(after));
+    const ge = !lt && (kGe >= 0 || /^\s*(or more|or above|and above)\b/.test(after));
+    const cur = m[1].toUpperCase().replace(/^DHS?$/, 'AED').replace(/^SR$/, 'SAR').replace(/^RS\.?$/, 'PKR');
+    const human = v >= 1e9 ? cur + ' ' + (v / 1e9) + ' billion' : v >= 1e6 ? cur + ' ' + (v / 1e6) + ' million' : cur + ' ' + v.toLocaleString('en-US');
+    return { threshold: (lt ? 'below ' : ge ? 'equal to or above ' : '') + human, cls: (lt ? 'lt:' : ge ? 'ge:' : 'at:') + Math.round(v) };
+  };
+  const subjectClassOf = (sent, thr) => /\bgovernment (entit|bod|agenc|department)|public sector entit/i.test(sent) ? 'gov'
+    : /\bvoluntar/i.test(sent) ? 'voluntary' : thr.cls || 'all';
+  const subjectOf = (sent) => { const m = s(sent).match(MODAL); if (!m || m.index < 6) return '';
+    return clean(s(sent).slice(0, m.index).replace(/^\(?[a-z0-9]{1,3}[).]\s+/i, '').replace(/^(?:and|but|so|then)\s+/i, '')).slice(0, 200); };
+  // the LAST obligation verb of the clause (the one nearest the date): "the next integration wave ... must integrate ... by <date>"
+  const verbOf = (clause) => { let best = null; for (const [v, re] of VERBS) { const g = new RegExp(re.source, 'gi'); for (const m of s(clause).matchAll(g)) if (!best || m.index > best.index) best = { verb: v, index: m.index, word: m[0] }; } return best; };
+  // the obligation is the verb phrase of the clause that ends at the date: "appoint an Accredited Service Provider" in
+  // "... shall appoint an Accredited Service Provider by 30 October 2026 and shall implement ... by 1 January 2027"
+  const obligationOf = (clause, vb) => {
+    if (!vb) return '';
+    let tail = s(clause).slice(vb.index);
+    const d0 = dates(tail)[0]; if (d0) tail = tail.slice(0, d0.index);
+    const stop = tail.search(/\s(?:by|before|from|on|no later than|until|as of|as from|starting|effective from|with effect from|at the latest)(?=\s|$)/i);
+    if (stop > 0) tail = tail.slice(0, stop);
+    tail = tail.replace(/[,;:(]+\s*$/, '');
+    return clean(tail).split(' ').slice(0, 12).join(' ').replace(/[,.;:]+$/, '');
+  };
+  // meta: { topic, url, role, tier, source_date, triggers[] }
+  const extract = (text, meta) => {
+    const m0 = meta || {}, out = [];
+    const trig = m0.triggers ? trigRe(m0.triggers) : null;
+    const head = s(text).slice(0, 2500);
+    const pageOnTopic = !trig || trig.test(head);
+    for (const sent of sentencesOf(text)) {
+      const ds = dates(sent).filter(d => d.precision === 'day' || /\b(by|from|in|until|before|starting|effective)\s+$/i.test(sent.slice(Math.max(0, d.index - 14), d.index)));
+      if (!ds.length) continue;
+      if (trig && !trig.test(sent) && !pageOnTopic) continue;
+      if (!MODAL.test(sent) && !DEADLINE.test(sent) && !AMEND.test(sent)) continue;
+      const thr = thresholdOf(sent), subject = subjectOf(sent), subject_class = subjectClassOf(sent, thr);
+      // an amendment: "from <old> to <new>" (or "<old> ... extended to <new>") -> the new date supersedes the old one, the old one is not a fact
+      const superseded = {};
+      if (AMEND.test(sent)) {
+        for (const m of sent.matchAll(new RegExp('\\bfrom\\s+([^.;]{3,40}?)\\s+to\\s+([^.;]{3,40})', 'gi'))) {
+          const a = dates(m[1])[0], b = dates(m[2])[0]; if (a && b && a.iso !== b.iso) superseded[b.iso] = a.iso;
+        }
+        if (!Object.keys(superseded).length && ds.length === 2 && /\b(extend|postpon|mov|push|delay|defer)/i.test(sent) && ds[0].iso < ds[1].iso) superseded[ds[1].iso] = ds[0].iso;
+      }
+      const oldDates = new Set(Object.values(superseded));
+      let from = 0;
+      for (const d of ds) {
+        if (oldDates.has(d.iso)) { from = d.end; continue; }
+        // the clause that ends at this date: from the last boundary ("and shall", ";", the previous date) to the date
+        let clause = sent.slice(from, d.index);
+        const cut = Math.max(clause.search(/;(?![^;]*;)/), clause.lastIndexOf(' and '), clause.lastIndexOf(', and '));
+        const vbFull = verbOf(clause);
+        const lastAnd = clause.lastIndexOf(' and ');
+        if (lastAnd >= 0 && vbFull && vbFull.index > lastAnd) clause = clause.slice(lastAnd + 5);
+        else if (cut > 0 && vbFull && vbFull.index > cut) clause = clause.slice(cut + 1);
+        let vb = verbOf(clause);
+        // "... to appoint an accredited service provider from 31 July 2026 to 30 October 2026": the new date's own clause is " to ", so
+        // its verb is the last one before it in the sentence
+        if (!vb) { clause = sent.slice(0, d.index); vb = verbOf(clause.replace(/\bfrom\s+[^.;]{3,40}?\s+to\s*$/i, '')); }
+        let obligation = obligationOf(clause, vb);
+        if (!vb && /\bdeadline\b/i.test(clause)) { vb = { verb: 'deadline', index: 0 }; obligation = 'deadline'; }
+        if (!vb || !obligation) { from = d.end; continue; }
+        out.push({ topic: m0.topic || '', date: d.iso, precision: d.precision, verb: vb.verb, obligation: obligation.slice(0, 140), subject, subject_class,
+          threshold: thr.threshold, url: s(m0.url), paragraph: sent.slice(0, 500), role: m0.role || 'official', source_tier: m0.tier == null ? null : m0.tier,
+          source_date: s(m0.source_date), supersedes: superseded[d.iso] || '', amendment: !!superseded[d.iso] });
+        from = d.end;
+      }
+    }
+    // the same obligation said twice on one page keeps one row (the one that names what it supersedes, else the first)
+    const seen = new Map();
+    for (const f of out) { const k = f.verb + '|' + f.subject_class + '|' + f.date; const o = seen.get(k); if (!o || (!o.supersedes && f.supersedes)) seen.set(k, f); }
+    return [...seen.values()];
+  };
+  // when the source was published: the reader's header, then a dated upload path (/2026/05/) or a dated file name (-20260514)
+  const sourceDate = (url, text) => {
+    const p = s(text).match(/^Published Time:\s*(\d{4}-\d{2}-\d{2})/m); if (p) return p[1];
+    const f = s(url).match(/[-_](20\d{2})(\d{2})(\d{2})(?=[-_.]|$)/); if (f && validDay(+f[1], +f[2], +f[3])) return f[1] + '-' + f[2] + '-' + f[3];
+    const u = s(url).match(/\/(20\d{2})\/(\d{2})\//); if (u && +u[2] >= 1 && +u[2] <= 12) return u[1] + '-' + u[2];
+    return '';
+  };
+
+  // ---------- which pages to read (shared by the SearXNG path and the DataForSEO fallback) ----------
+  // tasks[i] is the search whose answer is results[i] (an array of { url, title, content }). Per topic: the official text on file first,
+  // then up to OFFICIAL official pages (a dated upload path first: the newest decision), then up to SECONDARY independent secondary
+  // sources on different sites (the second tier needs two that agree); then the client's own posts; at most MAX_READS pages in all.
+  const OFFICIAL = 2, SECONDARY = 3, MAX_READS = 12;
+  // FU-SV (merge 2026-10-30): a search result that is a search-engine redirect is read as the page it leads to when the redirect carries
+  // it (the source kit's SRC.unwrap, inlined in the nodes that pick); an opaque one (google.com/goto?url=<token>) is never picked
+  const target = (u) => { const x = s(u).trim(); if (typeof SRC === 'undefined' || !SRC.isRedirect(x)) return x; return SRC.unwrap(x) || ''; };
+  const pick = (plan, tasks, results, data, market) => {
+    const P = plan || {}, out = [], seen = new Set(), hints = [];
+    const add = (x) => { const k = urlKey(x.url); if (!k || seen.has(k) || out.length >= MAX_READS) return false; seen.add(k); out.push(x); return true; };
+    const KIND = { amendment: 0, deadline: 1, secondary: 2 };
+    for (const t of P.topics || []) {
+      const offDomains = (t.official || []).concat((market || {}).official || []);
+      const rows = [];
+      (tasks || []).forEach((q, i) => { if (!q || q.topic !== t.id) return;
+        (Array.isArray(results[i]) ? results[i] : []).forEach((r, rank) => { const url = target(r && r.url); if (!/^https?:\/\//i.test(url)) return;
+          rows.push({ url, title: clean(r.title).slice(0, 160), snippet: clean(r.content || r.description).slice(0, 300), host: host(url), kind: q.kind, rank }); }); });
+      for (const r of rows) if (r.kind === 'amendment' && AMEND.test(r.title + ' ' + r.snippet) && hints.length < 4) hints.push({ topic: t.id, url: r.url, title: r.title });
+      for (const k of (P.known_reads || []).filter(x => x.topic === t.id)) add({ read: true, topic: t.id, role: 'official', url: k.url, title: '', snippet: '', via: 'on file' });
+      const off = rows.filter(r => onDomain(r.host, offDomains))
+        .sort((a, b) => (sourceDate(b.url) > sourceDate(a.url) ? 1 : sourceDate(b.url) < sourceDate(a.url) ? -1 : (KIND[a.kind] - KIND[b.kind]) || (a.rank - b.rank)));
+      let n = 0; for (const r of off) { if (n >= OFFICIAL) break; if (add({ read: true, topic: t.id, role: 'official', url: r.url, title: r.title, snippet: r.snippet, via: r.kind })) n++; }
+      const sites = new Set(); let m = 0;
+      for (const r of rows.filter(x => isSecondary(x.host, data)).sort((a, b) => (KIND[a.kind] - KIND[b.kind]) || (a.rank - b.rank))) {
+        const site = registrable(r.host); if (m >= SECONDARY || sites.has(site)) continue;
+        if (add({ read: true, topic: t.id, role: 'secondary', url: r.url, title: r.title, snippet: r.snippet, via: r.kind })) { sites.add(site); m++; }
+      }
+    }
+    for (const o of P.own_posts || []) add({ read: true, topic: o.topic, role: 'own', url: o.url, title: '', snippet: '', via: 'own site' });
+    return { reads: out, hints };
+  };
+
+  // ---------- status, against the day the page is written ----------
+  const statusOf = (f, asOf) => { const e = endOf(f.date); if (!e || !asOf) return 'unknown';
+    if (e >= asOf) return 'upcoming';
+    return /^(implement|start)$/.test(f.verb) ? 'in_force' : 'passed'; };
+  const TIER = { official: 1, on_file: 1, secondary_pair: 2 };
+
+  // ---------- one fact per obligation ----------
+  // cands: facts from REG.extract (role official / secondary / own) and the data file's `known` rows (role on_file)
+  // opts: { asOf, data, market }
+  const resolve = (cands, opts) => {
+    const o = opts || {}, chosen = [], notes = [], conflicts = [];
+    const keyOf = (f) => f.topic + '|' + (f.verb === 'deadline' ? 'deadline' : f.verb) + '|' + f.subject_class;
+    const groups = new Map();
+    for (const f of cands || []) { if (!f || !f.date || f.role === 'own') continue; const k = keyOf(f); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); }
+    for (const [k, list] of groups) {
+      const official = list.filter(f => f.role === 'official' || f.role === 'on_file');
+      if (official.length) {
+        // the latest dated source wins; an undated source never beats a dated one; on the same source date, the one that names what it
+        // supersedes wins, then the official text read live over the copy on file
+        const rank = (f) => [s(f.source_date) || '0000', f.supersedes ? 1 : 0, f.role === 'official' ? 1 : 0];
+        const sorted = official.slice().sort((a, b) => { const A = rank(a), B = rank(b); for (let i = 0; i < 3; i++) { if (A[i] > B[i]) return -1; if (A[i] < B[i]) return 1; } return 0; });
+        const top = sorted[0];
+        const rivals = sorted.filter(f => f.date !== top.date);
+        const sameRank = rivals.filter(f => s(f.source_date) === s(top.source_date) && !!f.supersedes === !!top.supersedes);
+        if (sameRank.length && !top.supersedes) { conflicts.push({ key: k, dates: [top.date].concat(sameRank.map(f => f.date)), urls: [top.url].concat(sameRank.map(f => f.url)).slice(0, 4),
+          reason: 'official sources of the same date state different dates for the same obligation' }); continue; }
+        const older = rivals.filter(f => f.date < top.date || s(f.source_date) < s(top.source_date)).map(f => f.date).sort().reverse();
+        const twins = official.filter(f => f.date === top.date);
+        const supersedes = top.supersedes || twins.map(f => f.supersedes).find(Boolean) || (older.length ? older[0] : '');
+        const instrument = top.instrument || twins.map(f => f.instrument).find(Boolean) || '';
+        chosen.push({ ...top, supersedes, instrument, source_kind: top.role === 'on_file' ? 'official_on_file' : 'official', source_tier: TIER[top.role] || 1, reported_by: [host(top.url)] });
+        continue;
+      }
+      // the second tier: two independent secondary sources (different registrable sites) that state the same date
+      const sec = list.filter(f => f.role === 'secondary');
+      const byDate = new Map();
+      for (const f of sec) { if (!byDate.has(f.date)) byDate.set(f.date, []); byDate.get(f.date).push(f); }
+      const pairs = [...byDate.entries()].map(([date, fs]) => { const sites = [...new Map(fs.map(f => [registrable(host(f.url)), f])).values()];
+        return { date, sites, newest: sites.map(f => s(f.source_date)).sort().reverse()[0] || '', supersedes: (fs.find(f => f.supersedes) || {}).supersedes || '' }; })
+        .filter(p => p.sites.length >= 2);
+      if (!pairs.length) { if (sec.length) notes.push({ key: k, reason: 'only one independent source states it (' + [...new Set(sec.map(f => registrable(host(f.url))))].slice(0, 3).join(', ') + '), so it is not used' }); continue; }
+      let pick = pairs[0];
+      if (pairs.length > 1) {
+        const superseded = new Set(pairs.map(p => p.supersedes).filter(Boolean));
+        const live = pairs.filter(p => !superseded.has(p.date));
+        const dated = live.filter(p => p.newest).sort((a, b) => (a.newest < b.newest ? 1 : -1));
+        if (live.length === 1) pick = live[0];
+        else if (dated.length && (dated.length === 1 || dated[0].newest !== dated[1].newest) && dated.length === live.length) pick = dated[0];
+        else { conflicts.push({ key: k, dates: pairs.map(p => p.date), urls: pairs.flatMap(p => p.sites.map(f => f.url)).slice(0, 4),
+          reason: 'independent sources agree in pairs on different dates and none is dated later than the other' }); continue; }
+      }
+      const a = pick.sites[0], b = pick.sites[1];
+      const others = pairs.filter(p => p !== pick).map(p => p.date).sort().reverse();
+      chosen.push({ ...a, supersedes: pick.supersedes || a.supersedes || (others.length && others[0] < pick.date ? others[0] : ''), source_kind: 'secondary_pair', source_tier: 2,
+        source_date: pick.newest, reported_by: [registrable(host(a.url)), registrable(host(b.url))], urls: [a.url, b.url] });
+    }
+    for (const f of chosen) f.status = statusOf(f, o.asOf);
+    chosen.sort((a, b) => (a.topic === b.topic ? (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) : (a.topic < b.topic ? -1 : 1)));
+    return { chosen, notes, conflicts };
+  };
+
+  // the client's own posts are read for consistency only: a date one of them states for an obligation we confirmed differently
+  const ownConflicts = (ownFacts, chosen) => {
+    const out = [];
+    for (const f of ownFacts || []) {
+      const c = (chosen || []).find(x => x.topic === f.topic && x.verb === f.verb && x.subject_class === f.subject_class);
+      if (c && c.date !== f.date) out.push({ url: f.url, says: fmt(f.date), current: fmt(c.date), obligation: c.obligation, superseded: c.supersedes === f.date });
+    }
+    const seen = new Set(); return out.filter(x => { const k = x.url + '|' + x.says; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 6);
+  };
+
+  // ---------- the block the brief and the writer print ----------
+  const STATUS_WORDS = { upcoming: 'upcoming', passed: 'passed', in_force: 'in force', unknown: 'status unknown' };
+  const sourceLine = (f) => f.source_kind === 'secondary_pair'
+    ? 'reported by ' + (f.reported_by || []).join(' and ') + ' (no official text could be read; write "as reported by ' + (f.reported_by || []).join(' and ') + '" and link ' + (f.urls || [f.url]).join(' and ') + ')'
+    : 'official: ' + (f.instrument ? f.instrument + ', ' : '') + f.url;
+  const digest = (reg) => {
+    const r = reg || {};
+    if (!r.topics || !r.topics.length) return '';
+    const L = ['REGULATORY FACTS (' + s(r.market_name) + ', as of ' + fmt(r.as_of) + ', the day this page is written; read on official sources by this run, never from memory)'];
+    for (const t of r.topics) {
+      const fs = (r.facts || []).filter(f => f.topic === t.id);
+      L.push('Topic: ' + t.label + (t.relevance === 'core'
+        ? ' (this page is about it: state the current timeline below in the section where the reader decides, each date with what it means today and its source link)'
+        : ' (the business works on it: mention it only where it changes the reader\'s decision, once, in a sentence or a table row with its source link; never add a section for it)'));
+      if (!fs.length) { L.push('- No current date could be confirmed on an official source or by two independent sources that agree. Write no date, deadline or threshold for it'
+        + (t.official && t.official.length ? '; if the reader needs one, tell them to check ' + t.official.slice(0, 2).join(' or ') : '') + '.'); continue; }
+      for (const f of fs) {
+        const when = f.status === 'passed' ? 'was ' + fmt(f.date) + ' (passed: write it in the past tense, never as coming)' : f.status === 'in_force' ? 'since ' + fmt(f.date) + ' (in force)' : 'by ' + fmt(f.date) + ' (upcoming)';
+        L.push('- ' + (f.subject ? f.subject.replace(/\s*\((phase \d)\)$/i, ' ($1)') + ': ' : '') + f.obligation + ' ' + when + (f.threshold ? '. Threshold: ' + f.threshold : '') + '. Source: ' + sourceLine(f) + '.'
+          + (f.supersedes ? ' This replaces the earlier date ' + fmt(f.supersedes) + ': never write the earlier date as current.' : ''));
+      }
+    }
+    L.push('RULES: dates, deadlines and thresholds for these topics come only from this block, quoted with their source link. Write each as a date ("by 30 October 2026"), never "next month", "tomorrow" or "in N days", because the page is read long after today. A deadline marked passed is written as passed, with what follows from it. Do not add a date this block does not give.');
+    return L.join('\n');
+  };
+
+  // ---------- what Content QA records (no score: Wave 2's accuracy items read it) ----------
+  const dateForms = (iso) => { const m = s(iso).match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/); if (!m) return [];
+    const y = m[1], mo = MONTH_NAMES[+m[2]], ab = mo.slice(0, 3), d = m[3] ? String(+m[3]) : '';
+    return d ? [d + '(?:st|nd|rd|th)?\\s+(?:of\\s+)?(?:' + mo + '|' + ab + ')\\.?,?\\s+' + y, '(?:' + mo + '|' + ab + ')\\.?\\s+' + d + '(?:st|nd|rd|th)?,?\\s+' + y, y + '-' + m[2] + '-' + m[3]]
+      : ['(?:' + mo + '|' + ab + ')\\.?,?\\s+' + y]; };
+  const hasDate = (md, iso) => dateForms(iso).some(p => new RegExp('\\b' + p + '\\b', 'i').test(s(md)));
+  const qa = (md, reg) => {
+    const r = reg || null;
+    if (!r || !r.topics || !r.topics.length) return { required: false, stated: null, status: r ? 'not_applicable' : 'not_checked', source_tier: null, missing: [], stale: [], passed_as_upcoming: [] };
+    const core = new Set(r.topics.filter(t => t.relevance === 'core').map(t => t.id));
+    const facts = (r.facts || []).filter(f => f.verb !== 'start' || core.has(f.topic));
+    const req = facts.filter(f => core.has(f.topic) && f.status !== 'in_force');
+    const stated = facts.filter(f => hasDate(md, f.date));
+    const missing = req.filter(f => !hasDate(md, f.date)).map(f => ({ topic: f.topic, date: f.date, obligation: f.obligation }));
+    const stale = facts.filter(f => f.supersedes && hasDate(md, f.supersedes) && !hasDate(md, f.date)).map(f => ({ topic: f.topic, written: f.supersedes, current: f.date }));
+    const passed_as_upcoming = [];
+    for (const f of facts.filter(x => x.status === 'passed')) for (const sent of sentencesOf(md)) {
+      if (!hasDate(sent, f.date)) continue;
+      if (/\b(was|were|passed|closed|ended|expired|has been|had|lapsed|already)\b/i.test(sent)) continue;
+      if (/\b(by|before|ahead of|upcoming|will|must|need to|deadline is|deadline of|until)\b/i.test(sent)) passed_as_upcoming.push({ date: f.date, sentence: sent.slice(0, 240) });
+    }
+    const coreNone = r.topics.some(t => t.relevance === 'core' && !(r.facts || []).some(f => f.topic === t.id));
+    const status = stale.length || passed_as_upcoming.length ? 'stale_date' : !core.size ? 'not_required' : coreNone && !req.length ? 'none_confirmed'
+      : missing.length ? 'missing' : 'stated';
+    const tiers = stated.map(f => f.source_tier).filter(x => x != null);
+    return { required: core.size > 0 && req.length > 0, stated: stated.length, required_facts: req.length, status, source_tier: tiers.length ? Math.min(...tiers) : null,
+      missing, stale, passed_as_upcoming: passed_as_upcoming.slice(0, 4) };
+  };
+
+  return { MAX_TOPICS, MAX_FACTS_TOPIC, MAX_CONTEXT_FACTS, host, registrable, onDomain, urlKey, dates, fmt, endOf, asOfFor, zoneOf, dayFor, addDays, marketOf, touches, topicsOf, officialOf,
+    queries, isSecondary, extract, sourceDate, pick, statusOf, resolve, ownConflicts, digest, qa, hasDate, sentencesOf };
+})();
 // ---- CK: is a model's answer complete? (LLM-LIMITS, 2026-10-27, docs/llm-limits-2026-10-27/LIMITS.md) ----
 // Production (techand.ai, execution 2195): the Editor's answer stopped mid-word ("Does the add-on cover gratu") when the model reached
 // its max_tokens ceiling; n8n hands a stream cut that way on as a success (the stop reason is dropped, the agent outputs only `output`),
 // so the run replaced a complete 1,804-word page with 749 words and delivered half a page. Nothing in the answer says it was cut, so this
 // kit reads the answer itself, deterministically:
 //   CK.text(md)            a long text (page, brief, e-mail, report) ends cleanly: not mid-word / mid-sentence, markdown balanced,
-//                          no unfinished list item, table row or code block, no heading left without its text.
+//                          no unfinished list item, table row or code block, no heading left without its text. A trailing author
+//                          box is profile data (read on the text before it); opts.unchanged_from: an end word for word the source's is
+//                          not a cut (fu-finalize-toc, K6).
+//                          opts.cta (W06-B, K4): the brief's / the site's call to action; a final short call-to-action line under the
+//                          last section ("Book a consultation") ends a page cleanly, a cut one ("Book a consult") does not.
 //   CK.edit(before, after) an edit of a complete text is itself complete AND did not lose the end: under 75% of the input's main-text
 //                          words (40% when the edit was asked to cut) or two of its sections gone is a cut, not an edit.
 //   CK.json(raw)           a JSON answer parses completely; an answer that stops inside its JSON is `truncated`, never an empty answer.
@@ -49,18 +616,70 @@ const CK = (() => {
     return false; };
   // the contiguous list block that ends at index `end`
   const listBlock = (lines, end) => { const out = []; for (let i = end; i >= 0 && LIST.test(lines[i]); i--) out.unshift(lines[i]); return out; };
+  // fu-finalize-toc (2026-10-30, docs/page-quality-2026-10-29/BASELINE.md, K6): the author box the page package adds from the business
+  // profile ("---", "**About the author: ...**", the bio, the credentials line, the profile links) is profile data, not a model's answer, and
+  // its credentials line has no full stop ("ISO 27001 certified; 5 years, 100+ projects"): the final version of an unchanged page was called
+  // cut off on it. The end is read on the text before the box; the box itself only has to be balanced. -1 when the page has no box at its end.
+  const AUTHOR_BOX = /^(?:\*\*|__)?\s*About the author\b/i;
+  const authorBoxAt = (lines) => { let k = -1;
+    for (let i = lines.length - 1; i >= Math.max(0, lines.length - 12); i--) if (AUTHOR_BOX.test(lines[i].trim())) { k = i; break; }
+    if (k < 1 || lines.slice(k + 1).filter(l => l.trim()).length > 6) return -1;
+    let s = k - 1; while (s >= 0 && !lines[s].trim()) s--;
+    if (s >= 0 && /^(-{3,}|\*{3,}|_{3,})$/.test(lines[s].trim())) { s--; while (s >= 0 && !lines[s].trim()) s--; }
+    return s >= 0 ? s + 1 : -1; };
+  // the last three lines of text of a page, as it ends
+  const endOf = (md) => bodyLines(md).map(l => l.trim()).filter(Boolean).slice(-3).join('\n');
+  // W06-B (2026-10-30, docs/page-quality-2026-10-29/WAVE05.md 3.2, K4 first try, exec 379): the writer twice answered a complete page of
+  // about 2,100 words whose last line was the bare button text "Book a consultation" (no full stop) under its last H2 "Book a consultation
+  // with Tech&"; the check read it as a sentence with no ending, retried, and failed the run (about $0.85 of Claude lost, no page). A final
+  // short line is a proper end when it is a call to action, standing as its own paragraph after a paragraph that ends cleanly, and either
+  // (a) it IS the brief's or the site's call to action (opts.cta: a string or a list), or (b) it reads as a button (it starts with a call
+  // to action verb, or it is in title case) and every one of its words is a whole word of the page's last section (its heading and text)
+  // or of the call to action. A cut answer stops at a random point: mid-word ("Book a consult": "consult" is not a word of the section),
+  // on a dangling word ("Book a consultation with"), after a comma, or as the start of a longer sentence, and those are still caught.
+  const CTA_VERB = /^(?:book|schedule|request|get|talk|speak|contact|call|email|e-mail|message|chat|start|try|ask|claim|download|see|explore|discover|learn|read|view|visit|join|sign up|register|apply|order|buy|shop|compare|find|reach|let'?s|meet|plan|arrange|send|subscribe|watch|hire|enquire|inquire)\b/i;
+  const tokens = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}&']+/gu, ' ').trim().split(/\s+/).filter(Boolean);
+  const ctaKey = (s) => tokens(String(s || '').replace(/[.!?]+\s*$/, '')).join(' ');
+  const ctaEnd = (lines, o) => {
+    if (lines.length < 3 || lines[lines.length - 2].trim()) return false;   // a line of its own, after a blank line
+    const raw = lines[lines.length - 1].trim();
+    const line = raw.replace(/^(?:\*\*|__|\*|_)+|(?:\*\*|__|\*|_)+$/g, '').replace(/\s*(?:→|»|>|->)+\s*$/, '').trim();
+    const w = tokens(line);
+    if (!w.length || w.length > 8 || line.length > 70 || unbalanced(raw) || /[,:;–—-]$/.test(line) || DANGLING.test(line) || QUESTION_START.test(line)) return false;
+    if (/[.!?,;:]\s/.test(line)) return false;   // one short phrase, never a sentence and the start of the next one
+    let p = lines.length - 3; while (p >= 0 && !lines[p].trim()) p--;
+    if (p < 0) return false;
+    const prev = lines[p].trim(), prevPlain = prev.replace(/[*_`]+$/g, '').trim();
+    const ctas = (Array.isArray(o.cta) ? o.cta : [o.cta]).map(ctaKey).filter(Boolean);
+    const exact = ctas.includes(w.join(' '));
+    const prevOk = /^#{1,6}\s/.test(prev) ? exact : !isTableRow(prev) && !unbalanced(prev) && (END_PUNCT.test(prevPlain) || LINK_END.test(prevPlain));
+    if (!prevOk) return false;
+    if (exact) return true;
+    let h = lines.length - 2; while (h >= 0 && !/^#{1,3}\s/.test(lines[h].trim())) h--;
+    if (h < 0) return false;   // a page has headings; a call to action is read under the last one
+    if (/^\d+$/.test(w[w.length - 1])) return false;   // "Call +971 50 702" stops inside a number
+    const words0 = line.split(/\s+/).filter(x => /\p{L}/u.test(x));
+    const title = words0.length >= 2 && /^\p{Lu}/u.test(words0[0]) && words0.filter(x => x.replace(/[^\p{L}]/gu, '').length > 3).every(x => /^\p{Lu}/u.test(x));
+    if (!CTA_VERB.test(line) && !title) return false;
+    const pool = new Set([...tokens(lines.slice(h, lines.length - 1).join('\n')), ...ctas.join(' ').split(' ')]);
+    return w.every(t => pool.has(t));
+  };
 
   const text = (md, opts) => {
     const o = opts || {};
     const minWords = o.min_words == null ? 0 : Number(o.min_words);
-    const lines = bodyLines(md);
+    const all = bodyLines(md);
     const reasons = [];
-    const body = lines.join('\n');
+    const body = all.join('\n');
     const n = words(body);
     if (!n) return { complete: false, cut_off: true, empty: true, words: 0, last_line: '', reasons: ['the answer is empty'] };
     if (minWords && n < minWords) reasons.push('the answer has ' + n + ' words, far below the ' + minWords + ' expected');
-    const fences = lines.filter(l => /^\s*(```|~~~)/.test(l)).length;
+    const fences = all.filter(l => /^\s*(```|~~~)/.test(l)).length;
     if (fences % 2) reasons.push('a code block is not closed');
+    const boxAt = fences % 2 ? -1 : authorBoxAt(all);
+    if (boxAt > 0) { const ub = unbalanced(all.slice(boxAt).join('\n')); if (ub) reasons.push('the author box stops mid-way (' + ub + ')'); }
+    const lines = boxAt > 0 ? all.slice(0, boxAt) : all;
+    const kept0 = minWords && n < minWords ? 1 : 0;
     const last = lines[lines.length - 1].trim();
     const lastPlain = last.replace(/[*_`]+$/g, '').trim();
     if (/^#{1,6}\s/.test(last)) reasons.push('the last heading has no text under it');
@@ -87,14 +706,23 @@ const CK = (() => {
       }
     } else if (signedOff(lines)) {
       // an e-mail's sign-off: "Best regards," then the sender's name (and a title / company line under it)
+    } else if (ctaEnd(lines, o)) {
+      // W06-B: the page's call to action on its own line ("Book a consultation") under the last section: a complete page
     } else {
       const ub = unbalanced(last);
       if (ub) reasons.push('the last paragraph stops mid-way (' + ub + ')');
       else if (!END_PUNCT.test(lastPlain) && !LINK_END.test(lastPlain)) reasons.push(/[,:;–—-]$/.test(lastPlain) || DANGLING.test(lastPlain)
         ? 'the last sentence stops mid-way' : 'the last sentence has no ending (it stops mid-word or mid-sentence)');
     }
+    // fu-finalize-toc (K6): an end that is word for word the end of the page this text was made from (opts.unchanged_from: in the final
+    // version, the page the engine delivered) was not written by this answer, so it cannot be where this answer was cut. A truly cut answer
+    // ends on other words than its source and is still caught; the caller passes no source when the source itself was found cut off.
+    const refs = (o.unchanged_from || []).map(r => String(r == null ? '' : r)).filter(r => r.trim());
+    const endWas = reasons.slice(kept0);
+    const same = endWas.length > 0 && refs.some(r => endOf(r) === endOf(md));
+    if (same) reasons.splice(kept0);
     const cut_off = reasons.length > 0;
-    return { complete: !cut_off, cut_off, empty: false, words: n, last_line: last.slice(-160), reasons };
+    return { complete: !cut_off, cut_off, empty: false, words: n, last_line: last.slice(-160), reasons, ...(same ? { unchanged_end: true, unchanged_end_reasons: endWas } : {}) };
   };
 
   const MAIN_STOP = /^#{1,3}\s+(?:faq|frequently asked questions|sources|references)\b/i;
@@ -103,7 +731,7 @@ const CK = (() => {
 
   const edit = (before, after, opts) => {
     const o = opts || {};
-    const t = text(after);
+    const t = text(after, { cta: o.cta });   // W06-B: the page's call to action is a proper end in an edit too
     const reasons = t.reasons.slice();
     const wb = mainWords(before), wa = mainWords(after);
     const floor = o.cut_requested ? 0.4 : 0.75;
@@ -353,8 +981,33 @@ const ST = (() => {
 const SRC = (() => {
   const TRACK = /^(?:utm_[a-z0-9_]*|srsltid|gclid|gbraid|wbraid|dclid|fbclid|msclkid|yclid|twclid|ttclid|igshid|mc_cid|mc_eid|_hsenc|_hsmi|hsa_[a-z0-9_]*|s_kwcid|vero_id|oly_enc_id|cmpid|mkt_tok|spm|scid|ref_src|pk_campaign|pk_kwd|piwik_campaign|at_medium|at_campaign)$/i;
   const host = (u) => { const m = String(u == null ? '' : u).trim().match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '') : ''; };
+  // ---- FU-SV (2026-10-29, page-quality BEFORE run K7): a search-engine redirect is never a source ----
+  // One run's facts search answered 16 of its 19 results as Google redirects (https://google.com/goto?url=CAES..., an opaque token, domain
+  // "google.com", rated a high-authority source because it is Google), and all five citations of the delivered page pointed there.
+  // `isRedirect` knows the redirect forms (Google /url, /goto, /aclk, /imgres, the Vertex AI grounding redirect, Google News article
+  // tokens, Bing /ck/a); `unwrap` returns the real target when the redirect carries it (?q=https://..., ?url=https%3A..., Bing's
+  // u=a1<base64>), else ''. `clean` unwraps a redirect that carries its target, so every caller that cleans a link gets the real page; an
+  // opaque redirect is returned as it is, and the caller drops the link and keeps its words (`unredirect`). `tier` rates an opaque one weak.
+  const REDIR = /^https?:\/\/(?:[a-z0-9-]+\.)*(?:google\.[a-z]{2,3}(?:\.[a-z]{2})?\/(?:url|goto|aclk|search\/url|imgres)(?=[?\/#]|$)|vertexaisearch\.cloud\.google\.com\/grounding-api-redirect\/|news\.google\.com\/(?:rss\/)?(?:articles|read)\/|bing\.com\/ck\/a(?=[?\/#]|$))/i;
+  const isRedirect = (u) => REDIR.test(String(u == null ? '' : u).trim());
+  const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const b64 = (t) => { let bits = 0, val = 0, out = ''; for (const ch of String(t).replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '')) {
+    const i = B64.indexOf(ch); if (i < 0) return ''; val = ((val << 6) | i) & 0xffffff; bits += 6; if (bits >= 8) { bits -= 8; out += String.fromCharCode((val >> bits) & 255); } } return out; };
+  const dec = (v) => { let x = String(v || ''); for (let i = 0; i < 3 && /%[0-9a-f]{2}/i.test(x); i++) { try { x = decodeURIComponent(x); } catch (e) { break; } } return x; };
+  const param = (s, names) => { const q = s.indexOf('?'); if (q < 0) return ''; const qs = s.slice(q + 1).replace(/#.*$/, '');
+    for (const n of names) for (const p of qs.split('&')) { const e = p.indexOf('='); if (e > 0 && p.slice(0, e).toLowerCase() === n) return p.slice(e + 1); } return ''; };
+  const unwrap = (u, depth) => {
+    const s = String(u == null ? '' : u).trim(); if (!isRedirect(s)) return s;
+    let t = '';
+    if (/bing\.com\/ck\/a/i.test(s)) { const v = dec(param(s, ['u'])); t = /^a1/.test(v) ? b64(v.slice(2)) : v; }
+    else if (!/vertexaisearch|news\.google|\/aclk/i.test(s)) t = dec(param(s, /\/imgres/i.test(s) ? ['imgrefurl'] : ['url', 'q', 'u']));
+    t = String(t || '').trim();
+    if (!/^https?:\/\/[^\s\/?#]+\.[^\s]*$/i.test(t) || /[\s<>"]/.test(t)) return '';
+    return isRedirect(t) ? ((depth || 0) < 2 ? unwrap(t, (depth || 0) + 1) : '') : t;
+  };
   const clean = (u) => {
-    const s = String(u == null ? '' : u).trim();
+    let s = String(u == null ? '' : u).trim();
+    if (isRedirect(s)) { const t = unwrap(s); if (!t) return s; s = t; }
     if (!s || s.indexOf('?') < 0) return s;
     const h = s.indexOf('#'); const frag = h >= 0 ? s.slice(h) : ''; const noFrag = h >= 0 ? s.slice(0, h) : s;
     const q = noFrag.indexOf('?'); if (q < 0) return noFrag + frag;
@@ -367,7 +1020,8 @@ const SRC = (() => {
   const PRESS = /(^|\.)(reuters\.com|bloomberg\.com|bbc\.com|bbc\.co\.uk|nytimes\.com|wsj\.com|ft\.com|economist\.com|apnews\.com|cnbc\.com|theguardian\.com|forbes\.com|techcrunch\.com|zdnet\.com|arstechnica\.com|theregister\.com|gulfnews\.com|khaleejtimes\.com|thenationalnews\.com|arabianbusiness\.com|zawya\.com|bizjournals\.com)$/i;
   const VENDOR = /(^|\.)(microsoft\.com|oracle\.com|sap\.com|odoo\.com|zoho\.com|salesforce\.com|netsuite\.com|sage\.com|xero\.com|intuit\.com|quickbooks\.intuit\.com|google\.com|adobe\.com|aws\.amazon\.com|amazon\.com|ibm\.com|stripe\.com|shopify\.com|hubspot\.com|atlassian\.com|cloudflare\.com|mozilla\.org|developer\.mozilla\.org)$/i;
   const BLOGGY = /\/(?:blog|blogs|insights|resources|articles|news|post|posts|guides?)(?:\/|$)/i;
-  const tier = (u) => {
+  const tier = (u0) => {
+    const u = isRedirect(u0) ? unwrap(u0) : u0;   // FU-SV: a redirect is rated as its target; an opaque one has no host we can rate
     const h = host(u); if (!h) return 'weak';
     if (PRIMARY.test(h)) return 'primary';
     if (RESEARCH.test(h)) return 'research';
@@ -453,7 +1107,470 @@ const SRC = (() => {
   // an excerpt the run read was cut short (a search snippet: "…", "...", "Read more"): a figure missing from it is "not in the excerpt
   // the run read", never "the source does not carry it" — the page itself was never read in full.
   const cutShort = (text) => /\.{3}|…|\bread more\b/i.test(String(text == null ? '' : text));
-  return { TRACK, clean, key, host, tier, TIERS, strong, figures, valueOf, valueSet, hasFigure, spelled, cutShort, FIG_RE };
+  // FU-SV: every link of a text (Markdown links and images, HTML anchors, autolinks, bare URLs) that is a search-engine redirect becomes
+  // its real target when the redirect carries it; an opaque one loses its link and keeps its words, so the attribution stays readable.
+  const unredirect = (text) => {
+    const resolved = [], dropped = [];
+    const fix = (u) => { const t = unwrap(u); if (t) { const c = clean(t); resolved.push({ from: u, to: c }); return c; } dropped.push(u); return ''; };
+    let t = String(text == null ? '' : text);
+    if (!/google\.|vertexaisearch|bing\.com/i.test(t)) return { text: t, resolved, dropped };
+    t = t.replace(/(!?)\[([^\[\]]*)\]\((https?:\/\/[^)\s]+)((?:\s+"[^"]*")?)\)/g, (m, bang, a, u, ttl) => { if (!isRedirect(u)) return m; const r = fix(u); return r ? bang + '[' + a + '](' + r + ttl + ')' : (bang ? '' : a); });
+    t = t.replace(/<a\b([^>]*?)\bhref=(["'])(https?:\/\/[^"']+)\2([^>]*)>([\s\S]*?)<\/a>/gi, (m, pre, q, u0, post, inner) => { const u = u0.replace(/&amp;/g, '&'); if (!isRedirect(u)) return m; const r = fix(u); return r ? '<a' + pre + 'href=' + q + r.replace(/&/g, '&amp;') + q + post + '>' + inner + '</a>' : inner; });
+    t = t.replace(/<(https?:\/\/[^>\s]+)>/g, (m, u) => { if (!isRedirect(u)) return m; const r = fix(u); return r ? '<' + r + '>' : ''; });
+    t = t.replace(/(^|[\s(])(https?:\/\/[^\s)<>\]"']+)/g, (m, pre, u) => { if (!isRedirect(u)) return m; return pre + fix(u); });
+    if (dropped.length) t = t.replace(/[ \t]*\([ \t]*\)/g, '');
+    return { text: t, resolved, dropped };
+  };
+  return { TRACK, clean, key, host, tier, TIERS, strong, figures, valueOf, valueSet, hasFigure, spelled, cutShort, FIG_RE, isRedirect, unwrap, unredirect };
+})();
+// ---- grade kit (W0-C, page-quality programme 2026-10-29, docs/page-quality-2026-10-29/PLAN.md Fix 3, 2.6, 2.9; REVIEW_CODE H3 / L1 / L5;
+// REVIEW_EVIDENCE H2 / H3 / M1; inlined through the GRADE marker into Content QA, Page Candidates, Apply Second Read and the Finalize
+// workflow's Finalize Verdict). Production page run 3299 ("ms 365 erp") was graded 92 and its final version 100 "Ready to publish" while the
+// client's expert reviewer gave it 63: the grade counted structure, term coverage, readability, specificity, filler words and LENGTH, and
+// nothing a reviewer takes points off for (figures resting on an agency blog and a tracker, one label for two different lists, a keyword our
+// own verdict scored 42, a page the website already had). The only part that moved 92 -> 100 was length.
+//
+// The interim grade, deterministic and free, on ONE scale out of 100 (a subset of the Wave 2 rubric, so nothing is thrown away):
+//   structure 20       today's structure checks scaled; -3 per repetition cluster (one statement made 3+ times across sections, up to
+//                      -8); -2 per label used for two different lists (up to -4); a statement made 4+ times caps structure at 50%;
+//                      W06-A: -2 per IDEA restated 4+ times in 3+ places (the near-duplicate check below, up to -4), never below half
+//   removed sections   W06-A: when the run's deletions (verdict exclusions) or its edits took 2+ sections or 20%+ of the words out of the
+//                      page, coverage and fit are capped at 40% of their parts (the page no longer covers what its search asks), with why
+//   coverage 15        today's term coverage, scaled
+//   readability 10     today's readability, scaled
+//   specificity 10     today's specificity
+//   clean language 10  today's filler-phrase check
+//   sources 15         share of the cited sentences and figures resting on an official body, a research house, major press or vendor
+//                      documentation; -1/3 of the part per market, adoption, cost or compliance figure whose only source is weak; such a
+//                      compliance figure caps sources at 8 of 15. Nothing to source (no figure, no citation) is "not checked" at 12 of
+//                      15 (4/5): never full marks, so deleting a citation never pays (WAVE0_REVIEW M2). A sentence resting only on a weak
+//                      source with no market / cost / compliance figure counts half a strong one (none while such a figure rests only
+//                      on a weak source), and while nothing on the page is an
+//                      unsourced or weak-only figure the part never falls below "not checked": citing a vendor or agency page is never
+//                      worse than citing nothing. The digits of a phone number, opening hours, a postcode / PO box or a street, office
+//                      or floor number are contact details, never a figure to source (WAVE0_REVIEW H1)
+//   fit 20             half for the verdict (>= 50 full, 30-49 two fifths, < 30 none, no score full and "not checked"), half for no open
+//                      duplicate page. A verdict under 50 caps fit at 40%, also after "Write it anyway"; an open duplicate caps it at 30%.
+//                      The shapes of the results page are recorded (serp_shapes, Parse Analysis), no points yet
+//   length 0           advice only (Google says not to aim at a word count)
+// Every cap is a SHARE of its part, so a page-type weighting (Wave 2) cannot break it. Any open blocker -> total <= 59; shown as "95+" from 95.
+// READY needs no blocker AND every part at or above half its maximum. Exceptions, so a page we should write is never held back:
+//   * fit is waived after an explicit acknowledgement ("Write it anyway") and for pages a search score says nothing about (a page of the
+//     client's keyword ladder, a case study, an AI answer page, a refresh): shown as the client's or the plan's choice, the cap kept;
+//   * for runs the system started by itself (cadence, ladder, tracker), the fit floor is only recorded (shadow, owner decision D17).
+// A failed floor is ADVICE in this wave: the page is "Needs work: <part>" (delivery status `needs_work`), never "Ready to publish", and
+// nothing stops the client from approving and publishing it. A blocker is still the only thing that makes a page "not ready".
+// The guide that ranks (production exec 949, owner priority) passes every floor: harness/scenarios_w0c.js.
+// Regex and token code only (the n8n Code sandbox has no URL constructor and no-ops Object.defineProperty). No literal dash, curly quote
+// or ellipsis character in this file: they are built with String.fromCharCode.
+const GR = (() => {
+  const VERSION = 'w0c-1';
+  const S = (v) => String(v == null ? '' : v);
+  const num = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v))) ? null : Number(v);
+  const r1 = (x) => Math.round(x * 10) / 10;
+  const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+  const CH = (...c) => String.fromCharCode(...c);
+  const RE_DASH = new RegExp('\\s*[' + CH(0x2014, 0x2013) + ']\\s*', 'g'), RE_DQ = new RegExp('[' + CH(0x201C, 0x201D) + ']', 'g'), RE_SQ = new RegExp('[' + CH(0x2018, 0x2019) + ']', 'g'), RE_ELL = new RegExp(CH(0x2026), 'g');
+  const clean = (s) => S(s).replace(RE_DASH, ': ').replace(RE_DQ, '"').replace(RE_SQ, "'").replace(RE_ELL, '...').replace(/:\s*:/g, ':').trim();
+  const MAX = { structure: 20, coverage: 15, readability: 10, specificity: 10, clean_language: 10, sources: 15, fit: 20, length: 0 };
+  const DIMS = ['structure', 'coverage', 'readability', 'specificity', 'clean_language', 'sources', 'fit'];
+  const LABEL = { structure: 'structure', coverage: 'topic coverage', readability: 'readability', specificity: 'specificity', clean_language: 'plain language', sources: 'sources', fit: 'fit with the search' };
+  // caps as shares of their part (REVIEW_EVIDENCE M1): verdict under 50 -> fit 40%; open duplicate -> fit 30%; a statement made 4+ times ->
+  // structure 50%; a weak-only compliance figure -> sources 8 of 15
+  const SHARE = { fit_verdict: 0.4, fit_duplicate: 0.3, structure_repeat: 0.5, sources_compliance: 8 / 15, weak_figure: 1 / 3, verdict_partial: 0.4, sources_none: 0.8, weak_cite: 0.5, removed: 0.4 };
+  const CFG = { sim: 0.6, min_words: 4, cluster: 3, cluster_cap: 4, blocker_cap: 59, verdict_bar: 50, display_top: 95, floor: 0.5, review_share: 0.25,
+    idea: { size: 4, places: 3, shared: 3, overlap: 0.6, dice: 0.3, min_words: 3, df_share: 0.08, df_min: 6, points: 2, max_points: 4 },   // W06-A: the idea check
+    removed: { sections: 2, share: 0.2 } };   // W06-A: deletions that cap coverage and fit
+  const STOP = new Set(('the a an and or of for to in on with by at from about this that these those your our its it is are be how what which why when who you we they their them '
+    + 'than then into over under more most can will does do not but any all one two also very just only such been being has have had was were each per may must should would '
+    + 'could other some many much here there where while if so as up out own same both few no nor too yes use used using get gets make makes made need needs '
+    + 'first second third new well like via within without across between before after because usually often typically').split(' '));
+  const NUMW = { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+  const stem = (w) => { let x = w; if (x.length > 5) x = x.replace(/(?:ations?|ings?|ies|ed|es|ly|s)$/, ''); else if (x.length > 3) x = x.replace(/s$/, ''); return x; };
+  const plain = (t) => S(t).replace(/!?\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`>#|]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const toks = (t, keep) => S(t).toLowerCase().replace(RE_SQ, '').replace(/'/g, '').split(keep ? /[^\p{L}\p{N}&_]+/u : /[^\p{L}\p{N}&]+/u).filter(w => w.length > 2 && !STOP.has(w) && !/^\d+$/.test(w));
+  const HEAD = /^(Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary Keywords)\s*:/i;
+  const BYLINE = /^[*_]+\s*(?:written by|by|reviewed by|updated)\b/i;   // the italic byline line, never a sentence that starts "By 2027, ..."
+  const SKIP_SECTION = /\babout the author\b|^author\b|\bsources\b|\breferences\b|\bfurther reading\b/i;
+  const hostOf = (u) => { const m = S(u).match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '') : ''; };
+  const SOCIAL = /(^|\.)(linkedin\.com|x\.com|twitter\.com|facebook\.com|instagram\.com|tiktok\.com|youtube\.com|youtu\.be|wa\.me|whatsapp\.com|calendly\.com)$/;
+  const maxOf = (m) => { const o = { ...MAX }; for (const k of DIMS) if (m && Number.isFinite(Number(m[k])) && Number(m[k]) >= 0) o[k] = Number(m[k]); return o; };
+
+  // ---------- the page as sections, paragraphs, sentences, list items and table rows (head lines, byline, images, author box left out) ----------
+  const units = (md0) => {
+    const out = []; let section = 0, heading = '', skip = false, para = 0, qa = false;
+    const lines = S(md0).replace(/\r/g, '').split('\n');
+    let listId = 0, inList = false;
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i].trim();
+      if (!l) { para++; continue; }   // a blank line between two items does not end a list (a numbered list written "1.", blank, "1.")
+      if (HEAD.test(l)) continue;
+      const h = l.match(/^(#{1,6})\s+(.*)$/);
+      if (h) { if (h[1].length >= 2) { section++; heading = plain(h[2]); skip = SKIP_SECTION.test(heading); } para++; inList = false; out.push({ kind: 'heading', section, heading, text: plain(h[2]), level: h[1].length, line: i }); continue; }
+      if (skip) continue;
+      if (/^!\[/.test(l) || /^```/.test(l) || BYLINE.test(l)) continue;
+      if (/^\|/.test(l)) { inList = false; if (/^\|?\s*:?-{2,}/.test(l)) continue; out.push({ kind: 'row', section, heading, para, text: l, line: i }); continue; }
+      const li = l.match(/^(?:>\s*)?(?:[-*+]|\d{1,3}[.)])\s+(.*)$/);
+      if (li) { if (!inList) { listId++; inList = true; } out.push({ kind: 'li', list: listId, section, heading, para, text: li[1], line: i }); continue; }
+      inList = false;
+      const body = l.replace(/^>\s*/, '');
+      qa = /^\**\s*quick answer\b/i.test(body);
+      for (const s of body.split(/(?<=[.!?]["')*_]*)\s+(?=[A-Z0-9"'(*\[])/)) if (s.trim()) out.push({ kind: 'sentence', section, heading, para, text: s.trim(), qa, line: i });
+    }
+    return out;
+  };
+
+  // ---------- 1. repetition: one statement made again and again ----------
+  // Statements (sentences and list items under an H2 / H3, not the introduction, the Quick answer, questions, images or review notes) are
+  // reduced to their content words: the keyword's and the brand's words are taken out (they are on every line of a good page) and a name
+  // of several capitalised words is ONE word ("Accredited Service Provider", "Supply Chain Management"), since a product name alone says
+  // nothing about WHICH point a sentence makes (without that, every sentence naming the same two products was one "cluster" on the guide
+  // that ranks). Two statements in different sections with a Dice overlap of CFG.sim or more say the same thing; linked statements form a
+  // cluster; a cluster of 3+ statements across 2+ sections is one point made three times. Calibrated on production pages 3299 / 3336 and
+  // the guide that ranks (exec 949): none of the three has such a cluster, the pairs each page makes twice stay pairs, and one statement
+  // restated in six sections is found (harness/scenarios_w0c.js). Deliberately conservative: a paraphrase is the Wave 2 judge's work.
+  const repetition = (md, ctx) => {
+    const c = ctx || {};
+    const drop = new Set(toks([c.keyword].concat(c.brand_names || []).join(' ')).map(stem));
+    const U = units(md).filter(u => (u.kind === 'sentence' || u.kind === 'li') && !u.qa && u.section > 0 && !/^\[(?:Image|Confirm|Owner)\b/i.test(u.text) && !/\?["')*_]*$/.test(u.text.trim()));
+    const entity = (t) => plain(t).replace(/\b(?:The|A|An|This|That|These|Your|Our)\s+(?=[A-Z])/g, '').replace(/\b[A-Z][\w&]*(?:\s+[A-Z][\w&]*)+/g, (m) => m.replace(/\s+/g, '_'));
+    const items = [];
+    for (const u of U) { const set = [...new Set(toks(entity(u.text), true).map(stem).filter(w => !drop.has(w)))]; if (set.length >= CFG.min_words) items.push({ ...u, set: new Set(set), n: set.length }); }
+    const parent = items.map((x, i) => i); const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+    const near = [];
+    for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+      const a = items[i], b = items[j]; if (a.section === b.section) continue;
+      let inter = 0; for (const w of a.set) if (b.set.has(w)) inter++;
+      const sim = 2 * inter / (a.n + b.n);
+      if (c.debug && sim >= 0.4) near.push({ sim: Math.round(sim * 100) / 100, a: plain(a.text).slice(0, 110), b: plain(b.text).slice(0, 110) });
+      if (sim >= CFG.sim) { const x = find(i), y = find(j); if (x !== y) parent[x] = y; } }
+    const groups = new Map();
+    items.forEach((it, i) => { const r = find(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(it); });
+    const clusters = [...groups.values()].filter(g => g.length >= CFG.cluster && new Set(g.map(x => x.section)).size >= 2)
+      .map(g => ({ size: g.length, sections_n: new Set(g.map(x => x.section)).size, sections: [...new Set(g.map(x => x.heading))].slice(0, 8),
+        sample: plain(g[0].text).slice(0, 160), members: g.slice(0, 8).map(x => plain(x.text).slice(0, 140)) })).sort((a, b) => b.size - a.size);
+    return { clusters, count: clusters.length, worst: clusters.length ? clusters[0].size : 0, compared: items.length, ...(c.debug ? { near: near.sort((x, y) => y.sim - x.sim).slice(0, 25) } : {}) };
+  };
+
+  // ---------- 1b. W06-A: one IDEA restated (the near-duplicate check) ----------
+  // The blind judges of the wave 0.5 re-check (WAVE05.md) took structure points off three pages for an idea restated 4 to 6 times
+  // ("NetSuite for groups with subsidiaries across countries on one SaaS platform", "a gap-fit analysis before a fixed scope") that the
+  // statement check above never saw: the restatements are worded differently, in a list, a table row, a takeaway and a closing rule, so no
+  // two of them reach its Dice 0.6. Here every sentence, list item and table row (the Quick answer included, questions and links left out)
+  // is reduced to its rarer content words: the keyword's and the brand's words and every word on more than 8% of the units (the page's
+  // vocabulary, such as a product name) are taken out, and a name of several capitalised words is one word. Two units in different places
+  // that share 3+ such words, 60% of the shorter one and a Dice of 0.3, say the same thing. A unit with near copies in 3+ places, 4+ units
+  // in all, is one idea restated (the copies are taken by the most connected unit first, so one long chain is never one idea). Calibrated on
+  // the 16 AFTER / W05 pages of the page-quality run and the guide that ranks (exec 949): it finds the ideas the judges named on two of the
+  // three pages (K3, K4; K6's "launch narrow" is restated in a heading and with too few shared words), nothing on the guide that ranks, and
+  // a repeated deadline, a repeated product rule and a repeated method on three AFTER pages. Deterministic and conservative: a paraphrase
+  // with no shared words is the Wave 2 judge's work.
+  const ideas = (md, ctx) => {
+    const c = ctx || {}; const I = CFG.idea;
+    const strip = (t) => plain(S(t).replace(/!?\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/\]\([^)]*\)?/g, ' ').replace(/https?:\/\/\S+/g, ' ').replace(/\[/g, ' ')).replace(/^quick answer:?\s*/i, '');
+    const entity = (t) => strip(t).replace(/\b(?:The|A|An|This|That|These|Your|Our)\s+(?=[A-Z])/g, '').replace(/\b[A-Z][\w&]*(?:\s+[A-Z][\w&]*)+/g, (m) => m.replace(/\s+/g, '_'));
+    const drop = new Set(toks([c.keyword].concat(c.brand_names || []).join(' ')).map(stem));
+    const U = units(md).filter(u => (u.kind === 'sentence' || u.kind === 'li' || u.kind === 'row') && !/^\[(?:Image|Confirm|Owner)\b/i.test(u.text)
+      && !(u.kind === 'li' && /^\s*\[[^\]]*\]\(#[^)]*\)\s*$/.test(u.text)) && !/\?["')*_]*$/.test(u.text.trim()));
+    const items = U.map(u => ({ text: u.text, place: u.qa ? 'qa' : 's' + u.section, set: new Set(toks(entity(u.text), true).map(stem).filter(w => !drop.has(w))) }));
+    const df = new Map(); for (const it of items) for (const w of it.set) df.set(w, (df.get(w) || 0) + 1);
+    const cap = Math.max(I.df_min, Math.ceil(items.length * I.df_share));
+    for (const it of items) { it.set = new Set([...it.set].filter(w => df.get(w) <= cap)); it.n = it.set.size; }
+    const cand = items.map((it, i) => ({ ...it, i })).filter(it => it.n >= I.min_words);
+    const nb = new Map(cand.map(it => [it.i, []]));
+    for (let a = 0; a < cand.length; a++) for (let b = a + 1; b < cand.length; b++) {
+      const x = cand[a], y = cand[b]; if (x.place === y.place) continue;
+      let inter = 0; for (const w of x.set) if (y.set.has(w)) inter++;
+      if (inter < I.shared || inter / Math.min(x.n, y.n) < I.overlap || 2 * inter / (x.n + y.n) < I.dice) continue;
+      nb.get(x.i).push(y.i); nb.get(y.i).push(x.i); }
+    const used = new Set(); const found = [];
+    for (const it of cand.slice().sort((a, b) => nb.get(b.i).length - nb.get(a.i).length || a.i - b.i)) {
+      if (used.has(it.i)) continue;
+      const mem = [it.i].concat(nb.get(it.i).filter(j => !used.has(j)));
+      const places = new Set(mem.map(j => items[j].place));
+      if (mem.length >= I.size && places.size >= I.places) { mem.forEach(j => used.add(j));
+        found.push({ size: mem.length, places: places.size, sample: strip(it.text).slice(0, 160), members: mem.slice(0, 8).map(j => strip(items[j].text).slice(0, 140)) }); }
+    }
+    found.sort((a, b) => b.size - a.size);
+    return { ideas: found, count: found.length, worst: found.length ? found[0].size : 0, compared: cand.length };
+  };
+
+  // ---------- 2. one label for two different lists ("five questions" before two lists, then "use the five questions") ----------
+  const listLabels = (md) => {
+    const U = units(md); const LBL = /\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d{1,2})\s+([a-z]{3,})\b/i;
+    const norm = (m) => (NUMW[m[1].toLowerCase()] || Number(m[1])) + ' ' + stem(m[2].toLowerCase());
+    const leads = new Map();
+    for (let i = 0; i < U.length; i++) {
+      const u = U[i]; if (u.kind !== 'li') continue; if (i > 0 && U[i - 1].kind === 'li' && U[i - 1].list === u.list) continue;   // the first item of a list
+      const lead = i > 0 && (U[i - 1].kind === 'sentence' || U[i - 1].kind === 'heading') ? U[i - 1] : null;   // the line right before it
+      const m = lead ? plain(lead.text).match(LBL) : null; if (!m) continue;
+      const k = norm(m); if (!leads.has(k)) leads.set(k, { lists: new Set(), text: plain(lead.text).slice(0, 120) }); leads.get(k).lists.add(u.list); }
+    const collisions = [...leads.entries()].filter(([, v]) => v.lists.size >= 2).map(([label, v]) => ({ label, lists: v.lists.size, lead: v.text }));
+    return { collisions, count: collisions.length };
+  };
+
+  // ---------- 3. sources: what the cited sentences and the figures rest on ----------
+  // A unit is a sentence, list item or table row that cites an outside page, names its source ("according to ..."), or carries a figure.
+  // Strong: it links an official body, a research house, major press or vendor documentation (`opts.tier` = Content QA's SRC.tier: anything
+  // but 'weak'), or names an official body or one of those houses; a figure with no link of its own takes its paragraph's citation. A figure
+  // the business states about itself (on file: `own_text`), a year, or a standard's or a law's number is not a sourcing question. The
+  // client's own pages and social profiles are not citations.
+  const OFFICIAL = /\b(?:ministry|authority|federal|government|central bank|commission|council|agency|department|bureau|regulator|parliament|court|statistics|census|united nations|world bank|oecd|imf|european union|eurostat)\b/i;
+  const ATTR = /\b(?:according to|as reported by|reported by|research (?:by|from)|(?:a|the) (?:study|survey|report|analysis) (?:by|from))\s+((?:the\s+)?[A-Z][\w&.'-]*(?:\s+(?:of\s+|for\s+|and\s+)?[A-Z][\w&.'-]*){0,5})/;
+  const ATTR_FIG = /\b(?:data from|figures from)\s+((?:the\s+)?[A-Z][\w&.'-]*(?:\s+(?:of\s+|for\s+|and\s+)?[A-Z][\w&.'-]*){0,5})|\b((?:the\s+)?[A-Z][\w&.'-]+(?:\s+[A-Z][\w&.'-]+){0,4})(?:'s)?\s+(?:found|finds|reports?|reported|estimates?|estimated|states?|stated|counts?|counted)\b/;
+  const FIG_TOPIC = /\bmarket|\bshare\b|\bindustr|\brevenue|\bvalued?\b|\bworth\b|\bcagr\b|\bgrow|\bsize\b|\bforecast|\bspend|\bcompan(?:y|ies)\b|\bbusinesses\b|\borgani[sz]ations?\b|\bfirms?\b|\benterprises?\b|\bcustomers?\b|\busers?\b|\bclients?\b|\bsmes?\b|\badopt|\buse[sd]?\b|\busing\b|\bdeploy|\bimplement|\bcost|\bprice|\bpricing|\bfees?\b|\bbudget|\bsav(?:e|es|ed|ing|ings)\b|\broi\b|\binvest|\bfines?\b|\bpenalt|\bdeadline|\bmandat|\bvat\b|\btax|\bregulat|\blaws?\b|\blegal|\bcompl(?:y|ies|iance|iant)\b|\be-?invoic|\bthreshold|\brequire|\bauthorit|\bministry|\bdecree/i;
+  const COMPLIANCE = /\bfines?\b|\bpenalt|\bdeadline|\bmandat|\bvat\b|\btax|\bregulat|\blaws?\b|\blegal|\bcompl(?:y|ies|iance|iant)\b|\be-?invoic|\bthreshold|\brequire|\bauthorit|\bministry|\bdecree/i;
+  const STD = /\b(?:ISO|IEC|EN|BS|SOC|PCI|IAS|IFRS|ASC|Article|Section|Law|Decree|No\.?|Resolution|Circular|Decision)\s?(?:\/IEC)?$/i;
+  // H1 (WAVE0_REVIEW 2026-10-30): where a page states how to reach the business, its digits are contact details. BEFORE run K6 (the page
+  // both judges rated best) had one source unit, the last four digits of the phone number in its call to action, and graded sources 0 of 15:
+  // "Needs work: sources" on a guide that cites nothing it needs to. Every Local page carries a NAP block (v4.4), so every one would have.
+  // The spans below are phone numbers (an international prefix, or a phone word before a run of 7+ digits with separators or a leading 0),
+  // opening hours (0900-1800), a PO box / postcode / ZIP, and a street, office, suite, floor or building number. A figure inside one is
+  // not a sourcing question ("P.O. Box 123456" is cut into two sentences at "P.O.", so a capital "Box" with its number counts alone, as does a
+  // number in the local form 0X XXX XXXX). Each match must hold enough digits to be what it says (a phone 7+), so "call 1,200 customers" stays a figure.
+  const NAP_RES = [
+    [/(?:\+|\b00)\d{1,4}[\s.\-]?(?:\(\d{1,4}\)[\s.\-]?)?(?:\d{1,5}[\s.\-]?){1,5}\d{1,5}\b/g, 8],
+    [/\b(?:tel|telephone|phone|call(?:\s+us)?|mobile|whatsapp|fax|toll[\s\-]?free|landline|hotline)\b[^\n.]{0,30}?(?:\(\d{1,5}\)\s?|\b0)\d[\d\s.\-]{4,}\d/gi, 7],
+    [/\b(?:tel|telephone|phone|call(?:\s+us)?|mobile|whatsapp|fax|toll[\s\-]?free|landline|hotline)\b[^\n.]{0,30}?\b\d{2,5}(?:[\s.\-]\d{2,5}){1,4}\b/gi, 7],
+    [/\(\+?\d{1,5}\)\s?\d[\d\s.\-]{4,}\d/g, 7],
+    [/\b0\d{1,3}[\s.\-]\d{3,4}[\s.\-]?\d{3,4}\b/g, 8],
+    [/\bBox\s*[:#]?\s*\d[\d\-]{1,10}/g, 3],
+    [/\b(?:open(?:ing)?|hours|mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:rs|rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b[^\n.]{0,40}?\b(?:[01]\d|2[0-3])[:.]?[0-5]\d\s*(?:-|to|until|till)\s*(?:[01]\d|2[0-3])[:.]?[0-5]\d\b/gi, 6],
+    [/\b0\d[:.]?[0-5]\d\s*(?:-|to|until|till)\s*(?:[01]\d|2[0-3])[:.]?[0-5]\d\b/gi, 6],
+    [/\b(?:p\.?\s?o\.?\s?box|post\s?box|postcode|post(?:al)?\s?code|zip(?:\s?code)?|pin\s?code)\s*[:#.]?\s*[A-Z]{0,2}\d[\d\s\-]{1,10}/gi, 2],
+    [/,\s*[A-Z]{2}\s\d{5}(?:-\d{4})?\b/g, 5],
+    [/\b(?:Office|Suite|Unit|Floor|Level|Building|Bldg|Tower|Villa|Shop|Flat|Apartment|Apt|Room|Plot|Block|Warehouse|Street|Road|Avenue)\s*(?:No\.?|Number|#)?\s*\d{1,6}[A-Za-z]?\b(?![,.]\d)/g, 1],
+    [/\b\d{1,6}[A-Za-z]?,?\s+(?:[A-Z][\w'\-]*\s+){0,4}(?:Street|St\.?|Road|Rd\.?|Avenue|Ave\.?|Boulevard|Blvd\.?|Lane|Ln\.?|Drive|Highway|Hwy|Square)(?=[\s,.;]|$)/g, 1]
+  ];
+  const napSpans = (t) => { const out = []; const s = S(t);
+    for (const [re, minDigits] of NAP_RES) for (const m of s.matchAll(re)) if ((m[0].match(/\d/g) || []).length >= minDigits) out.push([m.index, m.index + m[0].length]);
+    return out; };
+  const strongName = (name, tier) => { const n = S(name).replace(/^the\s+/i, '').replace(/[.,;:]+$/, '').trim(); if (!n) return false; if (OFFICIAL.test(n)) return true;
+    if (typeof tier !== 'function') return false; const sq = n.toLowerCase().replace(/'s$/, '').replace(/[^a-z0-9]+/g, ''); return sq.length >= 2 && tier('https://' + sq + '.com/') !== 'weak'; };
+  const sources = (md, ctx, opts) => {
+    const c = ctx || {}; const o = opts || {}; const M = maxOf(o.max); const tier = typeof o.tier === 'function' ? o.tier : null; const figs = typeof o.figures === 'function' ? o.figures : null;
+    const d = S(c.domain).toLowerCase().replace(/^www\./, ''); const own = (h) => !!d && (h === d || h.endsWith('.' + d));
+    const ownText = S(c.own_text).toLowerCase();
+    const U = units(md).filter(u => u.kind !== 'heading' && !u.qa);
+    const linkTier = (u) => { const h = hostOf(u); if (!h || own(h) || SOCIAL.test(h)) return null; return tier ? tier(u) : 'weak'; };
+    const linksOf = (t) => [...S(t).matchAll(/\[([^\[\]]*)\]\((https?:\/\/[^)\s]+)\)/g)].map(m => ({ url: m[2], tier: linkTier(m[2]) })).filter(x => x.tier);
+    const paraLinks = new Map(); for (const u of U) { const k = u.section + ':' + u.para; const ls = linksOf(u.text); if (ls.length) paraLinks.set(k, (paraLinks.get(k) || []).concat(ls)); }
+    // H1: the client's own phone and address on file (own_text: Content QA adds the profile's and the site model's NAP) are theirs in any
+    // spelling: the run of digits a figure sits in (spaces, dots, dashes and brackets between them) equals one on file, or the two share
+    // their last 7 digits (a number written with and without its country code or trunk 0)
+    const ownRuns = [...S(c.own_text).matchAll(/\+?\d[\d\s.()\-]{2,}\d/g)].map(m => m[0].replace(/\D+/g, '')).filter(x => x.length >= 4);
+    const runAt = (p, x) => { let a = x.index, b = x.index + S(x.raw).length; while (a > 0 && /[\d\s.()+\-]/.test(p[a - 1])) a--; while (b < p.length && /[\d\s.()\-]/.test(p[b])) b++; return p.slice(a, b).replace(/\D+/g, ''); };
+    const ownNum = (p, x) => { if (!ownRuns.length) return false; const dg = runAt(p, x); return dg.length >= 4 && ownRuns.some(o => o === dg || (o.length >= 7 && dg.length >= 7 && o.slice(-7) === dg.slice(-7))); };
+    const figureIn = (p) => { if (!figs) return null; const nap = napSpans(p);
+      const f = (figs(p) || []).filter(x => x && !x.year && !STD.test(p.slice(Math.max(0, x.index - 16), x.index).trim())
+        && !nap.some(([a, b]) => x.index >= a && x.index < b));
+      const left = f.filter(x => !(ownText && ownText.includes(S(x.raw).toLowerCase())) && !ownNum(p, x)); return left.length ? left[0] : null; };
+    const list = []; let strong = 0, weakOnly = 0, weakCompliance = 0, weakCited = 0, unsourced = 0;
+    for (const u of U) {
+      const text = plain(u.text); if (!text) continue;
+      const links = linksOf(u.text); const fig = figureIn(text);
+      const am = text.match(ATTR) || (fig ? text.match(ATTR_FIG) : null); const named = am ? S(am[1] || am[2]) : '';
+      if (!links.length && !fig && !named) continue;
+      const ls = links.length ? links : (fig ? paraLinks.get(u.section + ':' + u.para) || [] : []);
+      const isStrong = ls.some(x => x.tier !== 'weak') || (!!named && strongName(named, tier));
+      const onlyWeak = !isStrong && ls.length > 0 && ls.every(x => x.tier === 'weak');
+      const unit = { text: text.slice(0, 200), strong: isStrong, figure: fig ? S(fig.raw) : '', named: named.slice(0, 80), weak_only: false, compliance: false };
+      if (fig && onlyWeak && FIG_TOPIC.test(text)) { unit.weak_only = true; weakOnly++; if (COMPLIANCE.test(text)) { unit.compliance = true; weakCompliance++; } }
+      // M2: a sentence that rests on a weak source (no market / cost / compliance figure of its own) is cited, only not by an authority: half a
+      // strong one. A figure resting on nothing at all is unsourced: no credit.
+      else if (!isStrong && (ls.length || named)) { unit.weak_cite = true; weakCited++; }
+      else if (!isStrong && fig) { unit.unsourced = true; unsourced++; }
+      if (isStrong) strong++;
+      list.push(unit);
+    }
+    const n = list.length; const none = M.sources * SHARE.sources_none;
+    if (!n) return { units: 0, strong: 0, share: null, weak_only: 0, weak_compliance: 0, weak_cited: 0, unsourced: 0, points: r1(none), capped: false, not_checked: true,
+      note: 'Sources not checked: the page cites no outside page and states no figure that needs one (4 of 5 of the part: citing an official body, a research house, major press or vendor documentation earns the rest)', list: [] };
+    const share = strong / n;
+    // the half credit holds while no market, cost or compliance figure rests only on a weak source: on a page that leans on weak sources for
+    // its figures (3336, the expert's 63), its other weak citations are the same problem and earn nothing (PLAN 5.2 pin 2 stays <= 72)
+    const half = weakOnly ? 0 : SHARE.weak_cite;
+    let pts = clamp(M.sources * (strong + half * weakCited) / n - M.sources * SHARE.weak_figure * weakOnly, 0, M.sources); let capped = false; let floored = false;
+    // M2: citing only weak pages is never worse than citing nothing, while no figure on the page is unsourced or weak-only (those cost the share)
+    if (!weakOnly && !unsourced && pts < none) { pts = none; floored = true; }
+    if (weakCompliance && pts > M.sources * SHARE.sources_compliance) { pts = M.sources * SHARE.sources_compliance; capped = true; }
+    return { units: n, strong, share: Math.round(share * 100), weak_only: weakOnly, weak_compliance: weakCompliance, weak_cited: weakCited, unsourced, points: r1(pts), capped, floored,
+      note: strong + ' of the ' + n + ' cited sentences and figures rest on an official body, a research house, major press or vendor documentation'
+        + (weakCited ? '; ' + weakCited + ' cite' + (weakCited === 1 ? 's' : '') + ' a page with no independent authority (' + (half ? 'half credit' : 'no credit while a figure rests only on such a page') + (floored ? ', and never less than citing nothing' : '') + ')' : '')
+        + (unsourced ? '; ' + unsourced + ' figure' + (unsourced === 1 ? ' has' : 's have') + ' no source' : '')
+        + (weakOnly ? '; ' + weakOnly + ' market, cost or compliance figure' + (weakOnly === 1 ? ' rests' : 's rest') + ' only on a source with no independent authority' : ''),
+      list: list.filter(x => !x.strong).slice(0, 8) };
+  };
+
+  // ---------- 4. fit with the search: the verdict, and the page the website already has ----------
+  // fitOf(prev): from a content run's Parse Brief item (verdict_score, verdict_acknowledged, hold_exempt / the page's own fields) or from the
+  // Finalize brief (prc.gating: score, verdict, verdict_acknowledged). A withheld or missing score is null: "not checked", full points.
+  const fitOf = (prev) => {
+    const p = prev || {}; const g = ((p.prc || {}).gating) || {};
+    const withheld = p.score_withheld === true || g.score_withheld === true || /^NOT_CHECKED$/i.test(S(p.verdict || g.verdict));
+    const score = withheld ? null : (num(p.verdict_score) != null ? num(p.verdict_score) : num(g.score));
+    const ack = p.verdict_acknowledged === true || g.verdict_acknowledged === true || !!(p.hold_ack && typeof p.hold_ack === 'object');
+    const ex0 = S(p.hold_exempt).match(/score:\s*([^;]+)/);
+    const ladder = !!S(p.ladder_id) && p.ladder_rung != null && p.ladder_rung !== '';
+    const caseStudy = !!S(p.case_id) || S(p.page_role) === 'case_study' || /case stud/i.test(S(p.page_type));
+    const aiPage = !!(p.ai_target && typeof p.ai_target === 'object' && S(p.ai_target.question));
+    const refresh = !!S(p.existing_page_url);
+    const exempt = ex0 ? ex0[1].trim() : caseStudy ? 'a case study: its keyword is the case name' : aiPage ? 'a page written to be cited in AI answers'
+      : refresh ? 'a refresh of a page your website already has' : ladder ? 'a page of your keyword ladder: the ladder checked its main keyword when it was planned' : '';
+    const automatic = /^(cadence|ladder|tracker|casestudy|audit):/i.test(S(p.client_ip));
+    return { verdict_score: score, withheld, acknowledged: ack, exempt, automatic };
+  };
+  const fit = (f0, dup, max) => {
+    const f = f0 || {}; const sc = num(f.verdict_score); const D = dup || {}; const M = Number.isFinite(Number(max)) ? Number(max) : MAX.fit; const half = M / 2;
+    const vp = sc == null || sc >= CFG.verdict_bar ? half : sc >= 30 ? half * SHARE.verdict_partial : 0;
+    const dp = D.open || D.differs ? 0 : half;
+    let pts = vp + dp; const caps = [];
+    if (sc != null && sc < CFG.verdict_bar && pts > M * SHARE.fit_verdict) { pts = M * SHARE.fit_verdict; caps.push({ dim: 'fit', share: SHARE.fit_verdict, why: 'our verdict scored this search ' + sc + ' out of 100, under ' + CFG.verdict_bar }); }
+    if ((D.open || D.differs) && pts > M * SHARE.fit_duplicate) { pts = M * SHARE.fit_duplicate; caps.push({ dim: 'fit', share: SHARE.fit_duplicate, why: D.open ? 'your website already has a page for this search' : 'published beside the page your website has for this search' }); }
+    const band = sc == null ? 'not_checked' : sc >= CFG.verdict_bar ? 'full' : sc >= 30 ? 'partial' : 'none';
+    const note = sc == null ? 'Fit not checked: ' + (f.withheld ? 'the verdict could not score this search' : 'no verdict score was kept with this page') + ', so fit takes its full points'
+      : 'Our verdict scored this search ' + sc + ' out of 100' + (sc < CFG.verdict_bar ? (f.acknowledged ? ', and you chose to write it anyway' : f.exempt ? ' (' + f.exempt + ')' : '') : '');
+    return { points: r1(pts), verdict_points: r1(vp), duplicate_points: r1(dp), band, caps, note };
+  };
+
+  // ---------- 4b. W06-A: what the run took out of the page ----------
+  // rm: { sections, words, words_before, h2_before, h2_removed, h2_now, headings } (EXC.removedOf on the page run's state, plus the page's
+  // H2 count now). Sections the edits lost count too (the H2s of the first draft that are neither on the page nor deleted on purpose).
+  // Two sections or a fifth of the words taken out cap coverage and fit at 40% of their parts: on the live K1 page (W05 run) six core
+  // sections went and the grade still read fit 20 of 20, "Ready".
+  const removedCap = (rm, max) => {
+    const R = rm && typeof rm === 'object' ? rm : null; if (!R) return null; const M = maxOf(max);
+    const excl = Math.max(0, Number(R.sections) || 0);
+    const byEdits = Number(R.h2_before) > 0 && R.h2_now != null && Number.isFinite(Number(R.h2_now)) ? Math.max(0, Number(R.h2_before) - (Number(R.h2_removed) || 0) - Number(R.h2_now)) : 0;
+    const share = Number(R.words_before) > 0 && Number(R.words) > 0 ? Number(R.words) / Number(R.words_before) : 0;
+    const n = excl + byEdits;
+    if (n < CFG.removed.sections && share < CFG.removed.share) return null;
+    const pct = Math.round(share * 100);
+    const why = (excl ? excl + ' section' + (excl === 1 ? ' was' : 's were') + ' taken out as a topic the verdict said to leave out' : '')
+      + (excl && byEdits ? ', and ' : '') + (byEdits ? byEdits + ' section' + (byEdits === 1 ? ' was' : 's were') + ' lost in editing' : '') + (pct ? ' (' + pct + '% of the words)' : '');
+    return { limit: { coverage: M.coverage * SHARE.removed, fit: M.fit * SHARE.removed }, why: clean(why),
+      note: clean('Coverage and fit are limited to ' + Math.round(SHARE.removed * 100) + '% of their points: ' + why + ', so the page no longer covers what its search asks. Write the missing sections back, or start a new page run'),
+      record: { sections: excl, by_edits: byEdits, words: Number(R.words) || 0, share_pct: pct, headings: (Array.isArray(R.headings) ? R.headings : []).slice(0, 8), capped: true } }; };
+
+  // ---------- 5. the page-local grade (Content QA) ----------
+  // parts: what Content QA already measures, as fractions or on their old scales: structure_frac (0-1), coverage_ratio (0-1),
+  // readability_pts (of 15), specificity_pts (of 10), clean_pts (of 10). ctx: keyword, brand_names, domain, own_text, prev (the brief item).
+  // opts: tier / figures (Content QA's SRC kit), max (a page-type weighting; the default is MAX).
+  const local = (parts, md, ctx, opts) => {
+    const P = parts || {}; const c = ctx || {}; const o = opts || {}; const M = maxOf(o.max);
+    const rep = repetition(md, c); const lab = listLabels(md); const src = sources(md, c, { ...o, max: M }); const F = fitOf(c.prev || {}); const fi = fit(F, null, M.fit);
+    const caps = fi.caps.slice();
+    let structure = clamp(M.structure * clamp(Number(P.structure_frac) || 0, 0, 1) - Math.min(8, 3 * rep.count) * M.structure / 20 - Math.min(4, 2 * lab.count) * M.structure / 20, 0, M.structure);
+    if (rep.worst >= CFG.cluster_cap && structure > M.structure * SHARE.structure_repeat) { structure = M.structure * SHARE.structure_repeat; caps.push({ dim: 'structure', share: SHARE.structure_repeat, why: 'one statement is made ' + rep.worst + ' times' }); }
+    // W06-A: an idea restated 4+ times that the statement check did not already count costs 2 points of structure (up to 4), never below
+    // half the part, so it alone never turns a page into "Needs work"
+    const idw = ideas(md, c); const seenRep = new Set(rep.clusters.flatMap(x => x.members || []).map(x => S(x).slice(0, 60)));
+    const idNew = idw.ideas.filter(x => !x.members.some(m => seenRep.has(S(m).slice(0, 60))));
+    let ideaCut = 0;
+    if (idNew.length) { const want = Math.min(CFG.idea.max_points, CFG.idea.points * idNew.length) * M.structure / 20; const room = Math.max(0, structure - M.structure * CFG.floor);
+      ideaCut = Math.min(want, room); structure -= ideaCut; }
+    const RM = removedCap(c.removed, M);
+    if (src.capped) caps.push({ dim: 'sources', share: SHARE.sources_compliance, why: 'a compliance figure rests only on a source with no independent authority' });
+    const raw = { structure, coverage: M.coverage * clamp(Number(P.coverage_ratio) || 0, 0, 1), readability: M.readability * clamp((Number(P.readability_pts) || 0) / 15, 0, 1),
+      specificity: M.specificity * clamp((Number(P.specificity_pts) || 0) / 10, 0, 1), clean_language: M.clean_language * clamp((Number(P.clean_pts) || 0) / 10, 0, 1), sources: src.points, fit: fi.points, length: 0 };
+    if (RM) for (const k of ['coverage', 'fit']) if (raw[k] > RM.limit[k]) { raw[k] = RM.limit[k]; caps.push({ dim: k, share: SHARE.removed, why: RM.why }); }
+    const breakdown = {}; for (const k of Object.keys(raw)) breakdown[k] = Math.round(raw[k]);
+    const notes = [fi.note, src.note, 'Length is advice only: it carries no points'];
+    if (rep.count) notes.push(rep.count + ' statement' + (rep.count === 1 ? ' is' : 's are') + ' made three or more times: ' + rep.clusters.slice(0, 3).map(x => '"' + x.sample + '" (' + x.size + ' times)').join('; '));
+    if (idNew.length) notes.push(idNew.length + ' idea' + (idNew.length === 1 ? ' is' : 's are') + ' restated four or more times in different places' + (ideaCut ? ' (' + r1(ideaCut) + ' point' + (r1(ideaCut) === 1 ? '' : 's') + ' off structure)' : '') + ': '
+      + idNew.slice(0, 2).map(x => '"' + x.sample.slice(0, 110) + '" (' + x.size + ' times)').join('; ') + '. Say it once where the reader decides, and point back to it');
+    if (RM) notes.push(RM.note);
+    if (lab.count) notes.push('The same label introduces two different lists: ' + lab.collisions.map(x => '"' + x.lead + '"').join(', '));
+    return { version: VERSION, score: DIMS.reduce((s, k) => s + breakdown[k], 0), of: 100, breakdown, max: M, caps,
+      items: { repetition: { count: rep.count, worst: rep.worst, clusters: rep.clusters.slice(0, 5) }, list_labels: lab.collisions,
+        ideas: { count: idNew.length, points_off: r1(ideaCut), ideas: idNew.slice(0, 4) }, ...(RM ? { removed: RM.record } : {}),
+        sources: { units: src.units, strong: src.strong, share: src.share, weak_only: src.weak_only, weak_compliance: src.weak_compliance, weak_cited: src.weak_cited, unsourced: src.unsourced, not_checked: !!src.not_checked, weak: src.list },
+        fit: { verdict_score: F.verdict_score, band: fi.band, acknowledged: F.acknowledged, exempt: F.exempt, automatic: F.automatic, verdict_points: fi.verdict_points, duplicate_points: fi.duplicate_points } },
+      notes: notes.map(clean) };
+  };
+
+  // ---------- 6. the delivered grade: blockers, the duplicate page, the floors (Page Candidates, Finalize Verdict, Apply Second Read) ----------
+  // grade0: the grade object those nodes build (score / breakdown from Content QA's content_score / score_breakdown; `w0c` = Content QA's
+  // grade_detail). blocking: the delivered blocking items ({ code }). o.decision: the client's duplicate-page decision (W0-B, D2).
+  // A grade without `w0c` (a check from before this kit) is returned as it was, with its display.
+  // W05-A (wave 0.5, 2026-10-30, BEFORE_AFTER.md): what the blind second read found that is not a factual error (an uncited contrast, a
+  // figure that wants a source, a vague market figure, a law with no link, a statistics note, a repeated point) is ADVICE: it never caps
+  // the total at 59 (only a blocker does), it takes points off the part it is about. Each advice item the client is shown costs 3 points
+  // (high) or 1.5 (medium) of its part, at most a quarter of the part, and never below half the part: advice alone never turns a page into
+  // "Needs work" (the floors judge what Content QA measured). Only an enforced read counts (shadow mode, the system's own runs and the
+  // client's keyword ladder, records it and changes nothing: the guide that ranks, a ladder page, is never marked down by it).
+  // o.review: the read's record (content_qa.critic_reread: { mode, status, advice: [{ severity, kind }] }); the deduction is kept on the
+  // grade (review.advice) so a later cap of the same grade applies it once, from the parts before it (pre_review).
+  const REVIEW_DIM = { fact: 'sources', source: 'sources', claim: 'sources', local: 'sources', repetition: 'structure', structure: 'structure', link: 'structure',
+    depth: 'specificity', intent: 'fit', style: 'clean_language' };
+  const REVIEW_PTS = { high: 3, medium: 1.5 };
+  const reviewCut = (rv, b, M) => {
+    const R = rv || {}; if (R.mode !== 'enforce' || (R.status && R.status !== 'checked')) return null;
+    const items = (Array.isArray(R.advice) ? R.advice : []).filter(a => a && REVIEW_DIM[S(a.kind)] && REVIEW_PTS[S(a.severity)]).map(a => ({ kind: S(a.kind), severity: S(a.severity) }));
+    if (!items.length) return null;
+    const want = {}; for (const a of items) { const k = REVIEW_DIM[a.kind]; want[k] = (want[k] || 0) + REVIEW_PTS[a.severity]; }
+    const cut = {}; let total = 0;
+    for (const k of Object.keys(want)) { if (!M[k]) continue; const room = Math.max(0, (Number(b[k]) || 0) - M[k] * CFG.floor);
+      const c = Math.floor(Math.min(want[k], M[k] * CFG.review_share, room)); if (c > 0) { cut[k] = c; total += c; } }
+    const parts = Object.keys(cut).map(k => LABEL[k] + ' -' + cut[k]);
+    return { mode: 'enforce', status: 'checked', advice: items, cut, total,
+      note: clean('A second read of the page found ' + items.length + ' thing' + (items.length === 1 ? '' : 's') + ' to improve before publishing' + (total ? ': ' + total + ' point' + (total === 1 ? '' : 's') + ' off (' + parts.join(', ') + ')' : ', already reflected in the parts')) }; };
+  const cap = (grade0, blocking, o0) => {
+    const g = { ...(grade0 || {}) }; const o = o0 || {}; const W = g.w0c || o.w0c || null;
+    if (!W || !g.breakdown || g.score == null) return { ...g, display: display(g.score) };
+    const M = maxOf(W.max); const b = { ...(g.pre_review && typeof g.pre_review === 'object' ? g.pre_review : g.breakdown) }; const caps = (W.caps || []).slice(); const F = (W.items || {}).fit || {};
+    const codes = (blocking || []).map(x => S(x && x.code)).filter(Boolean);
+    const dupOpen = codes.includes('duplicate_page'); const differs = !!(o.decision && o.decision.choice === 'differs');
+    if (dupOpen || differs) { const fi = fit(F, { open: dupOpen, differs }, M.fit); for (const x of fi.caps) if (!caps.some(y => y.dim === x.dim && y.share === x.share)) caps.push(x); b.fit = Math.round(fi.points); }
+    // W06-A: sections the run took out of the page cap coverage and fit (from the page run's state here, or the check's own record)
+    const RMc = o.removed ? removedCap(o.removed, M) : null;
+    const RMrec = RMc ? RMc.record : (g.removed && g.removed.capped ? g.removed : ((W.items || {}).removed && (W.items || {}).removed.capped ? W.items.removed : null));
+    if (RMc) for (const k of ['coverage', 'fit']) { const lim = Math.round(RMc.limit[k]); if ((Number(b[k]) || 0) > lim) { b[k] = lim; if (!caps.some(y => y.dim === k && y.share === SHARE.removed)) caps.push({ dim: k, share: SHARE.removed, why: RMc.why }); } }
+    // W05-A: the second read's advice, off its parts (from the parts before it, so it is applied once)
+    const pre = { ...b }; const rv = reviewCut(o.review !== undefined ? o.review : (g.review && Array.isArray(g.review.advice) ? g.review : null), b, M);
+    if (rv) for (const k of Object.keys(rv.cut)) b[k] = (Number(b[k]) || 0) - rv.cut[k];
+    let total = DIMS.reduce((s, k) => s + (Number(b[k]) || 0), 0);
+    if (codes.length && total > CFG.blocker_cap) { total = CFG.blocker_cap; caps.push({ dim: 'total', to: CFG.blocker_cap, why: codes.length + ' point' + (codes.length === 1 ? '' : 's') + ' still stop' + (codes.length === 1 ? 's' : '') + ' this page' }); }
+    const failing = [], waived = [], shadow = [];
+    for (const k of DIMS) {
+      if (!M[k] || (Number(b[k]) || 0) >= M[k] * CFG.floor) continue;
+      if (k === 'fit' && !dupOpen && !differs && !RMrec && (F.acknowledged || F.exempt)) { waived.push({ dim: k, why: F.acknowledged ? 'your choice: low search demand (you chose to write it anyway)' : 'chosen by your plan: ' + F.exempt }); continue; }
+      if (k === 'fit' && !dupOpen && !differs && !RMrec && F.automatic) { shadow.push({ dim: k, why: 'started automatically: recorded, not applied yet' }); continue; }
+      failing.push({ dim: k, label: LABEL[k], points: Number(b[k]) || 0, max: M[k], fix: clean(FIX[k](RMrec ? { ...W, items: { ...(W.items || {}), removed: RMrec } } : W)) });
+    }
+    const score = Math.round(total);
+    const R0 = { ...g }; delete R0.review; delete R0.pre_review;
+    return { ...R0, ...(rv ? { review: rv, pre_review: pre } : {}), ...(RMrec ? { removed: RMrec } : {}), score, display: display(score), breakdown: b, max: M, scale: VERSION, caps,
+      floors: { ok: failing.length === 0, failing, waived, shadow, rule: 'Ready needs no open blocker and every part at or above half its points' },
+      ready: codes.length === 0 && failing.length === 0 };
+  };
+  const FIX = {
+    structure: (W) => { const r = ((W.items || {}).repetition || {}); const l = (W.items || {}).list_labels || []; const id = ((W.items || {}).ideas || {});
+      return r.count ? 'Say each point once: "' + S((r.clusters || [])[0] && r.clusters[0].sample).slice(0, 90) + '" is made ' + r.worst + ' times'
+        : l.length ? 'Give each list its own label: "' + S(l[0].lead).slice(0, 90) + '" introduces two lists'
+          : id.count ? 'Say each idea once: "' + S((id.ideas || [])[0] && id.ideas[0].sample).slice(0, 90) + '" is restated ' + ((id.ideas || [])[0] || {}).size + ' times' : 'Give the page its headings, Quick answer, table and links back'; },
+    coverage: (W) => (((W.items || {}).removed || {}).capped ? 'Write back the sections this run took out (' + S((((W.items || {}).removed || {}).headings || []).slice(0, 3).join('; ')).slice(0, 160) + '), or start a new page run' : 'Cover the topics the pages that rank cover (the missing terms are in the advice)'),
+    readability: () => 'Use shorter sentences and plainer words',
+    specificity: () => 'Add concrete examples, steps or decision rules in place of general statements',
+    clean_language: () => 'Rewrite the filler phrases listed in the advice in plain, specific words',
+    sources: (W) => { const s = ((W.items || {}).sources || {}); return 'Cite an official body, a research house, major press or vendor documentation'
+      + ((s.weak || []).length ? ' for "' + S(s.weak[0].text).slice(0, 90) + '"' + (s.weak.length > 1 ? ' and ' + (s.weak.length - 1) + ' more' : '') : ''); },
+    fit: (W) => { const f = ((W.items || {}).fit || {}); if (((W.items || {}).removed || {}).capped) return 'The page lost the sections that answer its search: write them back, or start a new page run'; return f.verdict_score != null && f.verdict_score < CFG.verdict_bar ? 'Our verdict scored this search ' + f.verdict_score + ' out of 100: improve a page your website already has, or choose "Write it anyway" to keep this one' : 'Publish this text as an update of the page your website has for this search'; }
+  };
+  // the delivered status: a page with no blocker that fails a floor is "Needs work: <parts>", never "Ready to publish". It stays publishable
+  // (nothing stops the client): the status and label change, the items say what to improve, and a not-ready page is left as it is.
+  const deliver = (del0, grade) => {
+    const del = { ...(del0 || {}) }; const fl = (grade || {}).floors || null;
+    if (!fl || fl.ok || del.status === 'not_ready') return del;
+    const parts = fl.failing.map(x => x.label);
+    return { ...del, status: 'needs_work', label: clean('Needs work: ' + parts.join(', ')),
+      needs_work: fl.failing.map(x => ({ code: 'needs_work', dim: x.dim, text: clean(x.label.charAt(0).toUpperCase() + x.label.slice(1) + ' scored ' + x.points + ' of ' + x.max + ', under half its points'), action: x.fix })),
+      next_step: clean('Nothing stops you publishing this page, but ' + (parts.length === 1 ? 'one part is' : parts.length + ' parts are') + ' under half marks (' + parts.join(', ') + '). '
+        + fl.failing.map(x => x.fix.replace(/[.\s]+$/, '')).join('. ') + '. Change it in the editor and make the final version, or approve it as it is.') };
+  };
+  const display = (n) => n == null || n === '' || !Number.isFinite(Number(n)) ? '' : Math.round(Number(n)) >= CFG.display_top ? CFG.display_top + '+' : String(Math.round(Number(n)));
+  const basis = 'structure 20 (a statement made three or more times and one label for two lists cost points), topic coverage 15, readability 10, specificity 10, plain language 10, sources 15, fit with the search 20; length is advice only';
+  return { VERSION, MAX, DIMS, LABEL, SHARE, CFG, REVIEW_DIM, REVIEW_PTS, reviewCut, units, repetition, ideas, listLabels, sources, fitOf, fit, removedCap, local, cap, deliver, display, basis };
 })();
 // ---- anchor kit (D9, 2026-10-11; inlined through the __ANCHOR__ marker): the words a link to one of our own pages is written with.
 // Live, "Guides in this series" linked to "Facts erp" and "Erp software dubai" — a raw keyword string with one capital letter (exec 365).
@@ -806,6 +1923,61 @@ const SM = (() => {
   const titleShare = (page, keyword) => { const p = page || {}; if (!S(p.title) && !S(p.h1)) return null;
     const want = uniq(termsOf(norm(keyword)).filter(t => !FILLER.has(t)).map(stem)); if (!want.length) return null; const set = matchTerms(S(p.title) + ' ' + S(p.h1));
     return { share: Math.round(shareIn(want, set) * 100) / 100, have: want.filter(t => covers(set, t)).length, of: want.length, missing: want.filter(t => !covers(set, t)) }; };
+  // ---- W05-B (2026-10-30, page-quality BEFORE_AFTER K4): is this page really THE page for the search, before a run rewrites its address? ----
+  // The content run took /dynamics-365-project-operations-uae (title not on file, matched by its address only: "dynamics", "365", "uae") as the
+  // page to improve for "dynamics 365 partner dubai", wrote the partner page onto that address, and the hold waved it through as a refresh.
+  // An address is not evidence of what a page is about. A page is confirmed only by its OWN words: its title or main heading (from the
+  // inventory or read in this run, `more.texts`), or a Search Console search it earns impressions for, where that text (1) carries every core
+  // word of the search, (2) carries 75% of all its words, and (3) is ABOUT the search: its rarest word on this site is one of the search's own,
+  // or the words it adds (not the brand, a place, the kind of service or the form of the page) weigh under a third of the whole. "Dynamics 365
+  // Project Operations Implementation UAE" adds "project" and "operations" (rare) to "dynamics 365" (on every page): about something else.
+  // Returns { ok, by, text, evidence, why }; never throws; with nothing to read, ok is false (the caller writes a new page and says so).
+  const confirmPage = (model, page, keyword, more) => {
+    const p = page || {}; const o = more || {};
+    const m = model || {}; const brands = brandWords(m);
+    const core = coreTerms(keyword, brands);
+    const want = uniq(termsOf(norm(keyword)).filter(t => !FILLER.has(t)).map(stem));
+    const shortUrl = pathOf(p.url);
+    if (!core.length || !want.length) return { ok: false, by: '', text: '', evidence: '', why: 'the search has no word that says what it is about, so no page can be confirmed as its page' };
+    // the kind of service ("implementation", "support") and the form of the page ("guide", "checklist", a year) say how a page answers, not what about
+    const FORM = ['guide', 'guides', 'buyer', 'buyers', 'complete', 'ultimate', 'definitive', 'explained', 'explain', 'overview', 'introduction', 'intro', 'checklist', 'faq', 'faqs',
+      'tip', 'tips', 'everything', 'know', 'need', 'basic', 'basics', 'beginner', 'beginners', 'step', 'steps', 'updated', 'latest'];
+    const kindStems = new Set([...Object.keys(KIND), ...FORM].map(stem));
+    const inv = pages(m); const N = inv.length || 1;
+    const docs = inv.map(x => fieldsOf(x, brands).own);
+    const wOf = (t) => { const df = docs.filter(d => covers(d, t)).length; return Math.log((N + 1) / (df + 1)) + 1; };
+    const cands = [];
+    const add = (text, by) => { const t = S(text).replace(/&amp;/g, '&'); if (t) cands.push({ text: t, by }); };
+    add(p.title, 'its title'); add(p.h1, 'its main heading');
+    for (const t of (Array.isArray(o.texts) ? o.texts : [])) if (t && S(t.text)) add(t.text, S(t.by) || 'its title as read now');
+    for (const q of (Array.isArray(p.queries) ? p.queries : queriesOf(p))) if ((Number((q || {}).impressions) || 0) > 0) add((q || {}).query || (q || {}).keyword, 'a search it earns impressions for in Search Console');
+    if (!cands.length) return { ok: false, by: '', text: '', evidence: '', why: shortUrl + ' has no title, main heading or Search Console search on file, and an address alone does not say what a page is about' };
+    let best = null;
+    for (const c of cands) {
+      const tt = coreTerms(c.text, brands); if (!tt.length) continue;
+      const allCore = core.every(t => covers(tt, t));
+      const share = shareIn(want, matchTerms(c.text));
+      const extra = uniq(tt.filter(t => !core.includes(t) && !kindStems.has(t) && !/^(?:19|20)\d\d$/.test(t)));
+      const own = core.filter(t => covers(tt, t)).reduce((a, t) => a + wOf(t), 0);
+      const add2 = extra.reduce((a, t) => a + wOf(t), 0);
+      const focus = own + add2 > 0 ? own / (own + add2) : 0;
+      // about the search: its rarest word is one of the search's own (an article title that only describes more, "the cost of non-compliance:
+      // UAE e-invoicing penalties and mitigation costs", keeps it), or what it adds weighs under a third ("d365 operations uae", 0.58 on
+      // client A's site, adds the rarer "operations" to "dynamics 365": not the page for "dynamics 365 partner dubai")
+      const ws = tt.filter(t => !kindStems.has(t) && !/^(?:19|20)\d\d$/.test(t)).map(t => [t, wOf(t)]);
+      const maxW = ws.reduce((mx, x) => Math.max(mx, x[1]), 0);
+      const rarestOwn = ws.some(([t, w]) => core.includes(t) && w + 1e-9 >= maxW);
+      const ok = allCore && share + 1e-9 >= MATCH_MIN && (rarestOwn || focus > 0.67 + 1e-9);
+      const said = uniq(tokensOf(norm(c.text)).filter(w => extra.includes(stem(w))));   // the page's own words, not their stems, for the reason
+      const r = { ok, by: c.by, text: c.text, focus: Math.round(focus * 100) / 100, share: Math.round(share * 100) / 100, extra: said.length ? said : extra };
+      if (!best || (r.ok && !best.ok)) best = r;   // the first text read (the title before the searches) explains a refusal
+      if (ok) break;
+    }
+    if (!best) return { ok: false, by: '', text: '', evidence: '', why: 'the title and searches of ' + shortUrl + ' say nothing about this search' };
+    if (best.ok) return { ok: true, by: best.by, text: best.text, evidence: best.by + ' "' + best.text + '" is about this search', why: '' };
+    return { ok: false, by: best.by, text: best.text, evidence: '',
+      why: best.by + ' "' + best.text + '" is about ' + (best.extra.length ? best.extra.map(t => '"' + t + '"').join(' and ') : 'something else') + ', not this search, so ' + shortUrl + ' is not the page for it' };
+  };
   // R34: the pages whose title was never read, so a caller can say what it judged on the address alone instead of reading nothing silently
   const titleGap = (model) => { const all = pages(model); const u = untitled(model);
     return { pages: all.length, untitled: u.length, urls: u.slice(0, 12).map(p => p.url),
@@ -863,7 +2035,7 @@ const SM = (() => {
     return { state: 'planned', text: '' };
   };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, pageMatch, MATCH_CONF, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages,
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages, confirmPage,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms, coreTerms } };
 })();
 // Coverage kit (FIX_PLAN G33, 2026-10-13; inlined through the marker /*__COVERAGE__*/).
@@ -1502,9 +2674,11 @@ const CL = (() => {
       const h = L.match(/^(#{1,6})\s+(.*)$/);
       if (h) { flushPara(); if (h[1].length <= 2 || !g) { g = { heads: [], items: [] }; groups.push(g); } g.heads.push(h[2]); headLead = h[2]; lastLead = null; g.items.push({ p: h[2], kind: 'head' }); continue; }
       if (!g) { g = { heads: [], items: [] }; groups.push(g); }
-      const meta = L.match(/^Meta Description:\s*(.*)$/i);
-      if (meta) { flushPara(); g.items.push({ p: meta[1], kind: 'meta' }); continue; }
-      if (!L || /^\[[^\]]*\]$/.test(L) || /^(?:Title|Slug|Primary Keyword|Secondary Keywords):/i.test(L)) { flushPara(); if (!L) { /* a blank line keeps the lead-in for the list below it */ } continue; }
+      // W0-A (2026-10-29, page-quality PLAN Fix 1, R4 D1): the meta description is search-result copy written from the brief, not a
+      // statement on the page. Read as a claim, its call to action ("then book a consultation with ...") was wrapped, emptied and asked as a
+      // client question (production run 3299). It is skipped like the title and the slug; PF.meta (_page_fix.js) gives it one narrow field
+      // check (a price, a guarantee, a timeline or a number not on file is dropped) instead.
+      if (!L || /^\[[^\]]*\]$/.test(L) || /^(?:Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary Keywords)\s*:/i.test(L)) { flushPara(); if (!L) { /* a blank line keeps the lead-in for the list below it */ } continue; }
       if (/^\|/.test(L)) { flushPara(); if (/^\|[\s:|-]+\|?$/.test(L)) { const hd = g.items[g.items.length - 1]; if (hd && hd.kind === 'table') g.items.pop(); continue; }   // the header row is labels, not a statement
         g.items.push({ p: L.replace(/^\||\|$/g, '').split('|').map(x => x.trim()).filter(Boolean).join('; ') + '.', kind: 'table' }); continue; }
       if (/^(?:[-*]|\d+[.)])\s+/.test(L)) { const leadIn = para.length ? para.join(' ') : null; flushPara(); g.items.push({ p: L.replace(/^(?:[-*]|\d+[.)])\s+/, ''), kind: 'li', lead: leadIn && /:\s*$/.test(leadIn) ? leadIn : lastLead, head: headLead }); continue; }
@@ -1662,7 +2836,102 @@ const CL = (() => {
     out.why = suggestion ? 'only the client can confirm it; the closest thing on file is offered as a starting point' : 'only the client can confirm it; nothing on file is close';
     return out;
   }
-  return { CLAIM_RE, keyOf, check, business, commitments, canon, numsOf, arNorm, backs, neutral };
+  // ---- FU-SV voice (2026-10-29, page-quality BEFORE run: 5 of 8 pages) ----
+  // The page is published on the client's own site, yet 5 of 8 delivered pages spoke about the client as an outsider would: "Its website
+  // states 20+ years of industry experience", "Devaicon's site reports 5 years of work", "its site states 5 years and 100+ projects",
+  // "Tech& lists Project Operations among its business applications". The business facts on file are often worded that way ("The website
+  // states ...") and the writer copied the frame. CL.voice(text, { names }) removes the frame and keeps the claim, said plainly with the
+  // business as its subject, so the claim check (CL.business, §9d) reads it as a statement in the business's name:
+  //   "<its | their | the | Name's> [own] website/site/homepage <states | says | reports | ...> that X"  ->  "X"
+  //   "... <states | reports | ...> <a figure>"            ->  "Name has <figure>"      (20+ years, 100+ projects; never a date)
+  //   "... <states | reports | ...> <services, support>"   ->  "Name offers <...>"
+  //   "according to <its | the | Name's> website, X"         ->  "X"
+  //   "Name lists X among its Y"                             ->  "Name's Y include X";   "Name lists X"  ->  "Name offers X"
+  // "its" / "their" / "the website" belong to the business only when the sentence starts with its name, or starts with "It" / "Its" /
+  // "The website" / "We" and the sentence before it does (up to four back, across paragraphs); and not when another organisation is
+  // named in between ("works with the FTA, and its website states ..."): that one is the FTA's, or unclear. Anything else in that shape,
+  // and "the company says / states", is returned in `flags` (whole sentences) for the editor; it is never guessed at.
+  // Headings, meta lines, table rows, block quotes and text inside double quotes are left alone.
+  function voice(text, opts = {}) {
+    const given = (opts.names || []).map(n => String(n || '').trim()).filter(n => n.length >= 3);
+    const names = [...new Set(given)].sort((a, b) => b.length - a.length);   // every name (not fullNames: "Nova&" inside "Nova& systems LLC" is still the business here)
+    const out = { text: String(text == null ? '' : text), fixed: [], flags: [] };
+    if (!names.length) return out;
+    const display = given.find(n => /[A-Z&]/.test(n) && !/\b(?:LLC|Ltd|Limited|Inc|FZ-?LLC|FZE|FZCO|GmbH|PLC|Corp)\b\.?/i.test(n)) || given.find(n => /[A-Z&]/.test(n)) || given[0];   // the name the business goes by, not its legal name
+    const NM = '(?<![\\w&])(?:' + names.map(escR).join('|') + ')(?![\\w&])';
+    const SITE = "(?:own\\s+)?(?:web\\s?site|site|homepage|home\\s+page|about(?:\\s+us)?\\s+page|services?\\s+page)";
+    const VERB = '(?:states|says|reports|claims|notes|mentions|cites|shows|highlights|describes|advertises|lists|names)';
+    const SUBJ = "(?:\\b(?:[Ii]ts|[Tt]heir|[Tt]he)\\s+|" + NM + "['’]s\\s+)" + SITE;
+    const POSS = new RegExp(NM + "['’]s", 'i');
+    const NM_START = new RegExp('^' + NM, 'i');
+    const CHAIN = /^(?:it|its|they|their|we|our|the\s+(?:web\s?site|site|company|team|firm|business))\b/i;
+    const OTHER_ORG = /\b(?:with|by|from|of|to|for|at|via|under)\s+(?:the\s+)?[A-Z][\w&.-]*/g;
+    const FIG = /^(?:over |more than |nearly |around |about |almost |up to |a |an )?\d/i;
+    const DATE = /^(?:\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|(?:19|20)\d{2}\b|\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})/i;
+    const OFFER = /\b(?:support|services?|consult\w*|implementation|training|maintenance|integration|migration|development|audits?|assessments?)\b/i;
+    const atStart = (pre) => /(?:^|[.!?:]\s+|^\s*(?:[-*+]|\d+[.)])\s+|^[*_]+)$/.test(pre);
+    const inQuotes = (line, at) => ((line.slice(0, at).match(/["“”]/g) || []).length % 2) === 1;
+    const sentenceAt = (line, at) => { const a = Math.max(line.lastIndexOf('. ', at), line.lastIndexOf('! ', at), line.lastIndexOf('? ', at)); const b0 = line.slice(at).search(/[.!?](?:\s|$)/); return line.slice(a < 0 ? 0 : a + 2, b0 < 0 ? line.length : at + b0 + 1).trim(); };
+    const skipLine = (l) => !String(l || '').trim() || /^\s*(?:#|>|\||Title:|Meta Description:|Slug:|Primary Keyword:|Secondary Keywords:)/i.test(l);
+    const starts = (l) => { const st = [0]; for (const m of String(l).matchAll(/[.!?]["')\]*_]*\s+/g)) st.push(m.index + m[0].length); return st; };
+    const lead = (t) => String(t).replace(/^\s*(?:(?:[-*+]|\d+[.)])\s+)?[*_("\[\s]*/, '');
+    const lines = out.text.split('\n');
+    // does the "its / their / the website" at `off` of line `li` belong to the business?
+    const owner = (li, off) => {
+      let st = starts(lines[li]); let k = st.filter(x => x <= off).length - 1; let L = li;
+      const sent0 = lead(lines[li].slice(st[k]));
+      if (!NM_START.test(sent0) && !CHAIN.test(sent0)) return false;
+      // another organisation named between the start of the sentence and "its" ("works with the FTA, and its website ...")
+      const between = lead(lines[li].slice(st[k], off)).replace(NM_START, ''); const others = [...between.matchAll(OTHER_ORG)].filter(m => !new RegExp(NM, 'i').test(m[0]));
+      if (others.length) return false;
+      for (let step = 0; step < 5; step++) {
+        const s = lead(lines[L].slice(st[k]));
+        if (NM_START.test(s)) return true;
+        if (!CHAIN.test(s)) return false;
+        k--;
+        if (k < 0) { L--; while (L >= 0 && !String(lines[L]).trim()) L--; if (L < 0 || skipLine(lines[L])) return false; st = starts(lines[L]); k = st.length - 1; }
+      }
+      return false;
+    };
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i];
+      if (skipLine(line)) continue;
+      const before = line;
+      // 1. "according to its website, X"
+      line = line.replace(new RegExp('\\b([Aa])ccording to (?:' + SUBJ + '|the company[\'’]s\\s+' + SITE + '),?\\s+', 'g'), (m, a, off, s) => {
+        const after = s.slice(off + m.length);   // "According to its website, Nova& ..." / "..., we ...": the clause that follows is the business's
+        if (inQuotes(s, off) || !(POSS.test(m) || NM_START.test(after) || /^(?:we|our)\b/i.test(after) || owner(i, off))) return m;
+        return a === 'A' ? '\u0000CAP' : ''; });
+      lines[i] = line;
+      // 2. "<subject> states that X" / "<subject> states <figure | services>"
+      line = line.replace(new RegExp('(' + SUBJ + ')(\\s+also)?\\s+(' + VERB + ')\\s+(that\\s+)?', 'g'), (m, subj, also, verb, that, off, s) => {
+        if (inQuotes(s, off)) return m;
+        const own = POSS.test(subj); if (!own && !owner(i, off)) return m;
+        const rest = s.slice(off + m.length);
+        const who = (own ? subj.match(new RegExp(NM, 'i'))[0] : display) + (also ? ' also' : '');
+        if (that) return atStart(s.slice(0, off)) ? '\u0000CAP' : '';
+        if (/^(?:lists|names)$/i.test(verb)) return m;
+        if (FIG.test(rest) && !DATE.test(rest)) return who + ' has ';
+        if (OFFER.test(rest.split(/[.!?](?:\s|$)/)[0])) return who + ' offers ';
+        return m; });
+      // 3. "Name lists X among its Y" / "Name (also) lists X"
+      line = line.replace(new RegExp('(' + NM + ')(\\s+also)?\\s+lists\\s+([^.;:\\n]{2,160}?)\\s+among\\s+its\\s+([^.;:\\n]{2,140}?)(?=[.;:]|$)', 'gi'), (m, nm, also, x, y, off, s) => inQuotes(s, off) ? m : nm + "'s " + y + (also ? ' also' : '') + ' include ' + x);
+      line = line.replace(new RegExp('(' + NM + ')(\\s+also)?\\s+lists\\s+(?!among\\b)', 'gi'), (m, nm, also, off, s) => inQuotes(s, off) ? m : nm + (also || '') + ' offers ');
+      line = line.replace(/\u0000CAP\s*(\S)/g, (m, c) => c.toUpperCase()).replace(/\u0000CAP/g, '');
+      lines[i] = line;
+      if (line !== before) out.fixed.push({ from: before.trim().slice(0, 400), to: line.trim().slice(0, 400) });
+      // what is still in that shape, and is the business's, is named for the editor
+      const left = new RegExp('(' + SUBJ + ')(?:\\s+also)?\\s+' + VERB + '\\b|\\bthe company\\s+(?:says|states|claims|reports)\\b', 'g');
+      for (const m of line.matchAll(left)) {
+        if (inQuotes(line, m.index)) continue;
+        if (!/the company/i.test(m[0]) && !POSS.test(m[0]) && !owner(i, m.index)) continue;
+        const sent = sentenceAt(line, m.index); if (sent && !out.flags.includes(sent)) out.flags.push(sent);
+      }
+    }
+    out.text = lines.join('\n');
+    return out;
+  }
+  return { CLAIM_RE, keyOf, check, business, commitments, canon, numsOf, arNorm, backs, neutral, voice };
 })();
 // ---- promise judge kit (CT-FIX2, 2026-10-22; inlined by build_v4.py section 148): the second reader of the promise check ----
 // The rule-based check (CL.commitments, _claims.js) scored 100% / 88% recall offline and then, on the first fresh live page (exec 159),
@@ -1773,18 +3042,66 @@ const PJ = (() => {
 // the delivered page carried the H2 "How Much Is a Consultancy Licence in Dubai?": the strategy brief prompt only ever printed the
 // verdict's reasons, never its changes, so the instruction reached nobody and nothing checked it.
 //   EXC.fromVerdict(changes, skips)  the topics to leave out: the verdict's structured `topics_to_skip`, plus every "skip / avoid /
-//                                    leave out / do not cover …" phrase in its free-text changes (the fallback for older answers)
-//   EXC.match(text, ex, keyword)     does a heading (or an outline section) cover that topic? every content word of the topic must be in it;
-//                                    a one-word topic that is also a word of the page's own keyword never matches (it would match everything)
+//                                    leave out / do not cover ..." phrase in its free-text changes (the fallback for older answers)
+//   EXC.match(text, ex, family)      does a heading (or an outline section) cover that topic? (rules below). `family` is the page's keyword
+//                                    (a string, as before) or a list of strings: the keyword, the brief's primary and secondary keywords,
+//                                    the site's main services (EXC.familyOf)
 //   EXC.check(headings, list, kw)    [{ heading, topic }] for every heading that covers an excluded topic
 //   EXC.prune(outline, list, kw)     the brief's outline without those sections, and the ones dropped
+//   EXC.decide(md, list, family)     W06-A: which matched sections may really be deleted, and which are kept with the reason (the budget below)
+//   EXC.guard(md, flagged, list, f)  W06-A: the same decision for a list of flagged headings a quality check handed over (Page Candidates)
+//   EXC.removedOf(state)             W06-A: what a page run's deletions took out (sections, words), for the grade
+// W06-A (page-quality wave 0.6, 2026-10-30, docs/page-quality-2026-10-29/WAVE05.md 3.1): live (W05 run, K1 "ms 365 erp") the verdict said to
+// skip "Dynamics GP and SL"; tokens under 3 characters were dropped, so the topic became the single word "dynamic", which is not a word of
+// the keyword, and nine headings matched it. Page Candidates deleted six core sections (2,407 words -> 1,023) and the grade still said 79
+// "Ready". Now:
+//   * a short token is kept when it is meaningful: an acronym written in capitals in the topic (GP, SL, AI, ML, UK) or a token with a digit;
+//     such a token only matches the same acronym in capitals in the heading ("Is it ..." never matches "IT");
+//   * a topic that lost a token to the length filter (a lowercase "ai" or "ml") matches on its FULL phrase or not at all;
+//   * a one-token topic that is a word of the page's keyword family or the site's main services never matches, not even as a phrase;
+//     a topic made only of such words matches on its full phrase only;
+//   * the full phrase of a topic in a heading is always a match (and the strongest signal).
+// And the deletion budget (EXC.decide): a section whose heading names the topic's full phrase, or whose text names the topic's own words
+// (those outside the keyword family) at least twice, is a section about it ("a second signal"). Without such a signal at most ONE matched
+// section is deleted, and only when it holds no more than 20% of the page's words; the others are kept and reported. Deletions never take
+// more than 40% of the page's words in all. Every decision is recorded (removed / kept, with the reason) in the run's evidence.
 // Regex only (the n8n Code sandbox has no URL constructor).
 const EXC = (() => {
   const S = (v) => String(v == null ? '' : v);
   const STOP = new Set('the a an and or of for to in on with by at from about any all each every their your our its it is are be this that these those how what which why when who much many do does can should would will questions question topics topic sections section queries query searches search angles angle content pages page posts post details detail things thing buyer buyers intent people readers reader'.split(' '));
+  // two-letter words that carry no topic (the rest of the short words a topic loses make it a phrase-only topic)
+  const SHORT_STOP = new Set('of to in on by at it is be do vs as if so no up an or we us my me am go oh ok'.split(' '));
   const norm = (w) => { let x = S(w).toLowerCase().replace(/licens/g, 'licenc');
     if (x.length > 5) x = x.replace(/(?:ings|ing|ies|es|ed|s)$/, ''); else if (x.length > 3) x = x.replace(/s$/, ''); return x; };
   const toks = (t) => S(t).toLowerCase().replace(/[’']/g, '').split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !STOP.has(w)).map(norm);
+  // the topic's words with the meaningful short ones (acronyms in capitals, tokens with a digit: "#gp", "#sl"), how many short words it
+  // lost, and its normalised phrase
+  const raw = (t) => S(t).replace(/[’']/g, '').split(/[^A-Za-z0-9]+/).filter(Boolean);
+  const isAcr = (w) => w.length === 2 && (/^[A-Z][A-Z0-9]$/.test(w) || /^[0-9][A-Z]$/.test(w) || /^[A-Z][0-9]$/.test(w));
+  const phraseOf = (t) => S(t).toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').replace(/^\s*the\s+/, '').trim();
+  const terms = (t) => { const req = [], seen = new Set(); let lost = 0;
+    for (const w of raw(t)) {
+      const lw = w.toLowerCase();
+      if (w.length >= 3) { if (STOP.has(lw)) continue; const n = norm(lw); if (!seen.has(n)) { seen.add(n); req.push(n); } continue; }
+      if (isAcr(w)) { const n = '#' + lw; if (!seen.has(n)) { seen.add(n); req.push(n); } continue; }
+      if (w.length === 2 && !SHORT_STOP.has(lw) && /[a-z]/i.test(w)) lost++;
+    }
+    return { req, lost, phrase: phraseOf(t) }; };
+  // a heading's words: every content word, plus the acronyms it writes in capitals
+  const textSet = (t) => { const set = new Set(toks(t)); for (const w of raw(t)) if (isAcr(w)) set.add('#' + w.toLowerCase()); return set; };
+  const phraseIn = (text, phrase) => !!phrase && (' ' + phraseOf(text) + ' ').includes(' ' + phrase + ' ');
+  // the page's keyword family: the keyword, or a list of strings (keywords, the site's services)
+  // W06 integration (2026-10-30): a two-letter word of the family counts as its acronym whatever its case (the keyword "ai consultant" is
+  // typed in lowercase, the topic "AI consultant certification" keeps "#ai"). Such an acronym is the page's own context, not the topic's
+  // signal: it is never required in the text (an address or a heading may spell it out: "artificial-intelligence-certifications"), as
+  // the length filter never required it before W06-A (EQA4, exec 42). The topic's own acronyms (GP, SL) are still required, in capitals.
+  const famSet = (family) => { const f = new Set(); for (const s of (Array.isArray(family) ? family : [family])) {
+    for (const w of terms(s).req) f.add(w);
+    for (const w of raw(s)) { const lw = w.toLowerCase(); if (w.length === 2 && /^[a-z]{2}$/.test(lw) && !SHORT_STOP.has(lw)) f.add('#' + lw); } } return f; };
+  const familyOf = (prev, siteModel) => { const p = prev || {}; const b = p.content_brief || {}; const m = siteModel || p.site_model || {};
+    const sec = Array.isArray(b.secondary_keywords) ? b.secondary_keywords : [];
+    const sv = Array.isArray(m.services) ? m.services : [];
+    return [p.keyword, b.primary_keyword].concat(sec, sv).map(x => S(x && typeof x === 'object' ? (x.name || x.title || '') : x)).filter(x => x.trim()).slice(0, 40); };
   const SKIP_RE = /\b(?:skip|avoid|leave out|drop|exclude|omit|ignore|steer clear of|stay away from|do not (?:cover|answer|target|include)|don['’]t (?:cover|answer|target|include)|no need to (?:cover|answer))\s+(?:the\s+|any\s+|all\s+)?([^.;:!?]+?)(?=\s*,\s*(?:which|as|because|since|they|these|it|that)\b|\s+(?:which|because|since|as they|as these)\b|[.;:!?]|$)/gi;
   const TAIL_RE = /\s+(?:questions?|topics?|sections?|queries|query|searches|angles?|content|pages?|posts?|subjects?|keywords?)\s*$/i;
   const fromText = (line) => {
@@ -1800,24 +3117,30 @@ const EXC = (() => {
   };
   const fromVerdict = (changes, skips) => {
     const seen = new Set(); const out = [];
-    const add = (topic, source) => { const k = toks(topic).join(' '); if (!k || seen.has(k)) return; seen.add(k); out.push({ topic: S(topic).trim(), source }); };
+    const add = (topic, source) => { const T = terms(topic); const k = T.req.length ? T.req.join(' ') + (T.lost ? '|' + T.phrase : '') : ''; if (!k || seen.has(k)) return; seen.add(k); out.push({ topic: S(topic).trim(), source }); };
     (Array.isArray(skips) ? skips : []).forEach(t => add(S(t).replace(/[-_]+/g, ' '), 'verdict'));
     (Array.isArray(changes) ? changes : []).forEach(c => fromText(c).forEach(t => add(t, 'verdict_changes')));
     return out.slice(0, 12);
   };
-  const match = (text, ex, keyword) => {
-    const T = toks(ex && ex.topic != null ? ex.topic : ex); if (!T.length) return false;
-    const kw = new Set(toks(keyword));
-    if (T.length === 1 && kw.has(T[0])) return false;
-    const H = new Set(toks(text));
-    return T.every(w => H.has(w));
+  const topicOf = (ex) => S(ex && typeof ex === 'object' && ex.topic != null ? ex.topic : ex);
+  // how a text covers a topic: 'phrase' (the full phrase is in it), 'words' (every word of the topic is in it), or '' (no match)
+  const how = (text, ex, family) => {
+    const T = terms(topicOf(ex)); if (!T.req.length) return '';
+    const fam = famSet(family);
+    const own = T.req.filter(w => !fam.has(w));
+    if (T.req.length === 1 && !own.length) return '';   // one shared word of the keyword family: never, not even as a phrase
+    if (phraseIn(text, T.phrase)) return 'phrase';
+    if (T.lost || !own.length) return '';               // lost a short word, or only family words: the full phrase or nothing
+    const H = textSet(text);
+    return T.req.every(w => H.has(w) || (w[0] === '#' && fam.has(w))) ? 'words' : '';
   };
+  const match = (text, ex, family) => !!how(text, ex, family);
   const check = (headings, list, keyword) => {
     const out = [];
     for (const h of (Array.isArray(headings) ? headings : [])) {
       const text = S(h).replace(/^#+\s*/, '').replace(/[*_`]+/g, '').trim(); if (!text) continue;
       const ex = (Array.isArray(list) ? list : []).find(e => match(text, e, keyword));
-      if (ex) out.push({ heading: text, topic: S(ex.topic != null ? ex.topic : ex) });
+      if (ex) out.push({ heading: text, topic: topicOf(ex) });
     }
     return out;
   };
@@ -1825,11 +3148,82 @@ const EXC = (() => {
     const kept = [], dropped = [];
     for (const sec of (Array.isArray(outline) ? outline : [])) {
       const ex = (Array.isArray(list) ? list : []).find(e => match(S(sec && sec.h2), e, keyword));
-      if (ex) dropped.push({ h2: S(sec.h2), topic: S(ex.topic) }); else kept.push(sec);
+      if (ex) dropped.push({ h2: S(sec.h2), topic: topicOf(ex) }); else kept.push(sec);
     }
     return { kept, dropped };
   };
-  return { fromVerdict, fromText, match, check, prune, toks };
+  // ---------- W06-A: the deletion budget ----------
+  const BUDGET = { weak_sections: 1, weak_share: 0.2, total_share: 0.4, named: 2 };
+  const META = /^(Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary Keywords)\s*:/i;
+  const wordsIn = (t) => S(t).replace(/!?\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[#*_`>|]+/g, ' ').split(/\s+/).filter(w => /[A-Za-z0-9]/.test(w)).length;
+  const cleanH = (h) => S(h).replace(/^#+\s*/, '').replace(/[*_`]+/g, '').trim();
+  // the page's H2 / H3 sections with their own text (an H2 holds its H3s) and the page's words (meta lines and headings left out)
+  const sectionsOf = (md) => {
+    const lines = S(md).replace(/\r/g, '').split('\n'); const heads = []; let fence = false;
+    lines.forEach((l, i) => { if (/^\s*(```|~~~)/.test(l)) { fence = !fence; return; } const m = !fence && l.match(/^(#{2,3})\s+(.+?)\s*$/); if (m) heads.push({ i, level: m[1].length, heading: cleanH(m[2]) }); });
+    const secs = heads.map((h, k) => { let end = lines.length; for (let j = k + 1; j < heads.length; j++) if (heads[j].level <= h.level) { end = heads[j].i; break; }
+      const body = lines.slice(h.i + 1, end).filter(l => !/^#{1,6}\s/.test(l)).join('\n'); return { ...h, end, body, words: wordsIn(body) }; });
+    const total = lines.filter(l => l.trim() && !META.test(l.trim()) && !/^#{1,6}\s/.test(l)).reduce((s, l) => s + wordsIn(l), 0);
+    return { secs, total };
+  };
+  // does the section's own text name the topic? at least two of its sentences carry every word of the topic outside the keyword family
+  // (its full phrase, for a topic that lost a short word)
+  const namedIn = (body, ex, family) => { const T = terms(topicOf(ex)); const fam = famSet(family); const own = T.req.filter(w => !fam.has(w)); if (!own.length) return false;
+    const sents = S(body).split(/(?<=[.!?])\s+|\n+/).filter(x => x.trim());
+    const n = sents.filter(x => T.lost ? phraseIn(x, T.phrase) : (() => { const H = textSet(x); return own.every(w => H.has(w)); })()).length;
+    return n >= BUDGET.named; };
+  const decide = (md, list, family, opts) => {
+    const o = opts || {}; const L = Array.isArray(list) ? list : []; const only = Array.isArray(o.only) ? new Set(o.only.map(h => cleanH(h).toLowerCase())) : null;
+    const { secs, total } = sectionsOf(md);
+    const hits = [];
+    for (const s of secs) {
+      if (only && !only.has(s.heading.toLowerCase())) continue;
+      let ex = null, hw = '';
+      for (const e of L) { const h = how(s.heading, e, family); if (h === 'phrase') { ex = e; hw = h; break; } if (h && !ex) { ex = e; hw = h; } }
+      if (!ex) continue;
+      const signal = hw === 'phrase' ? 'the heading names the topic' : namedIn(s.body, ex, family) ? 'the section names the topic' : '';
+      hits.push({ s, topic: topicOf(ex), signal });
+    }
+    const remove = [], keep = []; const gone = []; let removed = 0;
+    const inside = (s) => gone.some(g => s.i > g.i && s.i < g.end);
+    const pct = (w) => total ? Math.round(100 * w / total) : 0;
+    const take = (h, why) => { remove.push({ heading: h.s.heading, topic: h.topic, level: h.s.level, words: h.s.words, share_pct: pct(h.s.words), signal: h.signal || why }); gone.push(h.s); removed += h.s.words; };
+    const sorted = hits.slice().sort((a, b) => a.s.level - b.s.level || a.s.i - b.s.i);
+    for (const h of sorted.filter(x => x.signal)) {
+      if (inside(h.s)) continue;
+      if (total && removed + h.s.words > total * BUDGET.total_share) { keep.push({ heading: h.s.heading, topic: h.topic, words: h.s.words, why: 'deleting it would take more than ' + Math.round(BUDGET.total_share * 100) + '% of the page' }); continue; }
+      take(h, '');
+    }
+    const weak = sorted.filter(x => !x.signal && !inside(x.s));
+    if (weak.length > BUDGET.weak_sections) for (const h of weak) keep.push({ heading: h.s.heading, topic: h.topic, words: h.s.words,
+      why: weak.length + ' sections share words with "' + h.topic + '" and none of them names it: one topic cannot be that much of the page, so none is deleted' });
+    else for (const h of weak) {
+      if (total && h.s.words > total * BUDGET.weak_share) { keep.push({ heading: h.s.heading, topic: h.topic, words: h.s.words, why: 'it holds ' + pct(h.s.words) + '% of the page and does not name the topic, so it is not deleted' }); continue; }
+      if (total && removed + h.s.words > total * BUDGET.total_share) { keep.push({ heading: h.s.heading, topic: h.topic, words: h.s.words, why: 'deleting it would take more than ' + Math.round(BUDGET.total_share * 100) + '% of the page' }); continue; }
+      take(h, 'one short section that shares the topic\'s words');
+    }
+    return { remove, keep, words_total: total, words_removed: removed };
+  };
+  // a quality check handed over flagged headings (Content QA's excluded_sections): decided again here on the page as it is now, so a list
+  // from an older check (or a matcher that went too far) can never delete more than the budget allows
+  const guard = (md, flagged, list, family) => {
+    const F = (Array.isArray(flagged) ? flagged : []).map(x => cleanH(x && typeof x === 'object' ? x.heading : x)).filter(Boolean);
+    if (!F.length) return { remove: [], keep: [], words_total: 0, words_removed: 0 };
+    const d = decide(md, list, family, { only: F });
+    const named = new Set(d.remove.concat(d.keep).map(x => x.heading.toLowerCase()));
+    for (const h of F) if (!named.has(h.toLowerCase())) d.keep.push({ heading: h, topic: '', words: 0, why: 'on a closer reading it is not about a topic the verdict said to leave out' });
+    return d;
+  };
+  // what a page run's deletions took out, from its Page Candidates state (structured since W06-A, else read off its fix notes)
+  const removedOf = (state) => {
+    const st = state && typeof state === 'object' ? state : {}; const by = new Map();
+    for (const r of (Array.isArray(st.exclusions_removed) ? st.exclusions_removed : [])) if (r && r.heading) by.set(cleanH(r.heading).toLowerCase(), { heading: cleanH(r.heading), words: Number(r.words) || 0, level: Number(r.level) || 2, topic: S(r.topic) });
+    for (const f of (Array.isArray(st.fixes) ? st.fixes : [])) { const m = S(f).match(/removed the section "(.+)" \(a topic the verdict said to leave out/); if (m && !by.has(cleanH(m[1]).toLowerCase())) by.set(cleanH(m[1]).toLowerCase(), { heading: cleanH(m[1]), words: 0, level: 0, topic: '' }); }
+    const list = [...by.values()]; const words = list.reduce((s, x) => s + x.words, 0);
+    const first = st.first && typeof st.first === 'object' ? st.first : null;
+    return { sections: list.length, words, words_before: first ? Number(first.words) || 0 : 0, h2_before: first ? Number(first.h2) || 0 : 0, h2_removed: list.filter(x => x.level === 2).length, headings: list.map(x => x.heading).slice(0, 12) };
+  };
+  return { fromVerdict, fromText, match, how, check, prune, toks, terms, familyOf, decide, guard, removedOf, sectionsOf, BUDGET };
 })();
 // ---- fit gate (2026-10-11, FIX_PLAN D4 / D8): ONE rule for keywords that no page of this website should target. Inlined by the build
 // (the FIT_GATE placeholder) into Analyze Keywords (full report: keyword gap, easy wins, opportunities), Rank Keywords (discovery), Ladder Pool /
@@ -2600,7 +3994,12 @@ const fixes = [];
 const warnings = [];
 // LLM-LIMITS (2026-10-27, section 150): a page that stops mid-way is its own failure, in plain words, and never publishable. The guards behind
 // the Copywriter and the Editor normally stop it before it reaches this node; this is the net under them, and it reads the page as delivered.
-const __cut = CK.text(md);
+// fu-finalize-toc (2026-10-30, K6): in the final version (Page Finalize: Parse Brief carries `finalize`) an end word for word the end of
+// the page the engine delivered was not written by this run, so it is not a cut; unless the page run itself found that page cut off (its
+// blocker travels in prc.gating.qa_blocking), then the end is read as it is. A page the client sent cut short is still cut off.
+const __cutFrom = (() => { const f = (prev && prev.finalize) || null; const qb = ((((prev || {}).prc || {}).gating || {}).qa_blocking) || [];
+  return f && !qb.some(b => b && b.code === 'cut_off') ? [f.delivered_markdown] : []; })();
+const __cut = CK.text(md, { unchanged_from: __cutFrom });
 const __llm_notes = (() => { const out = [];
   for (const nd of ['Draft Check (Copywriter)', 'Edit Check (Editor)']) for (let r = 0; r < 12; r++) { let a = null; try { a = $(nd).all(0, r); } catch (e) { break; } if (!a || !a.length) break;
     for (const i of a) { const k = i && i.json && i.json.llm_check; if (k && k.note && !out.includes(k.note)) out.push(k.note); } }
@@ -2613,7 +4012,11 @@ const domain = prev.domain || '';
 // 308-redirects on a www site. With no model (an older run) or another site's domain, the bare domain keeps today's behaviour.
 let SITE_MODEL = null; try { SITE_MODEL = $('Site Model').first().json.site_model || null; } catch (e) {}
 const siteUrlOf = (dom, path) => SM.siteUrl(SITE_MODEL && SITE_MODEL.domain && SITE_MODEL.domain === SM.helpers.bare(dom) ? SITE_MODEL : { domain: dom }, path);
-const today = new Date().toISOString().slice(0, 10);
+// W05-A (wave 0.5, 2026-10-30): the schema's dates are the website's market day (Regulatory Plan's as_of, in the market's time zone:
+// Asia/Dubai for the UAE), the same day the page's "Updated" line and the second read use; UTC only when no market day is known
+const today = (() => { const ok = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')); const r0 = (prev.regulatory || {}).as_of; if (ok(r0)) return String(r0);
+  try { const r1 = $('Collect Regulatory Facts').first().json.regulatory.as_of; if (ok(r1)) return String(r1); } catch (e) {}
+  return new Date().toISOString().slice(0, 10); })();
 
 const plain = (s) => String(s || '').replace(/\[([^\[\]]+)\]\([^)]*\)/g, '$1').replace(/[*_`>]+/g, '').replace(/\s+/g, ' ').trim();
 const countWords = (t) => String(t || '').split(/\s+/).filter(Boolean).length;
@@ -2736,8 +4139,17 @@ if (!userGavePrices) {
 }
 
 // 4. Meta lines — and nothing else may sit between them and the H1 (models sometimes add "production notes")
-const metaOf = (label) => { const m = md.match(new RegExp('^' + label + ':\\s*(.+)$', 'im')); return m ? m[1].trim() : ''; };
+// W0-A (2026-10-29, page-quality PLAN Fix 1): `:\s*(.+)$` let \s* run over the line end, so an emptied "Meta Description:" read the NEXT line
+// ("Slug: ms-365-erp-uae", production run 3299) as its value. A field is read on its own line only: empty means empty.
+const metaOf = (label) => { const m = md.match(new RegExp('^' + label + ':[ \\t]*(.*)$', 'im')); return m ? m[1].trim() : ''; };
 const metaTitle = metaOf('Title'), metaDesc = metaOf('Meta Description');
+// W0-A: the meta description's field rule (the same rule as PF.metaProblem in _page_fix.js; harness S-META holds the two together): one line,
+// 70-155 characters, never a field label, no bracket. Page Fix rebuilds a description that breaks it before every check, so a failure here
+// is one the page pipeline could not repair: `meta_error`, a publish error in PF.classify (the Publish Check's own verdict does not read it)
+const META_FIELD_LABEL = /^(?:Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary Keywords|URL|Page Type)\s*:/i;
+const metaDescProblem = !metaDesc ? 'is missing' : META_FIELD_LABEL.test(metaDesc) ? 'starts with a field label instead of a description' : /[\[\]]/.test(metaDesc) ? 'holds a bracket'
+  : metaDesc.length < 70 ? 'is under 70 characters' : metaDesc.length > 155 ? 'is over 155 characters' : '';
+const meta_error = metaDescProblem ? 'The meta description ' + metaDescProblem : '';
 // R15 (2026-10-13, re-rating §3.11): a ladder page keeps the URL its ladder row planned. Live, the row said
 // `…/service-industry-erp-software/` (the ladder's link map, the siblings' up-links and the Rank Tracker all use it) while the page was
 // delivered as `service-industry-erp-software-uae`, so publishing it would have left every stored link pointing at a URL that never exists.
@@ -2802,7 +4214,7 @@ if (round > 1) {
       const anchor = m[1], url = m[2]; const k = SRC.key(url); const host = SRC.host(url);
       const generic = GENERIC_ANCHOR.test(anchor.trim()); const prevSent = generic ? plainSent(sentOf(prevMd, m.index)) : '';
       if (reviewText && host && reviewText.includes(host.replace(/^www\./, '')) && /misattribut|vendor|not a (?:primary|reliable)|remove|drop/.test(reviewText)) continue;
-      if (!k || deadPrev.has(k) || (domain && (host === domain || host.endsWith('.' + domain)))) continue;
+      if (!k || deadPrev.has(k) || SRC.isRedirect(url) || (domain && (host === domain || host.endsWith('.' + domain)))) continue;   // FU-SV: never re-link a redirect
       if (!(evid.has(k) || OFFICIAL.test(host))) continue;
       if (md.includes('](' + url + ')')) continue;
       // the first place the anchor words stand in the body, outside a heading and outside any other link
@@ -2831,11 +4243,23 @@ const normUrl = (u) => String(u || '').trim().replace(/\/$/, '').toLowerCase().r
 const plannedTargets = new Set([...(prev.planned_link_targets || []), ...(prev.hub_pages || []).filter(p => p && p.planned)].map(l => normUrl(l && l.url)).filter(Boolean));
 plannedTargets.forEach(u => allowed.delete(u));
 if (prev.existing_page && prev.existing_page.url) allowed.add(normUrl(prev.existing_page.url));
+// W07-B (2026-10-31, WAVE06 section 10): a separate new page beside a page the client kept ("Write it anyway") links to that page once; it is a
+// live page of the site when this run read it, so its link is kept even when the sitemap did not list it
+const APQ = typeof PGA !== 'undefined' ? PGA.of(prev) : null;
+if (APQ) for (const pg of APQ.pages) if (pg.from === 'read in this run') allowed.add(normUrl(pg.url));
 if (domain) allowed.add(normUrl(siteUrlOf(domain, '/')));
 const removedLinks = [], plannedLinks = [], weakRepeats = []; const externalUrls = []; const weakSeen = new Map();
 let internalLinks = 0, externalLinks = 0, cleanedLinks = 0;
+// FU-SV (2026-10-29, page-quality BEFORE run K7): a search-engine redirect is never a citation. One that carries its target links the
+// target; an opaque one (google.com/goto?url=<token>, the Vertex AI grounding redirect) loses its link and keeps its words, so the
+// attribution stays and the figure it carried is checked like any other uncited figure (§9).
+const redirectsResolved = [], redirectsDropped = [];
 md = md.replace(/\[([^\[\]]+)\]\(([^)\s]+)\)/g, (m, text, url) => {
-  let u = SRC.clean(url.trim()); if (u !== url.trim()) cleanedLinks++;
+  // fu-finalize-toc (2026-10-30, BASELINE "Finalize strips table-of-contents links", 3 of 3): a link to a heading of this page (the contents
+  // list's "#anchor") is no citation and no page of the site; read as a weak source with no host, entries 2-8 were unlinked as "repeats"
+  if (/^#[^\s#]*$/.test(url.trim())) return m;
+  if (SRC.isRedirect(url.trim())) { const t = SRC.unwrap(url.trim()); if (!t) { redirectsDropped.push(url.trim()); return text; } redirectsResolved.push(t); }
+  let u = SRC.clean(url.trim()); if (u !== url.trim() && !SRC.isRedirect(url.trim())) cleanedLinks++;
   const isRelative = u.startsWith('/');
   if (isRelative) u = domain ? siteUrlOf(domain, u) : u;
   const host = u.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split(/[\/?#]/)[0].toLowerCase();
@@ -2849,6 +4273,19 @@ md = md.replace(/\[([^\[\]]+)\]\(([^)\s]+)\)/g, (m, text, url) => {
 if (removedLinks.length) fixes.push(`Removed ${removedLinks.length} link(s) to pages that do not exist on ${domain || 'the site'}: ` + removedLinks.slice(0, 4).join(', '));
 if (plannedLinks.length) fixes.push(`Removed ${plannedLinks.length} link(s) to pages that are planned but not published yet: ` + [...new Set(plannedLinks)].slice(0, 4).join(', ') + '. They are listed in the package as links to add once they are live');
 if (cleanedLinks) fixes.push(`Stripped tracking parameters (utm_*, srsltid, gclid, fbclid) from ${cleanedLinks} link(s)`);
+if (redirectsResolved.length) fixes.push(`Pointed ${redirectsResolved.length} link(s) that went through a search engine redirect at the page they lead to: ` + redirectsResolved.slice(0, 4).join(', '));
+if (redirectsDropped.length) fixes.push(`Removed ${redirectsDropped.length} link(s) that were search engine redirects with no page address in them, keeping their words. Cite the original page instead`);
+// FU-SV (2026-10-29, page-quality BEFORE run, 5 of 8 pages): the page is published on the client's own site, so the client's own facts are
+// never reported from the outside ("Its website states 20+ years of industry experience"). CL.voice (the claims kit) takes the frame away
+// and keeps the claim with the business as its subject ("Tech& has 20+ years ..."), BEFORE the claim checks below, which therefore read
+// the claim as a statement in the business's name (§9d). What it cannot rewrite safely is listed in content_qa.voice.flags for the editor.
+const VOICE = (() => {
+  const names = [...new Set([(prev.site_profile || {}).business_name, SITE_MODEL ? SM.name(SITE_MODEL) : '', ...((SITE_MODEL && Array.isArray(SITE_MODEL.brand_names)) ? SITE_MODEL.brand_names : []),
+    (prev.site_description || {}).business_name, domain ? String(domain).split('.')[0] : ''].map(x => String(x || '').trim()).filter(x => x.length >= 3))];
+  const v = CL.voice(md, { names }); md = v.text;
+  if (v.fixed.length) fixes.push('Rewrote ' + v.fixed.length + ' line(s) that described the business from the outside ("its website states ...") as plain statements in its own name');
+  return { fixed: v.fixed.length, rewrites: v.fixed.slice(0, 8), flags: v.flags.slice(0, 8) };
+})();
 if (weakRepeats.length) fixes.push(`Unlinked ${weakRepeats.length} repeat citation(s) of a source with no independent authority (one per domain): ` + [...new Set(weakRepeats)].join(', '));
 // citations must point at sources the brief allowed (evidence plan) or at least be real-looking hosts
 const allowedSources = new Set(((brief.evidence_plan || []).map(e => String(e.source_url || '').toLowerCase())).concat((prev.facts || []).map(f => String(f.url || '').toLowerCase())).concat(__VS.map(v => String(v.url || '').toLowerCase())));   // H1: + the verified sources
@@ -2931,13 +4368,16 @@ const stats = [...statHits].filter(s => !/^(19|20)\d\d/.test(s)).filter(s => !ow
 //     the client's own facts carry needs no external source; a sentence whose sources we never read is left alone (nothing to check against).
 // (`srcText` / `ownFacts` are built in §2b, above the money mask, so both checks read the same source corpus — B3-1.)
 const unverified_figures = [];
+// W05-C (2026-10-30, BEFORE_AFTER K6): the figures a cited source DOES state, with the host that states them. PF.weakFigures reads them: a
+// figure its own linked source states is a sourced figure, never rewritten into a vague word ("rose sharply" for "39% to 66%", K6 round 3)
+const verified_figures = [];
 // B3-8: the check is one function, so the live page a refresh starts from is checked by exactly the rule the draft is
 const citedFigureCheck = (text, limit) => {
   const pad = (x) => ' '.repeat(x.length);
   // a full stop between two digits is a decimal point, not the end of a sentence ("23.5%" must stay whole)
   const isBreak = (t, i) => { const c = t[i]; if (c === '\n' || c === '|' || c === '!' || c === '?') return true; if (c !== '.') return false; return !(/\d/.test(t[i - 1] || '') && /\d/.test(t[i + 1] || '')); };
   const bounds = (t, at, len) => { let a = at, b = at + len; while (a > 0 && !isBreak(t, a - 1)) a--; while (b < t.length && !isBreak(t, b)) b++; return [a, b]; };
-  const seen = new Set(); const found = []; let checked = 0;
+  const seen = new Set(); const found = []; const ok = []; let checked = 0;
   for (const m of [...String(text).matchAll(/\[[^\[\]]+\]\((https?:\/\/[^)\s]+)\)/g)]) {
     const [a, b] = bounds(text, m.index, m[0].length); const id = a + ':' + b; if (seen.has(id)) continue; seen.add(id);
     const sent = text.slice(a, b);
@@ -2950,7 +4390,7 @@ const citedFigureCheck = (text, limit) => {
     // (B3-8: a source a refresh re-read whole carries no cut marker unless FRESH_CAP cut it — see §2b.)
     for (const f of SRC.figures(body)) {
       checked++;
-      if (texts.some(t => SRC.hasFigure(f, t))) continue;
+      if (texts.some(t => SRC.hasFigure(f, t))) { if (ok.length < 40) ok.push({ figure: f.raw, sources: [...new Set(urls.filter(u => SRC.hasFigure(f, srcText.get(SRC.key(u)) || '')).map(u => SRC.host(u)))] }); continue; }
       if (SRC.hasFigure(f, ownFacts) || clientNums.includes(String(f.raw).toLowerCase()) || SRC.hasFigure(f, OWN_TEXT)) continue;   // A-19: the business's own pages vouch for its own figures
       found.push({ figure: f.raw, sources: [...new Set(urls.map(u => SRC.host(u)))], reason: texts.some(t => SRC.cutShort(t)) ? 'not_in_excerpt' : 'absent',
         start: a + f.index, end: a + f.index + f.length, raw: f.raw, context: plain(sent).slice(0, 160),
@@ -2959,11 +4399,12 @@ const citedFigureCheck = (text, limit) => {
     }
     if (found.length >= limit) break;
   }
-  return { found, checked };
+  return { found, checked, ok };
 };
 {
   const r9b = citedFigureCheck(md, 12);
   const marks = r9b.found.map(x => ({ start: x.start, end: x.end, raw: x.raw }));
+  r9b.ok.forEach(x => verified_figures.push(x));
   r9b.found.forEach(x => unverified_figures.push({ figure: x.figure, sources: x.sources, reason: x.reason, ...(x.refreshed ? { refreshed_source: true } : {}) }));
   marks.sort((x, y) => y.start - x.start);
   for (const t of marks) md = md.slice(0, t.start) + '[Confirm: ' + t.raw + ']' + md.slice(t.end);
@@ -3168,15 +4609,18 @@ const subtopics_dropped = [];
 // by another caller, may still carry a course page), (2) neither that page nor the subtopic is about a topic the verdict left out, and
 // (3) it is not a sales heading (a fee, a price, alumni, eligibility: CVG.subtopics' own filter, applied again to a stored plan).
 const verdict_exclusions = Array.isArray(prev.verdict_exclusions) ? prev.verdict_exclusions : EXC.fromVerdict(prev.verdict_changes, []);
+// W06-A (2026-10-30, WAVE05 3.1): a topic is matched against the page's keyword FAMILY (keyword, the brief's primary and secondary keywords,
+// the site's main services), so one shared word such as "Dynamics" never makes a heading about an excluded topic
+const excFamily = EXC.familyOf(prev, SITE_MODEL);
 const qaPageKind = CVG.kindFor(prev.page_type);
 const benchKind = subBest && (subBest.title || subBest.headings) ? CVG.kindOf(subBest, prev.keyword || '') : (covPlan && covPlan.best ? covPlan.best.kind : null);
 const benchTitleText = subBest ? String(subBest.title || '') + ' ' + String(subBest.url || '').replace(/^https?:\/\/[^\/]+/i, '').replace(/[\/_-]+/g, ' ') : '';
-const benchExcluded = benchTitleText.trim() ? verdict_exclusions.find(e => EXC.match(benchTitleText, e, prev.keyword || '')) : null;
+const benchExcluded = benchTitleText.trim() ? verdict_exclusions.find(e => EXC.match(benchTitleText, e, excFamily)) : null;
 const benchOffKind = !!(covPlan && (covPlan.type_match === false || (benchKind && benchKind !== qaPageKind && !(qaPageKind === 'guide' && benchKind === 'list'))));
 const subtopicsKept = (covPlan && Array.isArray(covPlan.subtopics) ? covPlan.subtopics : []).filter(s => {
   let why = benchOffKind ? 'the page to beat is a ' + ({ other: 'course, job or directory page', list: 'list of companies', guide: 'guide', service: 'service page', unknown: 'page of another kind' }[benchKind] || 'page of another kind') + ', not a page like this one'
     : benchExcluded ? 'the page to beat is about "' + String(benchExcluded.topic != null ? benchExcluded.topic : benchExcluded) + '", a topic the verdict said to leave out' : '';
-  if (!why) { const ex = verdict_exclusions.find(e => EXC.match(s, e, prev.keyword || '')); if (ex) why = 'about "' + String(ex.topic != null ? ex.topic : ex) + '", a topic the verdict said to leave out'; }
+  if (!why) { const ex = verdict_exclusions.find(e => EXC.match(s, e, excFamily)); if (ex) why = 'about "' + String(ex.topic != null ? ex.topic : ex) + '", a topic the verdict said to leave out'; }
   if (!why && CVG.isPromo(s, benchKind)) why = 'a sales heading (a fee or a price, or a course\'s alumni and eligibility), not a topic';
   if (!why) why = CVG.namesBrand(s, subBest, subOpts) || '';
   if (why) subtopics_dropped.push({ subtopic: s, reason: why }); return !why; });
@@ -3238,6 +4682,10 @@ if (!metaDesc) warnings.push('Meta description line missing');
 else { if (metaDesc.length > 155) warnings.push(`Meta description is ${metaDesc.length} characters (max 155)`); if (metaDesc.length < 70) warnings.push(`Meta description is only ${metaDesc.length} characters (aim for 120-155)`); }
 if (slug && !/^\/?[a-z0-9]+(-[a-z0-9]+)*\/?$/.test(slug)) warnings.push('Slug should be lowercase words joined by hyphens');
 if (!h1) warnings.push('H1 missing'); else if (kw && !flexRe(kw, 'i').test(h1)) warnings.push('Primary keyword missing from H1');
+// W07-B: the new page's title tag and H1 against the page the client kept (Page Fix gives them wording of their own; this records the result)
+const page_identity = APQ ? PGA.check(md, APQ) : null;
+if (page_identity && page_identity.title_same) warnings.push('Same title as your existing page ' + APQ.path + ': the meta title repeats its ' + (page_identity.same_as && page_identity.same_as.field === 'h1' ? 'main heading' : 'title tag'));
+if (page_identity && page_identity.h1_same) warnings.push('Same main heading as your existing page ' + APQ.path);
 if (kw && !flexRe(kw, 'i').test(first100)) warnings.push('Primary keyword not in the first 100 words');
 if (kwCount < 3) warnings.push(`Primary keyword used only ${kwCount} time(s)`);
 if (density > 2) warnings.push(`Keyword density is high (${density}%), a risk of keyword stuffing`);
@@ -3285,7 +4733,12 @@ if (business_claims.length) warnings.push('Statements about ' + (bizNames[0] || 
   + business_claims.slice(0, 4).map(b => '"' + b.sentence.slice(0, 160) + '"').join('; ') + '. Remove each one, or confirm it in the business facts');
 // A-18 (2026-10-17): a section about a topic the verdict said to leave out. Live (exec 771) the verdict said "Skip the consultancy-licence
 // and start-an-IT-company questions, which don't match buyer intent" and the page carried "How Much Is a Consultancy Licence in Dubai?".
-const excluded_sections = EXC.check(md.match(/^#{2,3} .+$/gm) || [], verdict_exclusions, prev.keyword || '');
+// W06-A (2026-10-30, WAVE05 3.1): only the sections the deletion budget allows are listed for deletion (EXC.decide: a heading or text that
+// names the topic, else at most one short section; never more than 40% of the page); the other matches are kept and recorded in
+// `excluded_sections_kept` with the reason (evidence only: not a warning, so the copy check and the editor round are unchanged)
+const excDecision = EXC.decide(md, verdict_exclusions, excFamily);
+const excluded_sections = excDecision.remove.map(x => ({ heading: x.heading, topic: x.topic, words: x.words, share_pct: x.share_pct, signal: x.signal }));
+const excluded_sections_kept = excDecision.keep.map(x => ({ heading: x.heading, topic: x.topic, words: x.words, why: x.why }));
 if (excluded_sections.length) warnings.push('Sections about a topic the verdict said to leave out: ' + excluded_sections.slice(0, 4).map(x => '"' + x.heading + '" (the verdict: skip ' + x.topic + ')').join('; ')
   + '. Remove each section, so the page stays on what its buyers search for');
 if (stats.length) warnings.push('Unverified statistics that need a linked source or a [Statistic] marker: ' + stats.join('; '));
@@ -3343,7 +4796,7 @@ if (placeholder_count > PH_MAX) warnings.push(`Too many placeholders to publish 
 
 // 15. Content score (0-100)
 // FIX_PLAN G2: an FAQ block is no longer one of the checks (no FAQ rich results since 2026-05-07); question headings answered directly are.
-const structuralChecks = [!!metaTitle && metaTitle.length <= 60, !!metaDesc && metaDesc.length <= 155, !!h1, h2s.length >= 4, !!qaMatch, answeredQuestions >= 3, /\|.*\|/.test(md), !/faq|frequently asked/i.test(lastH2), internalLinks > 0 || (prev.internal_link_candidates || []).filter(c => c && !c.planned).length <= 1, kwCount >= 3 && density <= 2];
+const structuralChecks = [!!metaTitle && metaTitle.length <= 60, !metaDescProblem, !!h1, h2s.length >= 4, !!qaMatch, answeredQuestions >= 3, /\|.*\|/.test(md), !/faq|frequently asked/i.test(lastH2), internalLinks > 0 || (prev.internal_link_candidates || []).filter(c => c && !c.planned).length <= 1, kwCount >= 3 && density <= 2];
 const structure_pts = 25 * structuralChecks.filter(Boolean).length / structuralChecks.length;
 // FIX_PLAN G33: the 25 coverage points are measured against the best competitor's coverage (clamped 60-90%), not against a silent 100%.
 // With no competitor page read, coverage_ratio is the plain share, exactly as before.
@@ -3355,7 +4808,28 @@ const readability_pts = flesch == null ? 10 : RBAND.ok ? (flesch >= RBAND.low ? 
 const specificity_pts = 10 * Math.min(1, specificity / 0.8);
 const banned_pts = Math.max(0, 10 - 2 * bannedCount);
 const length_pts = 15 * (1 - Math.min(1, Math.abs(mainWords - target) / target));
-const content_score = Math.round(structure_pts + coverage_pts + readability_pts + specificity_pts + banned_pts + length_pts);
+// W0-C (2026-10-29, page-quality PLAN Fix 3; build section 159): the six parts above are the COPY check (`copy_score`): it decides the editor
+// round and "passed" exactly as before, so no page is edited more, shortened or held because of this change. The grade the client sees is
+// the interim reviewer-aligned grade of the GRADE kit (v5/code/_grade.js): the same measures rescaled, repetition and list labels taken off
+// structure, sources and fit added, length advice only, one scale out of 100. Page Candidates / Finalize Verdict apply the blocker and
+// duplicate-page caps and the floors (GR.cap) where they know the blockers.
+const copy_score = Math.round(structure_pts + coverage_pts + readability_pts + specificity_pts + banned_pts + length_pts);
+// H1 (WAVE0_REVIEW 2026-10-30): the business's own phone and address on file (the business profile, else the site model's NAP) are the
+// client's own figures in the grade, never a sourcing question (the grade kit also knows a phone number, opening hours and an address by
+// their shape, so a page whose call to action gives the office number is not "Needs work: sources")
+const napOwn = (() => { let m = null; try { m = $('Site Model').first().json.site_model || null; } catch (e) { m = null; }
+  if (!m && prev.site_model && typeof prev.site_model === 'object') m = prev.site_model;
+  const n = m ? (SM.nap(m) || {}) : {}; const p0 = (prev.site_profile && typeof prev.site_profile === 'object') ? prev.site_profile : {}; const a0 = (p0.address && typeof p0.address === 'object') ? p0.address : {};
+  return [p0.phone, p0.street_address, a0.street, a0.postal_code, n.phone, n.street_address, n.postal_code].filter(x => typeof x === 'string' && x.trim()).join('\n'); })();
+// W06-A (2026-10-30, WAVE05 3.1 / Deploy readiness 4): what this page run already took out of the page (Page Candidates' state, carried by
+// Page Fix from the second check on): sections deleted as a topic the verdict said to leave out, and H2s the edits lost. Two sections or a
+// fifth of the words cap coverage and fit in the grade (GR.removedCap), so a page that lost its core never reads "Ready"
+const removed_run = (() => { if (round < 2) return null; let st = null; try { const j = $('Page Fix').first().json; st = j && j.page_fix && typeof j.page_fix === 'object' ? j.page_fix : null; } catch (e) { st = null; }
+  if (!st) return null; const r = EXC.removedOf(st); return { ...r, h2_now: h2s.length, words_now: mainWords }; })();
+const grade_detail = GR.local({ structure_frac: structuralChecks.filter(Boolean).length / structuralChecks.length, coverage_ratio, readability_pts, specificity_pts, clean_pts: banned_pts }, md,
+  { keyword: prev.keyword || '', brand_names: bizNames, domain, prev, removed: removed_run, own_text: [prev.business, prev.business_facts, prev.case_facts_text, napOwn].filter(x => typeof x === 'string').join('\n') },
+  { tier: SRC.tier, figures: SRC.figures });
+const content_score = grade_detail.score;
 
 // 16. Schema (deterministic, page-type aware). v4.4: the author as a Person (from the business profile), the expert reviewer, LocalBusiness
 //     for local pages, VideoObject for pages with a video, an ItemList of the cluster pages for hub pages. Unknown values stay [placeholders].
@@ -3580,7 +5054,7 @@ const owner_edits = [...placeholders.map(p => ({ token: p.token, count: p.count,
 owner_edits.splice(placeholders.length, 0, ...claim_edits);
 // P2-6: `passed_copy` judges the text and decides the editor round; `passed` judges the page the owner receives, so the author box's
 // bracketed fields, and every bracket left in the body, keep it false: the honest answer to "can I publish this as it is?".
-const passed_copy = warnings.length === 0 && content_score >= 80 && lenOk && !too_many_placeholders && !too_long;
+const passed_copy = warnings.length === 0 && copy_score >= 80 && lenOk && !too_many_placeholders && !too_long;   // W0-C: the copy check, unchanged
 const passed = passed_copy && profile_placeholders === 0 && body_brackets === 0 && claims_open === 0 && !__cut.cut_off;   // LLM-LIMITS: a cut page is never publishable   // E-CLAIM: an unsupported promise is an open bracket
 // v4.6: the editor pass (a full rewrite) runs only when it can still improve the page. It is skipped when the draft already scores 90+, the editorial
 // review rates it 85+ with no high-severity problem, the length is on target and the only open notes are style notes (passive voice, long
@@ -3589,8 +5063,8 @@ const passed = passed_copy && profile_placeholders === 0 && body_brackets === 0 
 const STYLE_ONLY = /^(Passive voice in about|\d+ sentences longer than 28 words|Editor review: )/;
 const crit = critique || lastCritique || {};
 const highProblem = (crit.problems || []).some(p => /high|critical/i.test(p.severity || ''));
-const editor_needed = !passed_copy && !(content_score >= 90 && crit.score != null && Number(crit.score) >= 85 && !highProblem && !too_many_placeholders && !too_long && lenOk && warnings.every(w => STYLE_ONLY.test(w)));
-if (!passed_copy && !editor_needed && round === 1) fixes.push('Editor pass skipped: the draft met every SEO check (score ' + content_score + ', review ' + crit.score + '); the style notes below are left for a final read');
+const editor_needed = !passed_copy && !(copy_score >= 90 && crit.score != null && Number(crit.score) >= 85 && !highProblem && !too_many_placeholders && !too_long && lenOk && warnings.every(w => STYLE_ONLY.test(w)));
+if (!passed_copy && !editor_needed && round === 1) fixes.push('Editor pass skipped: the draft met every SEO check (copy check ' + copy_score + ', review ' + crit.score + '); the style notes below are left for a final read');
 // R11 (2026-10-13, re-rating §3.11): when the rounds run out with the gate still failing, the page is DELIVERED AS A DRAFT and labelled as
 // one. Live (exec 521) round 1 failed on 6 placeholders, the editor ran, round 2 came back with 12 (11 × [Price], 1 × [Number]) and 40%
 // coverage against a target of 68 — and because `qa_max_rounds: 2` was reached the page went out with nothing in the callback, the e-mail or
@@ -3615,7 +5089,7 @@ const not_ready_reasons = !not_ready ? [] : [
   too_long ? 'the main content is ' + mainWords + ' words against a target of ' + (lenBand ? lenLow + '-' + lenHigh + lenBasis : target) : '',
   (!too_long && !lenOk && !__cut.cut_off) ? 'the main content is ' + mainWords + ' words against a target of ' + (lenBand ? lenLow + '-' + lenHigh + lenBasis : target) : '',
   (coverage_target_pct && coverage_pct < coverage_target_pct) ? coverage_compare : '',   // R43: one measure, both figures, the basis named
-  content_score < 80 ? 'the content score is ' + content_score + ' of 100 (80 is the bar)' : '',
+  copy_score < 80 ? 'the copy check scored ' + copy_score + ' of 100 (80 is the bar)' : '',
   ...warnings.filter(w => !/^Too many placeholders|^Main content is too long/.test(w)).slice(0, 4)
 ].filter(Boolean);
 const quality_label = passed ? 'passed the quality check'
@@ -3648,21 +5122,25 @@ if (siblingKw.size) md = md.replace(/^(Secondary Keywords:[ \t]*)(.*)$/m, (m0, h
 if (secondary_dropped.length) fixes.push('Took ' + secondary_dropped.length + ' keyword(s) of other pages of this ladder off the secondary keywords (each has its own page): ' + secondary_dropped.join(', '));
 const site_profile_out = (P && Object.keys(P).some(k => k === 'address' ? Object.values(P.address || {}).some(Boolean) : String(P[k] || '').trim())) ? P : (prev.site_profile || null);
 return [{ json: { ...prev, output: md, qa_round: round, editor_rounds, meta: { title: metaTitle, description: metaDesc, slug }, schema_blocks: blocks, critique: critique || lastCritique || null, site_profile: site_profile_out,
-  content_qa: { cut_off: __cut.cut_off, cut_off_reasons: __cut.reasons, llm_notes: __llm_notes, ai_ready, round, editor_rounds, passed, editor_needed, content_score, quality, publishable: passed, not_ready, quality_label, not_ready_reasons, max_rounds, rounds_left, score_breakdown: { structure: Math.round(structure_pts), coverage: Math.round(coverage_pts), readability: Math.round(readability_pts), specificity: Math.round(specificity_pts), clean_language: Math.round(banned_pts), length: Math.round(length_pts) },
+  content_qa: { cut_off: __cut.cut_off, cut_off_reasons: __cut.reasons, llm_notes: __llm_notes, ai_ready, round, editor_rounds, passed, editor_needed, content_score, quality, publishable: passed, not_ready, quality_label, not_ready_reasons, max_rounds, rounds_left, score_breakdown: grade_detail.breakdown, grade_detail,   // W0-C: the grade's parts (structure 20, coverage 15, readability 10, specificity 10, clean language 10, sources 15, fit 20, length 0) and how each was measured
+    copy_score, copy_breakdown: { structure: Math.round(structure_pts), coverage: Math.round(coverage_pts), readability: Math.round(readability_pts), specificity: Math.round(specificity_pts), clean_language: Math.round(banned_pts), length: Math.round(length_pts) },
     total_words: totalWords, main_content_words: mainWords, faq_words: faqWords, target_word_count: target, sections, placeholders, placeholder_count, placeholder_max: PH_MAX, review_notes, writer_notes, open_brackets, business_name: bizName, nap_source,
     placeholder_note, length_instruction, over_words, over_pct, longest_sections: fat_sections, length_band,   // CT-FIX2 (D8): the band judged against and its sample   // R25 / R22: the masked figures by name, and the cut the editor is asked to make
     masked_amounts, flagged_amounts, sourced_amounts,   // B3-1 / B3-2: what the money mask removed, what it left for review, and what a cited source vouched for
+    source_redirects: { resolved: redirectsResolved.length, dropped: redirectsDropped.length }, voice: VOICE,   // FU-SV: redirect citations, the business's own voice
     outbound_links: externalUrls.map(e => ({ url: e.url, anchor: e.anchor, host: e.host, tier: e.tier })),   // A-14: every outbound link, for Outbound Link Check
     business_claims, business_promises, promise_check, carried_promises, claims_open, business_names: bizNames, unverified_statistics_own: stats_own,   // A-15 / A-19 / E-CLAIM
-    verdict_exclusions, excluded_sections, protected_restored,   // A-18 / A-17
+    verdict_exclusions, excluded_sections, excluded_sections_kept, protected_restored,   // A-18 / A-17
     coverage_advice, subtopics_dropped, owner_edits, next_step, body_brackets, page_url: pageUrl,   // D5 / owner edits / placeholder gate (2026-10-21)
     passed_copy, profile_placeholders, profile_placeholder_fields: PROFILE_PH, placeholders_total: placeholder_count + profile_placeholders,
     keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, question_headings: questionHeadings, answered_questions: answeredQuestions, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),
     source_quality: externalUrls.reduce((m, e) => ({ ...m, [e.tier]: (m[e.tier] || 0) + 1 }), {}), weak_sources_unlinked: [...new Set(weakRepeats)], links_to_add_when_published: plannedLinksQA.map(p => ({ keyword: p.keyword || '', url: p.url, role: p.role, anchor: anchorText(p) })),
-    answer_block_words: answerWords, meta_title_length: metaTitle.length, meta_description_length: metaDesc.length, unverified_statistics: stats, unverified_figures,
+    answer_block_words: answerWords, meta_title_length: metaTitle.length, meta_description_length: metaDesc.length, meta_error, unverified_statistics: stats, unverified_figures, verified_figures,
     trusted_sources, banned_phrases: banned_found, readability: { flesch, avg_sentence_words: avgSentence, long_sentences: longSentences, passive_pct, position: read_position, basis: read_basis, band_line: read_band_line, note: read_note,
       band: RBAND.ok ? { low: RBAND.low, high: RBAND.high, median: RBAND.median, p25: RBAND.p25, p75: RBAND.p75, pages_measured: RBAND.pages_measured, pages: RBAND.pages, clamped: RBAND.clamped } : null,
       band_source: RBAND.ok ? 'competitor_pages' : 'fixed', advice_only: true },   // B3-4: the band and its basis; advice, never in `warnings`
+    ...(page_identity ? { page_identity } : {}),   // W07-B: the new page's title and H1 against the page the client kept, and its link to it
+    regulatory: (() => { try { return REG.qa(md, $('Collect Regulatory Facts').first().json.regulatory || null); } catch (e) { return REG.qa(md, prev.regulatory || null); } })(),   // W0-F (section 154): recorded, never scored
     intent, refresh_check,   // B3-6 (every draft) / B3-8 (a refresh: the live page against its re-read sources)
     term_coverage: termCoverage, coverage_pct, coverage: coverage_report, coverage_target_pct, missing_terms: missingTerms, missing_subtopics: missingSubtopics, specificity_per_100_words: specificity,
     critic_score: (critique || lastCritique || {}).score ?? null, critic_verdict: (critique || lastCritique || {}).verdict || null,

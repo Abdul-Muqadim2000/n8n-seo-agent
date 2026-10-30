@@ -1,3 +1,4 @@
+/*__SITE_MODEL__*/
 // Cleans the client's pages and extracts cheap trust signals (phone, email, years, certifications, counts).
 // R38 (2026-10-16): the verdict told a customer their page "has no mandate dates, no tables, no author or date" about a page that has all
 // three — three cuts (9,000 characters here, 3,500 in the analyzer's prompt, 5,000 in the copywriter's) and a reader (Jina, with the header /
@@ -10,9 +11,35 @@ const CONFIG = { existing_chars: 24000, other_chars: 6000, headings: 30, dates: 
 const ctx = $('Collect Site URLs').first().json;
 const reqs = $('Client Page Requests').all().map(i => i.json);
 // the Jina answers: read from their own node when the HTML read sits between (as wired); a direct feed keeps working (harness, older wiring)
+// FU-R1 (2026-10-29): the render chain (Client Render Plan -> Render Client Pages -> Client Render More -> Render More Client Pages) sits
+// between Read Client Page HTML and this node; when it ran, the HTML answers are read from their own node, not from this node's input
+let RPLAN = null; try { RPLAN = $('Client Render Plan').all().map(i => i.json || {}); } catch (e) { RPLAN = null; }
 let jina = null, htmlRes = [];
-try { jina = $('Read Client Pages').all().map(i => i.json); htmlRes = $input.all().map(i => i.json); } catch (e) { jina = null; }
+try { jina = $('Read Client Pages').all().map(i => i.json);
+  htmlRes = RPLAN ? (() => { try { return $('Read Client Page HTML').all().map(i => i.json); } catch (e) { return []; } })() : $input.all().map(i => i.json); } catch (e) { jina = null; }
 const res = jina || $input.all().map(i => i.json);
+// FU-R1: what the renderer read. A client-rendered site (a JavaScript app) answers the text reader with an empty page and the plain GET with a
+// script shell: those pages are read again after their scripts ran (Jina Reader, browser engine, the HTML Render Key Pages reads in the audit),
+// plus up to two pages the rendered homepage links to. Each rendered page is labelled `read_via: 'rendered'`, and `client_render` says what
+// was rendered, what was not and why. With no render (every server-rendered site) nothing here changes the output.
+const RENDER = (() => {
+  const out = { byIndex: {}, more: [], tried: [], home: null, more_plan: null };
+  if (!RPLAN || typeof CRK === 'undefined') return out;
+  const planned = RPLAN.filter(p => p && !p.skip && p.stage === 1);
+  if (!planned.length) return out;
+  let r1 = []; try { r1 = $('Render Client Pages').all().map(i => i.json || {}); } catch (e) { r1 = []; }
+  planned.forEach((p, k) => { const v = CRK.rendered(r1[k]); out.byIndex[p.index] = v;
+    out.tried.push({ url: p.url, kind: p.kind, stage: 1, rendered: !!v.ok, why: v.ok ? p.why : v.why });
+    if (v.ok && p.kind === 'home' && !out.home) out.home = { url: p.url, html: v.html }; });
+  let mp = []; try { mp = $('Client Render More').all().map(i => i.json || {}); } catch (e) { mp = []; }
+  let r2 = []; try { r2 = $('Render More Client Pages').all().map(i => i.json || {}); } catch (e) { r2 = []; }
+  const mpl = mp.filter(m => m && !m.skip);
+  if (!mpl.length && mp[0] && mp[0].more_plan) out.more_plan = mp[0].more_plan;
+  mpl.forEach((m, k) => { const v = CRK.rendered(r2[k]);
+    out.tried.push({ url: m.url, kind: m.kind, stage: 2, rendered: !!v.ok, why: v.ok ? m.why : v.why, ...(m.topic_match != null ? { topic_match: m.topic_match } : {}) });
+    if (v.ok) out.more.push({ url: m.url, kind: m.kind || 'related', raw: v.raw }); });
+  return out;
+})();
 const strip = (s) => String(s || '')
   .replace(/^(Title|URL Source|Markdown Content|Published Time):.*$/gm, '')
   .replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
@@ -103,16 +130,34 @@ const digestOf = (req, raw, text, html, given) => {
 };
 
 let existingDigest = null;
+let existingReaderTitle = null;
 const pages = reqs.map((r, i) => {
   const j = res[i] || {};
-  const rawText = String(j.page_text || j.data || '');
-  const text = strip(rawText);
-  if (j.error || text.length < 200 || /just a moment|access denied|captcha/i.test(text.slice(0, 400))) return null;
+  let rawText = String(j.page_text || j.data || '');
+  let text = strip(rawText);
+  // FU-R1: the reader could not read it and the renderer could: the rendered page stands in (its text, and its HTML for the page's facts)
+  const rr = RENDER.byIndex[i]; const viaRender = !!(rr && rr.ok && (j.error || text.length < 200));
+  if (viaRender) { rawText = rr.raw; text = strip(rawText); }
+  if (!viaRender && (j.error || text.length < 200 || /just a moment|access denied|captcha/i.test(text.slice(0, 400)))) return null;
   const cap = r.kind === 'existing' ? CONFIG.existing_chars : CONFIG.other_chars;
   const h = htmlRes[i] || {};
-  if (r.kind === 'existing' && !existingDigest) existingDigest = digestOf(r, rawText, text, h.error ? '' : (h.page_html != null ? h.page_html : (h.data != null ? h.data : h.body)), Math.min(cap, text.length));
-  return { url: r.url, kind: r.kind, words: text.split(/\s+/).length, text: text.slice(0, cap) };
+  if (r.kind === 'existing' && !existingReaderTitle) existingReaderTitle = { url: r.url, title: ((String(j.page_text || j.data || '').match(/^Title:[ \t]*(.+)$/m) || [])[1] || '').trim() };   // W05-B: the reader's own title line
+  if (r.kind === 'existing' && !existingDigest) existingDigest = digestOf(r, rawText, text, viaRender ? rr.html : (h.error ? '' : (h.page_html != null ? h.page_html : (h.data != null ? h.data : h.body))), Math.min(cap, text.length));
+  return { url: r.url, kind: r.kind, words: text.split(/\s+/).length, text: text.slice(0, cap), ...(viaRender ? { read_via: 'rendered' } : {}) };
 }).filter(Boolean);
+// FU-R1: the pages the rendered homepage links to (the services page, the page closest to the search), read rendered too
+for (const m of RENDER.more) { const text = strip(m.raw); if (text.length < 200) continue;
+  pages.push({ url: m.url, kind: m.kind, words: text.split(/\s+/).length, text: text.slice(0, CONFIG.other_chars), read_via: 'rendered' }); }
+// FU-R1: a client-rendered site has no sitemap the run could read, so its own pages were unknown as link targets; the rendered homepage's
+// menu is that list (only when the sitemap gave nothing, so a site with a sitemap keeps exactly the candidates it had)
+const renderedLinks = (RENDER.home && !(ctx.site_urls || []).length) ? CRK.links(RENDER.home.html, RENDER.home.url, ctx.domain).slice(0, CRK.CONFIG.links_kept) : [];
+const linkCands = (() => { if (!renderedLinks.length) return null; const base = ctx.internal_link_candidates || [];
+  const have = new Set(base.map(c => String((c && c.url) || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '')));
+  return base.concat(renderedLinks.filter(l => !have.has(l.url.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '')))
+    .map(l => ({ url: l.url, path: l.path, ...(l.title ? { title: l.title } : {}), source: 'rendered homepage' }))); })();
+const clientRender = RENDER.tried.length ? { rendered: RENDER.tried.filter(t => t.rendered).length, tried: RENDER.tried.length, cap: CRK.CONFIG.max_pages,
+  pages: RENDER.tried, links_found: renderedLinks.length, ...(RENDER.more_plan ? { more: RENDER.more_plan } : {}),
+  method: 'read after the page\'s scripts ran (the reader\'s browser engine), because the plain reading of the page was an empty script shell' } : null;
 const existing = pages.find(p => p.kind === 'existing');
 // P2-5 (2026-10-12, Phase 2 live check §3): a page of the inventory that already answers this keyword (Client Page Requests -> SM.matchPage)
 // becomes this run's existing page, whether or not the fetch of it succeeded. The verdict, the brief, the schema and the report then improve
@@ -121,7 +166,34 @@ const matchedReq = reqs.find(r => r && r.kind === 'existing' && r.existing_page 
 const inventoryPage = (!(ctx.existing_page && ctx.existing_page.url) && matchedReq) ? matchedReq.existing_page : null;
 // H2 (2026-10-27, exec 2575): the ladder planned a new page, so a page the sitemap matched is not this run's page to rewrite
 const ignoredReq = reqs.find(r => r && r.ignored_existing && r.ignored_existing.url) || null;
-const all = pages.map(p => p.text).join('\n');
+// W07-B (2026-10-31, docs/page-quality-2026-10-29/WAVE06.md section 10, K1): after "Write it anyway" the new page reused the kept page's
+// title tag word for word, because nothing knew what that title was. The kept page's own title tag and main heading, from its HTML read in
+// this very run (else the reader's first heading for the H1), else from the page inventory; empty when neither has them, and the later
+// checks then say "not checked". Only for a page the client chose to keep (a ladder's planned page keeps its own rule).
+const ignoredIdentity = (() => {
+  const ig = ignoredReq && ignoredReq.ignored_existing; if (!ig || ig.planned_url) return null;
+  const key = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const i = reqs.findIndex(r => r && key(r.url) === key(ig.url));
+  let title = '', h1 = '', from = '';
+  if (i >= 0) {
+    const rr = RENDER.byIndex[i]; const h = htmlRes[i] || {}; const j = res[i] || {};
+    const html = String((rr && rr.ok) ? rr.html : (h.error ? '' : (h.page_html != null ? h.page_html : (h.data != null ? h.data : (h.body || '')))));
+    const tidyT = (t) => textOfHtml(t).replace(/\s+([:;,.!?])/g, '$1').slice(0, 200);   // inline tags flattened: "<span>Businesses</span>:" reads "Businesses:"
+    if (html.length >= 200) { title = tidyT((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '');
+      h1 = tidyT((html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i) || [])[1] || ''); }
+    if (!h1 && !j.error) h1 = String(headingsOf(String(j.page_text || j.data || ''))[0] || '').slice(0, 200);
+    if (title || h1) from = 'read in this run';
+  }
+  if (!title && !h1 && typeof SM !== 'undefined') {
+    let model = (ctx.site_model && typeof ctx.site_model === 'object') ? ctx.site_model : null;
+    if (!model) { try { model = ($('Site Model').first().json || {}).site_model || null; } catch (e) { model = null; } }
+    const inv = model ? SM.pages(model).find(p => key(p.url) === key(ig.url)) : null;
+    if (inv) { title = String(inv.title || '').slice(0, 200); h1 = String(inv.h1 || '').slice(0, 200); if (title || h1) from = 'the page inventory'; }
+  }
+  return { title_tag: title, h1, identity_from: from };
+})();
+const ignoredOut = ignoredReq ? { ...ignoredReq.ignored_existing, ...(ignoredIdentity || {}) } : null;
+const all =pages.map(p => p.text).join('\n');
 const uniq = (a) => [...new Set((a || []).map(s => s.trim()))];
 const client_signals = {
   phone_shown: /\+?\d[\d\s().-]{7,}\d/.test(all),
@@ -131,7 +203,46 @@ const client_signals = {
   numbers: uniq(all.match(/\b\d[\d,.]*\+?\s?(clients?|customers?|projects?|users?|countries|offices|employees|staff|locations|installations?|reviews?)\b/gi)).slice(0, 6),
   locations: uniq(all.match(/\b(Dubai|Abu Dhabi|Sharjah|Riyadh|Jeddah|London|Manchester|New York|Toronto|Sydney|Singapore|Karachi|Lahore|Islamabad|Mumbai|Delhi|Bangalore|Berlin|Paris|Madrid|Amsterdam)\b/g)).slice(0, 5)
 };
+// ---- W05-B (2026-10-30, page-quality BEFORE_AFTER K4): the page this run would rewrite is confirmed by its OWN words first ----
+// K4 ("dynamics 365 partner dubai") took /dynamics-365-project-operations-uae as the page to improve: matched by its address alone (its title
+// not on file), so the partner page was written onto the Project Operations page's address and called Ready. A page the inventory or the
+// sitemap matched (never one the client or the pipeline named) must be confirmed by its title or main heading (on file, or read in this very
+// run) or a Search Console search it earns impressions for (SM.confirmPage). When it is not, this run writes a NEW page at its own address,
+// reads the other page as a related page only, and says so (`existing_page_unconfirmed`, shown in the report and the brief).
+const EXCONF = (() => {
+  const cand = inventoryPage || ((ctx.existing_page && ctx.existing_page.url) ? ctx.existing_page : null);
+  if (!cand || ignoredReq || String(cand.source || '') === 'provided' || String(ctx.existing_page_url || '').trim()) return null;
+  if (typeof SM === 'undefined') return null;
+  const key = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  if (String(ctx.ladder_target_url || '').trim() && key(ctx.ladder_target_url) === key(cand.url)) return null;   // the keyword ladder planned this very address for the keyword
+  let model = (ctx.site_model && typeof ctx.site_model === 'object') ? ctx.site_model : null;
+  if (!model) { try { model = ($('Site Model').first().json || {}).site_model || null; } catch (e) { model = null; } }
+  const inv = model ? SM.pages(model).find(p => key(p.url) === key(cand.url)) : null;
+  const page = { url: cand.url, title: (inv && inv.title) || cand.title || '', h1: (inv && inv.h1) || '', queries: (inv && inv.queries) || [] };
+  const readNow = existingDigest && key(existingDigest.url) === key(cand.url) ? existingDigest : null;
+  const rdTitle = existingReaderTitle && key(existingReaderTitle.url) === key(cand.url) ? existingReaderTitle.title : '';
+  const htmlTitle = readNow ? String(readNow.html_title || '').replace(/&amp;/g, '&') : '';
+  const texts = [{ text: htmlTitle || rdTitle, by: 'its title' }, { text: readNow ? (readNow.headings || [])[0] || '' : '', by: 'its main heading' }].filter(t => t.text);
+  const c = SM.confirmPage(model || { pages: [] }, page, ctx.keyword, { texts });
+  const title = page.title || (htmlTitle || rdTitle).replace(/\s*[|]\s*[^|]{1,40}$/, '').trim();
+  // W07-A (2026-10-31, WAVE06 section 9, the 402 run): what is on file did not confirm the page AND the page reader refused to read it (its
+  // fallback failed too). "Has no title, main heading or Search Console search on file" is then not a finding about the page: nobody read
+  // it. The check says the page could not be read, and the run decides nothing on it (Parse Verdict's `pages_unread`).
+  const unreadMark = !c.ok ? reqs.map((r0, k) => ({ r0, j: res[k] || {} })).find(x => x.r0 && key(x.r0.url) === key(cand.url) && x.j.reader_fallback && x.j.reader_fallback.via === 'none') : null;
+  if (unreadMark) return { ok: false, unread: true, cand, title, why: 'it could not be read: ' + (typeof RD !== 'undefined' ? RD.clientReason(unreadMark.j.reader_fallback.refused) : 'the service we use to read web pages did not answer') };
+  return { ok: c.ok, cand, title, by: c.by, evidence: c.evidence, why: c.why };
+})();
+const unreadExisting = EXCONF && EXCONF.unread ? { url: EXCONF.cand.url, title: EXCONF.title, source: EXCONF.cand.source || '', why: EXCONF.why,
+  note: 'The page your website already has for this search (' + EXCONF.cand.url + ') could not be read, so nothing was decided about it.' } : null;
+const unconfirmed = EXCONF && !EXCONF.ok && !EXCONF.unread ? { url: EXCONF.cand.url, title: EXCONF.title, matched_by: EXCONF.cand.matched_by || (EXCONF.cand.source === 'sitemap' ? 'address' : ''), source: EXCONF.cand.source || '',
+  why: EXCONF.why, note: 'Written as a new page at its own address: ' + EXCONF.why + '.' } : null;
+if (unconfirmed) for (const p of pages) if (p.kind === 'existing') p.kind = 'related';
+const confirmedPage = EXCONF && EXCONF.ok ? { ...EXCONF.cand, ...(EXCONF.title && !EXCONF.cand.title ? { title: EXCONF.title } : {}), confirmed_by: EXCONF.evidence } : null;
 return [{ json: { ...ctx, ...(inventoryPage ? { existing_page: inventoryPage, existing_page_url: ctx.existing_page_url || inventoryPage.url } : {}),
-  ...(ignoredReq ? { existing_page: null, existing_page_ignored: ignoredReq.ignored_existing } : {}),
-  client_pages: pages, client_pages_read: pages.length, existing_page_text: existing ? existing.text : '', existing_page_tables: existingDigest ? existingDigest.tables_block : '', existing_page_digest: existingDigest,
-  existing_page_facts_text: existingDigest ? existingDigest.facts_text : '', client_signals } }];
+  ...(ignoredReq ? { existing_page: null, existing_page_ignored: ignoredOut } : {}),
+  ...(confirmedPage ? { existing_page: confirmedPage } : {}),
+  ...(unconfirmed ? { existing_page: null, existing_page_url: String(ctx.existing_page_url || ''), existing_page_unconfirmed: unconfirmed } : {}),
+  ...(unreadExisting ? { existing_page: null, existing_page_url: String(ctx.existing_page_url || ''), existing_page_unread: unreadExisting } : {}),   // W07-A
+  client_pages: pages, client_pages_read: pages.length, existing_page_text: (existing && !unconfirmed) ? existing.text : '', existing_page_tables: (existingDigest && !unconfirmed) ? existingDigest.tables_block : '', existing_page_digest: unconfirmed ? null : existingDigest,
+  existing_page_facts_text: (existingDigest && !unconfirmed) ? existingDigest.facts_text : '', client_signals,
+  ...(linkCands ? { internal_link_candidates: linkCands } : {}), ...(clientRender ? { client_render: clientRender } : {}) } }];
