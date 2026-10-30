@@ -13636,6 +13636,70 @@ open(os.path.join(OUT_CODE, '_reader.js'), 'w').write(_rd0('code/_reader.js'))  
 log('When the page reader refuses (W07-A, 2026-10-31, section 179): every reader node (by its credential) is followed by a fallback that reads a refused page again through the reader without the key, then (text reads) directly with the client-render HTML-to-text; one ops alert per refusal (seo_ops_alerts first, then the alert webhook, OA dedupe, AR delivery); Collect Client Pages says an unconfirmed page it could not read "could not be read"; Parse Verdict decides no verdict, score, hold, duplicate or existing-page match on refused pages and a page run stops before the brief with the reason (callback pages_unread, content log failed); Ladder Plan refuses to plan on them')
 
 # =============================================================================
+# 180. A SEPARATE NEW PAGE STANDS APART FROM THE PAGE THE CLIENT KEPT: ITS OWN TITLE TAG AND H1, ONE LINK TO THE KEPT PAGE, AND NO ADVICE
+#      TO TAKE THAT PAGE OVER (W07-B, page-quality wave 0.7, 2026-10-31; docs/page-quality-2026-10-29/WAVE06.md section 10, findings 1-3).
+#      K1 "ms 365 erp", live on the new reader key: after "Write it anyway" the new page got its own address (W06-B) but
+#      * its title tag was the kept page's title tag word for word ("MS 365 ERP in the UAE: Dynamics 365 Partner | <brand>"), copied by the
+#        Strategy Brief; two pages with one title compete for one search, and no review step flagged it (the H1 differed; in the W05 run the
+#        H1 was the kept page's too, but for one word);
+#      * it did not link to the kept page, although the verdict's changes told the writer to;
+#      * the brief said "Publish this brief as a replacement of that URL, not as a second page" and the blind second read advised "Use the
+#        slug ms-365-erp-uae": neither was told the client's choice.
+#      The kit v5/code/_page_apart.js (PGA) holds the rule, and is inlined where the run writes or reviews a page:
+#      * Collect Client Pages records the kept page's title tag and main heading (its HTML read in this run, else the reader's first heading
+#        for the H1, else the page inventory) on `existing_page_ignored` (title_tag, h1, identity_from);
+#      * the page contract (Brief Context -> the brief, the writer, the Critic, the Editor) carries one SEPARATE PAGE line, only on such a run;
+#      * Parse Brief gives the brief a title and an H1 of their own, drops title variants and lines that advise taking the kept page over, and
+#        offers the kept page as an internal link;
+#      * Page Fix (PF.fix step i, in front of every quality check and the final one) rewrites a title tag or H1 that equals or nearly equals
+#        the kept page's (never the kept page itself) and links the kept page once, in the section that talks most about it;
+#      * Content QA records `page_identity` (still the same? linked?) and keeps that link; PF.classify blocks only a title it could not change;
+#      * the second read is told the choice (in its SITE_PAGES block) and sets aside any advice to take the kept page's address or slug,
+#        replace it, merge into it or redirect to it (`against_choice`).
+#      A rewrite ("Improve the existing page"), a page the client named, a keyword-ladder page (the guide that ranks, exec 949) and every
+#      ordinary run: PGA.of is null, and every prompt and every check is exactly as before.
+#      Pinned by harness/scenarios_w07b.js (W07B1-W07B6) on the anonymised K1 replay (fixtures/replay_w05_k1.json.gz) and synthetic cases.
+# =============================================================================
+PA_SRC179 = _rd0('code/_page_apart.js').rstrip('\n')
+assert PA_SRC179.count('const PGA = (() => {') == 1 and PA_SRC179.rstrip().endswith('})();'), 'W07-B: _page_apart.js is not one PGA kit'
+for _bad179 in ('—', '–', '“', '”', '…'):
+    for _f179 in ('code/_page_apart.js', 'code/_page_fix.js', 'code/_critic_reread.js'):
+        assert _bad179 not in _rd0(_f179), 'W07-B: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f179
+patch('Parse Brief', "\n// 5. M1 (2026-10-21, pre-launch run exec 42): a ladder's top page", r"""
+// 4c. W07-B (2026-10-31, docs/page-quality-2026-10-29/WAVE06.md section 10, K1 "ms 365 erp"): after "Write it anyway" the brief copied the
+//     kept page's title tag word for word and told the writer to publish the page "as a replacement of that URL, not as a second page". A
+//     separate new page gets a title and an H1 of its own, no line of the brief advises taking the kept page over, and the kept page is offered
+//     as a link (PGA.brief, v5/code/_page_apart.js). Any other run: PGA.of is null and the brief is untouched.
+if (typeof PGA !== 'undefined') {
+  const brandPB = String(((prev.style_guide || {}).brand_form) || '').replace(/\s*\([^)]*\)\s*$/, '').trim() || String((prev.site_profile || {}).business_name || (prev.site_description || {}).business_name || '').trim();
+  const PAB = PGA.brief(brief, prev, { keyword: prev.keyword, brand: brandPB, business: brandPB });
+  if (PAB.adjustments.length) adjustments.push(...PAB.adjustments);
+}
+
+// 5. M1 (2026-10-21, pre-launch run exec 42): a ladder's top page""")
+_pa179_nodes = ('Parse Brief', 'Brief Context', 'Page Fix', 'Content QA', 'Page Candidates', 'Second Read Plan', 'Apply Second Read')
+for _n179 in _pa179_nodes:
+    assert 'const PGA = (() => {' not in code(_n179), 'W07-B: ' + _n179 + ' already carries a PGA kit'
+    setcode(_n179, PA_SRC179 + '\n' + code(_n179))
+    assert code(_n179).count('const PGA = (() => {') == 1, 'W07-B: PGA kit missing or doubled in ' + _n179
+assert 'PGA.brief(brief, prev,' in code('Parse Brief') and code('Parse Brief').index('// 4c. W07-B') > code('Parse Brief').index('// 4b. W06-B'), 'W07-B: Parse Brief does not make the brief stand apart after the slug move'
+for _n179 in ('Brief Context', 'Page Fix', 'Page Candidates', 'Apply Second Read'):
+    assert "if (c.apart && typeof PGA !== 'undefined') { const A = PGA.fix(md, c.apart," in code(_n179) and "apart: typeof PGA !== 'undefined' ? PGA.of(p) : null" in code(_n179) \
+        and "const apart = typeof PGA !== 'undefined' ? PGA.contractLine(PGA.of(p)) : '';" in code(_n179), 'W07-B: ' + _n179 + ' carries an older page kit'
+for _n179 in ('Second Read Plan', 'Apply Second Read'):
+    assert "PGA.readerNote(PGA.of(p), b.slug)" in code(_n179) and 'against_choice' in code(_n179), 'W07-B: ' + _n179 + ' carries an older second-read kit'
+assert 'const page_identity = APQ ? PGA.check(md, APQ) : null;' in code('Content QA') and '...(page_identity ? { page_identity } : {}),' in code('Content QA'), 'W07-B: Content QA does not record the page identity'
+assert 'const ignoredIdentity = (() => {' in code('Collect Client Pages') and 'existing_page_ignored: ignoredOut' in code('Collect Client Pages'), 'W07-B: Collect Client Pages does not read the kept page\'s title and H1'
+# the editor reads the contract from its own item: the contract line reaches it only if the Editor prompt still prints page_contract
+assert "{{ ($json.page_contract || {}).text || '' }}" in _rd0('prompts/editor.txt'), 'W07-B: the Editor prompt no longer prints the page contract'
+# ---------- the harness: PGA with the page kit and the second-read kit, { kit: 'PA' | 'PF' | 'RR', fn, args } -> { r } ('__PF__' is the PF kit) ----------
+_rr179 = _rd0('code/_critic_reread.js').rstrip('\n').replace("const TEMPLATE = /*__RR_TEMPLATE__*/'';", 'const TEMPLATE = ' + json.dumps(_tpl158) + ';').replace("const BAR = /*__RR_BAR__*/'';", 'const BAR = ' + json.dumps(_bar158) + ';')
+open(os.path.join(OUT_CODE, '_page_apart.js'), 'w').write("// harness shim (written by build_v4.py section 180): the PGA kit with the page kit and the second-read kit, { kit: 'PA' | 'PF' | 'RR', fn, args } -> { r } ('__PF__' in args is the PF kit)\n"
+    + PA_SRC179 + '\n' + _rd0('code/_page_fix.js').rstrip('\n') + '\n' + _rr179
+    + "\nreturn $input.all().map(i => { const j = i.json || {}; const K = j.kit === 'PF' ? PF : j.kit === 'RR' ? RR : PGA; const a = (j.args || []).map(x => x === '__PF__' ? PF : x); return { json: { r: K[j.fn].apply(null, a) } }; });\n")
+log('A separate new page stands apart from the page the client kept (W07-B, 2026-10-31, section 180): after "Write it anyway" Collect Client Pages reads the kept page\'s title tag and H1; the page contract tells the brief, the writer, the Critic and the Editor; Parse Brief and Page Fix give the new page a title tag and an H1 of their own and one link to the kept page; Content QA records it (a title that could not be changed blocks); the second read is told the choice and its advice to take the kept page\'s address or slug is set aside. A rewrite, a named page, a ladder page and every ordinary run are unchanged')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;

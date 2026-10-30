@@ -101,9 +101,12 @@ const RR = (() => {
     const facts = list([].concat(b.client_facts || [], [p.business_facts, p.case_facts_text], sd.site_facts || sd.products_or_services || []).map(S), 80).join(' | ').slice(0, CFG.facts_chars);
     const srcs = list([].concat((b.evidence_plan || []).map(e => e && e.source_url ? S(e.fact).slice(0, 240) + ' (' + S(e.source_url) + ')' : ''),
       (p.facts || []).map(f => f && f.url ? S(f.claim || f.fact || f.text).slice(0, 240) + ' (' + S(f.url) + ')' : '')), CFG.sources);
+    // W07-B (2026-10-31, WAVE06 section 10 finding 3): a separate new page beside a page the client kept says so, or the read advises the
+    // kept page's slug (K1: "Use the slug ms-365-erp-uae"); only on such a page, so every other read gets the same prompt as before
+    const apart = typeof PGA !== 'undefined' ? PGA.readerNote(PGA.of(p), b.slug) : '';
     return { KEYWORD: S(p.keyword), PAGE_TYPE: S(p.page_type || 'page'), COUNTRY: S(p.country || 'not stated'), AUDIENCE: S(b.target_audience || p.audience || 'not stated'),
       BUSINESS: S(sp.business_name || sd.business_name || p.domain || 'the business'), DOMAIN: S(p.domain),
-      SITE_PAGES: own.slice(0, CFG.site_pages).join('\n') || 'none listed', FACTS: facts || 'none', SOURCES: srcs.join('\n') || 'none',
+      SITE_PAGES: (own.slice(0, CFG.site_pages).join('\n') || 'none listed') + (apart ? '\n\n' + apart : ''), FACTS: facts || 'none', SOURCES: srcs.join('\n') || 'none',
       REGULATORY: (today ? 'Today in ' + S(p.country || 'the market') + ': ' + fmtDay(today) + ' (the date this page is published with; it is read after that day too).\n' : '') + (S(reg).trim() || 'none for this page') }; };
   const fill = (tpl, vals) => S(tpl).replace(/\{\{([A-Z_]+)\}\}/g, (m, k) => (k in vals ? S(vals[k]) : m));
   // the request, or why there is none
@@ -120,7 +123,16 @@ const RR = (() => {
     const prompt = fill(TEMPLATE, { ...context(prev, o.regulatory_digest, today), BAR, PAGE: page });
     const body = { model: MODEL, max_tokens: CFG.max_tokens, thinking: { type: 'adaptive' }, output_config: { effort: CFG.effort, format: { type: 'json_schema', schema: SCHEMA } },
       messages: [{ role: 'user', content: prompt }] };
-    return { skip: false, reason: '', mode, model: MODEL, today, body: JSON.stringify(body), prompt_chars: prompt.length }; };
+    const ap = typeof PGA !== 'undefined' ? PGA.of(prev) : null;   // W07-B: the kept page, so read() can set aside advice that takes it over
+    return { skip: false, reason: '', mode, model: MODEL, today, body: JSON.stringify(body), prompt_chars: prompt.length,
+      ...(ap ? { apart: { url: ap.url, path: ap.path, slugs: ap.pages.map(x => x.slug).filter(Boolean), paths: ap.pages.map(x => x.path).filter(x => x.length > 1) } } : {}) }; };
+  // W07-B: advice that the page take the kept page's address or slug, replace it, merge into it or redirect to it goes against the client's
+  // choice (a separate page at its own address): it is set aside with that reason, never shown and never counted. Plain words here, so the
+  // reader of the answer needs no other kit.
+  const TAKEOVER = /\b(?:slug|url|address|path|redirect\w*|merge\w*|replac\w*|consolidat\w*|canonical\w*|second page)\b/i;
+  const againstChoice = (q, apart) => { if (!apart || /^link$/i.test(S(q.kind).trim())) return false; const t = (S(q.location) + ' ' + S(q.issue) + ' ' + S(q.fix)).toLowerCase();
+    const named = (apart.slugs || []).some(s => new RegExp('(^|[^\\w-])' + S(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\w-])').test(t)) || (apart.paths || []).some(x => t.includes(S(x)));
+    return named && TAKEOVER.test(S(q.issue) + ' ' + S(q.fix)); };
   // the answer: checked (with every problem, which ones gate and which are advice) or not checked (and why)
   const read = (resp, md, planned, PFk) => {
     const r = resp || {}; const pl = planned || {}; const mode = pl.mode || 'enforce';
@@ -135,7 +147,10 @@ const RR = (() => {
     let j = null; try { j = JSON.parse(texts[texts.length - 1].trim().replace(/^```(?:json)?\s*|\s*```$/g, '')); } catch (e) { j = null; }
     if (!j || typeof j !== 'object' || !Array.isArray(j.problems)) return nc('the second read gave an answer we could not read');
     const onPage = PFk && typeof PFk.onPage === 'function' ? PFk.onPage : () => false;
-    const problems = j.problems.filter(p => p && typeof p === 'object').slice(0, 20).map(p => {
+    const against = [];
+    const problems = j.problems.filter(p => p && typeof p === 'object').filter(p => { if (!againstChoice(p, pl.apart)) return true;
+      against.push({ severity: S(p.severity).toLowerCase(), kind: S(p.kind).toLowerCase(), location: clean(p.location).slice(0, 300), issue: clean(p.issue).slice(0, 400), fix: clean(p.fix).slice(0, 400),
+        why: 'set aside: it advises taking over the existing page the client chose to keep (' + S(pl.apart.path) + ')' }); return false; }).slice(0, 20).map(p => {
       const severity = /^(high|medium|low)$/i.test(S(p.severity)) ? S(p.severity).toLowerCase() : 'low'; const kind = KINDS.includes(S(p.kind).toLowerCase()) ? S(p.kind).toLowerCase() : 'other';
       const location = clean(p.location).slice(0, 300); const on_page = !!location && onPage(location, md);
       const q = { severity, kind, location, issue: clean(p.issue).slice(0, 400), fix: clean(p.fix).slice(0, 400), on_page };
@@ -145,14 +160,15 @@ const RR = (() => {
     const advice = problems.filter(p => !p.gates && p.on_page && p.severity !== 'low').sort((a, b) => (a.severity === 'high' ? 0 : 1) - (b.severity === 'high' ? 0 : 1)).slice(0, CFG.max_advice);
     return { status: 'checked', reason: '', mode, model: S(r.model || MODEL), usage, today: S(pl.today), score: Number.isFinite(Number(j.score)) ? Number(j.score) : null,
       problems, gates: mode === 'enforce' ? gating : [], would_block: mode === 'enforce' ? [] : gating, advice,
-      not_shown: problems.filter(p => !p.on_page).length }; };
+      not_shown: problems.filter(p => !p.on_page).length, ...(against.length ? { against_choice: against } : {}) }; };
   // the delivered page with what the read found: blockers in enforce mode, advice always; the grade object is not touched here
   const apply = (qa0, rr, PFk) => {
     const qa = { ...(qa0 || {}) }; const R = rr || {}; const del = qa.delivery && typeof qa.delivery === 'object' ? { ...qa.delivery } : null;
     const record = { status: R.status, reason: R.reason || '', mode: R.mode, model: R.model, usage: R.usage || null, score: R.score == null ? null : R.score,
       gates: (R.gates || []).map(g => ({ kind: g.kind, error: g.error || '', location: g.location, issue: g.issue, fix: g.fix })),
       would_block: (R.would_block || []).map(g => ({ kind: g.kind, error: g.error || '', location: g.location, issue: g.issue, fix: g.fix })),
-      advice: (R.advice || []).map(g => ({ severity: g.severity, kind: g.kind, location: g.location, issue: g.issue, fix: g.fix })), not_shown: R.not_shown || 0 };
+      advice: (R.advice || []).map(g => ({ severity: g.severity, kind: g.kind, location: g.location, issue: g.issue, fix: g.fix })), not_shown: R.not_shown || 0,
+      ...((R.against_choice || []).length ? { against_choice: R.against_choice } : {}) };   // W07-B: advice set aside because it takes over the page the client kept
     qa.critic_reread = record;
     if (!del || !PFk) return qa;
     const advisory = (del.advisory || []).slice();

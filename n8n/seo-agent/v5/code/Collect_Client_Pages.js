@@ -166,7 +166,34 @@ const matchedReq = reqs.find(r => r && r.kind === 'existing' && r.existing_page 
 const inventoryPage = (!(ctx.existing_page && ctx.existing_page.url) && matchedReq) ? matchedReq.existing_page : null;
 // H2 (2026-10-27, exec 2575): the ladder planned a new page, so a page the sitemap matched is not this run's page to rewrite
 const ignoredReq = reqs.find(r => r && r.ignored_existing && r.ignored_existing.url) || null;
-const all = pages.map(p => p.text).join('\n');
+// W07-B (2026-10-31, docs/page-quality-2026-10-29/WAVE06.md section 10, K1): after "Write it anyway" the new page reused the kept page's
+// title tag word for word, because nothing knew what that title was. The kept page's own title tag and main heading, from its HTML read in
+// this very run (else the reader's first heading for the H1), else from the page inventory; empty when neither has them, and the later
+// checks then say "not checked". Only for a page the client chose to keep (a ladder's planned page keeps its own rule).
+const ignoredIdentity = (() => {
+  const ig = ignoredReq && ignoredReq.ignored_existing; if (!ig || ig.planned_url) return null;
+  const key = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const i = reqs.findIndex(r => r && key(r.url) === key(ig.url));
+  let title = '', h1 = '', from = '';
+  if (i >= 0) {
+    const rr = RENDER.byIndex[i]; const h = htmlRes[i] || {}; const j = res[i] || {};
+    const html = String((rr && rr.ok) ? rr.html : (h.error ? '' : (h.page_html != null ? h.page_html : (h.data != null ? h.data : (h.body || '')))));
+    const tidyT = (t) => textOfHtml(t).replace(/\s+([:;,.!?])/g, '$1').slice(0, 200);   // inline tags flattened: "<span>Businesses</span>:" reads "Businesses:"
+    if (html.length >= 200) { title = tidyT((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '');
+      h1 = tidyT((html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i) || [])[1] || ''); }
+    if (!h1 && !j.error) h1 = String(headingsOf(String(j.page_text || j.data || ''))[0] || '').slice(0, 200);
+    if (title || h1) from = 'read in this run';
+  }
+  if (!title && !h1 && typeof SM !== 'undefined') {
+    let model = (ctx.site_model && typeof ctx.site_model === 'object') ? ctx.site_model : null;
+    if (!model) { try { model = ($('Site Model').first().json || {}).site_model || null; } catch (e) { model = null; } }
+    const inv = model ? SM.pages(model).find(p => key(p.url) === key(ig.url)) : null;
+    if (inv) { title = String(inv.title || '').slice(0, 200); h1 = String(inv.h1 || '').slice(0, 200); if (title || h1) from = 'the page inventory'; }
+  }
+  return { title_tag: title, h1, identity_from: from };
+})();
+const ignoredOut = ignoredReq ? { ...ignoredReq.ignored_existing, ...(ignoredIdentity || {}) } : null;
+const all =pages.map(p => p.text).join('\n');
 const uniq = (a) => [...new Set((a || []).map(s => s.trim()))];
 const client_signals = {
   phone_shown: /\+?\d[\d\s().-]{7,}\d/.test(all),
@@ -212,7 +239,7 @@ const unconfirmed = EXCONF && !EXCONF.ok && !EXCONF.unread ? { url: EXCONF.cand.
 if (unconfirmed) for (const p of pages) if (p.kind === 'existing') p.kind = 'related';
 const confirmedPage = EXCONF && EXCONF.ok ? { ...EXCONF.cand, ...(EXCONF.title && !EXCONF.cand.title ? { title: EXCONF.title } : {}), confirmed_by: EXCONF.evidence } : null;
 return [{ json: { ...ctx, ...(inventoryPage ? { existing_page: inventoryPage, existing_page_url: ctx.existing_page_url || inventoryPage.url } : {}),
-  ...(ignoredReq ? { existing_page: null, existing_page_ignored: ignoredReq.ignored_existing } : {}),
+  ...(ignoredReq ? { existing_page: null, existing_page_ignored: ignoredOut } : {}),
   ...(confirmedPage ? { existing_page: confirmedPage } : {}),
   ...(unconfirmed ? { existing_page: null, existing_page_url: String(ctx.existing_page_url || ''), existing_page_unconfirmed: unconfirmed } : {}),
   ...(unreadExisting ? { existing_page: null, existing_page_url: String(ctx.existing_page_url || ''), existing_page_unread: unreadExisting } : {}),   // W07-A

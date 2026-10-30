@@ -149,6 +149,13 @@ describe('the delivered status', () => {
     expect(r.detail).toMatch(/check the quoted words against a source you trust/);
     for (const h of [w, r]) expect(h.headline + h.detail).not.toMatch(/[\u2014\u2013\u201C\u201D\u2018\u2019\u2026]/);
   });
+  it('says what we did and what the client does when a separate new page keeps the existing page\'s title (W07-B)', () => {
+    const t = deliveryHeadline('not_ready', 0, { code: 'same_title', text: 'The meta title is the same as the title tag of your existing page https://www.novaand.example/ms-365-erp-uae, so the two pages would compete for one search' });
+    expect(t.headline).toMatch(/^Not ready: the meta title is the same as the title tag of your existing page/);
+    expect(t.detail).toMatch(/none was different enough from your existing page's/);
+    expect(t.detail).toMatch(/What you do: give this page a title of its own in the editor/);
+    expect(t.headline + t.detail).not.toMatch(/[\u2014\u2013\u201C\u201D\u2018\u2019\u2026]/);
+  });
 });
 
 describe('the client questions', () => {

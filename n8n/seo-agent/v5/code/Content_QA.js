@@ -260,6 +260,10 @@ const normUrl = (u) => String(u || '').trim().replace(/\/$/, '').toLowerCase().r
 const plannedTargets = new Set([...(prev.planned_link_targets || []), ...(prev.hub_pages || []).filter(p => p && p.planned)].map(l => normUrl(l && l.url)).filter(Boolean));
 plannedTargets.forEach(u => allowed.delete(u));
 if (prev.existing_page && prev.existing_page.url) allowed.add(normUrl(prev.existing_page.url));
+// W07-B (2026-10-31, WAVE06 section 10): a separate new page beside a page the client kept ("Write it anyway") links to that page once; it is a
+// live page of the site when this run read it, so its link is kept even when the sitemap did not list it
+const APQ = typeof PGA !== 'undefined' ? PGA.of(prev) : null;
+if (APQ) for (const pg of APQ.pages) if (pg.from === 'read in this run') allowed.add(normUrl(pg.url));
 if (domain) allowed.add(normUrl(siteUrlOf(domain, '/')));
 const removedLinks = [], plannedLinks = [], weakRepeats = []; const externalUrls = []; const weakSeen = new Map();
 let internalLinks = 0, externalLinks = 0, cleanedLinks = 0;
@@ -695,6 +699,10 @@ if (!metaDesc) warnings.push('Meta description line missing');
 else { if (metaDesc.length > 155) warnings.push(`Meta description is ${metaDesc.length} characters (max 155)`); if (metaDesc.length < 70) warnings.push(`Meta description is only ${metaDesc.length} characters (aim for 120-155)`); }
 if (slug && !/^\/?[a-z0-9]+(-[a-z0-9]+)*\/?$/.test(slug)) warnings.push('Slug should be lowercase words joined by hyphens');
 if (!h1) warnings.push('H1 missing'); else if (kw && !flexRe(kw, 'i').test(h1)) warnings.push('Primary keyword missing from H1');
+// W07-B: the new page's title tag and H1 against the page the client kept (Page Fix gives them wording of their own; this records the result)
+const page_identity = APQ ? PGA.check(md, APQ) : null;
+if (page_identity && page_identity.title_same) warnings.push('Same title as your existing page ' + APQ.path + ': the meta title repeats its ' + (page_identity.same_as && page_identity.same_as.field === 'h1' ? 'main heading' : 'title tag'));
+if (page_identity && page_identity.h1_same) warnings.push('Same main heading as your existing page ' + APQ.path);
 if (kw && !flexRe(kw, 'i').test(first100)) warnings.push('Primary keyword not in the first 100 words');
 if (kwCount < 3) warnings.push(`Primary keyword used only ${kwCount} time(s)`);
 if (density > 2) warnings.push(`Keyword density is high (${density}%), a risk of keyword stuffing`);
@@ -1139,6 +1147,7 @@ return [{ json: { ...prev, output: md, qa_round: round, editor_rounds, meta: { t
     trusted_sources, banned_phrases: banned_found, readability: { flesch, avg_sentence_words: avgSentence, long_sentences: longSentences, passive_pct, position: read_position, basis: read_basis, band_line: read_band_line, note: read_note,
       band: RBAND.ok ? { low: RBAND.low, high: RBAND.high, median: RBAND.median, p25: RBAND.p25, p75: RBAND.p75, pages_measured: RBAND.pages_measured, pages: RBAND.pages, clamped: RBAND.clamped } : null,
       band_source: RBAND.ok ? 'competitor_pages' : 'fixed', advice_only: true },   // B3-4: the band and its basis; advice, never in `warnings`
+    ...(page_identity ? { page_identity } : {}),   // W07-B: the new page's title and H1 against the page the client kept, and its link to it
     intent, refresh_check,   // B3-6 (every draft) / B3-8 (a refresh: the live page against its re-read sources)
     term_coverage: termCoverage, coverage_pct, coverage: coverage_report, coverage_target_pct, missing_terms: missingTerms, missing_subtopics: missingSubtopics, specificity_per_100_words: specificity,
     critic_score: (critique || lastCritique || {}).score ?? null, critic_verdict: (critique || lastCritique || {}).verdict || null,
