@@ -29,7 +29,7 @@ import {
   pageMarkdownWithMeta,
   personDisplayName,
   plainWords,
-  prefilledAnswer,
+  acceptAllPlan,
   questionsOf,
   reviewPersonIds,
   reviewStage,
@@ -170,12 +170,14 @@ export function finalizeStateOf(row: Pick<PageReviewRow, 'finalRunId' | 'finalRe
 }
 
 /** Whether a final version is worth making now (anything changed since the last one started) and, if not, why (pure). */
-export function finalizeNeedOf(o: { answers: Record<string, PageAnswer>; clientMarkdown: string | null; clientSavedAt: Date | null; since: Date | null; status: FinalizeState['status'] }): { needed: boolean; reason: string } {
+export function finalizeNeedOf(o: { answers: Record<string, PageAnswer>; clientMarkdown: string | null; clientSavedAt: Date | null; since: Date | null; status: FinalizeState['status']; openCount?: number }): { needed: boolean; reason: string } {
   if (o.status === 'running') return { needed: false, reason: 'The final version is being made now.' };
   const after = (at: string | Date | null | undefined) => !o.since || (at ? new Date(at).getTime() > o.since.getTime() : false);
   const fresh = Object.values(o.answers).filter((a) => after(a.at));
   const edited = !!o.clientMarkdown && after(o.clientSavedAt);
-  if (finalizeNeeded(fresh, edited)) return { needed: true, reason: '' };
+  // W05-C: the first final version once every question is decided, even when all were left general ("Accept all" on a page whose
+  // suggestions all need the client's own words)
+  if (finalizeNeeded(fresh, edited, !o.since && o.openCount === 0)) return { needed: true, reason: '' };
   return { needed: false, reason: o.since ? 'Nothing changed since the last final version: answer a question or edit the page first.' : 'Answer a question or edit the page first: as it is, nothing would change.' };
 }
 
@@ -232,11 +234,12 @@ export async function reviewView(a: OrgAccess, l: Loaded): Promise<PageReviewVie
   }
   const baseAnswers = answersFor(row?.answers, l.original.id, base.id);
   const decision = duplicateDecisionOf(row?.answers);
-  const need = finalizeNeedOf({ answers: { ...baseAnswers, ...(decision ? { [DUPLICATE_DECISION_KEY]: decision } : {}) }, clientMarkdown: row?.clientMarkdown ?? null, clientSavedAt: row?.clientSavedAt ?? null, since: row?.finalReportId ? (row.finalStartedAt ?? null) : null, status: fin.status });
-  // W0-B (D2): the website's page this one duplicates, while that blocker is open on the delivered page, and what the client decided
-  const dupPages = duplicatePagesOf(obj(l.original.payload));
   const questions = questionsOf(payload);
   const open = openQuestions(questions, answers, facts);
+  const openBase = openQuestions(questionsOf(obj(base.payload)), baseAnswers, facts).length;
+  const need = finalizeNeedOf({ answers: { ...baseAnswers, ...(decision ? { [DUPLICATE_DECISION_KEY]: decision } : {}) }, clientMarkdown: row?.clientMarkdown ?? null, clientSavedAt: row?.clientSavedAt ?? null, since: row?.finalReportId ? (row.finalStartedAt ?? null) : null, status: fin.status, openCount: openBase });
+  // W0-B (D2): the website's page this one duplicates, while that blocker is open on the delivered page, and what the client decided
+  const dupPages = duplicatePagesOf(obj(l.original.payload));
   const publish = await publishState(a.org.id, l);
   const delivery = deliveryOf(payload);
   const bp = obj(base.payload);
@@ -413,13 +416,17 @@ export async function putDecision(a: OrgAccess, req: FastifyRequest | null, repo
   return reviewView(a, l);
 }
 
-/** Every unanswered yes-or-no question that has a suggestion, confirmed in one click (W0-E: a question that needs the client's own words is never answered with a suggestion; a stored fact is not asked, so not answered). */
+/**
+ * "Accept all suggestions" (W05-C, 2026-10-30): every open yes-or-no question that has a suggestion is confirmed; every other open question
+ * is left general on this page (never answered with a suggestion: W0-E, 3299 stored a homepage slogan as proof), so the final version can be
+ * made. A stored fact is not asked, so not answered; a question left general here is not stored and a later page may ask it again.
+ */
 export async function acceptPrefilled(a: OrgAccess, req: FastifyRequest | null, reportId: unknown): Promise<PageReviewView> {
   const l = await loadReview(a.org.id, reportId);
   const questions = questionsOf(obj(l.report.payload));
   const open = openQuestions(questions, answersFor(l.row?.answers, l.original.id, l.report.id), (l.site?.factAnswers ?? {}) as FactAnswers);
-  const input = open.map((q) => ({ q, p: prefilledAnswer(q) })).filter((x) => x.p).map((x) => ({ questionId: x.q.id, decision: x.p!.decision, text: x.p!.text }));
-  if (!input.length) throw badRequest('No open yes-or-no question has a suggestion to accept. Questions that need your own words are answered one by one.');
+  const input = acceptAllPlan(open);
+  if (!input.length) throw badRequest('Every question on this page is already answered or decided. Change an answer one by one if you need to.');
   return saveAnswers(a, req, l, input, true);
 }
 
@@ -526,7 +533,8 @@ export async function startFinalize(a: OrgAccess, req: FastifyRequest | null, re
   const base = baseOf(l);
   const baseAnswers = answersFor(row.answers, l.original.id, base.id);
   const decision = duplicateDecisionOf(row.answers);
-  const need = finalizeNeedOf({ answers: { ...baseAnswers, ...(decision ? { [DUPLICATE_DECISION_KEY]: decision } : {}) }, clientMarkdown: row.clientMarkdown, clientSavedAt: row.clientSavedAt, since: row.finalReportId ? row.finalStartedAt : null, status: st.status });
+  const openBase = openQuestions(questionsOf(obj(base.payload)), baseAnswers, (l.site?.factAnswers ?? {}) as FactAnswers).length;
+  const need = finalizeNeedOf({ answers: { ...baseAnswers, ...(decision ? { [DUPLICATE_DECISION_KEY]: decision } : {}) }, clientMarkdown: row.clientMarkdown, clientSavedAt: row.clientSavedAt, since: row.finalReportId ? row.finalStartedAt : null, status: st.status, openCount: openBase });
   if (!need.needed) throw conflict(need.reason, 'finalize_not_needed');
   const quote = await finalizeQuote();
   const keyword = str(obj(base.payload).keyword) || str(obj(obj(base.payload).meta).primary_keyword);

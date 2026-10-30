@@ -151,7 +151,7 @@ const body = {
     // W0-B (D2): published as an update of the website's page for this search: its address and slug
     ...(decision && decision.choice === 'update' ? { target_url: decision.url, slug: (decision.url.replace(/^https?:\/\/[^\/]+/i, '').replace(/[?#].*$/, '').replace(/\/+$/, '').split('/').pop() || S((d.meta || {}).slug)) } : {}) },
   decision, page_run: { received: !!PR.received, legacy: !!PR.legacy, gating_missing: PR.gating_missing || [], grading_missing: PR.grading_missing || [], kept_open: carried.map(x => x.code), resolved },
-  applied: (FM.applied || []).map(a => ({ id: a.id, how: a.how, section: S(a.section) })), sections_rewritten: FM.sections_rewritten || [], changes: changes.slice(0, 60),
+  applied: (FM.applied || []).map(a => ({ id: a.id, how: a.how, section: S(a.section), ...(a.why ? { why: S(a.why).slice(0, 160) } : {}) })), sections_rewritten: FM.sections_rewritten || [], changes: changes.slice(0, 60),
   delivery_status: del.status,
   delivery: { status: del.status, label: del.label, blocking: del.blocking, advisory: del.advisory, next_step: del.next_step, grade, ...(del.needs_work ? { needs_work: del.needs_work } : {}) },
   client_questions, grade, cost, notes: (FM.notes || []).slice(0, 10), content_score: grade.score,

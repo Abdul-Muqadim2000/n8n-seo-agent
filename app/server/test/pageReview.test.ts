@@ -211,15 +211,25 @@ describe('answering: saved per question, kept as business facts, never asked aga
     expect(keys.indexOf('business')).toBeLessThan(keys.indexOf('business_facts'));
     expect(keys.indexOf('business_facts')).toBeLessThan(keys.indexOf('business_facts_kv'));
   });
-  it('accept all suggestions confirms every open yes / no question that has one, never a question that needs the client\'s own words (W0-E)', async () => {
+  it('accept all suggestions confirms every open yes / no question that has one, never a question that needs the client\'s own words (W0-E); the others are left general for this page so the final version can be made (W05-C)', async () => {
     const s = await setup();
     const v = view(await s.u.c.post(`${s.base}/accept-prefilled`, {}));
     expect(v.answers.q1).toMatchObject({ decision: 'yes', fromPrefill: true });
-    expect(v.answers.q3).toBeUndefined();   // a text question with a suggestion: answered one by one (3299 stored a homepage slogan as proof)
-    expect(v.answers.q2).toBeUndefined();
+    expect(v.answers.q3).toMatchObject({ decision: 'general', fromPrefill: true });   // a text question with a suggestion is never answered with it (3299 stored a homepage slogan as proof)
+    expect(v.answers.q2).toMatchObject({ decision: 'general', fromPrefill: true });
+    expect(v.finalize.needed).toBe(true);
+    const [site] = await db.select().from(schema.sites).where(eq(schema.sites.id, s.site.id));
+    expect(Object.keys(site!.factAnswers).sort()).toEqual(['service.business_discovery_assess']);   // left general by one click: not kept for later pages
     const again = await s.u.c.post(`${s.base}/accept-prefilled`, {});
-    expect(again.status).toBe(400);   // nothing left that one click may answer
-    expect(again.body.error ?? again.body.message).toMatch(/yes-or-no/);
+    expect(again.status).toBe(400);   // nothing left open
+    expect(again.body.error ?? again.body.message).toMatch(/already answered or decided/);
+  });
+  it('W05-C: a page whose suggestions all need the client\'s own words (K1, K4, K8) is no longer refused: every question is left general and the final version can be made', async () => {
+    const s = await setup({ payload: payload({ qa_client_questions: [Q2, Q3] }) });
+    const v = view(await s.u.c.post(`${s.base}/accept-prefilled`, {}));
+    expect(v.answers.q2).toMatchObject({ decision: 'general', fromPrefill: true });
+    expect(v.answers.q3).toMatchObject({ decision: 'general', fromPrefill: true });
+    expect(v.finalize.needed).toBe(true);
   });
 });
 
