@@ -622,15 +622,18 @@ const subtopics_dropped = [];
 // by another caller, may still carry a course page), (2) neither that page nor the subtopic is about a topic the verdict left out, and
 // (3) it is not a sales heading (a fee, a price, alumni, eligibility: CVG.subtopics' own filter, applied again to a stored plan).
 const verdict_exclusions = Array.isArray(prev.verdict_exclusions) ? prev.verdict_exclusions : EXC.fromVerdict(prev.verdict_changes, []);
+// W06-A (2026-10-30, WAVE05 3.1): a topic is matched against the page's keyword FAMILY (keyword, the brief's primary and secondary keywords,
+// the site's main services), so one shared word such as "Dynamics" never makes a heading about an excluded topic
+const excFamily = EXC.familyOf(prev, SITE_MODEL);
 const qaPageKind = CVG.kindFor(prev.page_type);
 const benchKind = subBest && (subBest.title || subBest.headings) ? CVG.kindOf(subBest, prev.keyword || '') : (covPlan && covPlan.best ? covPlan.best.kind : null);
 const benchTitleText = subBest ? String(subBest.title || '') + ' ' + String(subBest.url || '').replace(/^https?:\/\/[^\/]+/i, '').replace(/[\/_-]+/g, ' ') : '';
-const benchExcluded = benchTitleText.trim() ? verdict_exclusions.find(e => EXC.match(benchTitleText, e, prev.keyword || '')) : null;
+const benchExcluded = benchTitleText.trim() ? verdict_exclusions.find(e => EXC.match(benchTitleText, e, excFamily)) : null;
 const benchOffKind = !!(covPlan && (covPlan.type_match === false || (benchKind && benchKind !== qaPageKind && !(qaPageKind === 'guide' && benchKind === 'list'))));
 const subtopicsKept = (covPlan && Array.isArray(covPlan.subtopics) ? covPlan.subtopics : []).filter(s => {
   let why = benchOffKind ? 'the page to beat is a ' + ({ other: 'course, job or directory page', list: 'list of companies', guide: 'guide', service: 'service page', unknown: 'page of another kind' }[benchKind] || 'page of another kind') + ', not a page like this one'
     : benchExcluded ? 'the page to beat is about "' + String(benchExcluded.topic != null ? benchExcluded.topic : benchExcluded) + '", a topic the verdict said to leave out' : '';
-  if (!why) { const ex = verdict_exclusions.find(e => EXC.match(s, e, prev.keyword || '')); if (ex) why = 'about "' + String(ex.topic != null ? ex.topic : ex) + '", a topic the verdict said to leave out'; }
+  if (!why) { const ex = verdict_exclusions.find(e => EXC.match(s, e, excFamily)); if (ex) why = 'about "' + String(ex.topic != null ? ex.topic : ex) + '", a topic the verdict said to leave out'; }
   if (!why && CVG.isPromo(s, benchKind)) why = 'a sales heading (a fee or a price, or a course\'s alumni and eligibility), not a topic';
   if (!why) why = CVG.namesBrand(s, subBest, subOpts) || '';
   if (why) subtopics_dropped.push({ subtopic: s, reason: why }); return !why; });
@@ -739,7 +742,12 @@ if (business_claims.length) warnings.push('Statements about ' + (bizNames[0] || 
   + business_claims.slice(0, 4).map(b => '"' + b.sentence.slice(0, 160) + '"').join('; ') + '. Remove each one, or confirm it in the business facts');
 // A-18 (2026-10-17): a section about a topic the verdict said to leave out. Live (exec 771) the verdict said "Skip the consultancy-licence
 // and start-an-IT-company questions, which don't match buyer intent" and the page carried "How Much Is a Consultancy Licence in Dubai?".
-const excluded_sections = EXC.check(md.match(/^#{2,3} .+$/gm) || [], verdict_exclusions, prev.keyword || '');
+// W06-A (2026-10-30, WAVE05 3.1): only the sections the deletion budget allows are listed for deletion (EXC.decide: a heading or text that
+// names the topic, else at most one short section; never more than 40% of the page); the other matches are kept and recorded in
+// `excluded_sections_kept` with the reason (evidence only: not a warning, so the copy check and the editor round are unchanged)
+const excDecision = EXC.decide(md, verdict_exclusions, excFamily);
+const excluded_sections = excDecision.remove.map(x => ({ heading: x.heading, topic: x.topic, words: x.words, share_pct: x.share_pct, signal: x.signal }));
+const excluded_sections_kept = excDecision.keep.map(x => ({ heading: x.heading, topic: x.topic, words: x.words, why: x.why }));
 if (excluded_sections.length) warnings.push('Sections about a topic the verdict said to leave out: ' + excluded_sections.slice(0, 4).map(x => '"' + x.heading + '" (the verdict: skip ' + x.topic + ')').join('; ')
   + '. Remove each section, so the page stays on what its buyers search for');
 if (stats.length) warnings.push('Unverified statistics that need a linked source or a [Statistic] marker: ' + stats.join('; '));
@@ -822,8 +830,13 @@ const napOwn = (() => { let m = null; try { m = $('Site Model').first().json.sit
   if (!m && prev.site_model && typeof prev.site_model === 'object') m = prev.site_model;
   const n = m ? (SM.nap(m) || {}) : {}; const p0 = (prev.site_profile && typeof prev.site_profile === 'object') ? prev.site_profile : {}; const a0 = (p0.address && typeof p0.address === 'object') ? p0.address : {};
   return [p0.phone, p0.street_address, a0.street, a0.postal_code, n.phone, n.street_address, n.postal_code].filter(x => typeof x === 'string' && x.trim()).join('\n'); })();
+// W06-A (2026-10-30, WAVE05 3.1 / Deploy readiness 4): what this page run already took out of the page (Page Candidates' state, carried by
+// Page Fix from the second check on): sections deleted as a topic the verdict said to leave out, and H2s the edits lost. Two sections or a
+// fifth of the words cap coverage and fit in the grade (GR.removedCap), so a page that lost its core never reads "Ready"
+const removed_run = (() => { if (round < 2) return null; let st = null; try { const j = $('Page Fix').first().json; st = j && j.page_fix && typeof j.page_fix === 'object' ? j.page_fix : null; } catch (e) { st = null; }
+  if (!st) return null; const r = EXC.removedOf(st); return { ...r, h2_now: h2s.length, words_now: mainWords }; })();
 const grade_detail = GR.local({ structure_frac: structuralChecks.filter(Boolean).length / structuralChecks.length, coverage_ratio, readability_pts, specificity_pts, clean_pts: banned_pts }, md,
-  { keyword: prev.keyword || '', brand_names: bizNames, domain, prev, own_text: [prev.business, prev.business_facts, prev.case_facts_text, napOwn].filter(x => typeof x === 'string').join('\n') },
+  { keyword: prev.keyword || '', brand_names: bizNames, domain, prev, removed: removed_run, own_text: [prev.business, prev.business_facts, prev.case_facts_text, napOwn].filter(x => typeof x === 'string').join('\n') },
   { tier: SRC.tier, figures: SRC.figures });
 const content_score = grade_detail.score;
 
@@ -1117,7 +1130,7 @@ return [{ json: { ...prev, output: md, qa_round: round, editor_rounds, meta: { t
     source_redirects: { resolved: redirectsResolved.length, dropped: redirectsDropped.length }, voice: VOICE,   // FU-SV: redirect citations, the business's own voice
     outbound_links: externalUrls.map(e => ({ url: e.url, anchor: e.anchor, host: e.host, tier: e.tier })),   // A-14: every outbound link, for Outbound Link Check
     business_claims, business_promises, promise_check, carried_promises, claims_open, business_names: bizNames, unverified_statistics_own: stats_own,   // A-15 / A-19 / E-CLAIM
-    verdict_exclusions, excluded_sections, protected_restored,   // A-18 / A-17
+    verdict_exclusions, excluded_sections, excluded_sections_kept, protected_restored,   // A-18 / A-17
     coverage_advice, subtopics_dropped, owner_edits, next_step, body_brackets, page_url: pageUrl,   // D5 / owner edits / placeholder gate (2026-10-21)
     passed_copy, profile_placeholders, profile_placeholder_fields: PROFILE_PH, placeholders_total: placeholder_count + profile_placeholders,
     keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, question_headings: questionHeadings, answered_questions: answeredQuestions, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),

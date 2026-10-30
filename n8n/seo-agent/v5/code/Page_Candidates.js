@@ -1,5 +1,6 @@
 /*__PAGE_FIX__*/
 /*__GRADE__*/
+/*__EXCLUSIONS__*/
 // H1 (2026-10-27, docs/content-quality-2026-10-27/R1 §3.1, §6 rec. 1, 2, 5, 9; R2 §6): never deliver a worse draft than one the run
 // already had, and say what the client really receives. Runs after every quality check (Content QA -> Outbound Link Check -> Originality
 // Check). Production: in 3 of 4 page runs the one full-page edit made the page worse (exec 949 kept its length but lost the keyword in
@@ -15,6 +16,11 @@
 //      (a statement nothing supports is deleted, a call to action keeps only its link), checked once more by the whole quality check.
 //   4. after that last check: the delivered status (ready / ready_with_questions / not_ready), the grade OF THE DELIVERED PAGE, the
 //      client questions (what only the client knows, each with what the page says without it) and the record of every candidate.
+// W06-A (2026-10-30, docs/page-quality-2026-10-29/WAVE05.md 3.1): the sections Content QA lists as "a topic the verdict said to leave out"
+// are decided again here on the page as it is (EXC.guard: a heading or text that names the topic, else at most one short section, never
+// more than 40% of the page), every deletion and every section kept is recorded (page_fix.exclusions_removed / exclusions_kept, and the
+// delivery's changes), and the delivered grade caps coverage and fit when the run took 2+ sections or a fifth of the words out (GR.cap
+// `removed`). Live (W05 run, K1) six core sections went for one topic, "Dynamics GP and SL", that no heading named.
 const d0 = $input.first().json || {};
 const prev = $('Parse Brief').first().json || {};
 let qa = { ...(d0.content_qa || {}) };
@@ -29,6 +35,13 @@ const ctx = PF.ctxOf(prev, { critique: edits === 0 ? critique : null });
 let md = typeof d0.output === 'string' ? d0.output : '';
 const fixes = (state0 ? state0.fixes || [] : []).concat((applied.fixes || []).map(f => 'Round ' + round + ': ' + f));
 const removed = (state0 ? state0.removed || [] : []).concat((applied.removed || []).map(r => ({ ...r, round })));
+// W06-A: the first draft's size (its H2s and words), so the grade can tell what the run took out of it later
+const first = state0 && state0.first ? state0.first : null;
+let SMX = null; try { SMX = $('Site Model').first().json.site_model || null; } catch (e) { SMX = null; }
+const EXL = Array.isArray(prev.verdict_exclusions) ? prev.verdict_exclusions : EXC.fromVerdict(prev.verdict_changes, []);
+const EXF = EXC.familyOf(prev, SMX);
+const exRemoved0 = state0 && Array.isArray(state0.exclusions_removed) ? state0.exclusions_removed : [];
+const exKept0 = state0 && Array.isArray(state0.exclusions_kept) ? state0.exclusions_kept : [];
 
 // 1. dead links: replaced by the live page the link check proposed, else unlinked (the words stay)
 const lc = qa.link_check || {};
@@ -88,16 +101,19 @@ if (came === 'finalize') {
   // open blocker: at most 59; the page the website already has: fit at most 30%) and the floors; a page with no blocker that fails a floor
   // is "Needs work: <part>" (still publishable), never "Ready to publish"
   const GD = qa.grade_detail || null;
+  const removedRun = { ...EXC.removedOf(state0), h2_now: PF.split(finalMd).parts.length - 1 };   // W06-A
   const grade = GR.cap({ score: qa.content_score == null ? null : Number(qa.content_score), of: 100, breakdown: qa.score_breakdown || null,
     basis: 'measured on the page you receive, after every fix and the last full check: ' + (GD ? GR.basis : 'structure, topic coverage, readability, specificity, plain language, length'),
     blocking: del0.blocking.length, advice: del0.advisory.length, first_draft_review: critique && critique.score != null ? Number(critique.score) : null,
     first_draft_review_note: critique && critique.score != null ? 'the reviewer\'s score of the first draft, before any fix; it does not describe the page you receive' : '',
-    ...(GD ? { notes: GD.notes || [] } : {}) }, del0.blocking, { w0c: GD });
+    ...(GD ? { notes: GD.notes || [] } : {}) }, del0.blocking, { w0c: GD, removed: removedRun });
   const del = GR.deliver(del0, grade);
   const delivery = { status: del.status, label: del.label, blocking: del.blocking, advisory: del.advisory, client_questions: qs, grade, next_step: del.next_step, ...(del.needs_work ? { needs_work: del.needs_work } : {}),
     delivered_from: deliveredFrom, edits, candidates: history, stop_reason: state0.stop_reason || '',
     changes: { fixes: fixes.slice(0, 40), removed: allRemoved.map(r => ({ what: r.code, text: PF.clean(String(r.sentence || '')).slice(0, 220), how: r.how || 'removed', now: r.text || '' })).slice(0, 30),
-      brackets_removed: removed.filter(r => r && r.token).map(r => ({ token: r.token.slice(0, 160), question: r.question || '', research: r.research || '' })).slice(0, 20) },
+      brackets_removed: removed.filter(r => r && r.token).map(r => ({ token: r.token.slice(0, 160), question: r.question || '', research: r.research || '' })).slice(0, 20),
+      // W06-A: every section taken out as a topic the verdict said to leave out (with its words and why), and every one kept with the reason
+      sections_removed: ((state0.exclusions_removed || []).length ? state0.exclusions_removed : removedRun.headings.map(h => ({ heading: h, why: 'a topic the verdict said to leave out' }))).slice(0, 12), sections_kept: (state0.exclusions_kept || []).slice(0, 12) },
     sources_verified: sources.map(v => ({ url: v.url, host: v.host, tier: v.tier, figure: v.figure || '', task: v.task })).slice(0, 20),
     contract: { band: (prev.page_contract || {}).band || PF.bandOf(prev), version: (prev.page_contract || {}).version || 1 } };
   const reasons = ready ? [] : del.blocking.map(b => b.text).slice(0, 8);
@@ -123,14 +139,25 @@ if (!cmp.better) fixes.push('Round ' + round + ': the ' + cand.source + ' was se
 const bq = best.content_qa || {};
 const qa_marks = marksOf(bq), qa_figure_marks = figsOf(bq);
 let base = PF.unmark(best.output || '', qa_marks, qa_figure_marks);
-for (const x of (bq.excluded_sections || [])) { const r = PF.deleteSection(base, x.heading); if (r.done) { base = r.md; fixes.push('Round ' + round + ': removed the section "' + String(x.heading).replace(/^#+\s*/, '') + '" (a topic the verdict said to leave out)'); } }
+// W06-A: the flagged sections decided again on this page (never more than the budget allows), each deletion and each kept section recorded
+const exRemoved = exRemoved0.slice(), exKept = exKept0.slice();
+const EXG = EXC.guard(base, bq.excluded_sections || [], EXL, EXF);
+for (const x of EXG.remove) { const r = PF.deleteSection(base, x.heading); if (r.done) { base = r.md; if (!exRemoved.some(y => y.heading === x.heading)) exRemoved.push({ heading: x.heading, topic: x.topic, level: x.level, words: x.words, share_pct: x.share_pct, why: x.signal, round });
+  fixes.push('Round ' + round + ': removed the section "' + String(x.heading).replace(/^#+\s*/, '') + '" (a topic the verdict said to leave out: "' + x.topic + '", ' + x.signal + ')'); } }
+for (const x of EXG.keep) if (!exKept.some(y => y.heading === x.heading)) { exKept.push({ heading: x.heading, topic: x.topic, words: x.words, why: x.why, round });
+  fixes.push('Round ' + round + ': kept the section "' + String(x.heading).replace(/^#+\s*/, '') + '" (' + x.why + ')'); }
+// a section the budget kept is no longer a blocker: the editor is not asked to delete it, and the final version does not delete it either
+const keptH = new Set(EXG.keep.map(x => String(x.heading).toLowerCase()));
+if (keptH.size) { bestCls.blocking = bestCls.blocking.filter(b => !(b.code === 'off_topic' && keptH.has(String(b.heading || '').replace(/^#+\s*/, '').trim().toLowerCase())));
+  bestCls.soft = bestCls.blocking.filter(b => b.tier === 'soft').length; }
 const job = PF.plan(base, bestCls, bq, { ...ctx, critique: edits === 0 ? critique : null });
 const worth = job.sections.length > 0 && (bestCls.blocking.length > 0 || bestCls.adv >= 0.5);
 const stop_reason = edits >= PF.EDIT_MAX ? 'all ' + PF.EDIT_MAX + ' editing rounds were used'
   : (came === 'edit' && !cmp.better) ? 'the last edit did not improve the page, so the editing stopped'
     : !worth ? 'nothing is left that an edit can improve' : '';
 const claims_seen = cmp.better ? mergeClaims(claimsSeen0, claimsIn(qa, md)) : claimsSeen0;
-const common = { v: 1, round, edits, history, best, sources, claims_seen, searched: state0 ? state0.searched || [] : [], removed, fixes, qa_marks, qa_figure_marks, contract_version: (prev.page_contract || {}).version || 1 };
+const common = { v: 1, round, edits, history, best, sources, claims_seen, searched: state0 ? state0.searched || [] : [], removed, fixes, qa_marks, qa_figure_marks, contract_version: (prev.page_contract || {}).version || 1,
+  first: first || { h2: Number((cand.protect || {}).h2) || 0, words: Number((cand.protect || {}).words) || 0 }, exclusions_removed: exRemoved, exclusions_kept: exKept };   // W06-A
 if (!stop_reason) {
   const page_fix = { ...common, next: 'edit', came_from: 'edit', edit_job: job };
   return [{ json: { ...d0, ...keep(best), output: base, content_qa: bq, page_fix } }];
