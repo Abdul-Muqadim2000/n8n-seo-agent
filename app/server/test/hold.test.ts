@@ -10,7 +10,7 @@ import { estimateRunCost, HOLD_CHECK_USD } from '@seo/shared';
 import { runOutcome } from '../src/services/runs';
 import { ledgerCost, summarize } from '../src/services/summaries';
 import { heldPages } from '../src/services/pipeline';
-import { quoteOf } from '../src/services/runCredits';
+import { heldQuote, quoteOf } from '../src/services/runCredits';
 import { cadenceInputFromTables, planCadence, triggerOf, type CadenceTables } from '../src/services/cadence';
 
 const LIST = { creditValueUsd: 0.05, markup: 3 };
@@ -91,3 +91,16 @@ describe('the cadence mirror skips a held keyword and takes the next candidate (
     expect(planOf(heldRow(100)).picks.map((x) => x.keyword)).toContain(found!.p.picks[0].keyword);
   });
 });
+
+describe('W05-B (2026-10-30): a held run is quoted as the check, not as a page', () => {
+  it('the page quote (about 114 credits) becomes the check\'s (about 9); a free run stays free; an older run gets the check', () => {
+    const page = quoteOf(estimateRunCost('keyword', {}), LIST);
+    const check = quoteOf(HOLD_CHECK_USD, LIST);
+    expect(check).toBe(9);
+    expect(heldQuote(page, LIST)).toBe(check);
+    expect(heldQuote(0, LIST)).toBe(0);
+    expect(heldQuote(null, LIST)).toBe(check);
+    expect(heldQuote(5, LIST)).toBe(5);
+  });
+});
+

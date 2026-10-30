@@ -13268,6 +13268,39 @@ for _f171 in ('code/_page_fix.js', 'code/Finalize_Apply.js', 'code/_regulatory.j
 log('The follow-up branches meet Wave 0 (2026-10-30, section 171): voice flags go to the editor as section problems, the Finalize editor carries the own-voice / one-byline / no-redirect rules, regulatory search results are read through a redirect to their target and an opaque redirect is never a regulatory source')
 
 # =============================================================================
+# 175. THE PAGE A RUN REWRITES IS CONFIRMED BY ITS OWN WORDS, AND A HOLD IS ASKED ONLY OUTSIDE THE VERDICT'S NOISE (W05-B, page-quality
+#      wave 0.5, 2026-10-30; docs/page-quality-2026-10-29/BEFORE_AFTER.md "Holds", headline item 4, Next items 1 and 4):
+#      * K4 ("dynamics 365 partner dubai") was written onto /dynamics-365-project-operations-uae, a page matched by its address alone (its
+#        title not on file), and the hold waved it through as "a refresh of a page your website already has". *Collect Client Pages* now
+#        confirms a page the inventory or the sitemap matched with SM.confirmPage (v5/code/_site_model.js): its title or main heading (on
+#        file, or read in this run) or a Search Console search it earns impressions for must carry the search's core words AND be mostly
+#        about it (rare added words such as "project operations" weigh against it). Not confirmed: a new page at its own address, the other
+#        page read as a related page, `existing_page_unconfirmed` in the report and the brief. A page the client or the pipeline NAMED is
+#        never second-guessed.
+#      * K1: the page the run found for the search is no longer rewritten silently. A run a person started is held ("Improve the existing
+#        page" or "Write it anyway" for a separate new page, *Client Page Requests* then reads it as related); the page Google shows for the
+#        search (Search Console impressions) is offered too; automatic runs only log it (D17 shadow). Only a NAMED page is a refresh exemption.
+#      * The score line: held on its own under 40; from 40 to 49 only with a second signal (under 20 searches a month and no Search Console
+#        impressions, a duplicate, or the page the site already has). Every reading is logged (`verdict_readings`, hold.readings); after
+#        "Write it anyway" the acknowledged reading is the run's score, so a re-read cannot move the fit limit.
+#      * A recommended target is a search a person types: headlines ("verify an ASP in 5 minutes") and slash forms ("Dubai/UAE") are refused
+#        or reduced to their first form.
+# =============================================================================
+assert code('Collect Client Pages').count('const SM = (() => {') == 1 and 'SM.confirmPage(' in code('Collect Client Pages') and 'existing_page_unconfirmed: unconfirmed' in code('Collect Client Pages'), \
+    'W05-B: Collect Client Pages does not confirm the page it would rewrite (SM.confirmPage)'
+assert 'const confirmPage = (model, page, keyword, more) => {' in SITE_MODEL_SRC and ' confirmPage,' in SITE_MODEL_SRC, 'W05-B: the site model kit lacks confirmPage'
+assert 'ackNew' in code('Client Page Requests') and 'you chose "Write it anyway"' in code('Client Page Requests'), 'W05-B: "Write it anyway" on a found page does not write a separate page'
+_pv175 = code('Parse Verdict')
+for _k175 in ("clear: 40", 'const existingHit = found && !exemptDup && !ladderPage;', 'const refresh = !!S(prev.existing_page_url) && !found;', 'const searchOf = (raw) => {',
+              "score < CFG.clear || (score < CFG.threshold && second)", 'verdict_readings: HOLD.readings', "label: 'Improve the page Google shows'", 'existing_page_unconfirmed'):
+    assert _k175 in _pv175, 'W05-B: Parse Verdict lacks ' + _k175
+patch('Build Webhook Response', "        hold_exempt: g('hold_exempt') || '', hold_not_checked: g('hold_not_checked') || '' }; })(),\n",
+      "        hold_exempt: g('hold_exempt') || '', hold_not_checked: g('hold_not_checked') || '',\n"
+      "        verdict_readings: g('verdict_readings') || null, existing_page_unconfirmed: g('existing_page_unconfirmed') || null }; })(),   // W05-B (section 175)\n")
+assert "existing_page_unconfirmed: g('existing_page_unconfirmed') || null" in code('Build Webhook Response'), 'W05-B: the callback does not say which page was left alone'
+log('The page a run rewrites is confirmed by its own words, and a hold is asked only outside the verdict\'s noise (W05-B, 2026-10-30, section 175): Collect Client Pages confirms a matched page by its title, main heading or Search Console searches (SM.confirmPage), else writes a new page and says so; a page the run found is asked about (Improve the existing page / Write it anyway for a separate page / the page Google shows), only a named page is a refresh exemption; the score is held under 40, or under 50 with a second signal (little demand, a duplicate, the page the site has), every reading logged and the acknowledged one kept; recommended targets are real searches')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;

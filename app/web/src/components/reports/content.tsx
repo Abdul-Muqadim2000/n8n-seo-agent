@@ -219,6 +219,12 @@ export function ContentReport({ report }: { report: ReportDetail }) {
           {hold.reasons.join(' ')} This page was started automatically, so it was written as before; while this check is new, automatic pages are only checked.
         </Callout>
       )}
+      {/* W05-B (2026-10-30): a page of the website was considered as this page's address and left alone, because its own title is about something else */}
+      {html && !!str(obj(p.existing_page_unconfirmed).url) && (
+        <Callout tone="info" title="Written as a new page at its own address">
+          We looked at <ExternalLink href={str(obj(p.existing_page_unconfirmed).url)}>{str(obj(p.existing_page_unconfirmed).title) || str(obj(p.existing_page_unconfirmed).url)}</ExternalLink> as the page for this search, but it is about something else, so it stays as it is and this page has its own address.
+        </Callout>
+      )}
 
       {(reasons.length > 0 || risks.length > 0) && (
         <div className="grid gap-5 lg:grid-cols-2">
@@ -522,7 +528,7 @@ function HoldPanel({ hold, keyword, pageType, country, siteId }: { hold: HoldInf
       {can('member') ? (
         <ul role="list" className="mt-4 space-y-3">
           {buttons.map((b, i) => (
-            <li key={b.id} className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+            <li key={`${b.id}:${i}`} className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
               <ButtonLink to={paths.tool(org.id, 'keyword', { siteId, prefill: b.prefill })} size="sm" variant={i === 0 ? 'primary' : 'secondary'} icon={<ArrowRight className="size-4" />}>
                 {b.label}
               </ButtonLink>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ContentLogRow, LadderRow } from '@seo/shared';
-import { ladderSummaries, writtenPages } from '../src/services/pipeline';
+import { ladderSummaries, waitingPages, writtenPages } from '../src/services/pipeline';
 
 const log = (o: Partial<ContentLogRow>) => ({ keyword: '', status: 'started', started_at: '2026-10-01T10:00:00Z', published_url: '', request_id: '', source: 'app', ...o }) as ContentLogRow;
 const lad = (o: Partial<LadderRow>) => ({ ladder_id: 'l1', head_keyword: 'e invoicing', keyword: '', status: 'planned', rung: 1, page_no: 1, page_type: 'Service Page', target_url: '', ...o }) as LadderRow;
@@ -34,6 +34,24 @@ describe('pipeline: pages already written', () => {
       ['rung two', 'started', true],
       ['rung three', 'published', false],
     ]);
+  });
+});
+
+describe('W05-B (2026-10-30): a keyword held for the client\'s OK wrote nothing', () => {
+  // the AFTER run: K3 was held (row `held`), the client chose "Write it anyway", and the form then warned that a page "was already written"
+  // and listed the keyword twice among the pages waiting to be published
+  const HELD = log({ keyword: 'business central vs netsuite', status: 'held', request_id: '358', started_at: '2026-10-02T22:31:00Z' });
+  const WRITTEN = log({ keyword: 'business central vs netsuite', status: 'written', request_id: '364', started_at: '2026-10-02T22:37:00Z' });
+  it('a held keyword is not "a page already written"', () => {
+    expect(writtenPages([HELD], [], NOW)).toEqual([]);
+    expect(writtenPages([HELD, log({ keyword: 'vat rules', status: 'written' })], [], NOW).map((x) => x.keyword)).toEqual(['vat rules']);
+  });
+  it('a held keyword does not wait to be published', () => {
+    expect(waitingPages([HELD], NOW)).toEqual([]);
+  });
+  it('a keyword written after its hold waits once, not twice', () => {
+    const w = waitingPages([HELD, WRITTEN, log({ keyword: 'Business Central vs NetSuite', status: 'started', started_at: '2026-10-02T22:36:00Z' }), log({ keyword: 'vat rules', status: 'written' })], NOW);
+    expect(w.map((x) => x.keyword)).toEqual(['vat rules', 'business central vs netsuite']);
   });
 });
 

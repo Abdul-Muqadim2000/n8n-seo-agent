@@ -37,6 +37,7 @@ import {
   type RunCredits,
   type RunInput,
   type SiteContext,
+  holdOf,
 } from '@seo/shared';
 import { requireVerified, type OrgAccess } from '../auth/access';
 import { config } from '../config';
@@ -51,6 +52,8 @@ import { applyLadderPrefs, markLadderWon } from './ladderSettings';
 import { deliverReport } from './reportDelivery';
 import { emitForCallback, emitRunsFailed } from './webhooks';
 import { engineCostTable } from './engineCost';
+import { heldQuote } from './runCredits';
+import { settingsRow } from './admin/settings';
 import { assertBudget, assertPlatformCapacity, lockCompany } from './spend';
 import { assertCredits, siteForecasts } from './billing';
 import { customerError } from '../lib/customerError';
@@ -727,6 +730,9 @@ export async function ingestCallback(
     : null;
 
   const status = String(body.status ?? (stage === 'rejected' ? 'rejected' : 'completed'));
+  // W05-B: a page run held for the client's OK used only the check: it is quoted as the check, not as a written page
+  const heldRun = !!run && run.mode === 'keyword' && stage === 'content' && holdOf(payload)?.held === true && !payload.html;
+  const heldSettings = heldRun ? await settingsRow().catch(() => null) : null;
   const stored = await db.transaction(async (tx) => {
     const [rep] = await tx
       .insert(schema.reports)
@@ -770,6 +776,7 @@ export async function ingestCallback(
         if (engineEstimate.basis) patch.engineCostBasis = engineEstimate.basis.slice(0, 500);
       }
       Object.assign(patch, runOutcome(run.status, info?.finalStages ?? [], stage, body));
+      if (heldRun && heldSettings) patch.quotedCredits = heldQuote(run.quotedCredits ?? null, heldSettings);
       await tx.update(schema.runs).set(patch).where(eq(schema.runs.id, run.id));
     }
     if (site && (stage === 'site_tracker_setup' || stage === 'site_tracker') && site.trackingStatus === 'not_started')
