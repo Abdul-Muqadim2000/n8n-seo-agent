@@ -384,6 +384,8 @@ const REG = (() => {
 //                          no unfinished list item, table row or code block, no heading left without its text. A trailing author
 //                          box is profile data (read on the text before it); opts.unchanged_from: an end word for word the source's is
 //                          not a cut (fu-finalize-toc, K6).
+//                          opts.cta (W06-B, K4): the brief's / the site's call to action; a final short call-to-action line under the
+//                          last section ("Book a consultation") ends a page cleanly, a cut one ("Book a consult") does not.
 //   CK.edit(before, after) an edit of a complete text is itself complete AND did not lose the end: under 75% of the input's main-text
 //                          words (40% when the edit was asked to cut) or two of its sections gone is a cut, not an edit.
 //   CK.json(raw)           a JSON answer parses completely; an answer that stops inside its JSON is `truncated`, never an empty answer.
@@ -441,6 +443,41 @@ const CK = (() => {
     return s >= 0 ? s + 1 : -1; };
   // the last three lines of text of a page, as it ends
   const endOf = (md) => bodyLines(md).map(l => l.trim()).filter(Boolean).slice(-3).join('\n');
+  // W06-B (2026-10-30, docs/page-quality-2026-10-29/WAVE05.md 3.2, K4 first try, exec 379): the writer twice answered a complete page of
+  // about 2,100 words whose last line was the bare button text "Book a consultation" (no full stop) under its last H2 "Book a consultation
+  // with Tech&"; the check read it as a sentence with no ending, retried, and failed the run (about $0.85 of Claude lost, no page). A final
+  // short line is a proper end when it is a call to action, standing as its own paragraph after a paragraph that ends cleanly, and either
+  // (a) it IS the brief's or the site's call to action (opts.cta: a string or a list), or (b) it reads as a button (it starts with a call
+  // to action verb, or it is in title case) and every one of its words is a whole word of the page's last section (its heading and text)
+  // or of the call to action. A cut answer stops at a random point: mid-word ("Book a consult": "consult" is not a word of the section),
+  // on a dangling word ("Book a consultation with"), after a comma, or as the start of a longer sentence, and those are still caught.
+  const CTA_VERB = /^(?:book|schedule|request|get|talk|speak|contact|call|email|e-mail|message|chat|start|try|ask|claim|download|see|explore|discover|learn|read|view|visit|join|sign up|register|apply|order|buy|shop|compare|find|reach|let'?s|meet|plan|arrange|send|subscribe|watch|hire|enquire|inquire)\b/i;
+  const tokens = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}&']+/gu, ' ').trim().split(/\s+/).filter(Boolean);
+  const ctaKey = (s) => tokens(String(s || '').replace(/[.!?]+\s*$/, '')).join(' ');
+  const ctaEnd = (lines, o) => {
+    if (lines.length < 3 || lines[lines.length - 2].trim()) return false;   // a line of its own, after a blank line
+    const raw = lines[lines.length - 1].trim();
+    const line = raw.replace(/^(?:\*\*|__|\*|_)+|(?:\*\*|__|\*|_)+$/g, '').replace(/\s*(?:→|»|>|->)+\s*$/, '').trim();
+    const w = tokens(line);
+    if (!w.length || w.length > 8 || line.length > 70 || unbalanced(raw) || /[,:;–—-]$/.test(line) || DANGLING.test(line) || QUESTION_START.test(line)) return false;
+    if (/[.!?,;:]\s/.test(line)) return false;   // one short phrase, never a sentence and the start of the next one
+    let p = lines.length - 3; while (p >= 0 && !lines[p].trim()) p--;
+    if (p < 0) return false;
+    const prev = lines[p].trim(), prevPlain = prev.replace(/[*_`]+$/g, '').trim();
+    const ctas = (Array.isArray(o.cta) ? o.cta : [o.cta]).map(ctaKey).filter(Boolean);
+    const exact = ctas.includes(w.join(' '));
+    const prevOk = /^#{1,6}\s/.test(prev) ? exact : !isTableRow(prev) && !unbalanced(prev) && (END_PUNCT.test(prevPlain) || LINK_END.test(prevPlain));
+    if (!prevOk) return false;
+    if (exact) return true;
+    let h = lines.length - 2; while (h >= 0 && !/^#{1,3}\s/.test(lines[h].trim())) h--;
+    if (h < 0) return false;   // a page has headings; a call to action is read under the last one
+    if (/^\d+$/.test(w[w.length - 1])) return false;   // "Call +971 50 702" stops inside a number
+    const words0 = line.split(/\s+/).filter(x => /\p{L}/u.test(x));
+    const title = words0.length >= 2 && /^\p{Lu}/u.test(words0[0]) && words0.filter(x => x.replace(/[^\p{L}]/gu, '').length > 3).every(x => /^\p{Lu}/u.test(x));
+    if (!CTA_VERB.test(line) && !title) return false;
+    const pool = new Set([...tokens(lines.slice(h, lines.length - 1).join('\n')), ...ctas.join(' ').split(' ')]);
+    return w.every(t => pool.has(t));
+  };
 
   const text = (md, opts) => {
     const o = opts || {};
@@ -483,6 +520,8 @@ const CK = (() => {
       }
     } else if (signedOff(lines)) {
       // an e-mail's sign-off: "Best regards," then the sender's name (and a title / company line under it)
+    } else if (ctaEnd(lines, o)) {
+      // W06-B: the page's call to action on its own line ("Book a consultation") under the last section: a complete page
     } else {
       const ub = unbalanced(last);
       if (ub) reasons.push('the last paragraph stops mid-way (' + ub + ')');
@@ -506,7 +545,7 @@ const CK = (() => {
 
   const edit = (before, after, opts) => {
     const o = opts || {};
-    const t = text(after);
+    const t = text(after, { cta: o.cta });   // W06-B: the page's call to action is a proper end in an edit too
     const reasons = t.reasons.slice();
     const wb = mainWords(before), wa = mainWords(after);
     const floor = o.cut_requested ? 0.4 : 0.75;
@@ -907,7 +946,10 @@ const SRC = (() => {
 //
 // The interim grade, deterministic and free, on ONE scale out of 100 (a subset of the Wave 2 rubric, so nothing is thrown away):
 //   structure 20       today's structure checks scaled; -3 per repetition cluster (one statement made 3+ times across sections, up to
-//                      -8); -2 per label used for two different lists (up to -4); a statement made 4+ times caps structure at 50%
+//                      -8); -2 per label used for two different lists (up to -4); a statement made 4+ times caps structure at 50%;
+//                      W06-A: -2 per IDEA restated 4+ times in 3+ places (the near-duplicate check below, up to -4), never below half
+//   removed sections   W06-A: when the run's deletions (verdict exclusions) or its edits took 2+ sections or 20%+ of the words out of the
+//                      page, coverage and fit are capped at 40% of their parts (the page no longer covers what its search asks), with why
 //   coverage 15        today's term coverage, scaled
 //   readability 10     today's readability, scaled
 //   specificity 10     today's specificity
@@ -949,8 +991,10 @@ const GR = (() => {
   const LABEL = { structure: 'structure', coverage: 'topic coverage', readability: 'readability', specificity: 'specificity', clean_language: 'plain language', sources: 'sources', fit: 'fit with the search' };
   // caps as shares of their part (REVIEW_EVIDENCE M1): verdict under 50 -> fit 40%; open duplicate -> fit 30%; a statement made 4+ times ->
   // structure 50%; a weak-only compliance figure -> sources 8 of 15
-  const SHARE = { fit_verdict: 0.4, fit_duplicate: 0.3, structure_repeat: 0.5, sources_compliance: 8 / 15, weak_figure: 1 / 3, verdict_partial: 0.4, sources_none: 0.8, weak_cite: 0.5 };
-  const CFG = { sim: 0.6, min_words: 4, cluster: 3, cluster_cap: 4, blocker_cap: 59, verdict_bar: 50, display_top: 95, floor: 0.5, review_share: 0.25 };
+  const SHARE = { fit_verdict: 0.4, fit_duplicate: 0.3, structure_repeat: 0.5, sources_compliance: 8 / 15, weak_figure: 1 / 3, verdict_partial: 0.4, sources_none: 0.8, weak_cite: 0.5, removed: 0.4 };
+  const CFG = { sim: 0.6, min_words: 4, cluster: 3, cluster_cap: 4, blocker_cap: 59, verdict_bar: 50, display_top: 95, floor: 0.5, review_share: 0.25,
+    idea: { size: 4, places: 3, shared: 3, overlap: 0.6, dice: 0.3, min_words: 3, df_share: 0.08, df_min: 6, points: 2, max_points: 4 },   // W06-A: the idea check
+    removed: { sections: 2, share: 0.2 } };   // W06-A: deletions that cap coverage and fit
   const STOP = new Set(('the a an and or of for to in on with by at from about this that these those your our its it is are be how what which why when who you we they their them '
     + 'than then into over under more most can will does do not but any all one two also very just only such been being has have had was were each per may must should would '
     + 'could other some many much here there where while if so as up out own same both few no nor too yes use used using get gets make makes made need needs '
@@ -1020,6 +1064,49 @@ const GR = (() => {
       .map(g => ({ size: g.length, sections_n: new Set(g.map(x => x.section)).size, sections: [...new Set(g.map(x => x.heading))].slice(0, 8),
         sample: plain(g[0].text).slice(0, 160), members: g.slice(0, 8).map(x => plain(x.text).slice(0, 140)) })).sort((a, b) => b.size - a.size);
     return { clusters, count: clusters.length, worst: clusters.length ? clusters[0].size : 0, compared: items.length, ...(c.debug ? { near: near.sort((x, y) => y.sim - x.sim).slice(0, 25) } : {}) };
+  };
+
+  // ---------- 1b. W06-A: one IDEA restated (the near-duplicate check) ----------
+  // The blind judges of the wave 0.5 re-check (WAVE05.md) took structure points off three pages for an idea restated 4 to 6 times
+  // ("NetSuite for groups with subsidiaries across countries on one SaaS platform", "a gap-fit analysis before a fixed scope") that the
+  // statement check above never saw: the restatements are worded differently, in a list, a table row, a takeaway and a closing rule, so no
+  // two of them reach its Dice 0.6. Here every sentence, list item and table row (the Quick answer included, questions and links left out)
+  // is reduced to its rarer content words: the keyword's and the brand's words and every word on more than 8% of the units (the page's
+  // vocabulary, such as a product name) are taken out, and a name of several capitalised words is one word. Two units in different places
+  // that share 3+ such words, 60% of the shorter one and a Dice of 0.3, say the same thing. A unit with near copies in 3+ places, 4+ units
+  // in all, is one idea restated (the copies are taken by the most connected unit first, so one long chain is never one idea). Calibrated on
+  // the 16 AFTER / W05 pages of the page-quality run and the guide that ranks (exec 949): it finds the ideas the judges named on two of the
+  // three pages (K3, K4; K6's "launch narrow" is restated in a heading and with too few shared words), nothing on the guide that ranks, and
+  // a repeated deadline, a repeated product rule and a repeated method on three AFTER pages. Deterministic and conservative: a paraphrase
+  // with no shared words is the Wave 2 judge's work.
+  const ideas = (md, ctx) => {
+    const c = ctx || {}; const I = CFG.idea;
+    const strip = (t) => plain(S(t).replace(/!?\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/\]\([^)]*\)?/g, ' ').replace(/https?:\/\/\S+/g, ' ').replace(/\[/g, ' ')).replace(/^quick answer:?\s*/i, '');
+    const entity = (t) => strip(t).replace(/\b(?:The|A|An|This|That|These|Your|Our)\s+(?=[A-Z])/g, '').replace(/\b[A-Z][\w&]*(?:\s+[A-Z][\w&]*)+/g, (m) => m.replace(/\s+/g, '_'));
+    const drop = new Set(toks([c.keyword].concat(c.brand_names || []).join(' ')).map(stem));
+    const U = units(md).filter(u => (u.kind === 'sentence' || u.kind === 'li' || u.kind === 'row') && !/^\[(?:Image|Confirm|Owner)\b/i.test(u.text)
+      && !(u.kind === 'li' && /^\s*\[[^\]]*\]\(#[^)]*\)\s*$/.test(u.text)) && !/\?["')*_]*$/.test(u.text.trim()));
+    const items = U.map(u => ({ text: u.text, place: u.qa ? 'qa' : 's' + u.section, set: new Set(toks(entity(u.text), true).map(stem).filter(w => !drop.has(w))) }));
+    const df = new Map(); for (const it of items) for (const w of it.set) df.set(w, (df.get(w) || 0) + 1);
+    const cap = Math.max(I.df_min, Math.ceil(items.length * I.df_share));
+    for (const it of items) { it.set = new Set([...it.set].filter(w => df.get(w) <= cap)); it.n = it.set.size; }
+    const cand = items.map((it, i) => ({ ...it, i })).filter(it => it.n >= I.min_words);
+    const nb = new Map(cand.map(it => [it.i, []]));
+    for (let a = 0; a < cand.length; a++) for (let b = a + 1; b < cand.length; b++) {
+      const x = cand[a], y = cand[b]; if (x.place === y.place) continue;
+      let inter = 0; for (const w of x.set) if (y.set.has(w)) inter++;
+      if (inter < I.shared || inter / Math.min(x.n, y.n) < I.overlap || 2 * inter / (x.n + y.n) < I.dice) continue;
+      nb.get(x.i).push(y.i); nb.get(y.i).push(x.i); }
+    const used = new Set(); const found = [];
+    for (const it of cand.slice().sort((a, b) => nb.get(b.i).length - nb.get(a.i).length || a.i - b.i)) {
+      if (used.has(it.i)) continue;
+      const mem = [it.i].concat(nb.get(it.i).filter(j => !used.has(j)));
+      const places = new Set(mem.map(j => items[j].place));
+      if (mem.length >= I.size && places.size >= I.places) { mem.forEach(j => used.add(j));
+        found.push({ size: mem.length, places: places.size, sample: strip(it.text).slice(0, 160), members: mem.slice(0, 8).map(j => strip(items[j].text).slice(0, 140)) }); }
+    }
+    found.sort((a, b) => b.size - a.size);
+    return { ideas: found, count: found.length, worst: found.length ? found[0].size : 0, compared: cand.length };
   };
 
   // ---------- 2. one label for two different lists ("five questions" before two lists, then "use the five questions") ----------
@@ -1160,6 +1247,25 @@ const GR = (() => {
     return { points: r1(pts), verdict_points: r1(vp), duplicate_points: r1(dp), band, caps, note };
   };
 
+  // ---------- 4b. W06-A: what the run took out of the page ----------
+  // rm: { sections, words, words_before, h2_before, h2_removed, h2_now, headings } (EXC.removedOf on the page run's state, plus the page's
+  // H2 count now). Sections the edits lost count too (the H2s of the first draft that are neither on the page nor deleted on purpose).
+  // Two sections or a fifth of the words taken out cap coverage and fit at 40% of their parts: on the live K1 page (W05 run) six core
+  // sections went and the grade still read fit 20 of 20, "Ready".
+  const removedCap = (rm, max) => {
+    const R = rm && typeof rm === 'object' ? rm : null; if (!R) return null; const M = maxOf(max);
+    const excl = Math.max(0, Number(R.sections) || 0);
+    const byEdits = Number(R.h2_before) > 0 && R.h2_now != null && Number.isFinite(Number(R.h2_now)) ? Math.max(0, Number(R.h2_before) - (Number(R.h2_removed) || 0) - Number(R.h2_now)) : 0;
+    const share = Number(R.words_before) > 0 && Number(R.words) > 0 ? Number(R.words) / Number(R.words_before) : 0;
+    const n = excl + byEdits;
+    if (n < CFG.removed.sections && share < CFG.removed.share) return null;
+    const pct = Math.round(share * 100);
+    const why = (excl ? excl + ' section' + (excl === 1 ? ' was' : 's were') + ' taken out as a topic the verdict said to leave out' : '')
+      + (excl && byEdits ? ', and ' : '') + (byEdits ? byEdits + ' section' + (byEdits === 1 ? ' was' : 's were') + ' lost in editing' : '') + (pct ? ' (' + pct + '% of the words)' : '');
+    return { limit: { coverage: M.coverage * SHARE.removed, fit: M.fit * SHARE.removed }, why: clean(why),
+      note: clean('Coverage and fit are limited to ' + Math.round(SHARE.removed * 100) + '% of their points: ' + why + ', so the page no longer covers what its search asks. Write the missing sections back, or start a new page run'),
+      record: { sections: excl, by_edits: byEdits, words: Number(R.words) || 0, share_pct: pct, headings: (Array.isArray(R.headings) ? R.headings : []).slice(0, 8), capped: true } }; };
+
   // ---------- 5. the page-local grade (Content QA) ----------
   // parts: what Content QA already measures, as fractions or on their old scales: structure_frac (0-1), coverage_ratio (0-1),
   // readability_pts (of 15), specificity_pts (of 10), clean_pts (of 10). ctx: keyword, brand_names, domain, own_text, prev (the brief item).
@@ -1170,15 +1276,28 @@ const GR = (() => {
     const caps = fi.caps.slice();
     let structure = clamp(M.structure * clamp(Number(P.structure_frac) || 0, 0, 1) - Math.min(8, 3 * rep.count) * M.structure / 20 - Math.min(4, 2 * lab.count) * M.structure / 20, 0, M.structure);
     if (rep.worst >= CFG.cluster_cap && structure > M.structure * SHARE.structure_repeat) { structure = M.structure * SHARE.structure_repeat; caps.push({ dim: 'structure', share: SHARE.structure_repeat, why: 'one statement is made ' + rep.worst + ' times' }); }
+    // W06-A: an idea restated 4+ times that the statement check did not already count costs 2 points of structure (up to 4), never below
+    // half the part, so it alone never turns a page into "Needs work"
+    const idw = ideas(md, c); const seenRep = new Set(rep.clusters.flatMap(x => x.members || []).map(x => S(x).slice(0, 60)));
+    const idNew = idw.ideas.filter(x => !x.members.some(m => seenRep.has(S(m).slice(0, 60))));
+    let ideaCut = 0;
+    if (idNew.length) { const want = Math.min(CFG.idea.max_points, CFG.idea.points * idNew.length) * M.structure / 20; const room = Math.max(0, structure - M.structure * CFG.floor);
+      ideaCut = Math.min(want, room); structure -= ideaCut; }
+    const RM = removedCap(c.removed, M);
     if (src.capped) caps.push({ dim: 'sources', share: SHARE.sources_compliance, why: 'a compliance figure rests only on a source with no independent authority' });
     const raw = { structure, coverage: M.coverage * clamp(Number(P.coverage_ratio) || 0, 0, 1), readability: M.readability * clamp((Number(P.readability_pts) || 0) / 15, 0, 1),
       specificity: M.specificity * clamp((Number(P.specificity_pts) || 0) / 10, 0, 1), clean_language: M.clean_language * clamp((Number(P.clean_pts) || 0) / 10, 0, 1), sources: src.points, fit: fi.points, length: 0 };
+    if (RM) for (const k of ['coverage', 'fit']) if (raw[k] > RM.limit[k]) { raw[k] = RM.limit[k]; caps.push({ dim: k, share: SHARE.removed, why: RM.why }); }
     const breakdown = {}; for (const k of Object.keys(raw)) breakdown[k] = Math.round(raw[k]);
     const notes = [fi.note, src.note, 'Length is advice only: it carries no points'];
     if (rep.count) notes.push(rep.count + ' statement' + (rep.count === 1 ? ' is' : 's are') + ' made three or more times: ' + rep.clusters.slice(0, 3).map(x => '"' + x.sample + '" (' + x.size + ' times)').join('; '));
+    if (idNew.length) notes.push(idNew.length + ' idea' + (idNew.length === 1 ? ' is' : 's are') + ' restated four or more times in different places' + (ideaCut ? ' (' + r1(ideaCut) + ' point' + (r1(ideaCut) === 1 ? '' : 's') + ' off structure)' : '') + ': '
+      + idNew.slice(0, 2).map(x => '"' + x.sample.slice(0, 110) + '" (' + x.size + ' times)').join('; ') + '. Say it once where the reader decides, and point back to it');
+    if (RM) notes.push(RM.note);
     if (lab.count) notes.push('The same label introduces two different lists: ' + lab.collisions.map(x => '"' + x.lead + '"').join(', '));
     return { version: VERSION, score: DIMS.reduce((s, k) => s + breakdown[k], 0), of: 100, breakdown, max: M, caps,
       items: { repetition: { count: rep.count, worst: rep.worst, clusters: rep.clusters.slice(0, 5) }, list_labels: lab.collisions,
+        ideas: { count: idNew.length, points_off: r1(ideaCut), ideas: idNew.slice(0, 4) }, ...(RM ? { removed: RM.record } : {}),
         sources: { units: src.units, strong: src.strong, share: src.share, weak_only: src.weak_only, weak_compliance: src.weak_compliance, weak_cited: src.weak_cited, unsourced: src.unsourced, not_checked: !!src.not_checked, weak: src.list },
         fit: { verdict_score: F.verdict_score, band: fi.band, acknowledged: F.acknowledged, exempt: F.exempt, automatic: F.automatic, verdict_points: fi.verdict_points, duplicate_points: fi.duplicate_points } },
       notes: notes.map(clean) };
@@ -1217,6 +1336,10 @@ const GR = (() => {
     const codes = (blocking || []).map(x => S(x && x.code)).filter(Boolean);
     const dupOpen = codes.includes('duplicate_page'); const differs = !!(o.decision && o.decision.choice === 'differs');
     if (dupOpen || differs) { const fi = fit(F, { open: dupOpen, differs }, M.fit); for (const x of fi.caps) if (!caps.some(y => y.dim === x.dim && y.share === x.share)) caps.push(x); b.fit = Math.round(fi.points); }
+    // W06-A: sections the run took out of the page cap coverage and fit (from the page run's state here, or the check's own record)
+    const RMc = o.removed ? removedCap(o.removed, M) : null;
+    const RMrec = RMc ? RMc.record : (g.removed && g.removed.capped ? g.removed : ((W.items || {}).removed && (W.items || {}).removed.capped ? W.items.removed : null));
+    if (RMc) for (const k of ['coverage', 'fit']) { const lim = Math.round(RMc.limit[k]); if ((Number(b[k]) || 0) > lim) { b[k] = lim; if (!caps.some(y => y.dim === k && y.share === SHARE.removed)) caps.push({ dim: k, share: SHARE.removed, why: RMc.why }); } }
     // W05-A: the second read's advice, off its parts (from the parts before it, so it is applied once)
     const pre = { ...b }; const rv = reviewCut(o.review !== undefined ? o.review : (g.review && Array.isArray(g.review.advice) ? g.review : null), b, M);
     if (rv) for (const k of Object.keys(rv.cut)) b[k] = (Number(b[k]) || 0) - rv.cut[k];
@@ -1225,27 +1348,28 @@ const GR = (() => {
     const failing = [], waived = [], shadow = [];
     for (const k of DIMS) {
       if (!M[k] || (Number(b[k]) || 0) >= M[k] * CFG.floor) continue;
-      if (k === 'fit' && !dupOpen && !differs && (F.acknowledged || F.exempt)) { waived.push({ dim: k, why: F.acknowledged ? 'your choice: low search demand (you chose to write it anyway)' : 'chosen by your plan: ' + F.exempt }); continue; }
-      if (k === 'fit' && !dupOpen && !differs && F.automatic) { shadow.push({ dim: k, why: 'started automatically: recorded, not applied yet' }); continue; }
-      failing.push({ dim: k, label: LABEL[k], points: Number(b[k]) || 0, max: M[k], fix: clean(FIX[k](W)) });
+      if (k === 'fit' && !dupOpen && !differs && !RMrec && (F.acknowledged || F.exempt)) { waived.push({ dim: k, why: F.acknowledged ? 'your choice: low search demand (you chose to write it anyway)' : 'chosen by your plan: ' + F.exempt }); continue; }
+      if (k === 'fit' && !dupOpen && !differs && !RMrec && F.automatic) { shadow.push({ dim: k, why: 'started automatically: recorded, not applied yet' }); continue; }
+      failing.push({ dim: k, label: LABEL[k], points: Number(b[k]) || 0, max: M[k], fix: clean(FIX[k](RMrec ? { ...W, items: { ...(W.items || {}), removed: RMrec } } : W)) });
     }
     const score = Math.round(total);
     const R0 = { ...g }; delete R0.review; delete R0.pre_review;
-    return { ...R0, ...(rv ? { review: rv, pre_review: pre } : {}), score, display: display(score), breakdown: b, max: M, scale: VERSION, caps,
+    return { ...R0, ...(rv ? { review: rv, pre_review: pre } : {}), ...(RMrec ? { removed: RMrec } : {}), score, display: display(score), breakdown: b, max: M, scale: VERSION, caps,
       floors: { ok: failing.length === 0, failing, waived, shadow, rule: 'Ready needs no open blocker and every part at or above half its points' },
       ready: codes.length === 0 && failing.length === 0 };
   };
   const FIX = {
-    structure: (W) => { const r = ((W.items || {}).repetition || {}); const l = (W.items || {}).list_labels || [];
+    structure: (W) => { const r = ((W.items || {}).repetition || {}); const l = (W.items || {}).list_labels || []; const id = ((W.items || {}).ideas || {});
       return r.count ? 'Say each point once: "' + S((r.clusters || [])[0] && r.clusters[0].sample).slice(0, 90) + '" is made ' + r.worst + ' times'
-        : l.length ? 'Give each list its own label: "' + S(l[0].lead).slice(0, 90) + '" introduces two lists' : 'Give the page its headings, Quick answer, table and links back'; },
-    coverage: () => 'Cover the topics the pages that rank cover (the missing terms are in the advice)',
+        : l.length ? 'Give each list its own label: "' + S(l[0].lead).slice(0, 90) + '" introduces two lists'
+          : id.count ? 'Say each idea once: "' + S((id.ideas || [])[0] && id.ideas[0].sample).slice(0, 90) + '" is restated ' + ((id.ideas || [])[0] || {}).size + ' times' : 'Give the page its headings, Quick answer, table and links back'; },
+    coverage: (W) => (((W.items || {}).removed || {}).capped ? 'Write back the sections this run took out (' + S((((W.items || {}).removed || {}).headings || []).slice(0, 3).join('; ')).slice(0, 160) + '), or start a new page run' : 'Cover the topics the pages that rank cover (the missing terms are in the advice)'),
     readability: () => 'Use shorter sentences and plainer words',
     specificity: () => 'Add concrete examples, steps or decision rules in place of general statements',
     clean_language: () => 'Rewrite the filler phrases listed in the advice in plain, specific words',
     sources: (W) => { const s = ((W.items || {}).sources || {}); return 'Cite an official body, a research house, major press or vendor documentation'
       + ((s.weak || []).length ? ' for "' + S(s.weak[0].text).slice(0, 90) + '"' + (s.weak.length > 1 ? ' and ' + (s.weak.length - 1) + ' more' : '') : ''); },
-    fit: (W) => { const f = ((W.items || {}).fit || {}); return f.verdict_score != null && f.verdict_score < CFG.verdict_bar ? 'Our verdict scored this search ' + f.verdict_score + ' out of 100: improve a page your website already has, or choose "Write it anyway" to keep this one' : 'Publish this text as an update of the page your website has for this search'; }
+    fit: (W) => { const f = ((W.items || {}).fit || {}); if (((W.items || {}).removed || {}).capped) return 'The page lost the sections that answer its search: write them back, or start a new page run'; return f.verdict_score != null && f.verdict_score < CFG.verdict_bar ? 'Our verdict scored this search ' + f.verdict_score + ' out of 100: improve a page your website already has, or choose "Write it anyway" to keep this one' : 'Publish this text as an update of the page your website has for this search'; }
   };
   // the delivered status: a page with no blocker that fails a floor is "Needs work: <parts>", never "Ready to publish". It stays publishable
   // (nothing stops the client): the status and label change, the items say what to improve, and a not-ready page is left as it is.
@@ -1260,7 +1384,7 @@ const GR = (() => {
   };
   const display = (n) => n == null || n === '' || !Number.isFinite(Number(n)) ? '' : Math.round(Number(n)) >= CFG.display_top ? CFG.display_top + '+' : String(Math.round(Number(n)));
   const basis = 'structure 20 (a statement made three or more times and one label for two lists cost points), topic coverage 15, readability 10, specificity 10, plain language 10, sources 15, fit with the search 20; length is advice only';
-  return { VERSION, MAX, DIMS, LABEL, SHARE, CFG, REVIEW_DIM, REVIEW_PTS, reviewCut, units, repetition, listLabels, sources, fitOf, fit, local, cap, deliver, display, basis };
+  return { VERSION, MAX, DIMS, LABEL, SHARE, CFG, REVIEW_DIM, REVIEW_PTS, reviewCut, units, repetition, ideas, listLabels, sources, fitOf, fit, removedCap, local, cap, deliver, display, basis };
 })();
 // ---- anchor kit (D9, 2026-10-11; inlined through the __ANCHOR__ marker): the words a link to one of our own pages is written with.
 // Live, "Guides in this series" linked to "Facts erp" and "Erp software dubai" — a raw keyword string with one capital letter (exec 365).
@@ -2732,18 +2856,66 @@ const PJ = (() => {
 // the delivered page carried the H2 "How Much Is a Consultancy Licence in Dubai?": the strategy brief prompt only ever printed the
 // verdict's reasons, never its changes, so the instruction reached nobody and nothing checked it.
 //   EXC.fromVerdict(changes, skips)  the topics to leave out: the verdict's structured `topics_to_skip`, plus every "skip / avoid /
-//                                    leave out / do not cover …" phrase in its free-text changes (the fallback for older answers)
-//   EXC.match(text, ex, keyword)     does a heading (or an outline section) cover that topic? every content word of the topic must be in it;
-//                                    a one-word topic that is also a word of the page's own keyword never matches (it would match everything)
+//                                    leave out / do not cover ..." phrase in its free-text changes (the fallback for older answers)
+//   EXC.match(text, ex, family)      does a heading (or an outline section) cover that topic? (rules below). `family` is the page's keyword
+//                                    (a string, as before) or a list of strings: the keyword, the brief's primary and secondary keywords,
+//                                    the site's main services (EXC.familyOf)
 //   EXC.check(headings, list, kw)    [{ heading, topic }] for every heading that covers an excluded topic
 //   EXC.prune(outline, list, kw)     the brief's outline without those sections, and the ones dropped
+//   EXC.decide(md, list, family)     W06-A: which matched sections may really be deleted, and which are kept with the reason (the budget below)
+//   EXC.guard(md, flagged, list, f)  W06-A: the same decision for a list of flagged headings a quality check handed over (Page Candidates)
+//   EXC.removedOf(state)             W06-A: what a page run's deletions took out (sections, words), for the grade
+// W06-A (page-quality wave 0.6, 2026-10-30, docs/page-quality-2026-10-29/WAVE05.md 3.1): live (W05 run, K1 "ms 365 erp") the verdict said to
+// skip "Dynamics GP and SL"; tokens under 3 characters were dropped, so the topic became the single word "dynamic", which is not a word of
+// the keyword, and nine headings matched it. Page Candidates deleted six core sections (2,407 words -> 1,023) and the grade still said 79
+// "Ready". Now:
+//   * a short token is kept when it is meaningful: an acronym written in capitals in the topic (GP, SL, AI, ML, UK) or a token with a digit;
+//     such a token only matches the same acronym in capitals in the heading ("Is it ..." never matches "IT");
+//   * a topic that lost a token to the length filter (a lowercase "ai" or "ml") matches on its FULL phrase or not at all;
+//   * a one-token topic that is a word of the page's keyword family or the site's main services never matches, not even as a phrase;
+//     a topic made only of such words matches on its full phrase only;
+//   * the full phrase of a topic in a heading is always a match (and the strongest signal).
+// And the deletion budget (EXC.decide): a section whose heading names the topic's full phrase, or whose text names the topic's own words
+// (those outside the keyword family) at least twice, is a section about it ("a second signal"). Without such a signal at most ONE matched
+// section is deleted, and only when it holds no more than 20% of the page's words; the others are kept and reported. Deletions never take
+// more than 40% of the page's words in all. Every decision is recorded (removed / kept, with the reason) in the run's evidence.
 // Regex only (the n8n Code sandbox has no URL constructor).
 const EXC = (() => {
   const S = (v) => String(v == null ? '' : v);
   const STOP = new Set('the a an and or of for to in on with by at from about any all each every their your our its it is are be this that these those how what which why when who much many do does can should would will questions question topics topic sections section queries query searches search angles angle content pages page posts post details detail things thing buyer buyers intent people readers reader'.split(' '));
+  // two-letter words that carry no topic (the rest of the short words a topic loses make it a phrase-only topic)
+  const SHORT_STOP = new Set('of to in on by at it is be do vs as if so no up an or we us my me am go oh ok'.split(' '));
   const norm = (w) => { let x = S(w).toLowerCase().replace(/licens/g, 'licenc');
     if (x.length > 5) x = x.replace(/(?:ings|ing|ies|es|ed|s)$/, ''); else if (x.length > 3) x = x.replace(/s$/, ''); return x; };
   const toks = (t) => S(t).toLowerCase().replace(/[’']/g, '').split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !STOP.has(w)).map(norm);
+  // the topic's words with the meaningful short ones (acronyms in capitals, tokens with a digit: "#gp", "#sl"), how many short words it
+  // lost, and its normalised phrase
+  const raw = (t) => S(t).replace(/[’']/g, '').split(/[^A-Za-z0-9]+/).filter(Boolean);
+  const isAcr = (w) => w.length === 2 && (/^[A-Z][A-Z0-9]$/.test(w) || /^[0-9][A-Z]$/.test(w) || /^[A-Z][0-9]$/.test(w));
+  const phraseOf = (t) => S(t).toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').replace(/^\s*the\s+/, '').trim();
+  const terms = (t) => { const req = [], seen = new Set(); let lost = 0;
+    for (const w of raw(t)) {
+      const lw = w.toLowerCase();
+      if (w.length >= 3) { if (STOP.has(lw)) continue; const n = norm(lw); if (!seen.has(n)) { seen.add(n); req.push(n); } continue; }
+      if (isAcr(w)) { const n = '#' + lw; if (!seen.has(n)) { seen.add(n); req.push(n); } continue; }
+      if (w.length === 2 && !SHORT_STOP.has(lw) && /[a-z]/i.test(w)) lost++;
+    }
+    return { req, lost, phrase: phraseOf(t) }; };
+  // a heading's words: every content word, plus the acronyms it writes in capitals
+  const textSet = (t) => { const set = new Set(toks(t)); for (const w of raw(t)) if (isAcr(w)) set.add('#' + w.toLowerCase()); return set; };
+  const phraseIn = (text, phrase) => !!phrase && (' ' + phraseOf(text) + ' ').includes(' ' + phrase + ' ');
+  // the page's keyword family: the keyword, or a list of strings (keywords, the site's services)
+  // W06 integration (2026-10-30): a two-letter word of the family counts as its acronym whatever its case (the keyword "ai consultant" is
+  // typed in lowercase, the topic "AI consultant certification" keeps "#ai"). Such an acronym is the page's own context, not the topic's
+  // signal: it is never required in the text (an address or a heading may spell it out: "artificial-intelligence-certifications"), as
+  // the length filter never required it before W06-A (EQA4, exec 42). The topic's own acronyms (GP, SL) are still required, in capitals.
+  const famSet = (family) => { const f = new Set(); for (const s of (Array.isArray(family) ? family : [family])) {
+    for (const w of terms(s).req) f.add(w);
+    for (const w of raw(s)) { const lw = w.toLowerCase(); if (w.length === 2 && /^[a-z]{2}$/.test(lw) && !SHORT_STOP.has(lw)) f.add('#' + lw); } } return f; };
+  const familyOf = (prev, siteModel) => { const p = prev || {}; const b = p.content_brief || {}; const m = siteModel || p.site_model || {};
+    const sec = Array.isArray(b.secondary_keywords) ? b.secondary_keywords : [];
+    const sv = Array.isArray(m.services) ? m.services : [];
+    return [p.keyword, b.primary_keyword].concat(sec, sv).map(x => S(x && typeof x === 'object' ? (x.name || x.title || '') : x)).filter(x => x.trim()).slice(0, 40); };
   const SKIP_RE = /\b(?:skip|avoid|leave out|drop|exclude|omit|ignore|steer clear of|stay away from|do not (?:cover|answer|target|include)|don['’]t (?:cover|answer|target|include)|no need to (?:cover|answer))\s+(?:the\s+|any\s+|all\s+)?([^.;:!?]+?)(?=\s*,\s*(?:which|as|because|since|they|these|it|that)\b|\s+(?:which|because|since|as they|as these)\b|[.;:!?]|$)/gi;
   const TAIL_RE = /\s+(?:questions?|topics?|sections?|queries|query|searches|angles?|content|pages?|posts?|subjects?|keywords?)\s*$/i;
   const fromText = (line) => {
@@ -2759,24 +2931,30 @@ const EXC = (() => {
   };
   const fromVerdict = (changes, skips) => {
     const seen = new Set(); const out = [];
-    const add = (topic, source) => { const k = toks(topic).join(' '); if (!k || seen.has(k)) return; seen.add(k); out.push({ topic: S(topic).trim(), source }); };
+    const add = (topic, source) => { const T = terms(topic); const k = T.req.length ? T.req.join(' ') + (T.lost ? '|' + T.phrase : '') : ''; if (!k || seen.has(k)) return; seen.add(k); out.push({ topic: S(topic).trim(), source }); };
     (Array.isArray(skips) ? skips : []).forEach(t => add(S(t).replace(/[-_]+/g, ' '), 'verdict'));
     (Array.isArray(changes) ? changes : []).forEach(c => fromText(c).forEach(t => add(t, 'verdict_changes')));
     return out.slice(0, 12);
   };
-  const match = (text, ex, keyword) => {
-    const T = toks(ex && ex.topic != null ? ex.topic : ex); if (!T.length) return false;
-    const kw = new Set(toks(keyword));
-    if (T.length === 1 && kw.has(T[0])) return false;
-    const H = new Set(toks(text));
-    return T.every(w => H.has(w));
+  const topicOf = (ex) => S(ex && typeof ex === 'object' && ex.topic != null ? ex.topic : ex);
+  // how a text covers a topic: 'phrase' (the full phrase is in it), 'words' (every word of the topic is in it), or '' (no match)
+  const how = (text, ex, family) => {
+    const T = terms(topicOf(ex)); if (!T.req.length) return '';
+    const fam = famSet(family);
+    const own = T.req.filter(w => !fam.has(w));
+    if (T.req.length === 1 && !own.length) return '';   // one shared word of the keyword family: never, not even as a phrase
+    if (phraseIn(text, T.phrase)) return 'phrase';
+    if (T.lost || !own.length) return '';               // lost a short word, or only family words: the full phrase or nothing
+    const H = textSet(text);
+    return T.req.every(w => H.has(w) || (w[0] === '#' && fam.has(w))) ? 'words' : '';
   };
+  const match = (text, ex, family) => !!how(text, ex, family);
   const check = (headings, list, keyword) => {
     const out = [];
     for (const h of (Array.isArray(headings) ? headings : [])) {
       const text = S(h).replace(/^#+\s*/, '').replace(/[*_`]+/g, '').trim(); if (!text) continue;
       const ex = (Array.isArray(list) ? list : []).find(e => match(text, e, keyword));
-      if (ex) out.push({ heading: text, topic: S(ex.topic != null ? ex.topic : ex) });
+      if (ex) out.push({ heading: text, topic: topicOf(ex) });
     }
     return out;
   };
@@ -2784,11 +2962,82 @@ const EXC = (() => {
     const kept = [], dropped = [];
     for (const sec of (Array.isArray(outline) ? outline : [])) {
       const ex = (Array.isArray(list) ? list : []).find(e => match(S(sec && sec.h2), e, keyword));
-      if (ex) dropped.push({ h2: S(sec.h2), topic: S(ex.topic) }); else kept.push(sec);
+      if (ex) dropped.push({ h2: S(sec.h2), topic: topicOf(ex) }); else kept.push(sec);
     }
     return { kept, dropped };
   };
-  return { fromVerdict, fromText, match, check, prune, toks };
+  // ---------- W06-A: the deletion budget ----------
+  const BUDGET = { weak_sections: 1, weak_share: 0.2, total_share: 0.4, named: 2 };
+  const META = /^(Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary Keywords)\s*:/i;
+  const wordsIn = (t) => S(t).replace(/!?\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[#*_`>|]+/g, ' ').split(/\s+/).filter(w => /[A-Za-z0-9]/.test(w)).length;
+  const cleanH = (h) => S(h).replace(/^#+\s*/, '').replace(/[*_`]+/g, '').trim();
+  // the page's H2 / H3 sections with their own text (an H2 holds its H3s) and the page's words (meta lines and headings left out)
+  const sectionsOf = (md) => {
+    const lines = S(md).replace(/\r/g, '').split('\n'); const heads = []; let fence = false;
+    lines.forEach((l, i) => { if (/^\s*(```|~~~)/.test(l)) { fence = !fence; return; } const m = !fence && l.match(/^(#{2,3})\s+(.+?)\s*$/); if (m) heads.push({ i, level: m[1].length, heading: cleanH(m[2]) }); });
+    const secs = heads.map((h, k) => { let end = lines.length; for (let j = k + 1; j < heads.length; j++) if (heads[j].level <= h.level) { end = heads[j].i; break; }
+      const body = lines.slice(h.i + 1, end).filter(l => !/^#{1,6}\s/.test(l)).join('\n'); return { ...h, end, body, words: wordsIn(body) }; });
+    const total = lines.filter(l => l.trim() && !META.test(l.trim()) && !/^#{1,6}\s/.test(l)).reduce((s, l) => s + wordsIn(l), 0);
+    return { secs, total };
+  };
+  // does the section's own text name the topic? at least two of its sentences carry every word of the topic outside the keyword family
+  // (its full phrase, for a topic that lost a short word)
+  const namedIn = (body, ex, family) => { const T = terms(topicOf(ex)); const fam = famSet(family); const own = T.req.filter(w => !fam.has(w)); if (!own.length) return false;
+    const sents = S(body).split(/(?<=[.!?])\s+|\n+/).filter(x => x.trim());
+    const n = sents.filter(x => T.lost ? phraseIn(x, T.phrase) : (() => { const H = textSet(x); return own.every(w => H.has(w)); })()).length;
+    return n >= BUDGET.named; };
+  const decide = (md, list, family, opts) => {
+    const o = opts || {}; const L = Array.isArray(list) ? list : []; const only = Array.isArray(o.only) ? new Set(o.only.map(h => cleanH(h).toLowerCase())) : null;
+    const { secs, total } = sectionsOf(md);
+    const hits = [];
+    for (const s of secs) {
+      if (only && !only.has(s.heading.toLowerCase())) continue;
+      let ex = null, hw = '';
+      for (const e of L) { const h = how(s.heading, e, family); if (h === 'phrase') { ex = e; hw = h; break; } if (h && !ex) { ex = e; hw = h; } }
+      if (!ex) continue;
+      const signal = hw === 'phrase' ? 'the heading names the topic' : namedIn(s.body, ex, family) ? 'the section names the topic' : '';
+      hits.push({ s, topic: topicOf(ex), signal });
+    }
+    const remove = [], keep = []; const gone = []; let removed = 0;
+    const inside = (s) => gone.some(g => s.i > g.i && s.i < g.end);
+    const pct = (w) => total ? Math.round(100 * w / total) : 0;
+    const take = (h, why) => { remove.push({ heading: h.s.heading, topic: h.topic, level: h.s.level, words: h.s.words, share_pct: pct(h.s.words), signal: h.signal || why }); gone.push(h.s); removed += h.s.words; };
+    const sorted = hits.slice().sort((a, b) => a.s.level - b.s.level || a.s.i - b.s.i);
+    for (const h of sorted.filter(x => x.signal)) {
+      if (inside(h.s)) continue;
+      if (total && removed + h.s.words > total * BUDGET.total_share) { keep.push({ heading: h.s.heading, topic: h.topic, words: h.s.words, why: 'deleting it would take more than ' + Math.round(BUDGET.total_share * 100) + '% of the page' }); continue; }
+      take(h, '');
+    }
+    const weak = sorted.filter(x => !x.signal && !inside(x.s));
+    if (weak.length > BUDGET.weak_sections) for (const h of weak) keep.push({ heading: h.s.heading, topic: h.topic, words: h.s.words,
+      why: weak.length + ' sections share words with "' + h.topic + '" and none of them names it: one topic cannot be that much of the page, so none is deleted' });
+    else for (const h of weak) {
+      if (total && h.s.words > total * BUDGET.weak_share) { keep.push({ heading: h.s.heading, topic: h.topic, words: h.s.words, why: 'it holds ' + pct(h.s.words) + '% of the page and does not name the topic, so it is not deleted' }); continue; }
+      if (total && removed + h.s.words > total * BUDGET.total_share) { keep.push({ heading: h.s.heading, topic: h.topic, words: h.s.words, why: 'deleting it would take more than ' + Math.round(BUDGET.total_share * 100) + '% of the page' }); continue; }
+      take(h, 'one short section that shares the topic\'s words');
+    }
+    return { remove, keep, words_total: total, words_removed: removed };
+  };
+  // a quality check handed over flagged headings (Content QA's excluded_sections): decided again here on the page as it is now, so a list
+  // from an older check (or a matcher that went too far) can never delete more than the budget allows
+  const guard = (md, flagged, list, family) => {
+    const F = (Array.isArray(flagged) ? flagged : []).map(x => cleanH(x && typeof x === 'object' ? x.heading : x)).filter(Boolean);
+    if (!F.length) return { remove: [], keep: [], words_total: 0, words_removed: 0 };
+    const d = decide(md, list, family, { only: F });
+    const named = new Set(d.remove.concat(d.keep).map(x => x.heading.toLowerCase()));
+    for (const h of F) if (!named.has(h.toLowerCase())) d.keep.push({ heading: h, topic: '', words: 0, why: 'on a closer reading it is not about a topic the verdict said to leave out' });
+    return d;
+  };
+  // what a page run's deletions took out, from its Page Candidates state (structured since W06-A, else read off its fix notes)
+  const removedOf = (state) => {
+    const st = state && typeof state === 'object' ? state : {}; const by = new Map();
+    for (const r of (Array.isArray(st.exclusions_removed) ? st.exclusions_removed : [])) if (r && r.heading) by.set(cleanH(r.heading).toLowerCase(), { heading: cleanH(r.heading), words: Number(r.words) || 0, level: Number(r.level) || 2, topic: S(r.topic) });
+    for (const f of (Array.isArray(st.fixes) ? st.fixes : [])) { const m = S(f).match(/removed the section "(.+)" \(a topic the verdict said to leave out/); if (m && !by.has(cleanH(m[1]).toLowerCase())) by.set(cleanH(m[1]).toLowerCase(), { heading: cleanH(m[1]), words: 0, level: 0, topic: '' }); }
+    const list = [...by.values()]; const words = list.reduce((s, x) => s + x.words, 0);
+    const first = st.first && typeof st.first === 'object' ? st.first : null;
+    return { sections: list.length, words, words_before: first ? Number(first.words) || 0 : 0, h2_before: first ? Number(first.h2) || 0 : 0, h2_removed: list.filter(x => x.level === 2).length, headings: list.map(x => x.heading).slice(0, 12) };
+  };
+  return { fromVerdict, fromText, match, how, check, prune, toks, terms, familyOf, decide, guard, removedOf, sectionsOf, BUDGET };
 })();
 // ---- fit gate (2026-10-11, FIX_PLAN D4 / D8): ONE rule for keywords that no page of this website should target. Inlined by the build
 // (the FIT_GATE placeholder) into Analyze Keywords (full report: keyword gap, easy wins, opportunities), Rank Keywords (discovery), Ladder Pool /
@@ -4170,15 +4419,18 @@ const subtopics_dropped = [];
 // by another caller, may still carry a course page), (2) neither that page nor the subtopic is about a topic the verdict left out, and
 // (3) it is not a sales heading (a fee, a price, alumni, eligibility: CVG.subtopics' own filter, applied again to a stored plan).
 const verdict_exclusions = Array.isArray(prev.verdict_exclusions) ? prev.verdict_exclusions : EXC.fromVerdict(prev.verdict_changes, []);
+// W06-A (2026-10-30, WAVE05 3.1): a topic is matched against the page's keyword FAMILY (keyword, the brief's primary and secondary keywords,
+// the site's main services), so one shared word such as "Dynamics" never makes a heading about an excluded topic
+const excFamily = EXC.familyOf(prev, SITE_MODEL);
 const qaPageKind = CVG.kindFor(prev.page_type);
 const benchKind = subBest && (subBest.title || subBest.headings) ? CVG.kindOf(subBest, prev.keyword || '') : (covPlan && covPlan.best ? covPlan.best.kind : null);
 const benchTitleText = subBest ? String(subBest.title || '') + ' ' + String(subBest.url || '').replace(/^https?:\/\/[^\/]+/i, '').replace(/[\/_-]+/g, ' ') : '';
-const benchExcluded = benchTitleText.trim() ? verdict_exclusions.find(e => EXC.match(benchTitleText, e, prev.keyword || '')) : null;
+const benchExcluded = benchTitleText.trim() ? verdict_exclusions.find(e => EXC.match(benchTitleText, e, excFamily)) : null;
 const benchOffKind = !!(covPlan && (covPlan.type_match === false || (benchKind && benchKind !== qaPageKind && !(qaPageKind === 'guide' && benchKind === 'list'))));
 const subtopicsKept = (covPlan && Array.isArray(covPlan.subtopics) ? covPlan.subtopics : []).filter(s => {
   let why = benchOffKind ? 'the page to beat is a ' + ({ other: 'course, job or directory page', list: 'list of companies', guide: 'guide', service: 'service page', unknown: 'page of another kind' }[benchKind] || 'page of another kind') + ', not a page like this one'
     : benchExcluded ? 'the page to beat is about "' + String(benchExcluded.topic != null ? benchExcluded.topic : benchExcluded) + '", a topic the verdict said to leave out' : '';
-  if (!why) { const ex = verdict_exclusions.find(e => EXC.match(s, e, prev.keyword || '')); if (ex) why = 'about "' + String(ex.topic != null ? ex.topic : ex) + '", a topic the verdict said to leave out'; }
+  if (!why) { const ex = verdict_exclusions.find(e => EXC.match(s, e, excFamily)); if (ex) why = 'about "' + String(ex.topic != null ? ex.topic : ex) + '", a topic the verdict said to leave out'; }
   if (!why && CVG.isPromo(s, benchKind)) why = 'a sales heading (a fee or a price, or a course\'s alumni and eligibility), not a topic';
   if (!why) why = CVG.namesBrand(s, subBest, subOpts) || '';
   if (why) subtopics_dropped.push({ subtopic: s, reason: why }); return !why; });
@@ -4287,7 +4539,12 @@ if (business_claims.length) warnings.push('Statements about ' + (bizNames[0] || 
   + business_claims.slice(0, 4).map(b => '"' + b.sentence.slice(0, 160) + '"').join('; ') + '. Remove each one, or confirm it in the business facts');
 // A-18 (2026-10-17): a section about a topic the verdict said to leave out. Live (exec 771) the verdict said "Skip the consultancy-licence
 // and start-an-IT-company questions, which don't match buyer intent" and the page carried "How Much Is a Consultancy Licence in Dubai?".
-const excluded_sections = EXC.check(md.match(/^#{2,3} .+$/gm) || [], verdict_exclusions, prev.keyword || '');
+// W06-A (2026-10-30, WAVE05 3.1): only the sections the deletion budget allows are listed for deletion (EXC.decide: a heading or text that
+// names the topic, else at most one short section; never more than 40% of the page); the other matches are kept and recorded in
+// `excluded_sections_kept` with the reason (evidence only: not a warning, so the copy check and the editor round are unchanged)
+const excDecision = EXC.decide(md, verdict_exclusions, excFamily);
+const excluded_sections = excDecision.remove.map(x => ({ heading: x.heading, topic: x.topic, words: x.words, share_pct: x.share_pct, signal: x.signal }));
+const excluded_sections_kept = excDecision.keep.map(x => ({ heading: x.heading, topic: x.topic, words: x.words, why: x.why }));
 if (excluded_sections.length) warnings.push('Sections about a topic the verdict said to leave out: ' + excluded_sections.slice(0, 4).map(x => '"' + x.heading + '" (the verdict: skip ' + x.topic + ')').join('; ')
   + '. Remove each section, so the page stays on what its buyers search for');
 if (stats.length) warnings.push('Unverified statistics that need a linked source or a [Statistic] marker: ' + stats.join('; '));
@@ -4370,8 +4627,13 @@ const napOwn = (() => { let m = null; try { m = $('Site Model').first().json.sit
   if (!m && prev.site_model && typeof prev.site_model === 'object') m = prev.site_model;
   const n = m ? (SM.nap(m) || {}) : {}; const p0 = (prev.site_profile && typeof prev.site_profile === 'object') ? prev.site_profile : {}; const a0 = (p0.address && typeof p0.address === 'object') ? p0.address : {};
   return [p0.phone, p0.street_address, a0.street, a0.postal_code, n.phone, n.street_address, n.postal_code].filter(x => typeof x === 'string' && x.trim()).join('\n'); })();
+// W06-A (2026-10-30, WAVE05 3.1 / Deploy readiness 4): what this page run already took out of the page (Page Candidates' state, carried by
+// Page Fix from the second check on): sections deleted as a topic the verdict said to leave out, and H2s the edits lost. Two sections or a
+// fifth of the words cap coverage and fit in the grade (GR.removedCap), so a page that lost its core never reads "Ready"
+const removed_run = (() => { if (round < 2) return null; let st = null; try { const j = $('Page Fix').first().json; st = j && j.page_fix && typeof j.page_fix === 'object' ? j.page_fix : null; } catch (e) { st = null; }
+  if (!st) return null; const r = EXC.removedOf(st); return { ...r, h2_now: h2s.length, words_now: mainWords }; })();
 const grade_detail = GR.local({ structure_frac: structuralChecks.filter(Boolean).length / structuralChecks.length, coverage_ratio, readability_pts, specificity_pts, clean_pts: banned_pts }, md,
-  { keyword: prev.keyword || '', brand_names: bizNames, domain, prev, own_text: [prev.business, prev.business_facts, prev.case_facts_text, napOwn].filter(x => typeof x === 'string').join('\n') },
+  { keyword: prev.keyword || '', brand_names: bizNames, domain, prev, removed: removed_run, own_text: [prev.business, prev.business_facts, prev.case_facts_text, napOwn].filter(x => typeof x === 'string').join('\n') },
   { tier: SRC.tier, figures: SRC.figures });
 const content_score = grade_detail.score;
 
@@ -4674,7 +4936,7 @@ return [{ json: { ...prev, output: md, qa_round: round, editor_rounds, meta: { t
     source_redirects: { resolved: redirectsResolved.length, dropped: redirectsDropped.length }, voice: VOICE,   // FU-SV: redirect citations, the business's own voice
     outbound_links: externalUrls.map(e => ({ url: e.url, anchor: e.anchor, host: e.host, tier: e.tier })),   // A-14: every outbound link, for Outbound Link Check
     business_claims, business_promises, promise_check, carried_promises, claims_open, business_names: bizNames, unverified_statistics_own: stats_own,   // A-15 / A-19 / E-CLAIM
-    verdict_exclusions, excluded_sections, protected_restored,   // A-18 / A-17
+    verdict_exclusions, excluded_sections, excluded_sections_kept, protected_restored,   // A-18 / A-17
     coverage_advice, subtopics_dropped, owner_edits, next_step, body_brackets, page_url: pageUrl,   // D5 / owner edits / placeholder gate (2026-10-21)
     passed_copy, profile_placeholders, profile_placeholder_fields: PROFILE_PH, placeholders_total: placeholder_count + profile_placeholders,
     keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, question_headings: questionHeadings, answered_questions: answeredQuestions, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),

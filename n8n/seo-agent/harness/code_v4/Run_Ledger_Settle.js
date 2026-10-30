@@ -781,6 +781,15 @@ const __llmNotes = (() => { const out = [];
     for (const i of a) { const k = i && i.json && i.json.llm_check; if (k && k.note && !out.includes(k.note)) out.push(k.note); } }
   return out; })();
 const __llmNote = __llmNotes.length ? 'Claude answer cut short: ' + __llmNotes.join(' ') + ' ' : '';
+// W06-B (2026-10-30, docs/page-quality-2026-10-29/WAVE05.md 3.2, exec 379): a run that took its failure path (the page writer cut twice)
+// reaches this settle before *Stop Failed Run* ends it. It settles like any run, with what it really spent (the Claude calls that ran, the
+// DataForSEO tasks the account answers for), so the ledger no longer undercounts failed runs; the row says first that the run failed, and
+// it teaches the cost calibration nothing (a run that stopped half-way is not what the mode costs).
+const __failed = (() => {
+  for (const nd of ['Draft Check (Copywriter)']) for (let r = 0; r < 12; r++) { let a = null; try { a = $(nd).all(0, r); } catch (e) { break; } if (!a || !a.length) break;
+    for (const i of a) { const k = i && i.json && i.json.llm_check; if (k && k.failed) return { node: nd, reason: String(k.note || k.error || '') }; } }
+  return null; })();
+const __failNote = __failed ? 'Run failed, no page written (' + __failed.node + '): what it spent is settled here. ' : '';
 const __out = {
   run_id: String($execution.id), mode: String(row.mode || req.mode || ''), status: 'done', cost_mode,
   // the guard counts Claude money, so `settled_usd` stays the Claude figure — now the run's own, not a flat per-mode guess
@@ -790,7 +799,7 @@ const __out = {
   dfs_usd: dfs.usd, dfs_measured: dfs.measured,
   measured_usd: split.measured_usd, estimated_usd: split.estimated_usd,
   // the day's reconciliation rides on the row's own basis line, so nobody has to go looking for it
-  cost_basis: (__llmNote + (dfs_day.comparable && !dfs_day.within ? split.cost_basis + '. Day check: ' + dfs_day.basis : split.cost_basis)).slice(0, 500),
+  cost_basis: (__failNote + __llmNote + (dfs_day.comparable && !dfs_day.within ? split.cost_basis + '. Day check: ' + dfs_day.basis : split.cost_basis)).slice(0, 500),
   dfs_balance: +Number(row.dfs_balance || 0).toFixed(6), dfs_day_reconciled: dfs_day.comparable && dfs_day.within,
   dfs_day: dfs_day,
   // B-A5: the run's own reconciliation — the second free reading, which figure the row carries and whether the account could answer
@@ -806,6 +815,8 @@ const __out = {
   ai_estimated: !ai.measured, ai_basis: ai.basis, ai_source: ai.source, ai_nodes_ran: ai.ran, ai_nodes_checked: ai.checked,
   ai_by_node: fig ? fig.by_node : {}, ai_models: fig ? fig.models : {},
   ai_streaming_nodes: fig ? (fig.streaming_nodes || []) : [],
+  // W06-B: the run stopped on its failure path; read by Cost Calibration Row (learns nothing from it) and by the harness
+  run_failed: !!__failed, run_failed_node: __failed ? __failed.node : '',
 };
 if (__handoff) {
   // R81: the whole row says one thing — $0 here, the money on the child's row — and nothing on it reads as a measurement to learn from

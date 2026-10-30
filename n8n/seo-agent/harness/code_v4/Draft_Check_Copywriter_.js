@@ -7,6 +7,8 @@
 //                          no unfinished list item, table row or code block, no heading left without its text. A trailing author
 //                          box is profile data (read on the text before it); opts.unchanged_from: an end word for word the source's is
 //                          not a cut (fu-finalize-toc, K6).
+//                          opts.cta (W06-B, K4): the brief's / the site's call to action; a final short call-to-action line under the
+//                          last section ("Book a consultation") ends a page cleanly, a cut one ("Book a consult") does not.
 //   CK.edit(before, after) an edit of a complete text is itself complete AND did not lose the end: under 75% of the input's main-text
 //                          words (40% when the edit was asked to cut) or two of its sections gone is a cut, not an edit.
 //   CK.json(raw)           a JSON answer parses completely; an answer that stops inside its JSON is `truncated`, never an empty answer.
@@ -64,6 +66,41 @@ const CK = (() => {
     return s >= 0 ? s + 1 : -1; };
   // the last three lines of text of a page, as it ends
   const endOf = (md) => bodyLines(md).map(l => l.trim()).filter(Boolean).slice(-3).join('\n');
+  // W06-B (2026-10-30, docs/page-quality-2026-10-29/WAVE05.md 3.2, K4 first try, exec 379): the writer twice answered a complete page of
+  // about 2,100 words whose last line was the bare button text "Book a consultation" (no full stop) under its last H2 "Book a consultation
+  // with Tech&"; the check read it as a sentence with no ending, retried, and failed the run (about $0.85 of Claude lost, no page). A final
+  // short line is a proper end when it is a call to action, standing as its own paragraph after a paragraph that ends cleanly, and either
+  // (a) it IS the brief's or the site's call to action (opts.cta: a string or a list), or (b) it reads as a button (it starts with a call
+  // to action verb, or it is in title case) and every one of its words is a whole word of the page's last section (its heading and text)
+  // or of the call to action. A cut answer stops at a random point: mid-word ("Book a consult": "consult" is not a word of the section),
+  // on a dangling word ("Book a consultation with"), after a comma, or as the start of a longer sentence, and those are still caught.
+  const CTA_VERB = /^(?:book|schedule|request|get|talk|speak|contact|call|email|e-mail|message|chat|start|try|ask|claim|download|see|explore|discover|learn|read|view|visit|join|sign up|register|apply|order|buy|shop|compare|find|reach|let'?s|meet|plan|arrange|send|subscribe|watch|hire|enquire|inquire)\b/i;
+  const tokens = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}&']+/gu, ' ').trim().split(/\s+/).filter(Boolean);
+  const ctaKey = (s) => tokens(String(s || '').replace(/[.!?]+\s*$/, '')).join(' ');
+  const ctaEnd = (lines, o) => {
+    if (lines.length < 3 || lines[lines.length - 2].trim()) return false;   // a line of its own, after a blank line
+    const raw = lines[lines.length - 1].trim();
+    const line = raw.replace(/^(?:\*\*|__|\*|_)+|(?:\*\*|__|\*|_)+$/g, '').replace(/\s*(?:→|»|>|->)+\s*$/, '').trim();
+    const w = tokens(line);
+    if (!w.length || w.length > 8 || line.length > 70 || unbalanced(raw) || /[,:;–—-]$/.test(line) || DANGLING.test(line) || QUESTION_START.test(line)) return false;
+    if (/[.!?,;:]\s/.test(line)) return false;   // one short phrase, never a sentence and the start of the next one
+    let p = lines.length - 3; while (p >= 0 && !lines[p].trim()) p--;
+    if (p < 0) return false;
+    const prev = lines[p].trim(), prevPlain = prev.replace(/[*_`]+$/g, '').trim();
+    const ctas = (Array.isArray(o.cta) ? o.cta : [o.cta]).map(ctaKey).filter(Boolean);
+    const exact = ctas.includes(w.join(' '));
+    const prevOk = /^#{1,6}\s/.test(prev) ? exact : !isTableRow(prev) && !unbalanced(prev) && (END_PUNCT.test(prevPlain) || LINK_END.test(prevPlain));
+    if (!prevOk) return false;
+    if (exact) return true;
+    let h = lines.length - 2; while (h >= 0 && !/^#{1,3}\s/.test(lines[h].trim())) h--;
+    if (h < 0) return false;   // a page has headings; a call to action is read under the last one
+    if (/^\d+$/.test(w[w.length - 1])) return false;   // "Call +971 50 702" stops inside a number
+    const words0 = line.split(/\s+/).filter(x => /\p{L}/u.test(x));
+    const title = words0.length >= 2 && /^\p{Lu}/u.test(words0[0]) && words0.filter(x => x.replace(/[^\p{L}]/gu, '').length > 3).every(x => /^\p{Lu}/u.test(x));
+    if (!CTA_VERB.test(line) && !title) return false;
+    const pool = new Set([...tokens(lines.slice(h, lines.length - 1).join('\n')), ...ctas.join(' ').split(' ')]);
+    return w.every(t => pool.has(t));
+  };
 
   const text = (md, opts) => {
     const o = opts || {};
@@ -106,6 +143,8 @@ const CK = (() => {
       }
     } else if (signedOff(lines)) {
       // an e-mail's sign-off: "Best regards," then the sender's name (and a title / company line under it)
+    } else if (ctaEnd(lines, o)) {
+      // W06-B: the page's call to action on its own line ("Book a consultation") under the last section: a complete page
     } else {
       const ub = unbalanced(last);
       if (ub) reasons.push('the last paragraph stops mid-way (' + ub + ')');
@@ -129,7 +168,7 @@ const CK = (() => {
 
   const edit = (before, after, opts) => {
     const o = opts || {};
-    const t = text(after);
+    const t = text(after, { cta: o.cta });   // W06-B: the page's call to action is a proper end in an edit too
     const reasons = t.reasons.slice();
     const wb = mainWords(before), wa = mainWords(after);
     const floor = o.cut_requested ? 0.4 : 0.75;
@@ -188,14 +227,17 @@ const CK = (() => {
 //   complete                 -> on to the editorial review, unchanged (route `ok`)
 //   cut off, first attempt   -> the Copywriter writes the page once more from the same brief (route `retry`); the second call is a run
 //                               of its model node, so the cost settle prices it as a retry (R57: calls = the model node's runs)
-//   cut off, second attempt  -> the run stops here with a plain reason: a cut page is never delivered, and no later step can repair it
+//   cut off, second attempt  -> the run stops with a plain reason: a cut page is never delivered, and no later step can repair it. W06-B:
+//                               the failed item goes to the failure path first (content-log row `failed`, ledger settled), then stops
 const brief = $('Parse Brief').first().json || {};
 const items = $input.all();
 const attempt = ($runIndex || 0) + 1;
 const out0 = items.length ? (items[0].json || {}) : {};
 const md = typeof out0.output === 'string' ? out0.output : '';
 const tw = Number(brief.target_word_count || (brief.content_brief || {}).target_word_count || (brief.content_brief || {}).word_count || 0) || 0;
-const t = CK.text(md, { min_words: tw > 0 ? Math.round(tw * 0.35) : 0 });
+// W06-B (2026-10-30, WAVE05 3.2, K4): the brief's call to action (the request's, then the brief's own) is a proper last line
+const cta = [brief.cta, (brief.content_brief || {}).cta].filter(c => typeof c === 'string' && c.trim());
+const t = CK.text(md, { min_words: tw > 0 ? Math.round(tw * 0.35) : 0, cta });
 if (t.complete) {
   const note = attempt > 1 ? 'The page writer\'s first answer stopped before the end of the page; it wrote the page again and the second answer is complete.' : '';
   return items.map(i => ({ json: { ...i.json, llm_check: { node: 'Copywriter', kind: 'page', complete: true, attempt, note, words: t.words } } }));
@@ -205,4 +247,11 @@ if (attempt < 2) {
   return [{ json: { ...brief, llm_check: { node: 'Copywriter', kind: 'page', complete: false, retry: true, attempt, reasons: t.reasons, last_line: t.last_line, words: t.words,
     note: 'The page writer\'s answer stopped before the end of the page (' + why + '); it was asked to write the page again.' } } }];
 }
-throw new Error('The page could not be written in full: the writer stopped before the end of the page twice (' + why + '). No page was delivered and nothing was published. Start the page again.');
+// W06-B (2026-10-30, WAVE05 3.2): the run used to throw HERE, so its run-ledger row stayed `reserved` at $0 (about $0.85 of Claude spent and
+// never recorded) and the content-log row the app or the cadence opened at the start kept saying `started`, which the app then read as "a
+// page was already written". The failed item now takes the failure path (*Draft Written? (Copywriter)* false): *Page Run Failed Row* marks
+// this run's opening content-log row `failed`, the settle chain settles the ledger row with what the run spent, and *Stop Failed Run* then
+// ends the execution with this same error, so the app's failure watcher and the error handler see the run exactly as before.
+const error = 'The page could not be written in full: the writer stopped before the end of the page twice (' + why + '). No page was delivered and nothing was published. Start the page again.';
+return [{ json: { ...brief, llm_check: { node: 'Copywriter', kind: 'page', complete: false, retry: false, failed: true, attempt, reasons: t.reasons, last_line: t.last_line, words: t.words,
+  note: 'The page writer stopped before the end of the page twice (' + why + '); no page was written.', error } } }];

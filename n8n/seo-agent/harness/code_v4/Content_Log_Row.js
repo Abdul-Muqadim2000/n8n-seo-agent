@@ -48,7 +48,8 @@ const rung = Number(d.ladder_rung != null && d.ladder_rung !== '' ? d.ladder_run
 const meta = page.article_meta || {};
 const held = heldRun && !String(page.article_html || page.page_markdown || '').trim();
 // a hold wrote nothing, so it never takes the place of a page that exists: a written, not-ready or published row keeps its state
-if (held && prior && !['', 'started', 'held'].includes(String(prior.status || ''))) return [{ json: { skip: true, reason: 'held for the client\'s OK; the page this keyword already has keeps its row (' + String(prior.status) + ')' } }];
+if (held && prior && !['', 'started', 'held', 'failed'].includes(String(prior.status || '')))   // W06-B: a failed run's row is not a page either
+  return [{ json: { skip: true, reason: 'held for the client\'s OK; the page this keyword already has keeps its row (' + String(prior.status) + ')' } }];
 const notReady = !held && (page.qa_not_ready === true || (page.qa_not_ready == null && !!(meta.quality && meta.quality.not_ready === true)));
 const reasons = held
   ? ['held for your OK' + (PVH.hold.score != null ? ': verdict score ' + PVH.hold.score + ' (under ' + (PVH.hold.threshold || 50) + ')' : ''),

@@ -459,6 +459,7 @@ plan.forEach((s, idx) => {
   const cands = new Map();
   for (const r of L) {
     if (r.status === 'published' || String(r.published_url || '').trim()) continue;   // D5: 'started' (the run was spawned) and 'written' (the page exists) both wait
+    if (r.status === 'failed') continue;   // W06-B (2026-10-30): a page run that failed wrote no page, so there is nothing to find live
     const t = Date.parse(r.started_at); if (!(t >= cutoff)) continue;
     const kw = norm(r.keyword); if (!kw || cands.has(kw) || published.has(kw)) continue;
     const ladder = ladderOf(kw); if (ladder && ladder.status === 'published') continue;   // already recorded through the ladder

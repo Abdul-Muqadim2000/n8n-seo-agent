@@ -163,7 +163,10 @@ const SRC = (() => {
 //
 // The interim grade, deterministic and free, on ONE scale out of 100 (a subset of the Wave 2 rubric, so nothing is thrown away):
 //   structure 20       today's structure checks scaled; -3 per repetition cluster (one statement made 3+ times across sections, up to
-//                      -8); -2 per label used for two different lists (up to -4); a statement made 4+ times caps structure at 50%
+//                      -8); -2 per label used for two different lists (up to -4); a statement made 4+ times caps structure at 50%;
+//                      W06-A: -2 per IDEA restated 4+ times in 3+ places (the near-duplicate check below, up to -4), never below half
+//   removed sections   W06-A: when the run's deletions (verdict exclusions) or its edits took 2+ sections or 20%+ of the words out of the
+//                      page, coverage and fit are capped at 40% of their parts (the page no longer covers what its search asks), with why
 //   coverage 15        today's term coverage, scaled
 //   readability 10     today's readability, scaled
 //   specificity 10     today's specificity
@@ -205,8 +208,10 @@ const GR = (() => {
   const LABEL = { structure: 'structure', coverage: 'topic coverage', readability: 'readability', specificity: 'specificity', clean_language: 'plain language', sources: 'sources', fit: 'fit with the search' };
   // caps as shares of their part (REVIEW_EVIDENCE M1): verdict under 50 -> fit 40%; open duplicate -> fit 30%; a statement made 4+ times ->
   // structure 50%; a weak-only compliance figure -> sources 8 of 15
-  const SHARE = { fit_verdict: 0.4, fit_duplicate: 0.3, structure_repeat: 0.5, sources_compliance: 8 / 15, weak_figure: 1 / 3, verdict_partial: 0.4, sources_none: 0.8, weak_cite: 0.5 };
-  const CFG = { sim: 0.6, min_words: 4, cluster: 3, cluster_cap: 4, blocker_cap: 59, verdict_bar: 50, display_top: 95, floor: 0.5, review_share: 0.25 };
+  const SHARE = { fit_verdict: 0.4, fit_duplicate: 0.3, structure_repeat: 0.5, sources_compliance: 8 / 15, weak_figure: 1 / 3, verdict_partial: 0.4, sources_none: 0.8, weak_cite: 0.5, removed: 0.4 };
+  const CFG = { sim: 0.6, min_words: 4, cluster: 3, cluster_cap: 4, blocker_cap: 59, verdict_bar: 50, display_top: 95, floor: 0.5, review_share: 0.25,
+    idea: { size: 4, places: 3, shared: 3, overlap: 0.6, dice: 0.3, min_words: 3, df_share: 0.08, df_min: 6, points: 2, max_points: 4 },   // W06-A: the idea check
+    removed: { sections: 2, share: 0.2 } };   // W06-A: deletions that cap coverage and fit
   const STOP = new Set(('the a an and or of for to in on with by at from about this that these those your our its it is are be how what which why when who you we they their them '
     + 'than then into over under more most can will does do not but any all one two also very just only such been being has have had was were each per may must should would '
     + 'could other some many much here there where while if so as up out own same both few no nor too yes use used using get gets make makes made need needs '
@@ -276,6 +281,49 @@ const GR = (() => {
       .map(g => ({ size: g.length, sections_n: new Set(g.map(x => x.section)).size, sections: [...new Set(g.map(x => x.heading))].slice(0, 8),
         sample: plain(g[0].text).slice(0, 160), members: g.slice(0, 8).map(x => plain(x.text).slice(0, 140)) })).sort((a, b) => b.size - a.size);
     return { clusters, count: clusters.length, worst: clusters.length ? clusters[0].size : 0, compared: items.length, ...(c.debug ? { near: near.sort((x, y) => y.sim - x.sim).slice(0, 25) } : {}) };
+  };
+
+  // ---------- 1b. W06-A: one IDEA restated (the near-duplicate check) ----------
+  // The blind judges of the wave 0.5 re-check (WAVE05.md) took structure points off three pages for an idea restated 4 to 6 times
+  // ("NetSuite for groups with subsidiaries across countries on one SaaS platform", "a gap-fit analysis before a fixed scope") that the
+  // statement check above never saw: the restatements are worded differently, in a list, a table row, a takeaway and a closing rule, so no
+  // two of them reach its Dice 0.6. Here every sentence, list item and table row (the Quick answer included, questions and links left out)
+  // is reduced to its rarer content words: the keyword's and the brand's words and every word on more than 8% of the units (the page's
+  // vocabulary, such as a product name) are taken out, and a name of several capitalised words is one word. Two units in different places
+  // that share 3+ such words, 60% of the shorter one and a Dice of 0.3, say the same thing. A unit with near copies in 3+ places, 4+ units
+  // in all, is one idea restated (the copies are taken by the most connected unit first, so one long chain is never one idea). Calibrated on
+  // the 16 AFTER / W05 pages of the page-quality run and the guide that ranks (exec 949): it finds the ideas the judges named on two of the
+  // three pages (K3, K4; K6's "launch narrow" is restated in a heading and with too few shared words), nothing on the guide that ranks, and
+  // a repeated deadline, a repeated product rule and a repeated method on three AFTER pages. Deterministic and conservative: a paraphrase
+  // with no shared words is the Wave 2 judge's work.
+  const ideas = (md, ctx) => {
+    const c = ctx || {}; const I = CFG.idea;
+    const strip = (t) => plain(S(t).replace(/!?\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/\]\([^)]*\)?/g, ' ').replace(/https?:\/\/\S+/g, ' ').replace(/\[/g, ' ')).replace(/^quick answer:?\s*/i, '');
+    const entity = (t) => strip(t).replace(/\b(?:The|A|An|This|That|These|Your|Our)\s+(?=[A-Z])/g, '').replace(/\b[A-Z][\w&]*(?:\s+[A-Z][\w&]*)+/g, (m) => m.replace(/\s+/g, '_'));
+    const drop = new Set(toks([c.keyword].concat(c.brand_names || []).join(' ')).map(stem));
+    const U = units(md).filter(u => (u.kind === 'sentence' || u.kind === 'li' || u.kind === 'row') && !/^\[(?:Image|Confirm|Owner)\b/i.test(u.text)
+      && !(u.kind === 'li' && /^\s*\[[^\]]*\]\(#[^)]*\)\s*$/.test(u.text)) && !/\?["')*_]*$/.test(u.text.trim()));
+    const items = U.map(u => ({ text: u.text, place: u.qa ? 'qa' : 's' + u.section, set: new Set(toks(entity(u.text), true).map(stem).filter(w => !drop.has(w))) }));
+    const df = new Map(); for (const it of items) for (const w of it.set) df.set(w, (df.get(w) || 0) + 1);
+    const cap = Math.max(I.df_min, Math.ceil(items.length * I.df_share));
+    for (const it of items) { it.set = new Set([...it.set].filter(w => df.get(w) <= cap)); it.n = it.set.size; }
+    const cand = items.map((it, i) => ({ ...it, i })).filter(it => it.n >= I.min_words);
+    const nb = new Map(cand.map(it => [it.i, []]));
+    for (let a = 0; a < cand.length; a++) for (let b = a + 1; b < cand.length; b++) {
+      const x = cand[a], y = cand[b]; if (x.place === y.place) continue;
+      let inter = 0; for (const w of x.set) if (y.set.has(w)) inter++;
+      if (inter < I.shared || inter / Math.min(x.n, y.n) < I.overlap || 2 * inter / (x.n + y.n) < I.dice) continue;
+      nb.get(x.i).push(y.i); nb.get(y.i).push(x.i); }
+    const used = new Set(); const found = [];
+    for (const it of cand.slice().sort((a, b) => nb.get(b.i).length - nb.get(a.i).length || a.i - b.i)) {
+      if (used.has(it.i)) continue;
+      const mem = [it.i].concat(nb.get(it.i).filter(j => !used.has(j)));
+      const places = new Set(mem.map(j => items[j].place));
+      if (mem.length >= I.size && places.size >= I.places) { mem.forEach(j => used.add(j));
+        found.push({ size: mem.length, places: places.size, sample: strip(it.text).slice(0, 160), members: mem.slice(0, 8).map(j => strip(items[j].text).slice(0, 140)) }); }
+    }
+    found.sort((a, b) => b.size - a.size);
+    return { ideas: found, count: found.length, worst: found.length ? found[0].size : 0, compared: cand.length };
   };
 
   // ---------- 2. one label for two different lists ("five questions" before two lists, then "use the five questions") ----------
@@ -416,6 +464,25 @@ const GR = (() => {
     return { points: r1(pts), verdict_points: r1(vp), duplicate_points: r1(dp), band, caps, note };
   };
 
+  // ---------- 4b. W06-A: what the run took out of the page ----------
+  // rm: { sections, words, words_before, h2_before, h2_removed, h2_now, headings } (EXC.removedOf on the page run's state, plus the page's
+  // H2 count now). Sections the edits lost count too (the H2s of the first draft that are neither on the page nor deleted on purpose).
+  // Two sections or a fifth of the words taken out cap coverage and fit at 40% of their parts: on the live K1 page (W05 run) six core
+  // sections went and the grade still read fit 20 of 20, "Ready".
+  const removedCap = (rm, max) => {
+    const R = rm && typeof rm === 'object' ? rm : null; if (!R) return null; const M = maxOf(max);
+    const excl = Math.max(0, Number(R.sections) || 0);
+    const byEdits = Number(R.h2_before) > 0 && R.h2_now != null && Number.isFinite(Number(R.h2_now)) ? Math.max(0, Number(R.h2_before) - (Number(R.h2_removed) || 0) - Number(R.h2_now)) : 0;
+    const share = Number(R.words_before) > 0 && Number(R.words) > 0 ? Number(R.words) / Number(R.words_before) : 0;
+    const n = excl + byEdits;
+    if (n < CFG.removed.sections && share < CFG.removed.share) return null;
+    const pct = Math.round(share * 100);
+    const why = (excl ? excl + ' section' + (excl === 1 ? ' was' : 's were') + ' taken out as a topic the verdict said to leave out' : '')
+      + (excl && byEdits ? ', and ' : '') + (byEdits ? byEdits + ' section' + (byEdits === 1 ? ' was' : 's were') + ' lost in editing' : '') + (pct ? ' (' + pct + '% of the words)' : '');
+    return { limit: { coverage: M.coverage * SHARE.removed, fit: M.fit * SHARE.removed }, why: clean(why),
+      note: clean('Coverage and fit are limited to ' + Math.round(SHARE.removed * 100) + '% of their points: ' + why + ', so the page no longer covers what its search asks. Write the missing sections back, or start a new page run'),
+      record: { sections: excl, by_edits: byEdits, words: Number(R.words) || 0, share_pct: pct, headings: (Array.isArray(R.headings) ? R.headings : []).slice(0, 8), capped: true } }; };
+
   // ---------- 5. the page-local grade (Content QA) ----------
   // parts: what Content QA already measures, as fractions or on their old scales: structure_frac (0-1), coverage_ratio (0-1),
   // readability_pts (of 15), specificity_pts (of 10), clean_pts (of 10). ctx: keyword, brand_names, domain, own_text, prev (the brief item).
@@ -426,15 +493,28 @@ const GR = (() => {
     const caps = fi.caps.slice();
     let structure = clamp(M.structure * clamp(Number(P.structure_frac) || 0, 0, 1) - Math.min(8, 3 * rep.count) * M.structure / 20 - Math.min(4, 2 * lab.count) * M.structure / 20, 0, M.structure);
     if (rep.worst >= CFG.cluster_cap && structure > M.structure * SHARE.structure_repeat) { structure = M.structure * SHARE.structure_repeat; caps.push({ dim: 'structure', share: SHARE.structure_repeat, why: 'one statement is made ' + rep.worst + ' times' }); }
+    // W06-A: an idea restated 4+ times that the statement check did not already count costs 2 points of structure (up to 4), never below
+    // half the part, so it alone never turns a page into "Needs work"
+    const idw = ideas(md, c); const seenRep = new Set(rep.clusters.flatMap(x => x.members || []).map(x => S(x).slice(0, 60)));
+    const idNew = idw.ideas.filter(x => !x.members.some(m => seenRep.has(S(m).slice(0, 60))));
+    let ideaCut = 0;
+    if (idNew.length) { const want = Math.min(CFG.idea.max_points, CFG.idea.points * idNew.length) * M.structure / 20; const room = Math.max(0, structure - M.structure * CFG.floor);
+      ideaCut = Math.min(want, room); structure -= ideaCut; }
+    const RM = removedCap(c.removed, M);
     if (src.capped) caps.push({ dim: 'sources', share: SHARE.sources_compliance, why: 'a compliance figure rests only on a source with no independent authority' });
     const raw = { structure, coverage: M.coverage * clamp(Number(P.coverage_ratio) || 0, 0, 1), readability: M.readability * clamp((Number(P.readability_pts) || 0) / 15, 0, 1),
       specificity: M.specificity * clamp((Number(P.specificity_pts) || 0) / 10, 0, 1), clean_language: M.clean_language * clamp((Number(P.clean_pts) || 0) / 10, 0, 1), sources: src.points, fit: fi.points, length: 0 };
+    if (RM) for (const k of ['coverage', 'fit']) if (raw[k] > RM.limit[k]) { raw[k] = RM.limit[k]; caps.push({ dim: k, share: SHARE.removed, why: RM.why }); }
     const breakdown = {}; for (const k of Object.keys(raw)) breakdown[k] = Math.round(raw[k]);
     const notes = [fi.note, src.note, 'Length is advice only: it carries no points'];
     if (rep.count) notes.push(rep.count + ' statement' + (rep.count === 1 ? ' is' : 's are') + ' made three or more times: ' + rep.clusters.slice(0, 3).map(x => '"' + x.sample + '" (' + x.size + ' times)').join('; '));
+    if (idNew.length) notes.push(idNew.length + ' idea' + (idNew.length === 1 ? ' is' : 's are') + ' restated four or more times in different places' + (ideaCut ? ' (' + r1(ideaCut) + ' point' + (r1(ideaCut) === 1 ? '' : 's') + ' off structure)' : '') + ': '
+      + idNew.slice(0, 2).map(x => '"' + x.sample.slice(0, 110) + '" (' + x.size + ' times)').join('; ') + '. Say it once where the reader decides, and point back to it');
+    if (RM) notes.push(RM.note);
     if (lab.count) notes.push('The same label introduces two different lists: ' + lab.collisions.map(x => '"' + x.lead + '"').join(', '));
     return { version: VERSION, score: DIMS.reduce((s, k) => s + breakdown[k], 0), of: 100, breakdown, max: M, caps,
       items: { repetition: { count: rep.count, worst: rep.worst, clusters: rep.clusters.slice(0, 5) }, list_labels: lab.collisions,
+        ideas: { count: idNew.length, points_off: r1(ideaCut), ideas: idNew.slice(0, 4) }, ...(RM ? { removed: RM.record } : {}),
         sources: { units: src.units, strong: src.strong, share: src.share, weak_only: src.weak_only, weak_compliance: src.weak_compliance, weak_cited: src.weak_cited, unsourced: src.unsourced, not_checked: !!src.not_checked, weak: src.list },
         fit: { verdict_score: F.verdict_score, band: fi.band, acknowledged: F.acknowledged, exempt: F.exempt, automatic: F.automatic, verdict_points: fi.verdict_points, duplicate_points: fi.duplicate_points } },
       notes: notes.map(clean) };
@@ -473,6 +553,10 @@ const GR = (() => {
     const codes = (blocking || []).map(x => S(x && x.code)).filter(Boolean);
     const dupOpen = codes.includes('duplicate_page'); const differs = !!(o.decision && o.decision.choice === 'differs');
     if (dupOpen || differs) { const fi = fit(F, { open: dupOpen, differs }, M.fit); for (const x of fi.caps) if (!caps.some(y => y.dim === x.dim && y.share === x.share)) caps.push(x); b.fit = Math.round(fi.points); }
+    // W06-A: sections the run took out of the page cap coverage and fit (from the page run's state here, or the check's own record)
+    const RMc = o.removed ? removedCap(o.removed, M) : null;
+    const RMrec = RMc ? RMc.record : (g.removed && g.removed.capped ? g.removed : ((W.items || {}).removed && (W.items || {}).removed.capped ? W.items.removed : null));
+    if (RMc) for (const k of ['coverage', 'fit']) { const lim = Math.round(RMc.limit[k]); if ((Number(b[k]) || 0) > lim) { b[k] = lim; if (!caps.some(y => y.dim === k && y.share === SHARE.removed)) caps.push({ dim: k, share: SHARE.removed, why: RMc.why }); } }
     // W05-A: the second read's advice, off its parts (from the parts before it, so it is applied once)
     const pre = { ...b }; const rv = reviewCut(o.review !== undefined ? o.review : (g.review && Array.isArray(g.review.advice) ? g.review : null), b, M);
     if (rv) for (const k of Object.keys(rv.cut)) b[k] = (Number(b[k]) || 0) - rv.cut[k];
@@ -481,27 +565,28 @@ const GR = (() => {
     const failing = [], waived = [], shadow = [];
     for (const k of DIMS) {
       if (!M[k] || (Number(b[k]) || 0) >= M[k] * CFG.floor) continue;
-      if (k === 'fit' && !dupOpen && !differs && (F.acknowledged || F.exempt)) { waived.push({ dim: k, why: F.acknowledged ? 'your choice: low search demand (you chose to write it anyway)' : 'chosen by your plan: ' + F.exempt }); continue; }
-      if (k === 'fit' && !dupOpen && !differs && F.automatic) { shadow.push({ dim: k, why: 'started automatically: recorded, not applied yet' }); continue; }
-      failing.push({ dim: k, label: LABEL[k], points: Number(b[k]) || 0, max: M[k], fix: clean(FIX[k](W)) });
+      if (k === 'fit' && !dupOpen && !differs && !RMrec && (F.acknowledged || F.exempt)) { waived.push({ dim: k, why: F.acknowledged ? 'your choice: low search demand (you chose to write it anyway)' : 'chosen by your plan: ' + F.exempt }); continue; }
+      if (k === 'fit' && !dupOpen && !differs && !RMrec && F.automatic) { shadow.push({ dim: k, why: 'started automatically: recorded, not applied yet' }); continue; }
+      failing.push({ dim: k, label: LABEL[k], points: Number(b[k]) || 0, max: M[k], fix: clean(FIX[k](RMrec ? { ...W, items: { ...(W.items || {}), removed: RMrec } } : W)) });
     }
     const score = Math.round(total);
     const R0 = { ...g }; delete R0.review; delete R0.pre_review;
-    return { ...R0, ...(rv ? { review: rv, pre_review: pre } : {}), score, display: display(score), breakdown: b, max: M, scale: VERSION, caps,
+    return { ...R0, ...(rv ? { review: rv, pre_review: pre } : {}), ...(RMrec ? { removed: RMrec } : {}), score, display: display(score), breakdown: b, max: M, scale: VERSION, caps,
       floors: { ok: failing.length === 0, failing, waived, shadow, rule: 'Ready needs no open blocker and every part at or above half its points' },
       ready: codes.length === 0 && failing.length === 0 };
   };
   const FIX = {
-    structure: (W) => { const r = ((W.items || {}).repetition || {}); const l = (W.items || {}).list_labels || [];
+    structure: (W) => { const r = ((W.items || {}).repetition || {}); const l = (W.items || {}).list_labels || []; const id = ((W.items || {}).ideas || {});
       return r.count ? 'Say each point once: "' + S((r.clusters || [])[0] && r.clusters[0].sample).slice(0, 90) + '" is made ' + r.worst + ' times'
-        : l.length ? 'Give each list its own label: "' + S(l[0].lead).slice(0, 90) + '" introduces two lists' : 'Give the page its headings, Quick answer, table and links back'; },
-    coverage: () => 'Cover the topics the pages that rank cover (the missing terms are in the advice)',
+        : l.length ? 'Give each list its own label: "' + S(l[0].lead).slice(0, 90) + '" introduces two lists'
+          : id.count ? 'Say each idea once: "' + S((id.ideas || [])[0] && id.ideas[0].sample).slice(0, 90) + '" is restated ' + ((id.ideas || [])[0] || {}).size + ' times' : 'Give the page its headings, Quick answer, table and links back'; },
+    coverage: (W) => (((W.items || {}).removed || {}).capped ? 'Write back the sections this run took out (' + S((((W.items || {}).removed || {}).headings || []).slice(0, 3).join('; ')).slice(0, 160) + '), or start a new page run' : 'Cover the topics the pages that rank cover (the missing terms are in the advice)'),
     readability: () => 'Use shorter sentences and plainer words',
     specificity: () => 'Add concrete examples, steps or decision rules in place of general statements',
     clean_language: () => 'Rewrite the filler phrases listed in the advice in plain, specific words',
     sources: (W) => { const s = ((W.items || {}).sources || {}); return 'Cite an official body, a research house, major press or vendor documentation'
       + ((s.weak || []).length ? ' for "' + S(s.weak[0].text).slice(0, 90) + '"' + (s.weak.length > 1 ? ' and ' + (s.weak.length - 1) + ' more' : '') : ''); },
-    fit: (W) => { const f = ((W.items || {}).fit || {}); return f.verdict_score != null && f.verdict_score < CFG.verdict_bar ? 'Our verdict scored this search ' + f.verdict_score + ' out of 100: improve a page your website already has, or choose "Write it anyway" to keep this one' : 'Publish this text as an update of the page your website has for this search'; }
+    fit: (W) => { const f = ((W.items || {}).fit || {}); if (((W.items || {}).removed || {}).capped) return 'The page lost the sections that answer its search: write them back, or start a new page run'; return f.verdict_score != null && f.verdict_score < CFG.verdict_bar ? 'Our verdict scored this search ' + f.verdict_score + ' out of 100: improve a page your website already has, or choose "Write it anyway" to keep this one' : 'Publish this text as an update of the page your website has for this search'; }
   };
   // the delivered status: a page with no blocker that fails a floor is "Needs work: <parts>", never "Ready to publish". It stays publishable
   // (nothing stops the client): the status and label change, the items say what to improve, and a not-ready page is left as it is.
@@ -516,6 +601,6 @@ const GR = (() => {
   };
   const display = (n) => n == null || n === '' || !Number.isFinite(Number(n)) ? '' : Math.round(Number(n)) >= CFG.display_top ? CFG.display_top + '+' : String(Math.round(Number(n)));
   const basis = 'structure 20 (a statement made three or more times and one label for two lists cost points), topic coverage 15, readability 10, specificity 10, plain language 10, sources 15, fit with the search 20; length is advice only';
-  return { VERSION, MAX, DIMS, LABEL, SHARE, CFG, REVIEW_DIM, REVIEW_PTS, reviewCut, units, repetition, listLabels, sources, fitOf, fit, local, cap, deliver, display, basis };
+  return { VERSION, MAX, DIMS, LABEL, SHARE, CFG, REVIEW_DIM, REVIEW_PTS, reviewCut, units, repetition, ideas, listLabels, sources, fitOf, fit, removedCap, local, cap, deliver, display, basis };
 })();
 return $input.all().map(i => { const j = i.json || {}; const a = (j.args || []).map(x => x === '__SRC__' ? { tier: SRC.tier, figures: SRC.figures } : (x && typeof x === 'object' && x.__src__ ? { ...x, tier: SRC.tier, figures: SRC.figures, __src__: undefined } : x)); return { json: { r: GR[j.fn].apply(null, a) } }; });
