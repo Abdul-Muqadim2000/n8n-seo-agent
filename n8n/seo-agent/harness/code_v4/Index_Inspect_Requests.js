@@ -1122,7 +1122,11 @@ const IX = (() => {
     // wave 2 (§2.3): the client asked Google to read the page (asked_google_at, written by the app): what Google did since
     const ak = askState(row, c.now);
     if (ak.state === 'read' && ak.days_since_read <= CFG.ask_read_note_days) s = 'Google read it again on ' + S(row.google_read_after_ask_at).slice(0, 10) + '. ' + s;
-    else if (ak.state === 'quiet') s = 'You asked Google on ' + S(row.asked_google_at).slice(0, 10) + '; Google has not read it again yet. There is nothing more to do on your side for now.';
+    // Wave 2 review W9: "nothing more to do on your side" only for a page that has nothing to do (wait / none); a site step, "improve it",
+    // "add links", a duplicate or "fine to leave out" keeps its own note, after the line about the ask
+    else if (ak.state === 'quiet') s = ['wait', 'none', ''].includes(S(row.action))
+      ? 'You asked Google on ' + S(row.asked_google_at).slice(0, 10) + '; Google has not read it again yet. There is nothing more to do on your side for now.'
+      : 'You asked Google on ' + S(row.asked_google_at).slice(0, 10) + '; Google has not read it again yet. ' + s;
     return s.replace(/[—–]/g, '-').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/…/g, '...');
   };
 
@@ -1169,6 +1173,7 @@ const IX = (() => {
     for (const r of (c.inventory || [])) { if (!r || !S(r.url)) continue; const p = get(norm(r.url, site)); if (!p) continue; p._src.add('inventory'); p._inv = r; }
     // wave 2 (§2.1): pages the home page or a parent links to; a page no other source names is added with the source `home`
     const linkIdx = c.link_index || null; const linksRead = !!c.links_read && !!linkIdx;
+    const unreadPar = new Set((c.unread_parents || []).map(u => key(u) || S(u)).filter(Boolean));   // W5: parents planned and not read today
     for (const u of (c.linked || [])) { const loc = norm(u, site); if (!loc) continue; const had = pages.has(key(loc)); const p = get(loc); if (p && (!had || !p._src.size)) p._src.add('home'); }
     // A Site Tracker reading is borrowed only for the exact address it was taken for: `key` ignores www, but techand.ai/x (308 to www) and
     // www.techand.ai/x are different URLs to Google ("Page with redirect" vs indexed). Production, first run 2026-10-29.
@@ -1215,7 +1220,11 @@ const IX = (() => {
         _prev: prev ? slimPrev(prev) : null, _moved_from: prev && url !== S(prev.url) ? S(prev.url) : '',
         _search: ev, _impr7: ev && ev.impr7 != null ? ev.impr7 : 0, _watch: (watchBy.get(k) || []).find(w => hostOf(w.url) === hostOf(url)) || null };
       // wave 2 (§2.1): who links here today (up to 3 sources); 'unread' when the home page could not be read: nothing is concluded
-      row.linked_by = linksRead ? (() => { const a = linkedOf(url, linkIdx).slice(0, CFG.linked_by_max); return a.length ? JSON.stringify(a) : ''; })() : 'unread';
+      // Wave 2 review W5: no link found AND the page's parent was planned but not read today (it failed, or was past the parents cap): nothing
+      // is concluded either - the stored linked_by stands ('unread' when there is none), exactly as on a day the home page is not read
+      row.linked_by = linksRead ? (() => { const a = linkedOf(url, linkIdx).slice(0, CFG.linked_by_max); if (a.length) return JSON.stringify(a);
+        const pk = key(parentOf(url)); if (pk && unreadPar.has(pk)) return S(pv.linked_by) || 'unread';
+        return ''; })() : 'unread';
       if (!S(row.title) && c.titles && c.titles[k]) row.title = S(c.titles[k]).slice(0, 300);
       row.lane = laneOf(row, ctx);
       // our own sitemap check settles the sitemap half of a cause without waiting for Google (a complete read only)
@@ -1350,9 +1359,10 @@ const IX = (() => {
   /** The home page's own links (E-X8 "linked from the home page or its menu"): the keys of the same-site addresses it links to, bounded. */
   const homeLinks = (html, pageUrl, site) => {
     const out = new Set(); const h = S(html).slice(0, 400000);
-    const rx = /<a\b[^>]*\bhref\s*=\s*["']([^"'#]+)["']/gi; let m;
+    const rx = /<a\b([^>]*)>/gi; let m;   // W14: nofollow links are not the home page's links
     while ((m = rx.exec(h)) && out.size < CFG.home_links_max) {
-      let u = m[1].trim(); if (/^\//.test(u) && !/^\/\//.test(u)) u = 'https://' + hostOf(pageUrl) + u;
+      const href = followHref(m[1]); if (href == null) continue;
+      let u = S(href).replace(/#[\s\S]*$/, ''); if (!u) continue; if (/^\//.test(u) && !/^\/\//.test(u)) u = 'https://' + hostOf(pageUrl) + u;
       const n = norm(u, site); if (n) out.add(key(n));
     }
     return [...out];
@@ -1371,17 +1381,27 @@ const IX = (() => {
   const linkSuggestions = (target, pages, o) => {
     const opts = o || {}; const already = new Set((opts.linked_from || []).map(key));
     const brand = new Set(words(bare(S((opts.site || {}).domain) || hostOf(target.url)).split('.')[0]));
-    const cands = (pages || []).filter(q => q && S(q.state) === 'indexed' && !same(q.url, target.url) && !isLowValue(q.url) && !isUtility(q.url) && !isJobPosting(q.url) && !already.has(key(q.url)));
+    const cands = (pages || []).filter(q => q && S(q.state) === 'indexed' && !same(q.url, target.url) && !isLowValue(q.url) && !isUtility(q.url) && !isJobPosting(q.url) && !notSource(q.url) && !already.has(key(q.url)));
     if (!cands.length) return [];
     // the topic of a page is its title (without the site's name) and the LAST segment of its address: a section (/insights/, /capabilities/)
     // says where a page sits, not what it is about, so two articles of one section do not share a topic through it
-    const tw0 = (p) => [...new Set(words(titleCore(p.title, opts.site || { domain: p.domain }) + ' ' + (pathOf(p.url).split('/').filter(Boolean).pop() || '').replace(/[-_.]+/g, ' ')))].filter(w => !brand.has(w));
+    const parts = (p) => [titleCore(p.title, opts.site || { domain: p.domain }), (pathOf(p.url).split('/').filter(Boolean).pop() || '').replace(/[-_.]+/g, ' ')]
+      .map(t => words(t).filter(w => !brand.has(w)));
+    const tw0 = (p) => [...new Set(parts(p).flat())];
+    // W12: an exact phrase = two words next to each other in the title or in the last segment of the address, stop words and the site's name
+    // left out but short words kept, so a compound like "e-invoicing" ("e invoicing") is a phrase
+    const rawParts = (p) => [titleCore(p.title, opts.site || { domain: p.domain }), (pathOf(p.url).split('/').filter(Boolean).pop() || '').replace(/[-_.]+/g, ' ')]
+      .map(t => (S(t).toLowerCase().match(/[\p{L}\p{N}]+/gu) || []).filter(w => !STOP.has(w) && !brand.has(w)));
+    const phrases = (p) => { const s = new Set(); for (const a of rawParts(p)) for (let i = 0; i + 1 < a.length; i++) if (a[i] !== a[i + 1]) s.add(a[i] + ' ' + a[i + 1]); return s; };
     const df = new Map(); for (const q of cands) for (const w of tw0(q)) df.set(w, (df.get(w) || 0) + 1);
     const N = cands.length;
     const generic = (w) => N >= 3 && (df.get(w) || 0) / N > CFG.link_generic_share;
-    const tw = tw0(target).filter(w => !generic(w));
-    const scored = cands.map(q => { const qw = new Set(tw0(q)); let s = 0; for (const w of tw) if (qw.has(w)) s += Math.log((N + 1) / (df.get(w) || 1)); return { q, s }; })
-      .filter(x => x.s >= CFG.link_min_score).sort((a, b) => b.s - a.s || n0(b.q.impressions_28d) - n0(a.q.impressions_28d) || S(a.q.url).localeCompare(S(b.q.url)));
+    const tw = tw0(target).filter(w => !generic(w)); const tp = phrases(target);
+    // Wave 2 review W12: a real topic overlap = at least TWO shared informative words, or one exact multi-word phrase - and the IDF score;
+    // one shared rare word ("innovation") is not a topic (devaicon.com's /careers was the first suggestion for an article through it)
+    const scored = cands.map(q => { const qw = new Set(tw0(q)); let s = 0, n = 0; for (const w of tw) if (qw.has(w)) { s += Math.log((N + 1) / (df.get(w) || 1)); n++; }
+      const qp = phrases(q); const phrase = [...tp].some(x => qp.has(x)); return { q, s, ok: n >= 2 || phrase }; })
+      .filter(x => x.ok && x.s >= CFG.link_min_score).sort((a, b) => b.s - a.s || n0(b.q.impressions_28d) - n0(a.q.impressions_28d) || S(a.q.url).localeCompare(S(b.q.url)));
     return scored.slice(0, CFG.link_from_max).map(x => ({ url: x.q.url, title: S(x.q.title).slice(0, 160) }));
   };
 
@@ -1610,23 +1630,33 @@ const IX = (() => {
   // its own title, "I asked Google" checked back, and the opt-in sitemap submission. Pure functions, like the rest of the kit.
   // =================================================================================================================================
   /**
-   * §2.4: utility pages - ONE list for the engine and the app (the app mirrors IX.UTILITY). A path segment matched whole and without case
-   * (`privacy`, `privacy.html`, `/legal/privacy`); `security` only as the whole path (/security, never /services/security). Job postings:
+   * §2.4: utility pages - ONE list for the engine and the app (the app mirrors IX.UTILITY). The FIRST path segment matched whole and without
+   * case (`/privacy`, `/privacy.html`, `/legal/privacy`; never `/industries/legal`); `security` only as the whole path (/security). Job postings:
    * a page under /careers/ or /jobs/ with a further segment (the listing /careers itself is a normal page). Job postings are not utility
    * pages for the cause (a job page may well want to be found: it keeps its own cause and note) but are never offered to "ask Google" and
    * never suggested as a link source.
    */
+  // Wave 2 review W3 (2026-10-30): the rule is the FIRST path segment only (`/privacy`, `/terms.html`, `/account/settings`), never a segment
+  // deeper down (/industries/legal, /features/search, /solutions/accessibility, /blog/thanks are content pages); `dirs` = the directory page
+  // and everything under it (/legal/*, /policies/*); `top_level_only` = only as the whole path (/security). The app mirrors exactly this:
+  // isUtility(path) = g = the path's segments (decoded, lower case, .html / .htm / .php / .asp / .aspx dropped); g non-empty AND
+  // ((g.length === 1 AND top_level_only has g[0]) OR dirs has g[0] OR segments has g[0]).
   const UTILITY = {
+    rule: 'first_segment',
     segments: ['privacy', 'privacy-policy', 'cookies', 'cookie-policy', 'terms', 'terms-of-service', 'terms-and-conditions', 'legal', 'imprint', 'impressum',
       'disclaimer', 'accessibility', 'sitemap', 'login', 'signin', 'sign-in', 'register', 'signup', 'account', 'cart', 'checkout', 'search', 'thank-you', 'thanks'],
+    dirs: ['legal', 'policies'],
     top_level_only: ['security'],
     job_dirs: ['careers', 'jobs'],
   };
   const segsOf = (u) => pathOf(u).split('/').filter(Boolean).map(x => { let y = x; try { y = decodeURIComponent(x); } catch (e) { y = x; } return y.toLowerCase().replace(/\.(?:html?|php|aspx?)$/, ''); });
   const isUtility = (u) => { const g = segsOf(u); if (!g.length) return false;
     if (g.length === 1 && UTILITY.top_level_only.includes(g[0])) return true;
-    return g.some(x => UTILITY.segments.includes(x)); };
+    return UTILITY.dirs.includes(g[0]) || UTILITY.segments.includes(g[0]); };
   const isJobPosting = (u) => { const g = segsOf(u); return g.length >= 2 && UTILITY.job_dirs.includes(g[0]); };
+  // Wave 2 review W12: careers, contact and about pages are never suggested as the page to add a link from (their topic is the company)
+  const NOT_SOURCE = { dirs: ['careers', 'career', 'jobs', 'contact', 'contact-us', 'about', 'about-us'], prefixes: ['about-', 'contact-'] };
+  const notSource = (u) => { const g = segsOf(u); return !!g.length && (NOT_SOURCE.dirs.includes(g[0]) || NOT_SOURCE.prefixes.some(p => g[0].indexOf(p) === 0)); };
 
   // ---- §2.1: the links of the home page and of parent pages ----
   const LINK_SKIP = /^(?:mailto|tel|javascript|data|sms|fax|ftp|whatsapp|skype|callto|intent|file):/i;
@@ -1644,12 +1674,18 @@ const IX = (() => {
     return 'https://' + base.host + path + (q && q !== '?' ? q : '');
   };
   /** The same-site pages one page links to (plain HTML <a href>), on the canonical host, fragments dropped, files left out; bounded. */
+  // Wave 2 review W14: the href of one <a> tag, '' when the link carries rel="nofollow" (a nofollow link is not a link Google follows to find
+  // a page, so it never counts as "linked from your website")
+  const attrOf = (attrs, name) => { const m = (' ' + attrs).match(new RegExp('\\s' + name + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\'|([^\\s"\'>]+))', 'i'));
+    return m ? (m[1] != null ? m[1] : m[2] != null ? m[2] : (m[3] || '')) : null; };
+  const followHref = (attrs) => { const rel = attrOf(attrs, 'rel'); if (rel != null && /(?:^|\s)nofollow(?:\s|$)/i.test(rel)) return null; return attrOf(attrs, 'href'); };
   const pageLinks = (html, pageUrl, site) => {
     const base = parseUrl(pageUrl); if (!base) return [];
     const out = []; const seen = new Set(); const h = S(html).slice(0, 600000);
-    const rx = /<a\b[^>]*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi; let m;
+    const rx = /<a\b([^>]*)>/gi; let m;
     while ((m = rx.exec(h)) && out.length < CFG.home_links_max) {
-      const raw = decodeXml(m[1] != null ? m[1] : m[2] != null ? m[2] : (m[3] || ''));
+      const href = followHref(m[1]); if (href == null) continue;
+      const raw = decodeXml(href);
       const abs = resolveHref(raw, base); if (!abs) continue;
       const n = norm(abs, site); if (!n || NOT_PAGE.test(pathOf(n))) continue;
       const k = key(n); if (!k || seen.has(k)) continue; seen.add(k); out.push(n);
@@ -1681,7 +1717,10 @@ const IX = (() => {
    * that parent; never the home page (read already), never through a utility page; the parents with the most such children first, at most
    * parents_max. known: [{ url, state }] - the stored rows first, then the sitemap's and the home page's addresses.
    */
-  const parentPlan = (known, site) => {
+  /** What parentPlan is given: the stored rows (with their state), then the sitemap's and the home page's addresses (not checked yet). */
+  const parentKnown = (stored, st) => (stored || []).filter(r => r && S(r.url)).map(r => ({ url: r.url, state: S(r.state) }))
+    .concat(((st || {}).urls || []).map(u => ({ url: u && u.loc, state: '' }))).concat(((st || {}).home_link_urls || []).map(u => ({ url: u, state: '' })));
+  const parentPlan = (known, site, all) => {
     const byKey = new Map(); for (const p of (known || [])) { const k = key(p && p.url); if (k && !byKey.has(k)) byKey.set(k, p); }
     const cnt = new Map();
     for (const p of byKey.values()) {
@@ -1691,7 +1730,26 @@ const IX = (() => {
       cnt.set(pk, (cnt.get(pk) || 0) + 1);
     }
     return [...cnt.entries()].map(([k, n]) => ({ url: safe(byKey.get(k).url, site), children: n })).filter(x => x.url)
-      .sort((a, b) => b.children - a.children || depth(a.url) - depth(b.url) || a.url.localeCompare(b.url)).slice(0, CFG.parents_max);
+      .sort((a, b) => b.children - a.children || depth(a.url) - depth(b.url) || a.url.localeCompare(b.url)).slice(0, all ? CFG.pages_max : CFG.parents_max);
+  };
+  /**
+   * Wave 2 review W11: the pages we suggested as link sources (stored `links` rows' link_from), read in what is left of the parents budget
+   * (parents first), so a link the client adds where we asked is seen and the page moves to `wait`. Own domain only, never a page already
+   * planned, at most `room`. -> [{ url }]
+   */
+  const sourcePlan = (stored, site, taken, room) => {
+    const have = new Set((taken || []).map(u => key(u)).filter(Boolean)); const out = [];
+    for (const r of (stored || [])) {
+      if (out.length >= room) break;
+      if (!r || S(r.action) !== 'links' || S(r.state) === 'indexed' || S(r.link_from)[0] !== '[') continue;
+      let a = []; try { a = JSON.parse(S(r.link_from)); } catch (e) { a = []; }
+      for (const x of (Array.isArray(a) ? a : [])) {
+        if (out.length >= room) break;
+        const u = safe(S(x && typeof x === 'object' ? x.url : x), site); const k = key(u); if (!u || !k || have.has(k)) continue;
+        have.add(k); out.push({ url: u });
+      }
+    }
+    return out;
   };
   /** The page's own <title>, entities decoded. */
   const titleOf = (html) => { const m = S(html).slice(0, 300000).match(/<title[^>]*>([\s\S]*?)<\/title>/i); return m ? decodeEnt(m[1]).replace(/\s+/g, ' ').trim().slice(0, 300) : ''; };
@@ -1717,6 +1775,10 @@ const IX = (() => {
     const g = S(row.user_canonical); const mine = S(row.page_canonical);
     const target = g && own(g, st) && !same(g, row.url) ? g : (mine && own(mine, st) && !same(mine, row.url) ? mine : '');
     if (!target) return null;
+    // Wave 2 review W4: an address with a query string (a filter / facet / tracking variant) and a page whose canonical names the same path
+    // (another host, another query) are variants of their target, whatever their title says: never "a page in its own right"
+    if (queryOf(row.url)) return false;
+    if (pathOf(target).replace(/\/+$/, '').toLowerCase() === pathOf(row.url).replace(/\/+$/, '').toLowerCase()) return false;
     const a = titleCore(row.title, st); const b = titleCore((titles && typeof titles.get === 'function' ? titles.get(key(target)) : (titles || {})[key(target)]) || '', st);
     if (!a || !b) return null;
     return a !== b;
@@ -1741,7 +1803,9 @@ const IX = (() => {
     if (isUtility(row.url) && !UTILITY_KEEP.includes(cause)) { cause = 'low_value'; action = 'leave_out'; own_title = false; }
     if (UNSEEN.includes(cause) && (action === 'links' || action === 'wait') && !S(row.fix_seen_at)) {
       const lb = S(row.linked_by);
-      if (lb === 'unread') { const p = x.prev; if (p && S(p.cause) === cause && (S(p.action) === 'wait' || S(p.action) === 'links')) action = S(p.action); }
+      // 'unread': the home page, or (W5) this page's parent, could not be read today - the stored action stands (a cause that moved between
+      // "unknown" and "found, not crawled" keeps it too)
+      if (lb === 'unread') { const p = x.prev; if (p && UNSEEN.includes(S(p.cause)) && (S(p.action) === 'wait' || S(p.action) === 'links')) action = S(p.action); }
       else action = linkedList(lb).length ? 'wait' : 'links';
     }
     return { cause, action, state: stateOf(cause), own_title, changed: cause !== S(row.cause) || action !== S(row.action) };
@@ -1784,73 +1848,148 @@ const IX = (() => {
   };
   const listedAs = (gsc, url) => (gsc || []).find(e => e && S(e.path) && same(e.path, url)) || null;
   /**
+   * Wave 2 review W2: Search Console's sitemaps.list answer -> [{ path, errors, warnings, pending, last_downloaded, last_submitted }] when it
+   * was READ, null when it was not. Read = an object with a `sitemap` array, or `{}` from a 200 whose body is JSON (Google leaves an empty list
+   * out: the property has no sitemap). A full response (statusCode) is required for `{}`: an empty 502 also comes out of n8n as `{}`; an HTML
+   * error page comes out as { data: '<html...' }; an error item, any non-200, an empty or non-JSON body is "not read" - never "no sitemap".
+   */
+  const sitemapsListOf = (ans) => {
+    const a = ans && typeof ans === 'object' && !Array.isArray(ans) ? ans : null; if (!a || a.error) return null;
+    const list = (b) => Array.isArray(b.sitemap) ? b.sitemap.filter(x => x && typeof x === 'object' && S(x.path)).map(x => ({ path: S(x.path), errors: n0(x.errors), warnings: n0(x.warnings),
+      pending: x.isPending === true || x.isPending === 'true', last_downloaded: S(x.lastDownloaded), last_submitted: S(x.lastSubmitted) })) : null;
+    if (a.statusCode === undefined) return list(a);   // a plain body (no status code): only a real list is a reading
+    if (n0(a.statusCode) !== 200) return null;
+    let b = a.body !== undefined ? a.body : a.data;
+    if (typeof b === 'string') { const t = b.trim(); if (t[0] !== '{') return null; try { b = JSON.parse(t); } catch (e) { return null; } }
+    if (!b || typeof b !== 'object' || Array.isArray(b) || b.error) return null;
+    if (b.sitemap !== undefined) return list(b);
+    return Object.keys(b).length === 0 ? [] : null;
+  };
+  /**
    * Which of the website's sitemaps to submit today. Writes to the client's Search Console only when EVERY gate passes: the client's switch
    * (index_sitemap_submit), the build's kill switch (SEO_SITEMAP_SUBMIT), Google reporting FULL access (siteOwner / siteFullUser), no 403 on an
-   * earlier submission at the same access level (submit_denied_days), Search Console's list read today, and the property covering the address.
-   * The sitemap is the one robots.txt names, else /sitemap.xml - and only one we read as a real sitemap today. When: (a) Search Console does
-   * not list it; (b) it is listed with errors and its addresses changed since our last submission; (c) its addresses changed since Search
-   * Console's lastSubmitted and we did not submit it in the last 7 days. Never an unchanged resubmit, at most one submission per sitemap per
-   * 7 days, at most submit_max a run. A change is known only between two complete reads (the first reading is a baseline).
-   * o: { on, kill_off, permission, property, ok: [{url, from}], gsc: [{path, errors, last_submitted, last_downloaded}] | null, complete, urls,
-   *      prev: { submissions, tree_fp, submit_denied }, now }
+   * earlier submission at the same access level (submit_denied_days), Search Console's list read today, and the property (and the website's
+   * own domain, when `site` is given) covering the address. The sitemap is the one robots.txt names, else /sitemap.xml - and only one we read
+   * as a real sitemap today. When (`due`): (a) Search Console does not list it; (b) it is listed with errors and its addresses changed since
+   * our last submission; (c) its addresses changed since Search Console's lastSubmitted. Never an unchanged resubmit, at most one attempt per
+   * sitemap per 7 days (whatever the answer), at most submit_max a run. A change is known only between two complete reads (the first reading
+   * is a baseline). Also -> `picks` (every sitemap considered: { url, path, due, block }) and the outlook (`will_submit`, `blocked`, W1).
+   * `permission_full` is Google's raw fact (siteOwner / siteFullUser), a 403 does not change it (W7: the hold is `blocked: 'refused'`).
+   * o: { on, kill_off, permission, property, site, ok: [{url, from}], gsc: [{path, errors, last_submitted, last_downloaded}] | null, complete,
+   *      urls, prev: { submissions, tree_fp, submit_denied }, now }
    */
   const submitPlan = (o) => {
     const x = o || {}; const now = n0(x.now); const nowIso = new Date(now).toISOString(); const prev = x.prev || {};
     const fp = treeFp(x.urls, x.complete === true);
     const pf = prev.tree_fp && typeof prev.tree_fp === 'object' ? prev.tree_fp : {};
     const tree_fp = fp ? (!S(pf.fp) ? { fp, changed_at: '' } : S(pf.fp) !== fp ? { fp, changed_at: nowIso } : { fp, changed_at: S(pf.changed_at) }) : { fp: S(pf.fp), changed_at: S(pf.changed_at) };
-    // the submissions carried from the last run, checked back against today's sitemaps.list (lastSubmitted / lastDownloaded after ours)
+    // the submissions carried from the last run, checked back against today's sitemaps.list (lastSubmitted / lastDownloaded after ours);
+    // W13: an attempt recorded before its PUT ('pending': the run stopped before it recorded the answer) is confirmed the same way
     const slack = 5 * 60e3;
     const submissions = (Array.isArray(prev.submissions) ? prev.submissions : []).filter(e => e && S(e.path) && S(e.at)).slice(0, CFG.submissions_keep).map(e => {
       const y = { ...e }; const l = Array.isArray(x.gsc) ? listedAs(x.gsc, e.path) : null;
-      if (l && /^(submitted|confirmed)$/.test(S(y.status))) {
+      if (l && /^(submitted|confirmed|pending)$/.test(S(y.status))) {
         if (ts(l.last_submitted) && ts(l.last_submitted) >= ts(y.at) - slack) { y.status = 'confirmed'; y.confirmed_at = S(l.last_submitted); }
-        if (ts(l.last_downloaded) && ts(l.last_downloaded) >= ts(y.at) - slack) { y.status = 'read'; y.read_at = S(l.last_downloaded); }
+        if (ts(l.last_downloaded) && ts(l.last_downloaded) >= ts(y.at) - slack && S(y.status) === 'confirmed') { y.status = 'read'; y.read_at = S(l.last_downloaded); }
       }
       return y; });
     const perm = S(x.permission);
     const den = prev.submit_denied && typeof prev.submit_denied === 'object' ? prev.submit_denied : null;
     const denied = !!(den && S(den.level) === perm && ts(den.at) && now - ts(den.at) < CFG.submit_denied_days * DAY);
-    const permission_full = FULL_ACCESS.includes(perm) && !denied;
+    const permission_full = FULL_ACCESS.includes(perm);
     const gate = !x.on ? 'off' : x.kill_off ? 'kill_switch' : !perm ? 'not_checked' : !FULL_ACCESS.includes(perm) ? 'not_full_access' : denied ? 'denied_before'
       : !Array.isArray(x.gsc) ? 'list_not_read' : 'ok';
-    const out = { gate, on: !!x.on, kill_off: !!x.kill_off, permission: perm, permission_full, submit_denied: denied ? den : null, tree_fp, submissions, submit: [], skipped: [] };
-    if (gate !== 'ok') return out;
+    const out = { gate, on: !!x.on, kill_off: !!x.kill_off, permission: perm, permission_full, submit_denied: denied ? den : null, tree_fp, submissions, submit: [], skipped: [], picks: [], no_sitemap: false };
+    const done = () => Object.assign(out, submitOutlook(out, out.submissions, now));
+    if (gate !== 'ok') return done();
     const ok = (x.ok || []).filter(e => e && S(e.url));
     const robots = ok.filter(e => e.from === 'robots'); const pick0 = robots.length ? robots : ok.filter(e => e.from === 'default');
     const seen = new Set(); const pick = pick0.filter(e => { const k = key(e.url); if (!k || seen.has(k)) return false; seen.add(k); return true; });
-    if (!pick.length) { out.skipped.push({ url: '', why: 'no sitemap read today (robots.txt names none and /sitemap.xml is not a sitemap)' }); return out; }
+    if (!pick.length) { out.no_sitemap = true; out.skipped.push({ url: '', why: 'no sitemap read today (robots.txt names none and /sitemap.xml is not a sitemap)' }); return done(); }
     const changedAt = ts(tree_fp.changed_at);
     for (const e of pick) {
-      if (out.submit.length >= CFG.submit_max) { out.skipped.push({ url: e.url, why: 'more than ' + CFG.submit_max + ' sitemaps' }); continue; }
-      if (!inProperty(e.url, x.property)) { out.skipped.push({ url: e.url, why: 'outside the Search Console property' }); continue; }
+      if (!inProperty(e.url, x.property) || (x.site && !safe(e.url, x.site))) { out.picks.push({ url: e.url, path: e.url, due: '', block: 'outside_property' }); out.skipped.push({ url: e.url, why: 'outside the Search Console property' }); continue; }
       const l = listedAs(x.gsc, e.url);
-      const ours = submissions.filter(s => same(s.path, e.url)).sort((a, b) => S(b.at).localeCompare(S(a.at)))[0] || null;
-      if (ours && now - ts(ours.at) < CFG.submit_space_days * DAY) { out.skipped.push({ url: e.url, why: 'submitted on ' + S(ours.at).slice(0, 10) }); continue; }
       const path = l ? S(l.path) : e.url;   // a listed sitemap is resubmitted under the address Search Console has it
-      if (!l) { out.submit.push({ url: path, reason: 'not_listed' }); continue; }
-      const since = ours ? ts(ours.at) : ts(l.last_submitted);
-      if (changedAt && n0(l.errors) > 0 && changedAt > since) out.submit.push({ url: path, reason: 'errors_changed' });
-      else if (changedAt && changedAt > ts(l.last_submitted)) out.submit.push({ url: path, reason: 'changed' });
-      else out.skipped.push({ url: path, why: 'unchanged' });
+      const ours = submissions.filter(s => same(s.path, e.url)).sort((a, b) => S(b.at).localeCompare(S(a.at)))[0] || null;
+      let due = '', block = '';
+      if (!l) due = 'not_listed';
+      else {
+        const since = ours ? ts(ours.at) : ts(l.last_submitted);
+        if (changedAt && n0(l.errors) > 0 && changedAt > since) due = 'errors_changed';
+        else if (changedAt && changedAt > ts(l.last_submitted)) due = 'changed';
+        else block = n0(l.errors) > 0 ? 'unchanged' : '';   // listed with errors, nothing changed: a resubmit would do nothing
+      }
+      out.picks.push({ url: e.url, path, due, block });
+      if (ours && now - ts(ours.at) < CFG.submit_space_days * DAY) { out.skipped.push({ url: e.url, why: 'submitted on ' + S(ours.at).slice(0, 10) }); continue; }
+      if (!due) { out.skipped.push({ url: path, why: 'unchanged' }); continue; }
+      if (out.submit.length >= CFG.submit_max) { out.skipped.push({ url: e.url, why: 'more than ' + CFG.submit_max + ' sitemaps' }); continue; }
+      out.submit.push({ url: path, reason: due });
+    }
+    return done();
+  };
+  /**
+   * Wave 2 review W1 (the contract the app reads in sitemaps_json.submit): would the engine submit on its NEXT run if nothing changes?
+   * -> { will_submit, blocked }. blocked is '' when will_submit, or when nothing is due (and when today's gate could not be read: Google's
+   * access or its list; `gate` says which); else: 'switch_off' | 'not_full_access' | 'paused' (the kill switch) | 'refused' (Google answered
+   * 403, held 28 days at that level, or another 4xx in the last 7 days) | 'no_sitemap' (none read today) | 'outside_property' | 'unchanged'
+   * (listed with errors, its addresses unchanged) | 'too_soon' (an attempt in the last 7 days) | 'not_set_up' (our write credential is
+   * missing). `submissions` = the history after today's attempts (Index Run Rows) or before them (Index Inventory).
+   */
+  const GATE_BLOCK = { off: 'switch_off', kill_switch: 'paused', not_full_access: 'not_full_access', denied_before: 'refused', not_checked: '', list_not_read: '' };
+  const BLOCK_ORDER = ['not_set_up', 'refused', 'too_soon', 'outside_property', 'unchanged'];
+  const submitOutlook = (plan, submissions, now) => {
+    const p = plan || {};
+    if (p.gate !== 'ok') return { will_submit: false, blocked: Object.prototype.hasOwnProperty.call(GATE_BLOCK, S(p.gate)) ? GATE_BLOCK[S(p.gate)] : '' };
+    if (p.no_sitemap) return { will_submit: false, blocked: 'no_sitemap' };
+    const subs = (Array.isArray(submissions) ? submissions : (p.submissions || [])).filter(e => e && S(e.path) && S(e.at));
+    const found = new Set(); let will = 0;
+    for (const k of (p.picks || [])) {
+      if (S(k.block) === 'outside_property') { found.add('outside_property'); continue; }
+      if (!S(k.due)) { if (S(k.block)) found.add(S(k.block)); continue; }
+      const last = subs.filter(s => same(s.path, k.url) || same(s.path, k.path)).sort((a, b) => S(b.at).localeCompare(S(a.at)))[0] || null;
+      if (last && n0(now) - ts(last.at) < CFG.submit_space_days * DAY) found.add(/^(denied|refused)$/.test(S(last.status)) ? 'refused' : S(last.status) === 'not_set_up' ? 'not_set_up' : 'too_soon');
+      else will++;
+    }
+    if (will) return { will_submit: true, blocked: '' };
+    return { will_submit: false, blocked: BLOCK_ORDER.find(b => found.has(b)) || '' };
+  };
+  /**
+   * The PUTs of one website's plan (Sitemap Submit Requests sends them; Index Reservation records them as 'pending' BEFORE they are sent,
+   * W13): every gate checked again, own domain only, inside the property. v: the Index Inventory item. -> [{ site_id, path, reason }]
+   */
+  const submitRequests = (v, killOff) => {
+    const out = []; if (killOff || !v) return out;
+    const p = v.submit || {}; const s = v.site || {};
+    if (p.gate !== 'ok' || !p.on || p.kill_off || !p.permission_full || !FULL_ACCESS.includes(S(s.gsc_permission))) return out;
+    for (const q of (p.submit || []).slice(0, CFG.submit_max)) {
+      const path = safe(q.url, s); if (!path || !inProperty(path, s.gsc_property)) continue;
+      out.push({ site_id: S(v.site_id), path: S(q.url), reason: S(q.reason) });
     }
     return out;
   };
+  /** W13: the attempts about to be made, as the reservation records them (status 'pending'), newest first, before the carried history. */
+  const submitPending = (v, killOff, now) => {
+    const nowIso = new Date(n0(now) || Date.now()).toISOString(); const p = (v && v.submit) || {};
+    return submitRequests(v, killOff).map(q => ({ path: q.path, at: nowIso, status: 'pending', reason: q.reason, http_status: 0, fp: S((p.tree_fp || {}).fp) }))
+      .concat(p.submissions || []).slice(0, CFG.submissions_keep);
+  };
   /**
    * The submissions after today's answers: asked[i] ({ path, reason }: what Sitemap Submit Requests sent) was answered with answers[i] (full
-   * responses). 2xx = submitted; 403 = denied (the permission is recorded as not full until it reads otherwise or submit_denied_days pass;
-   * no retry before); any other answer = refused / failed. -> { submissions (newest first, at most submissions_keep), submit_denied,
-   * permission_full, today: [...] }
+   * responses). 2xx = submitted; 403 = denied (no new attempt before submit_denied_days at that access level); another 4xx = refused; an
+   * n8n error naming the credential (status 0: our write credential is missing, W8) = not_set_up (nothing reached Google); anything else =
+   * failed. -> { submissions (newest first, at most submissions_keep), submit_denied, permission_full (Google's raw fact), today: [...] }
    */
   const submitResults = (plan, asked, answers, now) => {
     const p = plan || {}; const nowIso = new Date(n0(now) || Date.now()).toISOString();
     const today = (asked || []).map((q0, i) => { const q = { url: S(q0.path || q0.url), reason: S(q0.reason) }; const r = (answers || [])[i] || {};
       const st = n0(r.statusCode ?? r.status ?? (r.error && typeof r.error === 'object' ? (r.error.httpCode || r.error.code) : 0));
-      const status = st >= 200 && st < 300 ? 'submitted' : st === 403 ? 'denied' : st >= 400 && st < 500 ? 'refused' : 'failed';
+      const err = r.error ? (typeof r.error === 'string' ? r.error : S(r.error.message || r.error.description || JSON.stringify(r.error))) : '';
+      const status = st >= 200 && st < 300 ? 'submitted' : st === 403 ? 'denied' : st >= 400 && st < 500 ? 'refused' : (!st && /credential/i.test(err)) ? 'not_set_up' : 'failed';
       return { path: S(q.url), at: nowIso, status, reason: S(q.reason), http_status: st, fp: S((p.tree_fp || {}).fp) }; });
     const deniedNow = today.some(t => t.status === 'denied');
     const submit_denied = deniedNow ? { at: nowIso, level: S(p.permission) } : (p.submit_denied || null);
-    return { today, submissions: today.concat(p.submissions || []).slice(0, CFG.submissions_keep), submit_denied, permission_full: !!p.permission_full && !deniedNow };
+    return { today, submissions: today.concat(p.submissions || []).slice(0, CFG.submissions_keep), submit_denied, permission_full: !!p.permission_full };
   };
 
   return { CFG, key, same, norm, own, safe, parseUrl, siteHost, hostOf, bare, pathOf, depth, isLowValue, LOW_VALUE, robotsSitemaps, parseSitemap, sitemapRoots, sitemapAccept,
@@ -1860,7 +1999,8 @@ const IX = (() => {
     reportMarkdown, groupNote, isoDay, DAY, merge, ts,
     fixState, xRobotsNoindex, metaNoindex, sitemapBatch, answerText, sizeOf, plainWhy, PLAIN_FAIL,
     UTILITY, isUtility, isJobPosting, resolveHref, pageLinks, linkIndex, linkedOf, linkedList, parentOf, parentPlan, titleOf, titleCore, canonicalOwn,
-    refine, askState, readAfterAsk, askValue, FULL_ACCESS, treeFp, submitPlan, submitResults };
+    refine, askState, readAfterAsk, askValue, FULL_ACCESS, treeFp, submitPlan, submitResults,
+    sitemapsListOf, submitOutlook, submitRequests, submitPending, parentKnown, sourcePlan, NOT_SOURCE, notSource };
 })();
 const inv = $('Index Inventory').all().map(i => i.json).filter(x => x && x.site_id && !x.failed && !x.no_access);
 let pq = []; try { pq = $('Index Probe Requests').all().map(i => i.json).filter(q => q && !q.skip); } catch (e) { pq = []; }

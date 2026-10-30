@@ -32,7 +32,7 @@ if (ROUND === 1) {
   let lists = []; try { lists = $('GSC Sitemaps List').all().map(i => i.json); } catch (e) { lists = []; }
   let lreqs = []; try { lreqs = $('Sitemaps List Requests').all().map(i => i.json).filter(q => q && !q.skip); } catch (e) { lreqs = []; }
   for (const s of sites) { const i = lreqs.findIndex(q => q.site_id === s.site_id); const ans = i >= 0 ? (lists[i] || {}) : {};
-    roots.set(s.site_id, Array.isArray(ans.sitemap) ? ans.sitemap.map(x => S(x.path)).filter(Boolean) : []); }
+    roots.set(s.site_id, (IX.sitemapsListOf(ans) || []).map(x => x.path)); }   // W2: a full response now (status code read); only a real list
 }
 const out = [];
 for (const s of sites) {

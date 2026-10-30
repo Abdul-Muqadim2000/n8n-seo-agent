@@ -289,7 +289,8 @@
      "Index Start Alert (Next)",
      "Index Start Alert (Part)",
      "Index Start Alert (Restart)",
-     "Index Start Alert (Watch)"
+     "Index Start Alert (Watch)",
+     "Submit Setup Alert"
     ],
     "settles": [
      "Index Start Delivery (After Settle)",

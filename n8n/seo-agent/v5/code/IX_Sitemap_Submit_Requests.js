@@ -12,13 +12,11 @@ const S = (v) => String(v == null ? '' : v).trim();
 const KILL_OFF = '__SITEMAP_SUBMIT__' === 'off';
 const inv = (() => { try { return $('Index Inventory').all().map(i => i.json).filter(x => x && x.site_id && !x.failed && !x.no_access); } catch (e) { return []; } })();
 const API = 'https://www.googleapis.com/webmasters/v3/sites/';
+// Wave 2 review W13: the gates and the list are IX.submitRequests, the same function Index Reservation used to record these attempts as
+// 'pending' before this node runs (a crash or an overlapping run still sees them for the 7-day spacing)
 const out = [];
-if (!KILL_OFF) for (const v of inv) {
-  const p = v.submit || {}; const s = v.site || {};
-  if (p.gate !== 'ok' || !p.on || p.kill_off || !p.permission_full || !IX.FULL_ACCESS.includes(S(s.gsc_permission))) continue;
-  for (const q of (p.submit || []).slice(0, IX.CFG.submit_max)) {
-    const path = IX.safe(q.url, s); if (!path || !IX.inProperty(path, s.gsc_property)) continue;
-    out.push({ json: { site_id: v.site_id, path: S(q.url), reason: S(q.reason), url: API + encodeURIComponent(S(s.gsc_property)) + '/sitemaps/' + encodeURIComponent(S(q.url)) } });
-  }
+for (const v of inv) {
+  const s = v.site || {};
+  for (const q of IX.submitRequests(v, KILL_OFF)) out.push({ json: { site_id: v.site_id, path: q.path, reason: q.reason, url: API + encodeURIComponent(S(s.gsc_property)) + '/sitemaps/' + encodeURIComponent(q.path) } });
 }
 return out.length ? out : [{ json: { skip: true, reason: KILL_OFF ? 'sitemap submission is switched off for this engine (SEO_SITEMAP_SUBMIT=off)' : 'no sitemap to submit today' } }];
