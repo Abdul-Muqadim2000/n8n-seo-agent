@@ -215,7 +215,8 @@ module.exports = async (ctx) => {
       { url: W + '/dynamics-365-crm', title: 'Dynamics 365 CRM', state: 'indexed' },
     ];
     const s = IX.linkSuggestions(rows[0], rows);
-    check('at most 5, topic pages only, ranked by shared rare words', s.length === 5 && s.every(x => /peppol|invoic/i.test(x.url + x.title)) && !s.some(x => /dynamics/.test(x.url)), J(s));
+    // wave 2 (DESIGN_WAVE2.md §2.2): at most 3 (was 5), each with a real topic overlap
+    check('at most 3, topic pages only, ranked by shared rare words', s.length >= 1 && s.length <= 3 && s.every(x => /peppol|invoic/i.test(x.url + x.title)) && !s.some(x => /dynamics/.test(x.url)), J(s));
     check('never itself, never a not-indexed page, never a tag listing', !s.some(x => IX.same(x.url, rows[0].url)) && !s.some(x => /draft|\/tag\//.test(x.url)), J(s));
     check('a page with no shared topic gets no suggestion (no filler)', IX.linkSuggestions({ url: W + '/careers', title: 'Careers' }, rows).length === 0, '');
   });
