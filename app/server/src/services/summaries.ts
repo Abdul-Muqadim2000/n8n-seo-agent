@@ -34,6 +34,12 @@ export function summarize(stage: string, p: P): Summary {
       put('qa', str(p.qa_summary));
       // R11 (re-rating, 2026-10-13): a page the quality gate failed twice is a draft, the run list says so, not only the report
       if (p.qa_not_ready === true) put('notReadyToPublish', true);
+      // W0-D (2026-10-29): a page held for the client's OK before writing (Needs you: "Needs your OK"); the score it was held at
+      if (obj(p.hold).held === true || (Object.keys(obj(p.hold)).length > 0 && obj(p.hold).mode === 'enforce')) {
+        put('held', true);
+        put('holdScore', num(obj(p.hold).score));
+        put('holdDuplicate', Array.isArray(obj(p.hold).kinds) && (obj(p.hold).kinds as unknown[]).includes('duplicate'));
+      }
       put('volume', num(obj(p.keyword_data).search_volume));
       put('difficulty', num(obj(p.keyword_data).keyword_difficulty));
       put('hasPage', typeof p.html === 'string' && p.html.length > 50);

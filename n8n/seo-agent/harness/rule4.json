@@ -9,8 +9,8 @@
    "subject": 3
   },
   "delivery": {
-   "pass": 22,
-   "subject": 22
+   "pass": 28,
+   "subject": 28
   },
   "promise": {
    "pass": 4,
@@ -163,6 +163,34 @@
     "fail": "",
     "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
     "judges": [
+     "AR.posted("
+    ],
+    "node": "Reader Alert Delivery",
+    "ok": true,
+    "opener": false,
+    "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 AI Visibility Tracker"
+   },
+   {
+    "fail": "",
+    "how": "follow the POST with a node that calls AR.posted( and writes the result back to seo_ops_alerts",
+    "node": "(workflow)",
+    "ok": true,
+    "opener": true,
+    "opens": [
+     "Reader Alert Plan"
+    ],
+    "settles": [
+     "Reader Alert Delivery"
+    ],
+    "why": "B-F3: Page Watch posted its digest and wrote nothing back, so every row it opened sat at `delivered: \"pending\"` for ever and the delivery rate could never be measured",
+    "workflow": "SEO Agent \u2014 AI Visibility Tracker"
+   },
+   {
+    "blind_sources": [],
+    "fail": "",
+    "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
+    "judges": [
      "AR.settle("
     ],
     "node": "Alert Retry Result (Audit)",
@@ -182,6 +210,34 @@
     "ok": true,
     "opener": false,
     "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 Backlink Monitor"
+   },
+   {
+    "blind_sources": [],
+    "fail": "",
+    "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
+    "judges": [
+     "AR.posted("
+    ],
+    "node": "Reader Alert Delivery",
+    "ok": true,
+    "opener": false,
+    "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent \u2014 Backlink Monitor"
+   },
+   {
+    "fail": "",
+    "how": "follow the POST with a node that calls AR.posted( and writes the result back to seo_ops_alerts",
+    "node": "(workflow)",
+    "ok": true,
+    "opener": true,
+    "opens": [
+     "Reader Alert Plan"
+    ],
+    "settles": [
+     "Reader Alert Delivery"
+    ],
+    "why": "B-F3: Page Watch posted its digest and wrote nothing back, so every row it opened sat at `delivered: \"pending\"` for ever and the delivery rate could never be measured",
     "workflow": "SEO Agent \u2014 Backlink Monitor"
    },
    {
@@ -404,6 +460,34 @@
     "opener": false,
     "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
     "workflow": "SEO Agent \u2014 Site Tracker"
+   },
+   {
+    "blind_sources": [],
+    "fail": "",
+    "how": "judge the POST on its status code (AR.posted reads `statusCode`), and give the HTTP node `fullResponse: true` whenever it is `neverError`",
+    "judges": [
+     "AR.posted("
+    ],
+    "node": "Reader Alert Delivery",
+    "ok": true,
+    "opener": false,
+    "why": "B-F2: *Post Alert Webhook* was neverError with no fullResponse, so a 404 from a revoked Slack hook arrived as an item with no error and was written down as a delivery. R6 / R30: an alert recorded as sent that was never sent.",
+    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+   },
+   {
+    "fail": "",
+    "how": "follow the POST with a node that calls AR.posted( and writes the result back to seo_ops_alerts",
+    "node": "(workflow)",
+    "ok": true,
+    "opener": true,
+    "opens": [
+     "Reader Alert Plan"
+    ],
+    "settles": [
+     "Reader Alert Delivery"
+    ],
+    "why": "B-F3: Page Watch posted its digest and wrote nothing back, so every row it opened sat at `delivered: \"pending\"` for ever and the delivery rate could never be measured",
+    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
    }
   ],
   "promise": [

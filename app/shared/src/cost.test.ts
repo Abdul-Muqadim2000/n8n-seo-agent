@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MODE_IDS, MODES, MONITOR_COSTS } from './constants';
-import { APP_ESTIMATE_BASIS, COST_TABLE, costKeys, estimateRunCost, estimateRunCostParts, keyCost, modeCostUsd, runCostEstimate, type CostKey } from './cost';
+import { APP_ESTIMATE_BASIS, COST_TABLE, costKeys, estimateRunCost, estimateRunCostParts, keyCost, modeCostUsd, runCostEstimate, type CostKey, HOLD_CHECK_USD } from './cost';
 
 describe('one table, not two', () => {
   it('every mode\'s listed price is the table\'s price', () => {
@@ -28,9 +28,9 @@ describe('one table, not two', () => {
 
 describe('the figures are the engine\'s calibrated ones, not the 2026-10-02 table', () => {
   // the old table against the measurements in BENCHMARKS_2026-10-14.md area 13 §3.1
-  it('a one-page keyword ladder is no longer $1.80', () => {
+  it('a one-page keyword ladder is the plan plus one written page at its measured cost (D8, 2026-10-29)', () => {
     const now = estimateRunCost('ladder', { pagesNow: 1 });
-    expect(now).toBeLessThan(1.8);
+    expect(now).toBeCloseTo(keyCost('ladder') + 1.9, 4);
     expect(now).toBeGreaterThan(0.726);   // and not below what that run actually cost
   });
 
@@ -40,9 +40,16 @@ describe('the figures are the engine\'s calibrated ones, not the 2026-10-02 tabl
     expect(estimateRunCost('audit', { reportType: 'full' })).toBeLessThan(0.9);
   });
 
-  it('a written page costs less than the old $1.20 and a keyword report less than the old $0.40', () => {
-    expect(estimateRunCost('keyword', {})).toBeLessThan(1.2);
+  it('D8 (owner, 2026-10-29): a written page is quoted at its measured cost, $1.90 (about 114 credits); a keyword report stays under the old $0.40', () => {
+    expect(estimateRunCost('keyword', {})).toBe(1.9);
+    expect(COST_TABLE.content.measured).toBe(1.9);
     expect(estimateRunCost('keyword', { receiveContent: false })).toBeLessThan(0.4);
+  });
+
+  it('D8: a page held for the client\'s OK uses only the check, about 9 credits at the list rate (60 a dollar)', () => {
+    expect(HOLD_CHECK_USD).toBe(0.15);
+    expect(Math.ceil(HOLD_CHECK_USD * 60)).toBe(9);
+    expect(Math.ceil(estimateRunCost('keyword', {}) * 60)).toBe(114);
   });
 
   it('a free backlink check reserves nothing', () => {

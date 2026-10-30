@@ -14,8 +14,8 @@ const out = []; const seen = new Set();
 tasks.forEach((t, i) => {
   const r = resps[i] || {};
   const results = Array.isArray(r.results) ? r.results : [];
-  const ok = results.map(x => ({ url: String((x && x.url) || ''), title: String((x && x.title) || ''), snippet: String((x && x.content) || '') }))
-    .filter(x => /^https?:\/\//i.test(x.url)).map(x => ({ ...x, host: PF.hostOf(x.url), tier: SRC.tier(x.url) }))
+  const ok = results.map(x => ({ url: SRC.clean(String((x && x.url) || '')), title: String((x && x.title) || ''), snippet: String((x && x.content) || '') }))   // FU-SV: a redirect is read as its target
+    .filter(x => /^https?:\/\//i.test(x.url) && !SRC.isRedirect(x.url)).map(x => ({ ...x, host: PF.hostOf(x.url), tier: SRC.tier(x.url) }))
     .filter(x => x.host && !(own && (x.host === own || x.host.endsWith('.' + own))) && !rivals.has(x.host) && !SOCIAL.test(x.host) && !/\.pdf($|\?)/i.test(x.url));
   const strong = ok.filter(x => x.tier !== 'weak'); const pick = (strong.length ? strong : ok.slice(0, 1)).slice(0, 3);
   for (const x of pick) { const k = PF.keyOf(x.url); if (seen.has(k) || out.length >= 12) continue; seen.add(k);

@@ -1,0 +1,298 @@
+{
+ "about": "W07-A (2026-10-31): the K1 hold run of 2026-10-30 (WAVE06 section 9) on the isolated stack: the page reader account was out of balance and every read answered HTTP 402. Anonymised: the client domain is novaand.example, competitors competitor-[abc].example, the account uid and the stack are removed. Counts as recorded.",
+ "reads": {
+  "Read Client Pages": [
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   },
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   },
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   },
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   }
+  ],
+  "Read Competitor Pages": [
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   },
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   },
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   }
+  ],
+  "Retry Blocked Pages": [
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   },
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   },
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   }
+  ],
+  "Read Regulatory Pages": [
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   },
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   },
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   },
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   },
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   },
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   },
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   },
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   },
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   },
+   {
+    "error": {
+     "message": "402 - {\"data\":null,\"code\":402,\"name\":\"InsufficientBalanceError\",\"status\":40203,\"message\":\"Account balance not enough to run this query, please recharge.\",\"readableMessage\":\"InsufficientBalanceError: Account balance not enough to run this query, please recharge.\"}",
+     "name": "AxiosError",
+     "code": "ERR_BAD_REQUEST",
+     "status": 402,
+     "stack": ""
+    },
+    "details": {
+     "message": "Payment required - perhaps check your payment details?"
+    }
+   }
+  ]
+ },
+ "client_requests": [
+  {
+   "url": "https://www.novaand.example/ms-365-erp-uae",
+   "kind": "existing"
+  },
+  {
+   "url": "https://www.novaand.example/",
+   "kind": "home"
+  },
+  {
+   "url": "https://www.novaand.example/insights/is-microsoft-dynamics-365-an-erp-system",
+   "kind": "related"
+  },
+  {
+   "url": "https://www.novaand.example/whatwedo",
+   "kind": "services"
+  }
+ ],
+ "competitor_requests": [
+  {
+   "url": "https://competitor-a.example/resources/microsoft-dynamics-365-erp/",
+   "rank": 1
+  },
+  {
+   "url": "https://www.competitor-b.example/blog/dynamics-365-erp-for-smes/",
+   "rank": 2
+  },
+  {
+   "url": "https://www.competitor-c.example/dynamics-365-erp-solutions/",
+   "rank": 3
+  }
+ ],
+ "recorded": {
+  "verdict": "GO_WITH_CHANGES",
+  "verdict_score": 38,
+  "verdict_hold": true,
+  "hold_kinds": [
+   "score"
+  ],
+  "hold_band": "clearly low",
+  "client_pages_read": 0,
+  "existing_page_unconfirmed_why": "/ms-365-erp-uae has no title, main heading or Search Console search on file, and an address alone does not say what a page is about",
+  "existing_page_unconfirmed_url": "https://www.novaand.example/ms-365-erp-uae",
+  "competitors_read": 0
+ }
+}

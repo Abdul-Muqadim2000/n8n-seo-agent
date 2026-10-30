@@ -135,6 +135,8 @@ export interface SiteRun {
   ladderId: string;
   costUsd: number;
   createdAt: string;
+  /** W06-B: the engine's request id, which the content-log row the app opened for a page run carries (a failed run's row is no page) */
+  requestId?: string | null;
 }
 
 export interface LadderSources {
@@ -716,7 +718,7 @@ function nextStep(
 /** the same words: "e invoicing in uae" and "UAE e-invoicing" */
 const sameSearch = (a: string, b: string) => keywordTokens(a).sort().join(' ') === keywordTokens(b).sort().join(' ');
 
-const KIND_RANK: Record<NeedsYouItem['kind'], number> = { connection: 0, keyword: 1, profile: 1.5, proposal: 2, level: 3, recheck: 4, pileup: 5, publish: 6, failed: 7, duplicate: 8, overlap: 9, approve: 10, ai_panel: 11, questions: 6.5, site_task: 6.8 };   // site tasks: a step on the website comes after the pages and their questions   // H3: questions on a written page come after the pages to publish   // AI-FOCUS: the AI panel's decisions come after the pages
+const KIND_RANK: Record<NeedsYouItem['kind'], number> = { connection: 0, keyword: 1, profile: 1.5, proposal: 2, level: 3, recheck: 4, pileup: 5, publish: 6, failed: 7, duplicate: 8, overlap: 9, approve: 10, ai_panel: 11, questions: 6.5, site_task: 6.8, hold: 5.5 };   // W0-D: a page that waits for the client's OK comes before the pages to publish   // site tasks: a step on the website comes after the pages and their questions   // H3: questions on a written page come after the pages to publish   // AI-FOCUS: the AI panel's decisions come after the pages
 
 /** Most urgent first: warnings, then by kind. */
 export function sortNeedsYou(items: NeedsYouItem[]): NeedsYouItem[] {
@@ -887,6 +889,7 @@ export async function ladderAppSources(org: OrgRow, site: SiteRow): Promise<Pick
         status: schema.runs.status,
         title: schema.runs.title,
         error: schema.runs.error,
+        requestId: schema.runs.requestId,
         keyword: sql<string | null>`${schema.runs.input}->>'keyword'`,
         ladderId: sql<string | null>`${schema.runs.input}->'ladder'->>'id'`,
         est: schema.runs.estimatedCostUsd,
@@ -941,6 +944,7 @@ export async function ladderAppSources(org: OrgRow, site: SiteRow): Promise<Pick
       ladderId: s(r.ladderId),
       costUsd: r.act ?? r.est,
       createdAt: r.createdAt.toISOString(),
+      requestId: r.requestId,
     })),
   };
 }

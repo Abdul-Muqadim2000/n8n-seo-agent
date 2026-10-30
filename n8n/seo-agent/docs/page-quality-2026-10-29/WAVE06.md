@@ -1,0 +1,380 @@
+# WAVE 0.6: four fixes, offline pins and the deploy checklist (2026-10-30)
+
+Anonymised. Sites: **client A** (UAE Microsoft Dynamics partner), **client B** (UAE AI and software agency), **own site** (our product
+site). Evidence (executions, page texts, judge files, the blind keys) stays in the run's local folder and is never committed.
+
+- Build: **W06** = Wave 0.6, `5d72a7d9` on `feature/seo-agent-v4.5` (W06-A `91b71099` exclusions + grade guards, W06-B `cb937e77`
+  reliability + "Write it anyway" address, integration `42fb9c22`), then **W06-C** `df9126da` (the two open items, section 8), rebuild
+  `b447c71f`. Compared with **W05** (`1e705b72`, `WAVE05.md`) and **AFTER**
+  (`fed34d3c`, `BEFORE_AFTER.md`).
+- **Nothing deployed. Production not touched.**
+
+## 0. Status: the paid re-check stopped at the hold (page reader out of balance), then finished on the new reader key (section 10)
+
+**Update, 14:46-15:12 UTC the same day: the owner replaced the reader key and K1 was re-run as a new run. Section 10 has the result**
+(judges' mean 65.5 for the new K1, between W05's 56.5 and AFTER's 70.0 in the same judging session; 8 sections kept, none removed; its own
+new address; our grade 81 delivered and final, 15.5 over the judges). The two paragraphs below are the record of the first try.
+
+After the owner freed disk space, the K1 re-check ran on the isolated `alvrun-*` stack rebuilt from **`b447c71f`** (2026-10-30 12:53-13:04
+UTC). The stack, the restore and the seeding were exactly as in Wave 0.5. **But the page reader account that every page read goes through
+had run out of balance** (HTTP 402 "please recharge" on every read, between 10:13 and 12:56 UTC that day). With no client, competitor or
+regulatory page read, K1 was held on its search score alone, and the run was stopped there on purpose: a page written without any page
+read would not be comparable with W05 or AFTER and would spend about $1 for nothing. Re-probed at 13:06 UTC: still 402.
+
+So there is **still no new judge score in this file** (no blind set was made). What is measured is offline: the recorded W05 executions
+replayed through the W06 code, and the full harness. Section 9 has the run and what it found; earlier, two attempts were blocked by the
+15 GB disk rule ($0).
+
+## 1. The four fixes and their offline pins
+
+| # | Defect (WAVE05) | Fix | Offline pin (all on recorded runs, $0) |
+|---|---|---|---|
+| 1 | 3.1 HIGH, in production: the verdict-exclusion matcher dropped "GP" and "SL", matched every "Dynamics" heading and deleted six core sections of K1 (2,407 -> 1,023 words) | `_exclusions.js`: capital acronyms and tokens with a digit are topic words, matched in capitals; a topic that lost a short word matches only on its full phrase; one word of the keyword family (keyword, brief keywords, site services) never matches. A section is deleted only with a second signal (its heading names the topic, or two of its sentences do); otherwise at most one section of at most 20% of the words, never 40% of the page; every decision recorded with its reason | **W06A1-W06A3** on the anonymised K1 replay: the new check flags **0** sections (was 9); handed the recorded list of 9, Page Candidates deletes **0** and keeps all 9 with reasons; the page keeps its six H2 sections and 2,210 words (W05 delivered 1,023). **EQA4** (integration fix): the "ai" of "ai consultant" still counts as its acronym, so an excluded topic still leaves the brief |
+| 2 | 3.2 HIGH, in production: a complete page ending on a bare "Book a consultation" line failed as cut off (about $0.85 lost), its ledger row stayed `reserved` at $0, and the app then said the page "was already written" | `_complete.js` accepts a final short call-to-action line (the brief's CTA, or a button made of the last section's words) after a clean paragraph; a really cut line is still caught. A page cut twice now routes to *Mark Page Run Failed* (the run's started row becomes `failed`) and the settle chain (the ledger row settles what was spent and says the run failed). The app never counts a failed run's row as written or waiting | **W06B1** on the anonymised K4 first try (both recorded answers): the deployed kit fails both, the new one passes both. **W06B2**: cut pages still caught. **W06B3**: a failed run leaves no "written" row, settles its ledger, stops with the same error. App: `pipeline.test.ts` |
+| 3 | 3.3: "Write it anyway" next to an existing page promised a separate page but reused the existing page's address | *Parse Brief* moves a new page's slug off any address the website already has (a rewrite and a ladder page keep theirs); the hold copy says what each choice does ("a new address of its own") | **W06B4** (K1's existing-page address case), **W06B5** (copy); app `hold.test.ts` |
+| 4 | Grade swung back to generous: K1 read 79 "Ready" with fit 20/20 after a third of the page was deleted; ideas restated 4-6 times cost nothing | `_grade.js`: two or more sections, or 20% of the words, taken out (exclusions or H2s lost in editing) cap coverage and fit at 40% with the reason, and the fit floor is then never waived (Needs work, never Ready). `GR.ideas`: an idea restated 4+ times in 3+ places costs 2 structure points, up to 4, never below half the part | **W06A4**: the W05-delivered K1 page re-grades **"Needs work" 72** (in the run: 79 ready with questions; 86 on the same replay before the fix), coverage <= 6/15 and fit <= 8/20, each cap saying "6 sections were taken out". **W06A5-W06A6**: the ranking guide (prod exec 949) unchanged, no idea penalty, Ready; K3 / K4 / K6-shaped pages keep their band. **PFX6** (integration fix): a section that held only an author prompt is no "lost" section |
+
+Offline on the real W05 pages (the agent's replay): K3 100 -> 98, K4 100 -> 98, K6 97 unchanged, all still Ready. So the guards hit the
+broken page and leave the good pages alone; they do **not** calibrate the grade on normal pages (Wave 2).
+
+## 2. K1: judges and our grade
+
+| K1 (client A, service page) | Words / H2 | Our grade (status) | Judges' mean (editor / strategist) | Ready (strategist) |
+|---|---|---|---|---|
+| AFTER (`fed34d3c`) delivered | 2,734 / - | 59 not ready | **66.5** (66 / 67) in the W05 session; 70.5 in the earlier session | no |
+| W05 (`1e705b72`) delivered | 1,023 / 3 | 79 ready with questions | **60.5** (59 / 62) | no |
+| W05 final | same text | 83 ready | 60.5 (59 / 62) | no |
+| W05 delivered, **re-graded by W06 offline** | 1,023 / 3 (same text) | **72 Needs work** | 60.5 (the judged text) | no |
+| W06 first try (`b447c71f`) | **not written**: held, page reader out of balance (section 9) | - | not measured | - |
+| **W06 delivered, new run on the new reader key (`b447c71f`)** | **2,845 / 8, none removed** (section 10) | **81 ready with questions** | **65.5** (66 / 65), blind06 session | no |
+| W06 final | same text | 81 ready | 65.5 (66 / 65) | no |
+
+- **Our grade vs the judges on K1**: in the W05 run +18.5 (79 vs 60.5) and a wrong "Ready"; W06 on the same text +11.5 (72 vs 60.5) and
+  the right call (not ready). Still over by 11 points: the rest is the general generosity Wave 2 calibrates.
+- **What a new K1 run should show** (expectation, not a measurement): the replay keeps the writer's full draft (six H2 sections, 2,210
+  words after round 1) and deletes nothing, so the delivered page should look like AFTER's (judged 66.5 to 70.5) plus the Wave 0.5 gains, not
+  W05's 60.5. Only the paid re-check can confirm it.
+- The other three keywords were not re-run either; offline their grades moved by 0 to -2 (section 1), so on K3, K4, K6 our grade is still
+  about 15 to 17 above the judges, as in Wave 0.5.
+
+## 3. Checks
+
+- **Engine harness, full**: **14825 passed, 0 failed**, re-run for this file at `5d72a7d9` in a throwaway `n8nio/n8n:2.41.4` container (removed after). The
+  rebuild commit recorded 14827 / 0; the 2 assertions fewer sit in time-of-day or date branches (none failed). W06A1-W06A6, W06B1-W06B5,
+  EQA4, PFX6 and the ranking-guide pins (RPL*, TOC6) all pass.
+- App (at `5d72a7d9`, from the rebuild commit): typecheck clean; shared 908, server 1536 (46 skipped), web 270; web build OK.
+- Build with the real `n8n/.env`, exit 0.
+
+## 4. Spend
+
+**$1.3622 of the $3 stop**: the first K1 hold check $0.0845 (Claude $0.0604 + DataForSEO $0.0241, reader 402) and the finish on the new
+reader key $1.2777 (section 10). Claude $1.3059 + DataForSEO $0.0563; the DataForSEO balance moved by exactly the ledger's dfs_usd. The two
+disk-blocked attempts, the harness and the two blind judges: $0 (SPEND.md "WAVE 0.6", "WAVE 0.6 paid re-check" and its "finish").
+
+## 5. DEPLOY CHECKLIST (for the owner)
+
+### 5.0 Before anything: production moved on (Index coverage)
+
+Production is **not** at the base this branch was planned against any more. Since 2026-10-30 ~01:15 UTC it runs **Index coverage**
+from `feature/indexing`: API on the VM at `fd32c0b4`, web at main `99718dd0` (PR #48, Vercel), engine with the new workflow
+`SEOagentIndexCv1` plus changes to Site Admin, the catch-up and the main workflow's monitor row, and two columns
+(`seo_monitors.index_watch` / `index_daily_cap`). **`feature/seo-agent-v4.5` does not contain it.**
+
+1. **Merge `origin/main` into `feature/seo-agent-v4.5` first.** Dry run (2026-10-30): 3 conflicts, `app/web/src/marketing/content/changelog.ts`,
+   `features.ts`, `n8n/seo-agent/harness/scenarios_v5.js`. Keep both sides; never hand-resolve generated workflow JSON: rebuild
+   (`python3 build_v4.py`, exit 0), then the full harness (0 failed) and the app suites (typecheck, shared / server / web, web build).
+   Without this merge the engine deploy reverts Site Admin's index settings, the catch-up entry and the monitor columns, and the API
+   deploy removes the indexing routes the live web calls.
+2. The VM's startup script checks out `alaventra-ref` (`feature/seo-agent-v4.5`) on every boot and rebuilds the app image only if it is
+   missing. The spot VM was preempted twice on 2026-10-30. Until the merge is done and deployed, a boot that rebuilds would serve
+   this branch's API without Index coverage.
+3. Optional, the owner's call: the paid K1 re-check (about $1.10). The disk is no longer the block; the page reader account must be
+   recharged first (section 9). **Check production's page reads before the deploy too** (section 9, finding 1).
+
+### 5.1 What changes for clients (Waves 0, 0.5 and 0.6, all on written pages)
+
+- **Pages**: a real search description on every page; answers worked into the sentence they change; local regulatory dates read from the
+  official text; no padding headings, at most 8 questions; a sourced figure kept exactly, a vendor-only figure rewritten; one byline,
+  the business's own voice; sources cited at their real address; script-rendered websites read after they load. Blind judges:
+  delivered pages 68.4 -> 74.5 on 8 keywords (Wave 0), held on 3 of 4 in Wave 0.5.
+- **Asking first ("Needs your OK")**: a keyword the verdict scores under 40, or under 50 with a second signal (little demand, or a page
+  the website already has), waits in Needs you with "Write it anyway", the recommended search, or "Improve the existing page". Only the
+  check is charged. "Write it anyway" next to an existing page writes a separate page at a new address of its own.
+- **The grade**: measures what a reviewer counts (sources, fit, repetition); "95+" instead of 100; "Needs work: <part>" instead of
+  "Ready" when a part is under half, or when the run removed several sections; a fresh second read where only a factual error blocks.
+- **The final version**: Accept all always works; the final keeps the page's shape, its contents list, every open blocker of the first
+  check; it has its own Word, PDF, HTML, Markdown and meta.json downloads.
+- **Reliability**: a complete page ending on a call-to-action line is no longer failed; a failed run never shows as "already written"
+  or as waiting; a failed run's cost is recorded. W07-A (section 11): when the page reader refuses, pages are read another way, one ops
+  alert is raised, and nothing is decided on pages nobody read (the report says so; only the check is charged).
+- **Price**: a written page is quoted at about **114 credits** (was about 51) and a held keyword at about **9 credits** (D8, below).
+
+### 5.2 What the deploy involves
+
+- **App migrations**: **none** since production's 0025 (`app/server/drizzle` unchanged since `003bb9cb`). No new environment variable.
+- **Data Table columns**: **none** from page quality (`ladder_common.py` unchanged since `003bb9cb`). New *values* only:
+  `seo_content_log.status` `held` and `failed`. Index coverage's two columns are already on production; after the merge, the dry run
+  must list no missing column.
+- **W07-A (section 11)**: no new workflow, table or column. The main workflow, the AI Visibility Tracker and the Backlink Monitor gain
+  a fallback node behind every page-reader node (the HTTP node is renamed `<name> (reader)`) and one alert chain each, which writes
+  `seo_ops_alerts` and posts to `SEO_ALERT_WEBHOOK_URL` (unset: the row waits for the retry sweep). Check after the deploy: a free
+  probe of the reader key answers 200, and `seo_ops_alerts` has no new "page reader" row.
+- **Workflows**: no new workflow from page quality (Page Finalize already exists). Changed: the main workflow (`SEO_Agent_v4.json`,
+  most of the change), Page Finalize (own PDF through the production Gotenberg service, own files), Site Tracker, and a schema-only
+  line in the other generated workflows. After the merge the manifest also carries `SEOagentIndexCv1`, which the dry run must show
+  unchanged or updated, never missing.
+- **Page-quality commits since production's last page-quality-free state** (`003bb9cb`, 2026-10-28; the engine deployed 2026-10-29/30
+  from `feature/indexing` contains none of them), oldest first:
+  - R&D and plan `8caf2467`; pre-Wave-0 `a40ea8d0` `54c1a03b` `71e9d97c`; BEFORE run `f86fa880`.
+  - Wave 0 batch 1: `ee183236` + `217fa739` (W0-A meta), `ede5a595` (W0-F regulatory), `c99343c2` + `d7c35703` (W0-D hold),
+    `a1621024` (D8 price), `567fd7d1`, rebuild `ae1aacf2`.
+  - Batch 2: `ee182c90` + `f2d217a4` (W0-B blockers), `5e561878` (script-rendered sites), `f28e8783` (sources, byline, voice), rebuild `3e2f0a8e`.
+  - Batch 3: `9bdc9415` + `f469d03c` (W0-G final files), `078e5ea1` + `8d2430a7` (W0-E weaving), rebuild `f6c0fc27`.
+  - Batch 4: `682d77e1` + `5b9f76f7` (W0-H causes), rebuild `8c92e6d7`.
+  - Batch 5: `173e5fc9` (finalize contents list), `c4c0429b` + `9c9ab76a` (W0-C grade), rebuild `07308113`.
+  - Follow-ups and review: `c452093a`, `cbde5f8e`, `94ab1d2d`, rebuild `7c762edf`, `fed34d3c` (review), `fa08a18a` (BEFORE/AFTER).
+  - Wave 0.5: `2a28ff7c` (W05-A), `02348b50` (W05-B), `cc471ac7` (W05-C), merges, rebuild `1e705b72`, `99ddd4b0` (WAVE05).
+  - Wave 0.6: `cb937e77` (W06-B), `91b71099` (W06-A), merges, `42fb9c22`, rebuild `5d72a7d9`, and this file.
+
+### 5.3 Order (not while a cycle job is starting)
+
+Pick a quiet window: not within 2 hours of the Index coverage run (05:15 New York = 09:15 UTC), no website cycle or "Coming up" preview
+due in the next 15 minutes (the deploy guard refuses then; a *running* job is reported, and the dispatcher restarts it). Dispatcher mode
+and the AI pulse settings stay as they are.
+
+1. **Backup**: `deploy/gcp/backup.sh` (both databases to `gs://alaventra-prod-backups/pg/<date>/`). Note the file names.
+2. **API first** (it understands the engine's new states: holds, `needs_work`, failed rows, final files): on the VM, a detached
+   checkout of the merged `feature/seo-agent-v4.5` head in `/mnt/data/repo`, then `up -d --build app` (RUNBOOK §3). Check: healthy,
+   `/api/health` ok, the Indexing route still answers 401 signed out.
+3. **Web**: PR `feature/seo-agent-v4.5` -> `main` (Vercel deploys main). Only after step 2. Check the pricing page shows 114 / 9 and the
+   Indexing page still loads.
+4. **Engine**: open `deploy/gcp/tunnel.sh`, then from the main checkout at the same commit `python3 deploy/gcp/deploy_engine.py` (dry
+   run: the deploy guard, no missing column, no missing workflow, the expected updated list), then `--apply`. `--create-missing` is not
+   needed. Check: every manifest workflow published, `SEOagentIndexCv1` active, the Cycle Dispatcher active, `cycle:last` fresh.
+5. **Free checks after**: one "Write a page" form shows the 114-credit quote and the hold rule line; a held keyword's Needs you card
+   (if one comes up) shows the three choices; no execution error in the first hour. The first paid page run of a client is the real
+   live check: read its report (grade, "Needs work" reason if any, final version files).
+
+### 5.4 D17: shadow mode for automatic runs
+
+- Runs the system starts by itself (the cadence / autopilot, a ladder's own page runs, the tracker, case-study and audit spawns:
+  `client_ip` `cadence:` `ladder:` `tracker:` `casestudy:` `audit:`) are **not held**. Their hold is computed and logged (`would_hold`,
+  `hold_shadow` in the run and its callback), the second read is advice only, and the grade's fit floor is recorded, not applied. The page
+  is written as before. Runs a person starts (app, form, API) are asked.
+- Rule (owner D17): two cadence cycles of shadow logs and the owner's review of the first 20 would-be holds; then switch on, unless the
+  hold rate is above 40%. Switch: `CFG.automatic = 'enforce'` in `v5/code/Parse_Verdict.js` and `v5/code/_critic_reread.js` (and the
+  grade's automatic fit rule in `_grade.js`), rebuild, harness, engine deploy.
+- Put a reminder two cycles after the deploy date to read the `would_hold` lines.
+
+### 5.5 D8: the credit price change
+
+- `shared/src/cost.ts`: a written page is quoted at its measured **$1.90 = about 114 credits** (was $0.84 = 51) and never below it
+  (`QUOTE_FLOOR_KEYS`); a held keyword uses only the check, **$0.15 = about 9 credits** (`HOLD_CHECK_USD`). Charges still follow usage,
+  **capped at the quote**: Wave 0.5's pages measured about $1.08 of Claude each, so most pages are charged about 65 to 70 credits and the
+  quote is the ceiling. The cadence's default page price is $1.90.
+- Copy that changes with it: the pricing page examples ("A written page ... about 114 credits", new line "A page that waits for your OK
+  before writing (only the check) ... about 9 credits"), the credits FAQ, two marketing mockups, the form's cost line. The prices on the
+  pricing page are still marked placeholders for the owner to confirm (CLAUDE.md 2026-10-14).
+- Clients with a monthly credit limit will see fewer pages fit inside it on the quote; the charge itself rarely reaches the quote.
+
+### 5.6 Rollback
+
+- **Engine** (first, if the problem is in pages): from a checkout of production's previous engine commit (`feature/indexing` `5987fe9d`),
+  `python3 deploy/gcp/deploy_engine.py --apply` over the tunnel. No column to remove; `held` / `failed` content-log rows stay readable.
+- **API**: detached checkout of `fd32c0b4` on the VM, `up -d --build app`. No migration to undo.
+- **Web**: revert the merge commit on `main` (Vercel redeploys).
+- **Data**: the backup of step 1 only if rows were damaged (`deploy/gcp/restore.sh`); page quality writes no new table.
+
+## 6. Tutorial screens that changed (for the end-of-programme re-film)
+
+Wave 0 list (WAVE0_REVIEW.md section 5) plus Waves 0.5 and 0.6:
+
+- **4.1** Run an analysis: the credits on a page run (114) and on a held keyword (9).
+- **4.4** Write a page for a keyword: the hold rule line, "only the check" price note, the "Written anyway" callout; no false "already
+  written" warning after a hold or a failed run.
+- **4.5** Follow a run and open its reports: a held run's report ("Needs your OK", the three choices and what each does).
+- **5.1** Read your Pipeline: Needs you, "Needs your OK" card with "Improve the existing page" / "Use the recommended target" / "Write
+  it anyway" (new address copy).
+- **5.8** Write the pages Alaventra suggests: autopilot pages are checked but not held (no visible change; re-check the copy).
+- **6.3, 6.7, 6.8**: grade "95+", "Needs work: <part>" (also after sections were removed), the duplicate-page card, Accept all always
+  works, at most 8 questions, unplaced answers, the final version's own downloads.
+- **6.4** Check any page before you publish it: the grade in the publish check.
+- **10.2** Understand your credits: examples 114 and 9.
+- Check **5.4** and **11.9** for the status label "Needs work".
+
+Owner rule of 2026-10-30 (on `main`): no filming during the app revamp; this list goes into the video-skills repo's
+`alaventra/TUTORIALS_BACKLOG.md` as one row when the programme is deployed.
+
+## 7. Risks left after Wave 0.6
+
+- The K1 fix is now proven live (section 10: 8 sections kept, none removed), but the new K1 page is judged 65.5, still 4.5 under AFTER's
+  70.0 in the same session (repetition, thin proof, fit), and our grade reads it 81 / "Ready" on the final: 15.5 over the judges.
+- A "Write it anyway" page reuses the existing page's title tag word for word (section 10, finding 1): two pages, one title, one search.
+- The engine has no fallback when the page reader refuses (401 / 402): the reads fail silently (section 9 finding 2, section 10).
+- A run whose page reads all fail is not flagged: no ops alert, a wrong reason to the client (section 9, finding 2).
+- Our grade is still about 11 to 17 points above the judges on normal pages (Wave 2 calibration).
+- Fit unchanged: a service page on an explainer results page (Wave 1).
+- Thin proof of the business on client A pages (Wave 3); a page can still be written with no outside source (K6).
+- Small Finalize faults seen in Wave 0.5: a lost referent, a doubled invitation.
+- n = 4 keywords in Wave 0.5: single-page differences under about 5 points are noise.
+
+## 8. The two open items, closed offline (W06-C, branch `w06-open-items`)
+
+- **A final version of a page that lost sections could read "Ready".** The content callback's `page_run` now carries `sections_removed`
+  (the counts the delivered grade capped on, the share of the words, each heading taken out and why); the app carries it on its
+  allow-list (`PRC_GRADING`) to the finalize request; Finalize Verdict caps coverage and fit (GR.removedCap) while those sections are
+  still missing on the final version. A section written back lifts the cap; a section the client deletes is never counted as "lost in
+  editing". A report from before the field keeps the old behaviour, with the advice "Not checked: whether the page run took sections
+  out of this page". Pinned on the anonymised K1 replay (W06C1-W06C3): the K1 final version reads **"Needs work", 72** (coverage 6 of 15,
+  fit 8 of 20, "6 sections were taken out") instead of **"Ready", 90** without the field; with the six sections pasted back it reads
+  Ready, 95.
+- **Two brief-building steps matched the topics to leave out against the keyword alone.** Parse Brief (`_brief_guard.js`) and Brief
+  Context now pass the keyword family (`EXC.familyOf`: keyword, the brief's primary and secondary keywords, the site's services), as
+  Content QA does (W06C5): K1's four core outline sections and two sections of its own family ("e-invoicing", "implementation") are kept,
+  and a section that names "Dynamics GP and SL" still goes.
+- The guide that ranks (949) through the final version with the field: Ready, 99, the same grade as without it (W06C4).
+- Checks: build section 178; full harness **14900 passed, 0 failed**; app typecheck clean, shared 909, the server and web finalize suites
+  green. No migration, no Data Table column, no new workflow. Deploy order unchanged (section 5): the API first, so the app carries the
+  new field; an engine without it ignores the field, and an app without it sends none ("Not checked").
+
+## 9. K1 live re-check (2026-10-30, `b447c71f`)
+
+| | W05 (`1e705b72`) | W06 (`b447c71f`), this run |
+|---|---|---|
+| Stack | alvrun, restored from the BEFORE snapshots, re-seeded | the same: build == committed workflows, image == rebuilt, 25 active, AI pulse off, dispatcher plan_only, nothing published, no e-mail |
+| Held? | yes, as a **duplicate** of client A's existing service page (score 52) | yes, but on the **score** (38, "clearly low"), not as a duplicate |
+| Existing page | read and confirmed | **not confirmed**: told the client it "has no title, main heading or Search Console search on file" |
+| Choices shown | Improve the existing page / Use the recommended target / Write it anyway | Use the recommended target / Write it anyway |
+| Page reads | client 4/4, competitors, regulatory: all read | **every read refused, 402** (client 4/4, competitors 3/3, retry 3/3, regulatory 10/10) |
+| Cost | $0.1244 | $0.0845 |
+
+- **Judges' mean, new K1 vs W05 vs AFTER**: not measured. W05 delivered 60.5, AFTER 66.5 (same session); no new page was written, so
+  there is nothing to judge and no blind set or key was made.
+- **Sections kept, the new page's address, our grade vs the judges (delivered and final)**: not produced. The offline pins stand
+  (sections 1, 2 and 8): the K1 replay deletes 0 sections and keeps 2,210 words; the W05 page re-grades "Needs work" 72 (judges 60.5);
+  its final version reads "Needs work" 72 with the new field instead of "Ready" 90.
+- **The two open items**: closed in code and offline (section 8, `df9126da`, rebuilt `b447c71f`); this run did not reach them (no page,
+  no final version), so they are not proven live yet.
+- **Full harness at `b447c71f`**: **14900 passed, 0 failed** (recorded with the rebuild); app typecheck clean, shared 909 / server 1536 /
+  web 270, web build OK.
+- **Spend**: $0.0845 of the $3 stop (section 4).
+
+**Findings from this run**
+
+1. **HIGH, probably in production too: the page reader account is out of balance.** Every page read fails with 402. If production uses
+   the same key (not checked: out of this run's scope), every page run, hold check, publish check, AI-readiness check and link check
+   there is running without reading any page. **Owner: recharge the reader account (or rotate to a funded key) and look at production's
+   page runs since about 10:00 UTC on 2026-10-30.**
+2. **MEDIUM: the engine degrades silently when page reads fail.** No ops alert, nothing in the client's report, and a wrong reason to the
+   client ("has no title, main heading or Search Console search on file" when the page simply could not be fetched); the verdict scored
+   on search data alone and held the keyword on that score. A 401 / 402 from the reader should flag the run ("pages could not be read")
+   and raise an ops alert, as DataForSEO balance problems already do. Not fixed in this wave.
+
+**To finish the re-check** (after the reader is funded): one free probe of the key; K1 as a **new** run (this run's hold was decided
+without page reads; expect W05's path, held as a duplicate), "Write it anyway", collect, finalize, blind set and the two judges. About
+$1.10; $2.92 of the $3 stop is left. The alvrun stack is left running and idle on `b447c71f`. **Done the same day: section 10.**
+
+## 10. K1 live re-check (new reader key)
+
+**Why a second try.** The page reader key in use until 2026-10-30 ran out of balance between about 10:13 and 12:56 UTC (HTTP 402 on every
+read, section 9). The owner replaced it the same afternoon: the new key is in `n8n/.env` and in the reader credential of the isolated stack
+and of production (credential only, no deploy; production's secret store still holds the old value, the owner's step). A free probe of
+the new key answered 200. K1 was then run again as a **new** run on the same `b447c71f` stack, with the same request as W05 and the first
+try (2026-10-30 14:46-15:12 UTC). Nothing published, no e-mail, dispatcher plan_only, AI pulse off, only `alvrun-*` containers.
+
+**The hold, with the pages read.** Client pages 4/4, competitor pages 3/3, regulatory pages 9/9, none refused. K1 was held on two reasons:
+the score (48, under 50 with about 10 searches a month) and as a duplicate of client A's existing service page `/ms-365-erp-uae`, which
+was read and confirmed this time. Choices shown: Improve the existing page / Use the recommended target / Write it anyway (W05's path plus
+the score reason). "Write it anyway" was chosen, as in W05.
+
+**The page.**
+
+| K1 (client A, service page) | Address | Words / H2 | Sections removed | Our grade, delivered | Our grade, final | Judges' mean (editor / strategist) | Ready (judges) |
+|---|---|---|---|---|---|---|---|
+| AFTER (`fed34d3c`) delivered | `/ms-365-erp-uae` (the existing page's) | 2,734 / - | - | 59 not ready | - | **70.0** (71 / 69) | strategist yes, editor no |
+| W05 (`1e705b72`) delivered | `/ms-365-erp-uae` (the existing page's) | 1,023 / 3 | 6 | 79 ready with questions | 83 ready | **56.5** (59 / 54) | no |
+| **W06 (`b447c71f`), new run** | **`/ms-365-erp`, its own new address** | **2,845 / 8** | **0** (8 written, 8 kept) | **81 ready with questions** | **81 ready** | **65.5** (66 / 65) | no |
+
+- **Judges.** Two blind judges (editor, strategist) scored the four pages together (W06 delivered and final, W05 delivered, AFTER
+  delivered, shuffled; one SERP file with the three readings). Same-session means: **AFTER 70.0 > W06 65.5 > W05 56.5** (strategist's
+  ranking the same). The W06 final has the same text as the delivered page and the same scores. Earlier sessions put W05 at 60.5 and AFTER
+  at 66.5 / 70.5, so the absolute numbers move by about 4 between sessions; the order within one session is the reliable reading.
+- **What the fix bought.** The new K1 keeps every section (W05 lost 6 of its sections to the exclusion matcher; the verdict's "Microsoft
+  365 licensing" exclusion did not take out "Is Microsoft 365 an ERP?" this time): +9 over W05 in the same session, mostly on usefulness (+4
+  editor, +6 strategist) with small gains in fit and proof; the editor scored its structure lower than W05's (9 vs 11, repetition). It confirms the offline pins of sections 1 and 8 live.
+- **Why it is still under AFTER (-4.5).** Both judges capped structure for repetition (the "Microsoft 365 holds no ledger, stock or VAT
+  records" idea and the Business Central vs Finance split each stated 4 or more times), proof is slogan-level for a service page (partner
+  with no tier or link, "20+ years", "24/7", a sector list, "free consultation"; no case or named client), the first e-invoicing appointment
+  date (30 October 2026) is printed as a future deadline, and the SAP vs D365 answer is hedged. AFTER had the stronger decision help
+  (demo tests, legacy migration map, quote line items). The editor noted that a new URL beside the ranking page would cap fit at 6 of 20
+  (cannibalisation) but did not apply it; applied, the W06 page would read 60 on the editor's sheet (mean 62.5). The strategist capped fit
+  at 10 on every page (service page on an explainer results page) and said this page should replace the existing URL, not go next to it.
+- **Our grade vs the judges.** Delivered 81 vs 65.5 (+15.5); final 81 "Ready" vs 65.5, neither judge would publish it: the guards of
+  section 1 did not fire because no section was removed (correct), and the general generosity (+11 to +17 on normal pages, Wave 2) is what
+  is left. For comparison, the same session reads W05's 79 as +22.5 and AFTER's 59 as -11.
+- **Spend.** The finish: hold check $0.1143 + page $1.1634 + finalize $0 = **$1.2777**; Wave 0.6 in all **$1.3622 of the $3 stop**
+  (Claude $1.3059 + DataForSEO $0.0563, the DataForSEO balance moved by exactly the ledger's dfs_usd). Judges $0.
+
+**Findings from the finish**
+
+1. **MEDIUM (ranking): the new page's title tag is the existing page's title tag, word for word.** The client chose a separate page, but
+   two pages with one title for one search is the cannibalisation the hold warns about, and no review step flags it (the H1 differs). Fix:
+   on "Write it anyway" after a duplicate hold, the title and H1 must differ from the existing page's, checked in QA.
+2. **LOW: the new page does not link to the existing page**, although the writer was told to link to it where it helps the reader.
+3. **LOW: the second read advised using the existing page's slug**, against the client's choice; the engine did not apply it and the
+   client did not see it, but the reviewer is not told about the choice.
+4. Final = delivered again ("Accept all" with general answers changes nothing), as in W05.
+
+**Open resilience item (not fixed in this wave): the engine must fall back and alert when the page reader refuses.** The 402 run in
+section 9 showed that when the reader answers 401 / 402 every page read fails silently: no ops alert, nothing in the client's report, a
+wrong reason to the client ("has no title, main heading or Search Console search on file") and a verdict scored on search data alone.
+Wanted: on a 401 / 402 / 429 from the reader, (a) retry the read through a fallback (the same reader without the key answered 200 in the
+probe, or a direct fetch of the page), (b) raise an ops alert like a DataForSEO balance problem, and (c) when the fallback also fails,
+mark the run "pages could not be read" instead of deciding a hold, a verdict or a grade without them. This is the next engine item,
+before the merge of `main` and the deploy (section 5). **Done in code: section 11.**
+
+## 11. The page reader's fallback and alert (W07-A, 2026-10-31, branch `w07-reader`; closes the open resilience item above)
+
+Code only, $0, nothing deployed. Build section 179 (`build_v4.py`), `reader_fallback.py`, kit `v5/code/_reader.js`, nodes
+`v5/code/Reader_Fallback.js`, `Reader_Refusals.js`, `Reader_Alert_Plan.js`, `Reader_Alert_Send.js`, `Reader_Alert_Delivery.js`.
+
+- **Every read path is covered, found by the credential** (`SEOcredJinaReade`): 13 reader nodes. Main workflow: Read Website, Read Nav
+  Pages (site description), Read Client Pages, Render Client Pages, Render More Client Pages, Read Competitor Pages, Retry Blocked Pages,
+  Read Competitor Homes, Read Regulatory Pages (verified facts), Fetch Refresh Sources (a refresh's cited sources), Render Key Pages
+  (audit render check); AI Visibility Tracker: Read Site (AI); Backlink Monitor: Render Pages (link check). The publish check, AI
+  readiness and the link checks' plain fetches do not use the reader (they are direct GETs) and are unchanged. The build fails when a
+  reader node has no fallback.
+- **(a) Fallback.** Each reader node is renamed `<name> (reader)` and followed by a Code node that takes its name, so every downstream
+  node and `$('<name>')` reads the same items in the same order. Only a refusal (401 / 402 / 429, or 403 in the reader's own key /
+  balance / rate words) is read again: first the same reader without the key (at most 12 a step, 3.2 s apart, stopped at its first
+  refusal), then, for a text read, a direct fetch of the page turned into the reader's line format by the client-render path's
+  HTML-to-text (`CRK.linesOf`; a homepage read keeps the site's own menu links for the nav pages). A render read (the page after its
+  scripts ran) never falls back to the plain HTML. A page that is down, blocked or slow is not a refusal and is left exactly as it was.
+- **(b) One ops alert.** `Reader Refusals -> Load Ops Alerts (Reader) -> Reader Alert Plan (OA.plan) -> Save Reader Alert ->
+  Reader Alert Send -> Post Reader Alert (fullResponse + neverError) -> Reader Alert Delivery (AR.posted) -> Save Reader Alert Delivery`,
+  fed by every fallback node: recorded in `seo_ops_alerts` first, critical, named "The page reader refused reads: HTTP 402
+  InsufficientBalanceError" with what the fallback recovered and what to do; the same identity for every step and every run of the next
+  30 minutes (counted, not re-sent); delivered only on a 2xx (state_lint rule 4 passes).
+- **(c) Nothing decided on pages nobody read.** Collect Client Pages: an existing page the run could not confirm from what is on file
+  and could not read is `existing_page_unread` ("it could not be read: ..."), never "has no title, main heading or Search Console search
+  on file". Parse Verdict (`PU`): when the reader refused and the fallback failed for the page the site already has, the site's own
+  pages or the pages that rank, there is no verdict (`NOT_CHECKED`), no score, no hold, no shadow hold, no duplicate check, no advice,
+  and `pages_unread` names what was missing and why in plain words. A page run stops before the brief (*Need Content?*), its started
+  content-log row becomes `failed` (tried again, never `held`), the callback carries `pages_unread`, the Word / PDF report says the pages
+  could not be read, Ladder Plan refuses to plan (`pages_unread`). App: the report shows "We could not read the pages this check needs"
+  with the reason, and the report is not delivered by e-mail / webhook (`unavailable`). Changelog line in 4.5.
+- **Also fixed:** the Backlink Monitor's render (`neverError`, no full response) handed the reader's 402 error JSON on as the linking
+  page's HTML; it is now unread ("not checked", never "missing").
+- **Pins** (`harness/scenarios_w07a.js`, fixture `harness/fixtures/w07a_reader402.json`: the 402 run's 20 reader items, anonymised):
+  W07A1 refusal detection (the production item, full response, body field, 401 / 429 / 403; not a 422, a time-out, a blocked domain, a
+  page about balances); W07A2 the 402 replay with the fallback failing (recorded: GO_WITH_CHANGES 38 held, "no title on file"; now
+  NOT_CHECKED, no hold, stopped, "could not be read", content log failed); W07A3 recovery by the reader without the key and by a direct
+  read, the page confirmed by its own title and the verdict decided as before; W07A4 a funded key: the same objects, no call, Collect
+  Client Pages and Parse Verdict byte for byte the same; W07A5 render reads; W07A6 the alert; W07A7 the generated wiring. FUR5 updated
+  for the renamed render nodes.
+- **Checks:** build exit 0 (`--no-env`), full harness **14986 passed, 0 failed**; app typecheck (shared, web) clean, shared 910 / web 270.
+- **Live check still to do (after the deploy, free):** a refusal cannot be forced without breaking the key; the first real refusal is the
+  test. Optional on the isolated stack: set the reader credential to an invalid key, run one keyword check, expect one `seo_ops_alerts`
+  row and pages read through the fallback.
+- **Note for the integrator:** the HTTP node names changed (`<name> (reader)`); anything outside this repo that looks a reader node up by
+  name (none found in `app/` or `deploy/`) must follow.

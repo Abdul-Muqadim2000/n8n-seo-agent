@@ -211,13 +211,25 @@ describe('answering: saved per question, kept as business facts, never asked aga
     expect(keys.indexOf('business')).toBeLessThan(keys.indexOf('business_facts'));
     expect(keys.indexOf('business_facts')).toBeLessThan(keys.indexOf('business_facts_kv'));
   });
-  it('accept all suggestions answers every open question that has one', async () => {
+  it('accept all suggestions confirms every open yes / no question that has one, never a question that needs the client\'s own words (W0-E); the others are left general for this page so the final version can be made (W05-C)', async () => {
     const s = await setup();
     const v = view(await s.u.c.post(`${s.base}/accept-prefilled`, {}));
     expect(v.answers.q1).toMatchObject({ decision: 'yes', fromPrefill: true });
-    expect(v.answers.q3).toMatchObject({ decision: 'answer', text: 'Microsoft Solutions Partner' });
-    expect(v.answers.q2).toBeUndefined();
-    expect((await s.u.c.post(`${s.base}/accept-prefilled`, {})).status).toBe(400);   // nothing left with a suggestion
+    expect(v.answers.q3).toMatchObject({ decision: 'general', fromPrefill: true });   // a text question with a suggestion is never answered with it (3299 stored a homepage slogan as proof)
+    expect(v.answers.q2).toMatchObject({ decision: 'general', fromPrefill: true });
+    expect(v.finalize.needed).toBe(true);
+    const [site] = await db.select().from(schema.sites).where(eq(schema.sites.id, s.site.id));
+    expect(Object.keys(site!.factAnswers).sort()).toEqual(['service.business_discovery_assess']);   // left general by one click: not kept for later pages
+    const again = await s.u.c.post(`${s.base}/accept-prefilled`, {});
+    expect(again.status).toBe(400);   // nothing left open
+    expect(again.body.error ?? again.body.message).toMatch(/already answered or decided/);
+  });
+  it('W05-C: a page whose suggestions all need the client\'s own words (K1, K4, K8) is no longer refused: every question is left general and the final version can be made', async () => {
+    const s = await setup({ payload: payload({ qa_client_questions: [Q2, Q3] }) });
+    const v = view(await s.u.c.post(`${s.base}/accept-prefilled`, {}));
+    expect(v.answers.q2).toMatchObject({ decision: 'general', fromPrefill: true });
+    expect(v.answers.q3).toMatchObject({ decision: 'general', fromPrefill: true });
+    expect(v.finalize.needed).toBe(true);
   });
 });
 
@@ -447,5 +459,51 @@ describe('pure rules', () => {
     expect(svc.setFact({}, 'proof.x', { decision: 'general' }, null, 't')).toMatchObject({ facts: { 'proof.x': { decision: 'general', text: '', category: 'proof' } } });
     expect(svc.setFact({}, 'proof.x', { decision: 'answer', text: '' }, null, 't')).toMatchObject({ error: expect.stringContaining('Write the detail') });
     expect(svc.setFact({}, 'proof x', { decision: 'general' }, null, 't')).toMatchObject({ error: 'Unknown business detail.' });
+  });
+});
+
+// W0-A (2026-10-29, n8n/seo-agent/docs/page-quality-2026-10-29/PLAN.md Fix 1): production page 3299 stored "Slug: ms-365-erp-uae" as its
+// meta description (the engine's claim check emptied it and a reader took the next line); the app showed it and sent it back to finalize.
+describe('a broken meta description (W0-A)', () => {
+  const broken = () => payload({ meta: { ...(payload().meta as object), meta_description: 'Slug: erp-systems-uae' } });
+  const REBUILT = 'ERP systems in the UAE: how to choose between the main products, what to check for VAT and e-invoicing, and the questions to ask a partner.';
+  it('is repaired when the review is read: shown as missing, with what to do', async () => {
+    const s = await setup({ payload: broken() });
+    const v = view(await s.u.c.get(s.base));
+    expect(v.delivered.metaDescription).toBe('');
+    expect(v.delivered.metaDescriptionNote).toMatch(/^Missing\. Make the final version/);
+    const good = await setup();
+    const g = view(await good.u.c.get(good.base));
+    expect(g.delivered.metaDescription).toBe('How to choose an ERP system in the UAE.');   // short but the page's own: shown as it is
+    expect(g.delivered.metaDescriptionNote).toBe('');
+  });
+  it('is never sent back to the engine, and the final version keeps the description the engine wrote', async () => {
+    const s = await setup({ payload: broken() });
+    await s.u.c.put(`${s.base}/answers`, { answers: [{ questionId: 'q1', decision: 'yes' }] });
+    t.finalizeAnswer = {
+      kind: 'answered',
+      status: 200,
+      error: null,
+      json: {
+        ok: true,
+        request_id: 'x',
+        markdown: MD.replace('A sound selection starts with business discovery.', 'Before we recommend a product, we run business discovery in our Assess phase.'),
+        applied: [{ id: 'q1', how: 'kept_original', section: 's0' }],
+        sections_rewritten: [],
+        changes: [],
+        delivery_status: 'ready',
+        delivery: { status: 'ready', label: 'Ready to publish', blocking: [], advisory: [], next_step: '', grade: { score: 92 } },
+        client_questions: [],
+        grade: { score: 92 },
+        cost: { claude_usd: 0, dfs_usd: 0, estimated: false, model_calls: 0 },
+        meta: { title: 'ERP Systems in UAE: How to Choose', meta_description: REBUILT, slug: 'erp-systems-uae' },
+      },
+    };
+    await s.u.c.post(`${s.base}/finalize`, {});
+    const v = await waitFinal(s.u.c, s.base);
+    expect(v.finalize.status).toBe('done');
+    expect((t.finalize[0]!.meta as Record<string, unknown>).meta_description).toBe('');
+    const [rep] = await db.select().from(schema.reports).where(eq(schema.reports.id, v.finalize.reportId!));
+    expect(((rep!.payload as Record<string, unknown>).meta as Record<string, unknown>).meta_description).toBe(REBUILT);
   });
 });

@@ -10,13 +10,39 @@
 const item = $input.first(); const d = item.json || {};
 const md0 = String(d.page_markdown || '');
 if (!md0.trim()) return [item];
-const metaRe = /^(Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):\s*(.+)$/gim;
+// W0-A (2026-10-29, page-quality PLAN Fix 1): `:\s*(.+)$` ran over the line end, so an empty "Meta Description:" took the next line
+// ("Slug: ms-365-erp-uae") as the description and the Slug line was lost (production run 3299). Each field is read on its own line.
+const metaRe = /^(Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):[ \t]*(.*)$/gim;
 const metaLines = {}; let mm; while ((mm = metaRe.exec(md0)) !== null) metaLines[mm[1].toLowerCase()] = mm[2].trim();
 let md = md0.replace(metaRe, '').replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/gi, '').replace(/^\s*(Production Brief|Note|Editor's note):.*$/gim, '').replace(/[ \t]*\[(?:Image|Video)\s*:(?:[^\[\]\n]|\[[^\[\]\n]*\])*\][ \t]*/gi, '').replace(/\n{3,}/g, '\n\n').trim();
+const __redir = SRC.unredirect(md); md = __redir.text;   // FU-SV (2026-10-29): a search-engine redirect never reaches the package: its target, or its words without the link
 md = md.replace(/\]\((https?:\/\/[^)\s]+)\)/g, (m, u) => '](' + SRC.clean(u) + ')');   // FIX_PLAN G4: utm_*, srsltid, gclid, fbclid never reach the published page
 const h1 = (md.match(/^#\s+(.+)$/m) || [])[1] || '';
 md = md.replace(/^#\s+.+$\n?/m, '').trim();
-const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// FU-SV (2026-10-29, page-quality BEFORE run, 3 of 8 pages): one byline. The package prints the structured byline under the H1 (author,
+// "Updated" date, reviewer) on every article and, with a profile on file, on every other page; the writer also wrote its own ("Written by
+// the ... Team and reviewed by ...", "This page was written by ... and reviewed by ...", "*By ... · Updated ...*"), so the page named its
+// author twice. A paragraph that is only such a line (up to 70 words, opening with it, naming the author, the reviewer, the business or
+// its team) is taken out when the structured byline will be printed; one naming a reviewer is taken out only when the byline names one.
+const byline_duplicates_removed = [];
+{
+  const AU0 = d.author || null, RV0 = d.reviewer || null;
+  const al0 = d.article_like != null ? !!d.article_like : /blog|guide|article|pillar|hub|case stud/.test(String(d.recommended_page || d.page_type || '').toLowerCase());
+  if (al0 || AU0) {
+    const OPEN = /^(?:(?:this|the|our)\s+(?:page|guide|article|post|piece|checklist|comparison|overview|explainer|content)\s+(?:was|is|has been)\s+)?(?:written|authored|prepared|produced|created|compiled)(?:\s+and\s+(?:reviewed|checked|fact[- ]checked|edited))?\s+by\b|^(?:(?:it|this (?:page|guide|article))\s+(?:was|has been)\s+)?(?:reviewed|fact[- ]checked|checked)\s+by\b|^by\s+[^.·]{2,120}·\s*(?:updated|published|last updated)\b/i;
+    const who = [AU0 && AU0.name, RV0 && RV0.name, (d.site_profile || {}).business_name].map(x => String(x || '').toLowerCase().trim()).filter(x => x.length >= 3);
+    md = md.split('\n').filter(line => {
+      const t = line.trim(); if (!t || /^(?:#|[-+]\s|\d+[.)]\s|\||>|!\[)/.test(t)) return true;
+      const p = t.replace(/\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]+/g, '').replace(/\s+/g, ' ').trim();
+      if (!OPEN.test(p) || p.split(' ').length > 70) return true;
+      const low = p.toLowerCase();
+      if (!(who.some(w => low.includes(w)) || /\b(?:our|team|consultants?|editors?|experts?)\b/.test(low))) return true;
+      if (/\b(?:reviewed|fact[- ]checked|checked)\s+by\b/.test(low) && !RV0) return true;   // the structured byline names no reviewer: keep the only mention
+      byline_duplicates_removed.push(p.slice(0, 200)); return false;
+    }).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+}
+const esc =(s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const inline = (s) => { let t = esc(s); t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>'); t = t.replace(/\[([^\[\]]+)\]\(([^)]+)\)/g, (m, a, u) => '<a href="' + SRC.clean(u) + '">' + a + '</a>'); return t; };   // FIX_PLAN G4: no tracking parameters leave the package
 const anchorIds = new Map();   // H2 ids for the table of contents (unique, stable)
 const anchorOf = (h) => { if (anchorIds.has(h)) return anchorIds.get(h); let a = String(h).toLowerCase().replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'section'; let k = a, i = 2; while ([...anchorIds.values()].includes(k)) k = a + '-' + (i++); anchorIds.set(h, k); return k; };
@@ -41,11 +67,12 @@ function mdToHtml(text) {
   }
   closeList(); closeTable(); return out.join('\n');
 }
-const cleanUrls = (x) => Array.isArray(x) ? x.map(cleanUrls) : (x && typeof x === 'object') ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, cleanUrls(v)])) : (typeof x === 'string' && /^https?:\/\//i.test(x) ? SRC.clean(x) : x);
+const opaqueRedirect = (v) => typeof v === 'string' && SRC.isRedirect(v) && !SRC.unwrap(v);   // FU-SV: no schema citation through a redirect
+const cleanUrls = (x) => Array.isArray(x) ? x.filter(v => !opaqueRedirect(v)).map(cleanUrls) : opaqueRedirect(x) ? '' : (x && typeof x === 'object') ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, cleanUrls(v)])) : (typeof x === 'string' && /^https?:\/\//i.test(x) ? SRC.clean(x) : x);
 const schema = (Array.isArray(d.schema_blocks) ? d.schema_blocks : []).map(b => (b && b.json) ? { ...b, json: cleanUrls(b.json) } : cleanUrls(b));
 const title = metaLines.title || h1 || d.keyword || 'New page';
 const slug = (String(d.content_brief_slug || metaLines.slug || title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)) || 'page';
-const description = metaLines['meta description'] || '';
+const description = /^(?:Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary Keywords|URL|Page Type)\s*:/i.test(metaLines['meta description'] || '') ? '' : (metaLines['meta description'] || '');   // W0-A: a field label is never a description
 const headings = [...md.matchAll(/^(#{2,3})\s+(.+)$/gm)].map(x => ({ level: x[1].length, text: x[2].trim() }));
 const links = [...md.matchAll(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g)].map(x => ({ text: x[1], url: x[2] }));
 const dom = String(d.domain || '').toLowerCase();
@@ -88,7 +115,13 @@ let bodyHtml = mdToHtml(md); let mdOut = md;
 const role = d.page_role || 'standard'; const pt = String(d.recommended_page || d.page_type || '').toLowerCase();
 const articleLike = d.article_like != null ? !!d.article_like : /blog|guide|article|pillar|hub|case stud/.test(pt);
 const AU = d.author || null, RV = d.reviewer || null, P = d.site_profile || null, V = d.video && d.video.url ? d.video : null, CS = d.case_study || null;
-const today = new Date().toISOString().slice(0, 10);
+// W05-A (wave 0.5, 2026-10-30): the visible "Updated" date is the website's market day (Regulatory Plan's as_of, in the market's time
+// zone: Asia/Dubai for the UAE), the day the second read and the regulatory status take as today. A run at 22:31 UTC on 29 October dated
+// a UAE page 29 October while the read and the deadlines said 30 October. UTC only when no market day is known.
+const today = (() => { const ok = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
+  try { const r0 = ($('Parse Brief').first().json.regulatory || {}).as_of; if (ok(r0)) return String(r0); } catch (e) {}
+  try { const r1 = $('Collect Regulatory Facts').first().json.regulatory.as_of; if (ok(r1)) return String(r1); } catch (e) {}
+  return new Date().toISOString().slice(0, 10); })();
 const dateText = new Date(today + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 const a = (href, text, rel) => href ? '<a href="' + esc(href) + '"' + (rel ? ' rel="' + rel + '"' : '') + '>' + esc(text) + '</a>' : esc(text);
 const authorName = AU ? AU.name : '[Author Name]', authorUrl = AU ? (AU.url || '') : '[Author Page URL]';

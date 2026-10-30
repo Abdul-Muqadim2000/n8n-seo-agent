@@ -13,6 +13,7 @@
 const OB = (() => {
   const S = (v) => String(v == null ? '' : v);
   const MAX = 25;
+  const REDIRECT = /^https?:\/\/(?:[a-z0-9-]+\.)*(?:google\.[a-z]{2,3}(?:\.[a-z]{2})?\/(?:url|goto|aclk|search\/url|imgres)(?=[?\/#]|$)|vertexaisearch\.cloud\.google\.com\/grounding-api-redirect\/|news\.google\.com\/(?:rss\/)?(?:articles|read)\/|bing\.com\/ck\/a(?=[?\/#]|$))/i;
   const hostOf = (u) => { const m = S(u).match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '') : ''; };
   const keyOf = (u) => S(u).trim().toLowerCase().replace(/^https?:\/\/(?:www\.)?/, '').replace(/#.*$/, '').replace(/\/+$/, '');
   // the links to fetch: every distinct external URL of the draft, in page order, at most MAX
@@ -20,6 +21,7 @@ const OB = (() => {
     const seen = new Set(); const out = [];
     for (const l of (Array.isArray(links) ? links : [])) {
       const url = S(l && l.url).trim(); if (!/^https?:\/\//i.test(url)) continue;
+      if (REDIRECT.test(url)) continue;   // FU-SV: a search-engine redirect is never a citation (Content QA resolves or unlinks it; same forms as SRC.isRedirect)
       const k = keyOf(url); if (seen.has(k)) continue; seen.add(k);
       out.push({ url, anchor: S(l.anchor), host: hostOf(url), round: Number(round) || 1 });
       if (out.length >= MAX) break;

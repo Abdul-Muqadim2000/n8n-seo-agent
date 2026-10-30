@@ -9,6 +9,9 @@ import {
   cmsPage,
   cmsReadiness,
   deliveryOf,
+  DUPLICATE_DECISION_KEY,
+  duplicatePagesOf,
+  duplicateReasonProblem,
   factOf,
   FACT_DECISION_LABEL,
   FINALIZE_STALE_MINUTES,
@@ -16,6 +19,8 @@ import {
   finalizeNeeded,
   finalReportPayload,
   keyCost,
+  metaDescriptionView,
+  cleanMetaDescription,
   n8nSiteId,
   NEEDS_YOU_QUESTION_PAGES,
   openQuestions,
@@ -24,7 +29,7 @@ import {
   pageMarkdownWithMeta,
   personDisplayName,
   plainWords,
-  prefilledAnswer,
+  acceptAllPlan,
   questionsOf,
   reviewPersonIds,
   reviewStage,
@@ -38,6 +43,8 @@ import {
   type FactAnswers,
   type FinalizeResult,
   type NeedsYouItem,
+  type PageRunContext,
+  type DuplicateDecision,
   type PageAnswer,
   type PageReviewSummary,
   type PageReviewView,
@@ -53,6 +60,7 @@ import { assertCredits, siteForecasts } from './billing';
 import { assertBudget, assertPlatformCapacity, lockCompany } from './spend';
 import { audit } from './audit';
 import { emitRunsFailed } from './webhooks';
+import { finalVersionFiles, isImageRow, type StoredFileRow } from './finalFiles';
 
 // H3 (2026-10-28, n8n/seo-agent/docs/content-quality-2026-10-27): the review of a written page. The engine delivers the page with its
 // status (ready / ready with questions / not ready), the grade of the delivered page and every client question (H1). Here the client:
@@ -88,10 +96,19 @@ export function answersFor(all: Record<string, PageAnswer> | null | undefined, o
   const out: Record<string, PageAnswer> = {};
   const prefix = `${reportId}/`;
   for (const [k, v] of Object.entries(all ?? {})) {
+    if (k.startsWith('@')) continue;   // W0-B: a decision of the whole review (DUPLICATE_DECISION_KEY), not an answer of one version
     if (reportId === originalId ? !k.includes('/') : k.startsWith(prefix)) out[reportId === originalId ? k : k.slice(prefix.length)] = v;
   }
   return out;
 }
+
+/** W0-B (owner decision D2): the client's answer to "this website already has a page for the same search", kept once for the whole review. */
+export function duplicateDecisionOf(all: Record<string, PageAnswer> | null | undefined): PageAnswer | null {
+  const a = (all ?? {})[DUPLICATE_DECISION_KEY];
+  return a && typeof a.text === 'string' && a.text.trim() ? a : null;
+}
+/** The decision as the engine reads it (FinalizeBody.duplicate_decision). */
+export const duplicateDecisionBody = (a: PageAnswer | null): DuplicateDecision | null => (a ? { choice: 'differs', reason: a.text } : null);
 
 interface Loaded {
   report: ReportRow;
@@ -153,12 +170,14 @@ export function finalizeStateOf(row: Pick<PageReviewRow, 'finalRunId' | 'finalRe
 }
 
 /** Whether a final version is worth making now (anything changed since the last one started) and, if not, why (pure). */
-export function finalizeNeedOf(o: { answers: Record<string, PageAnswer>; clientMarkdown: string | null; clientSavedAt: Date | null; since: Date | null; status: FinalizeState['status'] }): { needed: boolean; reason: string } {
+export function finalizeNeedOf(o: { answers: Record<string, PageAnswer>; clientMarkdown: string | null; clientSavedAt: Date | null; since: Date | null; status: FinalizeState['status']; openCount?: number }): { needed: boolean; reason: string } {
   if (o.status === 'running') return { needed: false, reason: 'The final version is being made now.' };
   const after = (at: string | Date | null | undefined) => !o.since || (at ? new Date(at).getTime() > o.since.getTime() : false);
   const fresh = Object.values(o.answers).filter((a) => after(a.at));
   const edited = !!o.clientMarkdown && after(o.clientSavedAt);
-  if (finalizeNeeded(fresh, edited)) return { needed: true, reason: '' };
+  // W05-C: the first final version once every question is decided, even when all were left general ("Accept all" on a page whose
+  // suggestions all need the client's own words)
+  if (finalizeNeeded(fresh, edited, !o.since && o.openCount === 0)) return { needed: true, reason: '' };
   return { needed: false, reason: o.since ? 'Nothing changed since the last final version: answer a question or edit the page first.' : 'Answer a question or edit the page first: as it is, nothing would change.' };
 }
 
@@ -214,9 +233,13 @@ export async function reviewView(a: OrgAccess, l: Loaded): Promise<PageReviewVie
     fin = { status: 'failed', stale: false };
   }
   const baseAnswers = answersFor(row?.answers, l.original.id, base.id);
-  const need = finalizeNeedOf({ answers: baseAnswers, clientMarkdown: row?.clientMarkdown ?? null, clientSavedAt: row?.clientSavedAt ?? null, since: row?.finalReportId ? (row.finalStartedAt ?? null) : null, status: fin.status });
+  const decision = duplicateDecisionOf(row?.answers);
   const questions = questionsOf(payload);
   const open = openQuestions(questions, answers, facts);
+  const openBase = openQuestions(questionsOf(obj(base.payload)), baseAnswers, facts).length;
+  const need = finalizeNeedOf({ answers: { ...baseAnswers, ...(decision ? { [DUPLICATE_DECISION_KEY]: decision } : {}) }, clientMarkdown: row?.clientMarkdown ?? null, clientSavedAt: row?.clientSavedAt ?? null, since: row?.finalReportId ? (row.finalStartedAt ?? null) : null, status: fin.status, openCount: openBase });
+  // W0-B (D2): the website's page this one duplicates, while that blocker is open on the delivered page, and what the client decided
+  const dupPages = duplicatePagesOf(obj(l.original.payload));
   const publish = await publishState(a.org.id, l);
   const delivery = deliveryOf(payload);
   const bp = obj(base.payload);
@@ -229,7 +252,8 @@ export async function reviewView(a: OrgAccess, l: Loaded): Promise<PageReviewVie
     delivery,
     questions: questions.map((q) => ({ ...q, stored: storedFactFor(q, facts) })),
     answers,
-    delivered: { markdown: str(bp.markdown), title: str(bmeta.title), metaDescription: str(bmeta.meta_description), slug: str(bmeta.slug) },
+    // W0-A (2026-10-29): read-time repair of a report written before the meta fix ("Slug: ..." as its description): shown as missing
+    delivered: (() => { const md = metaDescriptionView(bmeta.meta_description); return { markdown: str(bp.markdown), title: str(bmeta.title), metaDescription: md.text, metaDescriptionNote: md.note, slug: str(bmeta.slug) }; })(),
     clientVersion: row?.clientMarkdown != null && row.clientSavedAt
       ? { markdown: row.clientMarkdown, savedAt: row.clientSavedAt.toISOString(), savedBy: row.clientSavedBy ?? null, check: row.clientCheck ?? null }
       : null,
@@ -248,6 +272,13 @@ export async function reviewView(a: OrgAccess, l: Loaded): Promise<PageReviewVie
     stage: reviewStage({ delivery, openQuestions: open.length, finalize: { status: fin.status }, isFinal, approved: !!row?.approvedAt, publish: publish.status }),
     isFinal,
     finalOf: isFinal ? l.original.id : null,
+    duplicate: dupPages.length
+      ? {
+          pages: dupPages,
+          decision: decision ? { choice: 'differs', reason: decision.text, at: decision.at, by: decision.by ?? null } : null,
+          rewrite: { keyword: str(obj(l.original.payload).keyword) || str(obj(obj(l.original.payload).meta).primary_keyword), pageType: str(obj(obj(l.original.payload).meta).page_type), country: str(obj(l.original.payload).country) },
+        }
+      : null,
   };
   return { ...view, people: await peopleOf(reviewPersonIds(view)) };
 }
@@ -355,13 +386,47 @@ export async function putAnswers(a: OrgAccess, req: FastifyRequest | null, repor
   return saveAnswers(a, req, await loadReview(a.org.id, reportId), parsed.data.answers, false);
 }
 
-/** Every unanswered question that has a suggestion, answered with it in one click (a stored fact is not asked, so not answered). */
+/**
+ * W0-B (owner decision D2): "this website already has a page for the same search". The page is published only as an update of that page
+ * (the report offers a page run that rewrites it, quoted and charged as a page) or with the client's reason, recorded here, sent with the
+ * next final version and shown on it; the grade keeps its limit for fit. `choice: null` takes the reason back.
+ */
+export const decisionSchema = z.object({ choice: z.enum(['differs']).nullable(), reason: z.string().max(2000).optional() });
+
+export async function putDecision(a: OrgAccess, req: FastifyRequest | null, reportId: unknown, body: unknown): Promise<PageReviewView> {
+  const parsed = decisionSchema.safeParse(body ?? {});
+  if (!parsed.success) throw validationError(parsed.error);
+  const l = await loadReview(a.org.id, reportId);
+  if (l.row?.approvedAt) throw conflict('This page is approved: its decisions can no longer change.', 'approved');
+  const answers = { ...(l.row?.answers ?? {}) };
+  if (parsed.data.choice === null) {
+    if (!(DUPLICATE_DECISION_KEY in answers)) return reviewView(a, l);
+    delete answers[DUPLICATE_DECISION_KEY];
+  } else {
+    if (!duplicatePagesOf(obj(l.original.payload)).length) throw badRequest('This page has no other page of your website for the same search, so there is nothing to decide.');
+    const reason = plainWords(parsed.data.reason ?? '').replace(/\s+/g, ' ').trim();
+    const why = duplicateReasonProblem(reason);
+    if (why) throw badRequest(why);
+    answers[DUPLICATE_DECISION_KEY] = { questionId: DUPLICATE_DECISION_KEY, factKey: '', decision: 'answer', text: reason, at: new Date().toISOString(), by: a.user.id };
+  }
+  const row = await ensureRow(a.org.id, l);
+  const [saved] = await db.update(schema.pageReviews).set({ answers, updatedAt: new Date() }).where(eq(schema.pageReviews.id, row.id)).returning();
+  l.row = saved!;
+  await audit(req, a.org.id, { action: 'page.duplicate_decision', target: { type: 'report', id: l.original.id, label: str(obj(l.original.payload).keyword) || l.original.title }, details: { choice: parsed.data.choice ?? 'cleared' } });
+  return reviewView(a, l);
+}
+
+/**
+ * "Accept all suggestions" (W05-C, 2026-10-30): every open yes-or-no question that has a suggestion is confirmed; every other open question
+ * is left general on this page (never answered with a suggestion: W0-E, 3299 stored a homepage slogan as proof), so the final version can be
+ * made. A stored fact is not asked, so not answered; a question left general here is not stored and a later page may ask it again.
+ */
 export async function acceptPrefilled(a: OrgAccess, req: FastifyRequest | null, reportId: unknown): Promise<PageReviewView> {
   const l = await loadReview(a.org.id, reportId);
   const questions = questionsOf(obj(l.report.payload));
   const open = openQuestions(questions, answersFor(l.row?.answers, l.original.id, l.report.id), (l.site?.factAnswers ?? {}) as FactAnswers);
-  const input = open.map((q) => ({ q, p: prefilledAnswer(q) })).filter((x) => x.p).map((x) => ({ questionId: x.q.id, decision: x.p!.decision, text: x.p!.text }));
-  if (!input.length) throw badRequest('No open question has a suggestion to accept.');
+  const input = acceptAllPlan(open);
+  if (!input.length) throw badRequest('Every question on this page is already answered or decided. Change an answer one by one if you need to.');
   return saveAnswers(a, req, l, input, true);
 }
 
@@ -382,7 +447,7 @@ async function checkVersion(orgId: string, l: Loaded, md: string, openCount: num
   if (words < 50) return pageCheckOf({ ran: false, note: 'The page is shorter than 50 words, so it was not checked.' }, openCount, at);
   const res = await publishCheckCall(
     {
-      markdown: pageMarkdownWithMeta(md, { title: str(meta.title), meta_description: str(meta.meta_description), slug: str(meta.slug) }),
+      markdown: pageMarkdownWithMeta(md, { title: str(meta.title), meta_description: cleanMetaDescription(meta.meta_description), slug: str(meta.slug) }),   // W0-A: never "Slug: ..."
       keyword,
       ...(l.site ? { domain: l.site.domain, country: l.site.country } : {}),
       ...(str(meta.page_type) ? { page_type: str(meta.page_type).slice(0, 60) } : {}),
@@ -467,7 +532,9 @@ export async function startFinalize(a: OrgAccess, req: FastifyRequest | null, re
   if (st.status === 'running') throw conflict('The final version is being made now. It appears here in a minute or two.', 'finalize_running');
   const base = baseOf(l);
   const baseAnswers = answersFor(row.answers, l.original.id, base.id);
-  const need = finalizeNeedOf({ answers: baseAnswers, clientMarkdown: row.clientMarkdown, clientSavedAt: row.clientSavedAt, since: row.finalReportId ? row.finalStartedAt : null, status: st.status });
+  const decision = duplicateDecisionOf(row.answers);
+  const openBase = openQuestions(questionsOf(obj(base.payload)), baseAnswers, (l.site?.factAnswers ?? {}) as FactAnswers).length;
+  const need = finalizeNeedOf({ answers: { ...baseAnswers, ...(decision ? { [DUPLICATE_DECISION_KEY]: decision } : {}) }, clientMarkdown: row.clientMarkdown, clientSavedAt: row.clientSavedAt, since: row.finalReportId ? row.finalStartedAt : null, status: st.status, openCount: openBase });
   if (!need.needed) throw conflict(need.reason, 'finalize_not_needed');
   const quote = await finalizeQuote();
   const keyword = str(obj(base.payload).keyword) || str(obj(obj(base.payload).meta).primary_keyword);
@@ -513,6 +580,9 @@ export async function startFinalize(a: OrgAccess, req: FastifyRequest | null, re
     answers: baseAnswers,
     businessFacts: l.site.businessFacts,
     facts: (l.site.factAnswers ?? {}) as FactAnswers,
+    // W0-B (PLAN Fix 2): the page run's blockers and research come from the ORIGINAL report, never the final version being improved
+    original: obj(l.original.payload),
+    duplicateDecision: decision && duplicatePagesOf(obj(l.original.payload)).length ? duplicateDecisionBody(decision) : null,
   }) };
   const work = runFinalize({ orgId: org.id, siteId: l.site.id, rowId: row.id, runId: run.id, base, original: l.original, requestId, body, log: req?.log ?? null });
   if (opts.wait) await work;
@@ -523,6 +593,10 @@ export async function startFinalize(a: OrgAccess, req: FastifyRequest | null, re
 /** The engine call and what follows it: the final version's report, the run settled, the review linked; or the run failed (not charged). */
 export async function runFinalize(o: { orgId: string; siteId: string; rowId: string; runId: string; base: ReportRow; original: ReportRow; requestId: string; body: P; log: Log | null }): Promise<void> {
   let outcome: ReturnType<typeof interpretFinalize>;
+  const originalFilesP = originalImageRows(o.orgId, o.original.id).catch((err) => {
+    o.log?.warn({ err: String((err as Error)?.message ?? err) }, 'finalize: the first version\'s images could not be read');
+    return [] as StoredFileRow[];
+  });
   try {
     outcome = interpretFinalize(await finalizeCall(o.body, o.orgId, FINALIZE_TIMEOUT_MS));
   } catch (err) {
@@ -537,7 +611,11 @@ export async function runFinalize(o: { orgId: string; siteId: string; rowId: str
   const answeredIds = (Array.isArray(o.body.answers) ? o.body.answers : []).map((a) => str(obj(a).id)).filter(Boolean);
   const storedKeys = (Array.isArray(o.body.stored_fact_keys) ? o.body.stored_fact_keys : []).map((k) => String(k));
   const result = { ...outcome.result, client_questions: carryOpenQuestions(questionsOf(obj(o.base.payload)), outcome.result.client_questions ?? [], answeredIds, storedKeys) };
-  const payload = finalReportPayload(obj(o.base.payload), result, { originalReportId: o.original.id, requestId: o.requestId });
+  const payload0 = finalReportPayload(obj(o.base.payload), result, { originalReportId: o.original.id, requestId: o.requestId, pageRun: (o.body.page_run as PageRunContext | undefined) ?? null });
+  // W0-G (PLAN Fix 7): the final version's own downloads (its HTML / Markdown / meta.json, the PDF and Word file the engine printed, the
+  // first version's images, read before the engine call); a file that cannot be read never stops the final version from being stored
+  const originalFiles = await originalFilesP;
+  const { payload, files } = finalVersionFiles(payload0, obj(outcome.result as unknown).files, originalFiles);
   const d = deliveryOf(payload);
   const cost = Number((payload.run_ledger as P).ai_usd) + Number((payload.run_ledger as P).dataforseo_usd);
   const keyword = str(payload.keyword) || str(obj(payload.meta).primary_keyword);
@@ -571,11 +649,33 @@ export async function runFinalize(o: { orgId: string; siteId: string; rowId: str
         .where(eq(schema.runs.id, o.runId));
       // the client's version is now part of the final version: it is not applied twice
       await tx.update(schema.pageReviews).set({ finalReportId: rep!.id, finalError: null, clientMarkdown: null, clientSavedAt: null, clientSavedBy: null, clientCheck: null, updatedAt: new Date() }).where(eq(schema.pageReviews.id, o.rowId));
+      // W0-G: the final version's downloads, in the same transaction (the report never shows without its files) but behind a savepoint:
+      // files that cannot be stored are logged and never cost the client the final version itself
+      if (files.length)
+        await tx
+          .transaction(async (sp) => {
+            await sp.insert(schema.files).values(files.map((f) => ({ id: f.id, orgId: o.orgId, reportId: rep!.id, field: f.field, kind: f.kind, fileName: f.fileName, mimeType: f.mimeType, size: f.size, data: f.data })));
+          })
+          .catch((err) => o.log?.warn({ err: String((err as Error)?.message ?? err) }, 'finalize: the final version\'s files were not stored'));
     });
   } catch (err) {
     o.log?.error({ err: String((err as Error)?.message ?? err) }, 'finalize result not stored');
     await failFinalize(o.rowId, o.runId, 'The final version arrived but could not be saved. Nothing was charged; try again.');
   }
+}
+
+/** The original report's image rows with their bytes (W0-G): the final version gets copies of them. */
+async function originalImageRows(orgId: string, reportId: string): Promise<StoredFileRow[]> {
+  const head = await db
+    .select({ id: schema.files.id, field: schema.files.field, kind: schema.files.kind, fileName: schema.files.fileName, mimeType: schema.files.mimeType, size: schema.files.size })
+    .from(schema.files)
+    .where(and(eq(schema.files.orgId, orgId), eq(schema.files.reportId, reportId)));
+  const ids = head.filter((f) => isImageRow(f)).map((f) => f.id).slice(0, 12);
+  if (!ids.length) return [];
+  return db
+    .select({ id: schema.files.id, field: schema.files.field, kind: schema.files.kind, fileName: schema.files.fileName, mimeType: schema.files.mimeType, size: schema.files.size, data: schema.files.data })
+    .from(schema.files)
+    .where(and(eq(schema.files.orgId, orgId), inArray(schema.files.id, ids)));
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -745,7 +845,7 @@ export async function questionNeedsYou(orgId: string, site: SiteRow): Promise<Ne
     if (k && seen.has(k)) continue;   // the newest page of a keyword only
     if (k) seen.add(k);
     const s = sr.summaryOf(r, logRowFor(logs, r.requestId ?? str(r.payload.request_id), keyword));
-    if (!['questions', 'final_ready'].includes(s.stage) || s.answered >= s.questions) continue;
+    if (!['questions', 'final_ready', 'needs_work'].includes(s.stage) || s.answered >= s.questions) continue;   // W0-C: a page that needs work still gets its questions asked
     const qs = questionsOf(r.payload);
     const top = qs.find((q) => !storedFactFor(q, site.factAnswers as FactAnswers));
     const open = s.questions - s.answered;

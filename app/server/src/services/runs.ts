@@ -37,6 +37,7 @@ import {
   type RunCredits,
   type RunInput,
   type SiteContext,
+  holdOf,
 } from '@seo/shared';
 import { requireVerified, type OrgAccess } from '../auth/access';
 import { config } from '../config';
@@ -51,6 +52,8 @@ import { applyLadderPrefs, markLadderWon } from './ladderSettings';
 import { deliverReport } from './reportDelivery';
 import { emitForCallback, emitRunsFailed } from './webhooks';
 import { engineCostTable } from './engineCost';
+import { heldQuote } from './runCredits';
+import { settingsRow } from './admin/settings';
 import { assertBudget, assertPlatformCapacity, lockCompany } from './spend';
 import { assertCredits, siteForecasts } from './billing';
 import { customerError } from '../lib/customerError';
@@ -517,6 +520,48 @@ async function recordPageInEngine(site: SiteRow, input: Extract<RunInput, { mode
 }
 
 /**
+ * W06-B (2026-10-30, docs/page-quality-2026-10-29/WAVE05.md 3.2, K4 first try): a page run that FAILED wrote no page, but the content-log
+ * row recordPageInEngine opened for it kept saying `started`. On "Start it again" the app then told the client "A page for ... was already
+ * written ... and is waiting to be published" and counted it among the waiting pages. When the app closes a page run as failed (the
+ * engine's failure watcher, a refusal callback, the expiry), that run's own opening row (its request id, its keyword, still `started`) is
+ * marked `failed`; a row in any other state is never touched. The engine's failure path marks it too (build section 176); the readers
+ * also leave out a `started` row of a failed run (pipeline.ts failedPageRow), so a mark that does not land changes nothing on screen.
+ */
+export const failedPageReason = (error: string | null | undefined): string => `page run failed: ${String(error || 'the run stopped before the page was written').replace(/\s+/g, ' ').trim()}`.slice(0, 480);
+
+/** The content-log filters of one failed page run's opening row (pure; tested). Null when the run opened no row. */
+export function failedPageFilters(run: Pick<RunRow, 'mode' | 'requestId' | 'input'>, domain: string): { columnName: string; condition: 'eq'; value: string }[] | null {
+  const input = (run.input ?? {}) as { keyword?: unknown; receiveContent?: unknown };
+  const keyword = typeof input.keyword === 'string' ? input.keyword : '';
+  if (run.mode !== 'keyword' || !run.requestId || !keyword || input.receiveContent === false || !domain) return null;
+  return [
+    { columnName: 'site_id', condition: 'eq', value: n8nSiteId(domain) },
+    { columnName: 'request_id', condition: 'eq', value: run.requestId },
+    { columnName: 'keyword', condition: 'eq', value: keyword },
+    { columnName: 'status', condition: 'eq', value: 'started' },
+  ];
+}
+
+/** W06-B: mark the opening content-log rows of these failed page runs `failed` (best effort; returns how many updates were sent). */
+export async function releaseFailedPages(runIds: string[]): Promise<number> {
+  if (!runIds.length) return 0;
+  const rows = await db
+    .select({ id: schema.runs.id, mode: schema.runs.mode, requestId: schema.runs.requestId, input: schema.runs.input, error: schema.runs.error, siteId: schema.runs.siteId })
+    .from(schema.runs)
+    .where(and(inArray(schema.runs.id, runIds), eq(schema.runs.status, 'failed')));
+  let sent = 0;
+  for (const r of rows) {
+    if (r.mode !== 'keyword' || !r.siteId) continue;
+    const site = await db.query.sites.findFirst({ where: eq(schema.sites.id, r.siteId) });
+    const filters = site ? failedPageFilters(r, site.domain) : null;
+    if (!filters) continue;
+    const ok = await updateRows('contentLog', filters, { status: 'failed', qa_reasons: failedPageReason(customerError(r.error)) }).catch(() => false);
+    if (ok) sent++;
+  }
+  return sent;
+}
+
+/**
  * R116 (2026-10-16): what an expired run says. The old sentence claimed "the run may have failed in n8n (ops were e-mailed)", but the
  * app cannot know an e-mail was sent: the engine's failure watcher (engineFailures.ts) closes a run whose execution FAILED long before
  * this, so a run that reaches the expiry is one whose execution ended without a word to us (a refusal posted nowhere, a stop, a lost
@@ -542,6 +587,7 @@ export async function expireStaleRuns(): Promise<number> {
     )
     .returning({ id: schema.runs.id });
   void emitRunsFailed(rows.map((r) => r.id)).catch(() => undefined);
+  void releaseFailedPages(rows.map((r) => r.id)).catch(() => undefined); // W06-B: the page they opened was never written
   return rows.length;
 }
 
@@ -727,6 +773,10 @@ export async function ingestCallback(
     : null;
 
   const status = String(body.status ?? (stage === 'rejected' ? 'rejected' : 'completed'));
+  // W05-B: a page run held for the client's OK used only the check: it is quoted as the check, not as a written page
+  const heldRun = !!run && run.mode === 'keyword' && stage === 'content' && holdOf(payload)?.held === true && !payload.html;
+  const heldSettings = heldRun ? await settingsRow().catch(() => null) : null;
+  let closedFailed = null as string | null; // W06-B: the run this callback closed as failed (its opening content-log row is no page)
   const stored = await db.transaction(async (tx) => {
     const [rep] = await tx
       .insert(schema.reports)
@@ -770,6 +820,8 @@ export async function ingestCallback(
         if (engineEstimate.basis) patch.engineCostBasis = engineEstimate.basis.slice(0, 500);
       }
       Object.assign(patch, runOutcome(run.status, info?.finalStages ?? [], stage, body));
+      if (patch.status === 'failed' && run.status !== 'failed') closedFailed = run.id; // W06-B
+      if (heldRun && heldSettings) patch.quotedCredits = heldQuote(run.quotedCredits ?? null, heldSettings);
       await tx.update(schema.runs).set(patch).where(eq(schema.runs.id, run.id));
     }
     if (site && (stage === 'site_tracker_setup' || stage === 'site_tracker') && site.trackingStatus === 'not_started')
@@ -782,6 +834,7 @@ export async function ingestCallback(
   });
   const reportId = stored.id;
   if (domain) invalidateSite(domain);
+  if (closedFailed) void releaseFailedPages([closedFailed]).catch(() => undefined);
   // B-R1: push it. `deliverReport` decides for itself whether this report may leave the app (a page that failed its quality gate,
   // a refused plan or evidence the engine could not read is held with its reason), and a delivery that goes wrong is logged, never
   // allowed to lose the callback we have just stored.

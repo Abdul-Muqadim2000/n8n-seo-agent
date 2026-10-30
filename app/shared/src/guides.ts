@@ -3011,6 +3011,39 @@ export const GUIDES = [
     keywords: ['not planned', 'refused', 'no plan', 'failed', 'brand', 'off topic', 'recheck', 'duplicate', 'overlap'],
   },
   {
+    id: 'page-held',
+    area: 'autopilot',
+    title: 'A page that waits for your OK',
+    why: 'Before we write a page we check its keyword. When the check finds the page unlikely to pay off, or finds that your website already has a page for the same search, the page waits for your OK instead of being written. Nothing is written and only the check is charged.',
+    where: 'The page\'s report, and Pipeline > Needs you',
+    minutes: 3,
+    steps: [
+      {
+        title: 'Read why it waits',
+        body: 'The report says which of the two it is: the keyword scored under 40 out of 100 in our verdict, or under 50 when few people search for it (the wrong kind of page for what Google shows, or competition your website cannot beat yet), or your website already has a page aimed at the same search. Two pages for one search compete with each other in Google.',
+      },
+      {
+        title: 'Improve the existing page',
+        body: 'When your website already has a page for the search, **Improve the existing page** rewrites and strengthens that page at its own address. It keeps what it has already earned in Google, which is usually the faster way up.',
+      },
+      {
+        title: 'Use the recommended target',
+        body: '**Use the recommended target** opens the page form with the search our verdict recommends instead. Check it and start it.',
+      },
+      {
+        title: 'Or write it anyway',
+        body: 'You may know something the numbers do not, for example a search with few people behind it that brings the right buyers. **Write it anyway** writes the page as you asked. The report then says you chose it.',
+      },
+    ],
+    done: 'The page is written, the existing page is improved, or you chose another keyword. The item leaves Needs you.',
+    trouble: [
+      { q: 'Pages written on their own did not wait', a: 'For now, pages your autopilot writes are only checked: the page is written and its report notes what the check found. Pages you start yourself wait for your OK.' },
+      { q: 'The same keyword comes back', a: 'A keyword that waited is not picked again by the autopilot for 90 days. The next keyword in the plan is written in its place.' },
+    ],
+    related: ['keyword-not-planned', 'page-not-ready', 'coming-up-plan'],
+    keywords: ['held', 'waits', 'needs your ok', 'write it anyway', 'score', 'duplicate', 'existing page', 'improve'],
+  },
+  {
     id: 'page-not-ready',
     area: 'autopilot',
     title: 'Finish a page that is not ready to publish',
@@ -3079,11 +3112,11 @@ export const GUIDES = [
       {
         title: 'Choose one answer',
         body: '**Yes, keep it** puts the specific sentence in. **Edit it** lets you write it your way. **Remove it** takes the sentence out. **Leave it general** keeps the general words and is remembered, so the question does not come back. **Not now** leaves it open.',
-        note: '**Accept all suggestions** answers every question that has a suggestion in one click. You can change any answer afterwards.',
+        note: '**Accept all suggestions** confirms every yes-or-no question that has a suggestion in one click. Questions that need your own words, like a client result or a certification, are answered one by one. You can change any answer afterwards.',
       },
       {
         title: 'Make the final version',
-        body: 'Press **Make the final version**. Only the parts of the page your answers change are rewritten, then the whole page is checked again. The price is shown before it starts.',
+        body: 'Press **Make the final version**. Each answer is worked into the sentence it changes, never added as a loose line, and only those parts of the page are rewritten. Then the whole page is checked again. An answer that fits no sentence is listed as not placed, so you can tell us where it belongs. The price is shown before it starts.',
       },
       {
         title: 'Approve and publish',

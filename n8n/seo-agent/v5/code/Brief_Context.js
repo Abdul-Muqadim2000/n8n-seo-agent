@@ -154,7 +154,9 @@ const ROLE_WRITER = {
   local: 'LOCAL PAGE for ' + (area || '[City]') + ': genuinely local detail in every section (areas served, local rules and authorities, how the service works on site, local examples). Do not write the address, phone number or opening hours (the system inserts the verified block); never claim an office, review or client that is not in the facts.',
   standard: ''
 };
-const eeat_context = (author ? 'Written by ' + author.name + (author.job_title ? ', ' + author.job_title : '') + '. Credentials and experience: ' + (author.credentials || 'not given') + (author.knows_about.length ? '. Expert in: ' + author.knows_about.join(', ') : '') + (author.bio ? '. Bio: ' + author.bio.slice(0, 400) : '') + '.'
+// FU-SV (2026-10-29): the context names the author for the writer's use, not as a line to copy: it opened "Written by <name>.", and 3 of 8
+// pages printed a second byline in the body. The system prints the one byline (Blog Package).
+const eeat_context = (author ? 'Author (the system prints the byline and the author box; never write them in the copy): ' + author.name + (author.job_title ? ', ' + author.job_title : '') + '. Credentials and experience: ' + (author.credentials || 'not given') + (author.knows_about.length ? '. Expert in: ' + author.knows_about.join(', ') : '') + (author.bio ? '. Bio: ' + author.bio.slice(0, 400) : '') + '.'
   : 'No author profile on file: plan the experience notes as bracketed prompts for the author.') + (reviewer ? ' Expert reviewer: ' + reviewer.name + (reviewer.job_title ? ', ' + reviewer.job_title : '') + '.' : '');
 const proof_context = proof_library.length ? proof_library.map(c => '- ' + (c.title || c.service) + ' — ' + c.client + (c.industry ? ' (' + c.industry + ')' : '') + ': ' + c.results + (c.quote ? ' Quote: "' + c.quote + '"' + (c.quote_by ? ' — ' + c.quote_by : '') : '') + (c.url ? ' — ' + c.url : ' — no public page yet (do not link)')).join('\n') : 'none recorded';
 const video_context = video ? 'VIDEO: the page has a video ("' + (video.title || 'untitled') + '"' + (video.minutes ? ', about ' + video.minutes + ' minutes' : '') + '). The system embeds it' + (video.placement ? ' under "' + video.placement + '"' : ' after the quick answer') + ' with its transcript. Refer to it once, naturally (what it shows and why to watch); never transcribe it or invent what it says.' + (video.chapters.length ? ' Key moments: ' + video.chapters.map(c => c.name).join(' · ') + '.' : '') : '';
@@ -165,15 +167,18 @@ const case_facts_text = caseFacts.replace(/\n/g, ' | ') + (proof_library.length 
 // certification" and "AI consultant course" while the brief was asked to cover a certification course's "Program Eligibility" and
 // "Program Curriculum". Here, after the verdict and before the brief, a subtopic about an excluded topic is dropped, and every subtopic
 // goes when the page to beat itself is about one (its title or address names it).
+// W06-C (2026-10-30, WAVE06 Open 2): matched against the page's keyword FAMILY (the keyword, any brief keywords the request carries, the
+// site's main services: EXC.familyOf), as Content QA does, so a subtopic about the page's own subject is never dropped for sharing a word.
 const VEX = Array.isArray(d.verdict_exclusions) ? d.verdict_exclusions : [];
+const VEXF = EXC.familyOf(d, model);
 let coverage_target = d.coverage_target && typeof d.coverage_target === 'object' ? d.coverage_target : null;
 let coverage_digest = s(d.coverage_digest);
 const subtopics_excluded = [];
 if (coverage_target && Array.isArray(coverage_target.subtopics) && coverage_target.subtopics.length && VEX.length) {
   const bestC = (d.competitors || []).find(c => c && coverage_target.best && c.url === coverage_target.best.url) || {};
   const benchText = s(bestC.title) + ' ' + s((coverage_target.best || {}).url).replace(/^https?:\/\/[^\/]+/i, '').replace(/[\/_-]+/g, ' ');
-  const benchHit = VEX.find(e => EXC.match(benchText, e, kw));
-  const kept = coverage_target.subtopics.filter(st => { const e = benchHit || VEX.find(x => EXC.match(st, x, kw));
+  const benchHit = VEX.find(e => EXC.match(benchText, e, VEXF));
+  const kept = coverage_target.subtopics.filter(st => { const e = benchHit || VEX.find(x => EXC.match(st, x, VEXF));
     if (e) subtopics_excluded.push({ subtopic: st, topic: s(e.topic != null ? e.topic : e), why: benchHit ? 'the page to beat is about it' : 'the subtopic is about it' }); return !e; });
   if (subtopics_excluded.length) {
     coverage_target = { ...coverage_target, subtopics: kept, subtopics_excluded };

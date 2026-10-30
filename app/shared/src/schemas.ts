@@ -227,6 +227,10 @@ export const keywordInput = z
         competitors: z.array(z.string().trim().min(1).max(80)).max(8).default([]),
       })
       .optional(),
+    /** W0-D (page-quality 2026-10-29): "Write it anyway" on a page the engine held for the client's OK (the verdict scored the keyword under
+     *  50, or the website already has a page for the search). The engine then writes it and the report says it was acknowledged; the score
+     *  is the one the hold showed, kept for the record. Sent only from the hold's own button. */
+    holdAck: z.object({ score: z.number().int().min(0).max(100).nullable().default(null) }).optional(),
     /** keyword-first (R-K5): where an approved suggestion came from ("Write it" on a "Coming up" item or a suggestion), kept on the
      *  website's content log so the page is shown and counted as that kind of page. The app keeps it; the engine is not sent it (Normalize
      *  Input reads no `source` field, and the content log row the app writes at the start carries it, which the engine keeps). */

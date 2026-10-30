@@ -1,0 +1,61 @@
+{
+ "alert": [
+  "Reader Refusals",
+  "Any Reader Refusal?",
+  "Load Ops Alerts (Reader)",
+  "Reader Alert Plan",
+  "Save Reader Alert",
+  "Reader Alert Send",
+  "Send Reader Alert?",
+  "Post Reader Alert",
+  "Reader Alert Delivery",
+  "Save Reader Alert Delivery"
+ ],
+ "readers": {
+  "Fetch Refresh Sources": {
+   "http": "Fetch Refresh Sources (reader)",
+   "label": "the sources a refreshed page cites"
+  },
+  "Read Client Pages": {
+   "http": "Read Client Pages (reader)",
+   "label": "the client's own pages"
+  },
+  "Read Competitor Homes": {
+   "http": "Read Competitor Homes (reader)",
+   "label": "the competitors' homepages"
+  },
+  "Read Competitor Pages": {
+   "http": "Read Competitor Pages (reader)",
+   "label": "the pages that rank (competitors)"
+  },
+  "Read Nav Pages": {
+   "http": "Read Nav Pages (reader)",
+   "label": "the homepage menu pages (site description)"
+  },
+  "Read Regulatory Pages": {
+   "http": "Read Regulatory Pages (reader)",
+   "label": "regulatory pages (verified facts)"
+  },
+  "Read Website": {
+   "http": "Read Website (reader)",
+   "label": "the homepage (site description)"
+  },
+  "Render Client Pages": {
+   "http": "Render Client Pages (reader)",
+   "label": "the client's pages after their scripts ran"
+  },
+  "Render Key Pages": {
+   "http": "Render Key Pages (reader)",
+   "label": "key pages after their scripts ran (audit render check)"
+  },
+  "Render More Client Pages": {
+   "http": "Render More Client Pages (reader)",
+   "label": "the client's pages after their scripts ran (more)"
+  },
+  "Retry Blocked Pages": {
+   "http": "Retry Blocked Pages (reader)",
+   "label": "the pages that rank (blocked-page retry)"
+  }
+ },
+ "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+}

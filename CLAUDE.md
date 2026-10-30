@@ -63,7 +63,35 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-10-30, Index coverage: clients' old pages Google left out — latest, NOT deployed)
+## Status (2026-10-30, page quality Waves 0, 0.5, 0.6: blind-judged runs, fixes, deploy checklist — latest)
+Owner priority: page quality and ranking must never drop. Wave 0 + follow-ups (`fed34d3c`, harness 14221 / 0) run against BEFORE (`8caf2467`) on
+the isolated `alvrun-*` stack, same 8 keywords on 3 sites, both builds' pages + 3 published controls judged together blind (2 Claude judges).
+Read **`n8n/seo-agent/docs/page-quality-2026-10-29/BEFORE_AFTER.md`** (and `BASELINE.md`, `PLAN.md`). **Pages better**: judges' mean
+delivered 68.4 -> 74.5, finals 66.0 -> 73.4, gains in proof and local accuracy; fit unchanged; K6 -3. **Our grade over-corrected**: +23.9 ->
+-10.9 signed, 7 of 8 "Not ready" (second-read item caps at 59) while the strategist would publish 7; the only "Ready" (K4) is written onto
+another service page's URL (slug-only match, now hold-exempt). Finalize -3.6 -> -1.8 (still down); Accept all 400 leaves 3 pages with no
+final; false "already written" after a hold; K3 held wrongly. Spend $11.20 of $30. **NOT deployed, not ready to deploy**: fix the 5 items
+in BEFORE_AFTER "Next", re-check K1 K3 K4 K8 (~$6), then ask the owner. Then Waves 1 (fit) and 2 (calibration).
+**Wave 0.5 (`1e705b72`, pushed, NOT deployed) re-checked 2026-10-30 on alvrun, blind-judged: read `docs/page-quality-2026-10-29/WAVE05.md`.**
+Judges' mean flat (73.0 -> 73.4: K4 +5, K6 +3 recovered, K3 =, K1 -6); holds right (K3 not held, K4 own URL, K1 held + "Improve the existing
+page"), Accept all works, Finalize -0.5. Grade back to generous (+17.1 signed on 4; ready agreement 3/4). Two HIGH pre-existing defects (also in
+production): `_exclusions.js` EXC.match drops short tokens ("GP and SL" -> "dynamic") and deleted 6 of K1's sections; Draft Check fails a complete
+page ending on a bare CTA line (+ failed run shows "already written", ledger left reserved). Spend ~$5.41 of $10. Deploy: after a Wave 0.6 (those
+two + write-anyway slug + grade caps), offline-pinned on the recorded K1/K4 executions, then ask the owner (API first, then engine).
+**Wave 0.6 (`5d72a7d9`, pushed, NOT deployed): read `docs/page-quality-2026-10-29/WAVE06.md` (fixes, offline pins, DEPLOY CHECKLIST).** All four
+fixes built and pinned offline on the recorded runs (K1 replay deletes 0 sections, keeps 2,210 words; K4's CTA-ending page passes; the W05 K1
+page re-grades "Needs work" 72 vs judges 60.5); harness **14825 / 0**. The paid K1 re-check (~$1.10) did NOT run: disk 8-9 GB free vs the 15 GB
+rule; $0 spent. **Before any deploy from this branch, merge `main` into it** (Index coverage is live on production since 2026-10-30 from
+`feature/indexing`; 3 known conflicts), rebuild, retest; then backup, API, web PR, engine (WAVE06 §5). No app migration, no Data Table column.
+**W06-C (`df9126da`, rebuilt `b447c71f`, harness 14900 / 0) closed the two open items offline** (final version keeps the "sections removed" cap;
+brief steps match exclusions on the keyword family). **Paid K1 re-check 2026-10-30 on `b447c71f` stopped at the hold ($0.0845): the page reader
+(Jina) key answers 402 out of balance on every read** (likely production too: recharge, check prod page runs); no new page, no judge score (WAVE06 §9).
+**Finished on the owner's new reader key (WAVE06 §10, $1.36 of $3 in all): new K1 kept 8 of 8 sections at its own address `/ms-365-erp`; judges 65.5
+(W05 56.5, AFTER 70.0, same session); our grade 81 delivered and final (+15.5). Open: reader fallback + ops alert on 401/402, the write-anyway title
+equals the existing page's; then merge origin/main, full test, PR to main, owner's deploy go-ahead.**
+**Wave 0.7 + merge of main (2026-10-31, NOT deployed):** W07-A page reader resilience (fallback reader, one ops alert, no hold / verdict / grade on pages nobody read) and W07-B (after "Write it anyway" the separate page gets its own title tag and H1 and links the kept page once); `origin/main` (Index coverage, PR #48 / #49) merged into `feature/seo-agent-v4.5`, generated files rebuilt from the merged sources; PR to `main` opened, NOT merged (merging main deploys the web on Vercel: owner's go-ahead first). Deploy with WAVE06 §5.
+
+## Status (2026-10-30, Index coverage: clients' old pages Google left out — previous; engine on production since 2026-10-29, see its RESUME)
 Owner asked: our new pages get indexed, but many clients' older pages are not; find them, say why and what to do, carefully (production).
 Prod read 2026-10-29: devaicon.com 19 of 29 sitemap pages with no impressions. **Built, reviewed three times, fixed in three waves, NOT
 deployed**, on branch **`feature/indexing`** (worktree `../n8n_devaicon-indexing`; not merged into `feature/seo-agent-v4.5`). Read

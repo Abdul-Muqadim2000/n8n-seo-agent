@@ -102,6 +102,28 @@ no report delivered before that carries them, and `seo_content_log` holds none o
 | `serp_shapes` | `KWI.serpPageTypes` on the results page (W0-C carries the top-10 list; the example uses the 6 pages 3299 read) |
 | `regulatory_facts[]` | *Collect Regulatory Facts* (Fix 6, W0-F): `{date, obligation, subject, threshold, url, paragraph, source_tier, source_date, as_of, supersedes, status}`; the example entry is illustrative |
 | `content_request_id` | the run's request id (3299 sent `content_request_id: ""`, a form run: fall back to `request_id`) |
+| `sections_removed` | W06-C (2026-10-30): the delivered page's final check, `content_qa.delivery.changes.removed_run` + `sections_removed` + the grade's `removed`: `{sections, words, words_before, h2_before, h2_removed, h2_delivered, by_edits, share_pct, capped, list[{heading, topic, words, level, why}]}`. Finalize Verdict caps coverage and fit (GR.removedCap) while those sections are still missing on the final version; `null` from a check before W06-C (the final version says "Not checked") |
+
+**Built (W0-B, 2026-10-29, `scenarios_w0b.js` W0B1-W0B9).** *Build Webhook Response* (build section 155) sends the grading fields as
+`page_run: { prc: 1, ... }` on every content callback that carries a page (`null` otherwise); `length_band` also carries the brief's `target`,
+and `regulatory_topics` (`{id, relevance}`) travels beside `regulatory_facts` so the final check can record the regulatory status again. The app
+(`app/shared/src/page-review.ts` `pageRunOf`) sends `FinalizeBody.page_run` = the gating fields of the ORIGINAL report + that `page_run`, with
+three app-derived gating extras: `copied_passages` (the failing originality passages), `length_points` (the page run's own length points, used
+for a report with no `length_band`) and `missing` (gating fields the stored report lacks). Reports from before `qa_blocking` existed
+(2026-10-28; the ranking guide of exec 949 is one) are read from their gate (`qa_not_ready` / `qa_publishable`) and `meta.originality`: a
+duplicate page or failed originality becomes the blocker, everything else is measured again. Page Finalize keeps open what it cannot measure
+again (duplicate page until `duplicate_decision`, copied passages, a still-linked dead link, a still-present left-out section, the business name
+without the style guide, unknown codes) and is never ready when `qa_blocking` or `duplicate_targets` is missing.
+
+**Built (W0-C, 2026-10-29, `scenarios_w0c.js` W0C1-W0C8; the grade).** The grade kit `v5/code/_grade.js` (GR, build section 159; harness shim
+`code_v4/_grade.js`, `{ fn, args }`, `'__SRC__'` in args = the source kit's tier / figures) grades on one scale out of 100: structure 20,
+coverage 15, readability 10, specificity 10, plain language 10, sources 15, fit 20, length 0 (advice). Content QA writes it as `content_score`
+/ `score_breakdown` / `grade_detail`; the old six parts stay as `copy_score` / `copy_breakdown` and still decide the editor round and
+`passed` (a test about the old rules reads `copy_breakdown`). Page Candidates, Apply Second Read and Finalize Verdict build the delivered grade
+with `GR.cap` (blocker 59, duplicate fit 30%, floors) and the status with `GR.deliver` (`needs_work`: a part under half, publishable). Pick Top 6
+keeps `serp_top10` on its first item and Parse Analysis records `serp_shapes` (no points). A replay of the ranking guide through Content QA must
+null the `Promise Candidates` mock: Content QA reads its draft through that node when it ran, so without it the "guide" is 3299's own draft (RPL4
+and W0H8 did this until W0-C).
 
 ## Replay fixtures (page-quality programme 2026-10-29, PLAN §3.0 step 4, REVIEW_CODE M9)
 
@@ -115,9 +137,36 @@ and prints the BEFORE numbers Wave 0 changes.
   Page Candidates (3 rounds each), Blog Package, the nodes they read and the callback. On the code of 2026-10-29 every run reproduces
   production except today's date in the schema.
 * `fixtures/replay_3336.json.gz`: the finalize of that page, with the app's request (old format) and the recorded Finalize Editor answer.
+* `fixtures/replay_w05_k1.json.gz` (W06-A, 2026-10-30): the Wave 0.5 re-check's K1 page run ("ms 365 erp", Service Page, held as a duplicate and written with "Write it anyway"): Page Fix, Content QA, Originality Check and Page Candidates, 3 rounds each, with every node they read. Round 1 is where the verdict-exclusion matcher deleted six core sections for the topic "Dynamics GP and SL" (WAVE05.md 3.1). Scenario `scenarios_w06a.js` (W06A1-W06A6): the matcher keeps acronyms and never matches one shared word of the keyword family, the deletion budget (a second signal, else at most one short section, never 40% of the page), no core section deleted on the replay (new check and recorded list), the delivered K1 page "Needs work" (coverage and fit capped, no fit waiver), the idea check (an idea restated 4+ times costs structure points, never below half), the ranking guide 949 unchanged. Anonymised like 3299 (an address variant added).
 * `fixtures/ranking_guide_949.json`: the guide that ranks (exec 949, ladder rung 2, 319 impressions in its first week, one query at #12):
   the live page in the draft format, its brief, site model, critique and QA rounds, and its search outcome. Its verdict score is not
   stored in the repo: a hold rule must not depend on it.
+* `fixtures/regulatory_pages.json` (W0-F, Fix 6): short passages of the UAE Ministry of Finance's own texts as the reader returns them
+  (Ministerial Decision No. 244 of 2025 Article 5, its amendment No. 66 of 2026, the news item of 10 May 2026), with the line breaks a
+  PDF keeps, plus synthetic secondary pages. Scenario `scenarios_w0f.js` (W0F1-W0F9): the regulatory kit (`code_v4/_regulatory_kit.js`,
+  a shim written by build section 154), the plan on 3299's own Analyze Competitor Pages item, the amendment beating its original,
+  passed / in-force status in the market's time zone, the two-source tier and "none could be confirmed", the paid fallback when SearXNG
+  is down, Collect Facts carrying the facts on, Content QA's record (never a score change) and the 949 guide's guard.
 * Anonymised for the public repo: brand Nova&, domain novaand.example (the domain label equals the brand, as on the real site, so brand
   detection behaves the same), the client's own page prose cut to lines of 10 words or fewer (headings and slogans stay), competitor page
   bodies removed, hook token, API key and company id replaced. Our generated drafts keep their text with the identity swapped.
+
+**W0-D, the hold before the brief (`scenarios_hold.js`, W0D1-W0D9, 2026-10-29).** *Parse Verdict* holds a page run for the client's OK when
+the verdict scored the keyword under 50 or the website already has a page for the search (kit `v5/code/_dup_targets.js`, shared with the
+late *Originality Check*). Checked on the fixtures above: 3299 is held with both reasons and its three ways forward; `hold_ack` passes; a
+run the cadence, a ladder or the tracker started is only logged (`hold_shadow`, shadow mode, D17); case studies, AI answer pages, refreshes
+and keyword-ladder pages are not held for the score, a null score is never a hold; the guide that ranks (949) is never held and never its
+own duplicate at any score, however it is started; production's two 2026-10-29 service pages for the guide's searches are recognised as
+overlapping it (shadow-logged); the late check finds what production found on 3299; *Content Log Row* writes `held`; the cadence skips a
+held keyword for 90 days and takes the next candidate (D1); the callback keeps stage `content` with `hold` and `verdict_acknowledged`.
+
+**W0-E, answers woven into their sentence (`scenarios_w0e.js`, W0E1-W0E8, 2026-10-29, PLAN Fix 5).** A suggested answer (`PF.prefillOf`) is a
+sentence of 6+ words with a verb, not a question, never reading-time / navigation chrome, a listing page or a slogan, and answers the
+question's type (proof: a project, client or sector with an outcome, or a number or a link; credential: a credential noun); business facts
+first. The brief's `questions_for_client` are `{question, section, category}` (build section 156; strings still read). A statement the system
+removes records its anchor (`PF.anchorAt`) and gets no guessed neutral wording; Finalize Apply puts a "yes" back at that anchor only, sends each
+answer to its slot (`PF.slotIn`: call to action, the sentence naming the business, the decision section, the named section) with the host
+sentence named, and ignores an old report's answer about the search description; Finalize Merge refuses an edit that only appended an answer
+(`PF.appendedIn`) and never appends one itself (`not_placed`, "tell us where"). Checked on 3299 (no slogan / question / chrome suggestions, q5's
+anchor), 3336 as recorded (slots, hosts, the recorded editor's appended edits refused) and in the new format, and on the 949 guide (untouched
+when nothing is answered; a call-to-action answer goes into its own call-to-action sentence).

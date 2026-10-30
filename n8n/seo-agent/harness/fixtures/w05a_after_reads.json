@@ -1,0 +1,1658 @@
+{
+ "about": "W05-A (wave 0.5, 2026-10-30): the 8 delivered AFTER pages of the page-quality BEFORE / AFTER run (BEFORE_AFTER.md), anonymised. For each: the blind second read's recorded problems (severity, kind, the quoted words, the issue and the fix; names replaced), a synthetic page made of the quotes that were on the delivered page, the market day, the grade Page Candidates delivered (parts only) and the blind judges' scores. Finals: which of those quotes are still on the final version, and its grade parts.",
+ "pages": {
+  "K1": {
+   "site": "client A, Service",
+   "keyword_label": "K1",
+   "today": "2026-10-30",
+   "started_at_utc": "2026-10-29T22:31:11.621Z",
+   "mode": "enforce",
+   "judge": {
+    "mean": 70.5,
+    "editor_raw": 69,
+    "strategist": 72,
+    "strategist_ready": "yes"
+   },
+   "recorded": {
+    "status": "not_ready",
+    "score": 59
+   },
+   "problems": [
+    {
+     "severity": "high",
+     "kind": "local",
+     "location": "| Revenue equal to or exceeding AED 50,000,000 | 30 October 2026 | 1 January 2027 |",
+     "issue": "The page is written on 30 October 2026, so the appointment deadline falls today. The table gives no status, so readers cannot tell it is due now or about to pass.",
+     "fix": "State that the appointment deadline for this group is 30 October 2026, falls on the day of writing, and that firms that have not appointed a provider should do so immediately and plan to implement by 1 January 2027.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "local",
+     "location": "Cabinet Decision No. 149 of 2026 adds a clause on how government entities and charities calculate recoverable input tax.",
+     "issue": "The verified source excerpt is truncated after 'Government Entities and'. The words 'charities' and 'recoverable input tax' are not shown in it. This VAT paragraph also barely changes the buyer's ERP decision.",
+     "fix": "Cut the claim to what the source shows: a clause added by Cabinet Decision No. 149 of 2026 for government entities, effective from the first tax year commencing after 1 October 2027. Or drop the paragraph.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "claim",
+     "location": "Our AI capabilities include Dynamics 365 Copilot, Copilot Studio, Azure OpenAI Service and AI Builder.",
+     "issue": "The sector and application lists repeat the facts on file at length. They are a block of client boilerplate that does not help the partner-selection argument.",
+     "fix": "Shorten the sector and application lists to the few items relevant to ERP buyers, and tie them to the reader's choice.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "repetition",
+     "location": "Book a consultation: call +000 00 000 0000 or email contact@example.com",
+     "issue": "The closing line repeats the phone and email given just above it, so the CTA duplicates itself.",
+     "fix": "Delete the last line and keep one clear call to action with the contact details once.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "repetition",
+     "location": "Neither is better in general. For a large group, three checks usually settle it:",
+     "issue": "The SAP vs D365 section is thin and generic, with no UAE specifics. It also repeats the demo-script advice given elsewhere.",
+     "fix": "Add a UAE-specific point, such as localisation and e-invoicing connection options, or fold the section into the decision table. Keep it to 40-60 words.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "repetition",
+     "location": "No. Microsoft 365 is the productivity suite behind Outlook, Teams and Excel, and it holds no general ledger, stock or VAT records.",
+     "issue": "The quick answer, the first H2 answer and the comparison table all state that Microsoft 365 has no ledger or VAT records. The same point is made three times.",
+     "fix": "Keep the quick answer and shorten the H2 answer to a one-line pointer to the table.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "structure",
+     "location": "The first is a way to choose between Business Central and Dynamics 365 Finance with Supply Chain Management.",
+     "issue": "The intro spends a paragraph on a four-tool preview before the quick answer. This delays the direct answer for the reader who typed the keyword.",
+     "fix": "Put the quick answer first and cut the preview to one sentence.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "depth",
+     "location": "No credible quote can be given without scoping.",
+     "issue": "The cost section gives no ranges, benchmarks or sourced pricing reference such as Microsoft licence price pages. The reader gets only a list of line items.",
+     "fix": "Link to Microsoft's official Dynamics 365 pricing page for licence tiers, and add one worked example of how costs split for a typical mid-size UAE group, without inventing figures.",
+     "on_page": true
+    }
+   ],
+   "page": "| Revenue equal to or exceeding AED 50,000,000 | 30 October 2026 | 1 January 2027 |\n\nCabinet Decision No. 149 of 2026 adds a clause on how government entities and charities calculate recoverable input tax.\n\nOur AI capabilities include Dynamics 365 Copilot, Copilot Studio, Azure OpenAI Service and AI Builder.\n\nBook a consultation: call +000 00 000 0000 or email contact@example.com\n\nNeither is better in general. For a large group, three checks usually settle it:\n\nNo. Microsoft 365 is the productivity suite behind Outlook, Teams and Excel, and it holds no general ledger, stock or VAT records.\n\nThe first is a way to choose between Business Central and Dynamics 365 Finance with Supply Chain Management.\n\nNo credible quote can be given without scoping.",
+   "delivered": {
+    "status": "ready_with_questions",
+    "blocking": [],
+    "grade": {
+     "score": 98,
+     "of": 100,
+     "breakdown": {
+      "structure": 18,
+      "coverage": 15,
+      "readability": 10,
+      "specificity": 10,
+      "clean_language": 10,
+      "sources": 15,
+      "fit": 20,
+      "length": 0
+     },
+     "blocking": 0
+    }
+   },
+   "grade_detail": {
+    "version": "w0c-1",
+    "max": {
+     "structure": 20,
+     "coverage": 15,
+     "readability": 10,
+     "specificity": 10,
+     "clean_language": 10,
+     "sources": 15,
+     "fit": 20,
+     "length": 0
+    },
+    "caps": [],
+    "items": {
+     "fit": {
+      "verdict_score": 52,
+      "band": "full",
+      "acknowledged": false,
+      "exempt": "",
+      "automatic": false,
+      "verdict_points": 10,
+      "duplicate_points": 10
+     },
+     "repetition": {
+      "count": 0,
+      "clusters": []
+     },
+     "list_labels": [],
+     "sources": {
+      "weak": []
+     }
+    }
+   }
+  },
+  "K2": {
+   "site": "client A, Service",
+   "keyword_label": "K2",
+   "today": "2026-10-30",
+   "started_at_utc": "2026-10-29T22:37:48.752Z",
+   "mode": "enforce",
+   "judge": {
+    "mean": 76.0,
+    "editor_raw": 72,
+    "strategist": 80,
+    "strategist_ready": "yes"
+   },
+   "recorded": {
+    "status": "not_ready",
+    "score": 59
+   },
+   "problems": [
+    {
+     "severity": "high",
+     "kind": "local",
+     "location": "if you have not appointed an ASP by 30 October 2026, you are past your appointment date.",
+     "issue": "The page is written on 30 October 2026, the deadline day. Saying the reader is 'past' the date is wrong for that day and reads inconsistently with the page's other advice. The page also never says plainly whether the date has passed or is today.",
+     "fix": "Write: 'The appointment date for this band is 30 October 2026. If you have not appointed an ASP by that date, shortlist immediately, because the 1 January 2027 go-live date still applies.'",
+     "on_page": true
+    },
+    {
+     "severity": "high",
+     "kind": "local",
+     "location": "Missing a deadline can bring administrative penalties under Cabinet Decision No. 106 of 2025",
+     "issue": "The penalty decision, and Ministerial Decision No. 64 of 2025 and No. 168 of 2026 elsewhere, are stated with no source link, and they do not appear in the verified sources. The claims are unverified compliance facts.",
+     "fix": "Link each decision to its official mof.gov.ae PDF, or reword without the decision numbers, for example 'the official penalty schedule on the Ministry of Finance e-invoicing pages'.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "fact",
+     "location": "Providers are accredited under the Ministry of Finance's e-invoicing framework, not by the Federal Tax Authority (FTA), which administers the tax.",
+     "issue": "This is an unsourced, categorical claim about who accredits providers. The 'Quick answer' also says an ASP reports tax data to the FTA, which is not backed by any verified source.",
+     "fix": "Add a primary source link for the accreditation authority and the reporting flow, or soften the wording to what the cited MoF decisions state.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "local",
+     "location": "separately, [Cabinet Decision No. 149 of 2026](https://tax.gov.ae/Datafolder/Files/Legislation/2026/Law-No-8-of-2017-and-its-amendments--09-2026.pdf) adds a clause on how Government Entities and Charities calculate recoverable Input Tax",
+     "issue": "A VAT clause sits under the 'Which phase applies' list as a bullet for government entities. It is a VAT matter, not a phase rule, and it distracts from the decision. The excerpt does not clearly support 'recoverable Input Tax' wording. The government entity bullet also never gives their e-invoicing dates.",
+     "fix": "Put the government entity dates (appoint by 31 March 2027, implement by 1 October 2027) in this bullet. Move the VAT clause to one short sentence only if it changes a decision, and quote it exactly as the source states it.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "claim",
+     "location": "Nova& works with Dynamics 365 Finance, Supply Chain Management and Business Central.",
+     "issue": "This is accurate, but the page implies e-invoicing and PINT AE readiness expertise, and the section 'Where Nova& fits' makes the link without any project evidence. The 'gap-fit analysis against PINT AE' offer is not on file as a Nova& service for e-invoicing.",
+     "fix": "Describe the gap-fit analysis as part of Nova&'s Assess & Envision way of working, applied to the client's ERP data. Avoid implying proven PINT AE delivery.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "depth",
+     "location": "Ask each provider for a breakdown by those drivers. Include volume caps and anything that sits outside an advertised free tier.",
+     "issue": "The cost section gives no ranges or benchmarks and is only a list of drivers. 'Advertised free tier' is never explained. The penalty steps are generic because they cite no amounts.",
+     "fix": "Remove or explain the 'free tier' phrase. Add a worked example of the penalty calculation using the schedule's actual amounts once they are sourced.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "structure",
+     "location": "### Where can I find the list of accredited service providers in the UAE?",
+     "issue": "Question headings are present, but several answers are not 40-60 words (for example the 'Can I use my ERP's built-in e-invoicing' answer runs longer). The ASP definition is repeated nearly verbatim in the intro, the quick answer and the first H2.",
+     "fix": "Trim each question answer to 40-60 words. Cut the repeated definition in the first section to one sentence that points to the quick answer.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "other",
+     "location": "[Image: ERP system sending a structured e-invoice through an accredited service provider in the UAE]",
+     "issue": "Square-bracket image placeholders appear in the page body, which breaks the 'no bracket of any kind' rule.",
+     "fix": "Remove the bracketed placeholders and supply the images as real image elements with alt text in the CMS.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "style",
+     "location": "Our office is at Office 1, a free zone, Dubai, or you can [contact Nova&](https://www.novaand.example/contact-us) online.",
+     "issue": "The closing CTA is diffuse: it has a vague first sentence, a long address and a trailing link. The meta description promises 'Book a consultation', which the CTA never says.",
+     "fix": "Lead with one clear action, 'Book a consultation with Nova&', followed by phone, email and the link, and place the address last.",
+     "on_page": true
+    }
+   ],
+   "page": "if you have not appointed an ASP by 30 October 2026, you are past your appointment date.\n\nMissing a deadline can bring administrative penalties under Cabinet Decision No. 106 of 2025\n\nProviders are accredited under the Ministry of Finance's e-invoicing framework, not by the Federal Tax Authority (FTA), which administers the tax.\n\nseparately, [Cabinet Decision No. 149 of 2026](https://tax.gov.ae/Datafolder/Files/Legislation/2026/Law-No-8-of-2017-and-its-amendments--09-2026.pdf) adds a clause on how Government Entities and Charities calculate recoverable Input Tax\n\nNova& works with Dynamics 365 Finance, Supply Chain Management and Business Central.\n\nAsk each provider for a breakdown by those drivers. Include volume caps and anything that sits outside an advertised free tier.\n\n### Where can I find the list of accredited service providers in the UAE?\n\n[Image: ERP system sending a structured e-invoice through an accredited service provider in the UAE]\n\nOur office is at Office 1, a free zone, Dubai, or you can [contact Nova&](https://www.novaand.example/contact-us) online.",
+   "delivered": {
+    "status": "ready_with_questions",
+    "blocking": [],
+    "grade": {
+     "score": 74,
+     "of": 100,
+     "breakdown": {
+      "structure": 10,
+      "coverage": 15,
+      "readability": 10,
+      "specificity": 10,
+      "clean_language": 10,
+      "sources": 11,
+      "fit": 8,
+      "length": 0
+     },
+     "blocking": 0
+    }
+   },
+   "grade_detail": {
+    "version": "w0c-1",
+    "max": {
+     "structure": 20,
+     "coverage": 15,
+     "readability": 10,
+     "specificity": 10,
+     "clean_language": 10,
+     "sources": 15,
+     "fit": 20,
+     "length": 0
+    },
+    "caps": [
+     {
+      "dim": "fit",
+      "share": 0.4,
+      "why": "our verdict scored this search 42 out of 100, under 50"
+     },
+     {
+      "dim": "structure",
+      "share": 0.5,
+      "why": "one statement is made 4 times"
+     }
+    ],
+    "items": {
+     "fit": {
+      "verdict_score": 42,
+      "band": "partial",
+      "acknowledged": true,
+      "exempt": "",
+      "automatic": false,
+      "verdict_points": 4,
+      "duplicate_points": 10
+     },
+     "repetition": {
+      "count": 0,
+      "clusters": []
+     },
+     "list_labels": [],
+     "sources": {
+      "weak": []
+     }
+    }
+   }
+  },
+  "K3": {
+   "site": "client A, Guide",
+   "keyword_label": "K3",
+   "today": "2026-10-30",
+   "started_at_utc": "2026-10-29T22:37:50.734Z",
+   "mode": "enforce",
+   "judge": {
+    "mean": 80.5,
+    "editor_raw": 75,
+    "strategist": 86,
+    "strategist_ready": "yes"
+   },
+   "recorded": {
+    "status": "not_ready",
+    "score": 59
+   },
+   "problems": [
+    {
+     "severity": "high",
+     "kind": "fact",
+     "location": "Both products are sold as cloud ERP, but only Business Central also runs on-premises.",
+     "issue": "Contradicts nothing directly but the page also states 'Premium adds further modules such as manufacturing' and then claims cloud-only for NetSuite without any vendor documentation. The on-premises and cloud-only claims, the Essentials/Premium tier scope and the Business Central Copilot claims are stated flatly with no Microsoft Learn or Oracle source.",
+     "fix": "Link Microsoft Learn for Business Central deployment options, Essentials/Premium scope and Copilot, and Oracle documentation for NetSuite's cloud-only delivery, or soften to what the cited sources support.",
+     "on_page": true
+    },
+    {
+     "severity": "high",
+     "kind": "source",
+     "location": "Business Central publishes per-user licence tiers, while NetSuite is quoted per customer",
+     "issue": "The pricing contrast, which is central to the cost section, is uncited on the page. The only support in the research is a weak agency blog (an agency), and it is not linked here.",
+     "fix": "Link Microsoft's official Business Central pricing page for published tiers and NetSuite's quote-based pricing page, or say it is reported by vendors' own pages.",
+     "on_page": true
+    },
+    {
+     "severity": "high",
+     "kind": "claim",
+     "location": "our business applications practice is built on Dynamics 365",
+     "issue": "The facts on file list Dynamics 365 applications among Nova&'s offers, but do not say the practice is 'built on' it. 'We provide 24/7 support' also appears with no limit on which service it covers, while contact hours are weekdays only.",
+     "fix": "Write 'our business applications include Dynamics 365 Finance, Supply Chain Management and Business Central' and say the website lists 24/7 support.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "source",
+     "location": "NetSuite's own comparison says Business Central has [a very limited native HR module]",
+     "issue": "A competitor's marketing page is used as the sole support for a Business Central weakness, and the page later treats it as established ('Beyond the limited native HR noted above').",
+     "fix": "Cite Microsoft Learn for Business Central HR features, and keep the competitor attribution wherever the claim reappears.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "fact",
+     "location": "NetSuite's service tiers [make growth limits explicit, and moving tier carries a cost]",
+     "issue": "The agency source (an agency) is weak, and the sentence drops its figure; it is also used to prop up a section headed as NetSuite 'drawbacks'. SuiteScript and 'harder to forecast' claims are uncited.",
+     "fix": "Cite Oracle documentation for service tiers and SuiteScript, or present these as points to verify with Oracle.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "fact",
+     "location": "NetSuite's reporting capabilities centre on saved searches and role-based dashboards inside the platform.",
+     "issue": "Product-capability claims about NetSuite and Business Central reporting, AppSource, SuiteApps and 'subscription billing' are unsourced and thin.",
+     "fix": "Add vendor documentation links for these capabilities or reduce to demo checks.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "depth",
+     "location": "| UAE e-invoicing | Connector or partner integration | Connector or partner integration | The link to your Accredited Service Provider |",
+     "issue": "The e-invoicing row is identical for both products, so it gives the reader no decision information despite the page promising 'e-invoicing readiness'. The UAE-specific differentiators in the intro (VAT localisation, support in time zone) are not shown with evidence for either product.",
+     "fix": "State what to ask each vendor to prove, such as named ASP integrations live in the UAE, and link the Microsoft and Oracle localisation pages.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "local",
+     "location": "For VAT, check each system's tax code localisation, tax invoice formats and Arabic output.",
+     "issue": "Reasonable, but the e-invoicing paragraph does not say that the 30 October 2026 appointment date is the day this page was written, so a reader may not know it is today or passed.",
+     "fix": "Add that the 30 October 2026 deadline is the date of writing and that firms still without an ASP should act now; repeat the dates once, not twice across prose.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "structure",
+     "location": "**Quick answer:** Business Central is Microsoft's ERP for growing mid-sized companies, available in the cloud or on-premises",
+     "issue": "The quick answer repeats almost verbatim the first answer under 'What is the main difference', and 'Business Central is Microsoft's ERP for growing mid-sized companies' appears three times.",
+     "fix": "Make the quick answer a decision verdict and keep the definition once.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "repetition",
+     "location": "Lean towards Business Central if your teams work in Microsoft 365 and you want published licensing or an on-premises option.",
+     "issue": "The same lean-to rules are repeated in 'Which is better for a company already using Microsoft 365?', 'Consider Business Central over NetSuite when' and the decision table.",
+     "fix": "Keep the rule in the decision table and shorten the other two.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "style",
+     "location": "Business Central handles intercompany postings and consolidation within the product.",
+     "issue": "Several answers under question headings exceed or miss the 40-60 word direct-answer form, and some headings like 'Is Business Central a CRM or ERP?' start answering after a generic opener.",
+     "fix": "Open each question heading with a 40-60 word direct answer.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "link",
+     "location": "[Image: Business Central vs NetSuite ERP dashboards compared side by side for a UAE enterprise]",
+     "issue": "Square-bracket image placeholders remain in the published copy, breaking the no-bracket rule.",
+     "fix": "Replace placeholders with real images and alt text, or remove them.",
+     "on_page": true
+    }
+   ],
+   "page": "Both products are sold as cloud ERP, but only Business Central also runs on-premises.\n\nBusiness Central publishes per-user licence tiers, while NetSuite is quoted per customer\n\nour business applications practice is built on Dynamics 365\n\nNetSuite's own comparison says Business Central has [a very limited native HR module]\n\nNetSuite's service tiers [make growth limits explicit, and moving tier carries a cost]\n\nNetSuite's reporting capabilities centre on saved searches and role-based dashboards inside the platform.\n\n| UAE e-invoicing | Connector or partner integration | Connector or partner integration | The link to your Accredited Service Provider |\n\nFor VAT, check each system's tax code localisation, tax invoice formats and Arabic output.\n\n**Quick answer:** Business Central is Microsoft's ERP for growing mid-sized companies, available in the cloud or on-premises\n\nLean towards Business Central if your teams work in Microsoft 365 and you want published licensing or an on-premises option.\n\nBusiness Central handles intercompany postings and consolidation within the product.\n\n[Image: Business Central vs NetSuite ERP dashboards compared side by side for a UAE enterprise]",
+   "delivered": {
+    "status": "ready_with_questions",
+    "blocking": [],
+    "grade": {
+     "score": 85,
+     "of": 100,
+     "breakdown": {
+      "structure": 20,
+      "coverage": 15,
+      "readability": 10,
+      "specificity": 10,
+      "clean_language": 10,
+      "sources": 12,
+      "fit": 8,
+      "length": 0
+     },
+     "blocking": 0
+    }
+   },
+   "grade_detail": {
+    "version": "w0c-1",
+    "max": {
+     "structure": 20,
+     "coverage": 15,
+     "readability": 10,
+     "specificity": 10,
+     "clean_language": 10,
+     "sources": 15,
+     "fit": 20,
+     "length": 0
+    },
+    "caps": [
+     {
+      "dim": "fit",
+      "share": 0.4,
+      "why": "our verdict scored this search 46 out of 100, under 50"
+     }
+    ],
+    "items": {
+     "fit": {
+      "verdict_score": 46,
+      "band": "partial",
+      "acknowledged": true,
+      "exempt": "",
+      "automatic": false,
+      "verdict_points": 4,
+      "duplicate_points": 10
+     },
+     "repetition": {
+      "count": 0,
+      "clusters": []
+     },
+     "list_labels": [],
+     "sources": {
+      "weak": []
+     }
+    }
+   }
+  },
+  "K4": {
+   "site": "client A, Service",
+   "keyword_label": "K4",
+   "today": "2026-10-30",
+   "started_at_utc": "2026-10-29T22:56:44.575Z",
+   "mode": "enforce",
+   "judge": {
+    "mean": 77.5,
+    "editor_raw": 78,
+    "strategist": 77,
+    "strategist_ready": "yes"
+   },
+   "recorded": {
+    "status": "ready_with_questions",
+    "score": 96
+   },
+   "problems": [
+    {
+     "severity": "high",
+     "kind": "intent",
+     "location": "Slug: dynamics-365-project-operations-uae",
+     "issue": "The slug is an existing live Project Operations page URL, but this page targets the broader 'dynamics 365 partner dubai' keyword. This causes a URL clash and cannibalisation of the live page.",
+     "fix": "Use a distinct slug such as dynamics-365-partner-dubai, and keep the Project Operations page as an internal link target.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "structure",
+     "location": "Quick answer: A Dynamics 365 partner in Dubai helps UAE companies choose, license, implement and support",
+     "issue": "It promises 'five things' but lists only four or five run together, and the sentence structure is muddled. The quick answer is also long for a snippet.",
+     "fix": "Number the five checks clearly (directory listing, references, UAE-based consultants, e-invoicing connection, post-go-live support) in about 50 words.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "structure",
+     "location": "Title: Dynamics 365 Partner Dubai | ERP, CRM & E-Invoicing | Nova&",
+     "issue": "The title is 61 characters, over the 60 limit. The meta description is also only about 150 characters and omits e-invoicing, which the title promises.",
+     "fix": "Shorten to 'Dynamics 365 Partner Dubai | ERP, CRM, E-Invoicing | Nova&' (about 58 characters) and keep the description within 120-155 characters.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "structure",
+     "location": "[Image: Dynamics 365 partner in Dubai reviewing an ERP finance dashboard with a UAE enterprise team]",
+     "issue": "Bracketed image placeholders appear in the page body, and the brief says no bracket of any kind may appear.",
+     "fix": "Remove the bracketed notes; use real images with alt text instead of in-text brackets.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "structure",
+     "location": "### Does Dynamics 365 Support Arabic and UAE VAT?",
+     "issue": "This question heading sits inside the CTA section, so the CTA is not last. The section order is also muddled. Several other question headings have answers longer than 60 words or not given directly.",
+     "fix": "Move the Arabic/VAT answer into the selection section and keep the CTA as the final block. Keep each question answer to 40-60 words.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "depth",
+     "location": "Cost depends on scope, so a figure quoted without a scope document tells you little.",
+     "issue": "The cost section gives no range, figure or sourced benchmark, even though this is what a CFO shortlisting a partner most wants to know. A verified source was available.",
+     "fix": "Add a sourced benchmark with a link, or give a concrete decision rule such as a scope checklist with assumptions per user count and entity count.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "depth",
+     "location": "Start with the partner's listing in Microsoft's partner directory.",
+     "issue": "The page refers to Microsoft's partner directory and Solutions Partner designations without a link to the Microsoft page, so the key verification step is not actionable.",
+     "fix": "Link to the official Microsoft partner directory page and Microsoft Learn description of Solutions Partner designations.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "depth",
+     "location": "Multi-entity and GCC rollouts | Possible for simpler group structures",
+     "issue": "The table's comparative claims (fit, needs, migration path 'From spreadsheets or separate PSA tools') are unsourced assertions about products, and Business Central 'basic projects' is not backed.",
+     "fix": "Link Microsoft Learn documentation for the capabilities or soften the wording.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "claim",
+     "location": "Buying licences first and fitting processes afterwards is the most common way companies end up paying for the wrong edition.",
+     "issue": "'Most common way' is an unverified superlative with no source.",
+     "fix": "Rephrase as 'a common risk' or cite a source.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "repetition",
+     "location": "Our [Assess & Envision discovery and gap-fit analysis](https://www.novaand.example/whatwedo/assess-envision) covers business discovery, requirements, gap-fit analysis and an ROI assessment.",
+     "issue": "It repeats the same description given earlier in the services section. Project Operations capabilities are also described twice.",
+     "fix": "Cut the repeated sentence and refer back briefly.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "link",
+     "location": "Our guide to [Peppol e-invoicing software features for UAE CFOs]",
+     "issue": "Internal links are thin. There is no link to Project Operations, the CRM, migration or the Dynamics AX upgrade pages even though they are mentioned, and one link is the Peppol guide, which is a side topic.",
+     "fix": "Add links to the live Project Operations, CRM, NAV/GP migration and AX upgrade pages where those are mentioned.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "style",
+     "location": "The technology is the same everywhere. What differs is how well a partner fits it to local rules and ways of working.",
+     "issue": "Generic filler; local-partner arguments are unsupported and could be tighter, and the e-invoicing intro repeats the date summary already in the table.",
+     "fix": "Trim and replace with a concrete UAE example such as tax code or invoice layout setup.",
+     "on_page": true
+    }
+   ],
+   "page": "Slug: dynamics-365-project-operations-uae\n\nQuick answer: A Dynamics 365 partner in Dubai helps UAE companies choose, license, implement and support\n\nTitle: Dynamics 365 Partner Dubai | ERP, CRM & E-Invoicing | Nova&\n\n[Image: Dynamics 365 partner in Dubai reviewing an ERP finance dashboard with a UAE enterprise team]\n\n### Does Dynamics 365 Support Arabic and UAE VAT?\n\nCost depends on scope, so a figure quoted without a scope document tells you little.\n\nStart with the partner's listing in Microsoft's partner directory.\n\nMulti-entity and GCC rollouts | Possible for simpler group structures\n\nBuying licences first and fitting processes afterwards is the most common way companies end up paying for the wrong edition.\n\nOur [Assess & Envision discovery and gap-fit analysis](https://www.novaand.example/whatwedo/assess-envision) covers business discovery, requirements, gap-fit analysis and an ROI assessment.\n\nOur guide to [Peppol e-invoicing software features for UAE CFOs]\n\nThe technology is the same everywhere. What differs is how well a partner fits it to local rules and ways of working.",
+   "delivered": {
+    "status": "ready_with_questions",
+    "blocking": [],
+    "grade": {
+     "score": 96,
+     "of": 100,
+     "breakdown": {
+      "structure": 20,
+      "coverage": 15,
+      "readability": 10,
+      "specificity": 10,
+      "clean_language": 10,
+      "sources": 11,
+      "fit": 20,
+      "length": 0
+     },
+     "blocking": 0
+    }
+   },
+   "grade_detail": {
+    "version": "w0c-1",
+    "max": {
+     "structure": 20,
+     "coverage": 15,
+     "readability": 10,
+     "specificity": 10,
+     "clean_language": 10,
+     "sources": 15,
+     "fit": 20,
+     "length": 0
+    },
+    "caps": [],
+    "items": {
+     "fit": {
+      "verdict_score": 58,
+      "band": "full",
+      "acknowledged": false,
+      "exempt": "a refresh of a page your website already has",
+      "automatic": false,
+      "verdict_points": 10,
+      "duplicate_points": 10
+     },
+     "repetition": {
+      "count": 0,
+      "clusters": []
+     },
+     "list_labels": [],
+     "sources": {
+      "weak": []
+     }
+    }
+   }
+  },
+  "K5": {
+   "site": "client B, Service",
+   "keyword_label": "K5",
+   "today": "2026-10-30",
+   "started_at_utc": "2026-10-29T23:00:35.369Z",
+   "mode": "enforce",
+   "judge": {
+    "mean": 71.0,
+    "editor_raw": 70,
+    "strategist": 72,
+    "strategist_ready": "yes"
+   },
+   "recorded": {
+    "status": "not_ready",
+    "score": 59
+   },
+   "problems": [
+    {
+     "severity": "high",
+     "kind": "other",
+     "location": "[Image: Custom AI development for UAE enterprises connecting company data, AI models and a bilingual Arabic-English interface]",
+     "issue": "Square-bracket image placeholders appear in the page body (three of them). The quality bar allows no bracket of any kind.",
+     "fix": "Remove all bracketed image placeholders, or replace them with real images with plain alt text outside the copy.",
+     "on_page": true
+    },
+    {
+     "severity": "high",
+     "kind": "local",
+     "location": "Onshore companies follow the federal PDPL. DIFC and ADGM entities follow their free zone laws",
+     "issue": "Regulatory claims (PDPL, DIFC, ADGM, Central Bank rules) are stated with no official source link and no status or date; the run supplied no local facts. The PDPL's implementing regulations and exemptions (e.g. for financial-free-zone entities) are not mentioned.",
+     "fix": "Link u.ae, DIFC, ADGM and Central Bank pages for each regime, or soften to 'confirm with counsel which regime applies' without stating specifics.",
+     "on_page": true
+    },
+    {
+     "severity": "high",
+     "kind": "claim",
+     "location": "It also offers hosting that fits your data regime, holds security certification such as ISO 27001",
+     "issue": "The 'what a company does' answer slips into claims that read as Brightcode capabilities (hosting that fits data regimes, clear IP ownership, Arabic accuracy measurement, MLOps handover), none of which is in the facts on file. The page also implies Brightcode builds generative AI, agents, RAG and fine-tuning, which the facts do not list.",
+     "fix": "Present these as buyer criteria for any vendor, not as Brightcode offerings. Describe Brightcode's own work only from the facts on file (AI and ML built for production, NLP, computer vision, etc.).",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "source",
+     "location": "Deloitte's State of AI in the Enterprise reports that 81% of surveyed leaders",
+     "issue": "This is the only external figure and it is a global US-based statistic, with no UAE or GCC evidence. A page about UAE buyers should carry regional data.",
+     "fix": "Add one or two verified regional figures from a primary or research source, or reframe the Deloitte point as global context.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "repetition",
+     "location": "### AI development for Dubai's core sectors",
+     "issue": "Sector lists appear three times: the core sectors block, the use cases section and the banking subsection. The heading says Dubai, while the business is in the UAE and serves the UAE and GCC.",
+     "fix": "Merge the sector content into one section and rename the headings to UAE-wide wording.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "structure",
+     "location": "### AI development for Dubai's most ambitious enterprises",
+     "issue": "The heading does not match its content (an implementation method) and is a promotional phrase. The first H2 is also phrased as an evaluation question but answers what custom AI services are.",
+     "fix": "Rename to 'What does AI implementation involve?' and have the H2 answer directly in 40-60 words how to evaluate a company.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "style",
+     "location": "Brightcode is a custom AI development company based in the a free zone.",
+     "issue": "The intro promises a 'checklist of when custom AI is the wrong call' and a 'map of UAE data rules', and the primary keyword repeats very often (intro, quick answer, headings, closing), edging toward stuffing.",
+     "fix": "Trim keyword repetitions in the opening, quick answer and CTA, and use natural variants.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "depth",
+     "location": "How much does custom AI development cost in the UAE, and how long does it take?",
+     "issue": "The heading promises cost and duration but the answer gives neither a range nor a timeline, and offers no direct answer in 40-60 words.",
+     "fix": "Open with a 40-60 word direct answer stating typical phase durations only if sourced, otherwise say that fixed ranges are not honest without scoping and explain how a scoped estimate is produced.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "depth",
+     "location": "Banking and finance:** document processing and anomaly flags.",
+     "issue": "No example or evidence from Brightcode's own work, and no case study. The text states 'not a list of past projects', which weakens the proof for a shortlisting audience.",
+     "fix": "Add a concrete example of scope and outcome using only facts on file, or link the relevant insights article.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "link",
+     "location": "[Start a Project](https://brightcode.example/contact-us)",
+     "issue": "The Start a Project link appears twice in the close, plus phone support is repeated in the closing and in the at-a-glance list.",
+     "fix": "Keep one inline mention and the final button; drop the repeated support line.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "style",
+     "location": "Meta Description: Brightcode is a custom AI development company in the UAE building production AI, NLP and computer vision for UAE enterprises. Start a project.",
+     "issue": "The description is about 150 characters, which is acceptable, but it repeats the title wording and says 'in the UAE' while the H2 text and subheadings target Dubai.",
+     "fix": "Keep the length and align the geography across title, meta and headings.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "structure",
+     "location": "A custom AI development company designs, builds and runs AI software on your data, including models, pipelines, integrations and monitoring.",
+     "issue": "This is a near duplicate of the Quick answer definition near the top, and the section's H2 is placed late in the page.",
+     "fix": "Shorten the repeat and point back to the earlier definition, or move the question higher.",
+     "on_page": true
+    }
+   ],
+   "page": "[Image: Custom AI development for UAE enterprises connecting company data, AI models and a bilingual Arabic-English interface]\n\nOnshore companies follow the federal PDPL. DIFC and ADGM entities follow their free zone laws\n\nIt also offers hosting that fits your data regime, holds security certification such as ISO 27001\n\nDeloitte's State of AI in the Enterprise reports that 81% of surveyed leaders\n\n### AI development for Dubai's core sectors\n\n### AI development for Dubai's most ambitious enterprises\n\nBrightcode is a custom AI development company based in the a free zone.\n\nHow much does custom AI development cost in the UAE, and how long does it take?\n\nBanking and finance:** document processing and anomaly flags.\n\n[Start a Project](https://brightcode.example/contact-us)\n\nMeta Description: Brightcode is a custom AI development company in the UAE building production AI, NLP and computer vision for UAE enterprises. Start a project.\n\nA custom AI development company designs, builds and runs AI software on your data, including models, pipelines, integrations and monitoring.",
+   "delivered": {
+    "status": "ready_with_questions",
+    "blocking": [],
+    "grade": {
+     "score": 88,
+     "of": 100,
+     "breakdown": {
+      "structure": 20,
+      "coverage": 15,
+      "readability": 10,
+      "specificity": 10,
+      "clean_language": 10,
+      "sources": 15,
+      "fit": 8,
+      "length": 0
+     },
+     "blocking": 0
+    }
+   },
+   "grade_detail": {
+    "version": "w0c-1",
+    "max": {
+     "structure": 20,
+     "coverage": 15,
+     "readability": 10,
+     "specificity": 10,
+     "clean_language": 10,
+     "sources": 15,
+     "fit": 20,
+     "length": 0
+    },
+    "caps": [
+     {
+      "dim": "fit",
+      "share": 0.4,
+      "why": "our verdict scored this search 46 out of 100, under 50"
+     }
+    ],
+    "items": {
+     "fit": {
+      "verdict_score": 46,
+      "band": "partial",
+      "acknowledged": true,
+      "exempt": "",
+      "automatic": false,
+      "verdict_points": 4,
+      "duplicate_points": 10
+     },
+     "repetition": {
+      "count": 0,
+      "clusters": []
+     },
+     "list_labels": [],
+     "sources": {
+      "weak": []
+     }
+    }
+   }
+  },
+  "K6": {
+   "site": "client B, Guide",
+   "keyword_label": "K6",
+   "today": "2026-10-30",
+   "started_at_utc": "2026-10-29T22:56:49.138Z",
+   "mode": "enforce",
+   "judge": {
+    "mean": 74.0,
+    "editor_raw": 68,
+    "strategist": 80,
+    "strategist_ready": "yes"
+   },
+   "recorded": {
+    "status": "not_ready",
+    "score": 59
+   },
+   "problems": [
+    {
+     "severity": "high",
+     "kind": "source",
+     "location": "Adoption of AI agents in customer service organizations rose sharply from 2025 to 2026",
+     "issue": "The only market figure is stated vaguely with no number, although the verified source gives 39% to 66%. A vendor-news source is also weak, and the sentence says nothing specific.",
+     "fix": "State the figure: adoption rose from 39% to 66% (1.7x) between 2025 and 2026, per Salesforce's May 2026 survey, keeping the link.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "source",
+     "location": "([source](https://fin.ai/learn/ai-customer-service-best-practices))",
+     "issue": "The link text 'source' is generic, and it is a vendor blog (weak) cited for a best-practice claim. It is used as the sole basis for the go/no-go metrics.",
+     "fix": "Name the publisher in the anchor (Fin) and word the claim as one vendor's view. Rely on your own metric definitions for the rest.",
+     "on_page": false
+    },
+    {
+     "severity": "medium",
+     "kind": "depth",
+     "location": "Large language models now handle context, typos and mixed Arabic and English well, so conversation quality no longer decides the choice.",
+     "issue": "This is an unsupported sweeping claim, and it contradicts the page's own advice to test Gulf dialect and Arabizi heavily.",
+     "fix": "Soften it: models handle mixed Arabic and English better than rule-based bots, but dialect quality varies and must be tested, so integration and control usually decide.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "local",
+     "location": "Confirm your UAE federal and free-zone data-protection obligations with your legal or compliance team before choosing hosting.",
+     "issue": "For a UAE audience the page names no actual regime (e.g. PDPL, DIFC/ADGM rules, sector regulators) and offers no official source. The advice is generic on the topic buyers worry about most.",
+     "fix": "Name the categories of rule (the federal personal data protection law, free-zone regimes, sector regulators) without dates, and link a u.ae source if verified.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "depth",
+     "location": "It depends on how ready your knowledge base is, how many systems the agent must integrate with",
+     "issue": "The answer to 'how long does it take' never gives a range, although the page's own pilot is six weeks. The cost section likewise gives no figures.",
+     "fix": "Say a single-intent pilot is planned here as six weeks, and that a full rollout depends on the listed factors.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "repetition",
+     "location": "### Where do AI agents fit: tier-1 and tier-2 support",
+     "issue": "This repeats the earlier tier-1/tier-2 section almost word for word.",
+     "fix": "Remove this subsection and move the autonomous-AI link into the earlier tier section.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "style",
+     "location": "### Why most customer support is ripe for AI disruption",
+     "issue": "Cliché heading ('ripe for AI disruption') and the claim that most support is ripe is unsupported.",
+     "fix": "Rename it 'Why repetitive support requests suit an AI agent'.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "structure",
+     "location": "Our [engagement models](https://brightcode.example/engagement-models) are software development outsourcing, dedicated teams and staff augmentation.",
+     "issue": "A sales line interrupts the technical build-versus-buy section and repeats the closing paragraph.",
+     "fix": "Delete it here, keep it in the final section.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "claim",
+     "location": "Brightcode is a software, AI and automation company with NLP capability covering",
+     "issue": "The closing section lists capabilities but offers no proof of a customer-support agent delivered. This is a gap for a guide that sells the build.",
+     "fix": "Add only on-file proof such as the client results on file, and avoid implying specific support-agent projects.",
+     "on_page": true
+    }
+   ],
+   "page": "Adoption of AI agents in customer service organizations rose sharply from 2025 to 2026\n\nLarge language models now handle context, typos and mixed Arabic and English well, so conversation quality no longer decides the choice.\n\nConfirm your UAE federal and free-zone data-protection obligations with your legal or compliance team before choosing hosting.\n\nIt depends on how ready your knowledge base is, how many systems the agent must integrate with\n\n### Where do AI agents fit: tier-1 and tier-2 support\n\n### Why most customer support is ripe for AI disruption\n\nOur [engagement models](https://brightcode.example/engagement-models) are software development outsourcing, dedicated teams and staff augmentation.\n\nBrightcode is a software, AI and automation company with NLP capability covering",
+   "delivered": {
+    "status": "ready_with_questions",
+    "blocking": [],
+    "grade": {
+     "score": 96,
+     "of": 100,
+     "breakdown": {
+      "structure": 20,
+      "coverage": 14,
+      "readability": 10,
+      "specificity": 10,
+      "clean_language": 10,
+      "sources": 12,
+      "fit": 20,
+      "length": 0
+     },
+     "blocking": 0
+    }
+   },
+   "grade_detail": {
+    "version": "w0c-1",
+    "max": {
+     "structure": 20,
+     "coverage": 15,
+     "readability": 10,
+     "specificity": 10,
+     "clean_language": 10,
+     "sources": 15,
+     "fit": 20,
+     "length": 0
+    },
+    "caps": [],
+    "items": {
+     "fit": {
+      "verdict_score": 58,
+      "band": "full",
+      "acknowledged": false,
+      "exempt": "",
+      "automatic": false,
+      "verdict_points": 10,
+      "duplicate_points": 10
+     },
+     "repetition": {
+      "count": 0,
+      "clusters": []
+     },
+     "list_labels": [],
+     "sources": {
+      "weak": []
+     }
+    }
+   }
+  },
+  "K7": {
+   "site": "own site, Guide",
+   "keyword_label": "K7",
+   "today": "2026-10-29",
+   "started_at_utc": "2026-10-29T23:13:35.540Z",
+   "mode": "enforce",
+   "judge": {
+    "mean": 74.5,
+    "editor_raw": 70,
+    "strategist": 79,
+    "strategist_ready": "yes"
+   },
+   "recorded": {
+    "status": "not_ready",
+    "score": 59
+   },
+   "problems": [
+    {
+     "severity": "high",
+     "kind": "fact",
+     "location": "Using the Wilson score interval from the sampling section, the illustrative 30 of 120 has a 95% range from just under one in five to about one in three.",
+     "issue": "The Wilson 95% interval for 30/120 (25%) is about 18.2% to 33.3%. 'Just under one in five' is roughly right but the whole example treats the 120 answers as independent, though the same 20 prompts repeat. Also, 35 of 120 'sits inside the range' is correct, but the protocol earlier says 3 of 5 runs 'very wide', which is fine. The main risk is overstated precision.",
+     "fix": "State the interval as about 18% to 33% and add one sentence that repeated runs of the same prompts are not fully independent, so real ranges are wider.",
+     "on_page": true
+    },
+    {
+     "severity": "high",
+     "kind": "fact",
+     "location": "Your brand is named in 30 answers, so your mention rate is one in four.",
+     "issue": "Share of voice is calculated from 30 mentions out of 100 total, but competitor counts are 'answers' while the brand total counts mentions. Mixing answers and mentions without saying one answer can name several brands is confusing; competitors named in 45 and 25 answers plus 30 equals 100 only if each answer names one brand, which contradicts a shortlist-style answer.",
+     "fix": "Note that an answer can name several brands, so share of voice counts mentions, not answers, and the numbers are illustrative.",
+     "on_page": true
+    },
+    {
+     "severity": "high",
+     "kind": "source",
+     "location": "One example is Ahrefs' free AI visibility checker, which tests how a brand shows up across ChatGPT, Perplexity, Gemini, Copilot and Google AI Overviews.",
+     "issue": "Third-party product capability stated with no link and no verified source; it is unverified and could be out of date, and it contradicts the 'vendor-neutral' framing by naming one brand.",
+     "fix": "Remove the named product or write 'Several vendors offer free checkers; check which engines each covers', or link to Ahrefs' own page.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "source",
+     "location": "Tool categories differ more than the marketing suggests. A vendor's review of AI visibility tracking tools puts it this way",
+     "issue": "The only external citation is a weak vendor listicle, used for a generic point. The page gives no market numbers with sources despite several verified sources available (e.g. 16% of brands track systematically).",
+     "fix": "Either keep the quote as color only, or add one verified stat with its link, for example the 16% tracking figure from quickseo.ai, labeled as a vendor survey.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "depth",
+     "location": "Traditional SEO reports show rankings, impressions and clicks. None of those tell you whether an AI answer recommended you.",
+     "issue": "The case for why this matters has no data, such as zero-click share or ChatGPT usage, which the verified sources provide. Readers with budget objections get assertion only.",
+     "fix": "Add one sourced figure with link, such as the livesov.com zero-click statistic, flagged as from a vendor blog.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "claim",
+     "location": "Ownsite asks a panel of up to 500 buyer questions to six AI engines and answer surfaces, or nine with Copilot and the ChatGPT and Gemini APIs.",
+     "issue": "Conflicts with the page's own engine list of seven names and with 50 questions per website on Growth; a reader will see 'up to 500' vs '50 per site' as unclear.",
+     "fix": "Explain that Growth gives 50 questions per website and up to 500 in total, and that the panel size depends on plan.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "style",
+     "location": "The numbers below are illustrative and made up for teaching purposes.",
+     "issue": "'Made up' undermines trust wording.",
+     "fix": "Write 'The numbers below are hypothetical, for teaching.'",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "structure",
+     "location": "### How accurate are AI visibility tools?",
+     "issue": "This question heading sits under the 'How many times should you run each prompt?' H2 and its answer is not in a 40-60 word direct block under a proper H2; also 'How many prompts are enough' lacks a direct answer opening.",
+     "fix": "Move to its own place or open with a 40-60 word direct answer; make 'How many prompts are enough' answer first.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "other",
+     "location": "[Image: AI search visibility tracking: one buyer question checked across several AI answer engines for mentions and citations]",
+     "issue": "Square-bracket image placeholders appear in the page body, violating the no-bracket rule.",
+     "fix": "Replace with actual images and alt text, or remove the bracketed lines.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "repetition",
+     "location": "Free AI search visibility tracking works if you keep it small and disciplined:",
+     "issue": "Free-vs-tool limits (no history, no ranges, no visits link) are stated in the intro answer, the bullet list and the table.",
+     "fix": "Cut the repeated limits to one place and refer to the table.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "style",
+     "location": "Tie the numbers to visits and leads in a one-page report your boss can read.",
+     "issue": "Meta description does not mention the CTA wording fit; the page's meta title is vendor-neutral, but H1 and meta claim 'Start free' alongside a vendor-neutral promise, slight tension.",
+     "fix": "Keep CTA but make the meta description end on the benefit, within 120-155 characters.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "link",
+     "location": "Agencies can read about [running AI visibility for many client sites](https://ownsite.example/solutions/agencies).",
+     "issue": "Five internal links clustered in one paragraph feel like a link dump; the pricing sentence repeats the plan details.",
+     "fix": "Keep three links with specific purpose and fold the rest into the plan paragraph.",
+     "on_page": true
+    }
+   ],
+   "page": "Using the Wilson score interval from the sampling section, the illustrative 30 of 120 has a 95% range from just under one in five to about one in three.\n\nYour brand is named in 30 answers, so your mention rate is one in four.\n\nOne example is Ahrefs' free AI visibility checker, which tests how a brand shows up across ChatGPT, Perplexity, Gemini, Copilot and Google AI Overviews.\n\nTool categories differ more than the marketing suggests. A vendor's review of AI visibility tracking tools puts it this way\n\nTraditional SEO reports show rankings, impressions and clicks. None of those tell you whether an AI answer recommended you.\n\nOwnsite asks a panel of up to 500 buyer questions to six AI engines and answer surfaces, or nine with Copilot and the ChatGPT and Gemini APIs.\n\nThe numbers below are illustrative and made up for teaching purposes.\n\n### How accurate are AI visibility tools?\n\n[Image: AI search visibility tracking: one buyer question checked across several AI answer engines for mentions and citations]\n\nFree AI search visibility tracking works if you keep it small and disciplined:\n\nTie the numbers to visits and leads in a one-page report your boss can read.\n\nAgencies can read about [running AI visibility for many client sites](https://ownsite.example/solutions/agencies).",
+   "delivered": {
+    "status": "ready_with_questions",
+    "blocking": [],
+    "grade": {
+     "score": 94,
+     "of": 100,
+     "breakdown": {
+      "structure": 17,
+      "coverage": 15,
+      "readability": 10,
+      "specificity": 10,
+      "clean_language": 10,
+      "sources": 12,
+      "fit": 20,
+      "length": 0
+     },
+     "blocking": 0
+    }
+   },
+   "grade_detail": {
+    "version": "w0c-1",
+    "max": {
+     "structure": 20,
+     "coverage": 15,
+     "readability": 10,
+     "specificity": 10,
+     "clean_language": 10,
+     "sources": 15,
+     "fit": 20,
+     "length": 0
+    },
+    "caps": [],
+    "items": {
+     "fit": {
+      "verdict_score": 58,
+      "band": "full",
+      "acknowledged": false,
+      "exempt": "",
+      "automatic": false,
+      "verdict_points": 10,
+      "duplicate_points": 10
+     },
+     "repetition": {
+      "count": 0,
+      "clusters": []
+     },
+     "list_labels": [],
+     "sources": {
+      "weak": []
+     }
+    }
+   }
+  },
+  "K8": {
+   "site": "own site, Service",
+   "keyword_label": "K8",
+   "today": "2026-10-29",
+   "started_at_utc": "2026-10-29T23:13:39.747Z",
+   "mode": "enforce",
+   "judge": {
+    "mean": 72.0,
+    "editor_raw": 71,
+    "strategist": 73,
+    "strategist_ready": "no"
+   },
+   "recorded": {
+    "status": "not_ready",
+    "score": 59
+   },
+   "problems": [
+    {
+     "severity": "high",
+     "kind": "claim",
+     "location": "Ownsite tracks six AI engines and answer surfaces: ChatGPT, Gemini, Perplexity, Claude, Copilot, Google AI Mode and AI Overviews.",
+     "issue": "Seven names are listed while the text says six. Readers will notice the mismatch, which undermines trust in the figure.",
+     "fix": "Write it as the facts do but make the count consistent, e.g. 'tracks the major AI engines and answer surfaces: ChatGPT, Gemini, Perplexity, Claude, Copilot, and Google AI Mode and AI Overviews', or group Google AI Mode and AI Overviews as one surface.",
+     "on_page": true
+    },
+    {
+     "severity": "high",
+     "kind": "claim",
+     "location": "Low-risk work such as rank tracking, Search Console reporting and technical audits can run on its own.",
+     "issue": "The page implies Ownsite offers per-task autonomy tiers and undo, but the facts only say Auto or Manual per step. The 'How to undo' column and 'Restore the previous text' rows could be read as Ownsite features.",
+     "fix": "Label the matrix as a general vendor-neutral rule, and say that for Ownsite the confirmed controls are Auto or Manual per step and nothing is published without your OK.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "claim",
+     "location": "Ownsite is an AI SEO agent that runs research, pages, audits, AI visibility and backlinks as one weekly loop",
+     "issue": "The CTA calls it an 'agent', but facts describe a platform running a weekly loop. Also the intro says an agent 'chooses the next step from your site's data', which is not claimed for the product.",
+     "fix": "Say 'Ownsite is an SEO, AEO and GEO platform that works as an AI SEO agent you supervise', and avoid implying autonomous decision-making.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "claim",
+     "location": "Content optimization on pages that already rank, always with your sign-off.",
+     "issue": "Listed as agent scope, but facts only cover pages for chosen keywords. Ownsite may not optimize existing pages, and the list also names redirects, canonical tags and alt text checks as tasks without confirmation.",
+     "fix": "Frame the checklist as what to look for in any agent, and state only confirmed Ownsite coverage (technical audits with fix pack, pages for chosen keywords).",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "depth",
+     "location": "Many teams use AI agents to free a specialist's time for those decisions rather than to remove the specialist.",
+     "issue": "Unsourced generalization about market behavior; verified sources were available but none are cited anywhere. The page has no external evidence.",
+     "fix": "Reword as 'Use the agent to free a specialist's time for those decisions', or cite a verified source link.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "depth",
+     "location": "Ahrefs and Semrush report data and leave the work to you.",
+     "issue": "Competitors and agents (Arvow, Alli AI, Search Atlas OTTO) are named with unverified characterizations; Semrush and Ahrefs now ship AI features.",
+     "fix": "Say 'Classic SEO tools mostly report data' without naming brands, or soften to 'traditionally'.",
+     "on_page": true
+    },
+    {
+     "severity": "medium",
+     "kind": "fact",
+     "location": "Products sold under this label, such as Arvow, Alli AI and Search Atlas OTTO, vary mainly in how much they change without review.",
+     "issue": "Unverified claim about named third-party products, with no source.",
+     "fix": "Remove the names or state generally that products under this label differ in how much they change without review.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "repetition",
+     "location": "An AI SEO agent is software that carries out multi-step search work on its own: keyword research, content drafting, technical audits and rank tracking.",
+     "issue": "Definition repeated almost word for word in the Quick answer and the first H2 answer.",
+     "fix": "Shorten the Quick answer or vary the H2 answer to add the approval angle instead of repeating.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "structure",
+     "location": "## One task from start to finish: two worked examples",
+     "issue": "Heading is not phrased as a buyer question, and the page has few question headings; the new-page steps also partly repeat the Coming up and Manual statements made earlier.",
+     "fix": "Rephrase as 'What does one AI SEO agent task look like from start to finish?' and trim repeated sentences.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "style",
+     "location": "Start free: setting up Ownsite is free, and every analysis shows its price in credits before it runs.",
+     "issue": "Repeats the pricing sentence given in the cost section; the CTA also ends with demo wording after the Start free line, and the demo path has no link.",
+     "fix": "Shorten the CTA, and link 'book a demo' to https://ownsite.example/contact.",
+     "on_page": true
+    },
+    {
+     "severity": "low",
+     "kind": "link",
+     "location": "so you can [see the plan before anything is written](https://ownsite.example/platform/autopilot)",
+     "issue": "The anchor describes Coming up, but links to the autopilot page; the anchor is long and sentence-like. The platform/guided-setup and agency-portal pages are unused for the agency audience.",
+     "fix": "Use a short anchor such as 'Ownsite autopilot' and add a link to https://ownsite.example/solutions/agencies where agencies are mentioned.",
+     "on_page": true
+    }
+   ],
+   "page": "Ownsite tracks six AI engines and answer surfaces: ChatGPT, Gemini, Perplexity, Claude, Copilot, Google AI Mode and AI Overviews.\n\nLow-risk work such as rank tracking, Search Console reporting and technical audits can run on its own.\n\nOwnsite is an AI SEO agent that runs research, pages, audits, AI visibility and backlinks as one weekly loop\n\nContent optimization on pages that already rank, always with your sign-off.\n\nMany teams use AI agents to free a specialist's time for those decisions rather than to remove the specialist.\n\nAhrefs and Semrush report data and leave the work to you.\n\nProducts sold under this label, such as Arvow, Alli AI and Search Atlas OTTO, vary mainly in how much they change without review.\n\nAn AI SEO agent is software that carries out multi-step search work on its own: keyword research, content drafting, technical audits and rank tracking.\n\n## One task from start to finish: two worked examples\n\nStart free: setting up Ownsite is free, and every analysis shows its price in credits before it runs.\n\nso you can [see the plan before anything is written](https://ownsite.example/platform/autopilot)",
+   "delivered": {
+    "status": "needs_work",
+    "blocking": [],
+    "grade": {
+     "score": 85,
+     "of": 100,
+     "breakdown": {
+      "structure": 20,
+      "coverage": 15,
+      "readability": 10,
+      "specificity": 10,
+      "clean_language": 10,
+      "sources": 0,
+      "fit": 20,
+      "length": 0
+     },
+     "blocking": 0
+    }
+   },
+   "grade_detail": {
+    "version": "w0c-1",
+    "max": {
+     "structure": 20,
+     "coverage": 15,
+     "readability": 10,
+     "specificity": 10,
+     "clean_language": 10,
+     "sources": 15,
+     "fit": 20,
+     "length": 0
+    },
+    "caps": [],
+    "items": {
+     "fit": {
+      "verdict_score": 58,
+      "band": "full",
+      "acknowledged": false,
+      "exempt": "",
+      "automatic": false,
+      "verdict_points": 10,
+      "duplicate_points": 10
+     },
+     "repetition": {
+      "count": 0,
+      "clusters": []
+     },
+     "list_labels": [],
+     "sources": {
+      "weak": []
+     }
+    }
+   }
+  }
+ },
+ "finals": {
+  "K2": {
+   "judge": {
+    "mean": 74.0,
+    "strategist_ready": "no"
+   },
+   "still_on_final": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    true
+   ],
+   "blocking_other": [],
+   "recorded": {
+    "status": "not_ready",
+    "score": 59
+   },
+   "grade": {
+    "score": 74,
+    "breakdown": {
+     "structure": 10,
+     "coverage": 15,
+     "readability": 10,
+     "specificity": 10,
+     "clean_language": 10,
+     "sources": 11,
+     "fit": 8,
+     "length": 0
+    }
+   },
+   "grade_detail": {
+    "version": "w0c-1",
+    "max": {
+     "structure": 20,
+     "coverage": 15,
+     "readability": 10,
+     "specificity": 10,
+     "clean_language": 10,
+     "sources": 15,
+     "fit": 20,
+     "length": 0
+    },
+    "caps": [
+     {
+      "dim": "fit",
+      "share": 0.4,
+      "why": "our verdict scored this search 42 out of 100, under 50"
+     },
+     {
+      "dim": "structure",
+      "share": 0.5,
+      "why": "one statement is made 4 times"
+     }
+    ],
+    "items": {
+     "fit": {
+      "verdict_score": 42,
+      "band": "partial",
+      "acknowledged": true,
+      "exempt": "",
+      "automatic": false,
+      "verdict_points": 4,
+      "duplicate_points": 10
+     },
+     "repetition": {
+      "count": 0,
+      "clusters": []
+     },
+     "list_labels": [],
+     "sources": {
+      "weak": []
+     }
+    }
+   }
+  },
+  "K3": {
+   "judge": {
+    "mean": 80.0,
+    "strategist_ready": "yes"
+   },
+   "still_on_final": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false
+   ],
+   "blocking_other": [],
+   "recorded": {
+    "status": "not_ready",
+    "score": 59
+   },
+   "grade": {
+    "score": 85,
+    "breakdown": {
+     "structure": 20,
+     "coverage": 15,
+     "readability": 10,
+     "specificity": 10,
+     "clean_language": 10,
+     "sources": 12,
+     "fit": 8,
+     "length": 0
+    }
+   },
+   "grade_detail": {
+    "version": "w0c-1",
+    "max": {
+     "structure": 20,
+     "coverage": 15,
+     "readability": 10,
+     "specificity": 10,
+     "clean_language": 10,
+     "sources": 15,
+     "fit": 20,
+     "length": 0
+    },
+    "caps": [
+     {
+      "dim": "fit",
+      "share": 0.4,
+      "why": "our verdict scored this search 46 out of 100, under 50"
+     }
+    ],
+    "items": {
+     "fit": {
+      "verdict_score": 46,
+      "band": "partial",
+      "acknowledged": true,
+      "exempt": "",
+      "automatic": false,
+      "verdict_points": 4,
+      "duplicate_points": 10
+     },
+     "repetition": {
+      "count": 0,
+      "clusters": []
+     },
+     "list_labels": [],
+     "sources": {
+      "weak": []
+     }
+    }
+   }
+  },
+  "K5": {
+   "judge": {
+    "mean": 69.5,
+    "strategist_ready": "no"
+   },
+   "still_on_final": [
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    true
+   ],
+   "blocking_other": [],
+   "recorded": {
+    "status": "not_ready",
+    "score": 59
+   },
+   "grade": {
+    "score": 88,
+    "breakdown": {
+     "structure": 20,
+     "coverage": 15,
+     "readability": 10,
+     "specificity": 10,
+     "clean_language": 10,
+     "sources": 15,
+     "fit": 8,
+     "length": 0
+    }
+   },
+   "grade_detail": {
+    "version": "w0c-1",
+    "max": {
+     "structure": 20,
+     "coverage": 15,
+     "readability": 10,
+     "specificity": 10,
+     "clean_language": 10,
+     "sources": 15,
+     "fit": 20,
+     "length": 0
+    },
+    "caps": [
+     {
+      "dim": "fit",
+      "share": 0.4,
+      "why": "our verdict scored this search 46 out of 100, under 50"
+     }
+    ],
+    "items": {
+     "fit": {
+      "verdict_score": 46,
+      "band": "partial",
+      "acknowledged": true,
+      "exempt": "",
+      "automatic": false,
+      "verdict_points": 4,
+      "duplicate_points": 10
+     },
+     "repetition": {
+      "count": 0,
+      "clusters": []
+     },
+     "list_labels": [],
+     "sources": {
+      "weak": []
+     }
+    }
+   }
+  },
+  "K6": {
+   "judge": {
+    "mean": 73.0,
+    "strategist_ready": "yes"
+   },
+   "still_on_final": [
+    true,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "blocking_other": [],
+   "recorded": {
+    "status": "not_ready",
+    "score": 59
+   },
+   "grade": {
+    "score": 96,
+    "breakdown": {
+     "structure": 20,
+     "coverage": 14,
+     "readability": 10,
+     "specificity": 10,
+     "clean_language": 10,
+     "sources": 12,
+     "fit": 20,
+     "length": 0
+    }
+   },
+   "grade_detail": {
+    "version": "w0c-1",
+    "max": {
+     "structure": 20,
+     "coverage": 15,
+     "readability": 10,
+     "specificity": 10,
+     "clean_language": 10,
+     "sources": 15,
+     "fit": 20,
+     "length": 0
+    },
+    "caps": [],
+    "items": {
+     "fit": {
+      "verdict_score": 58,
+      "band": "full",
+      "acknowledged": false,
+      "exempt": "",
+      "automatic": false,
+      "verdict_points": 10,
+      "duplicate_points": 10
+     },
+     "repetition": {
+      "count": 0,
+      "clusters": []
+     },
+     "list_labels": [],
+     "sources": {
+      "weak": []
+     }
+    }
+   }
+  },
+  "K7": {
+   "judge": {
+    "mean": 70.5,
+    "strategist_ready": "no"
+   },
+   "still_on_final": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    true,
+    true,
+    true
+   ],
+   "blocking_other": [],
+   "recorded": {
+    "status": "not_ready",
+    "score": 59
+   },
+   "grade": {
+    "score": 94,
+    "breakdown": {
+     "structure": 17,
+     "coverage": 15,
+     "readability": 10,
+     "specificity": 10,
+     "clean_language": 10,
+     "sources": 12,
+     "fit": 20,
+     "length": 0
+    }
+   },
+   "grade_detail": {
+    "version": "w0c-1",
+    "max": {
+     "structure": 20,
+     "coverage": 15,
+     "readability": 10,
+     "specificity": 10,
+     "clean_language": 10,
+     "sources": 15,
+     "fit": 20,
+     "length": 0
+    },
+    "caps": [],
+    "items": {
+     "fit": {
+      "verdict_score": 58,
+      "band": "full",
+      "acknowledged": false,
+      "exempt": "",
+      "automatic": false,
+      "verdict_points": 10,
+      "duplicate_points": 10
+     },
+     "repetition": {
+      "count": 0,
+      "clusters": []
+     },
+     "list_labels": [],
+     "sources": {
+      "weak": []
+     }
+    }
+   }
+  }
+ }
+}

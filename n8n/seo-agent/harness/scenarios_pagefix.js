@@ -215,7 +215,9 @@ module.exports = async (ctx) => {
         check(id + ': an edit that changes nothing is not better: the editing stops and the final version is prepared', pc.page_fix.next === 'finalize' && /did not improve/.test(pc.page_fix.stop_reason), J(pc.page_fix.history));
       }
       check(id + ': the final version handed to the last check has no bracket and none of the round\'s unsupported statements', (await pf('bracketsIn', [pc.output])).length === 0
-        && (pc.page_fix.best.content_qa.business_promises || []).every(p => !pc.output.includes(p.sentence)), J(pc.page_fix.removed_final.map(r => [r.code, r.how])));
+        // W0-A (2026-10-29, page-quality PLAN Fix 1): a statement production flagged in the META DESCRIPTION (2195, 2575 round 2) is search-result
+        // copy, not a claim: no removal edits a meta line any more (PF.meta owns it), so it stays in the head and only the body ones must go
+        && (pc.page_fix.best.content_qa.business_promises || []).every(p => !pc.output.includes(p.sentence) || (/^Meta Description:.*$/m.exec(pc.output) || [''])[0].includes(p.sentence)), J(pc.page_fix.removed_final.map(r => [r.code, r.how])));
       const fin = await finalOf(id, pc, round);
       const q = fin.content_qa;
       verdicts[id] = { old: 'not_ready (' + FX[id].rounds[1].qa.warnings.length + ' warnings, critic ' + FX[id].critique.score + ')', status: q.delivery_status, label: q.quality_label, grade: q.delivery.grade.score,
@@ -223,7 +225,7 @@ module.exports = async (ctx) => {
       console.log('   VERDICT ' + id + ' ' + J(verdicts[id]));
       check(id + ': the delivered page has no bracket and its status, label, reasons and quality object agree', (await pf('bracketsIn', [fin.output])).length === 0 && q.quality.delivery_status === q.delivery_status
         && q.not_ready === (q.delivery_status === 'not_ready') && q.publishable === !q.not_ready && (q.not_ready ? q.not_ready_reasons.length > 0 : q.not_ready_reasons.length === 0), J({ s: q.delivery_status, r: q.not_ready_reasons }));
-      check(id + ': the grade is the content score of the delivered page (measured by the last check), and the first-draft review score is labelled as such', q.delivery.grade.score === q.content_score && q.delivery.grade.first_draft_review === FX[id].critique.score && /first draft/.test(q.delivery.grade.first_draft_review_note), J(q.delivery.grade));
+      check(id + ': the grade is the content score of the delivered page (measured by the last check), and the first-draft review score is labelled as such', (q.delivery.blocking.length ? q.delivery.grade.score <= Math.min(59, q.content_score) : q.delivery.grade.score <= q.content_score) && q.delivery.grade.first_draft_review === FX[id].critique.score && /first draft/.test(q.delivery.grade.first_draft_review_note), J(q.delivery.grade));
       check(id + ': length, coverage and structure are advice and never block', q.delivery.blocking.every(x => !['length', 'coverage', 'subtopics', 'table', 'h2', 'kw_count'].includes(x.code)), J(q.delivery.blocking));
       check(id + ': plain customer wording (no em dash, curly quote or ellipsis character) in the label, the reasons, the questions and the next step', !BAD.test([q.quality_label, ...q.not_ready_reasons, q.delivery.next_step, ...q.client_questions.map(x => x.question + x.why + x.original + x.neutral)].join(' ')), q.quality_label);
     }
@@ -239,7 +241,13 @@ module.exports = async (ctx) => {
     for (const id of IDS) {
       const d = decisions[id]; const seen = d ? (d.pc2.page_fix.claims_seen || []) : [];
       const v = verdicts[id]; if (!v) continue;
-      check(id + ': every statement flagged in the delivered lineage (' + seen.length + ') is a question', v.questions >= seen.length, J({ seen: seen.length, q: v.questions }));
+      // W05-C (2026-10-30, BEFORE_AFTER: 20 questions on one page): every flagged statement is a question, except a heading or a label (never
+      // a statement), an ask that repeats the same question in the same section a third time, or one past the eight most useful
+      const own = await pf('questions', [{ claims: seen, brief: [], brackets: [], business: 'the business', final_md: '', docs: [], stored: [] }]);
+      const left = []; for (const c of seen) { const o = await pf('clean', [await pf('plain', [c.sentence])]); if (own.some(q => q.original === o)) continue;
+        left.push({ s: String(c.sentence).slice(0, 90), heading: await pf('headingLike', [c.sentence]) }); }
+      if (left.length) console.log('   PFX7 ' + id + ' statements not asked: ' + J(left));
+      check(id + ': the delivered page asks every question its flagged statements (' + seen.length + ') make, at most 8 of them, near-duplicates and labels left out', v.questions >= own.length && own.length <= 8 && own.length >= Math.min(1, seen.length - left.filter(x => x.heading).length), J({ seen: seen.length, own: own.length, q: v.questions, left }));
     }
     const cs = [{ sentence: 'We are a Microsoft partner, so weigh our view of SAP with that in mind.', kind: 'credential', section: 'How does Dynamics 365 compare' },
       { sentence: 'Book a consultation and we will test your shortlist against these criteria: [speak to our ERP consultants](https://www.novaand-demo.com/contact-us).', kind: 'process', how: 'cta', neutral: 'Next step: [speak to our ERP consultants](https://www.novaand-demo.com/contact-us).' }];

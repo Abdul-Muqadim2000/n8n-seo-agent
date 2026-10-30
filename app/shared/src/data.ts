@@ -1370,7 +1370,9 @@ export interface NeedsYouItem {
     /** H3 (2026-10-28): a written page has questions only the client can answer (ranked; the page is publishable without them) */
     | 'questions'
     /** site tasks (2026-10-28, app/docs/SITE_TASKS.md): a step on the client's own website we check ourselves (IndexNow file, robots.txt, a redirect) */
-    | 'site_task';
+    | 'site_task'
+    /** W0-D (2026-10-29): a page held for the client's OK before writing (the verdict scored the keyword under 50, or the website already has a page for it) */
+    | 'hold';
   severity: 'warning' | 'info';
   title: string;
   detail: string;

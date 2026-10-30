@@ -31,7 +31,8 @@ export interface ContentGroups<T> {
 export function contentGroups<T extends Pick<ContentItem, 'status' | 'publishedUrl'>>(items: readonly T[]): ContentGroups<T> {
   return {
     live: items.filter(isLiveItem),
-    waiting: items.filter((i) => !isLiveItem(i) && !needsFixItem(i)),
+    // W0-D (2026-10-29): a `held` row was never written (it waits for the client's OK on its report), so it never waits to be published
+    waiting: items.filter((i) => !isLiveItem(i) && !needsFixItem(i) && i.status !== 'held'),
     fixing: items.filter(needsFixItem),
   };
 }

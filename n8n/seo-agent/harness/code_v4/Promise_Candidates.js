@@ -316,6 +316,61 @@ const SM = (() => {
   const titleShare = (page, keyword) => { const p = page || {}; if (!S(p.title) && !S(p.h1)) return null;
     const want = uniq(termsOf(norm(keyword)).filter(t => !FILLER.has(t)).map(stem)); if (!want.length) return null; const set = matchTerms(S(p.title) + ' ' + S(p.h1));
     return { share: Math.round(shareIn(want, set) * 100) / 100, have: want.filter(t => covers(set, t)).length, of: want.length, missing: want.filter(t => !covers(set, t)) }; };
+  // ---- W05-B (2026-10-30, page-quality BEFORE_AFTER K4): is this page really THE page for the search, before a run rewrites its address? ----
+  // The content run took /dynamics-365-project-operations-uae (title not on file, matched by its address only: "dynamics", "365", "uae") as the
+  // page to improve for "dynamics 365 partner dubai", wrote the partner page onto that address, and the hold waved it through as a refresh.
+  // An address is not evidence of what a page is about. A page is confirmed only by its OWN words: its title or main heading (from the
+  // inventory or read in this run, `more.texts`), or a Search Console search it earns impressions for, where that text (1) carries every core
+  // word of the search, (2) carries 75% of all its words, and (3) is ABOUT the search: its rarest word on this site is one of the search's own,
+  // or the words it adds (not the brand, a place, the kind of service or the form of the page) weigh under a third of the whole. "Dynamics 365
+  // Project Operations Implementation UAE" adds "project" and "operations" (rare) to "dynamics 365" (on every page): about something else.
+  // Returns { ok, by, text, evidence, why }; never throws; with nothing to read, ok is false (the caller writes a new page and says so).
+  const confirmPage = (model, page, keyword, more) => {
+    const p = page || {}; const o = more || {};
+    const m = model || {}; const brands = brandWords(m);
+    const core = coreTerms(keyword, brands);
+    const want = uniq(termsOf(norm(keyword)).filter(t => !FILLER.has(t)).map(stem));
+    const shortUrl = pathOf(p.url);
+    if (!core.length || !want.length) return { ok: false, by: '', text: '', evidence: '', why: 'the search has no word that says what it is about, so no page can be confirmed as its page' };
+    // the kind of service ("implementation", "support") and the form of the page ("guide", "checklist", a year) say how a page answers, not what about
+    const FORM = ['guide', 'guides', 'buyer', 'buyers', 'complete', 'ultimate', 'definitive', 'explained', 'explain', 'overview', 'introduction', 'intro', 'checklist', 'faq', 'faqs',
+      'tip', 'tips', 'everything', 'know', 'need', 'basic', 'basics', 'beginner', 'beginners', 'step', 'steps', 'updated', 'latest'];
+    const kindStems = new Set([...Object.keys(KIND), ...FORM].map(stem));
+    const inv = pages(m); const N = inv.length || 1;
+    const docs = inv.map(x => fieldsOf(x, brands).own);
+    const wOf = (t) => { const df = docs.filter(d => covers(d, t)).length; return Math.log((N + 1) / (df + 1)) + 1; };
+    const cands = [];
+    const add = (text, by) => { const t = S(text).replace(/&amp;/g, '&'); if (t) cands.push({ text: t, by }); };
+    add(p.title, 'its title'); add(p.h1, 'its main heading');
+    for (const t of (Array.isArray(o.texts) ? o.texts : [])) if (t && S(t.text)) add(t.text, S(t.by) || 'its title as read now');
+    for (const q of (Array.isArray(p.queries) ? p.queries : queriesOf(p))) if ((Number((q || {}).impressions) || 0) > 0) add((q || {}).query || (q || {}).keyword, 'a search it earns impressions for in Search Console');
+    if (!cands.length) return { ok: false, by: '', text: '', evidence: '', why: shortUrl + ' has no title, main heading or Search Console search on file, and an address alone does not say what a page is about' };
+    let best = null;
+    for (const c of cands) {
+      const tt = coreTerms(c.text, brands); if (!tt.length) continue;
+      const allCore = core.every(t => covers(tt, t));
+      const share = shareIn(want, matchTerms(c.text));
+      const extra = uniq(tt.filter(t => !core.includes(t) && !kindStems.has(t) && !/^(?:19|20)\d\d$/.test(t)));
+      const own = core.filter(t => covers(tt, t)).reduce((a, t) => a + wOf(t), 0);
+      const add2 = extra.reduce((a, t) => a + wOf(t), 0);
+      const focus = own + add2 > 0 ? own / (own + add2) : 0;
+      // about the search: its rarest word is one of the search's own (an article title that only describes more, "the cost of non-compliance:
+      // UAE e-invoicing penalties and mitigation costs", keeps it), or what it adds weighs under a third ("d365 operations uae", 0.58 on
+      // client A's site, adds the rarer "operations" to "dynamics 365": not the page for "dynamics 365 partner dubai")
+      const ws = tt.filter(t => !kindStems.has(t) && !/^(?:19|20)\d\d$/.test(t)).map(t => [t, wOf(t)]);
+      const maxW = ws.reduce((mx, x) => Math.max(mx, x[1]), 0);
+      const rarestOwn = ws.some(([t, w]) => core.includes(t) && w + 1e-9 >= maxW);
+      const ok = allCore && share + 1e-9 >= MATCH_MIN && (rarestOwn || focus > 0.67 + 1e-9);
+      const said = uniq(tokensOf(norm(c.text)).filter(w => extra.includes(stem(w))));   // the page's own words, not their stems, for the reason
+      const r = { ok, by: c.by, text: c.text, focus: Math.round(focus * 100) / 100, share: Math.round(share * 100) / 100, extra: said.length ? said : extra };
+      if (!best || (r.ok && !best.ok)) best = r;   // the first text read (the title before the searches) explains a refusal
+      if (ok) break;
+    }
+    if (!best) return { ok: false, by: '', text: '', evidence: '', why: 'the title and searches of ' + shortUrl + ' say nothing about this search' };
+    if (best.ok) return { ok: true, by: best.by, text: best.text, evidence: best.by + ' "' + best.text + '" is about this search', why: '' };
+    return { ok: false, by: best.by, text: best.text, evidence: '',
+      why: best.by + ' "' + best.text + '" is about ' + (best.extra.length ? best.extra.map(t => '"' + t + '"').join(' and ') : 'something else') + ', not this search, so ' + shortUrl + ' is not the page for it' };
+  };
   // R34: the pages whose title was never read, so a caller can say what it judged on the address alone instead of reading nothing silently
   const titleGap = (model) => { const all = pages(model); const u = untitled(model);
     return { pages: all.length, untitled: u.length, urls: u.slice(0, 12).map(p => p.url),
@@ -373,7 +428,7 @@ const SM = (() => {
     return { state: 'planned', text: '' };
   };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, pageMatch, MATCH_CONF, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages,
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages, confirmPage,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms, coreTerms } };
 })();
 // ---- claims kit (D14, 2026-10-11; inlined by build_monitors.py): statements about the business that only the owner can vouch for. With no
@@ -679,9 +734,11 @@ const CL = (() => {
       const h = L.match(/^(#{1,6})\s+(.*)$/);
       if (h) { flushPara(); if (h[1].length <= 2 || !g) { g = { heads: [], items: [] }; groups.push(g); } g.heads.push(h[2]); headLead = h[2]; lastLead = null; g.items.push({ p: h[2], kind: 'head' }); continue; }
       if (!g) { g = { heads: [], items: [] }; groups.push(g); }
-      const meta = L.match(/^Meta Description:\s*(.*)$/i);
-      if (meta) { flushPara(); g.items.push({ p: meta[1], kind: 'meta' }); continue; }
-      if (!L || /^\[[^\]]*\]$/.test(L) || /^(?:Title|Slug|Primary Keyword|Secondary Keywords):/i.test(L)) { flushPara(); if (!L) { /* a blank line keeps the lead-in for the list below it */ } continue; }
+      // W0-A (2026-10-29, page-quality PLAN Fix 1, R4 D1): the meta description is search-result copy written from the brief, not a
+      // statement on the page. Read as a claim, its call to action ("then book a consultation with ...") was wrapped, emptied and asked as a
+      // client question (production run 3299). It is skipped like the title and the slug; PF.meta (_page_fix.js) gives it one narrow field
+      // check (a price, a guarantee, a timeline or a number not on file is dropped) instead.
+      if (!L || /^\[[^\]]*\]$/.test(L) || /^(?:Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary Keywords)\s*:/i.test(L)) { flushPara(); if (!L) { /* a blank line keeps the lead-in for the list below it */ } continue; }
       if (/^\|/.test(L)) { flushPara(); if (/^\|[\s:|-]+\|?$/.test(L)) { const hd = g.items[g.items.length - 1]; if (hd && hd.kind === 'table') g.items.pop(); continue; }   // the header row is labels, not a statement
         g.items.push({ p: L.replace(/^\||\|$/g, '').split('|').map(x => x.trim()).filter(Boolean).join('; ') + '.', kind: 'table' }); continue; }
       if (/^(?:[-*]|\d+[.)])\s+/.test(L)) { const leadIn = para.length ? para.join(' ') : null; flushPara(); g.items.push({ p: L.replace(/^(?:[-*]|\d+[.)])\s+/, ''), kind: 'li', lead: leadIn && /:\s*$/.test(leadIn) ? leadIn : lastLead, head: headLead }); continue; }
@@ -839,7 +896,102 @@ const CL = (() => {
     out.why = suggestion ? 'only the client can confirm it; the closest thing on file is offered as a starting point' : 'only the client can confirm it; nothing on file is close';
     return out;
   }
-  return { CLAIM_RE, keyOf, check, business, commitments, canon, numsOf, arNorm, backs, neutral };
+  // ---- FU-SV voice (2026-10-29, page-quality BEFORE run: 5 of 8 pages) ----
+  // The page is published on the client's own site, yet 5 of 8 delivered pages spoke about the client as an outsider would: "Its website
+  // states 20+ years of industry experience", "Devaicon's site reports 5 years of work", "its site states 5 years and 100+ projects",
+  // "Tech& lists Project Operations among its business applications". The business facts on file are often worded that way ("The website
+  // states ...") and the writer copied the frame. CL.voice(text, { names }) removes the frame and keeps the claim, said plainly with the
+  // business as its subject, so the claim check (CL.business, §9d) reads it as a statement in the business's name:
+  //   "<its | their | the | Name's> [own] website/site/homepage <states | says | reports | ...> that X"  ->  "X"
+  //   "... <states | reports | ...> <a figure>"            ->  "Name has <figure>"      (20+ years, 100+ projects; never a date)
+  //   "... <states | reports | ...> <services, support>"   ->  "Name offers <...>"
+  //   "according to <its | the | Name's> website, X"         ->  "X"
+  //   "Name lists X among its Y"                             ->  "Name's Y include X";   "Name lists X"  ->  "Name offers X"
+  // "its" / "their" / "the website" belong to the business only when the sentence starts with its name, or starts with "It" / "Its" /
+  // "The website" / "We" and the sentence before it does (up to four back, across paragraphs); and not when another organisation is
+  // named in between ("works with the FTA, and its website states ..."): that one is the FTA's, or unclear. Anything else in that shape,
+  // and "the company says / states", is returned in `flags` (whole sentences) for the editor; it is never guessed at.
+  // Headings, meta lines, table rows, block quotes and text inside double quotes are left alone.
+  function voice(text, opts = {}) {
+    const given = (opts.names || []).map(n => String(n || '').trim()).filter(n => n.length >= 3);
+    const names = [...new Set(given)].sort((a, b) => b.length - a.length);   // every name (not fullNames: "Nova&" inside "Nova& systems LLC" is still the business here)
+    const out = { text: String(text == null ? '' : text), fixed: [], flags: [] };
+    if (!names.length) return out;
+    const display = given.find(n => /[A-Z&]/.test(n) && !/\b(?:LLC|Ltd|Limited|Inc|FZ-?LLC|FZE|FZCO|GmbH|PLC|Corp)\b\.?/i.test(n)) || given.find(n => /[A-Z&]/.test(n)) || given[0];   // the name the business goes by, not its legal name
+    const NM = '(?<![\\w&])(?:' + names.map(escR).join('|') + ')(?![\\w&])';
+    const SITE = "(?:own\\s+)?(?:web\\s?site|site|homepage|home\\s+page|about(?:\\s+us)?\\s+page|services?\\s+page)";
+    const VERB = '(?:states|says|reports|claims|notes|mentions|cites|shows|highlights|describes|advertises|lists|names)';
+    const SUBJ = "(?:\\b(?:[Ii]ts|[Tt]heir|[Tt]he)\\s+|" + NM + "['’]s\\s+)" + SITE;
+    const POSS = new RegExp(NM + "['’]s", 'i');
+    const NM_START = new RegExp('^' + NM, 'i');
+    const CHAIN = /^(?:it|its|they|their|we|our|the\s+(?:web\s?site|site|company|team|firm|business))\b/i;
+    const OTHER_ORG = /\b(?:with|by|from|of|to|for|at|via|under)\s+(?:the\s+)?[A-Z][\w&.-]*/g;
+    const FIG = /^(?:over |more than |nearly |around |about |almost |up to |a |an )?\d/i;
+    const DATE = /^(?:\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|(?:19|20)\d{2}\b|\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})/i;
+    const OFFER = /\b(?:support|services?|consult\w*|implementation|training|maintenance|integration|migration|development|audits?|assessments?)\b/i;
+    const atStart = (pre) => /(?:^|[.!?:]\s+|^\s*(?:[-*+]|\d+[.)])\s+|^[*_]+)$/.test(pre);
+    const inQuotes = (line, at) => ((line.slice(0, at).match(/["“”]/g) || []).length % 2) === 1;
+    const sentenceAt = (line, at) => { const a = Math.max(line.lastIndexOf('. ', at), line.lastIndexOf('! ', at), line.lastIndexOf('? ', at)); const b0 = line.slice(at).search(/[.!?](?:\s|$)/); return line.slice(a < 0 ? 0 : a + 2, b0 < 0 ? line.length : at + b0 + 1).trim(); };
+    const skipLine = (l) => !String(l || '').trim() || /^\s*(?:#|>|\||Title:|Meta Description:|Slug:|Primary Keyword:|Secondary Keywords:)/i.test(l);
+    const starts = (l) => { const st = [0]; for (const m of String(l).matchAll(/[.!?]["')\]*_]*\s+/g)) st.push(m.index + m[0].length); return st; };
+    const lead = (t) => String(t).replace(/^\s*(?:(?:[-*+]|\d+[.)])\s+)?[*_("\[\s]*/, '');
+    const lines = out.text.split('\n');
+    // does the "its / their / the website" at `off` of line `li` belong to the business?
+    const owner = (li, off) => {
+      let st = starts(lines[li]); let k = st.filter(x => x <= off).length - 1; let L = li;
+      const sent0 = lead(lines[li].slice(st[k]));
+      if (!NM_START.test(sent0) && !CHAIN.test(sent0)) return false;
+      // another organisation named between the start of the sentence and "its" ("works with the FTA, and its website ...")
+      const between = lead(lines[li].slice(st[k], off)).replace(NM_START, ''); const others = [...between.matchAll(OTHER_ORG)].filter(m => !new RegExp(NM, 'i').test(m[0]));
+      if (others.length) return false;
+      for (let step = 0; step < 5; step++) {
+        const s = lead(lines[L].slice(st[k]));
+        if (NM_START.test(s)) return true;
+        if (!CHAIN.test(s)) return false;
+        k--;
+        if (k < 0) { L--; while (L >= 0 && !String(lines[L]).trim()) L--; if (L < 0 || skipLine(lines[L])) return false; st = starts(lines[L]); k = st.length - 1; }
+      }
+      return false;
+    };
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i];
+      if (skipLine(line)) continue;
+      const before = line;
+      // 1. "according to its website, X"
+      line = line.replace(new RegExp('\\b([Aa])ccording to (?:' + SUBJ + '|the company[\'’]s\\s+' + SITE + '),?\\s+', 'g'), (m, a, off, s) => {
+        const after = s.slice(off + m.length);   // "According to its website, Nova& ..." / "..., we ...": the clause that follows is the business's
+        if (inQuotes(s, off) || !(POSS.test(m) || NM_START.test(after) || /^(?:we|our)\b/i.test(after) || owner(i, off))) return m;
+        return a === 'A' ? '\u0000CAP' : ''; });
+      lines[i] = line;
+      // 2. "<subject> states that X" / "<subject> states <figure | services>"
+      line = line.replace(new RegExp('(' + SUBJ + ')(\\s+also)?\\s+(' + VERB + ')\\s+(that\\s+)?', 'g'), (m, subj, also, verb, that, off, s) => {
+        if (inQuotes(s, off)) return m;
+        const own = POSS.test(subj); if (!own && !owner(i, off)) return m;
+        const rest = s.slice(off + m.length);
+        const who = (own ? subj.match(new RegExp(NM, 'i'))[0] : display) + (also ? ' also' : '');
+        if (that) return atStart(s.slice(0, off)) ? '\u0000CAP' : '';
+        if (/^(?:lists|names)$/i.test(verb)) return m;
+        if (FIG.test(rest) && !DATE.test(rest)) return who + ' has ';
+        if (OFFER.test(rest.split(/[.!?](?:\s|$)/)[0])) return who + ' offers ';
+        return m; });
+      // 3. "Name lists X among its Y" / "Name (also) lists X"
+      line = line.replace(new RegExp('(' + NM + ')(\\s+also)?\\s+lists\\s+([^.;:\\n]{2,160}?)\\s+among\\s+its\\s+([^.;:\\n]{2,140}?)(?=[.;:]|$)', 'gi'), (m, nm, also, x, y, off, s) => inQuotes(s, off) ? m : nm + "'s " + y + (also ? ' also' : '') + ' include ' + x);
+      line = line.replace(new RegExp('(' + NM + ')(\\s+also)?\\s+lists\\s+(?!among\\b)', 'gi'), (m, nm, also, off, s) => inQuotes(s, off) ? m : nm + (also || '') + ' offers ');
+      line = line.replace(/\u0000CAP\s*(\S)/g, (m, c) => c.toUpperCase()).replace(/\u0000CAP/g, '');
+      lines[i] = line;
+      if (line !== before) out.fixed.push({ from: before.trim().slice(0, 400), to: line.trim().slice(0, 400) });
+      // what is still in that shape, and is the business's, is named for the editor
+      const left = new RegExp('(' + SUBJ + ')(?:\\s+also)?\\s+' + VERB + '\\b|\\bthe company\\s+(?:says|states|claims|reports)\\b', 'g');
+      for (const m of line.matchAll(left)) {
+        if (inQuotes(line, m.index)) continue;
+        if (!/the company/i.test(m[0]) && !POSS.test(m[0]) && !owner(i, m.index)) continue;
+        const sent = sentenceAt(line, m.index); if (sent && !out.flags.includes(sent)) out.flags.push(sent);
+      }
+    }
+    out.text = lines.join('\n');
+    return out;
+  }
+  return { CLAIM_RE, keyOf, check, business, commitments, canon, numsOf, arNorm, backs, neutral, voice };
 })();
 // ---- promise judge kit (CT-FIX2, 2026-10-22; inlined by build_v4.py section 148): the second reader of the promise check ----
 // The rule-based check (CL.commitments, _claims.js) scored 100% / 88% recall offline and then, on the first fresh live page (exec 159),

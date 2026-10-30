@@ -11,6 +11,8 @@
 //   - one-click approve, then publish (CMS or "I published it", with the live check).
 // This module is the one contract between the engine's callback, the server and the screens. Pure: no I/O, no clock unless passed.
 
+import { cleanMetaDescription, usableMetaDescription } from './meta-description';
+
 type P = Record<string, unknown>;
 const obj = (v: unknown): P => (v && typeof v === 'object' && !Array.isArray(v) ? (v as P) : {});
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
@@ -31,7 +33,21 @@ export const plainWords = (t: string): string =>
 // 1. The delivered status
 // ---------------------------------------------------------------------------------------------------------------------------------
 
-export type PageDeliveryStatus = 'ready' | 'ready_with_questions' | 'not_ready' | 'unknown';
+/**
+ * W0-C (2026-10-29, page-quality PLAN Fix 3): `needs_work` = no blocking point, but a part of the grade (structure, coverage, readability,
+ * specificity, plain language, sources, fit with the search) is under half its points. Never "Ready to publish"; nothing stops the client
+ * from approving and publishing it (only `not_ready` does).
+ */
+export type PageDeliveryStatus = 'ready' | 'ready_with_questions' | 'needs_work' | 'not_ready' | 'unknown';
+const DELIVERY_STATUSES: readonly string[] = ['ready', 'ready_with_questions', 'needs_work', 'not_ready'];
+/** A delivered status a client may approve and publish (no blocking point). */
+export const publishableStatus = (st: PageDeliveryStatus): boolean => st === 'ready' || st === 'ready_with_questions' || st === 'needs_work';
+/** W0-C: the grade as shown: "95+" from 95 (we never claim a perfect page), the number below it. */
+export function gradeDisplay(score: number | null | undefined): string {
+  if (score == null || !Number.isFinite(score)) return '';
+  const n = Math.round(score);
+  return n >= 95 ? '95+' : String(n);
+}
 export interface PageDeliveryItem {
   code: string;
   text: string;
@@ -46,6 +62,10 @@ export interface PageDelivery {
   detail: string;
   /** the content grade of the DELIVERED page (0-100), never the first draft's */
   grade: number | null;
+  /** W0-C: the grade as shown ("95+" from 95; '' when there is none) */
+  gradeLabel: string;
+  /** W0-C: the parts under half their points (status `needs_work`), each with what to do; [] otherwise */
+  needsWork: PageDeliveryItem[];
   /** the reviewer's score of the first draft, kept apart (it does not describe the delivered page) */
   firstDraftReview: number | null;
   blocking: PageDeliveryItem[];
@@ -64,6 +84,9 @@ const WE_DO: Record<string, string> = {
   duplicate_page: 'We kept the text as it is.',
   brand: 'We corrected the forms we know; one is still unclear.',
   author_profile: 'We left the author box empty rather than invent it.',
+  weak_figure: 'We asked for the sentence to be rewritten without the number; this one is still there.',
+  review: 'A second read of the finished page quoted these words; we did not change them on our own.',
+  same_title: "We tried every title we could write for this page; none was different enough from your existing page's.",
 };
 const YOU_DO: Record<string, string> = {
   cut_off: 'Ask us to write the page again: a new run is needed.',
@@ -79,10 +102,20 @@ const YOU_DO: Record<string, string> = {
   off_topic: 'Delete the section in the editor.',
   guarantee: 'Delete the guarantee in the editor.',
   testimonial: 'Delete the testimonial in the editor.',
+  weak_figure: 'Rewrite the sentence without the number in the editor, or cite an official body, a research house or major press that states it.',
+  review: 'Check the quoted words against a source you trust, then correct or remove them in the editor.',
+  same_title: "Give this page a title of its own in the editor, different from your existing page's, so the two pages do not compete for one search.",
 };
 
-export function deliveryHeadline(status: PageDeliveryStatus, questions: number, firstBlocking?: PageDeliveryItem | null): { headline: string; detail: string } {
+export function deliveryHeadline(status: PageDeliveryStatus, questions: number, firstBlocking?: PageDeliveryItem | null, needsWork?: PageDeliveryItem[]): { headline: string; detail: string } {
   const qs = `${questions} ${questions === 1 ? 'question' : 'questions'}`;
+  if (status === 'needs_work') {
+    const parts = (needsWork ?? []).map((x) => x.text.replace(/ scored .*$/, '').toLowerCase()).filter(Boolean);
+    return {
+      headline: `Needs work${parts.length ? `: ${parts.join(', ')}` : ''}`,
+      detail: 'Nothing stops you publishing it, but part of the page scored under half marks. Improve it in the editor and make the final version, or approve it as it is.',
+    };
+  }
   if (status === 'ready')
     return { headline: 'Ready to publish, waiting for your OK', detail: 'Every check passed on the page you receive. Read it, change anything you like, then approve it.' };
   if (status === 'ready_with_questions')
@@ -106,6 +139,21 @@ const items = (v: unknown): PageDeliveryItem[] =>
     .map((x) => ({ code: s(x.code) || 'other', text: plainWords(s(x.text)), ...(s(x.action) ? { action: plainWords(s(x.action)) } : {}) }))
     .filter((x) => x.text);
 
+/** W0-C: the parts of the grade under half their points (the engine's grade.floors.failing), each with what to do. */
+export function needsWorkOf(grade: unknown): PageDeliveryItem[] {
+  const fl = obj(obj(grade).floors);
+  return arr(fl.failing)
+    .map(obj)
+    .map((x) => {
+      const label = plainWords(s(x.label) || s(x.dim).replace(/_/g, ' '));
+      const pts = num(x.points), max = num(x.max);
+      const text = label ? `${label.charAt(0).toUpperCase()}${label.slice(1)} scored ${pts ?? 0} of ${max ?? 0}, under half its points` : '';
+      return { code: 'needs_work', text, ...(s(x.fix) ? { action: plainWords(s(x.fix)) } : {}) };
+    })
+    .filter((x) => x.text)
+    .slice(0, 7);
+}
+
 /** The delivered status of a page report (the content callback), with fallbacks for reports written before H1. */
 export function deliveryOf(payload: P | null | undefined): PageDelivery {
   const p = payload ?? {};
@@ -115,8 +163,8 @@ export function deliveryOf(payload: P | null | undefined): PageDelivery {
   const raw = s(p.qa_delivery_status) || s(meta.delivery_status) || s(quality.delivery_status) || s(del.status);
   const questions = questionsOf(p);
   let status: PageDeliveryStatus =
-    raw === 'ready' || raw === 'ready_with_questions' || raw === 'not_ready'
-      ? raw
+    DELIVERY_STATUSES.includes(raw)
+      ? (raw as PageDeliveryStatus)
       : p.qa_not_ready === true || quality.not_ready === true
         ? 'not_ready'
         : p.qa_publishable === true || meta.publishable === true || quality.publishable === true
@@ -128,17 +176,20 @@ export function deliveryOf(payload: P | null | undefined): PageDelivery {
   const advisory = items(p.qa_advisory ?? quality.advisory ?? del.advisory);
   const g = obj(p.qa_grade ?? meta.grade ?? quality.grade ?? del.grade);
   const grade = num(g.score) ?? (raw ? null : num(meta.content_score));
-  const h = deliveryHeadline(status, questions.length, blocking[0] ?? null);
+  const needsWork = status === 'needs_work' ? needsWorkOf(g) : [];
+  const h = deliveryHeadline(status, questions.length, blocking[0] ?? null, needsWork);
   return {
     status,
     headline: h.headline,
     detail: h.detail,
     grade: grade == null ? null : Math.round(grade),
+    gradeLabel: gradeDisplay(grade),
+    needsWork,
     firstDraftReview: num(g.first_draft_review),
     blocking,
     advisory,
     questionCount: questions.length,
-    nextStep: status === 'not_ready' ? plainWords(s(p.qa_next_step) || s(quality.next_step) || s(del.next_step)) : '',
+    nextStep: status === 'not_ready' || status === 'needs_work' ? plainWords(s(p.qa_next_step) || s(quality.next_step) || s(del.next_step)) : '',
     deliveredFrom: plainWords(s(del.delivered_from)),
   };
 }
@@ -166,11 +217,29 @@ export interface ClientQuestion {
   neutral: string;
   in_page: 'neutral' | 'cta' | 'left_out';
   section: string;
+  /** W0-E: where the answer belongs in the page (cta | credential | proof | pricing | timeline | named; '' on older reports) */
+  slot: string;
+  /** W0-E: for a statement the page run removed, where it stood, so a "yes" puts it back there (null on older reports) */
+  anchor: QuestionAnchor | null;
   answer_type: 'choice' | 'text';
   prefill: string;
   prefill_source: string;
   use_for_future_pages: boolean;
 }
+
+/** W0-E (page-quality PLAN Fix 5.3): the sentence before / after a removed statement on its line, else the line above it, in its section. */
+export interface QuestionAnchor {
+  section: string;
+  before: string;
+  after: string;
+  line_before: string;
+}
+const SLOTS = ['cta', 'credential', 'proof', 'pricing', 'timeline', 'named'];
+const anchorOf = (v: unknown): QuestionAnchor | null => {
+  const a = obj(v);
+  const x: QuestionAnchor = { section: s(a.section).slice(0, 300), before: s(a.before).slice(0, 400), after: s(a.after).slice(0, 400), line_before: s(a.line_before).slice(0, 400) };
+  return x.before || x.after || x.line_before ? x : null;
+};
 
 export const TOP_QUESTIONS = 3;
 
@@ -200,6 +269,8 @@ export function questionsOf(payload: P | null | undefined): ClientQuestion[] {
         neutral: plainWords(s(q.neutral)),
         in_page: inPage === 'neutral' || inPage === 'cta' ? inPage : 'left_out',
         section: plainWords(s(q.section)),
+        slot: SLOTS.includes(s(q.slot)) ? s(q.slot) : '',
+        anchor: anchorOf(q.anchor),
         answer_type: source === 'claim' ? 'choice' : 'text',
         prefill: plainWords(s(q.prefill)),
         prefill_source: plainWords(s(q.prefill_source)),
@@ -276,15 +347,37 @@ export function answerText(q: Pick<ClientQuestion, 'original'>, decision: Answer
   return '';
 }
 
-/** The answer a one-click "Accept all suggestions" gives a question (null: nothing to accept). */
+/**
+ * The answer a one-click "Accept all suggestions" gives a question (null: nothing to accept). W0-E (2026-10-29, page-quality PLAN Fix 5.5):
+ * only a yes / no question about a statement is confirmed in one click; a question that needs the client's own words (proof, a credential,
+ * how an engagement starts) is never answered with a suggestion, because one click stored a homepage slogan as proof of projects (3299).
+ */
 export function prefilledAnswer(q: ClientQuestion): { decision: AnswerDecision; text: string } | null {
-  if (!q.prefill) return null;
-  return q.answer_type === 'choice' ? { decision: 'yes', text: '' } : { decision: 'answer', text: q.prefill.slice(0, ANSWER_TEXT_MAX) };
+  if (!q.prefill || q.answer_type !== 'choice') return null;
+  return { decision: 'yes', text: '' };
 }
 
+/**
+ * W05-C (2026-10-30, page-quality BEFORE_AFTER: "Accept all" was refused on three of eight pages, so they never got a final version):
+ * what one click does with every open question. A yes / no question with a suggestion is confirmed; every other one (a question that needs
+ * the client's own words, or one with no suggestion) is left general on this page: the page keeps its general wording, nothing is stored
+ * for later pages, and a later page may ask it again.
+ */
+export function acceptAllPlan(open: readonly ClientQuestion[]): { questionId: string; decision: AnswerDecision; text: string }[] {
+  return open.map((q) => {
+    const p = prefilledAnswer(q);
+    return p ? { questionId: q.id, decision: p.decision, text: p.text } : { questionId: q.id, decision: 'general' as AnswerDecision, text: '' };
+  });
+}
+
+/** Why a question needs the client's own words (shown beside a suggestion that one click never accepts). */
+export const OWN_WORDS_NOTE =
+  'We need this in your own words: your answer is published as a fact about your business, and a line taken from your website can be a slogan or a heading rather than a fact. Check the suggestion, then use it or write your own.';
+
 /** The business fact an answer stores (null: skip, or the question is for this page only). */
-export function factOf(q: ClientQuestion, a: Pick<PageAnswer, 'decision' | 'text' | 'at' | 'by'>, reportId: string | null): FactAnswer | null {
+export function factOf(q: ClientQuestion, a: Pick<PageAnswer, 'decision' | 'text' | 'at' | 'by'> & { fromPrefill?: boolean }, reportId: string | null): FactAnswer | null {
   if (a.decision === 'skip' || !q.use_for_future_pages) return null;
+  if (a.decision === 'general' && a.fromPrefill) return null;   // W05-C: left general by "Accept all", for this page only
   return { decision: a.decision, text: answerText(q, a.decision, a.text), question: q.question, category: q.category, at: a.at, by: a.by, reportId };
 }
 
@@ -312,8 +405,12 @@ export const FACT_DECISION_LABEL: Record<FactAnswer['decision'], string> = {
   general: 'Keep it general',
 };
 
-/** True when the answers (or the client's own edits) change the page, so a final version is worth making. */
-export function finalizeNeeded(answers: readonly Pick<PageAnswer, 'decision'>[], clientEdited: boolean): boolean {
+/**
+ * True when the answers (or the client's own edits) change the page, so a final version is worth making. W05-C: also the FIRST final
+ * version once every question is decided (`allDecided`), even when each one was left general: the client gets the final files to publish.
+ */
+export function finalizeNeeded(answers: readonly Pick<PageAnswer, 'decision'>[], clientEdited: boolean, allDecided = false): boolean {
+  if (allDecided && answers.some((a) => a.decision !== 'skip')) return true;
   return clientEdited || answers.some((a) => a.decision === 'yes' || a.decision === 'edit' || a.decision === 'remove' || a.decision === 'answer');
 }
 
@@ -333,6 +430,151 @@ export interface FinalizeAnswer {
   neutral: string;
   in_page: ClientQuestion['in_page'];
   section: string;
+  /** W0-E: the question's category and slot, so the engine works the answer into the sentence it changes */
+  category: string;
+  slot: string;
+  /** W0-E: where a removed statement stood (a "yes" goes back there and nowhere else); null when unknown */
+  anchor: QuestionAnchor | null;
+}
+
+/**
+ * W0-B (2026-10-29, page-quality PLAN Fix 2, REVIEW_CODE H2, owner decision D2; n8n/seo-agent/harness/README.md "PRC contract"): the
+ * page-run context of a delivered page, sent with every finalize so the final version keeps the page run's blockers and is judged with
+ * its research. Finalize 3336 graded the final version of page 3299 against itself and dropped "this website already has a page for the
+ * same search": it said Ready at 100.
+ * Gating fields come from the ORIGINAL report (never the final version, whose blocking list is its own); reports delivered before the
+ * blocking list existed (2026-10-28) are read from what they carry: the gate the page passed or failed and the originality check's
+ * duplicate pages and copied passages. `missing` names a gating field the stored report does not have: without the blocking list or the
+ * duplicate check nothing can say the page is ready. Grading fields come from the callback's `page_run` (page runs from W0-B on); a
+ * missing one is advice "not checked" in the engine, never a block.
+ */
+export interface PageRunContext {
+  qa_blocking: PageDeliveryItem[] | null;
+  duplicate_targets: { url: string; title: string; keyword_words_shared_pct: number | null }[] | null;
+  verdict: string | null;
+  score: number | null;
+  score_withheld: boolean;
+  page_type: string;
+  verdict_acknowledged: boolean;
+  /** the passages the first check found repeated from another page (the copied-text blocker stays until none is left) */
+  copied_passages: string[];
+  /** the length points (of 15) the page run measured against the pages that rank, for reports without a length band */
+  length_points: number | null;
+  /** gating fields the stored report does not have */
+  missing: string[];
+  content_request_id: string;
+  /** W06-C: what the page run took out of the page (absent on reports from before it: "not checked") */
+  sections_removed?: SectionsRemoved;
+  [grading: string]: unknown;
+}
+
+// `second_read` (wave 0.5, 2026-10-30): the second read's advice on the delivered page (severity, kind, the quoted words); the final version
+// keeps its grade deduction while those words are still on the page
+// `sections_removed` (wave 0.6, W06-C, 2026-10-30): what the page run took out of the page (sections deleted as a topic the verdict said to
+// leave out, H2s lost in editing, their share of the words and why). The final version keeps the grade's cap on coverage and fit while those
+// sections are still missing, so a page that lost its core never reads "Ready" after Accept all; a report from before it is "not checked"
+const PRC_GRADING = ['length_band', 'coverage_target', 'terms', 'facts', 'sources_cited', 'style_guide', 'site_urls', 'serp_shapes', 'regulatory_facts', 'regulatory_topics', 'second_read', 'sections_removed'] as const;
+
+/** W06-C: the page run's removals as the content callback sends them (`page_run.sections_removed`). */
+export interface SectionsRemoved {
+  sections: number;
+  words: number;
+  words_before: number;
+  h2_before: number;
+  h2_removed: number;
+  h2_delivered: number;
+  by_edits: number;
+  share_pct: number;
+  /** the delivered grade capped coverage and fit for it */
+  capped: boolean;
+  list: { heading: string; topic: string; words: number; level: number; why: string }[];
+}
+
+/** The page-run context of a stored content payload (the original report; a final version keeps its own copy in `page_run_context`). */
+export function pageRunOf(payload: P | null | undefined): PageRunContext {
+  const p = payload ?? {};
+  const kept = obj(p.page_run_context);
+  if (Object.keys(kept).length && Array.isArray(kept.missing)) return kept as PageRunContext;
+  const meta = obj(p.meta);
+  const quality = obj(p.qa_quality ?? meta.quality);
+  const orig = meta.originality && typeof meta.originality === 'object' ? obj(meta.originality) : null;
+  const missing: string[] = [];
+  const dups = orig && Array.isArray(orig.duplicate_targets)
+    ? arr(orig.duplicate_targets)
+        .map(obj)
+        .map((d) => ({ url: s(d.url), title: s(d.title), keyword_words_shared_pct: num(d.keyword_words_shared_pct) }))
+        .filter((d) => /^https?:\/\//i.test(d.url))
+        .slice(0, 10)
+    : null;
+  if (!dups) missing.push('duplicate_targets');
+  // the passages a failing originality check found (the source it failed on, else every overlap over the threshold)
+  const threshold = num(orig?.threshold_pct) ?? 15;
+  const failing = obj(orig?.failing ?? orig?.worst);
+  const overlaps = arr(orig?.top_overlaps).map(obj);
+  const failingPages = orig?.passed === false ? (Object.keys(failing).length ? [failing] : overlaps.filter((o) => (num(o.overlap_pct) ?? 0) >= threshold)) : [];
+  const copied_passages = [...new Set(failingPages.flatMap((o) => arr(o.passages).map((x) => s(obj(x).text) || s(x)).filter((t) => t.split(/\s+/).length >= 6)))].slice(0, 20);
+  // the page run's blocking list; a report from before it existed (2026-10-28) is read from the gate it passed or failed and its
+  // originality check: the duplicate page and copied text are the blockers a final check cannot see again, everything else it measures again
+  const listed = Array.isArray(p.qa_blocking) ? p.qa_blocking : Array.isArray(quality.blocking) ? quality.blocking : null;
+  let qa_blocking: PageDeliveryItem[] | null = listed ? items(listed) : null;
+  const gated = typeof p.qa_not_ready === 'boolean' || typeof p.qa_publishable === 'boolean' || typeof quality.not_ready === 'boolean' || typeof meta.publishable === 'boolean';
+  if (!qa_blocking && gated && orig) {
+    qa_blocking = [];
+    if (dups && dups.length)
+      qa_blocking.push({ code: 'duplicate_page', text: `This website already has a page for the same search: ${dups.slice(0, 2).map((d) => d.url).join(', ')}. Publish this text as an update of that page, or tell us how the new page differs` });
+    if (orig.passed === false) qa_blocking.push({ code: 'copied', text: 'Part of the text repeats another page word for word' });
+  }
+  if (!qa_blocking) missing.push('qa_blocking');
+  const pr = obj(p.page_run);
+  const grading: P = {};
+  for (const k of PRC_GRADING) if (pr[k] !== undefined && pr[k] !== null) grading[k] = pr[k];
+  const g = obj(p.qa_grade ?? quality.grade ?? meta.grade);
+  return {
+    qa_blocking,
+    duplicate_targets: dups,
+    verdict: s(p.verdict) || null,
+    score: num(p.score),
+    score_withheld: p.score_withheld === true,
+    page_type: s(meta.page_type) || s(p.recommended_page),
+    verdict_acknowledged: p.verdict_acknowledged === true,
+    copied_passages,
+    length_points: num(obj(g.breakdown).length),
+    missing,
+    content_request_id: s(pr.content_request_id) || s(p.request_id),
+    ...grading,
+  };
+}
+
+/** The client's answer to "this website already has a page for the same search" (owner decision D2), sent with the finalize. */
+export interface DuplicateDecision {
+  choice: 'update' | 'differs';
+  /** update: the address of the page this text replaces (one the first check named) */
+  url?: string;
+  /** differs: how this page differs, in the client's words (recorded and shown; the fit limit stays in the grade) */
+  reason?: string;
+}
+/** Where the decision is kept on the review row (with the answers, under a key no question id can take). */
+export const DUPLICATE_DECISION_KEY = '@duplicate_page';
+export const DUPLICATE_REASON_MIN = 20;
+export const DUPLICATE_REASON_MAX = 600;
+/** '' when the reason can be sent, else what is wrong with it (the engine refuses the same). */
+export function duplicateReasonProblem(reason: string): string {
+  const t = plainWords(reason).replace(/\s+/g, ' ').trim();
+  if (t.length < DUPLICATE_REASON_MIN) return `Say in at least ${DUPLICATE_REASON_MIN} characters how this page differs from the one your website has.`;
+  if (t.length > DUPLICATE_REASON_MAX) return `Keep it under ${DUPLICATE_REASON_MAX} characters.`;
+  if (/[<>]/.test(t)) return 'Use plain text (no < or >).';
+  return '';
+}
+
+/** The website's page(s) a delivered page duplicates, while that blocker is open on it (the original's list, else the version's own). */
+export function duplicatePagesOf(payload: P | null | undefined): { url: string; title: string }[] {
+  const pr = pageRunOf(payload);
+  const open = (pr.qa_blocking ?? []).some((b) => b.code === 'duplicate_page');
+  if (!open) return [];
+  const fromTargets = (pr.duplicate_targets ?? []).map((d) => ({ url: d.url, title: d.title }));
+  if (fromTargets.length) return fromTargets.slice(0, 3);
+  const text = (pr.qa_blocking ?? []).find((b) => b.code === 'duplicate_page')?.text ?? '';
+  return [...new Set(text.match(/https?:\/\/[^\s,]+[^\s,.]/g) ?? [])].slice(0, 3).map((url) => ({ url, title: '' }));
 }
 
 export interface FinalizeBody {
@@ -355,6 +597,10 @@ export interface FinalizeBody {
   stored_fact_keys: string[];
   /** the report the page came from (for the engine's log only) */
   content_request_id: string;
+  /** W0-B: the page-run context of the ORIGINAL report (its blockers travel to the final version) */
+  page_run: PageRunContext;
+  /** W0-B (D2): the client's answer to a duplicate-page blocker, when given */
+  duplicate_decision?: DuplicateDecision;
 }
 
 export function finalizeBody(o: {
@@ -368,6 +614,10 @@ export function finalizeBody(o: {
   answers: Record<string, PageAnswer>;
   businessFacts: string;
   facts: FactAnswers;
+  /** W0-B: the ORIGINAL report's payload (the page run's blockers and research); the base payload when this is the original */
+  original?: P;
+  /** W0-B (D2): the client's decision on a duplicate-page blocker */
+  duplicateDecision?: DuplicateDecision | null;
 }): FinalizeBody {
   const p = o.payload ?? {};
   const meta = obj(p.meta);
@@ -375,7 +625,8 @@ export function finalizeBody(o: {
   for (const q of o.questions) {
     const a = o.answers[q.id];
     if (!a || a.decision === 'skip') continue;
-    ans.push({ id: q.id, fact_key: q.fact_key, source: q.source, decision: a.decision, text: answerText(q, a.decision, a.text), question: q.question, original: q.original, neutral: q.neutral, in_page: q.in_page, section: q.section });
+    ans.push({ id: q.id, fact_key: q.fact_key, source: q.source, decision: a.decision, text: answerText(q, a.decision, a.text), question: q.question, original: q.original, neutral: q.neutral, in_page: q.in_page, section: q.section,
+      category: q.category, slot: q.slot, anchor: q.anchor });
   }
   const f = factsForEngine(o.facts);
   return {
@@ -389,12 +640,16 @@ export function finalizeBody(o: {
     markdown: o.markdown,
     delivered_markdown: s(p.markdown),
     client_edited: o.clientEdited,
-    meta: { title: s(meta.title), meta_description: s(meta.meta_description), slug: s(meta.slug), h1: s(meta.h1) },
+    // W0-A (2026-10-29): a stored description that is a field label ("Slug: ..."), on two lines or under 70 characters is not sent back:
+    // the engine writes one from the page (PF.meta in the finalize's Parse Brief)
+    meta: { title: s(meta.title), meta_description: usableMetaDescription(meta.meta_description), slug: s(meta.slug), h1: s(meta.h1) },
     answers: ans,
     business_facts: o.businessFacts.slice(0, 2000),
     business_facts_kv: f.business_facts_kv,
     stored_fact_keys: f.stored_fact_keys,
-    content_request_id: s(p.request_id),
+    content_request_id: s(obj(o.original ?? p).request_id) || s(p.request_id),
+    page_run: pageRunOf(o.original ?? p),
+    ...(o.duplicateDecision ? { duplicate_decision: o.duplicateDecision } : {}),
   };
 }
 
@@ -404,8 +659,8 @@ export interface FinalizeResult {
   request_id: string;
   /** the final article Markdown */
   markdown: string;
-  /** per answer: kept_original | client_wording | removed | woven | left_general | not_found */
-  applied: { id: string; how: string; section: string }[];
+  /** per answer: kept_original | client_wording | removed | woven | left_general | not_placed | already_covered (W05-C) */
+  applied: { id: string; how: string; section: string; why?: string }[];
   /** the sections the editor rewrote (s0 = introduction) */
   sections_rewritten: string[];
   changes: { section: string; what: string; before: string; after: string }[];
@@ -415,6 +670,12 @@ export interface FinalizeResult {
   client_questions: P[];
   grade: P;
   cost: { claude_usd: number; dfs_usd: number; estimated: boolean; model_calls: number };
+  /** W0-A (2026-10-29): the meta lines of the final version as the engine checked them (a broken description rebuilt); absent from older engines */
+  meta?: { title?: string; meta_description?: string; slug?: string; target_url?: string };
+  /** W0-B (D2): the client's decision on a duplicate-page blocker, as the engine applied it (null when there was none) */
+  decision?: { code: string; choice: 'update' | 'differs'; url: string; reason: string; pages: string[] } | null;
+  /** W0-B: what the final check knew of the page run (missing fields, blockers kept open, blockers resolved) */
+  page_run?: { received: boolean; gating_missing: string[]; grading_missing: string[]; kept_open: string[]; resolved: string[] };
   error?: string;
 }
 
@@ -433,9 +694,10 @@ export interface PageCheck {
 }
 
 /** Where a page stands, for the report and the content board. */
-export type ReviewStage = 'not_ready' | 'questions' | 'ready' | 'finalising' | 'final_ready' | 'approved' | 'sent_draft' | 'published' | 'live_verified';
+export type ReviewStage = 'not_ready' | 'needs_work' | 'questions' | 'ready' | 'finalising' | 'final_ready' | 'approved' | 'sent_draft' | 'published' | 'live_verified';
 export const REVIEW_STAGE_LABEL: Record<ReviewStage, string> = {
   not_ready: 'Not ready',
+  needs_work: 'Needs work, you can still publish it',
   questions: 'Ready, stronger with your input',
   ready: 'Ready, waiting for your OK',
   finalising: 'Making the final version',
@@ -447,6 +709,7 @@ export const REVIEW_STAGE_LABEL: Record<ReviewStage, string> = {
 };
 export const REVIEW_STAGE_TONE: Record<ReviewStage, 'critical' | 'warning' | 'info' | 'good'> = {
   not_ready: 'critical',
+  needs_work: 'warning',
   questions: 'info',
   ready: 'info',
   finalising: 'info',
@@ -474,7 +737,8 @@ export interface PageReviewView {
   /** every question, ranked; `stored` = the website already has this fact (answered there, not asked again) */
   questions: (ClientQuestion & { stored: FactAnswer | null })[];
   answers: Record<string, PageAnswer>;
-  delivered: { markdown: string; title: string; metaDescription: string; slug: string };
+  /** metaDescriptionNote: W0-A (2026-10-29), set when the stored description cannot be used ("Slug: ...", too short): what the client is told */
+  delivered: { markdown: string; title: string; metaDescription: string; metaDescriptionNote: string; slug: string };
   clientVersion: { markdown: string; savedAt: string; savedBy: string | null; check: PageCheck | null } | null;
   finalize: {
     status: 'none' | 'running' | 'done' | 'failed';
@@ -494,6 +758,17 @@ export interface PageReviewView {
   /** this report is itself a final version of `finalOf` */
   isFinal: boolean;
   finalOf: string | null;
+  /**
+   * W0-B (owner decision D2): the website already has a page for the same search (the delivered page's open blocker). The page is published
+   * only as an update of that page (`rewrite`: the Write a page form's values for a page run that improves it at its own address) or with
+   * the client's reason (`decision`, sent with the next final version and shown on it). Null when there is no such page. Optional: older
+   * servers do not send it.
+   */
+  duplicate?: {
+    pages: { url: string; title: string }[];
+    decision: { choice: 'differs'; reason: string; at: string; by: string | null } | null;
+    rewrite: { keyword: string; pageType: string; country: string };
+  } | null;
   /**
    * who did what, by name: every user id this view carries (`approval.approvedBy`, `clientVersion.savedBy`, each answer's and stored
    * fact's `by`) mapped to the person's name, else their e-mail, else "a team member". The UI prints names through `personLabel`,
@@ -519,13 +794,14 @@ export function personLabel(people: Record<string, string> | null | undefined, i
 }
 
 /** Every user id a review view refers to (approved, saved, answered, stored facts), deduplicated. */
-export function reviewPersonIds(v: Pick<PageReviewView, 'approval' | 'clientVersion' | 'answers' | 'questions'>): string[] {
+export function reviewPersonIds(v: Pick<PageReviewView, 'approval' | 'clientVersion' | 'answers' | 'questions'> & Partial<Pick<PageReviewView, 'duplicate'>>): string[] {
   const ids = new Set<string>();
   const add = (id: string | null | undefined) => {
     if (typeof id === 'string' && id) ids.add(id);
   };
   add(v.approval?.approvedBy);
   add(v.clientVersion?.savedBy);
+  add(v.duplicate?.decision?.by);
   for (const a of Object.values(v.answers ?? {})) add(a?.by);
   for (const q of v.questions ?? []) add(q.stored?.by);
   return [...ids];
@@ -546,6 +822,7 @@ export function reviewStage(o: {
   if (o.approved) return 'approved';
   if (o.finalize.status === 'running') return 'finalising';
   if (o.delivery.status === 'not_ready') return 'not_ready';
+  if (o.delivery.status === 'needs_work') return 'needs_work';   // W0-C: a part under half its points; approving it is still allowed
   if (o.isFinal || o.finalize.status === 'done') return 'final_ready';
   return o.openQuestions > 0 ? 'questions' : 'ready';
 }
@@ -872,25 +1149,44 @@ const RUN_ONLY_KEYS = ['cost_usd', 'run_ledger', 'run_cost_estimate_usd', 'run_c
  * The final version's report payload: the delivered page's payload with the final Markdown, its safe HTML, the engine's delivered status,
  * grade and remaining questions, and its own cost.
  */
-export function finalReportPayload(original: P, result: Pick<FinalizeResult, 'markdown' | 'delivery_status' | 'delivery' | 'client_questions' | 'grade' | 'changes' | 'applied' | 'cost'>, o: { originalReportId: string; requestId: string }): P {
+export function finalReportPayload(
+  original: P,
+  result: Pick<FinalizeResult, 'markdown' | 'delivery_status' | 'delivery' | 'client_questions' | 'grade' | 'changes' | 'applied' | 'cost' | 'meta' | 'decision'>,
+  o: { originalReportId: string; requestId: string; pageRun?: PageRunContext | null },
+): P {
   const base: P = {};
   for (const [k, v] of Object.entries(original ?? {})) if (!RUN_ONLY_KEYS.includes(k)) base[k] = v;
   const meta = obj(original?.meta);
   const md = s(result.markdown);
   const del = obj(result.delivery);
   const statusRaw = s(result.delivery_status) || s(del.status);
-  const status: PageDeliveryStatus = statusRaw === 'ready' || statusRaw === 'ready_with_questions' || statusRaw === 'not_ready' ? statusRaw : 'unknown';
+  const status: PageDeliveryStatus = DELIVERY_STATUSES.includes(statusRaw) ? (statusRaw as PageDeliveryStatus) : 'unknown';
   const questions = arr(result.client_questions);
-  const ready = status === 'ready' || status === 'ready_with_questions';
+  const ready = publishableStatus(status);   // W0-C: "needs work" blocks nothing, so it is publishable like "ready"
   const blocking = items(del.blocking);
-  const advisory = items(del.advisory);
+  // W0-E (2026-10-29, page-quality PLAN Fix 5.2): an answer the engine could not work into a sentence is never appended to the page; the
+  // client is told it was not placed, so they can say where it belongs
+  const asked = new Map(questionsOf(original).map((q) => [q.id, q.question]));
+  const notPlaced: PageDeliveryItem[] = arr(result.applied)
+    .map(obj)
+    .filter((a) => s(a.how) === 'not_placed')
+    .slice(0, 10)
+    .map((a) => ({ code: 'not_placed', text: plainWords(`Not placed: your answer to "${(asked.get(s(a.id)) ?? 'a question').slice(0, 160)}" ${s(a.why) ? `is ${s(a.why).slice(0, 120)}, so it was not put into a paragraph` : 'did not fit a sentence of the page'}${s(a.section) ? ` (${s(a.section).slice(0, 120)})` : ''}. Tell us where it belongs, or add it in the page editor, then make the final version again`) }));
+  const advisory = [...items(del.advisory), ...notPlaced];
   const grade = obj(result.grade ?? del.grade);
   const label = plainWords(s(del.label)) || deliveryHeadline(status, questions.length, blocking[0] ?? null).headline;
   const reasons = ready ? [] : blocking.map((b) => b.text).slice(0, 8);
-  const quality = { ...obj(original?.qa_quality ?? meta.quality), passed: ready, publishable: ready, not_ready: !ready, label, reasons, delivery_status: status, client_questions: questions, blocking, advisory, grade, next_step: ready ? '' : s(del.next_step) };
+  const quality = { ...obj(original?.qa_quality ?? meta.quality), passed: ready, publishable: ready, not_ready: !ready, label, reasons, delivery_status: status, client_questions: questions, blocking, advisory, grade, next_step: ready && status !== 'needs_work' ? '' : s(del.next_step) };
   const words = md.replace(/\|/g, ' ').replace(/[#>*_`]/g, '').split(/\s+/).filter(Boolean).length;
   const c = finalizeCostUsd(result);
   const score = num(grade.score);
+  // W0-A (2026-10-29): the final version's description is the one the engine checked (rebuilt when the stored one was broken); a stored
+  // description that cannot be used is never carried onto the final version
+  const finalDesc = usableMetaDescription(obj(result.meta).meta_description) || cleanMetaDescription(meta.meta_description);
+  const descFields = finalDesc !== s(meta.meta_description) ? { meta_description: finalDesc, meta_description_length: finalDesc.length } : {};
+  // W0-B (D2): published as an update of the website's page for the same search: that page's address and slug
+  const target = s(obj(result.meta).target_url);
+  const targetFields = /^https?:\/\//i.test(target) ? { target_url: target, suggested_url: target, ...(s(obj(result.meta).slug) ? { slug: s(obj(result.meta).slug) } : {}) } : {};
   return {
     ...base,
     request_id: o.requestId,
@@ -901,7 +1197,7 @@ export function finalReportPayload(original: P, result: Pick<FinalizeResult, 'ma
     qa_grade: grade,
     qa_blocking: blocking,
     qa_advisory: advisory,
-    qa_next_step: ready ? '' : plainWords(s(del.next_step)),
+    qa_next_step: ready && status !== 'needs_work' ? '' : plainWords(s(del.next_step)),   // W0-C: what to improve on a page that needs work
     qa_publishable: ready,
     qa_not_ready: !ready,
     qa_passed: ready,
@@ -909,8 +1205,11 @@ export function finalReportPayload(original: P, result: Pick<FinalizeResult, 'ma
     qa_reasons: reasons,
     qa_owner_edits: [],
     qa_quality: quality,
-    meta: { ...meta, word_count: words, publishable: ready, delivery_status: status, client_questions: questions, grade, quality, ...(score != null ? { content_score: score } : {}) },
+    meta: { ...meta, ...descFields, ...targetFields, word_count: words, publishable: ready, delivery_status: status, client_questions: questions, grade, quality, ...(score != null ? { content_score: score } : {}) },
     finalized_from: o.originalReportId,
+    // W0-B: the page-run context travels with the final version, so a second finalize (or one whose original is gone) keeps its blockers
+    page_run_context: o.pageRun ?? pageRunOf(original),
+    ...(result.decision ? { finalize_decision: result.decision } : {}),
     finalize_changes: arr(result.changes).slice(0, 60),
     finalize_applied: arr(result.applied).slice(0, 200),
     run_ledger: { dataforseo_usd: c.dfs, ai_usd: c.claude, ai_cost_estimated: c.estimated },

@@ -871,7 +871,9 @@ sv = get_schema('Parser — Verdict'); sv['properties'].update({'what_must_chang
 # The shared kits it needs are named by a marker each and inlined here in ONE pass, so a marker inside a kit is never expanded.
 PV_KITS = {'EXCLUSIONS': 'code/_exclusions.js', 'SITE_MODEL': 'code/_site_model.js', 'OWN_COVER': 'code/_own_cover.js',
            'REACH': 'code/_reach.js', 'KW_INPUTS': 'code/_kw_inputs.js', 'PAGE_TYPE': 'code/_page_type.js',
-           'PAGE_CLAIMS': 'code/_page_claims.js', 'VERDICT_OWN': 'code/_verdict_own.js', 'REMEASURE': 'code/_remeasure.js'}
+           'PAGE_CLAIMS': 'code/_page_claims.js', 'VERDICT_OWN': 'code/_verdict_own.js', 'REMEASURE': 'code/_remeasure.js',
+           'DUP_TARGETS': 'code/_dup_targets.js',   # W0-D (2026-10-29, section 153): the duplicate rule before the brief
+           'READER': 'code/_reader.js'}   # W07-A (2026-10-31, section 179): pages the page reader refused are never judged
 def pv_source():
     src = _rd0('code/Parse_Verdict.js')
     for _k in PV_KITS:
@@ -12436,7 +12438,12 @@ patch('Content QA', "const fixes = [];\nconst warnings = [];\n", r"""const fixes
 const warnings = [];
 // LLM-LIMITS (2026-10-27, section 150): a page that stops mid-way is its own failure, in plain words, and never publishable. The guards behind
 // the Copywriter and the Editor normally stop it before it reaches this node; this is the net under them, and it reads the page as delivered.
-const __cut = CK.text(md);
+// fu-finalize-toc (2026-10-30, K6): in the final version (Page Finalize: Parse Brief carries `finalize`) an end word for word the end of
+// the page the engine delivered was not written by this run, so it is not a cut; unless the page run itself found that page cut off (its
+// blocker travels in prc.gating.qa_blocking), then the end is read as it is. A page the client sent cut short is still cut off.
+const __cutFrom = (() => { const f = (prev && prev.finalize) || null; const qb = ((((prev || {}).prc || {}).gating || {}).qa_blocking) || [];
+  return f && !qb.some(b => b && b.code === 'cut_off') ? [f.delivered_markdown] : []; })();
+const __cut = CK.text(md, { unchanged_from: __cutFrom });
 const __llm_notes = (() => { const out = [];
   for (const nd of ['Draft Check (Copywriter)', 'Edit Check (Editor)']) for (let r = 0; r < 12; r++) { let a = null; try { a = $(nd).all(0, r); } catch (e) { break; } if (!a || !a.length) break;
     for (const i of a) { const k = i && i.json && i.json.llm_check; if (k && k.note && !out.includes(k.note)) out.push(k.note); } }
@@ -12662,6 +12669,1035 @@ patch('Spawn Page Runs', "  receive: ['Keyword Report', 'Page Content'], existin
 assert 'Load Content Log (Ladder)' in nodes, 'H3: the ladder flow has no content-log load to read our own pages from'
 assert "pick(p2, 'facts')" in code('Normalize Input') and 'business_facts_kv,' in code('Normalize Input') and 'stored_fact_keys,' in code('Normalize Input'), 'H3: Normalize Input lost the stored answers'
 log('The client\'s answers are kept once (H3, 2026-10-28, section 152): Normalize Input takes business_facts_kv and stored_fact_keys by their exact keys (the fuzzy picks for "facts" and "existing" skip them), a page run\'s business facts carry the confirmed answers, PJ.ownText reads them as on file and Page Candidates never asks a stored key; existing_page_ours is accepted and set by the Content Cadence and Spawn Page Runs from the content log; Site Admin facts stores fact_answers (seo_sites.fact_answers_json); the new synchronous workflow SEO Agent — Page Finalize (SEOagentFinalize, POST /webhook/seo-page-finalize) makes the final version of a delivered page from the answers')
+
+# =============================================================================
+# 153. ASK BEFORE WRITING A PAGE THE VERDICT SCORED UNDER 50, OR ONE THE WEBSITE ALREADY HAS (W0-D, page-quality programme 2026-10-29,
+#      docs/page-quality-2026-10-29/PLAN.md Fix 4 and §2.1 "Duplicate before the brief"; REVIEW_CODE H1 / M1 / M3; owner decisions D1 / D2 /
+#      D17). Run 3299 wrote "ms 365 erp", which its own verdict scored 42 ("a poor use of effort"), because *Verdict Router* stops only on
+#      AVOID, and learned only after the brief, the copy and three editor rounds that the website already had pages for the same search.
+#      * *Parse Verdict* (v5/code/Parse_Verdict.js, HOLD) decides `verdict_hold` before the brief: a score under 50 or a duplicate target
+#        (DUP, v5/code/_dup_targets.js: the late check's own rule, now also weighted by how rare each word is on the site, and blind to the
+#        keyword's own page). Exempt from the score hold: case studies, AI answer pages, refreshes of an own page, keyword-ladder pages (the
+#        ranking guide of exec 949 is one). A ladder page is held for a duplicate only by a page carrying ALL of its words. A null score is
+#        "not checked", never a hold. A run with `hold_ack` (the client's "Write it anyway") is not held and says `verdict_acknowledged`.
+#        Automatic runs (cadence, ladder spawns, tracker, case-study spawns) run in SHADOW mode (D17): `hold_shadow` is reported, the page is
+#        written as before. Runs a person started are asked.
+#      * *Need Content?* now reads `!!$json.include_content && !$json.verdict_hold`: a hold takes the report-only branch (no brief, no copy,
+#        no edit; the run ledger settles what the verdict really cost) and the callback keeps stage `content` with `hold` (M1: a new stage
+#        would leave the app's run open).
+#      * *Normalize Input* passes `hold_ack: { score }` through (exact key, after the fuzzy-matched head; app/shared/src/payload.ts).
+#      * *Build Webhook Response* carries `hold`, `hold_shadow` and `verdict_acknowledged` (the PRC gating field, harness/README.md).
+#      * *Content Log Row* writes `held` (M3); the Content Cadence and app/server/src/services/cadence.ts skip a held keyword for 90 days (D1).
+#      * *Originality Check* calls the same DUP kit, so the late safety net and the early check can never disagree about the rule.
+# =============================================================================
+DUP_SRC153 = _rd0('code/_dup_targets.js').rstrip('\n')
+assert DUP_SRC153.count('const DUP = (() => {') == 1, 'W0-D: _dup_targets.js must define DUP once'
+assert code('Originality Check').count('/*__DUP_TARGETS__*/') == 1, 'W0-D: Originality_Check.js must carry the /*__DUP_TARGETS__*/ marker once'
+setcode('Originality Check', code('Originality Check').replace('/*__DUP_TARGETS__*/', DUP_SRC153))
+assert 'DUP.targets(d.keyword, SM.pages(MODEL)' in code('Originality Check') and code('Originality Check').count('const DUP = (() => {') == 1, \
+    'W0-D: the late duplicate check no longer asks the DUP kit'
+_pv153 = code('Parse Verdict')
+for _k153 in ('const DUP = (() => {', 'const HOLD = (() => {', 'verdict_hold: HOLD.held', 'hold_shadow:', 'verdict_acknowledged: !!HOLD.ack',
+              "automatic: 'shadow'", 'threshold: 50', 'ladderPage ?', 'caseStudy ?', 'aiPage ?', 'refresh ?', 'score == null'):
+    assert _k153 in _pv153, 'W0-D: Parse Verdict lacks ' + _k153
+assert _pv153.count('const DUP = (() => {') == 1, 'W0-D: the DUP kit is inlined into Parse Verdict more than once'
+# the router: a hold takes the report-only branch, which already exists (verdict-only runs use it); the AVOID route is unchanged
+_nc153 = nodes['Need Content?']['parameters']['conditions']['conditions']
+assert len(_nc153) == 1 and _nc153[0]['leftValue'] == '={{ $json.include_content }}', 'W0-D: Need Content? changed under section 153: ' + str(_nc153)
+_nc153[0]['leftValue'] = '={{ !!$json.include_content && !$json.verdict_hold }}'
+assert [t['node'] for t in conns['Need Content?']['main'][0]] == ['Load Profile (Brief)'] and [t['node'] for t in conns['Need Content?']['main'][1]] == ['Build Word File'], \
+    'W0-D: Need Content? must send a page run to the brief and a held run (false) to the report-only delivery: ' + str(conns['Need Content?']['main'])
+assert [t['node'] for t in conns['Verdict Router']['main'][1]] == ['Need Content?'] and [t['node'] for t in conns['Ladder Mode?']['main'][1]] == ['Verdict Router'] \
+    and [t['node'] for t in conns['Parse Verdict']['main'][0]] == ['Ladder Mode?'], 'W0-D: Need Content? no longer reads Parse Verdict\'s own item (via Ladder Mode? and Verdict Router)'
+assert nodes['Verdict Router']['parameters']['conditions']['conditions'][0]['leftValue'] == "={{ $json.verdict === 'AVOID' && !$json.force_content }}", \
+    'W0-D: the AVOID route changed (it stays as it was; the hold is the new, earlier question)'
+# Normalize Input: the client's acknowledgement, by its exact key (no pick(): "hold_ack" holds none of the picked words)
+patch('Normalize Input', "    ai_target,\n    force_content: !!p2.force_content,",
+      "    ai_target,\n"
+      "    hold_ack: (p2.hold_ack && typeof p2.hold_ack === 'object' && !Array.isArray(p2.hold_ack)) ? { score: Number.isFinite(Number(p2.hold_ack.score)) && p2.hold_ack.score !== '' && p2.hold_ack.score != null ? Math.round(Number(p2.hold_ack.score)) : null } : (p2.hold_ack === true ? { score: null } : null),   // W0-D (section 153): the client chose \"Write it anyway\"\n"
+      "    force_content: !!p2.force_content,")
+# the callback: the hold, the shadow hold and the acknowledgement (PRC gating field `verdict_acknowledged`); read from the item, and from
+# *Parse Verdict* itself when an older path dropped them
+patch('Build Webhook Response', "    score_withheld: !!d.score_withheld,\n",
+      "    score_withheld: !!d.score_withheld,\n"
+      "    ...(() => { let pv = {}; try { pv = $('Parse Verdict').first().json || {}; } catch (e) { pv = {}; }   // W0-D (section 153)\n"
+      "      const g = (k) => (d[k] !== undefined ? d[k] : pv[k]);\n"
+      "      return { hold: g('hold') || null, hold_shadow: g('hold_shadow') || null, verdict_acknowledged: g('verdict_acknowledged') === true,\n"
+      "        hold_exempt: g('hold_exempt') || '', hold_not_checked: g('hold_not_checked') || '' }; })(),\n")
+assert "verdict_acknowledged: g('verdict_acknowledged') === true" in code('Build Webhook Response'), 'W0-D: the callback lost verdict_acknowledged'
+assert "'held'" in code('Content Log Row') and "$('Parse Verdict')" in code('Content Log Row'), 'W0-D: Content Log Row does not write a held run as held'
+log('Ask before writing (W0-D, 2026-10-29, section 153): Parse Verdict holds a page run for the client\'s OK before the brief when the verdict scored the keyword under 50 or the website already has a page for the search (the DUP kit, shared with the late Originality Check); case studies, AI answer pages, refreshes and keyword-ladder pages are not held for the score, a null score is never a hold, hold_ack ("Write it anyway") passes; automatic runs only log the hold (shadow mode, D17); Need Content? sends a hold to the report-only delivery, the callback keeps stage content with hold / hold_shadow / verdict_acknowledged, Content Log Row writes `held` and the cadence skips the keyword for 90 days')
+
+# =============================================================================
+# 154. LOCAL REGULATORY FACTS ARE RESEARCHED, DATED AND NEVER STALE (W0-F, page-quality programme 2026-10-29,
+#      docs/page-quality-2026-10-29/PLAN.md §3 Fix 6; R4 D7, REVIEW_EVIDENCE H5, REVIEW_CODE M6 / L6). Page run 3299 ("ms 365 erp", a UAE
+#      ERP partner) never learned the UAE e-invoicing timeline: the only facts search stripped every country name. And the 30 October 2026
+#      provider deadline is itself an amendment (Ministerial Decision No. 66 of 2026 replaced 31 July 2026 in Decision No. 244 of 2025), so a
+#      step that reads "the official page" can state a superseded date, and from 31 October a page must say that deadline has passed.
+#      * v5/data/regulators.json: market (ISO) -> topics -> official domains, trigger words, searches, and `known` dated obligations a person
+#        read on the official text (url + verbatim paragraph + checked_on, used until `fresh_until`). AE, SA, PK first (owner decision D4).
+#      * Analyze Competitor Pages -> Regulatory Plan -> Any Regulatory Topics? -> Search Regulatory Pages (SearXNG, free) -> Regulatory
+#        Candidates -> Regulatory Search Down? -> [Regulatory SERP (DataForSEO, only when SearXNG answered nothing; in-200 gate, on every
+#        ledger list) -> Regulatory SERP Candidates] -> Any Regulatory Pages? -> Read Regulatory Pages (the reader) -> Collect Regulatory
+#        Facts -> Facts SERP. The chain sits IN FRONT of the facts search, not between Collect Facts and the analyzer, so *Collect Facts*
+#        stays the one node the Competitor Analyzer, its token counter (sections 62 / 76) and *Parse Analysis* (the patch at section 1) read
+#        (REVIEW_CODE L6): Collect Facts carries `regulatory` / `regulatory_facts` on and puts the regulatory sources first in `facts`, so the
+#        figure check, the money mask and the evidence plan know them.
+#      * The latest dated official source wins and records what it supersedes; with no official text, two independent secondary sources
+#        that agree (labelled as reported by them); one alone never; else "none could be confirmed". The status (upcoming / passed / in
+#        force) is computed against the day the page is written, in the market's own time zone.
+#      * The Strategy Brief and the Copywriter print the REGULATORY FACTS block, read from $('Collect Regulatory Facts') explicitly inside a
+#        try/catch (RC M6: no field has to survive every node between); Content QA records `regulatory` {required, stated, status,
+#        source_tier, missing, stale, passed_as_upcoming} with no score (Wave 2's accuracy items read it).
+#      * Nothing here can stop a page run: every node of the chain answers on failure, and the run goes on without the block.
+# =============================================================================
+REG_SRC153 = _rd0('code/_regulatory.js').rstrip('\n')
+assert 'const REG = (() => {' in REG_SRC153
+REGULATORS153 = json.loads(_rd0('data/regulators.json'))
+REGULATORS_SRC153 = 'const REGULATORS = ' + json.dumps(REGULATORS153, ensure_ascii=False, separators=(',', ':')) + ';   // v5/data/regulators.json (build section 154)'
+# the data the build ships: every market names official domains; the UAE e-invoicing rows are the official text, with the amendment
+for _iso153, _m153 in REGULATORS153['markets'].items():
+    assert _m153.get('official') and _m153.get('topics') and isinstance(_m153.get('utc_offset_hours'), int), 'W0-F: market ' + _iso153 + ' has no official domains, topics or time zone'
+    for _tid153, _t153 in _m153['topics'].items():
+        assert _t153.get('triggers') and _t153.get('search'), 'W0-F: ' + _iso153 + '/' + _tid153 + ' has no trigger words or search'
+        for _k153 in _t153.get('known') or []:
+            assert re.match(r'^\d{4}-\d{2}-\d{2}$', _k153['date']) and _k153.get('paragraph') and _k153.get('checked_on') and _k153.get('source_date'), ('W0-F: a known row without its date, paragraph, source date or check date', _k153)
+            assert any(re.match(r'^https://(www\.)?' + re.escape(d) + r'/', _k153['url']) for d in (_t153.get('official') or _m153['official'])), ('W0-F: a known row is not on an official domain', _k153['url'])
+            assert _t153.get('fresh_until'), 'W0-F: ' + _iso153 + '/' + _tid153 + ' carries known rows with no fresh_until'
+_ae153 = {(k['verb'], k['subject_class']): k for k in REGULATORS153['markets']['AE']['topics']['e-invoicing']['known']}
+assert _ae153[('appoint', 'ge:50000000')]['date'] == '2026-10-30' and _ae153[('appoint', 'ge:50000000')]['supersedes'] == '2026-07-31' and _ae153[('implement', 'ge:50000000')]['date'] == '2027-01-01', \
+    'W0-F: the UAE phase 1 rows are not Ministerial Decision No. 66 of 2026 (30 October 2026, superseding 31 July 2026; live 1 January 2027)'
+for _bad153 in ('—', '–', '“', '”', '…'):
+    for _f153 in ('code/_regulatory.js', 'code/Regulatory_Plan.js', 'code/Regulatory_Candidates.js', 'code/Regulatory_SERP_Candidates.js', 'code/Collect_Regulatory_Facts.js', 'data/regulators.json'):
+        assert _bad153 not in _rd0(_f153), 'W0-F: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f153
+def _kit153(src):
+    for _mk153 in ('/*__REGULATORS__*/', '/*__REGULATORY__*/'):
+        assert src.count(_mk153) == 1, 'W0-F: marker ' + _mk153 + ' must appear exactly once'
+    return src.replace('/*__REGULATORS__*/', REGULATORS_SRC153).replace('/*__REGULATORY__*/', REG_SRC153)
+
+# ---------- A. the chain, in front of the facts search ----------
+assert [t['node'] for l in conns['Analyze Competitor Pages']['main'] for t in l] == ['Facts SERP'], 'W0-F: Analyze Competitor Pages no longer feeds Facts SERP alone'
+assert "const prev = $('Analyze Competitor Pages').first().json;" in code('Collect Facts'), 'W0-F: Collect Facts no longer reads Analyze Competitor Pages'
+_fs153 = pos('Facts SERP'); _x153, _y153 = _fs153[0] - 200, _fs153[1] + 380
+add_node('Regulatory Plan', 'n8n-nodes-base.code', 2, {'jsCode': _kit153(_rd0('code/Regulatory_Plan.js'))}, [_x153, _y153])
+if_node('Any Regulatory Topics?', "{{ !$json.skip }}", [_x153 + 180, _y153])
+add_node('Search Regulatory Pages', 'n8n-nodes-base.httpRequest', 4.5, {
+    'method': 'GET', 'url': '={{ $json.url }}', 'sendHeaders': True,
+    'headerParameters': {'parameters': [{'name': 'Accept', 'value': 'application/json'}, {'name': 'User-Agent', 'value': 'SEO-Agent-Regulatory/1.0'}]},
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 1000}}, 'timeout': 20000}},
+    [_x153 + 360, _y153 - 80], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, **retry_lint.RETRY})
+add_node('Regulatory Candidates', 'n8n-nodes-base.code', 2, {'jsCode': _kit153(_rd0('code/Regulatory_Candidates.js'))}, [_x153 + 540, _y153 - 80])
+if_node('Regulatory Search Down?', "{{ $json.dfs_fallback === true }}", [_x153 + 720, _y153 - 80])
+_rs153 = copy.deepcopy(nodes['Facts SERP']); _rs153['name'] = 'Regulatory SERP'; _rs153['id'] = nid('Regulatory SERP'); _rs153['position'] = [_x153 + 900, _y153 - 260]
+_rs153['parameters']['jsonBody'] = "={{ JSON.stringify([{ keyword: String($json.keyword || ''), location_code: $json.location_code, language_code: $json.language_code || 'en', depth: 10 }]) }}"
+_rs153['parameters']['options'] = {'timeout': 60000}
+for _k153 in ('retryOnFail', 'maxTries', 'waitBetweenTries'): _rs153.pop(_k153, None)   # N3: a paid call that can carry two items has no node-level retry; the in-200 gate re-sends the failed item
+_rs153['onError'] = 'continueRegularOutput'
+nodes['Regulatory SERP'] = _rs153
+add_node('Regulatory SERP Candidates', 'n8n-nodes-base.code', 2, {'jsCode': _kit153(_rd0('code/Regulatory_SERP_Candidates.js'))}, [_x153 + 1080, _y153 - 260])
+if_node('Any Regulatory Pages?', "{{ !$json.skip }}", [_x153 + 1260, _y153 - 80])
+_rr153 = copy.deepcopy(nodes['Read Competitor Pages']); _rr153['name'] = 'Read Regulatory Pages'; _rr153['id'] = nid('Read Regulatory Pages'); _rr153['position'] = [_x153 + 1440, _y153 - 160]
+_rr153['parameters']['options']['batching']['batch']['batchInterval'] = 1500
+_rr153['alwaysOutputData'] = True; _rr153['onError'] = 'continueRegularOutput'
+nodes['Read Regulatory Pages'] = _rr153
+add_node('Collect Regulatory Facts', 'n8n-nodes-base.code', 2, {'jsCode': _kit153(_rd0('code/Collect_Regulatory_Facts.js'))}, [_x153 + 1620, _y153])
+disconnect('Analyze Competitor Pages', 'Facts SERP')
+connect('Analyze Competitor Pages', 'Regulatory Plan'); connect('Regulatory Plan', 'Any Regulatory Topics?')
+connect('Any Regulatory Topics?', 'Search Regulatory Pages', 0); connect('Any Regulatory Topics?', 'Collect Regulatory Facts', 1)
+connect('Search Regulatory Pages', 'Regulatory Candidates'); connect('Regulatory Candidates', 'Regulatory Search Down?')
+connect('Regulatory Search Down?', 'Regulatory SERP', 0); connect('Regulatory Search Down?', 'Any Regulatory Pages?', 1)
+connect('Regulatory SERP', 'Regulatory SERP Candidates'); connect('Regulatory SERP Candidates', 'Any Regulatory Pages?')
+connect('Any Regulatory Pages?', 'Read Regulatory Pages', 0); connect('Any Regulatory Pages?', 'Collect Regulatory Facts', 1)
+connect('Read Regulatory Pages', 'Collect Regulatory Facts'); connect('Collect Regulatory Facts', 'Facts SERP')
+for _k153 in ('retryOnFail', 'maxTries', 'waitBetweenTries'):
+    assert nodes['Search Regulatory Pages'].get(_k153) and nodes['Read Regulatory Pages'].get(_k153), 'W0-F: a free regulatory read lost the retry rule (' + _k153 + ')'
+assert 'searxng:8080' in code('Regulatory Plan') and 'r.jina.ai' in nodes['Read Regulatory Pages']['parameters']['url'], 'W0-F: the regulatory search is not the stack\'s own SearXNG, or the read is not the reader'
+
+# ---------- B. the paid fallback: behind the in-200 gate, never retried node-level, counted on every ledger list that reaches it ----------
+_g153 = _gate75('Regulatory SERP', "the paid search for this page's official rules and dates (asked only when the free search is down)", 'search')
+assert [t['node'] for l in conns[_g153['answers']]['main'] for t in l] == ['Regulatory SERP Candidates'], 'W0-F: the gated answers do not reach Regulatory SERP Candidates'
+assert not nodes['Regulatory SERP'].get('retryOnFail') and not nodes[_g153['retry']].get('retryOnFail'), 'W0-F: the paid fallback re-bills on a node-level retry'
+_rev153 = {}
+for _s153, _o153 in conns.items():
+    for _l153 in (_o153.get('main') or []):
+        for _t153 in (_l153 or []): _rev153.setdefault(_t153['node'], set()).add(_s153)
+def _anc153(start):
+    seen, stack = set(), [start]
+    while stack:
+        for p in _rev153.get(stack.pop(), ()):
+            if p not in seen: seen.add(p); stack.append(p)
+    return seen
+_LRE153 = re.compile(r"const __LEDGER_NODES = \[([^\]]*)\];")
+_ledger153 = []
+for _nm153 in sorted(nm for nm in nodes if _LRE153.search(nodes[nm]['parameters'].get('jsCode', '') or '')):
+    _anc_set153 = _anc153(_nm153)
+    _need153 = [x for x in ('Regulatory SERP', _g153['retry']) if x in _anc_set153]
+    if not _need153: continue
+    _m153 = _LRE153.search(code(_nm153)); _listed153 = re.findall(r"'([^']+)'", _m153.group(1))
+    _new153 = _listed153 + [x for x in _need153 if x not in _listed153]
+    setcode(_nm153, code(_nm153).replace(_m153.group(0), "const __LEDGER_NODES = [" + ', '.join("'" + x + "'" for x in _new153) + "];", 1))
+    assert "__dfsOnce(t)" in code(_nm153), 'W0-F: ' + _nm153 + ' would count an attempt and its retry twice'
+    _ledger153.append(_nm153)
+assert _ledger153, 'W0-F: no ledger list reaches the paid fallback, so its money would go unseen'
+
+# ---------- C. Collect Facts carries the regulatory facts on, the official sources first in the run's verified facts ----------
+patch('Collect Facts', "const prev = $('Analyze Competitor Pages').first().json;",
+      "const prev = (() => { const p = $('Analyze Competitor Pages').first().json; let r = null; try { r = $('Collect Regulatory Facts').first().json; } catch (e) { r = null; }\n"
+      "  return (r && r.regulatory) ? { ...p, regulatory: r.regulatory, regulatory_facts: r.regulatory_facts || [], regulatory_sources: r.regulatory_sources || [] } : p; })();   // W0-F (section 154): the regulatory facts travel on from here")
+patch('Collect Facts', "return [{ json: { ...prev, facts: kept.slice(0, 10), facts_found: facts.length,",
+      "const regFacts = (prev.regulatory_sources || []).filter(f => f && f.url).map(f => ({ ...f, url: SRC.clean(f.url), tier: SRC.tier(f.url) }));   // W0-F: the official rules and dates, first\n"
+      "const regKeys = new Set(regFacts.map(f => SRC.key(f.url)));\n"
+      "const prevOut = { ...prev }; delete prevOut.regulatory_sources;\n"
+      "return [{ json: { ...prevOut, facts: regFacts.concat(kept.filter(f => !regKeys.has(SRC.key(f.url))).slice(0, 10)), facts_found: facts.length,")
+
+# ---------- D. the brief and the writer print the block; Content QA records what the page says ----------
+for _p153 in ('Strategy Brief', 'Copywriter'):
+    assert "$('Collect Regulatory Facts').first().json.regulatory" in nodes[_p153]['parameters']['text'] and 'catch (e)' in nodes[_p153]['parameters']['text'], \
+        'W0-F: the ' + _p153 + ' prompt does not print the REGULATORY FACTS block'
+    _pc153 = next((a for a in nodes['Prompt For Count (' + _p153 + ')']['parameters']['assignments']['assignments'] if a['name'] == '__prompt'), None)
+    assert _pc153 and "$('Collect Regulatory Facts').first().json.regulatory" in _pc153['value'], 'W0-F: the counted ' + _p153 + ' prompt is not the prompt sent'
+setcode('Content QA', REG_SRC153 + '\n' + code('Content QA'))
+patch('Content QA', "    intent, refresh_check,   // B3-6",
+      "    regulatory: (() => { try { return REG.qa(md, $('Collect Regulatory Facts').first().json.regulatory || null); } catch (e) { return REG.qa(md, prev.regulatory || null); } })(),   // W0-F (section 154): recorded, never scored\n"
+      "    intent, refresh_check,   // B3-6")
+
+# ---------- E. the proof, on the generated graph: one path, every route ends in Collect Regulatory Facts, and it reaches the brief ----------
+_rev153b = {}
+for _s153, _o153 in conns.items():
+    for _l153 in (_o153.get('main') or []):
+        for _t153 in (_l153 or []): _rev153b.setdefault(_t153['node'], set()).add(_s153)
+assert sorted(_rev153b.get('Collect Regulatory Facts', ())) == ['Any Regulatory Pages?', 'Any Regulatory Topics?', 'Read Regulatory Pages'], ('W0-F: unexpected inputs to Collect Regulatory Facts', _rev153b.get('Collect Regulatory Facts'))
+assert sorted(_rev153b.get('Facts SERP', ())) == ['Collect Regulatory Facts'], 'W0-F: Facts SERP is fed by something other than Collect Regulatory Facts'
+def _reach153(a, b):
+    seen, stack = set(), [a]
+    while stack:
+        n = stack.pop()
+        for l in ((conns.get(n) or {}).get('main') or []):
+            for t in (l or []):
+                if t['node'] == b: return True
+                if t['node'] not in seen: seen.add(t['node']); stack.append(t['node'])
+    return False
+for _d153 in ('Collect Facts', 'Competitor Analyzer', 'Parse Analysis', 'Strategy Brief', 'Copywriter', 'Content QA'):
+    assert _reach153('Collect Regulatory Facts', _d153), 'W0-F: Collect Regulatory Facts does not reach ' + _d153 + ' along main'
+# harness shim (scenario W0F): the kit and the data as a plain module
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_regulatory_kit.js'), 'w', encoding='utf-8').write('// harness shim (written by build_v4.py section 154): the regulatory kit and its data as a module\n'
+    + REGULATORS_SRC153 + '\n' + REG_SRC153 + '\nmodule.exports = { REG, REGULATORS };\n')
+log('Local regulatory facts are researched, dated and never stale (W0-F, 2026-10-29, section 154; PLAN Fix 6): v5/data/regulators.json maps each market (AE, SA, PK) to its regulated topics, official domains and, for UAE e-invoicing, the dated obligations read on the Ministry of Finance\'s own decisions (No. 244 of 2025 and its amendment No. 66 of 2026: phase 1 appoints a provider by 30 October 2026, superseding 31 July 2026, and goes live 1 January 2027); a page run searches the official sites (SearXNG, free; one gated DataForSEO search per topic only when SearXNG is down), reads the official text, an amendment search and two independent secondary sources, and Collect Regulatory Facts keeps the latest dated official source with what it supersedes, or two agreeing secondary sources, or says none could be confirmed; each fact carries its source, source date, as-of date and status (upcoming / passed / in force) on the day the page is written. The brief and the writer print a REGULATORY FACTS block, the official sources lead the run\'s verified facts, the client\'s own posts are checked for an old date, and Content QA records whether the page states the current dates (no score). Ledger lists reached: ' + ', '.join(_ledger153))
+
+# =============================================================================
+# 155. THE FINAL VERSION IS JUDGED WITH THE PAGE RUN'S CONTEXT (W0-B, page-quality programme 2026-10-29, docs/page-quality-2026-10-29/PLAN.md
+#      Fix 2 and §2.10; REVIEW_CODE H2 / M8; owner decision D2). Finalize 3336 graded the final version of page 3299 against itself (no facts,
+#      no terms, no length band, its own word count as the target) and never saw the page run's blocker, so it said "Ready" at 100.
+#      * *Build Webhook Response* now carries `page_run`, the GRADING fields of the page-run context (harness/README.md "PRC contract"):
+#        length_band (the final check's band, with the brief's target), coverage_target, terms, facts, sources_cited, style_guide, site_urls,
+#        serp_shapes (W0-C fills it), regulatory_facts / regulatory_topics (W0-F) and content_request_id. Read from *Parse Brief* and the
+#        last *Page Candidates* (the delivered page's final check), each inside try/catch; a run that wrote no page sends `page_run: null`.
+#        The GATING fields (qa_blocking, meta.originality.duplicate_targets, verdict, score, score_withheld, meta.page_type,
+#        verdict_acknowledged) were already in every callback: the app derives them from the stored ORIGINAL report for old and new reports.
+#      * The finalize side (SEO Agent — Page Finalize, build_monitors.py 6b) reads `page_run` + `duplicate_decision` in its Parse Brief and
+#        keeps every page-run blocker it cannot measure open in Finalize Verdict (v5/code/Finalize_Parse_Brief.js, Finalize_Verdict.js).
+# ======================================================================
+patch('Build Webhook Response', "    qa_blocking: d.qa_blocking || [], qa_advisory: d.qa_advisory || [],",
+      "    qa_blocking: d.qa_blocking || [], qa_advisory: d.qa_advisory || [],\n"
+      "    ...(() => {   // W0-B (section 155): the page-run context's grading fields, so the final version is judged like the page run\n"
+      "      if (!(d.article_markdown || d.page_markdown)) return { page_run: null };\n"
+      "      let pb = {}, cq = {}; try { pb = $('Parse Brief').first().json || {}; } catch (e) { pb = {}; }\n"
+      "      try { cq = ($('Page Candidates').first().json || {}).content_qa || {}; } catch (e) { cq = {}; }\n"
+      "      const A = (v) => (Array.isArray(v) ? v : []); const T = (v, n) => String(v == null ? '' : v).replace(/\\s+/g, ' ').trim().slice(0, n);\n"
+      "      const br = pb.content_brief || {}; const lbq = cq.length_band || (pb.competitor_analysis || {}).length_band || pb.length_band || null;\n"
+      "      const target = Number(br.target_word_count) > 0 ? Math.round(Number(br.target_word_count)) : (lbq && Number(lbq.target_word_count) > 0 ? Math.round(Number(lbq.target_word_count)) : null);\n"
+      "      const length_band = lbq && Number(lbq.low) > 0 && Number(lbq.high) >= Number(lbq.low) ? { low: Number(lbq.low), high: Number(lbq.high), source: lbq.source || (lbq.ok ? 'ranking_pages' : 'page_type'), sample: Number(lbq.sample) || 0, basis: T(lbq.basis, 400), target } : null;\n"
+      "      let reg = pb.regulatory || null; if (!reg) { try { reg = $('Collect Regulatory Facts').first().json.regulatory || null; } catch (e) { reg = null; } }\n"
+      "      const regFacts = A(pb.regulatory_facts).length ? A(pb.regulatory_facts) : A((reg || {}).facts);\n"
+      "      return { page_run: { prc: 1,\n"
+      "        length_band,\n"
+      "        coverage_target: pb.coverage_target && typeof pb.coverage_target === 'object' ? pb.coverage_target : null,\n"
+      "        terms: A(br.terms_to_use).map(t => (typeof t === 'string' ? { term: t, min_count: 1 } : { term: T((t || {}).term, 80), min_count: Number((t || {}).min_count) || 1 })).filter(t => t.term).slice(0, 80),\n"
+      "        facts: A(pb.facts).filter(f => f && typeof f === 'object').map(f => ({ claim: T(f.claim || f.text, 600), source: T(f.source, 120), url: T(f.url, 600), title: T(f.title, 200), ...(f.regulatory ? { regulatory: true } : {}) })).filter(f => f.claim || f.url).slice(0, 40),\n"
+      "        sources_cited: A(cq.sources_cited).filter(x => x && x.url).map(x => ({ anchor: T(x.anchor, 200), url: T(x.url, 600), host: T(x.host, 120), tier: x.tier == null ? null : x.tier })).slice(0, 30),\n"
+      "        style_guide: pb.style_guide && typeof pb.style_guide === 'object' ? pb.style_guide : { on_file: false },\n"
+      "        site_urls: A(pb.site_urls).map(u => String(u || '')).filter(u => /^https?:\\/\\//i.test(u)).slice(0, 300),\n"
+      "        serp_shapes: pb.serp_shapes || cq.serp_shapes || null,\n"
+      "        regulatory_facts: regFacts.slice(0, 40), regulatory_topics: A((reg || {}).topics).map(t => ({ id: T((t || {}).id, 60), relevance: T((t || {}).relevance, 20) })).filter(t => t.id).slice(0, 12),\n"
+      "        content_request_id: T(pb.content_request_id || d.request_id, 120) } }; })(),")
+_bwr155 = code('Build Webhook Response')
+for _k155 in ('page_run: { prc: 1,', 'length_band,', 'coverage_target:', 'terms:', 'facts:', 'sources_cited:', 'style_guide:', 'site_urls:', 'serp_shapes:', 'regulatory_facts:', 'content_request_id:',
+              "$('Parse Brief').first().json", "$('Page Candidates').first().json", 'return { page_run: null }'):
+    assert _k155 in _bwr155, 'W0-B: Build Webhook Response lacks ' + _k155
+assert _bwr155.count('page_run:') == 2, 'W0-B: Build Webhook Response sends page_run more than once'
+for _f155 in ('Finalize_Parse_Brief.js', 'Finalize_Verdict.js'):
+    for _k155 in ({'Finalize_Parse_Brief.js': ('b.page_run', 'duplicate_decision', "PRC_BLOCK = ['qa_blocking', 'duplicate_targets']", 'length_band: LEN.band', 'style_guide: G.style_guide'),
+                   'Finalize_Verdict.js': ("code === 'duplicate_page'", "code: 'not_checked'", 'PR.blocks_known', 'kept_open:', 'fit_cap')}[_f155]):
+        assert _k155 in _rd0('code/' + _f155), 'W0-B: ' + _f155 + ' lacks ' + _k155
+log('The final version is judged with the page run\'s context (W0-B, 2026-10-29, section 155; PLAN Fix 2, REVIEW_CODE H2 / M8, D2): every content callback carries page_run (length band with the brief\'s target, coverage target, terms, facts, sources cited, style guide, site URLs, SERP shapes, regulatory facts, content request id); Page Finalize reads it with the gating fields the app derives from the original report, keeps the page run\'s duplicate-page, copied-passage, dead-link and unknown blockers open until they are gone or the client decides (update of that page, or a recorded reason with the fit limit kept), and a request without the page run\'s blockers is never ready; a missing grading field is advice')
+
+# =============================================================================
+# 156. ANSWERS GO INTO THE SENTENCE THEY CHANGE; NO SLOGAN IS OFFERED AS PROOF (W0-E, page-quality programme 2026-10-29,
+#      docs/page-quality-2026-10-29/PLAN.md Fix 5; R4 D6 / G15; REVIEW_CODE M4 / L2). Finalize 3336 appended "At Nova&, consultation is
+#      free of charge." to a section about product names, wove the homepage slogan "Deep UAE & GCC knowledge" (offered as proof of UAE
+#      projects and accepted in one click) into a checklist item, and swapped a confirmed claim into an unrelated checklist sentence that a
+#      word-overlap match had taken for its "neutral" wording.
+#      * The Strategy Brief returns `questions_for_client` as { question, section, category } (this section: the parser schema; the prompt
+#        line in v5/prompts/strategy_brief.txt). Page Candidates and PF.questions still read a plain string (briefs stored before it).
+#      * PF.prefillOf only offers a sentence (6+ words, a verb, not a question), never chrome or a listing page, never a slogan, and only
+#        one that answers the question's type (proof: a project / client / sector with an outcome, or a number or a link; credential: a
+#        credential noun); the business facts first.
+#      * A statement the system removes carries its anchor (PF.anchorAt), no guessed neutral wording; Finalize Apply puts a "yes" back at
+#        that anchor only. Answers go to their slot (PF.slotIn) and the editor is told which sentence to rewrite; Finalize Merge refuses an
+#        edit that only appends an answer (PF.appendedIn) and never appends one itself: an unplaced answer is "not placed: tell us where".
+#      * Old reports: an answer about the page's head (its search description) changes nothing in the body (REVIEW_CODE L2).
+# =============================================================================
+_sb156 = get_schema('Parser — Strategy Brief')
+assert _sb156['properties']['questions_for_client'] == {'type': 'array', 'items': {'type': 'string'}, 'description': 'questions only the client can answer that would make the page stronger (0-5)'}, 'W0-E: the questions_for_client schema changed under section 156'
+_sb156['properties']['questions_for_client'] = {'type': 'array', 'description': 'questions only the client can answer that would make the page stronger (0-5), each with the section its answer changes and its category',
+    'items': {'type': 'object', 'properties': {'question': {'type': 'string'}, 'section': {'type': 'string', 'description': 'the exact H2 whose sentence the answer would change, or the call-to-action section'},
+                                               'category': {'type': 'string', 'description': 'proof, credential, terms, pricing, timeline or detail'}}, 'required': ['question']}}
+set_schema('Parser — Strategy Brief', _sb156)
+assert '"questions_for_client": [{ "question":' in nodes['Strategy Brief']['parameters']['text'] and '"category": "one of: proof' in nodes['Strategy Brief']['parameters']['text'], 'W0-E: the Strategy Brief prompt does not ask for question objects'
+for _n156 in ('Page Candidates',):
+    _c156 = code(_n156)
+    for _k156 in ('const anchorAt = ', 'const slotIn = ', 'const appendedIn = ', 'const prefillProblem = ', "r.how === 'removed')).map(r =>", 'names: ctx.names'):
+        assert _k156 in _c156, 'W0-E: ' + _n156 + ' lacks ' + _k156
+for _f156, _ks156 in {'Finalize_Apply.js': ('PF.slotIn(md', 'restoreAt(anchor, text)', "how: 'head_line'", 'const neutralHit = '),
+                      'Finalize_Merge.js': ('PF.appendedIn(before.text, after.text, t)', "x.how = 'not_placed'"),
+                      'Finalize_Parse_Brief.js': ("slot: ['cta', 'credential', 'proof', 'pricing', 'timeline', 'named']", 'anchor: a.anchor &&')}.items():
+    for _k156 in _ks156:
+        assert _k156 in _rd0('code/' + _f156), 'W0-E: ' + _f156 + ' lacks ' + _k156
+assert "part.text.replace(/\\s+$/, '') + '\\n\\n' + S(t).trim()" not in _rd0('code/Finalize_Merge.js'), 'W0-E: Finalize Merge still appends an unplaced answer as its own paragraph'
+log('Answers go into the sentence they change and no slogan is offered as proof (W0-E, 2026-10-29, section 156; PLAN Fix 5, R4 D6 / G15, REVIEW_CODE M4 / L2): the Strategy Brief returns questions_for_client as { question, section, category } (strings still read); a suggested answer must be a sentence that answers the question\'s type (proof names a project or client with an outcome, or a number or a link; a credential names one), never chrome, a listing page or a slogan, the business facts first; a removed statement keeps its anchor and no guessed neutral sentence, and a "yes" goes back there only; each answer goes to its slot (call to action, the sentence naming the business, the decision section, the named section) with the sentence to rewrite named; an edit that only appends an answer is refused and nothing is appended: an unplaced answer is reported "not placed"; an old report\'s answer about the search description changes nothing in the body')
+
+# =============================================================================
+# 158. THE CAUSES THE GRADE NOW COUNTS ARE REMOVED, AND THE PAGE THE CLIENT RECEIVES IS READ ONCE MORE (W0-H, page-quality programme
+#      2026-10-29, docs/page-quality-2026-10-29/PLAN.md Fix 3b, 2.4, 2.7, 2.8; R4 G9 / G12 / G13 / G14 / G18; REVIEW_EVIDENCE H1). Run 3299
+#      ("ms 365 erp") restated "Microsoft 365 is not an ERP" in six places, wrote "What is agentic ERP?" and "Which big companies use Dynamics
+#      365?" straight from People Also Ask, and published two market figures resting only on an agency blog and a tracker after the Critic
+#      had called both high; the Critic (66, the reviewer said 63) read the first draft once and gated nothing.
+#      * A. Prompts (v5/prompts/strategy_brief.txt, copywriter.txt): People Also Ask is evidence of what readers need, not the outline (only
+#        questions about the same reading of the search, whose answer adds something; a Guide up to 8, a Service / Location / Pricing page
+#        3-5, a Case Study none); a FAQ is a heading only when its answer is new to its section (a question that is the main search in other
+#        words may keep its heading, answered in new words); the keyword in the H1, the first sentence and the last section (an H2 only
+#        where a reader would phrase it so); each point has one home; a market, adoption, cost or compliance figure needs a strong source.
+#        PLAN 2.4 said "at most 4 question headings on a guide": the guide that ranks (exec 949, owner priority) carries 8 question H3s, each
+#        a different question, so the cap for a guide is 8 and the same-reading filter does the work. Built prompts asserted below.
+#      * B. PF.classify (v5/code/_page_fix.js): a market, adoption, cost or compliance figure whose ONLY linked source is weak (Content QA's
+#        tier) is a soft blocker "weak_figure": the editor rewrites the sentence without the number, else PF.neutralize takes the sentence
+#        out; Finalize re-measures it (Finalize_Verdict.js RECHECKED / TEXTUAL).
+#      * C. The second read: Finalize Page? (deliver) -> Second Read Plan -> Second Read? -> Second Read (Sonnet 5.5 over HTTP, the Messages
+#        API, structured JSON, measured usage) -> Apply Second Read -> Build Word File. Blind (no first-draft review, no history, no score),
+#        quotes verified on the page, high fact / source / claim / local problems are soft blockers (PF.reviewed) for runs a person started
+#        and reported advice in SHADOW mode for runs the system started (D17's rule); "not checked" on a refusal, a cut, a failure or an
+#        unreadable answer. Finalize keeps a "review" blocker open while its quoted words are on the page. Its cost joins the ledger.
+# =============================================================================
+_sbt158 = nodes['Strategy Brief']['parameters']['text']; _cwt158 = nodes['Copywriter']['parameters']['text']
+for _old158, _where158 in (('reuse the People Also Ask questions', _sbt158), ('each becomes its own question-style heading', _sbt158),
+                           ('Every question in the brief\'s "faqs" list becomes its own question-style heading', _cwt158),
+                           ('the first sentence, at least two H2s and the final section', _cwt158)):
+    assert _old158 not in _where158, 'W0-H: an old prompt instruction that creates padding or repetition is back: ' + _old158
+for _new158, _where158 in (('People Also Ask shows what readers need, it is not the outline', _sbt158), ('a Guide up to 8', _sbt158), ('a Case Study none', _sbt158),
+                           ('Each point has one home: give every claim, definition and list one owning section', _sbt158),
+                           ('when its answer says something that section does not already say', _cwt158), ('6b. Each point has one home', _cwt158),
+                           ('Use the primary keyword in the H1, the first sentence and the final section. An H2 may carry it', _cwt158),
+                           ('A market, adoption, cost or compliance figure needs an official, research or major-press source', _cwt158)):
+    assert _new158 in _where158, 'W0-H: the prompt rule is missing: ' + _new158
+PAGE_FIX_SRC158 = _rd0('code/_page_fix.js').rstrip('\n')
+for _k158 in ('const weakFigures = ', "B('weak_figure', ", "B('review', reviewText(r)", "else if (b.code === 'weak_figure') { const i = md.indexOf(b.sentence);", "if (b.code === 'review') return !b.location || onPage(b.location, t);", 'const reviewed = (cls, rr) =>'):
+    assert _k158 in PAGE_FIX_SRC158, 'W0-H: _page_fix.js lacks ' + _k158
+for _k158 in ("weak_figure: 'sentence'", "'bracket', 'weak_figure'])", "else if (code === 'review') { const q = "):
+    assert _k158 in _rd0('code/Finalize_Verdict.js'), 'W0-H: Finalize_Verdict.js lacks ' + _k158
+_crit158 = _rd0('prompts/critic.txt')
+_bar158 = _crit158[_crit158.index('QUALITY BAR'):_crit158.index('\nDRAFT\n')].strip()
+assert 'SOURCE QUALITY' in _bar158 and '{{' not in _bar158 and '$(' not in _bar158, 'W0-H: the Critic\'s quality bar is no longer plain text between QUALITY BAR and DRAFT'
+_tpl158 = _rd0('prompts/critic_reread.txt')
+for _k158 in ('{{BAR}}', '{{PAGE}}', '{{SITE_PAGES}}', '{{FACTS}}', '{{SOURCES}}', '{{REGULATORY}}'):
+    assert _tpl158.count(_k158) == 1, 'W0-H: critic_reread.txt needs ' + _k158 + ' exactly once'
+assert not re.search(r'\{\{\s*\$|\$json|\$\(', _tpl158), 'W0-H: critic_reread.txt is filled by RR.fill, not an n8n expression'
+RR_SRC158 = _rd0('code/_critic_reread.js').rstrip('\n')
+assert RR_SRC158.count("const TEMPLATE = /*__RR_TEMPLATE__*/'';") == 1 and RR_SRC158.count("const BAR = /*__RR_BAR__*/'';") == 1
+RR_SRC158 = RR_SRC158.replace("const TEMPLATE = /*__RR_TEMPLATE__*/'';", 'const TEMPLATE = ' + json.dumps(_tpl158) + ';').replace("const BAR = /*__RR_BAR__*/'';", 'const BAR = ' + json.dumps(_bar158) + ';')
+for _bad158 in ('—', '–', '“', '”', '…'):
+    for _f158 in ('code/_critic_reread.js', 'code/Second_Read_Plan.js', 'code/Apply_Second_Read.js'):
+        assert _bad158 not in _rd0(_f158), 'W0-H: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f158
+for _k158 in ("temperature", "tool_choice"):
+    assert _k158 not in RR_SRC158.split('const RR = (() => {', 1)[1], 'W0-H: Sonnet 5.5 refuses ' + _k158 + ' (400): the second read must not send it'
+_kit158 = lambda s: s.replace('/*__PAGE_FIX__*/', PAGE_FIX_SRC158).replace('/*__CRITIC_REREAD__*/', RR_SRC158)
+# ---------- C. the wiring: after the delivered page, before the report ----------
+assert [t['node'] for t in conns['Finalize Page?']['main'][1]] == ['Build Word File'], 'W0-H: Finalize Page? (deliver) no longer leads to Build Word File alone'
+_fp158 = pos('Finalize Page?')
+_x158, _y158 = _fp158[0] + 200, _fp158[1] + 260
+add_node('Second Read Plan', 'n8n-nodes-base.code', 2, {'jsCode': _kit158(_rd0('code/Second_Read_Plan.js'))}, [_x158, _y158])
+if_node('Second Read?', "{{ !($json.second_read || {}).skip }}", [_x158 + 180, _y158])
+add_node('Second Read', 'n8n-nodes-base.httpRequest', 4.5, {
+    'method': 'POST', 'url': 'https://api.anthropic.com/v1/messages',
+    'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'anthropicApi',
+    'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'anthropic-version', 'value': '2023-06-01'}]},
+    'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ $json.second_read.body }}',
+    'options': {'timeout': 300000}}, [_x158 + 360, _y158 - 80],
+    dict(credentials=dict(_ANTHROPIC_CRED62), onError='continueRegularOutput', alwaysOutputData=True, **_rl55.RETRY))
+add_node('Apply Second Read', 'n8n-nodes-base.code', 2, {'jsCode': _kit158(_rd0('code/Apply_Second_Read.js'))}, [_x158 + 540, _y158])
+disconnect('Finalize Page?', 'Build Word File')
+connect('Finalize Page?', 'Second Read Plan', 1); connect('Second Read Plan', 'Second Read?')
+connect('Second Read?', 'Second Read', 0); connect('Second Read?', 'Apply Second Read', 1)
+connect('Second Read', 'Apply Second Read'); connect('Apply Second Read', 'Build Word File')
+assert [t['node'] for t in conns['Finalize Page?']['main'][0]] == ['Page Fix'], 'W0-H: Finalize Page? (finalize) must still go back to Page Fix'
+for _n158 in ('Second Read Plan', 'Apply Second Read'):
+    _c158 = code(_n158)
+    assert 'const RR = (() => {' in _c158 and '/*__CRITIC_REREAD__*/' not in _c158 and '/*__PAGE_FIX__*/' not in _c158, 'W0-H: kit missing or marker left in ' + _n158
+assert 'const PF = (() => {' in code('Apply Second Read'), 'W0-H: Apply Second Read needs PF (onPage, reviewed, deliver)'
+# ---------- D. the money (measured), the ledger's AI steps, the callback ----------
+_SR_COST158 = """// W0-H (2026-10-29, section 158): the blind second read of the delivered page (Claude Sonnet 5.5 over HTTP, once a page run). Anthropic reports
+// the tokens of the answer (thinking included in output_tokens), so this call is MEASURED.
+{ let inT = 0, outT = 0, n = 0; let a = null; try { a = $('Second Read').all(); } catch (e) { a = null; }
+  for (const i of (a || [])) { const u = (i && i.json && i.json.usage) || null; if (u && (Number(u.input_tokens) || Number(u.output_tokens))) { inT += Number(u.input_tokens) || 0; outT += Number(u.output_tokens) || 0; n++; } }
+  if (n) __costCalls.push({ node: 'Second Read', model: 'claude-sonnet-5-5', max_tokens: 16000, effort: 'medium', streaming: false, prompt_chars: 0, output_chars: 0, usage: { promptTokens: inT, completionTokens: outT }, calls: n }); }
+"""
+_cost158 = [nm for nm in nodes if 'run_ledger.ai_cost = CC.runCost(__costCalls' in nodes[nm]['parameters'].get('jsCode', '')]
+assert {'Build Word File', 'Run Ledger Settle'} <= set(_cost158), _cost158
+for _n158 in _cost158:
+    assert code(_n158).count('run_ledger.ai_cost = CC.runCost(__costCalls') == 1, 'W0-H: ' + _n158 + ' prices its Claude calls in more than one place'
+    nodes[_n158]['parameters']['jsCode'] = code(_n158).replace('run_ledger.ai_cost = CC.runCost(__costCalls', _SR_COST158 + 'run_ledger.ai_cost = CC.runCost(__costCalls', 1)
+    assert "$('Second Read').all()" in code(_n158), _n158
+patch('Build Word File', "'Keyword Relevance', 'Critic'];", "'Keyword Relevance', 'Critic', 'Second Read'];")
+patch('Build Word File', "qa_blocking: (qa.delivery || {}).blocking || [], qa_advisory: (qa.delivery || {}).advisory || [],",
+      "qa_blocking: (qa.delivery || {}).blocking || [], qa_advisory: (qa.delivery || {}).advisory || [],\n"
+      "    qa_second_read: qa.critic_reread || null,   // W0-H (section 158): the blind second read of the delivered page (status, mode, what gated, what it would have gated in shadow mode, advice)")
+patch('Build Webhook Response', "qa_blocking: d.qa_blocking || [], qa_advisory: d.qa_advisory || [],",
+      "qa_blocking: d.qa_blocking || [], qa_advisory: d.qa_advisory || [], qa_second_read: d.qa_second_read || null,   // W0-H (section 158)")
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+# ---------- E. the harness: the kit as a runnable shim, and the wiring ----------
+open(os.path.join(OUT_CODE, '_critic_reread.js'), 'w').write("// harness shim (written by build_v4.py section 158): the second-read kit and the page kit, { kit, fn, args } -> { r } ('__PF__' in args is the PF kit)\n"
+    + PAGE_FIX_SRC158 + '\n' + RR_SRC158
+    + "\nreturn $input.all().map(i => { const j = i.json || {}; const K = j.kit === 'PF' ? PF : RR; const a = (j.args || []).map(x => x === '__PF__' ? PF : x); return { json: { r: K[j.fn].apply(null, a) } }; });\n")
+if os.path.isdir(os.path.join(HERE0, 'harness')):
+    _chain158 = ('Finalize Page?', 'Second Read Plan', 'Second Read?', 'Second Read', 'Apply Second Read')
+    json.dump({'connections': {k: [[t['node'] for t in (l or [])] for l in conns[k]['main']] for k in _chain158 if k in conns},
+               'if': nodes['Second Read?']['parameters']['conditions']['conditions'][0]['leftValue'],
+               'http': {k: nodes['Second Read'].get(k) for k in ('retryOnFail', 'maxTries', 'waitBetweenTries', 'onError', 'alwaysOutputData', 'credentials')},
+               'http_params': nodes['Second Read']['parameters'],
+               'cost_in': sorted(_n for _n in _cost158 if "$('Second Read').all()" in code(_n)),
+               'ai_nodes_word': "'Critic', 'Second Read'];" in code('Build Word File'),
+               'callback': 'qa_second_read: d.qa_second_read || null' in code('Build Webhook Response'),
+               'prompts': {p: nodes[p]['parameters']['text'] for p in ('Strategy Brief', 'Copywriter', 'Critic')}},
+              open(os.path.join(HERE0, 'harness', 'second_read_wiring.json'), 'w'), indent=1)
+sticky("""### The second read (W0-H, 2026-10-29)
+**Second Read Plan** -> **Second Read** (Sonnet 5.5, blind: no earlier review, no edit history, no score) -> **Apply Second Read**: quotes checked on the page; a high fact / source / claim / local problem blocks for runs a person started, is reported only for runs the system started (shadow, D17); refused or unreadable = "not checked".""", _x158 - 40, _y158 - 260, 760, 180, 5)
+log('The causes the grade now counts are removed, and the page the client receives is read once more (W0-H, 2026-10-29, section 158; PLAN Fix 3b, R4 G9 / G12 / G13 / G14 / G18, REVIEW_EVIDENCE H1): the brief takes People Also Ask questions only about the same reading of the search (a Guide up to 8 so the ranking guide keeps its shape, a Service / Location / Pricing page 3-5, a Case Study none) and gives each point one home; the copywriter writes a FAQ heading only when its answer is new, the keyword in the H1, the first sentence and the last section (an H2 only where natural) and no market or compliance figure on a blog alone; PF.classify makes a market, adoption, cost or compliance figure whose only linked source is weak a soft blocker (rewrite without the number, else the system removes the sentence; Finalize re-measures it); a blind Sonnet 5.5 second read of the delivered page (measured cost, about $0.05) turns each high fact / source / claim / local problem whose quote is on the page into a soft blocker for runs a person started, reports it only for runs the system started (shadow mode, D17) and is "not checked" when refused, cut, failed or unreadable; the callback carries qa_second_read')
+
+# =============================================================================
+# 159. THE GRADE COUNTS WHAT A REVIEWER COUNTS, SO IT CANNOT SAY 100 ON A PAGE LIKE 3299 (W0-C, page-quality programme 2026-10-29,
+#      docs/page-quality-2026-10-29/PLAN.md Fix 3, 2.6, 2.9; REVIEW_CODE H3 / L1 / L5; REVIEW_EVIDENCE H2 / H3 / M1). Page run 3299 ("ms 365
+#      erp") was graded 92 and its final version 3336 100 "Ready to publish"; the client's expert reviewer gave it 63. The grade counted
+#      structure 25, coverage 25, readability 15, specificity 10, clean language 10 and length 15, and the only part that moved 92 -> 100 was
+#      length. Now (v5/code/_grade.js, GR):
+#      * Content QA computes the interim grade on ONE scale out of 100: structure 20 (a statement made 3+ times across sections costs 3, one
+#        label for two lists costs 2; a statement made 4+ times caps structure at 50%), coverage 15, readability 10, specificity 10, clean
+#        language 10, sources 15 (share of cited sentences and figures on an official body, a research house, major press or vendor docs;
+#        a weak-only market / cost / compliance figure costs a third; a weak-only compliance figure caps it at 8), fit 20 (half the verdict,
+#        half "no open duplicate"; a verdict under 50 caps it at 40%, also after "Write it anyway"; a null verdict is "not checked", full
+#        points), length 0 (advice). The old six parts stay as `copy_score`, the measure the editor round and "passed" are decided on,
+#        UNCHANGED, so no page is edited more, shortened or held by this section (owner priority: the guide of exec 949 ranks).
+#      * Page Candidates, Finalize Verdict and Apply Second Read build the grade object the client sees with GR.cap (an open blocker: at most
+#        59; an open duplicate page, or one published beside it with a reason (D2): fit at most 30%) and the floors: a page with no blocker
+#        under half its points in any part is "Needs work: <part>" (delivery status `needs_work`, still publishable), never "Ready". The fit
+#        floor is waived after an acknowledgement and for ladder pages, case studies, AI answer pages and refreshes, and only recorded for
+#        runs the system started (D17 shadow). Shown as "95+" from 95, never 100.
+#      * The results page's shapes (KWI.serpPageTypes on the top-10 organic results Pick Top 6 read) are recorded on Parse Analysis as
+#        `serp_shapes` (the PRC grading field W0-B carries), with no points until Wave 1.
+#      * The Word / PDF report prints the same grade (the Build Word File content-score row, section 8's patch).
+# =============================================================================
+GRADE_SRC159 = _rd0('code/_grade.js').rstrip('\n')
+assert GRADE_SRC159.startswith('// ---- grade kit (W0-C') and 'const GR = (() => {' in GRADE_SRC159, 'W0-C: the grade kit is missing'
+for _bad159 in ('—', '–', '“', '”', '…', '‘', '’'):
+    assert _bad159 not in GRADE_SRC159, 'W0-C: customer wording rule (no em dash, curly quote or ellipsis character) broken in _grade.js'
+for _n159 in ('Content QA', 'Page Candidates', 'Apply Second Read'):
+    assert code(_n159).count('/*__GRADE__*/') == 1, 'W0-C: ' + _n159 + ' must carry the /*__GRADE__*/ marker exactly once'
+    setcode(_n159, code(_n159).replace('/*__GRADE__*/', GRADE_SRC159))
+    assert 'const GR = (() => {' in code(_n159) and '/*__GRADE__*/' not in code(_n159), 'W0-C: the grade kit is not inlined in ' + _n159
+_cq159 = code('Content QA')
+for _k159 in ("const copy_score = Math.round(structure_pts + coverage_pts + readability_pts + specificity_pts + banned_pts + length_pts);", 'const grade_detail = GR.local(',
+              'const content_score = grade_detail.score;', 'copy_score >= 80 && lenOk', '!(copy_score >= 90 && crit.score', 'score_breakdown: grade_detail.breakdown, grade_detail,'):
+    assert _k159 in _cq159, 'W0-C: Content QA lacks ' + _k159
+assert 'content_score >= 80 && lenOk' not in _cq159, 'W0-C: the editor round must stay on the copy check, not on the new grade'
+for _n159, _k159 in (('Page Candidates', 'const grade = GR.cap('), ('Page Candidates', 'const del = GR.deliver(del0, grade);'), ('Apply Second Read', 'GR.cap(D.grade, D.blocking')):
+    assert _k159 in code(_n159), 'W0-C: ' + _n159 + ' lacks ' + _k159
+for _k159 in ('const grade = GR.cap(', 'Object.assign(del, GR.deliver(del, grade));', '/*__GRADE__*/'):
+    assert _k159 in _rd0('code/Finalize_Verdict.js'), 'W0-C: Finalize_Verdict.js lacks ' + _k159
+# ---------- the results page's shapes, recorded (no points yet) ----------
+patch('Pick Top 6', "const items = task.result?.[0]?.items || [];\n",
+      "const items = task.result?.[0]?.items || [];\n"
+      "// W0-C (section 159): the top-10 organic results as read (address and title), for the shapes of the results page (Parse Analysis serp_shapes)\n"
+      "const __top10 = items.filter(x => x && x.type === 'organic' && x.url).sort((a, b) => (a.rank_group || 99) - (b.rank_group || 99)).slice(0, 10).map(x => ({ url: String(x.url), title: String(x.title || '') }));\n")
+patch('Pick Top 6', "      no_competitors: true,\n", "      no_competitors: true, serp_top10: __top10,\n")
+patch('Pick Top 6', "return picked.map(p => ({ json: { ...p, no_competitors: false } }));", "return picked.map((p, i) => ({ json: { ...p, no_competitors: false, ...(i === 0 ? { serp_top10: __top10 } : {}) } }));")
+assert 'const KWI = (() => {' not in code('Parse Analysis'), 'W0-C: Parse Analysis already carries the KW inputs kit'
+setcode('Parse Analysis', KW_INPUTS_SRC + '\n' + code('Parse Analysis'))
+patch('Parse Analysis', "return [{\n  json: {\n    ...prev,\n    competitor_digest: undefined,\n",
+      "// W0-C (section 159, PLAN Fix 3, REVIEW_CODE H3.2): what kind of page Google ranks for this search, read from the top-10 results Pick Top 6\n"
+      "// read (KWI.serpPageTypes: title and address of each result, nothing guessed); recorded with the run and carried to the final version\n"
+      "// (PRC grading field serp_shapes), no points in the grade until Wave 1\n"
+      "let __serp_shapes = null;\n"
+      "try { const t10 = (($('Pick Top 6').first() || {}).json || {}).serp_top10;\n"
+      "  if (Array.isArray(t10) && t10.length) { const sp = KWI.serpPageTypes(t10, { page_type: prev.page_type || prev.recommended_page || '' });\n"
+      "    __serp_shapes = { read: sp.read, counts: sp.counts, dominant: sp.dominant, dominant_share: sp.dominant_share, ours: sp.ours, mismatch: sp.mismatch, text: sp.text,\n"
+      "      top10: t10.map(x => ({ url: x.url, title: String(x.title || '').slice(0, 160), shape: KWI.shapeOf(x.url, x.title) })), points: 0, note: 'recorded only: the shapes of the results page carry no points until Wave 1' }; } } catch (e) { __serp_shapes = null; }\n"
+      "return [{\n  json: {\n    ...prev,\n    competitor_digest: undefined,\n    serp_shapes: __serp_shapes,\n")
+# ---------- the Word / PDF report prints the grade the client sees ----------
+patch('Build Word File', "    ['Content score', qa.content_score != null ? '<b>' + qa.content_score + '/100</b>' + (qa.score_breakdown ? ' (structure ' + qa.score_breakdown.structure + '/25, topic coverage ' + qa.score_breakdown.coverage + '/25, readability ' + qa.score_breakdown.readability + '/15, specificity ' + qa.score_breakdown.specificity + '/10, clean language ' + qa.score_breakdown.clean_language + '/10, length ' + qa.score_breakdown.length + '/15)' : '') : 'N/A'],",
+      "    ['Content score', (() => { const g = (qa.delivery && qa.delivery.grade && typeof qa.delivery.grade === 'object') ? qa.delivery.grade : null; const sc = g && g.score != null ? g.score : qa.content_score;   // W0-C (section 159): the grade the client sees\n"
+      "      if (sc == null) return 'N/A'; const b = (g && g.breakdown) || qa.score_breakdown || {}; const M = (g && g.max) || (qa.grade_detail || {}).max || null; const shown = (g && g.display) || (Number(sc) >= 95 ? '95+' : String(sc));\n"
+      "      if (!M) return '<b>' + esc(shown) + '/100</b>';\n"
+      "      const fl = g && g.floors ? (g.floors.ok ? '' : ' · needs work: ' + g.floors.failing.map(x => x.label).join(', ')) : '';\n"
+      "      return '<b>' + esc(shown) + '/100</b> (structure ' + b.structure + '/' + M.structure + ', topic coverage ' + b.coverage + '/' + M.coverage + ', readability ' + b.readability + '/' + M.readability + ', specificity ' + b.specificity + '/' + M.specificity\n"
+      "        + ', plain language ' + b.clean_language + '/' + M.clean_language + ', sources ' + b.sources + '/' + M.sources + ', fit with the search ' + b.fit + '/' + M.fit + '; length is advice only)' + esc(fl); })()],")
+# ---------- the harness: the kit as a runnable shim ({ fn, args } -> { r }; '__SRC__' in args is { tier, figures } of the source kit) ----------
+open(os.path.join(OUT_CODE, '_grade.js'), 'w').write("// harness shim (written by build_v4.py section 159): the grade kit, { fn, args } -> { r } ('__SRC__' in args is the source kit's tier / figures)\n"
+    + SOURCES_SRC + '\n' + GRADE_SRC159
+    + "\nreturn $input.all().map(i => { const j = i.json || {}; const a = (j.args || []).map(x => x === '__SRC__' ? { tier: SRC.tier, figures: SRC.figures } : (x && typeof x === 'object' && x.__src__ ? { ...x, tier: SRC.tier, figures: SRC.figures, __src__: undefined } : x)); return { json: { r: GR[j.fn].apply(null, a) } }; });\n")
+sticky("""### The grade (W0-C, 2026-10-29)
+**Content QA** grades the page on one scale out of 100: structure 20, coverage 15, readability 10, specificity 10, plain language 10, **sources 15**, **fit 20**, length advice only (repetition and list labels cost structure points). The old six parts decide the editor round, unchanged. **Page Candidates** / **Apply Second Read** cap it (a blocker: 59; a duplicate page: fit 30%) and apply the floors: under half in any part = **Needs work**, never Ready. Shown as 95+, never 100.""", pos('Page Candidates')[0] - 40, pos('Page Candidates')[1] + 420, 760, 180, 5)
+log('The grade counts what a reviewer counts (W0-C, 2026-10-29, section 159; PLAN Fix 3, REVIEW_CODE H3 / L1 / L5, REVIEW_EVIDENCE H2 / H3 / M1): Content QA grades on one scale out of 100 with the grade kit v5/code/_grade.js (structure 20 less repetition and list-label collisions, coverage 15, readability 10, specificity 10, plain language 10, sources 15 from the tier of what each cited sentence and figure rests on, fit 20 from the verdict and the duplicate page; length advice only) while the old six parts stay as copy_score for the editor round, unchanged; Page Candidates, Finalize Verdict and Apply Second Read cap it (an open blocker 59, an open duplicate or a page published beside it fit 30%) and apply the floors (under half in any part = "Needs work: <part>", delivery status needs_work, still publishable; the fit floor waived after "Write it anyway" and for ladder pages, case studies, AI pages and refreshes, shadow for automatic runs); shown as "95+"; Parse Analysis records the results page\'s shapes (serp_shapes, no points); the Word / PDF report prints the same grade')
+
+# =============================================================================
+# 170. A CLIENT-RENDERED WEBSITE IS READ AFTER ITS SCRIPTS RAN (FU-R1, page-quality programme 2026-10-29, BASELINE.md "Recurring defects":
+#      "Own site not read when it is client-rendered (0 own pages read)", K7 / K8 of the BEFORE run).
+#      The page run reads the client's own pages with the text reader (Read Client Pages) and one plain GET (Read Client Page HTML). A site
+#      written by JavaScript (a React app) answered the reader with an empty page and the GET with a script shell, and its "sitemap" was the
+#      same shell, so the run read 0 of the site's own pages: the brief had no services, no proof and no internal links from the real site.
+#      * Client Render Plan (v5/code/_client_render.js CRK.need): a page is rendered only when the reader's text is under 200 characters AND
+#        its HTML is a script shell (the link kit's js_shell rule, or an almost empty body loading a script bundle) on the run's own host. A
+#        server-rendered page is never rendered: the plan sends one skip item down the "nothing to render" branch and Collect Client Pages
+#        builds exactly the output it built before.
+#      * Render Client Pages: the renderer the audit already uses (Render Key Pages: Jina Reader, `X-Engine: browser`,
+#        `X-Return-Format: html`), at most CRK.CONFIG.max_pages (3) renders a run, X-Timeout 30, the G1 retry rule.
+#      * Client Render More: the rendered homepage's own links are the site's page list; the services / platform hub and the page closest to
+#        the search (half its words or more) are rendered next (Render More Client Pages), inside the same cap.
+#      * Collect Client Pages: a rendered page stands in for an empty reading (text, and its HTML for the page's facts), the linked pages are
+#        added, the homepage's links become internal link candidates when no sitemap was read, and every rendered page carries
+#        `read_via: 'rendered'`; `client_render` records what was rendered, what was not, and why (the run's evidence).
+#      Cost: Jina Reader tokens only (no DataForSEO, no Claude), 0 on a server-rendered site. Like Render Key Pages it asks for a fresh render
+#      (X-No-Cache): the reader's cached copy of an app is the empty shell this section exists to get past.
+# =============================================================================
+CRK_SRC170 = _rd0('code/_client_render.js').rstrip('\n')
+assert CRK_SRC170.count('const CRK = (() => {') == 1, 'FU-R1: _client_render.js must define CRK once'
+_KITS170 = LK_SRC54 + '\n' + CRK_SRC170 + '\n'
+assert [t['node'] for l in conns['Read Client Page HTML']['main'] for t in l] == ['Collect Client Pages'], 'FU-R1: Read Client Page HTML no longer feeds Collect Client Pages alone: ' + str(conns['Read Client Page HTML'])
+_rh170 = pos('Read Client Page HTML'); RX170, RY170 = _rh170[0], _rh170[1] + 220
+_RENDER_PARAMS170 = {
+    'url': '=https://r.jina.ai/{{ $json.url }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+    'sendHeaders': True, 'headerParameters': {'parameters': [
+        {'name': 'X-Return-Format', 'value': 'html'},   # the page after its scripts ran, with its links
+        {'name': 'X-Engine', 'value': 'browser'},
+        {'name': 'X-No-Cache', 'value': 'true'},
+        {'name': 'X-Timeout', 'value': '30'}]},
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 2500}}, 'timeout': 45000,
+                'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}}
+add_node('Client Render Plan', 'n8n-nodes-base.code', 2, {'jsCode': _KITS170 + rd('code/Client_Render_Plan.js')}, [RX170 + 220, RY170])
+if_node('Any Client Render?', '{{ !$json.skip }}', [RX170 + 440, RY170])
+add_node('Render Client Pages', 'n8n-nodes-base.httpRequest', 4.5, copy.deepcopy(_RENDER_PARAMS170), [RX170 + 660, RY170 + 160],
+         dict(onError='continueRegularOutput', alwaysOutputData=True, **_rl54.RETRY))
+add_node('Client Render More', 'n8n-nodes-base.code', 2, {'jsCode': _KITS170 + rd('code/Client_Render_More.js')}, [RX170 + 880, RY170 + 160])
+if_node('Any More Client Render?', '{{ !$json.skip }}', [RX170 + 1100, RY170 + 160])
+add_node('Render More Client Pages', 'n8n-nodes-base.httpRequest', 4.5, copy.deepcopy(_RENDER_PARAMS170), [RX170 + 1320, RY170 + 320],
+         dict(onError='continueRegularOutput', alwaysOutputData=True, **_rl54.RETRY))
+for _n170 in ('Render Client Pages', 'Render More Client Pages'):
+    nodes[_n170]['credentials'] = {'httpHeaderAuth': {'id': 'SEOcredJinaReade', 'name': 'Jina Reader'}}
+disconnect('Read Client Page HTML', 'Collect Client Pages')
+connect('Read Client Page HTML', 'Client Render Plan'); connect('Client Render Plan', 'Any Client Render?')
+connect('Any Client Render?', 'Render Client Pages', 0); connect('Any Client Render?', 'Collect Client Pages', 1)
+connect('Render Client Pages', 'Client Render More'); connect('Client Render More', 'Any More Client Render?')
+connect('Any More Client Render?', 'Render More Client Pages', 0); connect('Any More Client Render?', 'Collect Client Pages', 1)
+connect('Render More Client Pages', 'Collect Client Pages')
+setcode('Collect Client Pages', _KITS170 + code('Collect Client Pages'))
+
+# ---------- the proof, on the graph this build writes ----------
+_rev170 = {}
+for _s170, _o170 in conns.items():
+    for _l170 in (_o170.get('main') or []):
+        for _t170 in (_l170 or []): _rev170.setdefault(_t170['node'], set()).add(_s170)
+assert sorted(_rev170.get('Collect Client Pages', ())) == ['Any Client Render?', 'Any More Client Render?', 'Render More Client Pages'], ('FU-R1: unexpected inputs to Collect Client Pages', _rev170.get('Collect Client Pages'))
+assert [t['node'] for t in conns['Any Client Render?']['main'][0]] == ['Render Client Pages'] and [t['node'] for t in conns['Any Client Render?']['main'][1]] == ['Collect Client Pages'], 'FU-R1: the render branch is the wrong way round'
+assert [t['node'] for t in conns['Any More Client Render?']['main'][0]] == ['Render More Client Pages'] and [t['node'] for t in conns['Any More Client Render?']['main'][1]] == ['Collect Client Pages'], 'FU-R1: the second render branch is the wrong way round'
+for _n170 in ('Client Render Plan', 'Client Render More', 'Collect Client Pages'):
+    assert code(_n170).count('const LK = (() => {') == 1 and code(_n170).count('const CRK = (() => {') == 1, 'FU-R1: ' + _n170 + ' must inline the link kit and the render kit once'
+for _n170 in ('Render Client Pages', 'Render More Client Pages'):
+    _h170 = {p['name']: p['value'] for p in nodes[_n170]['parameters']['headerParameters']['parameters']}
+    assert _h170.get('X-Engine') == 'browser' and _h170.get('X-Return-Format') == 'html', 'FU-R1: ' + _n170 + ' is not the browser render'
+    assert not _rl54.weak(nodes[_n170]), 'FU-R1: ' + _n170 + ': the G1 retry rule is missing'
+    assert nodes[_n170]['parameters']['url'] == '=https://r.jina.ai/{{ $json.url }}', 'FU-R1: ' + _n170 + ' does not render the planned URL'
+# the reader decides first: a page read by the reader (200 characters) is never rendered, and the cap is the kit's
+assert 'CRK.need(reader[i], html[i], r.url, domain)' in code('Client Render Plan') and 'CRK.CONFIG.max_pages' in code('Client Render Plan'), 'FU-R1: the plan does not ask CRK.need under the cap'
+assert 'min_text_chars: 200' in CRK_SRC170 and 'max_pages: 3' in CRK_SRC170, 'FU-R1: the render threshold or the cap changed'
+assert "$('Read Client Pages').all()" in code('Collect Client Pages') and 'existing_page_digest' in code('Collect Client Pages'), 'FU-R1: Collect Client Pages lost the R38 reading'
+assert "read_via: 'rendered'" in code('Collect Client Pages') and 'client_render' in code('Collect Client Pages'), 'FU-R1: the rendered pages are not labelled'
+for _f170 in ('code/_client_render.js', 'code/Client_Render_Plan.js', 'code/Client_Render_More.js'):
+    for _bad170 in ('—', '–', '“', '”', '‘', '’', '…'):
+        assert _bad170 not in _rd0(_f170), 'FU-R1: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f170
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log('A client-rendered website is read after its scripts ran (FU-R1, 2026-10-29, section 170; the BEFORE run read 0 of the site\'s own pages on K7 / K8): Client Render Plan renders a page of the run only when the text reader got under 200 characters and its HTML is a script shell on the run\'s own host (v5/code/_client_render.js), through the browser render the audit uses (Render Client Pages, Jina X-Engine browser, HTML); Client Render More reads the services / platform hub and the page closest to the search from the rendered homepage\'s links (Render More Client Pages), at most 3 renders a run; Collect Client Pages uses the rendered text and HTML, adds the homepage\'s links as internal link candidates when no sitemap was read, labels each rendered page read_via rendered and records client_render; a server-rendered site takes the skip branch and its output is unchanged')
+
+# =============================================================================
+# 171. THE FOLLOW-UP BRANCHES MEET WAVE 0 (merge of fu-sources-voice / fu-own-site-render / fu-finalize-toc, page-quality programme
+#      2026-10-30; their merge notes). Each branch was built on a base older than Wave 0, so the joins they could not make are made here:
+#      * the voice lines Content QA could not rewrite by itself (content_qa.voice.flags) become a section problem for the editor (PF.plan,
+#        v5/code/_page_fix.js); advice, never a blocker, so a page with none (the ranking guide 949) gets the same edit job as before;
+#      * the Finalize editor gets the three rules the page editor got (our own voice, no own byline, no search-engine redirect;
+#        v5/code/Finalize_Apply.js builds the prompt that v5/prompts/finalize_editor.txt prints);
+#      * W0-F's regulatory step reads a search-engine redirect as the page it leads to (REG.pick through SRC.unwrap, the source kit inlined
+#        in the two nodes that pick) and never makes an opaque one a regulatory source (Collect Facts drops it as Collect Facts drops its own).
+# =============================================================================
+for _n171 in ('Regulatory Candidates', 'Regulatory SERP Candidates'):
+    assert 'const SRC = (() => {' not in code(_n171), 'FU-merge: ' + _n171 + ' already carries the source kit'
+    setcode(_n171, SOURCES_SRC + '\n' + code(_n171))
+    assert code(_n171).count('const SRC = (() => {') == 1 and 'REG.pick(' in code(_n171), 'FU-merge: ' + _n171 + ' must inline the source kit once and pick through REG.pick'
+assert "const target = (u) => { const x = s(u).trim(); if (typeof SRC === 'undefined' || !SRC.isRedirect(x)) return x; return SRC.unwrap(x) || ''; };" in REG_SRC153 \
+    and 'const url = target(r && r.url);' in REG_SRC153, 'FU-merge: REG.pick does not read a redirect as its target'
+patch('Collect Facts', "const regFacts = (prev.regulatory_sources || []).filter(f => f && f.url).map(",
+      "const regFacts = (prev.regulatory_sources || []).filter(f => f && f.url && !(SRC.isRedirect(f.url) && !SRC.unwrap(f.url))).map(")   # FU-merge: an opaque redirect is never a regulatory source
+_pf171 = _rd0('code/_page_fix.js')
+assert "for (const v of ((qa.voice || {}).flags || []).slice(0, 6))" in _pf171 and "add(at(sv), 'Say this in our own voice:" in _pf171, 'FU-merge: PF.plan does not give the voice flags to the editor'
+_fa171 = _rd0('code/Finalize_Apply.js')
+for _k171 in ("'- Our own voice: the page is published on the business", "'- One byline: the system prints the author", "'- A source link is the page itself, never a search engine redirect"):
+    assert _k171 in _fa171, 'FU-merge: the Finalize editor prompt lacks ' + _k171
+_ed171 = _rd0('prompts/editor.txt')
+for _k171 in ('- Our own voice:', '- One byline:', '- A source link is the page itself, never a search engine redirect'):
+    assert _k171 in _ed171, 'FU-merge: the page editor prompt lacks ' + _k171
+for _f171 in ('code/_page_fix.js', 'code/Finalize_Apply.js', 'code/_regulatory.js'):
+    for _bad171 in ('\u2014', '\u2013', '\u201c', '\u201d', '\u2026'):
+        assert _bad171 not in _rd0(_f171), 'FU-merge: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f171
+log('The follow-up branches meet Wave 0 (2026-10-30, section 171): voice flags go to the editor as section problems, the Finalize editor carries the own-voice / one-byline / no-redirect rules, regulatory search results are read through a redirect to their target and an opaque redirect is never a regulatory source')
+
+# =============================================================================
+# 172. THE SECOND READ BLOCKS ONLY A FACTUAL ERROR; THE REST IS ADVICE THAT COSTS ITS PART (W05-A, wave 0.5 of the page-quality programme,
+#      2026-10-30; docs/page-quality-2026-10-29/BEFORE_AFTER.md "Our second-read blockers against the judges"). On the 8 AFTER pages the read
+#      held 7 at "Not ready 59" while the blind strategist judge would publish 7 (signed error -10.9, ready agreement 2 of 8):
+#      * RR.read (v5/code/_critic_reread.js) blocks only a factual error the page states: a count that does not match its list (checked on the
+#        quote), an unsupported claim about the business, a statement its own source contradicts, a fact or local rule the read calls wrong
+#        or out of date without hedging. A deadline that only falls on the day the page is written is advice (the page is read after it);
+#      * everything else it shows is advice and GR.cap (v5/code/_grade.js) takes it off its part: 3 points a high item, 1.5 a medium one, at
+#        most a quarter of the part and never below half of it (advice alone never makes a page "Needs work"); enforce mode only, so the guide
+#        that ranks (a ladder page, shadow mode) is never marked down by it;
+#      * the page run's advice travels to the final version in page_run.second_read, and Finalize Verdict keeps the deduction while the quoted
+#        words are on the page (the grade never rises at Finalize for nothing);
+#      * "today" is the website's market day in its own time zone (REG.dayFor; Asia/Dubai for the UAE) for the regulatory status, the second
+#        read, the page's "Updated" date and its schema dates: the 22:31 UTC run of 29 October was a 30 October run in the UAE.
+# =============================================================================
+patch('Build Webhook Response', "        content_request_id: T(pb.content_request_id || d.request_id, 120) } }; })(),",
+      "        // W05-A (section 172): the second read's advice (enforce mode, read and checked), so the final version keeps its deduction while the words are there\n"
+      "        second_read: (() => { const R = d.qa_second_read || null; if (!R || R.mode !== 'enforce' || R.status !== 'checked') return null;\n"
+      "          return A(R.advice).filter(a => a && a.location).map(a => ({ severity: T(a.severity, 10), kind: T(a.kind, 20), location: T(a.location, 300) })).slice(0, 12); })(),\n"
+      "        content_request_id: T(pb.content_request_id || d.request_id, 120) } }; })(),")
+assert code('Build Webhook Response').count('second_read: (() => { const R = d.qa_second_read') == 1
+_rr172 = _rd0('code/_critic_reread.js')
+for _k172 in ('const errorOf = (p, today) =>', 'const countMismatch = (quote) =>', 'const sameDay = (p, today) =>', "const error = errorOf(q, S(pl.today)); return { ...q, error, gates: !!error }; });",
+              "if (p.kind === 'claim') return 'claim';", '!CONTRA_NONE.test(issue) && SRC_CONTRA.test(issue)'):
+    assert _k172 in _rr172, 'W05-A: _critic_reread.js lacks ' + _k172
+assert 'gates: severity === \'high\' && GATING.has(kind) && on_page' not in _rr172, 'W05-A: every high fact / source / claim / local problem blocks again'
+_gr172 = _rd0('code/_grade.js')
+for _k172 in ('const reviewCut = (rv, b, M) =>', 'review_share: 0.25', "if (R.mode !== 'enforce'", 'Math.max(0, (Number(b[k]) || 0) - M[k] * CFG.floor)'):
+    assert _k172 in _gr172, 'W05-A: _grade.js lacks ' + _k172
+assert 'review: content_qa.critic_reread || null' in code('Apply Second Read'), 'W05-A: Apply Second Read does not pass the read to the grade'
+assert "review: Array.isArray(PR.second_read)" in _rd0('code/Finalize_Verdict.js') and 'PF.onPage(a.location, md)' in _rd0('code/Finalize_Verdict.js'), 'W05-A: Finalize Verdict does not keep the advice deduction'
+assert 'second_read: (prc.grading || {}).second_read || null' in _rd0('code/Finalize_Parse_Brief.js'), 'W05-A: Finalize Parse Brief does not read page_run.second_read'
+assert 'REG.dayFor(prev.started_at, prev.country_iso, market)' in _rd0('code/Regulatory_Plan.js') and 'const dayFor = (startedAt, iso, market) =>' in REG_SRC153, 'W05-A: the regulatory day is not the market day'
+for _n172 in ('Second Read Plan', 'Content QA', 'Blog Package'):
+    assert "$('Collect Regulatory Facts').first().json" in code(_n172) and ('as_of' in code(_n172)), 'W05-A: ' + _n172 + ' does not read the market day'
+for _f172 in ('code/_critic_reread.js', 'code/_grade.js', 'code/Second_Read_Plan.js', 'code/Apply_Second_Read.js', 'code/Finalize_Verdict.js', 'code/Finalize_Parse_Brief.js',
+              'code/_regulatory.js', 'code/Regulatory_Plan.js'):   # Blog_Package.js maps those characters away on purpose, so it carries them
+    for _bad172 in ('—', '–', '“', '”', '…'):
+        assert _bad172 not in _rd0(_f172), 'W05-A: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f172
+log('The second read blocks only a factual error (W05-A, wave 0.5, 2026-10-30, section 172): a count that does not match its list, an unsupported claim about the business, a statement its own source contradicts, or a fact the read calls wrong or out of date (not on the day the page is written); the rest is advice that takes 3 / 1.5 points off its part (at most a quarter, never below half), travels to the final version while its words are there, and never caps the grade at 59; "today" is the website\'s market day in its own time zone for the regulatory status, the second read and the page\'s dates')
+
+# =============================================================================
+# 175. THE PAGE A RUN REWRITES IS CONFIRMED BY ITS OWN WORDS, AND A HOLD IS ASKED ONLY OUTSIDE THE VERDICT'S NOISE (W05-B, page-quality
+#      wave 0.5, 2026-10-30; docs/page-quality-2026-10-29/BEFORE_AFTER.md "Holds", headline item 4, Next items 1 and 4):
+#      * K4 ("dynamics 365 partner dubai") was written onto /dynamics-365-project-operations-uae, a page matched by its address alone (its
+#        title not on file), and the hold waved it through as "a refresh of a page your website already has". *Collect Client Pages* now
+#        confirms a page the inventory or the sitemap matched with SM.confirmPage (v5/code/_site_model.js): its title or main heading (on
+#        file, or read in this run) or a Search Console search it earns impressions for must carry the search's core words AND be mostly
+#        about it (rare added words such as "project operations" weigh against it). Not confirmed: a new page at its own address, the other
+#        page read as a related page, `existing_page_unconfirmed` in the report and the brief. A page the client or the pipeline NAMED is
+#        never second-guessed.
+#      * K1: the page the run found for the search is no longer rewritten silently. A run a person started is held ("Improve the existing
+#        page" or "Write it anyway" for a separate new page, *Client Page Requests* then reads it as related); the page Google shows for the
+#        search (Search Console impressions) is offered too; automatic runs only log it (D17 shadow). Only a NAMED page is a refresh exemption.
+#      * The score line: held on its own under 40; from 40 to 49 only with a second signal (under 20 searches a month and no Search Console
+#        impressions, a duplicate, or the page the site already has). Every reading is logged (`verdict_readings`, hold.readings); after
+#        "Write it anyway" the acknowledged reading is the run's score, so a re-read cannot move the fit limit.
+#      * A recommended target is a search a person types: headlines ("verify an ASP in 5 minutes") and slash forms ("Dubai/UAE") are refused
+#        or reduced to their first form.
+# =============================================================================
+assert code('Collect Client Pages').count('const SM = (() => {') == 1 and 'SM.confirmPage(' in code('Collect Client Pages') and 'existing_page_unconfirmed: unconfirmed' in code('Collect Client Pages'), \
+    'W05-B: Collect Client Pages does not confirm the page it would rewrite (SM.confirmPage)'
+assert 'const confirmPage = (model, page, keyword, more) => {' in SITE_MODEL_SRC and ' confirmPage,' in SITE_MODEL_SRC, 'W05-B: the site model kit lacks confirmPage'
+assert 'ackNew' in code('Client Page Requests') and 'you chose "Write it anyway"' in code('Client Page Requests'), 'W05-B: "Write it anyway" on a found page does not write a separate page'
+_pv175 = code('Parse Verdict')
+for _k175 in ("clear: 40", 'const existingHit = found && !exemptDup && !ladderPage;', 'const refresh = !!S(prev.existing_page_url) && !found;', 'const searchOf = (raw) => {',
+              "score < CFG.clear || (score < CFG.threshold && second)", 'verdict_readings: HOLD.readings', "label: 'Improve the page Google shows'", 'existing_page_unconfirmed'):
+    assert _k175 in _pv175, 'W05-B: Parse Verdict lacks ' + _k175
+patch('Build Webhook Response', "        hold_exempt: g('hold_exempt') || '', hold_not_checked: g('hold_not_checked') || '' }; })(),\n",
+      "        hold_exempt: g('hold_exempt') || '', hold_not_checked: g('hold_not_checked') || '',\n"
+      "        verdict_readings: g('verdict_readings') || null, existing_page_unconfirmed: g('existing_page_unconfirmed') || null }; })(),   // W05-B (section 175)\n")
+assert "existing_page_unconfirmed: g('existing_page_unconfirmed') || null" in code('Build Webhook Response'), 'W05-B: the callback does not say which page was left alone'
+log('The page a run rewrites is confirmed by its own words, and a hold is asked only outside the verdict\'s noise (W05-B, 2026-10-30, section 175): Collect Client Pages confirms a matched page by its title, main heading or Search Console searches (SM.confirmPage), else writes a new page and says so; a page the run found is asked about (Improve the existing page / Write it anyway for a separate page / the page Google shows), only a named page is a refresh exemption; the score is held under 40, or under 50 with a second signal (little demand, a duplicate, the page the site has), every reading logged and the acknowledged one kept; recommended targets are real searches')
+
+# =============================================================================
+# 173. A SOURCED FIGURE IS NEVER MADE VAGUE, NO PADDING IS ADDED, AND THE FINAL VERSION KEEPS THE PAGE'S SHAPE (W05-C, page-quality
+#      programme 2026-10-30, docs/page-quality-2026-10-29/BEFORE_AFTER.md K6 row, "Finalize" table, headline item 5). Wave 0 cost the guide
+#      both judges liked best 3 points, and the final version still took 1.8 points off a page. The causes, read off the BEFORE / AFTER
+#      executions, each fixed where it starts:
+#      * "39% to 66%" became "rose sharply": PF.weakFigures told the editor "rewrite the sentence without the number" for a figure its own
+#        linked source states. Content QA now records the figures a cited source states (verified_figures); such a figure with its source
+#        named in the sentence is advice, one with a generic link has the link named after its source instead of being taken out, an edit
+#        that drops a sourced figure is not kept (PF.protect / PF.better), and the Critic's "drop the figure" is not passed on for it;
+#      * two padding H3s and one point made three times: PF.plan asked for a competitor's rhetorical headings ("Why ... is ripe for AI
+#        disruption") as "a paragraph or an H3" while the same job cut 130 words. No subtopic while the page is over its length, no
+#        rhetorical or already-covered heading, a paragraph by default; the brief, copywriter and editor say the same;
+#      * a sales line in a code section: the brief placed a client fact in a technical how-to; client facts now go to the trust line, a
+#        "who does the work" section or the call to action;
+#      * Finalize: a fragment or a heading is never put into prose and never replaces a full sentence (PF.fragment), a list item keeps its
+#        marker, an invitation to get in touch is not added twice (PF.ctaSentence), an edit that loses a heading or a list item or adds a
+#        label is refused, and PF.finalGuard repairs the whole final version against the page it was made from;
+#      * the questions: near-duplicates go, a heading is never asked about, at most 8, ranked (PF.questions).
+#      The pins are harness/scenarios_w05c.js W05C1-W05C7 (anonymised K-shaped cases and the ranking guide 949).
+# =============================================================================
+_pf173 = _rd0('code/_page_fix.js')
+for _k173 in ("A('weak_figure_named'", "how: 'attributed'", "verified_figures", "out.push('the sourced figure'", "const RHETORIC = ",
+              "const QUESTION_MAX = 8;", "const finalGuard = ", "const fragment = ", "const ctaSentence = ", "Never replace the number with a vague word"):
+    assert _k173 in _pf173, 'W05-C: the page kit lacks ' + _k173
+assert "Give this subtopic a paragraph or an H3 inside this section" not in _pf173, 'W05-C: PF.plan still asks for a subtopic as an H3 by default'
+assert 'verified_figures' in _rd0('code/Content_QA.js') and 'r9b.ok.forEach(x => verified_figures.push(x));' in _rd0('code/Content_QA.js'), 'W05-C: Content QA does not record the figures a cited source states'
+_fa173 = _rd0('code/Finalize_Apply.js'); _fm173 = _rd0('code/Finalize_Merge.js')
+for _k173 in ("PF.fragment(text)", "PF.ctaSentence(text, NAMES)", "how: 'already_covered'", "if (lead && !/^\\s*(?:[-*+]|\\d{1,3}[.)])\\s+/.test(repl)) repl = lead + repl;", "'- One call to action:"):
+    assert _k173 in _fa173, 'W05-C: Finalize Apply lacks ' + _k173
+for _k173 in ("PF.finalGuard(ref0, md, NAMES)", "const broke = (b, a) =>", "notes = (FAx.notes || []).slice()"):
+    assert _k173 in _fm173, 'W05-C: Finalize Merge lacks ' + _k173
+for _f173, _ks173 in {'prompts/copywriter.txt': ('6c. Headings carry content', '6d. The business in its place', 'Never put a vague word'),
+                      'prompts/editor.txt': ('A figure that carries its source link stays exactly as written', 'Add no heading unless a problem asks for one by name', 'Lines about the business'),
+                      'prompts/strategy_brief.txt': ('Client facts go where a reader decides who does the work', 'Every h3 answers a question')}.items():
+    for _k173 in _ks173:
+        assert _k173 in _rd0(_f173), 'W05-C: ' + _f173 + ' lacks ' + _k173
+for _n173 in ('Strategy Brief', 'Copywriter'):
+    assert ('Client facts go where a reader decides' if _n173 == 'Strategy Brief' else '6d. The business in its place') in nodes[_n173]['parameters']['text'], 'W05-C: the built prompt of ' + _n173 + ' lacks its new line'
+for _f173 in ('code/_page_fix.js', 'code/Finalize_Apply.js', 'code/Finalize_Merge.js', 'prompts/editor.txt'):   # copywriter / strategy_brief carry older dashes; their W05-C lines are checked below
+    for _bad173 in ('—', '–', '“', '”', '…'):
+        assert _bad173 not in _rd0(_f173), 'W05-C: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f173
+for _f173, _ks173 in {'prompts/copywriter.txt': ('6c. Headings carry content', '6d. The business in its place', 'Never put a vague word'), 'prompts/strategy_brief.txt': ('Client facts go where a reader decides', 'Every h3 answers a question')}.items():
+    for _l173 in _rd0(_f173).split('\n'):
+        if any(_k173 in _l173 for _k173 in _ks173):
+            assert not any(_b173 in _l173 for _b173 in ('\u2014', '\u2013', '\u201c', '\u201d', '\u2026')), 'W05-C: a new line of ' + _f173 + ' carries an em dash, a curly quote or an ellipsis character'
+log('A sourced figure is never made vague, no padding is added, and the final version keeps the page\'s shape (W05-C, 2026-10-30, section 173): Content QA records the figures a cited source states; a figure its own source states is kept and attributed, never rewritten into a vague word; no subtopic while a page is over its length and never a rhetorical heading; client facts out of technical sections; Finalize never puts a fragment or heading into prose, keeps list markers, adds no second call to action and repairs the final version against its source page; at most 8 de-duplicated questions')
+
+# =============================================================================
+# 176. A COMPLETE PAGE IS NEVER FAILED FOR ITS CALL TO ACTION, A FAILED RUN LEAVES NO "WRITTEN" ROW AND SETTLES WHAT IT SPENT, AND A
+#      SEPARATE NEW PAGE GETS ITS OWN ADDRESS (W06-B, page-quality programme 2026-10-30, docs/page-quality-2026-10-29/WAVE05.md 3.2 / 3.3,
+#      "Deploy readiness" items 2 and 3):
+#      * K4 first try (exec 379): the writer twice answered a complete ~2,100-word page whose last line is the bare button text "Book a
+#        consultation"; *Draft Check (Copywriter)* read it as a sentence with no ending and failed the run ($0.85 of Claude lost). CK.text
+#        (v5/code/_complete.js) accepts a final short call-to-action line on its own after a clean paragraph, when it is the brief's call to
+#        action or reads as a button whose every word is a word of the last section; a cut line is still caught. Draft Check passes the CTA.
+#      * The same run threw inside Draft Check, so its ledger row stayed `reserved` at $0 and the app's opening content-log row stayed
+#        `started` (the app then said "a page ... was already written" and counted it as waiting). The second cut now emits a failed item:
+#        *Draft Written? (Copywriter)* sends it to *Load Content Log (Failed)* -> *Page Run Failed Row* -> *Mark Page Run Failed* (the run's
+#        own `started` row, by request id AND keyword, becomes `failed` with the reason) -> the settle chain (DFS Balance End ... Run Ledger
+#        Settle settles what it spent, says the run failed, and Cost Calibration Row learns nothing from it) -> *Stop Failed Run* ends the
+#        execution with the same error as before (n8n failed status, the error handler, the app's failure watcher, no charge).
+#      * K1 "Write it anyway": the Strategy Brief gave the new page the existing page's slug (/ms-365-erp-uae), so the suggested address was
+#        the page the client chose to keep. *Parse Brief* moves a new page's slug off any address the website already has (the page left
+#        alone, the sitemap, the link candidates), never for a rewrite or a keyword-ladder page with its planned address; the hold copy says
+#        what each choice does.
+# =============================================================================
+_ck176 = _rd0('code/_complete.js')
+assert 'const ctaEnd = (lines, o) => {' in _ck176 and '} else if (ctaEnd(lines, o)) {' in _ck176 and 'text(after, { cta: o.cta })' in _ck176, 'W06-B: the completeness kit does not accept a final call to action'
+for _g176 in ('Draft Check (Copywriter)', 'Edit Check (Editor)', 'Content QA'):
+    assert 'const ctaEnd = (lines, o) => {' in code(_g176), 'W06-B: ' + _g176 + ' carries an older completeness kit'
+assert 'CK.text(md, { min_words: tw > 0 ? Math.round(tw * 0.35) : 0, cta });' in code('Draft Check (Copywriter)') and 'failed: true' in code('Draft Check (Copywriter)') \
+    and 'throw new Error' not in code('Draft Check (Copywriter)'), 'W06-B: Draft Check still throws on a second cut page'
+open(os.path.join(OUT_CODE, '_complete.js'), 'w').write("// harness shim (written by build_v4.py section 150): the completeness kit, { fn, args } -> { r }\n" + _ck176.rstrip('\n')
+    + "\nreturn $input.all().map(i => ({ json: { r: CK[i.json.fn].apply(null, i.json.args || []) } }));\n")
+# ---- the failure path ----
+_dc176 = pos('Draft Check (Copywriter)')
+assert [t['node'] for l in conns['Draft Check (Copywriter)']['main'] for t in l] == ['Draft Complete? (Copywriter)'], 'W06-B: Draft Check no longer feeds Draft Complete? alone'
+if_node('Draft Written? (Copywriter)', '{{ !($json.llm_check && $json.llm_check.failed) }}', [_dc176[0] + 100, _dc176[1] - 200])
+disconnect('Draft Check (Copywriter)', 'Draft Complete? (Copywriter)')
+connect('Draft Check (Copywriter)', 'Draft Written? (Copywriter)'); connect('Draft Written? (Copywriter)', 'Draft Complete? (Copywriter)', 0)
+_RID176 = "={{ String($('Normalize Input').first().json.request_id || '') || '__no_request__' }}"
+add_node('Load Content Log (Failed)', DT_TYPE, DT_VERSION, dt_get_where_params(LOG_TABLE, 'request_id', 'eq', _RID176), [_dc176[0] + 320, _dc176[1] - 360],
+         {'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+add_node('Page Run Failed Row', 'n8n-nodes-base.code', 2, {'jsCode': _rd0('code/Page_Run_Failed_Row.js')}, [_dc176[0] + 540, _dc176[1] - 360], {'executeOnce': True})
+add_node('Mark Page Run Failed', DT_TYPE, DT_VERSION, dt_update_where_params(LOG_TABLE, LOG_COLS,
+         [('request_id', 'eq', '={{ $json.request_id }}'), ('keyword', 'eq', '={{ $json.keyword }}'), ('status', 'eq', 'started')],
+         {'status': '={{ $json.status }}', 'qa_reasons': '={{ $json.qa_reasons }}'}),
+         [_dc176[0] + 760, _dc176[1] - 360], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+connect('Draft Written? (Copywriter)', 'Load Content Log (Failed)', 1)
+connect('Load Content Log (Failed)', 'Page Run Failed Row'); connect('Page Run Failed Row', 'Mark Page Run Failed'); connect('Mark Page Run Failed', 'DFS Balance End')
+assert "$('Load Content Log (Failed)')" in code('Page Run Failed Row') and "String(r.status || '') === 'started'" in code('Page Run Failed Row'), 'W06-B: the failed row is not this run\'s own started row'
+_srl176 = pos('Settle Run Ledger')
+add_node('Stop Failed Run', 'n8n-nodes-base.code', 2, {'jsCode': _rd0('code/Stop_Failed_Run.js')}, [_srl176[0] + 220, _srl176[1] + 360], {'executeOnce': True})
+connect('Settle Run Ledger', 'Stop Failed Run')
+assert 'run_failed: !!__failed' in code('Run Ledger Settle') and '__failNote + __llmNote' in code('Run Ledger Settle'), 'W06-B: the settle does not record a failed run'
+assert 'const learn = !s.run_failed;' in code('Cost Calibration Row'), 'W06-B: a failed run would teach the cost calibration'
+# ---- a separate new page never takes an address the website already has ----
+patch('Parse Brief', "\n// 5. M1 (2026-10-21, pre-launch run exec 42): a ladder's top page", r"""
+// 4b. W06-B (2026-10-30, docs/page-quality-2026-10-29/WAVE05.md 3.3, K1 "ms 365 erp"): after "Write it anyway" on the page the website
+//     already has for the search, the Strategy Brief gave the separate new page that page's own slug (ms-365-erp-uae), so the delivered
+//     page's suggested address was the very page the client chose to leave as it is: publishing it there would overwrite a page that
+//     already earns its place. A NEW page (no page to rewrite, no address the client or a ladder named) never takes the address of a page
+//     the website has: the page left alone, the sitemap, the link candidates. Its slug moves to the keyword's own, else a free variant.
+(() => {
+  const pathK = (u) => String(u || '').trim().toLowerCase().replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/^\/+|\/+$/g, '');
+  if ((prev.existing_page && prev.existing_page.url) || String(prev.existing_page_url || '').trim() || (prev.ladder_id && String(prev.ladder_target_url || '').trim())) return;
+  const asked = pathK(brief.slug);
+  if (!asked) return;
+  const ign = pathK((prev.existing_page_ignored || {}).url);
+  const taken = new Set([ign, ...(prev.site_urls || []).map(pathK), ...(prev.internal_link_candidates || []).map(c => pathK(c && c.url))].filter(Boolean));
+  if (!taken.has(asked)) return;
+  const slugify = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
+  const type = String(prev.page_type || '').toLowerCase();
+  const word = /blog|guide|article|pillar|hub/.test(type) ? 'guide' : /compar/.test(type) ? 'comparison' : /service/.test(type) ? 'services' : 'page';
+  const cut = asked.lastIndexOf('/'), dir = cut >= 0 ? asked.slice(0, cut + 1) : '', base = asked.slice(cut + 1), kwS = slugify(prev.keyword);
+  const next = [kwS, base + '-' + word, kwS && kwS + '-' + word, base + '-2', base + '-3', base + '-4'].filter(Boolean).map(c => dir + c).find(c => c !== asked && !taken.has(c));
+  if (!next) return;
+  adjustments.push('Slug "' + asked + '" -> "' + next + '": your website already has a page at /' + asked + (ign === asked ? ' (the page you chose to leave as it is)' : '')
+    + ', so this separate new page gets an address of its own and the existing page is not overwritten');
+  brief.slug = next;
+})();
+
+// 5. M1 (2026-10-21, pre-launch run exec 42): a ladder's top page""")
+assert 'your website already has a page at /' in code('Parse Brief'), 'W06-B: Parse Brief does not move a new page off an existing address'
+log('A complete page is never failed for its call to action, a failed run leaves no "written" row and settles what it spent, and a separate new page gets its own address (W06-B, 2026-10-30, section 176): CK.text accepts a final short call-to-action line ("Book a consultation") after a clean paragraph when it is the brief\'s CTA or a button made of the last section\'s words, and still catches a cut line; a second cut page takes a failure path that marks the run\'s own started content-log row failed, settles the ledger row with the measured spend (no calibration) and then stops with the same error; Parse Brief moves a new page\'s slug off any address the website already has; the hold copy says what "Write it anyway" does')
+# =============================================================================
+# 177. THE VERDICT'S EXCLUSIONS NEVER DELETE A PAGE'S CORE, AND THE GRADE KNOWS WHAT WAS TAKEN OUT (W06-A, page-quality wave 0.6,
+#      2026-10-30; docs/page-quality-2026-10-29/WAVE05.md 3.1 and "Deploy readiness" items 1 and 4). Live (W05 run, K1 "ms 365 erp") the
+#      verdict said to skip "Dynamics GP and SL": EXC.match dropped the tokens under 3 characters, the topic became the single word "dynamic",
+#      nine headings matched it and Page Candidates deleted six core sections (2,407 words -> 1,023). The grade still read 79 "Ready" with
+#      fit 20 of 20. Pre-existing (A-18, 2026-10-17), so also in production. Now:
+#      * EXC.match (v5/code/_exclusions.js) keeps acronyms written in capitals (GP, SL, AI, ML) and tokens with a digit, matching them only
+#        in capitals; a topic that lost a short word matches on its full phrase or not at all; a one-word topic that is a word of the page's
+#        keyword FAMILY (keyword, primary and secondary keywords, the site's main services: EXC.familyOf) never matches, and a topic made
+#        only of such words needs its full phrase;
+#      * the deletion budget (EXC.decide, in Content QA; EXC.guard again in Page Candidates on the page as it is): a section is deleted when
+#        its heading names the topic's phrase or its text names the topic's own words twice ("a second signal"); without one at most ONE
+#        section of at most 20% of the words; never more than 40% of the page in all. Every deletion and every kept section is recorded
+#        (content_qa.excluded_sections / excluded_sections_kept, page_fix.exclusions_removed / exclusions_kept, delivery.changes);
+#      * the grade (v5/code/_grade.js): 2+ sections or 20%+ of the words taken out (by exclusions, or H2s the edits lost) cap coverage and
+#        fit at 40% and the fit floor is then never waived, so such a page is "Needs work", never "Ready"; an idea restated 4+ times in 3+
+#        places (GR.ideas, a deterministic near-duplicate check) costs 2 points of structure, up to 4, never below half the part.
+#      Pinned by harness/scenarios_w06a.js (W06A1-W06A6) on an anonymised replay of the K1 execution (fixtures/replay_w05_k1.json.gz), the
+#      ranking guide 949 and synthetic K3 / K4-shaped pages.
+# =============================================================================
+assert '/*__EXCLUSIONS__*/' in _rd0('code/Page_Candidates.js') and code('Page Candidates').count('/*__EXCLUSIONS__*/') == 1, 'W06-A: Page Candidates lacks the EXCLUSIONS marker'
+setcode('Page Candidates', code('Page Candidates').replace('/*__EXCLUSIONS__*/', EXCLUSIONS_SRC))
+_ex177 = _rd0('code/_exclusions.js')
+for _k177 in ('const isAcr = (w) =>', 'if (T.lost || !own.length) return', 'const decide = (md, list, family, opts) =>', 'const guard = (md, flagged, list, family) =>',
+              'const removedOf = (state) =>', 'const familyOf = (prev, siteModel) =>', "BUDGET = { weak_sections: 1, weak_share: 0.2, total_share: 0.4"):
+    assert _k177 in _ex177, 'W06-A: the exclusions kit lacks ' + _k177
+for _n177 in ('Page Candidates', 'Content QA', 'Parse Verdict', 'Parse Brief', 'Brief Context'):
+    if '/*__EXCLUSIONS__*/' in code(_n177) or 'const EXC = (() => {' in code(_n177):
+        assert code(_n177).count('const EXC = (() => {') == 1 and 'const decide = (md, list, family, opts) =>' in code(_n177) and '/*__EXCLUSIONS__*/' not in code(_n177), 'W06-A: ' + _n177 + ' does not carry the new exclusions kit exactly once'
+_pc177 = code('Page Candidates')
+for _k177 in ('const EXG = EXC.guard(base, bq.excluded_sections || [], EXL, EXF);', 'exclusions_removed: exRemoved, exclusions_kept: exKept', "{ w0c: GD, removed: removedRun }", 'sections_removed: ((state0.exclusions_removed || []).length'):
+    assert _k177 in _pc177, 'W06-A: Page Candidates lacks ' + _k177
+assert 'for (const x of (bq.excluded_sections || [])) { const r = PF.deleteSection(' not in _pc177, 'W06-A: Page Candidates still deletes every flagged section without the budget'
+_cq177 = code('Content QA')
+for _k177 in ('const excDecision = EXC.decide(md, verdict_exclusions, excFamily);', 'excluded_sections_kept', 'removed: removed_run', 'EXC.removedOf(st)'):
+    assert _k177 in _cq177, 'W06-A: Content QA lacks ' + _k177
+_gr177 = _rd0('code/_grade.js')
+for _k177 in ('const ideas = (md, ctx) =>', 'const removedCap = (rm, max) =>', 'removed: 0.4', '!RMrec && (F.acknowledged || F.exempt)', 'const RM = removedCap(c.removed, M);'):
+    assert _k177 in _gr177, 'W06-A: the grade kit lacks ' + _k177
+for _n177 in ('Content QA', 'Page Candidates', 'Apply Second Read'):
+    assert 'const removedCap = (rm, max) =>' in code(_n177), 'W06-A: ' + _n177 + ' carries an old grade kit'
+for _f177 in ('code/_grade.js', 'code/Page_Candidates.js'):
+    for _bad177 in ('—', '–', '“', '”', '…'):
+        assert _bad177 not in _rd0(_f177), 'W06-A: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f177
+# the harness: the kit as a runnable shim ({ fn, args } -> { r })
+open(os.path.join(OUT_CODE, '_exclusions.js'), 'w').write("// harness shim (written by build_v4.py section 177): the verdict exclusions kit, { fn, args } -> { r }\n"
+    + EXCLUSIONS_SRC + "\nreturn $input.all().map(i => { const j = i.json || {}; return { json: { r: EXC[j.fn].apply(null, j.args || []) } }; });\n")
+log('The verdict\'s exclusions never delete a page\'s core, and the grade knows what was taken out (W06-A, 2026-10-30, section 177): acronyms kept in capitals, a topic that lost a short word matched on its full phrase only, one word of the keyword family never a match; at most one section without a second signal and never 40% of the page, every deletion and kept section recorded; 2+ sections or a fifth of the words taken out cap coverage and fit at 40% (no fit waiver), an idea restated 4+ times costs structure points (never below half)')
+# =============================================================================
+# 178. THE FINAL VERSION REMEMBERS WHAT THE PAGE RUN TOOK OUT, AND THE BRIEF MATCHES THE TOPICS TO LEAVE OUT AGAINST THE WHOLE KEYWORD
+#      FAMILY (W06-C, page-quality wave 0.6, 2026-10-30; docs/page-quality-2026-10-29/WAVE06.md, the two open items of section 7).
+#      * Open 1: a final version made from a page that had already lost sections could still read "Ready" (K1's final version read 83):
+#        Finalize re-graded the page with no memory of the run. Page Candidates now keeps the counts its delivered grade capped on
+#        (delivery.changes.removed_run); *Build Webhook Response* sends them as the grading field `page_run.sections_removed` (sections,
+#        words, words_before, h2_before, h2_removed, h2_delivered, by_edits, share_pct, capped, list of { heading, topic, words, level, why });
+#        the app carries it (app/shared/src/page-review.ts PRC_GRADING) to the finalize request; Finalize Parse Brief reads it and Finalize
+#        Verdict applies GR.removedCap to what is still missing on the final version (a section written back lifts it; a section the client
+#        deleted is never counted as lost in editing), so such a version is "Needs work" with the reason, never "Ready". A report from before
+#        the field: unchanged, with the advice "Not checked: whether the page run took sections out of this page".
+#      * Open 2: *Parse Brief* (_brief_guard.js) and *Brief Context* matched the verdict's topics to leave out against the keyword alone;
+#        they now pass EXC.familyOf (the keyword, the brief's primary and secondary keywords, the site's services), as Content QA and Page
+#        Candidates do, so the brief never drops a section or subtopic about the page's own subject.
+#      Pinned by harness/scenarios_w06c.js (W06C1-W06C4): the anonymised K1 replay (fixtures/replay_w05_k1.json.gz) through Page Candidates,
+#      the callback, the app's page-run context and Page Finalize; the guide that ranks (949) stays Ready.
+# =============================================================================
+patch('Build Webhook Response', "        // W05-A (section 172): the second read's advice",
+      "        // W06-C (section 178): what the run took out of the page (the counts the delivered grade capped on, the share of the words and why), so\n"
+      "        // the final version keeps the cap while those sections are missing; null from a check before W06-C (the final version says \"not checked\")\n"
+      "        sections_removed: (() => { const dl = cq.delivery || {}; const ch = dl.changes || {}; const rr = ch.removed_run; if (!rr || typeof rr !== 'object') return null;\n"
+      "          const N = (v) => Math.max(0, Math.round(Number(v) || 0)); const gr = (dl.grade || {}).removed || null;\n"
+      "          const byEdits = N(rr.h2_before) > 0 ? Math.max(0, N(rr.h2_before) - N(rr.h2_removed) - N(rr.h2_now)) : 0;\n"
+      "          return { sections: N(rr.sections), words: N(rr.words), words_before: N(rr.words_before), h2_before: N(rr.h2_before), h2_removed: N(rr.h2_removed), h2_delivered: N(rr.h2_now),\n"
+      "            by_edits: gr && gr.by_edits != null ? N(gr.by_edits) : byEdits, share_pct: N(rr.words_before) && N(rr.words) ? Math.round(100 * N(rr.words) / N(rr.words_before)) : 0, capped: !!(gr && gr.capped),\n"
+      "            list: A(ch.sections_removed).filter(x => x && x.heading).map(x => ({ heading: T(x.heading, 200), topic: T(x.topic, 120), words: N(x.words), level: N(x.level), why: T(x.why || x.signal, 200) })).slice(0, 12) }; })(),\n"
+      "        // W05-A (section 172): the second read's advice")
+_bwr178 = code('Build Webhook Response')
+assert _bwr178.count('sections_removed: (() => { const dl = cq.delivery || {}') == 1 and _bwr178.count('page_run:') == 2, 'W06-C: Build Webhook Response does not send page_run.sections_removed once'
+assert 'removed_run: { sections: removedRun.sections' in code('Page Candidates'), 'W06-C: Page Candidates does not keep the counts its grade capped on'
+_fpb178 = _rd0('code/Finalize_Parse_Brief.js'); _fv178 = _rd0('code/Finalize_Verdict.js')
+for _k178 in ("'regulatory_facts', 'sections_removed'];", 'sections_removed: sectionsRemoved,', 'sections_removed: (prc.grading || {}).sections_removed || null'):
+    assert _k178 in _fpb178, 'W06-C: Finalize_Parse_Brief.js lacks ' + _k178
+for _k178 in ('const removedNow = (() => {', 'removed: removedNow,', "sections_removed: 'whether the page run took sections out", "code: 'sections_removed', text: RMn.note"):
+    assert _k178 in _fv178, 'W06-C: Finalize_Verdict.js lacks ' + _k178
+_bg178 = _rd0('code/_brief_guard.js'); _bc178 = _rd0('code/Brief_Context.js')
+assert 'EXC.prune(brief.outline, EXL, EXFB)' in _bg178 and "EXC.match(String((t && t.question) || ''), e, EXFB)" in _bg178 and "prev.keyword || '')" not in _bg178.split('// 3. A-18')[1], 'W06-C: the brief guard still matches the keyword alone'
+assert 'const VEXF = EXC.familyOf(d, model);' in _bc178 and 'EXC.match(benchText, e, VEXF)' in _bc178 and 'EXC.match(st, x, VEXF)' in _bc178 and 'EXC.match(benchText, e, kw)' not in _bc178, 'W06-C: Brief Context still matches the keyword alone'
+for _n178 in ('Parse Brief', 'Brief Context'):
+    assert 'EXFB' in code(_n178) or 'VEXF' in code(_n178), 'W06-C: ' + _n178 + ' does not carry the family match'
+    assert code(_n178).count('const familyOf = (prev, siteModel) =>') == 1, 'W06-C: ' + _n178 + ' lacks the exclusions kit with familyOf'
+for _f178 in ('code/Finalize_Parse_Brief.js', 'code/Finalize_Verdict.js', 'code/Page_Candidates.js'):
+    for _bad178 in ('—', '–', '“', '”', '…'):
+        assert _bad178 not in _rd0(_f178), 'W06-C: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f178
+log('The final version remembers what the page run took out, and the brief matches the topics to leave out against the whole keyword family (W06-C, 2026-10-30, section 178): page_run.sections_removed (counts, share of the words, why) travels through the app to Page Finalize, whose grade caps coverage and fit while those sections are missing (Needs work with the reason, never Ready; a report from before it is "not checked"); Parse Brief and Brief Context pass EXC.familyOf as Content QA does')
+
+# =============================================================================
+# 179. WHEN THE PAGE READER REFUSES, THE ENGINE READS ANOTHER WAY, RAISES ONE OPS ALERT AND DECIDES NOTHING ON PAGES NOBODY READ (W07-A,
+#      2026-10-31, docs/page-quality-2026-10-29/WAVE06.md "Open resilience item", section 9). On 2026-10-30 the reader account (Jina Reader,
+#      credential SEOcredJinaReade) ran out of balance: every read answered HTTP 402 between about 10:13 and 12:56 UTC. The HTTP nodes are
+#      `continueRegularOutput`, so each refusal became an error item that the next node read as "this page could not be read", silently:
+#      no ops alert, nothing in the client's report, K1 held on its search score alone (38) and the client told "/ms-365-erp-uae has no title,
+#      main heading or Search Console search on file" about a page nobody had read.
+#      * Every reader node (found by its credential, reader_fallback.find_readers: a new one cannot be missed) is renamed `<name> (reader)` and
+#        followed by a Code node that takes its name (v5/code/Reader_Fallback.js, kit v5/code/_reader.js): a REFUSED read (401 / 402 / 429, or
+#        403 in the reader's own words) is read again through the same reader without the key (capped, spaced: its free limit), then, for a
+#        text read, directly with the client-render path's HTML-to-text (CRK.linesOf). A render read has no plain-HTML stand-in. Everything
+#        the reader answered is handed on as the same objects, so a funded key changes nothing.
+#      * One alert chain (Reader Refusals -> ... -> Save Reader Alert Delivery) fed by every fallback node: recorded in seo_ops_alerts first,
+#        then the alert webhook, one alert per refusal and 30 minutes (OA's dedupe), delivered only on a 2xx (AR.posted).
+#      * The content run: Collect Client Pages says an existing page it could not confirm AND could not read "could not be read"
+#        (`existing_page_unread`), never "has no title"; Parse Verdict (PU) gives no verdict, score, hold, duplicate or existing-page decision
+#        when the pages it stands on were refused and not recovered (`pages_unread`), and a page run stops before the brief (*Need Content?*),
+#        its started row `failed` (Content Log Row), the callback carrying `pages_unread`; Ladder Plan refuses to plan on it.
+#      The AI Visibility Tracker's homepage read and the Backlink Monitor's render get the same fallback and alert (build_monitors.py).
+# =============================================================================
+import reader_fallback as _rf179
+_wf179 = {'id': 'SEOagentV4Full01', 'name': 'SEO Agent v4 — Audit, Keywords, Verdict & Content', 'nodes': list(nodes.values()), 'connections': conns}
+_specs179 = {
+    'Read Website': {'label': 'the homepage (site description)', 'target': 'RD.homeOf(q.domain)', 'domain': "String(q.domain || '')", 'links': True},
+    'Read Nav Pages': {'label': 'the homepage menu pages (site description)'},
+    'Read Client Pages': {'label': "the client's own pages"},
+    'Render Client Pages': {'label': "the client's pages after their scripts ran"},
+    'Render More Client Pages': {'label': "the client's pages after their scripts ran (more)"},
+    'Read Competitor Pages': {'label': 'the pages that rank (competitors)'},
+    'Retry Blocked Pages': {'label': 'the pages that rank (blocked-page retry)'},
+    'Read Competitor Homes': {'label': "the competitors' homepages"},
+    'Read Regulatory Pages': {'label': 'regulatory pages (verified facts)'},
+    'Fetch Refresh Sources': {'label': 'the sources a refreshed page cites'},
+    'Render Key Pages': {'label': 'key pages after their scripts ran (audit render check)'},
+}
+_wiring179 = _rf179.apply(_wf179, _specs179)
+nodes.clear(); nodes.update({n['name']: n for n in _wf179['nodes']})
+for _n179 in _specs179:
+    _h179 = nodes[_n179 + _rf179.SUFFIX]
+    assert _h179['type'] == 'n8n-nodes-base.httpRequest' and (_h179.get('credentials') or {}).get('httpHeaderAuth', {}).get('id') == 'SEOcredJinaReade', 'W07-A: ' + _n179 + ' (reader) lost its credential'
+    assert nodes[_n179]['type'] == 'n8n-nodes-base.code' and 'const RD = (() => {' in code(_n179) and 'await RD.recover(H,' in code(_n179), 'W07-A: ' + _n179 + ' is not the fallback'
+    assert [t['node'] for l in conns[_n179 + _rf179.SUFFIX]['main'] for t in l] == [_n179], 'W07-A: ' + _n179 + ' (reader) must feed its fallback only'
+    assert 'Reader Refusals' in [t['node'] for l in conns[_n179]['main'] for t in l], 'W07-A: ' + _n179 + ' does not feed the alert chain'
+assert _rf179.find_readers(_wf179) == [], 'W07-A: a reader node is left without its fallback: ' + str(_rf179.find_readers(_wf179))
+assert "{ reqs, res, mode: 'html'," in code('Render Key Pages') and "{ reqs, res, mode: 'html'," in code('Render Client Pages') and "{ reqs, res, mode: 'text'," in code('Read Client Pages'), 'W07-A: a render read must never fall back to the plain HTML'
+# the content run: the kit where the decisions are made, the router, the callback and the report
+if 'const RD = (() => {' not in code('Collect Client Pages'):
+    setcode('Collect Client Pages', _rd0('code/_reader.js').rstrip('\n') + '\n' + code('Collect Client Pages'))
+assert 'existing_page_unread: unreadExisting' in code('Collect Client Pages') and 'EXCONF.unread' in code('Collect Client Pages'), 'W07-A: Collect Client Pages still calls an unread page "no title on file"'
+_pv179 = code('Parse Verdict')
+for _k179 in ('const RD = (() => {', 'const PU = (() => {', 'withheld: out || !!PU', '!PU && (valueHit || dupHit || existingHit)', 'pages_unread: PU, pages_unread_stop: HOLD.applies'):
+    assert _k179 in _pv179, 'W07-A: Parse Verdict lacks ' + _k179
+_nc179 = nodes['Need Content?']['parameters']['conditions']['conditions']
+assert len(_nc179) == 1 and _nc179[0]['leftValue'] == '={{ !!$json.include_content && !$json.verdict_hold }}', 'W07-A: Need Content? changed under section 179: ' + str(_nc179)
+_nc179[0]['leftValue'] = '={{ !!$json.include_content && !$json.verdict_hold && !$json.pages_unread_stop }}'
+patch('Build Webhook Response', "        verdict_readings: g('verdict_readings') || null, existing_page_unconfirmed: g('existing_page_unconfirmed') || null }; })(),",
+      "        verdict_readings: g('verdict_readings') || null, existing_page_unconfirmed: g('existing_page_unconfirmed') || null,\n"
+      "        // W07-A (section 179): the pages the verdict stands on could not be read (the page reader refused, its fallback failed too)\n"
+      "        pages_unread: g('pages_unread') ? { reason: String(g('pages_unread').reason || ''), client_reason: String(g('pages_unread').client_reason || ''), missing: g('pages_unread').missing || [],\n"
+      "          existing: g('pages_unread').existing || null, client: g('pages_unread').client || null, competitors: g('pages_unread').competitors || null } : null,\n"
+      "        existing_page_unread: g('existing_page_unread') || null }; })(),")
+patch('Build Word File', "NOT_CHECKED: 'NOT CHECKED — the live Google results could not be read' }[d.verdict]",
+      "NOT_CHECKED: d.pages_unread ? 'NOT CHECKED: the pages it needs could not be read' : 'NOT CHECKED — the live Google results could not be read' }[d.verdict]")
+patch('Build Word File', "(d.score_withheld ? 'not scored — the live Google results could not be read' : 'N/A')",
+      "(d.score_withheld ? (d.pages_unread ? 'not scored: the pages it needs could not be read' : 'not scored — the live Google results could not be read') : 'N/A')")
+patch('Build Word File', "LN.unknown('The verdict, its score, expected visits and time to rank', 'the live Google results could not be read for this keyword, so nothing was scored')",
+      "LN.unknown('The verdict, its score, expected visits and time to rank', d.pages_unread ? 'the pages it stands on could not be read (' + String(d.pages_unread.client_reason || '') + '), so nothing was scored' : 'the live Google results could not be read for this keyword, so nothing was scored')")
+assert "unreadRun = PVH.pages_unread_stop === true" in code('Content Log Row') and "row.status = 'failed'" in code('Content Log Row'), 'W07-A: Content Log Row does not mark an unread run failed'
+assert "refusal.reason === 'pages_unread'" in code('Ladder Plan'), 'W07-A: Ladder Plan plans on pages nobody read'
+json.dump(_wiring179, open(os.path.join(HERE0, 'harness', 'reader_wiring.json'), 'w'), indent=1, sort_keys=True)
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_reader.js'), 'w').write(_rd0('code/_reader.js'))   # the kit on its own, for the harness (scenarios_w07a.js W07A1)
+log('When the page reader refuses (W07-A, 2026-10-31, section 179): every reader node (by its credential) is followed by a fallback that reads a refused page again through the reader without the key, then (text reads) directly with the client-render HTML-to-text; one ops alert per refusal (seo_ops_alerts first, then the alert webhook, OA dedupe, AR delivery); Collect Client Pages says an unconfirmed page it could not read "could not be read"; Parse Verdict decides no verdict, score, hold, duplicate or existing-page match on refused pages and a page run stops before the brief with the reason (callback pages_unread, content log failed); Ladder Plan refuses to plan on them')
+
+# =============================================================================
+# 180. A SEPARATE NEW PAGE STANDS APART FROM THE PAGE THE CLIENT KEPT: ITS OWN TITLE TAG AND H1, ONE LINK TO THE KEPT PAGE, AND NO ADVICE
+#      TO TAKE THAT PAGE OVER (W07-B, page-quality wave 0.7, 2026-10-31; docs/page-quality-2026-10-29/WAVE06.md section 10, findings 1-3).
+#      K1 "ms 365 erp", live on the new reader key: after "Write it anyway" the new page got its own address (W06-B) but
+#      * its title tag was the kept page's title tag word for word ("MS 365 ERP in the UAE: Dynamics 365 Partner | <brand>"), copied by the
+#        Strategy Brief; two pages with one title compete for one search, and no review step flagged it (the H1 differed; in the W05 run the
+#        H1 was the kept page's too, but for one word);
+#      * it did not link to the kept page, although the verdict's changes told the writer to;
+#      * the brief said "Publish this brief as a replacement of that URL, not as a second page" and the blind second read advised "Use the
+#        slug ms-365-erp-uae": neither was told the client's choice.
+#      The kit v5/code/_page_apart.js (PGA) holds the rule, and is inlined where the run writes or reviews a page:
+#      * Collect Client Pages records the kept page's title tag and main heading (its HTML read in this run, else the reader's first heading
+#        for the H1, else the page inventory) on `existing_page_ignored` (title_tag, h1, identity_from);
+#      * the page contract (Brief Context -> the brief, the writer, the Critic, the Editor) carries one SEPARATE PAGE line, only on such a run;
+#      * Parse Brief gives the brief a title and an H1 of their own, drops title variants and lines that advise taking the kept page over, and
+#        offers the kept page as an internal link;
+#      * Page Fix (PF.fix step i, in front of every quality check and the final one) rewrites a title tag or H1 that equals or nearly equals
+#        the kept page's (never the kept page itself) and links the kept page once, in the section that talks most about it;
+#      * Content QA records `page_identity` (still the same? linked?) and keeps that link; PF.classify blocks only a title it could not change;
+#      * the second read is told the choice (in its SITE_PAGES block) and sets aside any advice to take the kept page's address or slug,
+#        replace it, merge into it or redirect to it (`against_choice`).
+#      A rewrite ("Improve the existing page"), a page the client named, a keyword-ladder page (the guide that ranks, exec 949) and every
+#      ordinary run: PGA.of is null, and every prompt and every check is exactly as before.
+#      Pinned by harness/scenarios_w07b.js (W07B1-W07B6) on the anonymised K1 replay (fixtures/replay_w05_k1.json.gz) and synthetic cases.
+# =============================================================================
+PA_SRC179 = _rd0('code/_page_apart.js').rstrip('\n')
+assert PA_SRC179.count('const PGA = (() => {') == 1 and PA_SRC179.rstrip().endswith('})();'), 'W07-B: _page_apart.js is not one PGA kit'
+for _bad179 in ('—', '–', '“', '”', '…'):
+    for _f179 in ('code/_page_apart.js', 'code/_page_fix.js', 'code/_critic_reread.js'):
+        assert _bad179 not in _rd0(_f179), 'W07-B: customer wording rule (no em dash, curly quote or ellipsis character) broken in ' + _f179
+patch('Parse Brief', "\n// 5. M1 (2026-10-21, pre-launch run exec 42): a ladder's top page", r"""
+// 4c. W07-B (2026-10-31, docs/page-quality-2026-10-29/WAVE06.md section 10, K1 "ms 365 erp"): after "Write it anyway" the brief copied the
+//     kept page's title tag word for word and told the writer to publish the page "as a replacement of that URL, not as a second page". A
+//     separate new page gets a title and an H1 of its own, no line of the brief advises taking the kept page over, and the kept page is offered
+//     as a link (PGA.brief, v5/code/_page_apart.js). Any other run: PGA.of is null and the brief is untouched.
+if (typeof PGA !== 'undefined') {
+  const brandPB = String(((prev.style_guide || {}).brand_form) || '').replace(/\s*\([^)]*\)\s*$/, '').trim() || String((prev.site_profile || {}).business_name || (prev.site_description || {}).business_name || '').trim();
+  const PAB = PGA.brief(brief, prev, { keyword: prev.keyword, brand: brandPB, business: brandPB });
+  if (PAB.adjustments.length) adjustments.push(...PAB.adjustments);
+}
+
+// 5. M1 (2026-10-21, pre-launch run exec 42): a ladder's top page""")
+_pa179_nodes = ('Parse Brief', 'Brief Context', 'Page Fix', 'Content QA', 'Page Candidates', 'Second Read Plan', 'Apply Second Read')
+for _n179 in _pa179_nodes:
+    assert 'const PGA = (() => {' not in code(_n179), 'W07-B: ' + _n179 + ' already carries a PGA kit'
+    setcode(_n179, PA_SRC179 + '\n' + code(_n179))
+    assert code(_n179).count('const PGA = (() => {') == 1, 'W07-B: PGA kit missing or doubled in ' + _n179
+assert 'PGA.brief(brief, prev,' in code('Parse Brief') and code('Parse Brief').index('// 4c. W07-B') > code('Parse Brief').index('// 4b. W06-B'), 'W07-B: Parse Brief does not make the brief stand apart after the slug move'
+for _n179 in ('Brief Context', 'Page Fix', 'Page Candidates', 'Apply Second Read'):
+    assert "if (c.apart && typeof PGA !== 'undefined') { const A = PGA.fix(md, c.apart," in code(_n179) and "apart: typeof PGA !== 'undefined' ? PGA.of(p) : null" in code(_n179) \
+        and "const apart = typeof PGA !== 'undefined' ? PGA.contractLine(PGA.of(p)) : '';" in code(_n179), 'W07-B: ' + _n179 + ' carries an older page kit'
+for _n179 in ('Second Read Plan', 'Apply Second Read'):
+    assert "PGA.readerNote(PGA.of(p), b.slug)" in code(_n179) and 'against_choice' in code(_n179), 'W07-B: ' + _n179 + ' carries an older second-read kit'
+assert 'const page_identity = APQ ? PGA.check(md, APQ) : null;' in code('Content QA') and '...(page_identity ? { page_identity } : {}),' in code('Content QA'), 'W07-B: Content QA does not record the page identity'
+assert 'const ignoredIdentity = (() => {' in code('Collect Client Pages') and 'existing_page_ignored: ignoredOut' in code('Collect Client Pages'), 'W07-B: Collect Client Pages does not read the kept page\'s title and H1'
+# the editor reads the contract from its own item: the contract line reaches it only if the Editor prompt still prints page_contract
+assert "{{ ($json.page_contract || {}).text || '' }}" in _rd0('prompts/editor.txt'), 'W07-B: the Editor prompt no longer prints the page contract'
+# ---------- the harness: PGA with the page kit and the second-read kit, { kit: 'PA' | 'PF' | 'RR', fn, args } -> { r } ('__PF__' is the PF kit) ----------
+_rr179 = _rd0('code/_critic_reread.js').rstrip('\n').replace("const TEMPLATE = /*__RR_TEMPLATE__*/'';", 'const TEMPLATE = ' + json.dumps(_tpl158) + ';').replace("const BAR = /*__RR_BAR__*/'';", 'const BAR = ' + json.dumps(_bar158) + ';')
+open(os.path.join(OUT_CODE, '_page_apart.js'), 'w').write("// harness shim (written by build_v4.py section 180): the PGA kit with the page kit and the second-read kit, { kit: 'PA' | 'PF' | 'RR', fn, args } -> { r } ('__PF__' in args is the PF kit)\n"
+    + PA_SRC179 + '\n' + _rd0('code/_page_fix.js').rstrip('\n') + '\n' + _rr179
+    + "\nreturn $input.all().map(i => { const j = i.json || {}; const K = j.kit === 'PF' ? PF : j.kit === 'RR' ? RR : PGA; const a = (j.args || []).map(x => x === '__PF__' ? PF : x); return { json: { r: K[j.fn].apply(null, a) } }; });\n")
+log('A separate new page stands apart from the page the client kept (W07-B, 2026-10-31, section 180): after "Write it anyway" Collect Client Pages reads the kept page\'s title tag and H1; the page contract tells the brief, the writer, the Critic and the Editor; Parse Brief and Page Fix give the new page a title tag and an H1 of their own and one link to the kept page; Content QA records it (a title that could not be changed blocks); the second read is told the choice and its advice to take the kept page\'s address or slug is set aside. A rewrite, a named page, a ladder page and every ordinary run are unchanged')
 
 # =============================================================================
 # 9. WRITE

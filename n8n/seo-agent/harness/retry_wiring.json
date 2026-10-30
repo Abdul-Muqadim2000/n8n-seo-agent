@@ -158,7 +158,13 @@
    "Start Crawl Answers",
    "SERP Retry Failed?",
    "Wait Before SERP Light Retry",
-   "SERP Top 10 (Light Retry)"
+   "SERP Top 10 (Light Retry)",
+   "Regulatory SERP",
+   "Regulatory SERP Retry Plan",
+   "Any Regulatory SERP Retries?",
+   "Wait Before Regulatory SERP Retry",
+   "Regulatory SERP (Retry)",
+   "Regulatory SERP Answers"
   ],
   "SEO Agent \u2014 AI Pulse": [
    "Run AI Requests",
@@ -1663,6 +1669,83 @@
     "retryOnFail": true,
     "timeout": 20000,
     "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Search Regulatory Pages",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 20000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": null,
+    "name": "Regulatory SERP",
+    "onError": "continueRegularOutput",
+    "paid": true,
+    "per_item": true,
+    "retryOnFail": false,
+    "timeout": 60000,
+    "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Read Regulatory Pages",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 45000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": null,
+    "name": "Regulatory SERP (Retry)",
+    "onError": "continueRegularOutput",
+    "paid": true,
+    "per_item": true,
+    "retryOnFail": false,
+    "timeout": 60000,
+    "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Second Read",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 300000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Render Client Pages",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 45000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Render More Client Pages",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 45000,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 AI Growth": [
@@ -2017,7 +2100,7 @@
    {
     "allowed": false,
     "maxTries": 3,
-    "name": "Read Site (AI)",
+    "name": "Read Site (AI) (reader)",
     "onError": "continueRegularOutput",
     "paid": false,
     "per_item": false,
@@ -2167,6 +2250,17 @@
     "retryOnFail": false,
     "timeout": 150000,
     "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Reader Alert",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 15000,
+    "waitBetweenTries": 5000
    },
    {
     "allowed": false,
@@ -2474,7 +2568,7 @@
    {
     "allowed": false,
     "maxTries": 3,
-    "name": "Render Pages",
+    "name": "Render Pages (reader)",
     "onError": "continueRegularOutput",
     "paid": false,
     "per_item": false,
@@ -2569,6 +2663,17 @@
     "retryOnFail": false,
     "timeout": 120000,
     "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Reader Alert",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 15000,
+    "waitBetweenTries": 5000
    },
    {
     "allowed": false,
@@ -3225,6 +3330,17 @@
   ],
   "SEO Agent \u2014 Link Builder API": [],
   "SEO Agent \u2014 Page Finalize": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Render Final PDF",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 30000,
+    "waitBetweenTries": 5000
+   },
    {
     "allowed": false,
     "maxTries": 3,

@@ -1,6 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { db, schema } from '../db';
 import { emitRunsFailed } from './webhooks';
+import { releaseFailedPages } from './runs';
 import { executionFailure, executions } from '../n8n/client';
 
 // Without e-mail, a run that fails inside n8n would only show as failed after the 3-hour timeout (n8n's Error Handler mails the
@@ -54,5 +55,7 @@ export async function checkEngineFailures(): Promise<number> {
   if (seen.size > 5000) seen.clear();
   // G4: subscribers hear about it the moment the app does
   if (closed.length) void emitRunsFailed(closed).catch(() => undefined);
+  // W06-B (2026-10-30, WAVE05 3.2): a failed page run wrote no page, so its opening content-log row must not read as one
+  if (closed.length) void releaseFailedPages(closed).catch(() => undefined);
   return failed;
 }

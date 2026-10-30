@@ -154,7 +154,8 @@
     "AI Report",
     "Chunk Part Done",
     "Nothing To Do (AI)",
-    "Refuse Run Ledger (AI)"
+    "Refuse Run Ledger (AI)",
+    "Save Reader Alert Delivery"
    ],
    "tag": "AI"
   },
@@ -222,7 +223,8 @@
    "settle_from": [
     "BL Report",
     "Nothing To Do (BL)",
-    "Refuse Run Ledger (BL)"
+    "Refuse Run Ledger (BL)",
+    "Save Reader Alert Delivery"
    ],
    "tag": "BL"
   },

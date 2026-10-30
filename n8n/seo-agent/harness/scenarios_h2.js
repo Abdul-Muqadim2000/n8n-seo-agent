@@ -94,8 +94,18 @@ module.exports = async (ctx) => {
     check('existing_page is empty, no existing text, and the run says which page it left alone and why', A.ccp.existing_page === null && !A.ccp.existing_page_text && A.ccp.existing_page_ignored && A.ccp.existing_page_ignored.url === P949 && /planned a new page/.test(A.ccp.existing_page_ignored.why), J({ ep: A.ccp.existing_page, ig: A.ccp.existing_page_ignored }));
     const B = await flow({ ...CTX, ladder_id: '', ladder_target_url: '' });
     check('control: outside a ladder the matched page is still the existing page', B.reqs[0].kind === 'existing' && B.reqs[0].url === P949 && B.ccp.existing_page && B.ccp.existing_page.url === P949, J(B.reqs));
+    // W05-B (2026-10-30, BEFORE_AFTER K4): outside a ladder a page the sitemap matched is confirmed by its own title; one whose title is
+    // about another service is read as related and left alone (W05B2), one whose title is about the search stays the existing page
+    const modelB = (await run('_site_model', [{ json: { site_row: { site_id: 'site_novaand-demo-com', domain: 'novaand-demo.com', canonical_host: 'www.novaand-demo.com', model_updated_at: new Date().toISOString() }, extras: { pages: [{ url: W + '/erp-systems-uae', title: 'ERP Systems in the UAE: a Buyer\'s Guide', source: 'sitemap' }] } } }]))[0].json.model;
+    mock('Site Model', [{ json: { site_model: modelB } }]);
+    const ctxB = { ...CTX, ladder_id: '', ladder_target_url: '', existing_page: { url: W + '/erp-systems-uae', match: 0.75, source: 'sitemap' }, site_urls: [W + '/erp-systems-uae'] };
+    mock('Collect Site URLs', [{ json: ctxB }]);
+    const reqsB = (await run('Client Page Requests', [{ json: ctxB }])).map(r => r.json);
+    mock('Read Client Pages', reqsB.map(r => ({ json: { page_text: 'Title: page\n\nMarkdown Content:\n' + 'ERP systems for UAE companies: what to compare before you choose. '.repeat(20) } })));
+    const ccpB = (await run('Collect Client Pages', store['Read Client Pages']))[0].json;
+    check('control: outside a ladder a matched page whose title is about the search is still the existing page', reqsB[0].kind === 'existing' && ccpB.existing_page && ccpB.existing_page.url === W + '/erp-systems-uae' && !ccpB.existing_page_unconfirmed, J({ r: reqsB[0], ep: ccpB.existing_page, u: ccpB.existing_page_unconfirmed }));
     const C = await flow({ ...CTX, ladder_target_url: P949 });
-    check('control: a ladder page planned AS that page still refreshes it', C.reqs[0].kind === 'existing' && C.reqs[0].url === P949, J(C.reqs));
+    check('control: a ladder page planned AS that page still refreshes it', C.reqs[0].kind === 'existing' && C.reqs[0].url === P949 && C.ccp.existing_page && C.ccp.existing_page.url === P949, J({ r: C.reqs, ep: C.ccp.existing_page }));
   });
 
   await guard('H2-4 brand and legal name', async () => {
