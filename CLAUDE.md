@@ -70,6 +70,12 @@ delivered 68.4 -> 74.5, finals 66.0 -> 73.4, gains in proof and local accuracy; 
 another service page's URL (slug-only match, now hold-exempt). Finalize -3.6 -> -1.8 (still down); Accept all 400 leaves 3 pages with no
 final; false "already written" after a hold; K3 held wrongly. Spend $11.20 of $30. **NOT deployed, not ready to deploy**: fix the 5 items
 in BEFORE_AFTER "Next", re-check K1 K3 K4 K8 (~$6), then ask the owner. Then Waves 1 (fit) and 2 (calibration).
+**Wave 0.5 (`1e705b72`, pushed, NOT deployed) re-checked 2026-10-30 on alvrun, blind-judged: read `docs/page-quality-2026-10-29/WAVE05.md`.**
+Judges' mean flat (73.0 -> 73.4: K4 +5, K6 +3 recovered, K3 =, K1 -6); holds right (K3 not held, K4 own URL, K1 held + "Improve the existing
+page"), Accept all works, Finalize -0.5. Grade back to generous (+17.1 signed on 4; ready agreement 3/4). Two HIGH pre-existing defects (also in
+production): `_exclusions.js` EXC.match drops short tokens ("GP and SL" -> "dynamic") and deleted 6 of K1's sections; Draft Check fails a complete
+page ending on a bare CTA line (+ failed run shows "already written", ledger left reserved). Spend ~$5.41 of $10. Deploy: after a Wave 0.6 (those
+two + write-anyway slug + grade caps), offline-pinned on the recorded K1/K4 executions, then ask the owner (API first, then engine).
 
 ## Status (2026-10-28 midday, GA4 + autopilot steps fix from a client report — previous)
 devaicon.com reported "Connect GA4" in Recommendations while GA4 was connected, and the first audit offered as a manual step though the
