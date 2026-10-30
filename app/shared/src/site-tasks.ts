@@ -15,6 +15,9 @@ import {
   indexingTaskKey,
   indexPath,
   samePageUrl,
+  SITEMAP_BLOCKED,
+  sitemapBlockedText,
+  type SitemapBlocked,
   type IndexingCauseReading,
   type IndexingLinksReading,
   type IndexingSitemapReading,
@@ -81,9 +84,12 @@ export interface SiteTaskInputs {
     sitemap?: IndexingSitemapReading | null;
     /** wave 2: the pages that need a link from another page of the website (absent or null: not read; a stored step keeps its state) */
     links?: IndexingLinksReading | null;
-    /** wave 2: the client switched sitemap submission on AND Google reports Full access for us: Alaventra submits a missing sitemap, so
-     *  there is no "submit your sitemap" step (errors in a submitted sitemap are still the client's to fix) */
+    /** wave 2 review W1: the client switched sitemap submission on AND the engine's newest run says it WILL submit on its next run
+     *  (`sitemaps_json.submit.will_submit === true`): Alaventra submits the missing sitemap, so there is no "submit your sitemap" step (errors in
+     *  a submitted sitemap are still the client's to fix). Full access alone is not enough (kill switch, no readable sitemap, other property) */
     sitemapAuto?: boolean;
+    /** W1: with the switch on, why the engine will not submit (`submit.blocked`); the step says it in words ('' / absent: nothing to say) */
+    sitemapBlocked?: SitemapBlocked | '';
   } | null;
 }
 
@@ -272,7 +278,13 @@ function indexingDrafts(ix: SiteTaskInputs['indexing'], stored: StoredSiteTask[]
       key: INDEXING_SITEMAP_KEY,
       kind: 'indexing',
       engine: { at: sm.at, ok: false, by: 'index', message: sm.submitted === 0 ? 'Search Console lists no sitemap for this website.' : `Search Console reports ${sm.errors} error${sm.errors === 1 ? '' : 's'} in your sitemap.` },
-      payload: { cause: 'sitemap', submitted: sm.submitted, errors: sm.errors },
+      payload: {
+        cause: 'sitemap',
+        submitted: sm.submitted,
+        errors: sm.errors,
+        // W1: the switch is on but the engine will not submit: the step says why (absent when the switch is off)
+        ...(ix?.sitemapBlocked && ix.sitemapBlocked !== 'switch_off' ? { blocked: ix.sitemapBlocked } : {}),
+      },
     });
   } else if (smStored) {
     handled.add(INDEXING_SITEMAP_KEY);
@@ -441,13 +453,18 @@ function presentIndexing(p: Record<string, unknown>, domain: string): Pick<SiteT
   if (isSitemapStep(p)) {
     const errors = Number(p.errors) || 0;
     const none = Number(p.submitted) === 0;
+    // W1: the client switched sitemap submission on, and the engine says why it will not submit it
+    const blocked = SITEMAP_BLOCKED.find((x) => x === str(p.blocked));
+    const why = blocked ? sitemapBlockedText(blocked) : '';
     return {
       title: none ? 'Submit your sitemap in Search Console' : 'Fix the errors Search Console reports in your sitemap',
       detail: none
-        ? 'Search Console lists no sitemap for this website. Submitting it there is how Google learns which pages you want found, and Search Console then reports on it. Someone with access to your Search Console can do it, or you can let Alaventra submit it: switch on sitemap submission in Tracking & monitors and give us Full access in Search Console. The daily index check sees it the day after.'
+        ? why
+          ? `Search Console lists no sitemap for this website. Submitting it there is how Google learns which pages you want found, and Search Console then reports on it. You switched on sitemap submission, but we will not submit it. ${why} The daily index check sees it the day after.`
+          : 'Search Console lists no sitemap for this website. Submitting it there is how Google learns which pages you want found, and Search Console then reports on it. Someone with access to your Search Console can do it, or you can let Alaventra submit it: switch on sitemap submission in Tracking & monitors and give us Full access in Search Console. The daily index check sees it the day after.'
         : `Search Console reports ${errors} error${errors === 1 ? '' : 's'} in a sitemap you submitted, so Google may skip some of the pages in it. Search Console names each error; the daily index check sees the fix the day after it is resubmitted.`,
       values: [{ label: 'Your sitemap', value: `https://${domain}/sitemap.xml` }],
-      guide: 'index-submit-sitemap',
+      guide: none && blocked === 'not_full_access' ? 'search-console-full-access' : 'index-submit-sitemap',
       guideVars: {},
     };
   }
@@ -480,7 +497,8 @@ function presentLinks(p: Record<string, unknown>): Pick<SiteTask, 'title' | 'det
   return {
     title: 'Link to pages Google cannot find yet',
     detail:
-      `Google has not found ${pairs.length === 1 ? 'this page' : 'these pages'} yet, and no other page of your website links to ${pairs.length === 1 ? 'it' : 'them'}. ` +
+      // wave 2 review W11: the engine reads the home page and the pages above these ones, not the whole website: say only what it saw
+      `Google has not found ${pairs.length === 1 ? 'this page' : 'these pages'} yet, and we did not find a link to ${pairs.length === 1 ? 'it' : 'them'} on the pages of your website we read (your home page and the related pages). ` +
       `Add a link to each one from the page of yours we name next to it: ${pairs.length === 1 ? 'a page' : 'pages'} already in Google search, on the same subject. ` +
       `We open those pages and tick this step off once every link is there.${more > 0 ? ` ${more} more page${more === 1 ? '' : 's'} follow once these are done.` : ''}`,
     values: pairs.map((x) => ({ label: `On ${indexPath(x.source)}, add a link to`, value: x.target })),

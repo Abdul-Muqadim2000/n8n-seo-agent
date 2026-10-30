@@ -316,10 +316,12 @@ export const indexSitemapSubmitOn = (v: unknown): boolean => v === true || v ===
 
 /**
  * The ONE list of policy and utility pages, a mirror of the engine's `IX.UTILITY` (DESIGN_WAVE2 §2.4, `n8n/seo-agent/v5/code/_index_kit.js`;
- * `indexing.utility-parity.test.ts` compares the two). A page with one of these path segments (whole segment, any case, any depth, `.html` /
- * `.php` / `.asp` dropped) does not need to be in Google: never "Improve this page", never a page to ask Google about, never a page we suggest
- * a link from, shown under "Policy and utility pages: fine to leave out". Job postings are NOT utility pages (a job page may want to be
- * found): they are only never asked about and never a link source.
+ * `indexing.utility-parity.test.ts` compares the two). Wave 2 review W3 (engine W3): a page is a utility page only when its FIRST path segment
+ * is one of these words (whole segment, any case, `.html` / `.php` / `.asp` dropped), or it is /legal or /policies or under them; `security` only
+ * as the whole path /security. `/industries/legal`, `/features/search` or `/blog/thanks` are content pages. A utility page does not need to
+ * be in Google: never "Improve this page", never a page to ask Google about, never a page we suggest a link from, shown under "Policy and
+ * utility pages: fine to leave out". Job postings are NOT utility pages (a job page may want to be found): they are only never asked about
+ * and never a link source.
  */
 export const INDEX_UTILITY_SEGMENTS = [
   'privacy', 'privacy-policy', 'cookies', 'cookie-policy', 'terms', 'terms-of-service', 'terms-and-conditions', 'legal', 'imprint', 'impressum',
@@ -328,6 +330,8 @@ export const INDEX_UTILITY_SEGMENTS = [
 ] as const;
 /** Segments that count only as the whole path (`/security`, never `/services/security`). */
 export const INDEX_UTILITY_TOP_ONLY = ['security'] as const;
+/** Directories whose pages are all policy pages (`/policies`, `/legal/terms`, `/policies/refund`): the engine's `IX.UTILITY.dirs`. */
+export const INDEX_UTILITY_DIRS = ['legal', 'policies'] as const;
 /** Job postings: a page under one of these with a further segment (the listing page `/careers` itself is a normal page). */
 export const INDEX_JOB_PARENTS = ['careers', 'jobs'] as const;
 
@@ -350,8 +354,10 @@ const pathSegments = (url: string): string[] =>
 /** A policy or utility page (DESIGN_WAVE2 §2.4). */
 export function isUtilityPage(url: string): boolean {
   const seg = pathSegments(url);
+  if (!seg.length) return false;
   if (seg.length === 1 && (INDEX_UTILITY_TOP_ONLY as readonly string[]).includes(seg[0])) return true;
-  return seg.some((x) => (INDEX_UTILITY_SEGMENTS as readonly string[]).includes(x));
+  // W3 (the engine's `rule: 'first_segment'`): the FIRST segment only (a segment deeper down is a content page's subject: /industries/legal)
+  return (INDEX_UTILITY_DIRS as readonly string[]).includes(seg[0]) || (INDEX_UTILITY_SEGMENTS as readonly string[]).includes(seg[0]);
 }
 /** A job posting (DESIGN_WAVE2 §2.4): never a page to ask Google about. */
 export function isJobPosting(url: string): boolean {
@@ -412,7 +418,8 @@ export interface IndexPage {
   askGoogle: boolean;
   /** wave 2 (`linked_by`): pages of the website that link to this one today (up to 3); empty = none found, or not read (`linkedRead`) */
   linkedBy: string[];
-  /** false when the engine could not read the home page this run (`linked_by` = 'unread'): nothing is concluded about links */
+  /** false when the engine could not read the home page, or (wave 2 review W5) this page's parent page, this run, or the parent was past its
+   *  10-page cap (`linked_by` = 'unread'): nothing is concluded about links */
   linkedRead: boolean;
   /** wave 2: when the client said they asked Google to read it again ('' = never), and when Google read it after that ('' = not yet) */
   askedGoogleAt: string;
@@ -517,6 +524,10 @@ export interface IndexRunSitemaps {
   submissions: IndexSitemapSubmissionRow[];
   /** wave 2: Search Console's own list of the website's sitemaps as this run read it (the dates Google gives) */
   listed: { path: string; lastSubmitted: string; lastDownloaded: string }[];
+  /** wave 2 review W1: the engine says it WILL submit a sitemap on its next run (`submit.will_submit`; false when not sent: an older row) */
+  willSubmit: boolean;
+  /** wave 2 review W1: why the engine will not submit (`submit.blocked`, one of SITEMAP_BLOCKED; '' = nothing blocks, or not sent / unknown) */
+  blocked: SitemapBlocked | '';
 }
 
 /** One sitemap submission the engine made (`sitemaps_json.submissions[]`: path, at, status, reason). */
@@ -669,6 +680,8 @@ function linkedByOf(v: unknown): { urls: string[]; read: boolean } {
  * when Google reports the cause gone, or when Google crawled after the fix and still reports the cause (the row is then `site_fix` again).
  */
 const fixSeen = (fix: string): string => fix.trim();
+/** The sentence of the engine's 14-day "asked Google" note that is wrong for a page that needs the client (W9). */
+const NOTHING_MORE_TO_DO = /\s*There is nothing more to do on your side for now\.?/;
 
 export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
   const cause = s(r.cause);
@@ -688,6 +701,8 @@ export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
   const raw = displayAction(s(r.action), c, st);
   const linked = linkedByOf(r.linked_by);
   const action = fixFailedAt && raw === 'wait' && isCause(c) && INDEX_CAUSE_INFO[c].action === 'site_fix' ? 'site_fix' : raw;
+  // the engine sets `wait` with `fix_seen_at`; an older engine row is read the same way
+  const shown = fixSeenAt && action === 'site_fix' ? 'wait' : action;
   return {
     url: s(r.url),
     path: indexPath(s(r.url)),
@@ -695,8 +710,7 @@ export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
     lane: s(r.lane) === 'new' ? 'new' : 'existing',
     state: st,
     cause: c,
-    // the engine sets `wait` with `fix_seen_at`; an older engine row is read the same way
-    action: fixSeenAt && action === 'site_fix' ? 'wait' : action,
+    action: shown,
     inSitemap: b(r.in_sitemap),
     impressions28d: n(r.impressions_28d),
     clicks28d: n(r.clicks_28d),
@@ -723,7 +737,9 @@ export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
       .filter((x) => !isUtilityPage(x.url) && !isJobPosting(x.url))
       .slice(0, 5),
     mergeInto: s(r.merge_into),
-    note: s(r.note).slice(0, 500),
+    // wave 2 review W9: the engine's 14-day "asked Google" note replaced the whole note, whatever the action; a page that now needs the client
+    // (a fix on the website, a link...) never reads "nothing more to do on your side"
+    note: (INDEX_ACTIONS_NEED_YOU.has(shown) ? s(r.note).replace(NOTHING_MORE_TO_DO, '').trim() : s(r.note)).slice(0, 500),
     publishedAt: s(r.published_at),
     inspectedAt: s(r.inspect_at),
     fetchedAt: s(r.fetch_at),
@@ -801,19 +817,66 @@ function runSitemapsOf(v: unknown): IndexRunSitemaps | null {
       .map((y) => ({ path: s(y.path).slice(0, 500), lastSubmitted: s(y.lastSubmitted ?? y.last_submitted), lastDownloaded: s(y.lastDownloaded ?? y.last_downloaded) }))
       .filter((y) => y.path)
       .slice(0, 20),
+    // W1: only an explicit true from the engine is "we will submit" (an older row without the field never promises a submission)
+    willSubmit: x.submit && typeof x.submit === 'object' ? (x.submit as P).will_submit === true : false,
+    blocked: x.submit && typeof x.submit === 'object' ? sitemapBlockedOf((x.submit as P).blocked, (x.submit as P).gate) : '',
   };
+}
+
+/**
+ * Wave 2 review W1: the engine's reason it will not submit the website's sitemap on its next run (`sitemaps_json.submit.blocked`). An unknown
+ * code reads as '' (no reason shown, and still no promise: only `will_submit === true` promises a submission).
+ */
+export const SITEMAP_BLOCKED = ['switch_off', 'not_full_access', 'paused', 'no_sitemap', 'outside_property', 'unchanged', 'too_soon', 'refused', 'not_set_up', 'not_read'] as const;
+/** The engine's codes, plus the app's `not_read`: `blocked` '' while `submit.gate` is `not_checked` (Google's access level not read today) or
+ *  `list_not_read` (Search Console's sitemap list not read today): nothing is concluded, and the client is told we could not read it. */
+export type SitemapBlocked = (typeof SITEMAP_BLOCKED)[number];
+const sitemapBlockedOf = (v: unknown, gate: unknown): SitemapBlocked | '' => {
+  const x = s(v).trim();
+  if (x && x !== 'not_read') return (SITEMAP_BLOCKED as readonly string[]).includes(x) ? (x as SitemapBlocked) : '';
+  return /^(not_checked|list_not_read)$/.test(s(gate).trim()) ? 'not_read' : '';
+};
+/**
+ * The plain reason we will not submit the sitemap, for a client who switched sitemap submission on ('' for `switch_off` and unknown codes:
+ * the switch line says it is off). Never a promise about Google, never "we ask Google".
+ */
+export function sitemapBlockedText(code: SitemapBlocked | '' | undefined): string {
+  switch (code) {
+    case 'not_full_access':
+      return 'Google gives us read-only access to your Search Console, so we cannot submit your sitemap. Give us Full access in Search Console, or submit it yourself.';
+    case 'paused':
+      return 'Sitemap submission is paused on our side for now, so we will not submit it. You can submit it yourself in Search Console.';
+    case 'no_sitemap':
+      return 'We could not read a sitemap on your website (robots.txt names none, and /sitemap.xml is not one), so there is nothing we can submit. Name your sitemap in robots.txt, or submit it yourself in Search Console.';
+    case 'outside_property':
+      return 'Your sitemap is outside the Search Console property we can read (for example on www. while the property is for the address without it), so we cannot submit it there. Submit it yourself in the property that covers it.';
+    case 'unchanged':
+      return 'Your sitemap has not changed since it was last submitted, so there is nothing to submit.';
+    case 'too_soon':
+      return 'We submitted your sitemap in the last 7 days. We submit it at most once a week.';
+    case 'refused':
+      return 'Google refused our last submission of your sitemap, so we are not trying again for now. You can submit it yourself in Search Console.';
+    case 'not_set_up':
+      return 'Sitemap submission is not set up on our side yet, so we will not submit it for now. You can submit it yourself in Search Console.';
+    case 'not_read':
+      return 'We could not read your Search Console today, so we do not know yet whether your sitemap needs submitting. We look again on the next daily check.';
+    default:
+      return '';
+  }
 }
 
 /** wave 2: Full access in Search Console (the only access that can submit a sitemap). */
 export const SITEMAP_FULL_ACCESS: ReadonlySet<string> = new Set(['siteOwner', 'siteFullUser']);
-export type IndexSitemapAccess = 'full' | 'restricted' | 'unknown';
+/** full: we can submit; restricted: Google gives us read-only access; refused (W7): Google reports Full access but refused our submission */
+export type IndexSitemapAccess = 'full' | 'restricted' | 'refused' | 'unknown';
 
 /** One sitemap submission as the Indexing page shows it. */
 export interface IndexSitemapSubmission {
   path: string;
   at: string;
-  /** ok: Google accepted it; refused: Google answered that we may not (our access is not Full); error: anything else */
-  status: 'ok' | 'refused' | 'error';
+  /** ok: Google accepted it; refused: Google answered that we may not; pending (wave 2 review W13): our attempt, recorded before Google's
+   *  answer, with no answer kept (never shown as done); error: anything else (`failed`, `not_set_up`: nothing reached Google) */
+  status: 'ok' | 'refused' | 'pending' | 'error';
   /** why we submitted it, in words ('' when the engine gave no reason we know) */
   reason: string;
   /** Search Console's list shows it submitted on or after `at` ('' = not seen yet) */
@@ -834,10 +897,20 @@ export interface IndexSitemapState {
   /** sitemaps Search Console lists and the errors it reports in them, from the newest run that read the list (null: not read) */
   submitted: number | null;
   errors: number | null;
+  /** W1: the newest daily check says it will submit a sitemap on its next run (only then does the app say "we will submit it") */
+  willSubmit: boolean;
+  /** W1: why it will not ('' = nothing blocks, or the newest check did not say) */
+  blocked: SitemapBlocked | '';
 }
 
 const submissionStatus = (v: string): IndexSitemapSubmission['status'] =>
-  /^(ok|done|success|submitted|confirmed|read|accepted|2\d\d)$/i.test(v.trim()) ? 'ok' : /forbidden|refused|denied|permission|^4\d\d$/i.test(v) ? 'refused' : 'error';
+  /^(ok|done|success|submitted|confirmed|read|accepted|2\d\d)$/i.test(v.trim())
+    ? 'ok'
+    : /^pending$/i.test(v.trim())
+      ? 'pending'
+      : /forbidden|refused|denied|permission|^4\d\d$/i.test(v)
+        ? 'refused'
+        : 'error';
 /** The engine's reason codes in words (an unknown code is not shown). */
 const SUBMISSION_REASON: Record<string, string> = {
   not_listed: 'Search Console did not list your sitemap',
@@ -870,16 +943,24 @@ export function indexSitemapState(runs: readonly IndexRun[], submitOn: boolean):
     }
   submissions.sort((a, b) => b.at.localeCompare(a.at));
   const list = xs.find((r) => !r.failed && r.sitemaps!.submitted != null)?.sitemaps ?? null;
-  // the engine's verdict wins when it sent one (Full access, but a refusal still holding, is not "we can submit")
-  const full = withAccess?.sitemaps?.permissionFull ?? SITEMAP_FULL_ACCESS.has(permission);
+  // W1: the newest check's own word on its next run (an older row without the fields: no promise)
+  const newest = xs[0]?.sitemaps ?? null;
+  const willSubmit = submitOn && !!newest?.willSubmit;
+  const blocked = willSubmit ? '' : (newest?.blocked ?? '');
+  // W7: Google reports a Full level, but a refusal of our submission still holds (the engine's `permission_full` false, or `blocked`
+  // refused): Google refused the submission, which is not read-only access
+  const fullLevel = SITEMAP_FULL_ACCESS.has(permission);
+  const refusedNow = fullLevel && (withAccess?.sitemaps?.permissionFull === false || blocked === 'refused');
   return {
     submitOn,
-    access: !permission ? 'unknown' : full ? 'full' : 'restricted',
+    access: !permission ? 'unknown' : !fullLevel ? (withAccess?.sitemaps?.permissionFull === true ? 'full' : 'restricted') : refusedNow ? 'refused' : 'full',
     permission,
     accessAt: withAccess?.runAt ?? null,
     submissions: submissions.slice(0, 10),
     submitted: list?.submitted ?? null,
     errors: list?.submittedErrors ?? null,
+    willSubmit,
+    blocked,
   };
 }
 
@@ -1055,14 +1136,20 @@ export const INDEX_ASK_QUIET_DAYS = 14;
 export const INDEX_ASKED_SHOWN_DAYS = 45;
 
 /** What happened after the client said they asked Google to read a page again. */
-export function askGoogleStatus(p: Pick<IndexPage, 'askedGoogleAt' | 'googleReadAfterAskAt'> & { askNotRecorded?: string }, now = Date.now()): { state: 'none' | 'waiting' | 'read' | 'quiet' | 'lost'; text: string } {
+export function askGoogleStatus(p: Pick<IndexPage, 'askedGoogleAt' | 'googleReadAfterAskAt'> & { askNotRecorded?: string; action?: IndexAction }, now = Date.now()): { state: 'none' | 'waiting' | 'read' | 'quiet' | 'lost'; text: string } {
   if (p.askNotRecorded)
     return { state: 'lost', text: `You told us on ${indexDayText(p.askNotRecorded)} that you asked Google, but the daily index check did not keep it. Press I asked Google again.` };
   const asked = Date.parse(p.askedGoogleAt);
   if (!p.askedGoogleAt || !Number.isFinite(asked)) return { state: 'none', text: '' };
   if (p.googleReadAfterAskAt && p.googleReadAfterAskAt >= p.askedGoogleAt) return { state: 'read', text: `Google read it again on ${indexDayText(p.googleReadAfterAskAt)}.` };
   if (now - asked >= INDEX_ASK_QUIET_DAYS * 864e5)
-    return { state: 'quiet', text: `You asked Google on ${indexDayText(p.askedGoogleAt)}; Google has not read it again yet. There is nothing more to do on your side for now.` };
+    return {
+      state: 'quiet',
+      // wave 2 review W9: a page that now needs something from the client (a fix on the website, a link...) is never told "nothing more to do"
+      text: p.action && INDEX_ACTIONS_NEED_YOU.has(p.action)
+        ? `You asked Google on ${indexDayText(p.askedGoogleAt)}; Google has not read it again yet. Asking again will not help for now: this page has something to fix first, shown with it.`
+        : `You asked Google on ${indexDayText(p.askedGoogleAt)}; Google has not read it again yet. There is nothing more to do on your side for now.`,
+    };
   return { state: 'waiting', text: `Waiting for Google to read it again (you asked on ${indexDayText(p.askedGoogleAt)}).` };
 }
 export const inIndexGroup = (p: IndexPage): boolean => p.action !== 'none' && !(p.state === 'unknown' && p.cause === 'other');
@@ -1363,18 +1450,37 @@ export function indexingLinksReading(rows: readonly Partial<IndexPageRow>[], opt
 }
 
 /**
- * Whether a page's HTML holds an `<a href>` to the target page (DESIGN_WAVE2 §3.2): resolved against the page's address, compared without
- * the host's www., the scheme, a fragment or a trailing slash; a query counts only when the target has one. Comments are skipped.
+ * Whether a page's HTML holds an `<a href>` to the target page (DESIGN_WAVE2 §3.2): resolved against the page's address (or its `<base href>`,
+ * wave 2 review W14), compared without the host's www., the scheme, a fragment or a trailing slash; a query counts only when the target has
+ * one. Comments and the insides of `<script>` / `<style>` are skipped (an `<a href>` in a script string is not a link), and so is a link
+ * marked `rel="nofollow"` (W14: Google is told not to follow it, so it does not help Google find the page).
  */
 export function pageLinksTo(html: string, pageUrl: string, targetUrl: string): boolean {
   const wantQuery = s(targetUrl).includes('?');
-  const body = s(html).slice(0, 1_000_000).replace(/<!--[\s\S]*?-->/g, ' ');
-  for (const m of body.matchAll(/<a\b[^>]*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/gi)) {
+  const body = s(html)
+    .slice(0, 1_000_000)
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
+    .replace(/<(script|style)\b[^>]*>[\s\S]*$/i, ' ');
+  // W14: the first <base href> sets the address relative links resolve against (itself resolved against the page's address)
+  let base = s(pageUrl);
+  const baseHref = body.match(/<base\b[^>]*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/i);
+  if (baseHref) {
+    try {
+      const b = new URL((baseHref[1] ?? baseHref[2] ?? baseHref[3] ?? '').trim().replace(/&amp;/g, '&'), base);
+      if (b.protocol === 'https:' || b.protocol === 'http:') base = b.href;
+    } catch {
+      // an unreadable <base href> is ignored, as browsers do
+    }
+  }
+  for (const m of body.matchAll(/<a\b[^>]*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))[^>]*>/gi)) {
+    const rel = m[0].match(/\srel\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/i);
+    if (rel && /(^|\s)nofollow(\s|$)/i.test((rel[1] ?? rel[2] ?? rel[3] ?? '').trim())) continue;
     const href = (m[1] ?? m[2] ?? m[3] ?? '').trim().replace(/&amp;/g, '&');
     if (!href || href.startsWith('#') || /^(mailto|tel|javascript|data):/i.test(href)) continue;
     let abs: URL;
     try {
-      abs = new URL(href, s(pageUrl));
+      abs = new URL(href, base);
     } catch {
       continue;
     }
