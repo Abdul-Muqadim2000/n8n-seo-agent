@@ -159,6 +159,19 @@ Third review (REVIEW_3.md) running at save time: verify wave 2, hunt regressions
 3. Automatic content rewrites: NO (scaled content abuse risk); "Improve this page" stays approval-only.
 4. AI-drafted versioned policy checklist: not chosen now (later, small).
 
+## WAVE 2 BUILT, REVIEWED, FIXED, GREEN (2026-10-30 ~18:00 UTC) - NOT DEPLOYED, waiting for the owner's OK
+- Merges: wave 2 0710fd79 + da511f84, review fixes 2551a456 + 010e3db8, Indexing row only in Website settings (this commit).
+  REVIEW_WAVE2.md W1-W14 all fixed (ENGINE_BUILD.md / APP_BUILD.md "Wave 2 review fixes"). Harness 14050 / 0; app typecheck clean,
+  shared 1005, server 1564 (+46 skipped), web 293, web build OK.
+- Deploy plan (owner approval first; not a Monday; ≥ 2 h before 05:15 NY): backup (`sudo systemctl start alaventra-backup.service`);
+  tunnel; `deploy_engine.py --no-build` dry run (expect: Index Coverage, Site Admin monitor nodes, Monitor Row (Track), the monitors column
+  lists; tables: seo_index_pages.linked_by / asked_google_at / google_read_after_ask_at, seo_monitors.index_sitemap_submit; credential
+  SEOcredGoogleSvcW missing) then `--apply --credentials --create-missing` (check first that --credentials only writes what .env holds
+  and that prod's credential values come from the same .env; else create only SEOcredGoogleSvcW); API on the VM (fetch feature/indexing,
+  checkout FETCH_HEAD, `up -d --build app`); web via PR to main; then one test fire and check devaicon: the 7 industry pages as a site step,
+  already-linked pages as "not visited yet", privacy / cookies / security as utility, ask-Google picks capability pages.
+- Sitemap submission stays OFF for every site until the owner switches it on for one (first live submission to be watched).
+
 ## WAVE 2 IN PROGRESS (2026-10-30, owner: "do the devaicon fix, then full-access sitemap; check back every client action; carefully")
 Design: DESIGN_WAVE2.md (35c24b03). Agents building: engine in ../n8n_devaicon-ix-engine (ix/engine), app in ../n8n_devaicon-ix-app
 (ix/app), both from 35c24b03; each appends "Wave 2 (DESIGN_WAVE2)" to ENGINE_BUILD.md / APP_BUILD.md. Then: merge both into
