@@ -950,6 +950,9 @@ const IX = (() => {
           : (r.reused && cc === 'alternate' && p.in_sitemap) ? 'canonical_elsewhere' : (cc || 'unclassified');
       }
       if (cause === 'not_in_sitemap' && !smKnown) cause = 'unknown_to_google';
+      // Google naming THIS exact address as its canonical cannot be "a redirect" or "a copy of another page" for this address: the reading
+      // belongs to another form of it (e.g. the bare host that 308s to www). Google chose this page: it is the indexed one.
+      if (/^redirect$|^google_chose_other$|^duplicate_no_canonical$/.test(cause) && S(r.google_canonical) && same(r.google_canonical, p.url) && hostOf(r.google_canonical) === hostOf(p.url)) cause = 'indexed';
     }
     // our fetch: third, and only a hard fact over a vague reading Google has not refreshed itself
     const gRead = !!r && (S(r.page_fetch_state) === 'SUCCESSFUL' || (!S(r.page_fetch_state) && /^crawled/.test(normCov(r.coverage))) || S(r.verdict) === 'PASS');
@@ -1133,7 +1136,9 @@ const IX = (() => {
     for (const u of (sm.urls || [])) { const loc = norm(u.loc, site); const p = get(loc); if (!p) continue; p._src.add('sitemap'); if (u.gsc) p._src.add('gsc'); p._lastmod = S(u.lastmod) || S(p._lastmod); p._insm = true; p._smLoc = p._smLoc || loc; }
     if (sr.by) for (const e of sr.by.values()) { if (!(n0(e.impr90) > 0 || n0(e.impr28) > 0)) continue; const p = get(e.url); if (p) { p._src.add('search'); p._search = e; } }
     for (const r of (c.inventory || [])) { if (!r || !S(r.url)) continue; const p = get(norm(r.url, site)); if (!p) continue; p._src.add('inventory'); p._inv = r; }
-    const watchBy = new Map(); for (const w of (c.watch || [])) if (w && S(w.url)) watchBy.set(key(w.url), w);
+    // A Site Tracker reading is borrowed only for the exact address it was taken for: `key` ignores www, but techand.ai/x (308 to www) and
+    // www.techand.ai/x are different URLs to Google ("Page with redirect" vs indexed). Production, first run 2026-10-29.
+    const watchBy = new Map(); for (const w of (c.watch || [])) if (w && S(w.url)) { const a = watchBy.get(key(w.url)) || []; a.push(w); watchBy.set(key(w.url), a); }
     const prune = dupes.slice(0, CFG.moves_max);
     for (const [k, r] of storedBy) {
       if (pages.has(k)) continue;
@@ -1173,7 +1178,7 @@ const IX = (() => {
         http_status: n0(pv.http_status) || (n0(inv.http_status) >= 400 ? n0(inv.http_status) : 0),
         state: S(pv.state) || 'unknown', checks: n0(pv.checks),
         _prev: prev ? slimPrev(prev) : null, _moved_from: prev && url !== S(prev.url) ? S(prev.url) : '',
-        _search: ev, _impr7: ev && ev.impr7 != null ? ev.impr7 : 0, _watch: watchBy.get(k) || null };
+        _search: ev, _impr7: ev && ev.impr7 != null ? ev.impr7 : 0, _watch: (watchBy.get(k) || []).find(w => hostOf(w.url) === hostOf(url)) || null };
       row.lane = laneOf(row, ctx);
       // our own sitemap check settles the sitemap half of a cause without waiting for Google (a complete read only)
       if (smComplete && row.in_sitemap && S(row.cause) === 'indexed_not_in_sitemap') Object.assign(row, { cause: '', action: 'none' });

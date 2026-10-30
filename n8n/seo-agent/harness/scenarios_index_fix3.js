@@ -264,6 +264,32 @@ module.exports = async (ctx) => {
     const rr = first(await TA(() => node('Index Run Rows', { 'Index Diagnose': [{ site_id: 'site_a-com', domain: 'a.com', run_at: p.run_at, all: [], counts: {}, sitemap: { complete: true }, failed: false }], 'Index Plan': [p] }, null, now)));
     check('a chain part carries its dispatch id (Index Plan chain_id) and its final run row records it (sitemaps_json.chain_id)', p.chain_id === 'D2' && T(() => JSON.parse(rr.sitemaps_json).chain_id) === 'D2', J({ p: p.chain_id, s: rr.sitemaps_json }));
   });
+
+  // =================================================================================================================================
+  await guard('IXP1 production first run: a reading of the bare host is not borrowed for www', async () => {
+    const SN = 'IXP1 (production first run 2026-10-29, techand.ai) the Site Tracker inspected https://techand.ai/x, which 308s to https://www.techand.ai/x, and Google answered "Page with redirect" naming the www address as its canonical; that reading must not be borrowed for the www row (which is the indexed page), and a reading naming this exact address as Google\'s canonical never makes it "a redirect" or "a copy of itself"';
+    begin(SN); const check = mkCheck(SN);
+    const now = Date.parse('2026-10-29T23:55:00Z');
+    const site = { site_id: 'site_techand-ai', domain: 'techand.ai', canonical_host: 'www.techand.ai', gsc_property: 'sc-domain:techand.ai' };
+    const wwwUrl = 'https://www.techand.ai/dynamics-365-finance-and-operations-uae', bareUrl = 'https://techand.ai/dynamics-365-finance-and-operations-uae';
+    const watch = [{ url: bareUrl, status: 308, location: wwwUrl, inspect_at: iso(now - 0.95 * DAY), index_state: 'NEUTRAL', coverage: 'Page with redirect', google_canonical: wwwUrl }];
+    const m = T(() => IX.merge({ site, now, stored: [], inventory: [{ url: wwwUrl }], sitemap: { read: true, complete: true, urls: [{ loc: wwwUrl }] }, ours: [], search: { read: false }, watch }));
+    const row = ((m && m.pages) || []).find(p => S0(p.url) === wwwUrl) || {};
+    check('the www row borrows no reading taken of the bare host', m && !m.__error && !row._watch, J(m && m.__error) + ' watch=' + J(row._watch));
+    const watch2 = watch.concat([{ url: wwwUrl, status: 200, inspect_at: iso(now - 0.9 * DAY), index_state: 'PASS', coverage: 'Submitted and indexed', google_canonical: wwwUrl }]);
+    const m2 = T(() => IX.merge({ site, now, stored: [], inventory: [{ url: wwwUrl }], sitemap: { read: true, complete: true, urls: [{ loc: wwwUrl }] }, ours: [], search: { read: false }, watch: watch2 }));
+    const row2 = ((m2 && m2.pages) || []).find(p => S0(p.url) === wwwUrl) || {};
+    check('with both readings stored, the www row borrows the www reading (whatever the order)', row2._watch && S0(row2._watch.url) === wwwUrl, J(row2._watch));
+    const p = { url: wwwUrl, sources: 'sitemap,inventory', in_sitemap: true, lane: 'existing', impressions_28d: 973 };
+    const d1 = T(() => IX.diagnose(p, { ok: true, reused: true, verdict: 'NEUTRAL', coverage: 'Page with redirect', google_canonical: wwwUrl }, null, { now, sitemap_complete: true, has_sitemap: true }));
+    check('a reading naming this exact address as Google\'s canonical is not "a redirect" for it (it is the indexed page)', d1 && !d1.__error && S0(d1.cause) === '' && S0(d1.state) === 'indexed', J(d1));
+    const d2 = T(() => IX.diagnose(p, { ok: true, reused: true, verdict: 'NEUTRAL', coverage: 'Duplicate, Google chose different canonical than user', google_canonical: wwwUrl }, null, { now, sitemap_complete: true, has_sitemap: true }));
+    check('nor "a copy of" itself', d2 && !d2.__error && S0(d2.cause) === '' && !S0(d2.merge_into), J(d2));
+    const d3 = T(() => IX.diagnose({ ...p, url: bareUrl }, { ok: true, reused: true, verdict: 'NEUTRAL', coverage: 'Page with redirect', google_canonical: wwwUrl }, null, { now, sitemap_complete: true, has_sitemap: true }));
+    check('control: the bare-host row with the same reading is still a redirect', d3 && S0(d3.cause) === 'redirect', J(d3));
+    const d4 = T(() => IX.diagnose({ ...p, url: 'https://www.techand.ai/old-page' }, { ok: true, verdict: 'NEUTRAL', coverage: 'Page with redirect', google_canonical: wwwUrl }, null, { now, sitemap_complete: true, has_sitemap: true }));
+    check('control: a real redirect to another page stays a redirect', d4 && S0(d4.cause) === 'redirect', J(d4));
+  });
 };
 
 if (require.main === module) {
