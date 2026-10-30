@@ -159,6 +159,20 @@ Third review (REVIEW_3.md) running at save time: verify wave 2, hunt regressions
 3. Automatic content rewrites: NO (scaled content abuse risk); "Improve this page" stays approval-only.
 4. AI-drafted versioned policy checklist: not chosen now (later, small).
 
+## WAVE 2 DEPLOYED + VERIFIED 2026-10-30 ~19:25 UTC (owner said "deploy")
+- Backup pg/2026-10-30/*T182056Z. Engine: `deploy_engine.py --no-build --apply --credentials --only-credentials SEOcredGoogleSvcW
+  --create-missing` (4 columns, 16 workflows, 28 published, only the new credential written; node diff checked first). API on the VM at
+  05002d55 (healthy). Web: PR #49 -> main 5f4b0744 (Vercel live). Test fire 15:20 NY after deleting the two 2026-10-30 run rows; schedule
+  restored to 05:15 NY and published.
+- devaicon.com now: 37 known (7 industry pages found via the home links), 7 indexed; the 7 /industries/* pages = canonical_elsewhere
+  site_fix; 17 already-linked pages = wait ("Already linked from your website ... Google has not visited it yet"), no link suggestions;
+  /cookies /privacy /security = low_value leave_out; sitemap submit blocked 'switch_off'. techand.ai 48 / 44 indexed.
+- Seen, NOT fixed yet: (a) ask_google still marks /about-devaicon, /industries, /insights (marked 2026-10-29 under the old rule); the 5-per-7-days
+  cap still counts the old marks (incl. cookies/security), so the capability pages get no slot until the window passes. Fix: count only
+  currently eligible marks / unmark lower-value not-yet-asked pages. (b) /capabilities/application-software-development and
+  /capabilities/consulting-transformation now read "Crawled - currently not indexed" (they were indexed): a real drop-out per Google,
+  or check the reading.
+
 ## WAVE 2 BUILT, REVIEWED, FIXED, GREEN (2026-10-30 ~18:00 UTC) - NOT DEPLOYED, waiting for the owner's OK
 - Merges: wave 2 0710fd79 + da511f84, review fixes 2551a456 + 010e3db8, Indexing row only in Website settings (this commit).
   REVIEW_WAVE2.md W1-W14 all fixed (ENGINE_BUILD.md / APP_BUILD.md "Wave 2 review fixes"). Harness 14050 / 0; app typecheck clean,
