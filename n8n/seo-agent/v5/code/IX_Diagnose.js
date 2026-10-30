@@ -8,6 +8,11 @@
 // was indexed and is now left out with something to do (X4: not a redirect the client made, not a removed page, not an intended noindex);
 // `fix_seen_at` when our read shows the step done while Google still shows the old reason (X7: action `wait`, re-checked within a day);
 // `ask_google` on at most 5 pages a week (X8); the first run and Google news older than the site's first run send no same-day callback (X13).
+// Wave 2 (DESIGN_WAVE2.md §2.2 / §2.3): every page Google does not have goes through IX.refine - a page with its own title that names
+// another page as its canonical is a step on the site (canonical_elsewhere, in the sitemap or not); a policy / utility page is left out
+// (low_value, never "improve", never "ask Google"); a page Google has not visited that the website already links to waits (action `wait`, no
+// link suggestions; 'unread' keeps what was stored). Link suggestions only with a real topic overlap, at most 3. "I asked Google"
+// (asked_google_at, the app's) is checked back: Google's crawl after it is google_read_after_ask_at, and the page is offered again after 28 days.
 /*__PAGE_WATCH__*/
 /*__INDEX_KIT__*/
 const S = (v) => String(v == null ? '' : v).trim();
@@ -33,7 +38,7 @@ for (const v of inv) {
     const all = (v.pages || []).map(r => ({ url: S(r.url), state: S(r.state) || 'unknown', cause: S(r.cause), action: S(r.action) || 'none', lane: S(r.lane), needs_person: r.needs_person === true || r.needs_person === 'true',
       note: S(r.note), merge_into: S(r.merge_into), final_url: S(r.final_url), http_status: n0(r.http_status), fix_seen_at: S(r.fix_seen_at), ask_google: r.ask_google === true || r.ask_google === 'true' }));
     out.push({ json: { ...base, upserts: [], history: [], deletes: [], history_moves: [], all, dropped: [], counts: { inspected: 0, reused: 0, fetched: 0, errors: 0 }, failed: true,
-      why: IX.plainWhy(v.why), why_detail: S(v.why_detail), plan: {}, freeze: fr, news_today: 0 } });   // R5: plain words only; the raw error stays internal
+      why: IX.plainWhy(v.why), why_detail: S(v.why_detail), plan: {}, freeze: fr, news_today: 0, submit: v.submit || null } });   // R5: plain words only; the raw error stays internal
     continue;
   }
   try {
@@ -41,6 +46,12 @@ for (const v of inv) {
     const site = v.site || {};
     const ctx = { now, freeze: fr, sitemap_complete: smComplete, has_sitemap: (v.sitemap || {}).urls > 0, site };
     const robots = v.robots || {};
+    // wave 2 (§2.2): the titles we know of the website's pages (stored, read today, the parents read), for the canonical check
+    const titles = new Map();
+    for (const p of (v.pages || [])) if (S(p.title)) titles.set(IX.key(p.url), S(p.title));
+    for (const [kk, f0] of fetches) if (kk.indexOf(v.site_id + '|') === 0 && f0 && f0.ok && !f0.blocked && S(f0.title)) titles.set(kk.slice(v.site_id.length + 1), S(f0.title));
+    for (const [kk, t] of Object.entries(v.link_titles || {})) if (S(t) && !titles.has(kk)) titles.set(kk, S(t));
+    const rctx = { titles, site };
     const reserved = saved.some(r => r && !r.error && S(r.site_id) === v.site_id);
     const rows = []; const dropped = []; const c = { inspected: 0, reused: 0, fetched: 0, errors: 0, quota: false, access: false, rate: 0, blocked: 0, moved: 0 };
     let movesLeft = IX.CFG.moves_max - (v.moves || []).length;
@@ -83,6 +94,12 @@ for (const v of inv) {
         const basis = reading || IX.storedReading(row);
         if (!(row._evidence_search && !reading)) d = IX.diagnose(row, basis, f && f.ok && !f.blocked ? f : null, ctx);
       }
+      // wave 2: the canonical with its own title, utility pages, pages already linked (IX.refine) - before `checks`, so a refined cause counts its re-checks
+      if (d) { const rf = IX.refine({ ...row, ...d }, { ...rctx, prev }); d = { ...d, cause: rf.cause, action: rf.action, state: rf.state }; row._own_title = rf.own_title; }
+      else if (!moved && S(row.cause) && !(fi && !fi.ok && !prevState)) {
+        const rf = IX.refine(row, { ...rctx, prev }); row._own_title = rf.own_title;
+        if (rf.changed) { const cc = rf.cause !== S(row.cause); Object.assign(row, { cause: rf.cause, action: rf.action, state: rf.state }); if (cc) { row.fix_seen_at = ''; row.fix_failed_at = ''; } }
+      }
       if (d) {
         Object.assign(row, { state: d.state, cause: d.cause, action: d.action, merge_into: S(d.merge_into), host_only: !!d.host_only });
         if (reading) row.checks = (prev && S(prev.cause) === d.cause && S(prev.inspect_at)) ? n0(prev.checks) + 1 : 1;
@@ -117,14 +134,16 @@ for (const v of inv) {
         else if (S(row.fix_seen_at) && S(row.fix_seen_at) !== fixBefore) { const nc = IX.nextCheck(row, ctx); if (!S(row.next_check_at) || Date.parse(nc) < Date.parse(row.next_check_at)) row.next_check_at = nc; }
       }
       row.needs_person = ['site_fix', 'links', 'quality', 'duplicate'].includes(S(row.action)) && n0(row.checks) > IX.CFG.person_after;
+      // wave 2 (§2.3): the client asked Google to read it (asked_google_at, written by the app): Google's first crawl after that ask
+      if (S(row.asked_google_at)) row.google_read_after_ask_at = IX.readAfterAsk(row);
       rows.push(row);
     }
     // internal links for the pages Google has not found or crawled: existing indexed pages on the same topic
-    for (const r of rows) r.link_from = r.action === 'links' ? JSON.stringify(IX.linkSuggestions(r, rows)) : '';
+    for (const r of rows) r.link_from = r.action === 'links' ? JSON.stringify(IX.linkSuggestions(r, rows, { site, linked_from: IX.linkedList(r.linked_by) })) : '';
     for (const r of rows) { if (r.state === 'indexed' && !S(r.cause)) r.action = 'none'; }
     // X8: "ask Google to read it" - at most 5 a site; chosen again on the engine's Monday
     const asked = IX.askGoogle(rows, { now, home_keys: new Set(v.home_links || []), freeze: fr, reselect: monday });
-    for (const r of rows) { r.note = IX.noteOf(r, { freeze: fr }); r.updated_at = nowIso; }
+    for (const r of rows) { r.note = IX.noteOf(r, { freeze: fr, now, site }); r.updated_at = nowIso; }
     const upserts = [], history = [];
     for (const r of rows) {
       const o = IX.rowOut(r);
@@ -144,7 +163,8 @@ for (const v of inv) {
       .filter(x => x.url && !live.has(x.url));
     const history_moves = netMoves.filter(m => !live.has(m.from));
     const all = rows.map(r => ({ url: r.url, state: S(r.state), cause: S(r.cause), action: S(r.action), lane: S(r.lane), needs_person: !!r.needs_person, note: S(r.note),
-      merge_into: S(r.merge_into), final_url: S(r.final_url), http_status: n0(r.http_status), fix_seen_at: S(r.fix_seen_at), ask_google: !!r.ask_google, fix_failed_at: S(r.fix_failed_at) }));
+      merge_into: S(r.merge_into), final_url: S(r.final_url), http_status: n0(r.http_status), fix_seen_at: S(r.fix_seen_at), ask_google: !!r.ask_google, fix_failed_at: S(r.fix_failed_at),
+      own_title: !!r._own_title, linked: IX.linkedList(r.linked_by).length > 0 }));
     // X13: no same-day callback for news on the site's first run, nor for an update that started before the site was first checked
     const firstRun = !(v.pages || []).some(p => p._prev);
     const since = S(v.watch_since);
@@ -152,10 +172,10 @@ for (const v of inv) {
     const news_today = newsFor(g.started) + newsFor(g.completed) + (g.policy_news && !firstRun ? 1 : 0);
     out.push({ json: { ...base, upserts, history, deletes: deletes.slice(0, IX.CFG.moves_max * 2), history_moves, all, dropped: dropped.slice(0, IX.CFG.dropped_max), counts: c, plan: v.plan || {},
       freeze: fr, sitemap: v.sitemap || {}, gsc_sitemaps: v.gsc_sitemaps, search: v.search || {}, quota_stop: !!v.quota_stop || c.quota, access_lost: c.access, capped: !!v.capped,
-      reserved, ask_google: asked, first_run: firstRun, news_today, failed: false } });
+      reserved, ask_google: asked, first_run: firstRun, news_today, failed: false, submit: v.submit || null, links: v.links || null } });
   } catch (e) {
     out.push({ json: { ...base, upserts: [], history: [], deletes: [], history_moves: [], all: [], dropped: [], counts: { inspected: 0, reused: 0, fetched: 0, errors: 0 }, failed: true,
-      why: IX.PLAIN_FAIL, why_detail: 'diagnosis failed: ' + S(e && e.message).slice(0, 160), plan: {}, freeze: fr, news_today: 0 } });   // R5
+      why: IX.PLAIN_FAIL, why_detail: 'diagnosis failed: ' + S(e && e.message).slice(0, 160), plan: {}, freeze: fr, news_today: 0, submit: v.submit || null } });   // R5
   }
 }
 return out.length ? out.map(o => ({ json: { ...o.json, monday } })) : [{ json: { skip: true, reason: 'no website' } }];

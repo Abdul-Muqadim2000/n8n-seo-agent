@@ -6,6 +6,9 @@
 // canonical host or the home page's final host (E5); Search Console by page per window with truncation known (E8); our own and the
 // sitemap's pages first when the 6,000 cap is reached (E12); stored rows on another form of an address move (E4), long-gone rows are pruned
 // (X16); only addresses inside a URL-prefix property are asked (E5). A website with no Search Console access keeps its stored rows (E14).
+// Wave 2 (DESIGN_WAVE2.md): the website's own links (Site Links: the home page and up to 10 parent pages) give every page its `linked_by`
+// ('unread' when the home page could not be read) and add the pages they link to that no other source names (source `home`, §2.1); the
+// opt-in sitemap submission is decided here (IX.submitPlan, §2.5: the client's switch, the build's kill switch, full access, the property).
 /*__PAGE_WATCH__*/
 /*__INDEX_KIT__*/
 const S = (v) => String(v == null ? '' : v).trim();
@@ -24,12 +27,16 @@ const saReqs2 = grab('Pages Query More').filter(q => q && !q.skip), saRes2 = gra
 let smLists = []; try { smLists = $('GSC Sitemaps List').all().map(i => i.json); } catch (e) { smLists = []; }
 let smReqs = []; try { smReqs = $('Sitemaps List Requests').all().map(i => i.json).filter(q => q && !q.skip); } catch (e) { smReqs = []; }
 const slimStored = (r) => { const o = {}; for (const k of IX.PAGE_COLS) o[k] = r[k]; return o; };
+const siteLinks = (() => { try { return $('Site Links').all().map(i => i.json).filter(x => x && x.site_id); } catch (e) { return null; } })();
+const SUBMIT_KILL_OFF = '__SITEMAP_SUBMIT__' === 'off';   // SEO_SITEMAP_SUBMIT=off in n8n/.env, baked at build (the per-site switch stays the primary control)
+const prevOf = (s) => ({ submissions: Array.isArray(s.prev_submissions) ? s.prev_submissions : [], tree_fp: s.prev_tree_fp || null, submit_denied: s.prev_submit_denied || null });
 const out = [];
 for (const s of sites) {
   const mineStored = stored.filter(r => r.site_id === s.site_id);
   if (!s.gsc_connected) {
     // E14: nothing is checked, nothing is called zero: the stored rows stand, the run says why
-    out.push({ json: { site_id: s.site_id, domain: s.domain, site: s, failed: false, no_access: true, why: IX.plainWhy(s.gsc_error), why_detail: S(s.gsc_error_detail || s.gsc_error), pages: mineStored.map(slimStored), take: [], reuse: [] } });
+    out.push({ json: { site_id: s.site_id, domain: s.domain, site: s, failed: false, no_access: true, why: IX.plainWhy(s.gsc_error), why_detail: S(s.gsc_error_detail || s.gsc_error), pages: mineStored.map(slimStored), take: [], reuse: [],
+      submit: IX.submitPlan({ on: s.sitemap_submit === true, kill_off: SUBMIT_KILL_OFF, permission: '', property: s.gsc_property, ok: [], gsc: null, complete: false, urls: [], prev: prevOf(s), now }) } });
     continue;
   }
   try {
@@ -49,13 +56,25 @@ for (const s of sites) {
     const ev = IX.searchEvidence(saOk ? win : {}, site, { now });
     const li = smReqs.findIndex(q => q.site_id === s.site_id);
     const gl = li >= 0 ? (smLists[li] || {}) : {};
-    const gscSitemaps = Array.isArray(gl.sitemap) ? gl.sitemap.map(x => ({ path: S(x.path), errors: Number(x.errors) || 0, warnings: Number(x.warnings) || 0, pending: !!x.isPending, last_downloaded: S(x.lastDownloaded) })) : null;
+    const gscSitemaps = Array.isArray(gl.sitemap) ? gl.sitemap.map(x => ({ path: S(x.path), errors: Number(x.errors) || 0, warnings: Number(x.warnings) || 0, pending: !!x.isPending, last_downloaded: S(x.lastDownloaded), last_submitted: S(x.lastSubmitted) }))
+      // wave 2 (§2.5): Google leaves an empty list out of its answer (`{}` = the property has no sitemap submitted): that is a list read, not a failure
+      : (li >= 0 && gl && typeof gl === 'object' && !gl.error && gl.sitemap === undefined && !Object.keys(gl).some(k => /error|message|status|code/i.test(k)) && smLists.length > li ? [] : null);
+    // wave 2 (§2.1): the website's own links - Site Links (the home page + the parents), or the home page alone when that node did not run
+    const sl = (siteLinks || []).find(x => x.site_id === s.site_id) || null;
+    const linkIndex = sl ? (sl.index || {}) : (st.home_read ? IX.linkIndex([{ url: S(st.home_url), links: st.home_link_urls || [] }]) : null);
+    const linksRead = sl ? !!sl.home_read : !!st.home_read;
+    const linked = sl ? (sl.linked || []) : (st.home_read ? (st.home_link_urls || []).filter(u => !IX.isLowValue(u) && !IX.isUtility(u) && IX.depth(u) > 0) : []);
+    const linkTitles = (sl && sl.titles) || {};
     const dom = IX.bare(s.domain);
     const ours = logs.filter(l => S(l.published_url) && (S(l.site_id) === s.site_id || IX.bare(S(l.domain)) === dom) && /^published$/i.test(S(l.status)))
       .map(l => ({ url: S(l.published_url), published_at: S(l.published_at) }));
     const m = IX.merge({ site, now, stored: mineStored, inventory: inventory.filter(r => r.site_id === s.site_id),
       sitemap: { read: (st.read || 0) > 0, complete, urls: st.urls || [] }, ours, search: { read: saOk, by: ev.by, truncated: ev.truncated },
-      watch: watch.filter(r => r.site_id === s.site_id), prev_complete: !!s.prev_complete, prev_complete_at: S(s.prev_complete_at) });
+      watch: watch.filter(r => r.site_id === s.site_id), prev_complete: !!s.prev_complete, prev_complete_at: S(s.prev_complete_at),
+      link_index: linkIndex, links_read: linksRead, linked, titles: linkTitles });
+    // wave 2 (§2.5): the sitemap submission, decided before anything is written (Sitemap Submit Requests asks; Index Run Rows records)
+    const submit = IX.submitPlan({ on: s.sitemap_submit === true, kill_off: SUBMIT_KILL_OFF, permission: S(s.gsc_permission), property: s.gsc_property, ok: st.ok || [],
+      gsc: gscSitemaps, complete, urls: st.urls || [], prev: prevOf(s), now });
     // a Site Tracker inspection of the same URL in the last 3 days is reused, not repeated
     for (const p of m.pages) { const r = IX.reuseOf(p._watch, now); if (r && (!p.inspect_at || Date.parse(p.inspect_at) < Date.parse(r.at))) p._reuse = r; }
     const quota_stop = !!s.quota_hit;
@@ -67,9 +86,10 @@ for (const s of sites) {
       sitemap: { read: st.read || 0, fetched: (st.fetched || []).length, urls: (st.urls || []).length, errors: (st.errors || []).slice(0, 10), capped: !!(st.capped || st.capped_sitemaps),
         complete, left: (st.next || []).length, robots_status: st.robots_status || 0, home_host: S(site.home_host) },
       gsc_sitemaps: gscSitemaps, search: { read: saOk, rows: ev.rows, end: ev.end, truncated: ev.truncated, truncated_windows: ev.truncated_windows, why: saOk ? '' : saWhy },
-      quota_stop, failed: false } });
+      quota_stop, failed: false, submit, links: { read: linksRead, parents: sl ? (sl.parents || []) : [], sources: sl ? (sl.sources || []).length : (st.home_read ? 1 : 0), found: linked.length }, link_titles: linkTitles } });
   } catch (e) {
     // R5 (fix wave 3): the client reads a plain reason; the exception stays in why_detail (ops: the execution, the run row's sitemaps_json.error_detail)
-    out.push({ json: { site_id: s.site_id, domain: s.domain, site: s, failed: true, why: IX.PLAIN_FAIL, why_detail: 'inventory failed: ' + S(e && e.message).slice(0, 160), pages: mineStored.map(slimStored), take: [], reuse: [] } }); }
+    out.push({ json: { site_id: s.site_id, domain: s.domain, site: s, failed: true, why: IX.PLAIN_FAIL, why_detail: 'inventory failed: ' + S(e && e.message).slice(0, 160), pages: mineStored.map(slimStored), take: [], reuse: [],
+      submit: IX.submitPlan({ on: s.sitemap_submit === true, kill_off: SUBMIT_KILL_OFF, permission: '', property: s.gsc_property, ok: [], gsc: null, complete: false, urls: [], prev: prevOf(s), now }) } }); }
 }
 return out.length ? out : [{ json: { skip: true, reason: 'no website' } }];

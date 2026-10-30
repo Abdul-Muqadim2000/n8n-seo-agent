@@ -7,6 +7,9 @@
 // N7 (fix wave 2): a round reads a bounded batch, so what was queued and not asked this round stays queued for the next one; round 1 queues
 // the roots it did not ask. The answers are files the HTTP node wrote to disk (read here, at most 8 MB of one: a longer sitemap is read in
 // part and the tree is marked capped), so no sitemap body is kept in the run's saved data; only the addresses found travel on.
+// Wave 2 (DESIGN_WAVE2.md §2.1): the home page's links are also kept as addresses (home_link_urls, resolved against the page, bounded) with
+// `home_read` / `home_url` / `home_title`, so the run knows which pages the website itself links to; a home page that could not be read (no
+// 2xx answer, a bot wall) leaves home_read false and nothing is concluded from it. Sitemaps read as real sitemaps are listed in `ok` (§2.5).
 /*__PAGE_WATCH__*/
 /*__INDEX_KIT__*/
 const ROUND = __ROUND__;
@@ -39,7 +42,8 @@ for (const s of sites) {
   const asked = new Set(mine.map(x => IX.key(x.q.url) + (x.q.robots ? '#r' : x.q.home ? '#h' : '')));
   // N7: what was queued and not asked in this round stays queued
   const carry = st ? (st.next || []).filter(n => !asked.has(IX.key(n.url) + (n.robots ? '#r' : n.home ? '#h' : ''))) : [];
-  st = st ? { ...st, next: carry } : { site_id: s.site_id, fetched: [], urls: [], next: [], errors: [], read: 0, sets: 0, robots_status: 0, robots_txt: '', home_host: '', home_links: [], home_hops: 0 };
+  st = st ? { ...st, next: carry } : { site_id: s.site_id, fetched: [], urls: [], next: [], errors: [], read: 0, sets: 0, robots_status: 0, robots_txt: '', home_host: '', home_links: [], home_hops: 0,
+    home_read: false, home_url: '', home_title: '', home_link_urls: [], ok: [] };
   const site = () => ({ ...s, home_host: st.home_host || S(s.home_host_prev) });
   try {
     // the home page first: the host decides how every sitemap address is stored
@@ -52,6 +56,9 @@ for (const s of sites) {
       } else if (status >= 200 && status < 300) {
         if (!st.home_host) st.home_host = IX.hostOf(q.url);
         st.home_links = IX.homeLinks(S(r.data), q.url, site());
+        // wave 2 (§2.1): a challenge page or a bot wall is not the home page: nothing is concluded from its links
+        const rf = IX.readFetch(q.url, { statusCode: status, headers: r.headers || {}, data: S(r.data) }, null);
+        if (rf.ok && !rf.blocked) { st.home_read = true; st.home_url = q.url; st.home_title = IX.titleOf(S(r.data)); st.home_link_urls = IX.pageLinks(S(r.data), q.url, site()); }
       }
     }
     for (const x of mine.filter(x => !x.q.home)) {

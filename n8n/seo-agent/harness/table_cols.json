@@ -222,7 +222,8 @@
   "ai_pulse_scope",
   "ai_focus_mode",
   "index_watch",
-  "index_daily_cap"
+  "index_daily_cap",
+  "index_sitemap_submit"
  ],
  "AI_VIS": [
   "site_id",

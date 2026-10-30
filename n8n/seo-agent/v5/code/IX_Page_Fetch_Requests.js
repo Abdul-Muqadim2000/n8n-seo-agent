@@ -4,6 +4,9 @@
 // the next day; then stored not-indexed pages last read more than a week ago - new pages first, sitemap pages next - at most IX.CFG.fetch_cap a
 // website a day. Listing / filter / account pages and removed pages nothing points to are not read; robots.txt blocks are checked against
 // robots.txt itself. E11: the address is rebuilt from its strict parse and must be on the site's own domain; no fetch follows a redirect.
+// Wave 2 (DESIGN_WAVE2.md §2.2): the read also reaches the pages Google calls "Alternate page with proper canonical tag" and the pages
+// Google has never seen that the website links to (linked_by), FIRST within the same cap: a page with its own title that names another
+// page as its canonical is only found by reading it (devaicon.com's 7 /industries/* pages: canonical -> /industries, not in the sitemap).
 /*__PAGE_WATCH__*/
 /*__INDEX_KIT__*/
 const S = (v) => String(v == null ? '' : v).trim();
@@ -24,8 +27,13 @@ for (const v of inv) {
     if (r && r.ok === false) continue;
     const age = !S(p.fetch_at) ? Infinity : now - Date.parse(p.fetch_at);
     const siteFix = S(p.action) === 'site_fix' || !!S(p.fix_seen_at);
-    if (r ? notIdx(r) : siteFix ? age > 20 * 3600e3 : ((S(p.state) === 'not_indexed' || S(p.state) === 'excluded') && age > IX.CFG.fetch_refresh_days * IX.DAY))
-      cands.push({ p, url, rank: r ? 0 : siteFix ? 1 : 2 });
+    // wave 2: an alternate (Google's reading, today's or stored) or a page Google has never seen, linked from the website, not read this week
+    const linked = IX.linkedList(p.linked_by).length > 0;
+    const alt = /^alternate page with proper canonical/i.test(S((r || {}).coverage) || S(p.coverage)) || S(p.cause) === 'alternate';
+    const unseen = S(p.state) === 'unknown' || /unknown to google/i.test(S((r || {}).coverage) || S(p.coverage)) || S(p.cause) === 'unknown_to_google';
+    const first = linked && (alt || unseen) && S(p.state) !== 'indexed' && !(r && !notIdx(r)) && age > IX.CFG.fetch_refresh_days * IX.DAY;
+    if (first || (r ? notIdx(r) : siteFix ? age > 20 * 3600e3 : ((S(p.state) === 'not_indexed' || S(p.state) === 'excluded') && age > IX.CFG.fetch_refresh_days * IX.DAY)))
+      cands.push({ p, url, rank: first ? 0 : r ? 1 : siteFix ? 2 : 3 });
   }
   cands.sort((a, b) => (a.rank - b.rank) || ((b.p.lane === 'new') - (a.p.lane === 'new')) || ((!!b.p.in_sitemap) - (!!a.p.in_sitemap)) || S(a.p.url).localeCompare(S(b.p.url)));
   for (const c of cands.slice(0, IX.CFG.fetch_cap)) out.push({ json: { site_id: v.site_id, url: c.url, page_url: c.p.url } });

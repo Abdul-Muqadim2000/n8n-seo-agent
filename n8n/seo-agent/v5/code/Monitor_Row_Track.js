@@ -25,5 +25,7 @@ Object.assign(__row, { ai_pulse_scope: ['focus', 'all'].includes(String(pick('ai
 // (the upsert writes every column it is given, so a column left out here would be emptied by every save)
 Object.assign(__row, { index_watch: (old.index_watch === '' || old.index_watch == null) ? null : !(old.index_watch === false || old.index_watch === 'false'),
   index_daily_cap: (old.index_daily_cap === '' || old.index_daily_cap == null) ? null : Number(old.index_daily_cap) });
+// Index coverage wave 2 (2026-10-30): the opt-in for sitemap submission is set through Site Admin `monitors` only; carried as stored (empty = off)
+Object.assign(__row, { index_sitemap_submit: (old.index_sitemap_submit === '' || old.index_sitemap_submit == null) ? null : (old.index_sitemap_submit === true || old.index_sitemap_submit === 'true') });
 if (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit
 return [{ json: __row }];
