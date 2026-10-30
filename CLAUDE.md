@@ -61,7 +61,7 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-10-30, page quality Wave 0: paid before/after run, blind-judged — latest)
+## Status (2026-10-30, page quality Waves 0, 0.5, 0.6: blind-judged runs, fixes, deploy checklist — latest)
 Owner priority: page quality and ranking must never drop. Wave 0 + follow-ups (`fed34d3c`, harness 14221 / 0) run against BEFORE (`8caf2467`) on
 the isolated `alvrun-*` stack, same 8 keywords on 3 sites, both builds' pages + 3 published controls judged together blind (2 Claude judges).
 Read **`n8n/seo-agent/docs/page-quality-2026-10-29/BEFORE_AFTER.md`** (and `BASELINE.md`, `PLAN.md`). **Pages better**: judges' mean
@@ -76,6 +76,11 @@ page"), Accept all works, Finalize -0.5. Grade back to generous (+17.1 signed on
 production): `_exclusions.js` EXC.match drops short tokens ("GP and SL" -> "dynamic") and deleted 6 of K1's sections; Draft Check fails a complete
 page ending on a bare CTA line (+ failed run shows "already written", ledger left reserved). Spend ~$5.41 of $10. Deploy: after a Wave 0.6 (those
 two + write-anyway slug + grade caps), offline-pinned on the recorded K1/K4 executions, then ask the owner (API first, then engine).
+**Wave 0.6 (`5d72a7d9`, pushed, NOT deployed): read `docs/page-quality-2026-10-29/WAVE06.md` (fixes, offline pins, DEPLOY CHECKLIST).** All four
+fixes built and pinned offline on the recorded runs (K1 replay deletes 0 sections, keeps 2,210 words; K4's CTA-ending page passes; the W05 K1
+page re-grades "Needs work" 72 vs judges 60.5); harness **14825 / 0**. The paid K1 re-check (~$1.10) did NOT run: disk 8-9 GB free vs the 15 GB
+rule; $0 spent. **Before any deploy from this branch, merge `main` into it** (Index coverage is live on production since 2026-10-30 from
+`feature/indexing`; 3 known conflicts), rebuild, retest; then backup, API, web PR, engine (WAVE06 §5). No app migration, no Data Table column.
 
 ## Status (2026-10-28 midday, GA4 + autopilot steps fix from a client report — previous)
 devaicon.com reported "Connect GA4" in Recommendations while GA4 was connected, and the first audit offered as a manual step though the
