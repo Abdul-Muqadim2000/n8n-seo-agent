@@ -8,6 +8,8 @@
 // 403 on a submission: false), the opt-in (`submit`: on / gate / kill switch), every submission (`submissions`: { path, at, status, reason },
 // checked back the next runs from sitemaps.list: `confirmed_at` = Search Console's lastSubmitted, `read_at` = its lastDownloaded),
 // the sitemap tree's fingerprint (`tree_fp`) and a 403 that holds the next submission (`submit_denied`). And the run's link read (`links`).
+// Wave 2 review: `permission_full` is Google's raw fact (W7); `submit.will_submit` / `submit.blocked` say whether the next run would submit
+// and what holds it (W1, IX.submitOutlook); a 403 at Full access and a missing write credential have their own notes (W7, W8).
 /*__PAGE_WATCH__*/
 /*__INDEX_KIT__*/
 const S = (v) => String(v == null ? '' : v).trim();
@@ -45,9 +47,14 @@ for (const d of diag) {
   const sr = IX.submitResults(sp, mineAsked, mineAns, Date.parse(nowIso));
   for (const t of sr.today) {
     if (t.status === 'submitted') notes.push('We submitted your sitemap to Google today (' + t.path + ').');
-    else if (t.status === 'denied') notes.push('Google refused our sitemap submission (no full access for us), so it was not submitted; we try again only when Google reports full access.');
+    // W7: Google reports Full access for us (the gate let the PUT go) and still refused it: never "read-only access"
+    else if (t.status === 'denied') notes.push('Google refused our sitemap submission today (' + t.path + ', answered 403) although it reports Full access for us, so the sitemap was not submitted. We try again in ' + IX.CFG.submit_denied_days + ' days, or sooner if your access level in Search Console changes; you can also submit it yourself.');
+    // W8: our own write credential is missing: nothing reached Google (one ops alert: Submit Setup Alert)
+    else if (t.status === 'not_set_up') notes.push('Sitemap submission is not set up on our side yet, so we did not submit your sitemap today.');
     else notes.push('Google did not accept our sitemap submission today (' + t.path + (t.http_status ? ', answered ' + t.http_status : '') + '); we try again in 7 days.');
   }
+  // W1: the outlook the app reads - would the next run submit if nothing changes, and if not, what holds it (after today's attempts)
+  const outlook = IX.submitOutlook(sp, sr.submissions, Date.parse(nowIso));
   if (!d.failed && sp.on && sp.gate === 'not_full_access') notes.push('You switched on sitemap submission, but Google gives us read-only access, so we cannot submit your sitemap. Give us Full access in Search Console, or submit it yourself.');
   const fr = d.freeze || {};
   out.push({ json: { site_id: d.site_id, domain: S(d.domain), run_at: S(d.run_at) || nowIso, request_id: S(d.request_id),
@@ -61,9 +68,10 @@ for (const d of diag) {
       pending: Array.isArray(d.gsc_sitemaps) ? d.gsc_sitemaps.filter(x => x.pending).length : null,
       read: n0(sm.read), fetched: n0(sm.fetched), urls: n0(sm.urls), capped: !!sm.capped, complete: d.failed ? null : sm.complete === true, robots_status: n0(sm.robots_status),
       home_host: S(sm.home_host), errors: (sm.errors || []).slice(0, 10), checked: !d.failed, chain_id: S(plan0.chain_id),
-      permission: S(sp.permission), permission_full: sr.permission_full, submit: { on: !!sp.on, gate: S(sp.gate), kill_switch: !!sp.kill_off, skipped: (sp.skipped || []).slice(0, 5) },
+      permission: S(sp.permission), permission_full: sr.permission_full, submit: { on: !!sp.on, gate: S(sp.gate), kill_switch: !!sp.kill_off, skipped: (sp.skipped || []).slice(0, 5), will_submit: outlook.will_submit, blocked: outlook.blocked },
       submissions: sr.submissions, tree_fp: sp.tree_fp || null, submit_denied: sr.submit_denied || null,
-      ...(d.links ? { links: { read: !!d.links.read, sources: n0(d.links.sources), found: n0(d.links.found), parents: (d.links.parents || []).slice(0, 10).map(x => ({ url: S(x.url), read: !!x.read })) } } : {}),
+      ...(d.links ? { links: { read: !!d.links.read, sources: n0(d.links.sources), found: n0(d.links.found), parents: (d.links.parents || []).slice(0, 10).map(x => ({ url: S(x.url), read: !!x.read })),
+        suggested: (d.links.suggested || []).slice(0, 10).map(x => ({ url: S(x.url), read: !!x.read })), unread_parents: n0(d.links.unread_parents) } } : {}),
       ...(S(d.why_detail) ? { error_detail: S(d.why_detail).slice(0, 300) } : {}) }) } });
 }
 return out.length ? out : [{ json: { skip: true, reason: 'no website' } }];

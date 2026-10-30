@@ -163,7 +163,10 @@ iff('Any Sites (Index)?', "{{ !$('Index Sites').first().json.skip }}", at(32, 1)
 node('Nothing To Do (Index)', 'n8n-nodes-base.noOp', 1, {}, at(33, 2))
 # ---- Search Console (submitted sitemaps, pages with impressions: by page per window, a second page when the first was full) ----
 code('Sitemaps List Requests', rd('IX_Sitemaps_List_Requests.js'), at(33, 1)); iff('Any Sitemaps List?', '{{ !$json.skip }}', at(34, 1))
-node('GSC Sitemaps List', 'n8n-nodes-base.httpRequest', 4.5, google('GET', '={{ $json.url }}'), at(35, 0), credentials=GOOGLE, **HTTP_X)
+# Wave 2 review W2: the list is read WITH its status code (fullResponse): an empty 502 also comes out of n8n as `{}`, which is Google's own
+# answer for "no sitemap" only on a 200 (IX.sitemapsListOf); an HTML error page is { body: '<html...' } and is "not read"
+_gsl = google('GET', '={{ $json.url }}'); _gsl['options']['response']['response']['fullResponse'] = True
+node('GSC Sitemaps List', 'n8n-nodes-base.httpRequest', 4.5, _gsl, at(35, 0), credentials=GOOGLE, **HTTP_X)
 code('Pages Query Requests', rd('IX_Pages_Query_Requests.js'), at(36, 1)); iff('Any Pages Query?', '{{ !$json.skip }}', at(37, 1))
 node('GSC Pages Query', 'n8n-nodes-base.httpRequest', 4.5, google('POST', '={{ $json.url }}'), at(38, 0), credentials=GOOGLE, **HTTP_X)
 code('Pages Query More', rd('IX_Pages_Query_More.js'), at(39, 1)); iff('Any Pages Query More?', '{{ !$json.skip }}', at(40, 1))
@@ -192,6 +195,9 @@ code('Sitemap Submit Requests', rd('IX_Sitemap_Submit_Requests.js'), at(73, 5));
 node(SUBMIT_NODE, 'n8n-nodes-base.httpRequest', 4.5, {'method': 'PUT', 'url': '={{ $json.url }}', 'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'googleApi',
      'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 1000}}, 'timeout': 60000, 'response': {'response': {'fullResponse': True, 'neverError': True}}}},
      at(73, 7), credentials=GOOGLE_W, **HTTP_X)
+node('Load Submit Alerts', DT_TYPE, DT_VERSION, dt_get_all_where_params(OPS_ALERTS_TABLE, [('workflow', 'eq', NAME)]), at(73, 8), **LOAD)
+code('Submit Setup Alert', rd('IX_Submit_Alert.js'), at(74, 8), executeOnce=True); iff('Any Submit Alert?', '{{ !$json.skip }}', at(75, 8))
+node('Save Submit Alert', DT_TYPE, DT_VERSION, dt_upsert_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, 'alert_key'), at(76, 8), **SAVE)
 code('Index Probe Requests', rd('IX_Probe_Requests.js'), at(74, 4)); iff('Any Probes?', '{{ !$json.skip }}', at(75, 4))
 node('Inspect URL (Probe)', 'n8n-nodes-base.httpRequest', 4.5, google('POST', INSPECT_URL), at(76, 3), credentials=GOOGLE, **HTTP_X)
 code('Index Inspect Requests', rd('IX_Inspect_Requests.js'), at(77, 4)); iff('Any Inspections (Index)?', '{{ !$json.skip }}', at(78, 4))
@@ -275,7 +281,10 @@ gate('Link Read Requests', 'Any Link Reads?', 'Fetch Link Pages', 'Site Links')
 link('Site Links', 'Index Inventory')
 link('Index Inventory', 'Index Reservation')
 gate('Index Reservation', 'Any Reservation?', 'Save Index Reservation', 'Sitemap Submit Requests')
-gate('Sitemap Submit Requests', 'Any Sitemap Submit?', SUBMIT_NODE, 'Index Probe Requests')
+# Wave 2 review W8: after the PUTs, a missing write credential (n8n's own error item, nothing reached Google) raises ONE ops alert for the run
+chain('Sitemap Submit Requests', 'Any Sitemap Submit?'); link('Any Sitemap Submit?', SUBMIT_NODE, 0); link('Any Sitemap Submit?', 'Index Probe Requests', 1)
+chain(SUBMIT_NODE, 'Load Submit Alerts', 'Submit Setup Alert', 'Any Submit Alert?')
+link('Any Submit Alert?', 'Save Submit Alert', 0); link('Any Submit Alert?', 'Index Probe Requests', 1); link('Save Submit Alert', 'Index Probe Requests')
 gate('Index Probe Requests', 'Any Probes?', 'Inspect URL (Probe)', 'Index Inspect Requests')
 gate('Index Inspect Requests', 'Any Inspections (Index)?', 'Inspect URL (Index)', 'Inspect Retry Requests')
 chain('Inspect Retry Requests', 'Any Rate Retry?'); link('Any Rate Retry?', 'Wait (Index Rate Limit)', 0); link('Any Rate Retry?', 'Page Fetch Requests', 1)

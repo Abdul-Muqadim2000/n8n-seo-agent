@@ -294,6 +294,14 @@
     "Index Report"
    ]
   ],
+  "Any Submit Alert?": [
+   [
+    "Save Submit Alert"
+   ],
+   [
+    "Index Probe Requests"
+   ]
+  ],
   "Any Update Impact?": [
    [
     "Save Update Impact"
@@ -712,6 +720,11 @@
     "Index Start Alert (Watch)"
    ]
   ],
+  "Load Submit Alerts": [
+   [
+    "Submit Setup Alert"
+   ]
+  ],
   "Load Update Impact": [
    [
     "GSC Sites (Index)"
@@ -879,6 +892,11 @@
     "Index Report"
    ]
   ],
+  "Save Submit Alert": [
+   [
+    "Index Probe Requests"
+   ]
+  ],
   "Save Update Impact": [
    [
     "Index Run Rows"
@@ -1011,9 +1029,14 @@
     "Load Start Alerts (Next)"
    ]
   ],
+  "Submit Setup Alert": [
+   [
+    "Any Submit Alert?"
+   ]
+  ],
   "Submit Sitemap (Index)": [
    [
-    "Index Probe Requests"
+    "Load Submit Alerts"
    ]
   ],
   "Tell Caller (Index)?": [
@@ -1162,6 +1185,7 @@
   "Any Start Alert (Before Settle)?",
   "Any Start Delivery? (After Settle)",
   "Any Start Delivery? (Before Settle)",
+  "Any Submit Alert?",
   "Any Update Impact?",
   "Callback Ledger (Index)",
   "DFS Balance (Index)",
@@ -1244,6 +1268,7 @@
   "Load Start Alerts (Part)",
   "Load Start Alerts (Restart)",
   "Load Start Alerts (Watch)",
+  "Load Submit Alerts",
   "Load Update Impact",
   "Manual Run",
   "Move Index History",
@@ -1280,6 +1305,7 @@
   "Save Index Start Alert (Before Settle)",
   "Save Index Start Delivery (After Settle)",
   "Save Index Start Delivery (Before Settle)",
+  "Save Submit Alert",
   "Save Update Impact",
   "Send Start Webhook? (After Settle)",
   "Send Start Webhook? (Before Settle)",
@@ -1305,6 +1331,7 @@
   "Start Index Part",
   "Start Index Watch",
   "Start Next Index Part",
+  "Submit Setup Alert",
   "Submit Sitemap (Index)",
   "Tell Caller (Index)?",
   "Update Impact Requests",
@@ -1450,7 +1477,8 @@
    "Save Index Start Alert (After Settle)",
    "Save Index Start Alert (Before Settle)",
    "Save Index Start Delivery (After Settle)",
-   "Save Index Start Delivery (Before Settle)"
+   "Save Index Start Delivery (Before Settle)",
+   "Save Submit Alert"
   ],
   "seo_run_ledger": [
    "Ensure Run Ledger (Index)",

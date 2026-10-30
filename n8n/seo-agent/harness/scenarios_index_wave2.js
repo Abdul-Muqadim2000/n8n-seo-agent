@@ -78,6 +78,8 @@ module.exports = async (ctx) => {
     return insp({ coverageState: 'URL is unknown to Google', pageFetchState: '', indexingState: '', robotsTxtState: '' }); };
   const sitemapAnswer = (u) => /\/robots\.txt$/.test(u) ? { statusCode: 200, headers: { 'content-type': 'text/plain' }, data: ROBOTS }
     : /\/sitemap\.xml$/.test(u) ? { statusCode: 200, headers: { 'content-type': 'application/xml' }, data: SITEMAP } : null;
+  // Wave 2 review W2: GSC Sitemaps List is read with its status code (fullResponse); FULL wraps a body the way n8n returns it then
+  const FULL = (body, st) => ({ statusCode: st || 200, statusMessage: 'OK', headers: { 'content-type': 'application/json; charset=UTF-8' }, body });
   const GSC_LISTED = (o) => ({ sitemap: [{ path: DEV + '/sitemap.xml', lastSubmitted: '2026-10-01T08:00:00.000Z', lastDownloaded: '2026-10-28T03:00:00.000Z', isPending: false, isSitemapsIndex: false, warnings: '0', errors: '0', ...(o || {}) }] });
 
   // ---- one day of devaicon.com through the generated nodes; st = { stored: [rows], history: [], runs: [run rows] } is updated as n8n's tables would be ----
@@ -91,7 +93,7 @@ module.exports = async (ctx) => {
     M['Load Index Pages'] = st.stored.length ? st.stored.map(r => ({ ...r })) : [{}];
     M['Load Pages (Index)'] = [{}]; M['Load Page Watch (Index)'] = [{}]; M['Load Content Log (Index)'] = [{}];
     M['Sitemaps List Requests'] = [{ site_id: SITE.site_id, url: 'https://www.googleapis.com/webmasters/v3/sites/sc-domain%3Adevaicon.com/sitemaps' }];
-    M['GSC Sitemaps List'] = [opt.gscList !== undefined ? opt.gscList : GSC_LISTED()];
+    M['GSC Sitemaps List'] = [opt.gscList !== undefined ? opt.gscList : FULL(GSC_LISTED())];
     M['Pages Query Requests'] = [{ skip: true }]; M['Pages Query More'] = [{ skip: true }];
     M['Google Events'] = [{ freeze: { freeze: false }, started: [], completed: [], events: [] }];
     // round 1 of the sitemap tree: the home page, robots.txt, /sitemap.xml (complete in one round, as on the live site)
@@ -102,7 +104,9 @@ module.exports = async (ctx) => {
     let parents = [];
     if (has('Link Read Requests')) {
       const lr = await node('Link Read Requests', M, null, now); M['Link Read Requests'] = lr; parents = lr.filter(q => !q.skip).map(q => P(q.url));
-      if (lr.some(q => !q.skip)) M['Fetch Link Pages'] = lr.filter(q => !q.skip).map(q => OK(q.url));
+      // wave 2 review: opt.linkDown = paths whose read fails today (W5); opt.page(url) = the page's HTML when the client changed it (W11 / W14)
+      if (lr.some(q => !q.skip)) M['Fetch Link Pages'] = lr.filter(q => !q.skip).map(q => (opt.linkDown || []).includes(P(q.url)) ? { statusCode: 503, headers: {}, data: 'unavailable' }
+        : (opt.page && opt.page(q.url) != null) ? { statusCode: 200, headers: { 'content-type': 'text/html' }, data: opt.page(q.url) } : OK(q.url));
       M['Site Links'] = await node('Site Links', M, M['Fetch Link Pages'] || null, now);
     }
     const inv = await node('Index Inventory', M, null, now); M['Index Inventory'] = inv;
@@ -132,7 +136,7 @@ module.exports = async (ctx) => {
     const run = (await node('Index Run Rows', M, null, now)).filter(r => !r.skip)[0] || null;
     for (const r of rows) { const m = st.stored.filter(x => x.site_id === r.site_id && x.url === r.url); if (m.length) m.forEach(x => Object.assign(x, r)); else st.stored.push({ ...r }); }
     st.history.push(...hist); if (run) st.runs.push(run);
-    return { inv: inv[0], dg: dg[0], rows, asked, fetched, parents, submits, run, sitemapRead: M['Sitemap Read 1'][0] };
+    return { inv: inv[0], dg: dg[0], rows, asked, fetched, parents, submits, run, sitemapRead: M['Sitemap Read 1'][0], res: res[0] || null, M };
   };
   const row = (st, p) => st.stored.find(r => P(r.url) === p) || {};
   const linkedOf = (r) => { try { const a = JSON.parse(S0(r.linked_by) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
@@ -210,7 +214,8 @@ module.exports = async (ctx) => {
     const a = T(() => IX.linkSuggestions(sov, rows, { site: SITE })), b = T(() => IX.linkSuggestions(edge, rows, { site: SITE })), c = T(() => IX.linkSuggestions(none, rows, { site: SITE }));
     const util = (l) => (Array.isArray(l) ? l : []).some(x => /\/(cookies|privacy|security)$|\/careers\//.test(x.url));
     check('never a utility page or a job posting (the live advice suggested /cookies for a data-sovereignty article)', Array.isArray(a) && Array.isArray(b) && !util(a) && !util(b), J({ a, b }));
-    check('a real topic overlap only (a section like /insights/ is not a topic): the data-sovereignty article gets the data page, the edge-AI article the industrial-automation pages', Array.isArray(a) && a.length >= 1 && a.every(x => /data/i.test(x.url + x.title)) && Array.isArray(b) && b.length >= 1 && b.some(x => /industrial-automation/.test(x.url)) && b.length <= 3, J({ a, b }));
+    // wave 2 review W12: one shared word ("data") is not a topic: the data-sovereignty article now gets no suggestion (it got the data page)
+    check('a real topic overlap only (a section like /insights/ is not a topic, nor one shared word): the data-sovereignty article gets nothing, the edge-AI article the industrial-automation pages', Array.isArray(a) && a.length === 0 && Array.isArray(b) && b.length >= 1 && b.some(x => /industrial-automation/.test(x.url)) && b.length <= 3, J({ a, b }));
     check('no generic filler: two articles on different topics do not get the same list, and neither gets the home page, /whatwedo or /careers (pages that share only the site\'s name)', J(a) !== J(b) && ![].concat(Array.isArray(a) ? a : [], Array.isArray(b) ? b : []).some(x => /devaicon\.com\/(whatwedo|careers)?$/.test(x.url)), J({ a, b }));
     check('a page with no topic in common gets NO suggestion (the site\'s name "Devaicon" in every title is not a topic)', Array.isArray(c) && c.length === 0, J(c));
     const d = T(() => IX.linkSuggestions(edge, rows, { site: SITE, linked_from: [DEV + '/insights/ai-in-industrial-automation'] }));
@@ -227,7 +232,8 @@ module.exports = async (ctx) => {
       'login', 'signin', 'sign-in', 'register', 'signup', 'account', 'cart', 'checkout', 'search', 'thank-you', 'thanks'];
     check('IX.UTILITY carries exactly the §2.4 segments, security as a top-level page only, careers / jobs for job postings', J((U.segments || []).slice().sort()) === J(SPEC.slice().sort()) && J(U.top_level_only) === J(['security']) && J(U.job_dirs) === J(['careers', 'jobs']), J(U));
     const u = (p) => T(() => IX.isUtility(DEV + p));
-    check('whole segments, any case, any depth: /privacy, /Legal/Imprint, /terms.html, /en/cookie-policy', [u('/privacy'), u('/Legal/Imprint'), u('/terms.html'), u('/en/cookie-policy')].every(x => x === true), J([u('/privacy'), u('/Legal/Imprint'), u('/terms.html'), u('/en/cookie-policy')]));
+    // wave 2 review W3: the FIRST segment only (any depth made /industries/legal a policy page); /en/cookie-policy is no longer one
+    check('the first segment, whole, any case: /privacy, /Legal/Imprint, /terms.html, /policies/cookies', [u('/privacy'), u('/Legal/Imprint'), u('/terms.html'), u('/policies/cookies')].every(x => x === true), J([u('/privacy'), u('/Legal/Imprint'), u('/terms.html'), u('/policies/cookies')]));
     check('not a utility page: /services/security, /privacy-first-analytics, /searching-for-talent, /careers', [u('/services/security'), u('/privacy-first-analytics'), u('/searching-for-talent'), u('/careers')].every(x => x === false), J([u('/services/security'), u('/privacy-first-analytics'), u('/searching-for-talent'), u('/careers')]));
     check('job postings: /careers/data-engineer and /jobs/x are, /careers is not', T(() => IX.isJobPosting(DEV + '/careers/data-engineer')) === true && T(() => IX.isJobPosting(DEV + '/jobs/x')) === true && T(() => IX.isJobPosting(DEV + '/careers')) === false, '');
     const home = new Set(['/capabilities/a', '/industries/b', '/insights/c', '/about', '/insights', '/privacy', '/careers/x'].map(p => IX.key(DEV + p)));
@@ -306,7 +312,8 @@ module.exports = async (ctx) => {
     // the 403
     const plan = sp({ gsc: [] });
     const r403 = T(() => IX.submitResults(plan, [{ path: DEV + '/sitemap.xml', reason: 'not_listed' }], [{ statusCode: 403, headers: {}, body: { error: { code: 403, message: 'User does not have sufficient permission' } } }], now));
-    check('a 403 -> recorded "denied", permission not full, the level remembered', r403 && r403.today && r403.today[0].status === 'denied' && r403.permission_full === false && r403.submit_denied && r403.submit_denied.level === 'siteFullUser', J(r403));
+    // wave 2 review W7: permission_full stays Google's raw fact (Full access); the hold is submit_denied (blocked 'refused' for the app)
+    check('a 403 -> recorded "denied", permission_full still Google\'s fact (full), the level remembered', r403 && r403.today && r403.today[0].status === 'denied' && r403.permission_full === true && r403.submit_denied && r403.submit_denied.level === 'siteFullUser', J(r403));
     check('after a 403: no retry at the same access level the next day', g({ gsc: [], now: now + DAY, prev: { submissions: (r403 || {}).submissions, submit_denied: (r403 || {}).submit_denied } }) === 'denied_before:', g({ gsc: [], now: now + DAY, prev: { submit_denied: (r403 || {}).submit_denied } }));
     check('after a 403: tried again when Google reports another (full) level, or after 28 days', g({ gsc: [], permission: 'siteOwner', now: now + DAY, prev: { submit_denied: (r403 || {}).submit_denied } }) === 'ok:not_listed' && g({ gsc: [], now: now + 29 * DAY, prev: { submit_denied: (r403 || {}).submit_denied } }) === 'ok:not_listed', '');
     // the check back
@@ -317,18 +324,18 @@ module.exports = async (ctx) => {
     // end to end through the nodes: switched on, full access, Search Console lists nothing (`{}`)
     const E = { stored: D.stored.map(r => ({ ...r })), history: [], runs: D.runs.slice() };
     const t1 = T0 + 10 * DAY;
-    const x1 = await TA(() => devDay(E, t1, { submit: true, gscList: {} }));
+    const x1 = await TA(() => devDay(E, t1, { submit: true, gscList: FULL({}) }));
     const put = (x1.submits || [])[0] || {};
-    check('end to end: an empty sitemaps.list ({}) is read as "no sitemap submitted" and the robots.txt sitemap is submitted with ONE PUT to sitemaps.submit', !x1.__error && (x1.submits || []).length === 1 && put.url === 'https://www.googleapis.com/webmasters/v3/sites/sc-domain%3Adevaicon.com/sitemaps/https%3A%2F%2Fdevaicon.com%2Fsitemap.xml' && put.reason === 'not_listed', J({ err: x1.__error, submits: x1.submits }));
+    check('end to end: an empty sitemaps.list ({} from a 200) is read as "no sitemap submitted" and the robots.txt sitemap is submitted with ONE PUT to sitemaps.submit', !x1.__error && (x1.submits || []).length === 1 && put.url === 'https://www.googleapis.com/webmasters/v3/sites/sc-domain%3Adevaicon.com/sitemaps/https%3A%2F%2Fdevaicon.com%2Fsitemap.xml' && put.reason === 'not_listed', J({ err: x1.__error, submits: x1.submits }));
     const j1 = T(() => JSON.parse(S0((x1.run || {}).sitemaps_json) || '{}')) || {};
     check('the run row: submit on / ok, the submission recorded (submitted), the note says so', (j1.submissions || [])[0] && j1.submissions[0].status === 'submitted' && j1.submit && j1.submit.on === true && j1.submit.gate === 'ok' && /We submitted your sitemap to Google today/.test(S0((x1.run || {}).note)), J({ j: j1, note: (x1.run || {}).note }));
-    const x2 = await TA(() => devDay(E, t1 + DAY, { submit: true, gscList: GSC_LISTED({ lastSubmitted: iso(t1 + 60e3), lastDownloaded: iso(t1 + 4 * 3600e3) }) }));
+    const x2 = await TA(() => devDay(E, t1 + DAY, { submit: true, gscList: FULL(GSC_LISTED({ lastSubmitted: iso(t1 + 60e3), lastDownloaded: iso(t1 + 4 * 3600e3) })) }));
     const j2 = T(() => JSON.parse(S0((x2.run || {}).sitemaps_json) || '{}')) || {};
     check('the next day: listed with our date -> no resubmit, the submission reads "read" (Google read your sitemap)', !x2.__error && (x2.submits || []).length === 0 && (j2.submissions || [])[0] && j2.submissions[0].status === 'read', J({ err: x2.__error, s: x2.submits, j: j2.submissions }));
-    const x3 = await TA(() => devDay(E, t1 + 2 * DAY, { submit: true, permission: 'siteRestrictedUser', gscList: {} }));
+    const x3 = await TA(() => devDay(E, t1 + 2 * DAY, { submit: true, permission: 'siteRestrictedUser', gscList: FULL({}) }));
     const j3 = T(() => JSON.parse(S0((x3.run || {}).sitemaps_json) || '{}')) || {};
     check('read-only access with the switch on: nothing sent, permission recorded, the note asks for Full access', !x3.__error && (x3.submits || []).length === 0 && j3.permission === 'siteRestrictedUser' && j3.permission_full === false && /read-only access/.test(S0((x3.run || {}).note)), J({ err: x3.__error, j: j3, note: (x3.run || {}).note }));
-    const x4 = await TA(() => devDay(E, t1 + 3 * DAY, { submit: false, gscList: {} }));
+    const x4 = await TA(() => devDay(E, t1 + 3 * DAY, { submit: false, gscList: FULL({}) }));
     check('control: switched off, nothing sent (an unsubmitted sitemap is the client\'s step, as before)', !x4.__error && (x4.submits || []).length === 0, J(x4.submits || x4.__error));
   });
 
@@ -382,6 +389,222 @@ module.exports = async (ctx) => {
     const plan = await TA(() => node('Index Plan', { 'Manual Run': [{ domain: 'devaicon.com' }], 'Load Sites (Index)': [{ ...SITE, status: 'active' }], 'Load Monitors (Index)': [{ site_id: SITE.site_id, index_sitemap_submit: true }], 'Load Index Runs': [{}] }, null, T0));
     const plan0 = await TA(() => node('Index Plan', { 'Manual Run': [{ domain: 'devaicon.com' }], 'Load Sites (Index)': [{ ...SITE, status: 'active' }], 'Load Monitors (Index)': [{ site_id: SITE.site_id }], 'Load Index Runs': [{}] }, null, T0));
     check('the run reads the switch: on when stored true, OFF when empty', Array.isArray(plan) && plan[0].sitemap_submit === true && Array.isArray(plan0) && plan0[0].sitemap_submit === false, J([plan, plan0].map(p => Array.isArray(p) ? p[0].sitemap_submit : p)));
+  });
+  // =================================================================================================================================
+  // IXW1-IXW14 (wave 2 review, 2026-10-30, docs/indexing-2026-10-29/REVIEW_WAVE2.md W1-W14): every check here fails on ix/engine fb6bdbf3
+  // (the wave 2 build the review read) unless it is named "control:"; run it there with CODE_DIR / WF_DIR pointing at that build's output.
+  const SJ = (run) => T(() => JSON.parse(S0((run || {}).sitemaps_json) || '{}')) || {};
+  const copyD = () => ({ stored: D.stored.map(r => ({ ...r })), history: [], runs: D.runs.slice() });
+  const tW = T0 + 20 * DAY;
+  await guard('IXW2 sitemaps.list read only from a real answer', async () => {
+    const SN = 'IXW2 (REVIEW_WAVE2 W2) only a real Search Console sitemaps.list answer is a reading: a `sitemap` array, or `{}` from a 200 that is JSON; an HTML error page, an empty body, an empty 502 or an error item is "not read" - no "no sitemap submitted" note, no sitemap step, no PUT; the list is read with its status code';
+    begin(SN); const check = mkCheck(SN);
+    const L = (a) => T(() => IX.sitemapsListOf(a));
+    check('IX.sitemapsListOf: {} from a 200 (JSON object or the text "{}") -> [] (no sitemap); a sitemap array -> the list', J(L(FULL({}))) === '[]' && J(L(FULL('{}'))) === '[]' && (L(FULL(GSC_LISTED())) || [])[0] && L(FULL(GSC_LISTED()))[0].path === DEV + '/sitemap.xml', J([L(FULL({})), L(FULL('{}')), L(FULL(GSC_LISTED()))]));
+    const bad = [{ data: '<!DOCTYPE html><html><title>Error 502 (Server Error)!!1</title></html>' }, {}, FULL('', 502), FULL('<html>Service Unavailable</html>', 503), FULL('', 200), FULL('<html>oops</html>', 200),
+      FULL({ error: { code: 500, message: 'Internal error' } }, 200), { error: { message: 'socket hang up' } }, FULL({ kind: 'x' }, 200)];
+    check('an HTML page, an empty body, an empty 502, a non-200, a 200 that is not JSON, an error item -> null (not read)', bad.every(a => L(a) === null), J(bad.map(L)));
+    const wf = T(() => JSON.parse(fs.readFileSync(path.join(WFD, 'SEO_Agent_Index_Coverage.json'), 'utf8'))[0]) || {};
+    const gl = ((wf.nodes || []).find(n => n.name === 'GSC Sitemaps List') || {}).parameters || {};
+    check('GSC Sitemaps List is read with its status code (fullResponse + neverError): an empty 502 can be told from Google\'s {}', J(((gl.options || {}).response || {}).response) === J({ neverError: true, fullResponse: true }) || J(((gl.options || {}).response || {}).response) === J({ fullResponse: true, neverError: true }), J(gl.options));
+    for (const [label, ans] of [['an HTML error page ({ data: "<html..." })', bad[0]], ['an empty 502 ({} without a status code)', bad[1]]]) {
+      const E = copyD(); const x = await TA(() => devDay(E, tW, { submit: true, gscList: ans })); const j = SJ(x.run);
+      check('end to end, switch on, full access, ' + label + ': no PUT, "submitted" not read (null), no "No sitemap is submitted" note', !x.__error && (x.submits || []).length === 0 && j.submitted === null && !/No sitemap is submitted/.test(S0((x.run || {}).note)),
+        J({ err: x.__error, submits: x.submits, submitted: j.submitted, note: S0((x.run || {}).note).slice(0, 300) }));
+    }
+    const E2 = copyD(); const y = await TA(() => devDay(E2, tW, { submit: true, gscList: FULL({}) }));
+    check('{} from a 200 (full response) is still "no sitemap submitted" (one PUT, the count 0)', !y.__error && (y.submits || []).length === 1 && SJ(y.run).submitted === 0, J({ err: y.__error, s: y.submits }));
+  });
+
+  await guard('IXW1 will_submit and blocked', async () => {
+    const SN = 'IXW1 (REVIEW_WAVE2 W1) sitemaps_json.submit gains will_submit (the next run would submit if nothing changes) and blocked (why not): switch_off, not_full_access, paused (kill switch), no_sitemap, outside_property, unchanged, too_soon, refused, not_set_up; "" when it will submit or nothing is due';
+    begin(SN); const check = mkCheck(SN);
+    const now = Date.parse('2026-11-12T10:00:00Z');
+    const urls = (n) => Array.from({ length: n }, (_, i) => ({ loc: DEV + '/p' + i }));
+    const base = { on: true, kill_off: false, permission: 'siteFullUser', property: 'sc-domain:devaicon.com', site: SITE, ok: [{ url: DEV + '/sitemap.xml', from: 'robots' }], complete: true, urls: urls(30), now };
+    const L = (o) => [{ path: DEV + '/sitemap.xml', errors: 0, last_submitted: '2026-10-01T08:00:00.000Z', last_downloaded: '2026-10-28T03:00:00.000Z', ...(o || {}) }];
+    const fp29 = T(() => IX.treeFp(urls(29), true));
+    const o = (x) => { const r = T(() => IX.submitPlan({ ...base, ...x })); return r && !r.__error ? (r.will_submit === true ? 'will' : r.will_submit === false ? 'no' : '?') + ':' + r.blocked : J(r); };
+    const cases = [
+      ['not listed, full access -> will submit', { gsc: [] }, 'will:'],
+      ['switch off', { on: false, gsc: [] }, 'no:switch_off'],
+      ['read-only access', { permission: 'siteRestrictedUser', gsc: [] }, 'no:not_full_access'],
+      ['the kill switch', { kill_off: true, gsc: [] }, 'no:paused'],
+      ['no sitemap read today', { ok: [], gsc: [] }, 'no:no_sitemap'],
+      ['a URL-prefix property on the other host', { property: 'https://www.devaicon.com/', gsc: [] }, 'no:outside_property'],
+      ['a robots.txt sitemap on another domain', { ok: [{ url: 'https://cdn.example.net/sitemap.xml', from: 'robots' }], gsc: [] }, 'no:outside_property'],
+      ['listed, unchanged, no errors -> nothing due', { gsc: L(), prev: { tree_fp: { fp: T(() => IX.treeFp(urls(30), true)), changed_at: '' } } }, 'no:'],
+      ['listed WITH errors, unchanged -> a resubmit would do nothing', { gsc: L({ errors: 3 }), prev: { tree_fp: { fp: T(() => IX.treeFp(urls(30), true)), changed_at: '' } } }, 'no:unchanged'],
+      ['changed, but we submitted it 3 days ago', { gsc: L({ last_submitted: iso(now - 3 * DAY) }), prev: { tree_fp: { fp: fp29 }, submissions: [{ path: DEV + '/sitemap.xml', at: iso(now - 3 * DAY), status: 'confirmed' }] } }, 'no:too_soon'],
+      ['a 403 held at the same level', { gsc: [], prev: { submit_denied: { at: iso(now - 10 * DAY), level: 'siteFullUser' } } }, 'no:refused'],
+      ['another 4xx 2 days ago', { gsc: [], prev: { submissions: [{ path: DEV + '/sitemap.xml', at: iso(now - 2 * DAY), status: 'refused' }] } }, 'no:refused'],
+      ['our credential missing 2 days ago', { gsc: [], prev: { submissions: [{ path: DEV + '/sitemap.xml', at: iso(now - 2 * DAY), status: 'not_set_up' }] } }, 'no:not_set_up'],
+      ['Search Console\'s list not read today (nothing concluded; gate says so)', { gsc: null }, 'no:'],
+    ];
+    for (const [label, x, want] of cases) check('IX.submitPlan -> ' + want + ': ' + label, o(x) === want, o(x));
+    // end to end: the run row carries them
+    const E = copyD();
+    const a = await TA(() => devDay(E, tW, { submit: true, gscList: FULL({}) })); const ja = SJ(a.run);
+    check('end to end: the day we submitted, the run row says the next run will not (an attempt in the last 7 days)', !a.__error && (a.submits || []).length === 1 && ja.submit && ja.submit.will_submit === false && ja.submit.blocked === 'too_soon', J({ err: a.__error, submit: ja.submit }));
+    const E2 = copyD(); const b = await TA(() => devDay(E2, tW, { submit: false, gscList: FULL({}) })); const jb = SJ(b.run);
+    check('end to end: switch off -> will_submit false, blocked switch_off (the app keeps the "submit your sitemap" step)', !b.__error && jb.submit && jb.submit.will_submit === false && jb.submit.blocked === 'switch_off', J(jb.submit));
+    const E3 = copyD(); const c = await TA(() => devDay(E3, tW, { submit: true, permission: 'siteRestrictedUser', gscList: FULL({}) })); const jc = SJ(c.run);
+    check('end to end: read-only access -> blocked not_full_access', !c.__error && jc.submit && jc.submit.will_submit === false && jc.submit.blocked === 'not_full_access', J(jc.submit));
+    const E4 = copyD(); const d = await TA(() => devDay(E4, tW, { submit: true, gscList: FULL(GSC_LISTED()) })); const jd = SJ(d.run);
+    check('end to end: listed and nothing changed -> will_submit false, blocked "" (nothing due)', !d.__error && (d.submits || []).length === 0 && jd.submit && jd.submit.will_submit === false && jd.submit.blocked === '', J(jd.submit));
+  });
+
+  await guard('IXW3 utility pages by the first segment', async () => {
+    const SN = 'IXW3 (REVIEW_WAVE2 W3) a utility page only when the FIRST path segment is a utility word (or /legal/*, /policies/*), security only as /security: /industries/legal, /features/search, /solutions/accessibility, /blog/thanks are normal pages; IX.UTILITY exports the rule for the app';
+    begin(SN); const check = mkCheck(SN);
+    const u = (p) => T(() => IX.isUtility(DEV + p));
+    const no = ['/industries/legal', '/features/search', '/solutions/accessibility', '/blog/thanks', '/services/legal/contracts', '/products/cart-abandonment-guide', '/a/security'];
+    const yes = ['/privacy', '/legal', '/legal/privacy', '/policies/refunds', '/policies', '/security', '/Terms.html', '/account/settings', '/search', '/thank-you'];
+    check('normal pages: ' + no.join(', '), no.every(p => u(p) === false), J(no.map(p => [p, u(p)])));
+    check('utility pages: ' + yes.join(', '), yes.every(p => u(p) === true), J(yes.map(p => [p, u(p)])));
+    const U = T(() => IX.UTILITY) || {};
+    check('IX.UTILITY exports the rule for the app: rule first_segment, dirs legal / policies', U.rule === 'first_segment' && J(U.dirs) === J(['legal', 'policies']), J(U));
+    const r = T(() => IX.refine({ url: DEV + '/industries/legal', domain: 'devaicon.com', cause: 'discovered_not_crawled', action: 'links', state: 'not_indexed', linked_by: J([DEV + '/industries']) }, { titles: new Map(), site: SITE }));
+    check('/industries/legal (Google found it, not crawled, linked from /industries) waits like any page, never "fine to leave out"', r && r.cause === 'discovered_not_crawled' && r.action === 'wait', J(r));
+  });
+
+  await guard('IXW4 own-title canonical never on a variant', async () => {
+    const SN = 'IXW4 (REVIEW_WAVE2 W4) "a copy with its own title" (canonical_elsewhere / site_fix) never fires for an address with a query string, nor when the page and its canonical have the same path; the devaicon.com industry pages still do';
+    begin(SN); const check = mkCheck(SN);
+    const titles = new Map([[IX.key(DEV + '/products'), 'Products | Devaicon'], [IX.key(DEV + '/shop?lang=en'), 'Boutique | Devaicon'], [IX.key(DEV + '/industries'), 'Industries We Serve | Devaicon']]);
+    const rf = (u, t, can) => T(() => IX.refine({ url: DEV + u, domain: 'devaicon.com', cause: 'alternate', action: 'leave_out', state: 'excluded', title: t, page_canonical: DEV + can, user_canonical: DEV + can, in_sitemap: false, linked_by: '' }, { titles, site: SITE }));
+    const a = rf('/products?color=red', 'Red Products | Devaicon', '/products'), b = rf('/shop', 'Shop | Devaicon', '/shop?lang=en'), c = rf('/industries/retail', 'Retail Technology Solutions | Devaicon', '/industries');
+    check('/products?color=red ("Red Products", canonical /products): stays alternate / leave_out', a && a.cause === 'alternate' && a.action === 'leave_out', J(a));
+    check('/shop ("Shop", canonical /shop?lang=en, same path): stays alternate / leave_out', b && b.cause === 'alternate' && b.action === 'leave_out', J(b));
+    check('control: /industries/retail (own title, canonical /industries) is still canonical_elsewhere / site_fix', c && c.cause === 'canonical_elsewhere' && c.action === 'site_fix', J(c));
+  });
+
+  await guard('IXW5 an unread parent protects its children', async () => {
+    const SN = 'IXW5 (REVIEW_WAVE2 W5) a parent page not read today (it failed, or it is past the 10-parent cap) protects its children like the home page\'s "unread": they keep their linked_by and their action, never "add internal links"';
+    begin(SN); const check = mkCheck(SN);
+    const before = JOBS.map(p => [p, row(D, p).action, linkedOf(row(D, p)).length]);
+    check('control: before, the six job pages wait, linked from /careers', JOBS.every(p => row(D, p).action === 'wait' && linkedOf(row(D, p)).some(x => /\/careers$/.test(x))), J(before));
+    const E = copyD(); const x = await TA(() => devDay(E, tW, { linkDown: ['/careers'] }));
+    check('/careers answers 503 today: every job page keeps wait and its linked_by (no "add internal links", no link suggestions)', !x.__error && JOBS.every(p => { const r = row(E, p); return r.action === 'wait' && linkedOf(r).some(u => /\/careers$/.test(u)) && S0(r.link_from) === ''; }),
+      J({ err: x.__error, jobs: JOBS.map(p => [p, row(E, p).action, row(E, p).linked_by, row(E, p).link_from]) }));
+    // past the cap: 12 parents, each with a child Google does not know; the two read last keep what was stored
+    const known = []; for (let i = 0; i < 12; i++) { known.push({ url: DEV + '/s' + String(i).padStart(2, '0'), state: 'indexed' }); for (let j = 0; j <= 12 - i; j++) known.push({ url: DEV + '/s' + String(i).padStart(2, '0') + '/c' + j, state: 'not_indexed' }); }
+    const all = T(() => IX.parentPlan(known, SITE, true)); const capped = T(() => IX.parentPlan(known, SITE));
+    check('IX.parentPlan(known, site, true) lists every parent (12), the plan itself still at most 10', Array.isArray(all) && all.length === 12 && Array.isArray(capped) && capped.length === 10, J({ all: (all || []).length, capped: (capped || []).length }));
+    const child = { site_id: SITE.site_id, domain: 'devaicon.com', url: DEV + '/s11/c0', state: 'not_indexed', cause: 'unknown_to_google', action: 'wait', linked_by: J([DEV + '/s11']), in_sitemap: true, inspect_at: iso(tW - DAY), first_seen_at: iso(tW - 30 * DAY) };
+    const m = T(() => IX.merge({ site: SITE, now: tW, stored: [child], sitemap: { read: true, complete: true, urls: [{ loc: DEV + '/s11/c0' }] }, search: { read: false, by: new Map(), truncated: false },
+      link_index: {}, links_read: true, linked: [], titles: {}, unread_parents: [DEV + '/s11'] }));
+    const mr = ((m || {}).pages || [])[0] || {};
+    check('IX.merge: a child of a parent past the cap (or not read) keeps its stored linked_by, never \'\'', mr.linked_by === J([DEV + '/s11']), J({ m: m && m.__error, linked_by: mr.linked_by }));
+    const m2 = T(() => IX.merge({ site: SITE, now: tW, stored: [{ ...child, linked_by: '' }], sitemap: { read: true, complete: true, urls: [{ loc: DEV + '/s11/c0' }] }, search: { read: false, by: new Map(), truncated: false },
+      link_index: {}, links_read: true, linked: [], titles: {}, unread_parents: [DEV + '/s11'] }));
+    check('IX.merge: with nothing stored it is \'unread\' (nothing concluded), not \'\'', (((m2 || {}).pages || [])[0] || {}).linked_by === 'unread', J((((m2 || {}).pages || [])[0] || {}).linked_by));
+  });
+
+  await guard('IXW7 IXW8 a 403 at full access, a missing credential', async () => {
+    const SN = 'IXW7 / IXW8 (REVIEW_WAVE2 W7, W8) a 403 while Google reports Full access is "Google refused the submission" (blocked refused), never "read-only access", and permission_full stays Google\'s fact; a missing write credential is "not set up on our side" (blocked not_set_up) with ONE ops alert, never "Google did not accept"';
+    begin(SN); const check = mkCheck(SN);
+    const E = copyD();
+    const a = await TA(() => devDay(E, tW, { submit: true, gscList: FULL({}), submitAnswer: () => ({ statusCode: 403, headers: {}, body: { error: { code: 403, message: 'User does not have sufficient permission for site' } } }) }));
+    const ja = SJ(a.run); const na = S0((a.run || {}).note);
+    check('W7: the note says Google refused it although it reports Full access, and never "read-only access" or "no full access"', !a.__error && /refused our sitemap submission/.test(na) && /reports Full access/.test(na) && !/read-only/.test(na) && !/no full access/.test(na), J({ err: a.__error, note: na }));
+    check('W7: permission_full stays true (Google\'s fact), the submission is "denied", blocked "refused"', ja.permission_full === true && (ja.submissions || [])[0] && ja.submissions[0].status === 'denied' && ja.submit && ja.submit.blocked === 'refused' && ja.submit.will_submit === false, J({ pf: ja.permission_full, s: ja.submissions, submit: ja.submit }));
+    const b = await TA(() => devDay(E, tW + DAY, { submit: true, gscList: FULL({}) })); const jb = SJ(b.run);
+    check('W7: the next day, no new PUT (held at that level), still blocked "refused", access still reads full', !b.__error && (b.submits || []).length === 0 && jb.submit && jb.submit.blocked === 'refused' && jb.permission_full === true, J({ err: b.__error, s: b.submits, submit: jb.submit, pf: jb.permission_full }));
+    const E2 = copyD();
+    const CRED = { error: { message: 'Credential with ID "SEOcredGoogleSvcW" does not exist for type "googleApi".' } };
+    const c = await TA(() => devDay(E2, tW, { submit: true, gscList: FULL({}), submitAnswer: () => CRED })); const jc = SJ(c.run); const nc = S0((c.run || {}).note);
+    check('W8: the note is "Sitemap submission is not set up on our side yet", never "Google did not accept"', !c.__error && /Sitemap submission is not set up on our side yet/.test(nc) && !/Google did not accept/.test(nc), J({ err: c.__error, note: nc }));
+    check('W8: recorded not_set_up, blocked not_set_up', (jc.submissions || [])[0] && jc.submissions[0].status === 'not_set_up' && jc.submit && jc.submit.blocked === 'not_set_up', J({ s: jc.submissions, submit: jc.submit }));
+    const al = await TA(() => node('Submit Setup Alert', { ...(c.M || {}), 'Load Submit Alerts': [{}] }, null, tW));
+    const al0 = (Array.isArray(al) ? al : [])[0] || {};
+    check('W8: ONE ops alert row (seo_ops_alerts: critical, pending, due now for the sweep, names the credential)', Array.isArray(al) && al.length === 1 && S0(al0.alert_key) && al0.severity === 'critical' && al0.delivered === 'pending' && S0(al0.next_attempt_at) === iso(tW) && /SEOcredGoogleSvcW/.test(S0(al0.message)), J(al));
+    const okDay = await TA(() => devDay(copyD(), tW, { submit: true, gscList: FULL({}) }));
+    const ok = await TA(() => node('Submit Setup Alert', { ...(okDay.M || {}), 'Load Submit Alerts': [{}] }, null, tW));
+    check('W8: no alert when Google answered', Array.isArray(ok) && ok.length === 1 && ok[0].skip === true, J(ok));
+    const wf = T(() => JSON.parse(fs.readFileSync(path.join(WFD, 'SEO_Agent_Index_Coverage.json'), 'utf8'))[0]) || {};
+    const C = wf.connections || {}; const outs = (n) => ((C[n] || {}).main || []).flat().filter(Boolean).map(t => t.node);
+    check('W8: wiring Submit Sitemap (Index) -> Load Submit Alerts -> Submit Setup Alert -> Any Submit Alert? -> Save Submit Alert (seo_ops_alerts) -> Index Probe Requests', J(outs('Submit Sitemap (Index)')) === J(['Load Submit Alerts']) && J(outs('Load Submit Alerts')) === J(['Submit Setup Alert'])
+      && J(outs('Submit Setup Alert')) === J(['Any Submit Alert?']) && J(outs('Any Submit Alert?').sort()) === J(['Index Probe Requests', 'Save Submit Alert']) && J(outs('Save Submit Alert')) === J(['Index Probe Requests']), J(['Submit Sitemap (Index)', 'Load Submit Alerts', 'Submit Setup Alert', 'Any Submit Alert?', 'Save Submit Alert'].map(n => [n, outs(n)])));
+  });
+
+  await guard('IXW9 the 14-day note never replaces a step', async () => {
+    const SN = 'IXW9 (REVIEW_WAVE2 W9) "There is nothing more to do on your side" (14 days after "I asked Google") only for a page with nothing to do; a site step, "improve it" or "fine to leave out" keeps its own note';
+    begin(SN); const check = mkCheck(SN);
+    const asked = iso(T0 - 16 * DAY);
+    const n = (o) => S0(T(() => IX.noteOf({ url: DEV + '/x', domain: 'devaicon.com', asked_google_at: asked, state: 'not_indexed', ...o }, { now: T0, site: SITE })));
+    const a = n({ cause: 'noindex', action: 'site_fix', noindex: 'meta' }), b = n({ cause: 'crawled_not_indexed', action: 'quality' }), c = n({ cause: 'low_value', action: 'leave_out', url: DEV + '/privacy' }), d = n({ cause: 'discovered_not_crawled', action: 'wait', linked_by: J([DEV + '/']) });
+    check('noindex (site_fix): the step stays in the note, after "You asked Google on ..."', /^You asked Google on/.test(a) && /Remove the noindex/.test(a) && !/nothing more to do/.test(a), a);
+    check('crawled, not indexed (quality): the note keeps "Improving the page"', /Improving the page/.test(b) && !/nothing more to do/.test(b), b);
+    check('a utility page (leave_out): keeps "Policy and utility pages ..."', /Policy and utility pages/.test(c) && !/nothing more to do/.test(c), c);
+    check('control: a page that only waits gets "There is nothing more to do on your side for now."', /nothing more to do on your side/.test(d), d);
+  });
+
+  await guard('IXW11 IXW14 a link the client adds is seen; nofollow is not a link', async () => {
+    const SN = 'IXW11 / IXW14 (REVIEW_WAVE2 W11, W14) the engine also reads the pages it suggested as link sources (in the 10-page budget, parents first), so a link the client adds there moves the page to wait; a rel="nofollow" link never counts as a link';
+    begin(SN); const check = mkCheck(SN);
+    const pl = (h) => T(() => IX.pageLinks(h, DEV + '/', SITE)), hl = (h) => T(() => IX.homeLinks(h, DEV + '/', SITE));
+    const html = '<a href="/a">a</a><a rel="nofollow" href="/b">b</a><a href="/c" rel="noopener nofollow">c</a><a rel=nofollow href=/d>d</a><a href="/e" rel="noopener">e</a>';
+    check('W14 IX.pageLinks: nofollow links (quoted, unquoted, among other values) are left out, the rest kept', J(pl(html)) === J([DEV + '/a', DEV + '/e']), J(pl(html)));
+    check('W14 IX.homeLinks (the "linked from the home page" keys): nofollow left out', J(hl(html)) === J([IX.key(DEV + '/a'), IX.key(DEV + '/e')]), J(hl(html)));
+    const SRC = DEV + '/insights/ai-in-industrial-automation', ORPH = DEV + '/insights/orphan-case-study';
+    const E = copyD();
+    const orphan = { site_id: SITE.site_id, domain: 'devaicon.com', url: ORPH, state: 'not_indexed', cause: 'unknown_to_google', action: 'links', linked_by: '', in_sitemap: false, sources: 'inventory',
+      title: 'Industrial automation case study | Devaicon', inspect_at: iso(tW - DAY), next_check_at: iso(tW + 6 * DAY), first_seen_at: iso(tW - 40 * DAY), checks: 1, link_from: J([{ url: SRC, title: 'AI in Industrial Automation' }]) };
+    E.stored.push({ ...orphan });
+    const withLink = (rel) => (u) => P(u) === P(SRC) ? pageHtml(u).replace(/<\/body>/i, '<p><a ' + rel + 'href="/insights/orphan-case-study">case study</a></p></body>') : null;
+    const a = await TA(() => devDay(E, tW, { page: withLink('rel="nofollow" ') }));
+    const lr = ((a.M || {})['Link Read Requests'] || []).filter(q => !q.skip);
+    check('W11: the suggested source page is read in the budget left after the parents (kind source), at most 10 pages', lr.some(q => P(q.url) === P(SRC) && q.kind === 'source') && lr.length <= 10 && lr.filter(q => q.kind !== 'source').every(q => q.kind === 'parent'), J(lr.map(q => [P(q.url), q.kind])));
+    check('control (the old build never reads that page): W14 end to end, the client added the link as nofollow -> still "add internal links", linked_by \'\'', !a.__error && row(E, P(ORPH)).action === 'links' && S0(row(E, P(ORPH)).linked_by) === '', J({ err: a.__error, r: row(E, P(ORPH)) }));
+    row(E, P(ORPH)).link_from = J([{ url: SRC, title: 'AI in Industrial Automation' }]);
+    const b = await TA(() => devDay(E, tW + DAY, { page: withLink('') }));
+    const rb = row(E, P(ORPH));
+    check('W11 end to end: the client added a followed link on the suggested page -> the page waits, linked_by names that page, no suggestions', !b.__error && rb.action === 'wait' && linkedOf(rb).includes(SRC) && S0(rb.link_from) === '', J({ err: b.__error, r: [rb.action, rb.linked_by, rb.link_from] }));
+    const jb = SJ(b.run);
+    check('W11: the run row records the suggested pages read (links.suggested)', jb.links && Array.isArray(jb.links.suggested) && jb.links.suggested.some(x => P(x.url) === P(SRC) && x.read === true), J(jb.links));
+  });
+
+  await guard('IXW12 a real topic overlap', async () => {
+    const SN = 'IXW12 (REVIEW_WAVE2 W12) a link source needs at least two shared informative words (or an exact multi-word phrase); careers, contact and about pages are never suggested';
+    begin(SN); const check = mkCheck(SN);
+    const ix = (p, t) => ({ url: DEV + p, title: t + ' | Devaicon', state: 'indexed', domain: 'devaicon.com' });
+    // the reviewer's case: "innovation" is on two of eight candidates (not generic), /careers is one of them
+    const rows = [ix('/careers', 'Careers at Devaicon - Join Our Innovation Team'), ix('/capabilities/innovation-lab', 'Innovation Lab'), ix('/capabilities/application-software-development', 'Application Software Development'),
+      ix('/capabilities/intelligent-systems-data', 'Intelligent Systems & Data'), ix('/whatwedo', 'What We Do'), ix('/insights/ai-in-industrial-automation', 'AI in Industrial Automation'),
+      ix('/engagement-models', 'Engagement Models'), ix('/capabilities/open-edx-services', 'Open edX Services')];
+    const tgt = { url: DEV + '/insights/value-driven-innovation', title: 'Value-driven innovation | Devaicon', state: 'not_indexed', domain: 'devaicon.com' };
+    const a = T(() => IX.linkSuggestions(tgt, rows, { site: SITE }));
+    check('one shared rare word ("innovation") is not a topic: no suggestion (fb6bdbf3 gave /careers and /capabilities/innovation-lab)', Array.isArray(a) && a.length === 0, J(a));
+    const rows2 = [ix('/about-devaicon', 'About Devaicon - Innovation and Automation Partner'), ix('/contact-us', 'Contact us about automation innovation'), ix('/careers', 'Careers in automation innovation'),
+      ix('/capabilities/automation-innovation-services', 'Automation and Innovation Services'), ix('/capabilities/application-software-development', 'Application Software Development'),
+      ix('/capabilities/intelligent-systems-data', 'Intelligent Systems & Data'), ix('/whatwedo', 'What We Do'), ix('/engagement-models', 'Engagement Models'), ix('/capabilities/open-edx-services', 'Open edX Services'),
+      ix('/insights/cloud-costs', 'Cloud Costs Explained')];
+    const tgt2 = { url: DEV + '/insights/innovation-automation-roadmap', title: 'An innovation and automation roadmap | Devaicon', state: 'not_indexed', domain: 'devaicon.com' };
+    const b = T(() => IX.linkSuggestions(tgt2, rows2, { site: SITE }));
+    check('two shared words: the content page that shares them is suggested, never careers / contact / about (which share them too)', Array.isArray(b) && b.length >= 1 && b.some(x => /automation-innovation-services/.test(x.url)) && !b.some(x => /\/(careers|contact-us|about-devaicon)$/.test(x.url)), J(b));
+    const tgt3 = { url: DEV + '/insights/industrial-automation-safety', title: 'Safety in industrial automation | Devaicon', state: 'not_indexed', domain: 'devaicon.com' };
+    const c = T(() => IX.linkSuggestions(tgt3, rows, { site: SITE }));
+    check('control: a real overlap ("industrial automation") is still suggested', Array.isArray(c) && c.some(x => /ai-in-industrial-automation/.test(x.url)), J(c));
+    check('IX.notSource: careers, contact and about pages', ['/careers', '/careers/x', '/contact-us', '/contact', '/about', '/about-devaicon'].every(p => T(() => IX.notSource(DEV + p)) === true) && T(() => IX.notSource(DEV + '/insights/about-ai')) === false, '');
+  });
+
+  await guard('IXW13 the attempt is recorded before the PUT', async () => {
+    const SN = 'IXW13 (REVIEW_WAVE2 W13) the submission attempt (path, at, status pending) is written into the run\'s reservation BEFORE the PUT; the run row replaces it with the answer; a run that stopped after the PUT (or an overlapping run) still sees it and keeps the 7-day spacing';
+    begin(SN); const check = mkCheck(SN);
+    const E = copyD();
+    const a = await TA(() => devDay(E, tW, { submit: true, gscList: FULL({}) }));
+    const jr = T(() => JSON.parse(S0((a.res || {}).sitemaps_json) || '{}')) || {};
+    check('the reservation (saved before Submit Sitemap) carries today\'s attempt: path, at, status pending', !a.__error && (jr.submissions || [])[0] && jr.submissions[0].status === 'pending' && jr.submissions[0].path === DEV + '/sitemap.xml' && jr.submissions[0].at === iso(tW), J({ err: a.__error, s: jr.submissions }));
+    const ja = SJ(a.run);
+    check('the run row replaces it with the answer (submitted), no pending left', (ja.submissions || [])[0] && ja.submissions[0].status === 'submitted' && !(ja.submissions || []).some(x => x.status === 'pending'), J(ja.submissions));
+    // the run stopped after the PUT: the reservation is the last row the next run reads
+    const F = copyD(); F.runs = D.runs.concat([a.res]);
+    const b = await TA(() => devDay(F, tW + 2 * 3600e3, { submit: true, gscList: FULL({}) }));
+    check('a replay after a crash (the reservation is the last row): no second PUT, blocked too_soon', !b.__error && (b.submits || []).length === 0 && (SJ(b.run).submit || {}).blocked === 'too_soon', J({ err: b.__error, s: b.submits, submit: SJ(b.run).submit }));
+    const later = T(() => IX.submitPlan({ on: true, permission: 'siteFullUser', property: 'sc-domain:devaicon.com', site: SITE, ok: [{ url: DEV + '/sitemap.xml', from: 'robots' }], complete: true, urls: [], now: tW + DAY,
+      gsc: [{ path: DEV + '/sitemap.xml', errors: 0, last_submitted: iso(tW + 60e3), last_downloaded: '' }], prev: { submissions: jr.submissions } }));
+    check('a pending attempt Search Console lists afterwards is confirmed', later && (later.submissions || [])[0] && later.submissions[0].status === 'confirmed', J(later && later.submissions));
   });
 };
 

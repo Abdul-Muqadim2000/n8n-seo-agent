@@ -450,7 +450,7 @@ The workflow is 190 nodes (was 183: `Link Read Requests`, `Any Link Reads?`, `Fe
    no read -> the 14-day note; the page can carry `ask_google` again 28 days after the ask. `ask_google` is never set on a utility page or a job
    posting.
 8. `seo_index_runs.sitemaps_json` gains: `permission` (Google's raw level for us, '' when the run could not check), `permission_full`
-   (siteOwner / siteFullUser and no 403 holding), `submit: { on, gate, kill_switch, skipped: [{url, why}] }` (gate: `off` | `kill_switch` |
+   (siteOwner / siteFullUser: Google's raw fact; since the wave 2 review W7 a 403 no longer turns it false, the hold is `submit.blocked: 'refused'`), `submit: { on, gate, kill_switch, skipped: [{url, why}] }` (gate: `off` | `kill_switch` |
    `not_checked` | `not_full_access` | `denied_before` | `list_not_read` | `ok`), `submissions: [{ path, at, status, reason, http_status, fp,
    confirmed_at?, read_at? }]` (newest first, up to 10; status `submitted` | `confirmed` (Search Console's lastSubmitted after ours) | `read`
    (its lastDownloaded after ours: "Google read your sitemap on <read_at>") | `denied` (403) | `refused` (other 4xx) | `failed`; reason
@@ -474,3 +474,70 @@ credential's write scope on the real service account; the HTTP node's file answe
 
 **Result**: full harness in Docker (`n8nio/n8n:2.41.4`, ~15:50 UTC), **13983 passed, 0 failed** (baseline 13897; +80 IXV checks, +6 node runs of
 the new code nodes counted by the IX scenarios). Commits on `ix/engine`: `ed3dc2a5` (engine + generated), `91296577` (harness + fixtures), this section.
+
+## Wave 2 review fixes (2026-10-30)
+
+Branch `ix/engine` from `fb6bdbf3`, findings of REVIEW_WAVE2.md (engine side). Nothing deployed, no production access, no paid API, nothing
+written to any Search Console, nothing pushed. Only `workflows/SEO_Agent_Index_Coverage.json` changes among the generated workflows (every
+other file byte-identical to the fb6bdbf3 build); the workflow is 194 nodes (+4: `Load Submit Alerts`, `Submit Setup Alert`, `Any Submit
+Alert?`, `Save Submit Alert`). Harness: `harness/scenarios_index_wave2.js` gains IXW1-IXW14 (62 checks); every one that is not named
+"control" fails on the fb6bdbf3 build (`CODE_DIR=<fb6bdbf3>/harness/code_v4 WF_DIR=<fb6bdbf3>/workflows node scenarios_index_wave2.js`:
+80 passed, 62 failed; on this build 142 / 142).
+
+### Per finding
+| W | Fix | Where |
+|---|---|---|
+| W2 (blocker) | `GSC Sitemaps List` is read with its status code (`fullResponse` + `neverError`). `IX.sitemapsListOf(answer)` is the one reader: a `sitemap` array, or `{}` from a 200 whose body is JSON (`{}` or the text `"{}"`) -> the list / `[]`; an HTML page, an empty body, any non-200, a 200 that is not JSON, a JSON error, an n8n error item -> `null` = not read (no "No sitemap is submitted" note, `submitted: null`, no sitemap step, no PUT). A plain body without a status code (old fixtures) counts only with a `sitemap` array. Used by Index Inventory, Sitemap Requests 1, Sitemap Read 1 | `_index_kit.js` `sitemapsListOf`; `build_index_coverage.py`; `IX_Inventory.js`, `IX_Sitemap_Requests.js`, `IX_Sitemap_Read.js` |
+| W1 | `IX.submitPlan` keeps every field and adds `picks` ([{url, path, due, block}]), `no_sitemap`, `will_submit`, `blocked`; `IX.submitOutlook(plan, submissions, now)` decides them; Index Run Rows recomputes them AFTER today's answers, so the run row says what the NEXT run would do. `sitemaps_json.submit` = `{ on, gate, kill_switch, skipped, will_submit, blocked }` (contract below) | `_index_kit.js`; `IX_Run_Rows.js` |
+| W3 | Utility page = the FIRST path segment is a utility word, or the first segment is a `dirs` entry (`/legal/*`, `/policies/*`, the directory page included), or the whole path is `/security`. `/industries/legal`, `/features/search`, `/solutions/accessibility`, `/blog/thanks` are normal pages. `IX.UTILITY` = `{ rule: 'first_segment', segments: [unchanged list], dirs: ['legal', 'policies'], top_level_only: ['security'], job_dirs: ['careers', 'jobs'] }` | `_index_kit.js` `UTILITY`, `isUtility` |
+| W4 | `IX.canonicalOwn` answers false (a variant, never "a page in its own right") for an address with a query string and for a page whose canonical has the same path (case and trailing slash ignored); the devaicon.com industry pages are unchanged | `_index_kit.js` `canonicalOwn` |
+| W5 | Site Links reports `unread_parents`: the parents planned and not read today, plus the parents past the 10-page cap (`IX.parentPlan(known, site, true)` lists them all). `IX.merge` (`c.unread_parents`): a page with no link found today whose parent is one of them keeps its stored `linked_by` (`'unread'` when none was stored), so `IX.refine` keeps the stored action. `refine`'s 'unread' rule also holds when the cause moved between "unknown" and "found, not crawled" | `IX_Site_Links.js`, `IX_Inventory.js`; `_index_kit.js` `merge`, `parentPlan`, `parentKnown`, `refine` |
+| W7 | `permission_full` is Google's raw fact (siteOwner / siteFullUser); a 403 at Full access is `blocked: 'refused'` (held 28 days at that level, `submit_denied` unchanged), note "Google refused our sitemap submission today (<path>, answered 403) although it reports Full access for us, so the sitemap was not submitted. We try again in 28 days, or sooner if your access level in Search Console changes; you can also submit it yourself." Never "read-only access" | `_index_kit.js` `submitPlan`, `submitResults`; `IX_Run_Rows.js`, `IX_Reservation.js` |
+| W8 | An n8n error item naming the credential (no status code; our write credential `SEOcredGoogleSvcW` is missing) is recorded `not_set_up` (nothing reached Google; spaces the next try 7 days), `blocked: 'not_set_up'`, note "Sitemap submission is not set up on our side yet, so we did not submit your sitemap today.", and ONE ops alert for the run: `Load Submit Alerts` -> `Submit Setup Alert` (OA.plan, critical, due at once so the sweep that ends the run posts it; a repeat within 30 minutes is one row) -> `Save Submit Alert` (seo_ops_alerts, upsert by alert_key) -> Index Probe Requests | `_index_kit.js` `submitResults`; new `IX_Submit_Alert.js`; `build_index_coverage.py`; `IX_Run_Rows.js` |
+| W9 | The 14-day "There is nothing more to do on your side for now." replaces the note only when the action is `wait` / `none`; any other action keeps its note after "You asked Google on <date>; Google has not read it again yet." | `_index_kit.js` `noteOf` |
+| W11 | Link Read Requests reads, in what is left of the 10-page budget after the parents (parents first), the pages stored as link suggestions of `links` rows (`IX.sourcePlan`: own domain, never a page already planned or the home page; items carry `kind: 'parent' | 'source'`). Their links enter the link index (a link the client added there moves the page to `wait`), their titles too; the pages they link to are NOT added to the inventory (only the home page's and the parents' are). Run row `links.suggested: [{url, read}]` | `IX_Link_Read_Requests.js`, `IX_Site_Links.js`, `IX_Run_Rows.js`; `_index_kit.js` `sourcePlan` |
+| W12 | A link source needs at least two shared informative words, or one exact two-word phrase (adjacent words of the title, or of the address's last segment; stop words and the site's name left out, short words kept, so "e-invoicing" is the phrase "e invoicing"), and the IDF score as before; careers / contact / about pages (`IX.NOT_SOURCE`: first segment careers, career, jobs, contact, contact-us, about, about-us, or starting with `about-` / `contact-`) are never suggested | `_index_kit.js` `linkSuggestions`, `notSource` |
+| W13 | Index Reservation writes today's attempts (`IX.submitPending`: {path, at, status 'pending', reason, http_status 0, fp}) first in the reservation row's `submissions`, BEFORE `Submit Sitemap (Index)`; Index Run Rows replaces the row with the answers (no `pending` left). A run that stopped after the PUT, or an overlapping run that reads the reservation, sees the attempt: the 7-day spacing holds (`blocked: 'too_soon'`). The check back confirms a `pending` attempt that Search Console lists afterwards. Sitemap Submit Requests and the reservation use the same `IX.submitRequests` | `_index_kit.js`; `IX_Reservation.js`, `IX_Sitemap_Submit_Requests.js` |
+| W14 | `IX.pageLinks` and `IX.homeLinks` skip an `<a>` whose `rel` holds `nofollow` (quoted or not, among other values) | `_index_kit.js` `followHref` |
+
+### Contract for the app (exact; additive unless said)
+1. `seo_index_runs.sitemaps_json.submit` = `{ on, gate, kill_switch, skipped, will_submit, blocked }`:
+   * `will_submit` (boolean): the engine would submit a sitemap on its NEXT run if nothing changes (every gate passes and a submission is due and not
+     held). The app shows "we will submit it" ONLY when this is true; otherwise it keeps the client's "Submit your sitemap" step.
+   * `blocked` (string): `''` when `will_submit`, or when nothing is due (the sitemap is listed and unchanged), or when today's gate could not be read
+     (`gate` `not_checked`: Google's access level was not read; `list_not_read`: sitemaps.list was not read) - nothing is concluded then. Otherwise one of:
+     `switch_off` (the client's switch is off), `not_full_access` (Google reports read-only / restricted access), `paused` (the engine's kill switch
+     `SEO_SITEMAP_SUBMIT=off`), `no_sitemap` (no sitemap read today: robots.txt names none and /sitemap.xml is not one), `outside_property` (the
+     sitemap is outside the Search Console property or on another domain), `unchanged` (listed WITH errors and its addresses did not change: a
+     resubmit would do nothing), `too_soon` (an attempt in the last 7 days, incl. a successful one today), `refused` (Google answered 403 - held 28
+     days at that access level - or another 4xx in the last 7 days), `not_set_up` (our write credential is missing). Gate-level values
+     (`switch_off`, `not_full_access`, `paused`, `refused` from a held 403) are reported whatever is due.
+2. `permission_full` = Google's raw fact (`siteOwner` / `siteFullUser`); a 403 no longer turns it false (changed, W7). For the access line:
+   `permission_full` true + `blocked: 'refused'` = "Google refused the submission although we have Full access", never "read-only access".
+3. `submissions[].status` gains `pending` (the attempt as written into the reservation before the PUT; it stays in the history only when the run
+   stopped before recording the answer; Search Console's lastSubmitted after it makes it `confirmed`) and `not_set_up` (nothing reached Google; our
+   credential is missing). Both count for the 7-day spacing.
+4. Utility pages: mirror `IX.UTILITY` and this matcher exactly - segments of the path (split on `/`, empty dropped, `decodeURIComponent`, lower
+   case, a trailing `.html` / `.htm` / `.php` / `.asp` / `.aspx` dropped) = g; utility when g is non-empty AND ((g.length === 1 AND
+   `top_level_only` has g[0]) OR `dirs` has g[0] OR `segments` has g[0]). Job postings unchanged (`job_dirs`, two or more segments).
+5. `linked_by: 'unread'` now also means "this page's parent page could not be read today, or was past the 10-parent cap" (nothing is concluded);
+   a page whose parent was not read may also keep yesterday's JSON list.
+6. `links` in sitemaps_json gains `suggested: [{url, read}]` (the suggested source pages read today) and `unread_parents` (a count).
+7. Run notes may now say "Google refused our sitemap submission today (<path>, answered 403) although it reports Full access for us, ..." (replaces
+   the "(no full access for us)" note) and "Sitemap submission is not set up on our side yet, so we did not submit your sitemap today."
+8. `sitemaps_json.submitted` is `null` (not read) for an HTML / empty / error answer of sitemaps.list; `0` only for `{}` from a 200 (changed, W2).
+
+### Tests
+* `harness/scenarios_index_wave2.js` IXW1-IXW14: W2 (the reader on 11 answer shapes, the node's fullResponse, end to end an HTML page and an
+  empty 502 with the switch on: no PUT, `submitted: null`, no note); W1 (the outlook on 14 plans, and on the run row end to end); W3, W4, W9,
+  W12, W14 (kit cases incl. the reviewer's); W5 (devaicon.com with /careers answering 503: the six job pages keep `wait` and /careers; 12
+  parents: the 2 past the cap are listed; `merge` keeps the stored linked_by / 'unread'); W7 / W8 end to end (a 403: the note, `permission_full`
+  true, `refused`, no PUT the next day; the credential error: the note, `not_set_up`, ONE ops alert row from `Submit Setup Alert`, none when
+  Google answered, the wiring); W11 end to end (the suggested page read as `source`, a nofollow link added: still `links`, a followed link:
+  `wait` with that page in `linked_by`, `links.suggested`); W13 (the reservation carries `pending` before the PUT, the run row replaces it, a
+  replay after a crash makes no second PUT, a pending attempt is confirmed by the next list).
+* Updated wave 2 checks for the contract changes: IXV2 (the data-sovereignty article now gets no suggestion: one shared word), IXV3 (first segment:
+  `/policies/cookies` instead of `/en/cookie-policy`), IXV5 (`permission_full` true after a 403; `{}` fixtures as 200 full responses).
+* Full harness in Docker (`n8nio/n8n:2.41.4`, ~16:45 UTC): **14050 passed, 0 failed** (fb6bdbf3 baseline 13988 per REVIEW_WAVE2; +62 IXW checks).
+  The first full run found IX5 (the Peppol fixture: "Peppol e-invoicing" vs "E-invoicing software") empty under the two-word rule; fixed by
+  keeping short words in the phrase match ("e invoicing"), not by loosening the rule.
