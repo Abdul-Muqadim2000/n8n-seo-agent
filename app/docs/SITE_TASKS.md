@@ -86,3 +86,73 @@ Listings on directories (bot walls make a reliable check impossible; the Link Bu
 e-mails (their proof is the link, found by the backlink monitor), audit fix-pack items (robots.txt / llms.txt / schema / redirects of the
 audit: the next audit re-checks them; a later version can turn each into a task with the same machinery), e-mail notices when a task
 flips.
+
+## 6. Kind `indexing` (Index coverage, 2026-10-29)
+
+Added with the Index coverage feature (`n8n/seo-agent/docs/indexing-2026-10-29/DESIGN.md` §6.2, `shared/src/indexing.ts`). One step per cause
+only the client can fix, key `indexing:<cause>` (noindex, robots.txt block, server error, login / 403, not found, empty page, a copy listed in
+the sitemap, a redirecting address in the sitemap, a page missing from the sitemap), listing up to 25 of its pages (most impressions first)
+and how many there are. Every rule above holds:
+
+- **Newest reading decides.** The engine's reading (`by: 'index'`, "Daily index check on ...") is the newest time its daily index run read
+  any listed page with that cause; a run after the step was stored that lists none of its pages any more reads it as done.
+- **Our own check** opens at most 10 of the listed pages on the website's own host through the safe fetcher (its opt-in header return reads
+  `X-Robots-Tag`; no existing caller changed), reads the sitemap once (robots.txt `Sitemap:` lines, else `/sitemap.xml`, an index followed
+  for 5 children) and robots.txt for a block with the shared matcher. Done only when every page it opened is fixed.
+- **Unreachable never records**: one listed page with no answer is "the website did not answer" (503 on a click, nothing stored daily).
+- 45 s cap (pages four at a time, the sitemap in parallel), one website at a time, paused websites skipped, two misses an hour apart reopen,
+  skip / restore audited, a guide per cause (`index-*` in `shared/src/guides.ts`).
+- **One page, one ask**: a broken page that is already a `redirect:` step (from the backlink report) is left out of the `not_found` list.
+- **Budget**: see fix wave 1 below (a third of each tick is reserved for indexing steps).
+- The fall-through that read any unknown key or kind as a redirect is gone: `siteTaskKindOfKey`, `siteTaskPayload`, `present`, `doneDetail`
+  and `runSiteTaskCheck` are exhaustive switches (a kind added without its check does not compile; a stored row of an unknown kind reads
+  nothing and records nothing).
+
+### Fix wave 1 (2026-10-29, `n8n/seo-agent/docs/indexing-2026-10-29/FIX_CONTRACT.md`), binding for this kind
+
+- **The exact positive signal per cause** (FIX_CONTRACT decision 3): noindex = a 200 HTML page with no noindex in the header or the page;
+  server error / login = 200; not found = 200, or a 301 / 308 to a page of the same website that answers 200; canonical = the page names
+  itself, or a COMPLETE sitemap read no longer lists it; robots = a real robots.txt (a text file, or a 404) that allows the pages. Anything
+  else from our side (a 401 / 403 / 429 / 503 wall, a challenge page, a redirect to another website, a robots.txt that is a web page) is
+  **"could not tell"**: nothing recorded daily, 409 `site_unsure` on a click.
+- **A sitemap's silence counts only from a complete read** (every listed sitemap an XML list, read in full, children followed up to 12, none
+  on another host, none compressed); otherwise "not listed" is "could not tell". One download per website per check round.
+- **Google's reading is dated by Google's inspection**, never by the engine's weekly re-fetch, so a step our check found fixed is not
+  reopened by a stale reading. Pages the engine's own fetch saw fixed after Google's reading (`fix_seen_at`) make a step **done, waiting for
+  Google**, never reopened by the older reading.
+- **No conclusion from a capped read**: each cause is read on its own (200 rows, sorted by impressions); a capped cause never reads as done.
+- **One page, one ask**: a cause whose pages are all `redirect:` steps has no indexing step at all (never a "done").
+- **`indexing:sitemap`**: Search Console lists no sitemap, or reports errors (`seo_index_runs.sitemaps_json`); only the daily index check can
+  tick it off (Search Console's list is Google's), so its "check now" answers 409 `engine_reads_it` and the daily check records nothing.
+- **Done says what we checked** (per cause), never "Google can now read and choose these pages".
+- **Budget**: a third of each tick's checks is reserved for indexing steps; the other kinds take the rest.
+- **Rollback**: before reverting the API, delete or skip the `site_tasks` rows with `kind = 'indexing'` (an older build reads them as
+  redirect steps).
+
+### Fix wave 2 (2026-10-29, `n8n/seo-agent/docs/indexing-2026-10-29/REVIEW_2.md`)
+
+- **`fix_seen_at` set = fixed on your site, waiting for Google**, whatever the order of `inspect_at` and `fix_seen_at` (the rule shared with
+  the engine; only the engine sets and clears it). The app never reopens a step from such rows, and a done step says only what the reading
+  shows ("The daily index check lists no page with this problem left to fix on your website"), never "Google's newest reading lists none".
+- **A cause's read takes only its `site_fix` and `wait` rows** (sorted by impressions, 200 each); pages of that cause left out on purpose can
+  no longer fill the read, and a cause whose read hit the cap is an incomplete reading, never a done.
+- **The engine's reading is kept on the row** (`last_check` with `by: 'index'`), so a late, failed or missing index read leaves an
+  engine-only step (`indexing:sitemap`, a step done by the engine) in its last known state; `last_check_at` still schedules the own check.
+- **The own check closes a step only when it opened every listed page**; with more than 10 it says "the first 10 of N are fixed", records
+  nothing daily and answers 409 `site_partial` on a click; the engine's reading decides the rest.
+- **Sitemap read**: complete only when robots.txt was read as rules or is not there (404 / 410); a guessed /sitemap.xml that answers a web
+  page is no sitemap (not a partial read); a robots.txt or sitemap that ended on another host is not trusted.
+- **X-Robots-Tag**: `max-snippet:-1, noindex` and the like are directives for every crawler; `otherbot: noindex` alone is not a noindex.
+  Relative and protocol-relative canonicals are resolved against the page address.
+
+### Fix wave 3 (2026-10-30, `n8n/seo-agent/docs/indexing-2026-10-29/REVIEW_3.md`)
+
+- **Google still sees it after the client's fix** (engine `fix_failed_at`: Google crawled after a fix we saw and still reads the cause, so
+  the row is `site_fix` again): the step's payload carries `googleStillSees` (how many of its pages), the step is to do (warning) and says
+  in plain words that the website may show Google something different from what a browser sees, with the cause's guide (its new
+  "Our check finds it fixed, but Google still sees the problem" answer: URL Inspection, Test live URL). While it holds no reading that calls
+  the step done decides it (our own check, or an older engine reading kept on the row): the own check that finds it fixed records nothing
+  daily and answers 409 `google_still_sees` on a click; one that still finds the problem is recorded as usual. Only Google's next reading
+  (the engine clears `fix_failed_at`) closes it. A `fix_seen_at` newer than `fix_failed_at` is a later fix, waiting for Google again.
+- An empty canonical (`href=""`) is no canonical, never resolved to an address.
+

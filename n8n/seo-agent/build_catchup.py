@@ -44,7 +44,7 @@ CRED = {'httpHeaderAuth': {'id': 'SEOcredN8nApiKey', 'name': 'n8n API (SEO Agent
 # each website runs them in its own 7-day cycle, and a missed or crashed cycle job is the Cycle Dispatcher's own due row (record-then-start,
 # the most recent missed cycle once). The catch-up keeps the two daily crons. The dispatcher's own 5-minute sweep is durable by itself (its
 # state is in seo_cycles / seo_cycle_jobs, and n8n's Instance Started sweeps it too), so it is never a schedule this planner replays.
-EXPECTED = ('SEOagentAIPulse1', 'SEOagentPageWch1')
+EXPECTED = ('SEOagentAIPulse1', 'SEOagentPageWch1', 'SEOagentIndexCv1')   # Index coverage (2026-10-29, docs/indexing-2026-10-29/DESIGN.md §7): the daily index watch, 05:15
 NOT_REPLAYED = ('SEOagentCycleDsp',)   # the Cycle Dispatcher (build_cycle.py): its sweep is not a slot to replay
 DISPATCHER_ID = 'SEOagentCycleDsp'     # F-ENG (2026-10-20): ... but it is WATCHED: inactive, or no sweep for 20 minutes, raises an ops alert
 # A dry run (a test through *Catch-up Run*) starts only the workflows that honour `dry_run`: AI Growth (no Bing / IndexNow submission,

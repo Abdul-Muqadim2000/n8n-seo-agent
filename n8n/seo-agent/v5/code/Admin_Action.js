@@ -66,4 +66,20 @@ const monitors = (t.monitors && typeof t.monitors === 'object') ? t.monitors : (
   if (raw !== undefined && raw !== null) { delete monitors.ai_alert_rules; monitors.ai_alert_rules_json = (raw === '' || (Array.isArray(raw) && !raw.length)) ? '' : JSON.stringify(AVX.validateRules(typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch (e) { throw new Error('ai_alert_rules_json is not valid JSON'); } })() : raw)); }
   if (monitors.ai_sov_set !== undefined && monitors.ai_sov_set !== null) monitors.ai_sov_set = (Array.isArray(monitors.ai_sov_set) ? monitors.ai_sov_set : String(monitors.ai_sov_set).split(/[\n,;]+/)).map(x => String(x).trim()).filter(Boolean)
     .map(x => /\./.test(x) ? normD(x) : x.slice(0, 60)).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 20).join(', '); }
+// Index coverage (2026-10-29, docs/indexing-2026-10-29/DESIGN.md §2.6): the daily index watch (a yes / no; '' or null keeps the stored value, empty = on)
+// and its daily URL Inspection cap (a whole number, kept 20-1,200 so the Site Tracker and the audits keep their share of Google's 2,000 a day; '' clears
+// it to the default 300). Anything else is refused with its reason and nothing is stored.
+{ const w = monitors.index_watch;
+  if (w !== undefined && w !== null && w !== '') {
+    if (typeof w === 'boolean') { /* kept */ }
+    else if (/^(true|1|yes|on)$/i.test(String(w).trim())) monitors.index_watch = true;
+    else if (/^(false|0|no|off)$/i.test(String(w).trim())) monitors.index_watch = false;
+    else throw new Error('index_watch must be true or false');
+  }
+  const c = monitors.index_daily_cap;
+  if (c !== undefined && c !== null && c !== '') {
+    const n = Number(String(c).trim());
+    if (!Number.isFinite(n) || Math.floor(n) !== n) throw new Error('index_daily_cap must be a whole number of URL inspections a day (20-1,200)');
+    monitors.index_daily_cap = Math.min(1200, Math.max(20, n));
+  } }
 return [{ json: { fact_answers_sent, fact_answers_json, fact_answers_count: Object.keys(FAP.answers).length, fact_answers_dropped: FAP.dropped, action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, on_prompts, pin_prompts, unpin_prompts, edit_prompts, accept_prompts, retire_prompts, monitors, content_groups_json, business_facts, market_country: market.country, market_location_code: market.location_code, market_language_code: market.language_code, market_iso: market.country_iso, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];

@@ -96,6 +96,17 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
     case 'ai_pulse':
       parts.push(nm(s, 'alerts') ? `${nm(s, 'alerts')} change(s) in today's AI answers` : 'no change', nm(s, 'mentionRate') != null && `named in ${pctText(nm(s, 'mentionRate'))} of ${nm(s, 'samples') ?? 0} answers`);
       break;
+    case 'index_coverage':
+      parts.push(
+        // N-app-6: a run that could not check the website says so first; its figures are the last check's
+        s.failed === true ? 'could not check the website this time' : null,
+        nm(s, 'known') != null && `${compactNumber(nm(s, 'indexed') ?? 0)} of ${compactNumber(nm(s, 'known'))} pages in Google search${s.failed === true ? ' (last check)' : ''}`,
+        nm(s, 'siteFixes') ? `${nm(s, 'siteFixes')} to fix on your website` : null,
+        nm(s, 'dropped') ? `${nm(s, 'dropped')} dropped out` : null,
+        nm(s, 'backlogLeft') ? `${compactNumber(nm(s, 'backlogLeft'))} not checked yet` : null,
+        typeof s.updateRollingOut === 'string' && s.updateRollingOut ? `${s.updateRollingOut} rolling out` : null,
+      );
+      break;
     case 'ai_growth':
       parts.push(s.dryRun === true ? 'dry run: nothing submitted' : nm(s, 'submitted') ? `${nm(s, 'submitted')} page(s) sent to Bing / IndexNow` : null, nm(s, 'avgScore') != null && `key pages ${nm(s, 'avgScore')}/100 AI-ready`, nm(s, 'earned') ? `${nm(s, 'earned')} page(s) AI cites without you` : null, nm(s, 'targets') ? `${nm(s, 'targets')} question(s) queued` : null);
       break;

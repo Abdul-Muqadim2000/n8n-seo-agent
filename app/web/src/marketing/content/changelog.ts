@@ -34,6 +34,26 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-10-29',
+    version: '4.5',
+    title: 'Index coverage',
+    summary:
+      'A new page for every website with Search Console connected: which of your pages Google has left out of its index, why, and what to do. We look every day at the pages Google left out, each page is read again on its own schedule, and it is free to run.',
+    highlights: [
+      'Every day, which of your pages Google has left out of its index, your older pages as well as the new ones we write',
+      'Why each page was left out, in plain words, with the pages grouped by the reason so one fix covers the whole group',
+      'What to do for each group: steps on your website that we then check for you, internal links to add, pages worth improving one at a time with your approval, and pages that are fine to leave out',
+      'You hear when a page we saw in Google\'s index drops out of it, the day our check notices',
+      'A page you fixed shows as fixed while Google catches up, and we look up Google\'s reading of it again within a day or two',
+      'A short list of the pages worth asking Google to read again in Search Console, which you do yourself in a few clicks',
+      'A step on your website when Search Console has no sitemap for it, or reports errors in one',
+      'Google\'s announced ranking updates followed for you: suggestions to change pages wait while an update rolls out, and after it finishes you see which of your pages lost, held or gained',
+      'New pages and existing pages on their own tabs, with each page\'s last check and history',
+      'Free to run on your connected Search Console: no credits',
+    ],
+    features: ['index-coverage'],
+  },
+  {
     date: '2026-10-28',
     version: '4.4',
     title: 'Video tutorials',

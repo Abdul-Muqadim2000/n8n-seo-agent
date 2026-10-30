@@ -7,6 +7,7 @@ import {
   BellRing,
   Bot,
   CalendarClock,
+  FileSearch,
   ChartNoAxesColumnIncreasing,
   ClipboardCheck,
   FileText,
@@ -87,6 +88,7 @@ const STAGE_MODE: Record<string, ModeId> = {
   backlinks_started: 'backlinks',
   backlinks: 'backlinks',
   link_builder: 'backlinks',
+  index_coverage: 'audit',
 };
 
 export function StageGlyph({ stage, size = 'md', report }: { stage: string; size?: 'sm' | 'md'; /** tells a verdict-only content report apart */ report?: ReportLike }) {
@@ -104,6 +106,7 @@ export function StageIcon({ stage, report, className }: { stage: string; report?
   if (stage === 'rejected') return <AlertOctagon className={className} aria-hidden />;
   if (stage === 'console_alert') return <BellRing className={className} aria-hidden />;
   if (stage === 'content_cadence') return <CalendarClock className={className} aria-hidden />;
+  if (stage === 'index_coverage') return <FileSearch className={className} aria-hidden />;
   return <ModeIcon mode={report && isVerdictOnly(report) ? 'verdict' : (STAGE_MODE[stage] ?? 'describe')} className={className} />;
 }
 

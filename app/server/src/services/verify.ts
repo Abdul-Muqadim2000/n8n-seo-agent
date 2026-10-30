@@ -1,4 +1,5 @@
 import { promises as dns } from 'node:dns';
+import type { IncomingHttpHeaders } from 'node:http';
 import { request } from 'node:https';
 import { isIP } from 'node:net';
 import { cleanDomain, domainOk, VERIFICATION_META_NAME, VERIFICATION_TXT_PREFIX, type VerificationMethod } from '@seo/shared';
@@ -16,22 +17,46 @@ export interface VerifyOutcome {
 // the SSRF guard's two halves live in lib/netGuard.ts (G4); re-exported here for the callers that import them from verify (cms/http.ts)
 export { isPrivateIp, publicLookup } from '../lib/netGuard';
 
-function getOnce(url: string, maxBytes: number): Promise<{ status: number; location: string | null; text: string }> {
+/** What one GET answered. `headers` only when the caller asked for them (Index coverage, 2026-10-29: X-Robots-Tag); every other caller
+ *  gets exactly the three fields it always got. */
+export interface OnceAnswer {
+  status: number;
+  location: string | null;
+  text: string;
+  headers?: IncomingHttpHeaders;
+  /** with the option: the body was cut at `maxBytes` (a sitemap cut in half is not a complete list) */
+  truncated?: boolean;
+}
+
+/** Options of one request. `headers: true` adds the response headers to the answer (opt-in; nothing else changes). */
+export interface FetchOpts {
+  headers?: boolean;
+}
+
+/** One HTTPS GET (no redirect followed). Module-private (A22): every caller goes through fetchPublicText / fetchPublicOnce, which apply the
+ *  host guard (https, public host, no credentials, no IP literal) before any request. */
+function getOnce(url: string, maxBytes: number, opts: FetchOpts = {}): Promise<OnceAnswer> {
   return new Promise((resolve, reject) => {
     const req = request(url, { method: 'GET', lookup: publicLookup as never, headers: { 'user-agent': 'SEO-Agent-Verifier/1.0', accept: 'text/html' }, timeout: 10000 }, (res) => {
+      // opt-in only: an answer without the option has no `headers` key at all (its shape is unchanged for every existing caller)
+      let cut = false;
+      const withHeaders = (a: Omit<OnceAnswer, 'headers'>): OnceAnswer => (opts.headers ? { ...a, headers: { ...res.headers }, truncated: cut } : a);
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400) {
         res.resume();
-        return resolve({ status: res.statusCode, location: res.headers.location ?? null, text: '' });
+        return resolve(withHeaders({ status: res.statusCode, location: res.headers.location ?? null, text: '' }));
       }
       const chunks: Buffer[] = [];
       let size = 0;
       res.on('data', (c: Buffer) => {
         size += c.length;
         if (size <= maxBytes) chunks.push(c);
-        else res.destroy();
+        else {
+          cut = true;
+          res.destroy();
+        }
       });
-      res.on('end', () => resolve({ status: res.statusCode ?? 0, location: null, text: Buffer.concat(chunks).toString('utf8') }));
-      res.on('close', () => resolve({ status: res.statusCode ?? 0, location: null, text: Buffer.concat(chunks).toString('utf8') }));
+      res.on('end', () => resolve(withHeaders({ status: res.statusCode ?? 0, location: null, text: Buffer.concat(chunks).toString('utf8') })));
+      res.on('close', () => resolve(withHeaders({ status: res.statusCode ?? 0, location: null, text: Buffer.concat(chunks).toString('utf8') })));
       res.on('error', reject);
     });
     req.on('timeout', () => req.destroy(new Error('timeout')));
@@ -58,17 +83,28 @@ export function publicHttpsHost(url: string): string | null {
   return domainOk(cleanDomain(host)) ? host : null;
 }
 
-/** HTTPS GET with manual redirects (https only, public hosts only, at most 4 hops) and a size cap. */
-export async function fetchPublicText(url: string, maxBytes = 512 * 1024, hops = 4): Promise<{ status: number; text: string; finalUrl: string } | null> {
+/**
+ * HTTPS GET with manual redirects (https only, public hosts only, at most 4 hops) and a size cap. With `opts.headers` the answer also
+ * carries the final response's headers and the first hop's status (`firstStatus`, so a caller can tell a 301 from a 302); without it the
+ * answer is exactly `{ status, text, finalUrl }` as before.
+ */
+export async function fetchPublicText(
+  url: string,
+  maxBytes = 512 * 1024,
+  hops = 4,
+  opts: FetchOpts = {},
+): Promise<{ status: number; text: string; finalUrl: string; headers?: IncomingHttpHeaders; firstStatus?: number; truncated?: boolean } | null> {
   let current = url;
+  let firstStatus = 0;
   for (let i = 0; i <= hops; i++) {
     if (!publicHttpsHost(current)) return null;
-    const r = await getOnce(current, maxBytes);
+    const r = await getOnce(current, maxBytes, opts.headers ? { headers: true } : {});
+    if (i === 0 && r.location) firstStatus = r.status;
     if (r.location) {
       current = new URL(r.location, current).toString();
       continue;
     }
-    return { status: r.status, text: r.text, finalUrl: current };
+    return opts.headers ? { status: r.status, text: r.text, finalUrl: current, headers: r.headers ?? {}, firstStatus, truncated: !!r.truncated } : { status: r.status, text: r.text, finalUrl: current };
   }
   return null;
 }

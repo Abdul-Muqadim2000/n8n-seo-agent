@@ -25,6 +25,22 @@ export const GUIDE_FOR_NEEDS_YOU_KIND: Record<NeedsYouItem['kind'], GuideId> = {
   site_task: 'indexnow-key-file',   // site tasks (2026-10-28): refined by the item's id below
 };
 
+/** Index coverage: the guide of each indexing step (the same ids as INDEX_CAUSE_INFO in indexing.ts; a test holds the two together). */
+export const INDEXING_GUIDE: Record<string, GuideId> = {
+  noindex: 'index-remove-noindex',
+  robots_blocked: 'index-robots-blocked',
+  indexed_not_in_sitemap: 'index-add-to-sitemap',
+  not_in_sitemap: 'index-not-in-sitemap',
+  canonical_elsewhere: 'index-canonical-sitemap',
+  not_found: 'index-fix-not-found',
+  soft_404: 'index-fix-soft-404',
+  server_error: 'index-fix-server-error',
+  access_denied: 'index-fix-access-denied',
+  redirect: 'index-sitemap-redirects',
+  redirect_error: 'index-fix-redirect-error',
+  sitemap: 'index-submit-sitemap',
+};
+
 /** The guide that answers one Needs-you item: its kind's, refined by what the id says (a refused plan, a draft to fix, an announcement). */
 export function guideForNeedsYou(item: Pick<NeedsYouItem, 'id' | 'kind' | 'severity'>): GuideId {
   const id = item.id;
@@ -37,6 +53,8 @@ export function guideForNeedsYou(item: Pick<NeedsYouItem, 'id' | 'kind' | 'sever
   // site tasks: one guide per kind of step on the website (ids task:indexnow, task:ai_crawlers, task:redirect:<address>)
   if (id === 'task:ai_crawlers') return 'ai-crawler-access';
   if (id.startsWith('task:redirect:')) return 'redirect-broken-page';
+  // Index coverage (2026-10-29): one guide per cause only the client can fix (task:indexing:<cause>)
+  if (id.startsWith('task:indexing:')) return INDEXING_GUIDE[id.slice('task:indexing:'.length)] ?? 'index-coverage';
   // a level-3 announcement is a warning (it starts on its own); a suggestion at levels 1-2 waits and is info
   if (item.kind === 'proposal' && item.severity === 'warning') return 'keyword-announcements';
   return GUIDE_FOR_NEEDS_YOU_KIND[item.kind] ?? 'your-journey';

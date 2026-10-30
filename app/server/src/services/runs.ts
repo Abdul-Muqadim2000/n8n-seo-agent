@@ -646,7 +646,7 @@ const deliveryLog = {
 
 /** Stages only a schedule produces. Their callbacks reuse the request id of the run that set the work up (the ladder plan, the
  *  tracking setup), so a run row is found for them although that run did none of the work. */
-export const SCHEDULED_STAGES: readonly string[] = ['rank_tracker', 'content_cadence', 'console_alert', 'cycle_preview'];
+export const SCHEDULED_STAGES: readonly string[] = ['rank_tracker', 'content_cadence', 'console_alert', 'cycle_preview', 'index_coverage'];
 
 /** A report a schedule produced (a weekly or daily run, or a job of the website's cycle), as opposed to one the matched app run produced. */
 export const isScheduledCallback = (stage: string, body: Record<string, unknown>): boolean =>

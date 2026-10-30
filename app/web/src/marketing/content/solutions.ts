@@ -84,6 +84,7 @@ export const solutions: Solution[] = [
       { feature: 'autopilot', title: 'A weekly cadence that runs itself', body: 'Pages a week for the keywords you choose, written with QA, the plan shown in "Coming up" two days ahead and a "Needs you" queue for approvals.' },
       { feature: 'keyword-ladders', title: 'Content with a destination', body: 'Keyword ladders climb to the head terms your business needs, one supporting page at a time.' },
       { feature: 'technical-audits', title: 'Audits with a fix pack', body: 'Monthly audits show what changed, and the fix pack goes straight to your developers.' },
+      { feature: 'index-coverage', title: 'Every page accounted for: in Google, or the reason why not', body: 'Each day, the pages Google left out of its index, grouped by the reason, with the step for your developers and the pages that are fine to leave out.' },
       { feature: 'site-tracking', title: 'One weekly view', body: 'Search Console, GA4 and Trends together, with striking-distance keywords called out.' },
       { feature: 'crawler-analytics', title: 'What the crawlers really did', body: 'Your server logs show which pages Google and the AI crawlers fetched, which they skipped and which "crawlers" were impostors.' },
       { feature: 'guided-setup', title: 'Nothing waits on a ticket', body: 'Every connection we ask for comes with its steps and your own values, and goes to IT or the agency as an e-mail when the job is theirs.' },
@@ -164,6 +165,7 @@ export const solutions: Solution[] = [
     helps: [
       { feature: 'content', title: 'Local pages that hold up', body: 'Local (city or area) pages with a verified name, address and phone block, LocalBusiness schema and the areas you serve.' },
       { feature: 'technical-audits', title: 'Brand and entity check', body: 'Audits confirm your business listing matches your website before it is trusted.' },
+      { feature: 'index-coverage', title: 'Your older pages, back in view', body: 'Which of your pages Google never put in its index and why, in plain words, with what you can do about each one. Free, once Search Console is connected.' },
       { feature: 'site-tracking', title: 'Tracking per website', body: 'Search Console, GA4 and live rank checks for each website you run, including whether a local pack was on the page and whether your listing was in it.' },
       { feature: 'enterprise', title: 'One account for every brand', body: 'Separate companies for separate brands, with one team and one login.' },
       { feature: 'link-building', title: 'The local listings that matter', body: 'Google Business Profile, Bing Places, Apple Business and the directories in your country, checked for your listing, with a ready description to paste.' },

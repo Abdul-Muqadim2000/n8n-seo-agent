@@ -171,5 +171,42 @@
       "ai_prompts_max": 30,
       "competitors": "rival.com"
     }
+  },
+  {
+    "name": "index coverage: switched off, 500 checks a day",
+    "body": {
+      "domain": "northwind-erp.com",
+      "site_id": "site_northwind-erp-com",
+      "request_id": "app-monitors-fixture",
+      "action": "monitors",
+      "monitors": {
+        "ai_visibility": true,
+        "ai_engines": "chatgpt, perplexity, gemini, claude, ai_overview, ai_mode",
+        "ai_prompts_max": 50,
+        "ai_pulse": true,
+        "ai_personas": " ",
+        "ai_markets": " ",
+        "ai_pulse_mode": "auto",
+        "ai_pulse_per_week": 0,
+        "ai_growth": true,
+        "ai_pages_month": 2,
+        "backlinks": true,
+        "link_builder": true,
+        "audit_monthly": true,
+        "audit_pages": 200,
+        "audit_js": false,
+        "brand_names": " ",
+        "index_watch": false,
+        "index_daily_cap": 500
+      }
+    },
+    "stored": {
+      "site_id": "site_northwind-erp-com",
+      "domain": "northwind-erp.com"
+    },
+    "expect": {
+      "index_watch": false,
+      "index_daily_cap": 500
+    }
   }
 ]

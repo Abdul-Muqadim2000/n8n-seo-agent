@@ -287,6 +287,9 @@ const FEATURE_LABEL: Record<string, string> = {
   published: 'Publish check',
   case_study: 'Case study',
   page_watch: 'Page watch',
+  // Index coverage (2026-10-29): Google data only, always 0 credits
+  index_coverage: 'Index coverage (free)',
+  index_watch: 'Index coverage (free)',
 };
 export function featureLabel(mode: string | null | undefined): string {
   const m = String(mode ?? '').trim();

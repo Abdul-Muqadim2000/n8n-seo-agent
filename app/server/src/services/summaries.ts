@@ -1,4 +1,4 @@
-import { STAGE_LABELS } from '@seo/shared';
+import { indexingReportFailed, STAGE_LABELS } from '@seo/shared';
 
 // Headline values per callback stage for lists and run cards (field names from the live callbacks of 2026-10-01/02).
 
@@ -206,6 +206,25 @@ export function summarize(stage: string, p: P): Summary {
     case 'rejected':
       put('error', str(p.error));
       break;
+    case 'index_coverage': {
+      // Index coverage (2026-10-29, DESIGN.md §5): the daily index check's report (free)
+      const m = obj(p.summary);
+      const by = obj(m.by_action);
+      // N-app-6 / N12: a run that could not check the website says so; its figures are the last check's, never today's
+      if (indexingReportFailed(m)) put('failed', true);
+      put('known', num(m.known));
+      put('indexed', num(m.indexed));
+      put('notIndexed', num(m.not_indexed));
+      put('backlogLeft', num(m.backlog_left));
+      put('newPages', num(m.new_pages));
+      put('newIndexed', num(m.new_indexed));
+      put('siteFixes', num(by.site_fix));
+      put('dropped', len(m.dropped));
+      if (m.freeze === true) put('freeze', true);
+      const ev = arr(m.events).map(obj).find((e) => e.status === 'rolling_out');
+      put('updateRollingOut', ev ? str(ev.title) : null);
+      break;
+    }
     case 'console_alert':
       put('kind', str(p.kind));
       put('severity', str(p.severity));

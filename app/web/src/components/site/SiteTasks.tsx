@@ -180,7 +180,7 @@ export function SiteTasksPanel({ tasks }: { tasks: readonly SiteTask[] | undefin
             {done > 0 && <span className="rounded-full bg-good-soft px-2 text-xs font-semibold tabular text-good-text">{done} done</span>}
           </span>
         }
-        description="Changes only you can make on your own website. We check each one ourselves, every day, and tick it off when it is in place."
+        description="Changes only you can make on your own website. We check them for you and tick each one off when it is in place."
       >
         <ul className="divide-y divide-line border-t border-line">
           {tasks.map((t) => (

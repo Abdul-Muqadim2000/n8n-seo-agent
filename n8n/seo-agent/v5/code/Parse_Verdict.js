@@ -1,0 +1,166 @@
+/*__EXCLUSIONS__*/
+/*__SITE_MODEL__*/
+/*__OWN_COVER__*/
+// Accepts an object (from the Structured Output Parser) or a string with/without code fences or surrounding text
+const parseAgentJson = (raw) => {
+  if (raw && typeof raw === 'object') return raw;
+  let s = String(raw || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+  try { return JSON.parse(s); } catch (e) {}
+  const a = s.indexOf('{'), b = s.lastIndexOf('}');
+  if (a >= 0 && b > a) { try { return JSON.parse(s.slice(a, b + 1)); } catch (e) {} }
+  throw new Error('AI did not return valid JSON. Output was: ' + s.slice(0, 300));
+};
+
+/*__REACH__*/
+/*__KW_INPUTS__*/
+const prev = $('Merge Keyword Data').first().json;
+const verdict = parseAgentJson($input.first().json.output);
+
+/*__PAGE_TYPE__*/
+// 2026-10-12 (FIX_PLAN D10): the verdict answers in free text; the fixed option decides the length band, the schema and
+// meta.json, and the sentence itself travels on as page_notes so the brief still hears what the verdict asked for.
+const allowed = ['GO', 'GO_WITH_CHANGES', 'AVOID'];
+if (!allowed.includes(verdict.verdict)) verdict.verdict = 'GO_WITH_CHANGES';
+
+// ---- a keyword the site already has a page for (P2-5, 2026-10-12; inlined into the v3 node *Parse Verdict* by build_v4.py section 39) ----
+// Run 444 asked for a verdict on "uae e invoicing penalties" — a search the site's own /insights/…-uae-e-invoicing-penalties-… page has
+// answered since 2026-08-21 — and the answer was "Build an informational penalty guide", recommended_page "Guide": the owner was told to
+// create a second URL for a search their page already answers (the exact D11 harm). *Collect Client Pages* now sets `existing_page` from
+// the page inventory (SM.matchPage) and `v5/prompts/verdict.txt` forbids a new page; this is the deterministic half of it.
+// ---- R7 (2026-10-13, re-rating): no verdict may ask for FAQPage schema (G2 removed it from everything we write) ----
+// Live: exec 486 `verdict_changes[3]` said "add … an FAQ with schema matching the People Also Ask questions" and the ladder's exec 495
+// `what_must_change[3]` said "Add an FAQ section that mirrors the People Also Ask questions, with FAQ and Service schema". Google stopped
+// showing FAQ rich results on 2026-05-07, so the owner would spend time on markup that shows nothing. The prompt now forbids it; this
+// rewrites the schema part out of any line that still asks for it and keeps the FAQ *section*, which is what AI assistants quote.
+const FAQ_SCHEMA_RE = /\b(?:faq\s*page|faqpage)\b(?:\s+(?:schema|markup|structured\s+data))?|\bfaq\b[^.;]{0,20}?\b(?:schema|markup|structured\s+data)\b|\b(?:schema|markup|structured\s+data)\b[^.;]{0,20}?\bfaq\b/gi;
+const noFaqSchema = (line) => {
+  let t = String(line == null ? '' : line);
+  if (!FAQ_SCHEMA_RE.test(t)) return t;
+  FAQ_SCHEMA_RE.lastIndex = 0;
+  t = t.replace(/\b(an?\s+)?FAQ\s+with\s+(?:its\s+own\s+)?(?:schema|markup|structured data)\b/gi, '$1FAQ section (question headings answered directly)')
+       .replace(/\bwith\s+FAQ\s+and\s+([A-Z][A-Za-z]*)\s+schema\b/g, 'with $1 schema')
+       .replace(/\bFAQ\s+and\s+([A-Z][A-Za-z]*)\s+schema\b/g, '$1 schema')
+       .replace(/\b(?:an?\s+)?FAQ\s*(?:page)?\s+(?:schema|markup|structured data)\b/gi, 'an FAQ section (question headings answered directly)')
+       .replace(/\bFAQPage\b/gi, 'an FAQ section (question headings answered directly)')
+       .replace(/\bwith\s+(?:FAQ|FAQPage)\s+(?:schema|markup|structured data)\b/gi, '')
+       .replace(/\s{2,}/g, ' ').replace(/\s+([,.;])/g, '$1').replace(/,\s*\./g, '.').trim();
+  return t;
+};
+verdict.risks = (Array.isArray(verdict.risks) ? verdict.risks : []).map(noFaqSchema);
+verdict.reasons = (Array.isArray(verdict.reasons) ? verdict.reasons : []).map(noFaqSchema);
+/*__PAGE_CLAIMS__*/
+// ---- R38 / R48 (2026-10-16): what the verdict says about the client's own page is checked against what was measured on that page ----
+// Exec 608: reasons[3] said "Its visible text has no mandate dates, ... no tables, ... no author or date" about a page that has all three.
+// The Verdict Agent now reads the page's facts; this removes any sentence of its reasons / risks that the digest still contradicts (or that
+// the digest says could not be checked) and says so in `page_claims_dropped`. R48: "FTA-accredited" -> the Ministry of Finance's framework.
+const PCD = prev.existing_page_digest || null;
+const page_claims_dropped = [];
+const pcClean = (arr) => (Array.isArray(arr) ? arr : []).map(x => { const r = PC.filterText(x, PCD, {}); r.dropped.forEach(d => page_claims_dropped.push(d)); return PC.fta(r.text); }).filter(Boolean);
+verdict.risks = pcClean(verdict.risks);
+verdict.reasons = pcClean(verdict.reasons);
+
+// ---- R18 (2026-10-14, FIX_PLAN §3.12): a feasibility score computed on a results page nobody could read ----
+// Execution 549: both SERP calls answered 40101 inside an HTTP 200, were billed, ran once — and the run still said
+// "winnable, GO_WITH_CHANGES 68" and wrote a page. The retry is wired above; when it fails too, the competition was never seen,
+// so there is no verdict and no number — only what was tried, and the suggestion to run the check again.
+const EV56 = (() => {
+  const sf = prev.serp_features || {}; const ev = prev.serp_evidence || null; const kd = prev.keyword_data_evidence || null;
+  const out = !!(sf.unavailable || (ev && ev.unavailable));
+  const why = String((ev && ev.error) || sf.error || 'no answer from the search data provider').slice(0, 160);
+  const again = (ev && ev.retried) ? (Number(ev.attempts) > 2 ? ' The search was sent ' + ev.attempts + ' times (the last time as a lighter request) and failed every time.' : ' The search was sent again once and failed again.') : '';   // F-SERP: up to three attempts
+  return {
+    withheld: out,
+    evidence: { serp: out ? 'unavailable' : 'read', error: out ? why : '', asked: ev ? ev.asked : 1, checked: ev ? ev.checked : (out ? 0 : 1),
+      retried: ev ? ev.retried : 0, attempts: ev ? (Number(ev.attempts) || 1 + (Number(ev.retried) || 0)) : 1, read_light: !!sf.light_read, keyword_data: (kd && kd.unavailable) ? 'unavailable' : 'read' },
+    reason: out ? 'No score is given for this keyword: the live Google results could not be read (' + why + ').' + again
+      + ' Nobody has seen the pages that rank, the featured snippet or the AI Overview, so any number here would be invented.' + (sf.retryable === false ? ' Run the check again.' : ' This is a temporary problem with the search data provider, not with your keyword. Run the check again later.') : ''
+  };
+})();
+// ---- B1-1 (2026-10-15, benchmark area 1): the two numbers the keyword report puts in front of a customer ----
+// They used to be whatever the Verdict Agent typed into its JSON. The same run computes both properly: `_reach.js` turns a keyword
+// difficulty and this site's reach into a plan with a month RANGE and an uncalibrated chance band against a published base rate, and
+// `KWI.calibrate` turns a monthly volume into visits through the measured click loss of the results page that was actually read.
+const KD77 = (prev.keyword_data || {}).keyword_difficulty ?? null;
+const VOL77 = (prev.keyword_data || {}).search_volume ?? null;
+const SF77 = prev.serp_features || {};
+const SERP_READ77 = SF77.unavailable !== true;
+let CACHE77 = []; try { CACHE77 = $('Load Site Cache').all().map(i => i.json); } catch (e) { CACHE77 = []; }
+// the site's reach: the stored measurement (30 days, same market) or, failing that, the size tier of the authority this run already
+// read. Never a fresh paid pull: a keyword report does not buy the ranked-keywords list.
+const RI77 = reachCached(CACHE77, prev.domain, prev.location_code) || { ...reachFrom(null, prev.site_authority || null), ranked: null, cached: false };
+const TA77 = reachTopic(RI77.ranked === undefined ? null : RI77.ranked, prev.keyword, RI77.reach, { domain: prev.domain || 'your site',
+  reason_missing: RI77.cached ? 'the reach of your site was measured on ' + String(RI77.cached_at || '').slice(0, 10) + ' across all your keywords, not this topic, so this report cannot say how strong you are on this topic in particular'
+    : 'a keyword report does not buy the list of keywords your site ranks for (the keyword research and the ladder do)' });
+const DIFF77 = prev.domain ? difficultyForYou(KD77, TA77.reach, {}) : null;
+const PLAN77 = DIFF77 ? reachPlan(DIFF77, reachStrong(RI77, null), reachMeasured(TA77 && TA77.used ? { used: true } : RI77, null)) : null;   // R49: no chance band on a reach no measured ranking supports
+const FORYOU77 = !DIFF77 ? null : { difficulty_for_you: DIFF77, plan_type: PLAN77.plan_type, months: PLAN77.months, months_range: PLAN77.months_range,
+  stretch: PLAN77.stretch, chance: PLAN77.chance, reach_used: TA77.reach, reach_basis: TA77.used ? 'topic' : 'site',
+  site_reach: TA77.site_reach, topic_reach: TA77.topic_reach, kd_known: KD77 != null,
+  label: reachLabel(DIFF77, PLAN77.plan_type === 'none' ? null : PLAN77) + (TA77.used ? ' \u00b7 measured on this topic' : ''),
+  note: TA77.note + (KD77 == null ? ' This keyword has no measured difficulty either, so it is counted as that reach + ' + REACH_CFG.unknown_kd + '.' : '') };
+const TTR77 = (!PLAN77 || PLAN77.plan_type === 'none') ? null : { months: PLAN77.months, months_range: PLAN77.months_range, basis: 'modelled',
+  chance: PLAN77.chance, note: reachChanceText(PLAN77), base_rate: REACH_BASE_RATE, model_months: verdict.time_to_rank_months ?? null };
+// the visits a page in the top three would take. A results page nobody could read yields NO estimate: what it takes in clicks before
+// anyone reaches a link is exactly what was not seen.
+const VIS77 = (() => {
+  const model = verdict.expected_monthly_visits_top3 ?? null;
+  if (!SERP_READ77) return { visits: null, basis: 'unknown', basis_text: 'not estimated: the live results page could not be read, so the clicks it takes before anyone reaches a link are unknown',
+    note: 'No visit estimate: the live Google results could not be read (' + String(SF77.error || 'no answer').slice(0, 120) + ').', model_estimate: model, loss_applied: '' };
+  const c = KWI.calibrate({ volume: VOL77, serp_types: SF77.features_present || [] }, {});
+  const basis_text = c.traffic_basis === 'calibrated' ? 'calibrated with your own Search Console data'
+    : c.traffic_basis === 'modelled' ? 'modelled from the provider\'s monthly volume, after this results page\'s click loss'
+    : 'not estimated: no monthly search volume was measured for this keyword';
+  return { visits: c.traffic_potential, basis: c.traffic_basis,
+    basis_text: basis_text + ((SF77.ai_overview || {}).not_read ? ' (the AI Overview was not read on this attempt, so any clicks it takes are not counted)' : ''),   // F-SERP
+    note: c.traffic_note, model_estimate: model, loss_applied: KWI.lossText(SF77.features_present || []) };
+})();
+const EXP = (prev.existing_page && prev.existing_page.url) ? prev.existing_page : null;
+let verdict_changes = Array.isArray(verdict.what_must_change) ? verdict.what_must_change.map(x => PC.fta(noFaqSchema(x))).filter(Boolean) : [];   // R7: never FAQPage schema
+let existing_page_action = null;
+if (EXP) {
+  existing_page_action = 'improve';
+  // a line that explicitly asks for a SECOND URL is dropped; a line that asks for work ("Build an informational penalty guide of about
+  // 1,800 words …", the live answer of run 444) is kept but addressed to the page that exists, so no advice and no word target is lost.
+  const NEW_URL_RE = /\b(?:new|second|separate|dedicated|additional|another|standalone|stand-alone)\s+(?:page|url|post|article)\b|\b(?:publish|create|build|launch|spin up)\s+an?\s+(?:new\s+)?(?:page|url)\b/i;
+  const CREATE_RE = /^(?:please\s+)?(?:build|create|write|publish|launch|produce|develop|make|add|set up)\b/i;
+  const WORDS_RE = /\b(\d[\d,]{2,5})\s*words?\b/i;
+  const dropped = verdict_changes.filter(c => NEW_URL_RE.test(c));
+  verdict_changes = verdict_changes.filter(c => !NEW_URL_RE.test(c))
+    .map(c => CREATE_RE.test(c) ? c.replace(CREATE_RE, (m) => 'On that page, ' + m.toLowerCase()) : c);
+  // the length the verdict asked for is the brief's clamp (D10): never lose it with the line that happened to carry it
+  const lostWords = dropped.map(c => (c.match(WORDS_RE) || [])[1]).filter(Boolean)[0];
+  if (lostWords && !verdict_changes.some(c => WORDS_RE.test(c))) verdict_changes.push('Aim for about ' + lostWords + ' words on that page.');
+  verdict_changes.unshift('Improve the page the site already has for this search (' + EXP.url + '): update and expand it, keep its URL, and do not publish a second page for this keyword.');
+}
+
+/*__VERDICT_OWN__*/
+/*__REMEASURE__*/
+
+return [{
+  json: {
+    ...prev,
+    verdict: EV56.withheld ? 'NOT_CHECKED' : verdict.verdict,
+    verdict_score: EV56.withheld ? null : (verdict.score ?? null),
+    verdict_evidence: EV56.evidence,
+    ladder_remeasure,   // A-21
+    score_withheld: EV56.withheld,
+    score_withheld_reason: EV56.reason,
+    verdict_reasons: EV56.withheld ? [EV56.reason, ...(verdict.reasons || [])] : (verdict.reasons || []),
+    verdict_risks: verdict.risks || [],
+    recommended_page: PT.of(verdict.recommended_page || prev.page_type, prev.page_type),
+    page_notes: PT.notes(verdict.recommended_page, PT.of(verdict.recommended_page || prev.page_type, prev.page_type)),
+    secondary_keywords: OWNV.secondary,
+    secondary_covered: OWNV.covered,   // A-5: the searches the site already holds elsewhere, kept off this page and named
+    existing_related: OWNV.related, sections_covered: OWNV.sections, already_on_page: OWNV.already_on_page, keyword_covered: OWNV.keyword_covered, own_coverage_checked: OWNV.checked,
+    verdict_changes,
+    page_claims_dropped,
+    verdict_exclusions: EXC.fromVerdict(verdict_changes, verdict.topics_to_skip),   // A-18: what this page must not cover
+    existing_page_action,
+    expected_visits_top3: EV56.withheld ? null : (VIS77.visits ?? null),
+    expected_visits: EV56.withheld ? null : VIS77,
+    time_to_rank_months: EV56.withheld ? null : (verdict.time_to_rank_months ?? null),   // kept for the ladder and older readers: it is the MODEL's own number and every surface now says so
+    time_to_rank: EV56.withheld ? null : TTR77,
+    for_you: EV56.withheld ? null : FORYOU77,
+    reach_info: FORYOU77 ? { reach: RI77.reach, method: RI77.method, cached: !!RI77.cached, cached_at: RI77.cached_at || null, evidence_kept: !!RI77.ranked } : null
+  }
+}];

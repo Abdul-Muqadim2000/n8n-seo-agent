@@ -236,6 +236,34 @@
    ],
    "tag": "Cadence"
   },
+  "SEO Agent \u2014 Index Coverage": {
+   "ai_nodes": [],
+   "balance": "DFS Balance (Index)",
+   "dead_ends": [],
+   "est": {
+    "ai": 0.0,
+    "dfs": 0.0
+   },
+   "settle": "Settle Run Ledger (Index)",
+   "settle_from": [
+    "Index Report",
+    "Refuse Run Ledger (Index)"
+   ],
+   "settle_writes": [
+    "ai_usd",
+    "cost_basis",
+    "cost_mode",
+    "dfs_balance_end",
+    "dfs_source",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_at",
+    "settled_usd",
+    "status"
+   ],
+   "tag": "Index"
+  },
   "SEO Agent \u2014 Link Builder": {
    "ai_nodes": [
     "Outreach Sequence Writer"

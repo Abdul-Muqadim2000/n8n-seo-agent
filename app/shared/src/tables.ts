@@ -124,6 +124,8 @@ export interface MonitorsRow extends DtRow {
   ai_claude_weekly?: boolean | null; ai_pulse_engines?: string; ai_persona_context?: boolean | null; ai_fanout_check?: number | null; ai_sov_set?: string; ai_alert_rules_json?: string;
   /** W2-E3: the monthly market trend (empty = off) */
   ai_demand_market?: boolean | null;
+  /** Index coverage (2026-10-29): the daily index check (empty = on) and its URL inspections a day (empty = 300, 20 to 1,200) */
+  index_watch?: boolean | string | null; index_daily_cap?: number | string | null;
 }
 export interface AiPromptRow extends DtRow {
   prompt_id: string; site_id: string; domain: string; prompt: string; kind: string; topic: string; keyword: string;
@@ -348,6 +350,52 @@ export interface PageWatchRow extends DtRow {
   mobile: string; rich_results: string; inspect_error: string;
 }
 
+/** Index coverage (2026-10-29, n8n/seo-agent/docs/indexing-2026-10-29/DESIGN.md §2): written by the engine's daily `SEOagentIndexCv1`,
+ * read only by the app. One row per website and known page (`site_id` + `url`); see shared/src/indexing.ts for what the codes mean. */
+export interface IndexPageRow extends DtRow {
+  site_id: string; domain: string; url: string; lane: string; sources: string; in_sitemap: boolean; sitemap_lastmod: string;
+  first_seen_at: string; published_at: string; impressions_28d: number; clicks_28d: number; last_impression_at: string;
+  state: string; evidence: string; cause: string; action: string; verdict: string; coverage: string; indexing_state: string;
+  robots_state: string; page_fetch_state: string; crawled_as: string; google_canonical: string; user_canonical: string;
+  last_crawl: string; referring_count: number; google_sitemaps: number; inspect_at: string; fetch_at: string; http_status: number;
+  final_url: string; noindex: string; page_canonical: string; words: number; title: string; indexed_since: string; dropped_at: string;
+  checks: number; next_check_at: string; needs_person: boolean; link_from: string; merge_into: string; note: string; updated_at: string;
+  /** fix wave 1 (FIX_CONTRACT.md): ISO, our fetch saw the site-fix cause gone while Google's last inspection still shows it ('' = no) */
+  fix_seen_at?: string;
+  /** fix wave 1: a manual "Request indexing" in Search Console is the right next step (at most 5 a site a week, never automated) */
+  ask_google?: boolean | string;
+  /** fix wave 2 (ENGINE_BUILD.md, N3): ISO of Google's crawl AFTER a fix we saw that still showed the same cause ('' = no). The row is
+   *  `site_fix` again and its note says so; the engine clears it when its own read sees the problem again, Google's reason changes or the
+   *  page is indexed. While it is set the app's own fetch can never call the step done (R1): Google is shown something our fetch is not. */
+  fix_failed_at?: string;
+  /** fix wave 2 (N6): when the page was last newly marked `ask_google` (kept after the mark ends; engine-only, the app does not read it) */
+  ask_google_at?: string;
+}
+/** One row per state / cause change of a page (insert only). */
+export interface IndexHistoryRow extends DtRow {
+  site_id: string; url: string; at: string; state: string; cause: string; evidence: string; verdict: string; coverage: string;
+}
+/** One row per website per daily run. */
+export interface IndexRunRow extends DtRow {
+  site_id: string; domain: string; run_at: string; request_id: string; known: number; indexed: number; not_indexed: number;
+  excluded: number; unknown: number; errors: number; new_pages: number; new_indexed: number; inspected: number; reused: number;
+  fetched: number; quota_cap: number; backlog_left: number; by_cause_json: string; by_action_json: string; dropped_json: string;
+  freeze: boolean; freeze_reason: string; note: string;
+  /** contract change 2 (ENGINE_BUILD): Search Console's submitted sitemaps and our own sitemap read, as JSON
+   *  `{submitted, submitted_errors, submitted_warnings, pending, read, fetched, urls, capped, robots_status, errors[]}` (+ `complete` later) */
+  sitemaps_json?: string;
+}
+/** Google's own announcements (Search Status Dashboard, spam policies page); global, one row per event. */
+export interface GoogleEventRow extends DtRow {
+  event_id: string; source: string; kind: string; title: string; started_at: string; ended_at: string; status: string; url: string;
+  seen_at: string; updated_at: string;
+}
+/** What one Google update did to one website's pages (before vs after). */
+export interface UpdateImpactRow extends DtRow {
+  site_id: string; domain: string; event_id: string; event_title: string; compared_at: string; before_from: string; before_to: string;
+  after_from: string; after_to: string; pages: number; dropped: number; stable: number; gained: number; pages_json: string; note: string;
+}
+
 export const TABLES = {
   ladders: 'seo_ladders',
   rankHistory: 'seo_rank_history',
@@ -399,6 +447,12 @@ export const TABLES = {
   cycleJobs: 'seo_cycle_jobs',
   /** the client's decisions on the "Coming up" plan: written by the app, read by the Content Cadence */
   skips: 'seo_skips',
+  /** Index coverage (2026-10-29): the engine's daily index check, read only by the app (services/indexing.ts) */
+  indexPages: 'seo_index_pages',
+  indexHistory: 'seo_index_history',
+  indexRuns: 'seo_index_runs',
+  googleEvents: 'seo_google_events',
+  updateImpact: 'seo_update_impact',
 } as const;
 export type TableKey = keyof typeof TABLES;
 

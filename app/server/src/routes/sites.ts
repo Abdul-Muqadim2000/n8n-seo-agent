@@ -162,7 +162,29 @@ async function stopInEngine(site: SiteRow, log: FastifyRequest['log']) {
     log.warn({ err: String(err), domain: site.domain }, 'n8n ladder delete failed');
   }
   await clearAiInEngine(site.domain, log);
+  await clearIndexInEngine(site.domain, log);
   invalidateSite(site.domain);
+}
+
+/**
+ * X16 (Index coverage, FIX_CONTRACT decision 8): the website's index check leaves with it, like its ladders. The page, run and update-impact
+ * rows carry the domain; the history rows only the engine's site id (the app refuses a second domain with the same id, so it is this
+ * website's). Google's own announcements (seo_google_events) are global and stay. A table that fails is logged; the others still go.
+ */
+export const INDEX_TABLES_CLEARED_ON_DELETE = ['indexPages', 'indexRuns', 'updateImpact'] as const;
+export async function clearIndexInEngine(domain: string, log: FastifyRequest['log']): Promise<string[]> {
+  const failed: string[] = [];
+  const del = async (t: 'indexPages' | 'indexRuns' | 'updateImpact' | 'indexHistory', f: { columnName: string; condition: 'eq'; value: string }) => {
+    try {
+      await deleteRows(t, [f]);
+    } catch (err) {
+      failed.push(t);
+      log.warn({ err: String(err), domain, table: t }, 'n8n index data delete failed');
+    }
+  };
+  for (const t of INDEX_TABLES_CLEARED_ON_DELETE) await del(t, { columnName: 'domain', condition: 'eq', value: domain });
+  await del('indexHistory', { columnName: 'site_id', condition: 'eq', value: n8nSiteId(domain) });
+  return failed;
 }
 
 /**
