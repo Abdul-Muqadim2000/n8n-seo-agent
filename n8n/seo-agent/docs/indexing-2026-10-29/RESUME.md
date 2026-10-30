@@ -2,6 +2,20 @@
 
 Read this first if you are picking the work up. Owner's ask: OWNER_BRIEF.md. Contract: DESIGN.md + FIX_CONTRACT.md.
 
+## FIRST PRODUCTION RUN 2026-10-29 23:55 UTC (test fire, schedule moved to 19:55 NY and published) + fix 7d577be9 NOT YET DEPLOYED
+- Executions 4171 (trigger, waiting = the watch), 4172 / 4173 (one per site) success. devaicon.com 30 known / 9 indexed / 20 not (12 unknown
+  to Google, 6 discovered, 2 crawled-not-indexed) / 1 excluded; techand.ai 48 / 38 / 4 / 6; 77 readings reused, 1 inspection; 0 errors,
+  0 ops alerts, $0; 10 Google events; update impact techand.ai Sept spam: 8 lost / 10 gained / 3 held. The devaicon blog post is INDEXED
+  ("Submitted and indexed", 0 impressions): a ranking problem, not indexing.
+- Bug found: Site Tracker readings of https://techand.ai/x (308 to www) were lent to the www rows (host-agnostic key) -> 5 indexed pages
+  shown "Fixed on your site, waiting for Google" + 1 "copy of itself". Fixed in 7d577be9 (exact-host borrow + canonical-equals-page guard,
+  harness IXP1). Harness at 00:2x UTC: 13892 passed, 5 failed = the same 5 as the pre-fix code at that hour (S51 P34-5 known 00-03 UTC;
+  IXF6 x3: its NOW-1h run row falls on the previous UTC day between 00:00 and 01:00 UTC; test weakness to fix: pin the clock).
+- The second engine deploy (`deploy_engine.py --no-build --apply`) was BLOCKED by the permission classifier: production still has the
+  pre-fix workflow AND the test schedule 19:55 New York (not 05:15). Next: owner approves or runs it; that deploy also restores 05:15.
+  Then trigger one run (schedule +5 min, PUT + POST /activate = publish) and check the 6 techand rows become indexed; redeploy to restore.
+  n8n 2.x lesson: a PUT through the public API saves a draft; only /activate publishes the schedule.
+
 ## ENGINE DEPLOYED 2026-10-29 23:10 UTC (owner said "deploy")
 - Backup first: gs://alaventra-prod-backups/pg/2026-10-29/{app,n8n}-2026-10-29T230455Z.dump.
 - `deploy_engine.py --no-build --apply --create-missing` from feature/indexing e222cfb0: sync_tables added seo_monitors.index_watch /
