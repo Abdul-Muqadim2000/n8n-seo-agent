@@ -159,6 +159,20 @@ Third review (REVIEW_3.md) running at save time: verify wave 2, hunt regressions
 3. Automatic content rewrites: NO (scaled content abuse risk); "Improve this page" stays approval-only.
 4. AI-drafted versioned policy checklist: not chosen now (later, small).
 
+## COMPLETE 2026-10-31 ~01:00 UTC - everything live, main up to date
+- Ask Google slot fix (788cbc24, harness IXV8) deployed; devaicon's Ask Google now: /whatwedo, /capabilities/infrastructure-enterprise-systems,
+  /industries, /insights, /about-devaicon. The two devaicon capability pages that left the index are a real drop-out (Google: "Crawled -
+  currently not indexed" on 2026-10-30 01:18, last crawl Sep 26 / 28, was "Submitted and indexed" on Oct 28).
+- techand.ai sitemap submission switched ON (seo_monitors.index_sitemap_submit). First run with it: permission siteFullUser, gate ok,
+  sitemap already submitted with 0 errors and unchanged -> nothing sent (correct); the app shows no false promise and no step.
+- INCIDENT: the engine deploy at 2026-10-30 22:19:55 UTC (from feature/indexing) overwrote the page-quality Waves 0-0.7 engine the other
+  session had deployed minutes earlier (main workflow 829 -> 776 nodes). Fixed: merged origin/main into feature/indexing (c8288de5, no
+  conflicts), harness 16291 / 0, deployed the combined build; every production workflow verified equal to the build. Memory
+  feedback-engine-deploy-check-prod-first records the rule.
+- main = 9ce2582c (PR #51) contains everything; the API on the VM runs c28203f2 (identical app code), the web is main. CI on main: engine
+  harness, app unit tests, build, images all green; only the pre-existing cmsRoutes real-Postgres failure.
+- LEFT: feature/seo-agent-v4.5 must merge origin/main (it lacks only 788cbc24 + notes) before its next engine deploy. Daily run 05:15 NY.
+
 ## WAVE 2 DEPLOYED + VERIFIED 2026-10-30 ~19:25 UTC (owner said "deploy")
 - Backup pg/2026-10-30/*T182056Z. Engine: `deploy_engine.py --no-build --apply --credentials --only-credentials SEOcredGoogleSvcW
   --create-missing` (4 columns, 16 workflows, 28 published, only the new credential written; node diff checked first). API on the VM at
