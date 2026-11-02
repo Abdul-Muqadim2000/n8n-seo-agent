@@ -7,12 +7,12 @@
 # Every step first asks Google whether the thing exists (read-only describe/list, in both modes) and only then creates it, so a
 # second run changes nothing, and resources made by hand (the project, the static IP, the budget of 2026-10-18) are reused as they are.
 # Order: project + billing + APIs -> network + firewall -> service account -> backup bucket -> data disk + snapshot schedule ->
-# health check + template + managed instance group (one Spot VM, stateful disks and IP) -> uptime checks + alert -> budget -> cost.
+# health check + template + managed instance group (one VM, stateful disks and IP) -> uptime checks + alert -> budget -> cost.
 # The VM starts only when the three settings secrets exist (load_secrets.sh) — its startup script needs them.
 #
 # Settings (environment variables; the defaults are the decisions of 2026-10-18):
 #   PROJECT alaventra-prod · BILLING 0122E1-574F3D-7CDF90 · REGION me-central1 · ZONE me-central1-a · NAME alaventra (resource prefix)
-#   MACHINE e2-medium · BOOT_TYPE pd-balanced BOOT_SIZE 20 · DATA_TYPE pd-balanced DATA_SIZE 20 (RUNBOOK §2: why not pd-standard)
+#   MACHINE e2-medium · PROVISIONING STANDARD (SPOT until 2026-11-02, RUNBOOK §8) · BOOT_TYPE pd-balanced BOOT_SIZE 20 · DATA_TYPE pd-balanced DATA_SIZE 20 (RUNBOOK §2: why not pd-standard)
 #   DOMAIN 34-18-208-219.sslip.io (until a real one) · ALERT_EMAIL muqadim2000@gmail.com · REF feature/seo-agent-v4.5 (branch the VM runs)
 #   GCLOUD gcloud (the command to run gcloud with; e.g. a Docker wrapper)
 set -euo pipefail
@@ -33,6 +33,11 @@ REGION=${REGION:-me-central1}
 ZONE=${ZONE:-me-central1-a}
 NAME=${NAME:-alaventra}
 MACHINE=${MACHINE:-e2-medium}
+# 2026-11-02: STANDARD. As SPOT the VM was preempted five times in one day and every preemption killed the runs in flight (a client's
+# page run among them); a standard VM is live-migrated for host maintenance instead of stopped. About $13 a month more (RUNBOOK §8).
+PROVISIONING=${PROVISIONING:-STANDARD}
+case "$PROVISIONING" in STANDARD) SCHED=(--provisioning-model=STANDARD --maintenance-policy=MIGRATE) ;;
+  SPOT) SCHED=(--provisioning-model=SPOT --instance-termination-action=STOP) ;; *) echo "unexpected PROVISIONING: $PROVISIONING" >&2; exit 2 ;; esac
 BOOT_TYPE=${BOOT_TYPE:-pd-balanced}
 BOOT_SIZE=${BOOT_SIZE:-20}
 DATA_TYPE=${DATA_TYPE:-pd-balanced}
@@ -166,12 +171,12 @@ else run compute health-checks create http "$HC" --port=8081 --request-path=/hea
 
 # The template's name carries a hash of everything in it (machine, disks, startup script, ref), so a change makes a new template and
 # the group rolls to it (resize.sh); an unchanged run finds the same name and changes nothing.
-HASH=$( { echo "$MACHINE $BOOT_TYPE $BOOT_SIZE $REF $REPO $NAME"; cat "$HERE/startup.sh"; } | shasum -a 256 | cut -c1-8)
+HASH=$( { echo "$MACHINE $BOOT_TYPE $BOOT_SIZE $REF $REPO $NAME"; [ "$PROVISIONING" = SPOT ] || echo "$PROVISIONING"; cat "$HERE/startup.sh"; } | shasum -a 256 | cut -c1-8)
 TPL=$NAME-tpl-$(tr '[:upper:]' '[:lower:]' <<< "$MACHINE")-$HASH
 if q compute instance-templates describe "$TPL"; then keep "template $TPL"
 else
   run compute instance-templates create "$TPL" --machine-type="$MACHINE" \
-      --provisioning-model=SPOT --instance-termination-action=STOP \
+      "${SCHED[@]}" \
       --image-family=debian-12 --image-project=debian-cloud \
       --boot-disk-type="$BOOT_TYPE" --boot-disk-size="${BOOT_SIZE}GB" --boot-disk-device-name=boot \
       --network-interface="subnet=projects/$PROJECT/regions/$REGION/subnetworks/$SUBNET,network-tier=PREMIUM" \
