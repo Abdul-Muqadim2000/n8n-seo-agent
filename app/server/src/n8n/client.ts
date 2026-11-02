@@ -525,6 +525,34 @@ export async function executions(workflowId: string, status: 'error' | 'success'
   return r.data ?? [];
 }
 
+/** An execution's status ("success", "error", "crashed", "canceled", "running", …), or null when n8n no longer has it (pruned, 404). */
+export async function executionStatus(id: string): Promise<string | null> {
+  try {
+    const d: { status?: string } = await api(`/executions/${encodeURIComponent(id)}`);
+    return d.status ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The execution an Execute Workflow node of this run started: n8n 2.x records it on that node as `metadata.subExecution` (also with
+ * "wait for sub-workflow" off, as the API front door's *Start SEO Run* is). Null when no node started one (a refused request, a duplicate
+ * answered with the first run's id, a mode that runs inside the front door). Pure, so it is unit-tested.
+ */
+export function subExecutionIn(d: { data?: { resultData?: { runData?: Record<string, { metadata?: { subExecution?: { executionId?: unknown } } }[]> } } }): string | null {
+  for (const tasks of Object.values(d.data?.resultData?.runData ?? {}))
+    for (const t of tasks ?? []) {
+      const v = t?.metadata?.subExecution?.executionId;
+      if (v != null && v !== '') return String(v);
+    }
+  return null;
+}
+
+export async function subExecutionOf(id: string): Promise<string | null> {
+  return subExecutionIn(await api(`/executions/${encodeURIComponent(id)}?includeData=true`));
+}
+
 /**
  * Every execution of a workflow with a status that started at or after `since`, newest first, paged through n8n's cursor (N-app-5). A
  * fixed "newest 150" read covers too few days of a workflow that runs many executions a day (the daily index check runs one per website
