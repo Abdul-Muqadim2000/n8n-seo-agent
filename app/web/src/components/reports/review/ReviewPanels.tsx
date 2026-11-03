@@ -460,8 +460,19 @@ export function CheckResult({ check }: { check: NonNullable<NonNullable<PageRevi
         {check.note || 'Your changes are saved. Save again in a moment to check them.'}
       </Callout>
     );
+  const fixed = check.fixed ?? [];
   return (
     <div className="space-y-2">
+      {fixed.length > 0 && (
+        <Callout tone="good" title={`Your edit fixed ${fixed.length === 1 ? 'the problem we flagged' : `${fixed.length} problems we flagged`}`}>
+          <ul className="list-disc space-y-0.5 pl-5 [overflow-wrap:anywhere]">
+            {fixed.map((f, i) => (
+              <li key={`${i}-fixed`}>No longer on the page: {f.text}</li>
+            ))}
+          </ul>
+        </Callout>
+      )}
+      {check.note && check.blocking.length > 0 && <p className="text-[13px] text-ink-3">{check.note}</p>}
       {check.blocking.length ? (
         <Callout tone="critical" title={`${check.blocking.length} ${check.blocking.length === 1 ? 'point stops' : 'points stop'} your version from being published`}>
           <ul className="list-disc space-y-0.5 pl-5 [overflow-wrap:anywhere]">
@@ -475,12 +486,12 @@ export function CheckResult({ check }: { check: NonNullable<NonNullable<PageRevi
         </Callout>
       ) : (
         <Callout tone="good" title="Your version passed the check">
-          {check.note || 'Nothing in it stops you publishing.'}
+          {check.note || 'Nothing in it stops you publishing. The final version is checked again in full.'}
         </Callout>
       )}
       {check.advisory.length > 0 && (
         <details>
-          <summary className="cursor-pointer text-[13px] font-medium text-ink-2">Advice ({check.advisory.length})</summary>
+          <summary className="cursor-pointer text-[13px] font-medium text-ink-2">Advice, nothing here stops you publishing ({check.advisory.length})</summary>
           <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[13px] text-ink-2">
             {check.advisory.map((a, i) => (
               <li key={`${i}-${a.code}`}>{a.text}</li>

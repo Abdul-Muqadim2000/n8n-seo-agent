@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { FastifyBaseLogger, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -26,6 +26,10 @@ import {
   openQuestions,
   PAGE_MARKDOWN_MAX,
   pageCheckOf,
+  editCheckOf,
+  quotedProblemsOf,
+  withoutByline,
+  type CheckAnswer,
   pageMarkdownWithMeta,
   personDisplayName,
   plainWords,
@@ -437,26 +441,41 @@ export async function acceptPrefilled(a: OrgAccess, req: FastifyRequest | null, 
 export const versionSchema = z.object({ markdown: z.string().max(PAGE_MARKDOWN_MAX + 20_000, 'The page is too long to save') });
 
 /** The free check of the client's version: the engine's Publish Check (the deterministic half of the content gate). */
+/** the delivered version's check, by report and text (the same version is compared on every save; the check is deterministic) */
+const deliveredChecks = new Map<string, CheckAnswer>();
+
 async function checkVersion(orgId: string, l: Loaded, md: string, openCount: number): Promise<ReturnType<typeof pageCheckOf>> {
-  const p = obj(baseOf(l).payload);
+  const base = baseOf(l);
+  const p = obj(base.payload);
   const meta = obj(p.meta);
   const keyword = (str(p.keyword) || str(meta.primary_keyword) || l.report.title).slice(0, 120);
   const facts = Object.values((l.site?.factAnswers ?? {}) as FactAnswers).map((f) => f.text).filter(Boolean);
   const at = new Date().toISOString();
   const words = md.trim().split(/\s+/).filter(Boolean).length;
   if (words < 50) return pageCheckOf({ ran: false, note: 'The page is shorter than 50 words, so it was not checked.' }, openCount, at);
-  const res = await publishCheckCall(
-    {
-      markdown: pageMarkdownWithMeta(md, { title: str(meta.title), meta_description: cleanMetaDescription(meta.meta_description), slug: str(meta.slug) }),   // W0-A: never "Slug: ..."
-      keyword,
-      ...(l.site ? { domain: l.site.domain, country: l.site.country } : {}),
-      ...(str(meta.page_type) ? { page_type: str(meta.page_type).slice(0, 60) } : {}),
-      business_facts: [l.site?.businessFacts ?? '', ...facts].filter(Boolean).join('\n').slice(0, 5000),
-    },
-    orgId,
-  ).catch(() => null);
-  if (!res || res.kind !== 'answered' || res.status !== 200) return pageCheckOf({ ran: false }, openCount, at);
-  return pageCheckOf({ ran: true, json: res.json }, openCount, at);
+  const check = async (text: string): Promise<CheckAnswer> => {
+    const res = await publishCheckCall(
+      {
+        // prod 2026-11-03: without the byline, which the system prints and the check would read as a claim about the business
+        markdown: pageMarkdownWithMeta(withoutByline(text), { title: str(meta.title), meta_description: cleanMetaDescription(meta.meta_description), slug: str(meta.slug) }),   // W0-A: never "Slug: ..."
+        keyword,
+        ...(l.site ? { domain: l.site.domain, country: l.site.country } : {}),
+        ...(str(meta.page_type) ? { page_type: str(meta.page_type).slice(0, 60) } : {}),
+        business_facts: [l.site?.businessFacts ?? '', ...facts].filter(Boolean).join('\n').slice(0, 5000),
+      },
+      orgId,
+    ).catch(() => null);
+    return res && res.kind === 'answered' && res.status === 200 ? { ran: true, json: res.json } : { ran: false };
+  };
+  const baseMd = str(p.markdown);
+  const key = `${base.id}:${baseMd.length}:${createHash('sha256').update(baseMd).update('\u0000').update(keyword).digest('hex').slice(0, 24)}`;
+  const known = deliveredChecks.get(key);
+  const [edited, delivered] = await Promise.all([check(md), known ? Promise.resolve(known) : baseMd.trim() ? check(baseMd) : Promise.resolve(null)]);
+  if (delivered?.ran && !known) {
+    if (deliveredChecks.size >= 500) deliveredChecks.delete(deliveredChecks.keys().next().value!);
+    deliveredChecks.set(key, delivered);
+  }
+  return editCheckOf({ md, edited, delivered, box: quotedProblemsOf(p), openCount, at });
 }
 
 export async function putVersion(a: OrgAccess, req: FastifyRequest | null, reportId: unknown, body: unknown): Promise<PageReviewView> {
