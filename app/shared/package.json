@@ -16,7 +16,7 @@
     "export:payloads": "tsx scripts/export-payloads.ts"
   },
   "dependencies": {
-    "zod": "^4.1.0"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.18.0",
