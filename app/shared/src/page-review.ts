@@ -691,6 +691,8 @@ export interface PageCheck {
   /** false: the free check could not run (the engine did not answer); `note` says so */
   ran: boolean;
   note: string;
+  /** the problems the review box showed that the client's edit removed from the page (editCheckOf; absent on older checks) */
+  fixed?: PageDeliveryItem[];
 }
 
 /** Where a page stands, for the report and the content board. */
@@ -1131,6 +1133,122 @@ export function pageCheckOf(res: { ran: boolean; json?: P | null; note?: string 
     checkedAt: at,
     ran: true,
     note: '',
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// The check of the client's own version (prod 2026-11-03, devaicon.com: four saves, four "not ready", and the client gave up)
+// ---------------------------------------------------------------------------------------------------------------------------------
+// The client removes the problem the review box showed and saves. The free publish check then read the page with the business facts
+// only (it takes no website pages, author profile or case studies), so it called the page's own byline and sentences from the client's
+// website "statements nothing on file supports", listed points the box never showed, and blocked approval: removing the problem changed
+// nothing on screen. What a save answers now, in this order: did the edit fix what the box showed (each second-read problem re-read on
+// the page by its quoted words), did the edit add a problem (a kind of point the delivered version did not have, or more of it), and
+// what was already in the delivered version (advice: the delivered version's full check, with the whole context, did not block on it,
+// and the final version is checked again in full). When the delivered version could not be checked, every point blocks, as before.
+
+/** The page's byline line (`*Written by ... · Updated ... · Reviewed by ...*`, Blog_Package.js): printed by the system, never a claim. */
+export function withoutByline(md: string): string {
+  return s(md)
+    .replace(/^[ \t]*\*(?:Written by|By) [^\n]*\bUpdated [^\n]*\*[ \t]*$/gm, '')
+    .replace(/\n{3,}/g, '\n\n');
+}
+
+/** Text as words only (links as their text, no Markdown marks, straight quotes, one space, lower case), to find quoted words on a page. */
+export function pageWords(t: string): string {
+  return s(t)
+    .normalize('NFKC')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[*_`#>|~]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+export interface QuotedProblem {
+  item: PageDeliveryItem;
+  /** the words the second read quoted, as they stand on the page */
+  quote: string;
+}
+
+/** The review box's problems that the page text can show fixed: the second read's (`review`) items with the words it quoted. */
+export function quotedProblemsOf(payload: P | null | undefined): QuotedProblem[] {
+  const p = payload ?? {};
+  const gates = arr(obj(p.qa_second_read).gates).map(obj);
+  const out: QuotedProblem[] = [];
+  for (const raw of arr(p.qa_blocking).map(obj)) {
+    if (s(raw.code) !== 'review') continue;
+    const text = s(raw.text);
+    const gate = gates.find((g) => s(g.location).trim().length >= 12 && text.includes(s(g.location).trim()));
+    const quote = (s(gate?.location) || /\bat "(.+?)":\s/.exec(text)?.[1] || '').trim();
+    const [item] = items([raw]);
+    if (item && quote.length >= 12) out.push({ item, quote });
+  }
+  return out;
+}
+
+/** Whether the quoted words are still on the page (a trailing ellipsis of a shortened quote is not part of them). */
+export function quoteOnPage(md: string, quote: string): boolean {
+  const q = pageWords(quote).replace(/(\.\.\.|…)$/, '').trim();
+  return q.length > 0 && pageWords(md).includes(q);
+}
+
+/** A check point as a kind (its wording without quoted words and numbers) and its leading count ("7 statement(s) ..."), to compare two checks. */
+export function pointKind(text: string): { kind: string; count: number | null } {
+  const t = s(text).trim();
+  const head = t.split(/:\s/)[0] ?? t;
+  const lead = /^(\d+)\b/.exec(t);
+  return { kind: pageWords(head.replace(/"[^"]*"/g, ' ')).replace(/\d+/g, '#').replace(/\s+/g, ' ').trim(), count: lead ? Number(lead[1]) : null };
+}
+
+export interface CheckAnswer {
+  ran: boolean;
+  json?: P | null;
+  note?: string;
+}
+
+/**
+ * The check of the client's version (pure). `edited` is the free check of their version, `delivered` the same check of the version they
+ * edited (null or not ran: it could not be compared), `box` the review box's quoted problems of that version.
+ */
+export function editCheckOf(o: { md: string; edited: CheckAnswer; delivered: CheckAnswer | null; box: QuotedProblem[]; openCount: number; at: string }): PageCheck {
+  if (!o.edited.ran || !o.edited.json || typeof o.edited.json.publishable !== 'boolean') return pageCheckOf(o.edited, o.openCount, o.at);
+  const j = o.edited.json;
+  const still = o.box.filter((b) => quoteOnPage(o.md, b.quote));
+  const fixed = o.box.filter((b) => !quoteOnPage(o.md, b.quote)).map((b) => ({ code: b.item.code, text: plainWords(`"${b.quote}"`) }));
+  const compared = !!o.delivered?.ran && !!o.delivered.json && typeof o.delivered.json.publishable === 'boolean';
+  const before = new Map<string, number | null>();
+  if (compared) for (const r of arr(o.delivered!.json!.reasons)) { const k = pointKind(s(r)); if (k.kind) before.set(k.kind, k.count); }
+  const added: PageDeliveryItem[] = [];
+  const carried: PageDeliveryItem[] = [];
+  for (const r of arr(j.reasons).map((x) => s(x)).filter(Boolean)) {
+    const k = pointKind(r);
+    const had = before.has(k.kind);
+    const more = had && k.count != null && (before.get(k.kind) ?? 0) < k.count;
+    if (!compared || !had || more) added.push({ code: 'edit', text: plainWords(r) });
+    else carried.push({ code: 'delivered', text: plainWords(`Also in the version we delivered: ${r}`) });
+  }
+  if (!compared && j.publishable === false && !added.length) added.push({ code: 'edit', text: plainWords(s(j.label) || 'The check found a problem to fix before publishing') });
+  const blocking: PageDeliveryItem[] = [
+    ...still.map((b) => ({ ...b.item, text: plainWords(`Still on the page: ${b.item.text}`) })),
+    ...added.slice(0, 12),
+  ];
+  // the engine lists some points both as a reason and as a warning: each is shown once
+  const listed = new Set(arr(j.reasons).map((r) => pageWords(s(r))));
+  const advice = [...arr(j.advice), ...arr(j.warnings)]
+    .map((r) => ({ code: 'advice', text: plainWords(s(r)) }))
+    .filter((x, i, all) => x.text && !listed.has(pageWords(x.text)) && all.findIndex((y) => pageWords(y.text) === pageWords(x.text)) === i);
+  const status: PageDeliveryStatus = blocking.length ? 'not_ready' : o.openCount ? 'ready_with_questions' : 'ready';
+  return {
+    status,
+    blocking,
+    advisory: [...carried, ...advice].slice(0, 12),
+    fixed,
+    checkedAt: o.at,
+    ran: true,
+    note: compared ? '' : plainWords('We could not compare your version with the one we delivered just now, so every point the check found is listed. Save again in a moment to compare.'),
   };
 }
 

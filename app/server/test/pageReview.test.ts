@@ -42,7 +42,14 @@ vi.mock('../src/n8n/client', async (orig) => {
     invalidateSite: vi.fn(),
     executions: vi.fn(async () => []),
     siteAdmin: vi.fn(async (b: Record<string, unknown>) => (t.admin.push(b), { ok: true, action: String(b.action), affected: 1, error: null })),
-    publishCheckCall: vi.fn(async (b: Record<string, unknown>) => (t.checks.push(b), t.checkAnswer)),
+    // the free check reads the text it is sent (2026-11-03: a save checks the client's version and the delivered one): a [Price] bracket is a reason
+    publishCheckCall: vi.fn(async (b: Record<string, unknown>) => {
+      t.checks.push(b);
+      const a = t.checkAnswer;
+      if (a.kind !== 'answered' || !Array.isArray(a.json.reasons)) return a;
+      const bracket = String(b.markdown ?? '').includes('[Price]');
+      return { ...a, json: { ...a.json, publishable: !bracket, reasons: bracket ? a.json.reasons : [] } };
+    }),
     finalizeCall: vi.fn(async (b: Record<string, unknown>) => (t.finalize.push(b), t.finalizeAnswer ?? { kind: 'unreachable', status: 0, json: {}, error: 'off' })),
   };
 });
@@ -236,17 +243,30 @@ describe('answering: saved per question, kept as business facts, never asked aga
 describe('the client version (the editor)', () => {
   it('is sanitised, checked for free and can be undone', async () => {
     const s = await setup();
-    const md = `${MD}\nMore text <script>alert(1)</script> and [a link](javascript:alert(1)).\n`;
+    const md = `${MD}\nMore text <script>alert(1)</script> and [a link](javascript:alert(1)). It costs [Price].\n`;
     const v = view(await s.u.c.put(`${s.base}/version`, { markdown: md }));
     expect(v.clientVersion!.markdown).not.toMatch(/script|javascript/);
     expect(v.clientVersion!.markdown).toContain('More text  and a link.');
-    expect(v.clientVersion!.check).toMatchObject({ status: 'not_ready', ran: true, blocking: [{ text: 'A bracket left in the text: [Price]' }] });
+    // the bracket is new in the client's version (the delivered one has none): it blocks
+    expect(v.clientVersion!.check).toMatchObject({ status: 'not_ready', ran: true, blocking: [{ code: 'edit', text: 'A bracket left in the text: [Price]' }] });
+    expect(t.checks).toHaveLength(2);   // the client's version and the delivered one, compared
     expect(t.checks[0]).toMatchObject({ keyword: 'erp systems in uae', domain: s.site.domain });
     expect(String(t.checks[0]!.markdown)).toMatch(/^Title: ERP Systems in UAE: How to Choose\nMeta Description: /);
+    expect(String(t.checks[1]!.markdown)).not.toContain('[Price]');
     expect(v.finalize.needed).toBe(true);
     const back = view(await s.u.c.del(`${s.base}/version`));
     expect(back.clientVersion).toBeNull();
     expect(back.finalize.needed).toBe(false);
+  });
+  it('prod 2026-11-03 (devaicon.com): a point already in the delivered version is advice, the byline is never checked, and the delivered check is reused', async () => {
+    const s = await setup({ payload: payload({ markdown: `${MD}\nIt costs [Price].\n` }) });
+    const byline = '*Written by [Sara](https://novaand-demo.com/about), Editor · Updated 2 November 2026 · Reviewed by Omar*';
+    const first = view(await s.u.c.put(`${s.base}/version`, { markdown: `# ERP systems in the UAE\n\n${byline}\n\nA sound selection starts with business discovery. ${words}\n\nIt costs [Price].\n` }));
+    expect(first.clientVersion!.check).toMatchObject({ status: 'ready_with_questions', blocking: [], advisory: [{ code: 'delivered', text: 'Also in the version we delivered: A bracket left in the text: [Price]' }] });
+    expect(t.checks.every((c) => !String(c.markdown).includes('Written by'))).toBe(true);
+    const n = t.checks.length;
+    await s.u.c.put(`${s.base}/version`, { markdown: `${MD}\nIt costs [Price]. More.\n` });
+    expect(t.checks.length).toBe(n + 1);   // the delivered version was checked once
   });
   it('says so when the free check could not run', async () => {
     const s = await setup();

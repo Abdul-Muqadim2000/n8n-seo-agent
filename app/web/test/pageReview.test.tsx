@@ -169,6 +169,24 @@ describe('review screens', () => {
     expect(t).not.toMatch(NO_TELLS);
   });
 
+  it('prod 2026-11-03 (devaicon.com): a save says what the edit fixed, and what is left from our version is advice', () => {
+    const fixedOnly = {
+      status: 'ready' as const, blocking: [], fixed: [{ code: 'review', text: '"Regional banks tend to report four symptoms:"' }],
+      advisory: [{ code: 'delivered', text: 'Also in the version we delivered: Primary keyword missing from H1' }], checkedAt: '2026-11-03T10:00:00Z', ran: true, note: '',
+    };
+    const ok = text(render(<ReviewBody view={baseView({ questions: [], answers: {}, clientVersion: { markdown: '# A\n\nText.\n', savedAt: '2026-11-03T10:00:00Z', savedBy: 'u1', check: fixedOnly } })} report={page} />));
+    expect(ok).toContain('Your edit fixed the problem we flagged');
+    expect(ok).toContain('No longer on the page: "Regional banks tend to report four symptoms:"');
+    expect(ok).toContain('Your version passed the check');
+    expect(ok).toContain('Advice, nothing here stops you publishing');
+    const still = { ...fixedOnly, status: 'not_ready' as const, fixed: [], blocking: [{ code: 'review', text: 'Still on the page: A second read of the page found a problem at "x": no source.' }] };
+    const no = text(render(<ReviewBody view={baseView({ questions: [], answers: {}, clientVersion: { markdown: '# A\n\nText.\n', savedAt: '2026-11-03T10:00:00Z', savedBy: 'u1', check: still } })} report={page} />));
+    expect(no).toContain('1 point stops your version from being published');
+    expect(no).toContain('Still on the page:');
+    expect(no).not.toContain('Your edit fixed');
+    for (const s of [ok, no]) expect(s).not.toMatch(NO_TELLS);
+  });
+
   it('a viewer sees the questions but cannot answer, approve or start the final version', () => {
     const html = render(<ReviewBody view={baseView()} report={page} />, 'viewer');
     expect(html).toMatch(/<fieldset[^>]*disabled/);
