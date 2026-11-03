@@ -502,8 +502,12 @@ export function FinalVersionCard({ view }: { view: PageReviewView }) {
   const [confirm, setConfirm] = useState(false);
   const [err, setErr] = useState('');
   const f = view.finalize;
-  if (view.isFinal) return null;
+  // Prod 2026-11-03 (devaicon.com): the final version's own page offers the editor and the questions, so it offers this too. It used to
+  // return nothing there, and an edit made on the final version could only be applied from the first version's report. On a final version
+  // the card shows when there is something new to put in, or while a new one is being made or has failed.
+  if (view.isFinal && !f.needed && f.status !== 'running' && f.status !== 'failed') return null;
   if (f.status === 'none' && !f.needed) return null;
+  const onLatestFinal = view.isFinal && !!f.reportId && view.reportId === f.reportId;
   const price = formatCredits(f.quote.credits);
   const start = async () => {
     setErr('');
@@ -524,18 +528,25 @@ export function FinalVersionCard({ view }: { view: PageReviewView }) {
             Making the final version. It usually takes a minute or two; you can leave this page.
           </p>
         ) : f.status === 'done' && f.reportId ? (
-          <div className="flex flex-wrap items-center gap-3">
-            <p className="flex items-center gap-1.5 text-sm text-ink">
-              <CheckCircle2 className="size-4 text-good-text" aria-hidden /> The final version is ready.
-            </p>
-            <ButtonLink to={paths.report(org.id, f.reportId)} size="sm" icon={<FileCheck2 className="size-4" />}>
-              Open the final version
-            </ButtonLink>
-            {f.needed && can('member') && (
-              <Button size="sm" variant="ghost" onClick={() => setConfirm(true)}>
-                Make it again with my newer answers
-              </Button>
-            )}
+          <div className="space-y-2">
+            {err && <Callout tone="critical">{err}</Callout>}
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="flex items-center gap-1.5 text-sm text-ink">
+                <CheckCircle2 className="size-4 text-good-text" aria-hidden />{' '}
+                {onLatestFinal ? 'You changed this version after it was made.' : 'The final version is ready.'}
+              </p>
+              {!onLatestFinal && (
+                <ButtonLink to={paths.report(org.id, f.reportId)} size="sm" icon={<FileCheck2 className="size-4" />}>
+                  {view.isFinal ? 'Open the newest final version' : 'Open the final version'}
+                </ButtonLink>
+              )}
+              {f.needed && can('member') && (
+                <Button size="sm" variant={onLatestFinal ? 'primary' : 'ghost'} icon={onLatestFinal ? <Wand2 className="size-4" /> : undefined} onClick={() => setConfirm(true)}>
+                  Make it again with my edits and answers
+                </Button>
+              )}
+              {f.needed && <span className="text-[13px] text-ink-2">{price}</span>}
+            </div>
           </div>
         ) : (
           <div className="space-y-2">

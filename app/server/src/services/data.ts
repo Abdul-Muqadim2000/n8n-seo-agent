@@ -1,5 +1,6 @@
 import {
   creditsFor,
+  normKeyword,
   clampIndexDailyCap,
   indexWatchOn,
   indexSitemapSubmitOn,
@@ -739,6 +740,22 @@ export function profileFromRow(r: ProfileRow | null | undefined): ProfileFields 
 
 export const readiness = (p: ProfileFields | null): ProfileReadiness => profileReadiness(p);
 
+/**
+ * Prod 2026-11-03 (devaicon.com): the rows the Content page lists. A keyword is one page, so it is listed once (its newest row; the engine
+ * keeps one row per website + keyword, older duplicates came from a second opening row), and a row that stands for no page at all (a run
+ * that failed or finished without a page, W06-B) is not a written page. Pure.
+ */
+export function writtenPageRows(log: ContentLogRow[]): ContentLogRow[] {
+  const newest = new Map<string, ContentLogRow>();
+  for (const [i, r] of log.entries()) {
+    if (s(r.status) === 'failed') continue;
+    const k = normKeyword(s(r.keyword)) || `#${i}`;
+    const cur = newest.get(k);
+    if (!cur || s(r.started_at) > s(cur.started_at)) newest.set(k, r);
+  }
+  return [...newest.values()].sort((a, b) => s(b.started_at).localeCompare(s(a.started_at)));
+}
+
 export async function contentData(org: OrgRow, site: SiteRow): Promise<ContentData> {
   const d = site.domain;
   const [log, cadence, cases, profiles, generated] = await Promise.all([
@@ -756,7 +773,7 @@ export async function contentData(org: OrgRow, site: SiteRow): Promise<ContentDa
     return page && reviews ? { review: reviews.summaryOf(page, r) } : {};
   };
   return {
-    items: log.map((r) => ({
+    items: writtenPageRows(log).map((r) => ({
       keyword: s(r.keyword),
       source: s(r.source),
       pageType: s(r.page_type),

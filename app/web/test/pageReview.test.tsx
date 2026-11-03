@@ -181,9 +181,28 @@ describe('review screens', () => {
     expect(done).toContain('Open the final version');
     expect(done).toContain('Approve the final version and publish');
     expect(text(render(<ReviewBody view={baseView({ finalize: { ...baseView().finalize, status: 'failed', error: 'The engine did not answer.' } })} report={page} />))).toContain('Try again');
-    const fin = text(render(<ReviewBody view={baseView({ isFinal: true, finalOf: 'rep-0', questions: [] })} report={page} />));
+    const finalDone = { ...baseView().finalize, status: 'done' as const, reportId: 'rep-1', needed: false, reason: 'Nothing changed since the last final version: answer a question or edit the page first.' };
+    const fin = text(render(<ReviewBody view={baseView({ isFinal: true, finalOf: 'rep-0', questions: [], finalize: finalDone })} report={page} />));
     expect(fin).toContain('This is the final version of your page');
     expect(fin).not.toContain('Make the final version');
+    expect(fin).not.toContain('Make it again');
+  });
+
+  it('prod 2026-11-03 (devaicon.com): an edit made on the final version itself can be applied from that page', () => {
+    const edited = { ...baseView().finalize, status: 'done' as const, reportId: 'rep-1', needed: true, reason: '' };
+    const t = text(render(<ReviewBody view={baseView({ isFinal: true, finalOf: 'rep-0', questions: [], finalize: edited })} report={page} />));
+    expect(t).toContain('You changed this version after it was made.');
+    expect(t).toContain('Make it again with my edits and answers');
+    expect(t).toContain('2 credits');
+    expect(t).not.toContain('Open the final version');
+    // an older final version points to the newest one
+    const older = text(render(<ReviewBody view={baseView({ isFinal: true, finalOf: 'rep-0', questions: [], reportId: 'rep-old', finalize: { ...edited, reportId: 'rep-1' } })} report={page} />));
+    expect(older).toContain('Open the newest final version');
+    // the first version keeps its link and offers the same
+    const first = text(render(<ReviewBody view={baseView({ finalize: { ...edited, reportId: 'rep-2' } })} report={page} />));
+    expect(first).toContain('Open the final version');
+    expect(first).toContain('Make it again with my edits and answers');
+    for (const s of [t, older, first]) expect(s).not.toMatch(NO_TELLS);
   });
 
   it('not ready: approval waits and says why', () => {

@@ -241,6 +241,13 @@ two ways, and the second needs no Vercel work per agency:
   - Docker, the images and the data are already on the disks, so the stack is back in about 2–4 minutes after the VM starts.
   - If Spot capacity is short in the zone, the VM stays down until there is capacity. `resize.sh` cannot help with that.
   - Moving to standard (non-Spot) provisioning costs about $13 a month more.
+  - **2026-11-02: still Spot, by the owner's choice (no extra cost).** The VM was preempted five times that day (UTC 02:00, 08:00,
+    08:40, 13:54, 15:35) and one preemption killed a client's page run. To switch: `PROVISIONING=STANDARD bootstrap.sh` (dry run, read
+    it) then `--apply` while no run is active; the group restarts the VM once on the new template (about 3-5 minutes down).
+  - **When to switch:** count the runs started again after a crash (`select count(*) from runs where input ? 'retryOf'`, by week).
+    Each costs one more run (a page about $1.90); if they cost more than about $13 a month, or clients notice the delay, switch.
+  - A run a restart still cuts off is closed by the app within about 90 seconds and started again once for the person (app
+    `services/engineFailures.ts`), instead of waiting for the 3-hour expiry.
 - **What it costs in work:**
   - A run in progress dies. Its ledger row goes stale after 2 hours and holds nothing; the customer sees the run fail.
   - A cycle due while the VM was down starts at the dispatcher's next sweep (its own "Instance Started" door, or the 5-minute

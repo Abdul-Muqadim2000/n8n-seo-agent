@@ -487,27 +487,59 @@ export function repeatResolvesToOriginal(res: { duplicate?: boolean; requestId: 
   return res.duplicate === true && typeof res.requestId === 'string' && res.requestId !== '';
 }
 
+/**
+ * Prod 2026-11-03 (devaicon.com "banking & financial services technology"): the engine saves a page run's row by website + keyword
+ * (Content_Log_Row.js, upsert on site_id + keyword), which updates EVERY row of that keyword. A second run of a keyword (started again
+ * after a failure, by the person or automatically) used to insert a second opening row; the engine then wrote its result into both and
+ * the Content page listed the page twice. The keyword's existing row is reused, as the engine does; a page already on the website keeps
+ * its address and date (the row goes back to waiting only for the new text, which the engine marks written or not ready). Pure.
+ */
+export function pageRowFor(rows: ContentLogRow[], keyword: string): ContentLogRow | null {
+  const k = normKeyword(keyword);
+  return rows.filter((r) => r.keyword && normKeyword(r.keyword) === k).sort((a, b) => String(b.started_at ?? '').localeCompare(String(a.started_at ?? '')))[0] ?? null;
+}
+
+/**
+ * What a new page run writes into the keyword's existing row (pure). A row with no page behind it (a run that failed, was held or is
+ * still only `started`) becomes this run's opening row. A row that stands for a page (written, not ready, or on the website) only takes
+ * the new run's request id: the page keeps its status, address and dates while the new text is written, so a rewrite that then fails
+ * or writes nothing (both close only a `started` row of their own request id) can never mark a page that exists as failed. The engine
+ * finds the row by that request id and records the new text when the run finishes.
+ */
+export function reopenedRow(prior: Pick<ContentLogRow, 'status' | 'published_url'>, opening: Record<string, unknown>): Record<string, unknown> {
+  const noPage = ['', 'started', 'failed', 'held'].includes(String(prior.status ?? '')) && !String(prior.published_url ?? '').trim();
+  return noPage ? opening : { request_id: opening.request_id };
+}
+
 async function recordPageInEngine(site: SiteRow, input: Extract<RunInput, { mode: 'keyword' }>, requestId: string) {
   const now = new Date().toISOString();
-  await insertRows('contentLog', [
-    {
-      site_id: n8nSiteId(site.domain),
-      domain: site.domain,
-      keyword: input.keyword,
-      // R-K5: an approved suggestion keeps its kind (an AI answer page, a refresh...); a ladder page is a ladder page; else the app's own
-      source: input.ladder ? 'ladder' : input.source && input.source !== 'ladder' ? input.source : 'app',
-      page_type: input.pageType,
-      existing_page_url: input.existingPageUrl,
-      rung: input.ladder?.rung ?? 0,
-      ladder_id: input.ladder?.id ?? '',
-      request_id: requestId,
-      started_at: now,
-      status: 'started',
-      published_url: '',
-      published_at: '',
-      week: now.slice(0, 10),
-    },
-  ]);
+  const opening = {
+    // R-K5: an approved suggestion keeps its kind (an AI answer page, a refresh...); a ladder page is a ladder page; else the app's own
+    source: input.ladder ? 'ladder' : input.source && input.source !== 'ladder' ? input.source : 'app',
+    page_type: input.pageType,
+    existing_page_url: input.existingPageUrl,
+    rung: input.ladder?.rung ?? 0,
+    ladder_id: input.ladder?.id ?? '',
+    request_id: requestId,
+    started_at: now,
+    status: 'started',
+    week: now.slice(0, 10),
+    qa_reasons: '',
+  };
+  const rows = await siteRows<ContentLogRow>('contentLog', site.domain, { sortBy: 'started_at:desc', max: 1000, fresh: true }).catch(() => null);
+  const prior = rows ? pageRowFor(rows, input.keyword) : null;
+  if (prior?.keyword) {
+    await updateRows(
+      'contentLog',
+      [
+        { columnName: 'site_id', condition: 'eq', value: String(prior.site_id || n8nSiteId(site.domain)) },
+        { columnName: 'keyword', condition: 'eq', value: String(prior.keyword) },
+      ],
+      reopenedRow(prior, opening),
+    );
+  } else {
+    await insertRows('contentLog', [{ site_id: n8nSiteId(site.domain), domain: site.domain, keyword: input.keyword, ...opening, published_url: '', published_at: '' }]);
+  }
   if (input.ladder)
     await updateRows(
       'ladders',
@@ -569,6 +601,30 @@ export async function releaseFailedPages(runIds: string[]): Promise<number> {
  */
 export const STALE_RUN_ERROR =
   'No result arrived from the SEO engine in time, and the engine did not report a failure for this run. It may have been refused or stopped without a report; start it again, or check its execution in n8n.';
+
+/**
+ * Prod 2026-11-03 (devaicon.com "privacy policy", run of 2026-10-30): a page run can finish with a report and no page, when its verdict
+ * advised against writing it (AVOID; before holds were live, or wherever a run does not hold). The engine leaves the opening row as it
+ * is for a report-only run, so it said `started` for days: the Content page listed it as a page waiting to be published and the pile-up
+ * warning counted it. The app closes its own opening row like a failed run's (W06-B): no page exists. A held run is not this case (the
+ * engine writes `held` itself). Pure: the reason, or null when the report carries a page or is a hold.
+ */
+export function unwrittenPageReason(run: Pick<RunRow, 'mode'>, stage: string, payload: Record<string, unknown>, held: boolean): string | null {
+  if (run.mode !== 'keyword' || stage !== 'content' || held) return null;
+  if (String(payload.markdown ?? '').trim().length > 50 || String(payload.html ?? '').trim().length > 50) return null;
+  const verdict = typeof payload.verdict === 'string' ? payload.verdict.trim().toUpperCase() : '';
+  const advised = verdict === 'AVOID' || verdict === 'SKIP' || verdict === 'NO';
+  return `no page was written: ${advised ? 'the keyword check advised against this page, see its report' : 'the run delivered a report without a page'}`;
+}
+
+/** Marks the opening content-log row of a page run that finished without a page (best effort). */
+export async function closeUnwrittenPage(run: Pick<RunRow, 'mode' | 'requestId' | 'input' | 'siteId'>, reason: string): Promise<boolean> {
+  if (!run.siteId) return false;
+  const site = await db.query.sites.findFirst({ where: eq(schema.sites.id, run.siteId) });
+  const filters = site ? failedPageFilters(run, site.domain) : null;
+  if (!filters) return false;
+  return updateRows('contentLog', filters, { status: 'failed', qa_reasons: reason.slice(0, 480) }).catch(() => false);
+}
 
 /** Runs n8n accepted but never answered: failed after 3 h or 6x their expected time. */
 export async function expireStaleRuns(): Promise<number> {
@@ -835,6 +891,8 @@ export async function ingestCallback(
   const reportId = stored.id;
   if (domain) invalidateSite(domain);
   if (closedFailed) void releaseFailedPages([closedFailed]).catch(() => undefined);
+  const unwritten = run && !closedFailed ? unwrittenPageReason(run, stage, payload, heldRun) : null;
+  if (run && unwritten) void closeUnwrittenPage(run, unwritten).catch(() => undefined);
   // B-R1: push it. `deliverReport` decides for itself whether this report may leave the app (a page that failed its quality gate,
   // a refused plan or evidence the engine could not read is held with its reason), and a delivery that goes wrong is logged, never
   // allowed to lose the callback we have just stored.
