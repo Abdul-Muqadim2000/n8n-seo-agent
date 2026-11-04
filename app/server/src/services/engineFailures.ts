@@ -102,8 +102,17 @@ async function recoverCrashedRuns(runs: RunRow[], deps: RetryDeps = defaultDeps)
     if (!run.requestId || !/^\d+$/.test(run.requestId)) continue;
     let work = workOf.get(run.requestId);
     if (work === undefined) {
-      work = await subExecutionOf(run.requestId).catch(() => undefined);
-      if (work === undefined) continue; // n8n unreachable: ask again next sweep
+      const child = await subExecutionOf(run.requestId).catch(() => undefined);
+      if (child === undefined) continue; // n8n unreachable: ask again next sweep
+      if (child) work = child;
+      else {
+        // Prod 2026-11-04 (devaicon.com publish check): the front door answered 202 and was cut off itself before it started the work, so
+        // there is no work execution to follow. How the front door ended decides: cut off = this run's work never ran; still going = ask
+        // again next sweep (never remember "nothing" for a door that has not finished); finished without starting work = nothing to do.
+        const own = await executionStatus(run.requestId);
+        if (!own || !['success', 'error', ...CUT_OFF].includes(own)) continue;
+        work = CUT_OFF.includes(own) ? run.requestId : null;
+      }
       workOf.set(run.requestId, work);
     }
     if (!work) continue;

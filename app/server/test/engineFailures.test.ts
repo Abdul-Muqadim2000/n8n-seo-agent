@@ -142,6 +142,27 @@ describe('runs whose engine execution crashed', () => {
     expect(st.started).toHaveLength(0);
   });
 
+  it('prod 2026-11-04 (devaicon.com): a front door cut off before it started the work is closed and started again', async () => {
+    st.active = [run('pub-1', '8255', { mode: 'published', input: { mode: 'published', siteId: '65ee2d24-ac16-4e03-a931-ab0aac76ad29', keyword: 'banking & financial services technology', emailCopy: false, publishedUrl: 'https://devaicon.example/services/industries-bfsi', confirmMismatch: false, contentRequestId: '6661' } })];   // the stored input of the stuck run
+    st.work = { '8255': null };
+    st.status = { '8255': 'crashed' };
+    expect(await checkEngineFailures()).toBe(1);
+    expect(String(st.updates[0]!.error)).toContain(ENGINE_RESTART_ERROR);
+    expect(st.started).toHaveLength(1);
+    expect(st.started[0]!.input).toMatchObject({ mode: 'published', keyword: 'banking & financial services technology' });
+  });
+
+  it('a front door still answering is asked again next sweep; one that finished without starting work is left alone', async () => {
+    st.active = [run('door-1', '9001'), run('door-2', '9002')];
+    st.work = { '9001': null, '9002': null };
+    st.status = { '9001': 'running', '9002': 'success' };
+    expect(await checkEngineFailures()).toBe(0);
+    st.status = { '9001': 'crashed', '9002': 'success' };
+    expect(await checkEngineFailures()).toBe(1);   // the door that was still going is read again, and was cut off
+    expect(st.started).toHaveLength(1);
+    expect(st.frontDoorReads).toBe(3);   // door-2 is remembered after its first read
+  });
+
   it('closes but never repeats a ladder, a free run or a run someone cancelled in n8n', async () => {
     st.work = { '10': '11', '20': '21', '30': '31' };
     st.status = { '11': 'crashed', '21': 'crashed', '31': 'canceled' };
@@ -153,7 +174,7 @@ describe('runs whose engine execution crashed', () => {
   it('leaves running, finished and unknown executions to the callback and the expiry, and reads each front door once', async () => {
     st.active = [run('a', '100'), run('b', '200'), run('c', '300'), run('d', 'admin-7')];
     st.work = { '100': '101', '200': '201', '300': null };
-    st.status = { '101': 'running', '201': 'success' };
+    st.status = { '101': 'running', '201': 'success', '300': 'success' };   // 300: a front door that finished without starting work
     expect(await checkEngineFailures()).toBe(0);
     expect(await checkEngineFailures()).toBe(0);
     expect(st.updates).toHaveLength(0);
