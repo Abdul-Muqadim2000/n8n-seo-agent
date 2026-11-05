@@ -13,6 +13,7 @@ import { EmailVerifyNotice } from '@/components/site/EmailVerifyNotice';
 import { competitorValidator } from '@/components/site/helpers';
 import { completeMonitors, MonitoringCost, MonitorSettingsFields } from '@/components/site/MonitorSettingsFields';
 import { aiMeasuredFrom } from '@/components/site/AiPrecision';
+import { AiRankingCard } from '@/components/site/AiRankingCard';
 import { ProfileForm, profileSavedToast, useSaveProfile } from '@/components/site/ProfileForm';
 import { businessOnly, SiteBusinessForm } from '@/components/site/SiteBusinessFields';
 import { BLOG_OPTIONS, blogMonthlyCost, trackDefaults, TrackingForm, type TrackFormOutput } from '@/components/site/TrackingForm';
@@ -296,6 +297,9 @@ function TrackingSettings({ data, admin }: { data: SiteSettingsData; admin: bool
         blogsPerWeek={data.cadence?.pagesPerWeek ?? site.blogsPerWeek}
         admin={admin}
       />
+
+      {/* AIR (2026-11-06): the AI ranking setting, saved on its own (never with the monitors above) */}
+      <AiRankingCard initial={data.aiRank} admin={admin} />
 
       <ContentGroupsCard initial={data.contentGroups ?? []} admin={admin} />
 

@@ -25,10 +25,17 @@ import {
   type IndexingSitemapReading,
   type IndexSiteFixCause,
 } from './indexing';
+import { aiExportTaskKey, aiRankGuideOf, aiRankLeverLabel, type AiRankStep } from './ai-rank';
 
 /** `index_links` (wave 2, DESIGN_WAVE2 §3.2): the one step `indexing:links`, pages that need a link from another page of the website */
-export type SiteTaskKind = 'indexnow' | 'ai_crawlers' | 'redirect' | 'indexing' | 'index_links' | 'index_merge';
-export const SITE_TASK_KINDS: readonly SiteTaskKind[] = ['indexnow', 'ai_crawlers', 'redirect', 'indexing', 'index_links', 'index_merge'];
+/** AIR (2026-11-06, docs/ai-ranking-2026-11-05/DESIGN.md §6.7): `ai_rank` = a step the AI-ranking plan needs from the client on their website or
+ *  elsewhere (`ai_rank:<lever>:<ref>`), `ai_export` = the monthly ask to download the two AI reports and upload them (`ai_export:<yyyy-mm>`).
+ *  Both appended (never renamed): an app build from before them ignores rows of these kinds (deriveSiteTasks lists only the kinds it drafts). */
+export type SiteTaskKind = 'indexnow' | 'ai_crawlers' | 'redirect' | 'indexing' | 'index_links' | 'index_merge' | 'ai_rank' | 'ai_export';
+export const SITE_TASK_KINDS: readonly SiteTaskKind[] = ['indexnow', 'ai_crawlers', 'redirect', 'indexing', 'index_links', 'index_merge', 'ai_rank', 'ai_export'];
+/** AIR: at most this many new AI-ranking steps a week (owner default 2026-11-06) and this many open at once per website */
+export const AI_RANK_STEPS_NEW_PER_WEEK = 3;
+export const AI_RANK_STEPS_OPEN_MAX = 8;
 /** The kinds the daily index check feeds (their own share of each daily tick, A27). */
 export const INDEX_TASK_KINDS: readonly SiteTaskKind[] = ['indexing', 'index_links', 'index_merge'];
 export type SiteTaskState = 'todo' | 'done' | 'skipped';
@@ -96,6 +103,12 @@ export interface SiteTaskInputs {
   /** 2026-11-05 (production, devaicon.com): improvements the client confirmed at ANOTHER address than the page they update (the content
    *  log; `indexMergePairs`). Absent or null: not read (a stored step keeps its state). */
   merges?: { pairs: { from: string; to: string; at: string }[] } | null;
+  /** AIR (2026-11-06): the AI-ranking plan of a website in `on` mode: the human steps of its newest run (the ai_growth callback's
+   *  `ai_rank.steps`) and the engine's status of every action (seo_ai_rank_actions). Absent or null: the website is off or in its trial, or
+   *  nothing was read: no AI-ranking step is shown (a stored one is kept, hidden, and comes back if the website is switched on again). */
+  aiRank?: { checkedAt: string; steps: AiRankStep[]; statusOf: Record<string, string> } | null;
+  /** AIR: the monthly AI report uploads of a website in `on` mode: this month (yyyy-mm, UTC) and whether each of the two arrived */
+  aiExport?: { month: string; bing: boolean; gsc: boolean; checkedAt: string } | null;
 }
 
 /** One stored row (services/siteTasks.ts), in the shape this rule reads. */
@@ -168,6 +181,67 @@ function crawlerDraft(a: SiteTaskInputs['access'], stored: StoredSiteTask | unde
     : null;
   // a reading older than the task itself says nothing about the fix
   return { key: 'ai_crawlers', kind: 'ai_crawlers', engine: engine && stored && engine.ok && engine.at < stored.createdAt ? null : engine, payload: { bots } };
+}
+
+/** AIR: an action the engine confirmed (done = it happened by its own check, verified = it also counted) */
+const AI_RANK_DONE = new Set(['done', 'verified']);
+/** AIR: an action still waiting for the client */
+const AI_RANK_OPEN = new Set(['proposed', 'queued', 'in_progress']);
+
+/**
+ * AIR (2026-11-06): the AI-ranking plan's human steps (`ai_rank:<lever>:<ref>`). The engine decides done: the weekly run checks each step itself
+ * (the robots.txt rule, the profile page naming the client, the article live) and sets the action's status. The rules:
+ * - the steps of the newest on-mode run are listed; at most AI_RANK_STEPS_NEW_PER_WEEK new ones a week and AI_RANK_STEPS_OPEN_MAX open at once;
+ * - a stored step the newest run does not list stays while its action is open, and is done when the engine confirmed it;
+ * - a step whose action expired, did not happen or was refused is not listed any more (the plan moved on), nor is any step of a website that
+ *   is not in `on` mode (switching AI ranking off hides them; switching it on again brings them back).
+ */
+function aiRankDrafts(a: SiteTaskInputs['aiRank'], stored: StoredSiteTask[]): Draft[] {
+  if (!a) return [];
+  const mine = stored.filter((x) => x.kind === 'ai_rank');
+  const byKey = new Map(mine.map((x) => [x.key, x]));
+  const engineOf = (actionId: string): SiteTaskCheck | null =>
+    AI_RANK_DONE.has(a.statusOf[actionId] ?? '') ? { at: a.checkedAt, ok: true, by: 'weekly', message: 'The weekly AI ranking check found this step done.' } : null;
+  const weekAgo = new Date(Date.parse(a.checkedAt) - 7 * 864e5).toISOString();
+  let fresh = mine.filter((x) => x.createdAt >= weekAgo).length;
+  let open = 0;
+  const out: Draft[] = [];
+  const seen = new Set<string>();
+  // the stored ones first: a step already shown keeps its place
+  for (const st of mine) {
+    const id = str(st.payload.actionId);
+    const step = a.steps.find((x) => x.key === st.key);
+    const status = a.statusOf[id] ?? str(step?.status);
+    if (!step && !AI_RANK_OPEN.has(status) && !AI_RANK_DONE.has(status)) continue;
+    const engine = engineOf(id);
+    if (!engine) open++;
+    seen.add(st.key);
+    out.push({ key: st.key, kind: 'ai_rank', engine, payload: step ? aiRankPayload(step) : st.payload });
+  }
+  for (const step of a.steps) {
+    if (seen.has(step.key) || byKey.has(step.key) || !/^ai_rank:/.test(step.key)) continue;
+    const status = a.statusOf[step.actionId] ?? step.status;
+    if (status && !AI_RANK_OPEN.has(status)) continue;
+    if (fresh >= AI_RANK_STEPS_NEW_PER_WEEK || open >= AI_RANK_STEPS_OPEN_MAX) break;
+    fresh++;
+    open++;
+    seen.add(step.key);
+    out.push({ key: step.key, kind: 'ai_rank', engine: null, payload: aiRankPayload(step) });
+  }
+  return out;
+}
+const aiRankPayload = (x: AiRankStep): Record<string, unknown> => ({ lever: x.lever, ref: x.key.split(':').slice(2).join(':'), what: x.what, why: x.why, check: x.check, url: x.url, actionId: x.actionId, label: x.label });
+
+/** AIR: the monthly ask (`ai_export:<yyyy-mm>`): done once this month's Bing AI Performance and Search Console AI uploads both arrived. */
+function aiExportDraft(e: SiteTaskInputs['aiExport'], stored: StoredSiteTask[]): Draft | null {
+  if (!e || !/^\d{4}-\d{2}$/.test(e.month)) return null;
+  const key = aiExportTaskKey(e.month);
+  const missing = [e.bing ? '' : 'Bing', e.gsc ? '' : 'Search Console'].filter(Boolean);
+  const engine: SiteTaskCheck = missing.length
+    ? { at: e.checkedAt, ok: false, by: 'monthly', message: `This month's ${missing.join(' and ')} upload ${missing.length === 1 ? 'is' : 'are'} not here yet.` }
+    : { at: e.checkedAt, ok: true, by: 'monthly', message: "Both of this month's AI reports are uploaded." };
+  const st = stored.find((x) => x.key === key);
+  return { key, kind: 'ai_export', engine: !engine.ok && st?.lastCheck?.ok && st.lastCheck.at > engine.at ? null : engine, payload: { month: e.month } };
 }
 
 /** 2026-11-05: one step for the old pages whose improved version went live at another address (`indexing:merge`). Our own fetch decides. */
@@ -431,6 +505,10 @@ function doneDetail(d: Draft, domain: string): string {
       const n = linkPairsOf(p).length;
       return `${n === 1 ? 'The link is' : `All ${n} links are`} in place. Google finds a page sooner when your other pages link to it; the daily index check keeps watching these pages.`;
     }
+    case 'ai_rank':
+      return `Done: ${str(p.what) || aiRankLeverLabel(str(p.lever))}. The weekly AI ranking check found it, and the next weekly plan measures what it changes in AI answers.`;
+    case 'ai_export':
+      return "This month's AI reports are uploaded. The AI visibility page reads them beside our own checks.";
     default: {
       const never: never = d.kind;
       return String(never);
@@ -452,6 +530,10 @@ function present(d: Draft, domain: string): Pick<SiteTask, 'title' | 'detail' | 
       return presentLinks(d.payload);
     case 'index_merge':
       return presentMerge(d.payload);
+    case 'ai_rank':
+      return presentAiRank(d.payload);
+    case 'ai_export':
+      return presentAiExport(d.payload);
     default: {
       const never: never = d.kind;
       throw new Error(`Unknown step kind ${String(never)}`);
@@ -571,6 +653,31 @@ function presentMerge(p: Record<string, unknown>): Pick<SiteTask, 'title' | 'det
   };
 }
 
+function presentAiRank(p: Record<string, unknown>): Pick<SiteTask, 'title' | 'detail' | 'values' | 'guide' | 'guideVars'> {
+  const lever = str(p.lever);
+  const url = str(p.url);
+  const why = str(p.why);
+  const check = str(p.check);
+  return {
+    title: str(p.what) || str(p.label) || aiRankLeverLabel(lever),
+    detail: [why ? `${why.replace(/[.\s]+$/, '')}.` : 'A step from your AI ranking plan: it helps AI assistants find, trust and name your business.', check ? `How we check it: ${check.replace(/[.\s]+$/, '')}.` : 'The weekly AI ranking check ticks it off once it finds it done.'].join(' '),
+    values: url ? [{ label: 'The page', value: url }] : [],
+    guide: aiRankGuideOf(lever),
+    guideVars: url ? { pageUrl: url } : {},
+  };
+}
+
+function presentAiExport(p: Record<string, unknown>): Pick<SiteTask, 'title' | 'detail' | 'values' | 'guide' | 'guideVars'> {
+  return {
+    title: 'Upload this month\'s two AI reports',
+    detail:
+      'Bing Webmaster Tools and Search Console each show how often AI answers use your pages, but neither offers a way for us to read it. Download the Bing AI Performance export and the Search Console report filtered to AI features, and upload both on the AI visibility page. It takes about ten minutes a month and shows what AI answers do with your pages beside our own checks.',
+    values: [{ label: 'Month', value: str(p.month) }],
+    guide: 'ai-report-import',
+    guideVars: {},
+  };
+}
+
 function presentRedirect(p: Record<string, unknown>): Pick<SiteTask, 'title' | 'detail' | 'values' | 'guide' | 'guideVars'> {
   const broken = str(p.brokenUrl);
   const to = str(p.redirectTo);
@@ -601,6 +708,8 @@ export function deriveSiteTasks(inputs: SiteTaskInputs, stored: StoredSiteTask[]
     ...indexingDrafts(inputs.indexing, stored, new Set(redirects.map((r) => r.key))),
     linksDraft(inputs.indexing?.links, byKey.get(INDEXING_LINKS_KEY)),
     mergeDraft(inputs.merges, byKey.get(INDEXING_MERGE_KEY)),
+    ...aiRankDrafts(inputs.aiRank, stored),
+    aiExportDraft(inputs.aiExport, stored),
   ].filter(
     (d): d is Draft => !!d,
   );
@@ -669,6 +778,13 @@ export function siteTaskPayload(inputs: SiteTaskInputs, stored: StoredSiteTask[]
     case 'index_merge':
       d = mergeDraft(inputs.merges, byKey.get(key));
       break;
+    case 'ai_rank':
+      d = aiRankDrafts(inputs.aiRank, stored).find((x) => x.key === key) ?? null;
+      break;
+    case 'ai_export':
+      d = aiExportDraft(inputs.aiExport, stored);
+      if (d && d.key !== key) d = null;
+      break;
     default: {
       const never: never = kind;
       return never;
@@ -684,6 +800,8 @@ export function siteTaskKindOfKey(key: string): SiteTaskKind | null {
   if (key.startsWith('redirect:')) return 'redirect';
   if (key === INDEXING_LINKS_KEY) return 'index_links';
   if (key === INDEXING_MERGE_KEY) return 'index_merge';
+  if (/^ai_rank:L\d{2}:/.test(key)) return 'ai_rank';
+  if (/^ai_export:\d{4}-\d{2}$/.test(key)) return 'ai_export';
   if (indexingCauseOfKey(key) || key === INDEXING_SITEMAP_KEY) return 'indexing';
   return null;
 }

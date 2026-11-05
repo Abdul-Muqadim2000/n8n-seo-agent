@@ -10,6 +10,8 @@ import {
   LINK_IMPORT_COLUMNS,
   linkImportSchema,
   siteAdminMonitorsBody,
+  aiRankBody,
+  aiRankPaidChange,
   parseLinkImport,
   importTargetHosts,
   n8nSiteId,
@@ -36,7 +38,7 @@ import {
   type VerificationMethod,
   type VerifyResult,
 } from '@seo/shared';
-import { orgAccess, requireVerified, siteAccess } from '../auth/access';
+import { isPlatformAdmin, orgAccess, requireVerified, siteAccess } from '../auth/access';
 import { G_COOKIE, googleAuthUrl } from '../auth/google';
 import { config } from '../config';
 import { db, schema } from '../db';
@@ -222,7 +224,9 @@ export function adminAuditDetails(a: AdminAction, affected: number | null | unde
       const changed = Object.keys(m).filter((k) => m[k] !== undefined);
       return { ...base, changed, ...(m.aiPromptsMax !== undefined ? { aiPromptsMax: m.aiPromptsMax } : {}), ...(Array.isArray(m.aiEngines) ? { aiEngines: (m.aiEngines as unknown[]).map(String) } : {}),
         ...(m.aiPulse !== undefined ? { aiPulse: m.aiPulse } : {}), ...(m.aiPulseMode !== undefined ? { aiPulseMode: m.aiPulseMode } : {}), ...(m.aiPulsePerWeek !== undefined ? { aiPulsePerWeek: m.aiPulsePerWeek } : {}),
-        ...(m.aiVisibility !== undefined ? { aiVisibility: m.aiVisibility } : {}), ...(a.competitors ? { competitors: a.competitors.length } : {}) };
+        ...(m.aiVisibility !== undefined ? { aiVisibility: m.aiVisibility } : {}), ...(a.competitors ? { competitors: a.competitors.length } : {}),
+        // AIR (2026-11-06): which AI-ranking settings were changed and to what (no personal data in them)
+        ...(a.aiRank && Object.keys(a.aiRank).length ? { aiRank: a.aiRank } : {}) };
     }
     case 'cadence':
       return { ...base, pagesPerWeek: a.pagesPerWeek };
@@ -626,7 +630,7 @@ export async function siteRoutes(app: FastifyInstance) {
   // ---------- Site Admin (n8n) ----------
   app.post('/api/orgs/:orgId/sites/:siteId/admin', async (req): Promise<AdminResult> => {
     const p = req.params as P;
-    const { site, org, role } = await siteAccess(req, p.orgId, p.siteId, 'admin');
+    const { site, org, role, user } = await siteAccess(req, p.orgId, p.siteId, 'admin');
     requireVerified(site);
     const { acknowledge } = takeAcknowledge(req.body);
     const a = parse(adminActionSchema, req.body);
@@ -655,7 +659,10 @@ export async function siteRoutes(app: FastifyInstance) {
         break;
       case 'monitors': {
         // Site Admin keeps a field when it is '' : a single space clears a list (shared siteAdminMonitorsBody, the body the harness replays)
-        body = { ...base, action: 'monitors', monitors: siteAdminMonitorsBody(a.monitors, a.competitors) };
+        // AIR (2026-11-06): the AI-ranking settings travel in the same body, only the ones the person changed (aiRankBody); the paid reads
+        // (fan-out searches, the AI mention database, the independent search index) only from a platform admin
+        if (aiRankPaidChange(a.aiRank) && !isPlatformAdmin(user)) throw new HttpError(403, 'Only a platform admin can change the paid AI ranking readings.', 'forbidden');
+        body = { ...base, action: 'monitors', monitors: { ...siteAdminMonitorsBody(a.monitors, a.competitors), ...aiRankBody(a.aiRank) } };
         break;
       }
       case 'prospect':

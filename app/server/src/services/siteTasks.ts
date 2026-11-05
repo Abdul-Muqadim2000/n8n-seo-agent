@@ -1,6 +1,9 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 import type { FastifyRequest } from 'fastify';
 import {
+  aiRankReportOf,
+  aiRankSettingsOf,
+  type AiRankActionRow,
   cleanDomain,
   deriveSiteTasks,
   indexImprovementsOf,
@@ -84,7 +87,7 @@ const s = (v: unknown) => (v == null ? '' : String(v));
  */
 export async function engineReadings(org: Pick<OrgRow, 'id'>, site: Pick<SiteRow, 'id' | 'domain'>): Promise<SiteTaskInputs> {
   const d = site.domain;
-  const [growth, vis, full, indexing, merges] = await Promise.all([
+  const [growth, vis, full, indexing, merges, air] = await Promise.all([
     siteRows<AiGrowthRow>('aiGrowth', d, { sortBy: 'checked_at:desc', max: 1 }).catch(() => [] as AiGrowthRow[]),
     siteRows<AiVisibilityRow>('aiVisibility', d, { sortBy: 'checked_at:desc', max: 10 }).catch(() => [] as AiVisibilityRow[]),
     db.query.reports.findFirst({
@@ -97,6 +100,7 @@ export async function engineReadings(org: Pick<OrgRow, 'id'>, site: Pick<SiteRow
     siteRows<ContentLogRow>('contentLog', d, { extra: [{ columnName: 'status', condition: 'eq', value: 'published' }], max: 1000 })
       .then((xs) => ({ pairs: indexMergePairs(indexImprovementsOf(xs)) }))
       .catch(() => null),
+    aiRankReading(org, site),
   ]);
   const g = growth[0];
   const inx = g ? ((safeJson<P>(s(g.submitted_json), {}).indexnow ?? {}) as P) : {};
@@ -127,7 +131,45 @@ export async function engineReadings(org: Pick<OrgRow, 'id'>, site: Pick<SiteRow
       : null,
     indexing,
     merges,
+    aiRank: air.aiRank,
+    aiExport: air.aiExport,
   };
+}
+
+/**
+ * AIR (2026-11-06, docs/ai-ranking-2026-11-05/DESIGN.md §6.7): a website in AI ranking's `on` mode gets the plan's human steps (the newest
+ * ai_growth report's `ai_rank.steps`, each action's status from the engine's own table) and the monthly ask for the two AI reports (this
+ * month's uploads, read from the app's own upload table). Off, the trial, an engine from before AI ranking or a failed read: both null, so
+ * nothing is shown and a stored step keeps its last state.
+ */
+async function aiRankReading(org: Pick<OrgRow, 'id'>, site: Pick<SiteRow, 'id' | 'domain'>): Promise<Pick<SiteTaskInputs, 'aiRank' | 'aiExport'>> {
+  const none = { aiRank: null, aiExport: null };
+  try {
+    const mons = await siteRows<MonitorsRow>('monitors', site.domain, { max: 5 });
+    if (aiRankSettingsOf(mons[0] as unknown as P).mode !== 'on') return none;
+    const month = new Date().toISOString().slice(0, 7);
+    const lastOf = (source: string) =>
+      siteRows<P>('aiImports', site.domain, { extra: [{ columnName: 'source', condition: 'eq', value: source }], sortBy: 'imported_at:desc', max: 1 })
+        .then((xs) => s(xs[0]?.imported_at).slice(0, 7) === month)
+        .catch(() => false);
+    const [report, actions, bing, gsc] = await Promise.all([
+      db.query.reports.findFirst({
+        where: and(eq(schema.reports.orgId, org.id), eq(schema.reports.siteId, site.id), eq(schema.reports.stage, 'ai_growth')),
+        orderBy: desc(schema.reports.receivedAt),
+        columns: { payload: true, receivedAt: true },
+      }),
+      siteRows<AiRankActionRow>('aiRankActions', site.domain, { sortBy: 'updated_at:desc', max: 300 }).catch(() => [] as AiRankActionRow[]),
+      lastOf('bing_ai'),
+      lastOf('gsc_ai'),
+    ]);
+    const r = aiRankReportOf(report?.payload);
+    const statusOf: Record<string, string> = {};
+    for (const a of actions) if (s(a.action_id) && !(s(a.action_id) in statusOf)) statusOf[s(a.action_id)] = s(a.status);
+    const at = r?.checkedAt || report?.receivedAt.toISOString() || new Date().toISOString();
+    return { aiRank: { checkedAt: at, steps: r?.steps ?? [], statusOf }, aiExport: { month, bing, gsc, checkedAt: new Date().toISOString() } };
+  } catch {
+    return none;
+  }
 }
 
 /** A6: the most rows one cause's read takes (sorted by impressions, so the pages a step lists are the right ones); a read that hits it is
@@ -674,11 +716,32 @@ function checkOf(domain: string, kind: SiteTaskKind, payload: Record<string, unk
       return checkLinks(domain, payload);
     case 'index_merge':
       return checkMerge(domain, payload);
+    // AIR: the engine's weekly run checks an AI-ranking step itself (it reads the page, the listing, the robots.txt rule); our check says so
+    case 'ai_rank':
+      return Promise.resolve({ ok: false, reached: false, engineOnly: true, message: 'The weekly AI ranking check confirms this step. It runs once a week and ticks it off once it finds it done.' });
+    case 'ai_export':
+      return checkAiExport(domain);
     default: {
       const never: never = kind;
       // a row of a kind this build does not know (written by a newer one): nothing is read and nothing recorded
       return Promise.resolve({ ok: false, reached: false, message: `Unknown step ${String(never)}.` });
     }
+  }
+}
+
+/** AIR: this month's two AI report uploads (the app's own upload table, read fresh). */
+async function checkAiExport(domain: string): Promise<CheckOutcome> {
+  const month = new Date().toISOString().slice(0, 7);
+  const has = async (source: string) =>
+    s((await siteRows<P>('aiImports', domain, { extra: [{ columnName: 'source', condition: 'eq', value: source }], sortBy: 'imported_at:desc', max: 1, fresh: true }))[0]?.imported_at).slice(0, 7) === month;
+  try {
+    const [bing, gsc] = await Promise.all([has('bing_ai'), has('gsc_ai')]);
+    const missing = [bing ? '' : 'Bing', gsc ? '' : 'Search Console'].filter(Boolean);
+    return missing.length
+      ? { ok: false, reached: true, message: `This month's ${missing.join(' and ')} upload ${missing.length === 1 ? 'is' : 'are'} not here yet. Upload it on the AI visibility page.` }
+      : { ok: true, reached: true, message: "Both of this month's AI reports are uploaded." };
+  } catch {
+    return { ok: false, reached: false, message: 'The uploads could not be read just now.' };
   }
 }
 

@@ -9,6 +9,7 @@ import type { PageChangeTest } from './change-test';
 import type { Lineage } from './lineage';
 import type { RecommendationScore } from './queue';
 import type { AiPanelInfo, AiSegments } from './ai-panel';
+import type { AiRankPlanData, AiRankSettings } from './ai-rank';
 import type { AiAnswerDetail, AiEngineRate, AiLatestExtras, AiSovPoint } from './ai-detail';
 import type { AiFilter, AiFilterDim } from './ai-trends';
 
@@ -749,6 +750,9 @@ export interface AiData {
   alertRules?: import('./ai-trends').AiAlertRule[];
   /** v4.12 (n8n/seo-agent/AI_GROWTH_SPEC.md): the weekly AI growth loop, null until its first run */
   growth: AiGrowth | null;
+  /** AIR (2026-11-06): the AI-ranking plan of a website in `on` mode (its newest on-mode run and open actions). Absent or null: the website is
+   *  off or in its private trial, or the engine has no run yet; the page then shows nothing new */
+  aiRank?: AiRankPlanData | null;
   /** from the latest AI visibility report (when it was delivered to the app) */
   report: {
     receivedAt: string;
@@ -1034,6 +1038,8 @@ export interface SiteSettingsData {
   readiness: ProfileReadiness;
   /** B7-5: the website's content groups as the engine stores them (seo_sites.content_groups_json); [] when none are set */
   contentGroups?: { name: string; pattern: string }[];
+  /** AIR (2026-11-06): the AI-ranking settings as the engine stores them (absent: an API from before AIR; all off when the engine has none) */
+  aiRank?: AiRankSettings;
 }
 
 export type RecommendationCategory = 'search' | 'technical' | 'ai' | 'backlinks' | 'content' | 'rankings' | 'setup';

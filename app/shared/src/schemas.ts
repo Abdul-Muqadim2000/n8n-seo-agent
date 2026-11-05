@@ -569,6 +569,22 @@ export const aiQuestionEditSchema = z.object({
   keyword: z.string().trim().min(2).max(120).optional(),
 });
 
+/**
+ * AIR (2026-11-06, CONTRACTS.md §2.1): the AI-ranking settings a person may change. Every field optional with no default: only what is given
+ * is sent to Site Admin `monitors` (aiRankBody), so a save never touches the others. The mode and the reserved slot: owners and admins; the
+ * three paid reads (fan-out searches, the AI mention database, the independent search index): platform admins only (the route checks it).
+ */
+export const aiRankSettingsSchema = z
+  .object({
+    mode: z.enum(['off', 'shadow', 'on'], { message: 'Choose Off, Trial or On' }).optional(),
+    reserve: z.boolean().optional(),
+    fanoutN: z.number().int().min(0, 'From 0').max(50, 'At most 50').optional(),
+    mentions: z.boolean().optional(),
+    brave: z.boolean().optional(),
+  })
+  .strict();
+export type AiRankSettingsPatch = z.output<typeof aiRankSettingsSchema>;
+
 export const adminActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('pause') }),
   z.object({ action: z.literal('resume') }),
@@ -579,6 +595,8 @@ export const adminActionSchema = z.discriminatedUnion('action', [
     // D1: patchOf: a setting left out stays as it is (with .partial() zod 4 sent every default, and no competitors cleared the engine's)
     monitors: patchOf(monitorSettingsSchema),
     competitors: z.array(domainField).max(3, 'Up to 3 domains').optional(),
+    /** AIR (2026-11-06): the AI-ranking settings, sent only when the person changed one (never with an ordinary monitors save) */
+    aiRank: aiRankSettingsSchema.optional(),
   }),
   z.object({
     action: z.literal('prospect'),

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { AlertTriangle, BadgeCheck, BarChart3, Bot, CalendarClock, CheckCircle2, CircleMinus, Coins, Eye, FileText, Gauge, Globe, Link2, ListOrdered, MessageSquareQuote, MessagesSquare, PieChart, Search, ShieldCheck, Smile, Sparkles, Users, XCircle } from 'lucide-react';
-import { AI_ENGINES, aiAlertsOf, questionWin, type ReportDetail } from '@seo/shared';
+import { AI_ENGINES, AI_RANK_EXECUTOR_TEXT, aiAlertsOf, aiRankReportOf, aiRankStatusText, questionWin, type AiRankReport, type ReportDetail } from '@seo/shared';
 import { fmtDateTime } from '@/lib/utils';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Callout } from '@/components/ui/feedback';
@@ -580,6 +580,8 @@ export function AiGrowthReport({ report }: { report: ReportDetail }) {
           </ul>
         </Block>
       )}
+      {/* AIR (2026-11-06): the AI ranking plan, carried only by the reports of a website in AI ranking's On mode (absent: nothing new) */}
+      <AiRankReportBlock r={aiRankReportOf(p)} />
       {earned.length > 0 && (
         <Block title="Pages AI cites without naming you" icon={<MessagesSquare />} description="Be named on these pages and the answers can name you">
           <ul className="divide-y divide-line text-[13px]">
@@ -628,5 +630,60 @@ export function AiGrowthReport({ report }: { report: ReportDetail }) {
       )}
       <CreditsCard p={p} />
     </Stagger>
+  );
+}
+
+/** AIR (2026-11-06): the `ai_rank` key of an AI growth report. Every field may be missing; a report without the key renders nothing here. */
+function AiRankReportBlock({ r }: { r: AiRankReport | null }) {
+  if (!r) return null;
+  const parts = (r.memo?.parts ?? []).filter((x) => x.lines.length && x.key !== 'shadow_vs_old');
+  if (!parts.length && !r.actions.length && !r.steps.length) return null;
+  return (
+    <Block title="AI ranking plan" icon={<Sparkles />} description="This week's steps to get you named in AI answers, and what changed">
+      <div className="space-y-4 text-[13px]">
+        {r.actions.length > 0 && (
+          <ul className="divide-y divide-line">
+            {r.actions.map((a, i) => (
+              <li key={a.actionId || i} className="flex flex-col gap-1 py-2 sm:flex-row sm:items-start sm:justify-between">
+                <span className="min-w-0">
+                  <span className="font-medium text-ink [overflow-wrap:anywhere]">{a.label}</span>
+                  {a.url && <span className="block text-xs text-ink-3 [overflow-wrap:anywhere]">{shortUrl(a.url)}</span>}
+                  {a.why && <span className="block text-ink-2 [overflow-wrap:anywhere]">{a.why}</span>}
+                </span>
+                <span className="flex shrink-0 flex-wrap gap-1.5">
+                  <Badge>{AI_RANK_EXECUTOR_TEXT[a.executor]}</Badge>
+                  {a.status && <Badge tone={['done', 'verified'].includes(a.status) ? 'good' : 'neutral'}>{aiRankStatusText(a.status)}</Badge>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {parts.map((x) => (
+          <div key={x.key || x.title}>
+            <SectionTitle>{x.title}</SectionTitle>
+            <ul className="mt-1 space-y-1 text-ink-2">
+              {x.lines.map((l, i) => (
+                <li key={i} className="[overflow-wrap:anywhere]">
+                  {l.text}
+                  {l.figures.length > 0 && <span className="block text-xs text-ink-3">{l.figures.map((f) => `${f.value}${f.basis ? ` (${f.basis})` : ''}`).join(' · ')}</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+        {(r.memo?.blockers ?? []).length > 0 && (
+          <Callout tone="warning" title="Waiting on someone">
+            <ul className="space-y-1">
+              {r.memo!.blockers.map((b, i) => (
+                <li key={i}>
+                  {b.what}
+                  {b.blocks ? `: ${b.blocks}` : ''} <span className="text-xs text-ink-3">({b.owner === 'us' ? 'on us' : 'on you'}{b.since ? `, since ${b.since}` : ''})</span>
+                </li>
+              ))}
+            </ul>
+          </Callout>
+        )}
+      </div>
+    </Block>
   );
 }
