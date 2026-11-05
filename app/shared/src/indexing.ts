@@ -283,6 +283,74 @@ export const INDEX_FIXED_ON_SITE = {
   youDo: 'Nothing. For an important page you can also ask Google to read it again in Search Console.',
 } as const;
 
+/** 2026-11-05: pages the client improved and published, that Google has not read since (`improveStateOf` = 'waiting'): their own group. */
+export const INDEX_IMPROVED_WAITING = {
+  label: 'Improved, waiting for Google',
+  meaning: 'You published an improved version of these pages. Google still shows its older reading until it reads the page again, and only Google decides whether to add it.',
+  weDo: 'Our daily index check looks up Google\'s reading of these pages again in the days after you publish, so the reason updates once Google has read the new version.',
+  youDo: 'Nothing on these pages for now. For an important page you can ask Google to read it again in Search Console.',
+} as const;
+
+/** 2026-11-05 (production, devaicon.com): the improved version went live at another address and the old one still opens. */
+export const INDEX_IMPROVED_ELSEWHERE = {
+  label: 'Improved version published at another address',
+  meaning: 'The improved version of each page went live at a new address, while the old address still opens the old page. Two pages for the same search compete with each other, and Google may keep showing the old one.',
+  weDo: 'We open each old address every day and tick the step off once it redirects permanently to its improved version.',
+  youDo: 'Redirect each old address to its improved version with a permanent (301) redirect. Or put the improved text back on the old address and remove the new one.',
+} as const;
+
+/**
+ * 2026-11-05 (client report, devaicon.com): the shared rule with the engine (`_index_kit.js` IX.improveState / IX.improvementsOf). A page
+ * Google read and left out (or treats as a copy) that the client improved, published at the same address and reported, is "improved,
+ * waiting for Google" until Google's last crawl is newer than the improvement; then Google's reading decides (in search, or still left out
+ * with "Google read your improved version"). We never call it indexed ourselves.
+ */
+export const INDEX_IMPROVABLE_CAUSES: ReadonlySet<string> = new Set(['crawled_not_indexed', 'google_chose_other', 'duplicate_no_canonical']);
+const isoMs = (v: unknown): number => {
+  const t = Date.parse(String(v ?? '').trim());
+  return Number.isFinite(t) ? t : 0;
+};
+export type ImproveState = '' | 'moved' | 'waiting' | 'read';
+/** 'moved' (production 2026-11-05): the improved version is live at ANOTHER address (`improved_to`) while this page still opens. */
+export function improveStateOf(r: { url?: unknown; state?: unknown; cause?: unknown; improved_at?: unknown; improved_to?: unknown; last_crawl?: unknown }): ImproveState {
+  if (String(r.state ?? '') === 'indexed' || !INDEX_IMPROVABLE_CAUSES.has(String(r.cause ?? ''))) return '';
+  const at = isoMs(r.improved_at);
+  if (!at) return '';
+  const to = String(r.improved_to ?? '').trim();
+  if (to && !samePageUrl(to, String(r.url ?? ''))) return 'moved';
+  return isoMs(r.last_crawl) >= at ? 'read' : 'waiting';
+}
+export interface IndexImprovement {
+  /** the page that was improved */
+  url: string;
+  /** where the improved version went live when that is ANOTHER address ('' = at the page itself) */
+  to: string;
+  at: string;
+}
+/** The content-log rows that improve a page (`existing_page_url`): at that very address, or confirmed at another one (the engine's
+ *  improvementsOf). */
+export function indexImprovementsOf(logs: readonly { status?: unknown; existing_page_url?: unknown; published_url?: unknown; published_at?: unknown }[]): IndexImprovement[] {
+  return logs
+    .filter((l) => /^published$/i.test(String(l.status ?? '').trim()) && String(l.published_at ?? '').trim() && String(l.existing_page_url ?? '').trim() && String(l.published_url ?? '').trim())
+    .map((l) => {
+      const from = String(l.existing_page_url).trim(), pub = String(l.published_url).trim(), at = String(l.published_at).trim();
+      return samePageUrl(from, pub) ? { url: pub, to: '', at } : { url: from, to: pub, at };
+    });
+}
+/**
+ * The engine records an improvement on its next daily run; the app shows it at once: each row takes the newest of its own `improved_at` and
+ * the content log's improvement of the same page. Pure; rows are copied only when they change.
+ */
+export function withImprovements<R extends Partial<IndexPageRow>>(rows: readonly R[], improvements: readonly { url: string; at: string; to?: string }[]): R[] {
+  if (!improvements.length) return [...rows];
+  return rows.map((r) => {
+    const had = String(r.improved_at ?? '').trim();
+    let best: { at: string; to: string } | null = null;
+    for (const i of improvements) if (samePageUrl(String(r.url ?? ''), i.url) && isoMs(i.at) > isoMs(best ? best.at : had)) best = { at: i.at, to: i.to ?? '' };
+    return best ? { ...r, improved_at: best.at, improved_to: best.to } : r;
+  });
+}
+
 export const INDEX_ACTION_INFO: Record<IndexAction, { label: string; summary: string }> = {
   site_fix: { label: 'Fix on your website', summary: 'Changes only you can make. Each one is a step on your Pipeline that we check every day.' },
   quality: { label: 'Improve the page', summary: 'Google read these pages and left them out. Improve them one at a time, when you choose.' },
@@ -429,10 +497,20 @@ export interface IndexPage {
   askNotRecorded: string;
   /** a policy or utility page (DESIGN_WAVE2 §2.4): fine to leave out of search */
   utility: boolean;
+  /** 2026-11-05: when the client last published an improved version of this page Google left out ('' = never, or not a reason an
+   *  improvement answers, or in search). See `improveStateOf`. */
+  improvedAt: string;
+  /** the improved version is live and Google has not read the page since: waiting for Google (action `wait`, no "Improve this page") */
+  improvedWaiting: boolean;
+  /** Google read the page after the improvement and still leaves it out: the date of that crawl ('' = not yet / no improvement) */
+  improvedReadAt: string;
+  /** 2026-11-05: the improved version went live at ANOTHER address while this one still opens ('' = no): the step is a permanent
+   *  redirect to it (site task `indexing:merge`); never "Improve this page" again */
+  improvedTo: string;
 }
 
 /** What a group is about: a cause, a code the app does not know, or pages fixed on the site that Google has not read again yet. */
-export type IndexGroupCause = IndexCause | 'other' | 'fixed_on_site' | 'linked_waiting' | 'canonical_parent' | 'utility';
+export type IndexGroupCause = IndexCause | 'other' | 'fixed_on_site' | 'improved_waiting' | 'improved_elsewhere' | 'linked_waiting' | 'canonical_parent' | 'utility';
 
 export interface IndexGroup {
   /** `<lane>:<action>:<cause>` */
@@ -683,6 +761,19 @@ const fixSeen = (fix: string): string => fix.trim();
 /** The sentence of the engine's 14-day "asked Google" note that is wrong for a page that needs the client (W9). */
 const NOTHING_MORE_TO_DO = /\s*There is nothing more to do on your side for now\.?/;
 
+/** 2026-11-05: the engine writes the improvement into its note on its next run; until then (the app's overlay) the app says it. */
+const IMPROVED_NOTE = /improved version/i;
+function improvedNote(imp: ImproveState, at: string, crawl: string, to: string, note: string): string {
+  if (!imp || IMPROVED_NOTE.test(note)) return note;
+  if (imp === 'moved') {
+    const p = indexPath(to);
+    return `An improved version of this page went live at ${p} on ${at.slice(0, 10)}, and this address still opens the old page, so the two compete for the same search. Redirect this address to ${p} with a permanent (301) redirect, or put the improved text back on this address and remove ${p}, so Google treats them as one page. We check the redirect for you every day.`;
+  }
+  if (imp === 'waiting')
+    return `You published an improved version on ${at.slice(0, 10)}. Google has not read the new version yet, so it still shows its older reading. We look up Google's reading again in the days after; asking Google to read it again in Search Console can help, and Google still decides.`;
+  return `Google read your improved version on ${crawl.slice(0, 10)} and still left it out for now. ${note}`.trim();
+}
+
 export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
   const cause = s(r.cause);
   const state = s(r.state);
@@ -701,8 +792,12 @@ export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
   const raw = displayAction(s(r.action), c, st);
   const linked = linkedByOf(r.linked_by);
   const action = fixFailedAt && raw === 'wait' && isCause(c) && INDEX_CAUSE_INFO[c].action === 'site_fix' ? 'site_fix' : raw;
-  // the engine sets `wait` with `fix_seen_at`; an older engine row is read the same way
-  const shown = fixSeenAt && action === 'site_fix' ? 'wait' : action;
+  // 2026-11-05 (improveStateOf, the engine's rule): an improved version Google has not read yet waits for Google; once Google read it, the
+  // page's own action is back (the engine's `wait` of the day before, or a row the app overlaid before the engine ran, are read the same way)
+  const imp = improveStateOf(r);
+  const improvedAt = imp ? s(r.improved_at).trim() : '';
+  // 'moved': a step on the website (a permanent redirect to the improved version), whatever the engine's row of the day before said
+  const shown = imp === 'moved' ? 'site_fix' : imp === 'waiting' ? 'wait' : imp === 'read' && (action === 'wait' || action === 'site_fix') && isCause(c) ? INDEX_CAUSE_INFO[c].action : fixSeenAt && action === 'site_fix' ? 'wait' : action;
   return {
     url: s(r.url),
     path: indexPath(s(r.url)),
@@ -739,7 +834,7 @@ export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
     mergeInto: s(r.merge_into),
     // wave 2 review W9: the engine's 14-day "asked Google" note replaced the whole note, whatever the action; a page that now needs the client
     // (a fix on the website, a link...) never reads "nothing more to do on your side"
-    note: (INDEX_ACTIONS_NEED_YOU.has(shown) ? s(r.note).replace(NOTHING_MORE_TO_DO, '').trim() : s(r.note)).slice(0, 500),
+    note: improvedNote(imp, improvedAt, s(r.last_crawl), s(r.improved_to), (INDEX_ACTIONS_NEED_YOU.has(shown) ? s(r.note).replace(NOTHING_MORE_TO_DO, '').trim() : s(r.note))).slice(0, 500),
     publishedAt: s(r.published_at),
     inspectedAt: s(r.inspect_at),
     fetchedAt: s(r.fetch_at),
@@ -752,6 +847,10 @@ export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
     googleReadAfterAskAt: s(r.google_read_after_ask_at).trim(),
     askNotRecorded: '',
     utility,
+    improvedAt,
+    improvedWaiting: imp === 'waiting',
+    improvedReadAt: imp === 'read' ? s(r.last_crawl) : '',
+    improvedTo: imp === 'moved' ? s(r.improved_to).trim() : '',
   };
 }
 
@@ -1087,6 +1186,10 @@ export const INDEX_UTILITY_GROUP = {
 const groupLabel = (c: IndexGroupCause): Pick<IndexCauseInfo, 'label' | 'meaning' | 'weDo' | 'youDo'> =>
   c === 'fixed_on_site'
     ? INDEX_FIXED_ON_SITE
+    : c === 'improved_waiting'
+      ? INDEX_IMPROVED_WAITING
+    : c === 'improved_elsewhere'
+      ? INDEX_IMPROVED_ELSEWHERE
     : c === 'linked_waiting'
       ? INDEX_LINKED_WAITING
       : c === 'canonical_parent'
@@ -1098,7 +1201,9 @@ const groupLabel = (c: IndexGroupCause): Pick<IndexCauseInfo, 'label' | 'meaning
       : INDEX_CAUSE_INFO[c];
 
 const groupGuide = (c: IndexGroupCause): string | null =>
-  c === 'fixed_on_site' || c === 'linked_waiting' || c === 'other'
+  c === 'improved_elsewhere'
+    ? 'index-merge-improved'
+    : c === 'fixed_on_site' || c === 'improved_waiting' || c === 'linked_waiting' || c === 'other'
     ? 'index-request-indexing'
     : c === 'canonical_parent'
       ? 'index-canonical-sitemap'
@@ -1115,6 +1220,8 @@ export const INDEX_GROUP_PREVIEW = 25;
  *  the paged lists (A19): pages in search with nothing to do, and pages not checked yet that the engine did not file, are in none. */
 export const indexGroupCauseOf = (p: IndexPage): IndexGroupCause => {
   if (p.fixSeenAt) return 'fixed_on_site';
+  if (p.improvedWaiting) return 'improved_waiting';
+  if (p.improvedTo) return 'improved_elsewhere';
   // wave 2 (DESIGN_WAVE2 §3.1): the engine's `wait` on a page it found already linked, apart from the pages that need a link
   if (p.action === 'wait' && (p.cause === 'unknown_to_google' || p.cause === 'discovered_not_crawled')) return 'linked_waiting';
   if (p.cause === 'canonical_elsewhere' && p.action === 'site_fix' && canonicalOwnTitle(p)) return 'canonical_parent';
@@ -1242,7 +1349,7 @@ export function buildIndexingData(input: {
     const info = groupLabel(cause);
     // wave 2: the canonical pages outside the sitemap are part of the `indexing:canonical_elsewhere` step; the pages that need a link have
     // one step of their own (`indexing:links`)
-    const taskKey = action === 'site_fix' && cause === 'canonical_parent' ? indexingTaskKey('canonical_elsewhere') : action === 'site_fix' && isSiteFixCause(cause) ? indexingTaskKey(cause) : action === 'links' ? INDEXING_LINKS_KEY : null;
+    const taskKey = action === 'site_fix' && cause === 'improved_elsewhere' ? INDEXING_MERGE_KEY : action === 'site_fix' && cause === 'canonical_parent' ? indexingTaskKey('canonical_elsewhere') : action === 'site_fix' && isSiteFixCause(cause) ? indexingTaskKey(cause) : action === 'links' ? INDEXING_LINKS_KEY : null;
     return {
       id,
       lane: ln,
@@ -1347,6 +1454,56 @@ export function indexingCauseOfKey(key: string): IndexSiteFixCause | null {
 }
 /** wave 2 (DESIGN_WAVE2 §3.2): the one step for the pages that need a link from another page of the website (kind `index_links`). */
 export const INDEXING_LINKS_KEY = 'indexing:links';
+/** 2026-11-05: the one step for the pages whose improved version went live at another address (kind `index_merge`): redirect each old
+ *  address permanently to its improved version. Built from the content log (the confirmed publish), checked by our own fetch. */
+export const INDEXING_MERGE_KEY = 'indexing:merge';
+/** The (old address, improved version) pairs that step lists and our own check opens at most. */
+export const INDEXING_MERGE_MAX_PAIRS = 10;
+export interface IndexMergePair {
+  from: string;
+  to: string;
+  at: string;
+}
+/** The pairs of that step from the content log's improvements (the newest per old address, most recent first). An old address whose
+ *  newest improvement went live at the address itself has no pair. */
+export function indexMergePairs(improvements: readonly IndexImprovement[]): IndexMergePair[] {
+  const by = new Map<string, IndexMergePair>();
+  for (const i of improvements) {
+    const k = i.url.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+    const had = by.get(k);
+    if (!had || isoMs(i.at) > isoMs(had.at)) by.set(k, { from: i.url, to: i.to, at: i.at });
+  }
+  return [...by.values()].filter((p) => p.to).sort((a, b) => isoMs(b.at) - isoMs(a.at)).slice(0, INDEXING_MERGE_MAX_PAIRS);
+}
+/**
+ * The check of one pair (pure; the server fetches). Done when the old address answers a PERMANENT redirect (301 / 308) that ends on the
+ * improved version and that page opens, or (the other way to make one page of two) the old address opens and the new one is gone (404 /
+ * 410) or redirects permanently back to it. A temporary redirect is "almost". `first`: the old address's own answer (no redirect
+ * followed); `end`: where its redirect ends (followed); `other`: the new address's own answer (asked only when the old one opens).
+ */
+export function indexMergeVerdict(
+  pair: { from: string; to: string },
+  first: { status: number; location?: string | null } | null,
+  end: { status: number; finalUrl: string } | null,
+  other: { status: number; location?: string | null } | null,
+): { done: boolean; reached: boolean; message: string } {
+  const from = indexPath(pair.from), to = indexPath(pair.to);
+  if (!first) return { done: false, reached: false, message: `${from} did not answer.` };
+  if (first.status >= 300 && first.status < 400) {
+    if (first.status !== 301 && first.status !== 308) return { done: false, reached: true, message: `${from} redirects with a temporary ${first.status}. Make it a permanent 301.` };
+    if (!end) return { done: false, reached: false, message: `${from} redirects, but where it leads did not answer.` };
+    if (!samePageUrl(end.finalUrl, pair.to)) return { done: false, reached: true, message: `${from} redirects to ${indexPath(end.finalUrl)}, not to ${to}.` };
+    if (end.status !== 200) return { done: false, reached: true, message: `${from} redirects to ${to}, but that page answers ${end.status}.` };
+    return { done: true, reached: true, message: `${from} redirects permanently to ${to}, which opens.` };
+  }
+  if (first.status >= 200 && first.status < 300) {
+    if (!other) return { done: false, reached: false, message: `${from} still opens, and ${to} did not answer.` };
+    if (other.status === 404 || other.status === 410) return { done: true, reached: true, message: `${from} opens and ${to} is gone, so they are one page again.` };
+    if ((other.status === 301 || other.status === 308) && other.location && samePageUrl(other.location, pair.from)) return { done: true, reached: true, message: `${to} redirects permanently back to ${from}.` };
+    return { done: false, reached: true, message: `${from} still opens its old page, and ${to} opens too.` };
+  }
+  return { done: false, reached: true, message: `${from} answers ${first.status}.` };
+}
 /** The (page to link to, page to add the link on) pairs that step lists, and our own check opens (the source pages) at most. */
 export const INDEXING_LINKS_MAX_PAIRS = 10;
 

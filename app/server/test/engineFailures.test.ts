@@ -21,6 +21,9 @@ const st = vi.hoisted(() => ({
   claimOk: true,
   work: {} as Record<string, string | null>,
   status: {} as Record<string, string | null>,
+  stopped: {} as Record<string, number>,
+  handoff: {} as Record<string, string[]>,
+  missing: [] as string[],
   frontDoorReads: 0,
   started: [] as { input: Record<string, unknown>; opts: Record<string, unknown> }[],
 }));
@@ -71,17 +74,21 @@ vi.mock('../src/n8n/client', async (actual) => ({
   executionFailure: async () => null,
   subExecutionOf: async (id: string) => {
     st.frontDoorReads++;
+    if (st.missing.includes(id)) throw new (await import('../src/lib/errors')).HttpError(502, `n8n API /executions/${id} answered 404`, 'n8n_not_found');
     return st.work[id] ?? null;
   },
-  executionStatus: async (id: string) => st.status[id] ?? null,
+  subExecutionsOf: async (id: string) => st.handoff[id] ?? [],
+  // a status in the map = n8n's answer; missing = 404 (null); not in the map, or null = n8n could not be asked (undefined)
+  executionState: async (id: string) => (st.missing.includes(id) ? null : st.status[id] ? { status: st.status[id]!, stoppedAt: st.stopped[id] ?? null } : undefined),
 }));
 
-const { checkEngineFailures, ENGINE_RESTART_ERROR, ENGINE_RESTART_RETRIED } = await import('../src/services/engineFailures');
+const { checkEngineFailures, ENGINE_RESTART_ERROR, ENGINE_RESTART_RETRIED, ENGINE_LOST_ERROR, ENGINE_LOST_RETRIED, ENGINE_NO_WORK_ERROR, ENGINE_NO_WORK_RETRIED, __test } = await import('../src/services/engineFailures');
 const { subExecutionIn } = await import('../src/n8n/client');
 
 // the stored input of the production run, as it is in `runs.input`
 const pageInput = { cta: '', goal: 'leads', mode: 'keyword', tone: 'Professional and direct', siteId: '65ee2d24-ac16-4e03-a931-ab0aac76ad29', country: 'Pakistan', keyword: 'banking & financial services technology', business: '', pageType: 'Service Page', videoUrl: '', emailCopy: false, localArea: '', acknowledged: ['pileup:banking financial services technology'], businessFacts: '', receiveReport: true, receiveContent: true, checkPageExists: false, existingPageUrl: 'https://devaicon.com/industries/bfsi', videoTranscript: '' };
-const run = (id: string, requestId: string, over: Partial<Row> = {}): Row => ({ id, requestId, status: 'accepted', mode: 'keyword', orgId: 'o1', userId: 'u1', siteId: 's1', createdAt: new Date(Date.now() - 20 * 60_000), input: { ...pageInput }, ...over });
+// 20 minutes old with a 15-minute estimate: not overdue yet (overdue = 3 x 15 = 45 minutes)
+const run = (id: string, requestId: string, over: Partial<Row> = {}): Row => ({ id, requestId, status: 'accepted', mode: 'keyword', orgId: 'o1', userId: 'u1', siteId: 's1', etaMinutes: 15, reportCount: 0, createdAt: new Date(Date.now() - 20 * 60_000), input: { ...pageInput }, ...over });
 
 beforeEach(() => {
   st.active = [];
@@ -91,8 +98,13 @@ beforeEach(() => {
   st.claimOk = true;
   st.work = {};
   st.status = {};
+  st.stopped = {};
+  st.handoff = {};
+  st.missing = [];
   st.frontDoorReads = 0;
   st.started = [];
+  __test.workOf.clear();
+  __test.handedTo.clear();
 });
 
 describe('runs whose engine execution crashed', () => {
@@ -142,6 +154,27 @@ describe('runs whose engine execution crashed', () => {
     expect(st.started).toHaveLength(0);
   });
 
+  it('prod 2026-11-04 (devaicon.com): a front door cut off before it started the work is closed and started again', async () => {
+    st.active = [run('pub-1', '8255', { mode: 'published', input: { mode: 'published', siteId: '65ee2d24-ac16-4e03-a931-ab0aac76ad29', keyword: 'banking & financial services technology', emailCopy: false, publishedUrl: 'https://devaicon.example/services/industries-bfsi', confirmMismatch: false, contentRequestId: '6661' } })];   // the stored input of the stuck run
+    st.work = { '8255': null };
+    st.status = { '8255': 'crashed' };
+    expect(await checkEngineFailures()).toBe(1);
+    expect(String(st.updates[0]!.error)).toContain(ENGINE_RESTART_ERROR);
+    expect(st.started).toHaveLength(1);
+    expect(st.started[0]!.input).toMatchObject({ mode: 'published', keyword: 'banking & financial services technology' });
+  });
+
+  it('a front door still answering is asked again next sweep; one that finished without starting work is left alone', async () => {
+    st.active = [run('door-1', '9001'), run('door-2', '9002')];
+    st.work = { '9001': null, '9002': null };
+    st.status = { '9001': 'running', '9002': 'success' };
+    expect(await checkEngineFailures()).toBe(0);
+    st.status = { '9001': 'crashed', '9002': 'success' };
+    expect(await checkEngineFailures()).toBe(1);   // the door that was still going is read again, and was cut off
+    expect(st.started).toHaveLength(1);
+    expect(st.frontDoorReads).toBe(3);   // door-2 is remembered after its first read
+  });
+
   it('closes but never repeats a ladder, a free run or a run someone cancelled in n8n', async () => {
     st.work = { '10': '11', '20': '21', '30': '31' };
     st.status = { '11': 'crashed', '21': 'crashed', '31': 'canceled' };
@@ -153,11 +186,108 @@ describe('runs whose engine execution crashed', () => {
   it('leaves running, finished and unknown executions to the callback and the expiry, and reads each front door once', async () => {
     st.active = [run('a', '100'), run('b', '200'), run('c', '300'), run('d', 'admin-7')];
     st.work = { '100': '101', '200': '201', '300': null };
-    st.status = { '101': 'running', '201': 'success' };
+    st.status = { '101': 'running', '201': 'success', '300': 'success' };   // 300: a front door that finished without starting work
     expect(await checkEngineFailures()).toBe(0);
     expect(await checkEngineFailures()).toBe(0);
     expect(st.updates).toHaveLength(0);
     expect(st.started).toHaveLength(0);
     expect(st.frontDoorReads).toBe(3);
+  });
+});
+
+// Prod 2026-11-05 (devaicon.com): the 2026-11-04 publish check, "about 1 min", read "Queued in the SEO engine" for 69 minutes. Every way a
+// run can go quiet other than "crashed" waited for the 3-hour expiry. Once overdue (3 x its estimate, never under 10 minutes), the chain
+// is read: still going = left alone; ended with nothing received after a 10-minute grace = closed with what is known.
+describe('runs that went quiet without a crash', () => {
+  const pubInput = { mode: 'published', siteId: '65ee2d24-ac16-4e03-a931-ab0aac76ad29', keyword: 'banking & financial services technology', emailCopy: false, publishedUrl: 'https://devaicon.example/industries/bfsi', confirmMismatch: false, contentRequestId: '6661' };
+  const ago = (m: number) => Date.now() - m * 60_000;
+  // the screenshot's run: a one-minute publish check accepted 69 minutes ago
+  const pub = (id: string, door: string, over: Partial<Row> = {}) => run(id, door, { mode: 'published', etaMinutes: 1, createdAt: new Date(ago(69)), input: { ...pubInput }, ...over });
+
+  it('a finished publish check whose result never arrived is closed and started again (free and quick)', async () => {
+    st.active = [pub('p1', '8255')];
+    st.work = { '8255': '8256' };
+    st.status = { '8256': 'success' };
+    st.stopped = { '8256': ago(68) };
+    expect(await checkEngineFailures()).toBe(1);
+    expect(st.updates[0]).toMatchObject({ status: 'failed' });
+    expect(String(st.updates[0]!.error)).toContain(ENGINE_LOST_ERROR);
+    expect(st.started).toHaveLength(1);
+    expect(st.started[0]!.input).toMatchObject({ mode: 'published', publishedUrl: pubInput.publishedUrl });
+    expect(String(st.updates.at(-1)?.error)).toContain(ENGINE_LOST_RETRIED);
+  });
+
+  it('a paid page run whose result was lost is closed but never run twice by itself', async () => {
+    st.active = [run('k1', '500', { createdAt: new Date(ago(60)), etaMinutes: 15 })];
+    st.work = { '500': '501' };
+    st.status = { '501': 'success' };
+    st.stopped = { '501': ago(20) };
+    expect(await checkEngineFailures()).toBe(1);
+    expect(String(st.updates[0]!.error)).toContain(ENGINE_LOST_ERROR);
+    expect(st.started).toHaveLength(0);
+  });
+
+  it('waits: before the run is overdue, within the grace after the work ended, and for a run that already received reports', async () => {
+    st.work = { '600': '601', '610': '611', '620': '621' };
+    st.status = { '601': 'success', '611': 'success', '621': 'success' };
+    st.stopped = { '601': ago(4), '611': ago(3), '621': ago(30) };
+    st.active = [
+      pub('early', '600', { createdAt: new Date(ago(5)) }), // 5 minutes: the 10-minute floor is not reached
+      pub('grace', '610'), // overdue, but the work ended 3 minutes ago: its result may still be on the way
+      run('ladder', '620', { mode: 'ladder', status: 'running', reportCount: 2, createdAt: new Date(ago(200)), etaMinutes: 20 }), // a ladder that delivered pages
+    ];
+    expect(await checkEngineFailures()).toBe(0);
+    expect(st.updates).toHaveLength(0);
+    // the grace passes: the second one is closed on a later sweep without asking the front door again
+    st.stopped['611'] = ago(11);
+    expect(await checkEngineFailures()).toBe(1);
+    expect(st.frontDoorReads).toBe(3);
+  });
+
+  it('a front door that ended without starting the work, or that n8n has no record of, is closed and started again once overdue', async () => {
+    st.work = { '700': null };
+    st.status = { '700': 'success' };
+    st.stopped = { '700': ago(68) };
+    st.missing = ['710'];
+    st.active = [pub('d1', '700'), pub('d2', '710')];
+    expect(await checkEngineFailures()).toBe(2);
+    expect(String(st.updates[0]!.error)).toContain(ENGINE_NO_WORK_ERROR);
+    expect(st.updates.map((u) => String(u.error))).toEqual(expect.arrayContaining([expect.stringContaining(ENGINE_NO_WORK_RETRIED)]));
+    expect(st.started).toHaveLength(2);
+  });
+
+  it('follows work handed on to another workflow: still going = left alone, cut off = closed and started again', async () => {
+    const ai = { mode: 'ai_visibility', siteId: '65ee2d24-ac16-4e03-a931-ab0aac76ad29', country: 'Pakistan', topics: [], competitors: [], emailCopy: false };
+    st.active = [run('ai1', '800', { mode: 'ai_visibility', etaMinutes: 5, createdAt: new Date(ago(40)), input: { ...ai } })];
+    st.work = { '800': '801' };
+    st.status = { '801': 'success', '802': 'running' };
+    st.stopped = { '801': ago(39) };
+    st.handoff = { '801': ['802'] };
+    expect(await checkEngineFailures()).toBe(0); // the AI Visibility Tracker is still asking the engines
+    st.status['802'] = 'crashed';
+    expect(await checkEngineFailures()).toBe(1);
+    expect(String(st.updates[0]!.error)).toContain(ENGINE_RESTART_ERROR);
+    expect(String(st.updates[0]!.error)).toContain('802');
+    expect(st.started).toHaveLength(1);
+    expect(st.started[0]!.input).toMatchObject({ mode: 'ai_visibility' });
+  });
+
+  it('an overdue run whose work ended in an error is closed with that error and not repeated', async () => {
+    st.active = [pub('e1', '900')];
+    st.work = { '900': '901' };
+    st.status = { '901': 'error' };
+    st.stopped = { '901': ago(60) };
+    expect(await checkEngineFailures()).toBe(1);
+    expect(String(st.updates[0]!.error)).toMatch(/^The SEO engine stopped with an error/);
+    expect(st.started).toHaveLength(0);
+  });
+
+  it('never takes n8n being unreachable for an answer', async () => {
+    st.active = [pub('u1', '950'), pub('u2', '960')];
+    st.work = { '950': '951', '960': '961' };
+    st.status = { '961': 'success' }; // 951 cannot be read; 961 ended but its hand-off cannot be read
+    st.handoff = { '961': ['962'] };
+    expect(await checkEngineFailures()).toBe(0);
+    expect(st.updates).toHaveLength(0);
   });
 });

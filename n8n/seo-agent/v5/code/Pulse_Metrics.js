@@ -25,7 +25,7 @@ return plans.map(p => {
   // D19 (2026-10-11): today's rates count answered requests only, and the failures are named (a DataForSEO task error inside an
   // HTTP 200 was invisible before; the retry gate has already re-sent each failed request once)
   const errMap = new Map();
-  for (const r of R.filter(x => x.error)) { const k = r.engine + '|' + String(r.error).slice(0, 80); const x = errMap.get(k) || { engine: ENG[r.engine] || r.engine, message: String(r.error).slice(0, 160), count: 0 }; x.count++; errMap.set(k, x); }
+  for (const r of R.filter(x => x.error)) { const k = r.engine + '|' + String(r.error).slice(0, 80); const x = errMap.get(k) || { engine: ENG[r.engine] || r.engine, message: FAIL.why(r.error), raw: String(r.error).slice(0, 160), count: 0 }; x.count++; errMap.set(k, x); }   // 2026-11-05: plain words for the customer, the raw message for us
   const error_list = [...errMap.values()].sort((a, b) => b.count - a.count).slice(0, 6);
   const errors = R.filter(x => x.error).length, error_rate = pct(errors, R.length);
   const retry = (() => { try { const mg = $('Merge AI Answers').first().json || {}; return { asked: Number(mg.retry_asked) || 0, answered: Number(mg.retry_answered) || 0 }; } catch (e) { return { asked: 0, answered: 0 }; } })();
@@ -81,7 +81,7 @@ return plans.map(p => {
   if (passes('drop')) alerts.push({ level: 'high', text: 'Named in ' + pct(m, n) + '% of today\'s AI answers vs ' + pct(bm, bn) + '% over ' + B.length + ' comparable day(s) (' + n + ' answers today; a real drop, not sampling noise: ' + holmWords(multiple_tests, 'drop') + ').' });
   // B8-3 (INVARIANTS rule 3): a morning that could not be read used to send nothing at all — a quiet day and a broken one looked
   // identical from the outside. A failure that reaches no human is not handled, so it is the one thing that always goes out.
-  if (readable.unavailable) alerts.push({ level: 'high', text: readable.note + ' ' + (error_list.length ? error_list.map(e => e.engine + ' — ' + e.message).slice(0, 3).join('; ') : 'No engine answered.') });
+  if (readable.unavailable) alerts.push({ level: 'high', text: readable.note + ' ' + (error_list.length ? error_list.map(e => e.engine + ' ' + e.message).slice(0, 3).join('; ') + '.' : 'No engine answered.') });
   else if (dead.length) alerts.push({ level: 'medium', text: readable.note });
   for (const [d, k] of newComp) if (passes('comp:' + d)) alerts.push({ level: 'medium', text: d + ' appears in ' + k + ' of today\'s ' + n + ' AI answers and was not named in the past ' + B.length + ' days (' + holmWords(multiple_tests, 'comp:' + d) + ').' });
   for (const q of p.prompts) for (const e of p.pulse_engines) { const now = (prompts[q.prompt_id] || {})[e]; if (!now || now === 'n' || now === 'e') continue;

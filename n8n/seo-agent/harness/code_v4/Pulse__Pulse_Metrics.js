@@ -290,6 +290,42 @@ const engineChange = (kNow, nNow, kBefore, nBefore, o) => {
     why: 'too few answers from this engine to tell (' + a + ' now, ' + b + ' before; a change needs ' + floor + ' on each side)' };
   const t = changeOf(kNow, a, kBefore, b, o); return { tested: true, ...t, k: kNow, k_before: kBefore };
 };
+// ---- 2026-11-05 (client report, devaicon.com): "this shows the server issue" ----
+// Nearly every weekly run since 2026-10-02 has had about 1 request in 45 that the AI engine's side did not answer (Google AI Overview /
+// AI Mode: "Internal SE Server Error." inside an HTTP 200), already re-sent once after a pause (2 of 3 answer on the retry) and left out
+// of every rate. The alert printed that raw message, under "Alerts from the latest run", every week, so the client read it as our server
+// failing. The failure is still disclosed (D19) but in plain words: which engine did not answer, that it was asked again, that the question
+// is asked again next run, and what the rates count. A handful of transient misses (under 10%) is level `info`, a note and not an alert;
+// a failure that is not a known upstream hiccup (a refused or malformed request) keeps level low and never claims to be the engine's side.
+// lineage_lint.py rule E reads a node's WHOLE source (kits included, comments stripped) for its refusal vocabulary, so this kit's code
+// must never hold those words ("could not be read", the bare word for a gate's unread answer): in the first build it did, and Apply
+// Analysis, which only inlines this kit, dropped off the refusal ratchet as if it refused unread evidence itself. Hence "is missing" and
+// the `unavailab` prefix below.
+const FAIL = (() => {
+  const TRANSIENT = /internal (se )?(server )?error|server error|no response|no answer|time.?out|timed out|try again|temporar|overload|unavailab|\b50[0234]\b|econnreset|socket hang up|eai_again/i;
+  const transient = (raw) => TRANSIENT.test(String(raw == null ? '' : raw));
+  const why = (raw) => /time.?out|timed out/i.test(String(raw || '')) ? 'took too long to answer' : transient(raw) ? 'did not answer' : 'could not be asked';
+  const and = (xs) => xs.length <= 1 ? (xs[0] || '') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1];
+  /** o: { errors, requests, retried, list: [{ engine, raw|message }], counted: what the rates count } -> { level, text, transient } | null */
+  const note = (o) => {
+    const n = Number(o && o.errors) || 0, N = Number(o && o.requests) || 0; if (!n) return null;
+    const list = o.list || []; const raws = list.map(e => e.raw != null ? e.raw : e.message);
+    const allT = raws.length > 0 && raws.every(transient);
+    const engs = [...new Set(list.map(e => e.engine).filter(Boolean))];
+    const who = engs.length > 3 ? engs.slice(0, 3).join(', ') + ' and others' : (and(engs) || 'The AI engine');
+    const rate = N ? 100 * n / N : 100;
+    const level = rate > 50 ? 'high' : rate >= 10 ? 'medium' : allT ? 'info' : 'low';
+    const again = o.retried ? ', even when asked again a little later' : '';
+    const what = allT ? who + ' did not answer' + again + '. This happens now and then on the AI engines\' side' + (rate < 10 ? ', not on your website' : '')
+      : who + ' could not be asked' + (o.retried ? ', also on a second try' : '');
+    // R84 kept: what came back this run and what the rates count (pulse answers included) are two numbers, never one phrase
+    const counted = ' ' + (N - n) + ' of ' + N + ' came back' + (o.counted ? '; the rates count only real answers: ' + String(o.counted).replace(/\.+$/, '') : '') + '.'
+      + (rate >= 10 ? ' With fewer answers than usual, their ranges are wider.' : '');
+    return { level, transient: allT,
+      text: n + ' of ' + N + ' AI answer' + (N === 1 ? '' : 's') + (n === 1 ? ' is' : ' are') + ' missing this time: ' + what + '. ' + (n === 1 ? 'That question is' : 'Those questions are') + ' asked again on the next run.' + counted };
+  };
+  return { transient, why, note };
+})();
 
 // ---- AI entities (F1a, 2026-10-23; docs/ai-visibility-2026-10-23/ENGINE_AUDIT.md E3 E4 E5 E8 E10 E16, PROD_STATE.md section 5) ----
 // WHO an AI answer names, as ONE entity per business, and in which ROLE. Inlined by build_monitors.py (the AI_ENTITIES placeholder) into
@@ -738,7 +774,7 @@ return plans.map(p => {
   // D19 (2026-10-11): today's rates count answered requests only, and the failures are named (a DataForSEO task error inside an
   // HTTP 200 was invisible before; the retry gate has already re-sent each failed request once)
   const errMap = new Map();
-  for (const r of R.filter(x => x.error)) { const k = r.engine + '|' + String(r.error).slice(0, 80); const x = errMap.get(k) || { engine: ENG[r.engine] || r.engine, message: String(r.error).slice(0, 160), count: 0 }; x.count++; errMap.set(k, x); }
+  for (const r of R.filter(x => x.error)) { const k = r.engine + '|' + String(r.error).slice(0, 80); const x = errMap.get(k) || { engine: ENG[r.engine] || r.engine, message: FAIL.why(r.error), raw: String(r.error).slice(0, 160), count: 0 }; x.count++; errMap.set(k, x); }   // 2026-11-05: plain words for the customer, the raw message for us
   const error_list = [...errMap.values()].sort((a, b) => b.count - a.count).slice(0, 6);
   const errors = R.filter(x => x.error).length, error_rate = pct(errors, R.length);
   const retry = (() => { try { const mg = $('Merge AI Answers').first().json || {}; return { asked: Number(mg.retry_asked) || 0, answered: Number(mg.retry_answered) || 0 }; } catch (e) { return { asked: 0, answered: 0 }; } })();
@@ -794,7 +830,7 @@ return plans.map(p => {
   if (passes('drop')) alerts.push({ level: 'high', text: 'Named in ' + pct(m, n) + '% of today\'s AI answers vs ' + pct(bm, bn) + '% over ' + B.length + ' comparable day(s) (' + n + ' answers today; a real drop, not sampling noise: ' + holmWords(multiple_tests, 'drop') + ').' });
   // B8-3 (INVARIANTS rule 3): a morning that could not be read used to send nothing at all — a quiet day and a broken one looked
   // identical from the outside. A failure that reaches no human is not handled, so it is the one thing that always goes out.
-  if (readable.unavailable) alerts.push({ level: 'high', text: readable.note + ' ' + (error_list.length ? error_list.map(e => e.engine + ' — ' + e.message).slice(0, 3).join('; ') : 'No engine answered.') });
+  if (readable.unavailable) alerts.push({ level: 'high', text: readable.note + ' ' + (error_list.length ? error_list.map(e => e.engine + ' ' + e.message).slice(0, 3).join('; ') + '.' : 'No engine answered.') });
   else if (dead.length) alerts.push({ level: 'medium', text: readable.note });
   for (const [d, k] of newComp) if (passes('comp:' + d)) alerts.push({ level: 'medium', text: d + ' appears in ' + k + ' of today\'s ' + n + ' AI answers and was not named in the past ' + B.length + ' days (' + holmWords(multiple_tests, 'comp:' + d) + ').' });
   for (const q of p.prompts) for (const e of p.pulse_engines) { const now = (prompts[q.prompt_id] || {})[e]; if (!now || now === 'n' || now === 'e') continue;

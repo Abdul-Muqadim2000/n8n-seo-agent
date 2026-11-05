@@ -626,6 +626,49 @@ export const GUIDES = [
     related: ['fix-pack', 'publish-page'],
     keywords: ['redirect', '301', 'broken link', '404', 'backlinks', 'reclaim'],
   },
+  {
+    id: 'index-merge-improved',
+    area: 'website',
+    title: 'Make one page of an old page and its improved version',
+    why: 'The improved version of a page went live at a new address while the old address still opens. Two pages for the same search compete with each other, and Google may keep showing the old one. A permanent redirect makes them one page, and the improved version takes the old address\'s place.',
+    where: 'Your website\'s redirect settings',
+    who: 'Whoever manages your website or its hosting',
+    minutes: 10,
+    vars: [V.domain, V.brokenUrl, V.redirectTo],
+    steps: [
+      {
+        title: 'Add a permanent (301) redirect from the old address to the improved version',
+        body: 'Use a 301 (or 308), not a 302: a temporary redirect tells Google the old page is coming back. Every pair is listed in the step on your Pipeline.',
+        copy: [
+          { label: 'From', value: '{{brokenUrl}}' },
+          { label: 'To', value: '{{redirectTo}}' },
+        ],
+        choices: [
+          { label: 'WordPress', body: 'A redirect plugin (Redirection, Rank Math or Yoast Premium): paste the old path as the source and the new address as the target, type 301.' },
+          { label: 'Shopify', body: 'Online Store > Navigation > URL redirects > Create URL redirect. Shopify redirects are permanent. Shopify only redirects an address that no longer opens, so unpublish the old page first.' },
+          { label: 'Webflow', body: 'Site settings > Publishing > 301 redirects. Add the old path and the new path, then publish the site.' },
+          { label: 'Wix / Squarespace', body: 'Wix: SEO > URL redirect manager. Squarespace: Settings > Developer tools > URL mappings, one line `/old-path -> /new-path 301`.' },
+          { label: 'Apache / nginx / Next.js', body: 'Apache: `Redirect 301 /old-path https://{{domain}}/new-path` in `.htaccess`. nginx: a `return 301` in a `location` block. Next.js: `redirects()` in `next.config.js` with `permanent: true`.' },
+        ],
+      },
+      {
+        title: 'Or keep the old address',
+        body: 'If the old address should stay, put the improved text on it and remove the new page (let it answer "not found", or redirect it permanently back to the old address). Either way, one page is left.',
+      },
+      {
+        title: 'Open the old address in a browser',
+        body: 'It should land on the improved version straight away.',
+      },
+      { title: 'Press "I\'ve done it, check now"', body: 'It is on the Pipeline under Steps on your website. We open each old address, follow the redirect and check that it is permanent and lands on its improved version, and we check again every day.' },
+    ],
+    done: 'The step shows Done on the Pipeline. Google moves to the improved version when it reads the old address again; the Indexing page shows the old address as a redirect, which is normal.',
+    trouble: [
+      { q: 'The check says the redirect is temporary', a: 'Your redirect answers 302 or 307. Change its type to 301 (sometimes called "permanent") and check again.' },
+      { q: 'We want to keep both pages', a: 'Then make them clearly different, each for its own search, and press Skip. Two near-identical pages for one search compete with each other.' },
+    ],
+    related: ['redirect-broken-page', 'index-coverage'],
+    keywords: ['redirect', '301', 'improved page', 'new address', 'duplicate', 'two pages', 'merge'],
+  },
   // ---------------------------------------------------------------- Index coverage (2026-10-29)
   {
     id: 'index-coverage',

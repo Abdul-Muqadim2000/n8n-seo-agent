@@ -285,19 +285,61 @@ export function aiAlertsOf(v: unknown): AiAlert[] {
     if (p && typeof p === 'object') {
       const o = rec(p);
       const text = String(o.text ?? '').trim();
-      if (text) out.push({ level: levelOf(String(o.level ?? '')), text });
+      if (text) out.push(plainFailure({ level: levelOf(String(o.level ?? '')), text }));
       continue;
     }
     const s = String(p ?? '').trim();
     if (!s) continue;
     const m = s.match(/^(critical|high|medium|warning|low|info)\s*:\s*(.+)$/is);
-    out.push(m ? { level: levelOf(m[1]), text: m[2].trim() } : { level: 'info', text: s });
+    out.push(plainFailure(m ? { level: levelOf(m[1]), text: m[2].trim() } : { level: 'info', text: s }));
   }
   return out;
 }
 function levelOf(s: string): AiAlertLevel {
   const l = s.toLowerCase();
   return l === 'critical' || l === 'high' ? 'high' : l === 'medium' || l === 'warning' ? 'medium' : l === 'low' ? 'low' : 'info';
+}
+
+// ---------------- 2026-11-05: failed AI requests in plain words ----------------
+// Client report (devaicon.com): "1 of 45 AI requests failed (2 of 3 answered on the retry): Google AI Overview — Internal SE Server Error..
+// 44 of 45 came back; ..." stood under "Alerts from the latest run" every week and read as our server failing. It is the AI engine's side
+// not answering one request now and then, already asked again once and left out of every rate. The engine now writes the sentence below
+// (FAIL in n8n/seo-agent/v5/code/_ai_stats.js: keep the two in step); rows stored before it are rewritten here the same way.
+
+const TRANSIENT = /internal (se )?(server )?error|server error|no response|no answer|time.?out|timed out|try again|temporar|overload|unavailab|\b50[0234]\b|econnreset|socket hang up|eai_again/i;
+const and = (xs: string[]) => (xs.length <= 1 ? xs[0] ?? '' : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+
+/** The engine's plain sentence for `errors` of `requests` AI answers that did not come back (mirrors FAIL.note). */
+export function aiFailureNote(o: { errors: number; requests: number; retried?: number; list: { engine: string; raw: string }[]; counted?: string }): AiAlert | null {
+  const n = Number(o.errors) || 0, N = Number(o.requests) || 0;
+  if (!n) return null;
+  const allT = o.list.length > 0 && o.list.every((e) => TRANSIENT.test(e.raw));
+  const engs = [...new Set(o.list.map((e) => e.engine).filter(Boolean))];
+  const who = engs.length > 3 ? `${engs.slice(0, 3).join(', ')} and others` : and(engs) || 'The AI engine';
+  const rate = N ? (100 * n) / N : 100;
+  const level: AiAlertLevel = rate > 50 ? 'high' : rate >= 10 ? 'medium' : allT ? 'info' : 'low';
+  const again = o.retried ? ', even when asked again a little later' : '';
+  const what = allT ? `${who} did not answer${again}. This happens now and then on the AI engines' side${rate < 10 ? ', not on your website' : ''}` : `${who} could not be asked${o.retried ? ', also on a second try' : ''}`;
+  const counted = ` ${N - n} of ${N} came back${o.counted ? `; the rates count only real answers: ${o.counted.replace(/\.+$/, '')}` : ''}.${rate >= 10 ? ' With fewer answers than usual, their ranges are wider.' : ''}`;
+  return {
+    level,
+    text: `${n} of ${N} AI answer${N === 1 ? '' : 's'}${n === 1 ? ' is' : ' are'} missing this time: ${what}. ${n === 1 ? 'That question is' : 'Those questions are'} asked again on the next run.${counted}`,
+  };
+}
+
+/** A row stored before 2026-11-05 carries the engine's raw failure line: rewrite it into the plain sentence; anything else is unchanged. */
+function plainFailure(a: AiAlert): AiAlert {
+  const m = a.text.match(/^(\d+) of (\d+) AI requests failed(?: \((\d+) of (\d+) answered on the retry\))?: ([\s\S]+)$/);
+  if (!m) return a;
+  const rest = m[5];
+  const cut = rest.search(/\.+\s+(?=\d+ of \d+ came back|the rates below count)/i);
+  const reasons = (cut >= 0 ? rest.slice(0, cut) : rest).split(/;\s*/).map((x) => {
+    const [engine, ...msg] = x.split(/\s+[—–-]\s+/);
+    return { engine: (engine ?? '').trim(), raw: msg.join(' - ').trim() };
+  });
+  const counted = rest.match(/the rates below count ([\s\S]+?)\.?$/i)?.[1];
+  const note = aiFailureNote({ errors: Number(m[1]), requests: Number(m[2]), retried: m[4] ? Number(m[4]) : 0, list: reasons, counted });
+  return note ? { level: a.level === 'high' || a.level === 'medium' ? a.level : note.level, text: note.text } : a;
 }
 
 /** URLs the engine joined with spaces (Parse_AI_Answers.js `our_urls`); a JSON array is read as such; commas and new lines split too. */

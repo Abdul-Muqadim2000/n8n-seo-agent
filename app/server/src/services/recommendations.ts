@@ -507,6 +507,19 @@ export function indexingRecommendations(
       action: { label: 'See the step', page: 'pipeline' },
       guideVars: t.guideVars,
     });
+  // 2026-11-05: an improved version that went live at another address while the old one still opens: one step (a permanent redirect)
+  for (const t of (tasks ?? []).filter((t) => t.kind === 'index_merge' && t.state === 'todo'))
+    add({
+      id: 'ix:merge',
+      taskKey: t.key,
+      category: 'technical',
+      priority: 'high',
+      title: t.title,
+      detail: t.detail,
+      evidence: t.values.map((v) => indexPath(v.value)).slice(0, 3).join(' · ') || undefined,
+      action: { label: 'See the step', page: 'pipeline' },
+      guideVars: t.guideVars,
+    });
   if (ix.askGoogle.length) {
     const n = ix.askGoogle.length;
     add({

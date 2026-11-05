@@ -67,10 +67,14 @@ for (const s of sites) {
     const linked = sl ? (sl.linked || []) : (st.home_read ? (st.home_link_urls || []).filter(u => !IX.isLowValue(u) && !IX.isUtility(u) && IX.depth(u) > 0) : []);
     const linkTitles = (sl && sl.titles) || {};
     const dom = IX.bare(s.domain);
-    const ours = logs.filter(l => S(l.published_url) && (S(l.site_id) === s.site_id || IX.bare(S(l.domain)) === dom) && /^published$/i.test(S(l.status)))
-      .map(l => ({ url: S(l.published_url), published_at: S(l.published_at) }));
+    // 2026-11-05: a page the client IMPROVED (published at the address it improved) is not a page we wrote: it keeps its lane and is
+    // "improved, waiting for Google" (IX.improvementsOf / IX.improveState); every other published row is ours
+    const siteLogs = logs.filter(l => S(l.published_url) && (S(l.site_id) === s.site_id || IX.bare(S(l.domain)) === dom) && /^published$/i.test(S(l.status)));
+    const improved = IX.improvementsOf(siteLogs);
+    const isImp = (l) => S(l.existing_page_url) && IX.same(l.existing_page_url, l.published_url);   // an improvement at ANOTHER address is our new page there (lane new) and a step on the old one
+    const ours = siteLogs.filter(l => !isImp(l)).map(l => ({ url: S(l.published_url), published_at: S(l.published_at) }));
     const m = IX.merge({ site, now, stored: mineStored, inventory: inventory.filter(r => r.site_id === s.site_id),
-      sitemap: { read: (st.read || 0) > 0, complete, urls: st.urls || [] }, ours, search: { read: saOk, by: ev.by, truncated: ev.truncated },
+      sitemap: { read: (st.read || 0) > 0, complete, urls: st.urls || [] }, ours, improved, search: { read: saOk, by: ev.by, truncated: ev.truncated },
       watch: watch.filter(r => r.site_id === s.site_id), prev_complete: !!s.prev_complete, prev_complete_at: S(s.prev_complete_at),
       link_index: linkIndex, links_read: linksRead, linked, titles: linkTitles, unread_parents: sl ? (sl.unread_parents || []) : [] });
     // wave 2 (§2.5): the sitemap submission, decided before anything is written (Sitemap Submit Requests asks; Index Run Rows records)

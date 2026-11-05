@@ -59,4 +59,5 @@ export * from './robots';   // site tasks: the engine's robots.txt matcher (v5/c
 export * from './indexing';   // Index coverage (2026-10-29): which pages Google left out, why, and what to do (DESIGN.md in docs/indexing-2026-10-29)
 export * from './site-tasks';   // site tasks (2026-10-28, app/docs/SITE_TASKS.md): steps on the client's own website, checked by us
 export * from './hold';   // W0-D (2026-10-29): a page held for the client's OK before writing (verdict under 50, or a page the website already has)
+export * from './run-watch';   // 2026-11-05: when a run with no result is overdue (the watcher and the run page share it)
 export * from './draft-fix';   // 2026-10-21: a not-ready draft is finished by hand (the engine's qa_next_step / qa_owner_edits), never re-run

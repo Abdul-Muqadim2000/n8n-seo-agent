@@ -294,6 +294,42 @@ const engineChange = (kNow, nNow, kBefore, nBefore, o) => {
     why: 'too few answers from this engine to tell (' + a + ' now, ' + b + ' before; a change needs ' + floor + ' on each side)' };
   const t = changeOf(kNow, a, kBefore, b, o); return { tested: true, ...t, k: kNow, k_before: kBefore };
 };
+// ---- 2026-11-05 (client report, devaicon.com): "this shows the server issue" ----
+// Nearly every weekly run since 2026-10-02 has had about 1 request in 45 that the AI engine's side did not answer (Google AI Overview /
+// AI Mode: "Internal SE Server Error." inside an HTTP 200), already re-sent once after a pause (2 of 3 answer on the retry) and left out
+// of every rate. The alert printed that raw message, under "Alerts from the latest run", every week, so the client read it as our server
+// failing. The failure is still disclosed (D19) but in plain words: which engine did not answer, that it was asked again, that the question
+// is asked again next run, and what the rates count. A handful of transient misses (under 10%) is level `info`, a note and not an alert;
+// a failure that is not a known upstream hiccup (a refused or malformed request) keeps level low and never claims to be the engine's side.
+// lineage_lint.py rule E reads a node's WHOLE source (kits included, comments stripped) for its refusal vocabulary, so this kit's code
+// must never hold those words ("could not be read", the bare word for a gate's unread answer): in the first build it did, and Apply
+// Analysis, which only inlines this kit, dropped off the refusal ratchet as if it refused unread evidence itself. Hence "is missing" and
+// the `unavailab` prefix below.
+const FAIL = (() => {
+  const TRANSIENT = /internal (se )?(server )?error|server error|no response|no answer|time.?out|timed out|try again|temporar|overload|unavailab|\b50[0234]\b|econnreset|socket hang up|eai_again/i;
+  const transient = (raw) => TRANSIENT.test(String(raw == null ? '' : raw));
+  const why = (raw) => /time.?out|timed out/i.test(String(raw || '')) ? 'took too long to answer' : transient(raw) ? 'did not answer' : 'could not be asked';
+  const and = (xs) => xs.length <= 1 ? (xs[0] || '') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1];
+  /** o: { errors, requests, retried, list: [{ engine, raw|message }], counted: what the rates count } -> { level, text, transient } | null */
+  const note = (o) => {
+    const n = Number(o && o.errors) || 0, N = Number(o && o.requests) || 0; if (!n) return null;
+    const list = o.list || []; const raws = list.map(e => e.raw != null ? e.raw : e.message);
+    const allT = raws.length > 0 && raws.every(transient);
+    const engs = [...new Set(list.map(e => e.engine).filter(Boolean))];
+    const who = engs.length > 3 ? engs.slice(0, 3).join(', ') + ' and others' : (and(engs) || 'The AI engine');
+    const rate = N ? 100 * n / N : 100;
+    const level = rate > 50 ? 'high' : rate >= 10 ? 'medium' : allT ? 'info' : 'low';
+    const again = o.retried ? ', even when asked again a little later' : '';
+    const what = allT ? who + ' did not answer' + again + '. This happens now and then on the AI engines\' side' + (rate < 10 ? ', not on your website' : '')
+      : who + ' could not be asked' + (o.retried ? ', also on a second try' : '');
+    // R84 kept: what came back this run and what the rates count (pulse answers included) are two numbers, never one phrase
+    const counted = ' ' + (N - n) + ' of ' + N + ' came back' + (o.counted ? '; the rates count only real answers: ' + String(o.counted).replace(/\.+$/, '') : '') + '.'
+      + (rate >= 10 ? ' With fewer answers than usual, their ranges are wider.' : '');
+    return { level, transient: allT,
+      text: n + ' of ' + N + ' AI answer' + (N === 1 ? '' : 's') + (n === 1 ? ' is' : ' are') + ' missing this time: ' + what + '. ' + (n === 1 ? 'That question is' : 'Those questions are') + ' asked again on the next run.' + counted };
+  };
+  return { transient, why, note };
+})();
 
 // ---- W2-E2 (2026-10-23, docs/ai-visibility-2026-10-23/fixes/W2-E2.md): measurement a statistician would sign (inlined by build_monitors.py) ----
 // The answers to ONE question are correlated: the same question asked of five engines on seven mornings tends to name the same businesses,
@@ -2653,7 +2689,8 @@ return plans.map(p => {
   const errorRows = Rall.filter(r => r.error);
   const errors = errorRows.length;
   const errMap = new Map();
-  for (const r of errorRows) { const k = r.engine + '|' + String(r.error).slice(0, 80); const x = errMap.get(k) || { engine: ENG[r.engine] || r.engine, message: String(r.error).slice(0, 160), count: 0 }; x.count++; errMap.set(k, x); }
+  // 2026-11-05: `message` is what a customer reads (FAIL.why); the engine's own words stay in `raw` for us
+  for (const r of errorRows) { const k = r.engine + '|' + String(r.error).slice(0, 80); const x = errMap.get(k) || { engine: ENG[r.engine] || r.engine, message: FAIL.why(r.error), raw: String(r.error).slice(0, 160), transient: FAIL.transient(r.error), count: 0 }; x.count++; errMap.set(k, x); }
   const error_list = [...errMap.values()].sort((a, b) => b.count - a.count).slice(0, 8);
   const retry = (() => { try { const m = $('Merge AI Answers').first().json || {}; return { asked: Number(m.retry_asked) || 0, answered: Number(m.retry_answered) || 0 }; } catch (e) { return { asked: 0, answered: 0 }; } })();
   const error_rate = pct(errors, Rall.length);
@@ -3173,8 +3210,9 @@ return plans.map(p => {
   for (const [e, c] of Object.entries(engine_changes)) if (c.tested && passes('engine:' + e) && c.delta < 0 && Math.abs(c.delta) >= (c.min_points || 5))
     alerts.push({ level: 'medium', text: c.name + (c.k === 0 ? ' no longer cites any of your pages: ' : ' cites your pages less: ') + c.k + ' of ' + c.samples + ' answers this week vs ' + c.k_before + ' of ' + c.samples_before + ' before (a real drop on this engine\'s own answers; ' + holmWords(multiple_tests, 'engine:' + e) + ').' });
   // D19: the failures are reported with their reason, and above 10% they are an alert of their own (every rate counts answered requests only)
-  if (errors) alerts.push({ level: error_rate > 50 ? 'high' : error_rate >= 10 ? 'medium' : 'low',
-    text: errors + ' of ' + Rall.length + ' AI requests failed' + (retry.asked ? ' (' + retry.answered + ' of ' + retry.asked + ' answered on the retry)' : '') + ': ' + error_list.map(e => e.engine + ' — ' + e.message).slice(0, 3).join('; ') + '. ' + came_back + ' of ' + Rall.length + ' came back; the rates below count ' + headline.text + '.' });
+  // 2026-11-05 (client report): in plain words, and under 10% of transient misses a note (`info`), not an alert (FAIL in _ai_stats.js)
+  const failure_note = FAIL.note({ errors, requests: Rall.length, retried: retry.asked, list: [...errMap.values()], counted: headline.text });
+  if (failure_note) alerts.push({ level: failure_note.level, text: failure_note.text });
   if (volume_lookup.note) alerts.push({ level: 'low', text: volume_lookup.note });
   for (const { c, t } of compTests) if (passes('comp:' + c.domain) && t.significant === true)
     alerts.push({ level: 'medium', text: c.domain + ' gained ' + Math.round(t.delta) + ' points of AI share of voice (now ' + c.share + '%) — ' + t.why + '; ' + holmWords(multiple_tests, 'comp:' + c.domain) + '.' });
@@ -3313,7 +3351,7 @@ return plans.map(p => {
     cache_rows.push(AIP.stateRow(p.site_id, { ...AIP.baseState(p), run_id: p.run_id, run_kind: p.run_kind, site_id: p.site_id, domain: p.domain, started_at: p.checked_at, updated_at: fin, finished_at: fin,
     chunk: p.chunk.no, status: 'done', asked: Rall.length, total: Rall.length, spent_dfs_usd: vis_row.cost_usd, spent_ai_usd: Number(sb.ai) || 0, executions: [...(p.chunk.executions || []), String($execution.id)].slice(-60),
     ...(st0.extras && st0.extras.run_id === p.run_id ? { extras: st0.extras } : {}) }, fin)); }
-  return { json: { ...p, metrics: { asked: RC.length, asked_all: R.length, requests: Rall.length, answered: ans.length, samples, pulse_samples: pulseN, pulse_days: pulseDays, pulse_readings: PR.length, came_back, headline, aio_basis, volume_lookup, errors, error_rate, errors_list: error_list, retried: retry.asked, retry_answered: retry.answered, mentioned, cited, mention_rate, mention_ci: [mention_lo, mention_hi], citation_rate, share_of_voice, visibility_score, avg_rank: vis_row.avg_rank, aio_presence, aio_citation_rate, brand_known, brand, delta,
+  return { json: { ...p, metrics: { asked: RC.length, asked_all: R.length, requests: Rall.length, answered: ans.length, samples, pulse_samples: pulseN, pulse_days: pulseDays, pulse_readings: PR.length, came_back, headline, aio_basis, volume_lookup, errors, error_rate, errors_list: error_list, failure_note, retried: retry.asked, retry_answered: retry.answered, mentioned, cited, mention_rate, mention_ci: [mention_lo, mention_hi], citation_rate, share_of_voice, visibility_score, avg_rank: vis_row.avg_rank, aio_presence, aio_citation_rate, brand_known, brand, delta,
     // B-L4: when the two runs are not like for like the customer is TOLD, in the place the change would have been
     delta_not_compared, panel, panel_before, delta_basis: prev ? (like.comparable ? 'compared with ' + String(prev.checked_at || '').slice(0, 10) + ' (' + panel_before + ' questions on ' + engText(engBefore) + ')' : like.why) : 'first run (baseline)',
     // B8-1: the other three headline tiles now carry what "Named in" always had — their own 95% range and their own verdict on the

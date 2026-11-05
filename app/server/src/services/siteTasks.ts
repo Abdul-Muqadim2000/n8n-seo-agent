@@ -3,6 +3,11 @@ import type { FastifyRequest } from 'fastify';
 import {
   cleanDomain,
   deriveSiteTasks,
+  indexImprovementsOf,
+  indexMergePairs,
+  indexMergeVerdict,
+  mergePairsOf,
+  type ContentLogRow,
   googleStillSees,
   indexingCauseOfKey,
   indexingCauseReadings,
@@ -79,7 +84,7 @@ const s = (v: unknown) => (v == null ? '' : String(v));
  */
 export async function engineReadings(org: Pick<OrgRow, 'id'>, site: Pick<SiteRow, 'id' | 'domain'>): Promise<SiteTaskInputs> {
   const d = site.domain;
-  const [growth, vis, full, indexing] = await Promise.all([
+  const [growth, vis, full, indexing, merges] = await Promise.all([
     siteRows<AiGrowthRow>('aiGrowth', d, { sortBy: 'checked_at:desc', max: 1 }).catch(() => [] as AiGrowthRow[]),
     siteRows<AiVisibilityRow>('aiVisibility', d, { sortBy: 'checked_at:desc', max: 10 }).catch(() => [] as AiVisibilityRow[]),
     db.query.reports.findFirst({
@@ -88,6 +93,10 @@ export async function engineReadings(org: Pick<OrgRow, 'id'>, site: Pick<SiteRow
       columns: { payload: true, receivedAt: true },
     }),
     indexingReading(d),
+    // 2026-11-05: improvements the client confirmed at another address than the page they update (null: not read, a stored step stands)
+    siteRows<ContentLogRow>('contentLog', d, { extra: [{ columnName: 'status', condition: 'eq', value: 'published' }], max: 1000 })
+      .then((xs) => ({ pairs: indexMergePairs(indexImprovementsOf(xs)) }))
+      .catch(() => null),
   ]);
   const g = growth[0];
   const inx = g ? ((safeJson<P>(s(g.submitted_json), {}).indexnow ?? {}) as P) : {};
@@ -117,6 +126,7 @@ export async function engineReadings(org: Pick<OrgRow, 'id'>, site: Pick<SiteRow
       ? { receivedAt: full.receivedAt.toISOString(), items: arrOf(rp.reclaim).map((r) => ({ brokenUrl: s(r.broken_url), redirectTo: s(r.redirect_to), links: Number(r.links) || 0, domains: Array.isArray(r.domains) ? r.domains.map(String) : [] })) }
       : null,
     indexing,
+    merges,
   };
 }
 
@@ -359,6 +369,40 @@ async function checkRedirect(domain: string, payload: Record<string, unknown>): 
     return { ok: true, reached: true, message: `It redirects permanently to ${shortPath(end.finalUrl)}, which opens.` };
   }
   return { ok: false, reached: true, message: `The old address still answers ${first.status}.` };
+}
+
+/**
+ * 2026-11-05: each old address and its improved version are one page again (indexMergeVerdict: the old one redirects permanently to the
+ * new one, or the new one is gone / redirects back). Only addresses on the client's own host are opened; nothing that did not answer is
+ * concluded.
+ */
+async function checkMerge(domain: string, payload: Record<string, unknown>): Promise<CheckOutcome> {
+  const pairs = mergePairsOf(payload).filter((x) => onSite(x.from, domain) && onSite(x.to, domain));
+  if (!pairs.length) return { ok: false, reached: true, message: 'None of these addresses is on your website, so there is nothing we can check.' };
+  const out = await Promise.all(
+    pairs.map(async (x) => {
+      let from = x.from.replace(/^http:\/\//i, 'https://');
+      const to = x.to.replace(/^http:\/\//i, 'https://');
+      // the stored form of the old address can differ from the live one (www or not, a trailing slash): a redirect that only moves to
+      // ANOTHER FORM OF THE SAME PAGE is followed first (up to 3 hops), never read as the step's redirect
+      let first = await fetchPublicOnce(from).catch(() => null);
+      for (let hop = 0; hop < 3 && first && first.status >= 300 && first.status < 400 && first.location && samePageUrl(first.location, from) && first.location !== from && onSite(first.location, domain); hop++) {
+        from = first.location;
+        first = await fetchPublicOnce(from).catch(() => null);
+      }
+      const moved = !!first && first.status >= 300 && first.status < 400 && !!first.location;
+      const end = moved ? await fetchPublicText(first!.location!, 64 * 1024).catch(() => null) : null;
+      let other = first && first.status >= 200 && first.status < 300 ? await fetchPublicOnce(to).catch(() => null) : null;
+      // the same for the improved version's own address (its redirect back to the old page is what counts, not a host or slash move)
+      for (let hop = 0; hop < 3 && other && other.status >= 300 && other.status < 400 && other.location && samePageUrl(other.location, to) && onSite(other.location, domain); hop++)
+        other = await fetchPublicOnce(other.location).catch(() => null);
+      return indexMergeVerdict({ from, to }, first, end ? { status: end.status, finalUrl: end.finalUrl } : null, other);
+    }),
+  );
+  const open = out.filter((v) => !v.done);
+  if (open.some((v) => !v.reached) && !open.some((v) => v.reached)) return { ok: false, reached: false, message: open.map((v) => v.message).join(' ') };
+  if (!open.length) return { ok: true, reached: true, message: out.map((v) => v.message).join(' ') };
+  return { ok: false, reached: true, message: open.map((v) => v.message).join(' ') };
 }
 
 /** A website's sitemap addresses and whether the whole tree was read (FIX_CONTRACT decision 2, A1). */
@@ -628,6 +672,8 @@ function checkOf(domain: string, kind: SiteTaskKind, payload: Record<string, unk
       return checkIndexing(domain, payload, opts).then((out) => googleStillSeesOutcome(payload, out));
     case 'index_links':
       return checkLinks(domain, payload);
+    case 'index_merge':
+      return checkMerge(domain, payload);
     default: {
       const never: never = kind;
       // a row of a kind this build does not know (written by a newer one): nothing is read and nothing recorded

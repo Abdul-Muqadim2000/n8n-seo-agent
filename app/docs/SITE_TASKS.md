@@ -46,6 +46,16 @@ One model for every step on the client's own website: **a site task**.
 - **Skip**: a member can skip a task ("Not for us", e.g. a redirect they do not want); it leaves the to-do list, stays visible as skipped,
   and can be restored. Every check, skip and restore by a person is written to the company's audit log.
 
+### `index_merge` (2026-11-05, production evidence on devaicon.com)
+
+One step, key `indexing:merge`: the old pages whose improved version the client confirmed at ANOTHER address (the publish check warned
+"planned as an update of A, but you sent B" and they confirmed). Built from the content log (`existing_page_url` = A, `published_url` = B,
+status published; `indexMergePairs`, newest per A, at most 10), never from the engine. Done (`indexMergeVerdict`, our own fetch) when A
+answers a permanent redirect (301 / 308) ending on B and B opens, or when A opens and B is gone (404 / 410) or redirects permanently back to
+A; a 302 / 307 is "almost". A redirect of A that only moves to another form of the same page (www, trailing slash) is followed first. Guide
+`index-merge-improved`; recommendation `ix:merge`. The Indexing page shows each A as "Improved version published at another address"
+(`improveStateOf` = 'moved', the engine's IX.improveState), never "Improve this page".
+
 ### Rules added by the review (2026-10-28, before the first deploy)
 
 - **Redirects read only full backlink reports.** The weekly light watch does not look for broken pages, so its silence would have marked

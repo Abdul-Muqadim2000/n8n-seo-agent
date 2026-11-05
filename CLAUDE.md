@@ -63,7 +63,19 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-10-31, page-quality Waves 0-0.7 DEPLOYED to production - latest)
+## Status (2026-11-05, four devaicon.com client reports fixed + deployed; VM now STANDARD - latest)
+Each report was checked on production first (owner allowed prod reads + deploys for this project, 2026-11-05). (1) Publish check stuck
+"Queued" 69 min = Spot preemptions (24 on 11-05); watcher `engineFailures.ts` now closes any run overdue (3x eta, min 10 min,
+`shared/src/run-watch.ts`) when nothing in its n8n chain (door, work, handed-off) is alive; restarts free checks / never-ran work once
+(4af51eec). (2) Privacy page in Needs you: one `noPageRow` rule in `ladders.ts` (5155ac65). (3) AI visibility: one missing answer is a
+calm plain note, raw provider error kept in `errors_list[].raw` (408eb98d); devaicon is named in 0 AI answers (real, timeline). (4) Index
+coverage: client published improvements at NEW /services/ URLs after our warning; old pages now get "Improved at another address" + site
+task `indexing:merge` (301 check), same-address improvements wait for Google (916697f7, 804bc4c9; `seo_index_pages.improved_at/_to`).
+Also harness S28 date bug (61af135e, harness 16329 / 0). Deployed: backup pg/2026-11-05/*T164419Z, VM -> STANDARD (bootstrap.sh default
+now STANDARD), engine (node-diff vs prod = 0 before and after), API at 09b2f5b8 (later commits are harness / infra docs only; rollback image alaventra-app:rollback-441797df). Web =
+PR #57, merge needs the owner (classifier). Client step: 301 the three old devaicon URLs to their /services/ versions.
+
+## Status (2026-10-31, page-quality Waves 0-0.7 DEPLOYED to production)
 Deployed 2026-10-30 21:43-22:15 UTC with the owner's go-ahead: backup `pg/2026-10-30/*T214343Z.dump`; API on the VM at `c28203f2` (rollback image
 `alaventra-app:rollback-05002d55`), healthy, no migration; web via PR #50 -> main `f5dbbeb1` (Vercel live: "about 114 credits" in the bundle);
 engine `deploy_engine.py --no-build --apply` (guard ok, 20 updated, 28 published, 29 active, 0 missing; remaining dry-run diffs are only the

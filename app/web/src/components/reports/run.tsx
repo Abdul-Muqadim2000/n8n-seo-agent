@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Check, Coins, Loader2, Mail } from 'lucide-react';
-import { formatCredits, GOALS, PAGE_TYPES, type ModeId, type Run, type RunCredits } from '@seo/shared';
+import { formatCredits, GOALS, PAGE_TYPES, runOverdueMinutes, RUN_RESULT_GRACE_MINUTES, type ModeId, type Run, type RunCredits } from '@seo/shared';
 import { cn, fmtBytes } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Meter } from '@/components/ui/misc';
@@ -61,6 +61,8 @@ export function RunProgress({ run, now }: { run: Run; now: number }) {
   // the engine reports no step progress: spread the steps over the estimate, never mark the last one done
   const current = Math.min(steps.length - 1, Math.floor(Math.min(0.99, ratio) * steps.length));
   const late = ratio > 1.5;
+  // the server's own moment (engineFailures.ts): past it, it asks the engine whether anything is still working on the run
+  const overdue = elapsed >= runOverdueMinutes(run.etaMinutes);
   const emailCopy = (run.input as { emailCopy?: boolean }).emailCopy === true;
   const status = run.status === 'running' ? 'Working on it' : run.status === 'submitting' ? 'Sending to the SEO engine' : 'Queued in the SEO engine';
   return (
@@ -88,7 +90,13 @@ export function RunProgress({ run, now }: { run: Run; now: number }) {
           </div>
         </div>
         <div className="min-w-0">
-          {late && <p className="mb-3 rounded-lg bg-warning-soft px-3 py-2 text-[13px] text-warning-text">Taking longer than usual. Large sites and busy AI models slow some steps; the page updates by itself when results arrive.</p>}
+          {overdue ? (
+            <p role="status" className="mb-3 rounded-lg bg-warning-soft px-3 py-2 text-[13px] text-warning-text">
+              This is taking far longer than it should (usually about {eta} min). We are checking with the SEO engine whether it is still working on it. If the run stopped, it is closed here within about {RUN_RESULT_GRACE_MINUTES} minutes, with the reason, and started again for you where that is safe. No credits are charged for a run that stopped.
+            </p>
+          ) : (
+            late && <p className="mb-3 rounded-lg bg-warning-soft px-3 py-2 text-[13px] text-warning-text">Taking longer than usual. Busy AI models, slow websites and large sites can slow some steps; the page updates by itself when results arrive.</p>
+          )}
           {steps.length > 0 && (
             <ol className="relative space-y-1">
               {steps.map((s, i) => {

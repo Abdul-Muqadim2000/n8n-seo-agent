@@ -209,7 +209,8 @@ async function apiSized<T>(path: string): Promise<{ data: T; bytes: number }> {
   } catch (err) {
     throw new HttpError(502, 'n8n is not reachable (' + String((err as Error).message || err) + ')');
   }
-  if (!res.ok) throw new HttpError(502, `n8n API ${path.split('?')[0]} answered ${res.status}`);
+  // a 404 is n8n saying it has no such record, which is an answer, not an outage: callers tell the two apart by the code
+  if (!res.ok) throw new HttpError(502, `n8n API ${path.split('?')[0]} answered ${res.status}`, res.status === 404 ? N8N_NOT_FOUND : undefined);
   const text = await res.text();
   return { data: JSON.parse(text) as T, bytes: Buffer.byteLength(text) };
 }
@@ -525,6 +526,24 @@ export async function executions(workflowId: string, status: 'error' | 'success'
   return r.data ?? [];
 }
 
+/** The code of an n8n API error that is a 404: n8n has no such record (an execution pruned, or never saved). */
+export const N8N_NOT_FOUND = 'n8n_not_found';
+export const isN8nNotFound = (err: unknown): boolean => err instanceof HttpError && err.code === N8N_NOT_FOUND;
+
+/**
+ * An execution's status and when it ended: null when n8n has no such execution (404); undefined when n8n could not be asked (down, a
+ * timeout), so a caller never takes an outage for an answer.
+ */
+export async function executionState(id: string): Promise<{ status: string; stoppedAt: number | null } | null | undefined> {
+  try {
+    const d: { status?: string; stoppedAt?: string | null } = await api(`/executions/${encodeURIComponent(id)}`);
+    const stopped = d.stoppedAt ? Date.parse(d.stoppedAt) : NaN;
+    return { status: d.status ?? 'unknown', stoppedAt: Number.isFinite(stopped) ? stopped : null };
+  } catch (err) {
+    return isN8nNotFound(err) ? null : undefined;
+  }
+}
+
 /** An execution's status ("success", "error", "crashed", "canceled", "running", …), or null when n8n no longer has it (pruned, 404). */
 export async function executionStatus(id: string): Promise<string | null> {
   try {
@@ -547,6 +566,21 @@ export function subExecutionIn(d: { data?: { resultData?: { runData?: Record<str
       if (v != null && v !== '') return String(v);
     }
   return null;
+}
+
+/** Every execution the nodes of this run started (an Execute Workflow node with "wait" off hands work on: AI visibility, backlinks). Pure. */
+export function subExecutionsIn(d: Parameters<typeof subExecutionIn>[0]): string[] {
+  const out: string[] = [];
+  for (const tasks of Object.values(d.data?.resultData?.runData ?? {}))
+    for (const t of tasks ?? []) {
+      const v = t?.metadata?.subExecution?.executionId;
+      if (v != null && v !== '' && !out.includes(String(v))) out.push(String(v));
+    }
+  return out;
+}
+
+export async function subExecutionsOf(id: string): Promise<string[]> {
+  return subExecutionsIn(await api(`/executions/${encodeURIComponent(id)}?includeData=true`));
 }
 
 export async function subExecutionOf(id: string): Promise<string | null> {

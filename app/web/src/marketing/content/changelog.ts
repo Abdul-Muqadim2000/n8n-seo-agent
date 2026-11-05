@@ -34,6 +34,20 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-11-05',
+    version: '4.8',
+    title: 'Improved pages followed until Google reads them, and stopped runs closed within minutes',
+    summary: 'Index coverage now records the pages you improved and published and follows them until Google has read the new version. Runs that stop on our side are closed and started again within minutes, and the Pipeline and AI visibility pages say exactly what happened.',
+    highlights: [
+      'When you improve a page Google left out and report it as published, Index coverage shows it as improved and waiting for Google the same day, instead of offering "Improve this page" again. It stays in the list of pages you already had, we look up Google\'s reading of it again in the days after, and it is among the pages worth asking Google to read again in Search Console. We never call it indexed ourselves: once Google reads the new version, the page is in search, or it shows that Google read your improved version and still left it out, with what to look at next',
+      'When an improved page goes live at a new address while the old address still opens, the two pages compete for the same search. The old page then shows as improved at another address instead of offering "Improve this page" again, and a step on your Pipeline asks for a permanent (301) redirect from the old address to the new one, with a guide for your website platform. We open the old address every day and tick the step off once it redirects, or once you put the improved text back on the old address and remove the new one. The publish check says this before you confirm a different address, and again after',
+      'A run that stops on our side no longer leaves you waiting for hours. When a run takes far longer than it should, we check whether it is still working: if it stopped, it is closed within minutes with the reason, and a free check such as "I published a page" is started again for you. A run that stopped before it did any work is started again too, and no credits are charged for a run that stopped. The run page says plainly that we are checking, instead of only "taking longer than usual"',
+      'A page that was never written, because our check advised against it or the run stopped, is no longer listed in Needs you as a written page waiting to be published, and a keyword waiting for your OK is no longer offered as a draft in the "I published a page" form',
+      'When one AI engine does not answer one of your questions on a run, the AI visibility page shows a short note in plain words, says the question is asked again on the next run and that your rates count only real answers, instead of a warning with the engine\'s raw error message. A warning is kept for when many answers are missing',
+    ],
+    features: ['index-coverage', 'ai-visibility', 'autopilot'],
+  },
+  {
     date: '2026-10-31',
     version: '4.7',
     title: 'Written pages you can publish with confidence',

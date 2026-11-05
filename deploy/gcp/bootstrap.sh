@@ -12,7 +12,7 @@
 #
 # Settings (environment variables; the defaults are the decisions of 2026-10-18):
 #   PROJECT alaventra-prod · BILLING 0122E1-574F3D-7CDF90 · REGION me-central1 · ZONE me-central1-a · NAME alaventra (resource prefix)
-#   MACHINE e2-medium · PROVISIONING SPOT (STANDARD: never preempted, about $13 a month more; RUNBOOK §8) · BOOT_TYPE pd-balanced BOOT_SIZE 20 · DATA_TYPE pd-balanced DATA_SIZE 20 (RUNBOOK §2: why not pd-standard)
+#   MACHINE e2-medium · PROVISIONING STANDARD (SPOT: about $13 a month less, preempted often; RUNBOOK §8) · BOOT_TYPE pd-balanced BOOT_SIZE 20 · DATA_TYPE pd-balanced DATA_SIZE 20 (RUNBOOK §2: why not pd-standard)
 #   DOMAIN 34-18-208-219.sslip.io (until a real one) · ALERT_EMAIL muqadim2000@gmail.com · REF feature/seo-agent-v4.5 (branch the VM runs)
 #   GCLOUD gcloud (the command to run gcloud with; e.g. a Docker wrapper)
 set -euo pipefail
@@ -33,9 +33,9 @@ REGION=${REGION:-me-central1}
 ZONE=${ZONE:-me-central1-a}
 NAME=${NAME:-alaventra}
 MACHINE=${MACHINE:-e2-medium}
-# SPOT (owner, 2026-11-02: no extra cost for now). A preemption kills the runs in flight; the app starts a crashed run again once
-# (services/engineFailures.ts). PROVISIONING=STANDARD (live-migrated, never preempted, about $13 a month more) if that proves too often.
-PROVISIONING=${PROVISIONING:-SPOT}
+# STANDARD (owner, 2026-11-05, after 24 Spot preemptions that day, every 4-8 minutes by the afternoon: client runs were cut off all day
+# and a deploy could not finish): live-migrated, never preempted, about $13 a month more. PROVISIONING=SPOT goes back to Spot.
+PROVISIONING=${PROVISIONING:-STANDARD}
 case "$PROVISIONING" in STANDARD) SCHED=(--provisioning-model=STANDARD --maintenance-policy=MIGRATE) ;;
   SPOT) SCHED=(--provisioning-model=SPOT --instance-termination-action=STOP) ;; *) echo "unexpected PROVISIONING: $PROVISIONING" >&2; exit 2 ;; esac
 BOOT_TYPE=${BOOT_TYPE:-pd-balanced}

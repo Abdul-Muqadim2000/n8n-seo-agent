@@ -55,13 +55,15 @@ return metrics.map((m, i) => {
   let html = '<div style="font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#0f172a;max-width:900px">';
   html += '<h2 style="margin:0 0 2px;font-size:20px">AI search visibility: ' + esc(m.domain) + '</h2>' + p_(esc(m.checked_at.slice(0, 10)) + ' · ' + (M.headline ? esc(M.headline.text) : m.questions.length + ' buyer questions × ' + engs.length + ' AI engines · ' + n(M.samples) + ' answers counted' + (M.pulse_samples ? ' (' + n(M.pulse_samples) + ' from the daily pulse)' : '')) + (m.on_demand ? ' · on-demand run' : '') + (m.previous ? (M.delta_not_compared ? ' · ' + esc(String(M.delta_not_compared).replace(/\.$/, '')) : ' · compared with ' + esc(String(m.previous.checked_at).slice(0, 10))) : ' · first run (baseline)'), true);
   // D19: every figure counts answered requests only, so the failures are named here instead of being invisible
-  if (M.errors) html += p_(M.errors + ' of ' + n(M.requests || M.asked_all) + ' requests failed this run (' + M.error_rate + '%)'
+  // 2026-11-05 (client report): the same plain sentence as the page's note (FAIL in _ai_stats.js), never the engine's raw message
+  if (M.errors && M.failure_note && M.failure_note.text) html += p_(esc(M.failure_note.text), true);
+  else if (M.errors) html += p_(M.errors + ' of ' + n(M.requests || M.asked_all) + ' requests failed this run (' + M.error_rate + '%)'
     + (M.retried ? ', ' + M.retry_answered + ' of ' + M.retried + ' answered when they were sent again' : '') + ': '
     + esc((M.errors_list || []).map(e => e.engine + ' — ' + e.message + (e.count > 1 ? ' (x' + e.count + ')' : '')).join('; '))
     + '. ' + (M.headline ? n(M.headline.came_back) + ' of ' + n(M.headline.requests) + ' came back; the rates below count ' + esc(M.headline.text) + '.' : 'The rates below count the ' + n(M.answered) + ' answers that came back.'), true);
   // R85: a lookup that failed is said where the volumes are read, never left as "—" with no reason
   if (M.volume_lookup && M.volume_lookup.note) html += p_(esc(M.volume_lookup.note), true);
-  html += briefBox(b) + alertBox(m.alerts);
+  html += briefBox(b) + alertBox((m.alerts || []).filter(a => a.level !== 'info'));   // 2026-11-05: a note (info) is said above, never in the red box
   // B8-9: the alerts that rest on a test were judged together - say across how many, and at what threshold
   if (M.multiple_tests && M.multiple_tests.tests) html += p_(esc(M.multiple_tests.note), true);
   const sig = d.significant === true ? ' <b>real change</b>' : d.significant === false ? ' (within noise)' : '';

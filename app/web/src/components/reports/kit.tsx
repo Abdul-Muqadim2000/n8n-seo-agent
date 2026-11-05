@@ -1,5 +1,5 @@
 import { Component, useId, useState, type ErrorInfo, type ReactNode } from 'react';
-import { AlertTriangle, BellRing, CheckCircle2, ChevronDown, CircleMinus, Coins, XCircle } from 'lucide-react';
+import { AlertTriangle, BellRing, CheckCircle2, ChevronDown, CircleMinus, Coins, Info, XCircle } from 'lucide-react';
 import { compactNumber, formatCredits, formatUsd } from '@seo/shared';
 import { cn, downloadText } from '@/lib/utils';
 import { StatusBadge, verdictTone, type Tone } from '@/components/ui/badge';
@@ -341,8 +341,33 @@ export function CreditsCard({
 const alertTone = (level: string): IconTileTone => (level === 'high' || level === 'critical' ? 'critical' : level === 'medium' ? 'warning' : 'blue');
 
 /** "high" / "medium" alert lists from the monitors ({ level, text }): one card, a status row per alert. */
-export function AlertList({ alerts }: { alerts: P[] }) {
-  if (!alerts.length) return null;
+export function AlertList({ alerts: all }: { alerts: P[] }) {
+  // 2026-11-05: an `info` item is a note about the run, not a change that needs a look: it gets a calm block of its own
+  const alerts = all.filter((a) => str(a.level).toLowerCase() !== 'info');
+  const notes = all.filter((a) => str(a.level).toLowerCase() === 'info');
+  if (!alerts.length && !notes.length) return null;
+  if (!alerts.length) return <RunNotes notes={notes} />;
+  return (
+    <>
+      <AlertBlock alerts={alerts} />
+      {notes.length > 0 && <RunNotes notes={notes} />}
+    </>
+  );
+}
+
+function RunNotes({ notes }: { notes: P[] }) {
+  return (
+    <Block title="About this run" description="Nothing to act on" icon={<Info />} iconTone="blue" flush>
+      <ul className="divide-y divide-line">
+        {notes.map((a, i) => (
+          <InsightItem key={i} tone="blue" title={str(a.text) || str(a.message)} />
+        ))}
+      </ul>
+    </Block>
+  );
+}
+
+function AlertBlock({ alerts }: { alerts: P[] }) {
   const worst = alerts.some((a) => ['high', 'critical'].includes(str(a.level).toLowerCase())) ? 'critical' : alerts.some((a) => str(a.level).toLowerCase() === 'medium') ? 'warning' : 'blue';
   return (
     <Block title={alerts.length === 1 ? 'Alert' : `${alerts.length} alerts`} description="Changes that need a look" icon={<BellRing />} iconTone={worst} flush>

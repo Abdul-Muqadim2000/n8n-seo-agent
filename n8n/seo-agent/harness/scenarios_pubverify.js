@@ -59,6 +59,13 @@ module.exports = async (ctx) => {
     check('the bare host with a trailing slash is the same page: same outcome (not "another address")', bare.c.verify === 'refresh_not_live' && notMoved(bare.c, 'written'), J({ v: bare.c.verify }));
     const elsewhere = await check1({ keyword: 'erp systems in uae', content_request_id: '5102', url: U_BC }, ok200(BC), [ERPUAE], [RUNG_ERP]);
     check('a refresh sent at another address: refresh_other_address, confirmable, nothing recorded', elsewhere.c.verify === 'refresh_other_address' && elsewhere.c.confirmable === true && notMoved(elsewhere.c, 'written'), J({ v: elsewhere.c.verify }));
+    // production 2026-11-05 (devaicon.com): the client confirmed three refreshes at new addresses; the old pages still open, so the two compete
+    check('the warning already says what confirming means: the old address then needs a permanent (301) redirect', /redirect the old address to the new one with a permanent \(301\) redirect/.test(elsewhere.c.verify_message), elsewhere.c.verify_message);
+    const confirmed = await check1({ keyword: 'erp systems in uae', content_request_id: '5102', url: U_BC, confirm_mismatch: true }, ok200(BC), [ERPUAE], [RUNG_ERP]);
+    check('confirmed at another address: recorded (existing_page_url kept, published_url the new address), and the note says the old page needs a redirect to it, in the summary too',
+      confirmed.c.recorded_live === true && confirmed.c.log_row.existing_page_url === U_ERP && confirmed.c.log_row.published_url === U_BC
+      && /still opens\. Redirect it to https:\/\/www\.techand\.ai\/dynamics-365-business-central-uae with a permanent \(301\) redirect/.test(confirmed.c.verify_note) && confirmed.c.summary.includes(confirmed.c.verify_note) && !/[—…“”]/.test(confirmed.c.verify_note),
+      J({ rec: confirmed.c.recorded_live, row: confirmed.c.log_row, note: confirmed.c.verify_note }));
   });
 
   await guard('PV3 one address, two keywords', async () => {
