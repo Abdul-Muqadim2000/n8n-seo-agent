@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { AlertTriangle, BadgeCheck, BarChart3, Bot, CalendarClock, CheckCircle2, CircleMinus, Coins, Eye, FileText, Gauge, Globe, Link2, ListOrdered, MessageSquareQuote, MessagesSquare, PieChart, Search, ShieldCheck, Smile, Sparkles, Users, XCircle } from 'lucide-react';
-import { AI_ENGINES, questionWin, type ReportDetail } from '@seo/shared';
+import { AI_ENGINES, aiAlertsOf, questionWin, type ReportDetail } from '@seo/shared';
 import { fmtDateTime } from '@/lib/utils';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Callout } from '@/components/ui/feedback';
@@ -103,7 +103,7 @@ export function AiVisibilityReport({ report }: { report: ReportDetail }) {
 
   const vis = num(m.visibility_score);
   // D19 (fix plan of 2026-10-11): the rates count answered requests only, so the hint says how many requests failed
-  const failed = num(m.errors) ? ` · ${num(m.errors)} request${num(m.errors) === 1 ? '' : 's'} failed` : '';
+  const failed = num(m.errors) ? ` · ${num(m.errors)} answer${num(m.errors) === 1 ? '' : 's'} not read this time` : '';   // 2026-11-05: plain words
   const mentionHint =
     arr<number>(m.mention_ci).length === 2
       ? `95% range ${pct(arr<number>(m.mention_ci)[0], 0)} to ${pct(arr<number>(m.mention_ci)[1], 0)} · ${num(m.samples) ?? num(m.answered) ?? 0} answers${delta.significant === true ? ' · real change' : delta.significant === false ? ' · change within noise' : ''}${failed}`
@@ -138,7 +138,8 @@ export function AiVisibilityReport({ report }: { report: ReportDetail }) {
       />
       {has(p.brief) && <BriefCard brief={obj(p.brief)} />}
       {notCompared && <p className="rounded-lg bg-surface-2 px-3 py-2 text-[13px] leading-snug text-ink-2">{notCompared}</p>}
-      <AlertList alerts={objs(p.alerts)} />
+      {/* 2026-11-05: through aiAlertsOf, so a report stored with the engine's raw failure line reads in plain words */}
+      <AlertList alerts={aiAlertsOf(objs(p.alerts)).map((a) => ({ ...a }))} />
       {/* B8-9: the alerts that rest on a test were judged together, at one stated threshold */}
       {(num(obj(m.multiple_tests).tests) ?? 0) > 0 && <p className="text-xs text-ink-3">{str(obj(m.multiple_tests).note)}</p>}
 

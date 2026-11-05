@@ -101,6 +101,30 @@ describe('A4: the engine\'s separators', () => {
     expect(aiAlertsOf('[{"level":"low","text":"a, b"}]')).toEqual([{ level: 'low', text: 'a, b' }]);
     expect(aiAlertsOf('')).toEqual([]);
   });
+  // 2026-11-05 (client report, devaicon.com): the exact stored line from production, under "Alerts from the latest run" every week
+  const CLIENT =
+    'low: 1 of 45 AI requests failed (2 of 3 answered on the retry): Google AI Overview — Internal SE Server Error.. 44 of 45 came back; the rates below count 71 answers to the 9 buyer questions on the 5 weekly engines (44 this run + 27 from the daily pulse).';
+  const PLAIN =
+    "1 of 45 AI answers is missing this time: Google AI Overview did not answer, even when asked again a little later. This happens now and then on the AI engines' side, not on your website. That question is asked again on the next run. 44 of 45 came back; the rates count only real answers: 71 answers to the 9 buyer questions on the 5 weekly engines (44 this run + 27 from the daily pulse).";
+  it('a stored raw failure line is rewritten in plain words and becomes a note, not an alert (same sentence as the engine writes now)', () => {
+    expect(aiAlertsOf(CLIENT)).toEqual([{ level: 'info', text: PLAIN }]);
+    expect(aiAlertsOf(`${CLIENT} | high: AI states something wrong about you (ChatGPT): x`)).toEqual([
+      { level: 'info', text: PLAIN },
+      { level: 'high', text: 'AI states something wrong about you (ChatGPT): x' },
+    ]);
+    expect(aiAlertsOf([{ level: 'low', text: CLIENT.slice(5) }])).toEqual([{ level: 'info', text: PLAIN }]);
+  });
+  it('the new wording is kept as it is, and other failures are never called the engines\' side', () => {
+    expect(aiAlertsOf(`info: ${PLAIN}`)).toEqual([{ level: 'info', text: PLAIN }]);
+    const refused = aiAlertsOf('low: 1 of 45 AI requests failed (0 of 1 answered on the retry): Perplexity — task error 40501: Invalid Field: x.. 44 of 45 came back; the rates below count 44 answers.')[0];
+    expect(refused.level).toBe('low');
+    expect(refused.text).toMatch(/^1 of 45 AI answers is missing this time: Perplexity could not be asked, also on a second try\./);
+    expect(refused.text).not.toMatch(/engines' side|Invalid Field|40501/);
+    const many = aiAlertsOf('medium: 6 of 45 AI requests failed (0 of 6 answered on the retry): Google AI Mode — Internal SE Server Error.; ChatGPT — no response. 39 of 45 came back; the rates below count 39 answers.')[0];
+    expect(many.level).toBe('medium');
+    expect(many.text).toMatch(/Google AI Mode and ChatGPT did not answer/);
+    expect(many.text).toMatch(/ranges are wider/);
+  });
   it('our cited URLs are space-joined; a JSON array is read too', () => {
     expect(aiUrlsOf('https://d/a https://d/b')).toEqual(['https://d/a', 'https://d/b']);
     expect(aiUrlsOf('["https://d/a",{"u":"https://d/b"}]')).toEqual(['https://d/a', 'https://d/b']);
