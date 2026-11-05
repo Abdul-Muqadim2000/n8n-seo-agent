@@ -271,17 +271,47 @@ interface LogState {
   writtenAt: string | null;
 }
 
+/**
+ * W06-B (2026-10-30, docs/page-quality-2026-10-29/WAVE05.md 3.2, K4 first try): a page run that FAILED wrote no page. Its content-log row
+ * is `failed` once the engine's failure path or the app (releaseFailedPages) has marked it; a `started` row whose request id belongs to a
+ * run the app knows failed is the same thing, read before it was marked (a run that failed before this deploy, or a mark that did not
+ * land). Neither is "a page already written" nor a page waiting to be published.
+ */
+export function failedPageRow(l: Pick<ContentLogRow, 'status' | 'request_id'>, failedRequests?: ReadonlySet<string>): boolean {
+  if (l.status === 'failed') return true;
+  return l.status === 'started' && !!failedRequests && failedRequests.has(String(l.request_id ?? ''));
+}
+
+/** W06-B: the request ids of the website's page runs the app saw fail (their opening content-log rows wrote no page). */
+export function failedPageRequests(runs: Pick<SiteRun, 'mode' | 'status' | 'requestId'>[]): Set<string> {
+  return new Set(runs.filter((r) => r.mode === 'keyword' && r.status === 'failed' && r.requestId).map((r) => String(r.requestId)));
+}
+
+/**
+ * Prod 2026-11-05 (devaicon.com "privacy policy"): ONE rule for "this content-log row stands for no page", read by every app path that
+ * counts pages written and not published (the Pipeline's waiting pages and its "Publish N written page" item, the ladder cards, the
+ * pile-up warning, "already written"): a row of a run that failed or finished without a page (`failed`, W06-B and the AVOID close of
+ * 2026-11-03) and a keyword held for the client's OK (`held`, W05-B; it has its own Needs-you item). The engine's count
+ * (v5/code/_waiting.js WAITS) agrees: only `written` / `not_ready` wait. A `not_ready` draft is a written page and still waits.
+ */
+export function noPageRow(l: Pick<ContentLogRow, 'status' | 'request_id'>, failedRequests?: ReadonlySet<string>): boolean {
+  return l.status === 'held' || failedPageRow(l, failedRequests);
+}
+
 /** State of a page from its content-log rows (newest first), reports and app runs. */
-function logState(logs: ContentLogRow[], reports: PageReport[], runs: SiteRun[], now: number): LogState | null {
+function logState(allLogs: ContentLogRow[], reports: PageReport[], runs: SiteRun[], now: number): LogState | null {
   const active = runs.find((r) => ACTIVE_RUN.includes(r.status) && now - Date.parse(r.createdAt) < 12 * 3600_000);
   if (active) return { state: 'writing', writtenAt: null };
   const latestRun = runs[0];
   if (latestRun?.status === 'failed') {
     const after = Date.parse(latestRun.createdAt);
     const arrived = reports.some((r) => Date.parse(r.receivedAt) >= after);
-    const retried = logs.some((l) => Date.parse(l.started_at) > after + 10 * 60_000);
+    const retried = allLogs.some((l) => Date.parse(l.started_at) > after + 10 * 60_000);
     if (!arrived && !retried) return { state: 'planned', writtenAt: null };
   }
+  // rows that stand for no page are not a written page; when they are all the keyword has, no page exists: it is planned again
+  const logs = allLogs.filter((l) => !noPageRow(l, failedPageRequests(runs)));
+  if (!logs.length && allLogs.length) return { state: 'planned', writtenAt: null };
   const log = logs.find((l) => l.status !== 'published' && !l.published_url);
   if (!log) return null;
   const started = s(log.started_at);
