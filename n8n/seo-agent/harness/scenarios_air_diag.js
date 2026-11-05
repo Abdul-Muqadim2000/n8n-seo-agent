@@ -299,8 +299,14 @@ module.exports = async (ctx) => {
     const u0c = DC.find(c => c.label.stage === 'S1' && c.label.basis === 'unknown_index' && c.engine === 'chatgpt'); const u0 = ARD.diagnose(cut(u0c.args, 'chatgpt', 2)).engines.chatgpt;
     const d0c = DC.find(c => c.label.stage === 'S1' && c.label.basis === 'direct' && c.engine === 'chatgpt'); const d0 = ARD.diagnose(cut(d0c.args, 'chatgpt', 2)).engines.chatgpt;
     check('AD15 a provisional S1 needs a basis: ChatGPT\'s retrieved set without the client -> S1 direct provisional; no retrieval reading -> unmeasured', d0.stage === 'S1' && d0.basis === 'direct' && d0.provisional === true && u0.stage === 'unmeasured' && u0.sub === 'too_few', J({ d0, u0 }));
-    const na = ARD.diagnose({ ...b0c.args, units60: b0c.args.units60.filter(u => u.engine !== 'copilot'), answers8: b0c.args.answers8.filter(a => a.engine !== 'copilot') }).engines.copilot;
-    check('AD15 an engine the site does not ask at all stays unmeasured / not_asked (no provisional stage)', na.stage === 'unmeasured' && na.sub === 'not_asked' && na.provisional === false, J(na));
+    const noCop = (args) => ({ ...args, units60: args.units60.filter(u => u.engine !== 'copilot'), answers8: args.answers8.filter(a => a.engine !== 'copilot') });
+    const naD = ARD.diagnose(noCop(b0c.args)); const na = naD.engines.copilot;
+    const naD2 = ARD.diagnose({ ...noCop(b0c.args), engines: b0c.args.engines.filter(e => e !== 'copilot') });
+    check('AD15 an engine the site does not ask, but whose index does not hold the site (not in Bing Webmaster) -> provisional S0 with asked false, also when the caller does not list it; it never moves best_stage',
+      na.stage === 'S0' && na.sub === 'not_indexed' && na.provisional === true && na.asked === false && na.n === 0 && naD2.engines.copilot && naD2.engines.copilot.sub === 'not_indexed' && naD2.best_stage === ARD.diagnose({ ...noCop(b0c.args), index: { ...b0c.args.index, bing: { in_account: null, crawled: new Map() } } }).best_stage, J(na));
+    const naU = ARD.diagnose({ ...noCop(b0c.args), index: { ...b0c.args.index, bing: { in_account: null, crawled: new Map() } } });
+    const naL = ARD.diagnose({ ...noCop(b0c.args), index: { ...b0c.args.index, bing: { in_account: null, crawled: new Map() } }, engines: b0c.args.engines.filter(e => e !== 'copilot') });
+    check('AD15 an engine the site does not ask with no S0 finding: unmeasured / not_asked when listed, no cell when not listed', naU.engines.copilot.stage === 'unmeasured' && naU.engines.copilot.sub === 'not_asked' && naU.engines.copilot.provisional === false && !('copilot' in naL.engines), J(naU.engines.copilot));
 
   });
 };

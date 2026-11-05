@@ -3424,6 +3424,25 @@ const ARD = (() => {
       let n = 0, b = 0; for (const e of engs) { const t = cellsE(e, 28); n += t[0]; b += t[10]; } return n >= 4 && b / n <= 0.2; })();
     const byCitation = intent === 'informational' || nobodyNamed;
     const askedBySite = new Set(); for (const L of [units60, answers8]) for (const [e2, t] of lastByEngine(L)) if (!Number.isFinite(N) || !Number.isFinite(t) || (t > N - 56 * DAY && t <= N + 6 * 3600e3)) askedBySite.add(e2);
+    // S0 per engine: robots block, a JavaScript-only page for a fetcher that does not render, not in the engine's index. A reading that shows the
+    // engine already reads the client (cited, retrieved) beats the page inference, and a ranking in the engine's own index beats Index Coverage;
+    // a Google ranking proves nothing about a fetcher that does not render (Perplexity). -> { sub, ev } or null
+    const eligibility = (e, cited, retrieved, rk, ix) => {
+      const blockBot = (BOTS_OF[e] || []).map(b => [b, robotsVerdict(access, b)]).find(x => x[1] && x[1].ok === false);
+      const blockedListed = Array.isArray(access && access.blocked_engines) && access.blocked_engines.map(engOf).includes(e);
+      if (blockBot || blockedListed) return { sub: 'blocked', ev: { kind: 'robots', bot: blockBot ? blockBot[0] : (BOTS_OF[e] || [''])[0], rule: blockBot ? blockBot[1].rule : '', at: S(access && access.read_at) } };
+      const read = cited > 0 || retrieved > 0; const proof = read || rk.top10 || (ix === 'google' && rk.anyOurs);
+      if (!read && JS_BLIND.has(e) && jsOnly(mapped)) return { sub: 'js_only', ev: { kind: 'page', url: S(mapped.url), words_raw: num(mapped.words_raw, 0), what: 'little text without JavaScript', at: S(mapped.checked_at) } };
+      if (!proof && ix === 'google' && e !== 'perplexity' && G.size) {
+        const gscHit = gsc && queries.some(q => num(look(gsc, q), 0) > 0);
+        const siteIdx = [...G.entries()].filter(([k]) => hostIn('https://' + k, OH)); const anyIdx = siteIdx.some(([, v]) => INDEXED.test(v && typeof v === 'object' ? lc(v.state) : lc(v)));
+        const ms = mapped ? gState(mapped.url) : ''; const notIdx = mapped ? NOT_INDEXED.test(ms) || (!ms && siteIdx.length > 0 && !anyIdx) : siteIdx.length > 0 && !anyIdx;
+        if (!gscHit && notIdx) return { sub: 'not_indexed', ev: { kind: 'index', url: mapped ? S(mapped.url) : '', state: ms || 'no page of the site indexed', what: mapped ? 'the page for this question is not in Google' : 'no page of the site is in Google' } }; }
+      if (!proof && ix === 'bing') { const B = (index && index.bing) || {}; const inAcc = B.in_account; const crawled = B.crawled ? asMap(B.crawled) : new Map();
+        if (inAcc === false) return { sub: 'not_indexed', ev: { kind: 'bing', what: 'the site is not in the Bing Webmaster account' } };
+        if (inAcc === true && mapped && !crawled.has(AIRF.urlKey(mapped.url)) && !S(mapped.bing_crawled_at) && Number.isFinite(msOf(mapped.submitted_at)) && N - msOf(mapped.submitted_at) >= 14 * DAY)
+          return { sub: 'not_indexed', ev: { kind: 'bing', url: S(mapped.url), what: 'submitted ' + S(mapped.submitted_at).slice(0, 10) + ', not crawled by Bing 14 days later' } }; }
+      return null; };
     const out = {}; const param = {}; const noSearch = [];
     for (const e of [...new Set(engs)]) {
       const any28 = U.some(u => engOf(u.engine) === e && inW(u.at, 28)) || cellsE(e, 28)[0] > 0;
@@ -3444,25 +3463,12 @@ const ARD = (() => {
       if (ce[0] > 0) { param[e] = r3(ce[5] / ce[0]); if (ce[0] >= num(C.min_param_n, 3) && ce[5] / ce[0] >= 0.6) noSearch.push(e); }
       const unmeasured = () => { ev.length = 0; ev.push(n === 0 ? { kind: 'count', what: 'no answer of this engine to this question in ' + W + ' days' } : { kind: 'count', what: n + ' answer(s) in ' + W + ' days, ' + minN + ' needed' + (thin ? ' (engine asked less than weekly)' : '') });
         prov = false; return cell('unmeasured', n === 0 ? 'not_asked' : 'too_few', 'direct'); };
-      if (n === 0 && !askedBySite.has(e)) { out[e] = unmeasured(); continue; }   // an engine the site does not ask at all
+      if (n === 0 && !askedBySite.has(e)) { const s0u = eligibility(e, cited, retrieved, rk, ix);   // an engine the site does not ask at all: eligibility only
+        if (s0u) { out[e] = { stage: 'S0', sub: s0u.sub, basis: 'direct', n: 0, named: 0, cited: 0, retrieved: 0, our_rank: rk.best, evidence: [s0u.ev, { kind: 'count', what: 'provisional: this engine is not asked for your site' }], thin, provisional: true, asked: false }; continue; }
+        out[e] = unmeasured(); continue; }
       if (low) { prov = true; ev.push({ kind: 'count', what: 'provisional: ' + n + ' answer(s) in ' + W + ' days, ' + minN + ' needed for an answer-based stage' }); }
-      // S0: the engine cannot read the client
-      const blockBot = (BOTS_OF[e] || []).map(b => [b, robotsVerdict(access, b)]).find(x => x[1] && x[1].ok === false);
-      const blockedListed = Array.isArray(access && access.blocked_engines) && access.blocked_engines.map(engOf).includes(e);
-      if (blockBot || blockedListed) { ev.push({ kind: 'robots', bot: blockBot ? blockBot[0] : (BOTS_OF[e] || [''])[0], rule: blockBot ? blockBot[1].rule : '', at: S(access && access.read_at) }); out[e] = cell('S0', 'blocked', 'direct'); continue; }
-      // contradiction guard: a reading that shows THIS engine already reads the client (cited, retrieved) beats the page inference, and a
-      // ranking in the engine's own index beats Index Coverage. A Google ranking proves nothing about a fetcher that does not render (Perplexity).
-      const read = cited > 0 || retrieved > 0; const proof = read || rk.top10 || (ix === 'google' && rk.anyOurs);
-      if (!read && JS_BLIND.has(e) && jsOnly(mapped)) { ev.push({ kind: 'page', url: S(mapped.url), words_raw: num(mapped.words_raw, 0), what: 'little text without JavaScript', at: S(mapped.checked_at) }); out[e] = cell('S0', 'js_only', 'direct'); continue; }
-      if (!proof && ix === 'google' && e !== 'perplexity' && G.size) {
-        const gscHit = gsc && queries.some(q => num(look(gsc, q), 0) > 0);
-        const siteIdx = [...G.entries()].filter(([k]) => hostIn('https://' + k, OH)); const anyIdx = siteIdx.some(([, v]) => INDEXED.test(v && typeof v === 'object' ? lc(v.state) : lc(v)));
-        const ms = mapped ? gState(mapped.url) : ''; const notIdx = mapped ? NOT_INDEXED.test(ms) || (!ms && siteIdx.length > 0 && !anyIdx) : siteIdx.length > 0 && !anyIdx;
-        if (!gscHit && notIdx) { ev.push({ kind: 'index', url: mapped ? S(mapped.url) : '', state: ms || 'no page of the site indexed', what: mapped ? 'the page for this question is not in Google' : 'no page of the site is in Google' }); out[e] = cell('S0', 'not_indexed', 'direct'); continue; } }
-      if (!proof && ix === 'bing') { const B = (index && index.bing) || {}; const inAcc = B.in_account; const crawled = B.crawled ? asMap(B.crawled) : new Map();
-        if (inAcc === false) { ev.push({ kind: 'bing', what: 'the site is not in the Bing Webmaster account' }); out[e] = cell('S0', 'not_indexed', 'direct'); continue; }
-        if (inAcc === true && mapped && !crawled.has(AIRF.urlKey(mapped.url)) && !S(mapped.bing_crawled_at) && Number.isFinite(msOf(mapped.submitted_at)) && N - msOf(mapped.submitted_at) >= 14 * DAY) {
-          ev.push({ kind: 'bing', url: S(mapped.url), what: 'submitted ' + S(mapped.submitted_at).slice(0, 10) + ', not crawled by Bing 14 days later' }); out[e] = cell('S0', 'not_indexed', 'direct'); continue; } }
+      // S0: the engine cannot read the client (one function, also used for the engines the site does not ask: see below)
+      const s0 = eligibility(e, cited, retrieved, rk, ix); if (s0) { ev.push(s0.ev); out[e] = cell('S0', s0.sub, 'direct'); continue; }
       if (low) { const b1 = e === 'chatgpt' ? (hasR > 0 ? 'direct' : '') : rk.read && ix !== 'none' ? 'proxy_rank' : '';
         if (named === 0 && cited === 0 && retrieved === 0 && !rk.top10 && b1) { ev.length = 0;
           ev.push(b1 === 'direct' ? { kind: 'answer', what: 'your site was not among the pages ChatGPT read (' + hasR + ' readings)' } : { kind: ix === 'google' ? 'serp' : ix, query: rk.best ? rk.best.query : queries[0] || '', pos: rk.best ? rk.best.pos : null, at: rk.best ? rk.best.read_at : '', what: rk.best ? 'ranks ' + rk.best.pos : 'not in the results read' });
@@ -3491,10 +3497,16 @@ const ARD = (() => {
       else if (rk.read) ev.push({ kind: ix === 'google' ? 'serp' : ix, query: rk.best ? rk.best.query : queries[0] || '', pos: rk.best ? rk.best.pos : null, at: rk.best ? rk.best.read_at : '', what: rk.best ? 'ranks ' + rk.best.pos : 'not in the results read' });
       else ev.push({ kind: 'none', what: ix === 'none' ? 'no reading of what this engine retrieves' : 'no reading of ' + (ix === 'chatgpt' ? 'what ChatGPT retrieved' : 'the ' + ix + ' results') + ' for these searches' });
       out[e] = cell('S1', '', basis); }
+    // engines the site does not ask (or the caller did not list): no answer stage, but eligibility does not depend on asking. A Copilot that
+    // cannot find the site in Bing is a step to take in week 1 (DESIGN 2.B deviation, fixes/P1.md): such a cell is a provisional S0 with n 0
+    // and `asked: false` (additive); an engine with no S0 finding gets no cell, as before.
+    for (const e of AIRF.ENGINES) { if (out[e] || !usable(e)) continue; const ix = INDEX_OF[e]; const rk = ix === 'google' ? RK.google : ix === 'bing' ? RK.bing : ix === 'brave' ? RK.brave : { best: null, read: false, anyOurs: false, top10: false };
+      const ce = cellsE(e, 56); const s0 = eligibility(e, ce[2], ce[3], rk, ix); if (!s0) continue;
+      out[e] = { stage: 'S0', sub: s0.sub, basis: 'direct', n: 0, named: 0, cited: 0, retrieved: 0, our_rank: rk.best, evidence: [s0.ev, { kind: 'count', what: 'provisional: this engine is not asked for your site' }], thin: false, provisional: true, asked: false }; }
     // question-level signals
     let tc = 0, tl = 0; for (const e of Object.keys(out)) { const t = cellsE(e, 28); tc += t[6]; tl += t[7]; }
     const list_dominated = tc >= num(C.min_list_cites, 3) && tl / tc >= 0.4;
-    const meas = Object.entries(out).filter(([, c]) => c.stage !== 'unmeasured'); const wsum = meas.reduce((s, [e]) => s + (num((C.weights || {})[e], W_ENGINE[e] || 0.05)), 0);
+    const meas = Object.entries(out).filter(([, c]) => c.stage !== 'unmeasured' && c.asked !== false); const wsum = meas.reduce((s, [e]) => s + (num((C.weights || {})[e], W_ENGINE[e] || 0.05)), 0);   // an engine the site does not ask never moves best_stage
     let best_stage = 'unmeasured'; if (meas.length) { let acc = 0; for (const [e, c] of meas.slice().sort((a, b) => ORDER[b[1].stage] - ORDER[a[1].stage])) { acc += num((C.weights || {})[e], W_ENGINE[e] || 0.05); if (acc >= 0.25 * wsum - 1e-9) { best_stage = c.stage; break; } } }
     let fnM = msOf(E.fn), lnM = msOf(E.ln), lcM = msOf(E.lc); for (const u of U) { const t = msOf(u.at); if (!Number.isFinite(t)) continue; if (u.named) { if (!(t >= fnM)) fnM = t; if (!(t <= lnM)) lnM = t; } if (u.cited && !(t <= lcM)) lcM = t; }
     const fn = isoOf(fnM), ln = isoOf(lnM), lcx = isoOf(lcM);
