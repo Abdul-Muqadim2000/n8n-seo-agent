@@ -1,4 +1,12 @@
 import {
+  aiRankPlanOf,
+  aiRankSettingsOf,
+  aiRankShadowOf,
+  type AiRankActionRow,
+  type AiRankPlanData,
+  type AiRankRunRow,
+  type AiRankSettings,
+  type AiRankShadowWeek,
   creditsFor,
   normKeyword,
   clampIndexDailyCap,
@@ -1270,6 +1278,8 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
     ...(opts.answers === 'summary' ? { answerResults: answerResultsOf(answers), answersStored: answers.length } : {}),
     scope: opts.filter ? aiScopeOf(opts.filter, vis, compared, answers, prompts, opts.answers !== false) : null,
     growth: toGrowth(growthRows[0], aiPages, aiTargets, aiProspects, logs, monitorsNow),
+    // AIR (2026-11-06): the AI-ranking plan, read only for a website in `on` mode (off and the private trial show nothing new)
+    aiRank: await aiRankPlanFor(d, mons[0]),
     report: rp
       ? {
           receivedAt: report!.report.receivedAt,
@@ -1738,6 +1748,8 @@ export async function settingsData(org: OrgRow, site: SiteRow): Promise<SiteSett
     profile,
     readiness: readiness(profile),
     contentGroups: contentGroupsOf(siteRow?.content_groups_json),
+    // AIR (2026-11-06): read apart from `monitors`, so an ordinary monitors save never sends them back
+    aiRank: aiRankSettingsOf(monitors[0] as unknown as Record<string, unknown>),
   };
 }
 
@@ -1749,4 +1761,31 @@ export function contentGroupsOf(raw: unknown): { name: string; pattern: string }
   } catch {
     return [];
   }
+}
+
+// ---------------- AI ranking (AIR, 2026-11-06, docs/ai-ranking-2026-11-05/DESIGN.md §2.H, §6.7) ----------------
+
+/** The AI-ranking plan of a website in `on` mode: its newest on-mode run and its open actions. Null for off / trial, and when the engine has
+ *  no AI-ranking table yet (an engine from before AIR: a missing table reads as no rows, a failed read as no plan, never an error page). */
+export async function aiRankPlanFor(domain: string, monitorsRow: MonitorsRow | undefined): Promise<AiRankPlanData | null> {
+  const settings = aiRankSettingsOf(monitorsRow as unknown as Record<string, unknown>);
+  if (settings.mode !== 'on') return null;
+  try {
+    const [runs, actions] = await Promise.all([
+      siteRows<AiRankRunRow>('aiRankRuns', domain, { sortBy: 'checked_at:desc', max: 4 }),
+      siteRows<AiRankActionRow>('aiRankActions', domain, { sortBy: 'updated_at:desc', max: 300 }),
+    ]);
+    return aiRankPlanOf(runs, actions, settings);
+  } catch {
+    return null;
+  }
+}
+
+/** The platform admin's shadow comparison: the newest 8 AI-ranking runs (trial or on) of a website, AI ranking's plan beside the current one. */
+export async function aiRankShadowData(site: SiteRow): Promise<{ settings: AiRankSettings; weeks: AiRankShadowWeek[] }> {
+  const [mons, runs] = await Promise.all([
+    siteRows<MonitorsRow>('monitors', site.domain, { max: 5 }).catch(() => [] as MonitorsRow[]),
+    siteRows<AiRankRunRow>('aiRankRuns', site.domain, { sortBy: 'checked_at:desc', max: 8 }).catch(() => [] as AiRankRunRow[]),
+  ]);
+  return { settings: aiRankSettingsOf(mons[0] as unknown as Record<string, unknown>), weeks: aiRankShadowOf(runs) };
 }

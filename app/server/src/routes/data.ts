@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { AI_EXPORT_KINDS, aiExportFileName, aiFilterFrom, clientSafePayload, isClientRole, type AiExportKind, type Role } from '@seo/shared';
-import { requireVerified, siteAccess } from '../auth/access';
-import { notFound } from '../lib/errors';
+import { isPlatformAdmin, requireVerified, siteAccess } from '../auth/access';
+import { HttpError, notFound } from '../lib/errors';
 import { aiAnswersPage, aiCsvStream, aiImportsOverview, aiQuestionHistory } from '../services/aiWave2';
-import { aiData, alertsData, backlinksData, contentData, rankingsData, searchData, settingsData, technicalData } from '../services/data';
+import { aiData, aiRankShadowData, alertsData, backlinksData, contentData, rankingsData, searchData, settingsData, technicalData } from '../services/data';
 import { requestRecheck } from '../services/pageWatch';
 import { ladderDetailData, pipelineData } from '../services/pipeline';
 import { loadBundle, overviewData, recommend } from '../services/recommendations';
@@ -64,6 +64,13 @@ export async function dataRoutes(app: FastifyInstance) {
     // (`answers=summary`); a web from before that reads them here, so without the flag they are still sent (remove one release later).
     const summary = String((req.query as Record<string, unknown>).answers ?? '') === 'summary';
     return shown(a.role, await aiData(a.org, a.site, { answers: summary ? 'summary' : true, filter: any ? filter : null }));
+  });
+  // AIR (2026-11-06, DESIGN.md §2.H item 7): the AI-ranking shadow comparison, platform admins only (it is our own check of the plan before it
+  // acts: AI ranking's choices beside the current logic's, week by week). Never shown to a client, whatever their role.
+  app.get('/api/orgs/:orgId/sites/:siteId/data/ai/rank-shadow', async (req) => {
+    const a = await guard(req);
+    if (!isPlatformAdmin(a.user)) throw new HttpError(403, 'Only a platform admin can see the AI ranking trial.', 'forbidden');
+    return aiRankShadowData(a.site);
   });
   // W2-A: one page of a run's answers (the latest, or `run`), filtered, with the filter's rates and ranges
   app.get('/api/orgs/:orgId/sites/:siteId/data/ai/answers', { config: { rateLimit: { max: 240, timeWindow: '1 minute' } } }, async (req) => {

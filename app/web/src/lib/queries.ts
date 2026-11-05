@@ -1,5 +1,7 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import type {
+  AiRankSettings,
+  AiRankShadowWeek,
   AnswerDecision,
   FactAnswer,
   FactAnswers,
@@ -544,6 +546,16 @@ export function useSiteData<P extends keyof DataPages>(orgId: string, siteId: st
     ...opts,
   });
 }
+
+/** AIR (2026-11-06): the AI-ranking trial beside the current plan, week by week. Platform admins only (the server answers 403 to anyone else). */
+export const useAiRankShadow = (orgId: string, siteId: string, enabled: boolean) =>
+  useQuery({
+    queryKey: qk.siteData(siteId, 'ai-rank-shadow'),
+    queryFn: () => api<{ settings: AiRankSettings; weeks: AiRankShadowWeek[] }>(`/api/orgs/${orgId}/sites/${siteId}/data/ai/rank-shadow`),
+    enabled,
+    retry: noRetryOn4xx,
+    staleTime: 5 * 60_000,
+  });
 
 /** One keyword ladder: its pages (the climb), timeline, results and reports. 404 when the ladder does not exist. */
 export const useLadder = (orgId: string, siteId: string, ladderId: string) =>
