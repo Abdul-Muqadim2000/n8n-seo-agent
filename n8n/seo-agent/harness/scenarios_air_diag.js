@@ -12,6 +12,7 @@
 //   AD11 rollEvidence: counts older than 8 days kept, 120 days dropped, 8 KB cap, idempotent
 //   AD12 gemini_api ignored by every function
 //   AD13 accuracy: precision and recall per stage on the labelled cells (fixtures_air diag_cases, two seeds), sub-label and basis accuracy
+//   AD15 provisional S0 / S1 with 0-3 answers (DESIGN 2.B deviation of 2026-11-06); S2-S5 still need 4; answers decide once there are 4
 //   AD14 the real shapes the 2026-11-06 production replay found: a panel drifted to another country (core of 1), thin strata (no control arm)
 const fs = require('fs'); const path = require('path');
 module.exports = async (ctx) => {
@@ -276,5 +277,30 @@ module.exports = async (ctx) => {
     for (const [s, n, p, r] of rows) check('AD13 stage ' + s + ': precision and recall >= 90% on ' + n + ' labelled cells (P ' + (100 * p).toFixed(1) + '%, R ' + (100 * r).toFixed(1) + '%)', n >= 6 && p >= 0.9 && r >= 0.9, J(miss.filter(m => m[1] === s || m[2].stage === s)));
     check('AD13 sub-label and basis right on >= 90% of the cells; boundary S0-S1 vs S2+ right on >= 95%', subOk / cells.length >= 0.9 && basisOk / cells.length >= 0.9
       && cells.filter(c => { const x = runCase(c); const lo = (s) => s === 'S0' || s === 'S1'; return c.label.stage !== 'unmeasured' && lo(x.stage) === lo(c.label.stage); }).length / cells.filter(c => c.label.stage !== 'unmeasured').length >= 0.95, J(miss));
+    // ---- AD15 provisional S0 / S1 with 0-3 answers (DESIGN 2.B deviation, orchestrator 2026-11-06) ----
+    const base15 = DC.find(c => c.label.stage === 'S1' && c.label.basis === 'proxy_rank' && c.engine === 'ai_mode');
+    const cut = (args, e, keep) => { const ue = args.units60.filter(u => u.engine === e && u.prompt_id === args.prompt.prompt_id && Date.parse(u.at) > NOW - 28 * DAY).sort((a, b) => b.at.localeCompare(a.at)); const drop = new Set(ue.slice(keep).map(u => u.at));
+      return { ...args, units60: args.units60.filter(u => !(u.engine === e && u.prompt_id === args.prompt.prompt_id && drop.has(u.at))), answers8: args.answers8.filter(a => !(a.engine === e && a.prompt_id === args.prompt.prompt_id && drop.has(a.checked_at))) }; };
+    const p2 = ARD.diagnose(cut(base15.args, 'ai_mode', 2)).engines.ai_mode;
+    check('AD15 two answers and a results-page reading below the top 10 -> S1 proxy_rank, provisional, the reading and the count as evidence', p2.stage === 'S1' && p2.basis === 'proxy_rank' && p2.provisional === true && p2.n === 2 && p2.evidence.some(x => x.kind === 'serp') && p2.evidence.some(x => /provisional/.test(x.what || '')), J(p2));
+    const full15 = ARD.diagnose(base15.args).engines.ai_mode;
+    check('AD15 with n >= 4 agreeing, the same S1 is no longer provisional', full15.stage === 'S1' && full15.provisional === false && full15.n >= 4, J(full15));
+    const plus = (args, e, k, f) => { const extra = Array.from({ length: k }, (_, i) => ({ prompt_id: args.prompt.prompt_id, engine: e, named: false, cited: true, position: null, rivals: [{ id: 'rival-a.example' }], answered: true, at: ago(1 + i * 0.2) }));
+      const rows = extra.map((u, i) => ({ site_id: 's', domain: 'case-co.example', run_id: 'x' + i, checked_at: u.at, prompt_id: u.prompt_id, engine: e, answered: true, error: '', named: false, cited: true,
+        cited_json: J([{ url: 'https://case-co.example/services/erp-partner', host: 'case-co.example', role: 'self' }]), retrieved_json: '', fanout_json: '', entities_json: J([{ id: 'rival-a.example', role: 'competitor', position: 1 }]) }));
+      return { ...args, units60: [...args.units60, ...extra], answers8: [...args.answers8, ...rows] }; };
+    const p3 = ARD.diagnose(plus(cut(base15.args, 'ai_mode', 2), 'ai_mode', 2)).engines.ai_mode;
+    check('AD15 provisional S1, then n >= 4 says the client is cited and not named -> S3 (the answer-based stage wins), not provisional', p3.stage === 'S3' && p3.provisional === false && p3.n === 4, J(p3));
+    const pc = ARD.diagnose(plus(cut(base15.args, 'ai_mode', 1), 'ai_mode', 1)).engines.ai_mode;
+    check('AD15 S2-S5 need n >= 4: two answers with a citation stay unmeasured / too_few', pc.stage === 'unmeasured' && pc.sub === 'too_few' && pc.provisional === false, J(pc));
+    const s0c = DC.find(c => c.label.sub === 'js_only' && c.engine === 'chatgpt'); const s0 = ARD.diagnose(cut(s0c.args, 'chatgpt', 1)).engines.chatgpt;
+    const b0c = DC.find(c => c.label.sub === 'not_indexed' && c.engine === 'copilot'); const pidB = b0c.args.prompt.prompt_id; const b0 = ARD.diagnose({ ...b0c.args, units60: b0c.args.units60.filter(u => !(u.engine === 'copilot' && u.prompt_id === pidB)), answers8: b0c.args.answers8.filter(a => !(a.engine === 'copilot' && a.prompt_id === pidB)) }).engines.copilot;
+    check('AD15 S0 from the page (JavaScript-only) with 1 answer, and from Bing with 0 answers to this question (the site asks the engine) -> provisional S0', s0.stage === 'S0' && s0.sub === 'js_only' && s0.provisional === true && b0.stage === 'S0' && b0.sub === 'not_indexed' && b0.provisional === true && b0.n === 0, J({ s0, b0 }));
+    const u0c = DC.find(c => c.label.stage === 'S1' && c.label.basis === 'unknown_index' && c.engine === 'chatgpt'); const u0 = ARD.diagnose(cut(u0c.args, 'chatgpt', 2)).engines.chatgpt;
+    const d0c = DC.find(c => c.label.stage === 'S1' && c.label.basis === 'direct' && c.engine === 'chatgpt'); const d0 = ARD.diagnose(cut(d0c.args, 'chatgpt', 2)).engines.chatgpt;
+    check('AD15 a provisional S1 needs a basis: ChatGPT\'s retrieved set without the client -> S1 direct provisional; no retrieval reading -> unmeasured', d0.stage === 'S1' && d0.basis === 'direct' && d0.provisional === true && u0.stage === 'unmeasured' && u0.sub === 'too_few', J({ d0, u0 }));
+    const na = ARD.diagnose({ ...b0c.args, units60: b0c.args.units60.filter(u => u.engine !== 'copilot'), answers8: b0c.args.answers8.filter(a => a.engine !== 'copilot') }).engines.copilot;
+    check('AD15 an engine the site does not ask at all stays unmeasured / not_asked (no provisional stage)', na.stage === 'unmeasured' && na.sub === 'not_asked' && na.provisional === false, J(na));
+
   });
 };

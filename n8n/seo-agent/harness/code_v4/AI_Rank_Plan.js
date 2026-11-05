@@ -3372,6 +3372,11 @@ const ARD = (() => {
   const BYP = new WeakMap();
   const byPrompt = (list) => { if (!Array.isArray(list)) return new Map(); let m = BYP.get(list); if (m && m.n === list.length) return m.map;
     const map = new Map(); for (const a of list) { if (!a || !answered(a)) continue; const k = S(a.prompt_id); const g = map.get(k); if (g) g.push(a); else map.set(k, [a]); } BYP.set(list, { n: list.length, map }); return map; };
+  // the engines a site asks at all (latest answer per engine, any question), once per list
+  const LBE = new WeakMap();
+  const lastByEngine = (list) => { if (!Array.isArray(list)) return new Map(); let m = LBE.get(list); if (m && m.n === list.length) return m.map; const map = new Map();
+    for (const a of list) { if (!a || !answered(a)) continue; const e = engOf(a.engine); const t = msOf(a.at || a.checked_at); const c = map.get(e); if (c === undefined || (Number.isFinite(t) && !(t <= c))) map.set(e, Number.isFinite(t) ? t : (c === undefined ? NaN : c)); }
+    LBE.set(list, { n: list.length, map }); return map; };
   const diagnose = ({ site, prompt, answers8, units60, evidence, access, pages, index, serp, bingStats, brave, brandKnown, ourHosts, rivals, engines, now, cfg } = {}) => {
     const N = msOf(now); const C = cfg || {}; const p = prompt || {}; const pid = S(p.prompt_id); const st = site || {};
     const OH = ourList(st, ourHosts); const ours = (u) => hostIn(u, OH);
@@ -3418,6 +3423,7 @@ const ARD = (() => {
     const nobodyNamed = (() => { const u28 = U.filter(u => inW(u.at, 28)); if (u28.length >= 4) return u28.filter(namesBusiness).length / u28.length <= 0.2;
       let n = 0, b = 0; for (const e of engs) { const t = cellsE(e, 28); n += t[0]; b += t[10]; } return n >= 4 && b / n <= 0.2; })();
     const byCitation = intent === 'informational' || nobodyNamed;
+    const askedBySite = new Set(); for (const L of [units60, answers8]) for (const [e2, t] of lastByEngine(L)) if (!Number.isFinite(N) || !Number.isFinite(t) || (t > N - 56 * DAY && t <= N + 6 * 3600e3)) askedBySite.add(e2);
     const out = {}; const param = {}; const noSearch = [];
     for (const e of [...new Set(engs)]) {
       const any28 = U.some(u => engOf(u.engine) === e && inW(u.at, 28)) || cellsE(e, 28)[0] > 0;
@@ -3430,10 +3436,16 @@ const ARD = (() => {
       const ix = INDEX_OF[e]; const rk = ix === 'google' ? RK.google : ix === 'bing' ? RK.bing : ix === 'brave' ? RK.brave : { best: null, read: false, anyOurs: false, top10: false };
       const ev = [];
       const recent = rows.filter(r => engOf(r.engine) === e).sort((a, b) => S(b.checked_at).localeCompare(S(a.checked_at)));
-      const cell = (stage, sub, basis) => ({ stage, sub, basis, n, named, cited, retrieved, our_rank: rk.best, evidence: ev.slice(0, 3), thin });   // thin: additive
+      // DESIGN 2.B deviation (orchestrator, 2026-11-06, fixes/P1.md): with 0-3 answers, S0 (robots / JavaScript / index presence) and S1 (a rank or
+      // fan-out proxy, or ChatGPT's own retrieved set without the client) are still read, marked `provisional`, because their basis is not an
+      // answer rate; S2-S5 need n >= 4. Once n >= 4 the ordinary rules decide (agreeing or not) and the cell is no longer provisional.
+      const low = n < minN; let prov = false;
+      const cell = (stage, sub, basis) => ({ stage, sub, basis, n, named, cited, retrieved, our_rank: rk.best, evidence: ev.slice(0, 3), thin, provisional: prov && (stage === 'S0' || stage === 'S1') });   // thin, provisional: additive
       if (ce[0] > 0) { param[e] = r3(ce[5] / ce[0]); if (ce[0] >= num(C.min_param_n, 3) && ce[5] / ce[0] >= 0.6) noSearch.push(e); }
-      if (n === 0) { ev.push({ kind: 'count', what: 'no answer of this engine to this question in ' + W + ' days' }); out[e] = cell('unmeasured', 'not_asked', 'direct'); continue; }
-      if (n < minN) { ev.push({ kind: 'count', what: n + ' answer(s) in ' + W + ' days, ' + minN + ' needed' + (thin ? ' (engine asked less than weekly)' : '') }); out[e] = cell('unmeasured', 'too_few', 'direct'); continue; }
+      const unmeasured = () => { ev.length = 0; ev.push(n === 0 ? { kind: 'count', what: 'no answer of this engine to this question in ' + W + ' days' } : { kind: 'count', what: n + ' answer(s) in ' + W + ' days, ' + minN + ' needed' + (thin ? ' (engine asked less than weekly)' : '') });
+        prov = false; return cell('unmeasured', n === 0 ? 'not_asked' : 'too_few', 'direct'); };
+      if (n === 0 && !askedBySite.has(e)) { out[e] = unmeasured(); continue; }   // an engine the site does not ask at all
+      if (low) { prov = true; ev.push({ kind: 'count', what: 'provisional: ' + n + ' answer(s) in ' + W + ' days, ' + minN + ' needed for an answer-based stage' }); }
       // S0: the engine cannot read the client
       const blockBot = (BOTS_OF[e] || []).map(b => [b, robotsVerdict(access, b)]).find(x => x[1] && x[1].ok === false);
       const blockedListed = Array.isArray(access && access.blocked_engines) && access.blocked_engines.map(engOf).includes(e);
@@ -3451,6 +3463,11 @@ const ARD = (() => {
         if (inAcc === false) { ev.push({ kind: 'bing', what: 'the site is not in the Bing Webmaster account' }); out[e] = cell('S0', 'not_indexed', 'direct'); continue; }
         if (inAcc === true && mapped && !crawled.has(AIRF.urlKey(mapped.url)) && !S(mapped.bing_crawled_at) && Number.isFinite(msOf(mapped.submitted_at)) && N - msOf(mapped.submitted_at) >= 14 * DAY) {
           ev.push({ kind: 'bing', url: S(mapped.url), what: 'submitted ' + S(mapped.submitted_at).slice(0, 10) + ', not crawled by Bing 14 days later' }); out[e] = cell('S0', 'not_indexed', 'direct'); continue; } }
+      if (low) { const b1 = e === 'chatgpt' ? (hasR > 0 ? 'direct' : '') : rk.read && ix !== 'none' ? 'proxy_rank' : '';
+        if (named === 0 && cited === 0 && retrieved === 0 && !rk.top10 && b1) { ev.length = 0;
+          ev.push(b1 === 'direct' ? { kind: 'answer', what: 'your site was not among the pages ChatGPT read (' + hasR + ' readings)' } : { kind: ix === 'google' ? 'serp' : ix, query: rk.best ? rk.best.query : queries[0] || '', pos: rk.best ? rk.best.pos : null, at: rk.best ? rk.best.read_at : '', what: rk.best ? 'ranks ' + rk.best.pos : 'not in the results read' });
+          ev.push({ kind: 'count', what: 'provisional: ' + n + ' answer(s) in ' + W + ' days' }); out[e] = cell('S1', '', b1); continue; }
+        out[e] = unmeasured(); continue; }
       // S3-S5 from the answers
       const rate = named / n, crate = cited / n, med = median(positions);
       const namedA = ce[1]; const negHeavy = ce[8] >= 1 && ce[8] >= Math.ceil(0.25 * Math.max(1, namedA)); const wrong = ce[9] > 0;
