@@ -40,6 +40,7 @@ export const changelog: ChangelogEntry[] = [
     summary: 'Index coverage now records the pages you improved and published, and follows them until Google has read the new version.',
     highlights: [
       'When you improve a page Google left out and report it as published, Index coverage shows it as improved and waiting for Google the same day, instead of offering "Improve this page" again. It stays in the list of pages you already had, we look up Google\'s reading of it again in the days after, and it is among the pages worth asking Google to read again in Search Console. We never call it indexed ourselves: once Google reads the new version, the page is in search, or it shows that Google read your improved version and still left it out, with what to look at next',
+      'When an improved page goes live at a new address while the old address still opens, the two pages compete for the same search. The old page then shows as improved at another address instead of offering "Improve this page" again, and a step on your Pipeline asks for a permanent (301) redirect from the old address to the new one, with a guide for your website platform. We open the old address every day and tick the step off once it redirects, or once you put the improved text back on the old address and remove the new one. The publish check says this before you confirm a different address, and again after',
     ],
     features: ['index-coverage'],
   },

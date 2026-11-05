@@ -420,7 +420,11 @@ INDEX_PAGES_COLS = [('site_id', 'string'), ('domain', 'string'), ('url', 'string
                     # client report 2026-11-05 (devaicon.com): when the client last published an improved version of this page at the same
                     # address (an "Improve this page" run, seo_content_log existing_page_url = published_url, its published_at; ISO, '' = never).
                     # A page Google read and left out is "improved, waiting for Google" until Google's last crawl is newer (IX.improveState)
-                    ('improved_at', 'string')]
+                    ('improved_at', 'string'),
+                    # 2026-11-05 (production evidence, devaicon.com): the improvement was confirmed published at ANOTHER address (the
+                    # content log's published_url when it differs from existing_page_url); '' = at this address. While this page still
+                    # opens, the two compete: the step is a permanent redirect to it (IX.improveState 'moved', app site task indexing:merge)
+                    ('improved_to', 'string')]
 # seo_index_history: insert only, one row per state / cause change of a page
 INDEX_HISTORY_TABLE = 'seo_index_history'
 INDEX_HISTORY_COLS = [('site_id', 'string'), ('url', 'string'), ('at', 'string'), ('state', 'string'), ('cause', 'string'), ('evidence', 'string'), ('verdict', 'string'), ('coverage', 'string')]

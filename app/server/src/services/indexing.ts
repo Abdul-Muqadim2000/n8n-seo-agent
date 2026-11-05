@@ -23,6 +23,7 @@ import {
   type IndexHistoryEntry,
   type IndexHistoryRow,
   type ContentLogRow,
+  type IndexImprovement,
   type IndexingData,
   type IndexingForRecs,
   type IndexPage,
@@ -75,7 +76,7 @@ export async function indexPageRows(domain: string, extra: F[] = [], max = INDEX
 const improvementsFor = (d: string) =>
   siteRows<ContentLogRow>('contentLog', d, { extra: [{ columnName: 'status', condition: 'eq', value: 'published' }], max: 1000 })
     .then(indexImprovementsOf)
-    .catch(() => [] as { url: string; at: string }[]);
+    .catch(() => [] as IndexImprovement[]);
 
 /**
  * X15: the rows the Indexing page needs. Pages in Google search with nothing to do are most of a healthy website and the page never lists
@@ -234,9 +235,11 @@ async function readForRecs(d: string): Promise<IndexingForRecs | null> {
   ]);
   // a page the client improved that Google has not read since is waiting for Google: never "Improve this page" again, never counted as
   // a page to improve (the run's cause count still holds it)
+  // (and one whose improved version went live at another address is the redirect step, `indexing:merge`, not a page to improve again)
   const readOutNow = withImprovements(readOut, imp);
-  const waiting = readOutNow.filter((p) => improveStateOf(p) === 'waiting').length;
-  const quality = readOutNow.filter((p) => improveStateOf(p) !== 'waiting' && String(p.action) !== 'wait');
+  const handled = (p: IndexPageRow) => ['waiting', 'moved'].includes(improveStateOf(p));
+  const waiting = readOutNow.filter(handled).length;
+  const quality = readOutNow.filter((p) => !handled(p) && !['wait', 'site_fix'].includes(String(p.action)));
   // a reservation row (a run that had not finished, or crashed) is never the latest reading
   const all = runs.map(indexRunOf).filter((r) => r.runAt && !r.reservation).sort((a, b) => (b.runAt > a.runAt ? 1 : -1));
   // A11: the freeze is the engine's newest run's flag; the counts are the newest run that read the website (A4)

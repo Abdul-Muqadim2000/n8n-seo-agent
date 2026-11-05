@@ -14,6 +14,14 @@ older (action `wait`, group "Improved, waiting for Google", inspected 0.5 / 3 / 
 Google crawled after it (own action back, note "Google read your improved version on ..."). Improvements are not `ours` (lane kept). The
 app overlays the content log at read time so the state shows the same day. Harness IXI1-IXI3 (fail on 1a13ec42); app
 `shared/src/indexing.improved.test.ts`.
+Production read the same day: devaicon.com's three improvements (content log rows 19 / 22 / 24) were confirmed at NEW addresses
+(/services/...) after the publish check warned, and the old pages still answer 200, so the same-address rule never fired. Second commit:
+`seo_index_pages.improved_to` (sync_tables) = where it went live; IX.improveState / improveStateOf 'moved' (cause improvable, not indexed,
+improved_to another address) -> action site_fix, group "Improved version published at another address", note with the honest step (a
+permanent 301 redirect to the new address, or the improved text back on the old one and the new one removed). The app's site task
+`indexing:merge` (kind `index_merge`, app/docs/SITE_TASKS.md) lists the pairs and checks them itself (301 / 308 to B that opens = done). The
+publish check now says before and after a confirmation at another address that the old address needs that redirect. Harness IXI4 (the
+production rows; fails on the first commit), PV2 additions; app shared + server tests.
 
 ## FULLY LIVE 2026-10-30 ~01:15 UTC
 - API on the VM from feature/indexing fd32c0b4 (fetch + checkout FETCH_HEAD in /mnt/data/repo, `up -d --build app`, healthy, no migration);

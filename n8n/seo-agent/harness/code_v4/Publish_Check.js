@@ -289,7 +289,8 @@ function verifyPublished(o) {
     missing = ['an address that is not already recorded for another keyword'];
   } else if (refresh && !refreshHere) {
     verify = 'refresh_other_address';
-    message = 'This draft was planned as an update of ' + refreshOf + ', but you sent ' + o.url + '. Nothing was marked published. Send the address of the page it updates, or confirm that you published it at this new address.';
+    message = 'This draft was planned as an update of ' + refreshOf + ', but you sent ' + o.url + '. Nothing was marked published. Send the address of the page it updates, or confirm that you published it at this new address. '
+      + 'If you confirm, redirect the old address to the new one with a permanent (301) redirect: while both open, the two pages compete for the same search.';
     missing = ['the address of the page this draft updates'];
   } else if (!matched) {
     verify = refresh ? 'refresh_not_live' : 'not_the_draft';
@@ -302,6 +303,10 @@ function verifyPublished(o) {
   if (verify === 'ok' && refreshHere && others.length) note = 'This page was already the published page for "' + others[0] + '". This draft is its planned update, so the page now carries both keywords.';
   const confirmable = verify !== 'ok' && verify !== 'address_used_by_other_keyword';
   const confirmed = confirmable && o.confirm === true;
+  // production 2026-11-05 (devaicon.com): an update confirmed at ANOTHER address leaves two pages for one search; the step is a redirect,
+  // which the app's Steps on your website checks every day (site task indexing:merge, from this content-log row)
+  if (confirmed && verify === 'refresh_other_address') note = 'The page this draft updates, ' + refreshOf + ', still opens. Redirect it to ' + o.url + ' with a permanent (301) redirect, '
+    + 'or put this text back on that address and remove this one, so Google treats them as one page; until then the two compete for the same search. We check the redirect every day under Steps on your website.';
   const accepted = verify === 'ok' || confirmed;
   const reasonShort = verify === 'ok' ? '' : verify === 'refresh_not_live' ? 'the update was not seen on the page' : verify === 'refresh_other_address' ? 'sent at another address than the page it updates' : verify === 'not_the_draft' ? 'the page did not match the draft (keyword not in the title, heading or text)' : 'the address is the published page of another keyword';
   return { verified: verify === 'ok', verify, accepted, confirmed, confirmable, message, missing, note, evidence,

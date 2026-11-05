@@ -382,6 +382,9 @@ export interface IndexPageRow extends DtRow {
   /** 2026-11-05: ISO, when the client last published an improved version of this page at the same address (the content log's
    *  `existing_page_url` = `published_url`, its `published_at`); engine, and overlaid by the app from the content log (indexing.ts) */
   improved_at?: string;
+  /** 2026-11-05: where that improvement went live when it is ANOTHER address ('' = this one): the old page then needs a permanent
+   *  redirect to it (site task indexing:merge) */
+  improved_to?: string;
 }
 /** One row per state / cause change of a page (insert only). */
 export interface IndexHistoryRow extends DtRow {
