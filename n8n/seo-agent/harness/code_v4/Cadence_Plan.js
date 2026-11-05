@@ -2879,6 +2879,9 @@ for (const s of list) {
   const aiThisWeek = slog.some(l => isAi(l) && (at - new Date(l.started_at || 0)) < 6 * 864e5);
   const keyOfU = (u) => String(u || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
   const refreshedRecently = new Set(slog.filter(l => l.existing_page_url && (at - new Date(l.started_at || 0)) < 60 * 864e5).map(l => keyOfU(l.existing_page_url)));
+  // F-38 (AIR P3, 2026-11-06, prod review 2026-10-31): a page the agent PUBLISHED in the same 60 days is as fresh as one it refreshed (the content
+  // log's published_at is its date), so an AI refresh of it waits too; it was offered for a refresh ten days after it went live.
+  for (const l of slog) if (l.published_url && l.published_at && (at - new Date(l.published_at)) < 60 * 864e5) refreshedRecently.add(keyOfU(l.published_url));
   // one search, one page: an AI question that a keyword-ladder page already targets is written AS that ladder page (with the AI target), never twice.
   // Words of the site's ladder heads ("e invoicing in uae") appear everywhere and do not count.
   const STOPW = new Set(['the', 'and', 'for', 'with', 'what', 'how', 'which', 'are', 'can', 'does', 'your', 'you', 'that', 'this', 'from', 'into', 'best', 'top', 'list', 'guide']);

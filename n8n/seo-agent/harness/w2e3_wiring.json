@@ -3350,11 +3350,6 @@
        "keyValue": "serp"
       },
       {
-       "condition": "={{ (((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {}))) === '%' ? 'like' : 'eq' }}",
-       "keyName": "site_id",
-       "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
-      },
-      {
        "condition": "lt",
        "keyName": "updated_at",
        "keyValue": "={{ new Date(Date.now() - 2 * 864e5).toISOString() }}"
@@ -3747,11 +3742,6 @@
        "keyValue": "serp"
       },
       {
-       "condition": "={{ (((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {}))) === '%' ? 'like' : 'eq' }}",
-       "keyName": "site_id",
-       "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
-      },
-      {
        "condition": "gte",
        "keyName": "updated_at",
        "keyValue": "={{ new Date().toISOString().slice(0, 10) }}"
@@ -3789,11 +3779,6 @@
        "condition": "eq",
        "keyName": "kind",
        "keyValue": "serp"
-      },
-      {
-       "condition": "={{ (((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {}))) === '%' ? 'like' : 'eq' }}",
-       "keyName": "site_id",
-       "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
       },
       {
        "condition": "lt",
