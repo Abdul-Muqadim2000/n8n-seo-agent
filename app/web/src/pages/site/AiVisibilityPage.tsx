@@ -95,7 +95,10 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
   const reportLabel = d.report ? `From the report of ${fmtDate(d.report.receivedAt)}` : '';
   const brief = d.report?.brief;
   // A4: the engine's alerts with their level (it joins them with " | "; a text may hold commas)
-  const alerts = L?.alertItems ?? [];
+  // 2026-11-05 (client report): only what needs a look is an alert; a note about the run (a request an AI engine did not answer, a lookup
+  // read from an earlier run) sits in a calm box of its own instead of the warning
+  const alerts = (L?.alertItems ?? []).filter((a) => a.level === 'high' || a.level === 'medium');
+  const notes = (L?.alertItems ?? []).filter((a) => a.level !== 'high' && a.level !== 'medium');
   // A1: no subtraction of two runs here; the comparison (and its reason when there is none) comes with the run
   const cmp = L?.compare ?? null;
   // A8: the period the rates were counted over, as the run records it
@@ -115,9 +118,18 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
           <ul className="list-disc space-y-0.5 pl-4">
             {alerts.map((a) => (
               <li key={a.level + a.text}>
-                {a.level === 'high' || a.level === 'medium' ? <span className="font-medium">{a.level === 'high' ? 'Important: ' : 'Worth a look: '}</span> : null}
+                <span className="font-medium">{a.level === 'high' ? 'Important: ' : 'Worth a look: '}</span>
                 {a.text}
               </li>
+            ))}
+          </ul>
+        </Callout>
+      )}
+      {notes.length > 0 && (
+        <Callout tone="info" title="About the latest run">
+          <ul className="list-disc space-y-0.5 pl-4">
+            {notes.map((a) => (
+              <li key={a.level + a.text}>{a.text}</li>
             ))}
           </ul>
         </Callout>

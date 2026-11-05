@@ -4979,10 +4979,29 @@ await guard('retries, AI data, sister domains and the fact base', async () => {
   const ap = await run('Apply Analysis', store['Answer Analyst']);
   const mt = await run('AI Metrics', ap); const X = mt[0].json; const XM = X.metrics;
   console.log('   errors ->', JSON.stringify({ requests: XM.requests, errors: XM.errors, rate: XM.error_rate, retried: XM.retried, answered_on_retry: XM.retry_answered, list: XM.errors_list }));
-  check('every rate counts answered requests only, and the one request that failed twice is listed with its engine, its message and the retry outcome', XM.samples === XM.answered && XM.errors === 1 && XM.error_rate === Math.round(1000 / XM.requests) / 10 && XM.retried === 2 && XM.retry_answered === 1 && XM.errors_list.length === 1 && XM.errors_list[0].engine === 'ChatGPT' && /no response/.test(XM.errors_list[0].message), JSON.stringify(XM).slice(0, 400));
-  check('the failures are an alert of their own, which says how many answers the rates are based on', X.alerts.some(a => /1 of \d+ AI requests failed/.test(a.text) && /1 of 2 answered on the retry/.test(a.text) && /rates below count/.test(a.text)), JSON.stringify(X.alerts.map(a => a.text)));
+  check('every rate counts answered requests only, and the one request that failed twice is listed with its engine, its message and the retry outcome', XM.samples === XM.answered && XM.errors === 1 && XM.error_rate === Math.round(1000 / XM.requests) / 10 && XM.retried === 2 && XM.retry_answered === 1 && XM.errors_list.length === 1 && XM.errors_list[0].engine === 'ChatGPT' && /no response/.test(XM.errors_list[0].raw) && XM.errors_list[0].message === 'did not answer', JSON.stringify(XM).slice(0, 400));
+  // 2026-11-05 (client report, devaicon.com): the failure is still disclosed, in plain words, as a note and not an alarm; the raw message stays in the data
+  const fN = X.alerts.find(a => /is missing this time/.test(a.text)) || {};
+  check('2026-11-05: one transient miss is a note (info) in plain words: which engine, asked again, asked again next run, what the rates count',
+    fN.level === 'info' && /^1 of \d+ AI answers is missing this time: ChatGPT did not answer, even when asked again a little later\. This happens now and then on the AI engines' side, not on your website\. That question is asked again on the next run\. \d+ of \d+ came back; the rates count only real answers: .+\.$/.test(fN.text)
+    && XM.failure_note && XM.failure_note.level === 'info' && !X.alerts.some(a => /requests failed|SE Server|no response|Internal|\.\./.test(a.text)), JSON.stringify(X.alerts));
   const rp = await run('AI Report', mt); const html = rp[0].json.html;
-  check('the report names the failures above the figures instead of hiding them', /requests failed this run/.test(html) && /answered when they were sent again/.test(html) && /came back; the rates below count/.test(html), html.slice(0, 200));   // R84 (2026-10-16): "N of M came back; the rates below count …" — the counted answers were never "the answers that came back"
+  check('the report names the failures above the figures instead of hiding them, in the same plain words and never in the red alert box', /1 of \d+ AI answers is missing this time/.test(html) && /\d+ of \d+ came back; the rates count only real answers/.test(html)
+    && !/requests failed|no response|SE Server/.test(html) && (html.match(/is missing this time/g) || []).length === 1, html.slice(0, 400));   // R84 kept: the counted answers are named
+  { // 2026-11-05: the kit's other paths - a refused request is never called the engine's side, and 10% or more stays an alert
+    const amSrc = require('fs').readFileSync(require('path').join(process.env.CODE_DIR || require('path').join(__dirname, 'code'), 'AI_Metrics.js'), 'utf8');   // the kit as the build inlined it
+    const at = amSrc.indexOf('const FAIL = (() => {'); const kit = amSrc.slice(at, amSrc.indexOf('\n})();', at) + 6);
+    const F = new Function(kit + '\nreturn FAIL;')();
+    const live = F.note({ errors: 1, requests: 45, retried: 3, list: [{ engine: 'Google AI Overview', raw: 'task error 40101: Internal SE Server Error.' }], counted: '71 answers to the 9 buyer questions on the 5 weekly engines (44 this run + 27 from the daily pulse)' });
+    const bad = F.note({ errors: 1, requests: 45, retried: 1, list: [{ engine: 'Perplexity', raw: 'task error 40501: Invalid Field: web_search_country_iso_code.' }], counted: '44 answers' });
+    const many = F.note({ errors: 6, requests: 45, retried: 6, list: [{ engine: 'Google AI Mode', raw: 'Internal SE Server Error.' }, { engine: 'ChatGPT', raw: 'no response' }], counted: '39 answers' });
+    console.log('   client case ->', live.text);
+    check('2026-11-05: the client\'s exact case (1 of 45 Google AI Overview "Internal SE Server Error.") reads as a note with no raw message and no doubled full stop',
+      live.level === 'info' && /^1 of 45 AI answers is missing this time: Google AI Overview did not answer/.test(live.text) && /44 of 45 came back; the rates count only real answers: 71 answers to the 9 buyer questions .*daily pulse\)\.$/.test(live.text)
+      && live.text === "1 of 45 AI answers is missing this time: Google AI Overview did not answer, even when asked again a little later. This happens now and then on the AI engines' side, not on your website. That question is asked again on the next run. 44 of 45 came back; the rates count only real answers: 71 answers to the 9 buyer questions on the 5 weekly engines (44 this run + 27 from the daily pulse)." && !/SE Server|40101|\.\./.test(live.text), live.text);
+    check('2026-11-05: a refused request (not an upstream hiccup) stays low and never says it was the engines\' side', bad.level === 'low' && /Perplexity could not be asked, also on a second try/.test(bad.text) && !/engines' side|Invalid Field/.test(bad.text), bad.text);
+    check('2026-11-05: 10% or more is still an alert (medium) and says the ranges are wider', many.level === 'medium' && /^6 of 45 AI answers are missing this time/.test(many.text) && /Google AI Mode and ChatGPT did not answer/.test(many.text) && /ranges are wider/.test(many.text) && /Those questions are asked again/.test(many.text), many.text);
+    check('2026-11-05: no failure, no note', F.note({ errors: 0, requests: 45, list: [] }) === null, ''); }
 
   // ---------- D. D19 / G22: a heading is not a brand, two URL variants are one page, a title is never cut ----------
   const PAGE = 'https://gulfnews.com/business/best-e-invoicing-providers-uae-2026-1.501';
@@ -17140,7 +17159,7 @@ await guard('S135 R83 R84 R85 AI visibility: no pitch to a rival, denominators t
     XM.samples === 74 && XM.headline && XM.headline.buyer_questions === 7 && XM.headline.engine_count === 5 && XM.headline.run_answers === 33 && XM.headline.pulse_answers === 41
     && /74 answers to the 7 buyer questions on the 5 weekly engines \(33 this run \+ 41 from the daily pulse\)/.test(XM.headline.text) && /Claude's 7 answers/.test(XM.headline.text), JSON.stringify(XM.headline));
   check('R84: 46 of the 47 requests came back — the alert no longer calls the 33 counted answers "the answers that came back"',
-    XM.headline && XM.headline.came_back === 46 && XM.headline.requests === 47 && X.alerts.some(a => /1 of 47 AI requests failed/.test(a.text) && /46 of 47 came back/.test(a.text)) && !X.alerts.some(a => /33 answers that came back/.test(a.text)),
+    XM.headline && XM.headline.came_back === 46 && XM.headline.requests === 47 && X.alerts.some(a => /1 of 47 AI answers is missing this time/.test(a.text) && /46 of 47 came back; the rates count only real answers: 74 answers/.test(a.text)) && !X.alerts.some(a => /33 answers that came back|answers that came back:/.test(a.text)),   // 2026-11-05 wording
     JSON.stringify(X.alerts.map(a => a.text)));
   check('R84: AI Overview presence = shown / the requests that answered (5 of 6 = 83.3%), not 5 of 7 — the failed request is not in the denominator (exec 623 printed 71.4%)',
     XM.aio_presence === 83.3 && F.expect.aio_presence === 71.4 && XM.aio_basis.failed === 1 && XM.aio_basis.read === 6, JSON.stringify({ now: XM.aio_presence, was: F.expect.aio_presence, basis: XM.aio_basis }));
@@ -17158,7 +17177,7 @@ await guard('S135 R83 R84 R85 AI visibility: no pitch to a rival, denominators t
     { action: 'Be listed on mof.gov.ae', why: 'The official list AI cites.' }] } } }]);
   const R = (await run('AI Report', store['AI Brief']))[0].json; const html = R.html;
   check('R84: the report header and the failure line say what the figures count ("74 answers to the 7 buyer questions on the 5 weekly engines", "46 of 47 came back")',
-    /74 answers to the 7 buyer questions on the 5 weekly engines/.test(html) && /46 of 47 came back; the rates below count/.test(html) && !/8 buyer questions × 6 AI engines/.test(html), (html.match(/AI search visibility[\s\S]{0,700}/) || [''])[0]);
+    /74 answers to the 7 buyer questions on the 5 weekly engines/.test(html) && /46 of 47 came back; the rates count only real answers/.test(html) && !/8 buyer questions × 6 AI engines/.test(html), (html.match(/AI search visibility[\s\S]{0,700}/) || [''])[0]);
   const lnAns = (R.lineage || []).find(l => /Named in/.test(l.figure)) || {};
   check('R84: the lineage sample names the same population — 7 buyer questions on 5 weekly engines, 33 this run + 41 from the pulse (it read "8 questions × 6 engines")',
     /7 buyer questions on 5 weekly engines: 33 this run \+ 41 from the daily pulse/.test(lnAns.sample || ''), JSON.stringify(lnAns));
