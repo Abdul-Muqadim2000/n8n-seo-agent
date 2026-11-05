@@ -349,7 +349,7 @@ function TutorialView({ tutorial: t }: { tutorial: Tutorial }) {
               <div className={film ? 'mt-9' : 'mt-8'}>
                 {film ? (
                   <div className="rounded-[20px] border border-line bg-surface p-1.5 shadow-raised sm:p-2">
-                    <TutorialPlayer key={t.slug} tutorial={t} controls={controls} onTime={onTime} startAt={startAt} priority />
+                    <TutorialPlayer key={t.slug} tutorial={t} controls={controls} onTime={onTime} startAt={startAt} priority eager />
                   </div>
                 ) : (
                   <ComingSoon />

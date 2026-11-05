@@ -7,8 +7,9 @@ import type { TutorialFilm } from './tutorials';
 export const tutorialFilms: Record<string, TutorialFilm> = {
   'create-your-account': {
     durationSeconds: 73,
-    published: '2026-10-25',
+    published: '2026-10-24',
     cover: '/tutorials/covers/create-your-account.webp',
+    youtubeId: 'coziV2Y1-Qk',
     captions: '/tutorials/captions/create-your-account.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -29,6 +30,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 76,
     published: '2026-10-25',
     cover: '/tutorials/covers/set-up-your-company.webp',
+    youtubeId: 'mvcF0hkOt_A',
     captions: '/tutorials/captions/set-up-your-company.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -46,31 +48,31 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     ],
   },
   'add-your-website': {
-    durationSeconds: 91,
+    durationSeconds: 69,
     published: '2026-10-28',
     cover: '/tutorials/covers/add-your-website.webp',
+    youtubeId: 'iSUxfWjnuLM',
     captions: '/tutorials/captions/add-your-website.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
       { start: 12, title: 'Type your website address', kind: 'step' },
       { start: 19, title: 'Choose the main country your customers search from', kind: 'step' },
       { start: 27, title: 'Say what you do', kind: 'step' },
-      { start: 35, title: 'Check that your main country matches', kind: 'step' },
-      { start: 56, title: 'Add the website and continue', kind: 'step' },
+      { start: 35, title: 'Add the website and continue', kind: 'step' },
     ],
     transcript: [
       "Welcome to Alaventra. Rank in search. Get recommended by AI. In tutorial 1.3, you'll add the website you want to grow, and say where its customers search.",
       'First, type your website address, or check the one filled in from the step before.',
       'Next, choose the main country your customers search from. Rankings, keyword searches and AI answers are checked there.',
       "Then, if you like, say what you do in a sentence or two. You'll add the rest in the business step.",
-      'Next, a quick check. If what you do names places outside your main country, like Riyadh and Jeddah here, Add website opens Check this first. Your main country decides where rankings, searches and AI answers are measured. Make the suggested country your main one, or tick Keep. Cancel changes nothing.',
-      'When the details match, click Add website. Next, you confirm that you own it, and series two shows you how. Pick one way: Verify with Google, Add a DNS record, or Add a meta tag. Or click Skip for now, and verify later. So, type your website address, choose the main country, say what you do, check the country matches, and add the website. Your website is added. Next, describe your business in tutorial 1.4.',
+      'Now click Add website. Next, you confirm that you own it, and series two shows you how. Pick one way: Verify with Google, Add a DNS record, or Add a meta tag. Or click Skip for now, and verify later. So, type your website address, choose the main country, say what you do, and add the website. Your website is added. Next, describe your business in tutorial 1.4.',
     ],
   },
   'describe-your-business': {
-    durationSeconds: 116,
+    durationSeconds: 99,
     published: '2026-10-28',
     cover: '/tutorials/covers/describe-your-business.webp',
+    youtubeId: 'CXlUKMmwMaY',
     captions: '/tutorials/captions/describe-your-business.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -78,8 +80,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
       { start: 22, title: 'List what you sell and who buys it', kind: 'step' },
       { start: 31, title: 'Pick the main goal of your website', kind: 'step' },
       { start: 38, title: 'Add real business facts, competitors and brand names', kind: 'step' },
-      { start: 64, title: 'Answer the country check, if it appears', kind: 'step' },
-      { start: 81, title: 'Save and continue', kind: 'step' },
+      { start: 64, title: 'Save and continue', kind: 'step' },
     ],
     transcript: [
       "Welcome to Alaventra. Rank in search. Get recommended by AI. In tutorial 1.4, you'll describe your business in your own words, so every page and report starts from real facts.",
@@ -87,28 +88,26 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
       'Next, list what you sell, one item at a time, then describe who your customers are.',
       'Then pick the main goal of your website. It steers which keywords are chosen, and how each page ends.',
       'Now choose your tone of voice and a call to action, then add real business facts, like years in business or certifications. Not sure what counts? Click What makes a good fact? for a short guide. Pages quote your facts, and never invent numbers. Then add up to three competitors, and the full names people use for your company, so AI answers about you are read correctly.',
-      "One check before you save. If your text names places outside your main country, like Riyadh and Jeddah for a business in the Emirates, you'll see Check this first. Make that country your main one, or tick Keep, then Continue. Or click Cancel, and change your text.",
-      'When your details are right, click Save and continue. The setup moves on to the people behind your pages. Every page, report and question we ask AI assistants now starts from your details. You can change them any time in Website settings. So, say what you do, list what you sell and who buys it, pick your goal, add real facts, and save. Your business is described. Next, choose your first keyword in tutorial 1.5.',
+      'Finally, click Save and continue. The setup moves on to the people behind your pages. Every page, report and question we ask AI assistants now starts from your details. You can change them any time in Website settings. So, say what you do, list what you sell and who buys it, pick your goal, add real facts, and save. Your business is described. Next, choose your first keyword in tutorial 1.5.',
     ],
   },
   'choose-your-first-keyword': {
-    durationSeconds: 106,
+    durationSeconds: 96,
     published: '2026-10-28',
     cover: '/tutorials/covers/choose-your-first-keyword.webp',
+    youtubeId: 'zAXS70GQDzk',
     captions: '/tutorials/captions/choose-your-first-keyword.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
       { start: 13, title: 'Type a search a customer would use and check it', kind: 'step' },
-      { start: 30, title: 'If your search names another place', kind: 'step' },
-      { start: 40, title: 'Or ask for suggestions', kind: 'step' },
-      { start: 56, title: 'Choose how pages are written: each week, or after your OK', kind: 'step' },
-      { start: 64, title: 'Pick how much we do on our own', kind: 'step' },
-      { start: 73, title: 'Continue, or choose later', kind: 'step' },
+      { start: 30, title: 'Or ask for suggestions', kind: 'step' },
+      { start: 45, title: 'Choose how pages are written: each week, or after your OK', kind: 'step' },
+      { start: 53, title: 'Pick how much we do on our own', kind: 'step' },
+      { start: 62, title: 'Continue, or choose later', kind: 'step' },
     ],
     transcript: [
       "Welcome to Alaventra. Rank in search. Get recommended by AI. In tutorial 1.5, you'll choose the search you most want to be found for, so your pages are the ones you want.",
       'First, type a search a customer would use to find you. Click Check it to see how hard that search is for your site. Your result shows your chances, how many people search for it each month, and about how many pages it takes.',
-      'If your search names a place outside your main country, Alaventra asks first. Take the suggested search, keep yours, or click Cancel and type another.',
       "Or start from our suggestions. Each card shows how many people search, your chances, and the credits a page uses. Click Choose this keyword on the one you want. Our first pick is the one we'd start with.",
       'Then choose how pages are written: a new page each week, or each page only after your OK.',
       "Next, pick how much we do on our own. Two days before each week, you see what's coming up, and you can skip anything.",
@@ -116,31 +115,31 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     ],
   },
   'choose-what-to-track-and-start': {
-    durationSeconds: 121,
-    published: '2026-10-28',
+    durationSeconds: 105,
+    published: '2026-10-29',
     cover: '/tutorials/covers/choose-what-to-track-and-start.webp',
+    youtubeId: 'ntBnY8G6DRQ',
     captions: '/tutorials/captions/choose-what-to-track-and-start.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
       { start: 12, title: 'Choose what is checked each week', kind: 'step' },
       { start: 56, title: 'Review every choice and edit any row', kind: 'step' },
-      { start: 71, title: 'Check the estimated credits', kind: 'step' },
-      { start: 79, title: 'Start, and see what happens today', kind: 'step' },
-      { start: 94, title: 'Change it later in Website settings', kind: 'step' },
+      { start: 64, title: 'Check the estimated credits', kind: 'step' },
+      { start: 72, title: 'Start, and see what happens today', kind: 'step' },
     ],
     transcript: [
       "Welcome to Alaventra. Rank in search. Get recommended by AI. In tutorial 1.6, you'll choose what's checked each week, review your setup, and start.",
       "First, add other searches you want to watch. You'll see your position for each one, every week. Then choose how many pages a week are written for your keyword. Next, turn on the growth monitors you want. AI visibility shows how AI assistants answer your buyers' questions, the Daily AI pulse checks them each morning, and AI growth helps you get named in AI answers. Then the Backlink monitor watches the sites that link to you, the Link builder finds new ones, and the Monthly technical audit checks your site's health. Turn off anything you don't need. At the bottom, you see the credits all of this uses each month.",
-      'Click Continue, and review every choice in one place. Click Edit on any row to change it. Under Monitors, your AI questions follow the services you listed and the keywords you work on.',
+      'Click Continue, and review every choice in one place. Click Edit on any row to change it.',
       'Check the estimated credits, what happens next, and what starting now uses from your balance.',
-      'Then click Start, and your first checks begin today. Not ready? Click Finish without tracking, and start later. You land on your Pipeline: what needs you, what runs on its own, and what happens next.',
-      "Later, you can change any of this in Website settings, under Tracking and monitors. Your main country comes from your Business details. So, choose what's checked, review your choices, check the credits, and click Start. You're set up. Next, find your way around Alaventra in tutorial 1.7.",
+      "Then click Start, and your first checks begin today. Not ready? Click Finish without tracking, and start later. You land on your Pipeline: what needs you, what runs on its own, and what happens next. So, choose what's checked, review your choices, check the credits, and click Start. You're set up. Next, find your way around Alaventra in tutorial 1.7.",
     ],
   },
   'find-your-way-around': {
     durationSeconds: 100,
     published: '2026-10-25',
     cover: '/tutorials/covers/find-your-way-around.webp',
+    youtubeId: 'A_-KLjw6c4U',
     captions: '/tutorials/captions/find-your-way-around.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -161,6 +160,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 73,
     published: '2026-10-25',
     cover: '/tutorials/covers/join-a-company-from-an-invitation.webp',
+    youtubeId: '906AgW6GAU4',
     captions: '/tutorials/captions/join-a-company-from-an-invitation.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -177,8 +177,9 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
   },
   'sign-in-and-reset-your-password': {
     durationSeconds: 107,
-    published: '2026-10-25',
+    published: '2026-10-24',
     cover: '/tutorials/covers/sign-in-and-reset-your-password.webp',
+    youtubeId: '6ft45md0tpg',
     captions: '/tutorials/captions/sign-in-and-reset-your-password.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -197,8 +198,9 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
   },
   'verify-with-google': {
     durationSeconds: 90,
-    published: '2026-10-25',
+    published: '2026-10-24',
     cover: '/tutorials/covers/verify-with-google.webp',
+    youtubeId: 'SZhZqt6aXuY',
     captions: '/tutorials/captions/verify-with-google.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -223,6 +225,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 108,
     published: '2026-10-25',
     cover: '/tutorials/covers/verify-with-dns-or-meta-tag.webp',
+    youtubeId: 'UUDL1xEEIEg',
     captions: '/tutorials/captions/verify-with-dns-or-meta-tag.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -249,6 +252,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 94,
     published: '2026-10-25',
     cover: '/tutorials/covers/connect-search-console-and-analytics.webp',
+    youtubeId: 'lUBnwJba1FA',
     captions: '/tutorials/captions/connect-search-console-and-analytics.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -273,6 +277,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 115,
     published: '2026-10-28',
     cover: '/tutorials/covers/add-another-website.webp',
+    youtubeId: 'P3x5tCXOn_k',
     captions: '/tutorials/captions/add-another-website.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -301,6 +306,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 86,
     published: '2026-10-25',
     cover: '/tutorials/covers/use-the-setup-guides.webp',
+    youtubeId: 'JRtrVdPRLfI',
     captions: '/tutorials/captions/use-the-setup-guides.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -327,6 +333,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 154,
     published: '2026-10-28',
     cover: '/tutorials/covers/keep-business-details-up-to-date.webp',
+    youtubeId: 'rCp8D-XE5vA',
     captions: '/tutorials/captions/keep-business-details-up-to-date.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -355,8 +362,9 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
   },
   'add-author-and-reviewer': {
     durationSeconds: 109,
-    published: '2026-10-25',
+    published: '2026-10-24',
     cover: '/tutorials/covers/add-author-and-reviewer.webp',
+    youtubeId: 'y5Rlk4bbT2s',
     captions: '/tutorials/captions/add-author-and-reviewer.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -387,6 +395,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 102,
     published: '2026-10-28',
     cover: '/tutorials/covers/set-your-style-guide.webp',
+    youtubeId: 'exm3fdpGlNo',
     captions: '/tutorials/captions/set-your-style-guide.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -415,6 +424,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 107,
     published: '2026-10-25',
     cover: '/tutorials/covers/write-a-case-study.webp',
+    youtubeId: 'aEoIgySvfQY',
     captions: '/tutorials/captions/write-a-case-study.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -441,8 +451,9 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
   },
   'run-an-analysis': {
     durationSeconds: 91,
-    published: '2026-10-24',
+    published: '2026-10-23',
     cover: '/tutorials/covers/run-an-analysis.webp',
+    youtubeId: 'yrbJz7m6Cdg',
     captions: '/tutorials/captions/run-an-analysis.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -463,8 +474,9 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
   },
   'find-keywords-for-your-business': {
     durationSeconds: 121,
-    published: '2026-10-24',
+    published: '2026-10-23',
     cover: '/tutorials/covers/find-keywords-for-your-business.webp',
+    youtubeId: '1z9Sb5hdxpk',
     captions: '/tutorials/captions/find-keywords-for-your-business.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -485,8 +497,9 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
   },
   'get-a-keyword-verdict': {
     durationSeconds: 100,
-    published: '2026-10-24',
+    published: '2026-10-23',
     cover: '/tutorials/covers/get-a-keyword-verdict.webp',
+    youtubeId: 'c3zhKNJ-gko',
     captions: '/tutorials/captions/get-a-keyword-verdict.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -509,6 +522,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 130,
     published: '2026-10-28',
     cover: '/tutorials/covers/write-a-page-for-a-keyword.webp',
+    youtubeId: 'jTxVUqgCS7A',
     captions: '/tutorials/captions/write-a-page-for-a-keyword.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -529,8 +543,9 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
   },
   'follow-a-run': {
     durationSeconds: 92,
-    published: '2026-10-24',
+    published: '2026-10-23',
     cover: '/tutorials/covers/follow-a-run.webp',
+    youtubeId: '9hKDvD6wua4',
     captions: '/tutorials/captions/follow-a-run.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -551,8 +566,9 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
   },
   'read-download-and-share-a-report': {
     durationSeconds: 99,
-    published: '2026-10-24',
+    published: '2026-10-23',
     cover: '/tutorials/covers/read-download-and-share-a-report.webp',
+    youtubeId: '98My31OMABg',
     captions: '/tutorials/captions/read-download-and-share-a-report.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -575,6 +591,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 138,
     published: '2026-10-25',
     cover: '/tutorials/covers/see-how-your-website-describes-you.webp',
+    youtubeId: '8HFQ8SToEC0',
     captions: '/tutorials/captions/see-how-your-website-describes-you.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -597,6 +614,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 123,
     published: '2026-10-28',
     cover: '/tutorials/covers/read-your-pipeline.webp',
+    youtubeId: 'ZpvZuTNvOMo',
     captions: '/tutorials/captions/read-your-pipeline.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -619,6 +637,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 148,
     published: '2026-10-28',
     cover: '/tutorials/covers/start-a-keyword-ladder.webp',
+    youtubeId: '5-OKHDABkR0',
     captions: '/tutorials/captions/start-a-keyword-ladder.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -643,6 +662,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 126,
     published: '2026-10-25',
     cover: '/tutorials/covers/follow-a-ladder.webp',
+    youtubeId: 'AN1vmFJkTgQ',
     captions: '/tutorials/captions/follow-a-ladder.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -669,6 +689,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 86,
     published: '2026-10-25',
     cover: '/tutorials/covers/approve-whats-coming-up.webp',
+    youtubeId: 'XlBrcsu6-kk',
     captions: '/tutorials/captions/approve-whats-coming-up.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -689,6 +710,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 105,
     published: '2026-10-28',
     cover: '/tutorials/covers/set-auto-or-manual-and-priority.webp',
+    youtubeId: 'MyAufTHCM0U',
     captions: '/tutorials/captions/set-auto-or-manual-and-priority.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -711,6 +733,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 118,
     published: '2026-10-28',
     cover: '/tutorials/covers/choose-autopilot-level-and-weekday.webp',
+    youtubeId: 'MW7R1DyH5dY',
     captions: '/tutorials/captions/choose-autopilot-level-and-weekday.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -731,6 +754,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 141,
     published: '2026-10-28',
     cover: '/tutorials/covers/answer-a-keyword-suggestion.webp',
+    youtubeId: 'E4QqTB6qGBo',
     captions: '/tutorials/captions/answer-a-keyword-suggestion.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -755,6 +779,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 146,
     published: '2026-10-28',
     cover: '/tutorials/covers/write-suggested-pages-and-see-what-runs.webp',
+    youtubeId: 'CBNo8EI6-TU',
     captions: '/tutorials/captions/write-suggested-pages-and-see-what-runs.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -777,8 +802,9 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
   },
   'tick-off-the-steps-on-your-website': {
     durationSeconds: 89,
-    published: '2026-10-28',
+    published: '2026-10-27',
     cover: '/tutorials/covers/tick-off-the-steps-on-your-website.webp',
+    youtubeId: '-6rjZI_v5Jc',
     captions: '/tutorials/captions/tick-off-the-steps-on-your-website.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -801,6 +827,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 132,
     published: '2026-10-28',
     cover: '/tutorials/covers/see-your-content-pipeline.webp',
+    youtubeId: 'Kjj4ytzAWvk',
     captions: '/tutorials/captions/see-your-content-pipeline.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -819,6 +846,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 120,
     published: '2026-10-28',
     cover: '/tutorials/covers/tell-us-you-published.webp',
+    youtubeId: 'KQou-kO2UCY',
     captions: '/tutorials/captions/tell-us-you-published.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -841,6 +869,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 99,
     published: '2026-10-28',
     cover: '/tutorials/covers/finish-a-page-that-needs-edits.webp',
+    youtubeId: 'h51APwN2584',
     captions: '/tutorials/captions/finish-a-page-that-needs-edits.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -863,6 +892,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 84,
     published: '2026-10-25',
     cover: '/tutorials/covers/check-a-page-before-you-publish.webp',
+    youtubeId: 'WyGtOaOTIQg',
     captions: '/tutorials/captions/check-a-page-before-you-publish.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -881,6 +911,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 132,
     published: '2026-10-28',
     cover: '/tutorials/covers/connect-your-cms.webp',
+    youtubeId: 'lq6tJm1ifug',
     captions: '/tutorials/captions/connect-your-cms.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -903,6 +934,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 91,
     published: '2026-10-28',
     cover: '/tutorials/covers/send-a-page-to-your-cms.webp',
+    youtubeId: 'gvVjoFpOV7M',
     captions: '/tutorials/captions/send-a-page-to-your-cms.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -925,6 +957,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 133,
     published: '2026-10-28',
     cover: '/tutorials/covers/read-a-written-page.webp',
+    youtubeId: 'wSyrhyhOvq8',
     captions: '/tutorials/captions/read-a-written-page.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -953,6 +986,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 124,
     published: '2026-10-28',
     cover: '/tutorials/covers/answer-the-questions-on-a-written-page.webp',
+    youtubeId: 'f7HhoidX_qQ',
     captions: '/tutorials/captions/answer-the-questions-on-a-written-page.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -979,6 +1013,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 104,
     published: '2026-10-25',
     cover: '/tutorials/covers/read-your-overview.webp',
+    youtubeId: '76_D1DPBgEQ',
     captions: '/tutorials/captions/read-your-overview.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1003,6 +1038,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 138,
     published: '2026-10-25',
     cover: '/tutorials/covers/read-search-and-traffic.webp',
+    youtubeId: 'bA_aqkHxtPY',
     captions: '/tutorials/captions/read-search-and-traffic.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1029,6 +1065,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 110,
     published: '2026-10-25',
     cover: '/tutorials/covers/track-your-rankings.webp',
+    youtubeId: 'H1NMPtDJ6P4',
     captions: '/tutorials/captions/track-your-rankings.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1053,6 +1090,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 82,
     published: '2026-10-25',
     cover: '/tutorials/covers/act-on-recommendations.webp',
+    youtubeId: 'smz8Y3gXGxg',
     captions: '/tutorials/captions/act-on-recommendations.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1075,6 +1113,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 102,
     published: '2026-10-25',
     cover: '/tutorials/covers/run-a-technical-audit.webp',
+    youtubeId: '2aGc9wb0vxU',
     captions: '/tutorials/captions/run-a-technical-audit.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1101,6 +1140,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 117,
     published: '2026-10-25',
     cover: '/tutorials/covers/fix-what-the-audit-found.webp',
+    youtubeId: 'CcO8PTFzgik',
     captions: '/tutorials/captions/fix-what-the-audit-found.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1127,6 +1167,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 113,
     published: '2026-10-25',
     cover: '/tutorials/covers/record-the-monthly-check-in.webp',
+    youtubeId: '4Z8GiAFa5ek',
     captions: '/tutorials/captions/record-the-monthly-check-in.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1149,6 +1190,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 138,
     published: '2026-10-25',
     cover: '/tutorials/covers/see-what-crawlers-fetch.webp',
+    youtubeId: 'v7OeNO6b5oA',
     captions: '/tutorials/captions/see-what-crawlers-fetch.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1172,27 +1214,28 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     ],
   },
   'choose-what-is-checked-every-week': {
-    durationSeconds: 184,
-    published: '2026-10-28',
+    durationSeconds: 190,
+    published: '2026-10-29',
     cover: '/tutorials/covers/choose-what-is-checked-every-week.webp',
+    youtubeId: 'YpatZLsfIH4',
     captions: '/tutorials/captions/choose-what-is-checked-every-week.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
       { start: 14, title: 'Open Tracking & monitors and start or pause weekly tracking', kind: 'step' },
       { start: 30, title: 'Check the country, set the keywords to watch and Google Analytics', kind: 'step' },
       { start: 61, title: 'Choose how many pages a week are written for your keyword', kind: 'step' },
-      { start: 80, title: 'Switch the growth monitors on or off: AI visibility, backlinks, link building, the monthly audit', kind: 'step' },
-      { start: 110, title: 'Add competitors and brand names', kind: 'step' },
-      { start: 118, title: 'Group your pages for the weekly report', kind: 'step' },
-      { start: 135, title: 'Check the credits a month and save', kind: 'step' },
-      { start: 155, title: 'What you get', kind: 'result' },
+      { start: 80, title: 'Switch the growth monitors on or off: AI visibility, backlinks, link building, indexing, the monthly audit', kind: 'step' },
+      { start: 116, title: 'Add competitors and brand names', kind: 'step' },
+      { start: 124, title: 'Group your pages for the weekly report', kind: 'step' },
+      { start: 141, title: 'Check the credits a month and save', kind: 'step' },
+      { start: 161, title: 'What you get', kind: 'result' },
     ],
     transcript: [
       "Welcome to Alaventra. Rank in search. Get recommended by AI. In tutorial 7.9, you'll choose what your weekly tracking checks, see the credits it uses, and pause it when you need a break.",
       "First, open Website settings, then Tracking & monitors. The Weekly tracking card shows what's connected and how many keywords are tracked. Need a break? Pause stops the weekly reports, monitors and pages, until you start them again.",
       "Next, scroll to Keywords and Google Analytics. The country is your website's main country; to change it, use Business details. Then type other keywords to watch. Add your Google Analytics property ID, or leave it empty and it's found for you. Then save, and a fresh report is sent. It uses about 6 credits. Not sure what to pick? Each field has a guide, like How do I choose these, that walks you through it step by step.",
       'Now, back at the top, choose how many pages a week are written for your keyword. The credits a month update as you choose. If you choose None while a keyword still has pages to write, Check this first tells you before anything changes. Keep 1 page a week, or click Cancel.',
-      'Then switch the growth monitors on or off. In AI visibility, tick Follow my keywords, so your AI questions follow the keywords you work on. The daily check can ask only those questions, which costs less. Next, the backlink monitor, the link builder and the monthly technical audit each have their own switch. For the audit, choose 200, 500 or 1000 pages to check, and turn on Render JavaScript if your site needs it.',
+      'Then switch the growth monitors on or off. In AI visibility, tick Follow my keywords, so your AI questions follow the keywords you work on. The daily check can ask only those questions, which costs less. Next, the backlink monitor, the link builder, Indexing and the monthly technical audit each have their own switch. Indexing is free: it shows which of your pages Google left out of search. For the audit, choose 200, 500 or 1000 pages to check, and turn on Render JavaScript if your site needs it.',
       'Add your brand names, so AI answers and mentions are matched to you, and the competitors you want to compare with.',
       'Next, Content groups sort your pages, like blog or services, so the weekly report shows how each group does. Click Add a group, give it a name and the part of the address its pages share, then click Save groups.',
       'Finally, Estimated credits a month adds up every schedule, so you see what each part uses. Click Save monitors to keep your choices. And if a change would use up your credits fast, Check this first says how long they would last, before anything is saved. Click Cancel to keep things as they are.',
@@ -1201,8 +1244,9 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
   },
   'read-your-weekly-report': {
     durationSeconds: 152,
-    published: '2026-10-25',
+    published: '2026-10-29',
     cover: '/tutorials/covers/read-your-weekly-report.webp',
+    youtubeId: 'FJLxm5Ksuyo',
     captions: '/tutorials/captions/read-your-weekly-report.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1225,10 +1269,40 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
       "So each week you know where visitors came from, what moved, and what to do next. So, find this week's report, read where visitors came from, check your searches and keywords, your waiting pages, the rankings report, and share it. You know what to do next. Then check if AI assistants name your business, in tutorial 8.1.",
     ],
   },
+  'see-which-pages-google-left-out-of-search': {
+    durationSeconds: 163,
+    published: '2026-10-29',
+    cover: '/tutorials/covers/see-which-pages-google-left-out-of-search.webp',
+    youtubeId: 'cte5CmDyFy0',
+    captions: '/tutorials/captions/see-which-pages-google-left-out-of-search.vtt',
+    chapters: [
+      { start: 0, title: 'Introduction', kind: 'intro' },
+      { start: 14, title: 'Open Indexing and read the summary', kind: 'step' },
+      { start: 34, title: 'Read each group: what it means, what we do, what you do', kind: 'step' },
+      { start: 50, title: 'Fix the problems on your website', kind: 'step' },
+      { start: 68, title: 'Help Google find a page, or improve it', kind: 'step' },
+      { start: 86, title: 'Wait for Google, or ask it to read a page again', kind: 'step' },
+      { start: 103, title: 'See what is left out on purpose and what dropped out', kind: 'step' },
+      { start: 113, title: "Follow Google's updates", kind: 'step' },
+      { start: 130, title: 'Turn the daily check on or off', kind: 'step' },
+    ],
+    transcript: [
+      "Welcome to Alaventra. Rank in search. Get recommended by AI. In tutorial 7.11, you'll see which of your pages Google left out of search, why, and what to do about each one.",
+      'First, open Indexing. Every day we check your pages with Google. The summary shows how many are in Google search, how many need you, and any that dropped out. New pages lists what you wrote or added in the last thirty days. Google usually needs a few weeks for those, so they just need time.',
+      'Existing pages groups every other page by its reason. Each group says what it means, what we do, and what you do. Click Details and history to see what Google says, what our own visit found, and how the page changed over time.',
+      "Some fixes only you can make on your website, like removing a noindex instruction, or a page that is not found. Click Open the step. Steps on your website lists the pages. Copy them, make the change, then click I've done it, check now. Show me how walks you through it.",
+      'When Google knows a page but has not read it yet, we suggest pages of yours already in search that should link to it. When Google read a page and left it out, click Improve this page. Write a page opens with that page filled in, and nothing starts until you run it.',
+      'Once we see your fix, the page moves to Fixed on your site, waiting for Google. Google decides when it reads the page again. For a few important pages, you can ask Google to read them again. You do that yourself in Search Console. Show me how gives you the steps.',
+      "Archives and search pages are left out on purpose, and that's fine. Dropped out lists pages that were in search and are not any more.",
+      "Google updates lists what Google announced. After an update finishes, you see which of your pages lost ground, held, or gained. While an update is rolling out, pages move around, so we hold back suggestions to rewrite pages until it's over.",
+      "Finally, Indexing is free. Click Change to switch it on or off in Tracking and monitors, and choose how many pages are checked with Google a day. So, open Indexing, read each group, fix what's on your website, help Google find or improve a page, ask Google to read it again, and follow Google's updates. You know where every page stands. Next, check if AI assistants name your business, in tutorial 8.1.",
+    ],
+  },
   'run-your-first-ai-visibility-check': {
     durationSeconds: 94,
-    published: '2026-10-24',
+    published: '2026-10-23',
     cover: '/tutorials/covers/run-your-first-ai-visibility-check.webp',
+    youtubeId: 'xPfGsme3PDU',
     captions: '/tutorials/captions/run-your-first-ai-visibility-check.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1251,6 +1325,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 137,
     published: '2026-10-25',
     cover: '/tutorials/covers/read-your-ai-visibility.webp',
+    youtubeId: 'B96_Bm0Q-FU',
     captions: '/tutorials/captions/read-your-ai-visibility.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1275,6 +1350,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 181,
     published: '2026-10-28',
     cover: '/tutorials/covers/manage-your-question-panel.webp',
+    youtubeId: 'ZpbNmA6DoQs',
     captions: '/tutorials/captions/manage-your-question-panel.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1303,6 +1379,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 144,
     published: '2026-10-28',
     cover: '/tutorials/covers/set-up-ai-monitoring.webp',
+    youtubeId: '3XVimigOGSk',
     captions: '/tutorials/captions/set-up-ai-monitoring.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1327,6 +1404,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 134,
     published: '2026-10-25',
     cover: '/tutorials/covers/act-on-ai-growth.webp',
+    youtubeId: 'FanQ3JlZpEo',
     captions: '/tutorials/captions/act-on-ai-growth.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1351,6 +1429,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 125,
     published: '2026-10-25',
     cover: '/tutorials/covers/see-what-ai-said-about-you.webp',
+    youtubeId: '5YEs2XZzk1E',
     captions: '/tutorials/captions/see-what-ai-said-about-you.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1379,6 +1458,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 142,
     published: '2026-10-28',
     cover: '/tutorials/covers/follow-your-ai-visibility-over-time.webp',
+    youtubeId: 'BN8TuOOcUfs',
     captions: '/tutorials/captions/follow-your-ai-visibility-over-time.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1405,6 +1485,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 92,
     published: '2026-10-25',
     cover: '/tutorials/covers/set-your-own-ai-alerts.webp',
+    youtubeId: '04yGY-dNze8',
     captions: '/tutorials/captions/set-your-own-ai-alerts.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1429,6 +1510,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 95,
     published: '2026-10-25',
     cover: '/tutorials/covers/add-your-bing-and-search-console-ai-reports.webp',
+    youtubeId: 'FZqB2DNGpHA',
     captions: '/tutorials/captions/add-your-bing-and-search-console-ai-reports.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1453,6 +1535,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 128,
     published: '2026-10-25',
     cover: '/tutorials/covers/choose-extra-ai-checks.webp',
+    youtubeId: 'ZP4s2xOxKWg',
     captions: '/tutorials/captions/choose-extra-ai-checks.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1477,6 +1560,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 136,
     published: '2026-10-25',
     cover: '/tutorials/covers/see-what-ai-gets-wrong-and-whether-it-can-read-your-site.webp',
+    youtubeId: 'DjQP5mhcIMw',
     captions: '/tutorials/captions/see-what-ai-gets-wrong-and-whether-it-can-read-your-site.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1503,6 +1587,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 82,
     published: '2026-10-25',
     cover: '/tutorials/covers/check-your-backlinks.webp',
+    youtubeId: 'OiceCm0QUtI',
     captions: '/tutorials/captions/check-your-backlinks.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1525,6 +1610,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 143,
     published: '2026-10-25',
     cover: '/tutorials/covers/read-your-backlinks.webp',
+    youtubeId: 'ieYCIdnESso',
     captions: '/tutorials/captions/read-your-backlinks.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1547,6 +1633,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 98,
     published: '2026-10-28',
     cover: '/tutorials/covers/upload-the-links-google-knows.webp',
+    youtubeId: 'CSYm_amsIJo',
     captions: '/tutorials/captions/upload-the-links-google-knows.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1569,6 +1656,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 163,
     published: '2026-10-28',
     cover: '/tutorials/covers/connect-a-mailbox.webp',
+    youtubeId: '4lsN_AkuyB8',
     captions: '/tutorials/captions/connect-a-mailbox.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1593,6 +1681,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 124,
     published: '2026-10-25',
     cover: '/tutorials/covers/review-and-approve-pitches.webp',
+    youtubeId: 'Bmgp6NFkmww',
     captions: '/tutorials/captions/review-and-approve-pitches.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1617,6 +1706,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 123,
     published: '2026-10-25',
     cover: '/tutorials/covers/answer-replies-and-follow-pitches.webp',
+    youtubeId: 'sCKrBIQFo54',
     captions: '/tutorials/captions/answer-replies-and-follow-pitches.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1641,6 +1731,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 108,
     published: '2026-10-25',
     cover: '/tutorials/covers/add-listings-and-redirects.webp',
+    youtubeId: 'B1L84G6jDfY',
     captions: '/tutorials/captions/add-listings-and-redirects.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1663,6 +1754,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 97,
     published: '2026-10-25',
     cover: '/tutorials/covers/read-your-weekly-link-building-report.webp',
+    youtubeId: 'PGYjemJGctg',
     captions: '/tutorials/captions/read-your-weekly-link-building-report.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1689,6 +1781,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 101,
     published: '2026-10-25',
     cover: '/tutorials/covers/invite-your-team.webp',
+    youtubeId: '8qLKlnTc988',
     captions: '/tutorials/captions/invite-your-team.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1711,6 +1804,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 117,
     published: '2026-10-25',
     cover: '/tutorials/covers/understand-your-credits.webp',
+    youtubeId: 'rdpGBnyiqkE',
     captions: '/tutorials/captions/understand-your-credits.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1735,6 +1829,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 112,
     published: '2026-10-25',
     cover: '/tutorials/covers/buy-credits-and-set-limits.webp',
+    youtubeId: '8GM5G8iJDRo',
     captions: '/tutorials/captions/buy-credits-and-set-limits.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1755,6 +1850,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 148,
     published: '2026-10-25',
     cover: '/tutorials/covers/deliver-reports-on-a-schedule.webp',
+    youtubeId: '04EE6AV_r7Q',
     captions: '/tutorials/captions/deliver-reports-on-a-schedule.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1777,6 +1873,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 131,
     published: '2026-10-25',
     cover: '/tutorials/covers/keep-your-company-and-websites-in-order.webp',
+    youtubeId: 'VvS1lzP6JTU',
     captions: '/tutorials/captions/keep-your-company-and-websites-in-order.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1801,6 +1898,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 101,
     published: '2026-10-25',
     cover: '/tutorials/covers/send-alerts-to-slack-or-teams.webp',
+    youtubeId: 'K1R8Hr-Hdz0',
     captions: '/tutorials/captions/send-alerts-to-slack-or-teams.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1823,6 +1921,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 103,
     published: '2026-10-24',
     cover: '/tutorials/covers/turn-findings-into-tickets.webp',
+    youtubeId: '4hGEuKnIa5w',
     captions: '/tutorials/captions/turn-findings-into-tickets.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1841,6 +1940,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 143,
     published: '2026-10-25',
     cover: '/tutorials/covers/export-your-data.webp',
+    youtubeId: 'kAyXQOoU3Zk',
     captions: '/tutorials/captions/export-your-data.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1861,6 +1961,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 133,
     published: '2026-10-25',
     cover: '/tutorials/covers/connect-an-ai-assistant.webp',
+    youtubeId: 'WGu324moOMM',
     captions: '/tutorials/captions/connect-an-ai-assistant.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1881,6 +1982,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 125,
     published: '2026-10-24',
     cover: '/tutorials/covers/protect-your-account.webp',
+    youtubeId: 'dX6LqzIKPVo',
     captions: '/tutorials/captions/protect-your-account.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1903,6 +2005,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 162,
     published: '2026-10-25',
     cover: '/tutorials/covers/require-two-step-and-set-up-sso.webp',
+    youtubeId: 'OM_j4eq0gfk',
     captions: '/tutorials/captions/require-two-step-and-set-up-sso.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1927,6 +2030,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 115,
     published: '2026-10-25',
     cover: '/tutorials/covers/run-clients-as-an-agency.webp',
+    youtubeId: '3BfejyVKw6c',
     captions: '/tutorials/captions/run-clients-as-an-agency.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1949,6 +2053,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 126,
     published: '2026-10-25',
     cover: '/tutorials/covers/brand-your-client-portal.webp',
+    youtubeId: 'EO7l6guEj6I',
     captions: '/tutorials/captions/brand-your-client-portal.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1971,6 +2076,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 111,
     published: '2026-10-25',
     cover: '/tutorials/covers/ask-a-client-to-approve.webp',
+    youtubeId: 'kR7EYmYi3r8',
     captions: '/tutorials/captions/ask-a-client-to-approve.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -1991,6 +2097,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 101,
     published: '2026-10-25',
     cover: '/tutorials/covers/update-your-name-password-and-google-sign-in.webp',
+    youtubeId: 'OP6oZdhgK0s',
     captions: '/tutorials/captions/update-your-name-password-and-google-sign-in.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
@@ -2013,6 +2120,7 @@ export const tutorialFilms: Record<string, TutorialFilm> = {
     durationSeconds: 103,
     published: '2026-10-25',
     cover: '/tutorials/covers/invite-your-client-into-their-portal.webp',
+    youtubeId: 'bz-Zqen2Jl0',
     captions: '/tutorials/captions/invite-your-client-into-their-portal.vtt',
     chapters: [
       { start: 0, title: 'Introduction', kind: 'intro' },
