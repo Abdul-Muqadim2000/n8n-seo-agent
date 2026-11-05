@@ -9,6 +9,8 @@ import {
   INDEX_CAUSE_INFO,
   INDEXING_LINKS_KEY,
   INDEXING_LINKS_MAX_PAIRS,
+  INDEXING_MERGE_KEY,
+  INDEXING_MERGE_MAX_PAIRS,
   INDEXING_SITEMAP_KEY,
   INDEXING_TASK_MAX_URLS,
   indexingCauseOfKey,
@@ -25,10 +27,10 @@ import {
 } from './indexing';
 
 /** `index_links` (wave 2, DESIGN_WAVE2 §3.2): the one step `indexing:links`, pages that need a link from another page of the website */
-export type SiteTaskKind = 'indexnow' | 'ai_crawlers' | 'redirect' | 'indexing' | 'index_links';
-export const SITE_TASK_KINDS: readonly SiteTaskKind[] = ['indexnow', 'ai_crawlers', 'redirect', 'indexing', 'index_links'];
+export type SiteTaskKind = 'indexnow' | 'ai_crawlers' | 'redirect' | 'indexing' | 'index_links' | 'index_merge';
+export const SITE_TASK_KINDS: readonly SiteTaskKind[] = ['indexnow', 'ai_crawlers', 'redirect', 'indexing', 'index_links', 'index_merge'];
 /** The kinds the daily index check feeds (their own share of each daily tick, A27). */
-export const INDEX_TASK_KINDS: readonly SiteTaskKind[] = ['indexing', 'index_links'];
+export const INDEX_TASK_KINDS: readonly SiteTaskKind[] = ['indexing', 'index_links', 'index_merge'];
 export type SiteTaskState = 'todo' | 'done' | 'skipped';
 /** who made a reading: the client's own "check now", the app's daily check, the engine's weekly / monthly run, or the engine's daily
  *  index check (Index coverage, 2026-10-29: Google's own inspection of the pages, read by the engine every day) */
@@ -91,6 +93,9 @@ export interface SiteTaskInputs {
     /** W1: with the switch on, why the engine will not submit (`submit.blocked`); the step says it in words ('' / absent: nothing to say) */
     sitemapBlocked?: SitemapBlocked | '';
   } | null;
+  /** 2026-11-05 (production, devaicon.com): improvements the client confirmed at ANOTHER address than the page they update (the content
+   *  log; `indexMergePairs`). Absent or null: not read (a stored step keeps its state). */
+  merges?: { pairs: { from: string; to: string; at: string }[] } | null;
 }
 
 /** One stored row (services/siteTasks.ts), in the shape this rule reads. */
@@ -164,6 +169,15 @@ function crawlerDraft(a: SiteTaskInputs['access'], stored: StoredSiteTask | unde
   // a reading older than the task itself says nothing about the fix
   return { key: 'ai_crawlers', kind: 'ai_crawlers', engine: engine && stored && engine.ok && engine.at < stored.createdAt ? null : engine, payload: { bots } };
 }
+
+/** 2026-11-05: one step for the old pages whose improved version went live at another address (`indexing:merge`). Our own fetch decides. */
+function mergeDraft(m: SiteTaskInputs['merges'], stored: StoredSiteTask | undefined): Draft | null {
+  const pairs = (m?.pairs ?? []).filter((x) => x.from && x.to).slice(0, INDEXING_MERGE_MAX_PAIRS);
+  if (pairs.length) return { key: INDEXING_MERGE_KEY, kind: 'index_merge', engine: null, payload: { pairs } };
+  return stored ? { key: INDEXING_MERGE_KEY, kind: 'index_merge', engine: null, payload: stored.payload } : null;
+}
+export const mergePairsOf = (p: Record<string, unknown>): { from: string; to: string; at: string }[] =>
+  (Array.isArray(p.pairs) ? (p.pairs as Record<string, unknown>[]) : []).map((x) => ({ from: str(x?.from), to: str(x?.to), at: str(x?.at) })).filter((x) => x.from && x.to);
 
 function redirectDrafts(r: SiteTaskInputs['reclaim'], stored: StoredSiteTask[]): Draft[] {
   const out: Draft[] = [];
@@ -408,6 +422,10 @@ function doneDetail(d: Draft, domain: string): string {
       if (d.engine?.ok && d.engine.by === 'index') return `${INDEXING_NONE_LEFT} It keeps watching these pages.`;
       return `${what} The daily index check keeps watching them.`;
     }
+    case 'index_merge': {
+      const n = mergePairsOf(p).length;
+      return `${n === 1 ? 'The old address and its improved version are' : `All ${n} old addresses and their improved versions are`} one page again, so they no longer compete. Google moves to the improved version when it reads the old address again.`;
+    }
     case 'index_links': {
       if (d.engine?.ok && d.engine.by === 'index') return `${LINKS_NONE_LEFT} Google finds a page sooner when your other pages link to it.`;
       const n = linkPairsOf(p).length;
@@ -432,6 +450,8 @@ function present(d: Draft, domain: string): Pick<SiteTask, 'title' | 'detail' | 
       return presentIndexing(d.payload, domain);
     case 'index_links':
       return presentLinks(d.payload);
+    case 'index_merge':
+      return presentMerge(d.payload);
     default: {
       const never: never = d.kind;
       throw new Error(`Unknown step kind ${String(never)}`);
@@ -537,6 +557,20 @@ function presentCrawlers(p: Record<string, unknown>, domain: string): Pick<SiteT
   };
 }
 
+function presentMerge(p: Record<string, unknown>): Pick<SiteTask, 'title' | 'detail' | 'values' | 'guide' | 'guideVars'> {
+  const pairs = mergePairsOf(p);
+  const one = pairs.length === 1;
+  return {
+    title: one ? `Redirect ${indexPath(pairs[0].from)} to its improved version` : 'Redirect your old pages to their improved versions',
+    detail:
+      `The improved version of ${one ? 'this page' : 'these pages'} went live at a new address, and the old address still opens the old page, so the two compete for the same search and Google may keep showing the old one. ` +
+      `Redirect each old address to its improved version with a permanent (301) redirect. Or put the improved text back on the old address and remove the new one. We open ${one ? 'it' : 'them'} every day and tick this step off once ${one ? 'it is' : 'they are'} one page again.`,
+    values: pairs.map((x) => ({ label: `Redirect ${indexPath(x.from)} to`, value: x.to })),
+    guide: 'index-merge-improved',
+    guideVars: { brokenUrl: pairs[0]?.from ?? '', redirectTo: pairs[0]?.to ?? '' },
+  };
+}
+
 function presentRedirect(p: Record<string, unknown>): Pick<SiteTask, 'title' | 'detail' | 'values' | 'guide' | 'guideVars'> {
   const broken = str(p.brokenUrl);
   const to = str(p.redirectTo);
@@ -566,6 +600,7 @@ export function deriveSiteTasks(inputs: SiteTaskInputs, stored: StoredSiteTask[]
     ...redirects,
     ...indexingDrafts(inputs.indexing, stored, new Set(redirects.map((r) => r.key))),
     linksDraft(inputs.indexing?.links, byKey.get(INDEXING_LINKS_KEY)),
+    mergeDraft(inputs.merges, byKey.get(INDEXING_MERGE_KEY)),
   ].filter(
     (d): d is Draft => !!d,
   );
@@ -631,6 +666,9 @@ export function siteTaskPayload(inputs: SiteTaskInputs, stored: StoredSiteTask[]
     case 'index_links':
       d = linksDraft(inputs.indexing?.links, byKey.get(key));
       break;
+    case 'index_merge':
+      d = mergeDraft(inputs.merges, byKey.get(key));
+      break;
     default: {
       const never: never = kind;
       return never;
@@ -645,6 +683,7 @@ export function siteTaskKindOfKey(key: string): SiteTaskKind | null {
   if (key === 'ai_crawlers') return 'ai_crawlers';
   if (key.startsWith('redirect:')) return 'redirect';
   if (key === INDEXING_LINKS_KEY) return 'index_links';
+  if (key === INDEXING_MERGE_KEY) return 'index_merge';
   if (indexingCauseOfKey(key) || key === INDEXING_SITEMAP_KEY) return 'indexing';
   return null;
 }

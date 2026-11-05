@@ -236,14 +236,53 @@ describe('a page the client improved and reported published (client report 2026-
     expect(again.other).toContainEqual({ action: 'quality', cause: 'crawled_not_indexed', total: 1 });
   });
 
-  it('a page published at another address, or not published, is no improvement of this one', async () => {
+  it('a written but unpublished improvement, or a separate "write it anyway" page, is no improvement of this one', async () => {
     const s = await setup();
     engine(s);
-    improved(s, { published_url: s.url('/blog/peppol-guide') });
+    improved(s, { existing_page_url: '', published_url: s.url('/blog/peppol-guide') });
     improved(s, { status: 'written', published_url: '', published_at: '' });
     const d = (await s.u.c.get(`${s.base}/data/indexing`)).body as IndexingData;
     expect(d.groups.find((g) => g.action === 'quality')?.pages.map((p) => p.url)).toEqual([s.url('/blog/peppol')]);
-    expect(d.groups.some((g) => g.cause === 'improved_waiting')).toBe(false);
+    expect(d.groups.some((g) => g.cause === 'improved_waiting' || g.cause === 'improved_elsewhere')).toBe(false);
+  });
+
+  // production 2026-11-05 (devaicon.com rows 19 / 22 / 24): the publish check warned "planned as an update of /industries/bfsi, but you
+  // sent /services/industries-bfsi" and the client confirmed it; the old page still opens, so the two compete
+  it('confirmed at another address: the old page is the redirect step (Steps on your website) with its own check, never "Improve this page"', async () => {
+    const s = await setup();
+    engine(s);
+    improved(s, { published_url: s.url('/services/peppol'), publish_note: 'Marked published by you after a warning: sent at another address than the page it updates (checked 2026-11-04)' });
+    const d = (await s.u.c.get(`${s.base}/data/indexing`)).body as IndexingData;
+    expect(d.groups.some((g) => g.action === 'quality')).toBe(false);
+    const g = d.groups.find((x) => x.cause === 'improved_elsewhere')!;
+    expect(g).toMatchObject({ action: 'site_fix', taskKey: 'indexing:merge', label: 'Improved version published at another address', guide: 'index-merge-improved', count: 1 });
+    expect(g.pages[0]).toMatchObject({ url: s.url('/blog/peppol'), state: 'not_indexed', improvedTo: s.url('/services/peppol'), improvedWaiting: false });
+    expect(g.pages[0].note).toMatch(/Redirect this address to \/services\/peppol with a permanent \(301\) redirect/);
+    const recs = (await indexingForRecs({ domain: s.domain })) as IndexingForRecs;
+    expect(recs.quality).toEqual([]);
+    expect(recs.other.some((o) => o.action === 'quality')).toBe(false);
+    const step = (await tasksOf(s)).find((x) => x.key === 'indexing:merge')!;
+    expect(step).toMatchObject({ kind: 'index_merge', state: 'todo', guide: 'index-merge-improved' });
+    expect(step.values).toEqual([{ label: 'Redirect /blog/peppol/ to', value: s.url('/services/peppol') }]);
+    await settle();
+    // the content log keeps the address the draft was planned for (bare host, trailing slash); the website moves it to its own form first,
+    // which is the same page and never counts as the step's redirect
+    t.web[`https://${s.domain}/blog/peppol/`] = { status: 301, location: s.url('/blog/peppol') };
+    // both still open: not done, and it says why
+    t.web[s.url('/blog/peppol')] = { status: 200, text: '<html></html>' };
+    t.web[s.url('/services/peppol')] = { status: 200, text: '<html></html>' };
+    const both = await s.u.c.post(`${s.base}/tasks/check`, { key: 'indexing:merge' });
+    expect(both.body.task.state).toBe('todo');
+    expect(both.body.task.lastCheck.message).toContain('still opens its old page');
+    // a temporary redirect is not enough
+    t.web[s.url('/blog/peppol')] = { status: 302, location: s.url('/services/peppol') };
+    expect((await s.u.c.post(`${s.base}/tasks/check`, { key: 'indexing:merge' })).body.task.lastCheck.message).toContain('temporary 302');
+    // a permanent redirect to the improved version, which opens: done
+    t.web[s.url('/blog/peppol')] = { status: 301, location: s.url('/services/peppol') };
+    const ok = await s.u.c.post(`${s.base}/tasks/check`, { key: 'indexing:merge' });
+    expect(ok.body.task.state).toBe('done');
+    expect((await rowOf(s.site.id, 'indexing:merge'))!.lastCheck).toMatchObject({ ok: true, by: 'you' });
+    expect(t.fetched.every((u) => u.includes(s.domain))).toBe(true);
   });
 });
 

@@ -37,7 +37,7 @@ for (const v of inv) {
     // E14: the stored rows stand as they are (the figures of the last check), the run says it could not check, nothing is written
     const all = (v.pages || []).map(r => ({ url: S(r.url), state: S(r.state) || 'unknown', cause: S(r.cause), action: S(r.action) || 'none', lane: S(r.lane), needs_person: r.needs_person === true || r.needs_person === 'true',
       note: S(r.note), merge_into: S(r.merge_into), final_url: S(r.final_url), http_status: n0(r.http_status), fix_seen_at: S(r.fix_seen_at), ask_google: r.ask_google === true || r.ask_google === 'true',
-      improved_at: S(r.improved_at), last_crawl: S(r.last_crawl) }));
+      improved_at: S(r.improved_at), improved_to: S(r.improved_to), last_crawl: S(r.last_crawl) }));
     out.push({ json: { ...base, upserts: [], history: [], deletes: [], history_moves: [], all, dropped: [], counts: { inspected: 0, reused: 0, fetched: 0, errors: 0 }, failed: true,
       why: IX.plainWhy(v.why), why_detail: S(v.why_detail), plan: {}, freeze: fr, news_today: 0, submit: v.submit || null } });   // R5: plain words only; the raw error stays internal
     continue;
@@ -124,9 +124,12 @@ for (const v of inv) {
       if (row.state === 'indexed') { row.fix_seen_at = ''; row.fix_failed_at = ''; if (row.action === 'wait' && !S(row.cause)) row.action = 'none'; }   // N4: nothing waits for an indexed page
       // 2026-11-05 (IX.improveState, the shared rule with the app): a page the client improved waits for Google until Google's last crawl is
       // newer than the improvement; then its own action is back (Google read the new version and still leaves it out). Never "indexed" by us.
+      // 'moved' (production 2026-11-05): the improved version is live at ANOTHER address and this one still opens: a step on the website
+      // (a permanent redirect to it), never "Improve this page" again
       const imp = IX.improveState(row);
       if (imp === 'waiting' && !moved) row.action = 'wait';
-      else if (row.action === 'wait' && IX.IMPROVABLE.includes(S(row.cause)) && row.state !== 'indexed' && !S(row.fix_seen_at)) row.action = IX.ACTION[S(row.cause)] || 'none';
+      else if (imp === 'moved' && !moved) row.action = 'site_fix';
+      else if ((row.action === 'wait' || row.action === 'site_fix') && IX.IMPROVABLE.includes(S(row.cause)) && row.state !== 'indexed' && !S(row.fix_seen_at)) row.action = IX.ACTION[S(row.cause)] || 'none';
       // X4: a drop-out is an indexed page Google now leaves out with something to do (never one left out on purpose, a move, or a wait)
       if (d && !moved && prevState === 'indexed' && (row.state === 'not_indexed' || row.state === 'excluded') && reading && !['leave_out', 'wait'].includes(row.action)) {
         row.dropped_at = nowIso; dropped.push({ url: row.url, at: nowIso, cause: row.cause });
@@ -172,7 +175,7 @@ for (const v of inv) {
     const history_moves = netMoves.filter(m => !live.has(m.from));
     const all = rows.map(r => ({ url: r.url, state: S(r.state), cause: S(r.cause), action: S(r.action), lane: S(r.lane), needs_person: !!r.needs_person, note: S(r.note),
       merge_into: S(r.merge_into), final_url: S(r.final_url), http_status: n0(r.http_status), fix_seen_at: S(r.fix_seen_at), ask_google: !!r.ask_google, fix_failed_at: S(r.fix_failed_at),
-      own_title: !!r._own_title, linked: IX.linkedList(r.linked_by).length > 0, improved_at: S(r.improved_at), last_crawl: S(r.last_crawl) }));
+      own_title: !!r._own_title, linked: IX.linkedList(r.linked_by).length > 0, improved_at: S(r.improved_at), improved_to: S(r.improved_to), last_crawl: S(r.last_crawl) }));
     // X13: no same-day callback for news on the site's first run, nor for an update that started before the site was first checked
     const firstRun = !(v.pages || []).some(p => p._prev);
     const since = S(v.watch_since);

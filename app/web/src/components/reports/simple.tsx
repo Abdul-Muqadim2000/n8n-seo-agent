@@ -103,7 +103,13 @@ export function PublishedReport({ report }: { report: ReportDetail }) {
           {str(p.verify_message) ? ` What the check found: ${str(p.verify_message).replace(/ Nothing was marked published\..*$/, '')}` : ''}
         </Callout>
       )}
-      {str(p.verify_note) && <Callout tone="info" title="One page, two keywords">{str(p.verify_note)}</Callout>}
+      {str(p.verify_note) &&
+        (p.verify === 'refresh_other_address' ? (
+          // 2026-11-05: an update confirmed at another address: the old page still opens, so the two compete until it redirects
+          <Callout tone="warning" title="Redirect the old page to this one">{str(p.verify_note)}</Callout>
+        ) : (
+          <Callout tone="info" title="One page, two keywords">{str(p.verify_note)}</Callout>
+        ))}
       {str(p.fetch_error) && <Callout tone="critical" title="Fetching the page failed">{str(p.fetch_error)}</Callout>}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <Block title="Live checks" description={`${passed} of ${checks.length} passed`} icon={<ListChecks />}>

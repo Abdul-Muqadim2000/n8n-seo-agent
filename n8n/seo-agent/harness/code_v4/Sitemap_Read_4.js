@@ -887,13 +887,22 @@ const IX = (() => {
    * improved version and still left it out". THE SHARED RULE (engine and app, app/shared/src/indexing.ts improveStateOf).
    */
   const IMPROVABLE = ['crawled_not_indexed', 'google_chose_other', 'duplicate_no_canonical'];
-  /** The content-log rows that are an improvement of a page: published at the very address they improved (existing_page_url). -> [{ url, at }] */
-  const improvementsOf = (logs) => (logs || []).filter(l => l && /^published$/i.test(S(l.status)) && S(l.existing_page_url) && S(l.published_url) && S(l.published_at)
-    && same(l.existing_page_url, l.published_url)).map(l => ({ url: S(l.published_url), at: S(l.published_at) }));
-  /** '' (no improvement that matters: in search, another reason, none), 'waiting' (Google has not read it since), 'read' (Google read it since and still leaves it out) */
+  /**
+   * The content-log rows that improve a page (existing_page_url): published at that very address (`to` = ''), or (production 2026-11-05,
+   * devaicon.com: the publish check warned "planned as an update of /industries/bfsi, but you sent /services/industries-bfsi" and the client
+   * confirmed it) at ANOTHER address (`to` = where it went live). -> [{ url: the improved page, to, at }]
+   */
+  const improvementsOf = (logs) => (logs || []).filter(l => l && /^published$/i.test(S(l.status)) && S(l.existing_page_url) && S(l.published_url) && S(l.published_at))
+    .map(l => same(l.existing_page_url, l.published_url) ? { url: S(l.published_url), to: '', at: S(l.published_at) } : { url: S(l.existing_page_url), to: S(l.published_url), at: S(l.published_at) });
+  /**
+   * '' (no improvement that matters: in search, another reason, none), 'moved' (the improved version is live at another address while this
+   * one still shows the old page: the two compete, the step is a permanent redirect), 'waiting' (Google has not read it since), 'read'
+   * (Google read it since and still leaves it out)
+   */
   const improveState = (r) => {
     const x = r || {}; if (S(x.state) === 'indexed' || !IMPROVABLE.includes(S(x.cause))) return '';
     const at = ts(x.improved_at); if (!at) return '';
+    if (S(x.improved_to) && !same(x.improved_to, x.url)) return 'moved';
     return ts(x.last_crawl) >= at ? 'read' : 'waiting';
   };
   const EXCLUDED = ['noindex', 'noindex_intended', 'robots_blocked', 'robots_intended', 'canonical_elsewhere', 'alternate', 'google_chose_other',
@@ -1148,7 +1157,9 @@ const IX = (() => {
       + 'It may only be shown to Google\'s crawler (by a plugin, a CDN or a server rule). ' + s;
     // 2026-11-05: the client published an improved version of a page Google left out (improveState: THE SHARED RULE with the app)
     const imp = improveState(row);
-    if (imp === 'waiting') s = 'You published an improved version on ' + S(row.improved_at).slice(0, 10) + '. Google last read this page '
+    if (imp === 'moved') s = 'An improved version of this page went live at ' + pathOf(row.improved_to) + ' on ' + S(row.improved_at).slice(0, 10) + ', and this address still opens the old page, so the two compete for the same search. '
+      + 'Redirect this address to ' + pathOf(row.improved_to) + ' with a permanent (301) redirect, or put the improved text back on this address and remove ' + pathOf(row.improved_to) + ', so Google treats them as one page. We check the redirect for you every day.';
+    else if (imp === 'waiting') s = 'You published an improved version on ' + S(row.improved_at).slice(0, 10) + '. Google last read this page '
       + (S(row.last_crawl) ? 'on ' + S(row.last_crawl).slice(0, 10) + ', before that' : 'before that') + ', so it still shows its older reading. '
       + 'We look up Google\'s reading again in the days after, and this updates once Google reads the new version. Asking Google to read it again in Search Console can help; Google still decides.';
     else if (imp === 'read') s = 'Google read your improved version on ' + S(row.last_crawl).slice(0, 10) + ' and still left it out for now. '
@@ -1206,7 +1217,7 @@ const IX = (() => {
       if (!p) { if (pages.size >= CFG.pages_max) { capped = true; return null; } p = { url: loc, _src: new Set() }; pages.set(k, p); order.push(k); } return p; };
     for (const o of (c.ours || [])) { const loc = norm(o.url, site); const p = get(loc); if (p) { p._src.add('ours'); p._ourLoc = p._ourLoc || loc; if (S(o.published_at) && (!S(p._pub) || S(o.published_at) < S(p._pub))) p._pub = S(o.published_at); } }
     // 2026-11-05: an improved version the client published at the same address (the latest one counts); not `ours`: the page keeps its lane
-    for (const o of (c.improved || [])) { const p = get(norm(o.url, site)); if (p && S(o.at) > S(p._impr)) p._impr = S(o.at); }
+    for (const o of (c.improved || [])) { const p = get(norm(o.url, site)); if (p && S(o.at) > S(p._impr)) { p._impr = S(o.at); p._imprTo = S(o.to) ? (norm(o.to, site) || S(o.to)) : ''; } }
     for (const u of (sm.urls || [])) { const loc = norm(u.loc, site); const p = get(loc); if (!p) continue; p._src.add('sitemap'); if (u.gsc) p._src.add('gsc'); p._lastmod = S(u.lastmod) || S(p._lastmod); p._insm = true; p._smLoc = p._smLoc || loc; }
     if (sr.by) for (const e of sr.by.values()) { if (!(n0(e.impr90) > 0 || n0(e.impr28) > 0)) continue; const p = get(e.url); if (p) { p._src.add('search'); p._search = e; } }
     for (const r of (c.inventory || [])) { if (!r || !S(r.url)) continue; const p = get(norm(r.url, site)); if (!p) continue; p._src.add('inventory'); p._inv = r; }
@@ -1252,6 +1263,7 @@ const IX = (() => {
         first_seen_at: S(pv.first_seen_at) || nowIso,
         published_at: S(p._pub) || S(pv.published_at),
         improved_at: S(p._impr) > S(pv.improved_at) ? S(p._impr) : S(pv.improved_at),
+        improved_to: S(p._impr) > S(pv.improved_at) ? S(p._imprTo) : S(pv.improved_to),
         impressions_28d: keep('impr28', n0(pv.impressions_28d)), clicks_28d: keep('clicks28', n0(pv.clicks_28d)),
         last_impression_at: ev ? (S(ev.last_at) || (CFG.sa_windows.some(d => ev['impr' + d] == null) ? S(pv.last_impression_at) : '')) : S(pv.last_impression_at),
         title: S(pv.title) || S(inv.title).slice(0, 300),
@@ -1594,7 +1606,7 @@ const IX = (() => {
     'last_impression_at', 'state', 'evidence', 'cause', 'action', 'verdict', 'coverage', 'indexing_state', 'robots_state', 'page_fetch_state', 'crawled_as',
     'google_canonical', 'user_canonical', 'last_crawl', 'referring_count', 'google_sitemaps', 'inspect_at', 'fetch_at', 'http_status', 'final_url', 'noindex',
     'page_canonical', 'words', 'title', 'indexed_since', 'dropped_at', 'checks', 'next_check_at', 'needs_person', 'link_from', 'merge_into', 'note', 'updated_at',
-    'fix_seen_at', 'ask_google', 'fix_failed_at', 'ask_google_at', 'linked_by', 'asked_google_at', 'google_read_after_ask_at', 'improved_at'];
+    'fix_seen_at', 'ask_google', 'fix_failed_at', 'ask_google_at', 'linked_by', 'asked_google_at', 'google_read_after_ask_at', 'improved_at', 'improved_to'];
   // fix wave 1 (FIX_CONTRACT.md): our fetch saw the site fix (X7), and "ask Google to read it" (X8); fix wave 2: Google read the page after
   // that fix and still saw the cause (N3), and when the page was last newly marked (N6)
   const NUM = ['impressions_28d', 'clicks_28d', 'referring_count', 'google_sitemaps', 'http_status', 'words', 'checks'];
@@ -1617,7 +1629,7 @@ const IX = (() => {
       needs_person: cnt(r => r.needs_person === true), should_index: cnt(r => r.action !== 'leave_out'), by_cause, by_action,
       backlog_left: n0((run || {}).backlog_left) };
   };
-  const ACTION_LABEL = { fixed: 'Fixed on your site, waiting for Google', improved: 'Improved by you, waiting for Google', site_fix: 'Steps on your website', links: 'Help Google find these pages (internal links and sitemap)', quality: 'Pages Google read and left out',
+  const ACTION_LABEL = { fixed: 'Fixed on your site, waiting for Google', improved: 'Improved by you, waiting for Google', moved: 'Improved version published at another address', site_fix: 'Steps on your website', links: 'Help Google find these pages (internal links and sitemap)', quality: 'Pages Google read and left out',
     duplicate: 'Pages Google treats as copies', wait: 'New pages Google has not reached yet (normal)', leave_out: 'Left out on purpose or not needed (no action)', none: 'Not checked or not recognised' };
   const CAUSE_LABEL = { indexed_not_in_sitemap: 'In Google but missing from the sitemap', wait_new: 'New, not crawled yet', unknown_to_google: 'Unknown to Google',
     not_in_sitemap: 'Unknown to Google and missing from the sitemap', discovered_not_crawled: 'Found by Google, not crawled yet', crawled_not_indexed: 'Read by Google, not added',
@@ -1639,7 +1651,7 @@ const IX = (() => {
       ? 'Already linked from your website. Google has not visited these pages yet, which is common for a young website. What helps: links from other websites to your site, and asking Google to read your most important pages.'
     : (S(row.cause) === 'low_value' && isUtility(row.url)) ? 'Policy and utility pages do not need to be in Google.'
     : noteOf({ cause: row.cause, action: row.action, state: row.state }, ctx).replace(/ We have checked it [\s\S]*$/, '');
-  const lineOf = (r) => '  - ' + r.url + (S(r.merge_into) ? ' (Google uses ' + r.merge_into + ')' : '') + (S(r.final_url) ? ' (redirects to ' + r.final_url + ')' : '')
+  const lineOf = (r) => '  - ' + r.url + (improveState(r) === 'moved' ? ' (improved version at ' + S(r.improved_to) + ')' : '') + (S(r.merge_into) ? ' (Google uses ' + r.merge_into + ')' : '') + (S(r.final_url) ? ' (redirects to ' + r.final_url + ')' : '')
     + (n0(r.http_status) >= 400 ? ' (answers ' + n0(r.http_status) + ')' : '') + (r.needs_person ? ' (needs a person: checked ' + CFG.person_after + ' times with no change)' : '');
   const reportMarkdown = (site, sum, run, o) => {
     const opts = o || {}; const L = [];
@@ -1654,12 +1666,13 @@ const IX = (() => {
     if (S(run.note) && !opts.failed) L.push(S(run.note));
     if (opts.freeze && opts.freeze.freeze) L.push('**' + opts.freeze.reason + '**');
     L.push('');
-    for (const a of ['site_fix', 'fixed', 'links', 'quality', 'improved', 'duplicate', 'wait', 'none', 'leave_out']) {
+    for (const a of ['moved', 'site_fix', 'fixed', 'links', 'quality', 'improved', 'duplicate', 'wait', 'none', 'leave_out']) {
       // X7: a fix we saw on the site, waiting for Google to read it again, is its own group (not "new pages"); so is (2026-11-05) a page the
       // client improved that Google has not read since
       const waitsImp = (r) => r.action === 'wait' && improveState(r) === 'waiting';
-      const rows = (opts.rows || []).filter(r => a === 'fixed' ? (r.action === 'wait' && S(r.fix_seen_at)) : a === 'improved' ? waitsImp(r)
-        : r.action === a && !(a === 'wait' && (S(r.fix_seen_at) || waitsImp(r))) && (a !== 'none' || (S(r.cause) && r.state !== 'indexed')));
+      const moved = (r) => improveState(r) === 'moved';
+      const rows = (opts.rows || []).filter(r => a === 'fixed' ? (r.action === 'wait' && S(r.fix_seen_at)) : a === 'improved' ? waitsImp(r) : a === 'moved' ? moved(r)
+        : r.action === a && !(a === 'wait' && (S(r.fix_seen_at) || waitsImp(r))) && !(a === 'site_fix' && moved(r)) && (a !== 'none' || (S(r.cause) && r.state !== 'indexed')));
       if (!rows.length) continue;
       L.push('## ' + ACTION_LABEL[a] + ' (' + rows.length + ')');
       // wave 2: a canonical to another page from a page with its own title is a group of its own (another step than a non-main address in the sitemap)
@@ -1667,7 +1680,7 @@ const IX = (() => {
       const causes = [...new Set(rows.map(gk))];
       for (const c0 of causes) {
         const cr = rows.filter(r => gk(r) === c0); const c = S(cr[0].cause);
-        L.push('- **' + (cr[0].own_title ? 'Tells Google it is a copy of another page' : (CAUSE_LABEL[c] || c)) + '** (' + cr.length + '): ' + (a === 'fixed' ? 'Fixed on your site. Waiting for Google to read these pages again.' : a === 'improved' ? 'You published improved versions of these pages. Google has not read the new versions yet; we look again in the days after.' : cr[0].own_title ? 'These pages name another page as their main version although they have their own titles, so Google shows that page instead. If they should be found on their own, point each canonical tag to the page itself and list them in your sitemap.' : groupNote(cr[0], { freeze: opts.freeze })));
+        L.push('- **' + (cr[0].own_title ? 'Tells Google it is a copy of another page' : (CAUSE_LABEL[c] || c)) + '** (' + cr.length + '): ' + (a === 'fixed' ? 'Fixed on your site. Waiting for Google to read these pages again.' : a === 'improved' ? 'You published improved versions of these pages. Google has not read the new versions yet; we look again in the days after.' : a === 'moved' ? 'The improved version of each page went live at another address, while the old address still opens the old page, so the two compete. Redirect each old address to its improved version with a permanent (301) redirect, or put the improved text back on the old address and remove the new one.' : cr[0].own_title ? 'These pages name another page as their main version although they have their own titles, so Google shows that page instead. If they should be found on their own, point each canonical tag to the page itself and list them in your sitemap.' : groupNote(cr[0], { freeze: opts.freeze })));
         for (const r of cr.slice(0, 5)) L.push(lineOf(r));
         if (cr.length > 5) L.push('  - and ' + (cr.length - 5) + ' more');
       }

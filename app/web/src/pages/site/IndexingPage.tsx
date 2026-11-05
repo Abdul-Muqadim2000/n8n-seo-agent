@@ -467,7 +467,9 @@ function PageRow({ p, orgId, siteId, member, freeze }: { p: IndexPage; orgId: st
     ? { tone: 'good' as Tone, label: 'Fixed, waiting for Google' }
     : p.improvedWaiting
       ? { tone: 'good' as Tone, label: 'Improved, waiting for Google' }
-      : STATE[p.state];
+      : p.improvedTo
+        ? { tone: 'warning' as Tone, label: 'Improved at another address' }
+        : STATE[p.state];
   const facts = [
     p.checkedAt ? `checked ${fmtDay(p.checkedAt)}` : 'not checked yet',
     p.fixSeenAt ? `we saw it fixed on ${fmtDay(p.fixSeenAt)}` : null,
@@ -476,6 +478,7 @@ function PageRow({ p, orgId, siteId, member, freeze }: { p: IndexPage; orgId: st
     // 2026-11-05: the client published an improved version; Google decides once it reads it
     p.improvedWaiting ? `you published an improved version on ${fmtDay(p.improvedAt)}, Google has not read it yet` : null,
     p.improvedReadAt ? `Google read your improved version on ${fmtDay(p.improvedReadAt)} and still left it out` : null,
+    p.improvedTo ? `its improved version went live at ${indexPath(p.improvedTo)}: redirect this address there (301)` : null,
     p.impressions28d ? `${n(p.impressions28d)} impressions in 28 days` : null,
     p.inSitemap ? 'in your sitemap' : 'not in your sitemap',
     // wave 2: which pages of the website link to it (the engine reads the home page and the parent pages)

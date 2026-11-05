@@ -38,7 +38,7 @@ module.exports = async (ctx) => {
     return (out || []).map(o => o.json);
   };
   const W = 'https://www.example.com';
-  const SITE = { site_id: 'site_example-com', domain: 'example.com', canonical_host: 'www.example.com', gsc_property: 'sc-domain:example.com' };
+  const SITE0 = { site_id: 'site_example-com', domain: 'example.com', canonical_host: 'www.example.com', gsc_property: 'sc-domain:example.com' }; const SITE = SITE0;
   const insp = (o) => ({ inspectionResult: { indexStatusResult: { verdict: 'NEUTRAL', coverageState: '', robotsTxtState: 'ALLOWED', indexingState: 'INDEXING_ALLOWED', pageFetchState: 'SUCCESSFUL', ...o } } });
   const LEFT_OUT = (crawl) => insp({ coverageState: 'Crawled - currently not indexed', lastCrawlTime: crawl });
   const PASS = (crawl) => insp({ verdict: 'PASS', coverageState: 'Submitted and indexed', lastCrawlTime: crawl });
@@ -47,13 +47,13 @@ module.exports = async (ctx) => {
 
   // ---- one website, one day, through the generated nodes; `st` = { stored, history, log } as n8n's tables would hold them ----
   const siteDay = async (st, now, o) => {
-    const opt = o || {}; const M = {};
-    M['Index Sites'] = [{ ...SITE, gsc_connected: true, cap: 300, used_today: 0, run_at: iso(now), quota_hit: false, prev_complete: true, prev_complete_at: iso(now - DAY), home_host_prev: 'www.example.com', on_demand: false }];
+    const opt = o || {}; const M = {}; const SITE = opt.site || SITE0;
+    M['Index Sites'] = [{ ...SITE, gsc_connected: true, cap: 300, used_today: 0, run_at: iso(now), quota_hit: false, prev_complete: true, prev_complete_at: iso(now - DAY), home_host_prev: SITE.canonical_host, on_demand: false }];
     M['Load Index Pages'] = st.stored.length ? st.stored.map(r => ({ ...r })) : [{}];
     M['Load Pages (Index)'] = [{}]; M['Load Page Watch (Index)'] = [{}];
     M['Load Content Log (Index)'] = (st.log || []).length ? st.log.map(r => ({ ...r })) : [{}];
     const urls = (opt.sitemap || []).map(loc => ({ loc, lastmod: '' }));
-    M['Sitemap Read 3'] = [{ site_id: SITE.site_id, urls, read: 1, sets: 1, fetched: ['example.com/sitemap.xml'], next: [], errors: [], robots_status: 200, robots_txt: 'User-agent: *\nAllow: /\n', home_host: 'www.example.com', home_links: [] }];
+    M['Sitemap Read 3'] = [{ site_id: SITE.site_id, urls, read: 1, sets: 1, fetched: [SITE.domain + '/sitemap.xml'], next: [], errors: [], robots_status: 200, robots_txt: 'User-agent: *\nAllow: /\n', home_host: SITE.canonical_host, home_links: [] }];
     M['Pages Query Requests'] = [{ skip: true }]; M['Pages Query More'] = [{ skip: true }]; M['GSC Sitemaps List'] = [{}]; M['Sitemaps List Requests'] = [{ skip: true }];
     M['Google Events'] = [{ freeze: { freeze: false }, started: [], completed: [], events: [] }];
     const inv = await node('Index Inventory', M, null, now); M['Index Inventory'] = inv;
@@ -67,7 +67,7 @@ module.exports = async (ctx) => {
     if (has('Inspect Retry Requests')) { M['Inspect Retry Requests'] = [{ skip: true }]; M['Inspect URL (Retry)'] = []; }
     const fr = await node('Page Fetch Requests', M, null, now); M['Page Fetch Requests'] = fr;
     if (fr.some(q => !q.skip)) {
-      M['Fetch Page (Index)'] = fr.filter(q => !q.skip).map(() => OK200());
+      M['Fetch Page (Index)'] = fr.filter(q => !q.skip).map(q => opt.fetch ? opt.fetch(q.url, now) : OK200());
       if (has('Page First Reads')) M['Page First Reads'] = await node('Page First Reads', M, M['Fetch Page (Index)'], now);
     }
     const hr = await node('Fetch Hop Requests', M, null, now); M['Fetch Hop Requests'] = hr;
@@ -78,7 +78,7 @@ module.exports = async (ctx) => {
     for (const r of rows) { const m = st.stored.filter(x => x.site_id === r.site_id && x.url === r.url); if (m.length) m.forEach(x => Object.assign(x, r)); else st.stored.push({ ...r }); }
     // the client's report text (sent on Mondays): the same function Index Report calls, over this run's rows
     const all = (dg[0] || {}).all || [];
-    const report = S0(T(() => IX.reportMarkdown({ domain: 'example.com' }, IX.summarize(all, {}), { quota_cap: 300 }, { rows: all })));
+    const report = S0(T(() => IX.reportMarkdown({ domain: SITE.domain }, IX.summarize(all, {}), { quota_cap: 300 }, { rows: all })));
     return { inv: inv[0], dg: dg[0], rows, asked, report };
   };
   const rowAt = (st, re) => st.stored.find(r => re.test(r.url)) || null;
@@ -124,9 +124,9 @@ module.exports = async (ctx) => {
   });
   // =================================================================================================================================
   await guard('IXI2 only an improvement at the same address', async () => {
-    const SN = 'IXI2 an improvement is only a content-log row published AT the address it improved: a "write it anyway" page at a new address is our new page (lane new), and the kept page carries no improvement; a written-not-published improvement changes nothing';
+    const SN = 'IXI2 a "write it anyway" page (a separate new page: the app sends no existing page, app/shared/src/hold.ts) at a new address is our new page (lane new), and the kept page carries no improvement; a written-not-published improvement changes nothing';
     begin(SN); const check = mkCheck(SN);
-    const other = { ...improvedLog(REPORTED), keyword: 'bfsi software', published_url: W + '/bfsi-software' };
+    const other = { ...improvedLog(REPORTED), keyword: 'bfsi software', existing_page_url: '', published_url: W + '/bfsi-software' };
     const st = { stored: [leftOut()], history: [], log: [other] };
     const d = await TA(() => siteDay(st, D5, { sitemap: [PAGE], answer: () => LEFT_OUT('2026-10-30T08:00:00Z') }));
     const kept = rowAt(st, /industries\/bfsi/) || {}; const fresh = rowAt(st, /bfsi-software/) || {};
@@ -149,6 +149,50 @@ module.exports = async (ctx) => {
     check('a copy Google chose another page for = waiting (rewriting it is the answer)', st({ cause: 'google_chose_other' }) === 'waiting', J(st({ cause: 'google_chose_other' })));
     check('no improvement = nothing', st({ improved_at: '' }) === '', J(st({ improved_at: '' })));
     const imps = T(() => IX.improvementsOf([improvedLog(REPORTED), { ...improvedLog(REPORTED), published_url: W + '/elsewhere' }, { ...improvedLog(REPORTED), status: 'written' }]));
-    check('improvementsOf keeps only the published row at the address it improved', Array.isArray(imps) && imps.length === 1 && /industries\/bfsi$/.test(imps[0].url) && imps[0].at === REPORTED, J(imps));
+    check('improvementsOf keeps the published rows only: one at the address it improved (to = \'\'), one at another address (url = the improved page, to = where it went live)',
+      Array.isArray(imps) && imps.length === 2 && /industries\/bfsi$/.test(imps[0].url) && imps[0].to === '' && imps[0].at === REPORTED && /industries\/bfsi\/$/.test(imps[1].url) && /\/elsewhere$/.test(imps[1].to), J(imps));
+    const mv = (o) => T(() => IX.improveState({ url: PAGE, state: 'not_indexed', cause: 'crawled_not_indexed', improved_at: REPORTED, improved_to: W + '/services/industries-bfsi', last_crawl: '2026-10-30T08:00:00Z', ...o }));
+    check('an improvement live at another address = moved (whatever Google read since); at the same address (other host form) = not moved; in search = nothing', mv({}) === 'moved' && mv({ last_crawl: '2026-11-07T00:00:00Z' }) === 'moved'
+      && mv({ improved_to: 'https://example.com/industries/bfsi/' }) === 'waiting' && mv({ state: 'indexed', cause: '' }) === '', J([mv({}), mv({ improved_to: 'https://example.com/industries/bfsi/' }), mv({ state: 'indexed', cause: '' })]));
+  });
+  // =================================================================================================================================
+  await guard('IXI4 improvement published at another address', async () => {
+    const SN = 'IXI4 (production 2026-11-05, devaicon.com content log rows 19 / 22 / 24) the three improvements were confirmed at NEW addresses (/services/...) while the old pages still open: each old page is "improved version published at another address" with the step to redirect it permanently (never "Improve this page" again, never "waiting for Google"), the new pages stay new pages of ours waiting for Google, and once an old address redirects it is a redirect, not a step';
+    begin(SN); const check = mkCheck(SN);
+    const DS = { site_id: 'site_devaicon-com', domain: 'devaicon.com', canonical_host: 'devaicon.com', gsc_property: 'sc-domain:devaicon.com' };
+    const D = 'https://devaicon.com';
+    const PAIRS = [['/capabilities/application-software-development', '/services/capabilities-application-software-development', '2026-11-04T12:11:40.000Z', 'application software development'],
+      ['/industries/bfsi', '/services/industries-bfsi', '2026-11-04T12:27:05.000Z', 'banking & financial services technology'],
+      ['/engagement-models', '/services/engagement-models', '2026-11-04T12:42:18.000Z', 'software engagement models']];
+    const oldRow = (path, next) => ({ site_id: DS.site_id, domain: 'devaicon.com', url: D + path, lane: 'existing', sources: 'sitemap', in_sitemap: true, first_seen_at: '2026-10-29T05:15:00.000Z',
+      state: 'not_indexed', evidence: 'inspection', cause: 'crawled_not_indexed', action: 'quality', verdict: 'NEUTRAL', coverage: 'Crawled - currently not indexed', page_fetch_state: 'SUCCESSFUL',
+      last_crawl: '2026-10-28T03:00:00.000Z', inspect_at: '2026-11-02T05:20:00.000Z', next_check_at: next, checks: 1, title: path.split('/').pop(), linked_by: '' });
+    const newRow = (path, at) => ({ site_id: DS.site_id, domain: 'devaicon.com', url: D + path, lane: 'new', sources: 'sitemap,ours', in_sitemap: true, first_seen_at: at, published_at: at,
+      state: 'not_indexed', evidence: 'inspection', cause: 'wait_new', action: 'wait', coverage: 'URL is unknown to Google', inspect_at: '2026-11-05T05:20:00.000Z', next_check_at: '2026-11-07T12:00:00.000Z', checks: 1, linked_by: '' });
+    const log = PAIRS.map(([a, b, at, kw], i) => ({ id: [19, 22, 24][i], site_id: DS.site_id, domain: 'devaicon.com', keyword: kw, source: 'manual', existing_page_url: D + a, status: 'published', published_url: D + b, published_at: at,
+      publish_note: 'Marked published by you after a warning: sent at another address than the page it updates (checked 2026-11-04)' }));
+    const st = { stored: PAIRS.map(([a], i) => oldRow(a, ['2026-11-06T05:20:00.000Z', '2026-11-09T05:20:00.000Z', '2026-11-13T05:20:00.000Z'][i])).concat(PAIRS.map(([, b, at]) => newRow(b, at))), history: [], log };
+    const sitemap = PAIRS.flatMap(([a, b]) => [D + a, D + b]);
+    const ans = (u) => /\/services\//.test(u) ? insp({ coverageState: 'URL is unknown to Google', verdict: 'NEUTRAL', pageFetchState: '' }) : LEFT_OUT('2026-10-28T03:00:00Z');
+    const D6 = Date.parse('2026-11-06T05:15:00Z');
+    const d1 = await TA(() => siteDay(st, D6, { site: DS, sitemap, answer: ans }));
+    check('day runs', !d1.__error, J(d1.__error));
+    const olds = PAIRS.map(([a]) => st.stored.find(r => r.url === D + a) || {}); const news = PAIRS.map(([, b]) => st.stored.find(r => r.url === D + b) || {});
+    check('each old page records where its improved version went live (improved_to) and when', olds.every((r, i) => r.improved_to === D + PAIRS[i][1] && r.improved_at === PAIRS[i][2]), J(olds.map(r => [r.url, r.improved_to, r.improved_at])));
+    check('each old page is a step on the website (site_fix), still left out by Google, still in the existing lane, never ours', olds.every(r => r.action === 'site_fix' && r.state === 'not_indexed' && r.cause === 'crawled_not_indexed' && r.lane === 'existing' && !/\bours\b/.test(S0(r.sources))),
+      J(olds.map(r => [r.action, r.state, r.cause, r.lane, r.sources])));
+    check('the note names the new address and the honest step (a permanent 301 redirect, or the text back on the old address), no promise of indexing',
+      olds.every((r, i) => S0(r.note).includes('went live at ' + PAIRS[i][1]) && /permanent \(301\) redirect/.test(S0(r.note)) && /put the improved text back on this address/.test(S0(r.note)) && !/will be indexed|guarantee/i.test(S0(r.note))), S0(olds[1].note));
+    check('the new pages stay new pages of ours, waiting for Google', news.every(r => r.lane === 'new' && /ours/.test(S0(r.sources)) && r.action === 'wait' && !S0(r.improved_to)), J(news.map(r => [r.lane, r.sources, r.action])));
+    check('the report lists the three under "Improved version published at another address", with where each went, and not under the pages to improve',
+      /## Improved version published at another address \(3\)/.test(d1.report) && /industries\/bfsi \(improved version at https:\/\/devaicon\.com\/services\/industries-bfsi\)/.test(d1.report) && !/Pages Google read and left out/.test(d1.report), d1.report.slice(0, 900));
+    // the client redirects /industries/bfsi permanently to its new address; Google then reads it as a page with redirect
+    const R = JSON.parse(J(st));
+    const bfsi = R.stored.find(r => r.url === D + '/industries/bfsi'); bfsi.next_check_at = '2026-11-07T00:00:00.000Z';
+    const redirAns = (u) => /\/industries\/bfsi$/.test(u) ? insp({ coverageState: 'Page with redirect', verdict: 'NEUTRAL', googleCanonical: D + '/services/industries-bfsi', pageFetchState: 'SUCCESSFUL', lastCrawlTime: '2026-11-07T10:00:00Z' }) : ans(u);
+    const redirFetch = (u) => /\/industries\/bfsi$/.test(u) ? { statusCode: 301, headers: { location: D + '/services/industries-bfsi' }, data: '' } : OK200();
+    const d2 = await TA(() => siteDay(R, Date.parse('2026-11-08T05:15:00Z'), { site: DS, sitemap, answer: redirAns, fetch: redirFetch }));
+    const b2 = R.stored.find(r => r.url === D + '/industries/bfsi') || {};
+    check('once the old address redirects, it is a redirect (Google\'s reading), no longer the improvement step', !d2.__error && b2.cause === 'redirect' && T(() => IX.improveState(b2)) === '', J({ err: d2.__error, cause: b2.cause, action: b2.action, note: b2.note }));
   });
 };

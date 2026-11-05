@@ -535,6 +535,7 @@ export const features: Feature[] = [
       'Why each page was left out, in plain words, with the pages grouped by the reason so one fix covers the whole group',
       'What to do for each group: steps on your own website that we then check for you, internal links to add from pages Google already shows, pages worth improving one at a time with your approval, and pages that are fine to leave out',
       'You hear when a page drops out of Google\'s index, the day our check notices it (each page is read again on its own schedule)',
+      'An improved page that went live at a new address while the old one still opens is shown with the step that makes them one page again, a permanent redirect we check for you every day, instead of a second "Improve this page"',
       'A page you improved and reported as published shows as improved and waiting for Google, the same day: no second "Improve this page", and we look up Google\'s reading of it again in the days after. Google still decides: once it reads the new version, the page is in search or shows that Google read the improved version and still left it out, with what to look at next',
       'A page you fixed shows as fixed while Google catches up, and a short list of your most valuable pages worth asking Google to read again in Search Console, which you do yourself: say when you have, and the page shows when Google read it again',
       'Pages your website already links to that Google has not visited yet are shown apart, with what helps, instead of a request to add links you already have',

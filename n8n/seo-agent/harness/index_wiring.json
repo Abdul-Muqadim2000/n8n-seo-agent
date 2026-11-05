@@ -1399,7 +1399,8 @@
   "linked_by",
   "asked_google_at",
   "google_read_after_ask_at",
-  "improved_at"
+  "improved_at",
+  "improved_to"
  ],
  "run_cols": [
   "site_id",
