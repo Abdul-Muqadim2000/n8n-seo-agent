@@ -42,9 +42,11 @@ describe('a film on YouTube', () => {
     expect(html).not.toMatch(/youtube|ytimg/i);
   });
 
-  it('the page: the facade, the chapters as buttons, and a VideoObject naming the YouTube addresses', () => {
+  it('the page: the player in the page (no autoplay), the chapters as buttons, and a VideoObject naming the YouTube addresses', () => {
     const html = page(`/tutorials/${onYouTube.slug}`);
-    expect(withoutJsonLd(html)).not.toMatch(/<iframe|youtube/i);
+    // the tutorial's own page loads the player with the page, so search engines see the video there; it never autoplays
+    expect(withoutJsonLd(html)).toMatch(/<iframe[^>]+youtube-nocookie\.com\/embed\//);
+    expect(withoutJsonLd(html)).not.toMatch(/autoplay=1/);
     expect(html).toContain(`"embedUrl":"https://www.youtube.com/embed/${TEST_ID}"`);
     expect(html).toContain(`"contentUrl":"https://www.youtube.com/watch?v=${TEST_ID}"`);
     expect(html).toContain('"@type":"Clip"');
