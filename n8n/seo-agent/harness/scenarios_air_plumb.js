@@ -236,8 +236,12 @@ module.exports = async (ctx) => {
     check('AP4 on: the stored on-mode action is verified and learned from (a prior row written); the old shadow action expires after its window + 14 days; acme (off) writes nothing',
       pri.length === 1 && pri[0].prior_id === 'L05:S1:chatgpt:global' && onActs.some(a => a.action_id === oldOnAct.action_id && a.status === 'verified' && a.learned_at) && onActs.some(a => a.action_id === oldShadowAct.action_id && a.status === 'expired')
       && !on.r.writes.some(w => /^(Save AI Rank|Set Core|Patch AI)/.test(w.node) && w.rows.some(r => r.site_id === 'site_acme-erp-example')), J(onActs.map(a => [a.lever, a.status])).slice(0, 400));
+    const noAirRep = (arr) => (arr || []).map(it => { const j = { ...((it && it.json) || {}) }; delete j.ai_rank; delete j.html; delete j.lineage; return j; });
     check('AP4 on: the report, the callback and every pre-existing write except the ones AIR is allowed in on mode are identical to the off run; no node error',
-      J(on.report) === J(offF.report) && J(on.callback) === J(offF.callback) && J(on.settle) === J(offF.settle) && !on.r.errors.length
+      // D24 (P6, wave 2): an on website's report item gains the "AI ranking plan" section, its lineage line and the additive key ai_rank; everything
+      // else of it, and every other website's item, stays identical (harness AE5 holds the section itself)
+      J(noAirRep(on.report)) === J(noAirRep(offF.report)) && J(noAirRep(on.callback)) === J(noAirRep(offF.callback)) && J(on.settle) === J(offF.settle) && !on.r.errors.length
+      && J((on.report || []).filter(it => !/nova/.test(String((it.json || {}).domain)))) === J((offF.report || []).filter(it => !/nova/.test(String((it.json || {}).domain))))
       && J(on.writes.filter(w => !/^(Save AI Rank|Set Core Until|Patch AI Growth)/.test(w.node))) === J(offF.writes), J(on.r.errors).slice(0, 300));
 
     // ---------------- AP5 isolation ----------------
@@ -299,8 +303,8 @@ module.exports = async (ctx) => {
     const airIn = allWf.filter(([f, w]) => w.nodes.some(n => AIR_NODE.test(n.name))).map(([f]) => f);
     const kitIn = allWf.filter(([f, w]) => w.nodes.some(n => /const AIRF = \(\(\) => \{/.test((n.parameters || {}).jsCode || ''))).map(([f, w]) => f + ': ' + w.nodes.filter(n => /const AIRF = \(\(\) => \{/.test((n.parameters || {}).jsCode || '')).map(n => n.name).join(', '));
     const MON = ['AI Plan', 'Audit Candidates', 'BL Plan', 'Growth Plan', 'LB Plan', 'Pilot Plan', 'Pulse Plan'];
-    const unexpected = allWf.flatMap(([f, w]) => w.nodes.filter(n => /const AIRF = \(\(\) => \{/.test((n.parameters || {}).jsCode || '')).filter(n => !(MON.includes(n.name) || ['Admin Action', 'Monitor Row (Admin)'].includes(n.name) || (f === 'SEO_Agent_AI_Growth.json' && AIR_NODE.test(n.name)))).map(n => f + ' / ' + n.name));
-    check('AP11 the AIR nodes exist only in the AI Growth workflow; the AIRF kit appears elsewhere only in the monitors\' site list (settings.rank) and Site Admin\'s two nodes',
+    const unexpected = allWf.flatMap(([f, w]) => w.nodes.filter(n => /const AIRF = \(\(\) => \{/.test((n.parameters || {}).jsCode || '')).filter(n => !(MON.includes(n.name) || ['Admin Action', 'Monitor Row (Admin)'].includes(n.name) || (f === 'SEO_Agent_Content_Cadence.json' && n.name === 'Cadence Plan') || (f === 'SEO_Agent_Link_Builder.json' && n.name === 'LB Assemble') || (f === 'SEO_Agent_AI_Growth.json' && n.name === 'Growth Report') || (f === 'SEO_Agent_AI_Growth.json' && AIR_NODE.test(n.name)))).map(n => f + ' / ' + n.name));
+    check('AP11 the AIR nodes exist only in the AI Growth workflow; the AIRF kit appears elsewhere only in the monitors\' site list (settings.rank) and Site Admin\'s two nodes (D24: and P6\'s three on-mode consumers, Cadence Plan, LB Assemble, Growth Report)',
       J(airIn) === J(['SEO_Agent_AI_Growth.json']) && !unexpected.length, J({ airIn, unexpected, kitIn }).slice(0, 600));
 
     // ---------------- AP13 Bing's site list: not read -> unknown, never "not in Bing" (coordinator fix 2026-11-06, P1's replay) ----------------

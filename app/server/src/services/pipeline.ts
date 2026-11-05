@@ -650,6 +650,11 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     db.select().from(schema.ladderRechecks).where(and(eq(schema.ladderRechecks.siteId, site.id), eq(schema.ladderRechecks.paused, true))).catch(() => []),
     siteRows<ContentLogRow>('contentLog', d, { extra: [{ columnName: 'status', condition: 'eq', value: 'published' }], max: 200 }).catch(() => [] as ContentLogRow[]),
   ]);
+  // AIR (2026-11-06, P6): a website whose AI ranking is `on` has the kind-'air' cache rows (kill switch, protect list) read for the cadence mirror;
+  // any other website reads nothing more and plans exactly as before
+  const airCache = String(monRows[0]?.ai_rank_mode ?? '').trim().toLowerCase() === 'on'
+    ? await n8nRows<{ key?: string; value?: unknown }>('cache', { filters: [{ columnName: 'kind', condition: 'eq', value: 'air' }], max: 50 }).catch(() => [] as { key?: string; value?: unknown }[])
+    : [];
   const used = await usageSince(db, org.id, monthStartUtc()).catch(() => null);
   const creditsUsed = used ? Math.round((used.autopilot + used.onDemand) * 100) / 100 : 0;
   const ownRuns = activeRuns(app.runs);
@@ -856,6 +861,9 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       competitors: competitorsOf(engineSite, (monRows[0] ?? null) as Parameters<typeof competitorsOf>[1], site.competitors),
       aiBrands,
       skips,
+      aiRankMode: monRows[0]?.ai_rank_mode,
+      aiRankReserve: monRows[0]?.ai_rank_reserve,
+      aiRankCache: airCache,
       estPageUsd: estimateRunCost('keyword', { receiveContent: true, receiveReport: true }, costTable?.calibration ?? null),
       readiness,
     },
