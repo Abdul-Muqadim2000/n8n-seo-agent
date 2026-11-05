@@ -8,6 +8,9 @@
 // monthly extras come only from the `monthly` the dispatcher passes (cycle.monthly), never from the UTC calendar. `cycle` travels with the
 // result so every plan can carry it on.
 /*__SITE_TIME__*/
+// AIR (2026-11-06, docs/ai-ranking-2026-11-05/CONTRACTS.md §4, package P4): the AI-ranking flags kit (AIRF) comes with this file, so every node that
+// inlines it reads `s.settings.rank` the one way. A node that inlines this file must NOT add the AIRF marker again (one const AIRF).
+/*__AI_RANK_FLAGS__*/
 let trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}
 if (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };
 const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };
@@ -73,6 +76,9 @@ function monitorSites(kind) {   // kind: 'ai' | 'backlinks' | 'audit' | 'links' 
     // release never changes what an existing site measures or pays. ai_focus_mode 'off' keeps the panel as it is (no automatic additions or retirements).
     Object.assign(settings, { pulse_scope: String(m.ai_pulse_scope || '').toLowerCase().trim() === 'focus' || (!m.site_id && !String(m.ai_pulse_scope || '').trim()) ? 'focus' : 'all',
       focus_mode: String(m.ai_focus_mode || '').toLowerCase().trim() === 'off' ? 'off' : 'auto' });
+    // AIR (2026-11-06, CONTRACTS.md §2 / §4): the AI-ranking mode and its flags, every one OFF when empty ({ mode, reserve, fanout_n, mentions, brave }).
+    // Read as `s.settings.rank.mode`; no plan, report or callback copies `settings` whole, so this field never reaches a client.
+    settings.rank = AIRF.settingsOf(m);
     const o = { ...s, business_name: nameOf(s, p), settings, profile: { business_name: p.business_name || '', business_type: p.business_type || '', city: p.city || '', phone: p.phone || '', street_address: p.street_address || '', author_name: p.author_name || '',
       region: p.region || '', country_code: p.country_code || '', public_email: p.public_email || '', price_range: p.price_range || '', service_areas: p.service_areas || '', opening_hours: p.opening_hours || '' } };
     if (on_demand) { if (trigger.email) o.email = trigger.email; if (trigger.callback_url) o.callback_url = trigger.callback_url; if (trigger.country) o.country = trigger.country; if (Number(trigger.location_code)) o.location_code = Number(trigger.location_code); if (trigger.language_code) o.language_code = trigger.language_code; }
