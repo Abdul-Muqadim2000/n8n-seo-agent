@@ -14,6 +14,36 @@
     "operation": "create",
     "table": null
    },
+   "Ensure AI Rank Actions Table": {
+    "filters": null,
+    "mapping": null,
+    "operation": "create",
+    "table": null
+   },
+   "Ensure AI Rank Priors Table": {
+    "filters": null,
+    "mapping": null,
+    "operation": "create",
+    "table": null
+   },
+   "Ensure AI Rank Questions Table": {
+    "filters": null,
+    "mapping": null,
+    "operation": "create",
+    "table": null
+   },
+   "Ensure AI Rank Runs Table": {
+    "filters": null,
+    "mapping": null,
+    "operation": "create",
+    "table": null
+   },
+   "Ensure AI Rank Sources Table": {
+    "filters": null,
+    "mapping": null,
+    "operation": "create",
+    "table": null
+   },
    "Ensure AI Targets Table": {
     "filters": null,
     "mapping": null,
@@ -64,6 +94,44 @@
     "operation": "get",
     "table": "seo_ai_answers"
    },
+   "Load AI Answers (Rank)": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "={{ (((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {}))) === '%' ? 'like' : 'eq' }}",
+       "keyName": "site_id",
+       "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+      },
+      {
+       "condition": "gte",
+       "keyName": "checked_at",
+       "keyValue": "={{ new Date(Date.now() - 28 * 864e5).toISOString() }}"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_ai_answers"
+   },
+   "Load AI Daily (Rank)": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "={{ (((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {}))) === '%' ? 'like' : 'eq' }}",
+       "keyName": "site_id",
+       "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+      },
+      {
+       "condition": "gte",
+       "keyName": "checked_at",
+       "keyValue": "={{ new Date(Date.now() - 60 * 864e5).toISOString() }}"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_ai_daily"
+   },
    "Load AI Growth": {
     "filters": null,
     "mapping": null,
@@ -81,6 +149,87 @@
     "mapping": null,
     "operation": "get",
     "table": "seo_ai_prompts"
+   },
+   "Load AI Rank Actions": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "={{ (((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {}))) === '%' ? 'like' : 'eq' }}",
+       "keyName": "site_id",
+       "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_ai_rank_actions"
+   },
+   "Load AI Rank Cache": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "kind",
+       "keyValue": "air"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_cache"
+   },
+   "Load AI Rank Priors": {
+    "filters": null,
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_ai_rank_priors"
+   },
+   "Load AI Rank Questions": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "={{ (((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {}))) === '%' ? 'like' : 'eq' }}",
+       "keyName": "site_id",
+       "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_ai_rank_questions"
+   },
+   "Load AI Rank Runs": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "={{ (((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {}))) === '%' ? 'like' : 'eq' }}",
+       "keyName": "site_id",
+       "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+      },
+      {
+       "condition": "gte",
+       "keyName": "checked_at",
+       "keyValue": "={{ new Date(Date.now() - 84 * 864e5).toISOString() }}"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_ai_rank_runs"
+   },
+   "Load AI Rank Sources": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "={{ (((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {}))) === '%' ? 'like' : 'eq' }}",
+       "keyName": "site_id",
+       "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_ai_rank_sources"
    },
    "Load AI Targets": {
     "filters": null,
@@ -147,17 +296,73 @@
     "operation": "get",
     "table": "seo_cycles"
    },
+   "Load Index Pages (Rank)": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "={{ (((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {}))) === '%' ? 'like' : 'eq' }}",
+       "keyName": "site_id",
+       "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_index_pages"
+   },
    "Load Ladders": {
     "filters": null,
     "mapping": null,
     "operation": "get",
     "table": "seo_ladders"
    },
+   "Load Link Outreach (Rank)": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "={{ (((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {}))) === '%' ? 'like' : 'eq' }}",
+       "keyName": "site_id",
+       "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_link_outreach"
+   },
    "Load Link Prospects (Growth)": {
     "filters": null,
     "mapping": null,
     "operation": "get",
     "table": "seo_link_prospects"
+   },
+   "Load Link Prospects (Rank)": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "={{ (((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {}))) === '%' ? 'like' : 'eq' }}",
+       "keyName": "site_id",
+       "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_link_prospects"
+   },
+   "Load Listings (Rank)": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "={{ (((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {}))) === '%' ? 'like' : 'eq' }}",
+       "keyName": "site_id",
+       "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_listings"
    },
    "Load Monitors": {
     "filters": null,
@@ -219,11 +424,87 @@
     "operation": "get",
     "table": "seo_run_ledger"
    },
+   "Load SERP Cache (Rank)": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "kind",
+       "keyValue": "serp"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_cache"
+   },
    "Load Sites": {
     "filters": null,
     "mapping": null,
     "operation": "get",
     "table": "seo_sites"
+   },
+   "Patch AI Growth Actions": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "site_id",
+       "keyValue": "={{ $json.site_id }}"
+      },
+      {
+       "condition": "eq",
+       "keyName": "run_id",
+       "keyValue": "={{ $json.run_id }}"
+      }
+     ]
+    },
+    "mapping": "defineBelow",
+    "operation": "update",
+    "table": "seo_ai_growth"
+   },
+   "Prune AI Rank Actions": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "={{ (((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {}))) === '%' ? 'like' : 'eq' }}",
+       "keyName": "site_id",
+       "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+      },
+      {
+       "condition": "eq",
+       "keyName": "status",
+       "keyValue": "expired"
+      },
+      {
+       "condition": "lt",
+       "keyName": "updated_at",
+       "keyValue": "={{ new Date(Date.now() - 120 * 864e5).toISOString() }}"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "deleteRows",
+    "table": "seo_ai_rank_actions"
+   },
+   "Prune AI Rank Sources": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "={{ (((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {}))) === '%' ? 'like' : 'eq' }}",
+       "keyName": "site_id",
+       "keyValue": "={{ ((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim() ? 'site_' + String(t.domain).toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/[^a-z0-9]+/g, '-') : '%'))(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {})) }}"
+      },
+      {
+       "condition": "lt",
+       "keyName": "last_seen",
+       "keyValue": "={{ new Date(Date.now() - 120 * 864e5).toISOString() }}"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "deleteRows",
+    "table": "seo_ai_rank_sources"
    },
    "Refuse Run Ledger (Growth)": {
     "filters": {
@@ -274,6 +555,136 @@
     "mapping": "autoMapInputData",
     "operation": "upsert",
     "table": "seo_ai_pages"
+   },
+   "Save AI Rank Actions": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "action_id",
+       "keyValue": "={{ $json.action_id }}"
+      }
+     ]
+    },
+    "mapping": "autoMapInputData",
+    "operation": "upsert",
+    "table": "seo_ai_rank_actions"
+   },
+   "Save AI Rank Cache": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "key",
+       "keyValue": "={{ $json.key }}"
+      }
+     ]
+    },
+    "mapping": "autoMapInputData",
+    "operation": "upsert",
+    "table": "seo_cache"
+   },
+   "Save AI Rank Priors": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "prior_id",
+       "keyValue": "={{ $json.prior_id }}"
+      }
+     ]
+    },
+    "mapping": "autoMapInputData",
+    "operation": "upsert",
+    "table": "seo_ai_rank_priors"
+   },
+   "Save AI Rank Proposed": {
+    "filters": null,
+    "mapping": "autoMapInputData",
+    "operation": "insert",
+    "table": "seo_ai_prompts"
+   },
+   "Save AI Rank Prospects": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "site_id",
+       "keyValue": "={{ $json.site_id }}"
+      },
+      {
+       "condition": "eq",
+       "keyName": "prospect_domain",
+       "keyValue": "={{ $json.prospect_domain }}"
+      },
+      {
+       "condition": "eq",
+       "keyName": "type",
+       "keyValue": "={{ $json.type }}"
+      }
+     ]
+    },
+    "mapping": "autoMapInputData",
+    "operation": "upsert",
+    "table": "seo_link_prospects"
+   },
+   "Save AI Rank Questions": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "site_id",
+       "keyValue": "={{ $json.site_id }}"
+      },
+      {
+       "condition": "eq",
+       "keyName": "prompt_id",
+       "keyValue": "={{ $json.prompt_id }}"
+      }
+     ]
+    },
+    "mapping": "autoMapInputData",
+    "operation": "upsert",
+    "table": "seo_ai_rank_questions"
+   },
+   "Save AI Rank Run": {
+    "filters": null,
+    "mapping": "autoMapInputData",
+    "operation": "insert",
+    "table": "seo_ai_rank_runs"
+   },
+   "Save AI Rank Sources": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "site_id",
+       "keyValue": "={{ $json.site_id }}"
+      },
+      {
+       "condition": "eq",
+       "keyName": "url_key",
+       "keyValue": "={{ $json.url_key }}"
+      }
+     ]
+    },
+    "mapping": "autoMapInputData",
+    "operation": "upsert",
+    "table": "seo_ai_rank_sources"
+   },
+   "Save AI Rank Targets": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "target_id",
+       "keyValue": "={{ $json.target_id }}"
+      }
+     ]
+    },
+    "mapping": "autoMapInputData",
+    "operation": "upsert",
+    "table": "seo_ai_targets"
    },
    "Save AI Targets": {
     "filters": {
@@ -340,6 +751,25 @@
     "mapping": "autoMapInputData",
     "operation": "upsert",
     "table": "seo_link_prospects"
+   },
+   "Set Core Until": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "prompt_id",
+       "keyValue": "={{ $json.prompt_id }}"
+      },
+      {
+       "condition": "eq",
+       "keyName": "site_id",
+       "keyValue": "={{ $json.site_id }}"
+      }
+     ]
+    },
+    "mapping": "defineBelow",
+    "operation": "update",
+    "table": "seo_ai_prompts"
    },
    "Settle Run Ledger (Growth)": {
     "filters": {

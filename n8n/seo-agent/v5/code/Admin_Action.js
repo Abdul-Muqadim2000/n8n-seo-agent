@@ -7,6 +7,7 @@
 /*__AI_MEASURE__*/
 /*__FACT_ANSWERS__*/
 /*__COUNTRIES__*/
+/*__AI_RANK_FLAGS__*/
 let t = {}; try { t = (($('Admin Run').first() || {}).json) || {}; } catch (e) { t = ($input.first() || {}).json || {}; }
 if (t.body && typeof t.body === 'object') t = { ...t, ...t.body };
 const action = String(t.action || '').toLowerCase();
@@ -91,4 +92,10 @@ const monitors = (t.monitors && typeof t.monitors === 'object') ? t.monitors : (
     else if (/^(false|0|no|off)$/i.test(String(ss).trim())) monitors.index_sitemap_submit = false;
     else throw new Error('index_sitemap_submit must be true or false');
   } }
+// AIR (2026-11-06, docs/ai-ranking-2026-11-05/CONTRACTS.md §2 / §5, package P4): the AI-ranking mode (off / shadow / on) and its four flags, checked
+// by the one rule AIR reads them with (AIRF.validate): a bad value is refused with its reason and nothing is stored; '' clears a field (= off);
+// a field not given keeps the stored value (Monitor Row (Admin)). The normalised value is handed on, so the row stores 'shadow', not ' Shadow '.
+{ const AV = AIRF.validate(monitors);
+  if (AV.errors.length) throw new Error(AV.errors.join('; '));
+  for (const k of Object.keys(AV.values)) if (AV.values[k] !== null) monitors[k] = AV.values[k]; }
 return [{ json: { fact_answers_sent, fact_answers_json, fact_answers_count: Object.keys(FAP.answers).length, fact_answers_dropped: FAP.dropped, action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, on_prompts, pin_prompts, unpin_prompts, edit_prompts, accept_prompts, retire_prompts, monitors, content_groups_json, business_facts, market_country: market.country, market_location_code: market.location_code, market_language_code: market.language_code, market_iso: market.country_iso, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];
