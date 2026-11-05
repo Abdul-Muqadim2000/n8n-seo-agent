@@ -66,6 +66,8 @@ export function AiRankMemoView({ memo }: { memo: AiRankMemo }) {
 
 export function AiRankActionList({ actions }: { actions: AiRankActionView[] }) {
   if (!actions.length) return <p className="text-[13px] text-ink-3">No step chosen this week.</p>;
+  // the engine's stored rows name questions by id; only question texts (the callback's) are shown
+  const texts = (qs: string[]) => qs.filter((q) => /\s/.test(q));
   return (
     <ul className="divide-y divide-line text-[13px]">
       {actions.map((a, i) => (
@@ -73,7 +75,7 @@ export function AiRankActionList({ actions }: { actions: AiRankActionView[] }) {
           <span className="min-w-0">
             <span className="font-medium text-ink [overflow-wrap:anywhere]">{a.label}</span>
             {a.url && <span className="block text-xs text-ink-3 [overflow-wrap:anywhere]">{urlPath(a.url)}</span>}
-            {a.questions.length > 0 && <span className="block text-ink-2 [overflow-wrap:anywhere]">For: {a.questions.slice(0, 2).join('; ')}{a.questions.length > 2 ? ` and ${a.questions.length - 2} more` : ''}</span>}
+            {texts(a.questions).length > 0 && <span className="block text-ink-2 [overflow-wrap:anywhere]">For: {texts(a.questions).slice(0, 2).join('; ')}{texts(a.questions).length > 2 ? ` and ${texts(a.questions).length - 2} more` : ''}</span>}
             {a.engines.length > 0 && <span className="block text-xs text-ink-3">{a.engines.map((e) => engineLabel(e)).join(', ')}</span>}
             {a.why && <span className="block text-xs text-ink-3 [overflow-wrap:anywhere]">{a.why}</span>}
           </span>
