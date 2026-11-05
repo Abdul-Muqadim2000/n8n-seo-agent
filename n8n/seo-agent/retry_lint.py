@@ -98,6 +98,26 @@ def load_baseline():
     return {k: _entries(v) for k, v in base.items()}
 
 
+# AIR P5 (2026-11-06): paid calls that are NOT DataForSEO but are billed per request the same way (a re-sent request is a second bill).
+# They take the N3 rule below exactly as the paid DataForSEO nodes do (no node-level retry on a node that can carry several items), but
+# they are not DataForSEO, so the in-200 gate's coverage (is_dfs) never counts them. Brave Search: ~$0.005 a search, its key in the
+# credential SEOcredBraveApi1.
+PAID_KEYED_MARK = ('SEOcredBraveApi1', 'api.search.brave.com')
+
+
+def is_paid_keyed(node):
+    """True when this node is a paid, keyed call billed per request that is not DataForSEO (PAID_KEYED_MARK), by credential or by URL."""
+    if node.get('type') != HTTP_TYPE:
+        return False
+    blob = json.dumps(node.get('parameters') or {}) + json.dumps(node.get('credentials') or {})
+    return any(m.lower() in blob.lower() for m in PAID_KEYED_MARK)
+
+
+def is_paid(node):
+    """True when a re-sent request of this node is a second bill: DataForSEO, or a PAID_KEYED_MARK call."""
+    return is_dfs(node) or is_paid_keyed(node)
+
+
 def is_dfs(node):
     """True when this node talks to DataForSEO, by URL or by credential."""
     if node.get('type') != HTTP_TYPE:
@@ -252,11 +272,13 @@ SINGLE_ITEM = {
 CONTINUE = ('continueRegularOutput', 'continueErrorOutput')
 _PAID_PROBE = {'type': HTTP_TYPE, 'name': 'Lint Paid Probe', 'onError': 'continueRegularOutput',
                'parameters': {'url': '={{ $json.endpoint }}'}, 'credentials': {'httpBasicAuth': {'id': 'SEOcredDataForSE'}}}
+_BRAVE_PROBE = {'type': HTTP_TYPE, 'name': 'Lint Brave Probe', 'onError': 'continueRegularOutput',
+                'parameters': {'url': '={{ $json.url }}'}, 'credentials': {'httpHeaderAuth': {'id': 'SEOcredBraveApi1'}}}
 
 
 def paid_multi(node):
     """True when this node is a paid (DataForSEO) call that may carry more than one item, so it takes the per-item pattern."""
-    return is_dfs(node) and not node.get('executeOnce') and node.get('name') not in SINGLE_ITEM
+    return is_paid(node) and not node.get('executeOnce') and node.get('name') not in SINGLE_ITEM   # AIR P5: DataForSEO and the paid keyed calls
 
 
 def paid_weak(node):
@@ -347,11 +369,16 @@ def record(where, nodes):
                         'passes_paid_execute_once': not findings([dict(_PAID_PROBE, executeOnce=True, **RETRY)], 'self test'),
                         'passes_paid_single_item': not findings([dict(_PAID_PROBE, name='SERP Top 10', **RETRY)], 'self test'),
                         'apply_strips_paid_retry': apply_paid_rule([dict(_PAID_PROBE, **RETRY)]) == ['Lint Paid Probe'],
-                        'single_item_reasons': all(len(v) > 20 for v in SINGLE_ITEM.values())}
+                        'single_item_reasons': all(len(v) > 20 for v in SINGLE_ITEM.values()),
+                        # AIR P5: the same rule bites on a paid keyed call that is not DataForSEO (Brave), and only on it
+                        'flags_paid_keyed_multi_with_retry': bool(findings([dict(_BRAVE_PROBE, **RETRY)], 'self test')),
+                        'passes_paid_keyed_per_item': not findings([dict(_BRAVE_PROBE)], 'self test'),
+                        'apply_strips_paid_keyed_retry': apply_paid_rule([dict(_BRAVE_PROBE, **RETRY)]) == ['Lint Brave Probe'],
+                        'paid_keyed_not_dfs': is_paid_keyed(_BRAVE_PROBE) and not is_dfs(_BRAVE_PROBE)}
     wfs = data.setdefault('workflows', {})
     wfs[where] = [{'name': n['name'], 'retryOnFail': bool(n.get('retryOnFail')), 'maxTries': n.get('maxTries'),
                    'waitBetweenTries': n.get('waitBetweenTries'), 'allowed': n['name'] in ALLOW,
-                   'paid': is_dfs(n), 'per_item': paid_multi(n), 'onError': n.get('onError', 'stop'),
+                   'paid': is_paid(n), 'per_item': paid_multi(n), 'onError': n.get('onError', 'stop'),
                    'timeout': ((n.get('parameters') or {}).get('options') or {}).get('timeout')} for n in nodes if n.get('type') == HTTP_TYPE]
     data['single_item'] = SINGLE_ITEM
     if where in GATES: data.setdefault('ai_gate', {})[where] = GATES[where]

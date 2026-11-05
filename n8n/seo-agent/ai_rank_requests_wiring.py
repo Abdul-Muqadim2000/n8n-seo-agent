@@ -12,15 +12,15 @@ so its IF sends nothing and the chain goes on; one branch of each IF carries ite
         -> AI Rank SERP Requests    -> Any AI Rank SERP?     -> AI Rank SERP Call      [in-200 gate, no node retry]   (DataForSEO, paid)
         -> AI Rank CC Requests      -> Any AI Rank CC?       -> AI Rank CC Collections [retry rule]                  (Common Crawl, free)
         -> AI Rank CC Index Requests -> Any AI Rank CC Index? -> AI Rank CC Index Call [retry rule]                  (Common Crawl, free)
-        -> AI Rank Brave Requests   -> Any AI Rank Brave?    -> AI Rank Brave Call     [retry rule]                  (Brave, keyed)
+        -> AI Rank Brave Requests   -> Any AI Rank Brave?    -> AI Rank Brave Call     [paid: no node retry]         (Brave, keyed)
         -> AI Rank Fetched (one item per on site: CONTRACTS.md §6 + cache_rows) -> AI Rank Fetch Rows -> Any AI Rank Fetch Rows?
         -> Save AI Rank Fetch Cache (seo_cache upsert by key) -> dst
 
 Rules (CONTRACTS.md §4 / §5 / §6, held by harness AI1-AI10):
   * nothing outside is read for a site in shadow or off: the planner plans only where AIRF.mayPay (mode `on`, not killed), so the shadow
     golden (AP3) keeps every outside request identical to the off run;
-  * paid DataForSEO calls go through G.in200_gate (dfs_gate.splice) with no node-level retry (retry_lint's N3 rule strips it); free and keyed
-    calls carry retry_lint.RETRY;
+  * paid DataForSEO calls go through G.in200_gate (dfs_gate.splice) with no node-level retry (retry_lint's N3 rule strips it); the paid
+    Brave call has no node-level retry either (retry_lint.PAID_KEYED_MARK); the free calls carry retry_lint.RETRY;
   * Brave: the key SEO_BRAVE_API_KEY is baked as BRAVE_ENABLED (env_settings.py). Without it the planner and the request node are built with
     `false` and never ask for a Brave search; the node and its credential reference stay in the workflow (as the Bing and Ahrefs nodes do),
     so the import never fails;
@@ -70,7 +70,7 @@ def _bake(n, subs):
     return n
 
 
-def _get(G, name, pos, cred=None, text=False, interval=300, timeout=30000, headers=None):
+def _get(G, name, pos, cred=None, text=False, interval=300, timeout=30000, headers=None, retry=True):
     params = {'method': 'GET', 'url': '={{ $json.url }}',
               'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': interval}}, 'timeout': timeout,
                           'response': {'response': ({'fullResponse': True, 'neverError': True, 'responseFormat': 'text'} if text else {'neverError': True})}}}
@@ -81,7 +81,7 @@ def _get(G, name, pos, cred=None, text=False, interval=300, timeout=30000, heade
         kind, cid, cname = cred
         params.update({'authentication': 'genericCredentialType', 'genericAuthType': kind})
         extra['credentials'] = {kind: {'id': cid, 'name': cname}}
-    return G.node(name, 'n8n-nodes-base.httpRequest', 4.5, params, pos, onError='continueRegularOutput', **retry_lint.RETRY, **extra)
+    return G.node(name, 'n8n-nodes-base.httpRequest', 4.5, params, pos, onError='continueRegularOutput', **(retry_lint.RETRY if retry else {}), **extra)
 
 
 def wire_requests(G, src, dst, pos):
@@ -100,7 +100,9 @@ def wire_requests(G, src, dst, pos):
         elif call == 'bing':
             _get(G, http, at(c + 2, -1), cred=BING, interval=400)
         elif call == 'brave':
-            _get(G, http, at(c + 2, -1), cred=BRAVE, interval=1100, timeout=20000, headers={'Accept': 'application/json'})
+            # paid per search: no node-level retry (retry_lint PAID_KEYED_MARK, the N3 rule of the paid DataForSEO nodes): n8n re-sends EVERY
+            # item of a node whose first item fails. Built without it on purpose, so a lint that stopped treating Brave as paid fails the build.
+            _get(G, http, at(c + 2, -1), cred=BRAVE, interval=1100, timeout=20000, headers={'Accept': 'application/json'}, retry=False)
         else:
             _get(G, http, at(c + 2, -1), text=(kind == 'text'), interval=1000, timeout=60000, headers={'User-Agent': CC_UA})
         G.link(req, iff); G.link(iff, http, 0)

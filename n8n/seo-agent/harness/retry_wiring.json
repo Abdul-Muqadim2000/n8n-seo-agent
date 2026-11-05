@@ -303,14 +303,18 @@
   "waitBetweenTries": 5000
  },
  "selftest": {
+  "apply_strips_paid_keyed_retry": true,
   "apply_strips_paid_retry": true,
   "flags_node_without_retry": true,
+  "flags_paid_keyed_multi_with_retry": true,
   "flags_paid_multi_that_stops": true,
   "flags_paid_multi_with_retry": true,
   "flags_weaker_retry": true,
   "honours_allow_list": true,
   "ignores_other_nodes": true,
+  "paid_keyed_not_dfs": true,
   "passes_paid_execute_once": true,
+  "passes_paid_keyed_per_item": true,
   "passes_paid_per_item": true,
   "passes_paid_single_item": true,
   "single_item_reasons": true
@@ -1941,14 +1945,14 @@
    },
    {
     "allowed": false,
-    "maxTries": 3,
+    "maxTries": null,
     "name": "AI Rank Brave Call",
     "onError": "continueRegularOutput",
-    "paid": false,
-    "per_item": false,
-    "retryOnFail": true,
+    "paid": true,
+    "per_item": true,
+    "retryOnFail": false,
     "timeout": 20000,
-    "waitBetweenTries": 5000
+    "waitBetweenTries": null
    },
    {
     "allowed": false,

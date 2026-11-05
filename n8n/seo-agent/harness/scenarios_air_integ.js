@@ -198,9 +198,15 @@ module.exports = async (ctx) => {
     const fetchedJs = (N('AI Rank Fetched').parameters || {}).jsCode || '';
     check('AI10 the two paid DataForSEO calls sit in the in-200 gate with no node-level retry (N3), and AI Rank Fetched reads their merged answers', gated && /'AI Rank Mentions Call Answers'/.test(fetchedJs) && /'AI Rank SERP Call Answers'/.test(fetchedJs)
       && !/'AI Rank (Mentions|SERP) Call'\)/.test(fetchedJs), '');
-    check('AI10 the free and keyed calls carry the retry rule (3 tries, 5 s); Bing with SEOcredBingWebm (query auth), Common Crawl with no credential',
-      ['AI Rank Bing Call', 'AI Rank CC Collections', 'AI Rank CC Index Call', 'AI Rank Brave Call'].every(n => RETRY(N(n))) && N('AI Rank Bing Call').credentials.httpQueryAuth.id === 'SEOcredBingWebm'
+    check('AI10 the free calls carry the retry rule (3 tries, 5 s); Bing with SEOcredBingWebm (query auth), Common Crawl with no credential',
+      ['AI Rank Bing Call', 'AI Rank CC Collections', 'AI Rank CC Index Call'].every(n => RETRY(N(n))) && N('AI Rank Bing Call').credentials.httpQueryAuth.id === 'SEOcredBingWebm'
       && !N('AI Rank CC Collections').credentials && !N('AI Rank CC Index Call').credentials, '');
+    // the paid Brave call takes the N3 rule of the paid DataForSEO nodes (retry_lint PAID_KEYED_MARK): no node-level retry, a failure is an item
+    const RWj = require('./retry_wiring.json'); const st = RWj.selftest || {};
+    const bw = ((RWj.workflows || {})['SEO Agent — AI Growth'] || []).find(x => x.name === 'AI Rank Brave Call') || {};
+    check('AI10 the paid Brave call has no node-level retry (n8n would re-send and re-bill every search when the first fails): recorded paid and per-item; the lint flags a Brave node WITH a retry, passes it without, strips it, and does not count it as DataForSEO',
+      N('AI Rank Brave Call').retryOnFail !== true && N('AI Rank Brave Call').onError === 'continueRegularOutput' && bw.paid === true && bw.per_item === true && bw.retryOnFail === false
+      && st.flags_paid_keyed_multi_with_retry === true && st.passes_paid_keyed_per_item === true && st.apply_strips_paid_keyed_retry === true && st.paid_keyed_not_dfs === true, J({ bw, st }).slice(0, 400));
     const chain = ['AI Rank Requests', 'AI Rank Fetched', 'AI Rank Fetch Rows', 'Any AI Rank Fetch Rows?', 'Save AI Rank Fetch Cache'];
     for (const h of ['AI Rank Mention Requests', 'AI Rank Bing Requests', 'AI Rank SERP Requests', 'AI Rank CC Requests', 'AI Rank CC Index Requests', 'AI Rank Brave Requests']) chain.push(h);
     const p5Nodes = wf.nodes.filter(n => chain.includes(n.name) || /^(Any )?AI Rank (Mentions Call|SERP Call|Bing|CC|Brave|Mentions\?|SERP\?)/.test(n.name) || /^Wait Before AI Rank/.test(n.name));

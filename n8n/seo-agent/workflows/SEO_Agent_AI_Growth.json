@@ -5395,9 +5395,6 @@
           1320
         ],
         "onError": "continueRegularOutput",
-        "retryOnFail": true,
-        "maxTries": 3,
-        "waitBetweenTries": 5000,
         "credentials": {
           "httpHeaderAuth": {
             "id": "SEOcredBraveApi1",

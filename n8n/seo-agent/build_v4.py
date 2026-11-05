@@ -5171,7 +5171,8 @@ patch('Build Webhook Response', "    run_ledger: d.run_ledger || null,", "    ru
 # A harness scenario cannot see this (it runs node code, not n8n's branch ordering), so it is checked here, on the generated JSON: walk the
 # main connections from every node with no main input, and refuse to walk past the reservation. Anything paid that is still reachable can
 # run before the row exists — which is exactly what R17 was.
-_PAID_CREDS55 = {'SEOcredDataForSE', 'SEOcredJinaReade', 'SEOcredPageSpeed', 'SEOcredAnthropic', 'SEOcredAhrefsDR', 'SEOcredBingWebm'}
+_PAID_CREDS55 = {'SEOcredDataForSE', 'SEOcredJinaReade', 'SEOcredPageSpeed', 'SEOcredAnthropic', 'SEOcredAhrefsDR', 'SEOcredBingWebm',
+                 'SEOcredBraveApi1'}   # AIR P5 (2026-11-06): Brave Search, paid per search (the AI-ranking reads)
 # a model / parser node hangs off its agent on an ai_* connection, never on `main`: the agent is the node that runs on the main path, and it
 # is the one this check cares about (its model node holds the Anthropic credential but cannot run on its own)
 _SUBNODE55 = ('lmChat', 'outputParser', 'memory', 'embeddings', 'toolWorkflow', 'vectorStore')
