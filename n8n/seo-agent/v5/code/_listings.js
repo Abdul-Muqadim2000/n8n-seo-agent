@@ -67,9 +67,9 @@ const LISTINGS = [
     link: 'unknown', ai: 'medium', prio: 2, submit: 'https://themanifest.com/', why: 'A sister site of Clutch with shortlists of service firms by service and city; AI answers to "which firm should I hire" cite such lists.' },
   { id: 'sortlist', name: 'Sortlist', host: 'sortlist.com', cat: 'directory', kinds: ['agency'], air: true, re: /sortlist\.[a-z.]+\/agency\/([a-z0-9-]+)/i,
     link: 'unknown', ai: 'medium', prio: 2, submit: 'https://www.sortlist.com/', why: 'A marketplace where buyers brief and shortlist agencies and development firms; its agency pages are read by AI answers about providers.' },
-  { id: 'ms_partner_dir', name: 'Microsoft partner directory', host: 'appsource.microsoft.com', cat: 'partner', kinds: ['agency', 'saas'], air: true, re: /appsource\.microsoft\.com\/[a-z-]+\/marketplace\/partner-dir\/[^"'\s]+/i, integ: /microsoft|dynamics 365|business central|power bi|power platform|azure|microsoft 365|sharepoint/i,
+  { id: 'ms_partner_dir', name: 'Microsoft partner directory', host: 'appsource.microsoft.com', cat: 'partner', kinds: ['agency', 'saas'], air: true, re: /appsource\.microsoft\.com\/[a-z-]+\/marketplace\/partner-dir\/[^"'\s]+/i, integ: /microsoft (solutions |gold |silver |certified |cloud )?partner|solutions partner|dynamics 365 partner|business central partner|partner center|microsoft partner network/i,
     link: 'unknown', ai: 'medium', prio: 1, submit: 'https://partner.microsoft.com/', why: 'For a Microsoft partner: the official directory buyers search for implementation partners; a listing needs a partner account and a published profile.' },
-  { id: 'pasha', name: 'P@SHA member directory (Pakistan Software Houses Association)', host: 'pasha.org.pk', cat: 'industry', kinds: ['agency', 'saas'], countries: ['PK'], air: true,
+  { id: 'pasha', name: 'P@SHA member directory (Pakistan Software Houses Association)', host: 'pasha.org.pk', cat: 'industry', kinds: ['saas'], countries: ['PK'], air: true,
     link: 'unknown', ai: 'low', prio: 2, submit: 'https://www.pasha.org.pk/', why: 'For software firms in Pakistan: the industry association\'s member list, a trust signal buyers and AI answers read.' }];
 const LISTING_HOSTS = LISTINGS.map(l => l.host);
 // which entries apply to a site: its kind (from the business type and topics), country, topics, and the integrations its own pages name
@@ -97,9 +97,14 @@ function listingClaim(o) {
 function siteKind(businessType, topicText, opts) {   // the checklists that apply: a consultancy that also sells software gets both
   const t = String(businessType || '') + ' ' + String(topicText || '');
   // AIR P6 (opts.air, on websites only): a firm that builds or implements software FOR clients is a service firm and a software seller, so it gets
-  // both checklists (the service-firm directories are where AI answers about providers look); every other website is judged as before
+  // both checklists (the service-firm directories are where AI answers about providers look); every other website is judged as before.
+  // FX-C RC-8: only when its words name software work too. A tax, VAT, HR, payroll, accounting, audit, legal or management consultancy is a
+  // professional-services firm: the agency checklist only (no software marketplace), unless its own business type names software.
+  const AIR_SOFT = /software|\bapps?\b|\bsaas\b|\berp\b|\bcrm\b|platform|(system|systems|software|it|api|crm|erp|data) integrat|(app|web|software|product|mobile) development|development (company|firm|agency|partner)|automation|it services|dynamics 365|salesforce|\bodoo\b|\bsap\b/i;
+  const AIR_PRO = /\b(tax|vat|hr|human resources?|payroll|accounting|accountants?|bookkeeping|audit|auditing|legal|law|management consult\w*|recruit\w*|immigration)\b/i;
   if (opts && opts.air === true && !/restaurant|cafe|clinic|dental|salon|store|shop|hotel|gym|plumb|electric|lawyer|law firm|real estate|local ?business|medical|spa|bakery/i.test(t)
-    && /software (development|house|company|agency|firm)|custom software|development (company|firm|agency|partner)|app development|web development|it services|implementation (partner|services)|systems? integrat|consultanc|consulting|outsourc|dedicated (team|developers)/i.test(t)) return ['agency', 'saas'];
+    && /software (development|house|company|agency|firm)|custom software|development (company|firm|agency|partner)|app development|web development|it services|implementation (partner|services)|systems? integrat|consultanc|consulting|outsourc|dedicated (team|developers)/i.test(t)
+    && AIR_SOFT.test(t) && (!AIR_PRO.test(String(businessType || '')) || AIR_SOFT.test(String(businessType || '')))) return ['agency', 'saas'];
   if (/restaurant|cafe|clinic|dental|salon|store|shop|hotel|gym|plumb|electric|lawyer|law firm|real estate|local ?business|medical|spa|bakery/i.test(t)) return ['local'];
   const agency = /agency|consult|marketing services|design studio|development services|professional ?service|accounting firm|audit firm/i.test(t);
   const software = /software|saas|platform|\bapp\b|cloud|e-?invoic|\berp\b|automation|\bapi\b/i.test(t);

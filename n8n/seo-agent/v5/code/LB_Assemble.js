@@ -35,13 +35,15 @@ const pathKey = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '')
 // AIR (2026-11-06, docs/ai-ranking-2026-11-05 DESIGN 2.F lever L08 / L09, package P6), for a website whose AI ranking is `on` ONLY (AIRF.settingsOf on
 // its seo_monitors row): (1) the listings checklist adds the service-firm directories (listingsFor / siteKind with { air: true }); (2) a placement
 // AI ranking chose (seo_link_prospects type ai_source, origin 'ai_rank') is scored with AI ranking's own probability (its stored score / 100) in place
-// of the flat ai_source likelihood, and (3) up to AIR_PITCH_MAX of them are drafted first each week, by that score, inside the writer budget (AI
-// ranking pre-registered them; a pitch never drafted can never happen). Every other row is scored and ordered exactly as before; a website that is
-// off or in shadow runs today's path. The Link Builder loads no kill-switch row: rolling a website back is its mode (off / shadow).
+// of the flat ai_source likelihood, and (3) the writer budget takes the ready rows by expected value (score x fit), AI ranking's placements
+// included, with at most AIR_PITCH_MAX of them a week: a placement drafted only when its expected value is inside the budget's cut-off, so AI
+// ranking's weakest pitches never push out a better one (FX-C RC-7). Every other row is scored as before; a website that is off or in shadow
+// runs today's path. RC-7: the kill switch (seo_cache `air:kill`, the one row `Load AIR Kill (LB)` reads) stops all of it on every website.
 const airMons = rows('Load Monitors');
+const airKill = AIRF.killed(rows('Load AIR Kill (LB)'));
 const airOnOf = (sid, dom) => { const m = airMons.find(x => x.site_id === sid) || airMons.find(x => String(x.domain || '').toLowerCase().replace(/^www\./, '') === String(dom || '').toLowerCase().replace(/^www\./, '')) || {};
-  return AIRF.writesSinks(AIRF.settingsOf(m), false); };
-const AIR_PITCH_MAX = 5;
+  return AIRF.writesSinks(AIRF.settingsOf(m), airKill); };
+const AIR_PITCH_MAX = 2;
 const LIKELY = { lost: 0.7, mention: 0.9, list: 0.5, comp_new: 0.55, gap: 0.4, ai_source: 0.35, resource: 0.45, broken: 0.6, press: 0.5, digest: 0.55, podcast: 0.35 };
 // L6: the kinds of page that earn links, each with the words that give it away, how many referring domains make it worth saying, and
 // what the work actually is. A kind nobody in this market has links for is not suggested.
@@ -412,9 +414,10 @@ for (const p of plans) {
   }
   const ready = [...outreach_rows.filter(o => o.status === 'ready'), ...myOutreach.filter(o => o.status === 'ready' && !o.sequence_json && !outreach_rows.some(n => n.prospect_domain === o.prospect_domain && n.type === o.type))]
     .map(o => ({ ...o, rankv: (Number(o.score) || 0) * (0.5 + Number(o.fit || 0)) })).sort((a, b) => b.rankv - a.rankv);
-  // AIR P6 (on only): AI ranking's chosen placements first (at most AIR_PITCH_MAX, by their score), then every other ready row in its own order
+  // AIR (on only, RC-7): every ready row by expected value (rankv), AI ranking's placements included; at most AIR_PITCH_MAX of them a week, the
+  // others wait for a later week (still `ready`). Off and shadow: `ready` exactly as it was.
   const isAirRow = (o) => airOn && o.type === 'ai_source' && myProspects.some(y => y.prospect_domain === o.prospect_domain && y.type === 'ai_source' && String(y.origin || '') === 'ai_rank');
-  const readyOrdered = airOn ? (() => { const a = ready.filter(isAirRow).slice(0, AIR_PITCH_MAX); return [...a, ...ready.filter(o => !a.includes(o))]; })() : ready;
+  const readyOrdered = airOn ? (() => { let n = 0; return ready.filter(o => !isAirRow(o) || n++ < AIR_PITCH_MAX); })() : ready;
   const jobs = p.free_only ? [] : readyOrdered.slice(0, p.budget).map(({ rankv, ...o }) => o);
   const stillOld = (k) => !(myOutreach.find(o => o.prospect_domain + '|' + o.type === k) || {}).sequence_json;
   out.push({ json: { site_id: sid, domain: p.domain, email: p.email, callback_url: p.callback_url, request_id: p.request_id, on_demand: p.on_demand, free_only: p.free_only, checked_at: iso,

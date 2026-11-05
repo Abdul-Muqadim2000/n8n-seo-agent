@@ -128,24 +128,39 @@ module.exports = async (ctx) => {
       && J(LS.siteKind('restaurant', 'custom software', { air: true })) === J(['local']) && J(LS.siteKind('e-invoicing platform', '', { air: true })) === J(LS.siteKind('e-invoicing platform', '')),
       J([LS.siteKind('custom software development company', 'ai agents dubai'), LS.siteKind('custom software development company', 'ai agents dubai', { air: true })]));
     const lb = fs.readFileSync(path.join(CODE, 'LB_Assemble.js'), 'utf8');
-    check('LB Assemble passes { air: true } to siteKind and listingsFor only for an on website (AIRF.writesSinks on its seo_monitors row)', /siteKind\(p\.profile\.business_type, p\.topics\.join\(' '\), airOn \? \{ air: true \} : undefined\)/.test(lb) && /LK\.text\(selfHtml\), airOn \? \{ air: true \} : undefined\)/.test(lb) && /AIRF\.writesSinks\(AIRF\.settingsOf\(m\), false\)/.test(lb), 'wiring');
+    check('LB Assemble passes { air: true } to siteKind and listingsFor only for an on website (AIRF.writesSinks on its seo_monitors row, with the kill switch read from Load AIR Kill (LB))', /siteKind\(p\.profile\.business_type, p\.topics\.join\(' '\), airOn \? \{ air: true \} : undefined\)/.test(lb) && /LK\.text\(selfHtml\), airOn \? \{ air: true \} : undefined\)/.test(lb) && /AIRF\.writesSinks\(AIRF\.settingsOf\(m\), airKill\)/.test(lb) && lb.includes("AIRF.killed(rows('Load AIR Kill (LB)'))"), 'wiring');
   });
 
   // ===================================================================================
   // AE4 - the Link Builder: AI ranking's placements
+    // FX-C RC-8: directories per firm type. A professional-services firm (tax, HR, accounting, management) gets the service-firm directories
+    // only, never a software marketplace; the Microsoft partner directory needs partner words on the site, not "we use Microsoft 365"
+    const SOFTMKT = ['g2', 'capterra', 'trustradius', 'saashub', 'alternativeto', 'producthunt', 'appsource'];
+    for (const [bt, tp] of [['tax consulting firm', 'corporate tax registration uae'], ['management consulting', 'strategy consulting dubai'], ['HR consultancy', 'hr outsourcing uae'], ['accounting firm', 'bookkeeping and vat returns dubai']]) {
+      const kOn = LS.siteKind(bt, tp, { air: true }), kOff = LS.siteKind(bt, tp);
+      const off = ids(LS.listingsFor(kOff, 'AE', tp, 'we use Microsoft 365 and Azure every day')), on = ids(LS.listingsFor(kOn, 'AE', tp, 'we use Microsoft 365 and Azure every day', { air: true }));
+      const added = on.filter(i => !off.includes(i));
+      check('RC-8 on, a ' + bt + ': an agency only, adds The Manifest and Sortlist only (no software marketplace, no Microsoft partner directory for "we use Microsoft 365")',
+        J(kOn) === J(['agency']) && J(added.slice().sort()) === J(['sortlist', 'themanifest']) && !on.some(i => SOFTMKT.includes(i) || i === 'ms_partner_dir'), J({ kOn, added, on }));
+    }
+    const msUse = ids(LS.listingsFor(['agency', 'saas'], 'AE', 'crm erp software', 'our team uses Microsoft 365, Azure and SharePoint', { air: true })), msPartner = ids(LS.listingsFor(['agency', 'saas'], 'AE', 'crm erp software', 'We are a Microsoft Solutions Partner for Business Applications', { air: true }));
+    check('RC-8: the Microsoft partner directory for a site that says it is a Microsoft partner, never for one that only uses Microsoft products', !msUse.includes('ms_partner_dir') && msPartner.includes('ms_partner_dir'), J({ msUse, msPartner }));
+    check('RC-8: P@SHA (a software houses association) is never offered to a professional-services firm in Pakistan', !ids(LS.listingsFor(LS.siteKind('tax consulting firm', 'tax returns lahore', { air: true }), 'PK', 'tax', '', { air: true })).includes('pasha'), 'pasha offered');
   // ===================================================================================
   await guard('air exec AE4 link builder', async () => {
-    reset(); const SN = 'AIR P6 AE4: Link Builder - an AI ranking placement is scored with AI ranking\'s own probability and drafted first (at most 5), every other row scored and ordered as before; off unchanged'; begin(SN); const check = mkCheck(SN);
+    reset(); const SN = 'AIR P6 AE4: Link Builder - an AI ranking placement is scored with AI ranking\'s own probability; the writer budget takes rows by expected value with at most 2 AI ranking placements a week (FX-C RC-7); the kill switch gives today\'s output; off unchanged'; begin(SN); const check = mkCheck(SN);
     const SID = 'site_nova-ai-example', DOM = 'nova-ai.example';
     const page = (title, dom) => ({ statusCode: 200, headers: { 'content-type': 'text/html' }, data: '<html lang="en"><head><title>' + title + '</title></head><body><h1>' + title + '</h1><p>A list of the best custom software development companies in Dubai for AI agents and automation projects. We compare delivery, pricing and reviews of software firms.</p><p>Contact the editor: <a href="mailto:editor@' + dom + '">editor@' + dom + '</a></p></body></html>' });
     const plan = { site_id: SID, domain: DOM, email: '', callback_url: '', request_id: 'lb_test', on_demand: true, free_only: false, competitors: [], serp_rivals: [], ai_rivals: [], topics: ['custom software development', 'ai agents'], services: ['custom software development', 'AI agents'],
       pages: [{ url: 'https://' + DOM + '/services/custom-software', title: 'Custom software development', keyword: 'custom software development dubai' }], home: 'https://' + DOM + '/', profile: { business_type: 'custom software development company' }, brand: 'Nova', brand_names: ['Nova'],
       country: 'United Arab Emirates', country_iso: 'AE', language_code: 'en', accreditation: '', budget: 2, due: { listings: false }, state: {} };
     const pros = (origin, dom, score) => ({ site_id: SID, domain: DOM, prospect_domain: dom, type: 'ai_source', rank: 0, spam_score: 0, detail: 'cited', source_url: 'https://' + dom + '/best-software-companies-dubai', target_url: '', status: 'new', first_seen: '2026-10-20T00:00:00.000Z', last_seen: '2026-11-01T00:00:00.000Z', won_at: '', score, origin, contact_email: '', contact_url: '' });
-    const runLB = async (mode) => { reset();
-      mock('LB Plan', [{ json: plan }]);
-      mock('Load Link Prospects', items([pros('ai_rank', 'lists-one.example', 8), pros('ai_growth', 'lists-two.example', 40), pros('ai_rank', 'lists-three.example', 12)]));
-      for (const n of ['Load Link Outreach', 'Load Listings', 'Load Backlinks', 'Load Link Impact', 'Load Query History', 'Load Content Log', 'LB Source Requests', 'Fetch LB Sources', 'LB Second Requests', 'Fetch LB Second', 'LB DFS Requests', 'Run LB DFS']) mock(n, items([]));
+    const runLB = async (mode, o = {}) => { reset();
+      mock('LB Plan', [{ json: o.budget ? { ...plan, budget: o.budget } : plan }]);
+      mock('Load Link Prospects', items([pros('ai_rank', 'lists-one.example', 8), pros('ai_growth', 'lists-two.example', 40), pros('ai_rank', 'lists-three.example', 12), ...(o.prospects || [])]));
+      mock('Load AIR Kill (LB)', items(o.kill ? [{ key: 'air:kill', kind: 'air', site_id: '', value: '1' }] : []));
+      mock('Load Link Outreach', items(o.outreach || []));
+      for (const n of ['Load Listings', 'Load Backlinks', 'Load Link Impact', 'Load Query History', 'Load Content Log', 'LB Source Requests', 'Fetch LB Sources', 'LB Second Requests', 'Fetch LB Second', 'LB DFS Requests', 'Run LB DFS']) mock(n, items([]));
       mock('Load Monitors', items([{ site_id: SID, domain: DOM, ai_rank_mode: mode, ai_rank_reserve: true }]));
       const reqs = ['lists-one.example', 'lists-two.example', 'lists-three.example'].map(d => ({ site_id: SID, kind: 'prospect', prospect_domain: d, type: 'ai_source', url: 'https://' + d + '/best-software-companies-dubai', title: 'Best software companies in Dubai' }));
       mock('LB Page Requests', reqs.map(j => ({ json: j }))); mock('Fetch LB Pages', reqs.map(r => ({ json: page('Best custom software development companies in Dubai', r.prospect_domain) })));
@@ -162,7 +177,7 @@ module.exports = async (ctx) => {
       J([O(on, 'lists-one.example'), O(on, 'lists-three.example')].map(o => [o.score, o.fit])));
     check('on: every other row is scored exactly as off', O(on, 'lists-two.example').score === O(off, 'lists-two.example').score, J([O(on, 'lists-two.example').score, O(off, 'lists-two.example').score]));
     check('off: the stored scores stand (an ai_rank row is not rescored on a website that is not on)', O(off, 'lists-one.example').score === 8 && O(off, 'lists-three.example').score === 12, J([O(off, 'lists-one.example').score, O(off, 'lists-three.example').score]));
-    check('on: AI ranking\'s placements are drafted first, by their score, inside the writer budget (2)', J((on.jobs || []).map(j => j.prospect_domain)) === J(['lists-three.example', 'lists-one.example']), J((on.jobs || []).map(j => j.prospect_domain)));
+    check('on: the writer budget (2) takes rows by expected value, so the stronger ordinary placement comes before AI ranking\'s (RC-7: no hoist)', J((on.jobs || []).map(j => j.prospect_domain)) === J(['lists-two.example', 'lists-three.example']), J((on.jobs || []).map(j => j.prospect_domain)));
     check('off: the writer budget takes the rows in their own order (the highest score first)', (off.jobs || [])[0] && off.jobs[0].prospect_domain === 'lists-two.example', J((off.jobs || []).map(j => j.prospect_domain)));
   });
 
@@ -170,6 +185,22 @@ module.exports = async (ctx) => {
   // AE5 - the AI Growth report and callback
   // ===================================================================================
   await guard('air exec AE5 report callback', async () => {
+    // RC-7: the kill switch. With the air:kill row an on website gets exactly the off output (flat scores, today's order, no AI ranking directory)
+    const killed = await runLB('on', { kill: true });
+    check('RC-7 kill switch: an on website with the air:kill row is byte-identical to off (scores, order, drafts)', norm(killed) === norm(off), norm(killed).slice(0, 300));
+    // RC-7: a mention (0.9) and a lost-link reclaim (0.7) already ready, and five AI ranking placements (~0.1): by expected value, at most 2 AI ones
+    const rdy = (dom, type, score) => ({ site_id: SID, domain: DOM, prospect_domain: dom, type, status: 'ready', score, fit: 0.5, sequence_json: '', contacts_json: '[{"email":"editor@' + dom + '"}]', checks_json: '{}', page_url: 'https://' + dom + '/p', page_title: 'A page', target_url: 'https://' + DOM + '/', checked_at: '2026-11-01T00:00:00.000Z' });
+    const airDoms = ['air-a.example', 'air-b.example', 'air-c.example', 'air-d.example', 'air-e.example'];
+    const evOut = [rdy('mention.example', 'mention', 90), rdy('lost.example', 'lost', 70), ...airDoms.map((d, i) => rdy(d, 'ai_source', 12 - i))];
+    const evPros = airDoms.map((d, i) => pros('ai_rank', d, 12 - i));
+    const ev3 = await runLB('on', { budget: 3, outreach: evOut, prospects: evPros }), ev8 = await runLB('on', { budget: 8, outreach: evOut, prospects: evPros }), ev3off = await runLB('', { budget: 3, outreach: evOut, prospects: evPros }), ev3kill = await runLB('on', { budget: 3, outreach: evOut, prospects: evPros, kill: true });
+    const jd = (A) => (A.jobs || []).map(j => j.prospect_domain);
+    console.log('   AE4 EV on budget 3 ->', J(jd(ev3)), '| budget 8 ->', J(jd(ev8)), '| off ->', J(jd(ev3off)));
+    check('RC-7: budget 3: the mention, the reclaim and the next best row by expected value (an ordinary placement) are drafted; no AI ranking placement', J(jd(ev3)) === J(['mention.example', 'lost.example', 'lists-two.example']), J(jd(ev3)));
+    check('RC-7: budget 3: no AI ranking placement is drafted ahead of the mention or the reclaim', jd(ev3)[0] === 'mention.example' && jd(ev3)[1] === 'lost.example', J(jd(ev3)));
+    const airN = (A) => jd(A).filter(d => airDoms.includes(d) || d === 'lists-one.example' || d === 'lists-three.example').length;
+    check('RC-7: a large budget (8) still drafts at most 2 AI ranking placements a week (the weakest wait), every better row first', airN(ev8) === 2 && jd(ev8)[0] === 'mention.example' && jd(ev8)[1] === 'lost.example' && !jd(ev8).includes('air-e.example') && !jd(ev8).includes('air-d.example'), J(jd(ev8)));
+    check('RC-7: with the kill switch the same tables give the off result byte for byte', norm(ev3kill) === norm(ev3off), norm(ev3kill).slice(0, 300));
     reset(); const SN = 'AIR P6 AE5: the AI Growth report and callback - the "AI ranking plan" section and the additive key ai_rank for an on website only; off, shadow and the kill switch identical'; begin(SN); const check = mkCheck(SN);
     const readWf = (f) => { const w = JSON.parse(fs.readFileSync(path.join(WF_DIR, f), 'utf8')); return Array.isArray(w) ? w[0] : w; };
     const WF = readWf('SEO_Agent_AI_Growth.json');
