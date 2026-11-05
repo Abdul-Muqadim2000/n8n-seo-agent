@@ -166,6 +166,20 @@
    "Regulatory SERP (Retry)",
    "Regulatory SERP Answers"
   ],
+  "SEO Agent \u2014 AI Growth": [
+   "AI Rank Mentions Call",
+   "AI Rank Mentions Call Retry Plan",
+   "Any AI Rank Mentions Call Retries?",
+   "Wait Before AI Rank Mentions Call Retry",
+   "AI Rank Mentions Call (Retry)",
+   "AI Rank Mentions Call Answers",
+   "AI Rank SERP Call",
+   "AI Rank SERP Call Retry Plan",
+   "Any AI Rank SERP Call Retries?",
+   "Wait Before AI Rank SERP Call Retry",
+   "AI Rank SERP Call (Retry)",
+   "AI Rank SERP Call Answers"
+  ],
   "SEO Agent \u2014 AI Pulse": [
    "Run AI Requests",
    "AI Retry Requests",
@@ -1868,6 +1882,94 @@
     "per_item": false,
     "retryOnFail": false,
     "timeout": 30000,
+    "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": null,
+    "name": "AI Rank Mentions Call",
+    "onError": "continueRegularOutput",
+    "paid": true,
+    "per_item": true,
+    "retryOnFail": false,
+    "timeout": 90000,
+    "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "AI Rank Bing Call",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 30000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": null,
+    "name": "AI Rank SERP Call",
+    "onError": "continueRegularOutput",
+    "paid": true,
+    "per_item": true,
+    "retryOnFail": false,
+    "timeout": 90000,
+    "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "AI Rank CC Collections",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 60000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "AI Rank CC Index Call",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 60000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "AI Rank Brave Call",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 20000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": null,
+    "name": "AI Rank Mentions Call (Retry)",
+    "onError": "continueRegularOutput",
+    "paid": true,
+    "per_item": true,
+    "retryOnFail": false,
+    "timeout": 90000,
+    "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": null,
+    "name": "AI Rank SERP Call (Retry)",
+    "onError": "continueRegularOutput",
+    "paid": true,
+    "per_item": true,
+    "retryOnFail": false,
+    "timeout": 90000,
     "waitBetweenTries": null
    },
    {

@@ -39,6 +39,9 @@ CREDS = [
     # v4.10 (BACKLINKS_SPEC.md): optional free link sources; without the key the Backlink Monitor is built with the source switched off
     ('SEOcredBingWebm', 'Bing Webmaster API', 'httpQueryAuth', {'value': 'SEO_BING_WEBMASTER_API_KEY'}, {'name': 'apikey'}),
     ('SEOcredAhrefsDR', 'Ahrefs (free Domain Rating)', 'httpHeaderAuth', {'value': 'SEO_AHREFS_API_KEY'}, {'name': 'Authorization'}),
+    # AIR P5 (2026-11-06, docs/ai-ranking-2026-11-05/CONTRACTS.md §6): Brave Search API (the AI-ranking reads; the owner approved it, off by default).
+    # Created only when SEO_BRAVE_API_KEY is set (an empty variable is skipped, like every entry); header auth, the key never printed.
+    ('SEOcredBraveApi1', 'Brave Search API', 'httpHeaderAuth', {'value': 'SEO_BRAVE_API_KEY'}, {'name': 'X-Subscription-Token'}),
     # R94 (2026-10-16): the Schedule Catch-up reads n8n's own public API (each scheduled workflow and its executions) to tell a fired
     # schedule from a lost one. Same key the linkgraph container and sync_tables.py use (Settings -> n8n API in the n8n UI).
     ('SEOcredN8nApiKey', 'n8n API (SEO Agent catch-up)', 'httpHeaderAuth', {'value': 'N8N_API_KEY'}, {'name': 'X-N8N-API-KEY'}),

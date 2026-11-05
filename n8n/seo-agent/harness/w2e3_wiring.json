@@ -584,6 +584,20 @@
     "operation": "upsert",
     "table": "seo_cache"
    },
+   "Save AI Rank Fetch Cache": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "key",
+       "keyValue": "={{ $json.key }}"
+      }
+     ]
+    },
+    "mapping": "autoMapInputData",
+    "operation": "upsert",
+    "table": "seo_cache"
+   },
    "Save AI Rank Priors": {
     "filters": {
      "conditions": [

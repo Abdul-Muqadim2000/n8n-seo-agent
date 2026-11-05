@@ -59,7 +59,8 @@
  "env_file": "n8n/.env",
  "flags": [
   "SEO_BING_WEBMASTER_API_KEY",
-  "SEO_AHREFS_API_KEY"
+  "SEO_AHREFS_API_KEY",
+  "SEO_BRAVE_API_KEY"
  ],
  "this_build": {
   "file_present": true,

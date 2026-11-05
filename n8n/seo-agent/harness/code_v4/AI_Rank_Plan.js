@@ -4266,6 +4266,12 @@ const accessOf = (rv) => { if (!rv) return { robots: {}, blocked_engines: [], re
 const bingList = (() => { try { const r = $('Fetch Bing Sites (Growth)').first(); const j0 = r && r.json; if (!j0 || typeof j0 !== 'object' || j0.error) return null;
   let j = j0; if (j0.d === undefined) { const b = j0.body ?? j0.data; if (b && typeof b === 'object') j = b; else { try { j = JSON.parse(b || '{}'); } catch (e) { j = {}; } } }
   return Array.isArray(j.d) ? j.d.filter(x => x && x.Url) : null; } catch (e) { return null; } })();
+// D24 (P5): this run's fan-out results pages (AI Rank Fetched `serp_reads`, Google only; Bing's reach the kits through bing_stats.positions) are
+// merged into the site's own copy of the Google map, a later reading of the same search winning, so the S1 / S2 proxy basis can be read
+const serpFor = (f) => { const reads = f && Array.isArray(f.serp_reads) ? f.serp_reads.filter(r => r && (!r.engine || r.engine === 'google')) : []; if (!reads.length) return serp;
+  const m = new Map(serp); for (const r of reads) { const k = SC.normKw(r.query || r.key); if (!k) continue; const prev = m.get(k); if (prev && String(prev.read_at) > String(r.read_at || '')) continue;
+    m.set(k, { results: (r.results || []).filter(x => x && x.url).map(x => ({ url: x.url, pos: Number(x.pos) || null })), read_at: String(r.read_at || ''), location_code: Number(r.location_code) || 0 }); }
+  return m; };
 const rawHost = (u) => { const m = S0(u).match(/^https?:\/\/([^\/?#:]+)/i); return m ? m[1].toLowerCase() : ''; };
 const out = [];
 for (const g of gateSites) {
@@ -4277,6 +4283,7 @@ for (const g of gateSites) {
     const dom = normD(s.domain || g.domain);
     const gp = plansG.find(p => p.site_id === sid) || {}; const em = earnedG.find(e => e.site_id === sid) || {}; const gm = metricsG.find(m => m.site_id === sid) || {};
     const fetched = fetchedG.find(f => f.site_id === sid) || null;
+    const serpS = serpFor(fetched);
     const ourHosts = [...new Set([dom, 'www.' + dom, S0(gp.site_host).toLowerCase()].filter(Boolean))];
     const competitors = (gp.competitors || s.settings.competitors || []).map(normD).filter(Boolean);
     const rivals = [...new Set([...competitors, ...(gp.rival_sources || []).map(normD)].filter(d => d && d !== dom))];
@@ -4342,7 +4349,7 @@ for (const g of gateSites) {
     const diag = [];
     for (const p of asked) { const pid = S0(p.prompt_id);
       const ev = ARD.rollEvidence({ stored: S0((storedQ.get(pid) || {}).evidence_json), answers8, now: nowMs, prompt_id: pid, ourHosts }); evidenceOf.set(pid, typeof ev === 'string' ? ev.slice(0, 8192) : '');
-      const d = un('ARD.diagnose', ARD.diagnose({ site, prompt: p, answers8, units60, evidence: evidenceOf.get(pid), access, pages: aiPages, index, serp,
+      const d = un('ARD.diagnose', ARD.diagnose({ site, prompt: p, answers8, units60, evidence: evidenceOf.get(pid), access, pages: aiPages, index, serp: serpS,
         bingStats: fetched ? fetched.bing_stats || null : null, brave: index.brave, brandKnown, ourHosts, rivals, engines, now: nowMs, cfg: {} }));
       if (!d.unavailable) diag.push(d); }
     // ---- E: value and feasibility per question ----
