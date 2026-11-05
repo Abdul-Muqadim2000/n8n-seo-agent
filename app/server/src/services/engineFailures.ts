@@ -1,12 +1,12 @@
 import { and, eq, gt, inArray, ne, sql } from 'drizzle-orm';
-import { parseRunInput } from '@seo/shared';
 import { db, schema } from '../db';
 import type { RunRow } from '../db/schema';
 import type { OrgAccess } from '../auth/access';
 import type { Role } from '@seo/shared';
 import { emitRunsFailed } from './webhooks';
 import { createRunWithMeta, releaseFailedPages, STALE_RUN_ERROR } from './runs';
-import { executionFailure, executionStatus, executions, subExecutionOf } from '../n8n/client';
+import { parseRunInput, runOverdueMinutes, RUN_RESULT_GRACE_MINUTES } from '@seo/shared';
+import { executionFailure, executionState, executions, isN8nNotFound, subExecutionOf, subExecutionsOf } from '../n8n/client';
 
 // Without e-mail, a run that fails inside n8n would only show as failed after the 3-hour timeout (n8n's Error Handler mails the
 // operator, not the user). This watcher reads n8n's failed executions while runs are active, finds the request id the execution
@@ -86,56 +86,180 @@ export const ENGINE_RESTART_RETRIED =
   'The SEO engine restarted while this run was working, so it was started again automatically: follow the new run for the result. No credits are charged for this one.';
 /** Modes that are safe to send again: one result, no stored plan or settings half written (a ladder, tracking, a profile, a case study are not). */
 export const RETRYABLE = ['keyword', 'verdict', 'discover', 'describe', 'audit', 'published', 'checkin', 'ai_visibility', 'backlinks'];
-/** n8n statuses of an execution a restart cut off. `canceled` is a person stopping it in n8n: closed, never started again. */
-const CUT_OFF = ['crashed', 'canceled'];
-/** front-door execution id -> the execution it started (null: it started none; not asked again) */
-const workOf = new Map<string, string | null>();
-
 export interface RetryDeps {
   start: (a: OrgAccess, input: Parameters<typeof createRunWithMeta>[1], opts: Parameters<typeof createRunWithMeta>[2]) => Promise<{ run: RunRow }>;
 }
 const defaultDeps: RetryDeps = { start: createRunWithMeta };
 
-async function recoverCrashedRuns(runs: RunRow[], deps: RetryDeps = defaultDeps): Promise<string[]> {
+/** n8n statuses of an execution a restart cut off. `canceled` is a person stopping it in n8n: closed, never started again. */
+const CUT_OFF = ['crashed', 'canceled'];
+/** n8n statuses of an execution that ended by itself */
+const ENDED = ['success', 'error'];
+
+// Prod 2026-11-05 (devaicon.com, the publish check of 2026-11-04 seen at "Queued in the SEO engine", 69 minutes on a one-minute check):
+// the watcher closed a run only when n8n said "crashed". Every other way a run can go quiet waited for the 3-hour expiry: the result was
+// lost on its way to the app (the app restarting while n8n called back), the front door ended without starting the work and posted
+// nothing, n8n has no record of the execution, or the work was handed on (AI visibility, backlinks run in a workflow of their own) and
+// that execution was the one cut off. Once a run is overdue (runOverdueMinutes, shared with the run page), the whole chain is read:
+// anything still going = leave it; anything cut off = closed (and started again once when it crashed); everything ended and still no
+// result after RUN_RESULT_GRACE_MINUTES = closed with what is known. A result that arrives later still completes the run (runOutcome).
+export const ENGINE_NO_WORK_ERROR =
+  'The SEO engine took this run but stopped before it started the work, so nothing was delivered. No credits are charged for it. Start it again.';
+export const ENGINE_NO_WORK_RETRIED =
+  'The SEO engine took this run but stopped before it started the work, so it was started again automatically: follow the new run for the result. No credits are charged for this one.';
+export const ENGINE_LOST_ERROR =
+  'The SEO engine finished this run, but its result never reached your account, so nothing was delivered. No credits are charged for it. Start it again.';
+export const ENGINE_LOST_RETRIED =
+  'The SEO engine finished this run, but its result never reached your account, so it was started again automatically: follow the new run for the result. No credits are charged for this one.';
+/**
+ * Modes started again by themselves when their result was lost after the work ran: free and quick, so a second run costs nothing even
+ * if the first result turns up after all. A paid run whose work ran is closed and left to the person (running it twice is spend).
+ */
+export const LOST_RESULT_RETRY = ['published', 'checkin'];
+
+/** front-door execution id -> what it started: the work execution, or null with how the door itself ended (never cached while it runs) */
+interface Door {
+  work: string | null;
+  /** when no work: how the door ended (`missing` = n8n has no record of it) and when */
+  ended?: string;
+  stoppedAt?: number | null;
+}
+const doorOf = new Map<string, Door>();
+/** a work execution that has ended -> the executions it handed the work to (fixed once it has ended) */
+const handedTo = new Map<string, string[]>();
+/** kept for the tests' import name: front door -> work */
+const workOf = doorOf;
+
+async function readDoor(requestId: string): Promise<Door | undefined> {
+  const known = doorOf.get(requestId);
+  if (known) return known;
+  let child: string | null;
+  try {
+    child = await subExecutionOf(requestId);
+  } catch (err) {
+    if (!isN8nNotFound(err)) return undefined; // n8n unreachable: ask again next sweep
+    child = null;
+  }
+  let door: Door;
+  if (child) door = { work: child };
+  else {
+    // Prod 2026-11-04 (devaicon.com publish check): the front door answered 202 and was cut off itself before it started the work, so
+    // there is no work execution to follow. How the front door ended decides: cut off = this run's work never ran (the door is followed
+    // as the work); still going = ask again next sweep (never remember "nothing" for a door that has not finished); ended = remembered.
+    const own = await executionState(requestId);
+    if (own === undefined) return undefined;
+    if (own === null) door = { work: null, ended: 'missing', stoppedAt: null };
+    else if (CUT_OFF.includes(own.status)) door = { work: requestId };
+    else if (ENDED.includes(own.status)) door = { work: null, ended: own.status, stoppedAt: own.stoppedAt };
+    else return undefined;
+  }
+  doorOf.set(requestId, door);
+  return door;
+}
+
+type Verdict =
+  | { kind: 'alive' }
+  | { kind: 'unknown' }
+  | { kind: 'cut_off'; execution: string; status: string }
+  | { kind: 'ended'; execution: string; status: string; lastStop: number | null };
+
+/** How the work of a run stands: the work execution, then (once it has ended) every execution it handed the work to. */
+async function readWork(work: string): Promise<Verdict> {
+  const own = await executionState(work);
+  if (own === undefined) return { kind: 'unknown' };
+  if (own === null) return { kind: 'ended', execution: work, status: 'missing', lastStop: null };
+  if (CUT_OFF.includes(own.status)) return { kind: 'cut_off', execution: work, status: own.status };
+  if (!ENDED.includes(own.status)) return { kind: 'alive' };
+  let children = handedTo.get(work);
+  if (!children) {
+    try {
+      children = await subExecutionsOf(work);
+    } catch (err) {
+      if (!isN8nNotFound(err)) return { kind: 'unknown' };
+      children = [];
+    }
+    handedTo.set(work, children);
+  }
+  let lastStop = own.stoppedAt;
+  for (const c of children) {
+    const st = await executionState(c);
+    if (st === undefined) return { kind: 'unknown' };
+    if (st === null) continue; // pruned: it ended long ago
+    if (CUT_OFF.includes(st.status)) return { kind: 'cut_off', execution: c, status: st.status };
+    if (!ENDED.includes(st.status)) return { kind: 'alive' };
+    if (st.stoppedAt != null) lastStop = Math.max(lastStop ?? 0, st.stoppedAt);
+  }
+  return { kind: 'ended', execution: work, status: own.status, lastStop };
+}
+
+const MIN = 60_000;
+function overdue(run: RunRow, now: number): boolean {
+  const from = (run.acceptedAt ?? run.createdAt).getTime();
+  return now - from >= runOverdueMinutes(run.etaMinutes) * MIN;
+}
+/** the result had its time to arrive after the last execution ended (an unknown end counts from when the run became overdue) */
+function graceOver(lastStop: number | null | undefined, now: number): boolean {
+  return lastStop == null || now - lastStop >= RUN_RESULT_GRACE_MINUTES * MIN;
+}
+
+async function recoverCrashedRuns(runs: RunRow[], deps: RetryDeps = defaultDeps, now = Date.now()): Promise<string[]> {
   const closed: string[] = [];
   for (const run of runs) {
     if (!run.requestId || !/^\d+$/.test(run.requestId)) continue;
-    let work = workOf.get(run.requestId);
-    if (work === undefined) {
-      const child = await subExecutionOf(run.requestId).catch(() => undefined);
-      if (child === undefined) continue; // n8n unreachable: ask again next sweep
-      if (child) work = child;
-      else {
-        // Prod 2026-11-04 (devaicon.com publish check): the front door answered 202 and was cut off itself before it started the work, so
-        // there is no work execution to follow. How the front door ended decides: cut off = this run's work never ran; still going = ask
-        // again next sweep (never remember "nothing" for a door that has not finished); finished without starting work = nothing to do.
-        const own = await executionStatus(run.requestId);
-        if (!own || !['success', 'error', ...CUT_OFF].includes(own)) continue;
-        work = CUT_OFF.includes(own) ? run.requestId : null;
+    const door = await readDoor(run.requestId);
+    if (!door) continue;
+    const active = ACTIVE.includes(run.status);
+    if (!door.work) {
+      // the door ended without starting the work and the run heard nothing: once overdue, closed (nothing ran, so started again once)
+      if (!active || (run.reportCount ?? 0) > 0 || !overdue(run, now) || !graceOver(door.stoppedAt, now)) continue;
+      if (await close(run, `${ENGINE_NO_WORK_ERROR} (n8n execution ${run.requestId}, ${door.ended})`)) closed.push(run.id);
+      else continue;
+      await startAgain(run, `${ENGINE_NO_WORK_RETRIED} (n8n execution ${run.requestId}, ${door.ended})`, deps).catch(() => undefined);
+      continue;
+    }
+    const v = await readWork(door.work);
+    if (v.kind === 'alive' || v.kind === 'unknown') continue;
+    if (v.kind === 'cut_off') {
+      if (active) {
+        if (!(await close(run, `${ENGINE_RESTART_ERROR} (n8n execution ${v.execution}, ${v.status})`))) continue; // its result arrived meanwhile
+        closed.push(run.id);
       }
-      workOf.set(run.requestId, work);
+      if (v.status === 'crashed') await startAgain(run, `${ENGINE_RESTART_RETRIED} (n8n execution ${v.execution}, crashed)`, deps).catch(() => undefined);
+      continue;
     }
-    if (!work) continue;
-    const status = await executionStatus(work);
-    if (!status || !CUT_OFF.includes(status)) continue;
-    if (ACTIVE.includes(run.status)) {
-      const done = await db
-        .update(schema.runs)
-        .set({ status: 'failed', completedAt: new Date(), error: `${ENGINE_RESTART_ERROR} (n8n execution ${work}, ${status})` })
-        .where(and(eq(schema.runs.id, run.id), inArray(schema.runs.status, ACTIVE)))
-        .returning({ id: schema.runs.id });
-      if (!done.length) continue; // its result arrived meanwhile
-      closed.push(run.id);
-      await releaseFailedPages([run.id]).catch(() => 0); // before the new run opens its own page row
+    // everything ended and no final result: lost on the way, or an error the first read did not see. Only once overdue and after the
+    // grace, so a result still being posted is never overtaken, and only for a run that received nothing at all: a run that delivered
+    // some reports (a ladder's pages) is left to the expiry, as before.
+    if (!active || (run.reportCount ?? 0) > 0 || !overdue(run, now) || !graceOver(v.lastStop, now)) continue;
+    if (v.status === 'error') {
+      const f = await executionFailure(v.execution).catch(() => null);
+      const text = `The SEO engine stopped with an error${f?.node ? ` in "${f.node}"` : ''}${f?.error ? `: ${f.error}` : ''} (n8n execution ${v.execution}). Start it again; if it repeats, the operator can open that execution in n8n.`;
+      if (await close(run, text)) closed.push(run.id);
+      continue;
     }
-    if (status === 'crashed') await startAgain(run, work, deps).catch(() => undefined);
+    if (!(await close(run, `${ENGINE_LOST_ERROR} (n8n execution ${v.execution}, ${v.status})`))) continue;
+    closed.push(run.id);
+    if (LOST_RESULT_RETRY.includes(run.mode)) await startAgain(run, `${ENGINE_LOST_RETRIED} (n8n execution ${v.execution}, ${v.status})`, deps).catch(() => undefined);
   }
-  if (workOf.size > 5000) workOf.clear();
+  if (doorOf.size > 5000) doorOf.clear();
+  if (handedTo.size > 5000) handedTo.clear();
   return closed;
 }
 
-/** Starts a crashed run again for the person who started it, once, unless they already did or the mode is not safe to repeat. */
-async function startAgain(run: RunRow, work: string, deps: RetryDeps): Promise<string | null> {
+/** Closes a run that is still open as failed with its reason, and frees the page row it opened. False when its result arrived meanwhile. */
+async function close(run: RunRow, error: string): Promise<boolean> {
+  const done = await db
+    .update(schema.runs)
+    .set({ status: 'failed', completedAt: new Date(), error })
+    .where(and(eq(schema.runs.id, run.id), inArray(schema.runs.status, ACTIVE)))
+    .returning({ id: schema.runs.id });
+  if (!done.length) return false;
+  await releaseFailedPages([run.id]).catch(() => 0); // before the new run opens its own page row
+  return true;
+}
+
+/** Starts a run that stopped without a result again for the person who started it, once, unless they already did or the mode is not safe to repeat. */
+async function startAgain(run: RunRow, retriedText: string, deps: RetryDeps): Promise<string | null> {
   const input = (run.input ?? {}) as Record<string, unknown>;
   if (!RETRYABLE.includes(run.mode) || input.retryOf || input.retryClaimed || input.freeResearch || !run.userId) return null;
   // the person started the same thing again themselves: nothing to do
@@ -179,7 +303,7 @@ async function startAgain(run: RunRow, work: string, deps: RetryDeps): Promise<s
     .where(eq(schema.runs.id, started.run.id));
   await db
     .update(schema.runs)
-    .set({ error: `${ENGINE_RESTART_RETRIED} (n8n execution ${work}, crashed)`, input: sql`${schema.runs.input} || ${JSON.stringify({ retriedAs: started.run.id })}::jsonb` })
+    .set({ error: retriedText, input: sql`${schema.runs.input} || ${JSON.stringify({ retriedAs: started.run.id })}::jsonb` })
     .where(eq(schema.runs.id, run.id));
   return started.run.id;
 }
@@ -195,4 +319,4 @@ async function accessOf(run: RunRow): Promise<OrgAccess | null> {
 }
 
 /** for the tests: the recovery with a fake start */
-export const __test = { recoverCrashedRuns, workOf };
+export const __test = { recoverCrashedRuns, workOf, handedTo };
