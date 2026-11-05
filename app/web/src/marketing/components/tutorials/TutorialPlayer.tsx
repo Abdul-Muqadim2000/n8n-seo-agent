@@ -18,6 +18,8 @@ interface PlayerProps {
   startAt?: number;
   preload?: 'none' | 'metadata';
   priority?: boolean;
+  /** a film on YouTube: put the player in the page at once (no autoplay), so search engines see the video on its own page */
+  eager?: boolean;
   className?: string;
 }
 
@@ -70,11 +72,11 @@ function PlayCover({ tutorial: t, startAt, priority, onPlay }: { tutorial: Tutor
 }
 
 /** YouTube's player in its 16:9 frame: privacy-enhanced (no cookies until it plays), starting at `start`, playing at once */
-export function YouTubeFrame({ youtubeId, title, start, origin, frameRef }: { youtubeId: string; title: string; start: number; origin: string; frameRef?: Ref<HTMLIFrameElement> }) {
+export function YouTubeFrame({ youtubeId, title, start, origin, frameRef, autoplay = true }: { youtubeId: string; title: string; start: number; origin: string; frameRef?: Ref<HTMLIFrameElement>; autoplay?: boolean }) {
   return (
     <iframe
       ref={frameRef}
-      src={youtubeEmbedUrl(youtubeId, { origin, start, autoplay: true })}
+      src={youtubeEmbedUrl(youtubeId, { origin, start, autoplay })}
       title={title}
       className="absolute inset-0 size-full border-0 bg-ink-surface"
       allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
@@ -86,14 +88,15 @@ export function YouTubeFrame({ youtubeId, title, start, origin, frameRef }: { yo
 }
 
 /**
- * A film on YouTube, loaded only on demand: until the play button (or a chapter) is pressed the page shows our own cover and asks
+ * A film on YouTube, loaded only on demand (or at once with `eager`, on the tutorial's own page): until the play button (or a chapter) is pressed the page shows our own cover and asks
  * nothing of YouTube (faster, and no third party sees the visit). Then the embed takes the frame, playing from the chosen moment,
  * and keyboard focus moves into it. The chapter list keeps seeking: commands go to the player by postMessage (no YouTube script on
  * the page), and its reports of the current time mark the chapter playing.
  */
-function YouTubePlayer({ tutorial: t, youtubeId, controls, onTime, startAt = 0, priority = false, className }: PlayerProps & { youtubeId: string }) {
+function YouTubePlayer({ tutorial: t, youtubeId, controls, onTime, startAt = 0, priority = false, eager = false, className }: PlayerProps & { youtubeId: string }) {
   const frame = useRef<HTMLIFrameElement>(null);
-  const [from, setFrom] = useState<number | null>(null);
+  // eager (a tutorial's own page): the player is there from the first paint, cued at startAt, and waits for a press
+  const [from, setFrom] = useState<number | null>(eager ? startAt : null);
   const bridge = useMemo(() => new YouTubeBridge(() => frame.current?.contentWindow), []);
   const started = from !== null;
 
@@ -109,7 +112,7 @@ function YouTubePlayer({ tutorial: t, youtubeId, controls, onTime, startAt = 0, 
 
   useEffect(() => {
     if (!started) return;
-    frame.current?.focus({ preventScroll: true });
+    if (!eager) frame.current?.focus({ preventScroll: true });
     const onMessage = (e: MessageEvent) => {
       const m = bridge.receive(e);
       const at = m?.info?.currentTime;
@@ -126,12 +129,12 @@ function YouTubePlayer({ tutorial: t, youtubeId, controls, onTime, startAt = 0, 
       window.removeEventListener('message', onMessage);
       window.clearInterval(timer);
     };
-  }, [started, bridge, onTime]);
+  }, [started, eager, bridge, onTime]);
 
   return (
     <div className={frameClass(className)}>
       {started ? (
-        <YouTubeFrame youtubeId={youtubeId} title={labelOf(t)} start={from} origin={window.location.origin} frameRef={frame} />
+        <YouTubeFrame youtubeId={youtubeId} title={labelOf(t)} start={from} origin={typeof window === 'undefined' ? '' : window.location.origin} frameRef={frame} autoplay={!eager} />
       ) : (
         <PlayCover tutorial={t} startAt={startAt} priority={priority} onPlay={() => seek(startAt)} />
       )}
