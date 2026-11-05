@@ -9,6 +9,9 @@ import {
   indexingCauseOfKey,
   indexWatchOn,
   indexSitemapSubmitOn,
+  indexImprovementsOf,
+  improveStateOf,
+  withImprovements,
   isUtilityPage,
   INDEX_ASK_QUIET_DAYS,
   INDEX_ASKED_SHOWN_DAYS,
@@ -19,6 +22,7 @@ import {
   type IndexCause,
   type IndexHistoryEntry,
   type IndexHistoryRow,
+  type ContentLogRow,
   type IndexingData,
   type IndexingForRecs,
   type IndexPage,
@@ -64,21 +68,33 @@ export async function indexPageRows(domain: string, extra: F[] = [], max = INDEX
 }
 
 /**
+ * 2026-11-05 (client report, devaicon.com): the pages the client improved and reported published (the content log's published rows at the
+ * address they improved). The engine records them on its next daily run; reading them here shows "improved, waiting for Google" at once.
+ * A failure is "no improvement known yet", never an error of the page.
+ */
+const improvementsFor = (d: string) =>
+  siteRows<ContentLogRow>('contentLog', d, { extra: [{ columnName: 'status', condition: 'eq', value: 'published' }], max: 1000 })
+    .then(indexImprovementsOf)
+    .catch(() => [] as { url: string; at: string }[]);
+
+/**
  * X15: the rows the Indexing page needs. Pages in Google search with nothing to do are most of a healthy website and the page never lists
  * them, so they are not read one by one: their counts come from the newest run that read the website (`indexedCounts`). Two reads: every
  * page not in search (capped), and the in-search pages missing from the sitemap. Without such a run the whole table is read as before.
  */
 async function pageView(domain: string, runs: IndexRunRow[]): Promise<{ rows: IndexPageRow[]; capped: boolean; indexedCounts?: { all: number; newLane: number } }> {
   const good = runs.map(indexRunOf).sort((a, b) => (b.runAt > a.runAt ? 1 : -1)).find((r) => r.runAt && !r.failed && !r.reservation);
+  const improved = improvementsFor(domain);
   if (!good) {
-    const all = await indexPageRows(domain);
-    return { rows: all, capped: all.length >= INDEX_PAGES_MAX };
+    const [all, imp] = await Promise.all([indexPageRows(domain), improved]);
+    return { rows: withImprovements(all, imp), capped: all.length >= INDEX_PAGES_MAX };
   }
-  const [out, flagged] = await Promise.all([
+  const [out, flagged, imp] = await Promise.all([
     indexPageRows(domain, [{ columnName: 'state', condition: 'neq', value: 'indexed' }]),
     indexPageRows(domain, [{ columnName: 'state', condition: 'eq', value: 'indexed' }, { columnName: 'cause', condition: 'eq', value: 'indexed_not_in_sitemap' }], INDEXED_WITH_CAUSE_MAX),
+    improved,
   ]);
-  return { rows: [...out, ...flagged], capped: out.length >= INDEX_PAGES_MAX, indexedCounts: { all: good.indexed, newLane: good.newIndexed } };
+  return { rows: withImprovements([...out, ...flagged], imp), capped: out.length >= INDEX_PAGES_MAX, indexedCounts: { all: good.indexed, newLane: good.newIndexed } };
 }
 
 /** Indexing on/off and the daily checks, from the website's monitor row (empty = on, 300). */
@@ -208,12 +224,19 @@ export async function indexingForRecs(site: Pick<SiteRow, 'domain'>): Promise<In
 }
 
 async function readForRecs(d: string): Promise<IndexingForRecs | null> {
-  const [settings, runs, quality, ask] = await Promise.all([
+  const [settings, runs, readOut, ask, imp] = await Promise.all([
     indexSettings(d),
     rows<IndexRunRow>('indexRuns', { filters: [bySite(d)], sortBy: 'run_at:desc', max: 5 }).then((xs) => mine(d, xs)),
-    indexPageRows(d, [{ columnName: 'action', condition: 'eq', value: 'quality' }], 50).catch(() => [] as IndexPageRow[]),
+    // 2026-11-05: every page Google read and left out (an improved one waiting for Google is `wait` in the engine, or not yet recorded)
+    indexPageRows(d, [{ columnName: 'cause', condition: 'eq', value: 'crawled_not_indexed' }], 50).catch(() => [] as IndexPageRow[]),
     indexPageRows(d, [{ columnName: 'ask_google', condition: 'eq', value: true }], 10).catch(() => [] as IndexPageRow[]),
+    improvementsFor(d),
   ]);
+  // a page the client improved that Google has not read since is waiting for Google: never "Improve this page" again, never counted as
+  // a page to improve (the run's cause count still holds it)
+  const readOutNow = withImprovements(readOut, imp);
+  const waiting = readOutNow.filter((p) => improveStateOf(p) === 'waiting').length;
+  const quality = readOutNow.filter((p) => improveStateOf(p) !== 'waiting' && String(p.action) !== 'wait');
   // a reservation row (a run that had not finished, or crashed) is never the latest reading
   const all = runs.map(indexRunOf).filter((r) => r.runAt && !r.reservation).sort((a, b) => (b.runAt > a.runAt ? 1 : -1));
   // A11: the freeze is the engine's newest run's flag; the counts are the newest run that read the website (A4)
@@ -227,7 +250,7 @@ async function readForRecs(d: string): Promise<IndexingForRecs | null> {
   const other: IndexingForRecs['other'] = [
     { action: 'duplicate' as const, cause: 'google_chose_other' as const, total: count('google_chose_other') },
     { action: 'duplicate' as const, cause: 'duplicate_no_canonical' as const, total: count('duplicate_no_canonical') },
-    { action: 'quality' as const, cause: 'crawled_not_indexed' as const, total: Math.max(count('crawled_not_indexed'), quality.length) },
+    { action: 'quality' as const, cause: 'crawled_not_indexed' as const, total: Math.max(count('crawled_not_indexed') - waiting, quality.length) },
   ].filter((x) => x.total > 0);
   const byImpr = (a: IndexPageRow, b: IndexPageRow) => (Number(b.impressions_28d) || 0) - (Number(a.impressions_28d) || 0) || (Number(b.clicks_28d) || 0) - (Number(a.clicks_28d) || 0);
   return {

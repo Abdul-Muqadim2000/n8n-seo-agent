@@ -379,6 +379,9 @@ export interface IndexPageRow extends DtRow {
   asked_google_at?: string;
   /** wave 2 (§2.3): ISO of Google's crawl after `asked_google_at` (engine) */
   google_read_after_ask_at?: string;
+  /** 2026-11-05: ISO, when the client last published an improved version of this page at the same address (the content log's
+   *  `existing_page_url` = `published_url`, its `published_at`); engine, and overlaid by the app from the content log (indexing.ts) */
+  improved_at?: string;
 }
 /** One row per state / cause change of a page (insert only). */
 export interface IndexHistoryRow extends DtRow {

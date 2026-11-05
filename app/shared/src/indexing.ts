@@ -283,6 +283,50 @@ export const INDEX_FIXED_ON_SITE = {
   youDo: 'Nothing. For an important page you can also ask Google to read it again in Search Console.',
 } as const;
 
+/** 2026-11-05: pages the client improved and published, that Google has not read since (`improveStateOf` = 'waiting'): their own group. */
+export const INDEX_IMPROVED_WAITING = {
+  label: 'Improved, waiting for Google',
+  meaning: 'You published an improved version of these pages. Google still shows its older reading until it reads the page again, and only Google decides whether to add it.',
+  weDo: 'Our daily index check looks up Google\'s reading of these pages again in the days after you publish, so the reason updates once Google has read the new version.',
+  youDo: 'Nothing on these pages for now. For an important page you can ask Google to read it again in Search Console.',
+} as const;
+
+/**
+ * 2026-11-05 (client report, devaicon.com): the shared rule with the engine (`_index_kit.js` IX.improveState / IX.improvementsOf). A page
+ * Google read and left out (or treats as a copy) that the client improved, published at the same address and reported, is "improved,
+ * waiting for Google" until Google's last crawl is newer than the improvement; then Google's reading decides (in search, or still left out
+ * with "Google read your improved version"). We never call it indexed ourselves.
+ */
+export const INDEX_IMPROVABLE_CAUSES: ReadonlySet<string> = new Set(['crawled_not_indexed', 'google_chose_other', 'duplicate_no_canonical']);
+const isoMs = (v: unknown): number => {
+  const t = Date.parse(String(v ?? '').trim());
+  return Number.isFinite(t) ? t : 0;
+};
+export function improveStateOf(r: { state?: unknown; cause?: unknown; improved_at?: unknown; last_crawl?: unknown }): '' | 'waiting' | 'read' {
+  if (String(r.state ?? '') === 'indexed' || !INDEX_IMPROVABLE_CAUSES.has(String(r.cause ?? ''))) return '';
+  const at = isoMs(r.improved_at);
+  if (!at) return '';
+  return isoMs(r.last_crawl) >= at ? 'read' : 'waiting';
+}
+/** The content-log rows that improve a page: published at the very address they improved. -> [{ url, at }] (the engine's improvementsOf). */
+export function indexImprovementsOf(logs: readonly { status?: unknown; existing_page_url?: unknown; published_url?: unknown; published_at?: unknown }[]): { url: string; at: string }[] {
+  return logs
+    .filter((l) => /^published$/i.test(String(l.status ?? '').trim()) && String(l.published_at ?? '').trim() && samePageUrl(String(l.existing_page_url ?? ''), String(l.published_url ?? '')))
+    .map((l) => ({ url: String(l.published_url).trim(), at: String(l.published_at).trim() }));
+}
+/**
+ * The engine records an improvement on its next daily run; the app shows it at once: each row takes the newest of its own `improved_at` and
+ * the content log's improvement of the same page. Pure; rows are copied only when they change.
+ */
+export function withImprovements<R extends Partial<IndexPageRow>>(rows: readonly R[], improvements: readonly { url: string; at: string }[]): R[] {
+  if (!improvements.length) return [...rows];
+  return rows.map((r) => {
+    let best = String(r.improved_at ?? '').trim();
+    for (const i of improvements) if (samePageUrl(String(r.url ?? ''), i.url) && isoMs(i.at) > isoMs(best)) best = i.at;
+    return best && best !== String(r.improved_at ?? '').trim() ? { ...r, improved_at: best } : r;
+  });
+}
+
 export const INDEX_ACTION_INFO: Record<IndexAction, { label: string; summary: string }> = {
   site_fix: { label: 'Fix on your website', summary: 'Changes only you can make. Each one is a step on your Pipeline that we check every day.' },
   quality: { label: 'Improve the page', summary: 'Google read these pages and left them out. Improve them one at a time, when you choose.' },
@@ -429,10 +473,17 @@ export interface IndexPage {
   askNotRecorded: string;
   /** a policy or utility page (DESIGN_WAVE2 §2.4): fine to leave out of search */
   utility: boolean;
+  /** 2026-11-05: when the client last published an improved version of this page Google left out ('' = never, or not a reason an
+   *  improvement answers, or in search). See `improveStateOf`. */
+  improvedAt: string;
+  /** the improved version is live and Google has not read the page since: waiting for Google (action `wait`, no "Improve this page") */
+  improvedWaiting: boolean;
+  /** Google read the page after the improvement and still leaves it out: the date of that crawl ('' = not yet / no improvement) */
+  improvedReadAt: string;
 }
 
 /** What a group is about: a cause, a code the app does not know, or pages fixed on the site that Google has not read again yet. */
-export type IndexGroupCause = IndexCause | 'other' | 'fixed_on_site' | 'linked_waiting' | 'canonical_parent' | 'utility';
+export type IndexGroupCause = IndexCause | 'other' | 'fixed_on_site' | 'improved_waiting' | 'linked_waiting' | 'canonical_parent' | 'utility';
 
 export interface IndexGroup {
   /** `<lane>:<action>:<cause>` */
@@ -683,6 +734,15 @@ const fixSeen = (fix: string): string => fix.trim();
 /** The sentence of the engine's 14-day "asked Google" note that is wrong for a page that needs the client (W9). */
 const NOTHING_MORE_TO_DO = /\s*There is nothing more to do on your side for now\.?/;
 
+/** 2026-11-05: the engine writes the improvement into its note on its next run; until then (the app's overlay) the app says it. */
+const IMPROVED_NOTE = /improved version/i;
+function improvedNote(imp: '' | 'waiting' | 'read', at: string, crawl: string, note: string): string {
+  if (!imp || IMPROVED_NOTE.test(note)) return note;
+  if (imp === 'waiting')
+    return `You published an improved version on ${at.slice(0, 10)}. Google has not read the new version yet, so it still shows its older reading. We look up Google's reading again in the days after; asking Google to read it again in Search Console can help, and Google still decides.`;
+  return `Google read your improved version on ${crawl.slice(0, 10)} and still left it out for now. ${note}`.trim();
+}
+
 export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
   const cause = s(r.cause);
   const state = s(r.state);
@@ -701,8 +761,11 @@ export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
   const raw = displayAction(s(r.action), c, st);
   const linked = linkedByOf(r.linked_by);
   const action = fixFailedAt && raw === 'wait' && isCause(c) && INDEX_CAUSE_INFO[c].action === 'site_fix' ? 'site_fix' : raw;
-  // the engine sets `wait` with `fix_seen_at`; an older engine row is read the same way
-  const shown = fixSeenAt && action === 'site_fix' ? 'wait' : action;
+  // 2026-11-05 (improveStateOf, the engine's rule): an improved version Google has not read yet waits for Google; once Google read it, the
+  // page's own action is back (the engine's `wait` of the day before, or a row the app overlaid before the engine ran, are read the same way)
+  const imp = improveStateOf(r);
+  const improvedAt = imp ? s(r.improved_at).trim() : '';
+  const shown = imp === 'waiting' ? 'wait' : imp === 'read' && action === 'wait' && isCause(c) ? INDEX_CAUSE_INFO[c].action : fixSeenAt && action === 'site_fix' ? 'wait' : action;
   return {
     url: s(r.url),
     path: indexPath(s(r.url)),
@@ -739,7 +802,7 @@ export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
     mergeInto: s(r.merge_into),
     // wave 2 review W9: the engine's 14-day "asked Google" note replaced the whole note, whatever the action; a page that now needs the client
     // (a fix on the website, a link...) never reads "nothing more to do on your side"
-    note: (INDEX_ACTIONS_NEED_YOU.has(shown) ? s(r.note).replace(NOTHING_MORE_TO_DO, '').trim() : s(r.note)).slice(0, 500),
+    note: improvedNote(imp, improvedAt, s(r.last_crawl), (INDEX_ACTIONS_NEED_YOU.has(shown) ? s(r.note).replace(NOTHING_MORE_TO_DO, '').trim() : s(r.note))).slice(0, 500),
     publishedAt: s(r.published_at),
     inspectedAt: s(r.inspect_at),
     fetchedAt: s(r.fetch_at),
@@ -752,6 +815,9 @@ export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
     googleReadAfterAskAt: s(r.google_read_after_ask_at).trim(),
     askNotRecorded: '',
     utility,
+    improvedAt,
+    improvedWaiting: imp === 'waiting',
+    improvedReadAt: imp === 'read' ? s(r.last_crawl) : '',
   };
 }
 
@@ -1087,6 +1153,8 @@ export const INDEX_UTILITY_GROUP = {
 const groupLabel = (c: IndexGroupCause): Pick<IndexCauseInfo, 'label' | 'meaning' | 'weDo' | 'youDo'> =>
   c === 'fixed_on_site'
     ? INDEX_FIXED_ON_SITE
+    : c === 'improved_waiting'
+      ? INDEX_IMPROVED_WAITING
     : c === 'linked_waiting'
       ? INDEX_LINKED_WAITING
       : c === 'canonical_parent'
@@ -1098,7 +1166,7 @@ const groupLabel = (c: IndexGroupCause): Pick<IndexCauseInfo, 'label' | 'meaning
       : INDEX_CAUSE_INFO[c];
 
 const groupGuide = (c: IndexGroupCause): string | null =>
-  c === 'fixed_on_site' || c === 'linked_waiting' || c === 'other'
+  c === 'fixed_on_site' || c === 'improved_waiting' || c === 'linked_waiting' || c === 'other'
     ? 'index-request-indexing'
     : c === 'canonical_parent'
       ? 'index-canonical-sitemap'
@@ -1115,6 +1183,7 @@ export const INDEX_GROUP_PREVIEW = 25;
  *  the paged lists (A19): pages in search with nothing to do, and pages not checked yet that the engine did not file, are in none. */
 export const indexGroupCauseOf = (p: IndexPage): IndexGroupCause => {
   if (p.fixSeenAt) return 'fixed_on_site';
+  if (p.improvedWaiting) return 'improved_waiting';
   // wave 2 (DESIGN_WAVE2 §3.1): the engine's `wait` on a page it found already linked, apart from the pages that need a link
   if (p.action === 'wait' && (p.cause === 'unknown_to_google' || p.cause === 'discovered_not_crawled')) return 'linked_waiting';
   if (p.cause === 'canonical_elsewhere' && p.action === 'site_fix' && canonicalOwnTitle(p)) return 'canonical_parent';
