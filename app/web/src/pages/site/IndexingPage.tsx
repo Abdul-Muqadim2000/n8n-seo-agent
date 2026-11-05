@@ -214,7 +214,7 @@ function UpdateBanner({ e, frozen }: { e: GoogleEvent; frozen: boolean }) {
  *  step. Never automated: the client asks Google, presses "I asked Google", and the page then follows Google's next reading. */
 function AskGooglePanel({ items, asked, domain, orgId, siteId, member }: { items: IndexPage[]; asked: IndexPage[]; domain: string; orgId: string; siteId: string; member: boolean }) {
   const mark = useAskedGoogle(orgId, siteId);
-  const why = (p: IndexPage) => (p.fixSeenAt ? 'fixed on your site, Google has not read it again yet' : p.lane === 'new' ? 'a new page Google has not put in search yet' : 'an important page Google has not read yet');
+  const why = (p: IndexPage) => (p.fixSeenAt ? 'fixed on your site, Google has not read it again yet' : p.improvedWaiting ? 'you published an improved version, Google has not read it yet' : p.lane === 'new' ? 'a new page Google has not put in search yet' : 'an important page Google has not read yet');
   return (
     <Panel
       icon={<MousePointerClick />}
@@ -463,12 +463,19 @@ const STATE: Record<IndexPage['state'], { tone: Tone; label: string }> = {
 };
 
 function PageRow({ p, orgId, siteId, member, freeze }: { p: IndexPage; orgId: string; siteId: string; member: boolean; freeze: boolean }) {
-  const st = p.fixSeenAt ? { tone: 'good' as Tone, label: 'Fixed, waiting for Google' } : STATE[p.state];
+  const st = p.fixSeenAt
+    ? { tone: 'good' as Tone, label: 'Fixed, waiting for Google' }
+    : p.improvedWaiting
+      ? { tone: 'good' as Tone, label: 'Improved, waiting for Google' }
+      : STATE[p.state];
   const facts = [
     p.checkedAt ? `checked ${fmtDay(p.checkedAt)}` : 'not checked yet',
     p.fixSeenAt ? `we saw it fixed on ${fmtDay(p.fixSeenAt)}` : null,
     // R1 (final browser check): the row says it too, not only its details: Google read it again after the change we saw, problem still there
     p.fixFailedAt ? `Google read it again on ${fmtDay(p.fixFailedAt)}, after the change we saw, and still sees the problem` : null,
+    // 2026-11-05: the client published an improved version; Google decides once it reads it
+    p.improvedWaiting ? `you published an improved version on ${fmtDay(p.improvedAt)}, Google has not read it yet` : null,
+    p.improvedReadAt ? `Google read your improved version on ${fmtDay(p.improvedReadAt)} and still left it out` : null,
     p.impressions28d ? `${n(p.impressions28d)} impressions in 28 days` : null,
     p.inSitemap ? 'in your sitemap' : 'not in your sitemap',
     // wave 2: which pages of the website link to it (the engine reads the home page and the parent pages)

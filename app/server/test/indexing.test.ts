@@ -15,6 +15,7 @@ const t = vi.hoisted(() => ({
   pages: [] as Record<string, unknown>[],
   runs: [] as Record<string, unknown>[],
   history: [] as Record<string, unknown>[],
+  log: [] as Record<string, unknown>[],
   failIndex: false,
   reads: [] as string[],
 }));
@@ -52,7 +53,10 @@ vi.mock('../src/n8n/client', async (orig) => {
     if (table === 'googleEvents') return [{ event_id: 'core-2026-10', kind: 'core', status: 'rolling_out', title: 'October 2026 core update', started_at: '2026-10-20' }];
     return [];
   });
-  return { ...real, rows, siteRows: vi.fn(async () => []), insertRows: vi.fn(async () => true), updateRows: vi.fn(async () => true), upsertRow: vi.fn(async () => undefined), deleteRows: vi.fn(async () => true), ensureTable: vi.fn(async () => 'tbl'), invalidateSite: vi.fn(), executions: vi.fn(async () => []) };
+  // the content log (2026-11-05: the pages the client improved), by domain and the extra filters, as siteRows asks n8n
+  const siteRows = vi.fn(async (table: string, domain: string, q: { extra?: F[] } = {}) =>
+    table === 'contentLog' ? match(t.log, [{ columnName: 'domain', condition: 'eq', value: domain }, ...(q.extra ?? [])]) : []);
+  return { ...real, rows, siteRows, insertRows: vi.fn(async () => true), updateRows: vi.fn(async () => true), upsertRow: vi.fn(async () => undefined), deleteRows: vi.fn(async () => true), ensureTable: vi.fn(async () => 'tbl'), invalidateSite: vi.fn(), executions: vi.fn(async () => []) };
 });
 vi.mock('../src/services/verify', async (orig) => {
   const real = await orig<typeof import('../src/services/verify')>();
@@ -88,6 +92,7 @@ const { db, schema } = await import('../src/db');
 const { signUp } = await import('./helpers/client');
 const svc = await import('../src/services/siteTasks');
 const { indexingRecommendations } = await import('../src/services/recommendations');
+const { indexingForRecs } = await import('../src/services/indexing');
 vi.setConfig({ testTimeout: 30_000 });
 
 let app: FastifyInstance;
@@ -106,6 +111,7 @@ beforeEach(() => {
   t.pages = [];
   t.runs = [];
   t.history = [];
+  t.log = [];
   t.failIndex = false;
   t.reads = [];
   svc.forgetSitemaps();
@@ -194,6 +200,50 @@ describe('the Indexing page reads', () => {
     expect((await s.u.c.get(`${s.base}/data/indexing/pages?lane=new`)).body.status).toBe('unreadable');
     expect((await s.u.c.get(`${s.base}/recommendations`)).status).toBe(200);
     expect((await s.u.c.get(`${s.base}/tasks`)).status).toBe(200);
+  });
+});
+
+describe('a page the client improved and reported published (client report 2026-11-05)', () => {
+  const improved = (s: S, o: Record<string, unknown> = {}) =>
+    t.log.push({ site_id: s.sid, domain: s.domain, keyword: 'peppol in the uae', existing_page_url: `https://${s.domain}/blog/peppol/`, status: 'published', published_url: s.url('/blog/peppol'), published_at: new Date(Date.now() - 3_600_000).toISOString(), ...o });
+
+  it('shows "Improved, waiting for Google" at once, before the engine runs: no Improve button, not counted as needing the client, still not in search', async () => {
+    const s = await setup();
+    engine(s);
+    improved(s);
+    const d = (await s.u.c.get(`${s.base}/data/indexing`)).body as IndexingData;
+    expect(d.groups.some((g) => g.action === 'quality')).toBe(false);
+    const g = d.groups.find((x) => x.cause === 'improved_waiting');
+    expect(g).toMatchObject({ lane: 'new', action: 'wait', label: 'Improved, waiting for Google', count: 1 });
+    expect(g!.pages[0]).toMatchObject({ url: s.url('/blog/peppol'), state: 'not_indexed', improvedWaiting: true });
+    expect(d.lanes.new.needYou).toBe(0);
+    const p = await s.u.c.get(`${s.base}/data/indexing/pages?lane=new&action=wait&cause=improved_waiting`);
+    expect(p.body).toMatchObject({ status: 'ok', total: 1 });
+  });
+
+  it('the recommendations stop asking to improve it; Google reading it again and still leaving it out brings the ask back', async () => {
+    const s = await setup();
+    engine(s);
+    improved(s);
+    const recs = (await indexingForRecs({ domain: s.domain })) as IndexingForRecs;
+    expect(recs.quality).toEqual([]);
+    expect(recs.other.some((o) => o.action === 'quality')).toBe(false);
+    // Google crawled the page after the improvement and still left it out
+    const row = t.pages.find((r) => r.url === s.url('/blog/peppol'))!;
+    row.last_crawl = new Date(Date.now() - 60_000).toISOString();
+    const again = (await indexingForRecs({ domain: s.domain })) as IndexingForRecs;
+    expect(again.quality.map((q) => q.url)).toEqual([s.url('/blog/peppol')]);
+    expect(again.other).toContainEqual({ action: 'quality', cause: 'crawled_not_indexed', total: 1 });
+  });
+
+  it('a page published at another address, or not published, is no improvement of this one', async () => {
+    const s = await setup();
+    engine(s);
+    improved(s, { published_url: s.url('/blog/peppol-guide') });
+    improved(s, { status: 'written', published_url: '', published_at: '' });
+    const d = (await s.u.c.get(`${s.base}/data/indexing`)).body as IndexingData;
+    expect(d.groups.find((g) => g.action === 'quality')?.pages.map((p) => p.url)).toEqual([s.url('/blog/peppol')]);
+    expect(d.groups.some((g) => g.cause === 'improved_waiting')).toBe(false);
   });
 });
 

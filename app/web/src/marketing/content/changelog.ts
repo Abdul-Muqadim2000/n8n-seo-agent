@@ -34,6 +34,16 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-11-05',
+    version: '4.8',
+    title: 'Improved pages followed until Google reads them',
+    summary: 'Index coverage now records the pages you improved and published, and follows them until Google has read the new version.',
+    highlights: [
+      'When you improve a page Google left out and report it as published, Index coverage shows it as improved and waiting for Google the same day, instead of offering "Improve this page" again. It stays in the list of pages you already had, we look up Google\'s reading of it again in the days after, and it is among the pages worth asking Google to read again in Search Console. We never call it indexed ourselves: once Google reads the new version, the page is in search, or it shows that Google read your improved version and still left it out, with what to look at next',
+    ],
+    features: ['index-coverage'],
+  },
+  {
     date: '2026-10-31',
     version: '4.7',
     title: 'Written pages you can publish with confidence',
