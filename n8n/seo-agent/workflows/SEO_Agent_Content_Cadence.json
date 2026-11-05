@@ -629,6 +629,18 @@
               {
                 "name": "won_at",
                 "type": "string"
+              },
+              {
+                "name": "origin",
+                "type": "string"
+              },
+              {
+                "name": "action_id",
+                "type": "string"
+              },
+              {
+                "name": "live_at",
+                "type": "string"
               }
             ]
           },
@@ -2289,6 +2301,36 @@
                 "type": "string",
                 "canBeUsedToMatch": true,
                 "removed": false
+              },
+              {
+                "id": "origin",
+                "displayName": "origin",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "action_id",
+                "displayName": "action_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "live_at",
+                "displayName": "live_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
               }
             ],
             "attemptToConvertTypes": true,
@@ -2597,6 +2639,36 @@
               {
                 "id": "won_at",
                 "displayName": "won_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "origin",
+                "displayName": "origin",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "action_id",
+                "displayName": "action_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "live_at",
+                "displayName": "live_at",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,

@@ -857,7 +857,7 @@ const CC = (() => {
     family, priceOf, tokensOf, callCost, runCost, keysFor, readCal, estOf, pick, calKey, calStat, calRow, monthRow, part, costBasis, split };
 })();
 const ROW = 'Run Ledger Row (Growth)';
-const MEASURED = 'Growth Metrics';   // '' when this workflow has no measured figure
+const MEASURED = 'Growth Metrics|AI Rank Fetched';   // '' when this workflow has no measured figure
 const AI_NODES = ["AI Outreach Writer"];     // every Claude node of this workflow (the agents a model node is wired to), '[]' when it calls none
 const BAL_END = 'DFS Balance End (Growth)';     // the free balance probe on the settle chain
 const LEDGER = 'Load Run Ledger (Growth)';       // the run-ledger rows around this run's window

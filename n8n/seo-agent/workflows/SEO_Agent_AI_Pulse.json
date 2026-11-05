@@ -187,6 +187,26 @@
               {
                 "name": "index_sitemap_submit",
                 "type": "boolean"
+              },
+              {
+                "name": "ai_rank_mode",
+                "type": "string"
+              },
+              {
+                "name": "ai_rank_reserve",
+                "type": "boolean"
+              },
+              {
+                "name": "ai_rank_fanout_n",
+                "type": "number"
+              },
+              {
+                "name": "ai_rank_mentions",
+                "type": "boolean"
+              },
+              {
+                "name": "ai_rank_brave",
+                "type": "boolean"
               }
             ]
           },

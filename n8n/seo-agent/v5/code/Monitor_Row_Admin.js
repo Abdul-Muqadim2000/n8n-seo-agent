@@ -46,5 +46,9 @@ Object.assign(__row, { index_watch: has('index_watch') ? (m.index_watch === true
 // Index coverage wave 2 (2026-10-30, DESIGN_WAVE2.md §2.5): the opt-in for sitemap submission (validated in Admin Action; empty = off) - kept as stored unless given
 Object.assign(__row, { index_sitemap_submit: has('index_sitemap_submit') ? (m.index_sitemap_submit === true || /^(true|1|yes|on)$/i.test(String(m.index_sitemap_submit)))
   : (old.index_sitemap_submit === '' || old.index_sitemap_submit == null ? null : (old.index_sitemap_submit === true || old.index_sitemap_submit === 'true')) });
+// AIR (2026-11-06, docs/ai-ranking-2026-11-05/CONTRACTS.md §2): the AI-ranking settings are carried by Site Admin (until package P4 adds AIRF.validate for the given values) as stored, empty = off
+Object.assign(__row, { ai_rank_mode: old.ai_rank_mode === '' || old.ai_rank_mode == null ? null : String(old.ai_rank_mode), ai_rank_reserve: old.ai_rank_reserve === '' || old.ai_rank_reserve == null ? null : (old.ai_rank_reserve === true || old.ai_rank_reserve === 'true'),
+  ai_rank_fanout_n: old.ai_rank_fanout_n === '' || old.ai_rank_fanout_n == null ? null : Number(old.ai_rank_fanout_n), ai_rank_mentions: old.ai_rank_mentions === '' || old.ai_rank_mentions == null ? null : (old.ai_rank_mentions === true || old.ai_rank_mentions === 'true'),
+  ai_rank_brave: old.ai_rank_brave === '' || old.ai_rank_brave == null ? null : (old.ai_rank_brave === true || old.ai_rank_brave === 'true') });
 if (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit
 return [{ json: __row }];

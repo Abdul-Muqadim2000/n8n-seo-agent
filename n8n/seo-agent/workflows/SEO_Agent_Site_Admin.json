@@ -448,6 +448,26 @@
               {
                 "name": "index_sitemap_submit",
                 "type": "boolean"
+              },
+              {
+                "name": "ai_rank_mode",
+                "type": "string"
+              },
+              {
+                "name": "ai_rank_reserve",
+                "type": "boolean"
+              },
+              {
+                "name": "ai_rank_fanout_n",
+                "type": "number"
+              },
+              {
+                "name": "ai_rank_mentions",
+                "type": "boolean"
+              },
+              {
+                "name": "ai_rank_brave",
+                "type": "boolean"
               }
             ]
           },
@@ -718,6 +738,10 @@
               {
                 "name": "retire_reason",
                 "type": "string"
+              },
+              {
+                "name": "core_until",
+                "type": "string"
               }
             ]
           },
@@ -784,7 +808,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Site Admin \"monitors\": merges the given settings over the stored seo_monitors row (exact columns). Settings: ai_visibility, ai_engines\n// (chatgpt, perplexity, gemini, claude, ai_overview, ai_mode, copilot, chatgpt_api, gemini_api), ai_prompts_max (3-500, G6), ai_personas / ai_markets\n// (G6: buyer roles and extra markets, CC-lang), ai_pulse_mode ('' auto | sample | full) + ai_pulse_per_week (1-6, empty = auto), ai_pulse (daily AI Pulse, v4.9), ai_growth (weekly AI Growth loop) + ai_pages_month (0-8, v4.12), link_builder (weekly Link Builder, v4.13), stuck_weeks (2-26, G32), backlinks, audit_monthly, audit_pages (50-1000), audit_js,\n// competitors (domains), brand_names; W2-E3: ai_claude_weekly, ai_pulse_engines, ai_persona_context, ai_fanout_check (0-200), ai_demand_market;\n// Index coverage (2026-10-29): index_watch (daily index watch, empty = on), index_daily_cap (20-1,200 URL inspections a day, empty = 300);\n// wave 2 (2026-10-30): index_sitemap_submit (the client's opt-in for sitemap submission, empty = OFF).\nconst a = $('Admin Action').first().json; const m = a.monitors || {};\nlet old = {}; try { old = $('Load Monitors (Admin)').all().map(i => i.json).find(x => x && x.site_id === a.site_id) || {}; } catch (e) {}\nconst has = (k) => m[k] !== undefined && m[k] !== null && m[k] !== '';\nconst b = (k, dflt) => has(k) ? !/^(false|0|no|off)$/i.test(String(m[k])) : (old[k] === undefined || old[k] === null || old[k] === '' ? dflt : !(old[k] === false || old[k] === 'false'));\nconst list = (v) => (Array.isArray(v) ? v : String(v || '').split(/[\\n,;]+/)).map(x => String(x).trim()).filter(Boolean);\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst ENG = ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode', 'copilot', 'chatgpt_api', 'gemini_api'];   // G6: + the two model APIs (opt-in)\nconst mkt = (x) => { const mm = String(x || '').trim().replace(/[_\\s]+/g, '-').match(/^([A-Za-z]{2})(?:-([A-Za-z]{2,3}))?$/); return mm ? mm[1].toUpperCase() + '-' + (mm[2] || 'en').toLowerCase() : ''; };\nconst __row = { site_id: a.site_id, domain: a.domain || old.domain || '', ai_visibility: b('ai_visibility', true), ai_engines: has('ai_engines') ? list(m.ai_engines).map(e => e.toLowerCase()).filter(e => ENG.includes(e)).join(', ') : String(old.ai_engines || ''),\n  ai_prompts_max: has('ai_prompts_max') ? Math.min(500, Math.max(3, parseInt(m.ai_prompts_max, 10) || 20)) : (old.ai_prompts_max === '' || old.ai_prompts_max == null ? (old.site_id ? null : 50) : Number(old.ai_prompts_max)), ai_pulse: b('ai_pulse', true), ai_growth: b('ai_growth', true),\n  // G6 (2026-10-18): who asks, where, and how the daily pulse samples the panel — kept as stored unless given\n  ai_personas: has('ai_personas') ? list(m.ai_personas).map(x => x.replace(/\\s+/g, ' ').slice(0, 40)).slice(0, 6).join(', ') : String(old.ai_personas || ''),\n  ai_markets: has('ai_markets') ? [...new Set(list(m.ai_markets).map(mkt).filter(Boolean))].slice(0, 5).join(', ') : String(old.ai_markets || ''),\n  ai_pulse_mode: has('ai_pulse_mode') ? (['auto', 'sample', 'full'].includes(String(m.ai_pulse_mode).toLowerCase()) ? String(m.ai_pulse_mode).toLowerCase().replace('auto', '') : '') : String(old.ai_pulse_mode || ''),\n  ai_pulse_per_week: has('ai_pulse_per_week') ? (parseInt(m.ai_pulse_per_week, 10) >= 1 ? Math.min(6, parseInt(m.ai_pulse_per_week, 10)) : null) : (old.ai_pulse_per_week === '' || old.ai_pulse_per_week == null ? null : Number(old.ai_pulse_per_week)),\n  ai_pages_month: has('ai_pages_month') ? Math.min(8, Math.max(0, parseInt(m.ai_pages_month, 10) || 0)) : (old.ai_pages_month === '' || old.ai_pages_month == null ? null : Number(old.ai_pages_month)), backlinks: b('backlinks', true), audit_monthly: b('audit_monthly', true), link_builder: b('link_builder', true),\n  audit_pages: has('audit_pages') ? Math.min(1000, Math.max(50, parseInt(m.audit_pages, 10) || 200)) : (Number(old.audit_pages) || 200), audit_js: b('audit_js', false),\n  competitors: has('competitors') ? list(m.competitors).map(normD).filter(Boolean).slice(0, 5).join(', ') : String(old.competitors || ''), brand_names: has('brand_names') ? list(m.brand_names).join(', ') : String(old.brand_names || ''),\n  // G32: weeks without a position gain before a ladder is called stuck and gets a re-plan proposal (empty = 8, kept between 2 and 26)\n  stuck_weeks: has('stuck_weeks') ? Math.min(26, Math.max(2, parseInt(m.stuck_weeks, 10) || 8)) : (old.stuck_weeks === '' || old.stuck_weeks == null ? null : Number(old.stuck_weeks)),\n  updated_at: a.updated_at, request_id: a.request_id || '',\n  // W2-E2 (2026-10-23): the owner's AI alert rules (validated in Admin Action; '' clears) and the declared share-of-voice set - kept as stored unless given\n  ai_alert_rules_json: m.ai_alert_rules_json !== undefined && m.ai_alert_rules_json !== null ? String(m.ai_alert_rules_json) : String(old.ai_alert_rules_json || ''),\n  ai_sov_set: m.ai_sov_set !== undefined && m.ai_sov_set !== null ? String(m.ai_sov_set) : String(old.ai_sov_set || '') };\n// W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §4): Claude weekly, the pulse's engines, the persona test (API answers), the fan-out searches checked a week\n// (0 = off; the app offers 25 / 50 / 100) and the monthly market trend - each kept as stored unless given; every one off by default\nconst PULSE_OK = ['chatgpt', 'gemini', 'ai_mode', 'copilot', 'perplexity', 'ai_overview'];\nconst __num = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v));\nObject.assign(__row, { ai_claude_weekly: b('ai_claude_weekly', false),\n  ai_pulse_engines: has('ai_pulse_engines') ? [...new Set(list(m.ai_pulse_engines).map(e => e.toLowerCase().replace(/[\\s-]+/g, '_')).filter(e => PULSE_OK.includes(e)))].join(', ') : String(old.ai_pulse_engines || ''),\n  ai_persona_context: b('ai_persona_context', false),\n  ai_fanout_check: m.ai_fanout_check !== undefined && m.ai_fanout_check !== null ? (m.ai_fanout_check === '' ? null : Math.min(200, Math.max(0, parseInt(m.ai_fanout_check, 10) || 0))) : __num(old.ai_fanout_check),\n  ai_demand_market: b('ai_demand_market', false) });\n// AI-FOCUS (2026-10-27): what the daily pulse asks (focus | all) and whether the panel follows the client's focus (off | '' = on) - kept as stored unless given\nObject.assign(__row, { ai_pulse_scope: has('ai_pulse_scope') ? (['focus', 'all'].includes(String(m.ai_pulse_scope).toLowerCase()) ? String(m.ai_pulse_scope).toLowerCase() : String(old.ai_pulse_scope || '')) : String(old.ai_pulse_scope || (old.site_id ? '' : 'focus')),\n  ai_focus_mode: has('ai_focus_mode') ? (String(m.ai_focus_mode).toLowerCase() === 'off' ? 'off' : '') : String(old.ai_focus_mode || '') });\n// Index coverage (2026-10-29): the daily index watch (empty = on) and its daily inspection cap (empty = 300), validated in Admin Action - kept as stored unless given\nObject.assign(__row, { index_watch: has('index_watch') ? (m.index_watch === true || /^(true|1|yes|on)$/i.test(String(m.index_watch))) : (old.index_watch === '' || old.index_watch == null ? null : !(old.index_watch === false || old.index_watch === 'false')),\n  index_daily_cap: m.index_daily_cap === '' ? null : has('index_daily_cap') ? Math.min(1200, Math.max(20, parseInt(m.index_daily_cap, 10) || 300)) : (old.index_daily_cap === '' || old.index_daily_cap == null ? null : Number(old.index_daily_cap)) });\n// Index coverage wave 2 (2026-10-30, DESIGN_WAVE2.md §2.5): the opt-in for sitemap submission (validated in Admin Action; empty = off) - kept as stored unless given\nObject.assign(__row, { index_sitemap_submit: has('index_sitemap_submit') ? (m.index_sitemap_submit === true || /^(true|1|yes|on)$/i.test(String(m.index_sitemap_submit)))\n  : (old.index_sitemap_submit === '' || old.index_sitemap_submit == null ? null : (old.index_sitemap_submit === true || old.index_sitemap_submit === 'true')) });\nif (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit\nreturn [{ json: __row }];\n"
+          "jsCode": "// Site Admin \"monitors\": merges the given settings over the stored seo_monitors row (exact columns). Settings: ai_visibility, ai_engines\n// (chatgpt, perplexity, gemini, claude, ai_overview, ai_mode, copilot, chatgpt_api, gemini_api), ai_prompts_max (3-500, G6), ai_personas / ai_markets\n// (G6: buyer roles and extra markets, CC-lang), ai_pulse_mode ('' auto | sample | full) + ai_pulse_per_week (1-6, empty = auto), ai_pulse (daily AI Pulse, v4.9), ai_growth (weekly AI Growth loop) + ai_pages_month (0-8, v4.12), link_builder (weekly Link Builder, v4.13), stuck_weeks (2-26, G32), backlinks, audit_monthly, audit_pages (50-1000), audit_js,\n// competitors (domains), brand_names; W2-E3: ai_claude_weekly, ai_pulse_engines, ai_persona_context, ai_fanout_check (0-200), ai_demand_market;\n// Index coverage (2026-10-29): index_watch (daily index watch, empty = on), index_daily_cap (20-1,200 URL inspections a day, empty = 300);\n// wave 2 (2026-10-30): index_sitemap_submit (the client's opt-in for sitemap submission, empty = OFF).\nconst a = $('Admin Action').first().json; const m = a.monitors || {};\nlet old = {}; try { old = $('Load Monitors (Admin)').all().map(i => i.json).find(x => x && x.site_id === a.site_id) || {}; } catch (e) {}\nconst has = (k) => m[k] !== undefined && m[k] !== null && m[k] !== '';\nconst b = (k, dflt) => has(k) ? !/^(false|0|no|off)$/i.test(String(m[k])) : (old[k] === undefined || old[k] === null || old[k] === '' ? dflt : !(old[k] === false || old[k] === 'false'));\nconst list = (v) => (Array.isArray(v) ? v : String(v || '').split(/[\\n,;]+/)).map(x => String(x).trim()).filter(Boolean);\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst ENG = ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode', 'copilot', 'chatgpt_api', 'gemini_api'];   // G6: + the two model APIs (opt-in)\nconst mkt = (x) => { const mm = String(x || '').trim().replace(/[_\\s]+/g, '-').match(/^([A-Za-z]{2})(?:-([A-Za-z]{2,3}))?$/); return mm ? mm[1].toUpperCase() + '-' + (mm[2] || 'en').toLowerCase() : ''; };\nconst __row = { site_id: a.site_id, domain: a.domain || old.domain || '', ai_visibility: b('ai_visibility', true), ai_engines: has('ai_engines') ? list(m.ai_engines).map(e => e.toLowerCase()).filter(e => ENG.includes(e)).join(', ') : String(old.ai_engines || ''),\n  ai_prompts_max: has('ai_prompts_max') ? Math.min(500, Math.max(3, parseInt(m.ai_prompts_max, 10) || 20)) : (old.ai_prompts_max === '' || old.ai_prompts_max == null ? (old.site_id ? null : 50) : Number(old.ai_prompts_max)), ai_pulse: b('ai_pulse', true), ai_growth: b('ai_growth', true),\n  // G6 (2026-10-18): who asks, where, and how the daily pulse samples the panel — kept as stored unless given\n  ai_personas: has('ai_personas') ? list(m.ai_personas).map(x => x.replace(/\\s+/g, ' ').slice(0, 40)).slice(0, 6).join(', ') : String(old.ai_personas || ''),\n  ai_markets: has('ai_markets') ? [...new Set(list(m.ai_markets).map(mkt).filter(Boolean))].slice(0, 5).join(', ') : String(old.ai_markets || ''),\n  ai_pulse_mode: has('ai_pulse_mode') ? (['auto', 'sample', 'full'].includes(String(m.ai_pulse_mode).toLowerCase()) ? String(m.ai_pulse_mode).toLowerCase().replace('auto', '') : '') : String(old.ai_pulse_mode || ''),\n  ai_pulse_per_week: has('ai_pulse_per_week') ? (parseInt(m.ai_pulse_per_week, 10) >= 1 ? Math.min(6, parseInt(m.ai_pulse_per_week, 10)) : null) : (old.ai_pulse_per_week === '' || old.ai_pulse_per_week == null ? null : Number(old.ai_pulse_per_week)),\n  ai_pages_month: has('ai_pages_month') ? Math.min(8, Math.max(0, parseInt(m.ai_pages_month, 10) || 0)) : (old.ai_pages_month === '' || old.ai_pages_month == null ? null : Number(old.ai_pages_month)), backlinks: b('backlinks', true), audit_monthly: b('audit_monthly', true), link_builder: b('link_builder', true),\n  audit_pages: has('audit_pages') ? Math.min(1000, Math.max(50, parseInt(m.audit_pages, 10) || 200)) : (Number(old.audit_pages) || 200), audit_js: b('audit_js', false),\n  competitors: has('competitors') ? list(m.competitors).map(normD).filter(Boolean).slice(0, 5).join(', ') : String(old.competitors || ''), brand_names: has('brand_names') ? list(m.brand_names).join(', ') : String(old.brand_names || ''),\n  // G32: weeks without a position gain before a ladder is called stuck and gets a re-plan proposal (empty = 8, kept between 2 and 26)\n  stuck_weeks: has('stuck_weeks') ? Math.min(26, Math.max(2, parseInt(m.stuck_weeks, 10) || 8)) : (old.stuck_weeks === '' || old.stuck_weeks == null ? null : Number(old.stuck_weeks)),\n  updated_at: a.updated_at, request_id: a.request_id || '',\n  // W2-E2 (2026-10-23): the owner's AI alert rules (validated in Admin Action; '' clears) and the declared share-of-voice set - kept as stored unless given\n  ai_alert_rules_json: m.ai_alert_rules_json !== undefined && m.ai_alert_rules_json !== null ? String(m.ai_alert_rules_json) : String(old.ai_alert_rules_json || ''),\n  ai_sov_set: m.ai_sov_set !== undefined && m.ai_sov_set !== null ? String(m.ai_sov_set) : String(old.ai_sov_set || '') };\n// W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §4): Claude weekly, the pulse's engines, the persona test (API answers), the fan-out searches checked a week\n// (0 = off; the app offers 25 / 50 / 100) and the monthly market trend - each kept as stored unless given; every one off by default\nconst PULSE_OK = ['chatgpt', 'gemini', 'ai_mode', 'copilot', 'perplexity', 'ai_overview'];\nconst __num = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v));\nObject.assign(__row, { ai_claude_weekly: b('ai_claude_weekly', false),\n  ai_pulse_engines: has('ai_pulse_engines') ? [...new Set(list(m.ai_pulse_engines).map(e => e.toLowerCase().replace(/[\\s-]+/g, '_')).filter(e => PULSE_OK.includes(e)))].join(', ') : String(old.ai_pulse_engines || ''),\n  ai_persona_context: b('ai_persona_context', false),\n  ai_fanout_check: m.ai_fanout_check !== undefined && m.ai_fanout_check !== null ? (m.ai_fanout_check === '' ? null : Math.min(200, Math.max(0, parseInt(m.ai_fanout_check, 10) || 0))) : __num(old.ai_fanout_check),\n  ai_demand_market: b('ai_demand_market', false) });\n// AI-FOCUS (2026-10-27): what the daily pulse asks (focus | all) and whether the panel follows the client's focus (off | '' = on) - kept as stored unless given\nObject.assign(__row, { ai_pulse_scope: has('ai_pulse_scope') ? (['focus', 'all'].includes(String(m.ai_pulse_scope).toLowerCase()) ? String(m.ai_pulse_scope).toLowerCase() : String(old.ai_pulse_scope || '')) : String(old.ai_pulse_scope || (old.site_id ? '' : 'focus')),\n  ai_focus_mode: has('ai_focus_mode') ? (String(m.ai_focus_mode).toLowerCase() === 'off' ? 'off' : '') : String(old.ai_focus_mode || '') });\n// Index coverage (2026-10-29): the daily index watch (empty = on) and its daily inspection cap (empty = 300), validated in Admin Action - kept as stored unless given\nObject.assign(__row, { index_watch: has('index_watch') ? (m.index_watch === true || /^(true|1|yes|on)$/i.test(String(m.index_watch))) : (old.index_watch === '' || old.index_watch == null ? null : !(old.index_watch === false || old.index_watch === 'false')),\n  index_daily_cap: m.index_daily_cap === '' ? null : has('index_daily_cap') ? Math.min(1200, Math.max(20, parseInt(m.index_daily_cap, 10) || 300)) : (old.index_daily_cap === '' || old.index_daily_cap == null ? null : Number(old.index_daily_cap)) });\n// Index coverage wave 2 (2026-10-30, DESIGN_WAVE2.md §2.5): the opt-in for sitemap submission (validated in Admin Action; empty = off) - kept as stored unless given\nObject.assign(__row, { index_sitemap_submit: has('index_sitemap_submit') ? (m.index_sitemap_submit === true || /^(true|1|yes|on)$/i.test(String(m.index_sitemap_submit)))\n  : (old.index_sitemap_submit === '' || old.index_sitemap_submit == null ? null : (old.index_sitemap_submit === true || old.index_sitemap_submit === 'true')) });\n// AIR (2026-11-06, docs/ai-ranking-2026-11-05/CONTRACTS.md §2): the AI-ranking settings are carried by Site Admin (until package P4 adds AIRF.validate for the given values) as stored, empty = off\nObject.assign(__row, { ai_rank_mode: old.ai_rank_mode === '' || old.ai_rank_mode == null ? null : String(old.ai_rank_mode), ai_rank_reserve: old.ai_rank_reserve === '' || old.ai_rank_reserve == null ? null : (old.ai_rank_reserve === true || old.ai_rank_reserve === 'true'),\n  ai_rank_fanout_n: old.ai_rank_fanout_n === '' || old.ai_rank_fanout_n == null ? null : Number(old.ai_rank_fanout_n), ai_rank_mentions: old.ai_rank_mentions === '' || old.ai_rank_mentions == null ? null : (old.ai_rank_mentions === true || old.ai_rank_mentions === 'true'),\n  ai_rank_brave: old.ai_rank_brave === '' || old.ai_rank_brave == null ? null : (old.ai_rank_brave === true || old.ai_rank_brave === 'true') });\nif (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit\nreturn [{ json: __row }];\n"
         },
         "id": "8c6bce25-376d-5118-9c48-3d6b4a981aea",
         "name": "Monitor Row (Admin)",
@@ -1152,6 +1176,56 @@
               {
                 "id": "index_sitemap_submit",
                 "displayName": "index_sitemap_submit",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ai_rank_mode",
+                "displayName": "ai_rank_mode",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ai_rank_reserve",
+                "displayName": "ai_rank_reserve",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ai_rank_fanout_n",
+                "displayName": "ai_rank_fanout_n",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ai_rank_mentions",
+                "displayName": "ai_rank_mentions",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ai_rank_brave",
+                "displayName": "ai_rank_brave",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,
@@ -1903,6 +1977,16 @@
               {
                 "id": "retire_reason",
                 "displayName": "retire_reason",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "core_until",
+                "displayName": "core_until",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,

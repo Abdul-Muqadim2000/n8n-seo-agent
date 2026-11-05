@@ -271,7 +271,7 @@
     "tell": "Tell Caller (Growth)?"
    },
    "ledger_load": "Load Run Ledger (Growth)",
-   "measured": "Growth Metrics",
+   "measured": "Growth Metrics|AI Rank Fetched",
    "mode": "ai_growth",
    "open_runs": "Load Open Runs (Growth)",
    "plan": "Growth Plan",

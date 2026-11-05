@@ -2690,7 +2690,7 @@ await guard('ai growth', async () => {
   // no answer in this fixture even asks that question, and "absent from the gaps" also covers a question nobody asked. The row
   // now waits with the reason; S92 proves the win itself, on answers that name the business.
   check('questions to win: a refresh of the stale page AI cited (200 days, 55/100) and a new answer page; a written target with no answers behind it is NOT called won', tRefresh.kind === 'refresh' && tRefresh.page_url === WWW + '/e-invoicing-uae/' && tRefresh.status === 'queued' && /not updated in 90\+ days/.test(tRefresh.reason) && tAnswer.kind === 'answer' && tAnswer.page_type === 'Comparison Page' && tAnswer.status === 'queued' && tWon.status === 'writing' && /not asked in the last 8 days/.test(tWon.reason) && tRefresh.value > tAnswer.value && JSON.parse(tRefresh.sources_json)[0].u.includes('gulfnews') && /deadline 2027/.test(tRefresh.fanout), JSON.stringify(G.targets.map(t => [t.target_id, t.kind, t.status, t.value, t.reason])));
-  check('target rows: exact seo_ai_targets columns', G.targets.filter(t => !t.id).every(t => same2(Object.keys(t), L.AI_TARGETS)), JSON.stringify(Object.keys(tRefresh)));
+  check('target rows: exact seo_ai_targets columns (but the AIR columns, which the row writer sets null: CONTRACTS.md §2)', G.targets.filter(t => !t.id).every(t => same2(Object.keys(t), L.AI_TARGETS.filter(c => !(L.AI_TARGETS_AIR || []).includes(c)))), JSON.stringify(Object.keys(tRefresh)));
   const kinds = Object.fromEntries(G.earned.map(e => [e.host, e.kind]));
   check('earned media: exact cited pages ranked (the list cited by 3 engines first), kinds (list, forum, official, video, competitor), competitors\' own pages never fetched', G.earned[0].host === 'gulfnews.com' && G.earned[0].citations === 3 && kinds['gulfnews.com'] === 'list' && kinds['reddit.com'] === 'forum' && kinds['mof.gov.ae'] === 'official' && kinds['youtube.com'] === 'video' && kinds['cleartax.com'] === 'competitor' && !G.earned_fetch.some(u => /cleartax/.test(u)), JSON.stringify(kinds));
   check('IndexNow key made once (32 hex) and the monthly entity check due', /^[a-f0-9]{32}$/.test(G.indexnow_key) && G.indexnow_new === true && G.entity_due === true, G.indexnow_key);
@@ -19771,5 +19771,15 @@ await require('./scenarios_index_fix2')({ H, run, mock, store, guard, reset, beg
 await require('./scenarios_index_fix3')({ H, run, mock, store, guard, reset, begin });   // IXR2-IXR8 (Index coverage fix wave 3, 2026-10-30, REVIEW_3.md R2-R8): each scenario fails on ix/engine 7777e17d
 await require('./scenarios_index_wave2')({ H, run, mock, store, guard, reset, begin });   // IXV1-IXV7 (Index coverage wave 2, 2026-10-30, DESIGN_WAVE2.md): devaicon.com's real pages end to end (site links, wait, canonical with its own title, utility pages, ask-Google order), "I asked Google" over 30 days, the sitemap-submission gate, the write credential on one node; every non-control check fails on 35c24b03
 await require('./scenarios_index_improved')({ H, run, mock, store, guard, reset, begin });   // IXI1-IXI3 (client report 2026-11-05, devaicon.com): a page Google left out that the client improved and reported published is "improved, waiting for Google" (own lane kept, inspected again within a day, ask-Google eligible) until Google reads the new version; fails on 1a13ec42
+// AIR (the AI-ranking algorithm, 2026-11-06, docs/ai-ranking-2026-11-05/CONTRACTS.md): the contract (W0), the golden test (every site off ->
+// AI Growth byte-identical to before AIR), and one file per package (P1 diag, P2 learn, P3 fix, P4 plumb, P5 integ, P6 exec; stubs until each lands)
+await require('./scenarios_air_w0')({ H, run, mock, store, guard, reset, begin });   // AIRW0-1..7: flags, kits, tables, fixtures, wiring, monitor rows
+await require('./scenarios_air_golden')({ H, run, mock, store, guard, reset, begin });   // AIRG0-4: every site off -> AI Growth output and the ai_growth callback unchanged
+await require('./scenarios_air_diag')({ H, run, mock, store, guard, reset, begin });   // P1 AD1-AD12
+await require('./scenarios_air_learn')({ H, run, mock, store, guard, reset, begin });   // P2 AL1-AL14
+await require('./scenarios_air_fix')({ H, run, mock, store, guard, reset, begin });   // P3 AF1-AF12
+await require('./scenarios_air_plumb')({ H, run, mock, store, guard, reset, begin });   // P4 AP1-AP12
+await require('./scenarios_air_integ')({ H, run, mock, store, guard, reset, begin });   // P5 AI1-AI10
+await require('./scenarios_air_exec')({ H, run, mock, store, guard, reset, begin });   // P6 AE1-AE8
 H.report();
 })();

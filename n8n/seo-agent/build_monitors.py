@@ -12,6 +12,7 @@ _env.require_settings('build_monitors.py')
 import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
 import dfs_gate     # B-A10 (2026-10-15): INVARIANTS rule 3 — the in-200 retry gate, one shape for every DataForSEO call
 import llm_limits   # LLM-LIMITS (2026-10-27)
+import ai_rank_wiring   # AIR (2026-11-06, docs/ai-ranking-2026-11-05/CONTRACTS.md §4): the AI-ranking side branch of AI Growth (package P4 fills it)
 import monitor_cost # A9 (2026-10-16, F6): the count_tokens answer expression, and the callback that waits for the settle (R115)
 from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_upsert_params, dt_upsert_params_keys,
                            SITES_TABLE, SITES_COLS, LADDER_TABLE, LADDER_COLS, LOG_TABLE, LOG_COLS, PROFILE_TABLE, PROFILE_COLS, CASE_TABLE, CASE_COLS,
@@ -59,6 +60,9 @@ def src(p):   # a Code node source with the shared snippets inlined
     s = s.replace('/*__AI_FOCUS__*/', rd('code/_ai_focus.js').rstrip('\n'))   # AI-FOCUS (2026-10-27, docs/ai-panel-focus-2026-10-27): the panel follows the client's focus (AIF)
     s = s.replace('/*__AI_W2E3__*/', rd('code/_ai_w2e3.js').rstrip('\n'))   # W2-E3 (2026-10-23): fan-out ranking gap, persona effect, demand, the owner's AI reports, the run's bookkeeping (AIX)
     s = s.replace('/*__SERP_CACHE__*/', rd('code/_serp_cache.js').rstrip('\n'))   # KW-SERP (2026-10-21): one results-page reading per search and day, shared by every path (SC); W2-E3: the fan-out check reads it too
+    # AIR (2026-11-06, docs/ai-ranking-2026-11-05/CONTRACTS.md §3): the AI-ranking kits - flags + kill switch (AIRF, frozen by W0), diagnosis (ARD,
+    # package P1) and decision / learning (ARL, package P2); inlined only into the AIR nodes of the AI Growth workflow (package P4)
+    s = s.replace('/*__AI_RANK_FLAGS__*/', rd('code/_ai_rank_flags.js').rstrip('\n')).replace('/*__AI_RANK_DIAG__*/', rd('code/_ai_rank_diag.js').rstrip('\n')).replace('/*__AI_RANK_LEARN__*/', rd('code/_ai_rank_learn.js').rstrip('\n'))
     s = s.replace('/*__RIVALS__*/', rd('code/_rivals.js').rstrip('\n'))   # C-2 / C-8 (2026-10-17): the one rival set and the category-provider rule (inside the outreach kit, and in AI Metrics)
     s = s.replace('/*__COUNTRIES__*/', "// ---- countries: copied from the main workflow's Normalize Input by build_monitors.py (DataForSEO location code = 2000 + ISO numeric) ----" + _COUNTRIES.group(0))
     assert '/*__' not in s and '_ENABLED__' not in s, p + ': placeholder left'
@@ -935,9 +939,13 @@ gstep('AI Page Rows', 'Any AI Page Rows?', 'Save AI Pages', 'AI Target Rows')
 gstep('AI Target Rows', 'Any AI Target Rows?', 'Save AI Targets', 'Growth Prospect Rows')
 gstep('Growth Prospect Rows', 'Any Growth Prospects?', 'Save Growth Prospects', 'Growth Cache Rows')
 gstep('Growth Cache Rows', 'Any Growth Cache?', 'Save Growth Cache', 'AI Growth Row')
-gstep('AI Growth Row', 'Any Growth Row?', 'Save AI Growth', 'Growth Report')
+# AIR (2026-11-06, docs/ai-ranking-2026-11-05/CONTRACTS.md §4): the AI-ranking side branch sits between Save AI Growth and Growth Report.
+# ai_rank_wiring.wire() (package P4) owns the links from the IF's false output and from the save to Growth Report; W0's skeleton makes exactly
+# the two links gstep made, so the graph is the same as before until P4 fills it.
+G.link('AI Growth Row', 'Any Growth Row?'); G.link('Any Growth Row?', 'Save AI Growth', 0)
+ai_rank_wiring.wire(G, 'Any Growth Row?', 'Save AI Growth', 'Growth Report', at(60, 3))
 G.link('Growth Report', 'Has Email (Growth)?'); G.link('Growth Report', 'Build Growth Callback'); G.link('Build Growth Callback', 'Has Callback (Growth)?')
-G.run_ledger('ai_growth', 'Growth', 'Growth Plan', ['Growth Report'], at(16, 4), measured='Growth Metrics')
+G.run_ledger('ai_growth', 'Growth', 'Growth Plan', ['Growth Report'], at(16, 4), measured='Growth Metrics|AI Rank Fetched')   # AIR (CONTRACTS.md §4): AIR's paid reads (P5) settle here; a node that did not run is skipped
 G.sticky(f"""## SEO Agent — AI Growth (v4.12, AI_GROWTH_SPEC.md)
 **Once a week in each website's own cycle** (job 5: after the AI Visibility Tracker and the Site Tracker, before the Content Cadence; *Manual Run* {CYCLE_ENTRY}; the Wikidata check only when `monthly: true`) and on demand (*Manual Run* `{{{{ domain | site_id, email?, callback_url? }}}}`). Per site with AI visibility and `ai_growth` on (`{MONITORS_TABLE}`; default on): the work that gets the business **named and cited** in AI answers.
 **Indexing**: new / updated pages and key pages Bing has not crawled → **Bing Webmaster Tools SubmitUrlBatch** (the index **Bing and Microsoft Copilot** answer from; OpenAI documents OAI-SearchBot, not Bing, for ChatGPT search; key SEO_BING_WEBMASTER_API_KEY: {'on' if BING_ON else 'off'}) and **IndexNow** once the site hosts its key file (`{CACHE_TABLE}` `indexnow:`; Bing, Yandex, Naver, Seznam, Yep — not Google, and a submission "does not guarantee immediate indexing"). **B9-2**: every page sent in the last 45 days is asked about again (GetUrlInfo) and the report says how many Bing has **since crawled** — measured, or "not available" with the reason. **B9-3**: `robots.txt` is read first (*Robots Verdicts (Growth)*) and judged per page for OAI-SearchBot / ChatGPT-User / PerplexityBot / Claude-SearchBot / Googlebot / Bingbot — a page no AI fetcher may read gets **no readiness score** and is not submitted. **AI readiness** of up to 12 key pages a week (`{AI_PAGES_TABLE}`): raw HTML without JavaScript, answer in the first ~200 characters, visible update date ≤ 90 days, question headings, sourced figures, lists, author; Bing's crawl state (GetUrlInfo).
@@ -1233,10 +1241,17 @@ print('ledger wiring: ' + str(len(LEDGER_WIRING)) + ' scheduled workflows reserv
 from ladder_common import RUN_LEDGER_COLS, SITES_COLS, PAGES_COLS, LADDER_COLS, HISTORY_COLS   # v4.14 (D1); v4.15 (G19) site model + page inventory; P2-7 ladder word target; v4.16 (G6) rank history
 from ladder_common import CHECKIN_COLS, OPS_ALERTS_COLS, AUDIT_FINDINGS_COLS   # D25c / D25b / G26 (2026-10-12)
 from ladder_common import PAGE_WATCH_COLS, ALERTS_COLS   # G11 + G25 (2026-10-13): the daily key-page watch rows and the alert rows it writes
+from ladder_common import (AI_RANK_RUNS_COLS, AI_RANK_QUESTIONS_COLS, AI_RANK_ACTIONS_COLS, AI_RANK_SOURCES_COLS, AI_RANK_PRIORS_COLS,   # AIR (2026-11-06)
+                           AIR_MONITOR_COLS, AIR_ONLY_COLS)
 from ladder_common import PROFILE_COLS   # G31 (2026-10-13): the business profile row, now with the stored style guide
 json.dump({'RUN_LEDGER': [c for c, _ in RUN_LEDGER_COLS], 'AI_PAGES': [c for c, _ in AI_PAGES_COLS], 'AI_TARGETS': [c for c, _ in AI_TARGETS_COLS], 'AI_GROWTH': [c for c, _ in AI_GROWTH_COLS], 'PROSPECT': [c for c, _ in PROSPECT_COLS],
            'CACHE': [c for c, _ in CACHE_COLS], 'AI_ANSWERS': [c for c, _ in AI_ANSWERS_COLS], 'AI_PROMPTS': [c for c, _ in AI_PROMPTS_COLS], 'MONITORS': [c for c, _ in MONITORS_COLS], 'AI_VIS': [c for c, _ in AI_VIS_COLS], 'AI_IMPORTS': [c for c, _ in AI_IMPORTS_COLS], 'AI_PROMPTS_STATE': ['last_asked_run', 'last_asked_at', 'asked_n_28d', 'refused_at_run'], 'LINK_OUTREACH': [c for c, _ in LINK_OUTREACH_COLS], 'LISTINGS': [c for c, _ in LISTINGS_COLS], 'LINK_IMPACT': [c for c, _ in LINK_IMPACT_COLS], 'LINKS': [c for c, _ in LINKS_COLS], 'SITES': [c for c, _ in SITES_COLS], 'PAGES': [c for c, _ in PAGES_COLS],
-           'LOG': [c for c, _ in LOG_COLS], 'LADDER': [c for c, _ in LADDER_COLS], 'HISTORY': [c for c, _ in HISTORY_COLS], 'AUDIT_FINDINGS': [c for c, _ in AUDIT_FINDINGS_COLS], 'CHECKIN': [c for c, _ in CHECKIN_COLS], 'OPS_ALERTS': [c for c, _ in OPS_ALERTS_COLS], 'PAGE_WATCH': [c for c, _ in PAGE_WATCH_COLS], 'CONSOLE_ALERTS': [c for c, _ in ALERTS_COLS], 'PROFILE': [c for c, _ in PROFILE_COLS]}, open(os.path.join(HERE, 'harness', 'table_cols.json'), 'w'), indent=1)   # G19 site model + D5 content log: the rows these nodes write
+           'LOG': [c for c, _ in LOG_COLS], 'LADDER': [c for c, _ in LADDER_COLS], 'HISTORY': [c for c, _ in HISTORY_COLS], 'AUDIT_FINDINGS': [c for c, _ in AUDIT_FINDINGS_COLS], 'CHECKIN': [c for c, _ in CHECKIN_COLS], 'OPS_ALERTS': [c for c, _ in OPS_ALERTS_COLS], 'PAGE_WATCH': [c for c, _ in PAGE_WATCH_COLS], 'CONSOLE_ALERTS': [c for c, _ in ALERTS_COLS], 'PROFILE': [c for c, _ in PROFILE_COLS],
+           # AIR (2026-11-06, CONTRACTS.md §2): the five AIR tables, the AIR monitor flags, and the new columns of seo_ai_prompts / seo_ai_targets that the
+           # AI visibility / AI Growth plan objects do not carry (core_until has one writer, AIR; the targets' three are set null by Growth's exact-column writer)
+           'AI_RANK_RUNS': [c for c, _ in AI_RANK_RUNS_COLS], 'AI_RANK_QUESTIONS': [c for c, _ in AI_RANK_QUESTIONS_COLS], 'AI_RANK_ACTIONS': [c for c, _ in AI_RANK_ACTIONS_COLS],
+           'AI_RANK_SOURCES': [c for c, _ in AI_RANK_SOURCES_COLS], 'AI_RANK_PRIORS': [c for c, _ in AI_RANK_PRIORS_COLS], 'AIR_MONITORS': list(AIR_MONITOR_COLS),
+           'AI_PROMPTS_AIR': list(AIR_ONLY_COLS['AI_PROMPTS']), 'AI_TARGETS_AIR': list(AIR_ONLY_COLS['AI_TARGETS'])}, open(os.path.join(HERE, 'harness', 'table_cols.json'), 'w'), indent=1)   # G19 site model + D5 content log: the rows these nodes write
 
 # ---- G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): ONE table of AI-panel cost cases, held by the engine and the app ----------------------
 # v5/data/ai_panel_cost_cases.json is written by harness/ai_panel_cases.js from AIP.cost (v5/code/_ai_panel.js). It is copied to the harness

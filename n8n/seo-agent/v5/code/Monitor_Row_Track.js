@@ -27,5 +27,9 @@ Object.assign(__row, { index_watch: (old.index_watch === '' || old.index_watch =
   index_daily_cap: (old.index_daily_cap === '' || old.index_daily_cap == null) ? null : Number(old.index_daily_cap) });
 // Index coverage wave 2 (2026-10-30): the opt-in for sitemap submission is set through Site Admin `monitors` only; carried as stored (empty = off)
 Object.assign(__row, { index_sitemap_submit: (old.index_sitemap_submit === '' || old.index_sitemap_submit == null) ? null : (old.index_sitemap_submit === true || old.index_sitemap_submit === 'true') });
+// AIR (2026-11-06, docs/ai-ranking-2026-11-05/CONTRACTS.md §2): the AI-ranking settings are carried by "Track my site" as stored, empty = off
+Object.assign(__row, { ai_rank_mode: old.ai_rank_mode === '' || old.ai_rank_mode == null ? null : String(old.ai_rank_mode), ai_rank_reserve: old.ai_rank_reserve === '' || old.ai_rank_reserve == null ? null : (old.ai_rank_reserve === true || old.ai_rank_reserve === 'true'),
+  ai_rank_fanout_n: old.ai_rank_fanout_n === '' || old.ai_rank_fanout_n == null ? null : Number(old.ai_rank_fanout_n), ai_rank_mentions: old.ai_rank_mentions === '' || old.ai_rank_mentions == null ? null : (old.ai_rank_mentions === true || old.ai_rank_mentions === 'true'),
+  ai_rank_brave: old.ai_rank_brave === '' || old.ai_rank_brave == null ? null : (old.ai_rank_brave === true || old.ai_rank_brave === 'true') });
 if (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit
 return [{ json: __row }];

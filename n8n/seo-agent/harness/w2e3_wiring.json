@@ -361,7 +361,7 @@
     "table": "seo_run_ledger"
    }
   },
-  "settle_measured": "Growth Metrics"
+  "settle_measured": "Growth Metrics|AI Rank Fetched"
  },
  "SEO_Agent_AI_Pulse.json": {
   "connections": {},
