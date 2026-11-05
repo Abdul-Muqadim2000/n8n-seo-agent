@@ -22,3 +22,12 @@ result, and proving the lift.
 
 Rules: client data stays in the private folder (repo is public); no paid calls without the owner's yes; engine deploys follow the
 merge-main + node-diff rule; tutorials go to the backlog (owner rule 2026-10-30); marketing pages follow shipped capabilities only.
+
+## Owner decisions (2026-11-06)
+- Build: **all** (W0, wave 1 P1-P4, wave 2 P5-P6), then independent review; nothing deployed without the owner's yes.
+- AI pages for AIR targets: **extra reserved slot** on top of keyword pages (~$1.60 / site / month).
+- Paid additions approved: **DataForSEO LLM Mentions**, **fan-out SERP checks**, **Brave Search** (owner provides the key). **SerpApi Copilot NOT approved: not built.**
+- Rollout once shadow looks right: **both sites together**.
+- Defaults taken by the orchestrator (owner can change): holdout 1 in 3 for 12 weeks; client hour value $25; max 3 new human steps a week;
+  rival-written lists learn-only; F-37 synonyms scoped to AIR / AI Growth only, NOT the global fit gate (owner rule: nothing else changes);
+  panel stays 20 with the daily pulse; client-facing UI, marketing, changelog and the tutorial-backlog row ship with wave 2.
