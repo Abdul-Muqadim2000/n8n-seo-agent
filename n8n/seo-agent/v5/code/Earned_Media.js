@@ -34,6 +34,10 @@ const aliasDomains = (sid) => { const row = cacheRowsG.find(r => r.key === 'ai_b
 const out = [];
 for (const p of plans) {
   const business = p.business_name || p.domain;
+  // AIR (P3 guard, CONTRACTS.md §5): with AI ranking ON for this site (Growth Plan's air_on), a prospect AIR wrote (type ai_source, origin
+  // 'ai_rank') is AIR's: this step neither re-writes it nor drafts for it. Off or shadow, the row is written as an AI Growth row again (rollback).
+  const airOn = p.air_on === true;
+  const airHosts = new Set(airOn ? prospects.filter(x => x.site_id === p.site_id && x.type === 'ai_source' && x.origin === 'ai_rank').map(x => x.prospect_domain) : []);
   const ownReg = LK.regDomain(p.domain) || p.domain;
   const rivals = new Set([...(p.competitors || []), ...(p.rival_sources || []), ...aliasDomains(p.site_id)].map(d => LK.regDomain(String(d || '').toLowerCase().replace(/^www\./, '')) || '').filter(d => d && /\./.test(d) && d !== ownReg && !OK.isGov(d)));
   const rivalOf = (h) => rivals.has(LK.regDomain(String(h || '').toLowerCase().replace(/^www\./, '')) || '');   // D12: never the domain label ("techand" for Tech&) — the site model's name, else the domain
@@ -65,7 +69,7 @@ for (const p of plans) {
   // prospects (type ai_source, one row per site + domain): the exact page, what it names, the action; drafts for the 3 most valuable new ones
   const rows = []; const jobs = [];
   for (const e of items.filter(x => x.kind !== 'competitor').slice(0, 12)) {
-    if (rows.some(r => r.prospect_domain === e.host)) continue;
+    if (rows.some(r => r.prospect_domain === e.host) || airHosts.has(e.host)) continue;   // AIR guard: on only
     const old0 = prospects.find(x => x.site_id === p.site_id && x.prospect_domain === e.host && x.type === 'ai_source') || {}; const old = old0.status === 'drafted' ? { ...old0, status: 'new' } : old0;   // 'drafted' (2026-10-10 runs) is not an app status
     const won = e.mentions_us === true;
     const kept = DRAFTS.carry(old, { handover: !!p.link_builder });
@@ -116,6 +120,7 @@ for (const p of plans) {
     if (c.fact_on_file) {
       if (!pages.length) { status = 'no_page'; note = 'AI made this claim but no third-party page was cited in those answers: nothing to correct at a publisher. Make sure your own pages state the fact plainly.'; }
       else if (!target) { status = 'page_not_confirmed'; note = 'None of the cited pages could be read saying this (' + pages.map(pg => pg.host + (pg.fetched ? ': does not say it' : ': not readable')).join('; ') + '): no correction is drafted for a claim we cannot show on the page.'; }
+      else if (airHosts.has(target.host)) { status = 'handed_over'; note = 'AI ranking already works with ' + target.host + ' (its prospect row): the correction is left to it.'; }
       else if (p.link_builder) { status = 'handed_over'; note = 'Handed to the Link Builder (one writer): ' + target.host + ' carries the claim. Approve the pitch on the Link building page.';
         const hit = rows.find(r => r.prospect_domain === target.host);
         const line = 'Correction needed: "' + c.claim + '" - the fact on file: ' + c.true_fact;

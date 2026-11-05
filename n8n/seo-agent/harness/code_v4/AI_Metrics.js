@@ -623,7 +623,9 @@ const AVX = (() => {
     const qOfKw = (kw) => { const k = String(kw || '').toLowerCase().trim(); if (k.split(/\s+/).length < 2) return []; return [...(c.meta || new Map()).values()].filter(q => q.kind !== 'brand' && (String(q.keyword || '').toLowerCase().trim() === k || String(q.prompt || '').toLowerCase().includes(k))).map(q => String(q.prompt_id)); };
     const inRange = (at) => { const x = Date.parse(at); return isFinite(x) && x >= nowT - 31 * DAY && x <= nowT; };
     const acts = [];
-    for (const t of rd('Load AI Targets (AI)').filter(mine)) { const at = t.written_at || (String(t.status) === 'won' ? t.won_at : ''); if (!['written', 'won', 'published'].includes(String(t.status || '')) || !inRange(at) || !t.prompt_id) continue;
+    // AIR (P3, 2026-11-06, CONTRACTS.md 2.1): an AIR target row carries live_at, when its page was seen live (the treatment's start); it is the
+    // action's time when present. AI Growth's rows never carry it (written null), so their time is unchanged.
+    for (const t of rd('Load AI Targets (AI)').filter(mine)) { const at = t.live_at || t.written_at || (String(t.status) === 'won' ? t.won_at : ''); if (!['written', 'won', 'published'].includes(String(t.status || '')) || !inRange(at) || !t.prompt_id) continue;
       acts.push({ action_id: String(t.target_id || 'ait_' + t.prompt_id), kind: 'ai_target' + (t.kind ? ':' + t.kind : ''), at, questions: [String(t.prompt_id)], label: String(t.question || t.keyword || '').slice(0, 160) }); }
     for (const l of rd('Load Content Log (AI)').filter(mine)) { if (String(l.status || '') !== 'published' || !inRange(l.published_at)) continue; const qs = qOfKw(l.keyword); if (!qs.length) continue;
       acts.push({ action_id: 'page:' + String(l.published_url || l.keyword), kind: 'page', at: l.published_at, questions: qs, label: String(l.keyword || '') }); }
@@ -804,6 +806,11 @@ const SENT = (() => {
         }; };
   return { ASPECTS, POL, MIN, KAPPA, rules, snippet, clausesOf, kappa, parseModel, namedAnswers, sampleOf, jobsOf, aggregate, nameRe };
 })();
+// F-08 (AIR P3, 2026-11-06): the headline now counts only the pulse answers to the run's own questions. A week counted that way says so in its
+// metrics_json (`headline_rule`); a week that left answers out is not compared with an earlier week counted the old way (once: the next week's
+// earlier row carries the marker). Where nothing was left out the two rules count the same answers, so the comparison stands. The stored
+// rule_version (AVM.RULE_VERSION) does not change: the answers themselves are read as before.
+const HEAD_RULE = 'f08';
 const w2read = (n) => { try { return $(n).all().map(i => i.json).filter(Boolean); } catch (e) { return []; } };   // W2-E2: the loads and the Sentiment Reader, read defensively
 // ---- AI entities (F1a, 2026-10-23; docs/ai-visibility-2026-10-23/ENGINE_AUDIT.md E3 E4 E5 E8 E10 E16, PROD_STATE.md section 5) ----
 // WHO an AI answer names, as ONE entity per business, and in which ROLE. Inlined by build_monitors.py (the AI_ENTITIES placeholder) into
@@ -861,7 +868,7 @@ const AIE = (() => {
   // ---- what kind of site or name a thing is ----
   const GOV = /\.gov(\.[a-z]{2,3})?$|(^|\.)(gouv|gob|go|gv)\.[a-z]{2}$|\.mil(\.[a-z]{2})?$|(^|\.)u\.ae$|\.int$|\.edu(\.[a-z]{2})?$|\.ac\.[a-z]{2}$|(^|\.)(difc|adgm|dmcc|dafz|dafza|jafza|rakez|dso|ifza|shams|kezad|dwtc|dubaichamber|abudhabichamber|dubaided|government|europa|saifzone|ajmanfreezone|fujairahfreezone|hamriyahfz)\.(com|ae|org|eu)$|(^|\.)[a-z]{3,}fz\.(ae|com)$|freezone/i;
   const MEDIA = /(^|\.)(gulfnews|khaleejtimes|thenationalnews|thenational|zawya|arabianbusiness|gulfbusiness|reuters|bloomberg|forbes|cnbc|bbc|ft|wsj|techcrunch|entrepreneur|economist|businessinsider|arabnews|timesofindia|dawn|business|nerdwallet|investopedia|techradar|pcmag|zdnet|cio|computerweekly|itpro|tradearabia|wam|emirates247|khaleej|alkhaleej|albayan|argaam|saudigazette|medium|substack|wikipedia|wikimedia|britannica)\.[a-z.]+$/i;
-  const DIRECTORY = /(^|\.)(g2|capterra|clutch|trustpilot|goodfirms|getapp|softwareadvice|crunchbase|yelp|sortlist|designrush|themanifest|softwaresuggest|sourceforge|saashub|alternativeto|producthunt|glassdoor|indeed|hidubai|connect|zoominfo|owler)\.[a-z.]+$|yellowpages|directory|review|compare|listing|ranking|top10|aspl?ist|uaeasp|einvoicinglist/i;
+  const DIRECTORY = /(^|\.)(g2|capterra|clutch|trustpilot|goodfirms|getapp|softwareadvice|crunchbase|yelp|sortlist|designrush|themanifest|softwaresuggest|sourceforge|saashub|alternativeto|producthunt|glassdoor|indeed|hidubai|connect|zoominfo|owler|selectedfirms|topdevelopers|techbehemoths|itfirms|appfutura|softwareworld|featuredcustomers|bark|yell|dubizzle|2gis|justdial|sulekha|expatwoman|upcity|trustradius|peerspot|softwarereviews|wadline|goodfirms|businesslist|cybo|ensun)\.[a-z.]+$|yellowpages|directory|review|compare|listing|ranking|top10|aspl?ist|uaeasp|einvoicinglist/i;
   const RESEARCH = /(^|\.)(gartner|forrester|statista|idc|mckinsey|bcg|bain|frost|marketsandmarkets|mordorintelligence|grandviewresearch)\.[a-z.]+$/i;
   const SOCIAL = /(^|\.)(youtube|youtu|linkedin|facebook|instagram|x|twitter|tiktok|reddit|quora|github|pinterest|t)\.(com|be|co|me)$|(^|\.)(google|bing|yahoo|duckduckgo|yandex|baidu|ecosia|ask|chatgpt|openai|perplexity|anthropic|claude|gemini|gstatic|goo)\.[a-z.]+$|vertexaisearch|peppol\.(org|eu)$/i;
   const NAME_SRC = /\b(ministry|authority|federal|government|municipality|chamber|association|council|institute|foundation|commission|department|free ?zone|yellow ?pages|directory|gazette|news|times|journal|magazine|wikipedia|openpeppol|gartner|forrester|statista)\b/i;
@@ -872,7 +879,7 @@ const AIE = (() => {
   // ---- the platforms buyers connect to: named as an integration target, or worked with by the client, they are never rivals ----
   const P_B = '(?<![\\p{L}\\p{N}])', P_E = '(?![\\p{L}\\p{N}])';
   const PLATFORMS = [
-    ['microsoft.com', 'Microsoft', P_B + '(?:microsoft(?:\\s+dynamics(?:\\s+365)?)?|dynamics\\s*365|ms\\s+dynamics|d365|business\\s+central|navision|azure|power\\s*bi|power\\s+(?:apps|automate|platform)|office\\s+365|microsoft\\s+365|sharepoint)' + P_E, 'giu'],
+    ['microsoft.com', 'Microsoft', P_B + '(?:microsoft(?:\\s+dynamics(?:\\s+365)?)?|dynamics\\s*365|ms\\s+dynamics|d365|business\\s+central|navision|azure|power\\s*bi|power\\s+(?:apps|automate|platform)|office\\s+365|microsoft\\s+365|sharepoint|(?:microsoft\\s+)?copilot(?:\\s+studio)?)' + P_E, 'giu'],
     ['sap.com', 'SAP', P_B + '(?:SAP(?:\\s+Business\\s+One|\\s+S\\/4\\s?HANA|\\s+B1)?|S\\/4\\s?HANA|SuccessFactors)' + P_E, 'gu'],
     ['oracle.com', 'Oracle', P_B + '(?:Oracle|ORACLE)(?!\\s+NetSuite)(?:\\s+(?:Fusion|Cloud|ERP|E-Business\\s+Suite))?' + P_E, 'gu'],
     ['netsuite.com', 'NetSuite', P_B + '(?:oracle\\s+)?netsuite' + P_E, 'giu'],
@@ -885,8 +892,12 @@ const AIE = (() => {
     ['salesforce.com', 'Salesforce', P_B + 'salesforce' + P_E, 'giu'], ['hubspot.com', 'HubSpot', P_B + 'hubspot' + P_E, 'giu'],
     ['shopify.com', 'Shopify', P_B + 'shopify' + P_E, 'giu'], ['amazon.com', 'AWS', P_B + '(?:AWS|Amazon\\s+Web\\s+Services)' + P_E, 'gu'],
     ['servicenow.com', 'ServiceNow', P_B + 'servicenow' + P_E, 'giu'], ['workday.com', 'Workday', P_B + 'Workday' + P_E, 'gu'],
+    ['openedx.org', 'Open edX', P_B + '(?:open\\s*edx|edx\\s+platform)' + P_E, 'giu'], ['moodle.com', 'Moodle', P_B + '(?:Moodle(?:\\s+Workplace|\\s+LMS)?|MOODLE)' + P_E, 'gu'],
     ['epicor.com', 'Epicor', P_B + 'epicor' + P_E, 'giu'], ['acumatica.com', 'Acumatica', P_B + 'acumatica' + P_E, 'giu'], ['infor.com', 'Infor', P_B + 'Infor' + P_E, 'gu']];
   const PLAT_DOMS = new Set(PLATFORMS.map(p => p[0]));
+  // F-53: open-source platforms a whole market builds on (openedx.org ranked as an Open edX shop's top rival): a platform, never a competitor,
+  // unless the owner named it a competitor
+  const OPEN_PLAT = new Set(['openedx.org', 'moodle.com']);
 
   // ---- how a name is found in a text ----
   const B = '(?<![\\p{L}\\p{M}\\p{N}])', E = '(?![\\p{L}\\p{M}\\p{N}])';
@@ -908,12 +919,59 @@ const AIE = (() => {
     return new RegExp(B + '(?:' + [...forms].map(tokRe).join('|') + ')' + tail, 'gu');
   };
   /** a name an answer gives a business: a short phrase of capitalised words, not a heading, a category or a field label */
-  const DENY = /^(pint-?ae|peppol|uae|ksa|fta|vat|erp|crm|asps?|b2b|b2g|b2c|xml|api|apis|pdf|aed|usd|sar|mof|faq|ceo|cfo|it|ai|ml|saas|sme|smes|ubl|edi|ctc|wps|kyc|gdpr|iso)$/i;
+  const DENY = /^(pint-?ae|peppol|uae|ksa|fta|vat|erp|crm|asps?|b2b|b2g|b2c|xml|api|apis|pdf|aed|usd|sar|mof|faq|ceo|cfo|it|ai|ml|saas|sme|smes|ubl|edi|ctc|wps|kyc|gdpr|iso|roi|tco|kpi|kpis|sla|slas|ipcs?|lms|hrms|mvp|poc|rfp|rfq|sow|tdra|cbuae|sca|dfsa|fsra|zatca|gazt|sama|citra|mohre|moec|ded|dld|rera|nesa|adek|khda|dha|doh|mohap|icp|gdrfa|vara|pdpl|nca)$/i;
+  // ---- F-53 (AIR P3, 2026-11-06, prod review 2026-10-31): 1,011 of 2,221 "competitors" in production were not businesses: table headings and row
+  // labels ("Factor", "Partner Name", "Initial Cost", "Deployment Speed"), bold labels ("Customization:"), plan steps ("Phase 2"), dates ("30 Oct"),
+  // price ranges ("AED 20k-100k"), "Yes", regulators, and the platforms the client works on. A name is now refused when it is money, a date or a
+  // step, a regulator, a place, an answer word, or made only of heading and category words; a name the answer gives no business signal for (a
+  // list label with no domain, no company suffix, no brand-shaped word and no "offers / partner / clients ..." next to it) is not a competitor.
+  // The word list and the patterns are mirrored in fix_ai_entities_cache.py (the purge of the stored rows); harness AF4 holds the two together.
+  const HEADING_WORDS = ('customization customisation customizations inventory factor factors retention scalability maintenance consideration considerations contingency infrastructure area areas '
+    + 'reporting testing retail expansion reconciliation operations operation deployment deployments scale upgrades upgrade milestones milestone criterion criteria phase phases stage stages '
+    + 'initial upfront annual monthly yearly speed multi branch access licensing license licenses licence licences red flag flags recommended next evaluate evaluation verify industry industries '
+    + 'specific track records record expertise regulatory staff needed structure breakdown drivers driver served differences difference workstream automation governed traditional agentic premise '
+    + 'premises category categories expense expenses budget budgets risk risks onboarding performance reliability flexibility usability customer customers user users experience verdict final '
+    + 'thoughts takeaway takeaways bottom highlights highlight advantages disadvantages limitations limitation capabilities strengths weaknesses ideal choice choosing choose approach approaches '
+    + 'strategy strategies process processes roadmap checklist insights insight alternatives alternative tradeoffs quick facts fact total ownership value warranty uptime managed self premium '
+    + 'essentials professional basic advanced edition editions plan plans tier tiers module modules functionality functionalities workflow workflows dashboard dashboards analytics '
+    + 'transparency documentation scope duration effort complexity size ease use cases case studies study getting started fit suitability verdicts typical estimated estimate estimates range '
+    + 'ranges average minimum maximum factor considerations tips pitfalls mistakes common important notes summary specialized specialised trusted verified preferred registered '
+    + 'experienced established independent dedicated popular notable shortlist options examples check assess compare confirm review ensure avoid prioritize prioritise '
+    + 'define identify understand request look before after during recurring subscription subscriptions commerce ecommerce rollout rollouts offered included computer vision '
+    + 'machine learning deep generative conversational natural language processing off shelf tools community standing name names accreditation accreditations certification certifications strength reputation presence coverage availability '
+    + 'bilingual fully hosted authentication target audience residency visibility centralized centralised reduced overhead standout middleware third party edtech integrators '
+    + 'implementers consultancies across mandates policy policies heritage distinction selection fees gap control execution relay streamlined independent built').split(/\s+/).filter(Boolean);
+  const HEADW = new Set(HEADING_WORDS);
+  const ANSWER_WORD = /^(yes|no|maybe|none|n\/a|na|tbd|varies|depends|optional|required|included|unlimited|custom)$/i;
+  const MONEY = /(?:\b(?:aed|usd|sar|qar|kwd|bhd|omr|egp|inr|pkr|eur|gbp|dhs?|dirhams?|riyals?|rupees?)\b|[$\u20ac\u00a3\u20b9])\s*[\d.,]+|\d[\d.,]*\s*(?:k|m|bn|aed|usd|sar|dhs?|million|billion|thousand)\b/i;
+  const MONTH = '(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?';
+  const DATE_RE = new RegExp('^(?:\\d{1,2}(?:st|nd|rd|th)?\\s+' + MONTH + '(?:,?\\s+\\d{2,4})?|' + MONTH + '\\s+\\d{1,4}(?:,?\\s+\\d{4})?|(?:q[1-4]|h[12]|fy\\s?\\d{2,4})(?:\\s+\\d{2,4})?)$', 'i');
+  const STEP_RE = /^(?:phase|step|stage|tier|level|option|wave|part|week|month|year|day|round|milestone|module|scenario|case|example|type|model|plan)\s*(?:\d+|[ivx]+|[a-d])?$/i;
+  const FZ_ONLY = /^(?:dmcc|difc|adgm|dso|jafza|dafza|rakez|ifza|kezad|shams|saif ?zone|hamriyah|dwtc|dic|dmc)$/i;   // a free zone named alone is a place (as a company's suffix it stays)
+  const PLACE = /\b(bay|oasis|marina|downtown|district|street|road|tower|towers|island|islands|jumeirah|deira|karama|barsha|internet city|media city|knowledge park|free ?zone|freezone|emirate|province|governorate|county)\b/i;
+  const CORP_SFX = /(?:^|\s)(?:llc|l\.l\.c\.?|ltd\.?|limited|inc\.?|corp\.?|corporation|fz-?llc|fze|fzco|fzc|fz|llp|dmcc|jlt|gmbh|plc|pvt|pte|s\.a\.?|ag|bv|technologies|technology|tech|solutions|systems|consulting|consultants|consultancy|services|group|labs|partners|software|global|international|mea|me|accountants|digital|studio|studios|agency|ventures|holding|holdings|infotech|softwares|it)\.?$/i;
+  /** a word that describes, labels or heads a section: the category words (GEN), the heading words, the denied acronyms, a number */
+  const headingWord = (w) => { const x = low(w).replace(/[^\p{L}\p{N}]/gu, ''); if (!x) return true; if (/^\d+$/.test(x) || DENY.test(x) || STOPW.has(x)) return true; return commonWord(x) || HEADW.has(x) || HEADW.has(x.replace(/s$/, '')) || HEADW.has(x.replace(/(?<=[a-z]{3})(es|ies)$/, '')); };
+  /** a name that is never a business: money, a date or a plan step, a regulator, a place, an answer word, or only heading / category words */
+  const junkName = (name) => { const n = L(name).replace(/[*_`]+/g, '').replace(/\s+/g, ' ').trim(); if (!n) return true;
+    if (MONEY.test(n) || DATE_RE.test(n) || STEP_RE.test(n) || ANSWER_WORD.test(n) || FZ_ONLY.test(n)) return true;
+    const w = n.split(/[\s\-\u2013\u2014/]+/).filter(Boolean); if (!w.length) return true;
+    // a company suffix after a compound word ("Infotech Solutions": info + tech) is a name; after plain words ("Smart Solutions") it stays a description
+    const direct = (x0) => { const x = low(x0).replace(/[^\p{L}\p{N}]/gu, ''); return !x || x.length < 3 || /^\d+$/.test(x) || DENY.test(x) || STOPW.has(x) || GEN.has(x) || GEN.has(x.replace(/s$/, '')) || HEADW.has(x) || HEADW.has(x.replace(/s$/, '')); };
+    if (w.every(headingWord) && !(w.length >= 2 && CORP_SFX.test(n) && w.some(x => !direct(x)))) return true;
+    if (PLACE.test(n) && !CORP_SFX.test(n)) return true;
+    return false; };
+  /** a word shaped like a brand: a capital inside it (eduNEXT, OpenCraft, iSys) or a digit beside a letter (10Pearls, Folio3) */
+  const brandShaped = (name) => L(name).split(/\s+/).some(x => /\p{Ll}\p{Lu}/u.test(x) || /\p{L}\p{N}|\p{N}\p{L}/u.test(x));
+  const BIZ_WORDS = /\b(?:partners?|compan(?:y|ies)|firms?|vendors?|providers?|consultan(?:cy|cies|ts?)|agenc(?:y|ies)|integrators?|resellers?|implementers?|developers?|specialists?|contributors?|founded|headquartered|based\s+in|[a-z]+-based|offices?\s+in|clients?|customers\s+(?:in|across|include)|offers?|offering|provides?|providing|delivers?|known\s+for|speciali[sz]\w*|focus(?:es|ed|ing)?\s+on|helps?|serves?|serving|works?\s+(?:extensively\s+)?with|supports?|gold|certified|premier|accredited|award\w*|years?\s+of|\d+\+?\s+years\b|portfolio|track\s+record|they(?:'ve|\u2019ve|\s+have|\s+are|\s+were)?\s+(?:manage|offer|provide|build|built|deliver|delivered|help|helped|work|worked|speciali[sz]e|focus|serve|support|run|operate|migrated|implemented|deployed|developed)|best\s+for|pricing|priced|per\s+(?:user|month|seat)|\/month|plans?\s+(?:start|from)|free\s+trial|solutions?\s+(?:for|provider)|software\s+(?:for|company)|platform\s+for|app\s+for|tool\s+for|crm\s+for|erp\s+for)\b/i;
+  /** the business signal of a name read off a list or an engine's list: a company suffix, a brand-shaped word, or business words in its own description */
+  const bizSignal = (name, spans) => CORP_SFX.test(L(name).trim()) || brandShaped(name) || (spans || []).some(t => BIZ_WORDS.test(String(t || '')));
   const nameLike = (name) => {
     const n = L(name).replace(/\s+/g, ' ').trim();
     if (n.length < 2 || n.length > 48 || /[:;,|\\?!]|\.{2}/.test(n) || /(^|\s)(and|or|for|with|in|on|of|the|a|an|to|at|by|vs|versus|&|from|your|our|how|what|why|when)(\s|$)/i.test(n)) return false;
     const w = n.split(' '); if (w.length > 5) return false;
     if (w.every(x => DENY.test(x.replace(/[^\p{L}\p{N}-]/gu, '')) || commonWord(x) || /^\d+$/.test(x))) return false;
+    if (junkName(n)) return false;   // F-53
     return w.every(x => /^[\p{Lu}\p{N}]/u.test(x) || /^[\p{Ll}]+\p{Lu}/u.test(x) || AR.test(x));
   };
   const DOMAIN_RE = /(?<![\p{L}\p{N}@-])((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|net|org|io|ai|co|ae|sa|qa|om|kw|bh|eg|uk|de|fr|es|it|nl|in|pk|sg|au|ca|nz|za|br|mx|us|biz|info|tech|app|cloud|global|digital|solutions|consulting|agency|me|network|one|online|site|store|group|eu))(?![\p{L}\p{N}-])/giu;
@@ -997,7 +1055,8 @@ const AIE = (() => {
       for (const k of keys) if (k.startsWith('n:')) names.add(display.get(k));
       for (const d of ds) { names.add(d); if (conf || softC) { const l = labelOf(d), co = core(d);
         for (const x of [l, co]) if (x.length >= 3 && !commonWord(x) && (conf || x.length >= 5)) names.add(x); } }
-      for (const n of names) { if (!n || selfKeys.has(nn(n))) continue; if (!isDom(n) && !/\./.test(n) && !conf && !nameLike(n) && !AR.test(n) && !keys.some(k => k === nameKey(n) && explicit.has(k))) continue;
+      for (const n of names) { if (!n || selfKeys.has(nn(n))) continue; if (!isDom(n) && !conf && junkName(n)) continue;   // F-53: a stored or learned label that is not a business is never looked for
+        if (!isDom(n) && !/\./.test(n) && !conf && !nameLike(n) && !AR.test(n) && !keys.some(k => k === nameKey(n) && explicit.has(k))) continue;
         const re = nameRe(n, { strict: !isDom(n) && n === n.toLowerCase() && n.replace(/[^a-z0-9]/g, '').length <= 4 }); if (re) scans.push({ re, root: r }); }
       roots.add(r); void id;
     }
@@ -1005,7 +1064,10 @@ const AIE = (() => {
     const selfScans = selfNames.map(n => nameRe(n)).filter(Boolean);
     const cp = new Set(clientPlatforms(plan).map(d => find('d:' + d)));
     const ct = clientText(plan);
-    const out = { plan, own, owned, configured, soft, find, idOfRoot, membersOf, display, nameKey, nameToDom, doms, scans, selfScans, selfNames, selfKeys, clientRoots: cp, clientText: ct, roleOfBook, explicit,
+    // F-53: the client's own words, as squashed 2-3 word runs ("Open edX" -> openedx; one word alone, "dynamics", names too much), so a domain whose name the client's services or topics use
+    // (openedx.org for an Open edX shop) reads as the client's platform, not its rival
+    const clientSquash = new Set(); { const ws = low(ct).split(/[^\p{L}\p{N}]+/u).filter(Boolean); for (let i = 0; i < ws.length; i++) for (let k = 2; k <= 3 && i + k <= ws.length; k++) clientSquash.add(ws.slice(i, i + k).join('')); }
+    const out = { plan, own, owned, configured, soft, find, idOfRoot, membersOf, display, nameKey, nameToDom, doms, scans, selfScans, selfNames, selfKeys, clientRoots: cp, clientText: ct, clientSquash, roleOfBook, explicit,
       confRoots: new Set(configured.map(d => find('d:' + d))) };
     DIRS.set(key, out);
     return out;
@@ -1048,26 +1110,52 @@ const AIE = (() => {
     DOMAIN_RE.lastIndex = 0;
     for (const m of vis.matchAll(DOMAIN_RE)) { const d = normD(m[1]); if (TECH_TERM.test(d) || !/\.[a-z]{2,}$/.test(d)) continue; const r = localRoot(d); if (r) M.push({ s: m.index, e: m.index + m[0].length, root: r, name: d, dom: true }); }
     // names the engine itself lists (ChatGPT / Gemini brand entities), and the leading names of list items and table rows
+    // F-53: a name that is a platform plus tier or category words ("SAP S/4HANA Cloud", "Business Central Premium", "Managed Open edX") is that platform
+    const platOf = (n) => { for (const [d, , src, fl] of PLATFORMS) { const re = new RegExp(src, fl.replace('g', '')); const m = L(n).match(re); if (!m) continue;
+      const rest = (L(n).slice(0, m.index) + ' ' + L(n).slice(m.index + m[0].length)).split(/[\s\-()/&,]+/).filter(Boolean); if (rest.every(headingWord)) return d; } return null; };
     const nameRoot = (n) => { const k = D.nameKey(n); if (D.selfKeys.has(nn(n))) return 'self'; if (D.display.has(k)) return D.find(k);
+      { const pd = platOf(n); if (pd) return D.find('d:' + pd); }
       const d = D.nameToDom(n, [...D.doms, ...PLAT_DOMS, ...[...local.values()].flatMap(x => [...x.doms])]); if (d) return localRoot(d); return 'N:' + nn(n); };
     const listNames = [];
-    { let off = 0; for (const line of vis.split('\n')) {
-      if (!/^\s*\|?\s*:?-{2,}/.test(line)) for (const re of LINE_NAME) { const m = line.match(re); if (!m) continue; let raw = m[1];
-        if (/:\s*$/.test(raw) || (re !== LINE_NAME[4] && re !== LINE_NAME[3] && /:/.test(raw))) break;
+    // F-53: a table's header row is never a name, and its first column says what the rows are: businesses ("Partner Name", "Company", "Provider")
+    // or something else ("Factor", "Feature", "Cost item"), whose row labels are then not names at all. With no header the rows are judged as before.
+    const SEP = /^\s*\|?\s*:?-{2,}/; const BIZ_HEAD = /\b(partner|company|companies|vendor|provider|firm|consultan\w*|agency|integrator|name|brand|platform|solution|tool|software|product|option|implementer|reseller|business)s?\b/i;
+    // and the line that introduces a list says what its items are: businesses ("A few options in the Islamabad market:", "Top partners in the UAE")
+    // or criteria ("Factors to consider when choosing a partner:"); the items of a business list carry that signal.
+    const BIZ_INTRO = /\b(options|compan(?:y|ies)|providers?|vendors?|firms?|partners?|agencies|consultanc(?:y|ies)|integrators?|tools|platforms|alternatives|shortlist|players|contenders|worth\s+(?:evaluating|considering|a\s+look))\b/i;
+    const NOT_BIZ_INTRO = /\b(factors?|criteria|considerations|questions?|steps?|tips|checklist|red\s+flags?|mistakes|things\s+to|look\s+for|evaluat\w*|features?|benefits|costs?|phases?|pros|cons)\b/i;
+    const LIST_ITEM = /^\s*(?:[-*\u2022]|\d+[.)])\s+/;
+    { let off = 0; const LINES = vis.split('\n'); let tableBiz = null; let introBiz = false;
+      for (let li = 0; li < LINES.length; li++) { const line = LINES[li]; const isRow = /^\s*\|/.test(line); const isItem = LIST_ITEM.test(line);
+      if (!isRow) tableBiz = null;
+      // a heading decides for what follows it; another line decides only when it says something either way
+      if (!isRow && !isItem && line.trim()) { const yes = BIZ_INTRO.test(line) && !NOT_BIZ_INTRO.test(line), no = NOT_BIZ_INTRO.test(line); if (/^\s*#/.test(line) || yes || no) introBiz = yes; }
+      if (isRow && !SEP.test(line) && li + 1 < LINES.length && SEP.test(LINES[li + 1])) { const head = (line.match(/^\s*\|\s*([^|]*)\|/) || [])[1] || ''; tableBiz = BIZ_HEAD.test(head.replace(/[*_]+/g, '')); off += line.length + 1; continue; }
+      if (isRow && tableBiz === false) { off += line.length + 1; continue; }
+      if (!SEP.test(line)) for (const re of LINE_NAME) { const m = line.match(re); if (!m) continue; let raw = m[1];
+        // F-53: a bold label ending in a colon ("**Overview:**", "**Customization:**") is a label, unless what follows it describes a business
+        // ("**Ravelin (by Sable):** One of the leading Open edX service providers"): then the label is the business's name
+        let colonBiz = false;
+        // (and the label itself looks like a name: a "(by X)" owner, a company suffix, a brand-shaped word, or an item of a list introduced as businesses;
+        // "**Bilingual Support:** providers who offer it" is a criterion, however business-like its description)
+        if (/:\s*$/.test(raw) || (re !== LINE_NAME[4] && re !== LINE_NAME[3] && /:/.test(raw))) { const lab = raw.replace(/:\s*$/, '').replace(/[*_]+/g, '').trim();
+          const named0 = /\((?:by|from|part of)\s+[^()]+\)\s*$/i.test(lab) || CORP_SFX.test(lab.replace(/\s*\([^()]*\)\s*$/, '')) || brandShaped(lab) || (isItem && introBiz);
+          if (!(/:\s*$/.test(raw) && named0 && BIZ_WORDS.test(line.slice(line.indexOf(m[0]) + m[0].length)))) break; raw = lab; colonBiz = true; }
+        raw = raw.replace(/^\s*\d+[.)]\s+/, '');   // F-53: "3. Cubite" is Cubite (a numbered item inside the bold)
         raw = raw.split(/\s[-–—]\s|:|,|\s\|/)[0].replace(/[*_]+/g, '').trim();
-        const par = raw.match(/^(.*?)\s*\(([^()]+)\)\s*$/); let name = par ? par[1].trim() : raw; const alt = par && !/^(formerly|previously|now|a |an |part|owned|acquired)/i.test(par[2]) ? par[2].trim() : '';
+        const par = raw.match(/^(.*?)\s*\(([^()]+)\)\s*$/); let name = par ? par[1].trim() : raw; const alt = par && !/^(formerly|previously|now|a |an |part|owned|acquired|by )/i.test(par[2]) ? par[2].trim() : '';
         if (!nameLike(name)) { if (alt && nameLike(alt)) name = alt; else break; }
-        const at = off + Math.max(0, line.indexOf(name)); listNames.push({ name, alt: alt && nameLike(alt) ? alt : '', at, lineEnd: off + line.length }); break; }
+        const at = off + Math.max(0, line.indexOf(name)); listNames.push({ name, alt: alt && nameLike(alt) ? alt : '', at, lineEnd: off + line.length, sig: (isRow && tableBiz === true) || (isItem && introBiz) || colonBiz }); break; }
       off += line.length + 1; } }
     for (const x of listNames) { let root = nameRoot(x.name); if (root.startsWith('N:') && x.alt) { const r2 = nameRoot(x.alt); if (!r2.startsWith('N:')) root = r2; }
       // the website on the item's line or the lines under it, until the next item
       const next = listNames.find(y => y.at > x.at); const span = vis.slice(x.at, next ? next.at : Math.min(vis.length, x.at + 320));
-      DOMAIN_RE.lastIndex = 0; const dm = [...span.matchAll(DOMAIN_RE)].map(m => normD(m[1])).find(d => !TECH_TERM.test(d));
+      DOMAIN_RE.lastIndex = 0; const dm = [...span.matchAll(DOMAIN_RE)].map(m => normD(m[1])).find(d => !TECH_TERM.test(d) && !PLAT_DOMS.has(regD(d)) && kindOfDomain(d) === 'site');   // F-53: a partner directory or platform page linked on the item (openedx.org/partners/...) is where the item is listed, not its website
       x.root = root; x.dom = dm || '';
-      M.push({ s: x.at, e: x.at + x.name.length, root, name: x.name, list: true }); }
+      M.push({ s: x.at, e: x.at + x.name.length, root, name: x.name, list: true, span: span.slice(x.name.length, 400), sig: !!x.sig }); }
     for (const n of (ans.entities || [])) { const name = L(n).trim(); if (!name) continue; const root = nameRoot(name); if (root.startsWith('N:') && !nameLike(name)) continue;
-      const re = nameRe(name); let hit = false; if (re) { re.lastIndex = 0; for (const m of vis.matchAll(re)) { M.push({ s: m.index, e: m.index + m[0].length, root, name }); hit = true; } }
-      if (!hit) M.push({ s: 1e8 + M.length, e: 1e8 + M.length, root, name, engine_list: true }); }
+      const re = nameRe(name); let hit = false; if (re) { re.lastIndex = 0; for (const m of vis.matchAll(re)) { M.push({ s: m.index, e: m.index + m[0].length, root, name, span: sentenceAfter(vis, m.index + m[0].length, 200), sig: true }); hit = true; } }
+      if (!hit) M.push({ s: 1e8 + M.length, e: 1e8 + M.length, root, name, engine_list: true, sig: true }); }   // F-53: the engine's own list of brands is a business signal (junk names are refused before)
     // a name inside a longer name of ANOTHER business is not a mention ("Oracle" in "Oracle NetSuite")
     M.sort((a, b) => (b.e - b.s) - (a.e - a.s) || a.s - b.s);
     const kept = []; for (const m of M) { if (kept.some(k => k.root !== m.root && m.s < k.e && k.s < m.e && m.s < 1e8)) continue; kept.push(m); }
@@ -1103,7 +1191,8 @@ const AIE = (() => {
       const name = (named.find(m => !m.dom && m.s < 1e8) || named.find(m => !m.dom) || {}).name || (ds[0] || id);
       const rootsF = [...e.roots].map(r => String(r));
       const isConf = rootsF.some(r => D.confRoots.has(r)) || ds.some(d => D.configured.includes(d));
-      const isClientPlat = rootsF.some(r => D.clientRoots.has(r)) || (named.some(m => !m.dom && m.name.length >= 5 && D.clientText && nameRe(m.name) && nameRe(m.name).test(D.clientText)));
+      const isClientPlat = rootsF.some(r => D.clientRoots.has(r)) || (named.some(m => !m.dom && m.name.length >= 5 && D.clientText && nameRe(m.name) && nameRe(m.name).test(D.clientText)))
+        || ds.some(d => { const l = labelOf(d); return l.length >= 5 && !commonWord(l) && !!D.clientSquash && D.clientSquash.has(l); });   // F-53: a domain the client's own words name
       const kinds = new Set(ds.map(kindOfDomain)); const names = named.map(m => m.name);
       const srcKind = [...kinds].some(k => SOURCE_KINDS.has(k)) && !ds.some(d => kindOfDomain(d) === 'site' && named.some(m => m.dom && regD(m.name) === d)) || names.some(n => NAME_SRC.test(n));
       const otherKind = (kinds.has('other') && !kinds.has('site')) || names.some(n => NAME_OTHER.test(L(n).trim()));
@@ -1112,10 +1201,12 @@ const AIE = (() => {
       else if (!named.length) role = isClientPlat ? 'platform' : 'source';
       else if (srcKind) role = 'source';
       else if (otherKind) role = 'other';
-      else if (isClientPlat) role = 'platform';
+      else if (isClientPlat || ds.some(d => OPEN_PLAT.has(d))) role = 'platform';
       else if (named.filter(m => m.s < 1e8).length && named.filter(m => m.s < 1e8).every(m => platformBefore(vis, m.s) || platformAfter(vis, m.e))) role = 'platform';
       else if (named.filter(m => m.s < 1e8).length && named.filter(m => m.s < 1e8).every(m => SRC_BEFORE.test(vis.slice(Math.max(0, m.s - 40), m.s)) || SRC_AFTER.test(vis.slice(m.e, m.e + 30)))) role = 'source';
-      else if (ds.length || nameLike(name) || AR.test(name) || rootsF.some(r => D.explicit.has(r))) role = 'competitor';
+      else if (ds.length || nameLike(name) || AR.test(name) || rootsF.some(r => D.explicit.has(r)))
+        // F-53: a name nothing else knows (no domain, not configured, not learned) is a competitor only with a business signal
+        role = (!ds.length && rootsF.length && rootsF.every(r => r.startsWith('N:')) && !named.some(m => m.sig) && !bizSignal(name, named.map(m => m.span))) ? 'other' : 'competitor';
       else role = 'other';
       list.push({ id, name: L(name).replace(/\s+/g, ' ').trim().slice(0, 60), role, at, cited: e.cited, named: named.length > 0, domains: ds });
     }
@@ -1161,7 +1252,7 @@ const AIE = (() => {
     if ((F1.size || F2.size) && jac(F1, F2) < 0.6) return false; return jac(stems(ca), stems(cb)) >= 0.5; };
   const claimKey = (t) => { const [c, f] = splitIssue(t); return [...stems(f)].sort().join(' ') + '|' + [...stems(c)].sort().join(' '); };
 
-  return { servicesOf, L, low, normD, regD, hostOf, labelOf, core, commonWord, nameLike, nameRe, visible, kindOfDomain, brandNames, ownNames, clientPlatforms, bookOf, dir, read, compact, entitiesOf, sameEntity, vendorIn, sameClaim, claimKey, PLATFORMS };
+  return { servicesOf, L, low, normD, regD, hostOf, labelOf, core, commonWord, nameLike, junkName, bizSignal, HEADING_WORDS, nameRe, visible, kindOfDomain, brandNames, ownNames, clientPlatforms, bookOf, dir, read, compact, entitiesOf, sameEntity, vendorIn, sameClaim, claimKey, PLATFORMS };
 })();
 // ---- G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): the AI question panel at enterprise scale — shared by AI Plan, AI Requests, Prompt Jobs,
 // Prompt Rows, Pulse Plan, AI Metrics and the Site Admin (inlined by the build). Pure functions, no node access: the harness runs them.
@@ -1829,6 +1920,10 @@ const AIF = (() => {
     const brand = live.filter(p => S(p.kind) === 'brand');
     const qs = live.filter(p => S(p.kind) !== 'brand');
     const retire = [], updates = [], owner_off_focus = [], market_drift = [];
+    // AIR (P3, 2026-11-06, docs/ai-ranking-2026-11-05 DESIGN 2.A A3): a question AI ranking holds in its core set (seo_ai_prompts.core_until in the
+    // future, written only by AIR on a site where it is on) is never retired by these rules: its trend is what AIR measures progress on. With no
+    // core_until on any row (every site today) nothing below changes.
+    const held = (p) => { const c = t(p && p.core_until); return c > 0 && c > t(now); };
     const of = new Map(); const have = new Map(); let ownerFree = 0; const keptAuto = new Map();
     // focus_seen_at: while a question is in focus, when it was last seen in focus (refreshed weekly); once it is out, when it was first found out
     // of focus (a question stored before this rule starts its 28 days the first time it is judged, so a release retires nothing by itself)
@@ -1849,14 +1944,14 @@ const AIF = (() => {
       const outDays = S(p.focus_state) === 'out' && S(p.focus_seen_at) ? daysBetween(S(p.focus_seen_at), now) : 0;   // out of focus since it was first found so
       const offFocus = !z || deleted;
       if (wrongMarket) {
-        if (provisional && allElsewhere) { retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: 'asked in ' + S(p.market) + ', not in your market (' + own + ')', topic: z ? z.label : '' }); continue; }
+        if (provisional && allElsewhere && !held(p)) { retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: 'asked in ' + S(p.market) + ', not in your market (' + own + ')', topic: z ? z.label : '' }); continue; }
         market_drift.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), market: S(p.market) });
       }
       if (offFocus) {
         const why = deleted ? 'its keyword ladder was deleted' : 'it is about something you no longer work on (no keyword ladder, page, service or tracked keyword covers it)';
-        if ((x.full && (deleted || outDays >= CFG.grace_days))) { retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: why, topic: S(p.focus_topic) }); continue; }
+        if ((x.full && (deleted || outDays >= CFG.grace_days)) && !held(p)) { retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: why, topic: S(p.focus_topic) }); continue; }
         stamp(p, null); continue; }
-      if (z.state === 'paused' && x.full && daysBetween(z.since, now) >= CFG.paused_days) { retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: 'its keyword ladder has been paused for more than ' + CFG.paused_days + ' days', topic: z.label }); continue; }
+      if (z.state === 'paused' && x.full && daysBetween(z.since, now) >= CFG.paused_days && !held(p)) { retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: 'its keyword ladder has been paused for more than ' + CFG.paused_days + ' days', topic: z.label }); continue; }
       if (!wrongMarket) { have.set(z.id, n0(have.get(z.id)) + 1); const l = keptAuto.get(z.id) || []; l.push(p); keptAuto.set(z.id, l); }
       stamp(p, z);
     }
@@ -1866,7 +1961,7 @@ const AIF = (() => {
     for (const z of topics) { const l = (keptAuto.get(z.id) || []).slice().sort((a, b) => S(a.created_at).localeCompare(S(b.created_at)));
       const q = n0(Q.quota.get(z.id)); const ownN = n0(have.get(z.id)) - l.length;
       if ((z.state === 'watch' || z.state === 'maintain') && l.length + ownN > q && (provisional || x.full))
-        for (const p of l.slice(Math.max(0, q - ownN))) { retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: z.state === 'watch' ? 'a keyword you only watch keeps one question' : 'a won keyword ladder keeps two questions', topic: z.label });
+        for (const p of l.slice(Math.max(0, q - ownN))) { if (held(p)) continue; retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: z.state === 'watch' ? 'a keyword you only watch keeps one question' : 'a won keyword ladder keeps two questions', topic: z.label });
           have.set(z.id, n0(have.get(z.id)) - 1); } }
     // what each measured topic still needs; a topic the client chose that has NO question yet (a new ladder) takes room from over-quota topics at once
     const write = []; let free = Math.max(0, freeNow());
@@ -1881,9 +1976,9 @@ const AIF = (() => {
       let take = Math.min(k, free); free -= take;
       if (take < k && fresh) {   // swap: over-quota automatic questions of other topics make room (largest surplus first, newest question first)
         let short = Math.min(k, CFG.min_per_topic) - take;
-        while (short > 0) { const donor = topics.filter(y => y !== z && n0(have.get(y.id)) > n0(Q.quota.get(y.id)) && (keptAuto.get(y.id) || []).some(p => !retire.some(r => r.prompt_id === S(p.prompt_id))))
+        while (short > 0) { const donor = topics.filter(y => y !== z && n0(have.get(y.id)) > n0(Q.quota.get(y.id)) && (keptAuto.get(y.id) || []).some(p => !held(p) && !retire.some(r => r.prompt_id === S(p.prompt_id))))
             .sort((a, b) => (n0(have.get(b.id)) - n0(Q.quota.get(b.id))) - (n0(have.get(a.id)) - n0(Q.quota.get(a.id))))[0];
-          if (!donor) break; const p = (keptAuto.get(donor.id) || []).filter(q => !retire.some(r => r.prompt_id === S(q.prompt_id))).sort((a, b) => S(b.created_at).localeCompare(S(a.created_at)))[0];
+          if (!donor) break; const p = (keptAuto.get(donor.id) || []).filter(q => !held(q) && !retire.some(r => r.prompt_id === S(q.prompt_id))).sort((a, b) => S(b.created_at).localeCompare(S(a.created_at)))[0];
           retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: 'made room for "' + z.label + '" inside your panel size', topic: donor.label, swap: true });
           have.set(donor.id, n0(have.get(donor.id)) - 1); take++; short--; } }
       if (take > 0) { write.push({ topic_id: z.id, label: z.label, state: z.state, source: z.source === 'ladder' ? 'ladder:' + (z.refs[0] || '') : z.source, count: take, terms: z.terms.slice(0, 8),
@@ -2699,8 +2794,20 @@ return plans.map(p => {
   // competitor - is then computed from ONE list of answers (`U`), so the headline share of voice is exactly what its segments add up to.
   // A morning counted under an earlier rule is left out and named (pulse_basis); AI Plan has already bounded the mornings to this run's window.
   const PRall = p.pulse_rows || [];
-  const PR = PRall.filter(d => String(d.rule_version || '') === AVM.RULE_VERSION && d.detail && Array.isArray(d.detail.a));
-  const pulseOld = PRall.filter(d => !PR.includes(d));
+  const PRrule = PRall.filter(d => String(d.rule_version || '') === AVM.RULE_VERSION && d.detail && Array.isArray(d.detail.a));
+  const pulseOld = PRall.filter(d => !PRrule.includes(d));
+  // F-08 (AIR P3, 2026-11-06, prod review 2026-10-31): a pulse morning's answers to questions that are NOT on this run's panel (retired since,
+  // or written for another market) were pooled into the headline: one site read "named in 1.4%" while it was named in 0 of the answers to its
+  // current questions, and its rival table was led by businesses from the old panel. Only answers to the run's own question ids are counted;
+  // the rest are named (pulse_basis.off_panel). A run with no panel ids on hand (nothing to compare against) keeps every answer, as before.
+  const panelIds = new Set((p.prompts || []).map(q => String((q && q.prompt_id) || '')).filter(Boolean));
+  const onPanel = (id) => !panelIds.size || panelIds.has(String(id));
+  const offPanel = { answers: 0, readings: 0, ids: new Set() };
+  const PR = PRrule.map(d => { const keep = d.detail.a.filter(a => !Array.isArray(a) || onPanel(a[0])); const off = d.detail.a.length - keep.length; if (!off) return d;
+    offPanel.answers += off; offPanel.readings++; for (const a of d.detail.a) if (Array.isArray(a) && !onPanel(a[0])) offPanel.ids.add(String(a[0]));
+    return { ...d, samples: keep.filter(Array.isArray).length, detail: { ...d.detail, a: keep } }; }).filter(d => d.detail.a.length);
+  const pulse_off_panel = offPanel.answers ? { answers: offPanel.answers, readings: offPanel.readings, questions: offPanel.ids.size, ids: [...offPanel.ids].sort().slice(0, 50),
+    note: offPanel.answers + ' daily pulse answer(s) to ' + offPanel.ids.size + ' question(s) no longer on this week\'s panel were left out of this week\'s figures.' } : null;
   const pulseN = PR.reduce((s, d) => s + d.detail.a.length, 0);
   // ---- B8-3 (2026-10-15, benchmark area 8, INVARIANTS rule 1): the week's headline pools the daily pulse answers straight into
   // `samples` and `mentioned`, and a pulse morning on which one engine returned nothing contributes a DIFFERENT mix of engines.
@@ -2723,8 +2830,10 @@ return plans.map(p => {
     partial_days: partialDays.map(d => ({ date: d.date, answers: d.samples, engines: d.engines.map(e => ENG[e] || e), missing: d.missing })), partial_answers: partialAnswers,
     note: (PR.length === pulseDays ? pulseDays + ' daily pulse day(s) are' : PR.length + ' daily pulse readings on ' + pulseDays + ' day(s) are') + ' counted in the figures below (' + pulseN + ' of the ' + (ans.length + pulseN) + ' answers)'
       + (partialDays.length ? ', and ' + partialDays.length + ' of them did not reach every engine (' + partialAnswers + ' answer(s) from '
-        + partialDays.map(d => d.date + (d.missing.length ? ': no answer from ' + d.missing.join(', ') : ': ' + (d.engines.length || 'no') + ' engine(s) only')).join('; ') + ')' : '') + '.' + (pulse_left_out ? ' ' + pulse_left_out.note : '') }
-    : pulse_left_out ? { days: 0, readings: 0, answers: 0, engines: [], basis: 'not_available', left_out: pulse_left_out, partial_days: [], partial_answers: 0, note: pulse_left_out.note } : null;
+        + partialDays.map(d => d.date + (d.missing.length ? ': no answer from ' + d.missing.join(', ') : ': ' + (d.engines.length || 'no') + ' engine(s) only')).join('; ') + ')' : '') + '.' + (pulse_left_out ? ' ' + pulse_left_out.note : '') + (pulse_off_panel ? ' ' + pulse_off_panel.note : ''),
+    ...(pulse_off_panel ? { off_panel: pulse_off_panel } : {}) }
+    : (pulse_left_out || pulse_off_panel) ? { days: 0, readings: 0, answers: 0, engines: [], basis: 'not_available', left_out: pulse_left_out, partial_days: [], partial_answers: 0, ...(pulse_off_panel ? { off_panel: pulse_off_panel } : {}),
+      note: [pulse_left_out ? pulse_left_out.note : '', pulse_off_panel ? pulse_off_panel.note : ''].filter(Boolean).join(' ') } : null;
   // B8-5: *AI Requests* stops adding requests at 900 / $15 ($4 on the pulse) and records what it dropped in `skipped_by_cap` — which
   // nothing has ever read. A capped run asks fewer engines of fewer questions, every rate below is measured on what was left, and the
   // panel simply looked shorter. Named here, printed in the report (INVARIANTS rule 1).
@@ -3039,7 +3148,9 @@ return plans.map(p => {
   const same_ids = prevIds ? AIP.overlap(nowIds, prevIds) : null;
   // F1b (2026-10-23): a row counted under another measurement rule is never compared - the deploy of a new rule is not a change in
   // visibility. It is checked first: it explains more than an engine or a panel change.
-  const same_rule = prev ? (String(prev.rule_version || '') === AVM.RULE_VERSION ? { comparable: true, why: '' }
+  const same_rule = prev ? (String(prev.rule_version || '') === AVM.RULE_VERSION ? (pulse_off_panel && !(prev.stats && prev.stats.headline_rule === HEAD_RULE)
+      ? { comparable: false, why: 'measurement rule changed: this week starts a new baseline (the headline now counts the daily pulse answers to this week\'s questions only; ' + pulse_off_panel.answers + ' answer(s) to questions no longer on the panel were left out, and the earlier week counted such answers)' }
+      : { comparable: true, why: '' })
     : { comparable: false, why: 'measurement rule changed: this week starts a new baseline (from ' + AVM.RULE_VERSION.replace(/^aivis-/, '') + ' "named in" counts the answers that name you, not the ones that only cite a page, and share of voice counts every competitor named)' }) : null;
   // R-E6 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): the daily pulse's answers join the headline, so the engines the pulse asks
   // and whether it asks every question or a rotating sample are part of what the week measures. The week records them (panel_json.pulse); when
@@ -3141,7 +3252,7 @@ return plans.map(p => {
   // engines · 74 answers" while the 74 were 7 buyer questions on the 5 weekly engines (33 this run + 41 from the pulse) — the 8th
   // question is the brand question (recognition only) and Claude, asked monthly, is shown per engine and kept out of the headline on
   // purpose (the week-on-week comparison depends on the weekly engine set). The words change, not the denominator.
-  const buyerQ = new Set(R.map(r => r.prompt_id)).size, brandQ = new Set(RB.map(r => r.prompt_id)).size;
+  const buyerQ = new Set([...R.map(r => r.prompt_id), ...U.filter(u => u.pulse).map(u => u.prompt_id)].map(String)).size, brandQ = new Set(RB.map(r => r.prompt_id)).size;
   const headEng = [...new Set([...RC.map(r => r.engine), ...PR.flatMap(d => Object.entries(d.engines || {}).filter(([, v]) => (Number((v || {}).answered) || 0) > 0).map(([e]) => e))])];
   const monthlyOut = MONTHLY.filter(e => R.some(r => r.engine === e)).map(e => ({ engine: ENG[e] || e, answers: R.filter(r => r.engine === e && r.answered).length }));
   const came_back = Rall.filter(r => !r.error).length;
@@ -3260,7 +3371,7 @@ return plans.map(p => {
     c.delta = { named_rate: dd(c.named_rate, b0.named_rate), sov: dd(c.sov, b0.sov != null ? b0.sov : b0.share), avg_position: dd(c.avg_position, b0.avg_position), cited_rate: dd(c.cited_rate, b0.cited_rate),
       sov_significant: t ? t.significant : null, sov_p: t ? t.p : null, why: t ? t.why : 'the earlier run did not record this competitor per answer' };
     for (const [e, x] of Object.entries(c.engines || {})) { const y = ((b0.engines || {})[e]) || null; x.delta = y ? { named_rate: dd(x.named_rate, y.named_rate), sov: dd(x.sov, y.sov), avg_position: dd(x.avg_position, y.avg_position), cited_rate: dd(x.cited_rate, y.cited_rate) } : null; } }
-  const stats = { v: 1, rule_version: AVM.RULE_VERSION, named: { k: H.named, n: H.n }, cited: { k: H.cited, n: H.n },
+  const stats = { v: 1, rule_version: AVM.RULE_VERSION, headline_rule: HEAD_RULE, named: { k: H.named, n: H.n }, cited: { k: H.cited, n: H.n },
     sov: { rate: H.sov, se: H.sov_se, n: H.sov_n, self: H.sov_self, mentions: H.sov_mentions },
     position: { mean: H.avg_position, sd: H.position_sd, n: H.position_n, first: H.first, first_rate: H.first_rate, pos_visibility: H.pos_visibility, pos_visibility_se: H.pos_visibility_se },
     score: { score: visibility_score, half: score_band.half, n: score_band.n, n_eff: score_band.n_eff },

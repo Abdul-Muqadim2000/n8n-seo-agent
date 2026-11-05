@@ -114,7 +114,11 @@ try { const g = require('./in200.json'); for (const wf of Object.values(g)) for 
 // gets the per-answer record its aggregates describe). A scenario that wants a row of an older rule says so explicitly
 // (`rule_version: ''` or another version): such a row is passed through untouched.
 const AIV_RULE = (() => { try { const m = fs.readFileSync(path.join(CODE_DIR, 'AI_Metrics.js'), 'utf8').match(/const RULE_VERSION = '([^']+)'/); return m ? m[1] : ''; } catch (e) { return ''; } })();
-const aivSynthDetail = (d) => {
+// F-08 (AIR P3, 2026-11-06): the weekly headline now counts only the pulse answers to the run's own questions, so a synthesized pulse morning
+// answers the site's panel questions (the stored prompts mocked for the scenario, or the hand-built plan's), never invented ids.
+const aivPanelIds = (siteId, plan) => { const from = plan && Array.isArray(plan.prompts) ? plan.prompts : (store['Load AI Prompts'] || []).map(i => i && i.json).filter(Boolean);
+  return from.filter(q => q && q.prompt_id && q.kind !== 'brand' && (!siteId || !q.site_id || q.site_id === siteId) && !['retired', 'off', 'refused', 'proposed'].includes(String(q.status || ''))).map(q => String(q.prompt_id)); };
+const aivSynthDetail = (d, panel) => {
   const P = (v, f) => { try { const x = typeof v === 'string' ? JSON.parse(v || 'null') : v; return x == null ? f : x; } catch (e) { return f; } };
   const eng = P(d.engines_json, {}), codes = P(d.prompts_json, {}), comps = P(d.competitors_json, {});
   const n = Number(d.samples) || 0, m = Number(d.mentioned) || 0, c = Number(d.cited) || 0;
@@ -123,7 +127,7 @@ const aivSynthDetail = (d) => {
   if (units.length !== n) { units = [];
     let per = Object.entries(eng || {}).map(([e, x]) => [e, Number((x || {}).answered) || 0, Number((x || {}).mentioned) || 0, Number((x || {}).cited) || 0]).filter(x => x[1] > 0);
     if (per.reduce((s, x) => s + x[1], 0) !== n || per.reduce((s, x) => s + x[2], 0) !== m) per = [['chatgpt', n, m, c]];
-    const pids = Object.keys(codes || {}); let k = 0;
+    const pids = Object.keys(codes || {}).length ? Object.keys(codes || {}) : (panel || []); let k = 0;
     for (const [e, a, mm, cc] of per) for (let i = 0; i < a; i++) { units.push({ pid: pids.length ? pids[k % pids.length] : 'pq_' + (k % 7), e, named: i < mm, cited: i < Math.min(cc, mm), pos: i < mm ? 2 : null }); k++; } }
   const ents = []; units.forEach(u => { u.r = []; });
   let start = 0; for (const [id, k0] of Object.entries(comps || {})) { const kk = Math.min(Number(k0) || 0, units.length); ents.push(id); for (let i = 0; i < kk; i++) units[(start + i) % units.length].r.push([ents.length - 1, null, 0]); start += kk; }
@@ -134,12 +138,12 @@ const aivStamp = (node, items) => {
   if (AIV_RULE && node === 'AI Plan') return items.map(it => { const j = it && it.json; if (!j || typeof j !== 'object') return it; const out = { ...j };
     if (j.previous && typeof j.previous === 'object' && !('rule_version' in j.previous)) out.previous = { ...j.previous, rule_version: AIV_RULE };
     if (Array.isArray(j.pulse_rows)) out.pulse_rows = j.pulse_rows.map(d => (!d || ('rule_version' in d)) ? d : { ...d, rule_version: AIV_RULE,
-      detail: d.detail || JSON.parse(aivSynthDetail({ samples: d.samples, mentioned: d.mentioned, cited: d.cited, engines_json: d.engines || {}, prompts_json: d.prompts || {}, competitors_json: d.competitors || {} })) });
+      detail: d.detail || JSON.parse(aivSynthDetail({ samples: d.samples, mentioned: d.mentioned, cited: d.cited, engines_json: d.engines || {}, prompts_json: d.prompts || {}, competitors_json: d.competitors || {} }, aivPanelIds(j.site_id, j))) });
     if (Array.isArray(j.baseline)) out.baseline = j.baseline.map(d => (!d || ('rule_version' in d)) ? d : { ...d, rule_version: AIV_RULE });
     return { ...it, json: out }; });
   if (!AIV_RULE || (node !== 'Load AI Visibility' && node !== 'Load AI Daily')) return items;
   return items.map(it => { const j = it && it.json; if (!j || typeof j !== 'object' || !j.site_id || ('rule_version' in j)) return it;
-    const out = { ...j, rule_version: AIV_RULE }; if (node === 'Load AI Daily' && !out.detail_json) out.detail_json = aivSynthDetail(out); return { ...it, json: out }; });
+    const out = { ...j, rule_version: AIV_RULE }; if (node === 'Load AI Daily' && !out.detail_json) out.detail_json = aivSynthDetail(out, aivPanelIds(j.site_id)); return { ...it, json: out }; });
 };
 function mock(node, items) {
   store[node] = aivStamp(node, toItems(items));

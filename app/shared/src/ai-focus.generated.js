@@ -188,6 +188,10 @@ const AIF = (() => {
     const brand = live.filter(p => S(p.kind) === 'brand');
     const qs = live.filter(p => S(p.kind) !== 'brand');
     const retire = [], updates = [], owner_off_focus = [], market_drift = [];
+    // AIR (P3, 2026-11-06, docs/ai-ranking-2026-11-05 DESIGN 2.A A3): a question AI ranking holds in its core set (seo_ai_prompts.core_until in the
+    // future, written only by AIR on a site where it is on) is never retired by these rules: its trend is what AIR measures progress on. With no
+    // core_until on any row (every site today) nothing below changes.
+    const held = (p) => { const c = t(p && p.core_until); return c > 0 && c > t(now); };
     const of = new Map(); const have = new Map(); let ownerFree = 0; const keptAuto = new Map();
     // focus_seen_at: while a question is in focus, when it was last seen in focus (refreshed weekly); once it is out, when it was first found out
     // of focus (a question stored before this rule starts its 28 days the first time it is judged, so a release retires nothing by itself)
@@ -208,14 +212,14 @@ const AIF = (() => {
       const outDays = S(p.focus_state) === 'out' && S(p.focus_seen_at) ? daysBetween(S(p.focus_seen_at), now) : 0;   // out of focus since it was first found so
       const offFocus = !z || deleted;
       if (wrongMarket) {
-        if (provisional && allElsewhere) { retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: 'asked in ' + S(p.market) + ', not in your market (' + own + ')', topic: z ? z.label : '' }); continue; }
+        if (provisional && allElsewhere && !held(p)) { retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: 'asked in ' + S(p.market) + ', not in your market (' + own + ')', topic: z ? z.label : '' }); continue; }
         market_drift.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), market: S(p.market) });
       }
       if (offFocus) {
         const why = deleted ? 'its keyword ladder was deleted' : 'it is about something you no longer work on (no keyword ladder, page, service or tracked keyword covers it)';
-        if ((x.full && (deleted || outDays >= CFG.grace_days))) { retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: why, topic: S(p.focus_topic) }); continue; }
+        if ((x.full && (deleted || outDays >= CFG.grace_days)) && !held(p)) { retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: why, topic: S(p.focus_topic) }); continue; }
         stamp(p, null); continue; }
-      if (z.state === 'paused' && x.full && daysBetween(z.since, now) >= CFG.paused_days) { retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: 'its keyword ladder has been paused for more than ' + CFG.paused_days + ' days', topic: z.label }); continue; }
+      if (z.state === 'paused' && x.full && daysBetween(z.since, now) >= CFG.paused_days && !held(p)) { retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: 'its keyword ladder has been paused for more than ' + CFG.paused_days + ' days', topic: z.label }); continue; }
       if (!wrongMarket) { have.set(z.id, n0(have.get(z.id)) + 1); const l = keptAuto.get(z.id) || []; l.push(p); keptAuto.set(z.id, l); }
       stamp(p, z);
     }
@@ -225,7 +229,7 @@ const AIF = (() => {
     for (const z of topics) { const l = (keptAuto.get(z.id) || []).slice().sort((a, b) => S(a.created_at).localeCompare(S(b.created_at)));
       const q = n0(Q.quota.get(z.id)); const ownN = n0(have.get(z.id)) - l.length;
       if ((z.state === 'watch' || z.state === 'maintain') && l.length + ownN > q && (provisional || x.full))
-        for (const p of l.slice(Math.max(0, q - ownN))) { retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: z.state === 'watch' ? 'a keyword you only watch keeps one question' : 'a won keyword ladder keeps two questions', topic: z.label });
+        for (const p of l.slice(Math.max(0, q - ownN))) { if (held(p)) continue; retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: z.state === 'watch' ? 'a keyword you only watch keeps one question' : 'a won keyword ladder keeps two questions', topic: z.label });
           have.set(z.id, n0(have.get(z.id)) - 1); } }
     // what each measured topic still needs; a topic the client chose that has NO question yet (a new ladder) takes room from over-quota topics at once
     const write = []; let free = Math.max(0, freeNow());
@@ -240,9 +244,9 @@ const AIF = (() => {
       let take = Math.min(k, free); free -= take;
       if (take < k && fresh) {   // swap: over-quota automatic questions of other topics make room (largest surplus first, newest question first)
         let short = Math.min(k, CFG.min_per_topic) - take;
-        while (short > 0) { const donor = topics.filter(y => y !== z && n0(have.get(y.id)) > n0(Q.quota.get(y.id)) && (keptAuto.get(y.id) || []).some(p => !retire.some(r => r.prompt_id === S(p.prompt_id))))
+        while (short > 0) { const donor = topics.filter(y => y !== z && n0(have.get(y.id)) > n0(Q.quota.get(y.id)) && (keptAuto.get(y.id) || []).some(p => !held(p) && !retire.some(r => r.prompt_id === S(p.prompt_id))))
             .sort((a, b) => (n0(have.get(b.id)) - n0(Q.quota.get(b.id))) - (n0(have.get(a.id)) - n0(Q.quota.get(a.id))))[0];
-          if (!donor) break; const p = (keptAuto.get(donor.id) || []).filter(q => !retire.some(r => r.prompt_id === S(q.prompt_id))).sort((a, b) => S(b.created_at).localeCompare(S(a.created_at)))[0];
+          if (!donor) break; const p = (keptAuto.get(donor.id) || []).filter(q => !held(q) && !retire.some(r => r.prompt_id === S(q.prompt_id))).sort((a, b) => S(b.created_at).localeCompare(S(a.created_at)))[0];
           retire.push({ prompt_id: S(p.prompt_id), prompt: S(p.prompt), reason: 'made room for "' + z.label + '" inside your panel size', topic: donor.label, swap: true });
           have.set(donor.id, n0(have.get(donor.id)) - 1); take++; short--; } }
       if (take > 0) { write.push({ topic_id: z.id, label: z.label, state: z.state, source: z.source === 'ladder' ? 'ladder:' + (z.refs[0] || '') : z.source, count: take, terms: z.terms.slice(0, 8),

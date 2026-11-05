@@ -400,7 +400,10 @@ A.node('Load Content Log (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(_LO
 # W2-E3 (2026-10-23): the owner's uploaded AI reports of the last 35 days (Bing AI Performance, Search Console AI Mode / AI Overviews), and the
 # results pages this site's paths read TODAY (seo_cache `serp:`), so the fan-out check pays for none of them twice
 A.node('Load AI Imports', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_IMPORTS_TABLE, [SITE_EQ, ('day', 'gte', '={{ new Date(Date.now() - 35 * 864e5).toISOString().slice(0, 10) }}')]), at(14, 2), **LOAD)
-A.node('Load SERP Cache (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(CACHE_TABLE, [('kind', 'eq', 'serp'), SITE_EQ, ('updated_at', 'gte', '={{ new Date().toISOString().slice(0, 10) }}')]), at(15, 2), **LOAD)
+# F-85 (AIR P3, 2026-11-06, prod review 2026-10-31): `serp:` rows are keyed by the search alone (keyword | location | language | device) and most
+# writers store them with an EMPTY site id, so a load scoped to the site (SITE_EQ) found none of them: nothing was reused and nothing was pruned.
+# A reading is the same whichever site bought it, so the `serp:` load, blank and prune match on kind and date only.
+A.node('Load SERP Cache (AI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(CACHE_TABLE, [('kind', 'eq', 'serp'), ('updated_at', 'gte', '={{ new Date().toISOString().slice(0, 10) }}')]), at(15, 2), **LOAD)
 loads += [('Load AI Imports', None), ('Load SERP Cache (AI)', None)]
 # AI-FOCUS (2026-10-27, docs/ai-panel-focus-2026-10-27/RESEARCH_AND_DESIGN.md §5 step 2): each ladder's status (active / paused / won / archived) and who
 # chose it, so the question panel follows the ladders the client works on (a paused ladder was a topic for ever: the AI workflow never read the settings)
@@ -490,9 +493,9 @@ A.code('Trimmed (AI)', COLLAPSE, at(19, 5), executeOnce=True)
 # and the results pages the fan-out check (and every other path) stored for this site: a reading counts only on its own day (SC.lookup), so rows
 # older than 2 days are dead weight - one row of up to 20 KB per search, up to 200 searches a week per site, and nothing pruned them. The value is
 # blanked first (an update that answers with small rows), then the rows are deleted (a delete that answers with the now-small rows).
-A.node('Blank Old SERP Cache (AI)', DT_TYPE, DT_VERSION, _dt_update_where_w2e1(CACHE_TABLE, CACHE_COLS, [('kind', 'eq', 'serp'), SITE_EQ, ('updated_at', 'lt', SINCE(2)), ('value', 'isNotEmpty', '')], {'value': ''}),
+A.node('Blank Old SERP Cache (AI)', DT_TYPE, DT_VERSION, _dt_update_where_w2e1(CACHE_TABLE, CACHE_COLS, [('kind', 'eq', 'serp'), ('updated_at', 'lt', SINCE(2)), ('value', 'isNotEmpty', '')], {'value': ''}),   # F-85: every site's (no site id filter)
        at(27, 7), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
-A.node('Prune Old SERP Cache (AI)', DT_TYPE, DT_VERSION, dt_delete_where_params(CACHE_TABLE, [('kind', 'eq', 'serp'), SITE_EQ, ('updated_at', 'lt', SINCE(2))]), at(28, 7), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+A.node('Prune Old SERP Cache (AI)', DT_TYPE, DT_VERSION, dt_delete_where_params(CACHE_TABLE, [('kind', 'eq', 'serp'), ('updated_at', 'lt', SINCE(2))]), at(28, 7), onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
 A.code('SERP Cache Pruned (AI)', COLLAPSE, at(29, 7), executeOnce=True)
 # W2-FIX (2026-10-23, fixes/W2-FIX.md item 3; W2-E2 open item 5): each weekly row stores `units_json`, its answers one by one (~145 KB a week at 500
 # questions x 9 engines), and seo_ai_visibility keeps its rows for good. The record is read only for the 28-day window and an action's 28 days before /

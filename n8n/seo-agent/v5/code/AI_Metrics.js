@@ -9,6 +9,11 @@
 /*__AI_STATS__*/
 /*__AI_MEASURE__*/
 /*__AI_SENTIMENT__*/
+// F-08 (AIR P3, 2026-11-06): the headline now counts only the pulse answers to the run's own questions. A week counted that way says so in its
+// metrics_json (`headline_rule`); a week that left answers out is not compared with an earlier week counted the old way (once: the next week's
+// earlier row carries the marker). Where nothing was left out the two rules count the same answers, so the comparison stands. The stored
+// rule_version (AVM.RULE_VERSION) does not change: the answers themselves are read as before.
+const HEAD_RULE = 'f08';
 const w2read = (n) => { try { return $(n).all().map(i => i.json).filter(Boolean); } catch (e) { return []; } };   // W2-E2: the loads and the Sentiment Reader, read defensively
 /*__AI_ENTITIES__*/
 /*__AI_PANEL__*/
@@ -88,8 +93,20 @@ return plans.map(p => {
   // competitor - is then computed from ONE list of answers (`U`), so the headline share of voice is exactly what its segments add up to.
   // A morning counted under an earlier rule is left out and named (pulse_basis); AI Plan has already bounded the mornings to this run's window.
   const PRall = p.pulse_rows || [];
-  const PR = PRall.filter(d => String(d.rule_version || '') === AVM.RULE_VERSION && d.detail && Array.isArray(d.detail.a));
-  const pulseOld = PRall.filter(d => !PR.includes(d));
+  const PRrule = PRall.filter(d => String(d.rule_version || '') === AVM.RULE_VERSION && d.detail && Array.isArray(d.detail.a));
+  const pulseOld = PRall.filter(d => !PRrule.includes(d));
+  // F-08 (AIR P3, 2026-11-06, prod review 2026-10-31): a pulse morning's answers to questions that are NOT on this run's panel (retired since,
+  // or written for another market) were pooled into the headline: one site read "named in 1.4%" while it was named in 0 of the answers to its
+  // current questions, and its rival table was led by businesses from the old panel. Only answers to the run's own question ids are counted;
+  // the rest are named (pulse_basis.off_panel). A run with no panel ids on hand (nothing to compare against) keeps every answer, as before.
+  const panelIds = new Set((p.prompts || []).map(q => String((q && q.prompt_id) || '')).filter(Boolean));
+  const onPanel = (id) => !panelIds.size || panelIds.has(String(id));
+  const offPanel = { answers: 0, readings: 0, ids: new Set() };
+  const PR = PRrule.map(d => { const keep = d.detail.a.filter(a => !Array.isArray(a) || onPanel(a[0])); const off = d.detail.a.length - keep.length; if (!off) return d;
+    offPanel.answers += off; offPanel.readings++; for (const a of d.detail.a) if (Array.isArray(a) && !onPanel(a[0])) offPanel.ids.add(String(a[0]));
+    return { ...d, samples: keep.filter(Array.isArray).length, detail: { ...d.detail, a: keep } }; }).filter(d => d.detail.a.length);
+  const pulse_off_panel = offPanel.answers ? { answers: offPanel.answers, readings: offPanel.readings, questions: offPanel.ids.size, ids: [...offPanel.ids].sort().slice(0, 50),
+    note: offPanel.answers + ' daily pulse answer(s) to ' + offPanel.ids.size + ' question(s) no longer on this week\'s panel were left out of this week\'s figures.' } : null;
   const pulseN = PR.reduce((s, d) => s + d.detail.a.length, 0);
   // ---- B8-3 (2026-10-15, benchmark area 8, INVARIANTS rule 1): the week's headline pools the daily pulse answers straight into
   // `samples` and `mentioned`, and a pulse morning on which one engine returned nothing contributes a DIFFERENT mix of engines.
@@ -112,8 +129,10 @@ return plans.map(p => {
     partial_days: partialDays.map(d => ({ date: d.date, answers: d.samples, engines: d.engines.map(e => ENG[e] || e), missing: d.missing })), partial_answers: partialAnswers,
     note: (PR.length === pulseDays ? pulseDays + ' daily pulse day(s) are' : PR.length + ' daily pulse readings on ' + pulseDays + ' day(s) are') + ' counted in the figures below (' + pulseN + ' of the ' + (ans.length + pulseN) + ' answers)'
       + (partialDays.length ? ', and ' + partialDays.length + ' of them did not reach every engine (' + partialAnswers + ' answer(s) from '
-        + partialDays.map(d => d.date + (d.missing.length ? ': no answer from ' + d.missing.join(', ') : ': ' + (d.engines.length || 'no') + ' engine(s) only')).join('; ') + ')' : '') + '.' + (pulse_left_out ? ' ' + pulse_left_out.note : '') }
-    : pulse_left_out ? { days: 0, readings: 0, answers: 0, engines: [], basis: 'not_available', left_out: pulse_left_out, partial_days: [], partial_answers: 0, note: pulse_left_out.note } : null;
+        + partialDays.map(d => d.date + (d.missing.length ? ': no answer from ' + d.missing.join(', ') : ': ' + (d.engines.length || 'no') + ' engine(s) only')).join('; ') + ')' : '') + '.' + (pulse_left_out ? ' ' + pulse_left_out.note : '') + (pulse_off_panel ? ' ' + pulse_off_panel.note : ''),
+    ...(pulse_off_panel ? { off_panel: pulse_off_panel } : {}) }
+    : (pulse_left_out || pulse_off_panel) ? { days: 0, readings: 0, answers: 0, engines: [], basis: 'not_available', left_out: pulse_left_out, partial_days: [], partial_answers: 0, ...(pulse_off_panel ? { off_panel: pulse_off_panel } : {}),
+      note: [pulse_left_out ? pulse_left_out.note : '', pulse_off_panel ? pulse_off_panel.note : ''].filter(Boolean).join(' ') } : null;
   // B8-5: *AI Requests* stops adding requests at 900 / $15 ($4 on the pulse) and records what it dropped in `skipped_by_cap` — which
   // nothing has ever read. A capped run asks fewer engines of fewer questions, every rate below is measured on what was left, and the
   // panel simply looked shorter. Named here, printed in the report (INVARIANTS rule 1).
@@ -428,7 +447,9 @@ return plans.map(p => {
   const same_ids = prevIds ? AIP.overlap(nowIds, prevIds) : null;
   // F1b (2026-10-23): a row counted under another measurement rule is never compared - the deploy of a new rule is not a change in
   // visibility. It is checked first: it explains more than an engine or a panel change.
-  const same_rule = prev ? (String(prev.rule_version || '') === AVM.RULE_VERSION ? { comparable: true, why: '' }
+  const same_rule = prev ? (String(prev.rule_version || '') === AVM.RULE_VERSION ? (pulse_off_panel && !(prev.stats && prev.stats.headline_rule === HEAD_RULE)
+      ? { comparable: false, why: 'measurement rule changed: this week starts a new baseline (the headline now counts the daily pulse answers to this week\'s questions only; ' + pulse_off_panel.answers + ' answer(s) to questions no longer on the panel were left out, and the earlier week counted such answers)' }
+      : { comparable: true, why: '' })
     : { comparable: false, why: 'measurement rule changed: this week starts a new baseline (from ' + AVM.RULE_VERSION.replace(/^aivis-/, '') + ' "named in" counts the answers that name you, not the ones that only cite a page, and share of voice counts every competitor named)' }) : null;
   // R-E6 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): the daily pulse's answers join the headline, so the engines the pulse asks
   // and whether it asks every question or a rotating sample are part of what the week measures. The week records them (panel_json.pulse); when
@@ -530,7 +551,7 @@ return plans.map(p => {
   // engines · 74 answers" while the 74 were 7 buyer questions on the 5 weekly engines (33 this run + 41 from the pulse) — the 8th
   // question is the brand question (recognition only) and Claude, asked monthly, is shown per engine and kept out of the headline on
   // purpose (the week-on-week comparison depends on the weekly engine set). The words change, not the denominator.
-  const buyerQ = new Set(R.map(r => r.prompt_id)).size, brandQ = new Set(RB.map(r => r.prompt_id)).size;
+  const buyerQ = new Set([...R.map(r => r.prompt_id), ...U.filter(u => u.pulse).map(u => u.prompt_id)].map(String)).size, brandQ = new Set(RB.map(r => r.prompt_id)).size;
   const headEng = [...new Set([...RC.map(r => r.engine), ...PR.flatMap(d => Object.entries(d.engines || {}).filter(([, v]) => (Number((v || {}).answered) || 0) > 0).map(([e]) => e))])];
   const monthlyOut = MONTHLY.filter(e => R.some(r => r.engine === e)).map(e => ({ engine: ENG[e] || e, answers: R.filter(r => r.engine === e && r.answered).length }));
   const came_back = Rall.filter(r => !r.error).length;
@@ -649,7 +670,7 @@ return plans.map(p => {
     c.delta = { named_rate: dd(c.named_rate, b0.named_rate), sov: dd(c.sov, b0.sov != null ? b0.sov : b0.share), avg_position: dd(c.avg_position, b0.avg_position), cited_rate: dd(c.cited_rate, b0.cited_rate),
       sov_significant: t ? t.significant : null, sov_p: t ? t.p : null, why: t ? t.why : 'the earlier run did not record this competitor per answer' };
     for (const [e, x] of Object.entries(c.engines || {})) { const y = ((b0.engines || {})[e]) || null; x.delta = y ? { named_rate: dd(x.named_rate, y.named_rate), sov: dd(x.sov, y.sov), avg_position: dd(x.avg_position, y.avg_position), cited_rate: dd(x.cited_rate, y.cited_rate) } : null; } }
-  const stats = { v: 1, rule_version: AVM.RULE_VERSION, named: { k: H.named, n: H.n }, cited: { k: H.cited, n: H.n },
+  const stats = { v: 1, rule_version: AVM.RULE_VERSION, headline_rule: HEAD_RULE, named: { k: H.named, n: H.n }, cited: { k: H.cited, n: H.n },
     sov: { rate: H.sov, se: H.sov_se, n: H.sov_n, self: H.sov_self, mentions: H.sov_mentions },
     position: { mean: H.avg_position, sd: H.position_sd, n: H.position_n, first: H.first, first_rate: H.first_rate, pos_visibility: H.pos_visibility, pos_visibility_se: H.pos_visibility_se },
     score: { score: visibility_score, half: score_band.half, n: score_band.n, n_eff: score_band.n_eff },

@@ -718,7 +718,7 @@ const AIE = (() => {
   // ---- what kind of site or name a thing is ----
   const GOV = /\.gov(\.[a-z]{2,3})?$|(^|\.)(gouv|gob|go|gv)\.[a-z]{2}$|\.mil(\.[a-z]{2})?$|(^|\.)u\.ae$|\.int$|\.edu(\.[a-z]{2})?$|\.ac\.[a-z]{2}$|(^|\.)(difc|adgm|dmcc|dafz|dafza|jafza|rakez|dso|ifza|shams|kezad|dwtc|dubaichamber|abudhabichamber|dubaided|government|europa|saifzone|ajmanfreezone|fujairahfreezone|hamriyahfz)\.(com|ae|org|eu)$|(^|\.)[a-z]{3,}fz\.(ae|com)$|freezone/i;
   const MEDIA = /(^|\.)(gulfnews|khaleejtimes|thenationalnews|thenational|zawya|arabianbusiness|gulfbusiness|reuters|bloomberg|forbes|cnbc|bbc|ft|wsj|techcrunch|entrepreneur|economist|businessinsider|arabnews|timesofindia|dawn|business|nerdwallet|investopedia|techradar|pcmag|zdnet|cio|computerweekly|itpro|tradearabia|wam|emirates247|khaleej|alkhaleej|albayan|argaam|saudigazette|medium|substack|wikipedia|wikimedia|britannica)\.[a-z.]+$/i;
-  const DIRECTORY = /(^|\.)(g2|capterra|clutch|trustpilot|goodfirms|getapp|softwareadvice|crunchbase|yelp|sortlist|designrush|themanifest|softwaresuggest|sourceforge|saashub|alternativeto|producthunt|glassdoor|indeed|hidubai|connect|zoominfo|owler)\.[a-z.]+$|yellowpages|directory|review|compare|listing|ranking|top10|aspl?ist|uaeasp|einvoicinglist/i;
+  const DIRECTORY = /(^|\.)(g2|capterra|clutch|trustpilot|goodfirms|getapp|softwareadvice|crunchbase|yelp|sortlist|designrush|themanifest|softwaresuggest|sourceforge|saashub|alternativeto|producthunt|glassdoor|indeed|hidubai|connect|zoominfo|owler|selectedfirms|topdevelopers|techbehemoths|itfirms|appfutura|softwareworld|featuredcustomers|bark|yell|dubizzle|2gis|justdial|sulekha|expatwoman|upcity|trustradius|peerspot|softwarereviews|wadline|goodfirms|businesslist|cybo|ensun)\.[a-z.]+$|yellowpages|directory|review|compare|listing|ranking|top10|aspl?ist|uaeasp|einvoicinglist/i;
   const RESEARCH = /(^|\.)(gartner|forrester|statista|idc|mckinsey|bcg|bain|frost|marketsandmarkets|mordorintelligence|grandviewresearch)\.[a-z.]+$/i;
   const SOCIAL = /(^|\.)(youtube|youtu|linkedin|facebook|instagram|x|twitter|tiktok|reddit|quora|github|pinterest|t)\.(com|be|co|me)$|(^|\.)(google|bing|yahoo|duckduckgo|yandex|baidu|ecosia|ask|chatgpt|openai|perplexity|anthropic|claude|gemini|gstatic|goo)\.[a-z.]+$|vertexaisearch|peppol\.(org|eu)$/i;
   const NAME_SRC = /\b(ministry|authority|federal|government|municipality|chamber|association|council|institute|foundation|commission|department|free ?zone|yellow ?pages|directory|gazette|news|times|journal|magazine|wikipedia|openpeppol|gartner|forrester|statista)\b/i;
@@ -729,7 +729,7 @@ const AIE = (() => {
   // ---- the platforms buyers connect to: named as an integration target, or worked with by the client, they are never rivals ----
   const P_B = '(?<![\\p{L}\\p{N}])', P_E = '(?![\\p{L}\\p{N}])';
   const PLATFORMS = [
-    ['microsoft.com', 'Microsoft', P_B + '(?:microsoft(?:\\s+dynamics(?:\\s+365)?)?|dynamics\\s*365|ms\\s+dynamics|d365|business\\s+central|navision|azure|power\\s*bi|power\\s+(?:apps|automate|platform)|office\\s+365|microsoft\\s+365|sharepoint)' + P_E, 'giu'],
+    ['microsoft.com', 'Microsoft', P_B + '(?:microsoft(?:\\s+dynamics(?:\\s+365)?)?|dynamics\\s*365|ms\\s+dynamics|d365|business\\s+central|navision|azure|power\\s*bi|power\\s+(?:apps|automate|platform)|office\\s+365|microsoft\\s+365|sharepoint|(?:microsoft\\s+)?copilot(?:\\s+studio)?)' + P_E, 'giu'],
     ['sap.com', 'SAP', P_B + '(?:SAP(?:\\s+Business\\s+One|\\s+S\\/4\\s?HANA|\\s+B1)?|S\\/4\\s?HANA|SuccessFactors)' + P_E, 'gu'],
     ['oracle.com', 'Oracle', P_B + '(?:Oracle|ORACLE)(?!\\s+NetSuite)(?:\\s+(?:Fusion|Cloud|ERP|E-Business\\s+Suite))?' + P_E, 'gu'],
     ['netsuite.com', 'NetSuite', P_B + '(?:oracle\\s+)?netsuite' + P_E, 'giu'],
@@ -742,8 +742,12 @@ const AIE = (() => {
     ['salesforce.com', 'Salesforce', P_B + 'salesforce' + P_E, 'giu'], ['hubspot.com', 'HubSpot', P_B + 'hubspot' + P_E, 'giu'],
     ['shopify.com', 'Shopify', P_B + 'shopify' + P_E, 'giu'], ['amazon.com', 'AWS', P_B + '(?:AWS|Amazon\\s+Web\\s+Services)' + P_E, 'gu'],
     ['servicenow.com', 'ServiceNow', P_B + 'servicenow' + P_E, 'giu'], ['workday.com', 'Workday', P_B + 'Workday' + P_E, 'gu'],
+    ['openedx.org', 'Open edX', P_B + '(?:open\\s*edx|edx\\s+platform)' + P_E, 'giu'], ['moodle.com', 'Moodle', P_B + '(?:Moodle(?:\\s+Workplace|\\s+LMS)?|MOODLE)' + P_E, 'gu'],
     ['epicor.com', 'Epicor', P_B + 'epicor' + P_E, 'giu'], ['acumatica.com', 'Acumatica', P_B + 'acumatica' + P_E, 'giu'], ['infor.com', 'Infor', P_B + 'Infor' + P_E, 'gu']];
   const PLAT_DOMS = new Set(PLATFORMS.map(p => p[0]));
+  // F-53: open-source platforms a whole market builds on (openedx.org ranked as an Open edX shop's top rival): a platform, never a competitor,
+  // unless the owner named it a competitor
+  const OPEN_PLAT = new Set(['openedx.org', 'moodle.com']);
 
   // ---- how a name is found in a text ----
   const B = '(?<![\\p{L}\\p{M}\\p{N}])', E = '(?![\\p{L}\\p{M}\\p{N}])';
@@ -765,12 +769,59 @@ const AIE = (() => {
     return new RegExp(B + '(?:' + [...forms].map(tokRe).join('|') + ')' + tail, 'gu');
   };
   /** a name an answer gives a business: a short phrase of capitalised words, not a heading, a category or a field label */
-  const DENY = /^(pint-?ae|peppol|uae|ksa|fta|vat|erp|crm|asps?|b2b|b2g|b2c|xml|api|apis|pdf|aed|usd|sar|mof|faq|ceo|cfo|it|ai|ml|saas|sme|smes|ubl|edi|ctc|wps|kyc|gdpr|iso)$/i;
+  const DENY = /^(pint-?ae|peppol|uae|ksa|fta|vat|erp|crm|asps?|b2b|b2g|b2c|xml|api|apis|pdf|aed|usd|sar|mof|faq|ceo|cfo|it|ai|ml|saas|sme|smes|ubl|edi|ctc|wps|kyc|gdpr|iso|roi|tco|kpi|kpis|sla|slas|ipcs?|lms|hrms|mvp|poc|rfp|rfq|sow|tdra|cbuae|sca|dfsa|fsra|zatca|gazt|sama|citra|mohre|moec|ded|dld|rera|nesa|adek|khda|dha|doh|mohap|icp|gdrfa|vara|pdpl|nca)$/i;
+  // ---- F-53 (AIR P3, 2026-11-06, prod review 2026-10-31): 1,011 of 2,221 "competitors" in production were not businesses: table headings and row
+  // labels ("Factor", "Partner Name", "Initial Cost", "Deployment Speed"), bold labels ("Customization:"), plan steps ("Phase 2"), dates ("30 Oct"),
+  // price ranges ("AED 20k-100k"), "Yes", regulators, and the platforms the client works on. A name is now refused when it is money, a date or a
+  // step, a regulator, a place, an answer word, or made only of heading and category words; a name the answer gives no business signal for (a
+  // list label with no domain, no company suffix, no brand-shaped word and no "offers / partner / clients ..." next to it) is not a competitor.
+  // The word list and the patterns are mirrored in fix_ai_entities_cache.py (the purge of the stored rows); harness AF4 holds the two together.
+  const HEADING_WORDS = ('customization customisation customizations inventory factor factors retention scalability maintenance consideration considerations contingency infrastructure area areas '
+    + 'reporting testing retail expansion reconciliation operations operation deployment deployments scale upgrades upgrade milestones milestone criterion criteria phase phases stage stages '
+    + 'initial upfront annual monthly yearly speed multi branch access licensing license licenses licence licences red flag flags recommended next evaluate evaluation verify industry industries '
+    + 'specific track records record expertise regulatory staff needed structure breakdown drivers driver served differences difference workstream automation governed traditional agentic premise '
+    + 'premises category categories expense expenses budget budgets risk risks onboarding performance reliability flexibility usability customer customers user users experience verdict final '
+    + 'thoughts takeaway takeaways bottom highlights highlight advantages disadvantages limitations limitation capabilities strengths weaknesses ideal choice choosing choose approach approaches '
+    + 'strategy strategies process processes roadmap checklist insights insight alternatives alternative tradeoffs quick facts fact total ownership value warranty uptime managed self premium '
+    + 'essentials professional basic advanced edition editions plan plans tier tiers module modules functionality functionalities workflow workflows dashboard dashboards analytics '
+    + 'transparency documentation scope duration effort complexity size ease use cases case studies study getting started fit suitability verdicts typical estimated estimate estimates range '
+    + 'ranges average minimum maximum factor considerations tips pitfalls mistakes common important notes summary specialized specialised trusted verified preferred registered '
+    + 'experienced established independent dedicated popular notable shortlist options examples check assess compare confirm review ensure avoid prioritize prioritise '
+    + 'define identify understand request look before after during recurring subscription subscriptions commerce ecommerce rollout rollouts offered included computer vision '
+    + 'machine learning deep generative conversational natural language processing off shelf tools community standing name names accreditation accreditations certification certifications strength reputation presence coverage availability '
+    + 'bilingual fully hosted authentication target audience residency visibility centralized centralised reduced overhead standout middleware third party edtech integrators '
+    + 'implementers consultancies across mandates policy policies heritage distinction selection fees gap control execution relay streamlined independent built').split(/\s+/).filter(Boolean);
+  const HEADW = new Set(HEADING_WORDS);
+  const ANSWER_WORD = /^(yes|no|maybe|none|n\/a|na|tbd|varies|depends|optional|required|included|unlimited|custom)$/i;
+  const MONEY = /(?:\b(?:aed|usd|sar|qar|kwd|bhd|omr|egp|inr|pkr|eur|gbp|dhs?|dirhams?|riyals?|rupees?)\b|[$\u20ac\u00a3\u20b9])\s*[\d.,]+|\d[\d.,]*\s*(?:k|m|bn|aed|usd|sar|dhs?|million|billion|thousand)\b/i;
+  const MONTH = '(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?';
+  const DATE_RE = new RegExp('^(?:\\d{1,2}(?:st|nd|rd|th)?\\s+' + MONTH + '(?:,?\\s+\\d{2,4})?|' + MONTH + '\\s+\\d{1,4}(?:,?\\s+\\d{4})?|(?:q[1-4]|h[12]|fy\\s?\\d{2,4})(?:\\s+\\d{2,4})?)$', 'i');
+  const STEP_RE = /^(?:phase|step|stage|tier|level|option|wave|part|week|month|year|day|round|milestone|module|scenario|case|example|type|model|plan)\s*(?:\d+|[ivx]+|[a-d])?$/i;
+  const FZ_ONLY = /^(?:dmcc|difc|adgm|dso|jafza|dafza|rakez|ifza|kezad|shams|saif ?zone|hamriyah|dwtc|dic|dmc)$/i;   // a free zone named alone is a place (as a company's suffix it stays)
+  const PLACE = /\b(bay|oasis|marina|downtown|district|street|road|tower|towers|island|islands|jumeirah|deira|karama|barsha|internet city|media city|knowledge park|free ?zone|freezone|emirate|province|governorate|county)\b/i;
+  const CORP_SFX = /(?:^|\s)(?:llc|l\.l\.c\.?|ltd\.?|limited|inc\.?|corp\.?|corporation|fz-?llc|fze|fzco|fzc|fz|llp|dmcc|jlt|gmbh|plc|pvt|pte|s\.a\.?|ag|bv|technologies|technology|tech|solutions|systems|consulting|consultants|consultancy|services|group|labs|partners|software|global|international|mea|me|accountants|digital|studio|studios|agency|ventures|holding|holdings|infotech|softwares|it)\.?$/i;
+  /** a word that describes, labels or heads a section: the category words (GEN), the heading words, the denied acronyms, a number */
+  const headingWord = (w) => { const x = low(w).replace(/[^\p{L}\p{N}]/gu, ''); if (!x) return true; if (/^\d+$/.test(x) || DENY.test(x) || STOPW.has(x)) return true; return commonWord(x) || HEADW.has(x) || HEADW.has(x.replace(/s$/, '')) || HEADW.has(x.replace(/(?<=[a-z]{3})(es|ies)$/, '')); };
+  /** a name that is never a business: money, a date or a plan step, a regulator, a place, an answer word, or only heading / category words */
+  const junkName = (name) => { const n = L(name).replace(/[*_`]+/g, '').replace(/\s+/g, ' ').trim(); if (!n) return true;
+    if (MONEY.test(n) || DATE_RE.test(n) || STEP_RE.test(n) || ANSWER_WORD.test(n) || FZ_ONLY.test(n)) return true;
+    const w = n.split(/[\s\-\u2013\u2014/]+/).filter(Boolean); if (!w.length) return true;
+    // a company suffix after a compound word ("Infotech Solutions": info + tech) is a name; after plain words ("Smart Solutions") it stays a description
+    const direct = (x0) => { const x = low(x0).replace(/[^\p{L}\p{N}]/gu, ''); return !x || x.length < 3 || /^\d+$/.test(x) || DENY.test(x) || STOPW.has(x) || GEN.has(x) || GEN.has(x.replace(/s$/, '')) || HEADW.has(x) || HEADW.has(x.replace(/s$/, '')); };
+    if (w.every(headingWord) && !(w.length >= 2 && CORP_SFX.test(n) && w.some(x => !direct(x)))) return true;
+    if (PLACE.test(n) && !CORP_SFX.test(n)) return true;
+    return false; };
+  /** a word shaped like a brand: a capital inside it (eduNEXT, OpenCraft, iSys) or a digit beside a letter (10Pearls, Folio3) */
+  const brandShaped = (name) => L(name).split(/\s+/).some(x => /\p{Ll}\p{Lu}/u.test(x) || /\p{L}\p{N}|\p{N}\p{L}/u.test(x));
+  const BIZ_WORDS = /\b(?:partners?|compan(?:y|ies)|firms?|vendors?|providers?|consultan(?:cy|cies|ts?)|agenc(?:y|ies)|integrators?|resellers?|implementers?|developers?|specialists?|contributors?|founded|headquartered|based\s+in|[a-z]+-based|offices?\s+in|clients?|customers\s+(?:in|across|include)|offers?|offering|provides?|providing|delivers?|known\s+for|speciali[sz]\w*|focus(?:es|ed|ing)?\s+on|helps?|serves?|serving|works?\s+(?:extensively\s+)?with|supports?|gold|certified|premier|accredited|award\w*|years?\s+of|\d+\+?\s+years\b|portfolio|track\s+record|they(?:'ve|\u2019ve|\s+have|\s+are|\s+were)?\s+(?:manage|offer|provide|build|built|deliver|delivered|help|helped|work|worked|speciali[sz]e|focus|serve|support|run|operate|migrated|implemented|deployed|developed)|best\s+for|pricing|priced|per\s+(?:user|month|seat)|\/month|plans?\s+(?:start|from)|free\s+trial|solutions?\s+(?:for|provider)|software\s+(?:for|company)|platform\s+for|app\s+for|tool\s+for|crm\s+for|erp\s+for)\b/i;
+  /** the business signal of a name read off a list or an engine's list: a company suffix, a brand-shaped word, or business words in its own description */
+  const bizSignal = (name, spans) => CORP_SFX.test(L(name).trim()) || brandShaped(name) || (spans || []).some(t => BIZ_WORDS.test(String(t || '')));
   const nameLike = (name) => {
     const n = L(name).replace(/\s+/g, ' ').trim();
     if (n.length < 2 || n.length > 48 || /[:;,|\\?!]|\.{2}/.test(n) || /(^|\s)(and|or|for|with|in|on|of|the|a|an|to|at|by|vs|versus|&|from|your|our|how|what|why|when)(\s|$)/i.test(n)) return false;
     const w = n.split(' '); if (w.length > 5) return false;
     if (w.every(x => DENY.test(x.replace(/[^\p{L}\p{N}-]/gu, '')) || commonWord(x) || /^\d+$/.test(x))) return false;
+    if (junkName(n)) return false;   // F-53
     return w.every(x => /^[\p{Lu}\p{N}]/u.test(x) || /^[\p{Ll}]+\p{Lu}/u.test(x) || AR.test(x));
   };
   const DOMAIN_RE = /(?<![\p{L}\p{N}@-])((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|net|org|io|ai|co|ae|sa|qa|om|kw|bh|eg|uk|de|fr|es|it|nl|in|pk|sg|au|ca|nz|za|br|mx|us|biz|info|tech|app|cloud|global|digital|solutions|consulting|agency|me|network|one|online|site|store|group|eu))(?![\p{L}\p{N}-])/giu;
@@ -854,7 +905,8 @@ const AIE = (() => {
       for (const k of keys) if (k.startsWith('n:')) names.add(display.get(k));
       for (const d of ds) { names.add(d); if (conf || softC) { const l = labelOf(d), co = core(d);
         for (const x of [l, co]) if (x.length >= 3 && !commonWord(x) && (conf || x.length >= 5)) names.add(x); } }
-      for (const n of names) { if (!n || selfKeys.has(nn(n))) continue; if (!isDom(n) && !/\./.test(n) && !conf && !nameLike(n) && !AR.test(n) && !keys.some(k => k === nameKey(n) && explicit.has(k))) continue;
+      for (const n of names) { if (!n || selfKeys.has(nn(n))) continue; if (!isDom(n) && !conf && junkName(n)) continue;   // F-53: a stored or learned label that is not a business is never looked for
+        if (!isDom(n) && !/\./.test(n) && !conf && !nameLike(n) && !AR.test(n) && !keys.some(k => k === nameKey(n) && explicit.has(k))) continue;
         const re = nameRe(n, { strict: !isDom(n) && n === n.toLowerCase() && n.replace(/[^a-z0-9]/g, '').length <= 4 }); if (re) scans.push({ re, root: r }); }
       roots.add(r); void id;
     }
@@ -862,7 +914,10 @@ const AIE = (() => {
     const selfScans = selfNames.map(n => nameRe(n)).filter(Boolean);
     const cp = new Set(clientPlatforms(plan).map(d => find('d:' + d)));
     const ct = clientText(plan);
-    const out = { plan, own, owned, configured, soft, find, idOfRoot, membersOf, display, nameKey, nameToDom, doms, scans, selfScans, selfNames, selfKeys, clientRoots: cp, clientText: ct, roleOfBook, explicit,
+    // F-53: the client's own words, as squashed 2-3 word runs ("Open edX" -> openedx; one word alone, "dynamics", names too much), so a domain whose name the client's services or topics use
+    // (openedx.org for an Open edX shop) reads as the client's platform, not its rival
+    const clientSquash = new Set(); { const ws = low(ct).split(/[^\p{L}\p{N}]+/u).filter(Boolean); for (let i = 0; i < ws.length; i++) for (let k = 2; k <= 3 && i + k <= ws.length; k++) clientSquash.add(ws.slice(i, i + k).join('')); }
+    const out = { plan, own, owned, configured, soft, find, idOfRoot, membersOf, display, nameKey, nameToDom, doms, scans, selfScans, selfNames, selfKeys, clientRoots: cp, clientText: ct, clientSquash, roleOfBook, explicit,
       confRoots: new Set(configured.map(d => find('d:' + d))) };
     DIRS.set(key, out);
     return out;
@@ -905,26 +960,52 @@ const AIE = (() => {
     DOMAIN_RE.lastIndex = 0;
     for (const m of vis.matchAll(DOMAIN_RE)) { const d = normD(m[1]); if (TECH_TERM.test(d) || !/\.[a-z]{2,}$/.test(d)) continue; const r = localRoot(d); if (r) M.push({ s: m.index, e: m.index + m[0].length, root: r, name: d, dom: true }); }
     // names the engine itself lists (ChatGPT / Gemini brand entities), and the leading names of list items and table rows
+    // F-53: a name that is a platform plus tier or category words ("SAP S/4HANA Cloud", "Business Central Premium", "Managed Open edX") is that platform
+    const platOf = (n) => { for (const [d, , src, fl] of PLATFORMS) { const re = new RegExp(src, fl.replace('g', '')); const m = L(n).match(re); if (!m) continue;
+      const rest = (L(n).slice(0, m.index) + ' ' + L(n).slice(m.index + m[0].length)).split(/[\s\-()/&,]+/).filter(Boolean); if (rest.every(headingWord)) return d; } return null; };
     const nameRoot = (n) => { const k = D.nameKey(n); if (D.selfKeys.has(nn(n))) return 'self'; if (D.display.has(k)) return D.find(k);
+      { const pd = platOf(n); if (pd) return D.find('d:' + pd); }
       const d = D.nameToDom(n, [...D.doms, ...PLAT_DOMS, ...[...local.values()].flatMap(x => [...x.doms])]); if (d) return localRoot(d); return 'N:' + nn(n); };
     const listNames = [];
-    { let off = 0; for (const line of vis.split('\n')) {
-      if (!/^\s*\|?\s*:?-{2,}/.test(line)) for (const re of LINE_NAME) { const m = line.match(re); if (!m) continue; let raw = m[1];
-        if (/:\s*$/.test(raw) || (re !== LINE_NAME[4] && re !== LINE_NAME[3] && /:/.test(raw))) break;
+    // F-53: a table's header row is never a name, and its first column says what the rows are: businesses ("Partner Name", "Company", "Provider")
+    // or something else ("Factor", "Feature", "Cost item"), whose row labels are then not names at all. With no header the rows are judged as before.
+    const SEP = /^\s*\|?\s*:?-{2,}/; const BIZ_HEAD = /\b(partner|company|companies|vendor|provider|firm|consultan\w*|agency|integrator|name|brand|platform|solution|tool|software|product|option|implementer|reseller|business)s?\b/i;
+    // and the line that introduces a list says what its items are: businesses ("A few options in the Islamabad market:", "Top partners in the UAE")
+    // or criteria ("Factors to consider when choosing a partner:"); the items of a business list carry that signal.
+    const BIZ_INTRO = /\b(options|compan(?:y|ies)|providers?|vendors?|firms?|partners?|agencies|consultanc(?:y|ies)|integrators?|tools|platforms|alternatives|shortlist|players|contenders|worth\s+(?:evaluating|considering|a\s+look))\b/i;
+    const NOT_BIZ_INTRO = /\b(factors?|criteria|considerations|questions?|steps?|tips|checklist|red\s+flags?|mistakes|things\s+to|look\s+for|evaluat\w*|features?|benefits|costs?|phases?|pros|cons)\b/i;
+    const LIST_ITEM = /^\s*(?:[-*\u2022]|\d+[.)])\s+/;
+    { let off = 0; const LINES = vis.split('\n'); let tableBiz = null; let introBiz = false;
+      for (let li = 0; li < LINES.length; li++) { const line = LINES[li]; const isRow = /^\s*\|/.test(line); const isItem = LIST_ITEM.test(line);
+      if (!isRow) tableBiz = null;
+      // a heading decides for what follows it; another line decides only when it says something either way
+      if (!isRow && !isItem && line.trim()) { const yes = BIZ_INTRO.test(line) && !NOT_BIZ_INTRO.test(line), no = NOT_BIZ_INTRO.test(line); if (/^\s*#/.test(line) || yes || no) introBiz = yes; }
+      if (isRow && !SEP.test(line) && li + 1 < LINES.length && SEP.test(LINES[li + 1])) { const head = (line.match(/^\s*\|\s*([^|]*)\|/) || [])[1] || ''; tableBiz = BIZ_HEAD.test(head.replace(/[*_]+/g, '')); off += line.length + 1; continue; }
+      if (isRow && tableBiz === false) { off += line.length + 1; continue; }
+      if (!SEP.test(line)) for (const re of LINE_NAME) { const m = line.match(re); if (!m) continue; let raw = m[1];
+        // F-53: a bold label ending in a colon ("**Overview:**", "**Customization:**") is a label, unless what follows it describes a business
+        // ("**Ravelin (by Sable):** One of the leading Open edX service providers"): then the label is the business's name
+        let colonBiz = false;
+        // (and the label itself looks like a name: a "(by X)" owner, a company suffix, a brand-shaped word, or an item of a list introduced as businesses;
+        // "**Bilingual Support:** providers who offer it" is a criterion, however business-like its description)
+        if (/:\s*$/.test(raw) || (re !== LINE_NAME[4] && re !== LINE_NAME[3] && /:/.test(raw))) { const lab = raw.replace(/:\s*$/, '').replace(/[*_]+/g, '').trim();
+          const named0 = /\((?:by|from|part of)\s+[^()]+\)\s*$/i.test(lab) || CORP_SFX.test(lab.replace(/\s*\([^()]*\)\s*$/, '')) || brandShaped(lab) || (isItem && introBiz);
+          if (!(/:\s*$/.test(raw) && named0 && BIZ_WORDS.test(line.slice(line.indexOf(m[0]) + m[0].length)))) break; raw = lab; colonBiz = true; }
+        raw = raw.replace(/^\s*\d+[.)]\s+/, '');   // F-53: "3. Cubite" is Cubite (a numbered item inside the bold)
         raw = raw.split(/\s[-–—]\s|:|,|\s\|/)[0].replace(/[*_]+/g, '').trim();
-        const par = raw.match(/^(.*?)\s*\(([^()]+)\)\s*$/); let name = par ? par[1].trim() : raw; const alt = par && !/^(formerly|previously|now|a |an |part|owned|acquired)/i.test(par[2]) ? par[2].trim() : '';
+        const par = raw.match(/^(.*?)\s*\(([^()]+)\)\s*$/); let name = par ? par[1].trim() : raw; const alt = par && !/^(formerly|previously|now|a |an |part|owned|acquired|by )/i.test(par[2]) ? par[2].trim() : '';
         if (!nameLike(name)) { if (alt && nameLike(alt)) name = alt; else break; }
-        const at = off + Math.max(0, line.indexOf(name)); listNames.push({ name, alt: alt && nameLike(alt) ? alt : '', at, lineEnd: off + line.length }); break; }
+        const at = off + Math.max(0, line.indexOf(name)); listNames.push({ name, alt: alt && nameLike(alt) ? alt : '', at, lineEnd: off + line.length, sig: (isRow && tableBiz === true) || (isItem && introBiz) || colonBiz }); break; }
       off += line.length + 1; } }
     for (const x of listNames) { let root = nameRoot(x.name); if (root.startsWith('N:') && x.alt) { const r2 = nameRoot(x.alt); if (!r2.startsWith('N:')) root = r2; }
       // the website on the item's line or the lines under it, until the next item
       const next = listNames.find(y => y.at > x.at); const span = vis.slice(x.at, next ? next.at : Math.min(vis.length, x.at + 320));
-      DOMAIN_RE.lastIndex = 0; const dm = [...span.matchAll(DOMAIN_RE)].map(m => normD(m[1])).find(d => !TECH_TERM.test(d));
+      DOMAIN_RE.lastIndex = 0; const dm = [...span.matchAll(DOMAIN_RE)].map(m => normD(m[1])).find(d => !TECH_TERM.test(d) && !PLAT_DOMS.has(regD(d)) && kindOfDomain(d) === 'site');   // F-53: a partner directory or platform page linked on the item (openedx.org/partners/...) is where the item is listed, not its website
       x.root = root; x.dom = dm || '';
-      M.push({ s: x.at, e: x.at + x.name.length, root, name: x.name, list: true }); }
+      M.push({ s: x.at, e: x.at + x.name.length, root, name: x.name, list: true, span: span.slice(x.name.length, 400), sig: !!x.sig }); }
     for (const n of (ans.entities || [])) { const name = L(n).trim(); if (!name) continue; const root = nameRoot(name); if (root.startsWith('N:') && !nameLike(name)) continue;
-      const re = nameRe(name); let hit = false; if (re) { re.lastIndex = 0; for (const m of vis.matchAll(re)) { M.push({ s: m.index, e: m.index + m[0].length, root, name }); hit = true; } }
-      if (!hit) M.push({ s: 1e8 + M.length, e: 1e8 + M.length, root, name, engine_list: true }); }
+      const re = nameRe(name); let hit = false; if (re) { re.lastIndex = 0; for (const m of vis.matchAll(re)) { M.push({ s: m.index, e: m.index + m[0].length, root, name, span: sentenceAfter(vis, m.index + m[0].length, 200), sig: true }); hit = true; } }
+      if (!hit) M.push({ s: 1e8 + M.length, e: 1e8 + M.length, root, name, engine_list: true, sig: true }); }   // F-53: the engine's own list of brands is a business signal (junk names are refused before)
     // a name inside a longer name of ANOTHER business is not a mention ("Oracle" in "Oracle NetSuite")
     M.sort((a, b) => (b.e - b.s) - (a.e - a.s) || a.s - b.s);
     const kept = []; for (const m of M) { if (kept.some(k => k.root !== m.root && m.s < k.e && k.s < m.e && m.s < 1e8)) continue; kept.push(m); }
@@ -960,7 +1041,8 @@ const AIE = (() => {
       const name = (named.find(m => !m.dom && m.s < 1e8) || named.find(m => !m.dom) || {}).name || (ds[0] || id);
       const rootsF = [...e.roots].map(r => String(r));
       const isConf = rootsF.some(r => D.confRoots.has(r)) || ds.some(d => D.configured.includes(d));
-      const isClientPlat = rootsF.some(r => D.clientRoots.has(r)) || (named.some(m => !m.dom && m.name.length >= 5 && D.clientText && nameRe(m.name) && nameRe(m.name).test(D.clientText)));
+      const isClientPlat = rootsF.some(r => D.clientRoots.has(r)) || (named.some(m => !m.dom && m.name.length >= 5 && D.clientText && nameRe(m.name) && nameRe(m.name).test(D.clientText)))
+        || ds.some(d => { const l = labelOf(d); return l.length >= 5 && !commonWord(l) && !!D.clientSquash && D.clientSquash.has(l); });   // F-53: a domain the client's own words name
       const kinds = new Set(ds.map(kindOfDomain)); const names = named.map(m => m.name);
       const srcKind = [...kinds].some(k => SOURCE_KINDS.has(k)) && !ds.some(d => kindOfDomain(d) === 'site' && named.some(m => m.dom && regD(m.name) === d)) || names.some(n => NAME_SRC.test(n));
       const otherKind = (kinds.has('other') && !kinds.has('site')) || names.some(n => NAME_OTHER.test(L(n).trim()));
@@ -969,10 +1051,12 @@ const AIE = (() => {
       else if (!named.length) role = isClientPlat ? 'platform' : 'source';
       else if (srcKind) role = 'source';
       else if (otherKind) role = 'other';
-      else if (isClientPlat) role = 'platform';
+      else if (isClientPlat || ds.some(d => OPEN_PLAT.has(d))) role = 'platform';
       else if (named.filter(m => m.s < 1e8).length && named.filter(m => m.s < 1e8).every(m => platformBefore(vis, m.s) || platformAfter(vis, m.e))) role = 'platform';
       else if (named.filter(m => m.s < 1e8).length && named.filter(m => m.s < 1e8).every(m => SRC_BEFORE.test(vis.slice(Math.max(0, m.s - 40), m.s)) || SRC_AFTER.test(vis.slice(m.e, m.e + 30)))) role = 'source';
-      else if (ds.length || nameLike(name) || AR.test(name) || rootsF.some(r => D.explicit.has(r))) role = 'competitor';
+      else if (ds.length || nameLike(name) || AR.test(name) || rootsF.some(r => D.explicit.has(r)))
+        // F-53: a name nothing else knows (no domain, not configured, not learned) is a competitor only with a business signal
+        role = (!ds.length && rootsF.length && rootsF.every(r => r.startsWith('N:')) && !named.some(m => m.sig) && !bizSignal(name, named.map(m => m.span))) ? 'other' : 'competitor';
       else role = 'other';
       list.push({ id, name: L(name).replace(/\s+/g, ' ').trim().slice(0, 60), role, at, cited: e.cited, named: named.length > 0, domains: ds });
     }
@@ -1018,7 +1102,7 @@ const AIE = (() => {
     if ((F1.size || F2.size) && jac(F1, F2) < 0.6) return false; return jac(stems(ca), stems(cb)) >= 0.5; };
   const claimKey = (t) => { const [c, f] = splitIssue(t); return [...stems(f)].sort().join(' ') + '|' + [...stems(c)].sort().join(' '); };
 
-  return { servicesOf, L, low, normD, regD, hostOf, labelOf, core, commonWord, nameLike, nameRe, visible, kindOfDomain, brandNames, ownNames, clientPlatforms, bookOf, dir, read, compact, entitiesOf, sameEntity, vendorIn, sameClaim, claimKey, PLATFORMS };
+  return { servicesOf, L, low, normD, regD, hostOf, labelOf, core, commonWord, nameLike, junkName, bizSignal, HEADING_WORDS, nameRe, visible, kindOfDomain, brandNames, ownNames, clientPlatforms, bookOf, dir, read, compact, entitiesOf, sameEntity, vendorIn, sameClaim, claimKey, PLATFORMS };
 })();
 const CONFIG = { questions: 10, repeats: 10, engines: ['chatgpt', 'gemini', 'perplexity', 'ai_mode', 'claude', 'chatgpt_api', 'gemini_api'], max_usd: 4 };
 const { list, on_demand, want } = monitorSites('ai');

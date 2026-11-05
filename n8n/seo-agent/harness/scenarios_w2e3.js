@@ -267,7 +267,7 @@ module.exports = async (ctx) => {
     // R-E2 (2026-10-23): a site scope is `eq` when the start names the site and `like '%'` only when it names none ("scope" below)
     const isScope = (c) => /=== '%' \? 'like' : 'eq'/.test(String(c.condition));
     const cond = (d) => ((d && d.filters && d.filters.conditions) || []).map(c => c.keyName + ' ' + (isScope(c) ? 'scope' : c.condition)).join(', ');
-    check('the uploads and today\'s results pages are read for the started site only', /site_id scope/.test(cond(T.dt['Load AI Imports'])) && /day gte/.test(cond(T.dt['Load AI Imports'])) && /kind eq, site_id scope, updated_at gte/.test(cond(T.dt['Load SERP Cache (AI)'])), cond(T.dt['Load AI Imports']) + ' | ' + cond(T.dt['Load SERP Cache (AI)']));
+    check('the uploads are read for the started site only; today\'s results pages for any site (F-85: serp rows carry no site id)', /site_id scope/.test(cond(T.dt['Load AI Imports'])) && /day gte/.test(cond(T.dt['Load AI Imports'])) && /^kind eq, updated_at gte$/.test(cond(T.dt['Load SERP Cache (AI)'])), cond(T.dt['Load AI Imports']) + ' | ' + cond(T.dt['Load SERP Cache (AI)']));
     for (const [f, n] of [['SEO_Agent_AI_Pulse.json', 'Load AI Visibility'], ['SEO_Agent_AI_Growth.json', 'Load AI Visibility'], ['SEO_Agent_Backlink_Monitor.json', 'Load AI Visibility (BL)'], ['SEO_Agent_Link_Builder.json', 'Load AI Visibility (LB)']]) {
       const d = (WR[f] || { dt: {} }).dt[n];
       check(f.replace(/^SEO_Agent_|\.json$/g, '') + ': ' + n + ' reads one site and a window (F2 "Not fixed")', d && cond(d) === 'site_id scope, checked_at gte', cond(d)); }

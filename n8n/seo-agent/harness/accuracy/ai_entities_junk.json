@@ -1,0 +1,23 @@
+{
+  "about": "F-53 (AIR P3, 2026-11-06): names an AI answer gives that are never a business (true) and real business names (false). Synthetic; the shapes follow the production review of 2026-10-31 (headings, table labels, plan steps, dates, prices, regulators, places). Read by harness/scenarios_air_fix.js (AIE.junkName, the engine) and by fix_ai_entities_cache.py --self-test (the purge), so the two rules cannot drift.",
+  "cases": [
+    ["Customization", true], ["Customisation", true], ["Inventory", true], ["Factor", true], ["Retention", true], ["Scalability", true],
+    ["Maintenance", true], ["Infrastructure", true], ["Consideration", true], ["Partner Name", true], ["Software Licensing", true],
+    ["Initial Cost", true], ["Deployment Speed", true], ["Upfront Cost", true], ["Cost Breakdown Structure", true], ["Key Cost Drivers", true],
+    ["Recommended Next Step", true], ["Red Flag", true], ["Multi-Branch Access", true], ["Traditional ERP", true], ["Agentic ERP", true],
+    ["Governed AI", true], ["Industries Served", true], ["Key Differences", true], ["IT Staff Needed", true], ["Implementation Speed", true],
+    ["Phase 2", true], ["Phase", true], ["Level 3", true], ["Scenario B", true], ["Step 4", true],
+    ["30 Oct", true], ["31 Mar 2026", true], ["Q4 2026", true], ["Jan 15", true],
+    ["AED 20k-100k", true], ["AED 1.5M", true], ["$5,000", true], ["PKR 75", true], ["USD 120", true],
+    ["Yes", true], ["TBD", true], ["Varies", true],
+    ["TDRA", true], ["ZATCA", true], ["CBUAE", true], ["DMCC", true], ["DIFC", true],
+    ["Business Bay", true], ["Dubai Silicon Oasis", true], ["Jumeirah Lake Towers", true],
+    ["Evaluate Industry-Specific Track Records", true], ["Verify UAE Regulatory Expertise", true], ["Check Official Community Standing", true],
+    ["Natural Language Processing", true], ["Computer Vision", true], ["Off-the-Shelf AI Tools", true],
+    ["Lumora", false], ["Quillbyte", false], ["Nexaro Systems", false], ["Brightpath Consulting", false], ["Kestrel Labs", false],
+    ["OpenFerry", false], ["eduVERTA", false], ["Folia7", false], ["9Harbors", false], ["Zentro Technologies", false],
+    ["Calder Software DMCC", false], ["Marlow Analytics FZ-LLC", false], ["Tessaly Business Solutions", false], ["Orvane Group", false],
+    ["Pinewood Chartered Accountants", false], ["Halcyon Digital", false], ["Ravelin Partners", false], ["Sable & Finch", false],
+    ["Mirava", false], ["Corvo CRM", false], ["Netsoft Solutions", false], ["Smart Solutions", true], ["Cloud Services", true]
+  ]
+}
