@@ -2465,7 +2465,10 @@ await guard('backlinks v4.10', async () => {
   check('callback: coverage, best links, wins, lists, competitors\' new links, at risk; no ledger dump, no refdomains, no html', !!CB.coverage && CB.best.length > 0 && Array.isArray(CB.wins) && Array.isArray(CB.lists) && Array.isArray(CB.comp_new) && Array.isArray(CB.at_risk) && CB.ledger_rows === undefined && CB.refdomains === undefined && CB.html === undefined && CB.stage === 'backlinks', Object.keys(CB).join(','));
   // ---------------- next week: the light watch ----------------
   const ledger2 = R.ledger_rows.map(r => ({ ...r, updated_at: B.iso(7) }));
-  loadAll({ ledger: ledger2, prospects: PR, snaps: snr.map(r => ({ json: { ...r.json, checked_at: B.iso(7) } })) });
+  // the full run was "last week" in the SAME month (BL Plan runs full again once the month changes): 7 days ago fell in the previous
+  // month on the 1st-7th, so these checks failed on those days only (2026-11-05); earlier this month instead when 7 days would cross it
+  const lastWeek = Math.min(7, new Date().getUTCDate() - 1);
+  loadAll({ ledger: ledger2, prospects: PR, snaps: snr.map(r => ({ json: { ...r.json, checked_at: B.iso(lastWeek) } })) });
   const p2 = await run('BL Plan', store['Load Link Graph'], PLAN); const rq2 = await run('BL Requests', p2);
   mock('Run BL Requests', rq2.map(r => r.json.kind === 'lost' || r.json.kind === 'new' ? { tasks: [{ status_code: 20000, cost: 0.024, result: [{ items: [] }] }] } : B.blFor(r.json)));
   await run('Gap Requests', store['Run BL Requests']); delete store['Run Gap Requests']; const sr2 = await run('Source Requests', store['Gap Requests']);
