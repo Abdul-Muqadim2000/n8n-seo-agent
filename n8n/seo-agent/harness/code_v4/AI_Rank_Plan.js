@@ -3099,7 +3099,7 @@ const ARD = (() => {
     const pid = S(p.prompt_id);
     const rows = (Array.isArray(answers28) ? answers28 : []).filter(a => answered(a) && (!pid || !S(a.prompt_id) || S(a.prompt_id) === pid));
     if (rows.length >= 4) return rows.filter(namesBusiness).length / rows.length >= 0.5 ? 'recommendation' : 'informational';
-    const k = lc(p.kind); if (k === 'recommend' || k === 'recommendation' || k === 'compare') return 'recommendation'; if (k === 'learn' || k === 'informational' || k === 'info') return 'informational';
+    const k = lc(p.kind); if (['recommend', 'recommendation', 'compare', 'choose', 'shortlist', 'alternatives'].includes(k)) return 'recommendation'; if (['learn', 'informational', 'info', 'cost', 'problem', 'howto', 'how_to', 'define'].includes(k)) return 'informational';
     const t = S(p.prompt || p.question); if (!t) return 'unknown';
     return REC_Q.test(t) ? 'recommendation' : INFO_Q.test(t) ? 'informational' : PROVIDER_Q.test(t) ? 'recommendation' : 'unknown'; };
 
@@ -3144,14 +3144,27 @@ const ARD = (() => {
     // 3. fill up to core_max with active questions of the site's market: pinned first, then demand, then the oldest
     const fresh = P.filter(p => !brand(p) && !inCore.has(S(p.prompt_id)) && isActive(p) && marketOk(p))
       .sort((a, b) => (flag(b.pinned) - flag(a.pinned)) || (volOf(b) - volOf(a)) || S(a.created_at).localeCompare(S(b.created_at)) || S(a.prompt_id).localeCompare(S(b.prompt_id)));
-    for (const p of fresh) { if (core.length >= coreMax) break; const s = ST.get(S(p.prompt_id)); const was = s && flag(s.core);
+    const join = (p, outside) => { const s = ST.get(S(p.prompt_id)); const was = s && flag(s.core);
       const since = was && S(s.core_since) ? S(s.core_since) : iso(N); const until = N + FREEZE;
-      const reason = was ? 'renewed: still asked, in your market (' + (siteCc || 'any') + ')' : 'new: asked in your market (' + (siteCc || 'any') + ')' + (volOf(p) > 0 ? ', demand ' + volOf(p) : '');
+      const where = outside ? 'outside your market (' + marketCc(p.market) + ', yours is ' + siteCc + '): measured because too few questions of your market are asked' : 'in your market (' + (siteCc || 'any') + ')';
+      const reason = was ? 'renewed: still asked, ' + where : 'new: asked, ' + where + (volOf(p) > 0 ? ', demand ' + volOf(p) : '');
       if (was) extend.push({ prompt_id: S(p.prompt_id), core_until: iso(until), reason });
-      push(p, since, iso(until), reason); }
+      push(p, since, iso(until), reason); };
+    for (const p of fresh) { if (core.length >= coreMax) break; join(p, false); }
+    // too few questions of the site's market are being asked (a panel that drifted to another country, R4 cause 3): the questions that ARE
+    // asked join, up to core_min, labelled; progress can only be measured on questions somebody asks. Off with cfg.core_min = 0.
+    const coreMin = Math.min(coreMax, num(C.core_min, 12));
+    if (core.length < coreMin) for (const p of P.filter(q => !brand(q) && !inCore.has(S(q.prompt_id)) && isActive(q) && !marketOk(q))
+      .sort((a, b) => (flag(b.pinned) - flag(a.pinned)) || (volOf(b) - volOf(a)) || S(a.created_at).localeCompare(S(b.created_at)) || S(a.prompt_id).localeCompare(S(b.prompt_id)))) { if (core.length >= coreMin) break; join(p, true); }
     // 4. questions to propose (never activated here): the caller's candidates from client keywords, Search Console question queries, LLM Mentions
     const cands = Array.isArray(demand && demand.candidates) ? demand.candidates : Array.isArray(C.candidates) ? C.candidates : [];
     const proposed = []; const room = Math.max(0, Math.min(num(C.propose_max, 5), coreMax - core.length)); const taken = new Set();
+    // first: questions of the site's market that were retired and are no longer asked (bring them back; `revive` names the stored row, additive)
+    const inMarketAsked = core.filter(c => marketOk(P.find(p => S(p.prompt_id) === c.prompt_id) || {}) && isActive(P.find(p => S(p.prompt_id) === c.prompt_id) || {})).length;
+    if (siteCc && inMarketAsked < coreMin) for (const p of P.filter(q => !brand(q) && !isActive(q) && marketOk(q) && S(q.market) && !/^(refused|deleted)$/i.test(S(q.status)))
+      .sort((a, b) => (volOf(b) - volOf(a)) || S(a.prompt_id).localeCompare(S(b.prompt_id)))) { if (proposed.length >= room) break; const kw = normKw(p.keyword || p.prompt); if (taken.has(kw)) continue; taken.add(kw);
+      proposed.push({ prompt: S(p.prompt), keyword: normKw(p.keyword), market: siteCc + '-' + lang, intent: intentOf(p, []), source: 'retired_in_market', revive: S(p.prompt_id),
+        reason: 'a question of your market (' + siteCc + ') that is no longer asked (' + lc(p.status) + '): ask it again so progress in your market can be measured' }); }
     const covered = (kw) => P.some(p => cover(kw, S(p.keyword) + ' ' + S(p.prompt)) >= 0.6 || (S(p.keyword) && cover(S(p.keyword), kw) >= 0.8));
     for (const c of cands.slice().sort((a, b) => num(b && b.volume, 0) - num(a && a.volume, 0))) { if (proposed.length >= room) break;
       const kw = normKw(c && (c.keyword || c.query)); if (!kw || taken.has(kw)) continue;
@@ -3178,7 +3191,13 @@ const ARD = (() => {
     const ST = new Map((Array.isArray(stored) ? stored : []).filter(r => r && S(r.prompt_id)).map(r => [S(r.prompt_id), r]));
     const clusterCount = new Map(); for (const c of C) { const k = lc(c.cluster) || 'other'; clusterCount.set(k, (clusterCount.get(k) || 0) + 1); }
     const top = new Set([...clusterCount.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 4).map(x => x[0]));
-    const stratumOf = (c) => [lc(c.intent) || 'unknown', lc(c.baseline) === 'some' ? 'some' : 'zero', top.has(lc(c.cluster) || 'other') ? (lc(c.cluster) || 'other') : 'other'].join('|');
+    // a stratum needs at least 3 questions to hold a control (T, T, C): smaller ones are merged into a coarser stratum, dropping the cluster
+    // first, then the baseline, then the intent (a real panel of 13 questions over 10 fine strata held no control at all)
+    const MIN_S = 3; const levels = [(c) => [lc(c.intent) || 'unknown', lc(c.baseline) === 'some' ? 'some' : 'zero', top.has(lc(c.cluster) || 'other') ? (lc(c.cluster) || 'other') : 'other'],
+      (c) => [lc(c.intent) || 'unknown', lc(c.baseline) === 'some' ? 'some' : 'zero', '*'], (c) => [lc(c.intent) || 'unknown', '*', '*'], () => ['*', '*', '*']];
+    const fine = new Map(); { let pending = C.slice(); for (let L = 0; L < levels.length; L++) { const g = new Map(); for (const c of pending) { const k = levels[L](c).join('|'); const a = g.get(k) || []; a.push(c); g.set(k, a); }
+      const next = []; for (const [k, a] of g) { if (a.length >= MIN_S || L === levels.length - 1) for (const c of a) fine.set(S(c.prompt_id), k); else next.push(...a); } pending = next; if (!pending.length) break; } }
+    const stratumOf = (c) => fine.get(S(c.prompt_id)) || levels[0](c).join('|');
     const out = new Map(); const tally = new Map(); const fresh = [];
     for (const c of C) { const pid = S(c.prompt_id); const s = ST.get(pid); const arm = s && AIRF.ARMS.includes(lc(s.arm)) ? lc(s.arm) : '';
       if (!arm) { fresh.push(c); continue; }
@@ -3188,7 +3207,9 @@ const ARD = (() => {
       const t = tally.get(stratum) || { n: 0, c: 0 }; t.n++; if (a === 'control') t.c++; tally.set(stratum, t); }
     const key = (c) => AIRF.hash(S(site_id) + '|' + S(c.prompt_id) + '|' + S(seed));
     fresh.sort((a, b) => key(a) - key(b) || S(a.prompt_id).localeCompare(S(b.prompt_id)));
-    for (const c of fresh) { const stratum = stratumOf(c); const t = tally.get(stratum) || { n: 0, c: 0 }; const arm = PATTERN_OK(t.n, t.c) ? 'control' : 'treated';
+    // a new question joins its stored stratum: the computed one when it already holds stored questions, else the finest level that does
+    const placeOf = (c) => { const k = stratumOf(c); if (tally.has(k)) return k; for (const L of levels) { const k2 = L(c).join('|'); if (tally.has(k2)) return k2; } return k; };
+    for (const c of fresh) { const stratum = placeOf(c); const t = tally.get(stratum) || { n: 0, c: 0 }; const arm = PATTERN_OK(t.n, t.c) ? 'control' : 'treated';
       t.n++; if (arm === 'control') t.c++; tally.set(stratum, t); out.set(S(c.prompt_id), { prompt_id: S(c.prompt_id), arm, stratum, assigned_at: iso }); }
     return C.map(c => out.get(S(c.prompt_id)));
   };
@@ -3353,6 +3374,11 @@ const ARD = (() => {
   const BYP = new WeakMap();
   const byPrompt = (list) => { if (!Array.isArray(list)) return new Map(); let m = BYP.get(list); if (m && m.n === list.length) return m.map;
     const map = new Map(); for (const a of list) { if (!a || !answered(a)) continue; const k = S(a.prompt_id); const g = map.get(k); if (g) g.push(a); else map.set(k, [a]); } BYP.set(list, { n: list.length, map }); return map; };
+  // the engines a site asks at all (latest answer per engine, any question), once per list
+  const LBE = new WeakMap();
+  const lastByEngine = (list) => { if (!Array.isArray(list)) return new Map(); let m = LBE.get(list); if (m && m.n === list.length) return m.map; const map = new Map();
+    for (const a of list) { if (!a || !answered(a)) continue; const e = engOf(a.engine); const t = msOf(a.at || a.checked_at); const c = map.get(e); if (c === undefined || (Number.isFinite(t) && !(t <= c))) map.set(e, Number.isFinite(t) ? t : (c === undefined ? NaN : c)); }
+    LBE.set(list, { n: list.length, map }); return map; };
   const diagnose = ({ site, prompt, answers8, units60, evidence, access, pages, index, serp, bingStats, brave, brandKnown, ourHosts, rivals, engines, now, cfg } = {}) => {
     const N = msOf(now); const C = cfg || {}; const p = prompt || {}; const pid = S(p.prompt_id); const st = site || {};
     const OH = ourList(st, ourHosts); const ours = (u) => hostIn(u, OH);
@@ -3399,6 +3425,26 @@ const ARD = (() => {
     const nobodyNamed = (() => { const u28 = U.filter(u => inW(u.at, 28)); if (u28.length >= 4) return u28.filter(namesBusiness).length / u28.length <= 0.2;
       let n = 0, b = 0; for (const e of engs) { const t = cellsE(e, 28); n += t[0]; b += t[10]; } return n >= 4 && b / n <= 0.2; })();
     const byCitation = intent === 'informational' || nobodyNamed;
+    const askedBySite = new Set(); for (const L of [units60, answers8]) for (const [e2, t] of lastByEngine(L)) if (!Number.isFinite(N) || !Number.isFinite(t) || (t > N - 56 * DAY && t <= N + 6 * 3600e3)) askedBySite.add(e2);
+    // S0 per engine: robots block, a JavaScript-only page for a fetcher that does not render, not in the engine's index. A reading that shows the
+    // engine already reads the client (cited, retrieved) beats the page inference, and a ranking in the engine's own index beats Index Coverage;
+    // a Google ranking proves nothing about a fetcher that does not render (Perplexity). -> { sub, ev } or null
+    const eligibility = (e, cited, retrieved, rk, ix) => {
+      const blockBot = (BOTS_OF[e] || []).map(b => [b, robotsVerdict(access, b)]).find(x => x[1] && x[1].ok === false);
+      const blockedListed = Array.isArray(access && access.blocked_engines) && access.blocked_engines.map(engOf).includes(e);
+      if (blockBot || blockedListed) return { sub: 'blocked', ev: { kind: 'robots', bot: blockBot ? blockBot[0] : (BOTS_OF[e] || [''])[0], rule: blockBot ? blockBot[1].rule : '', at: S(access && access.read_at) } };
+      const read = cited > 0 || retrieved > 0; const proof = read || rk.top10 || (ix === 'google' && rk.anyOurs);
+      if (!read && JS_BLIND.has(e) && jsOnly(mapped)) return { sub: 'js_only', ev: { kind: 'page', url: S(mapped.url), words_raw: num(mapped.words_raw, 0), what: 'little text without JavaScript', at: S(mapped.checked_at) } };
+      if (!proof && ix === 'google' && e !== 'perplexity' && G.size) {
+        const gscHit = gsc && queries.some(q => num(look(gsc, q), 0) > 0);
+        const siteIdx = [...G.entries()].filter(([k]) => hostIn('https://' + k, OH)); const anyIdx = siteIdx.some(([, v]) => INDEXED.test(v && typeof v === 'object' ? lc(v.state) : lc(v)));
+        const ms = mapped ? gState(mapped.url) : ''; const notIdx = mapped ? NOT_INDEXED.test(ms) || (!ms && siteIdx.length > 0 && !anyIdx) : siteIdx.length > 0 && !anyIdx;
+        if (!gscHit && notIdx) return { sub: 'not_indexed', ev: { kind: 'index', url: mapped ? S(mapped.url) : '', state: ms || 'no page of the site indexed', what: mapped ? 'the page for this question is not in Google' : 'no page of the site is in Google' } }; }
+      if (!proof && ix === 'bing') { const B = (index && index.bing) || {}; const inAcc = B.in_account; const crawled = B.crawled ? asMap(B.crawled) : new Map();
+        if (inAcc === false) return { sub: 'not_indexed', ev: { kind: 'bing', what: 'the site is not in the Bing Webmaster account' } };
+        if (inAcc === true && mapped && !crawled.has(AIRF.urlKey(mapped.url)) && !S(mapped.bing_crawled_at) && Number.isFinite(msOf(mapped.submitted_at)) && N - msOf(mapped.submitted_at) >= 14 * DAY)
+          return { sub: 'not_indexed', ev: { kind: 'bing', url: S(mapped.url), what: 'submitted ' + S(mapped.submitted_at).slice(0, 10) + ', not crawled by Bing 14 days later' } }; }
+      return null; };
     const out = {}; const param = {}; const noSearch = [];
     for (const e of [...new Set(engs)]) {
       const any28 = U.some(u => engOf(u.engine) === e && inW(u.at, 28)) || cellsE(e, 28)[0] > 0;
@@ -3411,27 +3457,25 @@ const ARD = (() => {
       const ix = INDEX_OF[e]; const rk = ix === 'google' ? RK.google : ix === 'bing' ? RK.bing : ix === 'brave' ? RK.brave : { best: null, read: false, anyOurs: false, top10: false };
       const ev = [];
       const recent = rows.filter(r => engOf(r.engine) === e).sort((a, b) => S(b.checked_at).localeCompare(S(a.checked_at)));
-      const cell = (stage, sub, basis) => ({ stage, sub, basis, n, named, cited, retrieved, our_rank: rk.best, evidence: ev.slice(0, 3), thin });   // thin: additive
+      // DESIGN 2.B deviation (orchestrator, 2026-11-06, fixes/P1.md): with 0-3 answers, S0 (robots / JavaScript / index presence) and S1 (a rank or
+      // fan-out proxy, or ChatGPT's own retrieved set without the client) are still read, marked `provisional`, because their basis is not an
+      // answer rate; S2-S5 need n >= 4. Once n >= 4 the ordinary rules decide (agreeing or not) and the cell is no longer provisional.
+      const low = n < minN; let prov = false;
+      const cell = (stage, sub, basis) => ({ stage, sub, basis, n, named, cited, retrieved, our_rank: rk.best, evidence: ev.slice(0, 3), thin, provisional: prov && (stage === 'S0' || stage === 'S1') });   // thin, provisional: additive
       if (ce[0] > 0) { param[e] = r3(ce[5] / ce[0]); if (ce[0] >= num(C.min_param_n, 3) && ce[5] / ce[0] >= 0.6) noSearch.push(e); }
-      if (n === 0) { ev.push({ kind: 'count', what: 'no answer of this engine to this question in ' + W + ' days' }); out[e] = cell('unmeasured', 'not_asked', 'direct'); continue; }
-      if (n < minN) { ev.push({ kind: 'count', what: n + ' answer(s) in ' + W + ' days, ' + minN + ' needed' + (thin ? ' (engine asked less than weekly)' : '') }); out[e] = cell('unmeasured', 'too_few', 'direct'); continue; }
-      // S0: the engine cannot read the client
-      const blockBot = (BOTS_OF[e] || []).map(b => [b, robotsVerdict(access, b)]).find(x => x[1] && x[1].ok === false);
-      const blockedListed = Array.isArray(access && access.blocked_engines) && access.blocked_engines.map(engOf).includes(e);
-      if (blockBot || blockedListed) { ev.push({ kind: 'robots', bot: blockBot ? blockBot[0] : (BOTS_OF[e] || [''])[0], rule: blockBot ? blockBot[1].rule : '', at: S(access && access.read_at) }); out[e] = cell('S0', 'blocked', 'direct'); continue; }
-      // contradiction guard: a reading that shows THIS engine already reads the client (cited, retrieved) beats the page inference, and a
-      // ranking in the engine's own index beats Index Coverage. A Google ranking proves nothing about a fetcher that does not render (Perplexity).
-      const read = cited > 0 || retrieved > 0; const proof = read || rk.top10 || (ix === 'google' && rk.anyOurs);
-      if (!read && JS_BLIND.has(e) && jsOnly(mapped)) { ev.push({ kind: 'page', url: S(mapped.url), words_raw: num(mapped.words_raw, 0), what: 'little text without JavaScript', at: S(mapped.checked_at) }); out[e] = cell('S0', 'js_only', 'direct'); continue; }
-      if (!proof && ix === 'google' && e !== 'perplexity' && G.size) {
-        const gscHit = gsc && queries.some(q => num(look(gsc, q), 0) > 0);
-        const siteIdx = [...G.entries()].filter(([k]) => hostIn('https://' + k, OH)); const anyIdx = siteIdx.some(([, v]) => INDEXED.test(v && typeof v === 'object' ? lc(v.state) : lc(v)));
-        const ms = mapped ? gState(mapped.url) : ''; const notIdx = mapped ? NOT_INDEXED.test(ms) || (!ms && siteIdx.length > 0 && !anyIdx) : siteIdx.length > 0 && !anyIdx;
-        if (!gscHit && notIdx) { ev.push({ kind: 'index', url: mapped ? S(mapped.url) : '', state: ms || 'no page of the site indexed', what: mapped ? 'the page for this question is not in Google' : 'no page of the site is in Google' }); out[e] = cell('S0', 'not_indexed', 'direct'); continue; } }
-      if (!proof && ix === 'bing') { const B = (index && index.bing) || {}; const inAcc = B.in_account; const crawled = B.crawled ? asMap(B.crawled) : new Map();
-        if (inAcc === false) { ev.push({ kind: 'bing', what: 'the site is not in the Bing Webmaster account' }); out[e] = cell('S0', 'not_indexed', 'direct'); continue; }
-        if (inAcc === true && mapped && !crawled.has(AIRF.urlKey(mapped.url)) && !S(mapped.bing_crawled_at) && Number.isFinite(msOf(mapped.submitted_at)) && N - msOf(mapped.submitted_at) >= 14 * DAY) {
-          ev.push({ kind: 'bing', url: S(mapped.url), what: 'submitted ' + S(mapped.submitted_at).slice(0, 10) + ', not crawled by Bing 14 days later' }); out[e] = cell('S0', 'not_indexed', 'direct'); continue; } }
+      const unmeasured = () => { ev.length = 0; ev.push(n === 0 ? { kind: 'count', what: 'no answer of this engine to this question in ' + W + ' days' } : { kind: 'count', what: n + ' answer(s) in ' + W + ' days, ' + minN + ' needed' + (thin ? ' (engine asked less than weekly)' : '') });
+        prov = false; return cell('unmeasured', n === 0 ? 'not_asked' : 'too_few', 'direct'); };
+      if (n === 0 && !askedBySite.has(e)) { const s0u = eligibility(e, cited, retrieved, rk, ix);   // an engine the site does not ask at all: eligibility only
+        if (s0u) { out[e] = { stage: 'S0', sub: s0u.sub, basis: 'direct', n: 0, named: 0, cited: 0, retrieved: 0, our_rank: rk.best, evidence: [s0u.ev, { kind: 'count', what: 'provisional: this engine is not asked for your site' }], thin, provisional: true, asked: false }; continue; }
+        out[e] = unmeasured(); continue; }
+      if (low) { prov = true; ev.push({ kind: 'count', what: 'provisional: ' + n + ' answer(s) in ' + W + ' days, ' + minN + ' needed for an answer-based stage' }); }
+      // S0: the engine cannot read the client (one function, also used for the engines the site does not ask: see below)
+      const s0 = eligibility(e, cited, retrieved, rk, ix); if (s0) { ev.push(s0.ev); out[e] = cell('S0', s0.sub, 'direct'); continue; }
+      if (low) { const b1 = e === 'chatgpt' ? (hasR > 0 ? 'direct' : '') : rk.read && ix !== 'none' ? 'proxy_rank' : '';
+        if (named === 0 && cited === 0 && retrieved === 0 && !rk.top10 && b1) { ev.length = 0;
+          ev.push(b1 === 'direct' ? { kind: 'answer', what: 'your site was not among the pages ChatGPT read (' + hasR + ' readings)' } : { kind: ix === 'google' ? 'serp' : ix, query: rk.best ? rk.best.query : queries[0] || '', pos: rk.best ? rk.best.pos : null, at: rk.best ? rk.best.read_at : '', what: rk.best ? 'ranks ' + rk.best.pos : 'not in the results read' });
+          ev.push({ kind: 'count', what: 'provisional: ' + n + ' answer(s) in ' + W + ' days' }); out[e] = cell('S1', '', b1); continue; }
+        out[e] = unmeasured(); continue; }
       // S3-S5 from the answers
       const rate = named / n, crate = cited / n, med = median(positions);
       const namedA = ce[1]; const negHeavy = ce[8] >= 1 && ce[8] >= Math.ceil(0.25 * Math.max(1, namedA)); const wrong = ce[9] > 0;
@@ -3455,10 +3499,16 @@ const ARD = (() => {
       else if (rk.read) ev.push({ kind: ix === 'google' ? 'serp' : ix, query: rk.best ? rk.best.query : queries[0] || '', pos: rk.best ? rk.best.pos : null, at: rk.best ? rk.best.read_at : '', what: rk.best ? 'ranks ' + rk.best.pos : 'not in the results read' });
       else ev.push({ kind: 'none', what: ix === 'none' ? 'no reading of what this engine retrieves' : 'no reading of ' + (ix === 'chatgpt' ? 'what ChatGPT retrieved' : 'the ' + ix + ' results') + ' for these searches' });
       out[e] = cell('S1', '', basis); }
+    // engines the site does not ask (or the caller did not list): no answer stage, but eligibility does not depend on asking. A Copilot that
+    // cannot find the site in Bing is a step to take in week 1 (DESIGN 2.B deviation, fixes/P1.md): such a cell is a provisional S0 with n 0
+    // and `asked: false` (additive); an engine with no S0 finding gets no cell, as before.
+    for (const e of AIRF.ENGINES) { if (out[e] || !usable(e)) continue; const ix = INDEX_OF[e]; const rk = ix === 'google' ? RK.google : ix === 'bing' ? RK.bing : ix === 'brave' ? RK.brave : { best: null, read: false, anyOurs: false, top10: false };
+      const ce = cellsE(e, 56); const s0 = eligibility(e, ce[2], ce[3], rk, ix); if (!s0) continue;
+      out[e] = { stage: 'S0', sub: s0.sub, basis: 'direct', n: 0, named: 0, cited: 0, retrieved: 0, our_rank: rk.best, evidence: [s0.ev, { kind: 'count', what: 'provisional: this engine is not asked for your site' }], thin: false, provisional: true, asked: false }; }
     // question-level signals
     let tc = 0, tl = 0; for (const e of Object.keys(out)) { const t = cellsE(e, 28); tc += t[6]; tl += t[7]; }
     const list_dominated = tc >= num(C.min_list_cites, 3) && tl / tc >= 0.4;
-    const meas = Object.entries(out).filter(([, c]) => c.stage !== 'unmeasured'); const wsum = meas.reduce((s, [e]) => s + (num((C.weights || {})[e], W_ENGINE[e] || 0.05)), 0);
+    const meas = Object.entries(out).filter(([, c]) => c.stage !== 'unmeasured' && c.asked !== false); const wsum = meas.reduce((s, [e]) => s + (num((C.weights || {})[e], W_ENGINE[e] || 0.05)), 0);   // an engine the site does not ask never moves best_stage
     let best_stage = 'unmeasured'; if (meas.length) { let acc = 0; for (const [e, c] of meas.slice().sort((a, b) => ORDER[b[1].stage] - ORDER[a[1].stage])) { acc += num((C.weights || {})[e], W_ENGINE[e] || 0.05); if (acc >= 0.25 * wsum - 1e-9) { best_stage = c.stage; break; } } }
     let fnM = msOf(E.fn), lnM = msOf(E.ln), lcM = msOf(E.lc); for (const u of U) { const t = msOf(u.at); if (!Number.isFinite(t)) continue; if (u.named) { if (!(t >= fnM)) fnM = t; if (!(t <= lnM)) lnM = t; } if (u.cited && !(t <= lcM)) lcM = t; }
     const fn = isoOf(fnM), ln = isoOf(lnM), lcx = isoOf(lcM);
@@ -3653,10 +3703,21 @@ const ARL = (() => {
   const OWN_PAGE = ['L05', 'L06'];
   const SITE_WIDE = ['L11', 'L12', 'L13', 'L14', 'L17'];
   const HUMAN_NEW = ['L02', 'L03', 'L07', 'L09', 'L10', 'L11', 'L12', 'L13', 'L14', 'L17'];   // DESIGN 2.E "new human steps" (L01 / L04 ride existing site tasks)
-  const LONG_RUN = ['L11', 'L12', 'L17'];   // the only levers that can reach a question an engine answers from memory (no_search)
+  const LONG_RUN = ['L11', 'L12', 'L17'];
+  // off-site levers put the business's name on a third-party page the engine CAN read (a list, a directory, a registry, press, LinkedIn, a forum,
+  // a video): they do not need the client's own page to be readable, so they act on S0 cells too, counted from S1 (fixes/P2.md 2, item 13).
+  // DESIGN 2.E's "S0: eligibility only" is kept for every lever that works through the client's own page (L05-L07, L15, L16).
+  const OFF_SITE = ['L08', 'L09', 'L10', 'L11', 'L12', 'L13', 'L14', 'L17'];
+  const effFrom = (L, stage) => (L.from.includes(stage) ? stage : stage === 'S0' && OFF_SITE.includes(L.id) && L.from.includes('S1') ? 'S1' : '');   // the only levers that can reach a question an engine answers from memory (no_search)
   const ENGINE_W = { chatgpt: 0.30, ai_overview: 0.15, ai_mode: 0.15, gemini: 0.10, perplexity: 0.12, copilot: 0.10, claude: 0.08, chatgpt_api: 0 };
-  const CAPS = { own_pages: 1, pitches: 5, human_new: 3, human_open_max: 8, protect: 10, min_gain: 0.02 };
+  // The minimum is on EFFICIENCY, not size: an action must be expected to win at least 0.5% of what its own cells still have to win,
+  // gain / sum over its cells of w_e V F (U(S5) - U(s)), which does not move with V, F or the panel's size. DESIGN's absolute 0.02 is about six
+  // well-placed cells (one is ~0.0036): on the production replay (2026-11-06) every action of both sites fell under it and AIR chose nothing. A floor
+  // that grows with the panel (a share of all its headroom) favours site-wide steps that add up many tiny cells (fixes/P2.md 2, item 16).
+  // `min_gain` given in capacities is still read as an absolute floor.
+  const CAPS = { own_pages: 1, pitches: 5, human_new: 3, human_open_max: 8, protect: 10, min_gain: null, min_efficiency: 0.005, min_gain_abs: 0.0001 };
   const OPEN = ['proposed', 'queued', 'in_progress', 'done'];
+  const PROV = 0.8;   // ARD marks S0 / S1 read from index presence or a rank proxy with 0-3 answers `provisional`: acted on, p x 0.8 (unmeasured cells: nothing)
   const ENGINE_NAMES = { chatgpt: 'ChatGPT', gemini: 'Gemini', ai_mode: 'Google AI Mode', ai_overview: 'Google AI Overviews', perplexity: 'Perplexity', claude: 'Claude', copilot: 'Copilot', chatgpt_api: 'ChatGPT (API)' };
   const STAGE_WORDS = { S0: 'cannot be read', S1: 'not found', S2: 'found, not cited', S3: 'cited, not named', S4: 'named, weak or wrong', S5: 'won', unmeasured: 'not measured' };
   // AIR's cost constants, shared with the app through harness/ai_rank_cost_cases.json (AL1 regenerates and compares; P6 reads it)
@@ -3707,7 +3768,7 @@ const ARL = (() => {
 
   // ================================================================ E. candidates
   const cellsOf = (d) => Object.entries((d && d.engines) || {}).filter(([e, c]) => AIRF.usable(e) && c && typeof c === 'object').map(([e, c]) => ({ engine: e, stage: S(c.stage), sub: S(c.sub), c }));
-  const applies = (L, cell, d) => { if (!L.from.includes(cell.stage)) return false; if (L.sub.length && !L.sub.includes(cell.sub)) return false; if (multOf(L, cell.engine) <= 0) return false;
+  const applies = (L, cell, d) => { if (!effFrom(L, cell.stage)) return false; if (L.sub.length && !L.sub.includes(cell.sub)) return false; if (multOf(L, cell.engine) <= 0) return false;
     if ((d.no_search || []).includes(cell.engine) && !LONG_RUN.includes(L.id) && !ELIG.includes(L.id)) return false; return true; };
   const isOurs = (u, hosts) => { const h = hostOf(u); return !!h && hosts.some(x => h === x || h.endsWith('.' + x)); };
   const DIR_IDS = [['clutch.co', 'clutch'], ['goodfirms.co', 'goodfirms'], ['themanifest.com', 'themanifest'], ['sortlist.', 'sortlist'], ['designrush.com', 'designrush'], ['upcity.com', 'upcity'], ['g2.com', 'g2'], ['capterra.', 'capterra'], ['trustradius.com', 'trustradius'], ['trustpilot.', 'trustpilot'], ['appsource.microsoft.com', 'ms_appsource'], ['partner.microsoft.com', 'ms_partner']];
@@ -3723,7 +3784,7 @@ const ARL = (() => {
     const hosts = uniq([S(st.domain), ...(st.hosts || []).map(S)].map(hostOf).filter(Boolean));
     const home = hosts.length ? 'https://' + hosts[0] + '/' : '';
     const optIn = new Set((((settings || {}).pitch_rival_urls) || []).map(u => AIRF.urlKey(u)).filter(Boolean));
-    const pageOf = (d) => { const q = S(d.prompt_id); if (S(d.page_url)) return S(d.page_url);
+    const pageOf = (d) => { const q = S(d.prompt_id); if (S(d.page_url)) return S(d.page_url); if (S(d.mapped_page) && isOurs(d.mapped_page, hosts)) return S(d.mapped_page);   // ARD's additive mapped_page
       for (const { c } of cellsOf(d)) for (const ev of (c.evidence || [])) { const u = S(ev && (ev.url || ev.page)); if (u && isOurs(u, hosts)) return u; }
       const pg = (st.pages || []).find(r => r && arr(r.questions).map(S).includes(q) && isOurs(r.url, hosts)); return pg ? S(pg.url) : ''; };
     const hasPage = (d) => !!pageOf(d) || cellsOf(d).some(({ stage, c }) => lvl(stage) >= 2 || N(c.retrieved, 0) > 0 || N(c.cited, 0) > 0 || c.our_rank);
@@ -3733,9 +3794,9 @@ const ARL = (() => {
       cells.sort((x, y) => (x.prompt_id < y.prompt_id ? -1 : x.prompt_id > y.prompt_id ? 1 : x.engine < y.engine ? -1 : x.engine > y.engine ? 1 : 0));
       const qs = uniq(cells.map(c => c.prompt_id)); const p0 = P.get(qs[0]) || {};
       out.push(Object.assign({ action_id: id, site_id: sid, lever: L.id, label: L.label, executor: L.executor, scope: L.scope, ref, questions: qs, engines: uniq(cells.map(c => c.engine)).sort(), target_stage: L.to,
-        sink: L.sink, sink_ref: '', cells: cells.map(c => ({ prompt_id: c.prompt_id, engine: c.engine, stage: c.stage, sub: c.sub })), intent: intentOf(qs), factor: 1,
+        sink: L.sink, sink_ref: '', cells: cells.map(c => Object.assign({ prompt_id: c.prompt_id, engine: c.engine, stage: c.stage, sub: c.sub }, c.provisional ? { provisional: true } : {})), intent: intentOf(qs), factor: 1,
         keyword: L.scope === 'question' ? S(p0.keyword) : '', page_url: '', exposure: L.scope === 'page', why: '' }, extra || {})); };
-    const cellsFor = (L, qs, engines) => { const cs = []; for (const q of qs) { const d = byQ.get(q); if (!d) continue; for (const cell of cellsOf(d)) { if (engines && !engines.includes(cell.engine)) continue; if (applies(L, cell, d)) cs.push({ prompt_id: q, engine: cell.engine, stage: cell.stage, sub: cell.sub }); } } return cs; };
+    const cellsFor = (L, qs, engines) => { const cs = []; for (const q of qs) { const d = byQ.get(q); if (!d) continue; for (const cell of cellsOf(d)) { if (engines && !engines.includes(cell.engine)) continue; if (applies(L, cell, d)) cs.push({ prompt_id: q, engine: cell.engine, stage: cell.stage, sub: cell.sub, provisional: cell.c.provisional === true }); } } return cs; };
     const allQ = [...byQ.keys()].sort();
     // S0: eligibility only (content cannot help a page the engine cannot read)
     add(LV.get('L01'), {}, cellsFor(LV.get('L01'), allQ), { why: 'robots.txt blocks the AI search bots of these engines' });
@@ -3743,12 +3804,16 @@ const ARL = (() => {
     for (const id of ['L02', 'L04']) { const L = LV.get(id); const byPage = new Map();
       for (const q of allQ) { const cs = cellsFor(L, [q]); if (!cs.length) continue; const u = pageOf(byQ.get(q)) || home; const k = AIRF.urlKey(u) || 'site'; const g = byPage.get(k) || { url: u, cells: [] }; g.cells.push(...cs); byPage.set(k, g); }
       for (const [, g] of [...byPage.entries()].sort()) add(L, g.url ? { url: g.url } : {}, g.cells, { page_url: g.url, why: id === 'L02' ? 'the page shows little text before JavaScript runs' : 'the page the question maps to is not in Google\'s index' }); }
+    // the pages a won question is cited on (L16 protects them): never rewritten for ANOTHER question (DESIGN 2.F); that question gets a new page
+    const protectedBy = new Map(); for (const q of allQ) { const d = byQ.get(q); if (!cellsOf(d).some(x => x.stage === 'S5')) continue; const u = pageOf(d); if (!u) continue; const k = AIRF.urlKey(u); const set = protectedBy.get(k) || new Set(); set.add(q); protectedBy.set(k, set); }
     // question-specific levers: own page (new or refresh, never both), cited-not-named, correction. Never on a control question.
-    for (const q of allQ) { const d = byQ.get(q); const control = armOf.get(q) === 'control';
-      const own = hasPage(d) ? LV.get('L06') : LV.get('L05'); const listy = !!d.list_dominated;
+    for (const q of allQ) { const d = byQ.get(q); const control = armOf.get(q) === 'control'; const pu = pageOf(d); const guard = pu ? protectedBy.get(AIRF.urlKey(pu)) : null;
+      const onOther = !!guard && !guard.has(q);
+      const own = hasPage(d) && !onOther ? LV.get('L06') : LV.get('L05');
+      const listy = !!d.list_dominated && S(d.intent) !== 'informational';   // E26 / R1 7: recommendation answers pick providers from lists; an informational answer's win is the citation
       for (const L of [own, LV.get('L07'), LV.get('L15')]) { const cs = cellsFor(L, [q]); if (!cs.length) continue;
         const extra = { page_url: L.id === 'L05' ? '' : pageOf(d), factor: OWN_PAGE.includes(L.id) && listy ? 0.5 : 1,
-          why: L.id === 'L05' ? 'no page of the site is found for the searches the engines run' + (listy ? '; the answers are built from lists, so write an honest comparison or cost guide, never a self-ranked list (own-page chance halved)' : '')
+          why: L.id === 'L05' ? (onOther ? 'its closest page (' + pu + ') wins AI answers for ' + [...guard].join(', ') + ' and is protected: a new page for this question instead of rewriting it' : 'no page of the site is found for the searches the engines run') + (listy ? '; the answers are built from lists, so write an honest comparison or cost guide, never a self-ranked list (own-page chance halved)' : '')
             : L.id === 'L06' ? 'a page of the site is found but not cited' + (listy ? '; the answers are built from lists (own-page chance halved)' : '') : L.id === 'L07' ? 'the answers cite the site but do not name it' : 'an answer states something wrong about the business' };
         if (control) extra.refused = 'held out as a control question: no question-specific action while it is in the control group (1 in 3, 12 weeks)';
         add(L, { prompt_id: q }, cs, extra); } }
@@ -3799,18 +3864,19 @@ const ARL = (() => {
     if (!L) return { gain: 0, cost: 0, score: 0, p_by_cell: [], days: 0, why: 'unknown lever' };
     const W = Object.assign({}, ENGINE_W, weights || {}); const hh = H == null ? COST.H : N(H, COST.H); const costRaw = N(L.usd, 0) + N(L.effort_min, 0) / 60 * hh + COST.overhead_usd; const cost = costOf(L, hh); const days = L.days ? L.days[1] : 0;
     const fac = N(c.factor, 1); let gain = 0; const pc = []; const memo = new Map();
-    for (const cell of (c.cells || [])) { const s = S(cell.stage); const e = S(cell.engine); const grp = AIRF.GROUP_OF[e]; if (!grp || !(s in U)) continue;
+    for (const cell of (c.cells || [])) { const s0 = S(cell.stage); const e = S(cell.engine); const grp = AIRF.GROUP_OF[e]; if (!grp || !(s0 in U)) continue;
+      const s = effFrom(L, s0) || (L.id === 'L17' ? (s0 === 'S0' ? 'S1' : s0) : s0);   // an off-site lever on an S0 cell is priced from S1, its gain from S0
       const t = L.id === 'L16' ? 'S5' : L.next[s] || (L.id === 'L17' ? ({ S1: 'S2', S2: 'S3', S3: 'S4', S4: 'S4' })[s] : ''); if (!t) continue;
       const key = s + '|' + grp; if (!memo.has(key)) memo.set(key, priorOf({ lever: L.id, stage: s, group: grp, priors, site_id: c.site_id }));
       const pr = memo.get(key); const mean = L.prior ? pr.mean : (L.id === 'L17' ? 0.05 : 0);
-      const p = Math.min(0.95, mean * multOf(L, e) * fac);
-      let du = L.id === 'L16' ? U.S5 - U.S2 : U[t] - U[s]; if (ELIG.includes(L.id)) du += contAt(t, e, grp, priors, c.site_id);
+      const p = Math.min(0.95, mean * multOf(L, e) * fac * (cell.provisional === true ? PROV : 1));   // a provisional S0 / S1 (0-3 answers, read from the index or a rank proxy): mild doubt
+      let du = L.id === 'L16' ? U.S5 - U.S2 : U[t] - U[s0]; if (ELIG.includes(L.id)) du += contAt(t, e, grp, priors, c.site_id);
       if (!(du > 0) || !(p > 0)) continue;
       const w = N(W[e], 0), V = asNum(values, cell.prompt_id, 'V', 1), F = asNum(feas, cell.prompt_id, 'F', 0.5);
       const rk = OWN_PAGE.includes(L.id) ? rankChance(feas, cell.prompt_id) : 1;
-      const g = w * V * F * p * rk * du; gain += g; pc.push({ prompt_id: cell.prompt_id, engine: e, stage: s, to: t, p: rd(p * rk, 4), gain: rd(g) }); }
-    const sc = costRaw > 0 ? gain / costRaw / (1 + days / 60) : 0;
-    return { gain: rd(gain, 8), cost, score: rd(sc, 12), p_by_cell: pc, days, why: L.label + ': ' + pc.length + ' cell(s), expected gain ' + rd(gain, 4) + ' over $' + rd(cost, 2) + ' (client time at $' + hh + ' an hour), typical ' + days + ' days' }; };
+      const g = w * V * F * p * rk * du; gain += g; pc.push({ prompt_id: cell.prompt_id, engine: e, stage: s0, to: t, p: rd(p * rk, 4), gain: rd(g), head: rd(w * V * F * (U.S5 - U[s0])) }); }   // head: what the cell still has to win
+    const sc = costRaw > 0 ? gain / costRaw / (1 + days / 60) : 0; const head = pc.reduce((a, x) => a + x.head, 0);
+    return { gain: rd(gain, 8), cost, score: rd(sc, 12), head: rd(head, 8), efficiency: head > 0 ? rd(gain / head, 6) : gain > 0 ? 1 : 0, p_by_cell: pc, days, why: L.label + ': ' + pc.length + ' cell(s), expected gain ' + rd(gain, 4) + ' over $' + rd(cost, 2) + ' (client time at $' + hh + ' an hour), typical ' + days + ' days' }; };
   /** an own page helps only if it ranks for the searches the engines run (R1 lever 2, E24): its chance scales with the site's reach against the keyword,
    *  reach_w / 0.5 within [0.2, 1.5] (the median site keeps the prior). Unknown reach: 1. Other levers do not depend on the client's own ranking. */
   const rankChance = (feas, q) => { const f = mget(feas, q); const r = f && typeof f === 'object' && !/reach not stored/.test(S(f.basis)) ? N(f.reach_w, null) : null; return r == null ? 1 : clamp(r / 0.5, 0.2, 1.5); };
@@ -3833,13 +3899,18 @@ const ARL = (() => {
       if (ZERO_WEIGHT.includes(S(c.lever))) { refuse(what, 'weight 0: kept as hygiene in the audit fix pack, never an AI-ranking action'); continue; }
       if (c.refused) { refuse(c.ref && c.ref.prompt_id ? 'question-specific actions on question ' + c.ref.prompt_id : what, S(c.refused)); continue; }
       if (L.scope === 'question' && (c.questions || []).some(q => armOf.get(S(q)) === 'control')) { refuse('question-specific actions on question ' + c.questions.join(', '), 'held out as a control question'); continue; }
-      if (!ELIG.includes(L.id) && (c.cells || []).some(x => S(x.stage) === 'S0')) { refuse(what, 'a cell the engine cannot read: only eligibility steps apply'); continue; }
+      if (!ELIG.includes(L.id) && !OFF_SITE.includes(L.id) && (c.cells || []).some(x => S(x.stage) === 'S0')) { refuse(what, 'a cell the engine cannot read: only eligibility steps or a third-party page apply'); continue; }
       ok.push(it); }
     ok.sort((x, y) => N(y.s.score, 0) - N(x.s.score, 0) || (S(x.c.action_id) < S(y.c.action_id) ? -1 : 1));
     let own = 0, pitches = 0, human = 0, protect = 0; const ownNow = new Set();
+    const absMin = cap.min_gain != null; const effMin = N(cap.min_efficiency, 0), gMin = absMin ? N(cap.min_gain, 0) : N(cap.min_gain_abs, 0);
+    const effOf = (sc) => (sc.efficiency != null ? N(sc.efficiency, 0) : N(sc.head, 0) > 0 ? N(sc.gain, 0) / N(sc.head, 0) : 1);
+    const tooSmall = (sc) => N(sc.gain, 0) < gMin || (!absMin && effOf(sc) < effMin);
+    const floorWhy = (sc) => absMin || N(sc.gain, 0) < gMin ? 'below the minimum ' + gMin : 'expected to win ' + pct1(effOf(sc)) + '% of what its cells still have to win (' + pct1(effMin) + '% needed)';
+    res.floor = absMin ? { min_gain: gMin, basis: 'absolute, given' } : { min_efficiency: effMin, min_gain: gMin, basis: 'share of what the action\'s own cells still have to win' };
     const defer = (c, why) => res.deferred.push({ action: c, why });
     for (const { c, s } of ok) { const L = LV.get(c.lever);
-      if (N(s.gain, 0) < cap.min_gain && !(ELIG.includes(L.id) && N(s.gain, 0) > 0)) { defer(c, 'expected gain ' + rd(N(s.gain, 0), 4) + ' is below the minimum ' + cap.min_gain); continue; }   // eligibility is a gate: never dropped for size
+      if (tooSmall(s) && !(ELIG.includes(L.id) && N(s.gain, 0) > 0)) { defer(c, 'expected gain ' + rd(N(s.gain, 0), 5) + ': ' + floorWhy(s)); continue; }   // eligibility is a gate: never dropped for size
       if (openIds.has(S(c.action_id))) { defer(c, 'already open'); continue; }
       if (OWN_PAGE.includes(L.id)) { const q = S(c.questions[0]); if (ownQ.has(q) || ownNow.has(q)) { defer(c, 'one own page per question: one is already planned'); continue; } if (own >= cap.own_pages) { defer(c, 'no content slot left this week (' + cap.own_pages + ')'); continue; } }
       if (L.id === 'L08' && pitches >= cap.pitches) { defer(c, 'placement pitches this week: ' + cap.pitches + ' already'); continue; }
@@ -3973,17 +4044,17 @@ const ARL = (() => {
     // stage moves
     const cells = [], byK = new Map(), ctrl = new Map();
     const targetOf = (s) => (L.id === 'L16' ? 'S5' : L.next[s] || (L.id === 'L17' ? ({ S1: 'S2', S2: 'S3', S3: 'S4', S4: 'S4' })[s] : ''));
-    const counts = (s, sub) => L.from.includes(s) && (!L.sub.length || L.sub.includes(sub)) && (targetOf(s) !== s || L.id === 'L16');
+    const counts = (s, sub) => !!effFrom(L, s) && (!L.sub.length || L.sub.includes(sub)) && (targetOf(effFrom(L, s)) !== s || L.id === 'L16');
     for (const q of qs) for (const e of es) { const x0 = stageAt(m0, q, e), x1 = stageAt(mN, q, e); if (!x0 || !x1 || !counts(x0.stage, x0.sub) || multOf(L, e) <= 0) continue;
-      const t = targetOf(x0.stage); const reached = L.id === 'L16' ? x1.stage === 'S5' : lvl(x1.stage) >= lvl(t); const grp = AIRF.GROUP_OF[e];
+      const t = targetOf(effFrom(L, x0.stage)); const reached = L.id === 'L16' ? x1.stage === 'S5' : lvl(x1.stage) >= lvl(t); const grp = AIRF.GROUP_OF[e];
       cells.push({ prompt_id: q, engine: e, group: grp, from: x0.stage, target: t, now: x1.stage, reached }); const k = x0.stage + '|' + grp; const g = byK.get(k) || { stage: x0.stage, group: grp, n: 0, k: 0 }; g.n++; if (reached) g.k++; byK.set(k, g); }
-    for (const q of cs) for (const e of es) { const x0 = stageAt(m0, q, e), x1 = stageAt(mN, q, e); if (!x0 || !x1 || !counts(x0.stage, x0.sub) || multOf(L, e) <= 0) continue; const t = targetOf(x0.stage); const ok = L.id === 'L16' ? x1.stage === 'S5' : lvl(x1.stage) >= lvl(t);
+    for (const q of cs) for (const e of es) { const x0 = stageAt(m0, q, e), x1 = stageAt(mN, q, e); if (!x0 || !x1 || !counts(x0.stage, x0.sub) || multOf(L, e) <= 0) continue; const t = targetOf(effFrom(L, x0.stage)); const ok = L.id === 'L16' ? x1.stage === 'S5' : lvl(x1.stage) >= lvl(t);
       for (const k of [x0.stage + '|' + AIRF.GROUP_OF[e], x0.stage + '|*']) { const g = ctrl.get(k) || { n: 0, k: 0 }; g.n++; if (ok) g.k++; ctrl.set(k, g); } }
     const noControl = SITE_WIDE.includes(L.id) || (ELIG.includes(L.id) && L.scope === 'site');
     const by = [...byK.values()].sort((x, y) => (x.stage + x.group < y.stage + y.group ? -1 : 1)).map(g => { const c1 = ctrl.get(g.stage + '|' + g.group), c2 = ctrl.get(g.stage + '|*');
       const src = c1 && c1.n ? c1 : c2 && c2.n ? c2 : null; const b = src ? src.k / src.n : 0;
       const b_basis = src ? (src === c1 ? 'control cells, same stage and engine group' : 'control cells, same stage, any engine group') + ' (' + src.k + ' of ' + src.n + ')' : ELIG.includes(L.id) ? 'eligibility: no background expected' : 'none';
-      return { stage: g.stage, group: g.group, n: g.n, k: g.k, b: rd(b, 4), b_basis, k_adj: rd(Math.max(0, g.k - g.n * b), 4) }; });
+      return { stage: g.stage, prior_stage: effFrom(L, g.stage) || g.stage, group: g.group, n: g.n, k: g.k, b: rd(b, 4), b_basis, k_adj: rd(Math.max(0, g.k - g.n * b), 4) }; });   // prior_stage: the prior it teaches (an off-site lever from S0 teaches its S1 prior); b: same real starting stage
     const sk = by.reduce((s, x) => s + x.k, 0), sn = by.reduce((s, x) => s + x.n, 0), sb = sn ? by.reduce((s, x) => s + x.b * x.n, 0) / sn : 0;
     const stage_moves = { k: sk, n: sn, b: rd(sb, 4), k_adj: rd(by.reduce((s, x) => s + x.k_adj, 0), 4), by, cells };
     // the lift tests
@@ -4034,7 +4105,7 @@ const ARL = (() => {
     for (const it of (outcomes || [])) { if (!learnable(it)) continue; const a = (it && it.action) || it; const id = S(a.action_id); if (id && done.has(id)) continue; if (id) done.add(id); const oc = (it && it.outcome) || parse(a.outcome_json, {});
       const sid = S(a.site_id); if (!sid) continue; const L = S(a.lever);
       for (const g of oc.stage_moves.by) { if (!(N(g.n, 0) > 0) || !AIRF.STAGES.includes(S(g.stage)) || !AIRF.GROUPS.includes(S(g.group))) continue; if (S(g.b_basis) === 'none' && !ELIG.includes(L)) continue;
-        const n = N(g.n, 0), kadj = clamp(N(g.k, 0) - n * clamp(N(g.b, 0), 0, 1), 0, n); const key = L + '|' + S(g.stage) + '|' + S(g.group);
+        const n = N(g.n, 0), kadj = clamp(N(g.k, 0) - n * clamp(N(g.b, 0), 0, 1), 0, n); const key = L + '|' + (AIRF.STAGES.includes(S(g.prior_stage)) ? S(g.prior_stage) : S(g.stage)) + '|' + S(g.group);
         const m = delta.get(key) || new Map(); const d = m.get(sid) || { k: 0, f: 0, n: 0 }; d.k += kadj; d.f += n - kadj; d.n++; m.set(sid, d); delta.set(key, m); } }
     const out = [];
     for (const [key, m] of [...delta.entries()].sort()) { const [L, st, gr] = key.split('|'); const ev = evidencePrior(L);
@@ -4142,7 +4213,7 @@ const ARL = (() => {
     return { overlap: union.size ? rd(inter.length / union.size, 4) : 0, overlap_n: inter.length, gain_air: rd(gain_air), gain_old: rd(gain_old), causes: { air: uniq(ca).sort(), old: uniq(co).sort() }, refused_old,
       note: 'Gains are AIR\'s own model, not independent. Overlap: shared targets over all targets of both plans.' }; };
 
-  return { VERSION, LEVERS, REFUSED, ZERO_WEIGHT, U, VERDICTS, VERDICT_WORDS, MEMO_PARTS, MEMO_TITLES, ENGINE_W, CAPS, COST, HUMAN_NEW, ELIG, SITE_WIDE, STATS,
+  return { VERSION, OFF_SITE, LEVERS, REFUSED, ZERO_WEIGHT, U, VERDICTS, VERDICT_WORDS, MEMO_PARTS, MEMO_TITLES, ENGINE_W, CAPS, COST, HUMAN_NEW, ELIG, SITE_WIDE, STATS,
     value, feasibility, rivalsMedian, priorOf, candidates, score, choose, prereg, keepPrereg, verify, outcome, learnable, learn, brier, memo, compareOld, costOf, multOf, didOf };
 })();
 const AIR_CFG = { H: 25, window_min_days: 28, expire_grace_days: 14, sources_max: 200, actions_max: 300, growth_add_max: 3, protect_days: 28,

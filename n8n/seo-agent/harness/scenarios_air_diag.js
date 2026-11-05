@@ -12,6 +12,8 @@
 //   AD11 rollEvidence: counts older than 8 days kept, 120 days dropped, 8 KB cap, idempotent
 //   AD12 gemini_api ignored by every function
 //   AD13 accuracy: precision and recall per stage on the labelled cells (fixtures_air diag_cases, two seeds), sub-label and basis accuracy
+//   AD15 provisional S0 / S1 with 0-3 answers (DESIGN 2.B deviation of 2026-11-06); S2-S5 still need 4; answers decide once there are 4
+//   AD14 the real shapes the 2026-11-06 production replay found: a panel drifted to another country (core of 1), thin strata (no control arm)
 const fs = require('fs'); const path = require('path');
 module.exports = async (ctx) => {
   const { H, reset, guard, begin } = ctx;
@@ -65,7 +67,7 @@ module.exports = async (ctx) => {
       { prompt_id: 'pB', engine: 'chatgpt', named: true, at: ago(3), answered: true }, { prompt_id: 'p3', engine: 'gemini_api', named: true, cited: true, at: ago(3), answered: true }];
     const stored = [{ prompt_id: 'p1', core: true, core_since: ago(40), core_until: iso(NOW + 16 * DAY), arm: 'treated', stratum: '' }, { prompt_id: 'p7', core: true, core_since: ago(58), core_until: ago(2), arm: 'control' }];
     const cand = [{ keyword: 'erp support dubai', source: 'client', volume: 90 }, { keyword: 'software house lahore', source: 'gsc', volume: 400 }, { keyword: 'p2 software', source: 'client', volume: 50 }];
-    const cp = ARD.corePanel({ site: { site_id: 's' }, prompts, units60: units, stored, market: { cc: 'AE', lang: 'en' }, demand: { candidates: cand }, now: NOW, cfg: {} });
+    const cp = ARD.corePanel({ site: { site_id: 's' }, prompts, units60: units, stored, market: { cc: 'AE', lang: 'en' }, demand: { candidates: cand }, now: NOW, cfg: { core_min: 4 } });
     const ids = cp.core.map(c => c.prompt_id);
     const e1 = cp.extend.find(x => x.prompt_id === 'p1'), e7 = cp.extend.find(x => x.prompt_id === 'p7');
     check('AD3 core: a question that named the client 30 days ago is never dropped and gets `extend` to now + 56 days; a retired one that cited it stays too',
@@ -77,10 +79,10 @@ module.exports = async (ctx) => {
       cp.proposed.length === 1 && cp.proposed[0].keyword === 'erp support dubai' && cp.proposed[0].market === 'AE-en' && cp.proposed[0].source === 'client' && /\?$/.test(cp.proposed[0].prompt), J(cp.proposed));
     check('AD3 comparable false when the core changed (and why says so)', cp.comparable === false && /core changed/.test(cp.why), cp.why);
     const st2 = cp.core.map(c => ({ prompt_id: c.prompt_id, core: true, core_since: c.core_since, core_until: c.core_until }));
-    const cp2 = ARD.corePanel({ site: { site_id: 's' }, prompts: prompts.map(p => p.prompt_id === 'p3' ? { ...p, status: 'retired' } : p.prompt_id === 'p9' ? p : p).concat([P('p9', { volume: 9999 })]), units60: [], stored: st2, market: { cc: 'AE', lang: 'en' }, demand: {}, now: NOW + 7 * DAY, cfg: { core_max: 6 } });
+    const cp2 = ARD.corePanel({ site: { site_id: 's' }, prompts: prompts.map(p => p.prompt_id === 'p3' ? { ...p, status: 'retired' } : p.prompt_id === 'p9' ? p : p).concat([P('p9', { volume: 9999 })]), units60: [], stored: st2, market: { cc: 'AE', lang: 'en' }, demand: {}, now: NOW + 7 * DAY, cfg: { core_max: 6, core_min: 4 } });
     check('AD3 frozen 8 weeks: a week later the same core (a question retired by the focus rules stays; a new high-demand question waits for room) and comparable is true',
       J(cp2.core.map(c => c.prompt_id).sort()) === J(ids.slice().sort()) && cp2.comparable === true && cp2.core.find(c => c.prompt_id === 'p3').core_since === cp.core.find(c => c.prompt_id === 'p3').core_since && /frozen until/.test(cp2.core.find(c => c.prompt_id === 'p3').reason), J(cp2.core));
-    const cp3 = ARD.corePanel({ site: { site_id: 's' }, prompts: prompts.map(p => p.prompt_id === 'p3' ? { ...p, status: 'retired' } : p), units60: [], stored: st2, market: { cc: 'AE', lang: 'en' }, demand: {}, now: NOW + 60 * DAY, cfg: {} });
+    const cp3 = ARD.corePanel({ site: { site_id: 's' }, prompts: prompts.map(p => p.prompt_id === 'p3' ? { ...p, status: 'retired' } : p), units60: [], stored: st2, market: { cc: 'AE', lang: 'en' }, demand: {}, now: NOW + 60 * DAY, cfg: { core_min: 4 } });
     check('AD3 after its 8 weeks a retired question with no hit leaves the core; an active one is renewed with its first core_since', !cp3.core.some(c => c.prompt_id === 'p3') && cp3.core.find(c => c.prompt_id === 'p2').core_since === cp.core.find(c => c.prompt_id === 'p2').core_since && cp3.extend.some(x => x.prompt_id === 'p2'), J(cp3.core));
     const H0 = AVX.history({ rule: F.AIV_RULE, from: iso(NOW - 60 * DAY), to: F.now, vis_rows: T.seo_ai_visibility.filter(x => x.site_id === F.archetypes.acme.site_id), daily_rows: T.seo_ai_daily.filter(x => x.site_id === F.archetypes.acme.site_id) });
     const cpA = ARD.corePanel({ site: { site_id: F.archetypes.acme.site_id }, prompts: T.seo_ai_prompts.filter(p => p.site_id === F.archetypes.acme.site_id), units60: H0.units, stored: [], market: mA, demand: {}, now: NOW, cfg: {} });
@@ -90,8 +92,9 @@ module.exports = async (ctx) => {
     const core30 = Array.from({ length: 30 }, (_, i) => ({ prompt_id: 'a' + i, intent: i % 3 ? 'recommendation' : 'informational', baseline: i % 4 ? 'zero' : 'some', cluster: 'k' + (i % 6) }));
     const A1 = ARD.assignArms({ core: core30, stored: [], seed: 'seed-1', now: NOW, site_id: 's' }), A2 = ARD.assignArms({ core: core30, stored: [], seed: 'seed-1', now: NOW, site_id: 's' });
     const byS = new Map(); for (const a of A1) { const t = byS.get(a.stratum) || [0, 0]; t[0]++; if (a.arm === 'control') t[1]++; byS.set(a.stratum, t); }
-    check('AD4 arms: deterministic for a seed; at most 4 clusters (the rest pooled as other); 2:1 inside every stratum (controls = floor(n/3), off by at most 1)',
-      J(A1) === J(A2) && A1.length === 30 && [...byS.values()].every(([n, c]) => Math.abs(c - n / 3) <= 1 && c === Math.floor(n / 3)) && new Set(A1.map(a => a.stratum.split('|')[2])).size <= 5 && A1.some(a => /\|other$/.test(a.stratum)), J([...byS.entries()]));
+    check('AD4 arms: deterministic for a seed; at most 4 clusters (the rest pooled); strata under 3 questions merged into a coarser one; 2:1 inside every stratum (controls = floor(n/3)); 10 controls of 30',
+      J(A1) === J(A2) && A1.length === 30 && [...byS.values()].every(([n, c]) => c === Math.floor(n / 3)) && [...byS.entries()].every(([k, [n]]) => n >= 3 || k === '*|*|*')
+      && A1.every(a => !/\|k[45]$/.test(a.stratum) || false) && Math.abs(A1.filter(a => a.arm === 'control').length - 10) <= byS.size, J([...byS.entries()]));
     const stA = A1.map(a => ({ ...a, core: true, core_since: ago(10) }));
     const A3 = ARD.assignArms({ core: core30, stored: stA, seed: 'another-seed', now: NOW, site_id: 's' });
     check('AD4 stored arms are never reshuffled (another seed, same arms and strata)', J(A3.map(a => [a.prompt_id, a.arm, a.stratum])) === J(A1.map(a => [a.prompt_id, a.arm, a.stratum])), '');
@@ -102,6 +105,30 @@ module.exports = async (ctx) => {
     check('AD4 a new question takes the next slot of its stratum: after T,T,C a treated one; after T,T a control one', T3.filter(a => a.arm === 'control').length === 1 && T4.find(a => a.prompt_id === 'x3').arm === 'treated' && T2.every(a => a.arm === 'treated') && T2b.find(a => a.prompt_id === 'x2').arm === 'control', J({ T3, T4, T2b }));
     const rot = ARD.assignArms({ core: strat(4), stored: T3s.map(a => a.arm === 'control' ? { ...a, assigned_at: ago(90) } : a), seed: 's', now: NOW });
     check('AD4 the holdout rotates: a control question 12 weeks old becomes treated, and the next new question refills the control arm', rot.filter(a => a.arm === 'control').length === 1 && rot.find(a => a.prompt_id === 'x3').arm === 'control' && T3s.filter(a => a.arm === 'control').every(c => rot.find(a => a.prompt_id === c.prompt_id).arm === 'treated'), J(rot));
+
+    // ---- AD14 the real shapes the 2026-11-06 replay found (synthetic rows that mimic them; no client data) ----
+    // (a) a panel that drifted to another country: the site's market comes from the client's keywords (AE), every active question is PK-en,
+    //     the AE questions were retired, one retired AE question cited the client. The core held 1 question and no control.
+    const Rp = (id, o) => P(id, { kind: pick14(id), cluster: ['cl one', 'cl two', 'cl three'][id.charCodeAt(id.length - 1) % 3], ...(o || {}) });
+    function pick14(id) { return ['recommend', 'compare', 'choose', 'cost', 'problem'][id.charCodeAt(id.length - 1) % 5]; }
+    const drift = [...Array.from({ length: 9 }, (_, i) => Rp('pk' + i, { market: 'PK-en', status: 'active' })), ...Array.from({ length: 9 }, (_, i) => Rp('ae' + i, { market: 'AE-en', status: 'retired', retired_at: ago(10) })), P('br', { kind: 'brand', market: 'AE-en' })];
+    const dUnits = [{ prompt_id: 'ae3', engine: 'gemini', named: true, cited: false, at: ago(9), answered: true }, ...drift.filter(p => p.status === 'active').flatMap((p, i) => [0, 1, 2].map(d => ({ prompt_id: p.prompt_id, engine: 'chatgpt', named: false, cited: false, rivals: i % 2 ? [{ id: 'r.example' }] : [], at: ago(d * 3 + 1), answered: true })))];
+    const cpD = ARD.corePanel({ site: { site_id: 'sd' }, prompts: drift, units60: dUnits, stored: [], market: { cc: 'AE', lang: 'en' }, demand: { candidates: [{ keyword: 'ai development company uae', source: 'ladder', volume: 0 }] }, now: NOW, cfg: {} });
+    const armsD = ARD.assignArms({ core: cpD.core, stored: [], seed: 'sd', now: NOW, site_id: 'sd' });
+    check('AD14 drifted panel: the core holds the questions that are asked (9 PK ones, labelled outside your market) plus the retired AE one that cited the client; not 1',
+      cpD.core.length === 10 && cpD.core.filter(c => /outside your market/.test(c.reason)).length === 9 && cpD.core.some(c => c.prompt_id === 'ae3') && !cpD.core.some(c => c.prompt_id === 'br'), J(cpD.core.map(c => c.prompt_id + ': ' + c.reason)));
+    check('AD14 drifted panel: the retired questions of the market are proposed again first (revive = their id, market AE-en), then the client keywords; and the arms hold controls',
+      cpD.proposed.length === 5 && cpD.proposed.slice(0, 4).every(x => x.source === 'retired_in_market' && /^ae\d$/.test(x.revive) && x.market === 'AE-en') && armsD.filter(a => a.arm === 'control').length >= 2, J({ p: cpD.proposed, a: armsD }));
+    const cpOff = ARD.corePanel({ site: { site_id: 'sd' }, prompts: drift, units60: dUnits, stored: [], market: { cc: 'AE', lang: 'en' }, demand: {}, now: NOW, cfg: { core_min: 0 } });
+    check('AD14 cfg.core_min = 0 keeps DESIGN A3 to the letter (only the market\'s questions and the hit)', cpOff.core.length === 1, J(cpOff.core));
+    // (b) a 13-question core spread over 7 clusters, both intents, both baselines: 10 fine strata of 1-2 questions, every arm treated before
+    const wide = Array.from({ length: 13 }, (_, i) => ({ prompt_id: 'w' + i, intent: i < 11 ? 'recommendation' : 'informational', baseline: i % 3 === 0 ? 'some' : 'zero', cluster: 'cluster ' + (i % 7) }));
+    const armsW = ARD.assignArms({ core: wide, stored: [], seed: 'site_w', now: NOW, site_id: 'site_w' }); const cW = armsW.filter(a => a.arm === 'control').length;
+    const bySW = new Map(); for (const a of armsW) { const t = bySW.get(a.stratum) || [0, 0]; t[0]++; if (a.arm === 'control') t[1]++; bySW.set(a.stratum, t); }
+    check('AD14 thin strata are merged: 13 questions over 7 clusters get ' + cW + ' controls (4 = floor(13/3), at most one off per merged stratum), every merged stratum 2:1', cW >= 3 && cW <= 5 && [...bySW.values()].every(([n, c]) => c === Math.floor(n / 3)), J([...bySW.entries()]));
+    const armsW2 = ARD.assignArms({ core: [...wide, { prompt_id: 'w13', intent: 'recommendation', baseline: 'zero', cluster: 'cluster 3' }], stored: armsW.map(a => ({ ...a, core: true, core_since: ago(7) })), seed: 'site_w', now: NOW, site_id: 'site_w' });
+    check('AD14 the merged arms are stored and kept a week later; the new question takes a slot', J(armsW2.slice(0, 13).map(a => a.arm)) === J(armsW.map(a => a.arm)) && armsW2.length === 14, J(armsW2));
+    check('AD14 the real kinds (choose / cost / problem / compare) give an intent when answers are few', ARD.intentOf({ kind: 'choose' }, []) === 'recommendation' && ARD.intentOf({ kind: 'cost' }, []) === 'informational' && ARD.intentOf({ kind: 'problem' }, []) === 'informational' && ARD.intentOf({ kind: 'compare' }, []) === 'recommendation', '');
 
     // ---- AD5 MDE (R1 §6: m = 28, 80% power, alpha 0.05 two-sided) ----
     const R1T = [[0.02, 40, 5.0, 7.1, 6.9, 9.7], [0.02, 100, 3.2, 4.5, 4.3, 6.1], [0.10, 40, 10.7, 15.2, 14.7, 20.8], [0.10, 100, 6.8, 9.6, 9.3, 13.2], [0.10, 200, 4.8, 6.8, 6.6, 9.3], [0.30, 100, 10.4, 14.6, 14.2, 20.1]];
@@ -250,5 +277,36 @@ module.exports = async (ctx) => {
     for (const [s, n, p, r] of rows) check('AD13 stage ' + s + ': precision and recall >= 90% on ' + n + ' labelled cells (P ' + (100 * p).toFixed(1) + '%, R ' + (100 * r).toFixed(1) + '%)', n >= 6 && p >= 0.9 && r >= 0.9, J(miss.filter(m => m[1] === s || m[2].stage === s)));
     check('AD13 sub-label and basis right on >= 90% of the cells; boundary S0-S1 vs S2+ right on >= 95%', subOk / cells.length >= 0.9 && basisOk / cells.length >= 0.9
       && cells.filter(c => { const x = runCase(c); const lo = (s) => s === 'S0' || s === 'S1'; return c.label.stage !== 'unmeasured' && lo(x.stage) === lo(c.label.stage); }).length / cells.filter(c => c.label.stage !== 'unmeasured').length >= 0.95, J(miss));
+    // ---- AD15 provisional S0 / S1 with 0-3 answers (DESIGN 2.B deviation, orchestrator 2026-11-06) ----
+    const base15 = DC.find(c => c.label.stage === 'S1' && c.label.basis === 'proxy_rank' && c.engine === 'ai_mode');
+    const cut = (args, e, keep) => { const ue = args.units60.filter(u => u.engine === e && u.prompt_id === args.prompt.prompt_id && Date.parse(u.at) > NOW - 28 * DAY).sort((a, b) => b.at.localeCompare(a.at)); const drop = new Set(ue.slice(keep).map(u => u.at));
+      return { ...args, units60: args.units60.filter(u => !(u.engine === e && u.prompt_id === args.prompt.prompt_id && drop.has(u.at))), answers8: args.answers8.filter(a => !(a.engine === e && a.prompt_id === args.prompt.prompt_id && drop.has(a.checked_at))) }; };
+    const p2 = ARD.diagnose(cut(base15.args, 'ai_mode', 2)).engines.ai_mode;
+    check('AD15 two answers and a results-page reading below the top 10 -> S1 proxy_rank, provisional, the reading and the count as evidence', p2.stage === 'S1' && p2.basis === 'proxy_rank' && p2.provisional === true && p2.n === 2 && p2.evidence.some(x => x.kind === 'serp') && p2.evidence.some(x => /provisional/.test(x.what || '')), J(p2));
+    const full15 = ARD.diagnose(base15.args).engines.ai_mode;
+    check('AD15 with n >= 4 agreeing, the same S1 is no longer provisional', full15.stage === 'S1' && full15.provisional === false && full15.n >= 4, J(full15));
+    const plus = (args, e, k, f) => { const extra = Array.from({ length: k }, (_, i) => ({ prompt_id: args.prompt.prompt_id, engine: e, named: false, cited: true, position: null, rivals: [{ id: 'rival-a.example' }], answered: true, at: ago(1 + i * 0.2) }));
+      const rows = extra.map((u, i) => ({ site_id: 's', domain: 'case-co.example', run_id: 'x' + i, checked_at: u.at, prompt_id: u.prompt_id, engine: e, answered: true, error: '', named: false, cited: true,
+        cited_json: J([{ url: 'https://case-co.example/services/erp-partner', host: 'case-co.example', role: 'self' }]), retrieved_json: '', fanout_json: '', entities_json: J([{ id: 'rival-a.example', role: 'competitor', position: 1 }]) }));
+      return { ...args, units60: [...args.units60, ...extra], answers8: [...args.answers8, ...rows] }; };
+    const p3 = ARD.diagnose(plus(cut(base15.args, 'ai_mode', 2), 'ai_mode', 2)).engines.ai_mode;
+    check('AD15 provisional S1, then n >= 4 says the client is cited and not named -> S3 (the answer-based stage wins), not provisional', p3.stage === 'S3' && p3.provisional === false && p3.n === 4, J(p3));
+    const pc = ARD.diagnose(plus(cut(base15.args, 'ai_mode', 1), 'ai_mode', 1)).engines.ai_mode;
+    check('AD15 S2-S5 need n >= 4: two answers with a citation stay unmeasured / too_few', pc.stage === 'unmeasured' && pc.sub === 'too_few' && pc.provisional === false, J(pc));
+    const s0c = DC.find(c => c.label.sub === 'js_only' && c.engine === 'chatgpt'); const s0 = ARD.diagnose(cut(s0c.args, 'chatgpt', 1)).engines.chatgpt;
+    const b0c = DC.find(c => c.label.sub === 'not_indexed' && c.engine === 'copilot'); const pidB = b0c.args.prompt.prompt_id; const b0 = ARD.diagnose({ ...b0c.args, units60: b0c.args.units60.filter(u => !(u.engine === 'copilot' && u.prompt_id === pidB)), answers8: b0c.args.answers8.filter(a => !(a.engine === 'copilot' && a.prompt_id === pidB)) }).engines.copilot;
+    check('AD15 S0 from the page (JavaScript-only) with 1 answer, and from Bing with 0 answers to this question (the site asks the engine) -> provisional S0', s0.stage === 'S0' && s0.sub === 'js_only' && s0.provisional === true && b0.stage === 'S0' && b0.sub === 'not_indexed' && b0.provisional === true && b0.n === 0, J({ s0, b0 }));
+    const u0c = DC.find(c => c.label.stage === 'S1' && c.label.basis === 'unknown_index' && c.engine === 'chatgpt'); const u0 = ARD.diagnose(cut(u0c.args, 'chatgpt', 2)).engines.chatgpt;
+    const d0c = DC.find(c => c.label.stage === 'S1' && c.label.basis === 'direct' && c.engine === 'chatgpt'); const d0 = ARD.diagnose(cut(d0c.args, 'chatgpt', 2)).engines.chatgpt;
+    check('AD15 a provisional S1 needs a basis: ChatGPT\'s retrieved set without the client -> S1 direct provisional; no retrieval reading -> unmeasured', d0.stage === 'S1' && d0.basis === 'direct' && d0.provisional === true && u0.stage === 'unmeasured' && u0.sub === 'too_few', J({ d0, u0 }));
+    const noCop = (args) => ({ ...args, units60: args.units60.filter(u => u.engine !== 'copilot'), answers8: args.answers8.filter(a => a.engine !== 'copilot') });
+    const naD = ARD.diagnose(noCop(b0c.args)); const na = naD.engines.copilot;
+    const naD2 = ARD.diagnose({ ...noCop(b0c.args), engines: b0c.args.engines.filter(e => e !== 'copilot') });
+    check('AD15 an engine the site does not ask, but whose index does not hold the site (not in Bing Webmaster) -> provisional S0 with asked false, also when the caller does not list it; it never moves best_stage',
+      na.stage === 'S0' && na.sub === 'not_indexed' && na.provisional === true && na.asked === false && na.n === 0 && naD2.engines.copilot && naD2.engines.copilot.sub === 'not_indexed' && naD2.best_stage === ARD.diagnose({ ...noCop(b0c.args), index: { ...b0c.args.index, bing: { in_account: null, crawled: new Map() } } }).best_stage, J(na));
+    const naU = ARD.diagnose({ ...noCop(b0c.args), index: { ...b0c.args.index, bing: { in_account: null, crawled: new Map() } } });
+    const naL = ARD.diagnose({ ...noCop(b0c.args), index: { ...b0c.args.index, bing: { in_account: null, crawled: new Map() } }, engines: b0c.args.engines.filter(e => e !== 'copilot') });
+    check('AD15 an engine the site does not ask with no S0 finding: unmeasured / not_asked when listed, no cell when not listed', naU.engines.copilot.stage === 'unmeasured' && naU.engines.copilot.sub === 'not_asked' && naU.engines.copilot.provisional === false && !('copilot' in naL.engines), J(naU.engines.copilot));
+
   });
 };
