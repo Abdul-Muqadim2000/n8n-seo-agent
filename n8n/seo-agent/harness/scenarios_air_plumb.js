@@ -80,7 +80,7 @@ async function runGrowth(o) {
     if (/api\.anthropic\.com\/v1\/messages\/count_tokens/.test(u)) return { input_tokens: 1000 };
     if (/api\.dataforseo\.com\/v3\/appendix\/user_data/.test(u)) return { status_code: 20000, tasks: [{ status_code: 20000, result: [{ money: { balance: 25 } }] }] };
     if (/bing\.com\/webmaster\/api\.svc/i.test(u)) {
-      if (/GetUserSites/i.test(u)) return { d: F.bing.sites.map(s => ({ Url: s, IsVerified: true })) };
+      if (/GetUserSites/i.test(u)) return opt.bing === 'unread' ? { d: null } : opt.bing === 'failed' ? { error: { message: 'Bing answered 500' } } : { d: F.bing.sites.map(s => ({ Url: s, IsVerified: true })) };   // opt.bing: the list read (default), not read, failed
       if (/GetUrlSubmissionQuota/i.test(u)) return { d: { DailyQuota: 10, MonthlyQuota: 300 } };
       if (/GetUrlInfo/i.test(u)) { const m = u.match(/[?&]url=([^&]+)/i); const page = m ? decodeURIComponent(m[1]) : ''; const at = F.bing.crawled[page];
         return { d: { Url: page, HttpStatus: at ? 200 : 0, LastCrawledDate: '/Date(' + (at ? Date.parse(at) : -62135596800000) + ')/', DiscoveryDate: '/Date(' + (at ? Date.parse(at) : -62135596800000) + ')/' } }; }
@@ -302,6 +302,17 @@ module.exports = async (ctx) => {
     const unexpected = allWf.flatMap(([f, w]) => w.nodes.filter(n => /const AIRF = \(\(\) => \{/.test((n.parameters || {}).jsCode || '')).filter(n => !(MON.includes(n.name) || ['Admin Action', 'Monitor Row (Admin)'].includes(n.name) || (f === 'SEO_Agent_AI_Growth.json' && AIR_NODE.test(n.name)))).map(n => f + ' / ' + n.name));
     check('AP11 the AIR nodes exist only in the AI Growth workflow; the AIRF kit appears elsewhere only in the monitors\' site list (settings.rank) and Site Admin\'s two nodes',
       J(airIn) === J(['SEO_Agent_AI_Growth.json']) && !unexpected.length, J({ airIn, unexpected, kitIn }).slice(0, 600));
+
+    // ---------------- AP13 Bing's site list: not read -> unknown, never "not in Bing" (coordinator fix 2026-11-06, P1's replay) ----------------
+    const bingCase = async (bing) => { const res = await runGrowth({ modes: { nova: 'shadow', acme: 'shadow' }, bing }); const items = ((res.r.runs['AI Rank Plan'] || []).slice(-1)[0] || [[]])[0].map(i => i.json);
+      return Object.fromEntries(items.map(it => { const a = it.air || {}; return [it.site_id, { l03: (a.candidates || []).filter(c => c.lever === 'L03').length,
+        s0: (a.diag || []).some(d => ((d.engines || {}).copilot || {}).stage === 'S0' && ((d.engines || {}).copilot || {}).sub === 'not_indexed'), err: it.error }]; })); };
+    const bRead = await bingCase('read'), bUnread = await bingCase('unread'), bFailed = await bingCase('failed');
+    const NV = 'site_nova-ai-example', AC = 'site_acme-erp-example';
+    check('AP13 Bing\'s site list read without the site -> in_account false -> Copilot S0 not_indexed and the Bing step (L03); a site in the list gets neither',
+      bRead[NV] && bRead[NV].l03 >= 1 && bRead[NV].s0 && bRead[AC] && bRead[AC].l03 === 0 && !bRead[AC].s0, J(bRead));
+    check('AP13 Bing\'s site list not read (an empty answer, or the call failed) -> in_account null -> no Copilot S0 and no Bing step for any site',
+      [bUnread, bFailed].every(b => b[NV] && b[AC] && [NV, AC].every(k => b[k].l03 === 0 && !b[k].s0 && !b[k].err)), J({ bUnread, bFailed }));
 
     // ---------------- AP12 kill switch ----------------
     const k = await runGrowth({ wf: wfFake, modes: { nova: 'shadow', acme: 'on' }, kill: true });

@@ -4260,6 +4260,13 @@ const accessOf = (rv) => { if (!rv) return { robots: {}, blocked_engines: [], re
   const blocked_engines = Object.keys(byEngine).filter(e => byEngine[e].length && byEngine[e].every(x => x === false)).sort();
   return { robots, blocked_engines, read_at: S0(rv.checked_at), basis: rv.found ? 'measured' : rv.unavailable ? 'not available' : 'measured (no robots.txt)' }; };
 
+// Bing's list of the sites this account manages (Fetch Bing Sites (Growth)), read once. `null` when it was not read (Bing off, the call failed,
+// an empty answer): then nobody knows whether a site is in Bing, and `in_account` must be null, never false (a false "not in Bing" gave
+// techand.ai, which is in Bing, a Copilot S0 and a Bing step). Growth Metrics' own in_account is left as it is: it feeds the report.
+const bingList = (() => { try { const r = $('Fetch Bing Sites (Growth)').first(); const j0 = r && r.json; if (!j0 || typeof j0 !== 'object' || j0.error) return null;
+  let j = j0; if (j0.d === undefined) { const b = j0.body ?? j0.data; if (b && typeof b === 'object') j = b; else { try { j = JSON.parse(b || '{}'); } catch (e) { j = {}; } } }
+  return Array.isArray(j.d) ? j.d.filter(x => x && x.Url) : null; } catch (e) { return null; } })();
+const rawHost = (u) => { const m = S0(u).match(/^https?:\/\/([^\/?#:]+)/i); return m ? m[1].toLowerCase() : ''; };
 const out = [];
 for (const g of gateSites) {
   const sid = g.site_id;
@@ -4306,7 +4313,7 @@ for (const g of gateSites) {
     const runsPrev = bySite(rrAll, sid, dom).filter(r => r.run_id !== g.run_id);
     const prevRun = latest(runsPrev, 'checked_at');
     const access = accessOf(robotsG.find(r => r.site_id === sid));
-    const bingIn = gm.submitted && gm.submitted.bing && gm.submitted.bing.enabled ? !!gm.submitted.bing.in_account : null;
+    const bingIn = bingList === null ? null : bingList.some(x => { const h = rawHost(x.Url); return (h && h === S0(gp.site_host).toLowerCase()) || h.replace(/^www\./, '') === dom; });   // the list read: in it or not; not read: null
     const index = { google: new Map(bySite(indexAll, sid, dom).map(r => [AIRF.urlKey(r.url), S0(r.state || r.coverage)])),
       bing: { in_account: bingIn, crawled: new Map(aiPages.filter(p => S0(p.bing_crawled_at)).map(p => [AIRF.urlKey(p.url), S0(p.bing_crawled_at)])) },
       brave: fetched && fetched.brave ? new Map(Object.entries(fetched.brave)) : null, cc_captures: fetched && fetched.cc_captures != null ? Number(fetched.cc_captures) : null, gsc };
