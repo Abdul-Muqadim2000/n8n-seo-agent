@@ -126,7 +126,7 @@ const ARD = (() => {
     const pid = S(p.prompt_id);
     const rows = (Array.isArray(answers28) ? answers28 : []).filter(a => answered(a) && (!pid || !S(a.prompt_id) || S(a.prompt_id) === pid));
     if (rows.length >= 4) return rows.filter(namesBusiness).length / rows.length >= 0.5 ? 'recommendation' : 'informational';
-    const k = lc(p.kind); if (k === 'recommend' || k === 'recommendation' || k === 'compare') return 'recommendation'; if (k === 'learn' || k === 'informational' || k === 'info') return 'informational';
+    const k = lc(p.kind); if (['recommend', 'recommendation', 'compare', 'choose', 'shortlist', 'alternatives'].includes(k)) return 'recommendation'; if (['learn', 'informational', 'info', 'cost', 'problem', 'howto', 'how_to', 'define'].includes(k)) return 'informational';
     const t = S(p.prompt || p.question); if (!t) return 'unknown';
     return REC_Q.test(t) ? 'recommendation' : INFO_Q.test(t) ? 'informational' : PROVIDER_Q.test(t) ? 'recommendation' : 'unknown'; };
 
@@ -171,14 +171,27 @@ const ARD = (() => {
     // 3. fill up to core_max with active questions of the site's market: pinned first, then demand, then the oldest
     const fresh = P.filter(p => !brand(p) && !inCore.has(S(p.prompt_id)) && isActive(p) && marketOk(p))
       .sort((a, b) => (flag(b.pinned) - flag(a.pinned)) || (volOf(b) - volOf(a)) || S(a.created_at).localeCompare(S(b.created_at)) || S(a.prompt_id).localeCompare(S(b.prompt_id)));
-    for (const p of fresh) { if (core.length >= coreMax) break; const s = ST.get(S(p.prompt_id)); const was = s && flag(s.core);
+    const join = (p, outside) => { const s = ST.get(S(p.prompt_id)); const was = s && flag(s.core);
       const since = was && S(s.core_since) ? S(s.core_since) : iso(N); const until = N + FREEZE;
-      const reason = was ? 'renewed: still asked, in your market (' + (siteCc || 'any') + ')' : 'new: asked in your market (' + (siteCc || 'any') + ')' + (volOf(p) > 0 ? ', demand ' + volOf(p) : '');
+      const where = outside ? 'outside your market (' + marketCc(p.market) + ', yours is ' + siteCc + '): measured because too few questions of your market are asked' : 'in your market (' + (siteCc || 'any') + ')';
+      const reason = was ? 'renewed: still asked, ' + where : 'new: asked, ' + where + (volOf(p) > 0 ? ', demand ' + volOf(p) : '');
       if (was) extend.push({ prompt_id: S(p.prompt_id), core_until: iso(until), reason });
-      push(p, since, iso(until), reason); }
+      push(p, since, iso(until), reason); };
+    for (const p of fresh) { if (core.length >= coreMax) break; join(p, false); }
+    // too few questions of the site's market are being asked (a panel that drifted to another country, R4 cause 3): the questions that ARE
+    // asked join, up to core_min, labelled; progress can only be measured on questions somebody asks. Off with cfg.core_min = 0.
+    const coreMin = Math.min(coreMax, num(C.core_min, 12));
+    if (core.length < coreMin) for (const p of P.filter(q => !brand(q) && !inCore.has(S(q.prompt_id)) && isActive(q) && !marketOk(q))
+      .sort((a, b) => (flag(b.pinned) - flag(a.pinned)) || (volOf(b) - volOf(a)) || S(a.created_at).localeCompare(S(b.created_at)) || S(a.prompt_id).localeCompare(S(b.prompt_id)))) { if (core.length >= coreMin) break; join(p, true); }
     // 4. questions to propose (never activated here): the caller's candidates from client keywords, Search Console question queries, LLM Mentions
     const cands = Array.isArray(demand && demand.candidates) ? demand.candidates : Array.isArray(C.candidates) ? C.candidates : [];
     const proposed = []; const room = Math.max(0, Math.min(num(C.propose_max, 5), coreMax - core.length)); const taken = new Set();
+    // first: questions of the site's market that were retired and are no longer asked (bring them back; `revive` names the stored row, additive)
+    const inMarketAsked = core.filter(c => marketOk(P.find(p => S(p.prompt_id) === c.prompt_id) || {}) && isActive(P.find(p => S(p.prompt_id) === c.prompt_id) || {})).length;
+    if (siteCc && inMarketAsked < coreMin) for (const p of P.filter(q => !brand(q) && !isActive(q) && marketOk(q) && S(q.market) && !/^(refused|deleted)$/i.test(S(q.status)))
+      .sort((a, b) => (volOf(b) - volOf(a)) || S(a.prompt_id).localeCompare(S(b.prompt_id)))) { if (proposed.length >= room) break; const kw = normKw(p.keyword || p.prompt); if (taken.has(kw)) continue; taken.add(kw);
+      proposed.push({ prompt: S(p.prompt), keyword: normKw(p.keyword), market: siteCc + '-' + lang, intent: intentOf(p, []), source: 'retired_in_market', revive: S(p.prompt_id),
+        reason: 'a question of your market (' + siteCc + ') that is no longer asked (' + lc(p.status) + '): ask it again so progress in your market can be measured' }); }
     const covered = (kw) => P.some(p => cover(kw, S(p.keyword) + ' ' + S(p.prompt)) >= 0.6 || (S(p.keyword) && cover(S(p.keyword), kw) >= 0.8));
     for (const c of cands.slice().sort((a, b) => num(b && b.volume, 0) - num(a && a.volume, 0))) { if (proposed.length >= room) break;
       const kw = normKw(c && (c.keyword || c.query)); if (!kw || taken.has(kw)) continue;
@@ -205,7 +218,13 @@ const ARD = (() => {
     const ST = new Map((Array.isArray(stored) ? stored : []).filter(r => r && S(r.prompt_id)).map(r => [S(r.prompt_id), r]));
     const clusterCount = new Map(); for (const c of C) { const k = lc(c.cluster) || 'other'; clusterCount.set(k, (clusterCount.get(k) || 0) + 1); }
     const top = new Set([...clusterCount.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 4).map(x => x[0]));
-    const stratumOf = (c) => [lc(c.intent) || 'unknown', lc(c.baseline) === 'some' ? 'some' : 'zero', top.has(lc(c.cluster) || 'other') ? (lc(c.cluster) || 'other') : 'other'].join('|');
+    // a stratum needs at least 3 questions to hold a control (T, T, C): smaller ones are merged into a coarser stratum, dropping the cluster
+    // first, then the baseline, then the intent (a real panel of 13 questions over 10 fine strata held no control at all)
+    const MIN_S = 3; const levels = [(c) => [lc(c.intent) || 'unknown', lc(c.baseline) === 'some' ? 'some' : 'zero', top.has(lc(c.cluster) || 'other') ? (lc(c.cluster) || 'other') : 'other'],
+      (c) => [lc(c.intent) || 'unknown', lc(c.baseline) === 'some' ? 'some' : 'zero', '*'], (c) => [lc(c.intent) || 'unknown', '*', '*'], () => ['*', '*', '*']];
+    const fine = new Map(); { let pending = C.slice(); for (let L = 0; L < levels.length; L++) { const g = new Map(); for (const c of pending) { const k = levels[L](c).join('|'); const a = g.get(k) || []; a.push(c); g.set(k, a); }
+      const next = []; for (const [k, a] of g) { if (a.length >= MIN_S || L === levels.length - 1) for (const c of a) fine.set(S(c.prompt_id), k); else next.push(...a); } pending = next; if (!pending.length) break; } }
+    const stratumOf = (c) => fine.get(S(c.prompt_id)) || levels[0](c).join('|');
     const out = new Map(); const tally = new Map(); const fresh = [];
     for (const c of C) { const pid = S(c.prompt_id); const s = ST.get(pid); const arm = s && AIRF.ARMS.includes(lc(s.arm)) ? lc(s.arm) : '';
       if (!arm) { fresh.push(c); continue; }
@@ -215,7 +234,9 @@ const ARD = (() => {
       const t = tally.get(stratum) || { n: 0, c: 0 }; t.n++; if (a === 'control') t.c++; tally.set(stratum, t); }
     const key = (c) => AIRF.hash(S(site_id) + '|' + S(c.prompt_id) + '|' + S(seed));
     fresh.sort((a, b) => key(a) - key(b) || S(a.prompt_id).localeCompare(S(b.prompt_id)));
-    for (const c of fresh) { const stratum = stratumOf(c); const t = tally.get(stratum) || { n: 0, c: 0 }; const arm = PATTERN_OK(t.n, t.c) ? 'control' : 'treated';
+    // a new question joins its stored stratum: the computed one when it already holds stored questions, else the finest level that does
+    const placeOf = (c) => { const k = stratumOf(c); if (tally.has(k)) return k; for (const L of levels) { const k2 = L(c).join('|'); if (tally.has(k2)) return k2; } return k; };
+    for (const c of fresh) { const stratum = placeOf(c); const t = tally.get(stratum) || { n: 0, c: 0 }; const arm = PATTERN_OK(t.n, t.c) ? 'control' : 'treated';
       t.n++; if (arm === 'control') t.c++; tally.set(stratum, t); out.set(S(c.prompt_id), { prompt_id: S(c.prompt_id), arm, stratum, assigned_at: iso }); }
     return C.map(c => out.get(S(c.prompt_id)));
   };
