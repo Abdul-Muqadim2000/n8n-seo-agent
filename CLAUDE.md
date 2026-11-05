@@ -72,7 +72,7 @@ calm plain note, raw provider error kept in `errors_list[].raw` (408eb98d); deva
 coverage: client published improvements at NEW /services/ URLs after our warning; old pages now get "Improved at another address" + site
 task `indexing:merge` (301 check), same-address improvements wait for Google (916697f7, 804bc4c9; `seo_index_pages.improved_at/_to`).
 Also harness S28 date bug (61af135e, harness 16329 / 0). Deployed: backup pg/2026-11-05/*T164419Z, VM -> STANDARD (bootstrap.sh default
-now STANDARD), engine (node-diff vs prod = 0 before and after), API at 61af135e-1 (rollback image alaventra-app:rollback-441797df). Web =
+now STANDARD), engine (node-diff vs prod = 0 before and after), API at 09b2f5b8 (later commits are harness / infra docs only; rollback image alaventra-app:rollback-441797df). Web =
 PR #57, merge needs the owner (classifier). Client step: 301 the three old devaicon URLs to their /services/ versions.
 
 ## Status (2026-10-31, page-quality Waves 0-0.7 DEPLOYED to production)
