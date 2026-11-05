@@ -11,8 +11,7 @@
 //   AF9   focus: a question AIR holds in its core set (core_until in the future) is never retired; without it nothing changes
 //   AF10  _ai_measure: an action's time is live_at when present
 //   AF11  key pages include AIR's target pages only when on
-// The Growth Plan's `on` cases run a copy of the generated node with `settings.rank` filled in (package P4 adds the field to _monitor_sites.js;
-// until it lands no site can be `on`), written next to the generated code for the run and removed after.
+// The Growth Plan's off / shadow / on cases set seo_monitors.ai_rank_mode, which _monitor_sites.js reads into settings.rank (AIRF.settingsOf, P4).
 const fs = require('fs'); const path = require('path');
 module.exports = async (ctx) => {
   const { H, run, mock, store, guard, reset, begin } = ctx;
@@ -88,18 +87,13 @@ module.exports = async (ctx) => {
   const gap = (pid, prompt, topic, o) => ({ prompt_id: pid, prompt, kind: 'recommend', topic, competitors: ['cleartax.com'], sources: [], volume: 100, stage: 'decision', cluster: topic, fanout: [], cited_urls: [], engines: { chatgpt: 'absent' }, ...(o || {}) });
   const loadGrowth = (o) => {
     mock('Load Sites', M.sites({ declared_services: JSON.stringify(o.services || SVC), canonical_host: 'www.' + M.DOMAIN }));
-    mock('Load Ladders', M.ladders()); mock('Load Monitors', M.monitors({ ai_growth: true })); mock('Load Profiles', M.profiles()); mock('Load Cycles', [{ json: {} }]);
+    mock('Load Ladders', M.ladders()); mock('Load Monitors', M.monitors({ ai_growth: true, ...(o.rank ? { ai_rank_mode: o.rank } : {}) })); mock('Load Profiles', M.profiles()); mock('Load Cycles', [{ json: {} }]);
     mock('Load AI Visibility', [{ json: gpVis(o.gaps, o.cited) }]); mock('Load AI Prompts', (o.prompts || []).map(p => ({ json: { site_id: M.SITE, status: 'active', ...p } })));
     mock('Load Content Log', items(o.log || [])); mock('Load Query History', items(o.qh || [])); mock('Load AI Pages', items(o.pages || []));
     mock('Load AI Targets', items(o.targets || [])); mock('Load AI Growth', [{ json: {} }]); mock('Load AI Answers', items(o.answers || [])); mock('Load Cache (Growth)', [{ json: {} }]);
     mock('Load Link Prospects (Growth)', items(o.prospects || [])); };
-  // the `on` copy of the generated Growth Plan (settings.rank set per site, as _monitor_sites.js will once P4 lands)
-  const withRank = async (node, file, ranks, input) => { const src = fs.readFileSync(path.join(CODE, file + '.js'), 'utf8');
-    const anchor = "const airOn = !!(s.settings && s.settings.rank && s.settings.rank.mode === 'on');"; if (src.indexOf(anchor) < 0) throw new Error('the AIR guard anchor is not in ' + file);
-    const name = 'AIRFIX__' + file + '_' + Math.random().toString(36).slice(2, 8); const out = path.join(CODE, name + '.js');
-    fs.writeFileSync(out, 'const __AIRFIX_RANK = ' + JSON.stringify(ranks) + ';\n' + src.replace(anchor, 'if (s.settings && !s.settings.rank && __AIRFIX_RANK[s.site_id]) s.settings.rank = __AIRFIX_RANK[s.site_id]; ' + anchor));
-    try { return await run(node, input, { code: name }); } finally { try { fs.unlinkSync(out); } catch (e) {} } };
-  const growth = async (o, ranks) => { loadGrowth(o); const out = ranks ? await withRank('Growth Plan', 'Growth_Plan', ranks, store['Load Cache (Growth)']) : await run('Growth Plan', store['Load Cache (Growth)']); return out[0].json; };
+  // AI ranking's mode comes from the real seo_monitors column (ai_rank_mode), read by _monitor_sites.js through AIRF.settingsOf (package P4)
+  const growth = async (o, ranks) => { loadGrowth({ ...o, rank: ranks ? Object.values(ranks)[0].mode : '' }); return (await run('Growth Plan', store['Load Cache (Growth)']))[0].json; };
   const kitFrom = (file, name) => { const src = fs.readFileSync(path.join(CODE, file), 'utf8'); const a = src.indexOf('const ' + name + ' = (() => {'); const b = src.indexOf('\n})();', a);
     if (a < 0 || b < 0) throw new Error(name + ' is not inlined in ' + file); return new Function(src.slice(a, b + 6) + '\nreturn ' + name + ';')(); };
 
