@@ -396,3 +396,85 @@ describe('cards and Needs you from the cadence mirror', () => {
     ]);
   });
 });
+
+// Prod 2026-11-05 (devaicon.com): "privacy policy" was a page run of 2026-10-30 that finished with a report and no page (AVOID). The app
+// closed its content-log row `failed` and the Content page dropped it, but the Pipeline kept "Publish 1 written page: "privacy policy"
+// (waiting 6 days)" because the ladder build's logState took any unpublished row as a written page.
+describe('pages that were never written do not wait to be published (noPageRow)', () => {
+  const NOW_D = Date.parse('2026-11-05T09:00:00Z');
+  const since = (d: number) => new Date(NOW_D - d * DAY).toISOString();
+  const publishItems = (b: ReturnType<typeof buildLadders>) => ladderNeedsYou(b).filter((i) => i.kind === 'publish' || i.kind === 'failed');
+
+  it('a run that finished without a page (row closed `failed`): no waiting page, no "Publish 1 written page"', () => {
+    const b = buildLadders(
+      src({
+        logs: [log({ keyword: 'privacy policy', status: 'failed', started_at: since(6), request_id: 'req-pp', qa_reasons: 'no page was written: the keyword check advised against this page, see its report' })],
+        runs: [run({ keyword: 'privacy policy', status: 'completed', createdAt: since(6), requestId: 'req-pp' })],
+        pageReports: [{ reportId: 'rep-pp', runId: null, keyword: 'privacy policy', ladderId: '', receivedAt: since(6) }],
+      }),
+      sched(),
+      { now: NOW_D },
+    );
+    expect(b.waiting).toEqual([]);
+    expect(publishItems(b)).toEqual([]);
+  });
+
+  it('two closed rows for the keyword (the duplicate the 2026-11-03 fix deleted): still no page', () => {
+    const b = buildLadders(
+      src({ logs: [log({ keyword: 'privacy policy', status: 'failed', started_at: since(6) }), log({ keyword: 'Privacy Policy', status: 'failed', started_at: since(6.01) })] }),
+      sched(),
+      { now: NOW_D },
+    );
+    expect(b.waiting).toEqual([]);
+  });
+
+  it('a `started` row of a run the app saw fail, not yet marked: no page', () => {
+    const b = buildLadders(
+      src({
+        logs: [log({ keyword: 'privacy policy', status: 'started', started_at: since(6), request_id: 'req-f' })],
+        runs: [run({ id: 'r2', keyword: 'privacy policy', status: 'completed', createdAt: since(5), requestId: 'req-other' }), run({ keyword: 'privacy policy', status: 'failed', createdAt: since(6), requestId: 'req-f' })],
+      }),
+      sched(),
+      { now: NOW_D },
+    );
+    expect(b.waiting).toEqual([]);
+  });
+
+  it("a keyword held for the client's OK is not a written page (it has its own Needs-you item)", () => {
+    const b = buildLadders(src({ logs: [log({ keyword: 'erp dubai', status: 'held', started_at: since(2) })] }), sched(), { now: NOW_D });
+    expect(b.waiting).toEqual([]);
+  });
+
+  it('still waits: a written page, a not_ready draft, and an older written page whose later rewrite failed', () => {
+    const b = buildLadders(
+      src({
+        logs: [
+          log({ keyword: 'bfsi technology', status: 'written', started_at: since(3) }),
+          log({ keyword: 'erp uae', status: 'not_ready', started_at: since(4), qa_reasons: '[Confirm: AED 50m] in the body' }),
+          log({ keyword: 'crm uae', status: 'failed', started_at: since(1) }),
+          log({ keyword: 'crm uae', status: 'written', started_at: since(8) }),
+        ],
+      }),
+      sched(),
+      { now: NOW_D },
+    );
+    expect(b.waiting.map((w) => [w.keyword, !!w.needsFix])).toEqual([
+      ['crm uae', false],
+      ['erp uae', true],
+      ['bfsi technology', false],
+    ]);
+  });
+
+  it('a ladder page whose only run finished without a page is planned again, not waiting', () => {
+    const b = buildLadders(
+      src({
+        ladders: [lad({ keyword: 'privacy policy uae', status: 'writing', start_date: since(6) })],
+        logs: [log({ keyword: 'privacy policy uae', status: 'failed', started_at: since(6), ladder_id: 'l1' })],
+      }),
+      sched(),
+      { now: NOW_D },
+    );
+    expect(b.details.get('l1')?.pages.find((p) => p.keyword === 'privacy policy uae')?.state).toBe('planned');
+    expect(b.waiting).toEqual([]);
+  });
+});

@@ -216,7 +216,7 @@ export function PublishedForm({ initialSiteId, prefill }: ToolFormProps) {
   const drafts = useMemo(() => {
     const seen = new Set<string>();
     return (content.data?.items ?? [])
-      .filter((i) => i.status !== 'published' && !i.publishedUrl && i.keyword)
+      .filter((i) => i.status !== 'published' && i.status !== 'held' && !i.publishedUrl && i.keyword)   // 2026-11-05: a held keyword has no page (failed rows never reach the list)
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
       .filter((i) => (seen.has(draftKey(i)) ? false : (seen.add(draftKey(i)), true)))
       .slice(0, 50);
