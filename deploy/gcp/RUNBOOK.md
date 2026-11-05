@@ -241,6 +241,8 @@ two ways, and the second needs no Vercel work per agency:
   - Docker, the images and the data are already on the disks, so the stack is back in about 2–4 minutes after the VM starts.
   - If Spot capacity is short in the zone, the VM stays down until there is capacity. `resize.sh` cannot help with that.
   - Moving to standard (non-Spot) provisioning costs about $13 a month more.
+  - **2026-11-05: switched to STANDARD** (owner's choice after 24 preemptions that day, every 4-8 minutes by 16:00 UTC; template
+    `alaventra-tpl-e2-medium-153f71d8`, VM restarted 16:42 UTC). `bootstrap.sh` now defaults to STANDARD; `PROVISIONING=SPOT` goes back.
   - **2026-11-02: still Spot, by the owner's choice (no extra cost).** The VM was preempted five times that day (UTC 02:00, 08:00,
     08:40, 13:54, 15:35) and one preemption killed a client's page run. To switch: `PROVISIONING=STANDARD bootstrap.sh` (dry run, read
     it) then `--apply` while no run is active; the group restarts the VM once on the new template (about 3-5 minutes down).
