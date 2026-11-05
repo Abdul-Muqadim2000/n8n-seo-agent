@@ -437,16 +437,18 @@ const AVX = (() => {
 
   // ---- 2. the 28-day window: units of earlier weekly runs (units_json) and of the daily pulse (detail_json) --------------------------------
   /** the compact per-answer record a weekly row stores (units_json): questions and engines indexed once */
-  const packUnits = (units, at, rule) => { const qs = [], es = [], ents = []; const ix = (arr, v) => { let i = arr.indexOf(v); if (i < 0) { arr.push(v); i = arr.length - 1; } return i; };
+  // FX-B RB-1 (2026-11-06): `er` = the entity rule the competitors were counted under (AIE.RULE); a reader with another rule keeps the answer's
+  // named / cited / place but drops its competitors (null = not recorded under this rule)
+  const packUnits = (units, at, rule, er) => { const qs = [], es = [], ents = []; const ix = (arr, v) => { let i = arr.indexOf(v); if (i < 0) { arr.push(v); i = arr.length - 1; } return i; };
     const a = (units || []).map(u => [ix(qs, String(u.prompt_id)), ix(es, String(u.engine)), u.named ? 1 : 0, u.cited ? 1 : 0, u.position || null, u.rivals ? u.rivals.map(x => [ix(ents, String(x.id)), x.position || null, x.cited ? 1 : 0]) : null]);
-    return { v: 1, rule_version: rule, at, q: qs, e: es, ents, a }; };
+    return { v: 1, rule_version: rule, ...(er ? { entity_rule: er } : {}), at, q: qs, e: es, ents, a }; };
   const unpackUnits = (raw) => { const x = parse(raw, null); if (!x || !Array.isArray(x.a)) return null; const q = x.q || [], e = x.e || [], ents = x.ents || [];
-    return { rule_version: String(x.rule_version || ''), at: String(x.at || ''), units: x.a.filter(Array.isArray).map(a => ({ prompt_id: String(q[a[0]]), engine: String(e[a[1]]), named: !!a[2], cited: !!a[3], position: Number(a[4]) > 0 ? Number(a[4]) : null,
+    return { rule_version: String(x.rule_version || ''), entity_rule: String(x.entity_rule || ''), at: String(x.at || ''), units: x.a.filter(Array.isArray).map(a => ({ prompt_id: String(q[a[0]]), engine: String(e[a[1]]), named: !!a[2], cited: !!a[3], position: Number(a[4]) > 0 ? Number(a[4]) : null,
       rivals: Array.isArray(a[5]) ? a[5].map(r => ({ id: String(ents[(r || [])[0]] || ''), position: Number((r || [])[1]) > 0 ? Number(r[1]) : null, cited: !!(r || [])[2] })).filter(r => r.id) : null, answered: true })) }; };
   /** a pulse morning's per-answer record (Pulse Metrics' detail_json) as units */
-  const pulseUnits = (detail) => { const D = parse(detail, null); if (!D || !Array.isArray(D.a)) return []; const ents = Array.isArray(D.ents) ? D.ents : [];
+  const pulseUnits = (detail, er) => { const D = parse(detail, null); if (!D || !Array.isArray(D.a)) return []; const ents = Array.isArray(D.ents) ? D.ents : []; const keepR = !er || String(D.entity_rule || '') === er;
     return D.a.filter(Array.isArray).map(a => ({ prompt_id: String(a[0]), engine: String(a[1]), named: !!a[2], cited: !!a[3], position: Number(a[4]) > 0 ? Number(a[4]) : null, pulse: true, answered: true,
-      rivals: Array.isArray(a[5]) ? a[5].map(x => ({ id: String(ents[(x || [])[0]] || ''), position: Number((x || [])[1]) > 0 ? Number(x[1]) : null, cited: !!(x || [])[2] })).filter(x => x.id) : null })); };
+      rivals: keepR && Array.isArray(a[5]) ? a[5].map(x => ({ id: String(ents[(x || [])[0]] || ''), position: Number((x || [])[1]) > 0 ? Number(x[1]) : null, cited: !!(x || [])[2] })).filter(x => x.id) : null })); };
   /** every dated answer of the site under the current rule in (from, to]: this run's weekly units, earlier weekly rows' units_json, the pulse
    *  mornings' detail_json. Each pulse morning counts once (by its row), the weekly answers once (by their run). */
   const history = (o) => { const opt = o || {}; const rule = opt.rule; const from = Date.parse(opt.from), to = Date.parse(opt.to); const inW = (t) => { const x = Date.parse(t); return isFinite(x) && x > from && x <= to; };
@@ -454,9 +456,9 @@ const AVX = (() => {
     for (const u of (opt.now_units || [])) out.push({ ...u, at: opt.now_at });
     if (opt.now_units && opt.now_units.length) runs.push({ run_id: opt.now_run || '', at: opt.now_at });
     for (const r of (opt.vis_rows || [])) { if (!r || r.run_id === opt.now_run || !inW(r.checked_at)) continue; const x = unpackUnits(r.units_json); if (!x || x.rule_version !== rule) { left.weekly_rows++; continue; }
-      runs.push({ run_id: String(r.run_id || ''), at: String(r.checked_at) }); for (const u of x.units) out.push({ ...u, at: String(r.checked_at) }); }
+      runs.push({ run_id: String(r.run_id || ''), at: String(r.checked_at) }); const keepR = !opt.entity_rule || x.entity_rule === opt.entity_rule; for (const u of x.units) out.push({ ...u, ...(keepR ? {} : { rivals: null }), at: String(r.checked_at) }); }
     const seen = new Set(); for (const d of (opt.daily_rows || [])) { if (!d || !inW(d.checked_at)) continue; const key = String(d.run_id || '') + '|' + String(d.date || '') + '|' + String(d.checked_at); if (seen.has(key)) continue; seen.add(key);
-      if (String(d.rule_version || '') !== rule) { left.pulse_rows++; continue; } const us = pulseUnits(d.detail_json || d.detail); if (!us.length) { left.pulse_rows++; continue; }
+      if (String(d.rule_version || '') !== rule) { left.pulse_rows++; continue; } const us = pulseUnits(d.detail_json || d.detail, opt.entity_rule); if (!us.length) { left.pulse_rows++; continue; }
       pulseDays.add(String(d.date || String(d.checked_at).slice(0, 10))); for (const u of us) out.push({ ...u, at: String(d.checked_at) }); }
     return { units: out, runs, pulse_days: pulseDays.size, left_out: left, from: new Date(from).toISOString(), to: new Date(to).toISOString(), days: Math.round(10 * (to - from) / 864e5) / 10 }; };
 
@@ -610,7 +612,7 @@ const AVX = (() => {
     // 2. the 28-day window for segment rates (earlier weekly rows' units_json + the pulse mornings' detail_json + this run's weekly answers)
     const visRows = rd('Load AI Visibility').filter(mine), daily = rd('Load AI Daily').filter(mine);
     const weeklyNow = (c.U || []).filter(u => !u.pulse);
-    const H28 = history({ rule: c.rule, from: isoT(nowT - 28 * DAY), to: isoT(nowT + 1), now_units: weeklyNow, now_run: p.run_id, now_at: p.checked_at, vis_rows: visRows, daily_rows: daily });
+    const H28 = history({ rule: c.rule, entity_rule: c.entity_rule, from: isoT(nowT - 28 * DAY), to: isoT(nowT + 1), now_units: weeklyNow, now_run: p.run_id, now_at: p.checked_at, vis_rows: visRows, daily_rows: daily });
     const acc = new Map(); for (const u of H28.units) { const m0 = (c.meta && c.meta.get(u.prompt_id)) || {}; for (const [d, key] of c.segKeys({ ...m0, topic: m0.topic || '' }, u.engine)) { const id = d + '|' + key; const a = acc.get(id) || []; a.push(u); acc.set(id, a); } }
     const lend = c.CI ? c.CI.rho_lent : null;
     for (const s of (c.segRows || [])) { const us = acc.get(s.dim + '|' + s.key) || []; const r0 = prop(us, (u) => !!u.named, { rho: lend });
@@ -619,7 +621,7 @@ const AVX = (() => {
       note: 'Segment rates count the last 28 days (' + H28.runs.length + ' weekly run' + (H28.runs.length === 1 ? '' : 's') + ' and ' + H28.pulse_days + ' pulse morning' + (H28.pulse_days === 1 ? '' : 's') + ', ' + H28.units.length + ' answers); the headline counts this run\'s window. A segment\'s change is still tested run against run, on answers that do not overlap.'
         + (H28.left_out.weekly_rows || H28.left_out.pulse_rows ? ' ' + (H28.left_out.weekly_rows + H28.left_out.pulse_rows) + ' earlier reading(s) were left out (another measurement rule, or no per-answer record).' : '') };
     // 5. did an action work: the AI targets written / won and the pages published in the last 31 days (its 28 days before must be inside what is loaded)
-    const H60 = history({ rule: c.rule, from: isoT(nowT - 60 * DAY), to: isoT(nowT + 1), now_units: weeklyNow, now_run: p.run_id, now_at: p.checked_at, vis_rows: visRows, daily_rows: daily });
+    const H60 = history({ rule: c.rule, entity_rule: c.entity_rule, from: isoT(nowT - 60 * DAY), to: isoT(nowT + 1), now_units: weeklyNow, now_run: p.run_id, now_at: p.checked_at, vis_rows: visRows, daily_rows: daily });
     const qOfKw = (kw) => { const k = String(kw || '').toLowerCase().trim(); if (k.split(/\s+/).length < 2) return []; return [...(c.meta || new Map()).values()].filter(q => q.kind !== 'brand' && (String(q.keyword || '').toLowerCase().trim() === k || String(q.prompt || '').toLowerCase().includes(k))).map(q => String(q.prompt_id)); };
     const inRange = (at) => { const x = Date.parse(at); return isFinite(x) && x >= nowT - 31 * DAY && x <= nowT; };
     const acts = [];
@@ -640,7 +642,7 @@ const AVX = (() => {
     const comps = (c.comps || []).map(x => ({ domain: x.domain, sov: x.sov, delta: x.delta ? { sov: x.delta.sov, sov_z: x.delta.sov_p != null && x.delta.sov != null ? (x.delta.sov >= 0 ? 1 : -1) * zOfP(x.delta.sov_p) : null, why: x.delta.why } : null }));
     const evaluated = rulesErr ? [] : evalRules(rules, { comparable: c.comparable, why: c.why, compare: c.compare, segRows: (c.segRows || []).map(s => ({ dim: s.dim, key: String(s.key).toLowerCase(), n: s.n, k: s.k, cited: s.cited })), segPrev, comps, deff: c.CI && c.CI.headline.named_rate ? c.CI.headline.named_rate.deff : 1 });
     if (rulesErr) evaluated.push({ rule_id: '', fired: false, metric: '', scope: {}, delta: null, test: null, reason: 'the stored rules could not be read: ' + rulesErr });
-    return { sov: sovJ, window28, impact: imp, actions_considered: acts.length, alert_rules: evaluated, units_json: JSON.stringify(packUnits(weeklyNow, p.checked_at, c.rule)), ms: Date.now() - t0 }; };
+    return { sov: sovJ, window28, impact: imp, actions_considered: acts.length, alert_rules: evaluated, units_json: JSON.stringify(packUnits(weeklyNow, p.checked_at, c.rule, c.entity_rule)), ms: Date.now() - t0 }; };
 
   return { Z, t975, wilsonN, prop, ratio, boot, binom, rng, hash, ci, packUnits, unpackUnits, pulseUnits, history, sov, impact, validateRules, evalRules, METRICS, SCOPES, pilot, zOfP, nCdf, parse, run };
 })();
@@ -811,6 +813,12 @@ const SENT = (() => {
 // earlier row carries the marker). Where nothing was left out the two rules count the same answers, so the comparison stands. The stored
 // rule_version (AVM.RULE_VERSION) does not change: the answers themselves are read as before.
 const HEAD_RULE = 'f08';
+// FX-B RB-1 (2026-11-06, REVIEW_B_SAFETY.md): F-53 changed who counts as a competitor (headings, prices, places and regulators no longer do), which
+// re-normalises share of voice, the competitor table and the place among the businesses named. The week records the entity rule it was counted
+// under (metrics_json.entity_rule) and is never compared with a week counted under another one: "this week starts a new baseline", no delta, no
+// alert rule. A pulse morning stored under another entity rule still counts for "named in" and "cited", but its competitors are left out (the
+// share of voice counts only answers whose businesses were recorded under this rule). Read after the AI_ENTITIES kit is inlined (AIE.RULE).
+const entRuleOf = () => (typeof AIE === 'object' && AIE && AIE.RULE) || 'f53';
 const w2read = (n) => { try { return $(n).all().map(i => i.json).filter(Boolean); } catch (e) { return []; } };   // W2-E2: the loads and the Sentiment Reader, read defensively
 // ---- AI entities (F1a, 2026-10-23; docs/ai-visibility-2026-10-23/ENGINE_AUDIT.md E3 E4 E5 E8 E10 E16, PROD_STATE.md section 5) ----
 // WHO an AI answer names, as ONE entity per business, and in which ROLE. Inlined by build_monitors.py (the AI_ENTITIES placeholder) into
@@ -895,9 +903,14 @@ const AIE = (() => {
     ['openedx.org', 'Open edX', P_B + '(?:open\\s*edx|edx\\s+platform)' + P_E, 'giu'], ['moodle.com', 'Moodle', P_B + '(?:Moodle(?:\\s+Workplace|\\s+LMS)?|MOODLE)' + P_E, 'gu'],
     ['epicor.com', 'Epicor', P_B + 'epicor' + P_E, 'giu'], ['acumatica.com', 'Acumatica', P_B + 'acumatica' + P_E, 'giu'], ['infor.com', 'Infor', P_B + 'Infor' + P_E, 'gu']];
   const PLAT_DOMS = new Set(PLATFORMS.map(p => p[0]));
-  // F-53: open-source platforms a whole market builds on (openedx.org ranked as an Open edX shop's top rival): a platform, never a competitor,
-  // unless the owner named it a competitor
+  // F-53: open-source platforms a whole market builds on (openedx.org ranked as an Open edX shop's top rival).
+  // FX-B RB-1 (2026-11-06, REVIEW_B_SAFETY.md): they were a platform for EVERY site, so a client that competes with Moodle (an LMS vendor that
+  // builds on neither) lost it as a rival. They are a platform only for a client that itself builds on one of them (its own words name Open edX
+  // or Moodle: an Open edX shop treats Moodle as the other platform, not a business), and a competitor whenever the owner named them one.
   const OPEN_PLAT = new Set(['openedx.org', 'moodle.com']);
+  // FX-B RB-1: the version of the entity rule (who counts as a competitor). F-53 changed it; every stored figure that depends on it (share of
+  // voice, the competitor table, a pulse morning's competitors) carries it, and a week is never compared with one counted under another rule.
+  const RULE = 'f53';   // ENTITY_RULE (the harness reads it here)
 
   // ---- how a name is found in a text ----
   const B = '(?<![\\p{L}\\p{M}\\p{N}])', E = '(?![\\p{L}\\p{M}\\p{N}])';
@@ -1068,6 +1081,7 @@ const AIE = (() => {
     // (openedx.org for an Open edX shop) reads as the client's platform, not its rival
     const clientSquash = new Set(); { const ws = low(ct).split(/[^\p{L}\p{N}]+/u).filter(Boolean); for (let i = 0; i < ws.length; i++) for (let k = 2; k <= 3 && i + k <= ws.length; k++) clientSquash.add(ws.slice(i, i + k).join('')); }
     const out = { plan, own, owned, configured, soft, find, idOfRoot, membersOf, display, nameKey, nameToDom, doms, scans, selfScans, selfNames, selfKeys, clientRoots: cp, clientText: ct, clientSquash, roleOfBook, explicit,
+      openShop: [...OPEN_PLAT].some(d => clientPlatforms(plan).includes(d)),   // FX-B RB-1: the client builds on an open platform itself
       confRoots: new Set(configured.map(d => find('d:' + d))) };
     DIRS.set(key, out);
     return out;
@@ -1201,7 +1215,7 @@ const AIE = (() => {
       else if (!named.length) role = isClientPlat ? 'platform' : 'source';
       else if (srcKind) role = 'source';
       else if (otherKind) role = 'other';
-      else if (isClientPlat || ds.some(d => OPEN_PLAT.has(d))) role = 'platform';
+      else if (isClientPlat || (D.openShop && ds.some(d => OPEN_PLAT.has(d)))) role = 'platform';   // FX-B RB-1: an open platform only for a client on one
       else if (named.filter(m => m.s < 1e8).length && named.filter(m => m.s < 1e8).every(m => platformBefore(vis, m.s) || platformAfter(vis, m.e))) role = 'platform';
       else if (named.filter(m => m.s < 1e8).length && named.filter(m => m.s < 1e8).every(m => SRC_BEFORE.test(vis.slice(Math.max(0, m.s - 40), m.s)) || SRC_AFTER.test(vis.slice(m.e, m.e + 30)))) role = 'source';
       else if (ds.length || nameLike(name) || AR.test(name) || rootsF.some(r => D.explicit.has(r)))
@@ -1252,7 +1266,7 @@ const AIE = (() => {
     if ((F1.size || F2.size) && jac(F1, F2) < 0.6) return false; return jac(stems(ca), stems(cb)) >= 0.5; };
   const claimKey = (t) => { const [c, f] = splitIssue(t); return [...stems(f)].sort().join(' ') + '|' + [...stems(c)].sort().join(' '); };
 
-  return { servicesOf, L, low, normD, regD, hostOf, labelOf, core, commonWord, nameLike, junkName, bizSignal, HEADING_WORDS, nameRe, visible, kindOfDomain, brandNames, ownNames, clientPlatforms, bookOf, dir, read, compact, entitiesOf, sameEntity, vendorIn, sameClaim, claimKey, PLATFORMS };
+  return { RULE, servicesOf, L, low, normD, regD, hostOf, labelOf, core, commonWord, nameLike, junkName, bizSignal, HEADING_WORDS, nameRe, visible, kindOfDomain, brandNames, ownNames, clientPlatforms, bookOf, dir, read, compact, entitiesOf, sameEntity, vendorIn, sameClaim, claimKey, PLATFORMS };
 })();
 // ---- G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): the AI question panel at enterprise scale — shared by AI Plan, AI Requests, Prompt Jobs,
 // Prompt Rows, Pulse Plan, AI Metrics and the Site Admin (inlined by the build). Pure functions, no node access: the harness runs them.
@@ -2855,10 +2869,14 @@ return plans.map(p => {
   // ---- F1b (2026-10-23): the week's answers, ONE unit each: this run's answers (every engine; the headline leaves the monthly ones out) and
   // the pooled pulse answers, each with the business's reading (named / cited / place) and the competitors it named, one key per business
   // ("ClearTax" and cleartax.com are one). The headline, every engine, every segment and every competitor are measured from these units.
-  const pulseRaw = []; for (const d of PR) { const D = d.detail; const ents = Array.isArray(D.ents) ? D.ents : [];
+  const ENT_RULE = entRuleOf(); const entOld = { answers: 0, readings: 0 };
+  const pulseRaw = []; for (const d of PR) { const D = d.detail; const ents = Array.isArray(D.ents) ? D.ents : []; const entSame = String(D.entity_rule || '') === ENT_RULE;   // FX-B RB-1
+    if (!entSame) { entOld.readings++; entOld.answers += D.a.filter(Array.isArray).length; }
     for (const a of D.a) { if (!Array.isArray(a)) continue; const q0 = meta.get(String(a[0])); if (q0 && q0.kind === 'brand') continue;
       pulseRaw.push({ prompt_id: String(a[0]), engine: String(a[1]), date: d.date, run_id: d.run_id || '', pulse: true, answered: true, named: !!a[2], cited: !!a[3], position: Number(a[4]) > 0 ? Number(a[4]) : null,
-        rivals: Array.isArray(a[5]) ? a[5].map(x => ({ id: String(ents[(x || [])[0]] || ''), position: Number((x || [])[1]) > 0 ? Number(x[1]) : null, cited: !!(x || [])[2] })).filter(x => x.id && notList(x.id)) : null }); } }
+        rivals: !entSame ? null : Array.isArray(a[5]) ? a[5].map(x => ({ id: String(ents[(x || [])[0]] || ''), position: Number((x || [])[1]) > 0 ? Number(x[1]) : null, cited: !!(x || [])[2] })).filter(x => x.id && notList(x.id)) : null }); } }
+  if (entOld.readings && pulse_basis) { pulse_basis.entity_old = { readings: entOld.readings, answers: entOld.answers };
+    pulse_basis.note += ' ' + entOld.answers + ' of those pulse answers (' + entOld.readings + ' reading(s)) recorded their competitors under the earlier rule: they count for "named in" and "cited", not for share of voice.'; }
   const weekRaw = R.filter(r => AVM.tb(r.answered)).map(r => ({ prompt_id: r.prompt_id, engine: r.engine, topic: r.topic, pulse: false, answered: true, named: AVM.named(r), cited: AVM.tb(r.cited), position: AVM.position(r), rivals: AVM.rivals(r, { keep: notList }) }));
   const rivDoms = [...new Set([...(p.configured_competitors || []), ...[...weekRaw, ...pulseRaw].flatMap(u => (u.rivals || []).map(x => x.id))].filter(k => /\./.test(String(k))).map(k => String(k).toLowerCase()))];
   // F1b + F1a (2026-10-23): two ids met in separate answers that are one business (cleartax.com / cleartax.in, a subdomain) are counted
@@ -3150,6 +3168,8 @@ return plans.map(p => {
   // visibility. It is checked first: it explains more than an engine or a panel change.
   const same_rule = prev ? (String(prev.rule_version || '') === AVM.RULE_VERSION ? (pulse_off_panel && !(prev.stats && prev.stats.headline_rule === HEAD_RULE)
       ? { comparable: false, why: 'measurement rule changed: this week starts a new baseline (the headline now counts the daily pulse answers to this week\'s questions only; ' + pulse_off_panel.answers + ' answer(s) to questions no longer on the panel were left out, and the earlier week counted such answers)' }
+      : !(prev.stats && prev.stats.entity_rule === entRuleOf())   // FX-B RB-1: F-53's entity rule
+        ? { comparable: false, why: 'measurement rule changed: this week starts a new baseline (a competitor is now a business an answer names, not a heading, a price, a place or a regulator, so share of voice, your place among the businesses named and the competitor table are counted afresh)' }
       : { comparable: true, why: '' })
     : { comparable: false, why: 'measurement rule changed: this week starts a new baseline (from ' + AVM.RULE_VERSION.replace(/^aivis-/, '') + ' "named in" counts the answers that name you, not the ones that only cite a page, and share of voice counts every competitor named)' }) : null;
   // R-E6 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): the daily pulse's answers join the headline, so the engines the pulse asks
@@ -3371,7 +3391,7 @@ return plans.map(p => {
     c.delta = { named_rate: dd(c.named_rate, b0.named_rate), sov: dd(c.sov, b0.sov != null ? b0.sov : b0.share), avg_position: dd(c.avg_position, b0.avg_position), cited_rate: dd(c.cited_rate, b0.cited_rate),
       sov_significant: t ? t.significant : null, sov_p: t ? t.p : null, why: t ? t.why : 'the earlier run did not record this competitor per answer' };
     for (const [e, x] of Object.entries(c.engines || {})) { const y = ((b0.engines || {})[e]) || null; x.delta = y ? { named_rate: dd(x.named_rate, y.named_rate), sov: dd(x.sov, y.sov), avg_position: dd(x.avg_position, y.avg_position), cited_rate: dd(x.cited_rate, y.cited_rate) } : null; } }
-  const stats = { v: 1, rule_version: AVM.RULE_VERSION, headline_rule: HEAD_RULE, named: { k: H.named, n: H.n }, cited: { k: H.cited, n: H.n },
+  const stats = { v: 1, rule_version: AVM.RULE_VERSION, headline_rule: HEAD_RULE, entity_rule: entRuleOf(), named: { k: H.named, n: H.n }, cited: { k: H.cited, n: H.n },
     sov: { rate: H.sov, se: H.sov_se, n: H.sov_n, self: H.sov_self, mentions: H.sov_mentions },
     position: { mean: H.avg_position, sd: H.position_sd, n: H.position_n, first: H.first, first_rate: H.first_rate, pos_visibility: H.pos_visibility, pos_visibility_se: H.pos_visibility_se },
     score: { score: visibility_score, half: score_band.half, n: score_band.n, n_eff: score_band.n_eff },
@@ -3392,7 +3412,7 @@ return plans.map(p => {
       avg_position: cmpM(H.avg_position, PS && PS.position ? PS.position.mean : (prev ? prev.avg_position : null), H.position_n, PS && PS.position ? Number(PS.position.n) || 0 : 0, T0.avg_position) } };
   // ---- W2-E2 (2026-10-23, fixes/W2-E2.md): share of voice over the declared set, the 28-day segment window, did an action work, the owner's
   // alert rules (fired ones join the alerts), sentiment of every answer naming you (the Sentiment Reader), and the engines' clustered ranges
-  const W2 = AVX.run({ p, rule: AVM.RULE_VERSION, U, CI: W2CI, segRows, segKeys, meta, compare: compare.metrics, comparable: cmpOk, why: like ? like.why : 'no earlier run', comps: comp, read: w2read,
+  const W2 = AVX.run({ p, rule: AVM.RULE_VERSION, entity_rule: entRuleOf(), U, CI: W2CI, segRows, segKeys, meta, compare: compare.metrics, comparable: cmpOk, why: like ? like.why : 'no earlier run', comps: comp, read: w2read,
     canon: (x) => { const d = normD(x); const k0 = brandKey(/\./.test(d) ? d : String(x).trim(), rivDoms, p.aliases); return k0 ? oneKey(/\./.test(k0) ? String(k0).toLowerCase() : k0) : k0; } });
   for (const r of W2.alert_rules.filter(x => x.fired)) alerts.push({ level: 'medium', text: 'Your alert rule "' + r.rule_id + '" (' + r.metric.replace(/_/g, ' ') + (Object.keys(r.scope || {}).length ? ', ' + Object.entries(r.scope).map(([a, b]) => a + ' ' + b).join(', ') : '') + '): ' + r.reason + '.' });
   const W2S = (() => { const allJobs = (() => { try { return $('Sentiment Jobs').all().map(i => i.json || {}); } catch (e) { return []; } })(); const outs = (() => { try { return $('Sentiment Reader').all().map(i => i.json || {}); } catch (e) { return []; } })();

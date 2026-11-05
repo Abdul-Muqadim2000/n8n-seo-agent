@@ -111,7 +111,8 @@ module.exports = async (ctx) => {
     const G = await growth({ gaps, prompts, answers, cited: [{ url: page, citations: 2, engines: ['chatgpt'] }] });
     const t = (pid) => G.targets.find(x => x.prompt_id === pid) || {};
     console.log('   targets ->', JSON.stringify(G.targets.map(x => [x.prompt_id, x.status, x.keyword, String(x.reason).slice(0, 140)])));
-    check('"is ms 365 an erp" (too broad on its own words) is judged on the full question, abbreviation written out, and queued', t('g1').status === 'queued' && /judged on the full question \("microsoft 365 erp/.test(t('g1').reason), JSON.stringify(t('g1')));
+    // FX-B RB-2: rescued on the full question, its stored keyword is still the one the Content Cadence's gate refuses: listed (skipped, with why), never queued
+    check('"is ms 365 an erp" (too broad on its own words) is judged on the full question, abbreviation written out, never set aside, and (RB-2) listed but not queued: its stored search is one the page writer refuses', t('g1').status === 'skipped' && /judged on the full question \("microsoft 365 erp/.test(t('g1').reason) && /not queued for an automatic page/.test(t('g1').reason), JSON.stringify(t('g1')));
     check('an off-topic question whose page AI cites is kept, with the gate\'s finding and the page in its reason', t('g2').status !== 'set_aside' && t('g2').page_url === page && /AI already cites your page/.test(t('g2').reason), JSON.stringify(t('g2')));
     check('the same off-topic question with no page of the client\'s is still set aside', t('g3').status === 'set_aside', JSON.stringify(t('g3')));
     check('the kept one is listed as flagged-but-kept, not counted among the set-aside questions', G.targets_set_aside.some(x => x.target_id === t('g2').target_id && x.kept === true) && !/yacht charter dubai"/.test(G.set_aside_note) && /yacht charter corporate dubai/.test(G.set_aside_note), G.set_aside_note);
@@ -192,6 +193,66 @@ module.exports = async (ctx) => {
   });
 
   // ===================================================================================================================================
+  // ===================================================================================================================================
+  // FX-B (2026-11-06, docs/ai-ranking-2026-11-05/REVIEW_B_SAFETY.md, fixes/FX-B.md)
+  await guard('air FXB RB-2', async () => {
+    reset(); const SN = 'AIR FXB RB-2 - the own-page rule keeps only TOPIC refusals; a kept or rescued question the page writer would refuse is listed, never queued, and never takes a queued slot'; begin(SN); const check = mkCheck(SN);
+    // (1) a question refused as ANOTHER COMPANY'S brand with a cited page of the client's: set aside (before RB-2 the own page kept it, queued)
+    const prompts = [{ prompt_id: 'b1', prompt: 'Is ClearTax a good e-invoicing tool for a UAE company?', kind: 'compare', keyword: 'cleartax e invoicing uae' },
+      { prompt_id: 'b2', prompt: 'Is MS 365 an ERP, or do I need a separate ERP system for my Dubai company?', kind: 'recommend', keyword: 'is ms 365 an erp' }];
+    const pageB1 = WWW + '/cleartax-review/';
+    const answers = [{ site_id: M.SITE, domain: M.DOMAIN, run_id: 'ai_af', checked_at: day(1), prompt_id: 'b1', prompt: prompts[0].prompt, kind: 'compare', engine: 'chatgpt', answered: true, mentioned: false, cited: true, our_urls: 'www.' + M.DOMAIN + '/cleartax-review/', cited_urls: '[]' }];
+    const G = await growth({ gaps: [gap('b1', prompts[0].prompt, 'e invoicing'), gap('b2', prompts[1].prompt, 'ms 365 erp')], prompts, answers, cited: [{ url: pageB1, citations: 3, engines: ['chatgpt'] }],
+      services: [...SVC, 'UAE e-invoicing software implementation and support'] });
+    const t = (pid) => G.targets.find(x => x.prompt_id === pid) || {};
+    console.log('   targets ->', JSON.stringify(G.targets.map(x => [x.prompt_id, x.status, x.keyword, String(x.reason).slice(0, 160)])));
+    const sa = G.targets_set_aside.find(x => x.target_id === t('b1').target_id) || {};
+    check('a question the gate refuses for a reason other than its topic (' + (sa.reason || '?') + ') is set aside even with a cited page of the client\'s, never queued', t('b1').status === 'set_aside' && sa.kept === false && !['too broad', 'off topic'].includes(sa.reason), JSON.stringify({ t: t('b1'), sa }));
+    // (2) seven writable questions + one rescued on the full question: six writable ones are queued, the rescued one is listed and not counted
+    const W = [0, 1, 2, 3, 4, 5, 6].map(i => ({ prompt_id: 'w' + i, prompt: 'Who migrates a Microsoft 365 tenant for a Dubai company, case ' + i + '?', kind: 'recommend', keyword: 'microsoft 365 migration dubai ' + ['tenant', 'partner', 'services', 'consultant', 'company', 'cost', 'support'][i] }));
+    const all = [...W, prompts[1]];
+    const G2 = await growth({ gaps: [gap('b2', prompts[1].prompt, 'ms 365 erp', { volume: 100000 }), ...W.map(q => gap(q.prompt_id, q.prompt, 'microsoft 365 migration'))], prompts: all });
+    const t2 = (pid) => G2.targets.find(x => x.prompt_id === pid) || {};
+    console.log('   targets ->', JSON.stringify(G2.targets.map(x => [x.prompt_id, x.status, x.value])));
+    const q2 = G2.targets.filter(x => x.status === 'queued');
+    check('the rescued question (highest value) is not queued and says why', t2('b2').status === 'skipped' && /not queued for an automatic page/.test(t2('b2').reason), JSON.stringify(t2('b2')));
+    check('six writable questions are queued (max_targets), none of them pushed out by the rescued one', q2.length === 6 && q2.every(x => /^w/.test(x.prompt_id)), JSON.stringify(q2.map(x => x.prompt_id)));
+  });
+
+  await guard('air FXB RB-1', async () => {
+    reset(); const SN = 'AIR FXB RB-1 - F-53 changed who counts as a competitor: a week counted under the earlier entity rule is never compared (no delta, no alert rule), a pulse morning of that rule gives no competitors, and the open platforms are platforms only for a client on one'; begin(SN); const check = mkCheck(SN);
+    const P4 = ids(4).map((_, i) => prompt(i));
+    const prevOld = () => { const r = prevRow({ marker: true }); r.stats = { ...r.stats, entity_rule: '' }; return r; };   // counted before F-53 (explicit '': the harness stamps a row with no key)
+    const rules = [{ monitors: true, site_id: SID, domain: DOM, ai_alert_rules_json: JSON.stringify([{ id: 'sov_drop', metric: 'share_of_voice', direction: 'any', threshold_points: 1 }, { id: 'rival_rise', metric: 'competitor_share', scope: { competitor: 'rival.com' }, direction: 'any', threshold_points: 1 }]) }];
+    const A = await drive({ prompts: P4, rows: weekRows(), pulse_rows: pulses(false), previous: prevOld(), monitors: rules });
+    const cj = JSON.parse(A.vis_row.compare_json || '{}');
+    check('the week after F-53 is not compared with a week counted under the earlier entity rule: no delta, the reason in plain words', A.metrics.delta === null && /measurement rule changed: this week starts a new baseline/.test(A.metrics.delta_not_compared || '') && /competitor/.test(A.metrics.delta_not_compared || '') && cj.comparable === false, String(A.metrics.delta_not_compared));
+    check('no competitor carries a week-on-week change', (A.competitors || []).every(c => c.delta == null), JSON.stringify((A.competitors || []).map(c => [c.domain, c.delta])));
+    const ar = (A.metrics.alert_rules || A.alert_rules || (A.metrics.w2 || {}).alert_rules || []);
+    const arAll = JSON.stringify(A).match(/"rule_id":"(sov_drop|rival_rise)"[^}]*"fired":(true|false)/g) || [];
+    check('neither alert rule (share of voice, competitor share) fires, both say they were not evaluated', !/"rule_id":"(sov_drop|rival_rise)"[^}]*"fired":true/.test(JSON.stringify(A)) && /not evaluated: this run is not comparable/.test(JSON.stringify(A)) && !(A.alerts || []).some(x => /alert rule/.test(String(x.text || x))), JSON.stringify(arAll).slice(0, 300));
+    check('the stored week records the entity rule it was counted under', JSON.parse(A.vis_row.metrics_json).entity_rule === 'f53', A.vis_row.metrics_json.slice(0, 160));
+    const B = await drive({ prompts: P4, rows: weekRows(), pulse_rows: pulses(false), previous: (() => { const r = prevRow({ marker: true }); r.stats = { ...r.stats, entity_rule: 'f53' }; return r; })() });
+    check('the next week (its earlier row counted under F-53) is compared again', B.metrics.delta && B.metrics.delta.mention_rate != null, String(B.metrics.delta_not_compared || ''));
+    // a pulse morning counted under the earlier entity rule: named / cited count, its competitors do not
+    const oldMorning = pulseRow(day(2).slice(0, 10), [0, 1, 2, 3].map(q => ({ pid: 'q' + q, named: false, rivals: ['oldrule-rival.com'] }))); oldMorning.detail.entity_rule = '';
+    const newMornings = [1, 3].map(d => { const r = pulseRow(day(d).slice(0, 10), [0, 1, 2, 3].map(q => ({ pid: 'q' + q, named: false, rivals: ['rival.com'] }))); r.detail.entity_rule = 'f53'; return r; });
+    const C = await drive({ prompts: P4, rows: weekRows(), pulse_rows: [oldMorning, ...newMornings] });
+    check('the old-rule morning still counts for "named in" (12 pulse answers)', C.metrics.pulse_samples === 12, JSON.stringify({ pulse: C.metrics.pulse_samples }));
+    check('its competitors are left out of the share of voice and the competitor table, and the note says so', !(C.competitors || []).some(c => /oldrule-rival/.test(c.domain)) && (C.metrics.pulse_basis || {}).entity_old && C.metrics.pulse_basis.entity_old.answers === 4 && /earlier rule/.test(C.metrics.pulse_basis.note), JSON.stringify({ comps: (C.competitors || []).map(c => c.domain), pb: C.metrics.pulse_basis }));
+    // the open platforms (OPEN_PLAT): right for an Open edX shop AND for a client that competes with Moodle
+    const AIE = kitFrom('Parse_AI_Answers.js', 'AIE');
+    check('AIE.RULE is the F-53 entity rule', AIE.RULE === 'f53', AIE.RULE);
+    const txt = 'A few options in the market:\n- **Moodle** (moodle.com) - an open-source LMS used by universities.\n- **Brightwave Learning** (brightwave.example) - a corporate LMS.';
+    const roleOf = (site, id) => { const D = AIE.dir(site, {}); const e = AIE.read({ text: txt, cites: [], entities: [] }, D).entities.find(x => x.id === id); return e ? e.role : 'absent'; };
+    const lms = { site_id: 'site_lmsco', domain: 'lmsco.example', business_name: 'LMSCo', brand_names: ['LMSCo'], competitors: [], configured_competitors: [], aliases: {}, services: ['Corporate learning management system', 'Course authoring tools'], topics: ['lms for companies'] };
+    check('an LMS vendor that builds on neither platform: Moodle named as an option is a competitor (it was a "platform" for every site before)', roleOf({ ...lms, run_id: 'rb1a' }, 'moodle.com') === 'competitor', roleOf({ ...lms, run_id: 'rb1a2' }, 'moodle.com'));
+    check('the same vendor with moodle.com configured as a rival: competitor', roleOf({ ...lms, run_id: 'rb1b', competitors: ['moodle.com'], configured_competitors: ['moodle.com'] }, 'moodle.com') === 'competitor');
+    const shop = { ...lms, site_id: 'site_edxshop', domain: 'edxshop.example', business_name: 'EdxShop', brand_names: ['EdxShop'], services: ['Open edX platform development', 'Open edX hosting'], topics: ['open edx development'] };
+    check('an Open edX shop: Moodle (the other open platform) is a platform, not a business rival', roleOf({ ...shop, run_id: 'rb1c' }, 'moodle.com') === 'platform', roleOf({ ...shop, run_id: 'rb1c2' }, 'moodle.com'));
+    check('an Open edX shop with moodle.com configured as a rival: competitor (the owner decides)', roleOf({ ...shop, run_id: 'rb1d', competitors: ['moodle.com'], configured_competitors: ['moodle.com'] }, 'moodle.com') === 'competitor');
+  });
+
   await guard('air AF5 F-81', async () => {
     reset(); const SN = 'AIR AF5 (F-81) - "How this is measured" describes the website\'s own cycle day, its engines and its pulse, not the old Monday schedule'; begin(SN); const check = mkCheck(SN);
     const P4 = ids(4).map((_, i) => prompt(i));
