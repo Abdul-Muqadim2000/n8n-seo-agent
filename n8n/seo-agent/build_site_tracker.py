@@ -76,6 +76,7 @@ rd = lambda p: (seo_events.inline(_rdt(p)).replace('/*__SITE_MODEL__*/', SITE_MO
                 .replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__AI_PANEL__*/', AI_PANEL_SRC).replace('/*__WAITING__*/', WAITING_SRC).replace('/*__READINESS__*/', READINESS_SRC)
                 .replace('/*__SITE_TIME__*/', site_time_src()).replace('/*__GONE__*/', _rdt('code/_gone.js').rstrip('\n'))
                 .replace('/*__AI_MEASURE__*/', _rdt('code/_ai_measure.js').rstrip('\n'))
+                .replace('/*__AI_RANK_FLAGS__*/', _rdt('code/_ai_rank_flags.js').rstrip('\n'))   # AIR (2026-11-06, CONTRACTS.md §2, P4): Site Admin validates the AI-ranking settings with the one rule (AIRF)
                 .replace('/*__FACT_ANSWERS__*/', _rdt('code/_fact_answers.js').rstrip('\n'))   # H3 (2026-10-28): the client's stored answers (Site Admin facts, the cadence's page runs)
                 .replace('/*__COUNTRIES__*/', "// ---- countries: copied from the main workflow's Normalize Input by build_site_tracker.py (MKT 2026-10-27: Site Admin `market`) ----" + _ST_COUNTRIES.group(0)))   # W2-E2 (2026-10-23): Site Admin validates the owner's AI alert rules with the engine's own rule (AVX.validateRules)   # RV-1 (2026-10-21): the pages that no longer answer, one message   # 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): the website's calendar and the cycle run (ST)
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')

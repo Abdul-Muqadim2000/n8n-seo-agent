@@ -4,6 +4,7 @@
    "gate": "competitor",
    "read": "OK.sellsSame",
    "readers": {
+    "SEO Agent \u2014 AI Growth / AI Rank Plan": true,
     "SEO Agent \u2014 Link Builder / LB Assemble": true,
     "SEO Agent \u2014 Link Builder / LB Page Requests": false,
     "SEO Agent \u2014 Link Builder / LB Plan": false
@@ -20,6 +21,7 @@
    "gate": "competitor",
    "read": "OK.sellsSame",
    "readers": {
+    "SEO Agent \u2014 AI Growth / AI Rank Plan": true,
     "SEO Agent \u2014 AI Growth / Earned Media": true,
     "SEO Agent \u2014 AI Visibility Tracker / AI Metrics": false,
     "SEO Agent \u2014 Backlink Monitor / BL Plan": false,
@@ -38,6 +40,7 @@
    "why": "a prospect stored before the gate (or on a rival subdomain) is pitched anyway (R21)",
    "write": "OK.sellsSame",
    "writers": [
+    "SEO Agent \u2014 AI Growth / AI Rank Plan",
     "SEO Agent \u2014 AI Growth / Earned Media",
     "SEO Agent \u2014 Link Builder / LB Assemble",
     "SEO Agent \u2014 Link Builder / LB Draft QA"
@@ -53,6 +56,7 @@
     "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Own Coverage (Run)": true,
     "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Publish Check": false,
     "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Rank Keywords": true,
+    "SEO Agent \u2014 AI Growth / AI Rank Plan": true,
     "SEO Agent \u2014 AI Growth / Growth Plan": true,
     "SEO Agent \u2014 AI Pulse / AI Plan": true,
     "SEO Agent \u2014 AI Visibility Tracker / AI Plan": true,
