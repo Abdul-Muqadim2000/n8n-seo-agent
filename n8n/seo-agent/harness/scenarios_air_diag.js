@@ -12,6 +12,7 @@
 //   AD11 rollEvidence: counts older than 8 days kept, 120 days dropped, 8 KB cap, idempotent
 //   AD12 gemini_api ignored by every function
 //   AD13 accuracy: precision and recall per stage on the labelled cells (fixtures_air diag_cases, two seeds), sub-label and basis accuracy
+//   AD14 the real shapes the 2026-11-06 production replay found: a panel drifted to another country (core of 1), thin strata (no control arm)
 const fs = require('fs'); const path = require('path');
 module.exports = async (ctx) => {
   const { H, reset, guard, begin } = ctx;
@@ -65,7 +66,7 @@ module.exports = async (ctx) => {
       { prompt_id: 'pB', engine: 'chatgpt', named: true, at: ago(3), answered: true }, { prompt_id: 'p3', engine: 'gemini_api', named: true, cited: true, at: ago(3), answered: true }];
     const stored = [{ prompt_id: 'p1', core: true, core_since: ago(40), core_until: iso(NOW + 16 * DAY), arm: 'treated', stratum: '' }, { prompt_id: 'p7', core: true, core_since: ago(58), core_until: ago(2), arm: 'control' }];
     const cand = [{ keyword: 'erp support dubai', source: 'client', volume: 90 }, { keyword: 'software house lahore', source: 'gsc', volume: 400 }, { keyword: 'p2 software', source: 'client', volume: 50 }];
-    const cp = ARD.corePanel({ site: { site_id: 's' }, prompts, units60: units, stored, market: { cc: 'AE', lang: 'en' }, demand: { candidates: cand }, now: NOW, cfg: {} });
+    const cp = ARD.corePanel({ site: { site_id: 's' }, prompts, units60: units, stored, market: { cc: 'AE', lang: 'en' }, demand: { candidates: cand }, now: NOW, cfg: { core_min: 4 } });
     const ids = cp.core.map(c => c.prompt_id);
     const e1 = cp.extend.find(x => x.prompt_id === 'p1'), e7 = cp.extend.find(x => x.prompt_id === 'p7');
     check('AD3 core: a question that named the client 30 days ago is never dropped and gets `extend` to now + 56 days; a retired one that cited it stays too',
@@ -77,10 +78,10 @@ module.exports = async (ctx) => {
       cp.proposed.length === 1 && cp.proposed[0].keyword === 'erp support dubai' && cp.proposed[0].market === 'AE-en' && cp.proposed[0].source === 'client' && /\?$/.test(cp.proposed[0].prompt), J(cp.proposed));
     check('AD3 comparable false when the core changed (and why says so)', cp.comparable === false && /core changed/.test(cp.why), cp.why);
     const st2 = cp.core.map(c => ({ prompt_id: c.prompt_id, core: true, core_since: c.core_since, core_until: c.core_until }));
-    const cp2 = ARD.corePanel({ site: { site_id: 's' }, prompts: prompts.map(p => p.prompt_id === 'p3' ? { ...p, status: 'retired' } : p.prompt_id === 'p9' ? p : p).concat([P('p9', { volume: 9999 })]), units60: [], stored: st2, market: { cc: 'AE', lang: 'en' }, demand: {}, now: NOW + 7 * DAY, cfg: { core_max: 6 } });
+    const cp2 = ARD.corePanel({ site: { site_id: 's' }, prompts: prompts.map(p => p.prompt_id === 'p3' ? { ...p, status: 'retired' } : p.prompt_id === 'p9' ? p : p).concat([P('p9', { volume: 9999 })]), units60: [], stored: st2, market: { cc: 'AE', lang: 'en' }, demand: {}, now: NOW + 7 * DAY, cfg: { core_max: 6, core_min: 4 } });
     check('AD3 frozen 8 weeks: a week later the same core (a question retired by the focus rules stays; a new high-demand question waits for room) and comparable is true',
       J(cp2.core.map(c => c.prompt_id).sort()) === J(ids.slice().sort()) && cp2.comparable === true && cp2.core.find(c => c.prompt_id === 'p3').core_since === cp.core.find(c => c.prompt_id === 'p3').core_since && /frozen until/.test(cp2.core.find(c => c.prompt_id === 'p3').reason), J(cp2.core));
-    const cp3 = ARD.corePanel({ site: { site_id: 's' }, prompts: prompts.map(p => p.prompt_id === 'p3' ? { ...p, status: 'retired' } : p), units60: [], stored: st2, market: { cc: 'AE', lang: 'en' }, demand: {}, now: NOW + 60 * DAY, cfg: {} });
+    const cp3 = ARD.corePanel({ site: { site_id: 's' }, prompts: prompts.map(p => p.prompt_id === 'p3' ? { ...p, status: 'retired' } : p), units60: [], stored: st2, market: { cc: 'AE', lang: 'en' }, demand: {}, now: NOW + 60 * DAY, cfg: { core_min: 4 } });
     check('AD3 after its 8 weeks a retired question with no hit leaves the core; an active one is renewed with its first core_since', !cp3.core.some(c => c.prompt_id === 'p3') && cp3.core.find(c => c.prompt_id === 'p2').core_since === cp.core.find(c => c.prompt_id === 'p2').core_since && cp3.extend.some(x => x.prompt_id === 'p2'), J(cp3.core));
     const H0 = AVX.history({ rule: F.AIV_RULE, from: iso(NOW - 60 * DAY), to: F.now, vis_rows: T.seo_ai_visibility.filter(x => x.site_id === F.archetypes.acme.site_id), daily_rows: T.seo_ai_daily.filter(x => x.site_id === F.archetypes.acme.site_id) });
     const cpA = ARD.corePanel({ site: { site_id: F.archetypes.acme.site_id }, prompts: T.seo_ai_prompts.filter(p => p.site_id === F.archetypes.acme.site_id), units60: H0.units, stored: [], market: mA, demand: {}, now: NOW, cfg: {} });
@@ -90,8 +91,9 @@ module.exports = async (ctx) => {
     const core30 = Array.from({ length: 30 }, (_, i) => ({ prompt_id: 'a' + i, intent: i % 3 ? 'recommendation' : 'informational', baseline: i % 4 ? 'zero' : 'some', cluster: 'k' + (i % 6) }));
     const A1 = ARD.assignArms({ core: core30, stored: [], seed: 'seed-1', now: NOW, site_id: 's' }), A2 = ARD.assignArms({ core: core30, stored: [], seed: 'seed-1', now: NOW, site_id: 's' });
     const byS = new Map(); for (const a of A1) { const t = byS.get(a.stratum) || [0, 0]; t[0]++; if (a.arm === 'control') t[1]++; byS.set(a.stratum, t); }
-    check('AD4 arms: deterministic for a seed; at most 4 clusters (the rest pooled as other); 2:1 inside every stratum (controls = floor(n/3), off by at most 1)',
-      J(A1) === J(A2) && A1.length === 30 && [...byS.values()].every(([n, c]) => Math.abs(c - n / 3) <= 1 && c === Math.floor(n / 3)) && new Set(A1.map(a => a.stratum.split('|')[2])).size <= 5 && A1.some(a => /\|other$/.test(a.stratum)), J([...byS.entries()]));
+    check('AD4 arms: deterministic for a seed; at most 4 clusters (the rest pooled); strata under 3 questions merged into a coarser one; 2:1 inside every stratum (controls = floor(n/3)); 10 controls of 30',
+      J(A1) === J(A2) && A1.length === 30 && [...byS.values()].every(([n, c]) => c === Math.floor(n / 3)) && [...byS.entries()].every(([k, [n]]) => n >= 3 || k === '*|*|*')
+      && A1.every(a => !/\|k[45]$/.test(a.stratum) || false) && Math.abs(A1.filter(a => a.arm === 'control').length - 10) <= byS.size, J([...byS.entries()]));
     const stA = A1.map(a => ({ ...a, core: true, core_since: ago(10) }));
     const A3 = ARD.assignArms({ core: core30, stored: stA, seed: 'another-seed', now: NOW, site_id: 's' });
     check('AD4 stored arms are never reshuffled (another seed, same arms and strata)', J(A3.map(a => [a.prompt_id, a.arm, a.stratum])) === J(A1.map(a => [a.prompt_id, a.arm, a.stratum])), '');
@@ -102,6 +104,30 @@ module.exports = async (ctx) => {
     check('AD4 a new question takes the next slot of its stratum: after T,T,C a treated one; after T,T a control one', T3.filter(a => a.arm === 'control').length === 1 && T4.find(a => a.prompt_id === 'x3').arm === 'treated' && T2.every(a => a.arm === 'treated') && T2b.find(a => a.prompt_id === 'x2').arm === 'control', J({ T3, T4, T2b }));
     const rot = ARD.assignArms({ core: strat(4), stored: T3s.map(a => a.arm === 'control' ? { ...a, assigned_at: ago(90) } : a), seed: 's', now: NOW });
     check('AD4 the holdout rotates: a control question 12 weeks old becomes treated, and the next new question refills the control arm', rot.filter(a => a.arm === 'control').length === 1 && rot.find(a => a.prompt_id === 'x3').arm === 'control' && T3s.filter(a => a.arm === 'control').every(c => rot.find(a => a.prompt_id === c.prompt_id).arm === 'treated'), J(rot));
+
+    // ---- AD14 the real shapes the 2026-11-06 replay found (synthetic rows that mimic them; no client data) ----
+    // (a) a panel that drifted to another country: the site's market comes from the client's keywords (AE), every active question is PK-en,
+    //     the AE questions were retired, one retired AE question cited the client. The core held 1 question and no control.
+    const Rp = (id, o) => P(id, { kind: pick14(id), cluster: ['cl one', 'cl two', 'cl three'][id.charCodeAt(id.length - 1) % 3], ...(o || {}) });
+    function pick14(id) { return ['recommend', 'compare', 'choose', 'cost', 'problem'][id.charCodeAt(id.length - 1) % 5]; }
+    const drift = [...Array.from({ length: 9 }, (_, i) => Rp('pk' + i, { market: 'PK-en', status: 'active' })), ...Array.from({ length: 9 }, (_, i) => Rp('ae' + i, { market: 'AE-en', status: 'retired', retired_at: ago(10) })), P('br', { kind: 'brand', market: 'AE-en' })];
+    const dUnits = [{ prompt_id: 'ae3', engine: 'gemini', named: true, cited: false, at: ago(9), answered: true }, ...drift.filter(p => p.status === 'active').flatMap((p, i) => [0, 1, 2].map(d => ({ prompt_id: p.prompt_id, engine: 'chatgpt', named: false, cited: false, rivals: i % 2 ? [{ id: 'r.example' }] : [], at: ago(d * 3 + 1), answered: true })))];
+    const cpD = ARD.corePanel({ site: { site_id: 'sd' }, prompts: drift, units60: dUnits, stored: [], market: { cc: 'AE', lang: 'en' }, demand: { candidates: [{ keyword: 'ai development company uae', source: 'ladder', volume: 0 }] }, now: NOW, cfg: {} });
+    const armsD = ARD.assignArms({ core: cpD.core, stored: [], seed: 'sd', now: NOW, site_id: 'sd' });
+    check('AD14 drifted panel: the core holds the questions that are asked (9 PK ones, labelled outside your market) plus the retired AE one that cited the client; not 1',
+      cpD.core.length === 10 && cpD.core.filter(c => /outside your market/.test(c.reason)).length === 9 && cpD.core.some(c => c.prompt_id === 'ae3') && !cpD.core.some(c => c.prompt_id === 'br'), J(cpD.core.map(c => c.prompt_id + ': ' + c.reason)));
+    check('AD14 drifted panel: the retired questions of the market are proposed again first (revive = their id, market AE-en), then the client keywords; and the arms hold controls',
+      cpD.proposed.length === 5 && cpD.proposed.slice(0, 4).every(x => x.source === 'retired_in_market' && /^ae\d$/.test(x.revive) && x.market === 'AE-en') && armsD.filter(a => a.arm === 'control').length >= 2, J({ p: cpD.proposed, a: armsD }));
+    const cpOff = ARD.corePanel({ site: { site_id: 'sd' }, prompts: drift, units60: dUnits, stored: [], market: { cc: 'AE', lang: 'en' }, demand: {}, now: NOW, cfg: { core_min: 0 } });
+    check('AD14 cfg.core_min = 0 keeps DESIGN A3 to the letter (only the market\'s questions and the hit)', cpOff.core.length === 1, J(cpOff.core));
+    // (b) a 13-question core spread over 7 clusters, both intents, both baselines: 10 fine strata of 1-2 questions, every arm treated before
+    const wide = Array.from({ length: 13 }, (_, i) => ({ prompt_id: 'w' + i, intent: i < 11 ? 'recommendation' : 'informational', baseline: i % 3 === 0 ? 'some' : 'zero', cluster: 'cluster ' + (i % 7) }));
+    const armsW = ARD.assignArms({ core: wide, stored: [], seed: 'site_w', now: NOW, site_id: 'site_w' }); const cW = armsW.filter(a => a.arm === 'control').length;
+    const bySW = new Map(); for (const a of armsW) { const t = bySW.get(a.stratum) || [0, 0]; t[0]++; if (a.arm === 'control') t[1]++; bySW.set(a.stratum, t); }
+    check('AD14 thin strata are merged: 13 questions over 7 clusters get ' + cW + ' controls (4 = floor(13/3), at most one off per merged stratum), every merged stratum 2:1', cW >= 3 && cW <= 5 && [...bySW.values()].every(([n, c]) => c === Math.floor(n / 3)), J([...bySW.entries()]));
+    const armsW2 = ARD.assignArms({ core: [...wide, { prompt_id: 'w13', intent: 'recommendation', baseline: 'zero', cluster: 'cluster 3' }], stored: armsW.map(a => ({ ...a, core: true, core_since: ago(7) })), seed: 'site_w', now: NOW, site_id: 'site_w' });
+    check('AD14 the merged arms are stored and kept a week later; the new question takes a slot', J(armsW2.slice(0, 13).map(a => a.arm)) === J(armsW.map(a => a.arm)) && armsW2.length === 14, J(armsW2));
+    check('AD14 the real kinds (choose / cost / problem / compare) give an intent when answers are few', ARD.intentOf({ kind: 'choose' }, []) === 'recommendation' && ARD.intentOf({ kind: 'cost' }, []) === 'informational' && ARD.intentOf({ kind: 'problem' }, []) === 'informational' && ARD.intentOf({ kind: 'compare' }, []) === 'recommendation', '');
 
     // ---- AD5 MDE (R1 §6: m = 28, 80% power, alpha 0.05 two-sided) ----
     const R1T = [[0.02, 40, 5.0, 7.1, 6.9, 9.7], [0.02, 100, 3.2, 4.5, 4.3, 6.1], [0.10, 40, 10.7, 15.2, 14.7, 20.8], [0.10, 100, 6.8, 9.6, 9.3, 13.2], [0.10, 200, 4.8, 6.8, 6.6, 9.3], [0.30, 100, 10.4, 14.6, 14.2, 20.1]];
