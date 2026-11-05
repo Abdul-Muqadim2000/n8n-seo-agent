@@ -209,6 +209,127 @@ function make(opts) {
       status: 'active', skip_jobs: '', last_cycle_at: ago(7), last_monthly_key: '', adopted: true, updated_at: ago(7) });
   }
   const sites = ALL.map(A => ({ site_id: A.site_id, domain: A.domain, name: A.name, cc: A.cc, location_code: A.location_code }));
-  return { seed, now, nowMs, sites, tables: T, pages, robots, robots_history, bing, archetypes: archetypes(), AIV_RULE };
+  const out = { seed, now, nowMs, sites, tables: T, pages, robots, robots_history, bing, archetypes: archetypes(), AIV_RULE };
+  if (o.diag_cases) out.diag_cases = diagCases({ seed: o.diag_cases === true ? 'air-p1-diag' : String(o.diag_cases), now: nowMs });   // P1: labelled stage cells (absent by default)
+  return out;
 }
-module.exports = { make, archetypes, ENGINES, AIV_RULE, rngOf, fnv };
+
+// ---- P1 (AIR diagnosis, 2026-11-06): labelled question x engine cells for the stage classifier (harness AD6 / AD13) ----
+// make({ diag_cases: true | '<seed>' }) adds `diag_cases`: [{ id, engine, label: { stage, sub, basis }, why, args }], `args` being ARD.diagnose's
+// input. Each case is one situation a careful reader of the raw data would label without doubt (DESIGN.md 2.B), wrapped in noise the
+// classifier must see through: other engines' answers, another question's answers that name the client, gemini_api rows that name it, answers
+// older than the window, the client's host written with www or as a brand alias, a look-alike host, citations of unrelated pages, a Google
+// reading for an unrelated search where the client ranks first. Seeded: same seed, same cases. Synthetic hosts only.
+function diagCases(opts) {
+  const o = opts || {}; const R = rngOf(String(o.seed || 'air-p1-diag')); const nowMs = typeof o.now === 'number' ? o.now : Date.parse('2026-11-02T10:00:00.000Z');
+  const iso = (ms) => new Date(ms).toISOString(); const int = (a, b) => a + Math.floor(R() * (b - a + 1)); const pick = (a) => a[Math.floor(R() * a.length)];
+  const DOM = 'case-co.example', ALIAS = 'casebrand.example', LOOK = 'notcase-co.example'; const site = { site_id: 'site_case-co-example', domain: DOM, canonical_host: 'www.' + DOM };
+  const RIV = ['rival-a.example', 'rival-b.example', 'rival-c.example'];
+  const THIRD = ['https://top-picks.example/best-erp-partners-uae', 'https://clutch.co/ae/it-services/erp', 'https://vendor-x.example/services/erp', 'https://news-daily.example/news/erp-market-2026', 'https://www.g2.com/categories/erp-systems'];
+  const BOT = { chatgpt: 'OAI-SearchBot', chatgpt_api: 'OAI-SearchBot', perplexity: 'PerplexityBot', claude: 'Claude-SearchBot', ai_overview: 'Googlebot', ai_mode: 'Googlebot', gemini: 'Googlebot', copilot: 'Bingbot' };
+  const ALL = ['chatgpt', 'gemini', 'ai_mode', 'ai_overview', 'perplexity', 'claude', 'copilot', 'chatgpt_api'];
+  const cases = []; let k = 0;
+  const ourUrl = (path, how) => 'https://' + (how === 'www' ? 'www.' + DOM : how === 'alias' ? ALIAS : DOM) + path;
+  // spec: { kind, n, named, cited, retrieved, hasRetr, positions:[a,b], neg, wrong, nobody, robots, page, google, bing, serp, bingPos, brave, how, thin, old, intentRivals }
+  const make1 = (engine, label, why, sp) => {
+    const id = 'dc' + String(++k).padStart(3, '0'); const pid = 'p_' + id; const kw = sp.keyword || pick(['erp implementation partner', 'odoo consultants', 'erp software for retail', 'cloud erp migration', 'erp support services']);
+    const fan = [kw + ' 2026', 'best ' + kw]; const queries = [kw, ...fan]; const how = sp.how || pick(['bare', 'www', 'bare']);
+    const prompt = { prompt_id: pid, site_id: site.site_id, domain: DOM, prompt: sp.kind === 'learn' ? 'What should I know about ' + kw + '?' : 'Who are the best ' + kw + ' providers?', kind: sp.kind || 'recommend', keyword: kw, status: 'active', market: 'AE-en' };
+    const rows = [], units = []; let seq = 0;
+    const rivalsP = sp.nobody || sp.kind === 'learn' ? 0 : 0.9;   // an informational answer names no other business
+    const answer = (e, daysAgo, f) => { const at = iso(nowMs - daysAgo * DAY - (seq++ % 50) * 60e3); const rivals = RIV.filter(() => R() < rivalsP).map((id2, i) => ({ id: id2, position: i + (f.named ? 2 : 1), cited: false }));
+      const third = THIRD.filter(() => R() < 0.4).map(u => ({ url: u, host: u.replace(/^https?:\/\/(www\.)?/, '').replace(/\/.*$/, ''), role: 'source' }));
+      const ownC = f.cited ? [{ url: ourUrl('/services/erp-partner', f.how || how), host: (f.how || how) === 'alias' ? ALIAS : DOM, role: 'self' }] : [];
+      const cited = [...ownC, ...third].map((c, i) => ({ ...c, entity_id: c.host, position: i + 1 }));
+      const retr = e === 'chatgpt' && f.hasRetr !== false ? [{ url: 'https://' + LOOK + '/erp', host: LOOK, entity_id: LOOK }, ...(f.retrieved ? [{ url: ourUrl('/services/erp-partner', f.how || how), host: (f.how || how) === 'alias' ? ALIAS : DOM, entity_id: DOM }] : [])] : null;
+      const ents = [...(f.named ? [{ id: DOM, name: 'Case Co', role: 'self', position: f.position || 1, cited: !!f.cited }] : []), ...rivals.map(r => ({ id: r.id, name: r.id, role: 'competitor', position: r.position, cited: false }))];
+      const row = { site_id: site.site_id, domain: DOM, run_id: 'run_' + id + '_' + seq, checked_at: at, prompt_id: f.pid || pid, prompt: prompt.prompt, kind: prompt.kind, engine: e, answered: true, error: '', named: !!f.named, position: f.named ? (f.position || 1) : null,
+        cited: !!f.cited, mentioned: !!(f.named || f.cited), our_urls: ownC.map(c => c.url).join(', '), sentiment: f.named ? (f.neg ? 'negative' : 'neutral') : '', issues: f.wrong ? 'says you were founded in 1990 -> founded in 2015' : '',
+        cited_json: JSON.stringify(cited), retrieved_json: retr ? JSON.stringify(retr) : '', fanout_json: (e === 'chatgpt' || e === 'ai_mode') && !f.param ? JSON.stringify(fan) : (f.param ? '[]' : ''), entities_json: JSON.stringify(ents) };
+      if (f.param) row.cited_json = '[]';
+      if (daysAgo <= 7.9) rows.push(row);
+      units.push({ prompt_id: f.pid || pid, engine: e, named: !!f.named, cited: !!f.cited, position: f.named ? (f.position || 1) : null, rivals, answered: true, at }); };
+    // the engine under test: `n` answers in its window, the signal ones in the last 8 days
+    const thin = engine === 'claude'; const span = thin ? 50 : 26; const n = sp.n;
+    const sig = []; for (let i = 0; i < n; i++) sig.push({});
+    let j = 0; const mark = (cnt, fn) => { for (let i = 0; i < cnt && j < n; i++, j++) fn(sig[j]); };
+    const named = sp.named || 0; const pos = sp.positions || [1, 3];
+    mark(named, (f) => { f.named = true; f.position = int(pos[0], pos[1]); });
+    for (let i = 0; i < Math.min(sp.neg || 0, named); i++) sig[i].neg = true;
+    for (let i = 0; i < Math.min(sp.wrong || 0, n); i++) sig[i].wrong = true;
+    for (let i = 0; i < Math.min(sp.cited || 0, n); i++) sig[n - 1 - i].cited = true;
+    for (let i = 0; i < Math.min(sp.retrieved || 0, n); i++) sig[i].retrieved = true;
+    sig.forEach((f, i) => { f.hasRetr = sp.hasRetr; f.how = sp.how; f.param = !!sp.param; const signal = f.named || f.cited || f.retrieved || f.neg || f.wrong || sp.param;
+      answer(engine, thin ? (i === 0 ? 2 : 5 + i * 14) : signal ? 0.3 + R() * 7 : 0.3 + R() * span, f); });
+    // noise: other engines, another question naming the client, gemini_api naming the client, old answers outside the window
+    const noiseNamed = sp.kind === 'learn' ? 0 : 0.3;   // the searches the engines ran come from ChatGPT's and AI Mode's answers: at least one of each
+    for (const e of ALL.filter(x => x !== engine && x !== 'chatgpt_api')) for (let i = 0, m = (e === 'chatgpt' || e === 'ai_mode') ? int(1, 3) : int(0, 3); i < m; i++) answer(e, 0.3 + R() * 7, { named: R() < noiseNamed, cited: R() < 0.2, position: int(1, 6) });
+    for (let i = 0; i < 3; i++) answer(engine, 0.5 + R() * 6, { pid: 'p_other', named: true, cited: true, retrieved: true, position: 1 });
+    for (let i = 0; i < 3; i++) answer('gemini_api', 0.5 + R() * 6, { named: true, cited: true, position: 1 });
+    if (!thin && sp.old !== false) for (let i = 0; i < 4; i++) answer(engine, 35 + R() * 20, { named: true, cited: true, retrieved: true, position: 1 });
+    // what the engine's index shows
+    const pages = [{ site_id: site.site_id, url: ourUrl('/services/erp-partner', 'www'), title: 'ERP partner services', words_raw: 900, issues: '', questions: '', submitted_at: '', bing_crawled_at: '', checked_at: iso(nowMs - 9 * DAY) },
+      { site_id: site.site_id, url: ourUrl('/', 'bare'), title: 'Case Co', words_raw: 700, issues: '', questions: '', checked_at: iso(nowMs - 9 * DAY) }];
+    if (sp.page) pages.unshift({ site_id: site.site_id, url: ourUrl('/solutions/' + kw.replace(/\s+/g, '-'), 'bare'), title: kw, words_raw: 900, issues: '', questions: pid, submitted_at: '', bing_crawled_at: '', checked_at: iso(nowMs - 9 * DAY), ...sp.page });
+    const google = new Map(sp.google || pages.map(g => [g.url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''), g.state || 'indexed']));
+    const serp = new Map(); serp.set('erp news today', { results: [{ url: ourUrl('/', 'bare'), pos: 1 }], read_at: iso(nowMs - 3 * DAY), location_code: 2784 });
+    for (const [q, p] of Object.entries(sp.serp || {})) { const qq = q === 'K' ? kw : q === 'F' ? fan[0] : q === 'B' ? fan[1] : q; const res = []; for (let i = 1; i <= 50; i++) res.push({ url: 'https://result' + i + '.example/x', pos: i });
+      if (p) res[p - 1] = { url: ourUrl('/services/erp-partner', how === 'alias' ? 'www' : how), pos: p }; serp.set(qq, { results: res, read_at: iso(nowMs - int(2, 40) * DAY), location_code: 2784 }); }
+    const robots = {}; for (const b of ['OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Claude-SearchBot', 'Googlebot', 'Bingbot', 'Google-Extended']) robots[b] = { allowed_root: true, rule: '' };
+    for (const [b, v] of Object.entries(sp.robots || {})) robots[b] = { allowed_root: v, rule: v ? '' : 'Disallow: /' };
+    const bingPos = sp.bingPos ? { [fan[0]]: sp.bingPos } : null; const brave = sp.brave ? new Map([[fan[1], [{ url: 'https://other.example/', pos: 1 }, { url: ourUrl('/services/erp-partner', how === 'alias' ? 'bare' : how), pos: sp.brave }]]]) : null;
+    const args = { site, prompt, answers8: rows, units60: units, evidence: '', access: { robots, blocked_engines: [], read_at: iso(nowMs - DAY) }, pages,
+      index: { google, bing: { in_account: sp.bing ? sp.bing.in_account : null, crawled: new Map(sp.bing && sp.bing.crawled ? sp.bing.crawled : []) }, brave, cc_captures: null }, serp,
+      bingStats: bingPos ? { read_at: iso(nowMs - 2 * DAY), positions: bingPos, pages: {}, crawl_issues: [] } : null, brave: null, brandKnown: {}, ourHosts: [DOM, ALIAS], rivals: RIV.slice(), engines: ALL, now: nowMs, cfg: {} };
+    cases.push({ id, engine, label, why, args }); };
+  const L = (stage, sub, basis) => ({ stage, sub: sub || '', basis });
+  const times = (m, fn) => { for (let v = 0; v < m; v++) fn(v); };
+  const G3 = ['ai_overview', 'ai_mode', 'gemini'];
+  // S0 blocked (robots.txt read and blocking the engine's search bot)
+  for (const [e, bot] of [['chatgpt', 'OAI-SearchBot'], ['perplexity', 'PerplexityBot'], ['ai_overview', 'Googlebot'], ['ai_mode', 'Googlebot'], ['copilot', 'Bingbot'], ['claude', 'Claude-SearchBot'], ['gemini', 'Google-Extended'], ['chatgpt_api', 'OAI-SearchBot']])
+    times(2, (v) => make1(e, L('S0', 'blocked', 'direct'), 'robots.txt blocks ' + bot, { n: e === 'claude' ? 2 : int(4, 9), named: v, robots: { [bot]: false }, serp: { F: int(12, 30) } }));
+  // S0 js_only (raw HTML almost empty, the rendered page holds the text) for the fetchers that do not render
+  for (const e of ['chatgpt', 'perplexity', 'claude', 'chatgpt_api']) times(3, (v) => { const raw = int(10, 120);
+    make1(e, L('S0', 'js_only', 'direct'), 'the page for this question has ' + raw + ' words without JavaScript', { n: e === 'claude' ? 2 : int(4, 9), page: v % 2 ? { words_raw: raw, words_rendered: raw * int(4, 12) } : { words_raw: raw, issues: 'little text without JavaScript' }, serp: { K: int(15, 40) } }); });
+  // S0 not_indexed: Google (the mapped page, or no page of the site at all) and Bing (not in the account, or submitted and not crawled after 14 days)
+  for (const e of G3) times(3, (v) => { if (v < 2) make1(e, L('S0', 'not_indexed', 'direct'), 'the page for this question is not in Google', { n: int(4, 9), page: { words_raw: 800, state: 'not_indexed' }, serp: { F: 0 } });
+    else make1(e, L('S0', 'not_indexed', 'direct'), 'no page of the site is in Google', { n: int(4, 9), google: [[DOM, 'not_indexed'], [DOM + '/services/erp-partner', 'excluded']], serp: { K: 0 } }); });
+  times(3, () => make1('copilot', L('S0', 'not_indexed', 'direct'), 'the site is not in the Bing Webmaster account', { n: int(4, 8), bing: { in_account: false } }));
+  times(2, () => make1('copilot', L('S0', 'not_indexed', 'direct'), 'submitted to Bing 20 days ago, never crawled', { n: int(4, 8), bing: { in_account: true }, page: { words_raw: 800, submitted_at: iso(nowMs - 20 * DAY) } }));
+  // S1: eligible, not retrieved (direct for ChatGPT's own readings, proxy from a results page, unknown when nothing can be read)
+  times(4, () => make1('chatgpt', L('S1', '', 'direct'), 'ChatGPT read other pages (a look-alike host among them), not yours', { n: int(4, 10), hasRetr: true }));
+  for (const e of [...G3, 'perplexity']) times(2, () => make1(e, L('S1', '', 'proxy_rank'), 'ranks below 10 for the searches the engines run', { n: int(4, 9), serp: { [pick(['K', 'F', 'B'])]: int(11, 30) } }));
+  for (const e of G3) make1(e, L('S1', '', 'proxy_rank'), 'not in the results read, page indexed', { n: int(4, 9), serp: { K: 0 } });
+  times(2, () => make1('claude', L('S1', '', 'unknown_index'), 'no Brave reading', { n: int(2, 3) }));
+  times(2, () => make1('copilot', L('S1', '', 'unknown_index'), 'in Bing, crawled, no query positions', { n: int(4, 8), bing: { in_account: true, crawled: [[DOM + '/services/erp-partner', iso(nowMs - 5 * DAY)]] } }));
+  times(2, () => make1('chatgpt', L('S1', '', 'unknown_index'), 'no retrieval reading', { n: int(4, 8), hasRetr: false }));
+  times(2, () => make1('chatgpt_api', L('S1', '', 'unknown_index'), 'the API route shows no retrieval', { n: int(4, 8) }));
+  for (const e of G3) make1(e, L('S1', '', 'unknown_index'), 'no Google reading for these searches, index unknown', { n: int(4, 9), google: [] });
+  times(2, () => make1('ai_mode', L('S1', '', 'proxy_rank'), 'JavaScript page, but Google renders it', { n: int(4, 9), page: { words_raw: 40, issues: 'little text without JavaScript' }, serp: { F: int(12, 40) } }));
+  times(2, () => make1('copilot', L('S1', '', 'unknown_index'), 'Bing account state not read', { n: int(4, 8), bing: null }));
+  // S2: retrieved (ChatGPT direct, with www or the brand alias), or ranking in the top 10 of the engine's index (proxy)
+  times(4, (v) => make1('chatgpt', L('S2', '', 'direct'), 'ChatGPT read your page', { n: int(4, 10), retrieved: int(1, 3), how: ['www', 'alias', 'bare', 'www'][v] }));
+  for (const e of [...G3, 'perplexity']) times(2, () => make1(e, L('S2', '', 'proxy_rank'), 'ranks in the top 10 for a search the engines run', { n: int(4, 9), serp: { [pick(['K', 'F', 'B'])]: int(1, 10) } }));
+  times(2, () => make1('copilot', L('S2', '', 'proxy_rank'), 'Bing position for a fan-out query', { n: int(4, 8), bing: { in_account: true }, bingPos: int(1, 9) }));
+  times(2, () => make1('claude', L('S2', '', 'proxy_rank'), 'Brave position for a fan-out query', { n: int(2, 3), brave: int(2, 9) }));
+  for (const e of G3) make1(e, L('S2', '', 'proxy_rank'), 'Index Coverage says not indexed, but it ranks: the ranking wins', { n: int(4, 9), page: { words_raw: 800, state: 'not_indexed' }, serp: { F: int(3, 9) } });
+  times(2, () => make1('chatgpt', L('S2', '', 'direct'), 'JavaScript page, but ChatGPT read it', { n: int(4, 9), retrieved: 2, page: { words_raw: 40, issues: 'little text without JavaScript' } }));
+  // S3: cited, never named (a recommendation question)
+  for (const e of ['chatgpt', 'perplexity', 'ai_overview', 'ai_mode', 'gemini', 'copilot']) times(2, (v) => { const n = int(5, 10); make1(e, L('S3', '', 'direct'), 'your page is cited, you are never named', { n, cited: int(1, n - 1), how: v ? 'alias' : 'www' }); });
+  // S4: named but weak, low in the list, negative, or wrong
+  for (const e of ['chatgpt', 'ai_mode', 'perplexity', 'gemini']) times(2, (v) => { const n = int(8, 12); make1(e, L('S4', 'weak', 'direct'), 'named rarely', { n, named: v ? 1 : 2, cited: int(0, 2) }); });
+  for (const e of ['chatgpt', 'ai_mode', 'ai_overview']) times(2, () => { const n = int(6, 10); make1(e, L('S4', 'low_position', 'direct'), 'named often, but low in the list', { n, named: int(Math.ceil(0.35 * n), n), positions: [4, 8] }); });
+  for (const e of ['chatgpt', 'perplexity', 'gemini']) times(2, () => { const n = int(6, 10); const nm = int(Math.ceil(0.4 * n), n); make1(e, L('S4', 'negative', 'direct'), 'named often, spoken of negatively', { n, named: nm, neg: Math.ceil(0.5 * nm) }); });
+  for (const e of ['chatgpt', 'ai_mode', 'claude']) times(2, () => { const n = e === 'claude' ? 2 : int(5, 10); make1(e, L('S4', 'wrong', 'direct'), 'an answer states something wrong about you', { n, named: int(1, n), wrong: 1 }); });
+  times(3, () => { const n = int(6, 10); make1(pick(['ai_overview', 'gemini', 'perplexity']), L('S4', 'weak', 'direct'), 'informational, cited once: not yet often', { n, cited: 1, kind: 'learn', nobody: true }); });
+  // S5 won
+  for (const e of ['chatgpt', 'ai_mode', 'perplexity', 'ai_overview', 'gemini', 'copilot']) times(2, () => { const n = int(5, 12); make1(e, L('S5', '', 'direct'), 'named often, near the top', { n, named: int(Math.max(2, Math.ceil(0.35 * n)), n), positions: [1, 3] }); });
+  times(2, () => make1('claude', L('S5', '', 'direct'), 'named in both monthly answers', { n: 2, named: 2, positions: [1, 2] }));
+  times(4, () => { const n = int(5, 10); make1(pick(G3), L('S5', '', 'direct'), 'informational, nobody named, your page cited often', { n, cited: int(Math.max(2, Math.ceil(0.35 * n)), n), kind: 'learn', nobody: true }); });
+  times(2, () => { const n = int(5, 10); make1('perplexity', L('S5', '', 'direct'), 'informational, named often (position does not matter)', { n, named: Math.max(2, Math.ceil(0.35 * n)), positions: [4, 7], kind: 'learn' }); });
+  // unmeasured
+  times(4, () => make1(pick(['chatgpt', 'ai_mode', 'perplexity', 'copilot']), L('unmeasured', 'too_few', 'direct'), 'fewer than 4 answers in 28 days', { n: int(1, 3), named: 1, old: true }));
+  times(2, () => make1('claude', L('unmeasured', 'too_few', 'direct'), 'one monthly answer', { n: 1 }));
+  return cases;
+}
+module.exports = { make, archetypes, ENGINES, AIV_RULE, rngOf, fnv, diagCases };
