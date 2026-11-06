@@ -1749,7 +1749,9 @@ export async function settingsData(org: OrgRow, site: SiteRow): Promise<SiteSett
     readiness: readiness(profile),
     contentGroups: contentGroupsOf(siteRow?.content_groups_json),
     // AIR (2026-11-06): read apart from `monitors`, so an ordinary monitors save never sends them back
-    aiRank: aiRankSettingsOf(monitors[0] as unknown as Record<string, unknown>),
+    // RC-9 (review C): only when the engine stores the setting (its monitors row carries `ai_rank_mode`); an engine from before AI ranking
+    // has no such column, so the card says nothing rather than offering a setting that would not be kept
+    aiRank: monitors[0] && 'ai_rank_mode' in (monitors[0] as object) ? aiRankSettingsOf(monitors[0] as unknown as Record<string, unknown>) : undefined,
   };
 }
 

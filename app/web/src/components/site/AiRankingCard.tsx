@@ -1,7 +1,22 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Sparkles } from 'lucide-react';
-import { AI_RANK_MODE_TEXT, AI_RANK_MODES, AI_RANK_RESERVE_PAGES_MONTH, type AdminResult, type AiRankMode, type AiRankSettings, type AiRankSettingsPatch } from '@seo/shared';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  AI_RANK_MODE_TEXT,
+  AI_RANK_MODES,
+  AI_RANK_NOT_KEPT,
+  AI_RANK_OPEN_TO_CLIENTS,
+  AI_RANK_RESERVE_PAGES_MONTH,
+  AI_RANK_ROLLOUT_NOTE,
+  aiRankClientMode,
+  aiRankSaveKept,
+  type AdminResult,
+  type AiRankMode,
+  type AiRankSettings,
+  type AiRankSettingsPatch,
+  type SiteSettingsData,
+} from '@seo/shared';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardBody, CardFooter, CardHeader } from '@/components/ui/card';
@@ -10,26 +25,56 @@ import { Field, Select } from '@/components/ui/field';
 import { Segmented, SwitchRow } from '@/components/ui/tabs';
 import { IconTile } from '@/components/insight';
 import { GuideButton } from '@/components/guide';
-import { toastError } from '@/lib/api';
+import { api, toastError } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { PRICES } from '@/lib/prices';
-import { useSiteAdmin } from '@/lib/queries';
+import { qk, useSiteAdmin } from '@/lib/queries';
 
 const OFF: AiRankSettings = { mode: 'off', reserve: false, fanoutN: 0, mentions: false, brave: false };
 
 /**
  * AIR (2026-11-06, docs/ai-ranking-2026-11-05/DESIGN.md §4.1, §6.7): the website's AI ranking setting. Off / Trial (the engine's `shadow`:
- * the plan is worked out privately, nothing a client sees changes) / On, and the reserved AI answer page slot: owners and admins. The three
- * paid readings are shown to platform admins only. Saved apart from the monitors (only the fields changed are sent), so an ordinary
- * monitors save never sends these.
+ * the plan is worked out privately, nothing a client sees changes) / On, and the reserved AI answer page slot. The three paid readings are
+ * shown to platform admins only. Saved apart from the monitors (only the fields changed are sent), so an ordinary monitors save never sends
+ * these.
+ * RC-4 (review C): until the owner opens AI ranking to clients (AI_RANK_OPEN_TO_CLIENTS), only platform admins change it; a company owner or
+ * admin sees the state read-only (On or Off: the trial changes nothing they see) with a note. RC-9: nothing at all when the engine does not
+ * store the setting yet (`initial` undefined), and a save is confirmed by reading the stored setting back.
  */
 export function AiRankingCard({ initial, admin }: { initial: AiRankSettings | undefined; admin: boolean }) {
   const { org, me } = useOrgCtx();
   const { site } = useSiteCtx();
-  const action = useSiteAdmin(org.id, site.id);
+  const platform = !!me.platformAdmin;
+  if (!initial) return null;
+  if (!platform && !AI_RANK_OPEN_TO_CLIENTS) return <AiRankingReadOnly mode={initial.mode} domain={site.domain} />;
+  return <AiRankingEditor initial={initial} admin={platform || admin} platform={platform} orgId={org.id} siteId={site.id} domain={site.domain} />;
+}
+
+/** RC-4: what a company person who is not a platform admin sees while AI ranking is rolling out */
+export function AiRankingReadOnly({ mode, domain }: { mode: AiRankMode; domain: string }) {
+  const shown = aiRankClientMode(mode);
+  return (
+    <Card>
+      <CardHeader
+        icon={<IconTile size="sm" tone="blue" className="-mt-0.5"><Sparkles /></IconTile>}
+        title="AI ranking"
+        description="A weekly plan of the few steps most likely to get you named in AI answers, acted on and then checked."
+        actions={<Badge tone={shown === 'on' ? 'good' : 'neutral'}>{AI_RANK_MODE_TEXT[shown].label}</Badge>}
+      />
+      <CardBody className="space-y-3">
+        <p className="text-sm text-ink-2">{AI_RANK_MODE_TEXT[shown].text}</p>
+        {shown === 'off' && <Callout tone="info">{AI_RANK_ROLLOUT_NOTE}</Callout>}
+        <GuideButton id="ai-ranking" vars={{ domain }} variant="link" label="How AI ranking works" />
+      </CardBody>
+    </Card>
+  );
+}
+
+function AiRankingEditor({ initial, admin, platform, orgId, siteId, domain }: { initial: AiRankSettings; admin: boolean; platform: boolean; orgId: string; siteId: string; domain: string }) {
+  const qc = useQueryClient();
+  const action = useSiteAdmin(orgId, siteId);
   const start = initial ?? OFF;
   const [v, setV] = useState<AiRankSettings>(start);
-  const platform = !!me.platformAdmin;
   const changed: AiRankSettingsPatch = {};
   if (v.mode !== start.mode) changed.mode = v.mode;
   if (v.reserve !== start.reserve) changed.reserve = v.reserve;
@@ -38,11 +83,18 @@ export function AiRankingCard({ initial, admin }: { initial: AiRankSettings | un
   if (platform && v.brave !== start.brave) changed.brave = v.brave;
   const dirty = Object.keys(changed).length > 0;
 
+  // RC-9: an older engine answers "ok" and drops the fields: the stored setting is read back before saying it was saved
   const save = () =>
     action.mutate(
       { action: 'monitors', monitors: {}, aiRank: changed },
       {
-        onSuccess: (r: AdminResult) => (r.ok ? toast.success('AI ranking saved') : toast.error(r.error ?? 'The change was not applied')),
+        onSuccess: async (r: AdminResult) => {
+          if (!r.ok) return void toast.error(r.error ?? 'The change was not applied');
+          const fresh = await api<SiteSettingsData>(`/api/orgs/${orgId}/sites/${siteId}/data/settings`).catch(() => null);
+          qc.invalidateQueries({ queryKey: qk.siteData(siteId, 'settings') });
+          if (aiRankSaveKept(changed, fresh?.aiRank)) toast.success('AI ranking saved');
+          else toast.error(AI_RANK_NOT_KEPT);
+        },
         onError: (e) => toastError(e),
       },
     );
@@ -96,7 +148,7 @@ export function AiRankingCard({ initial, admin }: { initial: AiRankSettings | un
             </div>
           )}
         </fieldset>
-        <GuideButton id="ai-ranking" vars={{ domain: site.domain }} variant="link" label="How AI ranking works" />
+        <GuideButton id="ai-ranking" vars={{ domain }} variant="link" label="How AI ranking works" />
       </CardBody>
       {admin && (
         <CardFooter>

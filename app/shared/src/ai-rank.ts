@@ -245,7 +245,8 @@ export function aiRankActionOf(a: P): AiRankActionView {
   return {
     actionId: S(a.action_id ?? a.actionId),
     lever,
-    label: S(a.label) || aiRankLeverLabel(lever),
+    // RC-14 (review C, 2026-11-06): the client's words for a known lever win over the engine's own label
+    label: AI_RANK_LEVER_LABELS[lever] ?? (S(a.label) || aiRankLeverLabel(lever)),
     executor: execOf(a.executor),
     status: S(a.status),
     sink: S(a.sink),
@@ -379,3 +380,104 @@ export function aiRankShadowOf(runs: AiRankRunRow[]): AiRankShadowWeek[] {
 
 /** The monthly export ask: the key of this month's step. */
 export const aiExportTaskKey = (month: string): string => `ai_export:${month}`;
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// RC-4 (review C, 2026-11-06): who may switch AI ranking on
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/**
+ * The owner's switch for the trial period (DESIGN.md §4.4, §6.7): while it is false, only platform admins set a website to Trial or On and
+ * change the reserved slot; company owners and admins see the state read-only. The owner flips it once the shadow gate is passed and On is
+ * offered to clients (one constant, read by the server's Site Admin route and by the settings card).
+ */
+export const AI_RANK_OPEN_TO_CLIENTS = false;
+
+/** The fields that switch AI ranking itself (the mode and the reserved slot); the paid readings are AI_RANK_PAID_FIELDS. */
+export const AI_RANK_MODE_FIELDS = ['mode', 'reserve'] as const;
+export const aiRankModeChange = (a: AiRankSettingsInput | null | undefined): boolean => !!a && AI_RANK_MODE_FIELDS.some((k) => a[k] !== undefined);
+
+/** May this person change these AI ranking settings? (paid readings: platform admins only; mode and reserve: platform admins only until the owner opens it) */
+export function aiRankMayChange(a: AiRankSettingsInput | null | undefined, platformAdmin: boolean): boolean {
+  if (platformAdmin) return true;
+  if (aiRankPaidChange(a)) return false;
+  return AI_RANK_OPEN_TO_CLIENTS || !aiRankModeChange(a);
+}
+
+/** The state a company person who is not a platform admin is shown: the trial changes nothing they see, so it reads as Off. */
+export const aiRankClientMode = (m: AiRankMode): 'on' | 'off' => (m === 'on' ? 'on' : 'off');
+export const AI_RANK_ROLLOUT_NOTE = 'AI ranking is rolling out to selected websites. Ask us if you would like it for this one.';
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// RC-3 (review C, 2026-11-06): the steps whose check needs an address the client gives us
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/** Levers checked only on an address the client pastes on the step (the article, the post, the video, the corrected page, the Wikidata item). */
+export const AI_RANK_ADDRESS_REQUIRED: readonly string[] = ['L11', 'L12', 'L13', 'L14', 'L15', 'L17'];
+/** Levers the weekly check can confirm on its own (the listing is found), or sooner on the profile address the client gives. */
+export const AI_RANK_ADDRESS_OPTIONAL: readonly string[] = ['L09', 'L10'];
+export function aiRankAddressNeed(lever: string): 'required' | 'optional' | null {
+  const l = S(lever);
+  return AI_RANK_ADDRESS_REQUIRED.includes(l) ? 'required' : AI_RANK_ADDRESS_OPTIONAL.includes(l) ? 'optional' : null;
+}
+/** The label of the address field, per lever. */
+export const AI_RANK_ADDRESS_LABEL: Record<string, string> = {
+  L09: 'Your profile address on the directory',
+  L10: 'Your listing address',
+  L11: 'The address of the page that mentions you',
+  L12: 'The address of your LinkedIn article',
+  L13: 'The address of your answer',
+  L14: 'The address of your video',
+  L15: 'The address of the corrected page',
+  L17: 'The address of your Wikidata item',
+};
+export const aiRankAddressLabel = (lever: string): string => AI_RANK_ADDRESS_LABEL[S(lever)] ?? 'The address of the page';
+
+const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
+const WIKIDATA = /^(www\.)?wikidata\.org$/i;
+
+/**
+ * An address a client pasted on a step, checked by the safe fetcher's rules before anything is fetched: http or https (http is read as
+ * https, the only scheme our fetcher opens), no user name or password, no IP literal, a public-looking host name. L17 must be a Wikidata
+ * item. Returns the address we will open, or the sentence that says what is wrong.
+ */
+export function aiRankAddressCheck(raw: string, lever = ''): { url: string } | { error: string } {
+  const t = S(raw);
+  if (!t) return { error: 'Paste the address of the page first.' };
+  if (t.length > 600) return { error: 'That address is too long.' };
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(t) ? t : `https://${t}`;
+  let u: URL;
+  try {
+    u = new URL(withScheme.replace(/^http:\/\//i, 'https://'));
+  } catch {
+    return { error: 'That is not a web address. Copy it from the address bar of the page, starting with https://.' };
+  }
+  if (u.protocol !== 'https:') return { error: 'Only web addresses (https://) can be checked.' };
+  if (u.username || u.password) return { error: 'Remove the user name or password from the address.' };
+  const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (!host || host.includes(':') || IPV4.test(host)) return { error: 'Use the page\'s web address, not a number address.' };
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/i.test(host) || /(^|\.)(localhost|local|internal|lan)$/i.test(host)) return { error: 'That address is not a public website.' };
+  if (S(lever) === 'L17' && !(WIKIDATA.test(host) && /^\/wiki\/Q\d+/i.test(u.pathname))) return { error: 'Paste the address of your Wikidata item, for example https://www.wikidata.org/wiki/Q42.' };
+  u.hash = '';
+  return { url: u.toString() };
+}
+
+/** Does this page text name the business? The website's own address counts, and any business name on file of at least three characters (whole words). */
+export function aiRankPageNames(text: string, domain: string, names: string[]): boolean {
+  const plain = S(text).replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').toLowerCase();
+  const d = S(domain).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
+  if (d && plain.includes(d)) return true;
+  // the address inside a link counts too (a profile often links the website without printing it)
+  if (d && new RegExp(`https?://(www\\.)?${d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i').test(S(text))) return true;
+  return names.map((n) => S(n).toLowerCase()).filter((n) => n.length >= 3).some((n) => new RegExp(`(^|[^\\p{L}\\p{N}])${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\p{L}\\p{N}])`, 'u').test(plain));
+}
+
+/**
+ * RC-9 (review C, 2026-11-06): did the engine keep what was sent? An engine from before AI ranking answers a Site Admin save with "ok" and
+ * drops the fields it has no column for, so the app re-reads the settings and compares: undefined (no AI ranking column) or a different
+ * stored value means the setting was not saved.
+ */
+export function aiRankSaveKept(sent: AiRankSettingsInput, stored: AiRankSettings | null | undefined): boolean {
+  if (!stored) return false;
+  return (Object.keys(sent) as (keyof AiRankSettingsInput)[]).every((k) => sent[k] === undefined || stored[k] === sent[k]);
+}
+export const AI_RANK_NOT_KEPT = 'The engine has not been updated yet, so this setting was not saved.';

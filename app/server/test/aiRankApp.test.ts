@@ -61,6 +61,7 @@ const post = (payload: unknown) => app.inject({ method: 'POST', url: '/api/orgs/
 
 describe('the AI ranking setting through Site Admin', () => {
   it('sends only the fields changed, in the engine names, inside the monitors body', async () => {
+    st.platform = true;   // RC-4: while AI ranking is rolling out only a platform admin sets the mode (aiRankAccess.test.ts)
     const r = await post({ action: 'monitors', monitors: {}, aiRank: { mode: 'shadow', reserve: true } });
     expect(r.statusCode).toBe(200);
     expect(st.sent[0]).toMatchObject({ action: 'monitors', domain: 'nova-demo.example' });
