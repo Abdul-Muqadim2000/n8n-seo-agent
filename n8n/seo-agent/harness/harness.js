@@ -133,7 +133,15 @@ const aivSynthDetail = (d, panel) => {
   let start = 0; for (const [id, k0] of Object.entries(comps || {})) { const kk = Math.min(Number(k0) || 0, units.length); ents.push(id); for (let i = 0; i < kk; i++) units[(start + i) % units.length].r.push([ents.length - 1, null, 0]); start += kk; }
   return JSON.stringify({ v: 1, rule_version: AIV_RULE, ents, a: units.map(u => [u.pid, u.e, u.named ? 1 : 0, u.cited ? 1 : 0, u.pos, u.r]) });
 };
-const aivStamp = (node, items) => {
+// FX-B RB-1 (2026-11-06): the entity rule (who counts as a competitor, _ai_entities.js AIE.RULE) is recorded on every stored week (metrics_json /
+// units_json `entity_rule`) and pulse morning (detail `entity_rule`), and a week counted under another one is not compared. The fixtures stand for
+// rows of the CURRENT rule (as above), so a current-rule row with NO `entity_rule` key gets it; a scenario that wants a row counted before F-53
+// says so explicitly (`entity_rule: ''`).
+const AIV_ENT = (() => { try { const m = fs.readFileSync(path.join(CODE_DIR, 'AI_Metrics.js'), 'utf8').match(/const RULE = '([^']+)';\s*\/\/ ENTITY_RULE/); return m ? m[1] : ''; } catch (e) { return ''; } })();
+const aivEnt = (v, asString) => { if (!AIV_ENT) return v; let x = v; if (typeof v === 'string') { if (!v) return asString === 'create' ? JSON.stringify({ entity_rule: AIV_ENT }) : v; try { x = JSON.parse(v); } catch (e) { return v; } }
+  if (x == null && asString === 'create') return typeof v === 'string' ? JSON.stringify({ entity_rule: AIV_ENT }) : { entity_rule: AIV_ENT };
+  if (!x || typeof x !== 'object' || Array.isArray(x) || ('entity_rule' in x)) return v; const y = { ...x, entity_rule: AIV_ENT }; return typeof v === 'string' ? JSON.stringify(y) : y; };
+const aivStamp0 = (node, items) => {
   // a plan item built by hand (scenarios that mock AI Plan): its stored previous row, pooled pulse rows and pulse baseline days
   if (AIV_RULE && node === 'AI Plan') return items.map(it => { const j = it && it.json; if (!j || typeof j !== 'object') return it; const out = { ...j };
     if (j.previous && typeof j.previous === 'object' && !('rule_version' in j.previous)) out.previous = { ...j.previous, rule_version: AIV_RULE };
@@ -145,6 +153,15 @@ const aivStamp = (node, items) => {
   return items.map(it => { const j = it && it.json; if (!j || typeof j !== 'object' || !j.site_id || ('rule_version' in j)) return it;
     const out = { ...j, rule_version: AIV_RULE }; if (node === 'Load AI Daily' && !out.detail_json) out.detail_json = aivSynthDetail(out, aivPanelIds(j.site_id)); return { ...it, json: out }; });
 };
+const aivStamp = (node, items) => { const st = aivStamp0(node, items); if (!AIV_ENT || !AIV_RULE) return st;
+  const cur = (r) => r && String(r.rule_version || '') === AIV_RULE;
+  if (node === 'AI Plan') return st.map(it => { const j = it && it.json; if (!j || typeof j !== 'object') return it; const out = { ...j };
+    if (j.previous && typeof j.previous === 'object' && cur(j.previous)) out.previous = { ...j.previous, stats: aivEnt(j.previous.stats == null ? null : j.previous.stats, 'create') };
+    if (Array.isArray(j.pulse_rows)) out.pulse_rows = j.pulse_rows.map(d => (d && cur(d) && d.detail) ? { ...d, detail: aivEnt(d.detail) } : d);
+    return { ...it, json: out }; });
+  if (node === 'Load AI Visibility') return st.map(it => { const j = it && it.json; if (!j || !cur(j)) return it; return { ...it, json: { ...j, metrics_json: aivEnt(j.metrics_json == null ? '' : j.metrics_json, 'create'), ...(j.units_json ? { units_json: aivEnt(j.units_json) } : {}) } }; });
+  if (node === 'Load AI Daily') return st.map(it => { const j = it && it.json; if (!j || !cur(j) || !j.detail_json) return it; return { ...it, json: { ...j, detail_json: aivEnt(j.detail_json) } }; });
+  return st; };
 function mock(node, items) {
   store[node] = aivStamp(node, toItems(items));
   // the alias follows EVERY mock of the call, never only the first: S25 mocks `Run Reach Requests` a dozen times in a row with

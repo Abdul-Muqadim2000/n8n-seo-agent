@@ -14,6 +14,12 @@
 // earlier row carries the marker). Where nothing was left out the two rules count the same answers, so the comparison stands. The stored
 // rule_version (AVM.RULE_VERSION) does not change: the answers themselves are read as before.
 const HEAD_RULE = 'f08';
+// FX-B RB-1 (2026-11-06, REVIEW_B_SAFETY.md): F-53 changed who counts as a competitor (headings, prices, places and regulators no longer do), which
+// re-normalises share of voice, the competitor table and the place among the businesses named. The week records the entity rule it was counted
+// under (metrics_json.entity_rule) and is never compared with a week counted under another one: "this week starts a new baseline", no delta, no
+// alert rule. A pulse morning stored under another entity rule still counts for "named in" and "cited", but its competitors are left out (the
+// share of voice counts only answers whose businesses were recorded under this rule). Read after the AI_ENTITIES kit is inlined (AIE.RULE).
+const entRuleOf = () => (typeof AIE === 'object' && AIE && AIE.RULE) || 'f53';
 const w2read = (n) => { try { return $(n).all().map(i => i.json).filter(Boolean); } catch (e) { return []; } };   // W2-E2: the loads and the Sentiment Reader, read defensively
 /*__AI_ENTITIES__*/
 /*__AI_PANEL__*/
@@ -104,9 +110,14 @@ return plans.map(p => {
   const offPanel = { answers: 0, readings: 0, ids: new Set() };
   const PR = PRrule.map(d => { const keep = d.detail.a.filter(a => !Array.isArray(a) || onPanel(a[0])); const off = d.detail.a.length - keep.length; if (!off) return d;
     offPanel.answers += off; offPanel.readings++; for (const a of d.detail.a) if (Array.isArray(a) && !onPanel(a[0])) offPanel.ids.add(String(a[0]));
-    return { ...d, samples: keep.filter(Array.isArray).length, detail: { ...d.detail, a: keep } }; }).filter(d => d.detail.a.length);
-  const pulse_off_panel = offPanel.answers ? { answers: offPanel.answers, readings: offPanel.readings, questions: offPanel.ids.size, ids: [...offPanel.ids].sort().slice(0, 50),
-    note: offPanel.answers + ' daily pulse answer(s) to ' + offPanel.ids.size + ' question(s) no longer on this week\'s panel were left out of this week\'s figures.' } : null;
+    // FX-B RB-7 (2026-11-06, REVIEW_B_SAFETY.md): a morning keeps one `sources` count for ALL its answers (no per-answer sources in detail), so a
+    // morning with answers left out would still add the old panel's cited hosts to "Sources AI trusts" and the rival-as-source counts: its sources
+    // are dropped (and said so); a morning with nothing left out keeps them as before
+    return { ...d, samples: keep.filter(Array.isArray).length, sources: {}, sources_dropped: true, detail: { ...d.detail, a: keep } }; }).filter(d => d.detail.a.length);
+  const srcDropped = PR.filter(d => d.sources_dropped).length;
+  const pulse_off_panel = offPanel.answers ? { answers: offPanel.answers, readings: offPanel.readings, questions: offPanel.ids.size, ids: [...offPanel.ids].sort().slice(0, 50), sources_dropped: srcDropped,
+    note: offPanel.answers + ' daily pulse answer(s) to ' + offPanel.ids.size + ' question(s) no longer on this week\'s panel were left out of this week\'s figures'
+      + (srcDropped ? ', and the cited sources of those ' + srcDropped + ' morning(s) are left out of the sources table (a morning records its sources for all its answers together)' : '') + '.' } : null;
   const pulseN = PR.reduce((s, d) => s + d.detail.a.length, 0);
   // ---- B8-3 (2026-10-15, benchmark area 8, INVARIANTS rule 1): the week's headline pools the daily pulse answers straight into
   // `samples` and `mentioned`, and a pulse morning on which one engine returned nothing contributes a DIFFERENT mix of engines.
@@ -154,10 +165,14 @@ return plans.map(p => {
   // ---- F1b (2026-10-23): the week's answers, ONE unit each: this run's answers (every engine; the headline leaves the monthly ones out) and
   // the pooled pulse answers, each with the business's reading (named / cited / place) and the competitors it named, one key per business
   // ("ClearTax" and cleartax.com are one). The headline, every engine, every segment and every competitor are measured from these units.
-  const pulseRaw = []; for (const d of PR) { const D = d.detail; const ents = Array.isArray(D.ents) ? D.ents : [];
+  const ENT_RULE = entRuleOf(); const entOld = { answers: 0, readings: 0 };
+  const pulseRaw = []; for (const d of PR) { const D = d.detail; const ents = Array.isArray(D.ents) ? D.ents : []; const entSame = String(D.entity_rule || '') === ENT_RULE;   // FX-B RB-1
+    if (!entSame) { entOld.readings++; entOld.answers += D.a.filter(Array.isArray).length; }
     for (const a of D.a) { if (!Array.isArray(a)) continue; const q0 = meta.get(String(a[0])); if (q0 && q0.kind === 'brand') continue;
       pulseRaw.push({ prompt_id: String(a[0]), engine: String(a[1]), date: d.date, run_id: d.run_id || '', pulse: true, answered: true, named: !!a[2], cited: !!a[3], position: Number(a[4]) > 0 ? Number(a[4]) : null,
-        rivals: Array.isArray(a[5]) ? a[5].map(x => ({ id: String(ents[(x || [])[0]] || ''), position: Number((x || [])[1]) > 0 ? Number(x[1]) : null, cited: !!(x || [])[2] })).filter(x => x.id && notList(x.id)) : null }); } }
+        rivals: !entSame ? null : Array.isArray(a[5]) ? a[5].map(x => ({ id: String(ents[(x || [])[0]] || ''), position: Number((x || [])[1]) > 0 ? Number(x[1]) : null, cited: !!(x || [])[2] })).filter(x => x.id && notList(x.id)) : null }); } }
+  if (entOld.readings && pulse_basis) { pulse_basis.entity_old = { readings: entOld.readings, answers: entOld.answers };
+    pulse_basis.note += ' ' + entOld.answers + ' of those pulse answers (' + entOld.readings + ' reading(s)) recorded their competitors under the earlier rule: they count for "named in" and "cited", not for share of voice.'; }
   const weekRaw = R.filter(r => AVM.tb(r.answered)).map(r => ({ prompt_id: r.prompt_id, engine: r.engine, topic: r.topic, pulse: false, answered: true, named: AVM.named(r), cited: AVM.tb(r.cited), position: AVM.position(r), rivals: AVM.rivals(r, { keep: notList }) }));
   const rivDoms = [...new Set([...(p.configured_competitors || []), ...[...weekRaw, ...pulseRaw].flatMap(u => (u.rivals || []).map(x => x.id))].filter(k => /\./.test(String(k))).map(k => String(k).toLowerCase()))];
   // F1b + F1a (2026-10-23): two ids met in separate answers that are one business (cleartax.com / cleartax.in, a subdomain) are counted
@@ -449,6 +464,8 @@ return plans.map(p => {
   // visibility. It is checked first: it explains more than an engine or a panel change.
   const same_rule = prev ? (String(prev.rule_version || '') === AVM.RULE_VERSION ? (pulse_off_panel && !(prev.stats && prev.stats.headline_rule === HEAD_RULE)
       ? { comparable: false, why: 'measurement rule changed: this week starts a new baseline (the headline now counts the daily pulse answers to this week\'s questions only; ' + pulse_off_panel.answers + ' answer(s) to questions no longer on the panel were left out, and the earlier week counted such answers)' }
+      : !(prev.stats && prev.stats.entity_rule === entRuleOf())   // FX-B RB-1: F-53's entity rule
+        ? { comparable: false, why: 'measurement rule changed: this week starts a new baseline (a competitor is now a business an answer names, not a heading, a price, a place or a regulator, so share of voice, your place among the businesses named and the competitor table are counted afresh)' }
       : { comparable: true, why: '' })
     : { comparable: false, why: 'measurement rule changed: this week starts a new baseline (from ' + AVM.RULE_VERSION.replace(/^aivis-/, '') + ' "named in" counts the answers that name you, not the ones that only cite a page, and share of voice counts every competitor named)' }) : null;
   // R-E6 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): the daily pulse's answers join the headline, so the engines the pulse asks
@@ -552,7 +569,10 @@ return plans.map(p => {
   // question is the brand question (recognition only) and Claude, asked monthly, is shown per engine and kept out of the headline on
   // purpose (the week-on-week comparison depends on the weekly engine set). The words change, not the denominator.
   const buyerQ = new Set([...R.map(r => r.prompt_id), ...U.filter(u => u.pulse).map(u => u.prompt_id)].map(String)).size, brandQ = new Set(RB.map(r => r.prompt_id)).size;
-  const headEng = [...new Set([...RC.map(r => r.engine), ...PR.flatMap(d => Object.entries(d.engines || {}).filter(([, v]) => (Number((v || {}).answered) || 0) > 0).map(([e]) => e))])];
+  // FX-B RB-7: the pulse engines of the headline are the engines of the pulse answers it COUNTS (a morning's engine whose answers were all to
+  // questions no longer on the panel is not in the headline); for a morning with nothing left out this is its engines that answered, as before
+  const headEng = [...new Set([...RC.map(r => r.engine), ...PR.flatMap(d => d.sources_dropped ? d.detail.a.filter(Array.isArray).map(a => String(a[1])).filter(Boolean)
+    : Object.entries(d.engines || {}).filter(([, v]) => (Number((v || {}).answered) || 0) > 0).map(([e]) => e))])];
   const monthlyOut = MONTHLY.filter(e => R.some(r => r.engine === e)).map(e => ({ engine: ENG[e] || e, answers: R.filter(r => r.engine === e && r.answered).length }));
   const came_back = Rall.filter(r => !r.error).length;
   const headline = { buyer_questions: buyerQ, brand_questions: brandQ, engines: headEng.map(e => ENG[e] || e), engine_count: headEng.length, run_answers: ans.length, pulse_answers: pulseN, samples,
@@ -670,7 +690,7 @@ return plans.map(p => {
     c.delta = { named_rate: dd(c.named_rate, b0.named_rate), sov: dd(c.sov, b0.sov != null ? b0.sov : b0.share), avg_position: dd(c.avg_position, b0.avg_position), cited_rate: dd(c.cited_rate, b0.cited_rate),
       sov_significant: t ? t.significant : null, sov_p: t ? t.p : null, why: t ? t.why : 'the earlier run did not record this competitor per answer' };
     for (const [e, x] of Object.entries(c.engines || {})) { const y = ((b0.engines || {})[e]) || null; x.delta = y ? { named_rate: dd(x.named_rate, y.named_rate), sov: dd(x.sov, y.sov), avg_position: dd(x.avg_position, y.avg_position), cited_rate: dd(x.cited_rate, y.cited_rate) } : null; } }
-  const stats = { v: 1, rule_version: AVM.RULE_VERSION, headline_rule: HEAD_RULE, named: { k: H.named, n: H.n }, cited: { k: H.cited, n: H.n },
+  const stats = { v: 1, rule_version: AVM.RULE_VERSION, headline_rule: HEAD_RULE, entity_rule: entRuleOf(), named: { k: H.named, n: H.n }, cited: { k: H.cited, n: H.n },
     sov: { rate: H.sov, se: H.sov_se, n: H.sov_n, self: H.sov_self, mentions: H.sov_mentions },
     position: { mean: H.avg_position, sd: H.position_sd, n: H.position_n, first: H.first, first_rate: H.first_rate, pos_visibility: H.pos_visibility, pos_visibility_se: H.pos_visibility_se },
     score: { score: visibility_score, half: score_band.half, n: score_band.n, n_eff: score_band.n_eff },
@@ -691,7 +711,7 @@ return plans.map(p => {
       avg_position: cmpM(H.avg_position, PS && PS.position ? PS.position.mean : (prev ? prev.avg_position : null), H.position_n, PS && PS.position ? Number(PS.position.n) || 0 : 0, T0.avg_position) } };
   // ---- W2-E2 (2026-10-23, fixes/W2-E2.md): share of voice over the declared set, the 28-day segment window, did an action work, the owner's
   // alert rules (fired ones join the alerts), sentiment of every answer naming you (the Sentiment Reader), and the engines' clustered ranges
-  const W2 = AVX.run({ p, rule: AVM.RULE_VERSION, U, CI: W2CI, segRows, segKeys, meta, compare: compare.metrics, comparable: cmpOk, why: like ? like.why : 'no earlier run', comps: comp, read: w2read,
+  const W2 = AVX.run({ p, rule: AVM.RULE_VERSION, entity_rule: entRuleOf(), U, CI: W2CI, segRows, segKeys, meta, compare: compare.metrics, comparable: cmpOk, why: like ? like.why : 'no earlier run', comps: comp, read: w2read,
     canon: (x) => { const d = normD(x); const k0 = brandKey(/\./.test(d) ? d : String(x).trim(), rivDoms, p.aliases); return k0 ? oneKey(/\./.test(k0) ? String(k0).toLowerCase() : k0) : k0; } });
   for (const r of W2.alert_rules.filter(x => x.fired)) alerts.push({ level: 'medium', text: 'Your alert rule "' + r.rule_id + '" (' + r.metric.replace(/_/g, ' ') + (Object.keys(r.scope || {}).length ? ', ' + Object.entries(r.scope).map(([a, b]) => a + ' ' + b).join(', ') : '') + '): ' + r.reason + '.' });
   const W2S = (() => { const allJobs = (() => { try { return $('Sentiment Jobs').all().map(i => i.json || {}); } catch (e) { return []; } })(); const outs = (() => { try { return $('Sentiment Reader').all().map(i => i.json || {}); } catch (e) { return []; } })();

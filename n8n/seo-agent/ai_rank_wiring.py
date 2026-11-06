@@ -19,6 +19,7 @@ Rules (CONTRACTS.md §4 / §5, held by harness AIRG* and AP*):
   * every builder reads `AI Rank Plan` explicitly; every chain reaches `end` once.
 """
 import json
+import os
 from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_where_params, dt_get_where_params, dt_upsert_params_keys,
                            dt_update_params, dt_delete_where_params,
                            AI_RANK_RUNS_TABLE, AI_RANK_RUNS_COLS, AI_RANK_QUESTIONS_TABLE, AI_RANK_QUESTIONS_COLS, AI_RANK_ACTIONS_TABLE, AI_RANK_ACTIONS_COLS,
@@ -37,6 +38,20 @@ _SITE = ("((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim
          "(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {}))")
 SITE_EQ = ('site_id', "={{ (" + _SITE + ") === '%' ? 'like' : 'eq' }}", '={{ ' + _SITE + ' }}')
 IFX = '{{ !$json.skip && !$json.error }}'
+# FX-B (2026-11-06): AIRF's rule version (_ai_rank_flags.js). Rows written under another rule are never compared or learned from: the priors and the
+# runs are loaded for this rule only, and an action pre-registered under another rule is hidden from the plan (`Load AI Rank Actions` filters
+# `Load AI Rank Actions (Stored)`): its outcome would be counted under rules it was not registered for. The rows stay in the tables.
+import re as _re
+AIR_RULE = _re.search(r"const RULE_VERSION = '([^']+)'", open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'v5', 'code', '_ai_rank_flags.js'), encoding='utf-8').read()).group(1)
+RULE_EQ = ('rule_version', 'eq', AIR_RULE)
+ACTIONS_RULE_JS = ('// FX-B (2026-11-06): the stored AIR actions the plan may count and learn from: those pre-registered under this rule (prereg_json.rule_version\n'
+                   '// ' + AIR_RULE + ') or carrying no pre-registration yet. An action registered under another rule is left out of the plan (never re-counted under\n'
+                   '// the new rule, never learned from); its row stays in seo_ai_rank_actions.\n'
+                   "const RULE = " + json.dumps(AIR_RULE) + ";\n"
+                   "const P = (s) => { if (s && typeof s === 'object') return s; try { return JSON.parse(String(s || '')) || {}; } catch (e) { return {}; } };\n"
+                   "const rows = (() => { try { return $('Load AI Rank Actions (Stored)').all().map(i => i.json || {}); } catch (e) { return []; } })();\n"
+                   "const keep = rows.filter(r => { if (!r || r.error) return false; const v = String((P(r.prereg_json) || {}).rule_version || ''); return !v || v === RULE; });\n"
+                   "return keep.length ? keep.map(r => ({ json: r })) : [{ json: {} }];")
 AIR_TABLES = [('Ensure AI Rank Runs Table', AI_RANK_RUNS_TABLE, AI_RANK_RUNS_COLS), ('Ensure AI Rank Questions Table', AI_RANK_QUESTIONS_TABLE, AI_RANK_QUESTIONS_COLS),
               ('Ensure AI Rank Actions Table', AI_RANK_ACTIONS_TABLE, AI_RANK_ACTIONS_COLS), ('Ensure AI Rank Sources Table', AI_RANK_SOURCES_TABLE, AI_RANK_SOURCES_COLS),
               ('Ensure AI Rank Priors Table', AI_RANK_PRIORS_TABLE, AI_RANK_PRIORS_COLS)]
@@ -61,8 +76,8 @@ BUILDERS = [
      ('update', AI_GROWTH_TABLE, AI_GROWTH_COLS, ([('site_id', '={{ $json.site_id }}'), ('run_id', '={{ $json.run_id }}')], {'actions_json': '={{ $json.actions_json }}'}))),
 ]
 # the nodes of the side branch, for the harness (AP11) and the docs
-NODES = (['AI Rank Gate', 'Any AI Rank?', 'Load AI Rank Cache', 'AI Rank Live', 'Any AI Rank Live?'] + [e[0] for e in AIR_TABLES]
-         + ['Load AI Rank Questions', 'Load AI Rank Actions', 'Load AI Rank Sources', 'Load AI Rank Priors', 'Load AI Rank Runs', 'Load Index Pages (Rank)',
+NODES = (['AI Rank Gate', 'Any AI Rank?', 'Load AI Rank Kill', 'Load AI Rank Cache', 'AI Rank Live', 'Any AI Rank Live?'] + [e[0] for e in AIR_TABLES]
+         + ['Load AI Rank Questions', 'Load AI Rank Actions (Stored)', 'Load AI Rank Actions', 'Load AI Rank Sources', 'Load AI Rank Priors', 'Load AI Rank Runs', 'Load Index Pages (Rank)',
             'Load SERP Cache (Rank)', 'Load AI Daily (Rank)', 'Load AI Answers (Rank)', 'Load Listings (Rank)', 'Load Link Outreach (Rank)', 'Load Link Prospects (Rank)', 'AI Rank Plan']
          + [x for b in BUILDERS for x in (b[0], b[3], b[4])] + ['Prune AI Rank Actions', 'Prune AI Rank Sources'])
 SHADOW_TABLES = [t for _, t, _ in AIR_TABLES]
@@ -80,17 +95,19 @@ def wire(G, after_iff, after_save, end, pos):
     iff('Any AI Rank?', IFX, at(1))
     G.link(after_iff, 'AI Rank Gate', 1); G.link(after_save, 'AI Rank Gate'); G.link('AI Rank Gate', 'Any AI Rank?'); G.link('Any AI Rank?', end, 1)
     # ---- the kill switch (D17): read only when a site would run ----
+    # FX-B RB-4 / RB-11: the kill row by its KEY (any kind), then AIR's markers (kind air); AI Rank Live fails closed when either read fails
+    G.node('Load AI Rank Kill', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'key', 'eq', 'air:kill'), [at(2)[0], at(2)[1] - 110], **LOAD)
     G.node('Load AI Rank Cache', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'air'), at(2), **LOAD)
     G.code('AI Rank Live', 'AI_Rank_Live.js', at(3), **X)
     iff('Any AI Rank Live?', IFX, at(4))
-    G.link('Any AI Rank?', 'Load AI Rank Cache', 0); G.chain('Load AI Rank Cache', 'AI Rank Live', 'Any AI Rank Live?'); G.link('Any AI Rank Live?', end, 1)
+    G.link('Any AI Rank?', 'Load AI Rank Kill', 0); G.chain('Load AI Rank Kill', 'Load AI Rank Cache', 'AI Rank Live', 'Any AI Rank Live?'); G.link('Any AI Rank Live?', end, 1)
     # ---- the five AIR tables, then what AIR reads that AI Growth did not load already ----
     for i, (nm, t, c) in enumerate(AIR_TABLES): G.node(nm, DT_TYPE, DT_VERSION, dt_create_params(t, c), at(5 + i, 1), onError='continueRegularOutput', executeOnce=True)
     loads = [('Load AI Rank Questions', dt_get_all_where_params(AI_RANK_QUESTIONS_TABLE, [SITE_EQ])),
-             ('Load AI Rank Actions', dt_get_all_where_params(AI_RANK_ACTIONS_TABLE, [SITE_EQ])),
+             ('Load AI Rank Actions (Stored)', dt_get_all_where_params(AI_RANK_ACTIONS_TABLE, [SITE_EQ])),
              ('Load AI Rank Sources', dt_get_all_where_params(AI_RANK_SOURCES_TABLE, [SITE_EQ])),
-             ('Load AI Rank Priors', {'resource': 'row', 'operation': 'get', 'dataTableId': {'__rl': True, 'mode': 'name', 'value': AI_RANK_PRIORS_TABLE}, 'returnAll': True, 'options': {}}),
-             ('Load AI Rank Runs', dt_get_all_where_params(AI_RANK_RUNS_TABLE, [SITE_EQ, ('checked_at', 'gte', SINCE(84))])),
+             ('Load AI Rank Priors', dt_get_all_where_params(AI_RANK_PRIORS_TABLE, [RULE_EQ])),
+             ('Load AI Rank Runs', dt_get_all_where_params(AI_RANK_RUNS_TABLE, [SITE_EQ, ('checked_at', 'gte', SINCE(84)), RULE_EQ])),
              ('Load Index Pages (Rank)', dt_get_all_where_params(INDEX_PAGES_TABLE, [SITE_EQ])),
              ('Load SERP Cache (Rank)', dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'serp')),
              ('Load AI Daily (Rank)', dt_get_all_where_params(AI_DAILY_TABLE, [SITE_EQ, ('checked_at', 'gte', SINCE(60))])),
@@ -99,8 +116,10 @@ def wire(G, after_iff, after_save, end, pos):
              ('Load Link Outreach (Rank)', dt_get_all_where_params(LINK_OUTREACH_TABLE, [SITE_EQ])),
              ('Load Link Prospects (Rank)', dt_get_all_where_params(PROSPECT_TABLE, [SITE_EQ]))]
     for i, (nm, params) in enumerate(loads): G.node(nm, DT_TYPE, DT_VERSION, params, at(10 + i, 1), **LOAD)
+    G.code('Load AI Rank Actions', ACTIONS_RULE_JS, [at(11, 1)[0], at(11, 1)[1] + 110], **X)
     G.link('Any AI Rank Live?', AIR_TABLES[0][0], 0)
-    G.chain(*[e[0] for e in AIR_TABLES], *[l[0] for l in loads])
+    names = [l[0] for l in loads]; k = names.index('Load AI Rank Actions (Stored)'); names.insert(k + 1, 'Load AI Rank Actions')
+    G.chain(*[e[0] for e in AIR_TABLES], *names)
     ai_rank_requests_wiring.wire_requests(G, loads[-1][0], 'AI Rank Plan', at(21, 2))
     G.code('AI Rank Plan', 'AI_Rank_Plan.js', at(22), **X)
     # ---- the builders and their saves (gstep's shape: builder -> IF -> save -> next; IF false -> next) ----
@@ -108,7 +127,10 @@ def wire(G, after_iff, after_save, end, pos):
         n = G.code(bname, 'AI_Rank_Rows.js', at(23 + 2 * i), **X)
         js = n['parameters']['jsCode']
         assert js.count("'__AIR_WHICH__'") == 1 and js.count('__AIR_COLS__') == 1, 'AIR: AI_Rank_Rows.js lost its placeholders'
-        n['parameters']['jsCode'] = js.replace("'__AIR_WHICH__'", json.dumps(which)).replace('__AIR_COLS__', json.dumps(cols))
+        # FX-B RB-5: the fit gate is inlined in the target builder only (its sink keyword is gated); the other builders carry nothing there
+        assert js.count('// @@AIR_SINK_GATE@@') == 1, 'AIR: AI_Rank_Rows.js lost its sink-gate placeholder'
+        gate = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'v5', 'code', '_fit_gate.js'), encoding='utf-8').read().rstrip('\n') if which == 'targets' else ''
+        n['parameters']['jsCode'] = js.replace("'__AIR_WHICH__'", json.dumps(which)).replace('__AIR_COLS__', json.dumps(cols)).replace('// @@AIR_SINK_GATE@@', gate)
         # the run row carries an `error` column by design (the kit that was missing): its IF asks for the row, not for the absence of `error`
         iff(ifname, '{{ !$json.skip && !!$json.run_id }}' if which == 'runs' else IFX, at(24 + 2 * i))
         if op == 'insert': params = dt_insert_params(table, tcols)
