@@ -75,3 +75,15 @@ Owner to provide: Brave Search API key.
 - Left: browser pass of new app screens; owner decisions (deploy yes, Brave key, one live call each for 3 response shapes, whether to fix
   the two old cadence bugs for every site); then merge origin/main, node-diff prod, backup, deploy engine (sync_tables first) -> API -> web,
   sites in shadow; 4 weekly shadow cycles; then On for both.
+
+## DEPLOYED 2026-11-06 ~11:40 UTC (owner's yes): both sites in trial (shadow)
+- Release 15c7b1a2 on feature/seo-agent-v4.5 (= air/integration). Final checks: harness 17410 / 0; app typecheck clean, shared 1125,
+  server 1964 (46 skipped), web 317, web build OK.
+- Before: production == origin/main node by node (32 workflows, 0 differing). Backup gs://alaventra-prod-backups/pg/2026-11-06/{app,n8n}-2026-11-06T113605Z.dump.
+- Engine: deploy_engine.py --no-build --apply: sync_tables added 9 columns, 19 workflows updated, 10 unchanged, 28 published; after:
+  production == build (0 differing). API: VM repo ff to 15c7b1a2, `up -d --build app`, healthy (db, n8n api + webhook). Web: PR #58 merged -> main 34a580ea (Vercel).
+- Both sites: Site Admin `monitors` {ai_rank_mode: shadow} -> read back shadow; ai_visibility / prompts / engines unchanged; paid flags empty (off).
+- Next: each weekly AI Growth run computes AIR in shadow at $0 (only seo_ai_rank_* tables); platform-admin trial view in the app. After 4
+  cycles: comparison for the owner, then On for both (Site Admin ai_rank_mode on + ai_rank_reserve; paid flags per owner: mentions, fanout_n, brave).
+- Owner: SEO_BRAVE_API_KEY into n8n/.env then deploy credentials (deploy_engine --credentials --only-credentials SEOcredBraveApi1 --create-missing).
+- Rollback: Site Admin ai_rank_mode '' (off) per site, or seo_cache air:kill = 1; full rollback = previous workflows from origin/main@a8bbd555 + backup.

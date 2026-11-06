@@ -63,6 +63,20 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
+## Status (2026-11-06, AI ranking (AIR) built, reviewed, DEPLOYED in trial on both sites - latest)
+Owner asked for full R&D + the best enterprise AI-ranking algorithm (two prod clients had no outcome), multi-agent, nothing else may
+break. Read **`n8n/seo-agent/docs/ai-ranking-2026-11-05/RESUME.md`** (README = owner decisions, R1-R5 research, DESIGN.md, CONTRACTS.md,
+fixes/*.md, REVIEW_A/B/C, BROWSER_PASS). Root causes (R4): devaicon not findable (no Bing / Brave / Common Crawl), clients on none of the
+"best X" lists / directories AI cites, unstable model-written panel, 0 of 20 AI pages written. AIR = per question x engine stage
+(S0 cannot be found .. S5 won, provisional S0/S1 below 4 answers), source graph, 17 evidence-weighted levers, held-back controls,
+lift tests (t test across questions, Fisher first appearance), pooled learning, plain-language weekly plan; per site `seo_monitors.
+ai_rank_mode` off / shadow (trial) / on, only platform admins switch it (`AI_RANK_OPEN_TO_CLIENTS=false`), kill switch `seo_cache air:kill`
+(fails closed). Also F-08/37/38/53/81/85 and two cadence fixes for every site. Harness 17410 / 0; app shared 1125 / server 1964 / web 317.
+**Deployed 2026-11-06 ~11:40 UTC**: backup pg/2026-11-06/*T113605Z; engine deploy_engine --no-build --apply (9 columns, 19 updated, 28
+published; node diff prod == build, prod == origin/main before); API on the VM at 15c7b1a2 (healthy); web PR #58 -> main 34a580ea. Both
+sites set to **shadow** via Site Admin (no other monitor field changed). Next: 4 weekly shadow cycles, then the owner's comparison and On;
+owner to give SEO_BRAVE_API_KEY; live format checks of LLM Mentions / Bing stats (P5) in progress.
+
 ## Status (2026-11-05, four devaicon.com client reports fixed + deployed; VM now STANDARD - latest)
 Each report was checked on production first (owner allowed prod reads + deploys for this project, 2026-11-05). (1) Publish check stuck
 "Queued" 69 min = Spot preemptions (24 on 11-05); watcher `engineFailures.ts` now closes any run overdue (3x eta, min 10 min,
