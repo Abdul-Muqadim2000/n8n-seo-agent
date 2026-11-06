@@ -283,3 +283,16 @@ describe('every keyword-first ask has a guide', () => {
     expect(guideForRecommendation('tech:score-drop')).toBeUndefined();
   });
 });
+
+// browser pass D2 (2026-11-06): "Someone with access to {{domain}}" was printed raw because fillGuide filled title, why and the steps only
+describe('fillGuide fills the who and where lines too', () => {
+  it('no guide shows a raw placeholder in who or where, with or without the values', () => {
+    for (const g of GUIDES) {
+      for (const vars of [{}, { domain: 'example.com' }]) {
+        const f = fillGuide(g, vars);
+        expect(`${f.who ?? ''} ${f.where ?? ''}`, g.id).not.toMatch(/\{\{\w+\}\}/);
+      }
+    }
+    expect(fillGuide(GUIDES.find((g) => g.id === 'ai-report-import')!, { domain: 'acme.example' }).who).toBe('Someone with access to acme.example in Bing Webmaster Tools or Search Console');
+  });
+});

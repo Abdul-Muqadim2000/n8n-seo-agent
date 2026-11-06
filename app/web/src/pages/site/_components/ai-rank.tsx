@@ -4,7 +4,7 @@
 // Nothing here renders for a website that is off or in its trial (the page then looks exactly as before), and every field may be missing.
 import { useState } from 'react';
 import { ChevronDown, Compass, FlaskConical } from 'lucide-react';
-import { AI_RANK_EXECUTOR_TEXT, aiRankStatusText, type AiRankActionView, type AiRankMemo, type AiRankPlanData, type AiRankShadowWeek } from '@seo/shared';
+import { AI_RANK_EXECUTOR_TEXT, aiRankPlain, aiRankStatusText, type AiRankActionView, type AiRankMemo, type AiRankPlanData, type AiRankShadowWeek } from '@seo/shared';
 import { Badge, type Tone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
@@ -93,6 +93,16 @@ export function AiRankActionList({ actions }: { actions: AiRankActionView[] }) {
 /** The AI visibility page's AI ranking plan: rendered only for a website in `on` mode with a run on record. */
 export function AiRankSection({ plan, domain }: { plan: AiRankPlanData | null | undefined; domain: string }) {
   if (!plan) return null;
+  // browser pass D4: on, but no plan yet
+  if (plan.pending)
+    return (
+      <section className="space-y-4">
+        <SectionHeading icon={<Compass />} title="AI ranking plan" description="AI ranking is on for this website" actions={<GuideButton id="ai-ranking" vars={{ domain }} variant="link" label="How it works" />} />
+        <Panel title="Your first plan is on its way">
+          <p className="text-[13px] text-ink-2">The first weekly plan comes after the first AI visibility check of this website. It lists the steps most likely to get you named in AI answers, who does each one, and what changed since the week before.</p>
+        </Panel>
+      </section>
+    );
   return (
     <section className="space-y-4">
       <SectionHeading
@@ -150,8 +160,24 @@ export function AiRankShadowPanel({ orgId, siteId }: { orgId: string; siteId: st
   );
 }
 
-function ShadowWeek({ w }: { w: AiRankShadowWeek }) {
+/** browser pass D3 (2026-11-06): the trial view is for platform admins, but in plain words too: no internal name, no "own model", no ids */
+export const adminPlain = (t: string) =>
+  aiRankPlain(
+    String(t ?? '')
+      .replace(/AIR'?s own model,? not independent/gi, 'our estimate, not an independent measure')
+      .replace(/(AIR|AI ranking)'?s own model/gi, 'our estimate')
+      .replace(/^Gains are our estimate, not an independent measure\. Overlap: shared targets over all targets of both plans\.$/, ''),
+  );
+const plainMemo = (m: AiRankMemo): AiRankMemo => ({
+  ...m,
+  parts: m.parts.map((p) => ({ ...p, lines: p.lines.map((l) => ({ text: adminPlain(l.text), figures: l.figures.map((f) => ({ name: f.name.replace(/_/g, ' '), value: f.value, basis: adminPlain(f.basis) })) })) })),
+  blockers: m.blockers.map((b) => ({ ...b, what: adminPlain(b.what), blocks: adminPlain(b.blocks) })),
+});
+
+function ShadowWeek({ w: w0 }: { w: AiRankShadowWeek }) {
+  const w = { ...w0, memo: w0.memo ? plainMemo(w0.memo) : null, air: w0.air.map((a) => ({ ...a, why: adminPlain(a.why) })) };
   const shadowPart = w.memo?.parts.find((p) => p.key === 'shadow_vs_old');
+  const note = w.compare ? adminPlain(w.compare.note) : '';
   return (
     <div className="rounded-xl border border-line p-3">
       <p className="text-[13px] font-semibold text-ink">
@@ -161,8 +187,8 @@ function ShadowWeek({ w }: { w: AiRankShadowWeek }) {
       {w.compare && (
         <p className="mt-1 text-xs text-ink-3">
           Overlap {w.compare.overlap != null ? `${Math.round(w.compare.overlap * 100)}%` : 'not computed'}
-          {w.compare.gainAir != null && w.compare.gainOld != null ? ` · expected gain, AI ranking's own model: ${w.compare.gainAir.toFixed(3)} against ${w.compare.gainOld.toFixed(3)} for the current plan` : ''}
-          {w.compare.note ? ` · ${w.compare.note}` : ''}
+          {w.compare.gainAir != null && w.compare.gainOld != null ? ` · expected gain (our estimate, not an independent measure): ${w.compare.gainAir.toFixed(3)} for AI ranking against ${w.compare.gainOld.toFixed(3)} for the current plan` : ''}
+          {note ? ` · ${note}` : ''}
         </p>
       )}
       <div className="mt-2 grid gap-3 lg:grid-cols-2">

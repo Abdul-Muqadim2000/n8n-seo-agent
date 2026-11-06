@@ -31,7 +31,7 @@ vi.mock('../src/auth/access', () => ({
 vi.mock('../src/n8n/client', () => ({
   siteAdmin: vi.fn(async (body: Record<string, unknown>) => (st.sent.push(body), { ok: true, action: String(body.action), affected: 1, error: null })),
   siteRows: vi.fn(async (table: string) => st.rows[table] ?? []),
-  rows: vi.fn(async () => []),
+  rows: vi.fn(async (table: string) => st.rows[`all:${table}`] ?? []),
   insertRows: vi.fn(),
   deleteRows: vi.fn(),
   ensureTable: vi.fn(),
@@ -101,6 +101,14 @@ describe('RC-9: an engine without the AI ranking column gives no setting', () =>
     expect((await settingsData({ id: 'org' } as never, site)).aiRank).toMatchObject({ mode: 'off' });
     st.rows = { monitors: [{ domain: 'nova-demo.example', ai_rank_mode: 'on' }] };
     expect((await settingsData({ id: 'org' } as never, site)).aiRank).toMatchObject({ mode: 'on' });
+  });
+  it('browser pass D1: a website not tracked yet (no monitors row) gets the setting (off) when the engine table has the column, none when it does not', async () => {
+    st.rows = { monitors: [], 'all:monitors': [{ domain: 'other.example', ai_rank_mode: null }] };
+    expect((await settingsData({ id: 'org' } as never, site)).aiRank).toMatchObject({ mode: 'off', reserve: false });
+    st.rows = { monitors: [], 'all:monitors': [{ domain: 'other.example', ai_visibility: true }] };
+    expect((await settingsData({ id: 'org' } as never, site)).aiRank).toBeUndefined();
+    st.rows = { monitors: [] };
+    expect((await settingsData({ id: 'org' } as never, site)).aiRank).toBeUndefined();
   });
 });
 

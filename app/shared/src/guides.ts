@@ -3444,6 +3444,9 @@ export function fillGuide(guide: Guide, vars: GuideVars = {}): FilledGuide {
     ...guide,
     title: f(guide.title),
     why: f(guide.why),
+    // browser pass D2 (2026-11-06): the who and where lines carry placeholders too ("Someone with access to {{domain}}")
+    ...(guide.who ? { who: f(guide.who) } : {}),
+    ...(guide.where ? { where: f(guide.where) } : {}),
     done: guide.done ? f(guide.done) : undefined,
     steps: guide.steps.map((s) => ({
       ...s,

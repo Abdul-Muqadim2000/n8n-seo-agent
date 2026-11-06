@@ -110,8 +110,10 @@ describe('the AI ranking plan read', () => {
     expect([p?.memo ?? null, p?.cost ?? null]).toEqual([null, null]);
     const admin = await aiRankPlanFor('nova-demo.example', { ai_rank_mode: 'on' } as never, { admin: true });
     expect(admin?.actions[0]).toMatchObject({ actionId: 'a1', status: 'queued', executor: 'human' });
+    // browser pass D4: an on website with no run on record yet gets the "first plan on its way" state (an engine without the tables cannot be on)
     st.rows = {};
-    expect(await aiRankPlanFor('nova-demo.example', { ai_rank_mode: 'on' } as never)).toBeNull();
+    expect(await aiRankPlanFor('nova-demo.example', { ai_rank_mode: 'on' } as never)).toMatchObject({ pending: true, actions: [], client: null });
+    expect(await aiRankPlanFor('nova-demo.example', { ai_rank_mode: 'shadow' } as never)).toBeNull();
     st.fail = true;
     expect(await aiRankPlanFor('nova-demo.example', { ai_rank_mode: 'on' } as never)).toBeNull();
     const shadow = await aiRankShadowData({ id: 'site-1', domain: 'nova-demo.example' } as never);

@@ -74,23 +74,27 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
 
   if (!L && !d.latest && !d.report)
     return (
-      <EmptyState
-        icon={<Bot className="size-5" />}
-        title="No AI visibility check yet"
-        description={`The check asks your buyers' questions on ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews (Copilot optional), and shows who gets named, how AI describes you, which sources it trusts, whether AI crawlers can read your site and what AI visits are worth. About ${quoteLabel(estimateAiVisibilityCost().fullRun + estimateAiVisibilityCost().weekly / 4.33)} for the first full check.`}
-        action={
-          <>
-            <ToolButton mode="ai_visibility" variant="primary">
-              Run the first check
-            </ToolButton>
-            {can('admin') && (
-              <ButtonLink to={page('settings/tracking')} variant="secondary">
-                Weekly monitor settings
-              </ButtonLink>
-            )}
-          </>
-        }
-      />
+      <div className="space-y-6">
+        <EmptyState
+          icon={<Bot className="size-5" />}
+          title="No AI visibility check yet"
+          description={`The check asks your buyers' questions on ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews (Copilot optional), and shows who gets named, how AI describes you, which sources it trusts, whether AI crawlers can read your site and what AI visits are worth. About ${quoteLabel(estimateAiVisibilityCost().fullRun + estimateAiVisibilityCost().weekly / 4.33)} for the first full check.`}
+          action={
+            <>
+              <ToolButton mode="ai_visibility" variant="primary">
+                Run the first check
+              </ToolButton>
+              {can('admin') && (
+                <ButtonLink to={page('settings/tracking')} variant="secondary">
+                  Weekly monitor settings
+                </ButtonLink>
+              )}
+            </>
+          }
+        />
+        {/* browser pass D4 (2026-11-06): a website in AI ranking `on` says when its first plan comes, even before the first check */}
+        {d.aiRank && <AiRankSection plan={d.aiRank} domain={site.domain} />}
+      </div>
     );
 
   // A6 (2026-10-23): the report's prose, grid and actions are shown as current only when they were written for the latest run

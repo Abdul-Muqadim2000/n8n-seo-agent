@@ -315,7 +315,12 @@ export interface AiRankPlanData {
   /** provider cost of the plan's readings: platform admins only (null for everyone else) */
   cost: { usd: number; basis: string } | null;
   settings: AiRankSettings;
+  /** browser pass D4 (2026-11-06): the website is on but has no plan yet (its first plan follows the first AI visibility check) */
+  pending?: boolean;
 }
+
+/** browser pass D4: an `on` website with no on-mode run on record yet */
+export const aiRankPendingPlan = (settings: AiRankSettings): AiRankPlanData => ({ checkedAt: '', runId: '', client: null, memo: null, actions: [], cost: null, settings, pending: true });
 
 /** How the plan is read for one viewer: question texts by id, the credit rate, and whether the viewer is a platform admin. */
 export interface AiRankPlanOptions {

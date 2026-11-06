@@ -1,4 +1,5 @@
 import {
+  aiRankPendingPlan,
   aiRankPlanOf,
   creditRate,
   aiRankSettingsOf,
@@ -137,7 +138,7 @@ import {
   type AiScopeSummary,
 } from '@seo/shared';
 import type { OrgRow, SiteRow } from '../db/schema';
-import { siteRows } from '../n8n/client';
+import { rows as tableRows, siteRows } from '../n8n/client';
 import { settingsRow } from './admin/settings';
 import { indexCoverage, recheckOf, watchView } from './pageWatch';
 import { aiChargeEntries, bucketAiCharges } from './runCredits';
@@ -1743,6 +1744,9 @@ export async function settingsData(org: OrgRow, site: SiteRow): Promise<SiteSett
     siteRows<ProfileRow>('profiles', d, { max: 5 }),
   ]);
   const profile = profileFromRow(profiles[0]);
+  // browser pass D1 (2026-11-06): a website with no monitors row yet (not tracked) still gets the AI ranking card when the engine's table has the
+  // column: any one row of the table says so (the Data Tables API returns every column on every row); the setting then reads as off
+  const aiRankColumn = monitors[0] ? 'ai_rank_mode' in (monitors[0] as object) : await tableRows<MonitorsRow>('monitors', { max: 1 }).then((r) => !!r[0] && 'ai_rank_mode' in (r[0] as object)).catch(() => false);
   return {
     tracking: connection(siteRow, org, site),
     monitors: monitorsFromRow(monitors[0]),
@@ -1753,7 +1757,7 @@ export async function settingsData(org: OrgRow, site: SiteRow): Promise<SiteSett
     // AIR (2026-11-06): read apart from `monitors`, so an ordinary monitors save never sends them back
     // RC-9 (review C): only when the engine stores the setting (its monitors row carries `ai_rank_mode`); an engine from before AI ranking
     // has no such column, so the card says nothing rather than offering a setting that would not be kept
-    aiRank: monitors[0] && 'ai_rank_mode' in (monitors[0] as object) ? aiRankSettingsOf(monitors[0] as unknown as Record<string, unknown>) : undefined,
+    aiRank: aiRankColumn ? aiRankSettingsOf((monitors[0] ?? {}) as unknown as Record<string, unknown>) : undefined,
   };
 }
 
@@ -1786,7 +1790,8 @@ export async function aiRankPlanFor(
     ]);
     // FX-C RC-1: question texts by id, credits instead of money (the app's own credit rate), the raw memo and cost for a platform admin only
     const texts = new Map((opts.prompts ?? []).map((r) => [s((r as { prompt_id?: unknown }).prompt_id), s((r as { prompt?: unknown }).prompt)]));
-    return aiRankPlanOf(runs, actions, settings, { question: (id) => texts.get(id) ?? '', creditRate: ps ? creditRate(ps) : null, admin: opts.admin === true });
+    // browser pass D4: an on website with no run yet says its first plan is coming, rather than showing nothing
+    return aiRankPlanOf(runs, actions, settings, { question: (id) => texts.get(id) ?? '', creditRate: ps ? creditRate(ps) : null, admin: opts.admin === true }) ?? aiRankPendingPlan(settings);
   } catch {
     return null;
   }

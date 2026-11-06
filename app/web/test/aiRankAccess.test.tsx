@@ -8,6 +8,8 @@ import { GuideProvider } from '@/components/guide';
 import { TooltipProvider } from '@/components/ui/overlay';
 import { AiRankingCard } from '@/components/site/AiRankingCard';
 import { SiteTaskRow } from '@/components/site/SiteTasks';
+import { AiRankSection, adminPlain } from '@/pages/site/_components/ai-rank';
+import { aiRankPendingPlan } from '@seo/shared';
 import { makeCan, OrgContext, SiteContext } from '@/lib/context';
 import { ThemeProvider } from '@/lib/theme';
 import { text } from './renderReport';
@@ -67,5 +69,20 @@ describe('an AI ranking step checked on an address', () => {
     const t = wrap(<ul><SiteTaskRow task={task} /></ul>);
     expect(t).toContain('The address of your LinkedIn article');
     expect(t).toContain("I've done it, check now");
+  });
+});
+
+// browser pass 2026-11-06: D3 (the admin trial view in plain words) and D4 (an on website with no plan yet says its first plan is coming)
+describe('browser pass D3 / D4', () => {
+  it('D3: the trial view drops the engine wording', () => {
+    expect(adminPlain("AIR picks more questions the site can win (AI ranking's own model)")).toBe('AI ranking picks more questions the site can win (our estimate)');
+    expect(adminPlain("Gains are AIR's own model, not independent. Overlap: shared targets over all targets of both plans.")).toBe('');
+    expect(adminPlain("AIR's own model, not independent")).toBe('our estimate, not an independent measure');
+  });
+  it('D4: an on website with no plan yet shows the first-plan state', () => {
+    const t = wrap(<AiRankSection plan={aiRankPendingPlan(S('on'))} domain="novaand-demo.com" />);
+    expect(t).toContain('Your first plan is on its way');
+    expect(t).toContain('after the first AI visibility check');
+    expect(wrap(<AiRankSection plan={null} domain="novaand-demo.com" />)).toBe('');
   });
 });
