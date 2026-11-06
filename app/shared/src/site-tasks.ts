@@ -25,7 +25,7 @@ import {
   type IndexingSitemapReading,
   type IndexSiteFixCause,
 } from './indexing';
-import { aiExportTaskKey, aiRankGuideOf, aiRankLeverLabel, type AiRankStep } from './ai-rank';
+import { aiExportTaskKey, aiRankAddressLabel, aiRankAddressNeed, aiRankGuideOf, aiRankLeverLabel, type AiRankStep } from './ai-rank';
 
 /** `index_links` (wave 2, DESIGN_WAVE2 §3.2): the one step `indexing:links`, pages that need a link from another page of the website */
 /** AIR (2026-11-06, docs/ai-ranking-2026-11-05/DESIGN.md §6.7): `ai_rank` = a step the AI-ranking plan needs from the client on their website or
@@ -73,6 +73,9 @@ export interface SiteTask {
   guide: string;
   guideVars: Record<string, string>;
   skipped: { at: string; who: string } | null;
+  /** RC-3 (AIR): a step checked on an address the client pastes on it (an article, a post, a profile). `required`: the step cannot be
+   *  checked without it; `value`: the address given last ('' = none yet). Absent for every other step. */
+  address?: { required: boolean; label: string; value: string };
 }
 
 /** The engine's readings of one website, as the app's data layer already has them. */
@@ -212,11 +215,14 @@ function aiRankDrafts(a: SiteTaskInputs['aiRank'], stored: StoredSiteTask[]): Dr
     const id = str(st.payload.actionId);
     const step = a.steps.find((x) => x.key === st.key);
     const status = a.statusOf[id] ?? str(step?.status);
-    if (!step && !AI_RANK_OPEN.has(status) && !AI_RANK_DONE.has(status)) continue;
+    // RC-3: a step our own check confirmed on the address the client gave stays listed (done), whatever the plan did since
+    const ownDone = !!st.lastCheck?.ok && !engineBy(st.lastCheck.by);
+    const ownSeen = ownDone || (!!st.doneAt && !!str(st.payload.clientUrl));   // once confirmed, a later miss reopens it instead of hiding it
+    if (!step && !AI_RANK_OPEN.has(status) && !AI_RANK_DONE.has(status) && !ownSeen) continue;
     const engine = engineOf(id);
-    if (!engine) open++;
+    if (!engine && !ownDone) open++;
     seen.add(st.key);
-    out.push({ key: st.key, kind: 'ai_rank', engine, payload: step ? aiRankPayload(step) : st.payload });
+    out.push({ key: st.key, kind: 'ai_rank', engine, payload: step ? { ...aiRankPayload(step), ...aiRankOwn(st.payload) } : st.payload });
   }
   for (const step of a.steps) {
     if (seen.has(step.key) || byKey.has(step.key) || !/^ai_rank:/.test(step.key)) continue;
@@ -230,6 +236,8 @@ function aiRankDrafts(a: SiteTaskInputs['aiRank'], stored: StoredSiteTask[]): Dr
   }
   return out;
 }
+/** RC-3: what the client gave on a stored step (the address and the business names our check looked for) survives a new plan's payload */
+const aiRankOwn = (p: Record<string, unknown>): Record<string, unknown> => ({ ...(str(p.clientUrl) ? { clientUrl: str(p.clientUrl) } : {}), ...(Array.isArray(p.names) ? { names: p.names } : {}) });
 const aiRankPayload = (x: AiRankStep): Record<string, unknown> => ({ lever: x.lever, ref: x.key.split(':').slice(2).join(':'), what: x.what, why: x.why, check: x.check, url: x.url, actionId: x.actionId, label: x.label });
 
 /** AIR: the monthly ask (`ai_export:<yyyy-mm>`): done once this month's Bing AI Performance and Search Console AI uploads both arrived. */
@@ -506,6 +514,8 @@ function doneDetail(d: Draft, domain: string): string {
       return `${n === 1 ? 'The link is' : `All ${n} links are`} in place. Google finds a page sooner when your other pages link to it; the daily index check keeps watching these pages.`;
     }
     case 'ai_rank':
+      // RC-3: confirmed by our own reading of the address the client gave, or by the weekly check
+      if (!d.engine?.ok && str(p.clientUrl)) return `Done: ${str(p.what) || aiRankLeverLabel(str(p.lever))}. We opened ${str(p.clientUrl)} and found your business on it, and the next weekly plan measures what it changes in AI answers.`;
       return `Done: ${str(p.what) || aiRankLeverLabel(str(p.lever))}. The weekly AI ranking check found it, and the next weekly plan measures what it changes in AI answers.`;
     case 'ai_export':
       return "This month's AI reports are uploaded. The AI visibility page reads them beside our own checks.";
@@ -657,7 +667,14 @@ function presentAiRank(p: Record<string, unknown>): Pick<SiteTask, 'title' | 'de
   const lever = str(p.lever);
   const url = str(p.url);
   const why = str(p.why);
-  const check = str(p.check);
+  const need = aiRankAddressNeed(lever);
+  // RC-3: a step checked on an address says how, in the words of the field the client fills in
+  const check =
+    need === 'required'
+      ? 'Once it is live, paste its address below and press "I\'ve done it, check now": we open the page and look for your business. The step is done when we find it'
+      : need === 'optional'
+        ? 'The weekly check looks for your listing. To have it checked now, paste your profile address below and press "I\'ve done it, check now"'
+        : str(p.check);
   return {
     title: str(p.what) || str(p.label) || aiRankLeverLabel(lever),
     detail: [why ? `${why.replace(/[.\s]+$/, '')}.` : 'A step from your AI ranking plan: it helps AI assistants find, trust and name your business.', check ? `How we check it: ${check.replace(/[.\s]+$/, '')}.` : 'The weekly AI ranking check ticks it off once it finds it done.'].join(' '),
@@ -665,6 +682,14 @@ function presentAiRank(p: Record<string, unknown>): Pick<SiteTask, 'title' | 'de
     guide: aiRankGuideOf(lever),
     guideVars: url ? { pageUrl: url } : {},
   };
+}
+
+/** RC-3: the address field of an AI ranking step that is checked on an address (absent for every other step) */
+function addressOf(d: Draft): Pick<SiteTask, 'address'> {
+  if (d.kind !== 'ai_rank') return {};
+  const lever = str(d.payload.lever);
+  const need = aiRankAddressNeed(lever);
+  return need ? { address: { required: need === 'required', label: aiRankAddressLabel(lever), value: str(d.payload.clientUrl) } } : {};
 }
 
 function presentAiExport(p: Record<string, unknown>): Pick<SiteTask, 'title' | 'detail' | 'values' | 'guide' | 'guideVars'> {
@@ -745,6 +770,7 @@ export function deriveSiteTasks(inputs: SiteTaskInputs, stored: StoredSiteTask[]
       detail: state === 'done' ? doneDetail(d, inputs.domain) : shown.detail,
       guideVars: { domain: inputs.domain, ...shown.guideVars },
       skipped: s?.skippedAt ? { at: s.skippedAt, who: s.skippedBy ?? '' } : null,
+      ...addressOf(d),
     };
   });
   const rank = (t: SiteTask) => (t.state === 'todo' ? (t.severity === 'warning' ? 0 : 1) : t.state === 'done' ? 2 : 3);
