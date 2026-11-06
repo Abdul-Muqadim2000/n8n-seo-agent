@@ -2645,6 +2645,8 @@ const headRanks = allRanks.filter(r => Number(r.rung) === 4 || r.rung === '' || 
 const pageRows = rowsOf('Load Pages (Cadence)').filter(r => r.site_id && r.url);
 // v4.12 (AI_GROWTH_SPEC.md): the AI targets the AI Growth loop queued (questions AI answers without the business) and each site's AI pages a month
 const aiTargets = rowsOf('Load AI Targets (Cadence)').filter(r => r.target_id && r.status === 'queued'), monitors = rowsOf('Load Monitors (Cadence)');
+// FX-C RC-11: the AI targets being written (an AIR page started this cycle is on top of pages_per_week; read only for a website that is on)
+const aiTargetsWriting = rowsOf('Load AI Targets Writing (Cadence)').filter(r => r.target_id && r.status === 'writing');
 // R90 (2026-10-16): the names AI uses for other companies (seo_cache ai_brands:<site>), for the fit gate of the stored rungs
 const aiBrandRows = rowsOf('Load AI Brands (Cadence)').filter(r => r.key);
 // ---- AIR (2026-11-06, docs/ai-ranking-2026-11-05 DESIGN 2.F / 6.7, package P6): the AI-ranking rows of seo_cache (kind 'air': the kill switch
@@ -2653,18 +2655,25 @@ const aiBrandRows = rowsOf('Load AI Brands (Cadence)').filter(r => r.key);
 //   * RESERVE (`ai_rank_reserve`): the top queued AI target AIR chose (seo_ai_targets.origin 'ai_rank') is written at levels 2 and 3, ON TOP of
 //     pages_per_week, at most one a week and inside ai_pages_month (it takes the AI page of the week; the other AI target is suggested). The
 //     page is an ordinary `ai_answer` / `ai_refresh` run. Level 1, the pile-up guard, waiting for the first keyword, the author profile: it waits.
-//   * HONOUR (P3's note on F-37, owner D13): AIR keeps a question of the client's own tracked AI panel that the cadence's topic gate may call
-//     "off topic" / "too broad". So that AIR never promises a page the cadence will refuse, the cadence HONOURS an AIR target in the reserved
-//     slot: the gate's topic verdict (and the level-2 topic evidence) does not apply to it, while every safety refusal (own brand, another
-//     brand, government, portal, job search, navigational, other market) still refuses it, exactly as for any candidate. The global gate is not
-//     changed; nothing outside the reserved slot is honoured. (The other choice, checking the gate when AIR plans, cannot see what the cadence
-//     sees at write time - ladders, skips, the pages written since - and lives in package P4's plan.)
+//   * HONOUR (P3's note on F-37, owner D13; narrowed by FX-C RC-6, 2026-11-06): AIR keeps a question of the client's own tracked AI panel that
+//     the cadence's topic gate may call "too broad". The reserved slot honours ONLY that verdict, and only when the keyword shares a meaningful
+//     word with what the site sells (its services, AIR_SVC_STOP words left out): a broad question about the client's own service is written.
+//     "off topic" (a page about something the business does not sell) and every safety refusal (own brand, another brand, government, portal,
+//     job search, navigational, other market) refuse it, listed in `refused` with its target_id so AIR stops proposing it. The global gate is
+//     not changed; nothing outside the reserved slot is honoured.
+//   * ONE PAGE, ONE REWRITE (FX-C RC-2): on a website that is on, no page address is written twice in one run (nor one another keyword's run
+//     started in the last 7 days), and the reserved page is skipped (the slot passes to the next AIR target) when a page of this run already
+//     targets the same search or the same page, or a live page already answers it (air.held lists each with its reason).
 //   * PROTECT: a page AI answers cite (the protect list AIR stores, each entry until a date) is never rewritten by the cadence for ANOTHER
 //     keyword: a ladder rung, a striking-distance or decay refresh, or another AI refresh aimed at it becomes a suggestion with the reason. An
 //     item the client approved, and AIR's own refresh of that page, are not held.
 const airCacheRows = rowsOf('Load AIR Cache (Cadence)').filter(r => r.key);
 const airKill = AIRF.killed(airCacheRows);
-const AIR_TOPIC_REASONS = new Set(['off topic', 'too broad']);   // the only gate verdicts the reserved slot honours (never a safety refusal)
+const AIR_TOPIC_REASONS = new Set(['too broad']);   // FX-C RC-6: the only gate verdict the reserved slot honours, and only on a service word (never off topic, never a safety refusal)
+// the words that never make a keyword "about a service" of the site (stop, seller and place words); mirrored word for word in app/server/src/services/cadence.ts
+const AIR_SVC_STOP = new Set(['the', 'and', 'for', 'with', 'what', 'how', 'which', 'are', 'can', 'does', 'your', 'you', 'that', 'this', 'from', 'into', 'best', 'top', 'list', 'guide', 'who', 'near', 'online', 'free', 'cost', 'price', 'prices',
+  'company', 'companies', 'service', 'services', 'solution', 'solutions', 'provider', 'providers', 'firm', 'firms', 'agency', 'agencies', 'partner', 'partners', 'consultant', 'consultants', 'consulting', 'consultancy',
+  'expert', 'experts', 'specialist', 'specialists', 'software', 'business', 'businesses', 'uae', 'dubai', 'abu', 'dhabi', 'sharjah', 'saudi', 'ksa', 'riyadh', 'jeddah', 'qatar', 'doha', 'oman', 'bahrain', 'kuwait', 'pakistan', 'karachi', 'lahore', 'islamabad', 'india', 'usa', 'london']);
 const isAirTarget = (t) => String((t && t.origin) || '') === 'ai_rank';
 // keyword-first: the client's decisions on the "Coming up" plan (seo_skips, written by the app) and the engine's own cost calibration
 const skipRows = rowsOf('Load Skips (Cadence)').filter(r => r.site_id && r.item_key != null && String(r.item_key) !== '' && r.decision);
@@ -2998,11 +3007,13 @@ for (const s of list) {
   const aiDue = aiQuota > aiUsed && !aiThisWeek;
   // AIR RESERVE + HONOUR (on, ai_rank_reserve): AIR's queued targets, by value; a safety refusal refuses, a topic verdict is honoured (see the top)
   const airQueue = [], air_honoured = [];
+  const airSvcWords = new Set(services.flatMap(x => norm(x).split(' ')).filter(w => w.length > 2 && !AIR_SVC_STOP.has(w)));
+  const airSvcMatch = (kw) => norm(kw).split(' ').some(w => w.length > 2 && !AIR_SVC_STOP.has(w) && airSvcWords.has(w));
   if (airReserve) for (const t of aiTargets.filter(t => isAirTarget(t) && aiEligible(t)).sort((a, b) => (Number(b.value) || 0) - (Number(a.value) || 0))) {
     const o = aiCandOf(t); const g = gateOf(o);
-    if (!g.ok && !AIR_TOPIC_REASONS.has(String(g.reason || ''))) { refuse(o, g); continue; }
+    if (!g.ok && !(AIR_TOPIC_REASONS.has(String(g.reason || '')) && airSvcMatch(o.keyword))) { refuse(o, g); continue; }
     if (isSkipped(o.keyword)) { noteSkip(o); continue; }
-    markTopic(o); o.air = true; o.why += '; chosen by AI ranking' + (t.action_id ? ' (' + String(t.action_id) + ')' : '');
+    markTopic(o); o.air = true; o.why += '; chosen by AI ranking';   // FX-C RC-1: never an internal id in a reason
     if (!g.ok) { o.air_honoured = String(g.reason); air_honoured.push({ keyword: o.keyword, target_id: t.target_id, reason: g.reason, detail: g.detail || '' });
       o.why += '; the keyword rule reads it as ' + g.reason + ', and it is kept because it is one of the AI questions you track'; }
     airQueue.push(o);
@@ -3020,7 +3031,11 @@ for (const s of list) {
   const needOk = [...okOpps.filter(o => !autoFor(o)), ...aiQueue.filter(o => o !== aiAuto2 && o !== aiTop3)];
   // while the site waits for its first keyword the level's automatic items are shown as suggestions (sugPool below), so the client may
   // approve them too: they are approvable then (E4, 2026-10-19)
-  const approvable = [...needOk, ...(waiting_for_keyword ? autoOpps : []), ...[...manualL, ...unchosenL].flatMap(x => x.eligible.filter(l => !isSkipped(l.keyword)).map(l => ladderCand(x, l)))];
+  // FX-C RC-5 (on only): an item the level writes on its own (an automatic refresh, an active ladder's rung) that AIR's protect list holds is
+  // shown as a suggestion, so the client may approve it too, and the approval is honoured (protOf skips approved items)
+  const protUrlOf = (x) => { const u = x.existing_page_url || (x.source === 'ladder' ? x.target_url : '') || ''; return !!u && airProtect.has(keyOfU(u)); };
+  const protApprovable = (airOn && airProtect.size) ? [...autoOpps, ...cands].filter(protUrlOf) : [];
+  const approvable = [...needOk, ...(waiting_for_keyword ? autoOpps : []), ...[...manualL, ...unchosenL].flatMap(x => x.eligible.filter(l => !isSkipped(l.keyword)).map(l => ladderCand(x, l))), ...protApprovable];
   const approvedSeen = new Set(); const approval_ambiguous = [];
   // F-KW (finding 9): the approval row that names this item (source / ladder), or a keyword-only row when no other item shares the keyword
   const approvalFor = (o) => { const k = cycleNorm(o.keyword); const rows0 = approveRows.filter(r => cycleNorm(r.item_key) === k); if (!rows0.length) return false;
@@ -3031,6 +3046,8 @@ for (const s of list) {
     return true; };
   const approved = approvable.filter(o => { const k = cycleNorm(o.keyword); if (approvedSeen.has(k) || !approvalFor(o)) return false; approvedSeen.add(k); return true; })
     .map(o => ({ ...o, approved: true, why: o.why + '; approved by you for this cycle' }));
+  // RC-5: an active ladder's protected rung the client approved is already in cands: that item itself is marked approved (uniq keeps the first)
+  if (protApprovable.length) for (const c of cands) if (approvedSeen.has(cycleNorm(c.keyword)) && protUrlOf(c) && !c.approved) { c.approved = true; c.why += '; approved by you for this cycle'; }
   cands.push(...approved, ...autoOpps.filter(o => !approvedSeen.has(cycleNorm(o.keyword))));
   // D11: one search, one page — a candidate a live page of the site already answers is written as a refresh of that page (ladder) or left out
   const invRows = pageRows.filter(r => r.site_id === s.site_id);
@@ -3073,8 +3090,12 @@ for (const s of list) {
   const EXISTS = new Set(['written', 'not_ready', 'published']);
   const spentKeys = new Map();
   const spend = (kw, how) => { const k = norm(kw); if (k && !spentKeys.has(k)) spentKeys.set(k, how); };
+  // FX-C RC-11 (on only): a page written ON TOP of pages_per_week (the reserved AI ranking page, any AI page at level 3) spends nothing, so a retry
+  // inside the same cycle does not lose an ordinary page to it
+  const airKw = airOn ? new Set([...aiTargets, ...aiTargetsWriting].filter(t => t.site_id === s.site_id && isAirTarget(t)).map(t => norm(t.keyword)).filter(Boolean)) : new Set();
   for (const l of slog) { const rid = String(l.request_id || ''); const own = /^cad_/.test(rid);
-    if (own ? !inWin(l.started_at) : !inStartWin(l.started_at)) continue;   // F-KW: this cycle's cadence runs from its due time; ladder starts since the last cadence run
+    if (own ? !inWin(l.started_at) : !inStartWin(l.started_at)) continue;
+    if (airOn && own && isAi(l) && (level === 3 || airKw.has(norm(l.keyword)))) continue;   // F-KW: this cycle's cadence runs from its due time; ladder starts since the last cadence run
     if (!own && String(l.source || '') !== 'ladder') continue;   // the app's "Write it" is a page the client asked for on top: not the autopilot's budget
     const st = String(l.status || '');
     if (EXISTS.has(st) || String(l.published_url || '').trim() || (st === 'started' && inFlight(l.started_at))) spend(l.keyword, own ? 'this cycle\'s cadence' : 'ladder start'); }
@@ -3104,14 +3125,35 @@ for (const s of list) {
   const aiCand = aiCand0 && !picks.some(x => norm(x.keyword) === norm(aiCand0.keyword)) ? aiCand0 : null;
   const aiPick = level === 3 && pages > 0 && aiCand && aiCand === aiTop3 && aiDue && !blocked ? aiCand : null;
   if (aiPick) picks.push(aiPick);
-  // AIR RESERVE: the reserved AI ranking page of the week, on top of pages_per_week (never for 0 pages a week, never while blocked)
-  const airCand = airCand0 && !picks.some(x => norm(x.keyword) === norm(airCand0.keyword)) ? airCand0 : null;
-  const airPick = airClaims && pages > 0 && airCand && !blocked ? { ...airCand, why: airCand.why + '; the reserved AI ranking page of the week (on top of your pages a week)' } : null;
+  // FX-C RC-2 (on only): one page, one rewrite. A pick whose page another pick of this run already rewrites, or that another keyword's run
+  // started in the last 7 days, waits as a suggestion with the reason (never two concurrent rewrites of one page)
+  const pageOfPick = (x) => keyOfU(x.existing_page_url || '');
+  const urlHeld = [];
+  if (airOn) { const weekU = new Map(); for (const l of slog) if ((at - new Date(l.started_at || 0)) < 7 * 864e5) for (const u of [l.existing_page_url, l.published_url]) { const k = keyOfU(u); if (k && !weekU.has(k)) weekU.set(k, norm(l.keyword)); }
+    const seenU = new Set();
+    for (let i = 0; i < picks.length; i++) { const p = picks[i]; const u = pageOfPick(p); if (!u) continue;
+      if (seenU.has(u) || (weekU.has(u) && weekU.get(u) !== norm(p.keyword))) { urlHeld.push({ ...p, why: p.why + '; another page of this week\'s plan already rewrites ' + p.existing_page_url + ', so it waits' }); picks.splice(i, 1); i--; continue; }
+      seenU.add(u); } }
+  // AIR RESERVE: the reserved AI ranking page of the week, on top of pages_per_week (never for 0 pages a week, never while blocked). RC-2: an AIR
+  // target that a page of this run already covers (the same search or the same page) or that a live page already answers is held, and the slot
+  // passes to the next one
+  const air_held = []; const airHeldSug = [];
+  let airCand = null;
+  if (airClaims && pages > 0 && !blocked) for (const o of airQueue) { if (o.main_page) continue;
+    const ss = picks.find(x => norm(x.keyword) === norm(o.keyword) || sameSearch(x.keyword, o.keyword) || sameSearch(o.keyword, x.keyword));
+    const sp = !ss && pageOfPick(o) ? picks.find(x => pageOfPick(x) === pageOfPick(o)) : null;
+    const cv = !ss && !sp && o.source === 'ai_answer' ? coverOf(o) : null;
+    if (!ss && !sp && !cv) { airCand = o; break; }
+    const reason = ss ? 'same search' : sp ? 'same page' : 'covered';
+    air_held.push({ keyword: o.keyword, target_id: o.target_id || '', reason });
+    if (cv) { if (!covered.some(c => norm(c.keyword) === norm(o.keyword))) covered.push({ keyword: o.keyword, source: o.source, url: cv.url, matched_by: cv.matched_by }); continue; }
+    airHeldSug.push({ ...o, why: o.why + (ss ? '; a page of this week\'s plan already targets the same search ("' + ss.keyword + '"), so it waits' : '; another page of this week\'s plan already rewrites ' + o.existing_page_url + ', so it waits') }); }
+  const airPick = airCand ? { ...airCand, why: airCand.why + '; the reserved AI ranking page of the week (on top of your pages a week)' } : null;
   if (airPick) picks.push(airPick);
   // ---- suggestions: every needs-OK candidate the gate let through, not skipped, not written this run — with its price (max 5, AI first) ----
   const pickedK = new Set(picks.map(p => norm(p.keyword)));
   const sugSeen = new Set();
-  const sugPool = [...(airReserve && airQueue[0] && aiDue && !airPick ? [airQueue[0]] : []), ...(aiCand && aiDue && aiCand !== aiPick && aiCand !== aiAuto2 ? [aiCand] : []), ...protectedItems, ...needOk.filter(o => !isAi(o)), ...autoOpps.filter(o => !pickedK.has(norm(o.keyword)) && blocked)];
+  const sugPool = [...airHeldSug, ...urlHeld, ...(airReserve && airQueue[0] && aiDue && !airPick && !air_held.length ? [airQueue[0]] : []), ...(aiCand && aiDue && aiCand !== aiPick && aiCand !== aiAuto2 ? [aiCand] : []), ...protectedItems, ...needOk.filter(o => !isAi(o)), ...autoOpps.filter(o => !pickedK.has(norm(o.keyword)) && blocked)];
   const suggestions = sugPool.filter(o => { const k = norm(o.keyword); if (!k || sugSeen.has(k) || pickedK.has(k) || approvedSeen.has(k)) return false; sugSeen.add(k);   // an approved item is upcoming, not a suggestion
       if (coverOf(o)) { if (!covered.some(c => norm(c.keyword) === k)) { const c = coverOf(o); covered.push({ keyword: o.keyword, source: o.source, url: c.url, matched_by: c.matched_by }); } return false; }   // D11: never suggest a second page for a search a live page answers
       return true; })
@@ -3159,7 +3201,7 @@ for (const s of list) {
     // AIR (on only; an off or shadow website's output carries no such key): the reserved slot, the honoured topic verdicts, the protected pages
     ...(airOn ? { air: { mode: 'on', reserve: airReserve, reserved: airPick ? { keyword: airPick.keyword, source: airPick.source, target_id: airPick.target_id || '' } : null,
       next: airQueue[0] ? { keyword: airQueue[0].keyword, source: airQueue[0].source, target_id: airQueue[0].target_id || '', why: airQueue[0].why } : null, queued: airQueue.length,
-      honoured: air_honoured, protected: air_protected, protect_urls: airProtect.size } } : {}) };
+      honoured: air_honoured, protected: air_protected, held: air_held, protect_urls: airProtect.size } } : {}) };
   const ridOf = (i) => 'cad_' + week.replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, '') + '_' + i;
   // ---- preview: ONE item per site, what the cycle would write — nothing is started, logged or marked ----
   if (preview) {

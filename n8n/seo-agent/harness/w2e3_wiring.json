@@ -5071,6 +5071,20 @@
     "operation": "get",
     "table": "seo_ai_visibility"
    },
+   "Load AIR Kill (LB)": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "key",
+       "keyValue": "air:kill"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_cache"
+   },
    "Load Backlink Snapshots": {
     "filters": null,
     "mapping": null,
