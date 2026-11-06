@@ -9,6 +9,7 @@
 //                fixture extended with a set-aside question that has a cited client page and a refresh target published lately reaches the
 //                F-37 / F-38 paths, and its output is pinned (harness/air_golden/ai_growth_off_paths.json)
 //   FXB8   RB-8  AIR waits for the next run when this AI Growth run is already 25 minutes old (the report is never pushed past the 2,400 s limit)
+//   FXBR   AIRF rule air-2 (FX-A's counting changes): priors, runs and actions of air-1 are never compared or learned from
 //   FXB11  RB-11 old air:week / air:mentions markers are pruned after an `on` run, the rest of seo_cache is untouched, shadow prunes nothing
 // Regenerate (only for a deliberate change, with the reason in the commit):
 //   AIR_GOLDEN_WRITE=1 AIR_GOLDEN_MON_BASE=<dir of the base commit's workflows/*.json> node scenarios_air_fxb.js   (monitor_nodes_off.json)
@@ -196,6 +197,26 @@ module.exports = async (ctx) => {
     const g5 = await runNode(wf0, 'AI Rank Gate', T, F.nowMs, {}, { 'Growth Plan': plan(5) }), g30 = await runNode(wf0, 'AI Rank Gate', T, F.nowMs, {}, { 'Growth Plan': plan(30) });
     check('a run 5 minutes old: the gate hands on the on and shadow sites', Array.isArray(g5) && g5.length === 2 && g5.every(x => x.site_id && !x.skip), J(g5).slice(0, 300));
     check('a run 30 minutes old: the gate skips AIR with the reason, so the report and the ledger settle go out as before', Array.isArray(g30) && g30.length === 1 && g30[0].skip === true && g30[0].late === true && /minutes old/.test(g30[0].reason || ''), J(g30).slice(0, 300));
+  });
+
+  // =================================================================================================================================
+  await guard('air FXBR rule version', async () => {
+    const SN = 'AIR FXBR (AIRF air-2) - after the counting rules changed, rows of air-1 are never compared or learned from: priors and runs of this rule only, an action pre-registered under air-1 hidden from the plan'; begin(SN); const check = mk(SN);
+    const AIRF0 = (() => { const src = node(wf0, 'AI Rank Gate').parameters.jsCode; const a = src.indexOf('const AIRF = (() => {'), b = src.indexOf('\n})();', a); return new Function(src.slice(a, b + 6) + '\nreturn AIRF;')(); })();
+    check('AIRF.RULE_VERSION is air-2', AIRF0.RULE_VERSION === 'air-2', AIRF0.RULE_VERSION);
+    const act = (id, rule, status) => ({ action_id: 'air_' + NOVA + '_L05_' + id, site_id: NOVA, domain: 'nova-ai.example', lever: 'L05', executor: 'approve', scope: 'question', ref: '{"prompt_id":"nq1"}', questions: '["nq1"]', engines: '["chatgpt"]', target_stage: 'S2',
+      status, sink: 'ai_target', sink_ref: '', expected_json: '{}', prereg_json: JSON.stringify({ window_days: 28, rule_version: rule }), happened_at: '', verify_json: '', outcome_json: '', learned_at: '', mode: 'on', run_id: 'air_20261001_' + NOVA, created_at: '2026-10-01T10:00:00.000Z', updated_at: '2026-10-01T10:00:00.000Z' });
+    const prior = (rule) => ({ prior_id: 'L05:S1:chatgpt:global', lever: 'L05', stage: 'S1', engine_group: 'chatgpt', scope: 'global', alpha: rule === 'air-1' ? 40 : 2, beta: 4, n_outcomes: rule === 'air-1' ? 36 : 1, prior_alpha: 1.2, prior_beta: 4.8, source: 'pooled', updated_at: '2026-10-20T00:00:00.000Z', rule_version: rule });
+    const runRow = (rule, d) => ({ site_id: NOVA, domain: 'nova-ai.example', run_id: 'air_' + d + '_' + NOVA, checked_at: '2026-10-' + d.slice(6) + 'T10:00:00.000Z', mode: 'shadow', rule_version: rule, diag_json: '[]', error: '' });
+    const r = await PL.runGrowth({ wf: wfFake, modes: { nova: 'on', acme: 'off' }, extra: { seo_ai_rank_actions: [act('0000a001', 'air-1', 'queued'), act('0000a002', 'air-2', 'queued')], seo_ai_rank_priors: [prior('air-1')],
+      seo_ai_rank_runs: [runRow('air-1', '20261028'), runRow('air-2', '20261030')] } });
+    const out = (n) => ((r.r.runs[n] || []).slice(-1)[0] || [[]])[0].map(i => i.json).filter(x => x && Object.keys(x).length);
+    check('the priors the plan scores and learns with are this rule\'s only (the air-1 prior with 36 outcomes is not read)', !out('Load AI Rank Priors').some(x => x.rule_version === 'air-1'), J(out('Load AI Rank Priors')));
+    check('the earlier runs the plan compares with are this rule\'s only', out('Load AI Rank Runs').length >= 1 && out('Load AI Rank Runs').every(x => x.rule_version === 'air-2'), J(out('Load AI Rank Runs').map(x => [x.run_id, x.rule_version])));
+    const acts = out('Load AI Rank Actions').map(x => x.action_id);
+    check('an action pre-registered under air-1 is hidden from the plan, the air-2 one is handed on, and the stored rows stay', acts.includes('air_' + NOVA + '_L05_0000a002') && !acts.includes('air_' + NOVA + '_L05_0000a001') && out('Load AI Rank Actions (Stored)').length >= 2, J({ acts, stored: out('Load AI Rank Actions (Stored)').map(x => x.action_id) }));
+    const saved = r.r.writes.filter(w => w.node === 'Save AI Rank Actions').flatMap(w => w.rows);
+    check('the air-1 action is never verified or learned from (no row written for it)', !saved.some(a => a.action_id === 'air_' + NOVA + '_L05_0000a001'), J(saved.map(a => [a.action_id, a.status])));
   });
 
   // =================================================================================================================================

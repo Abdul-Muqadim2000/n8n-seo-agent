@@ -258,7 +258,7 @@ module.exports = async (ctx) => {
     const old0 = JSON.parse(rr0.old_json || 'null');
     check('AP7 the run row carries the old logic\'s choice (targets, earned pages, actions) and, with the kits filled, the comparison and the memo',
       old0 && Array.isArray(old0.targets) && Array.isArray(old0.earned) && Array.isArray(old0.actions) && old0.earned.length > 0 && JSON.parse(rrF.compare_json || '{}').note === 'fake compare'
-      && JSON.parse(rrF.memo_json || '{}').parts.length === 7 && rrF.error === '' && rr0.exec_id === 'air-plumb-1' && rr0.rule_version === 'air-1', J({ old0, c: rrF.compare_json }).slice(0, 400));
+      && JSON.parse(rrF.memo_json || '{}').parts.length === 7 && rrF.error === '' && rr0.exec_id === 'air-plumb-1' && rr0.rule_version === 'air-2', J({ old0, c: rrF.compare_json }).slice(0, 400));
     const kitGap = /^kit not built: /.test(rr0.error || '');
     check('AP7 a kit not built yet is named on the run row and nothing computed from it is written (no diagnosis -> no question / action row; no memo / comparison kit -> none stored); with every kit built the row has no error and the diagnosis is stored',
       kitGap ? (/ARD\.diagnose/.test(rr0.error) ? rr0.diag_json === '[]' && !byT(sh0, 'seo_ai_rank_questions').length && !byT(sh0, 'seo_ai_rank_actions').length : true)

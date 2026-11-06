@@ -12,7 +12,9 @@
 // Every setting is OFF when empty: a site without the columns, or with them empty, runs exactly as before AIR.
 const AIRF = (() => {
   const VERSION = 'air-flags-1';
-  const RULE_VERSION = 'air-1';   // the rule AIR's rows are written under (seo_ai_rank_* .rule_version); bump it when a counting rule changes
+  // air-2 (FX-B, 2026-11-06, for FX-A's counting changes: a t test across questions, control handling, one trial per action): rows of another rule are
+  // never compared or learned from (ai_rank_wiring.py loads priors and runs of this rule only, and hides actions pre-registered under another one)
+  const RULE_VERSION = 'air-2';   // the rule AIR's rows are written under (seo_ai_rank_* .rule_version); bump it when a counting rule changes
   const MODES = ['off', 'shadow', 'on'];
   const S = (v) => (v == null ? '' : String(v)).trim();
   const flag = (v) => v === true || /^(true|1|yes|on)$/i.test(S(v));

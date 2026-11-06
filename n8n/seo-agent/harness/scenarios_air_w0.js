@@ -42,7 +42,7 @@ module.exports = async (ctx) => {
       /^air_site_x_L08_[0-9a-f]{8}$/.test(a1) && a1 === a2 && a3 !== a1 && AIRF.runId('site_x', Date.parse('2026-11-02T10:00:00Z')) === 'air_20261102_site_x' && AIRF.targetId('site_acme-erp-example', 'aq1') === 'ait_acme-erp-example_aq1'
       && AIRF.priorId('L05', 'S1', 'google') === 'L05:S1:google:global' && AIRF.refKey({}) === 's:site', J([a1, a2, a3]));
     check('AIRW0-1 vocabulary: 8 engines (gemini_api excluded), 5 engine groups, stages S0-S5 + unmeasured, 9 action statuses', AIRF.ENGINES.length === 8 && !AIRF.ENGINES.includes('gemini_api') && AIRF.EXCLUDED_ENGINES.includes('gemini_api') && !AIRF.usable('gemini_api')
-      && AIRF.ENGINES.every(e => AIRF.GROUPS.includes(AIRF.GROUP_OF[e])) && AIRF.STAGE_LABELS.length === 7 && AIRF.ACTION_STATUSES.length === 9 && AIRF.RULE_VERSION === 'air-1', '');
+      && AIRF.ENGINES.every(e => AIRF.GROUPS.includes(AIRF.GROUP_OF[e])) && AIRF.STAGE_LABELS.length === 7 && AIRF.ACTION_STATUSES.length === 9 && AIRF.RULE_VERSION === 'air-2', '');
 
     // ---- AIRW0-2 ARD shapes ----
     const now = Date.parse('2026-11-02T10:00:00Z');

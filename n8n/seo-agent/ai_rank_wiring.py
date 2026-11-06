@@ -38,6 +38,20 @@ _SITE = ("((t) => String(t.site_id || '').trim() || (String(t.domain || '').trim
          "(Object.assign({}, $('Manual Run').first().json || {}, ($('Manual Run').first().json || {}).body || {}))")
 SITE_EQ = ('site_id', "={{ (" + _SITE + ") === '%' ? 'like' : 'eq' }}", '={{ ' + _SITE + ' }}')
 IFX = '{{ !$json.skip && !$json.error }}'
+# FX-B (2026-11-06): AIRF's rule version (_ai_rank_flags.js). Rows written under another rule are never compared or learned from: the priors and the
+# runs are loaded for this rule only, and an action pre-registered under another rule is hidden from the plan (`Load AI Rank Actions` filters
+# `Load AI Rank Actions (Stored)`): its outcome would be counted under rules it was not registered for. The rows stay in the tables.
+import re as _re
+AIR_RULE = _re.search(r"const RULE_VERSION = '([^']+)'", open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'v5', 'code', '_ai_rank_flags.js'), encoding='utf-8').read()).group(1)
+RULE_EQ = ('rule_version', 'eq', AIR_RULE)
+ACTIONS_RULE_JS = ('// FX-B (2026-11-06): the stored AIR actions the plan may count and learn from: those pre-registered under this rule (prereg_json.rule_version\n'
+                   '// ' + AIR_RULE + ') or carrying no pre-registration yet. An action registered under another rule is left out of the plan (never re-counted under\n'
+                   '// the new rule, never learned from); its row stays in seo_ai_rank_actions.\n'
+                   "const RULE = " + json.dumps(AIR_RULE) + ";\n"
+                   "const P = (s) => { if (s && typeof s === 'object') return s; try { return JSON.parse(String(s || '')) || {}; } catch (e) { return {}; } };\n"
+                   "const rows = (() => { try { return $('Load AI Rank Actions (Stored)').all().map(i => i.json || {}); } catch (e) { return []; } })();\n"
+                   "const keep = rows.filter(r => { if (!r || r.error) return false; const v = String((P(r.prereg_json) || {}).rule_version || ''); return !v || v === RULE; });\n"
+                   "return keep.length ? keep.map(r => ({ json: r })) : [{ json: {} }];")
 AIR_TABLES = [('Ensure AI Rank Runs Table', AI_RANK_RUNS_TABLE, AI_RANK_RUNS_COLS), ('Ensure AI Rank Questions Table', AI_RANK_QUESTIONS_TABLE, AI_RANK_QUESTIONS_COLS),
               ('Ensure AI Rank Actions Table', AI_RANK_ACTIONS_TABLE, AI_RANK_ACTIONS_COLS), ('Ensure AI Rank Sources Table', AI_RANK_SOURCES_TABLE, AI_RANK_SOURCES_COLS),
               ('Ensure AI Rank Priors Table', AI_RANK_PRIORS_TABLE, AI_RANK_PRIORS_COLS)]
@@ -63,7 +77,7 @@ BUILDERS = [
 ]
 # the nodes of the side branch, for the harness (AP11) and the docs
 NODES = (['AI Rank Gate', 'Any AI Rank?', 'Load AI Rank Kill', 'Load AI Rank Cache', 'AI Rank Live', 'Any AI Rank Live?'] + [e[0] for e in AIR_TABLES]
-         + ['Load AI Rank Questions', 'Load AI Rank Actions', 'Load AI Rank Sources', 'Load AI Rank Priors', 'Load AI Rank Runs', 'Load Index Pages (Rank)',
+         + ['Load AI Rank Questions', 'Load AI Rank Actions (Stored)', 'Load AI Rank Actions', 'Load AI Rank Sources', 'Load AI Rank Priors', 'Load AI Rank Runs', 'Load Index Pages (Rank)',
             'Load SERP Cache (Rank)', 'Load AI Daily (Rank)', 'Load AI Answers (Rank)', 'Load Listings (Rank)', 'Load Link Outreach (Rank)', 'Load Link Prospects (Rank)', 'AI Rank Plan']
          + [x for b in BUILDERS for x in (b[0], b[3], b[4])] + ['Prune AI Rank Actions', 'Prune AI Rank Sources'])
 SHADOW_TABLES = [t for _, t, _ in AIR_TABLES]
@@ -90,10 +104,10 @@ def wire(G, after_iff, after_save, end, pos):
     # ---- the five AIR tables, then what AIR reads that AI Growth did not load already ----
     for i, (nm, t, c) in enumerate(AIR_TABLES): G.node(nm, DT_TYPE, DT_VERSION, dt_create_params(t, c), at(5 + i, 1), onError='continueRegularOutput', executeOnce=True)
     loads = [('Load AI Rank Questions', dt_get_all_where_params(AI_RANK_QUESTIONS_TABLE, [SITE_EQ])),
-             ('Load AI Rank Actions', dt_get_all_where_params(AI_RANK_ACTIONS_TABLE, [SITE_EQ])),
+             ('Load AI Rank Actions (Stored)', dt_get_all_where_params(AI_RANK_ACTIONS_TABLE, [SITE_EQ])),
              ('Load AI Rank Sources', dt_get_all_where_params(AI_RANK_SOURCES_TABLE, [SITE_EQ])),
-             ('Load AI Rank Priors', {'resource': 'row', 'operation': 'get', 'dataTableId': {'__rl': True, 'mode': 'name', 'value': AI_RANK_PRIORS_TABLE}, 'returnAll': True, 'options': {}}),
-             ('Load AI Rank Runs', dt_get_all_where_params(AI_RANK_RUNS_TABLE, [SITE_EQ, ('checked_at', 'gte', SINCE(84))])),
+             ('Load AI Rank Priors', dt_get_all_where_params(AI_RANK_PRIORS_TABLE, [RULE_EQ])),
+             ('Load AI Rank Runs', dt_get_all_where_params(AI_RANK_RUNS_TABLE, [SITE_EQ, ('checked_at', 'gte', SINCE(84)), RULE_EQ])),
              ('Load Index Pages (Rank)', dt_get_all_where_params(INDEX_PAGES_TABLE, [SITE_EQ])),
              ('Load SERP Cache (Rank)', dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'serp')),
              ('Load AI Daily (Rank)', dt_get_all_where_params(AI_DAILY_TABLE, [SITE_EQ, ('checked_at', 'gte', SINCE(60))])),
@@ -102,8 +116,10 @@ def wire(G, after_iff, after_save, end, pos):
              ('Load Link Outreach (Rank)', dt_get_all_where_params(LINK_OUTREACH_TABLE, [SITE_EQ])),
              ('Load Link Prospects (Rank)', dt_get_all_where_params(PROSPECT_TABLE, [SITE_EQ]))]
     for i, (nm, params) in enumerate(loads): G.node(nm, DT_TYPE, DT_VERSION, params, at(10 + i, 1), **LOAD)
+    G.code('Load AI Rank Actions', ACTIONS_RULE_JS, [at(11, 1)[0], at(11, 1)[1] + 110], **X)
     G.link('Any AI Rank Live?', AIR_TABLES[0][0], 0)
-    G.chain(*[e[0] for e in AIR_TABLES], *[l[0] for l in loads])
+    names = [l[0] for l in loads]; k = names.index('Load AI Rank Actions (Stored)'); names.insert(k + 1, 'Load AI Rank Actions')
+    G.chain(*[e[0] for e in AIR_TABLES], *names)
     ai_rank_requests_wiring.wire_requests(G, loads[-1][0], 'AI Rank Plan', at(21, 2))
     G.code('AI Rank Plan', 'AI_Rank_Plan.js', at(22), **X)
     # ---- the builders and their saves (gstep's shape: builder -> IF -> save -> next; IF false -> next) ----

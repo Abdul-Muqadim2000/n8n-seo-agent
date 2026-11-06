@@ -150,7 +150,7 @@
     "operation": "get",
     "table": "seo_ai_prompts"
    },
-   "Load AI Rank Actions": {
+   "Load AI Rank Actions (Stored)": {
     "filters": {
      "conditions": [
       {
@@ -193,7 +193,15 @@
     "table": "seo_cache"
    },
    "Load AI Rank Priors": {
-    "filters": null,
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "rule_version",
+       "keyValue": "air-2"
+      }
+     ]
+    },
     "mapping": null,
     "operation": "get",
     "table": "seo_ai_rank_priors"
@@ -224,6 +232,11 @@
        "condition": "gte",
        "keyName": "checked_at",
        "keyValue": "={{ new Date(Date.now() - 84 * 864e5).toISOString() }}"
+      },
+      {
+       "condition": "eq",
+       "keyName": "rule_version",
+       "keyValue": "air-2"
       }
      ]
     },
