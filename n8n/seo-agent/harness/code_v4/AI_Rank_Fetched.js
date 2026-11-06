@@ -236,8 +236,12 @@ for (const [q, a] of M.pairs) { const s = site[q.site_id]; if (!s) continue; s.m
       const x = byKey.get(k) || { url, title: S0(it.title).slice(0, 160), mentions: 0, platform: S0(((it.platform || [])[0] || {}).key) || 'google', ai_search_volume: 0 };
       x.mentions += num((it.total || {}).mentions) || 0; x.ai_search_volume += num((it.total || {}).ai_search_volume) || 0; byKey.set(k, x); }
     s.mentions = [...byKey.values()].sort((x, y) => y.mentions - x.mentions || x.url.localeCompare(y.url)).slice(0, CFG.mentions_pages); s.mentionsFresh = true; }
-  else { const it = (Array.isArray(r0.items) ? r0.items : [])[0]; const tot = (it && it.total) || ((r0.aggregated_metrics || {}).total) || {};
-    s.metrics = { month: S0((s.p.mentions || {}).month), mentions: num(tot.mentions), ai_search_volume: num(tot.ai_search_volume), basis: it ? 'the domain\'s own row' : 'the answer\'s aggregated total' }; } }
+  else { const it = (Array.isArray(r0.items) ? r0.items : [])[0]; const agg = (r0.aggregated_metrics || {}).total; const tot = (it && it.total) || agg || {};
+    // live 2026-11-06 (techand.ai, 2784 / google): a domain the AI-answer database never mentions answers 20000 with total_count 0, items []
+    // and NO aggregated_metrics.total. That is a reading of zero, not an unknown: it is the month-on-month baseline, so it is stored as 0.
+    const none = !it && !agg && Number(r0.total_count) === 0;
+    s.metrics = { month: S0((s.p.mentions || {}).month), mentions: none ? 0 : num(tot.mentions), ai_search_volume: none ? 0 : num(tot.ai_search_volume),
+      basis: none ? 'no mention of the domain in the AI-answer database this month (total_count 0)' : it ? 'the domain\'s own row' : 'the answer\'s aggregated total' }; } }
 
 // ---- Bing Webmaster stats ----
 const B = pair('AI Rank Bing Requests', 'AI Rank Bing Call');
@@ -292,8 +296,14 @@ for (const s of Object.values(site)) {
     for (const [k, g] of [...qAgg.entries()].sort((x, y) => y[1].imp - x[1].imp).slice(0, CFG.keep_queries)) { const pos = g.pw > 0 ? r1(g.pw / Math.max(1, g.imp)) : null;
       queries[k] = { pos, impressions: g.imp, clicks: g.clk }; if (pos) { positions[k] = pos; basis[k] = 'webmaster'; } }
     const query_pages = {};
-    for (const [k, d] of Object.entries(s.bing.qp)) { const rows = d.filter(x => x && Number(x.AvgImpressionPosition) > 0).map(x => ({ url: S0(x.Query), pos: Number(x.AvgImpressionPosition), impressions: Number(x.Impressions) || 0 }));
-      query_pages[k] = rows.slice(0, 10); const best = rows.reduce((m, x) => (m == null || x.pos < m ? x.pos : m), null); if (best && positions[k] == null) { positions[k] = r1(best); basis[k] = 'webmaster (page stats)'; } }
+    // live 2026-11-06: GetQueryPageStats answers one row per page AND weekly bucket (one page came back 3 times), as GetQueryStats does, so
+    // each page is aggregated over the last 35 days, impression-weighted, before it is listed or gives the search a position
+    for (const [k, d] of Object.entries(s.bing.qp)) { const byUrl = new Map();
+      for (const x of d) { if (!x || !(Number(x.AvgImpressionPosition) > 0)) continue; const t = msDate(x.Date); if (Number.isFinite(t) && nowMs - t > CFG.bing_window_days * DAY) continue;
+        const u = S0(x.Query); const key = AIRF.urlKey(u) || u; const g = byUrl.get(key) || { url: u, imp: 0, pw: 0 }; const imp = Number(x.Impressions) || 0;
+        g.imp += imp; g.pw += Number(x.AvgImpressionPosition) * Math.max(1, imp); byUrl.set(key, g); }
+      const rows = [...byUrl.values()].map(g => ({ url: g.url, pos: r1(g.pw / Math.max(1, g.imp)), impressions: g.imp })).sort((a, b) => a.pos - b.pos || b.impressions - a.impressions);
+      query_pages[k] = rows.slice(0, 10); const best = rows.length ? rows[0].pos : null; if (best && positions[k] == null) { positions[k] = best; basis[k] = 'webmaster (page stats)'; } }
     const pages = {}; const pAgg = new Map();
     for (const x of s.bing.ps) { const t = msDate(x.Date); if (Number.isFinite(t) && nowMs - t > CFG.bing_window_days * DAY) continue; const k = AIRF.urlKey(x.Query); if (!k) continue;
       const g = pAgg.get(k) || { impressions: 0, clicks: 0, pw: 0 }; const imp = Number(x.Impressions) || 0; g.impressions += imp; g.clicks += Math.max(0, Number(x.Clicks) || 0);

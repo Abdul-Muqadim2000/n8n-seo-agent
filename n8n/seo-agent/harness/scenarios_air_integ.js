@@ -193,6 +193,24 @@ module.exports = async (ctx) => {
     check('AI9 no node error in any run, and Growth Report runs exactly once in each', [off, sh, on0, noKey, full, flagOff, dup, again, nextMonth, stale, notIn, none, err, errStored, readsNone, readsAll].every(x => !x.r.errors.length && x.counts['Growth Report'] === 1),
       J([off, sh, on0, full].map(x => x.r.errors)).slice(0, 300));
 
+    // ---------------- AI11 the shapes of the live calls of 2026-11-06 (owner-approved, one per endpoint; raw answers kept privately) ----------------
+    // target_metrics for a domain the AI-answer database never mentions: 20000, total_count 0, items [], aggregated_metrics with NO `total`.
+    // GetQueryPageStats: one row per page and weekly bucket (one page came back three times), Query = the page URL, plain positions.
+    const msD2 = (iso) => '/Date(' + Date.parse(iso) + ')/';
+    const live = await IX.runOn({ nova: { mode: 'on', ...ALL_FLAGS } }, { braveKey: false, http: (node, req) => {
+      const u = String(req.url || '');
+      if (/llm_mentions\/target_metrics/.test(u)) return { status_code: 20000, status_message: 'Ok.', cost: 0.101, tasks_count: 1, tasks_error: 0, tasks: [{ id: 'fx-live-tm', status_code: 20000, status_message: 'Ok.', cost: 0.101, result_count: 1,
+        data: (req.body || [])[0], result: [{ total_count: 0, offset: 0, items_count: 0, aggregated_metrics: { location: [], language: [], platform: [], sources_domain: [], search_results_domain: [], brand_entities_title: [], brand_entities_category: [] }, items: [] }] }] };
+      if (/GetQueryPageStats/i.test(u) && /query=custom%20software%20cost%20uae/.test(u)) { const row = (date, pos, imp) => ({ __type: 'QueryStats:#Microsoft.Bing.Webmaster.Api', AvgClickPosition: -1, AvgImpressionPosition: pos, Clicks: 0, Date: msD2(date), Impressions: imp, Query: 'https://nova-ai.example/blog/custom-software-cost' });
+        return { d: [row('2026-10-19T00:00:00Z', 8, 10), row('2026-10-26T00:00:00Z', 6, 30), row('2026-11-02T00:00:00Z', 5, 0), row('2026-08-03T00:00:00Z', 1, 99)] }; }
+      return undefined; } });
+    const L = f0(live) || {}; const qp = ((L.bing_stats || {}).query_pages || {})['custom software cost uae'] || [];
+    check('AI11 live shape: target_metrics for a domain with no mention (total_count 0, no aggregated total) is a reading of 0 with its basis, never null',
+      L.target_metrics && L.target_metrics.mentions === 0 && L.target_metrics.ai_search_volume === 0 && /total_count 0/.test(L.target_metrics.basis), J(L.target_metrics));
+    check('AI11 live shape: GetQueryPageStats rows of one page across weekly buckets become ONE page, impression-weighted over 35 days ((8 x 10 + 6 x 30 + 5 x 1) / 40 = 6.6; the August row left out), and give the search that position',
+      qp.length === 1 && qp[0].url === 'https://nova-ai.example/blog/custom-software-cost' && qp[0].pos === 6.6 && qp[0].impressions === 40
+      && L.bing_stats.positions['custom software cost uae'] === 6.6 && L.bing_stats.positions_basis['custom software cost uae'] === 'webmaster (page stats)', J({ qp, pos: (L.bing_stats || {}).positions }).slice(0, 300));
+
     // ---------------- proved to bite: three sabotaged copies of the generated workflow, each caught by the check that guards it ----------------
     const sab = (mut) => { const w = IX.clone(wf); mut(w); return w; };
     const nodeOf = (w, n) => w.nodes.find(x => x.name === n);
