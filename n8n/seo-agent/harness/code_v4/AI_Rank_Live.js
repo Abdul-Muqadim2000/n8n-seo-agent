@@ -8,7 +8,9 @@
 // Every setting is OFF when empty: a site without the columns, or with them empty, runs exactly as before AIR.
 const AIRF = (() => {
   const VERSION = 'air-flags-1';
-  const RULE_VERSION = 'air-1';   // the rule AIR's rows are written under (seo_ai_rank_* .rule_version); bump it when a counting rule changes
+  // air-2 (FX-B, 2026-11-06, for FX-A's counting changes: a t test across questions, control handling, one trial per action): rows of another rule are
+  // never compared or learned from (ai_rank_wiring.py loads priors and runs of this rule only, and hides actions pre-registered under another one)
+  const RULE_VERSION = 'air-2';   // the rule AIR's rows are written under (seo_ai_rank_* .rule_version); bump it when a counting rule changes
   const MODES = ['off', 'shadow', 'on'];
   const S = (v) => (v == null ? '' : String(v)).trim();
   const flag = (v) => v === true || /^(true|1|yes|on)$/i.test(S(v));
@@ -67,7 +69,15 @@ const AIRF = (() => {
   return { VERSION, RULE_VERSION, MODES, COLS, settingsOf, validate, CACHE_KIND, KILL_KEY, protectKey, mentionsKey, killed, runs, writesSinks, mayPay,
     ENGINES, EXCLUDED_ENGINES, GROUP_OF, GROUPS, STAGES, STAGE_LABELS, ACTION_STATUSES, ARMS, usable, hash, urlKey, refKey, actionId, runId, priorId, targetId };
 })();
-const cacheRows = (() => { try { return $('Load AI Rank Cache').all().map(i => i.json || {}); } catch (e) { return []; } })();
+// FX-B RB-4 (2026-11-06, REVIEW_B_SAFETY.md): the switch FAILS CLOSED. A load that errored (the Data Table node hands on [{ error }]) or did not run
+// at all means the switch could not be read, and the day a switch is needed is exactly the day reads fail: AIR then stops for every website (no
+// paid or keyed call, no sink write; the existing AI Growth report is unaffected). An empty table answers [{}] (alwaysOutputData): readable, not
+// killed. The kill row is also read by its KEY (`Load AI Rank Kill`), so a row inserted by hand with another `kind` still stops AIR (RB-11 loads
+// the kind = air markers separately).
+const readLoad = (name) => { try { const a = $(name).all().map(i => i.json || {}); return { ok: a.length > 0 && !a.some(r => r && r.error), rows: a.filter(r => r && !r.error) }; } catch (e) { return { ok: false, rows: [] }; } };
+const cacheLoad = readLoad('Load AI Rank Cache'), killLoad = readLoad('Load AI Rank Kill');
+const cacheRows = [...cacheLoad.rows, ...killLoad.rows];
 const sites = (() => { try { return $('AI Rank Gate').all().map(i => i.json || {}).filter(x => x.site_id && !x.skip && !x.error); } catch (e) { return []; } })();
+if (!cacheLoad.ok || !killLoad.ok) return [{ json: { skip: true, killed: true, unreadable: true, reason: 'the AI-ranking kill switch (seo_cache ' + AIRF.KILL_KEY + ') could not be read: AIR is stopped for every website this run (it fails closed)' } }];
 if (AIRF.killed(cacheRows)) return [{ json: { skip: true, killed: true, reason: 'the AI-ranking kill switch (seo_cache ' + AIRF.KILL_KEY + ') is on: AIR is stopped for every website' } }];
 return sites.length ? sites.map(s => ({ json: s })) : [{ json: { skip: true, reason: 'no website to run' } }];

@@ -19781,6 +19781,7 @@ await require('./scenarios_air_fxa')({ H, run, mock, store, guard, reset, begin 
 await require('./scenarios_air_fix')({ H, run, mock, store, guard, reset, begin });   // P3 AF1-AF12
 await require('./scenarios_air_plumb')({ H, run, mock, store, guard, reset, begin });   // P4 AP1-AP12
 await require('./scenarios_air_integ')({ H, run, mock, store, guard, reset, begin });   // P5 AI1-AI10
+await require('./scenarios_air_fxb')({ H, run, mock, store, guard, reset, begin });   // FX-B FXB4-FXB11: the safety review (REVIEW_B_SAFETY.md)
 await require('./scenarios_air_exec')({ H, run, mock, store, guard, reset, begin });   // P6 AE1-AE8
 H.report();
 })();

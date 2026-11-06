@@ -169,7 +169,11 @@ for (const s of sites) {
     const tg = rescue ? rescue.g : tg0;
     const tev = tg.ok ? fitEvidence(rescue ? rescue.text : keyword, targetCtx.topics || [], { topic_label: 'what this website sells and the keywords you chose', services: targetDeclared }) : null;
     const unjudged = !!tev && tev.verdict === 'unknown';
-    const page = pageFor(keyword, g.prompt, pid); const ownPage = !!(page && OWN_PAGE.includes(page.src));
+    const page = pageFor(keyword, g.prompt, pid); const ownPage0 = !!(page && OWN_PAGE.includes(page.src));
+    // FX-B RB-2 (2026-11-06, REVIEW_B_SAFETY.md): the own-page rule keeps a question refused for its TOPIC only ("too broad", "off topic"), as the
+    // rescue does: a question refused as another company's brand, a job search, another market, a government body or a portal is set aside even
+    // when a page of the client's matches it
+    const ownPage = ownPage0 && !tg0.ok && TOPIC_REASONS.includes(tg0.reason);
     if (page && (tg.ok || ownPage || ['writing', 'written'].includes(old.status))) usedPages.add(keyOf(page.url)); const pr = page ? stored.get(keyOf(page.url)) : null;
     // a planned keyword-ladder page for the same search: the Content Cadence writes it with this AI target (one search, one page)
     const hw = new Set(lrows.flatMap(l => String(l.head_keyword || '').toLowerCase().split(/[^a-z0-9]+/)).filter(Boolean)); const kt = (k) => [...new Set(toks(k).filter(w => !hw.has(w)))];
@@ -203,9 +207,21 @@ for (const s of sites) {
     // R-K4: a target whose keyword this website should not target is never queued for a page. A row already being written (or written) keeps
     // its state - that page is live work - and is flagged, the same rule fitStored applies to a stored rung.
     const tLive = ['writing', 'written'].includes(status0);
-    const status = !tg.ok && !tLive && !ownPage ? 'set_aside' : status0;   // F-37: the client's own page for it is never set aside
+    // FX-B RB-2: the keyword stored for the Content Cadence is the one it gates again when it writes. A question kept for its own page, or rescued
+    // on the full question, keeps a keyword the gate refuses: queued, it would take one of the max_targets slots every week and be refused at
+    // writing time. It is kept as `skipped` with that reason instead (listed, never written on its own, not counted against the queued slots).
+    const storedKw = rescue && rescue.text === growthSyn(keyword) ? rescue.text : keyword;
+    const writerRefuses = rescue ? storedKw !== rescue.text : !tg0.ok;
+    const status1 = !tg.ok && !tLive && !ownPage ? 'set_aside' : status0;   // F-37: the client's own page for it is never set aside
+    const keptNotWritten = status1 === 'queued' && writerRefuses && !tLive;
+    const status = keptNotWritten ? 'skipped' : status1;
+    // FX-B RB-5: a question the client kept out stays kept: its reason is stored as "kept by you" again (it was rewritten each week, so the next
+    // week's plan, and AIR's target sink, no longer saw the client's choice and queued it again)
+    const keptByYou = status === 'skipped' && old.status === 'skipped' && /kept by you/i.test(String(old.reason || '')) && !wasWon && !stalled;
     const gateNote = tg.ok ? (rescue ? 'judged on ' + rescue.via + ' ("' + rescue.text.slice(0, 120) + '")' + (rescue.g.detail ? ': ' + rescue.g.detail : '') + '. ' : '')
       : 'not a search this website should target: ' + tg.detail + ' (' + tg.reason + ')' + (tLive ? '; its page is already being written, so it is kept and flagged' : ownPage ? '; but ' + (page.src === 'cited' ? 'AI already cites your page ' + page.url + ' for this question' : 'your own page ' + page.url + ' answers it') + ', so it is kept' : '; set aside, so no page is written for it') + '. ';
+    const keptNote = keptNotWritten ? (ownPage ? 'your page answers it, so it is kept, but its search "' + storedKw + '" is not one the page writer takes on its own: refresh that page yourself if it needs it (not queued for an automatic page). '
+      : 'the full question is on your topic, but its search "' + storedKw + '" is not one the page writer takes on its own: it is listed, not queued for an automatic page. ') : '';
     const judgeNote = unjudged ? 'Too little is known about what you sell to tell whether this question is part of it, so it is only suggested, never written on its own. ' : '';   // F-REH: one plain sentence (it used to wrap the gate\'s own detail and say the same thing twice)
     if (unjudged) targets_unjudged.push({ target_id, question: g.prompt, keyword, kind, detail: tev.detail });
     if (!tg.ok) targets_set_aside.push({ target_id, question: g.prompt, keyword, kind, reason: tg.reason, detail: tg.detail, kept: tLive || ownPage, note: '"' + keyword + '" ' + gateNote.trim() });
@@ -213,10 +229,10 @@ for (const s of sites) {
     const lostAgain = wasWon ? { target_id, question: g.prompt, won_at: String(old.won_at || '').slice(0, 10), lost_at: String((v && v.checked_at) || iso).slice(0, 10), observed: obsLine(obsOf(pid)) } : null;
     if (lostAgain) won_lost.push(lostAgain);
     // F-37: a keyword passed with its abbreviation written out is stored written out, so the page the Content Cadence writes uses the buyers' full name
-    targets.push({ target_id, site_id: s.site_id, domain: dom, prompt_id: pid, question: g.prompt, keyword: rescue && rescue.text === growthSyn(keyword) ? rescue.text : keyword, kind, page_url: page ? page.url : '', page_type: kind === 'refresh' ? '' : (PT[g.kind] || 'Guide'),
+    targets.push({ target_id, site_id: s.site_id, domain: dom, prompt_id: pid, question: g.prompt, keyword: storedKw, kind, page_url: page ? page.url : '', page_type: kind === 'refresh' ? '' : (PT[g.kind] || 'Guide'),
       fanout: (g.fanout || []).slice(0, 8).join(' | '), sources_json: JSON.stringify((g.cited_urls || []).slice(0, 6).map(c => ({ u: c.u, t: c.t || '', n: c.n || 1 }))), competitors: (g.competitors || []).slice(0, 8).join(', '),
       engines: engines.join(', '), stage: g.stage || '', value, status,
-      reason: gateNote + judgeNote + (draftFailed ? 'the page written for this question did not pass the quality check: fix the draft and run it again (it is not offered as a page that answers the question until it passes). ' : '') + (stalled ? 'the page run started on ' + stalled.since + ' never produced a page (' + stalled.log + '): queued again. ' : '') + (lostAgain ? 'AI named you for this question and has stopped (won ' + (lostAgain.won_at || 'earlier') + ', lost again in the check of ' + lostAgain.lost_at + '; ' + lostAgain.observed + '). ' : '') + (status === 'set_aside' ? '' : ladderPage ? 'written as the keyword ladder page "' + ladderPage.keyword + '" (one search, one page)' : status === 'skipped' && kind === 'refresh' && justPublished ? 'the page was published on ' + pd.date.slice(0, 10) + ': its AI readiness is checked before any refresh is planned' : status === 'skipped' && kind === 'refresh' ? 'the page is fresh (' + (pd.from === 'published' ? 'published ' : 'updated ') + pd.date.slice(0, 10) + ') and AI-ready (' + (pr && pr.score) + '/100)' : page ? 'refresh ' + page.url + ' (' + page.how + (stale ? (pd.date ? '; not updated in 90+ days (last date ' + pd.date.slice(0, 10) + ')' : pr ? '; no visible update date on the page' : '') : '') + (weak ? '; AI-readiness ' + (pr ? pr.score + '/100' : 'not checked yet') : '') + ')' : 'no page answers it yet'),
+      reason: keptByYou ? 'kept by you' : gateNote + keptNote + judgeNote + (draftFailed ? 'the page written for this question did not pass the quality check: fix the draft and run it again (it is not offered as a page that answers the question until it passes). ' : '') + (stalled ? 'the page run started on ' + stalled.since + ' never produced a page (' + stalled.log + '): queued again. ' : '') + (lostAgain ? 'AI named you for this question and has stopped (won ' + (lostAgain.won_at || 'earlier') + ', lost again in the check of ' + lostAgain.lost_at + '; ' + lostAgain.observed + '). ' : '') + (status === 'set_aside' ? '' : ladderPage ? 'written as the keyword ladder page "' + ladderPage.keyword + '" (one search, one page)' : status1 === 'skipped' && kind === 'refresh' && justPublished ? 'the page was published on ' + pd.date.slice(0, 10) + ': its AI readiness is checked before any refresh is planned' : status1 === 'skipped' && kind === 'refresh' ? 'the page is fresh (' + (pd.from === 'published' ? 'published ' : 'updated ') + pd.date.slice(0, 10) + ') and AI-ready (' + (pr && pr.score) + '/100)' : page ? 'refresh ' + page.url + ' (' + page.how + (stale ? (pd.date ? '; not updated in 90+ days (last date ' + pd.date.slice(0, 10) + ')' : pr ? '; no visible update date on the page' : '') : '') + (weak ? '; AI-readiness ' + (pr ? pr.score + '/100' : 'not checked yet') : '') + ')' : 'no page answers it yet'),
       created_at: old.created_at || iso, updated_at: iso, request_id: old.request_id || '', written_at: old.written_at || '', won_at: old.won_at || '' });
     if (page) addPage(page.url, 'target', 'answers "' + g.prompt.slice(0, 80) + '"', { question: g.prompt });
   }

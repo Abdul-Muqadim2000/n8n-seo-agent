@@ -7,7 +7,7 @@
 //   AI3  the money: AI Rank Fetched's cost_usd is every DataForSEO task once by its id (a task id two answers share is counted once), the
 //        ledger settle carries it, and Brave's estimate never enters it
 //   AI4  reuse: a second run of the same week / month pays nothing again (markers in seo_cache, exact columns); a new month reads LLM Mentions again
-//   AI5  the SERP cache: a reading of the last 7 days costs $0 and is handed on as cached; an older one is read again
+//   AI5  the SERP cache: a reading of the last 2 days costs $0 and is handed on as cached; an older one is read again (FX-B RB-12: was 7 days)
 //   AI6  Bing Webmaster stats parsed into the positions map (impression-weighted, last 35 days), pages, crawl issues, crawl stats; a Bing results
 //        page only for a search Webmaster has no position for; a site outside the Bing account gets no Bing call
 //   AI7  no Brave key: the node and its credential reference are in the workflow, it is never executed, even with ai_rank_brave on
@@ -81,6 +81,22 @@ module.exports = async (ctx) => {
     const dup = await IX.runOn({ nova: { mode: 'on', ...ALL_FLAGS } }, { braveKey: false, dupTask: true });
     check('AI3 two results pages that answer with one task id are counted once (R28: a task is money once)', f0(dup) && f0(dup).cost_usd === +(0.251 + 0.002).toFixed(4), J((f0(dup) || {}).cost_usd));
 
+    // ---------------- FX-B RB-9 / RB-10 (2026-11-06, REVIEW_B_SAFETY.md) ----------------
+    const st9 = settle(full);
+    check('FXB RB-9 the Brave searches reach the run ledger as an ESTIMATE: estimated_usd carries them and the basis names them; the measured DataForSEO figure does not',
+      F && F.brave_usd_est > 0 && Number(st9.estimated_usd) >= F.brave_usd_est - 1e-9 && /Brave Search: \d+ search/.test(String(st9.cost_basis || '')) && Math.abs((st9.dfs_usd || 0) - (settle(on0).dfs_usd || 0) - want) < 1e-9,
+      J({ est: st9.estimated_usd, b: F && F.brave_usd_est, basis: String(st9.cost_basis || '').slice(-200) }));
+    const unp = IX.clone(IX.readWf('SEO_Agent_AI_Growth.json')); { const n = unp.nodes.find(x => x.name === 'AI Rank SERP Call Answers'); n.type = 'n8n-nodes-base.code'; n.typeVersion = 2;
+      n.parameters = { jsCode: "return [{ json: { status_code: 20000, tasks: [{ id: 'fxb-unpaired-1', status_code: 20000, cost: 0.002, result: [] }] } }, { json: { error: 'a gate node failed' } }];" }; }
+    const u1 = await IX.runOn({ nova: { mode: 'on', fanout_n: 6, mentions: false, brave: false, engines: '' } }, { braveKey: false, wf: unp });
+    const fu = f0(u1) || {}; const planned = (u1.last('AI Rank SERP Requests') || []).map(i => i.json).filter(r => !r.skip).length;
+    const wk = (u1.r.tables.seo_cache || []).find(r => String(r.key).startsWith('air:week:' + NV)); const wv = wk ? JSON.parse(wk.value) : {};
+    check('FXB RB-10 a paid call whose answers cannot be paired with its requests still charges the task it was billed for (once by id) and counts every planned read against the week',
+      planned > 1 && fu.cost_usd === 0.002 && (fu.errors || []).some(e => /could not be paired/.test(e)) && Number((wv.reads || {}).google) === planned, J({ planned, cost: fu.cost_usd, reads: wv.reads, errors: fu.errors }).slice(0, 400));
+    const u2 = await IX.runOn({ nova: { mode: 'on', fanout_n: 6, mentions: false, brave: false, engines: '' } }, { braveKey: false, wf: unp, tables: u1.r.tables });
+    const planned2 = (u2.last('AI Rank SERP Requests') || []).map(i => i.json).filter(r => !r.skip).length;
+    check('FXB RB-10 a second run the same week plans no paid read again (the budget is spent)', planned >= 6 ? planned2 === 0 : planned2 <= 6 - planned, J({ planned, planned2 }));
+
     // ---------------- AI4 reuse (the same week, then a new month) ----------------
     const rows = full.r.writes.filter(w => w.node === 'Save AI Rank Fetch Cache').flatMap(w => w.rows);
     const TC = require('./table_cols.json');
@@ -101,15 +117,18 @@ module.exports = async (ctx) => {
     check('AI4 a new month reads LLM Mentions again (and a new week has its own budget)', of(nextMonth.calls, /^AI Rank Mentions Call POST/).length === 2 && of(nextMonth.calls, /^AI Rank SERP Call POST/).length >= 1, J(p5(nextMonth.calls)).slice(0, 300));
 
     // ---------------- AI5 the SERP cache ----------------
-    const cached = F.serp_reads.filter(x => x.cached && x.source === 'serp cache');
-    const askedG = sReq.filter(r => r.engine === 'google').map(r => r.key);
-    check('AI5 a Google reading of the last 7 days in the shared cache costs $0: it is not asked again and is handed on as cached (the fixture has three, read 4 days ago)',
-      cached.length === 3 && cached.every(x => !askedG.includes(x.key) && x.engine === 'google' && x.results.length > 0), J({ cached: cached.map(x => x.key), askedG }));
-    const oldTables = IX.clone(full.F.tables); for (const r of oldTables.seo_cache) if (/^serp:/.test(r.key)) { const v = JSON.parse(r.value); v.at = '2026-10-20T10:00:00.000Z'; v.day = '2026-10-20'; r.value = JSON.stringify(v); }
-    const stale = await IX.runOn({ nova: { mode: 'on', ...ALL_FLAGS, engines: '' } }, { braveKey: false, tables: oldTables });
+    // FX-B RB-12 (2026-11-06): the AI visibility run prunes every serp: row older than 2 days (F-85), so AIR reuses a reading of the last 2 days only
+    // (serp_fresh_days 2, was 7: a 7-day window counted on readings that are never there). The fixture's three readings are 4 days old.
+    const atTables = (days) => { const t = IX.clone(full.F.tables); const at = new Date(full.F.nowMs - days * 864e5).toISOString(); for (const r of t.seo_cache) if (/^serp:/.test(r.key)) { const v = JSON.parse(r.value); v.at = at; v.day = at.slice(0, 10); r.value = JSON.stringify(v); } return t; };
+    const fresh = await IX.runOn({ nova: { mode: 'on', ...ALL_FLAGS, engines: '' } }, { braveKey: false, tables: atTables(1) });
+    const Ff = f0(fresh) || {}; const cached = (Ff.serp_reads || []).filter(x => x.cached && x.source === 'serp cache');
+    const askedG = (fresh.last('AI Rank SERP Requests') || []).map(i => i.json).filter(r => r.engine === 'google').map(r => r.key);
+    check('AI5 (RB-12) a Google reading of the last 2 days in the shared cache costs $0: it is not asked again and is handed on as cached',
+      cached.length >= 3 && cached.every(x => !askedG.includes(x.key) && x.engine === 'google' && x.results.length > 0), J({ cached: cached.map(x => x.key), askedG }));
+    const stale = await IX.runOn({ nova: { mode: 'on', ...ALL_FLAGS, engines: '' } }, { braveKey: false, tables: atTables(4) });
     const sReq2 = (stale.last('AI Rank SERP Requests') || []).map(i => i.json);
-    check('AI5 a reading older than 7 days is read again (one paid read each, within the budget); with no Copilot every read is Google',
-      cached.every(c => sReq2.some(r => r.key === c.key && r.engine === 'google')) && sReq2.length === 6 && sReq2.every(r => r.engine === 'google'), J(sReq2.map(r => [r.engine, r.key])));
+    check('AI5 (RB-12) a reading 4 days old (past the 2-day prune) is read again (one paid read each, within the budget); with no Copilot every read is Google',
+      ['ai development company uae', 'custom software cost uae', 'custom software development dubai'].every(k => sReq2.some(r => r.key === k && r.engine === 'google')) && sReq2.length === 6 && sReq2.every(r => r.engine === 'google'), J(sReq2.map(r => [r.engine, r.key])));
 
     // ---------------- AI6 Bing ----------------
     const bs = F.bing_stats || {};

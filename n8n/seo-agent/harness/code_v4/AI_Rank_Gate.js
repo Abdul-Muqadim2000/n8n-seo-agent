@@ -12,7 +12,9 @@
 // Every setting is OFF when empty: a site without the columns, or with them empty, runs exactly as before AIR.
 const AIRF = (() => {
   const VERSION = 'air-flags-1';
-  const RULE_VERSION = 'air-1';   // the rule AIR's rows are written under (seo_ai_rank_* .rule_version); bump it when a counting rule changes
+  // air-2 (FX-B, 2026-11-06, for FX-A's counting changes: a t test across questions, control handling, one trial per action): rows of another rule are
+  // never compared or learned from (ai_rank_wiring.py loads priors and runs of this rule only, and hides actions pre-registered under another one)
+  const RULE_VERSION = 'air-2';   // the rule AIR's rows are written under (seo_ai_rank_* .rule_version); bump it when a counting rule changes
   const MODES = ['off', 'shadow', 'on'];
   const S = (v) => (v == null ? '' : String(v)).trim();
   const flag = (v) => v === true || /^(true|1|yes|on)$/i.test(S(v));
@@ -75,6 +77,12 @@ const nowMs = Date.now();
 const all = (name) => { try { return $(name).all().map(i => i.json || {}); } catch (e) { return []; } };
 const plans = all('Growth Plan').filter(p => p.site_id && !p.nothing_to_do);
 const mons = all('Load Monitors').filter(m => m && m.site_id);
+// FX-B RB-8 (2026-11-06, REVIEW_B_SAFETY.md): AIR sits before Growth Report, so a run that is already long must not be pushed past the workflow's
+// 2,400 s limit by it (that would lose the existing report and leave the ledger unsettled). When this run's plan is more than 25 minutes old,
+// AIR waits for next week, says so, and the report goes out as before.
+const AIR_LATE_MS = 25 * 60 * 1000;
+const planAt = Math.min(...plans.map(p => Date.parse(p.checked_at)).filter(Number.isFinite));
+if (Number.isFinite(planAt) && nowMs - planAt > AIR_LATE_MS) return [{ json: { skip: true, late: true, reason: 'this AI Growth run is already ' + Math.round((nowMs - planAt) / 60000) + ' minutes old: the AI-ranking side branch waits for the next run, so the report is not delayed' } }];
 const out = [];
 for (const p of plans) {   // only the websites AI Growth worked on in this run, once each
   if (out.some(o => o.json.site_id === p.site_id)) continue;

@@ -1621,9 +1621,14 @@ const AIE = (() => {
     ['openedx.org', 'Open edX', P_B + '(?:open\\s*edx|edx\\s+platform)' + P_E, 'giu'], ['moodle.com', 'Moodle', P_B + '(?:Moodle(?:\\s+Workplace|\\s+LMS)?|MOODLE)' + P_E, 'gu'],
     ['epicor.com', 'Epicor', P_B + 'epicor' + P_E, 'giu'], ['acumatica.com', 'Acumatica', P_B + 'acumatica' + P_E, 'giu'], ['infor.com', 'Infor', P_B + 'Infor' + P_E, 'gu']];
   const PLAT_DOMS = new Set(PLATFORMS.map(p => p[0]));
-  // F-53: open-source platforms a whole market builds on (openedx.org ranked as an Open edX shop's top rival): a platform, never a competitor,
-  // unless the owner named it a competitor
+  // F-53: open-source platforms a whole market builds on (openedx.org ranked as an Open edX shop's top rival).
+  // FX-B RB-1 (2026-11-06, REVIEW_B_SAFETY.md): they were a platform for EVERY site, so a client that competes with Moodle (an LMS vendor that
+  // builds on neither) lost it as a rival. They are a platform only for a client that itself builds on one of them (its own words name Open edX
+  // or Moodle: an Open edX shop treats Moodle as the other platform, not a business), and a competitor whenever the owner named them one.
   const OPEN_PLAT = new Set(['openedx.org', 'moodle.com']);
+  // FX-B RB-1: the version of the entity rule (who counts as a competitor). F-53 changed it; every stored figure that depends on it (share of
+  // voice, the competitor table, a pulse morning's competitors) carries it, and a week is never compared with one counted under another rule.
+  const RULE = 'f53';   // ENTITY_RULE (the harness reads it here)
 
   // ---- how a name is found in a text ----
   const B = '(?<![\\p{L}\\p{M}\\p{N}])', E = '(?![\\p{L}\\p{M}\\p{N}])';
@@ -1794,6 +1799,7 @@ const AIE = (() => {
     // (openedx.org for an Open edX shop) reads as the client's platform, not its rival
     const clientSquash = new Set(); { const ws = low(ct).split(/[^\p{L}\p{N}]+/u).filter(Boolean); for (let i = 0; i < ws.length; i++) for (let k = 2; k <= 3 && i + k <= ws.length; k++) clientSquash.add(ws.slice(i, i + k).join('')); }
     const out = { plan, own, owned, configured, soft, find, idOfRoot, membersOf, display, nameKey, nameToDom, doms, scans, selfScans, selfNames, selfKeys, clientRoots: cp, clientText: ct, clientSquash, roleOfBook, explicit,
+      openShop: [...OPEN_PLAT].some(d => clientPlatforms(plan).includes(d)),   // FX-B RB-1: the client builds on an open platform itself
       confRoots: new Set(configured.map(d => find('d:' + d))) };
     DIRS.set(key, out);
     return out;
@@ -1927,7 +1933,7 @@ const AIE = (() => {
       else if (!named.length) role = isClientPlat ? 'platform' : 'source';
       else if (srcKind) role = 'source';
       else if (otherKind) role = 'other';
-      else if (isClientPlat || ds.some(d => OPEN_PLAT.has(d))) role = 'platform';
+      else if (isClientPlat || (D.openShop && ds.some(d => OPEN_PLAT.has(d)))) role = 'platform';   // FX-B RB-1: an open platform only for a client on one
       else if (named.filter(m => m.s < 1e8).length && named.filter(m => m.s < 1e8).every(m => platformBefore(vis, m.s) || platformAfter(vis, m.e))) role = 'platform';
       else if (named.filter(m => m.s < 1e8).length && named.filter(m => m.s < 1e8).every(m => SRC_BEFORE.test(vis.slice(Math.max(0, m.s - 40), m.s)) || SRC_AFTER.test(vis.slice(m.e, m.e + 30)))) role = 'source';
       else if (ds.length || nameLike(name) || AR.test(name) || rootsF.some(r => D.explicit.has(r)))
@@ -1978,7 +1984,7 @@ const AIE = (() => {
     if ((F1.size || F2.size) && jac(F1, F2) < 0.6) return false; return jac(stems(ca), stems(cb)) >= 0.5; };
   const claimKey = (t) => { const [c, f] = splitIssue(t); return [...stems(f)].sort().join(' ') + '|' + [...stems(c)].sort().join(' '); };
 
-  return { servicesOf, L, low, normD, regD, hostOf, labelOf, core, commonWord, nameLike, junkName, bizSignal, HEADING_WORDS, nameRe, visible, kindOfDomain, brandNames, ownNames, clientPlatforms, bookOf, dir, read, compact, entitiesOf, sameEntity, vendorIn, sameClaim, claimKey, PLATFORMS };
+  return { RULE, servicesOf, L, low, normD, regD, hostOf, labelOf, core, commonWord, nameLike, junkName, bizSignal, HEADING_WORDS, nameRe, visible, kindOfDomain, brandNames, ownNames, clientPlatforms, bookOf, dir, read, compact, entitiesOf, sameEntity, vendorIn, sameClaim, claimKey, PLATFORMS };
 })();
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 let jobs = []; try { jobs = $('Prompt Jobs').all().map(i => i.json).filter(j => !j.skip); } catch (e) {}
