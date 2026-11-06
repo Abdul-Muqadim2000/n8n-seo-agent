@@ -707,7 +707,8 @@
   "cost_json",
   "learn_json",
   "exec_id",
-  "error"
+  "error",
+  "stages_json"
  ],
  "AI_RANK_QUESTIONS": [
   "site_id",
@@ -733,7 +734,8 @@
   "last_named_at",
   "last_cited_at",
   "updated_at",
-  "rule_version"
+  "rule_version",
+  "arm_since"
  ],
  "AI_RANK_ACTIONS": [
   "action_id",

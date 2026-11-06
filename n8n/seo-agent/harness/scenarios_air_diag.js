@@ -92,9 +92,10 @@ module.exports = async (ctx) => {
     const core30 = Array.from({ length: 30 }, (_, i) => ({ prompt_id: 'a' + i, intent: i % 3 ? 'recommendation' : 'informational', baseline: i % 4 ? 'zero' : 'some', cluster: 'k' + (i % 6) }));
     const A1 = ARD.assignArms({ core: core30, stored: [], seed: 'seed-1', now: NOW, site_id: 's' }), A2 = ARD.assignArms({ core: core30, stored: [], seed: 'seed-1', now: NOW, site_id: 's' });
     const byS = new Map(); for (const a of A1) { const t = byS.get(a.stratum) || [0, 0]; t[0]++; if (a.arm === 'control') t[1]++; byS.set(a.stratum, t); }
-    check('AD4 arms: deterministic for a seed; at most 4 clusters (the rest pooled); strata under 3 questions merged into a coarser one; 2:1 inside every stratum (controls = floor(n/3)); 10 controls of 30',
-      J(A1) === J(A2) && A1.length === 30 && [...byS.values()].every(([n, c]) => c === Math.floor(n / 3)) && [...byS.entries()].every(([k, [n]]) => n >= 3 || k === '*|*|*')
-      && A1.every(a => !/\|k[45]$/.test(a.stratum) || false) && Math.abs(A1.filter(a => a.arm === 'control').length - 10) <= byS.size, J([...byS.entries()]));
+    // FX-A RA-2: the control target is floor(N / 3) for the panel, shared out floor(n / 3) per stratum with the remainder to the largest fractions
+    check('AD4 arms: deterministic for a seed; at most 4 clusters (the rest pooled); strata under 3 questions merged into a coarser one; each stratum holds floor(n/3) or ceil(n/3) controls; exactly 10 controls of 30 (FX-A RA-2)',
+      J(A1) === J(A2) && A1.length === 30 && [...byS.values()].every(([n, c]) => c >= Math.floor(n / 3) && c <= Math.ceil(n / 3)) && [...byS.entries()].every(([k, [n]]) => n >= 3 || k === '*|*|*')
+      && A1.every(a => !/\|k[45]$/.test(a.stratum) || false) && A1.filter(a => a.arm === 'control').length === 10, J([...byS.entries()]));
     const stA = A1.map(a => ({ ...a, core: true, core_since: ago(10) }));
     const A3 = ARD.assignArms({ core: core30, stored: stA, seed: 'another-seed', now: NOW, site_id: 's' });
     check('AD4 stored arms are never reshuffled (another seed, same arms and strata)', J(A3.map(a => [a.prompt_id, a.arm, a.stratum])) === J(A1.map(a => [a.prompt_id, a.arm, a.stratum])), '');
@@ -125,7 +126,7 @@ module.exports = async (ctx) => {
     const wide = Array.from({ length: 13 }, (_, i) => ({ prompt_id: 'w' + i, intent: i < 11 ? 'recommendation' : 'informational', baseline: i % 3 === 0 ? 'some' : 'zero', cluster: 'cluster ' + (i % 7) }));
     const armsW = ARD.assignArms({ core: wide, stored: [], seed: 'site_w', now: NOW, site_id: 'site_w' }); const cW = armsW.filter(a => a.arm === 'control').length;
     const bySW = new Map(); for (const a of armsW) { const t = bySW.get(a.stratum) || [0, 0]; t[0]++; if (a.arm === 'control') t[1]++; bySW.set(a.stratum, t); }
-    check('AD14 thin strata are merged: 13 questions over 7 clusters get ' + cW + ' controls (4 = floor(13/3), at most one off per merged stratum), every merged stratum 2:1', cW >= 3 && cW <= 5 && [...bySW.values()].every(([n, c]) => c === Math.floor(n / 3)), J([...bySW.entries()]));
+    check('AD14 thin strata are merged: 13 questions over 7 clusters get ' + cW + ' controls (4 = floor(13/3), FX-A RA-2), every merged stratum floor(n/3) or ceil(n/3)', cW === 4 && [...bySW.values()].every(([n, c]) => c >= Math.floor(n / 3) && c <= Math.ceil(n / 3)), J([...bySW.entries()]));
     const armsW2 = ARD.assignArms({ core: [...wide, { prompt_id: 'w13', intent: 'recommendation', baseline: 'zero', cluster: 'cluster 3' }], stored: armsW.map(a => ({ ...a, core: true, core_since: ago(7) })), seed: 'site_w', now: NOW, site_id: 'site_w' });
     check('AD14 the merged arms are stored and kept a week later; the new question takes a slot', J(armsW2.slice(0, 13).map(a => a.arm)) === J(armsW.map(a => a.arm)) && armsW2.length === 14, J(armsW2));
     check('AD14 the real kinds (choose / cost / problem / compare) give an intent when answers are few', ARD.intentOf({ kind: 'choose' }, []) === 'recommendation' && ARD.intentOf({ kind: 'cost' }, []) === 'informational' && ARD.intentOf({ kind: 'problem' }, []) === 'informational' && ARD.intentOf({ kind: 'compare' }, []) === 'recommendation', '');
@@ -137,8 +138,9 @@ module.exports = async (ctx) => {
     check('AD5 MDE reproduces all 24 figures of R1 §6 within 0.1 point', !off.length, J(off));
     const k1 = ARD.mde({ q_t: 16, q_c: 8, m: 28, p: 0, rho: 0.3 }), k2 = ARD.mde({ q_t: 20, q_c: 10, m: 28, p: 0, rho: 0.3 });
     const C = (n, r) => { let x = 1; for (let i = 0; i < r; i++) x = x * (n - i) / (i + 1); return x; };
-    check('AD5 first appearances: k = 7 for 16 / 8 (p 0.033); for 20 / 10 k = 7 (p 0.038), because C(20,6)/C(30,6) = 0.065 is above 0.05 (DESIGN A7 says 6: corrected, fixes/P1.md)',
-      k1.first_appearance_k === 7 && Math.abs(k1.first_appearance_p - 0.0331) < 0.001 && k2.first_appearance_k === 7 && Math.abs(k2.first_appearance_p - 0.0381) < 0.001 && C(20, 6) / C(30, 6) > 0.05 && C(20, 7) / C(30, 7) < 0.05, J({ k1, k2 }));
+    // FX-A RA-12: one alpha - the first-appearance test is judged one-sided at 0.025, as the DiD's two-sided 95% range (was 0.05: k 7 / 7)
+    check('AD5 first appearances (one-sided 0.025, FX-A RA-12): k = 8 for 16 / 8 (p 0.0175); for 20 / 10 k = 8 (p 0.0215), because C(20,7)/C(30,7) = 0.038 is above 0.025',
+      k1.first_appearance_k === 8 && Math.abs(k1.first_appearance_p - 0.0175) < 0.001 && k2.first_appearance_k === 8 && Math.abs(k2.first_appearance_p - 0.0215) < 0.001 && C(20, 7) / C(30, 7) > 0.025 && C(20, 8) / C(30, 8) < 0.025, J({ k1, k2 }));
     const z0 = ARD.mde({ q_t: 10, q_c: 0, m: 28, p: null, rho: 0.3 });
     check('AD5 a zero / unknown baseline plans with 2%; no control arm -> no DiD and no first-appearance test, said in words', z0.p_used === 0.02 && z0.did === null && z0.prepost > 0 && z0.first_appearance_k === null && /no control/.test(z0.basis) && /2% used/.test(z0.basis), J(z0));
 

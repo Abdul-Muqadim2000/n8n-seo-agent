@@ -19777,6 +19777,7 @@ await require('./scenarios_air_w0')({ H, run, mock, store, guard, reset, begin }
 await require('./scenarios_air_golden')({ H, run, mock, store, guard, reset, begin });   // AIRG0-4: every site off -> AI Growth output and the ai_growth callback unchanged
 await require('./scenarios_air_diag')({ H, run, mock, store, guard, reset, begin });   // P1 AD1-AD12
 await require('./scenarios_air_learn')({ H, run, mock, store, guard, reset, begin });   // P2 AL1-AL14
+await require('./scenarios_air_fxa')({ H, run, mock, store, guard, reset, begin });   // FX-A FXA-1..18: REVIEW_A RA-1..RA-18
 await require('./scenarios_air_fix')({ H, run, mock, store, guard, reset, begin });   // P3 AF1-AF12
 await require('./scenarios_air_plumb')({ H, run, mock, store, guard, reset, begin });   // P4 AP1-AP12
 await require('./scenarios_air_integ')({ H, run, mock, store, guard, reset, begin });   // P5 AI1-AI10

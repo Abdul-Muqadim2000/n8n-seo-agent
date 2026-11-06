@@ -50,11 +50,14 @@ const indexAll = rowsOf('Load Index Pages (Rank)'), serpRows = rowsOf('Load SERP
 const answers28All = rowsOf('Load AI Answers (Rank)'), queryAll = rowsOf('Load Query History');   // P1: the source graph reads 28 days of answers; Search Console queries feed demand
 const listingsAll = rowsOf('Load Listings (Rank)'), outreachAll = rowsOf('Load Link Outreach (Rank)'), prospectsAll = rowsOf('Load Link Prospects (Rank)');
 
-// Google results pages the engines' searches return (seo_cache serp:*, any date, each labelled with its reading date)
+// Google results pages the engines' searches return (seo_cache serp:*, any date, each labelled with its reading date). FX-A RA-13: one reading per
+// keyword AND location (`by_loc`; the latest of each), so ARD reads only a results page of the question's market; the entry's own fields are the
+// latest reading of any location (read when the market is not known)
 const serp = new Map();
-for (const r of serpRows) { const v = P(r.value, null); if (!v || typeof v !== 'object' || !v.keyword) continue; const k = SC.normKw(v.keyword); const prev = serp.get(k);
-  if (prev && String(prev.read_at) >= String(v.at || '')) continue;
-  serp.set(k, { results: (v.items || []).filter(x => x && x.type === 'organic' && x.url).map(x => ({ url: x.url, pos: Number(x.rank_group || x.rank_absolute) || null })), read_at: String(v.at || v.day || ''), location_code: Number(v.location_code) || 0 }); }
+const putSerp = (m, k, e) => { const prev = m.get(k); const by = Object.assign({}, prev ? prev.by_loc : {}); const lk = String(Number(e.location_code) || 0);
+  if (!by[lk] || String(by[lk].read_at) <= String(e.read_at)) by[lk] = e; const latest = !prev || String(prev.read_at) <= String(e.read_at) ? e : prev; m.set(k, Object.assign({}, latest, { by_loc: by })); };
+for (const r of serpRows) { const v = P(r.value, null); if (!v || typeof v !== 'object' || !v.keyword) continue;
+  putSerp(serp, SC.normKw(v.keyword), { results: (v.items || []).filter(x => x && x.type === 'organic' && x.url).map(x => ({ url: x.url, pos: Number(x.rank_group || x.rank_absolute) || null })), read_at: String(v.at || v.day || ''), location_code: Number(v.location_code) || 0 }); }
 
 // the robots verdict of this run, in the shape ARD reads: { robots: { bot: { allowed_root, rule } }, blocked_engines, read_at }
 const BOT_ENGINES = { 'OAI-SearchBot': ['chatgpt', 'chatgpt_api'], 'ChatGPT-User': ['chatgpt', 'chatgpt_api'], 'PerplexityBot': ['perplexity'], 'Perplexity-User': ['perplexity'],
@@ -74,11 +77,18 @@ const bingList = (() => { try { const r = $('Fetch Bing Sites (Growth)').first()
 // D24 (P5): this run's fan-out results pages (AI Rank Fetched `serp_reads`, Google only; Bing's reach the kits through bing_stats.positions) are
 // merged into the site's own copy of the Google map, a later reading of the same search winning, so the S1 / S2 proxy basis can be read
 const serpFor = (f) => { const reads = f && Array.isArray(f.serp_reads) ? f.serp_reads.filter(r => r && (!r.engine || r.engine === 'google')) : []; if (!reads.length) return serp;
-  const m = new Map(serp); for (const r of reads) { const k = SC.normKw(r.query || r.key); if (!k) continue; const prev = m.get(k); if (prev && String(prev.read_at) > String(r.read_at || '')) continue;
-    m.set(k, { results: (r.results || []).filter(x => x && x.url).map(x => ({ url: x.url, pos: Number(x.pos) || null })), read_at: String(r.read_at || ''), location_code: Number(r.location_code) || 0 }); }
+  const m = new Map(serp); for (const r of reads) { const k = SC.normKw(r.query || r.key); if (!k) continue;
+    putSerp(m, k, { results: (r.results || []).filter(x => x && x.url).map(x => ({ url: x.url, pos: Number(x.pos) || null })), read_at: String(r.read_at || ''), location_code: Number(r.location_code) || 0 }); }
   return m; };
 const rawHost = (u) => { const m = S0(u).match(/^https?:\/\/([^\/?#:]+)/i); return m ? m[1].toLowerCase() : ''; };
-const out = [];
+// RA-4 (FX-A): the exposure ledger - which questions each EXECUTED action (mode on; shadow rows execute nothing) works on, from its registration to
+// the end of its window (open-ended while it is open). The levers that touch every question alike (ARL.UNIFORM) are not exposure.
+const exposureOf = (rows) => rows.filter(a => a && S0(a.mode) === 'on' && !['shadow', 'refused', ''].includes(S0(a.status)) && !ARL.UNIFORM.includes(S0(a.lever))).map(a => {
+  const pre = P(a.prereg_json, {}) || {}; const vf = P(a.verify_json, {}) || {}; const win = Math.max(AIR_CFG.window_min_days, Number(pre.window_days) || 0);
+  const t0 = Date.parse(S0(pre.t0_rule === 'live_at' ? vf.live_at : '') || S0(a.happened_at) || S0(vf.at)); const open = AIR_CFG.open.includes(S0(a.status)) && S0(a.status) !== 'done';
+  const to = open ? '' : Number.isFinite(t0) ? new Date(t0 + win * DAY).toISOString() : S0(a.updated_at);
+  return { action_id: S0(a.action_id), lever: S0(a.lever), questions: P(a.questions, []).map(S0), from: S0(pre.registered_at) || S0(a.created_at), to, window_days: win, controls: (pre.controls || []).map(S0), open: AIR_CFG.open.includes(S0(a.status)) }; });
+const out = []; const siteLearn = [];
 for (const g of gateSites) {
   const sid = g.site_id;
   try {
@@ -120,7 +130,7 @@ for (const g of gateSites) {
     const monRow = monRows.find(m => m.site_id === sid) || {};
     const aiPages = bySite(aiPagesAll, sid, dom);
     const storedQ = new Map(bySite(rqAll, sid, dom).map(r => [S0(r.prompt_id), r]));
-    const storedA = bySite(raAll, sid, dom);
+    const storedA = bySite(raAll, sid, dom);   // (also read by the arms below: the exposure ledger)
     const storedSrc = bySite(rsAll, sid, dom);
     const runsPrev = bySite(rrAll, sid, dom).filter(r => r.run_id !== g.run_id);
     const prevRun = latest(runsPrev, 'checked_at');
@@ -139,13 +149,22 @@ for (const g of gateSites) {
       ...[...gsc.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([k, v]) => ({ keyword: k, source: 'gsc', volume: v, market: mkt }))].filter(c => c.keyword);
     const panelDemand = { byPrompt: Object.fromEntries(prompts.map(p => [S0(p.prompt_id), { volume: Number(p.volume) || 0 }])), candidates: candidatesQ };
     const panel0 = un('ARD.corePanel', ARD.corePanel({ site, prompts, units60, stored: [...storedQ.values()], market, demand: panelDemand, now: nowMs, cfg: {} }));
-    const arms = ARD.assignArms({ core: panel0.core || [], stored: [...storedQ.values()], seed: sid, now: nowMs, site_id: sid, holdout_days: 84 }) || [];
+    // RA-2 (FX-A): a control is replaced only by a treated question no executed step worked on in the last two windows, and never rotates while it is a
+    // registered control of an open action
+    const exposure = exposureOf(storedA);
+    const exposedQ = new Set(exposure.filter(x => !x.to || Date.parse(x.to) >= nowMs - 2 * x.window_days * DAY).flatMap(x => x.questions));
+    const lockedQ = new Set(exposure.filter(x => x.open).flatMap(x => x.controls));
+    const arms = ARD.assignArms({ core: panel0.core || [], stored: [...storedQ.values()], seed: sid, now: nowMs, site_id: sid, holdout_days: 84, exposed: exposedQ, locked: lockedQ }) || [];
     const armOf = new Map(arms.map(a => [S0(a.prompt_id), a]));
     const qT = arms.filter(a => a.arm === 'treated').length, qC = arms.filter(a => a.arm === 'control').length;
-    const perQ = new Map(); for (const u of units60) perQ.set(u.prompt_id, (perQ.get(u.prompt_id) || 0) + 1);
+    // RA-11 (FX-A): m = answers per core question in the last 28 days (the period the formula assumes), p = the named share on the core (no brand
+    // question); the memo prints the test actually run - one question (own page, passage fix, correction), a placement on 3 - beside the panel figure
+    const coreSet = new Set((panel0.core || []).map(c => S0(c.prompt_id))); const u28 = units60.filter(u => coreSet.has(S0(u.prompt_id)) && Date.parse(u.at) > nowMs - 28 * DAY);
+    const perQ = new Map(); for (const u of u28) perQ.set(u.prompt_id, (perQ.get(u.prompt_id) || 0) + 1);
     const mAns = perQ.size ? Math.round([...perQ.values()].reduce((a, b) => a + b, 0) / perQ.size) : 0;
-    const pNamed = units60.length ? units60.filter(u => u.named).length / units60.length : 0;
-    const mde = un('ARD.mde', ARD.mde({ q_t: qT, q_c: qC, m: mAns, p: pNamed, rho: 0.3 }));
+    const pNamed = u28.length ? u28.filter(u => u.named).length / u28.length : 0;
+    const mde0 = un('ARD.mde', ARD.mde({ q_t: qT, q_c: qC, m: mAns, p: pNamed, rho: 0.3 }));
+    const mde = mde0.unavailable ? mde0 : Object.assign({}, mde0, { one_question: qC ? ARD.mde({ q_t: 1, q_c: qC, m: mAns, p: pNamed, rho: 0.3 }) : null, page_level: qC && qT ? ARD.mde({ q_t: Math.min(3, qT), q_c: qC, m: mAns, p: pNamed, rho: 0.3 }) : null, page_level_q: Math.min(3, qT) });
     // ---- B: the stage of each question x engine ----
     const coreIds = new Set((panel0.core || []).map(c => S0(c.prompt_id)));
     const LIVE_OUT = new Set(['off', 'refused', 'retired', 'proposed']);
@@ -173,22 +192,35 @@ for (const g of gateSites) {
     const candidates = ARL.candidates({ site: { ...site, hosts: ourHosts, prompts, pages: aiPages }, diag, sources, arms, stored_actions: storedA, settings: rank, now: nowMs }) || [];
     const scored = candidates.map(c => { const sc = un('ARL.score', ARL.score(c, { priors: rpAll, values, feas, weights: null, H: AIR_CFG.H })); return sc.unavailable ? null : { ...c, ...sc }; }).filter(Boolean);
     const openStored = storedA.filter(a => AIR_CFG.open.includes(S0(a.status)));
-    const choice = ARL.choose(scored, { capacities: {}, arms, mode, open_actions: storedA.filter(a => ['shadow', ...AIR_CFG.open].includes(S0(a.status))), now: nowMs, units60 }) || { chosen: [], deferred: [], refused: [] };
+    const choice = ARL.choose(scored, { capacities: {}, arms, mode, open_actions: storedA.filter(a => ['shadow', ...AIR_CFG.open].includes(S0(a.status))), now: nowMs, units60, exposure }) || { chosen: [], deferred: [], refused: [] };
     // the gate on the way out: a placement pitch to a competitor's own page is refused here, whatever the kit chose (rival lists: learn only)
     const refused = (choice.refused || []).slice(); const chosen = [];
     for (const a of (choice.chosen || [])) {
       const url = S0((a.ref || {}).url); const src = url ? srcByKey.get(AIRF.urlKey(url)) : null;
       if (a.sink === 'prospect') { const why = rivalWhy(hostOf(url), { url, title: src ? src.title || '' : '' });
         if (why || (src && ['rival', 'client'].includes(S0(src.author_kind)))) { refused.push({ what: a.action_id || a.lever, why: why || 'a page written by ' + (src.author_kind === 'client' ? 'the client' : 'a competitor') + ': learned from, never pitched' }); continue; } }
-      chosen.push({ ...a, prereg: a.prereg && !a.prereg.unavailable ? a.prereg : ARL.prereg(a, { arms, units60, now: nowMs }) }); }
-    // ---- G: verify and learn (only actions AIR executed: mode `on`, an open status) ----
+      // RA-14 (FX-A): an own page is screened against the refused tactics before anything is written (shadow shows it too)
+      let screen = null; if (['L05', 'L06'].includes(S0(a.lever)) && typeof ARL.screenOwnPage === 'function') { const pq = promptById.get(S0((a.ref || {}).prompt_id)) || {};
+        screen = ARL.screenOwnPage({ keyword: pq.keyword || pq.topic, question: pq.prompt, fanouts: ARD.fanoutOf({ prompt_id: S0((a.ref || {}).prompt_id), answers8, evidence: evidenceOf.get(S0((a.ref || {}).prompt_id)) || '' }).slice(0, 8) });
+        if (screen.refused) { refused.push({ what: a.action_id || a.lever, why: screen.refused.id + ': ' + screen.refused.why }); continue; } if (!screen.page_type) screen = null; }
+      chosen.push({ ...a, screen, prereg: a.prereg && !a.prereg.unavailable ? a.prereg : ARL.prereg(a, { arms, units60, now: nowMs, exposure }) }); }
+    // ---- G: verify and judge (only actions AIR executed: mode `on`, an open status); learning runs ONCE after every site (RA-10) ----
+    // RA-1 / RA-9 (FX-A): the stages and answer counts at the start are frozen in verify_json (t0_snapshot) the first time our check finds the action
+    // done, from the latest stored reading at or before its start (the compact stages_json of the run rows), else this run's reading (labelled)
+    const readings = runsPrev.map(r => ({ at: S0(r.checked_at), diag: S0(r.stages_json) ? r.stages_json : P(r.diag_json, []), basis: 'the AI ranking reading of ' + S0(r.checked_at).slice(0, 10) })).filter(x => x.at);
+    const stagesAt = (t) => { let best = null; for (const r of readings) { const x = Date.parse(r.at); if (!Number.isFinite(x) || !Number.isFinite(t) || x > t + 6 * 3600e3 || t - x > 14 * DAY) continue; const d = ARL.stagesUnpack(r.diag); if (d.length && (!best || x > best.x)) best = { x, d }; } return best ? best.d : null; };
     const outcomes = [];
     for (const a of openStored.filter(x => S0(x.mode) === 'on')) {
       const qs0 = P(a.questions, []); const act = { ...a, ref: P(a.ref, {}), questions: qs0, engines: P(a.engines, []), expected: P(a.expected_json, {}), prereg: P(a.prereg_json, {}), keyword: S0((promptById.get(S0(qs0[0])) || {}).keyword) };
       const v = ARL.verify(act, { contentLog: bySite(logAll, sid, dom), pages: aiPages, index, listings, outreach, sources, robots: access, bing: index.bing, now: nowMs });
-      const o = ARL.outcome(act, { units60, diagNow: diag, diagAtT0: null, arms, now: nowMs });
-      outcomes.push({ action_id: a.action_id, lever: a.lever, site_id: sid, action: { ...a, site_id: sid }, verify: v, outcome: o, happened: v.happened === true }); }   // ARL.learn / learnable read { action, outcome, happened }
-    const learnRows = (ARL.learn({ priors: rpAll, outcomes, now: nowMs }) || []).filter(r => r && r.prior_id);
+      const sv = P(a.verify_json, {}) || {}; let snap = sv.t0_snapshot || null; const first = !S0(a.happened_at);
+      const t0 = Date.parse(act.prereg.t0_rule === 'live_at' ? S0(v.live_at || sv.live_at || a.live_at) : S0(a.happened_at || v.at));
+      if (!snap && v.happened === true && Number.isFinite(t0)) snap = ARL.snapshotT0(act, { t0, readings, diagNow: first ? diag : null, units: units60, now: nowMs });   // a start seen weeks ago is never read from this week's stages
+      const v2 = snap ? { ...v, t0_snapshot: snap } : v;
+      const o = ARL.outcome(act, { units60, diagNow: diag, diagAtT0: snap ? null : stagesAt(t0), arms, now: nowMs, verified: v2, exposure });
+      outcomes.push({ action_id: a.action_id, lever: a.lever, site_id: sid, action: { ...a, site_id: sid }, verify: v2, outcome: o, happened: v.happened === true }); }   // ARL.learn / learnable read { action, outcome, happened }
+    // RA-12: the false discovery rate over the actions judged in the last quarter (stored verdicts are history, never rewritten)
+    const fdrR = typeof ARL.fdr === 'function' ? ARL.fdr({ outcomes, judged: storedA, now: nowMs }) : null;
     // ---- H: the old logic's choice, the comparison, the memo ----
     const old = { targets: (gm.targets || gp.targets || []).filter(t => S0(t.status) === 'queued').slice(0, 10).map(t => ({ target_id: t.target_id, prompt_id: t.prompt_id || '', question: t.question, kind: t.kind, page_url: t.page_url || '', value: t.value })),
       earned: (em.earned || gp.earned || []).slice(0, 10).map(e => ({ url: e.url, host: e.host || hostOf(e.url), kind: e.kind || '', citations: e.citations || 0, mentions_us: e.mentions_us === true, action: S0(e.action_type || e.action).slice(0, 160) })),
@@ -196,13 +228,15 @@ for (const g of gateSites) {
     const compare = un('ARL.compareOld', ARL.compareOld({ chosen, old }));
     const blockers = (gm.actions || []).filter(x => ['bing', 'indexnow', 'robots', 'fetchers', 'access', 'render'].includes(S0(x.type))).slice(0, 8).map(x => ({ what: S0(x.action).slice(0, 200), owner: 'client', since: '', blocks: S0(x.why).slice(0, 200) }));
     const cost = { usd: fetched ? Math.round(1e4 * (Number(fetched.cost_usd) || 0)) / 1e4 : 0, basis: fetched ? 'AI Rank Fetched (measured, counted once by task id)' : 'stored data only: no paid or outside read this run' };
-    const memo = un('ARL.memo', ARL.memo({ site, diagNow: diag, diagPrev: prevRun ? P(prevRun.diag_json, []) : [], chosen, open: openStored, outcomes, mde, blockers, cost, old, mode }));
+    // RA-9: last week's stages come from the compact stages_json (the full diagnosis is trimmed from a run row of about 20 questions or more)
+    const diagPrev = !prevRun ? [] : (() => { const st = ARL.stagesUnpack(prevRun.stages_json); if (st.length) return st; const d = P(prevRun.diag_json, []); return Array.isArray(d) ? d : []; })();
+    const memo = un('ARL.memo', ARL.memo({ site, diagNow: diag, diagPrev, chosen, open: openStored, outcomes, mde, blockers, cost, old, mode }));
     const panel = { core: panel0.core || [], proposed: panel0.proposed || [], extend: panel0.extend || [], comparable: !!panel0.comparable, why: S0(panel0.why), arms, mde: mde.unavailable ? null : mde };
     // ---- the rows of the five AIR tables (shadow and on) ----
     const q_rows = diag.map(d => { const pid = S0(d.prompt_id); const p = promptById.get(pid) || {}; const c = (panel.core || []).find(x => S0(x.prompt_id) === pid) || null; const sq = storedQ.get(pid) || {};
       const ext = (panel.extend || []).find(x => S0(x.prompt_id) === pid) || null; const arm = armOf.get(pid) || {}; const v = values[pid] || null; const f = feas[pid] || null;
       return { site_id: sid, domain: dom, prompt_id: pid, question: S0(p.prompt).slice(0, 300), intent: S0(d.intent), market: S0(p.market) || (market.unavailable || !market.cc ? '' : market.cc + '-' + (market.lang || 'en')),
-        core: !!c, core_since: c ? S0(c.core_since) : S0(sq.core_since), core_until: ext ? S0(ext.core_until) : c ? S0(c.core_until) : '', arm: S0(arm.arm || sq.arm), stratum: S0(arm.stratum || sq.stratum),
+        core: !!c, core_since: c ? S0(c.core_since) : S0(sq.core_since), core_until: ext ? S0(ext.core_until) : c ? S0(c.core_until) : '', arm: S0(arm.arm || sq.arm), stratum: S0(arm.stratum || sq.stratum), arm_since: S0(arm.assigned_at || sq.arm_since),
         value: v ? Number(v.V) || 0 : null, demand: v ? Number(v.demand_w) || 0 : null, demand_basis: v ? S0(v.basis).slice(0, 300) : '', feasibility: f ? Number(f.F) || 0 : null,
         stage_json: J(d.engines || {}), best_stage: S0(d.best_stage), parametric_json: J({ parametric_share: d.parametric_share || {}, no_search: d.no_search || [], list_dominated: !!d.list_dominated, nobody_named: !!d.nobody_named }),
         evidence_json: evidenceOf.get(pid) || '', first_named_at: S0(d.first_named_at), last_named_at: S0(d.last_named_at), last_cited_at: S0(d.last_cited_at), updated_at: nowIso, rule_version: AIRF.RULE_VERSION }; });
@@ -211,27 +245,37 @@ for (const g of gateSites) {
     const storedById = new Map(storedA.map(a => [S0(a.action_id), a]));
     const a_rows = [];
     for (const a of chosen) { const id = S0(a.action_id) || AIRF.actionId(sid, a.lever, a.ref); const st = storedById.get(id) || {};
+      // RA-7 (FX-A): a registration is kept only by an attempt that is still open and executed (`on`); a shadow row, or an attempt that ended (did not
+      // happen, expired, verified), is registered afresh (registration date, baseline, controls), the earlier attempts kept as history in prereg_json
+      const keep = on && AIR_CFG.open.includes(S0(st.status)) && S0(st.mode) === 'on' && !!S0(st.prereg_json);
+      const old = !keep && S0(st.prereg_json) && S0(st.status) !== 'shadow' && S0(st.mode) === 'on' ? P(st.prereg_json, {}) || {} : null;
+      const fresh = a.prereg && !a.prereg.unavailable ? Object.assign({}, a.prereg, old ? { attempt: (Number(old.attempt) || 1) + 1, previous: [{ registered_at: S0(old.registered_at), status: S0(st.status), verdict: S0((P(st.outcome_json, {}) || {}).verdict) }, ...(old.previous || [])].slice(0, 5) } : {}) : null;
       a_rows.push({ action_id: id, site_id: sid, domain: dom, lever: S0(a.lever), executor: S0(a.executor), scope: S0(a.scope), ref: J(a.ref || {}), questions: J(a.questions || []), engines: J(a.engines || []),
-        target_stage: S0(a.target_stage), status: statusOf(a), sink: S0(a.sink), sink_ref: S0(st.sink_ref) || sinkRefOf(a), expected_json: J(a.expected || { p: a.p_hat, gain: a.gain, cost: a.cost, score: a.score, days: a.days }),
-        prereg_json: S0(st.prereg_json) || (a.prereg && !a.prereg.unavailable ? J(a.prereg) : ''),   // written once, never changed
-        happened_at: S0(st.happened_at), verify_json: S0(st.verify_json), outcome_json: S0(st.outcome_json), learned_at: S0(st.learned_at), mode, run_id: g.run_id, created_at: S0(st.created_at) || nowIso, updated_at: nowIso }); }
+        target_stage: S0(a.target_stage), status: statusOf(a), sink: S0(a.sink), sink_ref: keep ? S0(st.sink_ref) || sinkRefOf(a) : sinkRefOf(a), expected_json: J(a.expected || { p: a.p_hat, gain: a.gain, cost: a.cost, score: a.score, days: a.days }),
+        prereg_json: keep ? S0(st.prereg_json) : fresh ? J(fresh) : '',   // written once per attempt, never changed while it runs
+        happened_at: keep ? S0(st.happened_at) : '', verify_json: keep ? S0(st.verify_json) : '', outcome_json: keep ? S0(st.outcome_json) : '', learned_at: keep ? S0(st.learned_at) : '', mode, run_id: g.run_id, created_at: keep ? S0(st.created_at) || nowIso : nowIso, updated_at: nowIso }); }
     // every stored action has an exit (INVARIANTS rule 4): verified / not happened from its outcome, `expired` once its window + 14 days passed
-    const chosenIds = new Set(a_rows.map(r => r.action_id));
+    const chosenIds = new Set(a_rows.map(r => r.action_id)); const pendingOc = [];
     for (const o of outcomes) { const a = storedById.get(S0(o.action_id)); if (!a || chosenIds.has(S0(a.action_id))) continue; const v = o.verify || {}; const oc = o.outcome || {};
       const status = v.happened === true ? (oc.due && oc.verdict && oc.verdict !== 'not_due' ? 'verified' : 'done') : v.happened === false && oc.due ? 'not_happened' : S0(a.status);
       if (status === S0(a.status) && !(v.happened === true && !S0(a.happened_at))) continue;
-      a_rows.push({ ...a, status, happened_at: v.happened === true ? (S0(a.happened_at) || S0(v.at) || nowIso) : S0(a.happened_at), verify_json: J(v), outcome_json: oc.due ? J(oc) : S0(a.outcome_json),
-        learned_at: !S0(a.learned_at) && (typeof ARL.learnable === 'function' ? ARL.learnable(o) : (learnRows.length && oc.due)) ? nowIso : S0(a.learned_at), updated_at: nowIso }); chosenIds.add(S0(a.action_id)); }
-    for (const a of storedA) { if (chosenIds.has(S0(a.action_id)) || !['shadow', ...AIR_CFG.open].includes(S0(a.status))) continue;
-      const pre = P(a.prereg_json, {}); const win = Math.max(AIR_CFG.window_min_days, Number(pre.window_days) || 0);
-      const since = Date.parse(S0(a.status) === 'shadow' ? a.updated_at || a.created_at : a.created_at || a.updated_at);
-      if (Number.isFinite(since) && nowMs - since > (win + AIR_CFG.expire_grace_days) * DAY) a_rows.push({ ...a, status: 'expired', updated_at: nowIso }); }
+      const row = { ...a, status, happened_at: v.happened === true ? (S0(a.happened_at) || S0(v.at) || nowIso) : S0(a.happened_at), verify_json: J(v), outcome_json: oc.due ? J(oc) : S0(a.outcome_json),
+        learned_at: !S0(a.learned_at) && typeof ARL.learnable === 'function' && ARL.learnable(o) ? nowIso : S0(a.learned_at), updated_at: nowIso };
+      a_rows.push(row); if (oc.due) pendingOc.push({ row, oc, id: S0(a.action_id) }); chosenIds.add(S0(a.action_id)); }
+    // RA-16 (FX-A): an executed action that never happened expires at its registration + the lever's longest time to effect + 14 days (ARL.expiryDays,
+    // as verify); one that happened is never expired here (it waits for the end of its window); a shadow plan not chosen again: its window + 14 days
+    const judgedNow = new Set(outcomes.map(o => S0(o.action_id)));   // verify ran on these this run, with its own clock (a placement's starts at the pitch): no second clock here
+    for (const a of storedA) { if (chosenIds.has(S0(a.action_id)) || judgedNow.has(S0(a.action_id)) || !['shadow', ...AIR_CFG.open].includes(S0(a.status)) || S0(a.happened_at) || S0(a.status) === 'done') continue;
+      const pre = P(a.prereg_json, {}) || {}; const win = Math.max(AIR_CFG.window_min_days, Number(pre.window_days) || 0); const sh = S0(a.status) === 'shadow';
+      const since = Date.parse(sh ? a.updated_at || a.created_at : S0(pre.registered_at) || a.created_at || a.updated_at);
+      const days = sh ? win + AIR_CFG.expire_grace_days : (typeof ARL.expiryDays === 'function' ? ARL.expiryDays(S0(a.lever), pre) : win + AIR_CFG.expire_grace_days);
+      if (Number.isFinite(since) && nowMs - since > days * DAY) a_rows.push({ ...a, status: 'expired', updated_at: nowIso }); }
     const s_rows = sources.map(x => { const k = S0(x.url_key) || AIRF.urlKey(x.url); const st = storedSrc.find(r => S0(r.url_key) === k) || {};
       return { site_id: sid, domain: dom, url_key: k, url: S0(x.url), host: S0(x.host) || hostOf(x.url), page_type: S0(x.page_type), author_kind: S0(x.author_kind), names_client: x.names_client === null || x.names_client === undefined ? null : !!x.names_client,
         rivals_named: J(x.rivals_named || []), questions: J(x.questions || []), engines: J(x.engines || []), cites_28d: Number(x.cites_28d) || 0, influence: Number(x.influence) || 0, placeability: Number(x.placeability) || 0,
         placeability_why: S0(x.placeability_why).slice(0, 300), contact_email: S0(x.contact_email), contact_url: S0(x.contact_url), source_from: S0(x.from) || 'answers', first_seen: S0(st.first_seen) || nowIso, last_seen: S0(x.last_seen) || nowIso, checked_at: nowIso }; })
       .filter(r => r.url_key);
-    const p_rows = learnRows.map(r => ({ ...r, updated_at: S0(r.updated_at) || nowIso, rule_version: S0(r.rule_version) || AIRF.RULE_VERSION }));
+    const p_rows = [];   // filled after every site (RA-10)
     // ---- the sinks, `on` only (AIRF.writesSinks): nothing below is built for a site in shadow ----
     const sinks = { targets: [], prospects: [], proposed: [], core: [], cache: [], growth: null };
     if (on) {
@@ -241,9 +285,9 @@ for (const g of gateSites) {
         if (['writing', 'written', 'won'].includes(S0(st.status))) continue;   // live work or a win: AIR leaves it alone
         const qs = sources.filter(x => (x.questions || []).includes(pid)).slice(0, 6);
         sinks.targets.push({ target_id: tid, site_id: sid, domain: dom, prompt_id: pid, question: S0(p.prompt), keyword: S0(p.keyword || p.topic), kind: a.lever === 'L06' ? 'refresh' : 'answer',
-          page_url: S0((a.ref || {}).url) || S0(st.page_url), page_type: a.lever === 'L06' ? '' : (S0(st.page_type) || 'Guide'), fanout: ARD.fanoutOf({ prompt_id: pid, answers8, evidence: evidenceOf.get(pid) || '' }).slice(0, 8).map(f => f.query).join(' | '),
+          page_url: S0((a.ref || {}).url) || S0(st.page_url), page_type: a.lever === 'L06' ? '' : (a.screen && a.screen.page_type ? a.screen.page_type : (S0(st.page_type) || 'Guide')), fanout: ARD.fanoutOf({ prompt_id: pid, answers8, evidence: evidenceOf.get(pid) || '' }).slice(0, 8).map(f => f.query).join(' | '),
           sources_json: J(qs.map(x => ({ u: x.url, t: '', n: Number(x.cites_28d) || 1 }))), competitors: [...new Set(qs.flatMap(x => x.rivals_named || []))].slice(0, 8).join(', '), engines: (a.engines || []).join(', '), stage: S0(p.stage),
-          value: Math.round(100 * (1 + 4 * Math.min(1, (Number(a.score) || 0) / maxScore))) / 100, status: 'queued', reason: 'AI ranking (' + a.lever + '): ' + S0(a.why || (ARL.LEVERS.find(l => l.id === a.lever) || {}).label).slice(0, 300),
+          value: Math.round(100 * (1 + 4 * Math.min(1, (Number(a.score) || 0) / maxScore))) / 100, status: 'queued', reason: ('AI ranking (' + a.lever + '): ' + (a.screen && a.screen.note ? a.screen.note + '. ' : '') + S0(a.why || (ARL.LEVERS.find(l => l.id === a.lever) || {}).label)).slice(0, 600),
           created_at: S0(st.created_at) || nowIso, updated_at: nowIso, request_id: S0(st.request_id), written_at: S0(st.written_at), won_at: S0(st.won_at), origin: 'ai_rank', action_id: S0(a.action_id), live_at: S0(st.live_at) || null }); }
       for (const a of chosen.filter(x => x.sink === 'prospect')) { const url = S0((a.ref || {}).url); const pd = hostOf(url); if (!pd) continue; const src = srcByKey.get(AIRF.urlKey(url)) || {};
         const st = prospects.find(r => S0(r.prospect_domain) === pd && S0(r.type) === 'ai_source') || null;
@@ -275,12 +319,24 @@ for (const g of gateSites) {
         sinks.growth = { site_id: sid, run_id: S0(gr.run_id), actions_json: J(list) }; }
     }
     const kitsMissing = [...unavailable].sort();
-    const air = { market: market.unavailable ? null : market, panel: panel0.unavailable ? null : panel, diag, sources, candidates: scored.length ? scored : candidates, chosen, deferred: choice.deferred || [], refused, outcomes, priors: p_rows, memo: memo.unavailable ? null : memo,
-      compare: compare.unavailable ? null : compare, cost, old, learn: learnRows, set_aside: fitG.set_aside || [], kits_missing: kitsMissing, rule_version: AIRF.RULE_VERSION, checked_at: nowIso,
+    const air = { market: market.unavailable ? null : market, panel: panel0.unavailable ? null : panel, diag, stages: ARL.stagesPack(diag), sources, candidates: scored.length ? scored : candidates, chosen, deferred: choice.deferred || [], refused, outcomes, priors: p_rows, memo: memo.unavailable ? null : memo,
+      compare: compare.unavailable ? null : compare, cost, old, learn: [], fdr: fdrR, set_aside: fitG.set_aside || [], kits_missing: kitsMissing, rule_version: AIRF.RULE_VERSION, checked_at: nowIso,
       rows: { questions: q_rows, actions: a_rows.slice(0, AIR_CFG.actions_max), sources: s_rows, priors: p_rows }, sinks };
     out.push({ json: { site_id: sid, domain: dom, mode, run_id: g.run_id, air, error: '' } });
+    siteLearn.push({ sid, air, outcomes, history: storedA.filter(a => S0(a.learned_at)), pendingOc });
   } catch (e) {
     out.push({ json: { site_id: sid, domain: g.domain || '', mode: g.mode || '', run_id: g.run_id || AIRF.runId(sid, nowMs), air: null, error: 'AI ranking plan failed for this site: ' + S0(e && e.message).slice(0, 300) } });
   }
 }
+// ---- G4 (RA-10, FX-A): learning ONCE over every site's outcomes, so two sites learning one key in one run build one global row, not two that
+// overwrite each other; each site's item carries its own rows and the global rows of the keys it touched (identical values in every item)
+if (siteLearn.length) { try {
+  const allOc = siteLearn.flatMap(x => x.outcomes); const history = siteLearn.flatMap(x => x.history);
+  const rowsL = (ARL.learn({ priors: rpAll, outcomes: allOc, now: nowMs, history }) || []).filter(r => r && r.prior_id).map(r => ({ ...r, updated_at: S0(r.updated_at) || nowIso, rule_version: S0(r.rule_version) || AIRF.RULE_VERSION }));
+  const claimed = typeof ARL.claimCells === 'function' ? ARL.claimCells(allOc.filter(ARL.learnable), history) : new Map();
+  for (const x of siteLearn) { const keys = new Set(rowsL.filter(r => r.scope === x.sid).map(r => r.lever + '|' + r.stage + '|' + r.engine_group)); const levers = new Set(x.outcomes.filter(o => ARL.learnable(o)).map(o => S0(o.lever)));
+    const mine = rowsL.filter(r => r.scope === x.sid || (r.scope === 'global' && (keys.has(r.lever + '|' + r.stage + '|' + r.engine_group) || levers.has(S0(r.lever)))));
+    x.air.priors.push(...mine); x.air.learn.push(...mine);
+    for (const p of x.pendingOc) { const c = claimed.get(p.id); if (c && c.dropped.length) p.row.outcome_json = J(Object.assign({}, p.oc, { learn_overlap: { dropped: c.dropped, why: 'these cells were already taught by an earlier overlapping action: one move teaches one action' } })); } }
+} catch (e) { for (const x of siteLearn) x.air.learn_error = 'learning failed: ' + S0(e && e.message).slice(0, 200); } }
 return out.length ? out : [{ json: { skip: true, reason: 'no website to plan' } }];
