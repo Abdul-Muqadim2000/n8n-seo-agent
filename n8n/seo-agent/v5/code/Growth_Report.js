@@ -31,12 +31,12 @@ const airReportOf = (sid, checkedAt) => { const A = AIR_ON.find(x => x.site_id =
   const statusById = new Map(((air.rows || {}).actions || []).map(r => [S_(r.action_id), S_(r.status)]));
   const leverById = new Map([...((air.rows || {}).actions || []), ...(air.chosen || [])].map(r => [S_(r.action_id), S_(r.lever)]));
   const qText = (ids) => (Array.isArray(ids) ? ids : P_(ids, [])).map(id => AIR_PROMPTS.get(S_(id)) || '').filter(Boolean).slice(0, 4);
-  const actions = (air.chosen || []).slice(0, 20).map(a => { const ref = P_(a.ref, {}) || {};
+  const actions = (air.chosen || []).slice(0, 20).map(a => { const ref = P_(a.ref, {}) || {}; const pageUrl = S_(ref.url) || S_(a.page_url);   // FX-C: L07's ref names the question only; the page it fixes is on the chosen action
     return { action_id: S_(a.action_id), lever: S_(a.lever), label: labelOf(a), executor: S_(a.executor), status: statusById.get(S_(a.action_id)) || 'proposed', sink: S_(a.sink), scope: S_(a.scope),
-      questions: qText(a.questions), engines: (Array.isArray(a.engines) ? a.engines : P_(a.engines, [])).map(S_).slice(0, 8), target_stage: '', why: AIRC.plain(a.why).slice(0, 300), url: S_(ref.url) }; });
-  const steps = (air.chosen || []).filter(a => a.executor === 'human' || ['growth_action', 'site_task', 'listing'].includes(S_(a.sink))).slice(0, 8).map(a => { const ref = P_(a.ref, {}) || {};
-    return { key: 'ai_rank:' + S_(a.lever) + ':' + AIRF.refKey(ref), lever: S_(a.lever), label: labelOf(a), what: (labelOf(a) + (S_(ref.url) ? ': ' + S_(ref.url) : '')).slice(0, 200), why: AIRC.plain(a.why).slice(0, 300),
-      check: AIR_CHECK[S_(a.lever)] || 'our weekly check reads it again', url: S_(ref.url), action_id: S_(a.action_id), status: statusById.get(S_(a.action_id)) || 'queued' }; });
+      questions: qText(a.questions), engines: (Array.isArray(a.engines) ? a.engines : P_(a.engines, [])).map(S_).slice(0, 8), target_stage: '', why: AIRC.plain(a.why).slice(0, 300), url: pageUrl }; });
+  const steps = (air.chosen || []).filter(a => a.executor === 'human' || ['growth_action', 'site_task', 'listing'].includes(S_(a.sink))).slice(0, 8).map(a => { const ref = P_(a.ref, {}) || {}; const pageUrl = S_(ref.url) || S_(a.page_url);   // FX-C: L07's ref names the question only; the page it fixes is on the chosen action
+    return { key: 'ai_rank:' + S_(a.lever) + ':' + AIRF.refKey(ref), lever: S_(a.lever), label: labelOf(a), what: (labelOf(a) + (pageUrl ? ': ' + pageUrl : '')).slice(0, 200), why: AIRC.plain(a.why).slice(0, 300),
+      check: AIR_CHECK[S_(a.lever)] || 'our weekly check reads it again', url: pageUrl, action_id: S_(a.action_id), status: statusById.get(S_(a.action_id)) || 'queued' }; });
   const open = ((air.rows || {}).actions || []).filter(r => ['proposed', 'queued', 'in_progress'].includes(S_(r.status))).length;
   const mon = AIR_MONS.find(m => m.site_id === sid) || {};
   const memo = air.memo && typeof air.memo === 'object' ? air.memo : null;

@@ -134,12 +134,6 @@ module.exports = async (ctx) => {
       J(LS.siteKind('custom software development company', 'ai agents dubai')) === J(['saas']) && J(LS.siteKind('custom software development company', 'ai agents dubai', { air: true })) === J(['agency', 'saas'])
       && J(LS.siteKind('restaurant', 'custom software', { air: true })) === J(['local']) && J(LS.siteKind('e-invoicing platform', '', { air: true })) === J(LS.siteKind('e-invoicing platform', '')),
       J([LS.siteKind('custom software development company', 'ai agents dubai'), LS.siteKind('custom software development company', 'ai agents dubai', { air: true })]));
-    const lb = fs.readFileSync(path.join(CODE, 'LB_Assemble.js'), 'utf8');
-    check('LB Assemble passes { air: true } to siteKind and listingsFor only for an on website (AIRF.writesSinks on its seo_monitors row, with the kill switch read from Load AIR Kill (LB))', /siteKind\(p\.profile\.business_type, p\.topics\.join\(' '\), airOn \? \{ air: true \} : undefined\)/.test(lb) && /LK\.text\(selfHtml\), airOn \? \{ air: true \} : undefined\)/.test(lb) && /AIRF\.writesSinks\(AIRF\.settingsOf\(m\), airKill\)/.test(lb) && lb.includes("AIRF.killed(rows('Load AIR Kill (LB)'))"), 'wiring');
-  });
-
-  // ===================================================================================
-  // AE4 - the Link Builder: AI ranking's placements
     // FX-C RC-8: directories per firm type. A professional-services firm (tax, HR, accounting, management) gets the service-firm directories
     // only, never a software marketplace; the Microsoft partner directory needs partner words on the site, not "we use Microsoft 365"
     const SOFTMKT = ['g2', 'capterra', 'trustradius', 'saashub', 'alternativeto', 'producthunt', 'appsource'];
@@ -153,6 +147,12 @@ module.exports = async (ctx) => {
     const msUse = ids(LS.listingsFor(['agency', 'saas'], 'AE', 'crm erp software', 'our team uses Microsoft 365, Azure and SharePoint', { air: true })), msPartner = ids(LS.listingsFor(['agency', 'saas'], 'AE', 'crm erp software', 'We are a Microsoft Solutions Partner for Business Applications', { air: true }));
     check('RC-8: the Microsoft partner directory for a site that says it is a Microsoft partner, never for one that only uses Microsoft products', !msUse.includes('ms_partner_dir') && msPartner.includes('ms_partner_dir'), J({ msUse, msPartner }));
     check('RC-8: P@SHA (a software houses association) is never offered to a professional-services firm in Pakistan', !ids(LS.listingsFor(LS.siteKind('tax consulting firm', 'tax returns lahore', { air: true }), 'PK', 'tax', '', { air: true })).includes('pasha'), 'pasha offered');
+    const lb = fs.readFileSync(path.join(CODE, 'LB_Assemble.js'), 'utf8');
+    check('LB Assemble passes { air: true } to siteKind and listingsFor only for an on website (AIRF.writesSinks on its seo_monitors row, with the kill switch read from Load AIR Kill (LB))', /siteKind\(p\.profile\.business_type, p\.topics\.join\(' '\), airOn \? \{ air: true \} : undefined\)/.test(lb) && /LK\.text\(selfHtml\), airOn \? \{ air: true \} : undefined\)/.test(lb) && /AIRF\.writesSinks\(AIRF\.settingsOf\(m\), airKill\)/.test(lb) && lb.includes("AIRF.killed(rows('Load AIR Kill (LB)'))"), 'wiring');
+  });
+
+  // ===================================================================================
+  // AE4 - the Link Builder: AI ranking's placements
   // ===================================================================================
   await guard('air exec AE4 link builder', async () => {
     reset(); const SN = 'AIR P6 AE4: Link Builder - an AI ranking placement is scored with AI ranking\'s own probability; the writer budget takes rows by expected value with at most 2 AI ranking placements a week (FX-C RC-7); the kill switch gives today\'s output; off unchanged'; begin(SN); const check = mkCheck(SN);
@@ -186,12 +186,6 @@ module.exports = async (ctx) => {
     check('off: the stored scores stand (an ai_rank row is not rescored on a website that is not on)', O(off, 'lists-one.example').score === 8 && O(off, 'lists-three.example').score === 12, J([O(off, 'lists-one.example').score, O(off, 'lists-three.example').score]));
     check('on: the writer budget (2) takes rows by expected value, so the stronger ordinary placement comes before AI ranking\'s (RC-7: no hoist)', J((on.jobs || []).map(j => j.prospect_domain)) === J(['lists-two.example', 'lists-three.example']), J((on.jobs || []).map(j => j.prospect_domain)));
     check('off: the writer budget takes the rows in their own order (the highest score first)', (off.jobs || [])[0] && off.jobs[0].prospect_domain === 'lists-two.example', J((off.jobs || []).map(j => j.prospect_domain)));
-  });
-
-  // ===================================================================================
-  // AE5 - the AI Growth report and callback
-  // ===================================================================================
-  await guard('air exec AE5 report callback', async () => {
     // RC-7: the kill switch. With the air:kill row an on website gets exactly the off output (flat scores, today's order, no AI ranking directory)
     const killed = await runLB('on', { kill: true });
     check('RC-7 kill switch: an on website with the air:kill row is byte-identical to off (scores, order, drafts)', norm(killed) === norm(off), norm(killed).slice(0, 300));
@@ -208,6 +202,12 @@ module.exports = async (ctx) => {
     const airN = (A) => jd(A).filter(d => airDoms.includes(d) || d === 'lists-one.example' || d === 'lists-three.example').length;
     check('RC-7: a large budget (8) still drafts at most 2 AI ranking placements a week (the weakest wait), every better row first', airN(ev8) === 2 && jd(ev8)[0] === 'mention.example' && jd(ev8)[1] === 'lost.example' && !jd(ev8).includes('air-e.example') && !jd(ev8).includes('air-d.example'), J(jd(ev8)));
     check('RC-7: with the kill switch the same tables give the off result byte for byte', norm(ev3kill) === norm(ev3off), norm(ev3kill).slice(0, 300));
+  });
+
+  // ===================================================================================
+  // AE5 - the AI Growth report and callback
+  // ===================================================================================
+  await guard('air exec AE5 report callback', async () => {
     reset(); const SN = 'AIR P6 AE5: the AI Growth report and callback - the "AI ranking plan" section and the additive key ai_rank for an on website only; off, shadow and the kill switch identical'; begin(SN); const check = mkCheck(SN);
     const readWf = (f) => { const w = JSON.parse(fs.readFileSync(path.join(WF_DIR, f), 'utf8')); return Array.isArray(w) ? w[0] : w; };
     const WF = readWf('SEO_Agent_AI_Growth.json');
@@ -224,12 +224,17 @@ const ARL = Object.assign({}, ARL_BASE, {
   value: () => ({ V: 0.8, demand_w: 1, intent_w: 1, stage_w: 0.8, basis: 'test' }), feasibility: () => ({ F: 0.5, market_w: 1, comp_w: 0.5, reach_w: 0.5, basis: 'test' }),
   candidates: ({ site, diag }) => { const sid = site.site_id; const pid = (diag[0] || {}).prompt_id || 'nq1';
     const mk = (lever, ref) => { const L = ARL_BASE.LEVERS.find(l => l.id === lever); return { action_id: AIRF.actionId(sid, lever, ref), site_id: sid, lever, ref, questions: [pid], engines: ['chatgpt'], target_stage: L.to, executor: L.executor, scope: L.scope, sink: L.sink, sink_ref: '', why: 'test ' + lever }; };
-    return [mk('L05', { prompt_id: pid }), mk('L03', {}), mk('L09', { url: 'https://clutch.co/ae/developers/dubai' })]; },
+    return [mk('L05', { prompt_id: pid }), mk('L03', {}), mk('L09', { url: 'https://clutch.co/ae/developers/dubai' }), Object.assign(mk('L07', { prompt_id: pid }), { page_url: 'https://nova-ai.example/services/ai-agents' })]; },
   score: (c) => ({ gain: 0.1, cost: 2, score: 0.05, p_by_cell: [], days: 30, why: 'test score ' + c.lever, p_hat: 0.2, expected: { p: 0.2, gain: 0.1, cost: 2, score: 0.05, days: 30 } }),
   choose: (scored) => ({ chosen: scored, deferred: [], refused: [] }),
   prereg: (a, { now }) => ({ metric: 'named_rate', questions: a.questions, engines: a.engines, controls: [], window_days: 28, t0_rule: 'live_at', projected: { p: 0.2, gain: 0.1 }, registered_at: new Date(now).toISOString() }),
   verify: () => ({ happened: null, at: '', evidence: [] }), outcome: () => ({ due: false, verdict: 'not_due', why: 'test' }), learnable: () => false, learn: () => [],
-  memo: ({ site, mode }) => ({ v: 1, rule_version: 'air-1', site_id: site.site_id, mode, parts: ARL_BASE.MEMO_PARTS.map(k => ({ key: k, title: ARL_BASE.MEMO_TITLES[k], lines: [{ text: 'test line ' + k, figures: [{ name: 'test_figure', value: 1, basis: 'test basis' }] }] })), blockers: [{ what: 'connect a mailbox', owner: 'client', since: '2026-10-20', blocks: '0 pitches can be sent' }] }),
+  // FX-C RC-1: the REAL memo writer on crafted inputs, so the client view is tested against the memo's real line shapes (ids, stage codes,
+  // statistics, the model's figures and provider dollars all present in it)
+  memo: (o) => { const pid = ((o.diagNow || [])[0] || {}).prompt_id || 'nq1'; const d = (st) => [{ prompt_id: pid, engines: { chatgpt: { stage: st } } }, { prompt_id: 'zz_ctl', engines: { chatgpt: { stage: 'S1' } } }];
+    return ARL_BASE.memo({ site: o.site, mode: o.mode, diagNow: d('S2'), diagPrev: d('S1'), chosen: o.chosen, open: [{ action_id: 'air_site_x_L05_00aa', lever: 'L05', status: 'verified', questions: [pid], engines: ['chatgpt'], executor: 'approve' }],
+      outcomes: [{ action: { lever: 'L05', prereg_json: { projected: { p: 0.2 }, registered_at: '2026-10-01T00:00:00.000Z' } }, outcome: { due: true, verdict: 'likely_helped', stage_moves: { k: 1, n: 2, b: 0.1, cells: [], by: [] }, did: { effect: 0.2, lo: 0.05, hi: 0.3 } } }],
+      mde: { prepost: 0.12, did: 0.2, first_appearance_k: 7, basis: 'test' }, blockers: [{ what: 'connect a mailbox', owner: 'client', since: '2026-10-20', blocks: '0 pitches can be sent' }], cost: { usd: 3.1 }, old: null }); },
   compareOld: () => ({ overlap: 0, gain_air: 0.5, gain_old: 0.1, causes: { air: ['1'], old: [] }, note: 'test compare' }) });
 `;
     const withKits = (wf) => { const w = clone(wf); const n = w.nodes.find(x => x.name === 'AI Rank Plan'); let js = n.parameters.jsCode;
@@ -261,18 +266,29 @@ const ARL = Object.assign({}, ARL_BASE, {
     const n = site(on, NOVA) || {}, a = site(on, ACME) || {};
     check('on: the on website gets the section; the other website\'s report item is byte-identical to off', /AI ranking plan/.test(n.html || '') && J(a) === J(site(off, ACME)), J({ section: /AI ranking plan/.test(n.html || ''), acmeSame: J(a) === J(site(off, ACME)) }));
     const R = n.ai_rank || {};
-    check('on: ai_rank carries the contract keys (v, mode, run_id, memo, actions, steps, cost, compare, counts, reserve)', R.v === 1 && R.mode === 'on' && !!R.run_id && R.memo && R.memo.parts.length === 7 && Array.isArray(R.actions) && R.actions.length === 3 && Array.isArray(R.steps)
-      && R.cost && typeof R.cost.usd === 'number' && R.compare && R.compare.note === 'test compare' && R.counts && typeof R.counts.core === 'number' && typeof R.reserve === 'boolean', J(R).slice(0, 600));
-    check('on: the human steps (Bing Webmaster, the directory profile) are steps keyed ai_rank:<lever>:<refKey>, each with what, why and how we check it', R.steps.length === 2 && R.steps.every(s => /^ai_rank:L\d\d:(s:site|u:|p:|l:)/.test(s.key) && s.what && s.check && s.action_id) && R.steps.some(s => s.key === 'ai_rank:L09:u:clutch.co/ae/developers/dubai'), J(R.steps));
+    check('on: ai_rank carries the client contract (v 2, mode, run_id, client view, actions, steps, counts, reserve) and never the owner\'s memo, the cost or the comparison', R.v === 2 && R.mode === 'on' && !!R.run_id && R.client && Array.isArray(R.client.sections) && R.client.sections.length >= 4
+      && Array.isArray(R.actions) && R.actions.length === 4 && Array.isArray(R.steps) && !('memo' in R) && !('cost' in R) && !('compare' in R) && R.counts && typeof R.counts.core === 'number' && typeof R.reserve === 'boolean', J(R).slice(0, 600));
+    // RC-1: nothing a client reads carries an internal id, the internal name, statistics jargon, a stage code or money
+    const LEAK = /\baip_|\bair_[a-z]|\bAIR\b|Fisher|bootstrap|prior mean|\$\d|_usd\b|\bS[0-5]\b|own model|difference in differences/;
+    const clientText = J({ c: R.client.sections, a: R.actions.map(x => [x.label, x.why, x.questions]), s: R.steps.map(x => [x.label, x.what, x.why, x.check]) });
+    check('RC-1: the client view, the actions and the steps carry no id, no internal name, no statistics, no stage code and no money', !LEAK.test(clientText), (clientText.match(LEAK) || [''])[0] + ' in ' + clientText.slice(0, 500));
+    const secHtml = (n.html || '').split('AI ranking plan')[1] || '';
+    check('RC-1: the report section carries none of them either', !LEAK.test(secHtml.split('Where these numbers come from')[0]), (secHtml.match(LEAK) || [''])[0] + ' ' + secHtml.slice(0, 300));
+    const changedS = (R.client.sections.find(x => x.key === 'changed') || { lines: [] }).lines, whyS = (R.client.sections.find(x => x.key === 'why') || { lines: [] }).lines;
+    check('RC-1: a moved question is named by its text, in plain stage words; the why says "likely helped" with the step in client words', changedS.some(l => /^"[^"]+" on ChatGPT: moved up, from not in the answer to your website comes up but is not linked\.$/.test(l))
+      && whyS.some(l => /likely helped by our step "A new page that answers the question"/.test(l)), J({ changedS, whyS }));
+    check('RC-1: questions won and the raw spend travel apart (the app turns the spend into credits and strips it); the HTML shows no money', R.client.spend_usd === 3.1 && R.client.wins === 0 && /No question has been won after a confirmed step yet/.test(secHtml) && !/\$/.test(secHtml.split('Where these numbers come from')[0]), J({ w: R.client.wins, s: R.client.spend_usd }));
+    check('on: the human steps (Bing Webmaster, the directory profile) are steps keyed ai_rank:<lever>:<refKey>, each with what, why and how we check it', R.steps.length === 3 && R.steps.every(s => /^ai_rank:L\d\d:(s:site|u:|p:|l:)/.test(s.key) && s.what && s.check && s.action_id) && R.steps.some(s => s.key === 'ai_rank:L09:u:clutch.co/ae/developers/dubai'), J(R.steps));
+    check('FX-C: the passage step (L07) names the page it fixes (its ref holds only the question; the chosen action carries the page)', R.steps.some(x => x.lever === 'L07' && x.url === 'https://nova-ai.example/services/ai-agents' && /ai-agents/.test(x.what)), J(R.steps.filter(x => x.lever === 'L07')));
     check('on: each action names its questions in words (not ids) and who does it', R.actions.every(x => x.label && x.executor && Array.isArray(x.questions)) && R.actions.some(x => x.questions.length && !/^[a-z]{1,4}\d+$/.test(x.questions[0])), J(R.actions.map(x => [x.lever, x.questions])));
     const posted = on.posted.find(b => b && b.site_id === NOVA) || {}, postedA = on.posted.find(b => b && b.site_id === ACME) || {};
     check('on: the callback POSTed for the on website carries ai_rank; the other website\'s callback is byte-identical to off', J(posted.ai_rank) === J(R) && J(postedA) === J(off.posted.find(b => b && b.site_id === ACME)), J(Object.keys(posted)));
     const sec = (n.html || '').split('AI ranking plan')[1] || '';
-    check('the new section follows the copy rule (no em dash, curly quote or ellipsis) and prints every figure with its basis', !EMDASH.test(sec.split('Where these numbers come from')[0]) && /test figure: 1 \(test basis\)/.test(sec) && /Waiting on/.test(sec), sec.slice(0, 400));
+    check('the new section follows the copy rule (no em dash, curly quote or ellipsis) and lists what we need from the client', !EMDASH.test(sec.split('Where these numbers come from')[0]) && /What we need from you/.test(sec) && /connect a mailbox/i.test(sec), sec.slice(0, 400));
     check('no node error in any run', ![off, sh, on, killed].some(x => x.errors.length), J([off, sh, on, killed].map(x => x.errors)).slice(0, 300));
     // the lever labels in the report node are ARL's own
-    const ARLsrc = fs.readFileSync(path.join(__dirname, '..', 'v5', 'code', '_ai_rank_learn.js'), 'utf8'); const GR = fs.readFileSync(path.join(__dirname, '..', 'v5', 'code', 'Growth_Report.js'), 'utf8');
+    const ARLsrc = fs.readFileSync(path.join(__dirname, '..', 'v5', 'code', '_ai_rank_learn.js'), 'utf8'); const GR = fs.readFileSync(path.join(__dirname, '..', 'v5', 'code', '_ai_rank_client.js'), 'utf8');   // FX-C: the engine labels live in the client kit (AIRC.ENGINE_LABELS), which maps them to the client's words
     const labels = [...ARLsrc.matchAll(/\{ id: '(L\d\d)', label: '((?:[^'\\]|\\.)*)'/g)].map(m => [m[1], m[2]]);
-    check('the report\'s lever labels equal ARL.LEVERS (17)', labels.length === 17 && labels.every(([id, l]) => GR.includes(id + ": '" + l + "'")), J(labels.filter(([id, l]) => !GR.includes(id + ": '" + l + "'"))));
+    check('the client kit\'s engine lever labels equal ARL.LEVERS (17)', labels.length === 17 && labels.every(([id, l]) => GR.includes(id + ": '" + l + "'")), J(labels.filter(([id, l]) => !GR.includes(id + ": '" + l + "'"))));
   });
 };

@@ -66,7 +66,7 @@ const AIRC = (() => {
       else if (ex === 'approve' && (!st || st === 'proposed')) you.push(what + ' (you approve it, we do it).');
       else did.push(what + ' (' + WHO[ex] + (st ? '; ' + (STATUS[st] || plain(st).replace(/_/g, ' ')) : '') + ').'); }
     for (const b of (Array.isArray(m.blockers) ? m.blockers : [])) { const w = plain(b && b.what); if (!w) continue;
-      (S(b.owner) === 'us' ? did : you).push((S(b.owner) === 'us' ? 'On us: ' : '') + w.replace(/[.\s]+$/, '') + '.'); }
+      const W = w.charAt(0).toUpperCase() + w.slice(1); (S(b.owner) === 'us' ? did : you).push((S(b.owner) === 'us' ? 'On us: ' : '') + W.replace(/[.\s]+$/, '') + '.'); }
     if (!did.length) did.push('No new step this week.');
     if (!you.length) you.push('Nothing from you this week.');
     let wins = null, spend = null;
