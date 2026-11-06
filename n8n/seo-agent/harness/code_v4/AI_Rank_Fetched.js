@@ -214,10 +214,18 @@ const site = {};   // site_id -> working state
 for (const p of plans) site[p.site_id] = { p, errors: [], reads: { google: 0, bing: 0, brave: 0, bing_calls: 0 }, serp: [], readings: [], rows: [], mentions: null, metrics: null, mentionsFresh: false,
   bing: { qs: [], ps: [], issues: [], stats: [], qp: {}, ran: 0 }, cc: null, ccFresh: null, brave: {}, braveN: 0 };
 const errs = (sid, what) => { if (site[sid]) site[sid].errors.push(S0(what).slice(0, 200)); };
+// FX-B RB-10 (2026-11-06, REVIEW_B_SAFETY.md): a paid call whose requests and answers cannot be paired (one of the gate's own nodes failed and
+// handed one { error } item for N requests) was read as nothing at all: the tasks DataForSEO billed were missing from cost_usd, and the week's
+// budget counted no read, so a second run the same week paid again. Every answer that carries tasks is still charged (once by task id, to the
+// call's first site), and with `engineOf` every planned request counts as a read of its site this week.
+const chargeUnpaired = (reqNode, callNode, engineOf) => { const q = live(reqNode); const a = tryAll(callNode) || []; if (!q.length) return;
+  const sid0 = (r) => (r.site_ids || [r.site_id]).find(id => site[id]); const first = q.map(sid0).find(Boolean);
+  if (first) for (const ans of a) if (ans && Array.isArray(ans.tasks) && ans.tasks.length) charge(first, ans);
+  if (engineOf) for (const r of q) { const id = sid0(r); if (id) site[id].reads[engineOf(r)]++; } };
 
 // ---- LLM Mentions ----
 const M = pair('AI Rank Mention Requests', 'AI Rank Mentions Call Answers');
-if (M.unpaired) for (const s of Object.values(site)) errs(s.p.site_id, 'LLM Mentions: requests and answers could not be paired, nothing read');
+if (M.unpaired) { for (const s of Object.values(site)) errs(s.p.site_id, 'LLM Mentions: requests and answers could not be paired, nothing read'); chargeUnpaired('AI Rank Mention Requests', 'AI Rank Mentions Call Answers', null); }
 for (const [q, a] of M.pairs) { const s = site[q.site_id]; if (!s) continue; s.mCost = r4((s.mCost || 0) + charge(q.site_id, a));
   if (!dfsOk(a)) { errs(q.site_id, 'LLM Mentions ' + q.kind + ' failed: ' + S0(task0(a).status_message || a.status_message || (a.error && (a.error.message || a.error)) || 'no answer')); continue; }
   const r0 = ((task0(a).result || [])[0]) || {};
@@ -239,7 +247,7 @@ for (const [q, a] of B.pairs) { const s = site[q.site_id]; if (!s) continue; s.r
 
 // ---- results pages (Google and Bing) ----
 const R = pair('AI Rank SERP Requests', 'AI Rank SERP Call Answers');
-if (R.unpaired) for (const s of Object.values(site)) errs(s.p.site_id, 'results pages: requests and answers could not be paired, nothing read');
+if (R.unpaired) { for (const s of Object.values(site)) errs(s.p.site_id, 'results pages: requests and answers could not be paired, nothing read (the tasks billed are counted, and the reads count against this week)'); chargeUnpaired('AI Rank SERP Requests', 'AI Rank SERP Call Answers', (r) => r.engine === 'bing' ? 'bing' : 'google'); }
 for (const [q, a] of R.pairs) { const ids = (q.site_ids || [q.site_id]).filter(id => site[id]); if (!ids.length) continue; charge(ids[0], a);
   const body = (q.body || [])[0] || {}; const st = SC.status(a);
   if (st === 'failed') { for (const id of ids) errs(id, (q.engine === 'bing' ? 'Bing' : 'Google') + ' results page for "' + S0(q.query).slice(0, 60) + '" failed'); continue; }
@@ -331,6 +339,8 @@ for (const s of Object.values(site)) {
   const cost = r4(costBy[p.site_id] || 0);
   out.push({ json: { site_id: p.site_id, domain: S0(p.domain), mode: S0(p.mode), cost_usd: cost,
     cost_basis: tasksBy[p.site_id] ? 'measured: ' + tasksBy[p.site_id] + ' DataForSEO task(s) at what each reported, each counted once by its task id (both attempts of the in-200 gate)' : 'no paid DataForSEO task this run: $0',
+    // FX-B RB-9: the Brave figure also travels as the generic estimate the run ledger's settle adds to estimated_usd (never to cost_usd)
+    extra_est_usd: r4(s.braveN * CFG.brave_price), extra_est_basis: s.braveN ? 'Brave Search: ' + s.braveN + ' search(es) x $' + CFG.brave_price + ' (estimated; Brave reports no cost per call)' : '',
     brave_usd_est: r4(s.braveN * CFG.brave_price), brave_basis: s.braveN ? 'estimate: ' + s.braveN + ' Brave search(es) x $' + CFG.brave_price + ' (Brave reports no cost per call; inside its monthly free credit)' : '',
     mentions_pages, target_metrics, bing_stats, serp_reads, cc_captures: ccUse ? Number(ccUse.captures) : null, cc: ccUse ? { crawl: S0(ccUse.crawl), capped: !!ccUse.capped, at: S0(ccUse.at), fresh: !!s.ccFresh } : null, brave,
     reads: s.reads, basis: { queries: S0(p.queries_basis), market: p.loc ? S0(p.loc.basis) : 'no market', serp: S0((p.google || {}).basis), bing: S0((p.bing || {}).why) || 'read this run', mentions: S0((p.mentions || {}).why) || 'read this run', brave: S0((p.brave || {}).why) },

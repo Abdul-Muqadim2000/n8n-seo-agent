@@ -178,6 +178,20 @@
     "operation": "get",
     "table": "seo_cache"
    },
+   "Load AI Rank Kill": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "key",
+       "keyValue": "air:kill"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_cache"
+   },
    "Load AI Rank Priors": {
     "filters": null,
     "mapping": null,
@@ -487,6 +501,30 @@
     "operation": "deleteRows",
     "table": "seo_ai_rank_actions"
    },
+   "Prune AI Rank Mention Markers": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "kind",
+       "keyValue": "air"
+      },
+      {
+       "condition": "like",
+       "keyName": "key",
+       "keyValue": "air:mentions:%"
+      },
+      {
+       "condition": "lt",
+       "keyName": "updated_at",
+       "keyValue": "={{ new Date(Date.now() - 62 * 864e5).toISOString() }}"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "deleteRows",
+    "table": "seo_cache"
+   },
    "Prune AI Rank Sources": {
     "filters": {
      "conditions": [
@@ -505,6 +543,30 @@
     "mapping": null,
     "operation": "deleteRows",
     "table": "seo_ai_rank_sources"
+   },
+   "Prune AI Rank Week Markers": {
+    "filters": {
+     "conditions": [
+      {
+       "condition": "eq",
+       "keyName": "kind",
+       "keyValue": "air"
+      },
+      {
+       "condition": "like",
+       "keyName": "key",
+       "keyValue": "air:week:%"
+      },
+      {
+       "condition": "lt",
+       "keyName": "updated_at",
+       "keyValue": "={{ new Date(Date.now() - 14 * 864e5).toISOString() }}"
+      }
+     ]
+    },
+    "mapping": null,
+    "operation": "deleteRows",
+    "table": "seo_cache"
    },
    "Refuse Run Ledger (Growth)": {
     "filters": {

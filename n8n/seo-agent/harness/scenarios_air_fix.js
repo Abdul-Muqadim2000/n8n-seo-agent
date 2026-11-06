@@ -36,6 +36,7 @@ module.exports = async (ctx) => {
     const a = units.map(u => [u.pid, u.engine || 'chatgpt', u.named ? 1 : 0, 0, u.named ? 1 : null, (u.rivals || []).map((r, k) => [ix(r), k + 2, 0])]);
     return { date, checked_at: date + 'T06:31:00.000Z', run_id: 'pulse_' + date, samples: units.length, mentioned: units.filter(u => u.named).length, cited: 0, mention_rate: 0, visibility_score: 0,
       engines: { chatgpt: { answered: units.length } }, prompts: {}, competitors: {}, sources: {}, rule_version: RULE, detail: { v: 1, rule_version: RULE, ents, a } }; };
+  const J = (x) => String(JSON.stringify(x));
   const ids = (n) => Array.from({ length: n }, (_, i) => 'q' + i);
   const prevRow = (o) => ({ run_id: 'ai_prev', rule_version: RULE, checked_at: day(7), mention_rate: 25, samples: 40, mentioned_k: 10, prompts: 4, run_kind: 'weekly', citation_rate: 0, share_of_voice: 30, avg_rank: 1,
     visibility_score: 20, sentiment_score: null, engines: { chatgpt: { name: 'chatgpt', asked: 40, answered: 40, samples: 40, mentioned: 10, cited: 0, mention_rate: 25, citation_rate: 0, errors: 0 } }, market_month: '', market: null, index: null,
@@ -251,6 +252,21 @@ module.exports = async (ctx) => {
     const shop = { ...lms, site_id: 'site_edxshop', domain: 'edxshop.example', business_name: 'EdxShop', brand_names: ['EdxShop'], services: ['Open edX platform development', 'Open edX hosting'], topics: ['open edx development'] };
     check('an Open edX shop: Moodle (the other open platform) is a platform, not a business rival', roleOf({ ...shop, run_id: 'rb1c' }, 'moodle.com') === 'platform', roleOf({ ...shop, run_id: 'rb1c2' }, 'moodle.com'));
     check('an Open edX shop with moodle.com configured as a rival: competitor (the owner decides)', roleOf({ ...shop, run_id: 'rb1d', competitors: ['moodle.com'], configured_competitors: ['moodle.com'] }, 'moodle.com') === 'competitor');
+  });
+
+  await guard('air FXB RB-7', async () => {
+    reset(); const SN = 'AIR FXB RB-7 - a pulse morning with answers to questions no longer on the panel adds none of its cited sources, and an engine that only answered those is not a headline engine'; begin(SN); const check = mkCheck(SN);
+    const P4 = ids(4).map((_, i) => prompt(i));
+    const offOnly = pulseRow(day(2).slice(0, 10), [{ pid: 'q_old', engine: 'perplexity', named: true }, { pid: 'q_old', engine: 'perplexity', named: true }]);
+    offOnly.engines = { perplexity: { asked: 2, answered: 2 } }; offOnly.sources = { 'old-rival.example': 4 };
+    const mixed = pulseRow(day(3).slice(0, 10), [...[0, 1, 2, 3].map(q => ({ pid: 'q' + q, named: false })), { pid: 'q_old', engine: 'perplexity', named: true }]);
+    mixed.engines = { chatgpt: { asked: 4, answered: 4 }, perplexity: { asked: 1, answered: 1 } }; mixed.sources = { 'old-rival.example': 2 };
+    const clean = pulseRow(day(1).slice(0, 10), [0, 1, 2, 3].map(q => ({ pid: 'q' + q, named: false }))); clean.sources = { 'kept-source.example': 3 };
+    const A = await drive({ prompts: P4, rows: weekRows(), pulse_rows: [offOnly, mixed, clean] });
+    const txt = J(A.vis_row);   // what the week stores (sources_json, rival_sources_json, metrics_json): the input rows the node echoes are not its tables
+    check('the off-panel mornings\' cited host (old-rival.example) is in no table of the week; the clean morning\'s source still counts', !/old-rival\.example/.test(txt) && /kept-source\.example/.test(txt), (txt.match(/.{80}old-rival\.example.{40}/) || [''])[0]);
+    check('Perplexity, which answered only questions no longer on the panel, is not a headline engine', !(A.metrics.headline.engines || []).includes('Perplexity'), J(A.metrics.headline.engines));
+    check('the note says the sources of those mornings were left out', /cited sources of those \d+ morning\(s\) are left out/.test(((A.metrics.pulse_basis || {}).off_panel || {}).note || ''), J((A.metrics.pulse_basis || {}).off_panel));
   });
 
   await guard('air AF5 F-81', async () => {

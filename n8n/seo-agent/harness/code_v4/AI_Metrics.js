@@ -2819,9 +2819,14 @@ return plans.map(p => {
   const offPanel = { answers: 0, readings: 0, ids: new Set() };
   const PR = PRrule.map(d => { const keep = d.detail.a.filter(a => !Array.isArray(a) || onPanel(a[0])); const off = d.detail.a.length - keep.length; if (!off) return d;
     offPanel.answers += off; offPanel.readings++; for (const a of d.detail.a) if (Array.isArray(a) && !onPanel(a[0])) offPanel.ids.add(String(a[0]));
-    return { ...d, samples: keep.filter(Array.isArray).length, detail: { ...d.detail, a: keep } }; }).filter(d => d.detail.a.length);
-  const pulse_off_panel = offPanel.answers ? { answers: offPanel.answers, readings: offPanel.readings, questions: offPanel.ids.size, ids: [...offPanel.ids].sort().slice(0, 50),
-    note: offPanel.answers + ' daily pulse answer(s) to ' + offPanel.ids.size + ' question(s) no longer on this week\'s panel were left out of this week\'s figures.' } : null;
+    // FX-B RB-7 (2026-11-06, REVIEW_B_SAFETY.md): a morning keeps one `sources` count for ALL its answers (no per-answer sources in detail), so a
+    // morning with answers left out would still add the old panel's cited hosts to "Sources AI trusts" and the rival-as-source counts: its sources
+    // are dropped (and said so); a morning with nothing left out keeps them as before
+    return { ...d, samples: keep.filter(Array.isArray).length, sources: {}, sources_dropped: true, detail: { ...d.detail, a: keep } }; }).filter(d => d.detail.a.length);
+  const srcDropped = PR.filter(d => d.sources_dropped).length;
+  const pulse_off_panel = offPanel.answers ? { answers: offPanel.answers, readings: offPanel.readings, questions: offPanel.ids.size, ids: [...offPanel.ids].sort().slice(0, 50), sources_dropped: srcDropped,
+    note: offPanel.answers + ' daily pulse answer(s) to ' + offPanel.ids.size + ' question(s) no longer on this week\'s panel were left out of this week\'s figures'
+      + (srcDropped ? ', and the cited sources of those ' + srcDropped + ' morning(s) are left out of the sources table (a morning records its sources for all its answers together)' : '') + '.' } : null;
   const pulseN = PR.reduce((s, d) => s + d.detail.a.length, 0);
   // ---- B8-3 (2026-10-15, benchmark area 8, INVARIANTS rule 1): the week's headline pools the daily pulse answers straight into
   // `samples` and `mentioned`, and a pulse morning on which one engine returned nothing contributes a DIFFERENT mix of engines.
@@ -3273,7 +3278,10 @@ return plans.map(p => {
   // question is the brand question (recognition only) and Claude, asked monthly, is shown per engine and kept out of the headline on
   // purpose (the week-on-week comparison depends on the weekly engine set). The words change, not the denominator.
   const buyerQ = new Set([...R.map(r => r.prompt_id), ...U.filter(u => u.pulse).map(u => u.prompt_id)].map(String)).size, brandQ = new Set(RB.map(r => r.prompt_id)).size;
-  const headEng = [...new Set([...RC.map(r => r.engine), ...PR.flatMap(d => Object.entries(d.engines || {}).filter(([, v]) => (Number((v || {}).answered) || 0) > 0).map(([e]) => e))])];
+  // FX-B RB-7: the pulse engines of the headline are the engines of the pulse answers it COUNTS (a morning's engine whose answers were all to
+  // questions no longer on the panel is not in the headline); for a morning with nothing left out this is its engines that answered, as before
+  const headEng = [...new Set([...RC.map(r => r.engine), ...PR.flatMap(d => d.sources_dropped ? d.detail.a.filter(Array.isArray).map(a => String(a[1])).filter(Boolean)
+    : Object.entries(d.engines || {}).filter(([, v]) => (Number((v || {}).answered) || 0) > 0).map(([e]) => e))])];
   const monthlyOut = MONTHLY.filter(e => R.some(r => r.engine === e)).map(e => ({ engine: ENG[e] || e, answers: R.filter(r => r.engine === e && r.answered).length }));
   const came_back = Rall.filter(r => !r.error).length;
   const headline = { buyer_questions: buyerQ, brand_questions: brandQ, engines: headEng.map(e => ENG[e] || e), engine_count: headEng.length, run_answers: ans.length, pulse_answers: pulseN, samples,

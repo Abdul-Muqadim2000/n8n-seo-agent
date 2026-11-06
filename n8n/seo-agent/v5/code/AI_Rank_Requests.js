@@ -22,7 +22,7 @@
 /*__AI_RANK_DIAG__*/
 /*__SERP_CACHE__*/
 /*__COUNTRIES__*/
-const AIRC = { API: 'https://api.dataforseo.com/v3/', serp_depth: 10, serp_fresh_days: 7, queries_max: 50, brave_week_max: 10, bing_query_pages: 3, bing_calls_week_max: 10,
+const AIRC = { API: 'https://api.dataforseo.com/v3/', serp_depth: 10, serp_fresh_days: 2,   /* FX-B RB-12: the AI visibility run prunes every serp: row older than 2 days (F-85), so an older reading is never there to reuse */ queries_max: 50, brave_week_max: 10, bing_query_pages: 3, bing_calls_week_max: 10,
   mentions_keywords: 5, cc_every_days: 28,
   // planning prices (USD) only: the ledger settles what each DataForSEO task reports, counted once by its task id (AI Rank Fetched)
   price: { serp: 0.002, mentions_pages: 0.15, mentions_metrics: 0.101, brave: 0.005 }, site_usd_max: 0.6 };
@@ -45,7 +45,10 @@ const DEFAULT_ENGINES = ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overvi
 
 const sites = tryAll('AI Rank Live').filter(x => x && x.site_id && !x.skip && !x.error);
 const cacheAir = tryAll('Load AI Rank Cache');
-const pay = sites.filter(g => AIRF.mayPay(g.rank || AIRF.settingsOf({}), AIRF.killed(cacheAir)));
+// FX-B RB-4: the re-check fails closed too: a kill row read by its key, or a load that errored or never ran, means no paid or keyed read
+const killAir = tryAll('Load AI Rank Kill');
+const killNow = AIRF.killed(cacheAir) || AIRF.killed(killAir) || !cacheAir.length || !killAir.length || cacheAir.some(r => r && r.error) || killAir.some(r => r && r.error);
+const pay = sites.filter(g => AIRF.mayPay(g.rank || AIRF.settingsOf({}), killNow));
 if (!pay.length) return [{ json: { skip: true, reason: sites.length ? 'no website in mode on: AIR reads nothing from outside in shadow' : 'no website to read for' } }];
 
 const serpRows = tryAll('Load SERP Cache (Rank)');

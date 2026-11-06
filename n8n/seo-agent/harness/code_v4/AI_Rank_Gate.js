@@ -75,6 +75,12 @@ const nowMs = Date.now();
 const all = (name) => { try { return $(name).all().map(i => i.json || {}); } catch (e) { return []; } };
 const plans = all('Growth Plan').filter(p => p.site_id && !p.nothing_to_do);
 const mons = all('Load Monitors').filter(m => m && m.site_id);
+// FX-B RB-8 (2026-11-06, REVIEW_B_SAFETY.md): AIR sits before Growth Report, so a run that is already long must not be pushed past the workflow's
+// 2,400 s limit by it (that would lose the existing report and leave the ledger unsettled). When this run's plan is more than 25 minutes old,
+// AIR waits for next week, says so, and the report goes out as before.
+const AIR_LATE_MS = 25 * 60 * 1000;
+const planAt = Math.min(...plans.map(p => Date.parse(p.checked_at)).filter(Number.isFinite));
+if (Number.isFinite(planAt) && nowMs - planAt > AIR_LATE_MS) return [{ json: { skip: true, late: true, reason: 'this AI Growth run is already ' + Math.round((nowMs - planAt) / 60000) + ' minutes old: the AI-ranking side branch waits for the next run, so the report is not delayed' } }];
 const out = [];
 for (const p of plans) {   // only the websites AI Growth worked on in this run, once each
   if (out.some(o => o.json.site_id === p.site_id)) continue;

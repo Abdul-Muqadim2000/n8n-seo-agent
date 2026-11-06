@@ -73,6 +73,7 @@ async function runGrowth(o) {
   const tables = clone(F.tables);
   if (opt.kill) tables.seo_cache.push({ key: 'air:kill', kind: 'air', site_id: '', value: '1', updated_at: F.now });
   for (const [t, rows] of Object.entries(opt.extra || {})) tables[t] = [...(tables[t] || []), ...clone(rows)];
+  if (typeof opt.tablesFn === 'function') opt.tablesFn(tables, F);   // FX-B: a test may change the fixture's rows in place
   const hostOf = (u) => String(u).replace(/^https?:\/\//, '').replace(/[\/?#].*$/, '').toLowerCase().replace(/^www\./, '');
   const calls = [];
   const http = (node, req) => {
@@ -94,7 +95,7 @@ async function runGrowth(o) {
   };
   const agent = (node, item) => ({ drafts: ((item && item.jobs) || []).map(j => ({ n: j.n, subject: 'Synthetic subject ' + j.n, body: 'Synthetic draft for ' + String(j.url || '') + '. [Your name]' })) });
   const t0 = Date.now();
-  const r = await exec({ wf, trigger: {}, tables, http, agent, now: F.nowMs, seed: 'air-golden', execId: 'air-plumb-1' });
+  const r = await exec({ wf, trigger: {}, tables, http, agent, now: F.nowMs, seed: 'air-golden', execId: 'air-plumb-1', ...(opt.schemas ? { schemas: opt.schemas } : {}) });   // FX-B RB-6: a test's live table schemas
   const ms = Date.now() - t0;
   const last = (n) => { const x = r.runs[n]; return x && x.length ? x[x.length - 1][0] || [] : null; };
   const counts = {}; for (const n of r.order) counts[n] = (counts[n] || 0) + 1;
@@ -238,7 +239,7 @@ module.exports = async (ctx) => {
       && !on.r.writes.some(w => /^(Save AI Rank|Set Core|Patch AI)/.test(w.node) && w.rows.some(r => r.site_id === 'site_acme-erp-example')), J(onActs.map(a => [a.lever, a.status])).slice(0, 400));
     check('AP4 on: the report, the callback and every pre-existing write except the ones AIR is allowed in on mode are identical to the off run; no node error',
       J(on.report) === J(offF.report) && J(on.callback) === J(offF.callback) && J(on.settle) === J(offF.settle) && !on.r.errors.length
-      && J(on.writes.filter(w => !/^(Save AI Rank|Set Core Until|Patch AI Growth)/.test(w.node))) === J(offF.writes), J(on.r.errors).slice(0, 300));
+      && J(on.writes.filter(w => !/^(Save AI Rank|Set Core Until|Patch AI Growth|Prune AI Rank (Week|Mention) Markers)/.test(w.node))) === J(offF.writes), J(on.r.errors).slice(0, 300));
 
     // ---------------- AP5 isolation ----------------
     const iso = async (mut) => { const w = clone(wfFake); mut(w); return runGrowth({ wf: w, modes: { nova: 'shadow', acme: 'shadow' } }); };
@@ -318,7 +319,7 @@ module.exports = async (ctx) => {
     const k = await runGrowth({ wf: wfFake, modes: { nova: 'shadow', acme: 'on' }, kill: true });
     const kAir = Object.keys(k.counts).filter(n => AIR_NODE.test(n)).sort();
     check('AP12 kill switch (seo_cache air:kill = 1) with sites in shadow and on: only the gate, the kill check and their IFs run; nothing is written; the report and callback as off',
-      J(kAir) === J(['AI Rank Gate', 'AI Rank Live', 'Any AI Rank Live?', 'Any AI Rank?', 'Load AI Rank Cache']) && !k.airWrites.length && J(k.report) === J(offF.report) && J(k.callback) === J(offF.callback)
+      J(kAir) === J(['AI Rank Gate', 'AI Rank Live', 'Any AI Rank Live?', 'Any AI Rank?', 'Load AI Rank Cache', 'Load AI Rank Kill']) && !k.airWrites.length && J(k.report) === J(offF.report) && J(k.callback) === J(offF.callback)
       && J(k.writes) === J(offF.writes) && k.counts['Growth Report'] === 1, J({ kAir, w: k.airWrites.length }));
   });
 };

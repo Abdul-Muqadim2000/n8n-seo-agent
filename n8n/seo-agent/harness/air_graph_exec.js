@@ -13,6 +13,11 @@
 //   order     node names in the order they ran (a name once per run)    runs  { node: [[items of output 0], [output 1], ...] per run }
 //   writes    [{ node, table, op, rows }] every Data Table write           posts [{ node, url, body }] every HTTP POST
 //   errors    [{ node, error }] errors of nodes WITHOUT onError continueRegularOutput (they stop their branch, as in n8n)
+//   schema    (FX-B RB-6, 2026-11-06) the Data Tables refuse a write that names a column the table does not have, as n8n does (an unknown column fails
+//             the node; D12). The columns of a table are, in order: o.schemas[table] (a test's "live" schema, e.g. before sync_tables.py adds
+//             the new columns), else the columns its Ensure node declares, else the schema its write node carries. o.strict === false turns it
+//             off. Every refusal is also listed in `schemaErrors` [{ node, table, op, columns }] (a node with onError continue swallows it).
+//   like      `like` / `ilike` filters as n8n 2.41 runs them: a value without % is "contains", % is a wildcard, `_` is literal, NULL never matches
 const SANDBOX_NOOP = new Set(['defineProperty', 'defineProperties', 'setPrototypeOf']);
 const SANDBOX_OBJECT = new Proxy(Object, { get: (t, k) => SANDBOX_NOOP.has(k) ? ((o) => o) : t[k] });
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
@@ -27,7 +32,14 @@ async function exec(opt) {
   const M = Object.create(Math); M.random = () => { seedState = (seedState + 0x6D2B79F5) >>> 0; let t = seedState; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const nodes = new Map(wf.nodes.map(n => [n.name, n])); const conns = wf.connections || {};
   const tables = JSON.parse(JSON.stringify(o.tables || {})); const ids = {};
-  const order = [], runs = {}, writes = [], posts = [], errors = [], staticData = {};
+  const order = [], runs = {}, writes = [], posts = [], errors = [], staticData = {}, schemaErrors = [];
+  // FX-B RB-6: the columns each table has (see the header)
+  const declared = {}; for (const n of wf.nodes) { if (n.type !== 'n8n-nodes-base.dataTable') continue; const p0 = n.parameters || {};
+    if (p0.resource === 'table' && p0.operation === 'create' && p0.tableName) declared[p0.tableName] = ((p0.columns || {}).column || []).map(c => c.name); }
+  const ensured = new Set(Object.keys(declared));   // a table with no Ensure node: the union of the schemas its write nodes carry
+  for (const n of wf.nodes) { if (n.type !== 'n8n-nodes-base.dataTable') continue; const p0 = n.parameters || {}; const t0 = String(((p0.dataTableId || {}).value) || '');
+    const sch = ((p0.columns || {}).schema || []).map(c => c.id || c.displayName).filter(Boolean); if (t0 && sch.length && !ensured.has(t0)) declared[t0] = [...new Set([...(declared[t0] || []), ...sch])]; }
+  const colsOf = (t) => (o.schemas && o.schemas[t]) || declared[t] || null;
   const execId = String(o.execId || 'air-exec');
   const pos = (name) => { const n = nodes.get(name); return n && Array.isArray(n.position) ? n.position : [0, 0]; };
   const childrenOf = (name, idx) => (((conns[name] || {}).main || [])[idx] || []).filter(c => nodes.has(c.node));
@@ -55,6 +67,8 @@ async function exec(opt) {
     const cmp = (a, b) => (typeof a === 'number' && typeof b === 'number') ? a - b : String(a == null ? '' : a).localeCompare(String(b == null ? '' : b));
     switch (cond) { case 'eq': return String(v == null ? '' : v) === String(want == null ? '' : want); case 'neq': return String(v == null ? '' : v) !== String(want == null ? '' : want);
       case 'gt': return v != null && v !== '' && cmp(v, want) > 0; case 'gte': return v != null && v !== '' && cmp(v, want) >= 0; case 'lt': return v != null && v !== '' && cmp(v, want) < 0; case 'lte': return v != null && v !== '' && cmp(v, want) <= 0;
+      case 'like': case 'ilike': { if (v == null) return false; const w = String(want == null ? '' : want); const pat = w.indexOf('%') >= 0 ? w : '%' + w + '%';
+        const re = new RegExp('^' + pat.split('%').map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[\\s\\S]*') + '$', cond === 'ilike' ? 'i' : ''); return re.test(String(v)); }
       case 'isTrue': return v === true || v === 'true'; case 'isFalse': return v === false || v === 'false'; case 'isEmpty': return v == null || v === ''; case 'isNotEmpty': return !(v == null || v === '');
       default: return true; } };
   const match = (row, p, ctx) => { const cs = ((p.filters || {}).conditions) || []; if (!cs.length) return true; const all = p.matchType !== 'anyCondition'; return all ? cs.every(c => condOk(row, c, ctx)) : cs.some(c => condOk(row, c, ctx)); };
@@ -65,6 +79,8 @@ async function exec(opt) {
     if (op === 'get') { const ctx = ctxFor(items, 0); const rows = tbl(t).filter(r => match(r, p, ctx)).map(r => ({ json: { ...r } })); return [rows]; }
     const out = []; const wrote = [];
     items.forEach((it, i) => { const ctx = ctxFor(items, i); const d = dataFor(p, it, ctx);
+      if (o.strict !== false && ['insert', 'upsert', 'update'].includes(op)) { const cols = colsOf(t); const bad = cols ? Object.keys(d).filter(k => !cols.includes(k) && !SYSTEM_COLS.includes(k)) : [];
+        if (bad.length) { schemaErrors.push({ node: n.name, table: t, op, columns: bad }); writes.push({ node: n.name, table: t, op, rows: [d], refused: bad }); throw new Error('column(s) ' + bad.join(', ') + ' do not exist in data table ' + t); } }
       if (op === 'insert') { const r = stamp(t, d); tbl(t).push(r); wrote.push(d); out.push({ json: r }); }
       else if (op === 'upsert') { const hit = tbl(t).filter(r => match(r, p, ctx)); if (hit.length) hit.forEach(r => { Object.assign(r, d, { updatedAt: new PD().toISOString() }); out.push({ json: { ...r } }); }); else { const r = stamp(t, d); tbl(t).push(r); out.push({ json: r }); } wrote.push(d); }
       else if (op === 'update') { const hit = tbl(t).filter(r => match(r, p, ctx)); hit.forEach(r => { Object.assign(r, d, { updatedAt: new PD().toISOString() }); out.push({ json: { ...r } }); }); wrote.push(d); }
@@ -143,6 +159,6 @@ async function exec(opt) {
       const w = waiting.get(first); waiting.delete(first); await runOne(first, [], w);
     }
   }
-  return { order, runs, writes, posts, errors, tables };
+  return { order, runs, writes, posts, errors, tables, schemaErrors };
 }
 module.exports = { exec };
