@@ -765,7 +765,7 @@ export const features: Feature[] = [
       'Earned media: the exact pages AI cited when it did not name you, the competitors they name, the action that fits each one and a pitch drafted for you to review',
       'A page that starts naming you is marked won, and you hear about it',
       'A monthly check of whether Wikidata knows your business, by name and by official website',
-      'AI ranking, opt-in per website: each week a short plan of the few steps most likely to get you named, from what the answers cite and what we can see of your pages. It starts as a private trial that changes nothing; once on, it acts through the rest of the platform: a reserved slot for answer pages if you want one, placements on the lists and directories AI answers cite, steps on your website, and a weekly note in your report on what changed and why, with how each figure was measured',
+      'AI ranking, rolling out to selected websites on request: each week a short plan of the few steps most likely to get you named, from what the answers cite and what we can see of your pages. It starts as a private trial that changes nothing; once our team switches it on, it acts through the rest of the platform: a reserved slot for answer pages if you want one, placements on the lists and directories AI answers cite, steps on your website, and a weekly note in your report on what changed and why, with how each figure was measured',
       'A page AI answers already cite is kept as it is: while AI ranking is on, your weekly content run suggests a rewrite of it for another keyword instead of doing it on its own',
       'No tricks: no special versions of pages for AI crawlers, no lists that rank you first, no hidden instructions to assistants',
     ],
@@ -799,7 +799,7 @@ export const features: Feature[] = [
       },
       {
         q: 'What is AI ranking, and how do we turn it on?',
-        a: 'An opt-in weekly plan for getting your business named in AI answers. In Website settings you choose Off, Trial or On. In Trial we work out the plan privately and nothing changes. On, the plan acts: answer pages in a reserved slot if you turn it on, placements in link building, steps on your website, and a weekly note in your AI growth report. Every step is checked afterwards, and a change is never called a cause unless a comparison with questions we left alone supports it.',
+        a: 'A weekly plan for getting your business named in AI answers. It is rolling out to selected websites: ask us if you would like it for yours. Our team first runs it as a private trial, in which nothing changes, and then switches it on. On, the plan acts: answer pages in a reserved slot if you turn it on, placements in link building, steps on your website, and a weekly note in your AI growth report. Every step is checked afterwards, and a change is never called a cause unless a comparison with questions we left alone supports it.',
       },
       {
         q: 'Will you send the pitches for us?',

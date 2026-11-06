@@ -36,11 +36,11 @@ export const changelog: ChangelogEntry[] = [
   {
     date: '2026-11-06',
     version: '4.9',
-    title: 'AI ranking: a weekly plan to get you named in AI answers',
-    summary: 'A new opt-in setting per website. AI ranking works out, every week, the few steps most likely to get your business named in AI answers, starts as a private trial that changes nothing, and once switched on acts through the rest of the platform and checks what each step changed.',
+    title: 'AI ranking, rolling out: a weekly plan to get you named in AI answers',
+    summary: 'AI ranking is rolling out to selected websites, on request. It works out, every week, the few steps most likely to get your business named in AI answers. Each website starts with a private trial run by our team that changes nothing; once our team switches it on, it acts through the rest of the platform and checks what each step changed. Ask us if you would like it for your website.',
     highlights: [
-      'Choose Off, Trial or On in Website settings. In Trial the plan is worked out privately and nothing on your website, in your reports or in your plan changes',
-      'On, the plan acts: an answer page in a reserved slot if you turn it on, within your AI answer pages a month; placements on the lists and directories AI answers cite in Link building; and the steps only you can take under Steps on your website, each with a guide and our own check',
+      'Our team turns it on for one website at a time, after a private trial in which nothing on your website, in your reports or in your plan changes. Website settings shows whether it is on for yours',
+      'On, the plan acts: an answer page in a reserved slot if you turn it on, within your AI answer pages a month; placements on the lists and directories AI answers cite in Link building; and the steps only you can take under Steps on your website, each with a guide. For a step you take elsewhere, such as an article or a profile, you paste its address on the step and we open it to check that it names your business',
       'Your AI growth report and the AI visibility page get a weekly note: what changed and why, what can be detected with your number of questions, what is waiting and on whom, and the cost per question won once there is one',
       'A page AI answers already cite is not rewritten for another keyword on its own while AI ranking is on',
       'A monthly reminder to upload the two AI reports from Bing Webmaster Tools and Search Console, ticked off once both are in',
