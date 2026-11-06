@@ -128,6 +128,10 @@ export interface MonitorsRow extends DtRow {
   index_watch?: boolean | string | null; index_daily_cap?: number | string | null;
   /** Index coverage wave 2 (DESIGN_WAVE2 §2.5): the website's owner lets Alaventra submit its sitemap in Search Console (empty = off) */
   index_sitemap_submit?: boolean | string | null;
+  /** AIR (2026-11-06, CONTRACTS.md §2.1; absent before the engine adds them, empty = off): the AI-ranking mode (off | shadow | on), the reserved AI
+   *  page slot, and the three paid reads (fan-out searches a week 0-50, the AI mention database, the independent search index). Written only
+   *  through Site Admin `monitors`; read with aiRankSettingsOf (shared/src/ai-rank.ts) */
+  ai_rank_mode?: string | null; ai_rank_reserve?: boolean | string | null; ai_rank_fanout_n?: number | string | null; ai_rank_mentions?: boolean | string | null; ai_rank_brave?: boolean | string | null;
 }
 export interface AiPromptRow extends DtRow {
   prompt_id: string; site_id: string; domain: string; prompt: string; kind: string; topic: string; keyword: string;
@@ -140,6 +144,8 @@ export interface AiPromptRow extends DtRow {
   last_asked_run?: string; last_asked_at?: string; asked_n_28d?: number | null; refused_at_run?: string; keyword_source?: string;
   /** AI-FOCUS (2026-10-27): the focus topic it measures, where it came from, its state, when last in focus; when and why it was retired */
   focus_topic?: string; focus_source?: string; focus_state?: string; focus_seen_at?: string; retired_at?: string; retire_reason?: string;
+  /** AIR (2026-11-06, CONTRACTS.md §2.1, D10): a core question of the AI-ranking plan is kept on the panel until this date (one writer: the engine) */
+  core_until?: string | null;
 }
 /**
  * R-A7 (review 2026-10-23): the `origin` of a question the owner deleted. Its row stays as a tombstone with status `off`, so the engine
@@ -192,6 +198,9 @@ export interface AiTargetRow extends DtRow {
   target_id: string; site_id: string; domain: string; prompt_id: string; question: string; keyword: string; kind: string; page_url: string; page_type: string;
   fanout: string; sources_json: string; competitors: string; engines: string; stage: string; value: number; status: string; reason: string;
   created_at: string; updated_at: string; request_id: string; written_at: string; won_at: string;
+  /** AIR (2026-11-06, CONTRACTS.md §2.1; absent before the engine adds them): 'ai_rank' for a row AI ranking wrote (null = an AI growth row), the action
+   *  it came from, and when its page went live (the clock of the action's test) */
+  origin?: string | null; action_id?: string | null; live_at?: string | null;
 }
 /** v4.12: one row per site and weekly AI growth run */
 export interface AiGrowthRow extends DtRow {
@@ -435,6 +444,11 @@ export const TABLES = {
   aiGrowth: 'seo_ai_growth',
   /** W2 §5 (2026-10-23): the owner's AI report uploads (Bing AI Performance, Search Console AI features), written by the app */
   aiImports: 'seo_ai_imports',
+  /** AIR (2026-11-06): the AI-ranking runs and actions, written by the engine's AI Growth workflow (shadow and on sites), read only by the app */
+  aiRankRuns: 'seo_ai_rank_runs',
+  aiRankActions: 'seo_ai_rank_actions',
+  /** AIR: the third-party pages the answers cite (and, RC-3, the pages the client gave on a step, source_from 'client') */
+  aiRankSources: 'seo_ai_rank_sources',
   backlinkSnapshots: 'seo_backlink_snapshots',
   prospects: 'seo_link_prospects',
   backlinks: 'seo_backlinks',

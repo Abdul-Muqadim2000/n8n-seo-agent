@@ -90,6 +90,76 @@ const ST = (() => {
   const callbackFields = (cyc) => cyc && cyc.key ? { trigger: 'cycle', cycle_key: cyc.key, cycle_date: cyc.date, cycle_week: cyc.label, cycle_job: cyc.job } : {};
   return { ENGINE_TZ, okTz, zone, engineTz, parts, dayKey, monthKey, weekday, weekdayOfDate, cycleRow, tzOf, cycleWeekday, dayName, everyText, onText, weekOf, keyDate, cycleOf, callbackFields, DAYS };
 })();
+// AIR (2026-11-06, docs/ai-ranking-2026-11-05/CONTRACTS.md §4, package P4): the AI-ranking flags kit (AIRF) comes with this file, so every node that
+// inlines it reads `s.settings.rank` the one way. A node that inlines this file must NOT add the AIRF marker again (one const AIRF).
+// ---- AIRF: the AI-ranking algorithm's settings, kill switch, ids and shared vocabulary (inlined by build_monitors.py through its marker) ----
+// AIR (2026-11-06, docs/ai-ranking-2026-11-05/DESIGN.md §4.1, frozen in CONTRACTS.md §2-§3). Written by W0 and FROZEN: the packages read it,
+// none changes it (a change is a contract change: CONTRACTS.md first, then this file, then every caller). Pure: no node access, no clock, no
+// network; n8n sandbox rules (no URL constructor, no Object.defineProperty / setPrototypeOf, no structuredClone).
+// Every setting is OFF when empty: a site without the columns, or with them empty, runs exactly as before AIR.
+const AIRF = (() => {
+  const VERSION = 'air-flags-1';
+  // air-2 (FX-B, 2026-11-06, for FX-A's counting changes: a t test across questions, control handling, one trial per action): rows of another rule are
+  // never compared or learned from (ai_rank_wiring.py loads priors and runs of this rule only, and hides actions pre-registered under another one)
+  const RULE_VERSION = 'air-2';   // the rule AIR's rows are written under (seo_ai_rank_* .rule_version); bump it when a counting rule changes
+  const MODES = ['off', 'shadow', 'on'];
+  const S = (v) => (v == null ? '' : String(v)).trim();
+  const flag = (v) => v === true || /^(true|1|yes|on)$/i.test(S(v));
+  const modeOf = (v) => { const m = S(v).toLowerCase(); return MODES.includes(m) ? m : 'off'; };
+  const fanoutOf = (v) => { const n = Number(v); return S(v) === '' || !Number.isFinite(n) ? 0 : Math.min(50, Math.max(0, Math.round(n))); };
+  // seo_monitors row -> s.settings.rank (package P4 puts it on every monitor site in _monitor_sites.js; P3 and P6 read it there)
+  const settingsOf = (m) => { const r = m || {};
+    return { mode: modeOf(r.ai_rank_mode), reserve: flag(r.ai_rank_reserve), fanout_n: fanoutOf(r.ai_rank_fanout_n), mentions: flag(r.ai_rank_mentions), brave: flag(r.ai_rank_brave) }; };
+  // Site Admin `monitors` (package P4 calls it from Admin_Action.js / Monitor_Row_Admin.js): only the fields GIVEN are returned, normalised;
+  // '' clears a field to null (= off); a bad value is an error message, never a silent default
+  const COLS = ['ai_rank_mode', 'ai_rank_reserve', 'ai_rank_fanout_n', 'ai_rank_mentions', 'ai_rank_brave'];
+  const validate = (given) => { const g = given || {}; const values = {}; const errors = [];
+    for (const k of COLS) {
+      if (!(k in g) || g[k] === undefined || g[k] === null) continue;
+      const v = g[k];
+      if (S(v) === '') { values[k] = null; continue; }
+      if (k === 'ai_rank_mode') { const m = S(v).toLowerCase(); if (MODES.includes(m)) values[k] = m; else errors.push('ai_rank_mode must be off, shadow or on'); continue; }
+      if (k === 'ai_rank_fanout_n') { const n = Number(v); if (Number.isFinite(n) && n >= 0 && n <= 50 && Math.round(n) === n) values[k] = n; else errors.push('ai_rank_fanout_n must be a whole number from 0 to 50'); continue; }
+      if (v === true || v === false) { values[k] = v; continue; }
+      if (/^(true|1|yes|on)$/i.test(S(v))) values[k] = true; else if (/^(false|0|no|off)$/i.test(S(v))) values[k] = false; else errors.push(k + ' must be true or false');
+    }
+    return { values, errors }; };
+  // the global kill switch: seo_cache row key `air:kill`, value '1' (or true / on / yes) -> AIR skips every site, without a deploy
+  const CACHE_KIND = 'air';
+  const KILL_KEY = 'air:kill';
+  const protectKey = (site_id) => 'air:protect:' + S(site_id);
+  const mentionsKey = (site_id, ym) => 'air:mentions:' + S(site_id) + ':' + S(ym);
+  const killed = (cacheRows) => (Array.isArray(cacheRows) ? cacheRows : []).some(r => r && S(r.key) === KILL_KEY && /^(1|true|on|yes)$/i.test(S(r.value)));
+  // what a site in a mode may do (CONTRACTS.md §5): shadow computes and writes only the five AIR tables, pays nothing; on writes the sinks
+  const runs = (rank, kill) => !kill && !!rank && (rank.mode === 'shadow' || rank.mode === 'on');
+  const writesSinks = (rank, kill) => !kill && !!rank && rank.mode === 'on';
+  const mayPay = (rank, kill) => writesSinks(rank, kill);
+  // shared vocabulary (CONTRACTS.md §3.1)
+  const ENGINES = ['chatgpt', 'gemini', 'ai_mode', 'ai_overview', 'perplexity', 'claude', 'copilot', 'chatgpt_api'];
+  const EXCLUDED_ENGINES = ['gemini_api'];   // owner decision 9: never diagnosed or learned from until DataForSEO answers in writing
+  const GROUP_OF = { ai_overview: 'google', ai_mode: 'google', gemini: 'google', chatgpt: 'chatgpt', chatgpt_api: 'chatgpt', perplexity: 'perplexity', copilot: 'copilot', claude: 'claude' };
+  const GROUPS = ['google', 'chatgpt', 'perplexity', 'copilot', 'claude'];
+  const STAGES = ['S0', 'S1', 'S2', 'S3', 'S4', 'S5'];
+  const STAGE_LABELS = ['unmeasured', ...STAGES];
+  const ACTION_STATUSES = ['shadow', 'proposed', 'queued', 'in_progress', 'done', 'verified', 'not_happened', 'expired', 'refused'];
+  const ARMS = ['treated', 'control'];
+  const usable = (engine) => ENGINES.includes(S(engine).toLowerCase());
+  // ids (one rule for every writer and reader)
+  const hash = (s) => { let h = 2166136261 >>> 0; const t = String(s); for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; };   // FNV-1a, as AVX.hash
+  const hex8 = (s) => ('0000000' + hash(s).toString(16)).slice(-8);
+  // url_key: no scheme, no www., host lower-cased, no query, no fragment, no trailing slash, at most 300 characters ('' when it is not an http(s) URL)
+  const urlKey = (url) => { const m = S(url).match(/^https?:\/\/([^\/?#]+)([^?#]*)/i); if (!m) return '';
+    const host = m[1].toLowerCase().replace(/^www\./, '').replace(/:\d+$/, '').replace(/\.$/, ''); const path = m[2].replace(/\/+$/, '');
+    return (host + path).slice(0, 300); };
+  const refKey = (ref) => { const r = ref || {}; return r.prompt_id ? 'p:' + S(r.prompt_id) : r.url ? 'u:' + urlKey(r.url) : r.listing_id ? 'l:' + S(r.listing_id) : 's:site'; };
+  const actionId = (site_id, lever, ref) => 'air_' + S(site_id) + '_' + S(lever) + '_' + hex8(refKey(ref));
+  const day = (now) => { const d = new Date(typeof now === 'number' ? now : Date.parse(S(now))); return Number.isFinite(d.getTime()) ? d.toISOString().slice(0, 10).replace(/-/g, '') : ''; };
+  const runId = (site_id, now) => 'air_' + day(now) + '_' + S(site_id);
+  const priorId = (lever, stage, group, scope) => [S(lever), S(stage), S(group), S(scope) || 'global'].join(':');
+  const targetId = (site_id, prompt_id) => 'ait_' + S(site_id).replace(/^site_/, '') + '_' + S(prompt_id);   // the AI Growth format, unchanged
+  return { VERSION, RULE_VERSION, MODES, COLS, settingsOf, validate, CACHE_KIND, KILL_KEY, protectKey, mentionsKey, killed, runs, writesSinks, mayPay,
+    ENGINES, EXCLUDED_ENGINES, GROUP_OF, GROUPS, STAGES, STAGE_LABELS, ACTION_STATUSES, ARMS, usable, hash, urlKey, refKey, actionId, runId, priorId, targetId };
+})();
 let trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}
 if (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };
 const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };
@@ -155,6 +225,9 @@ function monitorSites(kind) {   // kind: 'ai' | 'backlinks' | 'audit' | 'links' 
     // release never changes what an existing site measures or pays. ai_focus_mode 'off' keeps the panel as it is (no automatic additions or retirements).
     Object.assign(settings, { pulse_scope: String(m.ai_pulse_scope || '').toLowerCase().trim() === 'focus' || (!m.site_id && !String(m.ai_pulse_scope || '').trim()) ? 'focus' : 'all',
       focus_mode: String(m.ai_focus_mode || '').toLowerCase().trim() === 'off' ? 'off' : 'auto' });
+    // AIR (2026-11-06, CONTRACTS.md §2 / §4): the AI-ranking mode and its flags, every one OFF when empty ({ mode, reserve, fanout_n, mentions, brave }).
+    // Read as `s.settings.rank.mode`; no plan, report or callback copies `settings` whole, so this field never reaches a client.
+    settings.rank = AIRF.settingsOf(m);
     const o = { ...s, business_name: nameOf(s, p), settings, profile: { business_name: p.business_name || '', business_type: p.business_type || '', city: p.city || '', phone: p.phone || '', street_address: p.street_address || '', author_name: p.author_name || '',
       region: p.region || '', country_code: p.country_code || '', public_email: p.public_email || '', price_range: p.price_range || '', service_areas: p.service_areas || '', opening_hours: p.opening_hours || '' } };
     if (on_demand) { if (trigger.email) o.email = trigger.email; if (trigger.callback_url) o.callback_url = trigger.callback_url; if (trigger.country) o.country = trigger.country; if (Number(trigger.location_code)) o.location_code = Number(trigger.location_code); if (trigger.language_code) o.language_code = trigger.language_code; }
@@ -1380,9 +1453,27 @@ const NEWS = /(^|\.)(reuters\.com|bloomberg\.com|forbes\.com|cnbc\.com|bbc\.co\.
 const LISTY = /\b(best|top\s?\d+|\d+\s(best|top)|alternatives?|vs\.?|versus|compared?|comparison|leading|list of|providers? in|companies in|ranked|review(s|ed)?)\b/i;
 const kindOf = (host, title, url, comps) => comps.some(c => host === c || host.endsWith('.' + c)) ? 'competitor' : WIKI.test(host) ? 'encyclopedia' : GOV.test(host) ? 'official' : FORUM.test(host) ? 'forum' : VIDEO.test(host) ? 'video'
   : SOCIAL.test(host) ? 'social' : REVIEW.test(host) ? 'review' : LISTY.test(title + ' ' + String(url).replace(/[-_\/]/g, ' ')) ? 'list' : (NEWS.test(host) || /\/(news|press)\//i.test(url)) ? 'news' : 'article';
+// F-37 (AIR P3, 2026-11-06, prod review 2026-10-31): the client's best-cited question was set aside as "not a search to target": its keyword
+// ("ms 365 ...") read as a category word and a number, so the gate called it too broad. Inside AI Growth only (owner decision D13: the shared
+// fit gate does not change), a question refused for its TOPIC is judged again on the same keyword with the buyers' spellings written out, then
+// on the full question; and a question whose page is the client's own (AI cites it for this question, or it is a ladder or written page) is
+// never set aside. A refusal for another reason (a competitor's brand, a government body, a portal) is never rescued.
+const GROWTH_SYN = [[/\bms[\s-]?365\b/g, 'microsoft 365'], [/\bm365\b/g, 'microsoft 365'], [/\bo365\b/g, 'office 365'], [/\bms[\s-]+office\b/g, 'microsoft office'],
+  [/\bms[\s-]+dynamics\b/g, 'microsoft dynamics'], [/\bms[\s-]+teams\b/g, 'microsoft teams'], [/\bms[\s-]+azure\b/g, 'microsoft azure'], [/\bms[\s-]+power[\s-]?bi\b/g, 'microsoft power bi']];
+const growthSyn = (t) => GROWTH_SYN.reduce((x, [re, to]) => x.replace(re, to), String(t || '').toLowerCase().replace(/\s+/g, ' ').trim());
+const TOPIC_REASONS = ['too broad', 'off topic'];
+// the full question as a search: its scaffolding ("is", "or do I need", "for my company", "who can") is not part of what it asks about
+const QSTOP = new Set(('is are am was were be an a the or and but do does did i we you our my your me us it its this that there any some need needs want get find help move use '
+  + 'should can could would will who what which how why when where whom whose really actually still also else just even ever very much many more most best top good right way ways '
+  + 'vs versus compare compared than then into from with without about of to in on at by for one ones other another separate own').split(/\s+/).filter(Boolean));
+const questionSearch = (q) => [...new Set(growthSyn(q).replace(/[^a-z0-9&+ ]+/g, ' ').split(/\s+/).filter(w => w && !QSTOP.has(w)))].join(' ');
+const OWN_PAGE = ['cited', 'ladder', 'written'];   // pageFor's sources that are the client's own answer to the question (not a page that merely ranks)
 const out = [];
 for (const s of sites) {
   const dom = s.domain; const ours = (u) => { const h = hostOf(u); return h === dom || h.endsWith('.' + dom); };
+  // AIR (P3 guard, CONTRACTS.md §4): with AI ranking ON for this site, the target rows AIR owns (origin 'ai_rank') are left alone here - AIR writes
+  // them. In off or shadow they are re-written as AI Growth rows (origin null), which is the per-site rollback. No row carries the origin before AIR.
+  const airOn = !!(s.settings && s.settings.rank && s.settings.rank.mode === 'on');
   // D15: the host the site really serves (www or not) comes from the one site model (SITE_MODEL_SPEC.md), which resolved it from the homepage,
   // its canonical tag and the site's own live URLs. Bing and IndexNow refuse addresses on another host than the site's. With no model yet
   // (the weekly Site Tracker has not run for this site), the model is built here from the same live URLs the old vote used.
@@ -1448,11 +1539,11 @@ for (const s of sites) {
   // ---- the questions to win (targets) ----
   const pageFor = (keyword, question, pid) => {
     const fromAi = cited.find(c => answers.some(a => a.site_id === s.site_id && a.prompt_id === pid && String(a.our_urls || '').includes(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))));
-    if (fromAi) return { url: normU(fromAi.url), how: 'AI cited it for this question' };
-    let best = null; for (const [u, imp] of byPage) { if (usedPages.has(keyOf(u))) continue; const qs = sq.filter(q => keyOf(q.page) === keyOf(u)); const o = Math.max(0, ...qs.map(q => wcover(keyword, q.query))); if (o >= 0.7 && (!best || o * Math.log10(10 + imp) > best.s)) best = { url: u, s: o * Math.log10(10 + imp), how: 'ranks on Google for related searches' }; }
+    if (fromAi) return { url: normU(fromAi.url), how: 'AI cited it for this question', src: 'cited' };
+    let best = null; for (const [u, imp] of byPage) { if (usedPages.has(keyOf(u))) continue; const qs = sq.filter(q => keyOf(q.page) === keyOf(u)); const o = Math.max(0, ...qs.map(q => wcover(keyword, q.query))); if (o >= 0.7 && (!best || o * Math.log10(10 + imp) > best.s)) best = { url: u, s: o * Math.log10(10 + imp), how: 'ranks on Google for related searches', src: 'search' }; }
     if (best) return best;
-    const lr = lrows.find(l => l.target_url && !usedPages.has(keyOf(l.target_url)) && (l.status === 'published' || l.page_exists === true || l.page_exists === 'true') && wcover(keyword, l.keyword) >= 0.6); if (lr) return { url: normU(lr.target_url), how: 'keyword ladder page' };
-    const lg = slog.find(l => l.published_url && !usedPages.has(keyOf(l.published_url)) && wcover(keyword, l.keyword) >= 0.6); if (lg) return { url: normU(lg.published_url), how: 'page written earlier' };
+    const lr = lrows.find(l => l.target_url && !usedPages.has(keyOf(l.target_url)) && (l.status === 'published' || l.page_exists === true || l.page_exists === 'true') && wcover(keyword, l.keyword) >= 0.6); if (lr) return { url: normU(lr.target_url), how: 'keyword ladder page', src: 'ladder' };
+    const lg = slog.find(l => l.published_url && !usedPages.has(keyOf(l.published_url)) && wcover(keyword, l.keyword) >= 0.6); if (lg) return { url: normU(lg.published_url), how: 'page written earlier', src: 'written' };
     return null;
   };
   // the site's own topic words appear in most of its queries: weight each word by how rare it is (IDF), so a page matches a question by its distinctive words
@@ -1461,20 +1552,42 @@ for (const s of sites) {
   const wcover = (kw, text) => { const K = [...new Set(toks(kw))], T = new Set(toks(text)); if (!K.length) return 0; const tot = K.reduce((t, w) => t + wgt(w), 0); return tot ? K.filter(w => T.has(w)).reduce((t, w) => t + wgt(w), 0) / tot : 0; };
   const usedPages = new Set();   // one refresh per page: a page matched to a question is not offered for the next one
   const existing = new Map(targetsStored.filter(t => t.site_id === s.site_id).map(t => [t.target_id, t]));
+  const airRows = airOn ? [...existing.values()].filter(t => t.origin === 'ai_rank') : [];   // AIR guard: on only
+  for (const t of airRows) if (t.page_url) usedPages.add(keyOf(t.page_url));
+  // F-38 (AIR P3, 2026-11-06, prod review 2026-10-31): "not updated in 90+ days" was printed for a page the readiness check never read and for a
+  // page that shows no date, and a page the agent published ten days earlier was offered for a refresh. A page's date is now the newest of the
+  // date the content log recorded when it was published and the update date read on the page; with neither it says so ("no visible date"), and a
+  // page published within refresh_after_days is fresh. A page published that recently and not read yet waits for its readiness check.
+  const pubAt = (url) => { const k = keyOf(url); let d = ''; for (const l of slog) if (l.published_url && l.published_at && keyOf(l.published_url) === k && String(l.published_at) > d) d = String(l.published_at); return d; };
+  const pageDate = (url, pr) => { const lg = url ? pubAt(url) : ''; const pg = pr && pr.updated_on ? String(pr.updated_on) : ''; const d = lg > pg ? lg : pg; return { date: d, from: !d ? '' : d === lg ? 'published' : 'page' }; };
   const logByReq = new Map(slog.filter(l => l.request_id).map(l => [String(l.request_id), l]));   // B9-6: the run a target claims to be written by
   const targets = []; const won_lost = []; const won_now = []; const stalled_targets = [];   // B9-4: what was won this run, with its evidence, and what was won before and is lost again
   for (const g of gaps.filter(g => g && g.prompt && g.kind !== 'brand').slice(0, 10)) {
     const p0 = promptOf.get(g.prompt_id || '') || myPrompts.find(x => String(x.prompt || '').trim() === String(g.prompt).trim()) || {}; const pid = g.prompt_id || p0.prompt_id || qid(g.prompt); const keyword = String(p0.keyword || g.topic || '').toLowerCase().trim() || toks(g.prompt).slice(0, 5).join(' ');
     const target_id = 'ait_' + s.site_id.replace(/^site_/, '') + '_' + pid; const old = existing.get(target_id) || {};
-    const tg = fitGate(keyword, targetCtx);   // R-K4: judged before it may claim a page, so a refused question never takes another one's refresh
-    const tev = tg.ok ? fitEvidence(keyword, targetCtx.topics || [], { topic_label: 'what this website sells and the keywords you chose', services: targetDeclared }) : null;
+    if (airOn && old.origin === 'ai_rank') continue;   // AIR guard: AIR owns this question's row while the site is on
+    const tg0 = fitGate(keyword, targetCtx);   // R-K4: judged before it may claim a page, so a refused question never takes another one's refresh
+    // F-37: a topic refusal is judged again with the buyers' spellings written out, then on the full question
+    const rescue = (() => { if (tg0.ok || !TOPIC_REASONS.includes(tg0.reason)) return null;
+      for (const [alt, via] of [[growthSyn(keyword), 'the same search with its abbreviation written out'], [questionSearch(g.prompt), 'the full question']]) {
+        if (!alt || alt === keyword) continue; const g1 = fitGate(alt, targetCtx); if (g1.ok) return { g: g1, text: alt, via }; }
+      return null; })();
+    const tg = rescue ? rescue.g : tg0;
+    const tev = tg.ok ? fitEvidence(rescue ? rescue.text : keyword, targetCtx.topics || [], { topic_label: 'what this website sells and the keywords you chose', services: targetDeclared }) : null;
     const unjudged = !!tev && tev.verdict === 'unknown';
-    const page = pageFor(keyword, g.prompt, pid); if (page && (tg.ok || ['writing', 'written'].includes(old.status))) usedPages.add(keyOf(page.url)); const pr = page ? stored.get(keyOf(page.url)) : null;
+    const page = pageFor(keyword, g.prompt, pid); const ownPage0 = !!(page && OWN_PAGE.includes(page.src));
+    // FX-B RB-2 (2026-11-06, REVIEW_B_SAFETY.md): the own-page rule keeps a question refused for its TOPIC only ("too broad", "off topic"), as the
+    // rescue does: a question refused as another company's brand, a job search, another market, a government body or a portal is set aside even
+    // when a page of the client's matches it
+    const ownPage = ownPage0 && !tg0.ok && TOPIC_REASONS.includes(tg0.reason);
+    if (page && (tg.ok || ownPage || ['writing', 'written'].includes(old.status))) usedPages.add(keyOf(page.url)); const pr = page ? stored.get(keyOf(page.url)) : null;
     // a planned keyword-ladder page for the same search: the Content Cadence writes it with this AI target (one search, one page)
     const hw = new Set(lrows.flatMap(l => String(l.head_keyword || '').toLowerCase().split(/[^a-z0-9]+/)).filter(Boolean)); const kt = (k) => [...new Set(toks(k).filter(w => !hw.has(w)))];
     const same = (a, b) => { const A = kt(a), B = new Set(kt(b)); return A.length > 0 && A.filter(w => B.has(w)).length / A.length >= 0.6; };
     const ladderPage = !page ? lrows.find(l => !['published'].includes(String(l.status)) && (same(keyword, l.keyword) || same(l.keyword, keyword))) : null;
-    const stale = !pr || !pr.updated_on || days(pr.updated_on) > CONFIG.refresh_after_days; const weak = !pr || (Number(pr.score) || 0) < 70;
+    const pd = page ? pageDate(page.url, pr) : { date: '', from: '' };   // F-38
+    const stale = !pd.date || days(pd.date) > CONFIG.refresh_after_days; const weak = !pr || (Number(pr.score) || 0) < 70;
+    const justPublished = !!page && !pr && pd.from === 'published' && !stale;   // F-38: published recently and not read yet: its readiness check comes first
     const kind = page ? 'refresh' : 'answer';
     const engines = Object.entries(g.engines || {}).filter(([, st]) => st === 'absent').map(([e]) => e);
     const vol = Number(g.volume) || 0; const value = Math.round(100 * (1 + Math.log10(1 + vol) / 2) * (CONFIG.stage_weight[g.stage] || 0.7) * (1 + Math.min(4, (g.competitors || []).length) / 4) * (1 + engines.length / 7)) / 100;
@@ -1496,28 +1609,42 @@ for (const s of sites) {
       const since = old.written_at || old.updated_at || '';
       if (days(since) < CONFIG.stale_writing_days) return null;
       return { since: String(since).slice(0, 10), log: l ? 'the page run is still "' + l.status + '"' : 'no page run on record' }; })();
-    const status0 = wasWon ? 'queued' : stalled ? 'queued' : ['writing', 'written'].includes(old.status) ? old.status : (kind === 'refresh' && !stale && !weak) ? 'skipped' : (old.status === 'skipped' && old.reason === 'kept by you') ? 'skipped' : 'queued';
+    const status0 = wasWon ? 'queued' : stalled ? 'queued' : ['writing', 'written'].includes(old.status) ? old.status : (kind === 'refresh' && ((!stale && !weak) || justPublished)) ? 'skipped' : (old.status === 'skipped' && old.reason === 'kept by you') ? 'skipped' : 'queued';
     // R-K4: a target whose keyword this website should not target is never queued for a page. A row already being written (or written) keeps
     // its state - that page is live work - and is flagged, the same rule fitStored applies to a stored rung.
     const tLive = ['writing', 'written'].includes(status0);
-    const status = !tg.ok && !tLive ? 'set_aside' : status0;
-    const gateNote = tg.ok ? '' : 'not a search this website should target: ' + tg.detail + ' (' + tg.reason + ')' + (tLive ? '; its page is already being written, so it is kept and flagged' : '; set aside, so no page is written for it') + '. ';
+    // FX-B RB-2: the keyword stored for the Content Cadence is the one it gates again when it writes. A question kept for its own page, or rescued
+    // on the full question, keeps a keyword the gate refuses: queued, it would take one of the max_targets slots every week and be refused at
+    // writing time. It is kept as `skipped` with that reason instead (listed, never written on its own, not counted against the queued slots).
+    const storedKw = rescue && rescue.text === growthSyn(keyword) ? rescue.text : keyword;
+    const writerRefuses = rescue ? storedKw !== rescue.text : !tg0.ok;
+    const status1 = !tg.ok && !tLive && !ownPage ? 'set_aside' : status0;   // F-37: the client's own page for it is never set aside
+    const keptNotWritten = status1 === 'queued' && writerRefuses && !tLive;
+    const status = keptNotWritten ? 'skipped' : status1;
+    // FX-B RB-5: a question the client kept out stays kept: its reason is stored as "kept by you" again (it was rewritten each week, so the next
+    // week's plan, and AIR's target sink, no longer saw the client's choice and queued it again)
+    const keptByYou = status === 'skipped' && old.status === 'skipped' && /kept by you/i.test(String(old.reason || '')) && !wasWon && !stalled;
+    const gateNote = tg.ok ? (rescue ? 'judged on ' + rescue.via + ' ("' + rescue.text.slice(0, 120) + '")' + (rescue.g.detail ? ': ' + rescue.g.detail : '') + '. ' : '')
+      : 'not a search this website should target: ' + tg.detail + ' (' + tg.reason + ')' + (tLive ? '; its page is already being written, so it is kept and flagged' : ownPage ? '; but ' + (page.src === 'cited' ? 'AI already cites your page ' + page.url + ' for this question' : 'your own page ' + page.url + ' answers it') + ', so it is kept' : '; set aside, so no page is written for it') + '. ';
+    const keptNote = keptNotWritten ? (ownPage ? 'your page answers it, so it is kept, but its search "' + storedKw + '" is not one the page writer takes on its own: refresh that page yourself if it needs it (not queued for an automatic page). '
+      : 'the full question is on your topic, but its search "' + storedKw + '" is not one the page writer takes on its own: it is listed, not queued for an automatic page. ') : '';
     const judgeNote = unjudged ? 'Too little is known about what you sell to tell whether this question is part of it, so it is only suggested, never written on its own. ' : '';   // F-REH: one plain sentence (it used to wrap the gate\'s own detail and say the same thing twice)
     if (unjudged) targets_unjudged.push({ target_id, question: g.prompt, keyword, kind, detail: tev.detail });
-    if (!tg.ok) targets_set_aside.push({ target_id, question: g.prompt, keyword, kind, reason: tg.reason, detail: tg.detail, kept: tLive, note: '"' + keyword + '" ' + gateNote.trim() });
+    if (!tg.ok) targets_set_aside.push({ target_id, question: g.prompt, keyword, kind, reason: tg.reason, detail: tg.detail, kept: tLive || ownPage, note: '"' + keyword + '" ' + gateNote.trim() });
     if (stalled) stalled_targets.push({ target_id, question: g.prompt, since: stalled.since, detail: stalled.log });
     const lostAgain = wasWon ? { target_id, question: g.prompt, won_at: String(old.won_at || '').slice(0, 10), lost_at: String((v && v.checked_at) || iso).slice(0, 10), observed: obsLine(obsOf(pid)) } : null;
     if (lostAgain) won_lost.push(lostAgain);
-    targets.push({ target_id, site_id: s.site_id, domain: dom, prompt_id: pid, question: g.prompt, keyword, kind, page_url: page ? page.url : '', page_type: kind === 'refresh' ? '' : (PT[g.kind] || 'Guide'),
+    // F-37: a keyword passed with its abbreviation written out is stored written out, so the page the Content Cadence writes uses the buyers' full name
+    targets.push({ target_id, site_id: s.site_id, domain: dom, prompt_id: pid, question: g.prompt, keyword: storedKw, kind, page_url: page ? page.url : '', page_type: kind === 'refresh' ? '' : (PT[g.kind] || 'Guide'),
       fanout: (g.fanout || []).slice(0, 8).join(' | '), sources_json: JSON.stringify((g.cited_urls || []).slice(0, 6).map(c => ({ u: c.u, t: c.t || '', n: c.n || 1 }))), competitors: (g.competitors || []).slice(0, 8).join(', '),
       engines: engines.join(', '), stage: g.stage || '', value, status,
-      reason: gateNote + judgeNote + (draftFailed ? 'the page written for this question did not pass the quality check: fix the draft and run it again (it is not offered as a page that answers the question until it passes). ' : '') + (stalled ? 'the page run started on ' + stalled.since + ' never produced a page (' + stalled.log + '): queued again. ' : '') + (lostAgain ? 'AI named you for this question and has stopped (won ' + (lostAgain.won_at || 'earlier') + ', lost again in the check of ' + lostAgain.lost_at + '; ' + lostAgain.observed + '). ' : '') + (status === 'set_aside' ? '' : ladderPage ? 'written as the keyword ladder page "' + ladderPage.keyword + '" (one search, one page)' : status === 'skipped' && kind === 'refresh' ? 'the page is fresh (updated ' + String(pr && pr.updated_on || '').slice(0, 10) + ') and AI-ready (' + (pr && pr.score) + '/100)' : page ? 'refresh ' + page.url + ' (' + page.how + (stale ? '; not updated in 90+ days' : '') + (weak ? '; AI-readiness ' + (pr ? pr.score + '/100' : 'not checked yet') : '') + ')' : 'no page answers it yet'),
+      reason: keptByYou ? 'kept by you' : gateNote + keptNote + judgeNote + (draftFailed ? 'the page written for this question did not pass the quality check: fix the draft and run it again (it is not offered as a page that answers the question until it passes). ' : '') + (stalled ? 'the page run started on ' + stalled.since + ' never produced a page (' + stalled.log + '): queued again. ' : '') + (lostAgain ? 'AI named you for this question and has stopped (won ' + (lostAgain.won_at || 'earlier') + ', lost again in the check of ' + lostAgain.lost_at + '; ' + lostAgain.observed + '). ' : '') + (status === 'set_aside' ? '' : ladderPage ? 'written as the keyword ladder page "' + ladderPage.keyword + '" (one search, one page)' : status1 === 'skipped' && kind === 'refresh' && justPublished ? 'the page was published on ' + pd.date.slice(0, 10) + ': its AI readiness is checked before any refresh is planned' : status1 === 'skipped' && kind === 'refresh' ? 'the page is fresh (' + (pd.from === 'published' ? 'published ' : 'updated ') + pd.date.slice(0, 10) + ') and AI-ready (' + (pr && pr.score) + '/100)' : page ? 'refresh ' + page.url + ' (' + page.how + (stale ? (pd.date ? '; not updated in 90+ days (last date ' + pd.date.slice(0, 10) + ')' : pr ? '; no visible update date on the page' : '') : '') + (weak ? '; AI-readiness ' + (pr ? pr.score + '/100' : 'not checked yet') : '') + ')' : 'no page answers it yet'),
       created_at: old.created_at || iso, updated_at: iso, request_id: old.request_id || '', written_at: old.written_at || '', won_at: old.won_at || '' });
     if (page) addPage(page.url, 'target', 'answers "' + g.prompt.slice(0, 80) + '"', { question: g.prompt });
   }
   // targets no longer lost: won (if written) or no longer needed
   const lostIds = new Set(targets.map(t => t.target_id));
-  for (const [id, t] of existing) if (!lostIds.has(id) && !['won', 'skipped', 'set_aside'].includes(t.status) && v) {
+  for (const [id, t] of existing) if (!lostIds.has(id) && !['won', 'skipped', 'set_aside'].includes(t.status) && v && !(airOn && t.origin === 'ai_rank')) {
     // B9-4: absent from the gap list is not the same as named. It can also mean the question was not asked this run (the panel
     // rotates, a request can fail), so the answers of the window decide: at least win_min_answers of them must name the business.
     const o = obsOf(t.prompt_id || ''); const written = ['writing', 'written'].includes(t.status);
@@ -1531,6 +1658,8 @@ for (const s of sites) {
     if (won) won_now.push({ target_id: id, question: t.question || '', observed: obsLine(o) }); }
   const queued = targets.filter(t => t.status === 'queued').sort((a, b) => b.value - a.value);
   queued.slice(CONFIG.max_targets).forEach(t => { t.status = 'skipped'; t.reason = 'lower value than the ' + CONFIG.max_targets + ' queued questions (checked again next week)'; });
+  // AIR guard (on only): the pages of the questions AIR works on are key pages too (readiness, Bing / IndexNow), as AI Growth's own targets' pages are
+  for (const t of airRows) if (t.page_url) addPage(t.page_url, 'target', 'AI ranking target: "' + String(t.question || t.keyword || '').slice(0, 80) + '"', t.question ? { question: String(t.question) } : {});
   // ---- pages to audit this week (rotating) ----
   const keyPages = [...key.values()].slice(0, CONFIG.max_key_pages);
   const rank = { cited: 0, target: 1, content: 2, ladder: 3, search: 4, home: 5 };
@@ -1614,7 +1743,7 @@ for (const s of sites) {
   // writes: with it on, these prospects go to the Link Builder's qualification and writer (one writer).
   const modelName = SM.name(site_model);
   const business_name = String(s.profile.business_name || '').trim() || (modelName && SM.helpers.bare(modelName) !== dom ? modelName : '');
-  out.push({ json: { site_id: s.site_id, domain: dom, site_host, country: s.country || '', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, cycle, business_name, profile: s.profile,
+  out.push({ json: { site_id: s.site_id, domain: dom, site_host, ...(airOn ? { air_on: true } : {}), country: s.country || '', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, cycle, business_name, profile: s.profile,
     link_builder: !!s.settings.link_builder, services: SM.services(site_model), accreditation: SM.facts(site_model).accreditation,
     // B-G2: what the gate refused, with its reason, so the report names it instead of printing a shorter list (INVARIANTS rule 1)
     set_aside, set_aside_note: [FITR.line(set_aside, 'turned into a question to win or a page to write'),

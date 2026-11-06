@@ -25,6 +25,8 @@ import { AiPilotPanel } from './_components/ai-pilot';
 import { PanelManager, SegmentsSection } from './_components/ai-panel';
 import { AccessPanel, AiTrafficPanel, DiscoveryPanel, GroupsPanel, IndexPanel, PerceptionPanel } from './_components/ai-insights';
 import { AiGrowthSection } from './_components/ai-growth';
+import { AiRankSection, AiRankShadowPanel } from './_components/ai-rank';
+import { useOrgCtx } from '@/lib/context';
 import { Chips, DataGate, FillHeight, MetricSwitch, Kind, Panel, SectionHeading, ToolButton, YesNo, useSitePage } from './_components/kit';
 import { lastTwo, pct, sortByDate, timeAxisFormat, urlPath } from './_components/format';
 import { AiDelta, aiHeadline, compareNote } from './_components/ai-compare';
@@ -57,6 +59,7 @@ export default function AiVisibilityPage() {
 
 function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; refetching: boolean; filter: AiFilter; setFilter: (p: Partial<AiFilter>) => void; clearFilter: () => void }) {
   const { site, can, page } = useSitePage();
+  const { org, me } = useOrgCtx();
   const runs = useMemo(() => sortByDate(d.runs, (r) => r.checkedAt), [d.runs]);
   const [L, P] = lastTwo(runs);
   const engineNames = useMemo(() => Object.fromEntries((d.latest?.engines ?? []).map((e) => [e.key, e.name])), [d.latest]);
@@ -71,23 +74,27 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
 
   if (!L && !d.latest && !d.report)
     return (
-      <EmptyState
-        icon={<Bot className="size-5" />}
-        title="No AI visibility check yet"
-        description={`The check asks your buyers' questions on ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews (Copilot optional), and shows who gets named, how AI describes you, which sources it trusts, whether AI crawlers can read your site and what AI visits are worth. About ${quoteLabel(estimateAiVisibilityCost().fullRun + estimateAiVisibilityCost().weekly / 4.33)} for the first full check.`}
-        action={
-          <>
-            <ToolButton mode="ai_visibility" variant="primary">
-              Run the first check
-            </ToolButton>
-            {can('admin') && (
-              <ButtonLink to={page('settings/tracking')} variant="secondary">
-                Weekly monitor settings
-              </ButtonLink>
-            )}
-          </>
-        }
-      />
+      <div className="space-y-6">
+        <EmptyState
+          icon={<Bot className="size-5" />}
+          title="No AI visibility check yet"
+          description={`The check asks your buyers' questions on ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews (Copilot optional), and shows who gets named, how AI describes you, which sources it trusts, whether AI crawlers can read your site and what AI visits are worth. About ${quoteLabel(estimateAiVisibilityCost().fullRun + estimateAiVisibilityCost().weekly / 4.33)} for the first full check.`}
+          action={
+            <>
+              <ToolButton mode="ai_visibility" variant="primary">
+                Run the first check
+              </ToolButton>
+              {can('admin') && (
+                <ButtonLink to={page('settings/tracking')} variant="secondary">
+                  Weekly monitor settings
+                </ButtonLink>
+              )}
+            </>
+          }
+        />
+        {/* browser pass D4 (2026-11-06): a website in AI ranking `on` says when its first plan comes, even before the first check */}
+        {d.aiRank && <AiRankSection plan={d.aiRank} domain={site.domain} />}
+      </div>
     );
 
   // A6 (2026-10-23): the report's prose, grid and actions are shown as current only when they were written for the latest run
@@ -331,6 +338,9 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
       )}
 
       <AiGrowthSection growth={d.growth} />
+      {/* AIR (2026-11-06): the AI ranking plan of a website in `on` mode (nothing for off or the private trial); the trial view for platform admins */}
+      <AiRankSection plan={d.aiRank} domain={site.domain} />
+      {me.platformAdmin && <AiRankShadowPanel orgId={org.id} siteId={site.id} />}
 
       {d.latest?.index && <IndexPanel index={d.latest.index} domain={site.domain} />}
       {d.latest?.index && <DiscoveryPanel index={d.latest.index} tracked={d.prompts.map((p) => p.prompt)} />}

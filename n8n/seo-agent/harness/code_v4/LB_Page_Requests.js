@@ -716,12 +716,25 @@ const LISTINGS = [
   { id: 'sap_store', name: 'SAP Store', host: 'store.sap.com', cat: 'marketplace', kinds: ['saas'], integ: /\bsap\b/i, link: 'unknown', ai: 'low', prio: 3, submit: 'https://www.sap.com/partners.html', why: 'Through the SAP partner programme; for SAP integrations.' },
   { id: 'hubspot_marketplace', name: 'HubSpot App Marketplace', host: 'ecosystem.hubspot.com', cat: 'marketplace', kinds: ['saas'], integ: /\bhubspot\b/i, link: 'unknown', ai: 'low', prio: 3, submit: 'https://developers.hubspot.com/', why: 'Needs 3+ active installs; for a real HubSpot integration.' },
   { id: 'xero_apps', name: 'Xero App Store', host: 'apps.xero.com', cat: 'marketplace', kinds: ['saas'], integ: /\bxero\b/i, link: 'unknown', ai: 'low', prio: 3, submit: 'https://developer.xero.com/', why: 'For a Xero integration.' },
-  { id: 'quickbooks_apps', name: 'QuickBooks App Store', host: 'apps.intuit.com', cat: 'marketplace', kinds: ['saas'], integ: /quickbooks/i, link: 'unknown', ai: 'low', prio: 3, submit: 'https://developer.intuit.com/', why: 'For a QuickBooks integration.' }];
+  { id: 'quickbooks_apps', name: 'QuickBooks App Store', host: 'apps.intuit.com', cat: 'marketplace', kinds: ['saas'], integ: /quickbooks/i, link: 'unknown', ai: 'low', prio: 3, submit: 'https://developer.intuit.com/', why: 'For a QuickBooks integration.' },
+  // ---- AIR (2026-11-06, docs/ai-ranking-2026-11-05 DESIGN 2.F lever L09, package P6): the directories of B2B service firms that AI answers to
+  // "which firm should I hire for X" draw on (R2 / R4: list- and directory-dominated recommendation answers). `air: true` = offered ONLY to a
+  // website whose AI ranking is `on` (listingsFor's opts.air); every other website gets exactly the checklist it had. Clutch, GoodFirms and
+  // DesignRush above already serve agencies; these add the rest of the set. Nothing is submitted for the client.
+  { id: 'themanifest', name: 'The Manifest', host: 'themanifest.com', cat: 'reviews', kinds: ['agency'], air: true, re: /themanifest\.com\/company\/([a-z0-9-]+)/i,
+    link: 'unknown', ai: 'medium', prio: 2, submit: 'https://themanifest.com/', why: 'A sister site of Clutch with shortlists of service firms by service and city; AI answers to "which firm should I hire" cite such lists.' },
+  { id: 'sortlist', name: 'Sortlist', host: 'sortlist.com', cat: 'directory', kinds: ['agency'], air: true, re: /sortlist\.[a-z.]+\/agency\/([a-z0-9-]+)/i,
+    link: 'unknown', ai: 'medium', prio: 2, submit: 'https://www.sortlist.com/', why: 'A marketplace where buyers brief and shortlist agencies and development firms; its agency pages are read by AI answers about providers.' },
+  { id: 'ms_partner_dir', name: 'Microsoft partner directory', host: 'appsource.microsoft.com', cat: 'partner', kinds: ['agency', 'saas'], air: true, re: /appsource\.microsoft\.com\/[a-z-]+\/marketplace\/partner-dir\/[^"'\s]+/i, integ: /microsoft (solutions |gold |silver |certified |cloud )?partner|solutions partner|dynamics 365 partner|business central partner|partner center|microsoft partner network/i,
+    link: 'unknown', ai: 'medium', prio: 1, submit: 'https://partner.microsoft.com/', why: 'For a Microsoft partner: the official directory buyers search for implementation partners; a listing needs a partner account and a published profile.' },
+  { id: 'pasha', name: 'P@SHA member directory (Pakistan Software Houses Association)', host: 'pasha.org.pk', cat: 'industry', kinds: ['saas'], countries: ['PK'], air: true,
+    link: 'unknown', ai: 'low', prio: 2, submit: 'https://www.pasha.org.pk/', why: 'For software firms in Pakistan: the industry association\'s member list, a trust signal buyers and AI answers read.' }];
 const LISTING_HOSTS = LISTINGS.map(l => l.host);
 // which entries apply to a site: its kind (from the business type and topics), country, topics, and the integrations its own pages name
-function listingsFor(kinds, iso, topicText, siteText) {
-  const K = Array.isArray(kinds) ? kinds : [kinds];
-  return LISTINGS.filter(l => (K.some(k => l.kinds.includes(k)) || (l.kinds.includes('any') && !K.includes('local') && l.cat !== 'local')) && (!l.countries || !l.countries.length || l.countries.includes(String(iso || '').toUpperCase()))
+// opts.air (AIR P6): true only for a website whose AI ranking is `on`; without it the entries marked `air` are never offered (today's checklist)
+function listingsFor(kinds, iso, topicText, siteText, opts) {
+  const K = Array.isArray(kinds) ? kinds : [kinds]; const air = !!(opts && opts.air === true);
+  return LISTINGS.filter(l => (!l.air || air) && (K.some(k => l.kinds.includes(k)) || (l.kinds.includes('any') && !K.includes('local') && l.cat !== 'local')) && (!l.countries || !l.countries.length || l.countries.includes(String(iso || '').toUpperCase()))
     && (!l.topics || l.topics.test(topicText || '')) && (!l.integ || l.integ.test(siteText || '')));
 }
 // What a fetched listing page is allowed to claim (P34-2, live 2026-10-12): three listings came back "listed" when they were not —
@@ -739,8 +752,17 @@ function listingClaim(o) {
   if (x.as_list) return { status: 'missing', evidence: 'the list does not name you' };
   return { status: 'unknown', evidence: 'the page at ' + String(x.url || '') + ' does not name you: it may belong to another product, or your profile may use a different name' };
 }
-function siteKind(businessType, topicText) {   // the checklists that apply: a consultancy that also sells software gets both
+function siteKind(businessType, topicText, opts) {   // the checklists that apply: a consultancy that also sells software gets both
   const t = String(businessType || '') + ' ' + String(topicText || '');
+  // AIR P6 (opts.air, on websites only): a firm that builds or implements software FOR clients is a service firm and a software seller, so it gets
+  // both checklists (the service-firm directories are where AI answers about providers look); every other website is judged as before.
+  // FX-C RC-8: only when its words name software work too. A tax, VAT, HR, payroll, accounting, audit, legal or management consultancy is a
+  // professional-services firm: the agency checklist only (no software marketplace), unless its own business type names software.
+  const AIR_SOFT = /software|\bapps?\b|\bsaas\b|\berp\b|\bcrm\b|platform|(system|systems|software|it|api|crm|erp|data) integrat|(app|web|software|product|mobile) development|development (company|firm|agency|partner)|automation|it services|dynamics 365|salesforce|\bodoo\b|\bsap\b/i;
+  const AIR_PRO = /\b(tax|vat|hr|human resources?|payroll|accounting|accountants?|bookkeeping|audit|auditing|legal|law|management consult\w*|recruit\w*|immigration)\b/i;
+  if (opts && opts.air === true && !/restaurant|cafe|clinic|dental|salon|store|shop|hotel|gym|plumb|electric|lawyer|law firm|real estate|local ?business|medical|spa|bakery/i.test(t)
+    && /software (development|house|company|agency|firm)|custom software|development (company|firm|agency|partner)|app development|web development|it services|implementation (partner|services)|systems? integrat|consultanc|consulting|outsourc|dedicated (team|developers)/i.test(t)
+    && AIR_SOFT.test(t) && (!AIR_PRO.test(String(businessType || '')) || AIR_SOFT.test(String(businessType || '')))) return ['agency', 'saas'];
   if (/restaurant|cafe|clinic|dental|salon|store|shop|hotel|gym|plumb|electric|lawyer|law firm|real estate|local ?business|medical|spa|bakery/i.test(t)) return ['local'];
   const agency = /agency|consult|marketing services|design studio|development services|professional ?service|accounting firm|audit firm/i.test(t);
   const software = /software|saas|platform|\bapp\b|cloud|e-?invoic|\berp\b|automation|\bapi\b/i.test(t);

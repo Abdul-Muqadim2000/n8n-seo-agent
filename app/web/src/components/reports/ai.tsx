@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { AlertTriangle, BadgeCheck, BarChart3, Bot, CalendarClock, CheckCircle2, CircleMinus, Coins, Eye, FileText, Gauge, Globe, Link2, ListOrdered, MessageSquareQuote, MessagesSquare, PieChart, Search, ShieldCheck, Smile, Sparkles, Users, XCircle } from 'lucide-react';
-import { AI_ENGINES, aiAlertsOf, questionWin, type ReportDetail } from '@seo/shared';
+import { AI_ENGINES, AI_RANK_EXECUTOR_TEXT, aiAlertsOf, aiRankReportOf, aiRankStatusText, questionWin, type AiRankReport, type ReportDetail } from '@seo/shared';
 import { fmtDateTime } from '@/lib/utils';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Callout } from '@/components/ui/feedback';
@@ -11,6 +11,7 @@ import { ShareBars } from '@/components/charts';
 import { ActionList, BriefCard } from './actions';
 import { AlertList, arr, Block, Chips, Empty, Facts, has, CreditsCard, n, num, obj, objs, pct, SectionTitle, shortUrl, str, strs, type P } from './kit';
 import { ReportHero, ScoreMark } from './visuals';
+import { AiRankClientNote } from '@/components/site/AiRankClientNote';
 
 const ENGINE_ORDER = AI_ENGINES.map((e) => e.value as string);
 const engineRank = (k: string) => {
@@ -580,6 +581,8 @@ export function AiGrowthReport({ report }: { report: ReportDetail }) {
           </ul>
         </Block>
       )}
+      {/* AIR (2026-11-06): the AI ranking plan, carried only by the reports of a website in AI ranking's On mode (absent: nothing new) */}
+      <AiRankReportBlock r={aiRankReportOf(p)} />
       {earned.length > 0 && (
         <Block title="Pages AI cites without naming you" icon={<MessagesSquare />} description="Be named on these pages and the answers can name you">
           <ul className="divide-y divide-line text-[13px]">
@@ -628,5 +631,36 @@ export function AiGrowthReport({ report }: { report: ReportDetail }) {
       )}
       <CreditsCard p={p} />
     </Stagger>
+  );
+}
+
+/** AIR (2026-11-06): the `ai_rank` key of an AI growth report. Every field may be missing; a report without the key renders nothing here. */
+function AiRankReportBlock({ r }: { r: AiRankReport | null }) {
+  if (!r) return null;
+  // FX-C RC-1: the client view only (the owner's memo never reaches a customer's payload); an older report without it shows its steps only
+  if (!r.client && !r.actions.length && !r.steps.length) return null;
+  return (
+    <Block title="AI ranking plan" icon={<Sparkles />} description="This week's steps to get you named in AI answers, and what changed">
+      <div className="space-y-4 text-[13px]">
+        {r.actions.length > 0 && (
+          <ul className="divide-y divide-line">
+            {r.actions.map((a, i) => (
+              <li key={a.actionId || i} className="flex flex-col gap-1 py-2 sm:flex-row sm:items-start sm:justify-between">
+                <span className="min-w-0">
+                  <span className="font-medium text-ink [overflow-wrap:anywhere]">{a.label}</span>
+                  {a.url && <span className="block text-xs text-ink-3 [overflow-wrap:anywhere]">{shortUrl(a.url)}</span>}
+                  {a.why && <span className="block text-ink-2 [overflow-wrap:anywhere]">{a.why}</span>}
+                </span>
+                <span className="flex shrink-0 flex-wrap gap-1.5">
+                  <Badge>{AI_RANK_EXECUTOR_TEXT[a.executor]}</Badge>
+                  {a.status && <Badge tone={['done', 'verified'].includes(a.status) ? 'good' : 'neutral'}>{aiRankStatusText(a.status)}</Badge>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {r.client && <AiRankClientNote note={r.client} />}
+      </div>
+    </Block>
   );
 }

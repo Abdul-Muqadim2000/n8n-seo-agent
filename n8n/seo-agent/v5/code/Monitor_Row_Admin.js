@@ -4,6 +4,7 @@
 // competitors (domains), brand_names; W2-E3: ai_claude_weekly, ai_pulse_engines, ai_persona_context, ai_fanout_check (0-200), ai_demand_market;
 // Index coverage (2026-10-29): index_watch (daily index watch, empty = on), index_daily_cap (20-1,200 URL inspections a day, empty = 300);
 // wave 2 (2026-10-30): index_sitemap_submit (the client's opt-in for sitemap submission, empty = OFF).
+/*__AI_RANK_FLAGS__*/
 const a = $('Admin Action').first().json; const m = a.monitors || {};
 let old = {}; try { old = $('Load Monitors (Admin)').all().map(i => i.json).find(x => x && x.site_id === a.site_id) || {}; } catch (e) {}
 const has = (k) => m[k] !== undefined && m[k] !== null && m[k] !== '';
@@ -46,5 +47,11 @@ Object.assign(__row, { index_watch: has('index_watch') ? (m.index_watch === true
 // Index coverage wave 2 (2026-10-30, DESIGN_WAVE2.md §2.5): the opt-in for sitemap submission (validated in Admin Action; empty = off) - kept as stored unless given
 Object.assign(__row, { index_sitemap_submit: has('index_sitemap_submit') ? (m.index_sitemap_submit === true || /^(true|1|yes|on)$/i.test(String(m.index_sitemap_submit)))
   : (old.index_sitemap_submit === '' || old.index_sitemap_submit == null ? null : (old.index_sitemap_submit === true || old.index_sitemap_submit === 'true')) });
+// AIR (2026-11-06, docs/ai-ranking-2026-11-05/CONTRACTS.md §2 / §5, package P4): the AI-ranking mode and its four flags. A value given is set
+// through the one rule (AIRF.validate; Admin Action has already refused a bad one); '' clears it to null (= off); a field not given is kept as stored.
+const __airGiven = AIRF.validate(Object.fromEntries(AIRF.COLS.filter(k => m[k] !== undefined && m[k] !== null).map(k => [k, m[k]]))).values;
+const __airOld = (k) => { const v = old[k]; if (v === '' || v == null) return null;
+  if (k === 'ai_rank_mode') return String(v); if (k === 'ai_rank_fanout_n') return Number(v); return v === true || v === 'true'; };
+Object.assign(__row, Object.fromEntries(AIRF.COLS.map(k => [k, k in __airGiven ? __airGiven[k] : __airOld(k)])));
 if (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit
 return [{ json: __row }];

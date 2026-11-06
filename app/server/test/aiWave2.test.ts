@@ -46,6 +46,7 @@ vi.mock('../src/auth/access', () => ({
   }),
   orgAccess: vi.fn(),
   requireVerified: vi.fn(),
+  isPlatformAdmin: vi.fn(() => false),   // FX-C RC-1: the AI page passes whether the viewer is a platform admin (the raw AI ranking memo)
 }));
 vi.mock('../src/services/audit', () => ({ audit: vi.fn(async (_req: unknown, _org: string, e: Record<string, unknown>) => { st.audits.push(e); }) }));
 vi.mock('../src/db', async (orig) => ({ ...(await orig<typeof import('../src/db')>()), db: { update: () => ({ set: () => ({ where: async () => undefined }) }), query: {} } }));

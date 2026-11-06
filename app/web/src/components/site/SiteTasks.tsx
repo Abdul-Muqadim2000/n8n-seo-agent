@@ -1,15 +1,17 @@
 // Steps on your website (app/docs/SITE_TASKS.md, 2026-10-28): the things only the client can change on their own website, each checked by
 // us. The Pipeline lists them all (to do highlighted, done ticked with when and how we know, skipped muted); Recommendations and the AI
 // page reuse the check button. "I've done it, check now" reads the website at once; we also look again every day on our own.
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { CheckCircle2, CircleDashed, ListChecks, RotateCcw, SkipForward, TriangleAlert } from 'lucide-react';
-import { siteTaskCheckLine, type SiteTask } from '@seo/shared';
+import { aiRankAddressCheck, siteTaskCheckLine, type SiteTask } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { InsightItem } from '@/components/insight';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/misc';
+import { Field, Input } from '@/components/ui/field';
 import { api, toastError } from '@/lib/api';
 import { noRetryOn4xx } from '@/lib/queries';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
@@ -41,8 +43,9 @@ function useTaskAction() {
   const { site } = useSiteCtx();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ key, action }: { key: string; action: 'check' | 'skip' | 'restore' }) =>
-      api<{ task: SiteTask }>(`/api/orgs/${org.id}/sites/${site.id}/tasks/${action}`, { method: 'POST', body: { key } }).then((r) => ({ action, task: r.task })),
+    // RC-3: a step checked on an address carries the address the client pasted (`clientUrl`)
+    mutationFn: ({ key, action, clientUrl }: { key: string; action: 'check' | 'skip' | 'restore'; clientUrl?: string }) =>
+      api<{ task: SiteTask }>(`/api/orgs/${org.id}/sites/${site.id}/tasks/${action}`, { method: 'POST', body: { key, ...(clientUrl ? { clientUrl } : {}) } }).then((r) => ({ action, task: r.task })),
     onSuccess: ({ action, task }) => {
       if (action === 'check') {
         if (task.state === 'done') toast.success(`Done: ${task.title}`);
@@ -83,6 +86,18 @@ export function SiteTaskRow({ task }: { task: SiteTask }) {
   const todo = task.state === 'todo';
   const check = task.lastCheck;
   const line = check ? siteTaskCheckLine(check, (iso) => fmtDate(iso)) : null;
+  // RC-3: the address field of a step checked on an address; checked by the same rules as the server before it is sent
+  const [address, setAddress] = useState(task.address?.value ?? '');
+  const [addressError, setAddressError] = useState('');
+  const checkNow = () => {
+    if (task.address && (address.trim() || task.address.required)) {
+      const v = aiRankAddressCheck(address, task.key.split(':')[1] ?? '');
+      if ('error' in v) return setAddressError(v.error);
+      setAddressError('');
+      return act.mutate({ key: task.key, action: 'check', clientUrl: v.url });
+    }
+    act.mutate({ key: task.key, action: 'check' });
+  };
   const description = (
     <div className="space-y-2 text-[13px] leading-snug text-ink-2">
       {task.state === 'skipped' ? (
@@ -105,6 +120,12 @@ export function SiteTaskRow({ task }: { task: SiteTask }) {
           ))}
         </dl>
       )}
+      {task.address && task.state !== 'skipped' && can('member') && (
+        <Field label={task.address.label} optional={!task.address.required} error={addressError} className="max-w-xl">
+          {(p) => <Input {...p} type="url" inputMode="url" placeholder="https://" value={address} onChange={(e) => setAddress(e.target.value)} />}
+        </Field>
+      )}
+      {task.address && task.state !== 'skipped' && !can('member') && task.address.value && <p className="text-ink-3 [overflow-wrap:anywhere]">Address given: {task.address.value}</p>}
       {check && task.state !== 'skipped' && (
         <p className={todo ? 'text-warning-text' : 'text-good-text'}>
           {todo && task.reopened && task.doneAt ? `It was done on ${fmtDate(task.doneAt)}. ` : ''}
@@ -127,12 +148,12 @@ export function SiteTaskRow({ task }: { task: SiteTask }) {
       action={
         <span className="flex flex-wrap items-center gap-1.5">
           {todo && can('member') && (
-            <Button size="sm" variant={task.severity === 'warning' || task.reopened ? 'primary' : 'secondary'} disabled={busy} loading={busy && act.variables?.action === 'check'} icon={<CheckCircle2 className="size-4" />} onClick={() => act.mutate({ key: task.key, action: 'check' })}>
+            <Button size="sm" variant={task.severity === 'warning' || task.reopened ? 'primary' : 'secondary'} disabled={busy} loading={busy && act.variables?.action === 'check'} icon={<CheckCircle2 className="size-4" />} onClick={checkNow}>
               I&apos;ve done it, check now
             </Button>
           )}
           {task.state === 'done' && can('member') && (
-            <Button size="sm" variant="ghost" disabled={busy} loading={busy && act.variables?.action === 'check'} onClick={() => act.mutate({ key: task.key, action: 'check' })}>
+            <Button size="sm" variant="ghost" disabled={busy} loading={busy && act.variables?.action === 'check'} onClick={checkNow}>
               Check again
             </Button>
           )}
@@ -141,7 +162,7 @@ export function SiteTaskRow({ task }: { task: SiteTask }) {
               id={task.guide}
               vars={{ domain: site.domain, ...task.guideVars }}
               label="Show me how"
-              finish={can('member') ? { label: "I've done it, check now", onClick: () => act.mutate({ key: task.key, action: 'check' }) } : undefined}
+              finish={can('member') ? { label: "I've done it, check now", onClick: checkNow } : undefined}
             />
           )}
           {todo && can('member') && (

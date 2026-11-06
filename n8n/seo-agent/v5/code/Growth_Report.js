@@ -4,6 +4,56 @@
 /*__REPORT_KIT__*/
 /*__LINEAGE__*/
 /*__SITE_TIME__*/
+/*__AI_RANK_FLAGS__*/
+/*__AI_RANK_CLIENT__*/
+// ---- AIR (2026-11-06, docs/ai-ranking-2026-11-05 DESIGN 2.H / 6.7, package P6): the AI ranking plan of a website whose AI ranking is `on` ----
+// A section "AI ranking plan" in the report and ONE additive key `ai_rank` in the ai_growth callback, built from this run's `AI Rank Plan` item for
+// the website (its weekly memo: what changed and why, what we can detect, what we did and what waits, projected against real, the cost per won
+// question, AI ranking's plan against the current one). Present ONLY for a website in `on`: a website off, in shadow, or stopped by the kill switch
+// has no AI Rank Plan item in `on` mode, so its report and its callback are exactly what they were (shadow is read by the owner elsewhere).
+const AIR_ON = (() => { try { return $('AI Rank Plan').all().map(i => i.json || {}).filter(x => x && x.site_id && !x.skip && !x.error && x.air && x.mode === 'on'); } catch (e) { return []; } })();
+const AIR_PROMPTS = (() => { try { return new Map($('Load AI Prompts').all().map(i => i.json || {}).filter(r => r && r.prompt_id).map(r => [String(r.prompt_id), String(r.prompt || r.question || '')])); } catch (e) { return new Map(); } })();
+const AIR_MONS = (() => { try { return $('Load Monitors').all().map(i => i.json || {}); } catch (e) { return []; } })();
+// FX-C RC-1 (2026-11-06): a client never reads the owner's memo. The section and the callback carry the client view (AIRC.view: what changed,
+// why it moved, did our steps work, what we did, what we need from you) with the lever names in the client's words; no ids, no stage codes,
+// no statistics, no figures of the model, no money (the number of questions won travels as `wins`, the raw spend as `spend_usd`, which the
+// app turns into credits and strips before a customer sees it). The raw memo stays in seo_ai_rank_runs for platform admins only.
+const AIR_WHO = AIRC.WHO;
+// RC-3: the steps that need an address say where the client gives it (the step in the app takes it, our check reads it)
+const AIR_CHECK = { L01: 'the next robots.txt reading lets the AI assistants read your site', L02: 'our reading of the page without JavaScript finds its text', L03: 'your site shows in Bing Webmaster Tools and the page is crawled',
+  L04: 'Google reports the page as indexed', L05: 'the page is published, answers, and is indexed', L06: 'the page is published, answers, and is indexed', L16: 'the page is published, answers, and is indexed',
+  L07: 'our reading of the cited page finds your name in the passage', L08: 'our reading of the list page finds your name', L09: 'the listing is found, or you paste the profile address on the step in the app and our reading confirms it',
+  L10: 'the listing is found, or you paste the profile address on the step in the app and our reading confirms it', L11: 'you paste the address on the step in the app and our reading finds your name on it', L12: 'you paste the address on the step in the app and our reading finds your name on it',
+  L13: 'you paste the address on the step in the app and our reading finds your name on it', L14: 'you paste the address on the step in the app and our reading finds your name on it', L15: 'you paste the address of the corrected page on the step in the app and our reading confirms it', L17: 'you paste the Wikidata address on the step in the app and our reading finds your website on it' };
+const airReportOf = (sid, checkedAt) => { const A = AIR_ON.find(x => x.site_id === sid); if (!A) return null; const air = A.air || {};
+  const S_ = (v) => (v == null ? '' : String(v)).trim(); const P_ = (v, d) => { if (v && typeof v === 'object') return v; try { const x = JSON.parse(v); return x == null ? d : x; } catch (e) { return d; } };
+  const labelOf = (a) => AIRC.label(a.lever);   // RC-14: the client's words for the lever, never the engine's
+  const statusById = new Map(((air.rows || {}).actions || []).map(r => [S_(r.action_id), S_(r.status)]));
+  const leverById = new Map([...((air.rows || {}).actions || []), ...(air.chosen || [])].map(r => [S_(r.action_id), S_(r.lever)]));
+  const qText = (ids) => (Array.isArray(ids) ? ids : P_(ids, [])).map(id => AIR_PROMPTS.get(S_(id)) || '').filter(Boolean).slice(0, 4);
+  const actions = (air.chosen || []).slice(0, 20).map(a => { const ref = P_(a.ref, {}) || {}; const pageUrl = S_(ref.url) || S_(a.page_url);   // FX-C: L07's ref names the question only; the page it fixes is on the chosen action
+    return { action_id: S_(a.action_id), lever: S_(a.lever), label: labelOf(a), executor: S_(a.executor), status: statusById.get(S_(a.action_id)) || 'proposed', sink: S_(a.sink), scope: S_(a.scope),
+      questions: qText(a.questions), engines: (Array.isArray(a.engines) ? a.engines : P_(a.engines, [])).map(S_).slice(0, 8), target_stage: '', why: AIRC.plain(a.why).slice(0, 300), url: pageUrl }; });
+  const steps = (air.chosen || []).filter(a => a.executor === 'human' || ['growth_action', 'site_task', 'listing'].includes(S_(a.sink))).slice(0, 8).map(a => { const ref = P_(a.ref, {}) || {}; const pageUrl = S_(ref.url) || S_(a.page_url);   // FX-C: L07's ref names the question only; the page it fixes is on the chosen action
+    return { key: 'ai_rank:' + S_(a.lever) + ':' + AIRF.refKey(ref), lever: S_(a.lever), label: labelOf(a), what: (labelOf(a) + (pageUrl ? ': ' + pageUrl : '')).slice(0, 200), why: AIRC.plain(a.why).slice(0, 300),
+      check: AIR_CHECK[S_(a.lever)] || 'our weekly check reads it again', url: pageUrl, action_id: S_(a.action_id), status: statusById.get(S_(a.action_id)) || 'queued' }; });
+  const open = ((air.rows || {}).actions || []).filter(r => ['proposed', 'queued', 'in_progress'].includes(S_(r.status))).length;
+  const mon = AIR_MONS.find(m => m.site_id === sid) || {};
+  const memo = air.memo && typeof air.memo === 'object' ? air.memo : null;
+  const client = memo ? AIRC.view(memo, { question: (id) => AIR_PROMPTS.get(S_(id)) || '', leverOf: (id) => leverById.get(S_(id)) || '', actions }) : null;
+  return { v: 2, mode: 'on', run_id: S_(A.run_id), checked_at: S_(air.checked_at) || S_(checkedAt), client, actions, steps,
+    counts: { core: ((air.panel || {}).core || []).length, chosen: (air.chosen || []).length, deferred: (air.deferred || []).length, refused: (air.refused || []).length, open },
+    reserve: AIRF.settingsOf(mon).reserve }; };
+const airHtml = (R) => { if (!R) return ''; const e = (v) => esc(String(v == null ? '' : v));
+  let h = h3('AI ranking plan') + p_('The work chosen this week to get you named in AI answers, and what has moved. A change is called our doing only when questions we did not work on did not move the same way.', true);
+  for (const sec of ((R.client || {}).sections || [])) { const lines = (sec.lines || []).filter(Boolean); if (!lines.length) continue;
+    h += '<p style="margin:8px 0 2px;font-size:13px"><b>' + e(sec.title) + '</b></p><ul style="font-size:13px;margin:2px 0 6px 18px;padding:0">' + lines.map(l => '<li>' + e(l) + '</li>').join('') + '</ul>'; }
+  const wins = (R.client || {}).wins;
+  if (wins != null) h += p_(wins > 0 ? 'Questions won after a confirmed step: <b>' + e(Math.round(wins * 10) / 10) + '</b> (net of the questions that moved on their own). The credits this used are on the AI visibility page in the app.' : 'No question has been won after a confirmed step yet.', true);
+  h += table(['Step', 'Who', 'State', 'Why'], R.actions.map(a => [e(a.label) + (a.url ? '<div style="font-size:11px">' + link(a.url) + '</div>' : '') + (a.questions.length ? '<div style="font-size:11px;color:#64748b">for: ' + a.questions.map(e).join(' | ') + '</div>' : ''),
+    e(AIR_WHO[a.executor] || 'you do it, we check it'), e(AIRC.STATUS[a.status] || String(a.status).replace(/_/g, ' ')), e(a.why)]), 'nothing new chosen this week');
+  if (R.steps.length) h += p_('Steps on your website: ' + R.steps.length + ' (each one is listed in the app with how we check it).', true);
+  return h; };
 // 2026-10-19: the cycle a website's run belongs to (Growth Plan carries it; Growth Metrics does not)
 const cycleOf = (sid) => { try { return ($('Growth Plan').all().map(i => i.json || {}).find(p => p.site_id === sid) || {}).cycle || null; } catch (e) { return null; } };
 const KIND = { list: '"Best of" list', article: 'Article', news: 'News', review: 'Review site', forum: 'Forum thread', video: 'Video', social: 'Social post', official: 'Official list', encyclopedia: 'Encyclopedia', competitor: 'Competitor page' };
@@ -78,11 +128,15 @@ return $('Growth Metrics').all().map(i => i.json).filter(m => !m.skip).map(m => 
       : LN.unknown('Bing crawl state', B.enabled ? 'this site is not in the Bing Webmaster account' : 'no Bing Webmaster key is configured'),
     LN.of('Questions queued for an AI answer page', 'ai_db', { basis: 'estimated', period: LN.asOf(m.checked_at), sample: LN.sample(m.targets.length, 'questions in the panel'), note: 'the value of each question uses DataForSEO\'s AI search volume estimate' }),
   ];
+  // AIR P6: the AI ranking plan (on websites only; nothing for any other website)
+  const AIRR = airReportOf(m.site_id, m.checked_at);
+  if (AIRR) { html += airHtml(AIRR); lineage.push(LN.of('AI ranking plan', 'own_check', { basis: 'modelled', period: LN.asOf(m.checked_at), sample: LN.sample(AIRR.counts.core, 'core AI questions'),
+    note: 'our own model of which steps move a question in AI answers, from the stored answers of the last 8 weeks; projections are estimates, a move is attributed to a step only when control questions did not move the same way' })); }
   html += LN.block(lineage) + '</div>';
   // C-11 (re-rating 2026-10-17): a dry run is a test - nothing was done for anyone this week - so its subject says so, and the callback
   // carries `dry_run: true`, which the app's delivery rule holds (app/shared/src/report-delivery.ts, hold code `test_run`)
   const subject = DRY ? '[AI growth · TEST RUN] ' + m.domain + ' — dry run, nothing was submitted'
     : '[AI growth] ' + m.domain + ' — ' + (m.actions.filter(a => a.priority === 1).length ? m.actions.filter(a => a.priority === 1).length + ' high-value action(s)' : 'done for you this week') + (m.alerts.some(a => a.level === 'good') ? ' · a win' : '');
   const file_name = 'ai-growth-' + m.domain.replace(/[^a-z0-9]+/gi, '-') + '-' + m.checked_at.slice(0, 10) + '.html';
-  return { json: { ...m, lineage, subject, html, file_name, status: 'progress', stage: 'ai_growth', ...(DRY ? { dry_run: true, dry_run_note } : {}) }, binary: { data: { data: b64(wrapDoc(subject, html)), mimeType: 'text/html', fileName: file_name, fileExtension: 'html' } } };
+  return { json: { ...m, lineage, subject, html, file_name, status: 'progress', stage: 'ai_growth', ...(DRY ? { dry_run: true, dry_run_note } : {}), ...(AIRR ? { ai_rank: AIRR } : {}) }, binary: { data: { data: b64(wrapDoc(subject, html)), mimeType: 'text/html', fileName: file_name, fileExtension: 'html' } } };
 });

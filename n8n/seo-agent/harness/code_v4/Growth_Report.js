@@ -200,6 +200,200 @@ const ST = (() => {
   const callbackFields = (cyc) => cyc && cyc.key ? { trigger: 'cycle', cycle_key: cyc.key, cycle_date: cyc.date, cycle_week: cyc.label, cycle_job: cyc.job } : {};
   return { ENGINE_TZ, okTz, zone, engineTz, parts, dayKey, monthKey, weekday, weekdayOfDate, cycleRow, tzOf, cycleWeekday, dayName, everyText, onText, weekOf, keyDate, cycleOf, callbackFields, DAYS };
 })();
+// ---- AIRF: the AI-ranking algorithm's settings, kill switch, ids and shared vocabulary (inlined by build_monitors.py through its marker) ----
+// AIR (2026-11-06, docs/ai-ranking-2026-11-05/DESIGN.md §4.1, frozen in CONTRACTS.md §2-§3). Written by W0 and FROZEN: the packages read it,
+// none changes it (a change is a contract change: CONTRACTS.md first, then this file, then every caller). Pure: no node access, no clock, no
+// network; n8n sandbox rules (no URL constructor, no Object.defineProperty / setPrototypeOf, no structuredClone).
+// Every setting is OFF when empty: a site without the columns, or with them empty, runs exactly as before AIR.
+const AIRF = (() => {
+  const VERSION = 'air-flags-1';
+  // air-2 (FX-B, 2026-11-06, for FX-A's counting changes: a t test across questions, control handling, one trial per action): rows of another rule are
+  // never compared or learned from (ai_rank_wiring.py loads priors and runs of this rule only, and hides actions pre-registered under another one)
+  const RULE_VERSION = 'air-2';   // the rule AIR's rows are written under (seo_ai_rank_* .rule_version); bump it when a counting rule changes
+  const MODES = ['off', 'shadow', 'on'];
+  const S = (v) => (v == null ? '' : String(v)).trim();
+  const flag = (v) => v === true || /^(true|1|yes|on)$/i.test(S(v));
+  const modeOf = (v) => { const m = S(v).toLowerCase(); return MODES.includes(m) ? m : 'off'; };
+  const fanoutOf = (v) => { const n = Number(v); return S(v) === '' || !Number.isFinite(n) ? 0 : Math.min(50, Math.max(0, Math.round(n))); };
+  // seo_monitors row -> s.settings.rank (package P4 puts it on every monitor site in _monitor_sites.js; P3 and P6 read it there)
+  const settingsOf = (m) => { const r = m || {};
+    return { mode: modeOf(r.ai_rank_mode), reserve: flag(r.ai_rank_reserve), fanout_n: fanoutOf(r.ai_rank_fanout_n), mentions: flag(r.ai_rank_mentions), brave: flag(r.ai_rank_brave) }; };
+  // Site Admin `monitors` (package P4 calls it from Admin_Action.js / Monitor_Row_Admin.js): only the fields GIVEN are returned, normalised;
+  // '' clears a field to null (= off); a bad value is an error message, never a silent default
+  const COLS = ['ai_rank_mode', 'ai_rank_reserve', 'ai_rank_fanout_n', 'ai_rank_mentions', 'ai_rank_brave'];
+  const validate = (given) => { const g = given || {}; const values = {}; const errors = [];
+    for (const k of COLS) {
+      if (!(k in g) || g[k] === undefined || g[k] === null) continue;
+      const v = g[k];
+      if (S(v) === '') { values[k] = null; continue; }
+      if (k === 'ai_rank_mode') { const m = S(v).toLowerCase(); if (MODES.includes(m)) values[k] = m; else errors.push('ai_rank_mode must be off, shadow or on'); continue; }
+      if (k === 'ai_rank_fanout_n') { const n = Number(v); if (Number.isFinite(n) && n >= 0 && n <= 50 && Math.round(n) === n) values[k] = n; else errors.push('ai_rank_fanout_n must be a whole number from 0 to 50'); continue; }
+      if (v === true || v === false) { values[k] = v; continue; }
+      if (/^(true|1|yes|on)$/i.test(S(v))) values[k] = true; else if (/^(false|0|no|off)$/i.test(S(v))) values[k] = false; else errors.push(k + ' must be true or false');
+    }
+    return { values, errors }; };
+  // the global kill switch: seo_cache row key `air:kill`, value '1' (or true / on / yes) -> AIR skips every site, without a deploy
+  const CACHE_KIND = 'air';
+  const KILL_KEY = 'air:kill';
+  const protectKey = (site_id) => 'air:protect:' + S(site_id);
+  const mentionsKey = (site_id, ym) => 'air:mentions:' + S(site_id) + ':' + S(ym);
+  const killed = (cacheRows) => (Array.isArray(cacheRows) ? cacheRows : []).some(r => r && S(r.key) === KILL_KEY && /^(1|true|on|yes)$/i.test(S(r.value)));
+  // what a site in a mode may do (CONTRACTS.md §5): shadow computes and writes only the five AIR tables, pays nothing; on writes the sinks
+  const runs = (rank, kill) => !kill && !!rank && (rank.mode === 'shadow' || rank.mode === 'on');
+  const writesSinks = (rank, kill) => !kill && !!rank && rank.mode === 'on';
+  const mayPay = (rank, kill) => writesSinks(rank, kill);
+  // shared vocabulary (CONTRACTS.md §3.1)
+  const ENGINES = ['chatgpt', 'gemini', 'ai_mode', 'ai_overview', 'perplexity', 'claude', 'copilot', 'chatgpt_api'];
+  const EXCLUDED_ENGINES = ['gemini_api'];   // owner decision 9: never diagnosed or learned from until DataForSEO answers in writing
+  const GROUP_OF = { ai_overview: 'google', ai_mode: 'google', gemini: 'google', chatgpt: 'chatgpt', chatgpt_api: 'chatgpt', perplexity: 'perplexity', copilot: 'copilot', claude: 'claude' };
+  const GROUPS = ['google', 'chatgpt', 'perplexity', 'copilot', 'claude'];
+  const STAGES = ['S0', 'S1', 'S2', 'S3', 'S4', 'S5'];
+  const STAGE_LABELS = ['unmeasured', ...STAGES];
+  const ACTION_STATUSES = ['shadow', 'proposed', 'queued', 'in_progress', 'done', 'verified', 'not_happened', 'expired', 'refused'];
+  const ARMS = ['treated', 'control'];
+  const usable = (engine) => ENGINES.includes(S(engine).toLowerCase());
+  // ids (one rule for every writer and reader)
+  const hash = (s) => { let h = 2166136261 >>> 0; const t = String(s); for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; };   // FNV-1a, as AVX.hash
+  const hex8 = (s) => ('0000000' + hash(s).toString(16)).slice(-8);
+  // url_key: no scheme, no www., host lower-cased, no query, no fragment, no trailing slash, at most 300 characters ('' when it is not an http(s) URL)
+  const urlKey = (url) => { const m = S(url).match(/^https?:\/\/([^\/?#]+)([^?#]*)/i); if (!m) return '';
+    const host = m[1].toLowerCase().replace(/^www\./, '').replace(/:\d+$/, '').replace(/\.$/, ''); const path = m[2].replace(/\/+$/, '');
+    return (host + path).slice(0, 300); };
+  const refKey = (ref) => { const r = ref || {}; return r.prompt_id ? 'p:' + S(r.prompt_id) : r.url ? 'u:' + urlKey(r.url) : r.listing_id ? 'l:' + S(r.listing_id) : 's:site'; };
+  const actionId = (site_id, lever, ref) => 'air_' + S(site_id) + '_' + S(lever) + '_' + hex8(refKey(ref));
+  const day = (now) => { const d = new Date(typeof now === 'number' ? now : Date.parse(S(now))); return Number.isFinite(d.getTime()) ? d.toISOString().slice(0, 10).replace(/-/g, '') : ''; };
+  const runId = (site_id, now) => 'air_' + day(now) + '_' + S(site_id);
+  const priorId = (lever, stage, group, scope) => [S(lever), S(stage), S(group), S(scope) || 'global'].join(':');
+  const targetId = (site_id, prompt_id) => 'ait_' + S(site_id).replace(/^site_/, '') + '_' + S(prompt_id);   // the AI Growth format, unchanged
+  return { VERSION, RULE_VERSION, MODES, COLS, settingsOf, validate, CACHE_KIND, KILL_KEY, protectKey, mentionsKey, killed, runs, writesSinks, mayPay,
+    ENGINES, EXCLUDED_ENGINES, GROUP_OF, GROUPS, STAGES, STAGE_LABELS, ACTION_STATUSES, ARMS, usable, hash, urlKey, refKey, actionId, runId, priorId, targetId };
+})();
+// ---- AIRC: the AI ranking plan in the client's words (FX-C RC-1, 2026-11-06; inlined by build_monitors.py through its marker) ----
+// The weekly memo of the AI ranking plan (ARL.memo, v5/code/_ai_rank_learn.js) is written for the owner's review: question ids, stage codes,
+// statistics, the model's own figures and provider dollars. A client never reads it. This kit turns it into five short sections a client
+// reads: what changed, why it moved ("likely helped" / "can't tell yet"), whether our steps worked, what we did and what we need from them.
+// It reads only the memo's documented line shapes; a line it does not recognise is left out (never printed raw). No money: the number of
+// questions won and the raw spend travel apart (`wins`, `spend_usd`) so the app can show credits; `spend_usd` is stripped before any
+// customer sees a payload (app/shared/src/agency.ts clientSafePayload). The app mirror is app/shared/src/ai-rank-client.ts (its test runs
+// this file and requires the same output for the same memo).
+// Pure: no node access, no clock, no network; n8n sandbox rules (no URL constructor, no defineProperty, no structuredClone).
+const AIRC = (() => {
+  const S = (v) => (v == null ? '' : String(v)).trim();
+  // the engine's lever names (ARL.LEVERS labels), as ARL writes them into the memo; harness AE5 holds this list equal to ARL.LEVERS
+  const ENGINE_LABELS = { L01: 'Unblock AI bots in robots.txt', L02: 'Content in raw HTML (server render)', L03: 'Add the site to Bing Webmaster and submit', L04: 'Get the page indexed in Google', L05: 'Own answer page for the searches the engines run', L06: 'Refresh the ranking page for the searches the engines run', L07: 'Cited but not named: fix the passage', L08: 'Placement on an editorial list the answers cite', L09: 'Directory profile on a directory the answers cite', L10: 'Registry or partner listing (eligible only)', L11: 'Earned mention (press, partner, customer case)', L12: 'LinkedIn article by a named person', L13: 'Disclosed community answer', L14: 'Video for the question', L15: 'Correction (own page or ask the source)', L16: 'Protect a cited page; refresh it when citations decay', L17: 'Wikidata / Wikipedia entity' };
+  // the client's words for each lever (equal to app/shared/src/ai-rank.ts AI_RANK_LEVER_LABELS; the app's test holds them equal)
+  const LABELS = { L01: 'Let AI assistants read your website', L02: 'Put the page text in the page itself, not only in scripts', L03: 'Add your website to Bing Webmaster Tools', L04: 'Get the page into Google', L05: 'A new page that answers the question', L06: 'Refresh the page that ranks for the question', L07: 'Name your business in the passage AI answers quote', L08: 'Get onto a list that AI answers cite', L09: 'A profile on a directory that AI answers cite', L10: 'A registry or partner listing you qualify for', L11: 'Be mentioned in the press, by a partner or a customer', L12: 'A LinkedIn article by a named person', L13: 'An answer in a community, saying who you are', L14: 'A short video that answers the question', L15: 'Correct a wrong claim about your business', L16: 'Keep a page AI answers cite, and refresh it when they stop', L17: 'A Wikidata entry for your business' };
+  const LEVER_OF_LABEL = {}; for (const k of Object.keys(ENGINE_LABELS)) LEVER_OF_LABEL[ENGINE_LABELS[k]] = k;
+  const label = (lever) => LABELS[S(lever)] || 'A step to get you named in AI answers';
+  // where a question stands in one assistant's answers (ARL stage codes), in plain words
+  const STAGE = { S0: 'the assistant could not read your website', S1: 'not in the answer', S2: 'your website comes up but is not linked', S3: 'linked but not named', S4: 'named, but weakly or wrongly', S5: 'clearly named', unmeasured: 'not measured' };
+  const ENGINES = { 'ChatGPT (API)': 'ChatGPT' };
+  const engine = (e) => ENGINES[S(e)] || S(e);
+  const WHO = { auto: 'we do it', approve: 'you approve it, we do it', human: 'you do it, we check it' };
+  const STATUS = { proposed: 'proposed', queued: 'queued', in_progress: 'in progress', done: 'done', verified: 'confirmed', not_happened: 'did not happen', expired: 'expired', refused: 'not done', shadow: 'trial only' };
+  const OPEN = ['proposed', 'queued', 'in_progress'];
+  const VERDICT = { 'likely helped': 'likely helped', "can't tell": "can't tell yet", 'no effect seen': 'no change seen yet', 'did not happen': 'the step did not happen', 'not due yet': 'too early to tell' };
+  /** a free text (an action's why, a blocker) without ids, stage codes, money, the internal name or the model's figures */
+  const plain = (v) => S(v)
+    .replace(/[–—]/g, '-').replace(/[‘’]/g, '\'').replace(/[“”]/g, '"').replace(/…/g, '...')
+    .replace(/\s*\([^()]*(?:chance|model|prior|bootstrap|fisher|p ?=|own-page|notability)[^()]*\)/gi, '')
+    .replace(/\bnotability gate\b/gi, 'the bar for an encyclopedia entry')
+    .replace(/\b(?:aip|air|ait|lad|cad)_[A-Za-z0-9_.:-]+/g, '').replace(/\bAIR'?s?\b/g, 'AI ranking').replace(/\bS[0-5]\b/g, '')
+    .replace(/(?:US)?\$\s?\d[\d,]*(?:\.\d+)?/g, '').replace(/\s+([,.;:])/g, '$1').replace(/\(\s*\)/g, '').replace(/\s{2,}/g, ' ').trim();
+  const qWords = (q, ctx) => { const t = S(ctx && typeof ctx.question === 'function' ? ctx.question(q) : ''); return t ? '"' + plain(t) + '"' : 'One of your tracked questions'; };
+  const lineOf = (l) => (l && typeof l === 'object' ? l : { text: S(l), figures: [] });
+  const fig = (l, name) => { const f = (lineOf(l).figures || []).find(x => x && S(x.name) === name); return f ? f.value : undefined; };
+  const num = (v) => { const n = Number(v); return v == null || S(v) === '' || !Number.isFinite(n) ? null : n; };
+
+  /** memo (ARL.memo) + ctx -> { v, sections: [{ key, title, lines: [text] }], wins, spend_usd }
+   *  ctx: { question(id) -> text, leverOf(actionId) -> lever, actions: [{ lever, executor, status, url }] } */
+  const view = (memo, ctx) => { const m = memo && typeof memo === 'object' ? memo : {}; const c = ctx || {};
+    const part = (k) => ((m.parts || []).find(p => p && p.key === k) || {}).lines || [];
+    const changed = [], why = [], worked = [], did = [], you = [];
+    for (const l0 of part('what_changed')) { const t = S(lineOf(l0).text); let x;
+      if (t === 'No diagnosis this week.') changed.push('No new reading of your questions this week.');
+      else if (/^This is the first reading/.test(t)) changed.push('This is the first week we read your questions, so there is nothing to compare with yet.');
+      else if (t === 'No question changed stage this week.') changed.push('No question moved this week.');
+      else if ((x = t.match(/^(.+?): found on (\d+) of (\d+) questions \(last week (\d+)\), won on (\d+) \(last week (\d+)\)\.$/)))
+        changed.push(engine(x[1]) + ': your website comes up for ' + x[2] + ' of ' + x[3] + ' questions (' + x[4] + ' last week), and you are clearly named for ' + x[5] + ' (' + x[6] + ' last week).');
+      else if ((x = t.match(/^Question (\S+) on (.+?): (up|down) from /))) { const from = STAGE[S(fig(l0, 'from'))], to = STAGE[S(fig(l0, 'to'))]; if (!from || !to) continue;
+        changed.push(qWords(x[1], c) + ' on ' + engine(x[2]) + ': moved ' + x[3] + ', from ' + from + ' to ' + to + '.'); } }
+    for (const l0 of part('why')) { const t = S(lineOf(l0).text); let x;
+      if (/^Nothing moved up/.test(t)) { why.push('Nothing moved up this week.'); continue; }
+      if (!(x = t.match(/^Question (\S+) on (.+?): (.+)$/))) continue; const head = qWords(x[1], c) + ' on ' + engine(x[2]) + ': ';
+      const aid = S(fig(l0, 'attributed_to')); const bg = /background/.test(x[3]);
+      if (aid) { const lv = S(typeof c.leverOf === 'function' ? c.leverOf(aid) : '') || LEVER_OF_LABEL[(x[3].match(/after "([^"]+)"/) || [])[1]] || '';
+        why.push(head + (bg ? 'can\'t tell yet. It moved after our step "' + label(lv) + '", but questions we did not work on moved the same way.' : 'likely helped by our step "' + label(lv) + '".')); }
+      else why.push(head + (bg ? 'it moved on its own: questions we did not work on moved the same way.' : 'it moved without a step of ours.')); }
+    for (const l0 of part('projected_vs_real')) { const t = S(lineOf(l0).text); let x;
+      if (/^No action has reached the end of its window yet/.test(t)) { worked.push('It is too early to tell whether our steps worked: each one is judged after a few weeks of answers, against questions we did not work on.'); continue; }
+      if (!(x = t.match(/^(.+?): we projected .*Verdict: (.+)\.$/))) continue; const lv = LEVER_OF_LABEL[x[1]]; const v = VERDICT[S(x[2])]; if (!v) continue;
+      worked.push(label(lv) + ': ' + v + '.'); }
+    const acts = (Array.isArray(c.actions) ? c.actions : []).filter(a => a && S(a.lever));
+    for (const a of acts) { const st = S(a.status); const ex = S(a.executor) === 'auto' || S(a.executor) === 'approve' ? S(a.executor) : 'human';
+      const what = label(a.lever) + (S(a.url) ? ': ' + S(a.url) : '');
+      if (ex === 'human') { if (!st || OPEN.includes(st)) you.push(what + ' (you do it, we check it).'); else did.push(what + ' (' + (STATUS[st] || plain(st).replace(/_/g, ' ')) + ').'); }
+      else if (ex === 'approve' && (!st || st === 'proposed')) you.push(what + ' (you approve it, we do it).');
+      else did.push(what + ' (' + WHO[ex] + (st ? '; ' + (STATUS[st] || plain(st).replace(/_/g, ' ')) : '') + ').'); }
+    for (const b of (Array.isArray(m.blockers) ? m.blockers : [])) { const w = plain(b && b.what); if (!w) continue;
+      const W = w.charAt(0).toUpperCase() + w.slice(1); (S(b.owner) === 'us' ? did : you).push((S(b.owner) === 'us' ? 'On us: ' : '') + W.replace(/[.\s]+$/, '') + '.'); }
+    if (!did.length) did.push('No new step this week.');
+    if (!you.length) you.push('Nothing from you this week.');
+    let wins = null, spend = null;
+    for (const l0 of part('cost_per_win')) { const w = num(fig(l0, 'wins')); const sp = num(fig(l0, 'spend_usd')); if (w != null) wins = w; if (sp != null) spend = sp; }
+    const sections = [{ key: 'changed', title: 'What changed', lines: changed }, { key: 'why', title: 'Why it moved', lines: why }, { key: 'worked', title: 'Did our steps work', lines: worked },
+      { key: 'did', title: 'What we did', lines: did.slice(0, 10) }, { key: 'you', title: 'What we need from you', lines: you.slice(0, 10) }].filter(s => s.lines.length);
+    return { v: 1, sections, wins, spend_usd: spend }; };
+  return { view, plain, label, LABELS, ENGINE_LABELS, STAGE, WHO, STATUS };
+})();
+// ---- AIR (2026-11-06, docs/ai-ranking-2026-11-05 DESIGN 2.H / 6.7, package P6): the AI ranking plan of a website whose AI ranking is `on` ----
+// A section "AI ranking plan" in the report and ONE additive key `ai_rank` in the ai_growth callback, built from this run's `AI Rank Plan` item for
+// the website (its weekly memo: what changed and why, what we can detect, what we did and what waits, projected against real, the cost per won
+// question, AI ranking's plan against the current one). Present ONLY for a website in `on`: a website off, in shadow, or stopped by the kill switch
+// has no AI Rank Plan item in `on` mode, so its report and its callback are exactly what they were (shadow is read by the owner elsewhere).
+const AIR_ON = (() => { try { return $('AI Rank Plan').all().map(i => i.json || {}).filter(x => x && x.site_id && !x.skip && !x.error && x.air && x.mode === 'on'); } catch (e) { return []; } })();
+const AIR_PROMPTS = (() => { try { return new Map($('Load AI Prompts').all().map(i => i.json || {}).filter(r => r && r.prompt_id).map(r => [String(r.prompt_id), String(r.prompt || r.question || '')])); } catch (e) { return new Map(); } })();
+const AIR_MONS = (() => { try { return $('Load Monitors').all().map(i => i.json || {}); } catch (e) { return []; } })();
+// FX-C RC-1 (2026-11-06): a client never reads the owner's memo. The section and the callback carry the client view (AIRC.view: what changed,
+// why it moved, did our steps work, what we did, what we need from you) with the lever names in the client's words; no ids, no stage codes,
+// no statistics, no figures of the model, no money (the number of questions won travels as `wins`, the raw spend as `spend_usd`, which the
+// app turns into credits and strips before a customer sees it). The raw memo stays in seo_ai_rank_runs for platform admins only.
+const AIR_WHO = AIRC.WHO;
+// RC-3: the steps that need an address say where the client gives it (the step in the app takes it, our check reads it)
+const AIR_CHECK = { L01: 'the next robots.txt reading lets the AI assistants read your site', L02: 'our reading of the page without JavaScript finds its text', L03: 'your site shows in Bing Webmaster Tools and the page is crawled',
+  L04: 'Google reports the page as indexed', L05: 'the page is published, answers, and is indexed', L06: 'the page is published, answers, and is indexed', L16: 'the page is published, answers, and is indexed',
+  L07: 'our reading of the cited page finds your name in the passage', L08: 'our reading of the list page finds your name', L09: 'the listing is found, or you paste the profile address on the step in the app and our reading confirms it',
+  L10: 'the listing is found, or you paste the profile address on the step in the app and our reading confirms it', L11: 'you paste the address on the step in the app and our reading finds your name on it', L12: 'you paste the address on the step in the app and our reading finds your name on it',
+  L13: 'you paste the address on the step in the app and our reading finds your name on it', L14: 'you paste the address on the step in the app and our reading finds your name on it', L15: 'you paste the address of the corrected page on the step in the app and our reading confirms it', L17: 'you paste the Wikidata address on the step in the app and our reading finds your website on it' };
+const airReportOf = (sid, checkedAt) => { const A = AIR_ON.find(x => x.site_id === sid); if (!A) return null; const air = A.air || {};
+  const S_ = (v) => (v == null ? '' : String(v)).trim(); const P_ = (v, d) => { if (v && typeof v === 'object') return v; try { const x = JSON.parse(v); return x == null ? d : x; } catch (e) { return d; } };
+  const labelOf = (a) => AIRC.label(a.lever);   // RC-14: the client's words for the lever, never the engine's
+  const statusById = new Map(((air.rows || {}).actions || []).map(r => [S_(r.action_id), S_(r.status)]));
+  const leverById = new Map([...((air.rows || {}).actions || []), ...(air.chosen || [])].map(r => [S_(r.action_id), S_(r.lever)]));
+  const qText = (ids) => (Array.isArray(ids) ? ids : P_(ids, [])).map(id => AIR_PROMPTS.get(S_(id)) || '').filter(Boolean).slice(0, 4);
+  const actions = (air.chosen || []).slice(0, 20).map(a => { const ref = P_(a.ref, {}) || {}; const pageUrl = S_(ref.url) || S_(a.page_url);   // FX-C: L07's ref names the question only; the page it fixes is on the chosen action
+    return { action_id: S_(a.action_id), lever: S_(a.lever), label: labelOf(a), executor: S_(a.executor), status: statusById.get(S_(a.action_id)) || 'proposed', sink: S_(a.sink), scope: S_(a.scope),
+      questions: qText(a.questions), engines: (Array.isArray(a.engines) ? a.engines : P_(a.engines, [])).map(S_).slice(0, 8), target_stage: '', why: AIRC.plain(a.why).slice(0, 300), url: pageUrl }; });
+  const steps = (air.chosen || []).filter(a => a.executor === 'human' || ['growth_action', 'site_task', 'listing'].includes(S_(a.sink))).slice(0, 8).map(a => { const ref = P_(a.ref, {}) || {}; const pageUrl = S_(ref.url) || S_(a.page_url);   // FX-C: L07's ref names the question only; the page it fixes is on the chosen action
+    return { key: 'ai_rank:' + S_(a.lever) + ':' + AIRF.refKey(ref), lever: S_(a.lever), label: labelOf(a), what: (labelOf(a) + (pageUrl ? ': ' + pageUrl : '')).slice(0, 200), why: AIRC.plain(a.why).slice(0, 300),
+      check: AIR_CHECK[S_(a.lever)] || 'our weekly check reads it again', url: pageUrl, action_id: S_(a.action_id), status: statusById.get(S_(a.action_id)) || 'queued' }; });
+  const open = ((air.rows || {}).actions || []).filter(r => ['proposed', 'queued', 'in_progress'].includes(S_(r.status))).length;
+  const mon = AIR_MONS.find(m => m.site_id === sid) || {};
+  const memo = air.memo && typeof air.memo === 'object' ? air.memo : null;
+  const client = memo ? AIRC.view(memo, { question: (id) => AIR_PROMPTS.get(S_(id)) || '', leverOf: (id) => leverById.get(S_(id)) || '', actions }) : null;
+  return { v: 2, mode: 'on', run_id: S_(A.run_id), checked_at: S_(air.checked_at) || S_(checkedAt), client, actions, steps,
+    counts: { core: ((air.panel || {}).core || []).length, chosen: (air.chosen || []).length, deferred: (air.deferred || []).length, refused: (air.refused || []).length, open },
+    reserve: AIRF.settingsOf(mon).reserve }; };
+const airHtml = (R) => { if (!R) return ''; const e = (v) => esc(String(v == null ? '' : v));
+  let h = h3('AI ranking plan') + p_('The work chosen this week to get you named in AI answers, and what has moved. A change is called our doing only when questions we did not work on did not move the same way.', true);
+  for (const sec of ((R.client || {}).sections || [])) { const lines = (sec.lines || []).filter(Boolean); if (!lines.length) continue;
+    h += '<p style="margin:8px 0 2px;font-size:13px"><b>' + e(sec.title) + '</b></p><ul style="font-size:13px;margin:2px 0 6px 18px;padding:0">' + lines.map(l => '<li>' + e(l) + '</li>').join('') + '</ul>'; }
+  const wins = (R.client || {}).wins;
+  if (wins != null) h += p_(wins > 0 ? 'Questions won after a confirmed step: <b>' + e(Math.round(wins * 10) / 10) + '</b> (net of the questions that moved on their own). The credits this used are on the AI visibility page in the app.' : 'No question has been won after a confirmed step yet.', true);
+  h += table(['Step', 'Who', 'State', 'Why'], R.actions.map(a => [e(a.label) + (a.url ? '<div style="font-size:11px">' + link(a.url) + '</div>' : '') + (a.questions.length ? '<div style="font-size:11px;color:#64748b">for: ' + a.questions.map(e).join(' | ') + '</div>' : ''),
+    e(AIR_WHO[a.executor] || 'you do it, we check it'), e(AIRC.STATUS[a.status] || String(a.status).replace(/_/g, ' ')), e(a.why)]), 'nothing new chosen this week');
+  if (R.steps.length) h += p_('Steps on your website: ' + R.steps.length + ' (each one is listed in the app with how we check it).', true);
+  return h; };
 // 2026-10-19: the cycle a website's run belongs to (Growth Plan carries it; Growth Metrics does not)
 const cycleOf = (sid) => { try { return ($('Growth Plan').all().map(i => i.json || {}).find(p => p.site_id === sid) || {}).cycle || null; } catch (e) { return null; } };
 const KIND = { list: '"Best of" list', article: 'Article', news: 'News', review: 'Review site', forum: 'Forum thread', video: 'Video', social: 'Social post', official: 'Official list', encyclopedia: 'Encyclopedia', competitor: 'Competitor page' };
@@ -274,11 +468,15 @@ return $('Growth Metrics').all().map(i => i.json).filter(m => !m.skip).map(m => 
       : LN.unknown('Bing crawl state', B.enabled ? 'this site is not in the Bing Webmaster account' : 'no Bing Webmaster key is configured'),
     LN.of('Questions queued for an AI answer page', 'ai_db', { basis: 'estimated', period: LN.asOf(m.checked_at), sample: LN.sample(m.targets.length, 'questions in the panel'), note: 'the value of each question uses DataForSEO\'s AI search volume estimate' }),
   ];
+  // AIR P6: the AI ranking plan (on websites only; nothing for any other website)
+  const AIRR = airReportOf(m.site_id, m.checked_at);
+  if (AIRR) { html += airHtml(AIRR); lineage.push(LN.of('AI ranking plan', 'own_check', { basis: 'modelled', period: LN.asOf(m.checked_at), sample: LN.sample(AIRR.counts.core, 'core AI questions'),
+    note: 'our own model of which steps move a question in AI answers, from the stored answers of the last 8 weeks; projections are estimates, a move is attributed to a step only when control questions did not move the same way' })); }
   html += LN.block(lineage) + '</div>';
   // C-11 (re-rating 2026-10-17): a dry run is a test - nothing was done for anyone this week - so its subject says so, and the callback
   // carries `dry_run: true`, which the app's delivery rule holds (app/shared/src/report-delivery.ts, hold code `test_run`)
   const subject = DRY ? '[AI growth · TEST RUN] ' + m.domain + ' — dry run, nothing was submitted'
     : '[AI growth] ' + m.domain + ' — ' + (m.actions.filter(a => a.priority === 1).length ? m.actions.filter(a => a.priority === 1).length + ' high-value action(s)' : 'done for you this week') + (m.alerts.some(a => a.level === 'good') ? ' · a win' : '');
   const file_name = 'ai-growth-' + m.domain.replace(/[^a-z0-9]+/gi, '-') + '-' + m.checked_at.slice(0, 10) + '.html';
-  return { json: { ...m, lineage, subject, html, file_name, status: 'progress', stage: 'ai_growth', ...(DRY ? { dry_run: true, dry_run_note } : {}) }, binary: { data: { data: b64(wrapDoc(subject, html)), mimeType: 'text/html', fileName: file_name, fileExtension: 'html' } } };
+  return { json: { ...m, lineage, subject, html, file_name, status: 'progress', stage: 'ai_growth', ...(DRY ? { dry_run: true, dry_run_note } : {}), ...(AIRR ? { ai_rank: AIRR } : {}) }, binary: { data: { data: b64(wrapDoc(subject, html)), mimeType: 'text/html', fileName: file_name, fileExtension: 'html' } } };
 });

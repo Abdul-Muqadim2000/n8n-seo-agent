@@ -204,7 +204,13 @@ MONITORS_COLS = [('site_id', 'string'), ('domain', 'string'), ('ai_visibility', 
                  # Index coverage wave 2 (2026-10-30, docs/indexing-2026-10-29/DESIGN_WAVE2.md §2.5): the client's opt-in for sitemap submission
                  # (empty = OFF). Only with this on AND Google reporting full access (siteOwner / siteFullUser) does the engine submit the
                  # website's sitemap (sitemaps.submit, nothing else). Written and validated by Site Admin `monitors`. Run sync_tables.py.
-                 ('index_sitemap_submit', 'boolean')]
+                 ('index_sitemap_submit', 'boolean'),
+                 # AIR (2026-11-06, docs/ai-ranking-2026-11-05/DESIGN.md §4.1 + CONTRACTS.md §2): the AI-ranking algorithm, per site and ALL OFF when
+                 # empty: the mode ('off' | 'shadow' | 'on', empty = off), AI pages for AIR targets on top of keyword pages (empty = no), fan-out
+                 # results-page reads a week (0-50, empty = 0), DataForSEO LLM Mentions monthly (empty = no), Brave Search as the Claude retrieval
+                 # proxy (empty = no; also needs the key). SerpApi Copilot was NOT approved (owner 2026-11-06): no column. Written and validated by
+                 # Site Admin `monitors` only; "Track my site" carries them as stored. Run sync_tables.py BEFORE importing the workflows.
+                 ('ai_rank_mode', 'string'), ('ai_rank_reserve', 'boolean'), ('ai_rank_fanout_n', 'number'), ('ai_rank_mentions', 'boolean'), ('ai_rank_brave', 'boolean')]
 AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('keyword', 'string'), ('source', 'string'), ('status', 'string'), ('created_at', 'string'),
                    ('stage', 'string'), ('cluster', 'string'), ('volume', 'number'), ('origin', 'string'), ('updated_at', 'string'),
                    # G6 (2026-10-18): who asks it (buyer role), in which market (CC-lang), pinned by the owner (never retired by the writer),
@@ -220,7 +226,11 @@ AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 's
                    # a declared service, a tracked keyword), where it came from (ladder:<id> | page | service | keyword | brand), its state (active | core |
                    # maintain | paused | watch | out), when it was last in focus, and for status `retired` (a topic the client left; history kept) when
                    # and why. Status may now also be `proposed` (written, not asked until the owner accepts it). Run sync_tables.py after deploying.
-                   ('focus_topic', 'string'), ('focus_source', 'string'), ('focus_state', 'string'), ('focus_seen_at', 'string'), ('retired_at', 'string'), ('retire_reason', 'string')]   # v4.9 (the row above): buyer stage, topic cluster, monthly search volume, where the question came from
+                   ('focus_topic', 'string'), ('focus_source', 'string'), ('focus_state', 'string'), ('focus_seen_at', 'string'), ('retired_at', 'string'), ('retire_reason', 'string'),
+                   # AIR (2026-11-06, DESIGN.md §2.A A3, CONTRACTS.md §2): a core question is never retired by the focus rules while core_until (ISO
+                   # date) is in the future. ONE writer: AIR's `Set Core Until` update (that column only, on sites in mode `on`); every other prompt
+                   # writer leaves it out (table_cols.json AI_PROMPTS_AIR), so an upsert never touches it. Empty everywhere = today's behaviour.
+                   ('core_until', 'string')]   # v4.9 (the row above): buyer stage, topic cluster, monthly search volume, where the question came from
 AI_ANSWERS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('checked_at', 'string'), ('prompt_id', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('engine', 'string'),
                    ('answered', 'boolean'), ('mentioned', 'boolean'), ('cited', 'boolean'), ('rank', 'number'), ('our_urls', 'string'), ('competitors', 'string'), ('sources', 'string'), ('excerpt', 'string'), ('cost', 'number'), ('error', 'string'),
                    ('run_kind', 'string'), ('sentiment', 'string'), ('brands', 'string'), ('issues', 'string'), ('fanout', 'string'),
@@ -291,12 +301,56 @@ AI_PAGES_COLS = [('site_id', 'string'), ('domain', 'string'), ('url', 'string'),
 AI_TARGETS_TABLE = 'seo_ai_targets'
 AI_TARGETS_COLS = [('target_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('prompt_id', 'string'), ('question', 'string'), ('keyword', 'string'), ('kind', 'string'), ('page_url', 'string'),
                    ('page_type', 'string'), ('fanout', 'string'), ('sources_json', 'string'), ('competitors', 'string'), ('engines', 'string'), ('stage', 'string'), ('value', 'number'), ('status', 'string'),
-                   ('reason', 'string'), ('created_at', 'string'), ('updated_at', 'string'), ('request_id', 'string'), ('written_at', 'string'), ('won_at', 'string')]
+                   ('reason', 'string'), ('created_at', 'string'), ('updated_at', 'string'), ('request_id', 'string'), ('written_at', 'string'), ('won_at', 'string'),
+                   # AIR (2026-11-06, DESIGN.md §2.F / §4.3, CONTRACTS.md §2): who owns the row ('ai_rank' = an AIR action on an `on` site; null = the
+                   # AI Growth plan, whose exact-column writer sets all three null, which is how Growth reclaims a row when a site leaves `on`), the
+                   # AIR action id, and when the page went live AND indexed (AIR's clock starts there, not at written_at)
+                   ('origin', 'string'), ('action_id', 'string'), ('live_at', 'string')]
 # seo_ai_growth: one row per site and weekly run (what was done automatically, the plan, the earned-media list, the entity check)
 AI_GROWTH_TABLE = 'seo_ai_growth'
 AI_GROWTH_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('checked_at', 'string'), ('submitted', 'number'), ('submitted_json', 'string'), ('indexnow', 'string'),
                   ('pages_checked', 'number'), ('avg_score', 'number'), ('pages_json', 'string'), ('targets_json', 'string'), ('earned_json', 'string'), ('entity_json', 'string'),
                   ('actions_json', 'string'), ('alerts', 'string'), ('cost_usd', 'number')]
+# ---- AIR, the AI-ranking algorithm (2026-11-06, docs/ai-ranking-2026-11-05/DESIGN.md §6.9, frozen in CONTRACTS.md §2) ----
+# Five tables, written ONLY by the AI Growth workflow's AIR chain (package P4) for sites in mode shadow / on; created by its "Ensure AI Rank …"
+# nodes (createIfNotExists) and kept in step by sync_tables.py. Types: *_json, ids, dates and labels strings; core / names_client booleans;
+# value, demand, feasibility, cites_28d, influence, placeability, alpha, beta, n_outcomes, prior_alpha, prior_beta numbers.
+# seo_ai_rank_runs: one row per site and AIR run (insert): the panel, the diagnosis, the source graph, candidates, choice, the old logic's choice
+# beside it, the memo, the cost, what was learned. At most 60 KB a row.
+AI_RANK_RUNS_TABLE = 'seo_ai_rank_runs'
+AI_RANK_RUNS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('checked_at', 'string'), ('mode', 'string'), ('rule_version', 'string'),
+                     ('panel_json', 'string'), ('diag_json', 'string'), ('sources_json', 'string'), ('candidates_json', 'string'), ('chosen_json', 'string'),
+                     ('old_json', 'string'), ('compare_json', 'string'), ('memo_json', 'string'), ('cost_json', 'string'), ('learn_json', 'string'),
+                     ('exec_id', 'string'), ('error', 'string'), ('stages_json', 'string')]   # FX-A RA-9 (additive): the compact stages, never trimmed
+# seo_ai_rank_questions: one row per site and question (upsert site_id + prompt_id): intent, market, core window, arm, value, stage per engine, evidence
+AI_RANK_QUESTIONS_TABLE = 'seo_ai_rank_questions'
+AI_RANK_QUESTIONS_COLS = [('site_id', 'string'), ('domain', 'string'), ('prompt_id', 'string'), ('question', 'string'), ('intent', 'string'), ('market', 'string'),
+                          ('core', 'boolean'), ('core_since', 'string'), ('core_until', 'string'), ('arm', 'string'), ('stratum', 'string'), ('value', 'number'),
+                          ('demand', 'number'), ('demand_basis', 'string'), ('feasibility', 'number'), ('stage_json', 'string'), ('best_stage', 'string'),
+                          ('parametric_json', 'string'), ('evidence_json', 'string'), ('first_named_at', 'string'), ('last_named_at', 'string'),
+                          ('last_cited_at', 'string'), ('updated_at', 'string'), ('rule_version', 'string'), ('arm_since', 'string')]   # FX-A RA-2 (additive): when the question took its arm
+# seo_ai_rank_actions: one row per AIR action (upsert action_id): lever, executor, scope, the pre-registration (never edited), verification, outcome.
+# status: shadow | proposed | queued | in_progress | done | verified | not_happened | expired | refused (every one has an exit, state_lint.py)
+AI_RANK_ACTIONS_TABLE = 'seo_ai_rank_actions'
+AI_RANK_ACTIONS_COLS = [('action_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('lever', 'string'), ('executor', 'string'), ('scope', 'string'),
+                        ('ref', 'string'), ('questions', 'string'), ('engines', 'string'), ('target_stage', 'string'), ('status', 'string'), ('sink', 'string'),
+                        ('sink_ref', 'string'), ('expected_json', 'string'), ('prereg_json', 'string'), ('happened_at', 'string'), ('verify_json', 'string'),
+                        ('outcome_json', 'string'), ('learned_at', 'string'), ('mode', 'string'), ('run_id', 'string'), ('created_at', 'string'), ('updated_at', 'string'),
+                        ('client_url', 'string')]   # FX-A2 (additive): the address the client pasted on the step (written by the app, FX-C RC-3; kept on every upsert)
+# seo_ai_rank_sources: one row per site and third-party page the answers cite (upsert site_id + url_key): type, author, placeability, influence
+AI_RANK_SOURCES_TABLE = 'seo_ai_rank_sources'
+AI_RANK_SOURCES_COLS = [('site_id', 'string'), ('domain', 'string'), ('url_key', 'string'), ('url', 'string'), ('host', 'string'), ('page_type', 'string'),
+                        ('author_kind', 'string'), ('names_client', 'boolean'), ('rivals_named', 'string'), ('questions', 'string'), ('engines', 'string'),
+                        ('cites_28d', 'number'), ('influence', 'number'), ('placeability', 'number'), ('placeability_why', 'string'), ('contact_email', 'string'),
+                        ('contact_url', 'string'), ('source_from', 'string'), ('first_seen', 'string'), ('last_seen', 'string'), ('checked_at', 'string')]
+# seo_ai_rank_priors: one row per lever x stage x engine group x scope (upsert prior_id): the Beta posterior and where it came from
+AI_RANK_PRIORS_TABLE = 'seo_ai_rank_priors'
+AI_RANK_PRIORS_COLS = [('prior_id', 'string'), ('lever', 'string'), ('stage', 'string'), ('engine_group', 'string'), ('scope', 'string'), ('alpha', 'number'),
+                       ('beta', 'number'), ('n_outcomes', 'number'), ('prior_alpha', 'number'), ('prior_beta', 'number'), ('source', 'string'), ('updated_at', 'string'),
+                       ('rule_version', 'string')]
+# the new columns on existing tables that AIR alone writes (the harness excludes them from the other writers' exact-column checks)
+AIR_ONLY_COLS = {'AI_PROMPTS': ['core_until'], 'AI_TARGETS': ['origin', 'action_id', 'live_at']}
+AIR_MONITOR_COLS = ['ai_rank_mode', 'ai_rank_reserve', 'ai_rank_fanout_n', 'ai_rank_mentions', 'ai_rank_brave']
 BL_SNAP_COLS = [('site_id', 'string'), ('domain', 'string'), ('checked_at', 'string'), ('mode', 'string'), ('rank', 'number'), ('backlinks', 'number'), ('referring_domains', 'number'), ('referring_domains_nofollow', 'number'),
                 ('spam_score', 'number'), ('broken_backlinks', 'number'), ('new_links', 'number'), ('lost_links', 'number'), ('important_lost', 'number'), ('spammy_new', 'number'), ('lost_json', 'string'), ('new_json', 'string'),
                 ('competitors_json', 'string'), ('timeseries_json', 'string'), ('cost_usd', 'number'),

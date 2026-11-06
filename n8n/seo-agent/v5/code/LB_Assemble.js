@@ -18,6 +18,7 @@
 /*__LISTINGS__*/
 /*__CHANGE_TEST__*/
 /*__PODCAST__*/
+/*__AI_RANK_FLAGS__*/
 const plans = $('LB Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const rows = (n) => { try { return $(n).all().map(i => i.json).filter(r => r && typeof r === 'object' && Object.keys(r).length && !r.error && !r.skip); } catch (e) { return []; } };
 const pair = (a, b) => { try { const R = $(a).all().map(i => i.json); const S = $(b).all().map(i => i.json || {}); return R.map((r, i) => ({ r, x: S[i] || {} })).filter(o => !o.r.skip); } catch (e) { return []; } };
@@ -31,6 +32,18 @@ const jsonOf = (x) => { if (!x) return null; if (x.body && typeof x.body === 'ob
 const errOf = (x) => x.error ? String(x.error.message || x.error.description || x.error).slice(0, 160) : '';
 const pathKey = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
 // the median and the one-decimal rounding of the control-group reading live in CT now (v5/code/_change_test.js), used by both kinds
+// AIR (2026-11-06, docs/ai-ranking-2026-11-05 DESIGN 2.F lever L08 / L09, package P6), for a website whose AI ranking is `on` ONLY (AIRF.settingsOf on
+// its seo_monitors row): (1) the listings checklist adds the service-firm directories (listingsFor / siteKind with { air: true }); (2) a placement
+// AI ranking chose (seo_link_prospects type ai_source, origin 'ai_rank') is scored with AI ranking's own probability (its stored score / 100) in place
+// of the flat ai_source likelihood, and (3) the writer budget takes the ready rows by expected value (score x fit), AI ranking's placements
+// included, with at most AIR_PITCH_MAX of them a week: a placement drafted only when its expected value is inside the budget's cut-off, so AI
+// ranking's weakest pitches never push out a better one (FX-C RC-7). Every other row is scored as before; a website that is off or in shadow
+// runs today's path. RC-7: the kill switch (seo_cache `air:kill`, the one row `Load AIR Kill (LB)` reads) stops all of it on every website.
+const airMons = rows('Load Monitors');
+const airKill = AIRF.killed(rows('Load AIR Kill (LB)'));
+const airOnOf = (sid, dom) => { const m = airMons.find(x => x.site_id === sid) || airMons.find(x => String(x.domain || '').toLowerCase().replace(/^www\./, '') === String(dom || '').toLowerCase().replace(/^www\./, '')) || {};
+  return AIRF.writesSinks(AIRF.settingsOf(m), airKill); };
+const AIR_PITCH_MAX = 2;
 const LIKELY = { lost: 0.7, mention: 0.9, list: 0.5, comp_new: 0.55, gap: 0.4, ai_source: 0.35, resource: 0.45, broken: 0.6, press: 0.5, digest: 0.55, podcast: 0.35 };
 // L6: the kinds of page that earn links, each with the words that give it away, how many referring domains make it worth saying, and
 // what the work actually is. A kind nobody in this market has links for is not suggested.
@@ -50,6 +63,7 @@ const deadlineOf = (t) => { for (const m of String(t).matchAll(/deadline[:\s-]+(
 const out = [];
 for (const p of plans) {
   const sid = p.site_id; const comp = p.competitors.map(c => LK.regDomain(c));
+  const airOn = airOnOf(sid, p.domain);   // AIR P6: false for every website that is not `on` (today's path)
   const myLedger = ledger.filter(l => l.site_id === sid); const linking = new Set(myLedger.filter(l => l.status !== 'lost').map(l => l.ref_domain));
   const myProspects = prospects.filter(x => x.site_id === sid); const myOutreach = outreach.filter(o => o.site_id === sid);
   // IDF over our own pages: a site's topic words are everywhere; the rare shared words decide the topic match
@@ -162,6 +176,8 @@ for (const p of plans) {
     o.target_url = tg.url; o.target_reason = tg.reason; o.anchor_hint = tg.anchor;
     if (!blocked && t && ['gap', 'comp_new', 'resource', 'broken'].includes(r.type) && o.fit < (r.type === 'broken' ? 0.15 : OK.OFF_TOPIC)) reasons.push('off topic for you (' + Math.round(o.fit * 100) + '% match)');
     if (isNew) o.score = Math.round(100 * (LIKELY[r.type] || 0.3) * (0.4 + 0.6 * Math.min(1, o.fit + 0.2)) * (r.rank ? Math.min(1.2, 0.6 + Number(r.rank) / 600) : 1));
+    else if (airOn && r.type === 'ai_source' && String(stored.origin || '') === 'ai_rank') { const pAir = Math.min(0.95, Math.max(0.01, (Number(stored.score) || 0) / 100));   // AIR P6: AI ranking's probability, not the flat 0.35
+      o.score = Math.round(100 * pAir * (0.4 + 0.6 * Math.min(1, o.fit + 0.2))); o.checks.air = { p: pAir, basis: 'AI ranking\'s estimate that this placement gets you named (its stored score)' }; }
     o.status = reasons.length ? 'not_fit' : (o.contacts.length ? 'ready' : 'needs_contact');
     o.checks.reasons = reasons; o.checks.page_status = st || (e ? 'error' : ''); o.checks.blocked = blocked; o.checks.noindex = !!facts.noindex;
     if (o.status === 'not_fit') o.fit_reason = reasons.join('; ');
@@ -276,8 +292,8 @@ for (const p of plans) {
   // ---- 4. the listings checklist ----
   if (p.due.listings) {
     const selfHtml = pagesRead.filter(o => o.r.site_id === sid && o.r.kind === 'self').map(o => htmlOf(o.x)).join(' ');
-    const kind = siteKind(p.profile.business_type, p.topics.join(' '));
-    for (const l of listingsFor(kind, p.country_iso, topicText, LK.text(selfHtml))) {
+    const kind = siteKind(p.profile.business_type, p.topics.join(' '), airOn ? { air: true } : undefined);   // AIR P6: the service-firm directories on `on` websites only
+    for (const l of listingsFor(kind, p.country_iso, topicText, LK.text(selfHtml), airOn ? { air: true } : undefined)) {
       const old = listingRows.find(y => y.site_id === sid && y.listing_id === l.id) || {};
       let status = 'unknown', profile_url = '', rel = l.link, evidence = '', blocked_now = false;
       const led = myLedger.find(y => y.status !== 'lost' && (y.ref_domain === l.host || LK.sameSite(y.ref_domain, l.host) || LK.sameSite(l.host, y.ref_domain)) && (l.list ? LK.normUrl(y.from_url) === LK.normUrl(l.list) : l.re ? l.re.test(y.from_url || '') : true));   // the list page itself, the profile pattern, else the host
@@ -398,7 +414,11 @@ for (const p of plans) {
   }
   const ready = [...outreach_rows.filter(o => o.status === 'ready'), ...myOutreach.filter(o => o.status === 'ready' && !o.sequence_json && !outreach_rows.some(n => n.prospect_domain === o.prospect_domain && n.type === o.type))]
     .map(o => ({ ...o, rankv: (Number(o.score) || 0) * (0.5 + Number(o.fit || 0)) })).sort((a, b) => b.rankv - a.rankv);
-  const jobs = p.free_only ? [] : ready.slice(0, p.budget).map(({ rankv, ...o }) => o);
+  // AIR (on only, RC-7): every ready row by expected value (rankv), AI ranking's placements included; at most AIR_PITCH_MAX of them a week, the
+  // others wait for a later week (still `ready`). Off and shadow: `ready` exactly as it was.
+  const isAirRow = (o) => airOn && o.type === 'ai_source' && myProspects.some(y => y.prospect_domain === o.prospect_domain && y.type === 'ai_source' && String(y.origin || '') === 'ai_rank');
+  const readyOrdered = airOn ? (() => { let n = 0; return ready.filter(o => !isAirRow(o) || n++ < AIR_PITCH_MAX); })() : ready;
+  const jobs = p.free_only ? [] : readyOrdered.slice(0, p.budget).map(({ rankv, ...o }) => o);
   const stillOld = (k) => !(myOutreach.find(o => o.prospect_domain + '|' + o.type === k) || {}).sequence_json;
   out.push({ json: { site_id: sid, domain: p.domain, email: p.email, callback_url: p.callback_url, request_id: p.request_id, on_demand: p.on_demand, free_only: p.free_only, checked_at: iso,
     outreach_rows, prospect_rows, listing_rows, impact_rows, jobs: jobs.filter(j => stillOld(j.prospect_domain + '|' + j.type)), fixes, asset_ideas, won_checks,

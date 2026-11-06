@@ -34,7 +34,8 @@ return plans.map(p => {
   const competitors = {}; for (const u of U) for (const x of (u.rivals || [])) competitors[x.id] = (competitors[x.id] || 0) + 1;   // F1b: the competitors named (entities with role competitor), one per answer
   // F1b: the per-answer record the weekly run pools (named, cited, place, the competitors named with their place); ids are indexed once
   const ents = []; const entIx = (id) => { let i = ents.indexOf(id); if (i < 0) { ents.push(id); i = ents.length - 1; } return i; };
-  const detail = { v: 1, rule_version: AVM.RULE_VERSION, ents, a: U.map(u => [u.r.prompt_id, u.r.engine, u.named ? 1 : 0, u.cited ? 1 : 0, u.position || null, u.rivals ? u.rivals.map(x => [entIx(x.id), x.position || null, x.cited ? 1 : 0]) : null]) };
+  // FX-B RB-1 (2026-11-06): the entity rule the competitors were counted under; the weekly run counts a morning's competitors only under its own rule
+  const detail = { v: 1, rule_version: AVM.RULE_VERSION, entity_rule: AIE.RULE, ents, a: U.map(u => [u.r.prompt_id, u.r.engine, u.named ? 1 : 0, u.cited ? 1 : 0, u.position || null, u.rivals ? u.rivals.map(x => [entIx(x.id), x.position || null, x.cited ? 1 : 0]) : null]) };
   const sources = {}; for (const r of A) for (const h of list(r.sources)) if (h !== p.domain && !h.endsWith('.' + p.domain)) sources[h] = (sources[h] || 0) + 1;
   const topN = (o, k) => Object.fromEntries(Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, k));
   const vol = new Map(p.prompts.map(q => [q.prompt_id, Number(q.volume) || 0]));

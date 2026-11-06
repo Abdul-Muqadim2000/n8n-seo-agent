@@ -617,6 +617,20 @@ export async function sitePageInventory(
   }
 }
 
+/** A kind-'air' seo_cache row as the cadence mirror reads it. */
+export type AirCacheRow = { key?: string; kind?: string; site_id?: string; value?: unknown };
+/**
+ * FX-C RC-10 (review C, 2026-11-06): the AI-ranking cache rows the cadence mirror needs for a website whose AI ranking is `on`: its protect list
+ * (`air:protect:<engine site id>`) and the kill switch (`air:kill`), each read by its key. The old read took the first 50 rows of kind 'air' of
+ * every website, and that kind grows by a week row per on website each week: a newly-on website's protect row fell past the first 50. Any other
+ * website reads nothing (and plans exactly as before). A failed read is no row.
+ */
+export async function airCacheRowsFor(mode: unknown, siteId: string, read: (key: string) => Promise<AirCacheRow[]>): Promise<AirCacheRow[]> {
+  if (String(mode ?? '').trim().toLowerCase() !== 'on') return [];
+  const [protect, kill] = await Promise.all([read(`air:protect:${siteId}`).catch(() => [] as AirCacheRow[]), read('air:kill').catch(() => [] as AirCacheRow[])]);
+  return [...protect, ...kill].filter((r) => r && typeof r === 'object');
+}
+
 async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: PipelineData; ladders: LadderBuild; rows: { logs: ContentLogRow[]; queries: QueryRow[]; audits: AuditPoint[] } }> {
   const d = site.domain;
   const sid = n8nSiteId(d);
@@ -650,6 +664,10 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     db.select().from(schema.ladderRechecks).where(and(eq(schema.ladderRechecks.siteId, site.id), eq(schema.ladderRechecks.paused, true))).catch(() => []),
     siteRows<ContentLogRow>('contentLog', d, { extra: [{ columnName: 'status', condition: 'eq', value: 'published' }], max: 200 }).catch(() => [] as ContentLogRow[]),
   ]);
+  // AIR (2026-11-06, P6): a website whose AI ranking is `on` has the kind-'air' cache rows (kill switch, protect list) read for the cadence mirror;
+  // any other website reads nothing more and plans exactly as before
+  // FX-C RC-10: read by key (this website's protect list and the kill switch), never the first 50 kind-'air' rows of every website
+  const airCache = await airCacheRowsFor(monRows[0]?.ai_rank_mode, sid, (key) => n8nRows<AirCacheRow>('cache', { filters: [{ columnName: 'key', condition: 'eq', value: key }], max: 3 }));
   const used = await usageSince(db, org.id, monthStartUtc()).catch(() => null);
   const creditsUsed = used ? Math.round((used.autopilot + used.onDemand) * 100) / 100 : 0;
   const ownRuns = activeRuns(app.runs);
@@ -856,6 +874,9 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       competitors: competitorsOf(engineSite, (monRows[0] ?? null) as Parameters<typeof competitorsOf>[1], site.competitors),
       aiBrands,
       skips,
+      aiRankMode: monRows[0]?.ai_rank_mode,
+      aiRankReserve: monRows[0]?.ai_rank_reserve,
+      aiRankCache: airCache,
       estPageUsd: estimateRunCost('keyword', { receiveContent: true, receiveReport: true }, costTable?.calibration ?? null),
       readiness,
     },

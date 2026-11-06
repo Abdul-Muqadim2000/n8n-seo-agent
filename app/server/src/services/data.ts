@@ -1,4 +1,14 @@
 import {
+  aiRankPendingPlan,
+  aiRankPlanOf,
+  creditRate,
+  aiRankSettingsOf,
+  aiRankShadowOf,
+  type AiRankActionRow,
+  type AiRankPlanData,
+  type AiRankRunRow,
+  type AiRankSettings,
+  type AiRankShadowWeek,
   creditsFor,
   normKeyword,
   clampIndexDailyCap,
@@ -128,7 +138,7 @@ import {
   type AiScopeSummary,
 } from '@seo/shared';
 import type { OrgRow, SiteRow } from '../db/schema';
-import { siteRows } from '../n8n/client';
+import { rows as tableRows, siteRows } from '../n8n/client';
 import { settingsRow } from './admin/settings';
 import { indexCoverage, recheckOf, watchView } from './pageWatch';
 import { aiChargeEntries, bucketAiCharges } from './runCredits';
@@ -1143,7 +1153,7 @@ function toIndex(x: P | null): AiIndex | null {
  */
 export const AI_READ_LIMITS = { runs: 300, prompts: 2500, daily: 120, answers: 6000 } as const;
 
-export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boolean | 'summary'; prompts?: boolean; filter?: AiFilter | null } = {}): Promise<AiData> {
+export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boolean | 'summary'; prompts?: boolean; filter?: AiFilter | null; admin?: boolean } = {}): Promise<AiData> {
   const d = site.domain;
   const since = new Date(Date.now() - 90 * 864e5).toISOString();
   const [visDesc, prompts, report, days, growthRows, aiPages, aiTargets, aiProspects, logs, mons] = await Promise.all([
@@ -1270,6 +1280,9 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
     ...(opts.answers === 'summary' ? { answerResults: answerResultsOf(answers), answersStored: answers.length } : {}),
     scope: opts.filter ? aiScopeOf(opts.filter, vis, compared, answers, prompts, opts.answers !== false) : null,
     growth: toGrowth(growthRows[0], aiPages, aiTargets, aiProspects, logs, monitorsNow),
+    // AIR (2026-11-06): the AI-ranking plan, read only for a website in `on` mode (off and the private trial show nothing new)
+    // FX-C RC-1: in the client's words with credits; the raw memo and the provider cost for a platform admin only
+    aiRank: await aiRankPlanFor(d, mons[0], { prompts, admin: opts.admin === true }),
     report: rp
       ? {
           receivedAt: report!.report.receivedAt,
@@ -1731,6 +1744,9 @@ export async function settingsData(org: OrgRow, site: SiteRow): Promise<SiteSett
     siteRows<ProfileRow>('profiles', d, { max: 5 }),
   ]);
   const profile = profileFromRow(profiles[0]);
+  // browser pass D1 (2026-11-06): a website with no monitors row yet (not tracked) still gets the AI ranking card when the engine's table has the
+  // column: any one row of the table says so (the Data Tables API returns every column on every row); the setting then reads as off
+  const aiRankColumn = monitors[0] ? 'ai_rank_mode' in (monitors[0] as object) : await tableRows<MonitorsRow>('monitors', { max: 1 }).then((r) => !!r[0] && 'ai_rank_mode' in (r[0] as object)).catch(() => false);
   return {
     tracking: connection(siteRow, org, site),
     monitors: monitorsFromRow(monitors[0]),
@@ -1738,6 +1754,10 @@ export async function settingsData(org: OrgRow, site: SiteRow): Promise<SiteSett
     profile,
     readiness: readiness(profile),
     contentGroups: contentGroupsOf(siteRow?.content_groups_json),
+    // AIR (2026-11-06): read apart from `monitors`, so an ordinary monitors save never sends them back
+    // RC-9 (review C): only when the engine stores the setting (its monitors row carries `ai_rank_mode`); an engine from before AI ranking
+    // has no such column, so the card says nothing rather than offering a setting that would not be kept
+    aiRank: aiRankColumn ? aiRankSettingsOf((monitors[0] ?? {}) as unknown as Record<string, unknown>) : undefined,
   };
 }
 
@@ -1749,4 +1769,39 @@ export function contentGroupsOf(raw: unknown): { name: string; pattern: string }
   } catch {
     return [];
   }
+}
+
+// ---------------- AI ranking (AIR, 2026-11-06, docs/ai-ranking-2026-11-05/DESIGN.md §2.H, §6.7) ----------------
+
+/** The AI-ranking plan of a website in `on` mode: its newest on-mode run and its open actions. Null for off / trial, and when the engine has
+ *  no AI-ranking table yet (an engine from before AIR: a missing table reads as no rows, a failed read as no plan, never an error page). */
+export async function aiRankPlanFor(
+  domain: string,
+  monitorsRow: MonitorsRow | undefined,
+  opts: { prompts?: AiPromptRow[]; admin?: boolean } = {},
+): Promise<AiRankPlanData | null> {
+  const settings = aiRankSettingsOf(monitorsRow as unknown as Record<string, unknown>);
+  if (settings.mode !== 'on') return null;
+  try {
+    const [runs, actions, ps] = await Promise.all([
+      siteRows<AiRankRunRow>('aiRankRuns', domain, { sortBy: 'checked_at:desc', max: 4 }),
+      siteRows<AiRankActionRow>('aiRankActions', domain, { sortBy: 'updated_at:desc', max: 300 }),
+      settingsRow().catch(() => null),
+    ]);
+    // FX-C RC-1: question texts by id, credits instead of money (the app's own credit rate), the raw memo and cost for a platform admin only
+    const texts = new Map((opts.prompts ?? []).map((r) => [s((r as { prompt_id?: unknown }).prompt_id), s((r as { prompt?: unknown }).prompt)]));
+    // browser pass D4: an on website with no run yet says its first plan is coming, rather than showing nothing
+    return aiRankPlanOf(runs, actions, settings, { question: (id) => texts.get(id) ?? '', creditRate: ps ? creditRate(ps) : null, admin: opts.admin === true }) ?? aiRankPendingPlan(settings);
+  } catch {
+    return null;
+  }
+}
+
+/** The platform admin's shadow comparison: the newest 8 AI-ranking runs (trial or on) of a website, AI ranking's plan beside the current one. */
+export async function aiRankShadowData(site: SiteRow): Promise<{ settings: AiRankSettings; weeks: AiRankShadowWeek[] }> {
+  const [mons, runs] = await Promise.all([
+    siteRows<MonitorsRow>('monitors', site.domain, { max: 5 }).catch(() => [] as MonitorsRow[]),
+    siteRows<AiRankRunRow>('aiRankRuns', site.domain, { sortBy: 'checked_at:desc', max: 8 }).catch(() => [] as AiRankRunRow[]),
+  ]);
+  return { settings: aiRankSettingsOf(mons[0] as unknown as Record<string, unknown>), weeks: aiRankShadowOf(runs) };
 }

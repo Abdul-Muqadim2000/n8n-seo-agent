@@ -727,12 +727,25 @@ const LISTINGS = [
   { id: 'sap_store', name: 'SAP Store', host: 'store.sap.com', cat: 'marketplace', kinds: ['saas'], integ: /\bsap\b/i, link: 'unknown', ai: 'low', prio: 3, submit: 'https://www.sap.com/partners.html', why: 'Through the SAP partner programme; for SAP integrations.' },
   { id: 'hubspot_marketplace', name: 'HubSpot App Marketplace', host: 'ecosystem.hubspot.com', cat: 'marketplace', kinds: ['saas'], integ: /\bhubspot\b/i, link: 'unknown', ai: 'low', prio: 3, submit: 'https://developers.hubspot.com/', why: 'Needs 3+ active installs; for a real HubSpot integration.' },
   { id: 'xero_apps', name: 'Xero App Store', host: 'apps.xero.com', cat: 'marketplace', kinds: ['saas'], integ: /\bxero\b/i, link: 'unknown', ai: 'low', prio: 3, submit: 'https://developer.xero.com/', why: 'For a Xero integration.' },
-  { id: 'quickbooks_apps', name: 'QuickBooks App Store', host: 'apps.intuit.com', cat: 'marketplace', kinds: ['saas'], integ: /quickbooks/i, link: 'unknown', ai: 'low', prio: 3, submit: 'https://developer.intuit.com/', why: 'For a QuickBooks integration.' }];
+  { id: 'quickbooks_apps', name: 'QuickBooks App Store', host: 'apps.intuit.com', cat: 'marketplace', kinds: ['saas'], integ: /quickbooks/i, link: 'unknown', ai: 'low', prio: 3, submit: 'https://developer.intuit.com/', why: 'For a QuickBooks integration.' },
+  // ---- AIR (2026-11-06, docs/ai-ranking-2026-11-05 DESIGN 2.F lever L09, package P6): the directories of B2B service firms that AI answers to
+  // "which firm should I hire for X" draw on (R2 / R4: list- and directory-dominated recommendation answers). `air: true` = offered ONLY to a
+  // website whose AI ranking is `on` (listingsFor's opts.air); every other website gets exactly the checklist it had. Clutch, GoodFirms and
+  // DesignRush above already serve agencies; these add the rest of the set. Nothing is submitted for the client.
+  { id: 'themanifest', name: 'The Manifest', host: 'themanifest.com', cat: 'reviews', kinds: ['agency'], air: true, re: /themanifest\.com\/company\/([a-z0-9-]+)/i,
+    link: 'unknown', ai: 'medium', prio: 2, submit: 'https://themanifest.com/', why: 'A sister site of Clutch with shortlists of service firms by service and city; AI answers to "which firm should I hire" cite such lists.' },
+  { id: 'sortlist', name: 'Sortlist', host: 'sortlist.com', cat: 'directory', kinds: ['agency'], air: true, re: /sortlist\.[a-z.]+\/agency\/([a-z0-9-]+)/i,
+    link: 'unknown', ai: 'medium', prio: 2, submit: 'https://www.sortlist.com/', why: 'A marketplace where buyers brief and shortlist agencies and development firms; its agency pages are read by AI answers about providers.' },
+  { id: 'ms_partner_dir', name: 'Microsoft partner directory', host: 'appsource.microsoft.com', cat: 'partner', kinds: ['agency', 'saas'], air: true, re: /appsource\.microsoft\.com\/[a-z-]+\/marketplace\/partner-dir\/[^"'\s]+/i, integ: /microsoft (solutions |gold |silver |certified |cloud )?partner|solutions partner|dynamics 365 partner|business central partner|partner center|microsoft partner network/i,
+    link: 'unknown', ai: 'medium', prio: 1, submit: 'https://partner.microsoft.com/', why: 'For a Microsoft partner: the official directory buyers search for implementation partners; a listing needs a partner account and a published profile.' },
+  { id: 'pasha', name: 'P@SHA member directory (Pakistan Software Houses Association)', host: 'pasha.org.pk', cat: 'industry', kinds: ['saas'], countries: ['PK'], air: true,
+    link: 'unknown', ai: 'low', prio: 2, submit: 'https://www.pasha.org.pk/', why: 'For software firms in Pakistan: the industry association\'s member list, a trust signal buyers and AI answers read.' }];
 const LISTING_HOSTS = LISTINGS.map(l => l.host);
 // which entries apply to a site: its kind (from the business type and topics), country, topics, and the integrations its own pages name
-function listingsFor(kinds, iso, topicText, siteText) {
-  const K = Array.isArray(kinds) ? kinds : [kinds];
-  return LISTINGS.filter(l => (K.some(k => l.kinds.includes(k)) || (l.kinds.includes('any') && !K.includes('local') && l.cat !== 'local')) && (!l.countries || !l.countries.length || l.countries.includes(String(iso || '').toUpperCase()))
+// opts.air (AIR P6): true only for a website whose AI ranking is `on`; without it the entries marked `air` are never offered (today's checklist)
+function listingsFor(kinds, iso, topicText, siteText, opts) {
+  const K = Array.isArray(kinds) ? kinds : [kinds]; const air = !!(opts && opts.air === true);
+  return LISTINGS.filter(l => (!l.air || air) && (K.some(k => l.kinds.includes(k)) || (l.kinds.includes('any') && !K.includes('local') && l.cat !== 'local')) && (!l.countries || !l.countries.length || l.countries.includes(String(iso || '').toUpperCase()))
     && (!l.topics || l.topics.test(topicText || '')) && (!l.integ || l.integ.test(siteText || '')));
 }
 // What a fetched listing page is allowed to claim (P34-2, live 2026-10-12): three listings came back "listed" when they were not —
@@ -750,8 +763,17 @@ function listingClaim(o) {
   if (x.as_list) return { status: 'missing', evidence: 'the list does not name you' };
   return { status: 'unknown', evidence: 'the page at ' + String(x.url || '') + ' does not name you: it may belong to another product, or your profile may use a different name' };
 }
-function siteKind(businessType, topicText) {   // the checklists that apply: a consultancy that also sells software gets both
+function siteKind(businessType, topicText, opts) {   // the checklists that apply: a consultancy that also sells software gets both
   const t = String(businessType || '') + ' ' + String(topicText || '');
+  // AIR P6 (opts.air, on websites only): a firm that builds or implements software FOR clients is a service firm and a software seller, so it gets
+  // both checklists (the service-firm directories are where AI answers about providers look); every other website is judged as before.
+  // FX-C RC-8: only when its words name software work too. A tax, VAT, HR, payroll, accounting, audit, legal or management consultancy is a
+  // professional-services firm: the agency checklist only (no software marketplace), unless its own business type names software.
+  const AIR_SOFT = /software|\bapps?\b|\bsaas\b|\berp\b|\bcrm\b|platform|(system|systems|software|it|api|crm|erp|data) integrat|(app|web|software|product|mobile) development|development (company|firm|agency|partner)|automation|it services|dynamics 365|salesforce|\bodoo\b|\bsap\b/i;
+  const AIR_PRO = /\b(tax|vat|hr|human resources?|payroll|accounting|accountants?|bookkeeping|audit|auditing|legal|law|management consult\w*|recruit\w*|immigration)\b/i;
+  if (opts && opts.air === true && !/restaurant|cafe|clinic|dental|salon|store|shop|hotel|gym|plumb|electric|lawyer|law firm|real estate|local ?business|medical|spa|bakery/i.test(t)
+    && /software (development|house|company|agency|firm)|custom software|development (company|firm|agency|partner)|app development|web development|it services|implementation (partner|services)|systems? integrat|consultanc|consulting|outsourc|dedicated (team|developers)/i.test(t)
+    && AIR_SOFT.test(t) && (!AIR_PRO.test(String(businessType || '')) || AIR_SOFT.test(String(businessType || '')))) return ['agency', 'saas'];
   if (/restaurant|cafe|clinic|dental|salon|store|shop|hotel|gym|plumb|electric|lawyer|law firm|real estate|local ?business|medical|spa|bakery/i.test(t)) return ['local'];
   const agency = /agency|consult|marketing services|design studio|development services|professional ?service|accounting firm|audit firm/i.test(t);
   const software = /software|saas|platform|\bapp\b|cloud|e-?invoic|\berp\b|automation|\bapi\b/i.test(t);
@@ -900,6 +922,74 @@ const PC = (() => {
   const MIN_FIT = 0.4;
   return { searchUrl, shows, feed, guestSignal, pickSignal, cleanQuote, prose, stale, STALE_DAYS, MIN_FIT, APPLE, INDEX, strip };
 })();
+// ---- AIRF: the AI-ranking algorithm's settings, kill switch, ids and shared vocabulary (inlined by build_monitors.py through its marker) ----
+// AIR (2026-11-06, docs/ai-ranking-2026-11-05/DESIGN.md §4.1, frozen in CONTRACTS.md §2-§3). Written by W0 and FROZEN: the packages read it,
+// none changes it (a change is a contract change: CONTRACTS.md first, then this file, then every caller). Pure: no node access, no clock, no
+// network; n8n sandbox rules (no URL constructor, no Object.defineProperty / setPrototypeOf, no structuredClone).
+// Every setting is OFF when empty: a site without the columns, or with them empty, runs exactly as before AIR.
+const AIRF = (() => {
+  const VERSION = 'air-flags-1';
+  // air-2 (FX-B, 2026-11-06, for FX-A's counting changes: a t test across questions, control handling, one trial per action): rows of another rule are
+  // never compared or learned from (ai_rank_wiring.py loads priors and runs of this rule only, and hides actions pre-registered under another one)
+  const RULE_VERSION = 'air-2';   // the rule AIR's rows are written under (seo_ai_rank_* .rule_version); bump it when a counting rule changes
+  const MODES = ['off', 'shadow', 'on'];
+  const S = (v) => (v == null ? '' : String(v)).trim();
+  const flag = (v) => v === true || /^(true|1|yes|on)$/i.test(S(v));
+  const modeOf = (v) => { const m = S(v).toLowerCase(); return MODES.includes(m) ? m : 'off'; };
+  const fanoutOf = (v) => { const n = Number(v); return S(v) === '' || !Number.isFinite(n) ? 0 : Math.min(50, Math.max(0, Math.round(n))); };
+  // seo_monitors row -> s.settings.rank (package P4 puts it on every monitor site in _monitor_sites.js; P3 and P6 read it there)
+  const settingsOf = (m) => { const r = m || {};
+    return { mode: modeOf(r.ai_rank_mode), reserve: flag(r.ai_rank_reserve), fanout_n: fanoutOf(r.ai_rank_fanout_n), mentions: flag(r.ai_rank_mentions), brave: flag(r.ai_rank_brave) }; };
+  // Site Admin `monitors` (package P4 calls it from Admin_Action.js / Monitor_Row_Admin.js): only the fields GIVEN are returned, normalised;
+  // '' clears a field to null (= off); a bad value is an error message, never a silent default
+  const COLS = ['ai_rank_mode', 'ai_rank_reserve', 'ai_rank_fanout_n', 'ai_rank_mentions', 'ai_rank_brave'];
+  const validate = (given) => { const g = given || {}; const values = {}; const errors = [];
+    for (const k of COLS) {
+      if (!(k in g) || g[k] === undefined || g[k] === null) continue;
+      const v = g[k];
+      if (S(v) === '') { values[k] = null; continue; }
+      if (k === 'ai_rank_mode') { const m = S(v).toLowerCase(); if (MODES.includes(m)) values[k] = m; else errors.push('ai_rank_mode must be off, shadow or on'); continue; }
+      if (k === 'ai_rank_fanout_n') { const n = Number(v); if (Number.isFinite(n) && n >= 0 && n <= 50 && Math.round(n) === n) values[k] = n; else errors.push('ai_rank_fanout_n must be a whole number from 0 to 50'); continue; }
+      if (v === true || v === false) { values[k] = v; continue; }
+      if (/^(true|1|yes|on)$/i.test(S(v))) values[k] = true; else if (/^(false|0|no|off)$/i.test(S(v))) values[k] = false; else errors.push(k + ' must be true or false');
+    }
+    return { values, errors }; };
+  // the global kill switch: seo_cache row key `air:kill`, value '1' (or true / on / yes) -> AIR skips every site, without a deploy
+  const CACHE_KIND = 'air';
+  const KILL_KEY = 'air:kill';
+  const protectKey = (site_id) => 'air:protect:' + S(site_id);
+  const mentionsKey = (site_id, ym) => 'air:mentions:' + S(site_id) + ':' + S(ym);
+  const killed = (cacheRows) => (Array.isArray(cacheRows) ? cacheRows : []).some(r => r && S(r.key) === KILL_KEY && /^(1|true|on|yes)$/i.test(S(r.value)));
+  // what a site in a mode may do (CONTRACTS.md §5): shadow computes and writes only the five AIR tables, pays nothing; on writes the sinks
+  const runs = (rank, kill) => !kill && !!rank && (rank.mode === 'shadow' || rank.mode === 'on');
+  const writesSinks = (rank, kill) => !kill && !!rank && rank.mode === 'on';
+  const mayPay = (rank, kill) => writesSinks(rank, kill);
+  // shared vocabulary (CONTRACTS.md §3.1)
+  const ENGINES = ['chatgpt', 'gemini', 'ai_mode', 'ai_overview', 'perplexity', 'claude', 'copilot', 'chatgpt_api'];
+  const EXCLUDED_ENGINES = ['gemini_api'];   // owner decision 9: never diagnosed or learned from until DataForSEO answers in writing
+  const GROUP_OF = { ai_overview: 'google', ai_mode: 'google', gemini: 'google', chatgpt: 'chatgpt', chatgpt_api: 'chatgpt', perplexity: 'perplexity', copilot: 'copilot', claude: 'claude' };
+  const GROUPS = ['google', 'chatgpt', 'perplexity', 'copilot', 'claude'];
+  const STAGES = ['S0', 'S1', 'S2', 'S3', 'S4', 'S5'];
+  const STAGE_LABELS = ['unmeasured', ...STAGES];
+  const ACTION_STATUSES = ['shadow', 'proposed', 'queued', 'in_progress', 'done', 'verified', 'not_happened', 'expired', 'refused'];
+  const ARMS = ['treated', 'control'];
+  const usable = (engine) => ENGINES.includes(S(engine).toLowerCase());
+  // ids (one rule for every writer and reader)
+  const hash = (s) => { let h = 2166136261 >>> 0; const t = String(s); for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; };   // FNV-1a, as AVX.hash
+  const hex8 = (s) => ('0000000' + hash(s).toString(16)).slice(-8);
+  // url_key: no scheme, no www., host lower-cased, no query, no fragment, no trailing slash, at most 300 characters ('' when it is not an http(s) URL)
+  const urlKey = (url) => { const m = S(url).match(/^https?:\/\/([^\/?#]+)([^?#]*)/i); if (!m) return '';
+    const host = m[1].toLowerCase().replace(/^www\./, '').replace(/:\d+$/, '').replace(/\.$/, ''); const path = m[2].replace(/\/+$/, '');
+    return (host + path).slice(0, 300); };
+  const refKey = (ref) => { const r = ref || {}; return r.prompt_id ? 'p:' + S(r.prompt_id) : r.url ? 'u:' + urlKey(r.url) : r.listing_id ? 'l:' + S(r.listing_id) : 's:site'; };
+  const actionId = (site_id, lever, ref) => 'air_' + S(site_id) + '_' + S(lever) + '_' + hex8(refKey(ref));
+  const day = (now) => { const d = new Date(typeof now === 'number' ? now : Date.parse(S(now))); return Number.isFinite(d.getTime()) ? d.toISOString().slice(0, 10).replace(/-/g, '') : ''; };
+  const runId = (site_id, now) => 'air_' + day(now) + '_' + S(site_id);
+  const priorId = (lever, stage, group, scope) => [S(lever), S(stage), S(group), S(scope) || 'global'].join(':');
+  const targetId = (site_id, prompt_id) => 'ait_' + S(site_id).replace(/^site_/, '') + '_' + S(prompt_id);   // the AI Growth format, unchanged
+  return { VERSION, RULE_VERSION, MODES, COLS, settingsOf, validate, CACHE_KIND, KILL_KEY, protectKey, mentionsKey, killed, runs, writesSinks, mayPay,
+    ENGINES, EXCLUDED_ENGINES, GROUP_OF, GROUPS, STAGES, STAGE_LABELS, ACTION_STATUSES, ARMS, usable, hash, urlKey, refKey, actionId, runId, priorId, targetId };
+})();
 const plans = $('LB Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const rows = (n) => { try { return $(n).all().map(i => i.json).filter(r => r && typeof r === 'object' && Object.keys(r).length && !r.error && !r.skip); } catch (e) { return []; } };
 const pair = (a, b) => { try { const R = $(a).all().map(i => i.json); const S = $(b).all().map(i => i.json || {}); return R.map((r, i) => ({ r, x: S[i] || {} })).filter(o => !o.r.skip); } catch (e) { return []; } };
@@ -913,6 +1003,18 @@ const jsonOf = (x) => { if (!x) return null; if (x.body && typeof x.body === 'ob
 const errOf = (x) => x.error ? String(x.error.message || x.error.description || x.error).slice(0, 160) : '';
 const pathKey = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
 // the median and the one-decimal rounding of the control-group reading live in CT now (v5/code/_change_test.js), used by both kinds
+// AIR (2026-11-06, docs/ai-ranking-2026-11-05 DESIGN 2.F lever L08 / L09, package P6), for a website whose AI ranking is `on` ONLY (AIRF.settingsOf on
+// its seo_monitors row): (1) the listings checklist adds the service-firm directories (listingsFor / siteKind with { air: true }); (2) a placement
+// AI ranking chose (seo_link_prospects type ai_source, origin 'ai_rank') is scored with AI ranking's own probability (its stored score / 100) in place
+// of the flat ai_source likelihood, and (3) the writer budget takes the ready rows by expected value (score x fit), AI ranking's placements
+// included, with at most AIR_PITCH_MAX of them a week: a placement drafted only when its expected value is inside the budget's cut-off, so AI
+// ranking's weakest pitches never push out a better one (FX-C RC-7). Every other row is scored as before; a website that is off or in shadow
+// runs today's path. RC-7: the kill switch (seo_cache `air:kill`, the one row `Load AIR Kill (LB)` reads) stops all of it on every website.
+const airMons = rows('Load Monitors');
+const airKill = AIRF.killed(rows('Load AIR Kill (LB)'));
+const airOnOf = (sid, dom) => { const m = airMons.find(x => x.site_id === sid) || airMons.find(x => String(x.domain || '').toLowerCase().replace(/^www\./, '') === String(dom || '').toLowerCase().replace(/^www\./, '')) || {};
+  return AIRF.writesSinks(AIRF.settingsOf(m), airKill); };
+const AIR_PITCH_MAX = 2;
 const LIKELY = { lost: 0.7, mention: 0.9, list: 0.5, comp_new: 0.55, gap: 0.4, ai_source: 0.35, resource: 0.45, broken: 0.6, press: 0.5, digest: 0.55, podcast: 0.35 };
 // L6: the kinds of page that earn links, each with the words that give it away, how many referring domains make it worth saying, and
 // what the work actually is. A kind nobody in this market has links for is not suggested.
@@ -932,6 +1034,7 @@ const deadlineOf = (t) => { for (const m of String(t).matchAll(/deadline[:\s-]+(
 const out = [];
 for (const p of plans) {
   const sid = p.site_id; const comp = p.competitors.map(c => LK.regDomain(c));
+  const airOn = airOnOf(sid, p.domain);   // AIR P6: false for every website that is not `on` (today's path)
   const myLedger = ledger.filter(l => l.site_id === sid); const linking = new Set(myLedger.filter(l => l.status !== 'lost').map(l => l.ref_domain));
   const myProspects = prospects.filter(x => x.site_id === sid); const myOutreach = outreach.filter(o => o.site_id === sid);
   // IDF over our own pages: a site's topic words are everywhere; the rare shared words decide the topic match
@@ -1044,6 +1147,8 @@ for (const p of plans) {
     o.target_url = tg.url; o.target_reason = tg.reason; o.anchor_hint = tg.anchor;
     if (!blocked && t && ['gap', 'comp_new', 'resource', 'broken'].includes(r.type) && o.fit < (r.type === 'broken' ? 0.15 : OK.OFF_TOPIC)) reasons.push('off topic for you (' + Math.round(o.fit * 100) + '% match)');
     if (isNew) o.score = Math.round(100 * (LIKELY[r.type] || 0.3) * (0.4 + 0.6 * Math.min(1, o.fit + 0.2)) * (r.rank ? Math.min(1.2, 0.6 + Number(r.rank) / 600) : 1));
+    else if (airOn && r.type === 'ai_source' && String(stored.origin || '') === 'ai_rank') { const pAir = Math.min(0.95, Math.max(0.01, (Number(stored.score) || 0) / 100));   // AIR P6: AI ranking's probability, not the flat 0.35
+      o.score = Math.round(100 * pAir * (0.4 + 0.6 * Math.min(1, o.fit + 0.2))); o.checks.air = { p: pAir, basis: 'AI ranking\'s estimate that this placement gets you named (its stored score)' }; }
     o.status = reasons.length ? 'not_fit' : (o.contacts.length ? 'ready' : 'needs_contact');
     o.checks.reasons = reasons; o.checks.page_status = st || (e ? 'error' : ''); o.checks.blocked = blocked; o.checks.noindex = !!facts.noindex;
     if (o.status === 'not_fit') o.fit_reason = reasons.join('; ');
@@ -1158,8 +1263,8 @@ for (const p of plans) {
   // ---- 4. the listings checklist ----
   if (p.due.listings) {
     const selfHtml = pagesRead.filter(o => o.r.site_id === sid && o.r.kind === 'self').map(o => htmlOf(o.x)).join(' ');
-    const kind = siteKind(p.profile.business_type, p.topics.join(' '));
-    for (const l of listingsFor(kind, p.country_iso, topicText, LK.text(selfHtml))) {
+    const kind = siteKind(p.profile.business_type, p.topics.join(' '), airOn ? { air: true } : undefined);   // AIR P6: the service-firm directories on `on` websites only
+    for (const l of listingsFor(kind, p.country_iso, topicText, LK.text(selfHtml), airOn ? { air: true } : undefined)) {
       const old = listingRows.find(y => y.site_id === sid && y.listing_id === l.id) || {};
       let status = 'unknown', profile_url = '', rel = l.link, evidence = '', blocked_now = false;
       const led = myLedger.find(y => y.status !== 'lost' && (y.ref_domain === l.host || LK.sameSite(y.ref_domain, l.host) || LK.sameSite(l.host, y.ref_domain)) && (l.list ? LK.normUrl(y.from_url) === LK.normUrl(l.list) : l.re ? l.re.test(y.from_url || '') : true));   // the list page itself, the profile pattern, else the host
@@ -1280,7 +1385,11 @@ for (const p of plans) {
   }
   const ready = [...outreach_rows.filter(o => o.status === 'ready'), ...myOutreach.filter(o => o.status === 'ready' && !o.sequence_json && !outreach_rows.some(n => n.prospect_domain === o.prospect_domain && n.type === o.type))]
     .map(o => ({ ...o, rankv: (Number(o.score) || 0) * (0.5 + Number(o.fit || 0)) })).sort((a, b) => b.rankv - a.rankv);
-  const jobs = p.free_only ? [] : ready.slice(0, p.budget).map(({ rankv, ...o }) => o);
+  // AIR (on only, RC-7): every ready row by expected value (rankv), AI ranking's placements included; at most AIR_PITCH_MAX of them a week, the
+  // others wait for a later week (still `ready`). Off and shadow: `ready` exactly as it was.
+  const isAirRow = (o) => airOn && o.type === 'ai_source' && myProspects.some(y => y.prospect_domain === o.prospect_domain && y.type === 'ai_source' && String(y.origin || '') === 'ai_rank');
+  const readyOrdered = airOn ? (() => { let n = 0; return ready.filter(o => !isAirRow(o) || n++ < AIR_PITCH_MAX); })() : ready;
+  const jobs = p.free_only ? [] : readyOrdered.slice(0, p.budget).map(({ rankv, ...o }) => o);
   const stillOld = (k) => !(myOutreach.find(o => o.prospect_domain + '|' + o.type === k) || {}).sequence_json;
   out.push({ json: { site_id: sid, domain: p.domain, email: p.email, callback_url: p.callback_url, request_id: p.request_id, on_demand: p.on_demand, free_only: p.free_only, checked_at: iso,
     outreach_rows, prospect_rows, listing_rows, impact_rows, jobs: jobs.filter(j => stillOld(j.prospect_domain + '|' + j.type)), fixes, asset_ideas, won_checks,

@@ -39,6 +39,10 @@ BAKED = (
 # Settings that are optional by design but still change the generated workflows when absent: the build says which way they went, so a
 # log makes it obvious that this build turned a source off. They are NOT required -- the file being there is what is required.
 FLAGS = ('SEO_BING_WEBMASTER_API_KEY', 'SEO_AHREFS_API_KEY')
+# AIR P5 (2026-11-06, docs/ai-ranking-2026-11-05/CONTRACTS.md §6): Brave Search for the AI-ranking reads. Baked as a build flag: without the key
+# the planner and the request node are built with `false`, so no Brave request is ever made (the node stays in the workflow, never run).
+BRAVE_ENABLED = bool((ENV.get('SEO_BRAVE_API_KEY') or '').strip())
+FLAGS = FLAGS + ('SEO_BRAVE_API_KEY',)
 
 
 def _opted_out(argv=None):

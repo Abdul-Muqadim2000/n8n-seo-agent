@@ -857,7 +857,7 @@ const CC = (() => {
     family, priceOf, tokensOf, callCost, runCost, keysFor, readCal, estOf, pick, calKey, calStat, calRow, monthRow, part, costBasis, split };
 })();
 const ROW = 'Run Ledger Row (Growth)';
-const MEASURED = 'Growth Metrics';   // '' when this workflow has no measured figure
+const MEASURED = 'Growth Metrics|AI Rank Fetched';   // '' when this workflow has no measured figure
 const AI_NODES = ["AI Outreach Writer"];     // every Claude node of this workflow (the agents a model node is wired to), '[]' when it calls none
 const BAL_END = 'DFS Balance End (Growth)';     // the free balance probe on the settle chain
 const LEDGER = 'Load Run Ledger (Growth)';       // the run-ledger rows around this run's window
@@ -979,6 +979,12 @@ const dfs = { usd: dfs_usd, measured: dfsAtt.attributed || measured != null,
   basis: dfsAtt.attributed ? dfsAtt.basis + ' (its own tasks: ' + taskBasis + ')'
     : dfsAtt.comparable ? taskBasis + '. ' + dfsAtt.basis : taskBasis };
 const split = CC.split(ai, dfs);
+// FX-B RB-9 (2026-11-06, AIR): a measured node may also state a cost it can only ESTIMATE, beside its measured `cost_usd` (AI Rank Fetched: the
+// Brave searches, which report no cost per call). It joins estimated_usd and the basis, never the measured DataForSEO figure. No other node
+// states it, so every other row is unchanged.
+{ let ex = 0; const why = []; for (const __mn of MEASURED_NODES) { let __it = null; try { __it = $(__mn).all().map(i => i.json || {}); } catch (e) { __it = null; } if (!__it) continue;
+    for (const j of __it) { const v = n0(j && j.extra_est_usd); if (v != null && v > 0) { ex += v; if (j.extra_est_basis) why.push(String(j.extra_est_basis)); } } }
+  if (ex > 0) { split.estimated_usd = +((Number(split.estimated_usd) || 0) + ex).toFixed(4); split.cost_basis = String(split.cost_basis || '') + ' Also estimated: $' + (+ex.toFixed(4)) + (why.length ? ' (' + why.join('; ') + ')' : '') + '.'; } }
 return [{ json: { run_id: String($execution.id), mode: String(row.mode || ''), status: 'done',
   settled_usd: ai_usd, ai_usd, ai_measured: ai.measured, ai_basis: ai.basis, ai_source: ai.source,
   ai_nodes_ran: ranAi, ai_nodes_checked: AI_NODES.length,

@@ -1,0 +1,153 @@
+{
+ "generated": "harness/scenarios_air_learn.js from ARL (v5/code/_ai_rank_learn.js); AIR_COST_WRITE=1 regenerates",
+ "rule_version": "air-1",
+ "constants": {
+  "H": 25,
+  "overhead_usd": 0.5,
+  "credits_per_usd": 60,
+  "page_usd": 0.8,
+  "reserve_pages_month": 2,
+  "fanout_read_usd": 0.002,
+  "mentions_task_usd": [
+   0.1,
+   0.2
+  ],
+  "mentions_tasks_month": 2
+ },
+ "levers": [
+  {
+   "id": "L01",
+   "usd": 0,
+   "effort_min": 15,
+   "executor": "human",
+   "cost_usd_at_H": 6.75
+  },
+  {
+   "id": "L02",
+   "usd": 0,
+   "effort_min": 240,
+   "executor": "human",
+   "cost_usd_at_H": 100.5
+  },
+  {
+   "id": "L03",
+   "usd": 0,
+   "effort_min": 20,
+   "executor": "human",
+   "cost_usd_at_H": 8.8333
+  },
+  {
+   "id": "L04",
+   "usd": 0,
+   "effort_min": 30,
+   "executor": "human",
+   "cost_usd_at_H": 13
+  },
+  {
+   "id": "L05",
+   "usd": 0.8,
+   "effort_min": 20,
+   "executor": "approve",
+   "cost_usd_at_H": 9.6333
+  },
+  {
+   "id": "L06",
+   "usd": 0.8,
+   "effort_min": 20,
+   "executor": "approve",
+   "cost_usd_at_H": 9.6333
+  },
+  {
+   "id": "L07",
+   "usd": 0,
+   "effort_min": 20,
+   "executor": "approve",
+   "cost_usd_at_H": 8.8333
+  },
+  {
+   "id": "L08",
+   "usd": 0.02,
+   "effort_min": 30,
+   "executor": "approve",
+   "cost_usd_at_H": 13.02
+  },
+  {
+   "id": "L09",
+   "usd": 0,
+   "effort_min": 60,
+   "executor": "human",
+   "cost_usd_at_H": 25.5
+  },
+  {
+   "id": "L10",
+   "usd": 0,
+   "effort_min": 120,
+   "executor": "human",
+   "cost_usd_at_H": 50.5
+  },
+  {
+   "id": "L11",
+   "usd": 0,
+   "effort_min": 240,
+   "executor": "human",
+   "cost_usd_at_H": 100.5
+  },
+  {
+   "id": "L12",
+   "usd": 0,
+   "effort_min": 90,
+   "executor": "human",
+   "cost_usd_at_H": 38
+  },
+  {
+   "id": "L13",
+   "usd": 0,
+   "effort_min": 45,
+   "executor": "human",
+   "cost_usd_at_H": 19.25
+  },
+  {
+   "id": "L14",
+   "usd": 0,
+   "effort_min": 300,
+   "executor": "human",
+   "cost_usd_at_H": 125.5
+  },
+  {
+   "id": "L15",
+   "usd": 0.02,
+   "effort_min": 20,
+   "executor": "approve",
+   "cost_usd_at_H": 8.8533
+  },
+  {
+   "id": "L16",
+   "usd": 0,
+   "effort_min": 0,
+   "executor": "auto",
+   "cost_usd_at_H": 0.5
+  },
+  {
+   "id": "L17",
+   "usd": 0,
+   "effort_min": 0,
+   "executor": "human",
+   "cost_usd_at_H": 0.5
+  }
+ ],
+ "monthly_usd": {
+  "shadow": 0,
+  "on_free": 0,
+  "reserve": 1.6,
+  "fanout_20": [
+   0.09,
+   0.17
+  ],
+  "mentions": [
+   0.2,
+   0.4
+  ]
+ },
+ "credits_per_usd": 60,
+ "note": "credits shown to clients = 60 x USD (3x markup at $0.05 a credit); provider costs per DESIGN.md section 5"
+}
