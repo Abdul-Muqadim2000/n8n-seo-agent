@@ -161,12 +161,12 @@
       "site_id": "site_techand-ai",
       "domain": "techand.ai",
       "prompt_id": "aq1",
-      "question": "Which CRM implementation partner in the UAE do companies recommend?",
-      "keyword": "crm implementation partner recommendations uae",
+      "question": "Which company can move our old CRM data to a new system in the UAE?",
+      "keyword": "crm data migration services uae",
       "kind": "answer",
       "page_url": "",
       "page_type": "Guide",
-      "fanout": "crm partner uae | crm implementation firms uae",
+      "fanout": "crm data migration uae | crm migration company uae",
       "sources_json": "[]",
       "competitors": "example-crm.ae",
       "engines": "chatgpt, perplexity",
@@ -226,7 +226,7 @@
     ],
     "suggestions": [
      {
-      "keyword": "crm implementation partner recommendations uae",
+      "keyword": "best crm consultants uae",
       "source": "ai_answer"
      },
      {
@@ -412,12 +412,12 @@
       "site_id": "site_techand-ai",
       "domain": "techand.ai",
       "prompt_id": "aq1",
-      "question": "Which CRM implementation partner in the UAE do companies recommend?",
-      "keyword": "crm implementation partner recommendations uae",
+      "question": "Which company can move our old CRM data to a new system in the UAE?",
+      "keyword": "crm data migration services uae",
       "kind": "answer",
       "page_url": "",
       "page_type": "Guide",
-      "fanout": "crm partner uae | crm implementation firms uae",
+      "fanout": "crm data migration uae | crm migration company uae",
       "sources_json": "[]",
       "competitors": "example-crm.ae",
       "engines": "chatgpt, perplexity",
@@ -477,7 +477,7 @@
     ],
     "suggestions": [
      {
-      "keyword": "crm implementation partner recommendations uae",
+      "keyword": "best crm consultants uae",
       "source": "ai_answer"
      },
      {
@@ -663,12 +663,12 @@
       "site_id": "site_techand-ai",
       "domain": "techand.ai",
       "prompt_id": "aq1",
-      "question": "Which CRM implementation partner in the UAE do companies recommend?",
-      "keyword": "crm implementation partner recommendations uae",
+      "question": "Which company can move our old CRM data to a new system in the UAE?",
+      "keyword": "crm data migration services uae",
       "kind": "answer",
       "page_url": "",
       "page_type": "Guide",
-      "fanout": "crm partner uae | crm implementation firms uae",
+      "fanout": "crm data migration uae | crm migration company uae",
       "sources_json": "[]",
       "competitors": "example-crm.ae",
       "engines": "chatgpt, perplexity",
@@ -735,7 +735,7 @@
     ],
     "suggestions": [
      {
-      "keyword": "crm implementation partner recommendations uae",
+      "keyword": "best crm consultants uae",
       "source": "ai_answer"
      },
      {
@@ -921,12 +921,12 @@
       "site_id": "site_techand-ai",
       "domain": "techand.ai",
       "prompt_id": "aq1",
-      "question": "Which CRM implementation partner in the UAE do companies recommend?",
-      "keyword": "crm implementation partner recommendations uae",
+      "question": "Which company can move our old CRM data to a new system in the UAE?",
+      "keyword": "crm data migration services uae",
       "kind": "answer",
       "page_url": "",
       "page_type": "Guide",
-      "fanout": "crm partner uae | crm implementation firms uae",
+      "fanout": "crm data migration uae | crm migration company uae",
       "sources_json": "[]",
       "competitors": "example-crm.ae",
       "engines": "chatgpt, perplexity",
@@ -976,7 +976,7 @@
       "source": "striking"
      },
      {
-      "keyword": "crm implementation partner recommendations uae",
+      "keyword": "crm data migration services uae",
       "source": "ai_answer"
      }
     ],
@@ -1006,7 +1006,7 @@
      }
     ],
     "air": {
-     "reserved": "crm implementation partner recommendations uae",
+     "reserved": "crm data migration services uae",
      "honoured": [],
      "protected": []
     }
@@ -1182,12 +1182,12 @@
       "site_id": "site_techand-ai",
       "domain": "techand.ai",
       "prompt_id": "aq1",
-      "question": "Which CRM implementation partner in the UAE do companies recommend?",
-      "keyword": "crm implementation partner recommendations uae",
+      "question": "Which company can move our old CRM data to a new system in the UAE?",
+      "keyword": "crm data migration services uae",
       "kind": "answer",
       "page_url": "",
       "page_type": "Guide",
-      "fanout": "crm partner uae | crm implementation firms uae",
+      "fanout": "crm data migration uae | crm migration company uae",
       "sources_json": "[]",
       "competitors": "example-crm.ae",
       "engines": "chatgpt, perplexity",
@@ -1237,7 +1237,7 @@
       "source": "striking"
      },
      {
-      "keyword": "crm implementation partner recommendations uae",
+      "keyword": "crm data migration services uae",
       "source": "ai_answer"
      }
     ],
@@ -1259,7 +1259,7 @@
      }
     ],
     "air": {
-     "reserved": "crm implementation partner recommendations uae",
+     "reserved": "crm data migration services uae",
      "honoured": [],
      "protected": []
     }
@@ -1267,7 +1267,7 @@
   },
   {
    "name": "air_on_reserve_honours_topic",
-   "doc": "HONOUR: an AIR target the topic gate calls off topic (a question the client tracks) is written in the reserved slot and listed as honoured, never as refused.",
+   "doc": "RC-6: an AIR target the topic gate calls off topic (\"erp consultancy for manufacturers\" for a CRM consultancy: a service it does not sell) is refused with its target id like any gate refusal, never written in the reserved slot.",
    "level": 2,
    "now": "2026-10-21T10:00:00.000Z",
    "trigger": {},
@@ -1477,9 +1477,280 @@
      {
       "keyword": "crm consulting dubai",
       "source": "striking"
+     }
+    ],
+    "suggestions": [
+     {
+      "keyword": "best crm consultants uae",
+      "source": "ai_answer"
+     },
+     {
+      "keyword": "sales pipeline automation tips",
+      "source": "striking"
+     },
+     {
+      "keyword": "crm adoption training",
+      "source": "trend"
+     }
+    ],
+    "waiting_for_keyword": false,
+    "refused": [
+     {
+      "keyword": "office coffee machines",
+      "reason": "off topic"
+     },
+     {
+      "keyword": "dynamics 365 finance operations partner uae",
+      "reason": "off topic"
      },
      {
       "keyword": "erp consultancy for manufacturers",
+      "reason": "off topic"
+     }
+    ],
+    "air": {
+     "reserved": null,
+     "honoured": [],
+     "protected": []
+    }
+   }
+  },
+  {
+   "name": "air_on_reserve_honours_broad",
+   "doc": "RC-6 / HONOUR: a broad AIR target the gate calls too broad, about a service the site sells (\"crm software\": \"crm\" is in its services), is written in the reserved slot and listed as honoured; a broad one with no service word (\"best software\") is refused with its target id.",
+   "level": 2,
+   "now": "2026-10-21T10:00:00.000Z",
+   "trigger": {},
+   "tables": {
+    "sites": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "country": "United Arab Emirates",
+      "status": "active",
+      "email": "",
+      "callback_url": "https://hooks.example.com/cb",
+      "services_json": "[\"CRM implementation services\", \"CRM consulting for sales teams\", \"CRM data migration\", \"Customer support desk setup\", \"Sales pipeline automation\", \"CRM training and adoption\"]",
+      "declared_services": "",
+      "competitors": "",
+      "brand_names": "",
+      "business_facts": "Founded in 2015; 25 CRM consultants; certified partner since 2017; fixed-price CRM implementation packages from 10 weeks; offices in Dubai and Abu Dhabi."
+     }
+    ],
+    "cadence": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "pages_per_week": 3,
+      "status": "active"
+     }
+    ],
+    "ladders": [
+     {
+      "ladder_id": "lad_crm",
+      "domain": "techand.ai",
+      "head_keyword": "crm service provider uae",
+      "rung": 1,
+      "page_no": 1,
+      "keyword": "crm implementation cost uae",
+      "supporting": "",
+      "page_type": "Guide",
+      "target_url": "https://techand.ai/crm-implementation-cost-uae/",
+      "page_exists": false,
+      "status": "planned",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_crm"
+     },
+     {
+      "ladder_id": "lad_crm",
+      "domain": "techand.ai",
+      "head_keyword": "crm service provider uae",
+      "rung": 4,
+      "page_no": 0,
+      "keyword": "crm service provider uae",
+      "supporting": "",
+      "page_type": "Pillar Page",
+      "target_url": "https://techand.ai/crm-service-provider-uae/",
+      "page_exists": false,
+      "status": "published",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_crm"
+     }
+    ],
+    "ladder_settings": [],
+    "content_log": [],
+    "query_history": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "crm consulting dubai",
+      "position": 7,
+      "impressions": 400,
+      "clicks": 6,
+      "page": "https://techand.ai/crm-consulting/"
+     },
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "sales pipeline automation tips",
+      "position": 12,
+      "impressions": 300,
+      "clicks": 2,
+      "page": ""
+     },
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "crm service provider",
+      "position": 25,
+      "impressions": 90,
+      "clicks": 0,
+      "page": "https://techand.ai/"
+     }
+    ],
+    "trends": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "keyword": "crm",
+      "direction": "rising",
+      "rising": "crm adoption training (+80%), office coffee machines (+60%)",
+      "change_pct": 80,
+      "checked_at": "2026-10-19T09:00:00.000Z"
+     }
+    ],
+    "pages": [
+     {
+      "site_id": "site_techand-ai",
+      "url": "https://techand.ai/crm-implementation/",
+      "title": "CRM implementation",
+      "h1": "",
+      "source": "gsc",
+      "decay_state": "decaying",
+      "decay_lost": 120,
+      "prev_clicks": 200,
+      "clicks": 80,
+      "decay_kind": "visibility",
+      "decay_basis": "Search Console clicks, 28 days against the 28 before (200 -> 80).",
+      "queries_json": "[{\"query\": \"crm implementation partner uae\", \"impressions\": 900, \"clicks\": 40, \"position\": 8}]"
+     }
+    ],
+    "ai_targets": [
+     {
+      "target_id": "ait_techand-ai_d365",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "question": "Which Dynamics 365 Finance and Operations partner should a UAE company choose?",
+      "keyword": "dynamics 365 finance operations partner uae",
+      "kind": "refresh",
+      "page_url": "https://techand.ai/dynamics-365-finance-and-operations-uae/",
+      "page_type": "",
+      "fanout": "d365 f&o partner uae",
+      "sources_json": "[]",
+      "competitors": "example-partner.ae",
+      "value": 5,
+      "status": "queued"
+     },
+     {
+      "target_id": "ait_techand-ai_crmq",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "question": "Who are the best CRM consultants in the UAE?",
+      "keyword": "best crm consultants uae",
+      "kind": "answer",
+      "page_url": "",
+      "page_type": "Guide",
+      "fanout": "crm consultants uae",
+      "sources_json": "[]",
+      "competitors": "example-crm.ae",
+      "value": 3,
+      "status": "queued"
+     },
+     {
+      "target_id": "ait_techand-ai_broad",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "prompt_id": "aq2",
+      "question": "Which CRM software do UAE sales teams use?",
+      "keyword": "crm software",
+      "kind": "answer",
+      "page_url": "",
+      "page_type": "Guide",
+      "fanout": "crm software uae",
+      "sources_json": "[]",
+      "competitors": "example-crm.ae",
+      "engines": "chatgpt, perplexity",
+      "stage": "",
+      "value": 4.5,
+      "status": "queued",
+      "origin": "ai_rank",
+      "action_id": "air_site_techand-ai_L05_1a1b2c3d",
+      "live_at": null
+     },
+     {
+      "target_id": "ait_techand-ai_broad2",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "prompt_id": "aq2",
+      "question": "What is the best software for a growing company?",
+      "keyword": "best software",
+      "kind": "answer",
+      "page_url": "",
+      "page_type": "Guide",
+      "fanout": "best business software",
+      "sources_json": "[]",
+      "competitors": "example-crm.ae",
+      "engines": "chatgpt, perplexity",
+      "stage": "",
+      "value": 4.0,
+      "status": "queued",
+      "origin": "ai_rank",
+      "action_id": "air_site_techand-ai_L05_0a1b2c3e",
+      "live_at": null
+     }
+    ],
+    "skips": [],
+    "monitors": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "ai_visibility": true,
+      "ai_growth": true,
+      "ai_pages_month": "",
+      "ai_rank_mode": "on",
+      "ai_rank_reserve": true
+     }
+    ],
+    "profiles": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "author_name": "Sara Haddad",
+      "author_job_title": "Head of CRM delivery",
+      "author_bio": "Sara leads the CRM delivery team and has run more than 60 CRM rollouts for sales and service teams in the Gulf."
+     }
+    ],
+    "air_cache": []
+   },
+   "expect": {
+    "picks": [
+     {
+      "keyword": "crm implementation cost uae",
+      "source": "ladder"
+     },
+     {
+      "keyword": "crm implementation partner uae",
+      "source": "decay"
+     },
+     {
+      "keyword": "crm consulting dubai",
+      "source": "striking"
+     },
+     {
+      "keyword": "crm software",
       "source": "ai_answer"
      }
     ],
@@ -1506,12 +1777,16 @@
      {
       "keyword": "dynamics 365 finance operations partner uae",
       "reason": "off topic"
+     },
+     {
+      "keyword": "best software",
+      "reason": "too broad"
      }
     ],
     "air": {
-     "reserved": "erp consultancy for manufacturers",
+     "reserved": "crm software",
      "honoured": [
-      "erp consultancy for manufacturers"
+      "crm software"
      ],
      "protected": []
     }
@@ -1697,12 +1972,12 @@
       "site_id": "site_techand-ai",
       "domain": "techand.ai",
       "prompt_id": "aq1",
-      "question": "Which CRM implementation partner in the UAE do companies recommend?",
-      "keyword": "crm implementation partner recommendations uae",
+      "question": "Which company can move our old CRM data to a new system in the UAE?",
+      "keyword": "crm data migration services uae",
       "kind": "answer",
       "page_url": "",
       "page_type": "Guide",
-      "fanout": "crm partner uae | crm implementation firms uae",
+      "fanout": "crm data migration uae | crm migration company uae",
       "sources_json": "[]",
       "competitors": "example-crm.ae",
       "engines": "chatgpt, perplexity",
@@ -1753,7 +2028,7 @@
       "source": "striking"
      },
      {
-      "keyword": "crm implementation partner recommendations uae",
+      "keyword": "crm data migration services uae",
       "source": "ai_answer"
      }
     ],
@@ -1787,7 +2062,7 @@
      }
     ],
     "air": {
-     "reserved": "crm implementation partner recommendations uae",
+     "reserved": "crm data migration services uae",
      "honoured": [],
      "protected": []
     }
@@ -1963,12 +2238,12 @@
       "site_id": "site_techand-ai",
       "domain": "techand.ai",
       "prompt_id": "aq1",
-      "question": "Which CRM implementation partner in the UAE do companies recommend?",
-      "keyword": "crm implementation partner recommendations uae",
+      "question": "Which company can move our old CRM data to a new system in the UAE?",
+      "keyword": "crm data migration services uae",
       "kind": "answer",
       "page_url": "",
       "page_type": "Guide",
-      "fanout": "crm partner uae | crm implementation firms uae",
+      "fanout": "crm data migration uae | crm migration company uae",
       "sources_json": "[]",
       "competitors": "example-crm.ae",
       "engines": "chatgpt, perplexity",
@@ -2012,7 +2287,7 @@
     ],
     "suggestions": [
      {
-      "keyword": "crm implementation partner recommendations uae",
+      "keyword": "crm data migration services uae",
       "source": "ai_answer"
      },
      {
@@ -2209,12 +2484,12 @@
       "site_id": "site_techand-ai",
       "domain": "techand.ai",
       "prompt_id": "aq1",
-      "question": "Which CRM implementation partner in the UAE do companies recommend?",
-      "keyword": "crm implementation partner recommendations uae",
+      "question": "Which company can move our old CRM data to a new system in the UAE?",
+      "keyword": "crm data migration services uae",
       "kind": "answer",
       "page_url": "",
       "page_type": "Guide",
-      "fanout": "crm partner uae | crm implementation firms uae",
+      "fanout": "crm data migration uae | crm migration company uae",
       "sources_json": "[]",
       "competitors": "example-crm.ae",
       "engines": "chatgpt, perplexity",
@@ -2266,7 +2541,7 @@
     ],
     "suggestions": [
      {
-      "keyword": "crm implementation partner recommendations uae",
+      "keyword": "best crm consultants uae",
       "source": "ai_answer"
      },
      {
@@ -2476,12 +2751,12 @@
       "site_id": "site_techand-ai",
       "domain": "techand.ai",
       "prompt_id": "aq1",
-      "question": "Which CRM implementation partner in the UAE do companies recommend?",
-      "keyword": "crm implementation partner recommendations uae",
+      "question": "Which company can move our old CRM data to a new system in the UAE?",
+      "keyword": "crm data migration services uae",
       "kind": "answer",
       "page_url": "",
       "page_type": "Guide",
-      "fanout": "crm partner uae | crm implementation firms uae",
+      "fanout": "crm data migration uae | crm migration company uae",
       "sources_json": "[]",
       "competitors": "example-crm.ae",
       "engines": "chatgpt, perplexity",
@@ -2746,12 +3021,12 @@
       "site_id": "site_techand-ai",
       "domain": "techand.ai",
       "prompt_id": "aq1",
-      "question": "Which CRM implementation partner in the UAE do companies recommend?",
-      "keyword": "crm implementation partner recommendations uae",
+      "question": "Which company can move our old CRM data to a new system in the UAE?",
+      "keyword": "crm data migration services uae",
       "kind": "answer",
       "page_url": "",
       "page_type": "Guide",
-      "fanout": "crm partner uae | crm implementation firms uae",
+      "fanout": "crm data migration uae | crm migration company uae",
       "sources_json": "[]",
       "competitors": "example-crm.ae",
       "engines": "chatgpt, perplexity",
@@ -2790,7 +3065,7 @@
     "picks": [],
     "suggestions": [
      {
-      "keyword": "crm implementation partner recommendations uae",
+      "keyword": "crm data migration services uae",
       "source": "ai_answer"
      },
      {
@@ -3950,6 +4225,1314 @@
     "waiting_for_keyword": false,
     "refused": [],
     "air": null
+   }
+  },
+  {
+   "name": "air_on_reserve_same_search_held",
+   "doc": "RC-2 (one search, one page): the AIR answer page \"crm implementation partner recommendations uae\" is the same search as this week's decay refresh \"crm implementation partner uae\" of /crm-implementation/: it is not written next to it; it is held (air.held, reason same search) and the slot passes to the next AIR target (none here).",
+   "level": 2,
+   "now": "2026-10-21T10:00:00.000Z",
+   "trigger": {},
+   "tables": {
+    "sites": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "country": "United Arab Emirates",
+      "status": "active",
+      "email": "",
+      "callback_url": "https://hooks.example.com/cb",
+      "services_json": "[\"CRM implementation services\", \"CRM consulting for sales teams\", \"CRM data migration\", \"Customer support desk setup\", \"Sales pipeline automation\", \"CRM training and adoption\"]",
+      "declared_services": "",
+      "competitors": "",
+      "brand_names": "",
+      "business_facts": "Founded in 2015; 25 CRM consultants; certified partner since 2017; fixed-price CRM implementation packages from 10 weeks; offices in Dubai and Abu Dhabi."
+     }
+    ],
+    "cadence": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "pages_per_week": 3,
+      "status": "active"
+     }
+    ],
+    "ladders": [
+     {
+      "ladder_id": "lad_crm",
+      "domain": "techand.ai",
+      "head_keyword": "crm service provider uae",
+      "rung": 1,
+      "page_no": 1,
+      "keyword": "crm implementation cost uae",
+      "supporting": "",
+      "page_type": "Guide",
+      "target_url": "https://techand.ai/crm-implementation-cost-uae/",
+      "page_exists": false,
+      "status": "planned",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_crm"
+     },
+     {
+      "ladder_id": "lad_crm",
+      "domain": "techand.ai",
+      "head_keyword": "crm service provider uae",
+      "rung": 4,
+      "page_no": 0,
+      "keyword": "crm service provider uae",
+      "supporting": "",
+      "page_type": "Pillar Page",
+      "target_url": "https://techand.ai/crm-service-provider-uae/",
+      "page_exists": false,
+      "status": "published",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_crm"
+     }
+    ],
+    "ladder_settings": [],
+    "content_log": [],
+    "query_history": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "crm consulting dubai",
+      "position": 7,
+      "impressions": 400,
+      "clicks": 6,
+      "page": "https://techand.ai/crm-consulting/"
+     },
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "sales pipeline automation tips",
+      "position": 12,
+      "impressions": 300,
+      "clicks": 2,
+      "page": ""
+     },
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "crm service provider",
+      "position": 25,
+      "impressions": 90,
+      "clicks": 0,
+      "page": "https://techand.ai/"
+     }
+    ],
+    "trends": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "keyword": "crm",
+      "direction": "rising",
+      "rising": "crm adoption training (+80%), office coffee machines (+60%)",
+      "change_pct": 80,
+      "checked_at": "2026-10-19T09:00:00.000Z"
+     }
+    ],
+    "pages": [
+     {
+      "site_id": "site_techand-ai",
+      "url": "https://techand.ai/crm-implementation/",
+      "title": "CRM implementation",
+      "h1": "",
+      "source": "gsc",
+      "decay_state": "decaying",
+      "decay_lost": 120,
+      "prev_clicks": 200,
+      "clicks": 80,
+      "decay_kind": "visibility",
+      "decay_basis": "Search Console clicks, 28 days against the 28 before (200 -> 80).",
+      "queries_json": "[{\"query\": \"crm implementation partner uae\", \"impressions\": 900, \"clicks\": 40, \"position\": 8}]"
+     }
+    ],
+    "ai_targets": [
+     {
+      "target_id": "ait_techand-ai_d365",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "question": "Which Dynamics 365 Finance and Operations partner should a UAE company choose?",
+      "keyword": "dynamics 365 finance operations partner uae",
+      "kind": "refresh",
+      "page_url": "https://techand.ai/dynamics-365-finance-and-operations-uae/",
+      "page_type": "",
+      "fanout": "d365 f&o partner uae",
+      "sources_json": "[]",
+      "competitors": "example-partner.ae",
+      "value": 5,
+      "status": "queued"
+     },
+     {
+      "target_id": "ait_techand-ai_crmq",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "question": "Who are the best CRM consultants in the UAE?",
+      "keyword": "best crm consultants uae",
+      "kind": "answer",
+      "page_url": "",
+      "page_type": "Guide",
+      "fanout": "crm consultants uae",
+      "sources_json": "[]",
+      "competitors": "example-crm.ae",
+      "value": 3,
+      "status": "queued"
+     },
+     {
+      "target_id": "ait_techand-ai_aq1",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "prompt_id": "aq1",
+      "question": "Which CRM implementation partner in the UAE do companies recommend?",
+      "keyword": "crm implementation partner recommendations uae",
+      "kind": "answer",
+      "page_url": "",
+      "page_type": "Guide",
+      "fanout": "crm partner uae | crm implementation firms uae",
+      "sources_json": "[]",
+      "competitors": "example-crm.ae",
+      "engines": "chatgpt, perplexity",
+      "stage": "",
+      "value": 4.2,
+      "status": "queued",
+      "origin": "ai_rank",
+      "action_id": "air_site_techand-ai_L05_0a1b2c3d",
+      "live_at": null
+     }
+    ],
+    "skips": [],
+    "monitors": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "ai_visibility": true,
+      "ai_growth": true,
+      "ai_pages_month": "",
+      "ai_rank_mode": "on",
+      "ai_rank_reserve": true
+     }
+    ],
+    "profiles": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "author_name": "Sara Haddad",
+      "author_job_title": "Head of CRM delivery",
+      "author_bio": "Sara leads the CRM delivery team and has run more than 60 CRM rollouts for sales and service teams in the Gulf."
+     }
+    ],
+    "air_cache": []
+   },
+   "expect": {
+    "picks": [
+     {
+      "keyword": "crm implementation cost uae",
+      "source": "ladder"
+     },
+     {
+      "keyword": "crm implementation partner uae",
+      "source": "decay"
+     },
+     {
+      "keyword": "crm consulting dubai",
+      "source": "striking"
+     }
+    ],
+    "suggestions": [
+     {
+      "keyword": "crm implementation partner recommendations uae",
+      "source": "ai_answer"
+     },
+     {
+      "keyword": "best crm consultants uae",
+      "source": "ai_answer"
+     },
+     {
+      "keyword": "sales pipeline automation tips",
+      "source": "striking"
+     },
+     {
+      "keyword": "crm adoption training",
+      "source": "trend"
+     }
+    ],
+    "waiting_for_keyword": false,
+    "refused": [
+     {
+      "keyword": "office coffee machines",
+      "reason": "off topic"
+     },
+     {
+      "keyword": "dynamics 365 finance operations partner uae",
+      "reason": "off topic"
+     }
+    ],
+    "air": {
+     "reserved": null,
+     "honoured": [],
+     "protected": [],
+     "held": [
+      {
+       "keyword": "crm implementation partner recommendations uae",
+       "reason": "same search"
+      }
+     ]
+    },
+    "held_reason": [
+     "crm implementation partner recommendations uae"
+    ]
+   }
+  },
+  {
+   "name": "air_on_reserve_same_url_held",
+   "doc": "RC-2 (one page, one rewrite): the AIR target is a refresh of https://techand.ai/crm-implementation/, the page this week's decay refresh already rewrites: the page is rewritten once (the decay refresh), the AIR refresh is held (reason same page) and suggested with the reason.",
+   "level": 2,
+   "now": "2026-10-21T10:00:00.000Z",
+   "trigger": {},
+   "tables": {
+    "sites": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "country": "United Arab Emirates",
+      "status": "active",
+      "email": "",
+      "callback_url": "https://hooks.example.com/cb",
+      "services_json": "[\"CRM implementation services\", \"CRM consulting for sales teams\", \"CRM data migration\", \"Customer support desk setup\", \"Sales pipeline automation\", \"CRM training and adoption\"]",
+      "declared_services": "",
+      "competitors": "",
+      "brand_names": "",
+      "business_facts": "Founded in 2015; 25 CRM consultants; certified partner since 2017; fixed-price CRM implementation packages from 10 weeks; offices in Dubai and Abu Dhabi."
+     }
+    ],
+    "cadence": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "pages_per_week": 3,
+      "status": "active"
+     }
+    ],
+    "ladders": [
+     {
+      "ladder_id": "lad_crm",
+      "domain": "techand.ai",
+      "head_keyword": "crm service provider uae",
+      "rung": 1,
+      "page_no": 1,
+      "keyword": "crm implementation cost uae",
+      "supporting": "",
+      "page_type": "Guide",
+      "target_url": "https://techand.ai/crm-implementation-cost-uae/",
+      "page_exists": false,
+      "status": "planned",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_crm"
+     },
+     {
+      "ladder_id": "lad_crm",
+      "domain": "techand.ai",
+      "head_keyword": "crm service provider uae",
+      "rung": 4,
+      "page_no": 0,
+      "keyword": "crm service provider uae",
+      "supporting": "",
+      "page_type": "Pillar Page",
+      "target_url": "https://techand.ai/crm-service-provider-uae/",
+      "page_exists": false,
+      "status": "published",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_crm"
+     }
+    ],
+    "ladder_settings": [],
+    "content_log": [],
+    "query_history": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "crm consulting dubai",
+      "position": 7,
+      "impressions": 400,
+      "clicks": 6,
+      "page": "https://techand.ai/crm-consulting/"
+     },
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "sales pipeline automation tips",
+      "position": 12,
+      "impressions": 300,
+      "clicks": 2,
+      "page": ""
+     },
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "crm service provider",
+      "position": 25,
+      "impressions": 90,
+      "clicks": 0,
+      "page": "https://techand.ai/"
+     }
+    ],
+    "trends": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "keyword": "crm",
+      "direction": "rising",
+      "rising": "crm adoption training (+80%), office coffee machines (+60%)",
+      "change_pct": 80,
+      "checked_at": "2026-10-19T09:00:00.000Z"
+     }
+    ],
+    "pages": [
+     {
+      "site_id": "site_techand-ai",
+      "url": "https://techand.ai/crm-implementation/",
+      "title": "CRM implementation",
+      "h1": "",
+      "source": "gsc",
+      "decay_state": "decaying",
+      "decay_lost": 120,
+      "prev_clicks": 200,
+      "clicks": 80,
+      "decay_kind": "visibility",
+      "decay_basis": "Search Console clicks, 28 days against the 28 before (200 -> 80).",
+      "queries_json": "[{\"query\": \"crm implementation partner uae\", \"impressions\": 900, \"clicks\": 40, \"position\": 8}]"
+     }
+    ],
+    "ai_targets": [
+     {
+      "target_id": "ait_techand-ai_d365",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "question": "Which Dynamics 365 Finance and Operations partner should a UAE company choose?",
+      "keyword": "dynamics 365 finance operations partner uae",
+      "kind": "refresh",
+      "page_url": "https://techand.ai/dynamics-365-finance-and-operations-uae/",
+      "page_type": "",
+      "fanout": "d365 f&o partner uae",
+      "sources_json": "[]",
+      "competitors": "example-partner.ae",
+      "value": 5,
+      "status": "queued"
+     },
+     {
+      "target_id": "ait_techand-ai_crmq",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "question": "Who are the best CRM consultants in the UAE?",
+      "keyword": "best crm consultants uae",
+      "kind": "answer",
+      "page_url": "",
+      "page_type": "Guide",
+      "fanout": "crm consultants uae",
+      "sources_json": "[]",
+      "competitors": "example-crm.ae",
+      "value": 3,
+      "status": "queued"
+     },
+     {
+      "target_id": "ait_techand-ai_aq1",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "prompt_id": "aq1",
+      "question": "Which company implements CRM systems for UAE businesses?",
+      "keyword": "crm implementation services uae",
+      "kind": "refresh",
+      "page_url": "https://techand.ai/crm-implementation/",
+      "page_type": "",
+      "fanout": "crm implementation company uae",
+      "sources_json": "[]",
+      "competitors": "example-crm.ae",
+      "engines": "chatgpt, perplexity",
+      "stage": "",
+      "value": 4.2,
+      "status": "queued",
+      "origin": "ai_rank",
+      "action_id": "air_site_techand-ai_L05_0a1b2c3d",
+      "live_at": null
+     }
+    ],
+    "skips": [],
+    "monitors": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "ai_visibility": true,
+      "ai_growth": true,
+      "ai_pages_month": "",
+      "ai_rank_mode": "on",
+      "ai_rank_reserve": true
+     }
+    ],
+    "profiles": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "author_name": "Sara Haddad",
+      "author_job_title": "Head of CRM delivery",
+      "author_bio": "Sara leads the CRM delivery team and has run more than 60 CRM rollouts for sales and service teams in the Gulf."
+     }
+    ],
+    "air_cache": []
+   },
+   "expect": {
+    "picks": [
+     {
+      "keyword": "crm implementation cost uae",
+      "source": "ladder"
+     },
+     {
+      "keyword": "crm implementation partner uae",
+      "source": "decay"
+     },
+     {
+      "keyword": "crm consulting dubai",
+      "source": "striking"
+     }
+    ],
+    "suggestions": [
+     {
+      "keyword": "crm implementation services uae",
+      "source": "ai_refresh"
+     },
+     {
+      "keyword": "best crm consultants uae",
+      "source": "ai_answer"
+     },
+     {
+      "keyword": "sales pipeline automation tips",
+      "source": "striking"
+     },
+     {
+      "keyword": "crm adoption training",
+      "source": "trend"
+     }
+    ],
+    "waiting_for_keyword": false,
+    "refused": [
+     {
+      "keyword": "office coffee machines",
+      "reason": "off topic"
+     },
+     {
+      "keyword": "dynamics 365 finance operations partner uae",
+      "reason": "off topic"
+     }
+    ],
+    "air": {
+     "reserved": null,
+     "honoured": [],
+     "protected": [],
+     "held": [
+      {
+       "keyword": "crm implementation services uae",
+       "reason": "same page"
+      }
+     ]
+    },
+    "held_reason": [
+     "crm implementation services uae"
+    ]
+   }
+  },
+  {
+   "name": "air_on_protect_approved_level2",
+   "doc": "RC-5: level 2 writes the striking-distance refresh on its own, but its page is protected, so it is suggested; the client approved it for this cycle, so it is written (the client's choice) and does not come back. The decay refresh of a protected page stays a suggestion that says why.",
+   "level": 2,
+   "now": "2026-10-21T10:00:00.000Z",
+   "trigger": {
+    "trigger": "cycle",
+    "domain": "techand.ai",
+    "cycle_key": "cyc_site_techand-ai_2026-10-21",
+    "scheduled_for": "2026-10-21T10:00:00.000Z",
+    "request_id": "cyc_techand-ai_20261021_content_cadence"
+   },
+   "tables": {
+    "sites": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "country": "United Arab Emirates",
+      "status": "active",
+      "email": "",
+      "callback_url": "https://hooks.example.com/cb",
+      "services_json": "[\"CRM implementation services\", \"CRM consulting for sales teams\", \"CRM data migration\", \"Customer support desk setup\", \"Sales pipeline automation\", \"CRM training and adoption\"]",
+      "declared_services": "",
+      "competitors": "",
+      "brand_names": "",
+      "business_facts": "Founded in 2015; 25 CRM consultants; certified partner since 2017; fixed-price CRM implementation packages from 10 weeks; offices in Dubai and Abu Dhabi."
+     }
+    ],
+    "cadence": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "pages_per_week": 3,
+      "status": "active"
+     }
+    ],
+    "ladders": [
+     {
+      "ladder_id": "lad_crm",
+      "domain": "techand.ai",
+      "head_keyword": "crm service provider uae",
+      "rung": 1,
+      "page_no": 1,
+      "keyword": "crm implementation cost uae",
+      "supporting": "",
+      "page_type": "Guide",
+      "target_url": "https://techand.ai/crm-implementation-cost-uae/",
+      "page_exists": false,
+      "status": "planned",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_crm"
+     },
+     {
+      "ladder_id": "lad_crm",
+      "domain": "techand.ai",
+      "head_keyword": "crm service provider uae",
+      "rung": 4,
+      "page_no": 0,
+      "keyword": "crm service provider uae",
+      "supporting": "",
+      "page_type": "Pillar Page",
+      "target_url": "https://techand.ai/crm-service-provider-uae/",
+      "page_exists": false,
+      "status": "published",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_crm"
+     }
+    ],
+    "ladder_settings": [
+     {
+      "ladder_id": "_site",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "mode": "auto",
+      "opportunities": "auto",
+      "max_active": 2,
+      "max_waiting": 3,
+      "autopilot_level": 2
+     }
+    ],
+    "content_log": [],
+    "query_history": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "crm consulting dubai",
+      "position": 7,
+      "impressions": 400,
+      "clicks": 6,
+      "page": "https://techand.ai/crm-consulting/"
+     },
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "sales pipeline automation tips",
+      "position": 12,
+      "impressions": 300,
+      "clicks": 2,
+      "page": ""
+     },
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "crm service provider",
+      "position": 25,
+      "impressions": 90,
+      "clicks": 0,
+      "page": "https://techand.ai/"
+     }
+    ],
+    "trends": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "keyword": "crm",
+      "direction": "rising",
+      "rising": "crm adoption training (+80%), office coffee machines (+60%)",
+      "change_pct": 80,
+      "checked_at": "2026-10-19T09:00:00.000Z"
+     }
+    ],
+    "pages": [
+     {
+      "site_id": "site_techand-ai",
+      "url": "https://techand.ai/crm-implementation/",
+      "title": "CRM implementation",
+      "h1": "",
+      "source": "gsc",
+      "decay_state": "decaying",
+      "decay_lost": 120,
+      "prev_clicks": 200,
+      "clicks": 80,
+      "decay_kind": "visibility",
+      "decay_basis": "Search Console clicks, 28 days against the 28 before (200 -> 80).",
+      "queries_json": "[{\"query\": \"crm implementation partner uae\", \"impressions\": 900, \"clicks\": 40, \"position\": 8}]"
+     }
+    ],
+    "ai_targets": [
+     {
+      "target_id": "ait_techand-ai_d365",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "question": "Which Dynamics 365 Finance and Operations partner should a UAE company choose?",
+      "keyword": "dynamics 365 finance operations partner uae",
+      "kind": "refresh",
+      "page_url": "https://techand.ai/dynamics-365-finance-and-operations-uae/",
+      "page_type": "",
+      "fanout": "d365 f&o partner uae",
+      "sources_json": "[]",
+      "competitors": "example-partner.ae",
+      "value": 5,
+      "status": "queued"
+     },
+     {
+      "target_id": "ait_techand-ai_crmq",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "question": "Who are the best CRM consultants in the UAE?",
+      "keyword": "best crm consultants uae",
+      "kind": "answer",
+      "page_url": "",
+      "page_type": "Guide",
+      "fanout": "crm consultants uae",
+      "sources_json": "[]",
+      "competitors": "example-crm.ae",
+      "value": 3,
+      "status": "queued"
+     }
+    ],
+    "skips": [
+     {
+      "site_id": "site_techand-ai",
+      "item_key": "crm consulting dubai",
+      "decision": "approve",
+      "scope": "cycle",
+      "cycle_key": "cyc_site_techand-ai_2026-10-21",
+      "source": "striking"
+     }
+    ],
+    "monitors": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "ai_visibility": true,
+      "ai_growth": true,
+      "ai_pages_month": "",
+      "ai_rank_mode": "on",
+      "ai_rank_reserve": false
+     }
+    ],
+    "profiles": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "author_name": "Sara Haddad",
+      "author_job_title": "Head of CRM delivery",
+      "author_bio": "Sara leads the CRM delivery team and has run more than 60 CRM rollouts for sales and service teams in the Gulf."
+     }
+    ],
+    "air_cache": [
+     {
+      "key": "air:protect:site_techand-ai",
+      "kind": "air",
+      "site_id": "site_techand-ai",
+      "value": "{\"urls\": [{\"url\": \"https://techand.ai/crm-implementation/\", \"until\": \"2026-11-15T00:00:00.000Z\", \"why\": \"cited in 3 AI answers in 28 days\"}, {\"url\": \"https://www.techand.ai/crm-consulting\", \"until\": \"2026-11-15T00:00:00.000Z\", \"why\": \"the page of a question AI names you for\"}]}",
+      "updated_at": "2026-10-20T09:30:00.000Z"
+     }
+    ]
+   },
+   "expect": {
+    "picks": [
+     {
+      "keyword": "crm implementation cost uae",
+      "source": "ladder"
+     },
+     {
+      "keyword": "crm consulting dubai",
+      "source": "striking"
+     }
+    ],
+    "suggestions": [
+     {
+      "keyword": "best crm consultants uae",
+      "source": "ai_answer"
+     },
+     {
+      "keyword": "crm implementation partner uae",
+      "source": "decay"
+     },
+     {
+      "keyword": "sales pipeline automation tips",
+      "source": "striking"
+     },
+     {
+      "keyword": "crm adoption training",
+      "source": "trend"
+     }
+    ],
+    "waiting_for_keyword": false,
+    "refused": [
+     {
+      "keyword": "office coffee machines",
+      "reason": "off topic"
+     },
+     {
+      "keyword": "dynamics 365 finance operations partner uae",
+      "reason": "off topic"
+     }
+    ],
+    "air": {
+     "reserved": null,
+     "honoured": [],
+     "protected": [
+      "crm implementation partner uae"
+     ]
+    },
+    "protect_reason": [
+     "crm implementation partner uae"
+    ]
+   }
+  },
+  {
+   "name": "air_on_reserve_retry_spend",
+   "doc": "RC-11: a retry inside the same cycle after a crash. The first run started the ladder page and the reserved AI ranking page (both `started`, in flight; the AIR target is now `writing`). The reserved page was on top of the 3 pages a week, so it spends nothing: the retry still writes the decay and the striking-distance refreshes.",
+   "level": 2,
+   "now": "2026-10-21T10:00:00.000Z",
+   "trigger": {},
+   "tables": {
+    "sites": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "country": "United Arab Emirates",
+      "status": "active",
+      "email": "",
+      "callback_url": "https://hooks.example.com/cb",
+      "services_json": "[\"CRM implementation services\", \"CRM consulting for sales teams\", \"CRM data migration\", \"Customer support desk setup\", \"Sales pipeline automation\", \"CRM training and adoption\"]",
+      "declared_services": "",
+      "competitors": "",
+      "brand_names": "",
+      "business_facts": "Founded in 2015; 25 CRM consultants; certified partner since 2017; fixed-price CRM implementation packages from 10 weeks; offices in Dubai and Abu Dhabi."
+     }
+    ],
+    "cadence": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "pages_per_week": 3,
+      "status": "active"
+     }
+    ],
+    "ladders": [
+     {
+      "ladder_id": "lad_crm",
+      "domain": "techand.ai",
+      "head_keyword": "crm service provider uae",
+      "rung": 1,
+      "page_no": 1,
+      "keyword": "crm implementation cost uae",
+      "supporting": "",
+      "page_type": "Guide",
+      "target_url": "https://techand.ai/crm-implementation-cost-uae/",
+      "page_exists": false,
+      "status": "planned",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_crm"
+     },
+     {
+      "ladder_id": "lad_crm",
+      "domain": "techand.ai",
+      "head_keyword": "crm service provider uae",
+      "rung": 4,
+      "page_no": 0,
+      "keyword": "crm service provider uae",
+      "supporting": "",
+      "page_type": "Pillar Page",
+      "target_url": "https://techand.ai/crm-service-provider-uae/",
+      "page_exists": false,
+      "status": "published",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_crm"
+     }
+    ],
+    "ladder_settings": [],
+    "content_log": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "keyword": "crm implementation cost uae",
+      "source": "ladder",
+      "status": "started",
+      "started_at": "2026-10-21T09:30:00.000Z",
+      "request_id": "cad_20261021_techand-ai_1",
+      "existing_page_url": "",
+      "ladder_id": "lad_crm"
+     },
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "keyword": "crm data migration services uae",
+      "source": "ai_answer",
+      "status": "started",
+      "started_at": "2026-10-21T09:30:00.000Z",
+      "request_id": "cad_20261021_techand-ai_4",
+      "existing_page_url": ""
+     }
+    ],
+    "query_history": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "crm consulting dubai",
+      "position": 7,
+      "impressions": 400,
+      "clicks": 6,
+      "page": "https://techand.ai/crm-consulting/"
+     },
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "sales pipeline automation tips",
+      "position": 12,
+      "impressions": 300,
+      "clicks": 2,
+      "page": ""
+     },
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "crm service provider",
+      "position": 25,
+      "impressions": 90,
+      "clicks": 0,
+      "page": "https://techand.ai/"
+     }
+    ],
+    "trends": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "keyword": "crm",
+      "direction": "rising",
+      "rising": "crm adoption training (+80%), office coffee machines (+60%)",
+      "change_pct": 80,
+      "checked_at": "2026-10-19T09:00:00.000Z"
+     }
+    ],
+    "pages": [
+     {
+      "site_id": "site_techand-ai",
+      "url": "https://techand.ai/crm-implementation/",
+      "title": "CRM implementation",
+      "h1": "",
+      "source": "gsc",
+      "decay_state": "decaying",
+      "decay_lost": 120,
+      "prev_clicks": 200,
+      "clicks": 80,
+      "decay_kind": "visibility",
+      "decay_basis": "Search Console clicks, 28 days against the 28 before (200 -> 80).",
+      "queries_json": "[{\"query\": \"crm implementation partner uae\", \"impressions\": 900, \"clicks\": 40, \"position\": 8}]"
+     }
+    ],
+    "ai_targets": [
+     {
+      "target_id": "ait_techand-ai_d365",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "question": "Which Dynamics 365 Finance and Operations partner should a UAE company choose?",
+      "keyword": "dynamics 365 finance operations partner uae",
+      "kind": "refresh",
+      "page_url": "https://techand.ai/dynamics-365-finance-and-operations-uae/",
+      "page_type": "",
+      "fanout": "d365 f&o partner uae",
+      "sources_json": "[]",
+      "competitors": "example-partner.ae",
+      "value": 5,
+      "status": "queued"
+     },
+     {
+      "target_id": "ait_techand-ai_crmq",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "question": "Who are the best CRM consultants in the UAE?",
+      "keyword": "best crm consultants uae",
+      "kind": "answer",
+      "page_url": "",
+      "page_type": "Guide",
+      "fanout": "crm consultants uae",
+      "sources_json": "[]",
+      "competitors": "example-crm.ae",
+      "value": 3,
+      "status": "queued"
+     }
+    ],
+    "skips": [],
+    "monitors": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "ai_visibility": true,
+      "ai_growth": true,
+      "ai_pages_month": "",
+      "ai_rank_mode": "on",
+      "ai_rank_reserve": true
+     }
+    ],
+    "profiles": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "author_name": "Sara Haddad",
+      "author_job_title": "Head of CRM delivery",
+      "author_bio": "Sara leads the CRM delivery team and has run more than 60 CRM rollouts for sales and service teams in the Gulf."
+     }
+    ],
+    "air_cache": [],
+    "ai_targets_writing": [
+     {
+      "target_id": "ait_techand-ai_aq1",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "prompt_id": "aq1",
+      "question": "Which company can move our old CRM data to a new system in the UAE?",
+      "keyword": "crm data migration services uae",
+      "kind": "answer",
+      "page_url": "",
+      "page_type": "Guide",
+      "fanout": "crm data migration uae | crm migration company uae",
+      "sources_json": "[]",
+      "competitors": "example-crm.ae",
+      "engines": "chatgpt, perplexity",
+      "stage": "",
+      "value": 4.2,
+      "status": "writing",
+      "origin": "ai_rank",
+      "action_id": "air_site_techand-ai_L05_0a1b2c3d",
+      "live_at": null
+     }
+    ]
+   },
+   "expect": {
+    "picks": [
+     {
+      "keyword": "crm implementation partner uae",
+      "source": "decay"
+     },
+     {
+      "keyword": "crm consulting dubai",
+      "source": "striking"
+     }
+    ],
+    "suggestions": [
+     {
+      "keyword": "sales pipeline automation tips",
+      "source": "striking"
+     },
+     {
+      "keyword": "crm adoption training",
+      "source": "trend"
+     }
+    ],
+    "waiting_for_keyword": false,
+    "refused": [
+     {
+      "keyword": "office coffee machines",
+      "reason": "off topic"
+     },
+     {
+      "keyword": "dynamics 365 finance operations partner uae",
+      "reason": "off topic"
+     }
+    ],
+    "air": {
+     "reserved": null,
+     "honoured": [],
+     "protected": []
+    }
+   }
+  },
+  {
+   "name": "air_on_url_once_level3",
+   "doc": "RC-2 (one page, one rewrite, every path): on, level 3, no reserve. The level-3 AI page of the week is a refresh of https://techand.ai/crm-implementation/, the page the decay refresh already rewrites, and https://techand.ai/crm-consulting/ was rewritten two days ago for another keyword (a page the client asked for in the app): each page is written at most once a week; the second rewrite of each waits as a suggestion with the reason.",
+   "level": 3,
+   "now": "2026-10-21T10:00:00.000Z",
+   "trigger": {},
+   "tables": {
+    "sites": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "country": "United Arab Emirates",
+      "status": "active",
+      "email": "",
+      "callback_url": "https://hooks.example.com/cb",
+      "services_json": "[\"CRM implementation services\", \"CRM consulting for sales teams\", \"CRM data migration\", \"Customer support desk setup\", \"Sales pipeline automation\", \"CRM training and adoption\"]",
+      "declared_services": "",
+      "competitors": "",
+      "brand_names": "",
+      "business_facts": "Founded in 2015; 25 CRM consultants; certified partner since 2017; fixed-price CRM implementation packages from 10 weeks; offices in Dubai and Abu Dhabi."
+     }
+    ],
+    "cadence": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "pages_per_week": 3,
+      "status": "active"
+     }
+    ],
+    "ladders": [
+     {
+      "ladder_id": "lad_crm",
+      "domain": "techand.ai",
+      "head_keyword": "crm service provider uae",
+      "rung": 1,
+      "page_no": 1,
+      "keyword": "crm implementation cost uae",
+      "supporting": "",
+      "page_type": "Guide",
+      "target_url": "https://techand.ai/crm-implementation-cost-uae/",
+      "page_exists": false,
+      "status": "planned",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_crm"
+     },
+     {
+      "ladder_id": "lad_crm",
+      "domain": "techand.ai",
+      "head_keyword": "crm service provider uae",
+      "rung": 4,
+      "page_no": 0,
+      "keyword": "crm service provider uae",
+      "supporting": "",
+      "page_type": "Pillar Page",
+      "target_url": "https://techand.ai/crm-service-provider-uae/",
+      "page_exists": false,
+      "status": "published",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_crm"
+     }
+    ],
+    "ladder_settings": [
+     {
+      "ladder_id": "_site",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "mode": "auto",
+      "opportunities": "auto",
+      "max_active": 2,
+      "max_waiting": 3,
+      "autopilot_level": 3
+     }
+    ],
+    "content_log": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "keyword": "crm consulting for sales teams",
+      "source": "striking",
+      "status": "written",
+      "started_at": "2026-10-19T10:00:00.000Z",
+      "request_id": "run_app_write_it_1",
+      "existing_page_url": "https://techand.ai/crm-consulting/"
+     }
+    ],
+    "query_history": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "crm consulting dubai",
+      "position": 7,
+      "impressions": 400,
+      "clicks": 6,
+      "page": "https://techand.ai/crm-consulting/"
+     },
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "sales pipeline automation tips",
+      "position": 12,
+      "impressions": 300,
+      "clicks": 2,
+      "page": ""
+     },
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "period_end": "2026-10-18",
+      "query": "crm service provider",
+      "position": 25,
+      "impressions": 90,
+      "clicks": 0,
+      "page": "https://techand.ai/"
+     }
+    ],
+    "trends": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "keyword": "crm",
+      "direction": "rising",
+      "rising": "crm adoption training (+80%), office coffee machines (+60%)",
+      "change_pct": 80,
+      "checked_at": "2026-10-19T09:00:00.000Z"
+     }
+    ],
+    "pages": [
+     {
+      "site_id": "site_techand-ai",
+      "url": "https://techand.ai/crm-implementation/",
+      "title": "CRM implementation",
+      "h1": "",
+      "source": "gsc",
+      "decay_state": "decaying",
+      "decay_lost": 120,
+      "prev_clicks": 200,
+      "clicks": 80,
+      "decay_kind": "visibility",
+      "decay_basis": "Search Console clicks, 28 days against the 28 before (200 -> 80).",
+      "queries_json": "[{\"query\": \"crm implementation partner uae\", \"impressions\": 900, \"clicks\": 40, \"position\": 8}]"
+     }
+    ],
+    "ai_targets": [
+     {
+      "target_id": "ait_techand-ai_d365",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "question": "Which Dynamics 365 Finance and Operations partner should a UAE company choose?",
+      "keyword": "dynamics 365 finance operations partner uae",
+      "kind": "refresh",
+      "page_url": "https://techand.ai/dynamics-365-finance-and-operations-uae/",
+      "page_type": "",
+      "fanout": "d365 f&o partner uae",
+      "sources_json": "[]",
+      "competitors": "example-partner.ae",
+      "value": 5,
+      "status": "queued"
+     },
+     {
+      "target_id": "ait_techand-ai_crmq",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "question": "Who are the best CRM consultants in the UAE?",
+      "keyword": "best crm consultants uae",
+      "kind": "answer",
+      "page_url": "",
+      "page_type": "Guide",
+      "fanout": "crm consultants uae",
+      "sources_json": "[]",
+      "competitors": "example-crm.ae",
+      "value": 3,
+      "status": "queued"
+     },
+     {
+      "target_id": "ait_techand-ai_aq1",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "prompt_id": "aq1",
+      "question": "Which company implements CRM systems for UAE businesses?",
+      "keyword": "crm implementation services uae",
+      "kind": "refresh",
+      "page_url": "https://techand.ai/crm-implementation/",
+      "page_type": "",
+      "fanout": "crm implementation company uae",
+      "sources_json": "[]",
+      "competitors": "example-crm.ae",
+      "engines": "chatgpt, perplexity",
+      "stage": "",
+      "value": 6,
+      "status": "queued",
+      "origin": "",
+      "action_id": "",
+      "live_at": null
+     }
+    ],
+    "skips": [],
+    "monitors": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "ai_visibility": true,
+      "ai_growth": true,
+      "ai_pages_month": "",
+      "ai_rank_mode": "on",
+      "ai_rank_reserve": false
+     }
+    ],
+    "profiles": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "author_name": "Sara Haddad",
+      "author_job_title": "Head of CRM delivery",
+      "author_bio": "Sara leads the CRM delivery team and has run more than 60 CRM rollouts for sales and service teams in the Gulf."
+     }
+    ],
+    "air_cache": []
+   },
+   "expect": {
+    "picks": [
+     {
+      "keyword": "crm implementation cost uae",
+      "source": "ladder"
+     },
+     {
+      "keyword": "crm implementation partner uae",
+      "source": "decay"
+     }
+    ],
+    "suggestions": [
+     {
+      "keyword": "crm consulting dubai",
+      "source": "striking"
+     },
+     {
+      "keyword": "crm implementation services uae",
+      "source": "ai_refresh"
+     }
+    ],
+    "waiting_for_keyword": false,
+    "refused": [
+     {
+      "keyword": "office coffee machines",
+      "reason": "off topic"
+     },
+     {
+      "keyword": "dynamics 365 finance operations partner uae",
+      "reason": "off topic"
+     }
+    ],
+    "air": {
+     "reserved": null,
+     "honoured": [],
+     "protected": []
+    },
+    "held_reason": [
+     "crm consulting dubai",
+     "crm implementation services uae"
+    ]
    }
   }
  ]

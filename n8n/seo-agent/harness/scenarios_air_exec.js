@@ -33,7 +33,7 @@ module.exports = async (ctx) => {
     mock('Manual Run', [{ json: c.trigger || {} }]);
     mock('Load Sites', items(t.sites)); mock('Load Cadence', items(t.cadence)); mock('Load Ladders', items(t.ladders)); mock('Load Query History', items(t.query_history));
     mock('Load Trends', items(t.trends)); mock('Load Content Log', items(t.content_log)); mock('Load Ladder Settings', items(t.ladder_settings)); mock('Load Main Keyword Ranks', items(t.ranks));
-    mock('Load AI Targets (Cadence)', items(t.ai_targets)); mock('Load AI Targets Writing (Cadence)', items([])); mock('Load Monitors (Cadence)', items(t.monitors));
+    mock('Load AI Targets (Cadence)', items(t.ai_targets)); mock('Load AI Targets Writing (Cadence)', items(t.ai_targets_writing)); mock('Load Monitors (Cadence)', items(t.monitors));
     mock('Load Pages (Cadence)', items(t.pages)); mock('Load AI Brands (Cadence)', items(t.ai_brands)); mock('Load Skips (Cadence)', items(t.skips)); mock('Load Cost (Cadence)', items(t.cost));
     mock('Load Cycle Jobs (Cadence)', items(t.cycle_jobs)); mock('Load Profiles (Cadence)', items(t.profiles));
     mock('Load AIR Cache (Cadence)', items(t.air_cache)); };
@@ -45,7 +45,7 @@ module.exports = async (ctx) => {
   // the same case with every AIR column and row taken away: what the plan was before AIR existed
   const stripAir = (c) => { const x = clone(c); const t = x.tables;
     for (const m of t.monitors || []) for (const k of ['ai_rank_mode', 'ai_rank_reserve', 'ai_rank_fanout_n', 'ai_rank_mentions', 'ai_rank_brave']) delete m[k];
-    for (const r of t.ai_targets || []) for (const k of ['origin', 'action_id', 'live_at']) delete r[k];
+    for (const r of [...(t.ai_targets || []), ...(t.ai_targets_writing || [])]) for (const k of ['origin', 'action_id', 'live_at']) delete r[k];
     t.air_cache = []; return x; };
   const ks = (arr) => (arr || []).map(x => ({ keyword: x.keyword, source: x.source }));
   const sortJ = (arr) => (arr || []).map(x => J(x)).sort();
@@ -62,7 +62,7 @@ module.exports = async (ctx) => {
     for (const c of CASES.cases) {
       const r = await planCase(c); const e = c.expect; const f = r.facts;
       const airPicks = r.picks.filter(p => (c.tables.ai_targets || []).some(t => t.target_id === p.target_id && t.origin === 'ai_rank') && /reserved AI ranking page/.test(p.why));
-      console.log('   ' + c.name + ' -> picks', J(ks(r.picks)), '| suggestions', J(ks(f.suggestions)), '| refused', J((f.refused || []).map(x => x.keyword + ' (' + x.reason + ')')), '| air', J(f.air ? { reserved: f.air.reserved && f.air.reserved.keyword, honoured: f.air.honoured.map(x => x.keyword), protected: f.air.protected.map(x => x.keyword) } : null));
+      console.log('   ' + c.name + ' -> picks', J(ks(r.picks)), '| suggestions', J(ks(f.suggestions)), '| refused', J((f.refused || []).map(x => x.keyword + ' (' + x.reason + ')')), '| air', J(f.air ? { reserved: f.air.reserved && f.air.reserved.keyword, honoured: f.air.honoured.map(x => x.keyword), protected: f.air.protected.map(x => x.keyword), held: (f.air.held || []).map(x => x.keyword + ' (' + x.reason + ')') } : null));
       if (!e.picks) { check(c.name + ': the case has an expectation', false, J({ picks: ks(r.picks), suggestions: ks(f.suggestions), waiting_for_keyword: !!f.waiting_for_keyword, refused: (f.refused || []).map(x => ({ keyword: x.keyword, reason: x.reason })), air: f.air ? { reserved: f.air.reserved && f.air.reserved.keyword, honoured: f.air.honoured.map(x => x.keyword), protected: f.air.protected.map(x => x.keyword) } : null })); continue; }
       check(c.name + ': picks', eq(ks(r.picks), e.picks), J(ks(r.picks)));
       check(c.name + ': suggestions', eq(ks(f.suggestions), e.suggestions), J(ks(f.suggestions)));
@@ -71,6 +71,13 @@ module.exports = async (ctx) => {
       if (e.air === null) check(c.name + ': no `air` key (a website that is not on, or stopped by the kill switch)', !r.out.some(j => 'air' in j), J(r.out.map(j => Object.keys(j).includes('air'))));
       else check(c.name + ': the air facts (reserved, honoured, protected)', !!f.air && f.air.mode === 'on' && (f.air.reserved ? f.air.reserved.keyword : null) === e.air.reserved
         && eq(f.air.honoured.map(x => x.keyword), e.air.honoured) && eq(f.air.protected.map(x => x.keyword), e.air.protected), J(f.air));
+      // FX-C RC-2: the AIR targets held because a page of this run already covers them (same search, same page, a live page answers it)
+      if (e.air && e.air.held) check(c.name + ': the held AIR targets (keyword, target id, reason)', eq((f.air.held || []).map(x => ({ keyword: x.keyword, reason: x.reason })), e.air.held) && (f.air.held || []).every(x => x.target_id), J(f.air.held));
+      // FX-C RC-1 / RC-2: no reason carries an internal id, and no page address is written twice in one run on an on website
+      check(c.name + ': no internal id in any reason', ![...r.picks, ...(f.suggestions || [])].some(p => /\bair_[a-z0-9]|\baip_|\bait_/.test(String(p.why || ''))), J([...r.picks, ...(f.suggestions || [])].map(p => p.why).filter(w => /\bair_|\bait_|\baip_/.test(w))));
+      if (e.air) { const us = r.picks.map(p => String(p.existing_page_url || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/+$/, '')).filter(Boolean);
+        check(c.name + ': no page address is written twice in one run', new Set(us).size === us.length, J(us)); }
+      if (e.held_reason) check(c.name + ': the suggestions held because this week\'s plan already covers their page or search say why', e.held_reason.every(k => (f.suggestions || []).some(x => x.keyword === k && /already (rewrites|targets)/.test(x.why) && !EMDASH.test(x.why))), J((f.suggestions || []).map(x => [x.keyword, x.why.slice(-140)])));
       if (e.protect_reason) check(c.name + ': the suggestions that rewrite a protected page say why', e.protect_reason.every(k => (f.suggestions || []).some(x => x.keyword === k && /AI answers cite this page/.test(x.why))), J((f.suggestions || []).map(x => [x.keyword, x.why.slice(-120)])));
       if (e.same_as_stripped) { const r0 = await planCase(stripAir(c));
         check(c.name + ': byte-identical to the same tables without any AIR column or row', J(r.out) === J(r0.out), J(r.out).slice(0, 300) + ' vs ' + J(r0.out).slice(0, 300)); }

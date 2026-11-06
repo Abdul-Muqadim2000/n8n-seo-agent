@@ -467,13 +467,20 @@ export interface CadenceAir {
   queued: number;
   honoured: { keyword: string; targetId: string; reason: string; detail: string }[];
   protected: { keyword: string; source: TopicSource; url: string; until: string; why: string }[];
+  /** FX-C RC-2: the AIR targets held because a page of this run already covers them (same search, same page) or a live page answers them */
+  held: { keyword: string; targetId: string; reason: 'same search' | 'same page' | 'covered' }[];
   protectUrls: number;
 }
 
 type Cand = CadenceItem & { targetId?: string; head?: string; targetUrl?: string; air?: boolean; airHonoured?: string };
 
 // ---- AIR (2026-11-06, package P6): the engine's AIRF rules this mirror needs (v5/code/_ai_rank_flags.js settingsOf / killed / writesSinks) ----
-const AIR_TOPIC_REASONS = new Set(['off topic', 'too broad']);
+// FX-C RC-6 (the engine's rule): the reserved slot honours only "too broad", and only when the keyword shares a meaningful word with what the
+// site sells; "off topic" and every safety refusal refuse. AIR_SVC_STOP is the engine's list word for word.
+const AIR_TOPIC_REASONS = new Set(['too broad']);
+const AIR_SVC_STOP = new Set(['the', 'and', 'for', 'with', 'what', 'how', 'which', 'are', 'can', 'does', 'your', 'you', 'that', 'this', 'from', 'into', 'best', 'top', 'list', 'guide', 'who', 'near', 'online', 'free', 'cost', 'price', 'prices',
+  'company', 'companies', 'service', 'services', 'solution', 'solutions', 'provider', 'providers', 'firm', 'firms', 'agency', 'agencies', 'partner', 'partners', 'consultant', 'consultants', 'consulting', 'consultancy',
+  'expert', 'experts', 'specialist', 'specialists', 'software', 'business', 'businesses', 'uae', 'dubai', 'abu', 'dhabi', 'sharjah', 'saudi', 'ksa', 'riyadh', 'jeddah', 'qatar', 'doha', 'oman', 'bahrain', 'kuwait', 'pakistan', 'karachi', 'lahore', 'islamabad', 'india', 'usa', 'london']);
 const airFlag = (v: unknown) => v === true || /^(true|1|yes|on)$/i.test(S(v));
 const airModeOf = (v: unknown) => {
   const m = S(v).toLowerCase();
@@ -894,11 +901,13 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   // AIR RESERVE + HONOUR (on, ai_rank_reserve; the engine's block): AIR's queued targets by value; a safety refusal refuses, a topic verdict is honoured
   const airQueue: Cand[] = [];
   const airHonoured: CadenceAir['honoured'] = [];
+  const airSvcWords = new Set(services.flatMap((x) => norm(x).split(' ')).filter((w) => w.length > 2 && !AIR_SVC_STOP.has(w)));
+  const airSvcMatch = (kw: string) => norm(kw).split(' ').some((w) => w.length > 2 && !AIR_SVC_STOP.has(w) && airSvcWords.has(w));
   if (airReserve)
     for (const t of aiTargets.filter((x) => isAirTarget(x) && aiEligible(x)).sort((a, b) => num(b.value) - num(a.value))) {
       const o = aiCandOf(t);
       const g = gateOf(o.keyword);
-      if (!g.ok && !AIR_TOPIC_REASONS.has(S(g.reason))) {
+      if (!g.ok && !(AIR_TOPIC_REASONS.has(S(g.reason)) && airSvcMatch(o.keyword))) {
         refuse(o, g);
         continue;
       }
@@ -908,7 +917,7 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
       }
       markTopic(o);
       o.air = true;
-      o.why += `; chosen by AI ranking${S(t.action_id) ? ` (${S(t.action_id)})` : ''}`;
+      o.why += '; chosen by AI ranking'; // FX-C RC-1: never an internal id in a reason
       if (!g.ok) {
         o.airHonoured = S(g.reason);
         airHonoured.push({ keyword: o.keyword, targetId: t.target_id, reason: S(g.reason), detail: S(g.detail) });
@@ -925,7 +934,13 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   const aiTop3 = level === 3 && aiCand0 && aiCand0.inTopic === true && !aiCand0.mainPage && !airClaims && !(airOn && airProtect.size && airProtect.has(urlKey(aiCand0.existingPageUrl))) ? aiCand0 : null;
   const needOk = [...okOpps.filter((o) => !autoFor(o)), ...aiQueue.filter((o) => o !== aiAuto2 && o !== aiTop3)];
   // while the website waits for its first keyword the level's automatic items are shown as suggestions, so they may be approved too
-  const approvable = [...needOk, ...(waitingForKeyword ? autoOpps : []), ...[...manualL, ...unchosenL].flatMap((x) => x.eligible.filter((l) => !isSkipped(l.keyword)).map((l) => ladderCand(x, l)))];
+  // FX-C RC-5 (on only): an automatic item or an active ladder's rung that AIR's protect list holds is suggested, so the client may approve it
+  const protUrlOf = (x: Cand) => {
+    const u = x.existingPageUrl || (x.source === 'ladder' ? S(x.targetUrl) : '') || '';
+    return !!u && airProtect.has(urlKey(u));
+  };
+  const protApprovable = airOn && airProtect.size ? [...autoOpps, ...cands].filter(protUrlOf) : [];
+  const approvable = [...needOk, ...(waitingForKeyword ? autoOpps : []), ...[...manualL, ...unchosenL].flatMap((x) => x.eligible.filter((l) => !isSkipped(l.keyword)).map((l) => ladderCand(x, l))), ...protApprovable];
   const approvedSeen = new Set<string>();
   const approvalAmbiguous: { itemKey: string; keyword: string; sources: string[] }[] = [];
   // the approval row that names this item (source / ladder), or a keyword-only row when no other item shares the keyword
@@ -951,6 +966,14 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
       return true;
     })
     .map((o) => ({ ...o, approved: true, auto: false, why: `${o.why}; approved by you for this cycle` }));
+  // RC-5: an active ladder's protected rung the client approved is already in cands: that item itself is marked approved (uniq keeps the first)
+  if (protApprovable.length)
+    for (const c of cands)
+      if (approvedSeen.has(cycleNorm(c.keyword)) && protUrlOf(c) && !c.approved) {
+        c.approved = true;
+        c.auto = false;
+        c.why += '; approved by you for this cycle';
+      }
   cands.push(...approved, ...autoOpps.filter((o) => !approvedSeen.has(cycleNorm(o.keyword))).map((o) => ({ ...o, auto: true })));
 
   // ---- D11: one search, one page ----
@@ -1005,9 +1028,14 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
     const k = norm(kw);
     if (k && !spentKeys.has(k)) spentKeys.set(k, how);
   };
+  // FX-C RC-11 (on only): a page written ON TOP of pages_per_week (the reserved AI ranking page, any AI page at level 3) spends nothing
+  const airKw = airOn
+    ? new Set((input.aiTargets ?? []).filter((t) => t && t.target_id && (t.status === 'queued' || t.status === 'writing') && (!t.site_id || t.site_id === siteId) && S(t.origin) === 'ai_rank').map((t) => norm(t.keyword)).filter(Boolean))
+    : new Set<string>();
   for (const l of slog) {
     const own = /^cad_/.test(S(l.request_id));
     if (own ? !inWin(l.started_at) : !inStartWin(l.started_at)) continue; // this cycle's cadence from its due time; ladder starts since the last cadence run
+    if (airOn && own && isAi(l) && (level === 3 || airKw.has(norm(l.keyword)))) continue;
     if (!own && S(l.source) !== 'ladder') continue; // the app's "Write it" is a page the client asked for on top
     const st = S(l.status);
     if (EXISTS.has(st) || S(l.published_url) || (st === 'started' && inFlight(l.started_at))) spend(l.keyword, own ? "this cycle's cadence" : 'ladder start');
@@ -1052,15 +1080,61 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   const aiCand = aiCand0 && !picks.some((x) => norm(x.keyword) === norm(aiCand0.keyword)) ? aiCand0 : null;
   const aiPick = level === 3 && pages > 0 && aiCand && aiCand === aiTop3 && aiDue && !blocked ? { ...aiCand, auto: true } : null;
   if (aiPick) picks.push(aiPick);
-  // AIR RESERVE: the reserved AI ranking page of the week, on top of pages_per_week (never for 0 pages a week, never while blocked)
-  const airCand = airCand0 && !picks.some((x) => norm(x.keyword) === norm(airCand0.keyword)) ? airCand0 : null;
-  const airPick = airClaims && pages > 0 && airCand && !blocked ? { ...airCand, auto: true, why: `${airCand.why}; the reserved AI ranking page of the week (on top of your pages a week)` } : null;
+  // FX-C RC-2 (on only, the engine's rule): one page, one rewrite. A pick whose page another pick of this run already rewrites, or that another
+  // keyword's run started in the last 7 days, waits as a suggestion with the reason
+  const pageOfPick = (x: Cand) => urlKey(x.existingPageUrl || '');
+  const urlHeld: Cand[] = [];
+  if (airOn) {
+    const weekU = new Map<string, string>();
+    for (const l of slog)
+      if (at - ms(l.started_at) < 7 * 864e5)
+        for (const u of [l.existing_page_url, l.published_url]) {
+          const k = urlKey(u);
+          if (k && !weekU.has(k)) weekU.set(k, norm(l.keyword));
+        }
+    const seenU = new Set<string>();
+    for (let i = 0; i < picks.length; i++) {
+      const p = picks[i];
+      const u = pageOfPick(p);
+      if (!u) continue;
+      if (seenU.has(u) || (weekU.has(u) && weekU.get(u) !== norm(p.keyword))) {
+        urlHeld.push({ ...p, auto: false, why: `${p.why}; another page of this week's plan already rewrites ${p.existingPageUrl}, so it waits` });
+        picks.splice(i, 1);
+        i--;
+        continue;
+      }
+      seenU.add(u);
+    }
+  }
+  // AIR RESERVE: the reserved AI ranking page of the week, on top of pages_per_week (never for 0 pages a week, never while blocked). RC-2: an AIR
+  // target a page of this run already covers (the same search or the same page), or that a live page answers, is held; the slot passes on
+  const airHeld: CadenceAir['held'] = [];
+  const airHeldSug: Cand[] = [];
+  let airCand: Cand | null = null;
+  if (airClaims && pages > 0 && !blocked)
+    for (const o of airQueue) {
+      if (o.mainPage) continue;
+      const ss = picks.find((x) => norm(x.keyword) === norm(o.keyword) || sameSearch(x.keyword, o.keyword) || sameSearch(o.keyword, x.keyword));
+      const sp = !ss && pageOfPick(o) ? picks.find((x) => pageOfPick(x) === pageOfPick(o)) : undefined;
+      const cv = !ss && !sp && o.source === 'ai_answer' ? coverOf(o) : null;
+      if (!ss && !sp && !cv) {
+        airCand = o;
+        break;
+      }
+      airHeld.push({ keyword: o.keyword, targetId: S(o.targetId), reason: ss ? 'same search' : sp ? 'same page' : 'covered' });
+      if (cv) {
+        if (!covered.some((c) => norm(c.keyword) === norm(o.keyword))) covered.push({ keyword: o.keyword, source: o.source, url: cv.url });
+        continue;
+      }
+      airHeldSug.push({ ...o, why: o.why + (ss ? `; a page of this week's plan already targets the same search ("${ss.keyword}"), so it waits` : `; another page of this week's plan already rewrites ${o.existingPageUrl}, so it waits`) });
+    }
+  const airPick = airCand ? { ...airCand, auto: true, why: `${airCand.why}; the reserved AI ranking page of the week (on top of your pages a week)` } : null;
   if (airPick) picks.push(airPick);
 
   // ---- suggestions: every needs-OK candidate the gate let through, not skipped, not written now (max 5, AI first) ----
   const pickedK = new Set(picks.map((p) => norm(p.keyword)));
   const sugSeen = new Set<string>();
-  const sugPool = [...(airReserve && airQueue[0] && aiDue && !airPick ? [airQueue[0]] : []), ...(aiCand && aiDue && aiCand !== aiAuto2 && !(aiPick && norm(aiPick.keyword) === norm(aiCand.keyword)) ? [aiCand] : []), ...protectedItems, ...needOk.filter((o) => !isAi(o)), ...autoOpps.filter((o) => !pickedK.has(norm(o.keyword)) && blocked)];
+  const sugPool = [...airHeldSug, ...urlHeld, ...(airReserve && airQueue[0] && aiDue && !airPick && !airHeld.length ? [airQueue[0]] : []), ...(aiCand && aiDue && aiCand !== aiAuto2 && !(aiPick && norm(aiPick.keyword) === norm(aiCand.keyword)) ? [aiCand] : []), ...protectedItems, ...needOk.filter((o) => !isAi(o)), ...autoOpps.filter((o) => !pickedK.has(norm(o.keyword)) && blocked)];
   const suggestions = sugPool
     .filter((o) => {
       const k = norm(o.keyword);
@@ -1223,6 +1297,7 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
             queued: airQueue.length,
             honoured: airHonoured,
             protected: airProtected,
+            held: airHeld,
             protectUrls: airProtect.size,
           },
         }
@@ -1351,6 +1426,8 @@ export interface CadenceTables {
   trends?: TrendRow[];
   pages?: SitePageRow[];
   ai_targets?: AiTargetRow[];
+  /** FX-C RC-11: seo_ai_targets rows being written (the engine's Load AI Targets Writing); the app's pipeline reads every status in ai_targets */
+  ai_targets_writing?: AiTargetRow[];
   skips?: SkipRow[];
   monitors?: CadenceMonitorsRow[];
   ranks?: RankHistoryRow[];
@@ -1383,7 +1460,7 @@ export function cadenceInputFromTables(t: CadenceTables, o: { siteId?: string; d
     logs: t.content_log ?? [],
     settings: (t.ladder_settings ?? []).filter((r) => r.site_id === siteId || normD(r.domain) === domain),
     history: t.ranks ?? [],
-    aiTargets: t.ai_targets ?? [],
+    aiTargets: [...(t.ai_targets ?? []), ...(t.ai_targets_writing ?? [])],
     aiPagesPerMonth: aiQuotaOf(mon),
     pages: t.pages ?? [],
     services: servicesOf(site, o.services ?? []),
