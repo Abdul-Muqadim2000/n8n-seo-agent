@@ -185,7 +185,8 @@ describe('the two new site task kinds (backward compatible)', () => {
     const t = deriveSiteTasks({ ...base, aiRank: { checkedAt: at, steps: Array.from({ length: 6 }, (_, i) => step(i)), statusOf: {} } }, []);
     expect(t.map((x) => x.key)).toEqual(['ai_rank:L10:p:q0', 'ai_rank:L11:p:q1', 'ai_rank:L12:p:q2']);
     expect(t.every((x) => x.kind === 'ai_rank' && x.state === 'todo' && guideById(x.guide))).toBe(true);
-    expect(t[0].detail).toMatch(/How we check it: we open the page/);
+    // RC-3: L10 is checked by the weekly run or, sooner, on the profile address pasted on the step (ai-rank-steps.test.ts)
+    expect(t[0].detail).toMatch(/How we check it: The weekly check looks for your listing\. To have it checked now, paste your profile address below/);
     // three stored this week already: no new one; five stored long ago and still open: the cap of open steps holds
     const recent = [0, 1, 2].map((i) => storedOf(step(i).key, 'ai_rank', '2026-11-08T00:00:00Z', { actionId: `a${i}`, lever: step(i).lever }));
     expect(deriveSiteTasks({ ...base, aiRank: { checkedAt: at, steps: Array.from({ length: 6 }, (_, i) => step(i)), statusOf: {} } }, recent).length).toBe(3);
