@@ -90,3 +90,17 @@ Owner to provide: Brave Search API key.
 - 2026-11-06 later: live format checks (owner yes, DataForSEO $0.234, Bing free, Brave skipped): target_metrics with no mention = 0 (not
   null); GetQueryPageStats weekly rows merged per page. Fix f8af02e5 (harness 17412/0) deployed (only AI Rank Fetched changed; prod == build
   after); main = 8325c20d (PR #59). Raw answers private in live_calls/.
+- 2026-11-06 (owner: "switch on now, rush it"): both sites set to ai_rank_mode=on, ai_rank_reserve=true, ai_rank_mentions=true,
+  ai_rank_fanout_n=20 (Brave off, no key) via Site Admin from inside alaventra-app-1. A run-now operator is pulling AI Growth -> Content
+  Cadence -> Link Builder forward through the Cycle Dispatcher (plan in the private RUN_NOW.md, schedule restored after, cap $6).
+  Frontend: PR #58 + #59 merged, Vercel status success on main 8325c20d (no PR waiting).
+- 2026-11-06 14:00-14:18 UTC, first `on` run (operator; plan + log in the private RUN_NOW.md). Mechanism: the three job rows of each
+  site's CURRENT cycle re-opened (`refused`, attempts 1) so the Cycle Dispatcher retried them in order; seo_cycles never written, both
+  sites' next cycle and preview unchanged. AI Growth ran for both (air-2, mode on, 0 node errors; 9 and 11 actions; one AIR target each;
+  DataForSEO $0.478 in all, Claude $0). Content Cadence NOT run: both AIR targets are L06 `refresh` with an empty page_url (L06 picked by
+  `hasPage()` from stage evidence while `pageOf()` found no URL), and Cadence_Plan `aiEligible()` drops a refresh without a URL silently,
+  so the reserved slot can never fire for them (one site's row had been an ordinary answer target before). Link Builder ran for both: 0 AIR
+  drafts, because AIR's out-gate does not apply the Link Builder's qualification (it picked lists already rejected as competitors / paid
+  posts, or already drafted); also two LB false positives (a social network read as a competitor, a software list read as gambling).
+  Fixes needed (owner): L06 needs a page URL (fall back to L05, or store the page), the reserved slot should list a dropped AIR target as
+  refused, and AIR's placement choice should reuse the Link Builder's qualification.
