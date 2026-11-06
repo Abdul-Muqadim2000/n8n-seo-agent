@@ -266,7 +266,7 @@ const ARL = (() => {
           why: L.id === 'L05' ? (onOther ? 'its closest page (' + pu + ') wins AI answers for ' + [...guard].join(', ') + ' and is protected: a new page for this question instead of rewriting it' : 'no page of the site is found for the searches the engines run') + (listy ? '; the answers are built from lists, so write an honest comparison or cost guide, never a self-ranked list (own-page chance halved)' : '')
             : L.id === 'L06' ? 'a page of the site is found but not cited' + (listy ? '; the answers are built from lists (own-page chance halved)' : '') : L.id === 'L07' ? 'the answers cite the site but do not name it' : 'an answer states something wrong about the business' };
         if (control) extra.refused = 'held out as a control question: no question-specific action while it is in the control group (1 in 3, 12 weeks)';
-        add(L, { prompt_id: q }, cs, extra); } }
+        add(L, L.id === 'L07' && extra.page_url ? { prompt_id: q, url: extra.page_url } : { prompt_id: q }, cs, extra); } }   // FX-A2: L07 stores the page it fixes (refKey keys on prompt_id, so its id is unchanged)
     // protect what wins (L16): the client's page cited for a won question, one action per page with every won cell it carries
     { const L = LV.get('L16'); const byPage = new Map(); for (const q of allQ) { const cs = cellsFor(L, [q]); if (!cs.length) continue; const u = pageOf(byQ.get(q)); const k = u ? AIRF.urlKey(u) : 'p:' + q;
         const g = byPage.get(k) || { url: u, q, cells: [] }; g.cells.push(...cs); byPage.set(k, g); }
@@ -447,7 +447,12 @@ const ARL = (() => {
       if (!(gi || bi) || (needG && !needB && !gi) || (needB && !needG && !bi)) return notYet('live, not yet in the index the engines search');
       if (es.some(e => CHATGPT_TYPE.includes(e)) && N(p.words_raw, 0) < 150) return notYet('live and indexed, but the raw HTML holds ' + N(p.words_raw, 0) + ' words (the AI fetchers run no JavaScript)');
       const live = Math.max(isFinite(pub) ? pub : 0, msOf(p.checked_at) || 0); return res(true, live, ['published ' + S(r.published_at).slice(0, 10) + ', HTTP 200, ' + (gi ? 'indexed in Google' : 'crawled by Bing') + ', ' + N(p.words_raw, 0) + ' raw words'], { live_at: isoOf(live), url: S(r.published_url) }); }
-    if (L.id === 'L08' || L.id === 'L07') { const s = srcRow(key); if (!s) return notYet('the page has not been read since the step was asked');
+    // FX-A2: L07 fixes a passage on the client's OWN page (its ref holds the page since FX-A2). Done when our fetch of that page after the step was asked
+    // finds it live (HTTP 200) and showing a change since then (its visible update date); an own page is never in the third-party source graph
+    if (L.id === 'L07') { if (!key) return notYet('the page this step fixes is not recorded on the action'); const p = pageRow(key); if (!p || !after(p.checked_at)) return notYet('the page has not been read since the step was asked');
+      if (N(p.status, 0) !== 200) return notYet('the page answers HTTP ' + (N(p.status, 0) || 'nothing') + ', not 200');
+      const up = msOf(p.updated_on); return isFinite(up) && after(up) ? res(true, p.checked_at, ['our fetch of ' + key + ' on ' + S(p.checked_at).slice(0, 10) + ': live, updated ' + S(p.updated_on).slice(0, 10)]) : notYet('the page is live but shows no update since the step was asked'); }
+    if (L.id === 'L08') { const s = srcRow(key); if (!s) return notYet('the page has not been read since the step was asked');
       const t = s.checked_at || s.last_seen; if (s.names_client == null) return res(null, '', ['the page could not be read (blocked): cannot confirm'], { expired });
       if (s.names_client === true && after(t)) return res(true, t, ['our fetch of ' + key + ' on ' + S(t).slice(0, 10) + ' finds the business named']);
       const sent = (outreach || []).find(o => o && AIRF.urlKey(o.page_url) === key && /sent|replied/.test(S(o.status)));
@@ -458,11 +463,25 @@ const ARL = (() => {
       if ((s && s.names_client == null) || (li && /unknown|blocked/.test(S(li.status)))) return res(null, '', ['the platform blocks our check: unconfirmed'], { expired });
       return notYet('no listing found yet'); }
     if (L.id === 'L16') return S(a.sink_ref) ? res(true, reg, ['the page is protected (' + S(a.sink_ref) + ')']) : notYet('not protected yet');
-    // L11-L15, L17: the client gives the URL, our fetch must find the business named on it
-    const cu = S(a.client_url); if (!cu) return notYet('waiting for the link from the client');
-    const s = srcRow(AIRF.urlKey(cu)) || pageRow(AIRF.urlKey(cu)); if (!s) return notYet('the link has not been read yet');
-    if (s.names_client == null && !('words_raw' in s)) return res(null, '', ['the page could not be read: cannot confirm'], { expired });
-    return s.names_client === true || N(s.status, 0) === 200 && L.id === 'L15' ? res(true, s.checked_at || s.last_seen, ['our fetch of ' + AIRF.urlKey(cu) + ' finds the business named']) : notYet('the page does not name the business'); };
+    // L11-L15, L17: the client pastes the address on the step (the app stores it as client_url and, when its own fetch finds the business named,
+    // a source row: names_client true, source_from 'client'). FX-A2: the address must pass the safe fetcher's rules (https, no credentials, no IP
+    // literal, a public host; L17 a Wikidata item) and the page must have been read live AFTER the step was asked and name the business. A source
+    // row that does not say it names the business never counts; the client's own page counts for a correction (L15) only when our fetch read it HTTP 200.
+    const cu = S(a.client_url); if (!cu) return notYet('waiting for the address from the client (paste it on the step)');
+    const bad = safeUrlWhy(cu, L.id); if (bad) return notYet('the address cannot be checked: ' + bad);
+    const ck = AIRF.urlKey(cu); const s = srcRow(ck); const own = pageRow(ck);
+    if (s) { const t = s.checked_at || s.last_seen; if (!after(t)) return notYet('the address has not been read since the step was asked'); if (s.names_client == null) return res(null, '', ['the page could not be read: cannot confirm'], { expired });
+      return s.names_client === true ? res(true, t, ['our fetch of ' + ck + ' on ' + S(t).slice(0, 10) + ' finds the business named']) : notYet('the page does not name the business'); }
+    if (own && L.id === 'L15') { if (!after(own.checked_at)) return notYet('the page has not been read since the step was asked');
+      return N(own.status, 0) === 200 ? res(true, own.checked_at, ['our fetch of ' + ck + ' on ' + S(own.checked_at).slice(0, 10) + ': the business\'s own page, live']) : notYet('the page answers HTTP ' + (N(own.status, 0) || 'nothing') + ', not 200'); }
+    return notYet('the address has not been read yet'); };
+  /** FX-A2: the safe fetcher's rules for an address a client gives (as the app's): '' when it may be checked, else why not */
+  const safeUrlWhy = (u, lever) => { const m = S(u).match(/^https:\/\/([^\/?#\s]*)/i); if (!m) return 'it is not an https address'; const auth = m[1];
+    if (auth.indexOf('@') >= 0) return 'it carries a user name or password'; const hp = auth.toLowerCase(); const host = hp.replace(/:(\d+)$/, '').replace(/\.$/, ''); const port = (hp.match(/:(\d+)$/) || [])[1];
+    if (port && port !== '443') return 'it names a port'; if (/^\[|:/.test(host) || /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || /^0x|^\d+$/.test(host)) return 'it is an IP address, not a website';
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(host) || /(^|\.)(localhost|local|internal|intranet|lan|home|corp|invalid)$/.test(host)) return 'it is not a public website';
+    if (lever === 'L17' && !/(^|\.)wikidata\.org$/.test(host)) return 'an entity step needs a Wikidata item address';
+    return ''; };
 
   // ================================================================ G2-G3. did it move the stage, and the lift tests
   const diagMap = (x) => { const m = new Map(); if (x && typeof x.get === 'function') { for (const [k, v] of x.entries()) m.set(S(k), v); return m; } for (const d of (Array.isArray(x) ? x : [])) if (d && S(d.prompt_id)) m.set(S(d.prompt_id), d); return m; };
@@ -831,5 +850,5 @@ const ARL = (() => {
 
   return { VERSION, OFF_SITE, LEVERS, REFUSED, ZERO_WEIGHT, U, VERDICTS, VERDICT_WORDS, MEMO_PARTS, MEMO_TITLES, ENGINE_W, CAPS, COST, HUMAN_NEW, ELIG, SITE_WIDE, STATS,
     value, feasibility, rivalsMedian, priorOf, candidates, score, choose, prereg, keepPrereg, verify, outcome, learnable, learn, brier, memo, compareOld, costOf, multOf, didOf,
-    UNIFORM, ALPHA, SITE_CAP, expiryDays, stagesPack, stagesUnpack, snapshotT0, qDid, its, claimCells, fdr, screenOwnPage };
+    UNIFORM, ALPHA, SITE_CAP, expiryDays, safeUrlWhy, stagesPack, stagesUnpack, snapshotT0, qDid, its, claimCells, fdr, screenOwnPage };
 })();

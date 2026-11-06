@@ -335,7 +335,8 @@ AI_RANK_ACTIONS_TABLE = 'seo_ai_rank_actions'
 AI_RANK_ACTIONS_COLS = [('action_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('lever', 'string'), ('executor', 'string'), ('scope', 'string'),
                         ('ref', 'string'), ('questions', 'string'), ('engines', 'string'), ('target_stage', 'string'), ('status', 'string'), ('sink', 'string'),
                         ('sink_ref', 'string'), ('expected_json', 'string'), ('prereg_json', 'string'), ('happened_at', 'string'), ('verify_json', 'string'),
-                        ('outcome_json', 'string'), ('learned_at', 'string'), ('mode', 'string'), ('run_id', 'string'), ('created_at', 'string'), ('updated_at', 'string')]
+                        ('outcome_json', 'string'), ('learned_at', 'string'), ('mode', 'string'), ('run_id', 'string'), ('created_at', 'string'), ('updated_at', 'string'),
+                        ('client_url', 'string')]   # FX-A2 (additive): the address the client pasted on the step (written by the app, FX-C RC-3; kept on every upsert)
 # seo_ai_rank_sources: one row per site and third-party page the answers cite (upsert site_id + url_key): type, author, placeability, influence
 AI_RANK_SOURCES_TABLE = 'seo_ai_rank_sources'
 AI_RANK_SOURCES_COLS = [('site_id', 'string'), ('domain', 'string'), ('url_key', 'string'), ('url', 'string'), ('host', 'string'), ('page_type', 'string'),

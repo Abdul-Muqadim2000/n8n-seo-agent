@@ -187,6 +187,12 @@ for (const g of gateSites) {
     const sources = (ARD.sources({ answers8: answers28, storedSources: storedSrc, mentionsPages: fetched ? fetched.mentions_pages || [] : [], fetched: em.earned || [], prompts,
       values: Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v.V])), rivals, ourHosts, now: nowMs }) || [])
       .slice().sort((a, b) => (Number(b.influence) || 0) - (Number(a.influence) || 0)).slice(0, AIR_CFG.sources_max);
+    // FX-A2: the pages the client gave us (the app's source rows, source_from 'client', written only when its own fetch found the business named)
+    // are kept as written whatever their influence: they are what L11-L15 / L17 verify against; a weekly run never re-reads or rewrites them
+    { const own = storedSrc.filter(r => S0(r.source_from) === 'client' && S0(r.url_key || AIRF.urlKey(r.url)));
+      for (const r of own) { const k = S0(r.url_key) || AIRF.urlKey(r.url); const i = sources.findIndex(x => (S0(x.url_key) || AIRF.urlKey(x.url)) === k); const base = i >= 0 ? sources[i] : { url_key: k, url: S0(r.url), host: S0(r.host), page_type: S0(r.page_type), author_kind: S0(r.author_kind), questions: P(r.questions, []), engines: P(r.engines, []), influence: 0, placeability: 0, cites_28d: 0 };
+        const x = Object.assign({}, base, { names_client: r.names_client === true || S0(r.names_client) === 'true', from: 'client', checked_at: S0(r.checked_at), last_seen: S0(r.last_seen) || S0(r.checked_at), first_seen: S0(r.first_seen), client: true });
+        if (i >= 0) sources[i] = x; else sources.push(x); } }
     const srcByKey = new Map(sources.map(x => [S0(x.url_key) || AIRF.urlKey(x.url), x]));
     // ---- D / E: candidates, scores, the choice ----
     const candidates = ARL.candidates({ site: { ...site, hosts: ourHosts, prompts, pages: aiPages }, diag, sources, arms, stored_actions: storedA, settings: rank, now: nowMs }) || [];
@@ -253,7 +259,8 @@ for (const g of gateSites) {
       a_rows.push({ action_id: id, site_id: sid, domain: dom, lever: S0(a.lever), executor: S0(a.executor), scope: S0(a.scope), ref: J(a.ref || {}), questions: J(a.questions || []), engines: J(a.engines || []),
         target_stage: S0(a.target_stage), status: statusOf(a), sink: S0(a.sink), sink_ref: keep ? S0(st.sink_ref) || sinkRefOf(a) : sinkRefOf(a), expected_json: J(a.expected || { p: a.p_hat, gain: a.gain, cost: a.cost, score: a.score, days: a.days }),
         prereg_json: keep ? S0(st.prereg_json) : fresh ? J(fresh) : '',   // written once per attempt, never changed while it runs
-        happened_at: keep ? S0(st.happened_at) : '', verify_json: keep ? S0(st.verify_json) : '', outcome_json: keep ? S0(st.outcome_json) : '', learned_at: keep ? S0(st.learned_at) : '', mode, run_id: g.run_id, created_at: keep ? S0(st.created_at) || nowIso : nowIso, updated_at: nowIso }); }
+        happened_at: keep ? S0(st.happened_at) : '', verify_json: keep ? S0(st.verify_json) : '', outcome_json: keep ? S0(st.outcome_json) : '', learned_at: keep ? S0(st.learned_at) : '', mode, run_id: g.run_id, created_at: keep ? S0(st.created_at) || nowIso : nowIso, updated_at: nowIso,
+        client_url: S0(st.client_url) }); }   // FX-A2: the address the client pasted is never wiped by a weekly run (a new attempt re-checks the same page)
     // every stored action has an exit (INVARIANTS rule 4): verified / not happened from its outcome, `expired` once its window + 14 days passed
     const chosenIds = new Set(a_rows.map(r => r.action_id)); const pendingOc = [];
     for (const o of outcomes) { const a = storedById.get(S0(o.action_id)); if (!a || chosenIds.has(S0(a.action_id))) continue; const v = o.verify || {}; const oc = o.outcome || {};
@@ -273,8 +280,8 @@ for (const g of gateSites) {
     const s_rows = sources.map(x => { const k = S0(x.url_key) || AIRF.urlKey(x.url); const st = storedSrc.find(r => S0(r.url_key) === k) || {};
       return { site_id: sid, domain: dom, url_key: k, url: S0(x.url), host: S0(x.host) || hostOf(x.url), page_type: S0(x.page_type), author_kind: S0(x.author_kind), names_client: x.names_client === null || x.names_client === undefined ? null : !!x.names_client,
         rivals_named: J(x.rivals_named || []), questions: J(x.questions || []), engines: J(x.engines || []), cites_28d: Number(x.cites_28d) || 0, influence: Number(x.influence) || 0, placeability: Number(x.placeability) || 0,
-        placeability_why: S0(x.placeability_why).slice(0, 300), contact_email: S0(x.contact_email), contact_url: S0(x.contact_url), source_from: S0(x.from) || 'answers', first_seen: S0(st.first_seen) || nowIso, last_seen: S0(x.last_seen) || nowIso, checked_at: nowIso }; })
-      .filter(r => r.url_key);
+        placeability_why: S0(x.placeability_why).slice(0, 300), contact_email: S0(x.contact_email), contact_url: S0(x.contact_url), source_from: S0(x.from) || 'answers', first_seen: S0(st.first_seen) || nowIso, last_seen: S0(x.last_seen) || nowIso, checked_at: x.client ? S0(x.checked_at) || S0(st.checked_at) : nowIso }; })
+      .filter(r => r.url_key && !(sources.find(x => x.client && (S0(x.url_key) || AIRF.urlKey(x.url)) === r.url_key) && !storedSrc.some(z => S0(z.url_key) === r.url_key && S0(z.source_from) !== 'client')));   // FX-A2: a client row that only the app wrote is left exactly as the app wrote it
     const p_rows = [];   // filled after every site (RA-10)
     // ---- the sinks, `on` only (AIRF.writesSinks): nothing below is built for a site in shadow ----
     const sinks = { targets: [], prospects: [], proposed: [], core: [], cache: [], growth: null };
