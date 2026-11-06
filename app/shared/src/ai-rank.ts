@@ -7,6 +7,8 @@
 //    callback, each tolerant of a missing or older shape (a reader never throws on an engine from before AIR);
 //  * the client words (no internal names: the client reads "AI ranking", never the engine's ids).
 
+import { aiRankClientCredits, aiRankClientOf, aiRankClientView, aiRankPlain, type AiRankClientView } from './ai-rank-client';
+
 /** The three modes, in the engine's words. 'shadow' is shown to clients as "Trial". */
 export const AI_RANK_MODES = ['off', 'shadow', 'on'] as const;
 export type AiRankMode = (typeof AI_RANK_MODES)[number];
@@ -180,9 +182,13 @@ export interface AiRankReport {
   runId: string;
   checkedAt: string;
   ruleVersion: string;
+  /** FX-C RC-1: the plan in the client's words (engine v 2); null from an engine before it */
+  client: AiRankClientView | null;
+  /** the owner's raw memo: null for every customer (clientSafePayload removes it; an engine from v 2 never sends it) */
   memo: AiRankMemo | null;
   actions: AiRankActionView[];
   steps: AiRankStep[];
+  /** provider cost: never served to a customer (null) */
   cost: { usd: number; basis: string } | null;
   compare: AiRankCompare | null;
   counts: { core: number; chosen: number; deferred: number; refused: number; open: number };
@@ -273,6 +279,7 @@ export function aiRankReportOf(payload: unknown): AiRankReport | null {
     runId: S(r.run_id),
     checkedAt: S(r.checked_at),
     ruleVersion: S(r.rule_version),
+    client: aiRankClientOf(r.client),
     memo: aiRankMemoOf(r.memo),
     actions: objs(r.actions).slice(0, 20).map(aiRankActionOf),
     steps: objs(r.steps)
@@ -280,7 +287,7 @@ export function aiRankReportOf(payload: unknown): AiRankReport | null {
       .map((x) => ({
         key: S(x.key),
         lever: S(x.lever),
-        label: S(x.label) || aiRankLeverLabel(S(x.lever)),
+        label: AI_RANK_LEVER_LABELS[S(x.lever)] ?? (S(x.label) || aiRankLeverLabel(S(x.lever))),   // RC-14: the client words for the lever first
         what: S(x.what),
         why: S(x.why),
         check: S(x.check),
@@ -300,10 +307,23 @@ export function aiRankReportOf(payload: unknown): AiRankReport | null {
 export interface AiRankPlanData {
   checkedAt: string;
   runId: string;
+  /** FX-C RC-1: the weekly note in the client's words, credits instead of money */
+  client: AiRankClientView | null;
+  /** the owner's raw memo: platform admins only (null for everyone else) */
   memo: AiRankMemo | null;
   actions: AiRankActionView[];
+  /** provider cost of the plan's readings: platform admins only (null for everyone else) */
   cost: { usd: number; basis: string } | null;
   settings: AiRankSettings;
+}
+
+/** How the plan is read for one viewer: question texts by id, the credit rate, and whether the viewer is a platform admin. */
+export interface AiRankPlanOptions {
+  question?: (promptId: string) => string;
+  /** credits per US dollar of provider cost (billing.ts creditRate); null: no credits shown */
+  creditRate?: number | null;
+  /** a platform admin also gets the raw memo and the provider cost */
+  admin?: boolean;
 }
 
 /** A seo_ai_rank_runs row in the shape the app reads (every column optional: an older engine has none). */
@@ -321,7 +341,7 @@ export interface AiRankActionRow {
 const OPEN = new Set(['proposed', 'queued', 'in_progress']);
 
 /** The plan of the newest `on` run of a website, with its open actions (null: no `on` run on record). */
-export function aiRankPlanOf(runs: AiRankRunRow[], actions: AiRankActionRow[], settings: AiRankSettings): AiRankPlanData | null {
+export function aiRankPlanOf(runs: AiRankRunRow[], actions: AiRankActionRow[], settings: AiRankSettings, opts: AiRankPlanOptions = {}): AiRankPlanData | null {
   const run = [...runs].filter((r) => modeOf(r.mode) === 'on' && S(r.checked_at)).sort((a, b) => S(b.checked_at).localeCompare(S(a.checked_at)))[0];
   if (!run) return null;
   const chosen = objs(jsonOf<unknown>(run.chosen_json, [])).map(aiRankActionOf);
@@ -329,12 +349,24 @@ export function aiRankPlanOf(runs: AiRankRunRow[], actions: AiRankActionRow[], s
   const shown = chosen.map((a) => ({ ...a, status: S(byId.get(a.actionId)?.status) || a.status }));
   const extra = actions.filter((a) => modeOf(a.mode) === 'on' && OPEN.has(S(a.status)) && !chosen.some((c) => c.actionId === S(a.action_id))).map((a) => aiRankActionOf(a as P));
   const cost = obj(jsonOf<unknown>(run.cost_json, {}));
+  const q = opts.question ?? (() => '');
+  const listed = [...shown, ...extra].slice(0, 20).map((a) => ({
+    ...a,
+    // FX-C RC-1: the stored rows name questions by id; a customer reads the question text or nothing, and a why without ids or figures
+    questions: a.questions.map((x) => (/\s/.test(x) ? x : q(x))).filter(Boolean),
+    why: opts.admin ? a.why : aiRankPlain(a.why),
+  }));
+  const shownToViewer = opts.admin ? listed : listed.map((a) => ({ ...a, actionId: '', targetStage: '' }));   // no internal id or stage code for a customer
+  const leverOf = new Map([...chosen, ...actions.map((a) => aiRankActionOf(a as P))].map((a) => [a.actionId, a.lever]));
+  const raw = jsonOf<unknown>(run.memo_json, null);
+  const client = raw ? aiRankClientCredits(aiRankClientView(raw, { question: q, leverOf: (id) => leverOf.get(id) ?? '', actions: listed }), opts.creditRate ?? null) : null;
   return {
     checkedAt: S(run.checked_at),
     runId: S(run.run_id),
-    memo: aiRankMemoOf(run.memo_json),
-    actions: [...shown, ...extra].slice(0, 20),
-    cost: S(cost.usd) !== '' ? { usd: num(cost.usd), basis: S(cost.basis) } : null,
+    client: client && client.sections.length ? client : null,
+    memo: opts.admin ? aiRankMemoOf(run.memo_json) : null,
+    actions: shownToViewer,
+    cost: opts.admin && S(cost.usd) !== '' ? { usd: num(cost.usd), basis: S(cost.basis) } : null,
     settings,
   };
 }

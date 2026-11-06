@@ -1,5 +1,6 @@
 import {
   aiRankPlanOf,
+  creditRate,
   aiRankSettingsOf,
   aiRankShadowOf,
   type AiRankActionRow,
@@ -1151,7 +1152,7 @@ function toIndex(x: P | null): AiIndex | null {
  */
 export const AI_READ_LIMITS = { runs: 300, prompts: 2500, daily: 120, answers: 6000 } as const;
 
-export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boolean | 'summary'; prompts?: boolean; filter?: AiFilter | null } = {}): Promise<AiData> {
+export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boolean | 'summary'; prompts?: boolean; filter?: AiFilter | null; admin?: boolean } = {}): Promise<AiData> {
   const d = site.domain;
   const since = new Date(Date.now() - 90 * 864e5).toISOString();
   const [visDesc, prompts, report, days, growthRows, aiPages, aiTargets, aiProspects, logs, mons] = await Promise.all([
@@ -1279,7 +1280,8 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
     scope: opts.filter ? aiScopeOf(opts.filter, vis, compared, answers, prompts, opts.answers !== false) : null,
     growth: toGrowth(growthRows[0], aiPages, aiTargets, aiProspects, logs, monitorsNow),
     // AIR (2026-11-06): the AI-ranking plan, read only for a website in `on` mode (off and the private trial show nothing new)
-    aiRank: await aiRankPlanFor(d, mons[0]),
+    // FX-C RC-1: in the client's words with credits; the raw memo and the provider cost for a platform admin only
+    aiRank: await aiRankPlanFor(d, mons[0], { prompts, admin: opts.admin === true }),
     report: rp
       ? {
           receivedAt: report!.report.receivedAt,
@@ -1769,15 +1771,22 @@ export function contentGroupsOf(raw: unknown): { name: string; pattern: string }
 
 /** The AI-ranking plan of a website in `on` mode: its newest on-mode run and its open actions. Null for off / trial, and when the engine has
  *  no AI-ranking table yet (an engine from before AIR: a missing table reads as no rows, a failed read as no plan, never an error page). */
-export async function aiRankPlanFor(domain: string, monitorsRow: MonitorsRow | undefined): Promise<AiRankPlanData | null> {
+export async function aiRankPlanFor(
+  domain: string,
+  monitorsRow: MonitorsRow | undefined,
+  opts: { prompts?: AiPromptRow[]; admin?: boolean } = {},
+): Promise<AiRankPlanData | null> {
   const settings = aiRankSettingsOf(monitorsRow as unknown as Record<string, unknown>);
   if (settings.mode !== 'on') return null;
   try {
-    const [runs, actions] = await Promise.all([
+    const [runs, actions, ps] = await Promise.all([
       siteRows<AiRankRunRow>('aiRankRuns', domain, { sortBy: 'checked_at:desc', max: 4 }),
       siteRows<AiRankActionRow>('aiRankActions', domain, { sortBy: 'updated_at:desc', max: 300 }),
+      settingsRow().catch(() => null),
     ]);
-    return aiRankPlanOf(runs, actions, settings);
+    // FX-C RC-1: question texts by id, credits instead of money (the app's own credit rate), the raw memo and cost for a platform admin only
+    const texts = new Map((opts.prompts ?? []).map((r) => [s((r as { prompt_id?: unknown }).prompt_id), s((r as { prompt?: unknown }).prompt)]));
+    return aiRankPlanOf(runs, actions, settings, { question: (id) => texts.get(id) ?? '', creditRate: ps ? creditRate(ps) : null, admin: opts.admin === true });
   } catch {
     return null;
   }

@@ -65,7 +65,8 @@ export async function dataRoutes(app: FastifyInstance) {
     // R-A9 (review 2026-10-23): the web and this API deploy separately. A web that pages the answers (/data/ai/answers) asks for the summary
     // (`answers=summary`); a web from before that reads them here, so without the flag they are still sent (remove one release later).
     const summary = String((req.query as Record<string, unknown>).answers ?? '') === 'summary';
-    return shown(a.role, await aiData(a.org, a.site, { answers: summary ? 'summary' : true, filter: any ? filter : null }));
+    // FX-C RC-1: a platform admin also gets the AI ranking plan's raw memo and its provider cost; every other viewer the client's words
+    return shown(a.role, await aiData(a.org, a.site, { answers: summary ? 'summary' : true, filter: any ? filter : null, admin: isPlatformAdmin(a.user) }));
   });
   // AIR (2026-11-06, DESIGN.md §2.H item 7): the AI-ranking shadow comparison, platform admins only (it is our own check of the plan before it
   // acts: AI ranking's choices beside the current logic's, week by week). Never shown to a client, whatever their role.

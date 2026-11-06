@@ -132,7 +132,10 @@ describe('the plan and the trial view from the engine rows', () => {
     { action_id: 'a3', lever: 'L09', status: 'expired', mode: 'on' },
   ];
   it('takes the newest on-mode run, the engine status of each action, and the open actions beside it', () => {
-    const p = aiRankPlanOf(runs, actions, aiRankSettingsOf({ ai_rank_mode: 'on' }))!;
+    // FX-C RC-1: the raw memo, the provider cost and the internal ids for a platform admin only (the customer read is in ai-rank-client.test.ts)
+    const p = aiRankPlanOf(runs, actions, aiRankSettingsOf({ ai_rank_mode: 'on' }), { admin: true })!;
+    const c = aiRankPlanOf(runs, actions, aiRankSettingsOf({ ai_rank_mode: 'on' }))!;
+    expect([c.memo, c.cost, c.actions.map((a) => a.actionId)]).toEqual([null, null, ['', '']]);
     expect(p.runId).toBe('r_on');
     expect(p.actions.map((a) => [a.actionId, a.status])).toEqual([
       ['a1', 'verified'],

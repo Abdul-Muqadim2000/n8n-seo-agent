@@ -1,6 +1,6 @@
 // AI ranking (AIR, 2026-11-06, n8n/seo-agent/docs/ai-ranking-2026-11-05/DESIGN.md §2.H, §6.7): the weekly plan of a website in `on` mode on
-// the AI visibility page (the memo in seven parts, every figure with its basis; the chosen actions with who does them and their state; the
-// blockers with their owner and date), and the platform admin's private trial view (AI ranking's choices beside the current plan's).
+// the AI visibility page (FX-C RC-1: the weekly note in the client's words and credits; the engine's raw memo for platform admins only; the
+// chosen actions with who does them and their state), and the platform admin's private trial view (AI ranking's choices beside the current plan's).
 // Nothing here renders for a website that is off or in its trial (the page then looks exactly as before), and every field may be missing.
 import { useState } from 'react';
 import { ChevronDown, Compass, FlaskConical } from 'lucide-react';
@@ -14,6 +14,7 @@ import { fmtAgo, fmtDate } from '@/lib/utils';
 import { Panel, SectionHeading } from './kit';
 import { engineLabel } from './ai';
 import { urlPath } from './format';
+import { AiRankClientNote, AiRankRawMemo } from '@/components/site/AiRankClientNote';
 
 const STATUS_TONE: Record<string, Tone> = { done: 'good', verified: 'good', queued: 'accent', in_progress: 'accent', proposed: 'neutral', not_happened: 'neutral', expired: 'neutral', refused: 'neutral', shadow: 'neutral' };
 
@@ -92,7 +93,6 @@ export function AiRankActionList({ actions }: { actions: AiRankActionView[] }) {
 /** The AI visibility page's AI ranking plan: rendered only for a website in `on` mode with a run on record. */
 export function AiRankSection({ plan, domain }: { plan: AiRankPlanData | null | undefined; domain: string }) {
   if (!plan) return null;
-  const costLine = plan.memo?.parts.find((p) => p.key === 'cost_per_win');
   return (
     <section className="space-y-4">
       <SectionHeading
@@ -106,11 +106,13 @@ export function AiRankSection({ plan, domain }: { plan: AiRankPlanData | null | 
         <Panel title="This week's steps" description="Who does each one, and where it stands">
           <AiRankActionList actions={plan.actions} />
         </Panel>
-        <Panel title="What changed and why" description={plan.memo ? 'Our weekly note, with the figures behind it' : 'The note appears after the next weekly run'}>
-          {plan.memo ? <AiRankMemoView memo={plan.memo} /> : <p className="text-[13px] text-ink-3">No note yet.</p>}
+        <Panel title="What changed and why" description={plan.client ? 'Our weekly note' : 'The note appears after the next weekly run'}>
+          {plan.client ? <AiRankClientNote note={plan.client} /> : <p className="text-[13px] text-ink-3">No note yet.</p>}
         </Panel>
       </div>
-      {!costLine && plan.cost && <p className="text-xs text-ink-3">AI ranking readings this week: {plan.cost.basis || 'measured'}.</p>}
+      {/* FX-C RC-1: the engine's own memo and the provider cost reach a platform admin only (the server sends them to nobody else) */}
+      {plan.memo && <AiRankRawMemo memo={plan.memo} />}
+      {plan.cost && <p className="text-xs text-ink-3">Platform admins only: AI ranking readings this week cost ${plan.cost.usd.toFixed(2)} ({plan.cost.basis || 'measured'}).</p>}
     </section>
   );
 }

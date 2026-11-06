@@ -105,7 +105,11 @@ describe('the AI ranking plan read', () => {
   it('an on website gets its plan; an engine without the tables (or a failed read) gives no plan, never an error', async () => {
     st.rows = { aiRankRuns: [run], aiRankActions: [{ action_id: 'a1', status: 'queued', mode: 'on' }] };
     const p = await aiRankPlanFor('nova-demo.example', { ai_rank_mode: 'on' } as never);
-    expect(p?.actions[0]).toMatchObject({ actionId: 'a1', status: 'queued', executor: 'human' });
+    // FX-C RC-1: a customer gets no internal id, no raw memo and no provider cost; a platform admin gets all three
+    expect(p?.actions[0]).toMatchObject({ actionId: '', status: 'queued', executor: 'human' });
+    expect([p?.memo ?? null, p?.cost ?? null]).toEqual([null, null]);
+    const admin = await aiRankPlanFor('nova-demo.example', { ai_rank_mode: 'on' } as never, { admin: true });
+    expect(admin?.actions[0]).toMatchObject({ actionId: 'a1', status: 'queued', executor: 'human' });
     st.rows = {};
     expect(await aiRankPlanFor('nova-demo.example', { ai_rank_mode: 'on' } as never)).toBeNull();
     st.fail = true;
