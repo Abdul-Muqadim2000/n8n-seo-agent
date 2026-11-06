@@ -576,7 +576,7 @@ for (const s of list) {
   const airKw = airOn ? new Set([...aiTargets, ...aiTargetsWriting].filter(t => t.site_id === s.site_id && isAirTarget(t)).map(t => norm(t.keyword)).filter(Boolean)) : new Set();
   for (const l of slog) { const rid = String(l.request_id || ''); const own = /^cad_/.test(rid);
     if (own ? !inWin(l.started_at) : !inStartWin(l.started_at)) continue;
-    if (airOn && own && isAi(l) && (level === 3 || airKw.has(norm(l.keyword)))) continue;   // F-KW: this cycle's cadence runs from its due time; ladder starts since the last cadence run
+    if (own && isAi(l) && (level === 3 || airKw.has(norm(l.keyword)))) continue;   // FX-C (owner 2026-11-06, every website): the level-3 AI page is on top, so a retry never loses an ordinary page to it   // F-KW: this cycle's cadence runs from its due time; ladder starts since the last cadence run
     if (!own && String(l.source || '') !== 'ladder') continue;   // the app's "Write it" is a page the client asked for on top: not the autopilot's budget
     const st = String(l.status || '');
     if (EXISTS.has(st) || String(l.published_url || '').trim() || (st === 'started' && inFlight(l.started_at))) spend(l.keyword, own ? 'this cycle\'s cadence' : 'ladder start'); }
@@ -610,7 +610,9 @@ for (const s of list) {
   // started in the last 7 days, waits as a suggestion with the reason (never two concurrent rewrites of one page)
   const pageOfPick = (x) => keyOfU(x.existing_page_url || '');
   const urlHeld = [];
-  if (airOn) { const weekU = new Map(); for (const l of slog) if ((at - new Date(l.started_at || 0)) < 7 * 864e5) for (const u of [l.existing_page_url, l.published_url]) { const k = keyOfU(u); if (k && !weekU.has(k)) weekU.set(k, norm(l.keyword)); }
+  // FX-C (owner 2026-11-06): the in-run rule holds for EVERY website (a decay refresh and the level-3 AI page rewrote one page twice); the 7-day
+  // rule across runs stays for websites in AI ranking `on`
+  { const weekU = new Map(); if (airOn) for (const l of slog) if ((at - new Date(l.started_at || 0)) < 7 * 864e5) for (const u of [l.existing_page_url, l.published_url]) { const k = keyOfU(u); if (k && !weekU.has(k)) weekU.set(k, norm(l.keyword)); }
     const seenU = new Set();
     for (let i = 0; i < picks.length; i++) { const p = picks[i]; const u = pageOfPick(p); if (!u) continue;
       if (seenU.has(u) || (weekU.has(u) && weekU.get(u) !== norm(p.keyword))) { urlHeld.push({ ...p, why: p.why + '; another page of this week\'s plan already rewrites ' + p.existing_page_url + ', so it waits' }); picks.splice(i, 1); i--; continue; }

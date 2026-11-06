@@ -1035,7 +1035,7 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   for (const l of slog) {
     const own = /^cad_/.test(S(l.request_id));
     if (own ? !inWin(l.started_at) : !inStartWin(l.started_at)) continue; // this cycle's cadence from its due time; ladder starts since the last cadence run
-    if (airOn && own && isAi(l) && (level === 3 || airKw.has(norm(l.keyword)))) continue;
+    if (own && isAi(l) && (level === 3 || airKw.has(norm(l.keyword)))) continue; // FX-C (owner 2026-11-06, every website): the level-3 AI page is on top, a retry never loses an ordinary page to it
     if (!own && S(l.source) !== 'ladder') continue; // the app's "Write it" is a page the client asked for on top
     const st = S(l.status);
     if (EXISTS.has(st) || S(l.published_url) || (st === 'started' && inFlight(l.started_at))) spend(l.keyword, own ? "this cycle's cadence" : 'ladder start');
@@ -1084,9 +1084,10 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   // keyword's run started in the last 7 days, waits as a suggestion with the reason
   const pageOfPick = (x: Cand) => urlKey(x.existingPageUrl || '');
   const urlHeld: Cand[] = [];
-  if (airOn) {
+  // FX-C (owner 2026-11-06): the in-run rule holds for EVERY website; the 7-day rule across runs stays for websites in AI ranking `on`
+  {
     const weekU = new Map<string, string>();
-    for (const l of slog)
+    for (const l of airOn ? slog : [])
       if (at - ms(l.started_at) < 7 * 864e5)
         for (const u of [l.existing_page_url, l.published_url]) {
           const k = urlKey(u);
