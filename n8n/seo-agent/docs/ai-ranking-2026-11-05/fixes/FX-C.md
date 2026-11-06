@@ -55,3 +55,21 @@ orchestrator's decisions. Nothing pushed or deployed, no paid call, production n
 
 - Both orders are safe. Old app + new engine: the old report block reads `memo` (now absent) and shows the steps only; the old app ignores `client`. New app + old engine: no `client` key, the block shows the steps; the settings card is hidden until the engine carries `ai_rank_mode`.
 - The Link Builder gains one load node (`Load AIR Kill (LB)`); no new table or column. No app migration (`site_tasks.payload` is jsonb). No payload schema change.
+
+## 6. Owner pass before deploy (2026-11-06, after merging `air/integration` at `395bafa5`)
+
+`air/integration` (FX-A2's engine side of the client's address, L07's page, FX-B) merged into `air/fxc` without conflict.
+
+| Item | Fix | Test (fails on the old code) | Status |
+|---|---|---|---|
+| Owner decision (a): one page rewritten twice in one run, every website | The in-run one-page rule in `Cadence_Plan.js` and `cadence.ts` now runs for every website (a decay refresh and the level-3 AI page could rewrite the same page in one run). The 7-day rule across runs stays for websites in AI ranking `on`. | New shared case `off_url_once_level3` (AI ranking off, level 3): the AI refresh of the decay page waits as a suggestion with the reason | Fixed |
+| Owner decision (b): a page lost on a retry, every website | A cadence content-log row of the level-3 AI page (written on top of pages a week) no longer counts against pages a week on a retry, for every website; AIR target keywords still count for `on`. | New shared case `off_retry_level3_ai_on_top` (off, level 3, ladder page and AI page `started`): the retry still writes the decay and the striking-distance refreshes | Fixed |
+| Which golden cases changed | **None.** All 66 keyword-first cases (`fixtures/cadence_levels.json`), the AE2 identity checks (66 x off / trial / empty / kill switch) and every other cadence scenario and app test give the same output as before: no existing case exercises either bug. The old mirror fails the two new cases (4 failures in `airCadence.test.ts`). | AE1 / AE2, `airCadence.test.ts` (24 cases), `cadence*.test.ts` | |
+| D1: AI ranking card missing before tracking | `settingsData` reads the column from any row of the engine's monitors table when the website has none (setting reads as off); the untracked Tracking view renders the card. | `server/test/aiRankAccess.test.ts` "browser pass D1" | Fixed |
+| D2: raw `{{domain}}` in a guide's who line | `fillGuide` fills `who` and `where`. | `shared/src/guides.test.ts` "fillGuide fills the who and where lines too" (every guide, with and without values) | Fixed |
+| D3: engine wording in the admin trial view | The trial view runs its text through plain words: no internal name, "our estimate, not an independent measure" for the model's figures, the engine's note dropped, figure names without underscores. | `web/test/aiRankAccess.test.tsx` "D3" | Fixed |
+| D4: On website with no AI check shows no plan | `aiRankPlanFor` answers a pending plan for an `on` website with no run yet; the AI page shows "Your first plan is on its way" (also under the "No AI visibility check yet" state). | `server/test/aiRankApp.test.ts`, `web/test/aiRankAccess.test.tsx` "D4" | Fixed |
+
+The "Owner decisions" in §3 about the two old cadence bugs are closed by this pass.
+
+Checks of this pass (whole repository mounted for the app): `build_v4.py` exit 0; full harness **17,410 passed, 0 failed** (the old Cadence Plan fails both new cases in AE1); app typecheck clean in all three workspaces; shared **1,125**, server **1,964** passed / 46 skipped, web **317** passed; `npm run build -w @seo/web` OK. No payload schema change, no migration.
