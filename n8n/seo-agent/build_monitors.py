@@ -63,6 +63,7 @@ def src(p):   # a Code node source with the shared snippets inlined
     # AIR (2026-11-06, docs/ai-ranking-2026-11-05/CONTRACTS.md §3): the AI-ranking kits - flags + kill switch (AIRF, frozen by W0), diagnosis (ARD,
     # package P1) and decision / learning (ARL, package P2); inlined only into the AIR nodes of the AI Growth workflow (package P4)
     s = s.replace('/*__AI_RANK_FLAGS__*/', rd('code/_ai_rank_flags.js').rstrip('\n')).replace('/*__AI_RANK_DIAG__*/', rd('code/_ai_rank_diag.js').rstrip('\n')).replace('/*__AI_RANK_LEARN__*/', rd('code/_ai_rank_learn.js').rstrip('\n'))
+    s = s.replace('/*__AI_RANK_CLIENT__*/', rd('code/_ai_rank_client.js').rstrip('\n'))   # FX-C RC-1 (2026-11-06): the AI ranking plan in the client's words (AIRC), inlined into Growth Report
     s = s.replace('/*__RIVALS__*/', rd('code/_rivals.js').rstrip('\n'))   # C-2 / C-8 (2026-10-17): the one rival set and the category-provider rule (inside the outreach kit, and in AI Metrics)
     s = s.replace('/*__COUNTRIES__*/', "// ---- countries: copied from the main workflow's Normalize Input by build_monitors.py (DataForSEO location code = 2000 + ISO numeric) ----" + _COUNTRIES.group(0))
     assert '/*__' not in s and '_ENABLED__' not in s, p + ': placeholder left'
