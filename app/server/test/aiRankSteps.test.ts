@@ -11,6 +11,8 @@ const t = vi.hoisted(() => ({
   web: {} as Record<string, { status: number; text?: string; location?: string; finalUrl?: string } | null>,
   fetched: [] as string[],
   upserts: [] as unknown[][],
+  updates: [] as unknown[][],
+  failWrites: false,
   growth: { verified: false, checkedAt: '2026-10-25T20:08:00.000Z' } as { verified: boolean; checkedAt: string } | null,
   monitors: [] as Record<string, unknown>[],
   actions: [] as Record<string, unknown>[],
@@ -40,7 +42,7 @@ vi.mock('../src/n8n/client', async (orig) => {
       return [{ domain, checked_at: t.access.checkedAt, access_json: JSON.stringify({ checked_at: t.access.checkedAt, bots: t.access.bots.map((b) => ({ bot: b.bot, owner: b.owner, group: b.group, allowed: b.allowed, rule: b.rule, blocked_paths: b.blockedPaths })) }) }];
     return [];
   });
-  return { ...real, rows: vi.fn(async () => []), siteRows, insertRows: vi.fn(async () => true), updateRows: vi.fn(async () => true), upsertRow: vi.fn(async (...args: unknown[]) => void t.upserts.push(args)), deleteRows: vi.fn(async () => true), ensureTable: vi.fn(async () => 'tbl'), invalidateSite: vi.fn(), executions: vi.fn(async () => []) };
+  return { ...real, rows: vi.fn(async () => []), siteRows, insertRows: vi.fn(async () => true), updateRows: vi.fn(async (...args: unknown[]) => { if (t.failWrites) throw new Error('no column client_url'); t.updates.push(args); return true; }), upsertRow: vi.fn(async (...args: unknown[]) => { if (t.failWrites) throw new Error('engine down'); t.upserts.push(args); }), deleteRows: vi.fn(async () => true), ensureTable: vi.fn(async () => 'tbl'), invalidateSite: vi.fn(), executions: vi.fn(async () => []) };
 });
 vi.mock('../src/services/verify', async (orig) => {
   const real = await orig<typeof import('../src/services/verify')>();
@@ -87,6 +89,8 @@ beforeEach(() => {
   t.web = {};
   t.fetched = [];
   t.upserts = [];
+  t.updates = [];
+  t.failWrites = false;
   t.growth = null;
   t.access = null;
   t.monitors = [{ ai_rank_mode: 'on' }];
@@ -140,10 +144,43 @@ describe('an AI ranking step checked on the address the client gives', () => {
     const row = await rowOf(s.site.id, L12);
     expect(row!.payload).toMatchObject({ clientUrl: url, actionId: 'act_L12' });
     expect(row!.doneAt).not.toBeNull();
-    expect(t.upserts[0]).toEqual(['cache', [{ columnName: 'key', condition: 'eq', value: 'air:client_url:act_L12' }], expect.objectContaining({ key: 'air:client_url:act_L12', kind: 'air' })]);
-    expect(JSON.parse(String((t.upserts[0][2] as { value: string }).value))).toMatchObject({ url, names_client: true });
+    // handed to the engine's verification input: the action row's client_url and a source row named by the client's page
+    expect(t.updates).toEqual([['aiRankActions', [{ columnName: 'action_id', condition: 'eq', value: 'act_L12' }], { client_url: url, updated_at: expect.any(String) }]]);
+    const sid = `site_${s.site.domain.replace(/\./g, '-')}`;
+    expect(t.upserts).toEqual([
+      [
+        'aiRankSources',
+        [{ columnName: 'site_id', condition: 'eq', value: sid }, { columnName: 'url_key', condition: 'eq', value: 'linkedin.com/pulse/how-we-run-crm-rollouts' }],
+        expect.objectContaining({ site_id: sid, domain: s.site.domain, url_key: 'linkedin.com/pulse/how-we-run-crm-rollouts', url, host: 'linkedin.com', names_client: true, source_from: 'client' }),
+      ],
+    ]);
+    for (const k of ['first_seen', 'last_seen', 'checked_at']) expect((t.upserts[0][2] as Record<string, unknown>)[k]).toEqual(expect.any(String));
     // the next read keeps it done
     expect(tasksOf(await s.u.c.get(s.base)).find((x) => x.key === L12)!.state).toBe('done');
+  });
+
+  it('an engine write that fails never fails the check (the step is still done); a miss writes nothing to the engine', async () => {
+    const s = await setup();
+    const url = 'https://www.linkedin.com/pulse/x';
+    t.web[url] = { status: 200, text: `<a href="https://${s.site.domain}">site</a>` };
+    t.failWrites = true;
+    const r = await s.u.c.post(`${s.base}/check`, { key: L12, clientUrl: url });
+    expect(r.status).toBe(200);
+    expect(taskOf(r).state).toBe('done');
+    t.failWrites = false;
+    const miss = 'https://news.example.org/nothing';
+    t.web[miss] = { status: 200, text: '<p>nothing here</p>' };
+    await s.u.c.post(`${s.base}/check`, { key: L12, clientUrl: miss });
+    expect([...t.updates, ...t.upserts]).toEqual([]);
+  });
+
+  it('the source key is the engine kit\'s AIRF.urlKey, rule for rule', async () => {
+    const { readFileSync } = await import('node:fs');
+    const kit = readFileSync(new URL('../../../n8n/seo-agent/v5/code/_ai_rank_flags.js', import.meta.url), 'utf8');
+    const AIRF = new Function(`${kit}\nreturn AIRF;`)() as { urlKey: (u: string) => string };
+    const { aiRankUrlKey } = await import('../src/services/siteTasks');
+    for (const u of ['https://WWW.LinkedIn.com/pulse/x/', 'http://news.example.org:8080/a/b?q=1#top', 'https://wikidata.org./wiki/Q42', 'ftp://x.org/a', '', `https://x.org/${'a'.repeat(400)}`])
+      expect(aiRankUrlKey(u), u).toBe(AIRF.urlKey(u));
   });
 
   it('a page that does not name the business stays to do and says what we looked for', async () => {

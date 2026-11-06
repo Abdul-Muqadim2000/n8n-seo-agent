@@ -447,6 +447,8 @@ export const TABLES = {
   /** AIR (2026-11-06): the AI-ranking runs and actions, written by the engine's AI Growth workflow (shadow and on sites), read only by the app */
   aiRankRuns: 'seo_ai_rank_runs',
   aiRankActions: 'seo_ai_rank_actions',
+  /** AIR: the third-party pages the answers cite (and, RC-3, the pages the client gave on a step, source_from 'client') */
+  aiRankSources: 'seo_ai_rank_sources',
   backlinkSnapshots: 'seo_backlink_snapshots',
   prospects: 'seo_link_prospects',
   backlinks: 'seo_backlinks',

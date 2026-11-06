@@ -58,7 +58,7 @@ import { requireVerified, type SiteAccess } from '../auth/access';
 import { db, schema } from '../db';
 import type { OrgRow, SiteRow, SiteTaskRow } from '../db/schema';
 import { badRequest, HttpError, notFound } from '../lib/errors';
-import { rows as n8nRows, siteRows, upsertRow } from '../n8n/client';
+import { rows as n8nRows, siteRows, updateRows, upsertRow } from '../n8n/client';
 import { audit } from './audit';
 import { fetchPublicOnce, fetchPublicText, publicHttpsHost } from './verify';
 
@@ -767,21 +767,45 @@ async function checkAiRankAddress(domain: string, payload: Record<string, unknow
 /** The business names our check looks for on a page the client gives: the brand names on file and the company name. */
 const businessNames = (a: SiteAccess): string[] => [...new Set([...(a.site.brandNames ?? []), a.org.name].map((x) => s(x).trim()).filter((x) => x.length >= 3))].slice(0, 8);
 
+/** AIRF.urlKey (v5/code/_ai_rank_flags.js): no scheme, no www., lower-case host, no query or fragment, no trailing slash, at most 300 */
+export function aiRankUrlKey(url: string): string {
+  const m = s(url).match(/^https?:\/\/([^/?#]+)([^?#]*)/i);
+  if (!m) return '';
+  const host = m[1].toLowerCase().replace(/^www\./, '').replace(/:\d+$/, '').replace(/\.$/, '');
+  return (host + m[2].replace(/\/+$/, '')).slice(0, 300);
+}
+
 /**
- * RC-3: what the client's check found, handed to the engine (best effort, never failing the request): one seo_cache row per action, kind
- * 'air', key `air:client_url:<action id>`. FX-A follow-up: AI Rank Plan reads it into the action's `client_url` (ARL.verify, L11-L15 / L17)
- * so the plan learns from a step only the client could do.
+ * RC-3: a passing check is handed to the engine's own verification input (best effort, never failing the request). ARL.verify (L11-L15,
+ * L17) reads `client_url` on the stored seo_ai_rank_actions row (AI Rank Plan spreads the row into the action) and then looks the address
+ * up in the source graph, whose stored seo_ai_rank_sources rows keep `names_client`. So: (1) the action row gets `client_url`; that column
+ * is added on the engine side (AI_RANK_ACTIONS_COLS, kept on upsert; FX-C.md), and until it exists the write fails and is only logged;
+ * (2) the page becomes a source row named by the client's page (source_from 'client'), keyed site_id + url_key.
  */
 async function handAddressToEngine(domain: string, payload: Record<string, unknown>, out: CheckOutcome, log?: Log): Promise<void> {
   const id = s(payload.actionId);
-  if (!id || !s(payload.clientUrl)) return;
-  const key = `air:client_url:${id}`;
+  const url = s(payload.clientUrl);
+  if (!out.ok || !url) return;
   const at = new Date().toISOString();
-  try {
-    await upsertRow('cache', [{ columnName: 'key', condition: 'eq', value: key }], { key, kind: 'air', site_id: n8nSiteId(domain), value: JSON.stringify({ url: s(payload.clientUrl), checked_at: at, names_client: out.ok }), updated_at: at });
-  } catch (err) {
-    log?.warn({ err: String(err), key }, 'AI ranking address not handed to the engine');
-  }
+  const siteId = n8nSiteId(domain);
+  if (id)
+    await updateRows('aiRankActions', [{ columnName: 'action_id', condition: 'eq', value: id }], { client_url: url, updated_at: at }).catch((err) =>
+      log?.warn({ err: String(err), actionId: id }, 'AI ranking address not stored on the action (the engine may not have the client_url column yet)'),
+    );
+  const key = aiRankUrlKey(url);
+  const host = key.split('/')[0] ?? '';
+  await upsertRow('aiRankSources', [{ columnName: 'site_id', condition: 'eq', value: siteId }, { columnName: 'url_key', condition: 'eq', value: key }], {
+    site_id: siteId,
+    domain: cleanDomain(domain),
+    url_key: key,
+    url,
+    host,
+    names_client: true,
+    first_seen: at,
+    last_seen: at,
+    checked_at: at,
+    source_from: 'client',
+  }).catch((err) => log?.warn({ err: String(err), key }, 'AI ranking address not stored as a source'));
 }
 
 /** AIR: this month's two AI report uploads (the app's own upload table, read fresh). */
