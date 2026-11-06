@@ -62,6 +62,7 @@
      "SEO Agent \u2014 AI Growth / AI Rank Plan",
      "SEO Agent \u2014 AI Growth / Growth Plan",
      "SEO Agent \u2014 Content Cadence / AI Target Settle",
+     "SEO Agent \u2014 Content Cadence / Cadence Plan",
      "SEO Agent \u2014 Link Builder / LB Plan"
     ],
     "table": "seo_ai_targets",
@@ -94,6 +95,7 @@
     "readers": [
      "SEO Agent \u2014 AI Growth / AI Rank Plan",
      "SEO Agent \u2014 AI Growth / Growth Plan",
+     "SEO Agent \u2014 Content Cadence / Cadence Plan",
      "SEO Agent \u2014 Link Builder / LB Plan",
      "SEO Agent \u2014 Rank Tracker / Tracker Report",
      "SEO Agent \u2014 Site Tracker / Publish Candidates"

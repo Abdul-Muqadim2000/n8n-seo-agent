@@ -1,6 +1,9 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 import type { FastifyRequest } from 'fastify';
 import {
+  aiRankAddressCheck,
+  aiRankAddressNeed,
+  aiRankPageNames,
   aiRankReportOf,
   aiRankSettingsOf,
   type AiRankActionRow,
@@ -55,9 +58,9 @@ import { requireVerified, type SiteAccess } from '../auth/access';
 import { db, schema } from '../db';
 import type { OrgRow, SiteRow, SiteTaskRow } from '../db/schema';
 import { badRequest, HttpError, notFound } from '../lib/errors';
-import { rows as n8nRows, siteRows } from '../n8n/client';
+import { rows as n8nRows, siteRows, updateRows, upsertRow } from '../n8n/client';
 import { audit } from './audit';
-import { fetchPublicOnce, fetchPublicText } from './verify';
+import { fetchPublicOnce, fetchPublicText, publicHttpsHost } from './verify';
 
 /** what this module logs through: a request's or the app's logger, or the callback's delivery log */
 type Log = { warn: (o: object, msg: string) => void };
@@ -361,6 +364,8 @@ export interface CheckOutcome {
   /** with reached false (R1): our fetch finds the step fixed, but Google read its pages again after a fix we saw and still sees the
    *  problem (the engine's `fix_failed_at`): only Google's next reading can close it, so nothing is recorded (never a daily "done") */
   googleSees?: boolean;
+  /** with reached false (RC-3, AIR): the step is checked on an address the client gives, and none was given: the client is asked for it */
+  needsAddress?: boolean;
 }
 
 const hostOf = (url: string) => cleanDomain(url.match(/^https?:\/\/([^/?#:]+)/i)?.[1] ?? '');
@@ -716,9 +721,15 @@ function checkOf(domain: string, kind: SiteTaskKind, payload: Record<string, unk
       return checkLinks(domain, payload);
     case 'index_merge':
       return checkMerge(domain, payload);
-    // AIR: the engine's weekly run checks an AI-ranking step itself (it reads the page, the listing, the robots.txt rule); our check says so
-    case 'ai_rank':
+    // AIR: the engine's weekly run checks an AI-ranking step itself (it reads the page, the listing, the robots.txt rule); our check says so.
+    // RC-3 (review C): a step done somewhere only the client knows (an article, a post, a video, a profile) is checked on the address the
+    // client pastes on it: we open it and look for the business. Without an address a required one asks for it.
+    case 'ai_rank': {
+      const need = aiRankAddressNeed(String(payload.lever ?? ''));
+      if (need && s(payload.clientUrl)) return checkAiRankAddress(domain, payload);
+      if (need === 'required') return Promise.resolve({ ok: false, reached: false, needsAddress: true, message: AI_RANK_ADDRESS_ASK });
       return Promise.resolve({ ok: false, reached: false, engineOnly: true, message: 'The weekly AI ranking check confirms this step. It runs once a week and ticks it off once it finds it done.' });
+    }
     case 'ai_export':
       return checkAiExport(domain);
     default: {
@@ -727,6 +738,74 @@ function checkOf(domain: string, kind: SiteTaskKind, payload: Record<string, unk
       return Promise.resolve({ ok: false, reached: false, message: `Unknown step ${String(never)}.` });
     }
   }
+}
+
+const AI_RANK_ADDRESS_ASK = 'Paste the address of the page where it is live, then press check now again. We open it and look for your business.';
+
+/** RC-3: the address a client gave on an AI ranking step, opened with the safe fetcher; done when the page names the business (L17: the
+ *  Wikidata item lists the website itself). A page that does not answer, or a firewall, records nothing; one that answers without the
+ *  business is a miss (the daily check's two-miss rule then applies to a step that was done). */
+async function checkAiRankAddress(domain: string, payload: Record<string, unknown>): Promise<CheckOutcome> {
+  const lever = s(payload.lever);
+  const v = aiRankAddressCheck(s(payload.clientUrl), lever);
+  if ('error' in v || !publicHttpsHost(v.url)) return { ok: false, reached: false, needsAddress: true, message: 'error' in v ? v.error : 'That address is not a public website.' };
+  const url = v.url;
+  const r = await fetchPublicText(url, 1024 * 1024).catch(() => null);
+  if (!r) return { ok: false, reached: false, message: `We could not open ${url} (no answer).` };
+  if (r.status === 401 || r.status === 403 || r.status === 429 || challengePage(r))
+    return { ok: false, reached: false, unsure: true, message: `${url} answered ${r.status} to us (often a firewall or a sign-in page), so we could not read it.` };
+  if (r.status !== 200) return { ok: false, reached: true, message: `${url} answers ${r.status}, so we could not find your business on it.` };
+  const names = lever === 'L17' ? [] : (Array.isArray(payload.names) ? payload.names : []).map(String);
+  if (aiRankPageNames(r.text, domain, names)) return { ok: true, reached: true, message: lever === 'L17' ? `Your Wikidata item lists ${cleanDomain(domain)}.` : `${url} names your business.` };
+  return {
+    ok: false,
+    reached: true,
+    message: lever === 'L17' ? `The Wikidata item does not list ${cleanDomain(domain)} as its website yet.` : `${url} does not name your business yet (we looked for ${[cleanDomain(domain), ...names.filter((n) => n.length >= 3)].slice(0, 4).join(', ')}).`,
+  };
+}
+
+/** The business names our check looks for on a page the client gives: the brand names on file and the company name. */
+const businessNames = (a: SiteAccess): string[] => [...new Set([...(a.site.brandNames ?? []), a.org.name].map((x) => s(x).trim()).filter((x) => x.length >= 3))].slice(0, 8);
+
+/** AIRF.urlKey (v5/code/_ai_rank_flags.js): no scheme, no www., lower-case host, no query or fragment, no trailing slash, at most 300 */
+export function aiRankUrlKey(url: string): string {
+  const m = s(url).match(/^https?:\/\/([^/?#]+)([^?#]*)/i);
+  if (!m) return '';
+  const host = m[1].toLowerCase().replace(/^www\./, '').replace(/:\d+$/, '').replace(/\.$/, '');
+  return (host + m[2].replace(/\/+$/, '')).slice(0, 300);
+}
+
+/**
+ * RC-3: a passing check is handed to the engine's own verification input (best effort, never failing the request). ARL.verify (L11-L15,
+ * L17) reads `client_url` on the stored seo_ai_rank_actions row (AI Rank Plan spreads the row into the action) and then looks the address
+ * up in the source graph, whose stored seo_ai_rank_sources rows keep `names_client`. So: (1) the action row gets `client_url`; that column
+ * is added on the engine side (AI_RANK_ACTIONS_COLS, kept on upsert; FX-C.md), and until it exists the write fails and is only logged;
+ * (2) the page becomes a source row named by the client's page (source_from 'client'), keyed site_id + url_key.
+ */
+async function handAddressToEngine(domain: string, payload: Record<string, unknown>, out: CheckOutcome, log?: Log): Promise<void> {
+  const id = s(payload.actionId);
+  const url = s(payload.clientUrl);
+  if (!out.ok || !url) return;
+  const at = new Date().toISOString();
+  const siteId = n8nSiteId(domain);
+  if (id)
+    await updateRows('aiRankActions', [{ columnName: 'action_id', condition: 'eq', value: id }], { client_url: url, updated_at: at }).catch((err) =>
+      log?.warn({ err: String(err), actionId: id }, 'AI ranking address not stored on the action (the engine may not have the client_url column yet)'),
+    );
+  const key = aiRankUrlKey(url);
+  const host = key.split('/')[0] ?? '';
+  await upsertRow('aiRankSources', [{ columnName: 'site_id', condition: 'eq', value: siteId }, { columnName: 'url_key', condition: 'eq', value: key }], {
+    site_id: siteId,
+    domain: cleanDomain(domain),
+    url_key: key,
+    url,
+    host,
+    names_client: true,
+    first_seen: at,
+    last_seen: at,
+    checked_at: at,
+    source_from: 'client',
+  }).catch((err) => log?.warn({ err: String(err), key }, 'AI ranking address not stored as a source'));
 }
 
 /** AIR: this month's two AI report uploads (the app's own upload table, read fresh). */
@@ -777,6 +856,18 @@ export async function checkSiteTask(a: SiteAccess, req: FastifyRequest, body: un
   if (task.state === 'skipped') throw badRequest('This step is skipped. Bring it back first, then check it.');
   const p = siteTaskPayload(st.inputs, st.stored, key);
   if (!p) throw notFound('This step is not on the list for this website any more.');
+  // RC-3: an AI ranking step checked on an address: the one pasted now (checked by the safe fetcher's rules first), else the one stored
+  if (p.kind === 'ai_rank') {
+    const need = aiRankAddressNeed(str(p.payload.lever));
+    const given = str((body as Record<string, unknown> | null)?.clientUrl).slice(0, 700);
+    if (need && given) {
+      const v = aiRankAddressCheck(given, str(p.payload.lever));
+      if ('error' in v) throw badRequest(v.error);
+      if (!publicHttpsHost(v.url)) throw badRequest('That address is not a public website.');
+      p.payload = { ...p.payload, clientUrl: v.url, names: businessNames(a) };
+    } else if (need && str(p.payload.clientUrl)) p.payload = { ...p.payload, names: businessNames(a) };
+    else if (need === 'required') throw badRequest(AI_RANK_ADDRESS_ASK);
+  }
   let row = st.rows.find((r) => r.taskKey === key);
   if (!row) {
     [row] = await db
@@ -784,7 +875,7 @@ export async function checkSiteTask(a: SiteAccess, req: FastifyRequest, body: un
       .values({ orgId: a.org.id, siteId: a.site.id, taskKey: key, kind: p.kind, payload: p.payload })
       .onConflictDoUpdate({ target: [schema.siteTasks.siteId, schema.siteTasks.taskKey], set: { payload: p.payload, updatedAt: new Date() } })
       .returning();
-  } else if (task.state === 'todo') {
+  } else if (task.state === 'todo' || (p.kind === 'ai_rank' && str(p.payload.clientUrl) !== str(row.payload?.clientUrl))) {
     await db.update(schema.siteTasks).set({ payload: p.payload }).where(eq(schema.siteTasks.id, row.id));
   }
   // one reader of a website at a time: the daily job never writes an older reading over this one
@@ -797,12 +888,14 @@ export async function checkSiteTask(a: SiteAccess, req: FastifyRequest, body: un
     inFlight.delete(a.site.id);
   }
   // the website did not answer at all: nothing is recorded (one bad minute must never reopen a done step), the person is asked to retry
+  if (!out.reached && out.needsAddress) throw badRequest(out.message);
   if (!out.reached && out.engineOnly) throw new HttpError(409, out.message, 'engine_reads_it');
   if (!out.reached && out.googleSees) throw new HttpError(409, out.message, 'google_still_sees');
   if (!out.reached && out.partial) throw new HttpError(409, out.message, 'site_partial');
   if (!out.reached && out.unsure) throw new HttpError(409, `We could not confirm it just now, so nothing changed. ${out.message}`, 'site_unsure');
   if (!out.reached) throw new HttpError(503, `Your website did not answer just now, so nothing changed. Try again in a minute. (${out.message})`, 'site_unreachable');
   await recordCheck(row, out, 'you', a.user.name || a.user.email);
+  if (p.kind === 'ai_rank') await handAddressToEngine(a.site.domain, p.payload, out, req.log);
   await audit(req, a.org.id, {
     action: 'site_task.checked',
     outcome: out.ok ? 'success' : 'failure',

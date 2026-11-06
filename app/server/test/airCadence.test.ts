@@ -26,9 +26,10 @@ interface Case {
     suggestions: { keyword: string; source: string }[];
     waiting_for_keyword: boolean;
     refused: { keyword: string; reason: string }[];
-    air: { reserved: string | null; honoured: string[]; protected: string[] } | null;
+    air: { reserved: string | null; honoured: string[]; protected: string[]; held?: { keyword: string; reason: string }[] } | null;
     same_as_stripped?: boolean;
     protect_reason?: string[];
+    held_reason?: string[];
   };
 }
 
@@ -38,20 +39,21 @@ const ks = (a: { keyword: string; source: string }[]) => a.map((x) => ({ keyword
 const sortJ = (a: unknown[]) => a.map((x) => JSON.stringify(x)).sort();
 const planOf = (c: Pick<Case, 'tables' | 'now' | 'trigger'>) => planCadence(cadenceInputFromTables(c.tables, { estPageUsd: 0.84 }), Date.parse(c.now), triggerOf(c.trigger));
 const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
+const S = (v: unknown) => (v == null ? '' : String(v));
 const AIR_COLS = ['ai_rank_mode', 'ai_rank_reserve', 'ai_rank_fanout_n', 'ai_rank_mentions', 'ai_rank_brave'];
 const stripAir = <T extends Pick<Case, 'tables'>>(c: T): T => {
   const x = clone(c);
   for (const m of (x.tables.monitors ?? []) as Record<string, unknown>[]) for (const k of AIR_COLS) delete m[k];
-  for (const r of (x.tables.ai_targets ?? []) as unknown as Record<string, unknown>[]) for (const k of ['origin', 'action_id', 'live_at']) delete r[k];
+  for (const r of [...(x.tables.ai_targets ?? []), ...(x.tables.ai_targets_writing ?? [])] as unknown as Record<string, unknown>[]) for (const k of ['origin', 'action_id', 'live_at']) delete r[k];
   x.tables.air_cache = [];
   return x;
 };
 
 describe('the shared AIR cadence cases (n8n/seo-agent/harness/air_cadence_cases.json)', () => {
-  it('is the file the engine runs, names this mirror, and holds the 16 cases', () => {
+  it('is the file the engine runs, names this mirror, and holds the 22 cases', () => {
     expect(FX._doc).toMatch(/cadence\.ts/);
     expect(FX.contract).toBe('app/server/src/services/cadence.ts');
-    expect(FX.cases.length).toBe(16);
+    expect(FX.cases.length).toBe(22);
   });
 
   for (const c of FX.cases) {
@@ -69,7 +71,24 @@ describe('the shared AIR cadence cases (n8n/seo-agent/harness/air_cadence_cases.
           expect(p.air?.reserved?.keyword ?? null).toBe(c.expect.air!.reserved);
           expect(p.air?.honoured.map((x) => x.keyword)).toEqual(c.expect.air!.honoured);
           expect(p.air?.protected.map((x) => x.keyword)).toEqual(c.expect.air!.protected);
+          // FX-C RC-2: the AIR targets held because a page of this run already covers them
+          if (c.expect.air!.held) {
+            expect(p.air?.held.map((x) => ({ keyword: x.keyword, reason: x.reason }))).toEqual(c.expect.air!.held);
+            for (const h of p.air?.held ?? []) expect(h.targetId).toBeTruthy();
+          }
         });
+      if (c.expect.air)
+        it('no page address is written twice in one run (FX-C RC-2)', () => {
+          const us = p.picks.map((x) => S(x.existingPageUrl).toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/+$/, '')).filter(Boolean);
+          expect(new Set(us).size).toBe(us.length);
+        });
+      if (c.expect.held_reason)
+        it('the suggestions held because this week already covers their page or search say why', () => {
+          for (const k of c.expect.held_reason!) expect(p.suggestions.find((x) => x.keyword === k)?.why ?? '').toMatch(/already (rewrites|targets)/);
+        });
+      it('no internal id in any reason (FX-C RC-1)', () => {
+        for (const x of [...p.picks, ...p.suggestions]) expect(x.why).not.toMatch(/\bair_[a-z0-9]|\baip_|\bait_/);
+      });
       if (c.expect.protect_reason)
         it('the suggestions that rewrite a protected page say why', () => {
           for (const k of c.expect.protect_reason!) expect(p.suggestions.find((x) => x.keyword === k)?.why ?? '').toMatch(/AI answers cite this page/);

@@ -736,9 +736,9 @@ const LISTINGS = [
     link: 'unknown', ai: 'medium', prio: 2, submit: 'https://themanifest.com/', why: 'A sister site of Clutch with shortlists of service firms by service and city; AI answers to "which firm should I hire" cite such lists.' },
   { id: 'sortlist', name: 'Sortlist', host: 'sortlist.com', cat: 'directory', kinds: ['agency'], air: true, re: /sortlist\.[a-z.]+\/agency\/([a-z0-9-]+)/i,
     link: 'unknown', ai: 'medium', prio: 2, submit: 'https://www.sortlist.com/', why: 'A marketplace where buyers brief and shortlist agencies and development firms; its agency pages are read by AI answers about providers.' },
-  { id: 'ms_partner_dir', name: 'Microsoft partner directory', host: 'appsource.microsoft.com', cat: 'partner', kinds: ['agency', 'saas'], air: true, re: /appsource\.microsoft\.com\/[a-z-]+\/marketplace\/partner-dir\/[^"'\s]+/i, integ: /microsoft|dynamics 365|business central|power bi|power platform|azure|microsoft 365|sharepoint/i,
+  { id: 'ms_partner_dir', name: 'Microsoft partner directory', host: 'appsource.microsoft.com', cat: 'partner', kinds: ['agency', 'saas'], air: true, re: /appsource\.microsoft\.com\/[a-z-]+\/marketplace\/partner-dir\/[^"'\s]+/i, integ: /microsoft (solutions |gold |silver |certified |cloud )?partner|solutions partner|dynamics 365 partner|business central partner|partner center|microsoft partner network/i,
     link: 'unknown', ai: 'medium', prio: 1, submit: 'https://partner.microsoft.com/', why: 'For a Microsoft partner: the official directory buyers search for implementation partners; a listing needs a partner account and a published profile.' },
-  { id: 'pasha', name: 'P@SHA member directory (Pakistan Software Houses Association)', host: 'pasha.org.pk', cat: 'industry', kinds: ['agency', 'saas'], countries: ['PK'], air: true,
+  { id: 'pasha', name: 'P@SHA member directory (Pakistan Software Houses Association)', host: 'pasha.org.pk', cat: 'industry', kinds: ['saas'], countries: ['PK'], air: true,
     link: 'unknown', ai: 'low', prio: 2, submit: 'https://www.pasha.org.pk/', why: 'For software firms in Pakistan: the industry association\'s member list, a trust signal buyers and AI answers read.' }];
 const LISTING_HOSTS = LISTINGS.map(l => l.host);
 // which entries apply to a site: its kind (from the business type and topics), country, topics, and the integrations its own pages name
@@ -766,9 +766,14 @@ function listingClaim(o) {
 function siteKind(businessType, topicText, opts) {   // the checklists that apply: a consultancy that also sells software gets both
   const t = String(businessType || '') + ' ' + String(topicText || '');
   // AIR P6 (opts.air, on websites only): a firm that builds or implements software FOR clients is a service firm and a software seller, so it gets
-  // both checklists (the service-firm directories are where AI answers about providers look); every other website is judged as before
+  // both checklists (the service-firm directories are where AI answers about providers look); every other website is judged as before.
+  // FX-C RC-8: only when its words name software work too. A tax, VAT, HR, payroll, accounting, audit, legal or management consultancy is a
+  // professional-services firm: the agency checklist only (no software marketplace), unless its own business type names software.
+  const AIR_SOFT = /software|\bapps?\b|\bsaas\b|\berp\b|\bcrm\b|platform|(system|systems|software|it|api|crm|erp|data) integrat|(app|web|software|product|mobile) development|development (company|firm|agency|partner)|automation|it services|dynamics 365|salesforce|\bodoo\b|\bsap\b/i;
+  const AIR_PRO = /\b(tax|vat|hr|human resources?|payroll|accounting|accountants?|bookkeeping|audit|auditing|legal|law|management consult\w*|recruit\w*|immigration)\b/i;
   if (opts && opts.air === true && !/restaurant|cafe|clinic|dental|salon|store|shop|hotel|gym|plumb|electric|lawyer|law firm|real estate|local ?business|medical|spa|bakery/i.test(t)
-    && /software (development|house|company|agency|firm)|custom software|development (company|firm|agency|partner)|app development|web development|it services|implementation (partner|services)|systems? integrat|consultanc|consulting|outsourc|dedicated (team|developers)/i.test(t)) return ['agency', 'saas'];
+    && /software (development|house|company|agency|firm)|custom software|development (company|firm|agency|partner)|app development|web development|it services|implementation (partner|services)|systems? integrat|consultanc|consulting|outsourc|dedicated (team|developers)/i.test(t)
+    && AIR_SOFT.test(t) && (!AIR_PRO.test(String(businessType || '')) || AIR_SOFT.test(String(businessType || '')))) return ['agency', 'saas'];
   if (/restaurant|cafe|clinic|dental|salon|store|shop|hotel|gym|plumb|electric|lawyer|law firm|real estate|local ?business|medical|spa|bakery/i.test(t)) return ['local'];
   const agency = /agency|consult|marketing services|design studio|development services|professional ?service|accounting firm|audit firm/i.test(t);
   const software = /software|saas|platform|\bapp\b|cloud|e-?invoic|\berp\b|automation|\bapi\b/i.test(t);
@@ -999,13 +1004,15 @@ const pathKey = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '')
 // AIR (2026-11-06, docs/ai-ranking-2026-11-05 DESIGN 2.F lever L08 / L09, package P6), for a website whose AI ranking is `on` ONLY (AIRF.settingsOf on
 // its seo_monitors row): (1) the listings checklist adds the service-firm directories (listingsFor / siteKind with { air: true }); (2) a placement
 // AI ranking chose (seo_link_prospects type ai_source, origin 'ai_rank') is scored with AI ranking's own probability (its stored score / 100) in place
-// of the flat ai_source likelihood, and (3) up to AIR_PITCH_MAX of them are drafted first each week, by that score, inside the writer budget (AI
-// ranking pre-registered them; a pitch never drafted can never happen). Every other row is scored and ordered exactly as before; a website that is
-// off or in shadow runs today's path. The Link Builder loads no kill-switch row: rolling a website back is its mode (off / shadow).
+// of the flat ai_source likelihood, and (3) the writer budget takes the ready rows by expected value (score x fit), AI ranking's placements
+// included, with at most AIR_PITCH_MAX of them a week: a placement drafted only when its expected value is inside the budget's cut-off, so AI
+// ranking's weakest pitches never push out a better one (FX-C RC-7). Every other row is scored as before; a website that is off or in shadow
+// runs today's path. RC-7: the kill switch (seo_cache `air:kill`, the one row `Load AIR Kill (LB)` reads) stops all of it on every website.
 const airMons = rows('Load Monitors');
+const airKill = AIRF.killed(rows('Load AIR Kill (LB)'));
 const airOnOf = (sid, dom) => { const m = airMons.find(x => x.site_id === sid) || airMons.find(x => String(x.domain || '').toLowerCase().replace(/^www\./, '') === String(dom || '').toLowerCase().replace(/^www\./, '')) || {};
-  return AIRF.writesSinks(AIRF.settingsOf(m), false); };
-const AIR_PITCH_MAX = 5;
+  return AIRF.writesSinks(AIRF.settingsOf(m), airKill); };
+const AIR_PITCH_MAX = 2;
 const LIKELY = { lost: 0.7, mention: 0.9, list: 0.5, comp_new: 0.55, gap: 0.4, ai_source: 0.35, resource: 0.45, broken: 0.6, press: 0.5, digest: 0.55, podcast: 0.35 };
 // L6: the kinds of page that earn links, each with the words that give it away, how many referring domains make it worth saying, and
 // what the work actually is. A kind nobody in this market has links for is not suggested.
@@ -1376,9 +1383,10 @@ for (const p of plans) {
   }
   const ready = [...outreach_rows.filter(o => o.status === 'ready'), ...myOutreach.filter(o => o.status === 'ready' && !o.sequence_json && !outreach_rows.some(n => n.prospect_domain === o.prospect_domain && n.type === o.type))]
     .map(o => ({ ...o, rankv: (Number(o.score) || 0) * (0.5 + Number(o.fit || 0)) })).sort((a, b) => b.rankv - a.rankv);
-  // AIR P6 (on only): AI ranking's chosen placements first (at most AIR_PITCH_MAX, by their score), then every other ready row in its own order
+  // AIR (on only, RC-7): every ready row by expected value (rankv), AI ranking's placements included; at most AIR_PITCH_MAX of them a week, the
+  // others wait for a later week (still `ready`). Off and shadow: `ready` exactly as it was.
   const isAirRow = (o) => airOn && o.type === 'ai_source' && myProspects.some(y => y.prospect_domain === o.prospect_domain && y.type === 'ai_source' && String(y.origin || '') === 'ai_rank');
-  const readyOrdered = airOn ? (() => { const a = ready.filter(isAirRow).slice(0, AIR_PITCH_MAX); return [...a, ...ready.filter(o => !a.includes(o))]; })() : ready;
+  const readyOrdered = airOn ? (() => { let n = 0; return ready.filter(o => !isAirRow(o) || n++ < AIR_PITCH_MAX); })() : ready;
   const jobs = p.free_only ? [] : readyOrdered.slice(0, p.budget).map(({ rankv, ...o }) => o);
   const stillOld = (k) => !(myOutreach.find(o => o.prospect_domain + '|' + o.type === k) || {}).sequence_json;
   out.push({ json: { site_id: sid, domain: p.domain, email: p.email, callback_url: p.callback_url, request_id: p.request_id, on_demand: p.on_demand, free_only: p.free_only, checked_at: iso,

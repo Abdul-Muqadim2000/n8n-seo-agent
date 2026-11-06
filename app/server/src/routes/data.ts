@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { AI_EXPORT_KINDS, aiExportFileName, aiFilterFrom, clientSafePayload, isClientRole, type AiExportKind, type Role } from '@seo/shared';
-import { isPlatformAdmin, requireVerified, siteAccess } from '../auth/access';
+import { and, eq } from 'drizzle-orm';
+import { isPlatformAdmin, isUuid, requireUser, requireVerified, siteAccess } from '../auth/access';
+import { db, schema } from '../db';
 import { HttpError, notFound } from '../lib/errors';
 import { aiAnswersPage, aiCsvStream, aiImportsOverview, aiQuestionHistory } from '../services/aiWave2';
 import { aiData, aiRankShadowData, alertsData, backlinksData, contentData, rankingsData, searchData, settingsData, technicalData } from '../services/data';
@@ -63,14 +65,21 @@ export async function dataRoutes(app: FastifyInstance) {
     // R-A9 (review 2026-10-23): the web and this API deploy separately. A web that pages the answers (/data/ai/answers) asks for the summary
     // (`answers=summary`); a web from before that reads them here, so without the flag they are still sent (remove one release later).
     const summary = String((req.query as Record<string, unknown>).answers ?? '') === 'summary';
-    return shown(a.role, await aiData(a.org, a.site, { answers: summary ? 'summary' : true, filter: any ? filter : null }));
+    // FX-C RC-1: a platform admin also gets the AI ranking plan's raw memo and its provider cost; every other viewer the client's words
+    return shown(a.role, await aiData(a.org, a.site, { answers: summary ? 'summary' : true, filter: any ? filter : null, admin: isPlatformAdmin(a.user) }));
   });
   // AIR (2026-11-06, DESIGN.md §2.H item 7): the AI-ranking shadow comparison, platform admins only (it is our own check of the plan before it
   // acts: AI ranking's choices beside the current logic's, week by week). Never shown to a client, whatever their role.
+  // RC-12 (review C, 2026-11-06): read-only, so a platform admin reads it for any client company, a member of it or not; anybody else
+  // (members included) gets 403
   app.get('/api/orgs/:orgId/sites/:siteId/data/ai/rank-shadow', async (req) => {
-    const a = await guard(req);
-    if (!isPlatformAdmin(a.user)) throw new HttpError(403, 'Only a platform admin can see the AI ranking trial.', 'forbidden');
-    return aiRankShadowData(a.site);
+    const user = requireUser(req);
+    if (!isPlatformAdmin(user)) throw new HttpError(403, 'Only a platform admin can see the AI ranking trial.', 'forbidden');
+    const p = req.params as P;
+    if (!isUuid(p.orgId) || !isUuid(p.siteId)) throw notFound('Website not found');
+    const site = await db.query.sites.findFirst({ where: and(eq(schema.sites.id, p.siteId), eq(schema.sites.orgId, p.orgId)) });
+    if (!site) throw notFound('Website not found');
+    return aiRankShadowData(site);
   });
   // W2-A: one page of a run's answers (the latest, or `run`), filtered, with the filter's rates and ranges
   app.get('/api/orgs/:orgId/sites/:siteId/data/ai/answers', { config: { rateLimit: { max: 240, timeWindow: '1 minute' } } }, async (req) => {

@@ -12,6 +12,8 @@ import {
   siteAdminMonitorsBody,
   aiRankBody,
   aiRankPaidChange,
+  aiRankMayChange,
+  AI_RANK_ROLLOUT_NOTE,
   parseLinkImport,
   importTargetHosts,
   n8nSiteId,
@@ -662,6 +664,9 @@ export async function siteRoutes(app: FastifyInstance) {
         // AIR (2026-11-06): the AI-ranking settings travel in the same body, only the ones the person changed (aiRankBody); the paid reads
         // (fan-out searches, the AI mention database, the independent search index) only from a platform admin
         if (aiRankPaidChange(a.aiRank) && !isPlatformAdmin(user)) throw new HttpError(403, 'Only a platform admin can change the paid AI ranking readings.', 'forbidden');
+        // RC-4 (review C, 2026-11-06): until the owner opens AI ranking to clients (AI_RANK_OPEN_TO_CLIENTS), only a platform admin sets the
+        // mode (Trial / On) and the reserved slot; a company owner or admin sees it read-only
+        if (a.aiRank && Object.keys(a.aiRank).length && !aiRankMayChange(a.aiRank, isPlatformAdmin(user))) throw new HttpError(403, `${AI_RANK_ROLLOUT_NOTE} Until then only our team can switch it on.`, 'forbidden');
         body = { ...base, action: 'monitors', monitors: { ...siteAdminMonitorsBody(a.monitors, a.competitors), ...aiRankBody(a.aiRank) } };
         break;
       }

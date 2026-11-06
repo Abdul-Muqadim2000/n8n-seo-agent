@@ -11,6 +11,7 @@ import { ShareBars } from '@/components/charts';
 import { ActionList, BriefCard } from './actions';
 import { AlertList, arr, Block, Chips, Empty, Facts, has, CreditsCard, n, num, obj, objs, pct, SectionTitle, shortUrl, str, strs, type P } from './kit';
 import { ReportHero, ScoreMark } from './visuals';
+import { AiRankClientNote } from '@/components/site/AiRankClientNote';
 
 const ENGINE_ORDER = AI_ENGINES.map((e) => e.value as string);
 const engineRank = (k: string) => {
@@ -636,8 +637,8 @@ export function AiGrowthReport({ report }: { report: ReportDetail }) {
 /** AIR (2026-11-06): the `ai_rank` key of an AI growth report. Every field may be missing; a report without the key renders nothing here. */
 function AiRankReportBlock({ r }: { r: AiRankReport | null }) {
   if (!r) return null;
-  const parts = (r.memo?.parts ?? []).filter((x) => x.lines.length && x.key !== 'shadow_vs_old');
-  if (!parts.length && !r.actions.length && !r.steps.length) return null;
+  // FX-C RC-1: the client view only (the owner's memo never reaches a customer's payload); an older report without it shows its steps only
+  if (!r.client && !r.actions.length && !r.steps.length) return null;
   return (
     <Block title="AI ranking plan" icon={<Sparkles />} description="This week's steps to get you named in AI answers, and what changed">
       <div className="space-y-4 text-[13px]">
@@ -658,31 +659,7 @@ function AiRankReportBlock({ r }: { r: AiRankReport | null }) {
             ))}
           </ul>
         )}
-        {parts.map((x) => (
-          <div key={x.key || x.title}>
-            <SectionTitle>{x.title}</SectionTitle>
-            <ul className="mt-1 space-y-1 text-ink-2">
-              {x.lines.map((l, i) => (
-                <li key={i} className="[overflow-wrap:anywhere]">
-                  {l.text}
-                  {l.figures.length > 0 && <span className="block text-xs text-ink-3">{l.figures.map((f) => `${f.value}${f.basis ? ` (${f.basis})` : ''}`).join(' · ')}</span>}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-        {(r.memo?.blockers ?? []).length > 0 && (
-          <Callout tone="warning" title="Waiting on someone">
-            <ul className="space-y-1">
-              {r.memo!.blockers.map((b, i) => (
-                <li key={i}>
-                  {b.what}
-                  {b.blocks ? `: ${b.blocks}` : ''} <span className="text-xs text-ink-3">({b.owner === 'us' ? 'on us' : 'on you'}{b.since ? `, since ${b.since}` : ''})</span>
-                </li>
-              ))}
-            </ul>
-          </Callout>
-        )}
+        {r.client && <AiRankClientNote note={r.client} />}
       </div>
     </Block>
   );

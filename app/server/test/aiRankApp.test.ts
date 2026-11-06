@@ -61,6 +61,7 @@ const post = (payload: unknown) => app.inject({ method: 'POST', url: '/api/orgs/
 
 describe('the AI ranking setting through Site Admin', () => {
   it('sends only the fields changed, in the engine names, inside the monitors body', async () => {
+    st.platform = true;   // RC-4: while AI ranking is rolling out only a platform admin sets the mode (aiRankAccess.test.ts)
     const r = await post({ action: 'monitors', monitors: {}, aiRank: { mode: 'shadow', reserve: true } });
     expect(r.statusCode).toBe(200);
     expect(st.sent[0]).toMatchObject({ action: 'monitors', domain: 'nova-demo.example' });
@@ -104,7 +105,11 @@ describe('the AI ranking plan read', () => {
   it('an on website gets its plan; an engine without the tables (or a failed read) gives no plan, never an error', async () => {
     st.rows = { aiRankRuns: [run], aiRankActions: [{ action_id: 'a1', status: 'queued', mode: 'on' }] };
     const p = await aiRankPlanFor('nova-demo.example', { ai_rank_mode: 'on' } as never);
-    expect(p?.actions[0]).toMatchObject({ actionId: 'a1', status: 'queued', executor: 'human' });
+    // FX-C RC-1: a customer gets no internal id, no raw memo and no provider cost; a platform admin gets all three
+    expect(p?.actions[0]).toMatchObject({ actionId: '', status: 'queued', executor: 'human' });
+    expect([p?.memo ?? null, p?.cost ?? null]).toEqual([null, null]);
+    const admin = await aiRankPlanFor('nova-demo.example', { ai_rank_mode: 'on' } as never, { admin: true });
+    expect(admin?.actions[0]).toMatchObject({ actionId: 'a1', status: 'queued', executor: 'human' });
     st.rows = {};
     expect(await aiRankPlanFor('nova-demo.example', { ai_rank_mode: 'on' } as never)).toBeNull();
     st.fail = true;

@@ -63,6 +63,7 @@ def src(p):   # a Code node source with the shared snippets inlined
     # AIR (2026-11-06, docs/ai-ranking-2026-11-05/CONTRACTS.md §3): the AI-ranking kits - flags + kill switch (AIRF, frozen by W0), diagnosis (ARD,
     # package P1) and decision / learning (ARL, package P2); inlined only into the AIR nodes of the AI Growth workflow (package P4)
     s = s.replace('/*__AI_RANK_FLAGS__*/', rd('code/_ai_rank_flags.js').rstrip('\n')).replace('/*__AI_RANK_DIAG__*/', rd('code/_ai_rank_diag.js').rstrip('\n')).replace('/*__AI_RANK_LEARN__*/', rd('code/_ai_rank_learn.js').rstrip('\n'))
+    s = s.replace('/*__AI_RANK_CLIENT__*/', rd('code/_ai_rank_client.js').rstrip('\n'))   # FX-C RC-1 (2026-11-06): the AI ranking plan in the client's words (AIRC), inlined into Growth Report
     s = s.replace('/*__RIVALS__*/', rd('code/_rivals.js').rstrip('\n'))   # C-2 / C-8 (2026-10-17): the one rival set and the category-provider rule (inside the outreach kit, and in AI Metrics)
     s = s.replace('/*__COUNTRIES__*/', "// ---- countries: copied from the main workflow's Normalize Input by build_monitors.py (DataForSEO location code = 2000 + ISO numeric) ----" + _COUNTRIES.group(0))
     assert '/*__' not in s and '_ENABLED__' not in s, p + ': placeholder left'
@@ -984,6 +985,7 @@ L.node('Load Query History', DT_TYPE, DT_VERSION, dt_get_all_where_params(QUERY_
 L.node('Load Rank History', DT_TYPE, DT_VERSION, dt_get_all_where_params(HISTORY_TABLE, [('checked_at', 'gte', SINCE(60))]), at(14, 1), **LOAD)
 L.node('Load Cache (Links)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'linkbld'), at(15, 1), **LOAD)
 L.node('Load Cache (LB Rivals)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(15, 2), **LOAD)   # C-2: the Answer Analyst's learned names (ai_brands:)
+L.node('Load AIR Kill (LB)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'key', 'eq', 'air:kill'), at(15, 3), **LOAD)   # AIR FX-C RC-7: the AI ranking kill switch (one seo_cache row; none = not killed)
 L.code('LB Plan', 'LB_Plan.js', at(16, 1)); L.iff('Any Sites (LB)?', '{{ !$json.nothing_to_do }}', at(17, 1)); L.node('Nothing To Do (LB)', 'n8n-nodes-base.noOp', 1, {}, at(18, 2))
 L.code('LB Source Requests', 'LB_Source_Requests.js', at(18, 0)); x_http(L, 'Fetch LB Sources', at(19, 0), interval=1500, text=True, headers={'User-Agent': LB_UA, 'Accept': 'application/json'})
 L.code('LB DFS Requests', 'LB_DFS_Requests.js', at(20, 0)); L.iff('Any LB DFS?', '{{ !$json.skip }}', at(21, 0)); L.dfs_http('Run LB DFS', at(22, -1), timeout=120000)
@@ -1014,8 +1016,12 @@ L.code('LB Report', 'LB_Report.js', at(49, 0))
 L.code('LB Doc', 'LB_Doc.js', at(50, 0)); L.pdf_chain('LB', at(51, 0))
 L.code('Build LB Callback', 'Build_LB_Callback.js', at(54, 1))
 L.deliver('LB', at(54, 0), "={{ $binary.pdf ? 'pdf' : 'data' }}")
-L.chain(*[e[0] for e in ens], *[l[0] for l in loads], 'Load Query History', 'Load Rank History', 'Load Cache (Links)', 'Load Cache (LB Rivals)', 'LB Plan', 'Any Sites (LB)?'); L.link('Manual Run', ens[0][0])
+L.chain(*[e[0] for e in ens], *[l[0] for l in loads], 'Load Query History', 'Load Rank History', 'Load Cache (Links)', 'Load Cache (LB Rivals)', 'Load AIR Kill (LB)', 'LB Plan', 'Any Sites (LB)?'); L.link('Manual Run', ens[0][0])
 L.link('Any Sites (LB)?', 'LB Source Requests', 0); L.link('Any Sites (LB)?', 'Nothing To Do (LB)', 1)
+# AIR FX-C RC-7: the Link Builder honours the AI ranking kill switch: one key-filtered seo_cache read, before LB Plan, that never stops the run
+_kill_lb = next(n for n in L.N if n['name'] == 'Load AIR Kill (LB)')
+assert _kill_lb.get('alwaysOutputData') and _kill_lb.get('onError') == 'continueRegularOutput' and 'air:kill' in json.dumps(_kill_lb['parameters']) and CACHE_TABLE in json.dumps(_kill_lb['parameters']), 'RC-7: Load AIR Kill (LB) must read only seo_cache air:kill and never stop the run'
+assert [t['node'] for l in L.C['Load AIR Kill (LB)']['main'] for t in l] == ['LB Plan'] and "AIRF.killed(rows('Load AIR Kill (LB)'))" in src('LB_Assemble.js'), 'RC-7: LB Assemble no longer reads the kill switch'
 L.chain('LB Source Requests', 'Fetch LB Sources', 'LB DFS Requests')
 def lstep(code, iff, http, nxt): L.link(code, iff); L.link(iff, http, 0); L.link(iff, nxt, 1); L.link(http, nxt)
 lstep('LB DFS Requests', 'Any LB DFS?', 'Run LB DFS', 'LB Page Requests')

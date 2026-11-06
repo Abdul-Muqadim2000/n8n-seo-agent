@@ -57,8 +57,9 @@ export * from './consistency';   // MKT (2026-10-27): the one mismatch mechanism
 export * from './consistency-more';   // MKT (2026-10-27): the remaining cases (D1-D7, S1-S8, C1, I1-I3, I7, B1) of the same registry
 export * from './robots';   // site tasks: the engine's robots.txt matcher (v5/code/_ai_access_kit.js), ported line for line
 export * from './indexing';   // Index coverage (2026-10-29): which pages Google left out, why, and what to do (DESIGN.md in docs/indexing-2026-10-29)
-export * from './site-tasks';
-export * from './ai-rank';   // AIR (2026-11-06, docs/ai-ranking-2026-11-05): the AI-ranking settings, plan, memo and the ai_growth callback's ai_rank key   // site tasks (2026-10-28, app/docs/SITE_TASKS.md): steps on the client's own website, checked by us
+export * from './site-tasks';   // site tasks (2026-10-28, app/docs/SITE_TASKS.md): steps on the client's own website, checked by us
+export * from './ai-rank';   // AIR (2026-11-06, docs/ai-ranking-2026-11-05): the AI-ranking settings, plan, memo and the ai_growth callback's ai_rank key
+export * from './ai-rank-client';   // FX-C RC-1 (2026-11-06): the AI ranking plan in the client's words (the engine kit's AIRC.view, mirrored)
 export * from './hold';   // W0-D (2026-10-29): a page held for the client's OK before writing (verdict under 50, or a page the website already has)
 export * from './run-watch';   // 2026-11-05: when a run with no result is overdue (the watcher and the run page share it)
 export * from './draft-fix';   // 2026-10-21: a not-ready draft is finished by hand (the engine's qa_next_step / qa_owner_edits), never re-run

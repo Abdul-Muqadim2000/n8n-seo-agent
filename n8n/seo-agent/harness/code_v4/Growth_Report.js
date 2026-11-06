@@ -266,6 +266,84 @@ const AIRF = (() => {
   return { VERSION, RULE_VERSION, MODES, COLS, settingsOf, validate, CACHE_KIND, KILL_KEY, protectKey, mentionsKey, killed, runs, writesSinks, mayPay,
     ENGINES, EXCLUDED_ENGINES, GROUP_OF, GROUPS, STAGES, STAGE_LABELS, ACTION_STATUSES, ARMS, usable, hash, urlKey, refKey, actionId, runId, priorId, targetId };
 })();
+// ---- AIRC: the AI ranking plan in the client's words (FX-C RC-1, 2026-11-06; inlined by build_monitors.py through its marker) ----
+// The weekly memo of the AI ranking plan (ARL.memo, v5/code/_ai_rank_learn.js) is written for the owner's review: question ids, stage codes,
+// statistics, the model's own figures and provider dollars. A client never reads it. This kit turns it into five short sections a client
+// reads: what changed, why it moved ("likely helped" / "can't tell yet"), whether our steps worked, what we did and what we need from them.
+// It reads only the memo's documented line shapes; a line it does not recognise is left out (never printed raw). No money: the number of
+// questions won and the raw spend travel apart (`wins`, `spend_usd`) so the app can show credits; `spend_usd` is stripped before any
+// customer sees a payload (app/shared/src/agency.ts clientSafePayload). The app mirror is app/shared/src/ai-rank-client.ts (its test runs
+// this file and requires the same output for the same memo).
+// Pure: no node access, no clock, no network; n8n sandbox rules (no URL constructor, no defineProperty, no structuredClone).
+const AIRC = (() => {
+  const S = (v) => (v == null ? '' : String(v)).trim();
+  // the engine's lever names (ARL.LEVERS labels), as ARL writes them into the memo; harness AE5 holds this list equal to ARL.LEVERS
+  const ENGINE_LABELS = { L01: 'Unblock AI bots in robots.txt', L02: 'Content in raw HTML (server render)', L03: 'Add the site to Bing Webmaster and submit', L04: 'Get the page indexed in Google', L05: 'Own answer page for the searches the engines run', L06: 'Refresh the ranking page for the searches the engines run', L07: 'Cited but not named: fix the passage', L08: 'Placement on an editorial list the answers cite', L09: 'Directory profile on a directory the answers cite', L10: 'Registry or partner listing (eligible only)', L11: 'Earned mention (press, partner, customer case)', L12: 'LinkedIn article by a named person', L13: 'Disclosed community answer', L14: 'Video for the question', L15: 'Correction (own page or ask the source)', L16: 'Protect a cited page; refresh it when citations decay', L17: 'Wikidata / Wikipedia entity' };
+  // the client's words for each lever (equal to app/shared/src/ai-rank.ts AI_RANK_LEVER_LABELS; the app's test holds them equal)
+  const LABELS = { L01: 'Let AI assistants read your website', L02: 'Put the page text in the page itself, not only in scripts', L03: 'Add your website to Bing Webmaster Tools', L04: 'Get the page into Google', L05: 'A new page that answers the question', L06: 'Refresh the page that ranks for the question', L07: 'Name your business in the passage AI answers quote', L08: 'Get onto a list that AI answers cite', L09: 'A profile on a directory that AI answers cite', L10: 'A registry or partner listing you qualify for', L11: 'Be mentioned in the press, by a partner or a customer', L12: 'A LinkedIn article by a named person', L13: 'An answer in a community, saying who you are', L14: 'A short video that answers the question', L15: 'Correct a wrong claim about your business', L16: 'Keep a page AI answers cite, and refresh it when they stop', L17: 'A Wikidata entry for your business' };
+  const LEVER_OF_LABEL = {}; for (const k of Object.keys(ENGINE_LABELS)) LEVER_OF_LABEL[ENGINE_LABELS[k]] = k;
+  const label = (lever) => LABELS[S(lever)] || 'A step to get you named in AI answers';
+  // where a question stands in one assistant's answers (ARL stage codes), in plain words
+  const STAGE = { S0: 'the assistant could not read your website', S1: 'not in the answer', S2: 'your website comes up but is not linked', S3: 'linked but not named', S4: 'named, but weakly or wrongly', S5: 'clearly named', unmeasured: 'not measured' };
+  const ENGINES = { 'ChatGPT (API)': 'ChatGPT' };
+  const engine = (e) => ENGINES[S(e)] || S(e);
+  const WHO = { auto: 'we do it', approve: 'you approve it, we do it', human: 'you do it, we check it' };
+  const STATUS = { proposed: 'proposed', queued: 'queued', in_progress: 'in progress', done: 'done', verified: 'confirmed', not_happened: 'did not happen', expired: 'expired', refused: 'not done', shadow: 'trial only' };
+  const OPEN = ['proposed', 'queued', 'in_progress'];
+  const VERDICT = { 'likely helped': 'likely helped', "can't tell": "can't tell yet", 'no effect seen': 'no change seen yet', 'did not happen': 'the step did not happen', 'not due yet': 'too early to tell' };
+  /** a free text (an action's why, a blocker) without ids, stage codes, money, the internal name or the model's figures */
+  const plain = (v) => S(v)
+    .replace(/[–—]/g, '-').replace(/[‘’]/g, '\'').replace(/[“”]/g, '"').replace(/…/g, '...')
+    .replace(/\s*\([^()]*(?:chance|model|prior|bootstrap|fisher|p ?=|own-page|notability)[^()]*\)/gi, '')
+    .replace(/\bnotability gate\b/gi, 'the bar for an encyclopedia entry')
+    .replace(/\b(?:aip|air|ait|lad|cad)_[A-Za-z0-9_.:-]+/g, '').replace(/\bAIR'?s?\b/g, 'AI ranking').replace(/\bS[0-5]\b/g, '')
+    .replace(/(?:US)?\$\s?\d[\d,]*(?:\.\d+)?/g, '').replace(/\s+([,.;:])/g, '$1').replace(/\(\s*\)/g, '').replace(/\s{2,}/g, ' ').trim();
+  const qWords = (q, ctx) => { const t = S(ctx && typeof ctx.question === 'function' ? ctx.question(q) : ''); return t ? '"' + plain(t) + '"' : 'One of your tracked questions'; };
+  const lineOf = (l) => (l && typeof l === 'object' ? l : { text: S(l), figures: [] });
+  const fig = (l, name) => { const f = (lineOf(l).figures || []).find(x => x && S(x.name) === name); return f ? f.value : undefined; };
+  const num = (v) => { const n = Number(v); return v == null || S(v) === '' || !Number.isFinite(n) ? null : n; };
+
+  /** memo (ARL.memo) + ctx -> { v, sections: [{ key, title, lines: [text] }], wins, spend_usd }
+   *  ctx: { question(id) -> text, leverOf(actionId) -> lever, actions: [{ lever, executor, status, url }] } */
+  const view = (memo, ctx) => { const m = memo && typeof memo === 'object' ? memo : {}; const c = ctx || {};
+    const part = (k) => ((m.parts || []).find(p => p && p.key === k) || {}).lines || [];
+    const changed = [], why = [], worked = [], did = [], you = [];
+    for (const l0 of part('what_changed')) { const t = S(lineOf(l0).text); let x;
+      if (t === 'No diagnosis this week.') changed.push('No new reading of your questions this week.');
+      else if (/^This is the first reading/.test(t)) changed.push('This is the first week we read your questions, so there is nothing to compare with yet.');
+      else if (t === 'No question changed stage this week.') changed.push('No question moved this week.');
+      else if ((x = t.match(/^(.+?): found on (\d+) of (\d+) questions \(last week (\d+)\), won on (\d+) \(last week (\d+)\)\.$/)))
+        changed.push(engine(x[1]) + ': your website comes up for ' + x[2] + ' of ' + x[3] + ' questions (' + x[4] + ' last week), and you are clearly named for ' + x[5] + ' (' + x[6] + ' last week).');
+      else if ((x = t.match(/^Question (\S+) on (.+?): (up|down) from /))) { const from = STAGE[S(fig(l0, 'from'))], to = STAGE[S(fig(l0, 'to'))]; if (!from || !to) continue;
+        changed.push(qWords(x[1], c) + ' on ' + engine(x[2]) + ': moved ' + x[3] + ', from ' + from + ' to ' + to + '.'); } }
+    for (const l0 of part('why')) { const t = S(lineOf(l0).text); let x;
+      if (/^Nothing moved up/.test(t)) { why.push('Nothing moved up this week.'); continue; }
+      if (!(x = t.match(/^Question (\S+) on (.+?): (.+)$/))) continue; const head = qWords(x[1], c) + ' on ' + engine(x[2]) + ': ';
+      const aid = S(fig(l0, 'attributed_to')); const bg = /background/.test(x[3]);
+      if (aid) { const lv = S(typeof c.leverOf === 'function' ? c.leverOf(aid) : '') || LEVER_OF_LABEL[(x[3].match(/after "([^"]+)"/) || [])[1]] || '';
+        why.push(head + (bg ? 'can\'t tell yet. It moved after our step "' + label(lv) + '", but questions we did not work on moved the same way.' : 'likely helped by our step "' + label(lv) + '".')); }
+      else why.push(head + (bg ? 'it moved on its own: questions we did not work on moved the same way.' : 'it moved without a step of ours.')); }
+    for (const l0 of part('projected_vs_real')) { const t = S(lineOf(l0).text); let x;
+      if (/^No action has reached the end of its window yet/.test(t)) { worked.push('It is too early to tell whether our steps worked: each one is judged after a few weeks of answers, against questions we did not work on.'); continue; }
+      if (!(x = t.match(/^(.+?): we projected .*Verdict: (.+)\.$/))) continue; const lv = LEVER_OF_LABEL[x[1]]; const v = VERDICT[S(x[2])]; if (!v) continue;
+      worked.push(label(lv) + ': ' + v + '.'); }
+    const acts = (Array.isArray(c.actions) ? c.actions : []).filter(a => a && S(a.lever));
+    for (const a of acts) { const st = S(a.status); const ex = S(a.executor) === 'auto' || S(a.executor) === 'approve' ? S(a.executor) : 'human';
+      const what = label(a.lever) + (S(a.url) ? ': ' + S(a.url) : '');
+      if (ex === 'human') { if (!st || OPEN.includes(st)) you.push(what + ' (you do it, we check it).'); else did.push(what + ' (' + (STATUS[st] || plain(st).replace(/_/g, ' ')) + ').'); }
+      else if (ex === 'approve' && (!st || st === 'proposed')) you.push(what + ' (you approve it, we do it).');
+      else did.push(what + ' (' + WHO[ex] + (st ? '; ' + (STATUS[st] || plain(st).replace(/_/g, ' ')) : '') + ').'); }
+    for (const b of (Array.isArray(m.blockers) ? m.blockers : [])) { const w = plain(b && b.what); if (!w) continue;
+      const W = w.charAt(0).toUpperCase() + w.slice(1); (S(b.owner) === 'us' ? did : you).push((S(b.owner) === 'us' ? 'On us: ' : '') + W.replace(/[.\s]+$/, '') + '.'); }
+    if (!did.length) did.push('No new step this week.');
+    if (!you.length) you.push('Nothing from you this week.');
+    let wins = null, spend = null;
+    for (const l0 of part('cost_per_win')) { const w = num(fig(l0, 'wins')); const sp = num(fig(l0, 'spend_usd')); if (w != null) wins = w; if (sp != null) spend = sp; }
+    const sections = [{ key: 'changed', title: 'What changed', lines: changed }, { key: 'why', title: 'Why it moved', lines: why }, { key: 'worked', title: 'Did our steps work', lines: worked },
+      { key: 'did', title: 'What we did', lines: did.slice(0, 10) }, { key: 'you', title: 'What we need from you', lines: you.slice(0, 10) }].filter(s => s.lines.length);
+    return { v: 1, sections, wins, spend_usd: spend }; };
+  return { view, plain, label, LABELS, ENGINE_LABELS, STAGE, WHO, STATUS };
+})();
 // ---- AIR (2026-11-06, docs/ai-ranking-2026-11-05 DESIGN 2.H / 6.7, package P6): the AI ranking plan of a website whose AI ranking is `on` ----
 // A section "AI ranking plan" in the report and ONE additive key `ai_rank` in the ai_growth callback, built from this run's `AI Rank Plan` item for
 // the website (its weekly memo: what changed and why, what we can detect, what we did and what waits, projected against real, the cost per won
@@ -274,41 +352,44 @@ const AIRF = (() => {
 const AIR_ON = (() => { try { return $('AI Rank Plan').all().map(i => i.json || {}).filter(x => x && x.site_id && !x.skip && !x.error && x.air && x.mode === 'on'); } catch (e) { return []; } })();
 const AIR_PROMPTS = (() => { try { return new Map($('Load AI Prompts').all().map(i => i.json || {}).filter(r => r && r.prompt_id).map(r => [String(r.prompt_id), String(r.prompt || r.question || '')])); } catch (e) { return new Map(); } })();
 const AIR_MONS = (() => { try { return $('Load Monitors').all().map(i => i.json || {}); } catch (e) { return []; } })();
-// the lever labels of ARL.LEVERS (v5/code/_ai_rank_learn.js; ARL is not inlined in this node; harness AE5 holds the two lists equal)
-const AIR_LABEL = { L01: 'Unblock AI bots in robots.txt', L02: 'Content in raw HTML (server render)', L03: 'Add the site to Bing Webmaster and submit', L04: 'Get the page indexed in Google', L05: 'Own answer page for the searches the engines run', L06: 'Refresh the ranking page for the searches the engines run', L07: 'Cited but not named: fix the passage', L08: 'Placement on an editorial list the answers cite', L09: 'Directory profile on a directory the answers cite', L10: 'Registry or partner listing (eligible only)', L11: 'Earned mention (press, partner, customer case)', L12: 'LinkedIn article by a named person', L13: 'Disclosed community answer', L14: 'Video for the question', L15: 'Correction (own page or ask the source)', L16: 'Protect a cited page; refresh it when citations decay', L17: 'Wikidata / Wikipedia entity' };
-const AIR_WHO = { auto: 'we do it', approve: 'you approve, we do it', human: 'you do it, we check it' };
+// FX-C RC-1 (2026-11-06): a client never reads the owner's memo. The section and the callback carry the client view (AIRC.view: what changed,
+// why it moved, did our steps work, what we did, what we need from you) with the lever names in the client's words; no ids, no stage codes,
+// no statistics, no figures of the model, no money (the number of questions won travels as `wins`, the raw spend as `spend_usd`, which the
+// app turns into credits and strips before a customer sees it). The raw memo stays in seo_ai_rank_runs for platform admins only.
+const AIR_WHO = AIRC.WHO;
+// RC-3: the steps that need an address say where the client gives it (the step in the app takes it, our check reads it)
 const AIR_CHECK = { L01: 'the next robots.txt reading lets the AI assistants read your site', L02: 'our reading of the page without JavaScript finds its text', L03: 'your site shows in Bing Webmaster Tools and the page is crawled',
   L04: 'Google reports the page as indexed', L05: 'the page is published, answers, and is indexed', L06: 'the page is published, answers, and is indexed', L16: 'the page is published, answers, and is indexed',
-  L07: 'our reading of the cited page finds your name in the passage', L08: 'our reading of the list page finds your name', L09: 'the listing is found, or you give us the profile address and our reading confirms it',
-  L10: 'the listing is found, or you give us the profile address and our reading confirms it', L11: 'you give us the address and our reading finds your name on it', L12: 'you give us the address and our reading finds your name on it',
-  L13: 'you give us the address and our reading finds your name on it', L14: 'you give us the address and our reading finds your name on it', L15: 'the page or the source now carries the correct fact', L17: 'Wikidata lists your website' };
+  L07: 'our reading of the cited page finds your name in the passage', L08: 'our reading of the list page finds your name', L09: 'the listing is found, or you paste the profile address on the step in the app and our reading confirms it',
+  L10: 'the listing is found, or you paste the profile address on the step in the app and our reading confirms it', L11: 'you paste the address on the step in the app and our reading finds your name on it', L12: 'you paste the address on the step in the app and our reading finds your name on it',
+  L13: 'you paste the address on the step in the app and our reading finds your name on it', L14: 'you paste the address on the step in the app and our reading finds your name on it', L15: 'you paste the address of the corrected page on the step in the app and our reading confirms it', L17: 'you paste the Wikidata address on the step in the app and our reading finds your website on it' };
 const airReportOf = (sid, checkedAt) => { const A = AIR_ON.find(x => x.site_id === sid); if (!A) return null; const air = A.air || {};
   const S_ = (v) => (v == null ? '' : String(v)).trim(); const P_ = (v, d) => { if (v && typeof v === 'object') return v; try { const x = JSON.parse(v); return x == null ? d : x; } catch (e) { return d; } };
-  const labelOf = (a) => S_(a.label) || AIR_LABEL[S_(a.lever)] || S_(a.lever);
+  const labelOf = (a) => AIRC.label(a.lever);   // RC-14: the client's words for the lever, never the engine's
   const statusById = new Map(((air.rows || {}).actions || []).map(r => [S_(r.action_id), S_(r.status)]));
+  const leverById = new Map([...((air.rows || {}).actions || []), ...(air.chosen || [])].map(r => [S_(r.action_id), S_(r.lever)]));
   const qText = (ids) => (Array.isArray(ids) ? ids : P_(ids, [])).map(id => AIR_PROMPTS.get(S_(id)) || '').filter(Boolean).slice(0, 4);
-  const actions = (air.chosen || []).slice(0, 20).map(a => { const ref = P_(a.ref, {}) || {};
+  const actions = (air.chosen || []).slice(0, 20).map(a => { const ref = P_(a.ref, {}) || {}; const pageUrl = S_(ref.url) || S_(a.page_url);   // FX-C: L07's ref names the question only; the page it fixes is on the chosen action
     return { action_id: S_(a.action_id), lever: S_(a.lever), label: labelOf(a), executor: S_(a.executor), status: statusById.get(S_(a.action_id)) || 'proposed', sink: S_(a.sink), scope: S_(a.scope),
-      questions: qText(a.questions), engines: (Array.isArray(a.engines) ? a.engines : P_(a.engines, [])).map(S_).slice(0, 8), target_stage: S_(a.target_stage), why: S_(a.why).slice(0, 300), url: S_(ref.url) }; });
-  const steps = (air.chosen || []).filter(a => a.executor === 'human' || ['growth_action', 'site_task', 'listing'].includes(S_(a.sink))).slice(0, 8).map(a => { const ref = P_(a.ref, {}) || {};
-    return { key: 'ai_rank:' + S_(a.lever) + ':' + AIRF.refKey(ref), lever: S_(a.lever), label: labelOf(a), what: (labelOf(a) + (S_(ref.url) ? ': ' + S_(ref.url) : '')).slice(0, 200), why: S_(a.why).slice(0, 300),
-      check: AIR_CHECK[S_(a.lever)] || 'our weekly check reads it again', url: S_(ref.url), action_id: S_(a.action_id), status: statusById.get(S_(a.action_id)) || 'queued' }; });
+      questions: qText(a.questions), engines: (Array.isArray(a.engines) ? a.engines : P_(a.engines, [])).map(S_).slice(0, 8), target_stage: '', why: AIRC.plain(a.why).slice(0, 300), url: pageUrl }; });
+  const steps = (air.chosen || []).filter(a => a.executor === 'human' || ['growth_action', 'site_task', 'listing'].includes(S_(a.sink))).slice(0, 8).map(a => { const ref = P_(a.ref, {}) || {}; const pageUrl = S_(ref.url) || S_(a.page_url);   // FX-C: L07's ref names the question only; the page it fixes is on the chosen action
+    return { key: 'ai_rank:' + S_(a.lever) + ':' + AIRF.refKey(ref), lever: S_(a.lever), label: labelOf(a), what: (labelOf(a) + (pageUrl ? ': ' + pageUrl : '')).slice(0, 200), why: AIRC.plain(a.why).slice(0, 300),
+      check: AIR_CHECK[S_(a.lever)] || 'our weekly check reads it again', url: pageUrl, action_id: S_(a.action_id), status: statusById.get(S_(a.action_id)) || 'queued' }; });
   const open = ((air.rows || {}).actions || []).filter(r => ['proposed', 'queued', 'in_progress'].includes(S_(r.status))).length;
-  const cmp = air.compare && typeof air.compare === 'object' ? { overlap: air.compare.overlap ?? null, gain_air: air.compare.gain_air ?? null, gain_old: air.compare.gain_old ?? null, note: S_(air.compare.note) } : null;
   const mon = AIR_MONS.find(m => m.site_id === sid) || {};
-  return { v: 1, mode: 'on', run_id: S_(A.run_id), checked_at: S_(air.checked_at) || S_(checkedAt), rule_version: S_(air.rule_version),
-    memo: air.memo && typeof air.memo === 'object' ? air.memo : null, actions, steps, cost: air.cost && typeof air.cost === 'object' ? { usd: Number(air.cost.usd) || 0, basis: S_(air.cost.basis) } : null, compare: cmp,
+  const memo = air.memo && typeof air.memo === 'object' ? air.memo : null;
+  const client = memo ? AIRC.view(memo, { question: (id) => AIR_PROMPTS.get(S_(id)) || '', leverOf: (id) => leverById.get(S_(id)) || '', actions }) : null;
+  return { v: 2, mode: 'on', run_id: S_(A.run_id), checked_at: S_(air.checked_at) || S_(checkedAt), client, actions, steps,
     counts: { core: ((air.panel || {}).core || []).length, chosen: (air.chosen || []).length, deferred: (air.deferred || []).length, refused: (air.refused || []).length, open },
     reserve: AIRF.settingsOf(mon).reserve }; };
 const airHtml = (R) => { if (!R) return ''; const e = (v) => esc(String(v == null ? '' : v));
-  let h = h3('AI ranking plan') + p_('The work chosen this week to get you named in AI answers, why it was chosen, and what has moved. Every figure says what it is based on.', true);
-  for (const part of ((R.memo || {}).parts || [])) { const lines = (part.lines || []).filter(l => l && l.text); if (!lines.length) continue;
-    h += '<p style="margin:8px 0 2px;font-size:13px"><b>' + e(part.title || part.key) + '</b></p><ul style="font-size:13px;margin:2px 0 6px 18px;padding:0">'
-      + lines.map(l => '<li>' + e(l.text) + ((l.figures || []).length ? '<div style="font-size:11px;color:#64748b">' + l.figures.filter(f => f && f.name).map(f => e(String(f.name).replace(/_/g, ' ')) + ': ' + e(f.value) + (f.basis ? ' (' + e(f.basis) + ')' : '')).join('; ') + '</div>' : '') + '</li>').join('') + '</ul>'; }
+  let h = h3('AI ranking plan') + p_('The work chosen this week to get you named in AI answers, and what has moved. A change is called our doing only when questions we did not work on did not move the same way.', true);
+  for (const sec of ((R.client || {}).sections || [])) { const lines = (sec.lines || []).filter(Boolean); if (!lines.length) continue;
+    h += '<p style="margin:8px 0 2px;font-size:13px"><b>' + e(sec.title) + '</b></p><ul style="font-size:13px;margin:2px 0 6px 18px;padding:0">' + lines.map(l => '<li>' + e(l) + '</li>').join('') + '</ul>'; }
+  const wins = (R.client || {}).wins;
+  if (wins != null) h += p_(wins > 0 ? 'Questions won after a confirmed step: <b>' + e(Math.round(wins * 10) / 10) + '</b> (net of the questions that moved on their own). The credits this used are on the AI visibility page in the app.' : 'No question has been won after a confirmed step yet.', true);
   h += table(['Step', 'Who', 'State', 'Why'], R.actions.map(a => [e(a.label) + (a.url ? '<div style="font-size:11px">' + link(a.url) + '</div>' : '') + (a.questions.length ? '<div style="font-size:11px;color:#64748b">for: ' + a.questions.map(e).join(' | ') + '</div>' : ''),
-    e(AIR_WHO[a.executor] || a.executor), e(String(a.status).replace(/_/g, ' ')), e(a.why)]), 'nothing new chosen this week');
-  const bl = ((R.memo || {}).blockers || []).filter(b => b && b.what);
-  if (bl.length) h += p_('<b>Waiting on</b>: ' + bl.slice(0, 8).map(b => e(b.what) + ' (' + e(b.owner === 'us' ? 'us' : 'you') + (b.since ? ', asked ' + e(b.since) : '') + (b.blocks ? '; blocks: ' + e(b.blocks) : '') + ')').join(' | '), true);
+    e(AIR_WHO[a.executor] || 'you do it, we check it'), e(AIRC.STATUS[a.status] || String(a.status).replace(/_/g, ' ')), e(a.why)]), 'nothing new chosen this week');
   if (R.steps.length) h += p_('Steps on your website: ' + R.steps.length + ' (each one is listed in the app with how we check it).', true);
   return h; };
 // 2026-10-19: the cycle a website's run belongs to (Growth Plan carries it; Growth Metrics does not)

@@ -4,6 +4,7 @@
 // an agency sets and the colour tokens computed from it (WCAG AA in light and dark), the portal host rules and its DNS proof, the
 // e-mail settings, approvals, and what a client person may see of a report payload.
 
+import { aiRankCustomerSafe } from './ai-rank-client';
 import { z } from 'zod';
 import { brandInitials, brandLogoUrl } from './brand';
 import { ROLE_RANK, type Role } from './constants';
@@ -680,6 +681,11 @@ export function clientSafePayload<T>(v: T, depth = 0): T {
   const out: Record<string, unknown> = {};
   for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
     if (isCostKey(k)) continue;
+    // FX-C RC-1: the AI ranking plan's key keeps only the client view and the steps; dollar amounts written into its text are removed too
+    if (k === 'ai_rank') {
+      out[k] = clientSafePayload(aiRankCustomerSafe(x), depth + 1);
+      continue;
+    }
     out[k] = clientSafePayload(x, depth + 1);
   }
   return out as T;
