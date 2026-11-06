@@ -20,7 +20,7 @@
 //   learn: { history } the site's stored action rows already learned (RA-4: one move teaches one action)
 //   FX-A (2026-11-06, docs/ai-ranking-2026-11-05/fixes/FX-A.md): RA-1 .. RA-18 of REVIEW_A_ALGO_STATS.md
 const ARL = (() => {
-  const VERSION = 'air-1';
+  const VERSION = 'air-2';   // FX-A2: follows AIRF.RULE_VERSION (FX-B)
   const RULE = AIRF.RULE_VERSION;
   const DAY = 864e5;
   const S = (v) => (v == null ? '' : String(v)).trim();

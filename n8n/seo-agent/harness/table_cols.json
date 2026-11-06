@@ -760,7 +760,8 @@
   "mode",
   "run_id",
   "created_at",
-  "updated_at"
+  "updated_at",
+  "client_url"
  ],
  "AI_RANK_SOURCES": [
   "site_id",

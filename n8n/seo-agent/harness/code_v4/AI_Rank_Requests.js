@@ -99,7 +99,7 @@ const AIRF = (() => {
 // (gemini_api) are ignored everywhere. Shapes are the frozen ones; fields added beside them are marked "additive" and nobody must rely on
 // their absence.
 const ARD = (() => {
-  const VERSION = 'air-1';
+  const VERSION = 'air-2';   // FX-A2: follows AIRF.RULE_VERSION (FX-B)
   const DAY = 864e5;
   // ---- small helpers -----------------------------------------------------------------------------------------------------------------
   const S = (v) => (v == null ? '' : String(v)).trim();

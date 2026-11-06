@@ -89,3 +89,19 @@ A scratch script (not committed) copied the kits and the generated workflow, put
   - **L11 to L15 and L17 wait for `client_url`.** No table or route provides it, so they never verify. P6's app flow needs to record it.
 - **App (P6):** the memo has new lines (detectable part, FDR count) and new outcome fields. Nothing in `app/` read `p_binom`, `diag_json` or `stage_moves`.
 - **Deploy:** `sync_tables.py` adds the two columns. Until they exist, the run row's `stages_json` and the question rows' `arm_since` are dropped by n8n, and the old fallbacks apply (`diag_json`, `core_since`).
+
+## 6. FX-A2 (2026-11-06): the engine side of the client's address, L07, and the air-2 rule
+
+This builds on FX-C RC-3 (`fixes/FX-C.md`). The app writes `client_url` on the `seo_ai_rank_actions` row and a `seo_ai_rank_sources` row with `names_client: true`, `source_from: 'client'`, `first_seen` / `last_seen` / `checked_at` set to now, and `url_key` from the AIRF rule. It writes them only after its own safe fetch has found the business named. This branch merged `air/integration` twice: first P6 + FX-A + FX-C, then FX-B.
+
+| Item | Fix | Check (fails on the code before FX-A2) |
+|---|---|---|
+| Column | `('client_url', 'string')` is added last to `AI_RANK_ACTIONS_COLS`. `sync_tables.py` adds it on deploy. | FXA-19 (`table_cols.json`) |
+| Kept on upsert | A chosen row writes `client_url: S0(st.client_url)`, so a weekly run never blanks it; a new attempt re-checks the same page. Outcome and expiry rows spread the stored row, so they keep it too. | FXA-19 (plan) |
+| The client's source rows | The plan puts the site's stored `source_from: 'client'` rows back into the source graph as written, whatever their influence, so they are never cut by `sources_max`. A weekly source row never rewrites a row that only the app wrote. | FXA-19 (plan: no rewrite of that `url_key`) |
+| Verification, L11-L15 and L17 | `ARL.verify` reads `client_url` and applies the safe fetcher's rules (`ARL.safeUrlWhy`): https only, no credentials, no IP literal (v4 or v6), a public host, no port other than 443, and for L17 a Wikidata item. The step is done only when the page was read after the step was asked and names the business. A correction (L15) on the client's own page counts when our fetch read it HTTP 200 after the step was asked. Before this, any HTTP 200 page row counted, however old. | FXA-19 (3 kit checks) |
+| L07 | The candidate's ref is `{ prompt_id, url: <the page it fixes> }`. The action id is unchanged, because `refKey` keys on `prompt_id` first. `verify` reads the client's own page (`seo_ai_pages`): live (HTTP 200), read after the step was asked, and its visible update date after that too. Before this, it looked for an empty URL in the third-party source graph. | FXA-20 |
+| air-2 (FX-B) | ARL / ARD `VERSION` = `air-2`, as AIRF. AI_Rank_Plan reads FX-B's Code node `Load AI Rank Actions` by the same name; it outputs rows, or `{}` when there are none, and `bySite` drops the empty item. The FXA fixtures register under `AIRF.RULE_VERSION`. AIRW0-2 checks that ARD.VERSION equals the rule. | AIRW0-2, FXBR |
+| `ai_growth_off_paths.json` | Not regenerated. FX-A2 changes no Growth Plan or report code, and the off output is unchanged (AIRG / FXB6 pass). | full harness |
+
+The old-code check rebuilt the AI Rank Plan node in a scratch copy from `307cd0c1`'s kit and plan: 6 of the 6 new checks fail.

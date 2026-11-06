@@ -74,7 +74,7 @@ const AIRF = (() => {
 })();
 
 const WHICH = "actions";
-const COLS = ["action_id", "site_id", "domain", "lever", "executor", "scope", "ref", "questions", "engines", "target_stage", "status", "sink", "sink_ref", "expected_json", "prereg_json", "happened_at", "verify_json", "outcome_json", "learned_at", "mode", "run_id", "created_at", "updated_at"];
+const COLS = ["action_id", "site_id", "domain", "lever", "executor", "scope", "ref", "questions", "engines", "target_stage", "status", "sink", "sink_ref", "expected_json", "prereg_json", "happened_at", "verify_json", "outcome_json", "learned_at", "mode", "run_id", "created_at", "updated_at", "client_url"];
 const SINKS = ['targets', 'prospects', 'proposed', 'core', 'cache', 'growth'];
 const JSON_MAX = 60000;
 const plans = (() => { try { return $('AI Rank Plan').all().map(i => i.json || {}); } catch (e) { return []; } })().filter(p => p && p.site_id && !p.skip);
