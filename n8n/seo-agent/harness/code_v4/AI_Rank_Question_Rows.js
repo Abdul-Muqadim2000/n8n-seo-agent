@@ -71,7 +71,7 @@ const AIRF = (() => {
     ENGINES, EXCLUDED_ENGINES, GROUP_OF, GROUPS, STAGES, STAGE_LABELS, ACTION_STATUSES, ARMS, usable, hash, urlKey, refKey, actionId, runId, priorId, targetId };
 })();
 const WHICH = "questions";
-const COLS = ["site_id", "domain", "prompt_id", "question", "intent", "market", "core", "core_since", "core_until", "arm", "stratum", "value", "demand", "demand_basis", "feasibility", "stage_json", "best_stage", "parametric_json", "evidence_json", "first_named_at", "last_named_at", "last_cited_at", "updated_at", "rule_version"];
+const COLS = ["site_id", "domain", "prompt_id", "question", "intent", "market", "core", "core_since", "core_until", "arm", "stratum", "value", "demand", "demand_basis", "feasibility", "stage_json", "best_stage", "parametric_json", "evidence_json", "first_named_at", "last_named_at", "last_cited_at", "updated_at", "rule_version", "arm_since"];
 const SINKS = ['targets', 'prospects', 'proposed', 'core', 'cache', 'growth'];
 const JSON_MAX = 60000;
 const plans = (() => { try { return $('AI Rank Plan').all().map(i => i.json || {}); } catch (e) { return []; } })().filter(p => p && p.site_id && !p.skip);
@@ -93,9 +93,11 @@ for (const p of plans) {
     const kits = (a.kits_missing || []);
     const row = { site_id: p.site_id, domain: p.domain || '', run_id: p.run_id || AIRF.runId(p.site_id, Date.now()), checked_at: a.checked_at || new Date().toISOString(), mode: p.mode || '', rule_version: AIRF.RULE_VERSION,
       panel_json: J(a.panel), diag_json: J(a.diag || []), sources_json: J((a.sources || []).slice(0, 60)), candidates_json: J((a.candidates || []).slice(0, 60)), chosen_json: J(a.chosen || []),
-      old_json: J(a.old), compare_json: J(a.compare), memo_json: J(a.memo), cost_json: J(a.cost), learn_json: J({ outcomes: a.outcomes || [], learned: a.learn || [], deferred: (a.deferred || []).slice(0, 30), refused: (a.refused || []).slice(0, 30), set_aside: (a.set_aside || []).slice(0, 20) }),
+      old_json: J(a.old), compare_json: J(a.compare), memo_json: J(a.memo), cost_json: J(a.cost), learn_json: J({ outcomes: a.outcomes || [], learned: a.learn || [], fdr: a.fdr || null, deferred: (a.deferred || []).slice(0, 30), refused: (a.refused || []).slice(0, 30), set_aside: (a.set_aside || []).slice(0, 20) }),
       exec_id: execId, error: !ok ? String(p.error || 'the plan gave no result') : kits.length ? 'kit not built: ' + kits.join(', ') : '' };
-    // at most 60 KB a row: the diagnosis goes first (it is rebuilt every week), then the candidates, then the sources
+    // FX-A RA-9: the compact stages (about 25 characters a question x engine) are what next week's memo and every action's start read; never trimmed
+    if (COLS.includes('stages_json')) row.stages_json = J(a.stages || null);
+    // at most 60 KB a row: the diagnosis goes first (it is rebuilt every week; stages_json keeps its stages), then the candidates, then the sources
     for (const k of ['diag_json', 'candidates_json', 'sources_json', 'learn_json']) { const size = COLS.reduce((n, c) => n + String(row[c] == null ? '' : row[c]).length, 0); if (size <= JSON_MAX) break; row[k] = J({ trimmed: true, chars: String(row[k]).length }); }
     rows.push(row); continue;
   }

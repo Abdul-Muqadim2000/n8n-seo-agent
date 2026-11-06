@@ -3183,12 +3183,18 @@ const ARD = (() => {
     return { core, proposed, extend, comparable, why };
   };
 
-  // ---- A6: treatment and control arms (2:1 inside each stratum, seeded, never reshuffled, the holdout rotates after 12 weeks) ---------------
-  const PATTERN_OK = (n, c) => c < Math.floor((n + 1) / 3);   // next slot is control when it keeps the stratum at T, T, C, T, T, C ...
-  const assignArms = ({ core, stored, seed, now, site_id, holdout_days } = {}) => {
+  // ---- A6: treatment and control arms (seeded, never reshuffled; FX-A RA-2: a control floor kept every week, rotation one at a time) ---------
+  // Each stratum's share of the control target floor(N / 3): floor(n / 3), the remainder to the strata with the largest fraction (a stratum of 5
+  // holds 1 or 2, so 30 questions in 6 strata of 5 hold 10, not 6). A control rotates after `holdout_days` only when a replacement in its stratum
+  // takes its place in the same run (a treated question no step worked on: not in `exposed`), one per stratum per run (so a first core's controls,
+  // all due the same week, rotate over several weeks), and never while it is a registered control of an open action (`locked`). A stratum under its
+  // target is refilled from its treated questions no step worked on. `exposed` / `locked`: prompt ids (Set or array; additive inputs, FX-A).
+  // `assigned_at` is when the question took its arm (stored as seo_ai_rank_questions.arm_since); a row without it falls back to core_since.
+  const assignArms = ({ core, stored, seed, now, site_id, holdout_days, exposed, locked } = {}) => {
     const N = msOf(now); const HOLD = num(holdout_days, 84) * DAY; const iso = isoOf(N);
     const C = (Array.isArray(core) ? core : []).filter(c => c && S(c.prompt_id));
     const ST = new Map((Array.isArray(stored) ? stored : []).filter(r => r && S(r.prompt_id)).map(r => [S(r.prompt_id), r]));
+    const EX = new Set([...(exposed || [])].map(S)), LK = new Set([...(locked || [])].map(S));
     const clusterCount = new Map(); for (const c of C) { const k = lc(c.cluster) || 'other'; clusterCount.set(k, (clusterCount.get(k) || 0) + 1); }
     const top = new Set([...clusterCount.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 4).map(x => x[0]));
     // a stratum needs at least 3 questions to hold a control (T, T, C): smaller ones are merged into a coarser stratum, dropping the cluster
@@ -3198,20 +3204,35 @@ const ARD = (() => {
     const fine = new Map(); { let pending = C.slice(); for (let L = 0; L < levels.length; L++) { const g = new Map(); for (const c of pending) { const k = levels[L](c).join('|'); const a = g.get(k) || []; a.push(c); g.set(k, a); }
       const next = []; for (const [k, a] of g) { if (a.length >= MIN_S || L === levels.length - 1) for (const c of a) fine.set(S(c.prompt_id), k); else next.push(...a); } pending = next; if (!pending.length) break; } }
     const stratumOf = (c) => fine.get(S(c.prompt_id)) || levels[0](c).join('|');
-    const out = new Map(); const tally = new Map(); const fresh = [];
+    const out = new Map(); const fresh = []; const known = new Set();
     for (const c of C) { const pid = S(c.prompt_id); const s = ST.get(pid); const arm = s && AIRF.ARMS.includes(lc(s.arm)) ? lc(s.arm) : '';
       if (!arm) { fresh.push(c); continue; }
-      const stratum = S(s.stratum) || stratumOf(c); const at0 = S(s.assigned_at || s.arm_since || s.core_since) || iso;
-      let a = arm, at = at0; if (arm === 'control' && Number.isFinite(N) && Number.isFinite(msOf(at0)) && N - msOf(at0) >= HOLD) { a = 'treated'; at = iso; }   // the holdout rotates
-      out.set(pid, { prompt_id: pid, arm: a, stratum, assigned_at: at });
-      const t = tally.get(stratum) || { n: 0, c: 0 }; t.n++; if (a === 'control') t.c++; tally.set(stratum, t); }
+      const stratum = S(s.stratum) || stratumOf(c); known.add(stratum);
+      out.set(pid, { prompt_id: pid, arm, stratum, assigned_at: S(s.assigned_at || s.arm_since || s.core_since) || iso, _new: false }); }
     const key = (c) => AIRF.hash(S(site_id) + '|' + S(c.prompt_id) + '|' + S(seed));
     fresh.sort((a, b) => key(a) - key(b) || S(a.prompt_id).localeCompare(S(b.prompt_id)));
     // a new question joins its stored stratum: the computed one when it already holds stored questions, else the finest level that does
-    const placeOf = (c) => { const k = stratumOf(c); if (tally.has(k)) return k; for (const L of levels) { const k2 = L(c).join('|'); if (tally.has(k2)) return k2; } return k; };
-    for (const c of fresh) { const stratum = placeOf(c); const t = tally.get(stratum) || { n: 0, c: 0 }; const arm = PATTERN_OK(t.n, t.c) ? 'control' : 'treated';
-      t.n++; if (arm === 'control') t.c++; tally.set(stratum, t); out.set(S(c.prompt_id), { prompt_id: S(c.prompt_id), arm, stratum, assigned_at: iso }); }
-    return C.map(c => out.get(S(c.prompt_id)));
+    const placeOf = (c) => { const k = stratumOf(c); if (known.has(k)) return k; for (const L of levels) { const k2 = L(c).join('|'); if (known.has(k2)) return k2; } return k; };
+    for (const c of fresh) out.set(S(c.prompt_id), { prompt_id: S(c.prompt_id), arm: 'treated', stratum: placeOf(c), assigned_at: iso, _new: true });
+    // the control target per stratum
+    const members = new Map(); for (const a of out.values()) { const l = members.get(a.stratum) || []; l.push(a); members.set(a.stratum, l); }
+    const total = Math.floor(out.size / 3); const target = new Map(); let sum = 0;
+    for (const [k, l] of members) { const b = l.length >= MIN_S ? Math.floor(l.length / 3) : 0; target.set(k, b); sum += b; }
+    const order = [...members.entries()].filter(([, l]) => l.length >= MIN_S && l.length % 3).sort((a, b) => (b[1].length % 3) - (a[1].length % 3) || b[1].length - a[1].length || a[0].localeCompare(b[0]));
+    for (const [k] of order) { if (sum >= total) break; target.set(k, target.get(k) + 1); sum++; }
+    const ctl = (k) => (members.get(k) || []).filter(a => a.arm === 'control');
+    // a replacement: a treated question of the stratum no step worked on; a new one first (never treated), then the one treated longest, then the seed order
+    const ageMs = (a) => { const t = msOf(a.assigned_at); return Number.isFinite(t) && Number.isFinite(N) ? N - t : 0; };
+    const pick = (k, not) => (members.get(k) || []).filter(a => a.arm === 'treated' && !EX.has(a.prompt_id) && !(not && not.has(a.prompt_id)))
+      .sort((a, b) => (b._new - a._new) || (ageMs(b) - ageMs(a)) || (key(a) - key(b)) || a.prompt_id.localeCompare(b.prompt_id))[0] || null;
+    const set = (a, arm) => { a.arm = arm; a.assigned_at = iso; };
+    for (const k of [...members.keys()].sort()) {
+      // 1. the new questions and the refill: up to the target
+      const swapped = new Set(); while (ctl(k).length < target.get(k)) { const r = pick(k); if (!r) break; set(r, 'control'); swapped.add(r.prompt_id); }
+      // 2. the holdout rotates: the oldest control past its 12 weeks (not locked) gives its place to a replacement, one per stratum per run
+      const due = ctl(k).filter(a => !swapped.has(a.prompt_id) && !LK.has(a.prompt_id) && HOLD > 0 && ageMs(a) >= HOLD).sort((a, b) => (ageMs(b) - ageMs(a)) || a.prompt_id.localeCompare(b.prompt_id))[0];
+      if (due) { const r = pick(k, swapped); if (r) { set(due, 'treated'); set(r, 'control'); } } }
+    return C.map(c => { const a = out.get(S(c.prompt_id)); return { prompt_id: a.prompt_id, arm: a.arm, stratum: a.stratum, assigned_at: a.assigned_at }; });
   };
 
   // ---- A7: minimum detectable effect + the first-appearance requirement -------------------------------------------------------------
@@ -3231,10 +3252,11 @@ const ARD = (() => {
     const neff = (Q) => (Q > 0 ? Q * M / (1 + (M - 1) * R) : 0); const nt = neff(Qt), nc = neff(Qc); const v = pu * (1 - pu);
     const prepost = nt > 0 ? r1(100 * z * Math.sqrt(2 * v / nt)) : null;
     const did = nt > 0 && nc > 0 ? r1(100 * z * Math.sqrt(2 * v * (1 / nt + 1 / nc))) : null;
-    let k = null, kp = null; if (Qt > 0 && Qc > 0) for (let j = 1; j <= Qt; j++) { const pj = allTreatedP(Qt, Qc, j); if (pj < A) { k = j; kp = r4(pj); break; } }
+    // FX-A RA-12: the first-appearance test is judged one-sided at alpha / 2 (0.025), the same alpha as the DiD's two-sided 95% range
+    const A1 = A / 2; let k = null, kp = null; if (Qt > 0 && Qc > 0) for (let j = 1; j <= Qt; j++) { const pj = allTreatedP(Qt, Qc, j); if (pj < A1) { k = j; kp = r4(pj); break; } }
     const basis = 'percentage points at ' + Math.round(PW * 100) + '% power, alpha ' + A + ' two-sided; n_eff = Q x m / (1 + (m - 1) x rho) with m ' + M + ', rho ' + R
       + (pIn == null ? ', baseline unknown: 2% used' : pIn < 0.02 ? ', baseline ' + r1(100 * pIn) + '%: 2% used for planning' : ', baseline ' + r1(100 * pu) + '%')
-      + (k != null ? '; first appearances: ' + k + ' on treated questions and none on control give one-sided p ' + kp : Qt > 0 && Qc > 0 ? '; no number of first appearances reaches p < ' + A + ' with ' + Qt + ' treated and ' + Qc + ' control questions' : '; no control questions: no first-appearance test');
+      + (k != null ? '; first appearances: ' + k + ' on treated questions and none on control give one-sided p ' + kp + ' (below ' + A1 + ')' : Qt > 0 && Qc > 0 ? '; no number of first appearances reaches one-sided p < ' + A1 + ' with ' + Qt + ' treated and ' + Qc + ' control questions' : '; no control questions: no first-appearance test');
     return { prepost, did, n_eff_t: r1(nt), n_eff_c: r1(nc), p_used: r4(pu), first_appearance_k: k, first_appearance_p: kp, basis };   // first_appearance_p: additive
   };
 
@@ -3410,8 +3432,14 @@ const ARD = (() => {
     const bingPos = bingStats && bingStats.positions ? asMap(bingStats.positions) : null;
     const gsc = index && index.gsc ? asMap(index.gsc) : null;
     const look = (M, q) => M.get(q) || M.get(normKw(q)) || M.get(normKw(q).replace(/[^a-z0-9\u00c0-\u024f\u0600-\u06ff ]+/g, ' ').replace(/\s+/g, ' ').trim());
+    // FX-A RA-13: a Google results page counts only when it was read in the question's market (its market, else the site's): a US page says nothing
+    // about a UAE question. An entry may hold one reading per location (`by_loc`, AI_Rank_Plan) or one reading with its `location_code`; a reading
+    // with no location recorded is accepted (it cannot be shown to be another market's)
+    const wantLoc = (() => { const qcc = S(p.market).split(/[-_]/)[0].toUpperCase(); const l1 = qcc ? LOC.get(qcc) || 0 : 0; if (l1) return l1; const sl = num(st.location_code, 0); return sl > 0 ? sl : (LOC.get(ccOf(st.country)) || 0); })();
+    const inMarket = (r) => { if (!r) return null; if (r.by_loc && typeof r.by_loc === 'object') { if (!wantLoc) return r; return r.by_loc[wantLoc] || r.by_loc[String(wantLoc)] || r.by_loc['0'] || null; }
+      const rl = num(r.location_code, 0); return !wantLoc || !rl || rl === wantLoc ? r : null; };
     const rankIn = (kind) => { let best = null, read = false, anyOurs = false;
-      if (kind === 'google') for (const q of queries) { const r = look(serpM, q); if (!r) continue; read = true; const res = Array.isArray(r.results) ? r.results : Array.isArray(r.items) ? r.items : [];
+      if (kind === 'google') for (const q of queries) { const r = inMarket(look(serpM, q)); if (!r) continue; read = true; const res = Array.isArray(r.results) ? r.results : Array.isArray(r.items) ? r.items : [];
         for (const x of res) { if (!x) continue; const pos = num(x.pos != null ? x.pos : x.rank_group != null ? x.rank_group : x.rank_absolute, null); if (pos == null || !ours(x.url || x.domain)) continue; anyOurs = true;
           if (!best || pos < best.pos) best = { query: q, pos, index: 'google', read_at: S(r.read_at || r.at || r.datetime) }; break; } }
       else if (kind === 'bing' && bingPos) for (const q of queries) { const v = look(bingPos, q); if (v == null) continue; read = true; const pos = num(v && typeof v === 'object' ? v.pos != null ? v.pos : v.position : v, null);
@@ -3589,7 +3617,10 @@ const ARD = (() => {
 //               settings = { pitch_rival_urls: [url] } (owner opt-in per page; rival lists are learn-only by default)
 //   feasibility: diag.rivals_median (median competitors named per answered answer; ARL.rivalsMedian(answers) computes it)
 //   choose: { now, units60 } pre-registers every chosen action before it is returned (no sink is written before that)
-//   outcome: { B } bootstrap draws (default 2000), { verified } the verify result when the action row is not marked verified
+//   outcome: { verified } the verify result when the action row is not marked verified (its t0_snapshot is read), { exposure } [{ action_id, lever,
+//            questions, from, to }] the other actions' exposure (RA-4); { B } is no longer used (FX-A: the lift test is a question-level t test)
+//   learn: { history } the site's stored action rows already learned (RA-4: one move teaches one action)
+//   FX-A (2026-11-06, docs/ai-ranking-2026-11-05/fixes/FX-A.md): RA-1 .. RA-18 of REVIEW_A_ALGO_STATS.md
 const ARL = (() => {
   const VERSION = 'air-1';
   const RULE = AIRF.RULE_VERSION;
@@ -3638,6 +3669,9 @@ const ARL = (() => {
     if (p < pl) { const q = Math.sqrt(-2 * Math.log(p)); return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
     if (p > 1 - pl) { const q = Math.sqrt(-2 * Math.log(1 - p)); return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
     const q = p - 0.5, r = q * q; return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1); };
+  /** Student t: CDF through the incomplete beta, quantile by bisection (FX-A RA-3: the question-level DiD is a t test on C - 1 or T + C - 2 degrees of freedom) */
+  const tCdf = (t, df) => { if (!(df > 0)) return NaN; if (!isFinite(t)) return t > 0 ? 1 : 0; const tail = 0.5 * ibeta(df / (df + t * t), df / 2, 0.5); return t > 0 ? 1 - tail : tail; };
+  const tInv = (q, df) => { if (!(df > 0) || !(q > 0 && q < 1)) return NaN; let lo = -1e4, hi = 1e4; for (let i = 0; i < 200; i++) { const mid = (lo + hi) / 2; if (tCdf(mid, df) < q) lo = mid; else hi = mid; } return (lo + hi) / 2; };
   /** P(X >= k) for X hypergeometric: n draws from N items of which K are "successes" */
   const hyperUpper = (k, Nn, K, n) => { if (!(Nn > 0) || n < 0 || K < 0 || n > Nn || K > Nn) return null; const lo = Math.max(0, n - (Nn - K)), hi = Math.min(K, n); if (k <= lo) return 1; if (k > hi) return 0;
     const den = logC(Nn, n); let p = 0; for (let x = k; x <= hi; x++) p += Math.exp(logC(K, x) + logC(Nn - K, n - x) - den); return Math.min(1, p); };
@@ -3652,11 +3686,14 @@ const ARL = (() => {
    *  pre/post z sqrt(2 p(1-p) / n_eff(Qt)), DiD z sqrt(2 p(1-p) (1/n_eff(Qt) + 1/n_eff(Qc))), a zero baseline planned at 2% */
   const mde = ({ q_t, q_c, m, p, rho, alpha, power } = {}) => { const a = alpha == null ? 0.05 : alpha, pw = power == null ? 0.8 : power; const qt = N(q_t, 0), qc = N(q_c, 0), mm = N(m, 0), r = clamp(N(rho, 0.3), 0, 1);
     const pu = Math.max(N(p, 0), 0.02); const z = normInv(1 - a / 2) + normInv(pw); const ne = (Q) => (Q > 0 && mm > 0 ? Q * mm / (1 + (mm - 1) * r) : 0);
-    const nt = ne(qt), nc = ne(qc); const v = 2 * pu * (1 - pu); const fk = firstK(qt, qc, a);
+    const nt = ne(qt), nc = ne(qc); const v = 2 * pu * (1 - pu); const fk = firstK(qt, qc, a / 2);   // RA-12: one alpha, one-sided a / 2 (0.025), as the verdict
     return { prepost: nt > 0 ? rd(100 * z * Math.sqrt(v / nt), 2) : null, did: nt > 0 && nc > 0 ? rd(100 * z * Math.sqrt(v * (1 / nt + 1 / nc)), 2) : null, n_eff_t: rd(nt, 2), n_eff_c: rd(nc, 2), p_used: pu,
       first_appearance_k: fk.k, first_appearance_p: fk.p == null ? null : rd(fk.p, 4), z: rd(z, 4),
-      basis: qt + ' treated and ' + qc + ' control questions, ' + mm + ' answers each per 4 weeks, intra-question correlation ' + r + ', 80% power, 5% two-sided' + (N(p, 0) < 0.02 ? ', baseline planned at 2%' : '') }; };
-  const STATS = { lgamma, logC, ibeta, betaInv, normCdf, normInv, hyperUpper, fisher, binomUpper, firstK, mde };
+      basis: qt + ' treated and ' + qc + ' control questions, ' + mm + ' answers each per 4 weeks, intra-question correlation ' + r + ', 80% power, 5% two-sided (first appearances one-sided 2.5%)' + (N(p, 0) < 0.02 ? ', baseline planned at 2%' : '') }; };
+  // RA-12 (FX-A): ONE alpha for every lift test: one-sided 0.025 (the 95% two-sided range above 0), for the DiD, the Fisher first-appearance test and the
+  // interrupted time series alike; across the actions judged in a quarter the false discovery rate is held at the same level (Benjamini-Hochberg, fdr())
+  const ALPHA = 0.025;
+  const STATS = { lgamma, logC, ibeta, betaInv, normCdf, normInv, tCdf, tInv, hyperUpper, fisher, binomUpper, firstK, mde, ALPHA };
 
   // ================================================================ D. the lever library
   // lever: { id, label, from: [stage], to: stage (the highest it reaches), next: { from: to } (one step per from stage), sub: [S0 sub-label] (empty = any),
@@ -3679,8 +3716,8 @@ const ARL = (() => {
     { id: 'L10', label: 'Registry or partner listing (eligible only)', from: ['S1'], to: 'S4', next: { S1: 'S4' }, sub: [], mult: { '*': 1 }, prior: { mean: 0.15, n0: 4 }, days: [30, 60, 120], usd: 0, effort_min: 120, executor: 'human', scope: 'page', sink: 'growth_action', sink_wave2: 'site_task', evidence: ['R4'] },
     { id: 'L11', label: 'Earned mention (press, partner, customer case)', from: ['S1', 'S2', 'S3', 'S4'], to: 'S4', next: { S1: 'S2', S2: 'S3', S3: 'S4', S4: 'S4' }, sub: [], mult: { chatgpt: 1.2, chatgpt_api: 1.2, claude: 1.2 }, prior: { mean: 0.05, n0: 4 }, days: [30, 60, 180], usd: 0, effort_min: 240, executor: 'human', scope: 'site', sink: 'growth_action', sink_wave2: 'site_task', evidence: ['E18', 'E5', 'E6', 'E21'] },
     { id: 'L12', label: 'LinkedIn article by a named person', from: ['S1', 'S2'], to: 'S4', next: { S1: 'S2', S2: 'S4' }, sub: [], mult: { chatgpt: 1.2, chatgpt_api: 1.2, ai_mode: 1.2 }, prior: { mean: 0.05, n0: 4 }, days: [7, 21, 45], usd: 0, effort_min: 90, executor: 'human', scope: 'site', sink: 'growth_action', sink_wave2: 'site_task', evidence: ['E29'] },
-    { id: 'L13', label: 'Disclosed community answer', from: ['S1'], to: 'S2', next: { S1: 'S2' }, sub: [], mult: { perplexity: 1.5, ai_overview: 1, chatgpt: 0.5, chatgpt_api: 0.5 }, prior: { mean: 0.03, n0: 3 }, days: [3, 14, 45], usd: 0, effort_min: 45, executor: 'human', scope: 'site', sink: 'growth_action', sink_wave2: 'site_task', evidence: ['E32', 'E6', 'E15'] },
-    { id: 'L14', label: 'Video for the question', from: ['S1'], to: 'S2', next: { S1: 'S2' }, sub: [], mult: { ai_overview: 1.3, perplexity: 1.2 }, prior: { mean: 0.03, n0: 3 }, days: [14, 45, 90], usd: 0, effort_min: 300, executor: 'human', scope: 'site', sink: 'growth_action', sink_wave2: 'site_task', evidence: ['E9'] },
+    { id: 'L13', label: 'Disclosed community answer', from: ['S1'], to: 'S2', next: { S1: 'S2' }, sub: [], mult: { perplexity: 1.5, ai_overview: 1, chatgpt: 0.5, chatgpt_api: 0.5 }, prior: { mean: 0.03, n0: 3 }, days: [3, 14, 45], usd: 0, effort_min: 45, executor: 'human', scope: 'page', sink: 'growth_action', sink_wave2: 'site_task', evidence: ['E32', 'E6', 'E15'] },
+    { id: 'L14', label: 'Video for the question', from: ['S1'], to: 'S2', next: { S1: 'S2' }, sub: [], mult: { ai_overview: 1.3, perplexity: 1.2 }, prior: { mean: 0.03, n0: 3 }, days: [14, 45, 90], usd: 0, effort_min: 300, executor: 'human', scope: 'page', sink: 'growth_action', sink_wave2: 'site_task', evidence: ['E9'] },
     { id: 'L15', label: 'Correction (own page or ask the source)', from: ['S4'], to: 'S5', next: { S4: 'S5' }, sub: ['wrong'], mult: { '*': 1 }, prior: { mean: 0.30, n0: 4 }, days: [14, 30, 60], usd: 0.02, effort_min: 20, executor: 'approve', scope: 'question', sink: 'existing', sink_wave2: 'existing', evidence: ['PE1'] },
     { id: 'L16', label: 'Protect a cited page; refresh it when citations decay', from: ['S5'], to: 'S5', next: { S5: 'S5' }, sub: [], mult: { '*': 1 }, prior: { mean: 0.50, n0: 4 }, days: null, usd: 0, effort_min: 0, executor: 'auto', scope: 'page', sink: 'protect', sink_wave2: 'protect', evidence: ['E33'] },
     { id: 'L17', label: 'Wikidata / Wikipedia entity', from: ['S1', 'S2', 'S3', 'S4'], to: 'S4', next: {}, sub: [], mult: { '*': 0, chatgpt: 1, chatgpt_api: 1, claude: 1 }, prior: null, gate: 'three independent earned mentions on file (notability, E36)', days: null, usd: 0, effort_min: 0, executor: 'human', scope: 'site', sink: 'growth_action', sink_wave2: 'site_task', evidence: ['E36', 'E35'] }
@@ -3701,9 +3738,19 @@ const ARL = (() => {
   const VERDICT_WORDS = { likely_helped: 'likely helped', cant_tell: 'can\'t tell', no_effect: 'no effect seen', not_happened: 'did not happen', not_due: 'not due yet' };
   const ELIG = ['L01', 'L02', 'L03', 'L04'];
   const OWN_PAGE = ['L05', 'L06'];
-  const SITE_WIDE = ['L11', 'L12', 'L13', 'L14', 'L17'];
+  // FX-A RA-4: the site-wide levers that touch every question EQUALLY (an earned mention, a LinkedIn article, the entity; and the site-scope
+  // eligibility steps L01 / L03) affect both arms alike, so they do not bias a question-level DiD and are not exposure. L13 (community answer) and
+  // L14 (video) act only on the questions whose cited pages are threads / videos: they are targeted in effect, so since FX-A they are scope 'page',
+  // record exposure, get controls (the questions they do not touch) and are judged and learned like a placement.
+  // SITE_WIDE (no control possible) are judged by an interrupted time series against the questions' own pre-period trend (its()), never learned.
+  const SITE_WIDE = ['L11', 'L12', 'L17'];
+  const UNIFORM = ['L01', 'L03', 'L11', 'L12', 'L17'];
   const HUMAN_NEW = ['L02', 'L03', 'L07', 'L09', 'L10', 'L11', 'L12', 'L13', 'L14', 'L17'];   // DESIGN 2.E "new human steps" (L01 / L04 ride existing site tasks)
-  const LONG_RUN = ['L11', 'L12', 'L17'];
+  // the levers that can reach an answer given from memory (no_search): an earned mention and the entity, through the next training data only.
+  // FX-A RA-15: LinkedIn (L12) reaches answers through search citations only (R1), so it no longer acts on a no_search cell; L11 / L17 on such a cell
+  // are discounted as if their time to effect were 180 days: (1 + 60 / 60) / (1 + 180 / 60) = 0.5 (score()).
+  const LONG_RUN = ['L11', 'L17'];
+  const NO_SEARCH_DISCOUNT = (1 + 60 / 60) / (1 + 180 / 60);
   // off-site levers put the business's name on a third-party page the engine CAN read (a list, a directory, a registry, press, LinkedIn, a forum,
   // a video): they do not need the client's own page to be readable, so they act on S0 cells too, counted from S1 (fixes/P2.md 2, item 13).
   // DESIGN 2.E's "S0: eligibility only" is kept for every lever that works through the client's own page (L05-L07, L15, L16).
@@ -3753,16 +3800,21 @@ const ARL = (() => {
     if (!xs.length) return null; xs.sort((x, y) => x - y); const m = xs.length; return m % 2 ? xs[(m - 1) / 2] : (xs[m / 2 - 1] + xs[m / 2]) / 2; };
   const evidencePrior = (lever) => { const L = LV.get(S(lever)); const pr = L && L.prior; return pr ? { a: pr.mean * pr.n0, b: (1 - pr.mean) * pr.n0 } : null; };
   const rowsOf = (priors) => (Array.isArray(priors) ? priors : []);
+  /** FX-A RA-5: a site's share of the pool keeps its RATE and caps its WEIGHT: w = min(1, SITE_CAP / (k + f)) applied to both k and f (DESIGN G4's
+   *  separate caps min(10, k) / min(10, f) pulled a 4% site to 50%). k and f count ACTIONS (one trial per action and engine group, RA-6), not cells. */
+  const SITE_CAP = 20;
+  const wOf = (k, f) => (k + f > SITE_CAP ? SITE_CAP / (k + f) : 1);
   /** the Beta prior of a lever at a stage for an engine group: evidence (DESIGN 2.D), pooled across sites (the global row), or the site's own posterior
-   *  (the global pool without this site's capped share, shrunk to at most 10 pseudo-outcomes, plus this site's raw outcomes: G4, leave-one-out) */
+   *  (the global pool without this site's weighted share, shrunk to at most 10 pseudo-outcomes toward that pool, which is anchored at the evidence
+   *  prior, plus this site's raw outcomes: G4, leave-one-out) */
   const priorOf = ({ lever, stage, group, priors, site_id } = {}) => { const ev = evidencePrior(lever);
     const out = (a, b, n, source) => ({ a: rd(a), b: rd(b), mean: a + b > 0 ? rd(a / (a + b)) : 0, lo90: a > 0 && b > 0 ? rd(betaInv(0.05, a, b)) : 0, hi90: a > 0 && b > 0 ? rd(betaInv(0.95, a, b)) : 0, n, source });
     if (!ev) return out(0, 0, 0, 'evidence');
     const rows = rowsOf(priors); const gid = AIRF.priorId(lever, stage, group, 'global'); const g = rows.find(r => r && S(r.prior_id) === gid);
     let ga = ev.a, gb = ev.b, gn = 0; if (g && N(g.alpha, 0) > 0 && N(g.beta, 0) > 0) { ga = N(g.alpha, ev.a); gb = N(g.beta, ev.b); gn = N(g.n_outcomes, 0); }
     const sid = S(site_id); const s = sid ? rows.find(r => r && S(r.prior_id) === AIRF.priorId(lever, stage, group, sid)) : null;
-    if (s) { const ks = Math.max(0, N(s.alpha, 0) - N(s.prior_alpha, 0)), fs = Math.max(0, N(s.beta, 0) - N(s.prior_beta, 0));
-      const la = Math.max(1e-6, ga - Math.min(10, ks)), lb = Math.max(1e-6, gb - Math.min(10, fs)); const kap = Math.min(la + lb, 10);
+    if (s) { const ks = Math.max(0, N(s.alpha, 0) - N(s.prior_alpha, 0)), fs = Math.max(0, N(s.beta, 0) - N(s.prior_beta, 0)); const w = wOf(ks, fs);
+      const la = Math.max(1e-6, ga - w * ks), lb = Math.max(1e-6, gb - w * fs); const kap = Math.min(la + lb, 10);
       return out(kap * la / (la + lb) + ks, kap * lb / (la + lb) + fs, N(s.n_outcomes, 0), 'site'); }
     return out(ga, gb, gn, gn > 0 ? 'pooled' : 'evidence'); };
 
@@ -3794,9 +3846,9 @@ const ARL = (() => {
       cells.sort((x, y) => (x.prompt_id < y.prompt_id ? -1 : x.prompt_id > y.prompt_id ? 1 : x.engine < y.engine ? -1 : x.engine > y.engine ? 1 : 0));
       const qs = uniq(cells.map(c => c.prompt_id)); const p0 = P.get(qs[0]) || {};
       out.push(Object.assign({ action_id: id, site_id: sid, lever: L.id, label: L.label, executor: L.executor, scope: L.scope, ref, questions: qs, engines: uniq(cells.map(c => c.engine)).sort(), target_stage: L.to,
-        sink: L.sink, sink_ref: '', cells: cells.map(c => Object.assign({ prompt_id: c.prompt_id, engine: c.engine, stage: c.stage, sub: c.sub }, c.provisional ? { provisional: true } : {})), intent: intentOf(qs), factor: 1,
+        sink: L.sink, sink_ref: '', cells: cells.map(c => Object.assign({ prompt_id: c.prompt_id, engine: c.engine, stage: c.stage, sub: c.sub }, c.provisional ? { provisional: true } : {}, c.no_search ? { no_search: true } : {})), intent: intentOf(qs), factor: 1,
         keyword: L.scope === 'question' ? S(p0.keyword) : '', page_url: '', exposure: L.scope === 'page', why: '' }, extra || {})); };
-    const cellsFor = (L, qs, engines) => { const cs = []; for (const q of qs) { const d = byQ.get(q); if (!d) continue; for (const cell of cellsOf(d)) { if (engines && !engines.includes(cell.engine)) continue; if (applies(L, cell, d)) cs.push({ prompt_id: q, engine: cell.engine, stage: cell.stage, sub: cell.sub, provisional: cell.c.provisional === true }); } } return cs; };
+    const cellsFor = (L, qs, engines) => { const cs = []; for (const q of qs) { const d = byQ.get(q); if (!d) continue; for (const cell of cellsOf(d)) { if (engines && !engines.includes(cell.engine)) continue; if (applies(L, cell, d)) cs.push({ prompt_id: q, engine: cell.engine, stage: cell.stage, sub: cell.sub, provisional: cell.c.provisional === true, no_search: (d.no_search || []).includes(cell.engine) }); } } return cs; };
     const allQ = [...byQ.keys()].sort();
     // S0: eligibility only (content cannot help a page the engine cannot read)
     add(LV.get('L01'), {}, cellsFor(LV.get('L01'), allQ), { why: 'robots.txt blocks the AI search bots of these engines' });
@@ -3822,7 +3874,7 @@ const ARL = (() => {
         const g = byPage.get(k) || { url: u, q, cells: [] }; g.cells.push(...cs); byPage.set(k, g); }
       for (const [, g] of [...byPage.entries()].sort()) add(L, g.url ? { url: g.url } : { prompt_id: g.q }, g.cells, { page_url: g.url, exposure: true, why: 'AI answers cite this page for a question the business wins; a rewrite for another keyword could lose it' }); }
     // pages the answers are built from: lists (L08), directories and review sites (L09), registries (L10); community threads (L13) and videos (L14)
-    const comm = [], vid = [];
+    const comm = [], vid = []; const dirs = new Map();
     const srcs = (Array.isArray(sources) ? sources : []).filter(s => s && S(s.url) && !isOurs(s.url, hosts)).slice().sort((a, b) => (AIRF.urlKey(a.url) < AIRF.urlKey(b.url) ? -1 : 1));
     for (const s of srcs) { const pt = S(s.page_type), ak = S(s.author_kind); const qs = arr(s.questions).map(S).filter(q => byQ.has(q)); const es = arr(s.engines).map(S).filter(AIRF.usable); if (!qs.length) continue;
       if (s.names_client === true) continue;   // already on it: nothing to place (L16 protects what wins)
@@ -3833,14 +3885,20 @@ const ARL = (() => {
         else if (!(pl > 0)) extra.refused = 'placeability 0' + (S(s.placeability_why) ? ': ' + S(s.placeability_why) : '');
         add(L, ref, cs, extra); }
       else if (pt === 'directory' || pt === 'review') { const L = LV.get('L09'); const cs = cellsFor(L, qs, es.length ? es : null); const lid = listingIdOf(s.url);
-        const extra = { page_url: S(s.url), factor: rd(clamp(pl / 0.8, 0, 1), 4), why: 'a ' + pt + ' page the answers cite for ' + qs.length + ' question(s) does not list the business' };
-        if (!(pl > 0)) extra.refused = 'placeability 0' + (S(s.placeability_why) ? ': ' + S(s.placeability_why) : '');
-        add(L, lid ? { listing_id: lid } : ref, cs, extra); }
+        // RA-17 (FX-A): every cited page of one directory is served by ONE profile: the pages' cells are merged into one candidate (all URLs kept)
+        const gk = lid ? 'l:' + lid : 'u:' + AIRF.urlKey(s.url); const g = dirs.get(gk) || { ref: lid ? { listing_id: lid } : ref, pt, urls: [], cells: [], qs: [], pl: 0, why0: S(s.placeability_why) };
+        g.urls.push(S(s.url)); g.qs.push(...qs); g.pl = Math.max(g.pl, pl); if (!g.why0) g.why0 = S(s.placeability_why);
+        for (const c of cs) if (!g.cells.some(x => x.prompt_id === c.prompt_id && x.engine === c.engine)) g.cells.push(c); dirs.set(gk, g); }
       else if (pt === 'registry') { const L = LV.get('L10'); const cs = cellsFor(L, qs, es.length ? es : null);
         const extra = { page_url: S(s.url), factor: rd(clamp(pl / 0.5, 0, 1), 4), why: 'an official list of providers the answers cite' };
         if (!(pl > 0)) extra.refused = 'not eligible for this list' + (S(s.placeability_why) ? ': ' + S(s.placeability_why) : '');
         add(L, ref, cs, extra); }
       else if (pt === 'community') comm.push(...qs); else if (pt === 'video') vid.push(...qs); }
+    for (const [, g] of dirs) { const L = LV.get('L09'); const nq = uniq(g.qs).length;
+      const extra = { page_url: g.urls[0], factor: rd(clamp(g.pl / 0.8, 0, 1), 4), why: 'a ' + g.pt + ' page the answers cite for ' + nq + ' question(s) does not list the business' + (g.urls.length > 1 ? ' (' + g.urls.length + ' of its pages are cited: one profile serves them all)' : '') };
+      if (g.urls.length > 1) extra.page_urls = g.urls.slice();
+      if (!(g.pl > 0)) extra.refused = 'placeability 0' + (g.why0 ? ': ' + g.why0 : '');
+      add(L, g.ref, g.cells, extra); }
     add(LV.get('L13'), {}, cellsFor(LV.get('L13'), uniq(comm).sort()), { why: 'the answers cite community threads for these questions; answer them openly as the business' });
     add(LV.get('L14'), {}, cellsFor(LV.get('L14'), uniq(vid).sort()), { why: 'the answers cite videos for these questions' });
     // site-wide, long-run levers
@@ -3874,7 +3932,8 @@ const ARL = (() => {
       if (!(du > 0) || !(p > 0)) continue;
       const w = N(W[e], 0), V = asNum(values, cell.prompt_id, 'V', 1), F = asNum(feas, cell.prompt_id, 'F', 0.5);
       const rk = OWN_PAGE.includes(L.id) ? rankChance(feas, cell.prompt_id) : 1;
-      const g = w * V * F * p * rk * du; gain += g; pc.push({ prompt_id: cell.prompt_id, engine: e, stage: s0, to: t, p: rd(p * rk, 4), gain: rd(g), head: rd(w * V * F * (U.S5 - U[s0])) }); }   // head: what the cell still has to win
+      const ns = cell.no_search === true && LONG_RUN.includes(L.id) ? NO_SEARCH_DISCOUNT : 1;   // RA-15: an answer from memory moves only after the next training release
+      const g = w * V * F * p * rk * ns * du; gain += g; pc.push({ prompt_id: cell.prompt_id, engine: e, stage: s0, to: t, p: rd(p * rk, 4), gain: rd(g), head: rd(w * V * F * (U.S5 - U[s0])) }); }   // head: what the cell still has to win
     const sc = costRaw > 0 ? gain / costRaw / (1 + days / 60) : 0; const head = pc.reduce((a, x) => a + x.head, 0);
     return { gain: rd(gain, 8), cost, score: rd(sc, 12), head: rd(head, 8), efficiency: head > 0 ? rd(gain / head, 6) : gain > 0 ? 1 : 0, p_by_cell: pc, days, why: L.label + ': ' + pc.length + ' cell(s), expected gain ' + rd(gain, 4) + ' over $' + rd(cost, 2) + ' (client time at $' + hh + ' an hour), typical ' + days + ' days' }; };
   /** an own page helps only if it ranks for the searches the engines run (R1 lever 2, E24): its chance scales with the site's reach against the keyword,
@@ -3884,7 +3943,7 @@ const ARL = (() => {
   /** greedy by score under the weekly caps (DESIGN 2.E). `scored`: candidates each with `.scored` = score(...) (or the score fields merged in).
    *  `open_actions`: stored action rows; rows with status 'shadow' never hold a slot (a shadow plan is made fresh each week). With `now` (and
    *  `units60`) every chosen action is pre-registered before it is returned. */
-  const choose = (scored, { capacities, arms, mode, open_actions, now, units60 } = {}) => { const md = S(mode) || 'off'; const res = { chosen: [], deferred: [], refused: [] };
+  const choose = (scored, { capacities, arms, mode, open_actions, now, units60, exposure } = {}) => { const md = S(mode) || 'off'; const res = { chosen: [], deferred: [], refused: [] };
     if (md === 'off' || !AIRF.MODES.includes(md)) return res;
     const cap = Object.assign({}, CAPS, capacities || {}); const armOf = new Map((arms || []).map(a => [S(a && a.prompt_id), S(a && a.arm)]));
     const openRows = (open_actions || []).filter(a => a && OPEN.includes(S(a.status)));
@@ -3902,7 +3961,7 @@ const ARL = (() => {
       if (!ELIG.includes(L.id) && !OFF_SITE.includes(L.id) && (c.cells || []).some(x => S(x.stage) === 'S0')) { refuse(what, 'a cell the engine cannot read: only eligibility steps or a third-party page apply'); continue; }
       ok.push(it); }
     ok.sort((x, y) => N(y.s.score, 0) - N(x.s.score, 0) || (S(x.c.action_id) < S(y.c.action_id) ? -1 : 1));
-    let own = 0, pitches = 0, human = 0, protect = 0; const ownNow = new Set();
+    let own = 0, pitches = 0, human = 0, protect = 0; const ownNow = new Set(); const expNow = [];
     const absMin = cap.min_gain != null; const effMin = N(cap.min_efficiency, 0), gMin = absMin ? N(cap.min_gain, 0) : N(cap.min_gain_abs, 0);
     const effOf = (sc) => (sc.efficiency != null ? N(sc.efficiency, 0) : N(sc.head, 0) > 0 ? N(sc.gain, 0) / N(sc.head, 0) : 1);
     const tooSmall = (sc) => N(sc.gain, 0) < gMin || (!absMin && effOf(sc) < effMin);
@@ -3920,24 +3979,32 @@ const ARL = (() => {
       const a = { action_id: c.action_id, site_id: c.site_id, lever: L.id, executor: L.executor, scope: L.scope, ref: c.ref || {}, questions: (c.questions || []).slice(), engines: (c.engines || []).slice(), target_stage: L.to,
         expected: { p: meanP(s.p_by_cell), gain: rd(N(s.gain, 0)), cost: N(s.cost, 0), score: N(s.score, 0), days: N(s.days, 0) }, prereg: null, sink: L.sink, sink_ref: '',
         label: L.label, intent: c.intent || 'mixed', keyword: S(c.keyword), page_url: S(c.page_url), why: S(c.why) };
-      if (now != null) a.prereg = prereg(a, { arms, units60, now });
+      if (now != null) a.prereg = prereg(a, { arms, units60, now, exposure: (exposure || []).concat(expNow) });
+      if (!UNIFORM.includes(L.id)) expNow.push({ action_id: a.action_id, lever: L.id, questions: a.questions, from: now == null ? '' : isoOf(now), to: '' });   // this week's other steps are exposure too (RA-4)
       res.chosen.push(a); }
     return res; };
 
   // ================================================================ E. pre-registration
+  /** RA-16 (FX-A): how long an action may wait for our check to find it happened, from its registration (or, for a placement, from the pitch):
+   *  the lever's own longest time to effect (days[2]), at least its window, plus 14 days. The window itself is kept for the outcome only. */
+  const expiryDays = (lever, pre) => { const L = typeof lever === 'string' ? LV.get(S(lever)) : lever; const p = pre || {}; const stored = N(p.expire_days, null); if (stored != null && stored > 0) return stored;
+    const win = N(p.window_days, L && L.days ? Math.max(28, L.days[1]) : 28); return Math.max(win, L && L.days ? N(L.days[2], win) : win) + 14; };
   const metricOf = (action) => { const L = LV.get(S(action.lever)) || {}; if (ELIG.includes(L.id) || SITE_WIDE.includes(L.id)) return 'stage'; if (L.id === 'L16') return 'cited_rate'; return S(action.intent) === 'informational' ? 'cited_rate' : 'named_rate'; };
   /** written once, before anything is executed, never edited: questions, engines, controls (the control arm, minus every question the action touches),
    *  the metric, the window (the lever's typical days, at least 28), when the clock starts, and the projection. */
-  const prereg = (action, { arms, units60, now } = {}) => { const a = action || {}; const L = LV.get(S(a.lever)); const nowMs = msOf(now);
+  const prereg = (action, { arms, units60, now, exposure } = {}) => { const a = action || {}; const L = LV.get(S(a.lever)); const nowMs = msOf(now);
     const qs = (a.questions || []).map(S); const touched = new Set(qs);
+    // RA-4 (FX-A): a control question another action is working on right now (a page-level or community step whose cells include it) is no control
+    const busy = new Set(); for (const x of (Array.isArray(exposure) ? exposure : [])) { if (!x || S(x.action_id) === S(a.action_id) || UNIFORM.includes(S(x.lever))) continue;
+      const to = msOf(x.to); if (isFinite(nowMs) && isFinite(to) && to < nowMs) continue; for (const q of (x.questions || [])) busy.add(S(q)); }
     const site = L && SITE_WIDE.includes(L.id); const elig = L && ELIG.includes(L.id) && L.scope === 'site';
     const strat = new Map((arms || []).map(x => [S(x && x.prompt_id), S(x && x.stratum)])); const myStrata = new Set(qs.map(q => strat.get(q)).filter(Boolean));
-    const controls = site || elig ? [] : (arms || []).filter(x => x && S(x.arm) === 'control' && !touched.has(S(x.prompt_id))).map(x => S(x.prompt_id))
+    const controls = site || elig ? [] : (arms || []).filter(x => x && S(x.arm) === 'control' && !touched.has(S(x.prompt_id)) && !busy.has(S(x.prompt_id))).map(x => S(x.prompt_id))
       .sort((x, y) => (myStrata.has(strat.get(x)) ? 0 : 1) - (myStrata.has(strat.get(y)) ? 0 : 1) || (x < y ? -1 : 1));
-    const window_days = L && L.days ? Math.max(28, L.days[1]) : 28; const metric = metricOf(a);
+    const window_days = L && L.days ? Math.max(28, L.days[1]) : 28; const metric = metricOf(a); const expire_days = expiryDays(L, { window_days });
     const ex = a.expected || {}; const pr = { metric, questions: qs, engines: (a.engines || []).map(S), controls, window_days, t0_rule: L && (OWN_PAGE.includes(L.id) || L.id === 'L16') ? 'live_at' : 'happened_at',
-      projected: { p: N(ex.p, 0), gain: N(ex.gain, 0) }, registered_at: isFinite(nowMs) ? new Date(nowMs).toISOString() : '', lever: S(a.lever), rule_version: RULE,
-      control_note: site || elig ? 'no control possible: it touches every question; judged on whether it happened and on the leading indicators' : controls.length ? '' : 'no control question available' };
+      projected: { p: N(ex.p, 0), gain: N(ex.gain, 0) }, registered_at: isFinite(nowMs) ? new Date(nowMs).toISOString() : '', lever: S(a.lever), rule_version: RULE, expire_days,
+      control_note: site || elig ? 'no control possible: it touches every question; judged on whether it happened, on the leading indicators and against the questions\' own trend before it' : controls.length ? (busy.size && (arms || []).some(x => x && S(x.arm) === 'control' && busy.has(S(x.prompt_id))) ? 'held-back questions another step is working on are left out' : '') : 'no control question available' };
     if (isFinite(nowMs) && Array.isArray(units60) && units60.length) { const from = nowMs - 28 * DAY; const ys = metric === 'cited_rate' ? 'cited' : 'named'; const cs = new Set(controls); const es = new Set(pr.engines);
       const b = { t: { k: 0, n: 0 }, c: { k: 0, n: 0 } }; for (const u of units60) { if (!u || !AIRF.usable(u.engine) || (es.size && !es.has(u.engine))) continue; const t = msOf(u.at); if (!(t > from && t <= nowMs)) continue;
         const q = S(u.prompt_id); const g = touched.has(q) ? b.t : cs.has(q) ? b.c : null; if (!g) continue; g.n++; if (u[ys]) g.k++; } pr.baseline = Object.assign(b, { days: 28, metric: ys }); }
@@ -3951,8 +4018,12 @@ const ARL = (() => {
   const verify = (action, { contentLog, pages, index, listings, outreach, sources, robots, bing, now } = {}) => { const a = action || {}; const L = LV.get(S(a.lever)); const nowMs = msOf(now);
     const pr = parse(a.prereg_json != null ? a.prereg_json : a.prereg, {}) || {}; const reg = msOf(pr.registered_at || a.created_at); const win = N(pr.window_days, L && L.days ? Math.max(28, L.days[1]) : 28);
     const res = (happened, at, evidence, extra) => Object.assign({ happened, at: at ? isoOf(at) : '', evidence }, extra || {});
-    const expired = isFinite(reg) && isFinite(nowMs) && nowMs > reg + (win + 14) * DAY;
-    const notYet = (why) => res(false, '', [why], { expired, why: expired ? 'not verified within the window + 14 days' : why });
+    // RA-16: the clock runs to the lever's longest time to effect + 14 days (not its typical window); a placement's clock starts when the pitch is sent
+    const url0 = S((a.ref || parse(a.ref, {}) || {}).url) || S(a.page_url);
+    const sentAt = L && L.id === 'L08' && url0 ? (outreach || []).filter(o => o && AIRF.urlKey(o.page_url || o.source_url) === AIRF.urlKey(url0) && /sent|replied|contacted/.test(S(o.status))).map(o => msOf(o.sent_at || o.contacted_at || o.updated_at)).filter(isFinite).sort((x, y) => x - y)[0] : NaN;
+    const clock = isFinite(sentAt) && isFinite(reg) ? Math.max(reg, sentAt) : reg; const expDays = expiryDays(L, Object.assign({}, pr, { window_days: win }));
+    const expired = isFinite(clock) && isFinite(nowMs) && nowMs > clock + expDays * DAY;
+    const notYet = (why) => res(false, '', [why], { expired, why: expired ? 'not verified within ' + expDays + ' days (the step\'s longest time to effect + 14 days)' : why });
     if (!L) return res(null, '', ['unknown lever']);
     if (S(a.status) === 'shadow' || S(a.mode) === 'shadow') return res(false, '', ['shadow: nothing is executed'], { expired: false });
     const url = S((a.ref || parse(a.ref, {}) || {}).url) || S(a.page_url); const key = AIRF.urlKey(url);
@@ -4016,31 +4087,104 @@ const ARL = (() => {
     return Object.assign(base, { effect: d.effect == null ? null : d.effect, lo: d.lo == null ? null : d.lo, hi: d.hi == null ? null : d.hi, p, B: d.B || 0, controls_used: row.control_questions || [], treated_used: row.target_questions || [],
       before: row.before, after: row.after, control_before: row.control_before, control_after: row.control_after, pre_days: preD, post_days: rd((end - t0) / DAY, 1), history_from: isFinite(earliest) ? new Date(earliest).toISOString() : '',
       why: S(row.why).replace(/28 days before and after/g, preD + ' days before and the window after') }); };
-  const firstAppear = (units, o) => { const t0 = msOf(o.t0), end = Math.min(msOf(o.now), t0 + o.post_days * DAY), from = t0 - 28 * DAY; const ys = o.metric === 'cited_rate' ? 'cited' : 'named';
-    const es = new Set(o.engines || []); const g = new Map();
-    for (const u of (units || [])) { if (!u || !AIRF.usable(u.engine) || (es.size && !es.has(u.engine))) continue; const q = S(u.prompt_id); const t = msOf(u.at); if (!isFinite(t)) continue;
-      const x = g.get(q) || { pre: 0, preY: 0, post: 0, postY: 0 }; if (t >= from && t < t0) { x.pre++; if (u[ys]) x.preY++; } else if (t > t0 && t <= end) { x.post++; if (u[ys]) x.postY++; } g.set(q, x); }
-    const arm = (qs) => { const r = { k: 0, n: 0, x: 0, m: 0, zero_all: true, any: false }; for (const q of qs) { const x = g.get(q); if (!x || !x.pre || !x.post) continue; r.any = true; if (x.preY) { r.zero_all = false; continue; } r.n++; r.m += x.post; r.x += x.postY; if (x.postY) r.k++; } return r; };
-    const T = arm(o.questions), C = arm(o.controls);
-    const p_fisher = T.n && C.n ? rd(fisher(T.k, T.n, C.k, C.n), 6) : null; const tot = T.x + C.x;
-    const p_binom = T.m + C.m > 0 ? rd(tot ? binomUpper(T.x, tot, T.m / (T.m + C.m)) : 1, 6) : null;
-    return { t: { k: T.k, n: T.n }, c: { k: C.k, n: C.n }, p_fisher, p_binom, answers: { t: { x: T.x, n: T.m }, c: { x: C.x, n: C.m } }, treated_zero_baseline: T.any && T.zero_all }; };
+  // ---- FX-A: compact stages (RA-9), the t0 snapshot (RA-1 / RA-8), per-question counts and the question-level tests (RA-3, RA-4, RA-12, RA-18) ----
+  /** a diagnosis in about 25 characters a cell: { v: 1, q: { prompt_id: { engine: [stage, sub, retrieved 0/1, on_source 1/0/null] } } }; `only` keeps those questions */
+  const stagesPack = (diag, only) => { const keep = only ? new Set([...only].map(S)) : null; const q = {};
+    for (const d of (Array.isArray(diag) ? diag : [])) { const pid = S(d && d.prompt_id); if (!pid || (keep && !keep.has(pid)) || !d.engines) continue; const e0 = {};
+      for (const e of Object.keys(d.engines).sort()) { const c = d.engines[e]; if (!c || typeof c !== 'object' || !AIRF.usable(e)) continue; e0[e] = [S(c.stage), S(c.sub), N(c.retrieved, 0) > 0 ? 1 : 0, 'on_source' in c ? (c.on_source === true ? 1 : 0) : null]; }
+      q[pid] = e0; }
+    return { v: 1, q }; };
+  /** back to ARD's diagnosis shape (prompt_id, engines: { e: { stage, sub, retrieved, on_source? } }); a stored full diagnosis array passes through */
+  const stagesUnpack = (x) => { const p = parse(x, null); if (Array.isArray(p)) return p; if (!p || typeof p !== 'object' || !p.q || typeof p.q !== 'object') return [];
+    return Object.keys(p.q).sort().map(pid => ({ prompt_id: pid, engines: Object.fromEntries(Object.entries(p.q[pid] || {}).map(([e, c]) => { const v = Array.isArray(c) ? c : [S(c)];
+      const o = { stage: S(v[0]), sub: S(v[1]), retrieved: N(v[2], 0) }; if (v[3] === 1 || v[3] === 0) o.on_source = v[3] === 1; return [e, o]; })) })); };
+  const Z3 = () => [0, 0, 0];
+  /** answers per question on the action's engines, [n, named, cited] per period: p1 = 56-28 days before t0, pre = the 28 days before, h1 / h2 = its
+   *  two halves, post = (t0, min(now, t0 + window)] */
+  const countsOf = (units, { qs, es, t0, post_days, now }) => { const keep = new Set((qs || []).map(S)); const E = new Set((es || []).map(S)); const end = Math.min(msOf(now), t0 + N(post_days, 0) * DAY);
+    const c = new Map(); let earliest = Infinity;
+    for (const u of (units || [])) { if (!u || !AIRF.usable(u.engine) || (E.size && !E.has(S(u.engine)))) continue; const q = S(u.prompt_id); if (!keep.has(q)) continue; const t = msOf(u.at); if (!isFinite(t)) continue;
+      earliest = Math.min(earliest, t);
+      const per = t >= t0 - 28 * DAY && t < t0 ? (t < t0 - 14 * DAY ? ['pre', 'h1'] : ['pre', 'h2']) : t >= t0 - 56 * DAY && t < t0 - 28 * DAY ? ['p1'] : t > t0 && t <= end ? ['post'] : null; if (!per) continue;
+      const x = c.get(q) || { p1: Z3(), pre: Z3(), h1: Z3(), h2: Z3(), post: Z3() }; for (const k of per) { x[k][0]++; if (u.named) x[k][1]++; if (u.cited) x[k][2]++; } c.set(q, x); }
+    return { c, earliest: isFinite(earliest) ? earliest : null }; };
+  const coveredDays = (earliest, from, to) => (earliest == null ? 0 : rd(Math.max(0, Math.min((to - from) / DAY, (to - Math.max(earliest, from)) / DAY)), 1));
+  /** RA-1 / RA-8: what the action's questions and its registered controls looked like when it started, frozen in verify_json the first time our check
+   *  finds that it happened: their stages (the latest reading at or before t0 within 14 days, else this run's, labelled) and their answer counts before t0
+   *  (the 28 days before, its halves and the 28 days before that, for the placebo). The outcome reads them at the end of the window, whatever history is
+   *  loaded then (a 60-day window keeps no before-period of its own). `readings`: [{ at, diag (array or packed), basis }]. */
+  const snapshotT0 = (action, { t0, readings, diagNow, units, now } = {}) => { const a = action || {}; const pr = parse(a.prereg_json != null ? a.prereg_json : a.prereg, {}) || {}; const T0 = msOf(t0); if (!isFinite(T0)) return null;
+    const qs = uniq([...arr(pr.questions && pr.questions.length ? pr.questions : a.questions), ...arr(pr.controls)].map(S).filter(Boolean)).sort(); const es = arr(pr.engines && pr.engines.length ? pr.engines : a.engines).map(S).filter(AIRF.usable);
+    let src = null; for (const r of (Array.isArray(readings) ? readings : [])) { const t = msOf(r && r.at); if (!isFinite(t) || t > T0 + 6 * 3600e3 || T0 - t > 14 * DAY) continue; const d = stagesUnpack(r.diag); if (!d.length) continue; if (!src || t > src.t) src = { t, d, basis: S(r.basis) || 'the reading of ' + isoOf(t).slice(0, 10) }; }
+    if (!src && Array.isArray(diagNow) && diagNow.length) src = { t: msOf(now), d: diagNow, basis: 'this run\'s reading (' + isoOf(now).slice(0, 10) + '), after the start: no reading on file from the 14 days before it' };
+    const cnt = countsOf(units, { qs, es, t0: T0, post_days: 0, now: T0 }); const periods = {};
+    for (const q of qs) { const x = cnt.c.get(q); if (x) periods[q] = [...x.pre, ...x.h1, ...x.h2, ...x.p1]; }
+    return { at: isoOf(T0), taken_at: isoOf(now), stages_basis: src ? src.basis : 'no reading on file', stages: src ? stagesPack(src.d, qs) : null, periods, engines: es,
+      pre_days_covered: coveredDays(cnt.earliest, T0 - 28 * DAY, T0), p1_days_covered: coveredDays(cnt.earliest, T0 - 56 * DAY, T0 - 28 * DAY) }; };
+  /** RA-3: the lift test at the unit R1 6 names, the QUESTION. Each question's change between two periods (rate after - rate before, points); the
+   *  DiD = mean change of the worked-on questions - mean change of the held-back ones; its variance is the spread of the questions' own changes (pooled
+   *  over both arms, or the held-back questions' alone when one question is worked on): s2 (1 / T + 1 / C), t on T + C - 2 (or C - 1) degrees of
+   *  freedom. A question's own drift between periods and the correlation of its answers are inside that spread; a resampling of answers missed both
+   *  (13% to 19% false "likely helped" for one question). The binomial noise of the counts is a floor under s2. One worked-on question needs at
+   *  least 4 held-back questions, any other action 3. p_one: one-sided, judged at ALPHA. */
+  const qDid = (cnt, T, C, a, b, metric, opt) => { const o = opt || {}; const yi = metric === 'cited_rate' ? 2 : 1; const minN = N(o.min_n, 3);
+    const ch = (q) => { const x = cnt.get(S(q)); if (!x) return null; const A = x[a], Bq = x[b]; if (!A || !Bq || A[0] < minN || Bq[0] < minN) return null; const ra = A[yi] / A[0], rb = Bq[yi] / Bq[0];
+      const pa = (A[yi] + 0.5) / (A[0] + 1), pb = (Bq[yi] + 0.5) / (Bq[0] + 1); return { q: S(q), d: 100 * (rb - ra), ra, rb, noise: 1e4 * (pa * (1 - pa) / A[0] + pb * (1 - pb) / Bq[0]) }; };
+    const dT = uniq(T.map(S)).map(ch).filter(Boolean), dC = uniq(C.map(S)).map(ch).filter(Boolean);
+    const base = { effect: null, lo: null, hi: null, p: null, p_one: null, se: null, df: null, B: 0, method: 'question-level difference in differences: t test on each question\'s change', periods: a + ' -> ' + b, treated_used: dT.map(x => x.q), controls_used: dC.map(x => x.q), why: '' };
+    if (!dT.length) return Object.assign(base, { why: 'no worked-on question has at least ' + minN + ' answers in both periods' });
+    const minC = dT.length === 1 ? 4 : 3;
+    if (dC.length < minC) return Object.assign(base, { why: (dT.length === 1 ? 'one worked-on question can only be compared with at least 4 held-back questions' : 'at least 3 held-back questions are needed') + ' with answers in both periods (' + dC.length + ' have)' });
+    const mean = (xs) => xs.reduce((s, x) => s + x.d, 0) / xs.length; const ss = (xs, m) => xs.reduce((s, x) => s + (x.d - m) * (x.d - m), 0);
+    const mT = mean(dT), mC = mean(dC); const df = dT.length >= 2 ? dT.length + dC.length - 2 : dC.length - 1;
+    const s2raw = (dT.length >= 2 ? ss(dT, mT) + ss(dC, mC) : ss(dC, mC)) / df; const all = dT.concat(dC); const floor = all.reduce((s, x) => s + x.noise, 0) / all.length;
+    const s2 = Math.max(s2raw, floor); const se = Math.sqrt(s2 * (1 / dT.length + 1 / dC.length)); const eff = mT - mC; const tq = tInv(1 - ALPHA, df);
+    const p_one = rd(se > 0 ? 1 - tCdf(eff / se, df) : (eff > 0 ? 0 : 1), 6);
+    const avg = (xs, k) => (xs.length ? rd(100 * xs.reduce((s, x) => s + x[k], 0) / xs.length, 1) : null);
+    return Object.assign(base, { effect: rd(eff, 1), lo: rd(eff - tq * se, 1), hi: rd(eff + tq * se, 1), se: rd(se, 3), df, p_one, p: rd(Math.min(1, 2 * Math.min(p_one, 1 - p_one)), 6),
+      s2_basis: s2raw >= floor ? (dT.length >= 2 ? 'spread of both arms\' changes' : 'spread of the held-back questions\' changes') : 'binomial noise of the counts (larger than the spread)',
+      before: avg(dT, 'ra'), after: avg(dT, 'rb'), control_before: avg(dC, 'ra'), control_after: avg(dC, 'rb') }); };
+  /** RA-4: a step that touches every question equally has no control. Interrupted time series per question: its change after the start (post - pre)
+   *  minus the change it was already making (2 x (second half - first half of the 28 days before): the same 28-day spacing); mean over the questions,
+   *  t on Q - 1 degrees of freedom. Reported, never learned: a market-wide move looks the same. */
+  const its = (cnt, Q, metric) => { const yi = metric === 'cited_rate' ? 2 : 1; const xs = [];
+    for (const q of uniq(Q.map(S))) { const x = cnt.get(q); if (!x || x.post[0] < 3 || x.pre[0] < 3 || x.h1[0] < 2 || x.h2[0] < 2) continue; const r = (v) => v[yi] / v[0]; xs.push(100 * ((r(x.post) - r(x.pre)) - 2 * (r(x.h2) - r(x.h1)))); }
+    const base = { effect: null, lo: null, hi: null, p_one: null, df: null, n_questions: xs.length, method: 'interrupted time series per question: the change after the start minus the trend before it', why: '' };
+    if (xs.length < 3) return Object.assign(base, { why: 'fewer than 3 questions with answers before (in both halves) and after' });
+    const m = xs.reduce((s, x) => s + x, 0) / xs.length; const df = xs.length - 1; const se = Math.sqrt(xs.reduce((s, x) => s + (x - m) * (x - m), 0) / df / xs.length); const tq = tInv(1 - ALPHA, df);
+    return Object.assign(base, { effect: rd(m, 1), lo: rd(m - tq * se, 1), hi: rd(m + tq * se, 1), df, p_one: rd(se > 0 ? 1 - tCdf(m / se, df) : (m > 0 ? 0 : 1), 6) }); };
+  /** Fisher's exact first-appearance test on questions (one-sided, judged at ALPHA). RA-18: the answer counts are printed for reading only, never tested
+   *  (answers to one question are correlated: an answer-level binomial p was far too small) */
+  const firstAppearC = (cnt, T, C, metric) => { const yi = metric === 'cited_rate' ? 2 : 1;
+    const arm = (qs) => { const r = { k: 0, n: 0, x: 0, m: 0, zero_all: true, any: false }; for (const q of uniq(qs.map(S))) { const x = cnt.get(q); if (!x || !x.pre[0] || !x.post[0]) continue; r.any = true; if (x.pre[yi]) { r.zero_all = false; continue; } r.n++; r.m += x.post[0]; r.x += x.post[yi]; if (x.post[yi]) r.k++; } return r; };
+    const A = arm(T), Cc = arm(C);
+    return { t: { k: A.k, n: A.n }, c: { k: Cc.k, n: Cc.n }, p_fisher: A.n && Cc.n ? rd(fisher(A.k, A.n, Cc.k, Cc.n), 6) : null, answers: { t: { x: A.x, n: A.m }, c: { x: Cc.x, n: Cc.m } },
+      answers_note: 'answer counts for reading only: answers to one question are correlated, so no test is run on them', treated_zero_baseline: A.any && A.zero_all }; };
   const shareOf = (m, qs, es, f) => { let k = 0, n = 0; for (const q of qs) for (const e of es) { const x = stageAt(m, q, e); if (!x || x.stage === 'unmeasured' || !x.stage) continue; n++; if (f(x)) k++; } return n ? { k, n, share: rd(k / n, 4) } : { k: 0, n: 0, share: null }; };
-  /** at the end of the pre-registered window: stage moves of the treated cells net of the control background b (same starting stage, same engine
-   *  group); DiD on the metric with a placebo in time; Fisher's exact first-appearance test when every treated question started at zero; the
-   *  leading indicators. The verdict never says "caused". */
-  const outcome = (action, { units60, diagNow, diagAtT0, arms, now, B, verified } = {}) => { const a = action || {}; const L = LV.get(S(a.lever)); const nowMs = msOf(now);
+  /** at the end of the pre-registered window: stage moves of the treated cells (from the stages frozen at t0) net of the control background b (same
+   *  starting stage, same engine group); the question-level DiD on the metric with a placebo in time (the 28 days before t0 against the 28 before that,
+   *  or, with less history, the two halves of the 28 days before); Fisher's exact first-appearance test when every treated question started at zero;
+   *  for the steps that touch every question, the interrupted time series; the leading indicators. Controls another step worked on in the same period
+   *  are left out (`controls_dropped`). One alpha (ALPHA, one-sided). The verdict never says "caused".
+   *  opts: { units60, diagNow, diagAtT0 (fallback when verify_json holds no t0 snapshot), arms, now, B (unused since FX-A), verified, exposure } */
+  const outcome = (action, { units60, diagNow, diagAtT0, arms, now, B, verified, exposure } = {}) => { const a = action || {}; const L = LV.get(S(a.lever)); const nowMs = msOf(now);
     const pr = parse(a.prereg_json != null ? a.prereg_json : a.prereg, {}) || {}; const vf = verified || parse(a.verify_json, {}) || {};
-    const empty = (verdict, why, extra) => Object.assign({ due: false, stage_moves: { k: 0, n: 0, b: 0 }, did: null, placebo: null, first_appearance: { t: { k: 0, n: 0 }, c: { k: 0, n: 0 }, p_fisher: null, p_binom: null }, leading: {}, verdict, why }, extra || {});
+    const empty = (verdict, why, extra) => Object.assign({ due: false, stage_moves: { k: 0, n: 0, b: 0, by: [], cells: [] }, did: null, placebo: null, first_appearance: { t: { k: 0, n: 0 }, c: { k: 0, n: 0 }, p_fisher: null }, leading: {}, verdict, why }, extra || {});
     if (!L || !pr.registered_at) return empty('not_due', 'no pre-registration');
     const happened = S(a.status) === 'verified' || vf.happened === true;
     const t0 = msOf(pr.t0_rule === 'live_at' ? (a.live_at || vf.live_at) : (a.happened_at || vf.at)); const win = N(pr.window_days, 28);
-    if (!happened) { const expired = S(a.status) === 'expired' || S(a.status) === 'not_happened' || vf.expired === true || (isFinite(nowMs) && nowMs > msOf(pr.registered_at) + (win + 14) * DAY);
+    if (!happened) { const expired = S(a.status) === 'expired' || S(a.status) === 'not_happened' || vf.expired === true || (vf.expired === undefined && isFinite(nowMs) && nowMs > msOf(pr.registered_at) + expiryDays(L, pr) * DAY);   // verify's own clock (a placement's from its pitch) wins when it ran
       return expired ? empty('not_happened', 'our check never found that it happened, so it says nothing about what works', { due: true }) : empty('not_due', 'not verified yet: the clock starts when our check finds it happened'); }
     if (!isFinite(t0)) return empty('not_due', 'verified, but the start date (' + pr.t0_rule + ') is not recorded');
     const due = isFinite(nowMs) && nowMs >= t0 + win * DAY;
-    const qs = (pr.questions || []).map(S), cs = (pr.controls || []).map(S), es = (pr.engines || []).map(S).filter(AIRF.usable);
-    const mN = diagMap(diagNow), m0 = diagMap(diagAtT0);
+    const qs = (pr.questions || []).map(S), cs0 = (pr.controls || []).map(S), es = (pr.engines || []).map(S).filter(AIRF.usable);
+    // RA-4: a registered control another (non-uniform) step worked on during this one's before or after period is left out; recorded, the registration is never edited
+    const exp = (Array.isArray(exposure) ? exposure : []).filter(x => x && S(x.action_id) !== S(a.action_id) && !UNIFORM.includes(S(x.lever)));
+    const lo0 = t0 - 28 * DAY, hi0 = t0 + win * DAY; const controls_dropped = [];
+    const cs = cs0.filter(q => { const hit = exp.find(x => arr(x.questions).map(S).includes(q) && !(msOf(x.from) > hi0) && !(msOf(x.to) < lo0)); if (hit) controls_dropped.push({ prompt_id: q, by: S(hit.action_id), lever: S(hit.lever) }); return !hit; });
+    // RA-1: the stages at t0 come from the snapshot frozen when our check first found the action done; a reading passed in is the fallback
+    const snap = vf.t0_snapshot || (parse(a.verify_json, {}) || {}).t0_snapshot || null;
+    const mN = diagMap(diagNow), m0 = diagMap(snap && snap.stages ? stagesUnpack(snap.stages) : diagAtT0);
     // stage moves
     const cells = [], byK = new Map(), ctrl = new Map();
     const targetOf = (s) => (L.id === 'L16' ? 'S5' : L.next[s] || (L.id === 'L17' ? ({ S1: 'S2', S2: 'S3', S3: 'S4', S4: 'S4' })[s] : ''));
@@ -4056,57 +4200,98 @@ const ARL = (() => {
       const b_basis = src ? (src === c1 ? 'control cells, same stage and engine group' : 'control cells, same stage, any engine group') + ' (' + src.k + ' of ' + src.n + ')' : ELIG.includes(L.id) ? 'eligibility: no background expected' : 'none';
       return { stage: g.stage, prior_stage: effFrom(L, g.stage) || g.stage, group: g.group, n: g.n, k: g.k, b: rd(b, 4), b_basis, k_adj: rd(Math.max(0, g.k - g.n * b), 4) }; });   // prior_stage: the prior it teaches (an off-site lever from S0 teaches its S1 prior); b: same real starting stage
     const sk = by.reduce((s, x) => s + x.k, 0), sn = by.reduce((s, x) => s + x.n, 0), sb = sn ? by.reduce((s, x) => s + x.b * x.n, 0) / sn : 0;
-    const stage_moves = { k: sk, n: sn, b: rd(sb, 4), k_adj: rd(by.reduce((s, x) => s + x.k_adj, 0), 4), by, cells };
-    // the lift tests
+    const stage_moves = { k: sk, n: sn, b: rd(sb, 4), k_adj: rd(by.reduce((s, x) => s + x.k_adj, 0), 4), by, cells, stages_at_t0: snap && snap.stages ? 'snapshot: ' + S(snap.stages_basis) : m0.size ? 'a reading passed in' : 'none: no stage at the start is on file, so no stage move is read' };
+    // the counts every lift test reads: the before-period as frozen at t0 when it was, the window after from the answers loaded now (RA-8)
     const metric = pr.metric === 'stage' ? 'named_rate' : S(pr.metric) || 'named_rate';
-    const strata = new Map((arms || []).map(x => [S(x && x.prompt_id), S(x && x.stratum)]));
-    const common = { questions: qs, controls: cs, engines: es, metric, now: nowMs, post_days: win, seed: S(a.action_id), B: B || 2000, id: S(a.action_id), lever: L.id, label: L.label, strata };
-    let did = null, placebo = null, fa = { t: { k: 0, n: 0 }, c: { k: 0, n: 0 }, p_fisher: null, p_binom: null };
-    if (!noControl && cs.length) { did = didOf(units60, Object.assign({}, common, { t0 }));
-      placebo = didOf(units60, Object.assign({}, common, { t0: t0 - win * DAY, now: t0 - 1, seed: S(a.action_id) + '|placebo' }));
+    const allQ = uniq([...qs, ...cs]); const live = countsOf(units60, { qs: allQ, es, t0, post_days: win, now: nowMs }); const cnt = new Map();
+    const sp = snap && snap.periods && typeof snap.periods === 'object' ? snap.periods : null;
+    for (const q of allQ) { const x = live.c.get(q) || { p1: Z3(), pre: Z3(), h1: Z3(), h2: Z3(), post: Z3() };
+      if (sp) { const v = Array.isArray(sp[q]) ? sp[q].map(n => N(n, 0)) : []; x.pre = v.length >= 3 ? v.slice(0, 3) : Z3(); x.h1 = v.length >= 6 ? v.slice(3, 6) : Z3(); x.h2 = v.length >= 9 ? v.slice(6, 9) : Z3(); x.p1 = v.length >= 12 ? v.slice(9, 12) : Z3(); }
+      cnt.set(q, x); }
+    const end = Math.min(nowMs, t0 + win * DAY);
+    const coverage = { pre_days: sp ? N(snap.pre_days_covered, 0) : coveredDays(live.earliest, t0 - 28 * DAY, t0), p1_days: sp ? N(snap.p1_days_covered, 0) : coveredDays(live.earliest, t0 - 56 * DAY, t0 - 28 * DAY),
+      post_days: coveredDays(live.earliest, t0, end), before_from: sp ? 'snapshot taken ' + S(snap.taken_at).slice(0, 10) : 'the answers loaded now' };
+    let did = null, placebo = null, itsR = null, fa = { t: { k: 0, n: 0 }, c: { k: 0, n: 0 }, p_fisher: null };
+    if (!noControl && cs.length) { did = Object.assign(qDid(cnt, qs, cs, 'pre', 'post', metric), { pre_days: coverage.pre_days, post_days: coverage.post_days });
+      // the placebo in time: the 28 days before t0 against the 28 before that when at least 21 of those days are on file; else the halves of the 28 days
+      // before (14 days apart, so their effect counts double against the DiD's 28-day spacing)
+      if (coverage.p1_days >= 21) placebo = Object.assign(qDid(cnt, qs, cs, 'p1', 'pre', metric), { kind: 'the 28 days before against the 28 before that', scale: 1 });
+      else placebo = Object.assign(qDid(cnt, qs, cs, 'h1', 'h2', metric, { min_n: 2 }), { kind: 'the two halves of the 28 days before (short history)', scale: 2 });
       if (placebo.effect == null) placebo.why = placebo.why || 'not enough history before the start';
-      fa = firstAppear(units60, Object.assign({}, common, { t0 })); }
+      fa = firstAppearC(cnt, qs, cs, metric); }
+    else if (SITE_WIDE.includes(L.id)) itsR = its(cnt, qs, metric);
     // leading indicators (LI1 retrievable, LI2 indexed, LI3 on-source, LI4 cited rate): treated vs control, at t0 and now
     const li = (f) => { const T0 = shareOf(m0, qs, es, f), T1 = shareOf(mN, qs, es, f), C0 = shareOf(m0, cs, es, f), C1 = shareOf(mN, cs, es, f);
       const dd = T0.share != null && T1.share != null && C0.share != null && C1.share != null ? rd(100 * ((T1.share - T0.share) - (C1.share - C0.share)), 1) : null;
       return { t: { at_t0: T0, now: T1 }, c: { at_t0: C0, now: C1 }, did_points: dd, basis: 'share of question x engine cells, two readings, no range' }; };
     const leading = { LI1: li((x) => lvl(x.stage) >= 2 || N(x.c.retrieved, 0) > 0), LI2: li((x) => !(x.stage === 'S0' && x.sub === 'not_indexed')),
-      LI3: li((x) => x.c.on_source === true), LI4: did && metric === 'cited_rate' ? did : !noControl && cs.length ? didOf(units60, Object.assign({}, common, { t0, metric: 'cited_rate', seed: S(a.action_id) + '|cited' })) : null };
+      LI3: li((x) => x.c.on_source === true), LI4: did && metric === 'cited_rate' ? did : !noControl && cs.length ? qDid(cnt, qs, cs, 'pre', 'post', 'cited_rate') : null };
     if (!mN.size || ![...mN.values()].some(d => d && d.engines && Object.values(d.engines).some(c => c && 'on_source' in c))) leading.LI3 = { basis: 'not read: the diagnosis does not carry on-source yet' };
-    // verdict
-    let verdict = 'cant_tell', why = '', primary = 'none';
+    // verdict (one alpha: ALPHA one-sided)
+    let verdict = 'cant_tell', why = '', primary = 'none', p_one = null;
+    const pct = (x) => rd(x, 4);
     if (!due) { verdict = 'not_due'; why = 'the window ends ' + new Date(t0 + win * DAY).toISOString().slice(0, 10); }
     else if (noControl) { primary = 'stage';
       if (ELIG.includes(L.id) && sn) { const r = sk / sn; verdict = r >= 0.5 ? 'likely_helped' : sk === 0 ? 'no_effect' : 'cant_tell'; why = sk + ' of ' + sn + ' cells the step was for can now be read (' + pct1(r) + '%); no control possible, it touches every question'; }
-      else { verdict = 'cant_tell'; why = 'no control possible: it touches every question, so only whether it happened and the leading indicators are reported (' + sk + ' of ' + sn + ' cells moved)'; } }
-    else if (!cs.length) { why = 'no control question was registered, so no lift can be read'; }
+      else if (itsR && itsR.effect != null) { primary = 'its'; p_one = itsR.p_one;
+        if (itsR.p_one < ALPHA && itsR.effect > 0) { verdict = 'likely_helped'; why = 'the questions moved ' + itsR.effect + ' points more than their own trend before the start (95% range ' + itsR.lo + ' to ' + itsR.hi + '); no control: a move of the whole market would look the same'; }
+        else if (itsR.hi <= 0) { verdict = 'no_effect'; why = 'the questions did not move more than their own trend before the start (95% range ' + itsR.lo + ' to ' + itsR.hi + ' points)'; }
+        else { verdict = 'cant_tell'; why = 'against their own trend before the start the questions moved ' + itsR.effect + ' points, inside the 95% range ' + itsR.lo + ' to ' + itsR.hi; } }
+      else { verdict = 'cant_tell'; why = 'no control possible: it touches every question, so only whether it happened and the leading indicators are reported (' + sk + ' of ' + sn + ' cells moved)' + (itsR ? '; the trend test: ' + itsR.why : ''); } }
+    else if (!cs.length) { why = cs0.length ? 'every registered held-back question was worked on by another step in this period (' + controls_dropped.map(x => x.prompt_id + ' by ' + x.lever).join(', ') + '), so no lift can be read' : 'no control question was registered, so no lift can be read'; }
     else { const fisherFirst = fa.p_fisher != null && fa.t.n > 0 && fa.c.n > 0 && (fa.treated_zero_baseline === true);
-      if (fisherFirst) { primary = 'fisher';
-        if (fa.p_fisher < 0.05) { verdict = 'likely_helped'; why = fa.t.k + ' of ' + fa.t.n + ' worked-on questions named the business for the first time against ' + fa.c.k + ' of ' + fa.c.n + ' held-back questions (one-sided Fisher p ' + fa.p_fisher + ')'; }
-        else { verdict = 'cant_tell'; why = 'first appearances: ' + fa.t.k + ' of ' + fa.t.n + ' worked-on vs ' + fa.c.k + ' of ' + fa.c.n + ' held-back questions (Fisher p ' + fa.p_fisher + ', 0.05 needed)'; } }
-      else if (did && did.lo != null) { primary = 'did';
-        if (did.lo > 0) { verdict = 'likely_helped'; why = 'its questions moved ' + did.effect + ' points more than the held-back questions (95% range ' + did.lo + ' to ' + did.hi + '); a correlation with controls, not proof of cause'; }
+      if (fisherFirst) { primary = 'fisher'; p_one = fa.p_fisher;
+        if (fa.p_fisher < ALPHA) { verdict = 'likely_helped'; why = fa.t.k + ' of ' + fa.t.n + ' worked-on questions named the business for the first time against ' + fa.c.k + ' of ' + fa.c.n + ' held-back questions (one-sided Fisher p ' + fa.p_fisher + ')'; }
+        else { verdict = 'cant_tell'; why = 'first appearances: ' + fa.t.k + ' of ' + fa.t.n + ' worked-on vs ' + fa.c.k + ' of ' + fa.c.n + ' held-back questions (Fisher p ' + fa.p_fisher + ', ' + ALPHA + ' needed)'; } }
+      else if (did && did.lo != null) { primary = 'did'; p_one = did.p_one;
+        if (did.p_one < ALPHA && did.effect > 0) { verdict = 'likely_helped'; why = 'its questions moved ' + did.effect + ' points more than the held-back questions (95% range ' + did.lo + ' to ' + did.hi + ', ' + did.treated_used.length + ' against ' + did.controls_used.length + ' questions); a correlation with controls, not proof of cause'; }
         else if (did.hi <= 0) { verdict = 'no_effect'; why = 'its questions did not move more than the held-back questions (95% range ' + did.lo + ' to ' + did.hi + ' points)'; }
         else { verdict = 'cant_tell'; why = 'the change against the held-back questions (' + did.effect + ' points) is inside the 95% range ' + did.lo + ' to ' + did.hi; } }
       else { why = 'the lift cannot be read: ' + ((did && did.why) || 'no answers'); }
-      if (verdict === 'likely_helped' && placebo && placebo.effect != null && did && did.effect != null && did.effect > 0 && placebo.effect >= 0.5 * did.effect && placebo.p != null && placebo.p < 0.2) {
-        verdict = 'cant_tell'; why = 'can\'t tell: the questions were already moving before the action (placebo ' + placebo.effect + ' points, p ' + placebo.p + ', against ' + did.effect + ' after)'; } }
-    return { due, t0: new Date(t0).toISOString(), window_days: win, metric: pr.metric, primary, stage_moves, did, placebo, first_appearance: fa, leading, verdict, verdict_words: VERDICT_WORDS[verdict], why }; };
+      if (verdict === 'likely_helped' && placebo && placebo.effect != null && did && did.effect != null && did.effect > 0 && placebo.effect * placebo.scale >= 0.5 * did.effect && placebo.p_one != null && placebo.p_one < 0.1) {
+        verdict = 'cant_tell'; why = 'can\'t tell: the questions were already moving before the action (placebo ' + placebo.effect + ' points over ' + placebo.kind + ', one-sided p ' + placebo.p_one + ', against ' + did.effect + ' after)'; }
+      if (placebo && placebo.effect == null) why += '; placebo not computable (' + placebo.why + ')';
+      if (controls_dropped.length) why += '; ' + controls_dropped.length + ' held-back question(s) left out: another step worked on them'; }
+    return { due, t0: new Date(t0).toISOString(), window_days: win, metric: pr.metric, primary, p_one: p_one == null ? null : pct(p_one), alpha: ALPHA, stage_moves, did, placebo, its: itsR, first_appearance: fa, leading, coverage, controls_used: cs, controls_dropped, verdict, verdict_words: VERDICT_WORDS[verdict], why }; };
 
   // ================================================================ G4. learning
+  /** RA-1 (FX-A): an outcome is learnable only when it read at least one stage move (an empty reading, e.g. no stage at t0 on file, never burns learned_at) */
   const learnable = (item) => { const a = (item && item.action) || item || {}; const oc = (item && item.outcome) || parse(a.outcome_json, null); const vf = parse(a.verify_json, {}) || {};
     const happened = (item && item.happened === true) || S(a.status) === 'verified' || vf.happened === true;
-    return !!(oc && oc.due === true && happened && oc.verdict !== 'not_happened' && !S(a.learned_at) && LV.has(S(a.lever)) && LV.get(S(a.lever)).prior && !SITE_WIDE.includes(S(a.lever)) && oc.stage_moves && Array.isArray(oc.stage_moves.by)); };
-  /** DESIGN G4, pooled Beta-binomial with the control background subtracted: k_adj = max(0, k - n b). Global: a = a0 + sum over sites min(10, k_site),
-   *  b = b0 + sum over sites min(10, n_site - k_site) (one site can never teach the whole system). Site: the global pool WITHOUT this site's capped share,
-   *  shrunk to kappa = min(a + b, 10) pseudo-outcomes, plus the site's own k and n - k. Rows: the global row and the site row of every key touched.
-   *  A site row stores its raw totals as alpha - prior_alpha and beta - prior_beta, so the next run (and priorOf) can rebuild the pool exactly. */
-  const learn = ({ priors, outcomes, now } = {}) => { const rows = rowsOf(priors); const t = isoOf(now); const delta = new Map(); const done = new Set();
-    for (const it of (outcomes || [])) { if (!learnable(it)) continue; const a = (it && it.action) || it; const id = S(a.action_id); if (id && done.has(id)) continue; if (id) done.add(id); const oc = (it && it.outcome) || parse(a.outcome_json, {});
-      const sid = S(a.site_id); if (!sid) continue; const L = S(a.lever);
-      for (const g of oc.stage_moves.by) { if (!(N(g.n, 0) > 0) || !AIRF.STAGES.includes(S(g.stage)) || !AIRF.GROUPS.includes(S(g.group))) continue; if (S(g.b_basis) === 'none' && !ELIG.includes(L)) continue;
-        const n = N(g.n, 0), kadj = clamp(N(g.k, 0) - n * clamp(N(g.b, 0), 0, 1), 0, n); const key = L + '|' + (AIRF.STAGES.includes(S(g.prior_stage)) ? S(g.prior_stage) : S(g.stage)) + '|' + S(g.group);
-        const m = delta.get(key) || new Map(); const d = m.get(sid) || { k: 0, f: 0, n: 0 }; d.k += kadj; d.f += n - kadj; d.n++; m.set(sid, d); delta.set(key, m); } }
+    return !!(oc && oc.due === true && happened && oc.verdict !== 'not_happened' && !S(a.learned_at) && LV.has(S(a.lever)) && LV.get(S(a.lever)).prior && !SITE_WIDE.includes(S(a.lever))
+      && oc.stage_moves && Array.isArray(oc.stage_moves.by) && oc.stage_moves.by.length > 0 && N(oc.stage_moves.n, 0) > 0); };
+  /** RA-4 (FX-A): one question x engine move teaches ONE action. Within the actions learned now and those learned before (`history`: stored action rows
+   *  with learned_at and outcome_json), a cell already claimed by another action whose window overlaps is dropped from the later one (the earliest t0
+   *  wins; ties: the smaller action id). Returns Map action_id -> { by (regrouped), dropped: [{ prompt_id, engine, by }] }. */
+  const claimCells = (items, history) => { const claims = new Map(); const winOf = (oc) => { const t0 = msOf(oc && oc.t0); return [t0, t0 + N(oc && oc.window_days, 28) * DAY]; };
+    const overl = (x, y) => isFinite(x[0]) && isFinite(y[0]) && x[0] <= y[1] && y[0] <= x[1];
+    const reg = (id, oc) => { const w = winOf(oc); for (const c of ((oc.stage_moves || {}).cells || [])) { const k = S(c.prompt_id) + '|' + S(c.engine); const l = claims.get(k) || []; l.push({ id, w }); claims.set(k, l); } };
+    for (const h of (history || [])) { const a = (h && h.action) || h || {}; if (!S(a.learned_at)) continue; const oc = (h && h.outcome) || parse(a.outcome_json, null); if (oc && oc.due) reg(S(a.action_id), oc); }
+    const out = new Map();
+    const list = (items || []).map(it => ({ it, a: (it && it.action) || it || {}, oc: (it && it.outcome) || parse(((it && it.action) || it || {}).outcome_json, {}) || {} }))
+      .sort((x, y) => (winOf(x.oc)[0] - winOf(y.oc)[0]) || (S(x.a.action_id) < S(y.a.action_id) ? -1 : 1));
+    for (const { a, oc } of list) { const id = S(a.action_id); const sm = oc.stage_moves || {}; const cells = Array.isArray(sm.cells) ? sm.cells : []; const w = winOf(oc);
+      if (!cells.length) { out.set(id, { by: sm.by || [], dropped: [] }); continue; }   // a reading with no cell list (older rows): kept as it was, nothing to de-duplicate
+      const dropped = [], keep = []; for (const c of cells) { const k = S(c.prompt_id) + '|' + S(c.engine); const hit = (claims.get(k) || []).find(x => x.id !== id && overl(x.w, w)); if (hit) dropped.push({ prompt_id: S(c.prompt_id), engine: S(c.engine), by: hit.id }); else keep.push(c); }
+      const by = []; for (const g of (sm.by || [])) { const cs = keep.filter(c => S(c.from) === S(g.stage) && S(c.group) === S(g.group)); if (!cs.length) continue; const k = cs.filter(c => c.reached).length;
+        by.push(Object.assign({}, g, { n: cs.length, k, k_adj: rd(Math.max(0, k - cs.length * N(g.b, 0)), 4) })); }
+      out.set(id, { by, dropped }); reg(id, Object.assign({}, oc, { stage_moves: Object.assign({}, sm, { cells: keep }) })); }
+    return out; };
+  /** DESIGN G4 with three FX-A corrections. RA-6: each action teaches ONE trial per engine group, its success the share of its cells that reached the
+   *  target net of the control background, (k - n b) / n, so one placement on 30 correlated cells moves another site's prior by one pseudo-outcome, not 30.
+   *  RA-5: a site's share of the pool keeps its rate and caps its weight (w = min(1, 20 / trials), wOf), never min(10, k) and min(10, f) apart.
+   *  RA-4: a cell another overlapping action already taught is not counted again (claimCells; `history` = the site's stored, learned action rows).
+   *  Global: a = a0 + sum over sites w k, b = b0 + sum over sites w f (anchored at the evidence prior a0 / b0). Site: the global pool WITHOUT this site's
+   *  weighted share, shrunk to kappa = min(a + b, 10) pseudo-outcomes, plus the site's own k and f. Rows: the global row and the site row of every key
+   *  touched; a site row stores its raw totals as alpha - prior_alpha and beta - prior_beta, so the next run (and priorOf) can rebuild the pool exactly.
+   *  RA-10: call it ONCE per run with every site's outcomes (AI_Rank_Plan does), or two sites learning one key overwrite each other's global row. */
+  const learn = ({ priors, outcomes, now, history } = {}) => { const rows = rowsOf(priors); const t = isoOf(now); const delta = new Map(); const done = new Set();
+    const items = (outcomes || []).filter(learnable); const claimed = claimCells(items, history);
+    for (const it of items) { const a = (it && it.action) || it; const id = S(a.action_id); if (id && done.has(id)) continue; if (id) done.add(id);
+      const sid = S(a.site_id); if (!sid) continue; const L = S(a.lever); const cl = claimed.get(id); const by = cl ? cl.by : (((it && it.outcome) || parse(a.outcome_json, {}) || {}).stage_moves || {}).by || [];
+      for (const g of by) { if (!(N(g.n, 0) > 0) || !AIRF.STAGES.includes(S(g.stage)) || !AIRF.GROUPS.includes(S(g.group))) continue; if (S(g.b_basis) === 'none' && !ELIG.includes(L)) continue;
+        const n = N(g.n, 0), kadj = clamp(N(g.k, 0) - n * clamp(N(g.b, 0), 0, 1), 0, n), s = kadj / n; const key = L + '|' + (AIRF.STAGES.includes(S(g.prior_stage)) ? S(g.prior_stage) : S(g.stage)) + '|' + S(g.group);
+        const m = delta.get(key) || new Map(); const d = m.get(sid) || { k: 0, f: 0, n: 0 }; d.k += s; d.f += 1 - s; d.n++; m.set(sid, d); delta.set(key, m); } }
     const out = [];
     for (const [key, m] of [...delta.entries()].sort()) { const [L, st, gr] = key.split('|'); const ev = evidencePrior(L);
       const gid = AIRF.priorId(L, st, gr, 'global'); const g = rows.find(r => r && S(r.prior_id) === gid);
@@ -4115,13 +4300,35 @@ const ARL = (() => {
       for (const r of rows) { if (!r || S(r.lever) !== L || S(r.stage) !== st || S(r.engine_group) !== gr || S(r.scope) === 'global' || !S(r.scope)) continue;
         sites.set(S(r.scope), { k: Math.max(0, N(r.alpha, 0) - N(r.prior_alpha, 0)), f: Math.max(0, N(r.beta, 0) - N(r.prior_beta, 0)), n: N(r.n_outcomes, 0) }); }
       for (const [sid, d] of m) { const s = sites.get(sid) || { k: 0, f: 0, n: 0 }; sites.set(sid, { k: s.k + d.k, f: s.f + d.f, n: s.n + d.n }); }
-      let A = a0, Bt = b0, nn = 0; for (const s of sites.values()) { A += Math.min(10, s.k); Bt += Math.min(10, s.f); nn += s.n; }
+      let A = a0, Bt = b0, nn = 0; for (const s of sites.values()) { const w = wOf(s.k, s.f); A += w * s.k; Bt += w * s.f; nn += s.n; }
       const base = { lever: L, stage: st, engine_group: gr, updated_at: t, rule_version: RULE };
       out.push(Object.assign({ prior_id: gid, scope: 'global', alpha: rd(A), beta: rd(Bt), n_outcomes: nn, prior_alpha: rd(a0), prior_beta: rd(b0), source: 'pooled' }, base));
-      for (const sid of [...m.keys()].sort()) { const s = sites.get(sid); const la = Math.max(1e-6, A - Math.min(10, s.k)), lb = Math.max(1e-6, Bt - Math.min(10, s.f)); const kap = Math.min(la + lb, 10);
+      for (const sid of [...m.keys()].sort()) { const s = sites.get(sid); const w = wOf(s.k, s.f); const la = Math.max(1e-6, A - w * s.k), lb = Math.max(1e-6, Bt - w * s.f); const kap = Math.min(la + lb, 10);
         const pa = kap * la / (la + lb), pb = kap * lb / (la + lb);
         out.push(Object.assign({ prior_id: AIRF.priorId(L, st, gr, sid), scope: sid, alpha: rd(pa + s.k), beta: rd(pb + s.f), n_outcomes: s.n, prior_alpha: rd(pa), prior_beta: rd(pb), source: 'site' }, base)); } }
     return out; };
+  /** RA-12 (FX-A): the false discovery rate across the actions judged in a quarter (Benjamini-Hochberg at ALPHA on the one-sided p of each action's
+   *  primary test). `outcomes`: this run's items ({ action, outcome }); `judged`: stored action rows whose outcome was judged before. A "likely helped"
+   *  of this run that does not survive becomes "can't tell", with the reason; stored verdicts are history and are never rewritten. Returns
+   *  { m, expected_by_chance, demoted: [action_id] } and writes outcome.fdr on each judged item of this run. */
+  const fdr = ({ outcomes, judged, now, days } = {}) => { const nowMs = msOf(now); const D = N(days, 91) * DAY; const pv = [];
+    const ids = new Set((outcomes || []).map(it => S(((it && it.action) || {}).action_id)));
+    for (const r of (judged || [])) { const id = S(r && r.action_id); if (!id || ids.has(id)) continue; const oc = parse(r.outcome_json, null); if (!oc || !oc.due || oc.p_one == null || !isFinite(N(oc.p_one, NaN))) continue;
+      const end = msOf(oc.t0) + N(oc.window_days, 28) * DAY; if (isFinite(nowMs) && isFinite(end) && nowMs - end > D) continue; pv.push({ id, p: N(oc.p_one, 1), mine: false }); }
+    for (const it of (outcomes || [])) { const oc = it && it.outcome; if (!oc || !oc.due || oc.p_one == null || !isFinite(N(oc.p_one, NaN))) continue; pv.push({ id: S(((it && it.action) || {}).action_id), p: N(oc.p_one, 1), mine: true, it }); }
+    const m = pv.length; const sorted = pv.slice().sort((x, y) => x.p - y.p || (x.id < y.id ? -1 : 1)); let kmax = 0; sorted.forEach((x, i) => { if (x.p <= (i + 1) / m * ALPHA) kmax = i + 1; });
+    const qv = new Map(); { let run = 1; for (let i = m - 1; i >= 0; i--) { run = Math.min(run, sorted[i].p * m / (i + 1)); qv.set(sorted[i].id, rd(Math.min(1, run), 6)); } }
+    const pass = new Set(sorted.slice(0, kmax).map(x => x.id)); const demoted = [];
+    for (const x of pv) { if (!x.mine) continue; const oc = x.it.outcome; oc.fdr = { m, q_value: qv.get(x.id), alpha: ALPHA, basis: 'Benjamini-Hochberg over the ' + m + ' action(s) judged in the last ' + Math.round(D / DAY) + ' days' };
+      if (oc.verdict === 'likely_helped' && !pass.has(x.id)) { oc.verdict = 'cant_tell'; oc.verdict_words = VERDICT_WORDS.cant_tell; oc.why = 'can\'t tell once the ' + m + ' actions judged this quarter are counted: alone it read "likely helped" (' + S(oc.why) + '), but with this many tests that is expected by chance (false discovery rate ' + ALPHA + ')'; demoted.push(x.id); } }
+    return { m, expected_by_chance: rd(m * ALPHA, 2), demoted }; };
+  /** RA-14 (FX-A): an own page is screened against the refused tactics before it is sent to the writer. A self-ranked "best X companies" question (R01)
+   *  is written as an honest comparison (criteria the reader can check, every option on the same terms, never a ranked list with the business first);
+   *  an AI-only page (R02) is refused. Returns { refused: null | { id, why }, page_type, note, matched: [ids] } */
+  const screenOwnPage = ({ keyword, question, fanouts } = {}) => { const txt = [S(keyword), S(question), ...arr(fanouts).map(f => S(f && f.query != null ? f.query : f))].join(' | ').toLowerCase(); const hits = REFUSED.filter(R => new RegExp(R.match, 'i').test(txt)).map(R => R.id);
+    const R02 = REFUSED.find(R => R.id === 'R02'); if (hits.includes('R02')) return { refused: { id: 'R02', why: R02.label + ': ' + R02.why }, page_type: '', note: '', matched: hits };
+    if (hits.includes('R01')) return { refused: null, page_type: 'Comparison Page', note: 'honest comparison, never a self-ranked list: the question asks for the best providers, and a page that ranks its own business first is left out of the answers (R01: ' + REFUSED[0].why + '); compare the options on criteria the reader can check, the business on the same terms as the others', matched: hits };
+    return { refused: null, page_type: '', note: '', matched: hits }; };
   /** calibration per lever: the Brier score of the projected p against each treated cell's result (reached its target or not), and the observed rate */
   const brier = (items) => { const by = {}; for (const it of (items || [])) { const a = (it && it.action) || it || {}; const oc = (it && it.outcome) || parse(a.outcome_json, null); if (!oc || !oc.due || !oc.stage_moves) continue;
       const pr = parse(a.prereg_json != null ? a.prereg_json : a.prereg, {}) || {}; const p = N((pr.projected || {}).p, N((a.expected || parse(a.expected_json, {}) || {}).p, null)); if (p == null) continue;
@@ -4161,12 +4368,20 @@ const ARL = (() => {
         [{ name: 'attributed_to', value: a ? S(a.action_id) : null, basis: a ? 'verified action on this question and engine' : 'no verified action' }])); }
     if (!parts.why.length) parts.why.push(line('Nothing moved up, so there is nothing to explain.', []));
     // 3. what we can detect
+    // RA-11 (FX-A): the figure of the test that is actually run. Every lift test is per action: one question for an own page, a passage fix or a
+    // correction (md.one_question), a few for a placement (md.page_level); the whole-panel figure is printed last, for a step touching every worked-on question
     const mdv = md && !md.unavailable && md.prepost != null ? md : md && md.q_t != null ? mde(md) : null;
-    if (mdv) { parts.detectable.push(line('With the questions we work on and the ones held back, a change of about ' + mdv.did + ' points in the rate can be shown against the held-back questions (' + mdv.prepost + ' points before and after on the worked-on questions alone).',
+    const one = md && md.one_question && md.one_question.did != null ? md.one_question : null, pl = md && md.page_level && md.page_level.did != null ? md.page_level : null;
+    if (one) { parts.detectable.push(line('For a step on one question (an own page, a passage fix, a correction), judged against the held-back questions, only a change of about ' + one.did + ' points in the rate can be shown.',
+        [{ name: 'mde_one_question_points', value: one.did, basis: one.basis || 'minimum detectable effect, one worked-on question' }]));
+      parts.detectable.push(line(one.first_appearance_k != null ? 'On a question where you were never named, one first appearance is enough to show against this many held-back questions.' : 'On a question where you were never named, one first appearance can never be shown on its own: that needs at least ' + Math.ceil(1 / ALPHA) + ' held-back questions that also start at zero (one-sided ' + ALPHA + '); such steps are read by the change of the rate.',
+        [{ name: 'first_appearance_one_question', value: one.first_appearance_k, basis: 'one-sided Fisher exact test at ' + ALPHA + ', one worked-on question' }])); }
+    if (pl) parts.detectable.push(line('For a step on ' + N(md.page_level_q, 3) + ' questions (a list placement, a directory profile), about ' + pl.did + ' points.', [{ name: 'mde_page_level_points', value: pl.did, basis: pl.basis || 'minimum detectable effect' }]));
+    if (mdv) { parts.detectable.push(line('For a step touching every question we work on, judged against the ones held back, a change of about ' + mdv.did + ' points in the rate can be shown (' + mdv.prepost + ' points before and after on the worked-on questions alone).',
         [{ name: 'mde_did_points', value: mdv.did, basis: mdv.basis || 'minimum detectable effect, 80% power, 5% two-sided' }, { name: 'mde_prepost_points', value: mdv.prepost, basis: mdv.basis || 'minimum detectable effect' }]));
-      if (mdv.first_appearance_k != null) parts.detectable.push(line('To show that our actions worked on questions where you were never named, about ' + mdv.first_appearance_k + ' of them must name you for the first time, all among the questions we worked on.',
-        [{ name: 'first_appearance_k', value: mdv.first_appearance_k, basis: 'one-sided Fisher exact test below 0.05, all first appearances on worked-on questions' }])); }
-    else parts.detectable.push(line('The size of change this panel can show is not computed this week.', [{ name: 'mde', value: null, basis: 'no panel arms yet' }]));
+      if (mdv.first_appearance_k != null) parts.detectable.push(line('To show that such a step worked on questions where you were never named, about ' + mdv.first_appearance_k + ' of them must name you for the first time, all among the questions we worked on.',
+        [{ name: 'first_appearance_k', value: mdv.first_appearance_k, basis: 'one-sided Fisher exact test below ' + ALPHA + ', all first appearances on worked-on questions' }])); }
+    if (!mdv && !one) parts.detectable.push(line('The size of change this panel can show is not computed this week.', [{ name: 'mde', value: null, basis: 'no panel arms yet' }]));
     // 4. actions and blockers
     for (const a of (chosen || [])) parts.actions.push(line('New: ' + (LV.get(S(a.lever)) || {}).label + ' (' + ({ auto: 'we do it', approve: 'needs your approval', human: 'a person must do it' })[S(a.executor)] + (a.page_url ? ', ' + a.page_url : '') + ').',
       [{ name: 'expected_gain', value: N((a.expected || {}).gain, 0), basis: 'AIR\'s own model, not independent' }, { name: 'p', value: N((a.expected || {}).p, 0), basis: 'prior mean x engine multiplier' }]));
@@ -4179,8 +4394,11 @@ const ARL = (() => {
     for (const { a, o } of ocs) { const pr = parse(a.prereg_json != null ? a.prereg_json : a.prereg, {}) || {}; const sm = o.stage_moves || {};
       parts.projected_vs_real.push(line((LV.get(S(a.lever)) || {}).label + ': we projected a ' + pct1(N((pr.projected || {}).p, 0)) + '% chance per cell; ' + N(sm.k, 0) + ' of ' + N(sm.n, 0) + ' cells moved (background ' + pct1(N(sm.b, 0)) + '%)' + (o.did && o.did.effect != null ? '; against the held-back questions ' + o.did.effect + ' points' + (o.did.lo != null ? ' (95% range ' + o.did.lo + ' to ' + o.did.hi + ')' : '') : '') + '. Verdict: ' + (VERDICT_WORDS[o.verdict] || o.verdict) + '.',
         [{ name: 'projected_p', value: N((pr.projected || {}).p, 0), basis: 'pre-registered ' + S(pr.registered_at).slice(0, 10) }, { name: 'moved', value: N(sm.k, 0), basis: 'treated cells that reached the target stage' }, { name: 'cells', value: N(sm.n, 0), basis: 'treated cells at a starting stage the lever acts on' },
-          { name: 'background', value: N(sm.b, 0), basis: 'share of control cells that moved the same way' }, { name: 'did_points', value: o.did ? o.did.effect : null, basis: o.did && o.did.lo != null ? 'difference in differences, two-level bootstrap' : 'not computed' }])); }
+          { name: 'background', value: N(sm.b, 0), basis: 'share of control cells that moved the same way' }, { name: 'did_points', value: o.did ? o.did.effect : null, basis: o.did && o.did.lo != null ? 'difference in differences per question, t test (' + (o.did.treated_used || []).length + ' against ' + (o.did.controls_used || []).length + ' questions)' : 'not computed' }])); }
     if (!parts.projected_vs_real.length) parts.projected_vs_real.push(line('No action has reached the end of its window yet.', []));
+    { const fm = ocs.map(x => x.o.fdr).filter(Boolean).sort((x, y) => N(y.m, 0) - N(x.m, 0))[0];   // RA-12: how many were judged, and what chance alone gives
+      if (fm) parts.projected_vs_real.push(line(N(fm.m, 0) + ' action(s) were judged in the last quarter. Each test alone reads "likely helped" by chance about ' + pct1(ALPHA) + '% of the time (about ' + rd(N(fm.m, 0) * ALPHA, 1) + ' of them), so a verdict counts only if it holds with all of them taken together (false discovery rate ' + pct1(ALPHA) + '%).',
+        [{ name: 'judged_quarter', value: N(fm.m, 0), basis: fm.basis || 'actions judged in the last 91 days' }, { name: 'expected_by_chance', value: rd(N(fm.m, 0) * ALPHA, 2), basis: 'judged actions x one-sided ' + ALPHA }])); }
     // 6. cost per won question (12 weeks)
     const c = cost || {}; const H = N(c.H, COST.H); const spend = N(c.usd, 0) + N(c.minutes, 0) / 60 * H;
     let wins = 0; for (const { o } of ocs) for (const g of ((o.stage_moves || {}).by || [])) { const cl = ((o.stage_moves || {}).cells || []).filter(x => x.from === g.stage && x.group === g.group && x.now === 'S5' && (!mP.size || (stageAt(mP, x.prompt_id, x.engine) || {}).stage === 'S5')).length; wins += Math.max(0, cl - N(g.n, 0) * N(g.b, 0)); }
@@ -4214,7 +4432,8 @@ const ARL = (() => {
       note: 'Gains are AIR\'s own model, not independent. Overlap: shared targets over all targets of both plans.' }; };
 
   return { VERSION, OFF_SITE, LEVERS, REFUSED, ZERO_WEIGHT, U, VERDICTS, VERDICT_WORDS, MEMO_PARTS, MEMO_TITLES, ENGINE_W, CAPS, COST, HUMAN_NEW, ELIG, SITE_WIDE, STATS,
-    value, feasibility, rivalsMedian, priorOf, candidates, score, choose, prereg, keepPrereg, verify, outcome, learnable, learn, brier, memo, compareOld, costOf, multOf, didOf };
+    value, feasibility, rivalsMedian, priorOf, candidates, score, choose, prereg, keepPrereg, verify, outcome, learnable, learn, brier, memo, compareOld, costOf, multOf, didOf,
+    UNIFORM, ALPHA, SITE_CAP, expiryDays, stagesPack, stagesUnpack, snapshotT0, qDid, its, claimCells, fdr, screenOwnPage };
 })();
 const AIR_CFG = { H: 25, window_min_days: 28, expire_grace_days: 14, sources_max: 200, actions_max: 300, growth_add_max: 3, protect_days: 28,
   // capacities: ARL's own defaults (own_pages 1 a week, pitches 5, human_new 3, human_open_max 8) in shadow AND on, so the shadow plan is what on would do
@@ -4245,11 +4464,14 @@ const indexAll = rowsOf('Load Index Pages (Rank)'), serpRows = rowsOf('Load SERP
 const answers28All = rowsOf('Load AI Answers (Rank)'), queryAll = rowsOf('Load Query History');   // P1: the source graph reads 28 days of answers; Search Console queries feed demand
 const listingsAll = rowsOf('Load Listings (Rank)'), outreachAll = rowsOf('Load Link Outreach (Rank)'), prospectsAll = rowsOf('Load Link Prospects (Rank)');
 
-// Google results pages the engines' searches return (seo_cache serp:*, any date, each labelled with its reading date)
+// Google results pages the engines' searches return (seo_cache serp:*, any date, each labelled with its reading date). FX-A RA-13: one reading per
+// keyword AND location (`by_loc`; the latest of each), so ARD reads only a results page of the question's market; the entry's own fields are the
+// latest reading of any location (read when the market is not known)
 const serp = new Map();
-for (const r of serpRows) { const v = P(r.value, null); if (!v || typeof v !== 'object' || !v.keyword) continue; const k = SC.normKw(v.keyword); const prev = serp.get(k);
-  if (prev && String(prev.read_at) >= String(v.at || '')) continue;
-  serp.set(k, { results: (v.items || []).filter(x => x && x.type === 'organic' && x.url).map(x => ({ url: x.url, pos: Number(x.rank_group || x.rank_absolute) || null })), read_at: String(v.at || v.day || ''), location_code: Number(v.location_code) || 0 }); }
+const putSerp = (m, k, e) => { const prev = m.get(k); const by = Object.assign({}, prev ? prev.by_loc : {}); const lk = String(Number(e.location_code) || 0);
+  if (!by[lk] || String(by[lk].read_at) <= String(e.read_at)) by[lk] = e; const latest = !prev || String(prev.read_at) <= String(e.read_at) ? e : prev; m.set(k, Object.assign({}, latest, { by_loc: by })); };
+for (const r of serpRows) { const v = P(r.value, null); if (!v || typeof v !== 'object' || !v.keyword) continue;
+  putSerp(serp, SC.normKw(v.keyword), { results: (v.items || []).filter(x => x && x.type === 'organic' && x.url).map(x => ({ url: x.url, pos: Number(x.rank_group || x.rank_absolute) || null })), read_at: String(v.at || v.day || ''), location_code: Number(v.location_code) || 0 }); }
 
 // the robots verdict of this run, in the shape ARD reads: { robots: { bot: { allowed_root, rule } }, blocked_engines, read_at }
 const BOT_ENGINES = { 'OAI-SearchBot': ['chatgpt', 'chatgpt_api'], 'ChatGPT-User': ['chatgpt', 'chatgpt_api'], 'PerplexityBot': ['perplexity'], 'Perplexity-User': ['perplexity'],
@@ -4269,11 +4491,18 @@ const bingList = (() => { try { const r = $('Fetch Bing Sites (Growth)').first()
 // D24 (P5): this run's fan-out results pages (AI Rank Fetched `serp_reads`, Google only; Bing's reach the kits through bing_stats.positions) are
 // merged into the site's own copy of the Google map, a later reading of the same search winning, so the S1 / S2 proxy basis can be read
 const serpFor = (f) => { const reads = f && Array.isArray(f.serp_reads) ? f.serp_reads.filter(r => r && (!r.engine || r.engine === 'google')) : []; if (!reads.length) return serp;
-  const m = new Map(serp); for (const r of reads) { const k = SC.normKw(r.query || r.key); if (!k) continue; const prev = m.get(k); if (prev && String(prev.read_at) > String(r.read_at || '')) continue;
-    m.set(k, { results: (r.results || []).filter(x => x && x.url).map(x => ({ url: x.url, pos: Number(x.pos) || null })), read_at: String(r.read_at || ''), location_code: Number(r.location_code) || 0 }); }
+  const m = new Map(serp); for (const r of reads) { const k = SC.normKw(r.query || r.key); if (!k) continue;
+    putSerp(m, k, { results: (r.results || []).filter(x => x && x.url).map(x => ({ url: x.url, pos: Number(x.pos) || null })), read_at: String(r.read_at || ''), location_code: Number(r.location_code) || 0 }); }
   return m; };
 const rawHost = (u) => { const m = S0(u).match(/^https?:\/\/([^\/?#:]+)/i); return m ? m[1].toLowerCase() : ''; };
-const out = [];
+// RA-4 (FX-A): the exposure ledger - which questions each EXECUTED action (mode on; shadow rows execute nothing) works on, from its registration to
+// the end of its window (open-ended while it is open). The levers that touch every question alike (ARL.UNIFORM) are not exposure.
+const exposureOf = (rows) => rows.filter(a => a && S0(a.mode) === 'on' && !['shadow', 'refused', ''].includes(S0(a.status)) && !ARL.UNIFORM.includes(S0(a.lever))).map(a => {
+  const pre = P(a.prereg_json, {}) || {}; const vf = P(a.verify_json, {}) || {}; const win = Math.max(AIR_CFG.window_min_days, Number(pre.window_days) || 0);
+  const t0 = Date.parse(S0(pre.t0_rule === 'live_at' ? vf.live_at : '') || S0(a.happened_at) || S0(vf.at)); const open = AIR_CFG.open.includes(S0(a.status)) && S0(a.status) !== 'done';
+  const to = open ? '' : Number.isFinite(t0) ? new Date(t0 + win * DAY).toISOString() : S0(a.updated_at);
+  return { action_id: S0(a.action_id), lever: S0(a.lever), questions: P(a.questions, []).map(S0), from: S0(pre.registered_at) || S0(a.created_at), to, window_days: win, controls: (pre.controls || []).map(S0), open: AIR_CFG.open.includes(S0(a.status)) }; });
+const out = []; const siteLearn = [];
 for (const g of gateSites) {
   const sid = g.site_id;
   try {
@@ -4315,7 +4544,7 @@ for (const g of gateSites) {
     const monRow = monRows.find(m => m.site_id === sid) || {};
     const aiPages = bySite(aiPagesAll, sid, dom);
     const storedQ = new Map(bySite(rqAll, sid, dom).map(r => [S0(r.prompt_id), r]));
-    const storedA = bySite(raAll, sid, dom);
+    const storedA = bySite(raAll, sid, dom);   // (also read by the arms below: the exposure ledger)
     const storedSrc = bySite(rsAll, sid, dom);
     const runsPrev = bySite(rrAll, sid, dom).filter(r => r.run_id !== g.run_id);
     const prevRun = latest(runsPrev, 'checked_at');
@@ -4334,13 +4563,22 @@ for (const g of gateSites) {
       ...[...gsc.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([k, v]) => ({ keyword: k, source: 'gsc', volume: v, market: mkt }))].filter(c => c.keyword);
     const panelDemand = { byPrompt: Object.fromEntries(prompts.map(p => [S0(p.prompt_id), { volume: Number(p.volume) || 0 }])), candidates: candidatesQ };
     const panel0 = un('ARD.corePanel', ARD.corePanel({ site, prompts, units60, stored: [...storedQ.values()], market, demand: panelDemand, now: nowMs, cfg: {} }));
-    const arms = ARD.assignArms({ core: panel0.core || [], stored: [...storedQ.values()], seed: sid, now: nowMs, site_id: sid, holdout_days: 84 }) || [];
+    // RA-2 (FX-A): a control is replaced only by a treated question no executed step worked on in the last two windows, and never rotates while it is a
+    // registered control of an open action
+    const exposure = exposureOf(storedA);
+    const exposedQ = new Set(exposure.filter(x => !x.to || Date.parse(x.to) >= nowMs - 2 * x.window_days * DAY).flatMap(x => x.questions));
+    const lockedQ = new Set(exposure.filter(x => x.open).flatMap(x => x.controls));
+    const arms = ARD.assignArms({ core: panel0.core || [], stored: [...storedQ.values()], seed: sid, now: nowMs, site_id: sid, holdout_days: 84, exposed: exposedQ, locked: lockedQ }) || [];
     const armOf = new Map(arms.map(a => [S0(a.prompt_id), a]));
     const qT = arms.filter(a => a.arm === 'treated').length, qC = arms.filter(a => a.arm === 'control').length;
-    const perQ = new Map(); for (const u of units60) perQ.set(u.prompt_id, (perQ.get(u.prompt_id) || 0) + 1);
+    // RA-11 (FX-A): m = answers per core question in the last 28 days (the period the formula assumes), p = the named share on the core (no brand
+    // question); the memo prints the test actually run - one question (own page, passage fix, correction), a placement on 3 - beside the panel figure
+    const coreSet = new Set((panel0.core || []).map(c => S0(c.prompt_id))); const u28 = units60.filter(u => coreSet.has(S0(u.prompt_id)) && Date.parse(u.at) > nowMs - 28 * DAY);
+    const perQ = new Map(); for (const u of u28) perQ.set(u.prompt_id, (perQ.get(u.prompt_id) || 0) + 1);
     const mAns = perQ.size ? Math.round([...perQ.values()].reduce((a, b) => a + b, 0) / perQ.size) : 0;
-    const pNamed = units60.length ? units60.filter(u => u.named).length / units60.length : 0;
-    const mde = un('ARD.mde', ARD.mde({ q_t: qT, q_c: qC, m: mAns, p: pNamed, rho: 0.3 }));
+    const pNamed = u28.length ? u28.filter(u => u.named).length / u28.length : 0;
+    const mde0 = un('ARD.mde', ARD.mde({ q_t: qT, q_c: qC, m: mAns, p: pNamed, rho: 0.3 }));
+    const mde = mde0.unavailable ? mde0 : Object.assign({}, mde0, { one_question: qC ? ARD.mde({ q_t: 1, q_c: qC, m: mAns, p: pNamed, rho: 0.3 }) : null, page_level: qC && qT ? ARD.mde({ q_t: Math.min(3, qT), q_c: qC, m: mAns, p: pNamed, rho: 0.3 }) : null, page_level_q: Math.min(3, qT) });
     // ---- B: the stage of each question x engine ----
     const coreIds = new Set((panel0.core || []).map(c => S0(c.prompt_id)));
     const LIVE_OUT = new Set(['off', 'refused', 'retired', 'proposed']);
@@ -4368,22 +4606,35 @@ for (const g of gateSites) {
     const candidates = ARL.candidates({ site: { ...site, hosts: ourHosts, prompts, pages: aiPages }, diag, sources, arms, stored_actions: storedA, settings: rank, now: nowMs }) || [];
     const scored = candidates.map(c => { const sc = un('ARL.score', ARL.score(c, { priors: rpAll, values, feas, weights: null, H: AIR_CFG.H })); return sc.unavailable ? null : { ...c, ...sc }; }).filter(Boolean);
     const openStored = storedA.filter(a => AIR_CFG.open.includes(S0(a.status)));
-    const choice = ARL.choose(scored, { capacities: {}, arms, mode, open_actions: storedA.filter(a => ['shadow', ...AIR_CFG.open].includes(S0(a.status))), now: nowMs, units60 }) || { chosen: [], deferred: [], refused: [] };
+    const choice = ARL.choose(scored, { capacities: {}, arms, mode, open_actions: storedA.filter(a => ['shadow', ...AIR_CFG.open].includes(S0(a.status))), now: nowMs, units60, exposure }) || { chosen: [], deferred: [], refused: [] };
     // the gate on the way out: a placement pitch to a competitor's own page is refused here, whatever the kit chose (rival lists: learn only)
     const refused = (choice.refused || []).slice(); const chosen = [];
     for (const a of (choice.chosen || [])) {
       const url = S0((a.ref || {}).url); const src = url ? srcByKey.get(AIRF.urlKey(url)) : null;
       if (a.sink === 'prospect') { const why = rivalWhy(hostOf(url), { url, title: src ? src.title || '' : '' });
         if (why || (src && ['rival', 'client'].includes(S0(src.author_kind)))) { refused.push({ what: a.action_id || a.lever, why: why || 'a page written by ' + (src.author_kind === 'client' ? 'the client' : 'a competitor') + ': learned from, never pitched' }); continue; } }
-      chosen.push({ ...a, prereg: a.prereg && !a.prereg.unavailable ? a.prereg : ARL.prereg(a, { arms, units60, now: nowMs }) }); }
-    // ---- G: verify and learn (only actions AIR executed: mode `on`, an open status) ----
+      // RA-14 (FX-A): an own page is screened against the refused tactics before anything is written (shadow shows it too)
+      let screen = null; if (['L05', 'L06'].includes(S0(a.lever)) && typeof ARL.screenOwnPage === 'function') { const pq = promptById.get(S0((a.ref || {}).prompt_id)) || {};
+        screen = ARL.screenOwnPage({ keyword: pq.keyword || pq.topic, question: pq.prompt, fanouts: ARD.fanoutOf({ prompt_id: S0((a.ref || {}).prompt_id), answers8, evidence: evidenceOf.get(S0((a.ref || {}).prompt_id)) || '' }).slice(0, 8) });
+        if (screen.refused) { refused.push({ what: a.action_id || a.lever, why: screen.refused.id + ': ' + screen.refused.why }); continue; } if (!screen.page_type) screen = null; }
+      chosen.push({ ...a, screen, prereg: a.prereg && !a.prereg.unavailable ? a.prereg : ARL.prereg(a, { arms, units60, now: nowMs, exposure }) }); }
+    // ---- G: verify and judge (only actions AIR executed: mode `on`, an open status); learning runs ONCE after every site (RA-10) ----
+    // RA-1 / RA-9 (FX-A): the stages and answer counts at the start are frozen in verify_json (t0_snapshot) the first time our check finds the action
+    // done, from the latest stored reading at or before its start (the compact stages_json of the run rows), else this run's reading (labelled)
+    const readings = runsPrev.map(r => ({ at: S0(r.checked_at), diag: S0(r.stages_json) ? r.stages_json : P(r.diag_json, []), basis: 'the AI ranking reading of ' + S0(r.checked_at).slice(0, 10) })).filter(x => x.at);
+    const stagesAt = (t) => { let best = null; for (const r of readings) { const x = Date.parse(r.at); if (!Number.isFinite(x) || !Number.isFinite(t) || x > t + 6 * 3600e3 || t - x > 14 * DAY) continue; const d = ARL.stagesUnpack(r.diag); if (d.length && (!best || x > best.x)) best = { x, d }; } return best ? best.d : null; };
     const outcomes = [];
     for (const a of openStored.filter(x => S0(x.mode) === 'on')) {
       const qs0 = P(a.questions, []); const act = { ...a, ref: P(a.ref, {}), questions: qs0, engines: P(a.engines, []), expected: P(a.expected_json, {}), prereg: P(a.prereg_json, {}), keyword: S0((promptById.get(S0(qs0[0])) || {}).keyword) };
       const v = ARL.verify(act, { contentLog: bySite(logAll, sid, dom), pages: aiPages, index, listings, outreach, sources, robots: access, bing: index.bing, now: nowMs });
-      const o = ARL.outcome(act, { units60, diagNow: diag, diagAtT0: null, arms, now: nowMs });
-      outcomes.push({ action_id: a.action_id, lever: a.lever, site_id: sid, action: { ...a, site_id: sid }, verify: v, outcome: o, happened: v.happened === true }); }   // ARL.learn / learnable read { action, outcome, happened }
-    const learnRows = (ARL.learn({ priors: rpAll, outcomes, now: nowMs }) || []).filter(r => r && r.prior_id);
+      const sv = P(a.verify_json, {}) || {}; let snap = sv.t0_snapshot || null; const first = !S0(a.happened_at);
+      const t0 = Date.parse(act.prereg.t0_rule === 'live_at' ? S0(v.live_at || sv.live_at || a.live_at) : S0(a.happened_at || v.at));
+      if (!snap && v.happened === true && Number.isFinite(t0)) snap = ARL.snapshotT0(act, { t0, readings, diagNow: first ? diag : null, units: units60, now: nowMs });   // a start seen weeks ago is never read from this week's stages
+      const v2 = snap ? { ...v, t0_snapshot: snap } : v;
+      const o = ARL.outcome(act, { units60, diagNow: diag, diagAtT0: snap ? null : stagesAt(t0), arms, now: nowMs, verified: v2, exposure });
+      outcomes.push({ action_id: a.action_id, lever: a.lever, site_id: sid, action: { ...a, site_id: sid }, verify: v2, outcome: o, happened: v.happened === true }); }   // ARL.learn / learnable read { action, outcome, happened }
+    // RA-12: the false discovery rate over the actions judged in the last quarter (stored verdicts are history, never rewritten)
+    const fdrR = typeof ARL.fdr === 'function' ? ARL.fdr({ outcomes, judged: storedA, now: nowMs }) : null;
     // ---- H: the old logic's choice, the comparison, the memo ----
     const old = { targets: (gm.targets || gp.targets || []).filter(t => S0(t.status) === 'queued').slice(0, 10).map(t => ({ target_id: t.target_id, prompt_id: t.prompt_id || '', question: t.question, kind: t.kind, page_url: t.page_url || '', value: t.value })),
       earned: (em.earned || gp.earned || []).slice(0, 10).map(e => ({ url: e.url, host: e.host || hostOf(e.url), kind: e.kind || '', citations: e.citations || 0, mentions_us: e.mentions_us === true, action: S0(e.action_type || e.action).slice(0, 160) })),
@@ -4391,13 +4642,15 @@ for (const g of gateSites) {
     const compare = un('ARL.compareOld', ARL.compareOld({ chosen, old }));
     const blockers = (gm.actions || []).filter(x => ['bing', 'indexnow', 'robots', 'fetchers', 'access', 'render'].includes(S0(x.type))).slice(0, 8).map(x => ({ what: S0(x.action).slice(0, 200), owner: 'client', since: '', blocks: S0(x.why).slice(0, 200) }));
     const cost = { usd: fetched ? Math.round(1e4 * (Number(fetched.cost_usd) || 0)) / 1e4 : 0, basis: fetched ? 'AI Rank Fetched (measured, counted once by task id)' : 'stored data only: no paid or outside read this run' };
-    const memo = un('ARL.memo', ARL.memo({ site, diagNow: diag, diagPrev: prevRun ? P(prevRun.diag_json, []) : [], chosen, open: openStored, outcomes, mde, blockers, cost, old, mode }));
+    // RA-9: last week's stages come from the compact stages_json (the full diagnosis is trimmed from a run row of about 20 questions or more)
+    const diagPrev = !prevRun ? [] : (() => { const st = ARL.stagesUnpack(prevRun.stages_json); if (st.length) return st; const d = P(prevRun.diag_json, []); return Array.isArray(d) ? d : []; })();
+    const memo = un('ARL.memo', ARL.memo({ site, diagNow: diag, diagPrev, chosen, open: openStored, outcomes, mde, blockers, cost, old, mode }));
     const panel = { core: panel0.core || [], proposed: panel0.proposed || [], extend: panel0.extend || [], comparable: !!panel0.comparable, why: S0(panel0.why), arms, mde: mde.unavailable ? null : mde };
     // ---- the rows of the five AIR tables (shadow and on) ----
     const q_rows = diag.map(d => { const pid = S0(d.prompt_id); const p = promptById.get(pid) || {}; const c = (panel.core || []).find(x => S0(x.prompt_id) === pid) || null; const sq = storedQ.get(pid) || {};
       const ext = (panel.extend || []).find(x => S0(x.prompt_id) === pid) || null; const arm = armOf.get(pid) || {}; const v = values[pid] || null; const f = feas[pid] || null;
       return { site_id: sid, domain: dom, prompt_id: pid, question: S0(p.prompt).slice(0, 300), intent: S0(d.intent), market: S0(p.market) || (market.unavailable || !market.cc ? '' : market.cc + '-' + (market.lang || 'en')),
-        core: !!c, core_since: c ? S0(c.core_since) : S0(sq.core_since), core_until: ext ? S0(ext.core_until) : c ? S0(c.core_until) : '', arm: S0(arm.arm || sq.arm), stratum: S0(arm.stratum || sq.stratum),
+        core: !!c, core_since: c ? S0(c.core_since) : S0(sq.core_since), core_until: ext ? S0(ext.core_until) : c ? S0(c.core_until) : '', arm: S0(arm.arm || sq.arm), stratum: S0(arm.stratum || sq.stratum), arm_since: S0(arm.assigned_at || sq.arm_since),
         value: v ? Number(v.V) || 0 : null, demand: v ? Number(v.demand_w) || 0 : null, demand_basis: v ? S0(v.basis).slice(0, 300) : '', feasibility: f ? Number(f.F) || 0 : null,
         stage_json: J(d.engines || {}), best_stage: S0(d.best_stage), parametric_json: J({ parametric_share: d.parametric_share || {}, no_search: d.no_search || [], list_dominated: !!d.list_dominated, nobody_named: !!d.nobody_named }),
         evidence_json: evidenceOf.get(pid) || '', first_named_at: S0(d.first_named_at), last_named_at: S0(d.last_named_at), last_cited_at: S0(d.last_cited_at), updated_at: nowIso, rule_version: AIRF.RULE_VERSION }; });
@@ -4406,27 +4659,37 @@ for (const g of gateSites) {
     const storedById = new Map(storedA.map(a => [S0(a.action_id), a]));
     const a_rows = [];
     for (const a of chosen) { const id = S0(a.action_id) || AIRF.actionId(sid, a.lever, a.ref); const st = storedById.get(id) || {};
+      // RA-7 (FX-A): a registration is kept only by an attempt that is still open and executed (`on`); a shadow row, or an attempt that ended (did not
+      // happen, expired, verified), is registered afresh (registration date, baseline, controls), the earlier attempts kept as history in prereg_json
+      const keep = on && AIR_CFG.open.includes(S0(st.status)) && S0(st.mode) === 'on' && !!S0(st.prereg_json);
+      const old = !keep && S0(st.prereg_json) && S0(st.status) !== 'shadow' && S0(st.mode) === 'on' ? P(st.prereg_json, {}) || {} : null;
+      const fresh = a.prereg && !a.prereg.unavailable ? Object.assign({}, a.prereg, old ? { attempt: (Number(old.attempt) || 1) + 1, previous: [{ registered_at: S0(old.registered_at), status: S0(st.status), verdict: S0((P(st.outcome_json, {}) || {}).verdict) }, ...(old.previous || [])].slice(0, 5) } : {}) : null;
       a_rows.push({ action_id: id, site_id: sid, domain: dom, lever: S0(a.lever), executor: S0(a.executor), scope: S0(a.scope), ref: J(a.ref || {}), questions: J(a.questions || []), engines: J(a.engines || []),
-        target_stage: S0(a.target_stage), status: statusOf(a), sink: S0(a.sink), sink_ref: S0(st.sink_ref) || sinkRefOf(a), expected_json: J(a.expected || { p: a.p_hat, gain: a.gain, cost: a.cost, score: a.score, days: a.days }),
-        prereg_json: S0(st.prereg_json) || (a.prereg && !a.prereg.unavailable ? J(a.prereg) : ''),   // written once, never changed
-        happened_at: S0(st.happened_at), verify_json: S0(st.verify_json), outcome_json: S0(st.outcome_json), learned_at: S0(st.learned_at), mode, run_id: g.run_id, created_at: S0(st.created_at) || nowIso, updated_at: nowIso }); }
+        target_stage: S0(a.target_stage), status: statusOf(a), sink: S0(a.sink), sink_ref: keep ? S0(st.sink_ref) || sinkRefOf(a) : sinkRefOf(a), expected_json: J(a.expected || { p: a.p_hat, gain: a.gain, cost: a.cost, score: a.score, days: a.days }),
+        prereg_json: keep ? S0(st.prereg_json) : fresh ? J(fresh) : '',   // written once per attempt, never changed while it runs
+        happened_at: keep ? S0(st.happened_at) : '', verify_json: keep ? S0(st.verify_json) : '', outcome_json: keep ? S0(st.outcome_json) : '', learned_at: keep ? S0(st.learned_at) : '', mode, run_id: g.run_id, created_at: keep ? S0(st.created_at) || nowIso : nowIso, updated_at: nowIso }); }
     // every stored action has an exit (INVARIANTS rule 4): verified / not happened from its outcome, `expired` once its window + 14 days passed
-    const chosenIds = new Set(a_rows.map(r => r.action_id));
+    const chosenIds = new Set(a_rows.map(r => r.action_id)); const pendingOc = [];
     for (const o of outcomes) { const a = storedById.get(S0(o.action_id)); if (!a || chosenIds.has(S0(a.action_id))) continue; const v = o.verify || {}; const oc = o.outcome || {};
       const status = v.happened === true ? (oc.due && oc.verdict && oc.verdict !== 'not_due' ? 'verified' : 'done') : v.happened === false && oc.due ? 'not_happened' : S0(a.status);
       if (status === S0(a.status) && !(v.happened === true && !S0(a.happened_at))) continue;
-      a_rows.push({ ...a, status, happened_at: v.happened === true ? (S0(a.happened_at) || S0(v.at) || nowIso) : S0(a.happened_at), verify_json: J(v), outcome_json: oc.due ? J(oc) : S0(a.outcome_json),
-        learned_at: !S0(a.learned_at) && (typeof ARL.learnable === 'function' ? ARL.learnable(o) : (learnRows.length && oc.due)) ? nowIso : S0(a.learned_at), updated_at: nowIso }); chosenIds.add(S0(a.action_id)); }
-    for (const a of storedA) { if (chosenIds.has(S0(a.action_id)) || !['shadow', ...AIR_CFG.open].includes(S0(a.status))) continue;
-      const pre = P(a.prereg_json, {}); const win = Math.max(AIR_CFG.window_min_days, Number(pre.window_days) || 0);
-      const since = Date.parse(S0(a.status) === 'shadow' ? a.updated_at || a.created_at : a.created_at || a.updated_at);
-      if (Number.isFinite(since) && nowMs - since > (win + AIR_CFG.expire_grace_days) * DAY) a_rows.push({ ...a, status: 'expired', updated_at: nowIso }); }
+      const row = { ...a, status, happened_at: v.happened === true ? (S0(a.happened_at) || S0(v.at) || nowIso) : S0(a.happened_at), verify_json: J(v), outcome_json: oc.due ? J(oc) : S0(a.outcome_json),
+        learned_at: !S0(a.learned_at) && typeof ARL.learnable === 'function' && ARL.learnable(o) ? nowIso : S0(a.learned_at), updated_at: nowIso };
+      a_rows.push(row); if (oc.due) pendingOc.push({ row, oc, id: S0(a.action_id) }); chosenIds.add(S0(a.action_id)); }
+    // RA-16 (FX-A): an executed action that never happened expires at its registration + the lever's longest time to effect + 14 days (ARL.expiryDays,
+    // as verify); one that happened is never expired here (it waits for the end of its window); a shadow plan not chosen again: its window + 14 days
+    const judgedNow = new Set(outcomes.map(o => S0(o.action_id)));   // verify ran on these this run, with its own clock (a placement's starts at the pitch): no second clock here
+    for (const a of storedA) { if (chosenIds.has(S0(a.action_id)) || judgedNow.has(S0(a.action_id)) || !['shadow', ...AIR_CFG.open].includes(S0(a.status)) || S0(a.happened_at) || S0(a.status) === 'done') continue;
+      const pre = P(a.prereg_json, {}) || {}; const win = Math.max(AIR_CFG.window_min_days, Number(pre.window_days) || 0); const sh = S0(a.status) === 'shadow';
+      const since = Date.parse(sh ? a.updated_at || a.created_at : S0(pre.registered_at) || a.created_at || a.updated_at);
+      const days = sh ? win + AIR_CFG.expire_grace_days : (typeof ARL.expiryDays === 'function' ? ARL.expiryDays(S0(a.lever), pre) : win + AIR_CFG.expire_grace_days);
+      if (Number.isFinite(since) && nowMs - since > days * DAY) a_rows.push({ ...a, status: 'expired', updated_at: nowIso }); }
     const s_rows = sources.map(x => { const k = S0(x.url_key) || AIRF.urlKey(x.url); const st = storedSrc.find(r => S0(r.url_key) === k) || {};
       return { site_id: sid, domain: dom, url_key: k, url: S0(x.url), host: S0(x.host) || hostOf(x.url), page_type: S0(x.page_type), author_kind: S0(x.author_kind), names_client: x.names_client === null || x.names_client === undefined ? null : !!x.names_client,
         rivals_named: J(x.rivals_named || []), questions: J(x.questions || []), engines: J(x.engines || []), cites_28d: Number(x.cites_28d) || 0, influence: Number(x.influence) || 0, placeability: Number(x.placeability) || 0,
         placeability_why: S0(x.placeability_why).slice(0, 300), contact_email: S0(x.contact_email), contact_url: S0(x.contact_url), source_from: S0(x.from) || 'answers', first_seen: S0(st.first_seen) || nowIso, last_seen: S0(x.last_seen) || nowIso, checked_at: nowIso }; })
       .filter(r => r.url_key);
-    const p_rows = learnRows.map(r => ({ ...r, updated_at: S0(r.updated_at) || nowIso, rule_version: S0(r.rule_version) || AIRF.RULE_VERSION }));
+    const p_rows = [];   // filled after every site (RA-10)
     // ---- the sinks, `on` only (AIRF.writesSinks): nothing below is built for a site in shadow ----
     const sinks = { targets: [], prospects: [], proposed: [], core: [], cache: [], growth: null };
     if (on) {
@@ -4436,9 +4699,9 @@ for (const g of gateSites) {
         if (['writing', 'written', 'won'].includes(S0(st.status))) continue;   // live work or a win: AIR leaves it alone
         const qs = sources.filter(x => (x.questions || []).includes(pid)).slice(0, 6);
         sinks.targets.push({ target_id: tid, site_id: sid, domain: dom, prompt_id: pid, question: S0(p.prompt), keyword: S0(p.keyword || p.topic), kind: a.lever === 'L06' ? 'refresh' : 'answer',
-          page_url: S0((a.ref || {}).url) || S0(st.page_url), page_type: a.lever === 'L06' ? '' : (S0(st.page_type) || 'Guide'), fanout: ARD.fanoutOf({ prompt_id: pid, answers8, evidence: evidenceOf.get(pid) || '' }).slice(0, 8).map(f => f.query).join(' | '),
+          page_url: S0((a.ref || {}).url) || S0(st.page_url), page_type: a.lever === 'L06' ? '' : (a.screen && a.screen.page_type ? a.screen.page_type : (S0(st.page_type) || 'Guide')), fanout: ARD.fanoutOf({ prompt_id: pid, answers8, evidence: evidenceOf.get(pid) || '' }).slice(0, 8).map(f => f.query).join(' | '),
           sources_json: J(qs.map(x => ({ u: x.url, t: '', n: Number(x.cites_28d) || 1 }))), competitors: [...new Set(qs.flatMap(x => x.rivals_named || []))].slice(0, 8).join(', '), engines: (a.engines || []).join(', '), stage: S0(p.stage),
-          value: Math.round(100 * (1 + 4 * Math.min(1, (Number(a.score) || 0) / maxScore))) / 100, status: 'queued', reason: 'AI ranking (' + a.lever + '): ' + S0(a.why || (ARL.LEVERS.find(l => l.id === a.lever) || {}).label).slice(0, 300),
+          value: Math.round(100 * (1 + 4 * Math.min(1, (Number(a.score) || 0) / maxScore))) / 100, status: 'queued', reason: ('AI ranking (' + a.lever + '): ' + (a.screen && a.screen.note ? a.screen.note + '. ' : '') + S0(a.why || (ARL.LEVERS.find(l => l.id === a.lever) || {}).label)).slice(0, 600),
           created_at: S0(st.created_at) || nowIso, updated_at: nowIso, request_id: S0(st.request_id), written_at: S0(st.written_at), won_at: S0(st.won_at), origin: 'ai_rank', action_id: S0(a.action_id), live_at: S0(st.live_at) || null }); }
       for (const a of chosen.filter(x => x.sink === 'prospect')) { const url = S0((a.ref || {}).url); const pd = hostOf(url); if (!pd) continue; const src = srcByKey.get(AIRF.urlKey(url)) || {};
         const st = prospects.find(r => S0(r.prospect_domain) === pd && S0(r.type) === 'ai_source') || null;
@@ -4470,12 +4733,24 @@ for (const g of gateSites) {
         sinks.growth = { site_id: sid, run_id: S0(gr.run_id), actions_json: J(list) }; }
     }
     const kitsMissing = [...unavailable].sort();
-    const air = { market: market.unavailable ? null : market, panel: panel0.unavailable ? null : panel, diag, sources, candidates: scored.length ? scored : candidates, chosen, deferred: choice.deferred || [], refused, outcomes, priors: p_rows, memo: memo.unavailable ? null : memo,
-      compare: compare.unavailable ? null : compare, cost, old, learn: learnRows, set_aside: fitG.set_aside || [], kits_missing: kitsMissing, rule_version: AIRF.RULE_VERSION, checked_at: nowIso,
+    const air = { market: market.unavailable ? null : market, panel: panel0.unavailable ? null : panel, diag, stages: ARL.stagesPack(diag), sources, candidates: scored.length ? scored : candidates, chosen, deferred: choice.deferred || [], refused, outcomes, priors: p_rows, memo: memo.unavailable ? null : memo,
+      compare: compare.unavailable ? null : compare, cost, old, learn: [], fdr: fdrR, set_aside: fitG.set_aside || [], kits_missing: kitsMissing, rule_version: AIRF.RULE_VERSION, checked_at: nowIso,
       rows: { questions: q_rows, actions: a_rows.slice(0, AIR_CFG.actions_max), sources: s_rows, priors: p_rows }, sinks };
     out.push({ json: { site_id: sid, domain: dom, mode, run_id: g.run_id, air, error: '' } });
+    siteLearn.push({ sid, air, outcomes, history: storedA.filter(a => S0(a.learned_at)), pendingOc });
   } catch (e) {
     out.push({ json: { site_id: sid, domain: g.domain || '', mode: g.mode || '', run_id: g.run_id || AIRF.runId(sid, nowMs), air: null, error: 'AI ranking plan failed for this site: ' + S0(e && e.message).slice(0, 300) } });
   }
 }
+// ---- G4 (RA-10, FX-A): learning ONCE over every site's outcomes, so two sites learning one key in one run build one global row, not two that
+// overwrite each other; each site's item carries its own rows and the global rows of the keys it touched (identical values in every item)
+if (siteLearn.length) { try {
+  const allOc = siteLearn.flatMap(x => x.outcomes); const history = siteLearn.flatMap(x => x.history);
+  const rowsL = (ARL.learn({ priors: rpAll, outcomes: allOc, now: nowMs, history }) || []).filter(r => r && r.prior_id).map(r => ({ ...r, updated_at: S0(r.updated_at) || nowIso, rule_version: S0(r.rule_version) || AIRF.RULE_VERSION }));
+  const claimed = typeof ARL.claimCells === 'function' ? ARL.claimCells(allOc.filter(ARL.learnable), history) : new Map();
+  for (const x of siteLearn) { const keys = new Set(rowsL.filter(r => r.scope === x.sid).map(r => r.lever + '|' + r.stage + '|' + r.engine_group)); const levers = new Set(x.outcomes.filter(o => ARL.learnable(o)).map(o => S0(o.lever)));
+    const mine = rowsL.filter(r => r.scope === x.sid || (r.scope === 'global' && (keys.has(r.lever + '|' + r.stage + '|' + r.engine_group) || levers.has(S0(r.lever)))));
+    x.air.priors.push(...mine); x.air.learn.push(...mine);
+    for (const p of x.pendingOc) { const c = claimed.get(p.id); if (c && c.dropped.length) p.row.outcome_json = J(Object.assign({}, p.oc, { learn_overlap: { dropped: c.dropped, why: 'these cells were already taught by an earlier overlapping action: one move teaches one action' } })); } }
+} catch (e) { for (const x of siteLearn) x.air.learn_error = 'learning failed: ' + S0(e && e.message).slice(0, 200); } }
 return out.length ? out : [{ json: { skip: true, reason: 'no website to plan' } }];

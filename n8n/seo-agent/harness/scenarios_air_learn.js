@@ -54,7 +54,7 @@ module.exports = async (ctx) => {
     check('AL-STAT a zero baseline is planned at 2% (p_used 0.02) and the basis says so', m0.p_used === 0.02 && /planned at 2%/.test(m0.basis) && ST.mde({ q_t: 40, q_c: 40, m: 28, p: 0, rho: 0.3 }).prepost === ST.mde({ q_t: 40, q_c: 40, m: 28, p: 0.02, rho: 0.3 }).prepost, J(m0));
     const fk1 = ST.firstK(16, 8), fk2 = ST.firstK(20, 10);
     check('AL-STAT first-appearance k: 16 treated / 8 control -> 7 (p 0.033); 20 / 10 -> 7 (p 0.038: DESIGN A7 says 6 / 0.046, but C(20,6)/C(30,6) = 0.065 > 0.05)',
-      fk1.k === 7 && near(fk1.p, ratio(bC(16, 7), bC(24, 7)), 1e-9) && near(fk1.p, 0.0331, 1e-4) && fk2.k === 7 && near(fk2.p, 0.0381, 1e-4) && ratio(bC(20, 6), bC(30, 6)) > 0.05 && m0.first_appearance_k === 7, J({ fk1, fk2 }));
+      fk1.k === 7 && near(fk1.p, ratio(bC(16, 7), bC(24, 7)), 1e-9) && near(fk1.p, 0.0331, 1e-4) && fk2.k === 7 && near(fk2.p, 0.0381, 1e-4) && ratio(bC(20, 6), bC(30, 6)) > 0.05 && m0.first_appearance_k === 8, J({ fk1, fk2, m0k: m0.first_appearance_k }));   // FX-A RA-12: the MDE's first-appearance k is judged one-sided at 0.025 (8 for 16 / 8)
     if (ARD.mde({ q_t: 16, q_c: 8, m: 28, p: 0.02, rho: 0.3 }).unavailable) console.log('   note AL-STAT: ARD.mde is the W0 skeleton; the cross-check of P1\'s MDE against R1 6 runs once P1 lands');
     else { const pm = ARD.mde({ q_t: 40, q_c: 40, m: 28, p: 0.02, rho: 0.3 }); check('AL-STAT P1\'s ARD.mde agrees with ARL\'s on R1 6 row 1 (5.0 / 7.1)', near(pm.prepost, 5.0, 0.1) && near(pm.did, 7.1, 0.1), J(pm)); }
     const FT = [[7, 16, 0, 8], [3, 4, 1, 4], [5, 10, 1, 10], [0, 6, 0, 6], [4, 12, 4, 12], [9, 20, 2, 10], [1, 3, 0, 9], [12, 20, 3, 10]];
@@ -227,10 +227,10 @@ module.exports = async (ctx) => {
       const v5 = ARL.verify(pre('L08', { ref: { url: 'https://top-firms.example/best' } }), { sources: [{ url: 'https://top-firms.example/best', names_client: true, checked_at: iso(NOW - 2 * DAY) }], now: NOW });
       const v6 = ARL.verify(pre('L01', { engines: ['chatgpt', 'perplexity'] }), { robots: { blocked_engines: ['claude'], read_at: iso(NOW - DAY) }, now: NOW });
       const v7 = ARL.verify(pre('L05', { status: 'shadow' }), { contentLog: cl, pages: pg, index: idx, now: NOW });
-      const v8 = ARL.verify(pre('L05', { keyword: 'never written', prereg: { registered_at: iso(NOW - 80 * DAY), window_days: 45, t0_rule: 'live_at' } }), { contentLog: cl, pages: pg, index: idx, now: NOW });
+      const v8 = ARL.verify(pre('L05', { keyword: 'never written', prereg: { registered_at: iso(NOW - 110 * DAY), window_days: 45, t0_rule: 'live_at' } }), { contentLog: cl, pages: pg, index: idx, now: NOW });   // FX-A RA-16: L05 waits 90 + 14 days
       check('AL6 a page counts only when published, live on our fetch (HTTP 200), indexed and readable in raw HTML; live_at = the later of publication and our fetch',
         v1.happened === true && v1.live_at === iso(NOW - 18 * DAY) && v2.happened === false && v3.happened === false && /raw HTML/.test(v3.evidence[0]), J({ v1, v2, v3 }));
-      check('AL6 a directory behind a 403 is unknown (null), never "not there"; a list that now names the business is done; robots open -> done; a shadow action never happens; past window + 14 days -> expired',
+      check('AL6 a directory behind a 403 is unknown (null), never "not there"; a list that now names the business is done; robots open -> done; a shadow action never happens; past the lever\'s longest time to effect + 14 days -> expired',
         v4.happened === null && v5.happened === true && v6.happened === true && v7.happened === false && v8.happened === false && v8.expired === true, J({ v4, v5, v6, v7, v8 }));
       const notH = Object.assign(pre('L05'), { status: 'expired', prereg: { registered_at: iso(NOW - 80 * DAY), window_days: 45, t0_rule: 'live_at', questions: ['q1'], controls: ['q2'], engines: ['chatgpt'] } });
       const oc = ARL.outcome(notH, { units60: [], diagNow: [], diagAtT0: [], now: NOW });
@@ -266,38 +266,38 @@ module.exports = async (ctx) => {
       check('AL7 zero lift: false "likely helped" <= 5% of seeded panels (16 / 8 questions: ' + (100 * f0).toFixed(1) + '% of 200; with a +10 point trend on every question: ' + (100 * f1).toFixed(1) + '% of 120; 8 / 4 questions: ' + (100 * f2).toFixed(1) + '% of 120)', f0 <= 0.05 && f1 <= 0.05 && f2 <= 0.05, J({ f0, f1, f2 })); }
 
     // ================= AL8: Fisher through outcome() =================
-    { const p = panel({ seed: 'fa', zero: true }); const app = new Set(p.T.slice(0, 7));
+    { const p = panel({ seed: 'fa', zero: true }); const app = new Set(p.T.slice(0, 8));   // FX-A RA-12: one alpha (one-sided 0.025): 8 of 16 (p 0.0175); 7 of 16 (p 0.033) is not enough
       for (const u of p.units) if (app.has(u.prompt_id) && Date.parse(u.at) > p.t0 && Date.parse(u.at) < p.t0 + 5 * DAY) u.named = true;
       const oc = ARL.outcome(actOf(p), { units60: p.units, diagNow: [], diagAtT0: [], arms: [], now: NOW, B: 300 }); const fa = oc.first_appearance;
-      check('AL8 zero baseline: 7 of 16 worked-on questions appear for the first time, 0 of 8 held back -> one-sided Fisher p 0.033 (3 decimals), "likely helped" on the exact test; the answer-level binomial check is printed',
-        fa.t.k === 7 && fa.t.n === 16 && fa.c.k === 0 && fa.c.n === 8 && fa.p_fisher.toFixed(3) === '0.033' && oc.primary === 'fisher' && oc.verdict === 'likely_helped' && fa.p_binom != null && fa.p_binom < 0.01, J({ fa, v: oc.verdict }));
-      const p6 = panel({ seed: 'fa6', zero: true }); const a6 = new Set(p6.T.slice(0, 6)); for (const u of p6.units) if (a6.has(u.prompt_id) && Date.parse(u.at) > p6.t0 && Date.parse(u.at) < p6.t0 + 5 * DAY) u.named = true;
+      check('AL8 zero baseline: 8 of 16 worked-on questions appear for the first time, 0 of 8 held back -> one-sided Fisher p 0.0175 (below 0.025), "likely helped" on the exact test; answer counts printed for reading only, never tested (FX-A RA-18)',
+        fa.t.k === 8 && fa.t.n === 16 && fa.c.k === 0 && fa.c.n === 8 && fa.p_fisher.toFixed(4) === '0.0175' && oc.primary === 'fisher' && oc.verdict === 'likely_helped' && !('p_binom' in fa) && /reading only/.test(fa.answers_note), J({ fa, v: oc.verdict }));
+      const p6 = panel({ seed: 'fa6', zero: true }); const a6 = new Set(p6.T.slice(0, 7)); for (const u of p6.units) if (a6.has(u.prompt_id) && Date.parse(u.at) > p6.t0 && Date.parse(u.at) < p6.t0 + 5 * DAY) u.named = true;
       const o6 = ARL.outcome(actOf(p6), { units60: p6.units, diagNow: [], diagAtT0: [], arms: [], now: NOW, B: 300 });
       { let fp = 0, fisherUsed = 0; const NS = 200; for (let s = 0; s < NS; s++) { const pz = panel({ seed: 'fanull' + s, zero: true, trend: 0.01 }); const oz = ARL.outcome(actOf(pz), { units60: pz.units, diagNow: [], diagAtT0: [], arms: [], now: NOW, B: 200 });
           if (oz.primary === 'fisher') fisherUsed++; if (oz.verdict === 'likely_helped') fp++; }
         check('AL8 zero baseline, no lift (every question, worked on or not, has the same 1% chance an answer names the business after t0): false "likely helped" <= 5% of 200 panels (' + (100 * fp / NS).toFixed(1) + '%, the exact test used in ' + fisherUsed + ')', fp / NS <= 0.05 && fisherUsed >= 150, J({ fp, fisherUsed })); }
-      check('AL8 6 of 16 is not enough (p ' + o6.first_appearance.p_fisher + ' >= 0.05): "can\'t tell", with the count needed in the reason', o6.verdict === 'cant_tell' && o6.first_appearance.p_fisher >= 0.05 && /0\.05 needed/.test(o6.why), J(o6.first_appearance)); }
+      check('AL8 7 of 16 is not enough (p ' + o6.first_appearance.p_fisher + ' >= 0.025): "can\'t tell", with the level needed in the reason', o6.verdict === 'cant_tell' && o6.first_appearance.p_fisher >= 0.025 && /0\.025 needed/.test(o6.why), J(o6.first_appearance)); }
 
     // ================= AL9: learning =================
     { const mkO = (site, n, k, b, x) => ({ action: Object.assign({ action_id: 'air_' + site + '_L05_' + n + k, site_id: site, lever: 'L05', status: 'verified', learned_at: '' }, (x || {}).a || {}),
         outcome: Object.assign({ due: true, verdict: 'cant_tell', stage_moves: { k, n, b, by: [{ stage: 'S1', group: 'google', n, k, b, b_basis: 'control cells, same stage and engine group' }], cells: [] } }, (x || {}).o || {}) });
       const oA = mkO('site_a', 12, 6, 0.25), oB = mkO('site_b', 30, 20, 0);
       const rows = ARL.learn({ priors: [], outcomes: [oA, oB], now: NOW }); const g = rows.find(r => r.scope === 'global'), sa = rows.find(r => r.scope === 'site_a'), sb = rows.find(r => r.scope === 'site_b');
-      // a0 = .2 x 6 = 1.2, b0 = 4.8; A: k_adj = 6 - 12 x .25 = 3, f = 9; B: k_adj 20 -> capped 10, f 10. Global 1.2 + 3 + 10 = 14.2 / 4.8 + 9 + 10 = 23.8
-      // site A (leave-one-out): pool without A = 11.2 / 14.8, kappa 10 -> 4.3077 / 5.6923; + its own 3 / 9 -> 7.3077 / 14.6923
-      check('AL9 background subtraction (k - n b), the per-site cap of 10 in the pool, and the hand case: global 14.2 / 23.8; site A 7.3077 / 14.6923 (pool without A, kappa 10, plus its own outcomes)',
-        g && near(g.alpha, 14.2, 1e-6) && near(g.beta, 23.8, 1e-6) && g.prior_id === 'L05:S1:google:global' && g.n_outcomes === 2 && sa && near(sa.alpha, 7.3077, 1e-4) && near(sa.beta, 14.6923, 1e-4) && near(sa.prior_alpha, 4.3077, 1e-4)
-        && sb && near(sb.alpha - sb.prior_alpha, 20, 1e-9) && near(sb.beta - sb.prior_beta, 10, 1e-9), J(rows));
+      // FX-A RA-6: one trial per action and engine group, success = (k - n b) / n. a0 = .2 x 6 = 1.2, b0 = 4.8; A: (6 - 12 x .25) / 12 = .25 -> k .25, f .75; B: 20 / 30 -> k .6667, f .3333.
+      // Global 1.2 + .25 + .6667 = 2.1167 / 4.8 + .75 + .3333 = 5.8833. Site A (leave-one-out): pool without A = 1.8667 / 5.1333, kappa min(7, 10) = 7 -> 1.8667 / 5.1333; + its own .25 / .75 -> 2.1167 / 5.8833
+      check('AL9 background subtraction (k - n b), one trial per action (FX-A RA-6), and the hand case: global 2.1167 / 5.8833; site A 2.1167 / 5.8833 (pool without A, kappa 7, plus its own trial); site B keeps its raw 0.6667 / 0.3333',
+        g && near(g.alpha, 2.116667, 1e-5) && near(g.beta, 5.883333, 1e-5) && g.prior_id === 'L05:S1:google:global' && g.n_outcomes === 2 && sa && near(sa.alpha, 2.116667, 1e-5) && near(sa.beta, 5.883333, 1e-5) && near(sa.prior_alpha, 1.866667, 1e-5)
+        && sb && near(sb.alpha - sb.prior_alpha, 2 / 3, 1e-5) && near(sb.beta - sb.prior_beta, 1 / 3, 1e-5), J(rows));
       const pa = ARL.priorOf({ lever: 'L05', stage: 'S1', group: 'google', priors: rows, site_id: 'site_a' }), pg = ARL.priorOf({ lever: 'L05', stage: 'S1', group: 'google', priors: rows }), pe = ARL.priorOf({ lever: 'L05', stage: 'S1', group: 'google', priors: [] });
-      check('AL9 priorOf: the site posterior (mean 0.3322, its 90% Beta interval exact), the pooled prior, the evidence prior (1.2 / 4.8) when nothing is learned',
-        pa.source === 'site' && near(pa.mean, 7.3077 / 22, 1e-4) && near(cdfNum(7.3077, 14.6923, pa.lo90), 0.05, 1e-4) && near(cdfNum(7.3077, 14.6923, pa.hi90), 0.95, 1e-4) && pg.source === 'pooled' && near(pg.mean, 14.2 / 38, 1e-6)
+      check('AL9 priorOf: the site posterior (mean 0.2646, its 90% Beta interval exact), the pooled prior, the evidence prior (1.2 / 4.8) when nothing is learned',
+        pa.source === 'site' && near(pa.mean, 2.116667 / 8, 1e-4) && near(cdfNum(2.116667, 5.883333, pa.lo90), 0.05, 1e-4) && near(cdfNum(2.116667, 5.883333, pa.hi90), 0.95, 1e-4) && pg.source === 'pooled' && near(pg.mean, 2.116667 / 8, 1e-5)
         && pe.source === 'evidence' && pe.a === 1.2 && pe.b === 4.8, J({ pa, pg, pe }));
       const inc = ARL.learn({ priors: ARL.learn({ priors: [], outcomes: [oA], now: NOW }), outcomes: [oB], now: NOW });
       check('AL9 incremental = at once (the site rows keep their raw totals), and an outcome already learned is never counted twice', J(inc.find(r => r.scope === 'global')) === J(g) && ARL.learn({ priors: rows, outcomes: [mkO('site_a', 12, 6, 0.25, { a: { learned_at: iso(NOW) } })], now: NOW }).length === 0, J(inc.find(r => r.scope === 'global')));
       const skip = ARL.learn({ priors: [], outcomes: [mkO('s', 5, 5, 0, { o: { due: false } }), mkO('s', 5, 5, 0, { a: { status: 'done' } }), mkO('s', 5, 5, 0, { a: { lever: 'L11' } }), mkO('s', 5, 5, 0, { o: { stage_moves: { k: 5, n: 5, b: 0, by: [{ stage: 'S1', group: 'google', n: 5, k: 5, b: 0, b_basis: 'none' }] } } })], now: NOW });
       check('AL9 priors move only on due, happened actions with a control background: not due / not verified / site-wide (no control possible) / no background -> nothing learned', skip.length === 0, J(skip));
-      const many = ARL.learn({ priors: [], outcomes: [mkO('big', 400, 400, 0)], now: NOW }).find(r => r.scope === 'global');
-      check('AL9 one site cannot teach the whole system: 400 of 400 on one site moves the global prior by at most 10 successes', near(many.alpha, 1.2 + 10, 1e-9) && near(many.beta, 4.8, 1e-9), J(many)); }
+      const many = ARL.learn({ priors: [], outcomes: Array.from({ length: 40 }, (_, i) => mkO('big', 400 + i, 400 + i, 0)), now: NOW }).find(r => r.scope === 'global');
+      check('AL9 one site cannot teach the whole system: 40 actions all reaching their target on one site move the global prior by at most 20 trials, its rate kept (FX-A RA-5)', near(many.alpha, 1.2 + 20, 1e-6) && near(many.beta, 4.8, 1e-6), J(many)); }
 
     // ================= AL10: Brier =================
     { const it = (lever, p, ys) => ({ action: { lever, prereg: { projected: { p } } }, outcome: { due: true, stage_moves: { cells: ys.map(y => ({ reached: !!y })) } } });
@@ -316,8 +316,8 @@ module.exports = async (ctx) => {
       check('AL11 the memo has the seven parts of 2.H in order, each with lines; blockers listed with owner and date', J(me.parts.map(p => p.key)) === J(ARL.MEMO_PARTS) && me.parts.every(p => p.lines.length) && me.blockers.length === 1 && me.blockers[0].owner === 'client', J(me.parts.map(p => [p.key, p.lines.length])));
       check('AL11 every figure carries a basis; the copy rule (no em dash, curly quote or ellipsis character); no claim of cause', figs.length >= 15 && figs.every(f => f.basis && f.basis !== 'not stated') && !/[\u2013\u2014\u2018\u2019\u201c\u201d\u2026]/.test(txt) && !/\bcaus(ed|es)\b|\bproves?\b|\bguarantee/i.test(txt.replace(/not proof of cause/g, '')), J({ n: figs.length, nobasis: figs.filter(f => !f.basis || f.basis === 'not stated'), cause: (txt.match(/.{60}\b(caus(ed|es)|proves?|guarantee).{20}/gi) || []) }));
       check('AL11 the content: a stage move with its "from" and "to", the verified action it followed, the MDE and the first-appearance k, the verdict in plain words, cost per won question "not yet"',
-        /Question q1 on ChatGPT: up from "not found" to "named, weak or wrong"/.test(plain) && /after "Placement on an editorial list the answers cite", which our check found done/.test(plain) && /about 7 of them must name you for the first time/.test(plain)
-        && /Verdict: likely helped/.test(plain) && /Not yet: no question has been won/.test(plain) && /share \d/.test(plain), J([/Question q1 on ChatGPT: up from "not found" to "named, weak or wrong"/.test(plain), /after "Placement on an editorial list the answers cite", which our check found done/.test(plain), /about 7 of them must name you for the first time/.test(plain), /Verdict: likely helped/.test(plain), /Not yet: no question has been won/.test(plain), /share \d/.test(plain)]) + ' ' + me.parts.map(p => p.lines.map(l => l.text).join(' | ')).join(' || ')); }
+        /Question q1 on ChatGPT: up from "not found" to "named, weak or wrong"/.test(plain) && /after "Placement on an editorial list the answers cite", which our check found done/.test(plain) && /about 8 of them must name you for the first time/.test(plain)
+        && /Verdict: likely helped/.test(plain) && /Not yet: no question has been won/.test(plain) && /share \d/.test(plain), J([/Question q1 on ChatGPT: up from "not found" to "named, weak or wrong"/.test(plain), /after "Placement on an editorial list the answers cite", which our check found done/.test(plain), /about 8 of them must name you for the first time/.test(plain), /Verdict: likely helped/.test(plain), /Not yet: no question has been won/.test(plain), /share \d/.test(plain)]) + ' ' + me.parts.map(p => p.lines.map(l => l.text).join(' | ')).join(' || ')); }
 
     // ================= AL12: compareOld =================
     { const ch = [{ lever: 'L05', ref: { prompt_id: 'q1' }, executor: 'approve', expected: { gain: 0.05 } }, { lever: 'L08', ref: { url: 'https://list.example/top' }, executor: 'approve', expected: { gain: 0.08 } }, { lever: 'L03', ref: {}, executor: 'human', expected: { gain: 0.02 } }];
@@ -381,7 +381,8 @@ module.exports = async (ctx) => {
         // DESIGN AL14 also says it "gets an own-page action for informational fan-outs". The plan holds one (a NEW page: the closest page is protected), but with one
         // own page a week, DESIGN's value weights (informational 0.6 x awareness 0.6) and its 0.02 minimum gain, a commercial refresh ranks above it. Asserted here: it is
         // planned for the informational question, never as a rewrite of a protected page; whether it must win the slot is an open design decision (fixes/P2.md 6).
-        const info = ac.cands.filter(c => ['L05', 'L06'].includes(c.lever) && c.intent === 'informational' && !c.refused); const prot = ac.chosen.filter(a => a.lever === 'L16').map(a => AIRF.urlKey(a.page_url));
+        // FX-A RA-2: the arms now hold floor(N / 3) controls, so the question may be held back this period: planned, refused only as a control (never for another reason)
+        const info = ac.cands.filter(c => ['L05', 'L06'].includes(c.lever) && c.intent === 'informational' && (!c.refused || /control/.test(c.refused))); const prot = ac.chosen.filter(a => a.lever === 'L16').map(a => AIRF.urlKey(a.page_url));
         check('AL14 retrievable archetype: an own-page action is planned for an informational question that is not won yet, and no own page rewrites a protected page for another question',
           info.some(c => c.lever === 'L05' && c.questions[0] === 'aq8' && /protected/.test(c.why)) && !ac.cands.some(c => c.lever === 'L06' && prot.includes(AIRF.urlKey(c.page_url)) && !ac.chosen.some(a => a.lever === 'L16' && AIRF.urlKey(a.page_url) === AIRF.urlKey(c.page_url) && a.questions.includes(c.questions[0]))),
           J({ info: info.map(c => [c.lever, c.questions, c.page_url, c.why]) })); } }

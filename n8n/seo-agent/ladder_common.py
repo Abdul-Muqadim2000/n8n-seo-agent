@@ -321,14 +321,14 @@ AI_RANK_RUNS_TABLE = 'seo_ai_rank_runs'
 AI_RANK_RUNS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('checked_at', 'string'), ('mode', 'string'), ('rule_version', 'string'),
                      ('panel_json', 'string'), ('diag_json', 'string'), ('sources_json', 'string'), ('candidates_json', 'string'), ('chosen_json', 'string'),
                      ('old_json', 'string'), ('compare_json', 'string'), ('memo_json', 'string'), ('cost_json', 'string'), ('learn_json', 'string'),
-                     ('exec_id', 'string'), ('error', 'string')]
+                     ('exec_id', 'string'), ('error', 'string'), ('stages_json', 'string')]   # FX-A RA-9 (additive): the compact stages, never trimmed
 # seo_ai_rank_questions: one row per site and question (upsert site_id + prompt_id): intent, market, core window, arm, value, stage per engine, evidence
 AI_RANK_QUESTIONS_TABLE = 'seo_ai_rank_questions'
 AI_RANK_QUESTIONS_COLS = [('site_id', 'string'), ('domain', 'string'), ('prompt_id', 'string'), ('question', 'string'), ('intent', 'string'), ('market', 'string'),
                           ('core', 'boolean'), ('core_since', 'string'), ('core_until', 'string'), ('arm', 'string'), ('stratum', 'string'), ('value', 'number'),
                           ('demand', 'number'), ('demand_basis', 'string'), ('feasibility', 'number'), ('stage_json', 'string'), ('best_stage', 'string'),
                           ('parametric_json', 'string'), ('evidence_json', 'string'), ('first_named_at', 'string'), ('last_named_at', 'string'),
-                          ('last_cited_at', 'string'), ('updated_at', 'string'), ('rule_version', 'string')]
+                          ('last_cited_at', 'string'), ('updated_at', 'string'), ('rule_version', 'string'), ('arm_since', 'string')]   # FX-A RA-2 (additive): when the question took its arm
 # seo_ai_rank_actions: one row per AIR action (upsert action_id): lever, executor, scope, the pre-registration (never edited), verification, outcome.
 # status: shadow | proposed | queued | in_progress | done | verified | not_happened | expired | refused (every one has an exit, state_lint.py)
 AI_RANK_ACTIONS_TABLE = 'seo_ai_rank_actions'

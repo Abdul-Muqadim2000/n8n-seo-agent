@@ -210,12 +210,18 @@ const ARD = (() => {
     return { core, proposed, extend, comparable, why };
   };
 
-  // ---- A6: treatment and control arms (2:1 inside each stratum, seeded, never reshuffled, the holdout rotates after 12 weeks) ---------------
-  const PATTERN_OK = (n, c) => c < Math.floor((n + 1) / 3);   // next slot is control when it keeps the stratum at T, T, C, T, T, C ...
-  const assignArms = ({ core, stored, seed, now, site_id, holdout_days } = {}) => {
+  // ---- A6: treatment and control arms (seeded, never reshuffled; FX-A RA-2: a control floor kept every week, rotation one at a time) ---------
+  // Each stratum's share of the control target floor(N / 3): floor(n / 3), the remainder to the strata with the largest fraction (a stratum of 5
+  // holds 1 or 2, so 30 questions in 6 strata of 5 hold 10, not 6). A control rotates after `holdout_days` only when a replacement in its stratum
+  // takes its place in the same run (a treated question no step worked on: not in `exposed`), one per stratum per run (so a first core's controls,
+  // all due the same week, rotate over several weeks), and never while it is a registered control of an open action (`locked`). A stratum under its
+  // target is refilled from its treated questions no step worked on. `exposed` / `locked`: prompt ids (Set or array; additive inputs, FX-A).
+  // `assigned_at` is when the question took its arm (stored as seo_ai_rank_questions.arm_since); a row without it falls back to core_since.
+  const assignArms = ({ core, stored, seed, now, site_id, holdout_days, exposed, locked } = {}) => {
     const N = msOf(now); const HOLD = num(holdout_days, 84) * DAY; const iso = isoOf(N);
     const C = (Array.isArray(core) ? core : []).filter(c => c && S(c.prompt_id));
     const ST = new Map((Array.isArray(stored) ? stored : []).filter(r => r && S(r.prompt_id)).map(r => [S(r.prompt_id), r]));
+    const EX = new Set([...(exposed || [])].map(S)), LK = new Set([...(locked || [])].map(S));
     const clusterCount = new Map(); for (const c of C) { const k = lc(c.cluster) || 'other'; clusterCount.set(k, (clusterCount.get(k) || 0) + 1); }
     const top = new Set([...clusterCount.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 4).map(x => x[0]));
     // a stratum needs at least 3 questions to hold a control (T, T, C): smaller ones are merged into a coarser stratum, dropping the cluster
@@ -225,20 +231,35 @@ const ARD = (() => {
     const fine = new Map(); { let pending = C.slice(); for (let L = 0; L < levels.length; L++) { const g = new Map(); for (const c of pending) { const k = levels[L](c).join('|'); const a = g.get(k) || []; a.push(c); g.set(k, a); }
       const next = []; for (const [k, a] of g) { if (a.length >= MIN_S || L === levels.length - 1) for (const c of a) fine.set(S(c.prompt_id), k); else next.push(...a); } pending = next; if (!pending.length) break; } }
     const stratumOf = (c) => fine.get(S(c.prompt_id)) || levels[0](c).join('|');
-    const out = new Map(); const tally = new Map(); const fresh = [];
+    const out = new Map(); const fresh = []; const known = new Set();
     for (const c of C) { const pid = S(c.prompt_id); const s = ST.get(pid); const arm = s && AIRF.ARMS.includes(lc(s.arm)) ? lc(s.arm) : '';
       if (!arm) { fresh.push(c); continue; }
-      const stratum = S(s.stratum) || stratumOf(c); const at0 = S(s.assigned_at || s.arm_since || s.core_since) || iso;
-      let a = arm, at = at0; if (arm === 'control' && Number.isFinite(N) && Number.isFinite(msOf(at0)) && N - msOf(at0) >= HOLD) { a = 'treated'; at = iso; }   // the holdout rotates
-      out.set(pid, { prompt_id: pid, arm: a, stratum, assigned_at: at });
-      const t = tally.get(stratum) || { n: 0, c: 0 }; t.n++; if (a === 'control') t.c++; tally.set(stratum, t); }
+      const stratum = S(s.stratum) || stratumOf(c); known.add(stratum);
+      out.set(pid, { prompt_id: pid, arm, stratum, assigned_at: S(s.assigned_at || s.arm_since || s.core_since) || iso, _new: false }); }
     const key = (c) => AIRF.hash(S(site_id) + '|' + S(c.prompt_id) + '|' + S(seed));
     fresh.sort((a, b) => key(a) - key(b) || S(a.prompt_id).localeCompare(S(b.prompt_id)));
     // a new question joins its stored stratum: the computed one when it already holds stored questions, else the finest level that does
-    const placeOf = (c) => { const k = stratumOf(c); if (tally.has(k)) return k; for (const L of levels) { const k2 = L(c).join('|'); if (tally.has(k2)) return k2; } return k; };
-    for (const c of fresh) { const stratum = placeOf(c); const t = tally.get(stratum) || { n: 0, c: 0 }; const arm = PATTERN_OK(t.n, t.c) ? 'control' : 'treated';
-      t.n++; if (arm === 'control') t.c++; tally.set(stratum, t); out.set(S(c.prompt_id), { prompt_id: S(c.prompt_id), arm, stratum, assigned_at: iso }); }
-    return C.map(c => out.get(S(c.prompt_id)));
+    const placeOf = (c) => { const k = stratumOf(c); if (known.has(k)) return k; for (const L of levels) { const k2 = L(c).join('|'); if (known.has(k2)) return k2; } return k; };
+    for (const c of fresh) out.set(S(c.prompt_id), { prompt_id: S(c.prompt_id), arm: 'treated', stratum: placeOf(c), assigned_at: iso, _new: true });
+    // the control target per stratum
+    const members = new Map(); for (const a of out.values()) { const l = members.get(a.stratum) || []; l.push(a); members.set(a.stratum, l); }
+    const total = Math.floor(out.size / 3); const target = new Map(); let sum = 0;
+    for (const [k, l] of members) { const b = l.length >= MIN_S ? Math.floor(l.length / 3) : 0; target.set(k, b); sum += b; }
+    const order = [...members.entries()].filter(([, l]) => l.length >= MIN_S && l.length % 3).sort((a, b) => (b[1].length % 3) - (a[1].length % 3) || b[1].length - a[1].length || a[0].localeCompare(b[0]));
+    for (const [k] of order) { if (sum >= total) break; target.set(k, target.get(k) + 1); sum++; }
+    const ctl = (k) => (members.get(k) || []).filter(a => a.arm === 'control');
+    // a replacement: a treated question of the stratum no step worked on; a new one first (never treated), then the one treated longest, then the seed order
+    const ageMs = (a) => { const t = msOf(a.assigned_at); return Number.isFinite(t) && Number.isFinite(N) ? N - t : 0; };
+    const pick = (k, not) => (members.get(k) || []).filter(a => a.arm === 'treated' && !EX.has(a.prompt_id) && !(not && not.has(a.prompt_id)))
+      .sort((a, b) => (b._new - a._new) || (ageMs(b) - ageMs(a)) || (key(a) - key(b)) || a.prompt_id.localeCompare(b.prompt_id))[0] || null;
+    const set = (a, arm) => { a.arm = arm; a.assigned_at = iso; };
+    for (const k of [...members.keys()].sort()) {
+      // 1. the new questions and the refill: up to the target
+      const swapped = new Set(); while (ctl(k).length < target.get(k)) { const r = pick(k); if (!r) break; set(r, 'control'); swapped.add(r.prompt_id); }
+      // 2. the holdout rotates: the oldest control past its 12 weeks (not locked) gives its place to a replacement, one per stratum per run
+      const due = ctl(k).filter(a => !swapped.has(a.prompt_id) && !LK.has(a.prompt_id) && HOLD > 0 && ageMs(a) >= HOLD).sort((a, b) => (ageMs(b) - ageMs(a)) || a.prompt_id.localeCompare(b.prompt_id))[0];
+      if (due) { const r = pick(k, swapped); if (r) { set(due, 'treated'); set(r, 'control'); } } }
+    return C.map(c => { const a = out.get(S(c.prompt_id)); return { prompt_id: a.prompt_id, arm: a.arm, stratum: a.stratum, assigned_at: a.assigned_at }; });
   };
 
   // ---- A7: minimum detectable effect + the first-appearance requirement -------------------------------------------------------------
@@ -258,10 +279,11 @@ const ARD = (() => {
     const neff = (Q) => (Q > 0 ? Q * M / (1 + (M - 1) * R) : 0); const nt = neff(Qt), nc = neff(Qc); const v = pu * (1 - pu);
     const prepost = nt > 0 ? r1(100 * z * Math.sqrt(2 * v / nt)) : null;
     const did = nt > 0 && nc > 0 ? r1(100 * z * Math.sqrt(2 * v * (1 / nt + 1 / nc))) : null;
-    let k = null, kp = null; if (Qt > 0 && Qc > 0) for (let j = 1; j <= Qt; j++) { const pj = allTreatedP(Qt, Qc, j); if (pj < A) { k = j; kp = r4(pj); break; } }
+    // FX-A RA-12: the first-appearance test is judged one-sided at alpha / 2 (0.025), the same alpha as the DiD's two-sided 95% range
+    const A1 = A / 2; let k = null, kp = null; if (Qt > 0 && Qc > 0) for (let j = 1; j <= Qt; j++) { const pj = allTreatedP(Qt, Qc, j); if (pj < A1) { k = j; kp = r4(pj); break; } }
     const basis = 'percentage points at ' + Math.round(PW * 100) + '% power, alpha ' + A + ' two-sided; n_eff = Q x m / (1 + (m - 1) x rho) with m ' + M + ', rho ' + R
       + (pIn == null ? ', baseline unknown: 2% used' : pIn < 0.02 ? ', baseline ' + r1(100 * pIn) + '%: 2% used for planning' : ', baseline ' + r1(100 * pu) + '%')
-      + (k != null ? '; first appearances: ' + k + ' on treated questions and none on control give one-sided p ' + kp : Qt > 0 && Qc > 0 ? '; no number of first appearances reaches p < ' + A + ' with ' + Qt + ' treated and ' + Qc + ' control questions' : '; no control questions: no first-appearance test');
+      + (k != null ? '; first appearances: ' + k + ' on treated questions and none on control give one-sided p ' + kp + ' (below ' + A1 + ')' : Qt > 0 && Qc > 0 ? '; no number of first appearances reaches one-sided p < ' + A1 + ' with ' + Qt + ' treated and ' + Qc + ' control questions' : '; no control questions: no first-appearance test');
     return { prepost, did, n_eff_t: r1(nt), n_eff_c: r1(nc), p_used: r4(pu), first_appearance_k: k, first_appearance_p: kp, basis };   // first_appearance_p: additive
   };
 
@@ -437,8 +459,14 @@ const ARD = (() => {
     const bingPos = bingStats && bingStats.positions ? asMap(bingStats.positions) : null;
     const gsc = index && index.gsc ? asMap(index.gsc) : null;
     const look = (M, q) => M.get(q) || M.get(normKw(q)) || M.get(normKw(q).replace(/[^a-z0-9\u00c0-\u024f\u0600-\u06ff ]+/g, ' ').replace(/\s+/g, ' ').trim());
+    // FX-A RA-13: a Google results page counts only when it was read in the question's market (its market, else the site's): a US page says nothing
+    // about a UAE question. An entry may hold one reading per location (`by_loc`, AI_Rank_Plan) or one reading with its `location_code`; a reading
+    // with no location recorded is accepted (it cannot be shown to be another market's)
+    const wantLoc = (() => { const qcc = S(p.market).split(/[-_]/)[0].toUpperCase(); const l1 = qcc ? LOC.get(qcc) || 0 : 0; if (l1) return l1; const sl = num(st.location_code, 0); return sl > 0 ? sl : (LOC.get(ccOf(st.country)) || 0); })();
+    const inMarket = (r) => { if (!r) return null; if (r.by_loc && typeof r.by_loc === 'object') { if (!wantLoc) return r; return r.by_loc[wantLoc] || r.by_loc[String(wantLoc)] || r.by_loc['0'] || null; }
+      const rl = num(r.location_code, 0); return !wantLoc || !rl || rl === wantLoc ? r : null; };
     const rankIn = (kind) => { let best = null, read = false, anyOurs = false;
-      if (kind === 'google') for (const q of queries) { const r = look(serpM, q); if (!r) continue; read = true; const res = Array.isArray(r.results) ? r.results : Array.isArray(r.items) ? r.items : [];
+      if (kind === 'google') for (const q of queries) { const r = inMarket(look(serpM, q)); if (!r) continue; read = true; const res = Array.isArray(r.results) ? r.results : Array.isArray(r.items) ? r.items : [];
         for (const x of res) { if (!x) continue; const pos = num(x.pos != null ? x.pos : x.rank_group != null ? x.rank_group : x.rank_absolute, null); if (pos == null || !ours(x.url || x.domain)) continue; anyOurs = true;
           if (!best || pos < best.pos) best = { query: q, pos, index: 'google', read_at: S(r.read_at || r.at || r.datetime) }; break; } }
       else if (kind === 'bing' && bingPos) for (const q of queries) { const v = look(bingPos, q); if (v == null) continue; read = true; const pos = num(v && typeof v === 'object' ? v.pos != null ? v.pos : v.position : v, null);
