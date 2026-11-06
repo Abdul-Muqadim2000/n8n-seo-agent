@@ -87,3 +87,6 @@ Owner to provide: Brave Search API key.
   cycles: comparison for the owner, then On for both (Site Admin ai_rank_mode on + ai_rank_reserve; paid flags per owner: mentions, fanout_n, brave).
 - Owner: SEO_BRAVE_API_KEY into n8n/.env then deploy credentials (deploy_engine --credentials --only-credentials SEOcredBraveApi1 --create-missing).
 - Rollback: Site Admin ai_rank_mode '' (off) per site, or seo_cache air:kill = 1; full rollback = previous workflows from origin/main@a8bbd555 + backup.
+- 2026-11-06 later: live format checks (owner yes, DataForSEO $0.234, Bing free, Brave skipped): target_metrics with no mention = 0 (not
+  null); GetQueryPageStats weekly rows merged per page. Fix f8af02e5 (harness 17412/0) deployed (only AI Rank Fetched changed; prod == build
+  after); main = 8325c20d (PR #59). Raw answers private in live_calls/.
