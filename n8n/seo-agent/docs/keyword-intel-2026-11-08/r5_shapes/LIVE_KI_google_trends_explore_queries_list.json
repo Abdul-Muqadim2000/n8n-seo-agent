@@ -1,0 +1,124 @@
+{
+ "_source": "real LIVE response, api.dataforseo.com/v3, 2026-11-07 ~20:06-20:10 UTC (2026-11-08 PKT), KI L0 live confirmations; item arrays trimmed to 3, strings to 300 chars",
+ "calls": [
+  {
+   "call": "c12_google_trends_queries",
+   "status_code": 20000,
+   "cost": 0.011,
+   "task": {
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "cost": 0.011,
+    "path": [
+     "v3",
+     "keywords_data",
+     "google_trends",
+     "explore",
+     "live"
+    ],
+    "data": {
+     "api": "keywords_data",
+     "function": "explore",
+     "se": "google_trends",
+     "keywords": [
+      "dynamics 365"
+     ],
+     "location_code": 2784,
+     "language_code": "en",
+     "type": "web",
+     "time_range": "past_12_months",
+     "item_types": [
+      "google_trends_graph",
+      "google_trends_queries_list"
+     ]
+    },
+    "result_count": 1,
+    "result": [
+     {
+      "keywords": [
+       "dynamics 365"
+      ],
+      "type": "trends",
+      "location_code": 2784,
+      "language_code": "en",
+      "check_url": "https://trends.google.com/trends/explore?hl=en&geo=AE&date=today%2012-m&q=dynamics%20365",
+      "datetime": "2026-11-07 20:06:46 +00:00",
+      "items_count": 2,
+      "items": [
+       {
+        "position": 1,
+        "type": "google_trends_graph",
+        "title": null,
+        "keywords": [
+         "dynamics 365"
+        ],
+        "data": [
+         {
+          "date_from": "2025-11-02",
+          "date_to": "2025-11-08",
+          "timestamp": 1762041600,
+          "missing_data": false,
+          "values": [
+           70
+          ]
+         },
+         {
+          "date_from": "2025-11-09",
+          "date_to": "2025-11-15",
+          "timestamp": 1762646400,
+          "missing_data": false,
+          "values": [
+           87
+          ]
+         },
+         {
+          "date_from": "2025-11-16",
+          "date_to": "2025-11-22",
+          "timestamp": 1763251200,
+          "missing_data": false,
+          "values": [
+           100
+          ]
+         },
+         "...(+50 more)"
+        ],
+        "averages": []
+       },
+       {
+        "position": 2,
+        "type": "google_trends_queries_list",
+        "title": null,
+        "keywords": [
+         "dynamics 365"
+        ],
+        "data": {
+         "top": [
+          {
+           "query": "microsoft dynamics",
+           "value": 100
+          },
+          {
+           "query": "microsoft 365 dynamics",
+           "value": 100
+          },
+          {
+           "query": "dynamics 365 business central",
+           "value": 43
+          },
+          "...(+7 more)"
+         ],
+         "rising": [
+          {
+           "query": "dynamics 365 business central essentials",
+           "value": 108600
+          }
+         ]
+        }
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}
