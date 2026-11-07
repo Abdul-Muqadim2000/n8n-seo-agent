@@ -29,9 +29,17 @@ const cache = all('Load KI Cache').filter(r => r && r.key);
 const tpKey = KIW.cacheKey(p.site_id, 'tp', p.market);
 const tpOld = KIW.cacheRead(cache, tpKey) || {}; const tp = { ...((tpOld && tpOld.map) || {}) };
 const tpReq = all('Any Research Traffic?').filter(r => r && !r.skip && r.ki_call); const tpPairs = KIW.paired(tpReq, all('Run Research Traffic Answers'));
-let tpRead = 0; for (const x of tpPairs) { if (!x.ok) continue; for (const it of KIW.itemsOf(x.a)) { const u = S(it.target); if (!u) continue; tp[u] = { etv: N((((it.metrics || {}).organic) || {}).etv), at: now }; tpRead++; } }
+let tpRead = 0; for (const x of tpPairs.filter(x => x.q.ki_call === 'tp')) { if (!x.ok) continue; for (const it of KIW.itemsOf(x.a)) { const u = S(it.target); if (!u) continue; tp[u] = { etv: N((((it.metrics || {}).organic) || {}).etv), at: now }; tpRead++; } }
 if (tpRead) saveRows.push(KIW.cacheRow(p.site_id, tpKey, { fetched_at: now, map: tp }));
-if (tpPairs.length) sections.push({ key: 'traffic_potential', ...KIW.callState(tpPairs, 'the traffic potential of the #1 pages'), rows: tpRead });
+if (tpPairs.some(x => x.q.ki_call === 'tp')) sections.push({ key: 'traffic_potential', ...KIW.callState(tpPairs.filter(x => x.q.ki_call === 'tp'), 'the traffic potential of the #1 pages'), rows: tpRead });
+// ---- FX-L H2: referring domains (this run's bulk read, then the 7-day cache shared with the Competitors run): Strength = the client's
+// against the median of each top 10; a host with no count stays unknown, and with no count for the client Strength is "not measured" ----
+const rd = {};
+for (const r of cache) { const mm = S(r.key).match(/^ki:[^:]+:rd:(.+)$/); if (mm && KIW.fresh(KIW.cacheRead(cache, r.key), 'backlinks', now, p.ki_force)) rd[mm[1]] = N((KIW.cacheRead(cache, r.key) || {}).refdomains); }
+const rdPair = tpPairs.find(x => x.q.ki_call === 'bulk_rd');
+if (rdPair && rdPair.ok) for (const it of KIW.itemsOf(rdPair.a)) { const d = KIW.host(it.target); const v = N(it.referring_main_domains != null ? it.referring_main_domains : it.referring_domains);
+  rd[d] = v; saveRows.push(KIW.cacheRow(p.site_id, KIW.cacheKey(p.site_id, 'rd', d), { refdomains: v, fetched_at: now })); }
+if (rdPair) sections.push({ key: 'strength', ...KIW.callState([rdPair], 'the referring domains of you and the top results'), rows: rdPair.ok ? KIW.itemsOf(rdPair.a).length : 0 });
 // ---- the site's pages (page mapping) ----
 const pages = all('Load Pages (KI)').filter(r => r && r.url);
 let model = null; try { model = SM.withPages(SM.from(g.site || { domain: p.domain }, {}), pages); } catch (e) { model = null; }
@@ -39,12 +47,15 @@ let model = null; try { model = SM.withPages(SM.from(g.site || { domain: p.domai
 const vm = sp.vol_map || rp.vol_map || {};
 const by = sp.by || {};
 const siteQ = (p.gsc || []).map(q => ({ query: q.query, impressions: q.impressions, position: q.position, page: q.page }));
-const siteCtx = { domain: p.domain, queries: siteQ, total_impressions: N(p.site_impressions), model, pages };
+const siteCtx = { domain: p.domain, queries: siteQ, total_impressions: N(p.site_impressions), model, pages, refdomains: rd[client] != null ? rd[client] : null };
 const cfg = KI.cfg({ now });
 const rows = (rp.rows || []).map(r0 => {
   const v = vm[r0.kw_key] || {};
   const r = { ...r0 }; if (r.volume == null && v.ads_v != null) { r.volume = v.ads_v; r.volume_source = 'Google Ads (Keyword Planner ranges)'; r.volume_basis = 'provider_estimate'; if (r.cpc == null) r.cpc = v.ads_cpc; }
-  const sr = by[r.keyword] || null; const top10 = sr ? (sr.top10 || []) : [];
+  const sr = by[r.keyword] || null; const top10 = sr ? (sr.top10 || []).map(t => ({ ...t, refdomains: rd[KIW.host(t.host)] != null ? rd[KIW.host(t.host)] : null })) : [];
+  // FX-L H5: with its results page read, a search naming a business on that page is another company's brand
+  if (sr && r.gate === 'pass') { const g2 = KI.gate(r.keyword, { ...(p.fit_ctx || {}), serp_domains: top10.map(t => t.host).filter(h => KIW.host(h) !== client) });
+    if (g2.gate !== 'pass') { r.gate = 'fail'; r.gate_reason = g2.reason; r.gate_code = g2.reason; r.gate_detail = (g2.text || g2.reason) + (g2.detail ? ' (' + g2.detail + ')' : ''); } }
   const intentP = N(r.intent_p);
   const st = KI.stage(top10, r.keyword, r.intent_label ? { label: r.intent_label, probability: intentP } : r.labs_intent, { own_domain: client, cfg });
   const row = { ...r, top10, serp: sr, stage: st.stage, intent: st.intent || null, intent_confidence: N(st.confidence), needs_review: !!st.needs_review || !sr, stage_evidence: st.evidence ? [st.evidence] : [],
@@ -70,7 +81,7 @@ for (const r of rows) (clusters[r.cluster_id] = clusters[r.cluster_id] || []).pu
 const heads = [];
 for (const [id, mem] of Object.entries(clusters)) {
   const head = mem.find(r => r.is_head) || mem[0];
-  const pa = KI.pageAction({ keyword: head.keyword, members: mem, top10: head.top10, gate: head.gate, verdict: head.verdict }, siteCtx, cfg);
+  const pa = KI.pageAction({ keyword: head.keyword, members: mem, top10: head.top10, gate: head.gate, verdict: head.verdict, stage: head.stage }, siteCtx, cfg);
   const cannibal = (pa.cannibal || []).length ? { pages: pa.cannibal, why: pa.cannibal.length + ' of your pages get impressions for the searches of this cluster: one should be the page, the others link to it' } : null;
   for (const r of mem) { r.page_action = pa.action; r.page_url = pa.page_url || ''; r.cannibal = cannibal; r.list_hosts = pa.list_hosts || []; }
   heads.push({ ...head, cluster_id: id, head: head.keyword, members: mem.length, page_action: pa.action, page_url: pa.page_url || null, list_hosts: pa.list_hosts || [], _gate: head.gate, _why: pa.reason });
@@ -89,11 +100,15 @@ for (const q of (p.gsc || [])) addQ(q.query, 'gsc');
 for (const r of rows) for (const q of (((r.serp || {}).extras || {}).paa || [])) addQ(q, 'paa');
 const questions = Object.values(qs).sort((a, b) => b.sources.length - a.sources.length || a.question.localeCompare(b.question)).slice(0, 30);
 // ---- gaps against the chosen set (KI.gaps: stored rows; the intersection's total gives "sample of N of M"); the client's status on a gap is kept ----
-const storedGaps = {}; for (const gr of all('Load KI Gaps').filter(r => r && r.gap_id && S(r.market) === p.market)) storedGaps[S(gr.gap_id)] = gr;
+// FX-L H9: the client's status on a gap follows the KEYWORD (a gap of the same search changes type between runs: missing -> weak)
+const storedGaps = {}, storedByKw = {}; for (const gr of all('Load KI Gaps').filter(r => r && r.gap_id && S(r.market) === p.market)) { storedGaps[S(gr.gap_id)] = gr;
+  const kk = KI.key(gr.keyword || gr.action_target || ''); if (kk && ['dismissed', 'started', 'done'].includes(S(gr.status)) && !storedByKw[kk]) storedByKw[kk] = gr; }
 const inter = c.intersection || null;
-const kg = KI.gaps({ site_id: p.site_id, domain: p.domain, market: p.market, run_id: p.run_id, now, total_impressions: N(p.site_impressions) }, chosen,
-  rows.map(r => ({ ...r, top10: r.gap_top10 })), { sample: inter && N(inter.read) != null && N(inter.total) != null ? { n: N(inter.read), m: N(inter.total) } : null }, cfg);
-const gapRows = kg.map(x => { const old = storedGaps[x.gap_id] || {};
+const gapClient = { site_id: p.site_id, domain: p.domain, market: p.market, run_id: p.run_id, now, total_impressions: N(p.site_impressions), gsc_complete: false };
+const gapIn = rows.filter(r => r.gate === 'pass').map(r => ({ ...r, top10: r.gap_top10, serp_read: !!r.serp }));
+const kg = KI.gaps(gapClient, chosen, gapIn, { sample: inter && N(inter.read) != null && N(inter.total) != null ? { n: N(inter.read), m: N(inter.total) } : null }, cfg);
+const positionUnread = KI.gapsUnread ? KI.gapsUnread(gapClient, chosen, gapIn, cfg) : 0;
+const gapRows = kg.map(x => { const old = storedGaps[x.gap_id] || storedByKw[KI.key(x.keyword || x.action_target || '')] || {};
   return { ...x, sample_note: x.sample_note ? x.sample_note + ' searches the data provider holds for these competitors' : '', status: ['dismissed', 'started', 'done'].includes(S(old.status)) ? S(old.status) : x.status, created_at: S(old.created_at) || x.created_at }; });
 const gapsSummary = {}; for (const x of gapRows) gapsSummary[x.type] = (gapsSummary[x.type] || 0) + 1;
 // ---- the plan (KI.plan: up to 10 ranked actions; Start creates the existing pipeline item, W2) ----
@@ -102,14 +117,15 @@ const plan = KI.plan(heads.filter(h => h._gate !== 'fail').slice(0, 30).map(h =>
 // ---- rows for seo_ki_keywords (the scored ones, then the gated ones with their reason) ----
 const srcOf = (r) => (r.sources || []).map(x => ({ source: x.source, fetched_at: x.fetched_at, detail: x.detail || '' }));
 const volBasis = (r) => r.volume == null ? null : 'provider_estimate';
+// FX-L L3: top10_json keeps exact / url_partial, so a later re-cluster never keys a recovered address as exact
 const kwRow = (r) => KIW.shape('KI_KW', { site_id: p.site_id, domain: p.domain, market: p.market, keyword: r.keyword, kw_key: r.kw_key, sources_json: srcOf(r), source_count: (r.sources || []).length,
   volume: N(r.volume), volume_basis: volBasis(r), volume_source: r.volume == null ? ((r.families || []).length >= 2 ? 'evidenced, volume not measured' : '') : (KIW.S(r.volume_source) || 'DataForSEO Labs'),
   cpc: N(r.cpc), kd: N(r.kd), trend_json: r.trend || null, gsc_impressions: N(r.gsc_impressions), gsc_clicks: N(r.gsc_clicks), gsc_position: N(r.gsc_position), gsc_page: r.gsc_page || null,
   intent: ['commercial', 'transactional', 'informational', 'navigational'].includes(r.intent) ? r.intent : null, stage: r.stage || null, stage_evidence_json: r.stage_evidence || [], intent_confidence: N(r.intent_confidence),
-  needs_review: !!r.needs_review, gate: r.gate, gate_reason: r.gate_reason || '', fit: N(r.fit), demand: N(r.demand), win: N(r.win), value: N(r.value_f), gap: N(r.gap),
+  needs_review: !!r.needs_review, gate: r.gate, gate_reason: r.gate === 'fail' ? (r.gate_code || r.gate_reason || 'off_topic') : '', gate_detail: r.gate === 'fail' ? (r.gate_detail || '') : '', fit: N(r.fit), demand: N(r.demand), win: N(r.win), value: N(r.value_f), gap: N(r.gap),
   score: r.gate === 'fail' ? 0 : N(r.score), score_low: r.gate === 'fail' ? 0 : N(r.score_low), score_high: r.gate === 'fail' ? 0 : N(r.score_high), low_confidence: !!r.low_confidence, verdict: r.gate === 'fail' ? 'gated' : r.verdict,
   cluster_id: r.cluster_id || null, is_head: r.gate === 'fail' ? false : !!r.is_head, cluster_size: N(r.cluster_size), cluster_demand: N(r.cluster_demand), serp_read_at: r.serp ? (r.serp.at || now) : null,
-  top10_json: (r.top10 || []).map(t => ({ url: t.url, host: t.host, type: t.type, pos: t.pos })), page_action: r.gate === 'fail' ? 'none' : (r.page_action || 'none'), page_url: r.page_url || null,
+  top10_json: (r.top10 || []).map(t => ({ url: t.url, host: t.host, type: t.type, pos: t.pos, exact: t.exact !== false, url_partial: !!t.url_partial })), page_action: r.gate === 'fail' ? 'none' : (r.page_action || 'none'), page_url: r.page_url || null,
   cannibal_json: r.cannibal || null, competitors_json: (r.competitors || []).filter(x => chosen.includes(KIW.host(x.domain)) || !chosen.length).slice(0, 10).map(x => ({ domain: KIW.host(x.domain), position: N(x.position), url: x.url || '' })), striking: !!r.striking, run_id: p.run_id, fetched_at: now, updated_at: now });
 const gatedRows = (c.gated || []).map(r => ({ ...r, gate: 'fail', verdict: 'gated', stage: null, top10: [], competitors: r.competitors || [], cluster_id: null, score: 0, score_low: 0, score_high: 0 }));
 const kwRows = [...rows, ...gatedRows].map(kwRow);
@@ -118,7 +134,9 @@ const status = !rows.length && missing.length ? 'failed' : (missing.length || se
 const reason = status === 'failed' ? 'no candidate search could be read (' + missing.map(s => s.key).join(', ') + ' could not be read); nothing was guessed, and this is not "no demand"' : '';
 const summary = { candidates: N(c.merged) || 0, scored: rows.length, gated: gatedRows.length, dropped_below_top_n: N(c.dropped) || 0, clusters: heads.length, results_pages_read: N(sp.read) || 0,
   results_pages_missing: N(sp.missing) || 0, results_pages_bought: N(sp.live) || 0, striking: striking.length, questions: questions.length, gaps: gapRows.length, plan: plan.length,
-  go: rows.filter(r => r.verdict === 'go').length, months: rows.filter(r => r.verdict === 'months').length, hard: rows.filter(r => r.verdict === 'hard').length, needs_review: rows.filter(r => r.needs_review).length };
+  go: rows.filter(r => r.gate === 'pass' && r.verdict === 'go').length, months: rows.filter(r => r.gate === 'pass' && r.verdict === 'months').length, hard: rows.filter(r => r.gate === 'pass' && r.verdict === 'hard').length,
+  unknown: rows.filter(r => r.gate === 'pass' && r.verdict === 'unknown').length, gated_after_read: rows.filter(r => r.gate === 'fail').length, needs_review: rows.filter(r => r.needs_review).length,
+  strength_measured: siteCtx.refdomains != null ? 1 : 0, gaps_position_unread: positionUnread };
 const clustersOut = heads.slice(0, 50).map(h => ({ cluster_id: h.cluster_id, head: h.head, members: h.members, demand: N(h.cluster_demand), stage: h.stage || null, verdict: h.verdict, score: N(h.score), score_low: N(h.score_low), score_high: N(h.score_high), page_action: h.page_action, page_url: h.page_url }));
 return [{ json: { kind: 'keyword_research', status, reason, sections, summary, notes: p.notes || [], kw_rows: kwRows, gap_rows: gapRows.map(x => KIW.shape('KI_GAPS', x)), cache_rows: saveRows, serp_cache_rows: sp.serp_cache_rows || [],
   lists: { clusters: clustersOut, striking, questions, gaps_summary: gapsSummary, plan } } }];

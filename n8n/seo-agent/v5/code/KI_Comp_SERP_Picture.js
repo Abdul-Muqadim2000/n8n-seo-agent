@@ -7,7 +7,7 @@ let cacheRows = []; try { cacheRows = $('Load SERP Cache (KI Comp)').all().map(i
 let reqItems = []; try { reqItems = $('Any Comp SERPs?').all().map(i => i.json).filter(r => r && !r.skip); } catch (e) { reqItems = []; }
 let answers = []; try { answers = $('Run Comp SERPs Answers').all().map(i => i.json); } catch (e) { answers = []; }
 const m = { location_code: p.location_code, language_code: p.language_code };
-const R = KIW.serpReadings((p.seeds || []).map(s => s.keyword), m, cacheRows, reqItems, answers, p.site_id, p.now);
+const R = KIW.serpReadings((p.seeds || []).map(s => s.keyword), m, cacheRows, reqItems, answers, p.site_id, p.now, { own_domain: p.domain, services: p.services });
 const hosts = KIW.hostsOf(R.by, p.canonical_host || p.domain);
 const st = KIW.callState(R.pairs, 'the results pages of your service searches');
 const state = !R.read ? (R.pairs.length ? 'missing' : 'missing') : (R.missing ? 'partial' : 'ok');

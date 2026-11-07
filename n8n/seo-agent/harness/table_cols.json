@@ -896,6 +896,7 @@
   "needs_review",
   "gate",
   "gate_reason",
+  "gate_detail",
   "fit",
   "demand",
   "win",

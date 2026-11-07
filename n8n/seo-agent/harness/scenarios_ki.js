@@ -49,10 +49,11 @@ module.exports = async (ctx) => {
       KI.key('E-invoicing in the UAE') === KI.key('uae einvoicing') && KI.key('erp & crm software') === KI.key('erp and crm softwares') && KI.key('erp software uae') === KI.key('uae erp software')
       && KI.key('erp software uae') !== KI.key('crm software uae') && KI.key('the') !== '', J([KI.key('E-invoicing in the UAE'), KI.key('uae einvoicing'), KI.key('erp & crm software')]));
     const s1 = KI.services('Microsoft Dynamics 365 consulting and implementation in the UAE and GCC: Business Central, F&O, and UAE e-invoicing (Peppol) and VAT compliance.');
-    check('KI2 services: R3 #4, a confirmed service written as a sentence is ONE phrase, never cut on its commas', s1.length === 1 && /Business Central, F&O, and UAE e-invoicing/.test(s1[0]), J(s1));
-    check('KI2 services: an array is kept as given (commas inside a phrase kept), a JSON array string is parsed, a one-line short list is split',
-      J(KI.services(['NAV, GP and AX migrations', 'Power BI'])) === J(['NAV, GP and AX migrations', 'Power BI']) && J(KI.services('["Open edX hosting","AI automation"]')) === J(['Open edX hosting', 'AI automation'])
-      && J(KI.services('erp, crm, peppol e-invoicing')) === J(['erp', 'crm', 'peppol e-invoicing']) && J(KI.services('a\nb; c')) === J(['a', 'b', 'c']) && KI.services('').length === 0, J(KI.services('erp, crm, peppol e-invoicing')));
+    // FX-L B1 (REVIEW_LOGIC B1): a sentence becomes its clean service phrases - never a fragment ("GCC: Business"), never one 120-character "service"
+    check('KI2 services (FX-L B1): a sentence becomes clean phrases: the product names and services in it, the market tail and "and" dropped, no fragment', J(s1) === J(['Microsoft Dynamics 365 consulting', 'Microsoft Dynamics 365 implementation', 'Business Central', 'F&O', 'e-invoicing', 'VAT compliance', 'Peppol']), J(s1));
+    check('KI2 services: array items are cleaned the same way ("GP and AX migrations" -> both migrations), a JSON array string is parsed, a one-line short list is split, single letters are not services',
+      J(KI.services(['NAV, GP and AX migrations', 'Power BI'])) === J(['NAV', 'GP migrations', 'AX migrations', 'Power BI']) && J(KI.services('["Open edX hosting","AI automation"]')) === J(['Open edX hosting', 'AI automation'])
+      && J(KI.services('erp, crm, peppol e-invoicing')) === J(['erp', 'crm', 'peppol e-invoicing']) && J(KI.services('a\nb; c')) === J([]) && KI.services('').length === 0, J([KI.services(['NAV, GP and AX migrations', 'Power BI']), KI.services('a\nb; c')]));
 
     // ---- KI3 hosts and urls ----
     check('KI3 validHost: a registrable host survives (scheme, www, path, port dropped); text fragments, IP literals and single words do not',
@@ -82,7 +83,7 @@ module.exports = async (ctx) => {
     const mg = Object.fromEntries(Object.keys(misc).map(h => [h, cd(h).class]));
     check('KI4 job boards, government / regulators, media, platforms and other vendors by rule', Object.entries(misc).every(([h, c]) => mg[h] === c), J(Object.entries(misc).filter(([h, c]) => mg[h] !== c).map(([h]) => [h, mg[h]])));
     check('KI4 a partner on a country domain whose name contains a vendor word is a business, not the platform (dynamics.ae is DBS, a UAE partner)',
-      cd('dynamics.ae', { appearances: [{ keyword: 'ms 365 erp', position: 1, type: 'provider' }] }).class === 'direct', J(cd('dynamics.ae', { appearances: [{ keyword: 'ms 365 erp', position: 1, type: 'provider' }] })));
+      ['direct', 'adjacent'].includes(cd('dynamics.ae', { appearances: [{ keyword: 'ms 365 erp', position: 1, type: 'provider' }] }).class), J(cd('dynamics.ae', { appearances: [{ keyword: 'ms 365 erp', position: 1, type: 'provider' }] })));
     const dec = cd('acme-dynamics.com', { declared: ['acme-dynamics.com'] }), usr = cd('randgroup.com', { user: { 'randgroup.com': 'adjacent' } });
     const llm1 = cd('unknownfirm.com', { llm: { class: 'adjacent', confidence: 0.5 } }), nollm = cd('unknownfirm.com');
     check('KI4 bases: declared -> direct (declared), the user\'s class is final (user), an LLM answer only when passed (llm, < 0.6 = needs review), otherwise rule / page',
@@ -203,8 +204,8 @@ module.exports = async (ctx) => {
     const d12 = [KI.demand([{ volume: 100, stage: 'hire' }]), KI.demand([{ volume: 100, gsc_impressions: 280, stage: 'hire' }]), KI.demand([{ volume: null, sources: [{ source: 'gsc' }, { source: 'paa' }] }]),
       KI.demand([{ volume: null, sources: [{ source: 'labs_ideas' }, { source: 'labs_related' }, { source: 'labs_suggestions' }] }]), KI.demand([{ volume: 1000, stage: 'info', aio: true }]), KI.demand([{ volume: 1000, stage: 'info', aio: false }]),
       KI.demand([{ volume: 10, stage: 'hire' }]), KI.demand([{ volume: 1000, stage: 'hire' }])];
-    check('KI12 demand: Search Console impressions beat provider volume; no volume + 2 independent sources -> the 0.15 floor ("evidenced, volume not measured"); three Labs endpoints are ONE source',
-      d12[1].clicks > d12[0].clicks && /Search Console/.test(d12[1].note) && d12[2].demand === 0.15 && d12[2].floor && /evidenced, volume not measured/.test(d12[2].note) && d12[3].demand === 0 && !d12[3].floor, J(d12.slice(0, 4)));
+    check('KI12 demand (FX-L H7): Search Console impressions beat provider volume on page 1-2; no volume + 2 independent sources -> a floor BELOW a measured 10 ("evidenced, volume not measured"); three Labs endpoints are ONE source',
+      d12[1].clicks > d12[0].clicks && /Search Console/.test(d12[1].note) && d12[2].demand > 0 && d12[2].demand < d12[6].demand && d12[2].floor && /evidenced, volume not measured/.test(d12[2].note) && d12[3].demand === 0 && !d12[3].floor, J(d12.slice(0, 4)));
     check('KI12 demand: an AI answer on the page lowers it (stage loss), more volume never lowers it, always 0..1 with low <= demand <= high',
       d12[4].demand < d12[5].demand && d12[6].demand <= d12[0].demand && d12[0].demand <= d12[7].demand && d12.every(d => d.demand >= 0 && d.demand <= 1 && d.low <= d.demand + 1e-9 && d.demand <= d.high + 1e-9), J(d12.map(d => [d.demand, d.low, d.high])));
 
@@ -225,7 +226,7 @@ module.exports = async (ctx) => {
 
     // ---- KI14 value / gap ----
     const v14 = [KI.value({ keyword: 'x', cpc: 15 }).value, KI.value({ keyword: 'x', cpc: 0 }).value, KI.value({ keyword: 'x' }), KI.value({ keyword: 'open edx hosting uae', cpc: 1 }, { service_values: { 'open edx hosting': 0.9 } })];
-    check('KI14 Value: CPC on a log scale ($15 = 1), missing CPC = 0.5 modelled with a range, the owner\'s value for the service wins', near(v14[0], 1) && v14[1] === 0 && v14[2].value === 0.5 && v14[2].basis === 'modelled' && v14[3].value === 0.9 && v14[3].basis === 'measured', J(v14));
+    check('KI14 Value: CPC on a log scale ($15 = 1), missing CPC = 0.5 modelled with a range, the owner\'s value for the service wins', near(v14[0], 1) && v14[1] === 0.5 && v14[2].value === 0.5 && v14[2].basis === 'modelled' && v14[3].value === 0.9 && v14[3].basis === 'measured', J(v14));
     const top14 = [{ host: 'randgroup.com', pos: 1 }, { host: 'www.velosio.com', pos: 3 }, { host: 'other.com', pos: 4 }, { domain: null, url_exact: false }];
     const g14 = [KI.gap({ top10: top14 }, ['randgroup.com', 'velosio.com', 'dynamicssquare.com', 'intwo.cloud']), KI.gap({ top10: top14, ai_cited: ['intwo.cloud'] }, ['randgroup.com', 'velosio.com', 'dynamicssquare.com', 'intwo.cloud']), KI.gap({ top10: top14 }, [])];
     check('KI14 Gap: the share of the chosen competitors in the top 10 (2 of 4 = 0.5), +0.5 when one is cited in AI answers, 0 with no chosen set', g14[0].gap === 0.5 && g14[1].gap === 1 && g14[2].gap === 0, J(g14));
@@ -306,12 +307,12 @@ module.exports = async (ctx) => {
     const cl20 = { site_id: 'site_techand-ai', domain: 'techand.ai', market: 'AE-en', run_id: 'r1', now: '2026-11-08T00:00:00.000Z' };
     const ch20 = ['randgroup.com', 'velosio.com', 'intwo.cloud'];
     const kr = [
-      { keyword: 'missing one', top10: [{ host: 'randgroup.com', pos: 1 }, { host: 'velosio.com', pos: 4 }] },
-      { keyword: 'untapped one', top10: [{ host: 'intwo.cloud', pos: 2 }] },
+      { keyword: 'missing one', sources: [{ source: 'gap' }], top10: [{ host: 'randgroup.com', pos: 1 }, { host: 'velosio.com', pos: 4 }] },
+      { keyword: 'untapped one', sources: [{ source: 'gap' }], top10: [{ host: 'intwo.cloud', pos: 2 }] },
       { keyword: 'weak one', gsc_position: 35, top10: [{ host: 'velosio.com', pos: 2 }], page_url: 'https://techand.ai/w' },
       { keyword: 'striking one', gsc_position: 9, gsc_impressions: 300, gsc_page: 'https://techand.ai/s', top10: [{ host: 'velosio.com', pos: 2 }] },
       { keyword: 'strong one', top10: [{ host: 'techand.ai', pos: 2 }, { host: 'randgroup.com', pos: 3 }] },
-      { keyword: 'list one', page_action: 'list', top10: [{ host: 'randgroup.com', pos: 1 }, { host: 'velosio.com', pos: 2 }] },
+      { keyword: 'list one', sources: [{ source: 'gap' }], page_action: 'list', top10: [{ host: 'randgroup.com', pos: 1 }, { host: 'velosio.com', pos: 2 }] },
       { keyword: 'gated one', gate: 'fail', top10: [{ host: 'randgroup.com', pos: 1 }, { host: 'velosio.com', pos: 2 }] } ];
     const ex20 = { sample: { n: 300, m: 1240 }, listings: [{ domain: 'goodfirms.co', keyword: 'crm consulting dubai', lists_competitors: ['velosio.com'], lists_client: false }],
       backlinks: [{ domain: 'peppol.org', links_to: ['randgroup.com', 'velosio.com'], links_client: false }, { domain: 'one.com', links_to: ['randgroup.com'], links_client: false }],
@@ -327,6 +328,14 @@ module.exports = async (ctx) => {
     check('KI20 stored shape: the contract columns, JSON columns as strings, "sample of 300 of 1240" when capped, deterministic ids',
       gp20.every(g => J(Object.keys(g)) === J(['gap_id', 'site_id', 'domain', 'market', 'type', 'keyword', 'cluster_id', 'competitor_domains_json', 'client_position', 'evidence_json', 'sample_note', 'action', 'action_target', 'credits', 'status', 'run_id', 'created_at', 'updated_at'])
         && typeof g.competitor_domains_json === 'string' && typeof g.evidence_json === 'string' && g.status === 'open') && gt['missing one'].sample_note === 'sample of 300 of 1240' && J(KI.gaps(cl20, ch20, kr.slice().reverse(), ex20)) === J(gp20), J(gp20[0]));
+
+    // FX-L H6: an unknown client position is "not read", never "not in the top 100": no missing / untapped row, counted apart; a page read with
+    // the client absent counts only when the site's Search Console reading is complete and has no row for the search
+    const kr6 = [{ keyword: 'unread one', top10: [{ host: 'randgroup.com', pos: 3 }, { host: 'velosio.com', pos: 7 }] }, { keyword: 'read absent', serp_read: true, top10: [{ host: 'randgroup.com', pos: 3 }, { host: 'velosio.com', pos: 7 }] }];
+    const g6a = KI.gaps(cl20, ch20, kr6, {}), g6b = KI.gaps({ ...cl20, gsc_complete: true }, ch20, kr6, {});
+    check('KI20 (FX-L H6): an unknown client position makes no "missing" gap and is counted as not read; with a complete Search Console reading a read results page without the client is "missing"',
+      g6a.length === 0 && KI.gapsUnread(cl20, ch20, kr6) === 2 && g6b.length === 1 && g6b[0].type === 'missing' && g6b[0].keyword === 'read absent' && g6b[0].sample_note === '', J([g6a, g6b.map(g => [g.type, g.keyword])]));
+    check('KI20 (FX-L L7): "sample of N of M" is on the intersection rows only, never on a striking or weak row', gt['striking one'].sample_note === '' && gt['weak one'].sample_note === '' && gt['untapped one'].sample_note === 'sample of 300 of 1240', J([gt['striking one'].sample_note, gt['untapped one'].sample_note]));
 
     // ---- KI21 plan ----
     const heads = Array.from({ length: 14 }, (_, i) => ({ keyword: 'service ' + i + ' dubai', cluster_id: 'c' + i, score: { score: 20 + i * 3, low: 10 + i * 3, high: 30 + i * 3, mid: 20 + i * 3 }, verdict: i % 3 ? 'months' : 'go', stage: 'hire', page_action: i % 4 === 0 ? 'refresh' : 'new', page_url: i % 4 === 0 ? 'https://techand.ai/s' + i : '', cluster_size: 1 + (i % 3) }))
@@ -348,10 +357,13 @@ module.exports = async (ctx) => {
     check('KI22 readable fails closed: only On, only with the kill switch read as off; a gated row, a row the gate refuses on re-read, google.com, a fragment or a dismissed competitor is never read',
       J(rd22) === J([true, false, false, false, false, false, false, false, true, false, false, false, false]), J(rd22));
     const lab = [KI.label('measured', '', '2026-11-02T10:00:00Z'), KI.label('provider_estimate', 'DataForSEO Labs', '2026-11-08'), KI.label('modelled'), KI.label('inferred'), KI.label('guess')];
-    check('KI22 label: the four bases with the app\'s words (measured + date, estimate from <source> + date, our estimate, AI judgement); anything else "not available"',
-      lab[0].text === 'measured on 2026-11-02' && lab[1].text === 'estimate from DataForSEO Labs on 2026-11-08' && lab[2].text === 'our estimate' && lab[3].text === 'AI judgement' && lab[4].basis === 'none' && lab[4].text === 'not available', J(lab));
+    check('KI22 label: the four bases with the app\'s words (measured + date, estimate from <source> + date, our estimate, our reading of the results); anything else "not available"',
+      lab[0].text === 'measured on 2026-11-02' && lab[1].text === 'estimate from DataForSEO Labs on 2026-11-08' && lab[2].text === 'our estimate' && lab[3].text === 'our reading of the results' && lab[4].basis === 'none' && lab[4].text === 'not available', J(lab));
 
     // ---- KI23 accuracy sets ----
+    // FX-L B2: the negative cases (a travel agency, a home automation shop, a web agency on a service results page) are never "direct"
+    const negs = DOM.cases.filter(c => c.fxl_negative).map(c => [c.host, KI.classifyDomain(c.host, { ...DOM.clients[c.client], appearances: c.appearances }).class]);
+    check('KI23 (FX-L B2) a business that ranks on a service search but sells something else is never "direct" (its own titles decide, never the search)', negs.length >= 3 && negs.every(([, k]) => k !== 'direct'), J(negs));
     const acc = (set, f) => { const r = { train: [0, 0], hold: [0, 0], miss: [] }; for (const c of set.cases) { const ok = f(c); const b = c.holdout ? r.hold : r.train; b[1]++; if (ok.ok) b[0]++; else r.miss.push((c.holdout ? 'HOLD ' : '') + ok.msg); } return r; };
     const ad = acc(DOM, (c) => { const k = KI.classifyDomain(c.host, { ...DOM.clients[c.client], appearances: c.appearances }); const got = k.store ? k.class : 'reject'; return { ok: got === c.class, msg: c.client + ' ' + c.host + ' ' + c.class + '->' + got }; });
     const as = acc(STG, (c) => { const s = KI.stage(c.top10 || [], c.keyword, null, STG.clients[c.client]); return { ok: s.stage === c.stage, msg: c.keyword + ' ' + c.stage + '->' + s.stage }; });

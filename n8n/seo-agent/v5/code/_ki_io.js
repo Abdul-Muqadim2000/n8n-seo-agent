@@ -30,14 +30,35 @@ const KIW = (() => {
   const CAPS = { seeds: 20, gsc_seeds: 50, serp_depth: 10, sc_limit: 50, size_targets: 30, cd_limit: 20, cd_min_ranked: 50, cd_rivals: 1,
     rk_limit: 300, chosen_max: 5, home_reads: 8, sitemaps: 5, autocomplete: 10, ideas_limit: 300, sugg_n: 2, sugg_limit: 200, related_n: 1,
     related_limit: 150, pi_limit: 500, pi_rank: 10, top_n: 300, top_m: 60, tp_urls: 60, overview_max: 700, intent_max: 1000, ads_max: 1000,
-    striking_min: 8, striking_max: 20, striking_impr: 100, striking_impr_small: 30, small_site_impr: 2000,
+    home_bytes: 400000, fetch_timeout_ms: 15000, rd_targets: 300,
     ...((CFG0.caps && typeof CFG0.caps === 'object') ? CFG0.caps : {}) };
   // ---- hosts and words ----
   const host = (u) => S(u).toLowerCase().trim().replace(/^https?:\/\//, '').replace(/[\/?#\s].*$/, '').replace(/:\d+$/, '').replace(/^www\./, '').replace(/\.$/, '');
   const HOSTRE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$/;
   // a public host only: no IP literal, no localhost / internal names (the SSRF guard every fetched address passes, as Normalize Input's domainOk)
-  const publicHost = (h0) => { const h = host(h0); if (!h || h.length > 253 || /^(\d{1,3}\.){3}\d{1,3}$/.test(h) || h.includes(':')) return false;
-    if (/(^|\.)(localhost|local|internal|localdomain|home|lan|corp|intranet|test|example|invalid|arpa)$/.test(h)) return false; return HOSTRE.test(h); };
+  // FX-L (REVIEW_PERF_SAFETY H2): also no wildcard-DNS names that resolve to any address you write in them (nip.io, sslip.io ...), no names
+  // with an IP inside, no cloud metadata names, no credentials
+  const WILDCARD_DNS = /(^|\.)(nip\.io|sslip\.io|xip\.io|traefik\.me|localtest\.me|lvh\.me|vcap\.me|lacolhost\.com|fbi\.com|localhost\.run|ngrok\.io|ngrok-free\.app|1u\.ms|rbndr\.us|burpcollaborator\.net|oastify\.com|interact\.sh)$/;
+  const publicHost = (h0) => { if (/@/.test(S(h0).replace(/^https?:\/\//i, '').replace(/[\/?#].*$/, ''))) return false; const h = host(h0); if (!h || h.length > 253 || /^(\d{1,3}\.){3}\d{1,3}$/.test(h) || h.includes(':')) return false;
+    if (/(^|\.)(localhost|local|internal|localdomain|home|lan|corp|intranet|test|example|invalid|arpa|metadata)$/.test(h) || /(^|\.)metadata\.google\.internal$/.test(h) || WILDCARD_DNS.test(h)) return false;
+    if (/(^|[.-])(\d{1,3})[.-](\d{1,3})[.-](\d{1,3})[.-](\d{1,3})([.-]|$)/.test(h)) return false; return HOSTRE.test(h); };
+  // one redirect hop, checked by us (the HTTP nodes follow none): https only, a public host, the SAME registrable domain as the address
+  // asked (apex <-> www, http -> https), no credentials. Anything else is not followed.
+  const regOf = (h) => (typeof KI === 'object' && KI && KI.reg) ? KI.reg(host(h)) : host(h).split('.').slice(-2).join('.');
+  const hopOf = (askedUrl, answer) => { const a = answer || {}; const code = N(a.statusCode); if (!code || code < 300 || code >= 400) return '';
+    const hd = a.headers || {}; let loc = S(hd.location || hd.Location || '').trim(); if (!loc) return '';
+    const base = S(askedUrl).match(/^(https?:\/\/[^\/?#]+)/i); if (/^\/(?!\/)/.test(loc) && base) loc = base[1] + loc;
+    if (!/^https:\/\/[^\s\/?#@]+(?:[\/?#]\S*)?$/i.test(loc)) return '';
+    const h = host(loc); if (!publicHost(h) || regOf(h) !== regOf(host(askedUrl))) return ''; return loc.slice(0, 500); };
+  // the text of an HTML page, linear time (no backtracking regex over a page of unclosed tags): script / style / noscript / svg blocks out,
+  // tags out, entities out, capped at max characters of the input
+  const htmlText = (html, max) => { const src = S(html).slice(0, max || 400000); const low = src.toLowerCase(); let out = '', i = 0;
+    const SKIP = ['script', 'style', 'noscript', 'svg'];
+    while (i < src.length) { const lt = low.indexOf('<', i); if (lt < 0) { out += src.slice(i); break; } out += src.slice(i, lt) + ' ';
+      const tag = SKIP.find(t => low.startsWith('<' + t, lt) && /[\s>\/]/.test(low.charAt(lt + t.length + 1) || '>'));
+      if (tag) { const end = low.indexOf('</' + tag, lt + 1); if (end < 0) break; const gt = low.indexOf('>', end); i = gt < 0 ? src.length : gt + 1; continue; }
+      const gt = low.indexOf('>', lt + 1); if (gt < 0) break; i = gt + 1; }
+    return out.replace(/&[a-z#0-9]{1,10};/gi, ' ').replace(/\s+/g, ' ').trim(); };
   const SEARCH = /(^|\.)(google|bing|duckduckgo|yahoo|yandex|baidu|ecosia)\.[a-z.]{2,6}$/;
   const isBusinessHost = (h0, client) => { const h = host(h0); return publicHost(h) && !SEARCH.test(h) && h !== host(client); };
   const normKw = (k) => { let s = S(k); try { s = s.normalize('NFKC'); } catch (e) {} return s.toLowerCase().replace(/\s+/g, ' ').trim(); };
@@ -68,24 +89,54 @@ const KIW = (() => {
     const w = w0.slice(0, 5); while (w.length && /^(and|or|the|a|an|of|to|in|for|&)$/.test(w[w.length - 1])) w.pop();
     const out = w.join(' ').replace(/[^\p{L}\p{N}&+.# -]+/gu, ' ').replace(/\s+/g, ' ').trim(); return out.length >= 3 && out.split(' ').length >= 1 ? out : ''; };
   // the services as the confirmed LIST (KI.services: JSON arrays parsed, a sentence never cut), and their short forms for the seeds
-  const services = (site, req) => { const s = site || {}; const k = (v) => (typeof KI === 'object' && KI.services) ? KI.services(v) : J(v, []).map(S);
-    return uniq([...k(s.declared_services), ...k(s.services_json), ...k(S((req || {}).business).split(/[\n;]+/).map(T).filter(x => x.length > 2 && x.length < 120))]).slice(0, 16); };
-  const seedServices = (svc) => uniq((svc || []).map(shortService).filter(Boolean)).slice(0, 12);
+  // FX-L B1: every distinct service is kept (devaicon's "Open edX Services" was item 21 of 30 and a cap of 16 cut it); the list is RANKED by
+  // evidence - declared by the client, the impressions of the site's own Search Console queries that contain it, a page of the site named
+  // for it - and only then capped (60), never cut by position
+  const services = (site, req, gsc, pages) => { const s = site || {}; const k = (v) => (typeof KI === 'object' && KI.services) ? KI.services(v) : J(v, []).map(S);
+    const declared = k(s.declared_services); const all = []; const seen = new Set();
+    for (const x of [...declared, ...k(s.services_json), ...k(S((req || {}).business).split(/[\n;]+/).map(T).filter(x => x.length > 2 && x.length < 160))]) { const kk = keyOf(x); if (!kk || seen.has(kk)) continue; seen.add(kk); all.push(x); }
+    const dk = new Set(declared.map(keyOf)); const tok = (x) => keyOf(x).split(' ').filter(t => t.length > 1);
+    const ev = (x) => { const t = tok(x); if (!t.length) return 0; const has = (q) => { const qt = new Set(keyOf(q).split(' ')); return t.every(w => qt.has(w)); };
+      const imp = (gsc || []).filter(q => has(q.query || q.keyword)).reduce((a, q) => a + (N(q.impressions) || 0), 0);
+      const pg = (pages || []).some(p => has(S(p.title) + ' ' + S(p.url).replace(/[\/_-]+/g, ' '))) ? 1 : 0;
+      return (dk.has(keyOf(x)) ? 3 : 0) + Math.log10(1 + imp) + pg; };
+    return all.map((x, i) => ({ x, i, e: ev(x) })).sort((a, b) => b.e - a.e || a.i - b.i).slice(0, 60).map(o => o.x); };
+  const GENERIC1 = /^(services?|solutions?|support|consulting|implementation|development|software|systems?|cloud|automation|it|ai)$/i;
+  const seedServices = (svc) => uniq((svc || []).map(x => normKw(x).replace(/[^\p{L}\p{N}&+#. -]+/gu, ' ').replace(/\s+/g, ' ').trim())
+    .filter(x => x && x.split(' ').length <= 5 && !GENERIC1.test(x) && !/[.:;!?()]/.test(x.replace(/\b\d+\.\d+\b/g, '')))).slice(0, 12);
   const productsOf = (svc) => uniq((svc || []).map(x => { const m = S(x).match(PRODUCTS); return m ? m[1].toLowerCase() : ''; }));
   // ---- the run plan's seeds (DESIGN §2.1): services x market, GSC, tracked, ladder heads, the request's own; fit-gated, capped ----
+  // FX-L H1 (REVIEW_LOGIC H1): the seeds are balanced by evidence inside the cap instead of filled by service phrasings: the request's own
+  // (<= 6), the top non-brand Search Console queries (<= 6), tracked keywords and ladder heads (<= 4), then the services x the market (<= 2
+  // phrasings each, round robin, so every service gets its turn before any gets a second), then products. A seed must be a plausible
+  // search: no punctuation inside, 2-6 words, never a single generic word.
+  const plausible = (kw, maxW) => { const w = kw.split(' ').filter(Boolean); if (w.length < 2 || w.length > (maxW || 6)) return false; if (/[.,:;!?()\[\]"]/.test(kw.replace(/\b\d+\.\d+\b/g, ''))) return false; return true; };
   const compSeeds = (o) => {
     const P = PLACES[o.iso] || { word: S(o.country).toLowerCase(), cities: [] }; const city = T(o.city).toLowerCase() || P.cities[0] || P.word;
-    const out = []; const add = (k, src, w) => { const kw = normKw(k); if (!kw || kw.split(' ').length > 8 || out.some(x => x.keyword === kw)) return; out.push({ keyword: kw, source: src, weight: w }); };
-    for (const s of (o.seeds || [])) add(s, 'seed', 1);
-    for (const s of (o.services || []).slice(0, 6)) { add(s + ' ' + P.word, 'service', 1); add(s + ' company ' + city, 'service', 0.9); add('best ' + s + ' ' + city, 'service', 0.8); }
-    for (const p of (o.products || []).slice(0, 3)) add(p + ' partner ' + P.word, 'service', 1);
-    for (const q of (o.gsc || []).slice(0, CAPS.gsc_seeds)) add(q.query, 'gsc', Math.min(1, 0.4 + Math.log10(1 + (N(q.impressions) || 0)) / 5));
-    for (const k of (o.tracked || [])) add(k, 'tracked', 0.8);
-    for (const k of (o.ladders || [])) add(k, 'ladder', 0.8);
-    const kept = [], refused = [];
-    for (const s of out) { const g = o.gate ? o.gate(s.keyword) : { gate: 'pass' }; if (g.gate === 'pass') kept.push(s); else refused.push({ keyword: s.keyword, reason: g.reason, detail: g.text || g.detail }); }
-    return { seeds: kept.slice(0, CAPS.seeds), refused, dropped: Math.max(0, kept.length - CAPS.seeds) };
+    const cap = CAPS.seeds; const Q = { seed: 6, gsc: 6, tracked: 4 };
+    const kept = [], refused = [], seenK = new Set(), waiting = new Set();
+    const take = (k, src, w, quota) => { const kw = normKw(k); if (!kw) return false; const kk = keyOf(kw); if (seenK.has(kk)) return false;
+      const maxW = src === 'service' ? 6 : 8;   // a phrase we build from a service: 6 words; a search people typed (Search Console, tracked, ladder, the request): 8
+      if (!plausible(kw, maxW)) { refused.push({ keyword: kw, reason: 'not_a_search', detail: 'not a plausible search (punctuation, or under 2 / over ' + maxW + ' words)' }); seenK.add(kk); return false; }
+      const g = o.gate ? o.gate(kw) : { gate: 'pass' };
+      if (g.gate !== 'pass') { refused.push({ keyword: kw, reason: g.reason, detail: g.text || g.detail }); seenK.add(kk); return false; }
+      if (kept.length >= cap || (quota != null && kept.filter(x => x.source === src || (src === 'tracked' && x.source === 'ladder') || (src === 'ladder' && x.source === 'tracked')).length >= quota)) { waiting.add(kk); return false; }
+      seenK.add(kk); waiting.delete(kk); kept.push({ keyword: kw, source: src, weight: w }); return true; };
+    for (const s0 of (o.seeds || [])) take(s0, 'seed', 1, Q.seed);
+    for (const q of (o.gsc || []).slice(0, CAPS.gsc_seeds)) take(q.query, 'gsc', Math.min(1, 0.4 + Math.log10(1 + (N(q.impressions) || 0)) / 5), Q.gsc);
+    for (const k of (o.tracked || [])) take(k, 'tracked', 0.8, Q.tracked);
+    for (const k of (o.ladders || [])) take(k, 'ladder', 0.8, Q.tracked);
+    const svc = (o.services || []).slice(0, 12); const prods = (o.products || []).slice(0, 3);
+    const phr = [(x) => x + ' ' + P.word, (x) => x + ' company ' + city];
+    for (let r = 0; r < phr.length && kept.length < cap; r++) for (const x of svc) { if (kept.length >= cap) break; take(phr[r](x), 'service', r ? 0.9 : 1, null); }
+    for (const p0 of prods) if (kept.length < cap) take(p0 + ' partner ' + P.word, 'service', 1, null);
+    // what is left of the cap goes to the remaining Search Console queries
+    for (const q of (o.gsc || []).slice(0, CAPS.gsc_seeds)) if (kept.length < cap) take(q.query, 'gsc', Math.min(1, 0.4 + Math.log10(1 + (N(q.impressions) || 0)) / 5), null);
+    return { seeds: kept.slice(0, cap), refused, dropped: waiting.size };
   };
+  // FX-L (REVIEW_PERF_SAFETY M2): the discovery and overlap bundles are keyed on the seeds that do not change week to week (the request's own
+  // and the service phrases), never on the weekly Search Console reading, so a repeat inside the 30-day lifetime is free
+  const seedHash = (seeds) => hash((seeds || []).filter(x => x && (x.source === 'seed' || x.source === 'service')).map(x => x.keyword).sort().join('|') || 'none');
   // ---- requests (one shape per endpoint; the fields R5 §13 confirmed live) ----
   const req = (call, path, task, est, meta) => ({ ki_call: call, endpoint: BASE + path, body: [task], est_usd: r6(est), ...(meta || {}) });
   const loc = (m) => ({ location_code: m.location_code, language_code: m.language_code });
@@ -131,10 +182,10 @@ const KIW = (() => {
   const fixAnswer = (a) => (a && typeof SU === 'object' && SU && SU.fixAnswer ? SU.fixAnswer(a) : a);
   // the top 10 of a results page: host by KI.hostOf (a redirect still on google.com, or no domain, is "host unknown" and skipped), its page
   // type, title, position, and whether the address is exact (an address rebuilt from a breadcrumb is not: the host is reliable, the page is not)
-  const top10Of = (a) => { const items = ((typeof SU === 'object' && SU && SU.fixItems) ? SU.fixItems(itemsOf(a)) : itemsOf(a)) || [];
+  const top10Of = (a, ctx) => { const items = ((typeof SU === 'object' && SU && SU.fixItems) ? SU.fixItems(itemsOf(a)) : itemsOf(a)) || [];
     const org = items.filter(x => x && x.type === 'organic').sort((x, y) => (N(x.rank_group) || 99) - (N(y.rank_group) || 99)).filter(x => (N(x.rank_group) || 99) <= 10);
     const out = []; for (const x of org) { const h = KI.hostOf(x); if (!h || SEARCH.test(h)) continue; const exact = x.url_exact !== false && !(SU && SU.isRedirect && SU.isRedirect(x.url));
-      out.push({ url: S(x.url), host: h, title: S(x.title).slice(0, 160), pos: N(x.rank_group) || null, exact, url_partial: !!x.url_partial, type: KI.pageType(x) || 'other' }); }
+      out.push({ url: S(x.url), host: h, title: S(x.title).slice(0, 160), pos: N(x.rank_group) || null, exact, url_partial: !!x.url_partial, type: KI.pageType(x, ctx || {}) || 'other' }); }
     return out; };
   const extrasOf = (a) => { const items = itemsOf(a); const out = { paa: [], related: [], forum: [], aio: false, local: false };
     for (const x of items) { if (!x) continue;
@@ -161,7 +212,7 @@ const KIW = (() => {
     return { state: 'ok', reason: '' }; };
   // ---- the money one gated call measured, each task once by its own id across both attempts (R28) ----
   const measured = (answersNodeItems) => { const ev = ((answersNodeItems || []).find(j => j && j.__dfs) || {}).__dfs; return ev ? (Number(ev.cost_usd) || 0) : 0; };
-  const LABELS = { measured: 'measured', provider_estimate: 'estimate from the data provider', modelled: 'our estimate', inferred: 'AI judgement' };
+  const LABELS = { measured: 'measured', provider_estimate: 'estimate from the data provider', modelled: 'our estimate', inferred: 'our reading of the results' };
   const STAGES = { competitors: 'ki_competitors', keyword_research: 'ki_research' };
   const baseBody = (q, status, reason, extra) => ({ stage: STAGES[q.kind] || 'ki_competitors', status, reason: S(reason), request_id: S(q.request_id), run_id: S(q.run_id), domain: S(q.domain),
     market: S(q.market), mode: S(q.ki_mode || 'off'), rule_version: RULE, sections: [], summary: {}, labels: LABELS, run_ledger: null,
@@ -171,14 +222,14 @@ const KIW = (() => {
     run_cost_estimate_basis: 'refused before any paid call: no search data was read and no model was asked' }), ...emptyLists(q.kind) });
   // ---- the results pages of a list of searches: the day cache first, then this run's answers (paired with the requests that went out) ----
   // -> { by: { keyword: { source: cache|live|missing, at, why, top10, extras } }, save: [seo_cache serp rows], pairs, read, missing }
-  const serpReadings = (kws, m, cacheRows, reqItems, answers, siteId, now) => {
+  const serpReadings = (kws, m, cacheRows, reqItems, answers, siteId, now, ctx) => {
     const pr = paired(reqItems, answers); const fr = {}; for (const x of pr) if (x.q && x.q.keyword) fr[normKw(x.q.keyword)] = x;
     const by = {}, save = []; let read = 0, missing = 0;
     for (const kw0 of (kws || [])) { const kw = normKw(kw0); const body = serpBody(kw, m);
       const lk = (typeof SC === 'object' && SC) ? SC.lookup(cacheRows || [], body, { now }) : { hit: false };
-      if (lk.hit) { by[kw] = { source: 'cache', at: S(lk.reading.at), why: '', top10: top10Of(lk.response), extras: extrasOf(lk.response) }; read++; continue; }
+      if (lk.hit) { by[kw] = { source: 'cache', at: S(lk.reading.at), why: '', top10: top10Of(lk.response, ctx), extras: extrasOf(lk.response) }; read++; continue; }
       const f = fr[kw];
-      if (f && f.ok) { const fixed = fixAnswer(f.a); by[kw] = { source: 'live', at: S(now), why: '', top10: top10Of(fixed), extras: extrasOf(fixed) }; read++;
+      if (f && f.ok) { const fixed = fixAnswer(f.a); by[kw] = { source: 'live', at: S(now), why: '', top10: top10Of(fixed, ctx), extras: extrasOf(fixed) }; read++;
         const row = (typeof SC === 'object' && SC) ? SC.rowFor(fixed, body, siteId, { now, path: 'ki' }) : null; if (row) save.push(row); continue; }
       by[kw] = { source: 'missing', at: '', why: f ? f.why : 'not read: nothing was asked for it', top10: [], extras: { paa: [], related: [], forum: [], aio: false, local: false } }; missing++; }
     return { by, save, pairs: pr, read, missing };
@@ -222,6 +273,6 @@ const KIW = (() => {
     appearances: (c.positions || []).filter(x => x.src === 'serp').map(x => ({ keyword: x.seed, position: x.position, url: x.url, title: x.title, type: x.type })),
     pages: home && home.tokens ? [{ title: '', text: S(home.tokens) }] : [] });
   return { RULE, S, T, N, J, r4, r6, uniq, BASE, PRICE, QUOTE, CAPS, ttlOf, host, publicHost, isBusinessHost, SEARCH, normKw, keyOf, hash, PLACES, countryOf, market,
-    shortService, services, seedServices, productsOf, compSeeds, rq, price, task0, result0, itemsOf, okAnswer, whyFailed, paired, cacheKey, cacheRead, fresh, cacheRow,
+    shortService, services, seedServices, productsOf, compSeeds, seedHash, plausible, hopOf, htmlText, regOf, WILDCARD_DNS, rq, price, task0, result0, itemsOf, okAnswer, whyFailed, paired, cacheKey, cacheRead, fresh, cacheRow,
     fixAnswer, top10Of, extrasOf, serpReadings, hostsOf, aiHitsOf, kwRow, strip, serpBody, wordsOf, topicSim, geoMatch, classify, COLS, shape, sections, callState, measured, LABELS, STAGES, baseBody, emptyLists, refusalBody };
 })();

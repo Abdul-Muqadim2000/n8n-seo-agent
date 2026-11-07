@@ -17,18 +17,7 @@ const site = g.site || {}; const mon = g.monitors || {};
 const m = { market: g.market, iso: g.iso, location_code: g.location_code, language_code: g.language_code, country: g.country_name };
 const cache = rowsOf('Load KI Cache');
 const compRows = rowsOf('Load KI Competitors').filter(r => S(r.market) === g.market);
-const services = KIW.services(site, g);   // the confirmed list (KI.services)
-const seedSvc = KIW.seedServices(services);   // their short forms, for the seeds
-const products = KIW.productsOf(services);
 const brandWords = [S(site.business_name), ...S(site.brand_names || mon.brand_names).split(',')].map(x => KIW.normKw(x)).filter(x => x.length >= 3);
-const declared = KIW.uniq([...(g.competitors || []), ...S(mon.competitors || site.competitors).split(/[\s,;]+/)].map(KIW.host).filter(h => KIW.isBusinessHost(h, g.domain))).slice(0, 10);
-const maxChosen = Math.min(KIW.CAPS.chosen_max, Math.max(1, N(mon.ki_max_competitors) || KIW.CAPS.chosen_max));
-const userChosen = compRows.filter(r => S(r.status) === 'chosen').map(r => KIW.host(r.comp_domain));
-const dismissed = compRows.filter(r => S(r.status) === 'dismissed' && S(r.status_by) === 'user').map(r => KIW.host(r.comp_domain));
-const chosen = KIW.uniq([...userChosen, ...declared.filter(d => !dismissed.includes(d))]).slice(0, maxChosen);
-// ---- the KI write gate (KI.gate: the shared fit gate in the KI vocabulary), written once, used on every seed and every candidate keyword ----
-const fitCtx = { own_domain: g.domain, market: g.iso, services, topics: services, competitors: declared, protect: [...(g.seeds || []), ...products] };
-const gate = (kw, extra) => KI.gate(kw, { ...fitCtx, ...(extra || {}) });
 // ---- Search Console: the newest 28-day reading, queries with impressions, the brand left out ----
 const qh = rowsOf('Load Query History (KI)');
 const lastPeriod = qh.map(r => S(r.period_end)).sort().pop() || '';
@@ -36,11 +25,34 @@ const gscAll = qh.filter(r => S(r.period_end) === lastPeriod && N(r.impressions)
 const isBrand = (q) => brandWords.some(b => KIW.normKw(q).includes(b)) || KIW.normKw(q).includes(S(g.domain).split('.')[0]);
 const gsc = gscAll.filter(r => !isBrand(r.query)).sort((a, b) => N(b.impressions) - N(a.impressions) || S(a.query).localeCompare(S(b.query)))
   .map(r => ({ query: KIW.normKw(r.query), impressions: N(r.impressions) || 0, clicks: N(r.clicks) || 0, position: N(r.position) || null, page: S(r.page) }));
-const siteImpr = gscAll.reduce((s, r) => s + (N(r.impressions) || 0), 0);
+// FX-L M2: "small site" reads the property's own 28-day total (seo_site_metrics, latest period), not the sum of the ~100 stored query rows
+const metrics = rowsOf('Load Site Metrics (KI)').filter(r => N(r.impressions) != null).sort((a, b) => S(b.period_end).localeCompare(S(a.period_end)));
+const siteImpr = metrics.length ? N(metrics[0].impressions) : gscAll.reduce((s, r) => s + (N(r.impressions) || 0), 0);
+const siteImprBasis = metrics.length ? 'seo_site_metrics ' + S(metrics[0].period_end) : 'sum of the stored query rows';
+const pageRows = rowsOf('Load Pages (KI)').filter(r => r.url).slice(0, 400);
+// FX-L B1: every distinct service, cleaned (KI.services) and ranked by evidence before any cap (KIW.services)
+const services = KIW.services(site, g, gsc, pageRows);
+const seedSvc = KIW.seedServices(services);   // their plain short forms, for the seeds
+const products = KIW.productsOf(services);
+const declared = KIW.uniq([...(g.competitors || []), ...S(mon.competitors || site.competitors).split(/[\s,;]+/)].map(KIW.host).filter(h => KIW.isBusinessHost(h, g.domain))).slice(0, 10);
+const maxChosen = Math.min(KIW.CAPS.chosen_max, Math.max(1, N(mon.ki_max_competitors) || KIW.CAPS.chosen_max));
+const userChosen = compRows.filter(r => S(r.status) === 'chosen').map(r => KIW.host(r.comp_domain));
+const dismissed = compRows.filter(r => S(r.status) === 'dismissed' && S(r.status_by) === 'user').map(r => KIW.host(r.comp_domain));
+const chosen = KIW.uniq([...userChosen, ...declared.filter(d => !dismissed.includes(d))]).slice(0, maxChosen);
+// FX-L H5: a search naming any business we know competes here is another company's brand (velosio dynamics 365, intwo cloud ...)
+const knownRivals = compRows.filter(r => ['direct', 'adjacent'].includes(S(r.class)) && !(S(r.status) === 'dismissed' && S(r.status_by) === 'user')).map(r => KIW.host(r.comp_domain));
+// FX-L H4: AVOID verdicts: the request's (the app's checks and content verdicts) and the content runs the check advised against
+const clog = rowsOf('Load Content Log (KI)');
+const avoidLog = clog.filter(r => /advised against|verdict (?:is )?avoid|\bAVOID\b/i.test(S(r.publish_note) + ' ' + S(r.qa_reasons) + ' ' + S(r.status))).map(r => KIW.normKw(r.keyword));
+const avoid = KIW.uniq([...(g.avoid || []), ...avoidLog].map(KIW.normKw).filter(Boolean)).slice(0, 300);
+// ---- the KI write gate (KI.gate: the shared fit gate in the KI vocabulary), written once, used on every seed and every candidate keyword ----
+const fitCtx = { own_domain: g.domain, market: g.iso, services, topics: services, competitors: KIW.uniq([...declared, ...chosen, ...knownRivals]).slice(0, 60), protect: [...(g.seeds || []), ...products], avoid,
+  pages: pageRows.slice(0, 150).map(r => ({ title: S(r.title).slice(0, 120), url: S(r.url).slice(0, 200) })) };
+const gate = (kw, extra) => KI.gate(kw, { ...fitCtx, ...(extra || {}) });
 // ---- the ladder heads, read back through the gate they were written through (FITR, INVARIANTS rule 2) ----
 const ladderRows = rowsOf('Load Ladders (KI)');
 const heads = KIW.uniq(ladderRows.map(r => KIW.normKw(r.head_keyword)));
-const fr = FITR.rungs(heads.map(h => ({ keyword: h })), { ...FITR.ctx({ own_domain: g.domain, services, competitors: declared, topics: services }), market: g.iso }, { where: 'KI Plan' });   // the website's market: a head stored for another country is set aside
+const fr = FITR.rungs(heads.map(h => ({ keyword: h })), { ...FITR.ctx({ own_domain: g.domain, services, competitors: fitCtx.competitors, topics: services }), market: g.iso }, { where: 'KI Plan' });   // the website's market: a head stored for another country is set aside
 const ladders = fr.keep.map(r => r.keyword);
 const tracked = KIW.uniq(S(site.keywords).split(',').map(KIW.normKw)).slice(0, 20);
 const sd = KIW.compSeeds({ iso: g.iso, country: g.country_name, city: (KIW.J(site.nap_json, {}) || {}).city, services: seedSvc, products, seeds: g.seeds || [],
@@ -51,11 +63,12 @@ const has = (k, kind) => KIW.fresh(KIW.cacheRead(cache, k), kind, now, g.ki_forc
 const ck = (what, ...p) => KIW.cacheKey(g.site_id, what, ...p);
 const rkCost = KIW.PRICE.labs + KIW.CAPS.rk_limit * KIW.PRICE.labs_row;
 const seedKws = sd.seeds.map(s => s.keyword);
+const seedKey = KIW.seedHash(sd.seeds);   // FX-L perf M2: the cache key of the discovery / overlap bundles (no weekly churn)
 let base = 0, profileCap = 0, compRkCap = 0;
 const notes = [];
 if (g.kind === 'competitors') {
   base += seedKws.length * KIW.PRICE.serp10;
-  if (!has(ck('sc', g.market, KIW.hash(seedKws.join('|'))), 'ranked')) base += KIW.PRICE.labs + KIW.CAPS.sc_limit * KIW.PRICE.labs_row;
+  if (!has(ck('sc', g.market, seedKey), 'ranked')) base += KIW.PRICE.labs + KIW.CAPS.sc_limit * KIW.PRICE.labs_row;
   base += KIW.PRICE.labs + (KIW.CAPS.size_targets + 1) * KIW.PRICE.labs_row;   // sizes (bulk traffic estimation)
   base += KIW.PRICE.bl + (KIW.CAPS.size_targets + 1) * KIW.PRICE.bl_row;       // referring domains
   base += (1 + KIW.CAPS.cd_rivals) * (KIW.PRICE.labs + KIW.CAPS.cd_limit * KIW.PRICE.labs_row);
@@ -64,10 +77,11 @@ if (g.kind === 'competitors') {
   if (need > profileCap) notes.push((need - profileCap) + ' competitor profile(s) wait for the next run: this run is held at the price quoted');
 } else {
   base += KIW.CAPS.autocomplete * KIW.PRICE.ac;
-  if (!has(ck('disc', g.market, KIW.hash(seedKws.join('|'))), 'discovery')) base += (KIW.PRICE.labs + KIW.CAPS.ideas_limit * KIW.PRICE.labs_row) + KIW.CAPS.sugg_n * (KIW.PRICE.labs + KIW.CAPS.sugg_limit * KIW.PRICE.labs_row) + KIW.CAPS.related_n * (KIW.PRICE.labs + KIW.CAPS.related_limit * KIW.PRICE.labs_row);
+  if (!has(ck('disc', g.market, seedKey), 'discovery')) base += (KIW.PRICE.labs + KIW.CAPS.ideas_limit * KIW.PRICE.labs_row) + KIW.CAPS.sugg_n * (KIW.PRICE.labs + KIW.CAPS.sugg_limit * KIW.PRICE.labs_row) + KIW.CAPS.related_n * (KIW.PRICE.labs + KIW.CAPS.related_limit * KIW.PRICE.labs_row);
   if (chosen.length && !has(ck('pi', g.market, KIW.hash(chosen.slice().sort().join('|'))), 'ranked')) base += KIW.PRICE.labs + KIW.CAPS.pi_limit * KIW.PRICE.labs_row;
   base += 2 * (KIW.PRICE.labs + KIW.CAPS.top_n * KIW.PRICE.labs_row) + KIW.PRICE.ads;   // overview + intent for the top N, Google Ads for what Labs does not know
   base += KIW.CAPS.top_m * KIW.PRICE.serp10 + (KIW.PRICE.labs + KIW.CAPS.tp_urls * KIW.PRICE.labs_row);
+  base += KIW.PRICE.bl + (KIW.CAPS.rd_targets || 300) * KIW.PRICE.bl_row;   // FX-L H2: the referring domains of the client and the read top-10 hosts (Strength)
   const need = chosen.filter(d => !has(ck('rk', g.market, d), 'ranked')).length;
   compRkCap = Math.max(0, Math.min(need, Math.floor((quote - base + 1e-9) / rkCost)));
   if (need > compRkCap) notes.push((need - compRkCap) + ' competitor keyword list(s) wait for the next run: this run is held at the price quoted');
@@ -77,7 +91,7 @@ const est = KIW.r6(Math.min(quote || Infinity, base + (g.kind === 'competitors' 
 return [{ json: { kind: g.kind, stage: g.stage, site_id: g.site_id, domain: g.domain, canonical_host: S(site.canonical_host) || g.domain, ...m, client_key: g.client_key || '',
   request_id: g.request_id, run_id: g.run_id, callback_url: g.callback_url, ki_mode: g.ki_mode, ki_force: !!g.ki_force, started_at: g.started_at || now, now,
   services, seed_services: seedSvc, products, brand_words: brandWords, declared, chosen, dismissed, max_chosen: maxChosen, seeds: sd.seeds, seeds_refused: sd.refused, seeds_dropped: sd.dropped,
-  gsc: gsc.slice(0, 500), gsc_period_end: lastPeriod, site_impressions: siteImpr, tracked, ladders, ladders_set_aside: fr.set_aside, fit_ctx: fitCtx,
+  gsc: gsc.slice(0, 500), gsc_period_end: lastPeriod, site_impressions: siteImpr, site_impressions_basis: siteImprBasis, seed_key: seedKey, avoid, known_rivals: knownRivals, tracked, ladders, ladders_set_aside: fr.set_aside, fit_ctx: fitCtx,
   profile_cap: profileCap, comp_rk_cap: compRkCap, quote, notes, business: g.business || '',
   est_dfs_usd: est, est_ai_usd: 0,
   est_basis: 'modelled before the run from the price of every request it may send ($' + est.toFixed(4) + ', every results page counted as not read today; the quote is $' + quote.toFixed(2) + ')' } }];

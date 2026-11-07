@@ -29,7 +29,7 @@ for (const kw of seeds) { const lk = SC.lookup(seedCache, KIW.serpBody(kw, m), {
   ex.paa.forEach(q => paa.push({ keyword: q, detail: 'asked on the results page of "' + kw + '"' })); ex.related.forEach(q => rel.push({ keyword: q, detail: 'related to "' + kw + '"' })); ex.forum.forEach(q => forum.push({ keyword: q, detail: 'a forum thread on "' + kw + '"' })); }
 lists.push({ source: 'paa', fetched_at: now, rows: paa }, { source: 'related', fetched_at: now, rows: rel }, { source: 'forum', fetched_at: now, rows: forum });
 // ---- autocomplete + Labs discovery (one bundle in the cache, 30 days) ----
-const discKey = ck('disc', p.market, KIW.hash(seeds.join('|')));
+const discKey = ck('disc', p.market, p.seed_key || KIW.seedHash(p.seeds));
 let disc = KIW.cacheRead(cache, discKey); if (!KIW.fresh(disc, 'discovery', now, p.ki_force)) disc = null;
 const discPairs = pairs.filter(x => ['ac', 'labs_ideas', 'labs_suggestions', 'labs_related'].includes(x.q.ki_call));
 if (discPairs.length) {
@@ -86,9 +86,13 @@ const rows = [], gated = [];
 for (const r of merged) {
   const g = KI.gate(r.keyword, { ...fc, protect, intent: r.labs_intent === 'navigational' ? 'navigational' : '' });
   const f = g.gate === 'pass' ? KI.fit(r.keyword, fc) : { fit: 0, low: 0, high: 0 };
-  const lowFit = g.gate === 'pass' && f.fit < (KI.CONFIG.fit_gate || 0.35);
-  const row = { ...r, gate: g.gate === 'pass' && !lowFit ? 'pass' : 'fail', gate_reason: g.gate === 'pass' ? (lowFit ? lowFitText : '') : (g.text || g.reason) + (g.detail ? ' (' + g.detail + ')' : ''),
-    gate_code: g.gate === 'pass' ? (lowFit ? 'low_fit' : '') : g.reason, fit: f.fit, fit_low: f.low, fit_high: f.high, competitors: compPos[r.kw_key] || [] };
+  // FX-L H8: a search the site already earns impressions for on page 1-2 is never "too far from what you sell"
+  const ranks = KIW.N(r.gsc_position) != null && KIW.N(r.gsc_position) <= 20 && (KIW.N(r.gsc_impressions) || 0) > 0;
+  const lowFit = g.gate === 'pass' && f.fit < (KI.CONFIG.fit_gate || 0.35) && !ranks;
+  // FX-L consistency M3: the stored reason is a CODE (gate_reason), the engine's sentence goes to gate_detail; the app has the words
+  const row = { ...r, gate: g.gate === 'pass' && !lowFit ? 'pass' : 'fail', gate_reason: g.gate === 'pass' ? (lowFit ? 'low_fit' : '') : g.reason,
+    gate_detail: g.gate === 'pass' ? (lowFit ? lowFitText + (f.detail ? ' (' + f.detail + ')' : '') : '') : (g.text || g.reason) + (g.detail ? ' (' + g.detail + ')' : ''),
+    gate_code: g.gate === 'pass' ? (lowFit ? 'low_fit' : '') : g.reason, fit: ranks && f.fit < (KI.CONFIG.fit_gate || 0.35) ? (KI.CONFIG.fit_gate || 0.35) : f.fit, fit_low: f.low, fit_high: f.high, competitors: compPos[r.kw_key] || [] };
   row.prescore = KI.prescore(row, KI.CONFIG);
   (row.gate === 'pass' ? rows : gated).push(row); }
 rows.sort((a, b) => b.prescore - a.prescore || a.kw_key.localeCompare(b.kw_key));

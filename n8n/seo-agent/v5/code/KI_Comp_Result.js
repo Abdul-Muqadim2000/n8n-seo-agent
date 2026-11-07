@@ -21,10 +21,14 @@ const saveRows = [...(cc.cache_rows || [])];
 const sections = [pic.section, ...(cc.sections || [])].filter(Boolean);
 // ---- homepages read this run -> words (data), kept 14 days ----
 const homes = { ...(cc.homes || {}) };
-const homeReqs = all('Any Comp Homes?').filter(r => r && !r.skip && r.domain); const homeAns = all('Read Comp Homes');
+const homeReqs = all('Any Comp Homes?').filter(r => r && !r.skip && r.domain); const homeAns0 = all('Read Comp Homes');
+// FX-L perf H2: a redirect the hop node checked was read once more; its answer stands for the first one (KI Fetch Hops)
+const hopAns = (reqNode, ansNode) => { const rq = all(reqNode).filter(r => r && !r.skip && r.url); const an = all(ansNode); const by = {}; rq.forEach((q, i) => { by[q.first_index] = an[i] || {}; }); return by; };
+const homeHop = hopAns('Any Comp Home Hops?', 'Read Comp Homes (Hop)');
+const homeAns = homeAns0.map((a, i) => homeHop[i] || a);
 let homeOk = 0;
 homeReqs.forEach((q, i) => { const a = homeAns[i] || {}; const code = KIW.N(a.statusCode); const html = KIW.S(a.body != null ? a.body : a.data);
-  const txt = html.slice(0, 400000).replace(/<(script|style|noscript|svg)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ');
+  const txt = KIW.htmlText(html, KIW.CAPS.home_bytes);   // linear: no backtracking regex over a page of unclosed tags
   if (a.error || (code && code >= 400) || txt.length < 200) return;
   const v = { tokens: KIW.wordsOf(txt.slice(0, 6000), 120).join(' '), fetched_at: now, chars: Math.min(txt.length, 6000) }; homes[q.domain] = v; homeOk++; saveRows.push(KIW.cacheRow(p.site_id, ck('home', q.domain), v)); });
 sections.push({ key: 'classification', state: homeReqs.length && homeOk < homeReqs.length ? 'partial' : 'ok', reason: homeReqs.length && homeOk < homeReqs.length ? (homeReqs.length - homeOk) + ' of ' + homeReqs.length + ' homepages could not be read: those businesses are placed by their results-page titles only' : '', rows: homeOk });
@@ -48,8 +52,9 @@ sections.push({ key: 'profiles', state: !(p.chosen || []).length ? 'skipped' : (
     : profFailed.length ? 'could not be read: ' + profFailed.map(x => x.q.target + ' (' + x.why + ')').join('; ') : (profWait ? profWait + ' profile(s) wait for the next run: this run is held at the price quoted' : ''), rows: Object.keys(rk).length });
 // ---- publishing pace (sitemap lastmod in the last 90 days) ----
 const pace = {};
-const smReqs = all('Any Comp Sitemaps?').filter(r => r && !r.skip && r.domain); const smAns = all('Read Comp Sitemaps');
-smReqs.forEach((q, i) => { const a = smAns[i] || {}; const body = KIW.S(a.body != null ? a.body : a.data); const code = KIW.N(a.statusCode);
+const smReqs = all('Any Comp Sitemaps?').filter(r => r && !r.skip && r.domain); const smHop = hopAns('Any Comp Sitemap Hops?', 'Read Comp Sitemaps (Hop)');
+const smAns = all('Read Comp Sitemaps').map((a, i) => smHop[i] || a);
+smReqs.forEach((q, i) => { const a = smAns[i] || {}; const body = KIW.S(a.body != null ? a.body : a.data).slice(0, KIW.CAPS.home_bytes * 5); const code = KIW.N(a.statusCode);
   let v; if (a.error || (code && code >= 400) || !/<(urlset|sitemapindex)\b/i.test(body)) v = { per_month: null, why: 'its sitemap could not be read (' + (code || 'no answer') + ')', fetched_at: now };
   else if (/<sitemapindex\b/i.test(body)) v = { per_month: null, why: 'its sitemap is an index of sitemaps (not read further)', fetched_at: now };
   else { const t0 = Date.parse(now) - 90 * 864e5; const dates = (body.match(/<lastmod>\s*([^<\s]+)\s*<\/lastmod>/gi) || []).map(x => Date.parse(x.replace(/<\/?lastmod>/gi, '').trim())).filter(Number.isFinite);
@@ -65,7 +70,8 @@ const me = sizeOf(client);
 const aiMax = Math.max(0, ...cands.map(c => KIW.N(c.ai_hits) || 0));
 const classed = cands.map(c => { const home = homes[c.domain] || null; const cls = KIW.classify(p, c, home);
   const text = (c.titles || []).join(' ') + ' ' + ((home && home.tokens) || '');
-  return { ...c, cls, topic_sim: KIW.N(cls.topic_sim) != null ? KIW.N(cls.topic_sim) : (text.trim() ? KIW.topicSim(text, p.services) : null), geo_match: KIW.N(cls.geo_match) != null ? KIW.N(cls.geo_match) : KIW.geoMatch(c.domain, text, p.iso) }; })
+  // FX-L B2: the topic is the domain's OWN text (KI.topicSim inside the class), never the seed's words
+  return { ...c, cls, topic_sim: KIW.N(cls.topic_sim) != null ? KIW.N(cls.topic_sim) : (text.trim() ? KI.topicSim(c.titles || [], (home && home.tokens) || '', { services: p.services }, c.domain) : null), geo_match: KIW.N(cls.geo_match) != null ? KIW.N(cls.geo_match) : KIW.geoMatch(c.domain, text, p.iso) }; })
   .filter(c => c.cls && c.cls.store && c.cls.class);
 const seedsIn = (p.seeds || []).map(s => ({ keyword: s.keyword, top10: (((pic.by || {})[s.keyword] || {}).top10) || [], demand: s.weight }));
 const scoredRows = KI.scoreCompetitors(classed.map(c => ({ domain: c.domain, class: c.cls.class, class_basis: c.cls.basis, class_confidence: c.cls.confidence, topic_sim: c.topic_sim, geo_match: c.geo_match,
@@ -94,6 +100,9 @@ const reasonsOf = (c, sc) => { const out = [...((sc && sc.reasons) || [])];
   return KIW.uniq(out).slice(0, 8); };
 const rows = [], drops = [];
 const seen = new Set();
+// FX-L M7: the declared competitors start chosen only up to the number the client may choose; the rest are watched. A row chosen because
+// it WAS declared, and no longer is, goes back to the run's own status.
+const declaredChosen = new Set((p.declared || []).slice(0, KIW.N(p.max_chosen) || 5));
 for (const sc of scoredRows) {
   const d = sc.comp_domain; const c = classOf[d] || { domain: d, cls: { class: sc.class, basis: sc.class_basis, confidence: sc.class_confidence, needs_review: false } };
   const st = storedBy[d] || storedBy[c.domain] || null; const declared = !!sc.declared;
@@ -102,8 +111,9 @@ for (const sc of scoredRows) {
   const evid = (KIW.N(sc.seeds_seen) || 0) > 0 || !!c.labs || !!c.cd || !!c.ai_hits || declared;
   if (!evid) continue;
   const userSt = st && KIW.S(st.status_by) === 'user';
-  const status = userSt ? KIW.S(st.status) : (declared ? 'chosen' : (st && ['watch', 'chosen'].includes(KIW.S(st.status)) ? KIW.S(st.status) : 'candidate'));
-  const status_by = userSt ? 'user' : (declared ? 'declared' : (st ? KIW.S(st.status_by) || 'auto' : 'auto'));
+  const wasDeclared = st && KIW.S(st.status_by) === 'declared' && !declared;
+  const status = userSt ? KIW.S(st.status) : (declared ? (declaredChosen.has(d) ? 'chosen' : 'watch') : (st && !wasDeclared && ['watch', 'chosen'].includes(KIW.S(st.status)) ? KIW.S(st.status) : 'candidate'));
+  const status_by = userSt ? 'user' : (declared ? 'declared' : (st && !wasDeclared ? KIW.S(st.status_by) || 'auto' : 'auto'));
   rows.push({ site_id: p.site_id, domain: p.domain, market: p.market, comp_domain: d, class: sc.class, class_basis: userSt && st.class_basis === 'user' ? 'user' : sc.class_basis, class_confidence: sc.class_confidence,
     scored: !!sc.scored, score: sc.score, score_low: sc.score_low, score_high: sc.score_high, serp_share: sc.serp_share, topic_sim: sc.topic_sim, geo_match: sc.geo_match, ai_share: sc.ai_share,
     size_tag: sc.size_tag, seeds_seen: sc.seeds_seen, seeds_total: sc.seeds_total, reasons_json: reasonsOf(c, sc), evidence_json: sc.evidence || [],
@@ -118,9 +128,13 @@ for (const st of stored) { const d = KIW.host(st.comp_domain); if (seen.has(d) |
   const keep = {}; for (const c of KIW.COLS.KI_COMP) keep[c] = st[c] === undefined ? null : st[c];
   rows.push({ ...keep, misses, run_id: p.run_id, updated_at: now, _kept: true }); }
 // the set: scored first (by score, then by evidence), then lists / directories / platforms; the client's own choices always stay
-const rank = (r) => (r.status === 'chosen' ? 1e6 : 0) + (r.scored ? 1000 + (KIW.N(r.score) || 0) : 0) + (KIW.N(r.seeds_seen) || 0);
+// FX-L: among the unscored, the businesses (direct, then adjacent, by their own topic match) come before lists, platforms and principals, so a
+// short run (few results pages read) still keeps its likely competitors instead of cutting them alphabetically
+const isBiz = (r) => r.class === 'direct' || r.class === 'adjacent';
+const rank = (r) => (r.status === 'chosen' ? 1e6 : 0) + (r.scored ? 1000 + (KIW.N(r.score) || 0) : (r.class === 'direct' ? 300 : r.class === 'adjacent' ? 200 : 0) + 100 * (KIW.N(r.topic_sim) || 0)) + (KIW.N(r.seeds_seen) || 0);
 rows.sort((a, b) => rank(b) - rank(a) || KIW.S(a.comp_domain).localeCompare(KIW.S(b.comp_domain)));
-const keepRows = rows.filter((r, i) => r.status_by === 'user' || r.status === 'chosen' || r._kept || (r.scored ? rows.filter(x => x.scored).indexOf(r) < 20 : rows.filter(x => !x.scored && !x._kept).indexOf(r) < 15));
+// FX-L M9: a stored row seen this run is always rewritten (its last_seen moves), even outside the top 20 / 15
+const keepRows = rows.filter((r, i) => r.status_by === 'user' || r.status === 'chosen' || r._kept || !!storedBy[KIW.host(r.comp_domain)] || (r.scored ? rows.filter(x => x.scored).indexOf(r) < 20 : isBiz(r) ? rows.filter(x => !x.scored && !x._kept && isBiz(x)).indexOf(r) < 20 : rows.filter(x => !x.scored && !x._kept && !isBiz(x)).indexOf(r) < 15));
 const out = (r) => { const o = {}; for (const c of KIW.COLS.KI_COMP) o[c] = r[c] === undefined ? null : r[c];
   const parsed = { ...o, reasons: KIW.J(o.reasons_json, []), evidence: KIW.J(o.evidence_json, []), profile: KIW.J(o.profile_json, null) }; delete parsed.reasons_json; delete parsed.evidence_json; delete parsed.profile_json; delete parsed.id; return parsed; };
 const scoredList = keepRows.filter(r => r.scored || r.status === 'chosen');
