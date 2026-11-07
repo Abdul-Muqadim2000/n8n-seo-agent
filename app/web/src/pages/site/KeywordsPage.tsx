@@ -79,7 +79,7 @@ export default function KeywordsPage() {
       description={`What buyers search to find a service like yours, and which searches ${site.domain} can win.`}
       actions={
         <span className="flex flex-wrap items-center gap-2">
-          <GuideButton id="ki-read-keyword-research" vars={{ domain: site.domain }} finish={finish} label="How to read this" />
+          <GuideButton id="ki-read-keyword-research" vars={{ domain: site.domain }} finish={finish} label="How to read this" className="max-sm:h-10 max-sm:px-3.5" />
           {ki.data?.visible && <KiRunButton kind="keyword_research" o={ki.data} refresh={!!summary.data?.rows.length} />}
         </span>
       }
@@ -349,6 +349,7 @@ function QuestionsPanel({ questions }: { questions: { key: string; question: str
         ) : undefined
       }
     >
+      {questions.length > 0 && !mayAdd && can('member') && <p className="mb-2 text-xs text-ink-3">Adding questions to your AI questions takes the admin role, as the AI question list itself. Ask an admin of your company.</p>}
       {questions.length ? (
         <ul className="divide-y divide-line">
           {questions.slice(0, 15).map((q) => (
@@ -533,7 +534,7 @@ function AllSearches({ o, clusters, table, loading, error, gaps, filter, onFilte
         </div>
       )}
       <p className="mt-3 text-xs text-ink-3">
-        Searches for {domain} in {kiMarketName(o.market) || 'your market'}. <GuideButton id="ki-verdicts" vars={{ domain }} variant="link" label="What the verdicts mean" />
+        Searches for {domain} in {kiMarketName(o.market) || 'your market'}. <GuideButton id="ki-verdicts" vars={{ domain }} variant="link" label="What the verdicts mean" className="max-sm:min-h-10" />
       </p>
     </Panel>
   );

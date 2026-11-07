@@ -50,6 +50,7 @@ import { ThemeProvider } from '@/lib/theme';
 import { Competitors } from '@/pages/site/CompetitorsPage';
 import { Keywords } from '@/pages/site/KeywordsPage';
 import { DiscoverForm } from '@/pages/tools/_components/forms/research';
+import { guideForNeedsYou, guideForRecommendation } from '@seo/shared/guides';
 import { text } from './renderReport';
 
 // KI web (2026-11-08, docs/keyword-intel-2026-11-08/DESIGN.md §6): the two pages render from fixture rows typed by shared/ki.ts (the
@@ -216,6 +217,15 @@ describe('who sees the KI pages and tools', () => {
   });
 });
 
+describe('the KI guides behind the asks (A1 ids)', () => {
+  it('Needs you and recommendations open the KI guides', () => {
+    expect(guideForNeedsYou({ id: 'ki:competitors', kind: 'ki', severity: 'info' } as never)).toBe('ki-choose-competitors');
+    expect(guideForNeedsYou({ id: 'ki:quick-wins', kind: 'ki', severity: 'info' } as never)).toBe('ki-read-keyword-research');
+    expect(guideForRecommendation('ki:competitors')).toBe('ki-choose-competitors');
+    expect(guideForRecommendation('ki:quick-wins')).toBe('ki-read-keyword-research');
+  });
+});
+
 // ---------------------------------------------------------------- the one verdict
 describe('KiVerdict', () => {
   it('one tone per verdict from the shared map, the word always shown', () => {
@@ -275,6 +285,11 @@ describe('the Keyword research page', () => {
       expect(t, s).toContain(s);
     expect(t).not.toMatch(NO_FORMS);
     expect(t).not.toMatch(/undefined|NaN|\bserp\b|\betv\b|\bKD\b|cluster_id|kw_key/i);
+  });
+  it('a member sees why they cannot add questions (admin role, as the AI question list)', () => {
+    const t = text(wrap(<Keywords o={overview()} summary={summary} table={summary} tableLoading={false} tableError={null} gaps={GAPS} filter={KI_KW_FILTER_EMPTY} onFilter={() => {}} />, 'member'));
+    expect(t).toContain('takes the admin role');
+    expect(t).not.toContain('Add to my AI questions');
   });
   it('a filter shows only its rows; each number says how we know it', () => {
     const html = wrap(<Keywords o={overview()} summary={summary} table={summary} tableLoading={false} tableError={null} gaps={GAPS} filter={{ ...KI_KW_FILTER_EMPTY, verdict: 'hard' }} onFilter={() => {}} />);

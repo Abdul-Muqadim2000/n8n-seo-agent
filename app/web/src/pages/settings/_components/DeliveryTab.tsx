@@ -36,7 +36,7 @@ import { SettingsCard } from './SettingsCard';
  */
 
 /** The reports worth choosing between; leaving every box clear sends all of them. */
-const CHOOSABLE_STAGES = ['site_tracker', 'rank_tracker', 'site_audit', 'full_report', 'content', 'ladder_plan', 'ai_visibility', 'ai_growth', 'backlinks', 'link_builder', 'keyword_strategy', 'index_coverage'];
+const CHOOSABLE_STAGES = ['site_tracker', 'rank_tracker', 'site_audit', 'full_report', 'content', 'ladder_plan', 'ai_visibility', 'ai_growth', 'backlinks', 'link_builder', 'keyword_strategy', 'index_coverage', 'ki_competitors', 'ki_research'];
 
 export function DeliveryTab() {
   const { org, can } = useOrgCtx();

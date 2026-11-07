@@ -60,7 +60,7 @@ export default function CompetitorsPage() {
       description={`Who ${site.domain} really competes with in Google, and what to do about each one.`}
       actions={
         <span className="flex flex-wrap items-center gap-2">
-          <GuideButton id="ki-choose-competitors" vars={{ domain: site.domain }} finish={finish} label="How to choose" />
+          <GuideButton id="ki-choose-competitors" vars={{ domain: site.domain }} finish={finish} label="How to choose" className="max-sm:h-10 max-sm:px-3.5" />
           {ki.data?.visible && <KiRunButton kind="competitors" o={ki.data} refresh={!!comps.data?.rows.length} />}
         </span>
       }
@@ -160,7 +160,7 @@ export function Competitors({ o, data, gaps, keywords, ai }: { o: KiOverview; da
           top && !s.chosen.length && member ? (
             <HeroNextStep title={`Choose your competitors, starting with ${top.domain}`} actions={<Button variant="secondary" size="sm" className={TAP} onClick={() => change(top, 'chosen')}>Choose {top.domain}</Button>} />
           ) : openGaps[0] ? (
-            <HeroNextStep title={`Next: ${KI_GAP_LABELS[openGaps[0].type]?.label.toLowerCase() ?? 'a gap'}${openGaps[0].keyword ? `, "${openGaps[0].keyword}"` : ''}`} />
+            <HeroNextStep title={`${KI_GAP_ACTION_LABELS[openGaps[0].action] ?? 'Close the gap'}${openGaps[0].keyword ? ` for "${openGaps[0].keyword}"` : openGaps[0].target ? `: ${openGaps[0].target}` : ''}`} />
           ) : undefined
         }
       />
@@ -203,7 +203,7 @@ export function Competitors({ o, data, gaps, keywords, ai }: { o: KiOverview; da
           ) : (
             <p className="text-sm text-ink-3">No list or directory showed up for your services in this reading.</p>
           )}
-          <GuideButton id="ki-choose-competitors" vars={{ domain: site.domain }} variant="link" label="Why directories are not competitors" className="mt-3" />
+          <GuideButton id="ki-choose-competitors" vars={{ domain: site.domain }} variant="link" label="Why directories are not competitors" className="mt-3 max-sm:min-h-10" />
         </Panel>
 
         <AiShare ai={ai} domain={site.domain} />

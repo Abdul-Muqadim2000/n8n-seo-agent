@@ -1,0 +1,142 @@
+[
+  {
+    "page": "competitors",
+    "width": 375,
+    "theme": "light",
+    "overflowPx": 0,
+    "h1": 1,
+    "smallTapTargets": [
+      "a \"novaand-demo.com(opens in a new tab)\" 24px"
+    ],
+    "consoleErrors": [],
+    "file": "competitors-375-light.png"
+  },
+  {
+    "page": "competitors drawer",
+    "width": 375,
+    "theme": "light",
+    "overflowPx": 0,
+    "file": "competitors-drawer-375.png"
+  },
+  {
+    "page": "keywords",
+    "width": 375,
+    "theme": "light",
+    "overflowPx": 0,
+    "h1": 1,
+    "smallTapTargets": [
+      "a \"novaand-demo.com(opens in a new tab)\" 24px"
+    ],
+    "consoleErrors": [],
+    "file": "keywords-375-light.png"
+  },
+  {
+    "page": "keywords filter sheet",
+    "width": 375,
+    "theme": "light",
+    "file": "keywords-filters-375.png"
+  },
+  {
+    "page": "competitors",
+    "width": 768,
+    "theme": "light",
+    "overflowPx": 0,
+    "h1": 1,
+    "consoleErrors": [],
+    "file": "competitors-768-light.png"
+  },
+  {
+    "page": "keywords",
+    "width": 768,
+    "theme": "light",
+    "overflowPx": 0,
+    "h1": 1,
+    "consoleErrors": [],
+    "file": "keywords-768-light.png"
+  },
+  {
+    "page": "competitors",
+    "width": 1440,
+    "theme": "light",
+    "overflowPx": 0,
+    "h1": 1,
+    "consoleErrors": [],
+    "file": "competitors-1440-light.png"
+  },
+  {
+    "page": "competitors drawer",
+    "width": 1440,
+    "theme": "light",
+    "overflowPx": 0,
+    "file": "competitors-drawer-1440.png"
+  },
+  {
+    "page": "keywords",
+    "width": 1440,
+    "theme": "light",
+    "overflowPx": 0,
+    "h1": 1,
+    "consoleErrors": [],
+    "file": "keywords-1440-light.png"
+  },
+  {
+    "page": "competitors",
+    "width": 375,
+    "theme": "dark",
+    "overflowPx": 0,
+    "h1": 1,
+    "smallTapTargets": [
+      "a \"novaand-demo.com(opens in a new tab)\" 24px"
+    ],
+    "consoleErrors": [],
+    "file": "competitors-375-dark.png"
+  },
+  {
+    "page": "keywords",
+    "width": 375,
+    "theme": "dark",
+    "overflowPx": 0,
+    "h1": 1,
+    "smallTapTargets": [
+      "a \"novaand-demo.com(opens in a new tab)\" 24px"
+    ],
+    "consoleErrors": [],
+    "file": "keywords-375-dark.png"
+  },
+  {
+    "page": "competitors",
+    "width": 768,
+    "theme": "dark",
+    "overflowPx": 0,
+    "h1": 1,
+    "consoleErrors": [],
+    "file": "competitors-768-dark.png"
+  },
+  {
+    "page": "keywords",
+    "width": 768,
+    "theme": "dark",
+    "overflowPx": 0,
+    "h1": 1,
+    "consoleErrors": [],
+    "file": "keywords-768-dark.png"
+  },
+  {
+    "page": "competitors",
+    "width": 1440,
+    "theme": "dark",
+    "overflowPx": 0,
+    "h1": 1,
+    "consoleErrors": [],
+    "file": "competitors-1440-dark.png"
+  },
+  {
+    "page": "keywords",
+    "width": 1440,
+    "theme": "dark",
+    "overflowPx": 0,
+    "h1": 1,
+    "consoleErrors": [],
+    "file": "keywords-1440-dark.png"
+  }
+]
