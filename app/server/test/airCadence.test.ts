@@ -50,10 +50,10 @@ const stripAir = <T extends Pick<Case, 'tables'>>(c: T): T => {
 };
 
 describe('the shared AIR cadence cases (n8n/seo-agent/harness/air_cadence_cases.json)', () => {
-  it('is the file the engine runs, names this mirror, and holds the 24 cases', () => {
+  it('is the file the engine runs, names this mirror, and holds the 25 cases', () => {
     expect(FX._doc).toMatch(/cadence\.ts/);
     expect(FX.contract).toBe('app/server/src/services/cadence.ts');
-    expect(FX.cases.length).toBe(24);
+    expect(FX.cases.length).toBe(25);   // LIVE1 (2026-11-07): + air_on_reserve_refresh_no_url_listed
   });
 
   for (const c of FX.cases) {
