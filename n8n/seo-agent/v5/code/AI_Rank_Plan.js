@@ -56,7 +56,7 @@ const listingsAll = rowsOf('Load Listings (Rank)'), outreachAll = rowsOf('Load L
 const serp = new Map();
 const putSerp = (m, k, e) => { const prev = m.get(k); const by = Object.assign({}, prev ? prev.by_loc : {}); const lk = String(Number(e.location_code) || 0);
   if (!by[lk] || String(by[lk].read_at) <= String(e.read_at)) by[lk] = e; const latest = !prev || String(prev.read_at) <= String(e.read_at) ? e : prev; m.set(k, Object.assign({}, latest, { by_loc: by })); };
-for (const r of serpRows) { const v = P(r.value, null); if (!v || typeof v !== 'object' || !v.keyword) continue;
+for (const r of serpRows) { const v = P(r.value, null); if (!v || typeof v !== 'object' || !v.keyword || SU.poisoned(v)) continue;   // SERP-GOTO (2026-11-08): a reading stored with Google redirect links and no site behind them is not a reading
   putSerp(serp, SC.normKw(v.keyword), { results: (v.items || []).filter(x => x && x.type === 'organic' && x.url).map(x => ({ url: x.url, pos: Number(x.rank_group || x.rank_absolute) || null })), read_at: String(v.at || v.day || ''), location_code: Number(v.location_code) || 0 }); }
 
 // the robots verdict of this run, in the shape ARD reads: { robots: { bot: { allowed_root, rule } }, blocked_engines, read_at }

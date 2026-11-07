@@ -1,4 +1,5 @@
 /*__SERP_OBS__*/
+/*__SERP_URL__*/
 // Turns the raw competitor pages into (1) a per-competitor digest for the analyst, (2) a TERM MODEL — the words and
 // phrases most top pages share (what the topic is "made of"), (3) the questions competitors answer, (4) the statistics
 // they cite, plus the SERP features from the same search. Longer excerpts than v3 (9,000 chars kept per page).

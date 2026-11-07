@@ -75,9 +75,15 @@ def plan_js(v5_dir, http, requests_node, max_retries=MAX_RETRIES, retry_empty=Tr
             "return p.items.map(j => ({ json: j }));\n")
 
 
+def _su_kit(v5_dir):
+    return open(os.path.join(v5_dir, 'code', '_serp_url.js'), encoding='utf-8').read().rstrip('\n')
+
+
 def answers_js(v5_dir, http, plan_node, retry_node, what, unit='request'):
-    """The *<X> Answers* node: the merged answers, what really happened, and what it cost -- each task once."""
-    return (_kit(v5_dir) + '\n'
+    """The *<X> Answers* node: the merged answers, what really happened, and what it cost -- each task once.
+    SERP-GOTO (2026-11-08): every answer leaves this node through SU.fixAnswer (v5/code/_serp_url.js), so a Google results page whose
+    links are Google redirects reaches every reader with the real host recovered (an answer with no redirect is the same object)."""
+    return (_kit(v5_dir) + '\n' + _su_kit(v5_dir) + '\n'
             "// B-A10 (2026-10-15, INVARIANTS rule 3 + rule 1): the first answers of *" + http + "* with each retry's answer in the failed\n"
             "// one's place, and `__dfs` - the evidence block - on every item, so a call that failed TWICE is `unavailable` and nothing\n"
             "// downstream may score, rank or advise from it. `__dfs.cost_usd` is both attempts counted once per task id (R28).\n"
@@ -110,7 +116,8 @@ def answers_js(v5_dir, http, plan_node, retry_node, what, unit='request'):
             "    const v = Number((t || {}).cost || 0); if (!v) continue; const id = String((t || {}).id || '');\n"
             "    if (id) { if (ids.has(id)) continue; ids.add(id); } c += v; }\n"
             "  return +c.toFixed(4); };\n"
-            "const out = (stats.answers || []).map((a, i) => ({ ...(a || {}), __dfs: ev,\n"
+            "// SERP-GOTO (2026-11-08): a results page whose links are Google redirects gets its real hosts back here, once, for every reader\n"
+            "const out = (stats.answers || []).map((a, i) => ({ ...(SU.fixAnswer(a) || {}), __dfs: ev,\n"
             "  __dfs_cost_usd: pairCost(first[i], retryFor.get(i)) }));\n"
             "return out.length ? out.map(j => ({ json: j })) : [{ json: { __dfs: ev, __dfs_cost_usd: 0 } }];\n")
 

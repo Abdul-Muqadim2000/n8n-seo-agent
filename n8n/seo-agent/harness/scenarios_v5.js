@@ -15378,7 +15378,9 @@ await guard('SC5 C-4 one outlier reading', async () => {
   reset(); begin(SN);
   const check = C1.check(SN);
   const RS = (() => { const src = require('fs').readFileSync(require('path').join(process.env.CODE_DIR || require('path').join(__dirname, 'code_v4'), 'Tracker_Report.js'), 'utf8');
-    const a = src.indexOf('const RS = (() => {'), b = src.indexOf('\n})();', a) + 6; return new Function(src.slice(a, b) + '; return RS;')(); })();
+    const a = src.indexOf('const RS = (() => {'), b = src.indexOf('\n})();', a) + 6;
+    const s0 = src.indexOf('var SU = '), s1 = src.indexOf('\n})();', s0) + 6;   // SERP-GOTO (2026-11-08): RS reads hosts through SU
+    return new Function(src.slice(s0, s1) + '\n' + src.slice(a, b) + '; return RS;')(); })();
   const H4 = require('./fixtures_c4');
   const desk = H4.filter(r => r.device === 'desktop');
   const today = desk.find(r => r.checked_at.startsWith('2026-10-17'));
@@ -19784,5 +19786,6 @@ await require('./scenarios_air_integ')({ H, run, mock, store, guard, reset, begi
 await require('./scenarios_air_fxb')({ H, run, mock, store, guard, reset, begin });   // FX-B FXB4-FXB11: the safety review (REVIEW_B_SAFETY.md)
 await require('./scenarios_air_exec')({ H, run, mock, store, guard, reset, begin });   // P6 AE1-AE8
 await require('./scenarios_air_live1')({ H, run, mock, store, guard, reset, begin });   // LIVE1: the first live AI ranking run (fixes/LIVE1.md)
+await require('./scenarios_serp_goto')({ H, run, mock, store, guard, reset, begin });   // SERP-GOTO SG1-SG6: the site behind Google's redirect links (fixes/SERP_GOTO.md)
 H.report();
 })();

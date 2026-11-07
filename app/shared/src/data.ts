@@ -217,7 +217,8 @@ export interface SerpReading {
   above: SerpCompetitor[];
   competitors: SerpCompetitor[];
   /** the top 10 kept as proof of the reading */
-  snapshot: { at: string | null; device: string; top: { position: number; url: string; title: string }[] };
+  // SERP-GOTO (2026-11-08): `approximate` = Google showed this result behind a redirect link, so only its site (`host`) is known; `url` is then ''
+  snapshot: { at: string | null; device: string; top: { position: number; url: string; title: string; host?: string; approximate?: boolean }[] };
   /** the mobile reading of the same keyword, when one was bought (the ladder's main keywords, weekly) */
   mobile: { position: number; checkedAt: string } | null;
 }
@@ -233,6 +234,8 @@ export interface LadderRung {
   status: string;
   months: string;
   latestPosition: number | null;
+  /** SERP-GOTO: set when the newest check could not tell the position because a result Google hid may be ours (latestPosition is then the last real one) */
+  latestNote?: string | null;
   previousPosition: number | null;
   bestPosition: number | null;
   lastChecked: string | null;
@@ -256,6 +259,8 @@ export interface TrackedKeyword {
   url: string;
   serpFeatures: string[];
   latestPosition: number | null;
+  /** SERP-GOTO: set when the newest check could not tell the position because a result Google hid may be ours (latestPosition is then the last real one) */
+  latestNote?: string | null;
   previousPosition: number | null;
   bestPosition: number | null;
   lastChecked: string | null;

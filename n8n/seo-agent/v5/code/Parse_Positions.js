@@ -11,7 +11,12 @@ const res = $input.all().map(i => i.json);
 const now = new Date().toISOString();
 return reqs.map((r, i) => {
   const a = RS.read(res[i]);
+  // SERP-GOTO (2026-11-08, review H2 + re-review N1): a -1 that only means "a result Google hid might be yours". In the second WEEK in a row
+  // Unread Alert Row (Tracker) raises one ops alert; from the third week the reading is SETTLED: it stays -1 (so no report, alert or chart
+  // can compute a drop from it - the hidden result most likely IS ours) and carries `st: 1`, which every report shows as "not found among
+  // the results we could read" instead of "check failed".
   const mine = RS.ourRank(a, r.domain);
+  const settled = mine.position === -1 && !!mine.maybe_ours && String(r.device || 'desktop') !== 'mobile' && Number(r.prev_unread) >= 2;
   const feats = RS.features(a, r.domain);
   const land = RS.landscape(a, r.domain, r.competitors || [], mine.position);
   const sov = RS.voice(land, feats, r.domain, mine.position);
@@ -25,6 +30,6 @@ return reqs.map((r, i) => {
     features_json: RS.pack(feats, 1600),
     competitors_json: RS.pack({ our_position: mine.position > 0 ? mine.position : null, above: land.above.map(x => ({ d: x.domain, p: x.position, t: x.tracked })),
       competitors: land.competitors.map(x => ({ d: x.domain, p: x.position, t: x.tracked })), shares: sov.shares, tracked: land.tracked, method: sov.method }, 1800),
-    snapshot_json: RS.pack(RS.snapshot(a, land, feats, device), 1800),
+    snapshot_json: RS.pack({ ...RS.snapshot(a, land, feats, device), ...(settled ? { st: 1 } : {}) }, 1800),
     share_of_voice: a.ok ? (sov.ours == null ? 0 : sov.ours) : -1 } };
 });

@@ -30,7 +30,7 @@ const serp = (() => {
   if (!reachTaskOk(sv)) { const why = String(reachError(sv) || ''); const late = /time ?out|timed out|aborted|ECONNABORTED|ETIMEDOUT|not read in time/i.test(why);
     return { asked: true, read: false, late, why: late ? 'not read in time' : why, pages: [], paa: [], related: [] }; }
   const r0 = ((t0.result || [])[0]) || {}; const items = Array.isArray(r0.items) ? r0.items : [];
-  const pages = items.filter(x => x && x.type === 'organic' && !(Number(x.rank_group) > 10)).map(x => ({ rank: Number(x.rank_group) || null, domain: String(x.domain || ''), url: String(x.url || ''), title: String(x.title || '') })).slice(0, 10);
+  const pages = items.filter(x => x && x.type === 'organic' && !SU.unresolved(x) && !(Number(x.rank_group) > 10)).map(x => ({ rank: Number(x.rank_group) || null, domain: String(x.domain || ''), url: String(x.url || ''), title: String(x.title || ''), ...(x.url_exact === false ? { url_exact: false } : {}) })).slice(0, 10);
   const paa = items.filter(x => x && x.type === 'people_also_ask').flatMap(x => (x.items || []).map(q => q && (q.title || q.question))).filter(Boolean).map(String).slice(0, 8);
   const related = items.filter(x => x && x.type === 'related_searches').flatMap(x => (x.items || []).map(q => typeof q === 'string' ? q : (q && (q.title || q.keyword)))).filter(Boolean).map(String).slice(0, 12);
   return { asked: true, read: true, why: '', pages, paa, related, checked_at: String(r0.datetime || '') || null, ai_overview_seen: items.some(x => x && x.type === 'ai_overview'),

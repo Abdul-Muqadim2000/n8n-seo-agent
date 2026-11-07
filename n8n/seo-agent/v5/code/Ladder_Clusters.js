@@ -70,11 +70,15 @@ out.cost_basis = 'measured: ' + out.tasks + ' Google results page(s) read, at th
   + (noId ? ' (' + noId + ' with no task id of their own)' : '') + '; the cap for this run was ' + out.cap + ' keyword(s)'
   + (out.cap_basis ? ' - ' + out.cap_basis : '') + (out.read_today ? '; ' + out.read_today_note : '') + '.';
 
+// SERP-GOTO (2026-11-08): since about 2026-10-30 Google's results carry redirect links (google.com/goto?url=<token>, each token unique), so
+// no two keywords ever shared a URL. SU (v5/code/_serp_url.js) gives every result back its host and an APPROXIMATE path from Google's
+// breadcrumb; such a result is compared by SU.key() ("~host/path", the same for the same result on two pages read the same day, never
+// equal to an exact url), and one that could not be traced to any site is left out.
 const organicItems = (res) => { try {
-  const items = ((((res || {}).tasks || [])[0] || {}).result || [])[0].items || [];
-  return items.filter(x => x && x.type === 'organic' && (x.url || x.domain)).sort((a, b) => (Number(a.rank_group) || 99) - (Number(b.rank_group) || 99)).slice(0, 10);
+  const items = SU.fixItems(((((res || {}).tasks || [])[0] || {}).result || [])[0].items || []);
+  return items.filter(x => x && x.type === 'organic' && (x.url || x.domain) && !SU.unresolved(x)).sort((a, b) => (Number(a.rank_group) || 99) - (Number(b.rank_group) || 99)).slice(0, 10);
 } catch (e) { return []; } };
-const organic = (res) => organicItems(res).map(x => String(x.url || x.domain || '')).filter(Boolean);   // the item's own URL; a bare domain is left bare (KWI.urlKey normalises either)
+const organic = (res) => organicItems(res).map(x => SU.exact(x) ? String(x.url || x.domain || '') : SU.key(x)).filter(Boolean);   // the item's own URL; a bare domain is left bare (KWI.urlKey normalises either); a redirect: its SU.key
 
 const entries = [];
 // F-A1 / A-10: the main page's supporting keywords (asked with `supporting_check`) are read, never clustered with the rungs - they are
@@ -91,7 +95,7 @@ asked.forEach((q) => {
   const urls = organic(a);
   if (urls.length < KWI.CFG.min_urls) { miss.push({ keyword: q.keyword, reason: 'its results page carried only ' + urls.length + ' ordinary result(s), too few to compare', retried: false }); return; }
   const its = organicItems(a);
-  out.types_of[String(q.keyword).toLowerCase()] = (({ read, dominant, dominant_count, dominant_share, counts }) => ({ read, dominant, dominant_count, dominant_share, counts }))(KWI.serpPageTypes(its.slice(0, out.top_n).map(x => ({ url: x.url || x.domain, title: x.title || '' })), {}));
+  out.types_of[String(q.keyword).toLowerCase()] = (({ read, dominant, dominant_count, dominant_share, counts }) => ({ read, dominant, dominant_count, dominant_share, counts }))(KWI.serpPageTypes(its.slice(0, out.top_n).map(x => ({ url: x.url || x.domain, title: x.title || '', url_exact: x.url_exact })), {}));
   out.titles_of[String(q.keyword).toLowerCase()] = its.slice(0, 4).map(x => String(x.title || '').replace(/\s+/g, ' ').trim().slice(0, 90)).filter(Boolean);
   (q.supporting_check ? supportingEntries : entries).push({ keyword: q.keyword, urls, weight: Number(q.weight) || 0, volume: q.volume });
   if (String(q.keyword || '').toLowerCase() !== String(pool.keyword || '').toLowerCase()) cmpSerps.push({ keyword: q.keyword, items: its });

@@ -37,15 +37,18 @@ const SC = (() => {
   };
   const cut = (s, n) => S(s).slice(0, n);
   const ref = (r) => ({ domain: cut((r || {}).domain, 80), url: cut((r || {}).url, 240), title: cut((r || {}).title, CFG.title_len) });
+  // SERP-GOTO (2026-11-08, v5/code/_serp_url.js, inlined above this kit): a result whose url was a Google redirect is stored with its
+  // recovered host and the flags that say its url is approximate; a clean result is stored exactly as before (no new keys)
+  const su = (o, x) => { if (x && x.url_exact === false) { o.url_exact = false; o.url_recovered = x.url_recovered || null; o.url_partial = !!x.url_partial; o.url_path = x.url_path || null; o.relative_url = x.relative_url || null; } return o; };
   // the compact form of one item: enough for every reader of this codebase (organic order and owners, page titles, PAA, related searches,
   // forum threads, the featured snippet, the AI Overview and its cited sources, which features were on the page), nothing else
   const compactItem = (x) => {
     const t = S(x && x.type); const o = { type: t, rank_group: Number(x.rank_group) || null, rank_absolute: Number(x.rank_absolute) || null };
-    if (t === 'organic') { o.url = cut(x.url, 300); o.domain = cut(x.domain, 100); o.title = cut(x.title, CFG.title_len); o.description = cut(x.description, CFG.desc_len); return o; }
+    if (t === 'organic') { o.url = cut(x.url, 300); o.domain = cut(x.domain, 100); o.title = cut(x.title, CFG.title_len); o.description = cut(x.description, CFG.desc_len); return su(o, x); }
     if (t === 'people_also_ask') { o.items = (x.items || []).slice(0, 10).map(q => ({ title: cut(q && (q.title || q.question), 200) })).filter(q => q.title); return o; }
     if (t === 'related_searches') { o.items = (x.items || []).slice(0, 12).map(q => cut(typeof q === 'string' ? q : (q && (q.title || q.keyword)), 120)).filter(Boolean); return o; }
     if (t === 'discussions_and_forums') { o.items = (x.items || []).slice(0, 6).map(q => ({ title: cut(q && q.title, CFG.title_len), domain: cut(q && (q.domain || q.source), 80), url: cut(q && q.url, 240) })); return o; }
-    if (t === 'featured_snippet') { o.domain = cut(x.domain, 100); o.url = cut(x.url, 300); o.title = cut(x.title, CFG.title_len); o.description = cut(x.description || x.text, 400); return o; }
+    if (t === 'featured_snippet') { o.domain = cut(x.domain, 100); o.url = cut(x.url, 300); o.title = cut(x.title, CFG.title_len); o.description = cut(x.description || x.text, 400); return su(o, x); }
     if (t === 'ai_overview') {
       o.asynchronous_ai_overview = x.asynchronous_ai_overview === true;
       o.references = (x.references || []).slice(0, 12).map(ref);
@@ -54,7 +57,7 @@ const SC = (() => {
         return { title: cut(y && y.title, CFG.title_len), text: tx, references: ((y && y.references) || []).slice(0, 6).map(ref) }; });
       return o;
     }
-    if (t === 'local_pack' || t === 'map') { o.domain = cut(x.domain, 100); o.url = cut(x.url, 300); o.title = cut(x.title, CFG.title_len); return o; }
+    if (t === 'local_pack' || t === 'map') { o.domain = cut(x.domain, 100); o.url = cut(x.url, 300); o.title = cut(x.title, CFG.title_len); return su(o, x); }
     return o;
   };
   // a fresh answer -> the reading to store (null when it is not a reading: a failed read is never stored)
@@ -63,7 +66,7 @@ const SC = (() => {
     const o = opts || {}; const t = task0(res); const r0 = ((t.result || [])[0]) || {};
     const b = body || (t.data || {}); const id = ident({ ...(t.data || {}), ...b }); const nd = need(b);
     const at = isoOf(r0.datetime) || isoOf(o.now) || new Date().toISOString();
-    const items = Array.isArray(r0.items) ? r0.items : [];
+    const items = Array.isArray(r0.items) ? SU.fixItems(r0.items) : [];   // SERP-GOTO: the real host behind a Google redirect, before anything is stored
     const out = { v: 1, ...id, day: dayOf(at), at, datetime: S(r0.datetime) || at, task_id: S(t.id), cost: Number(t.cost) || 0, depth: nd.depth, aio_loaded: nd.aio,
       empty: st === 'empty', se_results_count: r0.se_results_count ?? null, item_types: Array.isArray(r0.item_types) ? r0.item_types.map(S) : [...new Set(items.map(x => S(x && x.type)))].filter(Boolean),
       ai_overview_seen: items.some(x => x && x.type === 'ai_overview'), path: S(o.path),
@@ -93,6 +96,7 @@ const SC = (() => {
     const r = parse(row);
     if (!r) return { hit: false, key: k, why: 'stored reading unreadable' };
     if (r.day !== today) return { hit: false, key: k, why: 'last read on ' + (r.day || 'an unknown day') };
+    if (SU.poisoned(r)) return { hit: false, key: k, why: 'stored reading holds Google redirect links with no site behind them (read before the 2026-11-08 fix)' };
     if (key(r) !== k) return { hit: false, key: k, why: 'stored reading is for another search' };
     if (!r.empty && Number(r.depth) < nd.depth) return { hit: false, key: k, why: 'read today only ' + r.depth + ' results deep, this needs ' + nd.depth };
     if (nd.aio && !r.aio_loaded) return { hit: false, key: k, why: 'read today without the AI Overview content, which this needs' };

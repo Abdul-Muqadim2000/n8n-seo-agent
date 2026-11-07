@@ -207,6 +207,14 @@ export function serpHosts(row: RankLike, depth = 10): string[] {
     .sort((a, b) => a.p - b.p)
     .map((e) => e.h);
 }
+// SERP-GOTO (2026-11-08, mirror of RS.poisonedSnap / RS.poisonedRow in v5/code/_rank_serp.js): a reading stored while Google's redirect
+// links (google.com/goto?url=...) were read as the site is no reading of the page; it is never the baseline, here as in the engine.
+const GOOGLE_REDIRECT = /^https?:\/\/(?:[a-z0-9-]+\.)*(?:google\.[a-z]{2,3}(?:\.[a-z]{2})?\/(?:goto|url|search\/url|aclk)(?=[?\/#]|$)|bing\.com\/ck\/a(?=[?\/#]|$))/i;
+export const isSerpRedirect = (u: unknown) => GOOGLE_REDIRECT.test(S(u).trim());
+export function poisonedRow(h: RankLike): boolean {
+  const snap = jparse<{ top?: { u?: unknown }[] } | null>(h?.snapshot_json, null);
+  return !!h && ((!!snap && Array.isArray(snap.top) && snap.top.some((e) => isSerpRedirect(e?.u))) || isSerpRedirect(h.url));
+}
 export function prevReading(rows: RankLike[], o: { keyword: string; domain: string; before: string; withSnapshot?: boolean }): RankLike | null {
   const kwKey = (k: unknown) => S(k).toLowerCase().replace(/\s+/g, ' ').trim();
   const kw = kwKey(o.keyword), dom = bareHost(o.domain);
@@ -223,6 +231,7 @@ export function prevReading(rows: RankLike[], o: { keyword: string; domain: stri
           String(h.position) !== '' &&
           h.position != null &&
           Number(h.position) >= 0 &&
+          !poisonedRow(h) &&
           (!o.withSnapshot || !!jparse(h.snapshot_json, null) || !!jparse(h.competitors_json, null)),
       )
       .sort((a, b) => S(b.checked_at).localeCompare(S(a.checked_at)))[0] ?? null

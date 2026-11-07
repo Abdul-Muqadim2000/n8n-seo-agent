@@ -67,7 +67,7 @@ prio.forEach((p, i) => {
   // B1-5 / K4 (2026-10-15): the ten pages Google chose are the evidence for what KIND of page wins this search; until today only
   // their domains were kept and the page type came from the AI label alone.
   k.live = { top_domains: [...new Set(organic.map(o => normD(o.domain)).filter(Boolean))].slice(0, 5), your_position: mine && !mineGone ? mine.rank_group : null, ...(mineGone ? { gone_position: mine.rank_group ?? null, gone_url: mine.url } : {}), checked_at: serpSeenAt(serps[i]),
-    page_types: KWI.serpPageTypes(organic.filter(o => !(Number(o.rank_group) > 10)).map(o => ({ url: o.url, title: o.title })), { page_type: k.page_type }),
+    page_types: KWI.serpPageTypes(organic.filter(o => !(Number(o.rank_group) > 10)).map(o => ({ url: o.url, title: o.title, url_exact: o.url_exact })), { page_type: k.page_type }),
     features: [...new Set(items.map(x => x.type))].filter(t => t !== 'organic'), ai_overview: items.some(x => x.type === 'ai_overview'), paa: (items.find(x => x.type === 'people_also_ask') || { items: [] }).items.slice(0, 4).map(q => q.title || q.question).filter(Boolean) };
   const car = fitCareer(k.keyword, { pages: organic.filter(o => !(Number(o.rank_group) > 10)).map(o => ({ domain: o.domain, url: o.url, title: o.title })),
     paa: items.filter(x => x.type === 'people_also_ask').flatMap(x => (x.items || []).map(q => q.title || q.question)).filter(Boolean), related: careerRelated, topics: careerTopics });
