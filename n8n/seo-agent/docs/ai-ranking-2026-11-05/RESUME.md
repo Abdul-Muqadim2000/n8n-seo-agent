@@ -104,3 +104,24 @@ Owner to provide: Brave Search API key.
   posts, or already drafted); also two LB false positives (a social network read as a competitor, a software list read as gambling).
   Fixes needed (owner): L06 needs a page URL (fall back to L05, or store the page), the reserved slot should list a dropped AIR target as
   refused, and AIR's placement choice should reuse the Link Builder's qualification.
+
+## 2026-11-07: LIVE1 fixes DEPLOYED (engine + API); re-run of the week waits for an owner permission
+- Fixes (branch air/live1, report `fixes/LIVE1.md`): L06 refresh only with a known page address (else L05 new page; the target row carries
+  the url); AIR applies the cadence's 60 / 90-day rules before it chooses (both 11-06 refresh pages were ours, 7-9 days old, so the slot
+  would still have written nothing); a target the reserved slot cannot write is listed as refused with its reason and the slot falls back
+  to the next one (Cadence_Plan.js + cadence.ts); placements go through the Link Builder's stored verdicts, earlier pitches and rules
+  (`OK.placementVet`), contact-form-only = manual step, platform pages never pitched; Link Builder false positives fixed (gambling words
+  in a form drop-down; a social network as a competitor; new labelled set harness/accuracy/prospects.json 100% / 100%).
+- Release 3e91831b on feature/seo-agent-v4.5 (air/live1 ff + merge of origin/main 8325c20d, tree-equal). Checks in the main checkout:
+  build exit 0 with no drift, harness **17434 / 0**, app typecheck clean, shared 1125 / server 1974 (46 skipped) / web 317.
+- Before: production == origin/main node by node (32 workflows, 0 differing); backup gs://alaventra-prod-backups/pg/2026-11-07/{app,n8n}-2026-11-07T175032Z.dump.
+- Engine: deploy_engine.py --no-build --apply (guard ok, columns already there, 12 updated, 17 unchanged, 28 published, dispatcher mode
+  start); after: production == build (32, 0 differing). API: VM repo ff to 3e91831b, `up -d --build app`, healthy, api 200 (only the
+  cadence.ts mirror changed: the Pipeline preview). No web change.
+- Offline simulation on the production rows (fixer): techand's reserved slot writes an AIR refresh of /dynamics-365-cloud-migration-uae,
+  devaicon's writes a new AIR answer page; placements: techand 17 of 25 list sources pass the vetting, devaicon 33 of 61.
+- NOT DONE: the re-run of this week (AI Growth -> Content Cadence -> Link Builder via the RUN_NOW.md mechanism). Re-opening the job rows
+  (seo_cycle_jobs PATCH, helper scratchpad cyc.py) was refused by the auto-mode permission classifier on 2026-11-07. Before state saved
+  privately in run2/before.json (cycles unchanged: techand next 11-12 01:00Z, devaicon 11-13 01:00Z). Without the re-run the fixed code
+  first runs on the normal schedule: techand Thu 2026-11-12, devaicon Fri 2026-11-13 (06:00 Asia/Karachi).
+- Left by hand: the old linkedin.com not_fit row (devaicon) in seo_link_outreach (AIR never pitches platform pages anyway).
