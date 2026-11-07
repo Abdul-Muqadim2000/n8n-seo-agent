@@ -3842,8 +3842,10 @@ const ARL = (() => {
     const optIn = new Set((((settings || {}).pitch_rival_urls) || []).map(u => AIRF.urlKey(u)).filter(Boolean));
     const pageOf = (d) => { const q = S(d.prompt_id); if (S(d.page_url)) return S(d.page_url); if (S(d.mapped_page) && isOurs(d.mapped_page, hosts)) return S(d.mapped_page);   // ARD's additive mapped_page
       for (const { c } of cellsOf(d)) for (const ev of (c.evidence || [])) { const u = S(ev && (ev.url || ev.page)); if (u && isOurs(u, hosts)) return u; }
-      const pg = (st.pages || []).find(r => r && arr(r.questions).map(S).includes(q) && isOurs(r.url, hosts)); return pg ? S(pg.url) : ''; };
-    const hasPage = (d) => !!pageOf(d) || cellsOf(d).some(({ stage, c }) => lvl(stage) >= 2 || N(c.retrieved, 0) > 0 || N(c.cited, 0) > 0 || c.our_rank);
+      const pg = (st.pages || []).find(r => r && arr(r.questions).map(S).includes(q) && isOurs(r.url, hosts)); if (pg) return S(pg.url);
+      // LIVE1 (2026-11-07): the page Search Console shows for the question's own keyword or one of the engines' searches (exact query, the site's own host)
+      const gp = st.gsc_pages; if (gp && typeof gp.get === 'function') { const p0 = P.get(q) || {}; for (const k of uniq([S(p0.keyword), ...arr(d.fanout).map(S)].map(x => x.toLowerCase().replace(/\s+/g, ' ').trim()).filter(Boolean))) { const u = S(gp.get(k)); if (u && isOurs(u, hosts)) return u; } }
+      return ''; };
     const intentOf = (qs) => { const its = uniq(qs.map(q => S((byQ.get(q) || {}).intent))); return its.length === 1 && its[0] === 'informational' ? 'informational' : its.length === 1 && its[0] === 'recommendation' ? 'recommendation' : 'mixed'; };
     const out = []; const seen = new Set();
     const add = (L, ref, cells, extra) => { if (!cells.length) return; const id = AIRF.actionId(sid, L.id, ref); if (seen.has(id)) return; seen.add(id);
@@ -3865,14 +3867,14 @@ const ARL = (() => {
     // question-specific levers: own page (new or refresh, never both), cited-not-named, correction. Never on a control question.
     for (const q of allQ) { const d = byQ.get(q); const control = armOf.get(q) === 'control'; const pu = pageOf(d); const guard = pu ? protectedBy.get(AIRF.urlKey(pu)) : null;
       const onOther = !!guard && !guard.has(q);
-      const own = hasPage(d) && !onOther ? LV.get('L06') : LV.get('L05');
+      const own = pu && !onOther ? LV.get('L06') : LV.get('L05');   // LIVE1: a refresh needs a concrete page address (stage evidence alone wrote refresh rows with no URL); otherwise a new page
       const listy = !!d.list_dominated && S(d.intent) !== 'informational';   // E26 / R1 7: recommendation answers pick providers from lists; an informational answer's win is the citation
       for (const L of [own, LV.get('L07'), LV.get('L15')]) { const cs = cellsFor(L, [q]); if (!cs.length) continue;
         const extra = { page_url: L.id === 'L05' ? '' : pageOf(d), factor: OWN_PAGE.includes(L.id) && listy ? 0.5 : 1,
           why: L.id === 'L05' ? (onOther ? 'its closest page (' + pu + ') wins AI answers for ' + [...guard].join(', ') + ' and is protected: a new page for this question instead of rewriting it' : 'no page of the site is found for the searches the engines run') + (listy ? '; the answers are built from lists, so write an honest comparison or cost guide, never a self-ranked list (own-page chance halved)' : '')
             : L.id === 'L06' ? 'a page of the site is found but not cited' + (listy ? '; the answers are built from lists (own-page chance halved)' : '') : L.id === 'L07' ? 'the answers cite the site but do not name it' : 'an answer states something wrong about the business' };
         if (control) extra.refused = 'held out as a control question: no question-specific action while it is in the control group (1 in 3, 12 weeks)';
-        add(L, L.id === 'L07' && extra.page_url ? { prompt_id: q, url: extra.page_url } : { prompt_id: q }, cs, extra); } }   // FX-A2: L07 stores the page it fixes (refKey keys on prompt_id, so its id is unchanged)
+        add(L, ['L06', 'L07'].includes(L.id) && extra.page_url ? { prompt_id: q, url: extra.page_url } : { prompt_id: q }, cs, extra); } }   // FX-A2: L07 stores the page it fixes (refKey keys on prompt_id, so its id is unchanged)
     // protect what wins (L16): the client's page cited for a won question, one action per page with every won cell it carries
     { const L = LV.get('L16'); const byPage = new Map(); for (const q of allQ) { const cs = cellsFor(L, [q]); if (!cs.length) continue; const u = pageOf(byQ.get(q)); const k = u ? AIRF.urlKey(u) : 'p:' + q;
         const g = byPage.get(k) || { url: u, q, cells: [] }; g.cells.push(...cs); byPage.set(k, g); }
@@ -4564,6 +4566,8 @@ for (const g of gateSites) {
     const units60 = (hist.units || []).filter(u => AIRF.usable(u.engine));
     const demand = P(visLast.demand_json, {}) || {};   // the AI search demand per question (ARL.value)
     const queries = bySite(queryAll, sid, dom); const gsc = new Map(); for (const q of queries) { const k = S0(q.query).toLowerCase(); if (k) gsc.set(k, Math.max(gsc.get(k) || 0, Number(q.impressions) || 0)); }
+    // LIVE1 (2026-11-07): the page Search Console shows for each query (the one with the most impressions): a concrete address for a refresh (ARL.candidates)
+    const gscPages = new Map(); { const best = new Map(); for (const q of queries) { const k = S0(q.query).toLowerCase().replace(/\s+/g, ' '); const u = S0(q.page); const im = Number(q.impressions) || 0; if (!k || !u) continue; const b = best.get(k); if (!b || im > b) { best.set(k, im); gscPages.set(k, u); } } }
     const monRow = monRows.find(m => m.site_id === sid) || {};
     const aiPages = bySite(aiPagesAll, sid, dom);
     const storedQ = new Map(bySite(rqAll, sid, dom).map(r => [S0(r.prompt_id), r]));
@@ -4632,7 +4636,7 @@ for (const g of gateSites) {
         if (i >= 0) sources[i] = x; else sources.push(x); } }
     const srcByKey = new Map(sources.map(x => [S0(x.url_key) || AIRF.urlKey(x.url), x]));
     // ---- D / E: candidates, scores, the choice ----
-    const candidates = ARL.candidates({ site: { ...site, hosts: ourHosts, prompts, pages: aiPages }, diag, sources, arms, stored_actions: storedA, settings: rank, now: nowMs }) || [];
+    const candidates = ARL.candidates({ site: { ...site, hosts: ourHosts, prompts, pages: aiPages, gsc_pages: gscPages }, diag, sources, arms, stored_actions: storedA, settings: rank, now: nowMs }) || [];
     const scored = candidates.map(c => { const sc = un('ARL.score', ARL.score(c, { priors: rpAll, values, feas, weights: null, H: AIR_CFG.H })); return sc.unavailable ? null : { ...c, ...sc }; }).filter(Boolean);
     const openStored = storedA.filter(a => AIR_CFG.open.includes(S0(a.status)));
     const choice = ARL.choose(scored, { capacities: {}, arms, mode, open_actions: storedA.filter(a => ['shadow', ...AIR_CFG.open].includes(S0(a.status))), now: nowMs, units60, exposure }) || { chosen: [], deferred: [], refused: [] };
@@ -4728,8 +4732,12 @@ for (const g of gateSites) {
         const tid = AIRF.targetId(sid, pid); const st = targetsSite.find(t => S0(t.target_id) === tid) || {};
         if (['writing', 'written', 'won'].includes(S0(st.status))) continue;   // live work or a win: AIR leaves it alone
         const qs = sources.filter(x => (x.questions || []).includes(pid)).slice(0, 6);
+        // LIVE1 (2026-11-07): a refresh carries the page it refreshes (the action's own page_url; the ref held only the question, so prod wrote '');
+        // a refresh with no address could never be written by the cadence, so it is refused here with its reason, never stored
+        const pageUrl = S0((a.ref || {}).url) || S0(a.page_url) || S0(st.page_url);
+        if (a.lever === 'L06' && !pageUrl) { refused.push({ what: a.action_id || a.lever, why: 'a refresh with no page address: no page of the site is known for this question' }); continue; }
         sinks.targets.push({ target_id: tid, site_id: sid, domain: dom, prompt_id: pid, question: S0(p.prompt), keyword: S0(p.keyword || p.topic), kind: a.lever === 'L06' ? 'refresh' : 'answer',
-          page_url: S0((a.ref || {}).url) || S0(st.page_url), page_type: a.lever === 'L06' ? '' : (a.screen && a.screen.page_type ? a.screen.page_type : (S0(st.page_type) || 'Guide')), fanout: ARD.fanoutOf({ prompt_id: pid, answers8, evidence: evidenceOf.get(pid) || '' }).slice(0, 8).map(f => f.query).join(' | '),
+          page_url: a.lever === 'L06' ? pageUrl : S0(st.page_url), page_type: a.lever === 'L06' ? '' : (a.screen && a.screen.page_type ? a.screen.page_type : (S0(st.page_type) || 'Guide')), fanout: ARD.fanoutOf({ prompt_id: pid, answers8, evidence: evidenceOf.get(pid) || '' }).slice(0, 8).map(f => f.query).join(' | '),
           sources_json: J(qs.map(x => ({ u: x.url, t: '', n: Number(x.cites_28d) || 1 }))), competitors: [...new Set(qs.flatMap(x => x.rivals_named || []))].slice(0, 8).join(', '), engines: (a.engines || []).join(', '), stage: S0(p.stage),
           value: Math.round(100 * (1 + 4 * Math.min(1, (Number(a.score) || 0) / maxScore))) / 100, status: 'queued', reason: ('AI ranking (' + a.lever + '): ' + (a.screen && a.screen.note ? a.screen.note + '. ' : '') + S0(a.why || (ARL.LEVERS.find(l => l.id === a.lever) || {}).label)).slice(0, 600),
           created_at: S0(st.created_at) || nowIso, updated_at: nowIso, request_id: S0(st.request_id), written_at: S0(st.written_at), won_at: S0(st.won_at), origin: 'ai_rank', action_id: S0(a.action_id), live_at: S0(st.live_at) || null }); }

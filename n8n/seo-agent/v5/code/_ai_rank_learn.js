@@ -236,8 +236,10 @@ const ARL = (() => {
     const optIn = new Set((((settings || {}).pitch_rival_urls) || []).map(u => AIRF.urlKey(u)).filter(Boolean));
     const pageOf = (d) => { const q = S(d.prompt_id); if (S(d.page_url)) return S(d.page_url); if (S(d.mapped_page) && isOurs(d.mapped_page, hosts)) return S(d.mapped_page);   // ARD's additive mapped_page
       for (const { c } of cellsOf(d)) for (const ev of (c.evidence || [])) { const u = S(ev && (ev.url || ev.page)); if (u && isOurs(u, hosts)) return u; }
-      const pg = (st.pages || []).find(r => r && arr(r.questions).map(S).includes(q) && isOurs(r.url, hosts)); return pg ? S(pg.url) : ''; };
-    const hasPage = (d) => !!pageOf(d) || cellsOf(d).some(({ stage, c }) => lvl(stage) >= 2 || N(c.retrieved, 0) > 0 || N(c.cited, 0) > 0 || c.our_rank);
+      const pg = (st.pages || []).find(r => r && arr(r.questions).map(S).includes(q) && isOurs(r.url, hosts)); if (pg) return S(pg.url);
+      // LIVE1 (2026-11-07): the page Search Console shows for the question's own keyword or one of the engines' searches (exact query, the site's own host)
+      const gp = st.gsc_pages; if (gp && typeof gp.get === 'function') { const p0 = P.get(q) || {}; for (const k of uniq([S(p0.keyword), ...arr(d.fanout).map(S)].map(x => x.toLowerCase().replace(/\s+/g, ' ').trim()).filter(Boolean))) { const u = S(gp.get(k)); if (u && isOurs(u, hosts)) return u; } }
+      return ''; };
     const intentOf = (qs) => { const its = uniq(qs.map(q => S((byQ.get(q) || {}).intent))); return its.length === 1 && its[0] === 'informational' ? 'informational' : its.length === 1 && its[0] === 'recommendation' ? 'recommendation' : 'mixed'; };
     const out = []; const seen = new Set();
     const add = (L, ref, cells, extra) => { if (!cells.length) return; const id = AIRF.actionId(sid, L.id, ref); if (seen.has(id)) return; seen.add(id);
@@ -259,14 +261,14 @@ const ARL = (() => {
     // question-specific levers: own page (new or refresh, never both), cited-not-named, correction. Never on a control question.
     for (const q of allQ) { const d = byQ.get(q); const control = armOf.get(q) === 'control'; const pu = pageOf(d); const guard = pu ? protectedBy.get(AIRF.urlKey(pu)) : null;
       const onOther = !!guard && !guard.has(q);
-      const own = hasPage(d) && !onOther ? LV.get('L06') : LV.get('L05');
+      const own = pu && !onOther ? LV.get('L06') : LV.get('L05');   // LIVE1: a refresh needs a concrete page address (stage evidence alone wrote refresh rows with no URL); otherwise a new page
       const listy = !!d.list_dominated && S(d.intent) !== 'informational';   // E26 / R1 7: recommendation answers pick providers from lists; an informational answer's win is the citation
       for (const L of [own, LV.get('L07'), LV.get('L15')]) { const cs = cellsFor(L, [q]); if (!cs.length) continue;
         const extra = { page_url: L.id === 'L05' ? '' : pageOf(d), factor: OWN_PAGE.includes(L.id) && listy ? 0.5 : 1,
           why: L.id === 'L05' ? (onOther ? 'its closest page (' + pu + ') wins AI answers for ' + [...guard].join(', ') + ' and is protected: a new page for this question instead of rewriting it' : 'no page of the site is found for the searches the engines run') + (listy ? '; the answers are built from lists, so write an honest comparison or cost guide, never a self-ranked list (own-page chance halved)' : '')
             : L.id === 'L06' ? 'a page of the site is found but not cited' + (listy ? '; the answers are built from lists (own-page chance halved)' : '') : L.id === 'L07' ? 'the answers cite the site but do not name it' : 'an answer states something wrong about the business' };
         if (control) extra.refused = 'held out as a control question: no question-specific action while it is in the control group (1 in 3, 12 weeks)';
-        add(L, L.id === 'L07' && extra.page_url ? { prompt_id: q, url: extra.page_url } : { prompt_id: q }, cs, extra); } }   // FX-A2: L07 stores the page it fixes (refKey keys on prompt_id, so its id is unchanged)
+        add(L, ['L06', 'L07'].includes(L.id) && extra.page_url ? { prompt_id: q, url: extra.page_url } : { prompt_id: q }, cs, extra); } }   // FX-A2: L07 stores the page it fixes (refKey keys on prompt_id, so its id is unchanged)
     // protect what wins (L16): the client's page cited for a won question, one action per page with every won cell it carries
     { const L = LV.get('L16'); const byPage = new Map(); for (const q of allQ) { const cs = cellsFor(L, [q]); if (!cs.length) continue; const u = pageOf(byQ.get(q)); const k = u ? AIRF.urlKey(u) : 'p:' + q;
         const g = byPage.get(k) || { url: u, q, cells: [] }; g.cells.push(...cs); byPage.set(k, g); }

@@ -127,6 +127,8 @@ for (const g of gateSites) {
     const units60 = (hist.units || []).filter(u => AIRF.usable(u.engine));
     const demand = P(visLast.demand_json, {}) || {};   // the AI search demand per question (ARL.value)
     const queries = bySite(queryAll, sid, dom); const gsc = new Map(); for (const q of queries) { const k = S0(q.query).toLowerCase(); if (k) gsc.set(k, Math.max(gsc.get(k) || 0, Number(q.impressions) || 0)); }
+    // LIVE1 (2026-11-07): the page Search Console shows for each query (the one with the most impressions): a concrete address for a refresh (ARL.candidates)
+    const gscPages = new Map(); { const best = new Map(); for (const q of queries) { const k = S0(q.query).toLowerCase().replace(/\s+/g, ' '); const u = S0(q.page); const im = Number(q.impressions) || 0; if (!k || !u) continue; const b = best.get(k); if (!b || im > b) { best.set(k, im); gscPages.set(k, u); } } }
     const monRow = monRows.find(m => m.site_id === sid) || {};
     const aiPages = bySite(aiPagesAll, sid, dom);
     const storedQ = new Map(bySite(rqAll, sid, dom).map(r => [S0(r.prompt_id), r]));
@@ -195,7 +197,7 @@ for (const g of gateSites) {
         if (i >= 0) sources[i] = x; else sources.push(x); } }
     const srcByKey = new Map(sources.map(x => [S0(x.url_key) || AIRF.urlKey(x.url), x]));
     // ---- D / E: candidates, scores, the choice ----
-    const candidates = ARL.candidates({ site: { ...site, hosts: ourHosts, prompts, pages: aiPages }, diag, sources, arms, stored_actions: storedA, settings: rank, now: nowMs }) || [];
+    const candidates = ARL.candidates({ site: { ...site, hosts: ourHosts, prompts, pages: aiPages, gsc_pages: gscPages }, diag, sources, arms, stored_actions: storedA, settings: rank, now: nowMs }) || [];
     const scored = candidates.map(c => { const sc = un('ARL.score', ARL.score(c, { priors: rpAll, values, feas, weights: null, H: AIR_CFG.H })); return sc.unavailable ? null : { ...c, ...sc }; }).filter(Boolean);
     const openStored = storedA.filter(a => AIR_CFG.open.includes(S0(a.status)));
     const choice = ARL.choose(scored, { capacities: {}, arms, mode, open_actions: storedA.filter(a => ['shadow', ...AIR_CFG.open].includes(S0(a.status))), now: nowMs, units60, exposure }) || { chosen: [], deferred: [], refused: [] };
@@ -291,8 +293,12 @@ for (const g of gateSites) {
         const tid = AIRF.targetId(sid, pid); const st = targetsSite.find(t => S0(t.target_id) === tid) || {};
         if (['writing', 'written', 'won'].includes(S0(st.status))) continue;   // live work or a win: AIR leaves it alone
         const qs = sources.filter(x => (x.questions || []).includes(pid)).slice(0, 6);
+        // LIVE1 (2026-11-07): a refresh carries the page it refreshes (the action's own page_url; the ref held only the question, so prod wrote '');
+        // a refresh with no address could never be written by the cadence, so it is refused here with its reason, never stored
+        const pageUrl = S0((a.ref || {}).url) || S0(a.page_url) || S0(st.page_url);
+        if (a.lever === 'L06' && !pageUrl) { refused.push({ what: a.action_id || a.lever, why: 'a refresh with no page address: no page of the site is known for this question' }); continue; }
         sinks.targets.push({ target_id: tid, site_id: sid, domain: dom, prompt_id: pid, question: S0(p.prompt), keyword: S0(p.keyword || p.topic), kind: a.lever === 'L06' ? 'refresh' : 'answer',
-          page_url: S0((a.ref || {}).url) || S0(st.page_url), page_type: a.lever === 'L06' ? '' : (a.screen && a.screen.page_type ? a.screen.page_type : (S0(st.page_type) || 'Guide')), fanout: ARD.fanoutOf({ prompt_id: pid, answers8, evidence: evidenceOf.get(pid) || '' }).slice(0, 8).map(f => f.query).join(' | '),
+          page_url: a.lever === 'L06' ? pageUrl : S0(st.page_url), page_type: a.lever === 'L06' ? '' : (a.screen && a.screen.page_type ? a.screen.page_type : (S0(st.page_type) || 'Guide')), fanout: ARD.fanoutOf({ prompt_id: pid, answers8, evidence: evidenceOf.get(pid) || '' }).slice(0, 8).map(f => f.query).join(' | '),
           sources_json: J(qs.map(x => ({ u: x.url, t: '', n: Number(x.cites_28d) || 1 }))), competitors: [...new Set(qs.flatMap(x => x.rivals_named || []))].slice(0, 8).join(', '), engines: (a.engines || []).join(', '), stage: S0(p.stage),
           value: Math.round(100 * (1 + 4 * Math.min(1, (Number(a.score) || 0) / maxScore))) / 100, status: 'queued', reason: ('AI ranking (' + a.lever + '): ' + (a.screen && a.screen.note ? a.screen.note + '. ' : '') + S0(a.why || (ARL.LEVERS.find(l => l.id === a.lever) || {}).label)).slice(0, 600),
           created_at: S0(st.created_at) || nowIso, updated_at: nowIso, request_id: S0(st.request_id), written_at: S0(st.written_at), won_at: S0(st.won_at), origin: 'ai_rank', action_id: S0(a.action_id), live_at: S0(st.live_at) || null }); }
