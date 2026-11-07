@@ -42,6 +42,21 @@ export function kiMayRun(mode: KiMode, platformAdmin: boolean): boolean {
 /** May this person see the KI pages and results? The same rule as starting a run. */
 export const kiVisible = kiMayRun;
 
+/**
+ * FX-A (2026-11-08, review CONSISTENCY H1 / PERF_SAFETY H1): a Trial run is our team's own check. It is quoted and charged 0 credits to the
+ * client company (like the free setup research), and the run, its reports and everything made from them are for platform admins only.
+ * ONE mark each, set once by the server, read everywhere (services/ki.ts on the server holds the SQL twins of these two):
+ * - the run: `input.kiTrial === true` (set at the start, when the website's switch is Trial);
+ * - a report: `summary.trial === true` (a KI callback in Trial, or any callback of a Trial run, e.g. a refusal at the door).
+ */
+export const KI_TRIAL_INPUT_KEY = 'kiTrial';
+export function kiTrialRun(run: { input?: Record<string, unknown> | null } | null | undefined): boolean {
+  return run?.input?.[KI_TRIAL_INPUT_KEY] === true;
+}
+export function kiTrialReport(report: { summary?: Record<string, unknown> | null } | null | undefined): boolean {
+  return report?.summary?.trial === true;
+}
+
 /** How many competitors the client may choose (1-5, empty = 5). */
 export const KI_MAX_COMPETITORS = 5;
 export function kiMaxCompetitorsOf(v: unknown): number {
@@ -141,12 +156,99 @@ export const KI_BASIS: Record<KiBasis, string> = {
   measured: 'measured',
   provider_estimate: 'estimate from <source>',
   modelled: 'our estimate',
-  inferred: 'AI judgement',
+  // FX-A (review CONSISTENCY M4): no model is called in a KI run today, so an inferred value is our reading of the results, not an AI's
+  inferred: 'our reading of the results',
 };
+/**
+ * The source of a provider estimate in customer words (review CONSISTENCY L10): a provider's product name ("DataForSEO Labs") never reaches a
+ * screen; known sources get a plain name, anything else "our keyword data".
+ */
+export function kiSourceWords(source: unknown): string {
+  const s = String(source ?? '').trim();
+  if (!s) return 'our keyword data';
+  if (/google\s*ads|keyword\s*planner/i.test(s)) return 'Google Ads';
+  if (/search\s*console|gsc/i.test(s)) return 'your Search Console';
+  if (/labs|dataforseo|dfs|provider/i.test(s)) return 'our keyword data';
+  return /^[A-Za-z][A-Za-z ]{1,40}$/.test(s) ? s : 'our keyword data';
+}
 export function kiBasisLabel(basis: unknown, source?: unknown): string {
   const b = String(basis ?? '') as KiBasis;
-  if (b === 'provider_estimate') return 'estimate from ' + (String(source ?? '').trim() || 'our data provider');
+  if (b === 'provider_estimate') return 'estimate from ' + kiSourceWords(source);
   return KI_BASIS[b] ?? 'not available';
+}
+
+/**
+ * Striking distance, the ONE definition (DESIGN.md §3.11, the engine's KI.CONFIG.striking; ki.parity.test.ts holds them equal): Search Console
+ * positions 8 to 20 with at least 100 impressions in 28 days, at least 30 for a small site (under 5,000 impressions in all). The engine sets
+ * `striking` on each row; the app reads that flag only and uses these numbers for its words (review CONSISTENCY M2).
+ */
+export const KI_STRIKING = { min: 8, max: 20, impressions: 100, smallSiteImpressions: 30, smallSiteTotal: 5000 } as const;
+export const KI_STRIKING_WORDS = `places ${KI_STRIKING.min} to ${KI_STRIKING.max} in Google, seen at least ${KI_STRIKING.impressions} times in 28 days (${KI_STRIKING.smallSiteImpressions} for a smaller website)`;
+
+/**
+ * Why a search is "Not for you", in plain words. The engine stores a reason CODE (the 12 of ki_parity.json `gate_reasons`; FX-L moves the detail
+ * to its own field); the words are the app's. A legacy row may still carry the engine's sentence with its internal detail: it is matched to a
+ * code by its words, and anything else gets the general line, so raw detail ("62% of its own words match ...") never reaches a screen.
+ */
+export const KI_GATE_CODES = ['other_market', 'career', 'other_brand', 'government', 'portal', 'navigational', 'own_brand', 'off_topic', 'too_broad', 'empty', 'low_fit', 'avoid'] as const;
+export type KiGateCode = (typeof KI_GATE_CODES)[number];
+export const KI_GATE_WORDS: Record<KiGateCode, string> = {
+  other_market: 'This search is about a place outside your market.',
+  career: 'People searching this are looking for a job.',
+  other_brand: 'This is a search for another company by name.',
+  government: 'People searching this want a government service.',
+  portal: 'People searching this want to log in to a portal or service.',
+  navigational: 'People searching this want one particular website.',
+  own_brand: 'This is a search for your own name: you already get it, no page is needed.',
+  off_topic: 'This is not something you sell.',
+  too_broad: 'This search is too broad to bring buyers of your service.',
+  empty: 'This search has no words we can use.',
+  low_fit: 'This search is too far from what you sell.',
+  avoid: 'You asked us to leave this search out.',
+};
+const GATE_ALIASES: Record<string, KiGateCode> = {
+  market: 'other_market', market_mismatch: 'other_market', outside_market: 'other_market', jobs: 'career', job: 'career', brand: 'other_brand',
+  competitor_brand: 'other_brand', fit: 'low_fit', off_service: 'off_topic', offtopic: 'off_topic', broad: 'too_broad',
+};
+const GATE_HINTS: [RegExp, KiGateCode][] = [
+  [/\b(job|jobs|career|careers|salary|vacanc|hiring|recruit)/i, 'career'],
+  [/your own (brand|name)|own brand/i, 'own_brand'],
+  [/another company|other (company|brand)|competitor'?s? (brand|name)|brand name/i, 'other_brand'],
+  [/government|ministry|official portal/i, 'government'],
+  [/log ?in|portal/i, 'portal'],
+  [/outside (your|the) market|another (country|market)|other (country|market)/i, 'other_market'],
+  [/navigational|one (particular|specific) (website|site)/i, 'navigational'],
+  [/too broad/i, 'too_broad'],
+  [/avoid|left out|you asked/i, 'avoid'],
+  [/too far from what you sell|far from|fit/i, 'low_fit'],
+  [/not (something|what) you sell|off.?topic|unrelated/i, 'off_topic'],
+];
+export const KI_GATE_GENERAL = 'This search does not fit what you sell.';
+export function kiGateCodeOf(reason: unknown, code?: unknown): KiGateCode | null {
+  for (const v of [code, reason]) {
+    const k = String(v ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (!k) continue;
+    if ((KI_GATE_CODES as readonly string[]).includes(k)) return k as KiGateCode;
+    if (GATE_ALIASES[k]) return GATE_ALIASES[k];
+  }
+  const text = String(reason ?? '');
+  for (const [re, c] of GATE_HINTS) if (re.test(text)) return c;
+  return null;
+}
+export function kiGateWords(reason: unknown, code?: unknown): string {
+  const c = kiGateCodeOf(reason, code);
+  return c ? KI_GATE_WORDS[c] : KI_GATE_GENERAL;
+}
+
+/**
+ * Stale rows (review LOGIC H9): the engine upserts keyword and gap rows by key and never deletes them, so a run leaves the rows it did not
+ * write behind, with their old verdicts. A row is current when it is not marked superseded (FX-L's mark: `superseded_at` set, or status
+ * `superseded`) and it was written by the newest run that wrote that table for the website and market (services/kiData.ts kiCurrent).
+ */
+export function kiSuperseded(row: { superseded_at?: unknown; superseded?: unknown; status?: unknown } | null | undefined): boolean {
+  if (!row) return false;
+  const at = String(row.superseded_at ?? '').trim();
+  return (!!at && at !== 'null') || row.superseded === true || String(row.superseded ?? '') === 'true' || String(row.status ?? '').trim().toLowerCase() === 'superseded';
 }
 
 export const KI_SIZE_TAGS = ['peer', 'leader', 'smaller', 'out_of_reach', 'unknown'] as const;
@@ -250,7 +352,10 @@ export interface KiKeywordRow extends DtRow {
   source_count: number | null; volume: number | null; volume_basis: KiBasis | null; volume_source: string | null; cpc: number | null; kd: number | null;
   trend_json: string | null; gsc_impressions: number | null; gsc_clicks: number | null; gsc_position: number | null; gsc_page: string | null;
   intent: KiIntent | null; stage: KiStage | null; stage_evidence_json: string | null; intent_confidence: number | null; needs_review: boolean | null;
-  gate: 'pass' | 'fail'; gate_reason: string | null; fit: number | null; demand: number | null; win: number | null; value: number | null; gap: number | null;
+  gate: 'pass' | 'fail'; gate_reason: string | null;
+  /** FX-L (2026-11-08, review CONSISTENCY M3): the reason's code (KI_GATE_CODES), the detail kept apart; absent on older rows */
+  gate_code?: string | null;
+  fit: number | null; demand: number | null; win: number | null; value: number | null; gap: number | null;
   score: number | null; score_low: number | null; score_high: number | null; low_confidence: boolean | null; verdict: KiVerdict;
   cluster_id: string | null; is_head: boolean | null; cluster_size: number | null; cluster_demand: number | null; serp_read_at: string | null;
   /** [{url, host, type, pos}] */
@@ -259,6 +364,8 @@ export interface KiKeywordRow extends DtRow {
   /** [{domain, position, url}] */
   competitors_json: string | null;
   striking: boolean | null; run_id: string; fetched_at: string; updated_at: string;
+  /** review LOGIC H9: set when a later run of the same website and market no longer has this row (FX-L); absent on older rows */
+  superseded_at?: string | null;
 }
 
 /** seo_ki_gaps: one row per gap against the chosen competitor set. */
@@ -266,6 +373,8 @@ export interface KiGapRow extends DtRow {
   gap_id: string; site_id: string; domain: string; market: string; type: KiGapType; keyword: string | null; cluster_id: string | null;
   competitor_domains_json: string | null; client_position: number | null; evidence_json: string | null; sample_note: string | null;
   action: KiGapAction; action_target: string | null; credits: number | null; status: KiGapStatus; run_id: string; created_at: string; updated_at: string;
+  /** review LOGIC H9: set when a later run no longer finds this gap (FX-L); absent on older rows */
+  superseded_at?: string | null;
 }
 
 /** The tables' column names, in the engine's order (ladder_common.py KI_*_COLS; ki.parity.test.ts holds them equal). */

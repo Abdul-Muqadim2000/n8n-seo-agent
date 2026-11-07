@@ -38,6 +38,7 @@ import { and, desc, eq, gte, inArray, or, sql } from 'drizzle-orm';
 import { db, schema } from '../db';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { rankSeries } from './data';
+import { NOT_KI_TRIAL_RUN } from './ki';
 import { cachedCalibration } from './engineCost';
 import { actionFromApiBody } from './recommendations';
 import { filesFor, toReport } from './runs';
@@ -932,6 +933,7 @@ export async function ladderAppSources(org: OrgRow, site: SiteRow): Promise<Pick
           eq(schema.runs.orgId, org.id),
           eq(schema.runs.siteId, site.id),
           or(inArray(schema.runs.mode, ['keyword', 'ladder']), gte(schema.runs.createdAt, new Date(Date.now() - 7 * 864e5))),
+          NOT_KI_TRIAL_RUN,   // FX-A: our team's Trial runs are never on the company's Pipeline or Needs you
         ),
       )
       .orderBy(desc(schema.runs.createdAt))

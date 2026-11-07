@@ -26,6 +26,7 @@ import { seal, secretsReady, unseal } from '../lib/secretBox';
 import { signBody } from './reportDelivery';
 import { creditsForRuns } from './runCredits';
 import { customerError } from '../lib/customerError';
+import { NOT_KI_TRIAL_RUN } from './ki';
 
 /**
  * G4 (2026-10-17), event webhooks: several endpoints per company, each subscribed to event types and websites, delivered as
@@ -310,7 +311,7 @@ export async function emitRunsFailed(runIds: string[]): Promise<void> {
     .from(schema.runs)
     .innerJoin(schema.organizations, eq(schema.runs.orgId, schema.organizations.id))
     .leftJoin(schema.sites, eq(schema.runs.siteId, schema.sites.id))
-    .where(and(inArray(schema.runs.id, runIds.slice(0, 200)), eq(schema.runs.status, 'failed')));
+    .where(and(inArray(schema.runs.id, runIds.slice(0, 200)), eq(schema.runs.status, 'failed'), NOT_KI_TRIAL_RUN));   // FX-A: no event for our team's Trial runs
   for (const x of rows) {
     const credits = (await creditsForRuns(x.org.id, [x.r]).catch(() => null))?.get(x.r.id) ?? null;
     await emit(x.org, x.site, [{ type: 'run.failed', data: { run: runSummary(x.r, credits), error: customerError(x.r.error) } }]).catch(() => undefined);

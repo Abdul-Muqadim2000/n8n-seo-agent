@@ -45,7 +45,7 @@ import {
 import { requireVerified, type OrgAccess } from '../auth/access';
 import { config } from '../config';
 import { db, schema } from '../db';
-import type { OrgRow, ReportRow, RunRow, SiteRow } from '../db/schema';
+import type { OrgRow, ReportRow, RunRow, SiteRow, UserRow } from '../db/schema';
 import { safeEqual } from '../lib/crypto';
 import { badRequest, forbidden, HttpError, notFound } from '../lib/errors';
 import { insertRows, invalidateSite, siteRows, startRun, updateRows } from '../n8n/client';
@@ -65,7 +65,7 @@ import { engineCostEstimate, ledgerCost, stageOf, summarize, titleFor } from './
 import { siteReadiness } from './readiness';
 import { siteAutomation } from './ladders';
 import { assertConsistent, recordOverride, runWarnings } from './consistency';
-import { assertKiRunAllowed, invalidateKi, isKiStage, kiTrialCallback } from './ki';
+import { assertKiRunAllowed, invalidateKi, isKiStage, kiReportConds, kiTrialOf } from './ki';
 import type { FastifyRequest } from 'fastify';
 import type { Warning } from '@seo/shared';
 
@@ -270,8 +270,11 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
   if (site && input.mode === 'published' && !urlOnDomain(input.publishedUrl, site.domain))
     throw badRequest(`The published page must be on ${site.domain}`, { publishedUrl: `Must be a page on ${site.domain}` });
   // KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §1): Competitors / Keyword research only on a website switched On, or in
-  // Trial for a platform admin (403 / 409 before anything is quoted, locked or started)
-  await assertKiRunAllowed(input, site, user);
+  // Trial for a platform admin (403 / 409 before anything is quoted, locked or started). FX-A: a Trial run is our team's own check, so it
+  // is quoted and charged 0 credits to the client company, like the free setup research (the platform's daily ceiling still applies), and
+  // marked `input.kiTrial` so every list hides it from anyone who is not a platform admin (services/ki.ts)
+  const kiRun = await assertKiRunAllowed(input, site, user);
+  const free = !!opts.free || kiRun.trial;
   input = ladderChoice(inputForRole(input, a.role, { planOnly: !!opts.proposalId }), auto);
 
   // a typed keyword that is a planned page of one of the website's ladders is written as that ladder page (linked to the ladder,
@@ -356,10 +359,10 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
     // credits (app/docs/CREDITS.md): a company whose credits are enforced is held by its credits (balance, the credits kept for its
     // schedules, its own on-demand limit); the dollar budget is the platform's own guard for the others. Both under the company's lock.
     // D3: the website's one free research at setup skips the company's own checks (the platform's daily ceiling still applies)
-    if (opts.free) await assertPlatformCapacity(tx, estimated);
+    if (free) await assertPlatformCapacity(tx, estimated);
     else if (!org.creditsEnforced) await assertBudget(tx, org, estimated, 'This run');
     else await assertPlatformCapacity(tx, estimated);
-    const quoted = opts.free ? 0 : await assertCredits(tx, org, estimated, 'This run');
+    const quoted = free ? 0 : await assertCredits(tx, org, estimated, 'This run');
     const [row] = await tx
       .insert(schema.runs)
       .values({
@@ -369,11 +372,11 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
         mode: input.mode,
         title: auto && input.mode === 'ladder' ? `Started automatically: ${input.keyword}` : auto && input.mode === 'discover' ? `Keyword research refresh${site ? ` · ${site.domain}` : ''}` : runTitle(input, site),
         status: 'submitting',
-        input: { ...input, emailCopy: config.engineEmails && input.emailCopy, ...(auto ? { autoStart: true } : {}), ...(opts.proposalId ? { proposalId: opts.proposalId } : {}), ...(opts.free ? { freeResearch: true } : {}), ...(overridden.ids.length ? { acknowledged: overridden.ids } : {}) } as unknown as Record<string, unknown>,
+        input: { ...input, emailCopy: config.engineEmails && input.emailCopy, ...(auto ? { autoStart: true } : {}), ...(opts.proposalId ? { proposalId: opts.proposalId } : {}), ...(opts.free ? { freeResearch: true } : {}), ...(kiRun.trial ? { kiTrial: true } : {}), ...(overridden.ids.length ? { acknowledged: overridden.ids } : {}) } as unknown as Record<string, unknown>,
         estimatedCostUsd: estimated,
         // a free run is quoted 0 (the cost sync caps every charge of a run at its quote), so it is never charged. D3 (2026-10-21): a quote of
         // 0 is stored as 0, not as "no quote" (null is left for runs from before credits), so any work a 0-quoted run starts is capped too
-        quotedCredits: opts.free ? 0 : quoted,
+        quotedCredits: free ? 0 : quoted,
         etaMinutes: etaFor(input),
         apiKeyId: opts.apiKeyId ?? null,
         idempotencyKey: opts.idempotency?.key ?? null,
@@ -841,6 +844,7 @@ export async function ingestCallback(
     : null;
 
   const status = String(body.status ?? (stage === 'rejected' ? 'rejected' : 'completed'));
+  const trial = kiTrialOf(stage, body, run);
   // W05-B: a page run held for the client's OK used only the check: it is quoted as the check, not as a written page
   const heldRun = !!run && run.mode === 'keyword' && stage === 'content' && holdOf(payload)?.held === true && !payload.html;
   const heldSettings = heldRun ? await settingsRow().catch(() => null) : null;
@@ -859,7 +863,8 @@ export async function ingestCallback(
         // weekly reports reuse the request id of the run that set tracking up: they are scheduled all the same; a ladder started by
         // "Choose keywords for me" is automatic too (it shows among the Pipeline's automatic runs)
         scheduled: !run || isScheduledCallback(stage, body) || run.input?.autoStart === true,
-        summary: summarize(stage, body),
+        // FX-A: every report of our team's Trial check carries the one mark the lists read (`summary.trial`)
+        summary: trial ? { ...summarize(stage, body), trial: true } : summarize(stage, body),
         payload,
       })
       .returning({ id: schema.reports.id, title: schema.reports.title, receivedAt: schema.reports.receivedAt, scheduled: schema.reports.scheduled });
@@ -912,8 +917,8 @@ export async function ingestCallback(
   void deliverReport(org.id, reportId, deliveryLog).catch(() => undefined);
   // G4: the company's event webhooks (run.completed / report.ready / alert.raised / audit.finding.new / rank.changed ...), derived from
   // this callback after it is stored, like delivery, an event that goes wrong never loses the callback
-  // KI (A1): a Trial run is our team's own check, for platform admins only: no event leaves the app for it
-  if (!kiTrialCallback(stage, body)) void emitForCallback(org, site, { id: reportId, title: stored.title, stage, status, receivedAt: stored.receivedAt, scheduled: stored.scheduled, runId: run?.id ?? null }, payload, run).catch(() => undefined);
+  // KI (A1, FX-A): a Trial run is our team's own check, for platform admins only: no event leaves the app for it (deliverReport skips it too)
+  if (!trial) void emitForCallback(org, site, { id: reportId, title: stored.title, stage, status, receivedAt: stored.receivedAt, scheduled: stored.scheduled, runId: run?.id ?? null }, payload, run).catch(() => undefined);
   // the rank tracker says a ladder is won (main keyword top 3 in 4 checks): its settings row says so, so the cadence stops writing it
   // and the app keeps showing Won once the tracker stops checking it (not for a ladder the person paused)
   let ladderWon: boolean | undefined;
@@ -1004,8 +1009,9 @@ export async function filesFor(reportIds: string[]): Promise<Map<string, ReportF
   return m;
 }
 
-export async function reportsList(orgId: string, opts: { siteId?: string; runId?: string; stages?: string[]; limit?: number; before?: Date }): Promise<Report[]> {
-  const conds = [eq(schema.reports.orgId, orgId)];
+export async function reportsList(orgId: string, opts: { siteId?: string; runId?: string; stages?: string[]; limit?: number; before?: Date; viewer?: UserRow | null }): Promise<Report[]> {
+  // FX-A: a Trial report only for a platform admin who asks (`viewer`); every other caller (Overview, Pipeline, dashboards) never sees one
+  const conds = [eq(schema.reports.orgId, orgId), ...kiReportConds(opts.viewer ?? null)];
   if (opts.siteId) conds.push(eq(schema.reports.siteId, opts.siteId));
   if (opts.runId) conds.push(eq(schema.reports.runId, opts.runId));
   if (opts.stages?.length) conds.push(inArray(schema.reports.stage, opts.stages));
@@ -1072,7 +1078,7 @@ export async function runJoinedResult(orgId: string, run: Pick<RunRow, 'id' | 's
 /** Latest report of a stage for a site, with its payload (dashboards read the rich weekly reports). */
 export async function latestReport(orgId: string, siteId: string, stages: string[]): Promise<{ report: Report; payload: Record<string, unknown> } | null> {
   const row = await db.query.reports.findFirst({
-    where: and(eq(schema.reports.orgId, orgId), eq(schema.reports.siteId, siteId), inArray(schema.reports.stage, stages)),
+    where: and(eq(schema.reports.orgId, orgId), eq(schema.reports.siteId, siteId), inArray(schema.reports.stage, stages), ...kiReportConds(null)),
     orderBy: desc(schema.reports.receivedAt),
   });
   if (!row) return null;

@@ -5,14 +5,18 @@ import {
   KI_APPROVE_MAX,
   KI_COMP_USER_STATUSES,
   KI_COMPETITOR_CSV_COLUMNS,
+  KI_COMPETITOR_CSV_HEADERS,
   KI_GAP_CSV_COLUMNS,
+  KI_GAP_CSV_HEADERS,
   KI_GAP_STATUSES,
   KI_GAP_TYPES,
   KI_KEYWORD_CSV_COLUMNS,
+  KI_KEYWORD_CSV_HEADERS,
   KI_MODES,
   KI_PAGE_SIZE,
   kiCompetitorCsvRow,
   kiCsvFileName,
+  kiCsvHeader,
   kiGapCsvRow,
   kiKeywordCsvRow,
   kiKeywordQueryOf,
@@ -101,7 +105,7 @@ export async function kiRoutes(app: FastifyInstance) {
   app.get(`${R}/competitors.csv`, csv, async (req, reply) => {
     const a = await visible(req);
     const r = kiCompetitorsOf(await kiData(a.site), a.st, compQuery(req));
-    return sendCsv(reply, kiCsvFileName('competitors', a.site.domain), kiCsvChunks(KI_COMPETITOR_CSV_COLUMNS, r.items, kiCompetitorCsvRow));
+    return sendCsv(reply, kiCsvFileName('competitors', a.site.domain), kiCsvChunks(kiCsvHeader(KI_COMPETITOR_CSV_COLUMNS, KI_COMPETITOR_CSV_HEADERS), r.items, kiCompetitorCsvRow));
   });
   app.patch(`${R}/competitors/:compDomain`, writes, async (req) => {
     const a = await visible(req, 'member');
@@ -121,7 +125,7 @@ export async function kiRoutes(app: FastifyInstance) {
   app.get(`${R}/keywords.csv`, csv, async (req, reply) => {
     const a = await visible(req);
     const { list } = kiKeywordList(await kiData(a.site), kiKeywordQueryOf(req.query as Record<string, unknown>));
-    return sendCsv(reply, kiCsvFileName('keywords', a.site.domain), kiCsvChunks(KI_KEYWORD_CSV_COLUMNS, list, kiKeywordCsvRow));
+    return sendCsv(reply, kiCsvFileName('keywords', a.site.domain), kiCsvChunks(kiCsvHeader(KI_KEYWORD_CSV_COLUMNS, KI_KEYWORD_CSV_HEADERS), list, kiKeywordCsvRow));
   });
 
   // ---------- gaps ----------
@@ -144,7 +148,7 @@ export async function kiRoutes(app: FastifyInstance) {
   app.get(`${R}/gaps.csv`, csv, async (req, reply) => {
     const a = await visible(req);
     const { list } = kiGapList(await kiData(a.site), gapQuery(req));
-    return sendCsv(reply, kiCsvFileName('gaps', a.site.domain), kiCsvChunks(KI_GAP_CSV_COLUMNS, list, kiGapCsvRow));
+    return sendCsv(reply, kiCsvFileName('gaps', a.site.domain), kiCsvChunks(kiCsvHeader(KI_GAP_CSV_COLUMNS, KI_GAP_CSV_HEADERS), list, kiGapCsvRow));
   });
   app.patch(`${R}/gaps/:gapId`, writes, async (req) => {
     const a = await visible(req, 'member');

@@ -36,6 +36,7 @@ import { aiData, oneReadingFinding, previousOfType } from './data';
 import { aiAnswersPage } from './aiWave2';
 import { filesFor, runJoinedResult } from './runs';
 import { creditsForRuns, reportCredits } from './runCredits';
+import { kiRunVisible, NOT_KI_TRIAL_REPORT, NOT_KI_TRIAL_RUN } from './ki';
 import { customerError } from '../lib/customerError';
 import { crawlerData } from './crawlers/analytics';
 
@@ -293,7 +294,8 @@ const RUN_STATUSES: readonly string[] = RUN_STATUS_LIST;
 
 export async function listRuns(ctx: V1Ctx, q: Q = {}): Promise<PageV1<RunV1>> {
   const limit = pageLimit(q.limit);
-  const conds: SQL[] = [eq(schema.runs.orgId, ctx.org.id)];
+  // FX-A: our team's Trial runs are never readable through the API or MCP (a key acts for the company, never as a platform admin)
+  const conds: SQL[] = [eq(schema.runs.orgId, ctx.org.id), NOT_KI_TRIAL_RUN];
   if (q.websiteId != null && q.websiteId !== '') conds.push(eq(schema.runs.siteId, (await siteOf(ctx, q.websiteId)).id));
   if (typeof q.mode === 'string' && (MODE_IDS as readonly string[]).includes(q.mode)) conds.push(eq(schema.runs.mode, q.mode));
   if (q.status === 'active') conds.push(inArray(schema.runs.status, ['submitting', 'accepted', 'running']));
@@ -312,7 +314,7 @@ export async function listRuns(ctx: V1Ctx, q: Q = {}): Promise<PageV1<RunV1>> {
 export async function getRun(ctx: V1Ctx, runId: unknown): Promise<{ run: RunV1 & { input: Record<string, unknown>; joined?: JoinedRunResult }; reports: ReportV1[] }> {
   if (!isUuid(runId)) throw notFound('Run not found');
   const run = await db.query.runs.findFirst({ where: and(eq(schema.runs.orgId, ctx.org.id), eq(schema.runs.id, runId)) });
-  if (!run) throw notFound('Run not found');
+  if (!run || !kiRunVisible(run, null)) throw notFound('Run not found');
   const reports = await reportRows(ctx, [eq(schema.reports.runId, run.id)], 100);
   // R-A3: a joined run names the open run it joined and, once it has reported, that report's id
   const joined = await runJoinedResult(ctx.org.id, run);
@@ -349,8 +351,8 @@ async function reportRows(ctx: V1Ctx, extra: SQL[], limit: number): Promise<Repo
   const rows = (await db
     .select(reportCols)
     .from(schema.reports)
-    // KI (A1): a Trial run's reports are our team's check, never readable through the API
-    .where(and(eq(schema.reports.orgId, ctx.org.id), sql`not (${schema.reports.stage} in ('ki_competitors', 'ki_research', 'ki_competitors_started', 'ki_research_started') and coalesce(${schema.reports.summary}->>'trial', '') = 'true')`, ...extra))
+    // KI (A1, FX-A): a Trial run's reports are our team's check, never readable through the API (the one Trial mark, services/ki.ts)
+    .where(and(eq(schema.reports.orgId, ctx.org.id), NOT_KI_TRIAL_REPORT, ...extra))
     .orderBy(desc(ms(schema.reports.receivedAt)), desc(schema.reports.id))
     .limit(limit + 1)) as ReportListRow[];
   const fm = await filesFor(rows.slice(0, limit).map((r) => r.id));

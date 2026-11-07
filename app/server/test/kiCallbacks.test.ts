@@ -91,14 +91,19 @@ describe('KI A1: what a KI answer does to the run and its delivery', () => {
     st.platform = false;
     expect(kiReportVisible(rep, { id: 'u' } as never)).toBe(false);
     expect(kiReportVisible({ stage: 'ki_research', summary: summarize('ki_research', asBody(research('ok'))) }, { id: 'u' } as never)).toBe(true);
-    expect(kiReportVisible({ stage: 'content', summary: { trial: true } }, null)).toBe(true);
+    // FX-A: the one mark is the summary's `trial` (any report of a Trial run carries it); a report without it is everyone's
+    expect(kiReportVisible({ stage: 'content', summary: { trial: true } }, null)).toBe(false);
+    expect(kiReportVisible({ stage: 'content', summary: {} }, null)).toBe(true);
     st.platform = true;
     expect(kiReportVisible(rep, { id: 'u' } as never)).toBe(true);
     st.platform = false;
   });
   it('the callback path skips events for a Trial run and empties the KI cache of the website', () => {
     const src = readFileSync(join(__dirname, '../src/services/runs.ts'), 'utf8');
-    expect(src).toMatch(/if \(!kiTrialCallback\(stage, body\)\) void emitForCallback\(/);
+    // FX-A: the one Trial check of a callback (a KI answer in Trial, or any callback of a Trial run) marks the report and skips the events
+    expect(src).toMatch(/const trial = kiTrialOf\(stage, body, run\);/);
+    expect(src).toMatch(/summary: trial \? \{ \.\.\.summarize\(stage, body\), trial: true \} : summarize\(stage, body\)/);
+    expect(src).toMatch(/if \(!trial\) void emitForCallback\(/);
     expect(src).toMatch(/if \(domain && isKiStage\(stage\)\) invalidateKi\(domain\);/);
     kiCache.set('nova-ki.example|novaki', { at: Date.now(), value: 1 });
     kiCache.set('other.example|other', { at: Date.now(), value: 1 });
@@ -109,8 +114,13 @@ describe('KI A1: what a KI answer does to the run and its delivery', () => {
   });
   it('the report routes and API v1 hide a Trial run\'s reports', () => {
     const routes = readFileSync(join(__dirname, '../src/routes/runs.ts'), 'utf8');
-    expect(routes.match(/kiReportVisible\(/g)?.length).toBeGreaterThanOrEqual(3);
+    // FX-A: filtered in the reads themselves (before the limit), with the one Trial condition of services/ki.ts
+    expect(routes.match(/viewer: a\.user/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(routes).toMatch(/kiReportConds\(a\.user\)/);
     const v1 = readFileSync(join(__dirname, '../src/services/apiV1.ts'), 'utf8');
-    expect(v1).toMatch(/summary\}->>'trial', ''\) = 'true'/);
+    expect(v1).toMatch(/NOT_KI_TRIAL_REPORT/);
+    expect(v1).toMatch(/NOT_KI_TRIAL_RUN/);
+    const ki = readFileSync(join(__dirname, '../src/services/ki.ts'), 'utf8');
+    expect(ki).toMatch(/summary\}->>'trial', ''\) <> 'true'/);
   });
 });

@@ -2,7 +2,7 @@ import { useEngineCal } from '@/lib/engine-cal';
 import { useState, type ReactNode } from 'react';
 import { Link, Navigate, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, History, Plus, Wand2 } from 'lucide-react';
-import { isKiRunMode, MODE_CATEGORIES, MODES, type ModeId } from '@seo/shared';
+import { isKiRunMode, modeCategoryLabel, MODES, type ModeId } from '@seo/shared';
 import { lastSite, useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useKi, useProviders } from '@/lib/queries';
@@ -95,7 +95,7 @@ export default function ToolFormPage() {
       </Link>
       <PageHeader
         icon={<ModeIcon mode={mode} />}
-        eyebrow={MODE_CATEGORIES[info.category]}
+        eyebrow={modeCategoryLabel(info)}
         title={info.title}
         description={info.summary}
         actions={

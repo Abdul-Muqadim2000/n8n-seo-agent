@@ -13,6 +13,10 @@ import {
   KI_VERDICT_IDS,
   KI_VERDICT_TONE,
   kiBasisLabel,
+  kiGateCodeOf,
+  kiGateWords,
+  kiSourceWords as kiSourceWordsOf,
+  type KiGateCode,
   kiVerdict,
   type KiBasis,
   type KiClass,
@@ -102,7 +106,10 @@ export interface KiSummary {
   competitors: { total: number; chosen: number; watch: number; candidates: number; dismissed: number; listings: number; platforms: number;
     /** the person chose or dismissed at least one: the set is confirmed */
     confirmed: boolean };
-  keywords: { total: number; byVerdict: Record<KiVerdict, number>; byStage: Partial<Record<KiStage, number>>; striking: number; quickWins: number;
+  keywords: { total: number; byVerdict: Record<KiVerdict, number>;
+    /** FX-A (review UX L11 / M8): the topics (heads) by verdict, so the hero counts topics over every row, not the 200 read */
+    headsByVerdict: Record<KiVerdict, number>;
+    byStage: Partial<Record<KiStage, number>>; striking: number; quickWins: number;
     questions: number; clusters: number; needsReview: number; brand: number };
   gaps: { open: number; byType: Partial<Record<KiGapType, number>> };
   /** newest fetched_at / updated_at over the rows */
@@ -115,7 +122,7 @@ export interface KiOverview {
   mode: KiMode;
   /** On, or Trial and a platform admin, and not paused by the kill switch */
   visible: boolean;
-  /** platform admins only: the kill switch is on (every KI read behaves as Off) */
+  /** the kill switch is on (every KI read behaves as Off; the pages say "paused"): sent to platform admins and on an On website */
   killed?: boolean;
   /** platform admins may switch the mode (PATCH .../ki/mode) */
   canSwitch: boolean;
@@ -191,7 +198,10 @@ export interface KiKeywordView {
   stageLabel: string | null;
   needsReview: boolean;
   gate: 'pass' | 'fail';
+  /** why it is "Not for you", in plain words (FX-A: never the engine's sentence or detail) */
   gateReason: string | null;
+  /** the reason's code (ki_parity.json gate_reasons), null when not known */
+  gateCode: KiGateCode | null;
   verdict: KiVerdict;
   verdictLabel: string;
   verdictTone: KiTone;
@@ -218,10 +228,19 @@ export interface KiKeywordView {
   top10?: { url: string; host: string; type: string; pos: number }[];
 }
 
+/** The gap types a keyword row can carry (the others are about pages, lists, AI answers and links, not one search). */
+export const KI_KEYWORD_GAP_TYPES = ['missing', 'untapped', 'weak', 'striking', 'strong'] as const;
+export type KiKeywordGapType = (typeof KI_KEYWORD_GAP_TYPES)[number];
+/** The key a gap row and a keyword row share: the keyword, lower case, punctuation and spaces folded (the engine stores both normalised). */
+export const kiGapKeyOf = (keyword: unknown): string =>
+  String(keyword ?? '').toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ').replace(/\s+/g, ' ').trim();
+
 export type KiKeywordSort = 'score' | 'volume' | 'keyword' | 'position' | 'demand' | 'kd' | 'fetched';
 export const KI_KEYWORD_SORTS: readonly KiKeywordSort[] = ['score', 'volume', 'keyword', 'position', 'demand', 'kd', 'fetched'];
 
 export interface KiKeywordQuery {
+  /** FX-A (review UX H2): a keyword gap type, filtered on the server against the current gap rows, so counts, pager and empty state agree */
+  gapType?: KiKeywordGapType;
   stage?: KiStage;
   verdict?: KiVerdict;
   source?: KiSource;
@@ -424,7 +443,8 @@ export function kiKeywordView(r: KiKeywordRow, brandTokens: readonly string[], i
     stageLabel: stage ? KI_STAGES[stage] : null,
     needsReview: B(r.needs_review),
     gate,
-    gateReason: S(r.gate_reason) || null,
+    gateReason: gate === 'fail' ? kiGateWords(r.gate_reason, r.gate_code) : null,
+    gateCode: gate === 'fail' ? kiGateCodeOf(r.gate_reason, r.gate_code) : null,
     verdict,
     verdictLabel: KI_VERDICTS[verdict],
     verdictTone: KI_VERDICT_TONE[verdict],
@@ -507,6 +527,7 @@ export function kiKeywordQueryOf(q: Record<string, unknown>): KiKeywordQuery {
   const verdict = S(one('verdict'));
   const source = S(one('source'));
   const brand = S(one('brand'));
+  const gapType = S(one('gap_type'));
   const sortRaw = S(one('sort')) || '-score';
   const sortKey = sortRaw.replace(/^-/, '') as KiKeywordSort;
   const minVolume = N(one('min_volume'));
@@ -514,6 +535,7 @@ export function kiKeywordQueryOf(q: Record<string, unknown>): KiKeywordQuery {
   const page = Math.max(1, Math.floor(N(one('page')) ?? 1));
   const size = Math.floor(N(one('page_size')) ?? KI_PAGE_SIZE.default);
   return {
+    ...((KI_KEYWORD_GAP_TYPES as readonly string[]).includes(gapType) ? { gapType: gapType as KiKeywordGapType } : {}),
     ...(KI_STAGE_IDS.includes(stage as KiStage) ? { stage: stage as KiStage } : {}),
     ...(KI_VERDICT_IDS.includes(verdict as KiVerdict) ? { verdict: verdict as KiVerdict } : {}),
     ...((KI_SOURCES as readonly string[]).includes(source) ? { source: source as KiSource } : {}),
@@ -532,7 +554,12 @@ export function kiKeywordQueryOf(q: Record<string, unknown>): KiKeywordQuery {
   };
 }
 
-export function kiKeywordMatches(v: KiKeywordView, q: Omit<KiKeywordQuery, 'sort' | 'page' | 'pageSize' | 'includeSerp'>): boolean {
+export function kiKeywordMatches(
+  v: KiKeywordView,
+  q: Omit<KiKeywordQuery, 'sort' | 'page' | 'pageSize' | 'includeSerp'>,
+  gapTypes: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
+): boolean {
+  if (q.gapType && !gapTypes.get(kiGapKeyOf(v.keyword))?.has(q.gapType)) return false;
   if (q.stage && v.stage !== q.stage) return false;
   if (q.verdict && v.verdict !== q.verdict) return false;
   if (q.source && !v.sources.some((s) => s.source === q.source)) return false;
@@ -541,7 +568,8 @@ export function kiKeywordMatches(v: KiKeywordView, q: Omit<KiKeywordQuery, 'sort
   if (q.brand === 'brand' && !v.brand) return false;
   if (q.brand === 'non_brand' && v.brand) return false;
   if (q.q && !v.keyword.toLowerCase().includes(q.q)) return false;
-  if (q.striking && !v.striking) return false;
+  // striking distance is a quick win: a search that is not for this business is never one (the same rule as kiQuickWin)
+  if (q.striking && !kiQuickWin(v)) return false;
   if (q.heads && !v.isHead) return false;
   if (q.questions && !v.question) return false;
   return true;
@@ -571,20 +599,41 @@ export function kiPage<T>(items: readonly T[], page: number, pageSize: number): 
   return { items: items.slice((p - 1) * size, p * size), total: items.length, page: p, pageSize: size, pages };
 }
 
-/** A quick win: a keyword already on page 2 or low page 1 (striking distance), or one we judge Go that needs only a refresh. */
-export const kiQuickWin = (v: KiKeywordView): boolean => v.gate === 'pass' && (v.striking || (v.verdict === 'go' && v.pageAction === 'refresh'));
+/**
+ * A quick win IS a search in striking distance (KI_STRIKING, set by the engine on the row) that fits the business. FX-A (review CONSISTENCY M2):
+ * one definition, so the recommendation's count, the hero's "Just off page one" and the section it opens all count the same rows.
+ */
+export function kiQuickWin(v: Pick<KiKeywordView, 'gate' | 'striking'>): boolean {
+  return v.gate === 'pass' && v.striking;
+}
+/** The gap types of each keyword (current gap rows only), by kiGapKeyOf. */
+export function kiGapTypesIndex(gaps: readonly Pick<KiGapView, 'keyword' | 'type'>[]): Map<string, Set<string>> {
+  const m = new Map<string, Set<string>>();
+  for (const g of gaps) {
+    if (!g.keyword || !(KI_KEYWORD_GAP_TYPES as readonly string[]).includes(g.type)) continue;
+    const k = kiGapKeyOf(g.keyword);
+    const set = m.get(k) ?? new Set<string>();
+    set.add(g.type);
+    m.set(k, set);
+  }
+  return m;
+}
 
 export function kiSummaryOf(market: string | null, comps: readonly KiCompetitorView[], kws: readonly KiKeywordView[], gaps: readonly KiGapView[]): KiSummary {
   const byVerdict = Object.fromEntries(KI_VERDICT_IDS.map((v) => [v, 0])) as Record<KiVerdict, number>;
+  const headsByVerdict = Object.fromEntries(KI_VERDICT_IDS.map((v) => [v, 0])) as Record<KiVerdict, number>;
   const byStage: Partial<Record<KiStage, number>> = {};
   let striking = 0, quick = 0, questions = 0, review = 0, brand = 0;
   const clusters = new Set<string>();
   let newest = '';
   for (const k of kws) {
     byVerdict[k.verdict]++;
+    if (k.isHead || !k.clusterId) headsByVerdict[k.verdict]++;
     if (k.stage) byStage[k.stage] = (byStage[k.stage] ?? 0) + 1;
-    if (k.striking) striking++;
-    if (kiQuickWin(k)) quick++;
+    if (kiQuickWin(k)) {
+      striking++;
+      quick++;
+    }
     if (k.question && k.gate === 'pass') questions++;
     if (k.needsReview) review++;
     if (k.brand) brand++;
@@ -613,7 +662,7 @@ export function kiSummaryOf(market: string | null, comps: readonly KiCompetitorV
       platforms: comps.filter((c) => c.class === 'platform').length,
       confirmed: comps.some((c) => c.statusBy === 'user'),
     },
-    keywords: { total: kws.length, byVerdict, byStage, striking, quickWins: quick, questions, clusters: clusters.size, needsReview: review, brand },
+    keywords: { total: kws.length, byVerdict, headsByVerdict, byStage, striking, quickWins: quick, questions, clusters: clusters.size, needsReview: review, brand },
     gaps: { open, byType },
     fetchedAt: newest || null,
   };
@@ -637,31 +686,81 @@ export function kiFacetsOf(kws: readonly KiKeywordView[]): KiKeywordsResponse['f
 
 export const kiCsvLine = (cells: readonly unknown[]): string => cells.map(csvCell).join(',') + '\r\n';
 
+/**
+ * FX-A (review UX M11): the CSVs speak the page's words. Each file has a STABLE machine column order (the `*_CSV_COLUMNS` keys, for teams that
+ * load it into a warehouse: new columns are only ever added at the end) and a header row in plain words (`*_CSV_HEADERS`, same order); the
+ * values are the words the page shows (verdict, buyer stage, what to do, how we know), never engine codes. Documented in app/API.md.
+ */
+const PAGE_ACTION_WORDS: Record<string, string> = { new: 'Write a new page', refresh: 'Improve your page', list: 'Get on the lists that rank', none: 'No page needed' };
+const yes = (b: boolean | null | undefined) => (b ? 'yes' : 'no');
+
 export const KI_KEYWORD_CSV_COLUMNS = [
   'keyword', 'market', 'verdict', 'score', 'score_low', 'score_high', 'low_confidence', 'stage', 'intent', 'volume', 'volume_basis', 'volume_source', 'cpc', 'kd',
   'gsc_impressions', 'gsc_clicks', 'gsc_position', 'gsc_page', 'striking', 'brand', 'question', 'cluster_id', 'is_head', 'cluster_size', 'page_action', 'page_url',
   'sources', 'gate', 'gate_reason', 'competitors', 'serp_read_at', 'fetched_at',
 ] as const;
+export const KI_KEYWORD_CSV_HEADERS: Record<(typeof KI_KEYWORD_CSV_COLUMNS)[number], string> = {
+  keyword: 'Search', market: 'Market', verdict: 'For you', score: 'Score', score_low: 'Score likely from', score_high: 'Score likely to', low_confidence: 'Wide range',
+  stage: 'Buyer stage', intent: 'What the searcher wants', volume: 'Searches a month', volume_basis: 'How we know the searches', volume_source: 'Searches from', cpc: 'Cost per click in ads',
+  kd: 'How hard to rank (0 to 100)', gsc_impressions: 'Times you were seen (28 days)', gsc_clicks: 'Clicks to you (28 days)', gsc_position: 'Your place in Google', gsc_page: 'Your page shown',
+  striking: 'Just off page one', brand: 'Has your name', question: 'Buyer question', cluster_id: 'Topic id', is_head: 'Main search of its topic', cluster_size: 'Searches in its topic',
+  page_action: 'What to do', page_url: 'Page to improve', sources: 'Where from', gate: 'Fits what you sell', gate_reason: 'Why not', competitors: 'Competitors in the results',
+  serp_read_at: 'Google results read on', fetched_at: 'Updated on',
+};
+const INTENT_WORDS: Record<string, string> = { commercial: 'Comparing options', transactional: 'Ready to buy', informational: 'Learning', navigational: 'Looking for one website' };
 export const kiKeywordCsvRow = (v: KiKeywordView): string =>
   kiCsvLine([
-    v.keyword, v.market, v.verdictLabel, v.score, v.scoreLow, v.scoreHigh, v.lowConfidence, v.stageLabel ?? '', v.intent ?? '', v.volume, v.volumeBasisLabel, v.volumeSource ?? '', v.cpc, v.kd,
-    v.gsc?.impressions, v.gsc?.clicks, v.gsc?.position, v.gsc?.page ?? '', v.striking, v.brand, v.question, v.clusterId ?? '', v.isHead, v.clusterSize, v.pageAction ?? '', v.pageUrl ?? '',
-    v.sources.map((s) => s.label).join('; '), v.gate, v.gateReason ?? '', v.competitors.map((c) => `${c.domain} #${c.position}`).join('; '), v.serpReadAt ?? '', v.fetchedAt,
+    v.keyword, v.market, v.verdictLabel, v.score, v.scoreLow, v.scoreHigh, yes(v.lowConfidence), v.stageLabel ?? '', v.intent ? INTENT_WORDS[v.intent] ?? '' : '', v.volume, v.volumeBasisLabel,
+    v.volumeSource ? kiSourceWordsOf(v.volumeSource) : '', v.cpc, v.kd,
+    v.gsc?.impressions, v.gsc?.clicks, v.gsc?.position, v.gsc?.page ?? '', yes(v.striking), yes(v.brand), yes(v.question), v.clusterId ?? '', yes(v.isHead), v.clusterSize,
+    v.pageAction ? PAGE_ACTION_WORDS[v.pageAction] ?? '' : '', v.pageUrl ?? '',
+    v.sources.map((s) => s.label).join('; '), v.gate === 'fail' ? 'no' : 'yes', v.gate === 'fail' ? (v.gateReason ?? '') : '',
+    v.competitors.map((c) => `${c.domain} #${c.position}`).join('; '), v.serpReadAt ?? '', v.fetchedAt,
   ]);
 
+const CLASS_BASIS_WORDS: Record<string, string> = { rule: 'Google results', page: 'Their website', llm: 'Our reading', declared: 'You added it', user: 'You decided' };
+const COMP_STATUS_WORDS: Record<string, string> = { candidate: 'Suggested', chosen: 'You follow', watch: 'Watchlist', dismissed: 'Not a competitor' };
+const STATUS_BY_WORDS: Record<string, string> = { auto: 'Us', user: 'You', declared: 'You added it' };
 export const KI_COMPETITOR_CSV_COLUMNS = [
   'domain', 'market', 'class', 'class_basis', 'status', 'status_by', 'score', 'score_low', 'score_high', 'serp_share', 'topic_similarity', 'geo_match', 'ai_share', 'size',
   'seeds_seen', 'seeds_total', 'reasons', 'basis', 'first_seen', 'last_seen', 'fetched_at',
 ] as const;
+export const KI_COMPETITOR_CSV_HEADERS: Record<(typeof KI_COMPETITOR_CSV_COLUMNS)[number], string> = {
+  domain: 'Website', market: 'Market', class: 'What it is', class_basis: 'Sorted by', status: 'On your list as', status_by: 'Decided by', score: 'How much they compete (0 to 100)',
+  score_low: 'Likely from', score_high: 'Likely to', serp_share: 'Share of clicks on your searches', topic_similarity: 'Sells what you sell (0 to 1)', geo_match: 'Same area as you (0 to 1)',
+  ai_share: 'Share of AI answers', size: 'Size', seeds_seen: 'Your searches it shows up for', seeds_total: 'Your searches read', reasons: 'Why', basis: 'How we know',
+  first_seen: 'First seen', last_seen: 'Last seen', fetched_at: 'Updated on',
+};
 export const kiCompetitorCsvRow = (c: KiCompetitorView): string =>
   kiCsvLine([
-    c.compDomain, c.market, c.classLabel, c.classBasis, c.status, c.statusBy, c.score, c.scoreLow, c.scoreHigh, c.serpShare, c.topicSim, c.geoMatch, c.aiShare, c.sizeLabel,
-    c.seedsSeen, c.seedsTotal, c.reasons.join('; '), c.basisLabel, c.firstSeen, c.lastSeen, c.fetchedAt,
+    c.compDomain, c.market, c.classLabel, CLASS_BASIS_WORDS[c.classBasis] ?? '', COMP_STATUS_WORDS[c.status] ?? '', STATUS_BY_WORDS[c.statusBy] ?? '', c.score, c.scoreLow, c.scoreHigh, c.serpShare,
+    c.topicSim, c.geoMatch, c.aiShare, c.sizeLabel, c.seedsSeen, c.seedsTotal, c.reasons.join('; '), c.basisLabel, c.firstSeen, c.lastSeen, c.fetchedAt,
   ]);
 
+const GAP_TYPE_WORDS: Record<KiGapType, string> = {
+  missing: 'Competitors rank, you are missing', untapped: 'One competitor ranks, you are missing', weak: 'You rank low', striking: 'Just off page one', strong: 'You lead: keep it',
+  topic: 'A topic you do not cover', page_type: 'A kind of page you do not have', ai_answer: 'Named in AI answers, you are not', listing: 'A list or directory to join',
+  backlink: 'Websites that link to them, not you',
+};
+const GAP_ACTION_WORDS: Record<string, string> = { new_page: 'Write a new page', refresh: 'Improve your page', list: 'Get listed', pitch: 'Ask to be added', link: 'Ask for a link', defend: 'Keep it fresh' };
+const GAP_STATUS_WORDS: Record<string, string> = { open: 'Open', started: 'Started', dismissed: 'Not for us', done: 'Done' };
+/** How each kind of gap is known (review UX M11: it was "measured" for every row). */
+const GAP_BASIS: Record<KiGapType, KiBasis> = {
+  missing: 'provider_estimate', untapped: 'provider_estimate', weak: 'provider_estimate', striking: 'measured', strong: 'measured', topic: 'measured', page_type: 'measured',
+  ai_answer: 'measured', listing: 'measured', backlink: 'provider_estimate',
+};
 export const KI_GAP_CSV_COLUMNS = ['gap_id', 'market', 'type', 'keyword', 'competitors', 'your_position', 'action', 'action_target', 'credits', 'status', 'note', 'basis', 'created_at', 'updated_at'] as const;
+export const KI_GAP_CSV_HEADERS: Record<(typeof KI_GAP_CSV_COLUMNS)[number], string> = {
+  gap_id: 'Gap id', market: 'Market', type: 'Kind of gap', keyword: 'Search', competitors: 'Competitors', your_position: 'Your place', action: 'What to do', action_target: 'Where',
+  credits: 'About this many credits', status: 'Status', note: 'Note', basis: 'How we know', created_at: 'Found on', updated_at: 'Updated on',
+};
 export const kiGapCsvRow = (g: KiGapView): string =>
-  kiCsvLine([g.gapId, g.market, g.type, g.keyword ?? '', g.competitorDomains.join('; '), g.clientPosition, g.action, g.actionTarget ?? '', g.credits, g.status, g.sampleNote ?? '', 'measured', g.createdAt, g.updatedAt]);
+  kiCsvLine([
+    g.gapId, g.market, GAP_TYPE_WORDS[g.type] ?? '', g.keyword ?? '', g.competitorDomains.join('; '), g.clientPosition, GAP_ACTION_WORDS[g.action] ?? '', g.actionTarget ?? '', g.credits,
+    GAP_STATUS_WORDS[g.status] ?? '', g.sampleNote ?? '', kiBasisLabel(GAP_BASIS[g.type] ?? 'measured', 'our keyword data'), g.createdAt, g.updatedAt,
+  ]);
+/** The plain-words header row of one CSV, in its stable column order. */
+export const kiCsvHeader = <K extends string>(cols: readonly K[], words: Record<K, string>): string[] => cols.map((c) => words[c] ?? c);
 
 export const kiCsvFileName = (kind: 'competitors' | 'keywords' | 'gaps', domain: string, at = new Date()): string =>
   `${kind}-${S(domain).replace(/[^a-z0-9.-]+/gi, '_')}-${at.toISOString().slice(0, 10)}.csv`;

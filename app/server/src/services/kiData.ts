@@ -13,16 +13,17 @@ import {
   aiPanelSize,
   isClientRole,
   KI_APPROVE_MAX,
-  KI_KILL_KEY,
+  KI_STRIKING_WORDS,
   kiBrandTokens,
   kiCompetitorOrder,
   kiCompetitorView,
+  kiCsvLine,
   kiFacetsOf,
+  kiGapTypesIndex,
   kiGapView,
   kiKeywordComparator,
   kiKeywordMatches,
   kiKeywordView,
-  kiKilled,
   kiMaxCompetitorsOf,
   kiModeOf,
   kiPage,
@@ -30,6 +31,7 @@ import {
   kiQuickWin,
   kiRunView,
   kiSummaryOf,
+  kiSuperseded,
   kiVisible,
   n8nSiteId,
   normKeyword,
@@ -66,7 +68,9 @@ import { HttpError, notFound } from '../lib/errors';
 import { invalidateSite, rows, siteAdmin, siteRows } from '../n8n/client';
 import { settingsRow } from './admin/settings';
 import { quoteCredits } from './billing';
-import { invalidateKi, KI_CACHE_MS, kiCache } from './ki';
+import { invalidateKi, KI_CACHE_MS, kiCache, kiKillSwitch } from './ki';
+
+export { kiKillSwitch };
 import { estimateCost } from './runs';
 
 /** How many rows of each table one read takes at most (a website can hold thousands of keywords). */
@@ -98,15 +102,6 @@ export async function kiState(site: Pick<SiteRow, 'domain'>, user: UserRow | nul
   return { mode, killed, admin, visible: !killed && kiVisible(mode, admin), maxCompetitors: kiMaxCompetitorsOf(row?.ki_max_competitors), monitors: row };
 }
 
-/** seo_cache `ki:kill` = 1, or unreadable: every KI read behaves as Off (fails closed, CONTRACTS §1). */
-export async function kiKillSwitch(): Promise<boolean> {
-  try {
-    return kiKilled(await rows<{ key?: unknown; value?: unknown }>('cache', { filters: [{ columnName: 'key', condition: 'eq', value: KI_KILL_KEY }], max: 3 }));
-  } catch {
-    return true;
-  }
-}
-
 /** The data routes: 404 (as for a website that does not exist) unless the KI pages are visible to this person. */
 export function requireKiVisible(st: KiState): void {
   if (!st.visible) throw notFound('Not found');
@@ -127,6 +122,40 @@ export interface KiData {
 
 const sameDomain = (d: string) => (r: { domain?: unknown }) => String(r?.domain ?? '').trim().toLowerCase() === d;
 
+/**
+ * FX-A (review LOGIC H9, app side): only CURRENT keyword and gap rows are counted or listed. The engine upserts them by key and never deletes,
+ * so the rows a newer run did not write keep their old verdicts. A row is current when it is not marked superseded (FX-L's `superseded_at`,
+ * shared `kiSuperseded`) and, per market, it belongs to the newest delivered run (ok / partial) of its kind that wrote rows into the table.
+ * A row of a run the app does not know (older than the runs read) is stale once a known run wrote the table; with no known run at all, every
+ * unmarked row is kept (nothing to compare with).
+ */
+export function kiCurrentRows<T extends { run_id?: unknown; market?: unknown; superseded_at?: unknown; status?: unknown }>(all: readonly T[], runs: readonly KiRunRow[]): T[] {
+  const live = all.filter((r) => !kiSuperseded(r));
+  const delivered = [...runs]
+    .filter((r) => r.status === 'ok' || r.status === 'partial')
+    .sort((a, b) => String(b.started_at ?? '').localeCompare(String(a.started_at ?? '')));
+  const runOf = new Map(delivered.map((r) => [String(r.run_id ?? ''), r]));
+  const byMarket = new Map<string, T[]>();
+  for (const r of live) {
+    const m = String(r.market ?? '');
+    byMarket.set(m, [...(byMarket.get(m) ?? []), r]);
+  }
+  const out: T[] = [];
+  for (const [, group] of byMarket) {
+    const present = new Set(group.map((r) => String(r.run_id ?? '')));
+    // the newest run of each kind that wrote rows here (research writes keywords and gaps today; the rule does not assume it)
+    const newest = new Map<string, string>();
+    for (const r of delivered) if (present.has(String(r.run_id ?? '')) && !newest.has(String(r.kind))) newest.set(String(r.kind), String(r.run_id));
+    if (!newest.size) {
+      out.push(...group);
+      continue;
+    }
+    const keep = new Set(newest.values());
+    for (const r of group) if (keep.has(String(r.run_id ?? '')) && runOf.has(String(r.run_id ?? ''))) out.push(r);
+  }
+  return out;
+}
+
 export async function kiData(site: Pick<SiteRow, 'domain' | 'brandNames'>): Promise<KiData> {
   const d = site.domain.toLowerCase();
   const tokens = kiBrandTokens(d, site.brandNames ?? []);
@@ -142,12 +171,14 @@ export async function kiData(site: Pick<SiteRow, 'domain' | 'brandNames'>): Prom
     throw err instanceof HttpError ? err : new HttpError(502, 'The SEO engine could not be read right now. Please try again in a minute.', 'engine_unreachable');
   });
   const own = sameDomain(d);
-  const kRows = k.filter(own);
+  const runRows = r.filter(own);
+  const kRows = kiCurrentRows(k.filter(own), runRows);
+  const gRows = kiCurrentRows(g.filter(own), runRows);
   const value: KiData = {
     competitors: c.filter(own).map(kiCompetitorView).filter((x) => x.compDomain).sort(kiCompetitorOrder),
     keywords: kRows.map((x) => kiKeywordView(x, tokens)).filter((x) => x.kwKey && x.keyword),
-    gaps: g.filter(own).map(kiGapView).filter((x) => x.gapId),
-    runs: r.filter(own).map(kiRunView).sort((a, b) => b.startedAt.localeCompare(a.startedAt)),
+    gaps: gRows.map(kiGapView).filter((x) => x.gapId),
+    runs: runRows.map(kiRunView).sort((a, b) => b.startedAt.localeCompare(a.startedAt)),
     keywordRows: new Map(kRows.map((x) => [String(x.kw_key ?? ''), x])),
   };
   kiCache.set(key, { at: Date.now(), value });
@@ -178,11 +209,14 @@ export async function kiCredits(site: Pick<SiteRow, 'domain'>): Promise<KiOvervi
 }
 
 export async function kiOverview(site: SiteRow, user: UserRow | null, role: Role, st: KiState, market?: string): Promise<KiOverview> {
-  const credits = await kiCredits(site);
+  // FX-A: a Trial run is our team's check, quoted and charged 0 credits to the company (services/runs.ts createRun)
+  const credits = st.mode === 'trial' ? { competitors: 0, research: 0 } : await kiCredits(site);
   const base = {
     mode: st.admin ? st.mode : st.mode === 'on' ? ('on' as const) : ('off' as const),
     visible: st.visible,
-    ...(st.admin ? { killed: st.killed } : {}),
+    // FX-A (UX M1): the pause is said to everyone who would see the pages (an On website, or a platform admin), so a client who used them
+    // yesterday reads "paused for maintenance", not "rolling out"; a Trial website still reads as Off to a client (nothing is leaked)
+    ...(st.admin || st.mode === 'on' ? { killed: st.killed } : {}),
     canSwitch: st.admin,
     canAct: st.visible && roleAtLeast(role, 'member') && !isClientRole(role),
     maxCompetitors: st.maxCompetitors,
@@ -212,7 +246,9 @@ export function kiCompetitorsOf(data: KiData, st: Pick<KiState, 'maxCompetitors'
 export function kiKeywordList(data: KiData, q: KiKeywordQuery): { market: string | null; all: KiKeywordView[]; list: KiKeywordView[] } {
   const m = kiMarketFor(data, q.market);
   const all = data.keywords.filter(inMarket(m));
-  const list = all.filter((v) => kiKeywordMatches(v, q)).sort(kiKeywordComparator(q.sort));
+  // FX-A (review UX H2): the gap filter runs here, on every row of the market, so the total, the pager and the empty state agree
+  const gapTypes = q.gapType ? kiGapTypesIndex(data.gaps.filter(inMarket(m))) : undefined;
+  const list = all.filter((v) => kiKeywordMatches(v, q, gapTypes)).sort(kiKeywordComparator(q.sort));
   return { market: m, all, list };
 }
 
@@ -249,7 +285,7 @@ export function kiGapsOf(data: KiData, q: { market?: string; type?: string; stat
 
 /** CSV in chunks of 500 rows (the response is streamed, never built as one string). */
 export function* kiCsvChunks<T>(header: readonly string[], items: readonly T[], line: (x: T) => string, chunk = 500): Generator<string> {
-  yield header.join(',') + '\r\n';
+  yield kiCsvLine(header);
   for (let i = 0; i < items.length; i += chunk) yield items.slice(i, i + chunk).map(line).join('');
 }
 
@@ -389,15 +425,16 @@ export function kiRecommendations(k: KiForRecs | null | undefined): { rec: Recom
         action: { label: k.competitorsFound ? 'Choose competitors' : 'Find competitors', page: 'competitors' },
       },
     });
+  // FX-A (review CONSISTENCY M2): the count is the page's own "Just off page one" (kiQuickWin = the engine's striking flag on a search that fits)
   if (k.quickWins > 0)
     out.push({
       rec: {
         id: 'ki:quick-wins',
         category: 'rankings',
         priority: 'high',
-        title: `${plural(k.quickWins, 'quick win')} found`,
-        detail: 'Searches where your website already shows near the top of Google. A better page for each is the shortest way to more visits.',
-        action: { label: 'See the quick wins', page: 'keywords' },
+        title: `${plural(k.quickWins, 'search', 'searches')} just off page one`,
+        detail: `Searches where your website already shows in ${KI_STRIKING_WORDS}. A better page for each is the shortest way to more visits.`,
+        action: { label: 'See them', page: 'keywords' },
       },
     });
   return out;

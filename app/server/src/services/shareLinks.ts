@@ -1,4 +1,4 @@
-import { isKiStage } from './ki';
+import { kiReportVisible } from './ki';
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import {
   deliveryDecision,
@@ -69,7 +69,8 @@ export async function listShares(orgId: string, reportId: string): Promise<Share
 export async function createShare(o: { org: OrgRow; user: UserRow; reportId: string; days?: unknown }): Promise<{ link: ShareLink; token: string }> {
   const rep = await reportOfOrg(o.org.id, o.reportId);
   // KI (2026-11-08, A1): a Trial run's report is our team's check and never leaves the app, not even by link
-  if (isKiStage(rep.stage) && (rep.summary as Record<string, unknown> | null)?.trial === true) throw notFound('Report not found');
+  // FX-A: the one Trial check (null viewer: a link is for somebody outside, never a platform admin)
+  if (!kiReportVisible(rep, null)) throw notFound('Report not found');
   const now = new Date();
   const live = await db
     .select({ n: sql<number>`count(*)::int` })

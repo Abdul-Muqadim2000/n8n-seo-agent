@@ -28,6 +28,7 @@ import { seal, secretsReady, unseal } from '../lib/secretBox';
 import { sendReportMail } from '../lib/mailer';
 import { baseUrlFor, senderFor } from './portalMail';
 import { createShareForDelivery } from './shareLinks';
+import { kiReportVisible, NOT_KI_TRIAL_REPORT } from './ki';
 
 /**
  * B-R1, report delivery (benchmark programme 2026-10-15, area 12 §4 G-1, §5(a) a3 and §7).
@@ -323,6 +324,8 @@ export async function deliverReport(orgId: string, reportId: string, log: Log, o
   const row = rows[0];
   if (!row) return { delivered: false, reason: 'Unknown report', outcomes: [] };
   const report = { ...row.r, domain: row.domain ?? null };
+  // FX-A (CONSISTENCY H1 a): our team's Trial check never leaves the app and leaves no row in the company's delivery log (like an interim notice)
+  if (!kiReportVisible(report, null)) return { delivered: false, reason: 'Not a report for this company', outcomes: [] };
 
   // the readiness rule applies even to a delivery somebody asked for by hand: `force` skips the settings, never the refusal
   const decision = opts.force ? deliveryDecision(candidateOf(report)) : deliveryDecisionFor(candidateOf(report), s);
@@ -395,7 +398,7 @@ async function sendDigest(org: OrgRow, s: DeliverySettings, since: Date, now: Da
     .select({ r: schema.reports, domain: schema.sites.domain })
     .from(schema.reports)
     .leftJoin(schema.sites, eq(schema.reports.siteId, schema.sites.id))
-    .where(and(eq(schema.reports.orgId, org.id), gte(schema.reports.receivedAt, since), lte(schema.reports.receivedAt, now)))
+    .where(and(eq(schema.reports.orgId, org.id), gte(schema.reports.receivedAt, since), lte(schema.reports.receivedAt, now), NOT_KI_TRIAL_REPORT))
     .orderBy(desc(schema.reports.receivedAt))
     .limit(DELIVERY.maxReportsPerDigest * 2);
 
@@ -404,7 +407,8 @@ async function sendDigest(org: OrgRow, s: DeliverySettings, since: Date, now: Da
   for (const row of rows) {
     const report = { ...row.r, domain: row.domain ?? null };
     const decision = deliveryDecisionFor(candidateOf(report), s);
-    if (decision.code === 'stage_not_chosen' || decision.code === 'interim') continue;   // not asked for, or not a report
+    // not asked for, or not a report (FX-A: a Trial report is our team's, never listed as "held" in the company's digest)
+    if (decision.code === 'stage_not_chosen' || decision.code === 'interim' || decision.code === 'trial') continue;
     if (!decision.deliver) {
       held.push({ reportId: report.id, title: report.title, reason: decision.reason, code: decision.code });
       await record({ orgId: org.id, reportId: report.id, channel: s.webhook.enabled ? 'webhook' : 'email', status: 'held', kind: s.frequency, reason: decision.reason, title: report.title });

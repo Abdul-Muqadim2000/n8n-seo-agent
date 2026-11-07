@@ -91,7 +91,7 @@ vi.mock('../src/services/runs', () => ({ estimateCost: vi.fn(async (input: { mod
 const { kiRoutes } = await import('../src/routes/ki');
 const { kiCache } = await import('../src/services/ki');
 const kiData = await import('../src/services/kiData');
-const { kiCsvLine, KI_VERDICT_IDS } = await import('@seo/shared');
+const { kiCsvLine, KI_VERDICT_IDS, KI_KEYWORD_CSV_COLUMNS } = await import('@seo/shared');
 
 let app: FastifyInstance;
 beforeAll(async () => {
@@ -316,7 +316,9 @@ describe('KI A1: CSV', () => {
     expect(r.headers['content-type']).toMatch(/text\/csv/);
     expect(r.headers['content-disposition']).toMatch(/attachment; filename="keywords-nova-a\.example-\d{4}-\d\d-\d\d\.csv"/);
     const lines = r.body.trim().split('\r\n');
-    expect(lines[0]).toMatch(/^keyword,market,verdict,.*volume_basis.*fetched_at$/);
+    // FX-A (review UX M11): plain-word headers in the stable machine order of KI_KEYWORD_CSV_COLUMNS
+    expect(lines[0]).toMatch(/^"Search","Market","For you",.*"How we know the searches".*"Updated on"$/);
+    expect(lines[0].split(',').length).toBe(KI_KEYWORD_CSV_COLUMNS.length);
     for (const bad of ['=HYPERLINK', '+cmd', '@SUM', '-2+3']) {
       expect(r.body).not.toMatch(new RegExp(`(^|,)"\\${bad.charAt(0)}`, 'm'));
       expect(r.body).toContain(`"'${bad}`);
@@ -326,7 +328,7 @@ describe('KI A1: CSV', () => {
   });
   it('competitors and gaps download too', async () => {
     const c = await get('/competitors.csv');
-    expect(c.body.split('\r\n')[0]).toMatch(/^domain,market,class,/);
+    expect(c.body.split('\r\n')[0]).toMatch(/^"Website","Market","What it is",/);
     expect(c.body).toContain('rival-one.example');
     expect((await get('/gaps.csv')).body).toContain('"g1"');
   });
@@ -442,7 +444,8 @@ describe('KI A1: recommendations, Needs you and API v1 follow the switch', () =>
     const recs = kiData.kiRecommendations(k).map((x) => x.rec);
     expect(recs.map((r) => r.id)).toEqual(['ki:competitors', 'ki:quick-wins']);
     expect(recs[0].action).toEqual({ label: 'Choose competitors', page: 'competitors' });
-    expect(recs[1].title).toMatch(/^\d+ quick wins found$/);
+    // FX-A (review CONSISTENCY M2): named and counted as the section it opens
+    expect(recs[1].title).toMatch(/^\d+ search(es)? just off page one$/);
     for (const r of recs) expect(`${r.title} ${r.detail}`).not.toMatch(/[—–…‘’“”]/);
     const needs = kiData.kiNeedsYou(k);
     expect(needs.map((n) => [n.id, n.kind])).toEqual([['ki:competitors', 'ki'], ['ki:quick-wins', 'ki']]);

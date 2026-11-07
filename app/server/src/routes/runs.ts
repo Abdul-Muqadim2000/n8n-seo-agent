@@ -1,4 +1,4 @@
-import { kiReportVisible } from '../services/ki';
+import { kiReportConds, kiReportVisible, kiRunConds, kiRunVisible } from '../services/ki';
 import { and, desc, eq, inArray, lt, type SQL } from 'drizzle-orm';
 import { audit } from '../services/audit';
 import type { FastifyInstance, FastifyReply } from 'fastify';
@@ -67,7 +67,8 @@ export async function runRoutes(app: FastifyInstance) {
     const a = await orgAccess(req, (req.params as P).orgId);
     const q = req.query as { siteId?: string; mode?: string; status?: string; cursor?: string; limit?: string };
     const limit = Math.min(Math.max(Number(q.limit) || 25, 1), 100);
-    const conds: SQL[] = [eq(schema.runs.orgId, a.org.id)];
+    // FX-A: our team's Trial runs only for a platform admin (before the limit, so a page is never short)
+    const conds: SQL[] = [eq(schema.runs.orgId, a.org.id), ...kiRunConds(a.user)];
     if (q.siteId && isUuid(q.siteId)) conds.push(eq(schema.runs.siteId, q.siteId));
     if (q.mode && (MODE_IDS as readonly string[]).includes(q.mode)) conds.push(eq(schema.runs.mode, q.mode));
     if (q.status === 'active') conds.push(inArray(schema.runs.status, ['submitting', 'accepted', 'running']));
@@ -94,10 +95,11 @@ export async function runRoutes(app: FastifyInstance) {
     const a = await orgAccess(req, p.orgId);
     if (!isUuid(p.runId)) throw notFound('Run not found');
     const row = await getRunOrThrow(a.org.id, p.runId);
+    // FX-A: a Trial run is the same 404 as a run that does not exist, for anyone who is not a platform admin
+    if (!kiRunVisible(row, a.user)) throw notFound('Run not found');
     // R-A3: a check joined to the website's open run shows that run's report once it has arrived
-    const [run, reports, joined] = await Promise.all([runWithNames(p.runId), reportsList(a.org.id, { runId: p.runId, limit: 100 }), runJoinedResult(a.org.id, row)]);
-    // KI (A1): a Trial run's reports are for platform admins only
-    return { run: run!, reports: reports.filter((r) => kiReportVisible(r, a.user)).reverse(), ...(joined ? { joined } : {}) };
+    const [run, reports, joined] = await Promise.all([runWithNames(p.runId), reportsList(a.org.id, { runId: p.runId, limit: 100, viewer: a.user }), runJoinedResult(a.org.id, row)]);
+    return { run: run!, reports: reports.reverse(), ...(joined ? { joined } : {}) };
   });
 
   // G5: reports are part of the client portal (client viewers and approvers read them; files are rebranded below)
@@ -109,16 +111,17 @@ export async function runRoutes(app: FastifyInstance) {
       stages: q.stage ? q.stage.split(',').slice(0, 10) : undefined,
       limit: Number(q.limit) || 50,
       before: q.before && !Number.isNaN(Date.parse(q.before)) ? new Date(q.before) : undefined,
+      // FX-A: a Trial run's reports are for platform admins only, filtered in the read itself (L13: a page is never short)
+      viewer: a.user,
     });
-    // KI (A1): a Trial run's reports are for platform admins only (the same 404 as a report that does not exist)
-    return list.filter((r) => kiReportVisible(r, a.user));
+    return list;
   });
 
   app.get('/api/orgs/:orgId/reports/:reportId', async (req): Promise<ReportDetail> => {
     const p = req.params as P;
     const a = await orgAccess(req, p.orgId, 'client_viewer');
     if (!isUuid(p.reportId)) throw notFound('Report not found');
-    const row = await db.query.reports.findFirst({ where: and(eq(schema.reports.orgId, a.org.id), eq(schema.reports.id, p.reportId)) });
+    const row = await db.query.reports.findFirst({ where: and(eq(schema.reports.orgId, a.org.id), eq(schema.reports.id, p.reportId), ...kiReportConds(a.user)) });
     if (!row || !kiReportVisible(row, a.user)) throw notFound('Report not found');
     const [files, site] = await Promise.all([filesFor([row.id]), row.siteId ? db.query.sites.findFirst({ where: eq(schema.sites.id, row.siteId) }) : Promise.resolve(undefined)]);
     // G5: a client person gets no cost figures, and in a white-label workspace no file we cannot rebrand (the engine's PDF: the

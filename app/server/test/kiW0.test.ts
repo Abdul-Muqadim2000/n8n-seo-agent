@@ -14,6 +14,8 @@ import { noResultOf, runOutcome } from '../src/services/runs';
 const site = { domain: 'nova-ki.example' };
 const user = { id: 'u1', email: 'a@nova-ki.example' } as never;
 const rows = (ki_mode: unknown) => async () => [{ domain: site.domain, ki_mode } as never];
+// FX-A: the kill switch is read before a run starts (PERF_SAFETY L3); off in these cases unless said
+const live = async () => false;
 const fails = async () => {
   throw new Error('engine down');
 };
@@ -22,27 +24,42 @@ const codeOf = async (p: Promise<unknown>) => p.then(() => 'ok', (e: { statusCod
 describe('KI W0: who may start a keyword-intelligence run', () => {
   it('On: anyone the run route lets in; Trial: platform admins only; Off, empty or unknown: nobody', async () => {
     st.platform = false;
-    expect(await codeOf(assertKiRunAllowed({ mode: 'competitors' }, site, user, rows('on')))).toBe('ok');
-    expect(await codeOf(assertKiRunAllowed({ mode: 'keyword_research' }, site, user, rows('trial')))).toBe('403 ki_not_available');
-    expect(await codeOf(assertKiRunAllowed({ mode: 'competitors' }, site, user, rows('')))).toBe('403 ki_not_available');
-    expect(await codeOf(assertKiRunAllowed({ mode: 'competitors' }, site, user, rows('shadow')))).toBe('403 ki_not_available');
+    expect(await codeOf(assertKiRunAllowed({ mode: 'competitors' }, site, user, rows('on'), live))).toBe('ok');
+    expect(await codeOf(assertKiRunAllowed({ mode: 'keyword_research' }, site, user, rows('trial'), live))).toBe('403 ki_not_available');
+    expect(await codeOf(assertKiRunAllowed({ mode: 'competitors' }, site, user, rows(''), live))).toBe('403 ki_not_available');
+    expect(await codeOf(assertKiRunAllowed({ mode: 'competitors' }, site, user, rows('shadow'), live))).toBe('403 ki_not_available');
     st.platform = true;
-    expect(await codeOf(assertKiRunAllowed({ mode: 'keyword_research' }, site, user, rows(' Trial ')))).toBe('ok');
-    expect(await codeOf(assertKiRunAllowed({ mode: 'competitors' }, site, user, rows('off')))).toBe('403 ki_not_available');
+    expect(await codeOf(assertKiRunAllowed({ mode: 'keyword_research' }, site, user, rows(' Trial '), live))).toBe('ok');
+    expect(await codeOf(assertKiRunAllowed({ mode: 'competitors' }, site, user, rows('off'), live))).toBe('403 ki_not_available');
     st.platform = false;
   });
   it('an engine that cannot be read starts nothing (409), and every other mode is untouched', async () => {
-    expect(await codeOf(assertKiRunAllowed({ mode: 'competitors' }, site, user, fails))).toBe('409 ki_mode_unknown');
+    expect(await codeOf(assertKiRunAllowed({ mode: 'competitors' }, site, user, fails, live))).toBe('409 ki_mode_unknown');
     expect(await kiModeFor(site.domain, fails)).toBeNull();
     expect(await kiModeFor(site.domain, async () => [])).toBe('off');
-    expect(await codeOf(assertKiRunAllowed({ mode: 'backlinks' }, site, user, fails))).toBe('ok');
-    expect(await codeOf(assertKiRunAllowed({ mode: 'competitors' }, null, user, rows('on')))).toBe('400 bad_request');
+    expect(await codeOf(assertKiRunAllowed({ mode: 'backlinks' }, site, user, fails, live))).toBe('ok');
+    expect(await codeOf(assertKiRunAllowed({ mode: 'competitors' }, null, user, rows('on'), live))).toBe('400 bad_request');
   });
   it('the guard sits in the run path before anything is quoted or started', () => {
     const src = readFileSync(join(__dirname, '../src/services/runs.ts'), 'utf8');
-    const at = src.indexOf('await assertKiRunAllowed(input, site, user);');
+    const at = src.indexOf('const kiRun = await assertKiRunAllowed(input, site, user);');
     expect(at).toBeGreaterThan(0);
     expect(at).toBeLessThan(src.indexOf('const estimated = await estimateCost(input, site);'));
+  });
+});
+
+describe('FX-A: the start answers whether the run is a Trial run, and refuses while the kill switch is on', () => {
+  it('Trial for a platform admin = trial (charged 0); On = not; killed or unreadable switch = 409 ki_paused, nothing starts', async () => {
+    st.platform = true;
+    expect(await assertKiRunAllowed({ mode: 'competitors' }, site, user, rows('trial'), live)).toEqual({ trial: true });
+    expect(await assertKiRunAllowed({ mode: 'competitors' }, site, user, rows('on'), live)).toEqual({ trial: false });
+    expect(await codeOf(assertKiRunAllowed({ mode: 'competitors' }, site, user, rows('on'), async () => true))).toBe('409 ki_paused');
+    expect(await assertKiRunAllowed({ mode: 'backlinks' }, site, user, fails, async () => true)).toEqual({ trial: false });
+    st.platform = false;
+  });
+  it('the mode is read from the website\'s own row (PERF_SAFETY L8), not the first row the engine returns', async () => {
+    const two = async () => [{ domain: 'other.example', ki_mode: 'on' } as never, { domain: site.domain, ki_mode: 'off' } as never];
+    expect(await kiModeFor(site.domain, two)).toBe('off');
   });
 });
 

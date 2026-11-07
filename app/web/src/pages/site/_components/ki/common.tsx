@@ -1,38 +1,66 @@
-// KI (2026-11-08, DESIGN.md §6): the pieces both new pages share: the trial banner, the run notes (partial run, out of credits, paused),
-// the "run it" button with its credits, a number with its "what this means" tip and how it was found, the score with its factors, and
-// the page shown where the website's KI is not visible.
-import type { ReactNode } from 'react';
+// KI (2026-11-08, DESIGN.md §6): the pieces both new pages share: the trial banner, the run notes (partial run, out of credits, paused, a run
+// that did not start), the "run it" button with its credits, a number with its "what this means" tip and how it was found, the score with
+// its factors, the next-step links, the "show all" of a long list, and the page shown where the website's KI is not visible.
+import { useId, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { Coins, EyeOff, FlaskConical, Info, PauseCircle, Play } from 'lucide-react';
-import { KI_VERDICTS, MODES, type KiRunMode } from '@seo/shared';
+import { ArrowRight, ChevronDown, Coins, EyeOff, FlaskConical, Info, PauseCircle, Play } from 'lucide-react';
+import { MODES, type KiRunMode } from '@seo/shared';
 import { formatCredits, quoteLabel } from '@/lib/credits';
 import { runCost } from '@/lib/prices';
 import { paths } from '@/lib/paths';
-import { KI_FACTOR_WORDS, kiMarketName, kiOutOfCredits, kiPartialNote, kiScoreText, type KiKw, type KiOverview } from '@/lib/ki';
-import { fmtDate } from '@/lib/utils';
+import {
+  KI_FACTOR_WORDS,
+  kiActionLink,
+  kiFactorLevel,
+  kiMarketName,
+  kiOutOfCredits,
+  kiPartialNote,
+  kiRecentRun,
+  kiScoreText,
+  kiStopNote,
+  kiUpdatedWords,
+  type KiKw,
+  type KiOverview,
+} from '@/lib/ki';
+import { cn, fmtDate } from '@/lib/utils';
 import { ButtonLink } from '@/components/ui/button';
 import { Callout, EmptyState } from '@/components/ui/feedback';
 import { InfoTip } from '@/components/insight';
 import { useSitePage } from '../kit';
 
-/** Tap targets of 40 px on phones (the kit's small buttons are 32 px). */
-export const TAP = 'max-sm:h-10 max-sm:px-3.5';
+/** Tap targets of 40 px on phones and touch tablets (review UX M5: up to md, the kit's small buttons are 32 px). */
+export const TAP = 'max-md:h-10 max-md:px-3.5';
+/** A 40 px hit area around the 20 px "?" of a tip (review UX M5), drawn by an invisible ::after, so nothing moves. */
+export const KI_TIP = "after:absolute after:-inset-2.5 after:rounded-full after:content-['']";
 
+/** The credits of a run of this page, or "free" for our team's Trial run (quoted 0 to the company). */
 export function kiCreditsText(o: KiOverview | undefined, kind: KiRunMode): string {
+  if (o?.mode === 'trial') return 'free trial run';
   const c = kind === 'competitors' ? o?.credits.competitors : o?.credits.research;
   return c != null && c > 0 ? formatCredits(c) : quoteLabel(runCost(kind));
 }
 
-/** Start (or refresh) the run of this page: the tool form, where the credits are shown again before anything starts. */
-export function KiRunButton({ kind, o, refresh, variant = 'primary' }: { kind: KiRunMode; o: KiOverview | undefined; refresh?: boolean; variant?: 'primary' | 'secondary' }) {
+/**
+ * Start (or refresh) the run of this page: the tool form, where the credits are shown again before anything starts. FX-A: hidden while the
+ * stored results are loading or could not be read (review UX M2: never a paid run offered for data that exists), "again" read from the last
+ * run (not from the rows on screen, L10), and the quiet secondary style with "Updated today" while the last run is under 7 days old (M3).
+ */
+export function KiRunButton({ kind, o, ready = true }: { kind: KiRunMode; o: KiOverview | undefined; ready?: boolean }) {
   const { can, tool } = useSitePage();
-  if (!can('member') || o?.killed) return null;
-  const label = kind === 'competitors' ? (refresh ? 'Check my competitors again' : 'Find my competitors') : refresh ? 'Research my keywords again' : 'Research my keywords';
+  if (!can('member') || o?.killed || !ready) return null;
+  const run = o?.lastRuns[kind];
+  const again = !!run && (run.status === 'ok' || run.status === 'partial');
+  const recent = kiRecentRun(run);
+  const label = kind === 'competitors' ? (again ? 'Check my competitors again' : 'Find my competitors') : again ? 'Research my keywords again' : 'Research my keywords';
   return (
-    <ButtonLink to={tool(kind)} variant={variant} icon={<Play className="size-4" />} className={TAP}>
-      {label}
-      <span className="font-normal opacity-80">({kiCreditsText(o, kind)})</span>
-    </ButtonLink>
+    <span className="inline-flex flex-wrap items-center gap-2">
+      {recent && <span className="text-xs text-ink-3">{kiUpdatedWords(run)}</span>}
+      <ButtonLink to={tool(kind)} variant={recent ? 'secondary' : 'primary'} icon={<Play className="size-4" />} className={TAP}>
+        {label}
+        {/* review UX L1: full opacity (4.5:1 on blue), the weight says it is secondary */}
+        <span className="font-normal">({kiCreditsText(o, kind)})</span>
+      </ButtonLink>
+    </span>
   );
 }
 
@@ -41,25 +69,16 @@ export function KiTrialBanner({ o }: { o: KiOverview | undefined }) {
   if (o?.mode !== 'trial') return null;
   return (
     <Callout tone="info" title="Trial: only platform admins see this">
-      The client sees nothing new on this website until the setting is switched to On in Website settings.
+      The client sees nothing new on this website until the setting is switched to On in Website settings. Trial runs are free for the client.
     </Callout>
   );
 }
 
-/** Calm notes about the latest run: paused, out of credits, a part that could not be read. */
+/** Calm notes about the latest run: out of credits, a part that could not be read, a run that did not start or finish (with what to do). */
 export function KiRunNotes({ o, kind }: { o: KiOverview | undefined; kind: KiRunMode }) {
-  const { org } = useSitePage();
+  const { org, site, tool, page } = useSitePage();
   const run = o?.lastRuns[kind];
   const notes: ReactNode[] = [];
-  if (o?.killed)
-    notes.push(
-      <Callout key="k" tone="warning" title="Paused for maintenance">
-        <span className="inline-flex items-start gap-1.5">
-          <PauseCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
-          New runs are paused for a short while. What you see below is kept. Nothing is charged while it is paused.
-        </span>
-      </Callout>,
-    );
   if (kiOutOfCredits(run))
     notes.push(
       <Callout
@@ -75,17 +94,38 @@ export function KiRunNotes({ o, kind }: { o: KiOverview | undefined; kind: KiRun
         The last run stopped before it started spending. Add credits, then run it again. Nothing was charged.
       </Callout>,
     );
+  const stop = kiStopNote(run, { siteCountry: site.country });
+  if (stop)
+    notes.push(
+      <Callout
+        key="s"
+        tone="info"
+        title={stop.title}
+        action={
+          stop.action ? (
+            <span className="flex flex-wrap gap-2">
+              {stop.action.to === 'run' && (
+                <ButtonLink to={tool(kind, site.country ? { country: site.country } : undefined)} variant="secondary" size="sm" className={TAP}>
+                  {stop.action.label}
+                </ButtonLink>
+              )}
+              {/market|country/i.test(run?.reason ?? '') && (
+                <ButtonLink to={page('settings')} variant="ghost" size="sm" className={TAP}>
+                  Website settings
+                </ButtonLink>
+              )}
+            </span>
+          ) : undefined
+        }
+      >
+        {stop.text}
+      </Callout>,
+    );
   const partial = kiPartialNote(run);
   if (partial)
     notes.push(
       <Callout key="p" tone="info" title="Part of the last reading is missing">
         {partial}
-      </Callout>,
-    );
-  if (run && run.status === 'failed' && !kiOutOfCredits(run))
-    notes.push(
-      <Callout key="f" tone="info" title="The last run could not finish">
-        Nothing was charged for it. What you see below is from the run before it, if there was one.
       </Callout>,
     );
   return notes.length ? <div className="space-y-3">{notes}</div> : null;
@@ -96,7 +136,7 @@ export function KiFigure({ value, tip, basis, className }: { value: ReactNode; t
   return (
     <span className={className ?? 'inline-flex items-center gap-0.5 whitespace-nowrap'}>
       <span className="tabular">{value}</span>
-      <InfoTip label="What this means">
+      <InfoTip label="What this means" className={KI_TIP}>
         {tip}
         {basis && <span className="mt-1 block text-xs opacity-80">How we know: {basis}</span>}
       </InfoTip>
@@ -104,7 +144,10 @@ export function KiFigure({ value, tip, basis, className }: { value: ReactNode; t
   );
 }
 
-/** The score with its likely range; the factors behind it on hover or tap (never shown as raw codes). */
+/**
+ * The score with its likely range; the factors behind it on hover or tap, one plain line each ("Fits what you sell: high"), never codes.
+ * FX-A (review UX H1): the factors are read from the server's nested shape (lib/ki.ts kiKwOf), so all of them show.
+ */
 export function KiScore({ r }: { r: Pick<KiKw, 'score' | 'scoreLow' | 'scoreHigh' | 'factors' | 'lowConfidence' | 'verdict'> }) {
   if (r.score == null) return <span className="text-ink-3">-</span>;
   const f = r.factors;
@@ -112,17 +155,18 @@ export function KiScore({ r }: { r: Pick<KiKw, 'score' | 'scoreLow' | 'scoreHigh
   return (
     <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
       <span className="font-medium tabular text-ink">{kiScoreText(r.score, r.scoreLow, r.scoreHigh)}</span>
-      <InfoTip label="What makes up this score">
-        <span className="block font-medium">Score out of 100 for {KI_VERDICTS[r.verdict].toLowerCase()}</span>
-        <span className="mt-1 block">How it is made up (each from 0 to 100):</span>
-        <span className="mt-1 block space-y-0.5">
-          {rows.map((k) => (
-            <span key={k} className="flex justify-between gap-4">
-              <span>{KI_FACTOR_WORDS[k]}</span>
-              <span className="tabular">{Math.round((f[k] ?? 0) * 100)}</span>
-            </span>
-          ))}
-        </span>
+      <InfoTip label="What makes up this score" className={KI_TIP}>
+        <span className="block font-medium">How this score of {Math.round(r.score)} is made</span>
+        {rows.length > 0 && (
+          <span className="mt-1 block space-y-0.5">
+            {rows.map((k) => (
+              <span key={k} className="flex justify-between gap-4">
+                <span>{KI_FACTOR_WORDS[k]}</span>
+                <span>{kiFactorLevel(f[k] ?? 0)}</span>
+              </span>
+            ))}
+          </span>
+        )}
         {r.lowConfidence && <span className="mt-1 block">The range is wide: we are less sure about this one.</span>}
         <span className="mt-1 block text-xs opacity-80">How we know: our estimate</span>
       </InfoTip>
@@ -130,16 +174,16 @@ export function KiScore({ r }: { r: Pick<KiKw, 'score' | 'scoreLow' | 'scoreHigh
   );
 }
 
-/** Off sites never reach the page (no link anywhere); a typed address says it plainly. */
-export function KiNotAvailable({ title }: { title: string }) {
+/** Off sites never reach the page (no link anywhere); a typed address says it plainly. Paused (kill switch): said as a pause. */
+export function KiNotAvailable({ title, paused }: { title: string; paused?: boolean }) {
   const { page } = useSitePage();
   return (
     <div className="rounded-xl border border-line bg-surface shadow-card">
       <EmptyState
         titleAs="h1"
-        icon={<EyeOff className="size-5" />}
-        title={`${title} is not available for this website yet`}
-        description="It is rolling out to selected websites. Ask us if you would like it for yours."
+        icon={paused ? <PauseCircle className="size-5" /> : <EyeOff className="size-5" />}
+        title={paused ? `${title} is paused for maintenance` : `${title} is not available for this website yet`}
+        description={paused ? 'It is back shortly, with your results as they were. Nothing is charged while it is paused.' : 'It is rolling out to selected websites. Ask us if you would like it for yours.'}
         action={<ButtonLink to={page('overview')}>Back to the overview</ButtonLink>}
       />
     </div>
@@ -162,25 +206,50 @@ export function KiTrialIcon() {
   return <FlaskConical className="size-4" aria-hidden />;
 }
 
-/** Start buttons of the plan and the gaps: disabled with "Coming soon" until the start step ships (the server says when). */
-export function KiStartButton({ ready, onStart, pending, credits, label = 'Start' }: { ready: boolean; onStart: () => void; pending?: boolean; credits?: number | null; label?: string }) {
-  const { can } = useSitePage();
+/**
+ * FX-A (review UX H4): a plan step, a gap or the hero's next step, done now: it opens the existing tool or page with the search filled in
+ * (lib/ki.ts kiActionLink). Members and above only; nothing when no tool fits (never a dead "Coming soon").
+ */
+export function KiActionButton({ kind, keyword, target, variant = 'secondary', className }: { kind: string; keyword?: string | null; target?: string | null; variant?: 'primary' | 'secondary'; className?: string }) {
+  const { org, site, can, tool, page } = useSitePage();
   if (!can('member')) return null;
-  if (!ready)
-    return (
-      <span className="inline-flex items-center gap-1.5 text-xs text-ink-3" title="Starting from here is coming soon. For now, start it from the Pipeline or the tools.">
-        <button type="button" disabled aria-disabled className="inline-flex h-10 cursor-not-allowed items-center rounded-lg border border-line px-3 text-[13px] font-medium text-ink-3 opacity-70 sm:h-8">
-          {label}
-        </button>
-        Coming soon
-      </span>
-    );
+  const a = kiActionLink(kind, { keyword, target, domain: site.domain });
+  if (!a) return null;
+  const to = a.kind === 'tool' ? tool(a.mode, a.prefill) : a.kind === 'ladder' ? paths.newLadder(org.id, site.id, { keyword: a.keyword }) : `${page(a.page)}${a.hash ? `#${a.hash}` : ''}`;
   return (
-    <button type="button" onClick={onStart} disabled={pending} className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-accent px-3 text-[13px] font-medium text-accent-ink shadow-card transition-colors duration-150 ease-brand hover:bg-accent-hover disabled:opacity-60 sm:h-8">
-      {label}
-      {credits != null && credits > 0 && <span className="font-normal opacity-80">({formatCredits(credits)})</span>}
-    </button>
+    <ButtonLink to={to} variant={variant} size="sm" icon={<ArrowRight className="size-4" />} className={cn(TAP, className)}>
+      {a.label}
+    </ButtonLink>
   );
+}
+
+/**
+ * The "Show all N" of a long list (review UX H5): phones show `phone` items, wider screens `wide`; one button opens the rest. Use the
+ * returned `cls(i)` on each item and render `button` under the list.
+ */
+export function useShowAll(count: number, phone = 5, wide = phone) {
+  const [all, setAll] = useState(false);
+  const id = useId();
+  const cls = (i: number) => (all ? '' : i >= wide ? 'hidden' : i >= phone ? 'max-sm:hidden' : '');
+  const needWide = count > wide;
+  const needPhone = count > phone;
+  const button =
+    needWide || needPhone ? (
+      <button
+        type="button"
+        aria-expanded={all}
+        aria-controls={id}
+        onClick={() => setAll((v) => !v)}
+        className={cn(
+          'mt-2 inline-flex min-h-10 items-center gap-1.5 rounded-md px-1 text-[13px] font-medium text-accent-text hover:underline sm:min-h-8',
+          !all && !needWide && 'sm:hidden',
+        )}
+      >
+        {all ? 'Show fewer' : `Show all ${count.toLocaleString('en-US')}`}
+        <ChevronDown className={cn('size-4 transition-transform duration-200 ease-brand', all && 'rotate-180')} aria-hidden />
+      </button>
+    ) : null;
+  return { all, cls, button, listId: id };
 }
 
 /** The guide link that sits next to a section heading. */

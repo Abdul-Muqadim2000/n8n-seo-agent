@@ -339,9 +339,12 @@ export async function billingOverview(org: OrgRow, now = new Date()): Promise<Bi
     where org_id = ${org.id}::uuid and kind = 'usage' and created_at >= ${tsv(since)} and ${ORIGIN} = 'autopilot' group by 1`);
   const usedOn = new Map(perSite.map((r) => [r.domain.toLowerCase().replace(/^www\./, ''), Math.max(0, r2(Number(r.used)))]));
 
+  // FX-A: our team's Trial runs (quoted and charged 0) never show as a feature row of the company's usage (the same mark as services/ki.ts)
   const features = await execRows<{ mode: string; origin: string; used: number; n: number }>(db, sql`
     select coalesce(ref->>'mode', '') as mode, ${ORIGIN} as origin, (-sum(credits))::float as used, count(*) filter (where credits < 0)::int as n
-    from ${schema.creditLedger} where org_id = ${org.id}::uuid and kind = 'usage' and created_at >= ${tsv(since)} group by 1, 2`);
+    from ${schema.creditLedger} where org_id = ${org.id}::uuid and kind = 'usage' and created_at >= ${tsv(since)}
+      and not exists (select 1 from ${schema.runs} ru where ru.id::text = ref->>'runId' and coalesce(ru.input->>'kiTrial', '') = 'true')
+    group by 1, 2`);
   const byFeature = new Map<string, BillingOverview['byFeature'][number]>();
   for (const f of features) {
     const label = featureLabel(f.mode);

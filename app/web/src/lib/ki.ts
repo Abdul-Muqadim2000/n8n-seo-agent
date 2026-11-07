@@ -10,7 +10,9 @@ import {
   KI_SCORED_CLASSES,
   KI_STAGE_WEIGHT,
   kiBasisLabel,
+  kiGateWords,
   kiModeOf,
+  kiQuestionText,
   kiVerdict,
   MODES,
   type KiBasis,
@@ -105,7 +107,7 @@ export interface KiOverview {
 export interface KiSummaryCounts {
   market: string;
   competitors: { total: number; chosen: number; watch: number; candidates: number; listings: number; platforms: number; confirmed: boolean };
-  keywords: { total: number; byVerdict: Partial<Record<KiVerdict, number>>; striking: number; quickWins: number; questions: number; clusters: number };
+  keywords: { total: number; byVerdict: Partial<Record<KiVerdict, number>>; headsByVerdict: Partial<Record<KiVerdict, number>> | null; striking: number; quickWins: number; questions: number; clusters: number };
   gaps: { open: number; byType: Partial<Record<KiGapType, number>> };
   fetchedAt: string | null;
 }
@@ -119,7 +121,7 @@ function summaryOf(v: unknown): KiSummaryCounts | null {
   return {
     market: str(v.market),
     competitors: { total: n(c, 'total'), chosen: n(c, 'chosen'), watch: n(c, 'watch'), candidates: n(c, 'candidates'), listings: n(c, 'listings'), platforms: n(c, 'platforms'), confirmed: bool(c.confirmed) },
-    keywords: { total: n(k, 'total'), byVerdict: numMap(k.byVerdict ?? k.by_verdict), striking: n(k, 'striking'), quickWins: n(k, 'quickWins'), questions: n(k, 'questions'), clusters: n(k, 'clusters') },
+    keywords: { total: n(k, 'total'), byVerdict: numMap(k.byVerdict ?? k.by_verdict), headsByVerdict: isObj(k.headsByVerdict) ? numMap(k.headsByVerdict) : null, striking: n(k, 'striking'), quickWins: n(k, 'quickWins'), questions: n(k, 'questions'), clusters: n(k, 'clusters') },
     gaps: { open: n(g, 'open'), byType: numMap(g.byType ?? g.by_type) },
     fetchedAt: str(v.fetchedAt ?? v.fetched_at) || null,
   };
@@ -301,6 +303,7 @@ export interface KiKw {
   stageEvidence: string;
   needsReview: boolean;
   gate: 'pass' | 'fail';
+  /** why it is "Not for you", always in plain words (the server's words, else ours from the code; never the engine's detail) */
   gateReason: string;
   factors: { fit: number | null; demand: number | null; win: number | null; value: number | null; gap: number | null; stageW: number | null };
   score: number | null;
@@ -329,7 +332,10 @@ const gscOf = (o: Obj): Obj => (isObj(o.gsc) ? o.gsc : {});
 export function kiKwOf(o: Obj): KiKw {
   const stage = str(pick(o, 'stage')) as KiStage;
   const gate = str(pick(o, 'gate')) === 'fail' ? 'fail' : 'pass';
-  const win = num(pick(o, 'win'));
+  // FX-A (review UX H1): A1 sends the factors nested (`factors: {fit, demand, win, value, gap}`); a stored row has them at the top level
+  const fo = isObj(o.factors) ? o.factors : {};
+  const factor = (k: string) => num(fo[k] ?? pick(o, k));
+  const win = factor('win');
   const verdictRaw = str(pick(o, 'verdict')) as KiVerdict;
   const ev = pick(o, 'stage_evidence') ?? pick(o, 'stage_evidence_json');
   const evParsed = kiJson<unknown>(ev, '');
@@ -350,8 +356,8 @@ export function kiKwOf(o: Obj): KiKw {
     stageEvidence: typeof evParsed === 'string' ? evParsed : isObj(evParsed) ? str(evParsed.text ?? evParsed.summary ?? '') : Array.isArray(evParsed) ? evParsed.map(str).join(' ') : '',
     needsReview: bool(pick(o, 'needs_review')),
     gate,
-    gateReason: str(pick(o, 'gate_reason')),
-    factors: { fit: num(pick(o, 'fit')), demand: num(pick(o, 'demand')), win, value: num(pick(o, 'value')), gap: num(pick(o, 'gap')), stageW: stage in KI_STAGE_WEIGHT ? KI_STAGE_WEIGHT[stage] : null },
+    gateReason: gate === 'fail' ? kiGateWords(pick(o, 'gate_reason'), pick(o, 'gate_code')) : '',
+    factors: { fit: factor('fit'), demand: factor('demand'), win, value: factor('value'), gap: factor('gap'), stageW: stage in KI_STAGE_WEIGHT ? KI_STAGE_WEIGHT[stage] : null },
     score: num(pick(o, 'score')),
     scoreLow: num(pick(o, 'score_low')),
     scoreHigh: num(pick(o, 'score_high')),
@@ -405,10 +411,12 @@ export interface KiKwFilter {
   minVolume: string;
   gapType: '' | KiGapType;
   brand: '' | 'brand' | 'non_brand';
+  /** only the searches just off page one (the "See all" of that section) */
+  striking: boolean;
   sort: 'score' | 'volume' | 'keyword';
   page: number;
 }
-export const KI_KW_FILTER_EMPTY: KiKwFilter = { stage: '', verdict: '', source: '', cluster: '', minVolume: '', gapType: '', brand: '', sort: 'score', page: 1 };
+export const KI_KW_FILTER_EMPTY: KiKwFilter = { stage: '', verdict: '', source: '', cluster: '', minVolume: '', gapType: '', brand: '', striking: false, sort: 'score', page: 1 };
 export const KI_PAGE_SIZE = 50;
 
 /** The query string the keywords route takes (CONTRACTS.md §7); empty filters are left out. */
@@ -421,25 +429,12 @@ export function kiKwParams(f: KiKwFilter): Record<string, string> {
   if (f.cluster) p.cluster = f.cluster;
   if (f.minVolume) p.min_volume = f.minVolume;
   if (f.brand) p.brand = f.brand;
-  if (f.gapType) p.gap_type = f.gapType;   // not filtered by the server yet: the rows shown are filtered here (kiFilterKeywords)
+  // FX-A (review UX H2): filtered on the server like every other filter, so the count, the pager and the empty state agree
+  if (f.gapType) p.gap_type = f.gapType;
+  if (f.striking) p.striking = '1';
   return p;
 }
-export const kiActiveFilters = (f: KiKwFilter): number => (['stage', 'verdict', 'source', 'cluster', 'minVolume', 'gapType', 'brand'] as const).filter((k) => !!f[k]).length;
-
-/** The same filters applied to the rows shown (an older server that ignores a filter still shows the right rows on this page). */
-export function kiFilterKeywords(rows: readonly KiKw[], f: KiKwFilter, gapTypesByKey: ReadonlyMap<string, readonly string[]> = new Map()): KiKw[] {
-  const min = Number(f.minVolume) || 0;
-  return rows.filter(
-    (r) =>
-      (!f.stage || r.stage === f.stage) &&
-      (!f.verdict || r.verdict === f.verdict) &&
-      (!f.source || r.sources.some((s) => s.source === f.source)) &&
-      (!f.cluster || r.clusterId === f.cluster) &&
-      (!min || (r.volume ?? r.gscImpressions ?? 0) >= min) &&
-      (!f.brand || (f.brand === 'brand' ? r.brand : !r.brand)) &&
-      (!f.gapType || (gapTypesByKey.get(r.key) ?? []).includes(f.gapType)),
-  );
-}
+export const kiActiveFilters = (f: KiKwFilter): number => (['stage', 'verdict', 'source', 'cluster', 'minVolume', 'gapType', 'brand', 'striking'] as const).filter((k) => !!f[k]).length;
 
 /** The groups (one head each), by score; members counted from the rows or the stored group size. */
 export function kiClustersOf(rows: readonly KiKw[]) {
@@ -451,18 +446,22 @@ export function kiClustersOf(rows: readonly KiKw[]) {
     .sort((a, b) => (b.head.score ?? -1) - (a.head.score ?? -1) || a.head.keyword.localeCompare(b.head.keyword));
 }
 
-/** Searches you already show up for just off the first page (one definition, DESIGN.md §3.11: places 8 to 20). */
+/**
+ * Searches you already show up for just off the first page. FX-A (review CONSISTENCY M2): ONE definition, the engine's (shared KI_STRIKING),
+ * read from the row's `striking` flag only (no second rule here), on searches that fit the business (the server's kiQuickWin).
+ */
 export const kiStrikingOf = (rows: readonly KiKw[]) =>
-  rows.filter((r) => r.striking || (r.gscPosition != null && r.gscPosition >= 8 && r.gscPosition <= 20 && (r.gscImpressions ?? 0) >= 30)).sort((a, b) => (b.gscImpressions ?? 0) - (a.gscImpressions ?? 0)).slice(0, 30);
+  rows.filter((r) => r.striking && r.gate === 'pass').sort((a, b) => (b.gscImpressions ?? 0) - (a.gscImpressions ?? 0)).slice(0, 30);
 
 const QUESTION = /^(how|what|why|which|who|when|where|is|are|can|do|does|should|will)\b|\?$/i;
 /** Buyer questions: the server's list when it sends one, else the questions among the rows (people also ask, autocomplete, your searches). */
 export function kiQuestionsOf(rows: readonly KiKw[], explicit: KiKeywords['questions']): { key: string; question: string; sources: KiSource[] }[] {
-  if (explicit?.length) return explicit.slice(0, 30);
+  // review UX L3: a question reads as one (first letter upper case, a question mark), as the AI panel will store it
+  if (explicit?.length) return explicit.slice(0, 30).map((q) => ({ ...q, question: kiQuestionText(q.question) }));
   return rows
     .filter((r) => r.gate === 'pass' && (r.question ?? (QUESTION.test(r.keyword.trim()) && r.sources.some((s) => s.source === 'paa' || s.source === 'autocomplete' || s.source === 'gsc' || s.source === 'forum'))))
     .slice(0, 30)
-    .map((r) => ({ key: r.key, question: r.keyword, sources: [...new Set(r.sources.map((s) => s.source))] }));
+    .map((r) => ({ key: r.key, question: kiQuestionText(r.keyword), sources: [...new Set(r.sources.map((s) => s.source))] }));
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -580,9 +579,90 @@ export function kiPartialNote(run: KiRunInfo | undefined): string | null {
   const miss = run.sections.filter((s) => s.state === 'missing' || s.state === 'partial');
   if (!miss.length && run.status !== 'partial') return null;
   const parts = [...new Set(miss.map((s) => kiSectionWords(s.key)))];
-  const what = parts.length ? parts.join(', ') : 'part of the reading';
+  // review UX L8: "search volumes and your Search Console searches", "a, b and c"
+  const what = parts.length ? kiAnd(parts) : 'part of the reading';
   return `We could not read ${what} this time. Everything else is shown, and the next run tries again. You were only charged for what was read.`;
 }
+/** "a", "a and b", "a, b and c" */
+export const kiAnd = (parts: readonly string[]): string => (parts.length <= 1 ? parts[0] ?? '' : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`);
+
+/**
+ * FX-A (review UX H3): the last run did not deliver (refused at the start, or failed). A calm note with what happened, what to do, and never
+ * the first-run empty state (the owner would only run the same refused run again). `market` is the country the website is measured in.
+ */
+export interface KiStopNote {
+  title: string;
+  text: string;
+  /** the one action that fixes it */
+  action: { label: string; to: 'settings' | 'run' | 'credits' } | null;
+}
+export function kiStopNote(run: KiRunInfo | undefined, ctx: { siteCountry?: string | null } = {}): KiStopNote | null {
+  if (!run || (run.status !== 'refused' && run.status !== 'failed')) return null;
+  const why = run.reason.trim().toLowerCase();
+  if (kiOutOfCredits(run)) return null;   // said by its own note, with "Open Credits"
+  if (why === 'market_mismatch' || /market|country/.test(why)) {
+    const country = (ctx.siteCountry || kiMarketName(run.market) || '').trim();
+    return {
+      title: 'The last run did not start: it was for another country',
+      text: `Your website is measured in ${country || 'its main country'}. Change the country in Website settings, or run it again for ${country || 'that country'}. Nothing was charged.`,
+      action: { label: country ? `Run it for ${country}` : 'Run it again', to: 'run' },
+    };
+  }
+  if (why === 'killed' || /paus/.test(why)) return { title: 'The last run did not start: paused for maintenance', text: 'New runs are paused for a short while. Please try again later. Nothing was charged.', action: null };
+  if (why === 'ki_off' || why === 'not_available_yet') return { title: 'The last run did not start', text: 'This analysis is not switched on for this website yet. Nothing was charged.', action: null };
+  if (run.status === 'refused') return { title: 'The last run did not start', text: 'Something stopped it before it began. Nothing was charged. You can run it again.', action: { label: 'Run it again', to: 'run' } };
+  return { title: 'The last run could not finish', text: 'Nothing was charged for it. What you see below is from the run before it, if there was one. You can run it again.', action: { label: 'Run it again', to: 'run' } };
+}
+
+/** The last run is recent (under 7 days): the paid re-run is not the page's main button (review UX M3). */
+export function kiRecentRun(run: KiRunInfo | undefined, now = Date.now()): boolean {
+  const at = Date.parse(run?.finishedAt ?? run?.startedAt ?? '');
+  return Number.isFinite(at) && now - at < 7 * 864e5 && (run?.status === 'ok' || run?.status === 'partial');
+}
+/** "Updated today" / "Updated 3 days ago" */
+export function kiUpdatedWords(run: KiRunInfo | undefined, now = Date.now()): string | null {
+  const at = Date.parse(run?.finishedAt ?? run?.startedAt ?? '');
+  if (!Number.isFinite(at)) return null;
+  const days = Math.floor((now - at) / 864e5);
+  return days <= 0 ? 'Updated today' : days === 1 ? 'Updated yesterday' : `Updated ${days} days ago`;
+}
+
+/**
+ * FX-A (review UX H4): every next step can be done now. Until the plan's own Start ships, a step opens the EXISTING tool or page with the
+ * search filled in: write a page, improve a page, plan a keyword ladder, get listed (Link building's listings), get named (AI visibility),
+ * ask for links (Link building). Null when nothing fits (the row then shows no button, never a dead one).
+ */
+export type KiActionLink =
+  | { label: string; kind: 'tool'; mode: 'keyword'; prefill: Record<string, unknown> }
+  | { label: string; kind: 'ladder'; keyword: string }
+  | { label: string; kind: 'page'; page: 'links' | 'ai' | 'backlinks'; hash?: string };
+export function kiActionLink(kind: string, o: { keyword?: string | null; target?: string | null; domain?: string | null }): KiActionLink | null {
+  const target = str(o.target).trim();
+  const isUrl = /^https?:\/\//i.test(target) || (/^[a-z0-9.-]+\.[a-z]{2,}\//i.test(target));
+  const keyword = (str(o.keyword).trim() || (!isUrl ? target : '')).slice(0, 120);
+  // a page of this website only (the keyword form refuses any other host); hosts compared without www, no URL constructor needed
+  const host = (/^(?:https?:\/\/)?([^/?#]+)/i.exec(target)?.[1] ?? '').toLowerCase().replace(/^www\./, '');
+  const ownUrl = isUrl && o.domain && host === String(o.domain).toLowerCase().replace(/^www\./, '') ? (/^https?:/i.test(target) ? target : `https://${target}`) : '';
+  switch (kind) {
+    case 'new_page':
+    case 'write':
+      return keyword ? { label: 'Write this page', kind: 'tool', mode: 'keyword', prefill: { keyword } } : null;
+    case 'refresh':
+    case 'defend':
+      return keyword ? { label: kind === 'defend' ? 'Refresh this page' : 'Improve this page', kind: 'tool', mode: 'keyword', prefill: { keyword, ...(ownUrl ? { existingPageUrl: ownUrl } : {}) } } : null;
+    case 'ladder':
+      return keyword ? { label: 'Plan the ladder', kind: 'ladder', keyword } : null;
+    case 'list':
+      return { label: 'How to get listed', kind: 'page', page: 'links', hash: 'listings' };
+    case 'pitch':
+      return { label: 'How to get named', kind: 'page', page: 'ai' };
+    case 'link':
+      return { label: 'Find websites to ask', kind: 'page', page: 'links' };
+    default:
+      return null;
+  }
+}
+
 /** The last run stopped because the company had no credits left. */
 export const kiOutOfCredits = (run: KiRunInfo | undefined) => !!run && /credit|balance|budget/i.test(run.reason) && run.status !== 'ok';
 
@@ -591,13 +671,15 @@ export const kiModeOffered = (mode: ModeId, kiVisible: boolean): boolean => !MOD
 
 /** What each factor of the score means, in one line (shown on hover or tap). */
 export const KI_FACTOR_WORDS = {
-  fit: 'Fits what you sell and where',
-  stageW: 'How ready to buy the searcher is',
-  demand: 'How many people search it',
-  win: 'How likely your site is to rank for it',
-  value: 'What a visitor from it is worth',
-  gap: 'How many of your competitors already rank',
+  fit: 'Fits what you sell',
+  stageW: 'Ready to buy',
+  demand: 'People searching it',
+  win: 'Your chance to rank',
+  value: 'Worth of a visitor',
+  gap: 'Competitors already there',
 } as const;
+/** One factor (0 to 1) as a word (review UX H1: "Fits what you sell: high"). */
+export const kiFactorLevel = (v: number): string => (v >= 0.67 ? 'high' : v >= 0.34 ? 'medium' : 'low');
 
 /** "43, likely 35 to 51" */
 export function kiScoreText(score: number | null, low: number | null, high: number | null): string {

@@ -34,6 +34,7 @@ import { siteRows } from '../n8n/client';
 import { integrationOf, requireSecrets, toExportRunView, toIntegrationView } from './integrations';
 import { settingsRow } from './admin/settings';
 import { aiChargeEntries, bucketAiCharges, creditsForRuns } from './runCredits';
+import { NOT_KI_TRIAL_RUN } from './ki';
 import { customerError } from '../lib/customerError';
 
 /**
@@ -66,7 +67,7 @@ async function siteTableRows(org: Pick<OrgRow, 'id'>, site: SiteRow, t: ExportTa
     const rows = await db
       .select()
       .from(schema.runs)
-      .where(and(eq(schema.runs.orgId, org.id), eq(schema.runs.siteId, site.id)))
+      .where(and(eq(schema.runs.orgId, org.id), eq(schema.runs.siteId, site.id), NOT_KI_TRIAL_RUN))   // FX-A: never our team's Trial runs
       .orderBy(desc(schema.runs.createdAt))
       .limit(max);
     const credits = await creditsForRuns(org.id, rows);
@@ -116,7 +117,7 @@ async function companyRows(org: OrgRow, t: ExportTable, exportedAt: string): Pro
     const rows = await db
       .select()
       .from(schema.runs)
-      .where(and(eq(schema.runs.orgId, org.id), sql`${schema.runs.siteId} is null`))
+      .where(and(eq(schema.runs.orgId, org.id), sql`${schema.runs.siteId} is null`, NOT_KI_TRIAL_RUN))
       .orderBy(desc(schema.runs.createdAt))
       .limit(max + 1 - out.length);
     const credits = await creditsForRuns(org.id, rows);
