@@ -231,6 +231,41 @@ export function summarize(stage: string, p: P): Summary {
       put('updateRollingOut', ev ? str(ev.title) : null);
       break;
     }
+    case 'ki_competitors':
+    case 'ki_research': {
+      // KI (2026-11-08, A1; CONTRACTS.md §4): the run's status said as it is: a partial run names the sections it could not read; a Trial run
+      // is marked (its report is for platform admins only, never delivered)
+      const st = str(p.status);
+      put('status', st);
+      if (st === 'partial') {
+        put('partial', true);
+        const missing = arr(p.sections).map(obj).filter((x) => x.state === 'missing' || x.state === 'partial').map((x) => str(x.key)).filter(Boolean);
+        put('missing', missing.join(', ') || null);
+      }
+      if (st === 'refused' || st === 'failed') put('reason', str(p.reason));
+      if (str(p.mode) === 'trial') put('trial', true);
+      put('market', str(p.market));
+      const sm = obj(p.summary);
+      if (stage === 'ki_competitors') {
+        put('competitors', len(p.competitors));
+        put('chosen', arr(p.competitors).map(obj).filter((c) => c.status === 'chosen').length || num(sm.chosen));
+        put('listings', len(p.listings));
+        put('platforms', len(p.platforms));
+      } else {
+        put('clusters', len(p.clusters));
+        put('striking', len(p.striking));
+        put('questions', len(p.questions));
+        put('gaps', Object.values(obj(p.gaps_summary)).reduce<number>((a, v) => a + (num(v) ?? 0), 0));
+        put('plan', len(p.plan));
+        put('keywords', num(sm.keywords));
+      }
+      break;
+    }
+    case 'ki_competitors_started':
+    case 'ki_research_started':
+      put('market', str(p.market));
+      if (str(p.mode) === 'trial') put('trial', true);
+      break;
     case 'console_alert':
       put('kind', str(p.kind));
       put('severity', str(p.severity));

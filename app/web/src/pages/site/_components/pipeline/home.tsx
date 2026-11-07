@@ -12,6 +12,7 @@ import {
   Copy,
   Gauge,
   UserRound,
+  Users,
   Hand,
   KeyRound,
   Megaphone,
@@ -187,6 +188,7 @@ const KIND_ICON: Record<NeedsYouItem['kind'], ReactNode> = {
   questions: <CircleHelp className="size-4" />,   // H3 (2026-10-28): questions only you can answer on a written page
   site_task: <ListChecks className="size-4" />,   // site tasks (2026-10-28): a step on your own website, checked by us
   hold: <Hand className="size-4" />,   // W0-D (2026-10-29): a page that waits for your OK before it is written
+  ki: <Users className="size-4" />,   // KI (2026-11-08, A1): choose your competitors, quick wins found
 };
 
 /** Older servers: the pages waiting to be published. */
