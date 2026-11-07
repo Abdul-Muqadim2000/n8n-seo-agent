@@ -766,8 +766,9 @@ KW_INPUTS_SRC = _rd0('code/_kw_inputs.js').rstrip('\n')   # 2026-10-13 (G8): the
 COMPETITORS_SRC = _rd0('code/_competitors.js').rstrip('\n')   # 2026-10-21 (KW-COMP, RV-6): who is a competitor (a business ranking on several of the run's results pages), one answer for research, the ladder and the full report
 RADIUS_SRC = _rd0('code/_radius.js').rstrip('\n')   # 2026-10-13 (G32): the topic radius -- which topics are within reach, which are a stretch, on what evidence (needs the reach kit in the same node)
 import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits, one copy each
-SERP_CACHE_SRC = _rd0('code/_serp_cache.js').rstrip('\n')   # KW-SERP (RV-12, 2026-10-21): one results-page reading per search and day, shared by every path (section 145)
-rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__SERP_CACHE__*/', SERP_CACHE_SRC).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__LADDER_DUP__*/', _rd0('code/_ladder_dup.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__PUBLISH_VERIFY__*/', _rd0('code/_publish_verify.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__COMPETITORS__*/', COMPETITORS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n')).replace('/*__GONE__*/', _rd0('code/_gone.js').rstrip('\n'))   # shared kits (RV-1 2026-10-21: _gone.js, the pages that no longer answer) (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
+SERP_URL_SRC = _rd0('code/_serp_url.js').rstrip('\n')   # SERP-GOTO (2026-11-08): the real host behind a Google redirect link (SU), inlined with every SERP reader
+SERP_CACHE_SRC = SERP_URL_SRC + '\n' + _rd0('code/_serp_cache.js').rstrip('\n')   # KW-SERP (RV-12, 2026-10-21): one results-page reading per search and day, shared by every path (section 145)
+rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__SERP_CACHE__*/', SERP_CACHE_SRC).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__LADDER_DUP__*/', _rd0('code/_ladder_dup.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__PUBLISH_VERIFY__*/', _rd0('code/_publish_verify.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__COMPETITORS__*/', COMPETITORS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n')).replace('/*__GONE__*/', _rd0('code/_gone.js').rstrip('\n')).replace('/*__SERP_URL__*/', SERP_URL_SRC)   # shared kits (RV-1 2026-10-21: _gone.js, the pages that no longer answer) (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -5253,7 +5254,7 @@ def _r17_r29_checks():
         _check_ledger_order55(files55[wname55], wiring55); checked55 += 1
     # R32's companion (section 59): Page Watch joined the chain, so it is ten — the nine that spend plus the daily watch, which keeps a
     # $0 row so the guard and the day's reconciliation can see that it ran at all.
-    assert checked55 == 14, 'R17: ' + str(checked55) + ' workflows checked, expected 14 (the nine of R17, Page Watch, the Reply Reader since W3-F, the AI Repeat Pilot since W2-E2, the Page Finalize since H3, and Index Coverage since 2026-10-29)'
+    assert checked55 == 15, 'R17: ' + str(checked55) + ' workflows checked, expected 15 (the nine of R17, Page Watch, the Reply Reader since W3-F, the AI Repeat Pilot since W2-E2, the Page Finalize since H3, Index Coverage since 2026-10-29, and Keyword Intelligence since KI E2 2026-11-08)'
     hits55 = _secret_scan55([os.path.join(HERE0, 'workflows'), os.path.join(HERE0, 'harness', 'code_v4')])
     assert not hits55, 'R29: a secret reached the generated files:\n  ' + '\n  '.join(hits55)
     # R30 (2026-10-14): a shape scan only catches the secrets we thought of. The alert channel is checked positively as well — what is
@@ -6513,7 +6514,7 @@ def _b64_checks():
             'B-A7: ' + wname64 + ' does not write the retry state back: ' + str(wr64)
         out64[wname64] = {'guard': g64, 'retry': r64, 'writes': wr64, 'if_outputs': if64,
                           'refuse_values': sorted(ref64['columns']['value'].keys())}
-    assert len(out64) == 14, 'B-A7 / B-A9: ' + str(len(out64)) + ' workflows carry the gate and the sweep, expected 14 (the ten schedules, the Reply Reader since W3-F, the AI Repeat Pilot since W2-E2, the Page Finalize since H3 and Index Coverage since 2026-10-29)'
+    assert len(out64) == 15, 'B-A7 / B-A9: ' + str(len(out64)) + ' workflows carry the gate and the sweep, expected 15 (the ten schedules, the Reply Reader since W3-F, the AI Repeat Pilot since W2-E2, the Page Finalize since H3, Index Coverage since 2026-10-29 and Keyword Intelligence since KI E2 2026-11-08)'
     json.dump({'monitors': out64, 'n_minutes': 30, 'k_attempts': 3, 'max_attempts': 10, 'per_sweep': 5,
                'error_handler': _ops64['retry'], 'columns': [c for c, _t in _OAC64],
                'page_watch_delivery': {'code': 'Watch Ops Delivery', 'save': 'Save Watch Ops Delivery'}},
@@ -10760,7 +10761,7 @@ def _b116_checks():
     _nodes = {n['name']: n for n in _wf['nodes']}
     _code = {k: n['parameters'].get('jsCode', '') for k, n in _nodes.items() if n['type'] == 'n8n-nodes-base.code'}
     for _n in ('Parse Positions', 'Tracker Report'):
-        for _a, _m in (('const own = organic.filter(o => isOurs(o.domain, our))', 'B6-6: the landscape keeps one URL per site, so a second page of ours is never stored'),
+        for _a, _m in (('const own = organic.filter(o => isOurs(o.domain, our) && o.exact)', 'B6-6: the landscape keeps one URL per site, so a second page of ours is never stored'),
                        ('own_n: land.own.length', 'B6-6: the stored reading does not say how many of our pages it held'),
                        ('const cannibal = (cur, o) =>', 'B6-6: the cannibalisation reading is missing'),
                        ('const outranked = (prev, cur, o) =>', 'B6-10: the "who took the place" reading is missing'),
@@ -13701,6 +13702,40 @@ open(os.path.join(OUT_CODE, '_page_apart.js'), 'w').write("// harness shim (writ
 log('A separate new page stands apart from the page the client kept (W07-B, 2026-10-31, section 180): after "Write it anyway" Collect Client Pages reads the kept page\'s title tag and H1; the page contract tells the brief, the writer, the Critic and the Editor; Parse Brief and Page Fix give the new page a title tag and an H1 of their own and one link to the kept page; Content QA records it (a title that could not be changed blocks); the second read is told the choice and its advice to take the kept page\'s address or slug is set aside. A rewrite, a named page, a ladder page and every ordinary run are unchanged')
 
 # =============================================================================
+# 181. THE SITE BEHIND GOOGLE'S REDIRECT LINKS (SERP-GOTO, 2026-11-08, docs/keyword-intel-2026-11-08/fixes/SERP_GOTO.md; R5 L-1).
+#     Since about 2026-10-30 DataForSEO's live Google organic results carry `domain: "google.com"` and `url: https://google.com/goto?url=<an
+#     opaque token>` for every organic and local-pack result (Google serves /goto links; DataForSEO says Live requests resolve about half of
+#     them since 2026-11-02 - the live probes of 2026-11-08 resolved none). Read as it comes, google.com was every result's site: the Rank
+#     Tracker never found the client (techand.ai 1 of 14 on 2026-11-05, three false drops in the report), competitors were google.com, and no
+#     two keywords shared a result. One kit, v5/code/_serp_url.js (SU), recovers the host from Google's breadcrumb (then website_name), marks
+#     the url approximate, and is applied where the answers ENTER: every DataForSEO answer node (dfs_gate.answers_js), the SERP cache (SC
+#     stores recovered items and refuses a stored reading that still holds bare redirects), the rank kit (RS: our site by host, our page
+#     "not identified", -1 when a result has no site, a stored reading with redirects is never a baseline) and the five nodes of this
+#     workflow that read a SERP node directly (Pick Top 6, Analyze Competitor Pages, Ladder Plan, Collect Facts, Ladder Clusters).
+# =============================================================================
+assert 'var SU = ' not in code('Pick Top 6'), 'SERP-GOTO: Pick Top 6 already carries SU'
+setcode('Pick Top 6', SERP_URL_SRC + '\n' + code('Pick Top 6'))
+patch('Pick Top 6', "const items = task.result?.[0]?.items || [];\n",
+      "const items = SU.fixItems(task.result?.[0]?.items || []);   // SERP-GOTO (section 181): the real host behind a Google redirect link\n")
+patch('Pick Top 6', "  const d = String(it.domain || '').toLowerCase().replace(/^www\\./, '');\n  if (!d) continue;\n",
+      "  const d = String(it.domain || '').toLowerCase().replace(/^www\\./, '');\n  if (!d) continue;\n"
+      "  // SERP-GOTO (section 181): Google showed this result behind a redirect and cut its address, so only the site is known - its page is not\n"
+      "  // read as \"the competitor's page for this search\" (it would be the home page); a full breadcrumb address is read, marked approximate\n"
+      "  if (it.url_exact === false && it.url_partial) { skipped.push(d + ' (only the site is known: Google hid the page address)'); continue; }\n")
+patch('Pick Top 6', "    snippet: it.description || ''\n  });",
+      "    snippet: it.description || '',\n    ...(it.url_exact === false ? { url_exact: false } : {})\n  });")
+patch('Analyze Competitor Pages', "} catch (e) { serpItems = []; serpError = 'no answer'; }\n",
+      "} catch (e) { serpItems = []; serpError = 'no answer'; }\nserpItems = SU.fixItems(serpItems);   // SERP-GOTO (section 181): the real host behind a Google redirect link (the featured snippet's owner, forum threads)\n")
+patch('Collect Facts', "const items = res.tasks?.[0]?.result?.[0]?.items || [];\n",
+      "const items = SU.fixItems(res.tasks?.[0]?.result?.[0]?.items || []);   // SERP-GOTO (section 181): the real host behind a Google redirect link\n")
+assert "if (it.url_exact === false) { unlinkable.push(" in code('Collect Facts'), 'SERP-GOTO: Collect Facts would cite an approximate address'
+for _n181 in ('Pick Top 6', 'Analyze Competitor Pages', 'Ladder Plan', 'Collect Facts', 'Ladder Clusters', 'SERP Cache Row (Top 10)', 'Use SERP Cache (Top 10)', 'Ladder SERP Cache Rows'):
+    assert 'var SU = ' in code(_n181), 'SERP-GOTO: ' + _n181 + ' lacks the SU kit'
+open(os.path.join(OUT_CODE, '_serp_url.js'), 'w').write("// harness shim (written by build_v4.py section 181): the SERP url kit, { fn, args } -> { r }\n" + SERP_URL_SRC
+    + "\nreturn $input.all().map(i => ({ json: { r: SU[i.json.fn].apply(null, i.json.args || []) } }));\n")
+log('The site behind Google\'s redirect links (SERP-GOTO, 2026-11-08, section 181): since about 2026-10-30 every live Google organic and local-pack result came back as domain google.com with an opaque google.com/goto link, so the Rank Tracker never found the client (three false drops in techand.ai\'s 2026-11-05 report), competitors were google.com and no two keywords ever shared a result; one kit (v5/code/_serp_url.js, SU) recovers the host from Google\'s breadcrumb, marks the address approximate, and is applied where the answers enter - every DataForSEO answer node, the SERP cache (which refuses a stored reading that still holds bare redirects), the rank kit (our site by host, our page "not identified", -1 when a result has no site, a reading with redirects never a baseline) and the five nodes that read a results page directly')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;
@@ -14035,3 +14070,19 @@ _b69_checks()
 # whole answer, and streams above the SDK's non-streaming limit; the lint bites on purpose first (self-test) and fails the build otherwise
 _seen150 = _ll150.check(os.path.join(HERE0, 'workflows'))
 json.dump(dict(_ll150.harness_table(), seen=[list(x) for x in _seen150], self_test_cases=_ll150.self_test()), open(os.path.join(HERE0, 'harness', 'llm_limits.json'), 'w'), indent=1, sort_keys=True)
+
+# section 181 (SERP-GOTO, 2026-11-08): on EVERY generated workflow - a Code node that uses the SERP url kit carries it (a node calling
+# SU without the kit throws on the first results page), and every DataForSEO answer node carries it
+for _f181 in sorted(os.listdir(os.path.join(HERE0, 'workflows'))):
+    if not _f181.endswith('.json') or 'v3_original' in _f181:
+        continue
+    _w181 = json.load(open(os.path.join(HERE0, 'workflows', _f181), encoding='utf-8'))
+    _w181 = _w181[0] if isinstance(_w181, list) else _w181
+    for _n in _w181.get('nodes', []):
+        _js181 = (_n.get('parameters') or {}).get('jsCode') or ''
+        _run181 = re.sub(r'(?<!:)//[^\n]*', ' ', re.sub(r'/\*.*?\*/', ' ', _js181, flags=re.S))
+        if re.search(r'\bSU\.(?:fix|exact|unresolved|poisoned|key|isRedirect)', _run181):
+            assert 'var SU = ' in _js181, 'SERP-GOTO: %s / %s calls SU without the kit inlined' % (_f181, _n['name'])
+        if _n['name'].endswith(' Answers') and 'RT.stats(first' in _js181:
+            assert 'SU.fixAnswer(a)' in _js181, 'SERP-GOTO: %s / %s does not pass its answers through SU' % (_f181, _n['name'])
+print('SERP-GOTO (section 181): every node that reads a Google results page sees the real host behind a redirect link')

@@ -62,6 +62,62 @@
  "k_attempts": 3,
  "max_attempts": 10,
  "monitors": {
+  "SEO Agent - Keyword Intelligence": {
+   "guard": {
+    "gate": "After Run Ledger (KI)",
+    "if": "Run Allowed? (KI)",
+    "kit": "RG",
+    "load": "Load Open Runs (KI)",
+    "notice": "Refusal Notice (KI)",
+    "post": "Post Refusal (KI)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (KI)",
+     "Refusal Notice (KI)",
+     "Refuse Run Ledger (KI)",
+     "Tell Caller (KI)?"
+    ],
+    "refuse": "Refuse Run Ledger (KI)",
+    "tell": "Tell Caller (KI)?"
+   },
+   "if_outputs": [
+    [
+     "Load Ledger Today (KI)"
+    ],
+    [
+     "Refuse Run Ledger (KI)"
+    ]
+   ],
+   "refuse_values": [
+    "cost_basis",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_at",
+    "settled_usd",
+    "status"
+   ],
+   "retry": {
+    "from": "Settle Run Ledger (KI)",
+    "gate": "Any Alert Retry (KI)?",
+    "load": "Load Open Alerts (KI)",
+    "plan": "Alert Retry Plan (KI)",
+    "post": "Post Alert Retry (KI)",
+    "result": "Alert Retry Result (KI)",
+    "save": "Save Alert Retry (KI)",
+    "table": "seo_ops_alerts"
+   },
+   "writes": [
+    "attempt_log",
+    "attempts",
+    "channels",
+    "delivered",
+    "last_attempt_at",
+    "next_attempt_at",
+    "notes",
+    "severity"
+   ]
+  },
   "SEO Agent \u2014 AI Growth": {
    "guard": {
     "gate": "After Run Ledger (Growth)",

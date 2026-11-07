@@ -52,6 +52,7 @@
   "status"
  ],
  "call_tables": {
+  "SEO Agent - Keyword Intelligence": [],
   "SEO Agent \u2014 AI Growth": [
    {
     "model_node": "Claude \u2014 AI Outreach Writer",
@@ -120,6 +121,37 @@
  },
  "callback_gap": {},
  "callbacks": {
+  "SEO Agent - Keyword Intelligence": [
+   {
+    "fed_settle_directly": [],
+    "has_callback": "Has Callback (KI)?",
+    "join": "Ledger Join (KI)",
+    "ledger": "Callback Ledger (KI)",
+    "post": "POST KI Report",
+    "preds": [
+     [
+      "KI Report",
+      0
+     ]
+    ],
+    "proof": {
+     "bypass": false,
+     "input0": [
+      "KI Report"
+     ],
+     "input1": [
+      "Ledger Settle (KI)"
+     ],
+     "merge": true,
+     "preds": [
+      "KI Report"
+     ],
+     "reachable": true,
+     "settle": "Ledger Settle (KI)"
+    },
+    "settle": "Ledger Settle (KI)"
+   }
+  ],
   "SEO Agent \u2014 AI Growth": [
    {
     "fed_settle_directly": [],
@@ -709,6 +741,7 @@
   ]
  },
  "measured": {
+  "SEO Agent - Keyword Intelligence": "!Run Comp SERPs Answers|Run Comp Labs Answers|Run Comp Profiles Answers|Run Research Discover Answers|Run Research Enrich Answers|Run Research SERPs Answers|Run Research Traffic Answers",
   "SEO Agent \u2014 AI Growth": "Growth Metrics|AI Rank Fetched",
   "SEO Agent \u2014 AI Pulse": "Pulse Metrics",
   "SEO Agent \u2014 AI Repeat Pilot": "Pilot Metrics",

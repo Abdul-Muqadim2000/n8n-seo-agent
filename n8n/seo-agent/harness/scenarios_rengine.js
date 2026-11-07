@@ -9,7 +9,7 @@ module.exports = async (ctx) => {
   const RULE = 'aivis-2026-10-23';
   const mkCheck = (SN) => (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 450))); };
   const items = (arr) => (arr && arr.length ? arr : [{}]).map(j => ({ json: j }));
-  const kitsOf = (file, names) => { const src = fs.readFileSync(path.join(CD, file), 'utf8'); const parts = names.map(nm => { const a = src.indexOf('const ' + nm + ' = (() => {'); const b = src.indexOf('\n})();', a);
+  const kitsOf = (file, names) => { const src = fs.readFileSync(path.join(CD, file), 'utf8'); const parts = names.map(nm => { const a0 = src.indexOf('const ' + nm + ' = (() => {'); const a = a0 >= 0 ? a0 : src.indexOf('var ' + nm + ' = '); const b = src.indexOf('\n})();', a);   // SERP-GOTO: SU is a guarded `var`
     if (a < 0 || b < 0) throw new Error(nm + ' not inlined in ' + file); return src.slice(a, b + 6); }); return new Function(parts.join('\n') + '\nreturn { ' + names.join(', ') + ' };')(); };
   const { AIP } = kitsOf('AI_Requests.js', ['AIP']);
   const { AIX } = kitsOf('AI_Extras.js', ['AIP', 'SC', 'AIX']);

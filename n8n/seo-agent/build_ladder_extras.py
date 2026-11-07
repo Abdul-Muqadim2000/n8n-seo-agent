@@ -25,7 +25,7 @@ rd = lambda p: (seo_events.inline(_rd0(p)).replace('/*__ANCHOR__*/', _rd0('code/
                 .replace('/*__SITE_MODEL__*/', _rd0('code/_site_model.js').rstrip('\n'))
                 .replace('/*__SERP_OBS__*/', _rd0('code/_serp_obs.js').rstrip('\n'))
                 .replace('/*__FIT_GATE__*/', _rd0('code/_fit_gate.js').rstrip('\n'))   # R16 (build_v4.py section 53): the gate also reads the rungs stored before it existed
-                .replace('/*__RANK_SERP__*/', _rd0('code/_rank_serp.js').rstrip('\n'))
+                .replace('/*__RANK_SERP__*/', _rd0('code/_serp_url.js').rstrip('\n') + '\n' + _rd0('code/_rank_serp.js').rstrip('\n'))   # SERP-GOTO (2026-11-08): RS reads hosts through SU
                 .replace('/*__REPLAN__*/', _rd0('code/_replan.js').rstrip('\n'))   # G32: the re-plan proposal for a stuck ladder
                 .replace('/*__SITE_TIME__*/', site_time_src()))   # 2026-10-19: the cycle run (ST.cycleOf) for the Rank Tracker's one-site input
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
@@ -285,7 +285,7 @@ assert "'check again', not \"not ranking\"" in _tr7 or 'that is "check again", n
 # The tracker asks 50 deep with the AI Overview (Tracker_Plan.js serpBody), so its desktop reading refreshes seo_cache and serves the
 # research, the Keyword Check and the ladder (30 deep) for the rest of the day; a check already read 50 deep today is not bought again.
 import ladder_common as _lc_sc
-_sc_src = open(os.path.join(V5, 'code', '_serp_cache.js'), encoding='utf-8').read().rstrip('\n')
+_sc_src = _rd0('code/_serp_url.js').rstrip('\n') + '\n' + open(os.path.join(V5, 'code', '_serp_cache.js'), encoding='utf-8').read().rstrip('\n')   # SERP-GOTO: SU travels with SC
 _rt_src = open(os.path.join(V5, 'code', '_dfs_retry.js'), encoding='utf-8').read().rstrip('\n')
 _wsc = _lc_sc.serp_cache_wrap(_wf_tracker, 'SERP Check', 'Tracker', "(j) => ((Array.isArray(j.body) ? j.body[0] : j.body) || {})",
                               _sc_src, _rt_src, "the live Google results for the week's tracked keywords", 'keyword check')
@@ -308,7 +308,7 @@ json.dump(_lwj, open(_lw9, 'w'), indent=1, sort_keys=True)
 os.makedirs(CODE, exist_ok=True)
 open(os.path.join(CODE, '_rank_serp.js'), 'w').write(
     "// harness shim (written by build_ladder_extras.py, G6): the results-page kit — { serp, domain, competitors, device, max } -> what RS reads from one answer\n"
-    + _rd0('code/_serp_obs.js').rstrip('\n') + '\n' + _rd0('code/_rank_serp.js').rstrip('\n') + "\n"
+    + _rd0('code/_serp_obs.js').rstrip('\n') + '\n' + _rd0('code/_serp_url.js').rstrip('\n') + '\n' + _rd0('code/_rank_serp.js').rstrip('\n') + "\n"
     "return $input.all().map(i => { const j = i.json || {}; const a = RS.read(j.serp); const mine = RS.ourRank(a, j.domain);\n"
     "  const features = RS.features(a, j.domain); const landscape = RS.landscape(a, j.domain, j.competitors || [], mine.position);\n"
     "  const voice = RS.voice(landscape, features, j.domain, mine.position); const snapshot = RS.snapshot(a, landscape, features, j.device || 'desktop');\n"
@@ -321,6 +321,9 @@ open(os.path.join(CODE, '_rank_serp.js'), 'w').write(
     "    move_note: RS.moveNote(j.delta === undefined ? null : j.delta, RS.churn(j.prev_snapshot === undefined ? null : j.prev_snapshot, j.cur_snapshot === undefined ? RS.pack(snapshot, j.max || 1800) : j.cur_snapshot, j.churn_opts || {})),\n"
     # B6-6 / B6-8 (2026-10-16, agent W3-C): cannibalisation read from a stored reading, and what a move is called (S155 / S156)
     "    cannibal: RS.cannibal(j.cur_snapshot === undefined ? RS.pack(snapshot, j.max || 1800) : j.cur_snapshot, j.cannibal_opts || {}),\n"
+    # SERP-GOTO (2026-11-08, harness scenarios_serp_goto.js SG3): the baseline a history gives, whether a stored row holds redirects, "outranked since"
+    "    ...(j.history ? { prev: RS.prevReading(j.history, { keyword: j.keyword, domain: j.domain, before: j.before }), poisoned_row: j.history.some(RS.poisonedRow) } : {}),\n"
+    "    ...(j.prev_for_outranked ? { outranked: RS.outranked(j.prev_for_outranked, RS.pack(snapshot, j.max || 1800), j.outranked_opts || {}) } : {}),\n"
     "    move_kind: RS.moveKind(j.delta === undefined ? null : j.delta, RS.churn(j.prev_snapshot === undefined ? null : j.prev_snapshot, j.cur_snapshot === undefined ? RS.pack(snapshot, j.max || 1800) : j.cur_snapshot, j.churn_opts || {})) } }; });\n")
 
 # =============================================================================

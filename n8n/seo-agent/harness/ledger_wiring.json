@@ -183,6 +183,73 @@
   ]
  },
  "monitors": {
+  "SEO Agent - Keyword Intelligence": {
+   "ai_nodes": [],
+   "alert_retry": {
+    "from": "Settle Run Ledger (KI)",
+    "gate": "Any Alert Retry (KI)?",
+    "load": "Load Open Alerts (KI)",
+    "plan": "Alert Retry Plan (KI)",
+    "post": "Post Alert Retry (KI)",
+    "result": "Alert Retry Result (KI)",
+    "save": "Save Alert Retry (KI)",
+    "table": "seo_ops_alerts"
+   },
+   "balance": "DFS Balance (KI)",
+   "balance_end": "DFS Balance End (KI)",
+   "callbacks": [
+    {
+     "fed_settle_directly": [],
+     "has_callback": "Has Callback (KI)?",
+     "join": "Ledger Join (KI)",
+     "ledger": "Callback Ledger (KI)",
+     "post": "POST KI Report",
+     "preds": [
+      [
+       "KI Report",
+       0
+      ]
+     ],
+     "settle": "Ledger Settle (KI)"
+    }
+   ],
+   "catchup_records": "",
+   "est": {
+    "ai": 0.0,
+    "dfs": 0.9
+   },
+   "guard": {
+    "gate": "After Run Ledger (KI)",
+    "if": "Run Allowed? (KI)",
+    "kit": "RG",
+    "load": "Load Open Runs (KI)",
+    "notice": "Refusal Notice (KI)",
+    "post": "Post Refusal (KI)",
+    "post_max_tries": 3,
+    "refusal_path": [
+     "Post Refusal (KI)",
+     "Refusal Notice (KI)",
+     "Refuse Run Ledger (KI)",
+     "Tell Caller (KI)?"
+    ],
+    "refuse": "Refuse Run Ledger (KI)",
+    "tell": "Tell Caller (KI)?"
+   },
+   "ledger_load": "Load Run Ledger (KI)",
+   "measured": "!Run Comp SERPs Answers|Run Comp Labs Answers|Run Comp Profiles Answers|Run Research Discover Answers|Run Research Enrich Answers|Run Research SERPs Answers|Run Research Traffic Answers",
+   "mode": "keyword_research",
+   "open_runs": "Load Open Runs (KI)",
+   "plan": "KI Plan",
+   "reserve": "Run Ledger Row (KI)",
+   "resume": "After Run Ledger (KI)",
+   "settle": "Settle Run Ledger (KI)",
+   "settle_from": [
+    "KI Report",
+    "Refuse KI Limit (KI)",
+    "Refuse Run Ledger (KI)"
+   ],
+   "settle_from_ends": []
+  },
   "SEO Agent \u2014 AI Growth": {
    "ai_calls": [
     {

@@ -20,6 +20,35 @@
   "source": "v5/code/Monitor_Ledger_Row.js"
  },
  "monitors": {
+  "SEO Agent - Keyword Intelligence": {
+   "ai_nodes": [],
+   "balance": "DFS Balance (KI)",
+   "dead_ends": [],
+   "est": {
+    "ai": 0.0,
+    "dfs": 0.9
+   },
+   "settle": "Settle Run Ledger (KI)",
+   "settle_from": [
+    "KI Report",
+    "Refuse KI Limit (KI)",
+    "Refuse Run Ledger (KI)"
+   ],
+   "settle_writes": [
+    "ai_usd",
+    "cost_basis",
+    "cost_mode",
+    "dfs_balance_end",
+    "dfs_source",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_at",
+    "settled_usd",
+    "status"
+   ],
+   "tag": "KI"
+  },
   "SEO Agent \u2014 AI Growth": {
    "ai_nodes": [
     "AI Outreach Writer"

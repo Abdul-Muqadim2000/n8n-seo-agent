@@ -2,6 +2,8 @@
 // | facts (business_facts, the client's own facts about the business, stored on seo_sites; P1 2026-10-20; H3 2026-10-28: + fact_answers)
 // | market (country: name or ISO-2 of the main workflow's COUNTRIES; MKT 2026-10-27, AUDIT M2): the market every weekly job measures the website
 //   in (seo_sites country / location_code / language_code). Rank history and past rows stay as they are: the next checks start a new baseline.
+// | ki_competitor (market, comp_domain, status chosen / watch / dismissed: the client's own choice, status_by user, never changed by a run; at most
+//   ki_max_competitors chosen) | ki_gap (gap_id, status open / started / dismissed / done) - KI E2 2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §5
 // | prospect (prospect_domain + status contacted / replied / won / rejected / ignored / new, note, contact_email; replied: v4.13) | ai_prompts (add custom questions, switch some off) — by site_id or domain.
 // The table-ensure nodes before this one output table objects, so the request is read from the trigger (live finding 2026-10-02).
 /*__AI_MEASURE__*/
@@ -14,7 +16,7 @@ const action = String(t.action || '').toLowerCase();
 const normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
 const domain = normD(t.domain) || String(t.site_id || '').replace(/^site_/, '').replace(/-/g, '.');
 const site_id = String(t.site_id || '').trim() || (normD(t.domain) ? 'site_' + normD(t.domain).replace(/[^a-z0-9]+/g, '-') : '');
-if (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts', 'content_groups', 'facts', 'market'].includes(action)) throw new Error('action must be delete, pause, resume, cadence, unpublish, monitors, prospect, ai_prompts, content_groups, facts or market');
+if (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts', 'content_groups', 'facts', 'market', 'ki_competitor', 'ki_gap'].includes(action)) throw new Error('action must be delete, pause, resume, cadence, unpublish, monitors, prospect, ai_prompts, content_groups, facts, market, ki_competitor or ki_gap');
 // MKT (2026-10-27): the website's market, read from the same COUNTRIES table Normalize Input uses (never a code the caller sends)
 const countryRaw = String(t.country == null ? '' : t.country).trim();
 const marketName = countryRaw ? (Object.keys(COUNTRIES).find(n => n.toLowerCase() === countryRaw.toLowerCase()) || Object.keys(COUNTRIES).find(n => String(COUNTRIES[n].iso).toUpperCase() === countryRaw.toUpperCase()) || '') : '';
@@ -120,4 +122,18 @@ const monitors = (t.monitors && typeof t.monitors === 'object') ? t.monitors : (
     if (!Number.isFinite(n) || Math.floor(n) !== n || n < 1 || n > 5) throw new Error('ki_max_competitors must be a whole number from 1 to 5');
     monitors.ki_max_competitors = n;
   } }
-return [{ json: { fact_answers_sent, fact_answers_json, fact_answers_count: Object.keys(FAP.answers).length, fact_answers_dropped: FAP.dropped, action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, on_prompts, pin_prompts, unpin_prompts, edit_prompts, accept_prompts, retire_prompts, monitors, content_groups_json, business_facts, market_country: market.country, market_location_code: market.location_code, market_language_code: market.language_code, market_iso: market.country_iso, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];
+// KI E2 (2026-11-08, CONTRACTS.md §5): the client's choice on a competitor of the KI set, and the state of a gap
+const kiMarket = String(t.market == null ? '' : t.market).trim();
+const kiComp = normD(t.comp_domain);
+const kiStatus = String(t.status == null ? '' : t.status).trim().toLowerCase();
+const kiGap = String(t.gap_id == null ? '' : t.gap_id).trim();
+if (action === 'ki_competitor') {
+  if (!/^[A-Z]{2}-[a-z]{2,3}$/.test(kiMarket)) throw new Error('market (the KI market key, e.g. AE-en) is required for action ki_competitor');
+  if (!/^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$/.test(kiComp)) throw new Error('comp_domain (a competitor host, e.g. example.com) is required for action ki_competitor');
+  if (!['chosen', 'watch', 'dismissed'].includes(kiStatus)) throw new Error('status must be chosen, watch or dismissed');
+}
+if (action === 'ki_gap') {
+  if (!/^g_[a-z0-9]{6,40}$/.test(kiGap)) throw new Error('gap_id is required for action ki_gap');
+  if (!['open', 'started', 'dismissed', 'done'].includes(kiStatus)) throw new Error('status must be open, started, dismissed or done');
+}
+return [{ json: { ...(action === 'ki_competitor' || action === 'ki_gap' ? { ki_market: kiMarket, ki_comp_domain: kiComp, ki_status: kiStatus, ki_gap_id: kiGap } : {}), fact_answers_sent, fact_answers_json, fact_answers_count: Object.keys(FAP.answers).length, fact_answers_dropped: FAP.dropped, action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, on_prompts, pin_prompts, unpin_prompts, edit_prompts, accept_prompts, retire_prompts, monitors, content_groups_json, business_facts, market_country: market.country, market_location_code: market.location_code, market_language_code: market.language_code, market_iso: market.country_iso, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];

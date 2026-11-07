@@ -1,4 +1,4 @@
-// KI W0 (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §3): the request as the API front door forwards it ({ headers, body }, the body
+// KI (W0 2026-11-08, E2 2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §3): the request as the API front door forwards it ({ headers, body }, the body
 // being the app's payload: mode, keyword, country, domain, email, callback_url, business, customers, competitors, seeds, ki_force, request_id).
 // Pure reading and normalising: nothing is decided here. No URL constructor (the n8n sandbox has none): hosts by regex.
 const raw = $input.first().json || {};
@@ -20,5 +20,7 @@ return [{ json: {
   domain, site_id: domain ? 'site_' + domain.replace(/[^a-z0-9]+/g, '-') : '',
   request_id: S(b.request_id), run_id: S($execution.id), client_ip: S(b.client_ip), country: S(b.country),
   competitors, seeds, ki_force: b.ki_force === true || /^(true|1|yes)$/i.test(S(b.ki_force)),
-  callback_url: callbackOk ? cb : '', started_at: new Date().toISOString()
+  callback_url: callbackOk ? cb : '', started_at: new Date().toISOString(),
+  // E2: the caller's identity, the key the main workflow's Rate Limit counts a company's runs by (app:<company id>), and the business text
+  client_key: S(b.client_ip).toLowerCase(), business: S(b.business).slice(0, 2000), customers: S(b.customers).slice(0, 500)
 } }];

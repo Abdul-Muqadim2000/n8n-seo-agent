@@ -281,7 +281,9 @@ const raw = $input.first().json || {};
 const b = (raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body)) ? raw.body : {};
 const action = String(b.action || '').toLowerCase();
 const errors = [];
-if (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts', 'content_groups', 'facts', 'market'].includes(action)) errors.push('action must be delete, pause, resume, cadence, unpublish, monitors, prospect, ai_prompts, content_groups, facts or market');
+if (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts', 'content_groups', 'facts', 'market', 'ki_competitor', 'ki_gap'].includes(action)) errors.push('action must be delete, pause, resume, cadence, unpublish, monitors, prospect, ai_prompts, content_groups, facts, market, ki_competitor or ki_gap');
+if (action === 'ki_competitor' && (!b.comp_domain || !b.market || !['chosen', 'watch', 'dismissed'].includes(String(b.status || '').toLowerCase()))) errors.push('ki_competitor needs market, comp_domain and status (chosen, watch or dismissed)');   // KI E2 (2026-11-08, CONTRACTS.md §5)
+if (action === 'ki_gap' && (!b.gap_id || !['open', 'started', 'dismissed', 'done'].includes(String(b.status || '').toLowerCase()))) errors.push('ki_gap needs gap_id and status (open, started, dismissed or done)');
 if (action === 'market' && (typeof b.country !== 'string' || !b.country.trim())) errors.push('country (a country name or ISO-2 code) is required for action market');   // MKT (2026-10-27): Site Admin checks it against COUNTRIES
 if (action === 'facts' && (b.business_facts == null || typeof b.business_facts !== 'string')) errors.push('business_facts (text; an empty text clears them) is required for action facts');   // P1 (2026-10-20)
 if (action === 'content_groups' && !Array.isArray(b.content_groups)) errors.push('content_groups (a list of {name, pattern}; [] clears them) is required for action content_groups');
@@ -341,7 +343,8 @@ def _assess_code(f):
     s = _rd5('code/' + f).replace('/*__REACH__*/', _rd5('code/_reach.js').rstrip('\n'))
     s = s.replace('/*__FIT_GATE__*/', _rd5('code/_fit_gate.js').rstrip('\n'))   # R50 (A14): the stored ladder rows it names pass the same gate every other read path uses
     s = s.replace('/*__SITE_MODEL__*/', _rd5('code/_site_model.js').rstrip('\n')).replace('/*__OWN_COVER__*/', _rd5('code/_own_cover.js').rstrip('\n'))   # A-1 (2026-10-17): the page inventory match, the same as the main workflow's
-    s = s.replace('/*__SERP_CACHE__*/', _rd5('code/_serp_cache.js').rstrip('\n'))   # KW-SERP (RV-12, 2026-10-21): one results-page reading per search and day, shared by every path
+    s = s.replace('/*__SERP_CACHE__*/', _rd5('code/_serp_url.js').rstrip('\n') + '\n' + _rd5('code/_serp_cache.js').rstrip('\n'))   # SERP-GOTO (2026-11-08): SU travels with SC
+    s = s.replace('/*__SERP_URL__*/', _rd5('code/_serp_url.js').rstrip('\n'))   # KW-SERP (RV-12, 2026-10-21): one results-page reading per search and day, shared by every path
     s = s.replace('/*__KW_INPUTS__*/', _rd5('code/_kw_inputs.js').rstrip('\n'))   # E-SERP (2026-10-21): what kind of page Google ranks (KWI.serpPageTypes), the research's and the ladder's rule
     s = s.replace('/*__COUNTRIES__*/', '// ---- countries: copied from the main workflow\'s Normalize Input by build_api.py (DataForSEO location code = 2000 + ISO numeric) ----' + _m_c.group(0))
     s = s.replace('/*__DOMAIN_RULES__*/', '// ---- domain rules: copied from Normalize Input (public hostnames only) ----' + _m_d.group(0) + _m_o.group(0))

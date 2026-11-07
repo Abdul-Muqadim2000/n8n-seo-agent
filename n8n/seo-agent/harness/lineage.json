@@ -13,8 +13,8 @@
    "subject": 19
   },
   "refusal": {
-   "pass": 30,
-   "subject": 45
+   "pass": 31,
+   "subject": 46
   },
   "withheld": {
    "pass": 4,
@@ -22,6 +22,16 @@
   }
  },
  "nodes": {
+  "SEO Agent - Keyword Intelligence / Comp SERP Picture": {
+   "fails": [],
+   "markup": 0,
+   "node": "Comp SERP Picture",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent - Keyword Intelligence"
+  },
   "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / AI Visibility": {
    "fails": [
     "refusal"

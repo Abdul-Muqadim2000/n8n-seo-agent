@@ -96,10 +96,14 @@ module.exports = async (ctx) => {
       J(outs(api, 'Prepare Payload')) === J([['Start Which Run?']]) && J(outs(api, 'Start Which Run?')) === J([['Start KI Run'], ['Start SEO Run']]) && J(outs(api, 'Start KI Run')) === J([['Forget Old Requests']])
       && sk.parameters.workflowId.value === 'SEOagentKIntel1' && sk.parameters.options.waitForSubWorkflow === false, J({ pp: outs(api, 'Prepare Payload'), r: outs(api, 'Start Which Run?') }));
     const W = require('./ki_wiring.json'); const ki = JSON.parse(rd('workflows', W.file))[0];
-    check('KIW0-6 the skeleton: one door, settings and kill switch read before the gate, one callback, no paid node, no table write',
-      ki.id === 'SEOagentKIntel1' && ki.active === false && J(W.nodes) === J(['Has Callback (KI)?', 'KI Gate', 'KI Input', 'Load Kill Switch (KI)', 'Load Monitors (KI)', 'Manual Run', 'POST KI Report'])
-      && J(W.connections['KI Input']) === J([['Load Monitors (KI)']]) && J(W.connections['Load Kill Switch (KI)']) === J([['KI Gate']]) && W.callback.retry === false
-      && !ki.nodes.some(n => /langchain/.test(n.type) || /dataforseo/i.test(JSON.stringify(n))) && !ki.nodes.some(n => n.type === 'n8n-nodes-base.dataTable' && n.parameters.operation !== 'get'), J(W.nodes));
+    // E2 (2026-11-08): the skeleton became the worker; what stays frozen is the door: the request, then the settings and the kill switch, then the
+    // gate, and nothing paid or written on the way to a refusal (the worker's own wiring is scenarios_ki_e2.js KIE2-1)
+    const reachK = (w, from, stop) => { const seen = new Set(); const todo = [from]; while (todo.length) { const n = todo.pop(); if (seen.has(n) || n === stop) continue; seen.add(n); for (const l of ((w.connections[n] || {}).main || [])) for (const t of (l || [])) todo.push(t.node); } return seen; };
+    const beforeGate = [...reachK(ki, 'Manual Run', 'KI Gate')];
+    check('KIW0-6 the worker keeps the door: one trigger, settings and kill switch read before the gate, nothing paid or written before it, one final callback without a retry',
+      ki.id === 'SEOagentKIntel1' && ki.active === false && ['KI Input', 'Load Monitors (KI)', 'Load Kill Switch (KI)', 'KI Gate', 'POST KI Report', 'Manual Run'].every(n => W.nodes.includes(n))
+      && beforeGate.includes('Load Monitors (KI)') && beforeGate.includes('Load Kill Switch (KI)') && W.callback.retry === false
+      && !ki.nodes.some(n => beforeGate.includes(n.name) && (/langchain/.test(n.type) || /dataforseo/i.test(JSON.stringify(n.parameters || {})) || (n.type === 'n8n-nodes-base.dataTable' && !['get', 'create'].includes(n.parameters.operation)))), J(beforeGate));
     const M = JSON.parse(rd('deploy_manifest.json'));
     check('KIW0-6 deploy_manifest.json imports and publishes it (the front door starts it through Execute Workflow, so it must be published)',
       M.workflows.includes(W.file) && M.publish.includes('SEOagentKIntel1') && !(M.never_deploy || []).includes('SEOagentKIntel1'), J(M.publish.slice(-3)));
@@ -120,15 +124,17 @@ module.exports = async (ctx) => {
       killOff: await gate('competitors', mon('trial'), [{ key: 'ki:kill', value: '0' }]),
       trial: await gate('competitors', mon('Trial'), [{}]),
       on: await gate('keyword_research', mon('on'), [{}]) };
-    const R = Object.fromEntries(Object.entries(cases).map(([k, v]) => [k, v.callback_body.reason]));
-    check('KIW0-7 the kill switch stops every run and fails closed (unreadable = killed); off / empty / unknown / unreadable settings = ki_off; Trial and On reach the worker (W0: not_available_yet)',
-      J(R) === J({ killed: 'killed', killUnread: 'killed', noRow: 'ki_off', off: 'ki_off', typo: 'ki_off', monUnread: 'ki_off', killOff: 'not_available_yet', trial: 'not_available_yet', on: 'not_available_yet' }), J(R));
+    const R = Object.fromEntries(Object.entries(cases).map(([k, v]) => [k, v.callback_body ? v.callback_body.reason : (v.refused ? 'refused without a body' : 'runs')]));
+    check('KIW0-7 the kill switch stops every run and fails closed (unreadable = killed); off / empty / unknown / unreadable settings = ki_off; Trial and On reach the worker (E2: they run)',
+      J(R) === J({ killed: 'killed', killUnread: 'killed', noRow: 'ki_off', off: 'ki_off', typo: 'ki_off', monUnread: 'ki_off', killOff: 'runs', trial: 'runs', on: 'runs' }), J(R));
     const BASE = ['stage', 'status', 'reason', 'request_id', 'run_id', 'domain', 'market', 'mode', 'rule_version', 'sections', 'summary', 'labels', 'run_ledger', 'run_cost_estimate_usd', 'run_cost_estimate_basis', 'run_cost_estimate_state'];
-    const cb = cases.trial.callback_body, rb = cases.on.callback_body;
+    // E2: the refusal shape is checked on two refused cases of each kind (killed / off); Trial and On runs answer through the worker (KIE2-12)
+    const cb = cases.killOff.callback_body || (await gate('competitors', mon('trial'), [{ key: 'ki:kill', value: '1' }])).callback_body, rb = cases.off.callback_body;
+    const REFUSED = Object.fromEntries(Object.entries(cases).filter(([, v]) => v.refused));
     check('KIW0-7 the refusal is the contract\'s final callback (§4): its stage, status refused, the request id, every base key, the mode-specific lists empty, nothing spent',
-      cb.stage === 'ki_competitors' && rb.stage === 'ki_research' && Object.values(cases).every(c => c.callback_body.status === 'refused' && c.callback_body.run_cost_estimate_usd === 0 && c.callback_url === B.callback_url && c.callback_body.request_id === 'req-1')
+      cb.stage === 'ki_competitors' && rb.stage === 'ki_research' && Object.values(REFUSED).every(c => c.callback_body.status === 'refused' && c.callback_body.run_cost_estimate_usd === 0 && c.callback_url === B.callback_url && c.callback_body.request_id === 'req-1')
       && BASE.every(k => k in cb && k in rb) && ['competitors', 'listings', 'platforms'].every(k => J(cb[k]) === '[]') && ['clusters', 'striking', 'questions', 'plan'].every(k => J(rb[k]) === '[]') && J(rb.gaps_summary) === '{}'
-      && cb.mode === 'trial' && rb.mode === 'on' && cases.off.callback_body.mode === 'off' && cb.rule_version === 'ki-1', J({ cb, rb }));
+      && cb.mode === 'trial' && rb.mode === 'off' && cases.off.callback_body.mode === 'off' && cb.rule_version === 'ki-1' && !cases.trial.refused && !cases.on.refused, J({ cb, rb }));
 
     // ---- KIW0-8 money and words ----
     const CC = new Function(rd('v5', 'code', '_cost_cal.js') + '\nreturn CC;')();

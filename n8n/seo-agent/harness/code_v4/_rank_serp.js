@@ -25,6 +25,120 @@ const aioObserved = (obs) => {
   if (known.length === 1) return { count: 1, seen: seen.length, text: one(known[0]) + ' — AI Overviews vary between searches, so this is one observation, not a fixed feature of the query' };
   return { count: known.length, seen: seen.length, text: 'seen in ' + seen.length + ' of ' + known.length + ' checks (' + known.map(one).join('; ') + ') — AI Overviews vary between searches' };
 };
+// ---- SERP-GOTO (2026-11-08, R5 L-1): the real site behind a Google results-page redirect (SU) ----
+// Since about 2026-11-05 DataForSEO's LIVE Google organic SERP answers every organic and local-pack item with `domain: "google.com"`,
+// `url: "https://google.com/goto?url=CAES..."` (an opaque token nobody can decode), `main_domain` / `relative_url` null and `links[].url`
+// wrapped the same way. Google started serving /goto links in August; on 2026-11-02 DataForSEO wrote that Google now throttles how many
+// of them can be resolved per results page, so "High priority and Live requests resolve about half" (live probes of 2026-11-08 resolved
+// none of 50). Standard-priority tasks (task_post + task_get, about 80 s) still come back with every real URL.
+//   Read as it comes, every reader took google.com for the site: the Rank Tracker never found the client (13 of 14 rows of 2026-11-05
+// held goto URLs), competitors became google.com, and no two keywords ever shared a result (each token is unique).
+//   What survives is `breadcrumb` ("https://www.sage.com › en-ae › erp") and sometimes `website_name` (a host, a brand, or
+// "Facebook · <page name>"). The rule, applied as early as possible (every DataForSEO answer node, the SERP cache, the rank kit):
+//   * an item is a REDIRECT when its url is a Google redirect (google.<tld>/goto, /url, /search/url, /aclk; or Bing /ck/a) - a normal
+//     google.com result (support.google.com/..., about.google/...) is NOT one and passes untouched;
+//   * its host comes from the breadcrumb (the text before the first " › "), else from website_name when that is a host, else from a
+//     known social network named before " · " ("Facebook · X" -> facebook.com); otherwise the item stays UNRESOLVED: domain null,
+//     url null, never google.com;
+//   * a recovered url is `https://<host>/<breadcrumb segments joined by "/">` - APPROXIMATE: Google's breadcrumb segments are often the
+//     path ("› en-ae › erp") but sometimes page labels ("› Home › Blog"), and a long one is cut ("› best-erp-sof..."). A cut segment and
+//     everything after it are dropped and the item says `url_partial: true` (its url is then the host's home page);
+//   * every rewritten item carries `url_exact: false`, `url_recovered` ('breadcrumb' | 'website_name' | 'social' | null) and the original
+//     redirect in `redirect_url`; an item that was not a redirect is returned as the SAME object (old fixtures stay byte-identical).
+// What a reader may do with an approximate url (the rule every reader follows):
+//   * the SITE (host) is reliable: own-site rank detection matches by host, competitors are counted by host;
+//   * the PAGE is not: own-page identification says "page not identified" (url ''), never a guessed page; a cited source needs an exact
+//     url; clustering compares `SU.key()` - host + the breadcrumb path tokens - which is the same for the same result on two pages read
+//     the same way, and marked `~` so it never equals an exact url key.
+// Regex only: the n8n Code sandbox has no URL constructor. `var` + the guard lets two kits that both inline SU share one copy.
+var SU = (typeof SU === 'object' && SU && SU.v === 1) ? SU : (() => {
+  const S = (x) => (x == null ? '' : String(x));
+  const REDIR = /^https?:\/\/(?:[a-z0-9-]+\.)*(?:google\.[a-z]{2,3}(?:\.[a-z]{2})?\/(?:goto|url|search\/url|aclk)(?=[?\/#]|$)|bing\.com\/ck\/a(?=[?\/#]|$))/i;
+  const isRedirect = (u) => REDIR.test(S(u).trim());
+  const HOST = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$/i;
+  const SOCIAL = { facebook: 'facebook.com', linkedin: 'linkedin.com', youtube: 'youtube.com', instagram: 'instagram.com', x: 'x.com',
+    twitter: 'x.com', reddit: 'reddit.com', quora: 'quora.com', tiktok: 'tiktok.com', medium: 'medium.com', pinterest: 'pinterest.com' };
+  const bare = (h) => S(h).toLowerCase().replace(/^www\./, '');
+  const crumbHost = (b) => { const m = S(b).trim().match(/^https?:\/\/([^\/\s›]+)/i); const h = m ? m[1].toLowerCase().replace(/:\d+$/, '') : ''; return HOST.test(h) ? h : ''; };
+  // the breadcrumb's path segments, up to (not including) the first cut one; `cut` says whether one was cut
+  const crumbPath = (b) => {
+    const parts = S(b).split(/\s*›\s*/).slice(1).map(x => x.trim()).filter(Boolean); const segs = []; let cut = false;
+    for (const p of parts) { if (/^(?:\.\.\.|…)$/.test(p) || /(?:\.\.\.|…)$/.test(p)) { cut = true; break; } segs.push(p.replace(/\s+/g, '-').replace(/[?#]/g, '')); }
+    return { segs, cut };
+  };
+  // a redirect that CARRIES its target (google.com/url?q=https://..., ?url=https%3A...) is read as that target, exactly (FU-SV kept this
+  // rule for the facts search); the /goto token is opaque, so this finds nothing there
+  const dec = (v) => { let x = S(v); for (let i = 0; i < 3 && /%[0-9a-f]{2}/i.test(x); i++) { try { x = decodeURIComponent(x); } catch (e) { break; } } return x; };
+  const carried = (u) => { const s = S(u).trim(); const q = s.indexOf('?'); if (q < 0) return '';
+    for (const n of ['url', 'q', 'u']) for (const p of s.slice(q + 1).replace(/#.*$/, '').split('&')) { const e = p.indexOf('=');
+      if (e > 0 && p.slice(0, e).toLowerCase() === n) { const t = dec(p.slice(e + 1)).trim(); if (/^https?:\/\/[^\s\/?#]+\.[^\s<>"]*$/i.test(t) && !isRedirect(t)) return t; } }
+    return ''; };
+  const nameHost = (n) => { const s = S(n).trim().toLowerCase(); if (HOST.test(s)) return s;
+    const brand = s.split(/\s*·\s*/)[0].trim(); return SOCIAL[brand] ? SOCIAL[brand] : ''; };
+  // one item -> the same object when it is not a redirect, else a copy with the real host (or none)
+  const fixItem = (it) => {
+    if (!it || typeof it !== 'object' || !isRedirect(it.url)) return fixLinks(it);
+    const tgt = carried(it.url);
+    if (tgt) { const h = (tgt.match(/^https?:\/\/([^\/?#:]+)/i) || [])[1].toLowerCase();
+      return fixLinks({ ...it, domain: h, url: tgt, main_domain: bare(h), relative_url: (tgt.match(/^https?:\/\/[^\/?#]+(\/[^?#]*)?/i) || [])[1] || '/', url_recovered: 'redirect', redirect_url: S(it.url) }, true); }   // exact: no url_exact flag
+    const ch = crumbHost(it.breadcrumb); const nh = ch ? '' : nameHost(it.website_name);
+    const host = ch || nh;
+    const how = ch ? 'breadcrumb' : (nh ? (HOST.test(S(it.website_name).trim()) ? 'website_name' : 'social') : null);
+    let url = null, rel = null, partial = false;
+    if (host) {
+      const p = ch ? crumbPath(it.breadcrumb) : { segs: [], cut: false };
+      partial = ch ? p.cut : true; const segs = p.cut ? [] : p.segs;   // a host from website_name has no path at all
+      rel = '/' + segs.join('/'); url = 'https://' + host + (segs.length ? rel : '/');
+    }
+    const out = { ...it, domain: host || null, url, main_domain: host ? bare(host) : null, relative_url: rel, url_exact: false,
+      url_recovered: how, url_partial: partial, redirect_url: S(it.url) };
+    return fixLinks(out, true);
+  };
+  // links / nested items (AI Overview elements, sitelinks): a redirect url there is dropped (null), never kept as google.com
+  const fixLinks = (it, copied) => {
+    if (!it || typeof it !== 'object') return it;
+    let o = it;
+    for (const f of ['links', 'items', 'references']) {
+      const arr = it[f]; if (!Array.isArray(arr)) continue;
+      let changed = false;
+      const next = arr.map(x => { if (!x || typeof x !== 'object') return x;
+        if (f === 'items' && x.type && (x.type === 'organic' || x.breadcrumb != null)) { const y = fixItem(x); if (y !== x) changed = true; return y; }
+        if (isRedirect(x.url)) { changed = true; return { ...x, url: null, domain: (x.domain && !/^(?:www\.)?google\./i.test(S(x.domain))) ? x.domain : null, url_exact: false, redirect_url: S(x.url) }; }
+        const y = fixLinks(x); if (y !== x) changed = true; return y; });
+      if (changed) { if (o === it && !copied) o = { ...it }; o[f] = next; }   // `copied`: `it` is already this kit's own copy
+    }
+    return o;
+  };
+  // a whole DataForSEO answer -> the same object when nothing was a redirect, else a copy (result[].items rewritten, counts on the result)
+  const fixAnswer = (res) => {
+    if (!res || typeof res !== 'object' || !Array.isArray(res.tasks)) return res;
+    let changedAny = false;
+    const tasks = res.tasks.map(t => {
+      if (!t || !Array.isArray(t.result)) return t;
+      let ch = false;
+      const result = t.result.map(r => {
+        if (!r || !Array.isArray(r.items)) return r;
+        let n = 0, rec = 0, unres = 0;
+        const items = r.items.map(x => { const y = fixItem(x); if (y !== x) { if (y && y.redirect_url && y.type) { n++; if (y.domain) rec++; else unres++; } } return y; });
+        if (!items.some((y, i) => y !== r.items[i])) return r;
+        ch = true; return { ...r, items, serp_url: { redirects: n, recovered: rec, unresolved: unres, rule: 'SU (v5/code/_serp_url.js): host from the breadcrumb, url approximate' } };
+      });
+      if (!ch) return t; changedAny = true; return { ...t, result };
+    });
+    return changedAny ? { ...res, tasks } : res;
+  };
+  const fixItems = (items) => (Array.isArray(items) ? items.map(fixItem) : items);
+  const exact = (it) => !!it && it.url_exact !== false;
+  const unresolved = (it) => !!it && it.url_exact === false && !it.domain;
+  // a stored compact reading written before this fix: an item still holding a redirect url with no recovery on it
+  const poisoned = (v) => !!v && Array.isArray(v.items) && v.items.some(x => x && (x.type === 'organic' || x.type === 'local_pack') && isRedirect(x.url) && x.url_exact !== false);
+  // the clustering key of one result: an exact url as it is (no scheme, no www, no query, no trailing slash); an approximate one as
+  // "~host/segments" in lower case (the same result read on two pages gives the same key; it is never equal to an exact key)
+  const urlKey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const key = (it) => { if (!it) return ''; if (exact(it)) return urlKey(it.url || it.domain);
+    if (!it.domain) return ''; return '~' + urlKey(S(it.domain) + (it.relative_url && it.relative_url !== '/' ? it.relative_url : '')) + (it.url_partial ? '/…' : ''); };
+  return { v: 1, REDIR, isRedirect, carried, fixItem, fixItems, fixAnswer, exact, unresolved, poisoned, key, urlKey, crumbHost, crumbPath, nameHost };
+})();
 // ---- what one rank check's results page showed (G6, 2026-10-12, system review FIX_PLAN) ----
 // Every rank check already pays for one SERP call. Until now we kept three things from it: our position, our ranking URL and a
 // comma-joined list of item types. The leaders (Semrush Position Tracking, Ahrefs Rank Tracker, AccuRanker, SE Ranking) keep the
@@ -71,7 +185,8 @@ const RS = (() => {
     if (r.error || Number(r.status_code) >= 40000 || !Array.isArray(r.tasks) || Number(t0.status_code) >= 40000)
       error = S((r.error && (r.error.message || r.error)) || t0.status_message || r.status_message || 'no answer').slice(0, 120);
     const result = (t0.result || [])[0] || {};
-    return { ok: !error, error, seen_at: serpSeenAt(r), items: Array.isArray(result.items) ? result.items : [],
+    // SERP-GOTO (2026-11-08): every item with the real host behind a Google redirect (SU, v5/code/_serp_url.js, inlined above this kit)
+    return { ok: !error, error, seen_at: serpSeenAt(r), items: Array.isArray(result.items) ? SU.fixItems(result.items) : [],
       results_count: result.se_results_count == null ? null : Number(result.se_results_count) };
   };
 
@@ -122,8 +237,16 @@ const RS = (() => {
   const ourRank = (a, ourDomain) => {
     if (!a || !a.ok) return { position: -1, url: '' };
     const our = bare(ourDomain);
-    const mine = a.items.filter(x => x && x.type === 'organic').find(o => isOurs(bare(o.domain) || hostOf(o.url), our));
-    return mine ? { position: Number(mine.rank_group) || 0, url: S(mine.url) } : { position: 0, url: '' };
+    const org = a.items.filter(x => x && x.type === 'organic');
+    const mine = org.find(o => isOurs(bare(o.domain) || hostOf(o.url), our));
+    // SERP-GOTO (2026-11-08): our site is found by its HOST, which the breadcrumb gives reliably; the PAGE behind a Google redirect is not
+    // known (the breadcrumb path is approximate), so the url is '' and `page_identified` false - "page not identified", never a guessed
+    // page. Not found while some result could not be traced to any site: the reading cannot say "not in the top 50" - it is -1 (check
+    // again), so no drop and no "lost" alert can come from it.
+    if (mine) return SU.exact(mine) ? { position: Number(mine.rank_group) || 0, url: S(mine.url) }
+      : { position: Number(mine.rank_group) || 0, url: '', page_identified: false, host: bare(mine.domain), why: 'Google showed this result behind a redirect link: the site is known, the page is not' };
+    const unres = org.filter(o => SU.unresolved(o)).length;
+    return unres ? { position: -1, url: '', unresolved: unres, why: unres + ' result(s) on the page could not be traced to a site (Google redirect links), so "not in the top 50" cannot be told' } : { position: 0, url: '' };
   };
 
   // page 1: one row per domain (the best position it holds), plus every tracked competitor's best position over the whole answer
@@ -132,7 +255,7 @@ const RS = (() => {
     const comps = listOf(competitorList).filter(d => d && !isOurs(d, our));
     if (!a || !a.ok) return { unavailable: true, top: [], above: [], own: [], competitors: comps.map(domain => ({ domain, position: null, tracked: true })), tracked: comps };
     const organic = a.items.filter(x => x && x.type === 'organic').map((o, i) => ({
-      position: Number(o.rank_group) || i + 1, domain: bare(o.domain) || hostOf(o.url), url: S(o.url), title: S(o.title).slice(0, 110) }))
+      position: Number(o.rank_group) || i + 1, domain: bare(o.domain) || hostOf(o.url), url: S(o.url), title: S(o.title).slice(0, 110), exact: SU.exact(o) }))
       .filter(o => o.domain);
     const best = new Map();
     for (const o of organic) { const prev = best.get(o.domain); if (!prev || o.position < prev.position) best.set(o.domain, o); }
@@ -147,7 +270,8 @@ const RS = (() => {
     // B6-6 (2026-10-16, benchmark area 6): EVERY result of ours over the whole depth bought, not only the best one. `top` keeps one row
     // per domain (the best position it holds), so a second page of the site on the same results page was thrown away before it was
     // stored, and cannibalisation (two of our own URLs answering one search) could never be seen in the snapshot we keep.
-    const own = organic.filter(o => isOurs(o.domain, our)).sort((x, y) => x.position - y.position).map(o => ({ position: o.position, url: o.url }))
+    // SERP-GOTO: only results whose page is known (exact url) are pages of ours; one behind a redirect is the site, not a page
+    const own = organic.filter(o => isOurs(o.domain, our) && o.exact).sort((x, y) => x.position - y.position).map(o => ({ position: o.position, url: o.url }))
       .filter((o, i, arr) => arr.findIndex(x => urlKey(x.url) === urlKey(o.url)) === i);
     return { unavailable: false, top, above, own, competitors, tracked: comps };
   };
@@ -183,7 +307,7 @@ const RS = (() => {
   const snapshot = (a, land, feats, device) => ({ at: (a && a.seen_at) || null, device: device || 'desktop',
     results: (a && a.results_count) || null, unavailable: !a || !a.ok, error: a && a.ok ? '' : ((a && a.error) || 'no answer'),
     features: feats && !feats.unavailable ? (feats.types || []).filter(t => t !== 'organic').slice(0, 12) : [],
-    top: ((land && land.top) || []).map(t => ({ p: t.position, u: S(t.url).slice(0, 180), t: S(t.title).slice(0, 80) })),
+    top: ((land && land.top) || []).map(t => ({ p: t.position, u: S(t.url).slice(0, 180), t: S(t.title).slice(0, 80), ...(t.exact === false ? { x: 1 } : {}) })),   // x: the url is approximate (SERP-GOTO)
     // B6-6: how many of OUR pages the answer held (any depth), and, only when there are two or more, which ones. `own_n` missing = a
     // reading stored before this was kept, which can say nothing about a second page either way.
     ...(land && !land.unavailable && Array.isArray(land.own) ? { own_n: land.own.length } : {}),
@@ -215,6 +339,11 @@ const RS = (() => {
     return s.length <= limit ? s : JSON.stringify({ trimmed: 'overflow', note: 'this reading was too long to store in one column' });
   };
   const unpack = (v, dflt) => { if (v && typeof v === 'object') return v; try { const o = JSON.parse(S(v) || 'null'); return o == null ? dflt : o; } catch (e) { return dflt; } };
+  // SERP-GOTO (2026-11-08): a reading stored while Google's redirect links were read as the site (from about 2026-10-30 to this fix): its
+  // top list holds google.com/goto urls, so its position (usually 0, "not in the top 50") and its competitors (google.com) are not a
+  // reading of the page. Such a row is never a baseline, never compared, never the source of a drop or an alert.
+  const poisonedSnap = (x0) => { const x = unpack(x0, null); return !!x && Array.isArray(x.top) && x.top.some(e => e && SU.isRedirect(e.u)); };
+  const poisonedRow = (h) => !!h && (poisonedSnap(h.snapshot_json) || SU.isRedirect(h.url));
 
   // one line a person can read, in the observation form D26 asks for (an AI Overview is what one search showed at one moment)
   const featureLine = (feats, obs) => {
@@ -265,9 +394,9 @@ const RS = (() => {
     depth: 0, changed: null, changed_pct: null, entered: null, gone: null, moved: null, mean_move: null, mean_move_others: null, depth_others: 0, changed_others: null, changed_others_pct: null, band_others: null, band: null,
     from: null, to: null, device: '', labels_basis: CHURN.labels_basis });
   const snapOf = (v) => { const x = (v && typeof v === 'object' && !Array.isArray(v)) ? v : unpack(v, null);
-    if (!x || x.unavailable) return null;
-    const top = (Array.isArray(x.top) ? x.top : []).map(e => ({ p: Number(e && e.p) || 0, k: urlKey(e && e.u) })).filter(e => e.p > 0 && e.k);
-    return top.length ? { top, at: x.at || null, device: S(x.device) || 'desktop', trimmed: S(x.trimmed) } : null; };
+    if (!x || x.unavailable || poisonedSnap(x)) return null;
+    const top = (Array.isArray(x.top) ? x.top : []).map(e => ({ p: Number(e && e.p) || 0, k: urlKey(e && e.u), h: hostOf(e && e.u), x: !!(e && e.x) })).filter(e => e.p > 0 && e.k);
+    return top.length ? { top, at: x.at || null, device: S(x.device) || 'desktop', trimmed: S(x.trimmed), approx: top.some(e => e.x) } : null; };
   // prev / cur: a stored snapshot (the packed string or the object). o: { min_depth }
   const churn = (prev, cur, o) => {
     const c = { ...CHURN, ...(o || {}) };
@@ -275,6 +404,8 @@ const RS = (() => {
     if (!B) return churnNone('this check could not read the results page, so nothing can be compared');
     if (!A) return churnNone('no earlier reading of this results page is stored, so how much it moved cannot be told yet');
     if (A.device !== B.device) return churnNone('the two readings are of different devices (' + A.device + ' and ' + B.device + ')');
+    // SERP-GOTO: when either reading names only the site of a result (an approximate url), both are compared by site, and it says so
+    if (A.approx || B.approx) { A.top = A.top.map(e => ({ ...e, k: e.h || e.k })); B.top = B.top.map(e => ({ ...e, k: e.h || e.k })); }
     const depth = Math.min(A.top.length, B.top.length, CTR.length);
     if (depth < c.min_depth) return churnNone('only ' + depth + ' result' + (depth === 1 ? '' : 's') + ' were kept in both readings, too few to compare');
     const a = A.top.filter(e => e.p <= depth), b = B.top.filter(e => e.p <= depth);
@@ -350,7 +481,7 @@ const RS = (() => {
   const prevReading = (rows, o) => {
     const q = o || {}; const kw = kwKey(q.keyword), dom = bare(q.domain); const before = S(q.before || '9999');
     return (rows || []).filter(h => h && isDesk(h) && kwKey(h.keyword) === kw && (!dom || bare(h.domain) === dom) && S(h.checked_at) && S(h.checked_at) < before
-      && h.position !== '' && h.position != null && Number(h.position) >= 0 && (!q.withSnapshot || !!unpack(h.snapshot_json, null) || !!unpack(h.competitors_json, null)))
+      && h.position !== '' && h.position != null && Number(h.position) >= 0 && !poisonedRow(h) && (!q.withSnapshot || !!unpack(h.snapshot_json, null) || !!unpack(h.competitors_json, null)))
       .sort((a, b) => S(b.checked_at).localeCompare(S(a.checked_at)))[0] || null;
   };
   // how much two readings of the SAME results page differ when nothing can have changed: stored desktop readings of the keyword for the
@@ -384,7 +515,7 @@ const RS = (() => {
     const since = new Date(Date.parse(before.slice(0, 4) === '9999' ? new Date().toISOString() : before) - (Number(q.days) || 21) * 864e5).toISOString();
     const fallback = prevReading(rows, q);
     const cands = (rows || []).filter(h => h && isDesk(h) && kwKey(h.keyword) === kw && (!dom || bare(h.domain) === dom) && S(h.checked_at) && S(h.checked_at) < before
-      && S(h.checked_at) >= since && h.position !== '' && h.position != null && Number(h.position) >= 0 && snapOf(h.snapshot_json))
+      && S(h.checked_at) >= since && h.position !== '' && h.position != null && Number(h.position) >= 0 && !poisonedRow(h) && snapOf(h.snapshot_json))
       .sort((a, b) => S(b.checked_at).localeCompare(S(a.checked_at))).slice(0, Number(q.max) || 3);
     const latest = fallback && cands.length && S(cands[0].checked_at) === S(fallback.checked_at) ? cands[0] : null;
     if (!latest || cands.length < 2 || !snapOf(q.cur)) return { row: fallback, outlier: null };
@@ -472,6 +603,7 @@ const RS = (() => {
     const P = unpack(prev, null), C = unpack(cur, null);
     if (!C || C.unavailable || !Array.isArray(C.top) || !C.top.length) return none('this check could not read the results page');
     if (!P || P.unavailable || !Array.isArray(P.top) || !P.top.length) return none('no earlier stored reading of this results page to compare with');
+    if (poisonedSnap(C) || poisonedSnap(P)) return none('a reading holds Google redirect links with no site behind them, so who moved above you cannot be told');
     if (S(P.device || 'desktop') !== S(C.device || 'desktop')) return none('the two readings are of different devices');
     const pp = Number(q.previous_position), cp = Number(q.position);
     if (!(pp > 0)) return none(pp === 0 ? 'your page was not in the top 50 in the previous reading, so nobody moved above it' : 'the previous position could not be read');
@@ -523,7 +655,7 @@ const RS = (() => {
       note: 'weighted by your Search Console impressions: ' + total + ' impressions over ' + withW.length + ' of the ' + its.length + ' keywords, 28 days to ' + period
         + (left ? '; ' + left + (left === 1 ? ' keyword with no impressions weighs nothing' : ' keywords with no impressions weigh nothing') : '') + '; the unweighted average is ' + unweighted + '%' };
   };
-  return { MOVE, moveKind, cannibal, outranked, WEIGHT, weightedVoice, CTR, SUM_CTR, METHOD, AIO_KEEP, AIO_SOURCE, keepAt, CHURN, read, features, typeList, ourRank, landscape, voice, snapshot, pack, unpack,
+  return { poisonedSnap, poisonedRow, MOVE, moveKind, cannibal, outranked, WEIGHT, weightedVoice, CTR, SUM_CTR, METHOD, AIO_KEEP, AIO_SOURCE, keepAt, CHURN, read, features, typeList, ourRank, landscape, voice, snapshot, pack, unpack,
     featureLine, featureChips, churn, churnNone, churnText, moveNote, bare, hostOf, isOurs, listOf, weight, urlKey, serpHosts, prevReading, stableReading, bandWord, BAND_TERMS, noise, withNoise };
 })();
 return $input.all().map(i => { const j = i.json || {}; const a = RS.read(j.serp); const mine = RS.ourRank(a, j.domain);
@@ -536,4 +668,6 @@ return $input.all().map(i => { const j = i.json || {}; const a = RS.read(j.serp)
     change_text: RS.churnText(RS.churn(j.prev_snapshot === undefined ? null : j.prev_snapshot, j.cur_snapshot === undefined ? RS.pack(snapshot, j.max || 1800) : j.cur_snapshot, j.churn_opts || {})),
     move_note: RS.moveNote(j.delta === undefined ? null : j.delta, RS.churn(j.prev_snapshot === undefined ? null : j.prev_snapshot, j.cur_snapshot === undefined ? RS.pack(snapshot, j.max || 1800) : j.cur_snapshot, j.churn_opts || {})),
     cannibal: RS.cannibal(j.cur_snapshot === undefined ? RS.pack(snapshot, j.max || 1800) : j.cur_snapshot, j.cannibal_opts || {}),
+    ...(j.history ? { prev: RS.prevReading(j.history, { keyword: j.keyword, domain: j.domain, before: j.before }), poisoned_row: j.history.some(RS.poisonedRow) } : {}),
+    ...(j.prev_for_outranked ? { outranked: RS.outranked(j.prev_for_outranked, RS.pack(snapshot, j.max || 1800), j.outranked_opts || {}) } : {}),
     move_kind: RS.moveKind(j.delta === undefined ? null : j.delta, RS.churn(j.prev_snapshot === undefined ? null : j.prev_snapshot, j.cur_snapshot === undefined ? RS.pack(snapshot, j.max || 1800) : j.cur_snapshot, j.churn_opts || {})) } }; });
