@@ -11,12 +11,12 @@ const snapOf = (v) => { try { return typeof v === 'string' ? JSON.parse(v || '{}
 const hits = [];
 plan.forEach((r, i) => { const p = pos[i] || {}; if (!r || r.skip || String(r.device || 'desktop') === 'mobile') return;
   if (Number(p.position) === -1 && Number(snapOf(p.snapshot_json).mo) > 0 && Number(r.prev_unread) === 1) hits.push({ domain: S(r.domain), keyword: S(r.keyword) }); });
-if (!hits.length) return [{ json: { skip: true, reason: 'no keyword was unreadable twice in a row' } }];
+if (!hits.length) return [{ json: { skip: true, reason: 'no keyword was unreadable two weeks in a row' } }];
 const now = new Date().toISOString();
-const domains = [...new Set(hits.map(h => h.domain))];
-const msg = ('Rank Tracker: for ' + hits.length + ' keyword(s) the position could not be told twice in a row, because Google showed a result behind a redirect link with no site we could read and that result may be the client\'s own: '
-  + hits.slice(0, 8).map(h => '"' + h.keyword + '" (' + h.domain + ')').join(', ') + (hits.length > 8 ? ' and ' + (hits.length - 8) + ' more' : '')
-  + '. The next reading is reported as "not found among the results we could read". Check the results page by hand, and DataForSEO\'s redirect resolution (docs/keyword-intel-2026-11-08/fixes/SERP_GOTO.md).').slice(0, 1500);
-return [{ json: { alert_key: ('rank-unread|' + domains.join(',') + '|' + now.slice(0, 10)).slice(0, 200), workflow: 'SEO Agent — Rank Tracker', node: 'Parse Positions', message: msg,
-  execution_id: S($execution && $execution.id), execution_url: '', mode: 'schedule', severity: 'high', first_seen_at: now, last_seen_at: now, count: hits.length,
-  channels: 'data_table', notes: 'SERP-GOTO unread positions', attempts: 0, last_attempt_at: '', next_attempt_at: now, attempt_log: '' } }];
+const d0 = new Date(); const monday = new Date(Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth(), d0.getUTCDate() - ((d0.getUTCDay() + 6) % 7))).toISOString().slice(0, 10);
+// re-review N3: one row PER KEYWORD and week, so a second keyword of the same site on the same day is its own alert (the upsert of one shared
+// key overwrote the first and was never sent again); a re-run in the same week finds its own row and sends nothing twice
+return hits.map(h => ({ json: { alert_key: ('rank-unread|' + h.domain + '|' + h.keyword + '|' + monday).slice(0, 200), workflow: 'SEO Agent — Rank Tracker', node: 'Parse Positions',
+  message: ('Rank Tracker: the position of "' + h.keyword + '" (' + h.domain + ') could not be told two weeks in a row, because Google showed a result behind a redirect link with no site we could read and that result may be the client\'s own. From next week the report says "not found among the results we could read" (no drop is claimed). Check the results page by hand, and DataForSEO\'s redirect resolution (docs/keyword-intel-2026-11-08/fixes/SERP_GOTO.md).').slice(0, 1500),
+  execution_id: S($execution && $execution.id), execution_url: '', mode: S(($execution && $execution.mode) || 'trigger'), severity: 'high', first_seen_at: now, last_seen_at: now, count: 1,
+  channels: 'data_table', notes: 'SERP-GOTO unread positions', attempts: 0, last_attempt_at: '', next_attempt_at: now, attempt_log: '' } }));

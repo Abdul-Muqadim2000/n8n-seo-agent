@@ -234,6 +234,8 @@ export interface LadderRung {
   status: string;
   months: string;
   latestPosition: number | null;
+  /** SERP-GOTO: set when the newest check could not tell the position because a result Google hid may be ours (latestPosition is then the last real one) */
+  latestNote?: string | null;
   previousPosition: number | null;
   bestPosition: number | null;
   lastChecked: string | null;
@@ -257,6 +259,8 @@ export interface TrackedKeyword {
   url: string;
   serpFeatures: string[];
   latestPosition: number | null;
+  /** SERP-GOTO: set when the newest check could not tell the position because a result Google hid may be ours (latestPosition is then the last real one) */
+  latestNote?: string | null;
   previousPosition: number | null;
   bestPosition: number | null;
   lastChecked: string | null;

@@ -119,3 +119,76 @@ plan-type mismatch. Fix: pass `url: ''` (judge by title only) when `url_exact ==
   - The only lasting extra is H2's weekly re-checks of unpublished rungs.
 - **Node crashes:** no Code node calls a method on a SERP item's `url` or `domain` that is now `null` (I scanned every generated
   workflow). There are no duplicate or conflicting `SU` declarations: 66 nodes carry it, each once.
+
+## Re-review of 36c1882a
+
+I read the diff 175ff5cd..36c1882a: the kits, the readers, the 3 new Rank Tracker nodes and their wiring in the generated JSON, build
+section 181, and app cadence.ts / data.ts / RankingsPage. I re-ran the edge-case script (scratchpad `su/t.js`) on the new kit, with
+extra cases for L2, M2, H1 and Unicode-host ReDoS.
+
+### Per finding
+
+| Finding | State | Evidence |
+|---|---|---|
+| H1 | **Fixed** | `SU.key` gives `''` to cut, label and host-only results (`_serp_url.js:127-128`). Two different cut posts of delemontechnology.com both come back `""`. Live fixture: 4 keys of 9, all complete slug paths. A cluster "miss" buys nothing. Residual (Low): the same result shown exact on one page and approximate on another never matches, so clustering under goto rarely merges. That is honest, but `Ladder_Clusters.js:96` then says "carried only N ordinary result(s)" when the results were really hidden. |
+| H2 (a) | **Fixed** | All of these now resolve: `müller.de`, `xn--mgbh0fb.xn--mgbaam7a8h`, `موقع.امارات`, and scheme-less `en.wikipedia.org`. These stay unresolved, correctly: `3 reactions · 1 month ago`, `v2.0 › docs`, `Wikipedia › wiki`. Unicode HOST stays linear (1-11 ms on 150k-char inputs). |
+| H2 (b) | **Fixed** | -1 now comes only with `maybe_ours` (`_rank_serp.js` `hidden` / `ourRank`). Otherwise the position is 0 with `unresolved: n`. |
+| H2 (c) | **Partly** | The alert works: one row, sent once (see Tracker nodes below). The "third reading says 0" rule brings back false drops (N1). |
+| H2 (d) | **Fixed** | `Tracker_Plan.js:135-139` defers an unread -1 the same way as a 0, so there are no extra weekly buys. |
+| M1 | **Fixed** | cadence.ts `prevReading` skips poisoned rows (same regex as the engine). `data.ts` `snapTop` shows an approximate row as its host with no link and drops bare redirects. RankingsPage renders it without a link. |
+| M2 | **Fixed** | A breadcrumb is a path only when every segment is a slug. `odooerp.ae › Home › Blog` becomes `labels`, partial, and Pick Top 6 skips it. Side effect: any segment with a capital letter (`… › wiki › ERP`) also skips the page. That is conservative and acceptable. |
+| M3 | **Fixed** | `own_hidden` leaves `own_n` out, and `cannibal` then says "not checked" with a reason. |
+| M4 | **Fixed** | `serpPageTypes` ignores `url_exact: false` and every caller passes the flag. Side effect (Low): at today's 0/50 resolution every result is approximate, so `read: 0` and the text says "The results page was not read". A title-only vote would keep that signal. |
+| L1 | **Fixed** | `website_name: "Constructor"` is now unresolved. |
+| L2 | **Fixed** | `?q=https://:a.b` no longer throws (unresolved). For `?q=https://u:p@evil.com/x` the userinfo is refused and the host falls back to the breadcrumb. |
+| L3 | **Fixed** | Local pack and snippet return `ours: null` when their site is hidden. The local pack now reads every listing. |
+| L4 | **Fixed** | `!RS.poisonedRow(h)` on the won test and on the deferral. |
+| L5 | **Fixed** | The reason now names the hidden addresses. |
+| L6 | **Partly** | Checks A, B and D are good. Check C only walks HTTP nodes whose parameters literally contain `serp/google/organic`. The Rank Tracker, Site Tracker, Keyword Check, AI Growth and AI Visibility SERP calls use `={{ $json.endpoint }}`, so C never sees them. They are covered only by B and the kits, so the comment's "every live SERP HTTP node" claims too much. Fix: also match `api.dataforseo.com` endpoints built in the plan node, or name those nodes. |
+
+### Rank Tracker nodes (Ensure Ops Alerts -> Unread Alert Row -> Unread Alert? -> Save Unread Alert -> Load Open Alerts)
+
+- **Not every run.** An alert row is written only when the current reading is -1 with `mo` and `prev_unread === 1`, i.e. once per
+  streak. A run with nothing to do, or a mobile-only run, gives `{skip:true}` (`$('Parse Positions')` throws inside try/catch). The
+  plan/position index pairing holds because Parse Positions maps the plan items 1:1.
+- **No double send.** The row is an upsert on `alert_key` (`rank-unread|<domains>|<day>`). The B-A7 sweep sends only rows that are
+  open and due, by webhook, then marks `delivered`.
+- **Empty or missing ops table.** Ensure creates the table. Row and Save are `continueRegularOutput` and Save has `alwaysOutputData`.
+  Load Open Alerts filters only on `last_seen_at` (it does not read `$json`) and is `executeOnce`, so either branch feeds it exactly
+  one item. The tracker cannot break here.
+- **Low, N3.** A second run on the same day with another keyword on the same domain hits the same key. The upsert overwrites the
+  message and resets `attempts` / `next_attempt_at`, but leaves `delivered: webhook`, so the new keyword's alert is never sent. Fix:
+  put the keyword set (or a hash of it) in the key. `mode` is hard-coded to `'schedule'`.
+
+### New findings
+
+- **N1, Medium (bordering High): the settled 0 is stored and reported as an ordinary "not in the top 50", a false drop.**
+  - `Parse_Positions.js:18` turns the third consecutive maybe-ours -1 into `position: 0`. `settled_after_unread` is not written to
+    the row or the snapshot.
+  - `Tracker_Report.js:87` then computes delta -100 against the last real position: "dropped out of the top 50", plus the lost alert
+    and the app chart.
+  - `maybe_ours` means the hidden result carries our own label in its name, title or breadcrumb, so it is most likely ours. The rule
+    tells the client their page fell when it probably did not. That is the incident class this hotfix exists to fix.
+  - The alert text (`Unread_Alert_Row.js:19`) promises "reported as 'not found among the results we could read'", but nothing
+    renders that.
+  - The streak counts readings, not weeks (`Tracker_Plan.js:136`). A scheduled run plus a catch-up plus an app re-check can settle
+    within days, so the warning week the alert was meant to give is lost.
+  - The Site Tracker (`Parse_Site_SERP.js:16`) settles on the 2nd reading, and counts a stored -1 of any cause, including a failed
+    API read, as the first.
+  - Fix: write a marker (`st: 1`) to the snapshot. Have Tracker Report and Site Metrics show "not found among the results we could
+    read" with delta null and no lost alert. Count the streak over readings at least 6 days apart, and use the same rule in the Site
+    Tracker.
+  - Exposure: in the worst case it lands on the 3rd weekly reading after deploy, only on keywords with a hidden maybe-ours result.
+    The alert fires one reading earlier.
+- **N2, Low.** A client with an IDN domain: Google's breadcrumb shows the host in Unicode, the stored domain is (probably) punycode,
+  or the reverse. `isOurs` fails and `couldBe` cannot match an `xn--` label, so the result is a false 0. There is no IDN client
+  today.
+- **N4, Low.** `pack()`'s last-resort `{trimmed:'overflow'}` drops `mo` / `ur`. For that keyword the streak, the deferral and the
+  alert then quietly stop.
+
+### Final verdict: SHIP
+
+There is no Blocker and no open High. H1 and every M/L except L6 are fixed. The new tracker nodes are safe: they do not fire every
+run, do not double-send, and do not break on an empty table. N1 should be fixed (marker + no -100 delta + a weekly streak) before
+the second weekly Rank Tracker cycle after deploy, which is the earliest a settled 0 can reach a client. Or ship with the settle rule
+switched off (keep the alert, keep the -1) until it is fixed.

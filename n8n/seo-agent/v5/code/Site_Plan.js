@@ -6,6 +6,7 @@
 // aside for being a competitor's brand still bought a live rank check every week and still appeared in the weekly report. The same shared
 // read-path gate the Rank Tracker and the Content Cadence use (FITR, _fit_gate.js) runs here, and what it sets aside is named with its reason.
 /*__FIT_GATE__*/
+/*__SERP_URL__*/
 // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.5 / §4.8): three kinds of run. No site named = the batch over every active site (the old Monday run).
 // A site named with `on_demand` semantics = the owner or "Track my site" asking (a paused site still runs). A site named by a run of its weekly
 // cycle (`trigger: 'cycle'`, the Cycle Dispatcher) = a SCHEDULED run for that one site: `on_demand` false and a paused site honoured. The monthly
@@ -156,7 +157,10 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const content_groups = (() => { try { const v = JSON.parse(s.content_groups_json || '[]'); return (Array.isArray(v) ? v : []).map(g => ({ name: String(g && g.name || '').trim().slice(0, 60), pattern: String(g && g.pattern || '').trim().slice(0, 200) })).filter(g => g.name && g.pattern).slice(0, 12); } catch (e) { return []; } })();
   const checkin_due = !cks.some(c => checkinMonth(c) === localMonth);
   const serp = {};
-  for (const h of history) { if (normD(h.domain) !== s.domain) continue; const k = String(h.keyword).toLowerCase(); if (!serp[k] || String(h.checked_at) > String(serp[k].checked_at)) serp[k] = { position: Number(h.position), url: h.url || '', checked_at: h.checked_at }; }
+  for (const h of history) { if (normD(h.domain) !== s.domain) continue; const k = String(h.keyword).toLowerCase(); if (!serp[k] || String(h.checked_at) > String(serp[k].checked_at)) serp[k] = { position: Number(h.position), url: h.url || '', checked_at: h.checked_at, note: SU.unreadNote(h.snapshot_json) }; }
+  // SERP-GOTO (re-review N1): the Site Tracker's own rows of each keyword (ladder_id = the site id), and how many earlier weeks in a row
+  // ended unread (a result Google hid may be yours) - a failed API read ends the streak; Parse Site SERP settles only from the third week
+  for (const k of Object.keys(serp)) serp[k].unread_weeks = SU.unreadWeeks(history.filter(h => normD(h.domain) === s.domain && String(h.ladder_id) === String(s.site_id) && String(h.keyword).toLowerCase() === k && String(h.device || 'desktop') !== 'mobile'), { now });
   return { json: { site_id: s.site_id, domain: s.domain, gsc_property_hint: s.gsc_property || '', ga4_property_id: String(s.ga4_property_id || '').replace(/^properties\//, ''), country: s.country || '', location_code: Number(s.location_code) || 0, language_code: s.language_code || 'en',
     email: s.email || '', callback_url: s.callback_url || '', request_id: String(trigger.request_id || s.request_id || ''), source: s.source || 'form', status: s.status || 'active', created_at: s.created_at || now, first_run: !s.last_run_at, virtual: !!s.virtual,
     keywords: s.keywords, tracked: tracked.slice(0, CONFIG.max_tracked_keywords), ladder_pages: pages.slice(0, CONFIG.max_inspections), ladder_heads: [...new Set(lrows.map(l => String(l.head_keyword || '').toLowerCase().trim()).filter(Boolean))],

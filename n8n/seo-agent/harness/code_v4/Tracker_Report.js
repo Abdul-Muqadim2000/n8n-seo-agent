@@ -624,7 +624,22 @@ var SU = (typeof SU === 'object' && SU && SU.v === 1) ? SU : (() => {
   const labelOf = (d) => flat(bare(S(d)).replace(/^https?:\/\//, '').split('/')[0].split('.')[0]);
   const couldBe = (it, domain) => { const l = labelOf(domain); if (!it || l.length < 4) return false;
     return [it.website_name, it.title, it.breadcrumb].some(v => flat(v).includes(l)); };
-  return { v: 1, REDIR, HOST, isRedirect, carried, hostOfUrl, couldBe, labelOf, fixItem, fixItems, fixAnswer, exact, unresolved, poisoned, key, urlKey, crumbHost, crumbPath, nameHost };
+  // ---- SERP-GOTO (re-review N1): unread readings of seo_rank_history, shared by the Rank Tracker and the Site Tracker ----
+  // UNREAD = position -1 because a result Google hid may be ours (snapshot `mo`), or settled after that (`st`). A -1 without `mo` is a
+  // failed read, which is not an unread reading and ends a streak. A row stored with bare redirects (before this fix) is no reading.
+  const snapOf = (v) => { if (v && typeof v === 'object') return v; try { const o = JSON.parse(S(v) || 'null'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } };
+  const poisonedRow = (h) => !!h && ((Array.isArray(snapOf(h.snapshot_json).top) && snapOf(h.snapshot_json).top.some(e => e && isRedirect(e.u))) || isRedirect(h.url));
+  const unreadRow = (h) => { if (!h || Number(h.position) !== -1) return false; const x = snapOf(h.snapshot_json); return Number(x.mo) > 0 || Number(x.st) > 0; };
+  const weekOf = (t) => { const d = new Date(S(t)); if (isNaN(d.getTime())) return ''; return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - ((d.getUTCDay() + 6) % 7))).toISOString().slice(0, 10); };
+  // how many earlier CALENDAR WEEKS (Monday-based, UTC) in a row ended unread, newest first: a catch-up or an app re-check in the same
+  // week is one week, and this run's own week does not count. rows: one keyword's desktop rows of one tracker (any order)
+  const unreadWeeks = (rows, o) => { const now = weekOf((o || {}).now || new Date().toISOString()); const weeks = new Set();
+    for (const h of (rows || []).filter(r => r && !poisonedRow(r) && S(r.checked_at)).sort((a, b) => S(b.checked_at).localeCompare(S(a.checked_at)))) {
+      if (!unreadRow(h)) break; const w = weekOf(h.checked_at); if (w && w !== now) weeks.add(w); }
+    return weeks.size; };
+  // the words a report uses for an unread reading (null for any other)
+  const unreadNote = (snap) => { const x = snapOf(snap); return Number(x.st) > 0 ? 'not found among the results we could read' : Number(x.mo) > 0 ? 'could not be told: a result Google hid may be yours' : null; };
+  return { v: 1, REDIR, HOST, unreadRow, weekOf, unreadWeeks, unreadNote, poisonedRowSU: poisonedRow, isRedirect, carried, hostOfUrl, couldBe, labelOf, fixItem, fixItems, fixAnswer, exact, unresolved, poisoned, key, urlKey, crumbHost, crumbPath, nameHost };
 })();
 // ---- what one rank check's results page showed (G6, 2026-10-12, system review FIX_PLAN) ----
 // Every rank check already pays for one SERP call. Until now we kept three things from it: our position, our ranking URL and a
@@ -838,7 +853,9 @@ const RS = (() => {
       const k = lists.filter(x => o[x].length).sort((a, b) => o[b].length - o[a].length)[0];
       o[k].pop(); cut.add('lists'); o.trimmed = [...cut].join('+'); s = JSON.stringify(o);
     }
-    return s.length <= limit ? s : JSON.stringify({ trimmed: 'overflow', note: 'this reading was too long to store in one column' });
+    // SERP-GOTO (re-review N4): the last resort keeps the small markers the next plan reads (hidden results, settled, own pages hidden)
+    const keep = {}; for (const k of ['at', 'device', 'unavailable', 'ur', 'mo', 'st', 'own_hidden']) if (o[k] !== undefined) keep[k] = o[k];
+    return s.length <= limit ? s : JSON.stringify({ trimmed: 'overflow', note: 'this reading was too long to store in one column', ...keep });
   };
   const unpack = (v, dflt) => { if (v && typeof v === 'object') return v; try { const o = JSON.parse(S(v) || 'null'); return o == null ? dflt : o; } catch (e) { return dflt; } };
   // SERP-GOTO (2026-11-08): a reading stored while Google's redirect links were read as the site (from about 2026-10-30 to this fix): its
@@ -846,6 +863,8 @@ const RS = (() => {
   // reading of the page. Such a row is never a baseline, never compared, never the source of a drop or an alert.
   const poisonedSnap = (x0) => { const x = unpack(x0, null); return !!x && Array.isArray(x.top) && x.top.some(e => e && SU.isRedirect(e.u)); };
   const poisonedRow = (h) => !!h && (poisonedSnap(h.snapshot_json) || SU.isRedirect(h.url));
+  // SERP-GOTO (re-review N1): the unread-reading rules live in SU (v5/code/_serp_url.js), so the Site Tracker's plan uses the same ones
+  const unreadRow = SU.unreadRow, weekOf = SU.weekOf, unreadWeeks = SU.unreadWeeks, unreadNote = SU.unreadNote;
 
   // one line a person can read, in the observation form D26 asks for (an AI Overview is what one search showed at one moment)
   const featureLine = (feats, obs) => {
@@ -1158,7 +1177,7 @@ const RS = (() => {
       note: 'weighted by your Search Console impressions: ' + total + ' impressions over ' + withW.length + ' of the ' + its.length + ' keywords, 28 days to ' + period
         + (left ? '; ' + left + (left === 1 ? ' keyword with no impressions weighs nothing' : ' keywords with no impressions weigh nothing') : '') + '; the unweighted average is ' + unweighted + '%' };
   };
-  return { hidden, poisonedSnap, poisonedRow, MOVE, moveKind, cannibal, outranked, WEIGHT, weightedVoice, CTR, SUM_CTR, METHOD, AIO_KEEP, AIO_SOURCE, keepAt, CHURN, read, features, typeList, ourRank, landscape, voice, snapshot, pack, unpack,
+  return { hidden, unreadRow, weekOf, unreadWeeks, unreadNote, poisonedSnap, poisonedRow, MOVE, moveKind, cannibal, outranked, WEIGHT, weightedVoice, CTR, SUM_CTR, METHOD, AIO_KEEP, AIO_SOURCE, keepAt, CHURN, read, features, typeList, ourRank, landscape, voice, snapshot, pack, unpack,
     featureLine, featureChips, churn, churnNone, churnText, moveNote, bare, hostOf, isOurs, listOf, weight, urlKey, serpHosts, prevReading, stableReading, bandWord, BAND_TERMS, noise, withNoise };
 })();
 // ---- chart annotations (G12, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.5 / 2.12) ----
@@ -2282,7 +2301,8 @@ const normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\/\//
 const validPos = (v) => v !== '' && v != null && Number.isFinite(Number(v)) && Number(v) >= 0;   // -1 = failed check: "check again", never a position
 const nowCheck = pos[0] ? pos[0].checked_at : new Date().toISOString();
 const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const posText = (v) => v == null || v === 0 ? 'not in top 50' : v < 0 ? 'check failed' : '#' + v;
+// SERP-GOTO (re-review N1): an unread -1 (a result Google hid may be yours; settled: not found among the results we could read) is said as such
+const posText = (v, note) => v == null || v === 0 ? 'not in top 50' : v < 0 ? (note || 'check failed') : '#' + v;
 const td = 'style="padding:4px 8px;border:1px solid #cbd5e1"';
 // G6: a mobile check is a second reading of the same keyword, so it never becomes a row of the ladder table — it is kept beside the
 // desktop row (the series, the rungs, won / stuck and the next step all stay desktop, as they were before G6).
@@ -2315,7 +2335,7 @@ for (const [id, items] of byLadder) {
   // C-4 (re-rating 2026-10-17): the baseline is the newest earlier reading unless the readings around it show it was a one-off (RS.stableReading)
   const rowsK = items.map(it => { const st = it.deferred ? null : RS.stableReading(deskHist, { keyword: it.keyword, domain: ladDomain, before: nowCheck, cur: it.result.snapshot_json }); const pr = st ? st.row : null; const cur = Number(it.result.position); const prev = it.deferred ? cur : (pr ? Number(pr.position) : null);
     const delta = (cur > 0 && prev > 0) ? prev - cur : (cur > 0 && prev === 0) ? 100 : (cur === 0 && prev > 0) ? -100 : null;
-    return { ...it, current: cur, previous: prev, delta, prev_row: pr, prev_at: pr ? String(pr.checked_at) : '', outlier: st ? st.outlier : null, url: it.result.url || '' }; }).sort((a, b) => a.rung - b.rung || a.page_no - b.page_no);
+    return { ...it, current: cur, previous: prev, delta, prev_row: pr, prev_at: pr ? String(pr.checked_at) : '', outlier: st ? st.outlier : null, url: it.result.url || '', unread_note: cur === -1 ? RS.unreadNote(it.result.snapshot_json) : null }; }).sort((a, b) => a.rung - b.rung || a.page_no - b.page_no);
   const head = rowsK.find(r => r.rung === 4) || rowsK[0];
   // ---- G6: the results page of each keyword, read back from the row that was just stored ----
   const serpOf = (r) => {
@@ -2343,7 +2363,7 @@ for (const [id, items] of byLadder) {
   const changes = new Map(rowsK.map(r => [r.keyword, r.deferred ? RS.churnNone('no check was bought for this keyword this week — it is checked monthly until its page is live')
     : { ...RS.withNoise(RS.churn(r.prev_row ? r.prev_row.snapshot_json : null, r.result.snapshot_json, { own: ladDomain }), RS.noise(deskHist, { keyword: r.keyword, domain: ladDomain })), ...(r.outlier ? { outlier: r.outlier } : {}) }]));   // R88: judged against what two readings of one moment show; B6-8: `own` also measures the page without us
   const moveNoteOf = (r) => RS.moveNote(r.delta, changes.get(r.keyword));
-  const withMove = (r) => { const n = moveNoteOf(r); return r.keyword + ' (' + posText(r.previous) + ' \u2192 ' + posText(r.current) + (n ? '; ' + n : '') + ')'; };
+  const withMove = (r) => { const n = moveNoteOf(r); return r.keyword + ' (' + posText(r.previous) + ' \u2192 ' + posText(r.current, r.unread_note) + (n ? '; ' + n : '') + ')'; };
   // how old the oldest reading this report compares against is, and what Google did in between (criterion 2.12)
   const prevDays = rowsK.map(r => r.prev_at).filter(Boolean).sort();
   const windowStart = prevDays.length ? prevDays[0].slice(0, 10) : '';
@@ -2486,7 +2506,7 @@ for (const [id, items] of byLadder) {
   // both checked monthly, and the column said nothing about it.
   const staleRead = (r) => !!r.prev_at && (new Date(nowCheck).getTime() - new Date(r.prev_at).getTime()) / 864e5 > RS.CHURN.stale_days;
   const table = '<table style="border-collapse:collapse;font-size:13px"><tr><th align="left" ' + td + '>Rung</th><th align="left" ' + td + '>Keyword</th><th ' + td + '>Now</th><th ' + td + '>Before</th><th align="left" ' + td + '>Ranking URL</th></tr>' +
-    rowsK.map(r => '<tr><td ' + td + '>' + (r.rung === 4 ? 'Top' : r.rung) + '</td><td ' + td + '>' + esc(r.keyword) + (asideKw.has(r.keyword) ? ' <span style="color:#b45309;font-size:11px">(set aside: not a search this website should target — see below; no page is written for it)</span>' : r.deferred ? ' <span style="color:#64748b;font-size:11px">(not published yet: checked monthly, last ' + esc(String(r.last_checked || '').slice(0, 10)) + ')</span>' : '')   /* C-12 (F-L): a set-aside rung is not "not published yet" */ + '</td><td align="center" ' + td + '>' + esc(posText(r.current)) + '</td><td align="center" ' + td + '>' + (r.previous == null ? 'first check' : esc(posText(r.previous)) + (staleRead(r) ? ' <span style="color:#64748b;font-size:11px">(' + esc(r.prev_at.slice(0, 10)) + ')</span>' : '')) + '</td><td ' + td + '>' + esc(r.url || '—') + '</td></tr>').join('') + '</table>';
+    rowsK.map(r => '<tr><td ' + td + '>' + (r.rung === 4 ? 'Top' : r.rung) + '</td><td ' + td + '>' + esc(r.keyword) + (asideKw.has(r.keyword) ? ' <span style="color:#b45309;font-size:11px">(set aside: not a search this website should target — see below; no page is written for it)</span>' : r.deferred ? ' <span style="color:#64748b;font-size:11px">(not published yet: checked monthly, last ' + esc(String(r.last_checked || '').slice(0, 10)) + ')</span>' : '')   /* C-12 (F-L): a set-aside rung is not "not published yet" */ + '</td><td align="center" ' + td + '>' + esc(posText(r.current, r.unread_note)) + '</td><td align="center" ' + td + '>' + (r.previous == null ? 'first check' : esc(posText(r.previous)) + (staleRead(r) ? ' <span style="color:#64748b;font-size:11px">(' + esc(r.prev_at.slice(0, 10)) + ')</span>' : '')) + '</td><td ' + td + '>' + esc(r.url || '—') + '</td></tr>').join('') + '</table>';
   // ---- G6: what the results pages looked like, who is above us and the share of voice ----
   const mobText = (m) => !m ? '—' : posText(m.position) + (m.fresh ? '' : ' <span style="color:#64748b;font-size:11px">(' + esc(String(m.checked_at || '').slice(0, 10)) + ')</span>');
   const serpRows = rowsK.filter(r => serps.get(r.keyword) || mobiles.get(r.keyword));
@@ -2567,7 +2587,7 @@ for (const [id, items] of byLadder) {
   const moves = rowsK.filter(r => !r.deferred && r.delta != null && Math.abs(r.delta) >= RS.MOVE.min_places).map(r => {
     const k = RS.moveKind(r.delta, changes.get(r.keyword)) || { kind: 'not_compared', own: false, text: '' };
     return { keyword: r.keyword, rung: r.rung, previous: r.previous, current: r.current, delta: r.delta, direction: r.delta > 0 ? 'gain' : 'drop',
-      kind: k.kind, own: !!k.own, note: k.text, line: r.keyword + ' (' + posText(r.previous) + ' → ' + posText(r.current) + (k.text ? '; ' + k.text : '') + ')' }; });
+      kind: k.kind, own: !!k.own, note: k.text, line: r.keyword + ' (' + posText(r.previous) + ' → ' + posText(r.current, r.unread_note) + (k.text ? '; ' + k.text : '') + ')' }; });
   const movesOf = (kind, dir) => moves.filter(m => m.kind === kind && (!dir || m.direction === dir)).map(m => m.line);
   const ownDrops = movesOf('own', 'drop'), ownGains = movesOf('own', 'gain');
   const movedWithPage = movesOf('with_page'), withinNoise = movesOf('within_noise'), notCompared = movesOf('not_compared');
@@ -2698,7 +2718,7 @@ if (watchMeta && (watchMeta.sites || []).length) {
       const f = read ? RS.unpack(sd.row.features_json, null) : null;
       const c = read ? RS.unpack(sd.row.competitors_json, null) : null;
       const sov = (read && sd.row.share_of_voice != null && Number(sd.row.share_of_voice) >= 0) ? Number(sd.row.share_of_voice) : null;
-      return { keyword: sd.keyword, how: sd.how, reason: sd.reason || '', read, current, previous, delta, change,
+      return { keyword: sd.keyword, how: sd.how, reason: sd.reason || '', read, current, previous, delta, change, unread_note: current === -1 ? RS.unreadNote(sd.row.snapshot_json) : null,
         at: sd.at || '', url: read ? (sd.row.url || '') : '', features: f, chips: f ? RS.featureChips(f) : [],
         share_of_voice: sov, above: ((c || {}).above || []).map(x => ({ domain: x.d, position: x.p, tracked: !!x.t })),
         competitors: ((c || {}).competitors || []).map(x => ({ domain: x.d, position: x.p, tracked: !!x.t })),
@@ -2706,12 +2726,12 @@ if (watchMeta && (watchMeta.sites || []).length) {
         move_kind: kind ? kind.kind : null, move_kind_note: kind ? kind.text : '', cannibal, outranked: outr };
     }).sort((a, b) => (a.current == null ? 1 : 0) - (b.current == null ? 1 : 0) || (a.current === 0 ? 1 : 0) - (b.current === 0 ? 1 : 0) || (a.current || 0) - (b.current || 0) || a.keyword.localeCompare(b.keyword));
     if (!rowsW.length && !heldW.length && !asideW.length) continue;
-    const moveOf = (r) => r.keyword + ' (' + posText(r.previous) + ' → ' + posText(r.current) + (r.move_note ? '; ' + r.move_note : '') + ')';
+    const moveOf = (r) => r.keyword + ' (' + posText(r.previous) + ' → ' + posText(r.current, r.unread_note) + (r.move_note ? '; ' + r.move_note : '') + ')';
     const gainsW = rowsW.filter(r => r.delta != null && r.delta >= 5).map(moveOf);
     const dropsW = rowsW.filter(r => r.delta != null && r.delta <= -5).map(moveOf);
     // B6-8: what each five-place move is called; the mail's gains and drops are the page's own moves only
     const bigW = rowsW.filter(r => r.delta != null && Math.abs(r.delta) >= RS.MOVE.min_places && r.move_kind);
-    const kindLine = (r) => r.keyword + ' (' + posText(r.previous) + ' → ' + posText(r.current) + (r.move_kind_note ? '; ' + r.move_kind_note : '') + ')';
+    const kindLine = (r) => r.keyword + ' (' + posText(r.previous) + ' → ' + posText(r.current, r.unread_note) + (r.move_kind_note ? '; ' + r.move_kind_note : '') + ')';
     const ofKindW = (k, dir) => bigW.filter(r => r.move_kind === k && (!dir || (dir === 'gain' ? r.delta > 0 : r.delta < 0))).map(kindLine);
     const ownGainsW = ofKindW('own', 'gain'), ownDropsW = ofKindW('own', 'drop'), withPageW = ofKindW('with_page'), noiseW = ofKindW('within_noise'), notComparedW = ofKindW('not_compared');
     const movesW = bigW.map(r => ({ keyword: r.keyword, previous: r.previous, current: r.current, delta: r.delta, direction: r.delta > 0 ? 'gain' : 'drop', kind: r.move_kind, own: r.move_kind === 'own', note: r.move_kind_note, line: kindLine(r) }));
@@ -2741,7 +2761,7 @@ if (watchMeta && (watchMeta.sites || []).length) {
     const tableW = rowsW.length ? '<table style="border-collapse:collapse;font-size:13px"><tr><th align="left" ' + td + '>Keyword</th><th ' + td + '>Now</th><th ' + td + '>Before</th><th align="left" ' + td + '>Where this reading came from</th><th ' + td + '>Share of voice</th><th align="left" ' + td + '>Page movement</th><th align="left" ' + td + '>Above you</th></tr>' +
       rowsW.map(r => { const ab = r.above.length ? r.above.slice(0, 3).map(a => esc(a.domain) + ' (#' + a.position + ')' + (a.tracked ? ' *' : '')).join(', ') + (r.above.length > 3 ? ' +' + (r.above.length - 3) + ' more' : '') : (r.current > 0 && r.current <= 10 ? 'nobody on page 1' : '—');
         const ch = r.change && r.change.available ? esc(r.change.changed + ' of top ' + r.change.depth + ' changed') + ' <span style="color:#64748b;font-size:11px">(' + esc(RS.bandWord(r.change.band)) + ')</span>' : '<span style="color:#64748b;font-size:11px">not available</span>';
-        return '<tr><td ' + td + '>' + esc(r.keyword) + '</td><td align="center" ' + td + '>' + (r.read ? esc(posText(r.current)) : '<span style="color:#64748b;font-size:11px">not read</span>') + '</td><td align="center" ' + td + '>' +
+        return '<tr><td ' + td + '>' + esc(r.keyword) + '</td><td align="center" ' + td + '>' + (r.read ? esc(posText(r.current, r.unread_note)) : '<span style="color:#64748b;font-size:11px">not read</span>') + '</td><td align="center" ' + td + '>' +
           (r.previous == null ? 'first reading' : esc(posText(r.previous)) + (r.previous_checked_at ? ' <span style="color:#64748b;font-size:11px">(' + esc(String(r.previous_checked_at).slice(0, 10)) + ')</span>' : '')) + '</td><td ' + td + '>' + esc(howText(r)) +
           '</td><td align="center" ' + td + '>' + (r.share_of_voice != null ? r.share_of_voice + '%' : '—') + '</td><td ' + td + '>' + ch + '</td><td ' + td + '>' + ab + '</td></tr>'; }).join('') + '</table>' : '';
     const heldHtml = heldW.length ? '<p style="color:#64748b;font-size:12px"><b>Not checked this week (' + heldW.length + (watchMeta.held_total > heldW.length ? ' of ' + watchMeta.held_total : '') + '):</b> ' +
@@ -2759,8 +2779,8 @@ if (watchMeta && (watchMeta.sites || []).length) {
     // the next step says something only when the readings say it (rule 1): a fall the page around it did not share, then the nearest win
     const ownDrop = rowsW.filter(r => r.delta != null && r.delta <= -RS.MOVE.min_places && r.move_kind === 'own').sort((a, b) => a.delta - b.delta)[0] || null;   // B6-8: the page's own fall, by the one rule
     const nearest = striking.sort((a, b) => a.current - b.current)[0] || null;
-    const nextW = ownDrop ? { action: 'look_at_drop', keyword: ownDrop.keyword, text: '"' + ownDrop.keyword + '" fell from ' + posText(ownDrop.previous) + ' to ' + posText(ownDrop.current) + ' and the rest of that results page barely moved, so this one is about your page: look at the page that ranks for it first.' }
-      : nearest ? { action: 'nearest_win', keyword: nearest.keyword, text: '"' + nearest.keyword + '" is at ' + posText(nearest.current) + ' — the nearest win on your list. Strengthening the page that already ranks for it is cheaper than writing a new one.' }
+    const nextW = ownDrop ? { action: 'look_at_drop', keyword: ownDrop.keyword, text: '"' + ownDrop.keyword + '" fell from ' + posText(ownDrop.previous) + ' to ' + posText(ownDrop.current, ownDrop.unread_note) + ' and the rest of that results page barely moved, so this one is about your page: look at the page that ranks for it first.' }
+      : nearest ? { action: 'nearest_win', keyword: nearest.keyword, text: '"' + nearest.keyword + '" is at ' + posText(nearest.current, nearest.unread_note) + ' — the nearest win on your list. Strengthening the page that already ranks for it is cheaper than writing a new one.' }
       : readRows.length ? { action: 'hold', keyword: '', text: 'Nothing on your keyword list moved five places or more this week, and none of it is within reach of page 1 yet. The readings keep building the trend.' }
       : { action: 'nothing_read', keyword: '', text: 'No results page could be read for your keyword list this week, so there is nothing to act on: the checks are sent again next week.' };
     const summaryW = { keywords: site.total, read: readRows.length, checked: rowsW.filter(r => r.how === 'bought').length,

@@ -14077,6 +14077,7 @@ json.dump(dict(_ll150.harness_table(), seen=[list(x) for x in _seen150], self_te
 #   A. a Code node that uses the SERP url kit carries it (a node calling SU without the kit throws on the first results page);
 #   B. every DataForSEO answer node (dfs_gate's `<X> Answers`) passes its answers through SU.fixAnswer;
 #   C. every Code node a live SERP HTTP node feeds (through IF / Wait / retry copies, up to the first Code node) or that reads one by name
+#      (a SERP HTTP node: its url names the endpoint, or an expression url fed by a Code node that builds SERP endpoints, and its retry copy)
 #      carries SU, except the nodes that only read the answer's status or cost (STATUS_ONLY, each with its reason);
 #   D. every Code node that reads stored `serp:` readings (seo_cache) or stored rank snapshots (`snapshot_json`) carries SU, so a stored
 #      reading with bare redirects can be recognised (SC.lookup, RS.prevReading / poisonedRow, SU.poisoned).
@@ -14108,7 +14109,19 @@ for _f181 in sorted(os.listdir(os.path.join(HERE0, 'workflows'))):
             assert 'SU.fixAnswer(a)' in _js181, 'SERP-GOTO (B): %s / %s does not pass its answers through SU' % (_f181, _n['name']); _c181['B'] += 1
         if _n['type'] == 'n8n-nodes-base.code' and _n['name'] not in _STORED_OK181 and ("'serp:'" in _run181 or '"serp:"' in _run181 or 'snapshot_json' in _run181):
             assert _has(_n['name']), 'SERP-GOTO (D): %s / %s reads stored SERP readings or rank snapshots without SU' % (_f181, _n['name']); _c181['D'] += 1
-    _serp181 = [n['name'] for n in _w181.get('nodes', []) if n['type'] == 'n8n-nodes-base.httpRequest' and re.search(r'serp/(?:google|bing)/organic', json.dumps(n.get('parameters') or {}))]
+    # a live SERP HTTP node: its own url names a SERP endpoint, OR (re-review L6) its url is an expression and the Code node feeding it builds
+    # SERP endpoints (the Rank Tracker, Site Tracker, Keyword Check, AI Growth, AI Visibility calls: `={{ $json.endpoint }}`), and the
+    # byte-copy "(Retry)" of any of those
+    _par181 = {}
+    for _s, _o in _cn181.items():
+        for _l in (_o or {}).get('main') or []:
+            for _t in (_l or []):
+                _par181.setdefault(_t['node'], []).append(_s)
+    _isserp = lambda n: re.search(r'serp/(?:google|bing)/organic', json.dumps(n.get('parameters') or {})) is not None
+    _serp181 = [n['name'] for n in _w181.get('nodes', []) if n['type'] == 'n8n-nodes-base.httpRequest' and (_isserp(n) or (
+        '{{' in json.dumps((n.get('parameters') or {}).get('url') or '') and any(_nd181.get(pp, {}).get('type') == 'n8n-nodes-base.code' and re.search(r'serp/(?:google|bing)/organic', _js(pp)) for pp in _par181.get(n['name'], []))))]
+    _serp181 += [n + ' (Retry)' for n in list(_serp181) if n + ' (Retry)' in _nd181 and n + ' (Retry)' not in _serp181]
+    _c181.setdefault('serp_nodes', 0); _c181['serp_nodes'] += len(_serp181)
     for _h in _serp181:
         _seen, _todo = set(), [_h]
         while _todo:
@@ -14130,4 +14143,4 @@ for _f181 in sorted(os.listdir(os.path.join(HERE0, 'workflows'))):
             _r = _strip181(_js(_n['name']))
             if _n['name'] != _h and _arg.search(_r) and '__LEDGER_NODES' not in _r and not _n['name'].endswith(' Retry Plan') and _n['name'] not in _STATUS_ONLY181:
                 assert _has(_n['name']), 'SERP-GOTO (C): %s / %s reads %s by name without SU' % (_f181, _n['name'], _h); _c181['C'] += 1
-print('SERP-GOTO (section 181): every node that reads a Google results page sees the real host behind a redirect link (A %d kit users, B %d answer nodes, C %d live readers, D %d stored-reading readers)' % (_c181['A'], _c181['B'], _c181['C'], _c181['D']))
+print('SERP-GOTO (section 181): every node that reads a Google results page sees the real host behind a redirect link (A %d kit users, B %d answer nodes, C %d live readers of %d SERP HTTP nodes, D %d stored-reading readers)' % (_c181['A'], _c181['B'], _c181['C'], _c181['serp_nodes'], _c181['D']))

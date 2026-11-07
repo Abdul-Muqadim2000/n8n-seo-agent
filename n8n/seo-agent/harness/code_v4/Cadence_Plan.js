@@ -1526,7 +1526,22 @@ var SU = (typeof SU === 'object' && SU && SU.v === 1) ? SU : (() => {
   const labelOf = (d) => flat(bare(S(d)).replace(/^https?:\/\//, '').split('/')[0].split('.')[0]);
   const couldBe = (it, domain) => { const l = labelOf(domain); if (!it || l.length < 4) return false;
     return [it.website_name, it.title, it.breadcrumb].some(v => flat(v).includes(l)); };
-  return { v: 1, REDIR, HOST, isRedirect, carried, hostOfUrl, couldBe, labelOf, fixItem, fixItems, fixAnswer, exact, unresolved, poisoned, key, urlKey, crumbHost, crumbPath, nameHost };
+  // ---- SERP-GOTO (re-review N1): unread readings of seo_rank_history, shared by the Rank Tracker and the Site Tracker ----
+  // UNREAD = position -1 because a result Google hid may be ours (snapshot `mo`), or settled after that (`st`). A -1 without `mo` is a
+  // failed read, which is not an unread reading and ends a streak. A row stored with bare redirects (before this fix) is no reading.
+  const snapOf = (v) => { if (v && typeof v === 'object') return v; try { const o = JSON.parse(S(v) || 'null'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } };
+  const poisonedRow = (h) => !!h && ((Array.isArray(snapOf(h.snapshot_json).top) && snapOf(h.snapshot_json).top.some(e => e && isRedirect(e.u))) || isRedirect(h.url));
+  const unreadRow = (h) => { if (!h || Number(h.position) !== -1) return false; const x = snapOf(h.snapshot_json); return Number(x.mo) > 0 || Number(x.st) > 0; };
+  const weekOf = (t) => { const d = new Date(S(t)); if (isNaN(d.getTime())) return ''; return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - ((d.getUTCDay() + 6) % 7))).toISOString().slice(0, 10); };
+  // how many earlier CALENDAR WEEKS (Monday-based, UTC) in a row ended unread, newest first: a catch-up or an app re-check in the same
+  // week is one week, and this run's own week does not count. rows: one keyword's desktop rows of one tracker (any order)
+  const unreadWeeks = (rows, o) => { const now = weekOf((o || {}).now || new Date().toISOString()); const weeks = new Set();
+    for (const h of (rows || []).filter(r => r && !poisonedRow(r) && S(r.checked_at)).sort((a, b) => S(b.checked_at).localeCompare(S(a.checked_at)))) {
+      if (!unreadRow(h)) break; const w = weekOf(h.checked_at); if (w && w !== now) weeks.add(w); }
+    return weeks.size; };
+  // the words a report uses for an unread reading (null for any other)
+  const unreadNote = (snap) => { const x = snapOf(snap); return Number(x.st) > 0 ? 'not found among the results we could read' : Number(x.mo) > 0 ? 'could not be told: a result Google hid may be yours' : null; };
+  return { v: 1, REDIR, HOST, unreadRow, weekOf, unreadWeeks, unreadNote, poisonedRowSU: poisonedRow, isRedirect, carried, hostOfUrl, couldBe, labelOf, fixItem, fixItems, fixAnswer, exact, unresolved, poisoned, key, urlKey, crumbHost, crumbPath, nameHost };
 })();
 // ---- what one rank check's results page showed (G6, 2026-10-12, system review FIX_PLAN) ----
 // Every rank check already pays for one SERP call. Until now we kept three things from it: our position, our ranking URL and a
@@ -1740,7 +1755,9 @@ const RS = (() => {
       const k = lists.filter(x => o[x].length).sort((a, b) => o[b].length - o[a].length)[0];
       o[k].pop(); cut.add('lists'); o.trimmed = [...cut].join('+'); s = JSON.stringify(o);
     }
-    return s.length <= limit ? s : JSON.stringify({ trimmed: 'overflow', note: 'this reading was too long to store in one column' });
+    // SERP-GOTO (re-review N4): the last resort keeps the small markers the next plan reads (hidden results, settled, own pages hidden)
+    const keep = {}; for (const k of ['at', 'device', 'unavailable', 'ur', 'mo', 'st', 'own_hidden']) if (o[k] !== undefined) keep[k] = o[k];
+    return s.length <= limit ? s : JSON.stringify({ trimmed: 'overflow', note: 'this reading was too long to store in one column', ...keep });
   };
   const unpack = (v, dflt) => { if (v && typeof v === 'object') return v; try { const o = JSON.parse(S(v) || 'null'); return o == null ? dflt : o; } catch (e) { return dflt; } };
   // SERP-GOTO (2026-11-08): a reading stored while Google's redirect links were read as the site (from about 2026-10-30 to this fix): its
@@ -1748,6 +1765,8 @@ const RS = (() => {
   // reading of the page. Such a row is never a baseline, never compared, never the source of a drop or an alert.
   const poisonedSnap = (x0) => { const x = unpack(x0, null); return !!x && Array.isArray(x.top) && x.top.some(e => e && SU.isRedirect(e.u)); };
   const poisonedRow = (h) => !!h && (poisonedSnap(h.snapshot_json) || SU.isRedirect(h.url));
+  // SERP-GOTO (re-review N1): the unread-reading rules live in SU (v5/code/_serp_url.js), so the Site Tracker's plan uses the same ones
+  const unreadRow = SU.unreadRow, weekOf = SU.weekOf, unreadWeeks = SU.unreadWeeks, unreadNote = SU.unreadNote;
 
   // one line a person can read, in the observation form D26 asks for (an AI Overview is what one search showed at one moment)
   const featureLine = (feats, obs) => {
@@ -2060,7 +2079,7 @@ const RS = (() => {
       note: 'weighted by your Search Console impressions: ' + total + ' impressions over ' + withW.length + ' of the ' + its.length + ' keywords, 28 days to ' + period
         + (left ? '; ' + left + (left === 1 ? ' keyword with no impressions weighs nothing' : ' keywords with no impressions weigh nothing') : '') + '; the unweighted average is ' + unweighted + '%' };
   };
-  return { hidden, poisonedSnap, poisonedRow, MOVE, moveKind, cannibal, outranked, WEIGHT, weightedVoice, CTR, SUM_CTR, METHOD, AIO_KEEP, AIO_SOURCE, keepAt, CHURN, read, features, typeList, ourRank, landscape, voice, snapshot, pack, unpack,
+  return { hidden, unreadRow, weekOf, unreadWeeks, unreadNote, poisonedSnap, poisonedRow, MOVE, moveKind, cannibal, outranked, WEIGHT, weightedVoice, CTR, SUM_CTR, METHOD, AIO_KEEP, AIO_SOURCE, keepAt, CHURN, read, features, typeList, ourRank, landscape, voice, snapshot, pack, unpack,
     featureLine, featureChips, churn, churnNone, churnText, moveNote, bare, hostOf, isOurs, listOf, weight, urlKey, serpHosts, prevReading, stableReading, bandWord, BAND_TERMS, noise, withNoise };
 })();
 // Shared cost kit (G23 + the estimate recalibration, 2026-10-13; FIX_PLAN G23, RESULTS §0b / §2.10).

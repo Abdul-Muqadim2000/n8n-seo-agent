@@ -169,3 +169,38 @@ Checks after the review fixes: build exit 0 (section 181: A 66, B 34, C 27, D 28
 **1125**, server **1978** (+46 skipped, incl. the new `serpGoto.test.ts`), web **317**, with the whole repo mounted in node:22-bookworm-slim.
 Not done here (owner rules for customer-facing changes): the marketing changelog line and a TUTORIALS_BACKLOG row for the Rankings page
 showing a result Google hid as its site, without a link.
+
+## 11. Re-review fixes (2026-11-08, "Re-review of 36c1882a" in `../REVIEW_SERP_GOTO.md`, verdict SHIP with N1 before deploy)
+
+**N1 (the settled reading was a false "dropped out of the top 50").** The settled reading is no longer a 0. It **stays -1** and carries
+`st: 1` in the existing `snapshot_json` (no new column), so no reader can compute a delta, a "lost" or a chart point from it: every
+path already treats -1 as "could not be told" (the Tracker Report's delta, `prevReading` / `stableReading`, the app's `rankSeries`).
+What changed is the wording: `SU.unreadNote` gives "could not be told: a result Google hid may be yours" (`mo`) or, once settled,
+"not found among the results we could read" (`st`), and every place that reports the position says it instead of "check failed":
+the Tracker Report (`posText(v, note)`, ladder rows and the customer's own keywords), the Site Tracker (Site Metrics `serp_note`,
+Site Report), and the app (`rankSeries.latestNote` -> `latestNote` on ladder rungs and tracked keywords, shown under the position;
+the position itself stays the last real one). The streak counts **calendar weeks** (Monday-based, UTC; this run's week not counted; a
+catch-up or an app re-check in the same week is one week; a failed API read, -1 without `mo`, ends it): `SU.unreadWeeks`, used by the
+Rank Tracker's plan and the Site Tracker's plan (`unread_weeks` on `serp_positions`). Week 2 raises the ops alert (Rank Tracker), week 3
+onwards is settled (both trackers). The unread rules live in SU so both trackers use one copy.
+
+**N3.** One alert row per keyword and week (`rank-unread|<domain>|<keyword>|<monday>`): a second keyword of the same site on the same day
+is its own alert; a re-run in the same week finds its own row and sends nothing twice. `mode` is the execution's mode.
+
+**N4.** `RS.pack`'s last-resort overflow object keeps `at`, `device`, `unavailable`, `ur`, `mo`, `st`, `own_hidden`.
+
+**L6 (rest).** Guard C now also treats an HTTP node with an expression url as a live SERP node when the Code node feeding it builds SERP
+endpoints (Rank Tracker, Site Tracker, Keyword Check, AI Growth, AI Visibility), plus each one's "(Retry)" copy: 19 SERP HTTP nodes,
+33 live readers, all carrying SU.
+
+Not done (Low, no client affected today): N2 (an IDN client domain stored in punycode while Google shows Unicode, or the reverse).
+
+Proofs: harness SG8 (week 3 stays -1 with `st`, the report wording in the generated Tracker Report, weekly streak cases: two weeks, three
+readings in one week = 1, a failed read ends it, this week = 0; two keywords = two alert keys; overflow keeps `mo` / `ur`; Site Tracker
+settles only from week 3 and stays -1); app `serpGoto.test.ts` (latest stays the last real position with the note; settled note; a
+failed check and a normal reading carry none).
+
+Checks after the re-review fixes: build exit 0 (section 181: A 66, B 34, C 33 readers of 19 SERP HTTP nodes, D 68); full harness in a
+throwaway n8nio/n8n:2.41.4 container with workflows/ in the copy **17559 passed, 0 failed** (a first run beside the app tests failed only
+AD10, the AIR diagnosis speed budget, 280 ms vs 200 ms under the parallel load; untouched code, passes alone); app typecheck clean, shared
+**1125**, server **1980** (+46 skipped), web **317**.

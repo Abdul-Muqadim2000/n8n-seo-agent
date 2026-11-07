@@ -557,6 +557,7 @@ export function LadderCard({ ladder, readiness, onHistory }: { ladder: Ladder; r
                           <>
                         <div className="text-right">
                           <PositionPill p={r.latestPosition} />
+                          {r.latestNote && <span className="text-[11px] text-ink-3">last check: {r.latestNote}</span>}
                           <div className="mt-1 flex items-center justify-end gap-2">
                             <PositionMove prev={r.previousPosition} cur={r.latestPosition} />
                           </div>
@@ -711,7 +712,12 @@ function SerpPanel({ serp }: { serp: SerpReading | null }) {
 function KeywordTable({ rows, onOpen }: { rows: TrackedKeyword[]; onOpen: (k: TrackedKeyword) => void }) {
   const columns: Column<TrackedKeyword>[] = [
     { key: 'keyword', header: 'Keyword', sortValue: (r) => r.keyword, cell: (r) => <span className="block min-w-[12rem] font-medium text-ink">{r.keyword}</span> },
-    { key: 'latest', header: 'Position', align: 'right', sortValue: (r) => posSort(r.latestPosition), cell: (r) => <PositionPill p={r.latestPosition} /> },
+    { key: 'latest', header: 'Position', align: 'right', sortValue: (r) => posSort(r.latestPosition), cell: (r) => (
+        <span className="inline-flex flex-col items-end">
+          <PositionPill p={r.latestPosition} />
+          {r.latestNote && <span className="mt-0.5 text-[11px] text-ink-3">last check: {r.latestNote}</span>}
+        </span>
+      ) },
     { key: 'move', header: 'Change', align: 'right', sortValue: (r) => (ranked(r.latestPosition) && ranked(r.previousPosition) ? r.previousPosition - r.latestPosition : null), cell: (r) => <PositionMove prev={r.previousPosition} cur={r.latestPosition} /> },
     { key: 'best', header: 'Best', align: 'right', hideOnMobile: true, sortValue: (r) => posSort(r.bestPosition), cell: (r) => posText(r.bestPosition) },
     {

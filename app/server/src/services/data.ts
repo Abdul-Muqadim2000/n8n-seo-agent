@@ -586,7 +586,13 @@ function emptyFeatures(): SerpFeatures {
   };
 }
 
-export function rankSeries(rows: RankHistoryRow[]): { history: RankPoint[]; latest: number | null; previous: number | null; best: number | null; lastChecked: string | null } {
+// SERP-GOTO (2026-11-08, mirror of SU.unreadNote): the newest desktop check is -1 because a result Google hid may be ours (`mo`), or settled (`st`)
+export function unreadNote(row: RankHistoryRow | undefined): string | null {
+  if (!row || n(row.position) !== -1) return null;
+  const x = safeJson<{ mo?: number; st?: number }>(s((row as { snapshot_json?: unknown }).snapshot_json), {});
+  return Number(x.st) > 0 ? 'not found among the results we could read' : Number(x.mo) > 0 ? 'could not be told: a result Google hid may be yours' : null;
+}
+export function rankSeries(rows: RankHistoryRow[]): { history: RankPoint[]; latest: number | null; previous: number | null; best: number | null; lastChecked: string | null; latestNote: string | null } {
   const history = desktopRows(rows)
     .slice()
     .sort(byDate((r) => s(r.checked_at)))
@@ -599,6 +605,7 @@ export function rankSeries(rows: RankHistoryRow[]): { history: RankPoint[]; late
     previous: ok.length > 1 ? ok[ok.length - 2].position : null,
     best: pos.length ? Math.min(...pos) : null,
     lastChecked: history.length ? history[history.length - 1].checkedAt : null,
+    latestNote: unreadNote(desktopRows(rows).slice().sort(byDate((r) => s(r.checked_at))).pop()),
   };
 }
 
@@ -642,6 +649,7 @@ export async function rankingsData(site: SiteRow): Promise<RankingsData> {
           status: s(r.status) || 'planned',
           months: s(r.months),
           latestPosition: series.latest,
+          latestNote: series.latestNote,
           previousPosition: series.previous,
           bestPosition: series.best,
           lastChecked: series.lastChecked,
@@ -682,6 +690,7 @@ export async function rankingsData(site: SiteRow): Promise<RankingsData> {
       serpFeatures: splitList(last?.serp_features),
       serp: serpReading(rs),
       latestPosition: series.latest,
+      latestNote: series.latestNote,
       previousPosition: series.previous,
       bestPosition: series.best,
       lastChecked: series.lastChecked,

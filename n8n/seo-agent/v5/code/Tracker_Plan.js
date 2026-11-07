@@ -132,8 +132,8 @@ for (const [id, pages] of byLadder) {
     // a -1 that only means "a hidden result might be yours" (snapshot `mo`) is, for an unpublished rung, as good as "not in the top 50":
     // it is deferred like a 0, so the rule costs no extra weekly checks. `prev_unread` = how many readings in a row ended that way.
     const kwHist = deskHist.filter(h => h.ladder_id === id && h.keyword === p.keyword && !RS.poisonedRow(h)).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));
-    const unreadOf = (h) => !!h && Number(h.position) === -1 && Number((RS.unpack(h.snapshot_json, {}) || {}).mo) > 0;
-    let prevUnread = 0; for (const h of kwHist) { if (unreadOf(h)) prevUnread++; else break; }
+    const unreadOf = (h) => RS.unreadRow(h);
+    const prevUnread = RS.unreadWeeks(kwHist, { now: new Date().toISOString() });   // re-review N1: earlier WEEKS in a row, not runs
     const lastH = kwHist[0];
     if (!live && lastH && (Number(lastH.position) === 0 || unreadOf(lastH)) && daysSince(lastH.checked_at) < LIMITS.unpublished_every_days) {   // only 'not in the top 50' (0); a page that ranks (published but not reported) or a failed check (-1) stays weekly
       deferred.push({ ladder_id: id, domain: p.domain, head_keyword: p.head_keyword, rung: Number(p.rung), page_no: Number(p.page_no), keyword: p.keyword, page_type: p.page_type || '', target_url: p.target_url || '', status: p.status || '',

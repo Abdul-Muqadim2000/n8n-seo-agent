@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RankHistoryRow } from '@seo/shared';
 import { poisonedRow, prevReading, serpHosts } from '../src/services/cadence';
-import { serpReading, snapTop } from '../src/services/data';
+import { rankSeries, serpReading, snapTop } from '../src/services/data';
 
 // SERP-GOTO (2026-11-08, n8n/seo-agent/docs/keyword-intel-2026-11-08/fixes/SERP_GOTO.md): since about 2026-10-30 DataForSEO's live Google
 // results carried google.com/goto redirect links instead of the result's address. The engine now recovers the site from Google's
@@ -71,3 +71,22 @@ describe('SERP-GOTO: an approximate address is shown as its site, never as a lin
     expect(r?.snapshot.top).toEqual([{ position: 1, url: '', title: 'Odoo ERP', host: 'odooerp.ae', approximate: true }]);
   });
 });
+
+describe('SERP-GOTO re-review N1: an unread check is said as such and never moves the position', () => {
+  const unread = (st: boolean) =>
+    row({ checked_at: '2026-11-16T01:10:00.000Z', position: -1, url: '', snapshot_json: JSON.stringify({ at: '2026-11-16T01:10:00Z', device: 'desktop', top: [], mo: 1, ur: 1, ...(st ? { st: 1 } : {}) }) });
+  it('the last real position stays, with the note of the newest check; a settled one says "not found among the results we could read"', () => {
+    const a = rankSeries([clean, unread(false)]);
+    expect(a.latest).toBe(9);
+    expect(a.latestNote).toBe('could not be told: a result Google hid may be yours');
+    const b = rankSeries([clean, unread(true)]);
+    expect(b.latest).toBe(9);
+    expect(b.previous).toBe(null);
+    expect(b.latestNote).toBe('not found among the results we could read');
+  });
+  it('a failed check (-1 with no hidden result) and a normal reading carry no note', () => {
+    expect(rankSeries([clean, row({ checked_at: '2026-11-16T01:10:00.000Z', position: -1, snapshot_json: JSON.stringify({ unavailable: true }) })]).latestNote).toBe(null);
+    expect(rankSeries([clean]).latestNote).toBe(null);
+  });
+});
+

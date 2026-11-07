@@ -5,6 +5,7 @@
 // name / NAP / logo, the services and the nav pages. SM.toRow(model) goes back into the seo_sites row, so the next run and every other
 // workflow read the same facts; the brief is given the host and the name (never the bare domain).
 /*__SITE_MODEL__*/
+/*__SERP_URL__*/
 /*__SITE_STATS__*/
 /*__PAGE_WATCH__*/
 // G12 / G29 (2026-10-13, FIX_PLAN): the events of the period are marked for every chart (pages published, audit fixes, Google
@@ -68,12 +69,12 @@ return sites.map((s, idx) => {
   const insp = inspAll.filter(x => x.site_idx === idx);
   const trends = trendAll.filter(x => x.site_idx === idx);
   const serpRows = serpAll.filter(x => normD(x.domain) === s.domain);
-  const serpNow = { ...(s.serp_positions || {}) }; for (const r of serpRows) serpNow[r.keyword] = { position: Number(r.position), url: r.url, checked_at: r.checked_at };
+  const serpNow = { ...(s.serp_positions || {}) }; for (const r of serpRows) serpNow[r.keyword] = { position: Number(r.position), url: r.url, checked_at: r.checked_at, note: SU.unreadNote(r.snapshot_json) };   // SERP-GOTO (re-review N1)
   const gscKw = new Map(((gsc && gsc.tracked) || []).map(t => [t.keyword, t]));
   const tracked = (s.tracked || []).map(t => { const g = gscKw.get(t.keyword); const sp = serpNow[t.keyword];
     const hist = queryHist.filter(h => h.site_id === s.site_id && h.query === t.keyword).sort((a, b) => String(a.period_end).localeCompare(String(b.period_end))).map(h => r1(h.position)).slice(-12);
     return { ...t, gsc_position: g ? g.position : null, gsc_prev_position: g ? g.prev_position : null, clicks: g ? g.clicks : 0, impressions: g ? g.impressions : 0, prev_clicks: g ? g.prev_clicks : 0, prev_impressions: g ? g.prev_impressions : 0, page: g ? g.page : '',
-      serp_position: sp ? sp.position : null, serp_url: sp ? sp.url : '', serp_checked_at: sp ? sp.checked_at : '', history: hist }; });
+      serp_position: sp ? sp.position : null, serp_url: sp ? sp.url : '', serp_checked_at: sp ? sp.checked_at : '', serp_note: sp && sp.position === -1 ? (sp.note || null) : null, history: hist }; });
   // pages found live this week replace their planned entry (live URL, published) or are added; they were inspected in this run
   const det = detAll.find(x => x.site_id === s.site_id) || null; const found = det ? det.detected : [];
   // R92 part 4 (2026-10-16, re-rating 2026-10-15): ONE rule with the Rank Tracker (Tracker_Report.js `coveredBy`): a ladder target that

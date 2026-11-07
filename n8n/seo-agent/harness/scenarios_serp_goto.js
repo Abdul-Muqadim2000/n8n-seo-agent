@@ -198,7 +198,21 @@ module.exports = async (ctx) => {
   const planItem = (prev) => ({ ladder_id: 'lad_t', domain: 'techand.ai', keyword: 'erp software uae', rung: 4, device: 'desktop', competitors: [], prev_unread: prev });
   const runPP = async (prev) => { mock('Tracker Plan', [{ json: planItem(prev) }]); return (await run('Parse Positions', [{ json: withOurs }]))[0].json; };
   const p0 = await runPP(0), p1 = await runPP(1), p2 = await runPP(2);
-  check('first and second unreadable reading: -1; the third (two before it) says "not found among the results we could read" (0)', p0.position === -1 && p1.position === -1 && p2.position === 0, J([p0.position, p1.position, p2.position]));
+  const st = (p) => JSON.parse(p.snapshot_json || '{}').st;
+  check('re-review N1: the third week stays -1 (no drop can be computed: the hidden result most likely IS ours) and is marked settled (st: 1); weeks 1-2 are not',
+    p0.position === -1 && p1.position === -1 && p2.position === -1 && st(p2) === 1 && !st(p0) && !st(p1), J([p0.position, p1.position, p2.position, st(p2)]));
+  const trSrc = fs.readFileSync(path.join(process.env.CODE_DIR || path.join(__dirname, 'code_v4'), 'Tracker_Report.js'), 'utf8');
+  check('the Tracker Report words an unread reading as such ("not found among the results we could read"), never "check failed" or a drop',
+    /const posText = \(v, note\) =>/.test(trSrc) && /unread_note: cur === -1 \? RS\.unreadNote\(it\.result\.snapshot_json\)/.test(trSrc) && !/posText\(r\.current\)/.test(trSrc)
+    && (await su('unreadNote', p2.snapshot_json)) === 'not found among the results we could read' && (await su('unreadNote', p0.snapshot_json)) === 'could not be told: a result Google hid may be yours');
+  const hr = (at, pos, snap) => ({ keyword: 'k', checked_at: at, position: pos, url: '', snapshot_json: J(snap) });
+  const now = '2026-11-23T01:00:00Z';   // a Monday
+  const wk = await su('unreadWeeks', [hr('2026-11-16T01:00:00Z', -1, { mo: 1 }), hr('2026-11-18T09:00:00Z', -1, { mo: 1 }), hr('2026-11-09T01:00:00Z', -1, { mo: 1 }), hr('2026-11-02T01:00:00Z', 7, { top: [] })], { now });
+  const wkSame = await su('unreadWeeks', [hr('2026-11-16T01:00:00Z', -1, { mo: 1 }), hr('2026-11-17T01:00:00Z', -1, { mo: 1 }), hr('2026-11-19T01:00:00Z', -1, { mo: 1 })], { now });
+  const wkFail = await su('unreadWeeks', [hr('2026-11-16T01:00:00Z', -1, { mo: 1 }), hr('2026-11-09T01:00:00Z', -1, { unavailable: true }), hr('2026-11-02T01:00:00Z', -1, { mo: 1 })], { now });
+  const wkThis = await su('unreadWeeks', [hr('2026-11-23T00:30:00Z', -1, { mo: 1 })], { now });
+  check('re-review N1: the streak counts CALENDAR WEEKS (a re-check in the same week is one), a failed read ends it, this week does not count',
+    wk === 2 && wkSame === 1 && wkFail === 1 && wkThis === 0, J({ wk, wkSame, wkFail, wkThis }));
   mock('Tracker Plan', [{ json: planItem(1) }]); mock('Parse Positions', [{ json: p1 }]);
   const al = (await run('Unread Alert Row (Tracker)', [{ json: {} }]))[0].json;
   check('the second one in a row writes ONE ops alert row (undelivered, due now, so the sweep in the same run sends it); `delivered` is never written here',
@@ -208,6 +222,20 @@ module.exports = async (ctx) => {
   mock('Tracker Plan', [{ json: planItem(2) }]); mock('Parse Positions', [{ json: p2 }]);
   const al2 = (await run('Unread Alert Row (Tracker)', [{ json: {} }]))[0].json;
   check('the first one and the third one write no alert (one alert per streak)', al0.skip === true && al2.skip === true, J([al0, al2]));
+  mock('Tracker Plan', [{ json: planItem(1) }, { json: { ...planItem(1), keyword: 'erp system dubai' } }]); mock('Parse Positions', [{ json: p1 }, { json: { ...p1, keyword: 'erp system dubai' } }]);
+  const al3 = (await run('Unread Alert Row (Tracker)', [{ json: {} }])).map(i => i.json);
+  check('re-review N3: two keywords of one site on the same day are two alert rows with their own keys (one shared key was overwritten and never sent)',
+    al3.length === 2 && new Set(al3.map(x => x.alert_key)).size === 2 && al3.every(x => /\|20\d\d-\d\d-\d\d$/.test(x.alert_key)), J(al3.map(x => x.alert_key)));
+  const big = await kit({ serp: withOurs, domain: 'techand.ai', max: 60 });
+  const packed = JSON.parse(big.packed);
+  check('re-review N4: a reading too long to store keeps the markers the next plan reads (mo, ur), so the streak, the deferral and the alert do not stop',
+    packed.trimmed === 'overflow' && packed.mo === 1 && packed.ur === 1, J(packed));
+  mock('Site SERP Requests', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', keyword: 'erp software uae', competitors: [], prev_unread: 2 } }]);
+  const sp = (await run('Parse Site SERP', [{ json: withOurs }]))[0].json;
+  mock('Site SERP Requests', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', keyword: 'erp software uae', competitors: [], prev_unread: 1 } }]);
+  const sp1 = (await run('Parse Site SERP', [{ json: withOurs }]))[0].json;
+  check('Site Tracker: settled only from the third week of unread readings, and kept -1 with the marker (never a 0)',
+    sp.position === -1 && JSON.parse(sp.snapshot_json).st === 1 && sp1.position === -1 && !JSON.parse(sp1.snapshot_json).st, J([sp.position, sp1.position]));
   const tpSrc = fs.readFileSync(path.join(process.env.CODE_DIR || path.join(__dirname, 'code_v4'), 'Tracker_Plan.js'), 'utf8');
   check('Tracker Plan (generated) skips poisoned rows (review L4), defers an unpublished rung after an unreadable -1 like a 0, and counts the streak',
     /!RS\.poisonedRow\(h\)\)\.sort/.test(tpSrc) && /Number\(lastH\.position\) === 0 \|\| unreadOf\(lastH\)/.test(tpSrc) && /prev_unread: prevUnread/.test(tpSrc));
