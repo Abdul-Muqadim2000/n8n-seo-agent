@@ -75,15 +75,18 @@ const RS = (() => {
     const sourcesUnknown = !!aioItem && (aioItem.asynchronous_ai_overview === true || (!refs.length && !texts));
     const fs = a.items.find(x => x && x.type === 'featured_snippet') || null;
     const fsDom = fs ? (bare(fs.domain) || hostOf(fs.url)) : '';
+    const fsUnknown = !!fs && SU.unresolved(fs);   // R-L3: a snippet whose site Google hid is "unknown", not "not ours"
     const paaItem = a.items.find(x => x && x.type === 'people_also_ask') || null;
     const paa = paaItem ? ((paaItem.items) || []).map(q => S(q && (q.title || q.question))).filter(Boolean) : [];
     const lp = a.items.find(x => x && (x.type === 'local_pack' || x.type === 'map')) || null;
-    const lpOurs = lp ? [...((lp.items) || []), lp].some(x => isOurs(bare(x && x.domain) || hostOf(x && x.url), our)) : null;
+    const lpAll = lp ? a.items.filter(x => x && (x.type === 'local_pack' || x.type === 'map')).flatMap(x => [x, ...((x.items) || [])]) : [];
+    const lpFound = lpAll.some(x => isOurs(bare(x && x.domain) || hostOf(x && x.url), our));
+    const lpOurs = lp ? (lpFound ? true : (lpAll.some(x => SU.unresolved(x)) ? null : false)) : null;   // R-L3: listings with no site = unknown
     return { unavailable: false, error: '', checked_at: a.seen_at, types, results_count: a.results_count,
       ai_overview: { shown: !!aioItem, content_loaded: !!aioItem && !sourcesUnknown,
         cites_us: !aioItem ? false : (sourcesUnknown ? null : refs.some(d => isOurs(d, our))),
         cited_domains: refs.slice(0, 12), seen_at: a.seen_at },
-      featured_snippet: { shown: !!fs, ours: fs ? isOurs(fsDom, our) : false, domain: fsDom },
+      featured_snippet: { shown: !!fs, ours: fs ? (fsUnknown ? null : isOurs(fsDom, our)) : false, domain: fsDom },
       people_also_ask: { shown: !!paaItem, count: paa.length, questions: paa.slice(0, 6) },
       local_pack: { shown: !!lp, ours: lpOurs }, video: { shown: has('video', 'short_videos') },
       shopping: { shown: has('shopping', 'popular_products') } };
@@ -92,6 +95,10 @@ const RS = (() => {
   // the comma list the serp_features column has always held (kept so nothing that reads it changes)
   const typeList = (a) => (!a || !a.ok) ? '' : [...new Set(a.items.map(x => S(x && x.type)))].filter(t => t && t !== 'organic').join(',');
 
+  // SERP-GOTO: the organic results Google hid behind a redirect with no site recoverable, and how many of them could be ours
+  const hidden = (a, our) => { if (!a || !a.ok) return { unresolved: 0, maybe_ours: 0 };
+    const un = a.items.filter(x => x && x.type === 'organic' && SU.unresolved(x));
+    return { unresolved: un.length, maybe_ours: un.filter(x => SU.couldBe(x, our)).length }; };
   // our position over the whole depth that was bought (0 = not in it, so the caller can tell it from "the check failed")
   const ourRank = (a, ourDomain) => {
     if (!a || !a.ok) return { position: -1, url: '' };
@@ -104,8 +111,11 @@ const RS = (() => {
     // again), so no drop and no "lost" alert can come from it.
     if (mine) return SU.exact(mine) ? { position: Number(mine.rank_group) || 0, url: S(mine.url) }
       : { position: Number(mine.rank_group) || 0, url: '', page_identified: false, host: bare(mine.domain), why: 'Google showed this result behind a redirect link: the site is known, the page is not' };
-    const unres = org.filter(o => SU.unresolved(o)).length;
-    return unres ? { position: -1, url: '', unresolved: unres, why: unres + ' result(s) on the page could not be traced to a site (Google redirect links), so "not in the top 50" cannot be told' } : { position: 0, url: '' };
+    // R-H2 (review 2026-11-08): -1 only when a result with no site behind it COULD be ours (its name, title or breadcrumb carries our
+    // label); a hidden result that names someone else is not ours, so "not in the top 50" stands (0) and says how many were hidden
+    const hid = hidden(a, our);
+    if (hid.maybe_ours) return { position: -1, url: '', unresolved: hid.unresolved, maybe_ours: hid.maybe_ours, why: hid.maybe_ours + ' result(s) on the page could not be traced to a site and may be yours (Google redirect links), so "not in the top 50" cannot be told' };
+    return hid.unresolved ? { position: 0, url: '', unresolved: hid.unresolved, why: hid.unresolved + ' result(s) could not be traced to a site; none of them names you' } : { position: 0, url: '' };
   };
 
   // page 1: one row per domain (the best position it holds), plus every tracked competitor's best position over the whole answer
@@ -130,9 +140,11 @@ const RS = (() => {
     // per domain (the best position it holds), so a second page of the site on the same results page was thrown away before it was
     // stored, and cannibalisation (two of our own URLs answering one search) could never be seen in the snapshot we keep.
     // SERP-GOTO: only results whose page is known (exact url) are pages of ours; one behind a redirect is the site, not a page
+    // R-M3: when one of our results is behind a redirect, whether two of our pages compete cannot be told (own_hidden), never "none"
+    const own_hidden = organic.some(o => isOurs(o.domain, our) && !o.exact) || hidden(a, our).maybe_ours > 0;
     const own = organic.filter(o => isOurs(o.domain, our) && o.exact).sort((x, y) => x.position - y.position).map(o => ({ position: o.position, url: o.url }))
       .filter((o, i, arr) => arr.findIndex(x => urlKey(x.url) === urlKey(o.url)) === i);
-    return { unavailable: false, top, above, own, competitors, tracked: comps };
+    return { unavailable: false, top, above, own, own_hidden, hidden: hidden(a, our), competitors, tracked: comps };
   };
 
   // CTR- and feature-weighted share of voice over page 1 (a model: see METHOD)
@@ -169,7 +181,10 @@ const RS = (() => {
     top: ((land && land.top) || []).map(t => ({ p: t.position, u: S(t.url).slice(0, 180), t: S(t.title).slice(0, 80), ...(t.exact === false ? { x: 1 } : {}) })),   // x: the url is approximate (SERP-GOTO)
     // B6-6: how many of OUR pages the answer held (any depth), and, only when there are two or more, which ones. `own_n` missing = a
     // reading stored before this was kept, which can say nothing about a second page either way.
-    ...(land && !land.unavailable && Array.isArray(land.own) ? { own_n: land.own.length } : {}),
+    ...(land && !land.unavailable && Array.isArray(land.own) && !land.own_hidden ? { own_n: land.own.length } : {}),
+    ...(land && land.own_hidden ? { own_hidden: true } : {}),
+    // SERP-GOTO: results with no site behind their redirect (ur) and how many could be ours (mo): the Rank Tracker's next plan reads them
+    ...(land && land.hidden && land.hidden.unresolved ? { ur: land.hidden.unresolved } : {}), ...(land && land.hidden && land.hidden.maybe_ours ? { mo: land.hidden.maybe_ours } : {}),
     ...(land && !land.unavailable && Array.isArray(land.own) && land.own.length >= 2 ? { own: land.own.slice(0, 3).map(o => ({ p: o.position, u: S(o.url).slice(0, 140) })) } : {}) });
 
   // a JSON string that stays small: titles go first, then the tail of the list (a snapshot is proof, not an archive)
@@ -195,7 +210,9 @@ const RS = (() => {
       const k = lists.filter(x => o[x].length).sort((a, b) => o[b].length - o[a].length)[0];
       o[k].pop(); cut.add('lists'); o.trimmed = [...cut].join('+'); s = JSON.stringify(o);
     }
-    return s.length <= limit ? s : JSON.stringify({ trimmed: 'overflow', note: 'this reading was too long to store in one column' });
+    // SERP-GOTO (re-review N4): the last resort keeps the small markers the next plan reads (hidden results, settled, own pages hidden)
+    const keep = {}; for (const k of ['at', 'device', 'unavailable', 'ur', 'mo', 'st', 'own_hidden']) if (o[k] !== undefined) keep[k] = o[k];
+    return s.length <= limit ? s : JSON.stringify({ trimmed: 'overflow', note: 'this reading was too long to store in one column', ...keep });
   };
   const unpack = (v, dflt) => { if (v && typeof v === 'object') return v; try { const o = JSON.parse(S(v) || 'null'); return o == null ? dflt : o; } catch (e) { return dflt; } };
   // SERP-GOTO (2026-11-08): a reading stored while Google's redirect links were read as the site (from about 2026-10-30 to this fix): its
@@ -203,6 +220,8 @@ const RS = (() => {
   // reading of the page. Such a row is never a baseline, never compared, never the source of a drop or an alert.
   const poisonedSnap = (x0) => { const x = unpack(x0, null); return !!x && Array.isArray(x.top) && x.top.some(e => e && SU.isRedirect(e.u)); };
   const poisonedRow = (h) => !!h && (poisonedSnap(h.snapshot_json) || SU.isRedirect(h.url));
+  // SERP-GOTO (re-review N1): the unread-reading rules live in SU (v5/code/_serp_url.js), so the Site Tracker's plan uses the same ones
+  const unreadRow = SU.unreadRow, weekOf = SU.weekOf, unreadWeeks = SU.unreadWeeks, unreadNote = SU.unreadNote;
 
   // one line a person can read, in the observation form D26 asks for (an AI Overview is what one search showed at one moment)
   const featureLine = (feats, obs) => {
@@ -436,6 +455,7 @@ const RS = (() => {
   const cannibal = (cur, o) => {
     const q = o || {}; const x = unpack(cur, null);
     if (!x || x.unavailable) return { checked: false, found: false, count: null, pages: [], reason: 'this check could not read the results page' };
+    if (x.own_hidden) return { checked: false, found: false, count: null, pages: [], reason: 'Google showed your results behind redirect links on this page, so whether two of your pages compete could not be told' };
     if (x.own_n == null) return { checked: false, found: false, count: null, pages: [], reason: 'this reading was stored before a second page of the site was kept' };
     const n = Number(x.own_n) || 0;
     const pages = (Array.isArray(x.own) ? x.own : []).map(e => ({ position: Number(e && e.p) || 0, url: S(e && e.u) })).filter(e => e.position > 0 && e.url).sort((a, b) => a.position - b.position);
@@ -514,6 +534,6 @@ const RS = (() => {
       note: 'weighted by your Search Console impressions: ' + total + ' impressions over ' + withW.length + ' of the ' + its.length + ' keywords, 28 days to ' + period
         + (left ? '; ' + left + (left === 1 ? ' keyword with no impressions weighs nothing' : ' keywords with no impressions weigh nothing') : '') + '; the unweighted average is ' + unweighted + '%' };
   };
-  return { poisonedSnap, poisonedRow, MOVE, moveKind, cannibal, outranked, WEIGHT, weightedVoice, CTR, SUM_CTR, METHOD, AIO_KEEP, AIO_SOURCE, keepAt, CHURN, read, features, typeList, ourRank, landscape, voice, snapshot, pack, unpack,
+  return { hidden, unreadRow, weekOf, unreadWeeks, unreadNote, poisonedSnap, poisonedRow, MOVE, moveKind, cannibal, outranked, WEIGHT, weightedVoice, CTR, SUM_CTR, METHOD, AIO_KEEP, AIO_SOURCE, keepAt, CHURN, read, features, typeList, ourRank, landscape, voice, snapshot, pack, unpack,
     featureLine, featureChips, churn, churnNone, churnText, moveNote, bare, hostOf, isOurs, listOf, weight, urlKey, serpHosts, prevReading, stableReading, bandWord, BAND_TERMS, noise, withNoise };
 })();

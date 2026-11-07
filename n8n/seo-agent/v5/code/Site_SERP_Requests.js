@@ -14,7 +14,7 @@ sites.forEach((s, idx) => {
   if (!(Number(s.location_code) > 0)) return;
   const g = gscAll.find(x => x.site_idx === idx || x.site_id === s.site_id); const gscPos = new Map(((g && g.tracked) || []).filter(k => Number(k.position) > 0).map(k => [k.keyword, k.position]));
   const competitors = competitorsFor(s);
-  (s.tracked || []).filter(t => t.source === 'site').filter(t => !gscPos.has(t.keyword) || daysSince(((s.serp_positions || {})[t.keyword] || {}).checked_at) >= 28).slice(0, (s.config || {}).max_serp_checks || 20).forEach(t => out.push({ json: { site_idx: idx, site_id: s.site_id, domain: s.domain, keyword: t.keyword, competitors,
+  (s.tracked || []).filter(t => t.source === 'site').filter(t => !gscPos.has(t.keyword) || daysSince(((s.serp_positions || {})[t.keyword] || {}).checked_at) >= 28).slice(0, (s.config || {}).max_serp_checks || 20).forEach(t => out.push({ json: { site_idx: idx, site_id: s.site_id, domain: s.domain, keyword: t.keyword, competitors, prev_unread: Number((((s.serp_positions || {})[t.keyword] || {}).unread_weeks) || 0),
     endpoint: 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced', body: [{ keyword: t.keyword, location_code: Number(s.location_code), language_code: s.language_code || 'en', depth: 50, device: 'desktop', os: 'windows' }] } }));
 });
 return out.length ? out : [{ json: { skip: true, reason: 'no site keywords to check live' } }];
