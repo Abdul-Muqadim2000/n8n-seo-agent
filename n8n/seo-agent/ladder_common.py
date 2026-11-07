@@ -685,6 +685,10 @@ LEDGER_EST = {
     'page_finalize':   {'ai': 0.05, 'dfs': 0.0},
     # W2-E2 (2026-10-23): the one-off AI repeat pilot - its plan prices itself (est_dfs_usd: 10 questions x 10 asks x its engines, at most $4)
     'ai_pilot':        {'ai': 0.0, 'dfs': 1.5},
+    # KI (E2 2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §7): the two keyword-intelligence runs (SEOagentKIntel1, build_ki.py). The worker
+    # calls no model; its plan prices its own run (est_dfs_usd, held under these quotes = _cost_cal.js DFS_EST), so these are the ceilings only.
+    'competitors':     {'ai': 0.0, 'dfs': 0.35},
+    'keyword_research': {'ai': 0.0, 'dfs': 0.90},
 }
 
 

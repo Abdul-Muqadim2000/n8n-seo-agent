@@ -4955,7 +4955,7 @@ await guard('retries, AI data, sister domains and the fact base', async () => {
   check('G1: the nodes inherited from v3 keep the same rule (the DataForSEO reads, PageSpeed, RDAP, the probes, the Gotenberg renders)', ['Keyword Data', 'Find Competitors', 'PageSpeed', 'RDAP Lookup', 'Run Probes', 'Render PDF Report', 'Read Website', 'SERP Top 10 (Retry)'].every(nm => { const x = httpNode('SEO Agent v4', nm); return x && (x.per_item ? perItemOk(x) : keepsRule(x)); }), JSON.stringify(['Keyword Data', 'PageSpeed', 'RDAP Lookup', 'SERP Top 10 (Retry)'].map(nm => nm + ':' + JSON.stringify(httpNode('SEO Agent v4', nm)))));
   // R-E14 (2026-10-23): + the AI tracker's three notice callbacks (a `rejected` answer that closes the caller's request), at one try like every report callback
   const NOTICES = ['Post Open Run Notices', 'Post Busy Notices', 'Post Stop Notices'];
-  check('G1: the allow-list holds only what is not idempotent — the report callbacks, the AI tracker\'s notice callbacks and the WordPress draft — each with its reason, and those nodes really carry no retry', Object.keys(RW.allow).length === 18 && Object.keys(RW.allow).every(k => /^POST /.test(k) || k === 'Create WP Draft' || NOTICES.includes(k)) && Object.values(RW.allow).every(v => String(v).length > 20) && httpNode('SEO Agent v4', 'POST Callback').retryOnFail === false && httpNode('SEO Agent — Publish to WordPress', 'Create WP Draft').retryOnFail === false
+  check('G1: the allow-list holds only what is not idempotent — the report callbacks, the AI tracker\'s notice callbacks and the WordPress draft — each with its reason, and those nodes really carry no retry', Object.keys(RW.allow).length === 20 && Object.keys(RW.allow).every(k => /^POST /.test(k) || k === 'Create WP Draft' || NOTICES.includes(k)) && Object.values(RW.allow).every(v => String(v).length > 20) && httpNode('SEO Agent v4', 'POST Callback').retryOnFail === false && httpNode('SEO Agent — Publish to WordPress', 'Create WP Draft').retryOnFail === false
     && NOTICES.every(nm => { const x = httpNode('SEO Agent — AI Visibility Tracker', nm); return x && !x.retryOnFail; }), JSON.stringify(Object.keys(RW.allow)) + ' ' + JSON.stringify(NOTICES.map(nm => httpNode('SEO Agent — AI Visibility Tracker', nm))));
   check('G1: the lint bites — it flags an HTTP node with no retry and one with a weaker retry, honours its allow-list and leaves other node types alone (self-test run by build_v4.py section 37)', RW.selftest.flags_node_without_retry === true && RW.selftest.flags_weaker_retry === true && RW.selftest.honours_allow_list === true && RW.selftest.ignores_other_nodes === true, JSON.stringify(RW.selftest));
   const GATE = ['Run AI Requests', 'AI Retry Requests', 'Any AI Retries?', 'Wait Before AI Retry', 'Run AI Retries', 'Merge AI Answers', 'Parse AI Answers'];
@@ -9670,7 +9670,7 @@ await guard('R17 R28 R29 ledger order, money and secrets', async () => {
     JSON.stringify(LW.assess.settle_values));
 
   // ---------- 4. R17: what the build proved about every scheduled workflow ----------
-  const MON = Object.keys(LO.monitors).filter(w => !/AI Repeat Pilot|Page Finalize/.test(w)).sort();   // H3 (2026-10-28): the Page Finalize is on demand and synchronous like the pilot (own scenario FIN1)
+  const MON = Object.keys(LO.monitors).filter(w => !/AI Repeat Pilot|Page Finalize|Keyword Intelligence/.test(w)).sort();   // KI E2 (2026-11-08): Keyword Intelligence is on demand (own scenario KIE2)   // H3 (2026-10-28): the Page Finalize is on demand and synchronous like the pilot (own scenario FIN1)
     // W2-E2 (2026-10-23): the AI Repeat Pilot keeps a ledger row too, but it is on demand only (never scheduled) - its own scenario W2E2-PILOT
   // R32 (2026-10-14, section 59): Page Watch joined them — free today (25 plain GETs), and the one workflow the guard and the day's
   // reconciliation could not see at all.
@@ -10152,7 +10152,7 @@ await guard('R31 R32 R33 the money a run reports is the money that happened', as
     mixedRow.est_usd === 0.05 && mixedRow.dfs_est_usd === 0.05 && /1 free-only site\(s\)/.test(mixedRow.cost_basis), JSON.stringify(mixedRow));
 
   // ---------- 4. what the build proved about the schedules (the three "also seen" items of the live check) ----------
-  const MON69 = Object.keys(CT.monitors).filter(w => !/Reply Reader|AI Repeat Pilot|Page Finalize|Index Coverage/.test(w)).sort();   // Index coverage (2026-10-29): no DataForSEO, its balance probes are no-ops (scenarios_index.js IX12)   // H3: the Page Finalize calls no DataForSEO either (FIN1)
+  const MON69 = Object.keys(CT.monitors).filter(w => !/Reply Reader|AI Repeat Pilot|Page Finalize|Index Coverage|Keyword Intelligence/.test(w)).sort();   // KI E2 (2026-11-08): on demand, settles its measured DataForSEO figure (KIE2-11)   // Index coverage (2026-10-29): no DataForSEO, its balance probes are no-ops (scenarios_index.js IX12)   // H3: the Page Finalize calls no DataForSEO either (FIN1)
     // W2-E2: the on-demand pilot is not a schedule   // W3-F: the Reply Reader calls no DataForSEO, so its two balance probes are no-ops (own scenario S177)
   check('R32: all ten scheduled workflows take the free `appendix/user_data` reading on their own ledger chain — until now only main-workflow runs did, so the monitors (where most of the DataForSEO money goes) reconciled against nothing',
     MON69.length === 10 && MON69.every(w => CT.monitors[w].balance === 'DFS Balance (' + CT.monitors[w].tag + ')'),
@@ -10799,7 +10799,7 @@ await guard('B-A7 B-A9 the alert retry, the escalation and the shared concurrenc
     && first74.next_attempt_at > new Date().toISOString() && eq(Object.keys(first74), TC74.OPS_ALERTS), JSON.stringify(Object.keys(first74)));
 
   // ---------- 8. the wiring: every scheduled workflow sweeps, and the Page Watch records its own delivery ----------
-  const MON74 = Object.keys(WIRE74.monitors).filter(w => !/AI Repeat Pilot|Page Finalize/.test(w)).sort();   // H3: the Page Finalize is on demand (FIN1)
+  const MON74 = Object.keys(WIRE74.monitors).filter(w => !/AI Repeat Pilot|Page Finalize|Keyword Intelligence/.test(w)).sort();   // KI E2 (2026-11-08): on demand (KIE2-1)   // H3: the Page Finalize is on demand (FIN1)
     // W2-E2 (2026-10-23): the AI Repeat Pilot keeps a ledger row too, but it is on demand only (never scheduled) - its own scenario W2E2-PILOT
   check('B-A7: all ten scheduled workflows end by sweeping the alerts nobody has — that is the retry\'s schedule: Page Watch daily at 05:45, the AI Pulse daily at 06:30, the weekly jobs and the monthly audit in each website\'s own cycle (2026-10-19; it was six on Monday morning and the audit on the 1st)',
     MON74.length === 12 && ['AI Growth', 'AI Pulse', 'AI Visibility Tracker', 'Audit Scheduler', 'Backlink Monitor', 'Content Cadence', 'Link Builder', 'Rank Tracker', 'Site Tracker', 'Page Watch', 'Reply Reader', 'Index Coverage']   // W3-F; Index Coverage since 2026-10-29
@@ -12488,7 +12488,7 @@ await guard('B-A10 — a failure inside an HTTP 200 is asked again once, counted
   const totals = wfs.reduce((a, w) => ({ gated: a.gated + IN200[w].gated.length, ungated: a.ungated + IN200[w].ungated.length }), { gated: 0, ungated: 0 });
   console.log('   in-200 ratchet ->', wfs.length, 'workflows,', totals.gated, 'gated,', totals.ungated, 'on the ratchet');
   check('B-A10: the ratchet covers all twelve workflows that call DataForSEO, not the main one alone — that hole is how ten `DFS Balance End` nodes had slipped in ungated and unmeasured',
-    wfs.length === 13 && totals.gated >= 70, JSON.stringify({ workflows: wfs.length, ...totals }));
+    wfs.length === 14 && totals.gated >= 70,   // KI E2 (2026-11-08): + Keyword Intelligence (7 gated calls) JSON.stringify({ workflows: wfs.length, ...totals }));
   check('B-A10: not one node is left on the ratchet without a reason written beside it — an excused node is a decision, and a decision with no reason cannot be told from a debt nobody got to',
     wfs.every(w => IN200[w].ungated.every(n => String((IN200[w].excused || {})[n] || '').length > 80)),
     JSON.stringify(wfs.flatMap(w => IN200[w].ungated.filter(n => !(IN200[w].excused || {})[n]).map(n => w + ' / ' + n))));
@@ -16046,7 +16046,7 @@ await guard('S115 R116 R96 — a refused on-demand monitor tells its caller, and
     return !Array.isArray(p) || !p.includes(g.notice) || !p.includes(g.post) || p.some(n => /^DFS Balance|^Load Run Ledger|^Ledger Settle|^Settle Run Ledger|^Ensure Ops Alerts/.test(n)) || g.post_max_tries !== 3; });
   console.log('   refusal path (BL) ->', JSON.stringify((W.monitors['SEO Agent — Backlink Monitor'].guard || {}).refusal_path));
   check('R96 (dossier test a): in all ten scheduled workflows no path from Refuse Run Ledger reaches a DataForSEO node or the settle — exec 624 waited 5 min 33 s on a balance read it did not need, then computed $0.45 and dropped it',
-    MON.length === 11 && bad.length === 0, JSON.stringify(bad));   // Index coverage (2026-10-29): + the daily index watch
+    MON.length === 12 && bad.length === 0, JSON.stringify(bad));   // Index coverage (2026-10-29): + the daily index watch; KI E2 (2026-11-08): + Keyword Intelligence
   check('R96: the refused row is settled by the refusal itself (status refused, $0, settled_at, the reason) — no second write is needed or attempted',
     MON.every(w => ['status', 'settled_usd', 'dfs_usd', 'settled_at', 'cost_basis'].every(c => W.monitors[w].refuse_values.includes(c))), JSON.stringify(W.monitors[MON[0]].refuse_values));
   reset();
