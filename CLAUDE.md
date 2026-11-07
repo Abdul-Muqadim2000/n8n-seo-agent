@@ -63,7 +63,16 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-11-06, AI ranking (AIR) built, reviewed, DEPLOYED in trial on both sites - latest)
+## Status (2026-11-07, AI ranking switched ON + first-live-run fixes deployed - latest)
+Owner switched AIR on for both sites 2026-11-06 (ai_rank_mode on, reserve, mentions, fan-out 20; Brave off, no key). The first live run
+found three defects (no AI page: L06 refresh without an address, and the cadence's 60-day rule; placements skipped the Link Builder's
+vetting; two Link Builder false positives); fixed in `fixes/LIVE1.md`, release **3e91831b**, harness **17434 / 0**, app 1125 / 1974 / 317.
+**Deployed 2026-11-07 ~18:30 UTC**: backup pg/2026-11-07/*T175032Z; prod == main before, prod == build after (32 / 0); engine 28
+published; API on the VM at 3e91831b (healthy). **Owner:** merge PR #60 (main = production; the merge was refused to me as unreviewed),
+and either allow the job-row re-open (refused by the classifier) to re-run this week now, or wait for the normal runs (techand Thu 11-12,
+devaicon Fri 11-13). Read `n8n/seo-agent/docs/ai-ranking-2026-11-05/RESUME.md` (last section).
+
+## Status (2026-11-06, AI ranking (AIR) built, reviewed, DEPLOYED in trial on both sites - previous)
 Owner asked for full R&D + the best enterprise AI-ranking algorithm (two prod clients had no outcome), multi-agent, nothing else may
 break. Read **`n8n/seo-agent/docs/ai-ranking-2026-11-05/RESUME.md`** (README = owner decisions, R1-R5 research, DESIGN.md, CONTRACTS.md,
 fixes/*.md, REVIEW_A/B/C, BROWSER_PASS). Root causes (R4): devaicon not findable (no Bing / Brave / Common Crawl), clients on none of the
