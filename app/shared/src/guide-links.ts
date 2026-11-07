@@ -24,6 +24,7 @@ export const GUIDE_FOR_NEEDS_YOU_KIND: Record<NeedsYouItem['kind'], GuideId> = {
   questions: 'page-questions',   // H3 (2026-10-28): questions on a written page; each answer is kept in the business details
   site_task: 'indexnow-key-file',   // site tasks (2026-10-28): refined by the item's id below
   hold: 'page-held',   // W0-D (2026-10-29): a page that waits for your OK before it is written
+  ki: 'choose-first-keyword',   // KI (2026-11-08, A1): until A2's guides exist; A2 maps it to 'ki-choose-competitors' and refines 'ki:quick-wins' (ki-api.ts KI_NEEDS_YOU_GUIDES)
 };
 
 /** Index coverage: the guide of each indexing step (the same ids as INDEX_CAUSE_INFO in indexing.ts; a test holds the two together). */

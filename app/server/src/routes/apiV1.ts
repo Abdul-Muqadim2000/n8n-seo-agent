@@ -213,10 +213,10 @@ const TOOLS: Tool[] = [
   {
     name: 'get_table',
     description:
-      'Rows of one export table for one verified website, oldest first: rank_history (keyword positions), site_metrics (weekly Search Console / GA4), audit_findings, ai_visibility, backlinks, runs (analyses and their credits). Filter by date with since / until (ISO).',
+      'Rows of one export table for one verified website, oldest first: rank_history (keyword positions), site_metrics (weekly Search Console / GA4), audit_findings, ai_visibility, backlinks, runs (analyses and their credits). Filter by date with since / until (ISO). Keyword intelligence, read-only and only for a website where it is switched on: ki_competitors, ki_keywords, ki_gaps, ki_runs (rows as stored, JSON columns as text; since / until do not apply).',
     inputSchema: {
       type: 'object',
-      properties: { websiteId: { type: 'string' }, table: { type: 'string', enum: ['rank_history', 'site_metrics', 'audit_findings', 'ai_visibility', 'backlinks', 'runs'] }, since: { type: 'string' }, until: { type: 'string' }, ...listArgs },
+      properties: { websiteId: { type: 'string' }, table: { type: 'string', enum: ['rank_history', 'site_metrics', 'audit_findings', 'ai_visibility', 'backlinks', 'runs', 'ki_competitors', 'ki_keywords', 'ki_gaps', 'ki_runs'] }, since: { type: 'string' }, until: { type: 'string' }, ...listArgs },
       required: ['websiteId', 'table'],
     },
     run: async (c, a) => tableRowsV1(c.org, await siteOf(c, a.websiteId), a.table, a),

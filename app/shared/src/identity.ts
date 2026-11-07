@@ -528,6 +528,11 @@ export const AUDIT_ACTIONS = {
   'site.admin.prospect': { label: 'Changed a link prospect', category: 'websites' },
   'site.admin.ai_prompts': { label: 'Changed the AI question panel', category: 'websites' },
   'site.admin.content_groups': { label: 'Changed the content groups', category: 'websites' },
+  // KI (2026-11-08, A1): keyword intelligence
+  'site.ki_competitor': { label: 'Changed a competitor (chosen, watchlist or not a competitor)', category: 'websites' },
+  'site.ki_gap': { label: 'Changed a keyword gap', category: 'websites' },
+  'site.ki_questions_approved': { label: 'Added buyer questions from keyword research to the AI question panel', category: 'websites' },
+  'site.ki_mode': { label: 'Switched keyword intelligence for a website', category: 'websites' },
   // MKT (2026-10-27, AUDIT.md §2): a warning the person (or an API caller) went past with Continue anyway, and the market fixes
   'warning.overridden': { label: 'Continued past a warning', category: 'websites' },
   'site.market_synced': { label: 'Moved the weekly checks to the website\'s main country', category: 'websites' },

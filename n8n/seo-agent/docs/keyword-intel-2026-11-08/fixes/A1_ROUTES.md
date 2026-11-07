@@ -42,3 +42,10 @@ them: `GUIDE_FOR_RECOMMENDATION['ki:competitors'] = 'ki-choose-competitors'`, `[
 `choose-first-keyword` (one line in `guide-links.ts`) and gives it an icon in `pipeline/home.tsx` `KIND_ICON` (one line, `Users`).
 
 Page paths A1 assumes for the actions: `competitors`, `keywords` (relative to `/o/:org/sites/:site/`).
+
+## Addendum (end of A1): web places A2 owns that list stages / kinds
+- `web/src/components/reports/ReportSummaryLine.tsx`: a case for `ki_competitors` / `ki_research` (summary keys above) and the two started notices.
+- `web/src/pages/runs/RunDetailPage.tsx` `NOTICE_STAGES`: add `ki_competitors_started`, `ki_research_started`.
+- `web/src/pages/settings/_components/DeliveryTab.tsx` `CHOOSABLE_STAGES`: add `ki_competitors`, `ki_research` (Trial reports are held by the server whatever is chosen).
+- `ReportView.tsx` RENDERERS: the two final stages.
+- A1 already added `ki` to `KIND_ICON` (pipeline/home.tsx, icon `Users`) and `GUIDE_FOR_NEEDS_YOU_KIND.ki` (placeholder guide).

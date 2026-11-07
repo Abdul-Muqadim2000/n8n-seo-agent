@@ -349,7 +349,8 @@ async function reportRows(ctx: V1Ctx, extra: SQL[], limit: number): Promise<Repo
   const rows = (await db
     .select(reportCols)
     .from(schema.reports)
-    .where(and(eq(schema.reports.orgId, ctx.org.id), ...extra))
+    // KI (A1): a Trial run's reports are our team's check, never readable through the API
+    .where(and(eq(schema.reports.orgId, ctx.org.id), sql`not (${schema.reports.stage} in ('ki_competitors', 'ki_research', 'ki_competitors_started', 'ki_research_started') and coalesce(${schema.reports.summary}->>'trial', '') = 'true')`, ...extra))
     .orderBy(desc(ms(schema.reports.receivedAt)), desc(schema.reports.id))
     .limit(limit + 1)) as ReportListRow[];
   const fm = await filesFor(rows.slice(0, limit).map((r) => r.id));

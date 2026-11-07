@@ -144,6 +144,9 @@ export const RULE_SCORES: Record<string, { impact: number; effort: EffortBand; b
   // AI
   'ai:outreach': { impact: 6, effort: 'hour', basis: 'the pages AI answers already rely on, which do not name you' },
   'ai:indexnow': { impact: 4, effort: 'minutes', basis: 'one file that gets every new page to Bing and Copilot in the same week' },
+  // KI (2026-11-08, A1): keyword intelligence, On websites only
+  'ki:competitors': { impact: 5, effort: 'minutes', basis: 'the keyword research and its gaps compare you with the competitors you choose' },
+  'ki:quick-wins': { impact: 6, effort: 'hour', basis: 'searches where you already show near the top of Google, the shortest way to new clicks' },
   'ai:crawlers': { impact: 7, effort: 'minutes', basis: 'an AI search crawler turned away by robots.txt cannot read, name or cite any page it is kept from' },
   'ai:gap': { impact: 4, effort: 'session', basis: 'a buyer question AI answers without you' },
   // content and cadence

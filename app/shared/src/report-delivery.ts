@@ -169,7 +169,9 @@ export type HoldCode =
   | 'stage_not_chosen'
   | 'delivery_off'
   | 'no_channel'
-  | 'already_delivered';
+  | 'already_delivered'
+  /** KI (2026-11-08): a run in Trial is our team's own check, for platform admins only */
+  | 'trial';
 
 export interface DeliveryDecision {
   deliver: boolean;
@@ -209,6 +211,8 @@ export function finishedStatus(stage: string, status: string): boolean {
   if (!s || FINISHED_STATUSES.has(s)) return true;
   // Index coverage (2026-10-29, DESIGN.md §5): its callback says `complete`; read as finished for that stage only (no other stage changes)
   if (s === 'complete' && stage === 'index_coverage') return true;
+  // KI (2026-11-08, CONTRACTS.md §4): a partial Competitors / Keyword research run delivered what it could read and says what is missing
+  if (s === 'partial' && (stage === 'ki_competitors' || stage === 'ki_research')) return true;
   return s === 'progress' && REPORT_STAGES.has(stage) && !INTERIM_STAGES.has(stage);
 }
 
@@ -253,6 +257,9 @@ export function deliveryDecision(c: DeliveryCandidate): DeliveryDecision {
   // R110: a "started" note is an acknowledgement whatever status it carries (the engine sends them as `accepted`), so it is
   // checked before the status, otherwise it is coded `rejected` and a share link calls it "did not produce a report".
   if (INTERIM_STAGES.has(stage)) return hold('interim', 'This is a note that the work started, not the report itself.');
+  // KI (2026-11-08): a Trial run is our team's check before the feature is switched on for the website: it never leaves the app
+  if ((stage === 'ki_competitors' || stage === 'ki_research') && text(p.mode).toLowerCase() === 'trial')
+    return hold('trial', 'This analysis ran in trial for our team only, so it is not sent.');
   if (!finishedStatus(stage, status)) return hold('rejected', `This run finished as "${status}", not as a completed report.`);
   if (text(p.validation_error)) return hold('refused', `The engine refused this run: ${text(p.validation_error).slice(0, 200)}`);
   // C-11 (re-rating 2026-10-17): a dry run is a test the owner started - AI Growth's `dry_run: true` submitted nothing, so a report titled
