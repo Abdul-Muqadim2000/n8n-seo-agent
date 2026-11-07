@@ -1,0 +1,1795 @@
+{
+ "_comment": "KI E1 (2026-11-08) labelled journey stage + intent per keyword (top10 = the page types of its stored results page, in position order; null = no stored results page), built from the production read of 2026-11-08 (R3_PROD_OUTPUTS.md; private dump ~/seo-agent-secrets/keyword-intel-2026-11-08, read only) by scratchpad gen_sets.py. Only domains and keywords that already appear in the public repo are kept; no titles, no page addresses, no personal data. Labels are an expert reading of the stored results pages; holdout = every third case (index % 3 == 2), fixed before the kit was tuned. harness/scenarios_ki.js fails under 90% on the hold-out.",
+ "clients": {
+  "techand.ai": {
+   "own_domain": "techand.ai",
+   "market": "AE",
+   "services": [
+    "Microsoft Dynamics 365 Business Central implementation",
+    "Dynamics 365 Finance and Operations",
+    "Dynamics 365 CRM and Sales",
+    "Dynamics 365 Project Operations",
+    "NAV, GP and AX migrations to Dynamics 365",
+    "Managed Dynamics 365 support",
+    "Copilot Studio agents",
+    "Power Platform and Power BI",
+    "UAE e-invoicing (Peppol) and VAT compliance"
+   ]
+  },
+  "devaicon.com": {
+   "own_domain": "devaicon.com",
+   "market": "AE",
+   "services": [
+    "Custom AI solutions",
+    "AI automation",
+    "Agentic AI development",
+    "Custom software development",
+    "Microsoft enterprise systems (Dynamics 365, Fabric, Power Platform)",
+    "Managed IT support",
+    "Open edX services",
+    "Open edX hosting",
+    "Open edX development"
+   ]
+  }
+ },
+ "cases": [
+  {
+   "keyword": "dynamics 365 erp system",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "pos": 1,
+     "type": "guide"
+    },
+    {
+     "pos": 2,
+     "type": "video"
+    },
+    {
+     "pos": 3,
+     "type": "provider"
+    },
+    {
+     "pos": 4,
+     "type": "provider"
+    },
+    {
+     "pos": 5,
+     "type": "guide"
+    },
+    {
+     "pos": 6,
+     "type": "guide"
+    },
+    {
+     "pos": 7,
+     "type": "vendor"
+    },
+    {
+     "pos": 8,
+     "type": "guide"
+    },
+    {
+     "pos": 9,
+     "type": "forum"
+    }
+   ],
+   "stage": "solution",
+   "intent": "informational",
+   "holdout": false
+  },
+  {
+   "keyword": "crm service provider in uae",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "pos": 1,
+     "type": "vendor"
+    },
+    {
+     "pos": 2,
+     "type": "list"
+    },
+    {
+     "pos": 3,
+     "type": "list"
+    },
+    {
+     "pos": 4,
+     "type": "vendor"
+    },
+    {
+     "pos": 5,
+     "type": "provider"
+    },
+    {
+     "pos": 6,
+     "type": "directory"
+    },
+    {
+     "pos": 7,
+     "type": "list"
+    },
+    {
+     "pos": 8,
+     "type": "list"
+    },
+    {
+     "pos": 9,
+     "type": "provider"
+    },
+    {
+     "pos": 10,
+     "type": "vendor"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "open edx provider",
+   "client": "devaicon.com",
+   "top10": [
+    {
+     "pos": 1,
+     "type": "vendor"
+    },
+    {
+     "pos": 3,
+     "type": "forum"
+    },
+    {
+     "pos": 4,
+     "type": "vendor"
+    },
+    {
+     "pos": 5,
+     "type": "guide"
+    },
+    {
+     "pos": 7,
+     "type": "list"
+    },
+    {
+     "pos": 8,
+     "type": "other"
+    },
+    {
+     "pos": 9,
+     "type": "guide"
+    },
+    {
+     "pos": 10,
+     "type": "guide"
+    }
+   ],
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "is microsoft dynamics 365 an erp system",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "pos": 1,
+     "type": "provider"
+    },
+    {
+     "pos": 2,
+     "type": "guide"
+    },
+    {
+     "pos": 3,
+     "type": "guide"
+    },
+    {
+     "pos": 4,
+     "type": "news"
+    },
+    {
+     "pos": 5,
+     "type": "list"
+    },
+    {
+     "pos": 6,
+     "type": "guide"
+    },
+    {
+     "pos": 7,
+     "type": "video"
+    },
+    {
+     "pos": 8,
+     "type": "news"
+    },
+    {
+     "pos": 9,
+     "type": "guide"
+    },
+    {
+     "pos": 10,
+     "type": "directory"
+    }
+   ],
+   "stage": "info",
+   "intent": "informational",
+   "holdout": false
+  },
+  {
+   "keyword": "ms 365 erp",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "pos": 1,
+     "type": "provider"
+    },
+    {
+     "pos": 2,
+     "type": "guide"
+    },
+    {
+     "pos": 3,
+     "type": "video"
+    },
+    {
+     "pos": 4,
+     "type": "guide"
+    },
+    {
+     "pos": 5,
+     "type": "guide"
+    },
+    {
+     "pos": 6,
+     "type": "provider"
+    },
+    {
+     "pos": 7,
+     "type": "guide"
+    },
+    {
+     "pos": 8,
+     "type": "directory"
+    },
+    {
+     "pos": 9,
+     "type": "video"
+    },
+    {
+     "pos": 10,
+     "type": "guide"
+    }
+   ],
+   "stage": "solution",
+   "intent": "informational",
+   "holdout": false
+  },
+  {
+   "keyword": "microsoft dynamics erp",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "pos": 1,
+     "type": "provider"
+    },
+    {
+     "pos": 2,
+     "type": "guide"
+    },
+    {
+     "pos": 3,
+     "type": "provider"
+    },
+    {
+     "pos": 4,
+     "type": "guide"
+    },
+    {
+     "pos": 5,
+     "type": "news"
+    },
+    {
+     "pos": 6,
+     "type": "forum"
+    },
+    {
+     "pos": 7,
+     "type": "vendor"
+    },
+    {
+     "pos": 8,
+     "type": "guide"
+    },
+    {
+     "pos": 9,
+     "type": "forum"
+    },
+    {
+     "pos": 10,
+     "type": "provider"
+    }
+   ],
+   "stage": "solution",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "ai in industrial automation",
+   "client": "devaicon.com",
+   "top10": [
+    {
+     "pos": 1,
+     "type": "guide"
+    },
+    {
+     "pos": 2,
+     "type": "guide"
+    },
+    {
+     "pos": 3,
+     "type": "guide"
+    },
+    {
+     "pos": 4,
+     "type": "video"
+    },
+    {
+     "pos": 5,
+     "type": "guide"
+    },
+    {
+     "pos": 6,
+     "type": "guide"
+    },
+    {
+     "pos": 7,
+     "type": "guide"
+    },
+    {
+     "pos": 8,
+     "type": "guide"
+    },
+    {
+     "pos": 9,
+     "type": "guide"
+    },
+    {
+     "pos": 10,
+     "type": "guide"
+    }
+   ],
+   "stage": "info",
+   "intent": "informational",
+   "holdout": false
+  },
+  {
+   "keyword": "ai automation services pakistan",
+   "client": "devaicon.com",
+   "top10": [
+    {
+     "pos": 1,
+     "type": "list"
+    },
+    {
+     "pos": 2,
+     "type": "provider"
+    },
+    {
+     "pos": 3,
+     "type": "provider"
+    },
+    {
+     "pos": 4,
+     "type": "directory"
+    },
+    {
+     "pos": 5,
+     "type": "provider"
+    },
+    {
+     "pos": 6,
+     "type": "list"
+    },
+    {
+     "pos": 7,
+     "type": "provider"
+    },
+    {
+     "pos": 8,
+     "type": "directory"
+    },
+    {
+     "pos": 9,
+     "type": "guide"
+    }
+   ],
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "crm for customers",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "pos": 1,
+     "type": "guide"
+    },
+    {
+     "pos": 2,
+     "type": "guide"
+    },
+    {
+     "pos": 6,
+     "type": "vendor"
+    }
+   ],
+   "stage": "info",
+   "intent": "informational",
+   "holdout": true
+  },
+  {
+   "keyword": "what is a crm company",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "pos": 4,
+     "type": "video"
+    },
+    {
+     "pos": 6,
+     "type": "guide"
+    }
+   ],
+   "stage": "info",
+   "intent": "informational",
+   "holdout": false
+  },
+  {
+   "keyword": "best crm software for customer service",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "pos": 1,
+     "type": "list"
+    },
+    {
+     "pos": 8,
+     "type": "list"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "crm service module",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "pos": 1,
+     "type": "guide"
+    },
+    {
+     "pos": 3,
+     "type": "forum"
+    },
+    {
+     "pos": 8,
+     "type": "video"
+    },
+    {
+     "pos": 9,
+     "type": "guide"
+    }
+   ],
+   "stage": "solution",
+   "intent": "informational",
+   "holdout": true
+  },
+  {
+   "keyword": "crm service provider",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "pos": 2,
+     "type": "vendor"
+    },
+    {
+     "pos": 6,
+     "type": "guide"
+    },
+    {
+     "pos": 10,
+     "type": "list"
+    }
+   ],
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "ai development companies",
+   "client": "devaicon.com",
+   "top10": [
+    {
+     "pos": 1,
+     "type": "list"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "ai app development companies",
+   "client": "devaicon.com",
+   "top10": [
+    {
+     "pos": 1,
+     "type": "list"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "ai app development",
+   "client": "devaicon.com",
+   "top10": [
+    {
+     "pos": 1,
+     "type": "list"
+    }
+   ],
+   "stage": "solution",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "agentic ai development in uae",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "erp & crm software",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "guide"
+    },
+    {
+     "type": "guide"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "erp system dubai",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "guide"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "erp software uae",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "erp software in uae",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "provider"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "erp systems in uae",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "guide"
+    },
+    {
+     "type": "other"
+    },
+    {
+     "type": "provider"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "erp in dubai",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "erp software dubai",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "guide"
+    },
+    {
+     "type": "other"
+    },
+    {
+     "type": "provider"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "erp software in dubai",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "erp solutions",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "other"
+    },
+    {
+     "type": "other"
+    },
+    {
+     "type": "guide"
+    },
+    {
+     "type": "provider"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "best erp software dubai",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "provider"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "best erp software in dubai",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "forum"
+    },
+    {
+     "type": "provider"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "erp integration",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "type": "guide"
+    },
+    {
+     "type": "guide"
+    },
+    {
+     "type": "guide"
+    },
+    {
+     "type": "guide"
+    },
+    {
+     "type": "guide"
+    },
+    {
+     "type": "guide"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "other"
+    },
+    {
+     "type": "provider"
+    }
+   ],
+   "stage": "solution",
+   "intent": "informational",
+   "holdout": false
+  },
+  {
+   "keyword": "erp software solutions",
+   "client": "techand.ai",
+   "top10": [
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "erp solutions dubai",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "erp dubai",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "erp uae",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "erp implementation services",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "top erp systems",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "dynamics 365 finance operations",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "solution",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "dynamics 365 erp",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "solution",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "erp migration",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "solution",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "manufacturing erp",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "solution",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "what is erp",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "info",
+   "intent": "informational",
+   "holdout": false
+  },
+  {
+   "keyword": "dynamics 365 crm",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "solution",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "dynamics 365 erp and crm",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "solution",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "it solutions",
+   "client": "devaicon.com",
+   "top10": [
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "forum"
+    },
+    {
+     "type": "forum"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "guide"
+    },
+    {
+     "type": "other"
+    }
+   ],
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "software development companies",
+   "client": "devaicon.com",
+   "top10": [
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "guide"
+    },
+    {
+     "type": "provider"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "software development agencies",
+   "client": "devaicon.com",
+   "top10": [
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "guide"
+    },
+    {
+     "type": "provider"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "it services",
+   "client": "devaicon.com",
+   "top10": [
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "forum"
+    },
+    {
+     "type": "guide"
+    }
+   ],
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "software development agency",
+   "client": "devaicon.com",
+   "top10": [
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "software development company in uae",
+   "client": "devaicon.com",
+   "top10": [
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "digital solutions",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "solution",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "software company",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "tech solutions",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "solution",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "custom software development",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "solution",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "managed it services",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "mobile app development",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "solution",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "cloud services",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "solution",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "hr software",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "solution",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "web development",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "solution",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "ai solutions",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "solution",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "computer software development companies",
+   "client": "devaicon.com",
+   "top10": [
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "other"
+    }
+   ],
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "software development company uae",
+   "client": "devaicon.com",
+   "top10": [
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "list"
+    }
+   ],
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "adaptive software development",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "info",
+   "intent": "informational",
+   "holdout": false
+  },
+  {
+   "keyword": "programming languages",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "info",
+   "intent": "informational",
+   "holdout": false
+  },
+  {
+   "keyword": "ai automation solutions gcc",
+   "client": "devaicon.com",
+   "top10": [
+    {
+     "type": "other"
+    },
+    {
+     "type": "other"
+    },
+    {
+     "type": "other"
+    },
+    {
+     "type": "other"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "provider"
+    },
+    {
+     "type": "list"
+    },
+    {
+     "type": "forum"
+    }
+   ],
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "pdf vs e-invoice uae",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "problem",
+   "intent": "informational",
+   "holdout": false
+  },
+  {
+   "keyword": "uae peppol pint-ae compliance",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "problem",
+   "intent": "informational",
+   "holdout": false
+  },
+  {
+   "keyword": "peppol access point service provider uae",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "d365 finance and operations",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "solution",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "microsoft dynamics 365 partner in uae",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "dynamics 365 partner in uae",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "dynamics ax dubai",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "microsoft dynamics ax abu dhabi",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "dynamics 365 cloud migration services in uae",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "d365 cloud migration uae",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "dynamics 365 implementation cost uae",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "open edx service provider in india",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "dynamics 365 jobs dubai",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "info",
+   "intent": "informational",
+   "holdout": false
+  },
+  {
+   "keyword": "business central partner abu dhabi",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "e-invoicing deadline uae",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "problem",
+   "intent": "informational",
+   "holdout": true
+  },
+  {
+   "keyword": "dynamics 365 crm partner uae",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "digital transformation consulting uae",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "dedicated team vs staff augmentation",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "compare",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "software development engagement models",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "info",
+   "intent": "informational",
+   "holdout": false
+  },
+  {
+   "keyword": "open edx hosting",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "solution",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "managed open edx",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "solution",
+   "intent": "commercial",
+   "holdout": true
+  },
+  {
+   "keyword": "peppol access point provider uae",
+   "client": "techand.ai",
+   "top10": null,
+   "stage": "hire",
+   "intent": "commercial",
+   "holdout": false
+  },
+  {
+   "keyword": "erp software examples",
+   "client": "devaicon.com",
+   "top10": null,
+   "stage": "info",
+   "intent": "informational",
+   "holdout": false
+  }
+ ]
+}
