@@ -14,6 +14,7 @@ import { competitorValidator } from '@/components/site/helpers';
 import { completeMonitors, MonitoringCost, MonitorSettingsFields } from '@/components/site/MonitorSettingsFields';
 import { aiMeasuredFrom } from '@/components/site/AiPrecision';
 import { AiRankingCard } from '@/components/site/AiRankingCard';
+import { KiModeCard } from '@/components/site/KiModeCard';
 import { ProfileForm, profileSavedToast, useSaveProfile } from '@/components/site/ProfileForm';
 import { businessOnly, SiteBusinessForm } from '@/components/site/SiteBusinessFields';
 import { BLOG_OPTIONS, blogMonthlyCost, trackDefaults, TrackingForm, type TrackFormOutput } from '@/components/site/TrackingForm';
@@ -262,6 +263,8 @@ function TrackingSettings({ data, admin }: { data: SiteSettingsData; admin: bool
         </Card>
         {/* browser pass D1 (2026-11-06): the AI ranking setting is here before the first tracking save too (renders nothing on an engine without it) */}
         <AiRankingCard initial={data.aiRank} admin={admin} />
+        {/* KI (2026-11-08): Off / Trial / On, platform admins only (renders nothing for anyone else) */}
+        <KiModeCard />
       </div>
     );
 
@@ -302,6 +305,7 @@ function TrackingSettings({ data, admin }: { data: SiteSettingsData; admin: bool
 
       {/* AIR (2026-11-06): the AI ranking setting, saved on its own (never with the monitors above) */}
       <AiRankingCard initial={data.aiRank} admin={admin} />
+      <KiModeCard />
 
       <ContentGroupsCard initial={data.contentGroups ?? []} admin={admin} />
 

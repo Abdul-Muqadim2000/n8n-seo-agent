@@ -127,6 +127,12 @@ async function companyRows(org: OrgRow, t: ExportTable, exportedAt: string): Pro
 
 /** `GET /api/v1/websites/:id/tables/:table`, one website's rows in the export schema, oldest first, filterable by date. */
 export async function tableRowsV1(org: Pick<OrgRow, 'id'>, site: SiteRow, table: unknown, q: Record<string, unknown>): Promise<PageV1<Out> & { table: string; columns: { name: string; type: string; description: string }[] }> {
+  // KI (2026-11-08, A1): the four keyword-intelligence tables, read-only, for an On website only (not in the scheduled exports)
+  const ki = await import('./kiData');
+  if (ki.isKiV1Table(table)) {
+    if (!site.verifiedAt) throw new HttpError(403, `Verify that you own ${site.domain} in the app before its data can be read`, 'website_unverified');
+    return (await ki.kiTableRowsV1(org, site, table, q, (all, c, l) => pageOf(all, decodeCursor(c), l == null ? 100 : pageLimit(l)))) as never;
+  }
   const t = exportTable(table);
   if (!t) throw notFound('Unknown table: use one of rank_history, site_metrics, audit_findings, ai_visibility, backlinks, runs');
   if (!site.verifiedAt) throw new HttpError(403, `Verify that you own ${site.domain} in the app before its data can be read`, 'website_unverified');

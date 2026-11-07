@@ -20,6 +20,9 @@ const siteDataPages: RouteObject[] = [
   { path: 'recommendations', lazy: page(() => import('@/pages/site/RecommendationsPage')) },
   { path: 'search', lazy: page(() => import('@/pages/site/SearchPage')) },
   { path: 'rankings', lazy: page(() => import('@/pages/site/RankingsPage')) },
+  // KI (2026-11-08): shown in the sidebar only where the website's KI is visible (On, or Trial for platform admins); the pages say so otherwise
+  { path: 'competitors', lazy: page(() => import('@/pages/site/CompetitorsPage')) },
+  { path: 'keywords', lazy: page(() => import('@/pages/site/KeywordsPage')) },
   { path: 'content', lazy: page(() => import('@/pages/site/ContentPage')) },
   { path: 'technical', lazy: page(() => import('@/pages/site/TechnicalPage')) },
   { path: 'indexing', lazy: page(() => import('@/pages/site/IndexingPage')) },

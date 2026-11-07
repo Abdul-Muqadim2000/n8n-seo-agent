@@ -19,6 +19,7 @@ import { WorkspaceMockup } from './mockups/WorkspaceMockup';
 import { AgencyPortalMockup } from './mockups/AgencyPortalMockup';
 import { AiGrowthMockup } from './mockups/AiGrowthMockup';
 import { OutreachMockup } from './mockups/OutreachMockup';
+import { CompetitorsMockup } from './mockups/CompetitorsMockup';
 
 /** Renders the mockup or diagram a feature names in the registry (`feature.visual` / `feature.diagram`). */
 export function FeatureVisual({ kind, className }: { kind: VisualKey; className?: string }) {
@@ -65,5 +66,7 @@ export function FeatureVisual({ kind, className }: { kind: VisualKey; className?
       return <AiGrowthMockup className={className} />;
     case 'outreach':
       return <OutreachMockup className={className} />;
+    case 'competitors':
+      return <CompetitorsMockup className={className} />;
   }
 }

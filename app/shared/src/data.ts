@@ -1378,7 +1378,9 @@ export interface NeedsYouItem {
     /** site tasks (2026-10-28, app/docs/SITE_TASKS.md): a step on the client's own website we check ourselves (IndexNow file, robots.txt, a redirect) */
     | 'site_task'
     /** W0-D (2026-10-29): a page held for the client's OK before writing (the verdict scored the keyword under 50, or the website already has a page for it) */
-    | 'hold';
+    | 'hold'
+    /** KI (2026-11-08, A1): keyword intelligence on an On website: choose your competitors, quick wins found (ids `ki:competitors`, `ki:quick-wins`) */
+    | 'ki';
   severity: 'warning' | 'info';
   title: string;
   detail: string;

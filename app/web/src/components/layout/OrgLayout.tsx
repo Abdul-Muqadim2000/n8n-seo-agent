@@ -5,6 +5,8 @@ import {
   BellRing,
   Briefcase,
   Stamp,
+  Swords,
+  Telescope,
   Bot,
   ScanSearch,
   Building2,
@@ -39,7 +41,7 @@ import { CompanyMfaGate, COMPANY_MFA_CODES } from '@/components/identity/Company
 import { ApiRequestError } from '@/lib/api';
 import { lastSite, makeCan, OrgContext, rememberSite, useOrgCtx, type OrgContextValue } from '@/lib/context';
 import { paths } from '@/lib/paths';
-import { useLogout, useMe, useOrg, useSites } from '@/lib/queries';
+import { useKi, useLogout, useMe, useOrg, useSites } from '@/lib/queries';
 import { CreditBanner, CreditPill } from '@/pages/settings/_components/credits/CreditsShell';
 import { cn } from '@/lib/utils';
 import { ErrorState, PageLoader } from '../ui/feedback';
@@ -53,12 +55,15 @@ import { useDocumentTitle, useScrolled } from './useDocumentTitle';
 type IconType = ComponentType<{ className?: string }>;
 
 /** The website pages in the sidebar (path segment under /o/:orgId/sites/:siteId/). */
-export const SITE_NAV: { to: string; label: string; icon: IconType }[] = [
+/** `ki`: a KI page (2026-11-08), listed only where the website's KI is visible to this person (`useKi(...).visible`): Off sites see nothing new. */
+export const SITE_NAV: { to: string; label: string; icon: IconType; ki?: true }[] = [
   { to: 'overview', label: 'Overview', icon: LayoutDashboard },
   { to: 'pipeline', label: 'Pipeline', icon: Workflow },
   { to: 'recommendations', label: 'Recommendations', icon: Lightbulb },
   { to: 'search', label: 'Search & traffic', icon: TrendingUp },
   { to: 'rankings', label: 'Rankings', icon: Activity },
+  { to: 'competitors', label: 'Competitors', icon: Swords, ki: true },
+  { to: 'keywords', label: 'Keyword research', icon: Telescope, ki: true },
   { to: 'content', label: 'Content', icon: PenSquare },
   { to: 'technical', label: 'Technical health', icon: Gauge },
   { to: 'indexing', label: 'Indexing', icon: FileSearch },
@@ -69,6 +74,9 @@ export const SITE_NAV: { to: string; label: string; icon: IconType }[] = [
   { to: 'alerts', label: 'Alerts & check-ins', icon: BellRing },
   { to: 'settings', label: 'Website settings', icon: Settings },
 ];
+
+/** The website pages one person sees: the KI pages only when that website's KI is visible to them. */
+export const siteNavFor = (kiVisible: boolean) => SITE_NAV.filter((n) => !n.ki || kiVisible);
 
 /** G5: the website pages of an agency's client portal (what a client person sees; the server opens exactly these to client roles) */
 export const PORTAL_SITE_PAGES = ['overview', 'recommendations', 'search', 'rankings', 'technical', 'ai', 'backlinks'] as const;
@@ -266,6 +274,9 @@ function Sidebar({ onClose }: { onClose: () => void }) {
   const logout = useLogout();
   const nav = useRef<HTMLElement>(null);
   const moreBelow = useMoreBelow(nav, site?.id);
+  // KI (2026-11-08): the Competitors and Keyword research links, only where this website's KI is visible to this person (a verified
+  // website, not a client portal role; any read error = hidden)
+  const kiVisible = !!useKi(org.id, site?.verifiedAt ? site.id : null, !isClientRole(role)).data?.visible;
 
   useEffect(() => {
     if (site) rememberSite(org.id, site.id);
@@ -343,7 +354,7 @@ function Sidebar({ onClose }: { onClose: () => void }) {
       >
         {site && (
           <NavGroup title="Website">
-            {SITE_NAV.map((n) => (
+            {siteNavFor(kiVisible).map((n) => (
               <NavItem key={n.to} to={paths.site(org.id, site.id, n.to)} icon={n.icon}>
                 {n.label}
               </NavItem>

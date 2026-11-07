@@ -55,6 +55,7 @@ import { assertEngineIdFree, clearGa4OnEngine, ENGINE_ID_TAKEN, syncGa4ToEngine 
 import { routeSiteToApp } from '../services/runs';
 import { fetchPublicText, verify } from '../services/verify';
 import { checkIndexnowStep } from '../services/siteTasks';
+import { invalidateKi } from '../services/ki';
 import { deleteAiPrompts, importAiReport } from '../services/aiWave2';
 import { aiPilotState, startAiPilot } from '../services/aiPilot';
 
@@ -167,6 +168,7 @@ async function stopInEngine(site: SiteRow, log: FastifyRequest['log']) {
   }
   await clearAiInEngine(site.domain, log);
   await clearIndexInEngine(site.domain, log);
+  await clearKiInEngine(site.domain, log);
   invalidateSite(site.domain);
 }
 
@@ -188,6 +190,25 @@ export async function clearIndexInEngine(domain: string, log: FastifyRequest['lo
   };
   for (const t of INDEX_TABLES_CLEARED_ON_DELETE) await del(t, { columnName: 'domain', condition: 'eq', value: domain });
   await del('indexHistory', { columnName: 'site_id', condition: 'eq', value: n8nSiteId(domain) });
+  return failed;
+}
+
+/**
+ * KI (2026-11-08, A1; CONTRACTS.md §5): the website's keyword intelligence leaves with it. The engine's Site Admin `delete` removes the KI rows
+ * too (E2); this covers an engine without that step, table by table, keyed by the domain (a table not created yet is nothing to do).
+ */
+export const KI_TABLES_CLEARED_ON_DELETE = ['kiCompetitors', 'kiKeywords', 'kiGaps', 'kiRuns'] as const;
+export async function clearKiInEngine(domain: string, log: FastifyRequest['log']): Promise<string[]> {
+  const failed: string[] = [];
+  for (const t of KI_TABLES_CLEARED_ON_DELETE) {
+    try {
+      await deleteRows(t, [{ columnName: 'domain', condition: 'eq', value: domain }]);
+    } catch (err) {
+      failed.push(t);
+      log.warn({ err: String(err), domain, table: t }, 'n8n KI data delete failed');
+    }
+  }
+  invalidateKi(domain);
   return failed;
 }
 

@@ -65,7 +65,7 @@ import { engineCostEstimate, ledgerCost, stageOf, summarize, titleFor } from './
 import { siteReadiness } from './readiness';
 import { siteAutomation } from './ladders';
 import { assertConsistent, recordOverride, runWarnings } from './consistency';
-import { assertKiRunAllowed } from './ki';
+import { assertKiRunAllowed, invalidateKi, isKiStage, kiTrialCallback } from './ki';
 import type { FastifyRequest } from 'fastify';
 import type { Warning } from '@seo/shared';
 
@@ -902,6 +902,7 @@ export async function ingestCallback(
   });
   const reportId = stored.id;
   if (domain) invalidateSite(domain);
+  if (domain && isKiStage(stage)) invalidateKi(domain);   // KI (A1): the KI pages read the new rows at once
   if (closedFailed) void releaseFailedPages([closedFailed]).catch(() => undefined);
   const unwritten = run && !closedFailed ? unwrittenPageReason(run, stage, payload, heldRun) : null;
   if (run && unwritten) void closeUnwrittenPage(run, unwritten).catch(() => undefined);
@@ -911,7 +912,8 @@ export async function ingestCallback(
   void deliverReport(org.id, reportId, deliveryLog).catch(() => undefined);
   // G4: the company's event webhooks (run.completed / report.ready / alert.raised / audit.finding.new / rank.changed ...), derived from
   // this callback after it is stored, like delivery, an event that goes wrong never loses the callback
-  void emitForCallback(org, site, { id: reportId, title: stored.title, stage, status, receivedAt: stored.receivedAt, scheduled: stored.scheduled, runId: run?.id ?? null }, payload, run).catch(() => undefined);
+  // KI (A1): a Trial run is our team's own check, for platform admins only: no event leaves the app for it
+  if (!kiTrialCallback(stage, body)) void emitForCallback(org, site, { id: reportId, title: stored.title, stage, status, receivedAt: stored.receivedAt, scheduled: stored.scheduled, runId: run?.id ?? null }, payload, run).catch(() => undefined);
   // the rank tracker says a ladder is won (main keyword top 3 in 4 checks): its settings row says so, so the cadence stops writing it
   // and the app keeps showing Won once the tracker stops checking it (not for a ladder the person paused)
   let ladderWon: boolean | undefined;

@@ -31,3 +31,30 @@ export async function assertKiRunAllowed(input: Pick<RunInput, 'mode'>, site: Pi
   if (!kiMayRun(mode, isPlatformAdmin(user)))
     throw new HttpError(403, 'This analysis is not available for this website yet. Ask us if you would like it switched on.', 'ki_not_available');
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// A1 (2026-11-08): what the run path and the report paths need without loading the KI data reads (services/kiData.ts)
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/**
+ * The KI data reads keep their mapped rows for a short while, per website (owner's performance rule, 2026-11-08: a page view must not hit the
+ * engine's API). services/kiData.ts fills it; a KI callback, a status change and the mode switch empty it for that website.
+ */
+export const KI_CACHE_MS = 60_000;
+export const kiCache = new Map<string, { at: number; value: unknown }>();
+export function invalidateKi(domain: string): void {
+  const d = String(domain || '').toLowerCase();
+  for (const k of [...kiCache.keys()]) if (k === d || k.startsWith(d + '|')) kiCache.delete(k);
+}
+
+const KI_STAGE_SET = new Set(['ki_competitors', 'ki_research', 'ki_competitors_started', 'ki_research_started']);
+export const isKiStage = (stage: string): boolean => KI_STAGE_SET.has(stage);
+
+/** A KI callback of a run in Trial: its report is for platform admins only, never delivered, never an event. */
+export const kiTrialCallback = (stage: string, body: Record<string, unknown>): boolean => isKiStage(stage) && String(body.mode ?? '').trim().toLowerCase() === 'trial';
+
+/** May this person see this stored report? Every report but a Trial KI one; that one only a platform admin (the summary carries `trial`). */
+export function kiReportVisible(r: { stage: string; summary?: Record<string, unknown> | null }, user: UserRow | null): boolean {
+  if (!isKiStage(r.stage)) return true;
+  return r.summary?.trial !== true || isPlatformAdmin(user);
+}

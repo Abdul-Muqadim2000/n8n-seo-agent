@@ -686,7 +686,7 @@ Company settings → API access. The key is shown **once**; only its SHA-256 is 
 | POST | /api/v1/publish-check | B3-7, below (scope `publish_check`) |
 | GET | /api/v1/modes | G4: every mode with `{ mode, title, description, websiteRequired, delivers, estimate: { credits, minutes }, inputSchema }` (the form's schema as JSON Schema; `credits` = a default run's quote) |
 | POST | /api/v1/runs | G4: start an analysis (scope `run`) — "Write API" below |
-| POST | /api/v1/mcp | MCP over Streamable HTTP (JSON answers, no streams; API key only): `initialize`, `tools/list`, `tools/call`, `ping` — tools `list_websites`, `list_audits`, `get_audit`, `get_crawler_activity`, `get_ai_visibility_segments` (G6), `list_runs`, `get_run`, `list_reports`, `get_report`, `publish_check`, `list_modes`, `get_table`, and with scope `run` `preview_run` / `start_run` (G4), each calling the handler of the REST route above. `tools/list` shows only the tools the key may call |
+| POST | /api/v1/mcp | MCP over Streamable HTTP (JSON answers, no streams; API key only): `initialize`, `tools/list`, `tools/call`, `ping` — tools `list_websites`, `list_audits`, `get_audit`, `get_crawler_activity`, `get_ai_visibility_segments` (G6), `list_runs`, `get_run`, `list_reports`, `get_report`, `publish_check`, `list_modes`, `get_table` (KI tables `ki_competitors` / `ki_keywords` / `ki_gaps` / `ki_runs` for an On website), and with scope `run` `preview_run` / `start_run` (G4), each calling the handler of the REST route above. `tools/list` shows only the tools the key may call |
 
 Key management (session only, Company settings → API access):
 
@@ -989,6 +989,47 @@ that fails answers `status: 'unreadable'` with a sentence, never an error, and n
     engine = off. With it on and Google reporting Full access (`siteOwner` / `siteFullUser`) there is no `indexing:sitemap` step for a
     missing sitemap (errors in a submitted one stay the client's). The report counts the pages that need a link from `by_action.links`.
   - Rollback: an API from before wave 2 ignores `site_tasks` rows with `kind = 'index_links'` (an unknown kind reads and records nothing).
+
+## Keyword intelligence: Competitors and Keyword research (KI, 2026-11-08; `shared/src/ki.ts`, `shared/src/ki-api.ts`, `server/src/services/kiData.ts`, `server/src/routes/ki.ts`, `n8n/seo-agent/docs/keyword-intel-2026-11-08/CONTRACTS.md`)
+
+Per website, switched by `seo_monitors.ki_mode` (Off / Trial / On; only platform admins switch it). **Visible** = On, or Trial for a platform
+admin, and the kill switch (`seo_cache ki:kill`, a read error = on) off. Every route needs a member of the company (viewer or above; client
+portal roles get 403) and a verified website. Every data route answers **404** when the website is not visible, the same answer as an unknown
+website. Reads: the engine's `seo_ki_competitors` / `seo_ki_keywords` / `seo_ki_gaps` / `seo_ki_runs`, filtered by the website's domain in the
+request and again on the rows returned, mapped once and kept 60 seconds per website (emptied by a KI callback, a status change and the mode
+switch); filters, sort and paging run on the server. Shapes: `shared/src/ki-api.ts` (camelCase views); full list in
+`n8n/seo-agent/docs/keyword-intel-2026-11-08/fixes/A1_ROUTES.md`.
+
+| Method | Path (under `/api/orgs/:orgId/sites/:siteId/ki`) | Who | Answer |
+|---|---|---|---|
+| GET | `` | viewer | `KiOverview` `{ mode, visible, killed? (platform admins), canSwitch, canAct, maxCompetitors, credits: {competitors, research}, lastRuns, summary }`: one request per page view, `summary` (null when not visible) holds the hero's counts. A non-admin reads Trial as `off`. 240/min |
+| GET | `/competitors?market&status&class` | viewer | `{ market, maxCompetitors, chosen, items: KiCompetitorView[] }` chosen first, then score; listings and platforms are rows with their `class`. 240/min |
+| GET | `/competitors.csv` | viewer | CSV (streamed), every cell through `csvCell` (a leading `= + - @` is neutralised), basis + `fetched_at` columns. 30 / 10 min |
+| PATCH | `/competitors/:compDomain` `{status: chosen\|watch\|dismissed}` | member | `{ ok, compDomain, status, chosen, maxCompetitors }` through Site Admin `ki_competitor` (status_by user, never changed by a run); **409 `ki_max_competitors`** above `ki_max_competitors` (default 5); 404 unknown domain. Audited `site.ki_competitor`. 60 / 10 min |
+| GET | `/keywords?stage&verdict&source&cluster&min_volume&brand&q&striking&heads&questions&market&sort&page&page_size&include=serp` | viewer | `{ market, total, page, pageSize, pages, sort, items: KiKeywordView[], facets }`; sort `score\|volume\|keyword\|position\|demand\|kd\|fetched` (`-` = descending, default `-score`, empty values last); `page_size` default 50, at most 200; unknown filter values ignored. 240/min |
+| GET | `/keywords.csv` (same filters, every page) | viewer | CSV, streamed in chunks of 500 rows. 30 / 10 min |
+| GET | `/gaps?type&status&market&page&page_size` | viewer | `{ market, total, page, pageSize, pages, items: KiGapView[], byType, byStatus }`. 240/min |
+| GET | `/gaps.csv` | viewer | CSV. 30 / 10 min |
+| PATCH | `/gaps/:gapId` `{status: open\|started\|dismissed\|done}` | member | `{ ok, gapId, status }` through Site Admin `ki_gap`; 404 unknown gap. Audited `site.ki_gap` |
+| POST | `/questions/approve` `{keys: kw_key[] (1-30)}` | admin (as the AI panel) | `{ added: [{kwKey, question}], skipped: [{kwKey, reason}], panelSize, ownOnPanel }`: buyer questions join the AI question panel as the owner's own (Site Admin `ai_prompts` add), no paid run; only as many as the panel has room for (its size minus the owner's own questions), the rest `panel_full`; `not_found`, `gated`, `not_a_question`, `already_on_panel`, `duplicate`. Audited `site.ki_questions_approved`. 30 / 10 min |
+| POST | `/plan/:actionId/start` | member | **501** `{ error, code: 'not_available_yet' }` until the plan feeds the Pipeline (W2) |
+| PATCH | `/mode` `{mode: off\|trial\|on}` | platform admin only (member of the company or not; 403 otherwise) | `{ ok, mode }`: Site Admin `monitors` `{ki_mode}` only, then read back from the engine (502 when it did not keep it). Audited `site.ki_mode`. 20 / 10 min |
+
+- **Runs**: `POST /api/orgs/:orgId/runs` with `mode: 'competitors'` or `'keyword_research'` (403 `ki_not_available` unless On, or Trial for a
+  platform admin; 409 `ki_mode_unknown` when the engine cannot be read). Quoted from the one cost table (`competitors` ~$0.35,
+  `keyword_research` ~$0.90 of provider cost, in credits: `credits` above is the same quote), never charged above it; a repeat inside the
+  engine's reuse window is quoted the same and charged what the run ledger settles (0 when everything was reused). A refused or failed
+  answer ends the run failed and nothing is charged.
+- **Callbacks** `ki_competitors_started` / `ki_research_started` (interim), then `ki_competitors` / `ki_research` (CONTRACTS.md §4): stored
+  as reports; `summary` = `status`, `partial` + `missing` (the sections it could not read), `reason` (refused / failed), `trial`, `market` and
+  the counts. `partial` counts as a finished report. A **Trial** run's reports are for platform admins only: hidden from everyone else in the
+  reports list, the report, the run and API v1, never delivered (hold `trial`), never shared, no webhook event.
+- **Recommendations / Needs you** (On websites only): `ki:competitors` "Choose your competitors" (no choice by a person yet) and
+  `ki:quick-wins` "N quick wins found"; Needs-you kind `ki`. Guide ids `ki-choose-competitors`, `ki-read-keyword-research`, `ki-verdicts`.
+- **API v1 / MCP**: `get_table` and `GET /api/v1/websites/:websiteId/tables/:table` also take `ki_competitors`, `ki_keywords`, `ki_gaps`,
+  `ki_runs` (rows as stored, read-only) for a website where KI is **On**; any other website answers as an unknown table. Not part of the
+  scheduled warehouse exports.
+- **Website delete** removes the website's KI rows (the engine's Site Admin delete, and `clearKiInEngine` table by table).
 
 ## Page review: questions, business details, the editor, the final version, approval (H3, 2026-10-28; `shared/src/page-review.ts`, `server/src/services/pageReview.ts`)
 For a written page (a `content` report that carries the page; anything else is 404, as is another company's report). Every write answers the

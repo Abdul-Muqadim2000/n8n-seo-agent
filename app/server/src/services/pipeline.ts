@@ -75,6 +75,7 @@ import { aiPanelNeedsYou } from '@seo/shared';
 import { buildLadders, draftQa, failedPageRow, failedPageRequests, noPageRow, ladderAppSources, ladderNeedsYou, ladderReports, sortNeedsYou, type LadderBuild, type LadderSchedule, type SiteRun, type WaitingPage } from './ladders';
 import { loadBundle, recommend, type SiteBundle } from './recommendations';
 import { siteTasksOf } from './siteTasks';
+import { kiForRecs, kiNeedsYou } from './kiData';   // KI (2026-11-08, A1): its Needs-you items, On websites only
 import type { SiteTask } from '@seo/shared';
 import { ga4Now, gscNow } from './data';
 import { latestReport, monthSpend, reportsList } from './runs';
@@ -1001,7 +1002,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   // AI-FOCUS (2026-10-27): the AI question panel's own decisions for the owner (most questions off the keywords they work on; a ladder the panel
   // has no room for, with the price of a bigger panel) - the same warnings as the website's banner, where Accept and "Keep these questions" are
   const aiPanelItems = await import('./consistency').then((m) => m.standingWarnings(org, site)).then((r) => aiPanelNeedsYou(r.warnings)).catch(() => [] as NeedsYouItem[]);
-  const needsYou = sortNeedsYou([...connectionNeeds(site, x, status), ...profileItems, ...autopilotItems, ...failedRuns(app.runs), ...refusedPlans(recentReports), ...heldPages(recentReports, app.runs), ...ladderNeedsYou(build, await settingsRow()), ...aiPanelItems, ...siteTaskNeedsYou(siteTasks ?? [])]);
+  const needsYou = sortNeedsYou([...connectionNeeds(site, x, status), ...profileItems, ...autopilotItems, ...failedRuns(app.runs), ...refusedPlans(recentReports), ...heldPages(recentReports, app.runs), ...ladderNeedsYou(build, await settingsRow()), ...aiPanelItems, ...siteTaskNeedsYou(siteTasks ?? []), ...(verified ? kiNeedsYou(await kiForRecs(site).catch(() => null)) : [])]);
   const thisWeek = thisWeekItems({ automations, calendar, running: runningHere, queue, plan: week0, x, build, tz, cycles });
   const autopilot: PipelineAutopilot = {
     level: week0.level,

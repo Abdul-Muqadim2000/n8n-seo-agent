@@ -7,6 +7,7 @@ import { PipelineMockup, ReportMockup } from './screens';
 const APP_PATH: Record<string, string> = {
   autopilot: 'pipeline',
   'keyword-research': 'keywords',
+  competitors: 'competitors',
   'keyword-ladders': 'pipeline/ladders',
   content: 'content',
   'technical-audits': 'technical',

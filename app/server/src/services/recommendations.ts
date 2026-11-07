@@ -49,6 +49,7 @@ import type { OrgRow, SiteRow } from '../db/schema';
 import { aiData, alertsData, backlinksData, contentData, ga4Now, gscNow, previousOfType, rankingsData, searchData, settingsData, technicalData } from './data';
 import { latestReport, reportsList } from './runs';
 import { indexingForRecs } from './indexing';
+import { kiForRecs, kiRecommendations, type KiForRecs } from './kiData';
 
 // Next steps for a website, from everything stored about it: setup gaps, Search Console opportunities, open audit issues, AI
 // answers lost to competitors, links to reclaim, pages to publish, ladder rungs to write, plus the actions the SEO engine itself
@@ -72,10 +73,12 @@ export interface SiteBundle {
   researchAt?: string | null;
   /** Index coverage (2026-10-29): the daily index check's newest counts (null: not run yet, or it could not be read) */
   indexing?: IndexingForRecs | null;
+  /** KI (2026-11-08, A1): keyword intelligence's asks; null unless the website is On (Trial and Off add nothing) */
+  ki?: KiForRecs | null;
 }
 
 export async function loadBundle(org: OrgRow, site: SiteRow): Promise<SiteBundle> {
-  const [search, rankings, content, technical, ai, backlinks, alerts, settings, rank, links, research, indexing] = await Promise.all([
+  const [search, rankings, content, technical, ai, backlinks, alerts, settings, rank, links, research, indexing, ki] = await Promise.all([
     searchData(org, site),
     rankingsData(site),
     contentData(org, site),
@@ -89,6 +92,8 @@ export async function loadBundle(org: OrgRow, site: SiteRow): Promise<SiteBundle
     latestReport(org.id, site.id, ['keyword_strategy']).catch(() => null),
     // Index coverage: its own reads, and a failure is "no index items", never a broken Recommendations or Overview page
     site.verifiedAt ? indexingForRecs(site).catch(() => null) : Promise.resolve(null),
+    // KI: its own reads, null unless the website is On; a failure is "no KI items", never a broken page
+    site.verifiedAt ? kiForRecs(site).catch(() => null) : Promise.resolve(null),
   ]);
   const reportsElsewhere = settings.tracking.tracked && settings.tracking.status === 'active' && !settings.tracking.reportsToThisApp;
   let rankNext: EngineAction | null = null;
@@ -106,7 +111,7 @@ export async function loadBundle(org: OrgRow, site: SiteRow): Promise<SiteBundle
       apiBody: (rank.payload.api_body as Record<string, unknown>) ?? null,
     };
   }
-  return { search, rankings, content, technical, ai, backlinks, alerts, settings, rankNext, reportsElsewhere, links, researchAt: research?.report.receivedAt ?? null, indexing };
+  return { search, rankings, content, technical, ai, backlinks, alerts, settings, rankNext, reportsElsewhere, links, researchAt: research?.report.receivedAt ?? null, indexing, ki };
 }
 
 const PAGE_TYPES = new Set<string>(PAGE_TYPE_VALUES);
@@ -450,6 +455,9 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
   }
   for (const k of x.rankings.keywords.filter((k) => k.previousPosition && k.latestPosition != null && (k.latestPosition === 0 || k.latestPosition - k.previousPosition >= 5)).slice(0, 3))
     add({ id: `rank:drop:${k.keyword}`, category: 'rankings', priority: 'medium', title: `"${k.keyword}" dropped`, detail: 'Check the ranking page and what moved above it.', evidence: `position ${k.previousPosition} to ${k.latestPosition === 0 ? 'out of the top 50' : k.latestPosition}`, action: { label: 'Refresh the page', mode: 'keyword', prefill: { keyword: k.keyword, ...(k.url && urlOnHost(k.url, site.domain) ? { existingPageUrl: k.url } : {}) } } });
+
+  // ---------- keyword intelligence (On websites only: kiForRecs is null for Off and Trial) ----------
+  for (const { rec, score } of kiRecommendations(x.ki)) add(rec, score);
 
   // One queue: blocking setup first, then by impact x confidence / effort, then the items nothing measured yet (`queue.ts`).
   return queueOrder(out).slice(0, 60);

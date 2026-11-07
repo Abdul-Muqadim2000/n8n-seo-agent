@@ -210,10 +210,10 @@ export function costKeys(mode: ModeId, v: Values = {}): CostKey[] {
     case 'audit':
       return v.reportType === 'full' ? ['full'] : ['site_audit', 'crawl'];
     case 'discover': {
-      // the strategy, then the follow-ups it starts: a keyword report on the best keyword, a page, an audit
+      // the strategy, then the follow-ups it starts: a keyword report on the best keyword, an audit. Never a page: research does not write
+      // one on its own pick (schemas.ts stores receiveContent false, R-K6), so a page is never quoted for it (R2 H1, KI 2026-11-08)
       const keys: CostKey[] = ['discover'];
       if (v.receiveReport !== false) keys.push('report');
-      if (v.receiveContent === true) keys.push('content');
       if (v.fullReport === true) keys.push('full');
       else if (v.siteAudit === true) keys.push('site_audit', 'crawl');
       return keys;
