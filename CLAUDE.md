@@ -63,7 +63,25 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-11-07, AI ranking switched ON + first-live-run fixes deployed - latest)
+## Status (2026-11-08, SERP-GOTO hotfix DEPLOYED + keyword intelligence (KI) in its fix round - latest)
+**Live defect fixed:** since 2026-10-30 DataForSEO's live Google organic results return every result as a google.com/goto redirect
+(real site only in `breadcrumb`); the Rank Tracker stopped finding clients (techand 3 false drops on 11-05), google.com became a
+competitor. Kit `v5/code/_serp_url.js` (SU) at every SERP reader (build section 181 guard), hidden-but-maybe-ours = -1 with a weekly
+streak, settled after 3 weeks as "not found among the results we could read" (never a drop / lost alert). Reviewed twice
+(`docs/keyword-intel-2026-11-08/REVIEW_SERP_GOTO.md`, ship). **Deployed 2026-11-07 ~22:20 UTC** at 7e0e3342: backup
+pg/2026-11-07/*T221308Z; prod == build before (0 nodes) and after (0); 13 workflows updated, 28 published; API on the VM at 7e0e3342
+(healthy). Web = **PR #61** (owner merges). Open (owner): the data repair of the 107 poisoned `serp:` cache rows / 21 rank + 16 query
+rows / 5 reports / 2 ladders and telling techand the 11-05 drops were our reading error (`fixes/SERP_GOTO.md` §7); DataForSEO's
+Standard queue resolves every goto link ($0.0006 vs $0.002 live): move weekly paths there next.
+**KI (owner ask 2026-11-08: competitor analysis + what buyers search, best in market):** read
+`n8n/seo-agent/docs/keyword-intel-2026-11-08/README.md` (R1-R5 research, DESIGN.md, CONTRACTS.md, fixes/*.md, four REVIEW_*.md).
+Built on branch `ki/integration` (worktree `.claude/worktrees/ki-w0`, not pushed): new workflow `SEOagentKIntel1`, modes
+`competitors` / `keyword_research`, tables `seo_ki_runs/_competitors/_keywords/_gaps`, `seo_monitors.ki_mode` off / trial / on
+(platform admins only), Competitors + Keyword research pages. The logic review found it reproduces most production failures on REAL
+stored rows (fixtures were too clean): fix rounds `ki/fxl` (engine, acceptance = offline replay on the private prod dump) and `ki/fxa`
+(app: Trial privacy + no charge, UX Highs) running. Not deployed; deploy with every site Off (`sync_tables.py` before import).
+
+## Status (2026-11-07, AI ranking switched ON + first-live-run fixes deployed - previous)
 Owner switched AIR on for both sites 2026-11-06 (ai_rank_mode on, reserve, mentions, fan-out 20; Brave off, no key). The first live run
 found three defects (no AI page: L06 refresh without an address, and the cadence's 60-day rule; placements skipped the Link Builder's
 vetting; two Link Builder false positives); fixed in `fixes/LIVE1.md`, release **3e91831b**, harness **17434 / 0**, app 1125 / 1974 / 317.
