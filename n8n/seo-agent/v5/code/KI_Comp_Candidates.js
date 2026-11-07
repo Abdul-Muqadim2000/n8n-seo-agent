@@ -54,11 +54,10 @@ for (const h of Object.keys(aiHits)) { const c = cand(h); if (c && !c.sources.in
 for (const d of [...(p.declared || []), ...(p.chosen || [])]) { const c = cand(d); if (c && !c.sources.includes('declared')) c.sources.push('declared'); }
 for (const r of stored) cand(r.comp_domain);
 const homes = {}; for (const r of cache) { const mm = KIW.S(r.key).match(/^ki:[^:]+:home:(.+)$/); if (mm && KIW.fresh(KIW.cacheRead(cache, r.key), 'homepage', p.now, p.ki_force)) homes[mm[1]] = KIW.cacheRead(cache, r.key); }
-const ctx = { client, declared: p.declared, services: p.services, market_iso: p.iso };
-const list = Object.values(C).map(c => ({ ...c, cls: KI.classifyDomain(c.domain, { ...ctx, titles: c.titles, home: (homes[c.domain] || {}).tokens || '' }) })).filter(c => c.cls && c.cls.class);
+const list = Object.values(C).map(c => ({ ...c, cls: KIW.classify(p, c, homes[c.domain]) })).filter(c => c.cls && c.cls.class);
 // only the unclear ones are read, the most visible first, and never a site whose class the rules already know
 const evidence = (c) => c.positions.length * 3 + c.labs + (c.cd ? 1 : 0) + (c.ai_hits ? 2 : 0);
-const toRead = list.filter(c => !homes[c.domain] && (c.cls.confidence < 0.6 || c.cls.basis === 'rule' && ['direct', 'adjacent'].includes(c.cls.class) && c.cls.confidence < 0.75) && KIW.publicHost(c.domain))
+const toRead = list.filter(c => !homes[c.domain] && ['direct', 'adjacent'].includes(c.cls.class) && (c.cls.needs_review || c.cls.basis === 'rule') && KIW.publicHost(c.domain))
   .sort((a, b) => evidence(b) - evidence(a) || a.domain.localeCompare(b.domain)).slice(0, KIW.CAPS.home_reads).map(c => c.domain);
 return [{ json: { candidates: list, sizes, refd, cd: cdRows, sc_total: sc ? sc.total : null, homes, to_read: toRead, ai_rows_read: aiRead, cache_rows: saveRows, sections,
   labs_unavailable: !!(scPair && !scPair.ok) } }];

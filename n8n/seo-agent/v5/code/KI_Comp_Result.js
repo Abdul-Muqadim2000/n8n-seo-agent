@@ -56,17 +56,22 @@ smReqs.forEach((q, i) => { const a = smAns[i] || {}; const body = KIW.S(a.body !
     v = dates.length ? { per_month: +(dates.filter(d => d >= t0).length / 3).toFixed(1), why: '', pages: dates.length, fetched_at: now } : { per_month: null, why: 'its sitemap gives no dates', fetched_at: now }; }
   pace[q.domain] = v; saveRows.push(KIW.cacheRow(p.site_id, ck('pace', q.domain), v)); });
 for (const d of (p.chosen || [])) if (!pace[d]) { const e = KIW.cacheRead(cache, ck('pace', d)); if (KIW.fresh(e, 'homepage', now, p.ki_force)) pace[d] = e; }
-// ---- classify (again, with the homepages) and score ----
-const ctx = { client, declared: p.declared, services: p.services, market_iso: p.iso };
+// ---- classify (again, with the homepages read this run) and score: KI.scoreCompetitors (SERP share weighted by the seed's demand x stage,
+// topic, geography, AI share; only direct / adjacent scored, and with 3+ seeds read a scored row needs 2 seeds seen) ----
 const cands = (cc.candidates || []).slice();
 for (const [d, n] of Object.entries(extra)) if (!cands.some(c => c.domain === d)) cands.push({ domain: d, positions: [], titles: [], labs: 0, cd: n, ai_hits: 0, sources: ['labs_overlap'] });
-const seedW = (p.seeds || []).map(s => ({ keyword: s.keyword, weight: s.weight }));
-const classed = cands.map(c => { const home = (homes[c.domain] || {}).tokens || ''; const cls = KI.classifyDomain(c.domain, { ...ctx, titles: c.titles, home });
-  const text = (c.titles || []).join(' ') + ' ' + home; return { ...c, cls, topic_sim: KIW.topicSim(text, p.services), geo_match: KIW.geoMatch(c.domain, text, p.iso) }; }).filter(c => c.cls && c.cls.class);
-const scored = KI.scoreCompetitors(classed.map(c => ({ domain: c.domain, class: c.cls.class, positions: (c.positions || []).filter(x => x.src === 'serp'), topic_sim: c.topic_sim, geo_match: c.geo_match, ai_hits: (cc.ai_rows_read ? c.ai_hits : null) })), seedW, KI.CONFIG);
-const byScore = {}; for (const r of scored) byScore[r.domain] = r;
 const sizeOf = (d) => ({ keywords: KIW.N(((cc.sizes || {})[d] || {}).keywords), etv: KIW.N(((cc.sizes || {})[d] || {}).etv), refdomains: KIW.N(((cc.refd || {})[d] || {}).refdomains) });
 const me = sizeOf(client);
+const aiMax = Math.max(0, ...cands.map(c => KIW.N(c.ai_hits) || 0));
+const classed = cands.map(c => { const home = homes[c.domain] || null; const cls = KIW.classify(p, c, home);
+  const text = (c.titles || []).join(' ') + ' ' + ((home && home.tokens) || '');
+  return { ...c, cls, topic_sim: KIW.N(cls.topic_sim) != null ? KIW.N(cls.topic_sim) : (text.trim() ? KIW.topicSim(text, p.services) : null), geo_match: KIW.N(cls.geo_match) != null ? KIW.N(cls.geo_match) : KIW.geoMatch(c.domain, text, p.iso) }; })
+  .filter(c => c.cls && c.cls.store && c.cls.class);
+const seedsIn = (p.seeds || []).map(s => ({ keyword: s.keyword, top10: (((pic.by || {})[s.keyword] || {}).top10) || [], demand: s.weight }));
+const scoredRows = KI.scoreCompetitors(classed.map(c => ({ domain: c.domain, class: c.cls.class, class_basis: c.cls.basis, class_confidence: c.cls.confidence, topic_sim: c.topic_sim, geo_match: c.geo_match,
+  ai_share: cc.ai_rows_read ? (aiMax > 0 ? KIW.r4((KIW.N(c.ai_hits) || 0) / aiMax) : 0) : null, declared: (p.declared || []).includes(c.domain), keywords: sizeOf(c.domain).keywords, refdomains: sizeOf(c.domain).refdomains })),
+  seedsIn, { ctx: { own_domain: client, services: p.services, declared: p.declared, market: p.iso }, client: me, market_name: p.country });
+const classOf = {}; for (const c of classed) { const R = KI.reg(c.domain) || c.domain; if (!classOf[R]) classOf[R] = c; }
 const stored = all('Load KI Competitors').filter(r => r && KIW.S(r.market) === p.market && r.comp_domain);
 const storedBy = {}; for (const r of stored) storedBy[KIW.host(r.comp_domain)] = r;
 const readAny = (pic.read || 0) > 0;
@@ -82,35 +87,34 @@ const profile = (d) => { const r = rk[d]; const sz = sizeOf(d); if (!r && sz.key
     pace_per_month: pc.per_month == null ? null : pc.per_month, pace_note: pc.why || '',
     basis: { etv: 'provider_estimate', keywords: 'provider_estimate', refdomains: 'provider_estimate', top_pages: 'provider_estimate', brand_share: 'modelled', pace_per_month: pc.per_month == null ? 'not_available' : 'measured' },
     fetched_at: (r && r.fetched_at) || now, source: 'DataForSEO Labs (ranked keywords, bulk traffic estimation) and Backlinks (referring domains)' }; };
-const reasonsOf = (c, s) => { const out = []; const live = (c.positions || []).filter(x => x.src === 'serp' && x.position <= 10);
-  if (live.length) out.push('in the top 10 for ' + live.length + ' of ' + seedsTotal + ' of your service searches in ' + (p.country || p.market));
+const reasonsOf = (c, sc) => { const out = [...((sc && sc.reasons) || [])];
   if (c.labs) out.push('the data provider\'s stored results show it on ' + c.labs + ' of these searches');
   if (c.cd) out.push('it shares ' + c.cd + ' ranked searches with a business that competes for yours');
   if (c.ai_hits) out.push('AI answers to your buyers\' questions name or cite it (' + Math.round(c.ai_hits) + 'x)');
-  if ((p.declared || []).includes(c.domain)) out.push('you named it as a competitor');
-  return [...out, ...((c.cls && c.cls.reasons) || [])].slice(0, 6); };
+  return KIW.uniq(out).slice(0, 8); };
 const rows = [], drops = [];
 const seen = new Set();
-for (const c of classed) {
-  const s = byScore[c.domain] || {}; const st = storedBy[c.domain] || null; const declared = (p.declared || []).includes(c.domain);
+for (const sc of scoredRows) {
+  const d = sc.comp_domain; const c = classOf[d] || { domain: d, cls: { class: sc.class, basis: sc.class_basis, confidence: sc.class_confidence, needs_review: false } };
+  const st = storedBy[d] || storedBy[c.domain] || null; const declared = !!sc.declared;
+  // evidence THIS run: a seed's results page, the provider's stored results, a rival's overlap, AI answers, or the client's own word; a stored
+  // row with none of them is not seen (it counts a miss below), and a domain with none of them is not a candidate at all
+  const evid = (KIW.N(sc.seeds_seen) || 0) > 0 || !!c.labs || !!c.cd || !!c.ai_hits || declared;
+  if (!evid) continue;
   const userSt = st && KIW.S(st.status_by) === 'user';
   const status = userSt ? KIW.S(st.status) : (declared ? 'chosen' : (st && ['watch', 'chosen'].includes(KIW.S(st.status)) ? KIW.S(st.status) : 'candidate'));
   const status_by = userSt ? 'user' : (declared ? 'declared' : (st ? KIW.S(st.status_by) || 'auto' : 'auto'));
-  const scoredRow = !!s.scored;
-  const sz = sizeOf(c.domain);
-  rows.push({ site_id: p.site_id, domain: p.domain, market: p.market, comp_domain: c.domain, class: c.cls.class, class_basis: userSt && st.class_basis === 'user' ? 'user' : c.cls.basis, class_confidence: KIW.r4(c.cls.confidence),
-    scored: scoredRow, score: scoredRow ? s.score : null, score_low: scoredRow ? s.score_low : null, score_high: scoredRow ? s.score_high : null,
-    serp_share: s.serp_share == null ? null : s.serp_share, topic_sim: c.topic_sim, geo_match: c.geo_match, ai_share: cc.ai_rows_read ? (s.ai_share == null ? 0 : s.ai_share) : null,
-    size_tag: KI.sizeTag(me, sz), seeds_seen: (c.positions || []).filter(x => x.src === 'serp' && x.position <= 10).length, seeds_total: seedsTotal,
-    reasons_json: reasonsOf(c, s), evidence_json: (c.positions || []).filter(x => x.src === 'serp').slice(0, 20).map(x => ({ seed: x.seed, position: x.position, url: x.url || '' })),
+  rows.push({ site_id: p.site_id, domain: p.domain, market: p.market, comp_domain: d, class: sc.class, class_basis: userSt && st.class_basis === 'user' ? 'user' : sc.class_basis, class_confidence: sc.class_confidence,
+    scored: !!sc.scored, score: sc.score, score_low: sc.score_low, score_high: sc.score_high, serp_share: sc.serp_share, topic_sim: sc.topic_sim, geo_match: sc.geo_match, ai_share: sc.ai_share,
+    size_tag: sc.size_tag, seeds_seen: sc.seeds_seen, seeds_total: sc.seeds_total, reasons_json: reasonsOf(c, sc), evidence_json: sc.evidence || [],
     declared, status, status_by, first_seen: (st && st.first_seen) || now, last_seen: now, misses: 0,
-    profile_json: status === 'chosen' ? profile(c.domain) : null, run_id: p.run_id, updated_at: now, _needs_review: c.cls.confidence < 0.6 });
-  seen.add(c.domain);
+    profile_json: status === 'chosen' ? profile(d) : null, run_id: p.run_id, updated_at: now, _needs_review: !!(c.cls && c.cls.needs_review) });
+  seen.add(d);
 }
 // stored rows this run did not see: a miss each (only when this run read results pages at all), out after two, the client's own never
-for (const st of stored) { const d = KIW.host(st.comp_domain); if (seen.has(d)) continue;
+for (const st of stored) { const d = KIW.host(st.comp_domain); if (seen.has(d) || seen.has(KI.reg(d))) continue;
   const misses = (KIW.N(st.misses) || 0) + (readAny ? 1 : 0); const user = KIW.S(st.status_by) === 'user';
-  if (!user && KIW.S(st.status) === 'candidate' && misses >= (KI.CONFIG.misses_leave || 2)) { drops.push({ site_id: p.site_id, market: p.market, comp_domain: d, reason: 'no evidence in two runs' }); continue; }
+  if (!user && KIW.S(st.status) === 'candidate' && misses >= (KI.CONFIG.comp_leave_after_misses || 2)) { drops.push({ site_id: p.site_id, market: p.market, comp_domain: d, reason: 'no evidence in two runs' }); continue; }
   const keep = {}; for (const c of KIW.COLS.KI_COMP) keep[c] = st[c] === undefined ? null : st[c];
   rows.push({ ...keep, misses, run_id: p.run_id, updated_at: now, _kept: true }); }
 // the set: scored first (by score, then by evidence), then lists / directories / platforms; the client's own choices always stay

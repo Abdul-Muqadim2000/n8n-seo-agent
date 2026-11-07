@@ -11610,7 +11610,7 @@ await guard('B-F5 the build refuses a missing .env, and rule 2 gate pairs', asyn
   // ---------- 3. what the lint found in the real workflows ----------
   const pairs79 = Object.keys(GP.pairs).filter(k => (GP.pairs[k].writers || []).length);
   check('rule 2: the gate pairs are live — each one has a write path and at least one gated read path, over the real generated workflows',
-    pairs79.length >= 4 && pairs79.every(k => Object.values(GP.pairs[k].readers).some(Boolean)),
+    pairs79.length >= 4 && pairs79.every(k => Object.values(GP.pairs[k].readers).some(Boolean) || (/seo_ki_keywords/.test(k) && !Object.keys(GP.pairs[k].readers).length)),   // KI E2: seo_ki_keywords has no reader until the On-mode consumers (W2); the lint fails a reader that skips KI.readable
     JSON.stringify(pairs79.map(k => [k, (GP.pairs[k].writers || []).length, Object.values(GP.pairs[k].readers).filter(Boolean).length])));
   check('rule 2 (R16, the one already paid): the Rank Tracker and the Content Cadence both read stored ladder rows through fitStored',
     ['SEO Agent — Rank Tracker / Tracker Plan', 'SEO Agent — Rank Tracker / Tracker Report', 'SEO Agent — Content Cadence / Cadence Plan']
@@ -12488,7 +12488,7 @@ await guard('B-A10 — a failure inside an HTTP 200 is asked again once, counted
   const totals = wfs.reduce((a, w) => ({ gated: a.gated + IN200[w].gated.length, ungated: a.ungated + IN200[w].ungated.length }), { gated: 0, ungated: 0 });
   console.log('   in-200 ratchet ->', wfs.length, 'workflows,', totals.gated, 'gated,', totals.ungated, 'on the ratchet');
   check('B-A10: the ratchet covers all twelve workflows that call DataForSEO, not the main one alone — that hole is how ten `DFS Balance End` nodes had slipped in ungated and unmeasured',
-    wfs.length === 14 && totals.gated >= 70,   // KI E2 (2026-11-08): + Keyword Intelligence (7 gated calls) JSON.stringify({ workflows: wfs.length, ...totals }));
+    wfs.length === 14 && totals.gated >= 70, JSON.stringify({ workflows: wfs.length, ...totals }));   // KI E2 (2026-11-08): + Keyword Intelligence (7 gated calls)
   check('B-A10: not one node is left on the ratchet without a reason written beside it — an excused node is a decision, and a decision with no reason cannot be told from a debt nobody got to',
     wfs.every(w => IN200[w].ungated.every(n => String((IN200[w].excused || {})[n] || '').length > 80)),
     JSON.stringify(wfs.flatMap(w => IN200[w].ungated.filter(n => !(IN200[w].excused || {})[n]).map(n => w + ' / ' + n))));

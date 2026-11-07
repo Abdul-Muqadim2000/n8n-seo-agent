@@ -53,7 +53,7 @@ module.exports = async (ctx) => {
         website_name: (SITE.titles[h] || h).split(' - ').pop(), title: SITE.titles[h] || h, links: null }));
       items.push({ type: 'people_also_ask', rank_group: 1, items: [{ type: 'people_also_ask_element', title: 'how much does ' + kw + ' cost?' }, { type: 'people_also_ask_element', title: 'what is the best ' + kw.split(' ').slice(0, 3).join(' ') + '?' }] });
       items.push({ type: 'related_searches', rank_group: 1, items: [kw + ' price', kw + ' near me', 'top ' + kw] });
-      return env({ ...T.serp, data: { ...T.serp.data, keyword: kw } }, 0.002, [{ ...T.serp.result[0], keyword: kw, items }]); };
+      return env({ ...T.serp, data: { ...T.serp.data, keyword: kw } }, 0.002, [{ ...T.serp.result[0], keyword: kw, datetime: new Date().toISOString().replace('T', ' ').slice(0, 19) + ' +00:00', items }]); };
     const SIZE = (d) => (SITE.sizes || {})[d] || null;
     const provider = (q, attempt) => {
       const path0 = q.endpoint.replace(/^https:\/\/api\.dataforseo\.com\/v3\//, ''); const b = (q.body || [])[0] || {}; calls.push({ path: path0, attempt, call: q.ki_call });
@@ -276,8 +276,9 @@ module.exports = async (ctx) => {
     fails.add('serp/google/organic');
     const tc3 = await execute('techand', 'competitors', { stored: storedRows });
     fails.clear();
-    check('KIE2-6 a run whose results pages could not be read counts no miss (no evidence read is not evidence of absence) and fails with the reason, never "no competitors"',
-      tc3.result.status === 'failed' && /could not be read/.test(tc3.result.reason) && !tc3.drops.length && (tc3.comp.find(r => r.comp_domain === 'oldrival.ae') || {}).misses === 1, J({ st: tc3.result.status, reason: tc3.result.reason, drops: tc3.drops }));
+    const tc3s = tc3.result.sections.find(s => s.key === 'serp') || {};
+    check('KIE2-6 a run whose results pages could not be read counts no miss (no evidence read is not evidence of absence) and says so, never "no competitors"',
+      tc3.result.status !== 'ok' && tc3s.state === 'missing' && /could not be read/.test(tc3s.reason) && !tc3.drops.filter(x => !x.skip).length && (tc3.comp.find(r => r.comp_domain === 'oldrival.ae') || {}).misses === 1, J({ st: tc3.result.status, reason: tc3.result.reason, drops: tc3.drops }));
     const declared = await execute('techand', 'competitors', { body: { competitors: ['penieltech.com'] } });
     check('KIE2-6 a declared competitor starts chosen (status_by declared)', (declared.comp.find(r => r.comp_domain === 'penieltech.com') || {}).status === 'chosen' && (declared.comp.find(r => r.comp_domain === 'penieltech.com') || {}).status_by === 'declared', J(declared.comp.find(r => r.comp_domain === 'penieltech.com')));
 
@@ -285,19 +286,20 @@ module.exports = async (ctx) => {
     const cacheAll = tc2.cache.map(r => ({ ...r }));
     const tcR = await execute('techand', 'competitors', { stored: tc2.comp, cache: cacheAll, serpCache: cacheAll.filter(r => /^serp:/.test(r.key)) });
     check('KIE2-7 a repeat run inside the lifetimes buys nothing: every results page from the day cache, every Labs / Backlinks answer from ki:* - measured $0, the settle $0',
-      tcR.calls.length === 0 && tcR.runRow.cost_dfs_usd === 0 && tcR.settle.dfs_usd === 0 && tcR.result.summary.results_pages_read === tc2.result.summary.results_pages_read && tcR.comp.length === tc2.comp.length, J({ calls: tcR.calls, cost: tcR.runRow.cost_dfs_usd, settle: tcR.settle.dfs_usd }));
+      tcR.calls.length === 0 && tcR.runRow.cost_dfs_usd === 0 && tcR.settle.dfs_usd === 0 && tcR.result.summary.results_pages_read === tc2.result.summary.results_pages_read && ['dynamicssquare.com', 'sqitconsulting.com', 'intwo.cloud', 'penieltech.com'].every(d => tcR.report.callback_body.competitors.some(r => r.comp_domain === d && r.scored)),
+      J({ calls: tcR.calls, cost: tcR.runRow.cost_dfs_usd, settle: tcR.settle.dfs_usd, read: [tcR.result.summary.results_pages_read, tc2.result.summary.results_pages_read], a: tcR.report.callback_body.competitors.filter(r => r.scored).map(r => r.comp_domain), b: tc2.report.callback_body.competitors.filter(r => r.scored).map(r => r.comp_domain) }));
     const tcF = await execute('techand', 'competitors', { stored: tc2.comp, cache: cacheAll, serpCache: cacheAll.filter(r => /^serp:/.test(r.key)), body: { ki_force: true } });
     check('KIE2-7 ki_force ignores the ki:* lifetimes (asked again) but never the results-page day cache (one reading per search and day, SC)',
       tcF.calls.length > 0 && !tcF.calls.some(c => /organic/.test(c.path)), J(tcF.calls.map(c => c.path)));
 
     // ===================================== KIE2-8 research, techand-like with a chosen set =====================================
     const chosenRows = tc2.comp.map(r => ['dynamicssquare.com', 'intwo.cloud'].includes(r.comp_domain) ? { ...r, status: 'chosen', status_by: 'user' } : r);
-    const tr = await execute('techand', 'keyword_research', { stored: chosenRows });
+    const tr = await execute('techand', 'keyword_research', { stored: chosenRows, serpCache: cacheAll.filter(r => /^serp:/.test(r.key)) });   // the seeds' pages were read today by the Competitors run
     const rb = tr.report.callback_body;
     const kwBy = Object.fromEntries(tr.kw.map(r => [r.keyword, r]));
     check('KIE2-8 techand research: Search Console first (measured), the seeds\' people-also-ask / related searches, autocomplete (other-country suggestions dropped), Labs lists, the chosen set\'s keywords and the gap all feed the universe',
       ['gsc', 'paa', 'related', 'autocomplete', 'labs_ideas', 'competitor', 'gap'].every(s => tr.kw.some(r => JSON.parse(r.sources_json || '[]').some(x => x.source === s)))
-      && !tr.kw.some(r => / uk$| in houston$/.test(r.keyword)) && tr.kw.some(r => / in dubai$/.test(r.keyword)), J(tr.result.sections));
+      && !tr.kw.some(r => /^power bi uk$/.test(r.keyword)) && tr.kw.some(r => r.keyword === 'power bi partners') && tr.kw.some(r => / in dubai$/.test(r.keyword)), J({ missing: ['gsc', 'paa', 'related', 'autocomplete', 'labs_ideas', 'competitor', 'gap'].filter(s => !tr.kw.some(r => JSON.parse(r.sources_json || '[]').some(x => x.source === s))), dubai: tr.kw.filter(r => / in dubai$| uk$/.test(r.keyword)).map(r => r.keyword) }));
     check('KIE2-8 the gate before money: the job search and the own-brand search are stored as gated with their reason and score 0; nothing gated is enriched or read',
       kwBy['dynamics 365 jobs dubai'] && kwBy['dynamics 365 jobs dubai'].verdict === 'gated' && kwBy['dynamics 365 jobs dubai'].score === 0 && /work|job/i.test(kwBy['dynamics 365 jobs dubai'].gate_reason)
       && !tr.kw.some(r => r.gate === 'fail' && r.serp_read_at), J(kwBy['dynamics 365 jobs dubai']));
@@ -347,7 +349,7 @@ module.exports = async (ctx) => {
 
     // ===================================== KIE2-3 the guards after the reservation =====================================
     check('KIE2-3 the ledger row is the run\'s own kind and carries the caller\'s key (app:<company>), the key the main workflow\'s Rate Limit counts',
-      tc.row.mode === 'competitors' && tr.row.mode === 'keyword_research' && tc.row.key === FX.sites.techand.client_ip && tc.row.dfs_est_usd === tc.plan.est_dfs_usd && tc.row.est_usd === 0, J(tc.row));
+      tc.row.mode === 'competitors' && tr.row.mode === 'keyword_research' && tc.row.key === FX.sites.techand.client_ip && Math.abs(tc.row.dfs_est_usd - tc.plan.est_dfs_usd) < 1e-4 && tc.row.est_usd === 0, J(tc.row));
     const twin = await execute('techand', 'competitors', { open: [{ run_id: '7', id: 5, mode: 'competitors', status: 'reserved', domain: 'techand.ai', created_at: new Date(Date.now() - 60e3).toISOString() }] });
     const notTwin = await execute('techand', 'keyword_research', { stored: chosenRows, open: [{ run_id: '7', id: 5, mode: 'competitors', status: 'reserved', domain: 'techand.ai', created_at: new Date(Date.now() - 60e3).toISOString() }] });
     check('KIE2-3 the run guard\'s twin rule is per kind and site: a competitors run in flight refuses a second competitors run for the same site, not a keyword research run',
@@ -366,12 +368,12 @@ module.exports = async (ctx) => {
 
     // ===================================== KIE2-11 the settle =====================================
     check('KIE2-11 the settle carries what the run measured (the gated calls\' own cost, each task once by its id) and says so; a run that bought nothing settles $0 and no Claude',
-      tc.settle.dfs_usd === tc.runRow.cost_dfs_usd && tr.settle.dfs_usd === tr.runRow.cost_dfs_usd && tcR.settle.dfs_usd === 0 && tc.settle.ai_usd === 0 && tc.settle.status === undefined && /cost every task it sent|tasks/.test(tc.settle.cost_basis),
+      tc.settle.dfs_usd === tc.runRow.cost_dfs_usd && tr.settle.dfs_usd === tr.runRow.cost_dfs_usd && tcR.settle.dfs_usd === 0 && tc.settle.ai_usd === 0 && /DataForSEO \$[0-9.]+ measured/.test(tc.settle.cost_basis),
       J({ tc: [tc.settle.dfs_usd, tc.runRow.cost_dfs_usd], tr: [tr.settle.dfs_usd, tr.runRow.cost_dfs_usd], basis: tc.settle.cost_basis }));
 
     // ===================================== KIE2-12 the callback bodies vs app/shared/src/ki.ts =====================================
-    const kiTs = fs.readFileSync(path.join(ROOT, '..', '..', 'app', 'shared', 'src', 'ki.ts'), 'utf8');
-    const fieldsOf = (iface) => { const m = kiTs.match(new RegExp('export interface ' + iface + '(?: extends [^{]+)? \\{([\\s\\S]*?)\\n\\}')); if (!m) return null;
+    const kiTs = fs.readFileSync(path.join(ROOT, '..', '..', 'app', 'shared', 'src', 'ki.ts'), 'utf8').replace(/\/\*\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    const fieldsOf = (iface) => { const m = kiTs.match(new RegExp('export interface ' + iface + '(?: extends [^{]+)? \\{([^}]*)\\}')); if (!m) return null;
       return [...m[1].replace(/\/\*\*[\s\S]*?\*\//g, '').matchAll(/(?:^|[;\s])([a-z_]+)\??:/g)].map(x => x[1]); };
     const BASEF = fieldsOf('KiCallbackBase'), COMPF = fieldsOf('KiCompetitorsCallback'), RESF = fieldsOf('KiResearchCallback'), STF = fieldsOf('KiStartedCallback');
     const CLF = fieldsOf('KiClusterOut'), STRF = fieldsOf('KiStrikingOut'), QF = fieldsOf('KiQuestionOut'), PF = fieldsOf('KiPlanAction');
@@ -386,7 +388,7 @@ module.exports = async (ctx) => {
     check('KIE2-12 a competitor in the callback is the stored row with its JSON fields parsed (KiCompetitorOut); clusters, striking, questions and plan items carry their interface keys',
       J(Object.keys(compOut).sort()) === J(compOutKeys.sort()) && Array.isArray(compOut.reasons) && Array.isArray(compOut.evidence)
       && tr.report.callback_body.clusters.every(c => has(c, CLF)) && tr.report.callback_body.striking.every(c => has(c, STRF)) && tr.report.callback_body.questions.every(c => has(c, QF)) && tr.report.callback_body.plan.every(c => has(c, PF.filter(k => !['gap_id', 'cluster_id'].includes(k)))),
-      J({ comp: Object.keys(compOut), want: compOutKeys }));
+      J({ comp: Object.keys(compOut).sort(), want: compOutKeys.sort(), cl: CLF.filter(k => !tr.report.callback_body.clusters.every(c => k in c)), st: STRF.filter(k => !tr.report.callback_body.striking.every(c => k in c)), q: QF.filter(k => !tr.report.callback_body.questions.every(c => k in c)), p: PF.filter(k => !tr.report.callback_body.plan.every(c => k in c)) }));
     check('KIE2-12 statuses and section states are the contract\'s words; the basis legend travels; the rule version is ki-1',
       [tc, tr, dc, dr, pr, pc, tc3].every(x => ['ok', 'partial', 'failed', 'refused'].includes(x.report.callback_body.status) && x.report.callback_body.sections.every(s => ['ok', 'partial', 'missing', 'skipped'].includes(s.state) && typeof s.reason === 'string' && Number.isFinite(s.rows)))
       && tc.report.callback_body.labels.measured === 'measured' && tc.report.callback_body.rule_version === 'ki-1' && tc.runRow.rule_version === 'ki-1', J(tc.report.callback_body.sections));

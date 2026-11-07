@@ -17,9 +17,9 @@ E2 (2026-11-08) replaces W0's skeleton with the worker. The API front door (buil
   4. writes seo_ki_competitors / seo_ki_keywords / seo_ki_gaps / seo_ki_runs (exactly their columns) and the cache rows, settles its ledger row at
      every end (the refusal ends are their own settle), and posts the final callback after the settle with its `run_ledger` (R115).
 
-It calls no model. Kits inlined: KIW (v5/code/_ki_io.js, this worker's input / output), KI (v5/code/_ki.js, E1; until it lands the thin shim
-v5/code/_ki_shim.js), SU (v5/code/_serp_url.js, the SERP-GOTO hotfix; until it lands the guarded shim v5/code/_su_shim.js), SC (_serp_cache.js),
-RT (_dfs_retry.js), the fit gate (_fit_gate.js), SM (_site_model.js, page mapping) and COUNTRIES (the main workflow's Normalize Input).
+It calls no model. Kits inlined: KIW (v5/code/_ki_io.js, this worker's input / output), KI (v5/code/_ki.js, E1) with the kits it calls before it
+(the fit gate _fit_gate.js, CMP _competitors.js, KWI _kw_inputs.js), SU (v5/code/_serp_url.js, the SERP-GOTO kit), SC (_serp_cache.js), RT
+(_dfs_retry.js), SM (_site_model.js, page mapping) and COUNTRIES (the main workflow's Normalize Input).
 Code nodes are also written to harness/code_v4 for the offline harness (scenarios_ki_w0.js, scenarios_ki_e2.js)."""
 import json, os, re, uuid, math
 import env_settings as _env   # B-F5: a build with no n8n/.env refuses, unless the offline build is deliberate
@@ -68,23 +68,23 @@ PAGE_CREDITS = int(math.ceil(round((_est('EST', 'content') + _est('DFS_EST', 'co
 KI_COLS = {'KI_RUNS': [c for c, _ in KI_RUNS_COLS], 'KI_COMP': [c for c, _ in KI_COMP_COLS], 'KI_KW': [c for c, _ in KI_KW_COLS], 'KI_GAPS': [c for c, _ in KI_GAPS_COLS]}
 
 # ---- the kits ----
-_has = lambda f: os.path.exists(os.path.join(V5, 'code', f))
-KI_KIT = '_ki.js' if _has('_ki.js') else '_ki_shim.js'          # E1's kit when it is merged, the thin shim until then
-SU_KITS = (['_serp_url.js'] if _has('_serp_url.js') else []) + ['_su_shim.js']   # the hotfix kit when merged; the shim keeps SU.normalize either way
 KIT_SRC = {
     'RT': read_v5('code/_dfs_retry.js').rstrip('\n'),
     'SC': read_v5('code/_serp_cache.js').rstrip('\n'),
-    'SU': '\n'.join(read_v5('code/' + f).rstrip('\n') for f in SU_KITS),
-    'KI': read_v5('code/' + KI_KIT).rstrip('\n'),
+    'SU': read_v5('code/_serp_url.js').rstrip('\n'),          # the SERP-GOTO kit: the real site behind Google's redirect links
+    'KI': read_v5('code/_ki.js').rstrip('\n'),                 # E1's kit; it calls the fit gate and CMP, so both are inlined before it (fixes/E1.md section 1)
     'FIT': read_v5('code/_fit_gate.js').rstrip('\n'),
+    'CMP': read_v5('code/_competitors.js').rstrip('\n'),
+    'KWI': read_v5('code/_kw_inputs.js').rstrip('\n'),         # optional for KI (KWI.shapeOf: page shapes), inlined so every node types pages alike
     'SM': read_v5('code/_site_model.js').rstrip('\n'),
     'COUNTRIES': "// ---- countries: copied from the main workflow's Normalize Input by build_ki.py (DataForSEO location code = 2000 + ISO numeric) ----" + _COUNTRIES.group(0),
     'KIW': read_v5('code/_ki_io.js').rstrip('\n').replace('__KI_QUOTE__', json.dumps(QUOTE, sort_keys=True)).replace('__KI_COLS__', json.dumps(KI_COLS)),
 }
 assert '__KI_' not in KIT_SRC['KIW'], 'a placeholder is left in _ki_io.js'
-BASE_KITS = ['RT', 'SC', 'SU', 'KI', 'KIW']
+KI_KIT = '_ki.js'
+BASE_KITS = ['FIT', 'CMP', 'KWI', 'RT', 'SC', 'SU', 'KI', 'KIW']
 def kits_for(names):
-    order = ['COUNTRIES', 'FIT', 'SM', 'RT', 'SC', 'SU', 'KI', 'KIW']
+    order = ['COUNTRIES', 'FIT', 'CMP', 'KWI', 'SM', 'RT', 'SC', 'SU', 'KI', 'KIW']
     return '\n'.join(KIT_SRC[k] for k in order if k in names)
 RAW = {}   # file -> the node's own code (before the kits), for the name check below
 def src(f, kits=(), sub=None):
@@ -159,7 +159,7 @@ LOADS = [('Load KI Cache', dt_get_all_where_params(CACHE_TABLE, [('kind', 'eq', 
          ('Load Pages (KI)', dt_get_all_where_params(PAGES_TABLE, [('site_id', 'eq', G('site_id'))]))]
 for i, (nm, params) in enumerate(LOADS):
     node(nm, DT_TYPE, DT_VERSION, params, at(11 + i, 1), **LOAD)
-code('KI Plan', src('KI_Plan.js', ['FIT']), at(19, 1), executeOnce=True)
+code('KI Plan', src('KI_Plan.js'), at(19, 1), executeOnce=True)
 link('KI Refused?', LOADS[0][0], 1); chain(*[l[0] for l in LOADS], 'KI Plan')
 # ---- after the reservation: the front door's guards, the started notice, the kind ----
 node('Load Ledger Today (KI)', DT_TYPE, DT_VERSION, dt_get_all_where_params(RUN_LEDGER_TABLE, [('created_at', 'gte', '={{ new Date().toISOString().slice(0, 10) }}')]), at(24, 1), **LOAD)
@@ -219,7 +219,7 @@ chain('KI Comp Drops', 'Any KI Comp Drops?')
 code('Research Seed Keys', src('KI_Research_Seed_Keys.js'), at(31, 6))
 node('Load SERP Cache (KI Seeds)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'key', 'eq', "={{ $json.serp_cache_key || 'serp:none' }}"), at(32, 6), onError='continueRegularOutput', alwaysOutputData=True)
 code('Research Discover Requests', src('KI_Research_Discover_Requests.js'), at(33, 6), executeOnce=True)
-code('Research Candidates', src('KI_Research_Candidates.js', ['FIT']), at(37, 6), executeOnce=True)
+code('Research Candidates', src('KI_Research_Candidates.js'), at(37, 6), executeOnce=True)
 link('Route KI Kind?', 'Research Seed Keys', 1); chain('Research Seed Keys', 'Load SERP Cache (KI Seeds)', 'Research Discover Requests')
 gated_step('Research Discover Requests', 'Any Research Discover?', 'Run Research Discover', 'Research Candidates', 6, 33); GATED.append(('Run Research Discover', 'keyword discovery lists, competitor keywords and the gap', 'request'))
 code('Research Enrich Requests', src('KI_Research_Enrich_Requests.js'), at(38, 6), executeOnce=True)
@@ -233,7 +233,7 @@ code('Research SERP Picture', src('KI_Research_SERP_Picture.js'), at(49, 6), exe
 chain('Research Picture', 'Research SERP Keys', 'Load SERP Cache (KI Research)', 'Research SERP Requests')
 gated_step('Research SERP Requests', 'Any Research SERPs?', 'Run Research SERPs', 'Research SERP Picture', 6, 45, batch=10, interval=100); GATED.append(('Run Research SERPs', 'keyword results pages and Google Ads volumes', 'request'))
 code('Research Traffic Requests', src('KI_Research_Traffic_Requests.js'), at(50, 6), executeOnce=True)
-code('Research Result', src('KI_Research_Result.js', ['FIT', 'SM']), at(54, 6), executeOnce=True)
+code('Research Result', src('KI_Research_Result.js', ['SM']), at(54, 6), executeOnce=True)
 link('Research SERP Picture', 'Research Traffic Requests')
 gated_step('Research Traffic Requests', 'Any Research Traffic?', 'Run Research Traffic', 'Research Result', 6, 50); GATED.append(('Run Research Traffic', 'traffic potential of the #1 pages', 'request'))
 code('KI KW Rows', ROWS('KI KW Rows', KI_KW_TABLE, 'kw_rows'), at(55, 6), executeOnce=True)
@@ -358,7 +358,7 @@ for _f, _s in RAW.items():
     for _ref in re.findall(r"\$\('([^']+)'\)", _s):
         assert _ref in names, _f + ' reads a node that does not exist: ' + _ref
 for _n, _s in _src.items():
-    if 'KIW.' in _s: assert 'const KIW = (() => {' in _s and ('const KI = (() => {' in _s or 'KI.' not in _s.replace('KIW.', '')), _n + ': the KI kits are not inlined'
+    if 'KIW.' in _s: assert 'const KIW = (() => {' in _s and "var KI = (typeof KI === 'object'" in _s and 'function fitGate(' in _s and 'const CMP = (() => {' in _s, _n + ': the KI kits (fit gate, CMP, KI, KIW) are not inlined'
 
 wfobj = freeze_ids(wfobj)
 json.dump([wfobj], open(os.path.join(OUT, FILE), 'w'), indent=2, ensure_ascii=False)
@@ -374,7 +374,7 @@ assert not _clash, 'code node names shared with another workflow (harness/code_v
 for n in wfobj['nodes']:
     if n['type'] == 'n8n-nodes-base.code': open(os.path.join(CODE, re.sub(r'[^A-Za-z0-9_.-]+', '_', n['name']) + '.js'), 'w').write(n['parameters']['jsCode'])
 # what the harness checks (scenarios_ki_w0.js / scenarios_ki_e2.js): the wiring, the gates, the tables, the callbacks, the baked figures
-json.dump({'workflow': WID, 'name': NAME, 'file': FILE, 'rule_version': RULE_VERSION, 'kill_key': KILL_KEY, 'stages': STAGES, 'kit': KI_KIT, 'su_kits': SU_KITS,
+json.dump({'workflow': WID, 'name': NAME, 'file': FILE, 'rule_version': RULE_VERSION, 'kill_key': KILL_KEY, 'stages': STAGES, 'kit': KI_KIT,
            'nodes': sorted(n['name'] for n in N if n['type'] != 'n8n-nodes-base.stickyNote'),
            'connections': {s_: [[t_['node'] for t_ in l_] for l_ in o_.get('main', [])] for s_, o_ in sorted(C.items())},
            'callback': {'post': 'POST KI Report', 'body': by['POST KI Report']['parameters']['jsonBody'], 'retry': bool(by['POST KI Report'].get('retryOnFail')),

@@ -24,7 +24,9 @@ const KIW = (() => {
   const PRICE = { serp10: 0.002, labs: 0.012, labs_row: 0.00012, bl: 0.024, bl_row: 0.000036, ac: 0.002, ads: 0.09 };
   const QUOTE = __KI_QUOTE__;   // the per-run search-data estimate the app quotes (v5/code/_cost_cal.js DFS_EST), baked by build_ki.py
   const CFG0 = (typeof KI === 'object' && KI && KI.CONFIG) || {};
-  const ttlOf = (k) => { const t = Object.assign({ serp: 1, ranked: 7, volume: 30, backlinks: 7, homepage: 14, discovery: 30 }, CFG0.ttl_days || CFG0.ttl || {}); return N(t[k]) || 7; };
+  // the lifetimes are KI.CONFIG.ttl_days (serp 1, ranked_keywords 7, volume 30, backlinks 7, homepage 14, competitors 30); discovery lists are volume data
+  const TTL_NAME = { serp: 'serp', ranked: 'ranked_keywords', volume: 'volume', backlinks: 'backlinks', homepage: 'homepage', discovery: 'volume', competitors: 'competitors' };
+  const ttlOf = (k) => { const t = CFG0.ttl_days || {}; return N(t[TTL_NAME[k] || k]) || ({ serp: 1, ranked: 7, volume: 30, backlinks: 7, homepage: 14, discovery: 30 })[k] || 7; };
   const CAPS = { seeds: 20, gsc_seeds: 50, serp_depth: 10, sc_limit: 50, size_targets: 30, cd_limit: 20, cd_min_ranked: 50, cd_rivals: 1,
     rk_limit: 300, chosen_max: 5, home_reads: 8, sitemaps: 5, autocomplete: 10, ideas_limit: 300, sugg_n: 2, sugg_limit: 200, related_n: 1,
     related_limit: 150, pi_limit: 500, pi_rank: 10, top_n: 300, top_m: 60, tp_urls: 60, overview_max: 700, intent_max: 1000, ads_max: 1000,
@@ -62,11 +64,13 @@ const KIW = (() => {
   const PRODUCTS = /\b(microsoft dynamics 365|dynamics 365|business central|finance (?:and|&) operations|dynamics crm|power bi|power platform|copilot studio|sap(?: b1| business one)?|odoo|netsuite|salesforce|zoho|open ?edx|moodle|hubspot|peppol|oracle|sage)\b/i;
   const shortService = (s) => { let t = normKw(s).replace(/\([^)]*\)/g, ' ').replace(/[–—]/g, '-');
     t = t.split(/[:;,]|\s-\s|\bin the\b|\bin\b(?= (?:the )?(?:uae|gcc|dubai|middle east|region|saudi|pakistan))|\bfor\b|\bwith\b|\bacross\b/)[0].trim();
-    const w = t.split(' ').filter(Boolean); while (w.length && /^(and|or|the|a|an|we|provide|offer|our|of|to)$/.test(w[0])) w.shift(); while (w.length && /^(and|or|the|a|an|of|to|in)$/.test(w[w.length - 1])) w.pop();
-    const out = w.slice(0, 4).join(' ').replace(/[^\p{L}\p{N}&+.# -]+/gu, ' ').replace(/\s+/g, ' ').trim(); return out.length >= 3 && out.split(' ').length >= 1 ? out : ''; };
-  const services = (site, req) => { const s = site || {}; const raw = [...J(s.declared_services, []), ...J(s.services_json, [])].map(S);
-    const extra = S((req || {}).business).split(/[\n;]+/).map(T).filter(x => x.length > 2 && x.length < 80);
-    return uniq([...raw, ...extra].map(shortService).filter(Boolean)).slice(0, 12); };
+    const w0 = t.split(' ').filter(Boolean); while (w0.length && /^(and|or|the|a|an|we|provide|offer|our|of|to)$/.test(w0[0])) w0.shift();
+    const w = w0.slice(0, 5); while (w.length && /^(and|or|the|a|an|of|to|in|for|&)$/.test(w[w.length - 1])) w.pop();
+    const out = w.join(' ').replace(/[^\p{L}\p{N}&+.# -]+/gu, ' ').replace(/\s+/g, ' ').trim(); return out.length >= 3 && out.split(' ').length >= 1 ? out : ''; };
+  // the services as the confirmed LIST (KI.services: JSON arrays parsed, a sentence never cut), and their short forms for the seeds
+  const services = (site, req) => { const s = site || {}; const k = (v) => (typeof KI === 'object' && KI.services) ? KI.services(v) : J(v, []).map(S);
+    return uniq([...k(s.declared_services), ...k(s.services_json), ...k(S((req || {}).business).split(/[\n;]+/).map(T).filter(x => x.length > 2 && x.length < 120))]).slice(0, 16); };
+  const seedServices = (svc) => uniq((svc || []).map(shortService).filter(Boolean)).slice(0, 12);
   const productsOf = (svc) => uniq((svc || []).map(x => { const m = S(x).match(PRODUCTS); return m ? m[1].toLowerCase() : ''; }));
   // ---- the run plan's seeds (DESIGN §2.1): services x market, GSC, tracked, ladder heads, the request's own; fit-gated, capped ----
   const compSeeds = (o) => {
@@ -79,7 +83,7 @@ const KIW = (() => {
     for (const k of (o.tracked || [])) add(k, 'tracked', 0.8);
     for (const k of (o.ladders || [])) add(k, 'ladder', 0.8);
     const kept = [], refused = [];
-    for (const s of out) { const g = o.gate ? o.gate(s.keyword) : { ok: true }; if (g.ok) kept.push(s); else refused.push({ keyword: s.keyword, reason: g.reason, detail: g.detail }); }
+    for (const s of out) { const g = o.gate ? o.gate(s.keyword) : { gate: 'pass' }; if (g.gate === 'pass') kept.push(s); else refused.push({ keyword: s.keyword, reason: g.reason, detail: g.text || g.detail }); }
     return { seeds: kept.slice(0, CAPS.seeds), refused, dropped: Math.max(0, kept.length - CAPS.seeds) };
   };
   // ---- requests (one shape per endpoint; the fields R5 §13 confirmed live) ----
@@ -123,10 +127,15 @@ const KIW = (() => {
     return (Date.parse(S(now)) || Date.now()) - t < ttlOf(kind) * 864e5; };
   const cacheRow = (siteId, k, value) => ({ key: k, kind: 'ki', site_id: S(siteId), value: JSON.stringify(value), updated_at: new Date().toISOString() });
   // ---- SERP readings: the cache first (SC), then this run's answers; every organic / local item through SU (google.com/goto, R5 §13 L-1) ----
-  const fixAnswer = (a) => { if (!a || !Array.isArray(a.tasks)) return a; return { ...a, tasks: a.tasks.map(t => t && Array.isArray(t.result) ? { ...t, result: t.result.map(r => r && Array.isArray(r.items) ? { ...r, items: SU.normalize(r.items) } : r) } : t) }; };
-  const top10Of = (a) => { const items = SU.normalize(itemsOf(a)); const org = items.filter(x => x && x.type === 'organic').sort((x, y) => (N(x.rank_group) || 99) - (N(y.rank_group) || 99)).slice(0, 10);
-    return org.map(x => { const h = host(x.domain || x.url); return { url: S(x.url), host: h && !SEARCH.test(h) ? h : '', title: S(x.title).slice(0, 160), pos: N(x.rank_group) || null,
-      exact: x.url_exact !== false && !SU.isRedirect(x.url), type: (typeof KI === 'object' && KI.pageType) ? KI.pageType({ ...x, domain: h }) : 'unknown', key: h ? h + (x.url_exact === false ? '~' : '') + S(x.url).replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/\/$/, '') : '' }; }); };
+  // every answer has passed SU.fixAnswer in its gate's Answers node (the SERP-GOTO hotfix); a cached reading is fixed here the same way (idempotent)
+  const fixAnswer = (a) => (a && typeof SU === 'object' && SU && SU.fixAnswer ? SU.fixAnswer(a) : a);
+  // the top 10 of a results page: host by KI.hostOf (a redirect still on google.com, or no domain, is "host unknown" and skipped), its page
+  // type, title, position, and whether the address is exact (an address rebuilt from a breadcrumb is not: the host is reliable, the page is not)
+  const top10Of = (a) => { const items = ((typeof SU === 'object' && SU && SU.fixItems) ? SU.fixItems(itemsOf(a)) : itemsOf(a)) || [];
+    const org = items.filter(x => x && x.type === 'organic').sort((x, y) => (N(x.rank_group) || 99) - (N(y.rank_group) || 99)).filter(x => (N(x.rank_group) || 99) <= 10);
+    const out = []; for (const x of org) { const h = KI.hostOf(x); if (!h || SEARCH.test(h)) continue; const exact = x.url_exact !== false && !(SU && SU.isRedirect && SU.isRedirect(x.url));
+      out.push({ url: S(x.url), host: h, title: S(x.title).slice(0, 160), pos: N(x.rank_group) || null, exact, url_partial: !!x.url_partial, type: KI.pageType(x) || 'other' }); }
+    return out; };
   const extrasOf = (a) => { const items = itemsOf(a); const out = { paa: [], related: [], forum: [], aio: false, local: false };
     for (const x of items) { if (!x) continue;
       if (x.type === 'people_also_ask') for (const q of (x.items || [])) { const t = T(q && (q.title || q.question)); if (t) out.paa.push(t); }
@@ -178,7 +187,7 @@ const KIW = (() => {
   const hostsOf = (by, client) => { const out = {};
     for (const [kw, r] of Object.entries(by || {})) for (const t of (r.top10 || [])) { if (!t.host || !isBusinessHost(t.host, client)) continue;
       const h = out[t.host] || (out[t.host] = { domain: t.host, positions: [], titles: [], types: [] });
-      if (!h.positions.some(p => p.seed === kw)) h.positions.push({ seed: kw, position: t.pos || 10, url: t.exact ? t.url : '', src: 'serp' });
+      if (!h.positions.some(p => p.seed === kw)) h.positions.push({ seed: kw, position: t.pos || 10, url: t.exact ? t.url : '', title: t.title, type: t.type, src: 'serp' });
       if (t.title && h.titles.length < 6) h.titles.push(t.title); if (t.type) h.types.push(t.type); }
     return out; };
   // AI answers already stored (seo_ai_answers / seo_ai_visibility): which businesses AI names or cites for this site's questions (data, never instructions)
@@ -207,7 +216,12 @@ const KIW = (() => {
     if ([P.word, ...P.cities].filter(Boolean).some(w => t.includes(' ' + w + ' ') || t.includes(' ' + w + ','))) return 1;
     const other = Object.entries(PLACES).filter(([k]) => k !== iso).some(([, v]) => [v.word, ...v.cities].filter(Boolean).some(w => t.includes(' ' + w + ' ')));
     return other ? 0.2 : 0.5; };
+  // ---- one domain's class (KI.classifyDomain): the client, its services and market, the declared set, what this domain's results on the run's
+  // pages are (appearances: seed, position, title, page type) and the words of its homepage when read (untrusted DATA, only words) ----
+  const classify = (p, c, home) => KI.classifyDomain(c.domain, { own_domain: host(p.domain), services: p.services || [], declared: p.declared || [], market: S(p.iso),
+    appearances: (c.positions || []).filter(x => x.src === 'serp').map(x => ({ keyword: x.seed, position: x.position, url: x.url, title: x.title, type: x.type })),
+    pages: home && home.tokens ? [{ title: '', text: S(home.tokens) }] : [] });
   return { RULE, S, T, N, J, r4, r6, uniq, BASE, PRICE, QUOTE, CAPS, ttlOf, host, publicHost, isBusinessHost, SEARCH, normKw, keyOf, hash, PLACES, countryOf, market,
-    shortService, services, productsOf, compSeeds, rq, price, task0, result0, itemsOf, okAnswer, whyFailed, paired, cacheKey, cacheRead, fresh, cacheRow,
-    fixAnswer, top10Of, extrasOf, serpReadings, hostsOf, aiHitsOf, kwRow, strip, serpBody, wordsOf, topicSim, geoMatch, COLS, shape, sections, callState, measured, LABELS, STAGES, baseBody, emptyLists, refusalBody };
+    shortService, services, seedServices, productsOf, compSeeds, rq, price, task0, result0, itemsOf, okAnswer, whyFailed, paired, cacheKey, cacheRead, fresh, cacheRow,
+    fixAnswer, top10Of, extrasOf, serpReadings, hostsOf, aiHitsOf, kwRow, strip, serpBody, wordsOf, topicSim, geoMatch, classify, COLS, shape, sections, callState, measured, LABELS, STAGES, baseBody, emptyLists, refusalBody };
 })();

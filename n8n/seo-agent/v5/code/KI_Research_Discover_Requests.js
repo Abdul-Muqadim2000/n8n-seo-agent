@@ -13,7 +13,7 @@ const m = { location_code: p.location_code, language_code: p.language_code };
 const ck = (what, ...x) => KIW.cacheKey(p.site_id, what, ...x);
 const fresh = (k, kind) => KIW.fresh(KIW.cacheRead(cache, k), kind, p.now, p.ki_force);
 const seeds = (p.seeds || []).map(s => s.keyword);
-const svc = (p.services || []).slice(0, 5);
+const svc = (p.seed_services || []).slice(0, 5);
 const reqs = [];
 if (seeds.length && !fresh(ck('disc', p.market, KIW.hash(seeds.join('|'))), 'discovery')) {
   const ac = []; for (const s of svc) { ac.push(s); ac.push(s + ' company'); }

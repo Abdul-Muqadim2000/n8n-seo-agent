@@ -46,10 +46,24 @@
     "SEO Agent \u2014 Link Builder / LB Draft QA"
    ]
   },
+  "keyword fit (KI) | seo_ki_keywords": {
+   "gate": "keyword fit (KI)",
+   "read": "KI.readable(",
+   "readers": {},
+   "table": "seo_ki_keywords",
+   "why": "a stored keyword is another company's brand, a job or another market's search, or the site is switched Off or killed (CONTRACTS.md section 1)",
+   "write": "KI.gate(",
+   "writers": [
+    "SEO Agent - Keyword Intelligence / KI Plan",
+    "SEO Agent - Keyword Intelligence / Research Candidates",
+    "SEO Agent - Keyword Intelligence / Research Result"
+   ]
+  },
   "keyword fit | seo_ladders": {
    "gate": "keyword fit",
    "read": "fitStored( or FITR.rungs(",
    "readers": {
+    "SEO Agent - Keyword Intelligence / KI Plan": true,
     "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Ladder Duplicate (Words)": true,
     "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Ladder Plan": true,
     "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Ladder Settings Rows": false,
