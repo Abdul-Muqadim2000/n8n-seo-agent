@@ -68,6 +68,49 @@ export function Dialog({
 }
 export const DialogClose = D.Close;
 
+/**
+ * A side panel (KI 2026-11-08): full screen on phones, a panel on the right from `sm` up. For details of one row (a competitor) and for
+ * the filters a phone has no room for. Same focus rules as Dialog.
+ */
+export function Sheet({ open, onOpenChange, title, description, children, footer, wide }: { open: boolean; onOpenChange: (o: boolean) => void; title: ReactNode; description?: ReactNode; children?: ReactNode; footer?: ReactNode; wide?: boolean }) {
+  const opener = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (open) opener.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+  }, [open]);
+  return (
+    <D.Root open={open} onOpenChange={onOpenChange}>
+      <D.Portal>
+        <D.Overlay className="fixed inset-0 z-50 bg-ink-surface/50 backdrop-blur-[2px] dark:bg-black/60 data-[state=open]:animate-fade-in" />
+        <D.Content
+          onCloseAutoFocus={(e) => {
+            const el = opener.current;
+            if (el?.isConnected) {
+              e.preventDefault();
+              el.focus({ preventScroll: true });
+            }
+          }}
+          className={cn(
+            'fixed inset-0 z-50 flex flex-col bg-surface shadow-overlay outline-none data-[state=open]:animate-fade-in sm:inset-y-0 sm:left-auto sm:right-0 sm:w-full sm:border-l sm:border-line',
+            wide ? 'sm:max-w-2xl' : 'sm:max-w-md',
+          )}
+        >
+          <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
+            <div className="min-w-0">
+              <D.Title className="font-display text-[17px] leading-snug font-semibold tracking-[-0.01em] break-words text-ink">{title}</D.Title>
+              {description ? <D.Description className="mt-1 text-[13px] leading-relaxed text-ink-2">{description}</D.Description> : <D.Description className="sr-only">{String(title)}</D.Description>}
+            </div>
+            <D.Close className="-mr-1.5 inline-flex size-10 shrink-0 items-center justify-center rounded-md text-ink-3 transition-colors duration-150 hover:bg-surface-2 hover:text-ink active:bg-surface-3" aria-label="Close">
+              <X className="size-4" />
+            </D.Close>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+          {footer && <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line bg-page/60 px-5 py-3">{footer}</div>}
+        </D.Content>
+      </D.Portal>
+    </D.Root>
+  );
+}
+
 // ---------- dropdown menu ----------
 export function Menu({ trigger, children, align = 'end', className }: { trigger: ReactNode; children: ReactNode; align?: 'start' | 'end' | 'center'; className?: string }) {
   return (

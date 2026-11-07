@@ -7,6 +7,8 @@ import { ArrowRight, CheckCircle2, Clock, Coins, Compass, Globe, History, Lock, 
 import { MODE_CATEGORIES, MODES, type ModeId, type ModeInfo, type Site } from '@seo/shared';
 import { lastSite, useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
+import { kiModeOffered } from '@/lib/ki';
+import { useKi } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
@@ -54,7 +56,9 @@ export default function ToolsPage() {
   const [params, setParams] = useSearchParams();
   const remembered = lastSite(org.id);
   const site = sites.find((s) => s.id === params.get('site')) ?? sites.find((s) => s.id === remembered && s.verifiedAt) ?? sites.find((s) => s.verifiedAt) ?? sites[0] ?? null;
-  const modes = Object.values(MODES).filter((m) => !m.hidden);   // KI W0: hidden modes are not offered yet
+  // KI (2026-11-08): Competitors and Keyword research are offered only for a website whose KI this person may see (On, or Trial for platform admins)
+  const kiVisible = !!useKi(org.id, site?.verifiedAt ? site.id : null).data?.visible;
+  const modes = Object.values(MODES).filter((m) => kiModeOffered(m.id, kiVisible));
 
   const pickSite = (id: string) =>
     setParams(
@@ -137,7 +141,8 @@ function HeroChip({ icon, children }: { icon: ReactNode; children: ReactNode }) 
 /** The website the tools run on, how many tools it unlocks and the recommended next tool. */
 function ToolsHero({ site, recommended, goals, onPickSite }: { site: Site | null; recommended: ModeId | null; goals: typeof GOALS; onPickSite: (id: string) => void }) {
   const { org, sites, can } = useOrgCtx();
-  const all = Object.values(MODES).filter((m) => !m.hidden);
+  const kiVisible = !!useKi(org.id, site?.verifiedAt ? site.id : null).data?.visible;
+  const all = Object.values(MODES).filter((m) => kiModeOffered(m.id, kiVisible));
   const verified = !!site?.verifiedAt;
   const ready = all.filter((m) => !m.siteBound || verified).length;
   const headline = !site

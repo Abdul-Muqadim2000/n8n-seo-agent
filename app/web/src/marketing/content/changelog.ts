@@ -34,6 +34,19 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-11-08',
+    version: '4.10',
+    title: 'Competitors and Keyword research, rolling out',
+    summary: 'Two new pages are rolling out to selected websites, on request: Competitors, with who you really compete with in Google and why, and Keyword research, with what buyers search to hire a service like yours and which searches you can win. Each website starts with a private trial run by our team; ask us if you would like them for yours.',
+    highlights: [
+      'Competitors: the companies in Google\'s results for your services in your market, each with the reason it is on your list. Directories, "best of" lists and platforms are kept apart as places to be listed on. Choose up to five to follow, keep others on a watchlist, and see where they are ahead of you, with the step that closes each gap and its credits',
+      'Keyword research: searches from your Search Console, Google\'s own questions and suggestions and your competitors, grouped into topics. Each topic gets one verdict ("Go", "Takes a few months", "Hard for your site now" or "Not for you" with the reason) and a score with its likely range, and every number says how we know it',
+      'The searches just off page one, buyer questions you can add to your AI questions, a plan of up to 10 steps, and filters and a CSV for every search',
+      'Keyword discovery no longer offers to write a page for the best keyword, which it never did, and its price no longer includes one',
+    ],
+    features: ['competitors', 'keyword-research'],
+  },
+  {
     date: '2026-11-06',
     version: '4.9',
     title: 'AI ranking, rolling out: a weekly plan to get you named in AI answers',

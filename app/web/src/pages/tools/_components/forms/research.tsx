@@ -325,7 +325,9 @@ export function DiscoverForm({ initialSiteId, prefill }: ToolFormProps) {
     ),
   });
   const { onSubmit, onAccept, pending, error } = useRunSubmit(form);
-  const v = form.watch();
+  // R2 H1 (KI 2026-11-08): research never writes a page (the schema stores false), so no option offers one and the price never adds it,
+  // even when an old link pre-fills it
+  const v = { ...form.watch(), receiveContent: false as const };
   const site = sites.find((s) => s.id === v.siteId) ?? null;
   const e = form.formState.errors;
   useSyncSiteParam(v.siteId);
@@ -345,7 +347,6 @@ export function DiscoverForm({ initialSiteId, prefill }: ToolFormProps) {
   };
   const extras = [
     v.receiveReport && 'Keyword report for the best keyword',
-    v.receiveContent && 'The page for the best keyword',
     audit === 'technical' && 'Technical site audit',
     audit === 'full' && 'Full SEO report',
   ].filter((x): x is string => !!x);
@@ -383,7 +384,6 @@ export function DiscoverForm({ initialSiteId, prefill }: ToolFormProps) {
       <FormCard title="Follow-ups" description="Optional extra reports, each delivered separately when ready.">
         <div className="space-y-2.5">
           <Checkbox {...form.register('receiveReport')} className={OPTION_BOX} label="Keyword report for the best keyword" description="Competitors, verdict and keyword data for the keyword the strategy says to start with." />
-          <Checkbox {...form.register('receiveContent')} className={OPTION_BOX} label={`Write the page for the best keyword (+${PRICES.page()})`} description="The full page run for that keyword: brief, copy, edit and QA." />
         </div>
         <div>
           <p className="mb-1.5 text-[13px] font-medium text-ink">Audit the website too</p>

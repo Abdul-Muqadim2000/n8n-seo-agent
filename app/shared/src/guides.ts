@@ -8,6 +8,7 @@
 // file). Rendering is in web/src/components/guide/rich.tsx; the plain-text form is `guideText` below.
 
 import { CYCLE_SPACING_DAYS } from './cycle-clock';
+import { KI_VERDICTS } from './ki';
 import { AUTOPILOT_LEVELS, CHANCE_WORDS, CYCLE_LOCAL_TIME, NUDGE_AFTER_PAGES, PREVIEW_HOURS_BEFORE, PROPOSAL_WAIT_HOURS, QUEUED_RECHECK_DAYS, REJECT_LIMIT, REJECT_WINDOW } from './cycles';
 
 export type GuideArea = 'autopilot' | 'google' | 'ownership' | 'website' | 'mailbox' | 'business' | 'company' | 'security' | 'integrations' | 'agency';
@@ -1713,6 +1714,117 @@ export const GUIDES = [
     done: 'The link gap and the AI share of voice start naming sites you recognise as rivals.',
     related: ['brand-names', 'keywords-to-track'],
     keywords: ['competitors', 'share of voice', 'link gap', 'benchmark'],
+  },
+  // KI (2026-11-08, docs/keyword-intel-2026-11-08/DESIGN.md §6): the Competitors and Keyword research pages
+  {
+    id: 'ki-choose-competitors',
+    area: 'business',
+    title: 'Choose the competitors to follow',
+    why: 'The competitors you follow decide every gap we show you and what we compare you with each month. We find them in Google, but only you know which ones you really lose customers to.',
+    where: 'Competitors page',
+    minutes: 5,
+    vars: [V.domain],
+    steps: [
+      {
+        title: 'Open the Competitors page',
+        body: 'Open **Competitors** for {{domain}}. If the list is empty, press **Find my competitors**. The credits are shown before anything starts, and the reading takes about 6 minutes.',
+      },
+      {
+        title: 'Read why each one is on the list',
+        body: 'Every company comes with the reason, for example "in the first 10 results for 9 of 14 of your service searches". Press **Details** to see its size, its best pages and the searches it ranks for.',
+      },
+      {
+        title: 'Choose up to five',
+        body: 'Press **Choose** on the companies that sell what you sell, to the people you sell to, in your market. Five is the most you can follow. To swap one, move it to your watchlist first.',
+        note: 'A company you added yourself is always kept on the list.',
+      },
+      {
+        title: 'Set aside the ones that are not like you',
+        body: 'Press **Not a competitor** for a website that only looks like one. It stays off your list after the next run too. Press **Watch** for one you want to keep an eye on without comparing against it.',
+        warn: 'Directories, "best of" lists and platforms are never counted as competitors. You find them under **Lists and directories to join** instead, because being listed there helps you.',
+      },
+    ],
+    done: 'The hero says how many competitors you follow, and **Gaps against your competitors** fills in after the next run.',
+    trouble: [
+      { q: 'The Choose button is greyed out', a: 'You already follow five. Move one to your watchlist, then choose the new one.' },
+      { q: 'A competitor I know is missing', a: 'Add it in the run form under **Competitors you already know** and run it again. It is then always on your list.' },
+    ],
+    related: ['ki-read-keyword-research', 'competitors'],
+    keywords: ['competitors', 'rivals', 'watchlist', 'not a competitor', 'choose competitors', 'directories'],
+  },
+  {
+    id: 'ki-read-keyword-research',
+    area: 'business',
+    title: 'Read your keyword research',
+    why: 'The keyword research shows what buyers type into Google to hire a service like yours, which of those searches your website can win, and the few steps to take first.',
+    where: 'Keyword research page',
+    minutes: 6,
+    vars: [V.domain],
+    steps: [
+      {
+        title: 'Start with the plan',
+        body: 'Open **Keyword research** for {{domain}}. **Your plan** lists up to 10 steps, best first, each with why it is there and its credits. Nothing starts without your click.',
+      },
+      {
+        title: 'Look at the topics',
+        body: 'Searches that Google answers with the same pages are one topic, and one page can win the whole topic. Each topic shows how many people search it a month, the buyer stage and its verdict.',
+      },
+      {
+        title: 'Pick the quick wins',
+        body: '**Just off page one** lists searches your website already shows up for in places 8 to 20. Improving the page that shows up is often the fastest way to more visits.',
+      },
+      {
+        title: 'Add the buyer questions that matter',
+        body: 'Tick the questions under **Buyer questions** and press **Add to my AI questions**. We then ask AI assistants those questions and show whether they name you. Nothing is charged when you add them.',
+      },
+      {
+        title: 'Filter or download every search',
+        body: 'Under **Every search**, filter by verdict, buyer stage, topic, source, size or gap, and press **Download CSV** for every row that matches.',
+        note: 'Every number says how we know it: "measured" is from your own Search Console, "estimate from" names the source, "our estimate" is worked out by us. Tap the small question mark beside a number to see it.',
+      },
+    ],
+    done: 'You know which topic to start with, and the first step of the plan is clear.',
+    trouble: [
+      { q: 'I see "not measured" instead of a number', a: 'We found the search in two or more places, but no source measures how often it is searched. We keep it so you do not lose it.' },
+      { q: 'Part of the reading is missing', a: 'A source did not answer this time. Everything else is shown, you were only charged for what was read, and the next run tries again.' },
+    ],
+    related: ['ki-verdicts', 'ki-choose-competitors'],
+    keywords: ['keyword research', 'topics', 'buyer questions', 'plan', 'striking distance', 'csv', 'searches'],
+  },
+  {
+    id: 'ki-verdicts',
+    area: 'business',
+    title: 'What the verdicts mean',
+    why: 'Every topic and search gets one plain verdict, so you can decide in seconds whether to go for it, plan for it or leave it for later.',
+    where: 'Competitors and Keyword research pages',
+    minutes: 3,
+    vars: [V.domain],
+    steps: [
+      {
+        title: KI_VERDICTS.go,
+        body: 'Websites like {{domain}} already rank for it. One good page, or an improved existing page, can get there soon.',
+      },
+      {
+        title: KI_VERDICTS.months,
+        body: 'Within reach after a few supporting pages, usually over two to four months. A keyword ladder is the usual way to get there.',
+      },
+      {
+        title: KI_VERDICTS.hard,
+        body: 'The results are held by much stronger websites. Win the easier topics first: they make this one easier later.',
+      },
+      {
+        title: KI_VERDICTS.gated,
+        body: 'It does not fit your business: people looking for a job, another company by name, a government service or a place outside your market. We say which, and never write a page for it.',
+      },
+      {
+        title: 'The score and its range',
+        body: 'The score out of 100 ranks searches against each other. The range says how sure we are: a wide range means we are less sure. Tap the question mark beside a score to see what it is made of.',
+      },
+    ],
+    done: 'You can tell from the verdict alone what to do with a search.',
+    trouble: [{ q: 'A search I sell is marked not for you', a: 'Check the reason under the verdict. If it is wrong, tell us: the rules learn from it.' }],
+    related: ['ki-read-keyword-research'],
+    keywords: ['verdict', 'go', 'takes a few months', 'hard', 'not for you', 'score', 'range'],
   },
   {
     id: 'brand-names',
@@ -3525,6 +3637,9 @@ export function searchGuides(query: string): Guide[] {
  */
 export const GUIDE_FOR_RECOMMENDATION: Record<string, GuideId> = {
   'setup:gsc': 'search-console-access',
+  // KI (2026-11-08, A1_ROUTES): the two On-site recommendations open the guides of their pages
+  'ki:competitors': 'ki-choose-competitors',
+  'ki:quick-wins': 'ki-read-keyword-research',
   'setup:ga4': 'ga4-access',
   'setup:profile': 'business-profile',
   'setup:checkin': 'search-console-checkin',

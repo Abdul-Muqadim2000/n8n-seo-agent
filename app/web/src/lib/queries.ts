@@ -1,3 +1,5 @@
+import type { KiCompStatus, KiGapStatus, KiMode } from '@seo/shared';
+import { kiCompetitorsOf, kiGapsOf, kiKeywordsOf, kiOverviewOf, kiWithStatus, type KiCompetitors } from './ki';
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import type {
   AiRankSettings,
@@ -1578,5 +1580,109 @@ export function useIndexingHistory(orgId: string, siteId: string, url: string | 
     enabled: !!url,
     retry: noRetryOn4xx,
     staleTime: 60_000,
+  });
+}
+
+// ---------- KI: Competitors + Keyword research (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §7) ----------
+// The answers are read through lib/ki.ts (tolerant of the exact shape). The overview and the lists start together (no waterfall): a site
+// whose KI is Off never reaches these pages, and its lists answer 403 without being shown.
+const kiBase = (orgId: string, siteId: string) => `/api/orgs/${orgId}/sites/${siteId}/ki`;
+export const kiKey = (siteId: string) => [...qk.site(siteId), 'ki'] as const;
+
+/** The website's KI mode and whether this person sees the pages (sidebar, tools, both pages). Off or unreadable = not visible. */
+export function useKi(orgId: string, siteId: string | null | undefined, enabled = true) {
+  return useQuery({
+    queryKey: [...kiKey(siteId ?? ''), 'overview'],
+    queryFn: async () => kiOverviewOf(await api<unknown>(kiBase(orgId, siteId!))),
+    enabled: !!siteId && enabled,
+    retry: noRetryOn4xx,
+    staleTime: 60_000,
+  });
+}
+
+export function useKiCompetitors(orgId: string, siteId: string) {
+  return useQuery({
+    queryKey: [...kiKey(siteId), 'competitors'],
+    queryFn: async () => kiCompetitorsOf(await api<unknown>(`${kiBase(orgId, siteId)}/competitors`)),
+    retry: noRetryOn4xx,
+    staleTime: 60_000,
+  });
+}
+
+/** One page of the keyword table, filtered and sorted on the server; the old page stays on screen while the next one loads. */
+export function useKiKeywords(orgId: string, siteId: string, params: Record<string, string>) {
+  return useQuery({
+    queryKey: [...kiKey(siteId), 'keywords', params],
+    queryFn: async () => kiKeywordsOf(await api<unknown>(`${kiBase(orgId, siteId)}/keywords?${new URLSearchParams(params)}`)),
+    placeholderData: keepPreviousData,
+    retry: noRetryOn4xx,
+    staleTime: 60_000,
+  });
+}
+
+export function useKiGaps(orgId: string, siteId: string, params: Record<string, string> = {}) {
+  return useQuery({
+    queryKey: [...kiKey(siteId), 'gaps', params],
+    queryFn: async () => kiGapsOf(await api<unknown>(`${kiBase(orgId, siteId)}/gaps${Object.keys(params).length ? `?${new URLSearchParams(params)}` : ''}`)),
+    placeholderData: keepPreviousData,
+    retry: noRetryOn4xx,
+    staleTime: 60_000,
+  });
+}
+
+/** Choose / watch / "not a competitor": shown at once, undone when the server refuses (409 above the cap). */
+export function useKiCompetitorStatus(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  const key = [...kiKey(siteId), 'competitors'];
+  return useMutation({
+    mutationFn: ({ domain, status }: { domain: string; status: KiCompStatus }) => api<unknown>(`${kiBase(orgId, siteId)}/competitors/${encodeURIComponent(domain)}`, { method: 'PATCH', body: { status } }),
+    onMutate: async ({ domain, status }) => {
+      await qc.cancelQueries({ queryKey: key });
+      const before = qc.getQueryData<KiCompetitors>(key);
+      if (before) qc.setQueryData<KiCompetitors>(key, { ...before, rows: kiWithStatus(before.rows, domain, status) });
+      return { before };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.before) qc.setQueryData(key, ctx.before);
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: key }),
+  });
+}
+
+export function useKiGapStatus(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ gapId, status }: { gapId: string; status: KiGapStatus }) => api<unknown>(`${kiBase(orgId, siteId)}/gaps/${encodeURIComponent(gapId)}`, { method: 'PATCH', body: { status } }),
+    onSettled: () => void qc.invalidateQueries({ queryKey: [...kiKey(siteId), 'gaps'] }),
+  });
+}
+
+/** Buyer questions approved for the AI question panel (no paid run starts). */
+export function useKiApproveQuestions(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (keys: string[]) => api<{ added?: { kwKey: string; question: string }[] | number; skipped?: { kwKey: string; reason: string }[] }>(`${kiBase(orgId, siteId)}/questions/approve`, { method: 'POST', body: { keys } }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: kiKey(siteId) });
+      void qc.invalidateQueries({ queryKey: qk.siteData(siteId, 'ai') });
+    },
+  });
+}
+
+/** Start one action of the plan (it becomes the usual pipeline item; 501 until that step ships). */
+export function useKiPlanStart(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (actionId: string) => api<unknown>(`${kiBase(orgId, siteId)}/plan/${encodeURIComponent(actionId)}/start`, { method: 'POST', body: {} }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.site(siteId) }),
+  });
+}
+
+/** Off / Trial / On (platform admins only, as AI ranking). */
+export function useKiMode(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (mode: KiMode) => api<unknown>(`${kiBase(orgId, siteId)}/mode`, { method: 'PATCH', body: { mode } }),
+    onSettled: () => void qc.invalidateQueries({ queryKey: kiKey(siteId) }),
   });
 }

@@ -1,0 +1,575 @@
+// Keyword research (KI 2026-11-08, n8n/seo-agent/docs/keyword-intel-2026-11-08/DESIGN.md §6): what buyers search to hire a service like
+// this website's, from every source we read, grouped into topics, each with the one verdict (Go / Takes a few months / Hard for your site
+// now / Not for you), a score with its likely range and the factors behind it; the searches just off page one; buyer questions to add to
+// the AI question panel; the plan of up to 10 steps; every search in one paged table with filters and a CSV. Every number says how it was
+// found and when. Shown only where the website's KI is visible (On, or Trial for platform admins).
+import { useMemo, useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router';
+import { toast } from 'sonner';
+import { ArrowRight, Check, ChevronLeft, ChevronRight, Download, Filter, Layers, ListOrdered, MessageCircleQuestion, Search, Telescope, TrendingUp } from 'lucide-react';
+import { compactNumber, KI_SOURCE_LABELS, KI_STAGES, KI_VERDICTS, type KiPlanAction, type KiSource, type KiStage, type KiVerdict as Verdict } from '@seo/shared';
+import { GuideButton } from '@/components/guide';
+import { CountUp, HeroNextStep, HeroStat, InsightItem, Stagger, SummaryHero } from '@/components/insight';
+import { Badge } from '@/components/ui/badge';
+import { Button, buttonClass } from '@/components/ui/button';
+import { EmptyState, ErrorState, Skeleton } from '@/components/ui/feedback';
+import { Select } from '@/components/ui/field';
+import { PageHeader } from '@/components/ui/misc';
+import { Sheet } from '@/components/ui/overlay';
+import { DataTable, type Column } from '@/components/ui/table';
+import { KiVerdict } from '@/components/site/KiVerdict';
+import {
+  KI_GAP_ACTION_LABELS,
+  KI_GAP_LABELS,
+  KI_KW_FILTER_EMPTY,
+  KI_PAGE_SIZE,
+  kiActiveFilters,
+  kiBasisLine,
+  kiClustersOf,
+  kiCsvUrl,
+  kiFilterKeywords,
+  kiGapTypesByKey,
+  kiKwParams,
+  kiQuestionsOf,
+  kiStartSoon,
+  kiStrikingOf,
+  kiMarketName,
+  planOf,
+  type KiGap,
+  type KiKeywords,
+  type KiKw,
+  type KiKwFilter,
+  type KiOverview,
+} from '@/lib/ki';
+import { formatCredits } from '@/lib/credits';
+import { useKi, useKiApproveQuestions, useKiGaps, useKiKeywords, useKiPlanStart, useReport, useReports } from '@/lib/queries';
+import { cn } from '@/lib/utils';
+import { Panel, useSitePage } from './_components/kit';
+import { DashSkeleton, HeroEyebrow } from './_components/visuals';
+import { KiFigure, KiNotAvailable, KiOtherPage, KiRunButton, KiRunNotes, KiScore, KiStartButton, KiTrialBanner, KiUpdated, TAP } from './_components/ki/common';
+
+// A1_ROUTES: the topic heads, the searches just off page one and the questions are each one filtered read (page_size at most 200)
+const HEADS = { heads: '1', sort: '-score', page: '1', page_size: '200' };
+const STRIKING = { striking: '1', sort: 'position', page: '1', page_size: '30' };
+const QUESTIONS = { questions: '1', sort: '-score', page: '1', page_size: '30' };
+const n0 = (v: number) => v.toLocaleString('en-US');
+
+export default function KeywordsPage() {
+  const { org, site, can, tool } = useSitePage();
+  const navigate = useNavigate();
+  // the guide's closing button starts the run (members) or closes the guide on the page it explains
+  const finish = can('member') ? { label: 'Research my keywords', onClick: () => navigate(tool('keyword_research')) } : undefined;
+  const [filter, setFilter] = useState<KiKwFilter>(KI_KW_FILTER_EMPTY);
+  // all reads start together: the overview, the summary (topics, striking, questions), this page of the table and the gaps
+  const ki = useKi(org.id, site.id);
+  const summary = useKiKeywords(org.id, site.id, HEADS);
+  const striking = useKiKeywords(org.id, site.id, STRIKING);
+  const questions = useKiKeywords(org.id, site.id, QUESTIONS);
+  const table = useKiKeywords(org.id, site.id, kiKwParams(filter));
+  const gaps = useKiGaps(org.id, site.id);
+  // the plan rides on the latest research report (CONTRACTS §4) unless the overview carries it
+  const reports = useReports(org.id, { siteId: site.id, stage: 'ki_research', limit: 1 });
+  const report = useReport(org.id, ki.data?.plan.length ? undefined : reports.data?.[0]?.id);
+  const plan = ki.data?.plan.length ? ki.data.plan : summary.data?.plan.length ? summary.data.plan : planOf(report.data?.payload?.plan);
+
+  const header = (
+    <PageHeader
+      icon={<Telescope />}
+      title="Keyword research"
+      description={`What buyers search to find a service like yours, and which searches ${site.domain} can win.`}
+      actions={
+        <span className="flex flex-wrap items-center gap-2">
+          <GuideButton id="ki-read-keyword-research" vars={{ domain: site.domain }} finish={finish} label="How to read this" />
+          {ki.data?.visible && <KiRunButton kind="keyword_research" o={ki.data} refresh={!!summary.data?.rows.length} />}
+        </span>
+      }
+    />
+  );
+  if (ki.isError || (ki.data && !ki.data.visible)) return <KiNotAvailable title="Keyword research" />;
+  if (!ki.data || (summary.isPending && !summary.data))
+    return (
+      <div>
+        {header}
+        <DashSkeleton cards={4} charts={1} />
+      </div>
+    );
+  return (
+    <div>
+      {header}
+      {summary.isError && !summary.data ? (
+        <ErrorState error={summary.error} onRetry={() => void summary.refetch()} />
+      ) : (
+        <Keywords
+          o={ki.data}
+          summary={summary.data ?? { rows: [], total: 0, page: 1, pageSize: KI_PAGE_SIZE, pages: null, plan: [], questions: null }}
+          striking={striking.data?.rows}
+          questionRows={questions.data?.rows}
+          plan={plan}
+          table={table.data}
+          tableLoading={table.isFetching}
+          tableError={table.isError ? table.error : null}
+          gaps={gaps.data ?? []}
+          filter={filter}
+          onFilter={setFilter}
+        />
+      )}
+    </div>
+  );
+}
+
+/** The page from its data (tests render this one). */
+export function Keywords({ o, summary, striking: strikingRows, questionRows, plan: planIn, table, tableLoading, tableError, gaps, filter, onFilter }: { o: KiOverview; summary: KiKeywords; striking?: KiKw[]; questionRows?: KiKw[]; plan?: KiPlanAction[]; table: KiKeywords | undefined; tableLoading: boolean; tableError: unknown; gaps: KiGap[]; filter: KiKwFilter; onFilter: (f: KiKwFilter) => void }) {
+  const { site } = useSitePage();
+  const rows = summary.rows;
+  const run = o.lastRuns.keyword_research;
+  const sum = o.summary?.keywords;
+  const clusters = useMemo(() => kiClustersOf(rows), [rows]);
+  const striking = useMemo(() => kiStrikingOf(strikingRows?.length ? strikingRows : rows), [rows, strikingRows]);
+  const questions = useMemo(() => kiQuestionsOf(questionRows?.length ? questionRows : rows, summary.questions), [rows, questionRows, summary.questions]);
+  const plan = planIn?.length ? planIn : summary.plan;
+
+  if (!rows.length)
+    return (
+      <Stagger className="space-y-6">
+        <KiTrialBanner o={o} />
+        <KiRunNotes o={o} kind="keyword_research" />
+        <div className="rounded-xl border border-line bg-surface shadow-card">
+          <EmptyState
+            icon={<Telescope className="size-5" />}
+            title="Find what your buyers search"
+            description="We collect searches from your Search Console, Google's own suggestions and questions, and your competitors; keep the ones that fit what you sell; group them by topic and tell you which ones you can win. It takes about 12 minutes."
+            action={<KiRunButton kind="keyword_research" o={o} />}
+          />
+          <p className="px-6 pb-5 text-center text-xs text-ink-3">
+            Tip: choose your competitors first on the <KiOtherPage to="competitors">Competitors page</KiOtherPage>, so the research can show where they are ahead.
+          </p>
+        </div>
+      </Stagger>
+    );
+
+  const heads = clusters.map((c) => c.head);
+  // the hero counts: the server's summary first, then the run's counts, then what the rows on screen say
+  const count = (v: Verdict) => run?.counts[v] ?? heads.filter((h) => h.verdict === v).length;
+  const go = count('go');
+  const months = count('months');
+  const total = sum?.total || run?.counts.keywords || summary.total;
+  const topics = sum?.clusters || run?.counts.clusters || clusters.length;
+  const strikingN = sum?.striking ?? run?.counts.striking ?? striking.length;
+  const firstPlan = plan[0];
+
+  return (
+    <Stagger className="space-y-6">
+      <KiTrialBanner o={o} />
+      <KiRunNotes o={o} kind="keyword_research" />
+      <SummaryHero
+        tone="blue"
+        eyebrow={<HeroEyebrow tag="Keyword research"><KiUpdated at={run?.finishedAt ?? rows[0]?.fetchedAt} market={o.market || run?.market} /></HeroEyebrow>}
+        title={go ? `You can win ${go} topic${go === 1 ? '' : 's'} soon${months ? `, and ${months} more in a few months` : ''}.` : months ? `${months} topic${months === 1 ? '' : 's'} can be won in a few months.` : 'These searches are hard for your website right now.'}
+        description={`We found ${n0(total)} searches people use to find a service like yours, grouped into ${n0(topics)} topics. Start with the plan below.`}
+        stats={
+          <>
+            <HeroStat label="Go" value={<CountUp value={go} />} info="Topics your website can rank for soon: sites like yours already rank there." />
+            <HeroStat label="Takes a few months" value={<CountUp value={months} />} info="Topics you can win with a few supporting pages first, usually over two to four months." />
+            <HeroStat label="Searches found" value={<CountUp value={total} format={compactNumber} />} info="Every search we kept because it fits what you sell and where you sell it." />
+            <HeroStat label="Just off page one" value={<CountUp value={strikingN} />} info="Searches you already show up for, in places 8 to 20. A better page can move these up fastest." />
+          </>
+        }
+        aside={firstPlan ? <HeroNextStep title={`First step: ${firstPlan.title}`} /> : undefined}
+      />
+
+      <PlanPanel plan={plan} o={o} />
+
+      <Panel icon={<Layers />} title="Topics" description={`${n0(clusters.length)} topics, best first. One page can win each topic.`} info="Searches that Google answers with the same pages belong together, so one page can rank for the whole topic. Each topic is named after its main search." flush>
+        <ul className="divide-y divide-line">
+          {clusters.slice(0, 12).map(({ head, members }) => (
+            <InsightItem
+              key={head.key}
+              icon={<Layers />}
+              actionPosition="side"
+              title={head.keyword}
+              meta={
+                <>
+                  {head.stage && <Badge>{KI_STAGES[head.stage]}</Badge>}
+                  <Badge>{members === 1 ? '1 search' : `${members} searches`}</Badge>
+                  {head.cannibal && <Badge tone="warning">Two of your pages compete for it</Badge>}
+                </>
+              }
+              description={
+                <span className="flex flex-col gap-1">
+                  <span className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-3">
+                    <span>
+                      Searches a month: <VolumeFigure r={head} demand={head.clusterDemand} />
+                    </span>
+                    <span>
+                      Score: <KiScore r={head} />
+                    </span>
+                    <span>Where from: {sourcesText(head.sources.map((s) => s.source))}</span>
+                  </span>
+                  <span className="text-xs text-ink-3">{pageLine(head)}</span>
+                  {head.stageEvidence && <span className="text-xs text-ink-3">Why this stage: {head.stageEvidence}</span>}
+                </span>
+              }
+              action={<KiVerdict verdict={head.verdict} reason={head.verdict === 'gated' ? head.gateReason : null} />}
+            />
+          ))}
+        </ul>
+        {clusters.length > 12 && <p className="border-t border-line px-5 py-3 text-xs text-ink-3">{clusters.length - 12} more topics in the table below (filter by topic).</p>}
+      </Panel>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <StrikingPanel rows={striking} />
+        <QuestionsPanel questions={questions} />
+      </div>
+
+      <AllSearches o={o} clusters={clusters.map((c) => c.head)} table={table} loading={tableLoading} error={tableError} gaps={gaps} filter={filter} onFilter={onFilter} domain={site.domain} />
+    </Stagger>
+  );
+}
+
+const sourcesText = (s: readonly KiSource[]) => {
+  const u = [...new Set(s)].map((x) => KI_SOURCE_LABELS[x] ?? 'Another source');
+  return u.length ? (u.length > 2 ? `${u.slice(0, 2).join(', ')} and ${u.length - 2} more` : u.join(', ')) : '-';
+};
+const shortUrl = (u: string) => u.replace(/^https?:\/\/(www\.)?/, '');
+function pageLine(r: KiKw): string {
+  if (r.pageAction === 'refresh' && r.pageUrl) return `Improve your page ${shortUrl(r.pageUrl)}`;
+  if (r.pageAction === 'list') return 'Google shows lists and directories here: get on those lists instead of writing a page';
+  if (r.pageAction === 'new') return 'Needs a new page';
+  if (r.pageUrl) return `Your page: ${shortUrl(r.pageUrl)}`;
+  return 'No page of yours yet';
+}
+
+function VolumeFigure({ r, demand }: { r: KiKw; demand?: number | null }) {
+  const v = demand ?? r.volume;
+  if (v == null && r.gscImpressions != null)
+    return <KiFigure value={compactNumber(r.gscImpressions)} tip="How often your site was shown in Google for this search in the last 28 days." basis={kiBasisLine('measured', '', r.fetchedAt) + ', your Search Console'} />;
+  if (v == null) return <KiFigure value="not measured" tip="We found this search in two or more places, but no source measures how often it is searched. We kept it so you do not lose it." basis="found in our sources" />;
+  return <KiFigure value={compactNumber(v)} tip={demand != null ? 'About how many people a month search the searches of this topic together.' : 'About how many people a month search this in your market.'} basis={kiBasisLine(r.volumeBasis ?? 'provider_estimate', r.volumeSource || 'Google Ads', r.fetchedAt)} />;
+}
+
+function PlanPanel({ plan, o }: { plan: KiPlanAction[]; o: KiOverview }) {
+  const { org, site } = useSitePage();
+  const start = useKiPlanStart(org.id, site.id);
+  const [soon, setSoon] = useState(false);
+  return (
+    <Panel icon={<ListOrdered />} title="Your plan" description={plan.length === 1 ? 'The step most likely to bring you buyers' : plan.length ? `The ${plan.length} steps most likely to bring you buyers, best first` : 'The plan appears after the research'} info="Ranked from the topics you can win and the gaps against your competitors. Each step says why it is here and how many credits it uses. Nothing starts without your click.">
+      {plan.length ? (
+        <>
+          {(soon || !o.planStart) && <p className="mb-2 text-xs text-ink-3">Starting a step from here is coming soon. Until then, use the Pipeline or the tools.</p>}
+          <ol className="divide-y divide-line">
+            {plan.slice(0, 10).map((a, i) => (
+              <li key={a.action_id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 gap-3">
+                  <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-soft font-mono text-xs font-medium text-accent-text">{i + 1}</span>
+                  <div className="min-w-0">
+                    <p className="font-medium text-ink">{a.title}</p>
+                    <p className="text-[13px] text-ink-2">{a.why}</p>
+                    <p className="mt-0.5 text-xs text-ink-3">
+                      {KI_GAP_ACTION_LABELS[a.kind] ?? 'Step'}
+                      {a.target ? ` · ${shortUrl(a.target)}` : ''}
+                      {a.credits > 0 ? ` · about ${formatCredits(a.credits)}` : ' · free'}
+                    </p>
+                  </div>
+                </div>
+                <KiStartButton
+                  ready={o.planStart && !soon}
+                  pending={start.isPending}
+                  credits={a.credits}
+                  onStart={() => start.mutate(a.action_id, { onSuccess: () => toast.success('Started. It shows on your Pipeline.'), onError: (e) => (kiStartSoon(e) ? setSoon(true) : toast.error('It did not start. Please try again.')) })}
+                />
+              </li>
+            ))}
+          </ol>
+        </>
+      ) : (
+        <p className="text-sm text-ink-3">Run the research to get your plan.</p>
+      )}
+    </Panel>
+  );
+}
+
+function StrikingPanel({ rows }: { rows: KiKw[] }) {
+  return (
+    <Panel icon={<TrendingUp />} title="Just off page one" description="You show up in places 8 to 20: the quickest wins" info="Searches your website already shows up for, just below or at the bottom of the first page, with enough people seeing them. Improving the page that shows up is usually enough to move it up.">
+      {rows.length ? (
+        <ul className="divide-y divide-line">
+          {rows.slice(0, 10).map((r) => (
+            <li key={r.key} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+              <span className="min-w-0">
+                <span className="block font-medium text-ink">{r.keyword}</span>
+                <span className="block truncate text-xs text-ink-3">{r.gscPage ? `Your page: ${shortUrl(r.gscPage)}` : pageLine(r)}</span>
+              </span>
+              <span className="flex items-center gap-3 text-xs text-ink-3">
+                <span>
+                  Place <KiFigure value={r.gscPosition == null ? '-' : `#${Math.round(r.gscPosition)}`} tip="Your average place in Google for this search over the last 28 days." basis="measured, your Search Console" />
+                </span>
+                <span>
+                  Seen <KiFigure value={r.gscImpressions == null ? '-' : compactNumber(r.gscImpressions)} tip="How many times your page was shown for this search in the last 28 days." basis="measured, your Search Console" />
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-ink-3">None yet. Connect Search Console in Website settings to see the searches you already show up for.</p>
+      )}
+    </Panel>
+  );
+}
+
+function QuestionsPanel({ questions }: { questions: { key: string; question: string; sources: KiSource[] }[] }) {
+  const { org, site, can } = useSitePage();
+  const approve = useKiApproveQuestions(org.id, site.id);
+  const mayAdd = can('admin');   // as the AI question panel itself (A1_ROUTES)
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const toggle = (k: string) => setPicked((p) => (p.has(k) ? new Set([...p].filter((x) => x !== k)) : new Set([...p, k])));
+  const send = () =>
+    approve.mutate([...picked], {
+      onSuccess: (r) => {
+        const added = Array.isArray(r?.added) ? r.added.length : typeof r?.added === 'number' ? r.added : picked.size;
+        const full = Array.isArray(r?.skipped) && r.skipped.some((x) => x?.reason === 'panel_full');
+        if (added) toast.success(`${added} question${added === 1 ? '' : 's'} added to your AI questions`, { description: 'They are asked from your next AI visibility check. Nothing is charged now.' });
+        if (full) toast.info('Your AI question list is full. Remove a question on the AI visibility page to add more.');
+        else if (!added) toast.info('These questions are already on your AI questions.');
+        setPicked(new Set());
+      },
+      onError: () => toast.error('The questions were not added. Please try again.'),
+    });
+  return (
+    <Panel
+      icon={<MessageCircleQuestion />}
+      title="Buyer questions"
+      description="Questions buyers ask before they hire. Add the ones that matter to your AI questions."
+      info="From Google's 'People also ask', its suggestions and your own Search Console. Once added, we ask ChatGPT, Gemini and other AI answers these questions and show whether they name you."
+      actions={
+        mayAdd && questions.length > 0 ? (
+          <Button size="sm" className={TAP} icon={<Check className="size-4" />} disabled={!picked.size} loading={approve.isPending} onClick={send}>
+            Add {picked.size || ''} to my AI questions
+          </Button>
+        ) : undefined
+      }
+    >
+      {questions.length ? (
+        <ul className="divide-y divide-line">
+          {questions.slice(0, 15).map((q) => (
+            <li key={q.key}>
+              <label className="flex min-h-10 cursor-pointer items-start gap-3 py-2.5">
+                <input type="checkbox" className="mt-1 size-4 shrink-0 accent-accent" checked={picked.has(q.key)} onChange={() => toggle(q.key)} disabled={!mayAdd} aria-label={`Add "${q.question}" to my AI questions`} />
+                <span className="min-w-0">
+                  <span className="block text-sm text-ink">{q.question}</span>
+                  <span className="block text-xs text-ink-3">From: {sourcesText(q.sources)}</span>
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-ink-3">No buyer questions in this reading.</p>
+      )}
+    </Panel>
+  );
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// every search: filters (a sheet on phones), the paged table (cards on phones), CSV
+// ------------------------------------------------------------------------------------------------------------------------------
+
+const VOLUME_STEPS = ['10', '50', '100', '500', '1000'];
+
+export function KiFilterFields({ f, set, clusters, stack }: { f: KiKwFilter; set: (p: Partial<KiKwFilter>) => void; clusters: KiKw[]; stack?: boolean }) {
+  const field = (label: string, value: string, onChange: (v: string) => void, options: { value: string; label: string }[], all = 'All') => (
+    <label key={label} className={cn('flex min-w-0 flex-col gap-1 text-xs font-medium text-ink-3', stack ? 'w-full' : 'w-[11.5rem]')}>
+      {label}
+      <Select value={value} onChange={(e) => onChange(e.target.value)} className="h-10 w-full sm:h-9">
+        <option value="">{all}</option>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </Select>
+    </label>
+  );
+  return (
+    <>
+      {field('Verdict', f.verdict, (v) => set({ verdict: v as KiKwFilter['verdict'] }), (['go', 'months', 'hard', 'gated'] as const).map((v) => ({ value: v, label: KI_VERDICTS[v] })))}
+      {field('Buyer stage', f.stage, (v) => set({ stage: v as KiKwFilter['stage'] }), (Object.keys(KI_STAGES) as KiStage[]).map((v) => ({ value: v, label: KI_STAGES[v] })))}
+      {field('Topic', f.cluster, (v) => set({ cluster: v }), clusters.filter((c) => c.clusterId).slice(0, 60).map((c) => ({ value: c.clusterId, label: c.keyword })))}
+      {field('Where from', f.source, (v) => set({ source: v as KiKwFilter['source'] }), (Object.keys(KI_SOURCE_LABELS) as KiSource[]).map((v) => ({ value: v, label: KI_SOURCE_LABELS[v] })), 'Any source')}
+      {field('Searches a month', f.minVolume, (v) => set({ minVolume: v }), VOLUME_STEPS.map((v) => ({ value: v, label: `At least ${n0(Number(v))}` })), 'Any number')}
+      {field('Gap', f.gapType, (v) => set({ gapType: v as KiKwFilter['gapType'] }), (['missing', 'untapped', 'weak', 'striking', 'strong'] as const).map((v) => ({ value: v, label: KI_GAP_LABELS[v].label })), 'Any')}
+      {field('Your brand', f.brand, (v) => set({ brand: v as KiKwFilter['brand'] }), [{ value: 'non_brand', label: 'Without your name' }, { value: 'brand', label: 'With your name' }], 'Both')}
+    </>
+  );
+}
+
+function AllSearches({ o, clusters, table, loading, error, gaps, filter, onFilter, domain }: { o: KiOverview; clusters: KiKw[]; table: KiKeywords | undefined; loading: boolean; error: unknown; gaps: KiGap[]; filter: KiKwFilter; onFilter: (f: KiKwFilter) => void; domain: string }) {
+  const { org, site } = useSitePage();
+  const [sheet, setSheet] = useState(false);
+  const set = (p: Partial<KiKwFilter>) => onFilter({ ...filter, ...p, page: 'page' in p ? (p.page ?? 1) : 1 });
+  const active = kiActiveFilters(filter);
+  const byKey = useMemo(() => kiGapTypesByKey(gaps), [gaps]);
+  const rows = useMemo(() => (table ? kiFilterKeywords(table.rows, filter, byKey) : []), [table, filter, byKey]);
+  const total = table?.total ?? 0;
+  const pages = Math.max(1, Math.ceil(total / KI_PAGE_SIZE));
+  const from = total ? (filter.page - 1) * KI_PAGE_SIZE + 1 : 0;
+  const to = Math.min(total, filter.page * KI_PAGE_SIZE);
+  const params = kiKwParams(filter);
+
+  const cols: Column<KiKw>[] = [
+    {
+      key: 'keyword',
+      header: 'Search',
+      cell: (r) => (
+        <span className="block min-w-[12rem]">
+          <span className="block font-medium text-ink">{r.keyword}</span>
+          {r.needsReview && <span className="block text-xs text-warning-text">Please check the buyer stage</span>}
+        </span>
+      ),
+    },
+    { key: 'volume', header: 'Searches a month', align: 'right', cell: (r) => <VolumeFigure r={r} /> },
+    { key: 'stage', header: 'Buyer stage', hideOnMobile: true, cell: (r) => <span className="whitespace-nowrap text-ink-2">{r.stage ? KI_STAGES[r.stage] : '-'}</span> },
+    { key: 'verdict', header: 'For you', cell: (r) => <KiVerdict verdict={r.verdict} reason={r.verdict === 'gated' ? r.gateReason : null} size="sm" /> },
+    { key: 'score', header: 'Score', align: 'right', cell: (r) => <KiScore r={r} /> },
+    { key: 'sources', header: 'Where from', hideOnMobile: true, cell: (r) => <span className="text-xs text-ink-3">{sourcesText(r.sources.map((s) => s.source))}</span> },
+    { key: 'page', header: 'Your page', hideOnMobile: true, cell: (r) => <span className="block max-w-[16rem] truncate text-xs text-ink-3">{pageLine(r)}</span> },
+  ];
+
+  return (
+    <Panel
+      icon={<Search />}
+      title="Every search"
+      description={total ? `${n0(total)} searches${active ? ' match your filters' : ''}` : 'Every search we kept, with its verdict'}
+      info="Filter by verdict, buyer stage, topic, source, size, gap or brand. The download has every row that matches your filters, not only this page."
+      actions={
+        <a href={kiCsvUrl(org.id, site.id, 'keywords', params)} download rel="noopener" className={buttonClass('secondary', 'sm', TAP)}>
+          <Download className="size-4" aria-hidden />
+          Download CSV
+        </a>
+      }
+    >
+      <div className="mb-3 hidden flex-wrap items-end gap-3 md:flex" data-ki-filters>
+        <KiFilterFields f={filter} set={set} clusters={clusters} />
+        {active > 0 && (
+          <Button variant="ghost" size="sm" onClick={() => onFilter(KI_KW_FILTER_EMPTY)}>
+            Clear filters
+          </Button>
+        )}
+      </div>
+      <div className="mb-3 flex flex-wrap items-center gap-2 md:hidden">
+        <button type="button" onClick={() => setSheet(true)} className="inline-flex h-10 items-center gap-2 rounded-lg border border-line-strong bg-surface px-3.5 text-sm font-medium text-ink shadow-card">
+          <Filter className="size-4" aria-hidden />
+          Filters{active ? ` (${active})` : ''}
+        </button>
+        <label className="flex items-center gap-2 text-xs font-medium text-ink-3">
+          Sort
+          <Select value={filter.sort} onChange={(e) => set({ sort: e.target.value as KiKwFilter['sort'] })} className="h-10">
+            <option value="score">Best first</option>
+            <option value="volume">Most searched</option>
+            <option value="keyword">A to Z</option>
+          </Select>
+        </label>
+        <Sheet
+          open={sheet}
+          onOpenChange={setSheet}
+          title="Filter the searches"
+          footer={
+            <>
+              {active > 0 && (
+                <Button variant="ghost" className="h-10" onClick={() => onFilter(KI_KW_FILTER_EMPTY)}>
+                  Clear
+                </Button>
+              )}
+              <Button className="h-10" onClick={() => setSheet(false)}>
+                Show results
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <KiFilterFields f={filter} set={set} clusters={clusters} stack />
+          </div>
+        </Sheet>
+      </div>
+      <div className="mb-2 hidden items-center justify-end gap-2 md:flex">
+        <label className="flex items-center gap-2 text-xs font-medium text-ink-3">
+          Sort
+          <Select value={filter.sort} onChange={(e) => set({ sort: e.target.value as KiKwFilter['sort'] })} className="h-9">
+            <option value="score">Best first</option>
+            <option value="volume">Most searched</option>
+            <option value="keyword">A to Z</option>
+          </Select>
+        </label>
+      </div>
+      {error && !table ? (
+        <ErrorState error={error} />
+      ) : !table ? (
+        <Skeleton className="h-[320px] rounded-xl" />
+      ) : (
+        <div className={cn('transition-opacity duration-150', loading && 'opacity-60')} aria-busy={loading || undefined}>
+          <DataTable
+            rows={rows}
+            columns={cols}
+            rowKey={(r) => r.key}
+            pageSize={Math.max(rows.length, 1)}
+            stickyFirst
+            empty={active ? 'No search matches these filters. Clear a filter to see more.' : 'No searches yet.'}
+            mobileCard={(r) => <SearchCard r={r} />}
+          />
+          {pages > 1 && (
+            <div className="mt-3 flex items-center justify-between gap-2 text-[13px] text-ink-3">
+              <span className="tabular">
+                {n0(from)}-{n0(to)} of {n0(total)}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="mr-1 hidden tabular sm:inline">
+                  Page {filter.page} of {pages}
+                </span>
+                <PagerButton disabled={filter.page <= 1} onClick={() => set({ page: filter.page - 1 })} label="Previous page" icon={<ChevronLeft className="size-4" />} />
+                <PagerButton disabled={filter.page >= pages} onClick={() => set({ page: filter.page + 1 })} label="Next page" icon={<ChevronRight className="size-4" />} />
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+      <p className="mt-3 text-xs text-ink-3">
+        Searches for {domain} in {kiMarketName(o.market) || 'your market'}. <GuideButton id="ki-verdicts" vars={{ domain }} variant="link" label="What the verdicts mean" />
+      </p>
+    </Panel>
+  );
+}
+
+function PagerButton({ disabled, onClick, label, icon }: { disabled: boolean; onClick: () => void; label: string; icon: ReactNode }) {
+  return (
+    <button type="button" disabled={disabled} onClick={onClick} aria-label={label} className="inline-flex size-10 items-center justify-center rounded-md border border-line-strong bg-surface text-ink-2 shadow-card transition-colors duration-150 ease-brand hover:bg-surface-2 disabled:pointer-events-none disabled:opacity-40 sm:size-8">
+      {icon}
+    </button>
+  );
+}
+
+function SearchCard({ r }: { r: KiKw }) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-start justify-between gap-3">
+        <span className="min-w-0 font-medium text-ink">{r.keyword}</span>
+        <KiVerdict verdict={r.verdict} reason={r.verdict === 'gated' ? r.gateReason : null} size="sm" className="shrink-0 items-end text-right" />
+      </div>
+      <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+        <dt className="text-ink-3">Searches a month</dt>
+        <dd className="text-right text-ink">
+          <VolumeFigure r={r} />
+        </dd>
+        <dt className="text-ink-3">Score</dt>
+        <dd className="text-right">
+          <KiScore r={r} />
+        </dd>
+        <dt className="text-ink-3">Buyer stage</dt>
+        <dd className="text-right text-ink-2">{r.stage ? KI_STAGES[r.stage] : '-'}</dd>
+      </dl>
+      <p className="flex items-start gap-1 text-xs text-ink-3">
+        <ArrowRight className="mt-0.5 size-3 shrink-0" aria-hidden />
+        {pageLine(r)}
+      </p>
+    </div>
+  );
+}
