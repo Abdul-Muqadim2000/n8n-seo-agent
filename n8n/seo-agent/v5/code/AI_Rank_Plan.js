@@ -127,6 +127,8 @@ for (const g of gateSites) {
     const units60 = (hist.units || []).filter(u => AIRF.usable(u.engine));
     const demand = P(visLast.demand_json, {}) || {};   // the AI search demand per question (ARL.value)
     const queries = bySite(queryAll, sid, dom); const gsc = new Map(); for (const q of queries) { const k = S0(q.query).toLowerCase(); if (k) gsc.set(k, Math.max(gsc.get(k) || 0, Number(q.impressions) || 0)); }
+    // LIVE1 (2026-11-07): the page Search Console shows for each query (the one with the most impressions): a concrete address for a refresh (ARL.candidates)
+    const gscPages = new Map(); { const best = new Map(); for (const q of queries) { const k = S0(q.query).toLowerCase().replace(/\s+/g, ' '); const u = S0(q.page); const im = Number(q.impressions) || 0; if (!k || !u) continue; const b = best.get(k); if (!b || im > b) { best.set(k, im); gscPages.set(k, u); } } }
     const monRow = monRows.find(m => m.site_id === sid) || {};
     const aiPages = bySite(aiPagesAll, sid, dom);
     const storedQ = new Map(bySite(rqAll, sid, dom).map(r => [S0(r.prompt_id), r]));
@@ -195,13 +197,39 @@ for (const g of gateSites) {
         if (i >= 0) sources[i] = x; else sources.push(x); } }
     const srcByKey = new Map(sources.map(x => [S0(x.url_key) || AIRF.urlKey(x.url), x]));
     // ---- D / E: candidates, scores, the choice ----
-    const candidates = ARL.candidates({ site: { ...site, hosts: ourHosts, prompts, pages: aiPages }, diag, sources, arms, stored_actions: storedA, settings: rank, now: nowMs }) || [];
-    const scored = candidates.map(c => { const sc = un('ARL.score', ARL.score(c, { priors: rpAll, values, feas, weights: null, H: AIR_CFG.H })); return sc.unavailable ? null : { ...c, ...sc }; }).filter(Boolean);
+    const candidates = ARL.candidates({ site: { ...site, hosts: ourHosts, prompts, pages: aiPages, gsc_pages: gscPages }, diag, sources, arms, stored_actions: storedA, settings: rank, now: nowMs }) || [];
+    // LIVE1 (2026-11-07): every placement (a pitch: sink prospect) passes the Link Builder's own vetting BEFORE the choice (OK.placementVet: its
+    // stored verdicts, an earlier pitch to the same site, and its rules that need no page), so a refused or already-pitched list is never chosen
+    // and the pitch slots go to the next candidates. A reachable contact is preferred; a contact form only is allowed and marked a manual step.
+    const outreachSite = bySite(outreachAll, sid, dom), prospectsSite = bySite(prospectsAll, sid, dom);
+    // LIVE1: an own page passes the Content Cadence's own freshness rules before the choice, so the one AI ranking page of the week is one the
+    // reserved slot can write (live, both sites' refresh targets were pages the agent had published 7-9 days before: the cadence refused both).
+    // A refresh waits 60 days after the page was refreshed or published (Cadence_Plan refreshedRecently, F-38); a new page waits 90 days after a
+    // page for the same keyword was started or published (Cadence_Plan recent). The question's other own pages and the other questions stay open.
+    const keyOfU = (u) => S0(u).toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+    const normKw = (k) => S0(k).toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const logSite = bySite(logAll, sid, dom); const freshAt = new Map(), kwAt = new Map();
+    for (const l of logSite) { const st0 = Date.parse(S0(l.started_at)), pb = Date.parse(S0(l.published_at));
+      if (S0(l.existing_page_url) && Number.isFinite(st0) && nowMs - st0 < 60 * DAY) freshAt.set(keyOfU(l.existing_page_url), S0(l.started_at).slice(0, 10));
+      if (S0(l.published_url) && Number.isFinite(pb) && nowMs - pb < 60 * DAY) freshAt.set(keyOfU(l.published_url), S0(l.published_at).slice(0, 10));
+      if (S0(l.keyword) && (S0(l.status) === 'published' || (Number.isFinite(st0) && nowMs - st0 < 90 * DAY))) kwAt.set(normKw(l.keyword), S0(l.published_at || l.started_at).slice(0, 10)); }
+    const ownWhy = (c) => { if (c.lever === 'L06') { const at = freshAt.get(keyOfU(S0((c.ref || {}).url) || c.page_url)); return at ? 'its page was refreshed or published on ' + at + ': the Content Cadence refreshes a page again only after 60 days' : ''; }
+      const kw = normKw(c.keyword || (promptById.get(S0((c.ref || {}).prompt_id)) || {}).keyword); const at = kw ? kwAt.get(kw) : ''; return at ? 'a page for "' + kw + '" was written on ' + at + ': the Content Cadence writes a search again only after 90 days' : ''; };
+    const vetted = candidates.map(c => { if (c.sink === 'ai_target' && !c.refused && ['L05', 'L06'].includes(c.lever)) { const w = ownWhy(c); return w ? { ...c, refused: 'not written this week: ' + w } : c; }
+      if (c.sink !== 'prospect' || c.refused) return c; const url = S0((c.ref || {}).url); const src = url ? srcByKey.get(AIRF.urlKey(url)) || {} : {};
+      const v = OK.placementVet({ url, domain: hostOf(url), title: S0(src.title), outreach: outreachSite, prospects: prospectsSite, competitors, ai_rivals: gp.rival_sources || [], topics: gp.topics || [], terms: site.services, contact_email: S0(src.contact_email), contact_url: S0(src.contact_url) });
+      if (v.refused) return { ...c, refused: 'not pitched (the Link Builder\'s vetting): ' + v.refused };
+      if (v.contact === 'email') return { ...c, contact: 'email', contact_email: v.email };
+      if (v.contact === 'form') return { ...c, contact: 'form', contact_url: v.form, manual: true, factor: Math.round(1e4 * (Number(c.factor) || 1) * 0.7) / 1e4, why: S0(c.why) + '; a contact form only: a manual step (send it yourself through ' + v.form + ')' };
+      return { ...c, contact: '', factor: Math.round(1e4 * (Number(c.factor) || 1) * 0.85) / 1e4 }; });
+    const scored = vetted.map(c => { const sc = un('ARL.score', ARL.score(c, { priors: rpAll, values, feas, weights: null, H: AIR_CFG.H })); return sc.unavailable ? null : { ...c, ...sc }; }).filter(Boolean);
     const openStored = storedA.filter(a => AIR_CFG.open.includes(S0(a.status)));
     const choice = ARL.choose(scored, { capacities: {}, arms, mode, open_actions: storedA.filter(a => ['shadow', ...AIR_CFG.open].includes(S0(a.status))), now: nowMs, units60, exposure }) || { chosen: [], deferred: [], refused: [] };
     // the gate on the way out: a placement pitch to a competitor's own page is refused here, whatever the kit chose (rival lists: learn only)
     const refused = (choice.refused || []).slice(); const chosen = [];
-    for (const a of (choice.chosen || [])) {
+    // LIVE1: ARL.choose returns its own action shape; the vetting's contact facts are carried back by action id (the sink reads them)
+    const vetById = new Map(vetted.filter(c => c.sink === 'prospect').map(c => [S0(c.action_id), c]));
+    for (const a0 of (choice.chosen || [])) { const vc = vetById.get(S0(a0.action_id)); const a = vc ? { ...a0, contact: vc.contact || '', contact_email: S0(vc.contact_email), contact_url: S0(vc.contact_url), manual: vc.manual === true } : a0;
       const url = S0((a.ref || {}).url); const src = url ? srcByKey.get(AIRF.urlKey(url)) : null;
       if (a.sink === 'prospect') { const why = rivalWhy(hostOf(url), { url, title: src ? src.title || '' : '' });
         if (why || (src && ['rival', 'client'].includes(S0(src.author_kind)))) { refused.push({ what: a.action_id || a.lever, why: why || 'a page written by ' + (src.author_kind === 'client' ? 'the client' : 'a competitor') + ': learned from, never pitched' }); continue; } }
@@ -291,8 +319,12 @@ for (const g of gateSites) {
         const tid = AIRF.targetId(sid, pid); const st = targetsSite.find(t => S0(t.target_id) === tid) || {};
         if (['writing', 'written', 'won'].includes(S0(st.status))) continue;   // live work or a win: AIR leaves it alone
         const qs = sources.filter(x => (x.questions || []).includes(pid)).slice(0, 6);
+        // LIVE1 (2026-11-07): a refresh carries the page it refreshes (the action's own page_url; the ref held only the question, so prod wrote '');
+        // a refresh with no address could never be written by the cadence, so it is refused here with its reason, never stored
+        const pageUrl = S0((a.ref || {}).url) || S0(a.page_url) || S0(st.page_url);
+        if (a.lever === 'L06' && !pageUrl) { refused.push({ what: a.action_id || a.lever, why: 'a refresh with no page address: no page of the site is known for this question' }); continue; }
         sinks.targets.push({ target_id: tid, site_id: sid, domain: dom, prompt_id: pid, question: S0(p.prompt), keyword: S0(p.keyword || p.topic), kind: a.lever === 'L06' ? 'refresh' : 'answer',
-          page_url: S0((a.ref || {}).url) || S0(st.page_url), page_type: a.lever === 'L06' ? '' : (a.screen && a.screen.page_type ? a.screen.page_type : (S0(st.page_type) || 'Guide')), fanout: ARD.fanoutOf({ prompt_id: pid, answers8, evidence: evidenceOf.get(pid) || '' }).slice(0, 8).map(f => f.query).join(' | '),
+          page_url: a.lever === 'L06' ? pageUrl : S0(st.page_url), page_type: a.lever === 'L06' ? '' : (a.screen && a.screen.page_type ? a.screen.page_type : (S0(st.page_type) || 'Guide')), fanout: ARD.fanoutOf({ prompt_id: pid, answers8, evidence: evidenceOf.get(pid) || '' }).slice(0, 8).map(f => f.query).join(' | '),
           sources_json: J(qs.map(x => ({ u: x.url, t: '', n: Number(x.cites_28d) || 1 }))), competitors: [...new Set(qs.flatMap(x => x.rivals_named || []))].slice(0, 8).join(', '), engines: (a.engines || []).join(', '), stage: S0(p.stage),
           value: Math.round(100 * (1 + 4 * Math.min(1, (Number(a.score) || 0) / maxScore))) / 100, status: 'queued', reason: ('AI ranking (' + a.lever + '): ' + (a.screen && a.screen.note ? a.screen.note + '. ' : '') + S0(a.why || (ARL.LEVERS.find(l => l.id === a.lever) || {}).label)).slice(0, 600),
           created_at: S0(st.created_at) || nowIso, updated_at: nowIso, request_id: S0(st.request_id), written_at: S0(st.written_at), won_at: S0(st.won_at), origin: 'ai_rank', action_id: S0(a.action_id), live_at: S0(st.live_at) || null }); }
@@ -303,8 +335,8 @@ for (const g of gateSites) {
         sinks.prospects.push({ site_id: sid, domain: dom, prospect_domain: pd, type: 'ai_source', rank: Number(o.rank) || 0, spam_score: Number(o.spam_score) || 0,
           detail: ('cited for ' + (src.questions || []).length + ' question(s) on ' + (src.engines || []).length + ' engine(s)' + ((src.rivals_named || []).length ? '; names ' + src.rivals_named.slice(0, 3).join(', ') : '')).slice(0, 500),
           source_url: url, target_url: S0(o.target_url), status: S0(o.status) || 'new', first_seen: S0(o.first_seen) || nowIso, last_seen: nowIso, won_at: S0(o.won_at), outreach_subject: S0(o.outreach_subject), outreach_body: S0(o.outreach_body),
-          note: S0(o.note) || 'AI ranking placement (' + a.lever + ')', score: Math.max(0, Math.min(100, Math.round(100 * (Number((a.expected || {}).p) || Number(a.p_hat) || 0)))), origin: 'ai_rank',
-          contact_email: S0(o.contact_email) || S0(src.contact_email), contact_url: S0(o.contact_url) || S0(src.contact_url), contacted_at: S0(o.contacted_at), followup_step: Number(o.followup_step) || 0,
+          note: S0(o.note) || ('AI ranking placement (' + a.lever + ')' + (a.manual ? ': a contact form only, a manual step' : '')), score: Math.max(0, Math.min(100, Math.round(100 * (Number((a.expected || {}).p) || Number(a.p_hat) || 0)))), origin: 'ai_rank',
+          contact_email: S0(o.contact_email) || S0(src.contact_email) || S0(a.contact_email), contact_url: S0(o.contact_url) || S0(src.contact_url) || S0(a.contact_url), contacted_at: S0(o.contacted_at), followup_step: Number(o.followup_step) || 0,
           followup_subject: S0(o.followup_subject), followup_body: S0(o.followup_body), verified_at: S0(o.verified_at), drafted_at: S0(o.drafted_at) }); }
       const fitCtxQ = { ...fitCtx, topics: null };
       for (const q of (panel.proposed || [])) { const text = S0(q.prompt); if (text.length < 10 || AIP.findStored(prompts, sid, text)) continue;

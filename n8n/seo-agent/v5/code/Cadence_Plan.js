@@ -490,6 +490,13 @@ for (const s of list) {
   const airQueue = [], air_honoured = [];
   const airSvcWords = new Set(services.flatMap(x => norm(x).split(' ')).filter(w => w.length > 2 && !AIR_SVC_STOP.has(w)));
   const airSvcMatch = (kw) => norm(kw).split(' ').some(w => w.length > 2 && !AIR_SVC_STOP.has(w) && airSvcWords.has(w));
+  // LIVE1 (2026-11-07): an AIR target the reserved slot cannot write is never dropped silently: it is listed in `refused` with a plain reason
+  // (beside the gate's refusals), and the slot passes to the next eligible AIR target
+  const airWhyNot = (t) => !t.keyword ? 'it has no keyword' : t.kind !== 'refresh' && ladderFor(t) ? 'a keyword ladder already covers this search ("' + ladderFor(t).keyword + '")'
+    : t.kind === 'refresh' ? (!t.page_url ? 'it asks to refresh a page but names no page address' : 'its page was refreshed or published in the last 60 days')
+    : recent.has(norm(t.keyword)) ? 'a page for this search was written or published recently' : 'a keyword ladder already targets this keyword';
+  if (airReserve) for (const t of aiTargets.filter(t => isAirTarget(t) && t.site_id === s.site_id && !aiEligible(t))) { const detail = airWhyNot(t); const kw = String(t.keyword || t.question || '');
+    refused.push({ keyword: kw, source: t.kind === 'refresh' ? 'ai_refresh' : 'ai_answer', reason: 'cannot be written now', detail, note: 'the AI ranking page "' + kw + '" is not written this week: ' + detail, target_id: t.target_id }); }
   if (airReserve) for (const t of aiTargets.filter(t => isAirTarget(t) && aiEligible(t)).sort((a, b) => (Number(b.value) || 0) - (Number(a.value) || 0))) {
     const o = aiCandOf(t); const g = gateOf(o);
     if (!g.ok && !(AIR_TOPIC_REASONS.has(String(g.reason || '')) && airSvcMatch(o.keyword))) { refuse(o, g); continue; }

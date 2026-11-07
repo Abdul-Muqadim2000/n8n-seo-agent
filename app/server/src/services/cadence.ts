@@ -903,6 +903,21 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   const airHonoured: CadenceAir['honoured'] = [];
   const airSvcWords = new Set(services.flatMap((x) => norm(x).split(' ')).filter((w) => w.length > 2 && !AIR_SVC_STOP.has(w)));
   const airSvcMatch = (kw: string) => norm(kw).split(' ').some((w) => w.length > 2 && !AIR_SVC_STOP.has(w) && airSvcWords.has(w));
+  // LIVE1 (2026-11-07, the engine's block): an AIR target the reserved slot cannot write is listed in `refused` with a plain reason, never
+  // dropped silently; the slot passes to the next eligible AIR target
+  const airWhyNot = (t: AiTargetRow): string => {
+    if (!t.keyword) return 'it has no keyword';
+    const lf = t.kind !== 'refresh' ? ladderFor(t) : null;
+    if (lf) return `a keyword ladder already covers this search ("${lf.keyword}")`;
+    if (t.kind === 'refresh') return !t.page_url ? 'it asks to refresh a page but names no page address' : 'its page was refreshed or published in the last 60 days';
+    return recent.has(norm(t.keyword)) ? 'a page for this search was written or published recently' : 'a keyword ladder already targets this keyword';
+  };
+  if (airReserve)
+    for (const t of aiTargets.filter((x) => isAirTarget(x) && !aiEligible(x))) {
+      const detail = airWhyNot(t);
+      const kw = S(t.keyword) || S(t.question);
+      refused.push({ keyword: kw, source: t.kind === 'refresh' ? 'ai_refresh' : 'ai_answer', reason: 'cannot be written now', detail, note: `the AI ranking page "${kw}" is not written this week: ${detail}`, targetId: t.target_id });
+    }
   if (airReserve)
     for (const t of aiTargets.filter((x) => isAirTarget(x) && aiEligible(x)).sort((a, b) => num(b.value) - num(a.value))) {
       const o = aiCandOf(t);

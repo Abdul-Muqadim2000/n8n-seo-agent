@@ -2755,7 +2755,10 @@ const OK = (() => {
   function sellSignals(html, facts) {
     const t = LK.text(html).toLowerCase().slice(0, 60000); const r = [];
     if (/(sponsored|guest) post[^.]{0,80}(\$|usd|eur|£|price|pricing|rate card|fee)|(\$|usd)\s?\d+[^.]{0,40}(per|a) (post|article|link)|dofollow (link|backlink)s? (guaranteed|included)|buy (a )?(guest post|backlink)|link insertion/.test(t)) r.push('sells posts or links');
-    if (/\b(casino|betting|sportsbook|cbd oil|essay writing|payday loan|escort|replica watches)\b/.test(t)) r.push('gambling / CBD / essay-mill topics');
+    // LIVE1 (2026-11-07): read without the choices of a form's drop-down (<select>): code-brew.ae, a software firm, was refused as gambling
+    // because its quote form's "Industry" list offers "Fantasy & Betting"; the options a form offers are not what the page is about
+    const tg = /<select\b/i.test(String(html || '')) ? LK.text(String(html).replace(/<select\b[\s\S]*?<\/select>/gi, ' ')).toLowerCase().slice(0, 60000) : t;
+    if (/\b(casino|betting|sportsbook|cbd oil|essay writing|payday loan|escort|replica watches)\b/.test(tg)) r.push('gambling / CBD / essay-mill topics');
     if (facts && facts.outbound_domains > 150) r.push(facts.outbound_domains + ' different sites linked from one page');
     if (/(write for us|guest post|sponsored post|contribute)[^.]{0,150}(\$\s?\d|usd\s?\d|€\s?\d|£\s?\d|\bfee\b|\bpaid\b|\bpricing\b)|(\$\s?\d+|\bfee\b)[^.]{0,80}(guest post|sponsored post|write for us)/.test(t)) r.push('paid guest posts');   // a price next to the offer (S30: "with prices and setup time" on an ordinary list page)
     return r; }
@@ -2845,6 +2848,9 @@ const OK = (() => {
   // outranks you is a SERP rival. `kind` says which, because only a SERP rival's "best X" list stays pitchable.
   function rivalOf(o) {
     const d = String(o.domain || '').toLowerCase().replace(/^www\./, ''); const dr = LK.regDomain(d);
+    // LIVE1 (2026-11-07): a social or professional network is never a competitor (linkedin.com, where any author posts, was refused as "a site
+    // that outranks you" because a LinkedIn article ranked #3 for one of the client's keywords); what its pages say is judged by the other rules
+    if (d && LK.domainKind(d) === 'social') return null;
     const hit = (list, label, kind) => {
       for (const c of (list || [])) { const x = domOf(c); if (!x || !d) continue;
         if (LK.sameSite(d, x) || LK.sameSite(x, d) || (dr && dr === LK.regDomain(x))) { const e = rivalEntry(c, (c && typeof c === 'object' && c.why) || label); return e ? { ...e, kind } : null; }
@@ -2971,7 +2977,37 @@ const OK = (() => {
     if (tld.length === 2 && tld !== 'us' && d.endsWith('.' + tld)) return { ok: true, why: 'a site in your market (.' + tld + ')' };
     return { ok: false, why: 'off topic for you: neither its name, its page nor its country ties it to ' + (String(x.topic_label || '') || 'your topics') };
   }
-  return { OFF_TOPIC, isGov, words, stem, fit, contactsIn, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf,
+  // ---- LIVE1 (2026-11-07, the first live AI ranking run): a placement AI ranking would pitch, through the Link Builder's own verdicts and rules,
+  // BEFORE it is chosen. Live, AI ranking chose five lists the Link Builder had already refused (competitors' own lists, paid guest posts) or
+  // had already written to, so the Link Builder drafted none. Read from the stored rows only (no fetch): the Link Builder's latest verdict on
+  // this site's page (not_fit, with its reason), any earlier pitch to the same site (a drafted sequence, a sent or answered e-mail, a stored
+  // draft), and the rules that need no page: a mailbox / database / CDN host, a government site, a bare homepage, a competing site.
+  // -> { refused: '' | why, contact: 'email' | 'form' | '', email, form }. A contact form only is allowed: the caller marks it a manual step.
+  // the platforms the Link Builder never reads for a pitch (LB_Page_Requests' BIG list, kept identical; harness LIVE1-3 compares the two): a page
+  // there belongs to whoever posted it, nobody edits it for a pitch, and the Link Builder would never qualify or draft it
+  const PLATFORM = /(^|\.)(google|youtube|facebook|linkedin|wikipedia|amazon|apple|microsoft|reddit|quora|instagram|twitter|x|tiktok|medium|github|pinterest|bing|yahoo|duckduckgo)\.[a-z.]+$/i;
+  const PITCHED = new Set(['drafted', 'needs_edit', 'approved', 'scheduled', 'sending', 'sent', 'replied', 'won', 'bounced', 'opted_out', 'stopped', 'contacted', 'declined']);
+  const pkey = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  function placementVet(o) {
+    const x = o || {}; const host = domOf(x.domain || LK.hostOf(x.url)); const d = LK.regDomain(host) || host; if (!d) return { refused: 'no site address', contact: '', email: '', form: '' };
+    const mine = (r) => { const y = domOf(r && r.prospect_domain); return !!y && (LK.sameSite(y, d) || LK.regDomain(y) === d); };
+    const outs = (x.outreach || []).filter(mine), pros = (x.prospects || []).filter(mine);
+    const when = (r) => String(r.drafted_at || r.contacted_at || r.checked_at || r.updated_at || r.updatedAt || '').slice(0, 10);
+    const pitched = outs.find(r => PITCHED.has(String(r.status || '')) || String(r.sequence_json || '').length > 2 || !!String(r.drafted_at || ''))
+      || pros.find(r => PITCHED.has(String(r.status || '')) || !!String(r.contacted_at || '') || !!String(r.drafted_at || '') || !!String(r.outreach_body || '').trim());
+    if (pitched) return { refused: 'the Link Builder already wrote to ' + d + (when(pitched) ? ' (' + when(pitched) + ')' : '') + ': one pitch per site, nothing new to send', contact: '', email: '', form: '' };
+    const nf = outs.filter(r => String(r.status || '') === 'not_fit' && (String(r.type || '') === 'ai_source' || (pkey(r.page_url) && pkey(r.page_url) === pkey(x.url))))
+      .sort((a, b) => String(b.checked_at || b.updatedAt || '').localeCompare(String(a.checked_at || a.updatedAt || '')))[0];
+    if (nf) return { refused: 'the Link Builder ruled it out' + (when(nf) ? ' on ' + when(nf) : '') + ': ' + String(nf.fit_reason || 'not a fit').slice(0, 240), contact: '', email: '', form: '' };
+    const why = badHost(d) || (PLATFORM.test(host) || PLATFORM.test(d) ? 'a platform page (' + d + '): the Link Builder does not pitch a platform, a post there belongs to whoever wrote it' : '') || (isGov(d) ? 'government site: you get on its lists by applying or being accredited, not by a pitch (see the listings checklist)' : '') || homepageOnly('ai_source', x.url)
+      || sellsSame({ type: 'ai_source', domain: d, competitors: x.competitors || [], serp_rivals: x.serp_rivals || [], ai_rivals: x.ai_rivals || [], topics: x.topics || [], title: x.title || '', url: x.url || '', terms: x.terms || [] });
+    if (why) return { refused: why, contact: '', email: '', form: '' };
+    const jl = (v) => { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
+    const email = String(x.contact_email || '').trim() || (outs.map(r => String(r.contact_email || '') || String((jl(r.contacts_json)[0] || {}).email || '')).find(Boolean) || '') || (pros.map(r => String(r.contact_email || '')).find(Boolean) || '');
+    const form = email ? '' : (String(x.contact_url || '').trim() || outs.map(r => String(r.contact_form_url || '')).find(Boolean) || pros.map(r => String(r.contact_url || '')).find(Boolean) || '');
+    return { refused: '', contact: email ? 'email' : form ? 'form' : '', email, form };
+  }
+  return { OFF_TOPIC, isGov, words, stem, fit, contactsIn, placementVet, PLATFORM, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf,
     badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, siteOffer, rivalOf, isRoundup, LIST_TYPES, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
 })();
 
@@ -3842,8 +3878,10 @@ const ARL = (() => {
     const optIn = new Set((((settings || {}).pitch_rival_urls) || []).map(u => AIRF.urlKey(u)).filter(Boolean));
     const pageOf = (d) => { const q = S(d.prompt_id); if (S(d.page_url)) return S(d.page_url); if (S(d.mapped_page) && isOurs(d.mapped_page, hosts)) return S(d.mapped_page);   // ARD's additive mapped_page
       for (const { c } of cellsOf(d)) for (const ev of (c.evidence || [])) { const u = S(ev && (ev.url || ev.page)); if (u && isOurs(u, hosts)) return u; }
-      const pg = (st.pages || []).find(r => r && arr(r.questions).map(S).includes(q) && isOurs(r.url, hosts)); return pg ? S(pg.url) : ''; };
-    const hasPage = (d) => !!pageOf(d) || cellsOf(d).some(({ stage, c }) => lvl(stage) >= 2 || N(c.retrieved, 0) > 0 || N(c.cited, 0) > 0 || c.our_rank);
+      const pg = (st.pages || []).find(r => r && arr(r.questions).map(S).includes(q) && isOurs(r.url, hosts)); if (pg) return S(pg.url);
+      // LIVE1 (2026-11-07): the page Search Console shows for the question's own keyword or one of the engines' searches (exact query, the site's own host)
+      const gp = st.gsc_pages; if (gp && typeof gp.get === 'function') { const p0 = P.get(q) || {}; for (const k of uniq([S(p0.keyword), ...arr(d.fanout).map(S)].map(x => x.toLowerCase().replace(/\s+/g, ' ').trim()).filter(Boolean))) { const u = S(gp.get(k)); if (u && isOurs(u, hosts)) return u; } }
+      return ''; };
     const intentOf = (qs) => { const its = uniq(qs.map(q => S((byQ.get(q) || {}).intent))); return its.length === 1 && its[0] === 'informational' ? 'informational' : its.length === 1 && its[0] === 'recommendation' ? 'recommendation' : 'mixed'; };
     const out = []; const seen = new Set();
     const add = (L, ref, cells, extra) => { if (!cells.length) return; const id = AIRF.actionId(sid, L.id, ref); if (seen.has(id)) return; seen.add(id);
@@ -3865,14 +3903,14 @@ const ARL = (() => {
     // question-specific levers: own page (new or refresh, never both), cited-not-named, correction. Never on a control question.
     for (const q of allQ) { const d = byQ.get(q); const control = armOf.get(q) === 'control'; const pu = pageOf(d); const guard = pu ? protectedBy.get(AIRF.urlKey(pu)) : null;
       const onOther = !!guard && !guard.has(q);
-      const own = hasPage(d) && !onOther ? LV.get('L06') : LV.get('L05');
+      const own = pu && !onOther ? LV.get('L06') : LV.get('L05');   // LIVE1: a refresh needs a concrete page address (stage evidence alone wrote refresh rows with no URL); otherwise a new page
       const listy = !!d.list_dominated && S(d.intent) !== 'informational';   // E26 / R1 7: recommendation answers pick providers from lists; an informational answer's win is the citation
       for (const L of [own, LV.get('L07'), LV.get('L15')]) { const cs = cellsFor(L, [q]); if (!cs.length) continue;
         const extra = { page_url: L.id === 'L05' ? '' : pageOf(d), factor: OWN_PAGE.includes(L.id) && listy ? 0.5 : 1,
           why: L.id === 'L05' ? (onOther ? 'its closest page (' + pu + ') wins AI answers for ' + [...guard].join(', ') + ' and is protected: a new page for this question instead of rewriting it' : 'no page of the site is found for the searches the engines run') + (listy ? '; the answers are built from lists, so write an honest comparison or cost guide, never a self-ranked list (own-page chance halved)' : '')
             : L.id === 'L06' ? 'a page of the site is found but not cited' + (listy ? '; the answers are built from lists (own-page chance halved)' : '') : L.id === 'L07' ? 'the answers cite the site but do not name it' : 'an answer states something wrong about the business' };
         if (control) extra.refused = 'held out as a control question: no question-specific action while it is in the control group (1 in 3, 12 weeks)';
-        add(L, L.id === 'L07' && extra.page_url ? { prompt_id: q, url: extra.page_url } : { prompt_id: q }, cs, extra); } }   // FX-A2: L07 stores the page it fixes (refKey keys on prompt_id, so its id is unchanged)
+        add(L, ['L06', 'L07'].includes(L.id) && extra.page_url ? { prompt_id: q, url: extra.page_url } : { prompt_id: q }, cs, extra); } }   // FX-A2: L07 stores the page it fixes (refKey keys on prompt_id, so its id is unchanged)
     // protect what wins (L16): the client's page cited for a won question, one action per page with every won cell it carries
     { const L = LV.get('L16'); const byPage = new Map(); for (const q of allQ) { const cs = cellsFor(L, [q]); if (!cs.length) continue; const u = pageOf(byQ.get(q)); const k = u ? AIRF.urlKey(u) : 'p:' + q;
         const g = byPage.get(k) || { url: u, q, cells: [] }; g.cells.push(...cs); byPage.set(k, g); }
@@ -4564,6 +4602,8 @@ for (const g of gateSites) {
     const units60 = (hist.units || []).filter(u => AIRF.usable(u.engine));
     const demand = P(visLast.demand_json, {}) || {};   // the AI search demand per question (ARL.value)
     const queries = bySite(queryAll, sid, dom); const gsc = new Map(); for (const q of queries) { const k = S0(q.query).toLowerCase(); if (k) gsc.set(k, Math.max(gsc.get(k) || 0, Number(q.impressions) || 0)); }
+    // LIVE1 (2026-11-07): the page Search Console shows for each query (the one with the most impressions): a concrete address for a refresh (ARL.candidates)
+    const gscPages = new Map(); { const best = new Map(); for (const q of queries) { const k = S0(q.query).toLowerCase().replace(/\s+/g, ' '); const u = S0(q.page); const im = Number(q.impressions) || 0; if (!k || !u) continue; const b = best.get(k); if (!b || im > b) { best.set(k, im); gscPages.set(k, u); } } }
     const monRow = monRows.find(m => m.site_id === sid) || {};
     const aiPages = bySite(aiPagesAll, sid, dom);
     const storedQ = new Map(bySite(rqAll, sid, dom).map(r => [S0(r.prompt_id), r]));
@@ -4632,13 +4672,39 @@ for (const g of gateSites) {
         if (i >= 0) sources[i] = x; else sources.push(x); } }
     const srcByKey = new Map(sources.map(x => [S0(x.url_key) || AIRF.urlKey(x.url), x]));
     // ---- D / E: candidates, scores, the choice ----
-    const candidates = ARL.candidates({ site: { ...site, hosts: ourHosts, prompts, pages: aiPages }, diag, sources, arms, stored_actions: storedA, settings: rank, now: nowMs }) || [];
-    const scored = candidates.map(c => { const sc = un('ARL.score', ARL.score(c, { priors: rpAll, values, feas, weights: null, H: AIR_CFG.H })); return sc.unavailable ? null : { ...c, ...sc }; }).filter(Boolean);
+    const candidates = ARL.candidates({ site: { ...site, hosts: ourHosts, prompts, pages: aiPages, gsc_pages: gscPages }, diag, sources, arms, stored_actions: storedA, settings: rank, now: nowMs }) || [];
+    // LIVE1 (2026-11-07): every placement (a pitch: sink prospect) passes the Link Builder's own vetting BEFORE the choice (OK.placementVet: its
+    // stored verdicts, an earlier pitch to the same site, and its rules that need no page), so a refused or already-pitched list is never chosen
+    // and the pitch slots go to the next candidates. A reachable contact is preferred; a contact form only is allowed and marked a manual step.
+    const outreachSite = bySite(outreachAll, sid, dom), prospectsSite = bySite(prospectsAll, sid, dom);
+    // LIVE1: an own page passes the Content Cadence's own freshness rules before the choice, so the one AI ranking page of the week is one the
+    // reserved slot can write (live, both sites' refresh targets were pages the agent had published 7-9 days before: the cadence refused both).
+    // A refresh waits 60 days after the page was refreshed or published (Cadence_Plan refreshedRecently, F-38); a new page waits 90 days after a
+    // page for the same keyword was started or published (Cadence_Plan recent). The question's other own pages and the other questions stay open.
+    const keyOfU = (u) => S0(u).toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+    const normKw = (k) => S0(k).toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const logSite = bySite(logAll, sid, dom); const freshAt = new Map(), kwAt = new Map();
+    for (const l of logSite) { const st0 = Date.parse(S0(l.started_at)), pb = Date.parse(S0(l.published_at));
+      if (S0(l.existing_page_url) && Number.isFinite(st0) && nowMs - st0 < 60 * DAY) freshAt.set(keyOfU(l.existing_page_url), S0(l.started_at).slice(0, 10));
+      if (S0(l.published_url) && Number.isFinite(pb) && nowMs - pb < 60 * DAY) freshAt.set(keyOfU(l.published_url), S0(l.published_at).slice(0, 10));
+      if (S0(l.keyword) && (S0(l.status) === 'published' || (Number.isFinite(st0) && nowMs - st0 < 90 * DAY))) kwAt.set(normKw(l.keyword), S0(l.published_at || l.started_at).slice(0, 10)); }
+    const ownWhy = (c) => { if (c.lever === 'L06') { const at = freshAt.get(keyOfU(S0((c.ref || {}).url) || c.page_url)); return at ? 'its page was refreshed or published on ' + at + ': the Content Cadence refreshes a page again only after 60 days' : ''; }
+      const kw = normKw(c.keyword || (promptById.get(S0((c.ref || {}).prompt_id)) || {}).keyword); const at = kw ? kwAt.get(kw) : ''; return at ? 'a page for "' + kw + '" was written on ' + at + ': the Content Cadence writes a search again only after 90 days' : ''; };
+    const vetted = candidates.map(c => { if (c.sink === 'ai_target' && !c.refused && ['L05', 'L06'].includes(c.lever)) { const w = ownWhy(c); return w ? { ...c, refused: 'not written this week: ' + w } : c; }
+      if (c.sink !== 'prospect' || c.refused) return c; const url = S0((c.ref || {}).url); const src = url ? srcByKey.get(AIRF.urlKey(url)) || {} : {};
+      const v = OK.placementVet({ url, domain: hostOf(url), title: S0(src.title), outreach: outreachSite, prospects: prospectsSite, competitors, ai_rivals: gp.rival_sources || [], topics: gp.topics || [], terms: site.services, contact_email: S0(src.contact_email), contact_url: S0(src.contact_url) });
+      if (v.refused) return { ...c, refused: 'not pitched (the Link Builder\'s vetting): ' + v.refused };
+      if (v.contact === 'email') return { ...c, contact: 'email', contact_email: v.email };
+      if (v.contact === 'form') return { ...c, contact: 'form', contact_url: v.form, manual: true, factor: Math.round(1e4 * (Number(c.factor) || 1) * 0.7) / 1e4, why: S0(c.why) + '; a contact form only: a manual step (send it yourself through ' + v.form + ')' };
+      return { ...c, contact: '', factor: Math.round(1e4 * (Number(c.factor) || 1) * 0.85) / 1e4 }; });
+    const scored = vetted.map(c => { const sc = un('ARL.score', ARL.score(c, { priors: rpAll, values, feas, weights: null, H: AIR_CFG.H })); return sc.unavailable ? null : { ...c, ...sc }; }).filter(Boolean);
     const openStored = storedA.filter(a => AIR_CFG.open.includes(S0(a.status)));
     const choice = ARL.choose(scored, { capacities: {}, arms, mode, open_actions: storedA.filter(a => ['shadow', ...AIR_CFG.open].includes(S0(a.status))), now: nowMs, units60, exposure }) || { chosen: [], deferred: [], refused: [] };
     // the gate on the way out: a placement pitch to a competitor's own page is refused here, whatever the kit chose (rival lists: learn only)
     const refused = (choice.refused || []).slice(); const chosen = [];
-    for (const a of (choice.chosen || [])) {
+    // LIVE1: ARL.choose returns its own action shape; the vetting's contact facts are carried back by action id (the sink reads them)
+    const vetById = new Map(vetted.filter(c => c.sink === 'prospect').map(c => [S0(c.action_id), c]));
+    for (const a0 of (choice.chosen || [])) { const vc = vetById.get(S0(a0.action_id)); const a = vc ? { ...a0, contact: vc.contact || '', contact_email: S0(vc.contact_email), contact_url: S0(vc.contact_url), manual: vc.manual === true } : a0;
       const url = S0((a.ref || {}).url); const src = url ? srcByKey.get(AIRF.urlKey(url)) : null;
       if (a.sink === 'prospect') { const why = rivalWhy(hostOf(url), { url, title: src ? src.title || '' : '' });
         if (why || (src && ['rival', 'client'].includes(S0(src.author_kind)))) { refused.push({ what: a.action_id || a.lever, why: why || 'a page written by ' + (src.author_kind === 'client' ? 'the client' : 'a competitor') + ': learned from, never pitched' }); continue; } }
@@ -4728,8 +4794,12 @@ for (const g of gateSites) {
         const tid = AIRF.targetId(sid, pid); const st = targetsSite.find(t => S0(t.target_id) === tid) || {};
         if (['writing', 'written', 'won'].includes(S0(st.status))) continue;   // live work or a win: AIR leaves it alone
         const qs = sources.filter(x => (x.questions || []).includes(pid)).slice(0, 6);
+        // LIVE1 (2026-11-07): a refresh carries the page it refreshes (the action's own page_url; the ref held only the question, so prod wrote '');
+        // a refresh with no address could never be written by the cadence, so it is refused here with its reason, never stored
+        const pageUrl = S0((a.ref || {}).url) || S0(a.page_url) || S0(st.page_url);
+        if (a.lever === 'L06' && !pageUrl) { refused.push({ what: a.action_id || a.lever, why: 'a refresh with no page address: no page of the site is known for this question' }); continue; }
         sinks.targets.push({ target_id: tid, site_id: sid, domain: dom, prompt_id: pid, question: S0(p.prompt), keyword: S0(p.keyword || p.topic), kind: a.lever === 'L06' ? 'refresh' : 'answer',
-          page_url: S0((a.ref || {}).url) || S0(st.page_url), page_type: a.lever === 'L06' ? '' : (a.screen && a.screen.page_type ? a.screen.page_type : (S0(st.page_type) || 'Guide')), fanout: ARD.fanoutOf({ prompt_id: pid, answers8, evidence: evidenceOf.get(pid) || '' }).slice(0, 8).map(f => f.query).join(' | '),
+          page_url: a.lever === 'L06' ? pageUrl : S0(st.page_url), page_type: a.lever === 'L06' ? '' : (a.screen && a.screen.page_type ? a.screen.page_type : (S0(st.page_type) || 'Guide')), fanout: ARD.fanoutOf({ prompt_id: pid, answers8, evidence: evidenceOf.get(pid) || '' }).slice(0, 8).map(f => f.query).join(' | '),
           sources_json: J(qs.map(x => ({ u: x.url, t: '', n: Number(x.cites_28d) || 1 }))), competitors: [...new Set(qs.flatMap(x => x.rivals_named || []))].slice(0, 8).join(', '), engines: (a.engines || []).join(', '), stage: S0(p.stage),
           value: Math.round(100 * (1 + 4 * Math.min(1, (Number(a.score) || 0) / maxScore))) / 100, status: 'queued', reason: ('AI ranking (' + a.lever + '): ' + (a.screen && a.screen.note ? a.screen.note + '. ' : '') + S0(a.why || (ARL.LEVERS.find(l => l.id === a.lever) || {}).label)).slice(0, 600),
           created_at: S0(st.created_at) || nowIso, updated_at: nowIso, request_id: S0(st.request_id), written_at: S0(st.written_at), won_at: S0(st.won_at), origin: 'ai_rank', action_id: S0(a.action_id), live_at: S0(st.live_at) || null }); }
@@ -4740,8 +4810,8 @@ for (const g of gateSites) {
         sinks.prospects.push({ site_id: sid, domain: dom, prospect_domain: pd, type: 'ai_source', rank: Number(o.rank) || 0, spam_score: Number(o.spam_score) || 0,
           detail: ('cited for ' + (src.questions || []).length + ' question(s) on ' + (src.engines || []).length + ' engine(s)' + ((src.rivals_named || []).length ? '; names ' + src.rivals_named.slice(0, 3).join(', ') : '')).slice(0, 500),
           source_url: url, target_url: S0(o.target_url), status: S0(o.status) || 'new', first_seen: S0(o.first_seen) || nowIso, last_seen: nowIso, won_at: S0(o.won_at), outreach_subject: S0(o.outreach_subject), outreach_body: S0(o.outreach_body),
-          note: S0(o.note) || 'AI ranking placement (' + a.lever + ')', score: Math.max(0, Math.min(100, Math.round(100 * (Number((a.expected || {}).p) || Number(a.p_hat) || 0)))), origin: 'ai_rank',
-          contact_email: S0(o.contact_email) || S0(src.contact_email), contact_url: S0(o.contact_url) || S0(src.contact_url), contacted_at: S0(o.contacted_at), followup_step: Number(o.followup_step) || 0,
+          note: S0(o.note) || ('AI ranking placement (' + a.lever + ')' + (a.manual ? ': a contact form only, a manual step' : '')), score: Math.max(0, Math.min(100, Math.round(100 * (Number((a.expected || {}).p) || Number(a.p_hat) || 0)))), origin: 'ai_rank',
+          contact_email: S0(o.contact_email) || S0(src.contact_email) || S0(a.contact_email), contact_url: S0(o.contact_url) || S0(src.contact_url) || S0(a.contact_url), contacted_at: S0(o.contacted_at), followup_step: Number(o.followup_step) || 0,
           followup_subject: S0(o.followup_subject), followup_body: S0(o.followup_body), verified_at: S0(o.verified_at), drafted_at: S0(o.drafted_at) }); }
       const fitCtxQ = { ...fitCtx, topics: null };
       for (const q of (panel.proposed || [])) { const text = S0(q.prompt); if (text.length < 10 || AIP.findStored(prompts, sid, text)) continue;
