@@ -34,6 +34,18 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-11-08',
+    version: '4.10',
+    title: 'Rank checks read correctly again after a change in Google results',
+    summary: 'Google started showing its results with redirect links instead of the website addresses. Our rank checks now read the real website behind each result again, so your positions, the websites above you and your keyword groups are right again.',
+    highlights: [
+      'Your position is found by your website again, even when Google hides the exact page address. Where Google hides the address, the Rankings page shows the website without a link instead of a page address that does not exist',
+      'When a result Google hid could be yours, the keyword says so in plain words instead of reporting a drop. It never counts as a fall out of the top 50 and never raises a lost alert. After three weeks it reads "not found among the results we could read"',
+      'Search results Google hid are no longer stored as if google.com were your competitor, and two different pages are never grouped as the same page',
+    ],
+    features: ['site-tracking', 'keyword-ladders', 'keyword-research'],
+  },
+  {
     date: '2026-11-06',
     version: '4.9',
     title: 'AI ranking, rolling out: a weekly plan to get you named in AI answers',

@@ -192,3 +192,44 @@ There is no Blocker and no open High. H1 and every M/L except L6 are fixed. The 
 run, do not double-send, and do not break on an empty table. N1 should be fixed (marker + no -100 delta + a weekly streak) before
 the second weekly Rank Tracker cycle after deploy, which is the earliest a settled 0 can reach a client. Or ship with the settle rule
 switched off (keep the alert, keep the -1) until it is fixed.
+
+## Check of c77ddb61
+
+I read the diff 36c1882a..c77ddb61 (v5 code, build_v4 / build_site_tracker, and app data.ts / shared / RankingsPage) and ran the new
+`SU.unreadWeeks` / `weekOf` / `unreadNote` in node:22 (scratchpad `su/w.js`).
+
+- **N1: Fixed. There is no longer any path to a false drop.**
+  - A settled reading stays at position -1 and carries `st: 1` (`Parse_Positions.js:31-32`, `Parse_Site_SERP.js:15-16`).
+  - With cur = -1 the Tracker Report delta is null (`:87`), so the reading produces no move, no `look_at_drop`, no lost alert and no
+    -100.
+  - `prevReading` / `validPos` skip -1, and the Site Tracker emits no alert on -1.
+  - The app's `rankSeries` computes `latest` / `previous` from real positions only.
+  - The wording is "not found among the results we could read" (settled) or "could not be told: a result Google hid may be yours".
+    It appears in Tracker Report (every `posText` of a current reading), Site Report (`serp_note`) and the app (`latestNote`, shown
+    under the pill).
+- **Weekly streak: correct.** `unreadWeeks` counts Monday-based UTC calendar weeks before the current one and stops at the first
+  reading that is not unread. Tested in node:
+  - Sun 23:59 and Mon 00:00 fall in different weeks.
+  - Re-runs in the current week do not count, and two readings in one earlier week count as 1.
+  - A failed read (-1 with no `mo`) ends the streak, and so does a 0.
+  - A settled reading (`st`) continues the streak.
+  - The alert fires when exactly 1 earlier week was unread and settling starts at 2 or more. Rank Tracker and Site Tracker use the
+    same rule (Site Plan `unread_weeks`, from the site's own rows).
+- **N3: Fixed.** There is one row per keyword per week (`rank-unread|domain|keyword|<Monday>`). A re-run in the same week upserts
+  the same row and leaves `delivered` alone, so nothing is sent twice. A second keyword gets its own row, so no alert is missed.
+  `mode` now comes from `$execution.mode`.
+- **N4: Fixed.** The overflow fallback keeps `at`, `device`, `unavailable`, `ur`, `mo`, `st` and `own_hidden`. Confirmed:
+  `unreadNote('{"trimmed":"overflow","mo":2}')` reads it.
+- **L6: Fixed.** Check C now also walks expression-URL HTTP nodes fed by a Code node that builds SERP endpoints (Rank Tracker, Site
+  Tracker, Keyword Check, AI Growth / Visibility), plus their "(Retry)" copies.
+- **Nothing else changed in behaviour.** The only other edits are harness cases and the app test.
+- **Low leftovers (not blocking):**
+  - The app pill shows the last real position (for example #22) with the note underneath. A reader could take #22 as current;
+    consider greying the pill when `latestNote` is set.
+  - `Tracker_Report.js:561` still counts settled rows under "could not be read this week ... 'check again'".
+  - A settled keyword stays -1 with no repeat alert after the first. That is honest, but if nobody acts on that one ops alert a real
+    fall stays unreported.
+  - A gap in readings (monthly deferral) does not break the streak. Readings are counted per week, and the weeks need not be
+    consecutive.
+
+**Verdict: SHIP.** No Blocker, no High.
