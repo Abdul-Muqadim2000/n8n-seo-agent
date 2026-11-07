@@ -1,0 +1,279 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "ai_optimization",
+   "llm_mentions",
+   "top_mentioned_pages",
+   "live"
+  ],
+  "data": {
+   "api": "ai_optimization",
+   "function": "top_mentioned_pages",
+   "target": [
+    {
+     "keyword": "e invoicing"
+    }
+   ],
+   "location_code": 2840,
+   "language_code": "en",
+   "platform": "chat_gpt",
+   "limit": 3
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "total_count": 128858,
+    "offset": 0,
+    "items_count": 5,
+    "aggregated_metrics": {
+     "location": [
+      {
+       "key": 2840,
+       "mentions": 179314,
+       "ai_search_volume": 4737083
+      }
+     ],
+     "language": [
+      {
+       "key": "en",
+       "mentions": 179314,
+       "ai_search_volume": 4737083
+      }
+     ],
+     "platform": [
+      {
+       "key": "chat_gpt",
+       "mentions": 179314,
+       "ai_search_volume": 4737083
+      }
+     ],
+     "sources_domain": [
+      {
+       "key": "www.reddit.com",
+       "mentions": 25094,
+       "ai_search_volume": 322489
+      },
+      {
+       "key": "www.caranddriver.com",
+       "mentions": 24108,
+       "ai_search_volume": 801392
+      },
+      "...(+3 more)"
+     ],
+     "search_results_domain": [
+      {
+       "key": "www.edmunds.com",
+       "mentions": 31696,
+       "ai_search_volume": 1022699
+      },
+      {
+       "key": "www.caranddriver.com",
+       "mentions": 27799,
+       "ai_search_volume": 1003738
+      },
+      "...(+3 more)"
+     ],
+     "brand_entities_title": [
+      {
+       "key": "BMW",
+       "mentions": 4966,
+       "ai_search_volume": 45632
+      },
+      {
+       "key": "Mercedes-Benz",
+       "mentions": 1192,
+       "ai_search_volume": 13286
+      },
+      "...(+3 more)"
+     ],
+     "brand_entities_category": [
+      {
+       "key": "vehicle",
+       "mentions": 27168,
+       "ai_search_volume": 497769
+      },
+      {
+       "key": "brand",
+       "mentions": 11542,
+       "ai_search_volume": 254831
+      },
+      "...(+3 more)"
+     ],
+     "total": {
+      "mentions": 179314,
+      "ai_search_volume": 4737083
+     }
+    },
+    "items": [
+     {
+      "page": "https://www.nhtsa.gov/recalls",
+      "location": [
+       {
+        "key": 2840,
+        "mentions": 349,
+        "ai_search_volume": 9699
+       }
+      ],
+      "language": [
+       {
+        "key": "en",
+        "mentions": 349,
+        "ai_search_volume": 9699
+       }
+      ],
+      "platform": [
+       {
+        "key": "chat_gpt",
+        "mentions": 349,
+        "ai_search_volume": 9699
+       }
+      ],
+      "sources_domain": [
+       {
+        "key": "www.nhtsa.gov",
+        "mentions": 349,
+        "ai_search_volume": 9699
+       },
+       {
+        "key": "www.consumerreports.org",
+        "mentions": 197,
+        "ai_search_volume": 5063
+       },
+       "...(+3 more)"
+      ],
+      "search_results_domain": [
+       {
+        "key": "www.consumerreports.org",
+        "mentions": 265,
+        "ai_search_volume": 7563
+       },
+       {
+        "key": "www.cars.com",
+        "mentions": 182,
+        "ai_search_volume": 5218
+       },
+       "...(+3 more)"
+      ],
+      "brand_entities_title": [
+       {
+        "key": "US National Highway Traffic Safety Administration",
+        "mentions": 6,
+        "ai_search_volume": 182
+       },
+       {
+        "key": "compact luxury SUV",
+        "mentions": 4,
+        "ai_search_volume": 109
+       },
+       "...(+3 more)"
+      ],
+      "brand_entities_category": [
+       {
+        "key": "vehicle",
+        "mentions": 73,
+        "ai_search_volume": 2433
+       },
+       {
+        "key": "organization",
+        "mentions": 21,
+        "ai_search_volume": 603
+       },
+       "...(+3 more)"
+      ],
+      "total": {
+       "mentions": 349,
+       "ai_search_volume": 9699
+      }
+     },
+     {
+      "page": "https://www.bmwblog.com/2024/01/02/bmw-n63-engine-pros-cons-and-reliability/?utm_source=chatgpt.com",
+      "location": [
+       {
+        "key": 2840,
+        "mentions": 101,
+        "ai_search_volume": 2942
+       }
+      ],
+      "language": [
+       {
+        "key": "en",
+        "mentions": 101,
+        "ai_search_volume": 2942
+       }
+      ],
+      "platform": [
+       {
+        "key": "chat_gpt",
+        "mentions": 101,
+        "ai_search_volume": 2942
+       }
+      ],
+      "sources_domain": [
+       {
+        "key": "www.bmwblog.com",
+        "mentions": 101,
+        "ai_search_volume": 2942
+       },
+       {
+        "key": "static.nhtsa.gov",
+        "mentions": 35,
+        "ai_search_volume": 1220
+       },
+       "...(+3 more)"
+      ],
+      "search_results_domain": [
+       {
+        "key": "www.go-parts.com",
+        "mentions": 44,
+        "ai_search_volume": 1781
+       },
+       {
+        "key": "www.carsniffer.com",
+        "mentions": 31,
+        "ai_search_volume": 1046
+       },
+       "...(+3 more)"
+      ],
+      "brand_entities_title": [
+       {
+        "key": "BMW N63",
+        "mentions": 3,
+        "ai_search_volume": 13
+       },
+       {
+        "key": "5 Series high-performance sedan",
+        "mentions": 1,
+        "ai_search_volume": 74
+       },
+       "...(+3 more)"
+      ],
+      "brand_entities_category": [
+       {
+        "key": "engine",
+        "mentions": 2,
+        "ai_search_volume": 12
+       },
+       {
+        "key": "car_model",
+        "mentions": 1,
+        "ai_search_volume": 74
+       },
+       "...(+3 more)"
+      ],
+      "total": {
+       "mentions": 101,
+       "ai_search_volume": 2942
+      }
+     },
+     "...(+3 more)"
+    ]
+   }
+  ]
+ }
+}

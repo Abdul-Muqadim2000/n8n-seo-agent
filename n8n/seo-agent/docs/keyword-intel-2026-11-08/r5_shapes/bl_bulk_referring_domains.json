@@ -1,0 +1,46 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "backlinks",
+   "bulk_referring_domains",
+   "live"
+  ],
+  "data": {
+   "api": "backlinks",
+   "function": "bulk_referring_domains",
+   "targets": [
+    "techand.ai",
+    "cleartax.com"
+   ]
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "items_count": 3,
+    "items": [
+     {
+      "target": "https://www.seopanel.org/blog/",
+      "referring_domains": 4,
+      "referring_domains_nofollow": 2,
+      "referring_main_domains": 4,
+      "referring_main_domains_nofollow": 2
+     },
+     {
+      "target": "https://pedia.watcha.com/",
+      "referring_domains": 346,
+      "referring_domains_nofollow": 140,
+      "referring_main_domains": 345,
+      "referring_main_domains_nofollow": 140
+     },
+     "...(+1 more)"
+    ]
+   }
+  ]
+ }
+}

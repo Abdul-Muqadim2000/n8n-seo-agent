@@ -1,0 +1,182 @@
+{
+ "_source": "harness/fixtures_live/top_domains.json (real live response, 2026-10-02, trimmed)",
+ "cost": 0.101,
+ "task": {
+  "cost": 0.101,
+  "path": [
+   "v3",
+   "ai_optimization",
+   "llm_mentions",
+   "top_domains",
+   "live"
+  ],
+  "data": {
+   "api": "ai_optimization",
+   "function": "top_domains",
+   "target": [
+    {
+     "keyword": "e invoicing uae"
+    }
+   ],
+   "location_code": 2784,
+   "language_code": "en",
+   "limit": 10
+  },
+  "result": [
+   {
+    "total": {
+     "location": [
+      {
+       "type": "group_element",
+       "key": "2784",
+       "mentions": 2326,
+       "ai_search_volume": 1708000,
+       "impressions": null
+      }
+     ],
+     "language": [
+      {
+       "type": "group_element",
+       "key": "en",
+       "mentions": 2326,
+       "ai_search_volume": 1708000,
+       "impressions": null
+      }
+     ],
+     "platform": [
+      {
+       "type": "group_element",
+       "key": "google",
+       "mentions": 2326,
+       "ai_search_volume": 1708000,
+       "impressions": null
+      }
+     ],
+     "sources_domain": [
+      {
+       "type": "group_element",
+       "key": "www.youtube.com",
+       "mentions": 827,
+       "ai_search_volume": 471960,
+       "impressions": null
+      },
+      {
+       "type": "group_element",
+       "key": "tax.gov.ae",
+       "mentions": 274,
+       "ai_search_volume": 184220,
+       "impressions": null
+      },
+      "...(+3 more)"
+     ],
+     "search_results_domain": null,
+     "brand_entities_title": null,
+     "brand_entities_category": null
+    },
+    "items": [
+     {
+      "key": "www.youtube.com",
+      "location": [
+       {
+        "type": "group_element",
+        "key": "2784",
+        "mentions": 128,
+        "ai_search_volume": 80230,
+        "impressions": null
+       }
+      ],
+      "language": [
+       {
+        "type": "group_element",
+        "key": "en",
+        "mentions": 128,
+        "ai_search_volume": 80230,
+        "impressions": null
+       }
+      ],
+      "platform": [
+       {
+        "type": "group_element",
+        "key": "google",
+        "mentions": 128,
+        "ai_search_volume": 80230,
+        "impressions": null
+       }
+      ],
+      "sources_domain": [
+       {
+        "type": "group_element",
+        "key": "www.youtube.com",
+        "mentions": 128,
+        "ai_search_volume": 80230,
+        "impressions": null
+       },
+       {
+        "type": "group_element",
+        "key": "u.ae",
+        "mentions": 18,
+        "ai_search_volume": 17220,
+        "impressions": null
+       },
+       "...(+3 more)"
+      ],
+      "search_results_domain": null,
+      "brand_entities_title": null,
+      "brand_entities_category": null
+     },
+     {
+      "key": "tax.gov.ae",
+      "location": [
+       {
+        "type": "group_element",
+        "key": "2784",
+        "mentions": 48,
+        "ai_search_volume": 36030,
+        "impressions": null
+       }
+      ],
+      "language": [
+       {
+        "type": "group_element",
+        "key": "en",
+        "mentions": 48,
+        "ai_search_volume": 36030,
+        "impressions": null
+       }
+      ],
+      "platform": [
+       {
+        "type": "group_element",
+        "key": "google",
+        "mentions": 48,
+        "ai_search_volume": 36030,
+        "impressions": null
+       }
+      ],
+      "sources_domain": [
+       {
+        "type": "group_element",
+        "key": "tax.gov.ae",
+        "mentions": 48,
+        "ai_search_volume": 36030,
+        "impressions": null
+       },
+       {
+        "type": "group_element",
+        "key": "u.ae",
+        "mentions": 16,
+        "ai_search_volume": 8760,
+        "impressions": null
+       },
+       "...(+3 more)"
+      ],
+      "search_results_domain": null,
+      "brand_entities_title": null,
+      "brand_entities_category": null
+     },
+     "...(+3 more)"
+    ]
+   }
+  ]
+ }
+}

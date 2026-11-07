@@ -1,0 +1,290 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "ai_optimization",
+   "llm_mentions",
+   "multi_target_metrics",
+   "live"
+  ],
+  "data": {
+   "api": "ai_optimization",
+   "function": "multi_target_metrics",
+   "targets": [
+    {
+     "key": "techand.ai",
+     "target": [
+      {
+       "domain": "techand.ai"
+      }
+     ]
+    },
+    {
+     "key": "cleartax.com",
+     "target": [
+      {
+       "domain": "cleartax.com"
+      }
+     ]
+    }
+   ],
+   "location_code": 2840,
+   "language_code": "en",
+   "platform": "chat_gpt"
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "total_count": 2,
+    "offset": 0,
+    "items_count": 2,
+    "aggregated_metrics": {
+     "location": [
+      {
+       "key": 2840,
+       "mentions": 82477,
+       "ai_search_volume": 1672054
+      }
+     ],
+     "language": [
+      {
+       "key": "en",
+       "mentions": 82477,
+       "ai_search_volume": 1672054
+      }
+     ],
+     "platform": [
+      {
+       "key": "chat_gpt",
+       "mentions": 82477,
+       "ai_search_volume": 1672054
+      }
+     ],
+     "sources_domain": [
+      {
+       "key": "www.caranddriver.com",
+       "mentions": 6381,
+       "ai_search_volume": 227118
+      },
+      {
+       "key": "www.edmunds.com",
+       "mentions": 6301,
+       "ai_search_volume": 172376
+      },
+      "...(+3 more)"
+     ],
+     "search_results_domain": [
+      {
+       "key": "www.edmunds.com",
+       "mentions": 10042,
+       "ai_search_volume": 333831
+      },
+      {
+       "key": "www.caranddriver.com",
+       "mentions": 8837,
+       "ai_search_volume": 324605
+      },
+      "...(+3 more)"
+     ],
+     "brand_entities_title": [
+      {
+       "key": "BMW",
+       "mentions": 1141,
+       "ai_search_volume": 9974
+      },
+      {
+       "key": "Audi",
+       "mentions": 566,
+       "ai_search_volume": 5334
+      },
+      "...(+3 more)"
+     ],
+     "brand_entities_category": [
+      {
+       "key": "vehicle",
+       "mentions": 9283,
+       "ai_search_volume": 141689
+      },
+      {
+       "key": "brand",
+       "mentions": 2990,
+       "ai_search_volume": 59606
+      },
+      "...(+3 more)"
+     ],
+     "total": {
+      "mentions": 82477,
+      "ai_search_volume": 1672054
+     }
+    },
+    "items": [
+     {
+      "key": "bmw",
+      "location": [
+       {
+        "key": 2840,
+        "mentions": 65525,
+        "ai_search_volume": 1334828
+       }
+      ],
+      "language": [
+       {
+        "key": "en",
+        "mentions": 65525,
+        "ai_search_volume": 1334828
+       }
+      ],
+      "platform": [
+       {
+        "key": "chat_gpt",
+        "mentions": 65525,
+        "ai_search_volume": 1334828
+       }
+      ],
+      "sources_domain": [
+       {
+        "key": "www.caranddriver.com",
+        "mentions": 5219,
+        "ai_search_volume": 186716
+       },
+       {
+        "key": "www.edmunds.com",
+        "mentions": 4809,
+        "ai_search_volume": 138322
+       },
+       "...(+3 more)"
+      ],
+      "search_results_domain": [
+       {
+        "key": "www.edmunds.com",
+        "mentions": 7819,
+        "ai_search_volume": 266122
+       },
+       {
+        "key": "www.caranddriver.com",
+        "mentions": 7138,
+        "ai_search_volume": 270742
+       },
+       "...(+3 more)"
+      ],
+      "brand_entities_title": [
+       {
+        "key": "BMW",
+        "mentions": 1141,
+        "ai_search_volume": 9974
+       },
+       {
+        "key": "Audi",
+        "mentions": 241,
+        "ai_search_volume": 3159
+       },
+       "...(+3 more)"
+      ],
+      "brand_entities_category": [
+       {
+        "key": "vehicle",
+        "mentions": 7479,
+        "ai_search_volume": 111801
+       },
+       {
+        "key": "brand",
+        "mentions": 2490,
+        "ai_search_volume": 50998
+       },
+       "...(+3 more)"
+      ],
+      "total": {
+       "mentions": 65525,
+       "ai_search_volume": 1334828
+      }
+     },
+     {
+      "key": "audi",
+      "location": [
+       {
+        "key": 2840,
+        "mentions": 31615,
+        "ai_search_volume": 585122
+       }
+      ],
+      "language": [
+       {
+        "key": "en",
+        "mentions": 31615,
+        "ai_search_volume": 585122
+       }
+      ],
+      "platform": [
+       {
+        "key": "chat_gpt",
+        "mentions": 31615,
+        "ai_search_volume": 585122
+       }
+      ],
+      "sources_domain": [
+       {
+        "key": "www.caranddriver.com",
+        "mentions": 2665,
+        "ai_search_volume": 87996
+       },
+       {
+        "key": "www.edmunds.com",
+        "mentions": 2748,
+        "ai_search_volume": 66950
+       },
+       "...(+3 more)"
+      ],
+      "search_results_domain": [
+       {
+        "key": "www.edmunds.com",
+        "mentions": 4169,
+        "ai_search_volume": 123747
+       },
+       {
+        "key": "www.caranddriver.com",
+        "mentions": 3473,
+        "ai_search_volume": 108083
+       },
+       "...(+3 more)"
+      ],
+      "brand_entities_title": [
+       {
+        "key": "BMW",
+        "mentions": 249,
+        "ai_search_volume": 3265
+       },
+       {
+        "key": "Audi",
+        "mentions": 563,
+        "ai_search_volume": 5327
+       },
+       "...(+3 more)"
+      ],
+      "brand_entities_category": [
+       {
+        "key": "vehicle",
+        "mentions": 3608,
+        "ai_search_volume": 53674
+       },
+       {
+        "key": "brand",
+        "mentions": 1174,
+        "ai_search_volume": 24405
+       },
+       "...(+3 more)"
+      ],
+      "total": {
+       "mentions": 31615,
+       "ai_search_volume": 585122
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

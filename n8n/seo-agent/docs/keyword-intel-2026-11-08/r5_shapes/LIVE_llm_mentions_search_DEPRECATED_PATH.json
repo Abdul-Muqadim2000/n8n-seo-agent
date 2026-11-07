@@ -1,0 +1,141 @@
+{
+ "_source": "harness/fixtures_live/mentions_search.json (real live response, 2026-10-02, trimmed)",
+ "cost": 0.103,
+ "task": {
+  "cost": 0.103,
+  "path": [
+   "v3",
+   "ai_optimization",
+   "llm_mentions",
+   "search",
+   "live"
+  ],
+  "data": {
+   "api": "ai_optimization",
+   "function": "search",
+   "target": [
+    {
+     "keyword": "e invoicing uae"
+    }
+   ],
+   "location_code": 2784,
+   "language_code": "en",
+   "limit": 3
+  },
+  "result": [
+   {
+    "total_count": 366,
+    "current_offset": 0,
+    "search_after_token": "eyJDdXJyZW50T2Zmc2V0IjozLCJSYXdSZXF1ZXN0Ijp7InRhcmdldCI6W3sidHlwZSI6ImtleXdvcmQiLCJrZXl3b3JkIjoiZSBpbnZvaWNpbmcgdWFlIiwic2VhcmNoX3Njb3BlIjpbImFueSJdLCJzZWFyY2hf...",
+    "items_count": 3,
+    "items": [
+     {
+      "platform": "google",
+      "model_name": "google_ai_overview",
+      "location_code": 2784,
+      "language_code": "en",
+      "question": "tbms",
+      "answer": "TBMS most commonly refers to the **Trojan Business Management System** or **E-Tendering Portal** used by Trojan Holding in the UAE, but it can also stand for a ...",
+      "sources": [
+       {
+        "snippet": ".:: TBMS ::. E-Tendering Portal - Supplier Data. Organization Details. Organisation Legal Name * Address. Country * United Arab Em...",
+        "source_name": "Trojan App",
+        "thumbnail": null,
+        "markdown": null,
+        "position": 1,
+        "title": ".:: TBMS ::. E-Tendering Portal - Supplier Data",
+        "domain": "tbms.ae",
+        "url": "https://tbms.ae/Procurement/NewSuppData.aspx",
+        "publication_date": null
+       },
+       {
+        "snippet": "About TBMS TBMS was a business app developed by Trojan Holding LLC. It was removed from Google Play Mar 23, 2024 and is no longer ...",
+        "source_name": "AppBrain",
+        "thumbnail": null,
+        "markdown": null,
+        "position": 2,
+        "title": "TBMS - Free APK Download for Android - AppBrain",
+        "domain": "www.appbrain.com",
+        "url": "https://www.appbrain.com/app/tbms/ae.trojan.TBMS",
+        "publication_date": null
+       },
+       "...(+2 more)"
+      ],
+      "search_results": null,
+      "ai_search_volume": 33100,
+      "monthly_searches": [
+       {
+        "year": 2026,
+        "month": 6,
+        "search_volume": 33100
+       },
+       {
+        "year": 2026,
+        "month": 5,
+        "search_volume": 40500
+       },
+       "...(+10 more)"
+      ],
+      "first_response_at": "2026-08-15 20:08:19 +00:00",
+      "last_response_at": "2026-08-15 20:08:19 +00:00",
+      "brand_entities": null,
+      "fan_out_queries": null
+     },
+     {
+      "platform": "google",
+      "model_name": "google_ai_overview",
+      "location_code": 2784,
+      "language_code": "en",
+      "question": "etisalat business",
+      "answer": "Etisalat (now operating as e& UAE) provides comprehensive telecommunication, internet, and digital solutions for small, medium, and large enterprises through th...",
+      "sources": [
+       {
+        "snippet": "Etisalat is committed to making this website accessible to the broadest possible audience, regardless of technology or physical ca...",
+        "source_name": "www.eand.ae",
+        "thumbnail": null,
+        "markdown": null,
+        "position": 1,
+        "title": "e& UAE | Business Online Portal",
+        "domain": "www.eand.ae",
+        "url": "https://www.eand.ae/en/smb/business-online-portal.html",
+        "publication_date": null
+       },
+       {
+        "snippet": "Etisalat's business plans include: * **Business Internet AI** * More speed * AI ready * More business * **AI Laptop by e&** * Work...",
+        "source_name": "www.eand.ae",
+        "thumbnail": null,
+        "markdown": null,
+        "position": 2,
+        "title": "e& UAE | The Best Business Solutions for Small and Medium Businesses",
+        "domain": "www.eand.ae",
+        "url": "https://www.eand.ae/en/smb/index.html",
+        "publication_date": null
+       },
+       "...(+5 more)"
+      ],
+      "search_results": null,
+      "ai_search_volume": 22200,
+      "monthly_searches": [
+       {
+        "year": 2026,
+        "month": 7,
+        "search_volume": 33100
+       },
+       {
+        "year": 2026,
+        "month": 6,
+        "search_volume": 27100
+       },
+       "...(+10 more)"
+      ],
+      "first_response_at": "2026-09-14 09:43:43 +00:00",
+      "last_response_at": "2026-09-14 09:43:43 +00:00",
+      "brand_entities": null,
+      "fan_out_queries": null
+     },
+     "...(+1 more)"
+    ]
+   }
+  ]
+ }
+}

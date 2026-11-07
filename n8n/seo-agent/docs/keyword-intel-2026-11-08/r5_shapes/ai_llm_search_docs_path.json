@@ -1,0 +1,145 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "ai_optimization",
+   "llm_mentions",
+   "search",
+   "live"
+  ],
+  "data": {
+   "api": "ai_optimization",
+   "function": "search",
+   "target": [
+    {
+     "keyword": "e invoicing"
+    }
+   ],
+   "location_code": 2840,
+   "language_code": "en",
+   "platform": "chat_gpt",
+   "limit": 3
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "total_count": 13017,
+    "current_offset": 0,
+    "search_after_token": "eyJDdXJyZW50T2Zmc2V0IjozLCJSYXdSZXF1ZXN0Ijp7InRhcmdldCI6W3sidHlwZSI6ImRvbWFpbiIsImRvbWFpbiI6ImRhdGFmb3JzZW8uY29tIiwic2VhcmNoX3Njb3BlIjpbImFueSJdLCJzZWFyY2hfdHlw...",
+    "items_count": 3,
+    "items": [
+     {
+      "platform": "google",
+      "model_name": "google_ai_overview",
+      "location_code": 2840,
+      "language_code": "en",
+      "question": "bmws",
+      "answer": "![BMWs With Extra Power | Penta](https://api.dataforseo.com/llm_m/cdn/i/-6227173402198699985:f0d6b3f0c795747c0d56c4adeaf0f9d1)\nYou can explore current models, b...",
+      "sources": [
+       {
+        "snippet": "Lease Offers: 2026 X3 30 xDrive ($549/month for 39 months, $5,299 due at signing, up to $1,000 loyalty credit); 2026 330i xDrive Sedan ($479/month for 39 months...",
+        "source_name": "BMW USA",
+        "thumbnail": null,
+        "markdown": null,
+        "position": 1,
+        "title": "Luxury SUVs, Sedans, Coupes, Convertibles, and Crossovers | BMW USA",
+        "domain": "www.bmwusa.com",
+        "url": "https://www.bmwusa.com/",
+        "publication_date": null
+       },
+       {
+        "snippet": "All BMW M Series at a glance. * XM BMW XM Label PLUG-IN-HYBRID * XM BMW XM 50e PLUG-IN-HYBRID * X7 BMW X7 M60i * X6 M BMW X6 M Competition * X6 BMW X6 M60i * X5...",
+        "source_name": "BMW M",
+        "thumbnail": null,
+        "markdown": null,
+        "position": 2,
+        "title": "All BMW M Series at a glance.",
+        "domain": "www.bmw-m.com",
+        "url": "https://www.bmw-m.com/en/topics/all-models.html",
+        "publication_date": null
+       },
+       "...(+7 more)"
+      ],
+      "search_results": null,
+      "ai_search_volume": 1500000,
+      "monthly_searches": [
+       {
+        "year": 2026,
+        "month": 8,
+        "search_volume": 1220000
+       },
+       {
+        "year": 2026,
+        "month": 7,
+        "search_volume": 1220000
+       },
+       "...(+10 more)"
+      ],
+      "first_response_at": "2026-11-02 23:00:16 +00:00",
+      "last_response_at": "2026-11-02 23:00:16 +00:00",
+      "brand_entities": null,
+      "fan_out_queries": null
+     },
+     {
+      "platform": "google",
+      "model_name": "google_ai_overview",
+      "location_code": 2840,
+      "language_code": "en",
+      "question": "bayerische motoren werke",
+      "answer": "![Bayerische motoren werke ag hi-res stock photography and ...](https://api.dataforseo.com/llm_m/cdn/i/1296425482457064656:a78188703f4853431d1ab5c1c6093ebc)\n[Ba...",
+      "sources": [
+       {
+        "snippet": "BMW This article is about the German motor vehicle manufacturer. For other uses, see BMW (disambiguation). Bayerische Motoren Werke AG, trading as BMW Group (co...",
+        "source_name": "Wikipedia",
+        "thumbnail": null,
+        "markdown": null,
+        "position": 1,
+        "title": "BMW - Wikipedia",
+        "domain": "en.wikipedia.org",
+        "url": "https://en.wikipedia.org/wiki/BMW",
+        "publication_date": null
+       },
+       {
+        "snippet": "The full form of BMW as Bavarian Motor Works is indeed correct. This name is the English translation of the German \"Bayerische Motoren Werke,\" which accurately ...",
+        "source_name": "Facebook",
+        "thumbnail": null,
+        "markdown": null,
+        "position": 2,
+        "title": "Can you pronounce the full meaning of BMW? Bayerische Motoren ...",
+        "domain": "www.facebook.com",
+        "url": "https://www.facebook.com/BMWBrunei/posts/can-you-pronounce-the-full-meaning-of-bmwbayerische-motoren-werkepronounced-bye-/1756414753151828/",
+        "publication_date": null
+       },
+       "...(+3 more)"
+      ],
+      "search_results": null,
+      "ai_search_volume": 1500000,
+      "monthly_searches": [
+       {
+        "year": 2026,
+        "month": 9,
+        "search_volume": 1220000
+       },
+       {
+        "year": 2026,
+        "month": 8,
+        "search_volume": 1220000
+       },
+       "...(+10 more)"
+      ],
+      "first_response_at": "2025-11-09 04:05:50 +00:00",
+      "last_response_at": "2026-11-02 22:55:51 +00:00",
+      "brand_entities": null,
+      "fan_out_queries": null
+     },
+     "...(+1 more)"
+    ]
+   }
+  ]
+ }
+}

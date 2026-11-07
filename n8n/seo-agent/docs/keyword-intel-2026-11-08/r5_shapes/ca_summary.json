@@ -1,0 +1,102 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "content_analysis",
+   "summary",
+   "live"
+  ],
+  "data": {
+   "api": "content_analysis",
+   "function": "summary",
+   "keyword": "e invoicing uae",
+   "page_type": [
+    "message-boards"
+   ]
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "type": "content_analysis_summary",
+    "total_count": 3979680,
+    "rank": 611,
+    "top_domains": [
+     {
+      "domain": "mediamarkt.de",
+      "count": 90408
+     },
+     {
+      "domain": "magasin-batterie.com",
+      "count": 53552
+     },
+     "...(+1 more)"
+    ],
+    "sentiment_connotations": {
+     "anger": 72,
+     "happiness": 312104,
+     "love": 13008,
+     "sadness": 240,
+     "share": 151104,
+     "fun": 6336
+    },
+    "connotation_types": {
+     "positive": 803424,
+     "negative": 880592,
+     "neutral": 571840
+    },
+    "text_categories": [
+     {
+      "category": null,
+      "count": 797528
+     },
+     {
+      "category": [
+       10019,
+       10167,
+       "...(+3 more)"
+      ],
+      "count": 131648
+     },
+     "...(+1 more)"
+    ],
+    "page_categories": [
+     {
+      "category": null,
+      "count": 1330784
+     },
+     {
+      "category": [
+       10019,
+       10168,
+       "...(+3 more)"
+      ],
+      "count": 48672
+     },
+     "...(+1 more)"
+    ],
+    "page_types": {
+     "blogs": 1320752,
+     "organization": null,
+     "news": null,
+     "message-boards": null,
+     "ecommerce": 2272832
+    },
+    "countries": {
+     "US": 283240,
+     "DE": 255936,
+     "WW": 125888
+    },
+    "languages": {
+     "en": 1886544,
+     "es": 312024,
+     "de": 276680
+    }
+   }
+  ]
+ }
+}

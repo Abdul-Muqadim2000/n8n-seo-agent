@@ -1,0 +1,317 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "ai_optimization",
+   "llm_mentions",
+   "top_domains",
+   "live"
+  ],
+  "data": {
+   "api": "ai_optimization",
+   "function": "top_domains",
+   "target": [
+    {
+     "keyword": "e invoicing"
+    }
+   ],
+   "location_code": 2840,
+   "language_code": "en",
+   "limit": 3
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "total": {
+     "location": [
+      {
+       "type": "group_element",
+       "key": "2840",
+       "mentions": 1228,
+       "ai_search_volume": 70931,
+       "impressions": null
+      }
+     ],
+     "language": [
+      {
+       "type": "group_element",
+       "key": "en",
+       "mentions": 1228,
+       "ai_search_volume": 70931,
+       "impressions": null
+      }
+     ],
+     "platform": [
+      {
+       "type": "group_element",
+       "key": "chat_gpt",
+       "mentions": 1228,
+       "ai_search_volume": 70931,
+       "impressions": null
+      }
+     ],
+     "sources_domain": [
+      {
+       "type": "group_element",
+       "key": "en.wikipedia.org",
+       "mentions": 24,
+       "ai_search_volume": 853,
+       "impressions": null
+      },
+      {
+       "type": "group_element",
+       "key": "www.bbb.org",
+       "mentions": 19,
+       "ai_search_volume": 561,
+       "impressions": null
+      }
+     ],
+     "search_results_domain": [
+      {
+       "type": "group_element",
+       "key": "www.linkedin.com",
+       "mentions": 97,
+       "ai_search_volume": 2502,
+       "impressions": null
+      },
+      {
+       "type": "group_element",
+       "key": "www.bbb.org",
+       "mentions": 89,
+       "ai_search_volume": 3253,
+       "impressions": null
+      }
+     ],
+     "brand_entities_title": [
+      {
+       "type": "group_element",
+       "key": "BMW Group",
+       "mentions": 24,
+       "ai_search_volume": 851,
+       "impressions": null
+      },
+      {
+       "type": "group_element",
+       "key": "Japanese automobile manufacturer",
+       "mentions": 23,
+       "ai_search_volume": 516,
+       "impressions": null
+      }
+     ],
+     "brand_entities_category": [
+      {
+       "type": "group_element",
+       "key": "company",
+       "mentions": 221,
+       "ai_search_volume": 7034,
+       "impressions": null
+      },
+      {
+       "type": "group_element",
+       "key": "brand",
+       "mentions": 106,
+       "ai_search_volume": 4635,
+       "impressions": null
+      }
+     ]
+    },
+    "items": [
+     {
+      "key": "en.wikipedia.org",
+      "location": [
+       {
+        "type": "group_element",
+        "key": "2840",
+        "mentions": 24,
+        "ai_search_volume": 853,
+        "impressions": null
+       }
+      ],
+      "language": [
+       {
+        "type": "group_element",
+        "key": "en",
+        "mentions": 24,
+        "ai_search_volume": 853,
+        "impressions": null
+       }
+      ],
+      "platform": [
+       {
+        "type": "group_element",
+        "key": "chat_gpt",
+        "mentions": 24,
+        "ai_search_volume": 853,
+        "impressions": null
+       }
+      ],
+      "sources_domain": [
+       {
+        "type": "group_element",
+        "key": "en.wikipedia.org",
+        "mentions": 24,
+        "ai_search_volume": 853,
+        "impressions": null
+       },
+       {
+        "type": "group_element",
+        "key": "www.carbrands.org",
+        "mentions": 2,
+        "ai_search_volume": 94,
+        "impressions": null
+       }
+      ],
+      "search_results_domain": [
+       {
+        "type": "group_element",
+        "key": "en.wikipedia.org",
+        "mentions": 5,
+        "ai_search_volume": 150,
+        "impressions": null
+       },
+       {
+        "type": "group_element",
+        "key": "www.sec.gov",
+        "mentions": 4,
+        "ai_search_volume": 229,
+        "impressions": null
+       }
+      ],
+      "brand_entities_title": [
+       {
+        "type": "group_element",
+        "key": "Ford Motor Company",
+        "mentions": 2,
+        "ai_search_volume": 85,
+        "impressions": null
+       },
+       {
+        "type": "group_element",
+        "key": "Toyota Motor Corporation",
+        "mentions": 2,
+        "ai_search_volume": 78,
+        "impressions": null
+       }
+      ],
+      "brand_entities_category": [
+       {
+        "type": "group_element",
+        "key": "company",
+        "mentions": 7,
+        "ai_search_volume": 331,
+        "impressions": null
+       },
+       {
+        "type": "group_element",
+        "key": "organization",
+        "mentions": 2,
+        "ai_search_volume": 79,
+        "impressions": null
+       }
+      ]
+     },
+     {
+      "key": "www.bbb.org",
+      "location": [
+       {
+        "type": "group_element",
+        "key": "2840",
+        "mentions": 19,
+        "ai_search_volume": 561,
+        "impressions": null
+       }
+      ],
+      "language": [
+       {
+        "type": "group_element",
+        "key": "en",
+        "mentions": 19,
+        "ai_search_volume": 561,
+        "impressions": null
+       }
+      ],
+      "platform": [
+       {
+        "type": "group_element",
+        "key": "chat_gpt",
+        "mentions": 19,
+        "ai_search_volume": 561,
+        "impressions": null
+       }
+      ],
+      "sources_domain": [
+       {
+        "type": "group_element",
+        "key": "www.bbb.org",
+        "mentions": 19,
+        "ai_search_volume": 561,
+        "impressions": null
+       },
+       {
+        "type": "group_element",
+        "key": "www.trustpilot.com",
+        "mentions": 3,
+        "ai_search_volume": 74,
+        "impressions": null
+       }
+      ],
+      "search_results_domain": [
+       {
+        "type": "group_element",
+        "key": "www.bbb.org",
+        "mentions": 11,
+        "ai_search_volume": 454,
+        "impressions": null
+       },
+       {
+        "type": "group_element",
+        "key": "www.trustpilot.com",
+        "mentions": 4,
+        "ai_search_volume": 94,
+        "impressions": null
+       }
+      ],
+      "brand_entities_title": [
+       {
+        "type": "group_element",
+        "key": "Auto Plus Auto Parts",
+        "mentions": 1,
+        "ai_search_volume": 29,
+        "impressions": null
+       },
+       {
+        "type": "group_element",
+        "key": "online auto parts retailer",
+        "mentions": 1,
+        "ai_search_volume": 23,
+        "impressions": null
+       }
+      ],
+      "brand_entities_category": [
+       {
+        "type": "group_element",
+        "key": "local_business",
+        "mentions": 4,
+        "ai_search_volume": 67,
+        "impressions": null
+       },
+       {
+        "type": "group_element",
+        "key": "company",
+        "mentions": 3,
+        "ai_search_volume": 71,
+        "impressions": null
+       }
+      ]
+     },
+     "...(+3 more)"
+    ]
+   }
+  ]
+ }
+}

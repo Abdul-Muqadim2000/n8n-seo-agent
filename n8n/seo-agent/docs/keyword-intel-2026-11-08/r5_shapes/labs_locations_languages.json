@@ -1,0 +1,40 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "dataforseo_labs",
+   "locations_and_languages"
+  ],
+  "data": {
+   "api": "dataforseo_labs",
+   "function": "locations_and_languages"
+  },
+  "result_count": 94,
+  "result": [
+   {
+    "location_code": 2008,
+    "location_name": "Albania",
+    "location_code_parent": null,
+    "country_iso_code": "AL",
+    "location_type": "Country",
+    "available_languages": [
+     {
+      "available_sources": [
+       "google"
+      ],
+      "language_name": "Albanian",
+      "language_code": "sq",
+      "keywords": 2321243,
+      "serps": 218742
+     }
+    ]
+   },
+   "...(+93 more)"
+  ]
+ }
+}

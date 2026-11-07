@@ -1,0 +1,95 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "keywords_data",
+   "google_ads",
+   "keywords_for_keywords",
+   "live"
+  ],
+  "data": {
+   "api": "keywords_data",
+   "function": "keywords_for_keywords",
+   "se": "google_ads",
+   "keywords": [
+    "e invoicing"
+   ],
+   "location_code": 2784,
+   "language_code": "en",
+   "sort_by": "search_volume"
+  },
+  "result_count": 714,
+  "result": [
+   {
+    "keyword": "seo",
+    "location_code": 2840,
+    "language_code": "en",
+    "search_partners": false,
+    "competition": "LOW",
+    "competition_index": 24,
+    "search_volume": 90500,
+    "low_top_of_page_bid": 4.68,
+    "high_top_of_page_bid": 25.3,
+    "cpc": 27.38,
+    "monthly_searches": [
+     {
+      "year": 2026,
+      "month": 9,
+      "search_volume": 60500
+     },
+     {
+      "year": 2026,
+      "month": 8,
+      "search_volume": 60500
+     },
+     "...(+10 more)"
+    ],
+    "keyword_annotations": {
+     "concepts": null
+    }
+   },
+   {
+    "keyword": "seo services",
+    "location_code": 2840,
+    "language_code": "en",
+    "search_partners": false,
+    "competition": "LOW",
+    "competition_index": 11,
+    "search_volume": 49500,
+    "low_top_of_page_bid": 10.14,
+    "high_top_of_page_bid": 41.21,
+    "cpc": 45.88,
+    "monthly_searches": [
+     {
+      "year": 2026,
+      "month": 9,
+      "search_volume": 18100
+     },
+     {
+      "year": 2026,
+      "month": 8,
+      "search_volume": 27100
+     },
+     "...(+10 more)"
+    ],
+    "keyword_annotations": {
+     "concepts": [
+      {
+       "name": "Non-Brands",
+       "concept_group": {
+        "name": "Non-Brands",
+        "type": "NON_BRAND"
+       }
+      }
+     ]
+    }
+   },
+   "...(+712 more)"
+  ]
+ }
+}

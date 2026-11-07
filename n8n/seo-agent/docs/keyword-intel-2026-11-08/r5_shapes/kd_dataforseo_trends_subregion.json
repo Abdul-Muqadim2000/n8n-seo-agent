@@ -1,0 +1,67 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "keywords_data",
+   "dataforseo_trends",
+   "subregion_interests",
+   "live"
+  ],
+  "data": {
+   "api": "keywords_data",
+   "function": "subregion_interests",
+   "se": "dataforseo_trends",
+   "keywords": [
+    "e invoicing"
+   ],
+   "location_code": 2784,
+   "type": "web"
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "keywords": [
+     "seo tools"
+    ],
+    "type": "trends",
+    "location_code": 2840,
+    "language_code": null,
+    "datetime": "2026-11-05 11:36:18 +00:00",
+    "items_count": 1,
+    "items": [
+     {
+      "position": 1,
+      "type": "subregion_interests",
+      "keywords": [
+       "seo tools"
+      ],
+      "interests": [
+       {
+        "keyword": "seo tools",
+        "values": [
+         {
+          "geo_id": null,
+          "geo_name": "Alabama",
+          "value": 27
+         },
+         {
+          "geo_id": null,
+          "geo_name": "Arizona",
+          "value": 25
+         },
+         "...(+40 more)"
+        ]
+       }
+      ],
+      "interests_comparison": null
+     }
+    ]
+   }
+  ]
+ }
+}

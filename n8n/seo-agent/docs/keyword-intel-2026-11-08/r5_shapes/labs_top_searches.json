@@ -1,0 +1,289 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "dataforseo_labs",
+   "google",
+   "top_searches",
+   "live"
+  ],
+  "data": {
+   "api": "dataforseo_labs",
+   "function": "top_searches",
+   "se_type": "google",
+   "location_code": 2784,
+   "language_code": "en",
+   "limit": 5
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "se_type": "google",
+    "location_code": 2840,
+    "language_code": "en",
+    "total_count": 1258596229,
+    "items_count": 3,
+    "offset": 0,
+    "offset_token": "eyJDdXJyZW50T2Zmc2V0IjozLCJSZXF1ZXN0RGF0YSI6eyJsb2FkX3NlcnBfaW5mbyI6ZmFsc2UsInNlYXJjaF9hZnRlcl90b2tlbiI6bnVsbCwiaWdub3JlX3N5bm9ueW1zIjpmYWxzZSwibGFuZ3VhZ2UiOiJl...",
+    "items": [
+     {
+      "se_type": "google",
+      "keyword": "yout7be",
+      "location_code": 2840,
+      "language_code": "en",
+      "keyword_info": {
+       "se_type": "google",
+       "last_updated_time": "2026-10-16 04:37:35 +00:00",
+       "competition": 0.01,
+       "competition_level": "LOW",
+       "cpc": 0.03,
+       "search_volume": 226000000,
+       "low_top_of_page_bid": 0.01,
+       "high_top_of_page_bid": 0.02,
+       "categories": [
+        10007,
+        11492,
+        "...(+1 more)"
+       ],
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 226000000
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 226000000
+        },
+        "...(+10 more)"
+       ],
+       "search_volume_trend": {
+        "monthly": 0,
+        "quarterly": 22,
+        "yearly": 0
+       }
+      },
+      "keyword_info_normalized_with_bing": {
+       "last_updated_time": "2026-11-04 02:22:04 +00:00",
+       "search_volume": 954,
+       "is_normalized": true,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 954
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 954
+        },
+        "...(+29 more)"
+       ]
+      },
+      "keyword_info_normalized_with_clickstream": {
+       "last_updated_time": "2026-11-04 02:22:04 +00:00",
+       "search_volume": 2518,
+       "is_normalized": true,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 2518
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 2207
+        },
+        "...(+29 more)"
+       ]
+      },
+      "clickstream_keyword_info": {
+       "search_volume": 1499,
+       "last_updated_time": "2026-11-03 09:16:26 +00:00",
+       "gender_distribution": {
+        "female": 31,
+        "male": 69
+       },
+       "age_distribution": {
+        "18-24": 80,
+        "25-34": 12,
+        "35-44": 8,
+        "45-54": 0,
+        "55-64": 0
+       },
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 10,
+         "search_volume": 1500
+        },
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 1860
+        },
+        "...(+10 more)"
+       ]
+      },
+      "keyword_properties": {
+       "se_type": "google",
+       "core_keyword": "youtube",
+       "synonym_clustering_algorithm": "keyword_metrics",
+       "keyword_difficulty": 100,
+       "detected_language": "fi",
+       "is_another_language": true,
+       "words_count": 1
+      },
+      "serp_info": null,
+      "avg_backlinks_info": {
+       "se_type": "google",
+       "backlinks": 323337.2,
+       "dofollow": 183183,
+       "referring_pages": 228521.2,
+       "referring_domains": 1969.1,
+       "referring_main_domains": 3611.4,
+       "rank": 268.1,
+       "main_domain_rank": 846.3,
+       "last_updated_time": "2023-10-12 06:04:23 +00:00"
+      },
+      "search_intent_info": {
+       "se_type": "google",
+       "main_intent": "navigational",
+       "foreign_intent": null,
+       "last_updated_time": "2026-04-30 03:09:20 +00:00"
+      }
+     },
+     {
+      "se_type": "google",
+      "keyword": "yioutube",
+      "location_code": 2840,
+      "language_code": "en",
+      "keyword_info": {
+       "se_type": "google",
+       "last_updated_time": "2026-11-05 17:57:26 +00:00",
+       "competition": 0.01,
+       "competition_level": "LOW",
+       "cpc": 0.03,
+       "search_volume": 226000000,
+       "low_top_of_page_bid": 0.01,
+       "high_top_of_page_bid": 0.02,
+       "categories": [
+        10007,
+        10013,
+        "...(+5 more)"
+       ],
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 226000000
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 226000000
+        },
+        "...(+10 more)"
+       ],
+       "search_volume_trend": {
+        "monthly": 0,
+        "quarterly": 22,
+        "yearly": 0
+       }
+      },
+      "keyword_info_normalized_with_bing": {
+       "last_updated_time": "2026-11-05 17:57:26 +00:00",
+       "search_volume": 226000000,
+       "is_normalized": false,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 226000000
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 226000000
+        },
+        "...(+10 more)"
+       ]
+      },
+      "keyword_info_normalized_with_clickstream": {
+       "last_updated_time": "2026-11-05 17:57:26 +00:00",
+       "search_volume": 226000000,
+       "is_normalized": false,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 226000000
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 226000000
+        },
+        "...(+10 more)"
+       ]
+      },
+      "clickstream_keyword_info": {
+       "search_volume": 23688,
+       "last_updated_time": "2026-11-03 09:08:35 +00:00",
+       "gender_distribution": {
+        "female": 49,
+        "male": 51
+       },
+       "age_distribution": {
+        "18-24": 31,
+        "25-34": 22,
+        "35-44": 14,
+        "45-54": 15,
+        "55-64": 17
+       },
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 10,
+         "search_volume": 23690
+        },
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 24100
+        },
+        "...(+10 more)"
+       ]
+      },
+      "keyword_properties": {
+       "se_type": "google",
+       "core_keyword": null,
+       "synonym_clustering_algorithm": "text_processing",
+       "keyword_difficulty": null,
+       "detected_language": "de",
+       "is_another_language": true,
+       "words_count": 1
+      },
+      "serp_info": null,
+      "avg_backlinks_info": null,
+      "search_intent_info": {
+       "se_type": "google",
+       "main_intent": "navigational",
+       "foreign_intent": null,
+       "last_updated_time": "2026-11-05 17:57:58 +00:00"
+      }
+     },
+     "...(+1 more)"
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,198 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "ai_optimization",
+   "llm_mentions",
+   "cross_aggregated_metrics",
+   "live"
+  ],
+  "data": {
+   "api": "ai_optimization",
+   "function": "cross_aggregated_metrics",
+   "targets": [
+    {
+     "aggregation_key": "techand",
+     "target": [
+      {
+       "domain": "techand.ai"
+      }
+     ]
+    },
+    {
+     "aggregation_key": "cleartax",
+     "target": [
+      {
+       "domain": "cleartax.com"
+      }
+     ]
+    }
+   ],
+   "location_code": 2840,
+   "language_code": "en",
+   "platform": "chat_gpt"
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "total": {
+     "location": [
+      {
+       "type": "group_element",
+       "key": "2840",
+       "mentions": 277863,
+       "ai_search_volume": 788118720,
+       "impressions": null
+      }
+     ],
+     "language": [
+      {
+       "type": "group_element",
+       "key": "en",
+       "mentions": 277863,
+       "ai_search_volume": 788118720,
+       "impressions": null
+      }
+     ],
+     "platform": [
+      {
+       "type": "group_element",
+       "key": "google",
+       "mentions": 277863,
+       "ai_search_volume": 788118720,
+       "impressions": null
+      }
+     ],
+     "sources_domain": [
+      {
+       "type": "group_element",
+       "key": "www.youtube.com",
+       "mentions": 140716,
+       "ai_search_volume": 209066810,
+       "impressions": null
+      },
+      {
+       "type": "group_element",
+       "key": "www.reddit.com",
+       "mentions": 64670,
+       "ai_search_volume": 39324280,
+       "impressions": null
+      },
+      "...(+3 more)"
+     ],
+     "search_results_domain": null,
+     "brand_entities_title": null,
+     "brand_entities_category": null
+    },
+    "items": [
+     {
+      "key": "chat_gpt",
+      "location": [
+       {
+        "type": "group_element",
+        "key": "2840",
+        "mentions": 12230,
+        "ai_search_volume": 60085260,
+        "impressions": null
+       }
+      ],
+      "language": [
+       {
+        "type": "group_element",
+        "key": "en",
+        "mentions": 12230,
+        "ai_search_volume": 60085260,
+        "impressions": null
+       }
+      ],
+      "platform": [
+       {
+        "type": "group_element",
+        "key": "google",
+        "mentions": 12230,
+        "ai_search_volume": 60085260,
+        "impressions": null
+       }
+      ],
+      "sources_domain": [
+       {
+        "type": "group_element",
+        "key": "www.youtube.com",
+        "mentions": 8273,
+        "ai_search_volume": 11025540,
+        "impressions": null
+       },
+       {
+        "type": "group_element",
+        "key": "www.reddit.com",
+        "mentions": 3903,
+        "ai_search_volume": 2004980,
+        "impressions": null
+       },
+       "...(+3 more)"
+      ],
+      "search_results_domain": null,
+      "brand_entities_title": null,
+      "brand_entities_category": null
+     },
+     {
+      "key": "claude",
+      "location": [
+       {
+        "type": "group_element",
+        "key": "2840",
+        "mentions": 116665,
+        "ai_search_volume": 160924350,
+        "impressions": null
+       }
+      ],
+      "language": [
+       {
+        "type": "group_element",
+        "key": "en",
+        "mentions": 116665,
+        "ai_search_volume": 160924350,
+        "impressions": null
+       }
+      ],
+      "platform": [
+       {
+        "type": "group_element",
+        "key": "google",
+        "mentions": 116665,
+        "ai_search_volume": 160924350,
+        "impressions": null
+       }
+      ],
+      "sources_domain": [
+       {
+        "type": "group_element",
+        "key": "www.youtube.com",
+        "mentions": 63138,
+        "ai_search_volume": 78159590,
+        "impressions": null
+       },
+       {
+        "type": "group_element",
+        "key": "www.reddit.com",
+        "mentions": 29445,
+        "ai_search_volume": 15490940,
+        "impressions": null
+       },
+       "...(+3 more)"
+      ],
+      "search_results_domain": null,
+      "brand_entities_title": null,
+      "brand_entities_category": null
+     },
+     "...(+2 more)"
+    ]
+   }
+  ]
+ }
+}

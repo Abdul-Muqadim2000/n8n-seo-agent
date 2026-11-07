@@ -1,0 +1,267 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "backlinks",
+   "page_intersection",
+   "live"
+  ],
+  "data": {
+   "api": "backlinks",
+   "function": "page_intersection",
+   "targets": {
+    "1": "https://cleartax.com/ae/",
+    "2": "https://www.zoho.com/ae/"
+   },
+   "exclude_targets": [
+    "https://techand.ai/"
+   ],
+   "limit": 3
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "targets": {
+     "1": "dataforseo.com",
+     "2": "seopanel.org"
+    },
+    "total_count": 10,
+    "items_count": 10,
+    "items": [
+     {
+      "page_intersection": {
+       "1": [
+        {
+         "type": "backlinks_page_intersection",
+         "domain_from": "www.softwareworld.co",
+         "url_from": "https://www.softwareworld.co/free-seo-software/?page=4",
+         "url_from_https": true,
+         "domain_to": "dataforseo.com",
+         "url_to": "https://dataforseo.com/?utm_source=softwareworld.co&utm_medium=referral",
+         "url_to_https": true,
+         "tld_from": "co",
+         "is_new": false,
+         "is_lost": false,
+         "backlink_spam_score": 0,
+         "rank": 0,
+         "page_from_rank": 0,
+         "domain_from_rank": 61,
+         "domain_from_platform_type": [
+          "unknown"
+         ],
+         "domain_from_is_ip": false,
+         "domain_from_ip": "172.67.68.67",
+         "domain_from_country": "CO",
+         "page_from_external_links": 31,
+         "page_from_internal_links": 190,
+         "page_from_size": 377095,
+         "page_from_encoding": "utf-8",
+         "page_from_language": "en",
+         "page_from_title": "Page 4 - List of Top Free  SEO Software - Nov 2026 Reviews | SoftwareWorld",
+         "page_from_status_code": 200,
+         "first_seen": "2026-05-16 23:32:15 +00:00",
+         "prev_seen": "2026-08-30 17:11:21 +00:00",
+         "last_seen": "2026-11-03 15:12:05 +00:00",
+         "item_type": "anchor",
+         "attributes": [
+          "nofollow"
+         ],
+         "dofollow": false,
+         "original": false,
+         "alt": null,
+         "anchor": "Visit Website",
+         "text_pre": null,
+         "text_post": null,
+         "semantic_location": "article",
+         "links_count": 1,
+         "group_count": 0,
+         "is_broken": false,
+         "url_to_status_code": null,
+         "url_to_spam_score": null,
+         "url_to_redirect_target": null,
+         "is_indirect_link": false,
+         "indirect_link_path": null
+        }
+       ],
+       "2": [
+        {
+         "type": "backlinks_page_intersection",
+         "domain_from": "www.softwareworld.co",
+         "url_from": "https://www.softwareworld.co/free-seo-software/?page=4",
+         "url_from_https": true,
+         "domain_to": "www.seopanel.org",
+         "url_to": "https://www.seopanel.org/?utm_source=softwareworld.co&utm_medium=referral",
+         "url_to_https": true,
+         "tld_from": "co",
+         "is_new": false,
+         "is_lost": false,
+         "backlink_spam_score": 0,
+         "rank": 0,
+         "page_from_rank": 0,
+         "domain_from_rank": 61,
+         "domain_from_platform_type": [
+          "unknown"
+         ],
+         "domain_from_is_ip": false,
+         "domain_from_ip": "172.67.68.67",
+         "domain_from_country": "CO",
+         "page_from_external_links": 31,
+         "page_from_internal_links": 190,
+         "page_from_size": 377095,
+         "page_from_encoding": "utf-8",
+         "page_from_language": "en",
+         "page_from_title": "Page 4 - List of Top Free  SEO Software - Nov 2026 Reviews | SoftwareWorld",
+         "page_from_status_code": 200,
+         "first_seen": "2026-05-16 23:32:15 +00:00",
+         "prev_seen": "2026-08-30 17:11:21 +00:00",
+         "last_seen": "2026-11-03 15:12:05 +00:00",
+         "item_type": "anchor",
+         "attributes": [
+          "nofollow"
+         ],
+         "dofollow": false,
+         "original": false,
+         "alt": null,
+         "anchor": "Visit Website",
+         "text_pre": null,
+         "text_post": null,
+         "semantic_location": "article",
+         "links_count": 1,
+         "group_count": 0,
+         "is_broken": false,
+         "url_to_status_code": 200,
+         "url_to_spam_score": 0,
+         "url_to_redirect_target": null,
+         "is_indirect_link": false,
+         "indirect_link_path": null
+        }
+       ]
+      },
+      "summary": {
+       "intersections_count": 2
+      }
+     },
+     {
+      "page_intersection": {
+       "1": [
+        {
+         "type": "backlinks_page_intersection",
+         "domain_from": "www.softwareworld.co",
+         "url_from": "https://www.softwareworld.co/seo-software-for-small-businesses/?page=6",
+         "url_from_https": true,
+         "domain_to": "dataforseo.com",
+         "url_to": "https://dataforseo.com/?utm_source=softwareworld.co&utm_medium=referral",
+         "url_to_https": true,
+         "tld_from": "co",
+         "is_new": false,
+         "is_lost": false,
+         "backlink_spam_score": 0,
+         "rank": 0,
+         "page_from_rank": 0,
+         "domain_from_rank": 61,
+         "domain_from_platform_type": [
+          "unknown"
+         ],
+         "domain_from_is_ip": false,
+         "domain_from_ip": "172.67.68.67",
+         "domain_from_country": "CO",
+         "page_from_external_links": 31,
+         "page_from_internal_links": 197,
+         "page_from_size": 377563,
+         "page_from_encoding": "utf-8",
+         "page_from_language": "en",
+         "page_from_title": "Page 6 - Top SEO Software for Small Businesses - Nov 2026 Reviews | SoftwareWorld",
+         "page_from_status_code": 200,
+         "first_seen": "2026-04-19 09:49:10 +00:00",
+         "prev_seen": "2026-07-26 16:54:33 +00:00",
+         "last_seen": "2026-11-03 07:19:43 +00:00",
+         "item_type": "anchor",
+         "attributes": [
+          "nofollow"
+         ],
+         "dofollow": false,
+         "original": false,
+         "alt": null,
+         "anchor": "Visit Website",
+         "text_pre": null,
+         "text_post": null,
+         "semantic_location": "article",
+         "links_count": 1,
+         "group_count": 0,
+         "is_broken": false,
+         "url_to_status_code": null,
+         "url_to_spam_score": null,
+         "url_to_redirect_target": null,
+         "is_indirect_link": false,
+         "indirect_link_path": null
+        }
+       ],
+       "2": [
+        {
+         "type": "backlinks_page_intersection",
+         "domain_from": "www.softwareworld.co",
+         "url_from": "https://www.softwareworld.co/seo-software-for-small-businesses/?page=6",
+         "url_from_https": true,
+         "domain_to": "www.seopanel.org",
+         "url_to": "https://www.seopanel.org/?utm_source=softwareworld.co&utm_medium=referral",
+         "url_to_https": true,
+         "tld_from": "co",
+         "is_new": false,
+         "is_lost": false,
+         "backlink_spam_score": 0,
+         "rank": 0,
+         "page_from_rank": 0,
+         "domain_from_rank": 61,
+         "domain_from_platform_type": [
+          "unknown"
+         ],
+         "domain_from_is_ip": false,
+         "domain_from_ip": "172.67.68.67",
+         "domain_from_country": "CO",
+         "page_from_external_links": 31,
+         "page_from_internal_links": 197,
+         "page_from_size": 377563,
+         "page_from_encoding": "utf-8",
+         "page_from_language": "en",
+         "page_from_title": "Page 6 - Top SEO Software for Small Businesses - Nov 2026 Reviews | SoftwareWorld",
+         "page_from_status_code": 200,
+         "first_seen": "2026-04-19 09:49:10 +00:00",
+         "prev_seen": "2026-07-26 16:54:33 +00:00",
+         "last_seen": "2026-11-03 07:19:43 +00:00",
+         "item_type": "anchor",
+         "attributes": [
+          "nofollow"
+         ],
+         "dofollow": false,
+         "original": false,
+         "alt": null,
+         "anchor": "Visit Website",
+         "text_pre": null,
+         "text_post": null,
+         "semantic_location": "article",
+         "links_count": 1,
+         "group_count": 0,
+         "is_broken": false,
+         "url_to_status_code": 200,
+         "url_to_spam_score": 0,
+         "url_to_redirect_target": null,
+         "is_indirect_link": false,
+         "indirect_link_path": null
+        }
+       ]
+      },
+      "summary": {
+       "intersections_count": 2
+      }
+     },
+     "...(+8 more)"
+    ]
+   }
+  ]
+ }
+}

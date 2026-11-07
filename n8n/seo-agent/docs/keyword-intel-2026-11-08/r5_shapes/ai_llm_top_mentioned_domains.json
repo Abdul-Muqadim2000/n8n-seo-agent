@@ -1,0 +1,279 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "ai_optimization",
+   "llm_mentions",
+   "top_mentioned_domains",
+   "live"
+  ],
+  "data": {
+   "api": "ai_optimization",
+   "function": "top_mentioned_domains",
+   "target": [
+    {
+     "keyword": "e invoicing"
+    }
+   ],
+   "location_code": 2840,
+   "language_code": "en",
+   "platform": "chat_gpt",
+   "limit": 3
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "total_count": 22493,
+    "offset": 0,
+    "items_count": 5,
+    "aggregated_metrics": {
+     "location": [
+      {
+       "key": 2840,
+       "mentions": 44373,
+       "ai_search_volume": 1213214
+      }
+     ],
+     "language": [
+      {
+       "key": "en",
+       "mentions": 44373,
+       "ai_search_volume": 1213214
+      }
+     ],
+     "platform": [
+      {
+       "key": "chat_gpt",
+       "mentions": 44373,
+       "ai_search_volume": 1213214
+      }
+     ],
+     "sources_domain": [
+      {
+       "key": "www.caranddriver.com",
+       "mentions": 5250,
+       "ai_search_volume": 189265
+      },
+      {
+       "key": "www.edmunds.com",
+       "mentions": 4831,
+       "ai_search_volume": 140143
+      },
+      "...(+3 more)"
+     ],
+     "search_results_domain": [
+      {
+       "key": "www.edmunds.com",
+       "mentions": 7818,
+       "ai_search_volume": 268650
+      },
+      {
+       "key": "www.caranddriver.com",
+       "mentions": 7125,
+       "ai_search_volume": 273940
+      },
+      "...(+3 more)"
+     ],
+     "brand_entities_title": [
+      {
+       "key": "BMW",
+       "mentions": 1111,
+       "ai_search_volume": 9817
+      },
+      {
+       "key": "Mercedes-Benz",
+       "mentions": 300,
+       "ai_search_volume": 3120
+      },
+      "...(+3 more)"
+     ],
+     "brand_entities_category": [
+      {
+       "key": "vehicle",
+       "mentions": 7382,
+       "ai_search_volume": 114144
+      },
+      {
+       "key": "brand",
+       "mentions": 2487,
+       "ai_search_volume": 52717
+      },
+      "...(+3 more)"
+     ],
+     "total": {
+      "mentions": 44373,
+      "ai_search_volume": 1213214
+     }
+    },
+    "items": [
+     {
+      "domain": "www.caranddriver.com",
+      "location": [
+       {
+        "key": 2840,
+        "mentions": 5250,
+        "ai_search_volume": 189265
+       }
+      ],
+      "language": [
+       {
+        "key": "en",
+        "mentions": 5250,
+        "ai_search_volume": 189265
+       }
+      ],
+      "platform": [
+       {
+        "key": "chat_gpt",
+        "mentions": 5250,
+        "ai_search_volume": 189265
+       }
+      ],
+      "sources_domain": [
+       {
+        "key": "www.caranddriver.com",
+        "mentions": 5250,
+        "ai_search_volume": 189265
+       },
+       {
+        "key": "www.edmunds.com",
+        "mentions": 1409,
+        "ai_search_volume": 53278
+       },
+       "...(+3 more)"
+      ],
+      "search_results_domain": [
+       {
+        "key": "www.caranddriver.com",
+        "mentions": 3247,
+        "ai_search_volume": 139349
+       },
+       {
+        "key": "www.edmunds.com",
+        "mentions": 2171,
+        "ai_search_volume": 92762
+       },
+       "...(+3 more)"
+      ],
+      "brand_entities_title": [
+       {
+        "key": "BMW X5",
+        "mentions": 70,
+        "ai_search_volume": 1188
+       },
+       {
+        "key": "BMW",
+        "mentions": 67,
+        "ai_search_volume": 1252
+       },
+       "...(+3 more)"
+      ],
+      "brand_entities_category": [
+       {
+        "key": "vehicle",
+        "mentions": 1520,
+        "ai_search_volume": 33646
+       },
+       {
+        "key": "car",
+        "mentions": 170,
+        "ai_search_volume": 3449
+       },
+       "...(+3 more)"
+      ],
+      "total": {
+       "mentions": 5250,
+       "ai_search_volume": 189265
+      }
+     },
+     {
+      "domain": "www.edmunds.com",
+      "location": [
+       {
+        "key": 2840,
+        "mentions": 4831,
+        "ai_search_volume": 140143
+       }
+      ],
+      "language": [
+       {
+        "key": "en",
+        "mentions": 4831,
+        "ai_search_volume": 140143
+       }
+      ],
+      "platform": [
+       {
+        "key": "chat_gpt",
+        "mentions": 4831,
+        "ai_search_volume": 140143
+       }
+      ],
+      "sources_domain": [
+       {
+        "key": "www.edmunds.com",
+        "mentions": 4831,
+        "ai_search_volume": 140143
+       },
+       {
+        "key": "www.kbb.com",
+        "mentions": 1552,
+        "ai_search_volume": 37199
+       },
+       "...(+3 more)"
+      ],
+      "search_results_domain": [
+       {
+        "key": "www.edmunds.com",
+        "mentions": 3274,
+        "ai_search_volume": 100037
+       },
+       {
+        "key": "www.kbb.com",
+        "mentions": 2274,
+        "ai_search_volume": 68511
+       },
+       "...(+3 more)"
+      ],
+      "brand_entities_title": [
+       {
+        "key": "Edmunds",
+        "mentions": 70,
+        "ai_search_volume": 1223
+       },
+       {
+        "key": "Kelley Blue Book",
+        "mentions": 69,
+        "ai_search_volume": 805
+       },
+       "...(+3 more)"
+      ],
+      "brand_entities_category": [
+       {
+        "key": "vehicle",
+        "mentions": 1169,
+        "ai_search_volume": 22681
+       },
+       {
+        "key": "car",
+        "mentions": 222,
+        "ai_search_volume": 1344
+       },
+       "...(+3 more)"
+      ],
+      "total": {
+       "mentions": 4831,
+       "ai_search_volume": 140143
+      }
+     },
+     "...(+3 more)"
+    ]
+   }
+  ]
+ }
+}

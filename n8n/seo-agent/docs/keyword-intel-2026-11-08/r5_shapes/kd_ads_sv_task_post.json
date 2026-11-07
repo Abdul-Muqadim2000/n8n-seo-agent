@@ -1,0 +1,28 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20100,
+  "status_message": "Task Created.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "keywords_data",
+   "google_ads",
+   "search_volume",
+   "task_post"
+  ],
+  "data": {
+   "api": "keywords_data",
+   "function": "search_volume",
+   "se": "google_ads",
+   "keywords": [
+    "e invoicing uae"
+   ],
+   "location_code": 2784,
+   "language_code": "en"
+  },
+  "result_count": 0,
+  "result": []
+ }
+}

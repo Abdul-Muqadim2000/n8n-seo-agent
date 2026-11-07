@@ -1,0 +1,116 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "ai_optimization",
+   "llm_mentions",
+   "target_metrics",
+   "live"
+  ],
+  "data": {
+   "api": "ai_optimization",
+   "function": "target_metrics",
+   "target": [
+    {
+     "domain": "techand.ai"
+    }
+   ],
+   "location_code": 2840,
+   "language_code": "en",
+   "platform": "chat_gpt"
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "total_count": 0,
+    "offset": 0,
+    "items_count": 0,
+    "aggregated_metrics": {
+     "location": [
+      {
+       "key": 2840,
+       "mentions": 65758,
+       "ai_search_volume": 1350005
+      }
+     ],
+     "language": [
+      {
+       "key": "en",
+       "mentions": 65758,
+       "ai_search_volume": 1350005
+      }
+     ],
+     "platform": [
+      {
+       "key": "chat_gpt",
+       "mentions": 65758,
+       "ai_search_volume": 1350005
+      }
+     ],
+     "sources_domain": [
+      {
+       "key": "www.caranddriver.com",
+       "mentions": 5258,
+       "ai_search_volume": 189371
+      },
+      {
+       "key": "www.edmunds.com",
+       "mentions": 4831,
+       "ai_search_volume": 140169
+      },
+      "...(+3 more)"
+     ],
+     "search_results_domain": [
+      {
+       "key": "www.edmunds.com",
+       "mentions": 7884,
+       "ai_search_volume": 269972
+      },
+      {
+       "key": "www.caranddriver.com",
+       "mentions": 7204,
+       "ai_search_volume": 274874
+      },
+      "...(+3 more)"
+     ],
+     "brand_entities_title": [
+      {
+       "key": "BMW",
+       "mentions": 1141,
+       "ai_search_volume": 9976
+      },
+      {
+       "key": "Mercedes-Benz",
+       "mentions": 315,
+       "ai_search_volume": 3194
+      },
+      "...(+3 more)"
+     ],
+     "brand_entities_category": [
+      {
+       "key": "vehicle",
+       "mentions": 7569,
+       "ai_search_volume": 116106
+      },
+      {
+       "key": "brand",
+       "mentions": 2522,
+       "ai_search_volume": 52982
+      },
+      "...(+3 more)"
+     ],
+     "total": {
+      "mentions": 65758,
+      "ai_search_volume": 1350005
+     }
+    },
+    "items": []
+   }
+  ]
+ }
+}

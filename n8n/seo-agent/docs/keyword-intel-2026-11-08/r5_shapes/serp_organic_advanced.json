@@ -1,0 +1,103 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "serp",
+   "google",
+   "organic",
+   "live",
+   "advanced"
+  ],
+  "data": {
+   "api": "serp",
+   "function": "live",
+   "se": "google",
+   "se_type": "organic",
+   "keyword": "e invoicing uae",
+   "location_code": 2784,
+   "language_code": "en",
+   "depth": 10,
+   "people_also_ask_click_depth": 2,
+   "load_async_ai_overview": true
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "keyword": "pizza",
+    "type": "organic",
+    "se_domain": "google.com",
+    "location_code": 1006886,
+    "language_code": "en",
+    "check_url": "https://www.google.com/search?q=pizza&hl=en&gl=GB&ie=UTF-8&uule=w+CAIQIFISCXXeIa8LoNhHEZkq1d1aOpZS",
+    "datetime": "2026-11-05 12:18:34 +00:00",
+    "spell": null,
+    "refinement_chips": null,
+    "item_types": [
+     "find_results_on",
+     "local_pack",
+     "...(+3 more)"
+    ],
+    "se_results_count": 65,
+    "pages_count": 1,
+    "items_count": 16,
+    "items": [
+     {
+      "type": "find_results_on",
+      "rank_group": 1,
+      "rank_absolute": 1,
+      "page": 1,
+      "position": "left",
+      "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[1]/div[2]/div[2]/div[1]/div[1]/div[1]/div[1]",
+      "items": [
+       {
+        "type": "find_results_on_element",
+        "title": "THE 10 BEST Pizza Places in Watford (Updated 2026)",
+        "domain": "google.com",
+        "url": "https://google.com/goto?url=CAESkwEBxCJF183IiDZGmN4YNYN3rT1EZIHfzkAGy5dtaLndYFa1YA3TCV4Zb7rtFyRF-Raq1OI9Ii_d--hW0qfHtDIsL2P3PQ4rFrEk96VY3wbQeBkxzzAYW_8quniBfzjA...",
+        "source": "Tripadvisor"
+       },
+       {
+        "type": "find_results_on_element",
+        "title": "TOP 10 BEST Pizza in Wakefield, West Yorkshire, United Kingdom ...",
+        "domain": "m.yelp.com",
+        "url": "https://m.yelp.com/search?find_desc=Pizza&find_loc=Wakefield%2C+West+Yorkshire",
+        "source": "Yelp"
+       },
+       "...(+3 more)"
+      ],
+      "rectangle": null
+     },
+     {
+      "type": "local_pack",
+      "rank_group": 1,
+      "rank_absolute": 2,
+      "page": 1,
+      "position": "left",
+      "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[1]/div[2]/div[2]/div[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/div[3]/div[1]/div[1]/div[1]/div[1]",
+      "title": "Crust Bros Pizza Covent Garden",
+      "description": "29 Bedford St \n\"The pizza was delicious, with fresh ingredients and perfect crust.\" \n",
+      "domain": "www.crustbros.co.uk",
+      "phone": "020 3034 0421",
+      "booking_url": null,
+      "url": "https://www.crustbros.co.uk/find-your-restaurant/covent-garden?utm_source=GMB&utm_medium=website_click&utm_campaign=crust-bros-covent-garden&utm_id=GMB",
+      "is_paid": false,
+      "rating": {
+       "rating_type": "Max5",
+       "value": 4.7,
+       "votes_count": 1600,
+       "rating_max": 5
+      },
+      "cid": "17820353906423378423",
+      "rectangle": null
+     },
+     "...(+14 more)"
+    ]
+   }
+  ]
+ }
+}

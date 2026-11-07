@@ -1,0 +1,202 @@
+{
+ "_source": "harness/fixtures_live/gap_partial.json (real live response, 2026-10-02, trimmed)",
+ "cost": 0.02418,
+ "task": {
+  "cost": 0.02418,
+  "path": [
+   "v3",
+   "backlinks",
+   "domain_intersection",
+   "live"
+  ],
+  "data": {
+   "api": "backlinks",
+   "function": "domain_intersection",
+   "targets": {
+    "1": "azentio.com",
+    "2": "cleartax.com"
+   },
+   "exclude_targets": [
+    "techand.ai"
+   ],
+   "intersection_mode": "partial",
+   "limit": 5,
+   "order_by": [
+    "1.rank,desc"
+   ]
+  },
+  "result": [
+   {
+    "targets": {
+     "1": "azentio.com",
+     "2": "cleartax.com"
+    },
+    "total_count": 135,
+    "items_count": 5,
+    "items": [
+     {
+      "domain_intersection": {
+       "1": {
+        "type": "backlinks_domain_intersection",
+        "target": "uae-asp.ae",
+        "rank": 25,
+        "backlinks": 3,
+        "first_seen": "2026-07-15 11:30:03 +00:00",
+        "lost_date": null,
+        "backlinks_spam_score": 0,
+        "broken_backlinks": 2,
+        "broken_pages": 1,
+        "referring_domains": 1,
+        "referring_domains_nofollow": 0,
+        "referring_main_domains": 1,
+        "referring_main_domains_nofollow": 0,
+        "referring_ips": 1,
+        "referring_subnets": 1,
+        "referring_pages": 2,
+        "referring_pages_nofollow": 0,
+        "referring_links_tld": {
+         "ae": 2
+        },
+        "referring_links_types": {
+         "anchor": 2
+        },
+        "referring_links_attributes": {
+         "noopener": 2,
+         "noreferrer": 2
+        },
+        "referring_links_platform_types": {
+         "organization": 1,
+         "unknown": 1
+        },
+        "referring_links_semantic_locations": {
+         "main": 1,
+         "section": 1
+        },
+        "referring_links_countries": null
+       },
+       "2": {
+        "type": "backlinks_domain_intersection",
+        "target": "uae-asp.ae",
+        "rank": 25,
+        "backlinks": 3,
+        "first_seen": "2026-05-27 10:19:22 +00:00",
+        "lost_date": null,
+        "backlinks_spam_score": 0,
+        "broken_backlinks": 0,
+        "broken_pages": 0,
+        "referring_domains": 1,
+        "referring_domains_nofollow": 0,
+        "referring_main_domains": 1,
+        "referring_main_domains_nofollow": 0,
+        "referring_ips": 1,
+        "referring_subnets": 1,
+        "referring_pages": 2,
+        "referring_pages_nofollow": 0,
+        "referring_links_tld": {
+         "ae": 2
+        },
+        "referring_links_types": {
+         "anchor": 2
+        },
+        "referring_links_attributes": {
+         "noopener": 2,
+         "noreferrer": 2
+        },
+        "referring_links_platform_types": {
+         "organization": 1,
+         "unknown": 1
+        },
+        "referring_links_semantic_locations": {
+         "main": 1,
+         "section": 1
+        },
+        "referring_links_countries": null
+       }
+      },
+      "summary": {
+       "intersections_count": 2
+      }
+     },
+     {
+      "domain_intersection": {
+       "1": {
+        "type": "backlinks_domain_intersection",
+        "target": "mof.gov.ae",
+        "rank": 18,
+        "backlinks": 8,
+        "first_seen": "2026-06-10 21:12:37 +00:00",
+        "lost_date": null,
+        "backlinks_spam_score": 0,
+        "broken_backlinks": 7,
+        "broken_pages": 1,
+        "referring_domains": 1,
+        "referring_domains_nofollow": 0,
+        "referring_main_domains": 1,
+        "referring_main_domains_nofollow": 0,
+        "referring_ips": 1,
+        "referring_subnets": 1,
+        "referring_pages": 8,
+        "referring_pages_nofollow": 0,
+        "referring_links_tld": {
+         "gov.ae": 8
+        },
+        "referring_links_types": {
+         "anchor": 8
+        },
+        "referring_links_attributes": null,
+        "referring_links_platform_types": {
+         "blogs": 8,
+         "cms": 8,
+         "organization": 8
+        },
+        "referring_links_semantic_locations": {
+         "section": 8
+        },
+        "referring_links_countries": null
+       },
+       "2": {
+        "type": "backlinks_domain_intersection",
+        "target": "mof.gov.ae",
+        "rank": 27,
+        "backlinks": 10,
+        "first_seen": "2025-11-04 22:47:26 +00:00",
+        "lost_date": null,
+        "backlinks_spam_score": 0,
+        "broken_backlinks": 0,
+        "broken_pages": 0,
+        "referring_domains": 1,
+        "referring_domains_nofollow": 0,
+        "referring_main_domains": 1,
+        "referring_main_domains_nofollow": 0,
+        "referring_ips": 1,
+        "referring_subnets": 1,
+        "referring_pages": 10,
+        "referring_pages_nofollow": 0,
+        "referring_links_tld": {
+         "gov.ae": 10
+        },
+        "referring_links_types": {
+         "anchor": 10
+        },
+        "referring_links_attributes": null,
+        "referring_links_platform_types": {
+         "blogs": 10,
+         "cms": 10,
+         "organization": 10
+        },
+        "referring_links_semantic_locations": {
+         "section": 10
+        },
+        "referring_links_countries": null
+       }
+      },
+      "summary": {
+       "intersections_count": 2
+      }
+     },
+     "...(+3 more)"
+    ]
+   }
+  ]
+ }
+}

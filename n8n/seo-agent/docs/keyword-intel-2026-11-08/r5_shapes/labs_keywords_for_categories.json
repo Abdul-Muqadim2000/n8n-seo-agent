@@ -1,0 +1,255 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "dataforseo_labs",
+   "google",
+   "keywords_for_categories",
+   "live"
+  ],
+  "data": {
+   "api": "dataforseo_labs",
+   "function": "keywords_for_categories",
+   "se_type": "google",
+   "category_codes": [
+    10019
+   ],
+   "location_code": 2784,
+   "language_code": "en",
+   "limit": 5
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "se_type": "google",
+    "seed_categories": [
+     12191,
+     12193
+    ],
+    "location_code": 2840,
+    "language_code": "en",
+    "total_count": 354,
+    "items_count": 3,
+    "offset": 0,
+    "offset_token": "eyJDdXJyZW50T2Zmc2V0IjozLCJSZXF1ZXN0RGF0YSI6eyJjYXRlZ29yaWVzIjpbMTIxOTEsMTIxOTNdLCJsb2NhdGlvbiI6Mjg0MCwibGFuZ3VhZ2UiOiJlbiIsImludGVyc2VjdCI6dHJ1ZSwibG9hZF9zZXJw...",
+    "items": [
+     {
+      "se_type": "google",
+      "keyword": "dell optiplex setup",
+      "location_code": 2840,
+      "language_code": "en",
+      "keyword_info": {
+       "se_type": "google",
+       "last_updated_time": "2026-10-17 17:34:03 +00:00",
+       "competition": 0,
+       "competition_level": "LOW",
+       "cpc": 2.46,
+       "search_volume": 14800,
+       "low_top_of_page_bid": null,
+       "high_top_of_page_bid": null,
+       "categories": [
+        10019,
+        10019,
+        "...(+6 more)"
+       ],
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 22200
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 18100
+        },
+        "...(+10 more)"
+       ],
+       "search_volume_trend": {
+        "monthly": 23,
+        "quarterly": 83,
+        "yearly": 83
+       }
+      },
+      "keyword_info_normalized_with_bing": {
+       "last_updated_time": "2026-10-17 17:34:03 +00:00",
+       "search_volume": 14800,
+       "is_normalized": false,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 22200
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 18100
+        },
+        "...(+10 more)"
+       ]
+      },
+      "keyword_info_normalized_with_clickstream": {
+       "last_updated_time": "2026-10-17 17:34:03 +00:00",
+       "search_volume": 14800,
+       "is_normalized": false,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 22200
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 18100
+        },
+        "...(+10 more)"
+       ]
+      },
+      "clickstream_keyword_info": null,
+      "keyword_properties": {
+       "se_type": "google",
+       "core_keyword": null,
+       "synonym_clustering_algorithm": null,
+       "keyword_difficulty": 0,
+       "detected_language": "it",
+       "is_another_language": true,
+       "words_count": 3
+      },
+      "serp_info": {
+       "se_type": "google",
+       "check_url": "https://www.google.com/search?q=dell%20optiplex%20setup&hl=en&gl=US&ie=UTF-8&uule=w+CAIQIFISCQs2MuSEtepUEUK33kOSuTsc",
+       "serp_item_types": [
+        "ai_overview",
+        "organic",
+        "...(+5 more)"
+       ],
+       "se_results_count": 161,
+       "last_updated_time": "2026-07-30 10:17:09 +00:00",
+       "previous_updated_time": "2026-05-15 15:04:08 +00:00"
+      },
+      "avg_backlinks_info": {
+       "se_type": "google",
+       "backlinks": 16.9,
+       "dofollow": 16.7,
+       "referring_pages": 16.9,
+       "referring_domains": 1.5,
+       "referring_main_domains": 1.5,
+       "rank": 28.3,
+       "main_domain_rank": 613.1,
+       "last_updated_time": "2026-07-30 10:17:09 +00:00"
+      },
+      "search_intent_info": {
+       "se_type": "google",
+       "main_intent": "navigational",
+       "foreign_intent": null,
+       "last_updated_time": "2026-04-27 14:41:04 +00:00"
+      }
+     },
+     {
+      "se_type": "google",
+      "keyword": "dell desktop computer optiplex 3020",
+      "location_code": 2840,
+      "language_code": "en",
+      "keyword_info": {
+       "se_type": "google",
+       "last_updated_time": "2026-11-04 18:33:20 +00:00",
+       "competition": 0.84,
+       "competition_level": "HIGH",
+       "cpc": 0.46,
+       "search_volume": 2400,
+       "low_top_of_page_bid": 0.19,
+       "high_top_of_page_bid": 0.89,
+       "categories": [
+        10019,
+        10168,
+        "...(+3 more)"
+       ],
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 1900
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 2400
+        },
+        "...(+10 more)"
+       ],
+       "search_volume_trend": {
+        "monthly": -21,
+        "quarterly": -21,
+        "yearly": -21
+       }
+      },
+      "keyword_info_normalized_with_bing": {
+       "last_updated_time": "2026-11-06 22:22:39 +00:00",
+       "search_volume": 8,
+       "is_normalized": true,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 6
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 8
+        },
+        "...(+10 more)"
+       ]
+      },
+      "keyword_info_normalized_with_clickstream": {
+       "last_updated_time": "2026-11-06 22:22:39 +00:00",
+       "search_volume": 1,
+       "is_normalized": true,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 0
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 1
+        },
+        "...(+10 more)"
+       ]
+      },
+      "clickstream_keyword_info": null,
+      "keyword_properties": {
+       "se_type": "google",
+       "core_keyword": "dell optiplex 3020 desktop computer",
+       "synonym_clustering_algorithm": "text_processing",
+       "keyword_difficulty": null,
+       "detected_language": "en",
+       "is_another_language": false,
+       "words_count": 5
+      },
+      "serp_info": null,
+      "avg_backlinks_info": null,
+      "search_intent_info": {
+       "se_type": "google",
+       "main_intent": "transactional",
+       "foreign_intent": [
+        "navigational"
+       ],
+       "last_updated_time": "2026-11-04 18:33:42 +00:00"
+      }
+     },
+     "...(+1 more)"
+    ]
+   }
+  ]
+ }
+}

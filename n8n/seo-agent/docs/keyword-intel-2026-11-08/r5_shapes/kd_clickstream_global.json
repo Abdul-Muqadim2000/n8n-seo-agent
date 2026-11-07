@@ -1,0 +1,49 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "keywords_data",
+   "clickstream_data",
+   "global_search_volume",
+   "live"
+  ],
+  "data": {
+   "api": "keywords_data",
+   "function": "global_search_volume",
+   "se": "clickstream_data",
+   "keywords": [
+    "e invoicing uae"
+   ]
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "items_count": 1,
+    "items": [
+     {
+      "keyword": "youtube",
+      "search_volume": 1745039739,
+      "country_distribution": [
+       {
+        "country_iso_code": "IN",
+        "search_volume": 311979648,
+        "percentage": 17.87808
+       },
+       {
+        "country_iso_code": "US",
+        "search_volume": 201274773,
+        "percentage": 11.53411
+       },
+       "...(+242 more)"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

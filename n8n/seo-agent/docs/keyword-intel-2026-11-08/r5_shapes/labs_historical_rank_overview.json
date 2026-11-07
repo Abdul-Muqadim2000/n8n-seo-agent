@@ -1,0 +1,184 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "dataforseo_labs",
+   "google",
+   "historical_rank_overview",
+   "live"
+  ],
+  "data": {
+   "api": "dataforseo_labs",
+   "function": "historical_rank_overview",
+   "se_type": "google",
+   "target": "techand.ai",
+   "location_code": 2784,
+   "language_code": "en"
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "se_type": "google",
+    "target": "dataforseo.com",
+    "location_code": 2840,
+    "language_code": "en",
+    "total_count": 6,
+    "items_count": 6,
+    "items": [
+     {
+      "se_type": "google",
+      "year": 2026,
+      "month": 10,
+      "metrics": {
+       "organic": {
+        "pos_1": 48,
+        "pos_2_3": 146,
+        "pos_4_10": 1223,
+        "pos_11_20": 2259,
+        "pos_21_30": 1941,
+        "pos_31_40": 1384,
+        "pos_41_50": 1042,
+        "pos_51_60": 731,
+        "pos_61_70": 432,
+        "pos_71_80": 203,
+        "pos_81_90": 94,
+        "pos_91_100": 25,
+        "etv": 14961.92980338486,
+        "count": 9528,
+        "estimated_paid_traffic_cost": 73518.36897124437,
+        "is_new": 7839,
+        "is_up": 917,
+        "is_down": 585,
+        "is_lost": 3727,
+        "clickstream_etv": 27475.138403999998,
+        "clickstream_gender_distribution": {
+         "female": 46,
+         "male": 53
+        },
+        "clickstream_age_distribution": {
+         "18-24": 30,
+         "25-34": 18,
+         "35-44": 18,
+         "45-54": 28,
+         "55-64": 4
+        }
+       },
+       "paid": {
+        "pos_1": 0,
+        "pos_2_3": 0,
+        "pos_4_10": 0,
+        "pos_11_20": 0,
+        "pos_21_30": 0,
+        "pos_31_40": 0,
+        "pos_41_50": 0,
+        "pos_51_60": 0,
+        "pos_61_70": 0,
+        "pos_71_80": 0,
+        "pos_81_90": 0,
+        "pos_91_100": 0,
+        "etv": 0,
+        "count": 0,
+        "estimated_paid_traffic_cost": 0,
+        "is_new": 0,
+        "is_up": 0,
+        "is_down": 0,
+        "is_lost": 0,
+        "clickstream_etv": 0,
+        "clickstream_gender_distribution": {
+         "female": 0,
+         "male": 0
+        },
+        "clickstream_age_distribution": {
+         "18-24": 0,
+         "25-34": 0,
+         "35-44": 0,
+         "45-54": 0,
+         "55-64": 0
+        }
+       }
+      }
+     },
+     {
+      "se_type": "google",
+      "year": 2026,
+      "month": 9,
+      "metrics": {
+       "organic": {
+        "pos_1": 38,
+        "pos_2_3": 140,
+        "pos_4_10": 1462,
+        "pos_11_20": 2663,
+        "pos_21_30": 2264,
+        "pos_31_40": 1643,
+        "pos_41_50": 1193,
+        "pos_51_60": 843,
+        "pos_61_70": 507,
+        "pos_71_80": 250,
+        "pos_81_90": 116,
+        "pos_91_100": 42,
+        "etv": 15027.54878546622,
+        "count": 11161,
+        "estimated_paid_traffic_cost": 75001.86209737479,
+        "is_new": 9069,
+        "is_up": 1293,
+        "is_down": 617,
+        "is_lost": 1612,
+        "clickstream_etv": 25872.944199999998,
+        "clickstream_gender_distribution": {
+         "female": 46,
+         "male": 53
+        },
+        "clickstream_age_distribution": {
+         "18-24": 30,
+         "25-34": 18,
+         "35-44": 18,
+         "45-54": 28,
+         "55-64": 4
+        }
+       },
+       "paid": {
+        "pos_1": 0,
+        "pos_2_3": 0,
+        "pos_4_10": 0,
+        "pos_11_20": 0,
+        "pos_21_30": 0,
+        "pos_31_40": 0,
+        "pos_41_50": 0,
+        "pos_51_60": 0,
+        "pos_61_70": 0,
+        "pos_71_80": 0,
+        "pos_81_90": 0,
+        "pos_91_100": 0,
+        "etv": 0,
+        "count": 0,
+        "estimated_paid_traffic_cost": 0,
+        "is_new": 0,
+        "is_up": 0,
+        "is_down": 0,
+        "is_lost": 0,
+        "clickstream_etv": 0,
+        "clickstream_gender_distribution": {
+         "female": 0,
+         "male": 0
+        },
+        "clickstream_age_distribution": {
+         "18-24": 0,
+         "25-34": 0,
+         "35-44": 0,
+         "45-54": 0,
+         "55-64": 0
+        }
+       }
+      }
+     },
+     "...(+4 more)"
+    ]
+   }
+  ]
+ }
+}

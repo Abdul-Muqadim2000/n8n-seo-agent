@@ -1,0 +1,74 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "serp",
+   "google",
+   "organic",
+   "live",
+   "regular"
+  ],
+  "data": {
+   "api": "serp",
+   "function": "live",
+   "se": "google",
+   "se_type": "organic",
+   "keyword": "e invoicing uae",
+   "location_code": 2784,
+   "language_code": "en",
+   "depth": 10
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "keyword": "pizza",
+    "type": "organic",
+    "se_domain": "google.com",
+    "location_code": 1006886,
+    "language_code": "en",
+    "check_url": "https://www.google.com/search?q=pizza&hl=en&gl=GB&ie=UTF-8&uule=w+CAIQIFISCXXeIa8LoNhHEZkq1d1aOpZS",
+    "datetime": "2026-11-06 08:18:08 +00:00",
+    "spell": null,
+    "refinement_chips": null,
+    "item_types": [
+     "find_results_on",
+     "local_pack",
+     "...(+4 more)"
+    ],
+    "se_results_count": 66,
+    "pages_count": 1,
+    "items_count": 10,
+    "items": [
+     {
+      "type": "organic",
+      "rank_group": 1,
+      "rank_absolute": 5,
+      "page": 1,
+      "domain": "google.com",
+      "title": "THE 10 BEST Pizza Places in Watford (Updated 2026)",
+      "description": "Best Pizza in Watford, Hertfordshire: 1. Il Pellegrino 4.6 2. L'artista 3.9 \u2026 4. Patzeria 5.0. Regina Margherita pizzeria 3.0",
+      "url": "https://google.com/goto?url=CAESkwEBxCJF157oSS7atUGdpN3y3R40uwKC-fYvjwOHY6uhuCtIcXukj0im2Em5H1szScndCSngAOtT5G7NUPn8ctcbYDhobGfSFwmTS0k0wA7ibIieNVrsFvl_6LzyAc9k...",
+      "breadcrumb": "https://www.tripadvisor.com \u203a ... \u203a Watford Restaurants"
+     },
+     {
+      "type": "organic",
+      "rank_group": 2,
+      "rank_absolute": 6,
+      "page": 1,
+      "domain": "google.com",
+      "title": "THE BEST Pizza Places for Families in Watford",
+      "description": "Best Pizza in Watford, Hertfordshire : Find Tripadvisor traveller reviews of Watford Pizza places and search by price, location, and more.",
+      "url": "https://google.com/goto?url=CAESmAEBxCJF1yLihO6grQ9NVjnDEIZt2ASwn8Z9g7QAh_88XKBtO8LPEgb_Ie5D2GqSox9A5ELiwsMPBUUmtS_K0qFX3nlzReCJnE2gxsKkLF6Nh1MbSsz_Kk4pjrPtgPJz...",
+      "breadcrumb": "https://www.tripadvisor.com \u203a ... \u203a Watford"
+     },
+     "...(+8 more)"
+    ]
+   }
+  ]
+ }
+}

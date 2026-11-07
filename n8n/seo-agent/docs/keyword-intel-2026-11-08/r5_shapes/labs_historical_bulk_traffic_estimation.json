@@ -1,0 +1,114 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "dataforseo_labs",
+   "google",
+   "historical_bulk_traffic_estimation",
+   "live"
+  ],
+  "data": {
+   "api": "dataforseo_labs",
+   "function": "historical_bulk_traffic_estimation",
+   "se_type": "google",
+   "targets": [
+    "techand.ai"
+   ],
+   "location_code": 2784,
+   "language_code": "en"
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "se_type": "google",
+    "location_code": 2840,
+    "language_code": "en",
+    "total_count": 2,
+    "items_count": 2,
+    "items": [
+     {
+      "se_type": "google",
+      "target": "cnn.com",
+      "metrics": {
+       "organic": [
+        {
+         "year": 2026,
+         "month": 10,
+         "etv": 27478587.273457788,
+         "count": 3280680
+        },
+        {
+         "year": 2026,
+         "month": 9,
+         "etv": 27669086.530599527,
+         "count": 3545431
+        },
+        "...(+10 more)"
+       ],
+       "paid": [
+        {
+         "year": 2026,
+         "month": 10,
+         "etv": 81.32902073860168,
+         "count": 14
+        },
+        {
+         "year": 2026,
+         "month": 9,
+         "etv": 1.4153873920440674,
+         "count": 1
+        },
+        "...(+10 more)"
+       ],
+       "local_pack": null,
+       "featured_snippet": null
+      }
+     },
+     {
+      "se_type": "google",
+      "target": "dataforseo.com",
+      "metrics": {
+       "organic": [
+        {
+         "year": 2026,
+         "month": 10,
+         "etv": 14961.92980338486,
+         "count": 9528
+        },
+        {
+         "year": 2026,
+         "month": 9,
+         "etv": 15027.54878546622,
+         "count": 11161
+        },
+        "...(+10 more)"
+       ],
+       "paid": [
+        {
+         "year": 2026,
+         "month": 10,
+         "etv": 0,
+         "count": 0
+        },
+        {
+         "year": 2026,
+         "month": 9,
+         "etv": 0,
+         "count": 0
+        },
+        "...(+10 more)"
+       ],
+       "local_pack": null,
+       "featured_snippet": null
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

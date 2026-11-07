@@ -1,0 +1,171 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "on_page",
+   "content_parsing",
+   "live"
+  ],
+  "data": {
+   "api": "on_page",
+   "function": "content_parsing",
+   "url": "https://techand.ai/"
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "crawl_progress": "finished",
+    "crawl_status": null,
+    "items_count": 1,
+    "items": [
+     {
+      "type": "content_parsing_element",
+      "fetch_time": "2026-11-04 05:45:19 +00:00",
+      "status_code": 200,
+      "page_content": {
+       "header": {
+        "primary_content": null,
+        "secondary_content": [
+         {
+          "text": "SERP API",
+          "url": "https://dataforseo.com/apis/serp-api",
+          "urls": [
+           {
+            "url": "https://dataforseo.com/apis/serp-api",
+            "anchor_text": "SERP API"
+           }
+          ]
+         },
+         {
+          "text": "Google Ads API",
+          "url": "https://dataforseo.com/apis/google-ads-api",
+          "urls": [
+           {
+            "url": "https://dataforseo.com/apis/google-ads-api",
+            "anchor_text": "Google Ads API"
+           }
+          ]
+         },
+         "...(+88 more)"
+        ],
+        "table_content": null
+       },
+       "footer": {
+        "primary_content": null,
+        "secondary_content": [
+         {
+          "text": "Vesiv\u00e4rava tn 50-201, Kesklinna linnaosa, Tallinn, Harju maakond, Republic of Estonia, 10152",
+          "url": null,
+          "urls": null
+         },
+         {
+          "text": "63 Profesora Otamanovskoho St , Kharkiv, Ukraine, 61166",
+          "url": null,
+          "urls": null
+         },
+         "...(+47 more)"
+        ],
+        "table_content": null
+       },
+       "main_topic": [
+        {
+         "h_title": "Powerful API Stack For\nData-Driven Marketers",
+         "main_title": "Powerful API Stack For\nData-Driven Marketers",
+         "author": "lobov",
+         "language": "en",
+         "level": 1,
+         "primary_content": [
+          {
+           "text": "We provide comprehensive SEO and digital marketing data solutions via API",
+           "url": null,
+           "urls": null
+          }
+         ],
+         "secondary_content": null,
+         "table_content": null
+        },
+        {
+         "h_title": "DataForSEO APIs",
+         "main_title": "Powerful API Stack For\nData-Driven Marketers",
+         "author": "lobov",
+         "language": "en",
+         "level": 3,
+         "primary_content": [
+          {
+           "text": "Explore our state-of-the-art APIs and find the perfect solution for your use case.",
+           "url": null,
+           "urls": null
+          }
+         ],
+         "secondary_content": null,
+         "table_content": null
+        },
+        "...(+13 more)"
+       ],
+       "secondary_topic": [
+        {
+         "h_title": "All the data your SEO software requires\nis now in one place",
+         "main_title": "Powerful API Stack For\nData-Driven Marketers",
+         "author": "lobov",
+         "language": "en",
+         "level": 2,
+         "primary_content": null,
+         "secondary_content": null,
+         "table_content": null
+        },
+        {
+         "h_title": "Total Backlinks collected",
+         "main_title": "Powerful API Stack For\nData-Driven Marketers",
+         "author": "lobov",
+         "language": "en",
+         "level": 3,
+         "primary_content": null,
+         "secondary_content": [
+          {
+           "text": "SERPs Google",
+           "url": "https://dataforseo.com/our-data",
+           "urls": [
+            {
+             "url": "https://dataforseo.com/our-data",
+             "anchor_text": "SERPs Google"
+            }
+           ]
+          },
+          {
+           "text": "Keywords Google",
+           "url": "https://dataforseo.com/our-data",
+           "urls": [
+            {
+             "url": "https://dataforseo.com/our-data",
+             "anchor_text": "Keywords Google"
+            }
+           ]
+          },
+          "...(+1 more)"
+         ],
+         "table_content": null
+        },
+        "...(+8 more)"
+       ],
+       "ratings": null,
+       "offers": null,
+       "comments": null,
+       "contacts": {
+        "telephones": [
+         "+3726027642"
+        ],
+        "emails": null
+       }
+      },
+      "page_as_markdown": null
+     }
+    ]
+   }
+  ]
+ }
+}

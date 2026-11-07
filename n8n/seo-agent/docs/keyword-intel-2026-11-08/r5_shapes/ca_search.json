@@ -1,0 +1,162 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "content_analysis",
+   "search",
+   "live"
+  ],
+  "data": {
+   "api": "content_analysis",
+   "function": "search",
+   "keyword": "e invoicing uae",
+   "page_type": [
+    "message-boards"
+   ],
+   "search_mode": "as_is",
+   "limit": 3
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "offset_token": "eyJDdXJyZW50T2Zmc2V0IjoxMCwiUmF3UmVxdWVzdCI6eyJrZXl3b3JkIjoibG9naXRlY2giLCJrZXl3b3JkX2ZpZWxkcyI6eyJzbmlwcGV0IjoibG9naXRlY2gifSwicGFnZV90eXBlIjp7InR5cGVzIjpbImVj...",
+    "total_count": 6532436,
+    "items_count": 10,
+    "items": [
+     {
+      "type": "content_analysis_search",
+      "url": "https://www.vikingdirekt.at/de/logitech-kabellose-maus-m185-blau-p-7160985",
+      "domain": "www.vikingdirekt.at",
+      "main_domain": "vikingdirekt.at",
+      "url_rank": 54,
+      "spam_score": 0,
+      "domain_rank": 482,
+      "fetch_time": "2026-10-30 16:45:54 +00:00",
+      "country": "AT",
+      "language": "de",
+      "score": 62556.656,
+      "page_category": [
+       10013,
+       10019,
+       "...(+3 more)"
+      ],
+      "page_types": [
+       "ecommerce"
+      ],
+      "ratings": [
+       {
+        "name": null,
+        "rating_value": 5,
+        "max_rating_value": 5,
+        "rating_count": 1,
+        "relative_rating": 1
+       }
+      ],
+      "social_metrics": null,
+      "content_info": {
+       "content_type": "page_content",
+       "title": "Logitech M185 Maus Kabellos Blau, Schwarz Geeignet F\u00fcr Linksh\u00e4nder",
+       "main_title": "Logitech M185 Maus Kabellos Blau, Schwarz Geeignet F\u00fcr Linksh\u00e4nder",
+       "previous_title": "Beschreibung",
+       "level": 1,
+       "author": null,
+       "snippet": "Keine Verz\u00f6gerungen oder Ausf\u00e4lle. Der winzige kabellose Empf\u00e4nger garantiert Ihnen eine zuverl\u00e4ssige Verbindung. Logitech",
+       "snippet_length": 122,
+       "social_metrics": null,
+       "highlighted_text": null,
+       "language": "de",
+       "sentiment_connotations": {
+        "anger": 0.5790008306503296,
+        "happiness": 0.07297239452600479,
+        "love": 0.05697182938456535,
+        "sadness": 0.1666630208492279,
+        "share": 0.06060585379600525,
+        "fun": 0.06384608149528503
+       },
+       "connotation_types": {
+        "positive": 0.010923143476247787,
+        "negative": 0.9710908532142639,
+        "neutral": 0.018016064539551735
+       },
+       "text_category": [
+        10019,
+        10167,
+        "...(+6 more)"
+       ],
+       "date_published": null,
+       "content_quality_score": 100,
+       "semantic_location": "main",
+       "rating": null,
+       "group_date": "2021-09-09 21:31:33 +00:00"
+      }
+     },
+     {
+      "type": "content_analysis_search",
+      "url": "https://www.vikingdirekt.at/de/logitech-drahtlose-maus-m185-p-7160994",
+      "domain": "www.vikingdirekt.at",
+      "main_domain": "vikingdirekt.at",
+      "url_rank": 48,
+      "spam_score": 0,
+      "domain_rank": 483,
+      "fetch_time": "2026-11-01 11:08:50 +00:00",
+      "country": "AT",
+      "language": "de",
+      "score": 61765.723,
+      "page_category": [
+       10019,
+       10168,
+       "...(+5 more)"
+      ],
+      "page_types": [
+       "ecommerce"
+      ],
+      "ratings": null,
+      "social_metrics": null,
+      "content_info": {
+       "content_type": "page_content",
+       "title": "Logitech M185 Maus Kabellos Rot, Schwarz Geeignet F\u00fcr Linksh\u00e4nder",
+       "main_title": "Logitech M185 Maus Kabellos Rot, Schwarz Geeignet F\u00fcr Linksh\u00e4nder",
+       "previous_title": "Beschreibung",
+       "level": 1,
+       "author": null,
+       "snippet": "Keine Verz\u00f6gerungen oder Ausf\u00e4lle. Der winzige kabellose Empf\u00e4nger garantiert Ihnen eine zuverl\u00e4ssige Verbindung. Logitech",
+       "snippet_length": 122,
+       "social_metrics": null,
+       "highlighted_text": null,
+       "language": "de",
+       "sentiment_connotations": {
+        "anger": 0.5790008306503296,
+        "happiness": 0.07297239452600479,
+        "love": 0.05697182938456535,
+        "sadness": 0.1666630208492279,
+        "share": 0.06060585379600525,
+        "fun": 0.06384608149528503
+       },
+       "connotation_types": {
+        "positive": 0.010923143476247787,
+        "negative": 0.9710908532142639,
+        "neutral": 0.018016064539551735
+       },
+       "text_category": [
+        10019,
+        10167,
+        "...(+6 more)"
+       ],
+       "date_published": null,
+       "content_quality_score": 100,
+       "semantic_location": "main",
+       "rating": null,
+       "group_date": "2024-07-13 19:37:37 +00:00"
+      }
+     },
+     "...(+8 more)"
+    ]
+   }
+  ]
+ }
+}

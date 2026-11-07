@@ -1,0 +1,70 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "ai_optimization",
+   "ai_keyword_data",
+   "keywords_search_volume",
+   "live"
+  ],
+  "data": {
+   "api": "ai_optimization",
+   "function": "keywords_search_volume",
+   "keywords": [
+    "e invoicing uae",
+    "best erp uae"
+   ],
+   "location_code": 2840,
+   "language_code": "en"
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "location_code": 2840,
+    "language_code": "en",
+    "items_count": 2,
+    "items": [
+     {
+      "keyword": "seo",
+      "ai_search_volume": 98156,
+      "ai_monthly_searches": [
+       {
+        "year": 2026,
+        "month": 10,
+        "ai_search_volume": 98156
+       },
+       {
+        "year": 2026,
+        "month": 9,
+        "ai_search_volume": 117209
+       },
+       "...(+10 more)"
+      ]
+     },
+     {
+      "keyword": "seo tools",
+      "ai_search_volume": 5662,
+      "ai_monthly_searches": [
+       {
+        "year": 2026,
+        "month": 10,
+        "ai_search_volume": 5662
+       },
+       {
+        "year": 2026,
+        "month": 9,
+        "ai_search_volume": 5965
+       },
+       "...(+10 more)"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

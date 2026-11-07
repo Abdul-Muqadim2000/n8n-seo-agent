@@ -1,0 +1,457 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "dataforseo_labs",
+   "google",
+   "page_intersection",
+   "live"
+  ],
+  "data": {
+   "api": "dataforseo_labs",
+   "function": "page_intersection",
+   "se_type": "google",
+   "pages": {
+    "1": "https://cleartax.com/ae/*",
+    "2": "https://www.zoho.com/ae/books/*"
+   },
+   "intersection_mode": "union",
+   "location_code": 2784,
+   "language_code": "en",
+   "limit": 5
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "se_type": "google",
+    "pages": {
+     "1": "https://dataforseo.com",
+     "2": "https://seopanel.org/*"
+    },
+    "exclude_pages": null,
+    "location_code": 2840,
+    "language_code": "en",
+    "total_count": 132,
+    "items_count": 3,
+    "items": [
+     {
+      "se_type": "google",
+      "keyword_data": {
+       "se_type": "google",
+       "keyword": "seo tools",
+       "location_code": 2840,
+       "language_code": "en",
+       "keyword_info": {
+        "se_type": "google",
+        "last_updated_time": "2026-10-16 08:09:18 +00:00",
+        "competition": 0.009999999776482582,
+        "competition_level": "LOW",
+        "cpc": 24.389999389648438,
+        "search_volume": 165000,
+        "low_top_of_page_bid": 5.099999904632568,
+        "high_top_of_page_bid": 29.079999923706055,
+        "categories": [
+         10004,
+         10004,
+         "...(+13 more)"
+        ],
+        "monthly_searches": [
+         {
+          "year": 2026,
+          "month": 9,
+          "search_volume": 550000
+         },
+         {
+          "year": 2026,
+          "month": 8,
+          "search_volume": 135000
+         },
+         "...(+10 more)"
+        ],
+        "search_volume_trend": {
+         "monthly": 307,
+         "quarterly": 307,
+         "yearly": 1011
+        }
+       },
+       "keyword_info_normalized_with_bing": {
+        "last_updated_time": "2026-09-27 06:04:20 +00:00",
+        "search_volume": 37575,
+        "is_normalized": true,
+        "monthly_searches": [
+         {
+          "year": 2026,
+          "month": 8,
+          "search_volume": 46114
+         },
+         {
+          "year": 2026,
+          "month": 7,
+          "search_volume": 46114
+         },
+         "...(+10 more)"
+        ]
+       },
+       "keyword_info_normalized_with_clickstream": {
+        "last_updated_time": "2026-09-27 06:04:20 +00:00",
+        "search_volume": 85776,
+        "is_normalized": true,
+        "monthly_searches": [
+         {
+          "year": 2026,
+          "month": 8,
+          "search_volume": 105289
+         },
+         {
+          "year": 2026,
+          "month": 7,
+          "search_volume": 105515
+         },
+         "...(+10 more)"
+        ]
+       },
+       "clickstream_keyword_info": {
+        "search_volume": 13200,
+        "last_updated_time": "2026-10-07 10:33:17 +00:00",
+        "gender_distribution": {
+         "female": 56,
+         "male": 44
+        },
+        "age_distribution": {
+         "18-24": 20,
+         "25-34": 17,
+         "35-44": 26,
+         "45-54": 37,
+         "55-64": null
+        },
+        "monthly_searches": [
+         {
+          "year": 2026,
+          "month": 9,
+          "search_volume": 13200
+         },
+         {
+          "year": 2026,
+          "month": 8,
+          "search_volume": 13400
+         },
+         "...(+10 more)"
+        ]
+       },
+       "keyword_properties": {
+        "se_type": "google",
+        "core_keyword": null,
+        "synonym_clustering_algorithm": "text_processing",
+        "keyword_difficulty": 66,
+        "detected_language": "en",
+        "is_another_language": false
+       },
+       "serp_info": {
+        "se_type": "google",
+        "check_url": "https://www.google.com/search?q=seo%20tools&hl=en&gl=US&ie=UTF-8&uule=w+CAIQIFISCQs2MuSEtepUEUK33kOSuTsc",
+        "serp_item_types": [
+         "ai_overview",
+         "organic",
+         "...(+5 more)"
+        ],
+        "se_results_count": 125,
+        "last_updated_time": "2026-08-03 09:52:45 +00:00",
+        "previous_updated_time": "2026-05-14 20:01:58 +00:00"
+       },
+       "avg_backlinks_info": {
+        "se_type": "google",
+        "backlinks": 3630.39990234375,
+        "dofollow": 2638.39990234375,
+        "referring_pages": 3194,
+        "referring_domains": 712.2999877929688,
+        "referring_main_domains": 655.7000122070312,
+        "rank": 305,
+        "main_domain_rank": 538.2999877929688,
+        "last_updated_time": "2026-08-03 09:52:50 +00:00"
+       },
+       "search_intent_info": {
+        "se_type": "google",
+        "main_intent": "commercial",
+        "foreign_intent": null,
+        "last_updated_time": "2026-04-28 22:42:56 +00:00"
+       }
+      },
+      "intersection_result": {
+       "1": {
+        "se_type": "google",
+        "type": "organic",
+        "rank_group": 51,
+        "rank_absolute": 61,
+        "position": "left",
+        "xpath": "/html[1]/body[1]/div[3]/div[1]/div[12]/div[1]/div[2]/div[2]/div[1]/div[1]/div[4]/div[1]/div[1]",
+        "domain": "dataforseo.com",
+        "title": "DataForSEO: Powerful API Stack For Data-Driven SEO Tools",
+        "url": "https://dataforseo.com/",
+        "breadcrumb": "https://dataforseo.com",
+        "website_name": "DataForSEO",
+        "is_image": false,
+        "is_video": false,
+        "is_featured_snippet": false,
+        "is_malicious": false,
+        "checks": null,
+        "description": "DataForSEO provides the most extensive, reliable, accurate, and granular SEO and search marketing insights available on the Internet. Read more",
+        "pre_snippet": null,
+        "extended_snippet": null,
+        "amp_version": false,
+        "rating": null,
+        "highlighted": [
+         "SEO"
+        ],
+        "links": null,
+        "about_this_result": null,
+        "main_domain": "dataforseo.com",
+        "relative_url": "/",
+        "etv": 25.92009735107422,
+        "estimated_paid_traffic_cost": 632.191162109375,
+        "clickstream_etv": 27.72,
+        "rank_changes": {
+         "previous_rank_absolute": 53,
+         "is_new": false,
+         "is_up": false,
+         "is_down": true
+        },
+        "backlinks_info": {
+         "referring_domains": 1174,
+         "referring_main_domains": 1119,
+         "referring_pages": 177477,
+         "dofollow": 176463,
+         "backlinks": 180183,
+         "time_update": "2026-10-11 04:07:01 +00:00"
+        },
+        "rank_info": {
+         "page_rank": 451,
+         "main_domain_rank": 327
+        }
+       },
+       "2": null
+      }
+     },
+     {
+      "se_type": "google",
+      "keyword_data": {
+       "se_type": "google",
+       "keyword": "dataforseo",
+       "location_code": 2840,
+       "language_code": "en",
+       "keyword_info": {
+        "se_type": "google",
+        "last_updated_time": "2026-10-17 19:55:47 +00:00",
+        "competition": 0.550000011920929,
+        "competition_level": "MEDIUM",
+        "cpc": 2.75,
+        "search_volume": 4400,
+        "low_top_of_page_bid": 0.6100000143051147,
+        "high_top_of_page_bid": 25.65999984741211,
+        "categories": [
+         10004,
+         10276,
+         "...(+1 more)"
+        ],
+        "monthly_searches": [
+         {
+          "year": 2026,
+          "month": 9,
+          "search_volume": 8100
+         },
+         {
+          "year": 2026,
+          "month": 8,
+          "search_volume": 8100
+         },
+         "...(+10 more)"
+        ],
+        "search_volume_trend": {
+         "monthly": 0,
+         "quarterly": 0,
+         "yearly": 406
+        }
+       },
+       "keyword_info_normalized_with_bing": {
+        "last_updated_time": "2026-10-17 19:55:47 +00:00",
+        "search_volume": 4400,
+        "is_normalized": false,
+        "monthly_searches": [
+         {
+          "year": 2026,
+          "month": 9,
+          "search_volume": 8100
+         },
+         {
+          "year": 2026,
+          "month": 8,
+          "search_volume": 8100
+         },
+         "...(+10 more)"
+        ]
+       },
+       "keyword_info_normalized_with_clickstream": {
+        "last_updated_time": "2026-10-17 19:55:47 +00:00",
+        "search_volume": 4400,
+        "is_normalized": false,
+        "monthly_searches": [
+         {
+          "year": 2026,
+          "month": 9,
+          "search_volume": 8100
+         },
+         {
+          "year": 2026,
+          "month": 8,
+          "search_volume": 8100
+         },
+         "...(+10 more)"
+        ]
+       },
+       "clickstream_keyword_info": {
+        "search_volume": 28740,
+        "last_updated_time": "2026-10-06 08:38:41 +00:00",
+        "gender_distribution": {
+         "female": 54,
+         "male": 46
+        },
+        "age_distribution": {
+         "18-24": 9,
+         "25-34": 16,
+         "35-44": 32,
+         "45-54": 43,
+         "55-64": null
+        },
+        "monthly_searches": [
+         {
+          "year": 2026,
+          "month": 9,
+          "search_volume": 28740
+         },
+         {
+          "year": 2026,
+          "month": 8,
+          "search_volume": 25270
+         },
+         "...(+10 more)"
+        ]
+       },
+       "keyword_properties": {
+        "se_type": "google",
+        "core_keyword": null,
+        "synonym_clustering_algorithm": "text_processing",
+        "keyword_difficulty": 9,
+        "detected_language": "es",
+        "is_another_language": true
+       },
+       "serp_info": {
+        "se_type": "google",
+        "check_url": "https://www.google.com/search?q=dataforseo&hl=en&gl=US&ie=UTF-8&uule=w+CAIQIFISCQs2MuSEtepUEUK33kOSuTsc",
+        "serp_item_types": [
+         "organic",
+         "people_also_ask",
+         "...(+1 more)"
+        ],
+        "se_results_count": 139,
+        "last_updated_time": "2026-09-04 00:45:45 +00:00",
+        "previous_updated_time": "2026-06-30 10:50:50 +00:00"
+       },
+       "avg_backlinks_info": {
+        "se_type": "google",
+        "backlinks": 2304,
+        "dofollow": 2188.39990234375,
+        "referring_pages": 2264,
+        "referring_domains": 104.69999694824219,
+        "referring_main_domains": 99.5999984741211,
+        "rank": 82,
+        "main_domain_rank": 641.0999755859375,
+        "last_updated_time": "2026-09-04 00:45:45 +00:00"
+       },
+       "search_intent_info": {
+        "se_type": "google",
+        "main_intent": "informational",
+        "foreign_intent": [
+         "navigational"
+        ],
+        "last_updated_time": "2026-04-29 12:49:22 +00:00"
+       }
+      },
+      "intersection_result": {
+       "1": {
+        "se_type": "google",
+        "type": "organic",
+        "rank_group": 1,
+        "rank_absolute": 1,
+        "position": "left",
+        "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[1]/div[2]/div[2]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]",
+        "domain": "dataforseo.com",
+        "title": "DataForSEO: Powerful API Stack For Data-Driven SEO Tools",
+        "url": "https://dataforseo.com/",
+        "breadcrumb": "https://dataforseo.com",
+        "website_name": "DataForSEO",
+        "is_image": false,
+        "is_video": false,
+        "is_featured_snippet": false,
+        "is_malicious": false,
+        "checks": null,
+        "description": "We provide comprehensive data solutions for SEO and SEM analytics via API. DataForSEO is a trusted partner for 750+ SEO software companies and agencies.",
+        "pre_snippet": null,
+        "extended_snippet": null,
+        "amp_version": false,
+        "rating": null,
+        "highlighted": [
+         "DataForSEO"
+        ],
+        "links": [
+         {
+          "type": "link_element",
+          "title": "Pricing",
+          "description": null,
+          "url": "https://dataforseo.com/pricing"
+         },
+         {
+          "type": "link_element",
+          "title": "Docs",
+          "description": null,
+          "url": "https://docs.dataforseo.com/v3/"
+         },
+         "...(+3 more)"
+        ],
+        "about_this_result": null,
+        "main_domain": "dataforseo.com",
+        "relative_url": "/",
+        "etv": 2268.65869140625,
+        "estimated_paid_traffic_cost": 6238.8115234375,
+        "clickstream_etv": 8736.96,
+        "rank_changes": {
+         "previous_rank_absolute": 1,
+         "is_new": false,
+         "is_up": false,
+         "is_down": false
+        },
+        "backlinks_info": {
+         "referring_domains": 1174,
+         "referring_main_domains": 1119,
+         "referring_pages": 177477,
+         "dofollow": 176463,
+         "backlinks": 180183,
+         "time_update": "2026-10-11 04:07:01 +00:00"
+        },
+        "rank_info": {
+         "page_rank": 466,
+         "main_domain_rank": 340
+        }
+       },
+       "2": null
+      }
+     },
+     "...(+1 more)"
+    ]
+   }
+  ]
+ }
+}

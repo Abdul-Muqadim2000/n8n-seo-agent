@@ -1,0 +1,19 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 40402,
+  "status_message": "Invalid Path.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "dataforseo_labs",
+   "google",
+   "bulk_search_volume",
+   "live"
+  ],
+  "data": null,
+  "result_count": 0,
+  "result": []
+ }
+}

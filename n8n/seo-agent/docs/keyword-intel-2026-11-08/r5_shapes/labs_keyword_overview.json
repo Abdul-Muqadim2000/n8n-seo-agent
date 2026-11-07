@@ -1,0 +1,323 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "dataforseo_labs",
+   "google",
+   "keyword_overview",
+   "live"
+  ],
+  "data": {
+   "api": "dataforseo_labs",
+   "function": "keyword_overview",
+   "se_type": "google",
+   "keywords": [
+    "e invoicing uae"
+   ],
+   "location_code": 2784,
+   "language_code": "en",
+   "include_serp_info": true,
+   "include_clickstream_data": false
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "se_type": "google",
+    "location_code": 2840,
+    "language_code": "en",
+    "items_count": 2,
+    "items": [
+     {
+      "se_type": "google",
+      "keyword": "phone",
+      "location_code": 2840,
+      "language_code": "en",
+      "search_partners": false,
+      "keyword_info": {
+       "se_type": "google",
+       "last_updated_time": "2026-10-19 17:25:00 +00:00",
+       "competition": 0.54,
+       "competition_level": "MEDIUM",
+       "cpc": 4,
+       "search_volume": 673000,
+       "low_top_of_page_bid": 2.05,
+       "high_top_of_page_bid": 7.03,
+       "categories": [
+        10007,
+        10878,
+        "...(+1 more)"
+       ],
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 1000000
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 823000
+        },
+        "...(+94 more)"
+       ],
+       "search_volume_trend": {
+        "monthly": 22,
+        "quarterly": 49,
+        "yearly": 49
+       }
+      },
+      "keyword_info_normalized_with_bing": {
+       "last_updated_time": "2026-11-03 21:24:03 +00:00",
+       "search_volume": 555784,
+       "is_normalized": true,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 825831
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 679659
+        },
+        "...(+10 more)"
+       ]
+      },
+      "keyword_info_normalized_with_clickstream": {
+       "last_updated_time": "2026-11-03 21:24:03 +00:00",
+       "search_volume": 556255,
+       "is_normalized": true,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 826564
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 684069
+        },
+        "...(+10 more)"
+       ]
+      },
+      "clickstream_keyword_info": {
+       "search_volume": 82290,
+       "last_updated_time": "2026-11-03 05:51:14 +00:00",
+       "gender_distribution": {
+        "female": 55,
+        "male": 45
+       },
+       "age_distribution": {
+        "18-24": 24,
+        "25-34": 21,
+        "35-44": 16,
+        "45-54": 31,
+        "55-64": 8
+       },
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 10,
+         "search_volume": 82290
+        },
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 84310
+        },
+        "...(+10 more)"
+       ]
+      },
+      "keyword_properties": {
+       "se_type": "google",
+       "core_keyword": null,
+       "synonym_clustering_algorithm": "text_processing",
+       "keyword_difficulty": 36,
+       "detected_language": "th",
+       "is_another_language": true
+      },
+      "serp_info": {
+       "se_type": "google",
+       "check_url": "https://www.google.com/search?q=phone&hl=en&gl=US&ie=UTF-8&uule=w+CAIQIFISCQs2MuSEtepUEUK33kOSuTsc",
+       "serp_item_types": [
+        "ai_overview",
+        "popular_products",
+        "...(+6 more)"
+       ],
+       "se_results_count": 144,
+       "last_updated_time": "2026-11-02 22:57:06 +00:00",
+       "previous_updated_time": "2026-07-30 03:40:50 +00:00"
+      },
+      "avg_backlinks_info": {
+       "se_type": "google",
+       "backlinks": 180658.1,
+       "dofollow": 63856.2,
+       "referring_pages": 64855.8,
+       "referring_domains": 1306.2,
+       "referring_main_domains": 1286.7,
+       "rank": 202,
+       "main_domain_rank": 637.7,
+       "last_updated_time": "2026-11-02 22:57:07 +00:00"
+      },
+      "search_intent_info": {
+       "se_type": "google",
+       "main_intent": "informational",
+       "foreign_intent": null,
+       "last_updated_time": "2026-04-29 17:44:32 +00:00"
+      }
+     },
+     {
+      "se_type": "google",
+      "keyword": "watch",
+      "location_code": 2840,
+      "language_code": "en",
+      "search_partners": false,
+      "keyword_info": {
+       "se_type": "google",
+       "last_updated_time": "2026-10-17 12:07:37 +00:00",
+       "competition": 0.94,
+       "competition_level": "HIGH",
+       "cpc": 1.46,
+       "search_volume": 550000,
+       "low_top_of_page_bid": 0.54,
+       "high_top_of_page_bid": 2.4,
+       "categories": [
+        10021,
+        10171,
+        "...(+1 more)"
+       ],
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 673000
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 550000
+        },
+        "...(+100 more)"
+       ],
+       "search_volume_trend": {
+        "monthly": 22,
+        "quarterly": 22,
+        "yearly": 22
+       }
+      },
+      "keyword_info_normalized_with_bing": {
+       "last_updated_time": "2026-11-04 18:15:02 +00:00",
+       "search_volume": 288042,
+       "is_normalized": true,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 352459
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 288042
+        },
+        "...(+10 more)"
+       ]
+      },
+      "keyword_info_normalized_with_clickstream": {
+       "last_updated_time": "2026-11-04 18:15:02 +00:00",
+       "search_volume": 324142,
+       "is_normalized": true,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 396635
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 325465
+        },
+        "...(+10 more)"
+       ]
+      },
+      "clickstream_keyword_info": {
+       "search_volume": 76238,
+       "last_updated_time": "2026-11-03 08:19:32 +00:00",
+       "gender_distribution": {
+        "female": 48,
+        "male": 52
+       },
+       "age_distribution": {
+        "18-24": 31,
+        "25-34": 15,
+        "35-44": 18,
+        "45-54": 28,
+        "55-64": 7
+       },
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 10,
+         "search_volume": 76240
+        },
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 76910
+        },
+        "...(+10 more)"
+       ]
+      },
+      "keyword_properties": {
+       "se_type": "google",
+       "core_keyword": null,
+       "synonym_clustering_algorithm": "text_processing",
+       "keyword_difficulty": 54,
+       "detected_language": "en",
+       "is_another_language": false
+      },
+      "serp_info": {
+       "se_type": "google",
+       "check_url": "https://www.google.com/search?q=watch&hl=en&gl=US&ie=UTF-8&uule=w+CAIQIFISCQs2MuSEtepUEUK33kOSuTsc",
+       "serp_item_types": [
+        "local_pack",
+        "people_also_ask",
+        "...(+4 more)"
+       ],
+       "se_results_count": 193,
+       "last_updated_time": "2026-07-30 03:41:04 +00:00",
+       "previous_updated_time": "2026-05-14 18:22:06 +00:00"
+      },
+      "avg_backlinks_info": {
+       "se_type": "google",
+       "backlinks": 2109.9,
+       "dofollow": 1885.7,
+       "referring_pages": 2023.8,
+       "referring_domains": 235.9,
+       "referring_main_domains": 218.1,
+       "rank": 223.9,
+       "main_domain_rank": 470.7,
+       "last_updated_time": "2026-07-30 03:41:04 +00:00"
+      },
+      "search_intent_info": {
+       "se_type": "google",
+       "main_intent": "transactional",
+       "foreign_intent": [
+        "informational"
+       ],
+       "last_updated_time": "2026-04-29 23:59:57 +00:00"
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

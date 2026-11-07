@@ -1,0 +1,50 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "dataforseo_labs",
+   "google",
+   "bulk_keyword_difficulty",
+   "live"
+  ],
+  "data": {
+   "api": "dataforseo_labs",
+   "function": "bulk_keyword_difficulty",
+   "se_type": "google",
+   "keywords": [
+    "e invoicing uae",
+    "erp software"
+   ],
+   "location_code": 2784,
+   "language_code": "en"
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "se_type": "google",
+    "location_code": 2840,
+    "language_code": "en",
+    "total_count": 3,
+    "items_count": 3,
+    "items": [
+     {
+      "se_type": "google",
+      "keyword": "dentist new york",
+      "keyword_difficulty": 33
+     },
+     {
+      "se_type": "google",
+      "keyword": "pizza brooklyn",
+      "keyword_difficulty": 23
+     },
+     "...(+1 more)"
+    ]
+   }
+  ]
+ }
+}

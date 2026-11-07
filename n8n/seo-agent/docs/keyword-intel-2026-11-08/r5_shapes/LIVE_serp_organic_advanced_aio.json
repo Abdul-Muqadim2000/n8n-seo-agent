@@ -1,0 +1,179 @@
+{
+ "_source": "harness/fixtures_live/aio.json (real live response, 2026-10-02, trimmed)",
+ "cost": 0.002,
+ "task": {
+  "cost": 0.002,
+  "path": [
+   "v3",
+   "serp",
+   "google",
+   "organic",
+   "live",
+   "advanced"
+  ],
+  "data": {
+   "api": "serp",
+   "function": "live",
+   "se": "google",
+   "se_type": "organic",
+   "keyword": "e invoicing in uae",
+   "location_code": 2784,
+   "language_code": "en",
+   "depth": 10,
+   "load_async_ai_overview": true,
+   "device": "desktop",
+   "os": "windows"
+  },
+  "result": [
+   {
+    "keyword": "e invoicing in uae",
+    "type": "organic",
+    "se_domain": "google.com",
+    "location_code": 2784,
+    "language_code": "en",
+    "check_url": "https://www.google.com/search?q=e%20invoicing%20in%20uae&hl=en&gl=AE&ie=UTF-8&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+    "datetime": "2026-10-02 11:58:36 +00:00",
+    "spell": null,
+    "refinement_chips": null,
+    "item_types": [
+     "ai_overview",
+     "organic",
+     "...(+3 more)"
+    ],
+    "se_results_count": 102,
+    "pages_count": 1,
+    "items_count": 14,
+    "items": [
+     {
+      "type": "ai_overview",
+      "rank_group": 1,
+      "rank_absolute": 1,
+      "page": 1,
+      "position": "left",
+      "asynchronous_ai_overview": false,
+      "markdown": "You can learn more about the legal and technical definitions on the [Federal Tax Authority - UAE E-Invoicing](https://tax.gov.ae/en/content/uae.einvoicing.aspx)...",
+      "items": [
+       {
+        "type": "ai_overview_element",
+        "position": "left",
+        "title": null,
+        "text": "You can learn more about the legal and technical definitions on the Federal Tax Authority - UAE E-Invoicing portal.",
+        "markdown": "You can learn more about the legal and technical definitions on the [Federal Tax Authority - UAE E-Invoicing](https://tax.gov.ae/en/content/uae.einvoicing.aspx)...",
+        "links": [
+         {
+          "type": "link_element",
+          "title": "Federal Tax Authority - UAE E-Invoicing",
+          "description": null,
+          "url": "https://tax.gov.ae/en/content/uae.einvoicing.aspx",
+          "domain": "tax.gov.ae"
+         }
+        ],
+        "images": null,
+        "references": [
+         {
+          "type": "ai_overview_reference",
+          "position": "left",
+          "source": "tax.gov.ae",
+          "domain": "tax.gov.ae",
+          "url": "https://tax.gov.ae/en/content/uae.einvoicing.aspx",
+          "title": "Federal Tax Authority - Uae E-Invoicing",
+          "text": "e-Invoicing is a key step in the UAE's digital transformation journey, enabling secure, structured and fully electronic exchange o..."
+         }
+        ]
+       },
+       {
+        "type": "ai_overview_element",
+        "position": "left",
+        "title": null,
+        "text": "The United Arab Emirates is rolling out a mandatory e-invoicing system using a decentralized 5-corner Peppol model to automate tax reporting and improve complia...",
+        "markdown": "The United Arab Emirates is rolling out a mandatory e-invoicing system using a decentralized 5-corner Peppol model to automate tax reporting and improve complia...",
+        "links": null,
+        "images": null,
+        "references": [
+         {
+          "type": "ai_overview_reference",
+          "position": "left",
+          "source": "Grant Thornton UAE",
+          "domain": "www.grantthornton.ae",
+          "url": "https://www.grantthornton.ae/services/tax/vat/e-invoicing-services/",
+          "title": "E-invoicing",
+          "text": "What is e-invoicing? E-invoicing is a digital solution for issuing, transmitting, and receiving invoices between suppliers and buy..."
+         },
+         {
+          "type": "ai_overview_reference",
+          "position": "left",
+          "source": "EDICOM",
+          "domain": "edicomgroup.com",
+          "url": "https://edicomgroup.com/electronic-invoicing/united-arab-emirates",
+          "title": "Electronic invoicing and e-Reporting in the UAE",
+          "text": "Features of electronic invoicing in the United Arab Emirates. The UAE authorities, through the Ministry of Finance (UAE) (MOF) and..."
+         },
+         "...(+1 more)"
+        ]
+       },
+       "...(+3 more)"
+      ],
+      "references": [
+       {
+        "type": "ai_overview_reference",
+        "position": "right",
+        "source": "tax.gov.ae",
+        "domain": "tax.gov.ae",
+        "url": "https://tax.gov.ae/en/content/uae.einvoicing.aspx",
+        "title": "Federal Tax Authority - Uae E-Invoicing",
+        "text": "e-Invoicing is a key step in the UAE's digital transformation journey, enabling secure, structured and fully electronic exchange o..."
+       },
+       {
+        "type": "ai_overview_reference",
+        "position": "right",
+        "source": "Grant Thornton UAE",
+        "domain": "www.grantthornton.ae",
+        "url": "https://www.grantthornton.ae/services/tax/vat/e-invoicing-services/",
+        "title": "E-invoicing",
+        "text": "What is e-invoicing? E-invoicing is a digital solution for issuing, transmitting, and receiving invoices between suppliers and buy..."
+       },
+       "...(+7 more)"
+      ]
+     },
+     {
+      "type": "organic",
+      "rank_group": 1,
+      "rank_absolute": 2,
+      "page": 1,
+      "position": "left",
+      "domain": "tax.gov.ae",
+      "title": "Federal Tax Authority - Uae E-Invoicing",
+      "url": "https://tax.gov.ae/en/content/uae.einvoicing.aspx",
+      "cache_url": null,
+      "related_search_url": null,
+      "breadcrumb": "https://tax.gov.ae \u203a content \u203a uae.einvoicing.aspx",
+      "website_name": "tax.gov.ae",
+      "is_image": false,
+      "is_video": false,
+      "is_featured_snippet": false,
+      "is_malicious": false,
+      "is_web_story": false,
+      "checks": null,
+      "description": "e-Invoicing is a key step in the UAE's digital transformation journey, enabling secure, structured and fully electronic exchange of invoice data",
+      "pre_snippet": null,
+      "extended_snippet": null,
+      "images": null,
+      "amp_version": false,
+      "rating": null,
+      "price": null,
+      "highlighted": [
+       "e-Invoicing is a key step in the UAE's digital transformation journey"
+      ],
+      "links": null,
+      "faq": null,
+      "extended_people_also_search": null,
+      "about_this_result": null,
+      "related_result": null,
+      "timestamp": null
+     },
+     "...(+12 more)"
+    ]
+   }
+  ]
+ }
+}
