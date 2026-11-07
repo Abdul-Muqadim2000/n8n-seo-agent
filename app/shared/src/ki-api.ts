@@ -160,7 +160,7 @@ export interface KiCompetitorView {
   profile: KiCompetitorProfile | null;
   /** the row's last update (the engine's updated_at) */
   fetchedAt: string;
-  /** `rule` / `page` / `declared` / `user` = measured on the results pages; `llm` = AI judgement */
+  /** `rule` / `page` / `declared` / `user` = measured on the results pages; `llm` = a model's reading (none is used today) */
   basis: KiBasis;
   basisLabel: string;
 }

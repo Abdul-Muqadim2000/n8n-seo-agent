@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { COST_TABLE } from './cost';
-import { KI_RULE_VERSION, KI_STAGE_WEIGHT, KI_VERDICT_IDS, KI_VERDICT_THRESHOLDS, KI_VERDICTS, kiVerdict, type KiVerdict } from './ki';
+import { KI_BASIS, KI_GATE_FIELDS, KI_GATE_REASON_IDS, KI_ROW_CURRENT, KI_RULE_VERSION, KI_STAGE_WEIGHT, KI_STRIKING, KI_VERDICT_IDS, KI_VERDICT_THRESHOLDS, KI_VERDICTS, kiVerdict, type KiVerdict } from './ki';
 
 const ENGINE = join(__dirname, '../../../n8n/seo-agent');
 const FIXTURE = join(ENGINE, 'harness/fixtures/ki_parity.json');
@@ -23,6 +23,14 @@ describe.skipIf(!existsSync(FIXTURE))('KI parity fixture', () => {
     expect(Object.keys(P.verdicts)).toEqual([...KI_VERDICT_IDS]);
     expect(P.thresholds).toEqual({ ...KI_VERDICT_THRESHOLDS });
     expect(P.stage_weights).toEqual(KI_STAGE_WEIGHT);
+  });
+  it('FX-L: gate reason codes, the gate fields, striking distance, the current-row rule and the basis words are the engine\'s', () => {
+    const Q = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Record<string, unknown>;
+    expect(Q.gate_reasons).toEqual([...KI_GATE_REASON_IDS]);
+    expect(Q.gate_fields).toEqual({ ...KI_GATE_FIELDS });
+    expect(Q.striking).toEqual(expect.objectContaining({ ...KI_STRIKING }));
+    expect(Q.row_current).toEqual(JSON.parse(JSON.stringify(KI_ROW_CURRENT)));
+    expect(Q.basis_labels).toEqual({ ...KI_BASIS });
   });
   it('every boundary case gets the fixture\'s verdict', () => {
     for (const c of P.cases) expect([c.name, kiVerdict(c.row)]).toEqual([c.name, c.verdict]);
