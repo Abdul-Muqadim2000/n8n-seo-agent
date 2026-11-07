@@ -1,4 +1,5 @@
 /*__SOURCES__*/
+/*__SERP_URL__*/
 // Verified facts: statistics from a second live search ("<keyword> statistics <year>"), kept only with their source URL,
 // so the writer can cite real numbers instead of inventing them or hiding behind [Statistic].
 // 2026-10-11 (FIX_PLAN G4): the URL is stored without its tracking parameters (a Statista link kept `?srsltid=` live), the source's
@@ -17,6 +18,8 @@ for (const it of items) {
   // FU-SV (2026-10-29, page-quality BEFORE run K7): a result whose URL is a search-engine redirect (google.com/goto?url=<token>, domain
   // "google.com") is read as the page it leads to when the redirect carries it; an opaque one cannot be cited with a link the page could
   // carry, so it never becomes a fact (it is named in facts_unlinkable with the site it came from). Never "google.com" as the source.
+  // SERP-GOTO (2026-11-08): a result SU recovered from its breadcrumb names the site but not the exact page, so it is not citable either
+  if (it.url_exact === false) { unlinkable.push({ site: String(it.website_name || '') || String(it.domain || '').replace(/^www\./, ''), title: String(it.title || '').slice(0, 120) }); continue; }
   const rawUrl = String(it.url || '');
   const redirected = SRC.isRedirect(rawUrl);
   if (redirected && !SRC.unwrap(rawUrl)) { unlinkable.push({ site: String(it.website_name || '') || ((String(it.breadcrumb || '').match(/^https?:\/\/(?:www\.)?([^\s\/›]+)/i) || [])[1] || ''), title: String(it.title || '').slice(0, 120) }); continue; }

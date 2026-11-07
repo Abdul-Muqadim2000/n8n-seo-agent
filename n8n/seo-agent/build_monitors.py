@@ -59,7 +59,8 @@ def src(p):   # a Code node source with the shared snippets inlined
     s = s.replace('/*__AI_PANEL__*/', rd('code/_ai_panel.js').rstrip('\n'))   # G6 (2026-10-18): the AI question panel at scale (limits, markets, strata, chunks, the one cost formula)
     s = s.replace('/*__AI_FOCUS__*/', rd('code/_ai_focus.js').rstrip('\n'))   # AI-FOCUS (2026-10-27, docs/ai-panel-focus-2026-10-27): the panel follows the client's focus (AIF)
     s = s.replace('/*__AI_W2E3__*/', rd('code/_ai_w2e3.js').rstrip('\n'))   # W2-E3 (2026-10-23): fan-out ranking gap, persona effect, demand, the owner's AI reports, the run's bookkeeping (AIX)
-    s = s.replace('/*__SERP_CACHE__*/', rd('code/_serp_cache.js').rstrip('\n'))   # KW-SERP (2026-10-21): one results-page reading per search and day, shared by every path (SC); W2-E3: the fan-out check reads it too
+    s = s.replace('/*__SERP_CACHE__*/', rd('code/_serp_url.js').rstrip('\n') + '\n' + rd('code/_serp_cache.js').rstrip('\n'))   # SERP-GOTO (2026-11-08): SU travels with SC
+    s = s.replace('/*__SERP_URL__*/', rd('code/_serp_url.js').rstrip('\n'))   # KW-SERP (2026-10-21): one results-page reading per search and day, shared by every path (SC); W2-E3: the fan-out check reads it too
     # AIR (2026-11-06, docs/ai-ranking-2026-11-05/CONTRACTS.md §3): the AI-ranking kits - flags + kill switch (AIRF, frozen by W0), diagnosis (ARD,
     # package P1) and decision / learning (ARL, package P2); inlined only into the AIR nodes of the AI Growth workflow (package P4)
     s = s.replace('/*__AI_RANK_FLAGS__*/', rd('code/_ai_rank_flags.js').rstrip('\n')).replace('/*__AI_RANK_DIAG__*/', rd('code/_ai_rank_diag.js').rstrip('\n')).replace('/*__AI_RANK_LEARN__*/', rd('code/_ai_rank_learn.js').rstrip('\n'))

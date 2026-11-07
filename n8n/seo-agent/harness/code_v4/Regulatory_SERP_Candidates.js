@@ -540,7 +540,9 @@ const __main = () => {
   const plan = (asked[0] || {}).regulatory_plan || {};
   const market = REG.marketOf(REGULATORS, plan.market);
   const results = asked.map((q, i) => { const a = answers[i] || {}; const items = ((((a.tasks || [])[0] || {}).result || [])[0] || {}).items || [];
-    return items.filter(it => it && it.type === 'organic').map(it => ({ url: it.url, title: it.title, content: it.description })); });
+    // SERP-GOTO (2026-11-08): a result whose link was a Google redirect has only an approximate address (url_exact false): it is never read
+    // and cited as an official page - only a result with its exact url is a candidate
+    return items.filter(it => it && it.type === 'organic' && it.url && it.url_exact !== false).map(it => ({ url: it.url, title: it.title, content: it.description })); });
   const picked = REG.pick(plan, asked.map(q => ({ topic: q.topic, kind: 'deadline' })), results, REGULATORS, market);
   const searched = { searches: asked.length, answered: results.filter(r => r.length).length, results: results.reduce((n, r) => n + r.length, 0), engine: 'dataforseo' };
   if (!picked.reads.length) return [{ json: { skip: true, reason: 'the free search was down and the paid search found no official or independent page to read', regulatory_plan: plan, hints: [], searched } }];

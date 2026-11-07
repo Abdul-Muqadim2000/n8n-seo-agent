@@ -108,7 +108,7 @@ for (const g of pay) {
   const bodyOf = (q) => ({ keyword: q.slice(0, 700), location_code: loc.location_code, language_code: loc.language_code, depth: AIRC.serp_depth });
   if (rank.fanout_n > 0 && loc) for (const q of queries) {
     const body = bodyOf(q.query); const row = serpRows.find(r => r && S0(r.key) === SC.key(body)); const v = row ? P(row.value, null) : null;
-    const fresh = v && v.at && nowMs - Date.parse(v.at) <= AIRC.serp_fresh_days * DAY && (v.empty || Number(v.depth) >= AIRC.serp_depth);
+    const fresh = v && v.at && !SU.poisoned(v) && nowMs - Date.parse(v.at) <= AIRC.serp_fresh_days * DAY && (v.empty || Number(v.depth) >= AIRC.serp_depth);   // SERP-GOTO: a reading with unresolved Google redirect links is read again
     if (fresh) { google.cached.push({ query: q.query, key: q.key, source: 'serp cache', read_at: S0(v.at), location_code: loc.location_code,
       results: v.empty ? [] : (v.items || []).filter(x => x && x.type === 'organic' && x.url).map(x => ({ url: x.url, pos: Number(x.rank_group || x.rank_absolute) || null })) }); continue; }
     const st = readOf('google', q.key); if (st) { google.cached.push({ query: q.query, key: q.key, source: 'this week', read_at: S0(st.at), location_code: Number(st.loc) || loc.location_code, results: st.ours || [], results_scope: 'ours' }); continue; }
