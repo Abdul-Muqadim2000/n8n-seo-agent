@@ -516,7 +516,12 @@ type CompJson = {
   above?: { d?: string; p?: number | null; t?: boolean }[];
   competitors?: { d?: string; p?: number | null; t?: boolean }[];
 };
-type SnapJson = { at?: string | null; device?: string; top?: { p?: number; u?: string; t?: string }[] };
+const SNAP_REDIRECT = /^https?:\/\/(?:[a-z0-9-]+\.)*(?:google\.[a-z]{2,3}(?:\.[a-z]{2})?\/(?:goto|url|search\/url|aclk)(?=[?/#]|$)|bing\.com\/ck\/a(?=[?/#]|$))/i;
+const snapHost = (u: string) => (u.match(/^https?:\/\/([^/?#\s]+)/i)?.[1] ?? '').toLowerCase().replace(/:\d+$/, '').replace(/^www\./, '');
+export function snapTop(top: { p?: number; u?: string; t?: string; x?: number }[]): { position: number; url: string; title: string; host?: string; approximate?: boolean }[] {
+  return top.filter((t) => s(t.u) && !SNAP_REDIRECT.test(s(t.u))).map((t) => (t.x ? { position: n(t.p), url: '', title: s(t.t), host: snapHost(s(t.u)), approximate: true } : { position: n(t.p), url: s(t.u), title: s(t.t) }));
+}
+type SnapJson = { at?: string | null; device?: string; top?: { p?: number; u?: string; t?: string; x?: number }[] };
 
 const tri = (v: boolean | null | undefined): boolean | null => (v === true ? true : v === false ? false : null);
 const comps = (list: CompJson['above']): SerpCompetitor[] =>
@@ -563,7 +568,9 @@ export function serpReading(rows: RankHistoryRow[]): SerpReading | null {
     method: s(c.method),
     above: comps(c.above),
     competitors: comps(c.competitors),
-    snapshot: { at: snap.at ?? null, device: s(snap.device) || 'desktop', top: (snap.top ?? []).filter((t) => s(t.u)).map((t) => ({ position: n(t.p), url: s(t.u), title: s(t.t) })) },
+    // SERP-GOTO (2026-11-08): an approximate address (x: 1, recovered from Google's breadcrumb) is shown as its site with no link; a reading
+    // stored with bare Google redirect links shows none of them
+    snapshot: { at: snap.at ?? null, device: s(snap.device) || 'desktop', top: snapTop(snap.top ?? []) },
     mobile,
   };
 }

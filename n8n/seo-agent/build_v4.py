@@ -13722,6 +13722,8 @@ patch('Pick Top 6', "  const d = String(it.domain || '').toLowerCase().replace(/
       "  // SERP-GOTO (section 181): Google showed this result behind a redirect and cut its address, so only the site is known - its page is not\n"
       "  // read as \"the competitor's page for this search\" (it would be the home page); a full breadcrumb address is read, marked approximate\n"
       "  if (it.url_exact === false && it.url_partial) { skipped.push(d + ' (only the site is known: Google hid the page address)'); continue; }\n")
+patch('Pick Top 6', ".map(x => ({ url: String(x.url), title: String(x.title || '') }));",
+      ".map(x => ({ url: String(x.url), title: String(x.title || ''), ...(x.url_exact === false ? { url_exact: false } : {}) }));   /* SERP-GOTO (review M4): an approximate address does not vote on the page type */")
 patch('Pick Top 6', "    snippet: it.description || ''\n  });",
       "    snippet: it.description || '',\n    ...(it.url_exact === false ? { url_exact: false } : {})\n  });")
 patch('Analyze Competitor Pages', "} catch (e) { serpItems = []; serpError = 'no answer'; }\n",
@@ -14071,18 +14073,61 @@ _b69_checks()
 _seen150 = _ll150.check(os.path.join(HERE0, 'workflows'))
 json.dump(dict(_ll150.harness_table(), seen=[list(x) for x in _seen150], self_test_cases=_ll150.self_test()), open(os.path.join(HERE0, 'harness', 'llm_limits.json'), 'w'), indent=1, sort_keys=True)
 
-# section 181 (SERP-GOTO, 2026-11-08): on EVERY generated workflow - a Code node that uses the SERP url kit carries it (a node calling
-# SU without the kit throws on the first results page), and every DataForSEO answer node carries it
+# section 181 (SERP-GOTO, 2026-11-08; strengthened after the review, L6): on EVERY generated workflow -
+#   A. a Code node that uses the SERP url kit carries it (a node calling SU without the kit throws on the first results page);
+#   B. every DataForSEO answer node (dfs_gate's `<X> Answers`) passes its answers through SU.fixAnswer;
+#   C. every Code node a live SERP HTTP node feeds (through IF / Wait / retry copies, up to the first Code node) or that reads one by name
+#      carries SU, except the nodes that only read the answer's status or cost (STATUS_ONLY, each with its reason);
+#   D. every Code node that reads stored `serp:` readings (seo_cache) or stored rank snapshots (`snapshot_json`) carries SU, so a stored
+#      reading with bare redirects can be recognised (SC.lookup, RS.prevReading / poisonedRow, SU.poisoned).
+# What it still does NOT look at: a Code node that calls DataForSEO itself (this.helpers.httpRequest - none does today), data handed to
+# another workflow through Execute Workflow, a reader that holds the kit but ignores url_exact, and the app (app/server/src/services
+# cadence.ts / data.ts mirror the rule by hand; app/server/test/serpGoto.test.ts pins them).
+_STATUS_ONLY181 = {   # node -> why it may read a SERP answer without SU
+    'Ladder Cluster Retry': 'reads only the status of each answer to decide what to send again',
+}
+_STORED_OK181 = {   # node -> why it may read a stored snapshot without SU
+    'Unread Alert Row (Tracker)': 'reads only the `mo` count Parse Positions wrote in this same run, never an address',
+}
+_strip181 = lambda js: re.sub(r'(?<!:)//[^\n]*', ' ', re.sub(r'/\*.*?\*/', ' ', js, flags=re.S))
+_c181 = {'A': 0, 'B': 0, 'C': 0, 'D': 0}
 for _f181 in sorted(os.listdir(os.path.join(HERE0, 'workflows'))):
     if not _f181.endswith('.json') or 'v3_original' in _f181:
         continue
     _w181 = json.load(open(os.path.join(HERE0, 'workflows', _f181), encoding='utf-8'))
     _w181 = _w181[0] if isinstance(_w181, list) else _w181
+    _nd181 = {n['name']: n for n in _w181.get('nodes', [])}
+    _cn181 = _w181.get('connections', {})
+    _js = lambda n: ((_nd181[n].get('parameters') or {}).get('jsCode') or '') if n in _nd181 else ''
+    _has = lambda n: 'var SU = ' in _js(n)
     for _n in _w181.get('nodes', []):
-        _js181 = (_n.get('parameters') or {}).get('jsCode') or ''
-        _run181 = re.sub(r'(?<!:)//[^\n]*', ' ', re.sub(r'/\*.*?\*/', ' ', _js181, flags=re.S))
-        if re.search(r'\bSU\.(?:fix|exact|unresolved|poisoned|key|isRedirect)', _run181):
-            assert 'var SU = ' in _js181, 'SERP-GOTO: %s / %s calls SU without the kit inlined' % (_f181, _n['name'])
+        _js181 = _js(_n['name']); _run181 = _strip181(_js181)
+        if re.search(r'\bSU\.(?:fix|exact|unresolved|poisoned|key|isRedirect|couldBe)', _run181):
+            assert _has(_n['name']), 'SERP-GOTO (A): %s / %s calls SU without the kit inlined' % (_f181, _n['name']); _c181['A'] += 1
         if _n['name'].endswith(' Answers') and 'RT.stats(first' in _js181:
-            assert 'SU.fixAnswer(a)' in _js181, 'SERP-GOTO: %s / %s does not pass its answers through SU' % (_f181, _n['name'])
-print('SERP-GOTO (section 181): every node that reads a Google results page sees the real host behind a redirect link')
+            assert 'SU.fixAnswer(a)' in _js181, 'SERP-GOTO (B): %s / %s does not pass its answers through SU' % (_f181, _n['name']); _c181['B'] += 1
+        if _n['type'] == 'n8n-nodes-base.code' and _n['name'] not in _STORED_OK181 and ("'serp:'" in _run181 or '"serp:"' in _run181 or 'snapshot_json' in _run181):
+            assert _has(_n['name']), 'SERP-GOTO (D): %s / %s reads stored SERP readings or rank snapshots without SU' % (_f181, _n['name']); _c181['D'] += 1
+    _serp181 = [n['name'] for n in _w181.get('nodes', []) if n['type'] == 'n8n-nodes-base.httpRequest' and re.search(r'serp/(?:google|bing)/organic', json.dumps(n.get('parameters') or {}))]
+    for _h in _serp181:
+        _seen, _todo = set(), [_h]
+        while _todo:
+            _x = _todo.pop()
+            for _l in (_cn181.get(_x) or {}).get('main') or []:
+                for _t in (_l or []):
+                    _k = _t['node']
+                    if _k in _seen or _k not in _nd181:
+                        continue
+                    _seen.add(_k)
+                    if _nd181[_k]['type'] == 'n8n-nodes-base.code':
+                        if _k.endswith(' Retry Plan') or _k in _STATUS_ONLY181:
+                            continue
+                        assert _has(_k), 'SERP-GOTO (C): %s / %s reads the results page of %s without SU' % (_f181, _k, _h); _c181['C'] += 1
+                    else:
+                        _todo.append(_k)
+        _arg = re.compile(r"""\$\(\s*['"]%s['"]\s*\)""" % re.escape(_h))
+        for _n in _w181.get('nodes', []):
+            _r = _strip181(_js(_n['name']))
+            if _n['name'] != _h and _arg.search(_r) and '__LEDGER_NODES' not in _r and not _n['name'].endswith(' Retry Plan') and _n['name'] not in _STATUS_ONLY181:
+                assert _has(_n['name']), 'SERP-GOTO (C): %s / %s reads %s by name without SU' % (_f181, _n['name'], _h); _c181['C'] += 1
+print('SERP-GOTO (section 181): every node that reads a Google results page sees the real host behind a redirect link (A %d kit users, B %d answer nodes, C %d live readers, D %d stored-reading readers)' % (_c181['A'], _c181['B'], _c181['C'], _c181['D']))

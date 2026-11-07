@@ -44,9 +44,11 @@ module.exports = async (ctx) => {
   check('the recovered hosts are the hosts the same search showed with exact urls (standard-priority task, 83 s later): at least 6 of 9, positions 1-3 identical',
     inBoth >= 6 && [1, 2, 3].every(p => bare((org.find(x => x.rank_group === p) || {}).domain) === bare((itemsOf(EXACT).find(x => x.type === 'organic' && x.rank_group === p) || {}).domain)),
     J({ inBoth, recovered: org.map(x => bare(x.domain)), real: [...realHosts] }));
-  check('a full breadcrumb gives an approximate address (host + path), a cut one only the home page, marked partial',
-    org.find(x => x.rank_group === 1).url === 'https://www.sage.com/en-ae/erp' && org.find(x => x.rank_group === 1).url_partial === false
-    && org.find(x => x.rank_group === 2).url === 'https://www.brainsphereit.com/' && org.find(x => x.rank_group === 2).url_partial === true, J(org.slice(0, 2).map(x => [x.url, x.url_partial])));
+  check('a full slug breadcrumb gives an approximate address (host + path); a cut one, or one made of page labels ("› Home › Blog"), only the home page, marked partial',
+    org.find(x => x.rank_group === 1).url === 'https://www.sage.com/en-ae/erp' && org.find(x => x.rank_group === 1).url_partial === false && org.find(x => x.rank_group === 1).url_path === 'path'
+    && org.find(x => x.rank_group === 2).url === 'https://www.brainsphereit.com/' && org.find(x => x.rank_group === 2).url_path === 'cut'
+    && org.find(x => x.rank_group === 7).url === 'https://odooerp.ae/' && org.find(x => x.rank_group === 7).url_partial === true && org.find(x => x.rank_group === 7).url_path === 'labels',
+    J(org.map(x => [x.rank_group, x.url, x.url_path])));
   check('a local-pack listing with no host anywhere is left unresolved (domain and url null), never counted as google.com',
     lp.length === 3 && lp.every(x => x.domain === null && x.url === null && x.url_exact === false), J(lp.map(x => [x.domain, x.url])));
   check('the answer says what was done (redirects / recovered / unresolved)', J(itemsOf(fixed) && fixed.tasks[0].result[0].serp_url) === J({ redirects: 12, recovered: 9, unresolved: 3, rule: 'SU (v5/code/_serp_url.js): host from the breadcrumb, url approximate' }), J(fixed.tasks[0].result[0].serp_url));
@@ -59,6 +61,15 @@ module.exports = async (ctx) => {
   const social = await su('fixItem', { type: 'organic', rank_group: 5, domain: 'google.com', url: 'https://google.com/goto?url=CAESabc', breadcrumb: '3 reactions · 1 month ago', website_name: 'Facebook · TechMantra GULF DMCC' });
   const named = await su('fixItem', { type: 'organic', rank_group: 6, domain: 'google.com', url: 'https://www.google.com/url?q=x', breadcrumb: null, website_name: 'acme-erp.ae' });
   const none = await su('fixItem', { type: 'organic', rank_group: 7, domain: 'google.com', url: 'https://google.com/goto?url=CAESdef', breadcrumb: 'Blueflame Labs', website_name: 'Blueflame Labs' });
+  const idn = await su('fixItem', { type: 'organic', domain: 'google.com', url: 'https://google.com/goto?url=CAES1', breadcrumb: 'https://www.müller.de › shop' });
+  const xn = await su('fixItem', { type: 'organic', domain: 'google.com', url: 'https://google.com/goto?url=CAES2', breadcrumb: 'https://xn--mgbh0fb.xn--mgbaam7a8h › a' });
+  const noScheme = await su('fixItem', { type: 'organic', domain: 'google.com', url: 'https://google.com/goto?url=CAES3', breadcrumb: 'en.wikipedia.org › wiki › ERP' });
+  check('review H2: a Unicode host, a punycode TLD (the UAE\'s) and a breadcrumb without https:// all give their host',
+    idn.domain === 'www.müller.de' && xn.domain === 'xn--mgbh0fb.xn--mgbaam7a8h' && noScheme.domain === 'en.wikipedia.org' && noScheme.url_path === 'labels', J([idn.domain, xn.domain, noScheme.domain, noScheme.url_path]));
+  const ctor = await su('fixItem', { type: 'organic', domain: 'google.com', url: 'https://google.com/goto?url=CAES4', breadcrumb: '', website_name: 'Constructor' });
+  check('review L1: website_name "Constructor" is not a social network (no prototype key): unresolved', ctor.domain === null && ctor.url === null, J(ctor));
+  let threw = ''; let odd = null; try { odd = [await su('carried', 'https://www.google.com/url?q=https://:a.b'), await su('carried', 'https://www.google.com/url?q=https://u:p@evil.example/x'), await su('carried', 'https://www.google.com/url?q=https%3A%2F%2Fwww.mof.gov.ae%2Fen')]; } catch (e) { threw = String(e); }
+  check('review L2: a carried target with no host or with userinfo is no target, and nothing throws; a real one is read', !threw && odd[0] === '' && odd[1] === '' && odd[2] === 'https://www.mof.gov.ae/en', threw || J(odd));
   check('no breadcrumb host: website_name when it is a host, a named social network, else unresolved',
     named.domain === 'acme-erp.ae' && named.url_recovered === 'website_name' && named.url_partial === true && social.domain === 'facebook.com' && social.url_recovered === 'social'
     && none.domain === null && none.url === null, J([named.domain, social.domain, none.domain]));
@@ -88,13 +99,19 @@ module.exports = async (ctx) => {
     (await kit({ serp: GOTO, domain: 'techand.ai' })).rank.position === 0);
   const withHole = JSON.parse(J(GOTO)); itemsOf(withHole).push({ type: 'organic', rank_group: 10, rank_absolute: 13, domain: 'google.com', url: 'https://google.com/goto?url=CAESzz', breadcrumb: '', website_name: 'Some Brand' });
   const Kh = await kit({ serp: withHole, domain: 'techand.ai' });
-  check('not found while one result has no site behind its redirect: -1 ("check again"), so no drop and no "lost" alert can come from it',
-    Kh.rank.position === -1 && Kh.rank.unresolved === 1, J(Kh.rank));
+  check('review H2: a hidden result that names someone else is not ours: "not in the top 50" stands (0) and says one result was hidden',
+    Kh.rank.position === 0 && Kh.rank.unresolved === 1 && !Kh.rank.maybe_ours, J(Kh.rank));
+  const withOurs = JSON.parse(J(GOTO)); itemsOf(withOurs).push({ type: 'organic', rank_group: 10, rank_absolute: 13, domain: 'google.com', url: 'https://google.com/goto?url=CAESyy', breadcrumb: '', website_name: 'Techand Software', title: 'ERP in the UAE | Tech&' });
+  const Ko = await kit({ serp: withOurs, domain: 'techand.ai' });
+  check('a hidden result that could be ours (our label in its name) is -1 ("check again"), counted in the snapshot (mo) for the next plan',
+    Ko.rank.position === -1 && Ko.rank.maybe_ours === 1 && Ko.snapshot.mo === 1 && Ko.snapshot.ur === 1, J({ rank: Ko.rank, mo: Ko.snapshot.mo }));
   const two = JSON.parse(J(GOTO)); itemsOf(two).forEach(x => { if (x.rank_group === 3 && x.type === 'organic') x.breadcrumb = 'https://www.sowaanerp.ae › erp-software-uae'; });
   const K2 = await kit({ serp: two, domain: 'sowaanerp.ae' });
   const snap2 = K2.snapshot;
-  check('two results of ours behind redirects are not "two of your pages compete" (the pages are not known)',
-    Array.isArray(K2.landscape.own) && K2.landscape.own.length === 0 && snap2.own_n === 0 && !snap2.own, J({ own: K2.landscape.own, n: snap2.own_n }));
+  check('two results of ours behind redirects are not "two of your pages compete", and not "none found" either (review M3): not checked, with the reason',
+    Array.isArray(K2.landscape.own) && K2.landscape.own.length === 0 && snap2.own_n === undefined && snap2.own_hidden === true
+    && K2.cannibal.checked === false && /redirect/.test(K2.cannibal.reason), J({ own: K2.landscape.own, n: snap2.own_n, c: K2.cannibal }));
+  check('review L3: a local pack whose listings have no site is "ours: unknown" (null), never a definite no', K.features.local_pack.shown === true && K.features.local_pack.ours === null, J(K.features.local_pack));
   check('the snapshot marks approximate addresses (x: 1) and stores no google.com', snap2.top.every(t => t.x === 1) && !/google\.com/.test(J(snap2.top)), J(snap2.top.slice(0, 3)));
   const Ke = await kit({ serp: EXACT, domain: 'sowaanerp.ae' });
   check('the exact reading (standard priority) still finds the page itself, url and all', Ke.rank.position === 9 && /sowaanerp\.ae\/erp-companies-in-the-uae/.test(Ke.rank.url) && Ke.rank.page_identified === undefined, J(Ke.rank));
@@ -134,9 +151,11 @@ module.exports = async (ctx) => {
     itemsOf(ans).filter(x => x.type === 'organic').every(x => x.domain && !isGoogle(x.domain)) && ans.__dfs && ans.__dfs_cost_usd === 0.002, J(itemsOf(ans).map(x => x.domain)));
   mock('Prepare Keyword Run', [{ json: { domain: 'sowaanerp.ae', keyword: 'erp software uae' } }]); mock('Route Mode', [{ json: { domain: 'sowaanerp.ae' } }]);
   const picked = (await run('Pick Top 6', [{ json: GOTO }])).map(i => i.json);
-  check('Pick Top 6 picks competitors by their real site, never google.com, skips our own site and pages whose address Google cut',
-    picked.length >= 4 && !picked[0].no_competitors && picked.every(p => !isGoogle(p.domain) && p.domain !== 'sowaanerp.ae' && p.url_exact === false && !/goto/.test(p.url))
-    && !picked.some(p => p.domain === 'brainsphereit.com'), J(picked.map(p => [p.domain, p.url])));
+  check('Pick Top 6 picks competitors by their real site, never google.com, skips our own site and pages whose address Google cut or showed only as labels (review M2)',
+    picked.length === 3 && !picked[0].no_competitors && picked.every(p => !isGoogle(p.domain) && p.domain !== 'sowaanerp.ae' && p.url_exact === false && !/goto/.test(p.url))
+    && !picked.some(p => p.domain === 'brainsphereit.com') && !picked.some(p => p.domain === 'odooerp.ae'), J(picked.map(p => [p.domain, p.url])));
+  const t10 = picked[0].serp_top10 || [];
+  check('review M4: the approximate addresses Pick Top 6 records for the page shapes are marked, so they do not vote on the page type', t10.length && t10.every(t => t.url_exact === false), J(t10.slice(0, 2)));
   const factsAns = JSON.parse(J(GOTO)); itemsOf(factsAns).forEach(x => { if (x.type === 'organic') x.description = 'In 2025, 64% of UAE companies moved their ERP to the cloud, according to a 2025 survey of 400 firms.'; });
   mock('Analyze Competitor Pages', [{ json: { keyword: 'erp software uae', serp_features: { people_also_ask: [] } } }]);
   const facts = (await run('Collect Facts', [{ json: factsAns }]))[0].json;
@@ -148,7 +167,53 @@ module.exports = async (ctx) => {
   const second = await su('fixAnswer', JSON.parse(J(GOTO).replace(/CAES/g, 'CAEZ')));   // the same page read again: other tokens, same breadcrumbs
   const keysA = itemsOf(fixed).filter(x => x.type === 'organic').map(x => x.domain && x), keysB = itemsOf(second).filter(x => x.type === 'organic');
   const kA = await Promise.all(keysA.map(x => su('key', x))), kB = await Promise.all(keysB.map(x => su('key', x)));
-  check('the same result read twice (different redirect tokens) gives the same key, so two keywords that share it can cluster', J(kA) === J(kB) && new Set(kA).size >= 8, J(kA));
+  check('the same result read twice (different redirect tokens) gives the same key; only complete slug paths have one (review H1)',
+    J(kA) === J(kB) && J(kA.filter(Boolean)) === J(['~sage.com/en-ae/erp', '~switchertechno.com/erp-software-uae', '~pactsoft.ae/best-erp-software-uae', '~sowaanerp.ae/erp-companies-in-the-uae']), J(kA));
   const kExact = await su('key', itemsOf(EXACT).find(x => x.type === 'organic' && x.rank_group === 1));
-  check('an approximate key is marked (~) and never equals an exact url key', kA.every(k => k.startsWith('~')) && kExact === 'sage.com/en-ae/erp' && kA[0] === '~sage.com/en-ae/erp' && kA[0] !== kExact, J([kA[0], kExact]));
+  check('an approximate key is marked (~) and never equals an exact url key', kA.filter(Boolean).every(k => k.startsWith('~')) && kExact === 'sage.com/en-ae/erp' && kA[0] === '~sage.com/en-ae/erp' && kA[0] !== kExact, J([kA[0], kExact]));
+
+  // ---------- SG7 review H1: cut breadcrumbs never merge two searches ----------
+  reset(); SN = 'SG7 SERP-GOTO review H1: two searches whose top 7 hold DIFFERENT pages of the same sites are not merged'; begin(SN);
+  const lcSrc = fs.readFileSync(path.join(process.env.CODE_DIR || path.join(__dirname, 'code_v4'), 'Ladder_Clusters.js'), 'utf8');
+  const cut = (src, a) => { const i = src.indexOf(a); const j = src.indexOf('\n})();', i); return i >= 0 && j > 0 ? src.slice(i, j + 6) : ''; };
+  const KITS = new Function(cut(lcSrc, 'var SU = ') + '\n' + cut(lcSrc, 'const KWI = (() => {') + '\nreturn { SU, KWI };')();
+  check('Ladder Clusters keys a redirect result by SU.key and leaves out one with no site (the generated node)', /SU\.exact\(x\) \? String\(x\.url \|\| x\.domain \|\| ''\) : SU\.key\(x\)/.test(lcSrc) && /!SU\.unresolved\(x\)/.test(lcSrc));
+  const hosts = ['www.delemontechnology.com', 'www.brainsphereit.com', 'singleclic.com', 'www.sage.com', 'pactsoft.ae', 'gear-up.ae', 'www.azdan.com'];
+  const page = (kw, tag) => ({ status_code: 20000, tasks: [{ id: 'h1-' + tag, status_code: 20000, result: [{ items: hosts.map((h, i) => ({ type: 'organic', rank_group: i + 1, domain: 'google.com',
+    url: 'https://google.com/goto?url=CAES' + tag + i, breadcrumb: i < 3 ? 'https://' + h + ' › blog › ' + tag + '-erp-' + ['guide', 'list', 'top'][i] + '...' : 'https://' + h + ' › ' + tag + '-page-' + i })) }] }] });
+  const exactPage = (kw, tag) => ({ status_code: 20000, tasks: [{ id: 'h1x-' + tag, status_code: 20000, result: [{ items: hosts.map((h, i) => ({ type: 'organic', rank_group: i + 1, domain: h,
+    url: 'https://' + h + (i < 3 ? '/blog/' + tag + '-erp-' + ['guide', 'list', 'top'][i] + '-2026/' : '/' + tag + '-page-' + i + '/') })) }] }] });
+  const urlsOf = (a) => KITS.SU.fixAnswer(a).tasks[0].result[0].items.filter(x => x.type === 'organic' && !KITS.SU.unresolved(x)).map(x => KITS.SU.exact(x) ? String(x.url || x.domain || '') : KITS.SU.key(x)).filter(Boolean);
+  const opts = { top_n: 7, min_overlap: 0.4 };
+  const goA = urlsOf(page('erp software uae', 'best')), goB = urlsOf(page('erp system dubai', 'top'));
+  const after = KITS.KWI.serpClusters([{ keyword: 'erp software uae', urls: goA, weight: 2 }, { keyword: 'erp system dubai', urls: goB, weight: 1 }], opts);
+  const before = KITS.KWI.serpClusters([{ keyword: 'erp software uae', urls: urlsOf(exactPage('a', 'best')), weight: 2 }, { keyword: 'erp system dubai', urls: urlsOf(exactPage('b', 'top')), weight: 1 }], opts);
+  check('the three cut breadcrumbs on delemontechnology / brainsphereit / singleclic have no key, so they cannot count as 3 shared pages', goA.length === 4 && goB.length === 4 && !goA.some(k => goB.includes(k)), J({ goA, goB }));
+  check('no merge after the fix, exactly as with the exact addresses before the redirects (no new merge)', (after.clusters || []).length === 0 && (before.clusters || []).length === 0, J({ after: after.clusters, before: before.clusters }));
+  const same = KITS.KWI.serpClusters([{ keyword: 'erp software uae', urls: goA, weight: 2 }, { keyword: 'erp software in uae', urls: urlsOf(page('erp software in uae', 'best')), weight: 1 }], opts);
+  check('two searches showing the SAME complete pages still merge (the key is stable across readings)', (same.clusters || []).length === 1, J(same.clusters));
+
+  // ---------- SG8 review H2: the -1 is said twice at most, raises one ops alert, and costs no extra checks ----------
+  reset(); SN = 'SG8 SERP-GOTO review H2: an unreadable position is reported twice at most, one ops alert, unpublished rungs still deferred'; begin(SN);
+  const planItem = (prev) => ({ ladder_id: 'lad_t', domain: 'techand.ai', keyword: 'erp software uae', rung: 4, device: 'desktop', competitors: [], prev_unread: prev });
+  const runPP = async (prev) => { mock('Tracker Plan', [{ json: planItem(prev) }]); return (await run('Parse Positions', [{ json: withOurs }]))[0].json; };
+  const p0 = await runPP(0), p1 = await runPP(1), p2 = await runPP(2);
+  check('first and second unreadable reading: -1; the third (two before it) says "not found among the results we could read" (0)', p0.position === -1 && p1.position === -1 && p2.position === 0, J([p0.position, p1.position, p2.position]));
+  mock('Tracker Plan', [{ json: planItem(1) }]); mock('Parse Positions', [{ json: p1 }]);
+  const al = (await run('Unread Alert Row (Tracker)', [{ json: {} }]))[0].json;
+  check('the second one in a row writes ONE ops alert row (undelivered, due now, so the sweep in the same run sends it); `delivered` is never written here',
+    al.alert_key && /rank-unread\|techand\.ai\|/.test(al.alert_key) && al.attempts === 0 && al.next_attempt_at && !('delivered' in al) && /erp software uae/.test(al.message), J(al));
+  mock('Tracker Plan', [{ json: planItem(0) }]); mock('Parse Positions', [{ json: p0 }]);
+  const al0 = (await run('Unread Alert Row (Tracker)', [{ json: {} }]))[0].json;
+  mock('Tracker Plan', [{ json: planItem(2) }]); mock('Parse Positions', [{ json: p2 }]);
+  const al2 = (await run('Unread Alert Row (Tracker)', [{ json: {} }]))[0].json;
+  check('the first one and the third one write no alert (one alert per streak)', al0.skip === true && al2.skip === true, J([al0, al2]));
+  const tpSrc = fs.readFileSync(path.join(process.env.CODE_DIR || path.join(__dirname, 'code_v4'), 'Tracker_Plan.js'), 'utf8');
+  check('Tracker Plan (generated) skips poisoned rows (review L4), defers an unpublished rung after an unreadable -1 like a 0, and counts the streak',
+    /!RS\.poisonedRow\(h\)\)\.sort/.test(tpSrc) && /Number\(lastH\.position\) === 0 \|\| unreadOf\(lastH\)/.test(tpSrc) && /prev_unread: prevUnread/.test(tpSrc));
+  const wfT = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'workflows', 'SEO_Agent_Rank_Tracker.json'), 'utf8'))[0];
+  const outsT = (n) => (((wfT.connections[n] || {}).main) || []).map(l => (l || []).map(t => t.node));
+  check('the alert row goes through the one existing ops alert path: Ensure Ops Alerts -> Unread Alert Row -> IF -> Save -> Load Open Alerts (the sweep)',
+    J(outsT('Ensure Ops Alerts (Tracker)')) === J([['Unread Alert Row (Tracker)']]) && J(outsT('Unread Alert? (Tracker)')) === J([['Save Unread Alert (Tracker)'], ['Load Open Alerts (Tracker)']])
+    && J(outsT('Save Unread Alert (Tracker)')) === J([['Load Open Alerts (Tracker)']]), J([outsT('Ensure Ops Alerts (Tracker)'), outsT('Unread Alert? (Tracker)')]));
 };

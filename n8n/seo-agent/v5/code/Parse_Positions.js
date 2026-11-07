@@ -11,7 +11,11 @@ const res = $input.all().map(i => i.json);
 const now = new Date().toISOString();
 return reqs.map((r, i) => {
   const a = RS.read(res[i]);
-  const mine = RS.ourRank(a, r.domain);
+  // SERP-GOTO (2026-11-08, review H2): a -1 that only means "a result Google hid might be yours" is not repeated for ever: after two such
+  // readings in a row (Tracker Plan's prev_unread, desktop) the third says what can be said - not found among the results we could read (0) -
+  // so a real fall shows; the second raises one ops alert (Unread Alert Row (Tracker)).
+  const mine0 = RS.ourRank(a, r.domain);
+  const mine = (mine0.position === -1 && mine0.maybe_ours && String(r.device || 'desktop') !== 'mobile' && Number(r.prev_unread) >= 2) ? { ...mine0, position: 0, settled_after_unread: true } : mine0;
   const feats = RS.features(a, r.domain);
   const land = RS.landscape(a, r.domain, r.competitors || [], mine.position);
   const sov = RS.voice(land, feats, r.domain, mine.position);

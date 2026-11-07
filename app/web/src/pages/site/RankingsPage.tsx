@@ -689,9 +689,15 @@ function SerpPanel({ serp }: { serp: SerpReading | null }) {
           <summary className="cursor-pointer text-[13px] text-ink-2">The top {serp.snapshot.top.length} we read{serp.snapshot.at ? ` on ${fmtDate(serp.snapshot.at)}` : ''} ({serp.snapshot.device})</summary>
           <ol className="mt-2 space-y-1">
             {serp.snapshot.top.map((t) => (
-              <li key={`${t.position}|${t.url}`} className="flex gap-2 text-[13px] text-ink-2">
+              <li key={`${t.position}|${t.url || t.host}`} className="flex gap-2 text-[13px] text-ink-2">
                 <span className="tabular w-5 shrink-0 text-right text-ink-3">{t.position}</span>
-                <ExternalLink href={t.url} className="truncate">{t.title || urlPath(t.url)}</ExternalLink>
+                {t.approximate || !t.url ? (
+                  <span className="truncate" title="Google showed this result behind a redirect link, so only the site is known">
+                    {t.title || t.host} <span className="text-ink-3">({t.host})</span>
+                  </span>
+                ) : (
+                  <ExternalLink href={t.url} className="truncate">{t.title || urlPath(t.url)}</ExternalLink>
+                )}
               </li>
             ))}
           </ol>

@@ -39,7 +39,7 @@ const SC = (() => {
   const ref = (r) => ({ domain: cut((r || {}).domain, 80), url: cut((r || {}).url, 240), title: cut((r || {}).title, CFG.title_len) });
   // SERP-GOTO (2026-11-08, v5/code/_serp_url.js, inlined above this kit): a result whose url was a Google redirect is stored with its
   // recovered host and the flags that say its url is approximate; a clean result is stored exactly as before (no new keys)
-  const su = (o, x) => { if (x && x.url_exact === false) { o.url_exact = false; o.url_recovered = x.url_recovered || null; o.url_partial = !!x.url_partial; o.relative_url = x.relative_url || null; } return o; };
+  const su = (o, x) => { if (x && x.url_exact === false) { o.url_exact = false; o.url_recovered = x.url_recovered || null; o.url_partial = !!x.url_partial; o.url_path = x.url_path || null; o.relative_url = x.relative_url || null; } return o; };
   // the compact form of one item: enough for every reader of this codebase (organic order and owners, page titles, PAA, related searches,
   // forum threads, the featured snippet, the AI Overview and its cited sources, which features were on the page), nothing else
   const compactItem = (x) => {

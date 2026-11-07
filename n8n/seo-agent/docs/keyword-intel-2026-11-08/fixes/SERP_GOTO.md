@@ -144,3 +144,28 @@ stay on Live with this normaliser. This kit stays as the safety net either way.
 ## 9. Spend
 
 DataForSEO live probes $0.0126 (6 Live calls at $0.002, one Standard task at $0.0006). No Claude spend. No production write.
+
+## 10. Review fixes (2026-11-08, `../REVIEW_SERP_GOTO.md`, verdict "ship after fixes")
+
+| Item | Fix | Where | Proof (harness unless said) |
+|---|---|---|---|
+| **H1** cut breadcrumbs collapsed to `~host/…` and could merge searches | `SU.key` gives a key only to an exact url or a COMPLETE slug path; a cut, label or host-only breadcrumb has none, so it neither matches nor counts toward `min_urls` | `_serp_url.js` `key` | SG7: two searches whose top 7 hold different (cut) posts of delemontechnology / brainsphereit / singleclic: no merge after the fix, no merge with the exact addresses before; two searches with the same complete pages still merge. SG6: keys only for the 4 complete slug paths of the live answer |
+| **H2** the -1 rule could hide a real fall for ever | (a) host: Unicode / IDN labels, punycode TLD (`xn--mgbaam7a8h`), scheme optional; (b) -1 only when a hidden result could be ours (our domain label in its website_name / title / breadcrumb), else 0 with `unresolved: n`; (c) Tracker Plan counts the streak (`prev_unread`); the 2nd reading in a row writes ONE ops alert row to `seo_ops_alerts` (undelivered, due now) that the existing B-A7 sweep sends in the same run; the 3rd says 0 ("not found among the results we could read"); Site Tracker: a -1 after a stored -1 says 0; (d) an unpublished rung after an unreadable -1 is deferred like a 0, so no extra weekly checks | `_serp_url.js` `HOST` `crumbHost` `couldBe`, `_rank_serp.js` `hidden` `ourRank`, `Tracker_Plan.js`, `Parse_Positions.js`, `Unread_Alert_Row.js` + 3 nodes in the Rank Tracker (`build_ladder_extras.py` `_unread_alert`), `Site_SERP_Requests.js`, `Parse_Site_SERP.js` | SG1 (müller.de, xn--, en.wikipedia.org), SG3 (someone else's hidden result -> 0; ours -> -1 with `mo`), SG8 (-1, -1, then 0; one alert on the 2nd only, no `delivered` written; wiring Ensure -> Row -> IF -> Save -> Load Open Alerts; Tracker Plan defers and skips poisoned rows) |
+| **M1** app mirrors | `cadence.ts` `prevReading` skips poisoned rows (`poisonedRow`, the engine's rule); `data.ts` `snapTop`: an approximate row is shown as its site (host, no link, `approximate: true`), bare redirects dropped; `RankingsPage.tsx` renders such a row without a link; shared type extended (optional fields) | `app/server/src/services/cadence.ts`, `data.ts`, `app/shared/src/data.ts`, `app/web/src/pages/site/RankingsPage.tsx` | `app/server/test/serpGoto.test.ts` (4 tests) |
+| **M2** Pick Top 6 read page labels as paths | a breadcrumb is a path only when every segment is a slug (`/^[a-z0-9%._~-]+$/`); labels (`› Home › Blog`) are `url_path: 'labels'`, partial, skipped like a cut one | `_serp_url.js` `crumbPath` | SG1 (odooerp.ae is `labels`), SG5 (3 picked, odooerp and brainsphereit skipped) |
+| **M3** cannibalisation said "none" when it could not see | `own_hidden` when any of our results is approximate (or a hidden result could be ours): `own_n` left out, `cannibal` says "not checked" with the reason | `_rank_serp.js` | SG3 |
+| **M4** approximate addresses voted on the page type | `KWI.serpPageTypes` skips `url_exact: false`; every caller passes the flag (Assess Response, Build Keyword Strategy, Ladder Clusters, Pick Top 6's `serp_top10`) | `_kw_inputs.js`, callers | SG5 (`serp_top10` marked) |
+| **L1** prototype key | `hasOwnProperty` on the social table | `_serp_url.js` | SG1 ("Constructor" unresolved) |
+| **L2** `carried()` could throw / take userinfo as host | one host rule (`hostOfUrl`), userinfo refused, never throws | `_serp_url.js` | SG1 |
+| **L3** local pack / featured snippet "not ours" when unknown | `ours: null` when the listings / snippet have no site | `_rank_serp.js` `features` | SG3 |
+| **L4** Tracker Plan read poisoned rows | `!RS.poisonedRow(h)` on the won test and the deferral | `Tracker_Plan.js` | SG8 |
+| **L5** regulatory reason | names the hidden addresses when that is why nothing was read | `Regulatory_SERP_Candidates.js` | by reading |
+| **L6** guard too narrow | build section 181 now also walks every live SERP HTTP node's connections (through IF / Wait / retry copies) to the first Code node, and every node naming one, and every node reading stored `serp:` rows or `snapshot_json`; each must carry SU (two named exceptions, each with its reason). It states what it still does not see (a Code node calling DataForSEO itself, Execute Workflow hand-offs, a reader that holds the kit but ignores `url_exact`, the app) | `build_v4.py` end | build log: A 66 kit users, B 34 answer nodes, C 27 live readers, D 28 stored-reading readers |
+
+Deploy scope after the review: the same 9 workflows, plus 3 new nodes in the Rank Tracker (`Unread Alert Row (Tracker)`, `Unread Alert? (Tracker)`, `Save Unread Alert (Tracker)`; no new column, `seo_ops_alerts` exists) and the app (API: cadence.ts / data.ts; web: RankingsPage; no migration).
+
+Checks after the review fixes: build exit 0 (section 181: A 66, B 34, C 27, D 28); full harness in a throwaway n8nio/n8n:2.41.4 container
+**17544 passed, 0 failed** (17515 at 175ff5cd; scenario SG1-SG8 now 107 checks); app typecheck clean in all three workspaces, tests shared
+**1125**, server **1978** (+46 skipped, incl. the new `serpGoto.test.ts`), web **317**, with the whole repo mounted in node:22-bookworm-slim.
+Not done here (owner rules for customer-facing changes): the marketing changelog line and a TUTORIALS_BACKLOG row for the Rankings page
+showing a result Google hid as its site, without a link.

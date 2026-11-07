@@ -10,7 +10,10 @@ const res = $input.all().map(i => i.json);
 const now = new Date().toISOString();
 return reqs.filter(q => !q.skip).map((r, i) => {
   const a = RS.read(res[i]);
-  const mine = RS.ourRank(a, r.domain);
+  // SERP-GOTO (2026-11-08, review H2): "a hidden result might be yours" (-1) is said once; when the stored position was already -1 this
+  // reading says what it can (not found among the results we could read, 0), so a real fall is not hidden week after week
+  const mine0 = RS.ourRank(a, r.domain);
+  const mine = (mine0.position === -1 && mine0.maybe_ours && r.prev_position != null && Number(r.prev_position) === -1) ? { ...mine0, position: 0, settled_after_unread: true } : mine0;
   const feats = RS.features(a, r.domain);
   const land = RS.landscape(a, r.domain, r.competitors || [], mine.position);
   const sov = RS.voice(land, feats, r.domain, mine.position);

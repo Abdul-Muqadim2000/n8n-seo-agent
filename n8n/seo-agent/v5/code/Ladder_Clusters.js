@@ -95,7 +95,7 @@ asked.forEach((q) => {
   const urls = organic(a);
   if (urls.length < KWI.CFG.min_urls) { miss.push({ keyword: q.keyword, reason: 'its results page carried only ' + urls.length + ' ordinary result(s), too few to compare', retried: false }); return; }
   const its = organicItems(a);
-  out.types_of[String(q.keyword).toLowerCase()] = (({ read, dominant, dominant_count, dominant_share, counts }) => ({ read, dominant, dominant_count, dominant_share, counts }))(KWI.serpPageTypes(its.slice(0, out.top_n).map(x => ({ url: x.url || x.domain, title: x.title || '' })), {}));
+  out.types_of[String(q.keyword).toLowerCase()] = (({ read, dominant, dominant_count, dominant_share, counts }) => ({ read, dominant, dominant_count, dominant_share, counts }))(KWI.serpPageTypes(its.slice(0, out.top_n).map(x => ({ url: x.url || x.domain, title: x.title || '', url_exact: x.url_exact })), {}));
   out.titles_of[String(q.keyword).toLowerCase()] = its.slice(0, 4).map(x => String(x.title || '').replace(/\s+/g, ' ').trim().slice(0, 90)).filter(Boolean);
   (q.supporting_check ? supportingEntries : entries).push({ keyword: q.keyword, urls, weight: Number(q.weight) || 0, volume: q.volume });
   if (String(q.keyword || '').toLowerCase() !== String(pool.keyword || '').toLowerCase()) cmpSerps.push({ keyword: q.keyword, items: its });

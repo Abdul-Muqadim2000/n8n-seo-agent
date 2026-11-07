@@ -52,6 +52,30 @@ def link(conns, a, b, out=0):
     outs[out].append({'node': b, 'type': 'main', 'index': 0})
 LEDGER_WIRING = {}   # R9: filled in when the Rank Tracker's ledger nodes are added, below
 
+def _unread_alert(wfobj):
+    """SERP-GOTO (review H2): Ensure Ops Alerts (Tracker) -> Unread Alert Row (Tracker) -> Unread Alert? (Tracker) -true-> Save Unread Alert
+    (Tracker) -> Load Open Alerts (Tracker); -false-> Load Open Alerts (Tracker). The sweep after it (B-A7) sends a row that is due, so the
+    alert written here goes out in the same run through the one existing ops alert path (webhook + e-mail), and nothing new sends anything."""
+    import ladder_common as _lc
+    import uuid as _u
+    nodes = {n['name']: n for n in wfobj['nodes']}; conns = wfobj['connections']
+    ens, load = 'Ensure Ops Alerts (Tracker)', 'Load Open Alerts (Tracker)'
+    assert [t['node'] for l in conns[ens]['main'] for t in l] == [load], 'SERP-GOTO: the Rank Tracker alert sweep is not wired as expected'
+    row, iff, save = 'Unread Alert Row (Tracker)', 'Unread Alert? (Tracker)', 'Save Unread Alert (Tracker)'
+    nid = lambda n: str(_u.uuid5(_lc._LEDGER_NS, str(wfobj.get('id')) + ':' + n))
+    x, y = nodes[ens]['position']
+    wfobj['nodes'].append({'parameters': {'jsCode': _rd0('code/Unread_Alert_Row.js')}, 'id': nid(row), 'name': row, 'type': 'n8n-nodes-base.code',
+                           'typeVersion': 2, 'position': [x + 60, y + 200], 'onError': 'continueRegularOutput', 'executeOnce': True})
+    wfobj['nodes'].append({'parameters': _lc._if_params(str(_u.uuid5(_lc._LEDGER_NS, iff + ':cond')), '{{ !$json.skip }}'), 'id': nid(iff), 'name': iff,
+                           'type': 'n8n-nodes-base.if', 'typeVersion': 2.3, 'position': [x + 140, y + 200]})
+    wfobj['nodes'].append({'parameters': _lc.dt_upsert_params(_lc.OPS_ALERTS_TABLE, _lc.OPS_ALERTS_COLS, 'alert_key'), 'id': nid(save), 'name': save,
+                           'type': _lc.DT_TYPE, 'typeVersion': _lc.DT_VERSION, 'position': [x + 220, y + 200], 'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+    conns[ens] = {'main': [[{'node': row, 'type': 'main', 'index': 0}]]}
+    conns[row] = {'main': [[{'node': iff, 'type': 'main', 'index': 0}]]}
+    conns[iff] = {'main': [[{'node': save, 'type': 'main', 'index': 0}], [{'node': load, 'type': 'main', 'index': 0}]]}
+    conns[save] = {'main': [[{'node': load, 'type': 'main', 'index': 0}]]}
+
+
 def write(wfobj, fname):
     # R17 (2026-10-14, FIX_PLAN §3.12): the reserve chain goes on the MAIN path, now that every connection of this workflow is made
     if wfobj.get('name') in LEDGER_WIRING:
@@ -60,6 +84,8 @@ def write(wfobj, fname):
         ledger_mainline(wfobj, _w)
         if 'Has Callback (Tracker)?' in {n['name'] for n in wfobj['nodes']}:   # R115 (2026-10-16): the Rank Tracker's callback waits for its settle and carries it
             monitor_cost.callback_after_settle(wfobj, _w, 'Has Callback (Tracker)?', 'POST Progress', V5, _declared)
+        if 'Ensure Ops Alerts (Tracker)' in {n['name'] for n in wfobj['nodes']}:
+            _unread_alert(wfobj)   # SERP-GOTO (2026-11-08, review H2): one ops alert when a position could not be told twice in a row
     url_lint.check(wfobj, wfobj.get('name') or fname)   # D15: no node builds a site URL by hand (url_lint.py)
     retry_lint.check(wfobj, wfobj.get('name') or fname)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
     for _n in wfobj['nodes']:   # e-mails retry a transient SMTP / DNS failure (live finding 2026-10-02: EAI_AGAIN smtp.gmail.com)
