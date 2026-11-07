@@ -659,7 +659,37 @@ const OK = (() => {
     if (tld.length === 2 && tld !== 'us' && d.endsWith('.' + tld)) return { ok: true, why: 'a site in your market (.' + tld + ')' };
     return { ok: false, why: 'off topic for you: neither its name, its page nor its country ties it to ' + (String(x.topic_label || '') || 'your topics') };
   }
-  return { OFF_TOPIC, isGov, words, stem, fit, contactsIn, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf,
+  // ---- LIVE1 (2026-11-07, the first live AI ranking run): a placement AI ranking would pitch, through the Link Builder's own verdicts and rules,
+  // BEFORE it is chosen. Live, AI ranking chose five lists the Link Builder had already refused (competitors' own lists, paid guest posts) or
+  // had already written to, so the Link Builder drafted none. Read from the stored rows only (no fetch): the Link Builder's latest verdict on
+  // this site's page (not_fit, with its reason), any earlier pitch to the same site (a drafted sequence, a sent or answered e-mail, a stored
+  // draft), and the rules that need no page: a mailbox / database / CDN host, a government site, a bare homepage, a competing site.
+  // -> { refused: '' | why, contact: 'email' | 'form' | '', email, form }. A contact form only is allowed: the caller marks it a manual step.
+  // the platforms the Link Builder never reads for a pitch (LB_Page_Requests' BIG list, kept identical; harness LIVE1-3 compares the two): a page
+  // there belongs to whoever posted it, nobody edits it for a pitch, and the Link Builder would never qualify or draft it
+  const PLATFORM = /(^|\.)(google|youtube|facebook|linkedin|wikipedia|amazon|apple|microsoft|reddit|quora|instagram|twitter|x|tiktok|medium|github|pinterest|bing|yahoo|duckduckgo)\.[a-z.]+$/i;
+  const PITCHED = new Set(['drafted', 'needs_edit', 'approved', 'scheduled', 'sending', 'sent', 'replied', 'won', 'bounced', 'opted_out', 'stopped', 'contacted', 'declined']);
+  const pkey = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  function placementVet(o) {
+    const x = o || {}; const host = domOf(x.domain || LK.hostOf(x.url)); const d = LK.regDomain(host) || host; if (!d) return { refused: 'no site address', contact: '', email: '', form: '' };
+    const mine = (r) => { const y = domOf(r && r.prospect_domain); return !!y && (LK.sameSite(y, d) || LK.regDomain(y) === d); };
+    const outs = (x.outreach || []).filter(mine), pros = (x.prospects || []).filter(mine);
+    const when = (r) => String(r.drafted_at || r.contacted_at || r.checked_at || r.updated_at || r.updatedAt || '').slice(0, 10);
+    const pitched = outs.find(r => PITCHED.has(String(r.status || '')) || String(r.sequence_json || '').length > 2 || !!String(r.drafted_at || ''))
+      || pros.find(r => PITCHED.has(String(r.status || '')) || !!String(r.contacted_at || '') || !!String(r.drafted_at || '') || !!String(r.outreach_body || '').trim());
+    if (pitched) return { refused: 'the Link Builder already wrote to ' + d + (when(pitched) ? ' (' + when(pitched) + ')' : '') + ': one pitch per site, nothing new to send', contact: '', email: '', form: '' };
+    const nf = outs.filter(r => String(r.status || '') === 'not_fit' && (String(r.type || '') === 'ai_source' || (pkey(r.page_url) && pkey(r.page_url) === pkey(x.url))))
+      .sort((a, b) => String(b.checked_at || b.updatedAt || '').localeCompare(String(a.checked_at || a.updatedAt || '')))[0];
+    if (nf) return { refused: 'the Link Builder ruled it out' + (when(nf) ? ' on ' + when(nf) : '') + ': ' + String(nf.fit_reason || 'not a fit').slice(0, 240), contact: '', email: '', form: '' };
+    const why = badHost(d) || (PLATFORM.test(host) || PLATFORM.test(d) ? 'a platform page (' + d + '): the Link Builder does not pitch a platform, a post there belongs to whoever wrote it' : '') || (isGov(d) ? 'government site: you get on its lists by applying or being accredited, not by a pitch (see the listings checklist)' : '') || homepageOnly('ai_source', x.url)
+      || sellsSame({ type: 'ai_source', domain: d, competitors: x.competitors || [], serp_rivals: x.serp_rivals || [], ai_rivals: x.ai_rivals || [], topics: x.topics || [], title: x.title || '', url: x.url || '', terms: x.terms || [] });
+    if (why) return { refused: why, contact: '', email: '', form: '' };
+    const jl = (v) => { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
+    const email = String(x.contact_email || '').trim() || (outs.map(r => String(r.contact_email || '') || String((jl(r.contacts_json)[0] || {}).email || '')).find(Boolean) || '') || (pros.map(r => String(r.contact_email || '')).find(Boolean) || '');
+    const form = email ? '' : (String(x.contact_url || '').trim() || outs.map(r => String(r.contact_form_url || '')).find(Boolean) || pros.map(r => String(r.contact_url || '')).find(Boolean) || '');
+    return { refused: '', contact: email ? 'email' : form ? 'form' : '', email, form };
+  }
+  return { OFF_TOPIC, isGov, words, stem, fit, contactsIn, placementVet, PLATFORM, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf,
     badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, siteOffer, rivalOf, isRoundup, LIST_TYPES, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
 })();
 
