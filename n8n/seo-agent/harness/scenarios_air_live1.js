@@ -3,6 +3,8 @@
 //   LIVE1-1  (kit checks in scenarios_air_learn.js) a refresh (L06) only with a concrete page address; here: the AI Rank Plan sink carries the
 //            refresh's page into the target row (production wrote page_url '' because it read only ref.url), and a refresh that has no address
 //            is refused with its reason, never stored
+//   LIVE1-4  the labelled prospect-rule set (accuracy/prospects.json): a form's drop-down is not the page's topic (gambling), a social or
+//            professional network is never a competitor; precision and recall 100%, the old rules' misses named
 const fs = require('fs'); const path = require('path');
 const plumb = require('./scenarios_air_plumb');
 const WF_DIR = path.join(__dirname, '..', 'workflows');
@@ -17,6 +19,9 @@ ARL.candidates = ({ site, diag }) => { const sid = site.site_id;
 ARL.choose = (scored) => ({ chosen: scored, deferred: [], refused: [] });
 ARL.screenOwnPage = () => ({ refused: null, page_type: '' });
 `;
+// LIVE1-4: the outreach kit as the Link Builder runs it (generated code)
+const loadOK = () => { const src = fs.readFileSync(path.join(process.env.CODE_DIR || path.join(__dirname, 'code_v4'), 'LB_Assemble.js'), 'utf8');
+  const cut = src.indexOf('const CT = (() => {'); return new Function(src.slice(0, cut) + '; return { LK, RV, OK };')(); };
 const withLive = (wf) => { const w = plumb.withFakeKits(wf); const n = w.nodes.find(x => x.name === 'AI Rank Plan'); const a = 'const AIR_CFG = ';
   if (n.parameters.jsCode.split(a).length !== 2) throw new Error('live1: anchor not found'); n.parameters.jsCode = n.parameters.jsCode.replace(a, LIVE_CANDIDATES + '\n' + a); return w; };
 
@@ -38,5 +43,14 @@ module.exports = async (ctx) => {
     check('LIVE1-1 sink: a refresh with no page address is never stored as a target (the cadence could never write it); it is refused with a plain reason',
       !t2 && refused.some(x => /no page address/.test(String(x.why))), J({ t2, refused }).slice(0, 500));
 
+    // ---------------- LIVE1-4 the labelled prospect-rule set ----------------
+    const { OK, LK } = loadOK(); const SET = JSON.parse(fs.readFileSync(path.join(__dirname, 'accuracy', 'prospects.json'), 'utf8')); const C = SET.context;
+    const predict = (c) => c.rule === 'gambling' ? OK.sellSignals(c.html, LK.pageFacts(c.html, {}, 'https://page.example/')).includes('gambling / CBD / essay-mill topics')
+      : !!OK.sellsSame({ type: c.prospect.type, domain: c.prospect.domain, competitors: C.competitors, serp_rivals: c.prospect.serp_rivals || [], ai_rivals: c.prospect.ai_rivals || C.ai_rivals, topics: C.topics, terms: C.terms, title: c.prospect.title, url: c.prospect.url, text: '' });
+    for (const rule of ['gambling', 'competitor']) { const cs = SET.cases.filter(c => c.rule === rule); const r = cs.map(c => ({ id: c.id, label: c.label, got: predict(c) }));
+      const tp = r.filter(x => x.label && x.got).length, fp = r.filter(x => !x.label && x.got).length, fn = r.filter(x => x.label && !x.got).length;
+      const prec = tp + fp ? tp / (tp + fp) : 1, rec = tp + fn ? tp / (tp + fn) : 1;
+      console.log('   LIVE1-4 ' + rule + ': ' + cs.length + ' cases, precision ' + (100 * prec).toFixed(1) + '%, recall ' + (100 * rec).toFixed(1) + '%');
+      check('LIVE1-4 accuracy/prospects.json ' + rule + ': precision and recall 100% over ' + cs.length + ' labelled cases (the live false positive included)', prec === 1 && rec === 1, J(r.filter(x => x.label !== x.got))); }
   });
 };

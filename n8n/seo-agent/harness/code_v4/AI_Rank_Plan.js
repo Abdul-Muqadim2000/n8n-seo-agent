@@ -2755,7 +2755,10 @@ const OK = (() => {
   function sellSignals(html, facts) {
     const t = LK.text(html).toLowerCase().slice(0, 60000); const r = [];
     if (/(sponsored|guest) post[^.]{0,80}(\$|usd|eur|£|price|pricing|rate card|fee)|(\$|usd)\s?\d+[^.]{0,40}(per|a) (post|article|link)|dofollow (link|backlink)s? (guaranteed|included)|buy (a )?(guest post|backlink)|link insertion/.test(t)) r.push('sells posts or links');
-    if (/\b(casino|betting|sportsbook|cbd oil|essay writing|payday loan|escort|replica watches)\b/.test(t)) r.push('gambling / CBD / essay-mill topics');
+    // LIVE1 (2026-11-07): read without the choices of a form's drop-down (<select>): code-brew.ae, a software firm, was refused as gambling
+    // because its quote form's "Industry" list offers "Fantasy & Betting"; the options a form offers are not what the page is about
+    const tg = /<select\b/i.test(String(html || '')) ? LK.text(String(html).replace(/<select\b[\s\S]*?<\/select>/gi, ' ')).toLowerCase().slice(0, 60000) : t;
+    if (/\b(casino|betting|sportsbook|cbd oil|essay writing|payday loan|escort|replica watches)\b/.test(tg)) r.push('gambling / CBD / essay-mill topics');
     if (facts && facts.outbound_domains > 150) r.push(facts.outbound_domains + ' different sites linked from one page');
     if (/(write for us|guest post|sponsored post|contribute)[^.]{0,150}(\$\s?\d|usd\s?\d|€\s?\d|£\s?\d|\bfee\b|\bpaid\b|\bpricing\b)|(\$\s?\d+|\bfee\b)[^.]{0,80}(guest post|sponsored post|write for us)/.test(t)) r.push('paid guest posts');   // a price next to the offer (S30: "with prices and setup time" on an ordinary list page)
     return r; }
@@ -2845,6 +2848,9 @@ const OK = (() => {
   // outranks you is a SERP rival. `kind` says which, because only a SERP rival's "best X" list stays pitchable.
   function rivalOf(o) {
     const d = String(o.domain || '').toLowerCase().replace(/^www\./, ''); const dr = LK.regDomain(d);
+    // LIVE1 (2026-11-07): a social or professional network is never a competitor (linkedin.com, where any author posts, was refused as "a site
+    // that outranks you" because a LinkedIn article ranked #3 for one of the client's keywords); what its pages say is judged by the other rules
+    if (d && LK.domainKind(d) === 'social') return null;
     const hit = (list, label, kind) => {
       for (const c of (list || [])) { const x = domOf(c); if (!x || !d) continue;
         if (LK.sameSite(d, x) || LK.sameSite(x, d) || (dr && dr === LK.regDomain(x))) { const e = rivalEntry(c, (c && typeof c === 'object' && c.why) || label); return e ? { ...e, kind } : null; }
