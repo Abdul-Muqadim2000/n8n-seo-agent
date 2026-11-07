@@ -184,7 +184,8 @@ export async function startRunV1(ctx: V1Ctx, rawBody: unknown, idempotencyKey: s
 export async function modesV1() {
   const [s, cal] = await Promise.all([settingsRow(), engineCostTable()]);
   return {
-    items: MODE_IDS.map((id) => {
+    // KI W0 (2026-11-08): a hidden mode (MODES[].hidden) is accepted but not listed until its pages ship
+    items: MODE_IDS.filter((id) => !MODES[id].hidden).map((id) => {
       const m = MODES[id];
       let inputSchema: unknown = null;
       try {

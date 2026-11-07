@@ -1,0 +1,265 @@
+[
+  {
+    "id": "SEOagentKIntel1",
+    "name": "SEO Agent - Keyword Intelligence",
+    "active": false,
+    "settings": {
+      "executionOrder": "v1",
+      "errorWorkflow": "SEOagentErrHandl",
+      "executionTimeout": 900,
+      "saveDataErrorExecution": "all",
+      "saveDataSuccessExecution": "all"
+    },
+    "tags": [],
+    "nodes": [
+      {
+        "parameters": {
+          "inputSource": "passthrough"
+        },
+        "id": "3c5da7c4-eb62-5286-a23a-072c414d7aee",
+        "name": "Manual Run",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// KI W0 (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §3): the request as the API front door forwards it ({ headers, body }, the body\n// being the app's payload: mode, keyword, country, domain, email, callback_url, business, customers, competitors, seeds, ki_force, request_id).\n// Pure reading and normalising: nothing is decided here. No URL constructor (the n8n sandbox has none): hosts by regex.\nconst raw = $input.first().json || {};\nconst b = (raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body)) ? raw.body : raw;\nconst S = (v) => (v == null ? '' : String(v)).trim();\nconst mode = S(b.mode).toLowerCase();\nconst kind = mode === 'competitors' || mode === 'keyword_research' ? mode : '';\nconst STAGE = { competitors: 'ki_competitors', keyword_research: 'ki_research' };\nconst normD = (x) => S(x).toLowerCase().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#:].*$/, '');\nconst domain = normD(b.domain);\nconst list = (v) => (Array.isArray(v) ? v : S(v).split(/[\\n,;]+/)).map(S).filter(Boolean);\nconst uniq = (a) => a.filter((x, i) => a.indexOf(x) === i);\nconst competitors = uniq(list(b.competitors).map(normD).filter(x => /^[a-z0-9-]+(\\.[a-z0-9-]+)+$/.test(x) && x !== domain)).slice(0, 5);\nconst seeds = uniq(list(b.seeds).map(x => x.replace(/\\s+/g, ' ').toLowerCase().slice(0, 120))).slice(0, 20);\nconst cb = S(b.callback_url);\nconst callbackOk = /^(https:\\/\\/\\S+|http:\\/\\/(localhost|127\\.0\\.0\\.1|host\\.docker\\.internal|n8n)(:\\d+)?\\/\\S*)$/.test(cb);\nreturn [{ json: {\n  kind, mode, stage: STAGE[kind] || 'ki_competitors', rule_version: 'ki-1',\n  domain, site_id: domain ? 'site_' + domain.replace(/[^a-z0-9]+/g, '-') : '',\n  request_id: S(b.request_id), run_id: S($execution.id), client_ip: S(b.client_ip), country: S(b.country),\n  competitors, seeds, ki_force: b.ki_force === true || /^(true|1|yes)$/i.test(S(b.ki_force)),\n  callback_url: callbackOk ? cb : '', started_at: new Date().toISOString()\n} }];"
+        },
+        "id": "c68eb85a-000b-56dc-ad8f-ee837af9f28e",
+        "name": "KI Input",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          220,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_monitors"
+          },
+          "returnAll": true,
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $('KI Input').first().json.site_id }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "9d056be4-3e6b-5a24-ad03-5137ee161f9d",
+        "name": "Load Monitors (KI)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          440,
+          0
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_cache"
+          },
+          "returnAll": true,
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "key",
+                "condition": "eq",
+                "keyValue": "ki:kill"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "0117a4c6-3de3-51c2-b7e0-e78e35ad13ca",
+        "name": "Load Kill Switch (KI)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          660,
+          0
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// KI W0 (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §1 / §4): may this website run keyword intelligence, and the callback that says so.\n// The kill switch (seo_cache `ki:kill` = 1) stops every run; a kill switch that could not be read counts as ON (fails closed). The website's\n// ki_mode must be trial or on; empty, off, anything else, or a settings row that could not be read is off. W0 is the skeleton: a run that\n// passes both is still refused with `not_available_yet` until E2 builds the worker. Nothing here spends, writes a table or reserves money.\nconst q = $('KI Input').first().json || {};\nconst S = (v) => (v == null ? '' : String(v)).trim();\nconst rowsOf = (n) => { try { return $(n).all().map(i => (i && i.json) || {}); } catch (e) { return null; } };\nconst kill = rowsOf('Load Kill Switch (KI)');\nconst killUnread = kill === null || kill.some(r => r && r.error);\nconst killed = killUnread || kill.some(r => S(r.key) === 'ki:kill' && /^(1|true|on|yes)$/i.test(S(r.value)));\nconst mons = rowsOf('Load Monitors (KI)');\nconst monUnread = mons === null || mons.some(r => r && r.error);\nconst mon = (mons || []).find(r => r && q.site_id && S(r.site_id) === q.site_id) || {};\nconst stored = S(mon.ki_mode).toLowerCase();\nconst kiMode = monUnread ? 'off' : (stored === 'trial' || stored === 'on' ? stored : 'off');\nconst reason = killed ? 'killed' : (kiMode === 'off' || !q.kind) ? 'ki_off' : 'not_available_yet';\nconst NOTE = {\n  killed: 'Keyword intelligence is paused for every website (seo_cache ' + 'ki:kill' + (killUnread ? ' could not be read, so it counts as on' : ' is on') + '). Nothing ran and nothing was spent.',\n  ki_off: 'Keyword intelligence is not switched on for this website (seo_monitors.ki_mode is ' + (monUnread ? 'unreadable' : (stored ? '\"' + stored + '\"' : 'empty')) + '). Nothing ran and nothing was spent.',\n  not_available_yet: 'Keyword intelligence is switched on (' + kiMode + ') but the analysis is not built yet. Nothing ran and nothing was spent.',\n};\nconst LABELS = { measured: 'measured', provider_estimate: 'estimate from the data provider', modelled: 'our estimate', inferred: 'AI judgement' };\nconst base = { stage: q.stage, status: 'refused', reason, note: NOTE[reason], request_id: q.request_id, run_id: q.run_id, domain: q.domain, market: '',\n  mode: kiMode, rule_version: q.rule_version, sections: [], summary: {}, labels: LABELS, run_ledger: null,\n  run_cost_estimate_usd: 0, run_cost_estimate_basis: 'refused before any paid call: no search data was read and no model was asked', run_cost_estimate_state: 'measured' };\nconst body = q.kind === 'keyword_research'\n  ? { ...base, clusters: [], striking: [], questions: [], gaps_summary: {}, plan: [] }\n  : { ...base, competitors: [], listings: [], platforms: [] };\nreturn [{ json: { callback_url: q.callback_url, callback_body: body, refused: true, reason, ki_mode: kiMode, killed } }];"
+        },
+        "id": "1a9ce441-7930-5db9-85b9-863ee03030ad",
+        "name": "KI Gate",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          880,
+          0
+        ],
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "46de1135-181d-5a77-a63a-6a93f70eda9e",
+                "leftValue": "={{ !!$json.callback_url }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "63616d02-27bf-51b5-b815-38b50e185b3c",
+        "name": "Has Callback (KI)?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          1100,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.callback_url }}",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.callback_body) }}",
+          "options": {
+            "timeout": 30000
+          }
+        },
+        "id": "2f9da055-5273-5985-a84f-63b8d8c6fd53",
+        "name": "POST KI Report",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          1320,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "content": "## SEO Agent - Keyword Intelligence (KI W0 skeleton, 2026-11-08)\nStarted by the API front door (`SEOagentAPIentry`, Execute Workflow, no wait) for modes **competitors** and **keyword_research** (docs/keyword-intel-2026-11-08/CONTRACTS.md).\n\nW0 answers every request with the final callback `ki_competitors` / `ki_research`, `status: refused`, and a reason: `killed` (seo_cache `ki:kill` = 1, or unreadable), `ki_off` (seo_monitors.ki_mode empty / off / unreadable) or `not_available_yet` (Trial / On: the worker is the next package, E2).\n\nNo paid call, no table write, nothing reserved.",
+          "height": 300,
+          "width": 620,
+          "color": 4
+        },
+        "id": "7fd2f725-76d3-5211-9942-ae369e368644",
+        "name": "Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          0,
+          -440
+        ]
+      }
+    ],
+    "connections": {
+      "Manual Run": {
+        "main": [
+          [
+            {
+              "node": "KI Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "KI Input": {
+        "main": [
+          [
+            {
+              "node": "Load Monitors (KI)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Monitors (KI)": {
+        "main": [
+          [
+            {
+              "node": "Load Kill Switch (KI)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Kill Switch (KI)": {
+        "main": [
+          [
+            {
+              "node": "KI Gate",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "KI Gate": {
+        "main": [
+          [
+            {
+              "node": "Has Callback (KI)?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Callback (KI)?": {
+        "main": [
+          [
+            {
+              "node": "POST KI Report",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

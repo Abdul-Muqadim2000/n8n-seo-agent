@@ -476,6 +476,29 @@ export const backlinksInput = z.object({
   emailCopy,
 });
 
+// KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §3): keyword intelligence. The website is required (its main market is the
+// market: another country is refused by the engine), declared competitors are kept as chosen, seeds are the client's own starting searches,
+// and `kiForce` asks for a fresh reading instead of reusing a recent one. The server starts these only when the website's ki_mode allows it.
+export const competitorsInput = z.object({
+  mode: z.literal('competitors'),
+  siteId,
+  country,
+  competitors: domainList(5),
+  seeds: stringList(20, 120),
+  kiForce: z.boolean().default(false),
+  emailCopy,
+});
+
+export const keywordResearchInput = z.object({
+  mode: z.literal('keyword_research'),
+  siteId,
+  country,
+  competitors: domainList(5),
+  seeds: stringList(20, 120),
+  kiForce: z.boolean().default(false),
+  emailCopy,
+});
+
 export const RUN_SCHEMAS = {
   verdict: verdictInput,
   keyword: keywordInput,
@@ -490,6 +513,8 @@ export const RUN_SCHEMAS = {
   profile: profileInput,
   ai_visibility: aiVisibilityInput,
   backlinks: backlinksInput,
+  competitors: competitorsInput,
+  keyword_research: keywordResearchInput,
 } as const;
 
 export const runInputSchema = z.union([
@@ -506,6 +531,8 @@ export const runInputSchema = z.union([
   profileInput,
   aiVisibilityInput,
   backlinksInput,
+  competitorsInput,
+  keywordResearchInput,
 ]);
 export type RunInput = z.output<typeof runInputSchema>;
 export type RunInputOf<M extends keyof typeof RUN_SCHEMAS> = z.output<(typeof RUN_SCHEMAS)[M]>;

@@ -1448,6 +1448,17 @@ await guard('web app', async () => {
     const qv = await run('Quick Validate', { headers: f.headers, body: f.body });
     check(f.name + ' / quick validate', qv[0].json.ok, qv[0].json.error);
     delete store['Start Form'];
+    // KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §3): the front door hands competitors / keyword_research to SEOagentKIntel1,
+    // whose own input node reads the forwarded request; every other body goes to the main workflow's Normalize Input as before
+    check(f.name + ' / front door target', qv[0].json.target === (f.target === 'ki' ? 'ki' : 'main'), qv[0].json.target);
+    if (f.target === 'ki') {
+      const k = (await run('KI Input', [{ json: qv[0].json.forward }]))[0].json;
+      const wrongK = Object.entries(f.expect).filter(([kk, v]) => JSON.stringify(get(k, kk)) !== JSON.stringify(v)).map(([kk, v]) => `${kk}: got ${JSON.stringify(get(k, kk))}, want ${JSON.stringify(v)}`);
+      check(f.name + ' / KI input', !wrongK.length, wrongK.join('; '));
+      check(f.name + ' / client_ip + callback (KI)', k.client_ip === 'app:7a1c2d3e-org' && k.callback_url === f.body.callback_url && k.request_id === qv[0].json.request_id, JSON.stringify({ client_ip: k.client_ip, callback_url: k.callback_url, rid: k.request_id }));
+      console.log('   ' + f.name + ' ->', wrongK.length ? 'WRONG ' + wrongK.join('; ') : 'ok (KI)');
+      continue;
+    }
     const n = await run('Normalize Input', qv[0].json.forward);
     const j = n[0].json;
     const wrong = Object.entries(f.expect).filter(([k, v]) => JSON.stringify(get(j, k)) !== JSON.stringify(v)).map(([k, v]) => `${k}: got ${JSON.stringify(get(j, k))}, want ${JSON.stringify(v)}`);
@@ -4944,7 +4955,7 @@ await guard('retries, AI data, sister domains and the fact base', async () => {
   check('G1: the nodes inherited from v3 keep the same rule (the DataForSEO reads, PageSpeed, RDAP, the probes, the Gotenberg renders)', ['Keyword Data', 'Find Competitors', 'PageSpeed', 'RDAP Lookup', 'Run Probes', 'Render PDF Report', 'Read Website', 'SERP Top 10 (Retry)'].every(nm => { const x = httpNode('SEO Agent v4', nm); return x && (x.per_item ? perItemOk(x) : keepsRule(x)); }), JSON.stringify(['Keyword Data', 'PageSpeed', 'RDAP Lookup', 'SERP Top 10 (Retry)'].map(nm => nm + ':' + JSON.stringify(httpNode('SEO Agent v4', nm)))));
   // R-E14 (2026-10-23): + the AI tracker's three notice callbacks (a `rejected` answer that closes the caller's request), at one try like every report callback
   const NOTICES = ['Post Open Run Notices', 'Post Busy Notices', 'Post Stop Notices'];
-  check('G1: the allow-list holds only what is not idempotent — the report callbacks, the AI tracker\'s notice callbacks and the WordPress draft — each with its reason, and those nodes really carry no retry', Object.keys(RW.allow).length === 17 && Object.keys(RW.allow).every(k => /^POST /.test(k) || k === 'Create WP Draft' || NOTICES.includes(k)) && Object.values(RW.allow).every(v => String(v).length > 20) && httpNode('SEO Agent v4', 'POST Callback').retryOnFail === false && httpNode('SEO Agent — Publish to WordPress', 'Create WP Draft').retryOnFail === false
+  check('G1: the allow-list holds only what is not idempotent — the report callbacks, the AI tracker\'s notice callbacks and the WordPress draft — each with its reason, and those nodes really carry no retry', Object.keys(RW.allow).length === 18 && Object.keys(RW.allow).every(k => /^POST /.test(k) || k === 'Create WP Draft' || NOTICES.includes(k)) && Object.values(RW.allow).every(v => String(v).length > 20) && httpNode('SEO Agent v4', 'POST Callback').retryOnFail === false && httpNode('SEO Agent — Publish to WordPress', 'Create WP Draft').retryOnFail === false
     && NOTICES.every(nm => { const x = httpNode('SEO Agent — AI Visibility Tracker', nm); return x && !x.retryOnFail; }), JSON.stringify(Object.keys(RW.allow)) + ' ' + JSON.stringify(NOTICES.map(nm => httpNode('SEO Agent — AI Visibility Tracker', nm))));
   check('G1: the lint bites — it flags an HTTP node with no retry and one with a weaker retry, honours its allow-list and leaves other node types alone (self-test run by build_v4.py section 37)', RW.selftest.flags_node_without_retry === true && RW.selftest.flags_weaker_retry === true && RW.selftest.honours_allow_list === true && RW.selftest.ignores_other_nodes === true, JSON.stringify(RW.selftest));
   const GATE = ['Run AI Requests', 'AI Retry Requests', 'Any AI Retries?', 'Wait Before AI Retry', 'Run AI Retries', 'Merge AI Answers', 'Parse AI Answers'];
@@ -19784,5 +19795,8 @@ await require('./scenarios_air_integ')({ H, run, mock, store, guard, reset, begi
 await require('./scenarios_air_fxb')({ H, run, mock, store, guard, reset, begin });   // FX-B FXB4-FXB11: the safety review (REVIEW_B_SAFETY.md)
 await require('./scenarios_air_exec')({ H, run, mock, store, guard, reset, begin });   // P6 AE1-AE8
 await require('./scenarios_air_live1')({ H, run, mock, store, guard, reset, begin });   // LIVE1: the first live AI ranking run (fixes/LIVE1.md)
+// KI (keyword intelligence, 2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md): the W0 contract - tables, monitor settings, Site Admin, the
+// front door's routing, the skeleton workflow's refusals, the cost rows, the parity fixture
+await require('./scenarios_ki_w0')({ H, run, mock, store, guard, reset, begin });   // KIW0-1..8
 H.report();
 })();

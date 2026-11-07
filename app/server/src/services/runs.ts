@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
 import {
   aiJoinedOf,
+  kiNoResultOf,
   creditRate,
   withAiRankCredits,
   buildN8nPayload,
@@ -64,6 +65,7 @@ import { engineCostEstimate, ledgerCost, stageOf, summarize, titleFor } from './
 import { siteReadiness } from './readiness';
 import { siteAutomation } from './ladders';
 import { assertConsistent, recordOverride, runWarnings } from './consistency';
+import { assertKiRunAllowed } from './ki';
 import type { FastifyRequest } from 'fastify';
 import type { Warning } from '@seo/shared';
 
@@ -267,6 +269,9 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
   if (site && input.mode === 'track' && input.ga4PropertyId) await assertGa4ForDomain(input.ga4PropertyId, site.domain);
   if (site && input.mode === 'published' && !urlOnDomain(input.publishedUrl, site.domain))
     throw badRequest(`The published page must be on ${site.domain}`, { publishedUrl: `Must be a page on ${site.domain}` });
+  // KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §1): Competitors / Keyword research only on a website switched On, or in
+  // Trial for a platform admin (403 / 409 before anything is quoted, locked or started)
+  await assertKiRunAllowed(input, site, user);
   input = ladderChoice(inputForRole(input, a.role, { planOnly: !!opts.proposalId }), auto);
 
   // a typed keyword that is a planned page of one of the website's ladders is written as that ladder page (linked to the ladder,
@@ -776,6 +781,9 @@ export const callbackCostCountsForRun = (stage: string, body: Record<string, unk
  * client is not charged for the provider's outage. Returns the customer sentence, or null when the run delivered something.
  */
 export function noResultOf(stage: string, body: Record<string, unknown>): string | null {
+  // KI (2026-11-08, CONTRACTS.md §4): a refused or failed Competitors / Keyword research answer delivered nothing: failed, not charged
+  const ki = kiNoResultOf(stage, body);
+  if (ki) return ki;
   if (stage !== 'ladder_plan') return null;
   const planned = !(body.planned === false || body.planned === 'false');
   const refusal = body.refusal && typeof body.refusal === 'object' ? (body.refusal as { reason?: unknown }) : null;

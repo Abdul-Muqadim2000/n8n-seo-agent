@@ -226,6 +226,9 @@ const CC = (() => {
     ai_visibility: 0.14,      // 0.095 (exec 526) — was 0.06, the worst of the five refusals
     backlinks: 0.06,          // 0     this run; the Link Analyst does run on a full check — was 0.04
     track: 0, published: 0, checkin: 0, profile: 0, case_study: 0,   // these spawn the work that costs; each spawn reserves its own row
+    // KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §7, R5 prices): no run yet, so these are the design's ceilings, not measured
+    competitors: 0.02,        // Claude Haiku only as a tie-break on a domain's class (DESIGN.md §2.5)
+    keyword_research: 0.04,   // Claude Haiku only as a tie-break on a keyword's buyer stage (DESIGN.md §3.6)
   };
   const DFS_EST = {           // measured DataForSEO cost of that run →
     crawl: 0.09,              // 0.09   (execs 497 and 513, both exactly)
@@ -237,6 +240,8 @@ const CC = (() => {
     ladder: 0.31,             // 0.1162 (exec 495) + 24 results-page calls at $0.006 (30 deep + AI Overview, KW-SERP 2026-10-21) = 0.2602 — was 0.21
     ai_visibility: 0.95,      // 0.7946 (exec 526) — was 0.60, below the money
     backlinks: 0.5,           // 0.3727 (execs 528 / 529)
+    competitors: 0.35,        // KI (2026-11-08, CONTRACTS.md §7): up to 20 results pages + domain overlap + the chosen set's profiles (R5 prices); no run yet
+    keyword_research: 0.90,   // KI: Labs ideas / suggestions / keyword data, autocomplete, up to 60 results pages, the gap (R5 prices); no run yet
     assess: 0.04,             // 0.0254 per check (execs 487-489) + its results page 30 deep with the AI Overview ($0.006, KW-SERP 2026-10-21) = 0.0314 — was 0.034
   };
   const ALPHA = 0.3;          // how fast the rolling figure follows the last settle

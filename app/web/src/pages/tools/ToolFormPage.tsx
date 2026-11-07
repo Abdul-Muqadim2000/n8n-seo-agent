@@ -43,7 +43,7 @@ export default function ToolFormPage() {
   // the website the link asked for (the form then keeps ?site= in step with its own choice)
   const [askedSiteId] = useState(() => params.get('site'));
 
-  if (!isModeId(mode))
+  if (!isModeId(mode) || MODES[mode].hidden)   // KI W0: a hidden mode has no form yet
     return (
       <EmptyState
         titleAs="h1"

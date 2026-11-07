@@ -287,6 +287,7 @@
   "POST Callback": "callback to the customer app: every POST inserts a report (not idempotent)",
   "POST Growth Report": "callback to the customer app: every POST inserts a report (not idempotent)",
   "POST Index Report": "callback to the customer app: every POST inserts a report (not idempotent)",
+  "POST KI Report": "callback to the customer app: every POST inserts a report (not idempotent)",
   "POST LB Report": "callback to the customer app: every POST inserts a report (not idempotent)",
   "POST Pilot Report": "callback to the customer app: every POST inserts a report (not idempotent)",
   "POST Progress": "callback to the customer app: every POST inserts a report (not idempotent)",
@@ -334,6 +335,19 @@
   "Start Crawl (Retry)": "the second attempt of that one task_post, one request"
  },
  "workflows": {
+  "SEO Agent - Keyword Intelligence": [
+   {
+    "allowed": true,
+    "maxTries": null,
+    "name": "POST KI Report",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": false,
+    "timeout": 30000,
+    "waitBetweenTries": null
+   }
+  ],
   "SEO Agent v4": [
    {
     "allowed": false,

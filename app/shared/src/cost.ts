@@ -54,7 +54,10 @@ export type CostKey =
   | 'case_study'
   | 'assess'
   /** H3 (2026-10-28): the final version of a written page (only the sections the answers change; no research, no new page) */
-  | 'finalize';
+  | 'finalize'
+  /** KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §7): the two keyword-intelligence runs */
+  | 'competitors'
+  | 'keyword_research';
 
 /**
  * One row per estimate key: `ai` is the Claude money, `dfs` the search-data money, and the engine reserves their sum.
@@ -90,6 +93,10 @@ export const COST_TABLE: Record<CostKey, CostRow> = {
   profile: { ai: 0, dfs: 0, measured: 0, basis: 'saving the business profile' },
   case_study: { ai: 0, dfs: 0, measured: 0, basis: 'the intake itself; the page it writes reserves a content run' },
   assess: { ai: 0, dfs: 0.04, measured: 0.0254, basis: 'one keyword check, execs 487-489, plus its results page read 30 deep with the AI Overview ($0.006)' },
+  // KI (2026-11-08, CONTRACTS.md §7): mirrored from _cost_cal.js EST / DFS_EST; no run has been measured yet, so these are the design's
+  // ceilings from the provider's prices (R5_DATAFORSEO.md), and the engine's own rolling figure replaces them once runs report
+  competitors: { ai: 0.02, dfs: 0.35, measured: 0, basis: 'competitor research: up to 20 results pages for your services, the domain overlap and a profile of each competitor you choose, at the provider\'s prices (no run measured yet)' },
+  keyword_research: { ai: 0.04, dfs: 0.9, measured: 0, basis: 'keyword research: keyword ideas, search volumes, autocomplete, up to 60 results pages and the gap against your competitors, at the provider\'s prices (no run measured yet)' },
   finalize: { ai: 0.1, dfs: 0, measured: 0.04, basis: 'the final version of a written page: the sections your answers change are rewritten (one model call on those sections), then the whole page is checked again; no search data' },
 };
 

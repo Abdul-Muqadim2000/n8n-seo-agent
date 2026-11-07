@@ -538,4 +538,26 @@ const monitors = (t.monitors && typeof t.monitors === 'object') ? t.monitors : (
 { const AV = AIRF.validate(monitors);
   if (AV.errors.length) throw new Error(AV.errors.join('; '));
   for (const k of Object.keys(AV.values)) if (AV.values[k] !== null) monitors[k] = AV.values[k]; }
+// KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §1): keyword intelligence per site - the mode ('' / off, trial, on), the monthly
+// refresh when On (a yes / no, empty = yes) and how many competitors the client may choose (a whole number 1-5, empty = 5). A bad value is
+// refused with its reason and nothing is stored; '' clears a field (Monitor Row (Admin) stores it empty); a field not given keeps the stored value.
+{ const km = monitors.ki_mode;
+  if (km !== undefined && km !== null && String(km).trim() !== '') {
+    const v = String(km).trim().toLowerCase();
+    if (!['off', 'trial', 'on'].includes(v)) throw new Error('ki_mode must be off, trial or on');
+    monitors.ki_mode = v;
+  }
+  const kr = monitors.ki_refresh;
+  if (kr !== undefined && kr !== null && kr !== '') {
+    if (typeof kr === 'boolean') { /* kept */ }
+    else if (/^(true|1|yes|on)$/i.test(String(kr).trim())) monitors.ki_refresh = true;
+    else if (/^(false|0|no|off)$/i.test(String(kr).trim())) monitors.ki_refresh = false;
+    else throw new Error('ki_refresh must be true or false');
+  }
+  const kc = monitors.ki_max_competitors;
+  if (kc !== undefined && kc !== null && String(kc).trim() !== '') {
+    const n = Number(String(kc).trim());
+    if (!Number.isFinite(n) || Math.floor(n) !== n || n < 1 || n > 5) throw new Error('ki_max_competitors must be a whole number from 1 to 5');
+    monitors.ki_max_competitors = n;
+  } }
 return [{ json: { fact_answers_sent, fact_answers_json, fact_answers_count: Object.keys(FAP.answers).length, fact_answers_dropped: FAP.dropped, action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, on_prompts, pin_prompts, unpin_prompts, edit_prompts, accept_prompts, retire_prompts, monitors, content_groups_json, business_facts, market_country: market.country, market_location_code: market.location_code, market_language_code: market.language_code, market_iso: market.country_iso, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];

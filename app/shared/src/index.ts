@@ -62,4 +62,5 @@ export * from './ai-rank';   // AIR (2026-11-06, docs/ai-ranking-2026-11-05): th
 export * from './ai-rank-client';   // FX-C RC-1 (2026-11-06): the AI ranking plan in the client's words (the engine kit's AIRC.view, mirrored)
 export * from './hold';   // W0-D (2026-10-29): a page held for the client's OK before writing (verdict under 50, or a page the website already has)
 export * from './run-watch';   // 2026-11-05: when a run with no result is overdue (the watcher and the run page share it)
+export * from './ki';   // KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md): keyword intelligence rows, callbacks, words, the per-site switch
 export * from './draft-fix';   // 2026-10-21: a not-ready draft is finished by hand (the engine's qa_next_step / qa_owner_edits), never re-run

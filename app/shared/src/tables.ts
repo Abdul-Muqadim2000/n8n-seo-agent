@@ -132,6 +132,9 @@ export interface MonitorsRow extends DtRow {
    *  page slot, and the three paid reads (fan-out searches a week 0-50, the AI mention database, the independent search index). Written only
    *  through Site Admin `monitors`; read with aiRankSettingsOf (shared/src/ai-rank.ts) */
   ai_rank_mode?: string | null; ai_rank_reserve?: boolean | string | null; ai_rank_fanout_n?: number | string | null; ai_rank_mentions?: boolean | string | null; ai_rank_brave?: boolean | string | null;
+  /** KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §1; absent before the engine adds them, empty = off): keyword intelligence per
+   *  site (off | trial | on), the monthly refresh when On (empty = yes), competitors the client may choose (1-5, empty = 5). Read with kiModeOf */
+  ki_mode?: string | null; ki_refresh?: boolean | string | null; ki_max_competitors?: number | string | null;
 }
 export interface AiPromptRow extends DtRow {
   prompt_id: string; site_id: string; domain: string; prompt: string; kind: string; topic: string; keyword: string;
@@ -482,6 +485,12 @@ export const TABLES = {
   indexRuns: 'seo_index_runs',
   googleEvents: 'seo_google_events',
   updateImpact: 'seo_update_impact',
+  /** KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §2): keyword intelligence, written only by the engine's SEOagentKIntel1 and
+   *  Site Admin's KI actions; read by the app only for a website in Trial (platform admins) or On (shared/src/ki.ts row types) */
+  kiRuns: 'seo_ki_runs',
+  kiCompetitors: 'seo_ki_competitors',
+  kiKeywords: 'seo_ki_keywords',
+  kiGaps: 'seo_ki_gaps',
 } as const;
 export type TableKey = keyof typeof TABLES;
 

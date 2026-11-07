@@ -39,6 +39,9 @@ const MODE_ICON: Record<ModeId, (cls?: string) => ReactNode> = {
   profile: (c) => <UserCheck className={c} aria-hidden />,
   ai_visibility: (c) => <Bot className={c} aria-hidden />,
   backlinks: (c) => <Link2 className={c} aria-hidden />,
+  // KI (2026-11-08): hidden until the KI pages ship; a run started by our team still shows a fitting icon
+  competitors: (c) => <Search className={c} aria-hidden />,
+  keyword_research: (c) => <FileSearch className={c} aria-hidden />,
 };
 
 export const isModeId = (v: unknown): v is ModeId => typeof v === 'string' && (MODE_IDS as readonly string[]).includes(v);

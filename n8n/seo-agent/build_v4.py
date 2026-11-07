@@ -13732,7 +13732,7 @@ print(f'\nwrote {OUT_JSON}: {len(nodes)} nodes, {sum(len(l) for o in conns.value
 
 # the API front door and the ladder extras (Rank Tracker, WordPress publisher, test runner) are generated alongside
 import subprocess
-for _s in ('build_api.py', 'build_ladder_extras.py', 'build_site_tracker.py', 'build_monitors.py', 'build_index_coverage.py'):   # Index coverage (2026-10-29): its own daily workflow, built before the catch-up reads the crons
+for _s in ('build_api.py', 'build_ladder_extras.py', 'build_site_tracker.py', 'build_monitors.py', 'build_index_coverage.py', 'build_ki.py'):   # Index coverage (2026-10-29): its own daily workflow, built before the catch-up reads the crons; KI (2026-11-08): SEOagentKIntel1, on demand only (no schedule)
     _r = subprocess.run([sys.executable, os.path.join(HERE0, _s)], cwd=HERE0)
     assert _r.returncode == 0, _s + ' failed'
 # =============================================================================

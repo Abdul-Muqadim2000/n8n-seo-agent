@@ -54,7 +54,7 @@ export default function ToolsPage() {
   const [params, setParams] = useSearchParams();
   const remembered = lastSite(org.id);
   const site = sites.find((s) => s.id === params.get('site')) ?? sites.find((s) => s.id === remembered && s.verifiedAt) ?? sites.find((s) => s.verifiedAt) ?? sites[0] ?? null;
-  const modes = Object.values(MODES);
+  const modes = Object.values(MODES).filter((m) => !m.hidden);   // KI W0: hidden modes are not offered yet
 
   const pickSite = (id: string) =>
     setParams(
@@ -137,7 +137,7 @@ function HeroChip({ icon, children }: { icon: ReactNode; children: ReactNode }) 
 /** The website the tools run on, how many tools it unlocks and the recommended next tool. */
 function ToolsHero({ site, recommended, goals, onPickSite }: { site: Site | null; recommended: ModeId | null; goals: typeof GOALS; onPickSite: (id: string) => void }) {
   const { org, sites, can } = useOrgCtx();
-  const all = Object.values(MODES);
+  const all = Object.values(MODES).filter((m) => !m.hidden);
   const verified = !!site?.verifiedAt;
   const ready = all.filter((m) => !m.siteBound || verified).length;
   const headline = !site

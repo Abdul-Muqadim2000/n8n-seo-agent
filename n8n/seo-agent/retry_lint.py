@@ -33,6 +33,7 @@ ALLOW = {
     'POST Pulse Report': 'callback to the customer app: every POST inserts a report (not idempotent)',
     'POST Pilot Report': 'callback to the customer app: every POST inserts a report (not idempotent)',   # W2-E2 (2026-10-23): the AI repeat pilot
     'POST Index Report': 'callback to the customer app: every POST inserts a report (not idempotent)',   # Index coverage (2026-10-29)
+    'POST KI Report': 'callback to the customer app: every POST inserts a report (not idempotent)',   # KI keyword intelligence (2026-11-08)
     'POST BL Report': 'callback to the customer app: every POST inserts a report (not idempotent)',
     'POST Growth Report': 'callback to the customer app: every POST inserts a report (not idempotent)',
     'POST LB Report': 'callback to the customer app: every POST inserts a report (not idempotent)',

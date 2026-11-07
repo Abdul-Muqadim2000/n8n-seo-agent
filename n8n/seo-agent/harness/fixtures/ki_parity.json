@@ -1,0 +1,17 @@
+{
+  "_comment": "KI parity fixture (W0 2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §6). The one source both sides are held to: the app (app/shared/src/ki.parity.test.ts reads it with the repo root mounted) and the engine kit v5/code/_ki.js (E1 adds its harness check). Verdict words and the Win thresholds of DESIGN.md §3.8; the cases are the boundaries. A change here is a contract change.",
+  "rule_version": "ki-1",
+  "verdicts": { "go": "Go", "months": "Takes a few months", "hard": "Hard for your site now", "gated": "Not for you" },
+  "thresholds": { "go": 0.6, "months": 0.35 },
+  "stage_weights": { "hire": 1, "compare": 0.9, "solution": 0.65, "problem": 0.5, "info": 0.3 },
+  "cases": [
+    { "name": "Win at the Go line", "row": { "gate": "pass", "win": 0.6 }, "verdict": "go" },
+    { "name": "strong Win", "row": { "gate": "pass", "win": 0.92 }, "verdict": "go" },
+    { "name": "just under Go", "row": { "gate": "pass", "win": 0.5999 }, "verdict": "months" },
+    { "name": "Win at the months line", "row": { "gate": "pass", "win": 0.35 }, "verdict": "months" },
+    { "name": "just under months", "row": { "gate": "pass", "win": 0.3499 }, "verdict": "hard" },
+    { "name": "no Win at all", "row": { "gate": "pass", "win": 0 }, "verdict": "hard" },
+    { "name": "Win not computed", "row": { "gate": "pass", "win": null }, "verdict": "hard" },
+    { "name": "gated, whatever the Win", "row": { "gate": "fail", "win": 0.95 }, "verdict": "gated" }
+  ]
+}

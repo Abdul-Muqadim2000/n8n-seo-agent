@@ -1,0 +1,64 @@
+{
+ "callback": {
+  "body": "={{ JSON.stringify($json.callback_body) }}",
+  "post": "POST KI Report",
+  "retry": false
+ },
+ "connections": {
+  "Has Callback (KI)?": [
+   [
+    "POST KI Report"
+   ]
+  ],
+  "KI Gate": [
+   [
+    "Has Callback (KI)?"
+   ]
+  ],
+  "KI Input": [
+   [
+    "Load Monitors (KI)"
+   ]
+  ],
+  "Load Kill Switch (KI)": [
+   [
+    "KI Gate"
+   ]
+  ],
+  "Load Monitors (KI)": [
+   [
+    "Load Kill Switch (KI)"
+   ]
+  ],
+  "Manual Run": [
+   [
+    "KI Input"
+   ]
+  ]
+ },
+ "file": "SEO_Agent_Keyword_Intelligence.json",
+ "kill_key": "ki:kill",
+ "name": "SEO Agent - Keyword Intelligence",
+ "nodes": [
+  "Has Callback (KI)?",
+  "KI Gate",
+  "KI Input",
+  "Load Kill Switch (KI)",
+  "Load Monitors (KI)",
+  "Manual Run",
+  "POST KI Report"
+ ],
+ "rule_version": "ki-1",
+ "settings": {
+  "errorWorkflow": "SEOagentErrHandl",
+  "executionOrder": "v1",
+  "executionTimeout": 900,
+  "saveDataErrorExecution": "all",
+  "saveDataSuccessExecution": "all"
+ },
+ "stages": {
+  "competitors": "ki_competitors",
+  "keyword_research": "ki_research"
+ },
+ "workflow": "SEOagentKIntel1"
+}
