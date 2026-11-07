@@ -1,0 +1,288 @@
+{
+ "_source": "real LIVE response, api.dataforseo.com/v3, 2026-11-07 ~20:06-20:10 UTC (2026-11-08 PKT), KI L0 live confirmations; item arrays trimmed to 3, strings to 300 chars",
+ "calls": [
+  {
+   "call": "c04_competitors_domain",
+   "status_code": 20000,
+   "cost": 0.012,
+   "task": {
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "cost": 0.012,
+    "path": [
+     "v3",
+     "dataforseo_labs",
+     "google",
+     "competitors_domain",
+     "live"
+    ],
+    "data": {
+     "api": "dataforseo_labs",
+     "function": "competitors_domain",
+     "se_type": "google",
+     "target": "techand.ai",
+     "location_code": 2784,
+     "language_code": "en",
+     "exclude_top_domains": false,
+     "max_rank_group": 20,
+     "limit": 3
+    },
+    "result_count": 1,
+    "result": [
+     {
+      "se_type": "google",
+      "target": "techand.ai",
+      "location_code": 2784,
+      "language_code": "en",
+      "total_count": null,
+      "items_count": 0,
+      "items": null
+     }
+    ]
+   }
+  },
+  {
+   "call": "c04b_competitors_domain_nomax",
+   "status_code": 20000,
+   "cost": 0.012,
+   "task": {
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "cost": 0.012,
+    "path": [
+     "v3",
+     "dataforseo_labs",
+     "google",
+     "competitors_domain",
+     "live"
+    ],
+    "data": {
+     "api": "dataforseo_labs",
+     "function": "competitors_domain",
+     "se_type": "google",
+     "target": "techand.ai",
+     "location_code": 2784,
+     "language_code": "en",
+     "exclude_top_domains": false,
+     "limit": 3
+    },
+    "result_count": 1,
+    "result": [
+     {
+      "se_type": "google",
+      "target": "techand.ai",
+      "location_code": 2784,
+      "language_code": "en",
+      "total_count": null,
+      "items_count": 0,
+      "items": null
+     }
+    ]
+   }
+  },
+  {
+   "call": "c04c_competitors_domain_rival",
+   "status_code": 20000,
+   "cost": 0.01212,
+   "task": {
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "cost": 0.01212,
+    "path": [
+     "v3",
+     "dataforseo_labs",
+     "google",
+     "competitors_domain",
+     "live"
+    ],
+    "data": {
+     "api": "dataforseo_labs",
+     "function": "competitors_domain",
+     "se_type": "google",
+     "target": "dynamicssquare.com",
+     "location_code": 2784,
+     "language_code": "en",
+     "exclude_top_domains": false,
+     "max_rank_group": 20,
+     "limit": 1
+    },
+    "result_count": 1,
+    "result": [
+     {
+      "se_type": "google",
+      "target": "dynamicssquare.com",
+      "location_code": 2784,
+      "language_code": "en",
+      "total_count": 72,
+      "items_count": 1,
+      "items": [
+       {
+        "se_type": "google",
+        "domain": "dynamicssquare.com",
+        "avg_position": 13.875,
+        "sum_position": 111,
+        "intersections": 8,
+        "full_domain_metrics": {
+         "organic": {
+          "pos_1": 0,
+          "pos_2_3": 0,
+          "pos_4_10": 2,
+          "pos_11_20": 6,
+          "pos_21_30": 7,
+          "pos_31_40": 1,
+          "pos_41_50": 3,
+          "pos_51_60": 1,
+          "pos_61_70": 0,
+          "pos_71_80": 0,
+          "pos_81_90": 4,
+          "pos_91_100": 3,
+          "etv": 17.602319843368605,
+          "count": 27,
+          "estimated_paid_traffic_cost": 97.8011868414469,
+          "is_new": 19,
+          "is_up": 4,
+          "is_down": 4,
+          "is_lost": 12,
+          "clickstream_etv": null,
+          "clickstream_gender_distribution": null,
+          "clickstream_age_distribution": null
+         },
+         "paid": {
+          "pos_1": 0,
+          "pos_2_3": 0,
+          "pos_4_10": 0,
+          "pos_11_20": 0,
+          "pos_21_30": 0,
+          "pos_31_40": 0,
+          "pos_41_50": 0,
+          "pos_51_60": 0,
+          "pos_61_70": 0,
+          "pos_71_80": 0,
+          "pos_81_90": 0,
+          "pos_91_100": 0,
+          "etv": 0,
+          "count": 0,
+          "estimated_paid_traffic_cost": 0,
+          "is_new": 0,
+          "is_up": 0,
+          "is_down": 0,
+          "is_lost": 0,
+          "clickstream_etv": null,
+          "clickstream_gender_distribution": null,
+          "clickstream_age_distribution": null
+         },
+         "local_pack": null,
+         "featured_snippet": null
+        },
+        "metrics": {
+         "organic": {
+          "pos_1": 0,
+          "pos_2_3": 0,
+          "pos_4_10": 2,
+          "pos_11_20": 6,
+          "pos_21_30": 0,
+          "pos_31_40": 0,
+          "pos_41_50": 0,
+          "pos_51_60": 0,
+          "pos_61_70": 0,
+          "pos_71_80": 0,
+          "pos_81_90": 0,
+          "pos_91_100": 0,
+          "etv": 12.438984472770244,
+          "count": 8,
+          "estimated_paid_traffic_cost": 66.75623629614711,
+          "is_new": 5,
+          "is_up": 2,
+          "is_down": 1,
+          "is_lost": 0,
+          "clickstream_etv": null,
+          "clickstream_gender_distribution": null,
+          "clickstream_age_distribution": null
+         },
+         "paid": {
+          "pos_1": 0,
+          "pos_2_3": 0,
+          "pos_4_10": 0,
+          "pos_11_20": 0,
+          "pos_21_30": 0,
+          "pos_31_40": 0,
+          "pos_41_50": 0,
+          "pos_51_60": 0,
+          "pos_61_70": 0,
+          "pos_71_80": 0,
+          "pos_81_90": 0,
+          "pos_91_100": 0,
+          "etv": 0,
+          "count": 0,
+          "estimated_paid_traffic_cost": 0,
+          "is_new": 0,
+          "is_up": 0,
+          "is_down": 0,
+          "is_lost": 0,
+          "clickstream_etv": null,
+          "clickstream_gender_distribution": null,
+          "clickstream_age_distribution": null
+         },
+         "local_pack": null,
+         "featured_snippet": null
+        },
+        "competitor_metrics": {
+         "organic": {
+          "pos_1": 0,
+          "pos_2_3": 0,
+          "pos_4_10": 2,
+          "pos_11_20": 6,
+          "pos_21_30": 0,
+          "pos_31_40": 0,
+          "pos_41_50": 0,
+          "pos_51_60": 0,
+          "pos_61_70": 0,
+          "pos_71_80": 0,
+          "pos_81_90": 0,
+          "pos_91_100": 0,
+          "etv": 12.438984472770244,
+          "count": 8,
+          "estimated_paid_traffic_cost": 66.75623629614711,
+          "is_new": 5,
+          "is_up": 2,
+          "is_down": 1,
+          "is_lost": 0,
+          "clickstream_etv": null,
+          "clickstream_gender_distribution": null,
+          "clickstream_age_distribution": null
+         },
+         "paid": {
+          "pos_1": 0,
+          "pos_2_3": 0,
+          "pos_4_10": 0,
+          "pos_11_20": 0,
+          "pos_21_30": 0,
+          "pos_31_40": 0,
+          "pos_41_50": 0,
+          "pos_51_60": 0,
+          "pos_61_70": 0,
+          "pos_71_80": 0,
+          "pos_81_90": 0,
+          "pos_91_100": 0,
+          "etv": 0,
+          "count": 0,
+          "estimated_paid_traffic_cost": 0,
+          "is_new": 0,
+          "is_up": 0,
+          "is_down": 0,
+          "is_lost": 0,
+          "clickstream_etv": null,
+          "clickstream_gender_distribution": null,
+          "clickstream_age_distribution": null
+         },
+         "local_pack": null,
+         "featured_snippet": null
+        }
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -29,7 +29,7 @@ module.exports = async (ctx) => {
     const TC = require('./table_cols.json');
     const FX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'ki_e2.json'), 'utf8'));
     const W = require('./ki_wiring.json');
-    const LIVE = (f) => JSON.parse(rd('docs', 'keyword-intel-2026-11-08', 'r5_shapes', 'LIVE_KI_' + f + '.json'));
+    const LIVE = (f) => JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'ki_live', 'LIVE_KI_' + f + '.json'), 'utf8'));   // copies of docs/keyword-intel-2026-11-08/r5_shapes (harness runs without docs)
     const liveTask = (f, i) => { const d = LIVE(f); return JSON.parse(J(((d.calls || [d])[i || 0]).task)); };
     const NOW = new Date().toISOString();
     // ---- the fake DataForSEO: every answer is a REAL live envelope (r5_shapes) with its items varied for this request ----
