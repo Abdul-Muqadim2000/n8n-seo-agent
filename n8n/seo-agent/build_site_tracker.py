@@ -65,7 +65,7 @@ import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the l
 SITE_STATS_SRC = seo_events.inline(_rdt('code/_site_stats.js').rstrip('\n'))     # G28 (FIX_PLAN 2026-10-12): the statistical test behind every traffic alert (its Google-update dates come from v5/data/seo_events.json)
 GSC_QUERIES_SRC = _rdt('code/_gsc_queries.js').rstrip('\n')   # G9 / D24: scraper queries, the brand split and the anonymised share, shared with the audit
 SERP_OBS_SRC = _rdt('code/_serp_obs.js').rstrip('\n')        # D26: a results-page feature is one observation at one moment, never a fact about the query
-RANK_SERP_SRC = _rdt('code/_rank_serp.js').rstrip('\n')      # G6 (FIX_PLAN 2026-10-12): the whole results page of one rank check (features, page 1, share of voice, snapshot)
+RANK_SERP_SRC = _rdt('code/_serp_url.js').rstrip('\n') + '\n' + _rdt('code/_rank_serp.js').rstrip('\n')   # SERP-GOTO (2026-11-08): RS reads hosts through SU      # G6 (FIX_PLAN 2026-10-12): the whole results page of one rank check (features, page 1, share of voice, snapshot)
 PAGE_WATCH_SRC = _rdt('code/_page_watch.js').rstrip('\n')    # G11 + G25 (FIX_PLAN 2026-10-13): the daily key-page watch and URL Inspection within Google's quota
 WAITING_SRC = _rdt('code/_waiting.js').rstrip('\n')          # F-A1 / A-12 (2026-10-17): the pile-up count and the ladders being written, one rule shared with the ladder mode
 READINESS_SRC = _rdt('code/_readiness.js').rstrip('\n')     # P1 (2026-10-20): author profile + business facts before a written page, one rule with Ladder Plan and the app

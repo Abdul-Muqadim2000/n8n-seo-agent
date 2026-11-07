@@ -15,9 +15,9 @@ module.exports = async (ctx) => {
     if (a < 0 || b < 0) throw new Error(name + ' not inlined in ' + file); return new Function(src.slice(a, b + 6) + '\nreturn ' + name + ';')(); };
   const AIP = kitOf('AI_Requests.js', 'AIP');
   // several kits from one generated node, in the order the node inlines them (AIX reads AIP and SC at call time)
-  const kitsOf = (file, names) => { const src = fs.readFileSync(path.join(CD, file), 'utf8'); const parts = names.map(nm => { const a = src.indexOf('const ' + nm + ' = (() => {'); const b = src.indexOf('\n})();', a);
+  const kitsOf = (file, names) => { const src = fs.readFileSync(path.join(CD, file), 'utf8'); const parts = names.map(nm => { const a0 = src.indexOf('const ' + nm + ' = (() => {'); const a = a0 >= 0 ? a0 : src.indexOf('var ' + nm + ' = '); const b = src.indexOf('\n})();', a);   // SERP-GOTO: SU is a guarded `var`
     if (a < 0 || b < 0) throw new Error(nm + ' not inlined in ' + file); return src.slice(a, b + 6); }); return new Function(parts.join('\n') + '\nreturn { ' + names.join(', ') + ' };')(); };
-  let AIX = null; try { AIX = kitsOf('AI_Extras.js', ['AIP', 'SC', 'AIX']).AIX; } catch (e) { console.log('   (W2-E3 kit not generated: ' + String(e.message).slice(0, 120) + ')'); }   // before W2-E3 there is no kit: each scenario then fails on its own
+  let AIX = null; try { AIX = kitsOf('AI_Extras.js', ['AIP', 'SU', 'SC', 'AIX']).AIX; } catch (e) { console.log('   (W2-E3 kit not generated: ' + String(e.message).slice(0, 120) + ')'); }   // before W2-E3 there is no kit: each scenario then fails on its own
   const day = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const today = new Date().toISOString().slice(0, 10);
   const SITE = 'site_techand-ai';
@@ -47,7 +47,7 @@ module.exports = async (ctx) => {
       ansRow('w3_02', 'perplexity', ['e-invoicing software uae', 'peppol access point uae'], { cited: true, our_urls: 'https://www.techand.ai/peppol' }), ansRow('w3_03', 'chatgpt', ['fta e-invoicing deadline']),
       ansRow('w3_04', 'ai_mode', ['vat return software'], { fanout_json: JSON.stringify(['vat return software', 'e-invoicing software uae']), fanout: '' }), ansRow('w3_05', 'chatgpt', [], { answered: false })];
     // the deadline search was read earlier today by another path of this site (the shared results-page cache)
-    const SCk = kitOf('AI_Extra_Requests.js', 'SC');
+    const SCk = kitsOf('AI_Extra_Requests.js', ['SU', 'SC']).SC;   // SERP-GOTO (2026-11-08): SC stores readings through SU
     const cached = SCk.row(SCk.reading(serp('fta e-invoicing deadline', ['tax.gov.ae', 'techand.ai', 'cleartax.com']), { keyword: 'fta e-invoicing deadline', location_code: 2784, language_code: 'en', depth: 10 }, { now: new Date().toISOString() }), SITE);
     stage(plan0({ options: { ...plan0().options, fanout_check: 4 } }), rows, { 'Load SERP Cache (AI)': [cached],
       'Load Query History': [{ site_id: SITE, query: 'e-invoicing software uae', impressions: 840, clicks: 12, position: 4.2, checked_at: day(3), period_end: day(4) }],
