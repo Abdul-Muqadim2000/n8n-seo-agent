@@ -1,0 +1,269 @@
+{
+ "_source": "real LIVE response, api.dataforseo.com/v3, 2026-11-07 ~20:06-20:10 UTC (2026-11-08 PKT), KI L0 live confirmations; item arrays trimmed to 3, strings to 300 chars",
+ "calls": [
+  {
+   "call": "c10_content_analysis_forums",
+   "status_code": 20000,
+   "cost": 0.024036,
+   "task": {
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "cost": 0.024036,
+    "path": [
+     "v3",
+     "content_analysis",
+     "search",
+     "live"
+    ],
+    "data": {
+     "api": "content_analysis",
+     "function": "search",
+     "keyword": "dynamics 365",
+     "page_type": [
+      "message-boards"
+     ],
+     "search_mode": "as_is",
+     "filters": [
+      [
+       "main_domain",
+       "in",
+       [
+        "reddit.com",
+        "quora.com"
+       ]
+      ]
+     ],
+     "limit": 3
+    },
+    "result_count": 1,
+    "result": [
+     {
+      "offset_token": "<redacted: base64 of the request incl. account id>",
+      "total_count": 0,
+      "items_count": 0,
+      "items": null
+     }
+    ]
+   }
+  },
+  {
+   "call": "c10b_content_analysis_forums_domains",
+   "status_code": 20000,
+   "cost": 0.02436,
+   "task": {
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "cost": 0.02436,
+    "path": [
+     "v3",
+     "content_analysis",
+     "search",
+     "live"
+    ],
+    "data": {
+     "api": "content_analysis",
+     "function": "search",
+     "keyword": "dynamics 365",
+     "page_type": [
+      "message-boards"
+     ],
+     "search_mode": "one_per_domain",
+     "limit": 10
+    },
+    "result_count": 1,
+    "result": [
+     {
+      "offset_token": "<redacted: base64 of the request incl. account id>",
+      "total_count": 2268,
+      "items_count": 10,
+      "items": [
+       {
+        "type": "content_analysis_search",
+        "url": "https://math.answers.com/math-and-arithmetic/What-is-the-difference-between-dynamics-365-and-dynamics-365-sales",
+        "domain": "math.answers.com",
+        "main_domain": "answers.com",
+        "url_rank": 0,
+        "spam_score": 0,
+        "domain_rank": 581,
+        "fetch_time": "2025-05-29 12:31:41 +00:00",
+        "country": "US",
+        "language": "en",
+        "score": 698177.8,
+        "page_category": [
+         10004,
+         10276,
+         11088,
+         "...(+8 more)"
+        ],
+        "page_types": [
+         "message-boards"
+        ],
+        "ratings": null,
+        "social_metrics": null,
+        "content_info": {
+         "content_type": "page_content",
+         "title": "What is the difference between Dynamics 365 and Dynamics 365 Sales?",
+         "main_title": "What is the difference between Dynamics 365 and Dynamics 365 Sales?",
+         "previous_title": null,
+         "level": 1,
+         "author": "Mayank",
+         "snippet": "Microsoft Dynamics 365 comes with many functnalities and is an upgraded version of Dynamics AX. Whereas Microsoft Dynamics 365 Sales is more focused on the CRM integration part. Microsoft Dynamics 365 holds both ERP and CRM as key components to help their customers grow. D365 Sales is a part of the ...",
+         "snippet_length": 556,
+         "social_metrics": null,
+         "highlighted_text": null,
+         "language": "en",
+         "sentiment_connotations": {
+          "anger": 0.03660183027386665,
+          "happiness": 0.37898385524749756,
+          "love": 0.11365765333175659,
+          "sadness": 0.06393785774707794,
+          "share": 0.24481044709682465,
+          "fun": 0.16206832230091095
+         },
+         "connotation_types": {
+          "positive": 0.3961030840873718,
+          "negative": 0.13062305748462677,
+          "neutral": 0.4733038544654846
+         },
+         "text_category": [
+          10004,
+          10276,
+          11088,
+          "...(+8 more)"
+         ],
+         "date_published": null,
+         "content_quality_score": 91,
+         "semantic_location": null,
+         "rating": null,
+         "group_date": "2024-08-14 05:48:04 +00:00"
+        }
+       },
+       {
+        "type": "content_analysis_search",
+        "url": "https://www.egpet.net/vb/showthread.php?t=113385",
+        "domain": "www.egpet.net",
+        "main_domain": "egpet.net",
+        "url_rank": 213,
+        "spam_score": 0,
+        "domain_rank": 236,
+        "fetch_time": "2026-07-17 03:50:11 +00:00",
+        "country": "US",
+        "language": "en",
+        "score": 689039.8,
+        "page_category": [
+         10016,
+         10139,
+         10746,
+         "...(+3 more)"
+        ],
+        "page_types": [
+         "message-boards"
+        ],
+        "ratings": null,
+        "social_metrics": null,
+        "content_info": {
+         "content_type": "page_content",
+         "title": "Microsoft System Dynamics 365",
+         "main_title": "Thread: Microsoft System Dynamics 365",
+         "previous_title": "Hybrid View",
+         "level": 2,
+         "author": null,
+         "snippet": "Does anyone use Microsoft System Dynamics 365 for Inventory Management/Maintenance Activity Management/Financial Management?\nI need the basic guidelines of MSD365.It will be very helpful for me if you upload some materials of MSD365.\nThank you in advance.",
+         "snippet_length": 255,
+         "social_metrics": null,
+         "highlighted_text": null,
+         "language": "en",
+         "sentiment_connotations": {
+          "anger": 0.07974620908498764,
+          "happiness": 0.2958821952342987,
+          "love": 0.10382111370563507,
+          "sadness": 0.12158846855163574,
+          "share": 0.18624676764011383,
+          "fun": 0.21277521550655365
+         },
+         "connotation_types": {
+          "positive": 0.28694701194763184,
+          "negative": 0.14465975761413574,
+          "neutral": 0.5684232115745544
+         },
+         "text_category": [
+          10016,
+          10141,
+          10763,
+          "...(+2 more)"
+         ],
+         "date_published": null,
+         "content_quality_score": 93,
+         "semantic_location": null,
+         "rating": null,
+         "group_date": "2026-07-17 03:50:11 +00:00"
+        }
+       },
+       {
+        "type": "content_analysis_search",
+        "url": "https://techcommunity.microsoft.com/discussions/microsoftlearn/dynamics-365/2791887",
+        "domain": "techcommunity.microsoft.com",
+        "main_domain": "microsoft.com",
+        "url_rank": 0,
+        "spam_score": 0,
+        "domain_rank": 842,
+        "fetch_time": "2025-09-19 20:26:47 +00:00",
+        "country": "US",
+        "language": "en",
+        "score": 638315.06,
+        "page_category": [
+         10108,
+         10756,
+         10011,
+         "...(+2 more)"
+        ],
+        "page_types": [
+         "message-boards"
+        ],
+        "ratings": null,
+        "social_metrics": null,
+        "content_info": {
+         "content_type": "page_content",
+         "title": "Dynamics 365",
+         "main_title": "Dynamics 365",
+         "previous_title": null,
+         "level": 1,
+         "author": "virtual-tech",
+         "snippet": "Can someone shed some light where Dynamics 365 data is stored? Are customers responsible for backing up the data with third party vendor?",
+         "snippet_length": 137,
+         "social_metrics": null,
+         "highlighted_text": null,
+         "language": "en",
+         "sentiment_connotations": {
+          "anger": 0.11425638943910599,
+          "happiness": 0.300285667181015,
+          "love": 0.03281645104289055,
+          "sadness": 0.13430044054985046,
+          "share": 0.2758215069770813,
+          "fun": 0.1425795555114746
+         },
+         "connotation_types": {
+          "positive": 0.03247363865375519,
+          "negative": 0.36884552240371704,
+          "neutral": 0.5987108945846558
+         },
+         "text_category": [
+          10011,
+          10108,
+          10756
+         ],
+         "date_published": "2021-09-28 14:37:29 +00:00",
+         "content_quality_score": 97,
+         "semantic_location": "section",
+         "rating": null,
+         "group_date": "2021-09-28 14:37:29 +00:00"
+        }
+       },
+       "...(+7 more)"
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

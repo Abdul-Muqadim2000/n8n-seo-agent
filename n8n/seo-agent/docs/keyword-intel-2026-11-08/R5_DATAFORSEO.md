@@ -6,7 +6,7 @@ a cost model for one typical run; the shapes that need ONE live call before code
 
 Method: 123 sandbox calls (`https://sandbox.dataforseo.com/v3/`, $0, same credentials, from a throwaway `node:22-bookworm-slim`
 container, credentials loaded with `env_settings.load_env()` and passed by env var, never printed; the probe script refuses any other
-host). **No live (paid) call was made.** Prices from dataforseo.com/pricing/* and request fields from docs.dataforseo.com, both read
+host). **No live (paid) call was made for sections 0-12** (19 live calls followed on 2026-11-08: §13). Prices from dataforseo.com/pricing/* and request fields from docs.dataforseo.com, both read
 2026-11-08. Real live shapes and real billed costs come from the harness fixtures already in the repo (`harness/fixtures_live/*`,
 recorded 2026-10-02 .. 2026-10-17). Trimmed samples: `r5_shapes/` (sandbox = `<group>_<endpoint>.json`, real live =
 `LIVE_*.json`, each with `_source`). `r5_shapes/labs_available_filters.json` is the full map of filterable field paths and types for
@@ -26,7 +26,7 @@ every Labs endpoint (free GET `dataforseo_labs/available_filters`): use it, neve
    Real billed costs in the fixtures match to the 6th decimal (backlinks 5 rows = $0.02418, 1 row = $0.024036).
 3. **Every row returned is billed** on Labs / Backlinks / Content Analysis / LLM Mentions / AI keyword volume. `limit` and `filters`
    are the cost controls; `total_count` is free. Google Ads, Trends, Clickstream volume, SERP, Autocomplete are per task.
-4. **`load_async_ai_overview` was not surcharged live.** Pricing page: "+1 base price". Fixtures: depth 10 + aio = $0.002
+4. **`load_async_ai_overview` was not surcharged live.** (**CORRECTED 2026-11-08, see §13 C1: it is +$0.002 when the overview is asynchronous.**) Pricing page: "+1 base price". Fixtures: depth 10 + aio = $0.002
    (`aio.json`), depth 30 + aio = $0.006 (`fa3_live.json.gz`, 2026-10-17), i.e. depth only. Model it as possible (+$0.002 per SERP)
    and confirm on the ledger.
 5. **Cheapest traffic potential (B5)**: `bulk_traffic_estimation` takes up to 1,000 targets **including page URLs** in one call
@@ -372,7 +372,7 @@ call and US-English only for ChatGPT: reuse the AI panel. Cache TTLs (owner note
 volume 30 d, SERP 24 h; DataForSEO itself refreshes keyword metrics monthly, so a shorter volume TTL buys nothing.
 Reference: today's discovery run is ~$0.27-0.34 and a full report ~$0.55 (BENCH_AREA1, `_cost_cal.js`).
 
-## 11. Live calls needed before code ships (one each, not made; ~$0.25 in all)
+## 11. Live calls needed before code ships (one each; MADE 2026-11-08, answers and corrections in §13)
 
 1. `bulk_traffic_estimation` with **page URL** targets: shape and `cost` (standard $0.012 + row, or the $0.12 exception?).
 2. `page_intersection` union with `https://comp.com/*` wildcards + `exclude_pages`: wildcard char (`*` vs `_`), `intersection_result`
@@ -414,3 +414,87 @@ bulk_ranks, content_analysis search.
 - Domain fields want bare hosts (no scheme, no www); page fields want absolute URLs; parse hosts with a regex (no `URL` in the n8n
   sandbox).
 - Every paid node: no node-level retry (retry_lint), ledger reserve before, settle from `cost` after (INVARIANTS rule 3, R17).
+
+## 13. Live confirmations (2026-11-08)
+
+Method: 19 POSTs to `https://api.dataforseo.com/v3/` (live, paid) on 2026-11-07 20:06-20:10 UTC (2026-11-08 PKT) from a throwaway
+`node:22-bookworm-slim` container, credentials loaded with `env_settings.load_env()` and passed by env var, never printed or written;
+each body validated in the sandbox first ($0); a hard cap of $0.40 on the summed `tasks[0].cost`; no retries. 13 approved items plus
+5 cheap diagnostics where the first answer was ambiguous (marked "diag") and one free refusal. Market UAE English (2784/en).
+**Balance $33.201983 before, $33.001467 after = $0.200516, exactly the sum of the `cost` fields** (no other spend in that window).
+Trimmed real responses: `r5_shapes/LIVE_KI_*.json` (arrays cut to 3, `offset_token` redacted because it is base64 of the request
+including the account id).
+
+### 13.0 Two findings that change more than the KI build
+
+- **L-1 (High, production too): live SERP organic results now come back wrapped in Google's click redirect.** Both live
+  `serp/google/organic/live/advanced` calls (2 of 2, 2784/en, 2026-11-07) return every `organic` and `local_pack` item with
+  `domain: "google.com"`, `url: "https://google.com/goto?url=CAES..."` (opaque token, not decodable), `main_domain: null`,
+  `relative_url: null`, and `links[].url` wrapped the same way. The real host survives only in `breadcrumb` (`"https://sqitconsulting.com
+  › microsoft-dynamics-365"`; for social results it is `"3 reactions · 1 month ago"`) and sometimes `website_name` (a host or a brand
+  name: `"sqitconsulting.com"`, `"Blueflame Labs"`, `"Facebook · TechMantra GULF DMCC"`); local_pack items keep only `title` and `cid`.
+  The full result URL is gone. `ai_overview.references[]` still carry real `domain` / `url`. The 2026-10-02 fixture (`aio.json`) had
+  real domains; the facts search saw goto URLs from 2026-10-29 (`_sources.js` FU-SV); R3 found google.com as "top competitor" on
+  devaicon's 11-04 discovery and the 11-05/06 rank readings: the same cause. Labs data (stored SERPs: page_intersection, ranked_keywords,
+  historical_serps) is NOT affected. Not verified in the engine, but by reading: `_rank_serp.js:98` finds our own result with
+  `bare(o.domain) || hostOf(o.url)` (so it would read "google.com" and never find the client), `Ladder_Clusters.js:77` clusters on
+  `x.url || x.domain` (every goto token is unique, so no two keywords would ever share a URL), and competitor picking would count
+  google.com. **Every SERP reader must recover the host from `breadcrumb` (regex `^https?://([^/\s›]+)`), then `website_name` when it is a
+  host, else mark the result "host unknown"; clustering must compare host + breadcrumb path, never `url`.** Worth a production check of
+  `seo_rank_history` since late October before the KI build.
+- **L-2 (High for A1): Labs has no data for techand.ai in UAE.** `competitors_domain` techand.ai returned `items: null`,
+  `total_count: null` with and without `max_rank_group` (both billed $0.012), and `bulk_traffic_estimation` gives
+  `https://www.techand.ai/` `count 0, etv 0`, although Search Console shows thousands of impressions. A1 cannot start from
+  `competitors_domain` for our clients; it must start from `serp_competitors` on keywords Labs holds, or from live SERPs (with L-1's
+  host recovery). Empty answers are billed the task base.
+
+### 13.1 Per item
+
+| # | Call (file) | Question | Answer | Cost |
+|---|---|---|---|---|
+| 1 | `bulk_traffic_estimation`, 3 page URLs (`LIVE_KI_labs_bulk_traffic_estimation_pages.json`) | Page URLs accepted? Price class? | **Yes**, absolute `https://` page URLs accepted; items `{se_type, target (echo), metrics{organic{etv float, count int}, paid null, local_pack null, featured_snippet null}}`; a page with nothing returns `etv 0, count 0` (still a billed row). Items come back in a different order than sent: join on `target`. **Standard Labs price**: $0.012 + 3 x $0.00012 = $0.01236 (not the $0.12 historical class). | $0.01236 |
+| 2 | `page_intersection` union, `https://www.dynamicssquare.com/*` + `https://www.intwo.cloud/*`, `exclude_pages` `https://www.techand.ai/*` (`LIVE_KI_labs_page_intersection_union.json`) | Wildcard, null entries, totals | `*` after a slash works live (the `_` form was not needed). `total_count` 29 at the top of `result[0]`; items `{se_type, keyword_data{...}, intersection_result{"1": serp_element or null, "2": ...}}`: **null where that page set does not rank** (union: 2 of 3 rows had one null). Rows include deep positions (rank_group 82): filter with `["intersection_result.$page.rank_group", "<=", 20]` style paths (`labs_available_filters.json` lists `intersection_result.$page.*`). Noise to expect: intwo's customer-story pages rank for customer names ("al nasr contracting company llc"). | $0.01236 |
+| 3 | `domain_intersection` `intersections:false` (`LIVE_KI_labs_domain_intersection_false.json`) | `second_domain_serp_element` null? `ai_overview_reference` refused live? | **`ai_overview_reference` is refused live too**: 40501 "Invalid Field: 'item_types'", cost 0. Re-sent with `item_types ["organic"]`: `total_count` 27; `second_domain_serp_element` is **present and `null`** on every row (key exists). Use `first_domain_serp_element.rank_group` to cut deep rows. | $0 + $0.01236 |
+| 4 | `competitors_domain` techand.ai (max_rank_group 20; diag without it); diag dynamicssquare.com limit 1 (`LIVE_KI_labs_competitors_domain.json`) | `competitor_metrics` live? `max_rank_group` on a small site | techand.ai: `items: null`, `total_count: null` both ways (L-2). dynamicssquare.com: `total_count` 72; item keys `se_type, domain, avg_position, sum_position, intersections, full_domain_metrics, metrics, competitor_metrics` - **`competitor_metrics` exists live** (same `organic/paid/...` bucket shape as `metrics`). The first row is the target itself (`intersections` 8 = its own count; `metrics` == `competitor_metrics` on that row): skip `domain == target`. Billing: $0.012 with 0 rows, $0.01212 with 1. | $0.012 + $0.012 + $0.01212 |
+| 5 | `serp_competitors` 3 B2B seeds (`dynamics 365 partner uae`, `microsoft dynamics partner dubai`, `erp partner dubai`); diag `erp software uae` (`LIVE_KI_labs_serp_competitors.json`) | `keywords_positions` keyed by keyword; coverage | The 3 Dynamics/partner seeds: `items: null`, `total_count: null` (no stored SERP for any; billed $0.012). `erp software uae`: `total_count` 63, items `{domain (with www.), avg_position, median_position, rating, etv, keywords_count, visibility, relevant_serp_items, keywords_positions{"erp software uae": [1, 15]}}`: **keyed by keyword, value = every position of that domain** (local pack and organic, rank_absolute-like), so `avg_position` 8 with `median_position` 1 is normal. Coverage for long B2B seeds is poor: send many seeds, expect most to be absent. | $0.012 + $0.01236 |
+| 6 | `historical_serps` `erp software uae`, `date_from` 2026-05-01 (`LIVE_KI_labs_historical_serps.json`) | Freshness, snapshots, price | 2 snapshots since 2026-05-01: **2026-06-03 and 2026-08-26 (newest 73 days old)**; each a full deep page (`items_count` 113 / 98: local_pack + ~100 organic, PAA, related), real domains (no goto). **Billed $0.00012 per snapshot, no task base** ($0.00024). Too stale and too sparse to replace live SERPs for B4 clustering of current results; usable as a cheap "what ranked this summer" fallback and immune to L-1. | $0.00024 |
+| 7 | `search_intent`, 1 English + 2 Arabic keywords, `location_code` sent, no language (`LIVE_KI_labs_search_intent.json`) | Arabic handling | No refusal; **`location_code` silently dropped** (absent from the `data` echo; the endpoint takes `keywords` only). Arabic keywords get labels: `شريك مايكروسوفت دايناميكس في الإمارات` commercial 0.604, `برنامج محاسبة` commercial 0.605 + secondary informational 0.3046; English `dynamics 365 partner uae` commercial 0.837. Items `{keyword, keyword_intent{label, probability float}, secondary_keyword_intents [{label, probability}] or null}`; no language field in the response. Arabic probabilities are lower: treat < 0.65 as "unsure". $0.012 + $0.00012/keyword. | $0.01236 |
+| 8 | SERP organic advanced, `people_also_ask_click_depth` 2 + `load_async_ai_overview` true: `dynamics 365 partner uae`; diag `erp software uae` (`LIVE_KI_serp_organic_advanced_paa_aio.json`) | aio surcharge, click price, expanded fields | **CORRECTION C1 (finding 4): the aio surcharge is real when Google serves the overview asynchronously.** `dynamics 365 partner uae`: `ai_overview` with `asynchronous_ai_overview: true`, 4 items, 3 references, no PAA: **$0.004** = $0.002 + $0.002. `erp software uae`: no AI overview, PAA of 9 questions (4 + 5 from 2 clicks, `seed_question` names the parent): **$0.0023** = $0.002 + 2 x $0.00015. The 2026-10-02 fixture was $0.002 because its overview was inline (`asynchronous_ai_overview: false`). **Every PAA answer was `people_also_ask_ai_overview_expanded_element` with `asynchronous_ai_overview: true`, `items` empty, no references**: no answer URL, no `people_also_ask_expanded_element` seen (2 of 2 UAE SERPs): PAA gives questions only. Plus L-1. The SERP `datetime` is the call time (fresh). | $0.004 + $0.0023 |
+| 9 | autocomplete `dynamics 365 partner`, `client gws-wiz-serp` (`LIVE_KI_serp_autocomplete.json`) | Shape, cost | $0.002 per request. `result[0]` `{keyword, type "autocomplete", se_domain, location_code, language_code, check_url (gl=AE), datetime, item_types, se_results_count 0, items_count 10}`; items `{type, rank_group, rank_absolute, relevance null, suggestion, suggestion_type null, search_query_url, thumbnail_url null, highlighted}`. **Suggestions are not localised** despite gl=AE: "partners uk", "in usa", "in houston", "australia", "new york", only one "in dubai". Drop suggestions naming another country/city before use; no volume (enrich with keyword_overview). | $0.002 |
+| 10 | `content_analysis/search` `dynamics 365`, `page_type ["message-boards"]`, filter `main_domain in [reddit.com, quora.com]`; diag same with `search_mode one_per_domain`, limit 10 (`LIVE_KI_content_analysis_search_message_boards.json`) | Reddit / Quora coverage | **Reddit and Quora: `total_count` 0** (filter path `main_domain` exists in the item, so the zero is real). Unfiltered: 2,268 message-board pages, first 10 domains math.answers.com, egpet.net, techcommunity.microsoft.com, baarez.com, capterra.in, capterra.mx, compararsoftware.com.br, teletechdigital.com, blitzhandel24.nl, b2bstore.com: vendor forums and review sites, mostly US / other countries, none UAE. **Content Analysis is not a community-question source**; finding 8 stands and is now measured. **An empty result is billed the base + 1 row** ($0.024036). | $0.024036 + $0.02436 |
+| 11 | `ai_keyword_data` 2784/en, 3 keywords (`LIVE_KI_ai_keyword_data_search_volume.json`) | Zeros or values in UAE | Real small values: `erp software uae` 3 (12 months 0..7), `dynamics 365 partner uae` 0 (1 in Nov/Dec 2025), `open edx hosting` 0 for all 12 months. Shape as documented (`ai_search_volume`, `ai_monthly_searches[{year, month, ai_search_volume}]`). Zeros are common for B2B: show "too little AI demand to measure", never "no AI demand". $0.01 + 3 x $0.0001. | $0.0103 |
+| 12 | `google_trends/explore` `["dynamics 365"]`, 2784, past_12_months, graph + queries_list (`LIVE_KI_google_trends_explore_queries_list.json`) | queries_list fields | Two items. Graph: 53 weekly points `{date_from, date_to, timestamp, missing_data, values[int]}`, `averages: []` for one keyword. **queries_list: `{position, type "google_trends_queries_list", title null, keywords, data{top[{query, value int 0-100}], rising[{query, value int}]}}`**; `rising` value is percent growth (108600 = Google's "Breakout"), 10 top and 1 rising here. $0.011 live as listed. | $0.011 |
+| 13 | `ranked_keywords` target = page URL `https://www.dynamicssquare.com/products/microsoft-dynamics-365/` (`LIVE_KI_labs_ranked_keywords_page.json`) | Per-URL metrics | Page URL accepted; top-level `metrics.organic` per URL (`etv` 8.102, `count` 3, pos buckets, `is_new/up/down/lost`, plus `ai_overview_reference: null` key) **equal to bulk_traffic_estimation's figure for the same URL** (8.102 / 3): item 1 is the cheaper TP source, this is the fallback with keyword detail. Each row's `ranked_serp_element.last_updated_time` varied from 2026-07-21 to 2026-10-07: Labs positions can be 1-4 months old. | $0.01236 |
+
+### 13.2 Corrections to earlier sections (marked)
+
+- **C1 (section 0 finding 4, section 6, section 10)**: `load_async_ai_overview` IS surcharged (+$0.002, one base price) when the
+  overview is asynchronous and gets loaded; not when it is inline or absent. Model +$0.002 on the share of SERPs with an async overview
+  (1 of 2 today); the "~$1.39 if aio is surcharged" line of section 10 is the realistic upper bound.
+- **C2 (section 6 organic element, section 1 "real live elements")**: organic `domain` / `url` / `main_domain` / `relative_url` /
+  `links[].url` can no longer be trusted on live SERPs (L-1). The field list is right; their content is a redirect.
+- **C3 (section 3 competitors_domain)**: `competitor_metrics` is present live (not only in the sandbox). The first row is the target
+  itself. A small UAE site can have no Labs data at all (L-2).
+- **C4 (section 3 page_intersection)**: the wildcard is `*` (confirmed live); filter paths are `intersection_result.$page.<field>`.
+- **C5 (section 3 domain_intersection)**: `ai_overview_reference` is refused live as well as in the sandbox (free 40501);
+  `second_domain_serp_element` is a present key with value `null` when `intersections: false`.
+- **C6 (section 3 bulk_traffic_estimation, section 0 finding 5)**: standard Labs price confirmed live ($0.012 + $0.00012/target).
+- **C7 (section 4 historical_serps)**: price is $0.00012 per snapshot with no task base; UAE snapshots are ~quarterly (newest 73 days).
+- **C8 (section 4 search_intent)**: `location_code` is dropped silently, like `language_code`; Arabic is labelled.
+- **C9 (section 6 autocomplete)**: with `gws-wiz-serp`, `relevance`, `suggestion_type` and `thumbnail_url` are null; suggestions are
+  not country-filtered.
+- **C10 (section 6 people_also_ask)**: in UAE PAA answers are AI-overview placeholders with no URL (2 of 2 SERPs); do not plan on PAA
+  answer URLs as competitor pages.
+- **C11 (billing, section 0 finding 3)**: Labs empty answers cost the task base ($0.012); Content Analysis empty answers cost base + 1 row.
+
+### 13.3 What the KI workflow must do differently
+
+1. Recover SERP hosts from `breadcrumb` / `website_name` (L-1) in one shared kit used by every SERP reader; cluster on host + path.
+2. A1: do not rely on `competitors_domain` for the client (L-2); use `serp_competitors` over many seeds + live SERP hosts; call
+   `competitors_domain` on the *competitors* (they have data) and skip the self row.
+3. Cut deep rows in intersections with `intersection_result.$page.rank_group <= 20` / `first_domain_serp_element.rank_group <= 20`.
+4. B5 traffic potential: `bulk_traffic_estimation` with page URLs (standard price), join on `target`.
+5. B3: `search_intent` takes `keywords` only; Arabic works; treat probability < 0.65 as unsure.
+6. B2: autocomplete needs a country/city filter; Trends `rising` values are percent (Breakout = very large number).
+7. No community-question source from DataForSEO (Content Analysis has no Reddit / Quora); PAA = questions only.
+8. Budget the aio surcharge on async overviews; label Labs positions with their `last_updated_time` (up to 4 months old).
