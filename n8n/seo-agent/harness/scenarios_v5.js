@@ -19798,5 +19798,6 @@ await require('./scenarios_air_live1')({ H, run, mock, store, guard, reset, begi
 // KI (keyword intelligence, 2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md): the W0 contract - tables, monitor settings, Site Admin, the
 // front door's routing, the skeleton workflow's refusals, the cost rows, the parity fixture
 await require('./scenarios_ki_w0')({ H, run, mock, store, guard, reset, begin });   // KIW0-1..8
+await require('./scenarios_ki')({ H, run, mock, store, guard, reset, begin });   // KI1-KI25: the kit v5/code/_ki.js (E1): classes, stage, clusters, score, gaps, plan, accuracy sets, R3 golden
 H.report();
 })();
