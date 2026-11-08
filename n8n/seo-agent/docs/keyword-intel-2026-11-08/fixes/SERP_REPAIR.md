@@ -113,3 +113,10 @@ Concurrent work seen on production during the repair (not touched): another sess
   filter already dropped goto citations from every count.
 - **Site Tracker** not re-run: its next weekly run (techand Thu 2026-11-12, devaicon Fri 2026-11-13) reads the new rank rows.
 - **Client messages**: drafted in `CLIENT_NOTES.md`, not sent.
+
+## 8. State at pause (2026-11-08 ~19:55 UTC) and next step
+
+Every production batch above is complete (no half-applied change; job rows 44 / 117 are back to `done`). Nothing is running from this
+repair; the tunnel used was another session's (this repair started none that stayed open). Next step: the owner reviews and sends the
+drafts in `CLIENT_NOTES.md` (update techand's three lines first if sent after the 2026-11-12 weekly reading), then decides the open
+items of section 7. Nothing else is needed to finish the repair.
