@@ -167,7 +167,7 @@ export interface KiCompetitorView {
   profile: KiCompetitorProfile | null;
   /** the row's last update (the engine's updated_at) */
   fetchedAt: string;
-  /** `rule` / `page` / `declared` / `user` = measured on the results pages; `llm` = AI judgement */
+  /** `rule` / `page` / `declared` / `user` = measured on the results pages; `llm` = a model's reading (none is used today) */
   basis: KiBasis;
   basisLabel: string;
 }
@@ -443,8 +443,9 @@ export function kiKeywordView(r: KiKeywordRow, brandTokens: readonly string[], i
     stageLabel: stage ? KI_STAGES[stage] : null,
     needsReview: B(r.needs_review),
     gate,
-    gateReason: gate === 'fail' ? kiGateWords(r.gate_reason, r.gate_code) : null,
-    gateCode: gate === 'fail' ? kiGateCodeOf(r.gate_reason, r.gate_code) : null,
+    // FX-L: gate_reason holds the code, gate_detail the engine's sentence (never shown; read only to find a code on an older row)
+    gateReason: gate === 'fail' ? kiGateWords(r.gate_detail, r.gate_reason) : null,
+    gateCode: gate === 'fail' ? kiGateCodeOf(r.gate_detail, r.gate_reason) : null,
     verdict,
     verdictLabel: KI_VERDICTS[verdict],
     verdictTone: KI_VERDICT_TONE[verdict],

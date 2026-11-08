@@ -31,7 +31,7 @@ import {
   kiQuickWin,
   kiRunView,
   kiSummaryOf,
-  kiSuperseded,
+  KI_ROW_CURRENT,
   kiVisible,
   n8nSiteId,
   normKeyword,
@@ -123,16 +123,16 @@ export interface KiData {
 const sameDomain = (d: string) => (r: { domain?: unknown }) => String(r?.domain ?? '').trim().toLowerCase() === d;
 
 /**
- * FX-A (review LOGIC H9, app side): only CURRENT keyword and gap rows are counted or listed. The engine upserts them by key and never deletes,
- * so the rows a newer run did not write keep their old verdicts. A row is current when it is not marked superseded (FX-L's `superseded_at`,
- * shared `kiSuperseded`) and, per market, it belongs to the newest delivered run (ok / partial) of its kind that wrote rows into the table.
- * A row of a run the app does not know (older than the runs read) is stale once a known run wrote the table; with no known run at all, every
- * unmarked row is kept (nothing to compare with).
+ * FX-A (review LOGIC H9, app side; FX-L's KI_ROW_CURRENT): only CURRENT keyword and gap rows are counted or listed. The engine deletes, after a
+ * keyword-research run, the rows it did not write; the app keeps, per market, only the rows of the newest keyword_research run with status
+ * ok or partial that wrote rows into the table (the safety net if a delete failed). A row of a run the app does not know (older than the runs
+ * read) is stale once a known run wrote the table; with no known run at all, every row is kept (nothing to compare with).
  */
-export function kiCurrentRows<T extends { run_id?: unknown; market?: unknown; superseded_at?: unknown; status?: unknown }>(all: readonly T[], runs: readonly KiRunRow[]): T[] {
-  const live = all.filter((r) => !kiSuperseded(r));
+export function kiCurrentRows<T extends { run_id?: unknown; market?: unknown }>(all: readonly T[], runs: readonly KiRunRow[]): T[] {
+  const live = all;
+  // FX-L's KI_ROW_CURRENT: the latest keyword_research run with status ok or partial (the engine also deletes the older rows)
   const delivered = [...runs]
-    .filter((r) => r.status === 'ok' || r.status === 'partial')
+    .filter((r) => String(r.kind) === KI_ROW_CURRENT.run_kind && (KI_ROW_CURRENT.run_status as readonly string[]).includes(String(r.status)))
     .sort((a, b) => String(b.started_at ?? '').localeCompare(String(a.started_at ?? '')));
   const runOf = new Map(delivered.map((r) => [String(r.run_id ?? ''), r]));
   const byMarket = new Map<string, T[]>();
@@ -143,7 +143,7 @@ export function kiCurrentRows<T extends { run_id?: unknown; market?: unknown; su
   const out: T[] = [];
   for (const [, group] of byMarket) {
     const present = new Set(group.map((r) => String(r.run_id ?? '')));
-    // the newest run of each kind that wrote rows here (research writes keywords and gaps today; the rule does not assume it)
+    // the newest current run that wrote rows here
     const newest = new Map<string, string>();
     for (const r of delivered) if (present.has(String(r.run_id ?? '')) && !newest.has(String(r.kind))) newest.set(String(r.kind), String(r.run_id));
     if (!newest.size) {

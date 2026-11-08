@@ -40,10 +40,10 @@ describe('KI A1: words and rows', () => {
     expect(kiIsBrand('techand erp reviews', t)).toBe(true);
     expect(kiIsBrand('erp reviews', t)).toBe(false);
   });
-  it('a broken JSON column reads as its fallback; an AI judgement is labelled so', () => {
+  it('a broken JSON column reads as its fallback; an inferred class is labelled so', () => {
     expect(kiJson('{bad', [])).toEqual([]);
     const c = kiCompetitorView({ comp_domain: 'Rival.example', class: 'weird', class_basis: 'llm', size_tag: '', reasons_json: '{bad', evidence_json: null, status: 'chosen', status_by: 'user' } as never);
-    expect(c).toMatchObject({ compDomain: 'rival.example', class: 'direct', basis: 'inferred', basisLabel: 'AI judgement', sizeTag: 'unknown', reasons: [], evidence: [], status: 'chosen' });
+    expect(c).toMatchObject({ compDomain: 'rival.example', class: 'direct', basis: 'inferred', basisLabel: 'our reading of the results', sizeTag: 'unknown', reasons: [], evidence: [], status: 'chosen' });
     const r = kiRunView({ run_id: 'r', kind: 'competitors', status: 'partial', sections_json: '[{"key":"profiles","state":"missing"}]', counts_json: '{"a":2,"b":"x"}' } as never);
     expect(r).toMatchObject({ status: 'partial', missingSections: ['profiles'], counts: { a: 2 } });
   });

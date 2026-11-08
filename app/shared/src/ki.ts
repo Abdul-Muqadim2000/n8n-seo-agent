@@ -97,24 +97,27 @@ export const kiCostRow = (kind: KiRunMode) => COST_TABLE[kind as CostKey];
 // §6 the words (one place; the screens, the guides and the reports read these)
 // ---------------------------------------------------------------------------------------------------------------------------
 
-export const KI_VERDICT_IDS = ['go', 'months', 'hard', 'gated'] as const;
+export const KI_VERDICT_IDS = ['go', 'months', 'hard', 'gated', 'unknown'] as const;
 export type KiVerdict = (typeof KI_VERDICT_IDS)[number];
 export const KI_VERDICTS: Record<KiVerdict, string> = {
   go: 'Go',
   months: 'Takes a few months',
-  hard: 'Hard for your site now',
+  hard: 'Hard for your website now',
   gated: 'Not for you',
+  /** FX-L: no Win, or a Win read with an unknown Strength whose range crosses a verdict line (never shown as Hard). */
+  unknown: 'Not judged yet',
 };
 /** The badge tones of the web app (components/ui/badge.tsx), the one tone map for the verdict. */
 export type KiTone = 'neutral' | 'accent' | 'good' | 'warning' | 'serious' | 'critical';
-export const KI_VERDICT_TONE: Record<KiVerdict, KiTone> = { go: 'good', months: 'warning', hard: 'serious', gated: 'neutral' };
+export const KI_VERDICT_TONE: Record<KiVerdict, KiTone> = { go: 'good', months: 'warning', hard: 'serious', gated: 'neutral', unknown: 'neutral' };
 
 /** The verdict is read from the Win factor (DESIGN.md §3.8): >= 0.60 Go, 0.35 to 0.60 Takes a few months, below 0.35 Hard; a gated row says why. */
 export const KI_VERDICT_THRESHOLDS = { go: 0.6, months: 0.35 } as const;
 export function kiVerdict(row: { gate?: string | null; win?: number | null }): KiVerdict {
   if (String(row.gate ?? '') === 'fail') return 'gated';
+  if (row.win == null || (row.win as unknown) === '') return 'unknown';
   const w = Number(row.win);
-  if (!Number.isFinite(w)) return 'hard';
+  if (!Number.isFinite(w)) return 'unknown';
   return w >= KI_VERDICT_THRESHOLDS.go ? 'go' : w >= KI_VERDICT_THRESHOLDS.months ? 'months' : 'hard';
 }
 
@@ -149,6 +152,25 @@ export const KI_CLASSES: Record<KiClass, string> = {
 /** Only these two are scored as competitors; the rest become listing, list-placement or format actions. */
 export const KI_SCORED_CLASSES: readonly KiClass[] = ['direct', 'adjacent'];
 
+// FX-L (2026-11-08, fixes/FXL.md): the engine is the source of truth for the three rules below (ki_parity.json `gate_reasons`,
+// `gate_fields`, `striking`, `row_current`); ki.parity.test.ts holds them equal.
+/** The gate reason CODES. seo_ki_keywords.gate_reason holds one of them ('' on a row that passes); gate_detail holds the engine's sentence. */
+export const KI_GATE_REASON_IDS = ['other_market', 'career', 'other_brand', 'government', 'portal', 'navigational', 'own_brand', 'off_topic', 'too_broad', 'empty', 'low_fit', 'avoid'] as const;
+export type KiGateReason = (typeof KI_GATE_REASON_IDS)[number];
+export const KI_GATE_FIELDS = { code: 'gate_reason', detail: 'gate_detail', pass_code: '' } as const;
+/** Striking distance, one definition (DESIGN.md 3.11): Search Console position 8-20 with >= 100 impressions in 28 days; >= 30 on a small
+ *  site, i.e. one whose own 28-day impressions total (seo_site_metrics, latest period; else the sum of its stored query rows) is under 5,000. */
+export const KI_STRIKING = { min_position: 8, max_position: 20, impressions_28d: 100, small_site_impressions_28d: 30, small_site_total_impressions_28d: 5000 } as const;
+export function kiIsStriking(position: number | null | undefined, impressions28d: number | null | undefined, siteTotal28d: number | null | undefined): boolean {
+  const p = Number(position), im = Number(impressions28d);
+  if (position == null || impressions28d == null || !Number.isFinite(p) || !Number.isFinite(im)) return false;
+  const small = siteTotal28d != null && Number.isFinite(Number(siteTotal28d)) && Number(siteTotal28d) < KI_STRIKING.small_site_total_impressions_28d;
+  return p >= KI_STRIKING.min_position && p <= KI_STRIKING.max_position && im >= (small ? KI_STRIKING.small_site_impressions_28d : KI_STRIKING.impressions_28d);
+}
+/** Which keyword / gap rows are current: the engine deletes, after every successful keyword-research run, the site x market rows it did not
+ *  write; a reader also keeps only rows whose run_id is the latest seo_ki_runs row of kind keyword_research with status ok or partial. */
+export const KI_ROW_CURRENT = { field: 'run_id', run_table: 'seo_ki_runs', run_kind: 'keyword_research', run_status: ['ok', 'partial'], tables: ['seo_ki_keywords', 'seo_ki_gaps'], engine_deletes_older: true } as const;
+
 export const KI_BASIS_IDS = ['measured', 'provider_estimate', 'modelled', 'inferred'] as const;
 export type KiBasis = (typeof KI_BASIS_IDS)[number];
 /** The legend, as words. `provider_estimate` names its source: "estimate from <source>". */
@@ -156,7 +178,6 @@ export const KI_BASIS: Record<KiBasis, string> = {
   measured: 'measured',
   provider_estimate: 'estimate from <source>',
   modelled: 'our estimate',
-  // FX-A (review CONSISTENCY M4): no model is called in a KI run today, so an inferred value is our reading of the results, not an AI's
   inferred: 'our reading of the results',
 };
 /**
@@ -177,21 +198,16 @@ export function kiBasisLabel(basis: unknown, source?: unknown): string {
   return KI_BASIS[b] ?? 'not available';
 }
 
-/**
- * Striking distance, the ONE definition (DESIGN.md §3.11, the engine's KI.CONFIG.striking; ki.parity.test.ts holds them equal): Search Console
- * positions 8 to 20 with at least 100 impressions in 28 days, at least 30 for a small site (under 5,000 impressions in all). The engine sets
- * `striking` on each row; the app reads that flag only and uses these numbers for its words (review CONSISTENCY M2).
- */
-export const KI_STRIKING = { min: 8, max: 20, impressions: 100, smallSiteImpressions: 30, smallSiteTotal: 5000 } as const;
-export const KI_STRIKING_WORDS = `places ${KI_STRIKING.min} to ${KI_STRIKING.max} in Google, seen at least ${KI_STRIKING.impressions} times in 28 days (${KI_STRIKING.smallSiteImpressions} for a smaller website)`;
+/** KI_STRIKING (FX-L, the engine's rule) in the customer's words; the app reads the row's `striking` flag and uses this for its copy only. */
+export const KI_STRIKING_WORDS = `places ${KI_STRIKING.min_position} to ${KI_STRIKING.max_position} in Google, seen at least ${KI_STRIKING.impressions_28d} times in 28 days (${KI_STRIKING.small_site_impressions_28d} for a smaller website)`;
 
 /**
  * Why a search is "Not for you", in plain words. The engine stores a reason CODE (the 12 of ki_parity.json `gate_reasons`; FX-L moves the detail
  * to its own field); the words are the app's. A legacy row may still carry the engine's sentence with its internal detail: it is matched to a
  * code by its words, and anything else gets the general line, so raw detail ("62% of its own words match ...") never reaches a screen.
  */
-export const KI_GATE_CODES = ['other_market', 'career', 'other_brand', 'government', 'portal', 'navigational', 'own_brand', 'off_topic', 'too_broad', 'empty', 'low_fit', 'avoid'] as const;
-export type KiGateCode = (typeof KI_GATE_CODES)[number];
+export const KI_GATE_CODES = KI_GATE_REASON_IDS;
+export type KiGateCode = KiGateReason;
 export const KI_GATE_WORDS: Record<KiGateCode, string> = {
   other_market: 'This search is about a place outside your market.',
   career: 'People searching this are looking for a job.',
@@ -224,7 +240,9 @@ const GATE_HINTS: [RegExp, KiGateCode][] = [
   [/not (something|what) you sell|off.?topic|unrelated/i, 'off_topic'],
 ];
 export const KI_GATE_GENERAL = 'This search does not fit what you sell.';
-export function kiGateCodeOf(reason: unknown, code?: unknown): KiGateCode | null {
+/** `code` = the row's `gate_reason` (FX-L: a code), `detail` = its `gate_detail` (the engine's sentence, matched only to find a code). */
+export function kiGateCodeOf(detail: unknown, code?: unknown): KiGateCode | null {
+  const reason = detail;
   for (const v of [code, reason]) {
     const k = String(v ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
     if (!k) continue;
@@ -235,21 +253,11 @@ export function kiGateCodeOf(reason: unknown, code?: unknown): KiGateCode | null
   for (const [re, c] of GATE_HINTS) if (re.test(text)) return c;
   return null;
 }
-export function kiGateWords(reason: unknown, code?: unknown): string {
-  const c = kiGateCodeOf(reason, code);
+export function kiGateWords(detail: unknown, code?: unknown): string {
+  const c = kiGateCodeOf(detail, code);
   return c ? KI_GATE_WORDS[c] : KI_GATE_GENERAL;
 }
 
-/**
- * Stale rows (review LOGIC H9): the engine upserts keyword and gap rows by key and never deletes them, so a run leaves the rows it did not
- * write behind, with their old verdicts. A row is current when it is not marked superseded (FX-L's mark: `superseded_at` set, or status
- * `superseded`) and it was written by the newest run that wrote that table for the website and market (services/kiData.ts kiCurrent).
- */
-export function kiSuperseded(row: { superseded_at?: unknown; superseded?: unknown; status?: unknown } | null | undefined): boolean {
-  if (!row) return false;
-  const at = String(row.superseded_at ?? '').trim();
-  return (!!at && at !== 'null') || row.superseded === true || String(row.superseded ?? '') === 'true' || String(row.status ?? '').trim().toLowerCase() === 'superseded';
-}
 
 export const KI_SIZE_TAGS = ['peer', 'leader', 'smaller', 'out_of_reach', 'unknown'] as const;
 export type KiSizeTag = (typeof KI_SIZE_TAGS)[number];
@@ -352,10 +360,7 @@ export interface KiKeywordRow extends DtRow {
   source_count: number | null; volume: number | null; volume_basis: KiBasis | null; volume_source: string | null; cpc: number | null; kd: number | null;
   trend_json: string | null; gsc_impressions: number | null; gsc_clicks: number | null; gsc_position: number | null; gsc_page: string | null;
   intent: KiIntent | null; stage: KiStage | null; stage_evidence_json: string | null; intent_confidence: number | null; needs_review: boolean | null;
-  gate: 'pass' | 'fail'; gate_reason: string | null;
-  /** FX-L (2026-11-08, review CONSISTENCY M3): the reason's code (KI_GATE_CODES), the detail kept apart; absent on older rows */
-  gate_code?: string | null;
-  fit: number | null; demand: number | null; win: number | null; value: number | null; gap: number | null;
+  gate: 'pass' | 'fail'; gate_reason: KiGateReason | '' | null; gate_detail: string | null; fit: number | null; demand: number | null; win: number | null; value: number | null; gap: number | null;
   score: number | null; score_low: number | null; score_high: number | null; low_confidence: boolean | null; verdict: KiVerdict;
   cluster_id: string | null; is_head: boolean | null; cluster_size: number | null; cluster_demand: number | null; serp_read_at: string | null;
   /** [{url, host, type, pos}] */
@@ -364,8 +369,6 @@ export interface KiKeywordRow extends DtRow {
   /** [{domain, position, url}] */
   competitors_json: string | null;
   striking: boolean | null; run_id: string; fetched_at: string; updated_at: string;
-  /** review LOGIC H9: set when a later run of the same website and market no longer has this row (FX-L); absent on older rows */
-  superseded_at?: string | null;
 }
 
 /** seo_ki_gaps: one row per gap against the chosen competitor set. */
@@ -373,8 +376,6 @@ export interface KiGapRow extends DtRow {
   gap_id: string; site_id: string; domain: string; market: string; type: KiGapType; keyword: string | null; cluster_id: string | null;
   competitor_domains_json: string | null; client_position: number | null; evidence_json: string | null; sample_note: string | null;
   action: KiGapAction; action_target: string | null; credits: number | null; status: KiGapStatus; run_id: string; created_at: string; updated_at: string;
-  /** review LOGIC H9: set when a later run no longer finds this gap (FX-L); absent on older rows */
-  superseded_at?: string | null;
 }
 
 /** The tables' column names, in the engine's order (ladder_common.py KI_*_COLS; ki.parity.test.ts holds them equal). */
