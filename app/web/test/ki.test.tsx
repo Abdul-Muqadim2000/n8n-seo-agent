@@ -31,8 +31,8 @@ import {
   kiChooseCheck,
   kiCompetitorsOf,
   kiBasisLine,
+  kiActionLink,
   kiCsvUrl,
-  kiFilterKeywords,
   kiGapsOf,
   kiKeywordsOf,
   kiKwParams,
@@ -43,9 +43,11 @@ import {
   kiPatchErrorText,
   kiQuestionsOf,
   kiSplit,
+  kiStopNote,
   kiStrikingOf,
   kiWithStatus,
 } from '@/lib/ki';
+import { kiCreditsText } from '@/pages/site/_components/ki/common';
 import { ThemeProvider } from '@/lib/theme';
 import { Competitors } from '@/pages/site/CompetitorsPage';
 import { Keywords } from '@/pages/site/KeywordsPage';
@@ -181,19 +183,18 @@ describe('choose up to five, and the words of a refusal', () => {
 
 describe('filters, striking, questions, CSV', () => {
   const rows = kiKeywordsOf({ rows: KWS }).rows;
-  it('each filter keeps only its rows; the query string leaves empty filters out', () => {
-    expect(kiFilterKeywords(rows, { ...KI_KW_FILTER_EMPTY, verdict: 'go' }).map((r) => r.keyword)).toEqual(['business central partner abu dhabi']);
-    expect(kiFilterKeywords(rows, { ...KI_KW_FILTER_EMPTY, stage: 'compare' }).map((r) => r.keyword)).toEqual(['erp implementation cost uae']);
-    expect(kiFilterKeywords(rows, { ...KI_KW_FILTER_EMPTY, source: 'labs_ideas' })).toEqual([]);
-    expect(kiFilterKeywords(rows, { ...KI_KW_FILTER_EMPTY, cluster: 'c2' })).toHaveLength(2);
-    expect(kiFilterKeywords(rows, { ...KI_KW_FILTER_EMPTY, minVolume: '1000' })).toEqual([]);
-    expect(kiFilterKeywords(rows, { ...KI_KW_FILTER_EMPTY, gapType: 'missing' }, new Map([['erp implementation cost uae', ['missing']]])).map((r) => r.keyword)).toEqual(['erp implementation cost uae']);
+  it('every filter goes to the server (FX-A, review UX H2: the gap and striking filters too); the query string leaves empty filters out', () => {
+    expect(kiKwParams({ ...KI_KW_FILTER_EMPTY, gapType: 'missing' })).toMatchObject({ gap_type: 'missing' });
+    expect(kiKwParams({ ...KI_KW_FILTER_EMPTY, striking: true })).toMatchObject({ striking: '1' });
     expect(kiKwParams({ ...KI_KW_FILTER_EMPTY, verdict: 'go', minVolume: '100', page: 2 })).toEqual({ sort: '-score', page: '2', page_size: '50', verdict: 'go', min_volume: '100' });
     expect(kiKwParams({ ...KI_KW_FILTER_EMPTY, sort: 'keyword' }).sort).toBe('keyword');
   });
-  it('striking is places 8 to 20; questions come from the rows when the server sends none', () => {
+  it('striking is the engine\'s flag only, on searches that fit; questions read as questions (review UX L3)', () => {
     expect(kiStrikingOf(rows).map((r) => r.keyword)).toEqual(['business central partner abu dhabi']);
-    expect(kiQuestionsOf(rows, null).map((q) => q.question)).toEqual(['how much does erp cost in dubai']);
+    // FX-A (review CONSISTENCY M2): no second rule in the browser: a row at place 12 with 500 impressions but no flag is not one
+    expect(kiStrikingOf(kiKeywordsOf({ rows: [kw('erp hosting', { striking: false, gsc_position: 12, gsc_impressions: 500 })] }).rows)).toEqual([]);
+    expect(kiStrikingOf(kiKeywordsOf({ rows: [kw('erp jobs', { striking: true, gate: 'fail', gate_reason: 'career' })] }).rows)).toEqual([]);
+    expect(kiQuestionsOf(rows, null).map((q) => q.question)).toEqual(['How much does erp cost in dubai?']);
     expect(kiQuestionsOf(rows, [{ key: 'k', question: 'who is the best partner?', sources: ['paa'] }])).toHaveLength(1);
   });
   it('the CSV link carries the filters but not the page', () => {
@@ -235,12 +236,18 @@ describe('KiVerdict', () => {
       expect(text(html)).toContain(KI_VERDICTS[v]);
       expect(html).toContain(cls[KI_VERDICT_TONE[v] as keyof typeof cls]);
     }
-    expect(KI_VERDICTS).toEqual({ go: 'Go', months: 'Takes a few months', hard: 'Hard for your site now', gated: 'Not for you' });
+    // FX-L contract: one wording with the rest of the app, and "Not judged yet" (never shown as hard)
+    expect(KI_VERDICTS).toEqual({ go: 'Go', months: 'Takes a few months', hard: 'Hard for your website now', gated: 'Not for you', unknown: 'Not judged yet' });
   });
   it('a gated row says why in plain words, never a code', () => {
     expect(text(wrap(<KiVerdict verdict="gated" reason="career" />))).toContain('looking for a job');
     expect(kiGateWords('other_brand')).toContain('another company');
     expect(kiGateWords('xq_7')).toBe('This search does not fit what you sell.');
+    // FX-L: gate_reason is a code, gate_detail the engine's sentence: the detail never reaches the screen (review CONSISTENCY M3)
+    const g = kiKeywordsOf({ rows: [kw('x', { gate: 'fail', gate_reason: 'low_fit', gate_detail: 'too far from what you sell (62% of its own words match the services (35% is the bar))' } as never)] }).rows[0];
+    expect(g.gateReason).toBe('This search is too far from what you sell.');
+    expect(g.gateReason).not.toMatch(/%|bar/);
+    expect(kiGateWords('too far from what you sell (62% of its own words match ...)')).not.toMatch(/%/);
   });
 });
 
@@ -252,8 +259,12 @@ describe('the Competitors page', () => {
     const html = wrap(<Competitors o={overview()} data={data} gaps={GAPS} keywords={kiKeywordsOf({ rows: KWS }).rows} ai={ai} />);
     const t = text(html);
     expect(t).toContain('You follow one main competitor: northpeak-erp.com.');
-    for (const s of ['Direct competitor', 'Close competitor', 'In the first 10 Google results for 9 of 14', 'Choose', 'Watch', 'Not a competitor', 'Move to watchlist', 'Watchlist', 'Lists and directories to join', 'clutch.co', 'Gaps against your competitors', 'Competitors rank, you are missing', 'about 114 credits', 'Coming soon', 'Who AI answers name', 'Not competitors', 'lookalike.example', 'Real competitors found', 'How much they compete with you'])
+    for (const s of ['Direct competitor', 'Close competitor', 'In the first 10 Google results for 9 of 14', 'Choose', 'Watch', 'Not a competitor', 'Move to watchlist', 'Watchlist', 'Lists and directories to join', 'clutch.co', 'Gaps against your competitors', 'Competitors rank, you are missing', 'about 114 credits', 'Write this page', 'How to get listed', 'Who AI answers name', 'Not competitors', 'lookalike.example', 'Real competitors found', 'How much they compete with you', 'Website settings'])
       expect(t, s).toContain(s);
+    // FX-A (review UX H4): no dead control; each step opens the existing tool with the search filled in
+    expect(t).not.toContain('Coming soon');
+    expect(html).toMatch(/\/o\/org-1\/tools\/keyword\?site=site-1&amp;prefill=/);
+    expect(html).toContain('/o/org-1/sites/site-1/links#listings');
     expect(html).toContain('/api/orgs/org-1/sites/site-1/ki/competitors.csv');
     expect(html).toContain('/api/orgs/org-1/sites/site-1/ki/gaps.csv');
     expect(t).not.toContain('Trial: only platform admins see this');
@@ -268,7 +279,7 @@ describe('the Competitors page', () => {
     expect(t).not.toContain('Move to watchlist');
   });
   it('before the first run: what it does and how to start it', () => {
-    const t = text(wrap(<Competitors o={overview()} data={{ rows: [], updatedAt: null }} gaps={[]} keywords={[]} ai={null} />));
+    const t = text(wrap(<Competitors o={overview({ last_runs: [] })} data={{ rows: [], updatedAt: null }} gaps={[]} keywords={[]} ai={null} />));
     expect(t).toContain('Find out who you really compete with');
     expect(t).toContain('Find my competitors');
     expect(t).toContain('21 credits');
@@ -281,8 +292,9 @@ describe('the Keyword research page', () => {
   it('answers first, then the plan, topics with verdict / score range / sources / page, striking, questions, every search', () => {
     const t = page();
     expect(t).toContain('You can win 1 topic soon, and 1 more in a few months.');
-    for (const s of ['Your plan', 'Improve your ERP page', 'about 40 credits', 'Coming soon', 'Topics', 'Ready to hire', 'Go', 'Takes a few months', 'Not for you', 'looking for a job', '55, likely 47 to 63', 'Your Search Console', 'People also ask', 'Improve your page novaand-demo.com/erp', 'Just off page one', 'Buyer questions', 'how much does erp cost in dubai', 'Add to my AI questions', 'Every search', 'Download CSV', 'Part of the last reading is missing', 'search volumes'])
+    for (const s of ['Your plan', 'Improve your ERP page', 'about 40 credits', 'Improve this page', 'Topics', 'Ready to hire', 'Go', 'Takes a few months', 'Not for you', 'looking for a job', '55, likely 47 to 63', '2 sources', 'Improve your page novaand-demo.com/erp', 'Just off page one', 'Buyer questions', 'How much does erp cost in dubai?', 'Add to my AI questions', 'Every search', 'Download CSV', 'Part of the last reading is missing', 'search volumes'])
       expect(t, s).toContain(s);
+    expect(t).not.toContain('Coming soon');
     expect(t).not.toMatch(NO_FORMS);
     expect(t).not.toMatch(/undefined|NaN|\bserp\b|\betv\b|\bKD\b|cluster_id|kw_key/i);
   });
@@ -291,8 +303,9 @@ describe('the Keyword research page', () => {
     expect(t).toContain('takes the admin role');
     expect(t).not.toContain('Add to my AI questions');
   });
-  it('a filter shows only its rows; each number says how we know it', () => {
-    const html = wrap(<Keywords o={overview()} summary={summary} table={summary} tableLoading={false} tableError={null} gaps={GAPS} filter={{ ...KI_KW_FILTER_EMPTY, verdict: 'hard' }} onFilter={() => {}} />);
+  it('a filter shows the server\'s answer (its count, its rows, its empty state); each number says how we know it', () => {
+    const none = kiKeywordsOf({ rows: [], total: 0 });
+    const html = wrap(<Keywords o={overview()} summary={summary} table={none} tableLoading={false} tableError={null} gaps={GAPS} filter={{ ...KI_KW_FILTER_EMPTY, verdict: 'hard' }} onFilter={() => {}} />);
     expect(text(html)).toContain('No search matches these filters');
     expect(html).toContain('/ki/keywords.csv?sort=-score&amp;verdict=hard');
     // the tips open on hover or tap (closed in a server render): the line each one carries
@@ -300,10 +313,34 @@ describe('the Keyword research page', () => {
     expect(kiBasisLine('measured')).toBe('measured');
     expect(kiBasisLine('modelled')).toBe('our estimate');
   });
-  it('the Start button works once the server says the start step is there', () => {
-    const t = page(KI_KW_FILTER_EMPTY, overview({ plan_start: true }));
-    expect(t).not.toContain('Coming soon');
-    expect(t).toMatch(/Start \( ?40 credits ?\)/);
+  it('each plan step opens the existing tool with the search filled in (review UX H4), the hero next step too', () => {
+    const html = wrap(<Keywords o={overview()} summary={summary} table={summary} tableLoading={false} tableError={null} gaps={GAPS} filter={KI_KW_FILTER_EMPTY} onFilter={() => {}} />);
+    expect(html).toMatch(/\/o\/org-1\/tools\/keyword\?site=site-1&amp;prefill=/);
+    expect(kiActionLink('refresh', { target: `https://${D}/erp`, keyword: 'erp partner dubai', domain: D })).toEqual({ label: 'Improve this page', kind: 'tool', mode: 'keyword', prefill: { keyword: 'erp partner dubai', existingPageUrl: `https://${D}/erp` } });
+    expect(kiActionLink('refresh', { target: 'https://other.example/x', keyword: 'k', domain: D })).toMatchObject({ prefill: { keyword: 'k' } });
+    expect(kiActionLink('ladder', { keyword: 'erp uae' })).toEqual({ label: 'Plan the ladder', kind: 'ladder', keyword: 'erp uae' });
+    expect(kiActionLink('list', {})).toMatchObject({ page: 'links', hash: 'listings' });
+    expect(kiActionLink('write', {})).toBeNull();
+    // a viewer gets no buttons
+    const viewer = text(wrap(<Keywords o={overview()} summary={summary} table={summary} tableLoading={false} tableError={null} gaps={GAPS} filter={KI_KW_FILTER_EMPTY} onFilter={() => {}} />, 'viewer'));
+    expect(viewer).not.toContain('Improve this page');
+  });
+  it('the score tip reads the server\'s nested factors (review UX H1)', () => {
+    const r = kiKeywordsOf({ items: [{ keyword: 'erp partner dubai', kwKey: 'k', gate: 'pass', verdict: 'go', score: 86, factors: { fit: 0.9, demand: 0.5, win: 0.7, value: 0.2, gap: 0.4 } }] }).rows[0];
+    expect(r.factors).toMatchObject({ fit: 0.9, demand: 0.5, win: 0.7, value: 0.2, gap: 0.4 });
+  });
+  it('a refused run says why and what to do, never the first-run empty state (review UX H3)', () => {
+    const o = overview({ last_runs: [{ kind: 'keyword_research', status: 'refused', reason: 'market_mismatch', finished_at: '2026-11-08T07:00:00Z', market: 'US-en' }] });
+    const t = text(wrap(<Keywords o={o} summary={kiKeywordsOf({ rows: [] })} table={undefined} tableLoading={false} tableError={null} filter={KI_KW_FILTER_EMPTY} onFilter={() => {}} />));
+    expect(t).toContain('Your website is measured in United Arab Emirates');
+    expect(t).toContain('Run it for United Arab Emirates');
+    expect(t).not.toContain('Find what your buyers search');
+    expect(kiStopNote(o.lastRuns.keyword_research, { siteCountry: 'United Arab Emirates' })?.text).not.toMatch(NO_FORMS);
+    expect(kiStopNote(overview().lastRuns.keyword_research)).toBeNull();
+  });
+  it('a Trial run is free for the client (shown as such), and a paused website says paused, not rolling out', () => {
+    expect(kiCreditsText(overview({ mode: 'trial' }), 'competitors')).toBe('free trial run');
+    expect(kiCreditsText(overview(), 'competitors')).toBe('21 credits');
   });
 });
 

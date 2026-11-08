@@ -1,6 +1,6 @@
 import type { KiCompStatus, KiGapStatus, KiMode } from '@seo/shared';
 import { kiCompetitorsOf, kiGapsOf, kiKeywordsOf, kiOverviewOf, kiWithStatus, type KiCompetitors } from './ki';
-import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import type {
   AiRankSettings,
   AiRankShadowWeek,
@@ -1600,6 +1600,24 @@ export function useKi(orgId: string, siteId: string | null | undefined, enabled 
   });
 }
 
+/**
+ * FX-A (review CONSISTENCY M1): does this person see keyword intelligence on ANY verified website of the company? The company-wide lists
+ * (the Delivery chooser, the Reports "Type" filter) offer the KI report kinds only then, so an Off company sees nothing new. The same query
+ * as `useKi` per website (shared cache); never for the client portal's roles.
+ */
+export function useOrgKiVisible(orgId: string, sites: readonly { id: string; verifiedAt?: string | null }[], enabled = true): boolean {
+  const ids = enabled ? sites.filter((s) => s.verifiedAt).map((s) => s.id).slice(0, 50) : [];
+  const res = useQueries({
+    queries: ids.map((id) => ({
+      queryKey: [...kiKey(id), 'overview'],
+      queryFn: async () => kiOverviewOf(await api<unknown>(kiBase(orgId, id))),
+      retry: noRetryOn4xx,
+      staleTime: 60_000,
+    })),
+  });
+  return res.some((q) => !!q.data?.visible);
+}
+
 export function useKiCompetitors(orgId: string, siteId: string) {
   return useQuery({
     queryKey: [...kiKey(siteId), 'competitors'],
@@ -1610,10 +1628,11 @@ export function useKiCompetitors(orgId: string, siteId: string) {
 }
 
 /** One page of the keyword table, filtered and sorted on the server; the old page stays on screen while the next one loads. */
-export function useKiKeywords(orgId: string, siteId: string, params: Record<string, string>) {
+export function useKiKeywords(orgId: string, siteId: string, params: Record<string, string>, enabled = true) {
   return useQuery({
     queryKey: [...kiKey(siteId), 'keywords', params],
     queryFn: async () => kiKeywordsOf(await api<unknown>(`${kiBase(orgId, siteId)}/keywords?${new URLSearchParams(params)}`)),
+    enabled,
     placeholderData: keepPreviousData,
     retry: noRetryOn4xx,
     staleTime: 60_000,

@@ -141,7 +141,7 @@ export type KiClass = (typeof KI_CLASS_IDS)[number];
 export const KI_CLASSES: Record<KiClass, string> = {
   direct: 'Direct competitor',
   adjacent: 'Close competitor',
-  principal: 'Software maker or principal',
+  principal: 'Software maker',   // review UX L6: "principal" is jargon
   directory: 'Directory',
   publisher_list: 'List or ranking article',
   platform: 'Platform',
@@ -254,6 +254,9 @@ export function kiGateCodeOf(detail: unknown, code?: unknown): KiGateCode | null
   return null;
 }
 export function kiGateWords(detail: unknown, code?: unknown): string {
+  // words this map already gave (a server view passed on) stay as they are
+  const given = String(detail ?? '').trim();
+  if (!String(code ?? '').trim() && [...(Object.values(KI_GATE_WORDS) as string[]), KI_GATE_GENERAL].includes(given)) return given;
   const c = kiGateCodeOf(detail, code);
   return c ? KI_GATE_WORDS[c] : KI_GATE_GENERAL;
 }
@@ -275,7 +278,7 @@ export const KI_SOURCE_LABELS: Record<KiSource, string> = {
   labs_suggestions: 'Keyword suggestions',
   labs_related: 'Related keywords',
   competitor: 'Your competitors rank for it',
-  gap: 'Competitors rank, you do not',
+  gap: 'A gap against your competitors',   // review UX L7: not the gap filter's words
   tracked: 'You track it',
   ladder: 'One of your keyword ladders',
   seed: 'Your services',

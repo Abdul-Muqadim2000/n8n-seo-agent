@@ -15,7 +15,7 @@ import { useKi, useKiMode } from '@/lib/queries';
 
 const TEXT: Record<KiMode, string> = {
   off: 'Off: nothing new anywhere for this website. The client sees no Competitors or Keyword research page and no new tools.',
-  trial: 'Trial: our team can run both analyses and see the pages. The client sees nothing new, and nothing else in the app reads the results.',
+  trial: 'Trial: our team can run both analyses and see the pages. Trial runs cost the client no credits; the client sees nothing new, and nothing else in the app reads the results.',
   on: 'On: the client sees both pages and can run both analyses, priced in credits before each run.',
 };
 
@@ -35,6 +35,9 @@ export function KiModeCard() {
 function KiModeEditor({ start, orgId, siteId, domain }: { start: KiMode; orgId: string; siteId: string; domain: string }) {
   const save = useKiMode(orgId, siteId);
   const [mode, setMode] = useState<KiMode>(start);
+  // review UX L16: switching a client website to On is confirmed once (the client sees the pages from that moment)
+  const [sure, setSure] = useState(false);
+  const needsSure = mode === 'on' && start !== 'on';
   return (
     <Card>
       <CardHeader
@@ -44,9 +47,17 @@ function KiModeEditor({ start, orgId, siteId, domain }: { start: KiMode; orgId: 
         actions={<Badge tone={start === 'on' ? 'good' : start === 'trial' ? 'accent' : 'neutral'}>{KI_MODE_LABELS[start]}</Badge>}
       />
       <CardBody className="space-y-3">
-        <Segmented<KiMode> label="Competitors and Keyword research" value={mode} onChange={setMode} options={KI_MODES.map((m) => ({ value: m, label: KI_MODE_LABELS[m] }))} />
+        <Segmented<KiMode> label="Competitors and Keyword research" value={mode} onChange={(m) => { setMode(m); setSure(false); }} options={KI_MODES.map((m) => ({ value: m, label: KI_MODE_LABELS[m] }))} className="max-md:[&_button]:min-h-10" />
         <p className="text-sm text-ink-2">{TEXT[mode]}</p>
-        {mode === 'on' && start !== 'on' && <Callout tone="info">Compare the trial results with the owner before switching a client website to On.</Callout>}
+        {needsSure && (
+          <Callout tone="warning">
+            Compare the trial results with the owner before switching a client website to On.
+            <label className="mt-2 flex min-h-10 cursor-pointer items-center gap-2 text-sm text-ink">
+              <input type="checkbox" className="size-4 accent-accent" checked={sure} onChange={(e) => setSure(e.target.checked)} />
+              The owner agreed: show {domain} both pages from now on
+            </label>
+          </Callout>
+        )}
         <GuideButton id="ki-read-keyword-research" vars={{ domain }} variant="link" label="What the client will see" />
       </CardBody>
       <CardFooter>
@@ -57,7 +68,7 @@ function KiModeEditor({ start, orgId, siteId, domain }: { start: KiMode; orgId: 
         )}
         <Button
           size="sm"
-          disabled={mode === start}
+          disabled={mode === start || (needsSure && !sure)}
           loading={save.isPending}
           onClick={() =>
             save.mutate(mode, {

@@ -201,7 +201,7 @@ export const features: Feature[] = [
       'A topic radius with every research run: the topics within reach for your site, the ones that are a stretch and the evidence behind each verdict',
       'Suggestions in plain words when you set up a website: "Good chance", "Takes a few months" or "Hard for your website now", with the searches a month, why we suggest it, the plan and about how many credits a page',
       'The research behind your first suggestions is free, once per website, at setup: it starts in the background while you fill in the rest',
-      'Rolling out to selected websites: a Keyword research page with what buyers search to hire a service like yours, from your Search Console, Google\'s own questions and suggestions and your competitors. Each topic gets one verdict ("Go", "Takes a few months", "Hard for your site now" or "Not for you" with the reason), a score with its likely range, the buyer stage and where the search came from, plus the searches just off page one, buyer questions to add to your AI questions, a plan of up to 10 steps and a CSV of every search',
+      'Rolling out to selected websites: a Keyword research page with what buyers search to hire a service like yours, from your Search Console, Google\'s own questions and suggestions and your competitors. Each topic gets one verdict ("Go", "Takes a few months", "Hard for your website now" or "Not for you" with the reason), a score with its likely range, the buyer stage and where the search came from, plus the searches just off page one, buyer questions to add to your AI questions, a plan of up to 10 steps and a CSV of every search',
     ],
     steps: [
       { title: 'Describe the business', body: 'Your website, market and goals set the context for every keyword Alaventra looks at.' },
@@ -254,7 +254,7 @@ export const features: Feature[] = [
     slug: 'competitors',
     name: 'Competitor analysis',
     shortName: 'Competitors',
-    tagline: 'Who you really compete with in Google, with the evidence, and where they are ahead of you.',
+    tagline: 'Who you really compete with in Google, with the evidence, and where they are ahead of you. Rolling out to selected websites.',
     summary:
       'Alaventra finds your competitors in Google\'s own results for your services in your market, not from a list you have to guess. Every website is sorted by what it is: a company like you, a directory, a "best of" list or a platform. You choose up to five to follow and see where they are ahead. Rolling out to selected websites.',
     icon: Swords,
@@ -270,7 +270,7 @@ export const features: Feature[] = [
       { title: 'Read the results', body: 'We read Google\'s results for each of your services in your market and note every website that shows up.' },
       { title: 'Sort them', body: 'Each website is sorted by what it is. Only companies like you are scored as competitors, with the evidence.' },
       { title: 'Choose', body: 'You choose up to five to follow; the rest stay on a watchlist or off your list.' },
-      { title: 'Close the gaps', body: 'See where your competitors are ahead and the step that closes each gap, priced in credits before it starts.' },
+      { title: 'Close the gaps', body: 'See where your competitors are ahead and the step that would close each gap. Its button opens the tool that does it, with the search filled in and its credits shown before anything starts.' },
     ],
     facts: [
       { value: 5, label: 'competitors you can follow at once' },
@@ -280,7 +280,7 @@ export const features: Feature[] = [
     faqs: [
       {
         q: 'Is it available for my website?',
-        a: 'It is rolling out to selected websites. Ask us if you would like it for yours. Our team first tries it privately on a website, and then switches it on.',
+        a: 'It is rolling out to selected websites. Ask us if you would like it for yours. Our team first tries it privately on a website, at no cost to you, and then switches it on.',
       },
       {
         q: 'Why is a directory not a competitor?',

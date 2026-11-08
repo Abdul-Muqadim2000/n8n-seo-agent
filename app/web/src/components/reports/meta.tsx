@@ -18,6 +18,7 @@ import {
   Scale,
   ScanText,
   Search,
+  Swords,
   Telescope,
   TrendingUp,
   UserCheck,
@@ -39,9 +40,9 @@ const MODE_ICON: Record<ModeId, (cls?: string) => ReactNode> = {
   profile: (c) => <UserCheck className={c} aria-hidden />,
   ai_visibility: (c) => <Bot className={c} aria-hidden />,
   backlinks: (c) => <Link2 className={c} aria-hidden />,
-  // KI (2026-11-08): hidden until the KI pages ship; a run started by our team still shows a fitting icon
-  competitors: (c) => <Search className={c} aria-hidden />,
-  keyword_research: (c) => <FileSearch className={c} aria-hidden />,
+  // KI (2026-11-08; review CONSISTENCY L1): one icon per capability, the sidebar's (Swords for Competitors, Telescope for Keyword research)
+  competitors: (c) => <Swords className={c} aria-hidden />,
+  keyword_research: (c) => <Telescope className={c} aria-hidden />,
 };
 
 export const isModeId = (v: unknown): v is ModeId => typeof v === 'string' && (MODE_IDS as readonly string[]).includes(v);
@@ -92,6 +93,10 @@ const STAGE_MODE: Record<string, ModeId> = {
   backlinks: 'backlinks',
   link_builder: 'backlinks',
   index_coverage: 'audit',
+  ki_competitors_started: 'competitors',
+  ki_competitors: 'competitors',
+  ki_research_started: 'keyword_research',
+  ki_research: 'keyword_research',
 };
 
 export function StageGlyph({ stage, size = 'md', report }: { stage: string; size?: 'sm' | 'md'; /** tells a verdict-only content report apart */ report?: ReportLike }) {

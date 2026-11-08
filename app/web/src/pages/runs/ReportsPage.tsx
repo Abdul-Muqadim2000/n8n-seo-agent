@@ -2,10 +2,10 @@ import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 import { ArrowRight, CalendarClock, CalendarDays, FileText, Filter, RotateCcw } from 'lucide-react';
-import { STAGE_LABELS, type Report } from '@seo/shared';
+import { isClientRole, STAGE_LABELS, type Report } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
-import { useReports } from '@/lib/queries';
+import { useOrgKiVisible, useReports } from '@/lib/queries';
 import { fmtAgo, fmtDateTime } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
@@ -26,8 +26,12 @@ const dayLabel = (iso: string) => {
   return format(d, 'EEEE d MMMM yyyy');
 };
 
+/** FX-A (review CONSISTENCY M1): the KI report kinds are in the Type filter only where this person sees KI; started notices never are */
+const KI_STAGES_ALL = ['ki_competitors', 'ki_research', 'ki_competitors_started', 'ki_research_started'];
+
 export default function ReportsPage() {
-  const { org, sites } = useOrgCtx();
+  const { org, sites, role } = useOrgCtx();
+  const kiOn = useOrgKiVisible(org.id, sites, !isClientRole(role));
   const [params, setParams] = useSearchParams();
   const siteId = params.get('site') ?? '';
   const stage = params.get('stage') ?? '';
@@ -86,7 +90,7 @@ export default function ReportsPage() {
           </label>
           <Select id="reports-stage" value={stage} onChange={(e) => set('stage', e.target.value)}>
             <option value="">All types</option>
-            {Object.entries(STAGE_LABELS).map(([k, label]) => (
+            {Object.entries(STAGE_LABELS).filter(([k]) => !KI_STAGES_ALL.includes(k) || (kiOn && !k.endsWith('_started'))).map(([k, label]) => (
               <option key={k} value={k}>
                 {label}
               </option>

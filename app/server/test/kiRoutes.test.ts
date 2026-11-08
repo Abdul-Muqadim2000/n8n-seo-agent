@@ -309,6 +309,40 @@ describe('KI A1: keyword filters, sort and paging (server side)', () => {
   });
 });
 
+describe('FX-A: the gap filter on the server, current rows only, gate words from codes', () => {
+  it('gap_type filters on the server, so the total, the pages and the empty state agree (review UX H2)', async () => {
+    seed('on', { keywords: 60 });
+    // keyword "erp service 3 dubai" has a missing gap; nothing has an untapped one
+    st.tables.kiGaps.push(gap('nova-a.example', 'g3', { keyword: 'erp service 3 dubai', type: 'missing' }));
+    const r = json(await get('/keywords?gap_type=missing&page_size=50'));
+    expect(r.total).toBe(1);
+    expect(r.items.map((x: { keyword: string }) => x.keyword)).toEqual(['erp service 3 dubai']);
+    expect(json(await get('/keywords?gap_type=untapped')).total).toBe(0);
+    expect(json(await get('/keywords?gap_type=nonsense')).total).toBe(60);   // an unknown value is ignored
+  });
+  it('rows of an older keyword-research run are neither listed nor counted (review LOGIC H9, KI_ROW_CURRENT)', async () => {
+    seed('on', { keywords: 10 });
+    st.tables.kiRuns.push(run('nova-a.example', { run_id: 'r2', status: 'ok', started_at: '2026-11-08T09:00:00Z' }));
+    // r2 rewrote 3 rows; the other 7 (run r1) are stale; a failed newer run changes nothing
+    for (const r of st.tables.kiKeywords.filter((x) => x.domain === 'nova-a.example').slice(0, 3)) r.run_id = 'r2';
+    st.tables.kiRuns.push(run('nova-a.example', { run_id: 'r3', status: 'failed', started_at: '2026-11-08T10:00:00Z' }));
+    st.tables.kiGaps.push(gap('nova-a.example', 'g9', { run_id: 'r2', keyword: 'erp service 0 dubai' }));
+    expect(json(await get('/keywords')).total).toBe(3);
+    const ov = json(await get(''));
+    expect(ov.summary.keywords.total).toBe(3);
+    expect(json(await get('/gaps')).items.map((g: { gapId: string }) => g.gapId)).toEqual(['g9']);
+  });
+  it('a gated row says why in the app\'s words from the code; the engine\'s detail never leaves the server (CONSISTENCY M3)', async () => {
+    seed('on', { keywords: 4 });
+    const g = st.tables.kiKeywords.find((x) => x.kw_key === 'k3')!;
+    Object.assign(g, { gate: 'fail', verdict: 'gated', gate_reason: 'low_fit', gate_detail: 'too far from what you sell (62% of its own words match (35% is the bar))' });
+    const r = json(await get('/keywords?verdict=gated'));
+    expect(r.items[0].gateReason).toBe('This search is too far from what you sell.');
+    expect(JSON.stringify(r)).not.toContain('35% is the bar');
+    expect((await get('/keywords.csv?verdict=gated')).body).not.toContain('35% is the bar');
+  });
+});
+
 describe('KI A1: CSV', () => {
   it('every cell starting with = + - @ is neutralised; the basis and the date are columns', async () => {
     st.tables.kiKeywords = [kw('nova-a.example', 1, { keyword: '=HYPERLINK("http://x.example","y")' }), kw('nova-a.example', 2, { keyword: '+cmd', kw_key: 'k2' }), kw('nova-a.example', 3, { keyword: '@SUM(1)', kw_key: 'k3' }), kw('nova-a.example', 4, { keyword: '-2+3', kw_key: 'k4' })];
@@ -518,5 +552,5 @@ describe('KI A1: performance with 5,000 keywords', () => {
 });
 
 describe('KI A1: the verdict words are the shared ones', () => {
-  it('four verdicts', () => expect([...KI_VERDICT_IDS]).toEqual(['go', 'months', 'hard', 'gated']));
+  it('five verdicts (FX-L: unknown = not judged yet)', () => expect([...KI_VERDICT_IDS]).toEqual(['go', 'months', 'hard', 'gated', 'unknown']));
 });

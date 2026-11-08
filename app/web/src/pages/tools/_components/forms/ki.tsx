@@ -48,7 +48,7 @@ function GateNotes({ trial, killed, visible, domain }: { trial: boolean; killed:
     <>
       {trial && (
         <Callout tone="info" title="Trial: only platform admins see this">
-          The run and its results stay with our team. The client sees nothing new until the website is switched to On.
+          The run and its results stay with our team, and it costs the client no credits. The client sees nothing new until the website is switched to On.
         </Callout>
       )}
       {killed && (
@@ -93,7 +93,7 @@ export function CompetitorsForm({ initialSiteId, prefill }: ToolFormProps) {
       values={v}
       mode="competitors"
       site={site}
-      cost={estimateCost('competitors', v)}
+      cost={gate.trial ? 0 : estimateCost('competitors', v)}
       eta={estimateEta('competitors', v)}
       emailCopy={!!v.emailCopy}
       onSubmit={onSubmit}
@@ -101,7 +101,7 @@ export function CompetitorsForm({ initialSiteId, prefill }: ToolFormProps) {
       error={error}
       submitLabel="Find my competitors"
       blocked={!gate.visible ? 'This analysis is not available for this website yet.' : gate.killed ? 'New runs are paused for a short while.' : undefined}
-      priceNote="If nothing changed since a recent run, we show that reading again and charge nothing."
+      priceNote={gate.trial ? 'A Trial run is our team\'s check: it costs the client company no credits.' : 'If nothing changed since a recent run, we show that reading again and charge nothing.'}
     >
       <GateNotes trial={gate.trial} killed={gate.killed} visible={gate.visible || gate.loading} domain={site?.domain} />
       <FormCard title="Your website" description="We read Google's results for each of your services in your market and sort every website we find by what it is." info="Companies like you are scored by how often and how high they show up. Directories and 'best of' lists become places to be listed on. Platforms are shown apart, never counted as competitors.">
@@ -118,7 +118,7 @@ export function CompetitorsForm({ initialSiteId, prefill }: ToolFormProps) {
           hint={<GuideButton id="ki-choose-competitors" vars={{ domain: site?.domain ?? '' }} variant="link" label="Who counts as a competitor" />}
         />
         <TextTagsField value={v.seeds ?? []} onChange={(s) => form.setValue('seeds', s, { shouldDirty: true })} error={errMsg(e.seeds)} label="Searches to start from" max={20} maxLength={120} placeholder="e.g. erp partner dubai" hint="Optional. Without them we start from your services and your market." />
-        <Checkbox {...form.register('kiForce')} className={OPTION_BOX} label="Read everything fresh" description="Ignore a reading from the last few days. Uses the full credits again." />
+        <Checkbox {...form.register('kiForce')} className={OPTION_BOX} label="Read everything fresh" description="Ignore a recent reading (up to a month for search volumes and the competitor set). Uses the full credits again." />
       </FormCard>
       <DeliveryCard reg={form.register('emailCopy')} />
     </ToolShell>
@@ -149,7 +149,7 @@ export function KeywordResearchForm({ initialSiteId, prefill }: ToolFormProps) {
       values={v}
       mode="keyword_research"
       site={site}
-      cost={estimateCost('keyword_research', v)}
+      cost={gate.trial ? 0 : estimateCost('keyword_research', v)}
       eta={estimateEta('keyword_research', v)}
       emailCopy={!!v.emailCopy}
       onSubmit={onSubmit}
@@ -157,7 +157,7 @@ export function KeywordResearchForm({ initialSiteId, prefill }: ToolFormProps) {
       error={error}
       submitLabel="Research my keywords"
       blocked={!gate.visible ? 'This analysis is not available for this website yet.' : gate.killed ? 'New runs are paused for a short while.' : undefined}
-      priceNote="If nothing changed since a recent run, we show that reading again and charge nothing."
+      priceNote={gate.trial ? 'A Trial run is our team\'s check: it costs the client company no credits.' : 'If nothing changed since a recent run, we show that reading again and charge nothing.'}
     >
       <GateNotes trial={gate.trial} killed={gate.killed} visible={gate.visible || gate.loading} domain={site?.domain} />
       <FormCard title="Your website" description="We collect what buyers search from your Search Console, Google's suggestions and questions, and the competitors you follow." info="Searches that do not fit what you sell (job seekers, other companies' names, other countries) are set aside with the reason. The rest are grouped by topic and given a verdict.">
@@ -166,7 +166,7 @@ export function KeywordResearchForm({ initialSiteId, prefill }: ToolFormProps) {
       </FormCard>
       <FormCard title="Where to start" description="Optional. Your services and the competitors you chose are used anyway.">
         <TextTagsField value={v.seeds ?? []} onChange={(s) => form.setValue('seeds', s, { shouldDirty: true })} error={errMsg(e.seeds)} label="Searches to start from" max={20} maxLength={120} placeholder="e.g. business central partner abu dhabi" hint="Up to 20, the way a buyer would type them." />
-        <Checkbox {...form.register('kiForce')} className={OPTION_BOX} label="Read everything fresh" description="Ignore a reading from the last few days. Uses the full credits again." />
+        <Checkbox {...form.register('kiForce')} className={OPTION_BOX} label="Read everything fresh" description="Ignore a recent reading (up to a month for search volumes and the competitor set). Uses the full credits again." />
       </FormCard>
       <DeliveryCard reg={form.register('emailCopy')} />
     </ToolShell>

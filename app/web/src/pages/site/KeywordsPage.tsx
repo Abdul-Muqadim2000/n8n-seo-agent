@@ -7,7 +7,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ArrowRight, Check, ChevronLeft, ChevronRight, Download, Filter, Layers, ListOrdered, MessageCircleQuestion, Search, Telescope, TrendingUp } from 'lucide-react';
-import { compactNumber, KI_SOURCE_LABELS, KI_STAGES, KI_VERDICTS, type KiPlanAction, type KiSource, type KiStage, type KiVerdict as Verdict } from '@seo/shared';
+import { compactNumber, KI_KEYWORD_GAP_TYPES, KI_SOURCE_LABELS, KI_STAGES, KI_STRIKING_WORDS, KI_VERDICT_IDS, KI_VERDICTS, type KiKeywordGapType, type KiPlanAction, type KiSource, type KiStage, type KiVerdict as Verdict } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { CountUp, HeroNextStep, HeroStat, InsightItem, Stagger, SummaryHero } from '@/components/insight';
 import { Badge } from '@/components/ui/badge';
@@ -322,28 +322,43 @@ function PlanPanel({ plan, heads }: { plan: KiPlanAction[]; heads: readonly KiKw
   );
 }
 
-function StrikingPanel({ rows }: { rows: KiKw[] }) {
+function StrikingPanel({ rows, total, onSeeAll }: { rows: KiKw[]; total: number; onSeeAll: () => void }) {
+  const show = useShowAll(Math.min(rows.length, 10), 5, 10);
   return (
-    <Panel icon={<TrendingUp />} title="Just off page one" description="You show up in places 8 to 20: the quickest wins" info="Searches your website already shows up for, just below or at the bottom of the first page, with enough people seeing them. Improving the page that shows up is usually enough to move it up.">
+    <Panel icon={<TrendingUp />} title="Just off page one" description="You show up in places 8 to 20: the quickest wins" info={`Searches your website already shows up for, in ${KI_STRIKING_WORDS}. Improving the page that shows up is usually enough to move it up.`}>
       {rows.length ? (
-        <ul className="divide-y divide-line">
-          {rows.slice(0, 10).map((r) => (
-            <li key={r.key} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-              <span className="min-w-0">
-                <span className="block font-medium text-ink">{r.keyword}</span>
-                <span className="block truncate text-xs text-ink-3">{r.gscPage ? `Your page: ${shortUrl(r.gscPage)}` : pageLine(r)}</span>
-              </span>
-              <span className="flex items-center gap-3 text-xs text-ink-3">
-                <span>
-                  Place <KiFigure value={r.gscPosition == null ? '-' : `#${Math.round(r.gscPosition)}`} tip="Your average place in Google for this search over the last 28 days." basis="measured, your Search Console" />
+        <>
+          <ul className="divide-y divide-line" id={show.listId}>
+            {rows.slice(0, 10).map((r, i) => (
+              <li key={r.key} className={cn('flex flex-wrap items-center justify-between gap-2 py-2.5', show.cls(i))}>
+                <span className="min-w-0">
+                  <span className="block font-medium text-ink">{r.keyword}</span>
+                  <span className="block truncate text-xs text-ink-3" title={r.gscPage || r.pageUrl || undefined}>
+                    {r.gscPage ? `Your page: ${shortUrl(r.gscPage)}` : pageLine(r)}
+                  </span>
                 </span>
-                <span>
-                  Seen <KiFigure value={r.gscImpressions == null ? '-' : compactNumber(r.gscImpressions)} tip="How many times your page was shown for this search in the last 28 days." basis="measured, your Search Console" />
+                <span className="flex flex-wrap items-center gap-3 text-xs text-ink-3">
+                  <span>
+                    Place <KiFigure value={r.gscPosition == null ? '-' : `#${Math.round(r.gscPosition)}`} tip="Your average place in Google for this search over the last 28 days." basis="measured, your Search Console" />
+                  </span>
+                  <span>
+                    Seen <KiFigure value={r.gscImpressions == null ? '-' : compactNumber(r.gscImpressions)} tip="How many times your page was shown for this search in the last 28 days." basis="measured, your Search Console" />
+                  </span>
+                  <KiActionButton kind="refresh" keyword={r.keyword} target={r.gscPage || r.pageUrl} />
                 </span>
-              </span>
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap items-center gap-x-4">
+            {show.button}
+            {/* review UX L13: the hero counts them all; the table shows them all */}
+            {total > Math.min(rows.length, 10) && (
+              <button type="button" onClick={onSeeAll} className="mt-2 inline-flex min-h-10 items-center gap-1.5 px-1 text-[13px] font-medium text-accent-text hover:underline sm:min-h-8">
+                See all {n0(total)} in the table <ArrowRight className="size-4" aria-hidden />
+              </button>
+            )}
+          </div>
+        </>
       ) : (
         <p className="text-sm text-ink-3">None yet. Connect Search Console in Website settings to see the searches you already show up for.</p>
       )}
@@ -356,6 +371,8 @@ function QuestionsPanel({ questions }: { questions: { key: string; question: str
   const approve = useKiApproveQuestions(org.id, site.id);
   const mayAdd = can('admin');   // as the AI question panel itself (A1_ROUTES)
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const shown = questions.slice(0, 15);
+  const show = useShowAll(shown.length, 5, 15);
   const toggle = (k: string) => setPicked((p) => (p.has(k) ? new Set([...p].filter((x) => x !== k)) : new Set([...p, k])));
   const send = () =>
     approve.mutate([...picked], {
@@ -383,25 +400,40 @@ function QuestionsPanel({ questions }: { questions: { key: string; question: str
         ) : undefined
       }
     >
-      {questions.length > 0 && !mayAdd && can('member') && <p className="mb-2 text-xs text-ink-3">Adding questions to your AI questions takes the admin role, as the AI question list itself. Ask an admin of your company.</p>}
-      {questions.length ? (
-        <ul className="divide-y divide-line">
-          {questions.slice(0, 15).map((q) => (
-            <li key={q.key}>
-              <label className="flex min-h-10 cursor-pointer items-start gap-3 py-2.5">
-                <input type="checkbox" className="mt-1 size-4 shrink-0 accent-accent" checked={picked.has(q.key)} onChange={() => toggle(q.key)} disabled={!mayAdd} aria-label={`Add "${q.question}" to my AI questions`} />
-                <span className="min-w-0">
-                  <span className="block text-sm text-ink">{q.question}</span>
-                  <span className="block text-xs text-ink-3">From: {sourcesText(q.sources)}</span>
-                </span>
-              </label>
-            </li>
-          ))}
-        </ul>
+      {/* review UX L9: everyone who cannot add is told why (members and viewers) */}
+      {questions.length > 0 && !mayAdd && <p className="mb-2 text-xs text-ink-3">Adding questions to your AI questions takes the admin role, as the AI question list itself. Ask an admin of your company.</p>}
+      {shown.length ? (
+        <>
+          <ul className="divide-y divide-line" id={show.listId}>
+            {shown.map((q, i) => (
+              <li key={q.key} className={show.cls(i)}>
+                {mayAdd ? (
+                  <label className="flex min-h-10 cursor-pointer items-start gap-3 py-2.5">
+                    <input type="checkbox" className="mt-1 size-4 shrink-0 accent-accent" checked={picked.has(q.key)} onChange={() => toggle(q.key)} aria-label={`Add "${q.question}" to my AI questions`} />
+                    <QuestionText q={q} />
+                  </label>
+                ) : (
+                  <div className="py-2.5">
+                    <QuestionText q={q} />
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+          {show.button}
+        </>
       ) : (
         <p className="text-sm text-ink-3">No buyer questions in this reading.</p>
       )}
     </Panel>
+  );
+}
+function QuestionText({ q }: { q: { question: string; sources: KiSource[] } }) {
+  return (
+    <span className="min-w-0">
+      <span className="block text-sm text-ink">{q.question}</span>
+      <span className="block text-xs text-ink-3">From: {sourcesText(q.sources)}</span>
+    </span>
   );
 }
 
@@ -410,6 +442,8 @@ function QuestionsPanel({ questions }: { questions: { key: string; question: str
 // ------------------------------------------------------------------------------------------------------------------------------
 
 const VOLUME_STEPS = ['10', '50', '100', '500', '1000'];
+/** review UX L4: short gap labels, so the select is not cut ("Competitors rank, yo") */
+const GAP_FILTER_LABELS: Record<KiKeywordGapType, string> = { missing: 'You are missing', untapped: 'One competitor only', weak: 'You rank low', striking: 'Just off page one', strong: 'You lead' };
 
 export function KiFilterFields({ f, set, clusters, stack }: { f: KiKwFilter; set: (p: Partial<KiKwFilter>) => void; clusters: KiKw[]; stack?: boolean }) {
   const field = (label: string, value: string, onChange: (v: string) => void, options: { value: string; label: string }[], all = 'All') => (
@@ -425,31 +459,38 @@ export function KiFilterFields({ f, set, clusters, stack }: { f: KiKwFilter; set
       </Select>
     </label>
   );
+  // review UX M8: every topic loaded (up to 200), A to Z, not the first 60
+  const topics = clusters.filter((c) => c.clusterId).sort((a, b) => a.keyword.localeCompare(b.keyword));
   return (
     <>
-      {field('Verdict', f.verdict, (v) => set({ verdict: v as KiKwFilter['verdict'] }), (['go', 'months', 'hard', 'gated'] as const).map((v) => ({ value: v, label: KI_VERDICTS[v] })))}
+      {field('Verdict', f.verdict, (v) => set({ verdict: v as KiKwFilter['verdict'] }), KI_VERDICT_IDS.map((v) => ({ value: v, label: KI_VERDICTS[v] })))}
       {field('Buyer stage', f.stage, (v) => set({ stage: v as KiKwFilter['stage'] }), (Object.keys(KI_STAGES) as KiStage[]).map((v) => ({ value: v, label: KI_STAGES[v] })))}
-      {field('Topic', f.cluster, (v) => set({ cluster: v }), clusters.filter((c) => c.clusterId).slice(0, 60).map((c) => ({ value: c.clusterId, label: c.keyword })))}
+      {field('Topic', f.cluster, (v) => set({ cluster: v }), topics.map((c) => ({ value: c.clusterId, label: c.keyword })))}
       {field('Where from', f.source, (v) => set({ source: v as KiKwFilter['source'] }), (Object.keys(KI_SOURCE_LABELS) as KiSource[]).map((v) => ({ value: v, label: KI_SOURCE_LABELS[v] })), 'Any source')}
       {field('Searches a month', f.minVolume, (v) => set({ minVolume: v }), VOLUME_STEPS.map((v) => ({ value: v, label: `At least ${n0(Number(v))}` })), 'Any number')}
-      {field('Gap', f.gapType, (v) => set({ gapType: v as KiKwFilter['gapType'] }), (['missing', 'untapped', 'weak', 'striking', 'strong'] as const).map((v) => ({ value: v, label: KI_GAP_LABELS[v].label })), 'Any')}
+      {field('Against competitors', f.gapType, (v) => set({ gapType: v as KiKwFilter['gapType'] }), KI_KEYWORD_GAP_TYPES.map((v) => ({ value: v, label: GAP_FILTER_LABELS[v] })), 'Any')}
       {field('Your brand', f.brand, (v) => set({ brand: v as KiKwFilter['brand'] }), [{ value: 'non_brand', label: 'Without your name' }, { value: 'brand', label: 'With your name' }], 'Both')}
     </>
   );
 }
 
-function AllSearches({ o, clusters, table, loading, error, gaps, filter, onFilter, domain }: { o: KiOverview; clusters: KiKw[]; table: KiKeywords | undefined; loading: boolean; error: unknown; gaps: KiGap[]; filter: KiKwFilter; onFilter: (f: KiKwFilter) => void; domain: string }) {
+function AllSearches({ o, clusters, table, loading, error, filter, onFilter, domain }: { o: KiOverview; clusters: KiKw[]; table: KiKeywords | undefined; loading: boolean; error: unknown; filter: KiKwFilter; onFilter: (f: KiKwFilter) => void; domain: string }) {
   const { org, site } = useSitePage();
   const [sheet, setSheet] = useState(false);
+  // review UX H5: on a phone the table is one tap away, under the answer and the actions
+  const [phoneOpen, setPhoneOpen] = useState(false);
   const set = (p: Partial<KiKwFilter>) => onFilter({ ...filter, ...p, page: 'page' in p ? (p.page ?? 1) : 1 });
   const active = kiActiveFilters(filter);
-  const byKey = useMemo(() => kiGapTypesByKey(gaps), [gaps]);
-  const rows = useMemo(() => (table ? kiFilterKeywords(table.rows, filter, byKey) : []), [table, filter, byKey]);
+  // FX-A (review UX H2): every filter runs on the server, so the rows, the count, the pager and the empty state are one answer
+  const rows = table?.rows ?? [];
   const total = table?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / KI_PAGE_SIZE));
   const from = total ? (filter.page - 1) * KI_PAGE_SIZE + 1 : 0;
   const to = Math.min(total, filter.page * KI_PAGE_SIZE);
   const params = kiKwParams(filter);
+  // review UX L15: no wall of filters above a handful of rows
+  const showFilters = active > 0 || total >= 20;
+  const open = phoneOpen || active > 0;
 
   const cols: Column<KiKw>[] = [
     {
@@ -462,115 +503,129 @@ function AllSearches({ o, clusters, table, loading, error, gaps, filter, onFilte
         </span>
       ),
     },
+    { key: 'verdict', header: 'For you', cell: (r) => <KiVerdict verdict={r.verdict} reason={r.verdict === 'gated' ? r.gateReason : null} size="sm" /> },
     { key: 'volume', header: 'Searches a month', align: 'right', cell: (r) => <VolumeFigure r={r} /> },
     { key: 'stage', header: 'Buyer stage', hideOnMobile: true, cell: (r) => <span className="whitespace-nowrap text-ink-2">{r.stage ? KI_STAGES[r.stage] : '-'}</span> },
-    { key: 'verdict', header: 'For you', cell: (r) => <KiVerdict verdict={r.verdict} reason={r.verdict === 'gated' ? r.gateReason : null} size="sm" /> },
     { key: 'score', header: 'Score', align: 'right', cell: (r) => <KiScore r={r} /> },
-    { key: 'sources', header: 'Where from', hideOnMobile: true, cell: (r) => <span className="text-xs text-ink-3">{sourcesText(r.sources.map((s) => s.source))}</span> },
-    { key: 'page', header: 'Your page', hideOnMobile: true, cell: (r) => <span className="block max-w-[16rem] truncate text-xs text-ink-3">{pageLine(r)}</span> },
+    { key: 'sources', header: 'Where from', hideOnMobile: true, cell: (r) => <span className="text-xs text-ink-3"><SourcesFigure sources={r.sources.map((x) => x.source)} /></span> },
+    { key: 'page', header: 'Your page', hideOnMobile: true, cell: (r) => <span className="block max-w-[16rem] truncate text-xs text-ink-3" title={r.pageUrl || r.gscPage || undefined}>{pageLine(r)}</span> },
   ];
 
   return (
-    <Panel
-      icon={<Search />}
-      title="Every search"
-      description={total ? `${n0(total)} searches${active ? ' match your filters' : ''}` : 'Every search we kept, with its verdict'}
-      info="Filter by verdict, buyer stage, topic, source, size, gap or brand. The download has every row that matches your filters, not only this page."
-      actions={
-        <a href={kiCsvUrl(org.id, site.id, 'keywords', params)} download rel="noopener" className={buttonClass('secondary', 'sm', TAP)}>
-          <Download className="size-4" aria-hidden />
-          Download CSV
-        </a>
-      }
-    >
-      <div className="mb-3 hidden flex-wrap items-end gap-3 md:flex" data-ki-filters>
-        <KiFilterFields f={filter} set={set} clusters={clusters} />
-        {active > 0 && (
-          <Button variant="ghost" size="sm" onClick={() => onFilter(KI_KW_FILTER_EMPTY)}>
-            Clear filters
-          </Button>
+    <section id="every-search" className="scroll-mt-20">
+      <Panel
+        icon={<Search />}
+        title="Every search"
+        description={total ? `${n0(total)} ${total === 1 ? 'search' : 'searches'}${active ? ' match your filters' : ''}` : 'Every search we kept, with its verdict'}
+        info="Filter by verdict, buyer stage, topic, source, size, gap or brand. The download has every row that matches your filters, not only this page."
+        actions={
+          <a href={kiCsvUrl(org.id, site.id, 'keywords', params)} download rel="noopener" className={buttonClass('secondary', 'sm', TAP)}>
+            <Download className="size-4" aria-hidden />
+            Download CSV
+          </a>
+        }
+      >
+        {!open && (
+          <button type="button" onClick={() => setPhoneOpen(true)} aria-expanded={false} className="mb-1 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-line-strong bg-surface text-sm font-medium text-ink shadow-card md:hidden">
+            See every search{total ? ` (${n0(total)})` : ''}
+          </button>
         )}
-      </div>
-      <div className="mb-3 flex flex-wrap items-center gap-2 md:hidden">
-        <button type="button" onClick={() => setSheet(true)} className="inline-flex h-10 items-center gap-2 rounded-lg border border-line-strong bg-surface px-3.5 text-sm font-medium text-ink shadow-card">
-          <Filter className="size-4" aria-hidden />
-          Filters{active ? ` (${active})` : ''}
-        </button>
-        <label className="flex items-center gap-2 text-xs font-medium text-ink-3">
-          Sort
-          <Select value={filter.sort} onChange={(e) => set({ sort: e.target.value as KiKwFilter['sort'] })} className="h-10">
-            <option value="score">Best first</option>
-            <option value="volume">Most searched</option>
-            <option value="keyword">A to Z</option>
-          </Select>
-        </label>
-        <Sheet
-          open={sheet}
-          onOpenChange={setSheet}
-          title="Filter the searches"
-          footer={
-            <>
+        <div className={cn(!open && 'max-md:hidden')}>
+          {showFilters && (
+            <div className="mb-3 hidden flex-wrap items-end gap-3 md:flex" data-ki-filters>
+              <KiFilterFields f={filter} set={set} clusters={clusters} />
               {active > 0 && (
-                <Button variant="ghost" className="h-10" onClick={() => onFilter(KI_KW_FILTER_EMPTY)}>
-                  Clear
+                <Button variant="ghost" size="sm" onClick={() => onFilter(KI_KW_FILTER_EMPTY)}>
+                  Clear filters
                 </Button>
               )}
-              <Button className="h-10" onClick={() => setSheet(false)}>
-                Show results
-              </Button>
-            </>
-          }
-        >
-          <div className="space-y-4">
-            <KiFilterFields f={filter} set={set} clusters={clusters} stack />
-          </div>
-        </Sheet>
-      </div>
-      <div className="mb-2 hidden items-center justify-end gap-2 md:flex">
-        <label className="flex items-center gap-2 text-xs font-medium text-ink-3">
-          Sort
-          <Select value={filter.sort} onChange={(e) => set({ sort: e.target.value as KiKwFilter['sort'] })} className="h-9">
-            <option value="score">Best first</option>
-            <option value="volume">Most searched</option>
-            <option value="keyword">A to Z</option>
-          </Select>
-        </label>
-      </div>
-      {error && !table ? (
-        <ErrorState error={error} />
-      ) : !table ? (
-        <Skeleton className="h-[320px] rounded-xl" />
-      ) : (
-        <div className={cn('transition-opacity duration-150', loading && 'opacity-60')} aria-busy={loading || undefined}>
-          <DataTable
-            rows={rows}
-            columns={cols}
-            rowKey={(r) => r.key}
-            pageSize={Math.max(rows.length, 1)}
-            stickyFirst
-            empty={active ? 'No search matches these filters. Clear a filter to see more.' : 'No searches yet.'}
-            mobileCard={(r) => <SearchCard r={r} />}
-          />
-          {pages > 1 && (
-            <div className="mt-3 flex items-center justify-between gap-2 text-[13px] text-ink-3">
-              <span className="tabular">
-                {n0(from)}-{n0(to)} of {n0(total)}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="mr-1 hidden tabular sm:inline">
-                  Page {filter.page} of {pages}
-                </span>
-                <PagerButton disabled={filter.page <= 1} onClick={() => set({ page: filter.page - 1 })} label="Previous page" icon={<ChevronLeft className="size-4" />} />
-                <PagerButton disabled={filter.page >= pages} onClick={() => set({ page: filter.page + 1 })} label="Next page" icon={<ChevronRight className="size-4" />} />
-              </span>
             </div>
           )}
+          {filter.striking && <p className="mb-2 text-xs text-ink-3">Showing the searches just off page one. <button type="button" className="font-medium text-accent-text hover:underline" onClick={() => set({ striking: false })}>Show every search</button></p>}
+          <div className="mb-3 flex flex-wrap items-center gap-2 md:hidden">
+            {showFilters && (
+              <button type="button" onClick={() => setSheet(true)} className="inline-flex h-10 items-center gap-2 rounded-lg border border-line-strong bg-surface px-3.5 text-sm font-medium text-ink shadow-card">
+                <Filter className="size-4" aria-hidden />
+                Filters{active ? ` (${active})` : ''}
+              </button>
+            )}
+            <label className="flex items-center gap-2 text-xs font-medium text-ink-3">
+              Sort
+              <Select value={filter.sort} onChange={(e) => set({ sort: e.target.value as KiKwFilter['sort'] })} className="h-10">
+                <option value="score">Best first</option>
+                <option value="volume">Most searched</option>
+                <option value="keyword">A to Z</option>
+              </Select>
+            </label>
+            <Sheet
+              open={sheet}
+              onOpenChange={setSheet}
+              title="Filter the searches"
+              footer={
+                <>
+                  {active > 0 && (
+                    <Button variant="ghost" className="h-10" onClick={() => onFilter(KI_KW_FILTER_EMPTY)}>
+                      Clear
+                    </Button>
+                  )}
+                  <Button className="h-10" onClick={() => setSheet(false)}>
+                    Show results
+                  </Button>
+                </>
+              }
+            >
+              <div className="space-y-4">
+                <KiFilterFields f={filter} set={set} clusters={clusters} stack />
+              </div>
+            </Sheet>
+          </div>
+          <div className="mb-2 hidden items-center justify-end gap-2 md:flex">
+            <label className="flex items-center gap-2 text-xs font-medium text-ink-3">
+              Sort
+              <Select value={filter.sort} onChange={(e) => set({ sort: e.target.value as KiKwFilter['sort'] })} className="h-9">
+                <option value="score">Best first</option>
+                <option value="volume">Most searched</option>
+                <option value="keyword">A to Z</option>
+              </Select>
+            </label>
+          </div>
+          {error && !table ? (
+            <ErrorState error={error} />
+          ) : !table ? (
+            <Skeleton className="h-[320px] rounded-xl" />
+          ) : (
+            <div className={cn('transition-opacity duration-150', loading && 'opacity-60')} aria-busy={loading || undefined}>
+              <DataTable
+                rows={rows}
+                columns={cols}
+                rowKey={(r) => r.key}
+                pageSize={Math.max(rows.length, 1)}
+                stickyFirst
+                empty={active ? 'No search matches these filters. Clear a filter to see more.' : 'No searches yet.'}
+                mobileCard={(r) => <SearchCard r={r} />}
+              />
+              {pages > 1 && (
+                <div className="mt-3 flex items-center justify-between gap-2 text-[13px] text-ink-3">
+                  <span className="tabular">
+                    {n0(from)}-{n0(to)} of {n0(total)}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="mr-1 hidden tabular sm:inline">
+                      Page {filter.page} of {pages}
+                    </span>
+                    <PagerButton disabled={filter.page <= 1} onClick={() => set({ page: filter.page - 1 })} label="Previous page" icon={<ChevronLeft className="size-4" />} />
+                    <PagerButton disabled={filter.page >= pages} onClick={() => set({ page: filter.page + 1 })} label="Next page" icon={<ChevronRight className="size-4" />} />
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+          <p className="mt-3 text-xs text-ink-3">
+            Searches for {domain} in {kiMarketName(o.market) || 'your market'}. <GuideButton id="ki-verdicts" vars={{ domain }} variant="link" label="What the verdicts mean" className="max-sm:min-h-10" />
+          </p>
         </div>
-      )}
-      <p className="mt-3 text-xs text-ink-3">
-        Searches for {domain} in {kiMarketName(o.market) || 'your market'}. <GuideButton id="ki-verdicts" vars={{ domain }} variant="link" label="What the verdicts mean" className="max-sm:min-h-10" />
-      </p>
-    </Panel>
+      </Panel>
+    </section>
   );
 }
 

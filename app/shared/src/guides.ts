@@ -1748,9 +1748,10 @@ export const GUIDES = [
     trouble: [
       { q: 'The Choose button is greyed out', a: 'You already follow five. Move one to your watchlist, then choose the new one.' },
       { q: 'A competitor I know is missing', a: 'Add it in the run form under **Competitors you already know** and run it again. It is then always on your list.' },
+      { q: 'How is this list different from the competitors in Website settings?', a: 'The competitors you entered in **Website settings** start on this list as chosen. Choosing here does not change that list, which your AI visibility and backlink checks use.' },
     ],
     related: ['ki-read-keyword-research', 'competitors'],
-    keywords: ['competitors', 'rivals', 'watchlist', 'not a competitor', 'choose competitors', 'directories'],
+    keywords: ['competitors', 'rivals', 'watchlist', 'not a competitor', 'choose competitors', 'directories', 'website settings competitors'],
   },
   {
     id: 'ki-read-keyword-research',
@@ -1763,7 +1764,7 @@ export const GUIDES = [
     steps: [
       {
         title: 'Start with the plan',
-        body: 'Open **Keyword research** for {{domain}}. **Your plan** lists up to 10 steps, best first, each with why it is there and its credits. Nothing starts without your click.',
+        body: 'Open **Keyword research** for {{domain}}. **Your plan** lists up to 10 steps, best first, each with why it is there. Each step has a button that opens the tool that does it, with the search filled in, and shows its credits there before anything starts. Nothing starts without your click.',
       },
       {
         title: 'Look at the topics',
@@ -1771,7 +1772,7 @@ export const GUIDES = [
       },
       {
         title: 'Pick the quick wins',
-        body: '**Just off page one** lists searches your website already shows up for in places 8 to 20. Improving the page that shows up is often the fastest way to more visits.',
+        body: '**Just off page one** lists searches your website already shows up for in places 8 to 20, seen at least 100 times in 28 days (30 for a smaller website). Improving the page that shows up is often the fastest way to more visits.',
       },
       {
         title: 'Add the buyer questions that matter',
@@ -1817,12 +1818,16 @@ export const GUIDES = [
         body: 'It does not fit your business: people looking for a job, another company by name, a government service or a place outside your market. We say which, and never write a page for it.',
       },
       {
+        title: KI_VERDICTS.unknown,
+        body: 'We could not judge your chance yet, usually because part of the reading is missing. The next run tries again; until then it is not counted as hard.',
+      },
+      {
         title: 'The score and its range',
         body: 'The score out of 100 ranks searches against each other. The range says how sure we are: a wide range means we are less sure. Tap the question mark beside a score to see what it is made of.',
       },
     ],
     done: 'You can tell from the verdict alone what to do with a search.',
-    trouble: [{ q: 'A search I sell is marked not for you', a: 'Check the reason under the verdict. If it is wrong, tell us: the rules learn from it.' }],
+    trouble: [{ q: 'A search I sell is marked not for you', a: 'Check the reason under the verdict. If it is wrong, tell us and we will look at it.' }],
     related: ['ki-read-keyword-research'],
     keywords: ['verdict', 'go', 'takes a few months', 'hard', 'not for you', 'score', 'range'],
   },

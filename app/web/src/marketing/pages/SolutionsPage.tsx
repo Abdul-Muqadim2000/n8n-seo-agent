@@ -65,7 +65,7 @@ function CapabilityMatrix() {
         <SectionHeading
           eyebrow="One platform"
           title={`${COUNT_WORDS[solutions.length] ?? solutions.length} starting points, the same weekly loop.`}
-          lead={`Every team gets all ${capabilityCount} capabilities. These are the ones each team tends to lean on first.`}
+          lead={`Every team gets all ${capabilityCount} capabilities, the newest as they roll out to each website. These are the ones each team tends to lean on first.`}
         />
         <Reveal>
           <ArrowLink to="/platform">Explore the platform</ArrowLink>

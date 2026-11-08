@@ -276,7 +276,9 @@ function Sidebar({ onClose }: { onClose: () => void }) {
   const moreBelow = useMoreBelow(nav, site?.id);
   // KI (2026-11-08): the Competitors and Keyword research links, only where this website's KI is visible to this person (a verified
   // website, not a client portal role; any read error = hidden)
-  const kiVisible = !!useKi(org.id, site?.verifiedAt ? site.id : null, !isClientRole(role)).data?.visible;
+  // FX-A (review UX M1): a paused (kill switch) On website keeps its two links; the pages say "paused", never "rolling out"
+  const kiQ = useKi(org.id, site?.verifiedAt ? site.id : null, !isClientRole(role)).data;
+  const kiVisible = !!kiQ?.visible || !!kiQ?.killed;
 
   useEffect(() => {
     if (site) rememberSite(org.id, site.id);
