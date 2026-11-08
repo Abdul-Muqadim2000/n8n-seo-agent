@@ -64,7 +64,9 @@ describe('KI: words, tones and credits', () => {
     expect(Object.keys(KI_CLASSES)).toHaveLength(9);
     expect(Object.keys(KI_STAGES)).toEqual(['hire', 'compare', 'solution', 'problem', 'info']);
     expect(KI_BASIS.modelled).toBe('our estimate');
-    expect(kiBasisLabel('provider_estimate', 'DataForSEO Labs')).toBe('estimate from DataForSEO Labs');
+    // FX-A (review CONSISTENCY L10): a provider's product name never reaches a customer
+    expect(kiBasisLabel('provider_estimate', 'DataForSEO Labs')).toBe('estimate from our keyword data');
+    expect(kiBasisLabel('provider_estimate', 'Google Ads')).toBe('estimate from Google Ads');
     expect(kiBasisLabel('inferred')).toBe('our reading of the results');
     const copy = JSON.stringify([KI_VERDICTS, KI_CLASSES, KI_STAGES, KI_BASIS, MODES.competitors, MODES.keyword_research]);
     expect(copy).not.toMatch(/[—–…‘’“”]/);

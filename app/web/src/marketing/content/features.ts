@@ -263,7 +263,7 @@ export const features: Feature[] = [
       'Every website sorted by what it is, so directories, lists and platforms are never counted as rivals: they become places to be listed on instead',
       'Choose up to five to follow, keep others on a watchlist, and mark the ones that are not competitors so they stay off your list',
       'A profile of each competitor you follow: its size, the pages that bring it the most visits and the searches it ranks for, with a CSV',
-      'Gaps against the competitors you follow: searches, kinds of pages, lists, AI answers and links they have and you do not, each with the step and its credits',
+      'Gaps against the competitors you follow: the searches they rank for and you do not, each with the step that would close it (gaps in kinds of pages, lists, AI answers and links come later)',
       'Who AI answers name for your buyers\' questions, next to your own share',
     ],
     steps: [

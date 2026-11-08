@@ -125,7 +125,7 @@ export function Keywords({ o, summary, striking: strikingRows, questionRows, pla
   const striking = useMemo(() => kiStrikingOf(strikingRows?.length ? strikingRows : rows), [rows, strikingRows]);
   const questions = useMemo(() => kiQuestionsOf(questionRows?.length ? questionRows : rows, summary.questions), [rows, questionRows, summary.questions]);
   const plan = planIn?.length ? planIn : summary.plan;
-  const topicsShow = useShowAll(clusters.length, 5, 12);
+  const topicsShow = useShowAll(clusters.length, 3, 12);
   const goTo = (p: Partial<KiKwFilter>) => {
     onFilter({ ...KI_KW_FILTER_EMPTY, ...p });
     document.getElementById('every-search')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -269,7 +269,8 @@ function SourcesFigure({ sources }: { sources: readonly KiSource[] }) {
 /** The search a plan step is about: its topic's main search, else its target when that is a search (not an address). */
 function planKeyword(a: KiPlanAction, heads: readonly KiKw[]): string {
   const h = a.cluster_id ? heads.find((x) => x.clusterId === a.cluster_id) : undefined;
-  return h?.keyword ?? (/^https?:|\//.test(a.target) ? '' : a.target);
+  // else the target when it is a search, else the search the step's title quotes ('Write a page for "erp cost uae"')
+  return h?.keyword ?? (a.target && !/^https?:|\//.test(a.target) ? a.target : (/"([^"]{2,120})"/.exec(a.title)?.[1] ?? ''));
 }
 const shortUrl = (u: string) => u.replace(/^https?:\/\/(www\.)?/, '');
 function pageLine(r: KiKw): string {
@@ -289,7 +290,7 @@ function VolumeFigure({ r, demand }: { r: KiKw; demand?: number | null }) {
 }
 
 function PlanPanel({ plan, heads }: { plan: KiPlanAction[]; heads: readonly KiKw[] }) {
-  const show = useShowAll(plan.length, 5, 10);
+  const show = useShowAll(plan.length, 3, 10);
   return (
     <Panel icon={<ListOrdered />} title="Your plan" description={plan.length === 1 ? 'The step most likely to bring you buyers' : plan.length ? `The ${plan.length} steps most likely to bring you buyers, best first` : 'The plan appears after the research'} info="Ranked from the topics you can win and the gaps against your competitors. Each step opens the tool that does it, with the search filled in; you see its credits there before anything starts.">
       {plan.length ? (
@@ -323,7 +324,7 @@ function PlanPanel({ plan, heads }: { plan: KiPlanAction[]; heads: readonly KiKw
 }
 
 function StrikingPanel({ rows, total, onSeeAll }: { rows: KiKw[]; total: number; onSeeAll: () => void }) {
-  const show = useShowAll(Math.min(rows.length, 10), 5, 10);
+  const show = useShowAll(Math.min(rows.length, 10), 3, 10);
   return (
     <Panel icon={<TrendingUp />} title="Just off page one" description="You show up in places 8 to 20: the quickest wins" info={`Searches your website already shows up for, in ${KI_STRIKING_WORDS}. Improving the page that shows up is usually enough to move it up.`}>
       {rows.length ? (
@@ -372,7 +373,7 @@ function QuestionsPanel({ questions }: { questions: { key: string; question: str
   const mayAdd = can('admin');   // as the AI question panel itself (A1_ROUTES)
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const shown = questions.slice(0, 15);
-  const show = useShowAll(shown.length, 5, 15);
+  const show = useShowAll(shown.length, 3, 15);
   const toggle = (k: string) => setPicked((p) => (p.has(k) ? new Set([...p].filter((x) => x !== k)) : new Set([...p, k])));
   const send = () =>
     approve.mutate([...picked], {

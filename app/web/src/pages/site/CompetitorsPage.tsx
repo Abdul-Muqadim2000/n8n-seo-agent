@@ -6,7 +6,7 @@ import { lazy, Suspense, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { Ban, Download, Eye, ListChecks, Star, Swords, Target, Trophy, Undo2 } from 'lucide-react';
-import { KI_CLASSES, KI_GAP_TYPES, KI_SIZE_LABELS, type KiCompStatus, type KiGapType, type KiSizeTag } from '@seo/shared';
+import { KI_CLASSES, KI_GAP_TYPES, KI_KEYWORD_GAP_TYPES, KI_SIZE_LABELS, type KiCompStatus, type KiGapType, type KiSizeTag } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { CountUp, HeroNextStep, HeroStat, IconTile, InsightItem, Stagger, SummaryHero } from '@/components/insight';
 import { Badge } from '@/components/ui/badge';
@@ -110,7 +110,8 @@ export function Competitors({ o, data, gaps, keywords, keywordsLoading, onDrawer
   const member = can('member');
   const run = o.lastRuns.competitors;
   const ownShare = run?.counts.client_share ?? run?.counts.serp_share ?? null;
-  const openGaps = gaps.filter((g) => g.status === 'open' || g.status === 'started');
+  // FX-L (LOGIC M6 skipped in the engine): only the keyword gaps are produced today; the other kinds are not shown until they exist
+  const openGaps = gaps.filter((g) => (g.status === 'open' || g.status === 'started') && (KI_KEYWORD_GAP_TYPES as readonly string[]).includes(g.type));
   const gapsOpen = o.summary?.gaps.open || openGaps.length;
 
   const change = (c: KiComp, next: KiCompStatus) => {
@@ -126,7 +127,7 @@ export function Competitors({ o, data, gaps, keywords, keywordsLoading, onDrawer
     );
   };
 
-  const listingsShow = useShowAll(Math.min(s.listings.length, 12), 5, 12);
+  const listingsShow = useShowAll(Math.min(s.listings.length, 12), 3, 12);
   const openDrawer = (c: KiComp) => {
     onDrawer?.();
     setOpen(c);
@@ -170,7 +171,7 @@ export function Competitors({ o, data, gaps, keywords, keywordsLoading, onDrawer
             <HeroStat label="Real competitors found" value={<CountUp value={s.chosen.length + s.others.length} />} info="Companies that sell what you sell and keep showing up in Google's results for your services. Directories, lists and platforms are counted apart." />
             <HeroStat label="You follow" value={`${s.chosen.length} of ${max}`} info="The competitors you chose. Gaps and monthly checks compare you with these." />
             <HeroStat label="Lists and directories to join" value={<CountUp value={s.listings.length} />} info="Directories and 'best of' lists that rank for your services and show other companies. Being on them helps you in Google and in AI answers." />
-            <HeroStat label="Gaps to act on" value={<CountUp value={gapsOpen} />} info="Places where your chosen competitors are found and you are not: searches, kinds of pages, lists, AI answers and links." />
+            <HeroStat label="Gaps to act on" value={<CountUp value={gapsOpen} />} info="Searches where your chosen competitors are found and you are not." />
           </>
         }
         aside={
@@ -199,14 +200,14 @@ export function Competitors({ o, data, gaps, keywords, keywordsLoading, onDrawer
         {/* review CONSISTENCY M7: the two competitor lists, one story */}
         <p className="border-b border-line px-5 py-2.5 text-xs text-ink-3">
           The competitors you entered in{' '}
-          <Link to={page('settings')} className="font-medium text-accent-text hover:underline">
+          <Link to={page('settings')} className="font-medium text-accent-text hover:underline max-md:inline-flex max-md:min-h-10 max-md:items-center">
             Website settings
           </Link>{' '}
           start on this list as chosen. Choosing here does not change that list, which your AI visibility and backlink checks use.
         </p>
         <CompetitorList title="You follow" rows={s.chosen} empty={`Choose up to ${max} below.`} onChange={change} onOpen={openDrawer} member={member} max={max} chosenCount={s.chosen.length} />
-        <CompetitorList title="Suggested" rows={s.others.filter((r) => r.status !== 'watch')} onChange={change} onOpen={openDrawer} member={member} max={max} chosenCount={s.chosen.length} />
-        <CompetitorList title="Watchlist" rows={s.others.filter((r) => r.status === 'watch')} empty="Nobody on your watchlist yet." onChange={change} onOpen={openDrawer} member={member} max={max} chosenCount={s.chosen.length} />
+        <CompetitorList title="Suggested" phone={2} rows={s.others.filter((r) => r.status !== 'watch')} onChange={change} onOpen={openDrawer} member={member} max={max} chosenCount={s.chosen.length} />
+        <CompetitorList title="Watchlist" phone={0} rows={s.others.filter((r) => r.status === 'watch')} empty="Nobody on your watchlist yet." onChange={change} onOpen={openDrawer} member={member} max={max} chosenCount={s.chosen.length} />
       </Panel>
 
       <GapsPanel gaps={openGaps} />
@@ -285,8 +286,8 @@ function CsvLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-function CompetitorList({ title, rows, empty, onChange, onOpen, member, max, chosenCount }: { title: string; rows: KiComp[]; empty?: string; onChange: (c: KiComp, s: KiCompStatus) => void; onOpen: (c: KiComp) => void; member: boolean; max: number; chosenCount: number }) {
-  const show = useShowAll(rows.length, 3, 10);
+function CompetitorList({ title, rows, empty, onChange, onOpen, member, max, chosenCount, phone = 3 }: { title: string; rows: KiComp[]; empty?: string; onChange: (c: KiComp, s: KiCompStatus) => void; onOpen: (c: KiComp) => void; member: boolean; max: number; chosenCount: number; phone?: number }) {
+  const show = useShowAll(rows.length, phone, 10);
   if (!rows.length && !empty) return null;
   return (
     <section className="border-t border-line first:border-t-0">
@@ -370,19 +371,19 @@ function GapsPanel({ gaps }: { gaps: KiGap[] }) {
   const [type, setType] = useState<'' | KiGapType>('');
   const shown = gaps.filter((g) => !type || g.type === type);
   // review UX H5: 5 on a phone, 10 wider, the rest one tap away
-  const show = useShowAll(shown.length, 5, 10);
+  const show = useShowAll(shown.length, 3, 10);
   return (
     <Panel
       icon={<Target />}
       title="Gaps against your competitors"
       description={gaps.length ? `${gaps.length} places where the competitors you follow are found and you are not` : 'Choose your competitors to see where they are ahead'}
-      info="A gap is a search, a kind of page, a list, an AI answer or a link your chosen competitors have and you do not. Each one shows the step that would close it; the step opens the tool that does it, with its credits shown before anything starts."
+      info="A gap is a search your chosen competitors rank for and you do not (gaps in kinds of pages, lists, AI answers and links come later). Each one shows the step that would close it; the step opens the tool that does it, with its credits shown before anything starts."
       actions={<CsvLink href={kiCsvUrl(org.id, site.id, 'gaps', type ? { type } : {})} label="Download CSV" />}
     >
       {types.length > 1 && (
         <FilterChips
           label="Kind of gap"
-          className="mb-3 [&>button]:max-md:h-10"
+          className="mb-3 max-md:flex-nowrap max-md:overflow-x-auto max-md:pb-1 [&>button]:shrink-0 [&>button]:max-md:h-10"
           value={type}
           onChange={setType}
           options={[{ value: '' as const, label: 'All', count: gaps.length }, ...types.map((t) => ({ value: t, label: KI_GAP_LABELS[t].label, count: gaps.filter((g) => g.type === t).length }))]}

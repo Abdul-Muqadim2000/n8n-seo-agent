@@ -9,6 +9,7 @@ import {
   KI_MAX_COMPETITORS,
   KI_SCORED_CLASSES,
   KI_STAGE_WEIGHT,
+  KI_VERDICT_IDS,
   kiBasisLabel,
   kiGateWords,
   kiModeOf,
@@ -362,7 +363,8 @@ export function kiKwOf(o: Obj): KiKw {
     scoreLow: num(pick(o, 'score_low')),
     scoreHigh: num(pick(o, 'score_high')),
     lowConfidence: bool(pick(o, 'low_confidence')),
-    verdict: verdictRaw === 'go' || verdictRaw === 'months' || verdictRaw === 'hard' || verdictRaw === 'gated' ? verdictRaw : kiVerdict({ gate, win }),
+    // FX-L: `unknown` (Not judged yet) is a stored verdict too; a gated row is always "Not for you"
+    verdict: gate === 'fail' ? 'gated' : (KI_VERDICT_IDS as readonly string[]).includes(verdictRaw) && verdictRaw !== 'gated' ? verdictRaw : kiVerdict({ gate, win }),
     clusterId: str(pick(o, 'cluster_id')),
     isHead: bool(pick(o, 'is_head')),
     clusterSize: num(pick(o, 'cluster_size')),
@@ -649,7 +651,7 @@ export function kiActionLink(kind: string, o: { keyword?: string | null; target?
       return keyword ? { label: 'Write this page', kind: 'tool', mode: 'keyword', prefill: { keyword } } : null;
     case 'refresh':
     case 'defend':
-      return keyword ? { label: kind === 'defend' ? 'Refresh this page' : 'Improve this page', kind: 'tool', mode: 'keyword', prefill: { keyword, ...(ownUrl ? { existingPageUrl: ownUrl } : {}) } } : null;
+      return keyword || ownUrl ? { label: kind === 'defend' ? 'Refresh this page' : 'Improve this page', kind: 'tool', mode: 'keyword', prefill: { ...(keyword ? { keyword } : {}), ...(ownUrl ? { existingPageUrl: ownUrl } : {}) } } : null;
     case 'ladder':
       return keyword ? { label: 'Plan the ladder', kind: 'ladder', keyword } : null;
     case 'list':
