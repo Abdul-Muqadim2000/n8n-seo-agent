@@ -2808,7 +2808,7 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
         if (g.source === 'gsc') { const im = num(r.impressions), cl = num(r.clicks), po = num(r.position);
           if (im != null && (row.gsc_impressions == null || im > row.gsc_impressions)) { row.gsc_impressions = im; row.gsc_clicks = cl; row.gsc_position = po; row.gsc_page = S(r.page || r.url); } }
         const vol = num(r.volume != null ? r.volume : r.search_volume);
-        if (vol != null && row.volume == null) { row.volume = vol; row.volume_basis = 'provider_estimate'; row.volume_source = S(r.volume_source || (/^labs/.test(g.source) ? 'DataForSEO Labs' : g.source === 'competitor' || g.source === 'gap' ? 'DataForSEO Labs' : 'Google Ads')); }
+        if (vol != null && row.volume == null) { row.volume = vol; row.volume_basis = 'provider_estimate'; row.volume_source = S(r.volume_source || (/^labs/.test(g.source) || g.source === 'competitor' || g.source === 'gap' ? 'DataForSEO keyword data' : 'Google Ads')); }
         if (row.cpc == null && num(r.cpc) != null) row.cpc = num(r.cpc);
         if (row.kd == null && num(r.kd != null ? r.kd : r.keyword_difficulty) != null) row.kd = num(r.kd != null ? r.kd : r.keyword_difficulty);
         if (!row.labs_intent && S(r.intent || r.main_intent)) row.labs_intent = S(r.intent || r.main_intent).toLowerCase();
@@ -3661,7 +3661,7 @@ const srcOf = (r) => (r.sources || []).map(x => ({ source: x.source, fetched_at:
 const volBasis = (r) => r.volume == null ? null : 'provider_estimate';
 // FX-L L3: top10_json keeps exact / url_partial, so a later re-cluster never keys a recovered address as exact
 const kwRow = (r) => KIW.shape('KI_KW', { site_id: p.site_id, domain: p.domain, market: p.market, keyword: r.keyword, kw_key: r.kw_key, sources_json: srcOf(r), source_count: (r.sources || []).length,
-  volume: N(r.volume), volume_basis: volBasis(r), volume_source: r.volume == null ? ((r.families || []).length >= 2 ? 'evidenced, volume not measured' : '') : (KIW.S(r.volume_source) || 'DataForSEO Labs'),
+  volume: N(r.volume), volume_basis: volBasis(r), volume_source: r.volume == null ? ((r.families || []).length >= 2 ? 'evidenced, volume not measured' : '') : (KIW.S(r.volume_source) === 'labs' ? 'DataForSEO keyword data' : (KIW.S(r.volume_source) || 'DataForSEO keyword data')),
   cpc: N(r.cpc), kd: N(r.kd), trend_json: r.trend || null, gsc_impressions: N(r.gsc_impressions), gsc_clicks: N(r.gsc_clicks), gsc_position: N(r.gsc_position), gsc_page: r.gsc_page || null,
   intent: ['commercial', 'transactional', 'informational', 'navigational'].includes(r.intent) ? r.intent : null, stage: r.stage || null, stage_evidence_json: r.stage_evidence || [], intent_confidence: N(r.intent_confidence),
   needs_review: !!r.needs_review, gate: r.gate, gate_reason: r.gate === 'fail' ? (r.gate_code || r.gate_reason || 'off_topic') : '', gate_detail: r.gate === 'fail' ? (r.gate_detail || '') : '', fit: N(r.fit), demand: N(r.demand), win: N(r.win), value: N(r.value_f), gap: N(r.gap),

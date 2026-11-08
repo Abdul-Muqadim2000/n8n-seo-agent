@@ -35,7 +35,7 @@ const discPairs = pairs.filter(x => ['ac', 'labs_ideas', 'labs_suggestions', 'la
 if (discPairs.length) {
   const take = (call, fn) => discPairs.filter(x => x.q.ki_call === call && x.ok).flatMap(x => KIW.itemsOf(x.a).map(fn)).filter(r => r && r.keyword);
   const acRows = take('ac', it => ({ keyword: KIW.normKw(it.suggestion) })).filter(r => fitMarket(r.keyword, p.iso).ok);
-  const lab = (it) => { const k = KIW.kwRow(it); return k.keyword ? { keyword: k.keyword, volume: k.volume, cpc: k.cpc, kd: k.kd, intent: k.labs_intent, trend: k.trend, volume_source: 'DataForSEO Labs' } : null; };
+  const lab = (it) => { const k = KIW.kwRow(it); return k.keyword ? { keyword: k.keyword, volume: k.volume, cpc: k.cpc, kd: k.kd, intent: k.labs_intent, trend: k.trend, volume_source: 'DataForSEO keyword data' } : null; };
   disc = { fetched_at: now, ac: acRows, ideas: take('labs_ideas', lab), sugg: take('labs_suggestions', lab), related: take('labs_related', lab),
     failed: discPairs.filter(x => !x.ok).map(x => x.q.ki_call + ': ' + x.why) };
   // only a complete bundle is kept for reuse: a call that failed is asked again next run
@@ -58,7 +58,7 @@ for (const d of chosen) if (!rk[d]) { const e = KIW.cacheRead(cache, ck('rk', p.
 const compPos = {};   // kw_key -> [{ domain, position, url }]
 const compRows = [];
 for (const [d, v] of Object.entries(rk)) for (const it of (v.items || [])) { const kk = KIW.keyOf(it.k); (compPos[kk] = compPos[kk] || []).push({ domain: d, position: it.pos, url: it.url });
-  compRows.push({ keyword: it.k, volume: it.v, cpc: it.cpc, kd: it.kd, intent: it.i, volume_source: 'DataForSEO Labs', detail: d + ' ranks #' + it.pos }); }
+  compRows.push({ keyword: it.k, volume: it.v, cpc: it.cpc, kd: it.kd, intent: it.i, volume_source: 'DataForSEO keyword data', detail: d + ' ranks #' + it.pos }); }
 lists.push({ source: 'competitor', fetched_at: now, rows: compRows });
 sections.push({ key: 'competitor_keywords', state: !chosen.length ? 'skipped' : (rkFailed.length ? (Object.keys(rk).length ? 'partial' : 'missing') : (chosen.every(d => rk[d]) ? 'ok' : 'partial')),
   reason: !chosen.length ? 'no competitor is chosen yet: run Competitors and pick up to ' + p.max_chosen : (rkFailed.length ? 'could not be read: ' + rkFailed.join('; ') : (chosen.every(d => rk[d]) ? '' : chosen.filter(d => !rk[d]).length + ' competitor keyword list(s) wait for the next run: this run is held at the price quoted')), rows: compRows.length });
@@ -72,7 +72,7 @@ if (piPair && piPair.ok) { const r0 = KIW.result0(piPair.a); const pages = (piPa
     return { k: k.keyword, v: k.volume, cpc: k.cpc, kd: k.kd, i: k.labs_intent, comps }; }).filter(r => r.k && r.comps.some(c => c.position && c.position <= KIW.CAPS.pi_rank)) };
   saveRows.push(KIW.cacheRow(p.site_id, piKey, pi)); }
 const gapRows = ((pi && pi.items) || []).map(it => { const kk = KIW.keyOf(it.k); for (const c of it.comps) { const l = (compPos[kk] = compPos[kk] || []); if (!l.some(x => x.domain === c.domain)) l.push(c); }
-  return { keyword: it.k, volume: it.v, cpc: it.cpc, kd: it.kd, intent: it.i, volume_source: 'DataForSEO Labs', detail: it.comps.filter(c => c.position <= KIW.CAPS.pi_rank).length + ' of your competitors rank in the top 10, you do not' }; });
+  return { keyword: it.k, volume: it.v, cpc: it.cpc, kd: it.kd, intent: it.i, volume_source: 'DataForSEO keyword data', detail: it.comps.filter(c => c.position <= KIW.CAPS.pi_rank).length + ' of your competitors rank in the top 10, you do not' }; });
 lists.push({ source: 'gap', fetched_at: pi ? pi.fetched_at : now, rows: gapRows });
 const intersection = pi ? { total: pi.total, read: pi.read, top10: (pi.items || []).length, sample_note: pi.total != null && pi.read != null && pi.total > pi.read ? 'sample of ' + pi.read + ' of ' + pi.total + ' searches the data provider holds for these competitors (the ' + pi.read + ' with the most searches were read)' : '' } : null;
 sections.push({ key: 'gap', state: !chosen.length ? 'skipped' : (piPair && !piPair.ok ? 'missing' : (pi ? 'ok' : 'missing')), reason: !chosen.length ? 'no competitor is chosen yet' : (piPair && !piPair.ok ? 'the gap could not be read: ' + piPair.why : (pi ? (intersection.sample_note || '') : 'the gap was not read')), rows: gapRows.length });

@@ -2370,7 +2370,7 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
         if (g.source === 'gsc') { const im = num(r.impressions), cl = num(r.clicks), po = num(r.position);
           if (im != null && (row.gsc_impressions == null || im > row.gsc_impressions)) { row.gsc_impressions = im; row.gsc_clicks = cl; row.gsc_position = po; row.gsc_page = S(r.page || r.url); } }
         const vol = num(r.volume != null ? r.volume : r.search_volume);
-        if (vol != null && row.volume == null) { row.volume = vol; row.volume_basis = 'provider_estimate'; row.volume_source = S(r.volume_source || (/^labs/.test(g.source) ? 'DataForSEO Labs' : g.source === 'competitor' || g.source === 'gap' ? 'DataForSEO Labs' : 'Google Ads')); }
+        if (vol != null && row.volume == null) { row.volume = vol; row.volume_basis = 'provider_estimate'; row.volume_source = S(r.volume_source || (/^labs/.test(g.source) || g.source === 'competitor' || g.source === 'gap' ? 'DataForSEO keyword data' : 'Google Ads')); }
         if (row.cpc == null && num(r.cpc) != null) row.cpc = num(r.cpc);
         if (row.kd == null && num(r.kd != null ? r.kd : r.keyword_difficulty) != null) row.kd = num(r.kd != null ? r.kd : r.keyword_difficulty);
         if (!row.labs_intent && S(r.intent || r.main_intent)) row.labs_intent = S(r.intent || r.main_intent).toLowerCase();

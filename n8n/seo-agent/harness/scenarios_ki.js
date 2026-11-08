@@ -400,5 +400,61 @@ module.exports = async (ctx) => {
     // ---- KI25 inputs never mutated ----
     const frozen = JSON.parse(J(rowsC)); KI.cluster(rowsC); KI.gaps(cl20, ch20, kr, ex20); KI.scoreCompetitors([], seeds, KI.cfg({})); KI.plan(heads, gp20);
     check('KI25 the kit never mutates its inputs (rows, seeds, gaps)', J(frozen) === J(rowsC), '');
+
+    // ---- KI26 (FX-L 2026-11-08, REVIEW_LOGIC): MESSY inputs as production stores them (the harness passed while its fixtures were cleaner
+    // than production; every string here is public: the fragments are quoted in REVIEW_LOGIC.md, the titles are generic UAE provider titles) ----
+    const FRAG = ['Microsoft Dynamics 365 consulting and implementation in the UAE and GCC: Busines', 'Finance & Operations', 'CRM and Project Operations. We also do NAV', 'GP and AX migrations',
+      'post-go-live and managed support', 'Copilot Studio AI agents', 'Power Platform and Power BI', 'and UAE e-invoicing (Peppol) and VAT compliance.'];
+    const fr = KI.services(JSON.stringify(FRAG));
+    check('KI26 B1 fragments: the stored sentence pieces become clean services (no cut word, no "we also do", no market tail, no leading "and"), Peppol and e-invoicing kept',
+      fr.includes('Peppol') && fr.includes('e-invoicing') && fr.includes('NAV') && fr.includes('GP migrations') && fr.includes('Power BI') && !fr.some(x => /busines$|^and |\bwe\b|\buae\b|\bgcc\b|[.:]/i.test(x)), J(fr));
+    const DV = ['We provide custom AI solutions', 'automation', 'software development', 'cloud and Microsoft enterprise systems', 'and ongoing managed IT support. Every solution is built around your business nee',
+      'Dynamics 365', 'Microsoft Fabric', 'Power Platform', 'Artificial Intelligence & Machine Learning', 'Data Science & Analytics', 'Natural Language Processing (NLP)', 'Computer Vision', 'AR & VR Solutions',
+      'Custom Software Development', 'Website & Portal Development', 'Mobile App Development', 'Managed Services', 'Infrastructure & Enterprise Systems', 'Consulting & Transformation',
+      'Application & Software Development', 'Open edX Services', 'Intelligent Systems & Data', 'Business Discovery & Requirements Analysis', 'Gap-Fit Analysis', 'ROI Assessment', 'Global Rollouts',
+      'System Optimization', 'Microsoft Solutions Implementation', 'Enterprise Chatbots', 'Data Pipeline Design'];
+    const dv = KI.services(JSON.stringify(DV)); const dctx = { own_domain: 'devaicon.com', market: 'AE', services: dv, topics: dv };
+    check('KI26 B1 thirty services with the key one at #21: nothing is cut by position, "Open edX Services" is kept, a sentence ("Every solution is built ...") is not a service',
+      dv.length >= 28 && dv.includes('Open edX Services') && !dv.some(x => /^every /i.test(x)) && dv.includes('custom AI solutions'), J(dv));
+    const oe = ['open edx hosting', 'open edx provider', 'managed open edx', 'open edx development company'].map(k => [k, KI.gate(k, dctx).gate, KI.fit(k, dctx).fit]);
+    check('KI26 B1 / H8 with the stored list verbatim, the Open edX searches pass the gate and are in topic (fit >= 0.35)', oe.every(([, g, f]) => g === 'pass' && f >= 0.35), J(oe));
+    const tctx = { own_domain: 'techand.ai', market: 'AE', services: fr, topics: fr, competitors: ['velosio.com', 'randgroup.com'], avoid: ['crm for customers'] };
+    const t26 = { pap: [KI.gate('peppol access point provider uae', tctx).gate, KI.fit('peppol access point provider uae', tctx).fit], av: KI.gate('crm for customers', tctx), br: KI.gate('velosio dynamics 365', tctx) };
+    check('KI26 H8 / H4 / H5 on the stored techand list: "peppol access point provider uae" passes in topic, a stored AVOID is gated (code avoid), a chosen competitor\'s brand search is gated (code other_brand)',
+      t26.pap[0] === 'pass' && t26.pap[1] >= 0.8 && t26.av.reason === 'avoid' && t26.br.reason === 'other_brand', J(t26));
+    const prov = ['Best ERP Company in Dubai | P1', 'Top ERP Solutions Provider in UAE', 'Leading ERP Software Company Dubai', 'Best ERP Software Company in Dubai | BrainSphere', 'Leading CRM Solutions Provider in Dubai'];
+    const ptypes = prov.map((t, i) => KI.pageType({ domain: 'provider' + i + '.ae', url: 'https://provider' + i + '.ae/', title: t }));
+    const t10 = prov.concat(['ERP Software Dubai | Q2', 'Dynamics 365 Partner Dubai', 'ERP Implementation UAE', 'Cloud ERP Dubai', 'ERP Consultants UAE']).map((t, i) => ({ host: 'provider' + i + '.ae', url: 'https://provider' + i + '.ae/', title: t, pos: i + 1, type: KI.pageType({ domain: 'provider' + i + '.ae', url: 'https://provider' + i + '.ae/', title: t }) }));
+    const pa26 = KI.pageAction({ keyword: 'erp company dubai', top10: t10, stage: 'hire' }, { domain: 'techand.ai' });
+    const cls26 = KI.classifyDomain('brainsphereit.com', { ...tctx, appearances: [{ keyword: 'erp company dubai', position: 4, title: 'Best ERP Software Company in Dubai | BrainSphere', url: 'https://brainsphereit.com/' }] });
+    check('KI26 H3 "Best ERP Company in Dubai" provider homepages are service pages, not lists: no "get onto the lists" action, the provider is a competitor, not a list publisher',
+      ptypes.every(t => t === 'provider') && pa26.action !== 'list' && cls26.class !== 'publisher_list', J({ ptypes, pa: pa26.action, cls: cls26.class }));
+    const nt = KI.classifyDomain('notitle-provider.ae', { ...tctx, appearances: [{ keyword: 'dynamics 365 partner uae', position: 3 }] });
+    check('KI26 B2 a competitor with no title of its own is "needs your review", never "direct" from the search it was found on', nt.class !== 'direct' && nt.needs_review, J(nt));
+    const d5 = KI.demand([{ stage: 'hire', volume: 1000, gsc_impressions: 5, gsc_position: 48 }]), d5b = KI.demand([{ stage: 'hire', volume: 1000 }]);
+    check('KI26 H7 Search Console impressions on page 5 (position 48) do not replace a larger provider volume (they are censored by the position)', d5.demand >= d5b.demand * 0.9 && d5.demand > 0.3, J([d5, d5b]));
+    const wU = KI.win({ keyword: 'dynamics 365 partner uae', stage: 'hire' }, { domain: 'techand.ai' }), vU = KI.verdict({ gate: 'pass', fit: 1, win: wU }), vN = KI.verdict({ gate: 'pass', fit: 1, win: null });
+    const wS = KI.win({ keyword: 'erp implementation uae', stage: 'hire', topical: 1, top10_refdomains_median: 5, top10: Array.from({ length: 10 }, (_, i) => ({ host: 'w' + i + '.ae', type: i < 4 ? 'forum' : 'provider', pos: i + 1 })) }, { domain: 'techand.ai', refdomains: 80 });
+    check('KI26 H2 / L8: no Win is "unknown" (never Hard); a measured Strength (referring domains 16x the top 10) with topic evidence and weak results makes "Go" reachable for a page the site does not have yet',
+      vN === 'unknown' && ['unknown', 'hard', 'months'].includes(vU) && wS.strength_known && KI.verdict({ gate: 'pass', fit: 1, win: wS }) === 'go', J({ vU, vN, wS: [wS.win, wS.low, wS.high] }));
+    check('KI26 L1 "what is a crm company" and "what is crm company" share a key (no "acrm"); a migration keeps its direction',
+      KI.key('what is a crm company') === KI.key('what is crm company') && KI.key('sap to dynamics 365 migration') !== KI.key('dynamics 365 to sap migration') && KI.key('e invoicing uae') === KI.key('einvoicing uae'), J([KI.key('what is a crm company'), KI.key('sap to dynamics 365 migration')]));
+    // the worker's own kit (KIW): seeds balanced by evidence, plausible searches only, the SSRF helpers
+    const KIWsrc = rd('_ki_io.js').replace('__KI_QUOTE__', '{"competitors":0.35,"keyword_research":0.9}').replace('__KI_COLS__', '{"KI_RUNS":[],"KI_COMP":[],"KI_KW":[],"KI_GAPS":[]}');
+    const KW = new Function('KI', 'SU', 'SC', 'RT', KIWsrc + '\nreturn KIW;')(KI, undefined, undefined, undefined);
+    const sd26 = KW.compSeeds({ iso: 'AE', country: 'United Arab Emirates', city: 'dubai', services: KW.seedServices(fr), products: ['dynamics 365'], seeds: [],
+      gsc: [{ query: 'peppol access point provider uae', impressions: 77 }, { query: 'dynamics ax dubai', impressions: 43 }, { query: 'pint ae mandatory fields', impressions: 30 }], tracked: ['crm service provider in uae'], ladders: ['dynamics 365 erp system'],
+      gate: (k) => KI.gate(k, tctx) });
+    const bySrc = {}; for (const x of sd26.seeds) bySrc[x.source] = (bySrc[x.source] || 0) + 1;
+    check('KI26 H1 competitor seeds: Search Console, tracked and ladder heads make the cap beside the service phrases; no fragment, no punctuation, no single generic word',
+      bySrc.gsc >= 3 && (bySrc.tracked || 0) + (bySrc.ladder || 0) >= 2 && bySrc.service >= 5 && sd26.seeds.length <= 20 && !sd26.seeds.some(x => /[.:,]| we |busines/.test(x.keyword)), J({ bySrc, seeds: sd26.seeds.map(x => x.keyword) }));
+    const hops = [KW.hopOf('https://rival.ae/', { statusCode: 301, headers: { location: 'https://www.rival.ae/' } }), KW.hopOf('https://rival.ae/', { statusCode: 302, headers: { location: 'http://n8n:5678/' } }),
+      KW.hopOf('https://rival.ae/', { statusCode: 302, headers: { location: 'https://169.254.169.254/latest' } }), KW.hopOf('https://rival.ae/', { statusCode: 302, headers: { location: 'https://evil.com/' } }),
+      KW.hopOf('https://rival.ae/', { statusCode: 302, headers: { location: 'https://user:pw@www.rival.ae/' } })];
+    check('KI26 perf H2 redirects: only an https hop to the same registrable domain is followed; an internal host, a metadata IP, another domain or credentials never are; wildcard-DNS names are not public',
+      hops[0] === 'https://www.rival.ae/' && hops.slice(1).every(h => h === '') && !KW.publicHost('10.0.0.5.nip.io') && !KW.publicHost('127-0-0-1.sslip.io') && KW.publicHost('rival.ae'), J(hops));
+    const bomb = '<html>' + '<script>'.repeat(20000) + 'x';
+    const t0 = Date.now(); const ht = KW.htmlText(bomb + '<p>ERP partner</p>', 400000); const ms = Date.now() - t0;
+    check('KI26 perf H2 the page text reader is linear: thousands of unclosed <script tags read in well under a second', ms < 500 && typeof ht === 'string' && KW.htmlText('<p>A</p><script>var x</script><p>B</p>') === 'A B', J({ ms, ht: ht.slice(0, 40) }));
   });
 };
