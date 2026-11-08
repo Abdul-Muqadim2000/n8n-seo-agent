@@ -14144,3 +14144,27 @@ for _f181 in sorted(os.listdir(os.path.join(HERE0, 'workflows'))):
             if _n['name'] != _h and _arg.search(_r) and '__LEDGER_NODES' not in _r and not _n['name'].endswith(' Retry Plan') and _n['name'] not in _STATUS_ONLY181:
                 assert _has(_n['name']), 'SERP-GOTO (C): %s / %s reads %s by name without SU' % (_f181, _n['name'], _h); _c181['C'] += 1
 print('SERP-GOTO (section 181): every node that reads a Google results page sees the real host behind a redirect link (A %d kit users, B %d answer nodes, C %d live readers of %d SERP HTTP nodes, D %d stored-reading readers)' % (_c181['A'], _c181['B'], _c181['C'], _c181['serp_nodes'], _c181['D']))
+
+# ---- 182. IF-BRANCH lint (2026-11-09, KI's first Trial run on production) ----
+# n8n resolves $('IF node').all() / .first() / .last() WITHOUT a branch index to the output that connects that IF to the reading node. A node
+# hanging on an IF's false output (index 1) therefore reads the false branch: Comp SERP Picture read 0 of its 20 answered searches. The
+# offline harness's $() ignores branches, so only this lint can catch it: a node connected to a non-zero output of an IF / Switch must name
+# the branch it reads. What it does not look at: reads through a variable node name, and Switch rules that route on purpose to output 0.
+import glob as _g182, re as _re182
+_c182 = 0
+for _f182 in sorted(_g182.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workflows', '*.json'))):
+    _d182 = json.load(open(_f182))
+    for _w182 in (_d182 if isinstance(_d182, list) else [_d182]):
+        _t182 = {n['name']: n['type'] for n in _w182.get('nodes', [])}
+        _ifs182 = {n for n, t in _t182.items() if t.endswith('.if') or t.endswith('.switch')}
+        _C182 = _w182.get('connections', {})
+        for _n182 in _w182.get('nodes', []):
+            _code182 = _n182.get('parameters', {}).get('jsCode') or ''
+            for _m182 in _re182.finditer(r"\$\('([^']+)'\)\.(all|first|last)\(\s*\)", _code182):
+                _src182 = _m182.group(1)
+                if _src182 not in _ifs182:
+                    continue
+                _outs182 = [i for i, o in enumerate(_C182.get(_src182, {}).get('main', [])) for c in (o or []) if c.get('node') == _n182['name']]
+                assert not any(i != 0 for i in _outs182), 'IF-BRANCH: %s / %s reads $(%r).%s() but hangs on its output %s: name the branch, e.g. .all(0)' % (os.path.basename(_f182), _n182['name'], _src182, _m182.group(2), _outs182)
+                _c182 += 1
+print('IF-BRANCH (section 182): every read of an IF / Switch node without a branch index comes from a node on its first output (%d reads checked)' % _c182)
