@@ -59,7 +59,8 @@ def src(p):   # a Code node source with the shared snippets inlined
     s = s.replace('/*__AI_PANEL__*/', rd('code/_ai_panel.js').rstrip('\n'))   # G6 (2026-10-18): the AI question panel at scale (limits, markets, strata, chunks, the one cost formula)
     s = s.replace('/*__AI_FOCUS__*/', rd('code/_ai_focus.js').rstrip('\n'))   # AI-FOCUS (2026-10-27, docs/ai-panel-focus-2026-10-27): the panel follows the client's focus (AIF)
     s = s.replace('/*__AI_W2E3__*/', rd('code/_ai_w2e3.js').rstrip('\n'))   # W2-E3 (2026-10-23): fan-out ranking gap, persona effect, demand, the owner's AI reports, the run's bookkeeping (AIX)
-    s = s.replace('/*__SERP_CACHE__*/', rd('code/_serp_cache.js').rstrip('\n'))   # KW-SERP (2026-10-21): one results-page reading per search and day, shared by every path (SC); W2-E3: the fan-out check reads it too
+    s = s.replace('/*__SERP_CACHE__*/', rd('code/_serp_url.js').rstrip('\n') + '\n' + rd('code/_serp_cache.js').rstrip('\n'))   # SERP-GOTO (2026-11-08): SU travels with SC
+    s = s.replace('/*__SERP_URL__*/', rd('code/_serp_url.js').rstrip('\n'))   # KW-SERP (2026-10-21): one results-page reading per search and day, shared by every path (SC); W2-E3: the fan-out check reads it too
     # AIR (2026-11-06, docs/ai-ranking-2026-11-05/CONTRACTS.md §3): the AI-ranking kits - flags + kill switch (AIRF, frozen by W0), diagnosis (ARD,
     # package P1) and decision / learning (ARL, package P2); inlined only into the AIR nodes of the AI Growth workflow (package P4)
     s = s.replace('/*__AI_RANK_FLAGS__*/', rd('code/_ai_rank_flags.js').rstrip('\n')).replace('/*__AI_RANK_DIAG__*/', rd('code/_ai_rank_diag.js').rstrip('\n')).replace('/*__AI_RANK_LEARN__*/', rd('code/_ai_rank_learn.js').rstrip('\n'))
@@ -1252,6 +1253,7 @@ from ladder_common import CHECKIN_COLS, OPS_ALERTS_COLS, AUDIT_FINDINGS_COLS   #
 from ladder_common import PAGE_WATCH_COLS, ALERTS_COLS   # G11 + G25 (2026-10-13): the daily key-page watch rows and the alert rows it writes
 from ladder_common import (AI_RANK_RUNS_COLS, AI_RANK_QUESTIONS_COLS, AI_RANK_ACTIONS_COLS, AI_RANK_SOURCES_COLS, AI_RANK_PRIORS_COLS,   # AIR (2026-11-06)
                            AIR_MONITOR_COLS, AIR_ONLY_COLS)
+from ladder_common import KI_RUNS_COLS, KI_COMP_COLS, KI_KW_COLS, KI_GAPS_COLS, KI_MONITOR_COLS   # KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §1-§2)
 from ladder_common import PROFILE_COLS   # G31 (2026-10-13): the business profile row, now with the stored style guide
 json.dump({'RUN_LEDGER': [c for c, _ in RUN_LEDGER_COLS], 'AI_PAGES': [c for c, _ in AI_PAGES_COLS], 'AI_TARGETS': [c for c, _ in AI_TARGETS_COLS], 'AI_GROWTH': [c for c, _ in AI_GROWTH_COLS], 'PROSPECT': [c for c, _ in PROSPECT_COLS],
            'CACHE': [c for c, _ in CACHE_COLS], 'AI_ANSWERS': [c for c, _ in AI_ANSWERS_COLS], 'AI_PROMPTS': [c for c, _ in AI_PROMPTS_COLS], 'MONITORS': [c for c, _ in MONITORS_COLS], 'AI_VIS': [c for c, _ in AI_VIS_COLS], 'AI_IMPORTS': [c for c, _ in AI_IMPORTS_COLS], 'AI_PROMPTS_STATE': ['last_asked_run', 'last_asked_at', 'asked_n_28d', 'refused_at_run'], 'LINK_OUTREACH': [c for c, _ in LINK_OUTREACH_COLS], 'LISTINGS': [c for c, _ in LISTINGS_COLS], 'LINK_IMPACT': [c for c, _ in LINK_IMPACT_COLS], 'LINKS': [c for c, _ in LINKS_COLS], 'SITES': [c for c, _ in SITES_COLS], 'PAGES': [c for c, _ in PAGES_COLS],
@@ -1260,7 +1262,10 @@ json.dump({'RUN_LEDGER': [c for c, _ in RUN_LEDGER_COLS], 'AI_PAGES': [c for c, 
            # AI visibility / AI Growth plan objects do not carry (core_until has one writer, AIR; the targets' three are set null by Growth's exact-column writer)
            'AI_RANK_RUNS': [c for c, _ in AI_RANK_RUNS_COLS], 'AI_RANK_QUESTIONS': [c for c, _ in AI_RANK_QUESTIONS_COLS], 'AI_RANK_ACTIONS': [c for c, _ in AI_RANK_ACTIONS_COLS],
            'AI_RANK_SOURCES': [c for c, _ in AI_RANK_SOURCES_COLS], 'AI_RANK_PRIORS': [c for c, _ in AI_RANK_PRIORS_COLS], 'AIR_MONITORS': list(AIR_MONITOR_COLS),
-           'AI_PROMPTS_AIR': list(AIR_ONLY_COLS['AI_PROMPTS']), 'AI_TARGETS_AIR': list(AIR_ONLY_COLS['AI_TARGETS'])}, open(os.path.join(HERE, 'harness', 'table_cols.json'), 'w'), indent=1)   # G19 site model + D5 content log: the rows these nodes write
+           'AI_PROMPTS_AIR': list(AIR_ONLY_COLS['AI_PROMPTS']), 'AI_TARGETS_AIR': list(AIR_ONLY_COLS['AI_TARGETS']),
+           # KI (2026-11-08, CONTRACTS.md §1-§2): the four keyword-intelligence tables and the three seo_monitors settings (the last three columns)
+           'KI_RUNS': [c for c, _ in KI_RUNS_COLS], 'KI_COMP': [c for c, _ in KI_COMP_COLS], 'KI_KW': [c for c, _ in KI_KW_COLS], 'KI_GAPS': [c for c, _ in KI_GAPS_COLS],
+           'KI_MONITORS': list(KI_MONITOR_COLS)}, open(os.path.join(HERE, 'harness', 'table_cols.json'), 'w'), indent=1)   # G19 site model + D5 content log: the rows these nodes write
 
 # ---- G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): ONE table of AI-panel cost cases, held by the engine and the app ----------------------
 # v5/data/ai_panel_cost_cases.json is written by harness/ai_panel_cases.js from AIP.cost (v5/code/_ai_panel.js). It is copied to the harness

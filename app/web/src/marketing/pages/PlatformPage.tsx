@@ -15,7 +15,7 @@ const HERO_FACTS = ['SEO, AEO and GEO', `${features.length} capabilities`, 'Page
 
 /** which capabilities carry each step of the weekly loop */
 const LOOP_MAP: Record<string, string[]> = {
-  Research: ['keyword-research', 'ai-visibility'],
+  Research: ['keyword-research', 'competitors', 'ai-visibility'],
   Plan: ['keyword-ladders', 'autopilot'],
   Write: ['content'],
   Publish: ['content', 'ai-growth', 'link-building'],

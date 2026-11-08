@@ -1,0 +1,317 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "dataforseo_labs",
+   "google",
+   "historical_serps",
+   "live"
+  ],
+  "data": {
+   "api": "dataforseo_labs",
+   "function": "historical_serps",
+   "se_type": "google",
+   "keyword": "e invoicing uae",
+   "location_code": 2784,
+   "language_code": "en"
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "se_type": "google",
+    "keyword": "albert einstein",
+    "location_code": 2840,
+    "language_code": "en",
+    "total_count": 2,
+    "items_count": 2,
+    "items": [
+     {
+      "se_type": "google",
+      "keyword": "albert einstein",
+      "type": "organic",
+      "se_domain": "google.com",
+      "location_code": 2840,
+      "language_code": "en",
+      "check_url": "https://www.google.com/search?q=albert%20einstein&hl=en&gl=US&ie=UTF-8&uule=w+CAIQIFISCQs2MuSEtepUEUK33kOSuTsc",
+      "datetime": "2026-05-14 18:21:50 +00:00",
+      "spell": null,
+      "item_types": [
+       "knowledge_graph",
+       "organic",
+       "...(+6 more)"
+      ],
+      "se_results_count": 83600000,
+      "items_count": 113,
+      "items": [
+       {
+        "se_type": "google",
+        "type": "knowledge_graph",
+        "rank_group": 1,
+        "rank_absolute": 1,
+        "position": "left",
+        "xpath": "/html[1]/body[1]/div[3]/div[1]/div[12]",
+        "title": "Albert Einstein",
+        "sub_title": null,
+        "description": null,
+        "card_id": null,
+        "url": null,
+        "image_url": null,
+        "logo_url": null,
+        "cid": null,
+        "items": [
+         {
+          "type": "knowledge_graph_images_item",
+          "rank_group": 0,
+          "rank_absolute": 0,
+          "position": "left",
+          "xpath": "/html[1]/body[1]/div[3]/div[1]/div[12]/div[3]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]",
+          "link": null,
+          "items": [
+           {
+            "type": "knowledge_graph_images_element",
+            "url": null,
+            "domain": null,
+            "alt": "Image of German born American theoretical physicist Albert Einstein (1879-1955) in his library study at home on 112 Mercer Street in Princeton, New Jersey, Unit...",
+            "image_url": "https://api.dataforseo.com/cdn/i/05142110-1087-0066-0000-cf70ee2503df:0",
+            "xpath": null
+           },
+           {
+            "type": "knowledge_graph_images_element",
+            "url": null,
+            "domain": null,
+            "alt": "Image of Albert Einstein - Wikipedia",
+            "image_url": "https://api.dataforseo.com/cdn/i/05142110-1087-0066-0000-cf70ee2503df:1",
+            "xpath": null
+           },
+           "...(+1 more)"
+          ]
+         },
+         {
+          "type": "knowledge_graph_row_item",
+          "rank_group": 0,
+          "rank_absolute": 0,
+          "position": "left",
+          "xpath": "/html[1]/body[1]/div[3]/div[1]/div[12]/div[5]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[1]/di...",
+          "title": "Born",
+          "data_attrid": "kc:/people/person:born",
+          "text": "Born : March 14, 1879, Ulm, Germany",
+          "links": [
+           {
+            "type": "link_element",
+            "title": "Ulm, Germany",
+            "url": "https://www.google.com/search?sca_esv=0cc88c52acce4ba2&hl=en&gl=US&q=Ulm&si=AL3DRZEaipurC9pse1xO2aCwuJWfKA_Njx1c7Qs8ap9rx81jmvS6tEXaD8ZWe_avPDeG_ahzJtLRsJurAnL5...",
+            "domain": "www.google.com",
+            "snippet": null,
+            "xpath": null
+           }
+          ]
+         },
+         "...(+7 more)"
+        ]
+       },
+       {
+        "se_type": "google",
+        "type": "organic",
+        "rank_group": 1,
+        "rank_absolute": 2,
+        "position": "left",
+        "xpath": "/html[1]/body[1]/div[3]/div[1]/div[12]/div[4]/div[1]/div[2]/div[1]/div[1]/div[2]/div[1]/div[1]",
+        "domain": "en.wikipedia.org",
+        "title": "Albert Einstein",
+        "url": "https://en.wikipedia.org/wiki/Albert_Einstein",
+        "breadcrumb": "https://en.wikipedia.org \u203a wiki \u203a Albert_Einstein",
+        "website_name": "Wikipedia",
+        "is_image": true,
+        "is_video": false,
+        "is_featured_snippet": false,
+        "is_malicious": false,
+        "checks": [
+         "is_image"
+        ],
+        "description": "Albert Einstein (14 March 1879 \u2013 18 April 1955) was a German-born theoretical physicist best known for developing the theory of relativity. Read more",
+        "pre_snippet": null,
+        "extended_snippet": null,
+        "amp_version": false,
+        "rating": null,
+        "highlighted": [
+         "theoretical physicist"
+        ],
+        "links": null,
+        "about_this_result": null,
+        "main_domain": "wikipedia.org",
+        "relative_url": "/wiki/Albert_Einstein",
+        "etv": 143887.30124020143,
+        "estimated_paid_traffic_cost": 97843.36484333698,
+        "clickstream_etv": null,
+        "rank_changes": {
+         "previous_rank_absolute": 2,
+         "is_new": true,
+         "is_up": false,
+         "is_down": false
+        },
+        "backlinks_info": {
+         "referring_domains": 6568,
+         "referring_main_domains": 5734,
+         "referring_pages": 86606,
+         "dofollow": 83834,
+         "backlinks": 104030,
+         "time_update": "2026-05-11 03:54:31 +00:00"
+        },
+        "rank_info": {
+         "page_rank": 577,
+         "main_domain_rank": 823
+        }
+       },
+       "...(+109 more)"
+      ]
+     },
+     {
+      "se_type": "google",
+      "keyword": "albert einstein",
+      "type": "organic",
+      "se_domain": "google.com",
+      "location_code": 2840,
+      "language_code": "en",
+      "check_url": "https://www.google.com/search?q=albert%20einstein&hl=en&gl=US&ie=UTF-8&uule=w+CAIQIFISCQs2MuSEtepUEUK33kOSuTsc",
+      "datetime": "2026-07-30 03:42:16 +00:00",
+      "spell": null,
+      "item_types": [
+       "knowledge_graph",
+       "organic",
+       "...(+6 more)"
+      ],
+      "se_results_count": 25400,
+      "items_count": 113,
+      "items": [
+       {
+        "se_type": "google",
+        "type": "knowledge_graph",
+        "rank_group": 1,
+        "rank_absolute": 1,
+        "position": "left",
+        "xpath": "/html[1]/body[1]/div[3]/div[1]/div[12]",
+        "title": "Albert Einstein",
+        "sub_title": null,
+        "description": null,
+        "card_id": null,
+        "url": null,
+        "image_url": null,
+        "logo_url": null,
+        "cid": null,
+        "items": [
+         {
+          "type": "knowledge_graph_images_item",
+          "rank_group": 0,
+          "rank_absolute": 0,
+          "position": "left",
+          "xpath": "/html[1]/body[1]/div[3]/div[1]/div[12]/div[3]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]",
+          "link": null,
+          "items": [
+           {
+            "type": "knowledge_graph_images_element",
+            "url": null,
+            "domain": null,
+            "alt": "Image of Albert Einstein - Global Governance Forum",
+            "image_url": "https://api.dataforseo.com/cdn/i/07242059-1087-0066-0000-b9bd8c241970:0",
+            "xpath": null
+           },
+           {
+            "type": "knowledge_graph_images_element",
+            "url": null,
+            "domain": null,
+            "alt": "Image of Albert Einstein | Biography, Relativity, Education ...",
+            "image_url": "https://api.dataforseo.com/cdn/i/07242059-1087-0066-0000-b9bd8c241970:1",
+            "xpath": null
+           },
+           "...(+1 more)"
+          ]
+         },
+         {
+          "type": "knowledge_graph_row_item",
+          "rank_group": 0,
+          "rank_absolute": 0,
+          "position": "left",
+          "xpath": "/html[1]/body[1]/div[3]/div[1]/div[12]/div[5]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[1]",
+          "title": "Born",
+          "data_attrid": "kc:/people/person:born",
+          "text": "Born : March 14, 1879, Ulm, Germany",
+          "links": [
+           {
+            "type": "link_element",
+            "title": "Ulm, Germany",
+            "url": "https://www.google.com/search?sca_esv=9b2bce15ce0d44fb&hl=en&gl=US&q=Ulm&si=APenkKlisoOXLiCMwraINHtdqOQii4CK9kOlkQc8Apn-pS60yQ9bqjR3LwAmDgv_Y4JfDSo1SIikE8O618VZ...",
+            "domain": "www.google.com",
+            "snippet": null,
+            "xpath": null
+           }
+          ]
+         },
+         "...(+7 more)"
+        ]
+       },
+       {
+        "se_type": "google",
+        "type": "organic",
+        "rank_group": 1,
+        "rank_absolute": 2,
+        "position": "left",
+        "xpath": "/html[1]/body[1]/div[3]/div[1]/div[12]/div[4]/div[1]/div[2]/div[1]/div[1]/div[2]/div[3]/div[1]",
+        "domain": "en.wikipedia.org",
+        "title": "Albert Einstein",
+        "url": "https://en.wikipedia.org/wiki/Albert_Einstein",
+        "breadcrumb": "https://en.wikipedia.org \u203a wiki \u203a Albert_Einstein",
+        "website_name": "Wikipedia",
+        "is_image": true,
+        "is_video": false,
+        "is_featured_snippet": false,
+        "is_malicious": false,
+        "checks": [
+         "is_image"
+        ],
+        "description": "Albert Einstein (14 March 1879 \u2013 18 April 1955) was a German-born theoretical physicist best known for developing the theory of relativity. Einstein also made\u00a0....",
+        "pre_snippet": null,
+        "extended_snippet": null,
+        "amp_version": false,
+        "rating": null,
+        "highlighted": [
+         "Albert Einstein"
+        ],
+        "links": null,
+        "about_this_result": null,
+        "main_domain": "wikipedia.org",
+        "relative_url": "/wiki/Albert_Einstein",
+        "etv": 143887.30124020143,
+        "estimated_paid_traffic_cost": 97843.36484333698,
+        "clickstream_etv": null,
+        "rank_changes": {
+         "previous_rank_absolute": 2,
+         "is_new": true,
+         "is_up": false,
+         "is_down": false
+        },
+        "backlinks_info": {
+         "referring_domains": 6119,
+         "referring_main_domains": 5573,
+         "referring_pages": 75957,
+         "dofollow": 73655,
+         "backlinks": 92543,
+         "time_update": "2026-07-21 03:06:07 +00:00"
+        },
+        "rank_info": {
+         "page_rank": 570,
+         "main_domain_rank": 817
+        }
+       },
+       "...(+109 more)"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

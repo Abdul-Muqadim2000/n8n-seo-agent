@@ -1,4 +1,5 @@
 /*__REACH__*/
+/*__SERP_URL__*/
 /*__LADDER_DUP__*/
 /*__RADIUS__*/
 /*__FIT_GATE__*/
@@ -324,8 +325,8 @@ const verdict = base.verdict || 'GO_WITH_CHANGES';
 const HEAD_SERP = (() => { for (const n of ['SERP Top 10 (Light Retry)', 'SERP Top 10 (Retry)', 'SERP Top 10']) {
   let a = null; try { a = $(n).first().json; } catch (e) { a = null; }
   const t = (((a || {}).tasks) || [])[0] || {}; if (Number(t.status_code) !== 20000) continue;
-  const items = ((((t.result || [])[0]) || {}).items || []).filter(Boolean);
-  const organic = items.filter(x => x.type === 'organic' && (x.url || x.domain)).sort((x, y) => (Number(x.rank_group) || 99) - (Number(y.rank_group) || 99));
+  const items = SU.fixItems(((((t.result || [])[0]) || {}).items || []).filter(Boolean));   // SERP-GOTO (2026-11-08): real hosts behind Google redirect links
+  const organic = items.filter(x => x.type === 'organic' && (x.url || x.domain) && !SU.unresolved(x)).sort((x, y) => (Number(x.rank_group) || 99) - (Number(y.rank_group) || 99));
   if (!organic.length) continue;
   return { node: n, organic,
     pages: organic.filter(x => !(Number(x.rank_group) > 10)).slice(0, 10).map(x => ({ rank: Number(x.rank_group) || null, domain: String(x.domain || ''), url: String(x.url || ''), title: String(x.title || '') })),
@@ -529,7 +530,7 @@ const one_page = { moved: [], left_out: [], kept: [] };
   // consultant"). The results page this run already bought for the main keyword (SERP Top 10 or its retries) is read here in full, at the
   // same depth and by the same URL rule as the rungs; competitors_summary stays the fallback when that answer is not in this run.
   const serpHeadUrls = (() => { if (!HEAD_SERP) return null;   // KW-LADDER: the one reading of the head's page (HEAD_SERP, above)
-    const u = [...new Set(HEAD_SERP.organic.map(x => KWI.urlKey(x.url || x.domain)).filter(Boolean))].slice(0, depthK);
+    const u = [...new Set(HEAD_SERP.organic.map(x => SU.exact(x) ? KWI.urlKey(x.url || x.domain) : SU.key(x)).filter(Boolean))].slice(0, depthK);   // SERP-GOTO: an approximate result by its SU key, as Ladder Clusters keys it
     return u.length >= KWI.CFG.min_urls ? u : null; })();
   const headUrls = serpHeadUrls || (base.competitors_summary || []).filter(c => c && Number(c.rank) >= 1 && Number(c.rank) <= depthK)
     .sort((a, b) => Number(a.rank) - Number(b.rank)).map(c => KWI.urlKey(c.url || c.domain)).filter(Boolean);

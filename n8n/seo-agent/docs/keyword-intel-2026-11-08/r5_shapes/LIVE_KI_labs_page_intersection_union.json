@@ -1,0 +1,466 @@
+{
+ "_source": "real LIVE response, api.dataforseo.com/v3, 2026-11-07 ~20:06-20:10 UTC (2026-11-08 PKT), KI L0 live confirmations; item arrays trimmed to 3, strings to 300 chars",
+ "calls": [
+  {
+   "call": "c02_page_intersection",
+   "status_code": 20000,
+   "cost": 0.01236,
+   "task": {
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "cost": 0.01236,
+    "path": [
+     "v3",
+     "dataforseo_labs",
+     "google",
+     "page_intersection",
+     "live"
+    ],
+    "data": {
+     "api": "dataforseo_labs",
+     "function": "page_intersection",
+     "se_type": "google",
+     "pages": {
+      "1": "https://www.dynamicssquare.com/*",
+      "2": "https://www.intwo.cloud/*"
+     },
+     "exclude_pages": [
+      "https://www.techand.ai/*"
+     ],
+     "intersection_mode": "union",
+     "location_code": 2784,
+     "language_code": "en",
+     "limit": 3
+    },
+    "result_count": 1,
+    "result": [
+     {
+      "se_type": "google",
+      "pages": {
+       "1": "https://www.dynamicssquare.com/*",
+       "2": "https://www.intwo.cloud/*"
+      },
+      "exclude_pages": [
+       "https://www.techand.ai/*"
+      ],
+      "location_code": 2784,
+      "language_code": "en",
+      "total_count": 29,
+      "items_count": 3,
+      "items": [
+       {
+        "se_type": "google",
+        "keyword_data": {
+         "se_type": "google",
+         "keyword": "erp system",
+         "location_code": 2784,
+         "language_code": "en",
+         "keyword_info": {
+          "se_type": "google",
+          "last_updated_time": "2026-10-15 16:31:05 +00:00",
+          "competition": 0.44999998807907104,
+          "competition_level": "MEDIUM",
+          "cpc": 9.6899995803833,
+          "search_volume": 4400,
+          "low_top_of_page_bid": 1.9100000858306885,
+          "high_top_of_page_bid": 10.449999809265137,
+          "categories": [
+           10019,
+           10019,
+           10168,
+           "...(+9 more)"
+          ],
+          "monthly_searches": [
+           {
+            "year": 2026,
+            "month": 9,
+            "search_volume": 4400
+           },
+           {
+            "year": 2026,
+            "month": 8,
+            "search_volume": 4400
+           },
+           {
+            "year": 2026,
+            "month": 7,
+            "search_volume": 4400
+           },
+           "...(+9 more)"
+          ],
+          "search_volume_trend": {
+           "monthly": 0,
+           "quarterly": 0,
+           "yearly": 0
+          }
+         },
+         "keyword_info_normalized_with_bing": null,
+         "keyword_info_normalized_with_clickstream": null,
+         "clickstream_keyword_info": null,
+         "keyword_properties": {
+          "se_type": "google",
+          "core_keyword": null,
+          "synonym_clustering_algorithm": "text_processing",
+          "keyword_difficulty": 29,
+          "detected_language": "en",
+          "is_another_language": false
+         },
+         "serp_info": null,
+         "avg_backlinks_info": {
+          "se_type": "google",
+          "backlinks": 2333.39990234375,
+          "dofollow": 1199.199951171875,
+          "referring_pages": 2192.699951171875,
+          "referring_domains": 606.4000244140625,
+          "referring_main_domains": 569.2000122070312,
+          "rank": 217.1999969482422,
+          "main_domain_rank": 622.2999877929688,
+          "last_updated_time": "2026-09-15 00:29:00 +00:00"
+         },
+         "search_intent_info": {
+          "se_type": "google",
+          "main_intent": "commercial",
+          "foreign_intent": null,
+          "last_updated_time": "2026-04-27 15:32:12 +00:00"
+         }
+        },
+        "intersection_result": {
+         "1": {
+          "se_type": "google",
+          "type": "organic",
+          "rank_group": 82,
+          "rank_absolute": 97,
+          "position": "left",
+          "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[1]/div[2]/div[2]/div[1]/div[1]/div[8]/div[1]/div[1]",
+          "domain": "www.dynamicssquare.com",
+          "title": "A Comprehensive Guide to ERP Systems",
+          "url": "https://www.dynamicssquare.com/guides/erp-system/",
+          "breadcrumb": "https://www.dynamicssquare.com › guides › erp-system",
+          "website_name": "Dynamics Square",
+          "is_image": false,
+          "is_video": false,
+          "is_featured_snippet": false,
+          "is_malicious": false,
+          "checks": null,
+          "description": "ERP systems automate many routine tasks, such as order processing, payroll, and inventory management. This automation reduces manual work, minimizes errors, and ... Read more",
+          "pre_snippet": null,
+          "extended_snippet": null,
+          "amp_version": false,
+          "rating": null,
+          "highlighted": [
+           "ERP systems"
+          ],
+          "links": [
+           {
+            "type": "link_element",
+            "title": "Read more",
+            "description": null,
+            "url": "https://www.dynamicssquare.com/guides/erp-system/#:~:text=ERP%20systems%20automate%20many%20routine,errors%2C%20and%20increases%20overall%20efficiency."
+           }
+          ],
+          "about_this_result": null,
+          "main_domain": "dynamicssquare.com",
+          "relative_url": "/guides/erp-system/",
+          "etv": 0.8647423386573792,
+          "estimated_paid_traffic_cost": 8.379353523254395,
+          "clickstream_etv": null,
+          "rank_changes": {
+           "previous_rank_absolute": null,
+           "is_new": true,
+           "is_up": false,
+           "is_down": false
+          },
+          "backlinks_info": {
+           "referring_domains": 2,
+           "referring_main_domains": 2,
+           "referring_pages": 4,
+           "dofollow": 2,
+           "backlinks": 6,
+           "time_update": "2026-10-11 03:54:03 +00:00"
+          },
+          "rank_info": {
+           "page_rank": 59,
+           "main_domain_rank": 271
+          }
+         },
+         "2": null
+        }
+       },
+       {
+        "se_type": "google",
+        "keyword_data": {
+         "se_type": "google",
+         "keyword": "al nasr contracting company llc",
+         "location_code": 2784,
+         "language_code": "en",
+         "keyword_info": {
+          "se_type": "google",
+          "last_updated_time": "2026-10-18 12:32:40 +00:00",
+          "competition": 0.09000000357627869,
+          "competition_level": "LOW",
+          "cpc": 0.41999998688697815,
+          "search_volume": 1000,
+          "low_top_of_page_bid": 0.5799999833106995,
+          "high_top_of_page_bid": 2.0399999618530273,
+          "categories": [
+           10004,
+           10282,
+           11141
+          ],
+          "monthly_searches": [
+           {
+            "year": 2026,
+            "month": 9,
+            "search_volume": 1000
+           },
+           {
+            "year": 2026,
+            "month": 8,
+            "search_volume": 1300
+           },
+           {
+            "year": 2026,
+            "month": 7,
+            "search_volume": 1300
+           },
+           "...(+9 more)"
+          ],
+          "search_volume_trend": {
+           "monthly": -23,
+           "quarterly": -23,
+           "yearly": 39
+          }
+         },
+         "keyword_info_normalized_with_bing": null,
+         "keyword_info_normalized_with_clickstream": null,
+         "clickstream_keyword_info": null,
+         "keyword_properties": {
+          "se_type": "google",
+          "core_keyword": "al nasr contracting company l l c",
+          "synonym_clustering_algorithm": "text_processing",
+          "keyword_difficulty": 0,
+          "detected_language": "en",
+          "is_another_language": false
+         },
+         "serp_info": null,
+         "avg_backlinks_info": {
+          "se_type": "google",
+          "backlinks": 1.5,
+          "dofollow": 0.699999988079071,
+          "referring_pages": 0.699999988079071,
+          "referring_domains": 0.20000000298023224,
+          "referring_main_domains": 0.20000000298023224,
+          "rank": 12.5,
+          "main_domain_rank": 472.3999938964844,
+          "last_updated_time": "2026-10-07 23:19:54 +00:00"
+         },
+         "search_intent_info": {
+          "se_type": "google",
+          "main_intent": "navigational",
+          "foreign_intent": null,
+          "last_updated_time": "2026-04-25 04:17:58 +00:00"
+         }
+        },
+        "intersection_result": {
+         "1": null,
+         "2": {
+          "se_type": "google",
+          "type": "organic",
+          "rank_group": 6,
+          "rank_absolute": 11,
+          "position": "left",
+          "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[2]/div[1]/div[2]/div[1]/div[1]/div[15]/div[1]/div[1]",
+          "domain": "www.intwo.cloud",
+          "title": "Al Nasr Contracting Company LLC Archives - Intwo",
+          "url": "https://www.intwo.cloud/company/al-nasr-contracting-company-llc/",
+          "breadcrumb": "https://www.intwo.cloud › company › al-nasr-contractin...",
+          "website_name": "intwo.cloud",
+          "is_image": false,
+          "is_video": false,
+          "is_featured_snippet": false,
+          "is_malicious": false,
+          "checks": null,
+          "description": "Imagine a cloud provider with your sense of urgency ... We've got you. Like we helped Al Nasr Contracting in construction increasing their efficiencies by 9%. Read more",
+          "pre_snippet": null,
+          "extended_snippet": null,
+          "amp_version": false,
+          "rating": null,
+          "highlighted": [
+           "Al Nasr Contracting",
+           "construction"
+          ],
+          "links": [
+           {
+            "type": "link_element",
+            "title": "Read more",
+            "description": null,
+            "url": "https://www.intwo.cloud/company/al-nasr-contracting-company-llc/#:~:text=Imagine%20a&text=Imagine%20a"
+           }
+          ],
+          "about_this_result": null,
+          "main_domain": "intwo.cloud",
+          "relative_url": "/company/al-nasr-contracting-company-llc/",
+          "etv": 1.2285828590393066,
+          "estimated_paid_traffic_cost": 0.5160048007965088,
+          "clickstream_etv": null,
+          "rank_changes": {
+           "previous_rank_absolute": null,
+           "is_new": true,
+           "is_up": false,
+           "is_down": false
+          },
+          "backlinks_info": null,
+          "rank_info": {
+           "page_rank": 0,
+           "main_domain_rank": 360
+          }
+         }
+        }
+       },
+       {
+        "se_type": "google",
+        "keyword_data": {
+         "se_type": "google",
+         "keyword": "microsoft dynamics",
+         "location_code": 2784,
+         "language_code": "en",
+         "keyword_info": {
+          "se_type": "google",
+          "last_updated_time": "2026-10-19 03:08:41 +00:00",
+          "competition": 0.2199999988079071,
+          "competition_level": "LOW",
+          "cpc": 7.230000019073486,
+          "search_volume": 880,
+          "low_top_of_page_bid": 1.6200000047683716,
+          "high_top_of_page_bid": 6.809999942779541,
+          "categories": [
+           10019,
+           10168,
+           10885,
+           "...(+1 more)"
+          ],
+          "monthly_searches": [
+           {
+            "year": 2026,
+            "month": 9,
+            "search_volume": 880
+           },
+           {
+            "year": 2026,
+            "month": 8,
+            "search_volume": 720
+           },
+           {
+            "year": 2026,
+            "month": 7,
+            "search_volume": 880
+           },
+           "...(+9 more)"
+          ],
+          "search_volume_trend": {
+           "monthly": 22,
+           "quarterly": 0,
+           "yearly": -12
+          }
+         },
+         "keyword_info_normalized_with_bing": null,
+         "keyword_info_normalized_with_clickstream": null,
+         "clickstream_keyword_info": null,
+         "keyword_properties": {
+          "se_type": "google",
+          "core_keyword": "dynamics microsoft",
+          "synonym_clustering_algorithm": "text_processing",
+          "keyword_difficulty": 30,
+          "detected_language": "en",
+          "is_another_language": false
+         },
+         "serp_info": null,
+         "avg_backlinks_info": {
+          "se_type": "google",
+          "backlinks": 46545.30078125,
+          "dofollow": 34487.5,
+          "referring_pages": 34661.80078125,
+          "referring_domains": 337.6000061035156,
+          "referring_main_domains": 315.6000061035156,
+          "rank": 220.39999389648438,
+          "main_domain_rank": 613.4000244140625,
+          "last_updated_time": "2026-09-18 19:33:17 +00:00"
+         },
+         "search_intent_info": {
+          "se_type": "google",
+          "main_intent": "navigational",
+          "foreign_intent": [
+           "transactional"
+          ],
+          "last_updated_time": "2026-04-29 15:08:16 +00:00"
+         }
+        },
+        "intersection_result": {
+         "1": {
+          "se_type": "google",
+          "type": "organic",
+          "rank_group": 13,
+          "rank_absolute": 17,
+          "position": "left",
+          "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[1]/div[2]/div[2]/div[1]/div[1]/div[8]/div[1]/div[1]",
+          "domain": "www.dynamicssquare.com",
+          "title": "Microsoft Dynamics 365 Suite For CRM & Cloud ERP ...",
+          "url": "https://www.dynamicssquare.com/products/microsoft-dynamics-365/",
+          "breadcrumb": "https://www.dynamicssquare.com › products › microsoft...",
+          "website_name": "Dynamics Square",
+          "is_image": false,
+          "is_video": false,
+          "is_featured_snippet": false,
+          "is_malicious": false,
+          "checks": null,
+          "description": "Microsoft Dynamics 365 is a SaaS-based suite of AI-driven ERP and CRM solutions that effortlessly connects your teams, processes, and data. This seamless ... Read more",
+          "pre_snippet": null,
+          "extended_snippet": null,
+          "amp_version": false,
+          "rating": null,
+          "highlighted": [
+           "Microsoft Dynamics 365"
+          ],
+          "links": [
+           {
+            "type": "link_element",
+            "title": "Read more",
+            "description": null,
+            "url": "https://www.dynamicssquare.com/products/microsoft-dynamics-365/#:~:text=Microsoft%20Dynamics%20365%20is%20a,and%20boosts%20your%20operational%20efficiency."
+           }
+          ],
+          "about_this_result": null,
+          "main_domain": "dynamicssquare.com",
+          "relative_url": "/products/microsoft-dynamics-365/",
+          "etv": 4.743067264556885,
+          "estimated_paid_traffic_cost": 34.29237747192383,
+          "clickstream_etv": null,
+          "rank_changes": {
+           "previous_rank_absolute": 30,
+           "is_new": false,
+           "is_up": true,
+           "is_down": false
+          },
+          "backlinks_info": {
+           "referring_domains": 69,
+           "referring_main_domains": 65,
+           "referring_pages": 139,
+           "dofollow": 114,
+           "backlinks": 142,
+           "time_update": "2026-10-11 03:03:53 +00:00"
+          },
+          "rank_info": {
+           "page_rank": 250,
+           "main_domain_rank": 271
+          }
+         },
+         "2": null
+        }
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

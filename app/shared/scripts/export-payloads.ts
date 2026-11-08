@@ -34,7 +34,7 @@ const noMail = { ...delivery, email: '' };
 const AI_PANEL_200 = aiRunPanelOf({ aiPromptsMax: 200, aiEngines: null, aiPersonaContext: true, aiPersonas: 'CFO, IT manager, Procurement', aiFanoutCheck: 50, aiDemandMarket: true });
 const AI_QUOTE = aiPanelQuoteBody(aiOnDemandRunCost(AI_PANEL_200), AI_PANEL_200.panel) as { dfs_usd: number; ai_usd: number; panel: number };
 
-type Case = { name: string; mode: keyof typeof RUN_SCHEMAS; input: Record<string, unknown>; site: SiteContext | null; mail?: boolean; expect: Record<string, unknown>; /** fields the server adds to the body (runs.ts) */ extra?: Record<string, unknown> };
+type Case = { name: string; mode: keyof typeof RUN_SCHEMAS; input: Record<string, unknown>; site: SiteContext | null; mail?: boolean; expect: Record<string, unknown>; /** fields the server adds to the body (runs.ts) */ extra?: Record<string, unknown>; /** KI: the workflow the front door starts ('ki' = SEOagentKIntel1) */ target?: 'ki' };
 
 const cases: Case[] = [
   {
@@ -305,13 +305,31 @@ const cases: Case[] = [
     site,
     expect: { mode: 'backlinks', competitors: ['azentio.com', 'cleartax.com'], free_only: true },
   },
+  // KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §3): the two keyword-intelligence modes go to SEOagentKIntel1, not the main
+  // workflow, so harness S23 runs them through Quick Validate and that workflow's own input node (KI Input) instead of Normalize Input
+  {
+    name: 'competitors (KI), the website\'s competitors and two seeds',
+    mode: 'competitors',
+    input: { siteId: SITE_ID, country: 'United Arab Emirates', seeds: ['odoo partner dubai', 'erp implementation uae'] },
+    site,
+    target: 'ki',
+    expect: { kind: 'competitors', stage: 'ki_competitors', domain: 'northwind-erp.com', site_id: 'site_northwind-erp-com', country: 'United Arab Emirates', competitors: ['azentio.com', 'cleartax.com'], seeds: ['odoo partner dubai', 'erp implementation uae'], ki_force: false },
+  },
+  {
+    name: 'keyword research (KI), declared competitors and a fresh reading',
+    mode: 'keyword_research',
+    input: { siteId: SITE_ID, country: 'United Arab Emirates', competitors: ['Rival.ae', 'www.other-erp.com'], kiForce: true },
+    site,
+    target: 'ki',
+    expect: { kind: 'keyword_research', stage: 'ki_research', domain: 'northwind-erp.com', competitors: ['rival.ae', 'other-erp.com'], seeds: [], ki_force: true },
+  },
 ];
 
 const fixtures = cases.map((c) => {
   const parsed = RUN_SCHEMAS[c.mode].safeParse({ mode: c.mode, ...c.input });
   if (!parsed.success) throw new Error(`${c.name}: ${JSON.stringify(parsed.error.issues)}`);
   const body = { ...compactBody(buildN8nPayload(parsed.data as never, c.site, c.mail === false ? noMail : delivery)), ...(c.extra ?? {}) };
-  return { name: c.name, headers: { 'x-forwarded-for': 'app:7a1c2d3e-org' }, body, expect: c.expect };
+  return { name: c.name, headers: { 'x-forwarded-for': 'app:7a1c2d3e-org' }, body, expect: c.expect, ...(c.target ? { target: c.target } : {}) };
 });
 
 writeFileSync(out, JSON.stringify(fixtures, null, 2) + '\n');

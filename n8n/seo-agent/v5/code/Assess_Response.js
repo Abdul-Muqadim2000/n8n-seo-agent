@@ -67,7 +67,7 @@ const careerA = !gate.ok && gate.reason === 'job search' && !!gate.career;
 const GATE_WORDS = { 'own brand': 'it is your own brand name', 'other brand': 'it names another company', government: 'it is a government service', navigational: 'people search it to reach one particular website',
   portal: 'it is a login, portal or status check', 'off topic': 'it is not about what you sell', 'too broad': 'it is too broad to win', 'job search': careerA ? 'people search it to find work or training' : 'people search it to find work', empty: 'there is no keyword' };
 // what KIND of page Google ranks here (KWI.serpPageTypes, the research's and the ladder's rule): lists, jobs, courses or service pages
-const kindsA = serpA.read && serpPagesA.length ? KWI.serpPageTypes(serpPagesA.map(p => ({ url: p.url || p.domain, title: p.title || '' })), {}) : null;
+const kindsA = serpA.read && serpPagesA.length ? KWI.serpPageTypes(serpPagesA.map(p => ({ url: p.url || p.domain, title: p.title || '', url_exact: p.url_exact })), {}) : null;
 const fit = gate.ok ? fitAi : 0;
 // F-KW (2026-10-20, finding 2): the gate judges topic distance only with 12+ topic words on file. Below that it passed everything and the
 // answer read as if the topic had been checked. Now the check says when there is not enough information to judge (and how to fix it), and a

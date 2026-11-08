@@ -1,0 +1,134 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "serp",
+   "google",
+   "ai_mode",
+   "live",
+   "advanced"
+  ],
+  "data": {
+   "api": "serp",
+   "function": "live",
+   "se": "google",
+   "se_type": "ai_mode",
+   "keyword": "best e invoicing software uae",
+   "location_code": 2784,
+   "language_code": "en"
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "keyword": "albert einstein",
+    "type": "ai_mode",
+    "se_domain": "google.com",
+    "location_code": 2840,
+    "language_code": "en",
+    "check_url": "https://www.google.com/search?q=albert%20einstein&hl=en&gl=US&udm=50&uule=w+CAIQIFISCQs2MuSEtepUEUK33kOSuTsc",
+    "datetime": "2026-11-04 04:56:23 +00:00",
+    "spell": null,
+    "refinement_chips": null,
+    "item_types": [
+     "ai_overview"
+    ],
+    "se_results_count": 0,
+    "items_count": 1,
+    "items": [
+     {
+      "type": "ai_overview",
+      "rank_group": 1,
+      "rank_absolute": 1,
+      "page": 1,
+      "position": "left",
+      "xpath": "/html[1]/body[1]/div[2]/div[1]/div[9]/div[1]/section[1]/div[1]/div[1]/div[3]/div[4]/div[1]/div[1]/div[1]/div[3]",
+      "markdown": "![Albert Einstein - Wikipedia](https://api.dataforseo.com/cdn/i/11040456-0001-0139-0000-b7235f195af4:16)\n![Albert Einstein | Biography, Relativity, Education .....",
+      "items": [
+       {
+        "type": "ai_overview_element",
+        "position": "left",
+        "title": null,
+        "text": null,
+        "markdown": "![Albert Einstein - Wikipedia](https://api.dataforseo.com/cdn/i/11040456-0001-0139-0000-b7235f195af4:8)\n![Albert Einstein | Biography, Relativity, Education ......",
+        "links": null,
+        "images": [
+         {
+          "type": "images_element",
+          "alt": "Albert Einstein - Wikipedia",
+          "url": null,
+          "image_url": "https://api.dataforseo.com/cdn/i/11040456-0001-0139-0000-b7235f195af4:12"
+         },
+         {
+          "type": "images_element",
+          "alt": "Albert Einstein | Biography, Relativity, Education ...",
+          "url": null,
+          "image_url": "https://api.dataforseo.com/cdn/i/11040456-0001-0139-0000-b7235f195af4:13"
+         },
+         "...(+2 more)"
+        ],
+        "references": null
+       },
+       {
+        "type": "ai_overview_element",
+        "position": "left",
+        "title": null,
+        "text": "Albert Einstein (14 March 1879 \u2013 18 April 1955) was a German-born theoretical physicist widely regarded as one of the most influential scientists in history. Be...",
+        "markdown": "**Albert Einstein** (14 March 1879 \u2013 18 April 1955) was a `German-born theoretical physicist widely regarded as one of the most influential scientists in histor...",
+        "links": null,
+        "images": null,
+        "references": [
+         {
+          "type": "ai_overview_reference",
+          "position": "left",
+          "source": "Wikipedia",
+          "domain": "en.wikipedia.org",
+          "url": "https://en.wikipedia.org/wiki/Albert_Einstein",
+          "title": "Albert Einstein - Wikipedia",
+          "text": "German-born theoretical physicist best known for developing the theory of relativity. has been called \"the world's most famous equ..."
+         },
+         {
+          "type": "ai_overview_reference",
+          "position": "left",
+          "source": "Facebook",
+          "domain": "www.facebook.com",
+          "url": "https://www.facebook.com/WorldJewishCong/videos/the-humor-and-wisdom-of-albert-einstein/2381801515615961/",
+          "title": "The humor and wisdom of Albert Einstein",
+          "text": "Best known for developing the theory of relativity, Einstein also made important contributions to quantum mechanics, and was thus ..."
+         }
+        ]
+       },
+       "...(+6 more)"
+      ],
+      "references": [
+       {
+        "type": "ai_overview_reference",
+        "position": "right",
+        "source": "Wikipedia",
+        "domain": "en.wikipedia.org",
+        "url": "https://en.wikipedia.org/wiki/Albert_Einstein",
+        "title": "Albert Einstein - Wikipedia",
+        "text": "German-born theoretical physicist best known for developing the theory of relativity. has been called \"the world's most famous equation\"."
+       },
+       {
+        "type": "ai_overview_reference",
+        "position": "right",
+        "source": "NobelPrize.org",
+        "domain": "www.nobelprize.org",
+        "url": "https://www.nobelprize.org/prizes/physics/1921/einstein/biographical/",
+        "title": "Albert Einstein \u2013 Biographical - NobelPrize.org",
+        "text": "Special Relativity (1905), Brownian movement explanation, photon theory foundation, General Relativity (1916), unified field theories, quantum theory of gases."
+       },
+       "...(+9 more)"
+      ],
+      "rectangle": null
+     }
+    ]
+   }
+  ]
+ }
+}

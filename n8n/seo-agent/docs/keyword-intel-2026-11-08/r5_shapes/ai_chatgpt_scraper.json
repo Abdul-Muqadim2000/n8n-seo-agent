@@ -1,0 +1,157 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "ai_optimization",
+   "chat_gpt",
+   "llm_scraper",
+   "live",
+   "advanced"
+  ],
+  "data": {
+   "api": "ai_optimization",
+   "function": "llm_scraper",
+   "se": "chat_gpt",
+   "keyword": "best e invoicing software in the UAE",
+   "location_code": 2784,
+   "language_code": "en"
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "keyword": "albert einstein",
+    "location_code": 2840,
+    "language_code": "en",
+    "model": "gpt-6",
+    "check_url": "https://chatgpt.com/?prompt=albert%20einstein&hints=search",
+    "datetime": "2026-11-07 16:16:16 +00:00",
+    "markdown": "![PHILIPPE HALSMAN (1906-1979) , Albert Einstein, 1947  | Christie's](https://images.openai.com/static-rsc-4/pEOekYJROw_wzcMEd_7Z6rCVsQ4LLgxgG8t1J4_vaLoDIuZ34xf...",
+    "search_results": [
+     {
+      "type": "chatgpt_search_result",
+      "url": "https://www.nobelprize.org/laureate/26%26lang%3Den?utm_source=chatgpt.com",
+      "domain": "www.nobelprize.org",
+      "title": "Albert Einstein \u2013 Facts - NobelPrize.org",
+      "description": "ALBERT EINSTEIN  FACTS  [Select]  Image: Albert Einstein  Photo from the Nobel Foundation archive.  Albert Einstein Nobel Prize in Physics 1921  Born: 14 March ...",
+      "breadcrumb": "nobelprize.org"
+     },
+     {
+      "type": "chatgpt_search_result",
+      "url": "https://www.nobelprize.org/prizes/physics/1921/einstein/biographical/?source=interbiznet&utm_source=chatgpt.com",
+      "domain": "www.nobelprize.org",
+      "title": "Albert Einstein \u2013 Biographical - NobelPrize.org",
+      "description": "ALBERT EINSTEIN  BIOGRAPHICAL  [Select]  Questions and Answers on Albert Einstein  Image: Albert EinsteinA lbert Einstein was born at Ulm, in W\u00fcrttemberg, Germa...",
+      "breadcrumb": "nobelprize.org"
+     },
+     "...(+10 more)"
+    ],
+    "sources": [
+     {
+      "type": "chat_gpt_source",
+      "title": "Albert Einstein \u2013 Facts",
+      "snippet": null,
+      "domain": "www.nobelprize.org",
+      "url": "https://www.nobelprize.org/laureate/26%26lang%3Den?utm_source=chatgpt.com",
+      "thumbnail": null,
+      "source_name": "Nobel Prize",
+      "publication_date": "2026-05-17 00:00:00 +00:00",
+      "markdown": null
+     },
+     {
+      "type": "chat_gpt_source",
+      "title": "Albert Einstein \u2013 Biographical",
+      "snippet": null,
+      "domain": "www.nobelprize.org",
+      "url": "https://www.nobelprize.org/prizes/physics/1921/einstein/biographical/?source=interbiznet&utm_source=chatgpt.com",
+      "thumbnail": null,
+      "source_name": "Nobel Prize",
+      "publication_date": null,
+      "markdown": null
+     },
+     "...(+5 more)"
+    ],
+    "fan_out_queries": [
+     "Albert Einstein biography scientific contributions Nobel Prize reliable sources"
+    ],
+    "brand_entities": [
+     {
+      "type": "chat_gpt_brand_entity",
+      "title": "Theoretical physicist",
+      "category": "people",
+      "markdown": "Albert Einstein",
+      "urls": null
+     }
+    ],
+    "se_results_count": 0,
+    "item_types": [
+     "chat_gpt_images",
+     "chat_gpt_text"
+    ],
+    "items_count": 10,
+    "items": [
+     {
+      "type": "chat_gpt_images",
+      "rank_group": 1,
+      "rank_absolute": 1,
+      "markdown": "![PHILIPPE HALSMAN (1906-1979) , Albert Einstein, 1947  | Christie's](https://images.openai.com/static-rsc-4/pEOekYJROw_wzcMEd_7Z6rCVsQ4LLgxgG8t1J4_vaLoDIuZ34xf...",
+      "items": [
+       {
+        "type": "chat_gpt_images_element",
+        "url": "https://www.christies.com/lot/lot-philippe-halsman-1906-1979-albert-einstein-1947-5544773/",
+        "alt": "PHILIPPE HALSMAN (1906-1979) , Albert Einstein, 1947  | Christie's",
+        "image_url": "https://images.openai.com/static-rsc-4/pEOekYJROw_wzcMEd_7Z6rCVsQ4LLgxgG8t1J4_vaLoDIuZ34xfBOPUFgISuGwWeglzv7KeL7khMjowYU4C6ThpiwJ1P1sI5_cJI-0A0t7DoeIl2CU-B4PdU-...",
+        "markdown": "![PHILIPPE HALSMAN (1906-1979) , Albert Einstein, 1947  | Christie's](https://images.openai.com/static-rsc-4/pEOekYJROw_wzcMEd_7Z6rCVsQ4LLgxgG8t1J4_vaLoDIuZ34xf..."
+       }
+      ]
+     },
+     {
+      "type": "chat_gpt_text",
+      "rank_group": 1,
+      "rank_absolute": 2,
+      "markdown": "\n\n# Albert Einstein\n\nMarch 14, 1879 \u2013 April 18, 1955\n\n**German-born theoretical physicist**\n\nBest known for the theory of relativity and the equation \\(E=mc^2\\)...",
+      "sources": [
+       {
+        "type": "chat_gpt_source",
+        "title": "Albert Einstein \u2013 Facts",
+        "snippet": null,
+        "domain": "www.nobelprize.org",
+        "url": "https://www.nobelprize.org/laureate/26%26lang%3Den?utm_source=chatgpt.com",
+        "thumbnail": null,
+        "source_name": "Nobel Prize",
+        "publication_date": "2026-05-17 00:00:00 +00:00",
+        "markdown": null
+       },
+       {
+        "type": "chat_gpt_source",
+        "title": "Albert Einstein \u2013 Biographical",
+        "snippet": null,
+        "domain": "www.nobelprize.org",
+        "url": "https://www.nobelprize.org/prizes/physics/1921/einstein/biographical/?source=interbiznet&utm_source=chatgpt.com",
+        "thumbnail": null,
+        "source_name": "Nobel Prize",
+        "publication_date": null,
+        "markdown": null
+       },
+       "...(+2 more)"
+      ],
+      "brand_entities": [
+       {
+        "type": "chat_gpt_brand_entity",
+        "title": "Theoretical physicist",
+        "category": "people",
+        "markdown": "Albert Einstein",
+        "urls": null
+       }
+      ]
+     },
+     "...(+8 more)"
+    ]
+   }
+  ]
+ }
+}

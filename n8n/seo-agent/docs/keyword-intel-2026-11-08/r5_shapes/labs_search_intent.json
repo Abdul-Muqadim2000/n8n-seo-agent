@@ -1,0 +1,56 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "dataforseo_labs",
+   "google",
+   "search_intent",
+   "live"
+  ],
+  "data": {
+   "api": "dataforseo_labs",
+   "function": "search_intent",
+   "se_type": "google",
+   "keywords": [
+    "e invoicing uae",
+    "buy erp software"
+   ],
+   "language_code": "en"
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "items_count": 4,
+    "items": [
+     {
+      "keyword": "login page",
+      "keyword_intent": {
+       "label": "navigational",
+       "probability": 0.9999
+      },
+      "secondary_keyword_intents": null
+     },
+     {
+      "keyword": "transmitter",
+      "keyword_intent": {
+       "label": "transactional",
+       "probability": 0.5211
+      },
+      "secondary_keyword_intents": [
+       {
+        "label": "informational",
+        "probability": 0.3911
+       }
+      ]
+     },
+     "...(+2 more)"
+    ]
+   }
+  ]
+ }
+}

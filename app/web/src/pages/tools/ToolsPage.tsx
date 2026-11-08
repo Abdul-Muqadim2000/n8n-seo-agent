@@ -4,9 +4,11 @@ import { quoteLabel } from '@/lib/credits';
 import type { ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { ArrowRight, CheckCircle2, Clock, Coins, Compass, Globe, History, Lock, PackageCheck, PenLine, Plus, Radar, Settings, Sparkles, Telescope, TriangleAlert, Wrench } from 'lucide-react';
-import { MODE_CATEGORIES, MODES, type ModeId, type ModeInfo, type Site } from '@seo/shared';
+import { modeCategoryLabel, MODES, type ModeId, type ModeInfo, type Site } from '@seo/shared';
 import { lastSite, useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
+import { kiModeOffered } from '@/lib/ki';
+import { useKi } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
@@ -34,7 +36,7 @@ const STRETCH = 'after:absolute after:inset-0 after:rounded-xl';
 
 /** The tools grouped by what you want to achieve (presentation only; every tool keeps its own category label on its card). */
 const GOALS: { id: string; title: string; description: string; short: string; icon: ReactNode; modes: ModeId[] }[] = [
-  { id: 'research', title: 'Research', description: 'Find the keywords worth winning and what your site says about you.', short: 'Keywords and your site', icon: <Telescope />, modes: ['discover', 'verdict', 'describe'] },
+  { id: 'research', title: 'Research', description: 'Find the keywords worth winning and what your site says about you.', short: 'Keywords and your site', icon: <Telescope />, modes: ['discover', 'verdict', 'describe', 'competitors', 'keyword_research'] },
   { id: 'create', title: 'Create', description: 'Pages, proof and the author behind them.', short: 'Pages and proof', icon: <PenLine />, modes: ['keyword', 'case_study', 'profile'] },
   { id: 'audit', title: 'Audit & track', description: 'Know where the site stands, page by page and week by week.', short: 'Health, pages, weekly tracking', icon: <Radar />, modes: ['audit', 'track', 'published', 'checkin'] },
   { id: 'grow', title: 'Grow visibility', description: 'Climb to a head term, get named by AI assistants and earn links.', short: 'Ladders, AI answers, links', icon: <Compass />, modes: ['ladder', 'ai_visibility', 'backlinks'] },
@@ -54,7 +56,9 @@ export default function ToolsPage() {
   const [params, setParams] = useSearchParams();
   const remembered = lastSite(org.id);
   const site = sites.find((s) => s.id === params.get('site')) ?? sites.find((s) => s.id === remembered && s.verifiedAt) ?? sites.find((s) => s.verifiedAt) ?? sites[0] ?? null;
-  const modes = Object.values(MODES);
+  // KI (2026-11-08): Competitors and Keyword research are offered only for a website whose KI this person may see (On, or Trial for platform admins)
+  const kiVisible = !!useKi(org.id, site?.verifiedAt ? site.id : null).data?.visible;
+  const modes = Object.values(MODES).filter((m) => kiModeOffered(m.id, kiVisible));
 
   const pickSite = (id: string) =>
     setParams(
@@ -69,7 +73,9 @@ export default function ToolsPage() {
   // every tool lands in one goal; a tool added later without a goal shows under "More tools"
   const grouped = new Set(GOALS.flatMap((g) => g.modes));
   const rest = modes.filter((m) => !grouped.has(m.id)).map((m) => m.id);
-  const goals = rest.length ? [...GOALS, { id: 'more', title: 'More tools', description: 'Everything else.', short: 'Everything else', icon: <Wrench />, modes: rest }] : GOALS;
+  // KI (review UX M7): a goal lists only the tools offered for this website, so its count and cards stay as before where KI is not offered
+  const offered = GOALS.map((g) => ({ ...g, modes: g.modes.filter((id) => modes.some((m) => m.id === id)) }));
+  const goals = rest.length ? [...offered, { id: 'more', title: 'More tools', description: 'Everything else.', short: 'Everything else', icon: <Wrench />, modes: rest }] : offered;
   const recommended = recommendedMode(site);
 
   return (
@@ -95,7 +101,8 @@ export default function ToolsPage() {
         )}
 
         {goals.map((g) => {
-          const list = g.modes.map((id) => MODES[id]).filter(Boolean);
+          // KI (review UX M7): the two new tools sit in Research, shown only where they are offered (Off websites: the goal as before)
+          const list = g.modes.filter((id) => modes.some((m) => m.id === id)).map((id) => MODES[id]).filter(Boolean);
           if (!list.length) return null;
           return (
             <section key={g.id} id={`goal-${g.id}`} aria-labelledby={`goal-${g.id}-title`} className="scroll-mt-6">
@@ -137,7 +144,8 @@ function HeroChip({ icon, children }: { icon: ReactNode; children: ReactNode }) 
 /** The website the tools run on, how many tools it unlocks and the recommended next tool. */
 function ToolsHero({ site, recommended, goals, onPickSite }: { site: Site | null; recommended: ModeId | null; goals: typeof GOALS; onPickSite: (id: string) => void }) {
   const { org, sites, can } = useOrgCtx();
-  const all = Object.values(MODES);
+  const kiVisible = !!useKi(org.id, site?.verifiedAt ? site.id : null).data?.visible;
+  const all = Object.values(MODES).filter((m) => kiModeOffered(m.id, kiVisible));
   const verified = !!site?.verifiedAt;
   const ready = all.filter((m) => !m.siteBound || verified).length;
   const headline = !site
@@ -326,7 +334,7 @@ function ToolCard({ info, site, recommended }: { info: ModeInfo; site: Site | nu
       </div>
       <p className="mt-4 flex items-center gap-1.5 text-xs font-medium text-ink-3 [&_svg]:size-3.5">
         {CATEGORY_ICON[info.category]}
-        {MODE_CATEGORIES[info.category]}
+        {modeCategoryLabel(info)}
       </p>
       <h3 className="mt-1 font-display text-base font-semibold tracking-[-0.01em] text-ink">{info.title}</h3>
       <p className="mt-1 text-[13px] leading-relaxed text-ink-2">{info.summary}</p>

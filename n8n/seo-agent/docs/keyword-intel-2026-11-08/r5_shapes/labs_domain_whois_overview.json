@@ -1,0 +1,168 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "dataforseo_labs",
+   "google",
+   "domain_whois_overview",
+   "live"
+  ],
+  "data": {
+   "api": "dataforseo_labs",
+   "function": "domain_whois_overview",
+   "se_type": "google",
+   "limit": 2
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "se_type": "google",
+    "total_count": 134719139,
+    "items_count": 2,
+    "offset": 0,
+    "offset_token": "REDACTED_OFFSET_TOKEN",
+    "items": [
+     {
+      "se_type": "google",
+      "domain": "youtube.com",
+      "created_datetime": "2005-02-15 05:13:12 +00:00",
+      "changed_datetime": "2026-01-14 10:29:14 +00:00",
+      "expiration_datetime": "2027-02-15 05:13:12 +00:00",
+      "updated_datetime": "2026-02-10 06:45:47 +00:00",
+      "first_seen": "2020-10-07 00:00:00 +00:00",
+      "epp_status_codes": [
+       "client_delete_prohibited",
+       "client_transfer_prohibited",
+       "...(+4 more)"
+      ],
+      "tld": "com",
+      "registered": true,
+      "registrar": "MarkMonitor Inc.",
+      "metrics": {
+       "organic": {
+        "pos_1": 13371493,
+        "pos_2_3": 24180129,
+        "pos_4_10": 142364211,
+        "pos_11_20": 125820034,
+        "pos_21_30": 54368559,
+        "pos_31_40": 27000484,
+        "pos_41_50": 14657153,
+        "pos_51_60": 7774795,
+        "pos_61_70": 4001546,
+        "pos_71_80": 1833850,
+        "pos_81_90": 763066,
+        "pos_91_100": 256580,
+        "etv": 16069891035.63298,
+        "count": 416391900,
+        "estimated_paid_traffic_cost": 10105631377.206005,
+        "clickstream_etv": null,
+        "clickstream_gender_distribution": null,
+        "clickstream_age_distribution": null
+       },
+       "paid": {
+        "pos_1": 20,
+        "pos_2_3": 6,
+        "pos_4_10": 0,
+        "pos_11_20": 0,
+        "pos_21_30": 0,
+        "pos_31_40": 0,
+        "pos_41_50": 0,
+        "pos_51_60": 0,
+        "pos_61_70": 0,
+        "pos_71_80": 0,
+        "pos_81_90": 0,
+        "pos_91_100": 0,
+        "etv": 1042.2630096673965,
+        "count": 26,
+        "estimated_paid_traffic_cost": 1522.2112069129944,
+        "clickstream_etv": null,
+        "clickstream_gender_distribution": null,
+        "clickstream_age_distribution": null
+       }
+      },
+      "backlinks_info": {
+       "referring_domains": 18146993,
+       "referring_main_domains": 14400501,
+       "referring_pages": 20443277137,
+       "dofollow": 17720465071,
+       "backlinks": 27094927189,
+       "time_update": "2026-10-16 23:25:23 +00:00"
+      }
+     },
+     {
+      "se_type": "google",
+      "domain": "facebook.com",
+      "created_datetime": "1997-03-29 05:00:00 +00:00",
+      "changed_datetime": "2020-03-10 18:53:59 +00:00",
+      "expiration_datetime": "2028-03-30 04:00:00 +00:00",
+      "updated_datetime": "2021-06-11 19:57:33 +00:00",
+      "first_seen": "2020-10-07 00:00:00 +00:00",
+      "epp_status_codes": [
+       "client_delete_prohibited",
+       "client_transfer_prohibited",
+       "...(+4 more)"
+      ],
+      "tld": "com",
+      "registered": true,
+      "registrar": null,
+      "metrics": {
+       "organic": {
+        "pos_1": 12044071,
+        "pos_2_3": 47896524,
+        "pos_4_10": 132571947,
+        "pos_11_20": 79983619,
+        "pos_21_30": 34172700,
+        "pos_31_40": 17646196,
+        "pos_41_50": 10087669,
+        "pos_51_60": 5791791,
+        "pos_61_70": 3328849,
+        "pos_71_80": 1841264,
+        "pos_81_90": 988573,
+        "pos_91_100": 418402,
+        "etv": 14035667786.415266,
+        "count": 346771605,
+        "estimated_paid_traffic_cost": 13146510328.023993,
+        "clickstream_etv": null,
+        "clickstream_gender_distribution": null,
+        "clickstream_age_distribution": null
+       },
+       "paid": {
+        "pos_1": 582,
+        "pos_2_3": 28,
+        "pos_4_10": 4,
+        "pos_11_20": 0,
+        "pos_21_30": 0,
+        "pos_31_40": 0,
+        "pos_41_50": 0,
+        "pos_51_60": 0,
+        "pos_61_70": 0,
+        "pos_71_80": 0,
+        "pos_81_90": 0,
+        "pos_91_100": 0,
+        "etv": 167608.1580195129,
+        "count": 614,
+        "estimated_paid_traffic_cost": 349489.6561935842,
+        "clickstream_etv": null,
+        "clickstream_gender_distribution": null,
+        "clickstream_age_distribution": null
+       }
+      },
+      "backlinks_info": {
+       "referring_domains": 34904395,
+       "referring_main_domains": 28666109,
+       "referring_pages": 43505920376,
+       "dofollow": 36048446258,
+       "backlinks": 58323780948,
+       "time_update": "2026-09-14 13:26:02 +00:00"
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

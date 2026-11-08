@@ -1,0 +1,108 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "backlinks",
+   "referring_domains",
+   "live"
+  ],
+  "data": {
+   "api": "backlinks",
+   "function": "referring_domains",
+   "target": "techand.ai",
+   "limit": 5,
+   "backlinks_status_type": "live"
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "target": "dataforseo.com",
+    "total_count": 45,
+    "items_count": 10,
+    "items": [
+     {
+      "type": "backlinks_referring_domain",
+      "domain": "guetsel.de",
+      "rank": 0,
+      "backlinks": 76850,
+      "first_seen": "2019-01-18 21:55:16 +00:00",
+      "lost_date": null,
+      "backlinks_spam_score": 24,
+      "broken_backlinks": 0,
+      "broken_pages": 0,
+      "referring_domains": 2,
+      "referring_domains_nofollow": 0,
+      "referring_main_domains": 1,
+      "referring_main_domains_nofollow": 0,
+      "referring_ips": 2,
+      "referring_subnets": 2,
+      "referring_pages": 76844,
+      "referring_pages_nofollow": 0,
+      "referring_links_tld": {
+       "de": 76844
+      },
+      "referring_links_types": {
+       "anchor": 52754,
+       "redirect": 24090
+      },
+      "referring_links_attributes": {
+       "noopener": 27
+      },
+      "referring_links_platform_types": {
+       "organization": 52754
+      },
+      "referring_links_semantic_locations": {
+       "": 76844
+      },
+      "referring_links_countries": {
+       "DE": 76844
+      }
+     },
+     {
+      "type": "backlinks_referring_domain",
+      "domain": "felo.ai",
+      "rank": 0,
+      "backlinks": 32740,
+      "first_seen": "2026-10-30 15:58:51 +00:00",
+      "lost_date": null,
+      "backlinks_spam_score": 0,
+      "broken_backlinks": 0,
+      "broken_pages": 0,
+      "referring_domains": 1,
+      "referring_domains_nofollow": 1,
+      "referring_main_domains": 1,
+      "referring_main_domains_nofollow": 1,
+      "referring_ips": 1,
+      "referring_subnets": 1,
+      "referring_pages": 19693,
+      "referring_pages_nofollow": 19693,
+      "referring_links_tld": {
+       "ai": 19693
+      },
+      "referring_links_types": {
+       "anchor": 19693
+      },
+      "referring_links_attributes": {
+       "nofollow": 19693
+      },
+      "referring_links_platform_types": {
+       "unknown": 19693
+      },
+      "referring_links_semantic_locations": {
+       "section": 19693
+      },
+      "referring_links_countries": {
+       "AI": 19693
+      }
+     },
+     "...(+8 more)"
+    ]
+   }
+  ]
+ }
+}

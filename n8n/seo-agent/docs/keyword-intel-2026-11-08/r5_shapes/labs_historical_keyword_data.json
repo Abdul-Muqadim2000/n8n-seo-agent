@@ -1,0 +1,203 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "dataforseo_labs",
+   "google",
+   "historical_keyword_data",
+   "live"
+  ],
+  "data": {
+   "api": "dataforseo_labs",
+   "function": "historical_keyword_data",
+   "se_type": "google",
+   "keywords": [
+    "e invoicing uae"
+   ],
+   "location_code": 2784,
+   "language_code": "en"
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "se_type": "google",
+    "location_code": 2840,
+    "language_code": "en",
+    "items_count": 2,
+    "items": [
+     {
+      "se_type": "google",
+      "keyword": "phone",
+      "location_code": 2840,
+      "language_code": "en",
+      "history": [
+       {
+        "year": 2026,
+        "month": 9,
+        "keyword_info": {
+         "se_type": "google",
+         "last_updated_time": "2026-10-19 17:25:00 +00:00",
+         "competition": 0.54,
+         "competition_level": "MEDIUM",
+         "cpc": 4,
+         "search_volume": 673000,
+         "low_top_of_page_bid": 2.05,
+         "high_top_of_page_bid": 7.03,
+         "categories": [
+          10007,
+          10878,
+          "...(+1 more)"
+         ],
+         "monthly_searches": [
+          {
+           "year": 2026,
+           "month": 9,
+           "search_volume": 1000000
+          },
+          {
+           "year": 2026,
+           "month": 8,
+           "search_volume": 823000
+          },
+          "...(+10 more)"
+         ],
+         "search_volume_trend": {
+          "monthly": 22,
+          "quarterly": 49,
+          "yearly": 49
+         }
+        }
+       },
+       {
+        "year": 2026,
+        "month": 8,
+        "keyword_info": {
+         "se_type": "google",
+         "last_updated_time": "2026-09-16 03:19:59 +00:00",
+         "competition": 0.76,
+         "competition_level": "HIGH",
+         "cpc": 4.63,
+         "search_volume": 673000,
+         "low_top_of_page_bid": 2.92,
+         "high_top_of_page_bid": 8,
+         "categories": [
+          10007,
+          10878,
+          "...(+1 more)"
+         ],
+         "monthly_searches": [
+          {
+           "year": 2026,
+           "month": 8,
+           "search_volume": 823000
+          },
+          {
+           "year": 2026,
+           "month": 7,
+           "search_volume": 673000
+          },
+          "...(+10 more)"
+         ],
+         "search_volume_trend": {
+          "monthly": 22,
+          "quarterly": 50,
+          "yearly": 50
+         }
+        }
+       },
+       "...(+59 more)"
+      ]
+     },
+     {
+      "se_type": "google",
+      "keyword": "watch",
+      "location_code": 2840,
+      "language_code": "en",
+      "history": [
+       {
+        "year": 2026,
+        "month": 9,
+        "keyword_info": {
+         "se_type": "google",
+         "last_updated_time": "2026-10-17 12:07:37 +00:00",
+         "competition": 0.94,
+         "competition_level": "HIGH",
+         "cpc": 1.46,
+         "search_volume": 550000,
+         "low_top_of_page_bid": 0.54,
+         "high_top_of_page_bid": 2.4,
+         "categories": [
+          10021,
+          10171,
+          "...(+1 more)"
+         ],
+         "monthly_searches": [
+          {
+           "year": 2026,
+           "month": 9,
+           "search_volume": 673000
+          },
+          {
+           "year": 2026,
+           "month": 8,
+           "search_volume": 550000
+          },
+          "...(+10 more)"
+         ],
+         "search_volume_trend": {
+          "monthly": 22,
+          "quarterly": 22,
+          "yearly": 22
+         }
+        }
+       },
+       {
+        "year": 2026,
+        "month": 8,
+        "keyword_info": {
+         "se_type": "google",
+         "last_updated_time": "2026-09-14 02:18:35 +00:00",
+         "competition": 0.95,
+         "competition_level": "HIGH",
+         "cpc": 1.39,
+         "search_volume": 550000,
+         "low_top_of_page_bid": 0.6,
+         "high_top_of_page_bid": 2.9,
+         "categories": [
+          10021,
+          10171,
+          "...(+1 more)"
+         ],
+         "monthly_searches": [
+          {
+           "year": 2026,
+           "month": 8,
+           "search_volume": 550000
+          },
+          {
+           "year": 2026,
+           "month": 7,
+           "search_volume": 550000
+          },
+          "...(+10 more)"
+         ],
+         "search_volume_trend": {
+          "monthly": 0,
+          "quarterly": 0,
+          "yearly": 22
+         }
+        }
+       },
+       "...(+59 more)"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

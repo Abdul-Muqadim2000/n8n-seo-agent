@@ -1,0 +1,49 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "ai_optimization",
+   "gemini",
+   "llm_responses",
+   "live"
+  ],
+  "data": {
+   "api": "ai_optimization",
+   "function": "llm_responses",
+   "se": "gemini",
+   "user_prompt": "best e invoicing software in the UAE",
+   "model_name": "gemini-2.5-flash",
+   "max_output_tokens": 300
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "model_name": "gemini-2.5-flash",
+    "input_tokens": 22,
+    "output_tokens": 958,
+    "reasoning_tokens": 0,
+    "web_search": false,
+    "money_spent": 0.0024016,
+    "datetime": "2026-11-06 10:15:56 +00:00",
+    "items": [
+     {
+      "type": "message",
+      "sections": [
+       {
+        "type": "text",
+        "text": "The amusement park business in France, like in many other countries, has shown remarkable resilience and continues to be a relevant sector, though it's importan...",
+        "annotations": null
+       }
+      ]
+     }
+    ],
+    "fan_out_queries": null
+   }
+  ]
+ }
+}

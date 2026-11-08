@@ -285,6 +285,8 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Weekly rank tracking', hint: 'Every rung and the head term, desktop and phone', values: [true, true, true] },
       { label: 'Search features per keyword', hint: 'AI Overview, snippet, People Also Ask, local pack, video', values: [true, true, true] },
       { label: 'Competitor positions and share of voice', hint: 'The sites above you on page one, per keyword', values: [true, true, true] },
+      { label: 'Competitors found in Google, with the evidence', hint: 'Rolling out to selected websites: up to five to follow, directories and lists kept apart, and the gaps against them', values: [true, true, true] },
+      { label: 'Keyword research page', hint: 'Rolling out to selected websites: topics with one verdict and a score range, buyer questions, a plan of up to 10 steps and a CSV', values: [true, true, true] },
       { label: 'Topic radius and re-plan proposals', hint: 'A ladder that has stalled gets a proposal; it is never applied for you', values: [true, true, true] },
     ],
   },

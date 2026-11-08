@@ -96,7 +96,7 @@ const serpBody = (p, device) => [{ keyword: p.keyword, location_code: Number(p.l
   device, os: device === 'mobile' ? 'android' : 'windows' }];   // the device was never set before G6 (DataForSEO's default is desktop/windows)
 for (const [id, pages] of byLadder) {
   const top = pages.find(p => Number(p.rung) === 4) || pages[0];
-  const topHist = deskHist.filter(h => h.ladder_id === id && h.keyword === top.keyword && h.position !== '' && h.position != null && Number(h.position) >= 0).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));   // -1 = failed check: check again
+  const topHist = deskHist.filter(h => h.ladder_id === id && h.keyword === top.keyword && h.position !== '' && h.position != null && Number(h.position) >= 0 && !RS.poisonedRow(h)).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));   // -1 = failed check: check again
   const last = topHist.slice(0, LIMITS.stop_after_top3_checks);
   const won = last.length >= LIMITS.stop_after_top3_checks && last.every(h => Number(h.position) > 0 && Number(h.position) <= 3);
   if (won && daysSince(last[0].checked_at) < LIMITS.won_every_days) {
@@ -128,12 +128,18 @@ for (const [id, pages] of byLadder) {
       target_url: p.target_url || '', status: p.status || '', reason: fit.reason, detail: fit.detail, note: fit.note, written: !!fit.live, dropped: !fit.ok });
     if (!fit.ok) continue;
     if (won && !live) continue;   // won ladder, monthly check: the main keyword and the published pages only
-    const lastH = deskHist.filter(h => h.ladder_id === id && h.keyword === p.keyword).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0];
-    if (!live && lastH && Number(lastH.position) === 0 && daysSince(lastH.checked_at) < LIMITS.unpublished_every_days) {   // only 'not in the top 50' (0); a page that ranks (published but not reported) or a failed check (-1) stays weekly
+    // SERP-GOTO (2026-11-08, review L4 / H2): a reading stored while Google's redirect links were read as the site is no reading at all, and
+    // a -1 that only means "a hidden result might be yours" (snapshot `mo`) is, for an unpublished rung, as good as "not in the top 50":
+    // it is deferred like a 0, so the rule costs no extra weekly checks. `prev_unread` = how many readings in a row ended that way.
+    const kwHist = deskHist.filter(h => h.ladder_id === id && h.keyword === p.keyword && !RS.poisonedRow(h)).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));
+    const unreadOf = (h) => RS.unreadRow(h);
+    const prevUnread = RS.unreadWeeks(kwHist, { now: new Date().toISOString() });   // re-review N1: earlier WEEKS in a row, not runs
+    const lastH = kwHist[0];
+    if (!live && lastH && (Number(lastH.position) === 0 || unreadOf(lastH)) && daysSince(lastH.checked_at) < LIMITS.unpublished_every_days) {   // only 'not in the top 50' (0); a page that ranks (published but not reported) or a failed check (-1) stays weekly
       deferred.push({ ladder_id: id, domain: p.domain, head_keyword: p.head_keyword, rung: Number(p.rung), page_no: Number(p.page_no), keyword: p.keyword, page_type: p.page_type || '', target_url: p.target_url || '', status: p.status || '',
         last_position: Number(lastH.position), last_url: lastH.url || '', last_checked: lastH.checked_at, device: 'desktop' }); continue; }
     const base = { ladder_id: id, domain: p.domain, head_keyword: p.head_keyword, rung: Number(p.rung), page_no: Number(p.page_no), keyword: p.keyword, page_type: p.page_type || '', target_url: p.target_url || '', status: p.status || '',
-      location_code: Number(p.location_code), language_code: p.language_code || 'en', email: p.email || '', callback_url: p.callback_url || '', request_id: (cycle && cycle.request_id) || p.request_id || '', country: p.country || '', won_monthly: won, competitors };
+      location_code: Number(p.location_code), language_code: p.language_code || 'en', email: p.email || '', callback_url: p.callback_url || '', request_id: (cycle && cycle.request_id) || p.request_id || '', country: p.country || '', won_monthly: won, competitors, prev_unread: prevUnread };
     checks.push({ ...base, device: 'desktop', endpoint: 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced', body: serpBody(p, 'desktop') });   // depth 50: ~$0.015 per check (depth 100 measured at $0.028); positions below 50 add little for a ladder
     if (LIMITS.mobile && (Number(p.rung) === 4 || Number(p.page_no) === 1) && mobileWanted.length < LIMITS.max_mobile_per_ladder && !mobileWanted.some(m => m.keyword === p.keyword)) mobileWanted.push(base);
   }

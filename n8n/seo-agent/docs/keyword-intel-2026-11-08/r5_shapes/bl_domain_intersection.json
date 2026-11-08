@@ -1,0 +1,205 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "backlinks",
+   "domain_intersection",
+   "live"
+  ],
+  "data": {
+   "api": "backlinks",
+   "function": "domain_intersection",
+   "targets": {
+    "1": "cleartax.com",
+    "2": "zoho.com"
+   },
+   "exclude_targets": [
+    "techand.ai"
+   ],
+   "intersection_mode": "all",
+   "limit": 5
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "targets": {
+     "1": "dataforseo.com",
+     "2": "seopanel.org"
+    },
+    "total_count": 229,
+    "items_count": 10,
+    "items": [
+     {
+      "domain_intersection": {
+       "1": {
+        "type": "backlinks_domain_intersection",
+        "target": "seokicks.de",
+        "rank": 0,
+        "backlinks": 185,
+        "first_seen": "2025-05-30 18:41:57 +00:00",
+        "lost_date": null,
+        "backlinks_spam_score": 16,
+        "broken_backlinks": 0,
+        "broken_pages": 0,
+        "referring_domains": 1,
+        "referring_domains_nofollow": 1,
+        "referring_main_domains": 1,
+        "referring_main_domains_nofollow": 1,
+        "referring_ips": 1,
+        "referring_subnets": 1,
+        "referring_pages": 185,
+        "referring_pages_nofollow": 185,
+        "referring_links_tld": {
+         "de": 185
+        },
+        "referring_links_types": {
+         "anchor": 185
+        },
+        "referring_links_attributes": {
+         "nofollow": 185
+        },
+        "referring_links_platform_types": {
+         "unknown": 185
+        },
+        "referring_links_semantic_locations": {
+         "": 185
+        },
+        "referring_links_countries": null
+       },
+       "2": {
+        "type": "backlinks_domain_intersection",
+        "target": "seokicks.de",
+        "rank": 0,
+        "backlinks": 23,
+        "first_seen": "2023-01-14 05:47:06 +00:00",
+        "lost_date": null,
+        "backlinks_spam_score": 17,
+        "broken_backlinks": 0,
+        "broken_pages": 0,
+        "referring_domains": 1,
+        "referring_domains_nofollow": 1,
+        "referring_main_domains": 1,
+        "referring_main_domains_nofollow": 1,
+        "referring_ips": 1,
+        "referring_subnets": 1,
+        "referring_pages": 22,
+        "referring_pages_nofollow": 22,
+        "referring_links_tld": {
+         "de": 22
+        },
+        "referring_links_types": {
+         "anchor": 22
+        },
+        "referring_links_attributes": {
+         "nofollow": 22
+        },
+        "referring_links_platform_types": {
+         "unknown": 22
+        },
+        "referring_links_semantic_locations": {
+         "": 22
+        },
+        "referring_links_countries": null
+       }
+      },
+      "summary": {
+       "intersections_count": 2
+      }
+     },
+     {
+      "domain_intersection": {
+       "1": {
+        "type": "backlinks_domain_intersection",
+        "target": "github.com",
+        "rank": 0,
+        "backlinks": 164,
+        "first_seen": "2023-08-26 09:00:12 +00:00",
+        "lost_date": null,
+        "backlinks_spam_score": 8,
+        "broken_backlinks": 8,
+        "broken_pages": 5,
+        "referring_domains": 1,
+        "referring_domains_nofollow": 0,
+        "referring_main_domains": 1,
+        "referring_main_domains_nofollow": 0,
+        "referring_ips": 3,
+        "referring_subnets": 2,
+        "referring_pages": 148,
+        "referring_pages_nofollow": 147,
+        "referring_links_tld": {
+         "com": 148
+        },
+        "referring_links_types": {
+         "anchor": 146,
+         "image": 2
+        },
+        "referring_links_attributes": {
+         "nofollow": 147,
+         "noopener": 4,
+         "noreferrer": 4
+        },
+        "referring_links_platform_types": {
+         "unknown": 148
+        },
+        "referring_links_semantic_locations": {
+         "article": 142,
+         "header": 3,
+         "main": 3
+        },
+        "referring_links_countries": null
+       },
+       "2": {
+        "type": "backlinks_domain_intersection",
+        "target": "github.com",
+        "rank": 0,
+        "backlinks": 15,
+        "first_seen": "2024-04-26 16:26:51 +00:00",
+        "lost_date": null,
+        "backlinks_spam_score": 6,
+        "broken_backlinks": 0,
+        "broken_pages": 0,
+        "referring_domains": 2,
+        "referring_domains_nofollow": 2,
+        "referring_main_domains": 1,
+        "referring_main_domains_nofollow": 1,
+        "referring_ips": 2,
+        "referring_subnets": 1,
+        "referring_pages": 14,
+        "referring_pages_nofollow": 14,
+        "referring_links_tld": {
+         "com": 14
+        },
+        "referring_links_types": {
+         "anchor": 14
+        },
+        "referring_links_attributes": {
+         "nofollow": 14,
+         "noopener": 3,
+         "noreferrer": 3
+        },
+        "referring_links_platform_types": {
+         "unknown": 14
+        },
+        "referring_links_semantic_locations": {
+         "article": 11,
+         "main": 2,
+         "header": 1
+        },
+        "referring_links_countries": null
+       }
+      },
+      "summary": {
+       "intersections_count": 2
+      }
+     },
+     "...(+8 more)"
+    ]
+   }
+  ]
+ }
+}

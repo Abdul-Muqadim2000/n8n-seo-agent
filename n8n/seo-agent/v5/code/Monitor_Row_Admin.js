@@ -4,6 +4,7 @@
 // competitors (domains), brand_names; W2-E3: ai_claude_weekly, ai_pulse_engines, ai_persona_context, ai_fanout_check (0-200), ai_demand_market;
 // Index coverage (2026-10-29): index_watch (daily index watch, empty = on), index_daily_cap (20-1,200 URL inspections a day, empty = 300);
 // wave 2 (2026-10-30): index_sitemap_submit (the client's opt-in for sitemap submission, empty = OFF).
+// KI (2026-11-08): ki_mode (off | trial | on, empty = off), ki_refresh (empty = yes), ki_max_competitors (1-5, empty = 5).
 /*__AI_RANK_FLAGS__*/
 const a = $('Admin Action').first().json; const m = a.monitors || {};
 let old = {}; try { old = $('Load Monitors (Admin)').all().map(i => i.json).find(x => x && x.site_id === a.site_id) || {}; } catch (e) {}
@@ -53,5 +54,14 @@ const __airGiven = AIRF.validate(Object.fromEntries(AIRF.COLS.filter(k => m[k] !
 const __airOld = (k) => { const v = old[k]; if (v === '' || v == null) return null;
   if (k === 'ai_rank_mode') return String(v); if (k === 'ai_rank_fanout_n') return Number(v); return v === true || v === 'true'; };
 Object.assign(__row, Object.fromEntries(AIRF.COLS.map(k => [k, k in __airGiven ? __airGiven[k] : __airOld(k)])));
+// KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §1): keyword intelligence - mode, monthly refresh, competitors the client may choose.
+// Admin Action has validated a given value; '' clears it to null (= off / yes / 5); a field not given is kept as stored.
+const __kiGiven = (k) => m[k] !== undefined && m[k] !== null;
+const __kiOld = (k) => { const v = old[k]; if (v === '' || v == null) return null;
+  if (k === 'ki_mode') return String(v); if (k === 'ki_max_competitors') return Number(v); return v === true || v === 'true'; };
+Object.assign(__row, {
+  ki_mode: __kiGiven('ki_mode') ? (String(m.ki_mode).trim() === '' ? null : String(m.ki_mode).trim().toLowerCase()) : __kiOld('ki_mode'),
+  ki_refresh: __kiGiven('ki_refresh') ? (m.ki_refresh === '' ? null : (m.ki_refresh === true || /^(true|1|yes|on)$/i.test(String(m.ki_refresh)))) : __kiOld('ki_refresh'),
+  ki_max_competitors: __kiGiven('ki_max_competitors') ? (String(m.ki_max_competitors).trim() === '' ? null : Number(m.ki_max_competitors)) : __kiOld('ki_max_competitors') });
 if (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit
 return [{ json: __row }];

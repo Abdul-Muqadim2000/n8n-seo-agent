@@ -1,0 +1,69 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "keywords_data",
+   "clickstream_data",
+   "bulk_search_volume",
+   "live"
+  ],
+  "data": {
+   "api": "keywords_data",
+   "function": "bulk_search_volume",
+   "se": "clickstream_data",
+   "keywords": [
+    "e invoicing uae"
+   ],
+   "location_code": 2784
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "location_code": 2840,
+    "items_count": 3,
+    "items": [
+     {
+      "keyword": "youtub",
+      "search_volume": 371537,
+      "monthly_searches": [
+       {
+        "year": 2026,
+        "month": 10,
+        "search_volume": 371537
+       },
+       {
+        "year": 2026,
+        "month": 9,
+        "search_volume": 378424
+       },
+       "...(+10 more)"
+      ]
+     },
+     {
+      "keyword": "you tube",
+      "search_volume": 3261043,
+      "monthly_searches": [
+       {
+        "year": 2026,
+        "month": 10,
+        "search_volume": 3261043
+       },
+       {
+        "year": 2026,
+        "month": 9,
+        "search_volume": 3350573
+       },
+       "...(+10 more)"
+      ]
+     },
+     "...(+1 more)"
+    ]
+   }
+  ]
+ }
+}

@@ -5,9 +5,13 @@ const hdr = raw.headers || {};
 const client_ip = String(hdr['x-forwarded-for'] || hdr['x-real-ip'] || hdr['cf-connecting-ip'] || '').split(',')[0].trim();
 const errors = [];
 const mode = String(b.mode || 'keyword').toLowerCase();
-if (!['keyword', 'verdict', 'check', 'audit', 'discover', 'describe', 'ladder', 'track', 'published', 'checkin', 'profile', 'case_study', 'ai_visibility', 'backlinks'].includes(mode)) errors.push('mode must be one of: keyword, verdict, audit, discover, describe, ladder, track, published, checkin, profile, case_study, ai_visibility, backlinks');
+if (!['keyword', 'verdict', 'check', 'audit', 'discover', 'describe', 'ladder', 'track', 'published', 'checkin', 'profile', 'case_study', 'ai_visibility', 'backlinks', 'competitors', 'keyword_research'].includes(mode)) errors.push('mode must be one of: keyword, verdict, audit, discover, describe, ladder, track, published, checkin, profile, case_study, ai_visibility, backlinks, competitors, keyword_research');
+// KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §3): keyword intelligence runs in its own workflow (SEOagentKIntel1), not the main one
+const ki = ['competitors', 'keyword_research'].includes(mode);
+if (ki && b.seeds != null && !Array.isArray(b.seeds)) errors.push('seeds must be an array of searches');
+if (ki && Array.isArray(b.seeds) && b.seeds.length > 20) errors.push('seeds allows at most 20 searches');
 if (['keyword', 'verdict', 'check', 'ladder'].includes(mode) && !b.keyword) errors.push('keyword is required');
-if (['audit', 'describe', 'ladder', 'track', 'published', 'checkin', 'profile', 'case_study', 'ai_visibility', 'backlinks'].includes(mode) && !b.domain) errors.push('domain is required');
+if (['audit', 'describe', 'ladder', 'track', 'published', 'checkin', 'profile', 'case_study', 'ai_visibility', 'backlinks', 'competitors', 'keyword_research'].includes(mode) && !b.domain) errors.push('domain is required');
 if (b.crawl_pages != null && !(Number(b.crawl_pages) >= 50 && Number(b.crawl_pages) <= 1000)) errors.push('crawl_pages must be between 50 and 1000');
 if (b.crawl_js && Number(b.crawl_pages || 200) > 500) errors.push('crawl_js (JavaScript rendering) allows at most 500 crawl_pages');
 if (b.competitors != null && !Array.isArray(b.competitors) && typeof b.competitors !== 'string') errors.push('competitors must be an array of domains or a comma-separated string');
@@ -28,7 +32,7 @@ if (!['describe', 'profile'].includes(mode) && !b.country) errors.push('country 
 if (!b.callback_url && !b.email) errors.push('callback_url (https) or email is required so the result can be delivered');
 if (b.callback_url && !/^(https:\/\/\S+|http:\/\/(localhost|127\.0\.0\.1|host\.docker\.internal|n8n)(:\d+)?\/\S*)$/.test(String(b.callback_url))) errors.push('callback_url must be an https URL (http only for localhost while testing)');
 const request_id = $execution.id;
-const eta = mode === 'audit' ? 20 : (['verdict', 'check'].includes(mode) ? 4 : mode === 'ladder' ? 8 : mode === 'track' ? 3 : mode === 'published' || mode === 'checkin' || mode === 'profile' ? 1 : mode === 'case_study' ? 15 : mode === 'ai_visibility' ? 10 : mode === 'backlinks' ? 5 : 10);
+const eta = mode === 'audit' ? 20 : (['verdict', 'check'].includes(mode) ? 4 : mode === 'ladder' ? 8 : mode === 'track' ? 3 : mode === 'published' || mode === 'checkin' || mode === 'profile' ? 1 : mode === 'case_study' ? 15 : mode === 'ai_visibility' ? 10 : mode === 'backlinks' ? 5 : mode === 'competitors' ? 6 : mode === 'keyword_research' ? 12 : 10);
 
 // ---- B-A6 (2026-10-15, build section 63): the key a repeated POST is recognised by -------------------------------------------
 // A POST that arrives twice — a caller that timed out and retried, a proxy or a webhook delivered twice, a double submit — started a
@@ -71,5 +75,6 @@ return [{ json: {
   ok: errors.length === 0, error: errors.join('; '), request_id, mode, keyword: b.keyword || null, domain: b.domain || null, country: b.country || null,
   delivery: b.callback_url ? 'POST to callback_url when finished' : 'email when finished', estimated_minutes: eta,
   idem_key, idem_window_min: IDEM_WINDOW_MIN, idem_source: forceNew ? 'force_new' : (idemGiven ? 'caller' : 'request fingerprint'),
+  target: ki ? 'ki' : 'main',   // KI: which workflow Start Which Run? hands the request to
   forward: { ...raw, body: { ...b, request_id, client_ip } }
 } }];

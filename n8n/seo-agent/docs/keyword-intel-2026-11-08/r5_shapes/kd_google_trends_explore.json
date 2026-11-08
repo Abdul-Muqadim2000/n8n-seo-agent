@@ -1,0 +1,74 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "keywords_data",
+   "google_trends",
+   "explore",
+   "live"
+  ],
+  "data": {
+   "api": "keywords_data",
+   "function": "explore",
+   "se": "google_trends",
+   "keywords": [
+    "e invoicing",
+    "peppol"
+   ],
+   "location_code": 2784,
+   "language_code": "en",
+   "type": "web"
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "keywords": [
+     "seo tools"
+    ],
+    "type": "trends",
+    "location_code": 2840,
+    "language_code": "en",
+    "check_url": "https://trends.google.com/trends/explore?hl=en&geo=US&date=2025-11-04%202026-11-04&q=seo%20tools",
+    "datetime": "2026-11-04 03:26:08 +00:00",
+    "items_count": 1,
+    "items": [
+     {
+      "position": 1,
+      "type": "google_trends_graph",
+      "title": null,
+      "keywords": [
+       "seo tools"
+      ],
+      "data": [
+       {
+        "date_from": "2025-11-02",
+        "date_to": "2025-11-08",
+        "timestamp": 1762041600,
+        "missing_data": false,
+        "values": [
+         42
+        ]
+       },
+       {
+        "date_from": "2025-11-09",
+        "date_to": "2025-11-15",
+        "timestamp": 1762646400,
+        "missing_data": false,
+        "values": [
+         43
+        ]
+       },
+       "...(+51 more)"
+      ],
+      "averages": []
+     }
+    ]
+   }
+  ]
+ }
+}

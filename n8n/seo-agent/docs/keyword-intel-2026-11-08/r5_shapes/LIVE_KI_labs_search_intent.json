@@ -1,0 +1,69 @@
+{
+ "_source": "real LIVE response, api.dataforseo.com/v3, 2026-11-07 ~20:06-20:10 UTC (2026-11-08 PKT), KI L0 live confirmations; item arrays trimmed to 3, strings to 300 chars",
+ "calls": [
+  {
+   "call": "c07_search_intent",
+   "status_code": 20000,
+   "cost": 0.01236,
+   "task": {
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "cost": 0.01236,
+    "path": [
+     "v3",
+     "dataforseo_labs",
+     "google",
+     "search_intent",
+     "live"
+    ],
+    "data": {
+     "api": "dataforseo_labs",
+     "function": "search_intent",
+     "se_type": "google",
+     "keywords": [
+      "dynamics 365 partner uae",
+      "شريك مايكروسوفت دايناميكس في الإمارات",
+      "برنامج محاسبة"
+     ]
+    },
+    "result_count": 1,
+    "result": [
+     {
+      "items_count": 3,
+      "items": [
+       {
+        "keyword": "dynamics 365 partner uae",
+        "keyword_intent": {
+         "label": "commercial",
+         "probability": 0.837
+        },
+        "secondary_keyword_intents": null
+       },
+       {
+        "keyword": "شريك مايكروسوفت دايناميكس في الإمارات",
+        "keyword_intent": {
+         "label": "commercial",
+         "probability": 0.604
+        },
+        "secondary_keyword_intents": null
+       },
+       {
+        "keyword": "برنامج محاسبة",
+        "keyword_intent": {
+         "label": "commercial",
+         "probability": 0.605
+        },
+        "secondary_keyword_intents": [
+         {
+          "label": "informational",
+          "probability": 0.3046
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

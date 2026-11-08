@@ -1,0 +1,330 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "dataforseo_labs",
+   "google",
+   "keyword_ideas",
+   "live"
+  ],
+  "data": {
+   "api": "dataforseo_labs",
+   "function": "keyword_ideas",
+   "se_type": "google",
+   "keywords": [
+    "e invoicing"
+   ],
+   "location_code": 2784,
+   "language_code": "en",
+   "limit": 5,
+   "include_serp_info": true,
+   "ignore_synonyms": true
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "se_type": "google",
+    "seed_keywords": [
+     "phone",
+     "watch"
+    ],
+    "location_code": 2840,
+    "language_code": "en",
+    "total_count": 460572,
+    "items_count": 3,
+    "offset": 0,
+    "offset_token": "REDACTED_OFFSET_TOKEN",
+    "items": [
+     {
+      "se_type": "google",
+      "keyword": "nothing phone",
+      "location_code": 2840,
+      "language_code": "en",
+      "keyword_info": {
+       "se_type": "google",
+       "last_updated_time": "2026-10-15 03:46:25 +00:00",
+       "competition": 0.87,
+       "competition_level": "HIGH",
+       "cpc": 0.63,
+       "search_volume": 165000,
+       "low_top_of_page_bid": 0.05,
+       "high_top_of_page_bid": 5.34,
+       "categories": [
+        10007,
+        10878,
+        "...(+1 more)"
+       ],
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 246000
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 301000
+        },
+        "...(+10 more)"
+       ],
+       "search_volume_trend": {
+        "monthly": -18,
+        "quarterly": 0,
+        "yearly": 124
+       }
+      },
+      "keyword_info_normalized_with_bing": {
+       "last_updated_time": "2026-09-26 02:21:06 +00:00",
+       "search_volume": 157856,
+       "is_normalized": true,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 287967
+        },
+        {
+         "year": 2026,
+         "month": 7,
+         "search_volume": 235349
+        },
+        "...(+36 more)"
+       ]
+      },
+      "keyword_info_normalized_with_clickstream": {
+       "last_updated_time": "2026-09-26 02:21:06 +00:00",
+       "search_volume": 157191,
+       "is_normalized": true,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 286755
+        },
+        {
+         "year": 2026,
+         "month": 7,
+         "search_volume": 234642
+        },
+        "...(+36 more)"
+       ]
+      },
+      "clickstream_keyword_info": {
+       "search_volume": 157287,
+       "last_updated_time": "2026-11-03 05:32:39 +00:00",
+       "gender_distribution": {
+        "female": 47,
+        "male": 53
+       },
+       "age_distribution": {
+        "18-24": 34,
+        "25-34": 22,
+        "35-44": 22,
+        "45-54": 19,
+        "55-64": 3
+       },
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 10,
+         "search_volume": 157290
+        },
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 158840
+        },
+        "...(+10 more)"
+       ]
+      },
+      "keyword_properties": {
+       "se_type": "google",
+       "core_keyword": "phones nothing",
+       "synonym_clustering_algorithm": "text_processing",
+       "keyword_difficulty": 31,
+       "detected_language": "en",
+       "is_another_language": false,
+       "words_count": 2
+      },
+      "serp_info": {
+       "se_type": "google",
+       "check_url": "https://www.google.com/search?q=nothing%20phone&hl=en&gl=US&ie=UTF-8&uule=w+CAIQIFISCQs2MuSEtepUEUK33kOSuTsc",
+       "serp_item_types": [
+        "organic",
+        "people_also_ask",
+        "...(+4 more)"
+       ],
+       "se_results_count": 239,
+       "last_updated_time": "2026-07-30 03:47:38 +00:00",
+       "previous_updated_time": "2026-05-14 18:50:10 +00:00"
+      },
+      "avg_backlinks_info": {
+       "se_type": "google",
+       "backlinks": 713.2,
+       "dofollow": 612.4,
+       "referring_pages": 664.3,
+       "referring_domains": 70,
+       "referring_main_domains": 60.2,
+       "rank": 129.8,
+       "main_domain_rank": 795.7,
+       "last_updated_time": "2026-07-30 03:47:39 +00:00"
+      },
+      "search_intent_info": {
+       "se_type": "google",
+       "main_intent": "informational",
+       "foreign_intent": null,
+       "last_updated_time": "2026-04-29 16:21:26 +00:00"
+      }
+     },
+     {
+      "se_type": "google",
+      "keyword": "find phone",
+      "location_code": 2840,
+      "language_code": "en",
+      "keyword_info": {
+       "se_type": "google",
+       "last_updated_time": "2026-10-16 17:02:39 +00:00",
+       "competition": 0.09,
+       "competition_level": "LOW",
+       "cpc": 2.04,
+       "search_volume": 14800,
+       "low_top_of_page_bid": 0.59,
+       "high_top_of_page_bid": 2,
+       "categories": [
+        10007,
+        10878,
+        "...(+1 more)"
+       ],
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 18100
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 18100
+        },
+        "...(+10 more)"
+       ],
+       "search_volume_trend": {
+        "monthly": 0,
+        "quarterly": 0,
+        "yearly": 22
+       }
+      },
+      "keyword_info_normalized_with_bing": {
+       "last_updated_time": "2026-09-26 19:29:25 +00:00",
+       "search_volume": 14071,
+       "is_normalized": true,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 17208
+        },
+        {
+         "year": 2026,
+         "month": 7,
+         "search_volume": 17208
+        },
+        "...(+36 more)"
+       ]
+      },
+      "keyword_info_normalized_with_clickstream": {
+       "last_updated_time": "2026-09-26 19:29:25 +00:00",
+       "search_volume": 14638,
+       "is_normalized": true,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 17902
+        },
+        {
+         "year": 2026,
+         "month": 7,
+         "search_volume": 17920
+        },
+        "...(+36 more)"
+       ]
+      },
+      "clickstream_keyword_info": {
+       "search_volume": 48929,
+       "last_updated_time": "2026-11-03 03:00:13 +00:00",
+       "gender_distribution": {
+        "female": 50,
+        "male": 50
+       },
+       "age_distribution": {
+        "18-24": 0,
+        "25-34": 31,
+        "35-44": 25,
+        "45-54": 44,
+        "55-64": 0
+       },
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 10,
+         "search_volume": 48930
+        },
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 50840
+        },
+        "...(+10 more)"
+       ]
+      },
+      "keyword_properties": {
+       "se_type": "google",
+       "core_keyword": null,
+       "synonym_clustering_algorithm": "text_processing",
+       "keyword_difficulty": 57,
+       "detected_language": "en",
+       "is_another_language": false,
+       "words_count": 2
+      },
+      "serp_info": {
+       "se_type": "google",
+       "check_url": "https://www.google.com/search?q=find%20phone&hl=en&gl=US&ie=UTF-8&uule=w+CAIQIFISCQs2MuSEtepUEUK33kOSuTsc",
+       "serp_item_types": [
+        "organic",
+        "people_also_ask",
+        "...(+2 more)"
+       ],
+       "se_results_count": 132,
+       "last_updated_time": "2026-07-30 08:52:43 +00:00",
+       "previous_updated_time": "2026-05-15 05:29:34 +00:00"
+      },
+      "avg_backlinks_info": {
+       "se_type": "google",
+       "backlinks": 4374.7,
+       "dofollow": 3048.2,
+       "referring_pages": 3786.6,
+       "referring_domains": 685.3,
+       "referring_main_domains": 619.1,
+       "rank": 254.6,
+       "main_domain_rank": 815.5,
+       "last_updated_time": "2026-07-30 08:53:58 +00:00"
+      },
+      "search_intent_info": {
+       "se_type": "google",
+       "main_intent": "informational",
+       "foreign_intent": null,
+       "last_updated_time": "2026-04-27 18:20:07 +00:00"
+      }
+     },
+     "...(+1 more)"
+    ]
+   }
+  ]
+ }
+}

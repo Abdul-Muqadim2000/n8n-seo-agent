@@ -34,6 +34,7 @@ import { siteRows } from '../n8n/client';
 import { integrationOf, requireSecrets, toExportRunView, toIntegrationView } from './integrations';
 import { settingsRow } from './admin/settings';
 import { aiChargeEntries, bucketAiCharges, creditsForRuns } from './runCredits';
+import { NOT_KI_TRIAL_RUN } from './ki';
 import { customerError } from '../lib/customerError';
 
 /**
@@ -66,7 +67,7 @@ async function siteTableRows(org: Pick<OrgRow, 'id'>, site: SiteRow, t: ExportTa
     const rows = await db
       .select()
       .from(schema.runs)
-      .where(and(eq(schema.runs.orgId, org.id), eq(schema.runs.siteId, site.id)))
+      .where(and(eq(schema.runs.orgId, org.id), eq(schema.runs.siteId, site.id), NOT_KI_TRIAL_RUN))   // FX-A: never our team's Trial runs
       .orderBy(desc(schema.runs.createdAt))
       .limit(max);
     const credits = await creditsForRuns(org.id, rows);
@@ -116,7 +117,7 @@ async function companyRows(org: OrgRow, t: ExportTable, exportedAt: string): Pro
     const rows = await db
       .select()
       .from(schema.runs)
-      .where(and(eq(schema.runs.orgId, org.id), sql`${schema.runs.siteId} is null`))
+      .where(and(eq(schema.runs.orgId, org.id), sql`${schema.runs.siteId} is null`, NOT_KI_TRIAL_RUN))
       .orderBy(desc(schema.runs.createdAt))
       .limit(max + 1 - out.length);
     const credits = await creditsForRuns(org.id, rows);
@@ -127,6 +128,12 @@ async function companyRows(org: OrgRow, t: ExportTable, exportedAt: string): Pro
 
 /** `GET /api/v1/websites/:id/tables/:table`, one website's rows in the export schema, oldest first, filterable by date. */
 export async function tableRowsV1(org: Pick<OrgRow, 'id'>, site: SiteRow, table: unknown, q: Record<string, unknown>): Promise<PageV1<Out> & { table: string; columns: { name: string; type: string; description: string }[] }> {
+  // KI (2026-11-08, A1): the four keyword-intelligence tables, read-only, for an On website only (not in the scheduled exports)
+  const ki = await import('./kiData');
+  if (ki.isKiV1Table(table)) {
+    if (!site.verifiedAt) throw new HttpError(403, `Verify that you own ${site.domain} in the app before its data can be read`, 'website_unverified');
+    return (await ki.kiTableRowsV1(org, site, table, q, (all, c, l) => pageOf(all, decodeCursor(c), l == null ? 100 : pageLimit(l)))) as never;
+  }
   const t = exportTable(table);
   if (!t) throw notFound('Unknown table: use one of rank_history, site_metrics, audit_findings, ai_visibility, backlinks, runs');
   if (!site.verifiedAt) throw new HttpError(403, `Verify that you own ${site.domain} in the app before its data can be read`, 'website_unverified');

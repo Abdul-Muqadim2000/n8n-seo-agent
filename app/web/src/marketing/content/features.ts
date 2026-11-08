@@ -19,6 +19,7 @@ import {
   ScanSearch,
   Search,
   Sparkles,
+  Swords,
   Workflow,
   type LucideIcon,
 } from 'lucide-react';
@@ -44,7 +45,8 @@ export type VisualKey =
   | 'index-coverage'
   | 'agency-portal'
   | 'ai-growth'
-  | 'outreach';
+  | 'outreach'
+  | 'competitors';
 
 export interface Fact {
   /** a number counts up when it scrolls into view; a string is shown as is */
@@ -199,6 +201,7 @@ export const features: Feature[] = [
       'A topic radius with every research run: the topics within reach for your site, the ones that are a stretch and the evidence behind each verdict',
       'Suggestions in plain words when you set up a website: "Good chance", "Takes a few months" or "Hard for your website now", with the searches a month, why we suggest it, the plan and about how many credits a page',
       'The research behind your first suggestions is free, once per website, at setup: it starts in the background while you fill in the rest',
+      'Rolling out to selected websites: a Keyword research page with what buyers search to hire a service like yours, from your Search Console, Google\'s own questions and suggestions and your competitors. Each topic gets one verdict ("Go", "Takes a few months", "Hard for your website now" or "Not for you" with the reason, and "Not judged yet" while the evidence is thin), a score with its likely range, the buyer stage and where the search came from, plus the searches just off page one, buyer questions to add to your AI questions, a plan of up to 10 steps and a CSV of every search',
     ],
     steps: [
       { title: 'Describe the business', body: 'Your website, market and goals set the context for every keyword Alaventra looks at.' },
@@ -231,6 +234,10 @@ export const features: Feature[] = [
         a: 'Once your website is connected, the searches it already gets impressions for are the starting point: the ones no page of yours answers become new page ideas, and the ones you rank between eighth and twentieth for become pages to strengthen. Where a search is already measured on your site, the traffic estimate is calibrated against your real impressions and clicks and labelled as measured; everywhere else it is labelled as modelled.',
       },
       {
+        q: 'What is the Keyword research page?',
+        a: 'It is rolling out to selected websites: ask us if you would like it for yours. It collects what buyers search to hire a service like yours from every source we read, keeps the searches that fit what you sell and where, groups them into topics and gives each topic one verdict with its reason (or "Not judged yet" while the evidence is thin) and a score with its likely range. Every number says how we know it: measured on your own website, an estimate from a named source, or our own estimate. Each run is priced in credits before it starts.',
+      },
+      {
         q: 'Why are some keywords grouped together?',
         a: 'When Google answers two searches with the same pages, they want one page, not two. Alaventra compares the results pages it reads and groups searches that share at least three of the same top-ten results, naming the group after its main keyword.',
       },
@@ -241,6 +248,55 @@ export const features: Feature[] = [
     story: {
       title: 'A call you can act on, not another list.',
       body: 'Most keyword tools hand you thousands of rows and a generic difficulty score. Alaventra makes a call on each keyword, explains it and measures it against your own site, so the next decision is clear: write one page, build a ladder or leave it for later.',
+    },
+  },
+  {
+    slug: 'competitors',
+    name: 'Competitor analysis',
+    shortName: 'Competitors',
+    tagline: 'Who you really compete with in Google, with the evidence, and where they are ahead of you. Rolling out to selected websites.',
+    summary:
+      'Alaventra finds your competitors in Google\'s own results for your services in your market, not from a list you have to guess. Every website is sorted by what it is: a company like you, a directory, a "best of" list or a platform. You choose up to five to follow and see where they are ahead. Rolling out to selected websites.',
+    icon: Swords,
+    benefits: [
+      'Competitors found in the first 10 Google results for each of your services, in your market, each with the reason it is on your list',
+      'Every website sorted by what it is, so directories, lists and platforms are never counted as rivals: they become places to be listed on instead',
+      'Choose up to five to follow, keep others on a watchlist, and mark the ones that are not competitors so they stay off your list',
+      'A profile of each competitor you follow: its size, the pages that bring it the most visits and the searches it ranks for, with a CSV',
+      'Gaps against the competitors you follow: the searches they rank for and you do not, each with the step that would close it (gaps in kinds of pages, lists, AI answers and links come later)',
+      'Who AI answers name for your buyers\' questions, next to your own share',
+    ],
+    steps: [
+      { title: 'Read the results', body: 'We read Google\'s results for each of your services in your market and note every website that shows up.' },
+      { title: 'Sort them', body: 'Each website is sorted by what it is. Only companies like you are scored as competitors, with the evidence.' },
+      { title: 'Choose', body: 'You choose up to five to follow; the rest stay on a watchlist or off your list.' },
+      { title: 'Close the gaps', body: 'See where your competitors are ahead and the step that would close each gap. Its button opens the tool that does it, with the search filled in and its credits shown before anything starts.' },
+    ],
+    facts: [
+      { value: 5, label: 'competitors you can follow at once' },
+      { value: 9, label: 'kinds of website told apart, so only real rivals are scored' },
+      { value: 1, label: 'reason shown for every competitor on your list' },
+    ],
+    faqs: [
+      {
+        q: 'Is it available for my website?',
+        a: 'It is rolling out to selected websites. Ask us if you would like it for yours. Our team first tries it privately on a website, at no cost to you, and then switches it on.',
+      },
+      {
+        q: 'Why is a directory not a competitor?',
+        a: 'A directory or a "best of" list ranks for your services but does not sell what you sell. Being listed on it helps you, so we show it as a place to be listed on, not as a rival to beat.',
+      },
+      {
+        q: 'How many credits does it use?',
+        a: 'Each run is priced in credits before it starts, and is never charged above that. If nothing changed since a recent run, we show that reading again and charge nothing.',
+      },
+    ],
+    related: ['keyword-research', 'backlinks', 'ai-visibility'],
+    image: 'notesLaptop',
+    visual: 'competitors',
+    story: {
+      title: 'The companies you really lose customers to.',
+      body: 'Most tools list the biggest websites in your industry. Alaventra looks at the searches your buyers use for your services in your market, shows who keeps coming up next to you and why, and keeps marketplaces and lists apart, so the gaps you see are ones you can close.',
     },
   },
   {
@@ -1103,7 +1159,7 @@ export const features: Feature[] = [
       { title: 'Alaventra checks the result', body: 'The button at the end runs the check (verified, connected, file found), so nobody is left guessing whether it worked.' },
     ],
     facts: [
-      { value: 94, label: 'guides, one for each thing we ask of you' },
+      { value: 97, label: 'guides, one for each thing we ask of you' },
       { value: 'Your values', label: 'in every copy box, not an example' },
       { value: 'One e-mail', label: 'hands a guide to the person who can do it' },
     ],

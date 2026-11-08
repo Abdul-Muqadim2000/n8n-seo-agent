@@ -1,0 +1,1662 @@
+{
+ "_comment": "KI E1 (2026-11-08) labelled domain classes (direct / adjacent / principal / directory / publisher_list / platform / government / job_board / media; reject = never stored: text fragments, search engines, the site itself), built from the production read of 2026-11-08 (R3_PROD_OUTPUTS.md; private dump ~/seo-agent-secrets/keyword-intel-2026-11-08, read only) by scratchpad gen_sets.py. Only domains and keywords that already appear in the public repo are kept; no titles, no page addresses, no personal data. Labels are an expert reading of the stored results pages; holdout = every third case (index % 3 == 2), fixed before the kit was tuned. harness/scenarios_ki.js fails under 90% on the hold-out.",
+ "clients": {
+  "techand.ai": {
+   "own_domain": "techand.ai",
+   "market": "AE",
+   "services": [
+    "Microsoft Dynamics 365 Business Central implementation",
+    "Dynamics 365 Finance and Operations",
+    "Dynamics 365 CRM and Sales",
+    "Dynamics 365 Project Operations",
+    "NAV, GP and AX migrations to Dynamics 365",
+    "Managed Dynamics 365 support",
+    "Copilot Studio agents",
+    "Power Platform and Power BI",
+    "UAE e-invoicing (Peppol) and VAT compliance"
+   ]
+  },
+  "devaicon.com": {
+   "own_domain": "devaicon.com",
+   "market": "AE",
+   "services": [
+    "Custom AI solutions",
+    "AI automation",
+    "Agentic AI development",
+    "Custom software development",
+    "Microsoft enterprise systems (Dynamics 365, Fabric, Power Platform)",
+    "Managed IT support",
+    "Open edX services",
+    "Open edX hosting",
+    "Open edX development"
+   ]
+  }
+ },
+ "cases": [
+  {
+   "host": "randgroup.com",
+   "client": "techand.ai",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 1,
+     "type": "",
+     "title": "Is Dynamics 365 an ERP or CRM?"
+    },
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 9,
+     "type": "",
+     "title": "What is Microsoft Dynamics 365 Finance and Operations ..."
+    },
+    {
+     "keyword": "microsoft dynamics erp",
+     "position": 2,
+     "type": "",
+     "title": "Is Dynamics 365 an ERP or CRM?"
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 2,
+     "type": "",
+     "title": "Is Dynamics 365 an ERP or CRM?"
+    },
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 7,
+     "type": "",
+     "title": "What is Microsoft Dynamics 365 Finance and Operations ..."
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 7,
+     "type": "",
+     "title": "Is Dynamics 365 an ERP or CRM?"
+    },
+    {
+     "keyword": "microsoft dynamics erp",
+     "position": 8,
+     "type": "",
+     "title": "Is Dynamics 365 an ERP or CRM?"
+    },
+    {
+     "keyword": "microsoft dynamics erp",
+     "position": 3,
+     "type": "",
+     "title": "Is Dynamics 365 an ERP or CRM?"
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "dynamicssquare.com",
+   "client": "techand.ai",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 3,
+     "type": "",
+     "title": "Microsoft Dynamics ERP Software"
+    },
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 1,
+     "type": "",
+     "title": "Microsoft Dynamics ERP Software"
+    },
+    {
+     "keyword": "microsoft dynamics erp",
+     "position": 3,
+     "type": "",
+     "title": "Microsoft Dynamics ERP Software"
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 7,
+     "type": "",
+     "title": "Microsoft Dynamics ERP Software"
+    },
+    {
+     "keyword": "ms 365 erp",
+     "position": 1,
+     "type": "",
+     "title": "Microsoft Dynamics ERP Software"
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "visionet.com",
+   "client": "techand.ai",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 6,
+     "type": "",
+     "title": "A guide to what a Microsoft Dynamics 365 ERP system is ..."
+    },
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 2,
+     "type": "",
+     "title": "A guide to what a Microsoft Dynamics 365 ERP system is."
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 1,
+     "type": "",
+     "title": "A guide to what a Microsoft Dynamics 365 ERP system is ..."
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 9,
+     "type": "",
+     "title": "A guide to what a Microsoft Dynamics 365 ERP system is ..."
+    },
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 3,
+     "type": "",
+     "title": "A guide to what a Microsoft Dynamics 365 ERP system is."
+    },
+    {
+     "keyword": "ms 365 erp",
+     "position": 7,
+     "type": "",
+     "title": "A guide to what a Microsoft Dynamics 365 ERP system is ..."
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 8,
+     "type": "",
+     "title": "A guide to what a Microsoft Dynamics 365 ERP system is ..."
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 3,
+     "type": "",
+     "title": "A guide to what a Microsoft Dynamics 365 ERP system is ..."
+    }
+   ],
+   "holdout": true
+  },
+  {
+   "host": "velosio.com",
+   "client": "techand.ai",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 8,
+     "type": "",
+     "title": "A Complete Overview for Microsoft Dynamics 365 ERP"
+    },
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 3,
+     "type": "",
+     "title": "A Complete Overview for Microsoft Dynamics 365 ERP"
+    },
+    {
+     "keyword": "microsoft dynamics erp",
+     "position": 8,
+     "type": "",
+     "title": "A Complete Overview for Microsoft Dynamics 365 ERP"
+    },
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 4,
+     "type": "",
+     "title": "A Complete Overview for Microsoft Dynamics 365 ERP"
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 6,
+     "type": "",
+     "title": "A Complete Overview for Microsoft Dynamics 365 ERP"
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "focussoftnet.com",
+   "client": "techand.ai",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "crm service provider in uae",
+     "position": 1,
+     "type": "",
+     "title": "Focus CRM - Customer Relationship Management Solution"
+    },
+    {
+     "keyword": "crm for customers",
+     "position": 6,
+     "type": "",
+     "title": "Focus CRM - Customer Relationship Management Solution"
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "dynatechconsultancy.com",
+   "client": "techand.ai",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 5,
+     "type": "",
+     "title": "Dynamics 365 CRM vs ERP: The Key Differences and ..."
+    },
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 6,
+     "type": "",
+     "title": "Dynamics 365 CRM vs ERP: The Key Differences and ..."
+    }
+   ],
+   "holdout": true
+  },
+  {
+   "host": "dynamics.ae",
+   "client": "techand.ai",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "ms 365 erp",
+     "position": 1,
+     "type": "",
+     "title": "Microsoft Dynamics 365 Solutions in the UAE | DBS"
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "intwo.cloud",
+   "client": "techand.ai",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "microsoft dynamics erp",
+     "position": 1,
+     "type": "",
+     "title": "Microsoft Dynamics 365 ERP Implementation Services - Intwo"
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 4,
+     "type": "",
+     "title": "Microsoft Dynamics 365 ERP Implementation Services - Intwo"
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 10,
+     "type": "",
+     "title": "Microsoft Dynamics 365 ERP Implementation Services - Intwo"
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "synoptek.com",
+   "client": "techand.ai",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 9,
+     "type": "",
+     "title": "The Ultimate ERP Face-Off: Microsoft Dynamics 365 vs. SAP"
+    }
+   ],
+   "holdout": true
+  },
+  {
+   "host": "hamtinfotech.com",
+   "client": "techand.ai",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "crm service provider in uae",
+     "position": 9,
+     "type": "",
+     "title": "Best CRM Software Solutions in Dubai & UAE"
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "abouttmc.com",
+   "client": "techand.ai",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "ms 365 erp",
+     "position": 6,
+     "type": "",
+     "title": "5 Things That Will Make You Consider Using Dynamics 365 ..."
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "xedos.ae",
+   "client": "techand.ai",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "crm service provider in uae",
+     "position": 2,
+     "type": "",
+     "title": "Best Sales CRM Software Dubai UAE"
+    },
+    {
+     "keyword": "erp systems in uae",
+     "position": 4,
+     "type": "",
+     "title": "Best Sales CRM Software Dubai UAE"
+    }
+   ],
+   "holdout": true
+  },
+  {
+   "host": "penieltech.com",
+   "client": "techand.ai",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "crm service provider in uae",
+     "position": 10,
+     "type": "",
+     "title": "Cloud-based CRM software in the UAE (ElateCRM)"
+    },
+    {
+     "keyword": "erp & crm software",
+     "position": 3,
+     "type": "",
+     "title": "Cloud-based CRM software in the UAE (ElateCRM)"
+    },
+    {
+     "keyword": "erp system dubai",
+     "position": 4,
+     "type": "",
+     "title": "Cloud-based CRM software in the UAE (ElateCRM)"
+    },
+    {
+     "keyword": "erp software in dubai",
+     "position": 4,
+     "type": "",
+     "title": "Cloud-based CRM software in the UAE (ElateCRM)"
+    },
+    {
+     "keyword": "best erp software dubai",
+     "position": 2,
+     "type": "",
+     "title": "Cloud-based CRM software in the UAE (ElateCRM)"
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "itransition.com",
+   "client": "techand.ai",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "crm service provider",
+     "position": 7,
+     "type": "",
+     "title": "CRM Services and Solutions We Deliver"
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "ravenlabs.com.au",
+   "client": "techand.ai",
+   "class": "adjacent",
+   "appearances": [
+    {
+     "keyword": "ms 365 erp",
+     "position": 5,
+     "type": "",
+     "title": "Microsoft Dynamics 365 vs Traditional ERP: An Honest ..."
+    }
+   ],
+   "holdout": true
+  },
+  {
+   "host": "learn.microsoft.com",
+   "client": "techand.ai",
+   "class": "principal",
+   "appearances": [
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 7,
+     "type": ""
+    },
+    {
+     "keyword": "microsoft dynamics erp",
+     "position": 7,
+     "type": ""
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 10,
+     "type": ""
+    },
+    {
+     "keyword": "ms 365 erp",
+     "position": 2,
+     "type": ""
+    },
+    {
+     "keyword": "ms 365 erp",
+     "position": 6,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "microsoft.com",
+   "client": "techand.ai",
+   "class": "principal",
+   "appearances": [
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 3,
+     "type": ""
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 1,
+     "type": ""
+    },
+    {
+     "keyword": "microsoft dynamics erp",
+     "position": 2,
+     "type": ""
+    },
+    {
+     "keyword": "ms 365 erp",
+     "position": 1,
+     "type": ""
+    },
+    {
+     "keyword": "microsoft dynamics erp",
+     "position": 6,
+     "type": ""
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 2,
+     "type": ""
+    },
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 1,
+     "type": ""
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 4,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "community.dynamics.com",
+   "client": "techand.ai",
+   "class": "principal",
+   "appearances": [
+    {
+     "keyword": "crm service module",
+     "position": 3,
+     "type": ""
+    }
+   ],
+   "holdout": true
+  },
+  {
+   "host": "youtube.com",
+   "client": "techand.ai",
+   "class": "platform",
+   "appearances": [
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 2,
+     "type": ""
+    },
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 7,
+     "type": ""
+    },
+    {
+     "keyword": "ms 365 erp",
+     "position": 9,
+     "type": ""
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 4,
+     "type": ""
+    },
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 8,
+     "type": ""
+    },
+    {
+     "keyword": "what is a crm company",
+     "position": 4,
+     "type": ""
+    },
+    {
+     "keyword": "crm service module",
+     "position": 8,
+     "type": ""
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 3,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "linkedin.com",
+   "client": "techand.ai",
+   "class": "platform",
+   "appearances": [
+    {
+     "keyword": "crm service provider in uae",
+     "position": 2,
+     "type": ""
+    },
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 10,
+     "type": ""
+    },
+    {
+     "keyword": "crm service provider in uae",
+     "position": 7,
+     "type": ""
+    },
+    {
+     "keyword": "erp systems in uae",
+     "position": 2,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "ae.linkedin.com",
+   "client": "techand.ai",
+   "class": "platform",
+   "appearances": [
+    {
+     "keyword": "microsoft dynamics erp",
+     "position": 9,
+     "type": ""
+    },
+    {
+     "keyword": "ms 365 erp",
+     "position": 9,
+     "type": ""
+    }
+   ],
+   "holdout": true
+  },
+  {
+   "host": "facebook.com",
+   "client": "techand.ai",
+   "class": "platform",
+   "appearances": [
+    {
+     "keyword": "ms 365 erp",
+     "position": 3,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "reddit.com",
+   "client": "techand.ai",
+   "class": "platform",
+   "appearances": [
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 3,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "en.wikipedia.org",
+   "client": "techand.ai",
+   "class": "platform",
+   "appearances": [
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 6,
+     "type": ""
+    },
+    {
+     "keyword": "microsoft dynamics erp",
+     "position": 4,
+     "type": ""
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 5,
+     "type": ""
+    }
+   ],
+   "holdout": true
+  },
+  {
+   "host": "coursera.org",
+   "client": "techand.ai",
+   "class": "platform",
+   "appearances": [
+    {
+     "keyword": "crm for customers",
+     "position": 2,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "sage.com",
+   "client": "techand.ai",
+   "class": "platform",
+   "appearances": [
+    {
+     "keyword": "crm service provider in uae",
+     "position": 4,
+     "type": ""
+    },
+    {
+     "keyword": "crm service provider",
+     "position": 3,
+     "type": ""
+    },
+    {
+     "keyword": "erp system dubai",
+     "position": 2,
+     "type": ""
+    },
+    {
+     "keyword": "erp software dubai",
+     "position": 3,
+     "type": ""
+    },
+    {
+     "keyword": "erp software solutions",
+     "position": 3,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "oracle.com",
+   "client": "techand.ai",
+   "class": "platform",
+   "appearances": [
+    {
+     "keyword": "crm service provider in uae",
+     "position": 1,
+     "type": ""
+    },
+    {
+     "keyword": "crm service provider",
+     "position": 6,
+     "type": ""
+    }
+   ],
+   "holdout": true
+  },
+  {
+   "host": "hubspot.com",
+   "client": "techand.ai",
+   "class": "platform",
+   "appearances": [
+    {
+     "keyword": "crm service provider",
+     "position": 2,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "zapier.com",
+   "client": "techand.ai",
+   "class": "platform",
+   "appearances": [
+    {
+     "keyword": "crm for customers",
+     "position": 3,
+     "type": ""
+    },
+    {
+     "keyword": "erp software solutions",
+     "position": 2,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "odoo.com",
+   "client": "techand.ai",
+   "class": "platform",
+   "appearances": [],
+   "holdout": true
+  },
+  {
+   "host": "sap.com",
+   "client": "techand.ai",
+   "class": "platform",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "shopify.com",
+   "client": "techand.ai",
+   "class": "platform",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "zoho.com",
+   "client": "techand.ai",
+   "class": "platform",
+   "appearances": [],
+   "holdout": true
+  },
+  {
+   "host": "netsuite.com",
+   "client": "techand.ai",
+   "class": "platform",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "infor.com",
+   "client": "techand.ai",
+   "class": "platform",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "gartner.com",
+   "client": "techand.ai",
+   "class": "directory",
+   "appearances": [
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 9,
+     "type": ""
+    },
+    {
+     "keyword": "microsoft dynamics erp",
+     "position": 6,
+     "type": ""
+    },
+    {
+     "keyword": "ms 365 erp",
+     "position": 9,
+     "type": ""
+    },
+    {
+     "keyword": "microsoft dynamics erp",
+     "position": 9,
+     "type": ""
+    }
+   ],
+   "holdout": true
+  },
+  {
+   "host": "goodfirms.co",
+   "client": "techand.ai",
+   "class": "directory",
+   "appearances": [
+    {
+     "keyword": "crm service provider in uae",
+     "position": 6,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "f6s.com",
+   "client": "techand.ai",
+   "class": "directory",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "bayzat.com",
+   "client": "techand.ai",
+   "class": "publisher_list",
+   "appearances": [
+    {
+     "keyword": "crm service provider in uae",
+     "position": 3,
+     "type": "",
+     "title": "10 Best CRM Softwares in Dubai, UAE (October, 2026)"
+    }
+   ],
+   "holdout": true
+  },
+  {
+   "host": "halsimplify.com",
+   "client": "techand.ai",
+   "class": "publisher_list",
+   "appearances": [
+    {
+     "keyword": "crm service provider in uae",
+     "position": 3,
+     "type": "",
+     "title": "8 Best CRM Software in UAE for 2026"
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "erpsoftwareblog.com",
+   "client": "techand.ai",
+   "class": "media",
+   "appearances": [
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 4,
+     "type": ""
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 3,
+     "type": ""
+    },
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 7,
+     "type": ""
+    },
+    {
+     "keyword": "ms 365 erp",
+     "position": 4,
+     "type": ""
+    },
+    {
+     "keyword": "microsoft dynamics erp",
+     "position": 1,
+     "type": ""
+    },
+    {
+     "keyword": "ms 365 erp",
+     "position": 10,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "erpresearch.com",
+   "client": "techand.ai",
+   "class": "media",
+   "appearances": [
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 8,
+     "type": ""
+    },
+    {
+     "keyword": "microsoft dynamics erp",
+     "position": 5,
+     "type": ""
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 8,
+     "type": ""
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 10,
+     "type": ""
+    },
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 9,
+     "type": ""
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 9,
+     "type": ""
+    }
+   ],
+   "holdout": true
+  },
+  {
+   "host": "msdynamicsworld.com",
+   "client": "techand.ai",
+   "class": "media",
+   "appearances": [
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 10,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "google.com",
+   "client": "techand.ai",
+   "class": "reject",
+   "appearances": [
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 1,
+     "type": ""
+    },
+    {
+     "keyword": "ms 365 erp",
+     "position": 2,
+     "type": ""
+    },
+    {
+     "keyword": "microsoft dynamics erp",
+     "position": 1,
+     "type": ""
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 1,
+     "type": ""
+    },
+    {
+     "keyword": "is microsoft dynamics 365 an erp system",
+     "position": 2,
+     "type": ""
+    },
+    {
+     "keyword": "crm for customers",
+     "position": 3,
+     "type": ""
+    },
+    {
+     "keyword": "what is a crm company",
+     "position": 1,
+     "type": ""
+    },
+    {
+     "keyword": "best crm software for customer service",
+     "position": 2,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "Milestones",
+   "client": "techand.ai",
+   "class": "reject",
+   "appearances": [],
+   "holdout": true
+  },
+  {
+   "host": "Testing",
+   "client": "techand.ai",
+   "class": "reject",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "Warranty",
+   "client": "techand.ai",
+   "class": "reject",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "Functionality",
+   "client": "techand.ai",
+   "class": "reject",
+   "appearances": [],
+   "holdout": true
+  },
+  {
+   "host": "Procurement",
+   "client": "techand.ai",
+   "class": "reject",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "Phase 1",
+   "client": "techand.ai",
+   "class": "reject",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "Phase 2",
+   "client": "techand.ai",
+   "class": "reject",
+   "appearances": [],
+   "holdout": true
+  },
+  {
+   "host": "AED 300k-450k",
+   "client": "techand.ai",
+   "class": "reject",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "Draft",
+   "client": "techand.ai",
+   "class": "reject",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "Validated",
+   "client": "techand.ai",
+   "class": "reject",
+   "appearances": [],
+   "holdout": true
+  },
+  {
+   "host": "Scalability",
+   "client": "techand.ai",
+   "class": "reject",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "Inventory",
+   "client": "techand.ai",
+   "class": "reject",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "techand.ai",
+   "client": "techand.ai",
+   "class": "reject",
+   "appearances": [],
+   "holdout": true
+  },
+  {
+   "host": "raccoongang.com",
+   "client": "devaicon.com",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "open edx provider",
+     "position": 5,
+     "type": "",
+     "title": "How to Choose an Open edX Service Provider (2026)"
+    },
+    {
+     "keyword": "open edx provider",
+     "position": 4,
+     "type": "",
+     "title": "How to Choose an Open edX Service Provider (2026)"
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "edly.io",
+   "client": "devaicon.com",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "open edx provider",
+     "position": 7,
+     "type": "",
+     "title": "Best Open edX Service Providers in 2026 - Edly"
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "edunext.co",
+   "client": "devaicon.com",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "open edx provider",
+     "position": 6,
+     "type": "",
+     "title": "edunext | Open edX\u00ae Hosting, Support & Consulting for ..."
+    }
+   ],
+   "holdout": true
+  },
+  {
+   "host": "openedx.org",
+   "client": "devaicon.com",
+   "class": "principal",
+   "appearances": [
+    {
+     "keyword": "open edx provider",
+     "position": 1,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "microsoft.com",
+   "client": "devaicon.com",
+   "class": "principal",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "github.com",
+   "client": "devaicon.com",
+   "class": "platform",
+   "appearances": [
+    {
+     "keyword": "open edx provider",
+     "position": 8,
+     "type": ""
+    },
+    {
+     "keyword": "open edx provider",
+     "position": 9,
+     "type": ""
+    },
+    {
+     "keyword": "software development companies",
+     "position": 5,
+     "type": ""
+    },
+    {
+     "keyword": "computer software development companies",
+     "position": 3,
+     "type": ""
+    }
+   ],
+   "holdout": true
+  },
+  {
+   "host": "en.wikipedia.org",
+   "client": "devaicon.com",
+   "class": "platform",
+   "appearances": [
+    {
+     "keyword": "open edx provider",
+     "position": 10,
+     "type": ""
+    },
+    {
+     "keyword": "software development companies",
+     "position": 4,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "youtube.com",
+   "client": "devaicon.com",
+   "class": "platform",
+   "appearances": [
+    {
+     "keyword": "ai in industrial automation",
+     "position": 4,
+     "type": ""
+    },
+    {
+     "keyword": "ai in industrial automation",
+     "position": 5,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "researchgate.net",
+   "client": "devaicon.com",
+   "class": "platform",
+   "appearances": [
+    {
+     "keyword": "ai in industrial automation",
+     "position": 9,
+     "type": ""
+    }
+   ],
+   "holdout": true
+  },
+  {
+   "host": "facebook.com",
+   "client": "devaicon.com",
+   "class": "platform",
+   "appearances": [
+    {
+     "keyword": "it solutions",
+     "position": 5,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "linkedin.com",
+   "client": "devaicon.com",
+   "class": "platform",
+   "appearances": [
+    {
+     "keyword": "open edx provider",
+     "position": 3,
+     "type": ""
+    },
+    {
+     "keyword": "open edx provider",
+     "position": 5,
+     "type": ""
+    },
+    {
+     "keyword": "ai automation services pakistan",
+     "position": 10,
+     "type": ""
+    },
+    {
+     "keyword": "software development company in uae",
+     "position": 5,
+     "type": ""
+    },
+    {
+     "keyword": "software development agencies",
+     "position": 2,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "atlassian.com",
+   "client": "devaicon.com",
+   "class": "platform",
+   "appearances": [
+    {
+     "keyword": "it services",
+     "position": 4,
+     "type": ""
+    }
+   ],
+   "holdout": true
+  },
+  {
+   "host": "servicenow.com",
+   "client": "devaicon.com",
+   "class": "platform",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "ibm.com",
+   "client": "devaicon.com",
+   "class": "platform",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "coursera.org",
+   "client": "devaicon.com",
+   "class": "platform",
+   "appearances": [],
+   "holdout": true
+  },
+  {
+   "host": "reddit.com",
+   "client": "devaicon.com",
+   "class": "platform",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "upwork.com",
+   "client": "devaicon.com",
+   "class": "platform",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "instagram.com",
+   "client": "devaicon.com",
+   "class": "platform",
+   "appearances": [],
+   "holdout": true
+  },
+  {
+   "host": "medium.com",
+   "client": "devaicon.com",
+   "class": "platform",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "sage.com",
+   "client": "devaicon.com",
+   "class": "platform",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "netsuite.com",
+   "client": "devaicon.com",
+   "class": "platform",
+   "appearances": [],
+   "holdout": true
+  },
+  {
+   "host": "clutch.co",
+   "client": "devaicon.com",
+   "class": "directory",
+   "appearances": [
+    {
+     "keyword": "ai automation services pakistan",
+     "position": 4,
+     "type": ""
+    },
+    {
+     "keyword": "software development companies",
+     "position": 2,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "sortlist.com",
+   "client": "devaicon.com",
+   "class": "directory",
+   "appearances": [
+    {
+     "keyword": "ai automation services pakistan",
+     "position": 4,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "themanifest.com",
+   "client": "devaicon.com",
+   "class": "directory",
+   "appearances": [
+    {
+     "keyword": "software development agencies",
+     "position": 4,
+     "type": ""
+    },
+    {
+     "keyword": "software development agency",
+     "position": 4,
+     "type": ""
+    }
+   ],
+   "holdout": true
+  },
+  {
+   "host": "topdevelopers.co",
+   "client": "devaicon.com",
+   "class": "directory",
+   "appearances": [
+    {
+     "keyword": "software development agency",
+     "position": 1,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "gartner.com",
+   "client": "devaicon.com",
+   "class": "directory",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "designrush.com",
+   "client": "devaicon.com",
+   "class": "directory",
+   "appearances": [],
+   "holdout": true
+  },
+  {
+   "host": "goodfirms.co",
+   "client": "devaicon.com",
+   "class": "directory",
+   "appearances": [
+    {
+     "keyword": "software development company uae",
+     "position": 2,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "indeed.com",
+   "client": "devaicon.com",
+   "class": "job_board",
+   "appearances": [
+    {
+     "keyword": "it services",
+     "position": 3,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "centralbank.ae",
+   "client": "devaicon.com",
+   "class": "government",
+   "appearances": [],
+   "holdout": true
+  },
+  {
+   "host": "ico.org.uk",
+   "client": "devaicon.com",
+   "class": "government",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "google.com",
+   "client": "devaicon.com",
+   "class": "reject",
+   "appearances": [
+    {
+     "keyword": "ai in industrial automation",
+     "position": 1,
+     "type": ""
+    },
+    {
+     "keyword": "ai automation services pakistan",
+     "position": 1,
+     "type": ""
+    },
+    {
+     "keyword": "ai development companies",
+     "position": 1,
+     "type": ""
+    },
+    {
+     "keyword": "ai app development companies",
+     "position": 1,
+     "type": ""
+    },
+    {
+     "keyword": "ai app development",
+     "position": 1,
+     "type": ""
+    },
+    {
+     "keyword": "software development companies",
+     "position": 2,
+     "type": ""
+    },
+    {
+     "keyword": "computer software development companies",
+     "position": 2,
+     "type": ""
+    },
+    {
+     "keyword": "software development agencies",
+     "position": 1,
+     "type": ""
+    }
+   ],
+   "holdout": false
+  },
+  {
+   "host": "Zapier",
+   "client": "devaicon.com",
+   "class": "reject",
+   "appearances": [],
+   "holdout": true
+  },
+  {
+   "host": "Make",
+   "client": "devaicon.com",
+   "class": "reject",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "Google Workspace",
+   "client": "devaicon.com",
+   "class": "reject",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "Governed AI",
+   "client": "devaicon.com",
+   "class": "reject",
+   "appearances": [],
+   "holdout": true
+  },
+  {
+   "host": "Permissions",
+   "client": "devaicon.com",
+   "class": "reject",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "PKR 75",
+   "client": "devaicon.com",
+   "class": "reject",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "Operations",
+   "client": "devaicon.com",
+   "class": "reject",
+   "appearances": [],
+   "holdout": true
+  },
+  {
+   "host": "Sales",
+   "client": "devaicon.com",
+   "class": "reject",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "Phase 1",
+   "client": "devaicon.com",
+   "class": "reject",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "Criteria",
+   "client": "devaicon.com",
+   "class": "reject",
+   "appearances": [],
+   "holdout": true
+  },
+  {
+   "host": "devaicon.com",
+   "client": "devaicon.com",
+   "class": "reject",
+   "appearances": [],
+   "holdout": false
+  },
+  {
+   "host": "sometravel.com",
+   "client": "techand.ai",
+   "class": "adjacent",
+   "fxl_negative": true,
+   "appearances": [
+    {
+     "keyword": "dynamics 365 business central company dubai",
+     "position": 8,
+     "type": "",
+     "title": "Dubai Holiday Packages and Desert Safari Tours"
+    }
+   ]
+  },
+  {
+   "host": "smarthomes-dubai.ae",
+   "client": "devaicon.com",
+   "class": "adjacent",
+   "fxl_negative": true,
+   "appearances": [
+    {
+     "keyword": "best automation dubai",
+     "position": 3,
+     "type": "",
+     "title": "Home Automation Dubai | Smart Homes"
+    }
+   ]
+  },
+  {
+   "host": "skytechdigital.ae",
+   "client": "devaicon.com",
+   "class": "adjacent",
+   "fxl_negative": true,
+   "appearances": [
+    {
+     "keyword": "custom ai solutions uae",
+     "position": 6,
+     "type": "",
+     "title": "Web Design Company in Dubai | Skytech Digital"
+    }
+   ]
+  }
+ ],
+ "_comment_fxl": "FX-L (2026-11-08, REVIEW_LOGIC B2 / M8): a business is classified on its OWN text, never on the search it was found on, so the business and list cases now carry the public titles their results showed on the stored readings (seo_rank_history snapshots, page titles only). The negative cases below are businesses on a service results page that are not competitors (an off-category business ranking on a city word): they must never come out direct."
+}

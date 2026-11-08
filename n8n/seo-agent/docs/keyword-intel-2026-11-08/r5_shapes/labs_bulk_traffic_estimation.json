@@ -1,0 +1,74 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "dataforseo_labs",
+   "google",
+   "bulk_traffic_estimation",
+   "live"
+  ],
+  "data": {
+   "api": "dataforseo_labs",
+   "function": "bulk_traffic_estimation",
+   "se_type": "google",
+   "targets": [
+    "techand.ai",
+    "cleartax.com"
+   ],
+   "location_code": 2784,
+   "language_code": "en",
+   "item_types": [
+    "organic"
+   ]
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "se_type": "google",
+    "location_code": 2840,
+    "language_code": "en",
+    "total_count": 2,
+    "items_count": 2,
+    "items": [
+     {
+      "se_type": "google",
+      "target": "cnn.com",
+      "metrics": {
+       "organic": {
+        "etv": 28068666.79624345,
+        "count": 3155496
+       },
+       "paid": {
+        "etv": 80.65898489952087,
+        "count": 14
+       },
+       "local_pack": null,
+       "featured_snippet": null
+      }
+     },
+     {
+      "se_type": "google",
+      "target": "dataforseo.com",
+      "metrics": {
+       "organic": {
+        "etv": 15860.73803276199,
+        "count": 8703
+       },
+       "paid": {
+        "etv": 0,
+        "count": 0
+       },
+       "local_pack": null,
+       "featured_snippet": null
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

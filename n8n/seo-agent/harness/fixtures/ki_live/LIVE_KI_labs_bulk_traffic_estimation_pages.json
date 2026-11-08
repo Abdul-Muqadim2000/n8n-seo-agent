@@ -1,0 +1,88 @@
+{
+ "_source": "real LIVE response, api.dataforseo.com/v3, 2026-11-07 ~20:06-20:10 UTC (2026-11-08 PKT), KI L0 live confirmations; item arrays trimmed to 3, strings to 300 chars",
+ "calls": [
+  {
+   "call": "c01_bulk_traffic_pages",
+   "status_code": 20000,
+   "cost": 0.01236,
+   "task": {
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "cost": 0.01236,
+    "path": [
+     "v3",
+     "dataforseo_labs",
+     "google",
+     "bulk_traffic_estimation",
+     "live"
+    ],
+    "data": {
+     "api": "dataforseo_labs",
+     "function": "bulk_traffic_estimation",
+     "se_type": "google",
+     "targets": [
+      "https://www.dynamicssquare.com/products/microsoft-dynamics-365/",
+      "https://www.intwo.cloud/company/al-nasr-contracting-company-llc/",
+      "https://www.techand.ai/"
+     ],
+     "location_code": 2784,
+     "language_code": "en",
+     "item_types": [
+      "organic"
+     ]
+    },
+    "result_count": 1,
+    "result": [
+     {
+      "se_type": "google",
+      "location_code": 2784,
+      "language_code": "en",
+      "total_count": 3,
+      "items_count": 3,
+      "items": [
+       {
+        "se_type": "google",
+        "target": "https://www.intwo.cloud/company/al-nasr-contracting-company-llc/",
+        "metrics": {
+         "organic": {
+          "etv": 1.2285828590393066,
+          "count": 1
+         },
+         "paid": null,
+         "local_pack": null,
+         "featured_snippet": null
+        }
+       },
+       {
+        "se_type": "google",
+        "target": "https://www.dynamicssquare.com/products/microsoft-dynamics-365/",
+        "metrics": {
+         "organic": {
+          "etv": 8.102083206176758,
+          "count": 3
+         },
+         "paid": null,
+         "local_pack": null,
+         "featured_snippet": null
+        }
+       },
+       {
+        "se_type": "google",
+        "target": "https://www.techand.ai/",
+        "metrics": {
+         "organic": {
+          "etv": 0,
+          "count": 0
+         },
+         "paid": null,
+         "local_pack": null,
+         "featured_snippet": null
+        }
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

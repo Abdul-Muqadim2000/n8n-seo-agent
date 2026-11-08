@@ -1,0 +1,118 @@
+{
+ "_source": "harness/fixtures_live/aimode.json (real live response, 2026-10-02, trimmed)",
+ "cost": 0.004,
+ "task": {
+  "cost": 0.004,
+  "path": [
+   "v3",
+   "serp",
+   "google",
+   "ai_mode",
+   "live",
+   "advanced"
+  ],
+  "data": {
+   "api": "serp",
+   "function": "live",
+   "se": "google",
+   "se_type": "ai_mode",
+   "keyword": "e invoicing service providers in uae",
+   "location_code": 2784,
+   "language_code": "en",
+   "device": "desktop",
+   "os": "windows"
+  },
+  "result": [
+   {
+    "keyword": "e invoicing service providers in uae",
+    "type": "ai_mode",
+    "se_domain": "google.com",
+    "location_code": 2784,
+    "language_code": "en",
+    "check_url": "https://www.google.com/search?q=e%20invoicing%20service%20providers%20in%20uae&hl=en&gl=AE&udm=50&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+    "datetime": "2026-10-02 11:58:27 +00:00",
+    "spell": null,
+    "refinement_chips": null,
+    "item_types": [
+     "ai_overview"
+    ],
+    "se_results_count": 0,
+    "items_count": 1,
+    "items": [
+     {
+      "type": "ai_overview",
+      "rank_group": 1,
+      "rank_absolute": 1,
+      "page": 1,
+      "position": "left",
+      "markdown": "The UAE is rolling out its national **e-invoicing system** (E-Billing / e-Invoicing framework) using a decentralized **5-corner model** built on the **Peppol ne...",
+      "items": [
+       {
+        "type": "ai_overview_element",
+        "position": "left",
+        "title": null,
+        "text": "The UAE is rolling out its national e-invoicing system (E-Billing / e-Invoicing framework) using a decentralized 5-corner model built on the Peppol network and ...",
+        "markdown": "The UAE is rolling out its national **e-invoicing system** (E-Billing / e-Invoicing framework) using a decentralized **5-corner model** built on the **Peppol ne...",
+        "links": null,
+        "images": null,
+        "references": [
+         {
+          "type": "ai_overview_reference",
+          "position": "left",
+          "source": "EDICOM",
+          "domain": "edicomgroup.com",
+          "url": "https://edicomgroup.com/blog/united-arab-emirates-electronic-invoicing-project",
+          "title": "B2B e-Invoicing in the United Arab Emirates (UAE): EDICOM Accredited e-Invoicing Service Provider | EDICOM",
+          "text": "UAE B2B and B2G mandatory electronic invoicing using a decentralized five-corner model, Peppol network, and PINT AE specification."
+         }
+        ]
+       },
+       {
+        "type": "ai_overview_element",
+        "position": "left",
+        "title": null,
+        "text": "To comply with the mandates\u2014which begin rolling out for large taxpayers (revenue \u2265 AED 50M) and scale broadly\u2014businesses must integrate through official Accredi...",
+        "markdown": "To comply with the mandates\u2014which begin rolling out for large taxpayers (revenue \u2265 AED 50M) and scale broadly\u2014businesses must integrate through official **Accre...",
+        "links": null,
+        "images": null,
+        "references": [
+         {
+          "type": "ai_overview_reference",
+          "position": "left",
+          "source": "EDICOM",
+          "domain": "edicomgroup.com",
+          "url": "https://edicomgroup.com/blog/united-arab-emirates-electronic-invoicing-project",
+          "title": "B2B e-Invoicing in the United Arab Emirates (UAE): EDICOM Accredited e-Invoicing Service Provider | EDICOM",
+          "text": "Compliance: Applies to all UAE business entities regardless of size, VAT registration, or establishment status."
+         }
+        ]
+       },
+       "...(+7 more)"
+      ],
+      "references": [
+       {
+        "type": "ai_overview_reference",
+        "position": "right",
+        "source": "Tax.gov.ae",
+        "domain": "tax.gov.ae",
+        "url": "https://tax.gov.ae/en/content/uae.einvoicing.aspx",
+        "title": "Federal Tax Authority - Uae E-Invoicing",
+        "text": "FTA services are only available through UAEPass! Subject to the e-Invoicing System. Calls on All Persons subject to Corporate Tax ..."
+       },
+       {
+        "type": "ai_overview_reference",
+        "position": "right",
+        "source": "EDICOM",
+        "domain": "edicomgroup.com",
+        "url": "https://edicomgroup.com/blog/united-arab-emirates-electronic-invoicing-project",
+        "title": "B2B e-Invoicing in the United Arab Emirates (UAE): EDICOM Accredited e-Invoicing Service Provider | EDICOM",
+        "text": "Compliance: Applies to all UAE business entities regardless of size, VAT registration, or establishment status."
+       },
+       "...(+3 more)"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

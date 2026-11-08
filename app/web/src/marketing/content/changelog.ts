@@ -34,6 +34,31 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-11-08',
+    version: '4.11',
+    title: 'Competitors and Keyword research, rolling out',
+    summary: 'Two new pages are rolling out to selected websites, on request: Competitors, with who you really compete with in Google and why, and Keyword research, with what buyers search to hire a service like yours and which searches you can win. Each website starts with a private trial run by our team, at no cost to you; ask us if you would like them for yours.',
+    highlights: [
+      'Competitors: the companies in Google\'s results for your services in your market, each with the reason it is on your list. Directories, "best of" lists and platforms are kept apart as places to be listed on. Choose up to five to follow, keep others on a watchlist, and see where they are ahead of you, with the step that would close each gap and a button that opens the tool for it',
+      'Keyword research: searches from your Search Console, Google\'s own questions and suggestions and your competitors, grouped into topics. Each topic gets one verdict ("Go", "Takes a few months", "Hard for your website now" or "Not for you" with the reason, and "Not judged yet" while the evidence is thin) and a score with its likely range, and every number says how we know it',
+      'The searches just off page one, buyer questions you can add to your AI questions, a plan of up to 10 steps, and filters and a CSV for every search',
+      'Keyword discovery no longer offers to write a page for the best keyword, which it never did, and its price no longer includes one',
+    ],
+    features: ['competitors', 'keyword-research'],
+  },
+  {
+    date: '2026-11-08',
+    version: '4.10',
+    title: 'Rank checks read correctly again after a change in Google results',
+    summary: 'Google started showing its results with redirect links instead of the website addresses. Our rank checks now read the real website behind each result again, so your positions, the websites above you and your keyword groups are right again.',
+    highlights: [
+      'Your position is found by your website again, even when Google hides the exact page address. Where Google hides the address, the Rankings page shows the website without a link instead of a page address that does not exist',
+      'When a result Google hid could be yours, the keyword says so in plain words instead of reporting a drop. It never counts as a fall out of the top 50 and never raises a lost alert. After three weeks it reads "not found among the results we could read"',
+      'Search results Google hid are no longer stored as if google.com were your competitor, and two different pages are never grouped as the same page',
+    ],
+    features: ['site-tracking', 'keyword-ladders', 'keyword-research'],
+  },
+  {
     date: '2026-11-06',
     version: '4.9',
     title: 'AI ranking, rolling out: a weekly plan to get you named in AI answers',

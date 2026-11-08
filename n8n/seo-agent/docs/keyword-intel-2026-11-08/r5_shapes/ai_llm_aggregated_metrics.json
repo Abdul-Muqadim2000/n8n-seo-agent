@@ -1,0 +1,83 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "ai_optimization",
+   "llm_mentions",
+   "aggregated_metrics",
+   "live"
+  ],
+  "data": {
+   "api": "ai_optimization",
+   "function": "aggregated_metrics",
+   "target": [
+    {
+     "domain": "techand.ai"
+    }
+   ],
+   "location_code": 2840,
+   "language_code": "en",
+   "platform": "chat_gpt"
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "total": {
+     "location": [
+      {
+       "type": "group_element",
+       "key": "2840",
+       "mentions": 3842,
+       "ai_search_volume": 28284280,
+       "impressions": null
+      }
+     ],
+     "language": [
+      {
+       "type": "group_element",
+       "key": "es",
+       "mentions": 3842,
+       "ai_search_volume": 28284280,
+       "impressions": null
+      }
+     ],
+     "platform": [
+      {
+       "type": "group_element",
+       "key": "google",
+       "mentions": 3842,
+       "ai_search_volume": 28284280,
+       "impressions": null
+      }
+     ],
+     "sources_domain": [
+      {
+       "type": "group_element",
+       "key": "www.youtube.com",
+       "mentions": 2566,
+       "ai_search_volume": 18579680,
+       "impressions": null
+      },
+      {
+       "type": "group_element",
+       "key": "www.reddit.com",
+       "mentions": 978,
+       "ai_search_volume": 6604190,
+       "impressions": null
+      },
+      "...(+8 more)"
+     ],
+     "search_results_domain": null,
+     "brand_entities_title": null,
+     "brand_entities_category": null
+    },
+    "items": null
+   }
+  ]
+ }
+}

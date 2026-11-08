@@ -1,0 +1,96 @@
+{
+ "_source": "real LIVE response, api.dataforseo.com/v3, 2026-11-07 ~20:06-20:10 UTC (2026-11-08 PKT), KI L0 live confirmations; item arrays trimmed to 3, strings to 300 chars",
+ "calls": [
+  {
+   "call": "c09_autocomplete",
+   "status_code": 20000,
+   "cost": 0.002,
+   "task": {
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "cost": 0.002,
+    "path": [
+     "v3",
+     "serp",
+     "google",
+     "autocomplete",
+     "live",
+     "advanced"
+    ],
+    "data": {
+     "se_type": "autocomplete",
+     "se": "google",
+     "api": "serp",
+     "function": "live",
+     "keyword": "dynamics 365 partner",
+     "location_code": 2784,
+     "language_code": "en",
+     "client": "gws-wiz-serp",
+     "device": "desktop",
+     "os": "windows"
+    },
+    "result_count": 1,
+    "result": [
+     {
+      "keyword": "dynamics 365 partner",
+      "type": "autocomplete",
+      "se_domain": "google.com",
+      "location_code": 2784,
+      "language_code": "en",
+      "check_url": "https://www.google.com/search?q=dynamics+365+partner&hl=en&gl=AE&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+      "datetime": "2026-11-07 20:06:32 +00:00",
+      "spell": null,
+      "refinement_chips": null,
+      "item_types": [
+       "autocomplete"
+      ],
+      "se_results_count": 0,
+      "items_count": 10,
+      "items": [
+       {
+        "type": "autocomplete",
+        "rank_group": 1,
+        "rank_absolute": 1,
+        "relevance": null,
+        "suggestion": "dynamics 365 partners",
+        "suggestion_type": null,
+        "search_query_url": "https://www.google.com/search?q=dynamics+365+partners&hl=en&gl=AE&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+        "thumbnail_url": null,
+        "highlighted": [
+         "s"
+        ]
+       },
+       {
+        "type": "autocomplete",
+        "rank_group": 2,
+        "rank_absolute": 2,
+        "relevance": null,
+        "suggestion": "dynamics 365 partner sandbox – sales field service and customer service",
+        "suggestion_type": null,
+        "search_query_url": "https://www.google.com/search?q=dynamics+365+partner+sandbox+%E2%80%93+sales+field+service+and+customer+service&hl=en&gl=AE&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+        "thumbnail_url": null,
+        "highlighted": [
+         "sandbox – sales field service and customer service"
+        ]
+       },
+       {
+        "type": "autocomplete",
+        "rank_group": 3,
+        "rank_absolute": 3,
+        "relevance": null,
+        "suggestion": "dynamics 365 partners uk",
+        "suggestion_type": null,
+        "search_query_url": "https://www.google.com/search?q=dynamics+365+partners+uk&hl=en&gl=AE&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+        "thumbnail_url": null,
+        "highlighted": [
+         "s uk"
+        ]
+       },
+       "...(+7 more)"
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

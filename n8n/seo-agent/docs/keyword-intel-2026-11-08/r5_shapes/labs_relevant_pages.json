@@ -1,0 +1,187 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "dataforseo_labs",
+   "google",
+   "relevant_pages",
+   "live"
+  ],
+  "data": {
+   "api": "dataforseo_labs",
+   "function": "relevant_pages",
+   "se_type": "google",
+   "target": "techand.ai",
+   "location_code": 2784,
+   "language_code": "en",
+   "limit": 5
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "se_type": "google",
+    "target": "dataforseo.com",
+    "location_code": 2840,
+    "language_code": "en",
+    "total_count": 79,
+    "items_count": 3,
+    "items": [
+     {
+      "se_type": "google",
+      "page_address": "https://dataforseo.com/free-seo-stats/top-1000-websites",
+      "metrics": {
+       "organic": {
+        "pos_1": 2,
+        "pos_2_3": 1,
+        "pos_4_10": 96,
+        "pos_11_20": 313,
+        "pos_21_30": 145,
+        "pos_31_40": 14,
+        "pos_41_50": 17,
+        "pos_51_60": 9,
+        "pos_61_70": 5,
+        "pos_71_80": 2,
+        "pos_81_90": 0,
+        "pos_91_100": 2,
+        "etv": 226.36793029567343,
+        "count": 606,
+        "estimated_paid_traffic_cost": 701.5027809674502,
+        "is_new": 108,
+        "is_up": 280,
+        "is_down": 176,
+        "is_lost": 0,
+        "clickstream_etv": 253.3459,
+        "clickstream_gender_distribution": {
+         "female": 43,
+         "male": 56
+        },
+        "clickstream_age_distribution": {
+         "18-24": 33,
+         "25-34": 22,
+         "35-44": 23,
+         "45-54": 21,
+         "55-64": 0
+        }
+       },
+       "paid": {
+        "pos_1": 0,
+        "pos_2_3": 0,
+        "pos_4_10": 0,
+        "pos_11_20": 0,
+        "pos_21_30": 0,
+        "pos_31_40": 0,
+        "pos_41_50": 0,
+        "pos_51_60": 0,
+        "pos_61_70": 0,
+        "pos_71_80": 0,
+        "pos_81_90": 0,
+        "pos_91_100": 0,
+        "etv": 0,
+        "count": 0,
+        "estimated_paid_traffic_cost": 0,
+        "is_new": 0,
+        "is_up": 0,
+        "is_down": 0,
+        "is_lost": 0,
+        "clickstream_etv": 0,
+        "clickstream_gender_distribution": {
+         "female": 0,
+         "male": 0
+        },
+        "clickstream_age_distribution": {
+         "18-24": 0,
+         "25-34": 0,
+         "35-44": 0,
+         "45-54": 0,
+         "55-64": 0
+        }
+       },
+       "featured_snippet": null,
+       "local_pack": null
+      }
+     },
+     {
+      "se_type": "google",
+      "page_address": "https://dataforseo.com/free-seo-stats/top-1000-keywords",
+      "metrics": {
+       "organic": {
+        "pos_1": 3,
+        "pos_2_3": 55,
+        "pos_4_10": 49,
+        "pos_11_20": 20,
+        "pos_21_30": 8,
+        "pos_31_40": 6,
+        "pos_41_50": 3,
+        "pos_51_60": 0,
+        "pos_61_70": 0,
+        "pos_71_80": 0,
+        "pos_81_90": 0,
+        "pos_91_100": 0,
+        "etv": 219.28625674627256,
+        "count": 144,
+        "estimated_paid_traffic_cost": 1247.378235673532,
+        "is_new": 17,
+        "is_up": 87,
+        "is_down": 24,
+        "is_lost": 0,
+        "clickstream_etv": 72.6736,
+        "clickstream_gender_distribution": {
+         "female": 63,
+         "male": 36
+        },
+        "clickstream_age_distribution": {
+         "18-24": 0,
+         "25-34": 60,
+         "35-44": 39,
+         "45-54": 0,
+         "55-64": 0
+        }
+       },
+       "paid": {
+        "pos_1": 0,
+        "pos_2_3": 0,
+        "pos_4_10": 0,
+        "pos_11_20": 0,
+        "pos_21_30": 0,
+        "pos_31_40": 0,
+        "pos_41_50": 0,
+        "pos_51_60": 0,
+        "pos_61_70": 0,
+        "pos_71_80": 0,
+        "pos_81_90": 0,
+        "pos_91_100": 0,
+        "etv": 0,
+        "count": 0,
+        "estimated_paid_traffic_cost": 0,
+        "is_new": 0,
+        "is_up": 0,
+        "is_down": 0,
+        "is_lost": 0,
+        "clickstream_etv": 0,
+        "clickstream_gender_distribution": {
+         "female": 0,
+         "male": 0
+        },
+        "clickstream_age_distribution": {
+         "18-24": 0,
+         "25-34": 0,
+         "35-44": 0,
+         "45-54": 0,
+         "55-64": 0
+        }
+       },
+       "featured_snippet": null,
+       "local_pack": null
+      }
+     },
+     "...(+1 more)"
+    ]
+   }
+  ]
+ }
+}

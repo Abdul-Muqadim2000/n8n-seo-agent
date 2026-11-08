@@ -1,0 +1,326 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "dataforseo_labs",
+   "google",
+   "keywords_for_site",
+   "live"
+  ],
+  "data": {
+   "api": "dataforseo_labs",
+   "function": "keywords_for_site",
+   "se_type": "google",
+   "target": "techand.ai",
+   "location_code": 2784,
+   "language_code": "en",
+   "limit": 5,
+   "include_serp_info": true
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "se_type": "google",
+    "target": "dataforseo.com",
+    "location_code": 2840,
+    "language_code": "en",
+    "total_count": 103817,
+    "items_count": 3,
+    "offset": 0,
+    "offset_token": "REDACTED_OFFSET_TOKEN",
+    "items": [
+     {
+      "se_type": "google",
+      "keyword": "google",
+      "location_code": 2840,
+      "language_code": "en",
+      "keyword_info": {
+       "se_type": "google",
+       "last_updated_time": "2026-10-15 07:48:51 +00:00",
+       "competition": 0,
+       "competition_level": "LOW",
+       "cpc": 8.78,
+       "search_volume": 68000000,
+       "low_top_of_page_bid": 35.89,
+       "high_top_of_page_bid": 50,
+       "categories": [
+        10007,
+        11498,
+        "...(+1 more)"
+       ],
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 68000000
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 68000000
+        },
+        "...(+10 more)"
+       ],
+       "search_volume_trend": {
+        "monthly": 0,
+        "quarterly": 22,
+        "yearly": 0
+       }
+      },
+      "keyword_info_normalized_with_bing": {
+       "last_updated_time": "2026-11-04 06:34:51 +00:00",
+       "search_volume": 66953600,
+       "is_normalized": true,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 66953600
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 66953600
+        },
+        "...(+37 more)"
+       ]
+      },
+      "keyword_info_normalized_with_clickstream": {
+       "last_updated_time": "2026-11-04 06:34:51 +00:00",
+       "search_volume": 65549433,
+       "is_normalized": true,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 65549445
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 65508618
+        },
+        "...(+37 more)"
+       ]
+      },
+      "clickstream_keyword_info": {
+       "search_volume": 26171186,
+       "last_updated_time": "2026-11-03 03:17:40 +00:00",
+       "gender_distribution": {
+        "female": 48,
+        "male": 52
+       },
+       "age_distribution": {
+        "18-24": 18,
+        "25-34": 12,
+        "35-44": 18,
+        "45-54": 40,
+        "55-64": 12
+       },
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 10,
+         "search_volume": 26171190
+        },
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 25973400
+        },
+        "...(+10 more)"
+       ]
+      },
+      "keyword_properties": {
+       "se_type": "google",
+       "core_keyword": null,
+       "synonym_clustering_algorithm": "text_processing",
+       "keyword_difficulty": 100,
+       "detected_language": "en",
+       "is_another_language": false,
+       "words_count": 1
+      },
+      "serp_info": {
+       "se_type": "google",
+       "check_url": "https://www.google.com/search?q=google&hl=en&gl=US&ie=UTF-8&uule=w+CAIQIFISCQs2MuSEtepUEUK33kOSuTsc",
+       "serp_item_types": [
+        "organic",
+        "perspectives",
+        "...(+2 more)"
+       ],
+       "se_results_count": 125,
+       "last_updated_time": "2026-11-02 22:44:39 +00:00",
+       "previous_updated_time": "2026-07-30 03:30:58 +00:00"
+      },
+      "avg_backlinks_info": {
+       "se_type": "google",
+       "backlinks": 245176.7,
+       "dofollow": 180874.8,
+       "referring_pages": 224157.2,
+       "referring_domains": 8578.2,
+       "referring_main_domains": 7503.5,
+       "rank": 662.1,
+       "main_domain_rank": 667.2,
+       "last_updated_time": "2026-11-02 22:44:39 +00:00"
+      },
+      "search_intent_info": {
+       "se_type": "google",
+       "main_intent": "navigational",
+       "foreign_intent": [
+        "informational"
+       ],
+       "last_updated_time": "2026-04-27 20:06:40 +00:00"
+      }
+     },
+     {
+      "se_type": "google",
+      "keyword": "worlde",
+      "location_code": 2840,
+      "language_code": "en",
+      "keyword_info": {
+       "se_type": "google",
+       "last_updated_time": "2026-10-16 19:06:30 +00:00",
+       "competition": 0,
+       "competition_level": "LOW",
+       "cpc": 1.43,
+       "search_volume": 55600000,
+       "low_top_of_page_bid": 0.48,
+       "high_top_of_page_bid": 1.91,
+       "categories": [
+        10108,
+        10756,
+        "...(+1 more)"
+       ],
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 68000000
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 55600000
+        },
+        "...(+10 more)"
+       ],
+       "search_volume_trend": {
+        "monthly": 22,
+        "quarterly": 49,
+        "yearly": 22
+       }
+      },
+      "keyword_info_normalized_with_bing": {
+       "last_updated_time": "2026-11-06 07:43:47 +00:00",
+       "search_volume": 762146,
+       "is_normalized": true,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 932120
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 762146
+        },
+        "...(+37 more)"
+       ]
+      },
+      "keyword_info_normalized_with_clickstream": {
+       "last_updated_time": "2026-11-06 07:43:47 +00:00",
+       "search_volume": 1960087,
+       "is_normalized": true,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 2397229
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 1926491
+        },
+        "...(+37 more)"
+       ]
+      },
+      "clickstream_keyword_info": {
+       "search_volume": 768747,
+       "last_updated_time": "2026-11-03 09:02:42 +00:00",
+       "gender_distribution": {
+        "female": 59,
+        "male": 41
+       },
+       "age_distribution": {
+        "18-24": 56,
+        "25-34": 24,
+        "35-44": 9,
+        "45-54": 11,
+        "55-64": 0
+       },
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 10,
+         "search_volume": 768750
+        },
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 744800
+        },
+        "...(+10 more)"
+       ]
+      },
+      "keyword_properties": {
+       "se_type": "google",
+       "core_keyword": null,
+       "synonym_clustering_algorithm": "text_processing",
+       "keyword_difficulty": 1,
+       "detected_language": "en",
+       "is_another_language": false,
+       "words_count": 1
+      },
+      "serp_info": {
+       "se_type": "google",
+       "check_url": "https://www.google.com/search?q=worlde&hl=en&gl=US&ie=UTF-8&uule=w+CAIQIFISCQs2MuSEtepUEUK33kOSuTsc",
+       "serp_item_types": [
+        "organic",
+        "related_searches",
+        "...(+3 more)"
+       ],
+       "se_results_count": 3810000,
+       "last_updated_time": "2025-10-07 23:10:47 +00:00",
+       "previous_updated_time": "2023-07-30 20:09:11 +00:00"
+      },
+      "avg_backlinks_info": {
+       "se_type": "google",
+       "backlinks": 28989.3,
+       "dofollow": 22114.5,
+       "referring_pages": 25021.8,
+       "referring_domains": 1512,
+       "referring_main_domains": 1421,
+       "rank": 280.4,
+       "main_domain_rank": 412.9,
+       "last_updated_time": "2025-10-07 23:10:49 +00:00"
+      },
+      "search_intent_info": {
+       "se_type": "google",
+       "main_intent": "informational",
+       "foreign_intent": null,
+       "last_updated_time": "2026-04-30 00:47:36 +00:00"
+      }
+     },
+     "...(+1 more)"
+    ]
+   }
+  ]
+ }
+}

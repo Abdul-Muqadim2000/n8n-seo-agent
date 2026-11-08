@@ -1,0 +1,346 @@
+{
+ "_source": "real LIVE response, api.dataforseo.com/v3, 2026-11-07 ~20:06-20:10 UTC (2026-11-08 PKT), KI L0 live confirmations; item arrays trimmed to 3, strings to 300 chars",
+ "calls": [
+  {
+   "call": "c06_historical_serps",
+   "status_code": 20000,
+   "cost": 0.00024,
+   "task": {
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "cost": 0.00024,
+    "path": [
+     "v3",
+     "dataforseo_labs",
+     "google",
+     "historical_serps",
+     "live"
+    ],
+    "data": {
+     "api": "dataforseo_labs",
+     "function": "historical_serps",
+     "se_type": "google",
+     "keyword": "erp software uae",
+     "location_code": 2784,
+     "language_code": "en",
+     "date_from": "2026-05-01"
+    },
+    "result_count": 1,
+    "result": [
+     {
+      "se_type": "google",
+      "keyword": "erp software uae",
+      "location_code": 2784,
+      "language_code": "en",
+      "total_count": 2,
+      "items_count": 2,
+      "items": [
+       {
+        "se_type": "google",
+        "keyword": "erp software uae",
+        "type": "organic",
+        "se_domain": "google.com",
+        "location_code": 2784,
+        "language_code": "en",
+        "check_url": "https://www.google.com/search?q=erp%20software%20uae&hl=en&gl=AE&ie=UTF-8&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+        "datetime": "2026-06-03 00:30:37 +00:00",
+        "spell": null,
+        "item_types": [
+         "local_pack",
+         "organic",
+         "people_also_ask",
+         "...(+1 more)"
+        ],
+        "se_results_count": 146,
+        "items_count": 113,
+        "items": [
+         {
+          "se_type": "google",
+          "type": "local_pack",
+          "rank_group": 1,
+          "rank_absolute": 1,
+          "position": "left",
+          "xpath": "/html[1]/body[1]/div[3]/div[1]/div[12]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]",
+          "title": "Peniel Technology LLC",
+          "description": "Dubai · 050 961 7708 \nClosed · Opens 9 AM \n\"Highly recommended for their top-notch software and customer service.\" \n",
+          "domain": "www.penieltech.com",
+          "phone": "050 961 7708",
+          "url": "https://www.penieltech.com/",
+          "is_paid": false,
+          "rating": {
+           "rating_type": "Max5",
+           "value": 4.9,
+           "votes_count": 1200,
+           "rating_max": 5
+          },
+          "main_domain": "penieltech.com",
+          "relative_url": "/",
+          "etv": 57.243097226445,
+          "estimated_paid_traffic_cost": 720.6905940809426,
+          "clickstream_etv": null,
+          "rank_changes": {
+           "previous_rank_absolute": 1,
+           "is_new": true,
+           "is_up": false,
+           "is_down": false
+          },
+          "backlinks_info": {
+           "referring_domains": 428,
+           "referring_main_domains": 417,
+           "referring_pages": 1837,
+           "dofollow": 1464,
+           "backlinks": 1999,
+           "time_update": "2026-06-02 09:10:07 +00:00"
+          },
+          "rank_info": {
+           "page_rank": 381,
+           "main_domain_rank": 297
+          }
+         },
+         {
+          "se_type": "google",
+          "type": "local_pack",
+          "rank_group": 2,
+          "rank_absolute": 2,
+          "position": "left",
+          "xpath": "/html[1]/body[1]/div[3]/div[1]/div[12]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/div[1]/div[3]/div[1]/div[1]",
+          "title": "FACTS ERP Software House L.L.C",
+          "description": "Dubai · 055 899 3902 \nOpen 24 hours \n\"Excellent ERP software with a ton of features and strong customizability.\" \n",
+          "domain": "facts.ae",
+          "phone": "055 899 3902",
+          "url": "https://facts.ae/?utm_source=CMBlisting&utm_medium=organic",
+          "is_paid": false,
+          "rating": {
+           "rating_type": "Max5",
+           "value": 4.6,
+           "votes_count": 106,
+           "rating_max": 5
+          },
+          "main_domain": "facts.ae",
+          "relative_url": "/?utm_source=CMBlisting&utm_medium=organic",
+          "etv": 28.6215486132225,
+          "estimated_paid_traffic_cost": 360.3452970404713,
+          "clickstream_etv": null,
+          "rank_changes": {
+           "previous_rank_absolute": 2,
+           "is_new": true,
+           "is_up": false,
+           "is_down": false
+          },
+          "backlinks_info": {
+           "referring_domains": 5,
+           "referring_main_domains": 5,
+           "referring_pages": 8,
+           "dofollow": 5,
+           "backlinks": 29,
+           "time_update": "2026-06-02 10:20:56 +00:00"
+          },
+          "rank_info": {
+           "page_rank": 119,
+           "main_domain_rank": 388
+          }
+         },
+         {
+          "se_type": "google",
+          "type": "local_pack",
+          "rank_group": 3,
+          "rank_absolute": 3,
+          "position": "left",
+          "xpath": "/html[1]/body[1]/div[3]/div[1]/div[12]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/div[1]/div[5]/div[1]/div[1]",
+          "title": "eresource MiddleEast FZE | Best ERP Software in UAE",
+          "description": "Closed · Opens 9:30 AM \n\"Best Industry Specific ERP Software in UAE.\" \n",
+          "domain": "www.eresourceerp.com",
+          "phone": "058 640 0803",
+          "url": "https://www.eresourceerp.com/erp-in-uae/",
+          "is_paid": false,
+          "rating": {
+           "rating_type": "Max5",
+           "value": 4.8,
+           "votes_count": 12,
+           "rating_max": 5
+          },
+          "main_domain": "eresourceerp.com",
+          "relative_url": "/erp-in-uae/",
+          "etv": 14.31077430661125,
+          "estimated_paid_traffic_cost": 180.17264852023564,
+          "clickstream_etv": null,
+          "rank_changes": {
+           "previous_rank_absolute": 3,
+           "is_new": true,
+           "is_up": false,
+           "is_down": false
+          },
+          "backlinks_info": {
+           "referring_domains": 1,
+           "referring_main_domains": 1,
+           "referring_pages": 1,
+           "dofollow": 1,
+           "backlinks": 1,
+           "time_update": "2026-06-02 10:10:37 +00:00"
+          },
+          "rank_info": {
+           "page_rank": 58,
+           "main_domain_rank": 262
+          }
+         },
+         "...(+110 more)"
+        ]
+       },
+       {
+        "se_type": "google",
+        "keyword": "erp software uae",
+        "type": "organic",
+        "se_domain": "google.com",
+        "location_code": 2784,
+        "language_code": "en",
+        "check_url": "https://www.google.com/search?q=erp%20software%20uae&hl=en&gl=AE&ie=UTF-8&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+        "datetime": "2026-08-26 03:17:55 +00:00",
+        "spell": null,
+        "item_types": [
+         "local_pack",
+         "organic",
+         "people_also_ask",
+         "...(+1 more)"
+        ],
+        "se_results_count": 127,
+        "items_count": 98,
+        "items": [
+         {
+          "se_type": "google",
+          "type": "local_pack",
+          "rank_group": 1,
+          "rank_absolute": 1,
+          "position": "left",
+          "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/div[1]",
+          "title": "Peniel Technology LLC",
+          "description": "Dubai · 050 961 7708 \nClosed · Opens 9 AM \nOn-site services \n",
+          "domain": "www.penieltech.com",
+          "phone": "050 961 7708",
+          "url": "https://www.penieltech.com/",
+          "is_paid": false,
+          "rating": {
+           "rating_type": "Max5",
+           "value": 4.9,
+           "votes_count": 1200,
+           "rating_max": 5
+          },
+          "main_domain": "penieltech.com",
+          "relative_url": "/",
+          "etv": 57.243097226445,
+          "estimated_paid_traffic_cost": 720.6905940809426,
+          "clickstream_etv": null,
+          "rank_changes": {
+           "previous_rank_absolute": 1,
+           "is_new": true,
+           "is_up": false,
+           "is_down": false
+          },
+          "backlinks_info": {
+           "referring_domains": 406,
+           "referring_main_domains": 393,
+           "referring_pages": 1401,
+           "dofollow": 1120,
+           "backlinks": 1532,
+           "time_update": "2026-08-11 02:38:01 +00:00"
+          },
+          "rank_info": {
+           "page_rank": 382,
+           "main_domain_rank": 297
+          }
+         },
+         {
+          "se_type": "google",
+          "type": "local_pack",
+          "rank_group": 2,
+          "rank_absolute": 2,
+          "position": "left",
+          "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[2]/div[1]/div[1]/div[3]/div[1]/div[1]",
+          "title": "eresource MiddleEast FZE | Best ERP Software in UAE",
+          "description": "Closed · Opens 9:30 AM \n",
+          "domain": "www.eresourceerp.com",
+          "phone": "058 640 0803",
+          "url": "https://www.eresourceerp.com/erp-in-uae/",
+          "is_paid": false,
+          "rating": {
+           "rating_type": "Max5",
+           "value": 4.8,
+           "votes_count": 11,
+           "rating_max": 5
+          },
+          "main_domain": "eresourceerp.com",
+          "relative_url": "/erp-in-uae/",
+          "etv": 28.6215486132225,
+          "estimated_paid_traffic_cost": 360.3452970404713,
+          "clickstream_etv": null,
+          "rank_changes": {
+           "previous_rank_absolute": 3,
+           "is_new": true,
+           "is_up": true,
+           "is_down": false
+          },
+          "backlinks_info": {
+           "referring_domains": 1,
+           "referring_main_domains": 1,
+           "referring_pages": 1,
+           "dofollow": 1,
+           "backlinks": 1,
+           "time_update": "2026-08-11 03:27:08 +00:00"
+          },
+          "rank_info": {
+           "page_rank": 58,
+           "main_domain_rank": 266
+          }
+         },
+         {
+          "se_type": "google",
+          "type": "local_pack",
+          "rank_group": 3,
+          "rank_absolute": 3,
+          "position": "left",
+          "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[2]/div[1]/div[1]/div[5]/div[1]/div[1]",
+          "title": "FACTS ERP Software House L.L.C",
+          "description": "Dubai · 055 899 3902 \nOpen 24 hours \nOn-site services · Online appointments \n",
+          "domain": "facts.ae",
+          "phone": "055 899 3902",
+          "url": "https://facts.ae/?utm_source=CMBlisting&utm_medium=organic",
+          "is_paid": false,
+          "rating": {
+           "rating_type": "Max5",
+           "value": 4.6,
+           "votes_count": 104,
+           "rating_max": 5
+          },
+          "main_domain": "facts.ae",
+          "relative_url": "/?utm_source=CMBlisting&utm_medium=organic",
+          "etv": 14.31077430661125,
+          "estimated_paid_traffic_cost": 180.17264852023564,
+          "clickstream_etv": null,
+          "rank_changes": {
+           "previous_rank_absolute": 2,
+           "is_new": true,
+           "is_up": false,
+           "is_down": true
+          },
+          "backlinks_info": {
+           "referring_domains": 5,
+           "referring_main_domains": 5,
+           "referring_pages": 8,
+           "dofollow": 5,
+           "backlinks": 31,
+           "time_update": "2026-08-11 03:35:22 +00:00"
+          },
+          "rank_info": {
+           "page_rank": 119,
+           "main_domain_rank": 390
+          }
+         },
+         "...(+95 more)"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -1,0 +1,193 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "ai_optimization",
+   "llm_mentions",
+   "search_mentions",
+   "live"
+  ],
+  "data": {
+   "api": "ai_optimization",
+   "function": "search_mentions",
+   "target": [
+    {
+     "domain": "techand.ai"
+    }
+   ],
+   "location_code": 2840,
+   "language_code": "en",
+   "platform": "chat_gpt",
+   "limit": 3
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "total_count": 65728,
+    "offset": 0,
+    "search_after_token": "eyJDdXJyZW50T2Zmc2V0IjozLCJSYXdSZXF1ZXN0Ijp7InRhcmdldCI6W3sidHlwZSI6ImtleXdvcmQiLCJrZXl3b3JkIjoiYm13Iiwic2VhcmNoX3Njb3BlIjpbImFuc3dlciJdLCJzZWFyY2hfdHlwZSI6Imlu...",
+    "items_count": 3,
+    "items": [
+     {
+      "platform": "chat_gpt",
+      "model_name": "gpt-5-6",
+      "location_code": 2840,
+      "language_code": "en",
+      "question": "which car is called poor man's bmw?",
+      "answer": "The car most famously called the **\u201cpoor man\u2019s BMW\u201d is the Datsun 510** (also sold as the Datsun 1600 in some markets). [www.jalopnik.com](https://www.jalopnik....",
+      "sources": [
+       {
+        "snippet": null,
+        "source_name": "Jalopnik",
+        "thumbnail": null,
+        "markdown": null,
+        "rank": 1,
+        "title": "Why The Datsun 510 Earned The Poor Man's BMW Title",
+        "domain": "www.jalopnik.com",
+        "url": "https://www.jalopnik.com/2148915/poor-mans-bmw-japanese-car-datsun-510/?utm_source=chatgpt.com",
+        "publication_date": null
+       },
+       {
+        "snippet": null,
+        "source_name": "Wikipedia",
+        "thumbnail": null,
+        "markdown": null,
+        "rank": 2,
+        "title": null,
+        "domain": "wikipedia.classicistranieri.com",
+        "url": "https://wikipedia.classicistranieri.com/en/articles/d/a/t/Datsun_510.html?utm_source=chatgpt.com",
+        "publication_date": null
+       },
+       "...(+1 more)"
+      ],
+      "search_results": [
+       {
+        "description": "WHICH CAR IS CALLED POOR MAN'S BMW?  THE POOR MAN\u2019S BMW: THE LEGENDARY DATSUN 510  If you\u2019ve ever heard the term \u201cpoor man\u2019s BMW,\u201d you\u2019ve probably stumbled into...",
+        "breadcrumb": "frcontext.com",
+        "rank": 1,
+        "title": "Which car is called poor man's BMW? \u2014 FrContext",
+        "domain": "frcontext.com",
+        "url": "https://frcontext.com/en/wiki/which-car-is-called-poor-man-s-bmw/?utm_source=chatgpt.com",
+        "publication_date": null
+       },
+       {
+        "description": "WHICH CAR IS CALLED POOR MAN'S BMW?  Asked by Anonymous Sep 02, 2026 14 views 1 answers  Looking for answers about Which car is called poor man's BMW? Explore u...",
+        "breadcrumb": "metrodailyreporter.com",
+        "rank": 2,
+        "title": "Which car is called poor man's BMW? | Ask questions. Get answers",
+        "domain": "www.metrodailyreporter.com",
+        "url": "https://www.metrodailyreporter.com/faq/which-car-is-called-poor-man-s-bmw/?utm_source=chatgpt.com",
+        "publication_date": null
+       },
+       "...(+15 more)"
+      ],
+      "ai_search_volume": 10712,
+      "monthly_searches": [
+       {
+        "year": 2026,
+        "month": 9,
+        "search_volume": 10712
+       },
+       {
+        "year": 2026,
+        "month": 8,
+        "search_volume": 10178
+       },
+       "...(+8 more)"
+      ],
+      "first_response_at": "2026-03-21 10:09:18 +00:00",
+      "last_response_at": "2026-10-02 10:20:36 +00:00",
+      "brand_entities": null,
+      "fan_out_queries": [
+       "\"poor man's BMW\" car called poor man's BMW",
+       "\"poor man's BMW\" Toyota Lexus Mercedes car"
+      ],
+      "is_web_search_based": true
+     },
+     {
+      "platform": "chat_gpt",
+      "model_name": "gpt-5-6",
+      "location_code": 2840,
+      "language_code": "en",
+      "question": "what car is the poor man's bmw?",
+      "answer": "The **Datsun 510** is probably the most historically recognized \u201cpoor man\u2019s BMW,\u201d especially as a cheaper alternative to the **BMW 2002**. [www.jalopnik.com](ht...",
+      "sources": [
+       {
+        "snippet": null,
+        "source_name": "Jalopnik",
+        "thumbnail": null,
+        "markdown": null,
+        "rank": 1,
+        "title": "Why The Datsun 510 Earned The Poor Man's BMW Title",
+        "domain": "www.jalopnik.com",
+        "url": "https://www.jalopnik.com/2148915/poor-mans-bmw-japanese-car-datsun-510/?utm_source=chatgpt.com",
+        "publication_date": null
+       },
+       {
+        "snippet": null,
+        "source_name": "Cars.com",
+        "thumbnail": null,
+        "markdown": null,
+        "rank": 2,
+        "title": "2015 Mazda Mazda6 Consumer Reviews | Cars.com",
+        "domain": "www.cars.com",
+        "url": "https://www.cars.com/research/mazda-mazda6-2015/consumer-reviews/?page=7&utm_source=chatgpt.com",
+        "publication_date": null
+       }
+      ],
+      "search_results": [
+       {
+        "description": "2009 PONTIAC G8 GXP FIRST LOOK  The poor man's BMW: They mean it this time  Todd LassaWriter Mar 15, 2008  Image: 112-0806-04pl-2009-pontiac-g8-GXP-front-three-...",
+        "breadcrumb": "motortrend.com",
+        "rank": 1,
+        "title": "2009 Pontiac G8 GXP - First Look - Motor Trend",
+        "domain": "www.motortrend.com",
+        "url": "https://www.motortrend.com/reviews/2009-pontiac-g8-gxp-first-look-2?utm_source=chatgpt.com",
+        "publication_date": null
+       },
+       {
+        "description": "WHAT TO FIX: FIAT EDITION  We can't solve our own problems, so what makes us think we can fix an automaker's? Hubris, that's what.  By John Pearley HuffmanPubli...",
+        "breadcrumb": "caranddriver.com",
+        "rank": 2,
+        "title": "What to Fix: Fiat Edition",
+        "domain": "www.caranddriver.com",
+        "url": "https://www.caranddriver.com/features/a29211735/what-to-fix-fiat-edition/?utm_source=chatgpt.com",
+        "publication_date": null
+       },
+       "...(+29 more)"
+      ],
+      "ai_search_volume": 8756,
+      "monthly_searches": [
+       {
+        "year": 2026,
+        "month": 9,
+        "search_volume": 8756
+       },
+       {
+        "year": 2026,
+        "month": 8,
+        "search_volume": 3310
+       },
+       "...(+3 more)"
+      ],
+      "first_response_at": "2026-08-28 10:01:24 +00:00",
+      "last_response_at": "2026-10-02 12:45:32 +00:00",
+      "brand_entities": null,
+      "fan_out_queries": [
+       "\"poor man's BMW\" car phrase",
+       "\"poor man's BMW\" \"Mazda\" car",
+       "...(+1 more)"
+      ],
+      "is_web_search_based": true
+     },
+     "...(+1 more)"
+    ]
+   }
+  ]
+ }
+}

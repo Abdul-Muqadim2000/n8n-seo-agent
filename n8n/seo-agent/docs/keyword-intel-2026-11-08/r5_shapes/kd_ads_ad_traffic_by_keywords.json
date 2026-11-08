@@ -1,0 +1,45 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "keywords_data",
+   "google_ads",
+   "ad_traffic_by_keywords",
+   "live"
+  ],
+  "data": {
+   "api": "keywords_data",
+   "function": "ad_traffic_by_keywords",
+   "se": "google_ads",
+   "keywords": [
+    "e invoicing uae"
+   ],
+   "location_code": 2784,
+   "language_code": "en",
+   "bid": 5,
+   "match": "exact"
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "keyword": null,
+    "location_code": 2840,
+    "language_code": "en",
+    "date_interval": "next_month",
+    "search_partners": false,
+    "bid": 999,
+    "match": "exact",
+    "impressions": null,
+    "ctr": null,
+    "average_cpc": 6.76,
+    "cost": 17612.8,
+    "clicks": 2606.52
+   }
+  ]
+ }
+}

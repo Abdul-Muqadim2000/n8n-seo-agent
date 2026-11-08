@@ -1,0 +1,100 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "keywords_data",
+   "google_ads",
+   "keywords_for_site",
+   "live"
+  ],
+  "data": {
+   "api": "keywords_data",
+   "function": "keywords_for_site",
+   "se": "google_ads",
+   "target": "techand.ai",
+   "location_code": 2784,
+   "language_code": "en"
+  },
+  "result_count": 1969,
+  "result": [
+   {
+    "keyword": "seo api",
+    "location_code": 2840,
+    "language_code": "en",
+    "search_partners": false,
+    "competition": "LOW",
+    "competition_index": 31,
+    "search_volume": 320,
+    "low_top_of_page_bid": 9.28,
+    "high_top_of_page_bid": 37.76,
+    "cpc": 28.75,
+    "monthly_searches": [
+     {
+      "year": 2026,
+      "month": 9,
+      "search_volume": 110
+     },
+     {
+      "year": 2026,
+      "month": 8,
+      "search_volume": 90
+     },
+     "...(+10 more)"
+    ],
+    "keyword_annotations": {
+     "concepts": [
+      {
+       "name": "google",
+       "concept_group": {
+        "name": "Site",
+        "type": "BRAND"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "keyword": "seo tools",
+    "location_code": 2840,
+    "language_code": "en",
+    "search_partners": false,
+    "competition": "LOW",
+    "competition_index": 1,
+    "search_volume": 165000,
+    "low_top_of_page_bid": 5.1,
+    "high_top_of_page_bid": 29.08,
+    "cpc": 24.39,
+    "monthly_searches": [
+     {
+      "year": 2026,
+      "month": 9,
+      "search_volume": 550000
+     },
+     {
+      "year": 2026,
+      "month": 8,
+      "search_volume": 135000
+     },
+     "...(+10 more)"
+    ],
+    "keyword_annotations": {
+     "concepts": [
+      {
+       "name": "Non-Brands",
+       "concept_group": {
+        "name": "Non-Brands",
+        "type": "NON_BRAND"
+       }
+      }
+     ]
+    }
+   },
+   "...(+1967 more)"
+  ]
+ }
+}

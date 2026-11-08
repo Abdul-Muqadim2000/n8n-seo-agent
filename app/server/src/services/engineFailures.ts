@@ -12,7 +12,8 @@ import { executionFailure, executionState, executions, isN8nNotFound, subExecuti
 // operator, not the user). This watcher reads n8n's failed executions while runs are active, finds the request id the execution
 // carried, and marks that run failed with n8n's error at once.
 
-const WATCHED = ['SEOagentV4Full01', 'SEOagentAIVisib1', 'SEOagentBacklnk1', 'SEOagentSiteTrk1', 'SEOagentTracker1', 'SEOagentCadence1', 'SEOagentAuditSc1'];
+// KI (2026-11-08, CONTRACTS.md §7): SEOagentKIntel1, keyword intelligence (Competitors / Keyword research), started by the API front door
+export const WATCHED = ['SEOagentV4Full01', 'SEOagentAIVisib1', 'SEOagentBacklnk1', 'SEOagentSiteTrk1', 'SEOagentTracker1', 'SEOagentCadence1', 'SEOagentAuditSc1', 'SEOagentKIntel1'];
 const ACTIVE = ['submitting', 'accepted', 'running'];
 const seen = new Set<string>();
 let sweeping = false;

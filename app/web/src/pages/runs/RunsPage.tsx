@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Clock, FileText, Filter, ListChecks, Plus, RotateCcw } from 'lucide-react';
-import { MODE_IDS, MODES, type Run } from '@seo/shared';
+import { LISTED_MODE_IDS, MODES, type Run } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useRuns, type RunFilters } from '@/lib/queries';
@@ -68,7 +68,7 @@ export default function RunsPage() {
         </FilterSelect>
         <FilterSelect label="Tool" value={filters.mode ?? ''} onChange={(v) => setFilter('mode', v)}>
           <option value="">All tools</option>
-          {MODE_IDS.map((m) => (
+          {LISTED_MODE_IDS.map((m) => (
             <option key={m} value={m}>
               {MODES[m].title}
             </option>

@@ -315,6 +315,17 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         competitors: input.competitors.length ? input.competitors : (s?.competitors ?? []),
         ...(input.freeOnly ? { free_only: true } : {}),
       };
+
+    // KI (2026-11-08, CONTRACTS.md §3): the head, then the declared competitors (the website's own when none are typed), the seeds and the
+    // fresh-reading flag. `seeds` is not named `keywords` (it would sit before nothing the fuzzy pick reads, but the rule keeps lists clear of it)
+    case 'competitors':
+    case 'keyword_research':
+      return {
+        ...head(input.mode, '', input.country, dom, d, s?.business ?? '', s?.customers ?? ''),
+        competitors: input.competitors.length ? input.competitors : (s?.competitors ?? []),
+        seeds: input.seeds,
+        ki_force: input.kiForce,
+      };
   }
 }
 

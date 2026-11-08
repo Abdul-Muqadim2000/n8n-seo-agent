@@ -4,7 +4,7 @@ import { IconTile } from '../FeatureCard';
 import { jumpTo } from './kit';
 
 const GROUPS: { label: string; slugs: string[] }[] = [
-  { label: 'Plan', slugs: ['keyword-research', 'keyword-ladders'] },
+  { label: 'Plan', slugs: ['keyword-research', 'competitors', 'keyword-ladders'] },
   { label: 'Create', slugs: ['content', 'autopilot'] },
   { label: 'Measure', slugs: ['technical-audits', 'index-coverage', 'site-tracking', 'ai-visibility', 'crawler-analytics', 'backlinks'] },
   { label: 'Grow', slugs: ['ai-growth', 'link-building'] },

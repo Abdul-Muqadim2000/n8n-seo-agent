@@ -1,0 +1,1403 @@
+{
+ "answers": [
+  "Run Comp SERPs Answers",
+  "Run Comp Labs Answers",
+  "Run Comp Profiles Answers",
+  "Run Research Discover Answers",
+  "Run Research Enrich Answers",
+  "Run Research SERPs Answers",
+  "Run Research Traffic Answers"
+ ],
+ "budget": {
+  "ai_budget_period": "day",
+  "ai_budget_usd": 15.0,
+  "dfs_balance_floor_usd": 0.5,
+  "dfs_budget_usd": 15.0,
+  "run_stale_hours": 2.0
+ },
+ "callback": {
+  "body": "={{ JSON.stringify(Object.assign({}, $json.callback_body, { run_ledger: $json.run_ledger || null })) }}",
+  "post": "POST KI Report",
+  "refusal_post": "POST KI Refusal",
+  "retry": false,
+  "started_post": "POST KI Started"
+ },
+ "cols": {
+  "KI_COMP": [
+   "site_id",
+   "domain",
+   "market",
+   "comp_domain",
+   "class",
+   "class_basis",
+   "class_confidence",
+   "scored",
+   "score",
+   "score_low",
+   "score_high",
+   "serp_share",
+   "topic_sim",
+   "geo_match",
+   "ai_share",
+   "size_tag",
+   "seeds_seen",
+   "seeds_total",
+   "reasons_json",
+   "evidence_json",
+   "declared",
+   "status",
+   "status_by",
+   "first_seen",
+   "last_seen",
+   "misses",
+   "profile_json",
+   "run_id",
+   "updated_at"
+  ],
+  "KI_GAPS": [
+   "gap_id",
+   "site_id",
+   "domain",
+   "market",
+   "type",
+   "keyword",
+   "cluster_id",
+   "competitor_domains_json",
+   "client_position",
+   "evidence_json",
+   "sample_note",
+   "action",
+   "action_target",
+   "credits",
+   "status",
+   "run_id",
+   "created_at",
+   "updated_at"
+  ],
+  "KI_KW": [
+   "site_id",
+   "domain",
+   "market",
+   "keyword",
+   "kw_key",
+   "sources_json",
+   "source_count",
+   "volume",
+   "volume_basis",
+   "volume_source",
+   "cpc",
+   "kd",
+   "trend_json",
+   "gsc_impressions",
+   "gsc_clicks",
+   "gsc_position",
+   "gsc_page",
+   "intent",
+   "stage",
+   "stage_evidence_json",
+   "intent_confidence",
+   "needs_review",
+   "gate",
+   "gate_reason",
+   "gate_detail",
+   "fit",
+   "demand",
+   "win",
+   "value",
+   "gap",
+   "score",
+   "score_low",
+   "score_high",
+   "low_confidence",
+   "verdict",
+   "cluster_id",
+   "is_head",
+   "cluster_size",
+   "cluster_demand",
+   "serp_read_at",
+   "top10_json",
+   "page_action",
+   "page_url",
+   "cannibal_json",
+   "competitors_json",
+   "striking",
+   "run_id",
+   "fetched_at",
+   "updated_at"
+  ],
+  "KI_RUNS": [
+   "site_id",
+   "domain",
+   "run_id",
+   "request_id",
+   "kind",
+   "market",
+   "location_code",
+   "language_code",
+   "mode",
+   "rule_version",
+   "started_at",
+   "finished_at",
+   "status",
+   "reason",
+   "sections_json",
+   "counts_json",
+   "cost_dfs_usd",
+   "cost_claude_usd",
+   "config_json"
+  ]
+ },
+ "connections": {
+  "After Run Ledger (KI)": [
+   [
+    "Run Allowed? (KI)"
+   ]
+  ],
+  "Alert Retry Plan (KI)": [
+   [
+    "Any Alert Retry (KI)?"
+   ]
+  ],
+  "Alert Retry Result (KI)": [
+   [
+    "Save Alert Retry (KI)"
+   ]
+  ],
+  "Any Alert Retry (KI)?": [
+   [
+    "Post Alert Retry (KI)"
+   ],
+   []
+  ],
+  "Any Comp Home Hops?": [
+   [
+    "Read Comp Homes (Hop)"
+   ],
+   [
+    "Comp Profile Requests"
+   ]
+  ],
+  "Any Comp Homes?": [
+   [
+    "Read Comp Homes"
+   ],
+   [
+    "Comp Profile Requests"
+   ]
+  ],
+  "Any Comp Labs?": [
+   [
+    "Run Comp Labs"
+   ],
+   [
+    "Comp Candidates"
+   ]
+  ],
+  "Any Comp Profiles?": [
+   [
+    "Run Comp Profiles"
+   ],
+   [
+    "Comp Sitemap Requests"
+   ]
+  ],
+  "Any Comp SERPs?": [
+   [
+    "Run Comp SERPs"
+   ],
+   [
+    "Comp SERP Picture"
+   ]
+  ],
+  "Any Comp Sitemap Hops?": [
+   [
+    "Read Comp Sitemaps (Hop)"
+   ],
+   [
+    "Comp Result"
+   ]
+  ],
+  "Any Comp Sitemaps?": [
+   [
+    "Read Comp Sitemaps"
+   ],
+   [
+    "Comp Result"
+   ]
+  ],
+  "Any KI Cache Prune?": [
+   [
+    "Prune KI Cache"
+   ],
+   [
+    "KI Run Row"
+   ]
+  ],
+  "Any KI Cache Rows?": [
+   [
+    "Save KI Cache"
+   ],
+   [
+    "KI Cache Prune"
+   ]
+  ],
+  "Any KI Comp Drops?": [
+   [
+    "Drop KI Competitors"
+   ],
+   [
+    "KI Cache Rows"
+   ]
+  ],
+  "Any KI Comp Rows?": [
+   [
+    "Save KI Competitors"
+   ],
+   [
+    "KI Comp Drops"
+   ]
+  ],
+  "Any KI Gap Rows?": [
+   [
+    "Save KI Gaps"
+   ],
+   [
+    "KI Cache Rows"
+   ]
+  ],
+  "Any KI KW Rows?": [
+   [
+    "Save KI Keywords"
+   ],
+   [
+    "KI Gap Rows"
+   ]
+  ],
+  "Any Research Discover?": [
+   [
+    "Run Research Discover"
+   ],
+   [
+    "Research Candidates"
+   ]
+  ],
+  "Any Research Enrich?": [
+   [
+    "Run Research Enrich"
+   ],
+   [
+    "Research Picture"
+   ]
+  ],
+  "Any Research SERPs?": [
+   [
+    "Run Research SERPs"
+   ],
+   [
+    "Research SERP Picture"
+   ]
+  ],
+  "Any Research Traffic?": [
+   [
+    "Run Research Traffic"
+   ],
+   [
+    "Research Result"
+   ]
+  ],
+  "Any Run Comp Labs Retries?": [
+   [
+    "Wait Before Run Comp Labs Retry"
+   ],
+   [
+    "Run Comp Labs Answers"
+   ]
+  ],
+  "Any Run Comp Profiles Retries?": [
+   [
+    "Wait Before Run Comp Profiles Retry"
+   ],
+   [
+    "Run Comp Profiles Answers"
+   ]
+  ],
+  "Any Run Comp SERPs Retries?": [
+   [
+    "Wait Before Run Comp SERPs Retry"
+   ],
+   [
+    "Run Comp SERPs Answers"
+   ]
+  ],
+  "Any Run Research Discover Retries?": [
+   [
+    "Wait Before Run Research Discover Retry"
+   ],
+   [
+    "Run Research Discover Answers"
+   ]
+  ],
+  "Any Run Research Enrich Retries?": [
+   [
+    "Wait Before Run Research Enrich Retry"
+   ],
+   [
+    "Run Research Enrich Answers"
+   ]
+  ],
+  "Any Run Research SERPs Retries?": [
+   [
+    "Wait Before Run Research SERPs Retry"
+   ],
+   [
+    "Run Research SERPs Answers"
+   ]
+  ],
+  "Any Run Research Traffic Retries?": [
+   [
+    "Wait Before Run Research Traffic Retry"
+   ],
+   [
+    "Run Research Traffic Answers"
+   ]
+  ],
+  "Callback Ledger (KI)": [
+   [
+    "Has Callback (KI)?"
+   ]
+  ],
+  "Comp Candidates": [
+   [
+    "Comp Home Requests"
+   ]
+  ],
+  "Comp Home Hop Text": [
+   [
+    "Comp Profile Requests"
+   ]
+  ],
+  "Comp Home Hops": [
+   [
+    "Any Comp Home Hops?"
+   ]
+  ],
+  "Comp Home Requests": [
+   [
+    "Any Comp Homes?"
+   ]
+  ],
+  "Comp Home Text": [
+   [
+    "Comp Home Hops"
+   ]
+  ],
+  "Comp Labs Requests": [
+   [
+    "Any Comp Labs?"
+   ]
+  ],
+  "Comp Profile Requests": [
+   [
+    "Any Comp Profiles?"
+   ]
+  ],
+  "Comp Result": [
+   [
+    "KI Comp Rows"
+   ]
+  ],
+  "Comp SERP Keys": [
+   [
+    "Load SERP Cache (KI Comp)"
+   ]
+  ],
+  "Comp SERP Picture": [
+   [
+    "Comp Labs Requests"
+   ]
+  ],
+  "Comp SERP Requests": [
+   [
+    "Any Comp SERPs?"
+   ]
+  ],
+  "Comp Sitemap Hop Text": [
+   [
+    "Comp Result"
+   ]
+  ],
+  "Comp Sitemap Hops": [
+   [
+    "Any Comp Sitemap Hops?"
+   ]
+  ],
+  "Comp Sitemap Requests": [
+   [
+    "Any Comp Sitemaps?"
+   ]
+  ],
+  "Comp Sitemap Text": [
+   [
+    "Comp Sitemap Hops"
+   ]
+  ],
+  "DFS Balance (KI)": [
+   [
+    "Load Open Runs (KI)"
+   ]
+  ],
+  "DFS Balance End (KI)": [
+   [
+    "Load Run Ledger (KI)"
+   ]
+  ],
+  "Drop KI Competitors": [
+   [
+    "KI Cache Rows"
+   ]
+  ],
+  "Drop Old KI Gaps": [
+   [
+    "KI Gap Rows"
+   ]
+  ],
+  "Drop Old KI Keywords": [
+   [
+    "Supersede Gaps?"
+   ]
+  ],
+  "Ensure KI Competitors Table": [
+   [
+    "Ensure KI Keywords Table"
+   ]
+  ],
+  "Ensure KI Gaps Table": [
+   [
+    "Load Monitors (KI)"
+   ]
+  ],
+  "Ensure KI Keywords Table": [
+   [
+    "Ensure KI Gaps Table"
+   ]
+  ],
+  "Ensure KI Runs Table": [
+   [
+    "Ensure KI Competitors Table"
+   ]
+  ],
+  "Ensure Ops Alerts (KI)": [
+   [
+    "Load Open Alerts (KI)"
+   ]
+  ],
+  "Ensure Run Ledger (KI)": [
+   [
+    "DFS Balance (KI)"
+   ]
+  ],
+  "Has Callback (KI Refusal)?": [
+   [
+    "POST KI Refusal"
+   ]
+  ],
+  "Has Callback (KI Started)?": [
+   [
+    "POST KI Started"
+   ],
+   [
+    "Route KI Kind?"
+   ]
+  ],
+  "Has Callback (KI)?": [
+   [
+    "POST KI Report"
+   ]
+  ],
+  "KI Cache Prune": [
+   [
+    "Any KI Cache Prune?"
+   ]
+  ],
+  "KI Cache Rows": [
+   [
+    "Any KI Cache Rows?"
+   ]
+  ],
+  "KI Comp Drops": [
+   [
+    "Any KI Comp Drops?"
+   ]
+  ],
+  "KI Comp Rows": [
+   [
+    "Any KI Comp Rows?"
+   ]
+  ],
+  "KI Gap Rows": [
+   [
+    "Any KI Gap Rows?"
+   ]
+  ],
+  "KI Gate": [
+   [
+    "KI Refused?"
+   ]
+  ],
+  "KI Input": [
+   [
+    "Ensure KI Runs Table"
+   ]
+  ],
+  "KI KW Rows": [
+   [
+    "Any KI KW Rows?"
+   ]
+  ],
+  "KI Limit": [
+   [
+    "KI Limited?"
+   ]
+  ],
+  "KI Limit Notice": [
+   [
+    "Has Callback (KI Refusal)?"
+   ]
+  ],
+  "KI Limited?": [
+   [
+    "Refuse KI Limit (KI)"
+   ],
+   [
+    "KI Started"
+   ]
+  ],
+  "KI Plan": [
+   [
+    "Ensure Run Ledger (KI)"
+   ]
+  ],
+  "KI Refused?": [
+   [
+    "Has Callback (KI Refusal)?"
+   ],
+   [
+    "Load KI Cache"
+   ]
+  ],
+  "KI Report": [
+   [
+    "DFS Balance End (KI)",
+    "Ledger Join (KI)"
+   ]
+  ],
+  "KI Run Row": [
+   [
+    "Save KI Run"
+   ]
+  ],
+  "KI Started": [
+   [
+    "Has Callback (KI Started)?"
+   ]
+  ],
+  "KI Supersede Check": [
+   [
+    "Supersede Keywords?"
+   ]
+  ],
+  "Ledger Join (KI)": [
+   [
+    "Callback Ledger (KI)"
+   ]
+  ],
+  "Ledger Settle (KI)": [
+   [
+    "Settle Run Ledger (KI)",
+    "Ledger Join (KI)"
+   ]
+  ],
+  "Load AI Answers (KI)": [
+   [
+    "Load Pages (KI)"
+   ]
+  ],
+  "Load AI Visibility (KI)": [
+   [
+    "Load AI Answers (KI)"
+   ]
+  ],
+  "Load Content Log (KI)": [
+   [
+    "Load Site Metrics (KI)"
+   ]
+  ],
+  "Load KI Cache": [
+   [
+    "Load KI Competitors"
+   ]
+  ],
+  "Load KI Competitors": [
+   [
+    "Load KI Gaps"
+   ]
+  ],
+  "Load KI Gaps": [
+   [
+    "Load Query History (KI)"
+   ]
+  ],
+  "Load Kill Switch (KI)": [
+   [
+    "Load Site (KI)"
+   ]
+  ],
+  "Load Ladders (KI)": [
+   [
+    "Load AI Visibility (KI)"
+   ]
+  ],
+  "Load Ledger Today (KI)": [
+   [
+    "KI Limit"
+   ]
+  ],
+  "Load Monitors (KI)": [
+   [
+    "Load Kill Switch (KI)"
+   ]
+  ],
+  "Load Open Alerts (KI)": [
+   [
+    "Alert Retry Plan (KI)"
+   ]
+  ],
+  "Load Open Runs (KI)": [
+   [
+    "Run Ledger Row (KI)"
+   ]
+  ],
+  "Load Pages (KI)": [
+   [
+    "Load Content Log (KI)"
+   ]
+  ],
+  "Load Query History (KI)": [
+   [
+    "Load Ladders (KI)"
+   ]
+  ],
+  "Load Run Ledger (KI)": [
+   [
+    "Ledger Settle (KI)"
+   ]
+  ],
+  "Load SERP Cache (KI Comp)": [
+   [
+    "Comp SERP Requests"
+   ]
+  ],
+  "Load SERP Cache (KI Research)": [
+   [
+    "Research SERP Requests"
+   ]
+  ],
+  "Load SERP Cache (KI Seeds)": [
+   [
+    "Research Discover Requests"
+   ]
+  ],
+  "Load Site (KI)": [
+   [
+    "KI Gate"
+   ]
+  ],
+  "Load Site Metrics (KI)": [
+   [
+    "KI Plan"
+   ]
+  ],
+  "Manual Run": [
+   [
+    "KI Input"
+   ]
+  ],
+  "POST KI Started": [
+   [
+    "Route KI Kind?"
+   ]
+  ],
+  "Post Alert Retry (KI)": [
+   [
+    "Alert Retry Result (KI)"
+   ]
+  ],
+  "Prune KI Cache": [
+   [
+    "KI Run Row"
+   ]
+  ],
+  "Read Comp Homes": [
+   [
+    "Comp Home Text"
+   ]
+  ],
+  "Read Comp Homes (Hop)": [
+   [
+    "Comp Home Hop Text"
+   ]
+  ],
+  "Read Comp Sitemaps": [
+   [
+    "Comp Sitemap Text"
+   ]
+  ],
+  "Read Comp Sitemaps (Hop)": [
+   [
+    "Comp Sitemap Hop Text"
+   ]
+  ],
+  "Refusal Notice (KI)": [
+   [
+    "Tell Caller (KI)?"
+   ]
+  ],
+  "Refuse KI Limit (KI)": [
+   [
+    "KI Limit Notice"
+   ]
+  ],
+  "Refuse Run Ledger (KI)": [
+   [
+    "Refusal Notice (KI)"
+   ]
+  ],
+  "Research Candidates": [
+   [
+    "Research Enrich Requests"
+   ]
+  ],
+  "Research Discover Requests": [
+   [
+    "Any Research Discover?"
+   ]
+  ],
+  "Research Enrich Requests": [
+   [
+    "Any Research Enrich?"
+   ]
+  ],
+  "Research Picture": [
+   [
+    "Research SERP Keys"
+   ]
+  ],
+  "Research Result": [
+   [
+    "KI KW Rows"
+   ]
+  ],
+  "Research SERP Keys": [
+   [
+    "Load SERP Cache (KI Research)"
+   ]
+  ],
+  "Research SERP Picture": [
+   [
+    "Research Traffic Requests"
+   ]
+  ],
+  "Research SERP Requests": [
+   [
+    "Any Research SERPs?"
+   ]
+  ],
+  "Research Seed Keys": [
+   [
+    "Load SERP Cache (KI Seeds)"
+   ]
+  ],
+  "Research Traffic Requests": [
+   [
+    "Any Research Traffic?"
+   ]
+  ],
+  "Reserve Run Ledger (KI)": [
+   [
+    "After Run Ledger (KI)"
+   ]
+  ],
+  "Route KI Kind?": [
+   [
+    "Comp SERP Keys"
+   ],
+   [
+    "Research Seed Keys"
+   ]
+  ],
+  "Run Allowed? (KI)": [
+   [
+    "Load Ledger Today (KI)"
+   ],
+   [
+    "Refuse Run Ledger (KI)"
+   ]
+  ],
+  "Run Comp Labs": [
+   [
+    "Run Comp Labs Retry Plan"
+   ]
+  ],
+  "Run Comp Labs (Retry)": [
+   [
+    "Run Comp Labs Answers"
+   ]
+  ],
+  "Run Comp Labs Answers": [
+   [
+    "Comp Candidates"
+   ]
+  ],
+  "Run Comp Labs Retry Plan": [
+   [
+    "Any Run Comp Labs Retries?"
+   ]
+  ],
+  "Run Comp Profiles": [
+   [
+    "Run Comp Profiles Retry Plan"
+   ]
+  ],
+  "Run Comp Profiles (Retry)": [
+   [
+    "Run Comp Profiles Answers"
+   ]
+  ],
+  "Run Comp Profiles Answers": [
+   [
+    "Comp Sitemap Requests"
+   ]
+  ],
+  "Run Comp Profiles Retry Plan": [
+   [
+    "Any Run Comp Profiles Retries?"
+   ]
+  ],
+  "Run Comp SERPs": [
+   [
+    "Run Comp SERPs Retry Plan"
+   ]
+  ],
+  "Run Comp SERPs (Retry)": [
+   [
+    "Run Comp SERPs Answers"
+   ]
+  ],
+  "Run Comp SERPs Answers": [
+   [
+    "Comp SERP Picture"
+   ]
+  ],
+  "Run Comp SERPs Retry Plan": [
+   [
+    "Any Run Comp SERPs Retries?"
+   ]
+  ],
+  "Run Ledger Row (KI)": [
+   [
+    "Reserve Run Ledger (KI)"
+   ]
+  ],
+  "Run Research Discover": [
+   [
+    "Run Research Discover Retry Plan"
+   ]
+  ],
+  "Run Research Discover (Retry)": [
+   [
+    "Run Research Discover Answers"
+   ]
+  ],
+  "Run Research Discover Answers": [
+   [
+    "Research Candidates"
+   ]
+  ],
+  "Run Research Discover Retry Plan": [
+   [
+    "Any Run Research Discover Retries?"
+   ]
+  ],
+  "Run Research Enrich": [
+   [
+    "Run Research Enrich Retry Plan"
+   ]
+  ],
+  "Run Research Enrich (Retry)": [
+   [
+    "Run Research Enrich Answers"
+   ]
+  ],
+  "Run Research Enrich Answers": [
+   [
+    "Research Picture"
+   ]
+  ],
+  "Run Research Enrich Retry Plan": [
+   [
+    "Any Run Research Enrich Retries?"
+   ]
+  ],
+  "Run Research SERPs": [
+   [
+    "Run Research SERPs Retry Plan"
+   ]
+  ],
+  "Run Research SERPs (Retry)": [
+   [
+    "Run Research SERPs Answers"
+   ]
+  ],
+  "Run Research SERPs Answers": [
+   [
+    "Research SERP Picture"
+   ]
+  ],
+  "Run Research SERPs Retry Plan": [
+   [
+    "Any Run Research SERPs Retries?"
+   ]
+  ],
+  "Run Research Traffic": [
+   [
+    "Run Research Traffic Retry Plan"
+   ]
+  ],
+  "Run Research Traffic (Retry)": [
+   [
+    "Run Research Traffic Answers"
+   ]
+  ],
+  "Run Research Traffic Answers": [
+   [
+    "Research Result"
+   ]
+  ],
+  "Run Research Traffic Retry Plan": [
+   [
+    "Any Run Research Traffic Retries?"
+   ]
+  ],
+  "Save KI Cache": [
+   [
+    "KI Cache Prune"
+   ]
+  ],
+  "Save KI Competitors": [
+   [
+    "KI Comp Drops"
+   ]
+  ],
+  "Save KI Gaps": [
+   [
+    "KI Cache Rows"
+   ]
+  ],
+  "Save KI Keywords": [
+   [
+    "KI Supersede Check"
+   ]
+  ],
+  "Save KI Run": [
+   [
+    "KI Report"
+   ]
+  ],
+  "Settle Run Ledger (KI)": [
+   [
+    "Ensure Ops Alerts (KI)"
+   ]
+  ],
+  "Supersede Gaps?": [
+   [
+    "Drop Old KI Gaps"
+   ],
+   [
+    "KI Gap Rows"
+   ]
+  ],
+  "Supersede Keywords?": [
+   [
+    "Drop Old KI Keywords"
+   ],
+   [
+    "KI Gap Rows"
+   ]
+  ],
+  "Tell Caller (KI)?": [
+   [
+    "Post Refusal (KI)"
+   ],
+   []
+  ],
+  "Wait Before Run Comp Labs Retry": [
+   [
+    "Run Comp Labs (Retry)"
+   ]
+  ],
+  "Wait Before Run Comp Profiles Retry": [
+   [
+    "Run Comp Profiles (Retry)"
+   ]
+  ],
+  "Wait Before Run Comp SERPs Retry": [
+   [
+    "Run Comp SERPs (Retry)"
+   ]
+  ],
+  "Wait Before Run Research Discover Retry": [
+   [
+    "Run Research Discover (Retry)"
+   ]
+  ],
+  "Wait Before Run Research Enrich Retry": [
+   [
+    "Run Research Enrich (Retry)"
+   ]
+  ],
+  "Wait Before Run Research SERPs Retry": [
+   [
+    "Run Research SERPs (Retry)"
+   ]
+  ],
+  "Wait Before Run Research Traffic Retry": [
+   [
+    "Run Research Traffic (Retry)"
+   ]
+  ]
+ },
+ "file": "SEO_Agent_Keyword_Intelligence.json",
+ "gates": {
+  "Run Comp Labs": [
+   "Run Comp Labs",
+   "Run Comp Labs Retry Plan",
+   "Any Run Comp Labs Retries?",
+   "Wait Before Run Comp Labs Retry",
+   "Run Comp Labs (Retry)",
+   "Run Comp Labs Answers"
+  ],
+  "Run Comp Profiles": [
+   "Run Comp Profiles",
+   "Run Comp Profiles Retry Plan",
+   "Any Run Comp Profiles Retries?",
+   "Wait Before Run Comp Profiles Retry",
+   "Run Comp Profiles (Retry)",
+   "Run Comp Profiles Answers"
+  ],
+  "Run Comp SERPs": [
+   "Run Comp SERPs",
+   "Run Comp SERPs Retry Plan",
+   "Any Run Comp SERPs Retries?",
+   "Wait Before Run Comp SERPs Retry",
+   "Run Comp SERPs (Retry)",
+   "Run Comp SERPs Answers"
+  ],
+  "Run Research Discover": [
+   "Run Research Discover",
+   "Run Research Discover Retry Plan",
+   "Any Run Research Discover Retries?",
+   "Wait Before Run Research Discover Retry",
+   "Run Research Discover (Retry)",
+   "Run Research Discover Answers"
+  ],
+  "Run Research Enrich": [
+   "Run Research Enrich",
+   "Run Research Enrich Retry Plan",
+   "Any Run Research Enrich Retries?",
+   "Wait Before Run Research Enrich Retry",
+   "Run Research Enrich (Retry)",
+   "Run Research Enrich Answers"
+  ],
+  "Run Research SERPs": [
+   "Run Research SERPs",
+   "Run Research SERPs Retry Plan",
+   "Any Run Research SERPs Retries?",
+   "Wait Before Run Research SERPs Retry",
+   "Run Research SERPs (Retry)",
+   "Run Research SERPs Answers"
+  ],
+  "Run Research Traffic": [
+   "Run Research Traffic",
+   "Run Research Traffic Retry Plan",
+   "Any Run Research Traffic Retries?",
+   "Wait Before Run Research Traffic Retry",
+   "Run Research Traffic (Retry)",
+   "Run Research Traffic Answers"
+  ]
+ },
+ "kill_key": "ki:kill",
+ "kit": "_ki.js",
+ "limits": {
+  "global_per_day": 150,
+  "per_app_company_per_day": 40,
+  "per_key_per_day": 6
+ },
+ "name": "SEO Agent - Keyword Intelligence",
+ "nodes": [
+  "After Run Ledger (KI)",
+  "Alert Retry Plan (KI)",
+  "Alert Retry Result (KI)",
+  "Any Alert Retry (KI)?",
+  "Any Comp Home Hops?",
+  "Any Comp Homes?",
+  "Any Comp Labs?",
+  "Any Comp Profiles?",
+  "Any Comp SERPs?",
+  "Any Comp Sitemap Hops?",
+  "Any Comp Sitemaps?",
+  "Any KI Cache Prune?",
+  "Any KI Cache Rows?",
+  "Any KI Comp Drops?",
+  "Any KI Comp Rows?",
+  "Any KI Gap Rows?",
+  "Any KI KW Rows?",
+  "Any Research Discover?",
+  "Any Research Enrich?",
+  "Any Research SERPs?",
+  "Any Research Traffic?",
+  "Any Run Comp Labs Retries?",
+  "Any Run Comp Profiles Retries?",
+  "Any Run Comp SERPs Retries?",
+  "Any Run Research Discover Retries?",
+  "Any Run Research Enrich Retries?",
+  "Any Run Research SERPs Retries?",
+  "Any Run Research Traffic Retries?",
+  "Callback Ledger (KI)",
+  "Comp Candidates",
+  "Comp Home Hop Text",
+  "Comp Home Hops",
+  "Comp Home Requests",
+  "Comp Home Text",
+  "Comp Labs Requests",
+  "Comp Profile Requests",
+  "Comp Result",
+  "Comp SERP Keys",
+  "Comp SERP Picture",
+  "Comp SERP Requests",
+  "Comp Sitemap Hop Text",
+  "Comp Sitemap Hops",
+  "Comp Sitemap Requests",
+  "Comp Sitemap Text",
+  "DFS Balance (KI)",
+  "DFS Balance End (KI)",
+  "Drop KI Competitors",
+  "Drop Old KI Gaps",
+  "Drop Old KI Keywords",
+  "Ensure KI Competitors Table",
+  "Ensure KI Gaps Table",
+  "Ensure KI Keywords Table",
+  "Ensure KI Runs Table",
+  "Ensure Ops Alerts (KI)",
+  "Ensure Run Ledger (KI)",
+  "Has Callback (KI Refusal)?",
+  "Has Callback (KI Started)?",
+  "Has Callback (KI)?",
+  "KI Cache Prune",
+  "KI Cache Rows",
+  "KI Comp Drops",
+  "KI Comp Rows",
+  "KI Gap Rows",
+  "KI Gate",
+  "KI Input",
+  "KI KW Rows",
+  "KI Limit",
+  "KI Limit Notice",
+  "KI Limited?",
+  "KI Plan",
+  "KI Refused?",
+  "KI Report",
+  "KI Run Row",
+  "KI Started",
+  "KI Supersede Check",
+  "Ledger Join (KI)",
+  "Ledger Settle (KI)",
+  "Load AI Answers (KI)",
+  "Load AI Visibility (KI)",
+  "Load Content Log (KI)",
+  "Load KI Cache",
+  "Load KI Competitors",
+  "Load KI Gaps",
+  "Load Kill Switch (KI)",
+  "Load Ladders (KI)",
+  "Load Ledger Today (KI)",
+  "Load Monitors (KI)",
+  "Load Open Alerts (KI)",
+  "Load Open Runs (KI)",
+  "Load Pages (KI)",
+  "Load Query History (KI)",
+  "Load Run Ledger (KI)",
+  "Load SERP Cache (KI Comp)",
+  "Load SERP Cache (KI Research)",
+  "Load SERP Cache (KI Seeds)",
+  "Load Site (KI)",
+  "Load Site Metrics (KI)",
+  "Manual Run",
+  "POST KI Refusal",
+  "POST KI Report",
+  "POST KI Started",
+  "Post Alert Retry (KI)",
+  "Post Refusal (KI)",
+  "Prune KI Cache",
+  "Read Comp Homes",
+  "Read Comp Homes (Hop)",
+  "Read Comp Sitemaps",
+  "Read Comp Sitemaps (Hop)",
+  "Refusal Notice (KI)",
+  "Refuse KI Limit (KI)",
+  "Refuse Run Ledger (KI)",
+  "Research Candidates",
+  "Research Discover Requests",
+  "Research Enrich Requests",
+  "Research Picture",
+  "Research Result",
+  "Research SERP Keys",
+  "Research SERP Picture",
+  "Research SERP Requests",
+  "Research Seed Keys",
+  "Research Traffic Requests",
+  "Reserve Run Ledger (KI)",
+  "Route KI Kind?",
+  "Run Allowed? (KI)",
+  "Run Comp Labs",
+  "Run Comp Labs (Retry)",
+  "Run Comp Labs Answers",
+  "Run Comp Labs Retry Plan",
+  "Run Comp Profiles",
+  "Run Comp Profiles (Retry)",
+  "Run Comp Profiles Answers",
+  "Run Comp Profiles Retry Plan",
+  "Run Comp SERPs",
+  "Run Comp SERPs (Retry)",
+  "Run Comp SERPs Answers",
+  "Run Comp SERPs Retry Plan",
+  "Run Ledger Row (KI)",
+  "Run Research Discover",
+  "Run Research Discover (Retry)",
+  "Run Research Discover Answers",
+  "Run Research Discover Retry Plan",
+  "Run Research Enrich",
+  "Run Research Enrich (Retry)",
+  "Run Research Enrich Answers",
+  "Run Research Enrich Retry Plan",
+  "Run Research SERPs",
+  "Run Research SERPs (Retry)",
+  "Run Research SERPs Answers",
+  "Run Research SERPs Retry Plan",
+  "Run Research Traffic",
+  "Run Research Traffic (Retry)",
+  "Run Research Traffic Answers",
+  "Run Research Traffic Retry Plan",
+  "Save Alert Retry (KI)",
+  "Save KI Cache",
+  "Save KI Competitors",
+  "Save KI Gaps",
+  "Save KI Keywords",
+  "Save KI Run",
+  "Settle Run Ledger (KI)",
+  "Supersede Gaps?",
+  "Supersede Keywords?",
+  "Tell Caller (KI)?",
+  "Wait Before Run Comp Labs Retry",
+  "Wait Before Run Comp Profiles Retry",
+  "Wait Before Run Comp SERPs Retry",
+  "Wait Before Run Research Discover Retry",
+  "Wait Before Run Research Enrich Retry",
+  "Wait Before Run Research SERPs Retry",
+  "Wait Before Run Research Traffic Retry"
+ ],
+ "own_tables": [
+  "seo_cache",
+  "seo_ki_competitors",
+  "seo_ki_gaps",
+  "seo_ki_keywords",
+  "seo_ki_runs"
+ ],
+ "page_credits": 51,
+ "paid": [
+  "Run Comp Labs",
+  "Run Comp Labs (Retry)",
+  "Run Comp Profiles",
+  "Run Comp Profiles (Retry)",
+  "Run Comp SERPs",
+  "Run Comp SERPs (Retry)",
+  "Run Research Discover",
+  "Run Research Discover (Retry)",
+  "Run Research Enrich",
+  "Run Research Enrich (Retry)",
+  "Run Research SERPs",
+  "Run Research SERPs (Retry)",
+  "Run Research Traffic",
+  "Run Research Traffic (Retry)"
+ ],
+ "quote": {
+  "competitors": 0.35,
+  "keyword_research": 0.9
+ },
+ "refusal_path": [
+  "Has Callback (KI Refusal)?",
+  "POST KI Refusal"
+ ],
+ "rule_version": "ki-1",
+ "settings": {
+  "errorWorkflow": "SEOagentErrHandl",
+  "executionOrder": "v1",
+  "executionTimeout": 1800,
+  "saveDataErrorExecution": "all",
+  "saveDataSuccessExecution": "all"
+ },
+ "shared_tables": [
+  "seo_ops_alerts",
+  "seo_run_ledger"
+ ],
+ "stages": {
+  "competitors": "ki_competitors",
+  "keyword_research": "ki_research"
+ },
+ "workflow": "SEOagentKIntel1",
+ "writes": {
+  "seo_cache": [
+   "Prune KI Cache",
+   "Save KI Cache"
+  ],
+  "seo_ki_competitors": [
+   "Drop KI Competitors",
+   "Ensure KI Competitors Table",
+   "Save KI Competitors"
+  ],
+  "seo_ki_gaps": [
+   "Drop Old KI Gaps",
+   "Ensure KI Gaps Table",
+   "Save KI Gaps"
+  ],
+  "seo_ki_keywords": [
+   "Drop Old KI Keywords",
+   "Ensure KI Keywords Table",
+   "Save KI Keywords"
+  ],
+  "seo_ki_runs": [
+   "Ensure KI Runs Table",
+   "Save KI Run"
+  ],
+  "seo_ops_alerts": [
+   "Ensure Ops Alerts (KI)",
+   "Save Alert Retry (KI)"
+  ],
+  "seo_run_ledger": [
+   "Ensure Run Ledger (KI)",
+   "Refuse KI Limit (KI)",
+   "Refuse Run Ledger (KI)",
+   "Reserve Run Ledger (KI)",
+   "Settle Run Ledger (KI)"
+  ]
+ }
+}

@@ -1,0 +1,148 @@
+{
+ "_source": "harness/fixtures_live/ca_search.json (real live response, 2026-10-02, trimmed)",
+ "cost": 0.02418,
+ "task": {
+  "cost": 0.02418,
+  "path": [
+   "v3",
+   "content_analysis",
+   "search",
+   "live"
+  ],
+  "data": {
+   "api": "content_analysis",
+   "function": "search",
+   "keyword": "techand",
+   "search_mode": "as_is",
+   "limit": 5
+  },
+  "result": [
+   {
+    "offset_token": "REDACTED_OFFSET_TOKEN",
+    "total_count": 2854,
+    "items_count": 5,
+    "items": [
+     {
+      "type": "content_analysis_search",
+      "url": "https://in.investing.com/equities/shenzhen-techand-eco-environment",
+      "domain": "in.investing.com",
+      "main_domain": "investing.com",
+      "url_rank": 57,
+      "spam_score": 0,
+      "domain_rank": 601,
+      "fetch_time": "2025-09-09 23:15:15 +00:00",
+      "country": "IN",
+      "language": "en",
+      "score": 511351.44,
+      "page_category": [
+       10012,
+       10095,
+       "...(+4 more)"
+      ],
+      "page_types": [
+       "message-boards"
+      ],
+      "ratings": null,
+      "social_metrics": null,
+      "content_info": {
+       "content_type": "page_content",
+       "title": "CECEP Techand Ecology&Environment Co Ltd (300197)",
+       "main_title": "CECEP Techand Ecology&Environment Co Ltd (300197)",
+       "previous_title": null,
+       "level": 1,
+       "author": null,
+       "snippet": "CECEP Techand Ecology&Environment Co Ltd stock price live, this page displays SZ 300197 stock exchange data. View the 300197 premarket stock price ahead of the ...",
+       "snippet_length": 2351,
+       "social_metrics": null,
+       "highlighted_text": null,
+       "language": "en",
+       "sentiment_connotations": {
+        "anger": 0.059823546558618546,
+        "happiness": 0.37167418003082275,
+        "love": 0.09878233075141907,
+        "sadness": 0.06145258992910385,
+        "share": 0.24309077858924866,
+        "fun": 0.16523654758930206
+       },
+       "connotation_types": {
+        "positive": 0.2244383990764618,
+        "negative": 0.4133598208427429,
+        "neutral": 0.3622317910194397
+       },
+       "text_category": [
+        10012,
+        10098,
+        "...(+4 more)"
+       ],
+       "date_published": "2018-05-25 07:35:06 +00:00",
+       "content_quality_score": 92,
+       "semantic_location": null,
+       "rating": null,
+       "group_date": "2018-05-25 07:35:06 +00:00"
+      }
+     },
+     {
+      "type": "content_analysis_search",
+      "url": "https://uk.investing.com/equities/shenzhen-techand-eco-environment",
+      "domain": "uk.investing.com",
+      "main_domain": "investing.com",
+      "url_rank": 82,
+      "spam_score": 0,
+      "domain_rank": 607,
+      "fetch_time": "2025-01-08 15:34:23 +00:00",
+      "country": "GB",
+      "language": "en",
+      "score": 465832.78,
+      "page_category": [
+       10108,
+       10012,
+       "...(+4 more)"
+      ],
+      "page_types": [
+       "message-boards"
+      ],
+      "ratings": null,
+      "social_metrics": null,
+      "content_info": {
+       "content_type": "page_content",
+       "title": "CECEP Techand Ecology&Environment Co Ltd (300197)",
+       "main_title": "CECEP Techand Ecology&Environment Co Ltd (300197)",
+       "previous_title": null,
+       "level": 1,
+       "author": null,
+       "snippet": "Assess today's live CECEP Techand Ecology&Environment Co Ltd (300197) share price, performance and insights using our live Shenzhen: 300197 stock exchange data....",
+       "snippet_length": 1991,
+       "social_metrics": null,
+       "highlighted_text": null,
+       "language": "en",
+       "sentiment_connotations": {
+        "anger": 0.053298041224479675,
+        "happiness": 0.3983106315135956,
+        "love": 0.10579580068588257,
+        "sadness": 0.05292988196015358,
+        "share": 0.21272416412830353,
+        "fun": 0.17700143158435822
+       },
+       "connotation_types": {
+        "positive": 0.36771538853645325,
+        "negative": 0.2447710931301117,
+        "neutral": 0.38754352927207947
+       },
+       "text_category": [
+        10012,
+        10098,
+        "...(+4 more)"
+       ],
+       "date_published": "2025-01-08 07:44:59 +00:00",
+       "content_quality_score": 91,
+       "semantic_location": null,
+       "rating": null,
+       "group_date": "2025-01-08 07:44:59 +00:00"
+      }
+     },
+     "...(+3 more)"
+    ]
+   }
+  ]
+ }
+}

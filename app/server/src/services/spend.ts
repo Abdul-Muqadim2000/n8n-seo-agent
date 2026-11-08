@@ -3,6 +3,7 @@ import { config } from '../config';
 import { db, schema } from '../db';
 import type { OrgRow } from '../db/schema';
 import { HttpError } from '../lib/errors';
+import { NOT_KI_TRIAL_RUN } from './ki';
 
 // A company's spend: its runs plus its keyword checks (failed ones free). Used by the budget checks (runs, keyword checks), the
 // usage endpoint, the platform admin list and the Pipeline's summary. The checks run inside a transaction that holds the company's
@@ -40,7 +41,7 @@ export async function orgSpendSince(q: Q, orgId: string, since = monthStart()): 
   const [r] = await q
     .select({ total: sql<number>`coalesce(sum(${runCost}), 0)` })
     .from(schema.runs)
-    .where(and(eq(schema.runs.orgId, orgId), gte(schema.runs.createdAt, since), notInArray(schema.runs.status, ['failed', 'joined'])));
+    .where(and(eq(schema.runs.orgId, orgId), gte(schema.runs.createdAt, since), notInArray(schema.runs.status, ['failed', 'joined']), NOT_KI_TRIAL_RUN));   // FX-A: our team's Trial check is not the company's spend (the platform total below still counts it)
   const [c] = await q
     .select({ total: sql<number>`coalesce(sum(${schema.keywordChecks.costUsd}), 0)` })
     .from(schema.keywordChecks)

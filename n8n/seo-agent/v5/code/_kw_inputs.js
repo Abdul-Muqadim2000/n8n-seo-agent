@@ -280,7 +280,8 @@ const KWI = (() => {
    *  -> { read, counts, dominant, dominant_count, dominant_share, ours, mismatch, text } */
   const serpPageTypes = (results, o) => {
     const c = { ...CFG, ...(o || {}) };
-    const list = (Array.isArray(results) ? results : []).filter(r => r && S(r.url)).slice(0, 10);
+    // SERP-GOTO (review M4): a result whose address Google hid (url_exact false) does not vote on the page type - its path is a guess
+    const list = (Array.isArray(results) ? results : []).filter(r => r && S(r.url) && r.url_exact !== false).slice(0, 10);
     const counts = {};
     for (const r of list) { const k = shapeOf(r.url, r.title); counts[k] = (counts[k] || 0) + 1; }
     const read = list.length;

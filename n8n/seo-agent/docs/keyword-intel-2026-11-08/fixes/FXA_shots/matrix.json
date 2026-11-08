@@ -1,0 +1,2167 @@
+{
+ "matrix": [
+  {
+   "pg": "competitors",
+   "width": 375,
+   "theme": "light",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"About real competitors found\" 20x20",
+    "button \"About you follow\" 20x20",
+    "button \"About lists and directories to join\" 20x20",
+    "button \"About gaps to act on\" 20x20",
+    "button \"About your competitors\" 20x20",
+    "button \"What this means\" 20x20",
+    "button \"About gaps against your competitors\" 20x20",
+    "button \"About who ai answers name\" 20x20",
+    "button \"About websites that win these searches but are not\" 20x20"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=439",
+    "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=632",
+    "span.tabular text-xs text-ink-3 right=619",
+    "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=757",
+    "span.tabular text-xs text-ink-3 right=744",
+    "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=909",
+    "span.tabular text-xs text-ink-3 right=896",
+    "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=1053"
+   ],
+   "trunc": [
+    "gulfdynamics-partners.ae"
+   ],
+   "heads": [
+    "H1:Competitors",
+    "H2:You follow 2 main competitors: northpeak",
+    "H3:Your competitors",
+    "H4:You follow",
+    "H4:Suggested",
+    "H4:Watchlist",
+    "H3:Gaps against your competitors",
+    "H3:Lists and directories to join",
+    "H3:Who AI answers name",
+    "H3:Websites that win these searches but are",
+    "H3:Not competitors"
+   ],
+   "unnamed": [],
+   "height": 5353,
+   "errors": []
+  },
+  {
+   "pg": "keywords",
+   "width": 375,
+   "theme": "light",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"About go\" 20x20",
+    "button \"About takes a few months\" 20x20",
+    "button \"About searches found\" 20x20",
+    "button \"About just off page one\" 20x20",
+    "button \"About your plan\" 20x20",
+    "button \"About topics\" 20x20",
+    "button \"What this means\" 20x20",
+    "button \"What makes up this score\" 20x20",
+    "button \"Where this search came from\" 20x20",
+    "button \"About buyer questions\" 20x20",
+    "button \"About every search\" 20x20"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=439"
+   ],
+   "trunc": [],
+   "heads": [
+    "H1:Keyword research",
+    "H2:You can win 73 topics soon, and 51 more ",
+    "H3:Your plan",
+    "H3:Topics",
+    "H3:Just off page one",
+    "H3:Buyer questions",
+    "H3:Every search"
+   ],
+   "unnamed": [],
+   "height": 4021,
+   "errors": []
+  },
+  {
+   "pg": "competitors",
+   "width": 768,
+   "theme": "light",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to choose\" 127x28",
+    "a \"Check my competitors again (21 credits)\" 324x36",
+    "a \"Write this page\" 140x32",
+    "button \"About real competitors found\" 20x20",
+    "button \"About you follow\" 20x20",
+    "button \"About lists and directories to join\" 20x20",
+    "button \"About gaps to act on\" 20x20",
+    "button \"About your competitors\" 20x20",
+    "a \"Download CSV\" 141x32",
+    "a \"Website settings\" 94x16",
+    "button \"What this means\" 20x20",
+    "button \"Details\" 68x32",
+    "button \"Move to watchlist\" 155x32",
+    "button \"Not a competitor\" 150x32",
+    "button \"Choose\" 93x32",
+    "button \"Watch\" 84x32",
+    "button \"About gaps against your competitors\" 20x20",
+    "button \"All 21\" 63x28",
+    "button \"Competitors rank, you are missing 6\" 247x28",
+    "button \"One competitor ranks, you are missing 1\" 273x28",
+    "button \"You rank low 5\" 119x28",
+    "button \"Just off page one 8\" 146x28",
+    "button \"You lead: keep it 1\" 138x28",
+    "button \"Not for us\" 85x32"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=824"
+   ],
+   "trunc": [
+    "gulfdynamics-partners.ae"
+   ],
+   "heads": [
+    "H1:Competitors",
+    "H2:You follow 2 main competitors: northpeak",
+    "H3:Your competitors",
+    "H4:You follow",
+    "H4:Suggested",
+    "H4:Watchlist",
+    "H3:Gaps against your competitors",
+    "H3:Lists and directories to join",
+    "H3:Who AI answers name",
+    "H3:Websites that win these searches but are",
+    "H3:Not competitors"
+   ],
+   "unnamed": [],
+   "height": 5062,
+   "errors": []
+  },
+  {
+   "pg": "keywords",
+   "width": 768,
+   "theme": "light",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to read this\" 136x28",
+    "a \"Research my keywords again (54 credits)\" 333x36",
+    "a \"Improve this page\" 157x32",
+    "button \"About go\" 20x20",
+    "button \"About takes a few months\" 20x20",
+    "button \"About searches found\" 20x20",
+    "button \"About just off page one\" 20x20",
+    "button \"About your plan\" 20x20",
+    "a \"Write this page\" 140x32",
+    "a \"How to get listed\" 152x32",
+    "a \"Plan the ladder\" 141x32",
+    "a \"How to get named\" 160x32",
+    "button \"About topics\" 20x20",
+    "button \"What this means\" 20x20",
+    "button \"What makes up this score\" 20x20",
+    "button \"Where this search came from\" 20x20",
+    "button \"Show all 179\" 107x32",
+    "button \"See all 227 in the table\" 168x32",
+    "button \"About buyer questions\" 20x20",
+    "button \"Add to my AI questions\" 189x32",
+    "button \"About every search\" 20x20",
+    "a \"Download CSV\" 141x32",
+    "select \"All Go Takes a few months Hard for your website no\" 184x36",
+    "select \"All Ready to hire Comparing providers Looking for \" 184x36"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=824"
+   ],
+   "trunc": [],
+   "heads": [
+    "H1:Keyword research",
+    "H2:You can win 73 topics soon, and 51 more ",
+    "H3:Your plan",
+    "H3:Topics",
+    "H3:Just off page one",
+    "H3:Buyer questions",
+    "H3:Every search"
+   ],
+   "unnamed": [],
+   "height": 8954,
+   "errors": []
+  },
+  {
+   "pg": "competitors",
+   "width": 1024,
+   "theme": "light",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to choose\" 127x28",
+    "a \"Check my competitors again (21 credits)\" 324x36",
+    "a \"Write this page\" 140x32",
+    "button \"About real competitors found\" 20x20",
+    "button \"About you follow\" 20x20",
+    "button \"About lists and directories to join\" 20x20",
+    "button \"About gaps to act on\" 20x20",
+    "button \"About your competitors\" 20x20",
+    "a \"Download CSV\" 141x32",
+    "a \"Website settings\" 94x16",
+    "button \"What this means\" 20x20",
+    "button \"Details\" 68x32",
+    "button \"Move to watchlist\" 155x32",
+    "button \"Not a competitor\" 150x32",
+    "button \"Choose\" 93x32",
+    "button \"Watch\" 84x32",
+    "button \"About gaps against your competitors\" 20x20",
+    "button \"All 21\" 63x28",
+    "button \"Competitors rank, you are missing 6\" 247x28",
+    "button \"One competitor ranks, you are missing 1\" 273x28",
+    "button \"You rank low 5\" 119x28",
+    "button \"Just off page one 8\" 146x28",
+    "button \"You lead: keep it 1\" 138x28",
+    "button \"Not for us\" 85x32"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=1064"
+   ],
+   "trunc": [
+    "gulfdynamics-partners.ae"
+   ],
+   "heads": [
+    "H1:Competitors",
+    "H2:You follow 2 main competitors: northpeak",
+    "H3:Your competitors",
+    "H4:You follow",
+    "H4:Suggested",
+    "H4:Watchlist",
+    "H3:Gaps against your competitors",
+    "H3:Lists and directories to join",
+    "H3:Who AI answers name",
+    "H3:Websites that win these searches but are",
+    "H3:Not competitors"
+   ],
+   "unnamed": [],
+   "height": 5445,
+   "errors": []
+  },
+  {
+   "pg": "keywords",
+   "width": 1024,
+   "theme": "light",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to read this\" 136x28",
+    "a \"Research my keywords again (54 credits)\" 333x36",
+    "a \"Improve this page\" 157x32",
+    "button \"About go\" 20x20",
+    "button \"About takes a few months\" 20x20",
+    "button \"About searches found\" 20x20",
+    "button \"About just off page one\" 20x20",
+    "button \"About your plan\" 20x20",
+    "a \"Write this page\" 140x32",
+    "a \"How to get listed\" 152x32",
+    "a \"Plan the ladder\" 141x32",
+    "a \"How to get named\" 160x32",
+    "button \"About topics\" 20x20",
+    "button \"What this means\" 20x20",
+    "button \"What makes up this score\" 20x20",
+    "button \"Where this search came from\" 20x20",
+    "button \"Show all 179\" 107x32",
+    "button \"See all 227 in the table\" 168x32",
+    "button \"About buyer questions\" 20x20",
+    "button \"Add to my AI questions\" 189x32",
+    "button \"About every search\" 20x20",
+    "a \"Download CSV\" 141x32",
+    "select \"All Go Takes a few months Hard for your website no\" 184x36",
+    "select \"All Ready to hire Comparing providers Looking for \" 184x36"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=1064"
+   ],
+   "trunc": [],
+   "heads": [
+    "H1:Keyword research",
+    "H2:You can win 73 topics soon, and 51 more ",
+    "H3:Your plan",
+    "H3:Topics",
+    "H3:Just off page one",
+    "H3:Buyer questions",
+    "H3:Every search"
+   ],
+   "unnamed": [],
+   "height": 8957,
+   "errors": []
+  },
+  {
+   "pg": "competitors",
+   "width": 1440,
+   "theme": "light",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to choose\" 127x28",
+    "a \"Check my competitors again (21 credits)\" 324x36",
+    "a \"Write this page\" 140x32",
+    "button \"About real competitors found\" 20x20",
+    "button \"About you follow\" 20x20",
+    "button \"About lists and directories to join\" 20x20",
+    "button \"About gaps to act on\" 20x20",
+    "button \"About your competitors\" 20x20",
+    "a \"Download CSV\" 141x32",
+    "a \"Website settings\" 94x16",
+    "button \"What this means\" 20x20",
+    "button \"Details\" 68x32",
+    "button \"Move to watchlist\" 155x32",
+    "button \"Not a competitor\" 150x32",
+    "button \"Choose\" 93x32",
+    "button \"Watch\" 84x32",
+    "button \"About gaps against your competitors\" 20x20",
+    "button \"All 21\" 63x28",
+    "button \"Competitors rank, you are missing 6\" 247x28",
+    "button \"One competitor ranks, you are missing 1\" 273x28",
+    "button \"You rank low 5\" 119x28",
+    "button \"Just off page one 8\" 146x28",
+    "button \"You lead: keep it 1\" 138x28",
+    "button \"Not for us\" 85x32"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=1480"
+   ],
+   "trunc": [
+    "gulfdynamics-partners.ae"
+   ],
+   "heads": [
+    "H1:Competitors",
+    "H2:You follow 2 main competitors: northpeak",
+    "H3:Your competitors",
+    "H4:You follow",
+    "H4:Suggested",
+    "H4:Watchlist",
+    "H3:Gaps against your competitors",
+    "H3:Lists and directories to join",
+    "H3:Who AI answers name",
+    "H3:Websites that win these searches but are",
+    "H3:Not competitors"
+   ],
+   "unnamed": [],
+   "height": 3671,
+   "errors": []
+  },
+  {
+   "pg": "keywords",
+   "width": 1440,
+   "theme": "light",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to read this\" 136x28",
+    "a \"Research my keywords again (54 credits)\" 333x36",
+    "a \"Improve this page\" 157x32",
+    "button \"About go\" 20x20",
+    "button \"About takes a few months\" 20x20",
+    "button \"About searches found\" 20x20",
+    "button \"About just off page one\" 20x20",
+    "button \"About your plan\" 20x20",
+    "a \"Write this page\" 140x32",
+    "a \"How to get listed\" 152x32",
+    "a \"Plan the ladder\" 141x32",
+    "a \"How to get named\" 160x32",
+    "button \"About topics\" 20x20",
+    "button \"What this means\" 20x20",
+    "button \"What makes up this score\" 20x20",
+    "button \"Where this search came from\" 20x20",
+    "button \"Show all 179\" 107x32",
+    "button \"See all 227 in the table\" 168x32",
+    "button \"About buyer questions\" 20x20",
+    "button \"Add to my AI questions\" 189x32",
+    "button \"About every search\" 20x20",
+    "a \"Download CSV\" 141x32",
+    "select \"All Go Takes a few months Hard for your website no\" 184x36",
+    "select \"All Ready to hire Comparing providers Looking for \" 184x36"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=1480"
+   ],
+   "trunc": [],
+   "heads": [
+    "H1:Keyword research",
+    "H2:You can win 73 topics soon, and 51 more ",
+    "H3:Your plan",
+    "H3:Topics",
+    "H3:Just off page one",
+    "H3:Buyer questions",
+    "H3:Every search"
+   ],
+   "unnamed": [],
+   "height": 7315,
+   "errors": []
+  },
+  {
+   "pg": "competitors",
+   "width": 375,
+   "theme": "dark",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"About real competitors found\" 20x20",
+    "button \"About you follow\" 20x20",
+    "button \"About lists and directories to join\" 20x20",
+    "button \"About gaps to act on\" 20x20",
+    "button \"About your competitors\" 20x20",
+    "button \"What this means\" 20x20",
+    "button \"About gaps against your competitors\" 20x20",
+    "button \"About who ai answers name\" 20x20",
+    "button \"About websites that win these searches but are not\" 20x20"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=439",
+    "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=632",
+    "span.tabular text-xs text-ink-3 right=619",
+    "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=757",
+    "span.tabular text-xs text-ink-3 right=744",
+    "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=909",
+    "span.tabular text-xs text-ink-3 right=896",
+    "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=1053"
+   ],
+   "trunc": [
+    "gulfdynamics-partners.ae"
+   ],
+   "heads": [
+    "H1:Competitors",
+    "H2:You follow 2 main competitors: northpeak",
+    "H3:Your competitors",
+    "H4:You follow",
+    "H4:Suggested",
+    "H4:Watchlist",
+    "H3:Gaps against your competitors",
+    "H3:Lists and directories to join",
+    "H3:Who AI answers name",
+    "H3:Websites that win these searches but are",
+    "H3:Not competitors"
+   ],
+   "unnamed": [],
+   "height": 5353,
+   "errors": []
+  },
+  {
+   "pg": "keywords",
+   "width": 375,
+   "theme": "dark",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"About go\" 20x20",
+    "button \"About takes a few months\" 20x20",
+    "button \"About searches found\" 20x20",
+    "button \"About just off page one\" 20x20",
+    "button \"About your plan\" 20x20",
+    "button \"About topics\" 20x20",
+    "button \"What this means\" 20x20",
+    "button \"What makes up this score\" 20x20",
+    "button \"Where this search came from\" 20x20",
+    "button \"About buyer questions\" 20x20",
+    "button \"About every search\" 20x20"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=439"
+   ],
+   "trunc": [],
+   "heads": [
+    "H1:Keyword research",
+    "H2:You can win 73 topics soon, and 51 more ",
+    "H3:Your plan",
+    "H3:Topics",
+    "H3:Just off page one",
+    "H3:Buyer questions",
+    "H3:Every search"
+   ],
+   "unnamed": [],
+   "height": 4021,
+   "errors": []
+  },
+  {
+   "pg": "competitors",
+   "width": 768,
+   "theme": "dark",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to choose\" 127x28",
+    "a \"Check my competitors again (21 credits)\" 324x36",
+    "a \"Write this page\" 140x32",
+    "button \"About real competitors found\" 20x20",
+    "button \"About you follow\" 20x20",
+    "button \"About lists and directories to join\" 20x20",
+    "button \"About gaps to act on\" 20x20",
+    "button \"About your competitors\" 20x20",
+    "a \"Download CSV\" 141x32",
+    "a \"Website settings\" 94x16",
+    "button \"What this means\" 20x20",
+    "button \"Details\" 68x32",
+    "button \"Move to watchlist\" 155x32",
+    "button \"Not a competitor\" 150x32",
+    "button \"Choose\" 93x32",
+    "button \"Watch\" 84x32",
+    "button \"About gaps against your competitors\" 20x20",
+    "button \"All 21\" 63x28",
+    "button \"Competitors rank, you are missing 6\" 247x28",
+    "button \"One competitor ranks, you are missing 1\" 273x28",
+    "button \"You rank low 5\" 119x28",
+    "button \"Just off page one 8\" 146x28",
+    "button \"You lead: keep it 1\" 138x28",
+    "button \"Not for us\" 85x32"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=824"
+   ],
+   "trunc": [
+    "gulfdynamics-partners.ae"
+   ],
+   "heads": [
+    "H1:Competitors",
+    "H2:You follow 2 main competitors: northpeak",
+    "H3:Your competitors",
+    "H4:You follow",
+    "H4:Suggested",
+    "H4:Watchlist",
+    "H3:Gaps against your competitors",
+    "H3:Lists and directories to join",
+    "H3:Who AI answers name",
+    "H3:Websites that win these searches but are",
+    "H3:Not competitors"
+   ],
+   "unnamed": [],
+   "height": 5062,
+   "errors": []
+  },
+  {
+   "pg": "keywords",
+   "width": 768,
+   "theme": "dark",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to read this\" 136x28",
+    "a \"Research my keywords again (54 credits)\" 333x36",
+    "a \"Improve this page\" 157x32",
+    "button \"About go\" 20x20",
+    "button \"About takes a few months\" 20x20",
+    "button \"About searches found\" 20x20",
+    "button \"About just off page one\" 20x20",
+    "button \"About your plan\" 20x20",
+    "a \"Write this page\" 140x32",
+    "a \"How to get listed\" 152x32",
+    "a \"Plan the ladder\" 141x32",
+    "a \"How to get named\" 160x32",
+    "button \"About topics\" 20x20",
+    "button \"What this means\" 20x20",
+    "button \"What makes up this score\" 20x20",
+    "button \"Where this search came from\" 20x20",
+    "button \"Show all 179\" 107x32",
+    "button \"See all 227 in the table\" 168x32",
+    "button \"About buyer questions\" 20x20",
+    "button \"Add to my AI questions\" 189x32",
+    "button \"About every search\" 20x20",
+    "a \"Download CSV\" 141x32",
+    "select \"All Go Takes a few months Hard for your website no\" 184x36",
+    "select \"All Ready to hire Comparing providers Looking for \" 184x36"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=824"
+   ],
+   "trunc": [],
+   "heads": [
+    "H1:Keyword research",
+    "H2:You can win 73 topics soon, and 51 more ",
+    "H3:Your plan",
+    "H3:Topics",
+    "H3:Just off page one",
+    "H3:Buyer questions",
+    "H3:Every search"
+   ],
+   "unnamed": [],
+   "height": 8954,
+   "errors": []
+  },
+  {
+   "pg": "competitors",
+   "width": 1024,
+   "theme": "dark",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to choose\" 127x28",
+    "a \"Check my competitors again (21 credits)\" 324x36",
+    "a \"Write this page\" 140x32",
+    "button \"About real competitors found\" 20x20",
+    "button \"About you follow\" 20x20",
+    "button \"About lists and directories to join\" 20x20",
+    "button \"About gaps to act on\" 20x20",
+    "button \"About your competitors\" 20x20",
+    "a \"Download CSV\" 141x32",
+    "a \"Website settings\" 94x16",
+    "button \"What this means\" 20x20",
+    "button \"Details\" 68x32",
+    "button \"Move to watchlist\" 155x32",
+    "button \"Not a competitor\" 150x32",
+    "button \"Choose\" 93x32",
+    "button \"Watch\" 84x32",
+    "button \"About gaps against your competitors\" 20x20",
+    "button \"All 21\" 63x28",
+    "button \"Competitors rank, you are missing 6\" 247x28",
+    "button \"One competitor ranks, you are missing 1\" 273x28",
+    "button \"You rank low 5\" 119x28",
+    "button \"Just off page one 8\" 146x28",
+    "button \"You lead: keep it 1\" 138x28",
+    "button \"Not for us\" 85x32"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=1064"
+   ],
+   "trunc": [
+    "gulfdynamics-partners.ae"
+   ],
+   "heads": [
+    "H1:Competitors",
+    "H2:You follow 2 main competitors: northpeak",
+    "H3:Your competitors",
+    "H4:You follow",
+    "H4:Suggested",
+    "H4:Watchlist",
+    "H3:Gaps against your competitors",
+    "H3:Lists and directories to join",
+    "H3:Who AI answers name",
+    "H3:Websites that win these searches but are",
+    "H3:Not competitors"
+   ],
+   "unnamed": [],
+   "height": 5445,
+   "errors": []
+  },
+  {
+   "pg": "keywords",
+   "width": 1024,
+   "theme": "dark",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to read this\" 136x28",
+    "a \"Research my keywords again (54 credits)\" 333x36",
+    "a \"Improve this page\" 157x32",
+    "button \"About go\" 20x20",
+    "button \"About takes a few months\" 20x20",
+    "button \"About searches found\" 20x20",
+    "button \"About just off page one\" 20x20",
+    "button \"About your plan\" 20x20",
+    "a \"Write this page\" 140x32",
+    "a \"How to get listed\" 152x32",
+    "a \"Plan the ladder\" 141x32",
+    "a \"How to get named\" 160x32",
+    "button \"About topics\" 20x20",
+    "button \"What this means\" 20x20",
+    "button \"What makes up this score\" 20x20",
+    "button \"Where this search came from\" 20x20",
+    "button \"Show all 179\" 107x32",
+    "button \"See all 227 in the table\" 168x32",
+    "button \"About buyer questions\" 20x20",
+    "button \"Add to my AI questions\" 189x32",
+    "button \"About every search\" 20x20",
+    "a \"Download CSV\" 141x32",
+    "select \"All Go Takes a few months Hard for your website no\" 184x36",
+    "select \"All Ready to hire Comparing providers Looking for \" 184x36"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=1064"
+   ],
+   "trunc": [],
+   "heads": [
+    "H1:Keyword research",
+    "H2:You can win 73 topics soon, and 51 more ",
+    "H3:Your plan",
+    "H3:Topics",
+    "H3:Just off page one",
+    "H3:Buyer questions",
+    "H3:Every search"
+   ],
+   "unnamed": [],
+   "height": 8957,
+   "errors": []
+  },
+  {
+   "pg": "competitors",
+   "width": 1440,
+   "theme": "dark",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to choose\" 127x28",
+    "a \"Check my competitors again (21 credits)\" 324x36",
+    "a \"Write this page\" 140x32",
+    "button \"About real competitors found\" 20x20",
+    "button \"About you follow\" 20x20",
+    "button \"About lists and directories to join\" 20x20",
+    "button \"About gaps to act on\" 20x20",
+    "button \"About your competitors\" 20x20",
+    "a \"Download CSV\" 141x32",
+    "a \"Website settings\" 94x16",
+    "button \"What this means\" 20x20",
+    "button \"Details\" 68x32",
+    "button \"Move to watchlist\" 155x32",
+    "button \"Not a competitor\" 150x32",
+    "button \"Choose\" 93x32",
+    "button \"Watch\" 84x32",
+    "button \"About gaps against your competitors\" 20x20",
+    "button \"All 21\" 63x28",
+    "button \"Competitors rank, you are missing 6\" 247x28",
+    "button \"One competitor ranks, you are missing 1\" 273x28",
+    "button \"You rank low 5\" 119x28",
+    "button \"Just off page one 8\" 146x28",
+    "button \"You lead: keep it 1\" 138x28",
+    "button \"Not for us\" 85x32"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=1480"
+   ],
+   "trunc": [
+    "gulfdynamics-partners.ae"
+   ],
+   "heads": [
+    "H1:Competitors",
+    "H2:You follow 2 main competitors: northpeak",
+    "H3:Your competitors",
+    "H4:You follow",
+    "H4:Suggested",
+    "H4:Watchlist",
+    "H3:Gaps against your competitors",
+    "H3:Lists and directories to join",
+    "H3:Who AI answers name",
+    "H3:Websites that win these searches but are",
+    "H3:Not competitors"
+   ],
+   "unnamed": [],
+   "height": 3671,
+   "errors": []
+  },
+  {
+   "pg": "keywords",
+   "width": 1440,
+   "theme": "dark",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to read this\" 136x28",
+    "a \"Research my keywords again (54 credits)\" 333x36",
+    "a \"Improve this page\" 157x32",
+    "button \"About go\" 20x20",
+    "button \"About takes a few months\" 20x20",
+    "button \"About searches found\" 20x20",
+    "button \"About just off page one\" 20x20",
+    "button \"About your plan\" 20x20",
+    "a \"Write this page\" 140x32",
+    "a \"How to get listed\" 152x32",
+    "a \"Plan the ladder\" 141x32",
+    "a \"How to get named\" 160x32",
+    "button \"About topics\" 20x20",
+    "button \"What this means\" 20x20",
+    "button \"What makes up this score\" 20x20",
+    "button \"Where this search came from\" 20x20",
+    "button \"Show all 179\" 107x32",
+    "button \"See all 227 in the table\" 168x32",
+    "button \"About buyer questions\" 20x20",
+    "button \"Add to my AI questions\" 189x32",
+    "button \"About every search\" 20x20",
+    "a \"Download CSV\" 141x32",
+    "select \"All Go Takes a few months Hard for your website no\" 184x36",
+    "select \"All Ready to hire Comparing providers Looking for \" 184x36"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=1480"
+   ],
+   "trunc": [],
+   "heads": [
+    "H1:Keyword research",
+    "H2:You can win 73 topics soon, and 51 more ",
+    "H3:Your plan",
+    "H3:Topics",
+    "H3:Just off page one",
+    "H3:Buyer questions",
+    "H3:Every search"
+   ],
+   "unnamed": [],
+   "height": 7315,
+   "errors": []
+  }
+ ],
+ "states": [
+  {
+   "site": "s-new",
+   "name": "empty",
+   "pg": "competitors",
+   "width": 375,
+   "text": "brandnew-consulting.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors\n\nWho brandnew-consulting.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nFind my competitors\n(21 credits)\nFind out who you really compete with\n\nWe read Google's results for each of your services in your market, sort every website by what it is (a company like you, a directory, a list, a platform) and show you the evidence. It takes about 6 minutes.\n\nFind my competitors\n(21 credits)",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"brandnew-consulting.ae (opens in a new tab)\" 215x24"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Competitors",
+     "H3:Find out who you really compete with"
+    ],
+    "unnamed": [],
+    "height": 900
+   }
+  },
+  {
+   "site": "s-new",
+   "name": "empty",
+   "pg": "keywords",
+   "width": 375,
+   "text": "brandnew-consulting.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches brandnew-consulting.ae can win.\n\nHow to read this\nResearch my keywords\n(54 credits)\nFind what your buyers search\n\nWe collect searches from your Search Console, Google's own suggestions and questions, and your competitors; keep the ones that fit what you sell; group them by topic and tell you which ones you can win. It takes about 12 minutes.\n\nResearch my keywords\n(54 credits)\n\nTip: choose your competitors first on the Competitors page, so the research can show where they are ahead.",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"brandnew-consulting.ae (opens in a new tab)\" 215x24",
+     "a \"Competitors page\" 103x16"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Keyword research",
+     "H3:Find what your buyers search"
+    ],
+    "unnamed": [],
+    "height": 948
+   }
+  },
+  {
+   "site": "s-new",
+   "name": "empty",
+   "pg": "competitors",
+   "width": 1440,
+   "text": "brandnew-consulting.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors\n\nWho brandnew-consulting.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nFind my competitors\n(21 credits)\nFind out who you really compete with\n\nWe read Google's results for each of your services in your market, sort every website by what it is (a company like you, a directory, a list, a platform) and show you the evidence. It takes about 6 minutes.\n\nFind my competitors\n(21 credits)",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"brandnew-consulting.ae (opens in a new tab)\" 215x24",
+     "button \"How to choose\" 127x28",
+     "a \"Find my competitors (21 credits)\" 268x36"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Competitors",
+     "H3:Find out who you really compete with"
+    ],
+    "unnamed": [],
+    "height": 900
+   }
+  },
+  {
+   "site": "s-new",
+   "name": "empty",
+   "pg": "keywords",
+   "width": 1440,
+   "text": "brandnew-consulting.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches brandnew-consulting.ae can win.\n\nHow to read this\nResearch my keywords\n(54 credits)\nFind what your buyers search\n\nWe collect searches from your Search Console, Google's own suggestions and questions, and your competitors; keep the ones that fit what you sell; group them by topic and tell you which ones you can win. It takes about 12 minutes.\n\nResearch my keywords\n(54 credits)\n\nTip: choose your competitors first on the Competitors page, so the research can show where they are ahead.",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"brandnew-consulting.ae (opens in a new tab)\" 215x24",
+     "button \"How to read this\" 136x28",
+     "a \"Research my keywords (54 credits)\" 291x36",
+     "a \"Competitors page\" 103x16"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Keyword research",
+     "H3:Find what your buyers search"
+    ],
+    "unnamed": [],
+    "height": 900
+   }
+  },
+  {
+   "site": "s-one",
+   "name": "one-row",
+   "pg": "competitors",
+   "width": 375,
+   "text": "tinyfirm-accounting.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors\n\nWho tinyfirm-accounting.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nUpdated today\nCheck my competitors again\n(21 credits)\nCOMPETITORS\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYour main competitor is sharjah-vat-experts.ae.\n\nFound in Google's results for your services. Choose up to 5 to follow: we compare you with them every month.\n\nNext step\n\nChoose your competitors, starting with sharjah-vat-experts.ae\n\nChoose sharjah-vat-experts.ae\nReal competitors found\n1\n1\nYou follow\n0 of 5\nLists and directories to join\n0\n0\nGaps to act on\n0\n0\nYour competitors\n\n0 chosen, 1 suggested, 0 on your watchlist\n\nDownload CSV\n\nThe competitors you entered in Website settings start on this list as chosen. Choosing here does not change that list, which your AI vis",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"tinyfirm-accounting.ae (opens in a new tab)\" 203x24",
+     "button \"About real competitors found\" 20x20",
+     "button \"About you follow\" 20x20",
+     "button \"About lists and directories to join\" 20x20",
+     "button \"About gaps to act on\" 20x20",
+     "button \"About your competitors\" 20x20",
+     "button \"What this means\" 20x20",
+     "button \"About gaps against your competitors\" 20x20",
+     "button \"About who ai answers name\" 20x20"
+    ],
+    "over": [
+     "img.pointer-events-none absolute -top-24 -right-20 -z- right=439"
+    ],
+    "trunc": [],
+    "heads": [
+     "H1:Competitors",
+     "H2:Your main competitor is sharjah-vat-expe",
+     "H3:Your competitors",
+     "H4:You follow",
+     "H4:Suggested",
+     "H4:Watchlist",
+     "H3:Gaps against your competitors",
+     "H3:Lists and directories to join",
+     "H3:Who AI answers name"
+    ],
+    "unnamed": [],
+    "height": 2493
+   }
+  },
+  {
+   "site": "s-one",
+   "name": "one-row",
+   "pg": "keywords",
+   "width": 375,
+   "text": "tinyfirm-accounting.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches tinyfirm-accounting.ae can win.\n\nHow to read this\nUpdated today\nResearch my keywords again\n(54 credits)\nKEYWORD RESEARCH\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou can win 1 topic soon.\n\nWe found 1 search people use to find a service like yours, grouped into 1 topic. Start with the plan below.\n\nNext step\n\nFirst step: Improve your VAT registration page\n\nImprove this page\nGo\n1\n1\nTakes a few months\n0\n0\nSearches found\n1\n1\nJust off page one\n1\n1\nYour plan\n\nThe step most likely to bring you buyers\n\n1\n\nImprove your VAT registration page\n\nYou are #11 and the page is thin.\n\nImprove your page · tinyfirm-accounting.ae/vat · about 40 credits\n\nImprove this page\nTopics\n\n1 topic, best first. One page can win each top",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"tinyfirm-accounting.ae (opens in a new tab)\" 203x24",
+     "button \"About go\" 20x20",
+     "button \"About takes a few months\" 20x20",
+     "button \"About searches found\" 20x20",
+     "button \"About just off page one\" 20x20",
+     "button \"About your plan\" 20x20",
+     "button \"About topics\" 20x20",
+     "button \"What this means\" 20x20",
+     "button \"What makes up this score\" 20x20",
+     "button \"Where this search came from\" 20x20",
+     "button \"About buyer questions\" 20x20",
+     "button \"About every search\" 20x20"
+    ],
+    "over": [
+     "img.pointer-events-none absolute -top-24 -right-20 -z- right=439"
+    ],
+    "trunc": [],
+    "heads": [
+     "H1:Keyword research",
+     "H2:You can win 1 topic soon.",
+     "H3:Your plan",
+     "H3:Topics",
+     "H3:Just off page one",
+     "H3:Buyer questions",
+     "H3:Every search"
+    ],
+    "unnamed": [],
+    "height": 2429
+   }
+  },
+  {
+   "site": "s-one",
+   "name": "one-row",
+   "pg": "competitors",
+   "width": 1440,
+   "text": "tinyfirm-accounting.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors\n\nWho tinyfirm-accounting.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nUpdated today\nCheck my competitors again\n(21 credits)\nCOMPETITORS\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYour main competitor is sharjah-vat-experts.ae.\n\nFound in Google's results for your services. Choose up to 5 to follow: we compare you with them every month.\n\nNext step\n\nChoose your competitors, starting with sharjah-vat-experts.ae\n\nChoose sharjah-vat-experts.ae\nReal competitors found\n1\n1\nYou follow\n0 of 5\nLists and directories to join\n0\n0\nGaps to act on\n0\n0\nYour competitors\n\n0 chosen, 1 suggested, 0 on your watchlist\n\nDownload CSV\n\nThe competitors you entered in Website settings start on this list as chosen. Choosing here does not change that list, which your AI v",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"tinyfirm-accounting.ae (opens in a new tab)\" 203x24",
+     "button \"How to choose\" 127x28",
+     "a \"Check my competitors again (21 credits)\" 324x36",
+     "button \"Choose sharjah-vat-experts.ae\" 210x32",
+     "button \"About real competitors found\" 20x20",
+     "button \"About you follow\" 20x20",
+     "button \"About lists and directories to join\" 20x20",
+     "button \"About gaps to act on\" 20x20",
+     "button \"About your competitors\" 20x20",
+     "a \"Download CSV\" 141x32",
+     "a \"Website settings\" 94x16",
+     "button \"What this means\" 20x20",
+     "button \"Details\" 68x32",
+     "button \"Choose\" 93x32",
+     "button \"Watch\" 84x32",
+     "button \"Not a competitor\" 150x32",
+     "button \"About gaps against your competitors\" 20x20",
+     "button \"Why directories are not competitors\" 235x20",
+     "button \"About who ai answers name\" 20x20"
+    ],
+    "over": [
+     "img.pointer-events-none absolute -top-24 -right-20 -z- right=1480"
+    ],
+    "trunc": [],
+    "heads": [
+     "H1:Competitors",
+     "H2:Your main competitor is sharjah-vat-expe",
+     "H3:Your competitors",
+     "H4:You follow",
+     "H4:Suggested",
+     "H4:Watchlist",
+     "H3:Gaps against your competitors",
+     "H3:Lists and directories to join",
+     "H3:Who AI answers name"
+    ],
+    "unnamed": [],
+    "height": 1354
+   }
+  },
+  {
+   "site": "s-one",
+   "name": "one-row",
+   "pg": "keywords",
+   "width": 1440,
+   "text": "tinyfirm-accounting.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches tinyfirm-accounting.ae can win.\n\nHow to read this\nUpdated today\nResearch my keywords again\n(54 credits)\nKEYWORD RESEARCH\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou can win 1 topic soon.\n\nWe found 1 search people use to find a service like yours, grouped into 1 topic. Start with the plan below.\n\nNext step\n\nFirst step: Improve your VAT registration page\n\nImprove this page\nGo\n1\n1\nTakes a few months\n0\n0\nSearches found\n1\n1\nJust off page one\n1\n1\nYour plan\n\nThe step most likely to bring you buyers\n\n1\n\nImprove your VAT registration page\n\nYou are #11 and the page is thin.\n\nImprove your page · tinyfirm-accounting.ae/vat · about 40 credits\n\nImprove this page\nTopics\n\n1 topic, best first. One page can win each t",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"tinyfirm-accounting.ae (opens in a new tab)\" 203x24",
+     "button \"How to read this\" 136x28",
+     "a \"Research my keywords again (54 credits)\" 333x36",
+     "a \"Improve this page\" 157x32",
+     "button \"About go\" 20x20",
+     "button \"About takes a few months\" 20x20",
+     "button \"About searches found\" 20x20",
+     "button \"About just off page one\" 20x20",
+     "button \"About your plan\" 20x20",
+     "button \"About topics\" 20x20",
+     "button \"What this means\" 20x20",
+     "button \"What makes up this score\" 20x20",
+     "button \"Where this search came from\" 20x20",
+     "button \"About buyer questions\" 20x20",
+     "button \"Add to my AI questions\" 189x32",
+     "button \"About every search\" 20x20",
+     "a \"Download CSV\" 141x32",
+     "select \"Best first Most searched A to Z\" 149x36",
+     "button \"What the verdicts mean\" 161x17"
+    ],
+    "over": [
+     "img.pointer-events-none absolute -top-24 -right-20 -z- right=1480"
+    ],
+    "trunc": [],
+    "heads": [
+     "H1:Keyword research",
+     "H2:You can win 1 topic soon.",
+     "H3:Your plan",
+     "H3:Topics",
+     "H3:Just off page one",
+     "H3:Buyer questions",
+     "H3:Every search"
+    ],
+    "unnamed": [],
+    "height": 1524
+   }
+  },
+  {
+   "site": "s-edx",
+   "name": "partial",
+   "pg": "competitors",
+   "width": 375,
+   "text": "openlearn-studio.io\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors\n\nWho openlearn-studio.io really competes with in Google, and what to do about each one.\n\nHow to choose\nUpdated today\nCheck my competitors again\n(21 credits)\nCOMPETITORS\nUpdated 8 Nov 2026\nMarket: United States\nYour 3 main competitors are lmsforge.dev, edtech-cloudworks.com and campusbyte.io.\n\nFound in Google's results for your services. Choose up to 5 to follow: we compare you with them every month.\n\nNext step\n\nChoose your competitors, starting with lmsforge.dev\n\nChoose lmsforge.dev\nReal competitors found\n3\n3\nYou follow\n0 of 5\nLists and directories to join\n2\n2\nGaps to act on\n0\n0\nYour competitors\n\n0 chosen, 3 suggested, 0 on your watchlist\n\nDownload CSV\n\nThe competitors you entered in Website settings start on this list as chosen. Choosing here does not change that list, which your AI v",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"openlearn-studio.io (opens in a new tab)\" 179x24",
+     "button \"About real competitors found\" 20x20",
+     "button \"About you follow\" 20x20",
+     "button \"About lists and directories to join\" 20x20",
+     "button \"About gaps to act on\" 20x20",
+     "button \"About your competitors\" 20x20",
+     "button \"What this means\" 20x20",
+     "button \"About gaps against your competitors\" 20x20",
+     "button \"About who ai answers name\" 20x20",
+     "button \"About websites that win these searches but are not\" 20x20"
+    ],
+    "over": [
+     "img.pointer-events-none absolute -top-24 -right-20 -z- right=439"
+    ],
+    "trunc": [],
+    "heads": [
+     "H1:Competitors",
+     "H2:Your 3 main competitors are lmsforge.dev",
+     "H3:Your competitors",
+     "H4:You follow",
+     "H4:Suggested",
+     "H4:Watchlist",
+     "H3:Gaps against your competitors",
+     "H3:Lists and directories to join",
+     "H3:Who AI answers name",
+     "H3:Websites that win these searches but are"
+    ],
+    "unnamed": [],
+    "height": 3284
+   }
+  },
+  {
+   "site": "s-edx",
+   "name": "partial",
+   "pg": "keywords",
+   "width": 375,
+   "text": "openlearn-studio.io\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches openlearn-studio.io can win.\n\nHow to read this\nUpdated today\nResearch my keywords again\n(54 credits)\n\nPart of the last reading is missing\n\nWe could not read search volumes and your Search Console searches this time. Everything else is shown, and the next run tries again. You were only charged for what was read.\nKEYWORD RESEARCH\nUpdated 8 Nov 2026\nMarket: United States\nYou can win 6 topics soon, and 2 more in a few months.\n\nWe found 143 searches people use to find a service like yours, grouped into 13 topics. Start with the plan below.\n\nGo\n6\n6\nTakes a few months\n2\n2\nSearches found\n143\n143\nJust off page one\n14\n14\nYour plan\n\nThe plan appears after the research\n\nRun the research to get your plan.\n\nTopics\n\n13 topics, ",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"openlearn-studio.io (opens in a new tab)\" 179x24",
+     "button \"About go\" 20x20",
+     "button \"About takes a few months\" 20x20",
+     "button \"About searches found\" 20x20",
+     "button \"About just off page one\" 20x20",
+     "button \"About your plan\" 20x20",
+     "button \"About topics\" 20x20",
+     "button \"What this means\" 20x20",
+     "button \"What makes up this score\" 20x20",
+     "button \"Where this search came from\" 20x20",
+     "button \"About buyer questions\" 20x20",
+     "button \"About every search\" 20x20"
+    ],
+    "over": [
+     "img.pointer-events-none absolute -top-24 -right-20 -z- right=439"
+    ],
+    "trunc": [],
+    "heads": [
+     "H1:Keyword research",
+     "H2:You can win 6 topics soon, and 2 more in",
+     "H3:Your plan",
+     "H3:Topics",
+     "H3:Just off page one",
+     "H3:Buyer questions",
+     "H3:Every search"
+    ],
+    "unnamed": [],
+    "height": 3383
+   }
+  },
+  {
+   "site": "s-edx",
+   "name": "partial",
+   "pg": "competitors",
+   "width": 1440,
+   "text": "openlearn-studio.io\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors\n\nWho openlearn-studio.io really competes with in Google, and what to do about each one.\n\nHow to choose\nUpdated today\nCheck my competitors again\n(21 credits)\nCOMPETITORS\n·\nUpdated 8 Nov 2026\nMarket: United States\nYour 3 main competitors are lmsforge.dev, edtech-cloudworks.com and campusbyte.io.\n\nFound in Google's results for your services. Choose up to 5 to follow: we compare you with them every month.\n\nNext step\n\nChoose your competitors, starting with lmsforge.dev\n\nChoose lmsforge.dev\nReal competitors found\n3\n3\nYou follow\n0 of 5\nLists and directories to join\n2\n2\nGaps to act on\n0\n0\nYour competitors\n\n0 chosen, 3 suggested, 0 on your watchlist\n\nDownload CSV\n\nThe competitors you entered in Website settings start on this list as chosen. Choosing here does not change that list, which your AI",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"openlearn-studio.io (opens in a new tab)\" 179x24",
+     "button \"How to choose\" 127x28",
+     "a \"Check my competitors again (21 credits)\" 324x36",
+     "button \"Choose lmsforge.dev\" 155x32",
+     "button \"About real competitors found\" 20x20",
+     "button \"About you follow\" 20x20",
+     "button \"About lists and directories to join\" 20x20",
+     "button \"About gaps to act on\" 20x20",
+     "button \"About your competitors\" 20x20",
+     "a \"Download CSV\" 141x32",
+     "a \"Website settings\" 94x16",
+     "button \"What this means\" 20x20",
+     "button \"Details\" 68x32",
+     "button \"Choose\" 93x32",
+     "button \"Watch\" 84x32",
+     "button \"Not a competitor\" 150x32",
+     "button \"About gaps against your competitors\" 20x20",
+     "a \"How to get listed\" 152x32",
+     "button \"Why directories are not competitors\" 235x20",
+     "button \"About who ai answers name\" 20x20",
+     "button \"About websites that win these searches but are not\" 20x20"
+    ],
+    "over": [
+     "img.pointer-events-none absolute -top-24 -right-20 -z- right=1480"
+    ],
+    "trunc": [],
+    "heads": [
+     "H1:Competitors",
+     "H2:Your 3 main competitors are lmsforge.dev",
+     "H3:Your competitors",
+     "H4:You follow",
+     "H4:Suggested",
+     "H4:Watchlist",
+     "H3:Gaps against your competitors",
+     "H3:Lists and directories to join",
+     "H3:Who AI answers name",
+     "H3:Websites that win these searches but are"
+    ],
+    "unnamed": [],
+    "height": 1932
+   }
+  },
+  {
+   "site": "s-edx",
+   "name": "partial",
+   "pg": "keywords",
+   "width": 1440,
+   "text": "openlearn-studio.io\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches openlearn-studio.io can win.\n\nHow to read this\nUpdated today\nResearch my keywords again\n(54 credits)\n\nPart of the last reading is missing\n\nWe could not read search volumes and your Search Console searches this time. Everything else is shown, and the next run tries again. You were only charged for what was read.\nKEYWORD RESEARCH\n·\nUpdated 8 Nov 2026\nMarket: United States\nYou can win 6 topics soon, and 2 more in a few months.\n\nWe found 143 searches people use to find a service like yours, grouped into 13 topics. Start with the plan below.\n\nGo\n6\n6\nTakes a few months\n2\n2\nSearches found\n143\n143\nJust off page one\n14\n14\nYour plan\n\nThe plan appears after the research\n\nRun the research to get your plan.\n\nTopics\n\n13 topics",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"openlearn-studio.io (opens in a new tab)\" 179x24",
+     "button \"How to read this\" 136x28",
+     "a \"Research my keywords again (54 credits)\" 333x36",
+     "button \"About go\" 20x20",
+     "button \"About takes a few months\" 20x20",
+     "button \"About searches found\" 20x20",
+     "button \"About just off page one\" 20x20",
+     "button \"About your plan\" 20x20",
+     "button \"About topics\" 20x20",
+     "button \"What this means\" 20x20",
+     "button \"What makes up this score\" 20x20",
+     "button \"Where this search came from\" 20x20",
+     "a \"Write this page\" 140x32",
+     "a \"Improve this page\" 157x32",
+     "button \"Show all 13\" 100x32",
+     "button \"See all 14 in the table\" 158x32",
+     "button \"About buyer questions\" 20x20",
+     "button \"Add to my AI questions\" 189x32",
+     "button \"About every search\" 20x20",
+     "a \"Download CSV\" 141x32",
+     "select \"All Go Takes a few months Hard for your website no\" 184x36",
+     "select \"All Ready to hire Comparing providers Looking for \" 184x36",
+     "select \"All custom lms development edx course authoring se\" 184x36",
+     "select \"Any source Your Search Console People also ask Rel\" 184x36",
+     "select \"Any number At least 10 At least 50 At least 100 At\" 184x36"
+    ],
+    "over": [
+     "img.pointer-events-none absolute -top-24 -right-20 -z- right=1480"
+    ],
+    "trunc": [],
+    "heads": [
+     "H1:Keyword research",
+     "H2:You can win 6 topics soon, and 2 more in",
+     "H3:Your plan",
+     "H3:Topics",
+     "H3:Just off page one",
+     "H3:Buyer questions",
+     "H3:Every search"
+    ],
+    "unnamed": [],
+    "height": 6840
+   }
+  },
+  {
+   "site": "s-refused",
+   "name": "refused",
+   "pg": "competitors",
+   "width": 375,
+   "text": "refused-market.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors\n\nWho refused-market.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nFind my competitors\n(21 credits)\n\nThe last run did not start: it was for another country\n\nYour website is measured in United Arab Emirates. Change the country in Website settings, or run it again for United Arab Emirates. Nothing was charged.\nRun it for United Arab Emirates\nWebsite settings",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"refused-market.ae (opens in a new tab)\" 168x24"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Competitors"
+    ],
+    "unnamed": [],
+    "height": 900
+   }
+  },
+  {
+   "site": "s-refused",
+   "name": "refused",
+   "pg": "keywords",
+   "width": 375,
+   "text": "refused-market.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches refused-market.ae can win.\n\nHow to read this\nResearch my keywords\n(54 credits)\n\nThe last run did not start: it was for another country\n\nYour website is measured in United Arab Emirates. Change the country in Website settings, or run it again for United Arab Emirates. Nothing was charged.\nRun it for United Arab Emirates\nWebsite settings",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"refused-market.ae (opens in a new tab)\" 168x24"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Keyword research"
+    ],
+    "unnamed": [],
+    "height": 900
+   }
+  },
+  {
+   "site": "s-refused",
+   "name": "refused",
+   "pg": "competitors",
+   "width": 1440,
+   "text": "refused-market.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors\n\nWho refused-market.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nFind my competitors\n(21 credits)\n\nThe last run did not start: it was for another country\n\nYour website is measured in United Arab Emirates. Change the country in Website settings, or run it again for United Arab Emirates. Nothing was charged.\nRun it for United Arab Emirates\nWebsite settings",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"refused-market.ae (opens in a new tab)\" 168x24",
+     "button \"How to choose\" 127x28",
+     "a \"Find my competitors (21 credits)\" 268x36",
+     "a \"Run it for United Arab Emirates\" 213x32",
+     "a \"Website settings\" 126x32"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Competitors"
+    ],
+    "unnamed": [],
+    "height": 900
+   }
+  },
+  {
+   "site": "s-refused",
+   "name": "refused",
+   "pg": "keywords",
+   "width": 1440,
+   "text": "refused-market.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches refused-market.ae can win.\n\nHow to read this\nResearch my keywords\n(54 credits)\n\nThe last run did not start: it was for another country\n\nYour website is measured in United Arab Emirates. Change the country in Website settings, or run it again for United Arab Emirates. Nothing was charged.\nRun it for United Arab Emirates\nWebsite settings",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"refused-market.ae (opens in a new tab)\" 168x24",
+     "button \"How to read this\" 136x28",
+     "a \"Research my keywords (54 credits)\" 291x36",
+     "a \"Run it for United Arab Emirates\" 213x32",
+     "a \"Website settings\" 126x32"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Keyword research"
+    ],
+    "unnamed": [],
+    "height": 900
+   }
+  },
+  {
+   "site": "s-credits",
+   "name": "credits",
+   "pg": "competitors",
+   "width": 375,
+   "text": "nocredits-co.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors\n\nWho nocredits-co.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nFind my competitors\n(21 credits)\n\nYour company has no credits left for analyses\n\nThe last run stopped before it started spending. Add credits, then run it again. Nothing was charged.\nOpen Credits\nFind out who you really compete with\n\nWe read Google's results for each of your services in your market, sort every website by what it is (a company like you, a directory, a list, a platform) and show you the evidence. It takes about 6 minutes.\n\nFind my competitors\n(21 credits)",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"nocredits-co.ae (opens in a new tab)\" 148x24"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Competitors",
+     "H3:Find out who you really compete with"
+    ],
+    "unnamed": [],
+    "height": 1076
+   }
+  },
+  {
+   "site": "s-credits",
+   "name": "credits",
+   "pg": "keywords",
+   "width": 375,
+   "text": "nocredits-co.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches nocredits-co.ae can win.\n\nHow to read this\nResearch my keywords\n(54 credits)\n\nYour company has no credits left for analyses\n\nThe last run stopped before it started spending. Add credits, then run it again. Nothing was charged.\nOpen Credits\nFind what your buyers search\n\nWe collect searches from your Search Console, Google's own suggestions and questions, and your competitors; keep the ones that fit what you sell; group them by topic and tell you which ones you can win. It takes about 12 minutes.\n\nResearch my keywords\n(54 credits)\n\nTip: choose your competitors first on the Competitors page, so the research can show where they are ahead.",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"nocredits-co.ae (opens in a new tab)\" 148x24",
+     "a \"Competitors page\" 103x16"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Keyword research",
+     "H3:Find what your buyers search"
+    ],
+    "unnamed": [],
+    "height": 1166
+   }
+  },
+  {
+   "site": "s-credits",
+   "name": "credits",
+   "pg": "competitors",
+   "width": 1440,
+   "text": "nocredits-co.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors\n\nWho nocredits-co.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nFind my competitors\n(21 credits)\n\nYour company has no credits left for analyses\n\nThe last run stopped before it started spending. Add credits, then run it again. Nothing was charged.\nOpen Credits\nFind out who you really compete with\n\nWe read Google's results for each of your services in your market, sort every website by what it is (a company like you, a directory, a list, a platform) and show you the evidence. It takes about 6 minutes.\n\nFind my competitors\n(21 credits)",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"nocredits-co.ae (opens in a new tab)\" 148x24",
+     "button \"How to choose\" 127x28",
+     "a \"Find my competitors (21 credits)\" 268x36",
+     "a \"Open Credits\" 127x32"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Competitors",
+     "H3:Find out who you really compete with"
+    ],
+    "unnamed": [],
+    "height": 900
+   }
+  },
+  {
+   "site": "s-credits",
+   "name": "credits",
+   "pg": "keywords",
+   "width": 1440,
+   "text": "nocredits-co.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches nocredits-co.ae can win.\n\nHow to read this\nResearch my keywords\n(54 credits)\n\nYour company has no credits left for analyses\n\nThe last run stopped before it started spending. Add credits, then run it again. Nothing was charged.\nOpen Credits\nFind what your buyers search\n\nWe collect searches from your Search Console, Google's own suggestions and questions, and your competitors; keep the ones that fit what you sell; group them by topic and tell you which ones you can win. It takes about 12 minutes.\n\nResearch my keywords\n(54 credits)\n\nTip: choose your competitors first on the Competitors page, so the research can show where they are ahead.",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"nocredits-co.ae (opens in a new tab)\" 148x24",
+     "button \"How to read this\" 136x28",
+     "a \"Research my keywords (54 credits)\" 291x36",
+     "a \"Open Credits\" 127x32",
+     "a \"Competitors page\" 103x16"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Keyword research",
+     "H3:Find what your buyers search"
+    ],
+    "unnamed": [],
+    "height": 900
+   }
+  },
+  {
+   "site": "s-off",
+   "name": "off",
+   "pg": "competitors",
+   "width": 375,
+   "text": "off-client.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors is not available for this website yet\n\nIt is rolling out to selected websites. Ask us if you would like it for yours.\n\nBack to the overview",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"off-client.ae (opens in a new tab)\" 116x24",
+     "a \"Back to the overview\" 174x36"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Competitors is not available for this we"
+    ],
+    "unnamed": [],
+    "height": 900
+   }
+  },
+  {
+   "site": "s-off",
+   "name": "off",
+   "pg": "keywords",
+   "width": 375,
+   "text": "off-client.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research is not available for this website yet\n\nIt is rolling out to selected websites. Ask us if you would like it for yours.\n\nBack to the overview",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"off-client.ae (opens in a new tab)\" 116x24",
+     "a \"Back to the overview\" 174x36"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Keyword research is not available for th"
+    ],
+    "unnamed": [],
+    "height": 900
+   }
+  },
+  {
+   "site": "s-off",
+   "name": "off",
+   "pg": "competitors",
+   "width": 1440,
+   "text": "off-client.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors is not available for this website yet\n\nIt is rolling out to selected websites. Ask us if you would like it for yours.\n\nBack to the overview",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"off-client.ae (opens in a new tab)\" 116x24",
+     "a \"Back to the overview\" 174x36"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Competitors is not available for this we"
+    ],
+    "unnamed": [],
+    "height": 900
+   }
+  },
+  {
+   "site": "s-off",
+   "name": "off",
+   "pg": "keywords",
+   "width": 1440,
+   "text": "off-client.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research is not available for this website yet\n\nIt is rolling out to selected websites. Ask us if you would like it for yours.\n\nBack to the overview",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"off-client.ae (opens in a new tab)\" 116x24",
+     "a \"Back to the overview\" 174x36"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Keyword research is not available for th"
+    ],
+    "unnamed": [],
+    "height": 900
+   }
+  },
+  {
+   "site": "s-erp",
+   "name": "error",
+   "pg": "competitors",
+   "width": 375,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors\n\nWho gulfdynamics-partners.ae really competes with in Google, and what to do about each one.\n\nHow to choose",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Competitors"
+    ],
+    "unnamed": [],
+    "height": 1711
+   }
+  },
+  {
+   "site": "s-erp",
+   "name": "error",
+   "pg": "keywords",
+   "width": 375,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches gulfdynamics-partners.ae can win.\n\nHow to read this",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Keyword research"
+    ],
+    "unnamed": [],
+    "height": 1711
+   }
+  },
+  {
+   "site": "s-erp",
+   "name": "error",
+   "pg": "competitors",
+   "width": 1440,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors\n\nWho gulfdynamics-partners.ae really competes with in Google, and what to do about each one.\n\nHow to choose",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+     "button \"How to choose\" 127x28"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Competitors"
+    ],
+    "unnamed": [],
+    "height": 1352
+   }
+  },
+  {
+   "site": "s-erp",
+   "name": "error",
+   "pg": "keywords",
+   "width": 1440,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches gulfdynamics-partners.ae can win.\n\nHow to read this",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+     "button \"How to read this\" 136x28"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Keyword research"
+    ],
+    "unnamed": [],
+    "height": 1352
+   }
+  },
+  {
+   "site": "s-erp",
+   "name": "loading",
+   "pg": "competitors",
+   "width": 375,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors\n\nWho gulfdynamics-partners.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nUpdated today\nCheck my competitors again\n(21 credits)\nCOMPETITORS\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou follow 2 main competitors: northpeak-erp.ae and bluefin-consulting.ae.\n\nFound in Google's results for your services. You can follow up to 5; the others stay on your watchlist.\n\nNext step\n\nWrite a new page for \"dynamics 365 business central partner abu dhabi\"\n\nWrite this page\nReal competitors found\n6\n6\nYou follow\n2 of 5\nLists and directories to join\n3\n3\nGaps to act on\n30\n30\nYour competitors\n\n2 chosen, 3 suggested, 1 on your watchlist\n\nDownload CSV\n\nThe competitors you entered in Website settings start on this list as chosen. Choosing here does not change that ",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+     "button \"About real competitors found\" 20x20",
+     "button \"About you follow\" 20x20",
+     "button \"About lists and directories to join\" 20x20",
+     "button \"About gaps to act on\" 20x20",
+     "button \"About your competitors\" 20x20",
+     "button \"What this means\" 20x20",
+     "button \"About gaps against your competitors\" 20x20",
+     "button \"About who ai answers name\" 20x20",
+     "button \"About websites that win these searches but are not\" 20x20"
+    ],
+    "over": [
+     "img.pointer-events-none absolute -top-24 -right-20 -z- right=439",
+     "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=632",
+     "span.tabular text-xs text-ink-3 right=619",
+     "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=757",
+     "span.tabular text-xs text-ink-3 right=744",
+     "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=909",
+     "span.tabular text-xs text-ink-3 right=896",
+     "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=1053"
+    ],
+    "trunc": [
+     "gulfdynamics-partners.ae"
+    ],
+    "heads": [
+     "H1:Competitors",
+     "H2:You follow 2 main competitors: northpeak",
+     "H3:Your competitors",
+     "H4:You follow",
+     "H4:Suggested",
+     "H4:Watchlist",
+     "H3:Gaps against your competitors",
+     "H3:Lists and directories to join",
+     "H3:Who AI answers name",
+     "H3:Websites that win these searches but are",
+     "H3:Not competitors"
+    ],
+    "unnamed": [],
+    "height": 5353
+   }
+  },
+  {
+   "site": "s-erp",
+   "name": "loading",
+   "pg": "keywords",
+   "width": 375,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches gulfdynamics-partners.ae can win.\n\nHow to read this",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Keyword research"
+    ],
+    "unnamed": [],
+    "height": 1711
+   }
+  },
+  {
+   "site": "s-erp",
+   "name": "loading",
+   "pg": "competitors",
+   "width": 1440,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors\n\nWho gulfdynamics-partners.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nUpdated today\nCheck my competitors again\n(21 credits)\nCOMPETITORS\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou follow 2 main competitors: northpeak-erp.ae and bluefin-consulting.ae.\n\nFound in Google's results for your services. You can follow up to 5; the others stay on your watchlist.\n\nNext step\n\nWrite a new page for \"dynamics 365 business central partner abu dhabi\"\n\nWrite this page\nReal competitors found\n6\n6\nYou follow\n2 of 5\nLists and directories to join\n3\n3\nGaps to act on\n30\n30\nYour competitors\n\n2 chosen, 3 suggested, 1 on your watchlist\n\nDownload CSV\n\nThe competitors you entered in Website settings start on this list as chosen. Choosing here does not change tha",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+     "button \"How to choose\" 127x28",
+     "a \"Check my competitors again (21 credits)\" 324x36",
+     "a \"Write this page\" 140x32",
+     "button \"About real competitors found\" 20x20",
+     "button \"About you follow\" 20x20",
+     "button \"About lists and directories to join\" 20x20",
+     "button \"About gaps to act on\" 20x20",
+     "button \"About your competitors\" 20x20",
+     "a \"Download CSV\" 141x32",
+     "a \"Website settings\" 94x16",
+     "button \"What this means\" 20x20",
+     "button \"Details\" 68x32",
+     "button \"Move to watchlist\" 155x32",
+     "button \"Not a competitor\" 150x32",
+     "button \"Choose\" 93x32",
+     "button \"Watch\" 84x32",
+     "button \"About gaps against your competitors\" 20x20",
+     "button \"All 21\" 63x28",
+     "button \"Competitors rank, you are missing 6\" 247x28",
+     "button \"One competitor ranks, you are missing 1\" 273x28",
+     "button \"You rank low 5\" 119x28",
+     "button \"Just off page one 8\" 146x28",
+     "button \"You lead: keep it 1\" 138x28",
+     "button \"Not for us\" 85x32"
+    ],
+    "over": [
+     "img.pointer-events-none absolute -top-24 -right-20 -z- right=1480"
+    ],
+    "trunc": [
+     "gulfdynamics-partners.ae"
+    ],
+    "heads": [
+     "H1:Competitors",
+     "H2:You follow 2 main competitors: northpeak",
+     "H3:Your competitors",
+     "H4:You follow",
+     "H4:Suggested",
+     "H4:Watchlist",
+     "H3:Gaps against your competitors",
+     "H3:Lists and directories to join",
+     "H3:Who AI answers name",
+     "H3:Websites that win these searches but are",
+     "H3:Not competitors"
+    ],
+    "unnamed": [],
+    "height": 3671
+   }
+  },
+  {
+   "site": "s-erp",
+   "name": "loading",
+   "pg": "keywords",
+   "width": 1440,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches gulfdynamics-partners.ae can win.\n\nHow to read this",
+   "errors": [],
+   "m": {
+    "overflow": 0,
+    "h1": 1,
+    "small": [
+     "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+     "button \"How to read this\" 136x28"
+    ],
+    "over": [],
+    "trunc": [],
+    "heads": [
+     "H1:Keyword research"
+    ],
+    "unnamed": [],
+    "height": 1352
+   }
+  }
+ ],
+ "personas": [
+  {
+   "p": "viewer",
+   "site": "s-erp",
+   "pg": "competitors",
+   "buttons": [
+    "gulfdynamics-partners.ae\n(opens in a new tab)",
+    "How to choose",
+    "Download CSV",
+    "Website settings",
+    "Details",
+    "All\n21",
+    "Competitors rank, you are missing\n6",
+    "One competitor ranks, you are missing\n1",
+    "You rank low\n5",
+    "Just off page one\n8",
+    "You lead: keep it\n1",
+    "Show all 21",
+    "Why directories are not competitors"
+   ],
+   "navHasKi": true,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors\n\nWho gulfdynamics-partners.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nCOMPETITORS\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou follow 2 main competitors: northpeak-erp.ae and bluefin-consulting.ae.\n\nFound in Google's results for your services. You can follow up to 5; the others stay on your watchlist.\n\nNext step\n\nWrite a new page for \"dynamics 365 business central partner abu dhabi\"\n\nReal competitors found\n6\n6\nYou follow\n2 of 5\nLists and directories to join\n3\n3\nGaps to act on\n30\n30\nYour competitors\n\n2 chosen, 3 suggested, 1 on your watchlist\n\nDownload CSV\n\nThe competitors you entered in Website settings start on this list as chosen. Choosing here does not change that list, which your AI visibility and backlink checks use.\n\nYou follow\nDirect competitor\nAbout your size\n\nnorthpeak-erp.ae\n\nIn the first 10 Google results for 9 of 14 of your service searches in United Arab Emirates.\nHow much they compete with you: \n78 of 100 (likely 70 to 86)\nShare of clicks on your searches: \n19.5%\nDetails\nDirect competitor\nMarket leader\n\nbluefin-con"
+  },
+  {
+   "p": "viewer",
+   "site": "s-erp",
+   "pg": "keywords",
+   "buttons": [
+    "gulfdynamics-partners.ae\n(opens in a new tab)",
+    "How to read this",
+    "Show all 179",
+    "See all 227 in the table",
+    "Download CSV",
+    "What the verdicts mean"
+   ],
+   "navHasKi": true,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches gulfdynamics-partners.ae can win.\n\nHow to read this\nKEYWORD RESEARCH\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou can win 73 topics soon, and 51 more in a few months.\n\nWe found 5,000 searches people use to find a service like yours, grouped into 179 topics. Start with the plan below.\n\nNext step\n\nFirst step: Improve your Business Central page\n\nGo\n73\n73\nTakes a few months\n51\n51\nSearches found\n5,000\n5,000\nJust off page one\n227\n227\nYour plan\n\nThe 5 steps most likely to bring you buyers, best first\n\n1\n\nImprove your Business Central page\n\nYou are #14 for \"dynamics 365 business central partner abu dhabi\" and two of your competitors are on page one.\n\nImprove your page · gulfdynamics-partners.ae/business-central · about 40 credits\n\n2\n\nWrite a page for \"erp implementation cost uae\"\n\nBuyers comparing providers search it about 320 times a month; you have no page.\n\nWrite a new page · about 114 credits\n\n3\n\nGet listed on clutch.co\n\nIt shows three of your competitors for your services, and not you.\n\nGet liste"
+  },
+  {
+   "p": "member",
+   "site": "s-erp",
+   "pg": "competitors",
+   "buttons": [
+    "gulfdynamics-partners.ae\n(opens in a new tab)",
+    "How to choose",
+    "Check my competitors again\n(21 credits)",
+    "Write this page",
+    "Download CSV",
+    "Website settings",
+    "Details",
+    "Move to watchlist",
+    "Not a competitor",
+    "Choose",
+    "Watch",
+    "All\n21",
+    "Competitors rank, you are missing\n6",
+    "One competitor ranks, you are missing\n1",
+    "You rank low\n5",
+    "Just off page one\n8",
+    "You lead: keep it\n1",
+    "Not for us",
+    "Improve this page",
+    "Refresh this page",
+    "Show all 21",
+    "How to get listed",
+    "Why directories are not competitors",
+    "Put back on the watchlist"
+   ],
+   "navHasKi": true,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors\n\nWho gulfdynamics-partners.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nUpdated today\nCheck my competitors again\n(21 credits)\nCOMPETITORS\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou follow 2 main competitors: northpeak-erp.ae and bluefin-consulting.ae.\n\nFound in Google's results for your services. You can follow up to 5; the others stay on your watchlist.\n\nNext step\n\nWrite a new page for \"dynamics 365 business central partner abu dhabi\"\n\nWrite this page\nReal competitors found\n6\n6\nYou follow\n2 of 5\nLists and directories to join\n3\n3\nGaps to act on\n30\n30\nYour competitors\n\n2 chosen, 3 suggested, 1 on your watchlist\n\nDownload CSV\n\nThe competitors you entered in Website settings start on this list as chosen. Choosing here does not change that list, which your AI visibility and backlink checks use.\n\nYou follow\nDirect competitor\nAbout your size\n\nnorthpeak-erp.ae\n\nIn the first 10 Google results for 9 of 14 of your service searches in United Arab Emirates.\nHow much they compete with you: \n78 of 100 (likely 70 to 86)\nShare of clicks on your"
+  },
+  {
+   "p": "member",
+   "site": "s-erp",
+   "pg": "keywords",
+   "buttons": [
+    "gulfdynamics-partners.ae\n(opens in a new tab)",
+    "How to read this",
+    "Research my keywords again\n(54 credits)",
+    "Improve this page",
+    "Write this page",
+    "How to get listed",
+    "Plan the ladder",
+    "How to get named",
+    "Show all 179",
+    "See all 227 in the table",
+    "Download CSV",
+    "What the verdicts mean"
+   ],
+   "navHasKi": true,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches gulfdynamics-partners.ae can win.\n\nHow to read this\nUpdated today\nResearch my keywords again\n(54 credits)\nKEYWORD RESEARCH\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou can win 73 topics soon, and 51 more in a few months.\n\nWe found 5,000 searches people use to find a service like yours, grouped into 179 topics. Start with the plan below.\n\nNext step\n\nFirst step: Improve your Business Central page\n\nImprove this page\nGo\n73\n73\nTakes a few months\n51\n51\nSearches found\n5,000\n5,000\nJust off page one\n227\n227\nYour plan\n\nThe 5 steps most likely to bring you buyers, best first\n\n1\n\nImprove your Business Central page\n\nYou are #14 for \"dynamics 365 business central partner abu dhabi\" and two of your competitors are on page one.\n\nImprove your page · gulfdynamics-partners.ae/business-central · about 40 credits\n\nImprove this page\n2\n\nWrite a page for \"erp implementation cost uae\"\n\nBuyers comparing providers search it about 320 times a month; you have no page.\n\nWrite a new page · about 114 credits\n\nWrite this page"
+  },
+  {
+   "p": "admin",
+   "site": "s-erp",
+   "pg": "competitors",
+   "buttons": [
+    "gulfdynamics-partners.ae\n(opens in a new tab)",
+    "How to choose",
+    "Check my competitors again\n(21 credits)",
+    "Write this page",
+    "Download CSV",
+    "Website settings",
+    "Details",
+    "Move to watchlist",
+    "Not a competitor",
+    "Choose",
+    "Watch",
+    "All\n21",
+    "Competitors rank, you are missing\n6",
+    "One competitor ranks, you are missing\n1",
+    "You rank low\n5",
+    "Just off page one\n8",
+    "You lead: keep it\n1",
+    "Not for us",
+    "Improve this page",
+    "Refresh this page",
+    "Show all 21",
+    "How to get listed",
+    "Why directories are not competitors",
+    "Put back on the watchlist"
+   ],
+   "navHasKi": true,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors\n\nWho gulfdynamics-partners.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nUpdated today\nCheck my competitors again\n(21 credits)\nCOMPETITORS\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou follow 2 main competitors: northpeak-erp.ae and bluefin-consulting.ae.\n\nFound in Google's results for your services. You can follow up to 5; the others stay on your watchlist.\n\nNext step\n\nWrite a new page for \"dynamics 365 business central partner abu dhabi\"\n\nWrite this page\nReal competitors found\n6\n6\nYou follow\n2 of 5\nLists and directories to join\n3\n3\nGaps to act on\n30\n30\nYour competitors\n\n2 chosen, 3 suggested, 1 on your watchlist\n\nDownload CSV\n\nThe competitors you entered in Website settings start on this list as chosen. Choosing here does not change that list, which your AI visibility and backlink checks use.\n\nYou follow\nDirect competitor\nAbout your size\n\nnorthpeak-erp.ae\n\nIn the first 10 Google results for 9 of 14 of your service searches in United Arab Emirates.\nHow much they compete with you: \n78 of 100 (likely 70 to 86)\nShare of clicks on your"
+  },
+  {
+   "p": "admin",
+   "site": "s-erp",
+   "pg": "keywords",
+   "buttons": [
+    "gulfdynamics-partners.ae\n(opens in a new tab)",
+    "How to read this",
+    "Research my keywords again\n(54 credits)",
+    "Improve this page",
+    "Write this page",
+    "How to get listed",
+    "Plan the ladder",
+    "How to get named",
+    "Show all 179",
+    "See all 227 in the table",
+    "Add to my AI questions",
+    "Download CSV",
+    "What the verdicts mean"
+   ],
+   "navHasKi": true,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches gulfdynamics-partners.ae can win.\n\nHow to read this\nUpdated today\nResearch my keywords again\n(54 credits)\nKEYWORD RESEARCH\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou can win 73 topics soon, and 51 more in a few months.\n\nWe found 5,000 searches people use to find a service like yours, grouped into 179 topics. Start with the plan below.\n\nNext step\n\nFirst step: Improve your Business Central page\n\nImprove this page\nGo\n73\n73\nTakes a few months\n51\n51\nSearches found\n5,000\n5,000\nJust off page one\n227\n227\nYour plan\n\nThe 5 steps most likely to bring you buyers, best first\n\n1\n\nImprove your Business Central page\n\nYou are #14 for \"dynamics 365 business central partner abu dhabi\" and two of your competitors are on page one.\n\nImprove your page · gulfdynamics-partners.ae/business-central · about 40 credits\n\nImprove this page\n2\n\nWrite a page for \"erp implementation cost uae\"\n\nBuyers comparing providers search it about 320 times a month; you have no page.\n\nWrite a new page · about 114 credits\n\nWrite this page"
+  },
+  {
+   "p": "padmin",
+   "site": "s-trial",
+   "pg": "competitors",
+   "buttons": [
+    "trial-client-erp.ae\n(opens in a new tab)",
+    "How to choose",
+    "Check my competitors again\n(free trial run)",
+    "Write this page",
+    "Download CSV",
+    "Website settings",
+    "Details",
+    "Move to watchlist",
+    "Not a competitor",
+    "Choose",
+    "Watch",
+    "All\n21",
+    "Competitors rank, you are missing\n6",
+    "One competitor ranks, you are missing\n1",
+    "You rank low\n5",
+    "Just off page one\n8",
+    "You lead: keep it\n1",
+    "Not for us",
+    "Improve this page",
+    "Refresh this page",
+    "Show all 21",
+    "How to get listed",
+    "Why directories are not competitors",
+    "Put back on the watchlist"
+   ],
+   "navHasKi": true,
+   "text": "trial-client-erp.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors\n\nWho trial-client-erp.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nUpdated today\nCheck my competitors again\n(free trial run)\n\nTrial: only platform admins see this\n\nThe client sees nothing new on this website until the setting is switched to On in Website settings. Trial runs are free for the client.\nCOMPETITORS\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou follow 2 main competitors: northpeak-erp.ae and bluefin-consulting.ae.\n\nFound in Google's results for your services. You can follow up to 5; the others stay on your watchlist.\n\nNext step\n\nWrite a new page for \"dynamics 365 business central partner abu dhabi\"\n\nWrite this page\nReal competitors found\n6\n6\nYou follow\n2 of 5\nLists and directories to join\n3\n3\nGaps to act on\n30\n30\nYour competitors\n\n2 chosen, 3 suggested, 1 on your watchlist\n\nDownload CSV\n\nThe competitors you entered in Website settings start on this list as chosen. Choosing here does not change that list, which your AI visibility and backlink checks use.\n\nYou follow\nDirect competitor\nAbout your size\n\nnorthpeak-erp.ae\n\nIn the "
+  },
+  {
+   "p": "padmin",
+   "site": "s-trial",
+   "pg": "keywords",
+   "buttons": [
+    "trial-client-erp.ae\n(opens in a new tab)",
+    "How to read this",
+    "Research my keywords again\n(free trial run)",
+    "Write this page",
+    "How to get listed",
+    "Plan the ladder",
+    "How to get named",
+    "Improve this page",
+    "Show all 16",
+    "See all 26 in the table",
+    "Add to my AI questions",
+    "Download CSV",
+    "What the verdicts mean"
+   ],
+   "navHasKi": true,
+   "text": "trial-client-erp.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches trial-client-erp.ae can win.\n\nHow to read this\nUpdated today\nResearch my keywords again\n(free trial run)\n\nTrial: only platform admins see this\n\nThe client sees nothing new on this website until the setting is switched to On in Website settings. Trial runs are free for the client.\nKEYWORD RESEARCH\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou can win 6 topics soon, and 6 more in a few months.\n\nWe found 400 searches people use to find a service like yours, grouped into 16 topics. Start with the plan below.\n\nNext step\n\nFirst step: Improve your Business Central page\n\nGo\n6\n6\nTakes a few months\n6\n6\nSearches found\n400\n400\nJust off page one\n26\n26\nYour plan\n\nThe 5 steps most likely to bring you buyers, best first\n\n1\n\nImprove your Business Central page\n\nYou are #14 for \"dynamics 365 business central partner abu dhabi\" and two of your competitors are on page one.\n\nImprove your page · gulfdynamics-partners.ae/business-central · about 40 credits\n\n2\n\nWrite a page for \"erp implementation cost uae\"\n\nBuyers comparin"
+  },
+  {
+   "p": "padmin",
+   "site": "s-killed",
+   "pg": "competitors",
+   "buttons": [
+    "paused-client.ae\n(opens in a new tab)",
+    "Back to the overview"
+   ],
+   "navHasKi": true,
+   "text": "paused-client.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors is paused for maintenance\n\nIt is back shortly, with your results as they were. Nothing is charged while it is paused.\n\nBack to the overview"
+  },
+  {
+   "p": "padmin",
+   "site": "s-killed",
+   "pg": "keywords",
+   "buttons": [
+    "paused-client.ae\n(opens in a new tab)",
+    "Back to the overview"
+   ],
+   "navHasKi": true,
+   "text": "paused-client.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research is paused for maintenance\n\nIt is back shortly, with your results as they were. Nothing is charged while it is paused.\n\nBack to the overview"
+  },
+  {
+   "p": "owner",
+   "site": "s-trial",
+   "pg": "competitors",
+   "buttons": [
+    "trial-client-erp.ae\n(opens in a new tab)",
+    "Back to the overview"
+   ],
+   "navHasKi": false,
+   "text": "trial-client-erp.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nCompetitors is not available for this website yet\n\nIt is rolling out to selected websites. Ask us if you would like it for yours.\n\nBack to the overview"
+  },
+  {
+   "p": "owner",
+   "site": "s-trial",
+   "pg": "keywords",
+   "buttons": [
+    "trial-client-erp.ae\n(opens in a new tab)",
+    "Back to the overview"
+   ],
+   "navHasKi": false,
+   "text": "trial-client-erp.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 1 hour\nKeyword research is not available for this website yet\n\nIt is rolling out to selected websites. Ask us if you would like it for yours.\n\nBack to the overview"
+  }
+ ],
+ "axe": [
+  {
+   "pg": "competitors",
+   "width": 375,
+   "theme": "light",
+   "v": [
+    {
+     "id": "region",
+     "impact": "moderate",
+     "help": "All page content should be contained by landmarks",
+     "n": 1,
+     "nodes": [
+      {
+       "t": ".sticky > a[href$=\"org-1\"][data-discover=\"true\"] > .dark\\:hidden.w-auto[alt=\"Alaventra\"]",
+       "s": "  Some page content is not contained by landmarks",
+       "h": "<img alt=\"Alaventra\" width=\"140\" height=\"28\" decoding=\"async\" draggable=\"false\" class=\"h-7 w-auto select-none dark:hidde"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pg": "keywords",
+   "width": 375,
+   "theme": "light",
+   "v": [
+    {
+     "id": "region",
+     "impact": "moderate",
+     "help": "All page content should be contained by landmarks",
+     "n": 1,
+     "nodes": [
+      {
+       "t": ".top-0 > a[href$=\"org-1\"][data-discover=\"true\"] > .dark\\:hidden.w-auto[alt=\"Alaventra\"]",
+       "s": "  Some page content is not contained by landmarks",
+       "h": "<img alt=\"Alaventra\" width=\"140\" height=\"28\" decoding=\"async\" draggable=\"false\" class=\"h-7 w-auto select-none dark:hidde"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pg": "competitors",
+   "width": 1440,
+   "theme": "light",
+   "v": []
+  },
+  {
+   "pg": "keywords",
+   "width": 1440,
+   "theme": "light",
+   "v": []
+  },
+  {
+   "pg": "competitors",
+   "width": 375,
+   "theme": "dark",
+   "v": [
+    {
+     "id": "region",
+     "impact": "moderate",
+     "help": "All page content should be contained by landmarks",
+     "n": 1,
+     "nodes": [
+      {
+       "t": ".sticky > a[href$=\"org-1\"][data-discover=\"true\"] > .dark\\:block.w-auto[alt=\"Alaventra\"]",
+       "s": "  Some page content is not contained by landmarks",
+       "h": "<img alt=\"Alaventra\" width=\"140\" height=\"28\" decoding=\"async\" draggable=\"false\" class=\"hidden h-7 w-auto select-none dar"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pg": "keywords",
+   "width": 375,
+   "theme": "dark",
+   "v": [
+    {
+     "id": "region",
+     "impact": "moderate",
+     "help": "All page content should be contained by landmarks",
+     "n": 1,
+     "nodes": [
+      {
+       "t": ".top-0 > a[href$=\"org-1\"][data-discover=\"true\"] > .dark\\:block.w-auto[alt=\"Alaventra\"]",
+       "s": "  Some page content is not contained by landmarks",
+       "h": "<img alt=\"Alaventra\" width=\"140\" height=\"28\" decoding=\"async\" draggable=\"false\" class=\"hidden h-7 w-auto select-none dar"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pg": "competitors",
+   "width": 1440,
+   "theme": "dark",
+   "v": []
+  },
+  {
+   "pg": "keywords",
+   "width": 1440,
+   "theme": "dark",
+   "v": []
+  }
+ ]
+}

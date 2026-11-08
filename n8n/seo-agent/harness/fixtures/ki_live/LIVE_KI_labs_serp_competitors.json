@@ -1,0 +1,144 @@
+{
+ "_source": "real LIVE response, api.dataforseo.com/v3, 2026-11-07 ~20:06-20:10 UTC (2026-11-08 PKT), KI L0 live confirmations; item arrays trimmed to 3, strings to 300 chars",
+ "calls": [
+  {
+   "call": "c05_serp_competitors",
+   "status_code": 20000,
+   "cost": 0.012,
+   "task": {
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "cost": 0.012,
+    "path": [
+     "v3",
+     "dataforseo_labs",
+     "google",
+     "serp_competitors",
+     "live"
+    ],
+    "data": {
+     "api": "dataforseo_labs",
+     "function": "serp_competitors",
+     "se_type": "google",
+     "keywords": [
+      "dynamics 365 partner uae",
+      "microsoft dynamics partner dubai",
+      "erp partner dubai"
+     ],
+     "location_code": 2784,
+     "language_code": "en",
+     "limit": 3
+    },
+    "result_count": 1,
+    "result": [
+     {
+      "se_type": "google",
+      "seed_keywords": [
+       "dynamics 365 partner uae",
+       "microsoft dynamics partner dubai",
+       "erp partner dubai"
+      ],
+      "location_code": 2784,
+      "language_code": "en",
+      "total_count": null,
+      "items_count": 0,
+      "items": null
+     }
+    ]
+   }
+  },
+  {
+   "call": "c05b_serp_competitors_erp",
+   "status_code": 20000,
+   "cost": 0.01236,
+   "task": {
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "cost": 0.01236,
+    "path": [
+     "v3",
+     "dataforseo_labs",
+     "google",
+     "serp_competitors",
+     "live"
+    ],
+    "data": {
+     "api": "dataforseo_labs",
+     "function": "serp_competitors",
+     "se_type": "google",
+     "keywords": [
+      "erp software uae"
+     ],
+     "location_code": 2784,
+     "language_code": "en",
+     "limit": 3
+    },
+    "result_count": 1,
+    "result": [
+     {
+      "se_type": "google",
+      "seed_keywords": [
+       "erp software uae"
+      ],
+      "location_code": 2784,
+      "language_code": "en",
+      "total_count": 63,
+      "items_count": 3,
+      "items": [
+       {
+        "se_type": "google",
+        "domain": "www.penieltech.com",
+        "avg_position": 8,
+        "median_position": 1,
+        "rating": 184,
+        "etv": 114.96479309305302,
+        "keywords_count": 1,
+        "visibility": 1.05,
+        "relevant_serp_items": 2,
+        "keywords_positions": {
+         "erp software uae": [
+          1,
+          15
+         ]
+        }
+       },
+       {
+        "se_type": "google",
+        "domain": "www.eresourceerp.com",
+        "avg_position": 12.5,
+        "median_position": 2,
+        "rating": 175,
+        "etv": 57.54417823053918,
+        "keywords_count": 1,
+        "visibility": 0.9,
+        "relevant_serp_items": 2,
+        "keywords_positions": {
+         "erp software uae": [
+          2,
+          23
+         ]
+        }
+       },
+       {
+        "se_type": "google",
+        "domain": "www.azdan.com",
+        "avg_position": 1,
+        "median_position": 1,
+        "rating": 99,
+        "etv": 11.135118156380441,
+        "keywords_count": 1,
+        "visibility": 1,
+        "relevant_serp_items": 1,
+        "keywords_positions": {
+         "erp software uae": [
+          1
+         ]
+        }
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

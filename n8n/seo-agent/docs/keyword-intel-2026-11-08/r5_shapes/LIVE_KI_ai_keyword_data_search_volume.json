@@ -1,0 +1,109 @@
+{
+ "_source": "real LIVE response, api.dataforseo.com/v3, 2026-11-07 ~20:06-20:10 UTC (2026-11-08 PKT), KI L0 live confirmations; item arrays trimmed to 3, strings to 300 chars",
+ "calls": [
+  {
+   "call": "c11_ai_keyword_data",
+   "status_code": 20000,
+   "cost": 0.0103,
+   "task": {
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "cost": 0.0103,
+    "path": [
+     "v3",
+     "ai_optimization",
+     "ai_keyword_data",
+     "keywords_search_volume",
+     "live"
+    ],
+    "data": {
+     "api": "ai_optimization",
+     "function": "keywords_search_volume",
+     "keywords": [
+      "dynamics 365 partner uae",
+      "erp software uae",
+      "open edx hosting"
+     ],
+     "location_code": 2784,
+     "language_code": "en"
+    },
+    "result_count": 1,
+    "result": [
+     {
+      "location_code": 2784,
+      "language_code": "en",
+      "items_count": 3,
+      "items": [
+       {
+        "keyword": "dynamics 365 partner uae",
+        "ai_search_volume": 0,
+        "ai_monthly_searches": [
+         {
+          "year": 2026,
+          "month": 10,
+          "ai_search_volume": 0
+         },
+         {
+          "year": 2026,
+          "month": 9,
+          "ai_search_volume": 0
+         },
+         {
+          "year": 2026,
+          "month": 8,
+          "ai_search_volume": 0
+         },
+         "...(+9 more)"
+        ]
+       },
+       {
+        "keyword": "erp software uae",
+        "ai_search_volume": 3,
+        "ai_monthly_searches": [
+         {
+          "year": 2026,
+          "month": 10,
+          "ai_search_volume": 3
+         },
+         {
+          "year": 2026,
+          "month": 9,
+          "ai_search_volume": 7
+         },
+         {
+          "year": 2026,
+          "month": 8,
+          "ai_search_volume": 6
+         },
+         "...(+9 more)"
+        ]
+       },
+       {
+        "keyword": "open edx hosting",
+        "ai_search_volume": 0,
+        "ai_monthly_searches": [
+         {
+          "year": 2026,
+          "month": 10,
+          "ai_search_volume": 0
+         },
+         {
+          "year": 2026,
+          "month": 9,
+          "ai_search_volume": 0
+         },
+         {
+          "year": 2026,
+          "month": 8,
+          "ai_search_volume": 0
+         },
+         "...(+9 more)"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -1,0 +1,499 @@
+{
+ "_source": "real LIVE response, api.dataforseo.com/v3, 2026-11-07 ~20:06-20:10 UTC (2026-11-08 PKT), KI L0 live confirmations; item arrays trimmed to 3, strings to 300 chars",
+ "calls": [
+  {
+   "call": "c08_serp_paa_aio",
+   "status_code": 20000,
+   "cost": 0.004,
+   "task": {
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "cost": 0.004,
+    "path": [
+     "v3",
+     "serp",
+     "google",
+     "organic",
+     "live",
+     "advanced"
+    ],
+    "data": {
+     "api": "serp",
+     "function": "live",
+     "se": "google",
+     "se_type": "organic",
+     "keyword": "dynamics 365 partner uae",
+     "location_code": 2784,
+     "language_code": "en",
+     "depth": 10,
+     "people_also_ask_click_depth": 2,
+     "load_async_ai_overview": true,
+     "device": "desktop",
+     "os": "windows"
+    },
+    "result_count": 1,
+    "result": [
+     {
+      "keyword": "dynamics 365 partner uae",
+      "type": "organic",
+      "se_domain": "google.com",
+      "location_code": 2784,
+      "language_code": "en",
+      "check_url": "https://www.google.com/search?q=dynamics%20365%20partner%20uae&hl=en&gl=AE&ie=UTF-8&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+      "datetime": "2026-11-07 20:06:30 +00:00",
+      "spell": null,
+      "refinement_chips": null,
+      "item_types": [
+       "ai_overview",
+       "organic"
+      ],
+      "se_results_count": 134,
+      "pages_count": 1,
+      "items_count": 10,
+      "items": [
+       {
+        "type": "ai_overview",
+        "rank_group": 1,
+        "rank_absolute": 1,
+        "page": 1,
+        "position": "left",
+        "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]",
+        "asynchronous_ai_overview": true,
+        "markdown": "`Leading Microsoft Dynamics 365 implementation and support partners in the UAE` provide end-to-end ERP, CRM, and cloud services tailored to local compliance (such as UAE VAT) and regional requirements:\n\n### Top Microsoft Dynamics 365 Partners in the UAE\n\n- **[SQIT Partner](https://google.com/goto?ur...",
+        "items": [
+         {
+          "type": "ai_overview_element",
+          "position": "left",
+          "title": null,
+          "text": "Leading Microsoft Dynamics 365 implementation and support partners in the UAE provide end-to-end ERP, CRM, and cloud services tailored to local compliance (such as UAE VAT) and regional requirements:",
+          "markdown": "`Leading Microsoft Dynamics 365 implementation and support partners in the UAE` provide end-to-end ERP, CRM, and cloud services tailored to local compliance (such as UAE VAT) and regional requirements:",
+          "links": null,
+          "images": null,
+          "references": null
+         },
+         {
+          "type": "ai_overview_element",
+          "position": "left",
+          "title": "Top Microsoft Dynamics 365 Partners in the UAE",
+          "text": "SQIT Partner : Specializes in local Dubai and UAE implementations of Business Central, Finance and Operations, Customer Service, Field Service, and Copilot AI integration. Offers UAE VAT compliance, Arabic language support, and cloud setups. Brightpoint Infotech : A Microsoft Gold Certified Partner ...",
+          "markdown": "- **[SQIT Partner](https://google.com/goto?url=CAESbwHEIkXXEhXA1WVXEwAQMPSgk8s6zCaQj863W2lI3LpYYkcY9widWVaGeWpHU5YHuB5HCa0fFp6Ux4eusGZ3_0kDjLUVSgVQ454k0e6Jvtcm13cZUB9GiybQ3Hxp8KSgkOcFi2J5x8XUd3ZO5AkUTQ)** : Specializes in local Dubai and UAE implementations of Business Central, Finance and Operation...",
+          "links": [
+           {
+            "type": "link_element",
+            "title": "SQIT Partner",
+            "description": null,
+            "url": "https://google.com/goto?url=CAESbwHEIkXXEhXA1WVXEwAQMPSgk8s6zCaQj863W2lI3LpYYkcY9widWVaGeWpHU5YHuB5HCa0fFp6Ux4eusGZ3_0kDjLUVSgVQ454k0e6Jvtcm13cZUB9GiybQ3Hxp8KSgkOcFi2J5x8XUd3ZO5AkUTQ",
+            "domain": "google.com"
+           },
+           {
+            "type": "link_element",
+            "title": "Brightpoint Infotech",
+            "description": null,
+            "url": "https://google.com/goto?url=CAESYAHEIkXX6VqKKkUZgboVHPjhAmInCs58lNKgnwWKkdr8hFyJpOsJKUOANVUYlj-Wv4YsNfuZmdy-KOIXa4bLi97wakIpXrpe_dVJAsmhG5NfnFc2-SiO4-69UpBvlXJt2A",
+            "domain": "google.com"
+           },
+           {
+            "type": "link_element",
+            "title": "Intwo",
+            "description": null,
+            "url": "https://google.com/goto?url=CAESegHEIkXX_t7qyyFS9ObRvhv183mW9gla8GrlJ35I_6dybQt-OGJDLUmP6fWHYXtfiSA05j6QtMD23tXddi5_JVrv1SVuvDuvETfKt-F1MFJ4IP_aUPlaFNjhs3ODEl0wpwqjKLxf39uHcMzOuImUC9BoXA6hLM8632Eu",
+            "domain": "google.com"
+           },
+           "...(+2 more)"
+          ],
+          "images": null,
+          "references": [
+           {
+            "type": "ai_overview_reference",
+            "position": "left",
+            "source": "sqitconsulting.com",
+            "domain": "sqitconsulting.com",
+            "url": "https://sqitconsulting.com/microsoft-dynamics-365/",
+            "title": "Microsoft Dynamics 365 | Microsoft Dynamics 365 Partner UAE | Microsoft Dynamics 365 Company",
+            "text": "SQIT Partner: Dubai and UAE local implementation for Microsoft Dynamics 365. Products: Business Central, Finance and Operations, C..."
+           },
+           {
+            "type": "ai_overview_reference",
+            "position": "left",
+            "source": "Brightpoint Infotech",
+            "domain": "brightpointinfotech.com",
+            "url": "https://brightpointinfotech.com/me/",
+            "title": "Microsoft Dynamics Gold Partners in UAE | Microsoft Dynamics 365 Partner in UAE for ERP & CRM Solutions",
+            "text": "Company: Brightpoint Infotech (Microsoft Dynamics Gold Certified Partner in UAE) Experience: 15+ years with 300+ projects complete..."
+           },
+           {
+            "type": "ai_overview_reference",
+            "position": "left",
+            "source": "www.intwo.cloud",
+            "domain": "www.intwo.cloud",
+            "url": "https://www.intwo.cloud/dubai/microsoft-dynamics-365-partner/",
+            "title": "Microsoft Dynamics 365 Implementation Partner in Dubai",
+            "text": "Partner: Intwo (certified Microsoft Dynamics 365 implementation partner in Dubai with 25+ years experience). Services: End-to-end ..."
+           },
+           "...(+2 more)"
+          ]
+         },
+         {
+          "type": "ai_overview_element",
+          "position": "left",
+          "title": "Key Services Offered by UAE Partners",
+          "text": "ERP & CRM Modules: Business Central, Finance and Operations (AX/NAV), Sales, Customer Service, Field Service, HR, and Supply Chain. Local Compliance: UAE VAT reporting, multi-currency accounting, and Arabic language localization. Modern Enhancements: Microsoft Copilot AI integration, Power Platform,...",
+          "markdown": "- **ERP & CRM Modules:** Business Central, Finance and Operations (AX/NAV), Sales, Customer Service, Field Service, HR, and Supply Chain.\n- **Local Compliance:** UAE VAT reporting, multi-currency accounting, and Arabic language localization.\n- **Modern Enhancements:** Microsoft Copilot AI integratio...",
+          "links": null,
+          "images": null,
+          "references": [
+           {
+            "type": "ai_overview_reference",
+            "position": "left",
+            "source": "www.startbiz.ae",
+            "domain": "www.startbiz.ae",
+            "url": "https://www.startbiz.ae/blog/top-10-microsoft-dynamics-partners-in-uae",
+            "title": "Top 10 Microsoft Dynamics Partners in UAE - StartBiz",
+            "text": "Euro Digital is a Microsoft partner that provides modular solutions for Dynamics 365 Sales, Customer Service, Finance, Commerce, a..."
+           },
+           {
+            "type": "ai_overview_reference",
+            "position": "left",
+            "source": "sqitconsulting.com",
+            "domain": "sqitconsulting.com",
+            "url": "https://sqitconsulting.com/microsoft-dynamics-365/",
+            "title": "Microsoft Dynamics 365 | Microsoft Dynamics 365 Partner UAE | Microsoft Dynamics 365 Company",
+            "text": "SQIT Partner: Dubai and UAE local implementation for Microsoft Dynamics 365. Products: Business Central, Finance and Operations, Customer Service, Field Service, C..."
+           },
+           {
+            "type": "ai_overview_reference",
+            "position": "left",
+            "source": "Brightpoint Infotech",
+            "domain": "brightpointinfotech.com",
+            "url": "https://brightpointinfotech.com/me/",
+            "title": "Microsoft Dynamics Gold Partners in UAE | Microsoft Dynamics 365 Partner in UAE for ERP & CRM Solutions",
+            "text": "Company: Brightpoint Infotech (Microsoft Dynamics Gold Certified Partner in UAE) Experience: 15+ years with 300+ projects complete..."
+           },
+           "...(+1 more)"
+          ]
+         },
+         "...(+1 more)"
+        ],
+        "references": [
+         {
+          "type": "ai_overview_reference",
+          "position": "right",
+          "source": "sqitconsulting.com",
+          "domain": "sqitconsulting.com",
+          "url": "https://sqitconsulting.com/microsoft-dynamics-365/",
+          "title": "Microsoft Dynamics 365 | Microsoft Dynamics 365 Partner UAE | Microsoft Dynamics 365 Company",
+          "text": "SQIT Partner: Dubai and UAE local implementation for Microsoft Dynamics 365. Products: Business Central, Finance and Operations, Customer Service, Field Service, C..."
+         },
+         {
+          "type": "ai_overview_reference",
+          "position": "right",
+          "source": "cetastech.com",
+          "domain": "cetastech.com",
+          "url": "https://cetastech.com/blogs/microsoft-dynamics-365-crm-implementation-partner-in-dubai/",
+          "title": "Microsoft Dynamics 365 CRM Implementation Partner in ...",
+          "text": "With over 15 years of experience, Cetas is a leading Microsoft Dynamics 365 CRM implementation partner in Dubai, delivering tailored solutions ..."
+         },
+         {
+          "type": "ai_overview_reference",
+          "position": "right",
+          "source": "Blueflame Labs",
+          "domain": "www.theblueflamelabs.com",
+          "url": "https://www.theblueflamelabs.com/microsoft-partner-in-dubai-uae/",
+          "title": "Microsoft Partner in Dubai UAE | Dynamics 365 Solutions & Services",
+          "text": "Company: Blueflame Labs (Microsoft Partner in Dubai, UAE). Core Services: Microsoft Dynamics 365, Power Platform, cloud migration, AI/automation, custom apps, and ..."
+         }
+        ],
+        "rectangle": null
+       },
+       {
+        "type": "organic",
+        "rank_group": 1,
+        "rank_absolute": 2,
+        "page": 1,
+        "position": "left",
+        "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[2]/div[1]/div[2]/div[1]/div[1]/div[3]/div[1]/div[1]",
+        "domain": "google.com",
+        "title": "Microsoft Dynamics 365 Partner UAE - SQIT Consulting",
+        "url": "https://google.com/goto?url=CAESbwHEIkXXTxg3YyoUrhqmZU23onoyrrkrt8bJgL_deR0AlP83fJzuX5nSBnjTPrj8Q9lHwXfBl2NRWGzQt-CG_QdENh2PH2Ccrmgg48rmGebdd53FMs9BvoeJzVuP4tMddi_XjcwuRCPxbBdIidhS9A",
+        "cache_url": null,
+        "related_search_url": null,
+        "breadcrumb": "https://sqitconsulting.com › microsoft-dynamics-365",
+        "website_name": "sqitconsulting.com",
+        "is_image": false,
+        "is_video": false,
+        "is_featured_snippet": false,
+        "is_malicious": false,
+        "is_web_story": false,
+        "checks": null,
+        "description": "We cover every part of your Dynamics 365 journey in house. Implementation, support, training, and everything in between, handled by our team in Dubai. Read more",
+        "pre_snippet": null,
+        "extended_snippet": null,
+        "images": null,
+        "amp_version": false,
+        "rating": null,
+        "price": null,
+        "highlighted": [
+         "and everything"
+        ],
+        "links": [
+         {
+          "type": "link_element",
+          "title": "Read more",
+          "description": null,
+          "url": "https://google.com/goto?url=CAEStAEBxCJF1zKaCGcEqalf3wUsYvevXTLXpaZrWTkV6X9kT9Nq2C55XI0x8wJxvaoUONhBN5rgu6O9pOUvCC3LH-0SY1SZShnvMRJCHBOhS7LsznZ1s3rxLttxtk_G-lQM6RLrEhZfBG9Y8ZeA4Xzuc2pSISX9s1okeM6C0bQm2hp0Oz4ZDv878MOoJdRzd9Kp2dEqdW-eKyFKaQKBcp_bqhPgVc3BFsAtBbUakEX-6_i9fi6ZGug",
+          "domain": "google.com"
+         }
+        ],
+        "faq": null,
+        "extended_people_also_search": null,
+        "about_this_result": null,
+        "related_result": null,
+        "timestamp": null,
+        "rectangle": null
+       },
+       {
+        "type": "organic",
+        "rank_group": 2,
+        "rank_absolute": 3,
+        "page": 1,
+        "position": "left",
+        "xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[2]/div[1]/div[2]/div[1]/div[1]/div[5]/div[1]/div[1]",
+        "domain": "google.com",
+        "title": "Microsoft Dynamics 365 Partner in UAE for ERP & CRM ...",
+        "url": "https://google.com/goto?url=CAESYAHEIkXXE9bFJVZfRmraqzfaoKs-eybqTEsUEjgKw2UeRmMZw1ZPapbu71eaqIom_ZBTMPqf3aq9mz_CygV1NSn7v8VgSlSdoFHLUR0hzWAqcudUo1IxA0EcmF98LTpp5w",
+        "cache_url": null,
+        "related_search_url": null,
+        "breadcrumb": "https://brightpointinfotech.com › ...",
+        "website_name": "Brightpoint Infotech",
+        "is_image": false,
+        "is_video": false,
+        "is_featured_snippet": false,
+        "is_malicious": false,
+        "is_web_story": false,
+        "checks": null,
+        "description": "Brightpoint Infotech is a trusted Microsoft Dynamics 365 Gold Partner in UAE for ERP & CRM solutions. Our team offers end-to-end consulting, implementation ...",
+        "pre_snippet": null,
+        "extended_snippet": null,
+        "images": null,
+        "amp_version": false,
+        "rating": null,
+        "price": null,
+        "highlighted": [
+         "Brightpoint Infotech is a trusted Microsoft Dynamics 365 Gold Partner in UAE"
+        ],
+        "links": null,
+        "faq": null,
+        "extended_people_also_search": null,
+        "about_this_result": null,
+        "related_result": null,
+        "timestamp": null,
+        "rectangle": null
+       },
+       "...(+1 more)"
+      ],
+      "_note": "items picked: ai_overview, first 3 organic, first local_pack, people_also_ask (then lists trimmed to 3)"
+     }
+    ]
+   }
+  },
+  {
+   "call": "c08b_serp_paa_aio_erp",
+   "status_code": 20000,
+   "cost": 0.0023,
+   "task": {
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "cost": 0.0023,
+    "path": [
+     "v3",
+     "serp",
+     "google",
+     "organic",
+     "live",
+     "advanced"
+    ],
+    "data": {
+     "api": "serp",
+     "function": "live",
+     "se": "google",
+     "se_type": "organic",
+     "keyword": "erp software uae",
+     "location_code": 2784,
+     "language_code": "en",
+     "depth": 10,
+     "people_also_ask_click_depth": 2,
+     "load_async_ai_overview": true,
+     "device": "desktop",
+     "os": "windows"
+    },
+    "result_count": 1,
+    "result": [
+     {
+      "keyword": "erp software uae",
+      "type": "organic",
+      "se_domain": "google.com",
+      "location_code": 2784,
+      "language_code": "en",
+      "check_url": "https://www.google.com/search?q=erp%20software%20uae&hl=en&gl=AE&ie=UTF-8&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+      "datetime": "2026-11-07 20:09:35 +00:00",
+      "spell": null,
+      "refinement_chips": {
+       "type": "refinement_chips",
+       "xpath": "/html[1]/body[1]/div[3]/div[1]/div[5]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]",
+       "items": [
+        {
+         "type": "refinement_chips_element",
+         "title": "Online appointments",
+         "url": "https://www.google.com/search?sca_esv=dae9217b41ff2178&hl=en&gl=AE&sxsrf=AKL5yDggLc4pHLWAiTtwyzEAzupiTqVEOg:1794082174477&q=online+appointments+erp+software+uae&uds=AE2AFgbf06ZzDvczg9XBG5Z3qflXjM7T9C1KBOQBWNW0ts4P_lZLkOy9eUd4TfCCaOPWiNFdrixqDpymD2x1B0CubhdW4pp1FaYz-40Zow_0lmma9G_qFj_-V7N0PhZsQ3hnJ3A...",
+         "domain": "www.google.com",
+         "options": null
+        },
+        {
+         "type": "refinement_chips_element",
+         "title": "Open now",
+         "url": "https://www.google.com/search?sca_esv=dae9217b41ff2178&hl=en&gl=AE&sxsrf=AKL5yDggLc4pHLWAiTtwyzEAzupiTqVEOg:1794082174477&q=erp+software+uae+open+now&uds=AE2AFgbf06ZzDvczg9XBG5Z3qflXoJrbavh2OrTg9OBWOMtQJetIDtAJOoN3ZuxzoBaCH1rBZ63zK0KDTaTtf3Tei6j_0s0wHw27CG_AGY8AdzrgzFkfae2IvLvn5BhAxtiOZxs4P0s9_r5wf5...",
+         "domain": "www.google.com",
+         "options": null
+        },
+        {
+         "type": "refinement_chips_element",
+         "title": "Top rated",
+         "url": "https://www.google.com/search?sca_esv=dae9217b41ff2178&hl=en&gl=AE&sxsrf=AKL5yDggLc4pHLWAiTtwyzEAzupiTqVEOg:1794082174477&q=top+rated+erp+software+uae&uds=AE2AFgbf06ZzDvczg9XBG5Z3qflXs15MMhHcZCY2KxsFaNV454t8IrgpcpxR3shDsSlPryjDJajgWgxeQUsUl_0frQy-8hzujkuGAqgvzXWvf4n5tIq_aKKUzkzaqjSXdHyd3QifuBVG3Jjvz...",
+         "domain": "www.google.com",
+         "options": null
+        }
+       ]
+      },
+      "item_types": [
+       "organic",
+       "local_pack",
+       "people_also_ask",
+       "...(+1 more)"
+      ],
+      "se_results_count": 136,
+      "pages_count": 1,
+      "items_count": 15,
+      "items": [
+       {
+        "type": "organic",
+        "rank_group": 1,
+        "rank_absolute": 1,
+        "page": 1,
+        "position": "left",
+        "xpath": "/html[1]/body[1]/div[3]/div[1]/div[14]/div[1]/div[2]/div[2]/div[1]/div[1]/div[1]/div[1]/div[1]",
+        "domain": "google.com",
+        "title": "Best ERP Software Dubai, UAE | ERP Dubai",
+        "url": "https://google.com/goto?url=CAESVQHEIkXXVP_dLuUPRylNWgVdIzG8cahm76AyOJUEVHBFFkWt4c8eJ1t49Y_PBr60HajntM-Li_MchImpCt8m9E9Qt_GAz-YVdJv8o6vKrDDAiJzOqVM",
+        "cache_url": null,
+        "related_search_url": null,
+        "breadcrumb": "https://ebrsoftware.com",
+        "website_name": "ebrsoftware",
+        "is_image": false,
+        "is_video": false,
+        "is_featured_snippet": false,
+        "is_malicious": false,
+        "is_web_story": false,
+        "checks": null,
+        "description": "Best ERP software in Dubai, UAE that can help your business to grow. We offer #1 ERP Dubai to help streamline business operations.",
+        "pre_snippet": null,
+        "extended_snippet": null,
+        "images": null,
+        "amp_version": false,
+        "rating": null,
+        "price": null,
+        "highlighted": [
+         "Best ERP software in Dubai, UAE"
+        ],
+        "links": null,
+        "faq": null,
+        "extended_people_also_search": null,
+        "about_this_result": null,
+        "related_result": null,
+        "timestamp": null,
+        "rectangle": null
+       },
+       {
+        "type": "organic",
+        "rank_group": 2,
+        "rank_absolute": 5,
+        "page": 1,
+        "position": "left",
+        "xpath": "/html[1]/body[1]/div[3]/div[1]/div[14]/div[1]/div[2]/div[2]/div[1]/div[1]/div[5]/div[1]/div[1]",
+        "domain": "google.com",
+        "title": "ERP Companies in the UAE: A Complete Partner Directory",
+        "url": "https://google.com/goto?url=CAESdgHEIkXX8fLbl2kOb183HZEZb8PdhCvgPby85i3cMmogcfmQgUk5Bd6Lp_xz5c7b3Fc1fZ-jCXMswvQrMp-9cOMOF2G2Y_Nhs71D3afiYiHG0B1n7zUxmiB-BHL1eejYd0jCEsihrEULpWSIzPTIYJppe2h6MEQ",
+        "cache_url": null,
+        "related_search_url": null,
+        "breadcrumb": "https://www.azdan.com › Blog",
+        "website_name": "Azdan",
+        "is_image": false,
+        "is_video": false,
+        "is_featured_snippet": false,
+        "is_malicious": false,
+        "is_web_story": false,
+        "checks": null,
+        "description": "16 Sep 2026 — A complete directory of ERP companies in the UAE across Oracle, SAP, Microsoft Dynamics, Odoo, Sage, Oracle NetSuite, IFS, Infor, and Epicor.",
+        "pre_snippet": "09/16/2026 00:00:00",
+        "extended_snippet": null,
+        "images": null,
+        "amp_version": false,
+        "rating": null,
+        "price": null,
+        "highlighted": [
+         "Oracle, SAP, Microsoft Dynamics, Odoo, Sage, Oracle NetSuite, IFS, Infor, and Epicor"
+        ],
+        "links": null,
+        "faq": null,
+        "extended_people_also_search": null,
+        "about_this_result": null,
+        "related_result": null,
+        "timestamp": "2026-09-16 00:00:00 +00:00",
+        "rectangle": null
+       },
+       {
+        "type": "organic",
+        "rank_group": 3,
+        "rank_absolute": 6,
+        "page": 1,
+        "position": "left",
+        "xpath": "/html[1]/body[1]/div[3]/div[1]/div[14]/div[1]/div[2]/div[2]/div[1]/div[1]/div[7]/div[1]/div[1]",
+        "domain": "google.com",
+        "title": "ERP Software UAE | Custom FTA-Compliant ERP System",
+        "url": "https://google.com/goto?url=CAESdQHEIkXX7BzjryIW5MQ3nv2Cfo7seyisVsdH2xmUKCjZn98LAKr7r9IhmLpWZaFaIbOpxjPWPalH40K2bJWCREqaX6UqEoBrmhXq2Sopv5VDhPi1M8pfUV8X5I8R0nYBzHwYhevWb5sNTDb9pXtaJy6MTeCLsA",
+        "cache_url": null,
+        "related_search_url": null,
+        "breadcrumb": "https://gear-up.ae › enterprise-resource-planning-software",
+        "website_name": "Gear Up Technology",
+        "is_image": false,
+        "is_video": false,
+        "is_featured_snippet": false,
+        "is_malicious": false,
+        "is_web_story": false,
+        "checks": null,
+        "description": "Gear Up is the ERP software UAE businesses trust — a fully FTA-compliant ERP software built natively for Dubai and Abu Dhabi operations. PS payroll, and Arabic ...",
+        "pre_snippet": null,
+        "extended_snippet": null,
+        "images": null,
+        "amp_version": false,
+        "rating": null,
+        "price": null,
+        "highlighted": [
+         "Gear Up is the ERP software UAE businesses trust"
+        ],
+        "links": null,
+        "faq": null,
+        "extended_people_also_search": null,
+        "about_this_result": null,
+        "related_result": null,
+        "timestamp": null,
+        "rectangle": null
+       },
+       "...(+2 more)"
+      ],
+      "_note": "items picked: ai_overview, first 3 organic, first local_pack, people_also_ask (then lists trimmed to 3)"
+     }
+    ]
+   }
+  }
+ ]
+}

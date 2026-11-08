@@ -1,0 +1,157 @@
+{
+ "status_code": 20000,
+ "cost": 0,
+ "task": {
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "cost": 0,
+  "path": [
+   "v3",
+   "dataforseo_labs",
+   "google",
+   "keyword_suggestions",
+   "live"
+  ],
+  "data": {
+   "api": "dataforseo_labs",
+   "function": "keyword_suggestions",
+   "se_type": "google",
+   "keyword": "e invoicing",
+   "location_code": 2784,
+   "language_code": "en",
+   "limit": 5,
+   "include_serp_info": true,
+   "include_seed_keyword": true
+  },
+  "result_count": 1,
+  "result": [
+   {
+    "se_type": "google",
+    "seed_keyword": "seo tool",
+    "seed_keyword_data": null,
+    "location_code": 2840,
+    "language_code": "en",
+    "total_count": 1088,
+    "items_count": 1,
+    "offset": 0,
+    "offset_token": "REDACTED_OFFSET_TOKEN",
+    "items": [
+     {
+      "se_type": "google",
+      "keyword": "seo marketing tool",
+      "location_code": 2840,
+      "language_code": "en",
+      "keyword_info": {
+       "se_type": "google",
+       "last_updated_time": "2026-10-17 08:27:20 +00:00",
+       "competition": 0.01,
+       "competition_level": "LOW",
+       "cpc": 24.39,
+       "search_volume": 165000,
+       "low_top_of_page_bid": 5.1,
+       "high_top_of_page_bid": 29.08,
+       "categories": [
+        10004,
+        10276,
+        "...(+2 more)"
+       ],
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 550000
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 135000
+        },
+        "...(+10 more)"
+       ],
+       "search_volume_trend": {
+        "monthly": 307,
+        "quarterly": 307,
+        "yearly": 1011
+       }
+      },
+      "keyword_info_normalized_with_bing": {
+       "last_updated_time": "2026-11-04 14:39:36 +00:00",
+       "search_volume": 178,
+       "is_normalized": true,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 592
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 145
+        },
+        "...(+37 more)"
+       ]
+      },
+      "keyword_info_normalized_with_clickstream": {
+       "last_updated_time": "2026-11-04 14:39:36 +00:00",
+       "search_volume": 10,
+       "is_normalized": true,
+       "monthly_searches": [
+        {
+         "year": 2026,
+         "month": 9,
+         "search_volume": 33
+        },
+        {
+         "year": 2026,
+         "month": 8,
+         "search_volume": 8
+        },
+        "...(+37 more)"
+       ]
+      },
+      "clickstream_keyword_info": null,
+      "keyword_properties": {
+       "se_type": "google",
+       "core_keyword": "seo marketing tools",
+       "synonym_clustering_algorithm": "text_processing",
+       "keyword_difficulty": 66,
+       "detected_language": "en",
+       "is_another_language": false,
+       "words_count": 3
+      },
+      "serp_info": {
+       "se_type": "google",
+       "check_url": "https://www.google.com/search?q=seo%20marketing%20tool&num=100&hl=en&gl=US&gws_rd=cr&ie=UTF-8&oe=UTF-8&glp=1&uule=w+CAIQIFISCQs2MuSEtepUEUK33kOSuTsc",
+       "serp_item_types": [
+        "organic",
+        "people_also_ask",
+        "...(+3 more)"
+       ],
+       "se_results_count": 84600000,
+       "last_updated_time": "2024-12-04 23:15:38 +00:00",
+       "previous_updated_time": "2024-10-25 07:22:38 +00:00"
+      },
+      "avg_backlinks_info": {
+       "se_type": "google",
+       "backlinks": 283443,
+       "dofollow": 142345.9,
+       "referring_pages": 264193.6,
+       "referring_domains": 15542.1,
+       "referring_main_domains": 14174.6,
+       "rank": 420.1,
+       "main_domain_rank": 567,
+       "last_updated_time": "2024-12-04 23:15:42 +00:00"
+      },
+      "search_intent_info": {
+       "se_type": "google",
+       "main_intent": "commercial",
+       "foreign_intent": null,
+       "last_updated_time": "2026-04-29 20:14:38 +00:00"
+      }
+     }
+    ]
+   }
+  ]
+ }
+}
