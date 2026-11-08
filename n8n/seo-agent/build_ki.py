@@ -30,7 +30,7 @@ import dfs_gate      # B-A10: the in-200 retry gate, spliced around every DataFo
 import monitor_cost  # R115: the callback waits for the settle and carries its figure
 from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_where_params, dt_get_where_params, dt_upsert_params,
                            dt_upsert_params_keys, dt_update_params, dt_delete_where_params, read_v5,
-                           MONITORS_TABLE, CACHE_TABLE, CACHE_COLS, SITES_TABLE, QUERY_TABLE, LADDER_TABLE, AI_VIS_TABLE, AI_ANSWERS_TABLE, PAGES_TABLE,
+                           MONITORS_TABLE, CACHE_TABLE, CACHE_COLS, SITES_TABLE, QUERY_TABLE, LADDER_TABLE, AI_VIS_TABLE, AI_ANSWERS_TABLE, PAGES_TABLE, LOG_TABLE, METRICS_TABLE,
                            KI_RUNS_TABLE, KI_RUNS_COLS, KI_COMP_TABLE, KI_COMP_COLS, KI_KW_TABLE, KI_KW_COLS, KI_GAPS_TABLE, KI_GAPS_COLS,
                            RUN_LEDGER_TABLE, RUN_LEDGER_COLS, monitor_ledger_js, LEDGER_EST, ledger_mainline, freeze_ids)
 
@@ -156,7 +156,10 @@ LOADS = [('Load KI Cache', dt_get_all_where_params(CACHE_TABLE, [('kind', 'eq', 
          ('Load Ladders (KI)', dt_get_all_where_params(LADDER_TABLE, [('domain', 'eq', G('domain'))])),
          ('Load AI Visibility (KI)', dt_get_all_where_params(AI_VIS_TABLE, [('site_id', 'eq', G('site_id')), ('checked_at', 'gte', '={{ new Date(Date.now() - 60 * 864e5).toISOString() }}')])),
          ('Load AI Answers (KI)', dt_get_all_where_params(AI_ANSWERS_TABLE, [('site_id', 'eq', G('site_id')), ('checked_at', 'gte', '={{ new Date(Date.now() - 60 * 864e5).toISOString() }}')])),
-         ('Load Pages (KI)', dt_get_all_where_params(PAGES_TABLE, [('site_id', 'eq', G('site_id'))]))]
+         ('Load Pages (KI)', dt_get_all_where_params(PAGES_TABLE, [('site_id', 'eq', G('site_id'))])),
+         # FX-L H4: the content runs the keyword check advised against (AVOID); FX-L M2: the property's own 28-day impressions total
+         ('Load Content Log (KI)', dt_get_all_where_params(LOG_TABLE, [('domain', 'eq', G('domain'))])),
+         ('Load Site Metrics (KI)', dt_get_all_where_params(METRICS_TABLE, [('site_id', 'eq', G('site_id'))]))]
 for i, (nm, params) in enumerate(LOADS):
     node(nm, DT_TYPE, DT_VERSION, params, at(11 + i, 1), **LOAD)
 code('KI Plan', src('KI_Plan.js'), at(19, 1), executeOnce=True)
@@ -192,19 +195,33 @@ gated_step('Comp Labs Requests', 'Any Comp Labs?', 'Run Comp Labs', 'Comp Candid
 code('Comp Home Requests', src('KI_Comp_Home_Requests.js'), at(43, 3), executeOnce=True)
 iff('Any Comp Homes?', '{{ !$json.skip }}', at(44, 3))
 # a plain GET of the public homepage (fullResponse, neverError: a page that is down is an answer, not a failure); its HTML is DATA - only words are counted
-node('Read Comp Homes', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'GET', 'url': '={{ $json.url }}', 'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': UA}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
-     'options': {'batching': {'batch': {'batchSize': 2, 'batchInterval': 500}}, 'timeout': 20000, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
-     at(45, 3), onError='continueRegularOutput', alwaysOutputData=True, **retry_lint.RETRY)
+# FX-L (REVIEW_PERF_SAFETY H2): no redirect is followed by the HTTP client (a 302 to an internal address is an answer, never a fetch); one hop
+# is read by us after KIW.hopOf checked it (https, public host, the same registrable domain); a Range header asks for the first 400 KB and
+# the timeout is 15 s; only hosts seen on a results page are asked (Comp Candidates / Comp Sitemap Requests)
+def free_get(name, pos, accept='text/html,application/xhtml+xml'):
+    return node(name, 'n8n-nodes-base.httpRequest', 4.5, {'method': 'GET', 'url': '={{ $json.url }}', 'sendHeaders': True,
+        'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': UA}, {'name': 'Accept', 'value': accept}, {'name': 'Range', 'value': 'bytes=0-399999'}]},
+        'options': {'batching': {'batch': {'batchSize': 2, 'batchInterval': 500}}, 'timeout': 15000, 'redirect': {'redirect': {'followRedirects': False}},
+                    'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
+        pos, onError='continueRegularOutput', alwaysOutputData=True, **retry_lint.RETRY)
+HOPS = lambda what, reqs, ans: src('KI_Fetch_Hops.js', sub={'__WHAT__': what, '__REQS__': reqs, '__ANS__': ans})
+free_get('Read Comp Homes', at(45, 3))
+code('Comp Home Hops', HOPS('Comp Home Hops', 'Any Comp Homes?', 'Read Comp Homes'), at(45, 4), executeOnce=True)
+iff('Any Comp Home Hops?', '{{ !$json.skip }}', at(46, 4))
+free_get('Read Comp Homes (Hop)', at(47, 4))
 code('Comp Profile Requests', src('KI_Comp_Profile_Requests.js'), at(46, 3), executeOnce=True)
-chain('Comp Candidates', 'Comp Home Requests', 'Any Comp Homes?'); link('Any Comp Homes?', 'Read Comp Homes', 0); link('Any Comp Homes?', 'Comp Profile Requests', 1); link('Read Comp Homes', 'Comp Profile Requests')
+chain('Comp Candidates', 'Comp Home Requests', 'Any Comp Homes?'); link('Any Comp Homes?', 'Read Comp Homes', 0); link('Any Comp Homes?', 'Comp Profile Requests', 1); link('Read Comp Homes', 'Comp Home Hops')
+chain('Comp Home Hops', 'Any Comp Home Hops?'); link('Any Comp Home Hops?', 'Read Comp Homes (Hop)', 0); link('Any Comp Home Hops?', 'Comp Profile Requests', 1); link('Read Comp Homes (Hop)', 'Comp Profile Requests')
 code('Comp Sitemap Requests', src('KI_Comp_Sitemap_Requests.js'), at(50, 3), executeOnce=True)
 gated_step('Comp Profile Requests', 'Any Comp Profiles?', 'Run Comp Profiles', 'Comp Sitemap Requests', 3, 46); GATED.append(('Run Comp Profiles', 'chosen competitors\' ranked keywords', 'request'))
 iff('Any Comp Sitemaps?', '{{ !$json.skip }}', at(51, 3))
-node('Read Comp Sitemaps', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'GET', 'url': '={{ $json.url }}', 'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': UA}]},
-     'options': {'batching': {'batch': {'batchSize': 2, 'batchInterval': 500}}, 'timeout': 20000, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
-     at(52, 3), onError='continueRegularOutput', alwaysOutputData=True, **retry_lint.RETRY)
+free_get('Read Comp Sitemaps', at(52, 3), accept='application/xml,text/xml,*/*')
+code('Comp Sitemap Hops', HOPS('Comp Sitemap Hops', 'Any Comp Sitemaps?', 'Read Comp Sitemaps'), at(52, 4), executeOnce=True)
+iff('Any Comp Sitemap Hops?', '{{ !$json.skip }}', at(53, 4))
+free_get('Read Comp Sitemaps (Hop)', at(54, 4), accept='application/xml,text/xml,*/*')
 code('Comp Result', src('KI_Comp_Result.js'), at(53, 3), executeOnce=True)
-chain('Comp Sitemap Requests', 'Any Comp Sitemaps?'); link('Any Comp Sitemaps?', 'Read Comp Sitemaps', 0); link('Any Comp Sitemaps?', 'Comp Result', 1); link('Read Comp Sitemaps', 'Comp Result')
+chain('Comp Sitemap Requests', 'Any Comp Sitemaps?'); link('Any Comp Sitemaps?', 'Read Comp Sitemaps', 0); link('Any Comp Sitemaps?', 'Comp Result', 1); link('Read Comp Sitemaps', 'Comp Sitemap Hops')
+chain('Comp Sitemap Hops', 'Any Comp Sitemap Hops?'); link('Any Comp Sitemap Hops?', 'Read Comp Sitemaps (Hop)', 0); link('Any Comp Sitemap Hops?', 'Comp Result', 1); link('Read Comp Sitemaps (Hop)', 'Comp Result')
 ROWS = lambda what, table, field: src('KI_Rows.js', sub={'__WHAT__': what, '__TABLE__': table, '__FIELD__': field})
 code('KI Comp Rows', ROWS('KI Comp Rows', KI_COMP_TABLE, 'comp_rows'), at(54, 3), executeOnce=True)
 iff('Any KI Comp Rows?', '{{ !$json.skip }}', at(55, 3))
@@ -242,7 +259,12 @@ node('Save KI Keywords', DT_TYPE, DT_VERSION, dt_upsert_params_keys(KI_KW_TABLE,
 code('KI Gap Rows', ROWS('KI Gap Rows', KI_GAPS_TABLE, 'gap_rows'), at(58, 6), executeOnce=True)
 iff('Any KI Gap Rows?', '{{ !$json.skip }}', at(59, 6))
 node('Save KI Gaps', DT_TYPE, DT_VERSION, dt_upsert_params_keys(KI_GAPS_TABLE, KI_GAPS_COLS, ['site_id', 'gap_id']), at(60, 6), **SAVE)
-chain('Research Result', 'KI KW Rows', 'Any KI KW Rows?'); link('Any KI KW Rows?', 'Save KI Keywords', 0); link('Any KI KW Rows?', 'KI Gap Rows', 1); link('Save KI Keywords', 'KI Gap Rows')
+# FX-L H9: one current row per site x market x key - after the keyword rows of this run are saved, every row of this site and market that
+# this run did not write (another run_id) is deleted, keywords and gaps alike (the client's gap status was carried to the new row by keyword)
+_OLD = [('site_id', 'eq', "={{ $('KI Plan').first().json.site_id }}"), ('market', 'eq', "={{ $('KI Plan').first().json.market }}"), ('run_id', 'neq', '={{ $execution.id }}')]
+node('Drop Old KI Keywords', DT_TYPE, DT_VERSION, dt_delete_where_params(KI_KW_TABLE, _OLD), at(57, 7), executeOnce=True, **SAVE)
+node('Drop Old KI Gaps', DT_TYPE, DT_VERSION, dt_delete_where_params(KI_GAPS_TABLE, _OLD), at(58, 7), executeOnce=True, **SAVE)
+chain('Research Result', 'KI KW Rows', 'Any KI KW Rows?'); link('Any KI KW Rows?', 'Save KI Keywords', 0); link('Any KI KW Rows?', 'KI Gap Rows', 1); chain('Save KI Keywords', 'Drop Old KI Keywords', 'Drop Old KI Gaps', 'KI Gap Rows')
 chain('KI Gap Rows', 'Any KI Gap Rows?')
 
 # ---- the shared end (row 5): cache rows, the run row, the report ----
@@ -256,7 +278,11 @@ iff('Has Callback (KI)?', '{{ !!$json.callback_url }}', at(67, 5))
 callback('POST KI Report', at(68, 5), body='={{ JSON.stringify(Object.assign({}, $json.callback_body, { run_ledger: $json.run_ledger || null })) }}')
 link('Any KI Comp Drops?', 'Drop KI Competitors', 0); link('Any KI Comp Drops?', 'KI Cache Rows', 1); link('Drop KI Competitors', 'KI Cache Rows')
 link('Any KI Gap Rows?', 'Save KI Gaps', 0); link('Any KI Gap Rows?', 'KI Cache Rows', 1); link('Save KI Gaps', 'KI Cache Rows')
-chain('KI Cache Rows', 'Any KI Cache Rows?'); link('Any KI Cache Rows?', 'Save KI Cache', 0); link('Any KI Cache Rows?', 'KI Run Row', 1); link('Save KI Cache', 'KI Run Row')
+code('KI Cache Prune', src('KI_Cache_Prune.js'), at(63, 6), executeOnce=True)
+iff('Any KI Cache Prune?', '{{ !$json.skip }}', at(64, 6))
+node('Prune KI Cache', DT_TYPE, DT_VERSION, dt_delete_where_params(CACHE_TABLE, [('key', 'eq', '={{ $json.key }}'), ('kind', 'eq', 'ki'), ('site_id', 'eq', '={{ $json.site_id }}')]), at(65, 6), **SAVE)
+chain('KI Cache Rows', 'Any KI Cache Rows?'); link('Any KI Cache Rows?', 'Save KI Cache', 0); link('Any KI Cache Rows?', 'KI Cache Prune', 1); link('Save KI Cache', 'KI Cache Prune')
+chain('KI Cache Prune', 'Any KI Cache Prune?'); link('Any KI Cache Prune?', 'Prune KI Cache', 0); link('Any KI Cache Prune?', 'KI Run Row', 1); link('Prune KI Cache', 'KI Run Row')
 chain('KI Run Row', 'Save KI Run', 'KI Report', 'Has Callback (KI)?'); link('Has Callback (KI)?', 'POST KI Report', 0)
 
 node('Note', 'n8n-nodes-base.stickyNote', 1, {'content': """## SEO Agent - Keyword Intelligence (KI, E2 2026-11-08)

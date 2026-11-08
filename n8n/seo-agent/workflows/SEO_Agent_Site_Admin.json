@@ -2576,6 +2576,44 @@
           "dataTableId": {
             "__rl": true,
             "mode": "name",
+            "value": "seo_cache"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $('Admin Action').first().json.site_id }}"
+              },
+              {
+                "keyName": "kind",
+                "condition": "eq",
+                "keyValue": "ki"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "fbe0669c-dbcd-5f0d-91ae-78e3a5af9143",
+        "name": "Delete KI Cache (Admin)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          780,
+          -240
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput",
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "deleteRows",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
             "value": "seo_sites"
           },
           "matchType": "allConditions",
@@ -6017,6 +6055,17 @@
         ]
       },
       "Delete KI Gaps (Admin)": {
+        "main": [
+          [
+            {
+              "node": "Delete KI Cache (Admin)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Delete KI Cache (Admin)": {
         "main": [
           [
             {

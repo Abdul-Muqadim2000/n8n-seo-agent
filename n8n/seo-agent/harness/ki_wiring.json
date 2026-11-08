@@ -99,6 +99,7 @@
    "needs_review",
    "gate",
    "gate_reason",
+   "gate_detail",
    "fit",
    "demand",
    "win",
@@ -168,6 +169,14 @@
    ],
    []
   ],
+  "Any Comp Home Hops?": [
+   [
+    "Read Comp Homes (Hop)"
+   ],
+   [
+    "Comp Profile Requests"
+   ]
+  ],
   "Any Comp Homes?": [
    [
     "Read Comp Homes"
@@ -200,6 +209,14 @@
     "Comp SERP Picture"
    ]
   ],
+  "Any Comp Sitemap Hops?": [
+   [
+    "Read Comp Sitemaps (Hop)"
+   ],
+   [
+    "Comp Result"
+   ]
+  ],
   "Any Comp Sitemaps?": [
    [
     "Read Comp Sitemaps"
@@ -208,12 +225,20 @@
     "Comp Result"
    ]
   ],
+  "Any KI Cache Prune?": [
+   [
+    "Prune KI Cache"
+   ],
+   [
+    "KI Run Row"
+   ]
+  ],
   "Any KI Cache Rows?": [
    [
     "Save KI Cache"
    ],
    [
-    "KI Run Row"
+    "KI Cache Prune"
    ]
   ],
   "Any KI Comp Drops?": [
@@ -346,6 +371,11 @@
     "Comp Home Requests"
    ]
   ],
+  "Comp Home Hops": [
+   [
+    "Any Comp Home Hops?"
+   ]
+  ],
   "Comp Home Requests": [
    [
     "Any Comp Homes?"
@@ -381,6 +411,11 @@
     "Any Comp SERPs?"
    ]
   ],
+  "Comp Sitemap Hops": [
+   [
+    "Any Comp Sitemap Hops?"
+   ]
+  ],
   "Comp Sitemap Requests": [
    [
     "Any Comp Sitemaps?"
@@ -399,6 +434,16 @@
   "Drop KI Competitors": [
    [
     "KI Cache Rows"
+   ]
+  ],
+  "Drop Old KI Gaps": [
+   [
+    "KI Gap Rows"
+   ]
+  ],
+  "Drop Old KI Keywords": [
+   [
+    "Drop Old KI Gaps"
    ]
   ],
   "Ensure KI Competitors Table": [
@@ -447,6 +492,11 @@
   "Has Callback (KI)?": [
    [
     "POST KI Report"
+   ]
+  ],
+  "KI Cache Prune": [
+   [
+    "Any KI Cache Prune?"
    ]
   ],
   "KI Cache Rows": [
@@ -552,6 +602,11 @@
     "Load AI Answers (KI)"
    ]
   ],
+  "Load Content Log (KI)": [
+   [
+    "Load Site Metrics (KI)"
+   ]
+  ],
   "Load KI Cache": [
    [
     "Load KI Competitors"
@@ -599,7 +654,7 @@
   ],
   "Load Pages (KI)": [
    [
-    "KI Plan"
+    "Load Content Log (KI)"
    ]
   ],
   "Load Query History (KI)": [
@@ -632,6 +687,11 @@
     "KI Gate"
    ]
   ],
+  "Load Site Metrics (KI)": [
+   [
+    "KI Plan"
+   ]
+  ],
   "Manual Run": [
    [
     "KI Input"
@@ -647,12 +707,27 @@
     "Alert Retry Result (KI)"
    ]
   ],
+  "Prune KI Cache": [
+   [
+    "KI Run Row"
+   ]
+  ],
   "Read Comp Homes": [
+   [
+    "Comp Home Hops"
+   ]
+  ],
+  "Read Comp Homes (Hop)": [
    [
     "Comp Profile Requests"
    ]
   ],
   "Read Comp Sitemaps": [
+   [
+    "Comp Sitemap Hops"
+   ]
+  ],
+  "Read Comp Sitemaps (Hop)": [
    [
     "Comp Result"
    ]
@@ -890,7 +965,7 @@
   ],
   "Save KI Cache": [
    [
-    "KI Run Row"
+    "KI Cache Prune"
    ]
   ],
   "Save KI Competitors": [
@@ -905,7 +980,7 @@
   ],
   "Save KI Keywords": [
    [
-    "KI Gap Rows"
+    "Drop Old KI Keywords"
    ]
   ],
   "Save KI Run": [
@@ -1032,11 +1107,14 @@
   "Alert Retry Plan (KI)",
   "Alert Retry Result (KI)",
   "Any Alert Retry (KI)?",
+  "Any Comp Home Hops?",
   "Any Comp Homes?",
   "Any Comp Labs?",
   "Any Comp Profiles?",
   "Any Comp SERPs?",
+  "Any Comp Sitemap Hops?",
   "Any Comp Sitemaps?",
+  "Any KI Cache Prune?",
   "Any KI Cache Rows?",
   "Any KI Comp Drops?",
   "Any KI Comp Rows?",
@@ -1055,6 +1133,7 @@
   "Any Run Research Traffic Retries?",
   "Callback Ledger (KI)",
   "Comp Candidates",
+  "Comp Home Hops",
   "Comp Home Requests",
   "Comp Labs Requests",
   "Comp Profile Requests",
@@ -1062,10 +1141,13 @@
   "Comp SERP Keys",
   "Comp SERP Picture",
   "Comp SERP Requests",
+  "Comp Sitemap Hops",
   "Comp Sitemap Requests",
   "DFS Balance (KI)",
   "DFS Balance End (KI)",
   "Drop KI Competitors",
+  "Drop Old KI Gaps",
+  "Drop Old KI Keywords",
   "Ensure KI Competitors Table",
   "Ensure KI Gaps Table",
   "Ensure KI Keywords Table",
@@ -1075,6 +1157,7 @@
   "Has Callback (KI Refusal)?",
   "Has Callback (KI Started)?",
   "Has Callback (KI)?",
+  "KI Cache Prune",
   "KI Cache Rows",
   "KI Comp Drops",
   "KI Comp Rows",
@@ -1094,6 +1177,7 @@
   "Ledger Settle (KI)",
   "Load AI Answers (KI)",
   "Load AI Visibility (KI)",
+  "Load Content Log (KI)",
   "Load KI Cache",
   "Load KI Competitors",
   "Load KI Gaps",
@@ -1110,14 +1194,18 @@
   "Load SERP Cache (KI Research)",
   "Load SERP Cache (KI Seeds)",
   "Load Site (KI)",
+  "Load Site Metrics (KI)",
   "Manual Run",
   "POST KI Refusal",
   "POST KI Report",
   "POST KI Started",
   "Post Alert Retry (KI)",
   "Post Refusal (KI)",
+  "Prune KI Cache",
   "Read Comp Homes",
+  "Read Comp Homes (Hop)",
   "Read Comp Sitemaps",
+  "Read Comp Sitemaps (Hop)",
   "Refusal Notice (KI)",
   "Refuse KI Limit (KI)",
   "Refuse Run Ledger (KI)",
@@ -1230,6 +1318,7 @@
  "workflow": "SEOagentKIntel1",
  "writes": {
   "seo_cache": [
+   "Prune KI Cache",
    "Save KI Cache"
   ],
   "seo_ki_competitors": [
@@ -1238,10 +1327,12 @@
    "Save KI Competitors"
   ],
   "seo_ki_gaps": [
+   "Drop Old KI Gaps",
    "Ensure KI Gaps Table",
    "Save KI Gaps"
   ],
   "seo_ki_keywords": [
+   "Drop Old KI Keywords",
    "Ensure KI Keywords Table",
    "Save KI Keywords"
   ],

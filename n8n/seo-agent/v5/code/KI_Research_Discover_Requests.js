@@ -15,7 +15,7 @@ const fresh = (k, kind) => KIW.fresh(KIW.cacheRead(cache, k), kind, p.now, p.ki_
 const seeds = (p.seeds || []).map(s => s.keyword);
 const svc = (p.seed_services || []).slice(0, 5);
 const reqs = [];
-if (seeds.length && !fresh(ck('disc', p.market, KIW.hash(seeds.join('|'))), 'discovery')) {
+if (seeds.length && !fresh(ck('disc', p.market, p.seed_key || KIW.seedHash(p.seeds)), 'discovery')) {
   const ac = []; for (const s of svc) { ac.push(s); ac.push(s + ' company'); }
   for (const k of KIW.uniq(ac).slice(0, KIW.CAPS.autocomplete)) reqs.push(KIW.rq.autocomplete(k, m));
   reqs.push(KIW.rq.ideas(seeds, m));

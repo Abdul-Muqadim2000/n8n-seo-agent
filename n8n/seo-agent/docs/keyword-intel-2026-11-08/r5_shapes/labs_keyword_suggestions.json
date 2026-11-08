@@ -34,7 +34,7 @@
     "total_count": 1088,
     "items_count": 1,
     "offset": 0,
-    "offset_token": "eyJDdXJyZW50T2Zmc2V0IjoxLCJSZXF1ZXN0RGF0YSI6eyJrZXl3b3JkIjoic2VvIHRvb2wiLCJpbmNsdWRlX3NlZWRfa2V5d29yZCI6ZmFsc2UsImZ1bGxfbWF0Y2giOmZhbHNlLCJsb2FkX3NlcnBfaW5mbyI6...",
+    "offset_token": "REDACTED_OFFSET_TOKEN",
     "items": [
      {
       "se_type": "google",

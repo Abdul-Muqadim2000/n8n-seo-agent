@@ -38,7 +38,7 @@
     "result_count": 1,
     "result": [
      {
-      "offset_token": "<redacted: base64 of the request incl. account id>",
+      "offset_token": "REDACTED_OFFSET_TOKEN",
       "total_count": 0,
       "items_count": 0,
       "items": null
@@ -73,7 +73,7 @@
     "result_count": 1,
     "result": [
      {
-      "offset_token": "<redacted: base64 of the request incl. account id>",
+      "offset_token": "REDACTED_OFFSET_TOKEN",
       "total_count": 2268,
       "items_count": 10,
       "items": [

@@ -26,7 +26,7 @@ module.exports = async (ctx) => {
     const FROZEN = {
       KI_RUNS: ['site_id', 'domain', 'run_id', 'request_id', 'kind', 'market', 'location_code', 'language_code', 'mode', 'rule_version', 'started_at', 'finished_at', 'status', 'reason', 'sections_json', 'counts_json', 'cost_dfs_usd', 'cost_claude_usd', 'config_json'],
       KI_COMP: ['site_id', 'domain', 'market', 'comp_domain', 'class', 'class_basis', 'class_confidence', 'scored', 'score', 'score_low', 'score_high', 'serp_share', 'topic_sim', 'geo_match', 'ai_share', 'size_tag', 'seeds_seen', 'seeds_total', 'reasons_json', 'evidence_json', 'declared', 'status', 'status_by', 'first_seen', 'last_seen', 'misses', 'profile_json', 'run_id', 'updated_at'],
-      KI_KW: ['site_id', 'domain', 'market', 'keyword', 'kw_key', 'sources_json', 'source_count', 'volume', 'volume_basis', 'volume_source', 'cpc', 'kd', 'trend_json', 'gsc_impressions', 'gsc_clicks', 'gsc_position', 'gsc_page', 'intent', 'stage', 'stage_evidence_json', 'intent_confidence', 'needs_review', 'gate', 'gate_reason', 'fit', 'demand', 'win', 'value', 'gap', 'score', 'score_low', 'score_high', 'low_confidence', 'verdict', 'cluster_id', 'is_head', 'cluster_size', 'cluster_demand', 'serp_read_at', 'top10_json', 'page_action', 'page_url', 'cannibal_json', 'competitors_json', 'striking', 'run_id', 'fetched_at', 'updated_at'],
+      KI_KW: ['site_id', 'domain', 'market', 'keyword', 'kw_key', 'sources_json', 'source_count', 'volume', 'volume_basis', 'volume_source', 'cpc', 'kd', 'trend_json', 'gsc_impressions', 'gsc_clicks', 'gsc_position', 'gsc_page', 'intent', 'stage', 'stage_evidence_json', 'intent_confidence', 'needs_review', 'gate', 'gate_reason', 'gate_detail', 'fit', 'demand', 'win', 'value', 'gap', 'score', 'score_low', 'score_high', 'low_confidence', 'verdict', 'cluster_id', 'is_head', 'cluster_size', 'cluster_demand', 'serp_read_at', 'top10_json', 'page_action', 'page_url', 'cannibal_json', 'competitors_json', 'striking', 'run_id', 'fetched_at', 'updated_at'],
       KI_GAPS: ['gap_id', 'site_id', 'domain', 'market', 'type', 'keyword', 'cluster_id', 'competitor_domains_json', 'client_position', 'evidence_json', 'sample_note', 'action', 'action_target', 'credits', 'status', 'run_id', 'created_at', 'updated_at'] };
     check('KIW0-1 the four KI tables carry exactly the frozen columns (CONTRACTS.md §2)', Object.entries(FROZEN).every(([k, v]) => J(TC[k]) === J(v)), J(Object.keys(FROZEN).filter(k => J(TC[k]) !== J(FROZEN[k]))));
     const KIM = ['ki_mode', 'ki_refresh', 'ki_max_competitors'];
@@ -138,15 +138,15 @@ module.exports = async (ctx) => {
 
     // ---- KIW0-8 money and words ----
     const CC = new Function(rd('v5', 'code', '_cost_cal.js') + '\nreturn CC;')();
-    check('KIW0-8 the engine estimates: competitors $0.35 search data, keyword_research $0.90 (CONTRACTS.md §7), a small Claude row each, and keysFor finds them',
-      CC.DFS_EST.competitors === 0.35 && CC.DFS_EST.keyword_research === 0.9 && CC.EST.competitors > 0 && CC.EST.competitors <= 0.05 && CC.EST.keyword_research > 0 && CC.EST.keyword_research <= 0.1
+    check('KIW0-8 the engine estimates: competitors $0.35 search data, keyword_research $0.90 (CONTRACTS.md §7), no Claude row (FX-L: the worker calls no model), and keysFor finds them',
+      CC.DFS_EST.competitors === 0.35 && CC.DFS_EST.keyword_research === 0.9 && CC.EST.competitors === 0 && CC.EST.keyword_research === 0
       && J(CC.keysFor('dfs', { mode: 'competitors' })) === J(['competitors']) && J(CC.keysFor('ai', { mode: 'keyword_research' })) === J(['keyword_research']), J({ e: [CC.EST.competitors, CC.EST.keyword_research], d: [CC.DFS_EST.competitors, CC.DFS_EST.keyword_research] }));
     const costTs = fs.readFileSync(path.join(ROOT, '..', '..', 'app', 'shared', 'src', 'cost.ts'), 'utf8');
     const row = (k) => { const m = costTs.match(new RegExp('\\n  ' + k + ': \\{ ai: ([0-9.]+), dfs: ([0-9.]+),')); return m ? [Number(m[1]), Number(m[2])] : null; };
     check('KIW0-8 the app mirror (app/shared/src/cost.ts) carries the same two rows', J(row('competitors')) === J([CC.EST.competitors, CC.DFS_EST.competitors]) && J(row('keyword_research')) === J([CC.EST.keyword_research, CC.DFS_EST.keyword_research]), J([row('competitors'), row('keyword_research')]));
     const P = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'ki_parity.json'), 'utf8'));
-    check('KIW0-8 the parity fixture: rule ki-1, the four verdict words, the Win thresholds, a case per boundary',
-      P.rule_version === 'ki-1' && J(Object.keys(P.verdicts)) === J(['go', 'months', 'hard', 'gated']) && P.thresholds.go === 0.6 && P.thresholds.months === 0.35 && P.cases.length >= 8
-      && P.cases.every(c => ['go', 'months', 'hard', 'gated'].includes(c.verdict)) && !/[—‘’“”…]/.test(JSON.stringify(P)), J(P.thresholds));
+    check('KIW0-8 the parity fixture: rule ki-1, the five verdict words (FX-L: unknown = not judged yet), the Win thresholds, a case per boundary',
+      P.rule_version === 'ki-1' && J(Object.keys(P.verdicts)) === J(['go', 'months', 'hard', 'gated', 'unknown']) && P.thresholds.go === 0.6 && P.thresholds.months === 0.35 && P.cases.length >= 8
+      && P.cases.every(c => ['go', 'months', 'hard', 'gated', 'unknown'].includes(c.verdict)) && !/[—‘’“”…]/.test(JSON.stringify(P)), J(P.thresholds));
   });
 };

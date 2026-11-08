@@ -23,14 +23,26 @@ const perKey = fromApp ? LIMITS.per_app_company_per_day : LIMITS.per_key_per_day
 const used = key ? todayRows.filter(r => S(r.key).toLowerCase() === key && !['published', 'checkin', 'profile'].includes(r.mode)).length : 0;
 const period = CONFIG.ai_budget_period === 'day' ? today : today.slice(0, 7);
 const inPeriod = earlier.filter(r => S(r.created_at).startsWith(period));
-const aiSpent = +inPeriod.reduce((s, r) => s + (r.status === 'done' ? n0(r.settled_usd) : n0(r.est_usd)), 0).toFixed(2);
-const dfsSpent = +inPeriod.reduce((s, r) => s + (r.status === 'done' ? n0(r.dfs_usd) : n0(r.dfs_est_usd)), 0).toFixed(2);
+// FX-L perf M5: a run that crashed or timed out (reserved, never settled, past the age limit) still spent money: it counts at its estimate
+const staleIn = rows.filter(r => isStale(r) && S(r.status) !== 'refused' && S(r.created_at).startsWith(period) && (myId > 0 ? n0(r.id) < myId : S(r.run_id) !== S($execution.id)));
+const aiSpent = +[...inPeriod, ...staleIn].reduce((s, r) => s + (r.status === 'done' ? n0(r.settled_usd) : n0(r.est_usd)), 0).toFixed(2);
+const dfsSpent = +[...inPeriod, ...staleIn].reduce((s, r) => s + (r.status === 'done' ? n0(r.dfs_usd) : n0(r.dfs_est_usd)), 0).toFixed(2);
+// FX-L perf M1 / M4: keyword-intelligence runs hold tens of MB each in the one n8n process: at most KI_CAP.open_per_company open at once for
+// a company and KI_CAP.open_global for the platform; and KI_CAP.per_site_kind_per_day of one kind for one website a day (a repeat inside
+// the lifetimes is free anyway), so one company cannot spend the platform's day
+const KI_CAP = { open_per_company: 1, open_global: 3, per_site_kind_per_day: 3 };
+const KI_KINDS = ['competitors', 'keyword_research'];
+const openKi = earlier.filter(r => KI_KINDS.includes(S(r.mode)) && S(r.status) === 'reserved');
+const openMine = key ? openKi.filter(r => S(r.key).toLowerCase() === key).length : 0;
+const siteKind = todayRows.filter(r => S(r.mode) === S(p.kind) && S(r.domain).toLowerCase() === S(p.domain).toLowerCase()).length;
 const est = n0(p.est_dfs_usd), aiEst = n0(p.est_ai_usd);
 let balance = 0; try { balance = n0(($('Run Ledger Row (KI)').first().json || {}).dfs_balance); } catch (e) { balance = 0; }
 const floor = n0(CONFIG.dfs_balance_floor_usd);
 const again = CONFIG.ai_budget_period === 'day' ? 'tomorrow' : 'next month';
 let reason = '', note = '';
 if (todayRows.length >= LIMITS.global_per_day) { reason = 'capacity'; note = 'This service has reached its daily capacity. Please try again tomorrow.'; }
+else if (openKi.length >= KI_CAP.open_global || openMine >= KI_CAP.open_per_company) { reason = 'busy'; note = 'Another competitor or keyword analysis is still running' + (openMine ? ' for your company' : '') + '. Nothing was charged and nothing was started: please try again in a few minutes.'; }
+else if (siteKind >= KI_CAP.per_site_kind_per_day) { reason = 'rate_limited'; note = 'This analysis already ran ' + siteKind + ' times today for this website. Nothing was charged and nothing was started: please try again tomorrow.'; }
 else if (key && used >= perKey) { reason = 'rate_limited'; note = 'You have reached the daily limit of ' + perKey + ' runs. Please try again tomorrow.'; }
 else if (n0(CONFIG.ai_budget_usd) > 0 && aiSpent + aiEst > n0(CONFIG.ai_budget_usd)) { reason = 'ai_budget'; note = 'The AI budget for this ' + (CONFIG.ai_budget_period || 'month') + ' is used up (estimated $' + aiSpent.toFixed(2) + ' of $' + n0(CONFIG.ai_budget_usd) + '). Nothing was charged and nothing was started: this analysis can run again ' + again + '.'; }
 else if (n0(CONFIG.dfs_budget_usd) > 0 && dfsSpent + est > n0(CONFIG.dfs_budget_usd)) { reason = 'dfs_budget'; note = 'The search-data budget for this ' + (CONFIG.ai_budget_period || 'month') + ' is used up (estimated $' + dfsSpent.toFixed(2) + ' of $' + n0(CONFIG.dfs_budget_usd) + '; this run would add about $' + est.toFixed(2) + '). Nothing was charged and nothing was started: this analysis can run again ' + again + '.'; }

@@ -29,13 +29,13 @@ for (const kw of seeds) { const lk = SC.lookup(seedCache, KIW.serpBody(kw, m), {
   ex.paa.forEach(q => paa.push({ keyword: q, detail: 'asked on the results page of "' + kw + '"' })); ex.related.forEach(q => rel.push({ keyword: q, detail: 'related to "' + kw + '"' })); ex.forum.forEach(q => forum.push({ keyword: q, detail: 'a forum thread on "' + kw + '"' })); }
 lists.push({ source: 'paa', fetched_at: now, rows: paa }, { source: 'related', fetched_at: now, rows: rel }, { source: 'forum', fetched_at: now, rows: forum });
 // ---- autocomplete + Labs discovery (one bundle in the cache, 30 days) ----
-const discKey = ck('disc', p.market, KIW.hash(seeds.join('|')));
+const discKey = ck('disc', p.market, p.seed_key || KIW.seedHash(p.seeds));
 let disc = KIW.cacheRead(cache, discKey); if (!KIW.fresh(disc, 'discovery', now, p.ki_force)) disc = null;
 const discPairs = pairs.filter(x => ['ac', 'labs_ideas', 'labs_suggestions', 'labs_related'].includes(x.q.ki_call));
 if (discPairs.length) {
   const take = (call, fn) => discPairs.filter(x => x.q.ki_call === call && x.ok).flatMap(x => KIW.itemsOf(x.a).map(fn)).filter(r => r && r.keyword);
   const acRows = take('ac', it => ({ keyword: KIW.normKw(it.suggestion) })).filter(r => fitMarket(r.keyword, p.iso).ok);
-  const lab = (it) => { const k = KIW.kwRow(it); return k.keyword ? { keyword: k.keyword, volume: k.volume, cpc: k.cpc, kd: k.kd, intent: k.labs_intent, trend: k.trend, volume_source: 'DataForSEO Labs' } : null; };
+  const lab = (it) => { const k = KIW.kwRow(it); return k.keyword ? { keyword: k.keyword, volume: k.volume, cpc: k.cpc, kd: k.kd, intent: k.labs_intent, trend: k.trend, volume_source: 'DataForSEO keyword data' } : null; };
   disc = { fetched_at: now, ac: acRows, ideas: take('labs_ideas', lab), sugg: take('labs_suggestions', lab), related: take('labs_related', lab),
     failed: discPairs.filter(x => !x.ok).map(x => x.q.ki_call + ': ' + x.why) };
   // only a complete bundle is kept for reuse: a call that failed is asked again next run
@@ -58,7 +58,7 @@ for (const d of chosen) if (!rk[d]) { const e = KIW.cacheRead(cache, ck('rk', p.
 const compPos = {};   // kw_key -> [{ domain, position, url }]
 const compRows = [];
 for (const [d, v] of Object.entries(rk)) for (const it of (v.items || [])) { const kk = KIW.keyOf(it.k); (compPos[kk] = compPos[kk] || []).push({ domain: d, position: it.pos, url: it.url });
-  compRows.push({ keyword: it.k, volume: it.v, cpc: it.cpc, kd: it.kd, intent: it.i, volume_source: 'DataForSEO Labs', detail: d + ' ranks #' + it.pos }); }
+  compRows.push({ keyword: it.k, volume: it.v, cpc: it.cpc, kd: it.kd, intent: it.i, volume_source: 'DataForSEO keyword data', detail: d + ' ranks #' + it.pos }); }
 lists.push({ source: 'competitor', fetched_at: now, rows: compRows });
 sections.push({ key: 'competitor_keywords', state: !chosen.length ? 'skipped' : (rkFailed.length ? (Object.keys(rk).length ? 'partial' : 'missing') : (chosen.every(d => rk[d]) ? 'ok' : 'partial')),
   reason: !chosen.length ? 'no competitor is chosen yet: run Competitors and pick up to ' + p.max_chosen : (rkFailed.length ? 'could not be read: ' + rkFailed.join('; ') : (chosen.every(d => rk[d]) ? '' : chosen.filter(d => !rk[d]).length + ' competitor keyword list(s) wait for the next run: this run is held at the price quoted')), rows: compRows.length });
@@ -72,7 +72,7 @@ if (piPair && piPair.ok) { const r0 = KIW.result0(piPair.a); const pages = (piPa
     return { k: k.keyword, v: k.volume, cpc: k.cpc, kd: k.kd, i: k.labs_intent, comps }; }).filter(r => r.k && r.comps.some(c => c.position && c.position <= KIW.CAPS.pi_rank)) };
   saveRows.push(KIW.cacheRow(p.site_id, piKey, pi)); }
 const gapRows = ((pi && pi.items) || []).map(it => { const kk = KIW.keyOf(it.k); for (const c of it.comps) { const l = (compPos[kk] = compPos[kk] || []); if (!l.some(x => x.domain === c.domain)) l.push(c); }
-  return { keyword: it.k, volume: it.v, cpc: it.cpc, kd: it.kd, intent: it.i, volume_source: 'DataForSEO Labs', detail: it.comps.filter(c => c.position <= KIW.CAPS.pi_rank).length + ' of your competitors rank in the top 10, you do not' }; });
+  return { keyword: it.k, volume: it.v, cpc: it.cpc, kd: it.kd, intent: it.i, volume_source: 'DataForSEO keyword data', detail: it.comps.filter(c => c.position <= KIW.CAPS.pi_rank).length + ' of your competitors rank in the top 10, you do not' }; });
 lists.push({ source: 'gap', fetched_at: pi ? pi.fetched_at : now, rows: gapRows });
 const intersection = pi ? { total: pi.total, read: pi.read, top10: (pi.items || []).length, sample_note: pi.total != null && pi.read != null && pi.total > pi.read ? 'sample of ' + pi.read + ' of ' + pi.total + ' searches the data provider holds for these competitors (the ' + pi.read + ' with the most searches were read)' : '' } : null;
 sections.push({ key: 'gap', state: !chosen.length ? 'skipped' : (piPair && !piPair.ok ? 'missing' : (pi ? 'ok' : 'missing')), reason: !chosen.length ? 'no competitor is chosen yet' : (piPair && !piPair.ok ? 'the gap could not be read: ' + piPair.why : (pi ? (intersection.sample_note || '') : 'the gap was not read')), rows: gapRows.length });
@@ -86,9 +86,13 @@ const rows = [], gated = [];
 for (const r of merged) {
   const g = KI.gate(r.keyword, { ...fc, protect, intent: r.labs_intent === 'navigational' ? 'navigational' : '' });
   const f = g.gate === 'pass' ? KI.fit(r.keyword, fc) : { fit: 0, low: 0, high: 0 };
-  const lowFit = g.gate === 'pass' && f.fit < (KI.CONFIG.fit_gate || 0.35);
-  const row = { ...r, gate: g.gate === 'pass' && !lowFit ? 'pass' : 'fail', gate_reason: g.gate === 'pass' ? (lowFit ? lowFitText : '') : (g.text || g.reason) + (g.detail ? ' (' + g.detail + ')' : ''),
-    gate_code: g.gate === 'pass' ? (lowFit ? 'low_fit' : '') : g.reason, fit: f.fit, fit_low: f.low, fit_high: f.high, competitors: compPos[r.kw_key] || [] };
+  // FX-L H8: a search the site already earns impressions for on page 1-2 is never "too far from what you sell"
+  const ranks = KIW.N(r.gsc_position) != null && KIW.N(r.gsc_position) <= 20 && (KIW.N(r.gsc_impressions) || 0) > 0;
+  const lowFit = g.gate === 'pass' && f.fit < (KI.CONFIG.fit_gate || 0.35) && !ranks;
+  // FX-L consistency M3: the stored reason is a CODE (gate_reason), the engine's sentence goes to gate_detail; the app has the words
+  const row = { ...r, gate: g.gate === 'pass' && !lowFit ? 'pass' : 'fail', gate_reason: g.gate === 'pass' ? (lowFit ? 'low_fit' : '') : g.reason,
+    gate_detail: g.gate === 'pass' ? (lowFit ? lowFitText + (f.detail ? ' (' + f.detail + ')' : '') : '') : (g.text || g.reason) + (g.detail ? ' (' + g.detail + ')' : ''),
+    gate_code: g.gate === 'pass' ? (lowFit ? 'low_fit' : '') : g.reason, fit: ranks && f.fit < (KI.CONFIG.fit_gate || 0.35) ? (KI.CONFIG.fit_gate || 0.35) : f.fit, fit_low: f.low, fit_high: f.high, competitors: compPos[r.kw_key] || [] };
   row.prescore = KI.prescore(row, KI.CONFIG);
   (row.gate === 'pass' ? rows : gated).push(row); }
 rows.sort((a, b) => b.prescore - a.prescore || a.kw_key.localeCompare(b.kw_key));

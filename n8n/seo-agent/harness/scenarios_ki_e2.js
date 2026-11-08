@@ -299,18 +299,22 @@ module.exports = async (ctx) => {
     const kwBy = Object.fromEntries(tr.kw.map(r => [r.keyword, r]));
     check('KIE2-8 techand research: Search Console first (measured), the seeds\' people-also-ask / related searches, autocomplete (other-country suggestions dropped), Labs lists, the chosen set\'s keywords and the gap all feed the universe',
       ['gsc', 'paa', 'related', 'autocomplete', 'labs_ideas', 'competitor', 'gap'].every(s => tr.kw.some(r => JSON.parse(r.sources_json || '[]').some(x => x.source === s)))
-      && !tr.kw.some(r => /^power bi uk$/.test(r.keyword)) && tr.kw.some(r => r.keyword === 'power bi partners') && tr.kw.some(r => / in dubai$/.test(r.keyword)), J({ missing: ['gsc', 'paa', 'related', 'autocomplete', 'labs_ideas', 'competitor', 'gap'].filter(s => !tr.kw.some(r => JSON.parse(r.sources_json || '[]').some(x => x.source === s))), dubai: tr.kw.filter(r => / in dubai$| uk$/.test(r.keyword)).map(r => r.keyword) }));
+      && !tr.kw.some(r => /^power bi uk$/.test(r.keyword)) && tr.kw.some(r => / partners$/.test(r.keyword)) && tr.kw.some(r => / in dubai$/.test(r.keyword)), J({ missing: ['gsc', 'paa', 'related', 'autocomplete', 'labs_ideas', 'competitor', 'gap'].filter(s => !tr.kw.some(r => JSON.parse(r.sources_json || '[]').some(x => x.source === s))), dubai: tr.kw.filter(r => / in dubai$| uk$/.test(r.keyword)).map(r => r.keyword) }));
     check('KIE2-8 the gate before money: the job search and the own-brand search are stored as gated with their reason and score 0; nothing gated is enriched or read',
-      kwBy['dynamics 365 jobs dubai'] && kwBy['dynamics 365 jobs dubai'].verdict === 'gated' && kwBy['dynamics 365 jobs dubai'].score === 0 && /work|job/i.test(kwBy['dynamics 365 jobs dubai'].gate_reason)
+      kwBy['dynamics 365 jobs dubai'] && kwBy['dynamics 365 jobs dubai'].verdict === 'gated' && kwBy['dynamics 365 jobs dubai'].score === 0 && kwBy['dynamics 365 jobs dubai'].gate_reason === 'career' && /work|job/i.test(kwBy['dynamics 365 jobs dubai'].gate_detail)
       && !tr.kw.some(r => r.gate === 'fail' && r.serp_read_at), J(kwBy['dynamics 365 jobs dubai']));
     check('KIE2-8 striking distance (positions 8-20, >= 30 impressions on a small site): peppol uae and pint ae, with the page and the change; "what is a crm company" (position 38) is not',
       rb.striking.some(s => s.keyword === 'peppol uae' && /e-invoicing-uae/.test(s.page)) && rb.striking.some(s => s.keyword === 'pint ae') && !rb.striking.some(s => s.keyword === 'what is a crm company'), J(rb.striking));
-    check('KIE2-8 one verdict vocabulary from Win (go / months / hard / gated), the score with its range on every row, clusters with their heads and mapped pages',
-      tr.kw.every(r => ['go', 'months', 'hard', 'gated'].includes(r.verdict) && r.score_low <= r.score && r.score <= r.score_high) && rb.clusters.length >= 5 && rb.clusters.every(c => c.cluster_id && c.head && c.members >= 1)
+    check('KIE2-8 one verdict vocabulary from Win (go / months / hard / gated / unknown = not judged yet), the score with its range on every row, clusters with their heads and mapped pages',
+      tr.kw.every(r => ['go', 'months', 'hard', 'gated', 'unknown'].includes(r.verdict) && r.score_low <= r.score && r.score <= r.score_high) && rb.clusters.length >= 5 && rb.clusters.every(c => c.cluster_id && c.head && c.members >= 1)
       && rb.clusters.some(c => c.page_url && /techand\.ai/.test(c.page_url)), J(rb.clusters.slice(0, 5)));
     const piGap = tr.gaps.find(g => g.type === 'missing' || g.type === 'untapped');
-    check('KIE2-8 gaps are against the chosen set only and reconcile with the provider\'s total: the intersection read fewer rows than it holds, so the gap rows say "sample of N of M"',
-      tr.gaps.length > 0 && piGap && /^sample of \d+ of \d+ searches/.test(piGap.sample_note) && tr.gaps.every(g => JSON.parse(g.competitor_domains_json || '[]').every(d => ['dynamicssquare.com', 'intwo.cloud'].includes(d))) && rb.gaps_summary.striking >= 2, J({ gaps: tr.gaps.slice(0, 3), sum: rb.gaps_summary }));
+    check('KIE2-8 gaps are against the chosen set only; "sample of N of M" only on the provider\'s intersection rows; no "missing" from an unread client position (FX-L H6)',
+      // FX-L H6 / L7: a "missing" / "untapped" gap needs the client measured absent (the fixture's pages all show techand.ai at #9, so none is
+      // made from a results page); the rows whose position was not read are counted apart; "sample of N of M" stays on intersection rows only
+      tr.gaps.length > 0 && (!piGap || /^sample of \d+ of \d+ searches/.test(piGap.sample_note)) && tr.gaps.filter(g => g.type === 'striking' || g.type === 'weak' || g.type === 'strong').every(g => !g.sample_note)
+      && tr.gaps.every(g => JSON.parse(g.competitor_domains_json || '[]').every(d => ['dynamicssquare.com', 'intwo.cloud'].includes(d))) && rb.gaps_summary.striking >= 2 && rb.summary.gaps_position_unread >= 1
+      && !tr.gaps.some(g => (g.type === 'missing' || g.type === 'untapped') && g.client_position == null && !/"gap"/.test((tr.kw.find(r => r.keyword === g.keyword) || {}).sources_json || '')), J({ gaps: tr.gaps.slice(0, 3), sum: rb.gaps_summary, unread: rb.summary.gaps_position_unread }));
     check('KIE2-8 buyer questions from people-also-ask and autocomplete (deduplicated, fit-gated) and a plan of at most 10 actions with credits',
       rb.questions.length >= 3 && rb.questions.every(q => /\?$/.test(q.question) && q.sources.length) && rb.plan.length >= 1 && rb.plan.length <= 10 && rb.plan.every(a => a.action_id && a.title && Number.isFinite(a.credits)), J({ q: rb.questions.slice(0, 3), plan: rb.plan.slice(0, 3) }));
     check('KIE2-8 the rows are exactly the seo_ki_keywords / seo_ki_gaps columns',
@@ -413,7 +417,29 @@ module.exports = async (ctx) => {
       k1.ok && k1.status_by === 'user' && k1.status === 'chosen' && !k2.ok && /at most 2/.test(k2.error) && k3.ok && k3.status === 'watch' && !k4.ok && /not in the competitor set/.test(k4.error), J([k1, k2, k3, k4]));
     const adm = JSON.parse(rd('workflows', 'SEO_Agent_Site_Admin.json'))[0]; const aout = (n) => ((adm.connections[n] || {}).main || []).flat().map(t => t.node);
     check('KIE2-13 a deleted website takes its KI rows (runs, competitors, keywords, gaps) before the site row; the two actions are routed, and a gap update touches only seo_ki_gaps',
-      J(aout('Delete Cycle Jobs (Admin)')) === J(['Delete KI Runs (Admin)']) && J(aout('Delete KI Gaps (Admin)')) === J(['Delete Site']) && aout('Admin Route').includes('Load KI Competitors (Admin)') && aout('Admin Route').includes('Set KI Gap')
+      J(aout('Delete Cycle Jobs (Admin)')) === J(['Delete KI Runs (Admin)']) && J(aout('Delete KI Gaps (Admin)')) === J(['Delete KI Cache (Admin)']) && J(aout('Delete KI Cache (Admin)')) === J(['Delete Site']) && aout('Admin Route').includes('Load KI Competitors (Admin)') && aout('Admin Route').includes('Set KI Gap')
       && adm.nodes.find(n => n.name === 'Set KI Gap').parameters.dataTableId.value === 'seo_ki_gaps' && adm.nodes.find(n => n.name === 'Set KI Competitor').parameters.columns.value.status_by === 'user', J(aout('Admin Route')));
+    check('KIE2-13 (FX-L perf M2) a deleted website also takes its ki:* cache rows (seo_cache, kind ki, its site_id), and nothing else of seo_cache',
+      (() => { const n = adm.nodes.find(x => x.name === 'Delete KI Cache (Admin)'); const cs = n && n.parameters.filters.conditions; return n && n.parameters.dataTableId.value === 'seo_cache' && cs.some(c => c.keyName === 'kind' && c.keyValue === 'ki') && cs.some(c => c.keyName === 'site_id'); })(), '');
+
+    // ---- KIE2-14 (FX-L 2026-11-08): the worker on the services AS PRODUCTION STORES THEM (sentence fragments cut at 80 characters, 30 items with the
+    // key service at #21) - the E2 fixture used a clean list, which is how B1 passed the harness; and the safety of the free reads ----
+    const FR = ['We provide custom AI solutions', 'automation', 'software development', 'cloud and Microsoft enterprise systems', 'and ongoing managed IT support. Every solution is built around your business nee'];
+    const L30 = FR.concat(['Dynamics 365', 'Microsoft Fabric', 'Power Platform', 'Artificial Intelligence & Machine Learning', 'Data Science & Analytics', 'Natural Language Processing (NLP)', 'Computer Vision',
+      'AR & VR Solutions', 'Custom Software Development', 'Website & Portal Development', 'Mobile App Development', 'Managed Services', 'Infrastructure & Enterprise Systems', 'Consulting & Transformation',
+      'Application & Software Development', 'Open edX Services', 'Intelligent Systems & Data', 'Business Discovery & Requirements Analysis', 'Gap-Fit Analysis', 'ROI Assessment', 'Global Rollouts',
+      'System Optimization', 'Microsoft Solutions Implementation', 'Enterprise Chatbots', 'Data Pipeline Design']);
+    const dm = await execute('devaicon', 'competitors', { site: { declared_services: JSON.stringify(FR), services_json: JSON.stringify(L30) } });
+    const sv = dm.plan.services || [];
+    check('KIE2-14 the stored fragments verbatim: every distinct service is kept (Open edX at #21 included), no sentence or cut word is a service, and no seed is a fragment',
+      sv.includes('Open edX Services') && sv.length >= 28 && !sv.some(x => /^every |nee$|^we |^and /i.test(x)) && !(dm.plan.seeds || []).some(x => /[.:,]| every | we /.test(x.keyword)), J({ n: sv.length, seeds: (dm.plan.seeds || []).map(x => x.keyword) }));
+    const WF = JSON.parse(rd('workflows', W.file))[0]; const nd = (n) => WF.nodes.find(x => x.name === n);
+    check('KIE2-14 (FX-L perf H2) the free reads follow no redirect, ask for 400 KB at most, time out in 15 s, and a checked hop is read by its own node',
+      ['Read Comp Homes', 'Read Comp Sitemaps', 'Read Comp Homes (Hop)', 'Read Comp Sitemaps (Hop)'].every(n => nd(n) && nd(n).parameters.options.redirect.redirect.followRedirects === false && nd(n).parameters.options.timeout <= 15000
+        && nd(n).parameters.headerParameters.parameters.some(h => h.name === 'Range'))
+      && !/<\(script\|style/.test(nd('Comp Result').parameters.jsCode), '');
+    check('KIE2-14 (FX-L H9) one current row per site x market: after the keyword rows are saved, the rows of this site and market another run wrote are deleted (keywords and gaps)',
+      ['Drop Old KI Keywords', 'Drop Old KI Gaps'].every(n => nd(n) && nd(n).parameters.filters.conditions.some(c => c.keyName === 'run_id' && c.condition === 'neq') && nd(n).parameters.filters.conditions.some(c => c.keyName === 'market'))
+      && J(W.connections['Save KI Keywords']) === J([['Drop Old KI Keywords']]), J(W.connections['Save KI Keywords']));
   });
 };

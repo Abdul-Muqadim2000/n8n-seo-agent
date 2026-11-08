@@ -41,42 +41,50 @@
     {
      "keyword": "dynamics 365 erp system",
      "position": 1,
-     "type": ""
+     "type": "",
+     "title": "Is Dynamics 365 an ERP or CRM?"
     },
     {
      "keyword": "is microsoft dynamics 365 an erp system",
      "position": 9,
-     "type": ""
+     "type": "",
+     "title": "What is Microsoft Dynamics 365 Finance and Operations ..."
     },
     {
      "keyword": "microsoft dynamics erp",
      "position": 2,
-     "type": ""
+     "type": "",
+     "title": "Is Dynamics 365 an ERP or CRM?"
     },
     {
      "keyword": "dynamics 365 erp system",
      "position": 2,
-     "type": ""
+     "type": "",
+     "title": "Is Dynamics 365 an ERP or CRM?"
     },
     {
      "keyword": "is microsoft dynamics 365 an erp system",
      "position": 7,
-     "type": ""
+     "type": "",
+     "title": "What is Microsoft Dynamics 365 Finance and Operations ..."
     },
     {
      "keyword": "dynamics 365 erp system",
      "position": 7,
-     "type": ""
+     "type": "",
+     "title": "Is Dynamics 365 an ERP or CRM?"
     },
     {
      "keyword": "microsoft dynamics erp",
      "position": 8,
-     "type": ""
+     "type": "",
+     "title": "Is Dynamics 365 an ERP or CRM?"
     },
     {
      "keyword": "microsoft dynamics erp",
      "position": 3,
-     "type": ""
+     "type": "",
+     "title": "Is Dynamics 365 an ERP or CRM?"
     }
    ],
    "holdout": false
@@ -89,27 +97,32 @@
     {
      "keyword": "dynamics 365 erp system",
      "position": 3,
-     "type": ""
+     "type": "",
+     "title": "Microsoft Dynamics ERP Software"
     },
     {
      "keyword": "is microsoft dynamics 365 an erp system",
      "position": 1,
-     "type": ""
+     "type": "",
+     "title": "Microsoft Dynamics ERP Software"
     },
     {
      "keyword": "microsoft dynamics erp",
      "position": 3,
-     "type": ""
+     "type": "",
+     "title": "Microsoft Dynamics ERP Software"
     },
     {
      "keyword": "dynamics 365 erp system",
      "position": 7,
-     "type": ""
+     "type": "",
+     "title": "Microsoft Dynamics ERP Software"
     },
     {
      "keyword": "ms 365 erp",
      "position": 1,
-     "type": ""
+     "type": "",
+     "title": "Microsoft Dynamics ERP Software"
     }
    ],
    "holdout": false
@@ -122,42 +135,50 @@
     {
      "keyword": "dynamics 365 erp system",
      "position": 6,
-     "type": ""
+     "type": "",
+     "title": "A guide to what a Microsoft Dynamics 365 ERP system is ..."
     },
     {
      "keyword": "is microsoft dynamics 365 an erp system",
      "position": 2,
-     "type": ""
+     "type": "",
+     "title": "A guide to what a Microsoft Dynamics 365 ERP system is."
     },
     {
      "keyword": "dynamics 365 erp system",
      "position": 1,
-     "type": ""
+     "type": "",
+     "title": "A guide to what a Microsoft Dynamics 365 ERP system is ..."
     },
     {
      "keyword": "dynamics 365 erp system",
      "position": 9,
-     "type": ""
+     "type": "",
+     "title": "A guide to what a Microsoft Dynamics 365 ERP system is ..."
     },
     {
      "keyword": "is microsoft dynamics 365 an erp system",
      "position": 3,
-     "type": ""
+     "type": "",
+     "title": "A guide to what a Microsoft Dynamics 365 ERP system is."
     },
     {
      "keyword": "ms 365 erp",
      "position": 7,
-     "type": ""
+     "type": "",
+     "title": "A guide to what a Microsoft Dynamics 365 ERP system is ..."
     },
     {
      "keyword": "dynamics 365 erp system",
      "position": 8,
-     "type": ""
+     "type": "",
+     "title": "A guide to what a Microsoft Dynamics 365 ERP system is ..."
     },
     {
      "keyword": "dynamics 365 erp system",
      "position": 3,
-     "type": ""
+     "type": "",
+     "title": "A guide to what a Microsoft Dynamics 365 ERP system is ..."
     }
    ],
    "holdout": true
@@ -170,27 +191,32 @@
     {
      "keyword": "dynamics 365 erp system",
      "position": 8,
-     "type": ""
+     "type": "",
+     "title": "A Complete Overview for Microsoft Dynamics 365 ERP"
     },
     {
      "keyword": "is microsoft dynamics 365 an erp system",
      "position": 3,
-     "type": ""
+     "type": "",
+     "title": "A Complete Overview for Microsoft Dynamics 365 ERP"
     },
     {
      "keyword": "microsoft dynamics erp",
      "position": 8,
-     "type": ""
+     "type": "",
+     "title": "A Complete Overview for Microsoft Dynamics 365 ERP"
     },
     {
      "keyword": "is microsoft dynamics 365 an erp system",
      "position": 4,
-     "type": ""
+     "type": "",
+     "title": "A Complete Overview for Microsoft Dynamics 365 ERP"
     },
     {
      "keyword": "dynamics 365 erp system",
      "position": 6,
-     "type": ""
+     "type": "",
+     "title": "A Complete Overview for Microsoft Dynamics 365 ERP"
     }
    ],
    "holdout": false
@@ -203,12 +229,14 @@
     {
      "keyword": "crm service provider in uae",
      "position": 1,
-     "type": ""
+     "type": "",
+     "title": "Focus CRM - Customer Relationship Management Solution"
     },
     {
      "keyword": "crm for customers",
      "position": 6,
-     "type": ""
+     "type": "",
+     "title": "Focus CRM - Customer Relationship Management Solution"
     }
    ],
    "holdout": false
@@ -221,12 +249,14 @@
     {
      "keyword": "is microsoft dynamics 365 an erp system",
      "position": 5,
-     "type": ""
+     "type": "",
+     "title": "Dynamics 365 CRM vs ERP: The Key Differences and ..."
     },
     {
      "keyword": "is microsoft dynamics 365 an erp system",
      "position": 6,
-     "type": ""
+     "type": "",
+     "title": "Dynamics 365 CRM vs ERP: The Key Differences and ..."
     }
    ],
    "holdout": true
@@ -239,7 +269,8 @@
     {
      "keyword": "ms 365 erp",
      "position": 1,
-     "type": ""
+     "type": "",
+     "title": "Microsoft Dynamics 365 Solutions in the UAE | DBS"
     }
    ],
    "holdout": false
@@ -252,17 +283,20 @@
     {
      "keyword": "microsoft dynamics erp",
      "position": 1,
-     "type": ""
+     "type": "",
+     "title": "Microsoft Dynamics 365 ERP Implementation Services - Intwo"
     },
     {
      "keyword": "dynamics 365 erp system",
      "position": 4,
-     "type": ""
+     "type": "",
+     "title": "Microsoft Dynamics 365 ERP Implementation Services - Intwo"
     },
     {
      "keyword": "dynamics 365 erp system",
      "position": 10,
-     "type": ""
+     "type": "",
+     "title": "Microsoft Dynamics 365 ERP Implementation Services - Intwo"
     }
    ],
    "holdout": false
@@ -275,7 +309,8 @@
     {
      "keyword": "is microsoft dynamics 365 an erp system",
      "position": 9,
-     "type": ""
+     "type": "",
+     "title": "The Ultimate ERP Face-Off: Microsoft Dynamics 365 vs. SAP"
     }
    ],
    "holdout": true
@@ -288,7 +323,8 @@
     {
      "keyword": "crm service provider in uae",
      "position": 9,
-     "type": ""
+     "type": "",
+     "title": "Best CRM Software Solutions in Dubai & UAE"
     }
    ],
    "holdout": false
@@ -301,7 +337,8 @@
     {
      "keyword": "ms 365 erp",
      "position": 6,
-     "type": ""
+     "type": "",
+     "title": "5 Things That Will Make You Consider Using Dynamics 365 ..."
     }
    ],
    "holdout": false
@@ -314,12 +351,14 @@
     {
      "keyword": "crm service provider in uae",
      "position": 2,
-     "type": ""
+     "type": "",
+     "title": "Best Sales CRM Software Dubai UAE"
     },
     {
      "keyword": "erp systems in uae",
      "position": 4,
-     "type": ""
+     "type": "",
+     "title": "Best Sales CRM Software Dubai UAE"
     }
    ],
    "holdout": true
@@ -332,27 +371,32 @@
     {
      "keyword": "crm service provider in uae",
      "position": 10,
-     "type": ""
+     "type": "",
+     "title": "Cloud-based CRM software in the UAE (ElateCRM)"
     },
     {
      "keyword": "erp & crm software",
      "position": 3,
-     "type": ""
+     "type": "",
+     "title": "Cloud-based CRM software in the UAE (ElateCRM)"
     },
     {
      "keyword": "erp system dubai",
      "position": 4,
-     "type": ""
+     "type": "",
+     "title": "Cloud-based CRM software in the UAE (ElateCRM)"
     },
     {
      "keyword": "erp software in dubai",
      "position": 4,
-     "type": ""
+     "type": "",
+     "title": "Cloud-based CRM software in the UAE (ElateCRM)"
     },
     {
      "keyword": "best erp software dubai",
      "position": 2,
-     "type": ""
+     "type": "",
+     "title": "Cloud-based CRM software in the UAE (ElateCRM)"
     }
    ],
    "holdout": false
@@ -365,7 +409,8 @@
     {
      "keyword": "crm service provider",
      "position": 7,
-     "type": ""
+     "type": "",
+     "title": "CRM Services and Solutions We Deliver"
     }
    ],
    "holdout": false
@@ -378,7 +423,8 @@
     {
      "keyword": "ms 365 erp",
      "position": 5,
-     "type": ""
+     "type": "",
+     "title": "Microsoft Dynamics 365 vs Traditional ERP: An Honest ..."
     }
    ],
    "holdout": true
@@ -813,7 +859,8 @@
     {
      "keyword": "crm service provider in uae",
      "position": 3,
-     "type": ""
+     "type": "",
+     "title": "10 Best CRM Softwares in Dubai, UAE (October, 2026)"
     }
    ],
    "holdout": true
@@ -826,7 +873,8 @@
     {
      "keyword": "crm service provider in uae",
      "position": 3,
-     "type": ""
+     "type": "",
+     "title": "8 Best CRM Software in UAE for 2026"
     }
    ],
    "holdout": false
@@ -1067,12 +1115,14 @@
     {
      "keyword": "open edx provider",
      "position": 5,
-     "type": ""
+     "type": "",
+     "title": "How to Choose an Open edX Service Provider (2026)"
     },
     {
      "keyword": "open edx provider",
      "position": 4,
-     "type": ""
+     "type": "",
+     "title": "How to Choose an Open edX Service Provider (2026)"
     }
    ],
    "holdout": false
@@ -1085,7 +1135,8 @@
     {
      "keyword": "open edx provider",
      "position": 7,
-     "type": ""
+     "type": "",
+     "title": "Best Open edX Service Providers in 2026 - Edly"
     }
    ],
    "holdout": false
@@ -1098,7 +1149,8 @@
     {
      "keyword": "open edx provider",
      "position": 6,
-     "type": ""
+     "type": "",
+     "title": "edunext | Open edX\u00ae Hosting, Support & Consulting for ..."
     }
    ],
    "holdout": true
@@ -1562,6 +1614,49 @@
    "class": "reject",
    "appearances": [],
    "holdout": false
+  },
+  {
+   "host": "sometravel.com",
+   "client": "techand.ai",
+   "class": "adjacent",
+   "fxl_negative": true,
+   "appearances": [
+    {
+     "keyword": "dynamics 365 business central company dubai",
+     "position": 8,
+     "type": "",
+     "title": "Dubai Holiday Packages and Desert Safari Tours"
+    }
+   ]
+  },
+  {
+   "host": "smarthomes-dubai.ae",
+   "client": "devaicon.com",
+   "class": "adjacent",
+   "fxl_negative": true,
+   "appearances": [
+    {
+     "keyword": "best automation dubai",
+     "position": 3,
+     "type": "",
+     "title": "Home Automation Dubai | Smart Homes"
+    }
+   ]
+  },
+  {
+   "host": "skytechdigital.ae",
+   "client": "devaicon.com",
+   "class": "adjacent",
+   "fxl_negative": true,
+   "appearances": [
+    {
+     "keyword": "custom ai solutions uae",
+     "position": 6,
+     "type": "",
+     "title": "Web Design Company in Dubai | Skytech Digital"
+    }
+   ]
   }
- ]
+ ],
+ "_comment_fxl": "FX-L (2026-11-08, REVIEW_LOGIC B2 / M8): a business is classified on its OWN text, never on the search it was found on, so the business and list cases now carry the public titles their results showed on the stored readings (seo_rank_history snapshots, page titles only). The negative cases below are businesses on a service results page that are not competitors (an off-category business ranking on a city word): they must never come out direct."
 }

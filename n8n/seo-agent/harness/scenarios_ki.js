@@ -49,10 +49,11 @@ module.exports = async (ctx) => {
       KI.key('E-invoicing in the UAE') === KI.key('uae einvoicing') && KI.key('erp & crm software') === KI.key('erp and crm softwares') && KI.key('erp software uae') === KI.key('uae erp software')
       && KI.key('erp software uae') !== KI.key('crm software uae') && KI.key('the') !== '', J([KI.key('E-invoicing in the UAE'), KI.key('uae einvoicing'), KI.key('erp & crm software')]));
     const s1 = KI.services('Microsoft Dynamics 365 consulting and implementation in the UAE and GCC: Business Central, F&O, and UAE e-invoicing (Peppol) and VAT compliance.');
-    check('KI2 services: R3 #4, a confirmed service written as a sentence is ONE phrase, never cut on its commas', s1.length === 1 && /Business Central, F&O, and UAE e-invoicing/.test(s1[0]), J(s1));
-    check('KI2 services: an array is kept as given (commas inside a phrase kept), a JSON array string is parsed, a one-line short list is split',
-      J(KI.services(['NAV, GP and AX migrations', 'Power BI'])) === J(['NAV, GP and AX migrations', 'Power BI']) && J(KI.services('["Open edX hosting","AI automation"]')) === J(['Open edX hosting', 'AI automation'])
-      && J(KI.services('erp, crm, peppol e-invoicing')) === J(['erp', 'crm', 'peppol e-invoicing']) && J(KI.services('a\nb; c')) === J(['a', 'b', 'c']) && KI.services('').length === 0, J(KI.services('erp, crm, peppol e-invoicing')));
+    // FX-L B1 (REVIEW_LOGIC B1): a sentence becomes its clean service phrases - never a fragment ("GCC: Business"), never one 120-character "service"
+    check('KI2 services (FX-L B1): a sentence becomes clean phrases: the product names and services in it, the market tail and "and" dropped, no fragment', J(s1) === J(['Microsoft Dynamics 365 consulting', 'Microsoft Dynamics 365 implementation', 'Business Central', 'F&O', 'e-invoicing', 'VAT compliance', 'Peppol']), J(s1));
+    check('KI2 services: array items are cleaned the same way ("GP and AX migrations" -> both migrations), a JSON array string is parsed, a one-line short list is split, single letters are not services',
+      J(KI.services(['NAV, GP and AX migrations', 'Power BI'])) === J(['NAV', 'GP migrations', 'AX migrations', 'Power BI']) && J(KI.services('["Open edX hosting","AI automation"]')) === J(['Open edX hosting', 'AI automation'])
+      && J(KI.services('erp, crm, peppol e-invoicing')) === J(['erp', 'crm', 'peppol e-invoicing']) && J(KI.services('a\nb; c')) === J([]) && KI.services('').length === 0, J([KI.services(['NAV, GP and AX migrations', 'Power BI']), KI.services('a\nb; c')]));
 
     // ---- KI3 hosts and urls ----
     check('KI3 validHost: a registrable host survives (scheme, www, path, port dropped); text fragments, IP literals and single words do not',
@@ -82,7 +83,7 @@ module.exports = async (ctx) => {
     const mg = Object.fromEntries(Object.keys(misc).map(h => [h, cd(h).class]));
     check('KI4 job boards, government / regulators, media, platforms and other vendors by rule', Object.entries(misc).every(([h, c]) => mg[h] === c), J(Object.entries(misc).filter(([h, c]) => mg[h] !== c).map(([h]) => [h, mg[h]])));
     check('KI4 a partner on a country domain whose name contains a vendor word is a business, not the platform (dynamics.ae is DBS, a UAE partner)',
-      cd('dynamics.ae', { appearances: [{ keyword: 'ms 365 erp', position: 1, type: 'provider' }] }).class === 'direct', J(cd('dynamics.ae', { appearances: [{ keyword: 'ms 365 erp', position: 1, type: 'provider' }] })));
+      ['direct', 'adjacent'].includes(cd('dynamics.ae', { appearances: [{ keyword: 'ms 365 erp', position: 1, type: 'provider' }] }).class), J(cd('dynamics.ae', { appearances: [{ keyword: 'ms 365 erp', position: 1, type: 'provider' }] })));
     const dec = cd('acme-dynamics.com', { declared: ['acme-dynamics.com'] }), usr = cd('randgroup.com', { user: { 'randgroup.com': 'adjacent' } });
     const llm1 = cd('unknownfirm.com', { llm: { class: 'adjacent', confidence: 0.5 } }), nollm = cd('unknownfirm.com');
     check('KI4 bases: declared -> direct (declared), the user\'s class is final (user), an LLM answer only when passed (llm, < 0.6 = needs review), otherwise rule / page',
@@ -203,8 +204,8 @@ module.exports = async (ctx) => {
     const d12 = [KI.demand([{ volume: 100, stage: 'hire' }]), KI.demand([{ volume: 100, gsc_impressions: 280, stage: 'hire' }]), KI.demand([{ volume: null, sources: [{ source: 'gsc' }, { source: 'paa' }] }]),
       KI.demand([{ volume: null, sources: [{ source: 'labs_ideas' }, { source: 'labs_related' }, { source: 'labs_suggestions' }] }]), KI.demand([{ volume: 1000, stage: 'info', aio: true }]), KI.demand([{ volume: 1000, stage: 'info', aio: false }]),
       KI.demand([{ volume: 10, stage: 'hire' }]), KI.demand([{ volume: 1000, stage: 'hire' }])];
-    check('KI12 demand: Search Console impressions beat provider volume; no volume + 2 independent sources -> the 0.15 floor ("evidenced, volume not measured"); three Labs endpoints are ONE source',
-      d12[1].clicks > d12[0].clicks && /Search Console/.test(d12[1].note) && d12[2].demand === 0.15 && d12[2].floor && /evidenced, volume not measured/.test(d12[2].note) && d12[3].demand === 0 && !d12[3].floor, J(d12.slice(0, 4)));
+    check('KI12 demand (FX-L H7): Search Console impressions beat provider volume on page 1-2; no volume + 2 independent sources -> a floor BELOW a measured 10 ("evidenced, volume not measured"); three Labs endpoints are ONE source',
+      d12[1].clicks > d12[0].clicks && /Search Console/.test(d12[1].note) && d12[2].demand > 0 && d12[2].demand < d12[6].demand && d12[2].floor && /evidenced, volume not measured/.test(d12[2].note) && d12[3].demand === 0 && !d12[3].floor, J(d12.slice(0, 4)));
     check('KI12 demand: an AI answer on the page lowers it (stage loss), more volume never lowers it, always 0..1 with low <= demand <= high',
       d12[4].demand < d12[5].demand && d12[6].demand <= d12[0].demand && d12[0].demand <= d12[7].demand && d12.every(d => d.demand >= 0 && d.demand <= 1 && d.low <= d.demand + 1e-9 && d.demand <= d.high + 1e-9), J(d12.map(d => [d.demand, d.low, d.high])));
 
@@ -225,7 +226,7 @@ module.exports = async (ctx) => {
 
     // ---- KI14 value / gap ----
     const v14 = [KI.value({ keyword: 'x', cpc: 15 }).value, KI.value({ keyword: 'x', cpc: 0 }).value, KI.value({ keyword: 'x' }), KI.value({ keyword: 'open edx hosting uae', cpc: 1 }, { service_values: { 'open edx hosting': 0.9 } })];
-    check('KI14 Value: CPC on a log scale ($15 = 1), missing CPC = 0.5 modelled with a range, the owner\'s value for the service wins', near(v14[0], 1) && v14[1] === 0 && v14[2].value === 0.5 && v14[2].basis === 'modelled' && v14[3].value === 0.9 && v14[3].basis === 'measured', J(v14));
+    check('KI14 Value: CPC on a log scale ($15 = 1), missing CPC = 0.5 modelled with a range, the owner\'s value for the service wins', near(v14[0], 1) && v14[1] === 0.5 && v14[2].value === 0.5 && v14[2].basis === 'modelled' && v14[3].value === 0.9 && v14[3].basis === 'measured', J(v14));
     const top14 = [{ host: 'randgroup.com', pos: 1 }, { host: 'www.velosio.com', pos: 3 }, { host: 'other.com', pos: 4 }, { domain: null, url_exact: false }];
     const g14 = [KI.gap({ top10: top14 }, ['randgroup.com', 'velosio.com', 'dynamicssquare.com', 'intwo.cloud']), KI.gap({ top10: top14, ai_cited: ['intwo.cloud'] }, ['randgroup.com', 'velosio.com', 'dynamicssquare.com', 'intwo.cloud']), KI.gap({ top10: top14 }, [])];
     check('KI14 Gap: the share of the chosen competitors in the top 10 (2 of 4 = 0.5), +0.5 when one is cited in AI answers, 0 with no chosen set', g14[0].gap === 0.5 && g14[1].gap === 1 && g14[2].gap === 0, J(g14));
@@ -306,12 +307,12 @@ module.exports = async (ctx) => {
     const cl20 = { site_id: 'site_techand-ai', domain: 'techand.ai', market: 'AE-en', run_id: 'r1', now: '2026-11-08T00:00:00.000Z' };
     const ch20 = ['randgroup.com', 'velosio.com', 'intwo.cloud'];
     const kr = [
-      { keyword: 'missing one', top10: [{ host: 'randgroup.com', pos: 1 }, { host: 'velosio.com', pos: 4 }] },
-      { keyword: 'untapped one', top10: [{ host: 'intwo.cloud', pos: 2 }] },
+      { keyword: 'missing one', sources: [{ source: 'gap' }], top10: [{ host: 'randgroup.com', pos: 1 }, { host: 'velosio.com', pos: 4 }] },
+      { keyword: 'untapped one', sources: [{ source: 'gap' }], top10: [{ host: 'intwo.cloud', pos: 2 }] },
       { keyword: 'weak one', gsc_position: 35, top10: [{ host: 'velosio.com', pos: 2 }], page_url: 'https://techand.ai/w' },
       { keyword: 'striking one', gsc_position: 9, gsc_impressions: 300, gsc_page: 'https://techand.ai/s', top10: [{ host: 'velosio.com', pos: 2 }] },
       { keyword: 'strong one', top10: [{ host: 'techand.ai', pos: 2 }, { host: 'randgroup.com', pos: 3 }] },
-      { keyword: 'list one', page_action: 'list', top10: [{ host: 'randgroup.com', pos: 1 }, { host: 'velosio.com', pos: 2 }] },
+      { keyword: 'list one', sources: [{ source: 'gap' }], page_action: 'list', top10: [{ host: 'randgroup.com', pos: 1 }, { host: 'velosio.com', pos: 2 }] },
       { keyword: 'gated one', gate: 'fail', top10: [{ host: 'randgroup.com', pos: 1 }, { host: 'velosio.com', pos: 2 }] } ];
     const ex20 = { sample: { n: 300, m: 1240 }, listings: [{ domain: 'goodfirms.co', keyword: 'crm consulting dubai', lists_competitors: ['velosio.com'], lists_client: false }],
       backlinks: [{ domain: 'peppol.org', links_to: ['randgroup.com', 'velosio.com'], links_client: false }, { domain: 'one.com', links_to: ['randgroup.com'], links_client: false }],
@@ -327,6 +328,14 @@ module.exports = async (ctx) => {
     check('KI20 stored shape: the contract columns, JSON columns as strings, "sample of 300 of 1240" when capped, deterministic ids',
       gp20.every(g => J(Object.keys(g)) === J(['gap_id', 'site_id', 'domain', 'market', 'type', 'keyword', 'cluster_id', 'competitor_domains_json', 'client_position', 'evidence_json', 'sample_note', 'action', 'action_target', 'credits', 'status', 'run_id', 'created_at', 'updated_at'])
         && typeof g.competitor_domains_json === 'string' && typeof g.evidence_json === 'string' && g.status === 'open') && gt['missing one'].sample_note === 'sample of 300 of 1240' && J(KI.gaps(cl20, ch20, kr.slice().reverse(), ex20)) === J(gp20), J(gp20[0]));
+
+    // FX-L H6: an unknown client position is "not read", never "not in the top 100": no missing / untapped row, counted apart; a page read with
+    // the client absent counts only when the site's Search Console reading is complete and has no row for the search
+    const kr6 = [{ keyword: 'unread one', top10: [{ host: 'randgroup.com', pos: 3 }, { host: 'velosio.com', pos: 7 }] }, { keyword: 'read absent', serp_read: true, top10: [{ host: 'randgroup.com', pos: 3 }, { host: 'velosio.com', pos: 7 }] }];
+    const g6a = KI.gaps(cl20, ch20, kr6, {}), g6b = KI.gaps({ ...cl20, gsc_complete: true }, ch20, kr6, {});
+    check('KI20 (FX-L H6): an unknown client position makes no "missing" gap and is counted as not read; with a complete Search Console reading a read results page without the client is "missing"',
+      g6a.length === 0 && KI.gapsUnread(cl20, ch20, kr6) === 2 && g6b.length === 1 && g6b[0].type === 'missing' && g6b[0].keyword === 'read absent' && g6b[0].sample_note === '', J([g6a, g6b.map(g => [g.type, g.keyword])]));
+    check('KI20 (FX-L L7): "sample of N of M" is on the intersection rows only, never on a striking or weak row', gt['striking one'].sample_note === '' && gt['weak one'].sample_note === '' && gt['untapped one'].sample_note === 'sample of 300 of 1240', J([gt['striking one'].sample_note, gt['untapped one'].sample_note]));
 
     // ---- KI21 plan ----
     const heads = Array.from({ length: 14 }, (_, i) => ({ keyword: 'service ' + i + ' dubai', cluster_id: 'c' + i, score: { score: 20 + i * 3, low: 10 + i * 3, high: 30 + i * 3, mid: 20 + i * 3 }, verdict: i % 3 ? 'months' : 'go', stage: 'hire', page_action: i % 4 === 0 ? 'refresh' : 'new', page_url: i % 4 === 0 ? 'https://techand.ai/s' + i : '', cluster_size: 1 + (i % 3) }))
@@ -348,10 +357,13 @@ module.exports = async (ctx) => {
     check('KI22 readable fails closed: only On, only with the kill switch read as off; a gated row, a row the gate refuses on re-read, google.com, a fragment or a dismissed competitor is never read',
       J(rd22) === J([true, false, false, false, false, false, false, false, true, false, false, false, false]), J(rd22));
     const lab = [KI.label('measured', '', '2026-11-02T10:00:00Z'), KI.label('provider_estimate', 'DataForSEO Labs', '2026-11-08'), KI.label('modelled'), KI.label('inferred'), KI.label('guess')];
-    check('KI22 label: the four bases with the app\'s words (measured + date, estimate from <source> + date, our estimate, AI judgement); anything else "not available"',
-      lab[0].text === 'measured on 2026-11-02' && lab[1].text === 'estimate from DataForSEO Labs on 2026-11-08' && lab[2].text === 'our estimate' && lab[3].text === 'AI judgement' && lab[4].basis === 'none' && lab[4].text === 'not available', J(lab));
+    check('KI22 label: the four bases with the app\'s words (measured + date, estimate from <source> + date, our estimate, our reading of the results); anything else "not available"',
+      lab[0].text === 'measured on 2026-11-02' && lab[1].text === 'estimate from DataForSEO Labs on 2026-11-08' && lab[2].text === 'our estimate' && lab[3].text === 'our reading of the results' && lab[4].basis === 'none' && lab[4].text === 'not available', J(lab));
 
     // ---- KI23 accuracy sets ----
+    // FX-L B2: the negative cases (a travel agency, a home automation shop, a web agency on a service results page) are never "direct"
+    const negs = DOM.cases.filter(c => c.fxl_negative).map(c => [c.host, KI.classifyDomain(c.host, { ...DOM.clients[c.client], appearances: c.appearances }).class]);
+    check('KI23 (FX-L B2) a business that ranks on a service search but sells something else is never "direct" (its own titles decide, never the search)', negs.length >= 3 && negs.every(([, k]) => k !== 'direct'), J(negs));
     const acc = (set, f) => { const r = { train: [0, 0], hold: [0, 0], miss: [] }; for (const c of set.cases) { const ok = f(c); const b = c.holdout ? r.hold : r.train; b[1]++; if (ok.ok) b[0]++; else r.miss.push((c.holdout ? 'HOLD ' : '') + ok.msg); } return r; };
     const ad = acc(DOM, (c) => { const k = KI.classifyDomain(c.host, { ...DOM.clients[c.client], appearances: c.appearances }); const got = k.store ? k.class : 'reject'; return { ok: got === c.class, msg: c.client + ' ' + c.host + ' ' + c.class + '->' + got }; });
     const as = acc(STG, (c) => { const s = KI.stage(c.top10 || [], c.keyword, null, STG.clients[c.client]); return { ok: s.stage === c.stage, msg: c.keyword + ' ' + c.stage + '->' + s.stage }; });
@@ -388,5 +400,61 @@ module.exports = async (ctx) => {
     // ---- KI25 inputs never mutated ----
     const frozen = JSON.parse(J(rowsC)); KI.cluster(rowsC); KI.gaps(cl20, ch20, kr, ex20); KI.scoreCompetitors([], seeds, KI.cfg({})); KI.plan(heads, gp20);
     check('KI25 the kit never mutates its inputs (rows, seeds, gaps)', J(frozen) === J(rowsC), '');
+
+    // ---- KI26 (FX-L 2026-11-08, REVIEW_LOGIC): MESSY inputs as production stores them (the harness passed while its fixtures were cleaner
+    // than production; every string here is public: the fragments are quoted in REVIEW_LOGIC.md, the titles are generic UAE provider titles) ----
+    const FRAG = ['Microsoft Dynamics 365 consulting and implementation in the UAE and GCC: Busines', 'Finance & Operations', 'CRM and Project Operations. We also do NAV', 'GP and AX migrations',
+      'post-go-live and managed support', 'Copilot Studio AI agents', 'Power Platform and Power BI', 'and UAE e-invoicing (Peppol) and VAT compliance.'];
+    const fr = KI.services(JSON.stringify(FRAG));
+    check('KI26 B1 fragments: the stored sentence pieces become clean services (no cut word, no "we also do", no market tail, no leading "and"), Peppol and e-invoicing kept',
+      fr.includes('Peppol') && fr.includes('e-invoicing') && fr.includes('NAV') && fr.includes('GP migrations') && fr.includes('Power BI') && !fr.some(x => /busines$|^and |\bwe\b|\buae\b|\bgcc\b|[.:]/i.test(x)), J(fr));
+    const DV = ['We provide custom AI solutions', 'automation', 'software development', 'cloud and Microsoft enterprise systems', 'and ongoing managed IT support. Every solution is built around your business nee',
+      'Dynamics 365', 'Microsoft Fabric', 'Power Platform', 'Artificial Intelligence & Machine Learning', 'Data Science & Analytics', 'Natural Language Processing (NLP)', 'Computer Vision', 'AR & VR Solutions',
+      'Custom Software Development', 'Website & Portal Development', 'Mobile App Development', 'Managed Services', 'Infrastructure & Enterprise Systems', 'Consulting & Transformation',
+      'Application & Software Development', 'Open edX Services', 'Intelligent Systems & Data', 'Business Discovery & Requirements Analysis', 'Gap-Fit Analysis', 'ROI Assessment', 'Global Rollouts',
+      'System Optimization', 'Microsoft Solutions Implementation', 'Enterprise Chatbots', 'Data Pipeline Design'];
+    const dv = KI.services(JSON.stringify(DV)); const dctx = { own_domain: 'devaicon.com', market: 'AE', services: dv, topics: dv };
+    check('KI26 B1 thirty services with the key one at #21: nothing is cut by position, "Open edX Services" is kept, a sentence ("Every solution is built ...") is not a service',
+      dv.length >= 28 && dv.includes('Open edX Services') && !dv.some(x => /^every /i.test(x)) && dv.includes('custom AI solutions'), J(dv));
+    const oe = ['open edx hosting', 'open edx provider', 'managed open edx', 'open edx development company'].map(k => [k, KI.gate(k, dctx).gate, KI.fit(k, dctx).fit]);
+    check('KI26 B1 / H8 with the stored list verbatim, the Open edX searches pass the gate and are in topic (fit >= 0.35)', oe.every(([, g, f]) => g === 'pass' && f >= 0.35), J(oe));
+    const tctx = { own_domain: 'techand.ai', market: 'AE', services: fr, topics: fr, competitors: ['velosio.com', 'randgroup.com'], avoid: ['crm for customers'] };
+    const t26 = { pap: [KI.gate('peppol access point provider uae', tctx).gate, KI.fit('peppol access point provider uae', tctx).fit], av: KI.gate('crm for customers', tctx), br: KI.gate('velosio dynamics 365', tctx) };
+    check('KI26 H8 / H4 / H5 on the stored techand list: "peppol access point provider uae" passes in topic, a stored AVOID is gated (code avoid), a chosen competitor\'s brand search is gated (code other_brand)',
+      t26.pap[0] === 'pass' && t26.pap[1] >= 0.8 && t26.av.reason === 'avoid' && t26.br.reason === 'other_brand', J(t26));
+    const prov = ['Best ERP Company in Dubai | P1', 'Top ERP Solutions Provider in UAE', 'Leading ERP Software Company Dubai', 'Best ERP Software Company in Dubai | BrainSphere', 'Leading CRM Solutions Provider in Dubai'];
+    const ptypes = prov.map((t, i) => KI.pageType({ domain: 'provider' + i + '.ae', url: 'https://provider' + i + '.ae/', title: t }));
+    const t10 = prov.concat(['ERP Software Dubai | Q2', 'Dynamics 365 Partner Dubai', 'ERP Implementation UAE', 'Cloud ERP Dubai', 'ERP Consultants UAE']).map((t, i) => ({ host: 'provider' + i + '.ae', url: 'https://provider' + i + '.ae/', title: t, pos: i + 1, type: KI.pageType({ domain: 'provider' + i + '.ae', url: 'https://provider' + i + '.ae/', title: t }) }));
+    const pa26 = KI.pageAction({ keyword: 'erp company dubai', top10: t10, stage: 'hire' }, { domain: 'techand.ai' });
+    const cls26 = KI.classifyDomain('brainsphereit.com', { ...tctx, appearances: [{ keyword: 'erp company dubai', position: 4, title: 'Best ERP Software Company in Dubai | BrainSphere', url: 'https://brainsphereit.com/' }] });
+    check('KI26 H3 "Best ERP Company in Dubai" provider homepages are service pages, not lists: no "get onto the lists" action, the provider is a competitor, not a list publisher',
+      ptypes.every(t => t === 'provider') && pa26.action !== 'list' && cls26.class !== 'publisher_list', J({ ptypes, pa: pa26.action, cls: cls26.class }));
+    const nt = KI.classifyDomain('notitle-provider.ae', { ...tctx, appearances: [{ keyword: 'dynamics 365 partner uae', position: 3 }] });
+    check('KI26 B2 a competitor with no title of its own is "needs your review", never "direct" from the search it was found on', nt.class !== 'direct' && nt.needs_review, J(nt));
+    const d5 = KI.demand([{ stage: 'hire', volume: 1000, gsc_impressions: 5, gsc_position: 48 }]), d5b = KI.demand([{ stage: 'hire', volume: 1000 }]);
+    check('KI26 H7 Search Console impressions on page 5 (position 48) do not replace a larger provider volume (they are censored by the position)', d5.demand >= d5b.demand * 0.9 && d5.demand > 0.3, J([d5, d5b]));
+    const wU = KI.win({ keyword: 'dynamics 365 partner uae', stage: 'hire' }, { domain: 'techand.ai' }), vU = KI.verdict({ gate: 'pass', fit: 1, win: wU }), vN = KI.verdict({ gate: 'pass', fit: 1, win: null });
+    const wS = KI.win({ keyword: 'erp implementation uae', stage: 'hire', topical: 1, top10_refdomains_median: 5, top10: Array.from({ length: 10 }, (_, i) => ({ host: 'w' + i + '.ae', type: i < 4 ? 'forum' : 'provider', pos: i + 1 })) }, { domain: 'techand.ai', refdomains: 80 });
+    check('KI26 H2 / L8: no Win is "unknown" (never Hard); a measured Strength (referring domains 16x the top 10) with topic evidence and weak results makes "Go" reachable for a page the site does not have yet',
+      vN === 'unknown' && ['unknown', 'hard', 'months'].includes(vU) && wS.strength_known && KI.verdict({ gate: 'pass', fit: 1, win: wS }) === 'go', J({ vU, vN, wS: [wS.win, wS.low, wS.high] }));
+    check('KI26 L1 "what is a crm company" and "what is crm company" share a key (no "acrm"); a migration keeps its direction',
+      KI.key('what is a crm company') === KI.key('what is crm company') && KI.key('sap to dynamics 365 migration') !== KI.key('dynamics 365 to sap migration') && KI.key('e invoicing uae') === KI.key('einvoicing uae'), J([KI.key('what is a crm company'), KI.key('sap to dynamics 365 migration')]));
+    // the worker's own kit (KIW): seeds balanced by evidence, plausible searches only, the SSRF helpers
+    const KIWsrc = rd('_ki_io.js').replace('__KI_QUOTE__', '{"competitors":0.35,"keyword_research":0.9}').replace('__KI_COLS__', '{"KI_RUNS":[],"KI_COMP":[],"KI_KW":[],"KI_GAPS":[]}');
+    const KW = new Function('KI', 'SU', 'SC', 'RT', KIWsrc + '\nreturn KIW;')(KI, undefined, undefined, undefined);
+    const sd26 = KW.compSeeds({ iso: 'AE', country: 'United Arab Emirates', city: 'dubai', services: KW.seedServices(fr), products: ['dynamics 365'], seeds: [],
+      gsc: [{ query: 'peppol access point provider uae', impressions: 77 }, { query: 'dynamics ax dubai', impressions: 43 }, { query: 'pint ae mandatory fields', impressions: 30 }], tracked: ['crm service provider in uae'], ladders: ['dynamics 365 erp system'],
+      gate: (k) => KI.gate(k, tctx) });
+    const bySrc = {}; for (const x of sd26.seeds) bySrc[x.source] = (bySrc[x.source] || 0) + 1;
+    check('KI26 H1 competitor seeds: Search Console, tracked and ladder heads make the cap beside the service phrases; no fragment, no punctuation, no single generic word',
+      bySrc.gsc >= 3 && (bySrc.tracked || 0) + (bySrc.ladder || 0) >= 2 && bySrc.service >= 5 && sd26.seeds.length <= 20 && !sd26.seeds.some(x => /[.:,]| we |busines/.test(x.keyword)), J({ bySrc, seeds: sd26.seeds.map(x => x.keyword) }));
+    const hops = [KW.hopOf('https://rival.ae/', { statusCode: 301, headers: { location: 'https://www.rival.ae/' } }), KW.hopOf('https://rival.ae/', { statusCode: 302, headers: { location: 'http://n8n:5678/' } }),
+      KW.hopOf('https://rival.ae/', { statusCode: 302, headers: { location: 'https://169.254.169.254/latest' } }), KW.hopOf('https://rival.ae/', { statusCode: 302, headers: { location: 'https://evil.com/' } }),
+      KW.hopOf('https://rival.ae/', { statusCode: 302, headers: { location: 'https://user:pw@www.rival.ae/' } })];
+    check('KI26 perf H2 redirects: only an https hop to the same registrable domain is followed; an internal host, a metadata IP, another domain or credentials never are; wildcard-DNS names are not public',
+      hops[0] === 'https://www.rival.ae/' && hops.slice(1).every(h => h === '') && !KW.publicHost('10.0.0.5.nip.io') && !KW.publicHost('127-0-0-1.sslip.io') && KW.publicHost('rival.ae'), J(hops));
+    const bomb = '<html>' + '<script>'.repeat(20000) + 'x';
+    const t0 = Date.now(); const ht = KW.htmlText(bomb + '<p>ERP partner</p>', 400000); const ms = Date.now() - t0;
+    check('KI26 perf H2 the page text reader is linear: thousands of unclosed <script tags read in well under a second', ms < 500 && typeof ht === 'string' && KW.htmlText('<p>A</p><script>var x</script><p>B</p>') === 'A B', J({ ms, ht: ht.slice(0, 40) }));
   });
 };

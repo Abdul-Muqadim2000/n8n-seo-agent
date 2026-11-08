@@ -16,7 +16,7 @@ const hosts = Object.values(pic.hosts || {}).sort((a, b) => b.positions.length -
 const client = KIW.host(p.domain);
 const top = KIW.uniq([client, ...p.declared, ...p.chosen, ...hosts.map(h => h.domain)]).slice(0, KIW.CAPS.size_targets + 1);
 const reqs = [];
-if (seeds.length && !fresh(ck('sc', p.market, KIW.hash(seeds.join('|'))), 'ranked')) reqs.push(KIW.rq.serpCompetitors(seeds, m));
+if (seeds.length && !fresh(ck('sc', p.market, p.seed_key || KIW.seedHash(p.seeds)), 'ranked')) reqs.push(KIW.rq.serpCompetitors(seeds, m));
 const needSize = top.filter(d => !fresh(ck('size', p.market, d), 'ranked'));
 if (needSize.length) reqs.push(KIW.rq.trafficTargets(needSize, m));
 const needRd = top.filter(d => !fresh(ck('rd', d), 'backlinks'));

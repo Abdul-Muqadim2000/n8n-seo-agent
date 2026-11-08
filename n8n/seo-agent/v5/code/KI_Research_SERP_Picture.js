@@ -12,7 +12,7 @@ const answers = all('Run Research SERPs Answers');
 const pr = KIW.paired(reqs, answers);
 const serpReqs = [], serpAns = [];
 pr.forEach(x => { if (x.q.ki_call === 'serp') { serpReqs.push(x.q); serpAns.push(x.a); } });
-const R = KIW.serpReadings(pic.top_m || [], m, all('Load SERP Cache (KI Research)').filter(r => r && r.key), serpReqs, serpAns, p.site_id, now);
+const R = KIW.serpReadings(pic.top_m || [], m, all('Load SERP Cache (KI Research)').filter(r => r && r.key), serpReqs, serpAns, p.site_id, now, { own_domain: p.domain, services: p.services });
 const ads = pr.find(x => x.q.ki_call === 'ads_volume');
 const volMap = { ...(pic.vol_map || {}) }; let adsN = 0;
 if (ads && ads.ok) for (const it of (KIW.task0(ads.a).result || [])) { if (!it || !it.keyword) continue; const kk = KIW.keyOf(it.keyword); adsN++;

@@ -434,7 +434,18 @@
     "paid": false,
     "per_item": false,
     "retryOnFail": true,
-    "timeout": 20000,
+    "timeout": 15000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Read Comp Homes (Hop)",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 15000,
     "waitBetweenTries": 5000
    },
    {
@@ -456,7 +467,18 @@
     "paid": false,
     "per_item": false,
     "retryOnFail": true,
-    "timeout": 20000,
+    "timeout": 15000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Read Comp Sitemaps (Hop)",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 15000,
     "waitBetweenTries": 5000
    },
    {

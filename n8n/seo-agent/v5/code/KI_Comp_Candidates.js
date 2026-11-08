@@ -18,7 +18,7 @@ const seeds = (p.seeds || []).map(s => s.keyword);
 const saveRows = [];
 const sections = [];
 // ---- serp_competitors ----
-const scKey = ck('sc', p.market, KIW.hash(seeds.join('|')));
+const scKey = ck('sc', p.market, p.seed_key || KIW.seedHash(p.seeds));
 let sc = read(scKey, 'ranked');
 const scPair = pairs.find(x => x.q.ki_call === 'serp_competitors');
 if (scPair && scPair.ok) { sc = { fetched_at: p.now, total: KIW.N(KIW.result0(scPair.a).total_count), items: KIW.itemsOf(scPair.a).map(it => ({ d: KIW.host(it.domain), pos: it.keywords_positions || {}, etv: KIW.N(it.etv), kc: KIW.N(it.keywords_count) })).filter(x => KIW.isBusinessHost(x.d, client)) }; saveRows.push(KIW.cacheRow(p.site_id, scKey, sc)); }
@@ -57,7 +57,8 @@ const homes = {}; for (const r of cache) { const mm = KIW.S(r.key).match(/^ki:[^
 const list = Object.values(C).map(c => ({ ...c, cls: KIW.classify(p, c, homes[c.domain]) })).filter(c => c.cls && c.cls.class);
 // only the unclear ones are read, the most visible first, and never a site whose class the rules already know
 const evidence = (c) => c.positions.length * 3 + c.labs + (c.cd ? 1 : 0) + (c.ai_hits ? 2 : 0);
-const toRead = list.filter(c => !homes[c.domain] && ['direct', 'adjacent'].includes(c.cls.class) && (c.cls.needs_review || c.cls.basis === 'rule') && KIW.publicHost(c.domain))
+// FX-L perf H2: only a host that appeared on a results page this run is ever fetched (never one taken from a provider list or a request)
+const toRead = list.filter(c => !homes[c.domain] && (c.positions || []).some(x => x.src === 'serp') && ['direct', 'adjacent'].includes(c.cls.class) && (c.cls.needs_review || c.cls.basis === 'rule') && KIW.publicHost(c.domain))
   .sort((a, b) => evidence(b) - evidence(a) || a.domain.localeCompare(b.domain)).slice(0, KIW.CAPS.home_reads).map(c => c.domain);
 return [{ json: { candidates: list, sizes, refd, cd: cdRows, sc_total: sc ? sc.total : null, homes, to_read: toRead, ai_rows_read: aiRead, cache_rows: saveRows, sections,
   labs_unavailable: !!(scPair && !scPair.ok) } }];
