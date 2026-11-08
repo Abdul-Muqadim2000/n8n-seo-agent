@@ -22,6 +22,40 @@
   ]
  },
  "monitors": {
+  "SEO Agent - Keyword Intelligence": {
+   "always_output": [
+    "Ensure Run Ledger (KI)",
+    "Reserve Run Ledger (KI)"
+   ],
+   "ensure_out": [
+    "DFS Balance (KI)"
+   ],
+   "est": {
+    "ai": 0.0,
+    "dfs": 0.9
+   },
+   "plan": "KI Plan",
+   "plan_out": [
+    "Ensure Run Ledger (KI)"
+   ],
+   "reserve_out": [
+    "After Run Ledger (KI)"
+   ],
+   "resume": "After Run Ledger (KI)",
+   "resume_out": [
+    "Run Allowed? (KI)"
+   ],
+   "row_out": [
+    "Reserve Run Ledger (KI)"
+   ],
+   "settle": "Settle Run Ledger (KI)",
+   "settle_from": [
+    "KI Report",
+    "Refuse KI Limit (KI)",
+    "Refuse Run Ledger (KI)"
+   ],
+   "tag": "KI"
+  },
   "SEO Agent \u2014 AI Growth": {
    "always_output": [
     "Ensure Run Ledger (Growth)",

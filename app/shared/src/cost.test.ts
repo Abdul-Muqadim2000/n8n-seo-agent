@@ -73,7 +73,9 @@ describe('the figures are the engine\'s calibrated ones, not the 2026-10-02 tabl
   it('discovery reserves the follow-ups it starts', () => {
     expect(costKeys('discover', { receiveReport: false })).toEqual(['discover']);
     expect(costKeys('discover', {})).toEqual(['discover', 'report']);
-    expect(costKeys('discover', { receiveContent: true, fullReport: true })).toEqual(['discover', 'report', 'content', 'full']);
+    expect(costKeys('discover', { fullReport: true })).toEqual(['discover', 'report', 'full']);
+    // R2 H1 (KI 2026-11-08): research never writes a page, so a pre-filled "write the page" is never quoted
+    expect(costKeys('discover', { receiveContent: true, fullReport: true })).toEqual(['discover', 'report', 'full']);
   });
 
   it('a case study reserves the page it writes, not the intake', () => {

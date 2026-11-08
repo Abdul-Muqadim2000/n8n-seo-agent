@@ -73,6 +73,7 @@ export const searchKindById = (id: SearchKindId): SearchKind => searchKinds.find
 export const featureSearchKinds: Record<string, SearchKindId[]> = {
   autopilot: ['seo', 'aeo', 'geo'],
   'keyword-research': ['seo'],
+  competitors: ['seo', 'geo'],
   'keyword-ladders': ['seo', 'aeo'],
   content: ['seo', 'aeo', 'geo'],
   'technical-audits': ['seo'],

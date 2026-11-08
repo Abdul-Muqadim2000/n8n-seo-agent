@@ -5254,7 +5254,7 @@ def _r17_r29_checks():
         _check_ledger_order55(files55[wname55], wiring55); checked55 += 1
     # R32's companion (section 59): Page Watch joined the chain, so it is ten — the nine that spend plus the daily watch, which keeps a
     # $0 row so the guard and the day's reconciliation can see that it ran at all.
-    assert checked55 == 14, 'R17: ' + str(checked55) + ' workflows checked, expected 14 (the nine of R17, Page Watch, the Reply Reader since W3-F, the AI Repeat Pilot since W2-E2, the Page Finalize since H3, and Index Coverage since 2026-10-29)'
+    assert checked55 == 15, 'R17: ' + str(checked55) + ' workflows checked, expected 15 (the nine of R17, Page Watch, the Reply Reader since W3-F, the AI Repeat Pilot since W2-E2, the Page Finalize since H3, Index Coverage since 2026-10-29, and Keyword Intelligence since KI E2 2026-11-08)'
     hits55 = _secret_scan55([os.path.join(HERE0, 'workflows'), os.path.join(HERE0, 'harness', 'code_v4')])
     assert not hits55, 'R29: a secret reached the generated files:\n  ' + '\n  '.join(hits55)
     # R30 (2026-10-14): a shape scan only catches the secrets we thought of. The alert channel is checked positively as well — what is
@@ -6514,7 +6514,7 @@ def _b64_checks():
             'B-A7: ' + wname64 + ' does not write the retry state back: ' + str(wr64)
         out64[wname64] = {'guard': g64, 'retry': r64, 'writes': wr64, 'if_outputs': if64,
                           'refuse_values': sorted(ref64['columns']['value'].keys())}
-    assert len(out64) == 14, 'B-A7 / B-A9: ' + str(len(out64)) + ' workflows carry the gate and the sweep, expected 14 (the ten schedules, the Reply Reader since W3-F, the AI Repeat Pilot since W2-E2, the Page Finalize since H3 and Index Coverage since 2026-10-29)'
+    assert len(out64) == 15, 'B-A7 / B-A9: ' + str(len(out64)) + ' workflows carry the gate and the sweep, expected 15 (the ten schedules, the Reply Reader since W3-F, the AI Repeat Pilot since W2-E2, the Page Finalize since H3, Index Coverage since 2026-10-29 and Keyword Intelligence since KI E2 2026-11-08)'
     json.dump({'monitors': out64, 'n_minutes': 30, 'k_attempts': 3, 'max_attempts': 10, 'per_sweep': 5,
                'error_handler': _ops64['retry'], 'columns': [c for c, _t in _OAC64],
                'page_watch_delivery': {'code': 'Watch Ops Delivery', 'save': 'Save Watch Ops Delivery'}},
@@ -13769,7 +13769,7 @@ print(f'\nwrote {OUT_JSON}: {len(nodes)} nodes, {sum(len(l) for o in conns.value
 
 # the API front door and the ladder extras (Rank Tracker, WordPress publisher, test runner) are generated alongside
 import subprocess
-for _s in ('build_api.py', 'build_ladder_extras.py', 'build_site_tracker.py', 'build_monitors.py', 'build_index_coverage.py'):   # Index coverage (2026-10-29): its own daily workflow, built before the catch-up reads the crons
+for _s in ('build_api.py', 'build_ladder_extras.py', 'build_site_tracker.py', 'build_monitors.py', 'build_index_coverage.py', 'build_ki.py'):   # Index coverage (2026-10-29): its own daily workflow, built before the catch-up reads the crons; KI (2026-11-08): SEOagentKIntel1, on demand only (no schedule)
     _r = subprocess.run([sys.executable, os.path.join(HERE0, _s)], cwd=HERE0)
     assert _r.returncode == 0, _s + ' failed'
 # =============================================================================

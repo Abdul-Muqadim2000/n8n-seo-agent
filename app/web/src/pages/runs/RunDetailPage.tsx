@@ -31,7 +31,7 @@ function creditsLine(c: RunCredits, joined = false): string {
   return [quoted, rest].filter(Boolean).join(' · ');
 }
 
-const NOTICE_STAGES = new Set(['case_study_started', 'ai_visibility_started', 'backlinks_started', 'site_tracker_setup']);
+const NOTICE_STAGES = new Set(['case_study_started', 'ai_visibility_started', 'backlinks_started', 'site_tracker_setup', 'ki_competitors_started', 'ki_research_started']);
 
 /** Reports that are still due after the run's final stage (ladder pages, discover follow-ups). */
 function pendingFollowUps(run: Run, reports: Report[]): string[] {

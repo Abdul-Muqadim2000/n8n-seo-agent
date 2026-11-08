@@ -26,6 +26,8 @@ export function InfoTip({ children, label = 'What this means', side = 'top', cla
           }}
           className={cn(
             'relative inline-flex size-5 shrink-0 items-center justify-center rounded-full align-middle transition-colors duration-150 ease-brand',
+            // a 40 px tap area on touch screens (below lg), drawn by an invisible ::after so nothing moves (KI review UX M5)
+            "max-lg:after:absolute max-lg:after:-inset-2.5 max-lg:after:rounded-full max-lg:after:content-['']",
             dark ? 'text-on-ink-2 hover:bg-on-ink/10 hover:text-on-ink' : 'text-ink-3 hover:bg-surface-2 hover:text-ink',
             open && (dark ? 'text-on-ink' : 'text-accent-text'),
             className,

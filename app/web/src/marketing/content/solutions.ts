@@ -83,6 +83,7 @@ export const solutions: Solution[] = [
     helps: [
       { feature: 'autopilot', title: 'A weekly cadence that runs itself', body: 'Pages a week for the keywords you choose, written with QA, the plan shown in "Coming up" two days ahead and a "Needs you" queue for approvals.' },
       { feature: 'keyword-ladders', title: 'Content with a destination', body: 'Keyword ladders climb to the head terms your business needs, one supporting page at a time.' },
+      { feature: 'competitors', title: 'Know who you are up against', body: 'Rolling out to selected websites: the companies that keep showing up next to you in Google for your services, with the evidence and the gaps to close.' },
       { feature: 'technical-audits', title: 'Audits with a fix pack', body: 'Monthly audits show what changed, and the fix pack goes straight to your developers.' },
       { feature: 'index-coverage', title: 'Every page accounted for: in Google, or the reason why not', body: 'Each day, the pages Google left out of its index, grouped by the reason, with the step for your developers and the pages that are fine to leave out.' },
       { feature: 'site-tracking', title: 'One weekly view', body: 'Search Console, GA4 and Trends together, with striking-distance keywords called out.' },
@@ -127,6 +128,7 @@ export const solutions: Solution[] = [
       { feature: 'ai-visibility', title: 'Visibility in AI answers', body: 'Up to 500 buyer questions by topic, buyer role and market across six AI engines (nine on request), with share of voice against named competitors and AI referral revenue from GA4.' },
       { feature: 'ai-growth', title: 'Onto the shortlist, week by week', body: 'The questions you lose become suggested answer pages, new pages reach Bing the same week, and the review and list pages AI cites without you become pitches.' },
       { feature: 'keyword-ladders', title: 'A route to the head term', body: 'Supporting pages on easier, related keywords climb to the category term.' },
+      { feature: 'competitors', title: 'The rivals that are really in your way', body: 'Rolling out to selected websites: competitors found in Google\'s results for your services, with the reason for each, review sites and lists kept apart, and the gaps against the five you follow.' },
       { feature: 'content', title: 'Pages with real expertise', body: 'Author and reviewer, experience notes, case studies and schema on every page.' },
       { feature: 'backlinks', title: 'Links that count', body: 'Nine link sources, links checked by Alaventra itself and scored prospects.' },
       { feature: 'link-building', title: 'Listed where buyers compare', body: 'G2, Capterra, TrustRadius and the other directories worth being on, checked against your listing, and pitches to the lists that leave you out.' },

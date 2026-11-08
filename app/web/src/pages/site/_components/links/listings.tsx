@@ -1,5 +1,6 @@
 // Link building, what the person does on their own: listings to add (nothing is submitted for you), redirects for old URLs that 404,
 // and what won links did for their pages (against a control; never "caused").
+import { useEffect } from 'react';
 import { toast } from 'sonner';
 import { ArrowRight, BarChart3, ClipboardList, CornerDownRight, ExternalLink as ExternalIcon, Undo2 } from 'lucide-react';
 import type { LinkBuildingData } from '@seo/shared';
@@ -36,6 +37,10 @@ const LISTING_NOTE: Record<string, string> = {
 const ORDER: Record<string, number> = { missing: 0, unknown: 1, listed: 2, submitted: 3, linked: 4, ignored: 5 };
 
 export function Listings({ d }: { d: LinkBuildingData }) {
+  // KI (review UX N7, pass 2): "How to get listed" links here as #listings; the section appears after its data, so scroll to it then
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash === '#listings') document.getElementById('listings')?.scrollIntoView({ block: 'start' });
+  }, []);
   const todo = d.listings.filter((l) => l.status !== 'linked' && l.status !== 'ignored').sort((a, b) => (ORDER[a.status] ?? 9) - (ORDER[b.status] ?? 9) || a.priority - b.priority);
   const done = d.listings.filter((l) => l.status === 'linked');
   const ignored = d.listings.filter((l) => l.status === 'ignored');

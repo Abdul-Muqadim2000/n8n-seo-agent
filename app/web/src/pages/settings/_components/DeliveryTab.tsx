@@ -23,7 +23,7 @@ import { TagInput } from '@/components/ui/tag-input';
 import { DataTable, type Column } from '@/components/ui/table';
 import { toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
-import { useDelivery, useSaveDelivery, useTestDelivery } from '@/lib/queries';
+import { useDelivery, useOrgKiVisible, useSaveDelivery, useTestDelivery } from '@/lib/queries';
 import { fmtAgo } from '@/lib/utils';
 import { SettingsCard } from './SettingsCard';
 
@@ -37,10 +37,13 @@ import { SettingsCard } from './SettingsCard';
 
 /** The reports worth choosing between; leaving every box clear sends all of them. */
 const CHOOSABLE_STAGES = ['site_tracker', 'rank_tracker', 'site_audit', 'full_report', 'content', 'ladder_plan', 'ai_visibility', 'ai_growth', 'backlinks', 'link_builder', 'keyword_strategy', 'index_coverage'];
+/** FX-A (review CONSISTENCY M1): the two KI reports, offered only where this person sees keyword intelligence on a website */
+const KI_CHOOSABLE_STAGES = ['ki_competitors', 'ki_research'];
 
 export function DeliveryTab() {
-  const { org, can } = useOrgCtx();
+  const { org, can, sites } = useOrgCtx();
   const owner = can('owner');
+  const kiOn = useOrgKiVisible(org.id, sites);
   const { data, isLoading, error, refetch } = useDelivery(org.id);
   const save = useSaveDelivery(org.id);
   const test = useTestDelivery(org.id);
@@ -135,7 +138,7 @@ export function DeliveryTab() {
             <Field label="Which reports" hint="Leave every box clear to send all of them.">
               {() => (
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {CHOOSABLE_STAGES.map((stage) => {
+                  {[...CHOOSABLE_STAGES, ...(kiOn ? KI_CHOOSABLE_STAGES : [])].map((stage) => {
                     const picked = draft.stages.includes(stage);
                     return (
                       <Checkbox

@@ -114,7 +114,8 @@ function make(opts) {
       brand_names: A.name, updated_at: ago(30), request_id: '', ai_pulse: true, ai_growth: true, ai_pages_month: null, link_builder: true, stuck_weeks: null, ai_personas: '', ai_markets: '', ai_pulse_mode: '', ai_pulse_per_week: null,
       ai_alert_rules_json: '', ai_sov_set: '', ai_claude_weekly: false, ai_pulse_engines: '', ai_persona_context: false, ai_fanout_check: null, ai_demand_market: false, ai_pulse_scope: 'all', ai_focus_mode: '',
       index_watch: null, index_daily_cap: null, index_sitemap_submit: null,
-      ai_rank_mode: mode === '' || mode == null ? null : mode, ai_rank_reserve: null, ai_rank_fanout_n: null, ai_rank_mentions: null, ai_rank_brave: null });
+      ai_rank_mode: mode === '' || mode == null ? null : mode, ai_rank_reserve: null, ai_rank_fanout_n: null, ai_rank_mentions: null, ai_rank_brave: null,
+      ki_mode: null, ki_refresh: null, ki_max_competitors: null });   // KI (2026-11-08): keyword intelligence off
     T.seo_profiles.push({ site_id: sid, domain: A.domain, business_name: A.name, business_type: 'Organization', country_code: A.profile_cc, city: A === nova ? 'Dubai' : 'Riyadh', service_areas: A === nova ? 'Dubai, Abu Dhabi' : 'Riyadh, Jeddah', author_name: 'Test Author' });
     A.ladders.forEach(([kw, by], i) => T.seo_ladders.push({ ladder_id: 'lad_' + sid.slice(5, 12) + '_' + i, domain: A.domain, head_keyword: kw, rung: 1, page_no: 1, keyword: kw, supporting: '', page_type: 'Service Page',
       target_url: A === acme && i === 1 ? W + A.cited_page : W + A.pages[Math.min(i + 1, A.pages.length - 1)], page_exists: true, status: 'active', months: 6, start_date: ago(90).slice(0, 10), country: A.country, location_code: A.location_code,

@@ -25,6 +25,7 @@ import { adminRoutes } from './routes/admin';
 import { billingRoutes } from './routes/billing';
 import { authRoutes } from './routes/auth';
 import { dataRoutes } from './routes/data';
+import { kiRoutes } from './routes/ki';
 import { hookRoutes } from './routes/hooks';
 import { keywordRoutes } from './routes/keywords';
 import { ladderRoutes } from './routes/ladders';
@@ -160,6 +161,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(orgRoutes);
   await app.register(siteRoutes);
   await app.register(dataRoutes);
+  await app.register(kiRoutes);
   await app.register(ladderRoutes);
   await app.register(autopilotRoutes);
   await app.register(keywordRoutes);

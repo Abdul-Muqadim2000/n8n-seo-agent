@@ -146,6 +146,22 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
     case 'site_description':
       parts.push(tx(s, 'name'), tx(s, 'summary'));
       break;
+    // KI (2026-11-08, A1_ROUTES summary keys): the counts in words, a partial run said calmly, a Trial run marked
+    case 'ki_competitors':
+    case 'ki_research':
+      if (s.trial === true) badge = <StatusBadge tone="accent">Trial</StatusBadge>;
+      else if (s.partial === true || tx(s, 'status') === 'partial') badge = <StatusBadge tone="warning">Part could not be read</StatusBadge>;
+      parts.push(
+        nm(s, 'competitors') != null && `${nm(s, 'competitors')} competitor${nm(s, 'competitors') === 1 ? '' : 's'} found`,
+        nm(s, 'listings') ? `${nm(s, 'listings')} list${nm(s, 'listings') === 1 ? '' : 's'} to join` : null,
+        nm(s, 'clusters') != null && `${nm(s, 'clusters')} topic${nm(s, 'clusters') === 1 ? '' : 's'}`,
+        nm(s, 'striking') ? `${nm(s, 'striking')} just off page one` : null,
+        nm(s, 'gaps') ? `${nm(s, 'gaps')} gap${nm(s, 'gaps') === 1 ? '' : 's'}` : null,
+        nm(s, 'plan') ? `${nm(s, 'plan')} step${nm(s, 'plan') === 1 ? '' : 's'} in the plan` : null,
+      );
+      break;
+    case 'ki_competitors_started':
+    case 'ki_research_started':
     case 'case_study_started':
     case 'ai_visibility_started':
     case 'backlinks_started':

@@ -50,6 +50,8 @@ export const MODE_STEPS: Record<ModeId, string[]> = {
   profile: ['Save the profile', 'Score E-E-A-T and local readiness', 'Preview the schema'],
   ai_visibility: ['Write buyer questions for your market', 'Ask ChatGPT, Perplexity, Gemini, Claude and Google AI', 'Find mentions, citations and competitors', 'Write the report and actions'],
   backlinks: ['Load your link profile', 'Find lost, new and spammy links', 'Compare with competitors (link gap)', 'Draft outreach and write the report'],
+  competitors: ['Read Google\'s results for your services in your market', 'Sort every website by what it is', 'Score your real competitors with the evidence', 'Profile the competitors you choose'],
+  keyword_research: ['Collect the searches from every source', 'Keep the ones that fit what you sell', 'Read the results pages and group the searches', 'Score each group with a range and a verdict', 'Find the gaps and rank the plan'],
 };
 
 /** Progress for a run that is still going: elapsed vs estimate, the steps, e-mail note. */

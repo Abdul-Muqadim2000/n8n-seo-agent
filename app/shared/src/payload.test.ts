@@ -34,6 +34,8 @@ const minimal: Record<string, Record<string, unknown>> = {
   profile: { author: { name: 'Sara Khan' }, publicEmail: 'hello@northwind-erp.com' },
   ai_visibility: { country: 'United Arab Emirates' },
   backlinks: { country: 'United Arab Emirates' },
+  competitors: { country: 'United Arab Emirates' },   // KI (2026-11-08)
+  keyword_research: { country: 'United Arab Emirates', seeds: ['erp dubai'] },
 };
 
 describe('buildN8nPayload', () => {

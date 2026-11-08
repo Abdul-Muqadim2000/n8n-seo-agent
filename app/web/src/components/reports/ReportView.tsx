@@ -23,6 +23,7 @@ import {
   TrackerSetupReport,
 } from './simple';
 import { KeywordStrategyReport } from './strategy';
+import { KiReport } from './ki';
 import { ReportDownloads, ReportFilesContext } from './visuals';
 import { SiteTrackerReport } from './tracker';
 
@@ -51,6 +52,11 @@ const RENDERERS: Record<string, (p: { report: ReportDetail }) => ReactNode> = {
   site_description: DescriptionReport,
   console_alert: ConsoleAlertReport,
   index_coverage: IndexCoverageReport,
+  // KI (2026-11-08): the full picture is on the Competitors / Keyword research pages; the report opens them
+  ki_competitors: KiReport,
+  ki_research: KiReport,
+  ki_competitors_started: StartedReport,
+  ki_research_started: StartedReport,
 };
 
 /** The documents of a report as download cards (fix-pack files are listed in their own section). */

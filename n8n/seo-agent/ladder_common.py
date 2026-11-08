@@ -210,7 +210,13 @@ MONITORS_COLS = [('site_id', 'string'), ('domain', 'string'), ('ai_visibility', 
                  # results-page reads a week (0-50, empty = 0), DataForSEO LLM Mentions monthly (empty = no), Brave Search as the Claude retrieval
                  # proxy (empty = no; also needs the key). SerpApi Copilot was NOT approved (owner 2026-11-06): no column. Written and validated by
                  # Site Admin `monitors` only; "Track my site" carries them as stored. Run sync_tables.py BEFORE importing the workflows.
-                 ('ai_rank_mode', 'string'), ('ai_rank_reserve', 'boolean'), ('ai_rank_fanout_n', 'number'), ('ai_rank_mentions', 'boolean'), ('ai_rank_brave', 'boolean')]
+                 ('ai_rank_mode', 'string'), ('ai_rank_reserve', 'boolean'), ('ai_rank_fanout_n', 'number'), ('ai_rank_mentions', 'boolean'), ('ai_rank_brave', 'boolean'),
+                 # KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §1): keyword intelligence (Competitors + Keyword research), per site and
+                 # OFF when empty: the mode ('' | 'off' = off, 'trial' = runs on demand, results for platform admins only, nothing else reads the KI
+                 # tables, 'on' = runs + the existing paths read them), the monthly refresh in the cycle when On (empty = yes), and how many
+                 # competitors the client may choose (1-5, empty = 5). Written and validated by Site Admin `monitors` only; "Track my site" carries
+                 # them as stored. Run sync_tables.py BEFORE importing the workflows.
+                 ('ki_mode', 'string'), ('ki_refresh', 'boolean'), ('ki_max_competitors', 'number')]
 AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('keyword', 'string'), ('source', 'string'), ('status', 'string'), ('created_at', 'string'),
                    ('stage', 'string'), ('cluster', 'string'), ('volume', 'number'), ('origin', 'string'), ('updated_at', 'string'),
                    # G6 (2026-10-18): who asks it (buyer role), in which market (CC-lang), pinned by the owner (never retired by the writer),
@@ -351,6 +357,46 @@ AI_RANK_PRIORS_COLS = [('prior_id', 'string'), ('lever', 'string'), ('stage', 's
 # the new columns on existing tables that AIR alone writes (the harness excludes them from the other writers' exact-column checks)
 AIR_ONLY_COLS = {'AI_PROMPTS': ['core_until'], 'AI_TARGETS': ['origin', 'action_id', 'live_at']}
 AIR_MONITOR_COLS = ['ai_rank_mode', 'ai_rank_reserve', 'ai_rank_fanout_n', 'ai_rank_mentions', 'ai_rank_brave']
+# KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §1): the three keyword-intelligence settings on seo_monitors (the last three columns)
+KI_MONITOR_COLS = ['ki_mode', 'ki_refresh', 'ki_max_competitors']
+# ---- KI: keyword intelligence (2026-11-08, docs/keyword-intel-2026-11-08/DESIGN.md + CONTRACTS.md §2), written ONLY by SEO Agent - Keyword
+# Intelligence (build_ki.py, SEOagentKIntel1) and Site Admin's KI actions; one stored picture per site and market (`<ISO2>-<lang>`, e.g. AE-en).
+# Every stored number has a sibling basis (measured | provider_estimate | modelled | inferred) + source + fetched_at; JSON columns are strings.
+# Rule version `ki-1`. New tables are created by the workflow's own Ensure node (createIfNotExists); sync_tables.py adds later columns.
+# Readers: KI_KW joins gate_lint (fitGate before insert, KI.readable(row) on read), KI_COMP the competitor pair (OK.sellsSame / class on read).
+# seo_ki_runs: one row per KI run (insert): what ran, for which market and mode, which sections came back, counts, cost
+KI_RUNS_TABLE = 'seo_ki_runs'
+KI_RUNS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('request_id', 'string'), ('kind', 'string'), ('market', 'string'),
+                ('location_code', 'number'), ('language_code', 'string'), ('mode', 'string'), ('rule_version', 'string'), ('started_at', 'string'),
+                ('finished_at', 'string'), ('status', 'string'), ('reason', 'string'), ('sections_json', 'string'), ('counts_json', 'string'),
+                ('cost_dfs_usd', 'number'), ('cost_claude_usd', 'number'), ('config_json', 'string')]
+# seo_ki_competitors: one row per site x market x comp_domain (upsert): class + basis, the score with its range, size tag, evidence, the
+# client's choice (a `user` status is never changed by a run; a domain leaves only after misses >= 2) and the chosen competitor's profile
+KI_COMP_TABLE = 'seo_ki_competitors'
+KI_COMP_COLS = [('site_id', 'string'), ('domain', 'string'), ('market', 'string'), ('comp_domain', 'string'), ('class', 'string'), ('class_basis', 'string'),
+                ('class_confidence', 'number'), ('scored', 'boolean'), ('score', 'number'), ('score_low', 'number'), ('score_high', 'number'),
+                ('serp_share', 'number'), ('topic_sim', 'number'), ('geo_match', 'number'), ('ai_share', 'number'), ('size_tag', 'string'),
+                ('seeds_seen', 'number'), ('seeds_total', 'number'), ('reasons_json', 'string'), ('evidence_json', 'string'), ('declared', 'boolean'),
+                ('status', 'string'), ('status_by', 'string'), ('first_seen', 'string'), ('last_seen', 'string'), ('misses', 'number'),
+                ('profile_json', 'string'), ('run_id', 'string'), ('updated_at', 'string')]
+# seo_ki_keywords: one row per site x market x kw_key (upsert): every source that produced it, demand / GSC, intent + buyer stage, the gate,
+# the gated multiplicative score with its range and the verdict (go | months | hard | gated), the cluster, the results page read, the page action
+KI_KW_TABLE = 'seo_ki_keywords'
+KI_KW_COLS = [('site_id', 'string'), ('domain', 'string'), ('market', 'string'), ('keyword', 'string'), ('kw_key', 'string'), ('sources_json', 'string'),
+              ('source_count', 'number'), ('volume', 'number'), ('volume_basis', 'string'), ('volume_source', 'string'), ('cpc', 'number'), ('kd', 'number'),
+              ('trend_json', 'string'), ('gsc_impressions', 'number'), ('gsc_clicks', 'number'), ('gsc_position', 'number'), ('gsc_page', 'string'),
+              ('intent', 'string'), ('stage', 'string'), ('stage_evidence_json', 'string'), ('intent_confidence', 'number'), ('needs_review', 'boolean'),
+              ('gate', 'string'), ('gate_reason', 'string'), ('gate_detail', 'string'), ('fit', 'number'), ('demand', 'number'), ('win', 'number'), ('value', 'number'), ('gap', 'number'),
+              ('score', 'number'), ('score_low', 'number'), ('score_high', 'number'), ('low_confidence', 'boolean'), ('verdict', 'string'),
+              ('cluster_id', 'string'), ('is_head', 'boolean'), ('cluster_size', 'number'), ('cluster_demand', 'number'), ('serp_read_at', 'string'),
+              ('top10_json', 'string'), ('page_action', 'string'), ('page_url', 'string'), ('cannibal_json', 'string'), ('competitors_json', 'string'),
+              ('striking', 'boolean'), ('run_id', 'string'), ('fetched_at', 'string'), ('updated_at', 'string')]
+# seo_ki_gaps: one row per gap against the chosen competitor set (upsert gap_id): its type, the evidence, the action and its credits, its status
+KI_GAPS_TABLE = 'seo_ki_gaps'
+KI_GAPS_COLS = [('gap_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('market', 'string'), ('type', 'string'), ('keyword', 'string'),
+                ('cluster_id', 'string'), ('competitor_domains_json', 'string'), ('client_position', 'number'), ('evidence_json', 'string'),
+                ('sample_note', 'string'), ('action', 'string'), ('action_target', 'string'), ('credits', 'number'), ('status', 'string'), ('run_id', 'string'),
+                ('created_at', 'string'), ('updated_at', 'string')]
 BL_SNAP_COLS = [('site_id', 'string'), ('domain', 'string'), ('checked_at', 'string'), ('mode', 'string'), ('rank', 'number'), ('backlinks', 'number'), ('referring_domains', 'number'), ('referring_domains_nofollow', 'number'),
                 ('spam_score', 'number'), ('broken_backlinks', 'number'), ('new_links', 'number'), ('lost_links', 'number'), ('important_lost', 'number'), ('spammy_new', 'number'), ('lost_json', 'string'), ('new_json', 'string'),
                 ('competitors_json', 'string'), ('timeseries_json', 'string'), ('cost_usd', 'number'),
@@ -639,6 +685,10 @@ LEDGER_EST = {
     'page_finalize':   {'ai': 0.05, 'dfs': 0.0},
     # W2-E2 (2026-10-23): the one-off AI repeat pilot - its plan prices itself (est_dfs_usd: 10 questions x 10 asks x its engines, at most $4)
     'ai_pilot':        {'ai': 0.0, 'dfs': 1.5},
+    # KI (E2 2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §7): the two keyword-intelligence runs (SEOagentKIntel1, build_ki.py). The worker
+    # calls no model; its plan prices its own run (est_dfs_usd, held under these quotes = _cost_cal.js DFS_EST), so these are the ceilings only.
+    'competitors':     {'ai': 0.0, 'dfs': 0.35},
+    'keyword_research': {'ai': 0.0, 'dfs': 0.90},
 }
 
 

@@ -24,6 +24,7 @@ export const GUIDE_FOR_NEEDS_YOU_KIND: Record<NeedsYouItem['kind'], GuideId> = {
   questions: 'page-questions',   // H3 (2026-10-28): questions on a written page; each answer is kept in the business details
   site_task: 'indexnow-key-file',   // site tasks (2026-10-28): refined by the item's id below
   hold: 'page-held',   // W0-D (2026-10-29): a page that waits for your OK before it is written
+  ki: 'ki-choose-competitors',   // KI (2026-11-08): 'ki:quick-wins' is refined to 'ki-read-keyword-research' in guideForNeedsYou
 };
 
 /** Index coverage: the guide of each indexing step (the same ids as INDEX_CAUSE_INFO in indexing.ts; a test holds the two together). */
@@ -59,6 +60,7 @@ export function guideForNeedsYou(item: Pick<NeedsYouItem, 'id' | 'kind' | 'sever
   // Index coverage (2026-10-29): one guide per cause only the client can fix (task:indexing:<cause>)
   if (id.startsWith('task:indexing:')) return INDEXING_GUIDE[id.slice('task:indexing:'.length)] ?? 'index-coverage';
   // a level-3 announcement is a warning (it starts on its own); a suggestion at levels 1-2 waits and is info
+  if (id === 'ki:quick-wins') return 'ki-read-keyword-research';
   if (item.kind === 'proposal' && item.severity === 'warning') return 'keyword-announcements';
   return GUIDE_FOR_NEEDS_YOU_KIND[item.kind] ?? 'your-journey';
 }

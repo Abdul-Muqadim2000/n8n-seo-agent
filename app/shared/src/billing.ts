@@ -290,6 +290,9 @@ const FEATURE_LABEL: Record<string, string> = {
   // Index coverage (2026-10-29): Google data only, always 0 credits
   index_coverage: 'Index coverage (free)',
   index_watch: 'Index coverage (free)',
+  // KI (2026-11-08, review CONSISTENCY L4): named, not left to the fallback
+  competitors: 'Competitors',
+  keyword_research: 'Keyword research',
 };
 export function featureLabel(mode: string | null | undefined): string {
   const m = String(mode ?? '').trim();

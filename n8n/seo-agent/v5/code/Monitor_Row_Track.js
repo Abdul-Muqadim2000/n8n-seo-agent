@@ -31,5 +31,10 @@ Object.assign(__row, { index_sitemap_submit: (old.index_sitemap_submit === '' ||
 Object.assign(__row, { ai_rank_mode: old.ai_rank_mode === '' || old.ai_rank_mode == null ? null : String(old.ai_rank_mode), ai_rank_reserve: old.ai_rank_reserve === '' || old.ai_rank_reserve == null ? null : (old.ai_rank_reserve === true || old.ai_rank_reserve === 'true'),
   ai_rank_fanout_n: old.ai_rank_fanout_n === '' || old.ai_rank_fanout_n == null ? null : Number(old.ai_rank_fanout_n), ai_rank_mentions: old.ai_rank_mentions === '' || old.ai_rank_mentions == null ? null : (old.ai_rank_mentions === true || old.ai_rank_mentions === 'true'),
   ai_rank_brave: old.ai_rank_brave === '' || old.ai_rank_brave == null ? null : (old.ai_rank_brave === true || old.ai_rank_brave === 'true') });
+// KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §1): the keyword-intelligence settings are set through Site Admin `monitors` only;
+// "Track my site" carries them as stored (never resets them), empty = off / yes / 5
+Object.assign(__row, { ki_mode: old.ki_mode === '' || old.ki_mode == null ? null : String(old.ki_mode),
+  ki_refresh: old.ki_refresh === '' || old.ki_refresh == null ? null : (old.ki_refresh === true || old.ki_refresh === 'true'),
+  ki_max_competitors: old.ki_max_competitors === '' || old.ki_max_competitors == null ? null : Number(old.ki_max_competitors) });
 if (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit
 return [{ json: __row }];

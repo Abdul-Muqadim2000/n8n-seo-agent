@@ -68,7 +68,10 @@ async function monOutputs(dir) {
 // what may differ from the base, and only this: `settings.rank` (AIRF.settingsOf, every field off) on the items a monitor plan hands to its own nodes
 // and the five ai_rank_* columns present as null on the Site Admin monitor row (a site that never had them; null = off, the column exists after
 // sync_tables.py, which deploy_engine.py runs before any workflow is updated - D12)
-const stripAirNull = (x) => Array.isArray(x) ? x.map(stripAirNull) : (x && typeof x === 'object') ? Object.fromEntries(Object.entries(x).filter(([k, v]) => !(AIRM.includes(k) && v === null))) : x;
+// KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §1): the three keyword-intelligence settings are new seo_monitors columns the same way,
+// so a site with none of them gets them as null (off) and nothing else changes
+const KIM = ['ki_mode', 'ki_refresh', 'ki_max_competitors'];
+const stripAirNull = (x) => Array.isArray(x) ? x.map(stripAirNull) : (x && typeof x === 'object') ? Object.fromEntries(Object.entries(x).filter(([k, v]) => !((AIRM.includes(k) || KIM.includes(k)) && v === null))) : x;
 const stripRank = (x) => Array.isArray(x) ? x.map(stripRank) : (x && typeof x === 'object') ? Object.fromEntries(Object.entries(x).filter(([k, v]) => !(k === 'rank' && v && typeof v === 'object' && v.mode === 'off' && Object.keys(v).length === 5)).map(([k, v]) => [k, stripRank(v)])) : x;
 const firstDiff = (a, b, p = '') => { if (J(a) === J(b)) return ''; if (a && b && typeof a === 'object' && typeof b === 'object') { for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) { const d = firstDiff(a[k], b[k], p + '.' + k); if (d) return d; } }
   return p + ': ' + J(a).slice(0, 220) + ' vs ' + J(b).slice(0, 220); };

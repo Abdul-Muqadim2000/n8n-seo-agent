@@ -683,6 +683,18 @@
               {
                 "name": "ai_rank_brave",
                 "type": "boolean"
+              },
+              {
+                "name": "ki_mode",
+                "type": "string"
+              },
+              {
+                "name": "ki_refresh",
+                "type": "boolean"
+              },
+              {
+                "name": "ki_max_competitors",
+                "type": "number"
               }
             ]
           },

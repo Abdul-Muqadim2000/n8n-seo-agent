@@ -2,20 +2,21 @@ import { useEngineCal } from '@/lib/engine-cal';
 import { useState, type ReactNode } from 'react';
 import { Link, Navigate, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, History, Plus, Wand2 } from 'lucide-react';
-import { MODE_CATEGORIES, MODES, type ModeId } from '@seo/shared';
+import { isKiRunMode, modeCategoryLabel, MODES, type ModeId } from '@seo/shared';
 import { lastSite, useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
-import { useProviders } from '@/lib/queries';
+import { useKi, useProviders } from '@/lib/queries';
 import { verifyMethods } from '@/lib/verify-copy';
 import { decodePrefill } from '@/lib/utils';
 import { ButtonLink } from '@/components/ui/button';
-import { Callout, EmptyState } from '@/components/ui/feedback';
+import { Callout, EmptyState, PageLoader } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/misc';
 import { isModeId, ModeIcon } from '@/components/reports/meta';
 import type { ToolFormProps } from './_components/form-utils';
 import { DiscoverForm, KeywordForm, VerdictForm } from './_components/forms/research';
 import { AuditForm, CheckinForm, DescribeForm, PublishedForm } from './_components/forms/site';
 import { AiVisibilityForm, BacklinksForm, CaseStudyForm, LadderForm } from './_components/forms/growth';
+import { CompetitorsForm, KeywordResearchForm } from './_components/forms/ki';
 
 const FORMS: Partial<Record<ModeId, (p: ToolFormProps) => ReactNode>> = {
   verdict: VerdictForm,
@@ -29,6 +30,9 @@ const FORMS: Partial<Record<ModeId, (p: ToolFormProps) => ReactNode>> = {
   case_study: CaseStudyForm,
   ai_visibility: AiVisibilityForm,
   backlinks: BacklinksForm,
+  // KI (2026-11-08): each form shows itself only for a website whose KI this person may see
+  competitors: CompetitorsForm,
+  keyword_research: KeywordResearchForm,
 };
 
 /** Modes configured in the website settings instead of a one-off form. */
@@ -42,8 +46,12 @@ export default function ToolFormPage() {
   const { org, sites, can, me } = useOrgCtx();
   // the website the link asked for (the form then keeps ?site= in step with its own choice)
   const [askedSiteId] = useState(() => params.get('site'));
+  // KI (2026-11-08): Competitors and Keyword research exist only for a website whose KI this person may see (Off: "does not exist")
+  const kiSiteId = isKiRunMode(mode) ? ((sites.find((s) => s.id === params.get('site') && s.verifiedAt) ?? sites.find((s) => s.id === lastSite(org.id) && s.verifiedAt) ?? sites.find((s) => s.verifiedAt))?.id ?? null) : null;
+  const kiGate = useKi(org.id, kiSiteId);
+  if (kiSiteId && kiGate.isPending) return <PageLoader />;
 
-  if (!isModeId(mode))
+  if (!isModeId(mode) || (MODES[mode].hidden && !(isKiRunMode(mode) && kiGate.data?.visible)))   // a hidden mode has no form; a KI form only where KI is visible
     return (
       <EmptyState
         titleAs="h1"
@@ -87,7 +95,7 @@ export default function ToolFormPage() {
       </Link>
       <PageHeader
         icon={<ModeIcon mode={mode} />}
-        eyebrow={MODE_CATEGORIES[info.category]}
+        eyebrow={modeCategoryLabel(info)}
         title={info.title}
         description={info.summary}
         actions={

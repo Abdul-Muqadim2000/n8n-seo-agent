@@ -128,6 +128,10 @@ export const MODE_IDS = [
   'profile',
   'ai_visibility',
   'backlinks',
+  // KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §3): keyword intelligence, run by the engine's own workflow (SEOagentKIntel1).
+  // `hidden` until the KI pages ship (A2); the server starts them only when the website's ki_mode allows it (services/ki.ts kiRunGuard)
+  'competitors',
+  'keyword_research',
 ] as const;
 export type ModeId = (typeof MODE_IDS)[number];
 
@@ -153,6 +157,9 @@ export interface ModeInfo {
   finalStages: string[];
   /** Interim callback stages: the run is running. */
   startStages?: string[];
+  /** KI W0 (2026-11-08): a mode the engine and the server accept but no screen offers yet (the tools page, the runs filter and the public
+   *  API's list of modes leave it out). The KI pages (A2) remove it. */
+  hidden?: boolean;
 }
 
 export const MODES: Record<ModeId, ModeInfo> = {
@@ -305,7 +312,45 @@ export const MODES: Record<ModeId, ModeInfo> = {
     finalStages: ['backlinks'],
     startStages: ['backlinks_started'],
   },
+  // KI (2026-11-08, CONTRACTS.md §3-§4): both run in SEOagentKIntel1 and answer `<stage>_started`, then the final stage
+  competitors: {
+    id: 'competitors',
+    title: 'Competitors',
+    summary: 'Who you really compete with in your market: the companies in Google\'s results for your services, each with the reason, plus the directories and lists to be on. Run it before Keyword research, so the research compares you with the right companies.',
+    delivers: 'Your competitor set with the evidence, the lists and directories that rank, and a profile of each competitor you choose',
+    category: 'keywords',
+    costUsd: modeCostUsd('competitors'),
+    etaMinutes: 6,
+    siteBound: true,
+    finalStages: ['ki_competitors'],
+    startStages: ['ki_competitors_started'],
+    hidden: true,
+  },
+  keyword_research: {
+    id: 'keyword_research',
+    title: 'Keyword research',
+    summary: 'What buyers search to hire a service like yours: every search with where it came from, grouped by topic, scored with a range and a plain verdict. Pick it over Keyword discovery when you want the searches compared with your competitors and a step-by-step plan.',
+    delivers: 'Every search buyers use for your services, with where it came from, its topic, buyer stage and verdict, the gaps against your competitors and a ranked plan',
+    category: 'keywords',
+    costUsd: modeCostUsd('keyword_research'),
+    etaMinutes: 12,
+    siteBound: true,
+    finalStages: ['ki_research'],
+    startStages: ['ki_research_started'],
+    hidden: true,
+  },
 };
+
+/** The modes a screen offers (KI W0: the hidden ones are accepted by the server but not listed yet). */
+export const LISTED_MODE_IDS: readonly ModeId[] = MODE_IDS.filter((m) => !MODES[m].hidden);
+
+/**
+ * The category line above a tool (its card and its form). KI (review UX M7 / CONSISTENCY L3): "Keyword research" is now also a tool's
+ * name, so the two new tools say "Research" instead of repeating it ("Keyword research > Keyword research"). Every other tool as before.
+ */
+export function modeCategoryLabel(info: Pick<ModeInfo, 'id' | 'category'>): string {
+  return info.id === 'competitors' || info.id === 'keyword_research' ? 'Research' : MODE_CATEGORIES[info.category];
+}
 
 export const MODE_CATEGORIES: Record<ModeCategory, string> = {
   keywords: 'Keyword research',
@@ -336,6 +381,11 @@ export const STAGE_LABELS: Record<string, string> = {
   profile: 'Business profile',
   case_study_started: 'Case study started',
   ai_visibility_started: 'AI visibility started',
+  // KI (2026-11-08, CONTRACTS.md §4)
+  ki_competitors_started: 'Competitors started',
+  ki_competitors: 'Competitors',
+  ki_research_started: 'Keyword research started',
+  ki_research: 'Keyword research',
   ai_visibility: 'AI visibility report',
   ai_pulse: 'AI pulse',   // D-13: "alert" only when the day has one (titleFor)
   ai_growth: 'AI growth',

@@ -52,6 +52,12 @@ PAIRS = [
     {'gate': 'competitor', 'kit': '_outreach_kit.js', 'defines': ('function sellsSame(', 'LK.regDomain('),
      'write': 'OK.sellsSame', 'read': 'OK.sellsSame', 'tables': ('seo_link_prospects', 'seo_link_outreach'),
      'why': 'a prospect stored before the gate (or on a rival subdomain) is pitched anyway (R21)'},
+    # KI E2 (2026-11-08, CONTRACTS.md section 2): the keyword universe is written through KI.gate (the shared fit gate in the KI vocabulary) and
+    # every consumer reads it back through KI.readable (gate + kill switch + mode, fails closed). Keyed on the KI entry points, not on fitGate:
+    # the kit itself calls fitGate, so a node that merely inlines _ki.js would otherwise count as gated (fixes/E1.md section 1).
+    {'gate': 'keyword fit (KI)', 'kit': '_ki.js', 'defines': ('const gate = (keyword, ctx) => {', 'const readable = (row, ctx) => {'),
+     'write': 'KI.gate(', 'read': 'KI.readable(', 'tables': ('seo_ki_keywords',),
+     'why': 'a stored keyword is another company\'s brand, a job or another market\'s search, or the site is switched Off or killed (CONTRACTS.md section 1)'},
 ]
 
 

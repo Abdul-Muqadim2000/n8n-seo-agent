@@ -1174,5 +1174,81 @@
       ],
       "free_only": true
     }
+  },
+  {
+    "name": "competitors (KI), the website's competitors and two seeds",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "competitors",
+      "keyword": "",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "customers": "distributors, wholesalers, finance teams",
+      "competitors": [
+        "azentio.com",
+        "cleartax.com"
+      ],
+      "seeds": [
+        "odoo partner dubai",
+        "erp implementation uae"
+      ],
+      "ki_force": false
+    },
+    "expect": {
+      "kind": "competitors",
+      "stage": "ki_competitors",
+      "domain": "northwind-erp.com",
+      "site_id": "site_northwind-erp-com",
+      "country": "United Arab Emirates",
+      "competitors": [
+        "azentio.com",
+        "cleartax.com"
+      ],
+      "seeds": [
+        "odoo partner dubai",
+        "erp implementation uae"
+      ],
+      "ki_force": false
+    },
+    "target": "ki"
+  },
+  {
+    "name": "keyword research (KI), declared competitors and a fresh reading",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "keyword_research",
+      "keyword": "",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "customers": "distributors, wholesalers, finance teams",
+      "competitors": [
+        "rival.ae",
+        "other-erp.com"
+      ],
+      "seeds": [],
+      "ki_force": true
+    },
+    "expect": {
+      "kind": "keyword_research",
+      "stage": "ki_research",
+      "domain": "northwind-erp.com",
+      "competitors": [
+        "rival.ae",
+        "other-erp.com"
+      ],
+      "seeds": [],
+      "ki_force": true
+    },
+    "target": "ki"
   }
 ]
