@@ -1720,7 +1720,7 @@ export const GUIDES = [
     id: 'ki-choose-competitors',
     area: 'business',
     title: 'Choose the competitors to follow',
-    why: 'The competitors you follow decide every gap we show you and what we compare you with each month. We find them in Google, but only you know which ones you really lose customers to.',
+    why: 'The competitors you follow decide every gap we show you and what we compare you with each time you run it. We find them in Google, but only you know which ones you really lose customers to.',
     where: 'Competitors page',
     minutes: 5,
     vars: [V.domain],

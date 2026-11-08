@@ -1034,8 +1034,11 @@ switch); filters, sort and paging run on the server. Shapes: `shared/src/ki-api.
 - **Recommendations / Needs you** (On websites only): `ki:competitors` "Choose your competitors" (no choice by a person yet) and
   `ki:quick-wins` "N searches just off page one" (the same count as the page's section: the engine's striking flag, `KI_STRIKING`); Needs-you kind `ki`. Guide ids `ki-choose-competitors`, `ki-read-keyword-research`, `ki-verdicts`.
 - **API v1 / MCP**: `get_table` and `GET /api/v1/websites/:websiteId/tables/:table` also take `ki_competitors`, `ki_keywords`, `ki_gaps`,
-  `ki_runs` (rows as stored, read-only) for a website where KI is **On**; any other website answers as an unknown table. Not part of the
-  scheduled warehouse exports.
+  `ki_runs` (read-only) for a website where KI is **On**; any other website answers as an unknown table. Not part of the scheduled
+  warehouse exports. FX-A: each table has a column allow-list (`KI_V1_COLUMNS` in `server/src/services/kiData.ts`, the engine's order):
+  no `gate_detail` (the engine's sentence; `gate_words` carries the plain words beside the `gate_reason` code), no provider cost
+  (`cost_dfs_usd`, `cost_claude_usd`) and no `config_json` on `ki_runs`; `volume_source` in customer words. `ki_keywords` and `ki_gaps`
+  return current rows only (the pages' rule, `KI_ROW_CURRENT`: the newest keyword-research run with status ok / partial).
 - **Website delete** removes the website's KI rows (the engine's Site Admin delete, and `clearKiInEngine` table by table).
 
 ## Page review: questions, business details, the editor, the final version, approval (H3, 2026-10-28; `shared/src/page-review.ts`, `server/src/services/pageReview.ts`)

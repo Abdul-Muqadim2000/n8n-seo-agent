@@ -165,12 +165,16 @@ describe('FX-A: a Trial run is our team\'s, free and private', () => {
   it('On: a run of the client is quoted credits, listed and theirs as before; the kill switch stops a run before anything is locked', async () => {
     st.mode = 'on';
     await addCreditEntry(db, { orgId, kind: 'grant', credits: 2000, note: 'test', lot: { source: 'grant', expiresAt: null } });
-    // FX-L H4: the searches the app already advised against travel as `avoid` (a check that found it off-topic)
-    await db.insert(schema.keywordChecks).values({ orgId, siteId, keyword: 'Dynamics 365 Jobs Dubai', country: 'United States', result: { fit: 0 } });
-    await db.insert(schema.keywordChecks).values({ orgId, siteId, keyword: 'erp partner', country: 'United States', result: { fit: 2 } });
+    // FX-L H4 / second review LOGIC N1: only explicit AVOID verdicts travel as `avoid`. The real devaicon case: "open edx provider" was
+    // checked fit 0 five times and navigational once by the pre-KI check (its niche, wrongly judged): never imported
+    for (const fit of [0, 0, 0, 0, 0]) await db.insert(schema.keywordChecks).values({ orgId, siteId, keyword: 'open edx provider', country: 'United States', result: { fit } });
+    await db.insert(schema.keywordChecks).values({ orgId, siteId, keyword: 'open edx provider', country: 'United States', result: { fit: 1, navigational: true } });
+    await db.insert(schema.reports).values({ orgId, siteId, stage: 'content', status: 'completed', title: 'Verdict: crm for customers', payload: { keyword: 'CRM for customers', verdict: 'AVOID' } });
+    await db.insert(schema.reports).values({ orgId, siteId, stage: 'content', status: 'completed', title: 'Verdict: open edx hosting', payload: { keyword: 'open edx hosting', verdict: 'GO' } });
     const r = await client.post(`/api/orgs/${orgId}/runs`, body());
     expect(r.status).toBe(200);
-    expect(st.starts.at(-1)?.avoid).toEqual(['dynamics 365 jobs dubai']);
+    expect(st.starts.at(-1)?.avoid).toEqual(['crm for customers']);
+    expect(await runs.kiAvoidKeywords(orgId, siteId)).not.toContain('open edx provider');
     const row = (await db.query.runs.findFirst({ where: and(eq(schema.runs.id, r.body.id), eq(schema.runs.orgId, orgId)) }))!;
     expect(row.quotedCredits).toBeGreaterThan(0);
     expect((row.input as Record<string, unknown>).kiTrial).toBeUndefined();

@@ -165,11 +165,11 @@ export function Competitors({ o, data, gaps, keywords, keywordsLoading, onDrawer
         tone="blue"
         eyebrow={<HeroEyebrow tag="Competitors"><KiUpdated at={run?.finishedAt ?? data.updatedAt} market={o.market || run?.market} /></HeroEyebrow>}
         title={kiCompetitorsHeadline(rows, ownShare)}
-        description={s.chosen.length ? `Found in Google's results for your services. You can follow up to ${max}; the others stay on your watchlist.` : `Found in Google's results for your services. Choose up to ${max} to follow: we compare you with them every month.`}
+        description={s.chosen.length ? `Found in Google's results for your services. You can follow up to ${max}; the others stay on your watchlist.` : `Found in Google's results for your services. Choose up to ${max} to follow: each run then compares you with them.`}
         stats={
           <>
             <HeroStat label="Real competitors found" value={<CountUp value={s.chosen.length + s.others.length} />} info="Companies that sell what you sell and keep showing up in Google's results for your services. Directories, lists and platforms are counted apart." />
-            <HeroStat label="You follow" value={`${s.chosen.length} of ${max}`} info="The competitors you chose. Gaps and monthly checks compare you with these." />
+            <HeroStat label="You follow" value={`${s.chosen.length} of ${max}`} info="The competitors you chose. Gaps compare you with these each time you run it." />
             <HeroStat label="Lists and directories to join" value={<CountUp value={s.listings.length} />} info="Directories and 'best of' lists that rank for your services and show other companies. Being on them helps you in Google and in AI answers." />
             <HeroStat label="Gaps to act on" value={<CountUp value={gapsOpen} />} info="Searches where your chosen competitors are found and you are not." />
           </>

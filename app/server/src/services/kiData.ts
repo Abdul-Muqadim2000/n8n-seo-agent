@@ -14,6 +14,8 @@ import {
   isClientRole,
   KI_APPROVE_MAX,
   KI_STRIKING_WORDS,
+  kiGateWords,
+  kiSourceWords,
   kiBrandTokens,
   kiCompetitorOrder,
   kiCompetitorView,
@@ -461,11 +463,36 @@ export const kiOwnRow = (domain: string) => sameDomain(domain.toLowerCase());
 export const KI_V1_TABLES = { ki_competitors: 'kiCompetitors', ki_keywords: 'kiKeywords', ki_gaps: 'kiGaps', ki_runs: 'kiRuns' } as const;
 export type KiV1Table = keyof typeof KI_V1_TABLES;
 export const isKiV1Table = (t: unknown): t is KiV1Table => typeof t === 'string' && Object.prototype.hasOwnProperty.call(KI_V1_TABLES, t);
-const V1_DROP = new Set(['id', 'createdAt', 'updatedAt']);
 
 /**
- * One page of a KI table as stored (JSON columns stay strings, as in the engine's table), with the company's ids beside each row. A website
- * that is not On answers exactly like an unknown table, so a key never learns that a Trial exists.
+ * FX-A (second review CONSISTENCY N1): the columns an API key gets, per table, in the engine's order. Left out on purpose: the engine's
+ * gate sentence (`gate_detail`: `gate_words` carries the app's plain words instead), provider cost (`cost_dfs_usd`, `cost_claude_usd`: a
+ * customer sees credits only, never provider cost) and the run's internal `config_json`. A provider name in `volume_source` is said in
+ * customer words. New engine columns are never exposed by accident: only what is listed here.
+ */
+export const KI_V1_COLUMNS: Record<KiV1Table, readonly string[]> = {
+  ki_runs: ['site_id', 'domain', 'run_id', 'request_id', 'kind', 'market', 'location_code', 'language_code', 'mode', 'rule_version', 'started_at', 'finished_at', 'status', 'reason', 'sections_json', 'counts_json'],
+  ki_competitors: ['site_id', 'domain', 'market', 'comp_domain', 'class', 'class_basis', 'class_confidence', 'scored', 'score', 'score_low', 'score_high', 'serp_share', 'topic_sim', 'geo_match', 'ai_share', 'size_tag', 'seeds_seen', 'seeds_total', 'reasons_json', 'evidence_json', 'declared', 'status', 'status_by', 'first_seen', 'last_seen', 'misses', 'profile_json', 'run_id', 'updated_at'],
+  ki_keywords: ['site_id', 'domain', 'market', 'keyword', 'kw_key', 'sources_json', 'source_count', 'volume', 'volume_basis', 'volume_source', 'cpc', 'kd', 'trend_json', 'gsc_impressions', 'gsc_clicks', 'gsc_position', 'gsc_page', 'intent', 'stage', 'stage_evidence_json', 'intent_confidence', 'needs_review', 'gate', 'gate_reason', 'gate_words', 'fit', 'demand', 'win', 'value', 'gap', 'score', 'score_low', 'score_high', 'low_confidence', 'verdict', 'cluster_id', 'is_head', 'cluster_size', 'cluster_demand', 'serp_read_at', 'top10_json', 'page_action', 'page_url', 'cannibal_json', 'competitors_json', 'striking', 'run_id', 'fetched_at', 'updated_at'],
+  ki_gaps: ['gap_id', 'site_id', 'domain', 'market', 'type', 'keyword', 'cluster_id', 'competitor_domains_json', 'client_position', 'evidence_json', 'sample_note', 'action', 'action_target', 'credits', 'status', 'run_id', 'created_at', 'updated_at'],
+};
+
+/** One stored row as an API key may read it (the allow-list above, plain gate words, customer source words). */
+export function kiV1Row(table: KiV1Table, r: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const c of KI_V1_COLUMNS[table]) {
+    if (c === 'gate_words') out[c] = String(r.gate ?? '') === 'fail' ? kiGateWords(r.gate_detail, r.gate_reason) : '';
+    else if (c === 'volume_source') out[c] = r.volume_source == null || r.volume_source === '' ? r.volume_source ?? null : kiSourceWords(r.volume_source);
+    else out[c] = r[c] ?? null;
+  }
+  return out;
+}
+
+/**
+ * One page of a KI table (JSON columns stay strings, as in the engine's table), with the company's ids beside each row. A website that is
+ * not On answers exactly like an unknown table, so a key never learns that a Trial exists. FX-A (second review CONSISTENCY N2): keyword and
+ * gap rows follow the pages' current-row rule (kiCurrentRows, FX-L's KI_ROW_CURRENT), so an API client never reads a row the app no longer
+ * shows.
  */
 export async function kiTableRowsV1(
   org: { id: string },
@@ -477,17 +504,19 @@ export async function kiTableRowsV1(
   const st = await kiState(site, null);
   if (st.mode !== 'on' || st.killed) throw notFound('Unknown table: use one of rank_history, site_metrics, audit_findings, ai_visibility, backlinks, runs');
   const key = KI_V1_TABLES[table];
-  const raw = await siteRows<Record<string, unknown>>(key, site.domain, { max: key === 'kiKeywords' ? KI_READ_MAX.keywords : KI_READ_MAX.gaps });
   const own = sameDomain(site.domain.toLowerCase());
+  const raw = (await siteRows<Record<string, unknown>>(key, site.domain, { max: key === 'kiKeywords' ? KI_READ_MAX.keywords : KI_READ_MAX.gaps })).filter(own);
+  const current = table === 'ki_keywords' || table === 'ki_gaps'
+    ? kiCurrentRows(raw, (await siteRows<KiRunRow>('kiRuns', site.domain, { sortBy: 'started_at:desc', max: KI_READ_MAX.runs })).filter(own))
+    : raw;
   const exportedAt = new Date().toISOString();
-  const all = raw.filter(own).map((r) => ({
-    company_id: org.id,
-    website_id: site.id,
-    website_domain: site.domain,
-    exported_at: exportedAt,
-    ...Object.fromEntries(Object.entries(r).filter(([k]) => !V1_DROP.has(k))),
-  }));
+  const all = current.map((r) => ({ company_id: org.id, website_id: site.id, website_domain: site.domain, exported_at: exportedAt, ...kiV1Row(table, r) }));
   const p = page(all, q.cursor, q.limit);
-  const cols = all[0] ? Object.keys(all[0]) : ['company_id', 'website_id', 'website_domain', 'exported_at'];
-  return { table, columns: cols.map((name) => ({ name, type: 'STRING', description: name.endsWith('_json') ? 'JSON, as the engine stores it' : '' })), items: p.items, nextCursor: p.nextCursor };
+  const cols = ['company_id', 'website_id', 'website_domain', 'exported_at', ...KI_V1_COLUMNS[table]];
+  return {
+    table,
+    columns: cols.map((name) => ({ name, type: 'STRING', description: name.endsWith('_json') ? 'JSON, as the engine stores it' : name === 'gate_words' ? 'Why the search is not for you, in plain words' : '' })),
+    items: p.items,
+    nextCursor: p.nextCursor,
+  };
 }

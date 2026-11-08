@@ -1,5 +1,5 @@
 // Keyword research (KI 2026-11-08, n8n/seo-agent/docs/keyword-intel-2026-11-08/DESIGN.md §6): what buyers search to hire a service like
-// this website's, from every source we read, grouped into topics, each with the one verdict (Go / Takes a few months / Hard for your site
+// this website's, from every source we read, grouped into topics, each with the one verdict (Go / Takes a few months / Hard for your website
 // now / Not for you), a score with its likely range and the factors behind it; the searches just off page one; buyer questions to add to
 // the AI question panel; the plan of up to 10 steps; every search in one paged table with filters and a CSV. Every number says how it was
 // found and when. Shown only where the website's KI is visible (On, or Trial for platform admins).
@@ -284,7 +284,7 @@ function pageLine(r: KiKw): string {
 function VolumeFigure({ r, demand }: { r: KiKw; demand?: number | null }) {
   const v = demand ?? r.volume;
   if (v == null && r.gscImpressions != null)
-    return <KiFigure value={compactNumber(r.gscImpressions)} tip="How often your site was shown in Google for this search in the last 28 days." basis={kiBasisLine('measured', '', r.fetchedAt) + ', your Search Console'} />;
+    return <KiFigure value={compactNumber(r.gscImpressions)} tip="How often your website was shown in Google for this search in the last 28 days." basis={kiBasisLine('measured', '', r.fetchedAt) + ', your Search Console'} />;
   if (v == null) return <KiFigure value="not measured" tip="We found this search in two or more places, but no source measures how often it is searched. We kept it so you do not lose it." basis="found in our sources" />;
   return <KiFigure value={compactNumber(v)} tip={demand != null ? 'About how many people a month search the searches of this topic together.' : 'About how many people a month search this in your market.'} basis={kiBasisLine(r.volumeBasis ?? 'provider_estimate', r.volumeSource || 'Google Ads', r.fetchedAt)} />;
 }

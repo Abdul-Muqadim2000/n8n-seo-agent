@@ -498,6 +498,22 @@ describe('KI A1: recommendations, Needs you and API v1 follow the switch', () =>
     expect(r.items).toHaveLength(40);
     expect(r.items[0]).toMatchObject({ company_id: ORG_A, website_id: SITE_A, website_domain: 'nova-a.example', kw_key: 'k0' });
     expect(r.items[0]).not.toHaveProperty('id');
+    // FX-A (second review CONSISTENCY N1 / N2): an allow-list per table (no engine sentence, no provider cost, no run config) and the
+    // pages' current-row rule
+    const g = st.tables.kiKeywords.find((x) => x.kw_key === 'k3')!;
+    Object.assign(g, { gate: 'fail', gate_reason: 'career', gate_detail: 'jobs words (secret detail)', volume_source: 'DataForSEO Labs' });
+    kiCache.clear();
+    const r2 = await kiData.kiTableRowsV1({ id: ORG_A }, SITES[SITE_A] as never, 'ki_keywords', {}, page);
+    const k3 = r2.items.find((x) => x.kw_key === 'k3')!;
+    expect(k3).not.toHaveProperty('gate_detail');
+    expect(k3).toMatchObject({ gate_reason: 'career', gate_words: 'People searching this are looking for a job.', volume_source: 'our keyword data' });
+    expect(JSON.stringify(r2)).not.toContain('secret detail');
+    const runsV1 = await kiData.kiTableRowsV1({ id: ORG_A }, SITES[SITE_A] as never, 'ki_runs', {}, page);
+    for (const c of ['cost_dfs_usd', 'cost_claude_usd', 'config_json']) expect(runsV1.items[0]).not.toHaveProperty(c);
+    expect(runsV1.columns.map((c) => c.name)).not.toContain('cost_dfs_usd');
+    st.tables.kiRuns.push({ ...st.tables.kiRuns[0], run_id: 'r9', status: 'ok', started_at: '2026-11-08T09:00:00Z' });
+    st.tables.kiKeywords.find((x) => x.kw_key === 'k1')!.run_id = 'r9';
+    expect((await kiData.kiTableRowsV1({ id: ORG_A }, SITES[SITE_A] as never, 'ki_keywords', {}, page)).items.map((x) => x.kw_key)).toEqual(['k1']);
     seed('trial');
     st.platform = true;
     await expect(kiData.kiTableRowsV1({ id: ORG_A }, SITES[SITE_A] as never, 'ki_gaps', {}, page)).rejects.toMatchObject({ statusCode: 404 });

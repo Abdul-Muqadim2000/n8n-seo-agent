@@ -201,7 +201,7 @@ export const features: Feature[] = [
       'A topic radius with every research run: the topics within reach for your site, the ones that are a stretch and the evidence behind each verdict',
       'Suggestions in plain words when you set up a website: "Good chance", "Takes a few months" or "Hard for your website now", with the searches a month, why we suggest it, the plan and about how many credits a page',
       'The research behind your first suggestions is free, once per website, at setup: it starts in the background while you fill in the rest',
-      'Rolling out to selected websites: a Keyword research page with what buyers search to hire a service like yours, from your Search Console, Google\'s own questions and suggestions and your competitors. Each topic gets one verdict ("Go", "Takes a few months", "Hard for your website now" or "Not for you" with the reason), a score with its likely range, the buyer stage and where the search came from, plus the searches just off page one, buyer questions to add to your AI questions, a plan of up to 10 steps and a CSV of every search',
+      'Rolling out to selected websites: a Keyword research page with what buyers search to hire a service like yours, from your Search Console, Google\'s own questions and suggestions and your competitors. Each topic gets one verdict ("Go", "Takes a few months", "Hard for your website now" or "Not for you" with the reason, and "Not judged yet" while the evidence is thin), a score with its likely range, the buyer stage and where the search came from, plus the searches just off page one, buyer questions to add to your AI questions, a plan of up to 10 steps and a CSV of every search',
     ],
     steps: [
       { title: 'Describe the business', body: 'Your website, market and goals set the context for every keyword Alaventra looks at.' },
@@ -235,7 +235,7 @@ export const features: Feature[] = [
       },
       {
         q: 'What is the Keyword research page?',
-        a: 'It is rolling out to selected websites: ask us if you would like it for yours. It collects what buyers search to hire a service like yours from every source we read, keeps the searches that fit what you sell and where, groups them into topics and gives each topic one verdict with its reason and a score with its likely range. Every number says how we know it: measured on your own site, an estimate from a named source, or our own estimate. Each run is priced in credits before it starts.',
+        a: 'It is rolling out to selected websites: ask us if you would like it for yours. It collects what buyers search to hire a service like yours from every source we read, keeps the searches that fit what you sell and where, groups them into topics and gives each topic one verdict with its reason (or "Not judged yet" while the evidence is thin) and a score with its likely range. Every number says how we know it: measured on your own website, an estimate from a named source, or our own estimate. Each run is priced in credits before it starts.',
       },
       {
         q: 'Why are some keywords grouped together?',

@@ -316,8 +316,8 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
     const qp = await aiPanelForQuote(site.domain);
     if (qp) body.panel_quote = aiPanelQuoteBody(aiOnDemandRunCost(qp), qp.panel);
   }
-  // FX-A (FX-L H4, 2026-11-08): a KI run leaves out the searches the app already advised against for this website (a keyword check
-  // that found it off-topic or a search for one particular website, a verdict that said AVOID): `avoid`, appended after the form's
+  // FX-A (FX-L H4, 2026-11-08): a KI run leaves out the searches the app explicitly advised against for this website (a verdict that
+  // said AVOID; never an old keyword check's fit, second review LOGIC N1): `avoid`, appended after the form's
   // fields (the payload key order of the form is unchanged); the engine gates them with code `avoid`
   if (site && isKiRunMode(input.mode)) {
     const avoid = await kiAvoidKeywords(org.id, site.id).catch(() => [] as string[]);
@@ -1084,32 +1084,25 @@ export async function runJoinedResult(orgId: string, run: Pick<RunRow, 'id' | 's
 }
 
 /**
- * FX-A (FX-L H4): the website's searches the app advised against, at most 200, lower case: keyword checks that found the search off-topic
- * (fit 0) or navigational, and keyword verdicts that said AVOID. Newest first; read from the app's own tables (no engine call).
+ * FX-A (FX-L H4; second review LOGIC N1): the website's searches the app explicitly advised against, at most 200, lower case: a keyword
+ * verdict (or a page run's verdict) that said AVOID. NEVER the old keyword checks' "fit 0" / navigational answers: those carry the pre-KI
+ * fit mistakes KI replaces (devaicon's "open edx provider" was checked fit 0 five times from business text that never named Open edX), and
+ * importing them would gate a business's own niche. Newest first; read from the app's own reports (no engine call).
  */
 export const KI_AVOID_MAX = 200;
 export async function kiAvoidKeywords(orgId: string, siteId: string): Promise<string[]> {
-  const [checks, verdicts] = await Promise.all([
-    db
-      .select({ keyword: schema.keywordChecks.keyword })
-      .from(schema.keywordChecks)
-      .where(and(eq(schema.keywordChecks.orgId, orgId), eq(schema.keywordChecks.siteId, siteId), sql`(${schema.keywordChecks.result}->>'fit' = '0' or ${schema.keywordChecks.result}->>'navigational' = 'true')`))
-      .orderBy(desc(schema.keywordChecks.createdAt))
-      .limit(KI_AVOID_MAX),
-    db
-      .select({ keyword: sql<string>`coalesce(${schema.reports.payload}->>'keyword', '')` })
-      .from(schema.reports)
-      .where(and(eq(schema.reports.orgId, orgId), eq(schema.reports.siteId, siteId), eq(schema.reports.stage, 'content'), sql`upper(coalesce(${schema.reports.payload}->>'verdict', '')) = 'AVOID'`))
-      .orderBy(desc(schema.reports.receivedAt))
-      .limit(KI_AVOID_MAX),
-  ]);
+  const verdicts = await db
+    .select({ keyword: sql<string>`coalesce(${schema.reports.payload}->>'keyword', '')` })
+    .from(schema.reports)
+    .where(and(eq(schema.reports.orgId, orgId), eq(schema.reports.siteId, siteId), eq(schema.reports.stage, 'content'), sql`upper(trim(coalesce(${schema.reports.payload}->>'verdict', ''))) = 'AVOID'`))
+    .orderBy(desc(schema.reports.receivedAt))
+    .limit(KI_AVOID_MAX);
   const out = new Set<string>();
-  for (const r of [...checks, ...verdicts]) {
+  for (const r of verdicts) {
     const k = String(r.keyword ?? '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 120);
     if (k) out.add(k);
-    if (out.size >= KI_AVOID_MAX) break;
   }
-  return [...out];
+  return [...out].slice(0, KI_AVOID_MAX);
 }
 
 /** Latest report of a stage for a site, with its payload (dashboards read the rich weekly reports). */
