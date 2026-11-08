@@ -135,3 +135,26 @@ Typecheck shared / server / web: clean. Tests: shared **1145 passed**, server **
 - `POST .../plan/:id/start` stays 501 (W2); the links cover it until then.
 - Verdict word "Go" (UX L6) and app-wide verdict words: owner K5.
 - API v1 `get_table` KI tables are raw stored rows (no current-row filter, as "rows as stored" says); add one if warehouse users ask.
+
+## 10. Second round (on the re-reviews of 3a990e62; `ki/integration` already in, `ki/fxl` merged at 721d6cff)
+
+| Finding | Fix |
+|---|---|
+| LOGIC N1 (High) avoid list | `kiAvoidKeywords` (`server/src/services/runs.ts`) sends ONLY explicit AVOID verdicts (a `content` report whose `verdict` is AVOID). Old keyword checks (fit 0 / navigational) are never imported. Test on the real devaicon case in `kiTrial.test.ts`: five fit-0 checks and one navigational check of `open edx provider` stay out, `crm for customers` (AVOID) goes in. No "not for me" mark exists in the app yet: nothing else is sent. |
+| CONSISTENCY N1 / N2 API v1 / MCP `get_table` | `KI_V1_COLUMNS` allow-list per table (`server/src/services/kiData.ts` `kiV1Row`): no `gate_detail` (plain `gate_words` beside the `gate_reason` code), no `cost_dfs_usd` / `cost_claude_usd` / `config_json`, `volume_source` in customer words; `ki_keywords` / `ki_gaps` through `kiCurrentRows`. API.md updated; test in `kiRoutes.test.ts`. |
+| FX-L final contract | Striking: site-relative (`KI_STRIKING`, `kiStrikingBar`, `KI_STRIKING_WORDS` from the engine; the guide no longer names fixed numbers). Gaps the client marked started / dismissed / done stay visible from an older run (`kiCurrentRows(..., { keepUserStatus })`, one row per kind and search, the current run's first); open rows: latest run only (test updated: g2 "started" kept, g1 "open" stale). |
+| CONSISTENCY N4 / N5 / L8 | Marketing (features, FAQ, changelog) names "Not judged yet"; `KeywordsPage.tsx` "your website"; the competitors guide and page say "each time you run it" (no monthly refresh promise); KI sections in `app/README.md` and `n8n/seo-agent/HANDOVER.md` (CLAUDE.md left to the orchestrator). |
+| UX N1 one gap count | the hero counts the panel's own list (keyword kinds, open or started; one read of up to 200 gaps). |
+| UX M6 keyboard reach | Keyword research: "On this page" index under the hero (Your plan, Topics, Just off page one, Every search and filters); Competitors: one tip per row (was two) and Watch / Move to watchlist / Not a competitor in one "More" menu (one tab stop instead of two or three). |
+| UX M5 | every InfoTip in the app has a 40 px tap area below `lg` (invisible `::after`, measured 40x40 in the browser); `TAP` up to `lg`. |
+| UX M14 | Keywords: 6 reads per view (gaps read removed earlier); the remaining ones are A1's contract (one summary route would change it), left. |
+| UX N2-N9 | N2 one reason inside the verdict; N3 "Not judged yet" shows no score; N4 tip "Each one raises the score when it is high", gap factor "Proof it sells (competitors rank)"; N5 "This analysis runs for your website's country, ... Run it again for ..."; N6 viewers see "Website settings" as text; N7 the listings section scrolls into view on `#listings`; N8 "Searches found" tip says not-for-you searches are included; N9 20 cards a page on phones. Report numbers with thousands separators. |
+| Competitors at 375 px | compact phone row (reason in two lines, figures from `sm`, More menu): 5,353 -> 5,005 px (about 5.5 screens at 900 px; the reviewer's estimate of 4 assumed the reason in a tip, which would hide the evidence: left). |
+
+Browser pass 2 (the reviewer's `pass2.mts`, `fixes/FXA_shots/pass2/`): 375 / 768 / 1024 / 1440, light + dark: no horizontal scroll, one h1, no
+console errors, axe 0 KI violations (only the app shell's logo landmark); tips 40x40 below lg; Keywords 4,132 px and Competitors 5,005 px at 375;
+"Every search" on a phone 7,876 px with 20 cards; prefilled links land on their forms with the fields set; refused run links to the form
+with the country; Trial form says it costs the client no credits.
+
+Checks (once, whole worktree mounted): typecheck shared / server / web clean; tests shared **1145**, server **2039 passed, 46 skipped**, web
+**344**; web build OK (web re-run after the last two copy edits: 344, build OK).

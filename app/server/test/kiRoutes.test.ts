@@ -330,7 +330,8 @@ describe('FX-A: the gap filter on the server, current rows only, gate words from
     expect(json(await get('/keywords')).total).toBe(3);
     const ov = json(await get(''));
     expect(ov.summary.keywords.total).toBe(3);
-    expect(json(await get('/gaps')).items.map((g: { gapId: string }) => g.gapId)).toEqual(['g9']);
+    // g1 (older run, open) is stale; g2 (older run, started by the client) stays, as the engine keeps it (FX-L final round)
+    expect(json(await get('/gaps')).items.map((g: { gapId: string }) => g.gapId)).toEqual(['g2', 'g9']);
   });
   it('a gated row says why in the app\'s words from the code; the engine\'s detail never leaves the server (CONSISTENCY M3)', async () => {
     seed('on', { keywords: 4 });

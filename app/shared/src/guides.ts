@@ -1772,7 +1772,7 @@ export const GUIDES = [
       },
       {
         title: 'Pick the quick wins',
-        body: '**Just off page one** lists searches your website already shows up for in places 8 to 20, seen at least 100 times in 28 days (30 for a smaller website). Improving the page that shows up is often the fastest way to more visits.',
+        body: '**Just off page one** lists searches your website already shows up for in places 8 to 20, seen often enough for the size of your website in the last 28 days. Improving the page that shows up is often the fastest way to more visits.',
       },
       {
         title: 'Add the buyer questions that matter',

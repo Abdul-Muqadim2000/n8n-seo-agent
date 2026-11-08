@@ -23,6 +23,7 @@ import {
   KI_GAP_LABELS,
   KI_KW_FILTER_EMPTY,
   KI_PAGE_SIZE,
+  KI_PAGE_SIZE_PHONE,
   kiActiveFilters,
   kiBasisLine,
   kiClustersOf,
@@ -46,7 +47,7 @@ import { cn } from '@/lib/utils';
 import { InfoTip } from '@/components/insight';
 import { Panel, useSitePage } from './_components/kit';
 import { DashSkeleton, HeroEyebrow } from './_components/visuals';
-import { KI_TIP, KiActionButton, KiFigure, KiNotAvailable, KiOtherPage, KiRunButton, KiRunNotes, KiScore, KiTrialBanner, KiUpdated, TAP, useShowAll } from './_components/ki/common';
+import { KI_TIP, KiActionButton, KiFigure, KiIndex, KiNotAvailable, KiOtherPage, KiRunButton, KiRunNotes, KiScore, KiTrialBanner, KiUpdated, TAP, useIsPhone, useShowAll } from './_components/ki/common';
 
 // A1_ROUTES: the topic heads, the searches just off page one and the questions are each one filtered read (page_size at most 200)
 const HEADS = { heads: '1', sort: '-score', page: '1', page_size: '200' };
@@ -65,7 +66,8 @@ export default function KeywordsPage() {
   const summary = useKiKeywords(org.id, site.id, HEADS);
   const striking = useKiKeywords(org.id, site.id, STRIKING);
   const questions = useKiKeywords(org.id, site.id, QUESTIONS);
-  const table = useKiKeywords(org.id, site.id, kiKwParams(filter));
+  const pageSize = useIsPhone() ? KI_PAGE_SIZE_PHONE : KI_PAGE_SIZE;
+  const table = useKiKeywords(org.id, site.id, kiKwParams(filter, pageSize));
   // the plan rides on the latest research report (CONTRACTS §4) unless the overview carries it
   const reports = useReports(org.id, { siteId: site.id, stage: 'ki_research', limit: 1 });
   const report = useReport(org.id, ki.data?.plan.length ? undefined : reports.data?.[0]?.id);
@@ -107,6 +109,7 @@ export default function KeywordsPage() {
           table={table.data}
           tableLoading={table.isFetching}
           tableError={table.isError ? table.error : null}
+          pageSize={pageSize}
           filter={filter}
           onFilter={setFilter}
         />
@@ -116,7 +119,7 @@ export default function KeywordsPage() {
 }
 
 /** The page from its data (tests render this one). */
-export function Keywords({ o, summary, striking: strikingRows, questionRows, plan: planIn, table, tableLoading, tableError, filter, onFilter }: { o: KiOverview; summary: KiKeywords; striking?: KiKw[]; questionRows?: KiKw[]; plan?: KiPlanAction[]; table: KiKeywords | undefined; tableLoading: boolean; tableError: unknown; gaps?: KiGap[]; filter: KiKwFilter; onFilter: (f: KiKwFilter) => void }) {
+export function Keywords({ o, summary, striking: strikingRows, questionRows, plan: planIn, table, tableLoading, tableError, filter, onFilter, pageSize = KI_PAGE_SIZE }: { o: KiOverview; summary: KiKeywords; striking?: KiKw[]; questionRows?: KiKw[]; plan?: KiPlanAction[]; table: KiKeywords | undefined; tableLoading: boolean; tableError: unknown; gaps?: KiGap[]; filter: KiKwFilter; onFilter: (f: KiKwFilter) => void; pageSize?: number }) {
   const { site } = useSitePage();
   const rows = summary.rows;
   const run = o.lastRuns.keyword_research;
@@ -186,15 +189,20 @@ export function Keywords({ o, summary, striking: strikingRows, questionRows, pla
           <>
             <HeroStat label="Go" value={<CountUp value={go} />} info="Topics your website can rank for soon: sites like yours already rank there." />
             <HeroStat label="Takes a few months" value={<CountUp value={months} />} info="Topics you can win with a few supporting pages first, usually over two to four months." />
-            <HeroStat label="Searches found" value={<CountUp value={total} format={compactNumber} />} info="Every search we kept because it fits what you sell and where you sell it." />
+            <HeroStat label="Searches found" value={<CountUp value={total} format={compactNumber} />} info="Every search we found for your services in your market, the ones that are not for you included (each says why)." />
             <HeroStat label="Just off page one" value={<CountUp value={strikingN} />} info={`Searches you already show up for, in ${KI_STRIKING_WORDS}. A better page can move these up fastest.`} />
           </>
         }
         aside={firstPlan ? <HeroNextStep title={`First step: ${firstPlan.title}`} actions={<KiActionButton kind={firstPlan.kind} keyword={firstKeyword} target={firstPlan.target} />} /> : undefined}
       />
 
-      <PlanPanel plan={plan} heads={heads} />
+      <KiIndex items={[{ id: 'ki-plan', label: 'Your plan' }, { id: 'ki-topics', label: 'Topics' }, { id: 'ki-striking', label: 'Just off page one' }, { id: 'every-search', label: 'Every search and filters' }]} />
 
+      <div id="ki-plan" className="scroll-mt-20">
+        <PlanPanel plan={plan} heads={heads} />
+      </div>
+
+      <div id="ki-topics" className="scroll-mt-20">
       <Panel icon={<Layers />} title="Topics" description={`${s(topics, 'topic')}, best first. One page can win each topic.`} info="Searches that Google answers with the same pages belong together, so one page can rank for the whole topic. Each topic is named after its main search." flush>
         <ul className="divide-y divide-line" id={topicsShow.listId}>
           {clusters.map(({ head, members }, i) => (
@@ -207,7 +215,8 @@ export function Keywords({ o, summary, striking: strikingRows, questionRows, pla
               meta={
                 <>
                   {/* review UX M12: the verdict leads the row */}
-                  <KiVerdict verdict={head.verdict} size="sm" />
+                  {/* review UX N2 (pass 2): one reason, in the verdict */}
+                  <KiVerdict verdict={head.verdict} reason={head.verdict === 'gated' ? head.gateReason : null} size="sm" />
                   {head.stage && <Badge>{KI_STAGES[head.stage]}</Badge>}
                   <Badge>{members === 1 ? '1 search' : `${members} searches`}</Badge>
                   {head.cannibal && <Badge tone="warning">Two of your pages compete for it</Badge>}
@@ -227,7 +236,6 @@ export function Keywords({ o, summary, striking: strikingRows, questionRows, pla
                     </span>
                   </span>
                   <span className="text-xs text-ink-3">{pageLine(head)}</span>
-                  {head.verdict === 'gated' && head.gateReason && <span className="text-xs text-ink-3">{head.gateReason}</span>}
                   {head.stageEvidence && <span className="text-xs text-ink-3">Why this stage: {head.stageEvidence}</span>}
                 </span>
               }
@@ -237,13 +245,14 @@ export function Keywords({ o, summary, striking: strikingRows, questionRows, pla
         </ul>
         {topicsShow.button && <div className="border-t border-line px-5 py-1">{topicsShow.button}</div>}
       </Panel>
+      </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <div id="ki-striking" className="grid scroll-mt-20 grid-cols-1 gap-4 xl:grid-cols-2">
         <StrikingPanel rows={striking} total={strikingN} onSeeAll={() => goTo({ striking: true })} />
         <QuestionsPanel questions={questions} />
       </div>
 
-      <AllSearches o={o} clusters={heads} table={table} loading={tableLoading} error={tableError} filter={filter} onFilter={onFilter} domain={site.domain} />
+      <AllSearches o={o} clusters={heads} table={table} loading={tableLoading} error={tableError} filter={filter} onFilter={onFilter} domain={site.domain} pageSize={pageSize} />
     </Stagger>
   );
 }
@@ -475,7 +484,7 @@ export function KiFilterFields({ f, set, clusters, stack }: { f: KiKwFilter; set
   );
 }
 
-function AllSearches({ o, clusters, table, loading, error, filter, onFilter, domain }: { o: KiOverview; clusters: KiKw[]; table: KiKeywords | undefined; loading: boolean; error: unknown; filter: KiKwFilter; onFilter: (f: KiKwFilter) => void; domain: string }) {
+function AllSearches({ o, clusters, table, loading, error, filter, onFilter, domain, pageSize }: { o: KiOverview; clusters: KiKw[]; table: KiKeywords | undefined; loading: boolean; error: unknown; filter: KiKwFilter; onFilter: (f: KiKwFilter) => void; domain: string; pageSize: number }) {
   const { org, site } = useSitePage();
   const [sheet, setSheet] = useState(false);
   // review UX H5: on a phone the table is one tap away, under the answer and the actions
@@ -485,10 +494,10 @@ function AllSearches({ o, clusters, table, loading, error, filter, onFilter, dom
   // FX-A (review UX H2): every filter runs on the server, so the rows, the count, the pager and the empty state are one answer
   const rows = table?.rows ?? [];
   const total = table?.total ?? 0;
-  const pages = Math.max(1, Math.ceil(total / KI_PAGE_SIZE));
-  const from = total ? (filter.page - 1) * KI_PAGE_SIZE + 1 : 0;
-  const to = Math.min(total, filter.page * KI_PAGE_SIZE);
-  const params = kiKwParams(filter);
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const from = total ? (filter.page - 1) * pageSize + 1 : 0;
+  const to = Math.min(total, filter.page * pageSize);
+  const params = kiKwParams(filter, pageSize);
   // review UX L15: no wall of filters above a handful of rows
   const showFilters = active > 0 || total >= 20;
   const open = phoneOpen || active > 0;

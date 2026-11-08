@@ -225,6 +225,17 @@ upload, the earned-media list with outreach drafts (copy), the questions to win 
 and "AI answer pages a month" (0-8, default 2; cost from `estimateAiGrowthCost`). The Pipeline lists the automation and the AI page of the
 week (`services/cadence.ts`, same rules as n8n's `Cadence_Plan.js`); reports render `ai_growth`. Engine side: `n8n/seo-agent/AI_GROWTH_SPEC.md`.
 
+## Competitors and Keyword research (KI, 2026-11-08, rolling out)
+
+Two pages per website, `pages/site/CompetitorsPage.tsx` (`/competitors`) and `pages/site/KeywordsPage.tsx` (`/keywords`), shown only where the
+website's switch `seo_monitors.ki_mode` is On, or Trial for platform admins (Website settings card `KiModeCard`, platform admins only). Data:
+`server/src/routes/ki.ts` + `services/kiData.ts` read the engine's `seo_ki_*` tables (current rows only), shapes in `shared/src/ki-api.ts`, words
+and constants in `shared/src/ki.ts` (held to the engine by `n8n/seo-agent/harness/fixtures/ki_parity.json`). Runs: modes `competitors` /
+`keyword_research` (workflow `SEOagentKIntel1`); a Trial run is free for the company and visible to platform admins only (one check:
+`services/ki.ts`); the app sends the website's explicit AVOID verdicts as `avoid`. Each next step links to the existing tool with the search
+filled in (`lib/ki.ts` `kiActionLink`). Routes: `app/API.md` "Keyword intelligence"; design and reviews:
+`n8n/seo-agent/docs/keyword-intel-2026-11-08/`.
+
 ## AI visibility (v4.9)
 
 The AI visibility page (`pages/site/AiVisibilityPage.tsx`, panels in `_components/ai-insights.tsx`) shows, per website:

@@ -33,7 +33,7 @@ export function KiReport({ report }: { report: ReportDetail }) {
         report={report}
         title={title}
         description={status === 'partial' ? 'Most of the reading is done. One part could not be read this time; the rest is on the page.' : undefined}
-        stats={stats.length ? <>{stats.map((k) => <HeroStat key={k} label={LABELS[k]} value={String(num(summary[k]))} />)}</> : undefined}
+        stats={stats.length ? <>{stats.map((k) => <HeroStat key={k} label={LABELS[k]} value={(num(summary[k]) ?? 0).toLocaleString('en-US')} />)}</> : undefined}
         actions={
           report.siteId && !portal && status !== 'refused' && status !== 'failed' ? (
             <ButtonLink to={paths.site(org.id, report.siteId, page)} variant="primary" icon={<ArrowRight className="size-4" />}>

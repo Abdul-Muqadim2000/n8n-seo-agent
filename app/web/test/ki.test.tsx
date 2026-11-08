@@ -259,7 +259,9 @@ describe('the Competitors page', () => {
     const html = wrap(<Competitors o={overview()} data={data} gaps={GAPS} keywords={kiKeywordsOf({ rows: KWS }).rows} ai={ai} />);
     const t = text(html);
     expect(t).toContain('You follow one main competitor: northpeak-erp.com.');
-    for (const s of ['Direct competitor', 'Close competitor', 'In the first 10 Google results for 9 of 14', 'Choose', 'Watch', 'Not a competitor', 'Move to watchlist', 'Watchlist', 'Lists and directories to join', 'clutch.co', 'Gaps against your competitors', 'Competitors rank, you are missing', 'about 114 credits', 'Write this page', 'How to get listed', 'Who AI answers name', 'Not competitors', 'lookalike.example', 'Real competitors found', 'How much they compete with you', 'Website settings'])
+    // Watch / Move to watchlist / Not a competitor sit in each row's "More" menu (review UX M6, pass 2)
+    expect(html).toContain('More actions for bluefin-consulting.ae');
+    for (const s of ['Direct competitor', 'Close competitor', 'In the first 10 Google results for 9 of 14', 'Choose', 'More', 'Watchlist', 'Lists and directories to join', 'clutch.co', 'Gaps against your competitors', 'Competitors rank, you are missing', 'about 114 credits', 'Write this page', 'How to get listed', 'Who AI answers name', 'Not competitors', 'lookalike.example', 'Real competitors found', 'How much they compete with you', 'Website settings'])
       expect(t, s).toContain(s);
     // FX-A (review UX H4): no dead control; each step opens the existing tool with the search filled in
     expect(t).not.toContain('Coming soon');
@@ -275,8 +277,9 @@ describe('the Competitors page', () => {
   it('a viewer sees the set but no buttons that change it; Trial shows the banner', () => {
     const t = text(wrap(<Competitors o={overview({ mode: 'trial' })} data={data} gaps={GAPS} keywords={[]} ai={null} />, 'viewer', true));
     expect(t).toContain('Trial: only platform admins see this');
-    expect(t).not.toContain('Not a competitor');
-    expect(t).not.toContain('Move to watchlist');
+    const vhtml = wrap(<Competitors o={overview({ mode: 'trial' })} data={data} gaps={GAPS} keywords={[]} ai={null} />, 'viewer', true);
+    expect(vhtml).not.toContain('More actions for');
+    expect(vhtml).not.toMatch(/>Choose</);
   });
   it('before the first run: what it does and how to start it', () => {
     const t = text(wrap(<Competitors o={overview({ last_runs: [] })} data={{ rows: [], updatedAt: null }} gaps={[]} keywords={[]} ai={null} />));
@@ -332,7 +335,7 @@ describe('the Keyword research page', () => {
   it('a refused run says why and what to do, never the first-run empty state (review UX H3)', () => {
     const o = overview({ last_runs: [{ kind: 'keyword_research', status: 'refused', reason: 'market_mismatch', finished_at: '2026-11-08T07:00:00Z', market: 'US-en' }] });
     const t = text(wrap(<Keywords o={o} summary={kiKeywordsOf({ rows: [] })} table={undefined} tableLoading={false} tableError={null} filter={KI_KW_FILTER_EMPTY} onFilter={() => {}} />));
-    expect(t).toContain('Your website is measured in United Arab Emirates');
+    expect(t).toContain("This analysis runs for your website's country, United Arab Emirates");
     expect(t).toContain('Run it for United Arab Emirates');
     expect(t).not.toContain('Find what your buyers search');
     expect(kiStopNote(o.lastRuns.keyword_research, { siteCountry: 'United Arab Emirates' })?.text).not.toMatch(NO_FORMS);

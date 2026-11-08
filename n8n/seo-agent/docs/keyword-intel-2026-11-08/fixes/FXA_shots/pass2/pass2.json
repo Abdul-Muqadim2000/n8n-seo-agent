@@ -1,0 +1,2565 @@
+{
+ "matrix": [
+  {
+   "pg": "competitors",
+   "width": 375,
+   "theme": "light",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"About real competitors found\" 20x20",
+    "button \"About you follow\" 20x20",
+    "button \"About lists and directories to join\" 20x20",
+    "button \"About gaps to act on\" 20x20",
+    "button \"About your competitors\" 20x20",
+    "button \"About gaps against your competitors\" 20x20",
+    "button \"About who ai answers name\" 20x20",
+    "button \"About websites that win these searches but are not\" 20x20"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=439",
+    "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=639",
+    "span.tabular text-xs text-ink-3 right=626",
+    "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=764",
+    "span.tabular text-xs text-ink-3 right=751",
+    "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=916",
+    "span.tabular text-xs text-ink-3 right=903",
+    "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=1060"
+   ],
+   "trunc": [
+    "gulfdynamics-partners.ae"
+   ],
+   "heads": [
+    "H1:Competitors",
+    "H2:You follow 2 main competitors: northpeak",
+    "H3:Your competitors",
+    "H4:You follow",
+    "H4:Suggested",
+    "H4:Watchlist",
+    "H3:Gaps against your competitors",
+    "H3:Lists and directories to join",
+    "H3:Who AI answers name",
+    "H3:Websites that win these searches but are",
+    "H3:Not competitors"
+   ],
+   "unnamed": [],
+   "height": 5005,
+   "tip": {
+    "box": "20x20",
+    "after": "40pxx40px inset -10px"
+   },
+   "errors": []
+  },
+  {
+   "pg": "keywords",
+   "width": 375,
+   "theme": "light",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"About go\" 20x20",
+    "button \"About takes a few months\" 20x20",
+    "button \"About searches found\" 20x20",
+    "button \"About just off page one\" 20x20",
+    "button \"About your plan\" 20x20",
+    "button \"About topics\" 20x20",
+    "button \"What this means\" 20x20",
+    "button \"What makes up this score\" 20x20",
+    "button \"Where this search came from\" 20x20",
+    "button \"About buyer questions\" 20x20",
+    "button \"About every search\" 20x20"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=439"
+   ],
+   "trunc": [],
+   "heads": [
+    "H1:Keyword research",
+    "H2:You can win 73 topics soon, and 51 more ",
+    "H3:Your plan",
+    "H3:Topics",
+    "H3:Just off page one",
+    "H3:Buyer questions",
+    "H3:Every search"
+   ],
+   "unnamed": [],
+   "height": 4132,
+   "tip": {
+    "box": "20x20",
+    "after": "40pxx40px inset -10px"
+   },
+   "errors": []
+  },
+  {
+   "pg": "competitors",
+   "width": 768,
+   "theme": "light",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to choose\" 127x28",
+    "button \"About real competitors found\" 20x20",
+    "button \"About you follow\" 20x20",
+    "button \"About lists and directories to join\" 20x20",
+    "button \"About gaps to act on\" 20x20",
+    "button \"About your competitors\" 20x20",
+    "a \"Website settings\" 94x16",
+    "button \"What these numbers mean\" 20x20",
+    "button \"About gaps against your competitors\" 20x20",
+    "button \"All 21\" 63x28",
+    "button \"Competitors rank, you are missing 10\" 254x28",
+    "button \"One competitor ranks, you are missing 1\" 273x28",
+    "button \"You rank low 4\" 119x28",
+    "button \"Just off page one 5\" 146x28",
+    "button \"You lead: keep it 1\" 138x28",
+    "button \"Show all 21\" 100x32",
+    "button \"Why directories are not competitors\" 235x20",
+    "button \"About who ai answers name\" 20x20",
+    "button \"About websites that win these searches but are not\" 20x20"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=824"
+   ],
+   "trunc": [
+    "gulfdynamics-partners.ae"
+   ],
+   "heads": [
+    "H1:Competitors",
+    "H2:You follow 2 main competitors: northpeak",
+    "H3:Your competitors",
+    "H4:You follow",
+    "H4:Suggested",
+    "H4:Watchlist",
+    "H3:Gaps against your competitors",
+    "H3:Lists and directories to join",
+    "H3:Who AI answers name",
+    "H3:Websites that win these searches but are",
+    "H3:Not competitors"
+   ],
+   "unnamed": [],
+   "height": 4768,
+   "tip": {
+    "box": "20x20",
+    "after": "40pxx40px inset -10px"
+   },
+   "errors": []
+  },
+  {
+   "pg": "keywords",
+   "width": 768,
+   "theme": "light",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to read this\" 136x28",
+    "button \"About go\" 20x20",
+    "button \"About takes a few months\" 20x20",
+    "button \"About searches found\" 20x20",
+    "button \"About just off page one\" 20x20",
+    "button \"About your plan\" 20x20",
+    "button \"About topics\" 20x20",
+    "button \"What this means\" 20x20",
+    "button \"What makes up this score\" 20x20",
+    "button \"Where this search came from\" 20x20",
+    "button \"Show all 183\" 108x32",
+    "button \"See all 211 in the table\" 162x32",
+    "button \"About buyer questions\" 20x20",
+    "button \"About every search\" 20x20",
+    "select \"All Go Takes a few months Hard for your website no\" 184x36",
+    "select \"All Ready to hire Comparing providers Looking for \" 184x36",
+    "select \"All best dynamics 365 business central abu dhabi b\" 184x36",
+    "select \"Any source Your Search Console People also ask Rel\" 184x36",
+    "select \"Any number At least 10 At least 50 At least 100 At\" 184x36",
+    "select \"Any You are missing One competitor only You rank l\" 184x36",
+    "select \"Both Without your name With your name\" 184x36",
+    "select \"Best first Most searched A to Z\" 149x36",
+    "button \"Previous page\" 32x32",
+    "button \"Next page\" 32x32"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=824"
+   ],
+   "trunc": [],
+   "heads": [
+    "H1:Keyword research",
+    "H2:You can win 73 topics soon, and 51 more ",
+    "H3:Your plan",
+    "H3:Topics",
+    "H3:Just off page one",
+    "H3:Buyer questions",
+    "H3:Every search"
+   ],
+   "unnamed": [],
+   "height": 9195,
+   "tip": {
+    "box": "20x20",
+    "after": "40pxx40px inset -10px"
+   },
+   "errors": []
+  },
+  {
+   "pg": "competitors",
+   "width": 1024,
+   "theme": "light",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to choose\" 127x28",
+    "a \"Check my competitors again (23 credits)\" 328x36",
+    "a \"Write this page\" 140x32",
+    "button \"About real competitors found\" 20x20",
+    "button \"About you follow\" 20x20",
+    "button \"About lists and directories to join\" 20x20",
+    "button \"About gaps to act on\" 20x20",
+    "button \"About your competitors\" 20x20",
+    "a \"Download CSV\" 141x32",
+    "a \"Website settings\" 94x16",
+    "button \"What these numbers mean\" 20x20",
+    "button \"Details\" 68x32",
+    "button \"More actions for northpeak-erp.ae\" 77x32",
+    "button \"More actions for bluefin-consulting.ae\" 77x32",
+    "button \"Choose\" 93x32",
+    "button \"More actions for atlas-dynamics-partners-internati\" 77x32",
+    "button \"More actions for gulfledger.ae\" 77x32",
+    "button \"More actions for sandstone-tech.ae\" 77x32",
+    "button \"More actions for orbit-erp.com\" 77x32",
+    "button \"About gaps against your competitors\" 20x20",
+    "button \"All 21\" 63x28",
+    "button \"Competitors rank, you are missing 10\" 254x28",
+    "button \"One competitor ranks, you are missing 1\" 273x28",
+    "button \"You rank low 4\" 119x28"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=1064"
+   ],
+   "trunc": [
+    "gulfdynamics-partners.ae"
+   ],
+   "heads": [
+    "H1:Competitors",
+    "H2:You follow 2 main competitors: northpeak",
+    "H3:Your competitors",
+    "H4:You follow",
+    "H4:Suggested",
+    "H4:Watchlist",
+    "H3:Gaps against your competitors",
+    "H3:Lists and directories to join",
+    "H3:Who AI answers name",
+    "H3:Websites that win these searches but are",
+    "H3:Not competitors"
+   ],
+   "unnamed": [],
+   "height": 4955,
+   "tip": {
+    "box": "20x20",
+    "after": "none"
+   },
+   "errors": []
+  },
+  {
+   "pg": "keywords",
+   "width": 1024,
+   "theme": "light",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to read this\" 136x28",
+    "a \"Research my keywords again (57 credits)\" 330x36",
+    "a \"Improve this page\" 157x32",
+    "button \"About go\" 20x20",
+    "button \"About takes a few months\" 20x20",
+    "button \"About searches found\" 20x20",
+    "button \"About just off page one\" 20x20",
+    "a \"Your plan\" 74x32",
+    "a \"Topics\" 55x32",
+    "a \"Just off page one\" 123x32",
+    "a \"Every search and filters\" 156x32",
+    "button \"About your plan\" 20x20",
+    "a \"Write this page\" 140x32",
+    "a \"How to get listed\" 152x32",
+    "a \"Plan the ladder\" 141x32",
+    "a \"How to get named\" 160x32",
+    "button \"About topics\" 20x20",
+    "button \"What this means\" 20x20",
+    "button \"What makes up this score\" 20x20",
+    "button \"Where this search came from\" 20x20",
+    "button \"Show all 183\" 108x32",
+    "button \"See all 211 in the table\" 162x32",
+    "button \"About buyer questions\" 20x20",
+    "button \"Add to my AI questions\" 189x32"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=1064"
+   ],
+   "trunc": [],
+   "heads": [
+    "H1:Keyword research",
+    "H2:You can win 73 topics soon, and 51 more ",
+    "H3:Your plan",
+    "H3:Topics",
+    "H3:Just off page one",
+    "H3:Buyer questions",
+    "H3:Every search"
+   ],
+   "unnamed": [],
+   "height": 9132,
+   "tip": {
+    "box": "20x20",
+    "after": "none"
+   },
+   "errors": []
+  },
+  {
+   "pg": "competitors",
+   "width": 1440,
+   "theme": "light",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to choose\" 127x28",
+    "a \"Check my competitors again (23 credits)\" 328x36",
+    "a \"Write this page\" 140x32",
+    "button \"About real competitors found\" 20x20",
+    "button \"About you follow\" 20x20",
+    "button \"About lists and directories to join\" 20x20",
+    "button \"About gaps to act on\" 20x20",
+    "button \"About your competitors\" 20x20",
+    "a \"Download CSV\" 141x32",
+    "a \"Website settings\" 94x16",
+    "button \"What these numbers mean\" 20x20",
+    "button \"Details\" 68x32",
+    "button \"More actions for northpeak-erp.ae\" 77x32",
+    "button \"More actions for bluefin-consulting.ae\" 77x32",
+    "button \"Choose\" 93x32",
+    "button \"More actions for atlas-dynamics-partners-internati\" 77x32",
+    "button \"More actions for gulfledger.ae\" 77x32",
+    "button \"More actions for sandstone-tech.ae\" 77x32",
+    "button \"More actions for orbit-erp.com\" 77x32",
+    "button \"About gaps against your competitors\" 20x20",
+    "button \"All 21\" 63x28",
+    "button \"Competitors rank, you are missing 10\" 254x28",
+    "button \"One competitor ranks, you are missing 1\" 273x28",
+    "button \"You rank low 4\" 119x28"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=1480"
+   ],
+   "trunc": [
+    "gulfdynamics-partners.ae"
+   ],
+   "heads": [
+    "H1:Competitors",
+    "H2:You follow 2 main competitors: northpeak",
+    "H3:Your competitors",
+    "H4:You follow",
+    "H4:Suggested",
+    "H4:Watchlist",
+    "H3:Gaps against your competitors",
+    "H3:Lists and directories to join",
+    "H3:Who AI answers name",
+    "H3:Websites that win these searches but are",
+    "H3:Not competitors"
+   ],
+   "unnamed": [],
+   "height": 3551,
+   "tip": {
+    "box": "20x20",
+    "after": "none"
+   },
+   "errors": []
+  },
+  {
+   "pg": "keywords",
+   "width": 1440,
+   "theme": "light",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to read this\" 136x28",
+    "a \"Research my keywords again (57 credits)\" 330x36",
+    "a \"Improve this page\" 157x32",
+    "button \"About go\" 20x20",
+    "button \"About takes a few months\" 20x20",
+    "button \"About searches found\" 20x20",
+    "button \"About just off page one\" 20x20",
+    "a \"Your plan\" 74x32",
+    "a \"Topics\" 55x32",
+    "a \"Just off page one\" 123x32",
+    "a \"Every search and filters\" 156x32",
+    "button \"About your plan\" 20x20",
+    "a \"Write this page\" 140x32",
+    "a \"How to get listed\" 152x32",
+    "a \"Plan the ladder\" 141x32",
+    "a \"How to get named\" 160x32",
+    "button \"About topics\" 20x20",
+    "button \"What this means\" 20x20",
+    "button \"What makes up this score\" 20x20",
+    "button \"Where this search came from\" 20x20",
+    "button \"Show all 183\" 108x32",
+    "button \"See all 211 in the table\" 162x32",
+    "button \"About buyer questions\" 20x20",
+    "button \"Add to my AI questions\" 189x32"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=1480"
+   ],
+   "trunc": [],
+   "heads": [
+    "H1:Keyword research",
+    "H2:You can win 73 topics soon, and 51 more ",
+    "H3:Your plan",
+    "H3:Topics",
+    "H3:Just off page one",
+    "H3:Buyer questions",
+    "H3:Every search"
+   ],
+   "unnamed": [],
+   "height": 7456,
+   "tip": {
+    "box": "20x20",
+    "after": "none"
+   },
+   "errors": []
+  },
+  {
+   "pg": "competitors",
+   "width": 375,
+   "theme": "dark",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"About real competitors found\" 20x20",
+    "button \"About you follow\" 20x20",
+    "button \"About lists and directories to join\" 20x20",
+    "button \"About gaps to act on\" 20x20",
+    "button \"About your competitors\" 20x20",
+    "button \"About gaps against your competitors\" 20x20",
+    "button \"About who ai answers name\" 20x20",
+    "button \"About websites that win these searches but are not\" 20x20"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=439",
+    "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=639",
+    "span.tabular text-xs text-ink-3 right=626",
+    "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=764",
+    "span.tabular text-xs text-ink-3 right=751",
+    "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=916",
+    "span.tabular text-xs text-ink-3 right=903",
+    "button.inline-flex h-7 items-center gap-1.5 rounded-full  right=1060"
+   ],
+   "trunc": [
+    "gulfdynamics-partners.ae"
+   ],
+   "heads": [
+    "H1:Competitors",
+    "H2:You follow 2 main competitors: northpeak",
+    "H3:Your competitors",
+    "H4:You follow",
+    "H4:Suggested",
+    "H4:Watchlist",
+    "H3:Gaps against your competitors",
+    "H3:Lists and directories to join",
+    "H3:Who AI answers name",
+    "H3:Websites that win these searches but are",
+    "H3:Not competitors"
+   ],
+   "unnamed": [],
+   "height": 5005,
+   "tip": {
+    "box": "20x20",
+    "after": "40pxx40px inset -10px"
+   },
+   "errors": []
+  },
+  {
+   "pg": "keywords",
+   "width": 375,
+   "theme": "dark",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"About go\" 20x20",
+    "button \"About takes a few months\" 20x20",
+    "button \"About searches found\" 20x20",
+    "button \"About just off page one\" 20x20",
+    "button \"About your plan\" 20x20",
+    "button \"About topics\" 20x20",
+    "button \"What this means\" 20x20",
+    "button \"What makes up this score\" 20x20",
+    "button \"Where this search came from\" 20x20",
+    "button \"About buyer questions\" 20x20",
+    "button \"About every search\" 20x20"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=439"
+   ],
+   "trunc": [],
+   "heads": [
+    "H1:Keyword research",
+    "H2:You can win 73 topics soon, and 51 more ",
+    "H3:Your plan",
+    "H3:Topics",
+    "H3:Just off page one",
+    "H3:Buyer questions",
+    "H3:Every search"
+   ],
+   "unnamed": [],
+   "height": 4132,
+   "tip": {
+    "box": "20x20",
+    "after": "40pxx40px inset -10px"
+   },
+   "errors": []
+  },
+  {
+   "pg": "competitors",
+   "width": 768,
+   "theme": "dark",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to choose\" 127x28",
+    "button \"About real competitors found\" 20x20",
+    "button \"About you follow\" 20x20",
+    "button \"About lists and directories to join\" 20x20",
+    "button \"About gaps to act on\" 20x20",
+    "button \"About your competitors\" 20x20",
+    "a \"Website settings\" 94x16",
+    "button \"What these numbers mean\" 20x20",
+    "button \"About gaps against your competitors\" 20x20",
+    "button \"All 21\" 63x28",
+    "button \"Competitors rank, you are missing 10\" 254x28",
+    "button \"One competitor ranks, you are missing 1\" 273x28",
+    "button \"You rank low 4\" 119x28",
+    "button \"Just off page one 5\" 146x28",
+    "button \"You lead: keep it 1\" 138x28",
+    "button \"Show all 21\" 100x32",
+    "button \"Why directories are not competitors\" 235x20",
+    "button \"About who ai answers name\" 20x20",
+    "button \"About websites that win these searches but are not\" 20x20"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=824"
+   ],
+   "trunc": [
+    "gulfdynamics-partners.ae"
+   ],
+   "heads": [
+    "H1:Competitors",
+    "H2:You follow 2 main competitors: northpeak",
+    "H3:Your competitors",
+    "H4:You follow",
+    "H4:Suggested",
+    "H4:Watchlist",
+    "H3:Gaps against your competitors",
+    "H3:Lists and directories to join",
+    "H3:Who AI answers name",
+    "H3:Websites that win these searches but are",
+    "H3:Not competitors"
+   ],
+   "unnamed": [],
+   "height": 4768,
+   "tip": {
+    "box": "20x20",
+    "after": "40pxx40px inset -10px"
+   },
+   "errors": []
+  },
+  {
+   "pg": "keywords",
+   "width": 768,
+   "theme": "dark",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to read this\" 136x28",
+    "button \"About go\" 20x20",
+    "button \"About takes a few months\" 20x20",
+    "button \"About searches found\" 20x20",
+    "button \"About just off page one\" 20x20",
+    "button \"About your plan\" 20x20",
+    "button \"About topics\" 20x20",
+    "button \"What this means\" 20x20",
+    "button \"What makes up this score\" 20x20",
+    "button \"Where this search came from\" 20x20",
+    "button \"Show all 183\" 108x32",
+    "button \"See all 211 in the table\" 162x32",
+    "button \"About buyer questions\" 20x20",
+    "button \"About every search\" 20x20",
+    "select \"All Go Takes a few months Hard for your website no\" 184x36",
+    "select \"All Ready to hire Comparing providers Looking for \" 184x36",
+    "select \"All best dynamics 365 business central abu dhabi b\" 184x36",
+    "select \"Any source Your Search Console People also ask Rel\" 184x36",
+    "select \"Any number At least 10 At least 50 At least 100 At\" 184x36",
+    "select \"Any You are missing One competitor only You rank l\" 184x36",
+    "select \"Both Without your name With your name\" 184x36",
+    "select \"Best first Most searched A to Z\" 149x36",
+    "button \"Previous page\" 32x32",
+    "button \"Next page\" 32x32"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=824"
+   ],
+   "trunc": [],
+   "heads": [
+    "H1:Keyword research",
+    "H2:You can win 73 topics soon, and 51 more ",
+    "H3:Your plan",
+    "H3:Topics",
+    "H3:Just off page one",
+    "H3:Buyer questions",
+    "H3:Every search"
+   ],
+   "unnamed": [],
+   "height": 9195,
+   "tip": {
+    "box": "20x20",
+    "after": "40pxx40px inset -10px"
+   },
+   "errors": []
+  },
+  {
+   "pg": "competitors",
+   "width": 1024,
+   "theme": "dark",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to choose\" 127x28",
+    "a \"Check my competitors again (23 credits)\" 328x36",
+    "a \"Write this page\" 140x32",
+    "button \"About real competitors found\" 20x20",
+    "button \"About you follow\" 20x20",
+    "button \"About lists and directories to join\" 20x20",
+    "button \"About gaps to act on\" 20x20",
+    "button \"About your competitors\" 20x20",
+    "a \"Download CSV\" 141x32",
+    "a \"Website settings\" 94x16",
+    "button \"What these numbers mean\" 20x20",
+    "button \"Details\" 68x32",
+    "button \"More actions for northpeak-erp.ae\" 77x32",
+    "button \"More actions for bluefin-consulting.ae\" 77x32",
+    "button \"Choose\" 93x32",
+    "button \"More actions for atlas-dynamics-partners-internati\" 77x32",
+    "button \"More actions for gulfledger.ae\" 77x32",
+    "button \"More actions for sandstone-tech.ae\" 77x32",
+    "button \"More actions for orbit-erp.com\" 77x32",
+    "button \"About gaps against your competitors\" 20x20",
+    "button \"All 21\" 63x28",
+    "button \"Competitors rank, you are missing 10\" 254x28",
+    "button \"One competitor ranks, you are missing 1\" 273x28",
+    "button \"You rank low 4\" 119x28"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=1064"
+   ],
+   "trunc": [
+    "gulfdynamics-partners.ae"
+   ],
+   "heads": [
+    "H1:Competitors",
+    "H2:You follow 2 main competitors: northpeak",
+    "H3:Your competitors",
+    "H4:You follow",
+    "H4:Suggested",
+    "H4:Watchlist",
+    "H3:Gaps against your competitors",
+    "H3:Lists and directories to join",
+    "H3:Who AI answers name",
+    "H3:Websites that win these searches but are",
+    "H3:Not competitors"
+   ],
+   "unnamed": [],
+   "height": 4955,
+   "tip": {
+    "box": "20x20",
+    "after": "none"
+   },
+   "errors": []
+  },
+  {
+   "pg": "keywords",
+   "width": 1024,
+   "theme": "dark",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to read this\" 136x28",
+    "a \"Research my keywords again (57 credits)\" 330x36",
+    "a \"Improve this page\" 157x32",
+    "button \"About go\" 20x20",
+    "button \"About takes a few months\" 20x20",
+    "button \"About searches found\" 20x20",
+    "button \"About just off page one\" 20x20",
+    "a \"Your plan\" 74x32",
+    "a \"Topics\" 55x32",
+    "a \"Just off page one\" 123x32",
+    "a \"Every search and filters\" 156x32",
+    "button \"About your plan\" 20x20",
+    "a \"Write this page\" 140x32",
+    "a \"How to get listed\" 152x32",
+    "a \"Plan the ladder\" 141x32",
+    "a \"How to get named\" 160x32",
+    "button \"About topics\" 20x20",
+    "button \"What this means\" 20x20",
+    "button \"What makes up this score\" 20x20",
+    "button \"Where this search came from\" 20x20",
+    "button \"Show all 183\" 108x32",
+    "button \"See all 211 in the table\" 162x32",
+    "button \"About buyer questions\" 20x20",
+    "button \"Add to my AI questions\" 189x32"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=1064"
+   ],
+   "trunc": [],
+   "heads": [
+    "H1:Keyword research",
+    "H2:You can win 73 topics soon, and 51 more ",
+    "H3:Your plan",
+    "H3:Topics",
+    "H3:Just off page one",
+    "H3:Buyer questions",
+    "H3:Every search"
+   ],
+   "unnamed": [],
+   "height": 9132,
+   "tip": {
+    "box": "20x20",
+    "after": "none"
+   },
+   "errors": []
+  },
+  {
+   "pg": "competitors",
+   "width": 1440,
+   "theme": "dark",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to choose\" 127x28",
+    "a \"Check my competitors again (23 credits)\" 328x36",
+    "a \"Write this page\" 140x32",
+    "button \"About real competitors found\" 20x20",
+    "button \"About you follow\" 20x20",
+    "button \"About lists and directories to join\" 20x20",
+    "button \"About gaps to act on\" 20x20",
+    "button \"About your competitors\" 20x20",
+    "a \"Download CSV\" 141x32",
+    "a \"Website settings\" 94x16",
+    "button \"What these numbers mean\" 20x20",
+    "button \"Details\" 68x32",
+    "button \"More actions for northpeak-erp.ae\" 77x32",
+    "button \"More actions for bluefin-consulting.ae\" 77x32",
+    "button \"Choose\" 93x32",
+    "button \"More actions for atlas-dynamics-partners-internati\" 77x32",
+    "button \"More actions for gulfledger.ae\" 77x32",
+    "button \"More actions for sandstone-tech.ae\" 77x32",
+    "button \"More actions for orbit-erp.com\" 77x32",
+    "button \"About gaps against your competitors\" 20x20",
+    "button \"All 21\" 63x28",
+    "button \"Competitors rank, you are missing 10\" 254x28",
+    "button \"One competitor ranks, you are missing 1\" 273x28",
+    "button \"You rank low 4\" 119x28"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=1480"
+   ],
+   "trunc": [
+    "gulfdynamics-partners.ae"
+   ],
+   "heads": [
+    "H1:Competitors",
+    "H2:You follow 2 main competitors: northpeak",
+    "H3:Your competitors",
+    "H4:You follow",
+    "H4:Suggested",
+    "H4:Watchlist",
+    "H3:Gaps against your competitors",
+    "H3:Lists and directories to join",
+    "H3:Who AI answers name",
+    "H3:Websites that win these searches but are",
+    "H3:Not competitors"
+   ],
+   "unnamed": [],
+   "height": 3551,
+   "tip": {
+    "box": "20x20",
+    "after": "none"
+   },
+   "errors": []
+  },
+  {
+   "pg": "keywords",
+   "width": 1440,
+   "theme": "dark",
+   "overflow": 0,
+   "h1": 1,
+   "small": [
+    "a \"gulfdynamics-partners.ae (opens in a new tab)\" 226x24",
+    "button \"How to read this\" 136x28",
+    "a \"Research my keywords again (57 credits)\" 330x36",
+    "a \"Improve this page\" 157x32",
+    "button \"About go\" 20x20",
+    "button \"About takes a few months\" 20x20",
+    "button \"About searches found\" 20x20",
+    "button \"About just off page one\" 20x20",
+    "a \"Your plan\" 74x32",
+    "a \"Topics\" 55x32",
+    "a \"Just off page one\" 123x32",
+    "a \"Every search and filters\" 156x32",
+    "button \"About your plan\" 20x20",
+    "a \"Write this page\" 140x32",
+    "a \"How to get listed\" 152x32",
+    "a \"Plan the ladder\" 141x32",
+    "a \"How to get named\" 160x32",
+    "button \"About topics\" 20x20",
+    "button \"What this means\" 20x20",
+    "button \"What makes up this score\" 20x20",
+    "button \"Where this search came from\" 20x20",
+    "button \"Show all 183\" 108x32",
+    "button \"See all 211 in the table\" 162x32",
+    "button \"About buyer questions\" 20x20",
+    "button \"Add to my AI questions\" 189x32"
+   ],
+   "over": [
+    "img.pointer-events-none absolute -top-24 -right-20 -z- right=1480"
+   ],
+   "trunc": [],
+   "heads": [
+    "H1:Keyword research",
+    "H2:You can win 73 topics soon, and 51 more ",
+    "H3:Your plan",
+    "H3:Topics",
+    "H3:Just off page one",
+    "H3:Buyer questions",
+    "H3:Every search"
+   ],
+   "unnamed": [],
+   "height": 7456,
+   "tip": {
+    "box": "20x20",
+    "after": "none"
+   },
+   "errors": []
+  }
+ ],
+ "axe": [
+  {
+   "pg": "competitors",
+   "width": 375,
+   "theme": "light",
+   "v": [
+    {
+     "id": "region",
+     "impact": "moderate",
+     "help": "All page content should be contained by landmarks",
+     "n": 1,
+     "nodes": [
+      {
+       "t": ".sticky > a[href$=\"org-1\"][data-discover=\"true\"] > .dark\\:hidden.w-auto[alt=\"Alaventra\"]",
+       "s": "  Some page content is not contained by landmarks",
+       "h": "<img alt=\"Alaventra\" width=\"140\" height=\"28\" decoding=\"async\" draggable=\"false\" class=\"h-7 w-auto select-none dark:hidde"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pg": "keywords",
+   "width": 375,
+   "theme": "light",
+   "v": [
+    {
+     "id": "region",
+     "impact": "moderate",
+     "help": "All page content should be contained by landmarks",
+     "n": 1,
+     "nodes": [
+      {
+       "t": ".top-0 > a[href$=\"org-1\"][data-discover=\"true\"] > .dark\\:hidden.w-auto[alt=\"Alaventra\"]",
+       "s": "  Some page content is not contained by landmarks",
+       "h": "<img alt=\"Alaventra\" width=\"140\" height=\"28\" decoding=\"async\" draggable=\"false\" class=\"h-7 w-auto select-none dark:hidde"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pg": "competitors",
+   "width": 1440,
+   "theme": "light",
+   "v": []
+  },
+  {
+   "pg": "keywords",
+   "width": 1440,
+   "theme": "light",
+   "v": []
+  },
+  {
+   "pg": "competitors",
+   "width": 375,
+   "theme": "dark",
+   "v": [
+    {
+     "id": "region",
+     "impact": "moderate",
+     "help": "All page content should be contained by landmarks",
+     "n": 1,
+     "nodes": [
+      {
+       "t": ".sticky > a[href$=\"org-1\"][data-discover=\"true\"] > .dark\\:block.w-auto[alt=\"Alaventra\"]",
+       "s": "  Some page content is not contained by landmarks",
+       "h": "<img alt=\"Alaventra\" width=\"140\" height=\"28\" decoding=\"async\" draggable=\"false\" class=\"hidden h-7 w-auto select-none dar"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pg": "keywords",
+   "width": 375,
+   "theme": "dark",
+   "v": [
+    {
+     "id": "region",
+     "impact": "moderate",
+     "help": "All page content should be contained by landmarks",
+     "n": 1,
+     "nodes": [
+      {
+       "t": ".top-0 > a[href$=\"org-1\"][data-discover=\"true\"] > .dark\\:block.w-auto[alt=\"Alaventra\"]",
+       "s": "  Some page content is not contained by landmarks",
+       "h": "<img alt=\"Alaventra\" width=\"140\" height=\"28\" decoding=\"async\" draggable=\"false\" class=\"hidden h-7 w-auto select-none dar"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "pg": "competitors",
+   "width": 1440,
+   "theme": "dark",
+   "v": []
+  },
+  {
+   "pg": "keywords",
+   "width": 1440,
+   "theme": "dark",
+   "v": []
+  }
+ ],
+ "states": [
+  {
+   "site": "s-new",
+   "name": "empty",
+   "pg": "competitors",
+   "width": 375,
+   "text": "brandnew-consulting.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 43 minutes\nCompetitors\n\nWho brandnew-consulting.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nFind my competitors\n(23 credits)\nFind out who you really compete with\n\nWe read Google's results for each of your services in your market, sort every website by what it is (a company like you, a directory, a list, a platform) and show you the evidence. It takes about 6 minutes.\n\nFind my competitors\n(23 credits)",
+   "links": [
+    "brandnew-consulting.ae (opens in a new tab) -> https://brandnew-consulting.ae",
+    "Find my competitors (23 credits) -> /o/org-1/tools/competitors?site=a0000000-0000-4000-8000-000000000012",
+    "Find my competitors (23 credits) -> /o/org-1/tools/competitors?site=a0000000-0000-4000-8000-000000000012"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-new",
+   "name": "empty",
+   "pg": "keywords",
+   "width": 375,
+   "text": "brandnew-consulting.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 43 minutes\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches brandnew-consulting.ae can win.\n\nHow to read this\nResearch my keywords\n(57 credits)\nFind what your buyers search\n\nWe collect searches from your Search Console, Google's own suggestions and questions, and your competitors; keep the ones that fit what you sell; group them by topic and tell you which ones you can win. It takes about 12 minutes.\n\nResearch my keywords\n(57 credits)\n\nTip: choose your competitors first on the Competitors page, so the research can show where they are ahead.",
+   "links": [
+    "brandnew-consulting.ae (opens in a new tab) -> https://brandnew-consulting.ae",
+    "Research my keywords (57 credits) -> /o/org-1/tools/keyword_research?site=a0000000-0000-4000-8000-000000000012",
+    "Research my keywords (57 credits) -> /o/org-1/tools/keyword_research?site=a0000000-0000-4000-8000-000000000012",
+    "Competitors page -> /o/org-1/sites/a0000000-0000-4000-8000-000000000012/competitors"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-new",
+   "name": "empty",
+   "pg": "competitors",
+   "width": 1440,
+   "text": "brandnew-consulting.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 43 minutes\nCompetitors\n\nWho brandnew-consulting.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nFind my competitors\n(23 credits)\nFind out who you really compete with\n\nWe read Google's results for each of your services in your market, sort every website by what it is (a company like you, a directory, a list, a platform) and show you the evidence. It takes about 6 minutes.\n\nFind my competitors\n(23 credits)",
+   "links": [
+    "brandnew-consulting.ae (opens in a new tab) -> https://brandnew-consulting.ae",
+    "Find my competitors (23 credits) -> /o/org-1/tools/competitors?site=a0000000-0000-4000-8000-000000000012",
+    "Find my competitors (23 credits) -> /o/org-1/tools/competitors?site=a0000000-0000-4000-8000-000000000012"
+   ],
+   "navKi": true
+  },
+  {
+   "site": "s-new",
+   "name": "empty",
+   "pg": "keywords",
+   "width": 1440,
+   "text": "brandnew-consulting.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 43 minutes\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches brandnew-consulting.ae can win.\n\nHow to read this\nResearch my keywords\n(57 credits)\nFind what your buyers search\n\nWe collect searches from your Search Console, Google's own suggestions and questions, and your competitors; keep the ones that fit what you sell; group them by topic and tell you which ones you can win. It takes about 12 minutes.\n\nResearch my keywords\n(57 credits)\n\nTip: choose your competitors first on the Competitors page, so the research can show where they are ahead.",
+   "links": [
+    "brandnew-consulting.ae (opens in a new tab) -> https://brandnew-consulting.ae",
+    "Research my keywords (57 credits) -> /o/org-1/tools/keyword_research?site=a0000000-0000-4000-8000-000000000012",
+    "Research my keywords (57 credits) -> /o/org-1/tools/keyword_research?site=a0000000-0000-4000-8000-000000000012",
+    "Competitors page -> /o/org-1/sites/a0000000-0000-4000-8000-000000000012/competitors"
+   ],
+   "navKi": true
+  },
+  {
+   "site": "s-one",
+   "name": "one-row",
+   "pg": "competitors",
+   "width": 375,
+   "text": "tinyfirm-accounting.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 43 minutes\nCompetitors\n\nWho tinyfirm-accounting.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nUpdated today\nCheck my competitors again\n(23 credits)\nCOMPETITORS\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYour main competitor is sharjah-vat-experts.ae.\n\nFound in Google's results for your services. Choose up to 5 to follow: each run then compares you with them.\n\nNext step\n\nChoose your competitors, starting with sharjah-vat-experts.ae\n\nChoose sharjah-vat-experts.ae\nReal competitors found\n1\n1\nYou follow\n0 of 5\nLists and directories to join\n0\n0\nGaps to act on\n0\n0\nYour competitors\n\n0 chosen, 1 suggested, 0 on your watchlist\n\nDownload CSV\n\nThe competitors you entered in Website settings start on this list as chosen. Choosing here does not change that list, which your AI visibility and backlink checks use.\n\nYou follow\n\nChoose up to 5 below.\n\nSuggested\nDirect competitor\nAbout your size\n\nsharjah-vat-experts.ae\n\nIn the first 10 Google results for 9 of 14 of your service",
+   "links": [
+    "tinyfirm-accounting.ae (opens in a new tab) -> https://tinyfirm-accounting.ae",
+    "Check my competitors again (23 credits) -> /o/org-1/tools/competitors?site=a0000000-0000-4000-8000-000000000013",
+    "Download CSV -> /api/orgs/org-1/sites/a0000000-0000-4000-8000-000000000013/ki/competitors.csv",
+    "Website settings -> /o/org-1/sites/a0000000-0000-4000-8000-000000000013/settings",
+    "Download CSV -> /api/orgs/org-1/sites/a0000000-0000-4000-8000-000000000013/ki/gaps.csv"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-one",
+   "name": "one-row",
+   "pg": "keywords",
+   "width": 375,
+   "text": "tinyfirm-accounting.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 43 minutes\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches tinyfirm-accounting.ae can win.\n\nHow to read this\nUpdated today\nResearch my keywords again\n(57 credits)\nKEYWORD RESEARCH\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou can win 1 topic soon.\n\nWe found 1 search people use to find a service like yours, grouped into 1 topic. Start with the plan below.\n\nNext step\n\nFirst step: Improve your VAT registration page\n\nImprove this page\nGo\n1\n1\nTakes a few months\n0\n0\nSearches found\n1\n1\nJust off page one\n0\n0\nOn this page:\nYour plan\nTopics\nJust off page one\nEvery search and filters\nYour plan\n\nThe step most likely to bring you buyers\n\n1\n\nImprove your VAT registration page\n\nYou are #11 and the page is thin.\n\nImprove your page · tinyfirm-accounting.ae/vat · about 40 credits\n\nImprove this page\nTopics\n\n1 topic, best first. One page can win each topic.\n\nGo\nReady to hire\n1 search\n\nvat registration consultant sharjah\n\nSearches a month: \n140\nScore: \n64, likely 56 to 72\nWh",
+   "links": [
+    "tinyfirm-accounting.ae (opens in a new tab) -> https://tinyfirm-accounting.ae",
+    "Research my keywords again (57 credits) -> /o/org-1/tools/keyword_research?site=a0000000-0000-4000-8000-000000000013",
+    "Improve this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000013&prefill=eyJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL3RpbnlmaXJtLWFjY291bnRpbmcuYWUvdmF0In0%3D",
+    "Your plan -> #ki-plan",
+    "Topics -> #ki-topics",
+    "Just off page one -> #ki-striking",
+    "Every search and filters -> #every-search",
+    "Improve this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000013&prefill=eyJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL3RpbnlmaXJtLWFjY291bnRpbmcuYWUvdmF0In0%3D",
+    "Improve this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000013&prefill=eyJrZXl3b3JkIjoidmF0IHJlZ2lzdHJhdGlvbiBjb25zdWx0YW50IHNoYXJqYWgiLCJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL3RpbnlmaXJtLWFjY291bnRpbmcuYWUvc2VydmljZXMvdmF0In0%3D",
+    "Download CSV -> /api/orgs/org-1/sites/a0000000-0000-4000-8000-000000000013/ki/keywords.csv?sort=-score"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-one",
+   "name": "one-row",
+   "pg": "competitors",
+   "width": 1440,
+   "text": "tinyfirm-accounting.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 43 minutes\nCompetitors\n\nWho tinyfirm-accounting.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nUpdated today\nCheck my competitors again\n(23 credits)\nCOMPETITORS\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYour main competitor is sharjah-vat-experts.ae.\n\nFound in Google's results for your services. Choose up to 5 to follow: each run then compares you with them.\n\nNext step\n\nChoose your competitors, starting with sharjah-vat-experts.ae\n\nChoose sharjah-vat-experts.ae\nReal competitors found\n1\n1\nYou follow\n0 of 5\nLists and directories to join\n0\n0\nGaps to act on\n0\n0\nYour competitors\n\n0 chosen, 1 suggested, 0 on your watchlist\n\nDownload CSV\n\nThe competitors you entered in Website settings start on this list as chosen. Choosing here does not change that list, which your AI visibility and backlink checks use.\n\nYou follow\n\nChoose up to 5 below.\n\nSuggested\nDirect competitor\nAbout your size\n\nsharjah-vat-experts.ae\n\nIn the first 10 Google results for 9 of 14 of your servi",
+   "links": [
+    "tinyfirm-accounting.ae (opens in a new tab) -> https://tinyfirm-accounting.ae",
+    "Check my competitors again (23 credits) -> /o/org-1/tools/competitors?site=a0000000-0000-4000-8000-000000000013",
+    "Download CSV -> /api/orgs/org-1/sites/a0000000-0000-4000-8000-000000000013/ki/competitors.csv",
+    "Website settings -> /o/org-1/sites/a0000000-0000-4000-8000-000000000013/settings",
+    "Download CSV -> /api/orgs/org-1/sites/a0000000-0000-4000-8000-000000000013/ki/gaps.csv"
+   ],
+   "navKi": true
+  },
+  {
+   "site": "s-one",
+   "name": "one-row",
+   "pg": "keywords",
+   "width": 1440,
+   "text": "tinyfirm-accounting.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 43 minutes\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches tinyfirm-accounting.ae can win.\n\nHow to read this\nUpdated today\nResearch my keywords again\n(57 credits)\nKEYWORD RESEARCH\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou can win 1 topic soon.\n\nWe found 1 search people use to find a service like yours, grouped into 1 topic. Start with the plan below.\n\nNext step\n\nFirst step: Improve your VAT registration page\n\nImprove this page\nGo\n1\n1\nTakes a few months\n0\n0\nSearches found\n1\n1\nJust off page one\n0\n0\nOn this page:\nYour plan\nTopics\nJust off page one\nEvery search and filters\nYour plan\n\nThe step most likely to bring you buyers\n\n1\n\nImprove your VAT registration page\n\nYou are #11 and the page is thin.\n\nImprove your page · tinyfirm-accounting.ae/vat · about 40 credits\n\nImprove this page\nTopics\n\n1 topic, best first. One page can win each topic.\n\nGo\nReady to hire\n1 search\n\nvat registration consultant sharjah\n\nSearches a month: \n140\nScore: \n64, likely 56 to 72\n",
+   "links": [
+    "tinyfirm-accounting.ae (opens in a new tab) -> https://tinyfirm-accounting.ae",
+    "Research my keywords again (57 credits) -> /o/org-1/tools/keyword_research?site=a0000000-0000-4000-8000-000000000013",
+    "Improve this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000013&prefill=eyJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL3RpbnlmaXJtLWFjY291bnRpbmcuYWUvdmF0In0%3D",
+    "Your plan -> #ki-plan",
+    "Topics -> #ki-topics",
+    "Just off page one -> #ki-striking",
+    "Every search and filters -> #every-search",
+    "Improve this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000013&prefill=eyJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL3RpbnlmaXJtLWFjY291bnRpbmcuYWUvdmF0In0%3D",
+    "Improve this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000013&prefill=eyJrZXl3b3JkIjoidmF0IHJlZ2lzdHJhdGlvbiBjb25zdWx0YW50IHNoYXJqYWgiLCJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL3RpbnlmaXJtLWFjY291bnRpbmcuYWUvc2VydmljZXMvdmF0In0%3D",
+    "Download CSV -> /api/orgs/org-1/sites/a0000000-0000-4000-8000-000000000013/ki/keywords.csv?sort=-score"
+   ],
+   "navKi": true
+  },
+  {
+   "site": "s-edx",
+   "name": "partial",
+   "pg": "competitors",
+   "width": 375,
+   "text": "openlearn-studio.io\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 43 minutes\nCompetitors\n\nWho openlearn-studio.io really competes with in Google, and what to do about each one.\n\nHow to choose\nUpdated today\nCheck my competitors again\n(23 credits)\nCOMPETITORS\nUpdated 8 Nov 2026\nMarket: United States\nYour 3 main competitors are lmsforge.dev, edtech-cloudworks.com and campusbyte.io.\n\nFound in Google's results for your services. Choose up to 5 to follow: each run then compares you with them.\n\nNext step\n\nChoose your competitors, starting with lmsforge.dev\n\nChoose lmsforge.dev\nReal competitors found\n3\n3\nYou follow\n0 of 5\nLists and directories to join\n2\n2\nGaps to act on\n0\n0\nYour competitors\n\n0 chosen, 3 suggested, 0 on your watchlist\n\nDownload CSV\n\nThe competitors you entered in Website settings start on this list as chosen. Choosing here does not change that list, which your AI visibility and backlink checks use.\n\nYou follow\n\nChoose up to 5 below.\n\nSuggested\nDirect competitor\nAbout your size\n\nlmsforge.dev\n\nIn the first 10 Google results for 11 of 14 of your service search",
+   "links": [
+    "openlearn-studio.io (opens in a new tab) -> https://openlearn-studio.io",
+    "Check my competitors again (23 credits) -> /o/org-1/tools/competitors?site=a0000000-0000-4000-8000-000000000011",
+    "Download CSV -> /api/orgs/org-1/sites/a0000000-0000-4000-8000-000000000011/ki/competitors.csv",
+    "Website settings -> /o/org-1/sites/a0000000-0000-4000-8000-000000000011/settings",
+    "Download CSV -> /api/orgs/org-1/sites/a0000000-0000-4000-8000-000000000011/ki/gaps.csv",
+    "How to get listed -> /o/org-1/sites/a0000000-0000-4000-8000-000000000011/links#listings",
+    "How to get listed -> /o/org-1/sites/a0000000-0000-4000-8000-000000000011/links#listings"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-edx",
+   "name": "partial",
+   "pg": "keywords",
+   "width": 375,
+   "text": "openlearn-studio.io\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 43 minutes\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches openlearn-studio.io can win.\n\nHow to read this\nUpdated today\nResearch my keywords again\n(57 credits)\n\nPart of the last reading is missing\n\nWe could not read search volumes and your Search Console searches this time. Everything else is shown, and the next run tries again. You were only charged for what was read.\nKEYWORD RESEARCH\nUpdated 8 Nov 2026\nMarket: United States\nYou can win 6 topics soon, and 4 more in a few months.\n\nWe found 143 searches people use to find a service like yours, grouped into 13 topics. Start with the plan below.\n\nGo\n6\n6\nTakes a few months\n4\n4\nSearches found\n143\n143\nJust off page one\n15\n15\nOn this page:\nYour plan\nTopics\nJust off page one\nEvery search and filters\nYour plan\n\nThe plan appears after the research\n\nRun the research to get your plan.\n\nTopics\n\n13 topics, best first. One page can win each topic.\n\nGo\nReady to hire\n14 searches\n\nopen edx consulting services\n\nSearches a month: \n9",
+   "links": [
+    "openlearn-studio.io (opens in a new tab) -> https://openlearn-studio.io",
+    "Research my keywords again (57 credits) -> /o/org-1/tools/keyword_research?site=a0000000-0000-4000-8000-000000000011",
+    "Your plan -> #ki-plan",
+    "Topics -> #ki-topics",
+    "Just off page one -> #ki-striking",
+    "Every search and filters -> #every-search",
+    "Write this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000011&prefill=eyJrZXl3b3JkIjoib3BlbiBlZHggY29uc3VsdGluZyBzZXJ2aWNlcyJ9",
+    "Improve this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000011&prefill=eyJrZXl3b3JkIjoib3BlbiBlZHggZGV2ZWxvcG1lbnQgY29tcGFueSBwcmljaW5nIiwiZXhpc3RpbmdQYWdlVXJsIjoiaHR0cHM6Ly9vcGVubGVhcm4tc3R1ZGlvLmlvL3NlcnZpY2VzL29wZW4tZWR4LWRldmVsb3BtZW50LWNvbXBhbnkifQ%3D%3D",
+    "Write this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000011&prefill=eyJrZXl3b3JkIjoib3BlbiBlZHggcGx1Z2luIGRldmVsb3BtZW50IHN1cHBvcnQifQ%3D%3D",
+    "Improve this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000011&prefill=eyJrZXl3b3JkIjoiZWR4IGNvdXJzZSBhdXRob3Jpbmcgc2VydmljZXMgc3VwcG9ydCIsImV4aXN0aW5nUGFnZVVybCI6Imh0dHBzOi8vb3BlbmxlYXJuLXN0dWRpby5pby9zZXJ2aWNlcy9lZHgtY291cnNlLWF1dGhvcmluZy1zZXJ2aWNlcyJ9",
+    "Improve this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000011&prefill=eyJrZXl3b3JkIjoib3BlbiBlZHggdGhlbWUgY3VzdG9taXphdGlvbiBiZXN0IHByYWN0aWNlcyIsImV4aXN0aW5nUGFnZVVybCI6Imh0dHBzOi8vb3BlbmxlYXJuLXN0dWRpby5pby9zZXJ2aWNlcy9vcGVuLWVkeC10aGVtZS1jdXN0b21pemF0aW9uIn0%3D",
+    "Write this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000011&prefill=eyJrZXl3b3JkIjoib3BlbiBlZHggdnMgbW9vZGxlIGF3cyJ9"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-edx",
+   "name": "partial",
+   "pg": "competitors",
+   "width": 1440,
+   "text": "openlearn-studio.io\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 43 minutes\nCompetitors\n\nWho openlearn-studio.io really competes with in Google, and what to do about each one.\n\nHow to choose\nUpdated today\nCheck my competitors again\n(23 credits)\nCOMPETITORS\n·\nUpdated 8 Nov 2026\nMarket: United States\nYour 3 main competitors are lmsforge.dev, edtech-cloudworks.com and campusbyte.io.\n\nFound in Google's results for your services. Choose up to 5 to follow: each run then compares you with them.\n\nNext step\n\nChoose your competitors, starting with lmsforge.dev\n\nChoose lmsforge.dev\nReal competitors found\n3\n3\nYou follow\n0 of 5\nLists and directories to join\n2\n2\nGaps to act on\n0\n0\nYour competitors\n\n0 chosen, 3 suggested, 0 on your watchlist\n\nDownload CSV\n\nThe competitors you entered in Website settings start on this list as chosen. Choosing here does not change that list, which your AI visibility and backlink checks use.\n\nYou follow\n\nChoose up to 5 below.\n\nSuggested\nDirect competitor\nAbout your size\n\nlmsforge.dev\n\nIn the first 10 Google results for 11 of 14 of your service sear",
+   "links": [
+    "openlearn-studio.io (opens in a new tab) -> https://openlearn-studio.io",
+    "Check my competitors again (23 credits) -> /o/org-1/tools/competitors?site=a0000000-0000-4000-8000-000000000011",
+    "Download CSV -> /api/orgs/org-1/sites/a0000000-0000-4000-8000-000000000011/ki/competitors.csv",
+    "Website settings -> /o/org-1/sites/a0000000-0000-4000-8000-000000000011/settings",
+    "Download CSV -> /api/orgs/org-1/sites/a0000000-0000-4000-8000-000000000011/ki/gaps.csv",
+    "How to get listed -> /o/org-1/sites/a0000000-0000-4000-8000-000000000011/links#listings",
+    "How to get listed -> /o/org-1/sites/a0000000-0000-4000-8000-000000000011/links#listings"
+   ],
+   "navKi": true
+  },
+  {
+   "site": "s-edx",
+   "name": "partial",
+   "pg": "keywords",
+   "width": 1440,
+   "text": "openlearn-studio.io\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 43 minutes\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches openlearn-studio.io can win.\n\nHow to read this\nUpdated today\nResearch my keywords again\n(57 credits)\n\nPart of the last reading is missing\n\nWe could not read search volumes and your Search Console searches this time. Everything else is shown, and the next run tries again. You were only charged for what was read.\nKEYWORD RESEARCH\n·\nUpdated 8 Nov 2026\nMarket: United States\nYou can win 6 topics soon, and 4 more in a few months.\n\nWe found 143 searches people use to find a service like yours, grouped into 13 topics. Start with the plan below.\n\nGo\n6\n6\nTakes a few months\n4\n4\nSearches found\n143\n143\nJust off page one\n15\n15\nOn this page:\nYour plan\nTopics\nJust off page one\nEvery search and filters\nYour plan\n\nThe plan appears after the research\n\nRun the research to get your plan.\n\nTopics\n\n13 topics, best first. One page can win each topic.\n\nGo\nReady to hire\n14 searches\n\nopen edx consulting services\n\nSearches a month: ",
+   "links": [
+    "openlearn-studio.io (opens in a new tab) -> https://openlearn-studio.io",
+    "Research my keywords again (57 credits) -> /o/org-1/tools/keyword_research?site=a0000000-0000-4000-8000-000000000011",
+    "Your plan -> #ki-plan",
+    "Topics -> #ki-topics",
+    "Just off page one -> #ki-striking",
+    "Every search and filters -> #every-search",
+    "Write this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000011&prefill=eyJrZXl3b3JkIjoib3BlbiBlZHggY29uc3VsdGluZyBzZXJ2aWNlcyJ9",
+    "Improve this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000011&prefill=eyJrZXl3b3JkIjoib3BlbiBlZHggZGV2ZWxvcG1lbnQgY29tcGFueSBwcmljaW5nIiwiZXhpc3RpbmdQYWdlVXJsIjoiaHR0cHM6Ly9vcGVubGVhcm4tc3R1ZGlvLmlvL3NlcnZpY2VzL29wZW4tZWR4LWRldmVsb3BtZW50LWNvbXBhbnkifQ%3D%3D",
+    "Write this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000011&prefill=eyJrZXl3b3JkIjoib3BlbiBlZHggcGx1Z2luIGRldmVsb3BtZW50IHN1cHBvcnQifQ%3D%3D",
+    "Improve this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000011&prefill=eyJrZXl3b3JkIjoiZWR4IGNvdXJzZSBhdXRob3Jpbmcgc2VydmljZXMgc3VwcG9ydCIsImV4aXN0aW5nUGFnZVVybCI6Imh0dHBzOi8vb3BlbmxlYXJuLXN0dWRpby5pby9zZXJ2aWNlcy9lZHgtY291cnNlLWF1dGhvcmluZy1zZXJ2aWNlcyJ9",
+    "Improve this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000011&prefill=eyJrZXl3b3JkIjoib3BlbiBlZHggdGhlbWUgY3VzdG9taXphdGlvbiBiZXN0IHByYWN0aWNlcyIsImV4aXN0aW5nUGFnZVVybCI6Imh0dHBzOi8vb3BlbmxlYXJuLXN0dWRpby5pby9zZXJ2aWNlcy9vcGVuLWVkeC10aGVtZS1jdXN0b21pemF0aW9uIn0%3D",
+    "Write this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000011&prefill=eyJrZXl3b3JkIjoib3BlbiBlZHggdnMgbW9vZGxlIGF3cyJ9"
+   ],
+   "navKi": true
+  },
+  {
+   "site": "s-refused",
+   "name": "refused",
+   "pg": "competitors",
+   "width": 375,
+   "text": "refused-market.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 43 minutes\nCompetitors\n\nWho refused-market.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nFind my competitors\n(23 credits)\n\nThe last run did not start: it asked for another country\n\nThis analysis runs for your website's country, United Arab Emirates. Run it again for United Arab Emirates. Nothing was charged.\nRun it for United Arab Emirates\nWebsite settings",
+   "links": [
+    "refused-market.ae (opens in a new tab) -> https://refused-market.ae",
+    "Find my competitors (23 credits) -> /o/org-1/tools/competitors?site=a0000000-0000-4000-8000-000000000014",
+    "Run it for United Arab Emirates -> /o/org-1/tools/competitors?site=a0000000-0000-4000-8000-000000000014&prefill=eyJjb3VudHJ5IjoiVW5pdGVkIEFyYWIgRW1pcmF0ZXMifQ%3D%3D",
+    "Website settings -> /o/org-1/sites/a0000000-0000-4000-8000-000000000014/settings"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-refused",
+   "name": "refused",
+   "pg": "keywords",
+   "width": 375,
+   "text": "refused-market.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 43 minutes\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches refused-market.ae can win.\n\nHow to read this\nResearch my keywords\n(57 credits)\n\nThe last run did not start: it asked for another country\n\nThis analysis runs for your website's country, United Arab Emirates. Run it again for United Arab Emirates. Nothing was charged.\nRun it for United Arab Emirates\nWebsite settings",
+   "links": [
+    "refused-market.ae (opens in a new tab) -> https://refused-market.ae",
+    "Research my keywords (57 credits) -> /o/org-1/tools/keyword_research?site=a0000000-0000-4000-8000-000000000014",
+    "Run it for United Arab Emirates -> /o/org-1/tools/keyword_research?site=a0000000-0000-4000-8000-000000000014&prefill=eyJjb3VudHJ5IjoiVW5pdGVkIEFyYWIgRW1pcmF0ZXMifQ%3D%3D",
+    "Website settings -> /o/org-1/sites/a0000000-0000-4000-8000-000000000014/settings"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-refused",
+   "name": "refused",
+   "pg": "competitors",
+   "width": 1440,
+   "text": "refused-market.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 43 minutes\nCompetitors\n\nWho refused-market.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nFind my competitors\n(23 credits)\n\nThe last run did not start: it asked for another country\n\nThis analysis runs for your website's country, United Arab Emirates. Run it again for United Arab Emirates. Nothing was charged.\nRun it for United Arab Emirates\nWebsite settings",
+   "links": [
+    "refused-market.ae (opens in a new tab) -> https://refused-market.ae",
+    "Find my competitors (23 credits) -> /o/org-1/tools/competitors?site=a0000000-0000-4000-8000-000000000014",
+    "Run it for United Arab Emirates -> /o/org-1/tools/competitors?site=a0000000-0000-4000-8000-000000000014&prefill=eyJjb3VudHJ5IjoiVW5pdGVkIEFyYWIgRW1pcmF0ZXMifQ%3D%3D",
+    "Website settings -> /o/org-1/sites/a0000000-0000-4000-8000-000000000014/settings"
+   ],
+   "navKi": true
+  },
+  {
+   "site": "s-refused",
+   "name": "refused",
+   "pg": "keywords",
+   "width": 1440,
+   "text": "refused-market.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 43 minutes\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches refused-market.ae can win.\n\nHow to read this\nResearch my keywords\n(57 credits)\n\nThe last run did not start: it asked for another country\n\nThis analysis runs for your website's country, United Arab Emirates. Run it again for United Arab Emirates. Nothing was charged.\nRun it for United Arab Emirates\nWebsite settings",
+   "links": [
+    "refused-market.ae (opens in a new tab) -> https://refused-market.ae",
+    "Research my keywords (57 credits) -> /o/org-1/tools/keyword_research?site=a0000000-0000-4000-8000-000000000014",
+    "Run it for United Arab Emirates -> /o/org-1/tools/keyword_research?site=a0000000-0000-4000-8000-000000000014&prefill=eyJjb3VudHJ5IjoiVW5pdGVkIEFyYWIgRW1pcmF0ZXMifQ%3D%3D",
+    "Website settings -> /o/org-1/sites/a0000000-0000-4000-8000-000000000014/settings"
+   ],
+   "navKi": true
+  },
+  {
+   "site": "s-credits",
+   "name": "credits",
+   "pg": "competitors",
+   "width": 375,
+   "text": "nocredits-co.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 42 minutes\nCompetitors\n\nWho nocredits-co.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nFind my competitors\n(23 credits)\n\nYour company has no credits left for analyses\n\nThe last run stopped before it started spending. Add credits, then run it again. Nothing was charged.\nOpen Credits\nFind out who you really compete with\n\nWe read Google's results for each of your services in your market, sort every website by what it is (a company like you, a directory, a list, a platform) and show you the evidence. It takes about 6 minutes.\n\nFind my competitors\n(23 credits)",
+   "links": [
+    "nocredits-co.ae (opens in a new tab) -> https://nocredits-co.ae",
+    "Find my competitors (23 credits) -> /o/org-1/tools/competitors?site=a0000000-0000-4000-8000-000000000015",
+    "Open Credits -> /o/org-1/settings/credits",
+    "Find my competitors (23 credits) -> /o/org-1/tools/competitors?site=a0000000-0000-4000-8000-000000000015"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-credits",
+   "name": "credits",
+   "pg": "keywords",
+   "width": 375,
+   "text": "nocredits-co.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 42 minutes\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches nocredits-co.ae can win.\n\nHow to read this\nResearch my keywords\n(57 credits)\n\nYour company has no credits left for analyses\n\nThe last run stopped before it started spending. Add credits, then run it again. Nothing was charged.\nOpen Credits\nFind what your buyers search\n\nWe collect searches from your Search Console, Google's own suggestions and questions, and your competitors; keep the ones that fit what you sell; group them by topic and tell you which ones you can win. It takes about 12 minutes.\n\nResearch my keywords\n(57 credits)\n\nTip: choose your competitors first on the Competitors page, so the research can show where they are ahead.",
+   "links": [
+    "nocredits-co.ae (opens in a new tab) -> https://nocredits-co.ae",
+    "Research my keywords (57 credits) -> /o/org-1/tools/keyword_research?site=a0000000-0000-4000-8000-000000000015",
+    "Open Credits -> /o/org-1/settings/credits",
+    "Research my keywords (57 credits) -> /o/org-1/tools/keyword_research?site=a0000000-0000-4000-8000-000000000015",
+    "Competitors page -> /o/org-1/sites/a0000000-0000-4000-8000-000000000015/competitors"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-credits",
+   "name": "credits",
+   "pg": "competitors",
+   "width": 1440,
+   "text": "nocredits-co.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 42 minutes\nCompetitors\n\nWho nocredits-co.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nFind my competitors\n(23 credits)\n\nYour company has no credits left for analyses\n\nThe last run stopped before it started spending. Add credits, then run it again. Nothing was charged.\nOpen Credits\nFind out who you really compete with\n\nWe read Google's results for each of your services in your market, sort every website by what it is (a company like you, a directory, a list, a platform) and show you the evidence. It takes about 6 minutes.\n\nFind my competitors\n(23 credits)",
+   "links": [
+    "nocredits-co.ae (opens in a new tab) -> https://nocredits-co.ae",
+    "Find my competitors (23 credits) -> /o/org-1/tools/competitors?site=a0000000-0000-4000-8000-000000000015",
+    "Open Credits -> /o/org-1/settings/credits",
+    "Find my competitors (23 credits) -> /o/org-1/tools/competitors?site=a0000000-0000-4000-8000-000000000015"
+   ],
+   "navKi": true
+  },
+  {
+   "site": "s-credits",
+   "name": "credits",
+   "pg": "keywords",
+   "width": 1440,
+   "text": "nocredits-co.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 42 minutes\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches nocredits-co.ae can win.\n\nHow to read this\nResearch my keywords\n(57 credits)\n\nYour company has no credits left for analyses\n\nThe last run stopped before it started spending. Add credits, then run it again. Nothing was charged.\nOpen Credits\nFind what your buyers search\n\nWe collect searches from your Search Console, Google's own suggestions and questions, and your competitors; keep the ones that fit what you sell; group them by topic and tell you which ones you can win. It takes about 12 minutes.\n\nResearch my keywords\n(57 credits)\n\nTip: choose your competitors first on the Competitors page, so the research can show where they are ahead.",
+   "links": [
+    "nocredits-co.ae (opens in a new tab) -> https://nocredits-co.ae",
+    "Research my keywords (57 credits) -> /o/org-1/tools/keyword_research?site=a0000000-0000-4000-8000-000000000015",
+    "Open Credits -> /o/org-1/settings/credits",
+    "Research my keywords (57 credits) -> /o/org-1/tools/keyword_research?site=a0000000-0000-4000-8000-000000000015",
+    "Competitors page -> /o/org-1/sites/a0000000-0000-4000-8000-000000000015/competitors"
+   ],
+   "navKi": true
+  },
+  {
+   "site": "s-off",
+   "name": "off",
+   "pg": "competitors",
+   "width": 375,
+   "text": "off-client.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 42 minutes\nCompetitors is not available for this website yet\n\nIt is rolling out to selected websites. Ask us if you would like it for yours.\n\nBack to the overview",
+   "links": [
+    "off-client.ae (opens in a new tab) -> https://off-client.ae",
+    "Back to the overview -> /o/org-1/sites/a0000000-0000-4000-8000-000000000017/overview"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-off",
+   "name": "off",
+   "pg": "keywords",
+   "width": 375,
+   "text": "off-client.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 42 minutes\nKeyword research is not available for this website yet\n\nIt is rolling out to selected websites. Ask us if you would like it for yours.\n\nBack to the overview",
+   "links": [
+    "off-client.ae (opens in a new tab) -> https://off-client.ae",
+    "Back to the overview -> /o/org-1/sites/a0000000-0000-4000-8000-000000000017/overview"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-off",
+   "name": "off",
+   "pg": "competitors",
+   "width": 1440,
+   "text": "off-client.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 42 minutes\nCompetitors is not available for this website yet\n\nIt is rolling out to selected websites. Ask us if you would like it for yours.\n\nBack to the overview",
+   "links": [
+    "off-client.ae (opens in a new tab) -> https://off-client.ae",
+    "Back to the overview -> /o/org-1/sites/a0000000-0000-4000-8000-000000000017/overview"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-off",
+   "name": "off",
+   "pg": "keywords",
+   "width": 1440,
+   "text": "off-client.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 42 minutes\nKeyword research is not available for this website yet\n\nIt is rolling out to selected websites. Ask us if you would like it for yours.\n\nBack to the overview",
+   "links": [
+    "off-client.ae (opens in a new tab) -> https://off-client.ae",
+    "Back to the overview -> /o/org-1/sites/a0000000-0000-4000-8000-000000000017/overview"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-killed",
+   "name": "killed",
+   "pg": "competitors",
+   "width": 375,
+   "text": "paused-client.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 42 minutes\nCompetitors is paused for maintenance\n\nIt is back shortly, with your results as they were. Nothing is charged while it is paused.\n\nBack to the overview",
+   "links": [
+    "paused-client.ae (opens in a new tab) -> https://paused-client.ae",
+    "Back to the overview -> /o/org-1/sites/a0000000-0000-4000-8000-000000000018/overview"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-killed",
+   "name": "killed",
+   "pg": "keywords",
+   "width": 375,
+   "text": "paused-client.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 42 minutes\nKeyword research is paused for maintenance\n\nIt is back shortly, with your results as they were. Nothing is charged while it is paused.\n\nBack to the overview",
+   "links": [
+    "paused-client.ae (opens in a new tab) -> https://paused-client.ae",
+    "Back to the overview -> /o/org-1/sites/a0000000-0000-4000-8000-000000000018/overview"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-killed",
+   "name": "killed",
+   "pg": "competitors",
+   "width": 1440,
+   "text": "paused-client.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 42 minutes\nCompetitors is paused for maintenance\n\nIt is back shortly, with your results as they were. Nothing is charged while it is paused.\n\nBack to the overview",
+   "links": [
+    "paused-client.ae (opens in a new tab) -> https://paused-client.ae",
+    "Back to the overview -> /o/org-1/sites/a0000000-0000-4000-8000-000000000018/overview"
+   ],
+   "navKi": true
+  },
+  {
+   "site": "s-killed",
+   "name": "killed",
+   "pg": "keywords",
+   "width": 1440,
+   "text": "paused-client.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 42 minutes\nKeyword research is paused for maintenance\n\nIt is back shortly, with your results as they were. Nothing is charged while it is paused.\n\nBack to the overview",
+   "links": [
+    "paused-client.ae (opens in a new tab) -> https://paused-client.ae",
+    "Back to the overview -> /o/org-1/sites/a0000000-0000-4000-8000-000000000018/overview"
+   ],
+   "navKi": true
+  },
+  {
+   "site": "s-erp",
+   "name": "error",
+   "pg": "competitors",
+   "width": 375,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 42 minutes\nCompetitors\n\nWho gulfdynamics-partners.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nCould not load this\n\nThe SEO engine could not be read right now. Please try again in a minute.\n\nTry again",
+   "links": [
+    "gulfdynamics-partners.ae (opens in a new tab) -> https://gulfdynamics-partners.ae"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-erp",
+   "name": "error",
+   "pg": "keywords",
+   "width": 375,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 42 minutes\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches gulfdynamics-partners.ae can win.\n\nHow to read this\nCould not load this\n\nThe SEO engine could not be read right now. Please try again in a minute.\n\nTry again",
+   "links": [
+    "gulfdynamics-partners.ae (opens in a new tab) -> https://gulfdynamics-partners.ae"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-erp",
+   "name": "error",
+   "pg": "competitors",
+   "width": 1440,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 42 minutes\nCompetitors\n\nWho gulfdynamics-partners.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nCould not load this\n\nThe SEO engine could not be read right now. Please try again in a minute.\n\nTry again",
+   "links": [
+    "gulfdynamics-partners.ae (opens in a new tab) -> https://gulfdynamics-partners.ae"
+   ],
+   "navKi": true
+  },
+  {
+   "site": "s-erp",
+   "name": "error",
+   "pg": "keywords",
+   "width": 1440,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 42 minutes\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches gulfdynamics-partners.ae can win.\n\nHow to read this\nCould not load this\n\nThe SEO engine could not be read right now. Please try again in a minute.\n\nTry again",
+   "links": [
+    "gulfdynamics-partners.ae (opens in a new tab) -> https://gulfdynamics-partners.ae"
+   ],
+   "navKi": true
+  },
+  {
+   "site": "s-erp",
+   "name": "loading",
+   "pg": "competitors",
+   "width": 375,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 42 minutes\nCompetitors\n\nWho gulfdynamics-partners.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nUpdated today\nCheck my competitors again\n(23 credits)\nCOMPETITORS\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou follow 2 main competitors: northpeak-erp.ae and bluefin-consulting.ae.\n\nFound in Google's results for your services. You can follow up to 5; the others stay on your watchlist.\n\nNext step\n\nWrite a new page for \"dynamics 365 business central partner abu dhabi\"\n\nWrite this page\nReal competitors found\n6\n6\nYou follow\n2 of 5\nLists and directories to join\n3\n3\nGaps to act on\n21\n21\nYour competitors\n\n2 chosen, 3 suggested, 1 on your watchlist\n\nDownload CSV\n\nThe competitors you entered in Website settings start on this list as chosen. Choosing here does not change that list, which your AI visibility and backlink checks use.\n\nYou follow\nDirect competitor\nAbout your size\n\nnorthpeak-erp.ae\n\nIn the first 10 Google results for 9 of 14 of your service searches in Unit",
+   "links": [
+    "gulfdynamics-partners.ae (opens in a new tab) -> https://gulfdynamics-partners.ae",
+    "Check my competitors again (23 credits) -> /o/org-1/tools/competitors?site=a0000000-0000-4000-8000-000000000010",
+    "Write this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgcGFydG5lciBhYnUgZGhhYmkifQ%3D%3D",
+    "Download CSV -> /api/orgs/org-1/sites/a0000000-0000-4000-8000-000000000010/ki/competitors.csv",
+    "Website settings -> /o/org-1/sites/a0000000-0000-4000-8000-000000000010/settings",
+    "Download CSV -> /api/orgs/org-1/sites/a0000000-0000-4000-8000-000000000010/ki/gaps.csv",
+    "Write this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgcGFydG5lciBhYnUgZGhhYmkifQ%3D%3D",
+    "Improve this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIHNvZnR3YXJlIHVhZSIsImV4aXN0aW5nUGFnZVVybCI6Imh0dHBzOi8vZ3VsZmR5bmFtaWNzLXBhcnRuZXJzLmFlL2VycC1zb2Z0d2FyZSJ9",
+    "Write this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoibWljcm9zb2Z0IGR5bmFtaWNzIDM2NSBidXNpbmVzcyBjZW50cmFsIGltcGxlbWVudGF0aW9uIHBhcnRuZXIgZm9yIHdob2xlc2FsZSBkaXN0cmlidXRpb24gYW5kIGxvZ2lzdGljcyBjb21wYW5pZXMgaW4gZHViIn0%3D",
+    "Refresh this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZ3VsZmR5bmFtaWNzIHBhcnRuZXJzIHJldmlld3MifQ%3D%3D",
+    "Improve this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgc2VydmljZXMgYWptYW4ifQ%3D%3D",
+    "Improve this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgYWdlbmN5IGFqbWFuIn0%3D"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-erp",
+   "name": "loading",
+   "pg": "keywords",
+   "width": 375,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 41 minutes\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches gulfdynamics-partners.ae can win.\n\nHow to read this",
+   "links": [
+    "gulfdynamics-partners.ae (opens in a new tab) -> https://gulfdynamics-partners.ae"
+   ],
+   "navKi": false
+  },
+  {
+   "site": "s-erp",
+   "name": "loading",
+   "pg": "competitors",
+   "width": 1440,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 41 minutes\nCompetitors\n\nWho gulfdynamics-partners.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nUpdated today\nCheck my competitors again\n(23 credits)\nCOMPETITORS\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou follow 2 main competitors: northpeak-erp.ae and bluefin-consulting.ae.\n\nFound in Google's results for your services. You can follow up to 5; the others stay on your watchlist.\n\nNext step\n\nWrite a new page for \"dynamics 365 business central partner abu dhabi\"\n\nWrite this page\nReal competitors found\n6\n6\nYou follow\n2 of 5\nLists and directories to join\n3\n3\nGaps to act on\n21\n21\nYour competitors\n\n2 chosen, 3 suggested, 1 on your watchlist\n\nDownload CSV\n\nThe competitors you entered in Website settings start on this list as chosen. Choosing here does not change that list, which your AI visibility and backlink checks use.\n\nYou follow\nDirect competitor\nAbout your size\n\nnorthpeak-erp.ae\n\nIn the first 10 Google results for 9 of 14 of your service searches in Un",
+   "links": [
+    "gulfdynamics-partners.ae (opens in a new tab) -> https://gulfdynamics-partners.ae",
+    "Check my competitors again (23 credits) -> /o/org-1/tools/competitors?site=a0000000-0000-4000-8000-000000000010",
+    "Write this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgcGFydG5lciBhYnUgZGhhYmkifQ%3D%3D",
+    "Download CSV -> /api/orgs/org-1/sites/a0000000-0000-4000-8000-000000000010/ki/competitors.csv",
+    "Website settings -> /o/org-1/sites/a0000000-0000-4000-8000-000000000010/settings",
+    "Download CSV -> /api/orgs/org-1/sites/a0000000-0000-4000-8000-000000000010/ki/gaps.csv",
+    "Write this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgcGFydG5lciBhYnUgZGhhYmkifQ%3D%3D",
+    "Improve this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIHNvZnR3YXJlIHVhZSIsImV4aXN0aW5nUGFnZVVybCI6Imh0dHBzOi8vZ3VsZmR5bmFtaWNzLXBhcnRuZXJzLmFlL2VycC1zb2Z0d2FyZSJ9",
+    "Write this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoibWljcm9zb2Z0IGR5bmFtaWNzIDM2NSBidXNpbmVzcyBjZW50cmFsIGltcGxlbWVudGF0aW9uIHBhcnRuZXIgZm9yIHdob2xlc2FsZSBkaXN0cmlidXRpb24gYW5kIGxvZ2lzdGljcyBjb21wYW5pZXMgaW4gZHViIn0%3D",
+    "Refresh this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZ3VsZmR5bmFtaWNzIHBhcnRuZXJzIHJldmlld3MifQ%3D%3D",
+    "Improve this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgc2VydmljZXMgYWptYW4ifQ%3D%3D",
+    "Improve this page -> /o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgYWdlbmN5IGFqbWFuIn0%3D"
+   ],
+   "navKi": true
+  },
+  {
+   "site": "s-erp",
+   "name": "loading",
+   "pg": "keywords",
+   "width": 1440,
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 41 minutes\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches gulfdynamics-partners.ae can win.\n\nHow to read this",
+   "links": [
+    "gulfdynamics-partners.ae (opens in a new tab) -> https://gulfdynamics-partners.ae"
+   ],
+   "navKi": true
+  }
+ ],
+ "personas": [
+  {
+   "p": "viewer",
+   "site": "s-erp",
+   "pg": "competitors",
+   "navKi": true,
+   "buttons": [
+    "gulfdynamics-partners.ae (opens in a new tab)",
+    "How to choose",
+    "Download CSV",
+    "Details",
+    "All 21",
+    "Competitors rank, you are missing 10",
+    "One competitor ranks, you are missing 1",
+    "You rank low 4",
+    "Just off page one 5",
+    "You lead: keep it 1",
+    "Show all 21",
+    "Why directories are not competitors"
+   ],
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 41 minutes\nCompetitors\n\nWho gulfdynamics-partners.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nCOMPETITORS\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou follow 2 main competitors: northpeak-erp.ae and bluefin-consulting.ae.\n\nFound in Google's results for your services. You can follow up to 5; the others stay on your watchlist.\n\nNext step\n\nWrite a new page for \"dynamics 365 business central partner abu dhabi\"\n\nReal competitors found\n6\n6\nYou follow\n2 of 5\nLists and directories to join\n3\n3\nGaps to act on\n21\n21\nYour competitors\n\n2 chosen, 3 suggested, 1 on your wa"
+  },
+  {
+   "p": "viewer",
+   "site": "s-erp",
+   "pg": "keywords",
+   "navKi": true,
+   "buttons": [
+    "gulfdynamics-partners.ae (opens in a new tab)",
+    "How to read this",
+    "Your plan",
+    "Topics",
+    "Just off page one",
+    "Every search and filters",
+    "Show all 183",
+    "See all 211 in the table",
+    "Download CSV",
+    "What the verdicts mean"
+   ],
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 41 minutes\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches gulfdynamics-partners.ae can win.\n\nHow to read this\nKEYWORD RESEARCH\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou can win 73 topics soon, and 51 more in a few months.\n\nWe found 5,000 searches people use to find a service like yours, grouped into 183 topics. Start with the plan below.\n\nNext step\n\nFirst step: Improve your Business Central page\n\nGo\n73\n73\nTakes a few months\n51\n51\nSearches found\n5,000\n5,000\nJust off page one\n211\n211\nOn this page:\nYour plan\nTopics\nJust off page one\nEvery search and filter"
+  },
+  {
+   "p": "member",
+   "site": "s-erp",
+   "pg": "competitors",
+   "navKi": true,
+   "buttons": [
+    "gulfdynamics-partners.ae (opens in a new tab)",
+    "How to choose",
+    "Check my competitors again (23 credits)",
+    "Write this page",
+    "Download CSV",
+    "Details",
+    "More",
+    "Choose",
+    "All 21",
+    "Competitors rank, you are missing 10",
+    "One competitor ranks, you are missing 1",
+    "You rank low 4",
+    "Just off page one 5",
+    "You lead: keep it 1",
+    "Not for us",
+    "Improve this page",
+    "Refresh this page",
+    "Show all 21",
+    "How to get listed",
+    "Why directories are not competitors",
+    "Put back on the watchlist"
+   ],
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 41 minutes\nCompetitors\n\nWho gulfdynamics-partners.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nUpdated today\nCheck my competitors again\n(23 credits)\nCOMPETITORS\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou follow 2 main competitors: northpeak-erp.ae and bluefin-consulting.ae.\n\nFound in Google's results for your services. You can follow up to 5; the others stay on your watchlist.\n\nNext step\n\nWrite a new page for \"dynamics 365 business central partner abu dhabi\"\n\nWrite this page\nReal competitors found\n6\n6\nYou follow\n2 of 5\nLists and directories to join\n3\n3\nGaps"
+  },
+  {
+   "p": "member",
+   "site": "s-erp",
+   "pg": "keywords",
+   "navKi": true,
+   "buttons": [
+    "gulfdynamics-partners.ae (opens in a new tab)",
+    "How to read this",
+    "Research my keywords again (57 credits)",
+    "Improve this page",
+    "Your plan",
+    "Topics",
+    "Just off page one",
+    "Every search and filters",
+    "Write this page",
+    "How to get listed",
+    "Plan the ladder",
+    "How to get named",
+    "Show all 183",
+    "See all 211 in the table",
+    "Download CSV",
+    "What the verdicts mean"
+   ],
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 41 minutes\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches gulfdynamics-partners.ae can win.\n\nHow to read this\nUpdated today\nResearch my keywords again\n(57 credits)\nKEYWORD RESEARCH\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou can win 73 topics soon, and 51 more in a few months.\n\nWe found 5,000 searches people use to find a service like yours, grouped into 183 topics. Start with the plan below.\n\nNext step\n\nFirst step: Improve your Business Central page\n\nImprove this page\nGo\n73\n73\nTakes a few months\n51\n51\nSearches found\n5,000\n5,000\nJust off page one\n211\n211\n"
+  },
+  {
+   "p": "admin",
+   "site": "s-erp",
+   "pg": "competitors",
+   "navKi": true,
+   "buttons": [
+    "gulfdynamics-partners.ae (opens in a new tab)",
+    "How to choose",
+    "Check my competitors again (23 credits)",
+    "Write this page",
+    "Download CSV",
+    "Website settings",
+    "Details",
+    "More",
+    "Choose",
+    "All 21",
+    "Competitors rank, you are missing 10",
+    "One competitor ranks, you are missing 1",
+    "You rank low 4",
+    "Just off page one 5",
+    "You lead: keep it 1",
+    "Not for us",
+    "Improve this page",
+    "Refresh this page",
+    "Show all 21",
+    "How to get listed",
+    "Why directories are not competitors",
+    "Put back on the watchlist"
+   ],
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 41 minutes\nCompetitors\n\nWho gulfdynamics-partners.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nUpdated today\nCheck my competitors again\n(23 credits)\nCOMPETITORS\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou follow 2 main competitors: northpeak-erp.ae and bluefin-consulting.ae.\n\nFound in Google's results for your services. You can follow up to 5; the others stay on your watchlist.\n\nNext step\n\nWrite a new page for \"dynamics 365 business central partner abu dhabi\"\n\nWrite this page\nReal competitors found\n6\n6\nYou follow\n2 of 5\nLists and directories to join\n3\n3\nGaps"
+  },
+  {
+   "p": "admin",
+   "site": "s-erp",
+   "pg": "keywords",
+   "navKi": true,
+   "buttons": [
+    "gulfdynamics-partners.ae (opens in a new tab)",
+    "How to read this",
+    "Research my keywords again (57 credits)",
+    "Improve this page",
+    "Your plan",
+    "Topics",
+    "Just off page one",
+    "Every search and filters",
+    "Write this page",
+    "How to get listed",
+    "Plan the ladder",
+    "How to get named",
+    "Show all 183",
+    "See all 211 in the table",
+    "Add to my AI questions",
+    "Download CSV",
+    "What the verdicts mean"
+   ],
+   "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 41 minutes\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches gulfdynamics-partners.ae can win.\n\nHow to read this\nUpdated today\nResearch my keywords again\n(57 credits)\nKEYWORD RESEARCH\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou can win 73 topics soon, and 51 more in a few months.\n\nWe found 5,000 searches people use to find a service like yours, grouped into 183 topics. Start with the plan below.\n\nNext step\n\nFirst step: Improve your Business Central page\n\nImprove this page\nGo\n73\n73\nTakes a few months\n51\n51\nSearches found\n5,000\n5,000\nJust off page one\n211\n211\n"
+  },
+  {
+   "p": "padmin",
+   "site": "s-trial",
+   "pg": "competitors",
+   "navKi": true,
+   "buttons": [
+    "trial-client-erp.ae (opens in a new tab)",
+    "How to choose",
+    "Check my competitors again (free trial run)",
+    "Write this page",
+    "Download CSV",
+    "Website settings",
+    "Details",
+    "More",
+    "Choose",
+    "All 21",
+    "Competitors rank, you are missing 10",
+    "One competitor ranks, you are missing 1",
+    "You rank low 4",
+    "Just off page one 5",
+    "You lead: keep it 1",
+    "Not for us",
+    "Improve this page",
+    "Refresh this page",
+    "Show all 21",
+    "How to get listed",
+    "Why directories are not competitors",
+    "Put back on the watchlist"
+   ],
+   "text": "trial-client-erp.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 41 minutes\nCompetitors\n\nWho trial-client-erp.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nUpdated today\nCheck my competitors again\n(free trial run)\n\nTrial: only platform admins see this\n\nThe client sees nothing new on this website until the setting is switched to On in Website settings. Trial runs are free for the client.\nCOMPETITORS\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou follow 2 main competitors: northpeak-erp.ae and bluefin-consulting.ae.\n\nFound in Google's results for your services. You can follow up to 5; the others stay on your watchlist.\n\nNext step\n\nW"
+  },
+  {
+   "p": "padmin",
+   "site": "s-trial",
+   "pg": "keywords",
+   "navKi": true,
+   "buttons": [
+    "trial-client-erp.ae (opens in a new tab)",
+    "How to read this",
+    "Research my keywords again (free trial run)",
+    "Your plan",
+    "Topics",
+    "Just off page one",
+    "Every search and filters",
+    "Write this page",
+    "How to get listed",
+    "Plan the ladder",
+    "How to get named",
+    "Improve this page",
+    "Show all 16",
+    "See all 25 in the table",
+    "Add to my AI questions",
+    "Download CSV",
+    "What the verdicts mean"
+   ],
+   "text": "trial-client-erp.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 41 minutes\nKeyword research\n\nWhat buyers search to find a service like yours, and which searches trial-client-erp.ae can win.\n\nHow to read this\nUpdated today\nResearch my keywords again\n(free trial run)\n\nTrial: only platform admins see this\n\nThe client sees nothing new on this website until the setting is switched to On in Website settings. Trial runs are free for the client.\nKEYWORD RESEARCH\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou can win 6 topics soon, and 6 more in a few months.\n\nWe found 400 searches people use to find a service like yours, grouped into 16 topics. Start with the plan below.\n"
+  },
+  {
+   "p": "owner",
+   "site": "s-trial",
+   "pg": "competitors",
+   "navKi": false,
+   "buttons": [
+    "trial-client-erp.ae (opens in a new tab)",
+    "Back to the overview"
+   ],
+   "text": "trial-client-erp.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 41 minutes\nCompetitors is not available for this website yet\n\nIt is rolling out to selected websites. Ask us if you would like it for yours.\n\nBack to the overview"
+  },
+  {
+   "p": "owner",
+   "site": "s-trial",
+   "pg": "keywords",
+   "navKi": false,
+   "buttons": [
+    "trial-client-erp.ae (opens in a new tab)",
+    "Back to the overview"
+   ],
+   "text": "trial-client-erp.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 41 minutes\nKeyword research is not available for this website yet\n\nIt is rolling out to selected websites. Ask us if you would like it for yours.\n\nBack to the overview"
+  },
+  {
+   "p": "padmin",
+   "site": "s-killed",
+   "pg": "competitors",
+   "navKi": true,
+   "buttons": [
+    "paused-client.ae (opens in a new tab)",
+    "Back to the overview"
+   ],
+   "text": "paused-client.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 41 minutes\nCompetitors is paused for maintenance\n\nIt is back shortly, with your results as they were. Nothing is charged while it is paused.\n\nBack to the overview"
+  },
+  {
+   "p": "padmin",
+   "site": "s-killed",
+   "pg": "keywords",
+   "navKi": true,
+   "buttons": [
+    "paused-client.ae (opens in a new tab)",
+    "Back to the overview"
+   ],
+   "text": "paused-client.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 41 minutes\nKeyword research is paused for maintenance\n\nIt is back shortly, with your results as they were. Nothing is charged while it is paused.\n\nBack to the overview"
+  }
+ ],
+ "links": [
+  {
+   "from": "keywords",
+   "label": "Improve this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL2d1bGZkeW5hbWljcy1wYXJ0bmVycy5hZS9idXNpbmVzcy1jZW50cmFsIn0=",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL2d1bGZkeW5",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "country=United Arab Emirates",
+    "existingPageUrl=https://gulfdynamics-partners.ae/business-central",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Improve this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL2d1bGZkeW5hbWljcy1wYXJ0bmVycy5hZS9idXNpbmVzcy1jZW50cmFsIn0=",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL2d1bGZkeW5",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "country=United Arab Emirates",
+    "existingPageUrl=https://gulfdynamics-partners.ae/business-central",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Write this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGltcGxlbWVudGF0aW9uIGNvc3QgdWFlIn0=",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGltcGxlbWVudGF0aW9uIGNvc3Q",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=erp implementation cost uae",
+    "country=United Arab Emirates",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Write this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIHNvZnR3YXJlIHByaWNpbmcgdWFlIn0=",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIHNvZnR3YXJlIHByaWNpbmcgdWF",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=erp software pricing uae",
+    "country=United Arab Emirates",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "How to get listed",
+   "href": "/o/org-1/sites/a0000000-0000-4000-8000-000000000010/links#listings",
+   "landed": "/o/org-1/sites/a0000000-0000-4000-8000-000000000010/links#listings",
+   "h1": "Link building",
+   "fields": []
+  },
+  {
+   "from": "keywords",
+   "label": "Plan the ladder",
+   "href": "/o/org-1/sites/a0000000-0000-4000-8000-000000000010/pipeline/new?keyword=erp+software+uae",
+   "landed": "/o/org-1/sites/a0000000-0000-4000-8000-000000000010/pipeline/new?keyword=erp+software+uae",
+   "h1": "New keyword ladder",
+   "fields": [
+    "_r_k_=erp software uae",
+    "_r_l_=United Arab Emirates"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "How to get named",
+   "href": "/o/org-1/sites/a0000000-0000-4000-8000-000000000010/ai",
+   "landed": "/o/org-1/sites/a0000000-0000-4000-8000-000000000010/ai",
+   "h1": "Something went wrong",
+   "fields": []
+  },
+  {
+   "from": "keywords",
+   "label": "Write this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGNybSBjb25zdWx0YW50cyBqZWJlbCBhbGkifQ==",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGNybSBjb25zdWx",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=dynamics 365 crm consultants jebel ali",
+    "country=United Arab Emirates",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Improve this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoic2FwIGJ1c2luZXNzIG9uZSBjb25zdWx0YW50cyIsImV4aXN0aW5nUGFnZVVybCI6Imh0dHBzOi8vZ3VsZmR5bmFtaWNzLXBhcnRuZXJzLmFlL3NlcnZpY2VzL3NhcC1idXN",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoic2FwIGJ1c2luZXNzIG9uZSBjb25zdWx",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=sap business one consultants",
+    "country=United Arab Emirates",
+    "existingPageUrl=https://gulfdynamics-partners.ae/services/sap-business-one-all",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Improve this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgY29uc3VsdGFudHMgcmFzIGFsIGtoYWltYWgiLCJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL2d1bGZkeW5hbWljcy1",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGN",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=dynamics 365 business central consultants ras al khaimah",
+    "country=United Arab Emirates",
+    "existingPageUrl=https://gulfdynamics-partners.ae/services/dynamics-365-business-central-ras-al-khaimah",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Improve this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZS1pbnZvaWNpbmcgc29mdHdhcmUgcGFydG5lciBzaGFyamFoIiwiZXhpc3RpbmdQYWdlVXJsIjoiaHR0cHM6Ly9ndWxmZHluYW1pY3MtcGFydG5lcnMuYWUvc2VydmljZXM",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZS1pbnZvaWNpbmcgc29mdHdhcmUgcGF",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=e-invoicing software partner sharjah",
+    "country=United Arab Emirates",
+    "existingPageUrl=https://gulfdynamics-partners.ae/services/e-invoicing-software-sharjah",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Write this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIHNvZnR3YXJlIHN1cHBvcnQgYWJ1IGRoYWJpIn0=",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIHNvZnR3YXJlIHN1cHBvcnQgYWJ",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=erp software support abu dhabi",
+    "country=United Arab Emirates",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Write this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGZvciBjb25zdHJ1Y3Rpb24gY29tcGFuaWVzIGFnZW5jeSJ9",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGZvciBjb25zdHJ1Y3Rpb24gY29",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=erp for construction companies agency",
+    "country=United Arab Emirates",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Write this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGZpbmFuY2UgYW5kIG9wZXJhdGlvbnMgY29uc3VsdGFudHMgYWwgYWluIn0=",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGZpbmFuY2UgYW5",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=dynamics 365 finance and operations consultants al ain",
+    "country=United Arab Emirates",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Write this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGZvciBjb25zdHJ1Y3Rpb24gY29tcGFuaWVzIGFnZW5jeSBhbCBhaW4ifQ==",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGZvciBjb25zdHJ1Y3Rpb24gY29",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=erp for construction companies agency al ain",
+    "country=United Arab Emirates",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Write this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoidmF0IGNvbXBsaWFudCBhY2NvdW50aW5nIHNvZnR3YXJlIGNlcnRpZmllZCBhbCBhaW4ifQ==",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoidmF0IGNvbXBsaWFudCBhY2NvdW50aW5",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=vat compliant accounting software certified al ain",
+    "country=United Arab Emirates",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Improve this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiYmVzdCBkeW5hbWljcyAzNjUgYnVzaW5lc3MgY2VudHJhbCBhYnUgZGhhYmkiLCJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL2d1bGZkeW5hbWljcy1wYXJ0bmVycy5hZS9",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiYmVzdCBkeW5hbWljcyAzNjUgYnVzaW5",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=best dynamics 365 business central abu dhabi",
+    "country=United Arab Emirates",
+    "existingPageUrl=https://gulfdynamics-partners.ae/services/dynamics-365-business-central-abu-dhabi",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Write this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoic2FwIGJ1c2luZXNzIG9uZSBsaWNlbnNpbmcgamViZWwgYWxpIn0=",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoic2FwIGJ1c2luZXNzIG9uZSBsaWNlbnN",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=sap business one licensing jebel ali",
+    "country=United Arab Emirates",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Improve this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiYmVzdCBlcnAgZm9yIHRyYWRpbmcgY29tcGFuaWVzIHNoYXJqYWgiLCJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL2d1bGZkeW5hbWljcy1wYXJ0bmVycy5hZS9zZXJ2aWN",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiYmVzdCBlcnAgZm9yIHRyYWRpbmcgY29",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=best erp for trading companies sharjah",
+    "country=United Arab Emirates",
+    "existingPageUrl=https://gulfdynamics-partners.ae/services/erp-for-trading-companies-sharjah",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Improve this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGltcGxlbWVudGF0aW9uIGRlbW8gYWwgYWluIiwiZXhpc3RpbmdQYWdlVXJsIjoiaHR0cHM6Ly9ndWxmZHluYW1pY3MtcGFydG5lcnMuYWUvc2VydmljZXMvZXJwLWl",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGltcGxlbWVudGF0aW9uIGRlbW8",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=erp implementation demo al ain",
+    "country=United Arab Emirates",
+    "existingPageUrl=https://gulfdynamics-partners.ae/services/erp-implementation-al-ain",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Write this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIHNvZnR3YXJlIHByaWNpbmcgc2hhcmphaCJ9",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIHNvZnR3YXJlIHByaWNpbmcgc2h",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=erp software pricing sharjah",
+    "country=United Arab Emirates",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Improve this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiYmVzdCBkeW5hbWljcyAzNjUgY3JtIGFqbWFuIiwiZXhpc3RpbmdQYWdlVXJsIjoiaHR0cHM6Ly9ndWxmZHluYW1pY3MtcGFydG5lcnMuYWUvc2VydmljZXMvZHluYW1pY3M",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiYmVzdCBkeW5hbWljcyAzNjUgY3JtIGF",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=best dynamics 365 crm ajman",
+    "country=United Arab Emirates",
+    "existingPageUrl=https://gulfdynamics-partners.ae/services/dynamics-365-crm-ajman",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Write this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGZvciB0cmFkaW5nIGNvbXBhbmllcyBjZXJ0aWZpZWQgYWptYW4ifQ==",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGZvciB0cmFkaW5nIGNvbXBhbml",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=erp for trading companies certified ajman",
+    "country=United Arab Emirates",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Write this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiY2xvdWQgZXJwIHNlcnZpY2VzIGFqbWFuIn0=",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiY2xvdWQgZXJwIHNlcnZpY2VzIGFqbWF",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=cloud erp services ajman",
+    "country=United Arab Emirates",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Write this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGltcGxlbWVudGF0aW9uIHBhcnRuZXIgZHViYWkifQ==",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGltcGxlbWVudGF0aW9uIHBhcnR",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=erp implementation partner dubai",
+    "country=United Arab Emirates",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Write this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIHN1cHBvcnQgcGFydG5lciBhYnUgZGhhYmkifQ==",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIHN1cHBvcnQgcGFydG5lciBhYnU",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=erp support partner abu dhabi",
+    "country=United Arab Emirates",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  },
+  {
+   "from": "keywords",
+   "label": "Write this page",
+   "href": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoic2FwIGJ1c2luZXNzIG9uZSBjb25zdWx0YW50cyBhYnUgZGhhYmkifQ==",
+   "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoic2FwIGJ1c2luZXNzIG9uZSBjb25zdWx",
+   "h1": "Write a page",
+   "fields": [
+    "_r_h_=a0000000-0000-4000-8000-000000000010",
+    "keyword=sap business one consultants abu dhabi",
+    "country=United Arab Emirates",
+    "receiveReport=true",
+    "receiveContent=true",
+    "tone=Professional and direct",
+    "goal=leads"
+   ]
+  }
+ ],
+ "keywords": {
+  "scoreTip": [
+   "How this score of 86 is made\nEach one raises the score when it is high.\nFits what you sell\nhigh\nReady to buy\nhigh\nPeople searching it\nhigh\nYour chance to rank\nhigh\nWorth of a visitor\nhigh\nProof it sells (competitors rank)\nhigh\nThe range is wide: we are less sure about this one.\nHow we know: our estimate"
+  ],
+  "hero": "You can win 73 topics soon, and 51 more in a few months.",
+  "heroDesc": "We found 5,000 searches people use to find a service like yours, grouped into 183 topics. Start with the plan below.",
+  "topicsDesc": "183 topics, best first. One page can win each topic.",
+  "comingSoon": 0,
+  "unknownBadges": 4,
+  "gatedReasons": [
+   "Not for youPeople searching this are looking for a job.",
+   "Not for youThis search is too broad to bring buyers of your service.",
+   "Not for youPeople searching this are looking for a job.",
+   "Not for youThis search is about a place outside your market.",
+   "Not for youPeople searching this want a government service.",
+   "Not for youThis is a search for another company by name.",
+   "Not for youThis is not something you sell."
+  ],
+  "filterCount": 7,
+  "filterLabels": [
+   "Verdict\nAll\nGo\nTakes a few months\nHard for your website now\nNot for you\nNot judged yet",
+   "Buyer stage\nAll\nReady to hire\nComparing providers\nLooking for a solution\nHas a problem to solve\nLearning about the topic",
+   "Topic\nAll\nbest dynamics 365 business central abu dhabi\nbest dynamics 365 crm ajman\nbest dynamics 365 crm dubai silicon oasis\nbest dynamics 365 finance and operations fujairah\nbest erp for trading companies jebel ali\nbest erp for trading companies sharjah\nbest erp implementation dubai silicon oasis\nbest erp implementation jebel ali\nbest inventory management software abu dhabi\nbest power bi consulting fujairah\nbusiness central partner ras al khaimah arabic\ncloud erp agency ras al khaimah\ncloud erp certified fujairah\ncloud erp company sharjah\ncloud erp demo al ain\ncloud erp fujairah support contract\ncloud erp licensing abu dhabi\ncloud erp near me jebel ali\ncloud erp partner dubai silicon oasis\ncloud erp services ajman\ncloud erp support dubai\ncloud erp tutorial\ncloud erp vs quickbooks uae\ndo i need e-invoicing software for the uae phase 1 mandate in 2026\ndynamics 365 business central benefits ajman\ndynamics 365 business central company\ndynamics 365 business central consultants ras al khaimah\ndynamics 365 business central customization dubai silicon oasis\ndynamics 365 business central features al ain\ndynamics 365 business central features sharjah\ndynamics 365 business central integration uae\ndynamics 365 business central near me jebel ali\ndynamics 365 business central pricing fujairah\ndynamics 365 business central upgrade dubai\ndynamics 365 crm certified abu dhabi\ndynamics 365 crm company sharjah\ndynamics 365 crm consultants jebel ali\ndynamics 365 crm customization dubai\ndynamics 365 crm implementation cost ras al khaimah\ndynamics 365 crm integration\ndynamics 365 crm integration al ain\ndynamics 365 crm upgrade fujairah\ndynamics 365 crm upgrade uae\ndynamics 365 finance and operations consultants al ain\ndynamics 365 finance and operations consultants uae\ndynamics 365 finance and operations free trial ajman\ndynamics 365 finance and operations free trial jebel ali\ndynamics 365 finance and operations free trial ras al khaimah\ndynamics 365 finance and operations implementation cost dubai silicon oasis\ndynamics 365 finance and operations implementation cost sharjah\ndynamics 365 finance and operations services dubai\ndynamics 365 finance and operations training\ndynamics 365 finance and operations tutorial abu dhabi\ndynamics 365 jobs dubai\ne-invoicing software certified abu dhabi\ne-invoicing software company dubai\ne-invoicing software implementation cost ajman\ne-invoicing software implementation cost al ain\ne-invoicing software migration ras al khaimah\ne-invoicing software partner fujairah\ne-invoicing software partner sharjah\ne-invoicing software services dubai silicon oasis\ne-invoicing software support uae\ne-invoicing software tutorial jebel ali\ne-invoicing software vs quickbooks\nerp\nerp consultant salary uae\nerp for construction companies agency\nerp for construction companies agency al ain\nerp for construction companies for small business ras al khaimah\nerp for construction companies implementation cost dubai\nerp for construction companies near me abu dhabi\nerp for construction companies near me sharjah\nerp for construction companies partner jebel ali\nerp for construction companies partner uae\nerp for construction companies reviews dubai silicon oasis\nerp for construction companies reviews fujairah\nerp for construction companies upgrade ajman\nerp for manufacturing consultants jebel ali\nerp for manufacturing customization dubai silicon oasis\nerp for manufacturing migration\nerp for manufacturing migration ajman\nerp for manufacturing near me al ain\nerp for manufacturing partner abu dhabi\nerp for manufacturing support dubai\nerp for manufacturing support ras al khaimah\nerp for manufacturing tutorial fujairah\nerp for manufacturing upgrade uae\nerp for manufacturing vs quickbooks sharjah\nerp for trading companies benefits dubai\nerp for trading companies certified ajman\nerp for trading companies customization dubai silicon oasis\nerp for trading companies customization uae\nerp for trading companies for small business\nerp for trading companies for small business al ain\nerp for trading companies for small business ras al khaimah\nerp for trading companies migration abu dhabi\nerp for trading companies services fujairah\nerp implementation benefits sharjah\nerp implementation customization ras al khaimah\nerp implementation demo al ain\nerp implementation features ajman\nerp implementation free trial uae\nerp implementation partner dubai\nerp implementation pricing\nerp implementation pricing abu dhabi\nerp implementation pricing fujairah\nerp partner ajman free zone\nerp software customization jebel ali\nerp software india\nerp software integration al ain\nerp software migration dubai\nerp software migration dubai silicon oasis\nerp software pricing sharjah\nerp software pricing uae\nerp software reviews\nerp software services fujairah\nerp software support abu dhabi\nerp software tutorial ajman\nerp software vs quickbooks ras al khaimah\nerp support benefits ajman\nerp support demo jebel ali\nerp support features dubai silicon oasis\nerp support for small business sharjah\nerp support migration dubai\nerp support migration uae\nerp support partner abu dhabi\nerp support pricing ras al khaimah\nerp support reviews\nerp support services fujairah\nerp support vs quickbooks al ain\ngulfdynamics partners reviews\nhow long does an erp implementation take for a 50 person company in abu dhabi\nhow much does dynamics 365 business central cost in dubai\ninventory management software agency al ain\ninventory management software agency uae\ninventory management software benefits\ninventory management software features ajman\ninventory management software free trial ras al khaimah\ninventory management software implementation cost dubai\ninventory management software integration fujairah\ninventory management software partner sharjah\ninventory management software tutorial jebel ali\ninventory management software upgrade dubai silicon oasis\nis sap business one good for small trading companies in the uae\nmicrosoft dynamics 365 business central implementation partner for wholesale distribution and logistics companies in dubai abu dhabi and sharjah with arabic support\nministry of finance e-invoicing portal login\nnorthpeak erp login\npower bi consulting features abu dhabi\npower bi consulting features sharjah\npower bi consulting for small business dubai silicon oasis\npower bi consulting implementation cost al ain\npower bi consulting implementation cost jebel ali\npower bi consulting near me dubai\npower bi consulting partner\npower bi consulting partner ras al khaimah\npower bi consulting services ajman\npower bi consulting vs quickbooks uae\nsap business one agency uae\nsap business one certified fujairah\nsap business one consultants\nsap business one consultants abu dhabi\nsap business one consultants al ain\nsap business one demo dubai silicon oasis\nsap business one free download crack\nsap business one licensing jebel ali\nsap business one pricing ajman\nsap business one reviews sharjah\nsap business one support ras al khaimah\nsap business one tutorial dubai\nvat compliant accounting software benefits uae\nvat compliant accounting software certified\nvat compliant accounting software certified al ain\nvat compliant accounting software company sharjah\nvat compliant accounting software features dubai\nvat compliant accounting software free trial abu dhabi\nvat compliant accounting software licensing ajman\nvat compliant accounting software migration fujairah\nvat compliant accounting software near me dubai silicon oasis\nvat compliant accounting software partner jebel ali\nvat compliant accounting software support ras al khaimah\nwhat is the difference between dynamics 365 business central and finance and operations\nwhich erp is best for construction companies in uae",
+   "Where from\nAny source\nYour Search Console\nPeople also ask\nRelated searches\nForum threads in the results\nGoogle autocomplete\nKeyword ideas\nKeyword suggestions\nRelated keywords\nYour competitors rank for it\nA gap against your competitors\nYou track it\nOne of your keyword ladders\nYour services",
+   "Searches a month\nAny number\nAt least 10\nAt least 50\nAt least 100\nAt least 500\nAt least 1,000",
+   "Against competitors\nAny\nYou are missing\nOne competitor only\nYou rank low\nJust off page one\nYou lead",
+   "Your brand\nBoth\nWithout your name\nWith your name"
+  ],
+  "topicOptions": 184,
+  "verdictOptions": [
+   "All",
+   "Go",
+   "Takes a few months",
+   "Hard for your website now",
+   "Not for you",
+   "Not judged yet"
+  ],
+  "tabsToFirstFilter": 119,
+  "noRing": 0,
+  "actions": [
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL2d1bGZkeW5hbWljcy1wYXJ0bmVycy5hZS9idXNpbmVzcy1jZW50cmFsIn0%3D"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL2d1bGZkeW5hbWljcy1wYXJ0bmVycy5hZS9idXNpbmVzcy1jZW50cmFsIn0%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGltcGxlbWVudGF0aW9uIGNvc3QgdWFlIn0%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIHNvZnR3YXJlIHByaWNpbmcgdWFlIn0%3D"
+   },
+   {
+    "t": "How to get listed",
+    "h": "/o/org-1/sites/a0000000-0000-4000-8000-000000000010/links#listings"
+   },
+   {
+    "t": "Plan the ladder",
+    "h": "/o/org-1/sites/a0000000-0000-4000-8000-000000000010/pipeline/new?keyword=erp+software+uae"
+   },
+   {
+    "t": "How to get named",
+    "h": "/o/org-1/sites/a0000000-0000-4000-8000-000000000010/ai"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGNybSBjb25zdWx0YW50cyBqZWJlbCBhbGkifQ%3D%3D"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoic2FwIGJ1c2luZXNzIG9uZSBjb25zdWx0YW50cyIsImV4aXN0aW5nUGFnZVVybCI6Imh0dHBzOi8vZ3VsZmR5bmFtaWNzLXBhcnRuZXJzLmFlL3NlcnZpY2VzL3NhcC1idXNpbmVzcy1vbmUtYWxsIn0%3D"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgY29uc3VsdGFudHMgcmFzIGFsIGtoYWltYWgiLCJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL2d1bGZkeW5hbWljcy1wYXJ0bmVycy5hZS9zZXJ2aWNlcy9keW5hbWljcy0zNjUtYnVzaW5lc3MtY2VudHJhbC1yYXMtYWwta2hhaW1haCJ9"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZS1pbnZvaWNpbmcgc29mdHdhcmUgcGFydG5lciBzaGFyamFoIiwiZXhpc3RpbmdQYWdlVXJsIjoiaHR0cHM6Ly9ndWxmZHluYW1pY3MtcGFydG5lcnMuYWUvc2VydmljZXMvZS1pbnZvaWNpbmctc29mdHdhcmUtc2hhcmphaCJ9"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIHNvZnR3YXJlIHN1cHBvcnQgYWJ1IGRoYWJpIn0%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGZvciBjb25zdHJ1Y3Rpb24gY29tcGFuaWVzIGFnZW5jeSJ9"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGZpbmFuY2UgYW5kIG9wZXJhdGlvbnMgY29uc3VsdGFudHMgYWwgYWluIn0%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGZvciBjb25zdHJ1Y3Rpb24gY29tcGFuaWVzIGFnZW5jeSBhbCBhaW4ifQ%3D%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoidmF0IGNvbXBsaWFudCBhY2NvdW50aW5nIHNvZnR3YXJlIGNlcnRpZmllZCBhbCBhaW4ifQ%3D%3D"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiYmVzdCBkeW5hbWljcyAzNjUgYnVzaW5lc3MgY2VudHJhbCBhYnUgZGhhYmkiLCJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL2d1bGZkeW5hbWljcy1wYXJ0bmVycy5hZS9zZXJ2aWNlcy9keW5hbWljcy0zNjUtYnVzaW5lc3MtY2VudHJhbC1hYnUtZGhhYmkifQ%3D%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoic2FwIGJ1c2luZXNzIG9uZSBsaWNlbnNpbmcgamViZWwgYWxpIn0%3D"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiYmVzdCBlcnAgZm9yIHRyYWRpbmcgY29tcGFuaWVzIHNoYXJqYWgiLCJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL2d1bGZkeW5hbWljcy1wYXJ0bmVycy5hZS9zZXJ2aWNlcy9lcnAtZm9yLXRyYWRpbmctY29tcGFuaWVzLXNoYXJqYWgifQ%3D%3D"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGltcGxlbWVudGF0aW9uIGRlbW8gYWwgYWluIiwiZXhpc3RpbmdQYWdlVXJsIjoiaHR0cHM6Ly9ndWxmZHluYW1pY3MtcGFydG5lcnMuYWUvc2VydmljZXMvZXJwLWltcGxlbWVudGF0aW9uLWFsLWFpbiJ9"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIHNvZnR3YXJlIHByaWNpbmcgc2hhcmphaCJ9"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiYmVzdCBkeW5hbWljcyAzNjUgY3JtIGFqbWFuIiwiZXhpc3RpbmdQYWdlVXJsIjoiaHR0cHM6Ly9ndWxmZHluYW1pY3MtcGFydG5lcnMuYWUvc2VydmljZXMvZHluYW1pY3MtMzY1LWNybS1ham1hbiJ9"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGZvciB0cmFkaW5nIGNvbXBhbmllcyBjZXJ0aWZpZWQgYWptYW4ifQ%3D%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiY2xvdWQgZXJwIHNlcnZpY2VzIGFqbWFuIn0%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGltcGxlbWVudGF0aW9uIHBhcnRuZXIgZHViYWkifQ%3D%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIHN1cHBvcnQgcGFydG5lciBhYnUgZGhhYmkifQ%3D%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoic2FwIGJ1c2luZXNzIG9uZSBjb25zdWx0YW50cyBhYnUgZGhhYmkifQ%3D%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiYmVzdCBwb3dlciBiaSBjb25zdWx0aW5nIGZ1amFpcmFoIn0%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZS1pbnZvaWNpbmcgc29mdHdhcmUgc2VydmljZXMgZHViYWkgc2lsaWNvbiBvYXNpcyJ9"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGZvciBtYW51ZmFjdHVyaW5nIHBhcnRuZXIgYWJ1IGRoYWJpIiwiZXhpc3RpbmdQYWdlVXJsIjoiaHR0cHM6Ly9ndWxmZHluYW1pY3MtcGFydG5lcnMuYWUvc2VydmljZXMvZXJwLWZvci1tYW51ZmFjdHVyaW5nLWFidS1kaGFiaSJ9"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGZvciB0cmFkaW5nIGNvbXBhbmllcyBzZXJ2aWNlcyBmdWphaXJhaCJ9"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZ3VsZmR5bmFtaWNzIHBhcnRuZXJzIHJldmlld3MiLCJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL2d1bGZkeW5hbWljcy1wYXJ0bmVycy5hZS9zZXJ2aWNlcy9icmFuZC0xIn0%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiYmVzdCBkeW5hbWljcyAzNjUgZmluYW5jZSBhbmQgb3BlcmF0aW9ucyBmdWphaXJhaCJ9"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiY2xvdWQgZXJwIHBhcnRuZXIgZHViYWkgc2lsaWNvbiBvYXNpcyJ9"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiaW52ZW50b3J5IG1hbmFnZW1lbnQgc29mdHdhcmUgaW1wbGVtZW50YXRpb24gY29zdCBkdWJhaSJ9"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiYmVzdCBpbnZlbnRvcnkgbWFuYWdlbWVudCBzb2Z0d2FyZSBhYnUgZGhhYmkifQ%3D%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGNybSB1cGdyYWRlIGZ1amFpcmFoIn0%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGZpbmFuY2UgYW5kIG9wZXJhdGlvbnMgZnJlZSB0cmlhbCBham1hbiJ9"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZS1pbnZvaWNpbmcgc29mdHdhcmUgaW1wbGVtZW50YXRpb24gY29zdCBham1hbiJ9"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIGZvciBjb25zdHJ1Y3Rpb24gY29tcGFuaWVzIHBhcnRuZXIgdWFlIiwiZXhpc3RpbmdQYWdlVXJsIjoiaHR0cHM6Ly9ndWxmZHluYW1pY3MtcGFydG5lcnMuYWUvc2VydmljZXMvZXJwLWZvci1jb25zdHJ1Y3Rpb24tY29tcGFuaWVzLXVhZSJ9"
+   }
+  ],
+  "showAll": [
+   "Show all 183"
+  ],
+  "whereFrom": "2 sources",
+  "strikingLink": 1
+ },
+ "competitors": {
+  "comingSoon": 0,
+  "runBtn": {
+   "text": "Check my competitors again (23 credits)",
+   "cls": "secondary"
+  },
+  "updated": 1,
+  "gapChips": [],
+  "gapKinds": [
+   "Competitors rank, you are missing",
+   "You rank low",
+   "You are in the results but below page one, and a competitor is on page one.\nWhat to do: Improve your page, about 40 credits · you are #18 · sample of 300 of 1,240 searches",
+   "You are in the results but below page one, and a competitor is on page one.",
+   "One competitor ranks, you are missing",
+   "You lead: keep it",
+   "Just off page one",
+   "Competitors rank, you are missing",
+   "Just off page one",
+   "Competitors rank, you are missing",
+   "Competitors rank, you are missing",
+   "Competitors rank, you are missing",
+   "Competitors rank, you are missing",
+   "You rank low",
+   "You are in the results but below page one, and a competitor is on page one.What to do: Improve your page, about 114 credits",
+   "You are in the results but below page one, and a competitor is on page one.",
+   "Just off page one",
+   "Competitors rank, you are missing",
+   "Competitors rank, you are missing",
+   "You rank low",
+   "You are in the results but below page one, and a competitor is on page one.What to do: Write a new page, about 114 credits",
+   "You are in the results but below page one, and a competitor is on page one.",
+   "Competitors rank, you are missing",
+   "You rank low",
+   "You are in the results but below page one, and a competitor is on page one.What to do: Improve your page, about 114 credits",
+   "You are in the results but below page one, and a competitor is on page one.",
+   "Competitors rank, you are missing",
+   "Just off page one",
+   "Just off page one"
+  ],
+  "actions": [
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgcGFydG5lciBhYnUgZGhhYmkifQ%3D%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgcGFydG5lciBhYnUgZGhhYmkifQ%3D%3D"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZXJwIHNvZnR3YXJlIHVhZSIsImV4aXN0aW5nUGFnZVVybCI6Imh0dHBzOi8vZ3VsZmR5bmFtaWNzLXBhcnRuZXJzLmFlL2VycC1zb2Z0d2FyZSJ9"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoibWljcm9zb2Z0IGR5bmFtaWNzIDM2NSBidXNpbmVzcyBjZW50cmFsIGltcGxlbWVudGF0aW9uIHBhcnRuZXIgZm9yIHdob2xlc2FsZSBkaXN0cmlidXRpb24gYW5kIGxvZ2lzdGljcyBjb21wYW5pZXMgaW4gZHViIn0%3D"
+   },
+   {
+    "t": "Refresh this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZ3VsZmR5bmFtaWNzIHBhcnRuZXJzIHJldmlld3MifQ%3D%3D"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgc2VydmljZXMgYWptYW4ifQ%3D%3D"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgYWdlbmN5IGFqbWFuIn0%3D"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgdnMgcXVpY2tib29rcyByYXMgYWwga2hhaW1haCJ9"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgcHJpY2luZyByYXMgYWwga2hhaW1haCJ9"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgcmV2aWV3cyBhbCBhaW4ifQ%3D%3D"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgbGljZW5zaW5nIGFsIGFpbiJ9"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgY2VydGlmaWVkIGZ1amFpcmFoIn0%3D"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgc3VwcG9ydCBqZWJlbCBhbGkifQ%3D%3D"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgc3VwcG9ydCBkdWJhaSBzaWxpY29uIG9hc2lzIn0%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgcHJpY2luZyBkdWJhaSBzaWxpY29uIG9hc2lzIn0%3D"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGJ1c2luZXNzIGNlbnRyYWwgZmVhdHVyZXMifQ%3D%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGZpbmFuY2UgYW5kIG9wZXJhdGlvbnMgaW50ZWdyYXRpb24gZHViYWkifQ%3D%3D"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGZpbmFuY2UgYW5kIG9wZXJhdGlvbnMgZnJlZSB0cmlhbCBkdWJhaSJ9"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGZpbmFuY2UgYW5kIG9wZXJhdGlvbnMgc3VwcG9ydCBhYnUgZGhhYmkifQ%3D%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGZpbmFuY2UgYW5kIG9wZXJhdGlvbnMgY29uc3VsdGFudHMgdWFlIn0%3D"
+   },
+   {
+    "t": "Write this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGZpbmFuY2UgYW5kIG9wZXJhdGlvbnMgZm9yIHNtYWxsIGJ1c2luZXNzIHNoYXJqYWgifQ%3D%3D"
+   },
+   {
+    "t": "Improve this page",
+    "h": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJrZXl3b3JkIjoiZHluYW1pY3MgMzY1IGZpbmFuY2UgYW5kIG9wZXJhdGlvbnMgdXBncmFkZSBham1hbiJ9"
+   },
+   {
+    "t": "How to get listed",
+    "h": "/o/org-1/sites/a0000000-0000-4000-8000-000000000010/links#listings"
+   },
+   {
+    "t": "How to get listed",
+    "h": "/o/org-1/sites/a0000000-0000-4000-8000-000000000010/links#listings"
+   },
+   {
+    "t": "How to get listed",
+    "h": "/o/org-1/sites/a0000000-0000-4000-8000-000000000010/links#listings"
+   }
+  ],
+  "text": "gulfdynamics-partners.ae\n(opens in a new tab)\nOwnership verified\nTracking weekly\nsince in 41 minutes\nCompetitors\n\nWho gulfdynamics-partners.ae really competes with in Google, and what to do about each one.\n\nHow to choose\nUpdated today\nCheck my competitors again\n(23 credits)\nCOMPETITORS\n·\nUpdated 8 Nov 2026\nMarket: United Arab Emirates\nYou follow 2 main competitors: northpeak-erp.ae and bluefin-consulting.ae.\n\nFound in Google's results for your services. You can follow up to 5; the others stay on your watchlist.\n\nNext step\n\nWrite a new page for \"dynamics 365 business central partner abu dhabi\"\n\nWrite this page\nReal competitors found\n6\n6\nYou follow\n2 of 5\nLists and directories to join\n3\n3\nGaps to act on\n21\n21\nYour competitors\n\n2 chosen, 3 suggested, 1 on your watchlist\n\nDownload CSV\n\nThe competitors you entered in Website settings start on this list as chosen. Choosing here does not change that list, which your AI visibility and backlink checks use.\n\nYou follow\nDirect competitor\nAbout your size\n\nnorthpeak-erp.ae\n\nIn the first 10 Google results for 9 of 14 of your service searches in United Arab Emirates.\nHow much they compete with you: 78 of 100 (likely 70 to 86)\nShare of clicks on your searches: 19.5%\nDetails\nMore\nDirect competitor\nMarket leader\n\nbluefin-consulting.ae\n\nIn the first 10 Google results for 9 of 14 of your service searches in United Arab Emirates.\nHow much they compete with you: 66 of 100 (likely 58 to 74)\nShare of clicks on your searches: 16.5%\nDetails\nMore\nSuggested\nClose competitor\nFar bigger than you\n\natlas-dynamics-partners-international-consulting.com\n\nIn the first 10 Google results for 6 of 14 of your service searches in United Arab Emirates.\nHow much they compete with you: 54 of 100 (likely 46 to 62)\nShare of clicks on your searches: 13.5%\nDetails\nChoose\nMore\nDirect competitor\nSmaller than you\nYou added it\n\ngulfledger.ae\n\nIn the first 10 Google results for 5 of 14 of your service searches in United Arab Emirates.\nHow much they compete with you: 47 of 100 (likely 39 to 55)\nShare of clicks on your searches: 11.8%\nDetails\nChoose\nMore\nDirect competitor\nAbout your size\nPlease check: do they sell what you sell?\n\nsandstone-tech.ae\n\nIn the first 10 Google results for 4 of 14 of your service searches in United Arab Emirates.\nHow much they compete with you: 41 of 100 (likely 33 to 49)\nShare of clicks on your searches: 10.3%\nDetails\nChoose\nMore\nWatchlist\nDirect competitor\nAbout your size\n\norbit-erp.com\n\nIn the first 10 Google results for 4 of 14 of your service searches in United Arab Emirates.\nHow much they compete with you: 39 of 100 (likely 31 to 47)\nShare of clicks on your searches: 9.8%\nDetails\nChoose\nMore\nGaps against your competitors\n\n21 places where the competitors you follow are found and you are not\n\nDownload CSV\nAll\n21\nCompetitors rank, you are missing\n10\nOne competitor ranks, you are missing\n1\nYou rank low\n4\nJust off page one\n5\nYou lead: keep it\n1\nCompetitors rank, you are missing\nnorthpeak-erp.ae\nbluefin-consulting.ae\n\ndynam",
+  "tabsToChoose": 19,
+  "drawer": "northpeak-erp.ae\n\nDirect competitor · About your size\n\nWhy it is on your list\nIn the first 10 Google results for 9 of 14 of your service searches in United Arab Emirates.\nSells the same services to the same kind of buyer.\nIts size\nVisits a month from Google\n4,200\nSearches it ranks for\n860\nWebsites linking to it\n140\nNew pages a month\n6\n\n31% of its visits come from people searching for its own name.\n\nIts pages that bring the most visits\nnorthpeak-erp.ae/services/erp-implementation-partner-dubai-abu-dhabi-sharjah-and-the-northern-emirates\nservice page\nabout 900 visits a month\nnorthpeak-erp.ae/business-central\nservice\nabout 600 visits a month\nnorthpeak-erp.ae/blog/erp-cost-guide\nblog post\nabout 300 visits a month\nWhere you overlap\n\nAmong your 200 best researched searches.\n\nYou both rank\n0\nOnly they rank\n32\nOnly you rank\n23\nSearches it ranks for\n\nFrom your keyword research. Your place is from your Search Console.\n\nDownload CSV\nSearch\n\tTheir place\n\tYour place\n\tSearches a month\n\tFor you\n\nerp for construction companies agency\t#9\t-\t1,880\t\nGo\n\nerp for construction companies agency al ain\t#2\t-\t1,817\t\nGo\n\ndynamics 365 crm pricing\t#10\t-\t1,721\t\nGo\n\ne-invoicing software free trial al ain\t#9\t-\t1,661\t\nGo\n\ndynamics 365 crm consultants uae\t#3\t-\t1,582\t\nGo\n\nerp support licensing abu dhabi\t#2\t-\t1,461\t\nGo\n\nerp for trading companies near me sharjah\t#6\t-\t1,455\t\nGo\n\ndynamics 365 finance and operations f"
+ },
+ "comp375": 5005,
+ "drawer375": {
+  "tableVisible": false,
+  "cards": 15,
+  "dialogs": 1
+ },
+ "kw375": 4132,
+ "kw375See": 1,
+ "kw375AfterSee": 7876,
+ "refusedLink": {
+  "href": "/o/org-1/tools/keyword_research?site=a0000000-0000-4000-8000-000000000014&prefill=eyJjb3VudHJ5IjoiVW5pdGVkIEFyYWIgRW1pcmF0ZXMifQ==",
+  "h1": "Keyword research",
+  "fields": [
+   "_r_i_=a0000000-0000-4000-8000-000000000014",
+   "country=United Arab Emirates"
+  ]
+ },
+ "clicksWrite": {
+  "firstButton": "Improve this page",
+  "landed": "/o/org-1/tools/keyword?site=a0000000-0000-4000-8000-000000000010&prefill=eyJleGlzdGluZ1BhZ2VVcmwiOiJodHRwczovL2d1bGZkeW5hbWljcy1wYXJ0bmVycy5hZS9idXNpbmVzcy1jZW50cmFsIn0=",
+  "h1": "Write a page",
+  "fields": [
+   "_r_10u_=a0000000-0000-4000-8000-000000000010",
+   "country=United Arab Emirates",
+   "existingPageUrl=https://gulfdynamics-partners.ae/business-central",
+   "receiveReport=true",
+   "receiveContent=true",
+   "tone=Professional and direct",
+   "goal=leads"
+  ]
+ },
+ "tools": {
+  "more": false,
+  "research": "Find the keywords worth winning and what your site says about you.\n\nWebsite optional\n\nKeyword research\n\nKeyword discovery\n\nMulti-source keyword research for your business: opportunity scores, topic clusters, quick wins and AI search demand.\n\nYou get:\nKeyword strategy (PDF) with priority keywords checked live on Google\nfrom 39 credits\n~10 min\nStart\nWebsite optional\n\nKeyword research\n\nKeyword verdict\n\nIs this keyword worth writing for? Get a GO / GO WITH CHANGES / AVOID verdict with reasons and risks.\n\nYou get:\nVerdict, score, reasons, risks and the recommended page (PDF)\nabout 12 credits\n~4 min\nStart\nYour website\n\nBrand & E-E-A-T\n\nDescribe my website\n\nA structured description of your site from its homepage: what you do, for whom, offers and proof.\n\nYou get:\nSite description\nabout 2 credits\n~2 min\nStart\nYour website\n\nResearch\n\nCompetitors\n\nWho you really compete with in your market: the companies in Google's results for your services, each with the reason, plus the directories and lists to be on. Run it before Keyword research, so the research compares you with the right companies.\n\nYou get:\nYour competitor set with the evidence, the lists and directories that rank, and a profile of each competitor you choose\nabout 21 credits\n~6 min\nStart\nYour website\n\nResearch\n\nKeyword research\n\nWhat buyers search to hire a service like yours: every search with where it came from, grouped by topic, scored with a range and a plain verdict. Pick it over Keyword discovery when you want the search"
+ },
+ "formHead": "All tools\nResearch\nKeyword research\n\nWhat buyers search to hire a service like yours: every search with where it came from, grouped by topic, scored with a range and a plain verdict. Pick it over Keyword discovery when you want the searches compared with your competitors and a step-by-step plan.\n\nPa",
+ "switchOn": {
+  "dialog": []
+ },
+ "trialForm": [
+  "Trial: only platform admins see this",
+  "Trial run is our team's check: it costs the client company no credits."
+ ],
+ "report-ok": "All reports\nKeyword research\nKeyword research\n\ngulfdynamics-partners.ae\n·\nreceived 8 Nov 2026, 06:12\n\nSend it now\nShare\nOpen the run\nSave as PDF\nKEYWORD RESEARCH\n·\ngulfdynamics-partners.ae\n·\n8 Nov 2026, 06:12\nYour keyword research is ready\nOpen Keyword research\nSearches found\n5000\nTopics\n160\nJust off page one\n41\nBuyer questions\n30",
+ "report-partial": "All reports\nKeyword research\nKeyword research\n\ngulfdynamics-partners.ae\n·\nreceived 8 Nov 2026, 06:12\n\nSend it now\nShare\nOpen the run\nSave as PDF\nKEYWORD RESEARCH\n·\ngulfdynamics-partners.ae\n·\n8 Nov 2026, 06:12\nYour keyword research is ready\n\nMost of the reading is done. One part could not be read this time; the rest is on the page.\n\nOpen Keyword research\nSearches found\n140\nTopics\n12\n\nPart of the reading is missing\n\nWe could not read search volumes, your Search Console searches this time. You were only charged for what was read, and the next run tries again.",
+ "report-refused": "All reports\nCompetitors\nCompetitors\n\ngulfdynamics-partners.ae\n·\nreceived 8 Nov 2026, 06:12\n\nShare\nOpen the run\nSave as PDF\nCOMPETITORS\n·\ngulfdynamics-partners.ae\n·\n8 Nov 2026, 06:12\nThis analysis runs for your website's main market. Choose that country and try again. Nothing was charged.\nSee what to do"
+}

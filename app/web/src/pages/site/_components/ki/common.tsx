@@ -1,7 +1,7 @@
 // KI (2026-11-08, DESIGN.md §6): the pieces both new pages share: the trial banner, the run notes (partial run, out of credits, paused, a run
 // that did not start), the "run it" button with its credits, a number with its "what this means" tip and how it was found, the score with
 // its factors, the next-step links, the "show all" of a long list, and the page shown where the website's KI is not visible.
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { ArrowRight, ChevronDown, Coins, EyeOff, FlaskConical, Info, PauseCircle, Play } from 'lucide-react';
 import { MODES, type KiRunMode } from '@seo/shared';
@@ -29,7 +29,7 @@ import { InfoTip } from '@/components/insight';
 import { useSitePage } from '../kit';
 
 /** Tap targets of 40 px on phones and touch tablets (review UX M5: up to md, the kit's small buttons are 32 px). */
-export const TAP = 'max-md:h-10 max-md:px-3.5';
+export const TAP = 'max-lg:h-10 max-lg:px-3.5';   // review UX M5 (pass 2): up to lg, portrait tablets too
 /** A 40 px hit area around the 20 px "?" of a tip (review UX M5), drawn by an invisible ::after, so nothing moves. */
 export const KI_TIP = "after:absolute after:-inset-2.5 after:rounded-full after:content-['']";
 
@@ -149,7 +149,8 @@ export function KiFigure({ value, tip, basis, className }: { value: ReactNode; t
  * FX-A (review UX H1): the factors are read from the server's nested shape (lib/ki.ts kiKwOf), so all of them show.
  */
 export function KiScore({ r }: { r: Pick<KiKw, 'score' | 'scoreLow' | 'scoreHigh' | 'factors' | 'lowConfidence' | 'verdict'> }) {
-  if (r.score == null) return <span className="text-ink-3">-</span>;
+  // review UX N3 (pass 2): a search we could not judge shows no score (a number with a range would read as a judgement)
+  if (r.score == null || r.verdict === 'unknown') return <span className="text-ink-3" title="Not judged yet">-</span>;
   const f = r.factors;
   const rows = (Object.keys(KI_FACTOR_WORDS) as (keyof typeof KI_FACTOR_WORDS)[]).filter((k) => f[k] != null);
   return (
@@ -157,6 +158,8 @@ export function KiScore({ r }: { r: Pick<KiKw, 'score' | 'scoreLow' | 'scoreHigh
       <span className="font-medium tabular text-ink">{kiScoreText(r.score, r.scoreLow, r.scoreHigh)}</span>
       <InfoTip label="What makes up this score" className={KI_TIP}>
         <span className="block font-medium">How this score of {Math.round(r.score)} is made</span>
+        {/* review UX N4 (pass 2): the direction of every factor */}
+        <span className="mt-0.5 block opacity-80">Each one raises the score when it is high.</span>
         {rows.length > 0 && (
           <span className="mt-1 block space-y-0.5">
             {rows.map((k) => (
@@ -250,6 +253,34 @@ export function useShowAll(count: number, phone = 5, wide = phone) {
       </button>
     ) : null;
   return { all, cls, button, listId: id };
+}
+
+/** A phone-width screen (below md), followed as the window changes; false where there is no window (tests, server render). */
+export function useIsPhone(): boolean {
+  const q = '(max-width: 767px)';
+  const [phone, setPhone] = useState(() => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(q).matches);
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const m = window.matchMedia(q);
+    const on = () => setPhone(m.matches);
+    m.addEventListener?.('change', on);
+    return () => m.removeEventListener?.('change', on);
+  }, []);
+  return phone;
+}
+
+/** review UX M6 (pass 2): a short in-page index under the hero, so the keyboard reaches a section (and the filters) in a few steps. */
+export function KiIndex({ items }: { items: { id: string; label: string }[] }) {
+  return (
+    <nav aria-label="On this page" className="flex flex-wrap items-center gap-x-1 gap-y-1 text-[13px]">
+      <span className="mr-1 text-xs text-ink-3">On this page:</span>
+      {items.map((it) => (
+        <a key={it.id} href={`#${it.id}`} className="inline-flex min-h-10 items-center rounded-md px-2 font-medium text-accent-text hover:bg-surface-2 hover:underline lg:min-h-8">
+          {it.label}
+        </a>
+      ))}
+    </nav>
+  );
 }
 
 /** The guide link that sits next to a section heading. */

@@ -88,6 +88,15 @@ Asked for: "make AI visibility the best in its category" (it was rated 6/10 agai
 - **Live-tested 2026-10-08** (with the pending v4.8 test, ≈ $2.75; REVIEW §5c V1-V2, K1, L2, P1, T1, C1): every path ran end to end into the app. Fixed from it: Claude's endpoint refuses the country field; a ladder with no supporting keyword now writes its main page first; Content QA marks unsourced thresholds / fines `[Confirm: AED 50m]` (no more "[Price]m") and keeps amounts from the verified facts; AI page width on phones; pulse question count and costs.
 - **Next:** the owner's decision on raising techand.ai's panel to 20 (+≈ $5/month).
 
+## 0d. Keyword intelligence: Competitors + Keyword research (KI, 2026-11-08, branch `ki/integration`, not deployed)
+
+New workflow **SEOagentKIntel1** (reached through the API front door, modes `competitors` / `keyword_research`), tables `seo_ki_runs`,
+`seo_ki_competitors`, `seo_ki_keywords`, `seo_ki_gaps` (synced by `sync_tables.py`), per-site switch `seo_monitors.ki_mode` off / trial / on
+(`ki_refresh`, `ki_max_competitors`; only platform admins switch it), kill switch `seo_cache ki:kill`. Off = every existing path unchanged; Trial
+= our team runs it for free and only platform admins see it; On = the client sees the two pages. Site Admin actions `ki_competitor` / `ki_gap`.
+Read `docs/keyword-intel-2026-11-08/README.md` (research, DESIGN.md, CONTRACTS.md, fixes/*.md, the reviews). Deploy with every site Off
+(`sync_tables.py` before the import).
+
 ## 0. The web app (v4.7, 2026-10-03)
 
 `app/` is the product front end: companies sign up (e-mail or Google), add and verify their websites, connect Search Console / GA4, give business and E-E-A-T details, start tracking, run every mode from a form and read dashboards, recommendations, runs and reports. Read `app/README.md` (run it, security model, tests) and `app/API.md`. Dev stack: `docker compose -f app/compose.dev.yml up -d` → http://localhost:5173.

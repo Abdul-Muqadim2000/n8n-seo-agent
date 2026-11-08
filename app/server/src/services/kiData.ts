@@ -130,7 +130,7 @@ const sameDomain = (d: string) => (r: { domain?: unknown }) => String(r?.domain 
  * ok or partial that wrote rows into the table (the safety net if a delete failed). A row of a run the app does not know (older than the runs
  * read) is stale once a known run wrote the table; with no known run at all, every row is kept (nothing to compare with).
  */
-export function kiCurrentRows<T extends { run_id?: unknown; market?: unknown }>(all: readonly T[], runs: readonly KiRunRow[]): T[] {
+export function kiCurrentRows<T extends { run_id?: unknown; market?: unknown }>(all: readonly T[], runs: readonly KiRunRow[], opts: { keepUserStatus?: boolean } = {}): T[] {
   const live = all;
   // FX-L's KI_ROW_CURRENT: the latest keyword_research run with status ok or partial (the engine also deletes the older rows)
   const delivered = [...runs]
@@ -153,7 +153,20 @@ export function kiCurrentRows<T extends { run_id?: unknown; market?: unknown }>(
       continue;
     }
     const keep = new Set(newest.values());
-    for (const r of group) if (keep.has(String(r.run_id ?? '')) && runOf.has(String(r.run_id ?? ''))) out.push(r);
+    const isCurrent = (r: T) => keep.has(String(r.run_id ?? '')) && runOf.has(String(r.run_id ?? ''));
+    // FX-L (final round): a gap the client marked started / dismissed / done is kept by the engine across runs, so it stays visible here
+    // too; one row per kind and search, the current run's first (an open row of an older run is stale)
+    const userKey = (r: T) => `${String((r as { type?: unknown }).type ?? '')}|${String((r as { keyword?: unknown }).keyword ?? '').toLowerCase()}`;
+    const seen = new Set<string>();
+    for (const r of group) if (isCurrent(r)) { out.push(r); if (opts.keepUserStatus) seen.add(userKey(r)); }
+    if (opts.keepUserStatus)
+      for (const r of group) {
+        const status = String((r as { status?: unknown }).status ?? 'open');
+        if (isCurrent(r) || status === 'open' || !status) continue;
+        if (seen.has(userKey(r))) continue;
+        seen.add(userKey(r));
+        out.push(r);
+      }
   }
   return out;
 }
@@ -175,7 +188,7 @@ export async function kiData(site: Pick<SiteRow, 'domain' | 'brandNames'>): Prom
   const own = sameDomain(d);
   const runRows = r.filter(own);
   const kRows = kiCurrentRows(k.filter(own), runRows);
-  const gRows = kiCurrentRows(g.filter(own), runRows);
+  const gRows = kiCurrentRows(g.filter(own), runRows, { keepUserStatus: true });
   const value: KiData = {
     competitors: c.filter(own).map(kiCompetitorView).filter((x) => x.compDomain).sort(kiCompetitorOrder),
     keywords: kRows.map((x) => kiKeywordView(x, tokens)).filter((x) => x.kwKey && x.keyword),
@@ -507,7 +520,7 @@ export async function kiTableRowsV1(
   const own = sameDomain(site.domain.toLowerCase());
   const raw = (await siteRows<Record<string, unknown>>(key, site.domain, { max: key === 'kiKeywords' ? KI_READ_MAX.keywords : KI_READ_MAX.gaps })).filter(own);
   const current = table === 'ki_keywords' || table === 'ki_gaps'
-    ? kiCurrentRows(raw, (await siteRows<KiRunRow>('kiRuns', site.domain, { sortBy: 'started_at:desc', max: KI_READ_MAX.runs })).filter(own))
+    ? kiCurrentRows(raw, (await siteRows<KiRunRow>('kiRuns', site.domain, { sortBy: 'started_at:desc', max: KI_READ_MAX.runs })).filter(own), { keepUserStatus: table === 'ki_gaps' })
     : raw;
   const exportedAt = new Date().toISOString();
   const all = current.map((r) => ({ company_id: org.id, website_id: site.id, website_domain: site.domain, exported_at: exportedAt, ...kiV1Row(table, r) }));

@@ -420,11 +420,13 @@ export interface KiKwFilter {
 }
 export const KI_KW_FILTER_EMPTY: KiKwFilter = { stage: '', verdict: '', source: '', cluster: '', minVolume: '', gapType: '', brand: '', striking: false, sort: 'score', page: 1 };
 export const KI_PAGE_SIZE = 50;
+/** review UX N9 (pass 2): a phone gets 20 search cards a page, not 50 */
+export const KI_PAGE_SIZE_PHONE = 20;
 
 /** The query string the keywords route takes (CONTRACTS.md §7); empty filters are left out. */
-export function kiKwParams(f: KiKwFilter): Record<string, string> {
+export function kiKwParams(f: KiKwFilter, pageSize: number = KI_PAGE_SIZE): Record<string, string> {
   // A1_ROUTES: a '-' in front sorts descending (best score and most searched first; names A to Z)
-  const p: Record<string, string> = { sort: f.sort === 'keyword' ? 'keyword' : `-${f.sort}`, page: String(f.page), page_size: String(KI_PAGE_SIZE) };
+  const p: Record<string, string> = { sort: f.sort === 'keyword' ? 'keyword' : `-${f.sort}`, page: String(f.page), page_size: String(pageSize) };
   if (f.stage) p.stage = f.stage;
   if (f.verdict) p.verdict = f.verdict;
   if (f.source) p.source = f.source;
@@ -605,8 +607,9 @@ export function kiStopNote(run: KiRunInfo | undefined, ctx: { siteCountry?: stri
   if (why === 'market_mismatch' || /market|country/.test(why)) {
     const country = (ctx.siteCountry || kiMarketName(run.market) || '').trim();
     return {
-      title: 'The last run did not start: it was for another country',
-      text: `Your website is measured in ${country || 'its main country'}. Change the country in Website settings, or run it again for ${country || 'that country'}. Nothing was charged.`,
+      title: 'The last run did not start: it asked for another country',
+      // review UX N5 (pass 2): the fix first; changing the website's own country is the secondary link
+      text: `This analysis runs for your website's country, ${country || 'its main country'}. Run it again for ${country || 'that country'}. Nothing was charged.`,
       action: { label: country ? `Run it for ${country}` : 'Run it again', to: 'run' },
     };
   }
@@ -678,7 +681,7 @@ export const KI_FACTOR_WORDS = {
   demand: 'People searching it',
   win: 'Your chance to rank',
   value: 'Worth of a visitor',
-  gap: 'Competitors already there',
+  gap: 'Proof it sells (competitors rank)',
 } as const;
 /** One factor (0 to 1) as a word (review UX H1: "Fits what you sell: high"). */
 export const kiFactorLevel = (v: number): string => (v >= 0.67 ? 'high' : v >= 0.34 ? 'medium' : 'low');

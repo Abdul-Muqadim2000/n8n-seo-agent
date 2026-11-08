@@ -5,10 +5,11 @@
 import { lazy, Suspense, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { toast } from 'sonner';
-import { Ban, Download, Eye, ListChecks, Star, Swords, Target, Trophy, Undo2 } from 'lucide-react';
+import { Ban, Download, Eye, ListChecks, MoreHorizontal, Star, Swords, Target, Trophy, Undo2 } from 'lucide-react';
 import { KI_CLASSES, KI_GAP_TYPES, KI_KEYWORD_GAP_TYPES, KI_SIZE_LABELS, type KiCompStatus, type KiGapType, type KiSizeTag } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
-import { CountUp, HeroNextStep, HeroStat, IconTile, InsightItem, Stagger, SummaryHero } from '@/components/insight';
+import { CountUp, HeroNextStep, HeroStat, IconTile, InfoTip, InsightItem, Stagger, SummaryHero } from '@/components/insight';
+import { Menu, MenuItem } from '@/components/ui/overlay';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonClass } from '@/components/ui/button';
 import { Callout, EmptyState, ErrorState } from '@/components/ui/feedback';
@@ -35,11 +36,13 @@ import { cn } from '@/lib/utils';
 import { CompetitorsPanel } from './_components/ai-panels2';
 import { FilterChips, Panel, useSitePage } from './_components/kit';
 import { DashSkeleton, HeroEyebrow, RankedBars } from './_components/visuals';
-import { KiActionButton, KiFigure, KiNotAvailable, KiRunButton, KiRunNotes, KiTrialBanner, KiUpdated, TAP, useShowAll } from './_components/ki/common';
+import { KI_TIP, KiActionButton, KiFigure, KiNotAvailable, KiRunButton, KiRunNotes, KiTrialBanner, KiUpdated, TAP, useShowAll } from './_components/ki/common';
 
 const CompetitorDrawer = lazy(() => import('./_components/ki/CompetitorDrawer'));
 // the searches behind the drawer's keyword profile and overlap (A1_ROUTES: page_size at most 200)
 const SUMMARY_PARAMS = { sort: '-score', page: '1', page_size: '200' };
+// every gap of the website in one read (A1_ROUTES: page_size at most 200), so the hero and the panel count the same list
+const GAP_PARAMS = { page: '1', page_size: '200' };
 
 export default function CompetitorsPage() {
   const { org, site, can, tool } = useSitePage();
@@ -49,7 +52,7 @@ export default function CompetitorsPage() {
   // every read starts at once (no waterfall); the lists of a website whose KI is not visible answer 403 and are not shown
   const ki = useKi(org.id, site.id);
   const comps = useKiCompetitors(org.id, site.id);
-  const gaps = useKiGaps(org.id, site.id);
+  const gaps = useKiGaps(org.id, site.id, GAP_PARAMS);
   // review UX M14: the searches behind the drawer are read only once a drawer is opened (not on every page view)
   const [drawerWanted, setDrawerWanted] = useState(false);
   const kws = useKiKeywords(org.id, site.id, SUMMARY_PARAMS, drawerWanted);
@@ -112,7 +115,8 @@ export function Competitors({ o, data, gaps, keywords, keywordsLoading, onDrawer
   const ownShare = run?.counts.client_share ?? run?.counts.serp_share ?? null;
   // FX-L (LOGIC M6 skipped in the engine): only the keyword gaps are produced today; the other kinds are not shown until they exist
   const openGaps = gaps.filter((g) => (g.status === 'open' || g.status === 'started') && (KI_KEYWORD_GAP_TYPES as readonly string[]).includes(g.type));
-  const gapsOpen = o.summary?.gaps.open || openGaps.length;
+  // review UX N1 (pass 2): the hero counts exactly the gaps the panel below lists (the kinds shown, open or started)
+  const gapsOpen = openGaps.length;
 
   const change = (c: KiComp, next: KiCompStatus) => {
     const refused = kiChooseCheck(rows, c.domain, next, max);
@@ -200,9 +204,13 @@ export function Competitors({ o, data, gaps, keywords, keywordsLoading, onDrawer
         {/* review CONSISTENCY M7: the two competitor lists, one story */}
         <p className="border-b border-line px-5 py-2.5 text-xs text-ink-3">
           The competitors you entered in{' '}
-          <Link to={page('settings')} className="font-medium text-accent-text hover:underline max-md:inline-flex max-md:min-h-10 max-md:items-center">
-            Website settings
-          </Link>{' '}
+          {can('admin') ? (
+            <Link to={page('settings')} className="font-medium text-accent-text hover:underline max-md:-my-3 max-md:inline-block max-md:py-3">
+              Website settings
+            </Link>
+          ) : (
+            'Website settings'
+          )}{' '}
           start on this list as chosen. Choosing here does not change that list, which your AI visibility and backlink checks use.
         </p>
         <CompetitorList title="You follow" rows={s.chosen} empty={`Choose up to ${max} below.`} onChange={change} onOpen={openDrawer} member={member} max={max} chosenCount={s.chosen.length} />
@@ -312,20 +320,21 @@ function CompetitorList({ title, rows, empty, onChange, onOpen, member, max, cho
               }
               description={
                 <span className="flex flex-col gap-1">
-                  <span>{c.reasons[0] ?? (c.seedsSeen != null && c.seedsTotal ? `In the first 10 Google results for ${c.seedsSeen} of ${c.seedsTotal} of your service searches.` : 'Found in Google\'s results for your services.')}</span>
+                  {/* review UX (pass 2): a compact phone row: the reason in two lines, the figures from sm up */}
+                  <span className="max-sm:line-clamp-2">{c.reasons[0] ?? (c.seedsSeen != null && c.seedsTotal ? `In the first 10 Google results for ${c.seedsSeen} of ${c.seedsTotal} of your service searches.` : 'Found in Google\'s results for your services.')}</span>
                   {(c.score != null || c.serpShare != null) && (
-                    <span className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-3">
+                    <span className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-3 max-sm:hidden">
                       {c.score != null && (
-                        <span>
-                          How much they compete with you:{' '}
-                          <KiFigure value={c.scoreLow != null && c.scoreHigh != null && Math.round(c.scoreLow) !== Math.round(c.scoreHigh) ? `${Math.round(c.score)} of 100 (likely ${Math.round(c.scoreLow)} to ${Math.round(c.scoreHigh)})` : `${Math.round(c.score)} of 100`} tip="Higher means they show up more often and higher than you for your services, in your area and in AI answers." basis="our estimate, from Google's results read on the date above" />
+                        <span className="tabular">
+                          How much they compete with you: {c.scoreLow != null && c.scoreHigh != null && Math.round(c.scoreLow) !== Math.round(c.scoreHigh) ? `${Math.round(c.score)} of 100 (likely ${Math.round(c.scoreLow)} to ${Math.round(c.scoreHigh)})` : `${Math.round(c.score)} of 100`}
                         </span>
                       )}
-                      {c.serpShare != null && (
-                        <span>
-                          Share of clicks on your searches: <KiFigure value={pctText(c.serpShare)} tip="Of the clicks the first page of your service searches gets, about this share goes to them." basis="our estimate, from their places in Google's results" />
-                        </span>
-                      )}
+                      {c.serpShare != null && <span className="tabular">Share of clicks on your searches: {pctText(c.serpShare)}</span>}
+                      {/* review UX M6: one tip per row (was two), fewer tab stops before the actions */}
+                      <InfoTip label="What these numbers mean" className={KI_TIP}>
+                        How much they compete with you: higher means they show up more often and higher than you for your services, in your area and in AI answers. Share of clicks: of the clicks the first page of your service searches gets, about this share goes to them.
+                        <span className="mt-1 block text-xs opacity-80">How we know: our estimate, from Google&apos;s results read on the date above</span>
+                      </InfoTip>
                     </span>
                   )}
                 </span>
@@ -340,15 +349,24 @@ function CompetitorList({ title, rows, empty, onChange, onOpen, member, max, cho
                       Choose
                     </Button>
                   )}
-                  {member && c.status !== 'watch' && (
-                    <Button variant="ghost" size="sm" className={TAP} icon={<Eye className="size-4" />} onClick={() => onChange(c, 'watch')}>
-                      {c.status === 'chosen' ? 'Move to watchlist' : 'Watch'}
-                    </Button>
-                  )}
+                  {/* review UX M6 / pass 2: Watch and Not a competitor in one menu (one tab stop, a shorter phone row) */}
                   {member && (
-                    <Button variant="ghost" size="sm" className={TAP} icon={<Ban className="size-4" />} onClick={() => onChange(c, 'dismissed')}>
-                      Not a competitor
-                    </Button>
+                    <Menu
+                      trigger={
+                        <Button variant="ghost" size="sm" className={TAP} icon={<MoreHorizontal className="size-4" />} aria-label={`More actions for ${c.domain}`}>
+                          More
+                        </Button>
+                      }
+                    >
+                      {c.status !== 'watch' && (
+                        <MenuItem icon={<Eye className="size-4" />} onSelect={() => onChange(c, 'watch')}>
+                          {c.status === 'chosen' ? 'Move to watchlist' : 'Watch'}
+                        </MenuItem>
+                      )}
+                      <MenuItem icon={<Ban className="size-4" />} onSelect={() => onChange(c, 'dismissed')}>
+                        Not a competitor
+                      </MenuItem>
+                    </Menu>
                   )}
                 </span>
               }
