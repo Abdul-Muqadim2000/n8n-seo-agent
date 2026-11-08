@@ -158,14 +158,19 @@ export const KI_SCORED_CLASSES: readonly KiClass[] = ['direct', 'adjacent'];
 export const KI_GATE_REASON_IDS = ['other_market', 'career', 'other_brand', 'government', 'portal', 'navigational', 'own_brand', 'off_topic', 'too_broad', 'empty', 'low_fit', 'avoid'] as const;
 export type KiGateReason = (typeof KI_GATE_REASON_IDS)[number];
 export const KI_GATE_FIELDS = { code: 'gate_reason', detail: 'gate_detail', pass_code: '' } as const;
-/** Striking distance, one definition (DESIGN.md 3.11): Search Console position 8-20 with >= 100 impressions in 28 days; >= 30 on a small
- *  site, i.e. one whose own 28-day impressions total (seo_site_metrics, latest period; else the sum of its stored query rows) is under 5,000. */
-export const KI_STRIKING = { min_position: 8, max_position: 20, impressions_28d: 100, small_site_impressions_28d: 30, small_site_total_impressions_28d: 5000 } as const;
+/** Striking distance, one definition (DESIGN.md 3.11, FX-L round 2): Search Console position 8-20 with at least
+ *  clamp(round(the site's own 28-day impressions / 300), 20, 100) impressions in 28 days (one query must hold 1/300 of the site's impressions,
+ *  never under 20, never over 100). The total is seo_site_metrics (latest period), else the sum of the stored query rows; unknown -> 100. */
+export const KI_STRIKING = { min_position: 8, max_position: 20, impressions_28d: 100, floor_impressions_28d: 20, site_divisor: 300 } as const;
+export function kiStrikingBar(siteTotal28d: number | null | undefined): number {
+  const t = Number(siteTotal28d);
+  if (siteTotal28d == null || !Number.isFinite(t) || t <= 0) return KI_STRIKING.impressions_28d;
+  return Math.min(KI_STRIKING.impressions_28d, Math.max(KI_STRIKING.floor_impressions_28d, Math.round(t / KI_STRIKING.site_divisor)));
+}
 export function kiIsStriking(position: number | null | undefined, impressions28d: number | null | undefined, siteTotal28d: number | null | undefined): boolean {
   const p = Number(position), im = Number(impressions28d);
   if (position == null || impressions28d == null || !Number.isFinite(p) || !Number.isFinite(im)) return false;
-  const small = siteTotal28d != null && Number.isFinite(Number(siteTotal28d)) && Number(siteTotal28d) < KI_STRIKING.small_site_total_impressions_28d;
-  return p >= KI_STRIKING.min_position && p <= KI_STRIKING.max_position && im >= (small ? KI_STRIKING.small_site_impressions_28d : KI_STRIKING.impressions_28d);
+  return p >= KI_STRIKING.min_position && p <= KI_STRIKING.max_position && im >= kiStrikingBar(siteTotal28d);
 }
 /** Which keyword / gap rows are current: the engine deletes, after every successful keyword-research run, the site x market rows it did not
  *  write; a reader also keeps only rows whose run_id is the latest seo_ki_runs row of kind keyword_research with status ok or partial. */
@@ -199,7 +204,7 @@ export function kiBasisLabel(basis: unknown, source?: unknown): string {
 }
 
 /** KI_STRIKING (FX-L, the engine's rule) in the customer's words; the app reads the row's `striking` flag and uses this for its copy only. */
-export const KI_STRIKING_WORDS = `places ${KI_STRIKING.min_position} to ${KI_STRIKING.max_position} in Google, seen at least ${KI_STRIKING.impressions_28d} times in 28 days (${KI_STRIKING.small_site_impressions_28d} for a smaller website)`;
+export const KI_STRIKING_WORDS = `places ${KI_STRIKING.min_position} to ${KI_STRIKING.max_position} in Google, seen often enough for your website's size in 28 days (from ${KI_STRIKING.floor_impressions_28d} times for a small website to ${KI_STRIKING.impressions_28d} for a large one)`;
 
 /**
  * Why a search is "Not for you", in plain words. The engine stores a reason CODE (the 12 of ki_parity.json `gate_reasons`; FX-L moves the detail

@@ -202,26 +202,32 @@ def free_get(name, pos, accept='text/html,application/xhtml+xml'):
     return node(name, 'n8n-nodes-base.httpRequest', 4.5, {'method': 'GET', 'url': '={{ $json.url }}', 'sendHeaders': True,
         'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': UA}, {'name': 'Accept', 'value': accept}, {'name': 'Range', 'value': 'bytes=0-399999'}]},
         'options': {'batching': {'batch': {'batchSize': 2, 'batchInterval': 500}}, 'timeout': 15000, 'redirect': {'redirect': {'followRedirects': False}},
-                    'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
+                    # FX-L round 2 (N2): the body goes to a binary file (on disk), and KI_Fetch_Text reads at most 400 KB of it, never one over 2 MB
+                    'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'file', 'outputPropertyName': 'data'}}}},
         pos, onError='continueRegularOutput', alwaysOutputData=True, **retry_lint.RETRY)
 HOPS = lambda what, reqs, ans: src('KI_Fetch_Hops.js', sub={'__WHAT__': what, '__REQS__': reqs, '__ANS__': ans})
+TEXT = lambda what: src('KI_Fetch_Text.js', sub={'__WHAT__': what})
 free_get('Read Comp Homes', at(45, 3))
-code('Comp Home Hops', HOPS('Comp Home Hops', 'Any Comp Homes?', 'Read Comp Homes'), at(45, 4), executeOnce=True)
+code('Comp Home Text', TEXT('Comp Home Text'), at(45, 5))
+code('Comp Home Hops', HOPS('Comp Home Hops', 'Any Comp Homes?', 'Comp Home Text'), at(45, 4), executeOnce=True)
 iff('Any Comp Home Hops?', '{{ !$json.skip }}', at(46, 4))
 free_get('Read Comp Homes (Hop)', at(47, 4))
+code('Comp Home Hop Text', TEXT('Comp Home Hop Text'), at(47, 5))
 code('Comp Profile Requests', src('KI_Comp_Profile_Requests.js'), at(46, 3), executeOnce=True)
-chain('Comp Candidates', 'Comp Home Requests', 'Any Comp Homes?'); link('Any Comp Homes?', 'Read Comp Homes', 0); link('Any Comp Homes?', 'Comp Profile Requests', 1); link('Read Comp Homes', 'Comp Home Hops')
-chain('Comp Home Hops', 'Any Comp Home Hops?'); link('Any Comp Home Hops?', 'Read Comp Homes (Hop)', 0); link('Any Comp Home Hops?', 'Comp Profile Requests', 1); link('Read Comp Homes (Hop)', 'Comp Profile Requests')
+chain('Comp Candidates', 'Comp Home Requests', 'Any Comp Homes?'); link('Any Comp Homes?', 'Read Comp Homes', 0); link('Any Comp Homes?', 'Comp Profile Requests', 1); chain('Read Comp Homes', 'Comp Home Text', 'Comp Home Hops')
+chain('Comp Home Hops', 'Any Comp Home Hops?'); link('Any Comp Home Hops?', 'Read Comp Homes (Hop)', 0); link('Any Comp Home Hops?', 'Comp Profile Requests', 1); chain('Read Comp Homes (Hop)', 'Comp Home Hop Text', 'Comp Profile Requests')
 code('Comp Sitemap Requests', src('KI_Comp_Sitemap_Requests.js'), at(50, 3), executeOnce=True)
 gated_step('Comp Profile Requests', 'Any Comp Profiles?', 'Run Comp Profiles', 'Comp Sitemap Requests', 3, 46); GATED.append(('Run Comp Profiles', 'chosen competitors\' ranked keywords', 'request'))
 iff('Any Comp Sitemaps?', '{{ !$json.skip }}', at(51, 3))
 free_get('Read Comp Sitemaps', at(52, 3), accept='application/xml,text/xml,*/*')
-code('Comp Sitemap Hops', HOPS('Comp Sitemap Hops', 'Any Comp Sitemaps?', 'Read Comp Sitemaps'), at(52, 4), executeOnce=True)
+code('Comp Sitemap Text', TEXT('Comp Sitemap Text'), at(52, 5))
+code('Comp Sitemap Hops', HOPS('Comp Sitemap Hops', 'Any Comp Sitemaps?', 'Comp Sitemap Text'), at(52, 4), executeOnce=True)
 iff('Any Comp Sitemap Hops?', '{{ !$json.skip }}', at(53, 4))
 free_get('Read Comp Sitemaps (Hop)', at(54, 4), accept='application/xml,text/xml,*/*')
+code('Comp Sitemap Hop Text', TEXT('Comp Sitemap Hop Text'), at(54, 5))
 code('Comp Result', src('KI_Comp_Result.js'), at(53, 3), executeOnce=True)
-chain('Comp Sitemap Requests', 'Any Comp Sitemaps?'); link('Any Comp Sitemaps?', 'Read Comp Sitemaps', 0); link('Any Comp Sitemaps?', 'Comp Result', 1); link('Read Comp Sitemaps', 'Comp Sitemap Hops')
-chain('Comp Sitemap Hops', 'Any Comp Sitemap Hops?'); link('Any Comp Sitemap Hops?', 'Read Comp Sitemaps (Hop)', 0); link('Any Comp Sitemap Hops?', 'Comp Result', 1); link('Read Comp Sitemaps (Hop)', 'Comp Result')
+chain('Comp Sitemap Requests', 'Any Comp Sitemaps?'); link('Any Comp Sitemaps?', 'Read Comp Sitemaps', 0); link('Any Comp Sitemaps?', 'Comp Result', 1); chain('Read Comp Sitemaps', 'Comp Sitemap Text', 'Comp Sitemap Hops')
+chain('Comp Sitemap Hops', 'Any Comp Sitemap Hops?'); link('Any Comp Sitemap Hops?', 'Read Comp Sitemaps (Hop)', 0); link('Any Comp Sitemap Hops?', 'Comp Result', 1); chain('Read Comp Sitemaps (Hop)', 'Comp Sitemap Hop Text', 'Comp Result')
 ROWS = lambda what, table, field: src('KI_Rows.js', sub={'__WHAT__': what, '__TABLE__': table, '__FIELD__': field})
 code('KI Comp Rows', ROWS('KI Comp Rows', KI_COMP_TABLE, 'comp_rows'), at(54, 3), executeOnce=True)
 iff('Any KI Comp Rows?', '{{ !$json.skip }}', at(55, 3))
@@ -263,8 +269,16 @@ node('Save KI Gaps', DT_TYPE, DT_VERSION, dt_upsert_params_keys(KI_GAPS_TABLE, K
 # this run did not write (another run_id) is deleted, keywords and gaps alike (the client's gap status was carried to the new row by keyword)
 _OLD = [('site_id', 'eq', "={{ $('KI Plan').first().json.site_id }}"), ('market', 'eq', "={{ $('KI Plan').first().json.market }}"), ('run_id', 'neq', '={{ $execution.id }}')]
 node('Drop Old KI Keywords', DT_TYPE, DT_VERSION, dt_delete_where_params(KI_KW_TABLE, _OLD), at(57, 7), executeOnce=True, **SAVE)
-node('Drop Old KI Gaps', DT_TYPE, DT_VERSION, dt_delete_where_params(KI_GAPS_TABLE, _OLD), at(58, 7), executeOnce=True, **SAVE)
-chain('Research Result', 'KI KW Rows', 'Any KI KW Rows?'); link('Any KI KW Rows?', 'Save KI Keywords', 0); link('Any KI KW Rows?', 'KI Gap Rows', 1); chain('Save KI Keywords', 'Drop Old KI Keywords', 'Drop Old KI Gaps', 'KI Gap Rows')
+# FX-L round 2 (N3): the deletes run only after KI Supersede Check saw every keyword row of this run saved with no error, on a run whose
+# discovery and results pages were read (a partial run never replaces a fuller one); old gaps go only when this run's gap section is ok,
+# and a gap the client started, dismissed or marked done is never deleted (status open only; its status is carried by keyword)
+node('Drop Old KI Gaps', DT_TYPE, DT_VERSION, dt_delete_where_params(KI_GAPS_TABLE, _OLD + [('status', 'eq', 'open')]), at(58, 7), executeOnce=True, **SAVE)
+code('KI Supersede Check', src('KI_Supersede_Check.js'), at(57, 8), executeOnce=True)
+iff('Supersede Keywords?', '{{ $json.drop_keywords === true }}', at(58, 8))
+iff('Supersede Gaps?', "{{ $('KI Supersede Check').first().json.drop_gaps === true }}", at(59, 8))
+chain('Research Result', 'KI KW Rows', 'Any KI KW Rows?'); link('Any KI KW Rows?', 'Save KI Keywords', 0); link('Any KI KW Rows?', 'KI Gap Rows', 1)
+chain('Save KI Keywords', 'KI Supersede Check', 'Supersede Keywords?'); link('Supersede Keywords?', 'Drop Old KI Keywords', 0); link('Supersede Keywords?', 'KI Gap Rows', 1)
+chain('Drop Old KI Keywords', 'Supersede Gaps?'); link('Supersede Gaps?', 'Drop Old KI Gaps', 0); link('Supersede Gaps?', 'KI Gap Rows', 1); link('Drop Old KI Gaps', 'KI Gap Rows')
 chain('KI Gap Rows', 'Any KI Gap Rows?')
 
 # ---- the shared end (row 5): cache rows, the run row, the report ----

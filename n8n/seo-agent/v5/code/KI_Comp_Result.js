@@ -21,10 +21,10 @@ const saveRows = [...(cc.cache_rows || [])];
 const sections = [pic.section, ...(cc.sections || [])].filter(Boolean);
 // ---- homepages read this run -> words (data), kept 14 days ----
 const homes = { ...(cc.homes || {}) };
-const homeReqs = all('Any Comp Homes?').filter(r => r && !r.skip && r.domain); const homeAns0 = all('Read Comp Homes');
+const homeReqs = all('Any Comp Homes?').filter(r => r && !r.skip && r.domain); const homeAns0 = all('Comp Home Text');   // FX-L round 2: the capped text of each answer (KI_Fetch_Text)
 // FX-L perf H2: a redirect the hop node checked was read once more; its answer stands for the first one (KI Fetch Hops)
 const hopAns = (reqNode, ansNode) => { const rq = all(reqNode).filter(r => r && !r.skip && r.url); const an = all(ansNode); const by = {}; rq.forEach((q, i) => { by[q.first_index] = an[i] || {}; }); return by; };
-const homeHop = hopAns('Any Comp Home Hops?', 'Read Comp Homes (Hop)');
+const homeHop = hopAns('Any Comp Home Hops?', 'Comp Home Hop Text');
 const homeAns = homeAns0.map((a, i) => homeHop[i] || a);
 let homeOk = 0;
 homeReqs.forEach((q, i) => { const a = homeAns[i] || {}; const code = KIW.N(a.statusCode); const html = KIW.S(a.body != null ? a.body : a.data);
@@ -52,8 +52,8 @@ sections.push({ key: 'profiles', state: !(p.chosen || []).length ? 'skipped' : (
     : profFailed.length ? 'could not be read: ' + profFailed.map(x => x.q.target + ' (' + x.why + ')').join('; ') : (profWait ? profWait + ' profile(s) wait for the next run: this run is held at the price quoted' : ''), rows: Object.keys(rk).length });
 // ---- publishing pace (sitemap lastmod in the last 90 days) ----
 const pace = {};
-const smReqs = all('Any Comp Sitemaps?').filter(r => r && !r.skip && r.domain); const smHop = hopAns('Any Comp Sitemap Hops?', 'Read Comp Sitemaps (Hop)');
-const smAns = all('Read Comp Sitemaps').map((a, i) => smHop[i] || a);
+const smReqs = all('Any Comp Sitemaps?').filter(r => r && !r.skip && r.domain); const smHop = hopAns('Any Comp Sitemap Hops?', 'Comp Sitemap Hop Text');
+const smAns = all('Comp Sitemap Text').map((a, i) => smHop[i] || a);
 smReqs.forEach((q, i) => { const a = smAns[i] || {}; const body = KIW.S(a.body != null ? a.body : a.data).slice(0, KIW.CAPS.home_bytes * 5); const code = KIW.N(a.statusCode);
   let v; if (a.error || (code && code >= 400) || !/<(urlset|sitemapindex)\b/i.test(body)) v = { per_month: null, why: 'its sitemap could not be read (' + (code || 'no answer') + ')', fetched_at: now };
   else if (/<sitemapindex\b/i.test(body)) v = { per_month: null, why: 'its sitemap is an index of sitemaps (not read further)', fetched_at: now };

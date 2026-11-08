@@ -43,10 +43,13 @@ const chosen = KIW.uniq([...userChosen, ...declared.filter(d => !dismissed.inclu
 const knownRivals = compRows.filter(r => ['direct', 'adjacent'].includes(S(r.class)) && !(S(r.status) === 'dismissed' && S(r.status_by) === 'user')).map(r => KIW.host(r.comp_domain));
 // FX-L H4: AVOID verdicts: the request's (the app's checks and content verdicts) and the content runs the check advised against
 const clog = rowsOf('Load Content Log (KI)');
-const avoidLog = clog.filter(r => /advised against|verdict (?:is )?avoid|\bAVOID\b/i.test(S(r.publish_note) + ' ' + S(r.qa_reasons) + ' ' + S(r.status))).map(r => KIW.normKw(r.keyword));
+// only the engine's own wording for a check that advised against the page (never free text that happens to contain "avoid")
+const avoidLog = clog.filter(r => /keyword check advised against/i.test(S(r.publish_note) + ' ' + S(r.qa_reasons))).map(r => KIW.normKw(r.keyword));
 const avoid = KIW.uniq([...(g.avoid || []), ...avoidLog].map(KIW.normKw).filter(Boolean)).slice(0, 300);
 // ---- the KI write gate (KI.gate: the shared fit gate in the KI vocabulary), written once, used on every seed and every candidate keyword ----
-const fitCtx = { own_domain: g.domain, market: g.iso, services, topics: services, competitors: KIW.uniq([...declared, ...chosen, ...knownRivals]).slice(0, 60), protect: [...(g.seeds || []), ...products], avoid,
+// FX-L N2: only rivals whose name is a brand (KI.brandDomains): an exact-match domain (softwarecompany.ae) never gates "software company in uae"
+const brandRivals = KI.brandDomains(KIW.uniq([...declared, ...chosen, ...knownRivals]), { services }).slice(0, 60);
+const fitCtx = { own_domain: g.domain, market: g.iso, services, topics: services, competitors: brandRivals, protect: [...(g.seeds || []), ...products], avoid,
   pages: pageRows.slice(0, 150).map(r => ({ title: S(r.title).slice(0, 120), url: S(r.url).slice(0, 200) })) };
 const gate = (kw, extra) => KI.gate(kw, { ...fitCtx, ...(extra || {}) });
 // ---- the ladder heads, read back through the gate they were written through (FITR, INVARIANTS rule 2) ----

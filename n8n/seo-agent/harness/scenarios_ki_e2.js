@@ -111,7 +111,9 @@ module.exports = async (ctx) => {
       await run(http + ' Answers', retries.length ? items(http + ' (Retry)') : []);
       return reqs.length;
     };
-    const plainGet = async (reqNode, ifNode, http) => { const reqs = items(reqNode).filter(r => !r.skip); drop(ifNode, http); if (!reqs.length) return 0; mock(ifNode, reqs); mock(http, reqs.map(free)); return reqs.length; };
+    const TEXT_OF = { 'Read Comp Homes': 'Comp Home Text', 'Read Comp Sitemaps': 'Comp Sitemap Text' };   // FX-L round 2: the capped text of each answer
+    const plainGet = async (reqNode, ifNode, http) => { const n = await plainGet0(reqNode, ifNode, http); drop(TEXT_OF[http]); if (n) await run(TEXT_OF[http], items(http)); return n; };
+    const plainGet0 = async (reqNode, ifNode, http) => { const reqs = items(reqNode).filter(r => !r.skip); drop(ifNode, http); if (!reqs.length) return 0; mock(ifNode, reqs); mock(http, reqs.map(free)); return reqs.length; };
     const LEDGER = { rows: [], seq: 100 };
     const execute = async (k, kind, o) => {
       o = o || {}; reset(); SITE = site(k); calls.length = 0;
@@ -303,7 +305,7 @@ module.exports = async (ctx) => {
     check('KIE2-8 the gate before money: the job search and the own-brand search are stored as gated with their reason and score 0; nothing gated is enriched or read',
       kwBy['dynamics 365 jobs dubai'] && kwBy['dynamics 365 jobs dubai'].verdict === 'gated' && kwBy['dynamics 365 jobs dubai'].score === 0 && kwBy['dynamics 365 jobs dubai'].gate_reason === 'career' && /work|job/i.test(kwBy['dynamics 365 jobs dubai'].gate_detail)
       && !tr.kw.some(r => r.gate === 'fail' && r.serp_read_at), J(kwBy['dynamics 365 jobs dubai']));
-    check('KIE2-8 striking distance (positions 8-20, >= 30 impressions on a small site): peppol uae and pint ae, with the page and the change; "what is a crm company" (position 38) is not',
+    check('KIE2-8 striking distance (positions 8-20, the site-relative bar: 20 impressions for this small fixture site): peppol uae and pint ae, with the page and the change; "what is a crm company" (position 38) is not',
       rb.striking.some(s => s.keyword === 'peppol uae' && /e-invoicing-uae/.test(s.page)) && rb.striking.some(s => s.keyword === 'pint ae') && !rb.striking.some(s => s.keyword === 'what is a crm company'), J(rb.striking));
     check('KIE2-8 one verdict vocabulary from Win (go / months / hard / gated / unknown = not judged yet), the score with its range on every row, clusters with their heads and mapped pages',
       tr.kw.every(r => ['go', 'months', 'hard', 'gated', 'unknown'].includes(r.verdict) && r.score_low <= r.score && r.score <= r.score_high) && rb.clusters.length >= 5 && rb.clusters.every(c => c.cluster_id && c.head && c.members >= 1)
@@ -438,8 +440,33 @@ module.exports = async (ctx) => {
       ['Read Comp Homes', 'Read Comp Sitemaps', 'Read Comp Homes (Hop)', 'Read Comp Sitemaps (Hop)'].every(n => nd(n) && nd(n).parameters.options.redirect.redirect.followRedirects === false && nd(n).parameters.options.timeout <= 15000
         && nd(n).parameters.headerParameters.parameters.some(h => h.name === 'Range'))
       && !/<\(script\|style/.test(nd('Comp Result').parameters.jsCode), '');
+    // ---- FX-L round 2 (re-review PERF N2): the body cap is enforced on the body: a GET writes a binary file, the text node reads at most 400 KB ----
+    check('KIE2-14 (N2) the free GETs write their answer to a file (responseFormat file) and a text node reads it',
+      ['Read Comp Homes', 'Read Comp Sitemaps', 'Read Comp Homes (Hop)', 'Read Comp Sitemaps (Hop)'].every(n => nd(n).parameters.options.response.response.responseFormat === 'file')
+      && J(W.connections['Read Comp Homes']) === J([['Comp Home Text']]) && J(W.connections['Read Comp Sitemaps']) === J([['Comp Sitemap Text']]), J([W.connections['Read Comp Homes'], W.connections['Read Comp Sitemaps']]));
+    reset();
+    const big = Buffer.alloc(600000, 'a'), small = Buffer.from('<html><title>ERP partner</title></html>');
+    const tx = (await run('Comp Home Text', [
+      { json: { statusCode: 200, headers: {} }, binary: { data: { data: small.toString('base64'), bytes: small.length, fileSize: small.length + ' B' } } },
+      { json: { statusCode: 200, headers: {} }, binary: { data: { data: big.toString('base64'), bytes: big.length, fileSize: '600 kB' } } },
+      { json: { statusCode: 200, headers: {} }, binary: { data: { data: '', bytes: 3e9, fileSize: '3 GB' } } },
+      { json: { statusCode: 200, headers: {} }, binary: { data: { data: small.toString('base64') } } },
+      { json: { statusCode: 302, headers: { location: 'https://www.rival.ae/' } } }])).map(i => i.json);
+    check('KIE2-14 (N2) the cap holds on the body: a small page is read, 600 KB is cut at 400 KB, a 3 GB answer and one of unknown size are never read, a redirect keeps its headers',
+      /ERP partner/.test(tx[0].data) && !tx[0].truncated && tx[1].data.length === 400000 && tx[1].truncated && tx[2].refused && tx[2].data === '' && /over 2 MB/.test(tx[2].error) && tx[3].refused && tx[4].statusCode === 302 && tx[4].headers.location === 'https://www.rival.ae/',
+      J(tx.map(x => [x.bytes, x.truncated, x.refused, (x.data || '').length])));
+    // ---- re-review N3: the supersede deletes run only after a clean save, never on a partial run, never on a client's gap status ----
+    const sup = async (saved, result) => { reset(); mock('KI Plan', [{ site_id: 's', market: 'AE-en' }]); mock('Research Result', [result]); mock('Save KI Keywords', saved); return (await run('KI Supersede Check', [{ json: {} }]))[0].json; };
+    const okR = { status: 'ok', kw_rows: [{}, {}], sections: [{ key: 'discovery', state: 'ok' }, { key: 'results_pages', state: 'ok' }, { key: 'gap', state: 'ok' }] };
+    const s1 = await sup([{ id: 1 }, { id: 2 }], okR), s2 = await sup([{ id: 1 }, { error: 'column gate_detail does not exist' }], okR), s3 = await sup([{ id: 1 }], okR),
+      s4 = await sup([{ id: 1 }, { id: 2 }], { ...okR, status: 'partial', sections: [{ key: 'discovery', state: 'missing' }, { key: 'results_pages', state: 'ok' }] }),
+      s5 = await sup([{ id: 1 }, { id: 2 }], { ...okR, sections: [{ key: 'discovery', state: 'ok' }, { key: 'gap', state: 'missing' }] });
+    check('KIE2-14 (N3) old rows are deleted only after every keyword row was saved with no error and discovery was read; old gaps only when the gap section is ok; the gap delete never touches a client status',
+      s1.drop_keywords && s1.drop_gaps && !s2.drop_keywords && !s3.drop_keywords && !s4.drop_keywords && s5.drop_keywords && !s5.drop_gaps
+      && J(W.connections['Save KI Keywords']) === J([['KI Supersede Check']]) && nd('Drop Old KI Gaps').parameters.filters.conditions.some(c => c.keyName === 'status' && c.keyValue === 'open'),
+      J([s1, s2, s3, s4, s5].map(x => [x.drop_keywords, x.drop_gaps, x.reason])));
     check('KIE2-14 (FX-L H9) one current row per site x market: after the keyword rows are saved, the rows of this site and market another run wrote are deleted (keywords and gaps)',
       ['Drop Old KI Keywords', 'Drop Old KI Gaps'].every(n => nd(n) && nd(n).parameters.filters.conditions.some(c => c.keyName === 'run_id' && c.condition === 'neq') && nd(n).parameters.filters.conditions.some(c => c.keyName === 'market'))
-      && J(W.connections['Save KI Keywords']) === J([['Drop Old KI Keywords']]), J(W.connections['Save KI Keywords']));
+      && J(W.connections['Supersede Keywords?']) === J([['Drop Old KI Keywords'], ['KI Gap Rows']]), J(W.connections['Supersede Keywords?']));
   });
 };

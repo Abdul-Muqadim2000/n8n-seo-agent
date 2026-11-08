@@ -101,7 +101,7 @@ module.exports = async (ctx) => {
       [{ domain: 'www.bayzat.com', url: 'https://www.bayzat.com/blog/crm-softwares-dubai/', title: '10 Best CRM Softwares in Dubai, UAE' }, 'list'],
       [{ domain: 'www.visionet.com', url: 'https://www.visionet.com/article/what-is-a-microsoft-dynamics-365-erp', title: 'A guide to what a Microsoft Dynamics 365 ERP system is' }, 'guide'],
       [{ domain: 'www.intwo.cloud', url: 'https://www.intwo.cloud/microsoft-dynamics-erp/', title: 'Microsoft Dynamics 365 ERP Implementation Services - Intwo' }, 'provider'],
-      [{ domain: 'learn.microsoft.com', url: 'https://learn.microsoft.com/en-us/dynamics365/finance/', title: 'Dynamics 365 Finance documentation' }, 'vendor'],
+      [{ domain: 'learn.microsoft.com', url: 'https://learn.microsoft.com/en-us/dynamics365/finance/', title: 'Dynamics 365 Finance documentation' }, 'guide'],   // FX-L L4: a maker's documentation is a guide
       [{ domain: 'www.hubspot.com', url: 'https://www.hubspot.com/products/crm', title: 'Free CRM Software' }, 'vendor'],
       [{ domain: 'www.reddit.com', url: 'https://www.reddit.com/r/Dynamics365/comments/x', title: 'Switching to D365' }, 'forum'],
       [{ domain: 'ae.indeed.com', url: 'https://ae.indeed.com/q-dynamics-365-jobs.html', title: 'Dynamics 365 Jobs in Dubai' }, 'job_board'],
@@ -300,8 +300,13 @@ module.exports = async (ctx) => {
       check('KI18 with a site model the page match is the shared SM.matchPage', pm.action === 'refresh' && /cloud-migration/.test(pm.page_url), J(pm)); }
 
     // ---- KI19 striking ----
-    const sk = [KI.striking({ gsc_position: 8.4, gsc_impressions: 120 }), KI.striking({ gsc_position: 21, gsc_impressions: 500 }), KI.striking({ gsc_position: 12, gsc_impressions: 40 }), KI.striking({ gsc_position: 12, gsc_impressions: 40 }, { total_impressions: 1200 }), KI.striking({ gsc_position: 5, gsc_impressions: 900 })];
-    check('KI19 striking distance, one definition: Search Console 8-20 with >= 100 impressions in 28 days (>= 30 on a small site)', J(sk) === J([true, false, false, true, false]), J(sk));
+    // FX-L round 2: the bar is relative to the site: clamp(round(site 28-day impressions / 300), 20, 100); unknown total -> 100
+    const sk = [KI.striking({ gsc_position: 8.4, gsc_impressions: 120 }), KI.striking({ gsc_position: 21, gsc_impressions: 500 }), KI.striking({ gsc_position: 12, gsc_impressions: 40 }),
+      KI.striking({ gsc_position: 8.4, gsc_impressions: 43 }, { total_impressions: 8013 }), KI.striking({ gsc_position: 13.6, gsc_impressions: 27 }, { total_impressions: 8013 }), KI.striking({ gsc_position: 17.6, gsc_impressions: 22 }, { total_impressions: 8013 }),
+      KI.striking({ gsc_position: 9, gsc_impressions: 2 }, { total_impressions: 66 }), KI.striking({ gsc_position: 9, gsc_impressions: 99 }, { total_impressions: 60000 })];
+    const bars = [KI.strikingBar(8013), KI.strikingBar(66), KI.strikingBar(60000), KI.strikingBar(null)];
+    check('KI19 striking distance, one site-relative definition: positions 8-20, impressions >= clamp(round(site / 300), 20, 100) (techand 27, devaicon 20, a big site 100, unknown 100)',
+      J(sk) === J([true, false, false, true, true, false, false, false]) && J(bars) === J([27, 20, 100, 100]) && PAR.striking.site_divisor === 300 && PAR.striking.floor_impressions_28d === 20 && PAR.striking.impressions_28d === 100, J({ sk, bars }));
 
     // ---- KI20 gaps ----
     const cl20 = { site_id: 'site_techand-ai', domain: 'techand.ai', market: 'AE-en', run_id: 'r1', now: '2026-11-08T00:00:00.000Z' };
@@ -439,6 +444,16 @@ module.exports = async (ctx) => {
       vN === 'unknown' && ['unknown', 'hard', 'months'].includes(vU) && wS.strength_known && KI.verdict({ gate: 'pass', fit: 1, win: wS }) === 'go', J({ vU, vN, wS: [wS.win, wS.low, wS.high] }));
     check('KI26 L1 "what is a crm company" and "what is crm company" share a key (no "acrm"); a migration keeps its direction',
       KI.key('what is a crm company') === KI.key('what is crm company') && KI.key('sap to dynamics 365 migration') !== KI.key('dynamics 365 to sap migration') && KI.key('e invoicing uae') === KI.key('einvoicing uae'), J([KI.key('what is a crm company'), KI.key('sap to dynamics 365 migration')]));
+    // FX-L round 2 (re-review N2, N4, L4)
+    const rivals = ['softwarecompany.ae', 'crmsoftware.ae', 'businesscentral.ae', 'peppol-uae.com', 'velosio.com', 'randgroup.com', 'intwo.cloud', 'dynamicssquare.com'];
+    const brands = KI.brandDomains(rivals, { services: dv.concat(fr) });
+    const g2 = ['software company in uae', 'crm software dubai', 'business central partner dubai', 'peppol uae'].map(k => { const g = KI.gate(k, { ...tctx, services: fr.concat(dv), topics: fr.concat(dv), competitors: brands }); return [k, g.gate, g.reason]; });
+    check('KI26 N2 an exact-match domain made of service / generic / place words is not a brand (softwarecompany.ae never gates "software company in uae"); velosio, randgroup, intwo, dynamicssquare stay brands',
+      J(brands) === J(['velosio.com', 'randgroup.com', 'intwo.cloud', 'dynamicssquare.com']) && g2.every(([, , r]) => r !== 'other_brand') && g2[0][1] === 'pass' && KI.gate('dynamics square uae', { ...tctx, competitors: brands }).reason === 'other_brand', J({ brands, g2 }));
+    const wN4 = KI.win({ keyword: 'open edx hosting', stage: 'hire', top10: Array.from({ length: 10 }, (_, i) => ({ host: 'p' + i + '.com', type: 'provider', pos: i + 1 })) }, { domain: 'devaicon.com' });
+    check('KI26 N4 an unknown Strength spans 0..1: an unranked keyword with no strength reading is "Not judged yet", never Hard from a guess',
+      wN4.strength_known === false && wN4.low <= 0.1 && wN4.high >= 0.35 && KI.verdict({ gate: 'pass', fit: 0.9, win: wN4 }) === 'unknown' && KI.CONFIG.plan.verdict_mult.unknown === 0.5, J(wN4));
+    check('KI26 L4 a maker\'s documentation page is a guide, not a vendor page', KI.pageType({ domain: 'learn.microsoft.com', url: 'https://learn.microsoft.com/en-us/dynamics365/business-central/', title: 'Business Central documentation' }, tctx) === 'guide', '');
     // the worker's own kit (KIW): seeds balanced by evidence, plausible searches only, the SSRF helpers
     const KIWsrc = rd('_ki_io.js').replace('__KI_QUOTE__', '{"competitors":0.35,"keyword_research":0.9}').replace('__KI_COLS__', '{"KI_RUNS":[],"KI_COMP":[],"KI_KW":[],"KI_GAPS":[]}');
     const KW = new Function('KI', 'SU', 'SC', 'RT', KIWsrc + '\nreturn KIW;')(KI, undefined, undefined, undefined);

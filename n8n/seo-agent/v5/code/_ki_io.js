@@ -123,15 +123,17 @@ const KIW = (() => {
       if (kept.length >= cap || (quota != null && kept.filter(x => x.source === src || (src === 'tracked' && x.source === 'ladder') || (src === 'ladder' && x.source === 'tracked')).length >= quota)) { waiting.add(kk); return false; }
       seenK.add(kk); waiting.delete(kk); kept.push({ keyword: kw, source: src, weight: w }); return true; };
     for (const s0 of (o.seeds || [])) take(s0, 'seed', 1, Q.seed);
-    for (const q of (o.gsc || []).slice(0, CAPS.gsc_seeds)) take(q.query, 'gsc', Math.min(1, 0.4 + Math.log10(1 + (N(q.impressions) || 0)) / 5), Q.gsc);
+    // a Search Console seed needs a few impressions (a query seen once is noise); a service seed needs two words unless it names a product
+    const gscOk = (o.gsc || []).slice(0, CAPS.gsc_seeds).filter(q => (N(q.impressions) || 0) >= (CAPS.gsc_seed_min_impr || 3));
+    for (const q of gscOk) take(q.query, 'gsc', Math.min(1, 0.4 + Math.log10(1 + (N(q.impressions) || 0)) / 5), Q.gsc);
     for (const k of (o.tracked || [])) take(k, 'tracked', 0.8, Q.tracked);
     for (const k of (o.ladders || [])) take(k, 'ladder', 0.8, Q.tracked);
-    const svc = (o.services || []).slice(0, 12); const prods = (o.products || []).slice(0, 3);
+    const svc = (o.services || []).filter(x => S(x).trim().split(/\s+/).length >= 2 || PRODUCTS.test(S(x))).slice(0, 12); const prods = (o.products || []).slice(0, 3);
     const phr = [(x) => x + ' ' + P.word, (x) => x + ' company ' + city];
     for (let r = 0; r < phr.length && kept.length < cap; r++) for (const x of svc) { if (kept.length >= cap) break; take(phr[r](x), 'service', r ? 0.9 : 1, null); }
     for (const p0 of prods) if (kept.length < cap) take(p0 + ' partner ' + P.word, 'service', 1, null);
     // what is left of the cap goes to the remaining Search Console queries
-    for (const q of (o.gsc || []).slice(0, CAPS.gsc_seeds)) if (kept.length < cap) take(q.query, 'gsc', Math.min(1, 0.4 + Math.log10(1 + (N(q.impressions) || 0)) / 5), null);
+    for (const q of gscOk) if (kept.length < cap) take(q.query, 'gsc', Math.min(1, 0.4 + Math.log10(1 + (N(q.impressions) || 0)) / 5), null);
     return { seeds: kept.slice(0, cap), refused, dropped: waiting.size };
   };
   // FX-L (REVIEW_PERF_SAFETY M2): the discovery and overlap bundles are keyed on the seeds that do not change week to week (the request's own
