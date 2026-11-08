@@ -203,3 +203,81 @@ and the 3-of-10 cluster rule held by the parity fixture on both sides; DFS quote
 reason words (`KI_REFUSAL_TEXT`); site delete in engine and app; kill switch fails closed in app and engine; no AI-tell characters or stock
 phrases in any new customer string; marketing says "rolling out" on every KI line and invents no customer or result (mockup labelled
 "Sample data").
+
+## Re-check of 3a990e62
+
+Read-only, on the frozen snapshot at `3a990e62` (fix rounds FX-L + FX-A, `fixes/FXL.md`, `fixes/FXA.md`), checked in the code, not from the
+fix notes. Video repo checked at `71f9a99`.
+
+### Findings of the first pass
+
+| Finding | State | Evidence |
+|---|---|---|
+| H1 Trial not private | fixed | one check in `server/src/services/ki.ts` (`NOT_KI_TRIAL_RUN` / `NOT_KI_TRIAL_REPORT`, `kiRunConds` / `kiReportConds`); used by the runs list in SQL before the limit (`routes/runs.ts:71`), run and report detail (`:99`, `:124-125`), `reportsList` (`services/runs.ts:1022`, so Overview and Pipeline), `latestReport` (`:1118`), both delivery paths (`reportDelivery.ts:328`, `:401`: skipped, no log row, not in `held`), share links, API v1 runs / reports (`apiV1.ts:298`, `:317`, `:355`), events (`webhooks.ts:314`), month spend (`spend.ts:44`), Pipeline / Needs you (`ladders.ts:936`), exports. Trial runs are quoted 0. The other direct report reads are stage-specific (content, ai_visibility, rejected of a joined run) and cannot return a KI Trial report |
+| M1 Off companies see KI stages | fixed | `useOrgKiVisible` gates `DeliveryTab.tsx:41-46` and `ReportsPage.tsx:30-34,93` (started stages never in the filter) |
+| M2 striking distance | fixed in KI; app-wide still differs | `KI_STRIKING` (`shared/src/ki.ts:163`) = `_ki.js:91` = fixture; web reads `row.striking` only (`lib/ki.ts:455-456`); the recommendation counts and names the same set ("N searches just off page one", `kiData.ts:429-435`). Outside KI unchanged: Search & traffic 4-20 (`QueryExplorer.tsx:21`), Site Tracker 4-20 (`Parse_GSC.js:64`): owner / K5, now Low |
+| M3 gate reasons | fixed | 12 codes identical in the fixture, `KI_GATE_WORDS` (`shared/src/ki.ts`) and `GATE_TEXT` (`_ki.js`); `gate_detail` column in `ladder_common.py`; app view carries words only (`ki-api.ts:446-448`). See N1 for the API v1 exception |
+| M4 "AI judgement", Claude money | fixed | `inferred` = "our reading of the results" in app, kit and callback labels; ai 0 in `cost.ts:98-99`, `_cost_cal.js:229-230`, `LEDGER_EST` |
+| M5 verdict wording | fixed | "Hard for your website now" in `KI_VERDICTS`, `_ki.js:805`, fixture, guide, marketing, changelog; no "for your site now" left in app / engine / harness. Only the historical backlog row 24 keeps the old words, superseded by row 27 |
+| M6 copy ahead of shipped | fixed | gap step "a button that opens the tool" (`features.ts:273`), unbuilt gap kinds "come later" (benefit line), tagline "Rolling out", Solutions "the newest as they roll out"; no "Coming soon" left in KI pages, guides or marketing |
+| M7 two competitor lists | fixed | line + link on the Competitors page (`CompetitorsPage.tsx:204`), guide Q&A in `ki-choose-competitors` |
+| L1 icons | fixed | Swords / Telescope in MODE_ICON and STAGE_MODE (`meta.tsx:44-45`, `:96-99`) |
+| L2 tools grouping | fixed | "Research" for both (`constants.ts:352`, ToolsPage research goal) |
+| L3 names | fixed | started stages "Competitors started" / "Keyword research started" |
+| L4 billing labels | fixed | `billing.ts:294-295` |
+| L5 marketing chips, loop | fixed | `search-kinds.ts:76`, `PlatformPage.tsx:18` |
+| L6 portal link | fixed | `components/reports/ki.tsx:20-21` |
+| L7 `kiCreditsEstimate` | not fixed (skipped, harmless) | |
+| L8 docs | partly | `app/API.md` updated (Trial, quotes, current rows); `app/README.md`, `HANDOVER.md`, developer guide still without KI; CLAUDE.md "Where things live" still lacks `SEOagentKIntel1`, the four `seo_ki_*` tables and the `ki_*` columns (report only) |
+| L9 backlog rows | fixed | rows 27-28 (`71f9a99`): fix round, company-wide lists, Trial free and invisible |
+| L10 vendor name | fixed | `kiSourceWords` maps "DataForSEO ..." / Labs to "our keyword data" (`shared/src/ki.ts:187-193`) in the page and the CSV |
+| L11 RETRYABLE | not fixed (decision recorded in FXA.md) | |
+| L12 guide "rules learn" | fixed | "we will look at it" |
+| L13 filter after limit | fixed | SQL before the limit |
+| L14 form TTL words | fixed | "up to a month for search volumes and the competitor set" |
+
+### New contract items (FX-L) checked
+
+- **Verdict `unknown` "Not judged yet"**: present in `KI_VERDICT_IDS`, `KI_VERDICTS`, `KI_VERDICT_TONE`, fixture verdicts + a boundary case,
+  `_ki.js` VERDICT_WORDS, every `Record<KiVerdict, ...>` (counts built from `KI_VERDICT_IDS`, `ki-api.ts:624-673`), the engine's run
+  counts (`KI_Research_Result.js:137`), the guide (`KI_VERDICTS.unknown` step). Two places name it only by fallback: the plan's
+  `verdict_mult` (`_ki.js:98`, `{ go, months, hard }`: `unknown` gets the 0.4 default, the same weight as Hard) and the marketing /
+  changelog sentences that list four verdicts (N4).
+- **Gate codes + `gate_detail` never shown raw**: true on the pages and the CSV; not in API v1 (N1).
+- **Current-row rule**: `kiCurrentRows` (`kiData.ts:131`) on the pages, counts and CSV; not in API v1 `get_table` (N2).
+- **One striking definition**: within KI, yes (above).
+- **"your site" in KI copy**: one left, the impressions tip on the Keyword research page (`KeywordsPage.tsx:287`, "How often your site was
+  shown"). The engine's `_ki.js:747` / `:915-917` strings say "your site" but are not shown (Win `parts` and the page action `_why` are not
+  stored or sent).
+- **Changelog**: 4.11 = KI (rolling out), 4.10 = the SERP-goto hotfix, 4.9 = AI ranking: ordered and consistent. But the 4.10 entry lives
+  only on `feature/seo-agent-v4.5` and the `ki/*` branches (commit `7e0e3342`); the local `hotfix/serp-goto` branch (tip `c77ddb61`) has
+  no 4.10 entry (N3).
+- **Tutorial backlog** (`~/Downloads/hiresuite-video-skills/alaventra/TUTORIALS_BACKLOG.md`, `71f9a99`): rows 23-25 (first pass), 26 (SERP
+  goto hotfix), 27 (KI fix round: buttons, phone lists, "Not judged yet", "Hard for your website now", confirm before On), 28 (company-wide
+  lists, Research group, Trial free and invisible). Complete for the customer-facing changes found here.
+
+### New findings
+
+- **N1 (Medium) API v1 / MCP `get_table` returns KI rows raw.** `kiTableRowsV1` (`server/src/services/kiData.ts`, after
+  `export async function kiTableRowsV1`) sends every stored column: `seo_ki_keywords.gate_detail` (the engine's sentence the FX-L contract
+  says is never shown), and `seo_ki_runs.cost_dfs_usd` / `cost_claude_usd` / `config_json`: provider cost, while every other customer
+  path (API v1 `get_report` via `customerSafePayload`, the KI routes) shows credits only. Fix: a column allow-list per KI table in
+  `kiTableRowsV1` (drop `gate_detail`, the two cost columns and `config_json`; add `gate_words` if wanted) and say so in `app/API.md`
+  ("rows as stored" today).
+- **N2 (Medium) API v1 `get_table` ignores the current-row rule.** The pages, counts and CSV read `kiCurrentRows`; `kiTableRowsV1` pages
+  over every stored keyword and gap row, so if the engine's delete failed (the case the safety net exists for) an API client gets rows
+  the app no longer shows. Fix: run `ki_keywords` / `ki_gaps` through `kiCurrentRows` with the site's `seo_ki_runs` rows.
+- **N3 (Low) the 4.10 changelog line may not ship with the hotfix.** It is on `feature/seo-agent-v4.5` but not on `hotfix/serp-goto`.
+  Check which branch the hotfix's web deploy (PR to `main`) is cut from; if it is `hotfix/serp-goto`, cherry-pick `7e0e3342`'s changelog
+  hunk there (business pages follow the product), and keep 4.11 for KI.
+- **N4 (Low) four verdicts named, five shown.** Changelog 4.11 and the keyword-research benefit / FAQ list "Go", "Takes a few months",
+  "Hard for your website now" or "Not for you"; the product also shows "Not judged yet". Add it, or say "one verdict (or 'Not judged yet'
+  while the evidence is thin)". Also give `verdict_mult` an explicit `unknown` entry (`_ki.js:98`) so the plan weight is a decision, not a
+  fallback.
+- **N5 (Low)** `KeywordsPage.tsx:287` "How often your site was shown" -> "your website". Guide `ki-choose-competitors` "what we compare you
+  with each month": the monthly refresh is not built (O5, W2); say "each time you run it" until it is.
+
+### High / Medium left
+
+No High. Medium: N1 (API v1 KI tables expose `gate_detail` and provider cost), N2 (API v1 KI tables skip the current-row rule). Owner /
+W2 items unchanged: app-wide striking distance and verdict words (K5), L8 docs and CLAUDE.md table.

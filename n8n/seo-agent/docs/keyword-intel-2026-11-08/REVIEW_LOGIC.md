@@ -298,3 +298,97 @@ leak described in B2.
 B1 and B2 first (they decide every other output), then H1, H4, H5 (inputs), H2 and H7 (the numbers), H3 and H8 (typing and fit), H6 and
 H9 (gaps and stale rows), then the Medium list. Re-measure with a replay on the stored `seo_sites` / `seo_query_history` values verbatim
 and end-to-end labelled titles before Trial.
+
+## Re-review of 3a990e62
+
+Same method as above: my probe scripts (scratchpad `ki/p1.js` .. `p15.js`) re-run on the new kits in `node:22-bookworm-slim`, against
+the stored production rows (`seo_sites`, `seo_query_history`, `seo_content_log`, app `keyword_checks` / `reports`), read only. The
+fixer's replay (`fxl_replay/`) was read only for its inputs, not its conclusions. One difference matters: it built the `avoid` list from
+content reports only, while the app also sends keyword checks (N1).
+
+### Verdict
+
+**Not ready for a Trial run yet, but close.** All the original Blockers are fixed, and so is every High except two new ones that the
+fixes introduced. Both fire on devaicon's real data and would distort the owner's Trial comparison on its main niche and its main money
+searches. Both are small fixes. After N1 and N2, a Trial on both sites is reasonable; N3 should land before On.
+
+### Status of the original findings
+
+| Finding | Status | Evidence on the new kits |
+|---|---|---|
+| B1 services | Fixed | techand 37 clean services, devaicon 32 with "Open edX Services". devaicon `open edx hosting` / `provider` / `development company` / `managed open edx` pass with fit 0.9 (were off_topic / low_fit 0.297). |
+| B2 topic from seed text | Fixed | `sometravel.com` (no title) -> adjacent 0.4, needs review. Home automation site -> adjacent 0.17. brainsphereit / skytechdigital -> adjacent 0.35 (topic 0, not counted). Real partners with realistic titles -> direct 0.8: randgroup, dynamicssquare, intwo, velosio, penieltech, raccoongang, edly, edunext, carmatec. bayzat's "Top 15 CRM Software" -> publisher_list. |
+| H1 seeds | Fixed | techand: 6 GSC (PINT AE / Peppol), 2 tracked, then services; e-invoicing and Peppol are seeds. devaicon: 3 GSC, `open edx services uae` / `... company dubai`. Remnants under Low. |
+| H2 Strength | Mostly fixed | Referring domains are now read in the research run, and Go is reachable. Remnant in M-N4. |
+| H3 list titles | Fixed | "Best ERP Software Company in Dubai", "Leading CRM Solutions Provider in Dubai" -> provider. 10 provider homepages -> stage hire, action new. "Top 10 CRM Companies" is still a list. |
+| H4 AVOID | Fixed for content verdicts | `crm for customers` arrives in the app's list (`payload.verdict = AVOID`) and is gated `avoid`. But see N1. |
+| H5 rival brands | Fixed, over-corrected | `velosio dynamics 365` etc. -> other_brand. But see N2. |
+| H6 unknown position | Fixed | Unknown client position -> no gap row, counted in `gaps_position_unread`. |
+| H7 demand | Fixed | 5 impressions at #60 with volume 1000 -> 0.686 (volume used). Measured 0 -> 0. Floor with PAA + autocomplete = 0.031, below volume 10 (0.07). PAA + related is one family. |
+| H8 fit | Fixed | `peppol access point provider uae` 0.85, `pint ae validation rules` / `mandatory fields` 0.765. A query ranking at #20 or better with impressions is never low_fit. |
+| H9 stale rows | Fixed in principle | Old rows are deleted and the app reads the latest run only. See N3. |
+| M1 range | Fixed | The range now follows the Strength span: unknown 0.088-0.262 vs known 0.14-0.21. On techand GSC rows, 18 of 83 are low confidence. |
+| M2 striking total | Fixed | Reads `seo_site_metrics` (techand 8,013 -> bar 100). Consequence: none of techand's stored rows is "striking" by the definition (`dynamics ax dubai` 43 impressions). They still rank first through their GSC position. Owner should know. |
+| M3, M4, M5, M7, M9 | Fixed | Share "1 of 1 read (19 not read)". gap factor ignores #18. Identical 2-key and partial-URL pages now join. Declared competitors capped at the max. Seen rows rewritten. |
+| M6 | Skipped | The app hides those gap kinds. Acceptable for Trial. |
+| M8 accuracy sets | Partly | Titles and negative cases added. The replay still did not use the app's real avoid inputs (that is how N1 was missed). |
+| L1, L2, L3, L5, L6, L7, L8 | Fixed | Probes: keys merged and direction kept, CPC 0 = unknown, plan dedupes by target and drops target-less refreshes. |
+| L4 docs page type | Not fixed | `learn.microsoft.com` "Business Central documentation" is still `vendor`, even with the services context. Low. |
+| L9 | Skipped | Agreed: no gain on today's data. |
+
+### New findings (introduced by the fixes)
+
+**N1 (High). The app's avoid list carries the old engine's wrong "fit 0" verdicts, so devaicon's main niche keyword is gated.**
+- Where: `app/server/src/services/runs.ts:1091-1113` (`kiAvoidKeywords`: every keyword check with `fit = 0` OR `navigational = true`)
+  -> `KI_Input.js:17` -> `KI_Plan.js:47` -> `fit_ctx.avoid`.
+- The input: the stored `keyword_checks`. devaicon has 6 checks of `open edx provider`. Five have fit 0, one is navigational. These are
+  exactly R3's wrong verdicts: fit 0 came from business text that never mentions Open edX.
+- The wrong answer: `KI.gate('open edx provider')` and `'open edx providers'` both fail with reason `avoid`, worded "you or our check said
+  not to write it". The rule also blocks them as seeds.
+- Fix: send only explicit AVOID verdicts (content / check verdict AVOID, or a client's own "not for me"). A `fit = 0` from the pre-KI
+  check is the very bug KI replaces and must not be imported. Replay with the app's real `kiAvoidKeywords` output.
+
+**N2 (High). Exact-match-domain rivals now gate the generic money searches.**
+- Where: `KI_Plan.js` (`knownRivals` = every stored direct / adjacent row, up to 60, into `fit_ctx.competitors`). It is used on seeds,
+  candidates and ladder heads (FITR).
+- The input: the real devaicon rival `softwarecompany.ae` (R3 section 3). It is now classified direct from its own title "Software
+  Company in Dubai", so it is stored.
+- The wrong answer: `software company in uae`, `software company dubai` and `custom software company dubai` all fail `other_brand` ("names
+  a competitor: softwarecompany"). Any UAE exact-match domain made of service words does the same (probe with `crmsoftware.ae`,
+  `businesscentral.ae`, `peppol-uae.com`: `crm software dubai`, `business central partner dubai`, `peppol uae` all gated). The real
+  techand hosts tested do not trigger it. `dynamicssquare.com` only gates the brand search "dynamics square", which is right.
+- Fix: a rival's label counts as a brand only when it is not made entirely of service, product, category, generic or place words (the
+  same filter `fitOwnLabels` applies to the client's own domain). Keep the label check for distinctive names (velosio, randgroup, intwo).
+
+**N3 (Medium). The supersede delete runs even when the save failed, and it drops user gap statuses.**
+- Where: `build_ki.py:258-267`. `Save KI Keywords` uses `onError: continueRegularOutput` and `alwaysOutputData`, then `Drop Old KI
+  Keywords` and `Drop Old KI Gaps` run unconditionally (`run_id neq` this execution).
+- The wrong answer:
+  - A failed upsert (for example the new `gate_detail` column not yet synced, or any table error) still deletes every earlier row. The
+    site ends with no keyword or gap rows, and the run row says `ok` / `partial`.
+  - A partial run (Labs discovery missing) replaces a full run's ~300 rows with its few.
+  - A dismissed or started gap whose keyword is not in this run's top N is deleted, so the client's choice is lost and the gap reopens
+    later. CONTRACTS section 2 says user statuses are kept.
+- Fix: delete only after an `If` that checks the save returned no error item. Keep rows that have a user status (or carry them as
+  `superseded`). Optionally, do not supersede a full run with a partial one that wrote fewer rows.
+
+**N4 (Medium). An unknown Strength still produces "Hard" for an unranked keyword.**
+- Where: `_ki.js:716-718`. The unknown span is +/- 0.25, not 0..1.
+- The wrong answer: `win({ keyword: 'open edx hosting', stage: 'hire', top10: 10 provider pages }, { domain: 'devaicon.com' })` gives
+  Win 0.175 (0.088-0.262), `strength_known: false`, verdict `hard`. With Strength 1 the Win would be 0.35, which is "Takes a few months".
+  So "Hard for your website now" is still printed from a default whenever the referring-domain read fails.
+- Fix: use the full 0..1 span when unknown, so such rows become `unknown`.
+
+**Low (new or remaining)**
+- GSC seeds take 1-impression queries ("autonomous customer story"), and some service seeds are single ambiguous words ("nav uae", "nlp
+  uae", "crm uae"). `KIW.compSeeds` should require a minimum number of impressions and 2+ content words.
+- `focussoftnet.com` (labelled direct) with the title "Best ERP Software in Dubai, UAE | Focus Softnet" -> adjacent, topic 0, while
+  "ERP Software Dubai | ... | Peniel Technology" -> direct 0.8. Something in the title segmenting drops its words.
+- The plan treats `unknown` like `hard` (`verdict_mult` has no `unknown` key, so it falls back to 0.4). Acceptable, but say so in the why text.
+- The content-log avoid regex `\bAVOID\b` is case-insensitive (`KI_Plan.js:46`), so any QA note containing "avoid" would mark the page's
+  keyword AVOID. No stored row hits this today. Match the verdict field, not free text.
+- `keepRows` now keeps every stored row (`KI_Comp_Result.js:137`). Growth is bounded only by the two-miss drop.
+
+### Before Trial
+
+Fix N1 and N2. Replay with the app's `kiAvoidKeywords` output for both sites. Then run Trial. N3 and N4 before On.

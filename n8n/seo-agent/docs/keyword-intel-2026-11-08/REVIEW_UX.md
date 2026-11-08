@@ -224,3 +224,143 @@ eyebrow's "Updated" date: acceptable). Jargon KD, SERP, etv, cluster, intent nev
    button only when a run is due.
 5. **Put both tools where people look and make phones and tablets touch-friendly** (M7, M4, M5): Research group with one line on which
    to pick, mobile cards in the drawer, 40 px hit areas on the info tips and small buttons up to 1024 px.
+
+## Second pass on 3a990e62
+
+Same method, rebuilt from the frozen snapshot at **3a990e62** (`vite build`, deps in `kirev_ux_nm`) and driven with Playwright 1.55.
+The fixtures were updated to the new contract and still go through the server's own view functions in `shared/src/ki-api.ts`:
+- gate codes `gate_reason` plus `gate_detail`, so the view gives plain words;
+- `win: null` rows read "Not judged yet";
+- `gap_type` is filtered on the server through `kiGapTypesIndex`;
+- `killed` is sent on On websites;
+- Trial quotes 0 credits;
+- `striking` is set from the engine rule (100 impressions);
+- plan actions with `cluster_id`;
+- real UUID site ids (the run forms check for them).
+
+The checks:
+- 375 / 768 / 1024 / 1440 px, light and dark, axe at 375 and 1440;
+- 9 states and 5 personas;
+- every prefilled link on both pages followed to its landing page, with the form values read back (27 links);
+- the Website settings switch, the tools page and the reports.
+
+Scripts are in `REVIEW_UX_shots/scripts/` (`pass2.mts`, `check4.mts`, `check5.mts`; `fixtures.mts` / `harness.mts` are now the pass-2
+versions). Screenshots are in `REVIEW_UX_shots/pass2/` (22 files, 1.5 MB).
+
+### Verdict
+
+**Ready for a client to see, in Trial now and in On after one small count fix (N1). No High is left.** All five Highs are fixed or
+fixed enough:
+- H5 is partly fixed: Competitors is still about 6 screens at 375 px.
+
+The answer and the next action are now one or two taps away, and every action button lands on the right tool with the right values.
+No horizontal scroll at any width or theme, one h1, no console errors. axe finds 0 KI violations; the only one left is the app shell's
+logo outside a landmark, at 375 px only.
+
+Clicks:
+- **Who are my competitors:** 1 click (sidebar). The hero headline names them.
+- **Act on "what should I write next":** 3 clicks.
+  1. Sidebar: Keyword research.
+  2. Hero "Next step": "Improve this page" or "Write this page".
+  3. "Write a page" opens with "Pre-filled for you". Website, country, keyword and (for Improve) the own page address are filled in, and the 114-credit price shows before the run. Submit.
+
+  Before, there was no way to act from the page.
+- **First time ever:** unchanged. Run button, form, submit, a 6 or 12 minute wait, then "Open ...".
+
+Prefilled links followed (27):
+- **Write this page:** lands on "Write a page" with the keyword (and own page address for Improve).
+- **Improve this page / Refresh this page:** same form, with the keyword and the page address.
+- **Plan the ladder:** "New keyword ladder" with the keyword and United Arab Emirates.
+- **How to get listed:** Link building.
+- **Run it for United Arab Emirates** (refused run): the Keyword research / Competitors form with the country set.
+
+Not verifiable with these fixtures (the target pages need their own data, which my fixtures do not carry):
+- "How to get named" (AI visibility page);
+- whether `#listings` scrolls to the listings section.
+
+### Pass-1 findings: status
+
+| Id | Status | Evidence (pass 2) |
+|---|---|---|
+| H1 score factors | **fixed** | "How this score of 86 is made", 6 factors in words (`x-kw-scoretip-1440.jpg`) |
+| H2 gap filter | **fixed** | "Against competitors: You are missing" gives "10 searches match your filters" and 10 rows; counts agree (`x-kw-gapfilter-1440.jpg`) |
+| H3 refused run | **fixed** | Note "The last run did not start: it was for another country" + "Run it for United Arab Emirates" (prefilled) + Website settings; no first-run empty state under it (`s-refused-keywords-375.jpg`) |
+| H4 dead Start | **fixed** | 0 "Coming soon" on both pages; plan, gaps, topics, striking, listings and both heroes link to the tools (see above) |
+| H5 phone length | **partly** | At 375: Keywords 16,800 -> **4,024 px**; Competitors 12,200 -> **5,353 px** (about 6 screens). "See every search" opens 50 cards (13,194 px) |
+| M1 kill switch | **fixed** | "Competitors is paused for maintenance. It is back shortly, with your results as they were"; nav items kept |
+| M2 paid run during error | **fixed** | No run button while loading or in error; "Could not load this / Try again" |
+| M3 re-run prominence | **fixed** | Secondary button + "Updated today" |
+| M4 drawer on phones | **fixed** | 15 cards, table hidden, no nested sheet, verdict chips (`x-drawer-375-dark.jpg`) |
+| M5 tap targets | **partly** | KI tips have a 40 px hit area (`KI_TIP`, `::after` inset 10 px). Still 20 px: the shared hero / panel "About ..." tips. At 768 px buttons are still 32 px (`TAP` applies below `md`, so a portrait tablet is not covered) |
+| M6 keyboard reach | **not fixed, worse** | 24 Tab presses to the first Choose (was 22); **115** to the first filter on Keywords (was 72), because of the new action buttons |
+| M7 tools placement | **fixed** | Both tools in Research; no "More tools"; the form says when to pick it over Keyword discovery |
+| M8 topic counts | **fixed** | "183 topics" in both hero and panel; topic picker lists all 183, A to Z |
+| M9 overlap basis | **fixed** | "Among your 200 best researched searches." |
+| M10 Get listed | **fixed** | Real link "How to get listed" to Link building (anchor scroll unverified, N9) |
+| M11 CSV words | **fixed** (code) | `KI_*_CSV_HEADERS` plain words, values in page words (the CSV route is mocked in the browser, so checked in `shared/src/ki-api.ts`) |
+| M12 verdict place | **fixed** | Verdict leads the topic row |
+| M13 "Where from" wrap | **fixed** | "2 sources" with the names in a tip |
+| M14 eager reads | **partly** | Drawer data loads on open; Keywords still makes 7 KI reads (skipped by FX-A) |
+| L1 contrast | fixed | axe clean |
+| L2 plurals | fixed | "1 search ... 1 topic" |
+| L3 questions | fixed | Shown as questions; acronyms lose their case ("Vat compliant ...?") |
+| L4 truncation | fixed | No untitled truncation found at 375 |
+| L5 sticky column | not fixed | Skipped (shared DataTable) |
+| L6 words | partly | "Software maker", new "needs review" wording; "Go" kept (owner K5) |
+| L7 source labels | partly | `gap` reworded; the three keyword-tool labels remain |
+| L8 partial note | partly | Fixed on the page ("search volumes and your Search Console searches"); the **report** renderer still says "search volumes, your Search Console searches" |
+| L9 viewer reason | fixed | Viewer sees why the question boxes are off |
+| L10 label flip | fixed | No button while loading |
+| L11 hero counts | fixed | From `headsByVerdict` |
+| L12 report | fixed | "Searches found" first; refused report has "See what to do". "5000" is not formatted ("5,000") |
+| L13 striking see-all | fixed | "See all 211 in the table" |
+| L14 list styles | not fixed | Skipped |
+| L15 filters on tiny lists | not rechecked | FX-A says hidden under 20 rows |
+| L16 confirm before On | fixed | Inline "The owner agreed: show <domain> both pages from now on"; Save disabled until ticked |
+
+Trial and personas:
+- **Platform admin on Trial:** the banner shows, the run buttons say "(free trial run)", and the form says "Trial run is our team's check: it costs the client company no credits."
+- **Owner on Trial:** sees "not available", with no nav items.
+- **Viewer:** no action buttons.
+- **Member:** actions shown; the questions panel says adding takes the admin role.
+- **Admin:** "Add to my AI questions" shown.
+
+### New problems
+
+- **N1 (Medium): two gap counts on one screen.** The Competitors hero says "Gaps to act on 30"; the panel below says "21 places where
+  the competitors you follow are found and you are not". The hero counts every open gap from the server summary, including the kinds the
+  page now hides (listing, page_type, ai_answer, backlink); the panel shows only the keyword kinds. This is the kind of contradiction M8
+  was about.
+  - Where: `CompetitorsPage.tsx` hero `gapsOpen` (`o.summary.gaps.open`).
+  - Fix: count only `KI_KEYWORD_GAP_TYPES` in the summary, or on the page.
+- **N2 (Low): a "Not for you" topic row gives two reasons.** The verdict badge shows the general "This search does not fit what you
+  sell." because no reason is passed, and the specific reason sits under it ("People searching this are looking for a job.").
+  - Where: `KeywordsPage.tsx:210, 230`.
+  - Fix: pass `head.gateReason` to `KiVerdict` and drop the separate line.
+- **N3 (Low): "Not judged yet" rows still show a score with a range** ("Not judged yet ... 55, likely 39 to 71"). This reads as a
+  judgement.
+  - Fix: show "-" or "score not ready" for `unknown`.
+- **N4 (Low): factor words have no direction.** "Competitors already there: high" does not say whether high helps or hurts.
+  - Fix: one word per factor such as "helps" / "holds you back", or invert the wording.
+- **N5 (Low): the refused note is ambiguous.** "Your website is measured in United Arab Emirates. Change the country in Website
+  settings, or run it again for United Arab Emirates" can read as "change your website's market".
+  - Fix: "The last run asked for another country. Run it for United Arab Emirates." Keep Website settings as a secondary link.
+- **N6 (Low): viewers see the Website settings link.** The line about the two competitor lists links to Website settings, which
+  viewers cannot change.
+- **N7 (Low, unverified): "How to get listed" may not reach the listings.** It goes to `links#listings`. The `#listings` section renders
+  after its data arrives, so the browser probably does not scroll to it.
+  - Fix: scroll on mount when `location.hash` is set.
+- **N8 (Low): "Searches found" counts "Not for you" searches.** Its tip says "Every search we kept because it fits what you sell", but
+  the 5,000 includes the gated ones (pre-existing). Fix: change the number or the tip.
+- **N9 (Low): "See every search" on a phone opens 50 cards (13,194 px).**
+  - Fix: 20 rows per page on phones.
+
+### Top changes left, in order
+
+1. **N1:** one gap count.
+2. **M6:** Keywords needs 115 Tab presses to reach the filters. Add a short in-page index under the hero ("Your plan, Topics, Just off
+   page one, Every search") as anchor links, and one tip per competitor row instead of two.
+3. **Competitors at 375 px:** about 6 screens. A compact phone row would get it to about 4: the reason in a tip, one "More" menu for
+   Watch / Not a competitor.
+4. **N2-N4:** verdict wording polish ("Not judged yet" without a score, factor direction, one reason per gated row).
+5. **M5 rest:** 40 px hit area on the shared hero / panel tips, and `TAP` up to `lg` for portrait tablets.

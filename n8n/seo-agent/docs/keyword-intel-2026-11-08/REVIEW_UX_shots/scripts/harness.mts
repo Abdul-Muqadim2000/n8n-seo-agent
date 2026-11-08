@@ -2,7 +2,8 @@
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import { readFileSync, existsSync } from 'node:fs';
 import { extname, join } from 'node:path';
-import { api, type Persona } from './fixtures.mts';
+import { api, SID, type Persona } from './fixtures.mts';
+export const sid = (path: string) => path.replace(/s-[a-z]+(?=\/|$|&|\?)/g, (m) => SID[m] ?? m);
 
 export const DIST = '/app/web/dist';
 export const BASE = 'http://app.test';
@@ -44,7 +45,7 @@ export async function open(c: Ctx, path: string): Promise<{ page: Page; errors: 
   const errors: string[] = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   page.on('pageerror', (e) => errors.push(String(e)));
-  await page.goto(BASE + path, { waitUntil: 'networkidle' });
+  await page.goto(BASE + sid(path), { waitUntil: 'networkidle' });
   await page.waitForTimeout(500);
   return { page, errors };
 }

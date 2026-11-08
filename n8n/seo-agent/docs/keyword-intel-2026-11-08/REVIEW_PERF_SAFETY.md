@@ -202,3 +202,77 @@ clustering fixtures.
   worst cases are H2 (c) and the homepage / sitemap retries (3 tries x 20 s per host, batches of 2): about 10 minutes for competitors,
   within the watcher's 3 x ETA but above the 6-minute ETA shown.
 - Secrets: no key, token, webhook or private key in the diff (scan of added lines), apart from L9.
+
+## Re-review of 3a990e62
+
+Snapshot `.claude/worktrees/ki-review` at `3a990e62` (fix rounds FX-L + FX-A). Non-KI workflows compared node by node with production
+`7e0e3342` (feature/seo-agent-v4.5 with the deployed SERP-GOTO hotfix), not with 461445de.
+
+### Verdict
+
+- **Safe to deploy Off.** Against production, the only non-KI node changes are: the five `_cost_cal.js` lines (KI keys; Claude estimates now
+  0) in every node that inlines CC; the three `ki_*` columns in the Ensure Monitors nodes, `Set Monitors` and `Save Monitors (Track)`;
+  `Monitor Row (Admin)` / `Monitor Row (Track)` keeping the stored `ki_*` values; Site Admin's KI branches (Route outputs 10 / 11 appended)
+  and its delete chain (`... Delete Cycle Jobs -> 4 KI table deletes -> Delete KI Cache (Admin) -> Delete Site`); Admin Validate's two
+  actions; the front-door router. No SERP-GOTO difference remains (production already has it). Run `sync_tables.py` before the import (the
+  `ki_*` monitor columns; `seo_ki_keywords.gate_detail` too, although on production the KI tables do not exist yet and the worker's Ensure
+  node creates them with `gate_detail`).
+- **Safe for Trial.** H1 is fixed; H2 is reduced to a Medium (N2): the client-chosen-host path and the internal-redirect path are closed,
+  but the 400 KB cap is a request, not a limit. No Blocker, no High open. Fix N1 before the second Trial run of a site.
+
+### Findings of the first review
+
+| # | State | Evidence |
+|---|---|---|
+| H1 Trial charged / visible | **fixed** | `services/runs.ts`: `kiRun.trial` -> quoted 0, platform ceiling still checked, `input.kiTrial`; `kiRunConds` / `kiReportConds` / `NOT_KI_TRIAL_*` in runs list (`routes/runs.ts:71`), run detail (`:99`), report detail (`:124`), `reportsList`, API v1 (`apiV1.ts:298,317,355`), exports (`exports.ts:70,120`), credit features (`billing.ts:346`); every report of a Trial run marked `summary.trial` (also a `rejected` one) |
+| H2 SSRF / size | **partly** -> N2 | `build_ki.py` `free_get`: `followRedirects: false`, one hop only after `KIW.hopOf` (https, public host, same registrable domain, `_ki_io.js:48-52`), timeout 15 s, `Range: bytes=0-399999`; `publicHost` refuses credentials, wildcard-DNS names, metadata names (`:41-43`); sitemaps only for chosen hosts seen on a results page (`KI_Comp_Sitemap_Requests.js:9-12`); linear `KIW.htmlText` (`:55-61`). Open: see N2 |
+| M1 concurrency | **fixed** | `KI_Limit.js`: 1 open KI run per company, 3 platform-wide (`busy`) |
+| M2 cache keys / growth | **fixed** | `KIW.seedHash` (request + service seeds, no GSC churn, `_ki_io.js:139`); `KI Cache Prune` deletes by key, kind `ki` and this site only; `Delete KI Cache (Admin)` on site delete |
+| M3 app cache / reads | **mostly fixed** | `kiCache` is now a `BoundedCache` of 200 entries (`services/ki.ts:75-89`); the engine keeps one current row per key (`Drop Old KI *`), so a site holds ~400 keyword rows, not a growing pile. `KI_READ_MAX.keywords` is still 20,000 (fine with the supersede) |
+| M4 one tenant spends the day | **fixed (mitigated)** | 3 runs of one kind per website a day + 1 open per company |
+| M5 crash unsettled | **fixed for the guard** | stale reserved rows count at their estimate in the day's spend (`KI_Limit.js`, `staleIn`); the row itself is still never settled (pre-existing, accepted) |
+| M6 SU.key partial collapse | **fixed in production** | `_serp_url.js:127-128` (SERP-GOTO review): a partial / host-only result has no key |
+| L1 Rank Tracker -1 | out of scope now | SERP-GOTO, deployed with its own review |
+| L2 Trial `rejected` report | **fixed** | `kiTrialOf(stage, body, run)` marks every callback of a Trial run |
+| L3 kill switch at start | **fixed** (per FXA.md: 409 `ki_paused` before credits are locked) |
+| L4 balance fails open, L5 Ads 12 / min | not fixed (pre-existing, accepted in FXL.md) |
+| L6 drawer href | **fixed** | `CompetitorDrawer.tsx:114` `safeHref` |
+| L7 KI prices in `/costs` | not fixed (accepted: harmless) |
+| L8 mode lookup | **fixed** (own monitors row, as `kiState`) |
+| L9 offset tokens | **fixed** | 0 `"offset_token": "ey..."` left, 11 files `REDACTED_OFFSET_TOKEN`; new diff scanned, no key / token / webhook |
+
+### Money with the 0-credit Trial
+
+- Trial: the app charges 0 (quote 0, cost sync caps at 0); the engine still spends and still obeys KI Limit (budget, balance floor, 1 open
+  per company, 3 per site and kind a day) and the app's platform ceiling (`assertPlatformCapacity`). Two sites x two kinds x 3 a day is the
+  worst Trial day: <= 12 runs, <= $7.0 of search data, under the $15 day budget. On sites are quoted and charged as before.
+- Quote vs estimate after FX-L: keyword research adds one Backlinks bulk read of up to 300 hosts (`KI_Research_Traffic_Requests.js:16-19`,
+  priced in the plan, `KI_Plan.js:84`): fixed part 0.602, 5 competitor lists 0.240, max **$0.842 <= $0.90**. Competitors unchanged
+  (**$0.3197 <= $0.35**); the hop GETs are free. App quotes drop by the removed Claude cents (21 / 54 credits for On).
+
+### New findings
+
+**N1 (Medium). The new supersede deletes run even when the save failed: one bad save wipes the site's keyword universe and the client's
+gap choices.** `build_ki.py` chains `Save KI Keywords -> Drop Old KI Keywords -> Drop Old KI Gaps`; all three use `SAVE`
+(`onError: continueRegularOutput`, `alwaysOutputData`), so the drop runs after a save that failed on every row (a column missing because
+`sync_tables.py` was skipped where the table already exists, n8n's Data Table size cap, an n8n API error). `run_id neq <this run>` then
+deletes every earlier row of the site and market, and nothing new was written. Separately, `Drop Old KI Gaps` deletes every gap this run
+did not regenerate: a run whose gap section is `missing` (page_intersection could not be read twice) or has no chosen competitor yet deletes
+all stored gaps, including the ones the client marked started / dismissed / done (carried only "by keyword" to a regenerated row,
+`KI_Research_Result.js:104-111`). Fix: a Code node between the save and the drops that counts the saved rows without `error` and skips the
+drops unless they cover this run's `kw_rows`; drop old gaps only when the gap section is `ok`, and never a gap with a client status.
+
+**N2 (Medium, the rest of H2). The 400 KB cap is a `Range` request, not a limit.** A server that ignores `Range` (most dynamic pages and any
+hostile one) still sends the whole body, which the HTTP node buffers in the one n8n process; `timeout: 15000` is an idle timeout, so a
+drip-fed body is not cut either. Who can still reach it: hosts seen on a results page - including a site that ranks for a seed the
+request itself supplies (`seeds`, any member), then declared as a competitor. Fix (one of): fetch homepages through the Jina reader path
+with its fallback; or `responseFormat: file` (binary to disk) and read the first 400 KB only after checking the stored file size, refusing
+anything over 2 MB; or a HEAD first and skip a missing / large `content-length`.
+
+**N3 (Low). A crashed run holds a concurrency slot for `run_stale_hours`.** The 1-per-company / 3-global caps count `reserved` rows until
+they turn stale (2 h): one crash blocks that company's KI runs for 2 hours, three crashes block KI for everyone. Count a reserved row whose
+execution is no longer running (the guard already reads open runs) as closed, or shorten the window for KI kinds.
+
+**N4 (Low). `Delete KI Cache (Admin)` is scoped correctly** (`site_id` from Admin Action AND `kind = ki`; the shared `serp:*` and `cost:*`
+rows are other kinds and untouched; `continueRegularOutput`, so it cannot stop a site delete). No action; noted because it deletes from
+the shared `seo_cache`.

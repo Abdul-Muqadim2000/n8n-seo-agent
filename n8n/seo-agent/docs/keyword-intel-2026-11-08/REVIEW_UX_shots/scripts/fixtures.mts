@@ -2,7 +2,7 @@
 // every /api answer has exactly the shape the A1 server sends. Two realistic sites + state sites.
 import {
   kiCompetitorView, kiKeywordView, kiGapView, kiRunView, kiSummaryOf, kiKeywordQueryOf, kiKeywordMatches, kiKeywordComparator, kiPage,
-  kiFacetsOf, kiCompetitorOrder, kiBrandTokens,
+  kiFacetsOf, kiCompetitorOrder, kiBrandTokens, kiGapTypesIndex,
 } from '/app/shared/src/ki-api.ts';
 
 const now = '2026-11-08T06:12:00.000Z';
@@ -23,12 +23,12 @@ const stageW: Record<string, number> = { hire: 1, compare: 0.9, solution: 0.65, 
 function kwRow(site: SiteFx, k: { keyword: string; stage: string; volume: number | null; cluster: string; head: boolean; size?: number; gate?: string; gateReason?: string; gsc?: [number, number] | null; comps?: { domain: string; position: number }[]; pageAction?: string; pageUrl?: string; sources?: string[]; win?: number; review?: boolean; cannibal?: boolean; evidence?: string }) {
   const fit = k.gate === 'fail' ? 0.1 : 0.7 + rnd() * 0.3;
   const demand = k.volume == null ? 0.2 : Math.min(1, Math.log10(Math.max(10, k.volume)) / 4);
-  const win = k.win ?? rnd();
+  const win = k.win === null ? null : (k.win ?? rnd());
   const value = 0.3 + rnd() * 0.6;
   const gap = rnd();
-  const score = k.gate === 'fail' ? 0 : Math.round(100 * (0.25 * fit + 0.2 * demand + 0.3 * win + 0.15 * value + 0.1 * gap) * (0.6 + 0.4 * stageW[k.stage]));
+  const score = k.gate === 'fail' ? 0 : Math.round(100 * (0.25 * fit + 0.2 * demand + 0.3 * (win ?? 0.4) + 0.15 * value + 0.1 * gap) * (0.6 + 0.4 * stageW[k.stage]));
   const spread = 4 + Math.round(rnd() * 14);
-  const verdict = k.gate === 'fail' ? 'gated' : win >= 0.6 ? 'go' : win >= 0.35 ? 'months' : 'hard';
+  const verdict = k.gate === 'fail' ? 'gated' : win == null ? 'unknown' : win >= 0.6 ? 'go' : win >= 0.35 ? 'months' : 'hard';
   const srcs = k.sources ?? [pickR(['gsc', 'paa', 'autocomplete', 'labs_ideas', 'related']), pickR(['competitor', 'labs_suggestions', 'seed', 'gap'])];
   return {
     id: 0, createdAt: now, updatedAt: now,
@@ -38,11 +38,11 @@ function kwRow(site: SiteFx, k: { keyword: string; stage: string; volume: number
     trend_json: null, gsc_impressions: k.gsc ? k.gsc[1] : null, gsc_clicks: k.gsc ? Math.round(k.gsc[1] * 0.02) : null, gsc_position: k.gsc ? k.gsc[0] : null,
     gsc_page: k.gsc ? `https://${site.domain}/services/${k.cluster}` : null, intent: 'commercial', stage: k.stage,
     stage_evidence_json: k.evidence ? JSON.stringify(k.evidence) : null, intent_confidence: 0.8, needs_review: !!k.review,
-    gate: k.gate === 'fail' ? 'fail' : 'pass', gate_reason: k.gateReason ?? null, fit, demand, win, value, gap, score, score_low: Math.max(0, score - spread), score_high: Math.min(100, score + spread),
+    gate: k.gate === 'fail' ? 'fail' : 'pass', gate_reason: k.gateReason ?? '', gate_detail: k.gate === 'fail' ? 'engine: matched rule ' + (k.gateReason ?? '') + ' on token set (debug)' : null, fit, demand, win, value, gap, score, score_low: Math.max(0, score - spread), score_high: Math.min(100, score + spread),
     low_confidence: spread > 15, verdict, cluster_id: k.cluster, is_head: k.head, cluster_size: k.size ?? null, cluster_demand: k.head && k.volume ? k.volume * (k.size ?? 1) : null,
     serp_read_at: now, top10_json: null, page_action: k.pageAction ?? (k.gsc ? 'refresh' : 'new'), page_url: k.pageUrl ?? (k.gsc ? `https://${site.domain}/services/${k.cluster}` : null),
     cannibal_json: k.cannibal ? JSON.stringify([`https://${site.domain}/a`, `https://${site.domain}/b`]) : null,
-    competitors_json: JSON.stringify(k.comps ?? []), striking: !!(k.gsc && k.gsc[0] >= 8 && k.gsc[0] <= 20 && k.gsc[1] >= 30), run_id: 'run-r', fetched_at: now, updated_at: now,
+    competitors_json: JSON.stringify(k.comps ?? []), striking: !!(k.gsc && k.gsc[0] >= 8 && k.gsc[0] <= 20 && k.gsc[1] >= 100), run_id: `${site.id}-keyword_research-1`, fetched_at: now, updated_at: now,
   };
 }
 
@@ -65,7 +65,7 @@ function compRow(site: SiteFx, d: string, o: any = {}) {
 function gapRow(site: SiteFx, i: number, o: any) {
   return { id: 0, createdAt: now, updatedAt: now, gap_id: `g${i}`, site_id: site.id, domain: site.domain, market: site.market, type: o.type, keyword: o.keyword ?? null, cluster_id: null,
     competitor_domains_json: JSON.stringify(o.comps ?? []), client_position: o.pos ?? null, evidence_json: null, sample_note: o.note ?? null, action: o.action, action_target: o.target ?? null,
-    credits: o.credits ?? null, status: o.status ?? 'open', run_id: 'run-c', created_at: now, updated_at: `2026-11-08T06:${String(10 + (i % 40)).padStart(2, '0')}:00.000Z` };
+    credits: o.credits ?? null, status: o.status ?? 'open', run_id: `${site.id}-keyword_research-1`, created_at: now, updated_at: `2026-11-08T06:${String(10 + (i % 40)).padStart(2, '0')}:00.000Z` };
 }
 
 function runRow(site: SiteFx, kind: string, o: any = {}) {
@@ -106,7 +106,8 @@ const A: SiteFx = { id: 's-erp', domain: 'gulfdynamics-partners.ae', country: 'U
   // questions, gated, a very long search, brand searches
   const qs = ['how much does dynamics 365 business central cost in dubai', 'what is the difference between dynamics 365 business central and finance and operations', 'is sap business one good for small trading companies in the uae', 'how long does an erp implementation take for a 50 person company in abu dhabi', 'which erp is best for construction companies in uae', 'do i need e-invoicing software for the uae phase 1 mandate in 2026'];
   for (const q of qs) A.kws.push(kwRow(A, { keyword: q, stage: 'compare', volume: 90 + Math.round(rnd() * 300), cluster: 'q-' + q.slice(0, 12), head: true, size: 1, sources: ['paa', 'autocomplete'], win: 0.65 }));
-  const gated: [string, string][] = [['dynamics 365 jobs dubai', 'career'], ['erp consultant salary uae', 'career'], ['northpeak erp login', 'other_brand'], ['ministry of finance e-invoicing portal login', 'government'], ['erp software india', 'market_mismatch'], ['sap business one free download crack', 'off_service']];
+  const gated: [string, string][] = [['dynamics 365 jobs dubai', 'career'], ['erp consultant salary uae', 'career'], ['northpeak erp login', 'other_brand'], ['ministry of finance e-invoicing portal login', 'government'], ['erp software india', 'other_market'], ['sap business one free download crack', 'off_topic'], ['erp', 'too_broad']];
+  for (const u of ['erp partner ajman free zone', 'business central partner ras al khaimah arabic', 'cloud erp fujairah support contract']) A.kws.push(kwRow(A, { keyword: u, stage: 'hire', volume: null, cluster: 'u-' + u, head: true, size: 1, win: null }));
   for (const [g, r] of gated) A.kws.push(kwRow(A, { keyword: g, stage: 'info', volume: 880, cluster: 'gated-' + g, head: true, size: 1, gate: 'fail', gateReason: r }));
   A.kws.push(kwRow(A, { keyword: 'microsoft dynamics 365 business central implementation partner for wholesale distribution and logistics companies in dubai abu dhabi and sharjah with arabic support', stage: 'hire', volume: 20, cluster: 'long-1', head: true, size: 1, win: 0.7, review: true, cannibal: true, gsc: [12, 64] }));
   A.kws.push(kwRow(A, { keyword: 'gulfdynamics partners reviews', stage: 'compare', volume: 30, cluster: 'brand-1', head: true, size: 1, win: 0.9, gsc: [1, 210] }));
@@ -140,6 +141,7 @@ const A: SiteFx = { id: 's-erp', domain: 'gulfdynamics-partners.ae', country: 'U
   A.plan = [
     { action_id: 'a1', kind: 'refresh', title: 'Improve your Business Central page', why: 'You are #14 for "dynamics 365 business central partner abu dhabi" and two of your competitors are on page one.', target: `https://${A.domain}/business-central`, credits: 40 },
     { action_id: 'a2', kind: 'new_page', title: 'Write a page for "erp implementation cost uae"', why: 'Buyers comparing providers search it about 320 times a month; you have no page.', target: '', credits: 114 },
+    { action_id: 'a6', kind: 'write', title: 'Write the main page for your top topic', why: 'The best topic you do not cover yet.', target: '', credits: 114, cluster_id: 'erp-software-uae' },
     { action_id: 'a3', kind: 'list', title: 'Get listed on clutch.co', why: 'It shows three of your competitors for your services, and not you.', target: 'clutch.co', credits: 0 },
     { action_id: 'a4', kind: 'ladder', title: 'Plan a keyword ladder for "erp software uae"', why: 'The topic is held by bigger sites; three supporting pages first make it winnable in a few months.', target: '', credits: 180 },
     { action_id: 'a5', kind: 'pitch', title: 'Ask to be added to "Top ERP consultants in the UAE 2026"', why: 'AI answers quote this list for your main service.', target: 'top-erp-consultants-uae-2026.example-rankings.com', credits: 0 },
@@ -160,7 +162,7 @@ const B: SiteFx = { id: 's-edx', domain: 'openlearn-studio.io', country: 'United
   }
   B.kws.push(kwRow(B, { keyword: 'what is open edx and how is it different from edx.org', stage: 'info', volume: 320, cluster: 'q1', head: true, size: 1, sources: ['paa'], win: 0.7 }));
   B.kws.push(kwRow(B, { keyword: 'how much does it cost to host open edx', stage: 'compare', volume: 90, cluster: 'q2', head: true, size: 1, sources: ['paa', 'autocomplete'], win: 0.66 }));
-  B.kws.push(kwRow(B, { keyword: 'edx jobs remote', stage: 'info', volume: 1300, cluster: 'g1', head: true, size: 1, gate: 'fail', gateReason: 'jobs' }));
+  B.kws.push(kwRow(B, { keyword: 'edx jobs remote', stage: 'info', volume: 1300, cluster: 'g1', head: true, size: 1, gate: 'fail', gateReason: 'career' }));
   B.comps = [
     compRow(B, 'lmsforge.dev', { score: 71, size: 'peer', reasons: ['In the first 10 Google results for 11 of 14 of your service searches in the United States.'] }),
     compRow(B, 'edtech-cloudworks.com', { score: 58, size: 'leader', etv: 9300 }),
@@ -189,6 +191,9 @@ const OFF = mk('s-off', 'off-client.ae', { mode: 'off' });
 const KILLED = { ...TRIAL, id: 's-killed', domain: 'paused-client.ae', mode: 'on' as const, killed: true };
 
 export const SITES: SiteFx[] = [A, B, EMPTY, ONE, REFUSED, CREDITS, TRIAL, OFF, KILLED];
+// pass 2: real uuids (the run forms validate siteId as a uuid); scripts keep the short names, harness.open() maps them
+export const SID: Record<string, string> = {};
+SITES.forEach((x, i) => { const u = `a0000000-0000-4000-8000-0000000000${String(i + 10)}`; SID[x.id] = u; x.id = u; });
 
 // ------------------------------------------------------------------ the app shell
 const ORG = 'org-1';
@@ -232,7 +237,7 @@ export function api(p: Persona, method: string, url: URL, body: any, opts: { cre
       const vis = visible(s, p);
       const d = data(s);
       if (rest === '/ki' && method === 'GET') {
-        const base: any = { mode: isPadmin(p) ? s.mode : s.mode === 'on' ? 'on' : 'off', visible: vis, ...(isPadmin(p) ? { killed: !!s.killed } : {}), canSwitch: isPadmin(p), canAct: vis && p !== 'viewer', maxCompetitors: 5, credits: { competitors: 21, research: 54 } };
+        const base: any = { mode: isPadmin(p) ? s.mode : s.mode === 'on' ? 'on' : 'off', visible: vis, ...(isPadmin(p) || s.mode === 'on' ? { killed: !!s.killed } : {}), canSwitch: isPadmin(p), canAct: vis && p !== 'viewer', maxCompetitors: 5, credits: s.mode === 'trial' ? { competitors: 0, research: 0 } : { competitors: 23, research: 57 } };
         if (!vis) return [200, { ...base, lastRuns: [], summary: null }];
         return [200, { ...base, lastRuns: d.runs, summary: kiSummaryOf(s.market, d.competitors, d.keywords, d.gaps) }];
       }
@@ -240,7 +245,8 @@ export function api(p: Persona, method: string, url: URL, body: any, opts: { cre
       if (rest === '/ki/competitors') return [200, { market: s.market, maxCompetitors: 5, chosen: d.competitors.filter((c: any) => c.status === 'chosen').length, items: d.competitors }];
       if (rest === '/ki/keywords') {
         const kq = kiKeywordQueryOf(q);
-        const list = d.keywords.filter((v: any) => kiKeywordMatches(v, kq)).sort(kiKeywordComparator(kq.sort));
+        const gi = (kq as any).gapType ? kiGapTypesIndex(d.gaps) : undefined;
+        const list = d.keywords.filter((v: any) => kiKeywordMatches(v, kq, gi)).sort(kiKeywordComparator(kq.sort));
         const pg = kiPage(list, kq.page, kq.pageSize);
         return [200, { market: s.market, total: pg.total, page: pg.page, pageSize: pg.pageSize, pages: pg.pages, sort: kq.sort, items: pg.items, facets: kiFacetsOf(d.keywords) }];
       }
