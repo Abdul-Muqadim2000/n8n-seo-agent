@@ -2,10 +2,12 @@
 // one URL per candidate and one candidate per URL (slug matches first, then the best title match), and the rows to store — built by the same
 // code as "I published a page" (Publish Check), so a detected page is stored exactly like a reported one. The live publish check itself is not
 // run here; the Site Tracker inspects the page in Search Console (index status) in this same run and tracks its keyword from now on.
+/*__LADDER_RULES__*/
 /*__PUBLISH_ROWS__*/
 /*__OVERLAP__*/
 const CONFIG = { title_share: 0.8, max_html_chars: 300000 };
 const ms = $('Match Slugs (Detect)').all().map(i => i.json || {});
+const sites0 = (() => { try { return $('Publish Candidates').all().map(i => i.json || {}); } catch (e) { return []; } })();   // LADDER PACKAGE: the owners per site
 const state = (ms[0] && ms[0].sites) || [];
 const fetchReq = ms.filter(x => x.fetch && x.url);
 let fetchRes = []; if (fetchReq.length) { try { fetchRes = $('Fetch Pages (Detect)').all().map(i => i.json || {}); } catch (e) { fetchRes = []; } }
@@ -31,7 +33,7 @@ const out = state.map(st => {
   }
   pairs.sort((a, b) => b.score - a.score);
   for (const p of pairs) if (!matched.has(p.key) && !claimed.has(p.ukey)) { matched.set(p.key, p); claimed.add(p.ukey); }
-  const detected = [], log_rows = [], ladder_rows = [], case_rows = [];
+  const detected = [], log_rows = [], ladder_rows = [], case_rows = [], conflicts = [];
   for (const c of st.candidates || []) {
     const p = matched.get(c.key); if (!p) continue;
     const keyword = (c.log || c.ladder || {}).keyword || c.keyword;
@@ -40,13 +42,16 @@ const out = state.map(st => {
     // sitemap for a slug match, which is the site declaring the page exists. Either way it is evidence from outside this run.
     const pgLive = pages.get(p.url);
     const live = pgLive ? !!pgLive.ok : true;
-    const { log_row, ladder_row } = publishedRows({ site_id: (c.log && c.log.site_id) || st.site_id, domain: st.domain, keyword, url: p.url, log: c.log, ladder: c.ladder, request_id: '', now, live });
+    const owners = ((sites0.find(x => x.site_id === st.site_id) || {}).owners) || [];   // LADDER PACKAGE (rule 1): other searches' addresses
+    const { log_row, ladder_row, url_conflict } = publishedRows({ site_id: (c.log && c.log.site_id) || st.site_id, domain: st.domain, keyword, url: p.url, log: c.log, ladder: c.ladder, request_id: '', now, live, owners });
     if (!live) continue;
+    if (url_conflict) { conflicts.push({ keyword, url: p.url, note: url_conflict.text }); continue; }   // never recorded live on another search's page
     log_rows.push(log_row); if (ladder_row) ladder_rows.push(ladder_row);
     if (log_row.source === 'case_study' || /case stud/i.test(log_row.page_type)) case_rows.push({ site_id: log_row.site_id, keyword: log_row.keyword, page_url: p.url });
     detected.push({ keyword, url: p.url, ladder_id: log_row.ladder_id || (c.ladder ? c.ladder.ladder_id : ''), matched_by: p.matched_by, source: c.source });
   }
-  const unmatched = (st.candidates || []).filter(c => !matched.has(c.key)).map(c => ({ keyword: c.keyword, note: (st.notes || {})[c.key] || '' }));
+  const unmatched = [...(st.candidates || []).filter(c => !matched.has(c.key)).map(c => ({ keyword: c.keyword, note: (st.notes || {})[c.key] || (c.address_taken ? 'its old address ' + LRU.pathOf(c.address_taken.url) + ' is the page for "' + c.address_taken.keyword + '", so it is looked for at its own address only' : '') })),
+    ...conflicts.map(x => ({ keyword: x.keyword, note: x.note }))];
   // D11: the sitemap URLs this run read, plus the title / H1 of the pages it fetched, feed the week's page inventory (seo_pages)
   const titles = (st.fetches || []).map(u => { const pg = pages.get(u); return (pg && pg.ok) ? { url: u, title: pg.title, h1: pg.h1 } : null; }).filter(Boolean);
   return { json: { site_idx: st.site_idx, site_id: st.site_id, domain: st.domain, candidates: (st.candidates || []).length, sitemap: st.sitemap, pages_fetched: (st.fetches || []).length, detected, log_rows, ladder_rows, case_rows, unmatched, inventory: st.inventory || [], page_titles: titles } };

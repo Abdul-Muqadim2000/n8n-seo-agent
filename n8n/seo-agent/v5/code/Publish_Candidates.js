@@ -3,6 +3,7 @@
 // to read. A page that improves an EXISTING URL (striking-distance rewrite, ladder page
 // that already existed) cannot be told apart by its URL, so it is matched only when the sitemap says that URL changed after the page was written.
 /*__SITE_MODEL__*/
+/*__LADDER_RULES__*/
 // 2026-10-12 (FIX_PLAN D11): the sitemap is now read for EVERY tracked site, not only for the ones with a page waiting — the same one plain GET
 // also builds the week's page inventory (seo_pages), which is what stops the agent recommending a page the site already has. `detect` says
 // whether this site has anything to match; a site without a waiting page still makes no page fetch (only the sitemap is read).
@@ -41,14 +42,22 @@ plan.forEach((s, idx) => {
   }
   // R111 (2026-10-16): a draft whose last quality round failed (`not_ready`) is still watched — an owner who publishes it anyway is
   // found — and carries the flag, so whatever records it can say the page went live without passing the quality check
+  // LADDER PACKAGE (2026-11-09, rule 1 at publish time): the addresses other searches of this website hold (published / existing ladder pages,
+  // published content-log pages). A waiting page whose "existing address" is ANOTHER search's page is not matched there: that is how three
+  // rungs of techand.ai's ERP ladder were recorded live on one blog address (2026-10-29). It is looked for at its own planned address only.
+  const owners = [...LD.filter(l => l.target_url && (l.status === 'published' || isTrue(l.page_exists))).map(l => ({ url: l.target_url, keyword: l.keyword, supporting: l.supporting, ladder_id: l.ladder_id })),
+    ...L.filter(r => String(r.published_url || '').trim()).map(r => ({ url: r.published_url, keyword: r.keyword, ladder_id: r.ladder_id || '' }))];
   const list = [...cands.values()].map(c => {
-    const existing = String((c.log && c.log.existing_page_url) || '').trim() || (c.ladder && isTrue(c.ladder.page_exists) ? String(c.ladder.target_url || '').trim() : '');
+    let existing = String((c.log && c.log.existing_page_url) || '').trim() || (c.ladder && isTrue(c.ladder.page_exists) ? String(c.ladder.target_url || '').trim() : '');
+    const takenBy = existing ? LRU.ownerOf(existing, c.keyword, owners, String((c.ladder || {}).supporting || '').split(',').map(x => x.trim()).filter(Boolean)) : null;
+    if (takenBy) existing = '';
     const planned = c.ladder && !isTrue(c.ladder.page_exists) ? String(c.ladder.target_url || '').trim() : '';
     return { ...c, existing_url: /^https?:\/\//i.test(existing) ? existing : '', planned_url: /^https?:\/\//i.test(planned) ? planned : '', ladder_id: (c.log && c.log.ladder_id) || (c.ladder && c.ladder.ladder_id) || '',
+      ...(takenBy ? { address_taken: { url: String(takenBy.url || ''), keyword: String(takenBy.keyword || '') } } : {}),
       qa_failed: !!(c.log && String(c.log.status || '') === 'not_ready') };
   }).sort((a, b) => String(b.written_at).localeCompare(String(a.written_at))).slice(0, CONFIG.max_candidates_per_site);
   // URLs that already belong to other pages of the site (published pages, pages that existed before) are never claimed by a new page
   const known = [...new Set([...L.flatMap(r => [r.published_url, r.existing_page_url]), ...LD.filter(l => l.status === 'published' || isTrue(l.page_exists)).map(l => l.target_url)].map(u => String(u || '').trim()).filter(u => /^https?:\/\//i.test(u)))];
-  out.push({ json: { site_idx: idx, site_id: s.site_id, domain: d, sitemap_url: SM.siteUrl(modelFor(s.site_id, d), '/sitemap.xml'), candidates: list, known, detect: list.length > 0 } });
+  out.push({ json: { site_idx: idx, site_id: s.site_id, domain: d, sitemap_url: SM.siteUrl(modelFor(s.site_id, d), '/sitemap.xml'), candidates: list, known, owners, detect: list.length > 0 } });
 });
 return out.length ? out : [{ json: { skip: true, reason: 'no tracked site to read a sitemap for', sites: plan.length } }];

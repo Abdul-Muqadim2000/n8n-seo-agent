@@ -502,6 +502,7 @@ return [{
       features: Array.isArray(p2.ladder_measure.features) ? p2.ladder_measure.features.slice(0, 12).map(x => String(x).slice(0, 40)) : [] } : null,   // A-21: what the ladder run measured for this keyword
     ai_target,
     hold_ack: (p2.hold_ack && typeof p2.hold_ack === 'object' && !Array.isArray(p2.hold_ack)) ? { score: Number.isFinite(Number(p2.hold_ack.score)) && p2.hold_ack.score !== '' && p2.hold_ack.score != null ? Math.round(Number(p2.hold_ack.score)) : null } : (p2.hold_ack === true ? { score: null } : null),   // W0-D (section 153): the client chose "Write it anyway"
+    market_ack: p2.market_ack === true,   // LADDER PACKAGE (section 182): the client chose another market than the website's on purpose
     force_content: !!p2.force_content,
     publish_wordpress: !!CONFIG.wordpress_publish && !!wordpress_url,
     wordpress_url,

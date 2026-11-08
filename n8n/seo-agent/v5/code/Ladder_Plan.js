@@ -9,6 +9,7 @@
 /*__WAITING__*/
 /*__OWN_COVER__*/
 /*__READINESS__*/
+/*__LADDER_RULES__*/
 // Ladder mode: applies the AI relevance screen, assigns keywords to rungs by difficulty, builds one page per topic
 // cluster, maps internal links, matches existing pages, estimates the timeline and picks the pages to write now.
 // v4.8 (PIPELINE_FEATURE_SPEC §5.3-5.5): everything is measured against the site's REACH (stored 30 days in seo_cache, else measured from this
@@ -631,6 +632,37 @@ const one_page = { moved: [], left_out: [], kept: [] };
         : 'topic label (results pages not compared)';
   one_page.kept = kept;
 }
+// ---- LADDER PACKAGE (2026-11-09, v5/code/_ladder_rules.js LRU, fixes/LADDER.md): rules 2 and 4 on the rung pages, before the plan caps them ----
+// Production 2026-11-03..06 (techand.ai "crm service provider"): the rung "crm for customers" was written and published although the page
+// run's own verdict said AVOID (score 30), and "what is a crm company", a dictionary search, took a rung of a ladder for people who hire a
+// CRM partner. A keyword this website's own checks advised against (the content log: "the keyword check advised against", a run held as
+// clearly low or AVOID; with keyword intelligence on, a stored AVOID) is STOPPED: its row is stored with the reason and nothing is
+// written until the client says "Write it anyway". A definition of a seller stays a rung only when its own results page was read and is
+// a page of guides, and it links up to the main page (every rung page does, below).
+const KI_LP = (() => { try { const k = $('Ladder Pool').first().json.ki_pool; return k && typeof k === 'object' ? k : null; } catch (e) { return null; } })();
+const kiStageOf = new Map(((KI_LP && KI_LP.used) ? (KI_LP.rows || []) : []).map(r => [String(r.keyword || '').toLowerCase().trim(), String(r.stage || '')]));
+const stageOfLP = (k) => LRU.stageOf(k.keyword, k.intent, k.stage || kiStageOf.get(String(k.keyword || '').toLowerCase().trim()) || '');
+const avoidLP = (() => { const out = [];
+  for (const r of rowsOf('Load Content Log (Ladder)')) { if (reachDomain(r.domain) !== reachDomain(domain) || !String(r.keyword || '').trim()) continue;
+    const txt = String(r.publish_note || '') + ' ' + String(r.qa_reasons || '');
+    if (/keyword check advised against/i.test(txt) || (String(r.status || '') === 'held' && /\bAVOID\b|clearly under/i.test(txt)))
+      out.push({ keyword: String(r.keyword).toLowerCase().trim(), source: 'content log', why: 'our check advised against "' + String(r.keyword).trim() + '" when it was written on ' + String(r.started_at || r.createdAt || '').slice(0, 10) }); }
+  for (const k of ((KI_LP && KI_LP.used) ? (KI_LP.avoid || []) : [])) out.push({ keyword: String(k).toLowerCase().trim(), source: 'keyword intelligence', why: 'keyword intelligence marks "' + k + '" as one to avoid' });
+  return out; })();
+const avoidOfLP = (kw) => avoidLP.find(a => LRU.sameSearch(a.keyword, kw)) || null;
+const stoppedLP = [], definitionalLP = [];
+if (planned) for (const r of rungs) r.pages = r.pages.filter(pg => {
+  const av = avoidOfLP(pg.keyword);
+  if (av) { stoppedLP.push({ ...pg, rung: r.rung, stage: stageOfLP(pg), status: 'stopped', stop: { reason: av.why, source: av.source, band: 'avoid' },
+    target_why: 'stopped: ' + av.why + '. Nothing is written for it unless you choose "Write it anyway".' }); return false; }
+  if (LRU.isDefinitional(pg.keyword)) {
+    const informational = !!(pg.serp_kind && pg.serp_kind.dominant === 'Guide or article');
+    if (!LRU.definitionalOk({ serp_informational: informational, links_up: true })) {
+      definitionalLP.push({ keyword: pg.keyword, rung: r.rung, read: !!pg.serp_kind, dominant: pg.serp_kind ? pg.serp_kind.dominant : '',
+        why: '"' + pg.keyword + '" asks what a word means: ' + (pg.serp_kind ? (pg.serp_kind.dominant ? 'Google answers it with ' + String(pg.serp_kind.dominant).toLowerCase() + 's' : 'Google ranks a mix for it') + ', not guides,' : 'its results page was not read,') + ' so it is not a step towards "' + head + '"' });
+      later.push({ keyword: pg.keyword, volume: pg.volume, kd: pg.kd }); return false; }
+  }
+  return true; });
 // ---- pages per plan type: direct 2-3 supporting pages, short 3-5, full as before (rung limits); the rest is kept for later ----
 const CAP = { direct: 3, short: 5, full: Infinity, none: 0 }[plan_type];
 let kept = 0;
@@ -639,7 +671,68 @@ for (const r of rungs) {
   for (const p of r.pages.slice(keep.length)) later.unshift({ keyword: p.keyword, volume: p.volume, kd: p.kd, held_back: true });
   r.pages = keep;
 }
-const rungPages = rungs.flatMap(r => r.pages);
+// ---- LADDER PACKAGE rule 2: the rungs step towards the main keyword ----
+// techand.ai's ERP ladder climbed "is microsoft dynamics 365 an erp system" -> "ms 365 erp" -> "microsoft dynamics erp" -> the main page: a
+// definition and two product searches, no page for people comparing or choosing a partner, so the step that turns a reader into a buyer
+// was missing. Every page now carries its stage (problem / solution / compare / hire; keyword intelligence's stored stage when on, else
+// the words and the intent); a short or full plan whose supporting pages hold no compare or hire page takes the strongest such keyword
+// of its own on-topic pool (it passed the fit gate, the topic test and the other ladders' rule already) as its last rung page.
+const replanLP = { checked: false, commercial_before: false, added: null, note: '' };
+if (planned && plan_type !== 'direct' && rungs.some(r => r.pages.length)) {
+  replanLP.checked = true;
+  replanLP.commercial_before = rungs.some(r => r.pages.some(pg => LRU.isCommercial(stageOfLP(pg))));
+  if (!replanLP.commercial_before) {
+    const used = new Set([head, ...(top.supporting || []), ...rungs.flatMap(r => r.pages.flatMap(pg => [pg.keyword, ...(pg.supporting || []), ...((pg.keywords || []).map(k => k.keyword))]))].map(x => String(x || '').toLowerCase().trim()));
+    const cand = onTopic.filter(k => !used.has(String(k.keyword).toLowerCase().trim()) && !avoidOfLP(k.keyword) && !LRU.isDefinitional(k.keyword) && LRU.isCommercial(stageOfLP(k)) && !LRU.sameSearch(k.keyword, head))
+      .sort((a, b) => b.opportunity - a.opportunity)[0] || null;
+    if (cand) {
+      const rr = Math.max(...rungs.filter(r => r.pages.length).map(r => r.rung), rungMap.get(cand.keyword) || 0, 1);
+      const savedNP = notPlanned[rr]; const pg = makePages([cand], rr)[0]; notPlanned[rr] = savedNP;
+      if (pg) {
+        const rung = rungs.find(r => r.rung === rr);
+        const total = rungs.reduce((n, r) => n + r.pages.length, 0);
+        if (total >= CAP) { const last = [...rungs].reverse().find(r => r.pages.length); const out = last.pages.pop(); later.unshift({ keyword: out.keyword, volume: out.volume, kd: out.kd, held_back: true }); }
+        rung.pages.push(pg);
+        later.splice(0, later.length, ...later.filter(l => !LRU.sameSearch(l.keyword, cand.keyword)));
+        replanLP.added = { keyword: pg.keyword, rung: rr, stage: stageOfLP(cand) };
+        replanLP.note = 'The supporting pages had no page for people comparing or choosing a provider, so "' + pg.keyword + '" (' + LRU.stageText(stageOfLP(cand)) + ') was added as the last step before the main page.';
+      }
+    } else replanLP.note = 'None of the supporting pages is for people comparing or choosing a provider, and the research found no such keyword on this topic: plan one before the main page (for example "' + head + '" with "company", "partner" or "best") when the data has one.';
+  }
+}
+let rungPages = rungs.flatMap(r => r.pages);
+// ---- LADDER PACKAGE rule 1: one search, one address - the main page's own address, then every page of the plan ----
+// techand.ai's CRM ladder aimed its main page at /dynamics-365-crm-uae-2, a copy of the live /dynamics-365-crm-uae, and its ERP ladder's main
+// page ended on a blog address. The main page is never a blog / insights address (a commercial page of the site improves instead, else a
+// new page) nor a numbered or "-copy" variant of a live page (the original improves). Then no two pages of this plan share an address
+// (compared without scheme or www): the first keeps it, the same search joins it, any other search gets its own new page.
+const knownLP = [...new Set([...SM.pages(pageModel).map(p => String(p.url || '')), ...(base.site_urls || []).map(String)].filter(Boolean))];
+const head_guard = (() => { if (!planned || !top.target_url) return null;
+  const nonBlog = { ...pageModel, pages: SM.pages(pageModel).filter(p => p && p.url && !LRU.isBlog(p.url) && !LRU.copyOf(p.url, knownLP)) };
+  let com = null; try { com = SM.matchPage(nonBlog, head); } catch (e) { com = null; }
+  const g = LRU.headTarget(top.target_url, { known: knownLP, home: homeUrl, planned: plannedUrl(head), commercial: com && com.url ? com.url : '' });
+  if (!g || !g.to) return null;
+  Object.assign(top, { target_url: g.to, exists: !!g.exists, status: g.exists ? 'improve' : 'new', existing_source: g.exists ? 'sitemap' : null,
+    existing_confidence: g.exists && com && LRU.urlKey(com.url) === LRU.urlKey(g.to) ? (com.confidence ?? null) : null, existing_evidence: g.exists ? (com && LRU.urlKey(com.url) === LRU.urlKey(g.to) ? com.evidence || '' : 'the original of ' + LRU.pathOf(g.was)) : '' });
+  return g; })();
+const one_url = planned ? LRU.oneUrl([top, ...rungPages], (kw) => plannedUrl(kw)) : { pages: [], moved: [] };
+if (planned) { const keepK = new Set(one_url.pages.filter(Boolean).map(p => p.keyword)); for (const r of rungs) r.pages = r.pages.filter(p => keepK.has(p.keyword)); rungPages = rungs.flatMap(r => r.pages); }
+// what each page is and why it sits at its address, in the client's words (the app's ladder page shows it per rung)
+for (const p of (planned ? [...rungPages, top] : [])) {
+  p.stage = stageOfLP(p);
+  const path = String(p.target_url || '').replace(/^https?:\/\/[^\/]+/i, '') || '/';
+  p.target_why = p.exists ? 'your page ' + path + ' already answers this search, so it is improved, not written twice'
+    : p.not_overwritten ? 'a new page at ' + path + ': ' + LRU.pathOf(p.not_overwritten.url) + ' is already the page for "' + p.not_overwritten.keyword + '"'
+    : (p === top && head_guard) ? head_guard.text
+    : 'a page you do not have yet, at ' + path;
+  p.action = p.exists ? 'improve' : 'new';
+}
+// rule 3: the market this ladder is measured in (Ladder Duplicate (Words) refused a run whose market contradicts it before anything was paid)
+const marketLP = (() => { let site = {}; try { site = ($('Load Site (Market Check)').all().map(i => i.json || {}).find(r => r && !r.error && r.site_id) || {}); } catch (e) { site = {}; }
+  const siteIso = String(site.country_iso || '') || ((LRU.CFG.countries && Object.keys(LRU.CFG.countries).find(k => LRU.CFG.countries[k] === String(site.country || ''))) || '');
+  return LRU.market({ keyword: head, site_iso: siteIso, request_iso: String(base.country_iso || '') }); })();
+const ladder_rules = { version: 'ladder-1', market: marketLP, head_guard, one_url: one_url.moved, steps: { ...replanLP, stages: planned ? [...rungPages, top].map(p => ({ keyword: p.keyword, rung: p.rung, stage: p.stage })) : [] },
+  definitional: definitionalLP, stopped: stoppedLP.map(p => ({ keyword: p.keyword, rung: p.rung, reason: p.stop.reason, source: p.stop.source })), ki_pool: KI_LP ? { used: !!KI_LP.used, reason: KI_LP.reason || '', rows: (KI_LP.rows || []).length, run_id: KI_LP.run_id || '' } : null };
 // ---- R22 (2026-10-14, FIX_PLAN.md §3.12): a rung page may never carry a word target of 0 ----
 // The rung rows of exec 549 carried `target_words: 0`, so *Spawn Page Runs* passed `ladder_words: 0` and the clamp protected only the
 // main page (1,800 from the competitor analysis). The rung page then shipped 2,648 words — +47% — after two editor rounds. The target
@@ -930,6 +1023,14 @@ else if (planned && plan_type === 'short' && rungPages.length < 3) notes.push('O
 if (offTopic.length) notes.push(offTopic.length + ' keyword(s) were left out because they are not on this ladder\'s topic ("' + head + '"): ' + offTopic.slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason.replace(/^it is not on this ladder's topic: /, '') + ')').join(', ') + (offTopic.length > 6 ? ' and ' + (offTopic.length - 6) + ' more' : '') + '.');
 if (excluded.length) notes.push(excluded.length + ' keyword(s) already belong to other ladders of this site and were left out (one search, one page): ' + excluded.slice(0, 6).map(x => '"' + x.keyword + '" (ladder "' + x.head + '")').join(', ') + (excluded.length > 6 ? ' and ' + (excluded.length - 6) + ' more' : '') + '.');
 for (const t of target_guard) notes.push(t.note + '.');   // H2 (exec 2575): another keyword's page is never refreshed for this one
+// LADDER PACKAGE (2026-11-09): the market, the main page's address, one address per search, the steps towards the main keyword, the stopped rungs
+if (marketLP.note && (marketLP.source === 'keyword' || marketLP.named.length)) notes.push(marketLP.note);
+if (head_guard) notes.push('The main page\'s address: ' + head_guard.text + '.');
+for (const m of one_url.moved) notes.push('One search, one address: ' + m.text + '.');
+if (planned && replanLP.note) notes.push(replanLP.note);
+for (const x of definitionalLP) notes.push(x.why + ', so it waits instead of taking a rung.');
+for (const x of stoppedLP) notes.push('"' + x.keyword + '" is stopped: ' + x.stop.reason + '. Its page is not written unless you choose "Write it anyway".');
+if (KI_LP && KI_LP.note) notes.push(KI_LP.note);
 // F-A1: one keyword, one page; the limits; and the keywords whose results pages sell what this business does not
 if (planned && (one_page.moved.length || one_page.left_out.length)) notes.push('One keyword, one page: '
   + [...one_page.moved.map(m => '"' + m.keyword + '" moved from its ' + m.from + ' to ' + m.to + ' (' + m.why + ')'),
@@ -952,6 +1053,7 @@ const ladder = { ladder_id: ladderId, head: { keyword: head, volume: top.volume,
   reach_info: { reach: reachInfo.reach, method: reachInfo.method, p75: reachInfo.p75 ?? null, size_reach: reachInfo.size_reach ?? null, sample: reachInfo.sample ?? null, top10: reachInfo.top10 ?? null, organic_keywords: reachInfo.organic_keywords ?? null, cached: !!reachInfo.cached, cached_at: reachInfo.cached_at || null },   // B2-1: the SITE-wide measurement; `reach` above is what this topic was measured against
   pile_up,   // R42
   limits, held, one_page, target_guard, not_sold_keywords: notSold.slice(0, 20),   // F-A1 A-12 / A-8 / A-11; H2: target_guard
+  ladder_rules, market: marketLP, stopped: planned ? stoppedLP : [],   // LADDER PACKAGE (2026-11-09): rules 1-4 and what they did; the stopped rungs are stored with their reason (Ladder Rows)
   topic_authority,   // B2-1: what this site already wins on THIS topic, what it already has written about it, and which reach the plan used
   serp_clusters: SERP_CL,   // B2-4: the results pages this run read, the groups they made, what could not be compared and what it cost
   serp_cluster_rungs: clusterRungs.slice(0, 12), serp_diversity,   // B2-5: how many different sites own the destination's results page, and the stated adjustment
