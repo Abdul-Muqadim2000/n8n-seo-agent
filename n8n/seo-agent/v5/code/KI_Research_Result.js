@@ -54,7 +54,7 @@ const rows = (rp.rows || []).map(r0 => {
   const r = { ...r0 }; if (r.volume == null && v.ads_v != null) { r.volume = v.ads_v; r.volume_source = 'Google Ads (Keyword Planner ranges)'; r.volume_basis = 'provider_estimate'; if (r.cpc == null) r.cpc = v.ads_cpc; }
   const sr = by[r.keyword] || null; const top10 = sr ? (sr.top10 || []).map(t => ({ ...t, refdomains: rd[KIW.host(t.host)] != null ? rd[KIW.host(t.host)] : null })) : [];
   // FX-L H5: with its results page read, a search naming a business on that page is another company's brand
-  if (sr && r.gate === 'pass') { const g2 = KI.gate(r.keyword, { ...(p.fit_ctx || {}), serp_domains: top10.map(t => t.host).filter(h => KIW.host(h) !== client) });
+  if (sr && r.gate === 'pass') { const g2 = KI.gate(r.keyword, { ...(p.fit_ctx || {}), serp_domains: KI.brandDomains(top10.map(t => t.host).filter(h => KIW.host(h) !== client), { services: p.services }) });
     if (g2.gate !== 'pass') { r.gate = 'fail'; r.gate_reason = g2.reason; r.gate_code = g2.reason; r.gate_detail = (g2.text || g2.reason) + (g2.detail ? ' (' + g2.detail + ')' : ''); } }
   const intentP = N(r.intent_p);
   const st = KI.stage(top10, r.keyword, r.intent_label ? { label: r.intent_label, probability: intentP } : r.labs_intent, { own_domain: client, cfg });

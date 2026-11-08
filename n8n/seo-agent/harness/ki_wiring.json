@@ -371,6 +371,11 @@
     "Comp Home Requests"
    ]
   ],
+  "Comp Home Hop Text": [
+   [
+    "Comp Profile Requests"
+   ]
+  ],
   "Comp Home Hops": [
    [
     "Any Comp Home Hops?"
@@ -379,6 +384,11 @@
   "Comp Home Requests": [
    [
     "Any Comp Homes?"
+   ]
+  ],
+  "Comp Home Text": [
+   [
+    "Comp Home Hops"
    ]
   ],
   "Comp Labs Requests": [
@@ -411,6 +421,11 @@
     "Any Comp SERPs?"
    ]
   ],
+  "Comp Sitemap Hop Text": [
+   [
+    "Comp Result"
+   ]
+  ],
   "Comp Sitemap Hops": [
    [
     "Any Comp Sitemap Hops?"
@@ -419,6 +434,11 @@
   "Comp Sitemap Requests": [
    [
     "Any Comp Sitemaps?"
+   ]
+  ],
+  "Comp Sitemap Text": [
+   [
+    "Comp Sitemap Hops"
    ]
   ],
   "DFS Balance (KI)": [
@@ -443,7 +463,7 @@
   ],
   "Drop Old KI Keywords": [
    [
-    "Drop Old KI Gaps"
+    "Supersede Gaps?"
    ]
   ],
   "Ensure KI Competitors Table": [
@@ -581,6 +601,11 @@
     "Has Callback (KI Started)?"
    ]
   ],
+  "KI Supersede Check": [
+   [
+    "Supersede Keywords?"
+   ]
+  ],
   "Ledger Join (KI)": [
    [
     "Callback Ledger (KI)"
@@ -714,22 +739,22 @@
   ],
   "Read Comp Homes": [
    [
-    "Comp Home Hops"
+    "Comp Home Text"
    ]
   ],
   "Read Comp Homes (Hop)": [
    [
-    "Comp Profile Requests"
+    "Comp Home Hop Text"
    ]
   ],
   "Read Comp Sitemaps": [
    [
-    "Comp Sitemap Hops"
+    "Comp Sitemap Text"
    ]
   ],
   "Read Comp Sitemaps (Hop)": [
    [
-    "Comp Result"
+    "Comp Sitemap Hop Text"
    ]
   ],
   "Refusal Notice (KI)": [
@@ -980,7 +1005,7 @@
   ],
   "Save KI Keywords": [
    [
-    "Drop Old KI Keywords"
+    "KI Supersede Check"
    ]
   ],
   "Save KI Run": [
@@ -991,6 +1016,22 @@
   "Settle Run Ledger (KI)": [
    [
     "Ensure Ops Alerts (KI)"
+   ]
+  ],
+  "Supersede Gaps?": [
+   [
+    "Drop Old KI Gaps"
+   ],
+   [
+    "KI Gap Rows"
+   ]
+  ],
+  "Supersede Keywords?": [
+   [
+    "Drop Old KI Keywords"
+   ],
+   [
+    "KI Gap Rows"
    ]
   ],
   "Tell Caller (KI)?": [
@@ -1133,16 +1174,20 @@
   "Any Run Research Traffic Retries?",
   "Callback Ledger (KI)",
   "Comp Candidates",
+  "Comp Home Hop Text",
   "Comp Home Hops",
   "Comp Home Requests",
+  "Comp Home Text",
   "Comp Labs Requests",
   "Comp Profile Requests",
   "Comp Result",
   "Comp SERP Keys",
   "Comp SERP Picture",
   "Comp SERP Requests",
+  "Comp Sitemap Hop Text",
   "Comp Sitemap Hops",
   "Comp Sitemap Requests",
+  "Comp Sitemap Text",
   "DFS Balance (KI)",
   "DFS Balance End (KI)",
   "Drop KI Competitors",
@@ -1173,6 +1218,7 @@
   "KI Report",
   "KI Run Row",
   "KI Started",
+  "KI Supersede Check",
   "Ledger Join (KI)",
   "Ledger Settle (KI)",
   "Load AI Answers (KI)",
@@ -1258,6 +1304,8 @@
   "Save KI Keywords",
   "Save KI Run",
   "Settle Run Ledger (KI)",
+  "Supersede Gaps?",
+  "Supersede Keywords?",
   "Tell Caller (KI)?",
   "Wait Before Run Comp Labs Retry",
   "Wait Before Run Comp Profiles Retry",

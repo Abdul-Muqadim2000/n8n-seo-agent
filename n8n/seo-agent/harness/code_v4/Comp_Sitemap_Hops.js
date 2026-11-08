@@ -1842,7 +1842,7 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
     // win inputs
     existing_rank: [{ max: 10, v: 1.0 }, { max: 20, v: 0.8 }, { max: 50, v: 0.5 }],
     strength_span: 10,                 // 10x the median strength of the top 10 = 1.0, a tenth = 0.0, equal = 0.5
-    strength_unknown: 0.5, strength_unknown_spread: 0.25,
+    strength_unknown: 0.5, strength_unknown_spread: 0.5,   // FX-L N4: an unknown Strength spans 0..1, so a guess never prints Hard
     topical_ref: 5,                    // this many of the site's own ranking queries on the topic = Topical 1.0
     topical_max_position: 50,
     weak: { stale_days: 730, thin_words: 300, low_rank: 100, low_refdomains: 10 },
@@ -1867,14 +1867,16 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
     // candidate pipeline (DESIGN 3.2)
     caps: { enrich: 300, serp: 60, seeds: 20, plan: 10, questions: 30, striking: 30, clusters_out: 50, evidence: 20 },
     // striking distance (DESIGN 3.11): one definition everywhere
-    striking: { min: 8, max: 20, impressions: 100, small_site_impressions: 30, small_site_total: 5000 },
+    // FX-L round 2: the impressions bar is relative to the site (one query must hold 1 / site_divisor of the site's 28-day impressions),
+    // never under `floor` (fewer is noise) nor over `impressions` (the published 100). techand (8,013) -> 27, devaicon (66) -> 20, 30,000+ -> 100
+    striking: { min: 8, max: 20, impressions: 100, floor: 20, site_divisor: 300 },
     // page action (DESIGN 3.9 / 3.10)
     page_action: { list_share: 0.50 },
     // gaps (R4 6.2)
     gaps: { missing_min: 2, top: 10, absent_over: 100, weak_min: 11, weak_max: 100, strong_max: 7 },
-    // plan (DESIGN 3.13): expected value multipliers per action and verdict
+    // plan (DESIGN 3.13): expected value multipliers per action and verdict; FX-L: unknown (not judged yet) weighs above Hard, below Takes a few months
     plan: { kind_mult: { refresh: 1.15, new_page: 1.0, list: 0.9, pitch: 0.7, link: 0.5, defend: 0.6 },
-      verdict_mult: { go: 1.0, months: 0.75, hard: 0.4 }, gap_ev: { listing: 30, ai_answer: 25, backlink: 15, page_type: 28, topic: 32 } },
+      verdict_mult: { go: 1.0, months: 0.75, hard: 0.4, unknown: 0.5 }, gap_ev: { listing: 30, ai_answer: 25, backlink: 15, page_type: 28, topic: 32 } },
     // credits of a started action: usd x markup / credit value (the app's rate, cost.ts content = 1.90)
     credits: { markup: 3, credit_value_usd: 0.05, usd: { new_page: 1.90, refresh: 1.90, list: 0, pitch: 0, link: 0, defend: 0 } },
     // cache TTLs, days (DESIGN 7)
@@ -2055,6 +2057,24 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
     // a generic word ("automation", "cloud", "ai") is weak evidence alone: it counts half (a whole service phrase still counts 1 above)
     const strong = new Set(phr.flat().filter(t => !TOPIC_WEAK.has(t)));
     return { svc, strip, phr, prods, cats, vocab: new Set(phr.flat()), strong }; };
+  // FX-L N2 (re-review): a rival's name is a BRAND only when its label is not made entirely of service, product, category, generic or place
+  // words: softwarecompany.ae, crmsoftware.ae, businesscentral.ae, peppol-uae.com are exact-match domains, and gating their words would gate the
+  // client's own money searches ("software company in uae"); velosio, randgroup, intwo, dynamicssquare stay brands
+  const LABEL_GENERIC = new Set(['software', 'softwares', 'company', 'companies', 'solution', 'solutions', 'service', 'services', 'tech', 'techs', 'technology', 'technologies', 'digital', 'it',
+    'consulting', 'consultant', 'consultants', 'consultancy', 'partner', 'partners', 'group', 'system', 'systems', 'global', 'cloud', 'ai', 'app', 'apps', 'web', 'online', 'pro', 'expert', 'experts',
+    'hub', 'lab', 'labs', 'soft', 'net', 'info', 'smart', 'data', 'business', 'central', 'crm', 'erp', 'hr', 'hrms', 'lms', 'peppol', 'einvoice', 'einvoicing', 'invoice', 'invoicing', 'accounting',
+    'agency', 'agencies', 'studio', 'dev', 'development', 'developer', 'developers', 'best', 'top', 'my', 'the', 'and', 'of', 'uae', 'dubai', 'abu', 'dhabi', 'sharjah', 'ajman', 'gcc', 'ksa', 'saudi',
+    'qatar', 'oman', 'bahrain', 'kuwait', 'me', 'mena', 'arabia', 'emirates', 'middle', 'east', 'gulf', 'dynamics', 'microsoft', 'office', 'erpsoftware', 'implementation', 'support', 'managed',
+    'automation', 'integration', 'marketing', 'design', 'media', 'online', 'store', 'shop', 'world', 'experts', 'center', 'centre', 'networks', 'network', 'computer', 'computers', 'mobile', 'agentic']);
+  const genericLabel = (label, vocab) => { const L = S(label).toLowerCase().replace(/[^a-z0-9-]/g, ''); if (!L) return true;
+    const words = (w) => w.length >= 2 && (LABEL_GENERIC.has(w) || vocab.has(w) || /^\d+$/.test(w));
+    const seg = (x) => { const ok = new Array(x.length + 1).fill(false); ok[0] = true;   // can x be cut into known words? (dynamic programming, linear in practice)
+      for (let i = 1; i <= x.length; i++) for (let j = Math.max(0, i - 16); j < i; j++) if (ok[j] && words(x.slice(j, i))) { ok[i] = true; break; }
+      return ok[x.length]; };
+    return L.split('-').filter(Boolean).every(seg); };
+  /** KI.brandDomains(domains, ctx) -> the domains whose name is a brand (see above); ctx.services feeds the known words */
+  const brandDomains = (domains, ctx) => { const o = ctx || {}; const vocab = new Set(services(o.services).concat(services(o.topics || [])).flatMap(x => norm(x).split(' ')).flatMap(w => [w, stem1(w)]).filter(w => w.length >= 2));
+    return uniq((Array.isArray(domains) ? domains : []).map(d => validHost(d) || '').filter(Boolean)).filter(d => !genericLabel(reg(d).split('.')[0], vocab)); };
   /** KI.topicSim(titles, homeText, ctx, host) -> 0..1 or null: a domain's own text against the client's services (see above) */
   const topicSim = (titles, homeText, ctx, host) => {
     const K = topicKit(ctx); if (!K.svc.length) return null;
@@ -2178,7 +2198,7 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
     const pset = principalsOf(ctx || {}); const R0 = reg(h);
     const ccOnly = /^[a-z0-9-]+\.[a-z]{2}$/.test(R0) && !/\.(io|ai|co|me|tv|ly|fm)$/.test(R0);
     const vendorHost = isPrincipal(h, pset) || (kind === 'platform' && !ccOnly) || PLATFORM_HOSTS.test(h);
-    const guide = GUIDE_T.test(t) || GUIDE_P.test(p);
+    const guide = GUIDE_T.test(t) || GUIDE_P.test(p) || /\b(?:documentation|docs|knowledge base|help center|support article)\b/i.test(t) || /^(?:learn|docs|support|help|developer|developers|community|techcommunity)\./.test(h);   // FX-L L4: a maker's documentation is a guide
     if (vendorHost) return guide && !/\/(?:products?|pricing|solutions?)(?:\/|$)/.test(p) ? 'guide' : 'vendor';
     if (guide && !(SERVICE_P.test(p) && !GUIDE_P.test(p))) return 'guide';
     if (SERVICE_P.test(p) || SERVICE_T.test(t) || p === '/' || !p.replace(/\//g, '')) return 'provider';
@@ -2658,9 +2678,11 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
   // striking distance, page action, gaps, plan
   // ---------------------------------------------------------------------------------------------------------------------------------
   /** KI.striking(row, site, cfg) -> bool: Search Console position 8-20 with >= 100 impressions in 28 days (>= 30 for a small site) */
+  const strikingBar = (total, c0) => { const c = C(c0); const t = num(total); const Z = c.striking;
+    return t == null || !(t > 0) ? Z.impressions : clip(Math.round(t / (Z.site_divisor || 300)), Z.floor == null ? 20 : Z.floor, Z.impressions); };
   const striking = (row, site, c0) => { const c = C(c0); const r = row || {}; const p = num(r.gsc_position), im = num(r.gsc_impressions);
-    if (p == null || im == null) return false; const small = num((site || {}).total_impressions) != null && num(site.total_impressions) < c.striking.small_site_total;
-    return p >= c.striking.min && p <= c.striking.max && im >= (small ? c.striking.small_site_impressions : c.striking.impressions); };
+    if (p == null || im == null) return false;
+    return p >= c.striking.min && p <= c.striking.max && im >= strikingBar((site || {}).total_impressions, c); };
   /** KI.pageAction(cluster, site, cfg) -> { action: new | refresh | list | none, page_url, reason, list_hosts, cannibal: [urls] }
    *  cluster: { keyword | head, members: [rows], top10 } (or a head row with top10); site: { domain, model (SM), pages: [{ url, title }], queries } */
   const pageAction = (cl, site, c0) => {
@@ -2771,7 +2793,7 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
       const sc = isObj(h.score) ? h.score : { score: num(h.score), mid: num(h.score_mid) != null ? num(h.score_mid) : num(h.score_low) != null && num(h.score_high) != null ? (num(h.score_low) + num(h.score_high)) / 2 : num(h.score) };
       const mid = num(sc.mid) != null ? num(sc.mid) : num(sc.score); if (!(mid > 0)) continue;
       const pa = S(h.page_action); const kind = pa === 'list' ? 'list' : pa === 'refresh' ? 'refresh' : pa === 'none' ? '' : 'new_page'; if (!kind) continue;
-      const v = S(h.verdict) || 'hard'; const ev = mid * (P.kind_mult[kind] || 1) * (P.verdict_mult[v] != null ? P.verdict_mult[v] : 0.4) * (h.striking ? 1.2 : 1);
+      const v = VERDICT_WORDS[S(h.verdict)] ? S(h.verdict) : 'unknown'; const ev = mid * (P.kind_mult[kind] || 1) * (P.verdict_mult[v] != null ? P.verdict_mult[v] : 0.4) * (h.striking ? 1.2 : 1);
       const kw = norm(h.keyword);
       const why = [];
       if (h.striking && num(h.gsc_position) != null) why.push('your page is at position ' + Math.round(num(h.gsc_position)) + ' in your Search Console' + (num(h.gsc_impressions) != null ? ' with ' + Math.round(num(h.gsc_impressions)) + ' impressions in 28 days' : '') + ', a few places from page one');
@@ -2832,7 +2854,7 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
 
   return { VERSION, CONFIG, cfg, norm, key, services, validHost, reg, hostOf, urlKey, classifyDomain, CLASS_IDS, PAGE_TYPES, pageType, top10, stage,
     gate, fit, GATE_TEXT, mergeCandidates, families, prescore, cluster, demand, win, value, gap: gapFactor, score, verdict, VERDICT_WORDS, sizeTag,
-    scoreCompetitors, striking, pageAction, gaps, gapsUnread, plan, readable, label, ascii, hash, topicSim };
+    scoreCompetitors, striking, strikingBar, pageAction, gaps, gapsUnread, plan, readable, label, ascii, hash, topicSim, brandDomains };
 })();
 // ---- KIW (E2, 2026-11-08, docs/keyword-intel-2026-11-08/DESIGN.md §2-§5, §7 + CONTRACTS.md §1-§5): the KI worker's input / output kit ----
 // Everything SEOagentKIntel1 does around the analysis kit KI (v5/code/_ki.js, E1): the market, the seeds, the DataForSEO requests (one shape
@@ -2959,15 +2981,17 @@ const KIW = (() => {
       if (kept.length >= cap || (quota != null && kept.filter(x => x.source === src || (src === 'tracked' && x.source === 'ladder') || (src === 'ladder' && x.source === 'tracked')).length >= quota)) { waiting.add(kk); return false; }
       seenK.add(kk); waiting.delete(kk); kept.push({ keyword: kw, source: src, weight: w }); return true; };
     for (const s0 of (o.seeds || [])) take(s0, 'seed', 1, Q.seed);
-    for (const q of (o.gsc || []).slice(0, CAPS.gsc_seeds)) take(q.query, 'gsc', Math.min(1, 0.4 + Math.log10(1 + (N(q.impressions) || 0)) / 5), Q.gsc);
+    // a Search Console seed needs a few impressions (a query seen once is noise); a service seed needs two words unless it names a product
+    const gscOk = (o.gsc || []).slice(0, CAPS.gsc_seeds).filter(q => (N(q.impressions) || 0) >= (CAPS.gsc_seed_min_impr || 3));
+    for (const q of gscOk) take(q.query, 'gsc', Math.min(1, 0.4 + Math.log10(1 + (N(q.impressions) || 0)) / 5), Q.gsc);
     for (const k of (o.tracked || [])) take(k, 'tracked', 0.8, Q.tracked);
     for (const k of (o.ladders || [])) take(k, 'ladder', 0.8, Q.tracked);
-    const svc = (o.services || []).slice(0, 12); const prods = (o.products || []).slice(0, 3);
+    const svc = (o.services || []).filter(x => S(x).trim().split(/\s+/).length >= 2 || PRODUCTS.test(S(x))).slice(0, 12); const prods = (o.products || []).slice(0, 3);
     const phr = [(x) => x + ' ' + P.word, (x) => x + ' company ' + city];
     for (let r = 0; r < phr.length && kept.length < cap; r++) for (const x of svc) { if (kept.length >= cap) break; take(phr[r](x), 'service', r ? 0.9 : 1, null); }
     for (const p0 of prods) if (kept.length < cap) take(p0 + ' partner ' + P.word, 'service', 1, null);
     // what is left of the cap goes to the remaining Search Console queries
-    for (const q of (o.gsc || []).slice(0, CAPS.gsc_seeds)) if (kept.length < cap) take(q.query, 'gsc', Math.min(1, 0.4 + Math.log10(1 + (N(q.impressions) || 0)) / 5), null);
+    for (const q of gscOk) if (kept.length < cap) take(q.query, 'gsc', Math.min(1, 0.4 + Math.log10(1 + (N(q.impressions) || 0)) / 5), null);
     return { seeds: kept.slice(0, cap), refused, dropped: waiting.size };
   };
   // FX-L (REVIEW_PERF_SAFETY M2): the discovery and overlap bundles are keyed on the seeds that do not change week to week (the request's own
@@ -3113,7 +3137,7 @@ const KIW = (() => {
     fixAnswer, top10Of, extrasOf, serpReadings, hostsOf, aiHitsOf, kwRow, strip, serpBody, wordsOf, topicSim, geoMatch, classify, COLS, shape, sections, callState, measured, LABELS, STAGES, baseBody, emptyLists, refusalBody };
 })();
 const all = (n) => { try { return $(n).all().map(i => (i && i.json) || {}); } catch (e) { return []; } };
-const REQS = 'Any Comp Sitemaps?', ANS = 'Read Comp Sitemaps';
+const REQS = 'Any Comp Sitemaps?', ANS = 'Comp Sitemap Text';
 const reqs = all(REQS).filter(r => r && !r.skip && r.url);
 const ans = all(ANS);
 const out = [];
