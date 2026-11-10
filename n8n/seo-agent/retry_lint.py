@@ -116,9 +116,26 @@ def is_paid_keyed(node):
     return any(m.lower() in blob.lower() for m in PAID_KEYED_MARK)
 
 
+# QUEUE (2026-11-11): DataForSEO endpoints that never bill. A node counts as free only when its OWN url is a fixed address that names one
+# (an expression url such as {{ $json.endpoint }} cannot be judged, so it stays paid): task_get / tasks_ready read a task already paid for at
+# task_post. A free node may keep the node-level retry (a re-sent GET bills nothing); it still needs an in-200 gate or a baseline reason.
+FREE_DFS_MARK = ('/task_get/', '/tasks_ready')
+
+
+def is_free_dfs(node):
+    """True when this DataForSEO node's own fixed url is a free read (FREE_DFS_MARK)."""
+    if node.get('type') != HTTP_TYPE:
+        return False
+    url = str((node.get('parameters') or {}).get('url') or '')
+    if not url.startswith('=https://api.dataforseo.com/v3/') and not url.startswith('https://api.dataforseo.com/v3/'):
+        return False
+    path = url.split('{{', 1)[0]
+    return any(m in path for m in FREE_DFS_MARK)
+
+
 def is_paid(node):
-    """True when a re-sent request of this node is a second bill: DataForSEO, or a PAID_KEYED_MARK call."""
-    return is_dfs(node) or is_paid_keyed(node)
+    """True when a re-sent request of this node is a second bill: DataForSEO (not a free read), or a PAID_KEYED_MARK call."""
+    return (is_dfs(node) and not is_free_dfs(node)) or is_paid_keyed(node)
 
 
 def is_dfs(node):

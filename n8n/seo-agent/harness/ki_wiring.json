@@ -6,6 +6,7 @@
   "Run Research Discover Answers",
   "Run Research Enrich Answers",
   "Run Research SERPs Answers",
+  "Run Research SERPs Live Answers",
   "Run Research Traffic Answers"
  ],
  "budget": {
@@ -289,12 +290,20 @@
     "Research Picture"
    ]
   ],
+  "Any Research SERPs Live?": [
+   [
+    "Run Research SERPs Live"
+   ],
+   [
+    "Research SERP Picture"
+   ]
+  ],
   "Any Research SERPs?": [
    [
     "Run Research SERPs"
    ],
    [
-    "Research SERP Picture"
+    "Research SERP Tasks"
    ]
   ],
   "Any Research Traffic?": [
@@ -345,6 +354,14 @@
     "Run Research Enrich Answers"
    ]
   ],
+  "Any Run Research SERPs Live Retries?": [
+   [
+    "Wait Before Run Research SERPs Live Retry"
+   ],
+   [
+    "Run Research SERPs Live Answers"
+   ]
+  ],
   "Any Run Research SERPs Retries?": [
    [
     "Wait Before Run Research SERPs Retry"
@@ -359,6 +376,14 @@
    ],
    [
     "Run Research Traffic Answers"
+   ]
+  ],
+  "Any SERP Tasks?": [
+   [
+    "Wait For SERP Tasks (1)"
+   ],
+   [
+    "Research SERP Fallback"
    ]
   ],
   "Callback Ledger (KI)": [
@@ -494,6 +519,31 @@
   "Ensure Run Ledger (KI)": [
    [
     "DFS Balance (KI)"
+   ]
+  ],
+  "Get SERP Tasks (1)": [
+   [
+    "SERP Tasks Check (1)"
+   ]
+  ],
+  "Get SERP Tasks (2)": [
+   [
+    "SERP Tasks Check (2)"
+   ]
+  ],
+  "Get SERP Tasks (3)": [
+   [
+    "SERP Tasks Check (3)"
+   ]
+  ],
+  "Get SERP Tasks (4)": [
+   [
+    "SERP Tasks Check (4)"
+   ]
+  ],
+  "Get SERP Tasks (5)": [
+   [
+    "SERP Tasks Check (5)"
    ]
   ],
   "Has Callback (KI Refusal)?": [
@@ -797,6 +847,11 @@
     "KI KW Rows"
    ]
   ],
+  "Research SERP Fallback": [
+   [
+    "Any Research SERPs Live?"
+   ]
+  ],
   "Research SERP Keys": [
    [
     "Load SERP Cache (KI Research)"
@@ -810,6 +865,11 @@
   "Research SERP Requests": [
    [
     "Any Research SERPs?"
+   ]
+  ],
+  "Research SERP Tasks": [
+   [
+    "Any SERP Tasks?"
    ]
   ],
   "Research Seed Keys": [
@@ -960,7 +1020,27 @@
   ],
   "Run Research SERPs Answers": [
    [
+    "Research SERP Tasks"
+   ]
+  ],
+  "Run Research SERPs Live": [
+   [
+    "Run Research SERPs Live Retry Plan"
+   ]
+  ],
+  "Run Research SERPs Live (Retry)": [
+   [
+    "Run Research SERPs Live Answers"
+   ]
+  ],
+  "Run Research SERPs Live Answers": [
+   [
     "Research SERP Picture"
+   ]
+  ],
+  "Run Research SERPs Live Retry Plan": [
+   [
+    "Any Run Research SERPs Live Retries?"
    ]
   ],
   "Run Research SERPs Retry Plan": [
@@ -986,6 +1066,63 @@
   "Run Research Traffic Retry Plan": [
    [
     "Any Run Research Traffic Retries?"
+   ]
+  ],
+  "SERP Tasks Check (1)": [
+   [
+    "SERP Tasks Pending (1)?"
+   ]
+  ],
+  "SERP Tasks Check (2)": [
+   [
+    "SERP Tasks Pending (2)?"
+   ]
+  ],
+  "SERP Tasks Check (3)": [
+   [
+    "SERP Tasks Pending (3)?"
+   ]
+  ],
+  "SERP Tasks Check (4)": [
+   [
+    "SERP Tasks Pending (4)?"
+   ]
+  ],
+  "SERP Tasks Check (5)": [
+   [
+    "Research SERP Fallback"
+   ]
+  ],
+  "SERP Tasks Pending (1)?": [
+   [
+    "Wait For SERP Tasks (2)"
+   ],
+   [
+    "Research SERP Fallback"
+   ]
+  ],
+  "SERP Tasks Pending (2)?": [
+   [
+    "Wait For SERP Tasks (3)"
+   ],
+   [
+    "Research SERP Fallback"
+   ]
+  ],
+  "SERP Tasks Pending (3)?": [
+   [
+    "Wait For SERP Tasks (4)"
+   ],
+   [
+    "Research SERP Fallback"
+   ]
+  ],
+  "SERP Tasks Pending (4)?": [
+   [
+    "Wait For SERP Tasks (5)"
+   ],
+   [
+    "Research SERP Fallback"
    ]
   ],
   "Save KI Cache": [
@@ -1065,6 +1202,11 @@
     "Run Research Enrich (Retry)"
    ]
   ],
+  "Wait Before Run Research SERPs Live Retry": [
+   [
+    "Run Research SERPs Live (Retry)"
+   ]
+  ],
   "Wait Before Run Research SERPs Retry": [
    [
     "Run Research SERPs (Retry)"
@@ -1074,9 +1216,41 @@
    [
     "Run Research Traffic (Retry)"
    ]
+  ],
+  "Wait For SERP Tasks (1)": [
+   [
+    "Get SERP Tasks (1)"
+   ]
+  ],
+  "Wait For SERP Tasks (2)": [
+   [
+    "Get SERP Tasks (2)"
+   ]
+  ],
+  "Wait For SERP Tasks (3)": [
+   [
+    "Get SERP Tasks (3)"
+   ]
+  ],
+  "Wait For SERP Tasks (4)": [
+   [
+    "Get SERP Tasks (4)"
+   ]
+  ],
+  "Wait For SERP Tasks (5)": [
+   [
+    "Get SERP Tasks (5)"
+   ]
   ]
  },
  "file": "SEO_Agent_Keyword_Intelligence.json",
+ "free_reads": [
+  "Get SERP Tasks (1)",
+  "Get SERP Tasks (2)",
+  "Get SERP Tasks (3)",
+  "Get SERP Tasks (4)",
+  "Get SERP Tasks (5)"
+ ],
  "gates": {
   "Run Comp Labs": [
    "Run Comp Labs",
@@ -1126,6 +1300,14 @@
    "Run Research SERPs (Retry)",
    "Run Research SERPs Answers"
   ],
+  "Run Research SERPs Live": [
+   "Run Research SERPs Live",
+   "Run Research SERPs Live Retry Plan",
+   "Any Run Research SERPs Live Retries?",
+   "Wait Before Run Research SERPs Live Retry",
+   "Run Research SERPs Live (Retry)",
+   "Run Research SERPs Live Answers"
+  ],
   "Run Research Traffic": [
    "Run Research Traffic",
    "Run Research Traffic Retry Plan",
@@ -1163,6 +1345,7 @@
   "Any KI KW Rows?",
   "Any Research Discover?",
   "Any Research Enrich?",
+  "Any Research SERPs Live?",
   "Any Research SERPs?",
   "Any Research Traffic?",
   "Any Run Comp Labs Retries?",
@@ -1170,8 +1353,10 @@
   "Any Run Comp SERPs Retries?",
   "Any Run Research Discover Retries?",
   "Any Run Research Enrich Retries?",
+  "Any Run Research SERPs Live Retries?",
   "Any Run Research SERPs Retries?",
   "Any Run Research Traffic Retries?",
+  "Any SERP Tasks?",
   "Callback Ledger (KI)",
   "Comp Candidates",
   "Comp Home Hop Text",
@@ -1199,6 +1384,11 @@
   "Ensure KI Runs Table",
   "Ensure Ops Alerts (KI)",
   "Ensure Run Ledger (KI)",
+  "Get SERP Tasks (1)",
+  "Get SERP Tasks (2)",
+  "Get SERP Tasks (3)",
+  "Get SERP Tasks (4)",
+  "Get SERP Tasks (5)",
   "Has Callback (KI Refusal)?",
   "Has Callback (KI Started)?",
   "Has Callback (KI)?",
@@ -1260,9 +1450,11 @@
   "Research Enrich Requests",
   "Research Picture",
   "Research Result",
+  "Research SERP Fallback",
   "Research SERP Keys",
   "Research SERP Picture",
   "Research SERP Requests",
+  "Research SERP Tasks",
   "Research Seed Keys",
   "Research Traffic Requests",
   "Reserve Run Ledger (KI)",
@@ -1292,11 +1484,24 @@
   "Run Research SERPs",
   "Run Research SERPs (Retry)",
   "Run Research SERPs Answers",
+  "Run Research SERPs Live",
+  "Run Research SERPs Live (Retry)",
+  "Run Research SERPs Live Answers",
+  "Run Research SERPs Live Retry Plan",
   "Run Research SERPs Retry Plan",
   "Run Research Traffic",
   "Run Research Traffic (Retry)",
   "Run Research Traffic Answers",
   "Run Research Traffic Retry Plan",
+  "SERP Tasks Check (1)",
+  "SERP Tasks Check (2)",
+  "SERP Tasks Check (3)",
+  "SERP Tasks Check (4)",
+  "SERP Tasks Check (5)",
+  "SERP Tasks Pending (1)?",
+  "SERP Tasks Pending (2)?",
+  "SERP Tasks Pending (3)?",
+  "SERP Tasks Pending (4)?",
   "Save Alert Retry (KI)",
   "Save KI Cache",
   "Save KI Competitors",
@@ -1312,8 +1517,14 @@
   "Wait Before Run Comp SERPs Retry",
   "Wait Before Run Research Discover Retry",
   "Wait Before Run Research Enrich Retry",
+  "Wait Before Run Research SERPs Live Retry",
   "Wait Before Run Research SERPs Retry",
-  "Wait Before Run Research Traffic Retry"
+  "Wait Before Run Research Traffic Retry",
+  "Wait For SERP Tasks (1)",
+  "Wait For SERP Tasks (2)",
+  "Wait For SERP Tasks (3)",
+  "Wait For SERP Tasks (4)",
+  "Wait For SERP Tasks (5)"
  ],
  "own_tables": [
   "seo_cache",
@@ -1336,9 +1547,15 @@
   "Run Research Enrich (Retry)",
   "Run Research SERPs",
   "Run Research SERPs (Retry)",
+  "Run Research SERPs Live",
+  "Run Research SERPs Live (Retry)",
   "Run Research Traffic",
   "Run Research Traffic (Retry)"
  ],
+ "queue": {
+  "rounds": 5,
+  "wait_s": 60
+ },
  "quote": {
   "competitors": 0.35,
   "keyword_research": 0.9

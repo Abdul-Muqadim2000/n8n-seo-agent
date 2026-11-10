@@ -12492,8 +12492,10 @@ await guard('B-A10 — a failure inside an HTTP 200 is asked again once, counted
   check('B-A10: not one node is left on the ratchet without a reason written beside it — an excused node is a decision, and a decision with no reason cannot be told from a debt nobody got to',
     wfs.every(w => IN200[w].ungated.every(n => String((IN200[w].excused || {})[n] || '').length > 80)),
     JSON.stringify(wfs.flatMap(w => IN200[w].ungated.filter(n => !(IN200[w].excused || {})[n]).map(n => w + ' / ' + n))));
-  check('B-A10: and what stays is only the two shapes a gate would be wrong for — the free appendix/user_data balance probes, which fail open, and the crawl poll, which already re-asks in its own loop',
-    wfs.every(w => IN200[w].ungated.every(n => /^DFS Balance/.test(n) || n === 'Get Crawl Summary')),
+  // QUEUE (2026-11-11): + the free task_get collection rounds of keyword research's results-page queue (a poll like the crawl's; their fixed
+  // task_get url is proved free by retry_lint.is_free_dfs and asserted in KIQ-1)
+  check('B-A10: and what stays is only the shapes a gate would be wrong for — the free appendix/user_data balance probes, which fail open, and the polls (the crawl poll, the results-page queue rounds), which already re-ask in their own loop',
+    wfs.every(w => IN200[w].ungated.every(n => /^DFS Balance/.test(n) || n === 'Get Crawl Summary' || (w === 'SEO Agent - Keyword Intelligence' && /^Get SERP Tasks \(\d\)$/.test(n)))),
     JSON.stringify(wfs.flatMap(w => IN200[w].ungated.map(n => w + ' / ' + n))));
   check('B-A10: every call that scores, ranks or advises is gated now — the week\'s positions, the keyword check, the reach, the crawl, the link ledger and the AI panel among them',
     ['SERP Check', 'SERP Check (Site)', 'Run Assess Requests', 'Run Reach Requests', 'Candidate SERP', 'Start Crawl', 'Get Crawled Pages', 'Run BL Requests', 'Run Discovery', 'Run LB DFS', 'Ask LLMs', 'Site Authority']

@@ -1,6 +1,8 @@
-// Research SERP Picture (E2, DESIGN.md §3.4): the top M results pages - from the day cache (cost 0) or this run's answers, every organic item
-// through SU (google.com/goto redirects, R5 §13 L-1) - and the Google Ads volumes for the candidates Labs knew nothing about. A page that
-// could not be read twice is `missing`: its keyword is scored without a results page and says so (low confidence), never "no competition".
+// Research SERP Picture (E2, DESIGN.md §3.4; QUEUE 2026-11-11): the top M results pages - from the day cache (cost 0, an exact reading only),
+// the normal-priority queue (exact page addresses, collected by task id over up to 5 rounds) or, for what the queue did not return,
+// a live read (its addresses are approximate: hosts are right, pages are not) - every organic item through SU (google.com/goto redirects,
+// R5 §13 L-1) - and the Google Ads volumes for the candidates Labs knew nothing about. A page that could not be read at all is `missing`:
+// its keyword is scored without a results page and says so (low confidence), never "no competition".
 // ---- fit gate (2026-10-11, FIX_PLAN D4 / D8): ONE rule for keywords that no page of this website should target. Inlined by the build
 // (the FIT_GATE placeholder) into Analyze Keywords (full report: keyword gap, easy wins, opportunities), Rank Keywords (discovery), Ladder Pool /
 // Ladder Plan (ladder rungs and the main keyword), Relevance Chunks (the brands the AI screen is told about) and Brief Context (the hub
@@ -2924,7 +2926,7 @@ const KIW = (() => {
   const BASE = 'https://api.dataforseo.com/v3/';
   // the price of one request (R5 §1-§7 + §13 C1-C11, measured to the 6th decimal on the live answers): Labs $0.012 + $0.00012 a row,
   // Backlinks $0.024 + $0.000036 a row, a live SERP of depth 10 $0.002, autocomplete $0.002, Google Ads volume $0.09 a task
-  const PRICE = { serp10: 0.002, labs: 0.012, labs_row: 0.00012, bl: 0.024, bl_row: 0.000036, ac: 0.002, ads: 0.09 };
+  const PRICE = { serp10: 0.002, serp_std: 0.0006, labs: 0.012, labs_row: 0.00012, bl: 0.024, bl_row: 0.000036, ac: 0.002, ads: 0.09 };
   const QUOTE = {"competitors": 0.35, "keyword_research": 0.9};   // the per-run search-data estimate the app quotes (v5/code/_cost_cal.js DFS_EST), baked by build_ki.py
   const CFG0 = (typeof KI === 'object' && KI && KI.CONFIG) || {};
   // the lifetimes are KI.CONFIG.ttl_days (serp 1, ranked_keywords 7, volume 30, backlinks 7, homepage 14, competitors 30); discovery lists are volume data
@@ -3048,6 +3050,11 @@ const KIW = (() => {
   const serpBody = (kw, m) => ({ keyword: normKw(kw), ...loc(m), device: 'desktop', depth: CAPS.serp_depth });   // no load_async_ai_overview: it doubles the price (R5 §13 C1)
   const rq = {
     serp: (kw, m) => req('serp', 'serp/google/organic/live/advanced', serpBody(kw, m), PRICE.serp10, { keyword: normKw(kw) }),
+    // QUEUE (2026-11-11): the normal-priority queue (priority 1) is the only reading that still gives Google's exact page addresses (live and
+    // high priority return every result as a google.com/goto redirect since 2026-10-30; probe on production 2026-11-11: 10 of 10 normal tasks
+    // ready in 86-118 s with 0 redirects, 10 of 10 high tasks ready in 18-36 s with every result a redirect). $0.0006 a page, collected free
+    // by task id (taskGet). The tag carries the keyword so an answer is matched back even if the order changes.
+    serpPost: (kw, m) => req('serp_post', 'serp/google/organic/task_post', { ...serpBody(kw, m), priority: 1, tag: normKw(kw).slice(0, 255) }, PRICE.serp_std, { keyword: normKw(kw) }),
     serpCompetitors: (kws, m) => req('serp_competitors', 'dataforseo_labs/google/serp_competitors/live', { keywords: kws.slice(0, 200), ...loc(m), include_subdomains: true, limit: CAPS.sc_limit }, PRICE.labs + CAPS.sc_limit * PRICE.labs_row),
     trafficTargets: (targets, m, call) => req(call || 'bulk_te', 'dataforseo_labs/google/bulk_traffic_estimation/live', { targets: targets.slice(0, 1000), ...loc(m), item_types: ['organic'] }, PRICE.labs + targets.length * PRICE.labs_row),
     refDomains: (targets) => req('bulk_rd', 'backlinks/bulk_referring_domains/live', { targets: targets.slice(0, 1000) }, PRICE.bl + targets.length * PRICE.bl_row),
@@ -3067,6 +3074,7 @@ const KIW = (() => {
     intent: (kws) => req('labs_intent', 'dataforseo_labs/google/search_intent/live', { keywords: kws.slice(0, CAPS.intent_max) }, PRICE.labs + kws.length * PRICE.labs_row),   // keywords only: location and language are dropped silently (R5 §13 C8)
     adsVolume: (kws, m) => req('ads_volume', 'keywords_data/google_ads/search_volume/live', { keywords: kws.slice(0, CAPS.ads_max), ...loc(m) }, PRICE.ads),
   };
+  const taskGet = (id, kw, round) => ({ ki_call: 'serp_get', endpoint: BASE + 'serp/google/organic/task_get/advanced/' + encodeURIComponent(S(id)), task_id: S(id), keyword: normKw(kw), round: round || 1 });
   const price = (reqs) => r6((reqs || []).reduce((s, r) => s + (Number(r.est_usd) || 0), 0));
   // ---- answers ----
   const task0 = (a) => (((a || {}).tasks || [])[0]) || {};
@@ -3125,17 +3133,37 @@ const KIW = (() => {
   const emptyLists = (kind) => (kind === 'keyword_research' ? { clusters: [], striking: [], questions: [], gaps_summary: {}, plan: [] } : { competitors: [], listings: [], platforms: [] });
   const refusalBody = (q, reason, note) => ({ ...baseBody(q, 'refused', reason, { note: S(note), run_cost_estimate_usd: 0, run_cost_estimate_state: 'measured',
     run_cost_estimate_basis: 'refused before any paid call: no search data was read and no model was asked' }), ...emptyLists(q.kind) });
-  // ---- the results pages of a list of searches: the day cache first, then this run's answers (paired with the requests that went out) ----
+  // QUEUE: a reading whose organic results carry their exact page addresses (at least half of the top 10; a live reading since the redirect
+  // change has none). Keyword research groups searches by shared pages, so it re-reads a page whose stored reading is not exact.
+  const exactEnough = (a) => { const items = ((typeof SU === 'object' && SU && SU.fixItems) ? SU.fixItems(itemsOf(a)) : itemsOf(a)) || [];
+    const org = items.filter(x => x && x.type === 'organic' && (N(x.rank_group) || 99) <= 10); if (!org.length) return false;
+    return org.filter(x => x.url_exact !== false && !(SU && SU.isRedirect && SU.isRedirect(x.url))).length / org.length >= 0.5; };
+  // QUEUE: one collection round: the task items that went in (in order) and what the free task_get answered (same order). A task is ready on
+  // 20000 with a result; still queued on 40601 (handed) / 40602 (in queue) or a failed request (asked again next round); anything else is
+  // failed (its search is read live instead). -> { ready: [{ keyword, task_id, answer }], pending: [items], failed: [{ keyword, why }] }
+  const QUEUED = new Set([40601, 40602]);
+  const collectRound = (inputs, answers) => { const ready = [], pending = [], failed = [];
+    (inputs || []).forEach((q, i) => { if (!q || !q.task_id) return; const a = (answers || [])[i];
+      if (!a || a.error) { pending.push(q); return; }
+      const t = task0(a); const code = N(t.status_code);
+      if (code === 20000 && (t.result || [])[0]) { ready.push({ keyword: normKw(q.keyword || (t.data && t.data.keyword) || (t.data && t.data.tag)), task_id: q.task_id, answer: a }); return; }
+      if (QUEUED.has(code) || !code) { pending.push(q); return; }
+      failed.push({ keyword: normKw(q.keyword), why: whyFailed(a) }); });
+    return { ready, pending, failed }; };
+  // ---- the results pages of a list of searches: this run's answers first, then the day cache (an exact reading only when ctx.need_exact,
+  //      with an inexact one kept as the last resort), the requests and answers paired in order ----
   // -> { by: { keyword: { source: cache|live|missing, at, why, top10, extras } }, save: [seo_cache serp rows], pairs, read, missing }
   const serpReadings = (kws, m, cacheRows, reqItems, answers, siteId, now, ctx) => {
     const pr = paired(reqItems, answers); const fr = {}; for (const x of pr) if (x.q && x.q.keyword) fr[normKw(x.q.keyword)] = x;
     const by = {}, save = []; let read = 0, missing = 0;
     for (const kw0 of (kws || [])) { const kw = normKw(kw0); const body = serpBody(kw, m);
       const lk = (typeof SC === 'object' && SC) ? SC.lookup(cacheRows || [], body, { now }) : { hit: false };
-      if (lk.hit) { by[kw] = { source: 'cache', at: S(lk.reading.at), why: '', top10: top10Of(lk.response, ctx), extras: extrasOf(lk.response) }; read++; continue; }
+      const useCache = lk.hit && (!(ctx && ctx.need_exact) || exactEnough(lk.response));
+      if (useCache) { by[kw] = { source: 'cache', at: S(lk.reading.at), why: '', top10: top10Of(lk.response, ctx), extras: extrasOf(lk.response), exact: exactEnough(lk.response) }; read++; continue; }
       const f = fr[kw];
-      if (f && f.ok) { const fixed = fixAnswer(f.a); by[kw] = { source: 'live', at: S(now), why: '', top10: top10Of(fixed, ctx), extras: extrasOf(fixed) }; read++;
+      if (f && f.ok) { const fixed = fixAnswer(f.a); const src = (f.q && f.q.ki_source) || 'live'; by[kw] = { source: src, at: S(now), why: '', top10: top10Of(fixed, ctx), extras: extrasOf(fixed), exact: exactEnough(fixed) }; read++;
         const row = (typeof SC === 'object' && SC) ? SC.rowFor(fixed, body, siteId, { now, path: 'ki' }) : null; if (row) save.push(row); continue; }
+      if (lk.hit) { by[kw] = { source: 'cache', at: S(lk.reading.at), why: '', top10: top10Of(lk.response, ctx), extras: extrasOf(lk.response), exact: false }; read++; continue; }
       by[kw] = { source: 'missing', at: '', why: f ? f.why : 'not read: nothing was asked for it', top10: [], extras: { paa: [], related: [], forum: [], aio: false, local: false } }; missing++; }
     return { by, save, pairs: pr, read, missing };
   };
@@ -3179,7 +3207,7 @@ const KIW = (() => {
     pages: home && home.tokens ? [{ title: '', text: S(home.tokens) }] : [] });
   return { RULE, S, T, N, J, r4, r6, uniq, BASE, PRICE, QUOTE, CAPS, ttlOf, host, publicHost, isBusinessHost, SEARCH, normKw, keyOf, hash, PLACES, countryOf, market,
     shortService, services, seedServices, productsOf, compSeeds, seedHash, plausible, hopOf, htmlText, regOf, WILDCARD_DNS, rq, price, task0, result0, itemsOf, okAnswer, whyFailed, paired, cacheKey, cacheRead, fresh, cacheRow,
-    fixAnswer, top10Of, extrasOf, serpReadings, hostsOf, aiHitsOf, kwRow, strip, serpBody, wordsOf, topicSim, geoMatch, classify, COLS, shape, sections, callState, measured, LABELS, STAGES, baseBody, emptyLists, refusalBody };
+    fixAnswer, top10Of, extrasOf, serpReadings, exactEnough, collectRound, taskGet, QUEUED, hostsOf, aiHitsOf, kwRow, strip, serpBody, wordsOf, topicSim, geoMatch, classify, COLS, shape, sections, callState, measured, LABELS, STAGES, baseBody, emptyLists, refusalBody };
 })();
 const p = $('KI Plan').first().json || {};
 const pic = $('Research Picture').first().json || {};
@@ -3190,14 +3218,27 @@ const reqs = all('Any Research SERPs?').filter(r => r && !r.skip && r.ki_call);
 const answers = all('Run Research SERPs Answers');
 const pr = KIW.paired(reqs, answers);
 const serpReqs = [], serpAns = [];
-pr.forEach(x => { if (x.q.ki_call === 'serp') { serpReqs.push(x.q); serpAns.push(x.a); } });
-const R = KIW.serpReadings(pic.top_m || [], m, all('Load SERP Cache (KI Research)').filter(r => r && r.key), serpReqs, serpAns, p.site_id, now, { own_domain: p.domain, services: p.services });
+// the queue's answers, by keyword (the first round that returned it), then the live fallback for the rest
+const got = new Set(); let queued = 0, failedQ = 0;
+for (let n = 1; n <= 5; n++) { const r = KIW.collectRound(all('Wait For SERP Tasks (' + n + ')'), all('Get SERP Tasks (' + n + ')')); failedQ += r.failed.length;
+  for (const x of r.ready) { if (!x.keyword || got.has(x.keyword)) continue; got.add(x.keyword); queued++; serpReqs.push({ ki_call: 'serp', keyword: x.keyword, ki_source: 'queue' }); serpAns.push(x.answer); } }
+const liveReqs = all('Any Research SERPs Live?').filter(r => r && !r.skip && r.ki_call === 'serp');
+const livePr = KIW.paired(liveReqs, all('Run Research SERPs Live Answers'));
+let live = 0; for (const x of livePr) { const k = KIW.normKw(x.q.keyword); if (!k || got.has(k)) continue; got.add(k); if (x.ok) live++; serpReqs.push({ ...x.q, ki_source: 'live' }); serpAns.push(x.a); }
+// a live reading asked in the first step (the shape before the queue, and the one a caller may still send) is read as live
+for (const x of pr) { if (x.q.ki_call !== 'serp') continue; const k = KIW.normKw(x.q.keyword); if (!k || got.has(k)) continue; got.add(k); if (x.ok) live++; serpReqs.push({ ...x.q, ki_source: 'live' }); serpAns.push(x.a); }
+const posted = pr.filter(x => x.q.ki_call === 'serp_post').length;
+const R = KIW.serpReadings(pic.top_m || [], m, all('Load SERP Cache (KI Research)').filter(r => r && r.key), serpReqs, serpAns, p.site_id, now, { own_domain: p.domain, services: p.services, need_exact: true });
+const exactN = Object.values(R.by).filter(r => r.source !== 'missing' && r.exact).length;
 const ads = pr.find(x => x.q.ki_call === 'ads_volume');
 const volMap = { ...(pic.vol_map || {}) }; let adsN = 0;
 if (ads && ads.ok) for (const it of (KIW.task0(ads.a).result || [])) { if (!it || !it.keyword) continue; const kk = KIW.keyOf(it.keyword); adsN++;
   volMap[kk] = { ...(volMap[kk] || {}), ads_v: KIW.N(it.search_volume), ads_cpc: KIW.N(it.cpc), ads_at: now, at: (volMap[kk] || {}).at || now }; }
 const sections = [{ key: 'results_pages', state: !R.read && (pic.top_m || []).length ? 'missing' : (R.missing ? 'partial' : 'ok'),
-  reason: !R.read && (pic.top_m || []).length ? 'no results page could be read: ' + ((Object.values(R.by).find(r => r.source === 'missing') || {}).why || 'no answer') : (R.missing ? R.missing + ' of ' + (pic.top_m || []).length + ' results pages could not be read (those searches are scored without one, at low confidence)' : ''), rows: R.read }];
+  reason: !R.read && (pic.top_m || []).length ? 'no results page could be read: ' + ((Object.values(R.by).find(r => r.source === 'missing') || {}).why || 'no answer') : (R.missing ? R.missing + ' of ' + (pic.top_m || []).length + ' results pages could not be read (those searches are scored without one, at low confidence)' : ''), rows: R.read },
+  // QUEUE: how the pages were read; searches are grouped only on pages with exact addresses
+  { key: 'results_pages_exact', state: !R.read ? 'skipped' : (exactN >= R.read ? 'ok' : (exactN ? 'partial' : 'missing')),
+    reason: !R.read ? '' : (exactN >= R.read ? '' : (R.read - exactN) + ' of ' + R.read + ' results pages were read without exact page addresses (searches on them are scored but not grouped)'), rows: exactN }];
 if (ads) sections.push({ key: 'ads_volume', ...KIW.callState([ads], 'the Google Ads volumes'), rows: adsN });
 const volRow = adsN ? [KIW.cacheRow(p.site_id, KIW.cacheKey(p.site_id, 'vol', p.market), { fetched_at: now, map: volMap })] : [];
-return [{ json: { by: R.by, read: R.read, missing: R.missing, live: serpReqs.length, serp_cache_rows: R.save, vol_map: volMap, sections, cache_rows: volRow } }];
+return [{ json: { by: R.by, read: R.read, missing: R.missing, live, queued, posted, queue_failed: failedQ, exact: exactN, serp_cache_rows: R.save, vol_map: volMap, sections, cache_rows: volRow } }];
