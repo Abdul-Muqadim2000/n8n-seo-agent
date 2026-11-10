@@ -63,7 +63,20 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-11-09, PAUSED by the owner: both sites in KI Trial; resume from `n8n/seo-agent/docs/keyword-intel-2026-11-08/fixes/RESUME_2026-11-09.md` - latest)
+## Status (2026-11-10, ladder package + KI Trial fixes DEPLOYED, ladders repaired - latest)
+**Ladder package** (owner ask: ladders were weak in production) deployed 2026-11-10 ~12:10 UTC at 4d4a3c69 (backup pg/2026-11-10/*T115925Z;
+prod == build after; sync_tables added seo_ladders.stage / target_why; API with the stuck-rung watcher `ladderWatch.ts`): one search one
+address at plan and publish time (a ranking head stays and its page is improved; a move only off a "-2"/copy page with a redirect step),
+rungs step to the head, market lock, only an explicit AVOID stops a page (low score = shadow log), kit `v5/code/_ladder_rules.js` (app copy
+generated). Reviews `docs/keyword-intel-2026-11-08/REVIEW_LADDER.md` (3 rounds, ship), report `fixes/LADDER.md`. **Repair applied**
+(`fixes/LADDER_REPAIR.md`, backup *T122006Z): techand ERP rung merged into the ranking guide, CRM ladder paused (stuck rung closed, two
+rungs set_aside, head off the -2 copy), devaicon "pakistan" ladder archived. Owner steps pending there (guide retitle, CRM re-plan, new GCC
+ladder, client notes). **KI Trial fixes** deployed (b02a2271): every KI node read IF false branches (answers billed and unread), classes
+from evidence + `education`, market Strength, career gate; both sites still in `trial`. Web = **PR #63** (owner merges). Next KI round:
+Standard-queue SERPs so clusters form (live SERPs give no exact URLs), job / off-service gates, KI page action using `_ladder_rules.js`;
+owner decision: Open edX researched worldwide for devaicon. Harness 18505 / 0; app 1158 / 2048 / 344.
+
+## Status (2026-11-09, paused by the owner (previous): both sites in KI Trial; resume from `n8n/seo-agent/docs/keyword-intel-2026-11-08/fixes/RESUME_2026-11-09.md` - latest)
 SERP data repair done; Trial runs found and fixed one bug (IF branch, build section 182); competitor classification ~50% wrong (fix
 paused on ki/fxl); keyword research Trial runs started 2026-11-08 19:47 UTC, not yet evaluated; ladder package WIP on ladder/package.
 
