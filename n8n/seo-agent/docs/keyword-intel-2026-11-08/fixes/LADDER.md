@@ -48,7 +48,9 @@ pile-up count (writing / written / not_ready) no longer holds a stuck rung for e
   and the ERP blog head; the ERP commercial step; definitions on list vs guide results; the content log's AVOID stored stopped; Parse
   Verdict's ladder stop (AVOID 30, 36 clearly low, 62 not, hold_ack, a cadence non-ladder page still shadow) and Ladder Row Written; the
   cadence drift case and the baseline; publishedRows owners; Publish Candidates; KI Pool on / trial / killed, Ladder Requests and Pool.
-- Full harness: see the summary (section 7).
+- Full harness (throwaway n8nio/n8n:2.41.4, n8n/seo-agent without docs + app/shared): **18460 passed, 0 failed** (LPK 447 checks incl.
+  the affected older scenarios). App: typecheck clean; shared **1158 passed**; server **2044 passed / 46 skipped** (one run had
+  `test/partialPatch.test.ts` fail once under load, 3 of 3 green alone, unrelated); web **344 passed**; web build OK.
 - App: typecheck clean (shared, server, web); shared + server + web tests; web build. Two existing expectations changed on purpose (rule 3:
   a GCC ladder on a Pakistan website now also gets `market.ladder_named`): shared `consistency.test.ts` M4 devaicon case, server
   `test/consistency.test.ts` run-start cases (and the started run's country is now the UAE). Rule 1 / 4 refinements the existing harness
