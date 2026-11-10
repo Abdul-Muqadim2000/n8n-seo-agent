@@ -189,7 +189,7 @@ every run start (`createRunWithMeta`: the app's `POST /api/orgs/:orgId/runs`, `/
 onboarding), `POST .../keywords/assess` (before the paid check), `POST /api/orgs/:orgId/sites` and the site `PATCH` (the description's
 markets), `POST .../admin` `ai_prompts` `add` (questions about another market). An automatic start (a level-3 announcement, a research
 refresh) never continues past one: the proposal waits for the client with the warning's title as its note. Codes today:
-`market.run_country` (M1), `market.engine_drift` / `market.country_change` (M2), `market.ladder_country` (M3), `market.keyword_place` /
+`market.run_country` (M1), `market.ladder_named` (a new ladder whose keyword names a market is measured there, LADDER PACKAGE 2026-11-09; the server sends that market), `market.engine_drift` / `market.country_change` (M2), `market.ladder_country` (M3), `market.keyword_place` /
 `market.keyword_unsupported` (M4), `market.business_text` / `market.domain_ending` / `market.timezone` (M5), `market.research_country`
 (M6), `ai.question_place` (M7), `lang.script` (M8) and `pipeline.*` (the forms' duplicate warnings, ids unchanged). A site `PATCH` that
 changes the main country of a tracked website moves the engine at once (Site Admin `market`).
@@ -265,7 +265,7 @@ Verified sites only (403 `forbidden` otherwise); another company's website is a 
 | GET | …/data/alerts | `AlertsData` |
 | GET | …/data/settings | `SiteSettingsData` |
 | GET | …/data/pipeline | `PipelineData` (automations with next/last run, the page queue, growth loop, 4-week calendar, recent automatic runs; for the tool-form notices: `running` schedule executions and cycle jobs, this site's `activeRuns`, `written` pages, `ladders` with their planned pages; keyword-first: `cycle`, `autopilot`) |
-| GET | …/data/ladders/:ladderId | `LadderDetail` (one keyword ladder: its card plus every page with its state, position history, run / report, volume / difficulty; the timeline with the coming Mondays; clicks and impressions of its published pages by Search Console period; its plan, rank and page reports; cost so far; 404 when the ladder is not one of this domain's) |
+| GET | …/data/ladders/:ladderId | `LadderDetail` (one keyword ladder: its card plus every page with its state, position history, run / report, volume / difficulty; the timeline with the coming Mondays; clicks and impressions of its published pages by Search Console period; its plan, rank and page reports; cost so far; 404 when the ladder is not one of this domain's). LADDER PACKAGE (2026-11-09): each page also carries `action` (`new` / `improve`), `why` (its address and why), `stage` (problem / solution / compare / hire / info) and, for the states `stopped` / `failed` / `merged`, `reason`; the detail carries `market` (`{ country, iso, siteCountry, note }`, note only when measured outside the website's market) |
 | GET | …/recommendations | `Recommendation[]` |
 
 `PipelineData` fields for the Pipeline home (v4.8, `PIPELINE_FEATURE_SPEC.md` §4.1; rules in `server/src/services/ladders.ts` and `shared/src/ladders.ts`):

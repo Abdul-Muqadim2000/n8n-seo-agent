@@ -107,9 +107,12 @@ describe('M1 a run sent with another country than the website\'s', () => {
 describe('M4 a keyword naming a place outside the market', () => {
   it('devaicon: Pakistan website + "ai automation solutions gcc" is flagged, Accept drops the place', () => {
     const w = consistencyWarnings('run', { mode: 'ladder', keyword: 'ai automation solutions gcc', country: 'Pakistan' }, ctx());
-    expect(w.map((x) => x.id)).toEqual(['market.keyword_place:ai automation solutions gcc:PK']);
-    expect(w[0]!.title).toBe('"ai automation solutions gcc" is a search about the GCC, not about Pakistan');
-    expect(w[0]!.accept).toEqual({ label: 'Use "ai automation solutions"', change: { kind: 'fields', set: { keyword: 'ai automation solutions' } } });
+    // LADDER PACKAGE (2026-11-09, rule 3): a ladder is also told that it is measured in the market its keyword names (the GCC: the UAE),
+    // never in Pakistan; the place warning still offers to drop the place
+    expect(w.map((x) => x.id)).toEqual(['market.ladder_named:ai automation solutions gcc:AE', 'market.keyword_place:ai automation solutions gcc:PK']);
+    expect(w[0]!.accept).toEqual({ label: 'Use United Arab Emirates', change: { kind: 'fields', set: { country: 'United Arab Emirates' } } });
+    expect(w[1]!.title).toBe('"ai automation solutions gcc" is a search about the GCC, not about Pakistan');
+    expect(w[1]!.accept).toEqual({ label: 'Use "ai automation solutions"', change: { kind: 'fields', set: { keyword: 'ai automation solutions' } } });
   });
 
   it('Pakistan website + "ai automation services in pakistan" is clean; UAE website + "dubai" is clean', () => {

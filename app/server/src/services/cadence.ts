@@ -11,6 +11,7 @@ import {
   fitStored,
   fitTokens,
   LADDER_SITE_ROW,
+  LRU,
   type AiTargetRow,
   type AutopilotLevel,
   type ChosenBy,
@@ -722,16 +723,41 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   const manualL = writable.filter((x) => x.mode === 'manual');
   const unchosenL = writable.filter((x) => x.mode === 'auto' && !x.chosenOk);
 
+  // LADDER PACKAGE (2026-11-09, rule 1, mirror of Cadence_Plan.js addressOf): a ladder page is never written onto an address another search of
+  // this website already holds (a published or existing ladder page, a published content-log page); the main page never onto a blog address
+  // (its own page instead), and a "-2" / "-copy" copy of a live page improves the original
+  const ownersC = [
+    ...lrows.filter((r) => r.target_url && (S(r.status) === 'published' || r.page_exists === true || String(r.page_exists) === 'true')).map((r) => ({ url: r.target_url, keyword: r.keyword, supporting: r.supporting, ladder_id: r.ladder_id })),
+    ...slog.filter((l) => S(l.published_url)).map((l) => ({ url: l.published_url, keyword: l.keyword })),
+  ];
+  const knownC = [...new Set([...(input.pages ?? []).filter((p) => p && (!p.site_id || p.site_id === siteId)).map((p) => S(p.url)), ...ownersC.map((o) => S(o.url))].filter(Boolean))];
+  const addressOf = (l: LadderRow): { existing: string; target: string } => {
+    const was = S(l.target_url);
+    const exists = l.page_exists === true || String(l.page_exists) === 'true';
+    const home = (was.match(/^https?:\/\/[^/?#]+/i) || [''])[0];
+    const own = (u: string) => LRU.plannedUrl(home, l.keyword, /\/$/.test(was)) || u;
+    if (num(l.rung) === 4) {
+      const orig = exists ? LRU.copyOf(was, knownC) : '';
+      if (orig) return { existing: orig, target: orig };
+      if (LRU.isBlog(was) && ['solution', 'compare', 'hire'].includes(LRU.stageOf(l.keyword, '', S((l as LadderRow & { stage?: string }).stage)))) { const nu = own(was); if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu }; }
+    }
+    if (exists && was && LRU.ownerOf(was, l.keyword, ownersC, S(l.supporting).split(',').map((x) => x.trim()).filter(Boolean))) {
+      const nu = own(was);
+      if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu };
+    }
+    return { existing: exists ? was : '', target: was };
+  };
   const ladderCand = (x: Info, l: LadderRow): Cand => {
     const rung = num(l.rung);
+    const addr = addressOf(l);
     return {
       keyword: l.keyword,
       source: 'ladder',
       why: `Keyword ladder "${l.head_keyword || ''}", ${rung === 4 ? 'the main page' : `rung ${rung}`}: the next planned page towards the main keyword`,
       pageType: l.page_type || 'Service Page',
-      existingPageUrl: l.page_exists === true || String(l.page_exists) === 'true' ? l.target_url || '' : '',
+      existingPageUrl: addr.existing,
       ladder: { id: l.ladder_id, rung, head: l.head_keyword || '', pageNo: num(l.page_no) },
-      targetUrl: l.target_url || '',
+      targetUrl: addr.target,
       itemKey: cycleNorm(l.keyword),
       auto: true,
       estUsd: estPageUsd,

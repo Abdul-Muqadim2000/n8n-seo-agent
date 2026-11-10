@@ -6,6 +6,7 @@ import { config } from './config';
 import { runMigrations, sqlClient } from './db';
 import { startProposalJobs } from './services/autoStart';
 import { checkEngineFailures } from './services/engineFailures';
+import { checkStuckRungs } from './services/ladderWatch';
 import { autoApproveTick, pollTick, senderTick } from './services/outreachJobs';
 import { startCrawlerJobs } from './services/crawlers/jobs';
 import { deliveryTick, retryTick } from './services/reportDelivery';
@@ -47,6 +48,14 @@ async function main() {
         .then((n) => n && app.log.warn({ runs: n }, 'runs failed in n8n marked failed'))
         .catch((err) => app.log.warn({ err: String(err) }, 'n8n failure check failed')),
     90 * 1000,
+  );
+  // LADDER PACKAGE (2026-11-09, rule 5): a rung "writing" far past its time with nothing alive is closed as failed with its reason (services/ladderWatch.ts)
+  const stuckRungTimer = setInterval(
+    () =>
+      checkStuckRungs()
+        .then((c) => c.length && app.log.warn({ rungs: c.map((x) => `${x.domain} ${x.ladderId} ${x.keyword}`) }, 'stuck ladder rungs closed as failed'))
+        .catch((err) => app.log.warn({ err: String(err) }, 'stuck ladder rung check failed')),
+    15 * 60 * 1000,
   );
   // keyword-first (SCHEDULING_KEYWORDS_PLAN.md §5.6 / §5.7): keyword proposals and the start of announced keywords (level 3), every
   // 10 minutes; AUTO_START_LADDERS is the platform's switch (default: on in production, off elsewhere; app/server/src/config.ts)
@@ -94,6 +103,7 @@ async function main() {
     clearInterval(webhookTimer);
     clearInterval(exportTimer);
     clearInterval(failureTimer);
+    clearInterval(stuckRungTimer);
     clearInterval(timer);
     clearInterval(flowTimer);
     clearInterval(auditTimer);

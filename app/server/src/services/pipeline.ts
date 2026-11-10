@@ -977,7 +977,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       ? { at: lastAt, waiting: Number(cp.waiting_publish) || 0, max: Number(cp.max_waiting) || week0.config.maxWaiting }
       : null;
   const build = buildLadders(
-    { ladders, history, logs, queries, settings: settingsRows, ...app },
+    { ladders, history, logs, queries, settings: settingsRows, ...app, siteCountry: String(site.country ?? '') },   // LADDER PACKAGE: the market line
     { ...cadenceSchedule(weeks, cadenceOn), cadenceRuns: cadenceCycles.map((c) => c.at), rankNextAt: on('rank_tracker')?.nextRunAt ?? null, lastRunPileup, held: readiness.ready ? null : READINESS_REASON },
   );
   // keyword-first: the autopilot's own Needs-you items (the keyword to choose, a proposal, a paused ladder, the level)

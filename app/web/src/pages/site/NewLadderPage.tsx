@@ -11,6 +11,7 @@ import {
   chooseForMe,
   COUNTRIES,
   GOALS,
+  ladderMarket,
   ladderOverlapsOf,
   MONITOR_COSTS,
   normKeyword,
@@ -831,6 +832,10 @@ function StartStep({ chosen, data, choices, onBack }: { chosen: ChosenKeyword; d
   const plan = chosen.planType && chosen.planType !== 'none' ? chosen.planType : null;
   const day = useCycleDay();
   const Day = day.every.charAt(0).toUpperCase() + day.every.slice(1);
+  // LADDER PACKAGE (2026-11-09, rule 3): a ladder is measured in the website's market or in the market its keyword names, never elsewhere;
+  // the change is said here, before the start (a keyword naming no place, sent elsewhere, is confirmed by the server's own warning)
+  const market = ladderMarket({ keyword: chosen.keyword, siteCountry: site.country, requested: chosen.country });
+  const sendCountry = market.named.length && market.country ? market.country : chosen.country;
 
   const go = () => {
     setError(null);
@@ -839,7 +844,7 @@ function StartStep({ chosen, data, choices, onBack }: { chosen: ChosenKeyword; d
         mode: 'ladder',
         siteId: site.id,
         keyword: chosen.keyword,
-        country: chosen.country,
+        country: sendCountry,
         // empty = the website's own settings (the server fills them in)
         business: '',
         customers: '',
@@ -872,6 +877,11 @@ function StartStep({ chosen, data, choices, onBack }: { chosen: ChosenKeyword; d
   return (
     <div className="max-w-2xl space-y-5">
       <SubmitError error={error} siteId={site.id} />
+      {market.warning && (
+        <Callout tone="warning" title={`This ladder is measured in ${market.named.length ? market.country : chosen.country}`}>
+          <p>{market.warning}</p>
+        </Callout>
+      )}
       <Card className="p-5 sm:p-6">
         <h2 className="flex items-center gap-3 font-display text-lg font-semibold tracking-[-0.01em] text-ink">
           <IconTile tone="solid" size="md">
@@ -883,7 +893,7 @@ function StartStep({ chosen, data, choices, onBack }: { chosen: ChosenKeyword; d
           className="mt-5"
           items={[
             { label: 'Main keyword', value: <span className="font-medium">{chosen.keyword}</span> },
-            { label: 'Country', value: chosen.country },
+            { label: 'Country', value: sendCountry },
             { label: 'Plan', value: plan ? `${PLAN_CHOICE_LABEL[plan]}${chosen.months ? `, about ${chosen.months.replace('-', ' to ')} months` : ''}` : 'Chosen when it is planned' },
             { label: 'Pages written now', value: String(choices.pagesNow) },
             { label: 'Writing', value: mode === 'manual' ? 'Manual: each page waits for your OK' : `Auto: its next pages are written ${day.every}` },
