@@ -16,7 +16,7 @@ vi.hoisted(() => {
 vi.mock('../src/db', () => ({ db: {}, schema: new Proxy({}, { get: () => new Proxy({}, { get: (_t, k) => String(k) }) }) }));
 
 const { failedPageFilters, pageRowFor, reopenedRow, unwrittenPageReason } = await import('../src/services/runs');
-const { writtenPageRows } = await import('../src/services/data');
+const { liveCheckFor, movedFor, writtenPageRows } = await import('../src/services/data');
 
 const row = (keyword: string, status: string, started_at: string, extra: Record<string, unknown> = {}) =>
   ({ site_id: 'site_devaicon-com', domain: 'devaicon.com', keyword, status, started_at, request_id: '1', ...extra }) as never;
@@ -67,5 +67,32 @@ describe('a page run that finished without a page', () => {
     expect(unwrittenPageReason(run, 'content', { verdict: 'AVOID' }, true)).toBeNull();
     expect(unwrittenPageReason({ mode: 'verdict' } as never, 'content', { verdict: 'AVOID' }, false)).toBeNull();
     expect(unwrittenPageReason(run, 'progress', {}, false)).toBeNull();
+  });
+});
+
+// Production 2026-11-10 (devaicon.com): "I fixed the issues the tool listed myself before publishing, but the card still shows the old score".
+// The card's grade is of the version we delivered; the live page's own check is the newest publish check of that page. And the old addresses
+// the client redirected to the new pages are said to be moved, from our own daily check of the website.
+describe('a live page on the Content page', () => {
+  const D = 'https://novaand-demo.com';
+  const check = (o: Record<string, unknown>) => ({ id: 'r1', receivedAt: '2026-11-10T10:03:31Z', keyword: 'banking & financial services technology', requestId: '6661', url: `${D}/services/industries-bfsi`, passed: 9, total: 16, failed: ['Title tag uses the keyword', 'At least 2 content images'], live: true, ...o });
+
+  it('the newest publish check of the page, by its request id first, else by its keyword', () => {
+    const checks = [check({ id: 'other', requestId: '9999', keyword: 'engagement models' }), check({ id: 'newest' }), check({ id: 'older', receivedAt: '2026-11-09T10:00:00Z', passed: 5 })];
+    expect(liveCheckFor({ request_id: '6661', keyword: 'Banking & Financial Services Technology' }, checks)).toEqual({ at: '2026-11-10T10:03:31Z', passed: 9, total: 16, failed: ['Title tag uses the keyword', 'At least 2 content images'], url: `${D}/services/industries-bfsi`, reportId: 'newest', live: true });
+    // a row whose request id has no check: its keyword (a re-check started from the board sends the keyword only)
+    expect(liveCheckFor({ request_id: 'cad_x', keyword: 'engagement models' }, checks)?.reportId).toBe('other');
+    expect(liveCheckFor({ request_id: '', keyword: 'cloud migration' }, checks)).toBeNull();
+    // a check that measured nothing (no checks, page opened) is no reading; one that could not open the page says so
+    expect(liveCheckFor({ request_id: '6661', keyword: '' }, [check({ total: 0, passed: 0 })])).toBeNull();
+    expect(liveCheckFor({ request_id: '6661', keyword: '' }, [check({ total: 0, passed: 0, live: false })])).toMatchObject({ live: false });
+  });
+
+  it('moved: the old address it improves redirects to it, as our check saw; another pair or the same address is not', () => {
+    const merged = [{ from: `${D}/industries/bfsi`, to: `${D}/services/industries-bfsi`, at: '2026-11-10T16:15:38Z' }];
+    expect(movedFor({ existing_page_url: 'https://www.novaand-demo.com/industries/bfsi/', published_url: `${D}/services/industries-bfsi` }, merged)).toEqual({ from: `${D}/industries/bfsi`, at: '2026-11-10T16:15:38Z' });
+    expect(movedFor({ existing_page_url: `${D}/engagement-models`, published_url: `${D}/services/engagement-models` }, merged)).toBeNull();
+    expect(movedFor({ existing_page_url: `${D}/services/industries-bfsi`, published_url: `${D}/services/industries-bfsi` }, merged)).toBeNull();
+    expect(movedFor({ existing_page_url: '', published_url: `${D}/x` }, merged)).toBeNull();
   });
 });

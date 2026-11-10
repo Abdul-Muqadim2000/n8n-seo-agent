@@ -2,7 +2,8 @@
 // ladder, Rankings). A draft the quality check refused (`not_ready`, R111) is written but never "waiting to publish": it needs the owner's edits by
 // hand first (never a new run), which is what Needs you says about it. Before this the Content page counted it as waiting and offered "Publish it, then
 // report its address", the Overview counted it as needing a fix, and the two screens disagreed about the same page.
-import type { ContentItem } from '@seo/shared';
+import type { ContentItem, ContentLiveCheck } from '@seo/shared';
+import { fmtDate } from '@/lib/utils';
 
 /** A page that is on the website (reported live, or found by the weekly report). */
 export const isLiveItem = (i: Pick<ContentItem, 'status' | 'publishedUrl'>): boolean => i.status === 'published' || !!i.publishedUrl;
@@ -42,4 +43,19 @@ export function liveLine(live: number, written: number): string {
   if (written <= 0) return 'No pages written yet';
   if (written === 1) return live >= 1 ? 'Your written page is live' : 'Your written page is not live yet';
   return `${live} of ${written} written pages ${live === 1 ? 'is' : 'are'} live`;
+}
+
+/** prod 2026-11-10: the "sent at another address" warning is answered once the old address redirects to the page, or when the page it
+ *  "updates" is the home page (a page of its own, nothing to redirect). Any other warning stays. */
+export function publishNoteSettled(item: Pick<ContentItem, 'publishNote' | 'moved' | 'ownPageFromHome'>): boolean {
+  const addressOnly = /another address than the page it updates/i.test(item.publishNote ?? '');
+  return addressOnly && (!!item.moved || !!item.ownPageFromHome);
+}
+
+/** prod 2026-11-10: what the newest publish check measured on the live page (at most 3 failed checks named), with its report. */
+export function liveCheckText(c: ContentLiveCheck): string {
+  if (!c.live) return `Live page checked ${fmtDate(c.at)}: we could not open it`;
+  const failed = c.failed.slice(0, 3);
+  const more = c.failed.length - failed.length;
+  return `Live page checked ${fmtDate(c.at)}: ${c.passed} of ${c.total} checks passed${failed.length ? `. Not passed: ${failed.join('; ')}${more > 0 ? ` and ${more} more` : ''}` : ''}`;
 }

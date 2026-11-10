@@ -14,6 +14,7 @@ import { Chips, Panel } from '../kit';
 import { daysSince, sortByDate, urlPath } from '../format';
 import { PositionHistoryCard } from '../history';
 import { asPageType, PageStateBadge, PositionChange, positionWords, rungLabel } from './common';
+import { BEFORE_PUBLISH_NOTE, pageGscText } from './rank-notes';
 import type { WriteNowItem } from './WriteNowDialog';
 
 const RUNG_HINT: Record<number, string> = {
@@ -265,14 +266,21 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
             ...(p.publishedAt ? [{ label: 'Published', value: fmtDate(p.publishedAt) }] : []),
             ...(p.position != null ? [{ label: 'Google position', value: positionWords(p.position) }] : []),
             ...(p.bestPosition != null && p.bestPosition > 0 ? [{ label: 'Best so far', value: positionWords(p.bestPosition) }] : []),
+            ...(p.state === 'published' && p.gsc ? [{ label: 'In Search Console', value: pageGscText(p.gsc) }] : []),
           ]}
         />
+        {p.state === 'published' && p.gsc && p.position === 0 && p.gsc.position != null && p.gsc.position <= 10 && p.gsc.impressions > 0 && (
+          <p className="text-[13px] leading-snug text-ink-2">
+            Search Console shows this page near the top for some searches, while our weekly check of {`"${p.keyword}"`} did not find it in the top 50: Search Console counts every search and place where Google showed the page, our check reads this one search in one place, desktop, not signed in.
+          </p>
+        )}
+        {history.some((h) => h.beforePublish) && <p className="text-[12px] leading-snug text-ink-3">{BEFORE_PUBLISH_NOTE}</p>}
         {history.some((h) => h.position > 0) ? (
           <PositionHistoryCard title="Position over time" lines={[{ key: 'p', label: p.keyword, history }]} height={170} />
         ) : (
           history.length > 0 && (
             <p className="text-[13px] text-ink-3">
-              Checked on Google {history.length === 1 ? 'once' : `${history.length} times`}, not in the top 50 yet. New pages usually need a few weeks after they go live.
+              Checked on Google {history.length === 1 ? 'once' : `${history.length} times`}, not in the top 50 yet. New pages usually need a few weeks after they go live.{p.state === 'published' && p.gsc ? ` Search Console: ${pageGscText(p.gsc)}.` : ''}
             </p>
           )
         )}

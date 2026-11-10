@@ -1,4 +1,10 @@
 import {
+  INDEXING_MERGE_KEY,
+  isSiteRoot,
+  mergedPairsOf,
+  samePageUrl,
+  type ContentLiveCheck,
+  type SiteTaskCheck,
   aiRankPendingPlan,
   aiRankPlanOf,
   creditRate,
@@ -137,6 +143,8 @@ import {
   type AiScope,
   type AiScopeSummary,
 } from '@seo/shared';
+import { and, desc, eq, sql } from 'drizzle-orm';
+import { db, schema } from '../db';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { rows as tableRows, siteRows } from '../n8n/client';
 import { settingsRow } from './admin/settings';
@@ -782,6 +790,85 @@ export function writtenPageRows(log: ContentLogRow[]): ContentLogRow[] {
   return [...newest.values()].sort((a, b) => s(b.started_at).localeCompare(s(a.started_at)));
 }
 
+/** prod 2026-11-10: one publish check the app received (stage `published`), only the fields the Content page shows. */
+export interface PublishCheckRef {
+  id: string;
+  receivedAt: string;
+  keyword: string;
+  /** the content run's request id the check was for (`content_request_id`) */
+  requestId: string;
+  url: string;
+  passed: number;
+  total: number;
+  failed: string[];
+  live: boolean;
+}
+
+/**
+ * prod 2026-11-10 (devaicon.com: "I fixed the issues myself before publishing, but the card still shows the old score"): the newest publish
+ * check of a written page, by the page's request id, else by its keyword. It measures the LIVE page; the review's grade is of the version we
+ * delivered. Pure; `checks` newest first.
+ */
+export function liveCheckFor(row: Pick<ContentLogRow, 'request_id' | 'keyword'>, checks: readonly PublishCheckRef[]): ContentLiveCheck | null {
+  const rid = s(row.request_id).trim();
+  const kw = normKeyword(s(row.keyword));
+  const c = (rid ? checks.find((x) => x.requestId === rid) : undefined) ?? (kw ? checks.find((x) => normKeyword(x.keyword) === kw) : undefined);
+  if (!c || (!c.total && c.live)) return null;
+  return { at: c.receivedAt, passed: Math.min(c.passed, c.total), total: c.total, failed: c.failed.slice(0, 20), url: c.url, reportId: c.id, live: c.live };
+}
+
+/** prod 2026-11-10: the old address a live page improves, when our daily check of the website saw it redirect permanently to the page. Pure. */
+export function movedFor(row: Pick<ContentLogRow, 'existing_page_url' | 'published_url'>, merged: readonly { from: string; to: string; at: string }[]): { from: string; at: string } | null {
+  const from = s(row.existing_page_url).trim();
+  const to = s(row.published_url).trim();
+  if (!from || !to || samePageUrl(from, to)) return null;
+  const m = merged.find((x) => samePageUrl(x.from, from) && samePageUrl(x.to, to));
+  return m ? { from: m.from, at: m.at } : null;
+}
+
+/** The website's publish checks, newest first: only the fields the board shows (no page text). A failed read is "no check". */
+async function publishChecks(orgId: string, siteId: string): Promise<PublishCheckRef[]> {
+  const R = schema.reports;
+  const p = R.payload;
+  const rows = await db
+    .select({
+      id: R.id,
+      receivedAt: R.receivedAt,
+      keyword: sql<string | null>`${p}->>'keyword'`,
+      requestId: sql<string | null>`${p}->>'content_request_id'`,
+      url: sql<string | null>`${p}->>'published_url'`,
+      passed: sql<string | null>`${p}->>'passed'`,
+      total: sql<number | null>`case when jsonb_typeof(${p}->'checks') = 'array' then jsonb_array_length(${p}->'checks') else 0 end`,
+      failed: sql<unknown>`${p}->'failed'`,
+      live: sql<string | null>`${p}->>'live'`,
+    })
+    .from(R)
+    .where(and(eq(R.orgId, orgId), eq(R.siteId, siteId), eq(R.stage, 'published')))
+    .orderBy(desc(R.receivedAt))
+    .limit(200);
+  return rows.map((r) => ({
+    id: r.id,
+    receivedAt: r.receivedAt.toISOString(),
+    keyword: s(r.keyword),
+    requestId: s(r.requestId),
+    url: s(r.url),
+    passed: n(r.passed),
+    total: n(r.total),
+    failed: Array.isArray(r.failed) ? r.failed.map(String).filter(Boolean) : [],
+    live: s(r.live) !== 'false',
+  }));
+}
+
+/** The merge step's pairs our own check last found done (old address redirects to its improved version). A failed read is none. */
+async function mergedPairs(siteId: string): Promise<{ from: string; to: string; at: string }[]> {
+  const [row] = await db
+    .select({ payload: schema.siteTasks.payload, lastCheck: schema.siteTasks.lastCheck })
+    .from(schema.siteTasks)
+    .where(and(eq(schema.siteTasks.siteId, siteId), eq(schema.siteTasks.taskKey, INDEXING_MERGE_KEY)))
+    .limit(1);
+  return row ? mergedPairsOf({ payload: (row.payload ?? {}) as Record<string, unknown>, lastCheck: (row.lastCheck ?? null) as SiteTaskCheck | null }) : [];
+}
+
 export async function contentData(org: OrgRow, site: SiteRow): Promise<ContentData> {
   const d = site.domain;
   const [log, cadence, cases, profiles, generated] = await Promise.all([
@@ -797,6 +884,17 @@ export async function contentData(org: OrgRow, site: SiteRow): Promise<ContentDa
   const reviewOf = (r: ContentLogRow) => {
     const page = reviews?.pageFor(r);
     return page && reviews ? { review: reviews.summaryOf(page, r) } : {};
+  };
+  // prod 2026-11-10: what the publish check measured on the live page, and an old address the client redirected to it (never fails the board)
+  const [checks, merged] = await Promise.all([publishChecks(org.id, site.id).catch(() => [] as PublishCheckRef[]), mergedPairs(site.id).catch(() => [] as { from: string; to: string; at: string }[])]);
+  const liveOf = (r: ContentLogRow) => {
+    if (s(r.status) !== 'published' && !s(r.published_url)) return {};
+    const existing = s(r.existing_page_url);
+    return {
+      liveCheck: liveCheckFor(r, checks),
+      moved: movedFor(r, merged),
+      ...(isSiteRoot(existing) && s(r.published_url) && !isSiteRoot(s(r.published_url)) ? { ownPageFromHome: true } : {}),
+    };
   };
   return {
     items: writtenPageRows(log).map((r) => ({
@@ -817,6 +915,7 @@ export async function contentData(org: OrgRow, site: SiteRow): Promise<ContentDa
       // 2026-10-27: marked published on the owner's word after the check's warning (the live page did not match the draft)
       publishNote: s(r.publish_note),
       ...reviewOf(r),
+      ...liveOf(r),
     })),
     cadence: cadence[0] ? { pagesPerWeek: n(cadence[0].pages_per_week), status: s(cadence[0].status) } : null,
     caseStudies: cases.map((c) => ({

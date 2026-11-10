@@ -104,4 +104,11 @@ describe('the redirect step for a main page that moved (review H5)', () => {
     ]);
     expect(held).toEqual([]);
   });
+
+  it('prod 2026-11-10 (devaicon.com): never a redirect from the home page, the step could never be done', () => {
+    expect(ladderMovesOf([
+      { status: 'published', target_why: 'moved from https://novaand-demo.com/: the home page answers another search', target_url: 'https://novaand-demo.com/ai-automation-services-pakistan', updatedAt: '2026-10-30T07:52:35Z' },
+      { status: 'published', target_why: 'moved from https://www.novaand-demo.com: the home page', target_url: 'https://novaand-demo.com/ai-automation', updatedAt: '' },
+    ])).toEqual([]);
+  });
 });

@@ -5,7 +5,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { BadgeCheck, Briefcase, CalendarClock, CheckCircle2, Clock, ExternalLink as ExternalIcon, FileText, Flame, Inbox, LayoutGrid, PenSquare, Rows3, Send, Target, TrendingDown, TrendingUp, Trophy, Undo2, UserRound, Wrench, XCircle } from 'lucide-react';
-import { cmsKindLabel, DRAFT_BY_HAND, titleCase, type CaseStudy, type CmsItemView, type ContentData, type ContentItem, type Report } from '@seo/shared';
+import { cmsKindLabel, DRAFT_BY_HAND, titleCase, type CaseStudy, type CmsItemView, type ContentData, type ContentItem, type ContentLiveCheck, type Report } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { toastError } from '@/lib/api';
 import { paths } from '@/lib/paths';
@@ -22,7 +22,7 @@ import { DataTable, type Column } from '@/components/ui/table';
 import { CountUp, DistributionBar, HeroLink, HeroNextStep, HeroStat, IconTile, ScoreRing, SEQ, Stagger, SummaryHero, type IconTileTone } from '@/components/insight';
 import { DataGate, FilterChips, SrOnly, Kind, Panel, RunAnalysisMenu, SectionHeading, ToolButton, useSitePage } from './_components/kit';
 import { HeroMeter } from './_components/pipeline/home';
-import { contentGroups, isLiveItem, liveLine, needsFixItem, publishPrefill } from './_components/content-status';
+import { contentGroups, isLiveItem, liveCheckText, liveLine, needsFixItem, publishNoteSettled, publishPrefill } from './_components/content-status';
 import { countBy, daysSince, plural, urlPath } from './_components/format';
 import { FileLinks } from './_components/reports';
 import { PublishCheckPanel } from './_components/publish-check';
@@ -376,6 +376,17 @@ function SourceLine({ item }: { item: ContentItem }) {
   );
 }
 
+function LiveCheckLine({ check, orgId }: { check: ContentLiveCheck; orgId: string }) {
+  return (
+    <p className="text-ink-2 [overflow-wrap:anywhere]">
+      {liveCheckText(check)}.{' '}
+      <Link to={paths.report(orgId, check.reportId)} className="font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
+        See the check
+      </Link>
+    </p>
+  );
+}
+
 function PipelineCard({ item, report, cms, onUnpublish }: { item: ContentItem; report?: Report; cms?: CmsItemView; onUnpublish: (i: ContentItem) => void }) {
   const { org, can, tool } = useSitePage();
   const liveNow = isLive(item);
@@ -400,13 +411,20 @@ function PipelineCard({ item, report, cms, onUnpublish }: { item: ContentItem; r
       <div className="mt-2 space-y-1 text-xs text-ink-3">
         <p>Started {fmtDate(item.startedAt)}{liveNow && item.publishedAt ? ` · published ${fmtDate(item.publishedAt)}` : ''}</p>
         {item.existingPageUrl && !liveNow && <p className="truncate">Improves {urlPath(item.existingPageUrl)}</p>}
-        {item.review && <ReviewLine review={item.review} orgId={org.id} />}
+        {item.review && <ReviewLine review={item.review} orgId={org.id} live={liveNow} />}
+        {liveNow && item.liveCheck && <LiveCheckLine check={item.liveCheck} orgId={org.id} />}
         {fix && !item.review && (
           <p className="text-ink-2 [overflow-wrap:anywhere]">
             Did not pass the quality check, so it is not ready to publish{reasons.length ? `: ${reasons.slice(0, 2).join('; ')}` : ''}. {DRAFT_BY_HAND}.
           </p>
         )}
-        {liveNow && item.publishNote && (
+        {liveNow && item.moved && (
+          <p className="text-ink-2 [overflow-wrap:anywhere]">
+            Moved: {urlPath(item.moved.from)} now redirects here (checked {fmtDate(item.moved.at)}).
+          </p>
+        )}
+        {liveNow && !item.moved && item.ownPageFromHome && <p className="text-ink-2">Published as a page of its own; your home page stays as it is.</p>}
+        {liveNow && item.publishNote && !publishNoteSettled(item) && (
           <p className="text-warning-text [overflow-wrap:anywhere]">Not verified: {item.publishNote.replace(/^Marked published by you after a warning: /, 'marked published on your word, ')}.</p>
         )}
         {item.publishedUrl && (

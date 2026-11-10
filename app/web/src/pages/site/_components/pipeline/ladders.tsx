@@ -201,6 +201,7 @@ function LadderCardView({ card: c, rank, controls }: { card: LadderCard; rank: n
               )}
             </span>
             <PositionChange change={c.headChange} className="mt-1" />
+            {c.headNote && <span className="mt-1 block text-[11px] leading-snug text-ink-3">{c.headNote}</span>}
           </Fact>
           <Fact label="In the top 10">
             <span className="text-[13px] text-ink-3">

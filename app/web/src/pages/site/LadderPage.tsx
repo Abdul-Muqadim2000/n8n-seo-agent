@@ -45,6 +45,7 @@ import { DeleteLadderButton, LadderModeSwitch, LadderPauseButton, MODE_HELP } fr
 import { HeroMeter, WarnLine } from './_components/pipeline/home';
 import { Panel } from './_components/kit';
 import { WriteNowDialog, type WriteNowItem } from './_components/pipeline/WriteNowDialog';
+import { BEFORE_PUBLISH_NOTE, trafficHint } from './_components/pipeline/rank-notes';
 
 // One keyword ladder (PIPELINE_FEATURE_SPEC.md §4.2): the main keyword, the climb from easy pages to the main page, what happened and
 // what comes next, the results on Google and in Search Console, and the ladder's reports.
@@ -190,7 +191,14 @@ function Ladder({ ladder: l, back }: { ladder: LadderDetail; back: ReactNode }) 
                   ) : undefined
                 }
                 trend={series.length > 1 ? <Sparkline data={series} dataKey="p" invert /> : undefined}
-                hint={l.top3 > 0 ? `${plural(l.top3, 'page')} of this ladder in the top 3` : undefined}
+                hint={
+                  l.top3 > 0 || l.headNote ? (
+                    <>
+                      {l.top3 > 0 && <span className="block">{`${plural(l.top3, 'page')} of this ladder in the top 3`}</span>}
+                      {l.headNote && <span className="mt-1 block text-[11px] leading-snug">{l.headNote}</span>}
+                    </>
+                  ) : undefined
+                }
               />
               <HeroStat
                 label="Pages live"
@@ -206,7 +214,7 @@ function Ladder({ ladder: l, back }: { ladder: LadderDetail; back: ReactNode }) 
               <HeroStat
                 label="Clicks, last 28 days"
                 value={<CountUp value={l.traffic?.clicks28d ?? 0} format={compactNumber} />}
-                hint={`${compactNumber(l.traffic?.impressions28d ?? 0)} times shown on Google (impressions), from Search Console`}
+                hint={trafficHint(l)}
               />
             </>
           }
@@ -339,17 +347,18 @@ function PositionResults({ ladder: l }: { ladder: LadderDetail }) {
           title={checks.length ? 'Not in the top 50 yet' : 'No Google checks yet'}
           description={
             checks.length
-              ? `Checked ${checks.length === 1 ? 'once' : `on ${checks.length} days`} since ${fmtDate(checks[0])}. Pages usually need a few weeks after they go live; the easy pages show up first. The chart starts with the first page in the top 50.`
+              ? `Checked ${checks.length === 1 ? 'once' : `on ${checks.length} days`} since ${fmtDate(checks[0])}. Pages usually need a few weeks after they go live; the easy pages show up first. The chart starts with the first page in the top 50.${lines.some((x) => x.history.some((h) => h.beforePublish)) ? ` ${BEFORE_PUBLISH_NOTE}` : ''}${l.headNote ? ` ${l.headNote}` : ''}`
               : `The rank check runs ${day.every}. Positions show up here once the ladder's pages are checked.`
           }
         />
       </Panel>
     );
   }
+  const before = lines.some((x) => x.history.some((h) => h.beforePublish));
   return (
     <PositionHistoryCard
       title="Position on Google over time"
-      description="The main keyword and the best page of each rung, per weekly check (1 = top of Google). Points on the bottom line were not in the top 50."
+      description={`The main keyword and the best page of each rung, per weekly check (1 = top of Google). Points on the bottom line were not in the top 50.${before ? ` ${BEFORE_PUBLISH_NOTE}` : ''}`}
       lines={lines}
       height={260}
     />

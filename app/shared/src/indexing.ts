@@ -1464,11 +1464,16 @@ export interface IndexMergePair {
   to: string;
   at: string;
 }
+/** The home page of a website (path "/" or none, a query or fragment aside): never the old address of a merge, never asked to redirect. */
+export const isSiteRoot = (url: string): boolean => /^https?:\/\/[^/?#]+\/?(?:[?#].*)?$/i.test(s(url).trim());
 /** The pairs of that step from the content log's improvements (the newest per old address, most recent first). An old address whose
  *  newest improvement went live at the address itself has no pair. */
 export function indexMergePairs(improvements: readonly IndexImprovement[]): IndexMergePair[] {
   const by = new Map<string, IndexMergePair>();
   for (const i of improvements) {
+    // prod 2026-11-10 (devaicon.com): a page planned as an update of the home page and published as a page of its own is no merge: the client
+    // is never asked to redirect their home page (that step could never be done)
+    if (isSiteRoot(i.url)) continue;
     const k = i.url.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
     const had = by.get(k);
     if (!had || isoMs(i.at) > isoMs(had.at)) by.set(k, { from: i.url, to: i.to, at: i.at });
@@ -1781,6 +1786,20 @@ export function realPage(f: IndexingFetch): boolean {
 const wall = (f: IndexingFetch, own403 = false): boolean =>
   (!own403 && (f.status === 401 || f.status === 403)) || f.status === 429 || (f.status === 503 && (!f.text || challengePage(f))) || challengePage(f);
 
+/**
+ * prod 2026-11-10: `canonical_elsewhere` fixed by merging. The page's own first answer is a permanent redirect (301 / 308) to ANOTHER page of
+ * the same website (host compared without www.), that page opens (200, a readable page) and its canonical names itself or nothing. Then the
+ * address it named as the main version is where it now sends everyone and Google: fixed. Anything else is left to the cause's own rule.
+ */
+export function canonicalMergedByRedirect(f: IndexingFetch): IndexingPageVerdict | null {
+  if (f.redirectStatus !== 301 && f.redirectStatus !== 308) return null;
+  if (!f.finalUrl || hostOfUrl(f.finalUrl) !== hostOfUrl(f.url) || samePageUrl(f.finalUrl, f.url)) return null;
+  if ((f.status ?? 0) !== 200 || wall(f) || !realPage(f)) return null;
+  const canon = pageCanonicalOf(f.text, f.finalUrl);
+  if (canon && !samePageUrl(canon, f.finalUrl)) return null;
+  return { fixed: true, why: `${indexPath(f.url)} now redirects permanently to ${indexPath(f.finalUrl)}, the main version, so the two are one page.` };
+}
+
 export function indexingPageFixed(cause: IndexSiteFixCause, f: IndexingFetch, inSitemap: boolean | null, opts: { ownTitle?: boolean } = {}): IndexingPageVerdict {
   const p = indexPath(f.url);
   const status = f.status ?? 0;
@@ -1828,6 +1847,10 @@ export function indexingPageFixed(cause: IndexSiteFixCause, f: IndexingFetch, in
       if (inSitemap === null) return unknown(`${p} still redirects, and ${notListed}.`);
       return { fixed: false, why: `${p} is still in your sitemap and redirects to ${indexPath(f.finalUrl)}.` };
     case 'canonical_elsewhere': {
+      // prod 2026-11-10 (devaicon.com /industries/bfsi): the address now answers a PERMANENT redirect (301 / 308, its own first answer) to a
+      // page of the same website that opens and names itself (or nothing else) as the main version: the two are one page, which is the fix
+      const merged = canonicalMergedByRedirect(f);
+      if (merged) return merged;
       // wave 2: a page with a title of its own that names another page as its main version: its absence from the sitemap is never the fix
       // (it may never have been there); only a canonical tag that names the page itself is
       if (opts.ownTitle) {
