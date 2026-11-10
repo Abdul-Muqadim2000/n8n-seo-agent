@@ -1,4 +1,4 @@
-// harness shim (written by build_v4.py section 182): the ladder rules kit, { fn, args } -> { r }
+// harness shim (written by build_v4.py section 183): the ladder rules kit, { fn, args } -> { r }
 // ---- fit gate (2026-10-11, FIX_PLAN D4 / D8): ONE rule for keywords that no page of this website should target. Inlined by the build
 // (the FIT_GATE placeholder) into Analyze Keywords (full report: keyword gap, easy wins, opportunities), Rank Keywords (discovery), Ladder Pool /
 // Ladder Plan (ladder rungs and the main keyword), Relevance Chunks (the brands the AI screen is told about) and Brief Context (the hub
@@ -895,13 +895,12 @@ const LRU = (() => {
       iso = keyword_iso; source = site && iso === site ? 'site' : 'keyword';
     } else if (site) { iso = site; source = 'site'; }
     else { iso = req; source = 'request'; }
-    const measurable = !!CFG.countries[iso];
-    if (!measurable && site) { iso = site; source = 'site'; }   // a named market we cannot measure (Qatar): the website's own, said so
+    const unmeasured = !CFG.countries[iso] && !!site;
+    if (unmeasured) { iso = site; source = 'site'; }   // a named market we cannot measure (Qatar): the website's own, said so
     const ok = !req || req === iso;
     const nm = (i) => countryName(i) || i;
     const note = !iso ? '' : source === 'keyword'
       ? 'The keyword names ' + named.join(', ') + ', so this ladder is measured in ' + nm(iso) + (site ? ', not in your website\'s market (' + nm(site) + ')' : '') + '.'
-      : !measurable ? ''
       : places.length && keyword_iso && keyword_iso !== iso ? 'The keyword names ' + named.join(', ') + ', which we cannot measure, so this ladder is measured in your website\'s market (' + nm(iso) + ').'
       : places.length ? 'The keyword names ' + named.join(', ') + ', which includes your website\'s market (' + nm(iso) + '), so it is measured there.'
       : source === 'site' ? 'Measured in your website\'s market (' + nm(iso) + ').' : '';

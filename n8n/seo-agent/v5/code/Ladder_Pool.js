@@ -1,5 +1,4 @@
 /*__FIT_GATE__*/
-/*__LADDER_RULES__*/
 // B6-9 (2026-10-15, benchmark area 6): the SERP click-loss table this node kept for itself is gone -- the one measured
 // copy in the discovery kit is used instead (`KWI.calibrate` / `KWI.lossApplied`), so the AI Overview figure is corrected
 // in one place for discovery, for the rank tracker and for the ladder.
@@ -64,13 +63,7 @@ reqs.forEach((r, i) => { const items = res[i]?.tasks?.[0]?.result?.[0]?.items ||
 // LADDER PACKAGE (2026-11-09, rule 6): keyword intelligence ON for this website -> its stored clusters ARE the pool (one search per cluster:
 // its head, the gate it passed, its verdict, page action, Search Console position and stage); Ladder Requests bought only the "keywords this
 // site ranks for" pull, which still measures the reach. Off sites (every site today) keep the pool above, unchanged.
-const kiRowsOf = (n) => { try { return $(n).all().map(i => i.json || {}).filter(r => r && !r.error && Object.keys(r).length); } catch (e) { return null; } };
-const ki_pool = (() => { const mons = kiRowsOf('Load Monitors (Ladder)'); const kill = kiRowsOf('Load KI Kill (Ladder)');
-  const sid = 'site_' + String(base.domain || '').toLowerCase().replace(/^www\./, '').replace(/[^a-z0-9]+/g, '-');
-  const mon = (mons || []).find(r => String(r.site_id || '') === sid) || {};
-  let iso = ''; try { iso = String($('Normalize Input').first().json.country_iso || base.country_iso || ''); } catch (e) { iso = String(base.country_iso || ''); }
-  return LRU.kiPool({ mode: mon.ki_mode, killed: kill === null ? null : kill.some(r => /^(1|true|on|yes)$/i.test(String(r.value || '').trim())), rows: kiRowsOf('Load KI Keywords (Ladder)') || [],
-    runs: kiRowsOf('Load KI Runs (Ladder)') || [], market: iso.toUpperCase() + '-' + String(base.language_code || 'en') }); })();
+const ki_pool = (() => { try { const k = ($('KI Pool (Ladder)').first().json || {}).ki_pool; return k && typeof k === 'object' ? { avoid: [], rows: [], ...k } : { used: false, reason: 'not read', run_id: '', note: '', avoid: [], rows: [] }; } catch (e) { return { used: false, reason: 'not read', run_id: '', note: '', avoid: [], rows: [] }; } })();   // KI Pool (Ladder): read once, through KI.readable
 if (ki_pool.used) {
   pool.clear();   // the ranked pull's own rows only feed `rankings` (the reach), never the pool
   const n0 = (v) => (v === '' || v == null || !Number.isFinite(Number(v))) ? null : Number(v);

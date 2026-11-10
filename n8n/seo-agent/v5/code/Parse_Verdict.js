@@ -263,7 +263,11 @@ const HOLD = (() => {
   // published, because a ladder's page runs carry force_content (the AVOID route is skipped) and the score hold exempts ladder pages and runs
   // automatic ones in shadow. A ladder page with an AVOID verdict, or a score clearly under the line, is now held for real, automatic or not:
   // nothing is written, the ladder row says "stopped" with this reason (Ladder Row Written), and only "Write it anyway" (hold_ack) writes it.
-  const ladderStop = (writes && ladderPage && !PU) ? LRU.verdictStop({ verdict: EV56.withheld ? '' : S(verdict.verdict), score: runScore, ack: !!ack }) : { stop: false, reason: '', band: '' };
+  // The owner's 2026-10-29 priority stays: a ladder page whose own address is already a live page of the site (the guide that ranks, exec 949:
+  // dup.self) is never stopped for its score, only for an AVOID verdict.
+  const ladderOwnLive = ((dup && dup.self) || []).length > 0;
+  const ladderStop0 = (writes && ladderPage && !PU) ? LRU.verdictStop({ verdict: EV56.withheld ? '' : S(verdict.verdict), score: runScore, ack: !!ack }) : { stop: false, reason: '', band: '' };
+  const ladderStop = ladderStop0.stop && ladderStop0.band === 'clearly_low' && ladderOwnLive ? { stop: false, reason: '', band: '', exempt: 'its own page is already live' } : ladderStop0;
   const would = writes && !ack && ((!PU && (valueHit || dupHit || existingHit)) || ladderStop.stop);   // ladderStop already needs pages that were read   // W07-A: never a hold (score, duplicate or existing page) on pages nobody read
   const mode = !writes ? 'off' : ladderStop.stop ? 'enforce' : automatic ? CFG.automatic : 'enforce';
   const kw = S(prev.keyword);

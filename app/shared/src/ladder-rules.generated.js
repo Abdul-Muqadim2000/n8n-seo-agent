@@ -152,13 +152,12 @@ const LRU = (() => {
       iso = keyword_iso; source = site && iso === site ? 'site' : 'keyword';
     } else if (site) { iso = site; source = 'site'; }
     else { iso = req; source = 'request'; }
-    const measurable = !!CFG.countries[iso];
-    if (!measurable && site) { iso = site; source = 'site'; }   // a named market we cannot measure (Qatar): the website's own, said so
+    const unmeasured = !CFG.countries[iso] && !!site;
+    if (unmeasured) { iso = site; source = 'site'; }   // a named market we cannot measure (Qatar): the website's own, said so
     const ok = !req || req === iso;
     const nm = (i) => countryName(i) || i;
     const note = !iso ? '' : source === 'keyword'
       ? 'The keyword names ' + named.join(', ') + ', so this ladder is measured in ' + nm(iso) + (site ? ', not in your website\'s market (' + nm(site) + ')' : '') + '.'
-      : !measurable ? ''
       : places.length && keyword_iso && keyword_iso !== iso ? 'The keyword names ' + named.join(', ') + ', which we cannot measure, so this ladder is measured in your website\'s market (' + nm(iso) + ').'
       : places.length ? 'The keyword names ' + named.join(', ') + ', which includes your website\'s market (' + nm(iso) + '), so it is measured there.'
       : source === 'site' ? 'Measured in your website\'s market (' + nm(iso) + ').' : '';

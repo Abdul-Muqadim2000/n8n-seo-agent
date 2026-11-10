@@ -1,4 +1,3 @@
-/*__LADDER_RULES__*/
 // Ladder mode: research pulls around the head term (executed by "Run Ladder Research").
 //  suggestions - long-tail phrases that contain the head term
 //  related     - "searches related to" the head term, depth 2
@@ -23,12 +22,7 @@ const reqs = [
 // LADDER PACKAGE (2026-11-09, rule 6): with keyword intelligence ON for this website (seo_monitors.ki_mode 'on', the kill switch off) and a
 // finished keyword research of this market on file, the supporting pages come from its stored clusters (Ladder Pool reads them): the three
 // keyword pulls are not bought again; the "keywords this site ranks for" pull stays, the reach of the plan is measured on it.
-const KIQ = (() => { const rows = (n) => { try { return $(n).all().map(i => i.json || {}).filter(r => r && !r.error && Object.keys(r).length); } catch (e) { return null; } };
-  const mons = rows('Load Monitors (Ladder)'); const kill = rows('Load KI Kill (Ladder)');
-  const sid = 'site_' + String(d.domain || '').toLowerCase().replace(/^www\./, '').replace(/[^a-z0-9]+/g, '-');
-  const mon = (mons || []).find(r => String(r.site_id || '') === sid) || {};
-  return LRU.kiPool({ mode: mon.ki_mode, killed: kill === null ? null : kill.some(r => /^(1|true|on|yes)$/i.test(String(r.value || '').trim())), rows: rows('Load KI Keywords (Ladder)') || [],
-    runs: rows('Load KI Runs (Ladder)') || [], market: String((() => { try { return $('Normalize Input').first().json.country_iso || d.country_iso || ''; } catch (e) { return d.country_iso || ''; } })()).toUpperCase() + '-' + String(lang || 'en') }); })();
+const KIQ = (() => { try { return ($('KI Pool (Ladder)').first().json || {}).ki_pool || { used: false }; } catch (e) { return { used: false }; } })();
 if (KIQ.used && d.domain) reqs.splice(0, reqs.length);   // KIQ.used implies a website (its seo_monitors row), so the ranked pull below is always there
 if (d.domain) reqs.push({ kind: 'ranked', label: 'keywords ' + d.domain + ' ranks for', domain: d.domain, endpoint: L + 'ranked_keywords/live',
   body: [{ target: d.domain, location_code: loc, language_code: lang, limit: 500, order_by: ['keyword_data.keyword_info.search_volume,desc'], filters: [['ranked_serp_element.serp_item.rank_group', '<=', 60]] }] });

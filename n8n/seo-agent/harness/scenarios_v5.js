@@ -19803,5 +19803,6 @@ await require('./scenarios_ki_w0')({ H, run, mock, store, guard, reset, begin })
 await require('./scenarios_ki')({ H, run, mock, store, guard, reset, begin });   // KI1-KI25: the kit v5/code/_ki.js (E1): classes, stage, clusters, score, gaps, plan, accuracy sets, R3 golden
 await require('./scenarios_serp_goto')({ H, run, mock, store, guard, reset, begin });   // SERP-GOTO SG1-SG6: the site behind Google's redirect links (fixes/SERP_GOTO.md)
 await require('./scenarios_ki_e2')({ H, run, mock, store, guard, reset, begin });   // KIE2-1..13: the keyword-intelligence worker (E2) replayed on fixtures
+await require('./scenarios_ladder_pkg')({ H, run, mock, store, guard, reset, begin });   // LPK1-LPK8 (LADDER PACKAGE 2026-11-09, fixes/LADDER.md): one search one address, steps to the head, market lock, AVOID stops a rung, stuck rungs, KI as the pool
 H.report();
 })();

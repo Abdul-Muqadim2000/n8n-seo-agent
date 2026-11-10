@@ -152,13 +152,12 @@ const LRU = (() => {
       iso = keyword_iso; source = site && iso === site ? 'site' : 'keyword';
     } else if (site) { iso = site; source = 'site'; }
     else { iso = req; source = 'request'; }
-    const measurable = !!CFG.countries[iso];
-    if (!measurable && site) { iso = site; source = 'site'; }   // a named market we cannot measure (Qatar): the website's own, said so
+    const unmeasured = !CFG.countries[iso] && !!site;
+    if (unmeasured) { iso = site; source = 'site'; }   // a named market we cannot measure (Qatar): the website's own, said so
     const ok = !req || req === iso;
     const nm = (i) => countryName(i) || i;
     const note = !iso ? '' : source === 'keyword'
       ? 'The keyword names ' + named.join(', ') + ', so this ladder is measured in ' + nm(iso) + (site ? ', not in your website\'s market (' + nm(site) + ')' : '') + '.'
-      : !measurable ? ''
       : places.length && keyword_iso && keyword_iso !== iso ? 'The keyword names ' + named.join(', ') + ', which we cannot measure, so this ladder is measured in your website\'s market (' + nm(iso) + ').'
       : places.length ? 'The keyword names ' + named.join(', ') + ', which includes your website\'s market (' + nm(iso) + '), so it is measured there.'
       : source === 'site' ? 'Measured in your website\'s market (' + nm(iso) + ').' : '';
@@ -279,8 +278,12 @@ function publishedRows(o) {
   const conflict = (ladder && live && Array.isArray(o.owners) && typeof LRU !== 'undefined')
     ? LRU.ownerOf(o.url, ladder.keyword, o.owners, String(ladder.supporting || '').split(',').map(x => x.trim()).filter(Boolean)) : null;
   const url_conflict = conflict ? { url: o.url, keyword: String(conflict.keyword || ''), ladder_id: String(conflict.ladder_id || ''),
-    text: o.url.replace(/^https?:\/\/[^\/]+/i, '') + ' is already the page for "' + String(conflict.keyword || '') + '": one search, one page, so the ladder page for "' + String(ladder.keyword || '') + '" was not moved to it' } : null;
-  const ladder_row = ((ladder && live) && !conflict) ? { ladder_id: ladder.ladder_id, keyword: ladder.keyword, status: 'published', target_url: o.url, page_exists: true } : null;
+    text: o.url.replace(/^https?:\/\/[^\/]+/i, '') + ' is already the page for "' + String(conflict.keyword || '') + '": one search, one page, so the ladder page for "' + String(ladder.keyword || '') + '" ' + ((log && typeof LRU !== 'undefined' && LRU.urlKey(log.existing_page_url) === LRU.urlKey(o.url)) ? 'is recorded as part of that page (merged), not as a second page' : 'was not moved to it') } : null;
+  // a page run that DELIBERATELY refreshed that page (its content-log row names it as the page it improves: the client's "Improve the existing
+  // page") joins it: the rung is `merged` into that page, never a second rung published on it; anything else leaves the rung where it was
+  const deliberate = !!conflict && !!log && typeof LRU !== 'undefined' && LRU.urlKey(log.existing_page_url) !== '' && LRU.urlKey(log.existing_page_url) === LRU.urlKey(o.url);
+  const ladder_row = ((ladder && live) && !conflict) ? { ladder_id: ladder.ladder_id, keyword: ladder.keyword, status: 'published', target_url: o.url, page_exists: true }
+    : (ladder && live && deliberate) ? { ladder_id: ladder.ladder_id, keyword: ladder.keyword, status: 'merged', target_url: o.url, page_exists: true } : null;
   return { log_row, ladder_row, live, url_conflict, not_live_reason: live ? '' : 'nothing confirmed the page is there, so no row says it is' };
 }
 // rule R1 "one search, one page" — the same words as the web app (app/shared/src/ladders.ts): lower case, one-letter and stop words out, a light

@@ -2583,13 +2583,12 @@ const LRU = (() => {
       iso = keyword_iso; source = site && iso === site ? 'site' : 'keyword';
     } else if (site) { iso = site; source = 'site'; }
     else { iso = req; source = 'request'; }
-    const measurable = !!CFG.countries[iso];
-    if (!measurable && site) { iso = site; source = 'site'; }   // a named market we cannot measure (Qatar): the website's own, said so
+    const unmeasured = !CFG.countries[iso] && !!site;
+    if (unmeasured) { iso = site; source = 'site'; }   // a named market we cannot measure (Qatar): the website's own, said so
     const ok = !req || req === iso;
     const nm = (i) => countryName(i) || i;
     const note = !iso ? '' : source === 'keyword'
       ? 'The keyword names ' + named.join(', ') + ', so this ladder is measured in ' + nm(iso) + (site ? ', not in your website\'s market (' + nm(site) + ')' : '') + '.'
-      : !measurable ? ''
       : places.length && keyword_iso && keyword_iso !== iso ? 'The keyword names ' + named.join(', ') + ', which we cannot measure, so this ladder is measured in your website\'s market (' + nm(iso) + ').'
       : places.length ? 'The keyword names ' + named.join(', ') + ', which includes your website\'s market (' + nm(iso) + '), so it is measured there.'
       : source === 'site' ? 'Measured in your website\'s market (' + nm(iso) + ').' : '';
@@ -3620,7 +3619,11 @@ let rungPages = rungs.flatMap(r => r.pages);
 // new page) nor a numbered or "-copy" variant of a live page (the original improves). Then no two pages of this plan share an address
 // (compared without scheme or www): the first keeps it, the same search joins it, any other search gets its own new page.
 const knownLP = [...new Set([...SM.pages(pageModel).map(p => String(p.url || '')), ...(base.site_urls || []).map(String)].filter(Boolean))];
+// the blog rule is for a main page people choose a provider on (solution / compare / hire); a problem or learning search whose live answer is
+// an article keeps that article (moving it would write a second page for the same search)
 const head_guard = (() => { if (!planned || !top.target_url) return null;
+  const headStage = LRU.stageOf(head, top.intent || '', kiStageOf.get(head) || '');
+  if (LRU.isBlog(top.target_url) && !['solution', 'compare', 'hire'].includes(headStage)) return null;
   const nonBlog = { ...pageModel, pages: SM.pages(pageModel).filter(p => p && p.url && !LRU.isBlog(p.url) && !LRU.copyOf(p.url, knownLP)) };
   let com = null; try { com = SM.matchPage(nonBlog, head); } catch (e) { com = null; }
   const g = LRU.headTarget(top.target_url, { known: knownLP, home: homeUrl, planned: plannedUrl(head), commercial: com && com.url ? com.url : '' });

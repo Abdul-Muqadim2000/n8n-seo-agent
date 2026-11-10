@@ -407,7 +407,7 @@ for (const s of list) {
     const own = (u) => LRU.plannedUrl(home, l.keyword, slash) || u;
     if (isTop(l)) { const orig = exists ? LRU.copyOf(was, knownC) : '';
       if (orig) return { existing: orig, target: orig, note: LRU.pathOf(was) + ' is a copy of ' + LRU.pathOf(orig) + ': the main page improves the original' };
-      if (LRU.isBlog(was)) { const nu = own(was); if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu, note: 'the main page gets its own page (' + LRU.pathOf(nu) + '), not the blog address ' + LRU.pathOf(was) }; } }
+      if (LRU.isBlog(was) && ['solution', 'compare', 'hire'].includes(LRU.stageOf(l.keyword, '', String(l.stage || '')))) { const nu = own(was); if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu, note: 'the main page gets its own page (' + LRU.pathOf(nu) + '), not the blog address ' + LRU.pathOf(was) }; } }
     if (exists && was) { const o = LRU.ownerOf(was, l.keyword, ownersC, String(l.supporting || '').split(',').map(x => x.trim()).filter(Boolean));
       if (o) { const nu = own(was); if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu, note: LRU.pathOf(was) + ' is already the page for "' + o.keyword + '": "' + l.keyword + '" gets its own page at ' + LRU.pathOf(nu) }; } }
     return { existing: exists ? was : '', target: was, note: '' }; };
