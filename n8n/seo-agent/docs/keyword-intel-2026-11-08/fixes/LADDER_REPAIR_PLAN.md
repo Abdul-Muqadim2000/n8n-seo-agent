@@ -1,4 +1,4 @@
-# Ladder repair plan: the four production ladders (2026-11-10, ladder package; owner approved the repair 2026-11-09)
+# Ladder repair plan: the four production ladders (2026-11-10, ladder package; owner approved the repair 2026-11-09; section 1 rewritten to the safe option after REVIEW_LADDER.md)
 
 Not executed. The orchestrator applies it **after** the ladder package is deployed (so the new statuses `stopped` / `failed` / `merged` and
 the columns `stage` / `target_why` exist: `sync_tables.py` adds the two columns). Every operation is a row update or insert on production
@@ -26,35 +26,35 @@ Before any write: `GET .../rows?filter=` the row by id and check `status` / `tar
 and re-plan that row (a weekly run moved it). Check the live pages named as targets answer 200 (`curl -sI`; `seo_pages.http_status` holds a
 stale 404 from one probe of 2026-10-22 for several of them, R3 F12). Do it on a Tuesday-Thursday, not during a site's cycle hour.
 
-## 1. techand.ai, "dynamics 365 erp system" (`lad_mvjsa7995bsr`, settings row 11, active, Auto, priority 1)
+## 1. techand.ai, "dynamics 365 erp system" (`lad_mvjsa7995bsr`, settings row 11, active, Auto, priority 1) - the SAFE option (orchestrator, after REVIEW_LADDER.md)
 
-What went wrong (R3 F6): rungs 2 and 3 and the main page were all written onto the blog address
-`/insights/is-microsoft-dynamics-365-an-erp-system` (rows 34, 36, 37), whose title is now the main page's ("Dynamics 365 ERP System: Right App
-for UAE Firms"); QA warned three times that `/dynamics-365-business-central-uae` already serves the search; no rung was for buyers comparing
-or choosing a partner.
+What went wrong (R3 F6): rungs 2 and 3 and the main page were written onto the blog address
+`/insights/is-microsoft-dynamics-365-an-erp-system` (rows 34, 36, 37); no rung was for buyers choosing a partner.
 
-What the results say (KI Trial, Search Console 28 days): Google shows the blog address for every ERP search of this ladder ("dynamics 365
-erp system" #31.4, "dynamics 365 erp" #50.2 89 impressions, "microsoft dynamics erp" #44.9, "dynamics 365 erp services" #35.9), all stage
-`solution`; the definition "is microsoft dynamics 365 an erp system" #31.3. The commercial Business Central page holds the buyer searches
-("microsoft dynamics 365 business central uae" #52.7, "business central uae" #52.6, "... provider" #42.9, all `hire`). The partner search
-"microsoft dynamics erp partner" (#64.1, `hire`) has no page of its own.
+Why the head stays where it is: that blog address is the page that ranks for the cluster (Rank Tracker #16 for "dynamics 365 erp system"
+on 2026-11-05; Search Console #26.5 "dynamics 365 erp", #31.4 "dynamics 365 erp system", #44.9 "microsoft dynamics erp"). Moving the head
+would leave it for a page that competes with it (review H5; the package now keeps a ranking address by itself, `LRU.ranksFor`). Moving it
+onto `/dynamics-365-business-central-uae` would hand the Business Central page a second search (rule 1 in reverse). So: no new competing
+page, no move. The page is improved and retitled towards the buying search; `/ms-365-erp-uae` stays its own rung; rung 3 is a section of
+the guide.
 
-Decision: the blog address stays the guide (the one URL that already ranks; the solution searches "microsoft dynamics erp" is folded into it
-as a section, which is what was published); the main page moves to the commercial page `/dynamics-365-business-central-uae` (improve it,
-rule 1: the head is never a blog address); a commercial step is added (rule 2).
+First: re-check every target's live status (`curl -sI`, follow nothing; `seo_pages.http_status` holds stale 404s from one probe of
+2026-10-22): `/insights/is-microsoft-dynamics-365-an-erp-system`, `/ms-365-erp-uae`. If one does not answer 200, stop and re-plan this
+section. Where `seo_pages.http_status` says 404 for a page that answers 200, set that row's `http_status: 200`, `status_at: <now>` (same
+table, update by `url`), so `SM.isGone` no longer hides it from matching.
 
 | Row | Now | Change |
 |---|---|---|
-| 34 rung 2 "is microsoft dynamics 365 an erp system" | published, /insights/is-microsoft-dynamics-365-an-erp-system | none (the guide; `stage: "info"`, `target_why: "the guide that already ranks for this search"`) |
-| 35 rung 2 "ms 365 erp" | published, /ms-365-erp-uae | none to the row (it is live). Note for the owner: KI gates "ms 365 erp" as too broad and QA said it duplicates the Business Central page: consider a 301 to /dynamics-365-business-central-uae (client action, not ours). `stage: "solution"` |
-| 36 rung 3 "microsoft dynamics erp" | published, the blog address | `status: "merged"`, `status_note: "merged: a section of /insights/is-microsoft-dynamics-365-an-erp-system, the page Google already shows for it (#44.9, Search Console 28 days); one search, one page"`, `stage: "solution"` |
-| 37 rung 4 "dynamics 365 erp system" (main) | published, the blog address | `target_url: "https://www.techand.ai/dynamics-365-business-central-uae"`, `page_exists: true`, `status: "planned"`, `status_note: "moved: the main page improves your Business Central page instead of the blog guide (repair 2026-11, one search one page)"`, `stage: "solution"`, `target_why: "your page /dynamics-365-business-central-uae already answers this search, so it is improved, not written twice"` |
-| new, rung 3 page 5 "microsoft dynamics erp partner" | (none) | insert: `ladder_id: "lad_mvjsa7995bsr"`, `domain: "techand.ai"`, `head_keyword: "dynamics 365 erp system"`, `rung: 3`, `page_no: 5`, `keyword: "microsoft dynamics erp partner"`, `supporting: "dynamics 365 erp services"`, `page_type: "Service Page"`, `target_url: "https://www.techand.ai/microsoft-dynamics-erp-partner"`, `page_exists: false`, `status: "planned"`, `months: "1-3"`, `start_date` = row 34's, `country: "United Arab Emirates"`, `location_code: 2784`, `language_code: "en"`, `email: ""`, `callback_url` = row 34's, `request_id: "repair-2026-11"`, `target_words: 1200`, `status_note: ""`, `chosen_by: "client_picked"`, `stage: "hire"`, `target_why: "the step for people choosing a partner, before the main page (rule 2)"` |
-| content log 16 "dynamics 365 erp system" | published, published_url the blog address | `status: "moved"`, `publish_note: "the ladder's main page moved to /dynamics-365-business-central-uae (repair 2026-11); this address stays the guide"`. Without this the Content Cadence counts the main keyword as published and never writes it; even with it, the keyword was started within the cadence's 90-day window, so the main page is written with "Write it now" on the ladder page, not by the cycle. |
+| 34 rung 2 "is microsoft dynamics 365 an erp system" | published, the guide address | `stage: "info"`, `target_why: "the guide; the ladder's main page improves this same page towards the buying search"`. Status stays `published`. |
+| 35 rung 2 "ms 365 erp" | published, /ms-365-erp-uae | `stage: "solution"`, `target_why: "its own page"`. Status stays `published`. |
+| 36 rung 3 "microsoft dynamics erp" | published, the guide address | `status: "merged"`, `status_note: "merged: a section of /insights/is-microsoft-dynamics-365-an-erp-system, the page Google shows for it (#44.9, Search Console 28 days); one search cluster, one page"`, `stage: "solution"`. (After review M2 a `merged` row never owns the address, so the guide's own rungs stay its owners.) |
+| 37 rung 4 "dynamics 365 erp system" (main) | published, the guide address, page_exists true | `stage: "solution"`, `target_why: "this page already ranks for \"dynamics 365 erp system\" (#16), so the main page improves it, retitled towards the buying search, instead of a second page that would compete with it"`. Status stays `published`; target unchanged. |
+| content log 15 / 16 | published at the guide | unchanged (true records of what was published). No new status. |
 
-After: the main page is written with "Write it now" on the ladder page (a refresh of the Business Central page, about 1.4 dollars of
-engine cost); the new partner rung is written by the next cycle. Tell the client (owner sends it): the blog address now carries the main page's title; its
-own title "Is Microsoft Dynamics 365 an ERP system?" should come back when the Business Central page is refreshed.
+Then (owner's choice, from the app, normal credits): "Write it now" on the main page (an improvement of the guide address that retitles
+it towards "dynamics 365 erp system" and adds a partner section linking to the Business Central and MS 365 ERP pages), and a new keyword
+the client picks for the commercial step through the app's "Add to my ladder" (for example "microsoft dynamics erp partner", Search
+Console #64.1, stage hire) only if the owner wants it. Nothing is written by the repair itself.
 
 ## 2. techand.ai, "crm service provider" (`lad_mw0goinsniv1`, settings row 14, active, Auto, priority 2)
 
@@ -71,11 +71,11 @@ orchestrator: KI.pageAction should apply LRU.headTarget, see LADDER.md section 6
 | Row | Now | Change |
 |---|---|---|
 | settings 14 | active, Auto, priority 2 | the app's Pause on the ladder page, or the Data Table: `status: "paused"` (the cadence writes nothing for a paused ladder; ranks are still checked). Then reorder: no change needed to row 11 (priority 1 stays). |
-| 47 rung 2 "what is a crm company" | writing | `status: "failed"`, `status_note: "failed: the page run stopped without a result (started 2026-11-05 01:33, nothing of it still running); nothing was written and nothing is charged for it"`, `stage: "info"` (the watcher would do this by itself once deployed; doing it by hand is the same write) |
+| 47 rung 2 "what is a crm company" | writing | `status: "failed"`, `status_note: "failed: the page run stopped without a result (started 2026-11-05 01:33, nothing of it still running); nothing was written"` (first confirm in n8n that no execution of the main workflow from 2026-11-05 is still running or queued), `stage: "info"` (the watcher would do this by itself once deployed; doing it by hand is the same write) |
 | content log 26 "what is a crm company" | started | `status: "failed"`, `qa_reasons: "page run failed: the page run stopped without a result"` |
 | 46 rung 2 "crm for customers" | published, /insights/crm-for-customers | `status_note: "published although our check advised against it (AVOID, score 30): consider removing it or redirecting it to /dynamics-365-crm-uae"`, `stage: "solution"`. Status stays `published` (the page is live). Owner note to the client. |
-| 48 rung 2 "best crm software for customer service" | planned | `status: "stopped"`, `status_note: "stopped: a comparison of CRM software, not of CRM partners; the ladder is re-planned from keyword research"`, `stage: "compare"` |
-| 49 rung 2 "crm service module" | planned | `status: "stopped"`, `status_note: "stopped: a product feature search, not a step towards choosing a CRM partner; the ladder is re-planned from keyword research"`, `stage: "solution"` |
+| 48 rung 2 "best crm software for customer service" | planned | `status: "set_aside"`, `status_note: "a comparison of CRM software, not of CRM partners: not a search for this ladder; it is re-planned from keyword research"`, `stage: "compare"` (review M5: `set_aside`, not `stopped`, because no check advised against it) |
+| 49 rung 2 "crm service module" | planned | `status: "set_aside"`, `status_note: "a product feature search, not a step towards choosing a CRM partner: not a search for this ladder; it is re-planned from keyword research"`, `stage: "solution"` |
 | 50 rung 4 "crm service provider" (main) | planned, /dynamics-365-crm-uae-2, page_exists true | `target_url: "https://www.techand.ai/dynamics-365-crm-uae"` (check it answers 200 first), `page_exists: true`, `status_note: "moved: the main page improves /dynamics-365-crm-uae, not its copy -2"`, `stage: "hire"`. Stays `planned`; the ladder is paused. |
 
 Re-plan later: when the owner switches techand.ai's keyword intelligence to `on`, start a new ladder from the app on the partner cluster
@@ -116,11 +116,11 @@ No change. Only `stage` for the record: 51 `hire`, 52 `hire`, 53 `solution`, 54 
 
 ## 5. Order and checks
 
-1. Deploy the package (sync_tables.py adds `stage` / `target_why`), then wait one cycle-free hour.
+1. Deploy the package with the review fixes H1-H5 (sync_tables.py adds `stage` / `target_why`), then wait one cycle-free hour. Re-check every target page's live status and correct stale `seo_pages.http_status` 404s first (sections 1 and 2).
 2. Before-images of rows 11, 12, 14, 15 (settings) and 34-54 (ladders), content log 16, 17, 23, 26.
 3. Apply 2 (pause first, it stops writes), then 1, then 3, then 4.
-4. Read back every changed row; open both sites' Pipeline as a platform admin: the CRM ladder Paused with "Stopped" / "Stopped without a
-   result" rows and their reasons, the ERP ladder's main page "Improves an existing page: /dynamics-365-business-central-uae", the
-   devaicon GCC ladder archived.
-5. Cost: nothing for the repair itself; the ERP main page refresh and the new partner rung are written by the normal cycle (about 1.4
-   dollars each in engine cost, charged to the client at the usual credits).
+4. Read back every changed row; open both sites' Pipeline as a platform admin: the CRM ladder Paused with its "Set aside" / "Stopped
+   without a result" rows and their reasons, the ERP ladder's main page "Improves an existing page" on the guide address with the reason,
+   rung 3 "Part of another page", the devaicon GCC ladder archived.
+5. Cost: nothing for the repair itself. The ERP main page improvement is the owner's "Write it now" (about 1.4 dollars in engine cost,
+   the usual credits), and only if the owner chooses it.
