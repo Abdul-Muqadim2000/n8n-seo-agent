@@ -41,7 +41,19 @@ Engine: build section 184, harness `scenarios_client_1110.js` (CR1-CR4) plus W0H
 Build exit 0 (main workflow 838 nodes). Harness **18581 passed, 0 failed** (run in a throwaway `n8nio/n8n:2.41.4` with `app/` mounted at
 `/app`; the KI scenarios read it).
 
-## Deploy and repair
+## Deployed 2026-11-10 (Tuesday, ~19:25-19:36 UTC)
+
+- Backup `gs://alaventra-prod-backups/pg/2026-11-10/{app,n8n}-2026-11-10T192434Z.dump`.
+- Before: production node-diffed against the build = only this commit's nodes (plus the alert-webhook placeholder the deploy substitutes).
+- Engine: `deploy_engine.py --no-build --apply` (guard ok, no new column, 14 updated, 29 published); after: prod == build (0 unexpected).
+- API on the VM: 4d4a3c69 -> 28f8de07, `up -d --build app`, healthy, 0 restarts; rollback image `alaventra-app:rollback-4d4a3c69`.
+- Web: PR #64 to main (the owner merges; Vercel deploys).
+- Not done: clearing the four stale publish notes directly in `seo_content_log` was refused by the permission classifier. Not needed:
+  the client's "Re-check page" now verifies these pages and clears the note, and the app shows "Moved: ... redirects here" after the
+  next daily redirect check.
+- App checks: typecheck clean, shared 1174, server 2070 (46 skipped), web 359, web build OK. Tutorials backlog row added (video-skills 12a1d5f).
+
+## Deploy and repair (plan, kept for the record)
 
 1. Merge origin/main, node-diff production against the build (feedback-engine-deploy-check-prod-first), backup, then
    `deploy/gcp/deploy_engine.py --no-build --apply` over the tunnel; API on the VM; web through a PR to main (owner merges).
