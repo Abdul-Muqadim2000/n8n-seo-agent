@@ -2540,7 +2540,18 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
    *         appearances: [{ keyword, position, type, title, url }] (this domain on the run's results pages; titles are untrusted text),
    *         pages: [{ url, title, text }] (its own pages read, untrusted), llm: { class, confidence } (only when an LLM was asked) }
    *  store=false for anything that may never become a competitor row: text fragments, search engines, the site itself. */
-  const CLASS_IDS = ['direct', 'adjacent', 'principal', 'directory', 'publisher_list', 'platform', 'government', 'job_board', 'media'];
+  const CLASS_IDS = ['direct', 'adjacent', 'principal', 'directory', 'publisher_list', 'platform', 'government', 'job_board', 'media', 'education'];
+  // FX-L 2026-11-10 (Trial classification ~50% wrong among `direct` on production results): classes generalised beyond the fixed host lists,
+  // from the evidence held per host - its name's words, its results' titles and paths. A job board, a recruiter or a staffing firm; a news,
+  // update or magazine site; a directory or "yellow pages"; a training provider, school or university are never competitors, whatever topic
+  // their pages share with the client.
+  const JOB_LABEL = /job|career|recruit|staff|talent|manpower|hiring|vacanc|trabajo|empleo|emploi|lavoro|naukri|bayt/;
+  const DIR_LABEL = /yellowpages|yellowpage|directory|directories|listing|listings|agencies|companies|firms|vendors|suppliers|businesslist|bizlist|finder/;
+  const MEDIA_LABEL = /news|update|updates|times|daily|journal|magazine|gazette|tribune|herald|insider|today|weekly|chronicle|blog/;
+  const EDU_LABEL = /university|universit|college|academy|academi|institute|school|campus/;   // not 'learning' / 'training': LMS vendors are often named so
+  const JOB_T = /\b(?:jobs?|vacanc(?:y|ies)|hiring|careers?|salar(?:y|ies)|recruit(?:ment|ing|er|ers)?|job openings?)\b/i;
+  const EDU_T = /\b(?:course|courses|training|trainers?|certification|certificate|bootcamp|academy|university|college|diploma|degree|classes|workshop)\b/i;
+  const NEWS_T = /\b(?:released|publishes|published|announces|announced|launches|launched|unveils|news|updates?|v\d+\.\d+)\b/i;
   const classifyDomain = (host, ctx) => {
     const o = ctx || {}; const raw = S(host).trim();
     const h = validHost(raw);
@@ -2563,13 +2574,27 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
     if (kind === 'job' || /(^|\.)(indeed|naukri|naukrigulf|bayt|glassdoor|monster|gulftalent|rozee|mustakbil|wuzzuf)\./.test(h)) return out('job_board', 'rule', 0.95, ['a job board']);
     if (DIRECTORY_HOSTS.test(h)) return out('directory', 'rule', 0.9, ['a directory or review site where companies are listed']);
     if (MEDIA_HOSTS.test(h)) return out('media', 'rule', 0.85, ['a news, trade media or analyst site']);
-    if (PLATFORM_HOSTS.test(h)) return out('platform', 'rule', 0.9, ['a global platform or another company\'s software']);
+    if (PLATFORM_HOSTS.test(h) || /^(?:about\.me|linktr\.ee|carrd\.co|bio\.link|beacons\.ai)$/.test(h)) return out('platform', 'rule', 0.9, ['a global platform or another company\'s software']);
     const ccOnly = /^[a-z0-9-]+\.[a-z]{2}$/.test(R) && !/\.(io|ai|co|me|tv|ly|fm)$/.test(R);
     if (kind !== 'business' && !(kind === 'platform' && ccOnly)) return out(KIND_CLASS[kind] || 'platform', 'rule', 0.9, [(typeof CMP === 'object' && CMP.LABEL && CMP.LABEL[kind]) || kind]);
     if (declared.includes(R)) return out('direct', 'declared', 0.9, ['declared by you as a competitor']);
+    // FX-L 2026-11-10: the host's own name, then the titles of its results
+    const label = R.split('.')[0];
+    const eduTld = /(^|\.)(ac|edu)\.[a-z]{2}$|\.edu$/.test(h);
+    if (JOB_LABEL.test(label)) return out('job_board', 'rule', 0.8, ['its name is a job board, recruiter or staffing firm']);
+    if (eduTld || EDU_LABEL.test(label)) return out('education', 'rule', 0.8, ['its name is a school, university or training provider']);
+    if (DIR_LABEL.test(label)) return out('directory', 'rule', 0.8, ['its name is a directory or listing site']);
+    if (MEDIA_LABEL.test(label)) return out('media', 'rule', 0.75, ['its name is a news, update or blog site']);
+    const tts = uniq((Array.isArray(o.appearances) ? o.appearances : []).map(a => S(a && a.title)).filter(Boolean));
+    const share = (re) => tts.length ? tts.filter(t => re.test(t)).length / tts.length : 0;
+    if (tts.length && share(JOB_T) >= 0.5) return out('job_board', 'page', tts.length >= 2 ? 0.8 : 0.65, ['its results read are job listings (' + tts.filter(t => JOB_T.test(t)).length + ' of ' + tts.length + ')']);
+    if (tts.length && share(EDU_T) >= 0.5) return out('education', 'page', tts.length >= 2 ? 0.8 : 0.65, ['its results read are courses or training (' + tts.filter(t => EDU_T.test(t)).length + ' of ' + tts.length + ')']);
+    if (tts.length >= 2 && share(NEWS_T) >= 0.5) return out('media', 'page', 0.7, ['its results read are news or update articles']);
     // page signals: what this domain's results on the run's pages are, and what its own pages say (untrusted text)
     const apps = (Array.isArray(o.appearances) ? o.appearances : []).filter(Boolean);
-    const typed = apps.map(a => ({ a, t: S(a.type) || (a.url || a.title ? pageType({ url: a.url, domain: h, title: a.title }, o) : '') })).filter(x => x.t);
+    // a comparison ("X vs Y") is an article, not a list of companies: it never makes its site a list publisher (FX-L 2026-11-10)
+    const cmpOnly = (t) => /\b(?:vs\.?|versus|compared|comparison|face-off)\b/i.test(S(t)) && !LIST_NUM.test(S(t)) && !LIST_PLURAL.test(S(t));
+    const typed = apps.map(a => { let t = S(a.type) || (a.url || a.title ? pageType({ url: a.url, domain: h, title: a.title }, o) : ''); if (t === 'list' && cmpOnly(a.title)) t = 'guide'; return { a, t }; }).filter(x => x.t);
     const types = typed.map(x => x.t);
     const nList = types.filter(t => t === 'list').length, nProv = types.filter(t => t === 'provider' || t === 'vendor').length;
     const nGuide = types.filter(t => t === 'guide' || t === 'news' || t === 'video').length;
@@ -2598,7 +2623,12 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
     const capC = (c) => (oneSellerList ? Math.min(c, 0.55) : c);
     if (sim === 0) return out('adjacent', 'page', 0.35, reasons.concat(['nothing in its own titles or pages matches your services: not counted as a competitor until you confirm']), { topic_sim: 0, geo_match: geoOff ? 0 : gm });
     if (geoOff) return out('adjacent', 'page', capC(0.7), reasons.concat(['based in another market']), { topic_sim: sim, geo_match: 0 });
-    if (sim != null && sim >= C(o.cfg).direct_topic) return out('direct', 'page', capC(nProv ? 0.8 : nGuide && nGuide === types.length ? 0.6 : 0.7), reasons, { topic_sim: sim, geo_match: gm });
+    // FX-L 2026-11-10: `direct` needs PROVIDER evidence - a service / product page of its own among its results, or a homepage that names the
+    // client's services; a site seen only through articles, guides or lists is a close competitor for you to confirm
+    const homeSim = pageText.trim() ? topicSim([], pageText, o, h) : null;
+    const provEv = nProv > 0 || (homeSim != null && homeSim >= 0.67);
+    if (sim != null && sim >= C(o.cfg).direct_topic && provEv) return out('direct', 'page', capC(nProv ? 0.8 : 0.7), reasons, { topic_sim: sim, geo_match: gm });
+    if (sim != null && sim >= C(o.cfg).direct_topic) return out('adjacent', 'page', 0.55, reasons.concat(['only its articles or lists were seen, no service page of its own: needs your review']), { topic_sim: sim, geo_match: gm });
     if (sim != null) return out('adjacent', 'page', capC(0.6), reasons.concat(['sells something that overlaps']), { topic_sim: sim, geo_match: gm });
     // no text of its own: never "direct" from where it was found
     return out('adjacent', 'rule', 0.4, reasons.concat([apps.length ? 'seen on your service searches, but no title or page of its own was read: needs your review' : 'not enough evidence yet']), { topic_sim: null, geo_match: gm });
@@ -2617,10 +2647,14 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
   const LIST_OTHER = /\balternatives\b|\b(?:vs\.?|versus)\b|\bcompared\b|\bcomparison\b/i;
   const LIST_YEAR = /\b(?:best|top)\s+(?:[\w&.+-]+\s+){0,5}?(?:software|tools|apps|systems|platforms)\b.*\b20\d\d\b/i;
   const LIST_SLUG = /(?:^|\/)(?:\d+-)?(?:top|best)-(?:[a-z0-9]+-){0,6}?(?:\d+|companies|firms|agencies|providers|consultants|vendors|partners|developers|integrators|tools|platforms|softwares|apps|alternatives)(?:-|\/|$)|(?:^|\/)top-(?:[a-z0-9]+-){0,4}?software(?!-(?:company|provider|partner|development|house))(?:-|\/|$)/;
-  const isListTitle = (t, p) => { const home = p === '/' || !S(p).replace(/\//g, '');
+  const isListTitle = (t, p, noHead) => { const home = p === '/' || !S(p).replace(/\//g, '');
     if (LIST_NUM.test(t)) return true; if (home) return false;
+    // FX-L 2026-11-10: a title whose FIRST part names plural sellers as its head ("AI Companies UAE", "System Integrators Companies in Sharjah",
+    // "Microsoft Office 365 Distributors And Suppliers In Sharjah") lists businesses
+    const first = S(t).split(/\s+[|\-\u2013\u2014:]\s+/)[0];
+    if (!noHead && /^(?:[\w&.+'-]+\s+){0,6}?(?:companies|agencies|firms|providers|vendors|developers|consultants|integrators|suppliers|distributors|resellers)\b(?:\s+\S+){0,5}$/i.test(first.trim()) && !/\b(?:company|agency|firm|provider|partner)\b/i.test(first)) return true;
     return LIST_PLURAL.test(t) || LIST_OTHER.test(t) || LIST_YEAR.test(t) || LIST_SLUG.test(p); };
-  const GUIDE_T = /\b(?:what is|what are|what's|how to|how does|why|guide|tutorial|explained|overview|introduction|definition|meaning|vs|difference|everything you need|complete|ultimate|101|beginner|faq|examples?|review|reviews|pdf)\b|\?/i;
+  const GUIDE_T = /\b(?:what is|what are|what's|what it means|what you need to know|how to|how does|why|guide|tutorial|explained|overview|introduction|definition|meaning|vs|difference|everything you need|complete|ultimate|101|beginner|faq|examples?|review|reviews|pdf)\b|\?/i;
   const GUIDE_P = /\/(?:blog|blogs|insights?|articles?|news|resources?|learn|guides?|knowledge|academy|wiki|faq|post|posts|stories|publication|science|document|presentation|docs?)(?:\/|$)/;
   const SERVICE_P = /\/(?:services?|solutions?|products?|software|platform|industries|consulting|implementation|offerings?|what-we-do|capabilities|expertise|partners?)(?:\/|$|-)/;
   const SERVICE_T = /\b(?:services?|solutions?|software|platform|partner|consult(?:ing|ancy|ants?)|implementation|agency|company|developers?|development|hosting|support|integrat(?:ion|or)s?|provider)\b/i;
@@ -2632,7 +2666,8 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
     if (S(it.type) === 'video' || VIDEO_H.test(h) || /\/watch(?:$|\/)|\/videos?\//.test(p)) return 'video';
     if (kind === 'gov' || /(^|\.)(gov|gouv|gob|mil)(\.[a-z]{2})?$/.test(h)) return 'government';
     if (kind === 'job' || ((typeof CMP === 'object' && CMP.kindOfResult) ? CMP.kindOfResult(u, t, '') === 'job' : /\b(jobs?|vacanc|careers?)\b/i.test(t))) return 'job_board';
-    if (isListTitle(t, p) && !/\b(what is|how to)\b/i.test(t)) return 'list';
+    const hasUrl = /^https?:\/\/[^\/]+/i.test(u) && !REDIR.test(u);   // FX-L 2026-11-10: a result with no readable address (a goto redirect) has an unknown path, not a homepage
+    if (isListTitle(t, hasUrl ? p : 'x/unknown', DIRECTORY_HOSTS.test(h) || kind === 'directory' || kind === 'review') && !/\b(what is|how to)\b/i.test(t)) return 'list';   // a directory's category page stays a directory
     if (DIRECTORY_HOSTS.test(h) || kind === 'directory' || kind === 'review') return 'directory';
     if (kind === 'qa' || kind === 'social' || /\/(?:forums?|community|communities|questions|discussion|threads?|pulse)\//.test(p) || /(^|\.)(community|forums?|answers|techcommunity)\./.test(h)) return 'forum';
     if (kind === 'media' || MEDIA_HOSTS.test(h)) return 'news';
@@ -2643,7 +2678,7 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
     const guide = GUIDE_T.test(t) || GUIDE_P.test(p) || /\b(?:documentation|docs|knowledge base|help center|support article)\b/i.test(t) || /^(?:learn|docs|support|help|developer|developers|community|techcommunity)\./.test(h);   // FX-L L4: a maker's documentation is a guide
     if (vendorHost) return guide && !/\/(?:products?|pricing|solutions?)(?:\/|$)/.test(p) ? 'guide' : 'vendor';
     if (guide && !(SERVICE_P.test(p) && !GUIDE_P.test(p))) return 'guide';
-    if (SERVICE_P.test(p) || SERVICE_T.test(t) || p === '/' || !p.replace(/\//g, '')) return 'provider';
+    if (SERVICE_P.test(p) || SERVICE_T.test(t) || (hasUrl && (p === '/' || !p.replace(/\//g, '')))) return 'provider';
     if (typeof KWI === 'object' && KWI && KWI.shapeOf) { const sh = KWI.shapeOf(u, t); if (sh === 'Guide or article') return 'guide'; if (sh === 'Service or product page' || sh === 'Pricing page' || sh === 'Homepage') return 'provider'; }
     return t || p.length > 1 ? 'provider' : 'other';
   };
@@ -2737,6 +2772,8 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
   // ---------------------------------------------------------------------------------------------------------------------------------
   // gate and fit (the shared fit gate, mapped to the KI reasons)
   // ---------------------------------------------------------------------------------------------------------------------------------
+  const CAREER_W = /\s(?:jobs?|careers?|vacanc(?:y|ies)|hiring|recruit(?:ing|ment)?|salar(?:y|ies)|internships?|job description|cv|resume|apply now|walk in|openings?|course|courses|certification|training institute)\s/;
+  const SELLS_WORK = /\b(?:recruit\w*|staffing|manpower|headhunt\w*|executive search|employment agenc\w*|training|courses?|academy|education)\b/;
   const GATE_REASON = { 'other market': 'other_market', 'job search': 'career', 'other brand': 'other_brand', 'government': 'government', 'portal': 'portal',
     'navigational': 'navigational', 'own brand': 'own_brand', 'off topic': 'off_topic', 'too broad': 'too_broad', 'empty': 'empty' };
   const GATE_TEXT = { other_market: 'outside your market', career: 'someone looking for a job or a course', other_brand: 'another company\'s brand', government: 'a government service',
@@ -2753,6 +2790,11 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
     if (!k) return { gate: 'fail', reason: 'empty', text: GATE_TEXT.empty, detail: 'no keyword' };
     if (avoid.has(k)) return { gate: 'fail', reason: 'avoid', text: GATE_TEXT.avoid, detail: 'a stored AVOID verdict for this keyword (it needs an explicit override)' };
     if (typeof fitGate !== 'function') return { gate: 'fail', reason: 'empty', text: 'the fit gate is not available', detail: 'fit gate kit not inlined (fails closed)' };
+    // FX-L 2026-11-10 (Trial: "software development company sharjah careers" passed): a search with a job / career / pay / study word is
+    // someone looking for work or a course, unless the site sells recruitment or training
+    const kn = ' ' + norm(keyword) + ' ';
+    if (CAREER_W.test(kn) && !SELLS_WORK.test(services(o.services).concat(services(o.topics || [])).join(' | ').toLowerCase()))
+      return { gate: 'fail', reason: 'career', text: GATE_TEXT.career, detail: 'it names a job, a career, pay or a course: ' + ascii((kn.match(CAREER_W) || [''])[0]).trim() };
     const g = fitGate(S(keyword), gctx(o));
     if (g && g.ok) return { gate: 'pass', reason: '', text: '', detail: '' };
     const reason = GATE_REASON[(g || {}).reason] || 'off_topic';
@@ -2947,6 +2989,10 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
     // Strength: the site's referring domains (or rank) against the median of the top 10, log ratio
     let st = null, stLo = null, stHi = null, stBasis = 'modelled';
     if (num(r.strength) != null) { st = clip(num(r.strength), 0, 1); stLo = clip(st - 0.1, 0, 1); stHi = clip(st + 0.1, 0, 1); stBasis = S(r.strength_basis) || 'modelled'; }
+    else if (num(s.refdomains) != null && num(r.market_refdomains_median) != null && !(items || []).some(x => num(x.refdomains) != null) && num(r.top10_refdomains_median) == null) {
+      // FX-L 2026-11-10: no results page read for this search, but the client's referring domains and the median of the results pages read in this
+      // market are known: Strength is read against the market, with a wider range (+/- 0.2) than against its own page
+      st = clip(0.5 + 0.5 * Math.log10((1 + num(s.refdomains)) / (1 + num(r.market_refdomains_median))) / Math.log10(c.strength_span), 0, 1); stLo = clip(st - 0.2, 0, 1); stHi = clip(st + 0.2, 0, 1); stBasis = 'modelled'; }
     else {
       const med = (vals) => { const v = vals.filter(x => x != null).sort((a, b) => a - b); return v.length ? (v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2) : null; };
       const pair = num(s.refdomains) != null ? [num(s.refdomains), num(r.top10_refdomains_median) != null ? num(r.top10_refdomains_median) : med((items || []).map(x => num(x.refdomains)))]
@@ -3583,7 +3629,7 @@ const g = $('KI Gate').first().json || {};
 const c = $('Research Candidates').first().json || {};
 const rp = $('Research Picture').first().json || {};
 const sp = $('Research SERP Picture').first().json || {};
-const all = (n) => { try { return $(n).all().map(i => (i && i.json) || {}); } catch (e) { return []; } };
+const all = (n) => { try { return $(n).all(0).map(i => (i && i.json) || {}); } catch (e) { return []; } };
 const now = p.now || new Date().toISOString();
 const N = KIW.N, S = KIW.S;
 const client = KIW.host(p.domain);
@@ -3615,6 +3661,11 @@ const by = sp.by || {};
 const siteQ = (p.gsc || []).map(q => ({ query: q.query, impressions: q.impressions, position: q.position, page: q.page }));
 const siteCtx = { domain: p.domain, queries: siteQ, total_impressions: N(p.site_impressions), model, pages, refdomains: rd[client] != null ? rd[client] : null };
 const cfg = KI.cfg({ now });
+// FX-L 2026-11-10: the median referring domains of the results pages read in this market (each page's own median first), the yardstick of
+// Strength for a search whose own page was not read (most of the top N: only the top M are read)
+const medOf = (v) => { const a = v.filter(x => x != null && Number.isFinite(x)).sort((x, y) => x - y); return a.length ? (a.length % 2 ? a[(a.length - 1) / 2] : (a[a.length / 2 - 1] + a[a.length / 2]) / 2) : null; };
+const pageMeds = Object.values(by).map(r => medOf((r.top10 || []).map(t => rd[KIW.host(t.host)]).filter(x => x != null))).filter(x => x != null);
+const marketMed = pageMeds.length >= 3 ? medOf(pageMeds) : null;
 const rows = (rp.rows || []).map(r0 => {
   const v = vm[r0.kw_key] || {};
   const r = { ...r0 }; if (r.volume == null && v.ads_v != null) { r.volume = v.ads_v; r.volume_source = 'Google Ads (Keyword Planner ranges)'; r.volume_basis = 'provider_estimate'; if (r.cpc == null) r.cpc = v.ads_cpc; }
@@ -3624,7 +3675,7 @@ const rows = (rp.rows || []).map(r0 => {
     if (g2.gate !== 'pass') { r.gate = 'fail'; r.gate_reason = g2.reason; r.gate_code = g2.reason; r.gate_detail = (g2.text || g2.reason) + (g2.detail ? ' (' + g2.detail + ')' : ''); } }
   const intentP = N(r.intent_p);
   const st = KI.stage(top10, r.keyword, r.intent_label ? { label: r.intent_label, probability: intentP } : r.labs_intent, { own_domain: client, cfg });
-  const row = { ...r, top10, serp: sr, stage: st.stage, intent: st.intent || null, intent_confidence: N(st.confidence), needs_review: !!st.needs_review || !sr, stage_evidence: st.evidence ? [st.evidence] : [],
+  const row = { ...r, top10, serp: sr, market_refdomains_median: sr ? null : marketMed, stage: st.stage, intent: st.intent || null, intent_confidence: N(st.confidence), needs_review: !!st.needs_review || !sr, stage_evidence: st.evidence ? [st.evidence] : [],
     aio: sr ? !!(sr.extras || {}).aio : r.aio };
   // the chosen set's positions for the gap (the results page read; else the provider's stored positions, an estimate)
   const labsTop = (r.competitors || []).filter(x => chosen.includes(KIW.host(x.domain)) && N(x.position)).map(x => ({ url: KIW.S(x.url), host: KIW.host(x.domain), pos: N(x.position), exact: false }));

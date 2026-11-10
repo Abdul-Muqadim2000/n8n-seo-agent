@@ -108,3 +108,76 @@ Replay on the stored rows with the corrected app behaviour (the `avoid` list = e
 - devaicon.com: direct edly.io, edunext.co, raccoongang.com; `open edx provider` / `hosting` / `development company` pass (fit 0.9, no longer gated by the old fit-0 checks); verdicts not judged 23; no striking (66 impressions in all).
 
 Checks: build exit 0, second build byte-identical; full harness **18312 passed, 0 failed**; app shared **1145 passed**, `tsc` clean for shared and web (`KI_STRIKING_WORDS` follows the new rule; the server typecheck reports only missing modules of the borrowed node_modules: `pdf-lib`, a Fastify type).
+
+## 7. Competitor classification on real Trial results (2026-11-10)
+
+The first good Trial competitor runs (production executions 11726 techand.ai, 11727 devaicon.com) classified about half of the `direct` rows
+wrong and stored ~20 evidence-less `adjacent` rows per site. Fixes (`_ki.js classifyDomain` / `pageType`, `KI_Comp_Result.js`):
+
+- **Classes from the evidence we hold, beyond the fixed host lists.** The host's own name first: job / career / recruit / staff / talent /
+  trabajo / empleo ... -> `job_board`; university / college / academy / institute / school or an `.ac.` / `.edu` address -> **new class
+  `education`** (training providers, schools, universities; never scored; `KI_CLASS_IDS` / `KI_CLASSES` "Training or education" in
+  `app/shared/src/ki.ts`); yellow pages / directory / listing / agencies / companies / suppliers -> `directory`; news / update / times /
+  magazine / blog -> `media`. Then the titles of its results: half or more job listings -> `job_board`, courses / training / certification
+  -> `education`, two or more news / update / "released" titles -> `media`. about.me and link-in-bio hosts -> `platform`.
+- **`direct` needs provider evidence**: a service or product page of its own among its results, or a homepage that names the client's
+  services. A business on topic seen only through articles, guides or lists is `adjacent` (a close competitor to confirm).
+- **Lists**: a title whose first part names plural sellers as its head ("AI Companies UAE", "Distributors And Suppliers In Sharjah") is a
+  list (not on a directory's own category pages); a comparison ("X vs Y") is an article, never a reason to call a site a list publisher; a
+  result whose address is a Google redirect has an unknown path, not a homepage (it was typed "provider" by default).
+- **No evidence-less rows**: a business never seen on a results page read and with no title or page of its own (an overlap list or an AI
+  citation alone) is not stored; such a row stored before leaves on the next run.
+
+Labelled set (`harness/accuracy/ki_domains.json`): +23 Trial hosts with the titles their results showed (public domains, page titles only),
+6 earlier labels changed to the rule (direct -> adjacent where only articles were seen: randgroup, velosio, dynatechconsultancy, synoptek,
+visionet; edly / raccoongang carry the Trial titles; uae-asp.ae and deloitte.com direct). **Train 87/87 (100%), hold-out 39/39 (100%)**
+(stage 27/28, intent 26/28 unchanged). Where I differ from the brief: concettolabs.com is `direct` (its result is "Power Platform Consulting
+Company in Dubai", a service techand sells), aiu.ae is `publisher_list` (its two results are "AI Companies UAE" lists; nothing in the
+evidence says university).
+
+Replay of the real runs (stored upstream outputs, the fixed classification and result nodes re-run, private tool `trial_tools/rexec.js`):
+
+| | techand.ai Trial | after | devaicon.com Trial | after |
+|---|---|---|---|---|
+| rows | 79 | 57 | 81 | 56 |
+| direct | 31 | 23 | 29 | 25 |
+| adjacent | 20 (+ seen 0/20) | 5 | 23 | 2 |
+| job_board / education / media / directory | 7 / 0 / 2 / 3 | 6 / 5 / 2 / 3 | 2 / 0 / 1 / 9 | 2 / 0 / 1 / 9 |
+| evidence-less adjacent rows | 20 | 0 | 19 | 0 |
+
+michaelpage.ae, talentmate.com, staffconnect.ae, jobrapido.com, trabajo.org -> `job_board`; vatupdate.com -> `media`; thehubofknowledge.com,
+edoxi.com, nobleprog.ae, lumifywork.com -> `education`; yellowpages-uae.com, digitalagencies.ae -> `directory`; intwo.cloud, edly.io,
+drcsystems.com, bluechipgulf.ae, competenza.ae, emtech.ae, raccoongang.com stay `direct`; qeemahcloud.com, hlbhamt.com, visionet.com,
+gostride.ventures -> `adjacent`.
+
+## 8. Keyword research Trial bugs (production executions 11730 techand.ai, 11731 devaicon.com, 2026-11-08)
+
+**Root cause (one, everywhere): the IF-branch read.** n8n resolves `$('IF').all()` without a branch index to the IF output that leads to the
+reading node (walking upstream); every KI node that both hangs on its IF's false output and reads the IF's requests through a helper
+(`all(n) => $(n).all()`) read the EMPTY false branch. Section 182 (d84466c4) only catches literal reads, so it fixed Comp SERP Picture only.
+On the real executions the answers were all there and fine (no wrong field name, no 40501: 10 autocomplete + Labs ideas / suggestions /
+related answered 20000; 47 + 5 retried results pages answered; overview / intent / Ads answered), but:
+- Research Candidates read 0 requests -> discovery "the keyword lists could not be read" (794 / 572 rows billed and dropped);
+- Research Picture -> volume `ok` with 0 rows (every volume null); Research SERP Picture -> 56 / 51 of 60 results pages "not read" and the
+  Ads volumes dropped; Research Result -> traffic potential and referring domains dropped; so no clusters (every row a head), mostly unknown
+  verdicts. About $0.42 / $0.38 of DataForSEO was billed for answers nothing read.
+- The competitors run had the same defect in Comp Candidates (Labs overlap / sizes / referring domains) and Comp Result (homepages,
+  profiles, sitemaps).
+
+Fixes: every KI helper reads `.all(0)`; `build_ki.py` refuses a KI node that names an IF and reads through a helper (or the IF itself) without
+a branch index; the harness now resolves branches the way n8n does (`harness.js setWiring`: walk upstream, the first connection from the IF
+decides; the false branch is empty), which made KIE2 fail exactly as production did (10 checks) before the fix. KIE2-15 replays the REAL
+envelopes of execution 11731 (trimmed, no headers or keys: `harness/fixtures/ki_trial/devaicon_research_2026-11-08.json`): discovery ok
+with autocomplete and Labs rows, both live results pages read.
+
+Also: Strength for a search whose own page was not read (all but the top 60) is read against the median referring domains of the results
+pages read in the market (+/- 0.2), instead of "not judged"; the career gate refuses any search with a job / career / pay / course word
+unless the site sells recruitment or training ("software development company sharjah careers" passed; "... jobs" was gated as navigational).
+
+Replay of the real research runs with the fixes: techand discovery 794 rows, volumes (overview 47 + Ads 159), 55 of the replayed top 60
+results pages read, referring domains 23, verdicts go 2 / months 14 / hard 263 / not judged 21 (techand has 24 referring domains against a
+market median of 968), 5 striking; devaicon discovery 572, Ads 68, referring domains 66, hard 255 / not judged 45. (The replay re-ranks the
+top 60 with the discovery rows production never read, so some of its top 60 were not bought on production: the fixed run buys its own.)
+
+Checks: build exit 0, second build byte-identical; full harness **18318 passed, 0 failed**; app shared **1145 passed**, shared and web `tsc`
+clean. No paid call was made; production was read only (executions over the tunnel, through the API key, nothing printed).

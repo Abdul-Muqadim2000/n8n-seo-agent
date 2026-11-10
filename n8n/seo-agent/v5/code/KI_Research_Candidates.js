@@ -6,7 +6,7 @@
 // A source that could not be read twice is `missing` in its section with the reason; the candidates of the other sources go on.
 /*__KI_KITS__*/
 const p = $('KI Plan').first().json || {};
-const all = (n) => { try { return $(n).all().map(i => (i && i.json) || {}); } catch (e) { return []; } };
+const all = (n) => { try { return $(n).all(0).map(i => (i && i.json) || {}); } catch (e) { return []; } };
 const now = p.now || new Date().toISOString();
 const cache = all('Load KI Cache').filter(r => r && r.key);
 const ck = (what, ...x) => KIW.cacheKey(p.site_id, what, ...x);

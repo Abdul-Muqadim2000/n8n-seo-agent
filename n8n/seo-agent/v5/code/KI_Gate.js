@@ -9,7 +9,7 @@
 /*__KI_KITS__*/
 const q = $('KI Input').first().json || {};
 const S = (v) => (v == null ? '' : String(v)).trim();
-const rowsOf = (n) => { try { return $(n).all().map(i => (i && i.json) || {}); } catch (e) { return null; } };
+const rowsOf = (n) => { try { return $(n).all(0).map(i => (i && i.json) || {}); } catch (e) { return null; } };
 const kill = rowsOf('Load Kill Switch (KI)');
 const killUnread = kill === null || kill.some(r => r && r.error);
 const killed = killUnread || kill.some(r => S(r.key) === '__KILL_KEY__' && /^(1|true|on|yes)$/i.test(S(r.value)));

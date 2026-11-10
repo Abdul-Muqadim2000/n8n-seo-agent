@@ -36,7 +36,7 @@
   {
    "host": "randgroup.com",
    "client": "techand.ai",
-   "class": "direct",
+   "class": "adjacent",
    "appearances": [
     {
      "keyword": "dynamics 365 erp system",
@@ -87,7 +87,8 @@
      "title": "Is Dynamics 365 an ERP or CRM?"
     }
    ],
-   "holdout": false
+   "holdout": false,
+   "class_before_fxl7": "direct"
   },
   {
    "host": "dynamicssquare.com",
@@ -130,7 +131,7 @@
   {
    "host": "visionet.com",
    "client": "techand.ai",
-   "class": "direct",
+   "class": "adjacent",
    "appearances": [
     {
      "keyword": "dynamics 365 erp system",
@@ -179,14 +180,30 @@
      "position": 3,
      "type": "",
      "title": "A guide to what a Microsoft Dynamics 365 ERP system is ..."
+    },
+    {
+     "keyword": "dynamics 365 erp",
+     "position": 4,
+     "type": "",
+     "title": "A guide to what a Microsoft Dynamics 365 ERP system is.",
+     "url": ""
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 2,
+     "type": "",
+     "title": "A guide to what a Microsoft Dynamics 365 ERP system is.",
+     "url": ""
     }
    ],
-   "holdout": true
+   "holdout": true,
+   "class_before_fxl7": "direct",
+   "fxl_trial": true
   },
   {
    "host": "velosio.com",
    "client": "techand.ai",
-   "class": "direct",
+   "class": "adjacent",
    "appearances": [
     {
      "keyword": "dynamics 365 erp system",
@@ -219,7 +236,8 @@
      "title": "A Complete Overview for Microsoft Dynamics 365 ERP"
     }
    ],
-   "holdout": false
+   "holdout": false,
+   "class_before_fxl7": "direct"
   },
   {
    "host": "focussoftnet.com",
@@ -244,7 +262,7 @@
   {
    "host": "dynatechconsultancy.com",
    "client": "techand.ai",
-   "class": "direct",
+   "class": "adjacent",
    "appearances": [
     {
      "keyword": "is microsoft dynamics 365 an erp system",
@@ -259,7 +277,8 @@
      "title": "Dynamics 365 CRM vs ERP: The Key Differences and ..."
     }
    ],
-   "holdout": true
+   "holdout": true,
+   "class_before_fxl7": "direct"
   },
   {
    "host": "dynamics.ae",
@@ -297,14 +316,37 @@
      "position": 10,
      "type": "",
      "title": "Microsoft Dynamics 365 ERP Implementation Services - Intwo"
+    },
+    {
+     "keyword": "dynamics 365 erp",
+     "position": 7,
+     "type": "",
+     "title": "Microsoft Dynamics 365 ERP Implementation Services - Intwo",
+     "url": ""
+    },
+    {
+     "keyword": "dynamics 365 erp system",
+     "position": 3,
+     "type": "",
+     "title": "Microsoft Dynamics 365 ERP Implementation Services - Intwo",
+     "url": ""
+    },
+    {
+     "keyword": "microsoft dynamics 365 implementation uae",
+     "position": 8,
+     "type": "",
+     "title": "microsoft dynamics 365 ce implementation solution in uae",
+     "url": ""
     }
    ],
-   "holdout": false
+   "holdout": false,
+   "class_before_fxl7": "direct",
+   "fxl_trial": true
   },
   {
    "host": "synoptek.com",
    "client": "techand.ai",
-   "class": "direct",
+   "class": "adjacent",
    "appearances": [
     {
      "keyword": "is microsoft dynamics 365 an erp system",
@@ -313,7 +355,8 @@
      "title": "The Ultimate ERP Face-Off: Microsoft Dynamics 365 vs. SAP"
     }
    ],
-   "holdout": true
+   "holdout": true,
+   "class_before_fxl7": "direct"
   },
   {
    "host": "hamtinfotech.com",
@@ -1123,23 +1166,48 @@
      "position": 4,
      "type": "",
      "title": "How to Choose an Open edX Service Provider (2026)"
+    },
+    {
+     "keyword": "open edx services uae",
+     "position": 3,
+     "type": "",
+     "title": "Open edX Development Services | Custom LMS Solutions",
+     "url": ""
     }
    ],
-   "holdout": false
+   "holdout": false,
+   "class_before_fxl7": "direct",
+   "fxl_trial": true
   },
   {
    "host": "edly.io",
    "client": "devaicon.com",
-   "class": "direct",
+   "class": "adjacent",
    "appearances": [
     {
      "keyword": "open edx provider",
      "position": 7,
      "type": "",
      "title": "Best Open edX Service Providers in 2026 - Edly"
+    },
+    {
+     "keyword": "open edx services uae",
+     "position": 6,
+     "type": "",
+     "title": "Best Open edX Service Providers in 2026 - Edly",
+     "url": ""
+    },
+    {
+     "keyword": "open edx services company sharjah",
+     "position": 3,
+     "type": "",
+     "title": "How to Choose an Open edX Service Provider - Edly",
+     "url": ""
     }
    ],
-   "holdout": false
+   "holdout": false,
+   "class_before_fxl7": "direct",
+   "fxl_trial": true
   },
   {
    "host": "edunext.co",
@@ -1656,7 +1724,523 @@
      "title": "Web Design Company in Dubai | Skytech Digital"
     }
    ]
+  },
+  {
+   "host": "concettolabs.com",
+   "client": "techand.ai",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "power platform uae",
+     "position": 1,
+     "type": "",
+     "title": "Power Platform Consulting Company in Dubai",
+     "url": ""
+    },
+    {
+     "keyword": "power platform company dubai",
+     "position": 1,
+     "type": "",
+     "title": "Power Platform Consulting Company in UAE",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": false
+  },
+  {
+   "host": "uae-asp.ae",
+   "client": "techand.ai",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "pint ae data dictionary",
+     "position": 6,
+     "type": "",
+     "title": "PINT AE Data Dictionary, UAE Peppol Invoice Standard",
+     "url": ""
+    },
+    {
+     "keyword": "pint ae mandatory fields",
+     "position": 5,
+     "type": "",
+     "title": "PINT AE Data Dictionary, UAE Peppol Invoice Standard",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": false,
+   "class_before_fxl7": "adjacent"
+  },
+  {
+   "host": "qeemahcloud.com",
+   "client": "techand.ai",
+   "class": "adjacent",
+   "appearances": [
+    {
+     "keyword": "pint ae",
+     "position": 3,
+     "type": "",
+     "title": "What is PINT-AE? The New UAE E-Invoicing Standard ...",
+     "url": ""
+    },
+    {
+     "keyword": "pint ae validation rules",
+     "position": 8,
+     "type": "",
+     "title": "What is PINT-AE? The New UAE E-Invoicing Standard ...",
+     "url": ""
+    },
+    {
+     "keyword": "peppol pint uae",
+     "position": 8,
+     "type": "",
+     "title": "What is PINT-AE? The New UAE E-Invoicing Standard ...",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": true
+  },
+  {
+   "host": "deloitte.com",
+   "client": "techand.ai",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "pint ae data dictionary",
+     "position": 4,
+     "type": "",
+     "title": "MoF publishes PINT AE specifications for E-invoicing",
+     "url": ""
+    },
+    {
+     "keyword": "pint ae validation rules",
+     "position": 3,
+     "type": "",
+     "title": "MoF publishes PINT AE specifications for E-invoicing",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": false,
+   "class_before_fxl7": "adjacent"
+  },
+  {
+   "host": "hlbhamt.com",
+   "client": "techand.ai",
+   "class": "adjacent",
+   "appearances": [
+    {
+     "keyword": "pint ae",
+     "position": 6,
+     "type": "",
+     "title": "PINT-AE & PEPPOL Framework Explained | UAE e-Invoicing",
+     "url": ""
+    },
+    {
+     "keyword": "peppol pint uae",
+     "position": 7,
+     "type": "",
+     "title": "PINT-AE & PEPPOL Framework Explained | UAE e-Invoicing",
+     "url": ""
+    },
+    {
+     "keyword": "peppol uae",
+     "position": 9,
+     "type": "",
+     "title": "PINT-AE & PEPPOL Framework Explained | UAE e-Invoicing",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": false
+  },
+  {
+   "host": "michaelpage.ae",
+   "client": "techand.ai",
+   "class": "job_board",
+   "appearances": [
+    {
+     "keyword": "finance & operations uae",
+     "position": 5,
+     "type": "",
+     "title": "Financial Services jobs in United Arab Emirates",
+     "url": ""
+    },
+    {
+     "keyword": "finance & operations company dubai",
+     "position": 2,
+     "type": "",
+     "title": "Finance jobs - Dubai",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": false
+  },
+  {
+   "host": "vatupdate.com",
+   "client": "techand.ai",
+   "class": "media",
+   "appearances": [
+    {
+     "keyword": "pint ae",
+     "position": 4,
+     "type": "",
+     "title": "UAE PINT AE v1.0.1 Released as an Official E-Invoicing ...",
+     "url": ""
+    },
+    {
+     "keyword": "peppol pint uae",
+     "position": 5,
+     "type": "",
+     "title": "UAE PINT AE v1.0.1 Released as an Official E-Invoicing ...",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": false
+  },
+  {
+   "host": "thehubofknowledge.com",
+   "client": "techand.ai",
+   "class": "education",
+   "appearances": [
+    {
+     "keyword": "project operations uae",
+     "position": 9,
+     "type": "",
+     "title": "MS Project Certification Course in UAE | Training Dubai",
+     "url": ""
+    },
+    {
+     "keyword": "copilot studio ai agents uae",
+     "position": 4,
+     "type": "",
+     "title": "Microsoft Copilot Training in Dubai | Courses & Fees 2026",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": true
+  },
+  {
+   "host": "gostride.ventures",
+   "client": "techand.ai",
+   "class": "adjacent",
+   "appearances": [
+    {
+     "keyword": "peppol uae",
+     "position": 7,
+     "type": "",
+     "title": "Peppol: what it means in UAE tax.",
+     "url": ""
+    },
+    {
+     "keyword": "peppol company dubai",
+     "position": 5,
+     "type": "",
+     "title": "Peppol: what it means in UAE tax.",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": false
+  },
+  {
+   "host": "talentmate.com",
+   "client": "techand.ai",
+   "class": "job_board",
+   "appearances": [
+    {
+     "keyword": "project operations uae",
+     "position": 8,
+     "type": "",
+     "title": "Project Manager - Operations Jobs in Dubai, United Arab ...",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": false
+  },
+  {
+   "host": "edoxi.com",
+   "client": "techand.ai",
+   "class": "education",
+   "appearances": [
+    {
+     "keyword": "power bi uae",
+     "position": 7,
+     "type": "",
+     "title": "Microsoft Power BI Training Course & Certification in Dubai",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": true
+  },
+  {
+   "host": "nobleprog.ae",
+   "client": "techand.ai",
+   "class": "education",
+   "appearances": [
+    {
+     "keyword": "power platform uae",
+     "position": 5,
+     "type": "",
+     "title": "Microsoft Power Platform Training in Abu Dhabi",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": false
+  },
+  {
+   "host": "lumifywork.com",
+   "client": "techand.ai",
+   "class": "education",
+   "appearances": [
+    {
+     "keyword": "copilot studio ai agents uae",
+     "position": 5,
+     "type": "",
+     "title": "Copilot Studio: Building AI Agents - Courses",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": false
+  },
+  {
+   "host": "drcsystems.com",
+   "client": "devaicon.com",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "open edx services uae",
+     "position": 9,
+     "type": "",
+     "title": "Build Scalable, Launch Faster with Open edX Development",
+     "url": ""
+    },
+    {
+     "keyword": "open edx services company sharjah",
+     "position": 2,
+     "type": "",
+     "title": "Open edX Implementation Guide: From Planning to Launch",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": false
+  },
+  {
+   "host": "bluechipgulf.ae",
+   "client": "devaicon.com",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "infrastructure & enterprise systems uae",
+     "position": 8,
+     "type": "",
+     "title": "Top 10 IT Infrastructure Services Companies In Dubai, UAE",
+     "url": ""
+    },
+    {
+     "keyword": "managed services company sharjah",
+     "position": 8,
+     "type": "",
+     "title": "Managed Services | IT Solutions Companies in Dubai",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": false
+  },
+  {
+   "host": "competenza.ae",
+   "client": "devaicon.com",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "software development uae",
+     "position": 9,
+     "type": "",
+     "title": "Custom Software Development Middle East: Complete Guide ...",
+     "url": ""
+    },
+    {
+     "keyword": "ongoing managed it support uae",
+     "position": 6,
+     "type": "",
+     "title": "Top 10 Managed IT Services Companies in UAE 2026",
+     "url": ""
+    },
+    {
+     "keyword": "application & software development uae",
+     "position": 6,
+     "type": "",
+     "title": "SaaS Development Services in Dubai & UAE | Competenza",
+     "url": ""
+    },
+    {
+     "keyword": "managed services company sharjah",
+     "position": 1,
+     "type": "",
+     "title": "Managed IT Services in Dubai | IT Support & Outsourcing",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": true
+  },
+  {
+   "host": "emtech.ae",
+   "client": "devaicon.com",
+   "class": "direct",
+   "appearances": [
+    {
+     "keyword": "managed services uae",
+     "position": 1,
+     "type": "",
+     "title": "Managed IT Services Dubai | emtech Since 1993",
+     "url": ""
+    },
+    {
+     "keyword": "custom ai solutions company sharjah",
+     "position": 1,
+     "type": "",
+     "title": "AI Solutions UAE | AI Consulting & Implementation",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": false
+  },
+  {
+   "host": "jobrapido.com",
+   "client": "devaicon.com",
+   "class": "job_board",
+   "appearances": [],
+   "fxl_trial": true,
+   "holdout": false
+  },
+  {
+   "host": "trabajo.org",
+   "client": "devaicon.com",
+   "class": "job_board",
+   "appearances": [],
+   "fxl_trial": true,
+   "holdout": true
+  },
+  {
+   "host": "staffconnect.ae",
+   "client": "devaicon.com",
+   "class": "job_board",
+   "appearances": [
+    {
+     "keyword": "ongoing managed it support uae",
+     "position": 4,
+     "type": "",
+     "title": "Best Managed IT Services Provider In Dubai, UAE",
+     "url": ""
+    },
+    {
+     "keyword": "managed services uae",
+     "position": 5,
+     "type": "",
+     "title": "Top 10 Managed Service Providers In Dubai For 2026",
+     "url": ""
+    },
+    {
+     "keyword": "ongoing managed it support company sharjah",
+     "position": 5,
+     "type": "",
+     "title": "IT Managed Services Dubai \u2013 A Smarter Alternative",
+     "url": ""
+    },
+    {
+     "keyword": "managed services company sharjah",
+     "position": 6,
+     "type": "",
+     "title": "Top 10 Managed Service Providers In Dubai For 2026",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": false
+  },
+  {
+   "host": "aiu.ae",
+   "client": "devaicon.com",
+   "class": "publisher_list",
+   "appearances": [
+    {
+     "keyword": "custom ai solutions uae",
+     "position": 4,
+     "type": "",
+     "title": "AI Companies UAE",
+     "url": ""
+    },
+    {
+     "keyword": "custom ai solutions company sharjah",
+     "position": 9,
+     "type": "",
+     "title": "AI Companies UAE",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": false
+  },
+  {
+   "host": "yellowpages-uae.com",
+   "client": "devaicon.com",
+   "class": "directory",
+   "appearances": [
+    {
+     "keyword": "microsoft enterprise systems company sharjah",
+     "position": 9,
+     "type": "",
+     "title": "Microsoft Office 365 Distributors And Suppliers In Sharjah ...",
+     "url": ""
+    },
+    {
+     "keyword": "infrastructure & enterprise systems company sharjah",
+     "position": 6,
+     "type": "",
+     "title": "Infrastructure Suppliers in Sharjah- Top Brands and Profiles",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": true
+  },
+  {
+   "host": "digitalagencies.ae",
+   "client": "devaicon.com",
+   "class": "directory",
+   "appearances": [
+    {
+     "keyword": "software development company sharjah",
+     "position": 7,
+     "type": "",
+     "title": "Sharjah - Digital Solutions and Service Providers",
+     "url": ""
+    },
+    {
+     "keyword": "infrastructure & enterprise systems company sharjah",
+     "position": 5,
+     "type": "",
+     "title": "System Integrators Companies in Sharjah",
+     "url": ""
+    }
+   ],
+   "fxl_trial": true,
+   "holdout": false
   }
  ],
- "_comment_fxl": "FX-L (2026-11-08, REVIEW_LOGIC B2 / M8): a business is classified on its OWN text, never on the search it was found on, so the business and list cases now carry the public titles their results showed on the stored readings (seo_rank_history snapshots, page titles only). The negative cases below are businesses on a service results page that are not competitors (an off-category business ranking on a city word): they must never come out direct."
+ "_comment_fxl": "FX-L (2026-11-08, REVIEW_LOGIC B2 / M8): a business is classified on its OWN text, never on the search it was found on, so the business and list cases now carry the public titles their results showed on the stored readings (seo_rank_history snapshots, page titles only). The negative cases below are businesses on a service results page that are not competitors (an off-category business ranking on a city word): they must never come out direct.",
+ "_comment_fxl7": "FX-L section 7 (2026-11-10): the hosts the first production Trial classified, labelled from the evidence the run held (the titles of their results; most addresses were Google redirects, so no path). Rule behind the labels: a job board / recruiter / staffing firm, a news or update site, a directory, a training provider or school is never a competitor; `direct` needs provider evidence (a service page of its own, or a homepage naming the client's services), otherwise a business on topic is `adjacent` (a close competitor to confirm). Every third new case is hold-out."
 }

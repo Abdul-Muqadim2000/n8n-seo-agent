@@ -10,7 +10,7 @@
 //     a competitor profile that does not fit waits for the next run, and says so.
 /*__KI_KITS__*/
 const g = $('KI Gate').first().json || {};
-const rowsOf = (n) => { try { return $(n).all().map(i => (i && i.json) || {}).filter(r => r && !r.error && Object.keys(r).length); } catch (e) { return []; } };
+const rowsOf = (n) => { try { return $(n).all(0).map(i => (i && i.json) || {}).filter(r => r && !r.error && Object.keys(r).length); } catch (e) { return []; } };
 const S = KIW.S, N = KIW.N;
 const now = new Date().toISOString();
 const site = g.site || {}; const mon = g.monitors || {};

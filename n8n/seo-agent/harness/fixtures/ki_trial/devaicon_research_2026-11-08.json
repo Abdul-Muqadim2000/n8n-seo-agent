@@ -1,0 +1,3682 @@
+{
+"_comment": "FX-L 2026-11-10: REAL live envelopes (trimmed to a few items, no headers, no keys) from the production KI Trial execution of devaicon.com keyword research (2026-11-08). On production every Research node hanging on its IF's false output read the empty false branch: the discovery lists and the results pages were billed and never read. scenarios_ki_e2.js KIE2-15 replays them with n8n's branch resolution (harness.js setWiring).",
+"plan": {
+"kind": "keyword_research",
+"stage": "ki_research",
+"site_id": "site_devaicon-com",
+"domain": "devaicon.com",
+"canonical_host": "devaicon.com",
+"market": "AE-en",
+"iso": "AE",
+"location_code": 2784,
+"language_code": "en",
+"country": "United Arab Emirates",
+"now": "2026-11-08T19:47:10.310Z",
+"run_id": "11731",
+"ki_force": false,
+"max_chosen": 5,
+"gsc_period_end": "2026-11-03",
+"seeds": [
+{
+"keyword": "agentic ai development in uae",
+"source": "ladder",
+"weight": 0.8
+},
+{
+"keyword": "software development uae",
+"source": "service",
+"weight": 1
+},
+{
+"keyword": "custom ai solutions uae",
+"source": "service",
+"weight": 1
+},
+{
+"keyword": "microsoft enterprise systems uae",
+"source": "service",
+"weight": 1
+},
+{
+"keyword": "ongoing managed it support uae",
+"source": "service",
+"weight": 1
+},
+{
+"keyword": "open edx services uae",
+"source": "service",
+"weight": 1
+},
+{
+"keyword": "managed services uae",
+"source": "service",
+"weight": 1
+},
+{
+"keyword": "infrastructure & enterprise systems uae",
+"source": "service",
+"weight": 1
+},
+{
+"keyword": "consulting & transformation uae",
+"source": "service",
+"weight": 1
+},
+{
+"keyword": "application & software development uae",
+"source": "service",
+"weight": 1
+},
+{
+"keyword": "intelligent systems & data uae",
+"source": "service",
+"weight": 1
+},
+{
+"keyword": "dynamics 365 uae",
+"source": "service",
+"weight": 1
+},
+{
+"keyword": "microsoft fabric uae",
+"source": "service",
+"weight": 1
+},
+{
+"keyword": "software development company sharjah",
+"source": "service",
+"weight": 0.9
+},
+{
+"keyword": "custom ai solutions company sharjah",
+"source": "service",
+"weight": 0.9
+},
+{
+"keyword": "microsoft enterprise systems company sharjah",
+"source": "service",
+"weight": 0.9
+},
+{
+"keyword": "ongoing managed it support company sharjah",
+"source": "service",
+"weight": 0.9
+},
+{
+"keyword": "open edx services company sharjah",
+"source": "service",
+"weight": 0.9
+},
+{
+"keyword": "managed services company sharjah",
+"source": "service",
+"weight": 0.9
+},
+{
+"keyword": "infrastructure & enterprise systems company sharjah",
+"source": "service",
+"weight": 0.9
+}
+],
+"seed_services": [
+"software development",
+"custom ai solutions",
+"microsoft enterprise systems",
+"ongoing managed it support",
+"open edx services",
+"managed services",
+"infrastructure & enterprise systems",
+"consulting & transformation",
+"application & software development",
+"intelligent systems & data",
+"dynamics 365",
+"microsoft fabric"
+],
+"services": [
+"automation",
+"software development",
+"cloud",
+"custom AI solutions",
+"Microsoft enterprise systems",
+"ongoing managed IT support",
+"Open edX Services",
+"Managed Services",
+"Infrastructure & Enterprise Systems",
+"Consulting & Transformation",
+"Application & Software Development",
+"Intelligent Systems & Data",
+"Dynamics 365",
+"Microsoft Fabric",
+"Power Platform",
+"Artificial Intelligence & Machine Learning",
+"Data Science & Analytics",
+"Natural Language Processing",
+"NLP",
+"Computer Vision",
+"AR & VR Solutions",
+"Custom Software Development",
+"Website & Portal Development",
+"Mobile App Development",
+"Business Discovery & Requirements Analysis",
+"Gap-Fit Analysis",
+"ROI Assessment",
+"Global Rollouts",
+"System Optimization",
+"Microsoft Solutions Implementation",
+"Enterprise Chatbots",
+"Data Pipeline Design"
+],
+"products": [
+"open edx",
+"dynamics 365",
+"power platform"
+],
+"gsc": [],
+"tracked": [],
+"ladders": [],
+"chosen": [],
+"declared": [],
+"seed_key": "9cf7a6f0bda5e512",
+"comp_rk_cap": 0,
+"site_impressions": 66,
+"fit_ctx": {
+"own_domain": "devaicon.com",
+"market": "AE",
+"services": [
+"automation",
+"software development",
+"cloud",
+"custom AI solutions",
+"Microsoft enterprise systems",
+"ongoing managed IT support",
+"Open edX Services",
+"Managed Services",
+"Infrastructure & Enterprise Systems",
+"Consulting & Transformation",
+"Application & Software Development",
+"Intelligent Systems & Data",
+"Dynamics 365",
+"Microsoft Fabric",
+"Power Platform",
+"Artificial Intelligence & Machine Learning",
+"Data Science & Analytics",
+"Natural Language Processing",
+"NLP",
+"Computer Vision",
+"AR & VR Solutions",
+"Custom Software Development",
+"Website & Portal Development",
+"Mobile App Development",
+"Business Discovery & Requirements Analysis",
+"Gap-Fit Analysis",
+"ROI Assessment",
+"Global Rollouts",
+"System Optimization",
+"Microsoft Solutions Implementation",
+"Enterprise Chatbots",
+"Data Pipeline Design"
+],
+"topics": [
+"automation",
+"software development",
+"cloud",
+"custom AI solutions",
+"Microsoft enterprise systems",
+"ongoing managed IT support",
+"Open edX Services",
+"Managed Services",
+"Infrastructure & Enterprise Systems",
+"Consulting & Transformation",
+"Application & Software Development",
+"Intelligent Systems & Data",
+"Dynamics 365",
+"Microsoft Fabric",
+"Power Platform",
+"Artificial Intelligence & Machine Learning",
+"Data Science & Analytics",
+"Natural Language Processing",
+"NLP",
+"Computer Vision",
+"AR & VR Solutions",
+"Custom Software Development",
+"Website & Portal Development",
+"Mobile App Development",
+"Business Discovery & Requirements Analysis",
+"Gap-Fit Analysis",
+"ROI Assessment",
+"Global Rollouts",
+"System Optimization",
+"Microsoft Solutions Implementation",
+"Enterprise Chatbots",
+"Data Pipeline Design"
+],
+"competitors": [
+"10pearls.com",
+"7t.ai",
+"aarmeh.ae",
+"abconlinecourses.com",
+"abizglobalservices.com",
+"abstract-technology.de",
+"accent.ae",
+"accenture.com",
+"actiontoaction.ai",
+"acuvate.com",
+"adamastechconsulting.com",
+"adaptivesecurity.com",
+"adbled.com",
+"adx.ae",
+"aeserver.com",
+"agenticaids.ae",
+"agentventures.ae",
+"ahl-techs.com",
+"ahmasoft.com",
+"competenza.ae",
+"staffconnect.ae",
+"edly.io",
+"emtech.ae",
+"drcsystems.com",
+"bluechipgulf.ae",
+"jobrapido.com",
+"aiu.ae",
+"trabajo.org",
+"missanglobal.com",
+"yellowpages-uae.com",
+"xccel8.com",
+"appikr.com",
+"appventurez.com",
+"arcitech.ai",
+"aulasneo.com",
+"baone.ae",
+"blend-ed.com",
+"bpsme.com",
+"carmatec.com",
+"codetrade.io",
+"codexlogy.com",
+"coredevsltd.com",
+"gravitybase.ai",
+"growthfactors.ae",
+"iihglobal.com",
+"loop-wise.com",
+"mdscomputers.ae",
+"pnpcglobal.com",
+"raccoongang.com",
+"radixweb.com"
+],
+"protect": [
+"open edx",
+"dynamics 365",
+"power platform"
+],
+"avoid": [
+"privacy policy"
+]
+}
+},
+"discover": {
+"requests": [
+{
+"ki_call": "ac",
+"endpoint": "https://api.dataforseo.com/v3/serp/google/autocomplete/live/advanced",
+"body": [
+{
+"keyword": "software development",
+"location_code": 2784,
+"language_code": "en",
+"client": "gws-wiz-serp"
+}
+],
+"est_usd": 0.002,
+"keyword": "software development"
+},
+{
+"ki_call": "ac",
+"endpoint": "https://api.dataforseo.com/v3/serp/google/autocomplete/live/advanced",
+"body": [
+{
+"keyword": "software development company",
+"location_code": 2784,
+"language_code": "en",
+"client": "gws-wiz-serp"
+}
+],
+"est_usd": 0.002,
+"keyword": "software development company"
+},
+{
+"ki_call": "labs_ideas",
+"endpoint": "https://api.dataforseo.com/v3/dataforseo_labs/google/keyword_ideas/live",
+"body": [
+{
+"keywords": [
+"agentic ai development in uae",
+"software development uae",
+"custom ai solutions uae",
+"microsoft enterprise systems uae",
+"ongoing managed it support uae",
+"open edx services uae",
+"managed services uae",
+"infrastructure & enterprise systems uae",
+"consulting & transformation uae",
+"application & software development uae",
+"intelligent systems & data uae",
+"dynamics 365 uae",
+"microsoft fabric uae",
+"software development company sharjah",
+"custom ai solutions company sharjah",
+"microsoft enterprise systems company sharjah",
+"ongoing managed it support company sharjah",
+"open edx services company sharjah",
+"managed services company sharjah",
+"infrastructure & enterprise systems company sharjah"
+],
+"location_code": 2784,
+"language_code": "en",
+"limit": 300,
+"include_serp_info": false,
+"ignore_synonyms": true
+}
+],
+"est_usd": 0.048
+},
+{
+"ki_call": "labs_suggestions",
+"endpoint": "https://api.dataforseo.com/v3/dataforseo_labs/google/keyword_suggestions/live",
+"body": [
+{
+"keyword": "software development",
+"location_code": 2784,
+"language_code": "en",
+"limit": 200,
+"include_seed_keyword": true,
+"ignore_synonyms": true
+}
+],
+"est_usd": 0.036,
+"keyword": "software development"
+},
+{
+"ki_call": "labs_suggestions",
+"endpoint": "https://api.dataforseo.com/v3/dataforseo_labs/google/keyword_suggestions/live",
+"body": [
+{
+"keyword": "custom ai solutions",
+"location_code": 2784,
+"language_code": "en",
+"limit": 200,
+"include_seed_keyword": true,
+"ignore_synonyms": true
+}
+],
+"est_usd": 0.036,
+"keyword": "custom ai solutions"
+}
+],
+"answers": [
+{
+"version": "0.1.20261103",
+"status_code": 20000,
+"status_message": "Ok.",
+"time": "1.7844 sec.",
+"cost": 0.002,
+"tasks_count": 1,
+"tasks_error": 0,
+"tasks": [
+{
+"id": "11081947-2365-0139-0000-090aec601e3d",
+"status_code": 20000,
+"status_message": "Ok.",
+"time": "1.7351 sec.",
+"cost": 0.002,
+"result_count": 1,
+"path": [
+"v3",
+"serp",
+"google",
+"autocomplete",
+"live",
+"advanced"
+],
+"data": {
+"se_type": "autocomplete",
+"se": "google",
+"api": "serp",
+"function": "live",
+"keyword": "software development",
+"location_code": 2784,
+"language_code": "en",
+"client": "gws-wiz-serp",
+"device": "desktop",
+"os": "windows"
+},
+"result": [
+{
+"keyword": "software development",
+"type": "autocomplete",
+"se_domain": "google.com",
+"location_code": 2784,
+"language_code": "en",
+"check_url": "https://www.google.com/search?q=software+development&hl=en&gl=AE&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+"datetime": "2026-11-08 19:47:20 +00:00",
+"spell": null,
+"refinement_chips": null,
+"item_types": [
+"autocomplete"
+],
+"se_results_count": 0,
+"items_count": 10,
+"items": [
+{
+"type": "autocomplete",
+"rank_group": 1,
+"rank_absolute": 1,
+"relevance": null,
+"suggestion": "software development",
+"suggestion_type": null,
+"search_query_url": "https://www.google.com/search?q=software+development&hl=en&gl=AE&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+"thumbnail_url": null,
+"highlighted": null
+},
+{
+"type": "autocomplete",
+"rank_group": 2,
+"rank_absolute": 2,
+"relevance": null,
+"suggestion": "software development life cycle",
+"suggestion_type": null,
+"search_query_url": "https://www.google.com/search?q=software+development+life+cycle&hl=en&gl=AE&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+"thumbnail_url": null,
+"highlighted": [
+"life cycle"
+]
+},
+{
+"type": "autocomplete",
+"rank_group": 3,
+"rank_absolute": 3,
+"relevance": null,
+"suggestion": "software development companies in dubai",
+"suggestion_type": null,
+"search_query_url": "https://www.google.com/search?q=software+development+companies+in+dubai&hl=en&gl=AE&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+"thumbnail_url": null,
+"highlighted": [
+"companies in dubai"
+]
+},
+{
+"type": "autocomplete",
+"rank_group": 4,
+"rank_absolute": 4,
+"relevance": null,
+"suggestion": "software development company",
+"suggestion_type": null,
+"search_query_url": "https://www.google.com/search?q=software+development+company&hl=en&gl=AE&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+"thumbnail_url": null,
+"highlighted": [
+"company"
+]
+},
+{
+"type": "autocomplete",
+"rank_group": 5,
+"rank_absolute": 5,
+"relevance": null,
+"suggestion": "software development courses",
+"suggestion_type": null,
+"search_query_url": "https://www.google.com/search?q=software+development+courses&hl=en&gl=AE&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+"thumbnail_url": null,
+"highlighted": [
+"courses"
+]
+},
+{
+"type": "autocomplete",
+"rank_group": 6,
+"rank_absolute": 6,
+"relevance": null,
+"suggestion": "software development cycle",
+"suggestion_type": null,
+"search_query_url": "https://www.google.com/search?q=software+development+cycle&hl=en&gl=AE&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+"thumbnail_url": null,
+"highlighted": [
+"cycle"
+]
+}
+]
+}
+]
+}
+],
+"__dfs_cost_usd": 0.002
+},
+{
+"version": "0.1.20261103",
+"status_code": 20000,
+"status_message": "Ok.",
+"time": "1.3675 sec.",
+"cost": 0.002,
+"tasks_count": 1,
+"tasks_error": 0,
+"tasks": [
+{
+"id": "11081947-2365-0139-0000-9806a3170c48",
+"status_code": 20000,
+"status_message": "Ok.",
+"time": "1.3193 sec.",
+"cost": 0.002,
+"result_count": 1,
+"path": [
+"v3",
+"serp",
+"google",
+"autocomplete",
+"live",
+"advanced"
+],
+"data": {
+"se_type": "autocomplete",
+"se": "google",
+"api": "serp",
+"function": "live",
+"keyword": "software development company",
+"location_code": 2784,
+"language_code": "en",
+"client": "gws-wiz-serp",
+"device": "desktop",
+"os": "windows"
+},
+"result": [
+{
+"keyword": "software development company",
+"type": "autocomplete",
+"se_domain": "google.com",
+"location_code": 2784,
+"language_code": "en",
+"check_url": "https://www.google.com/search?q=software+development+company&hl=en&gl=AE&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+"datetime": "2026-11-08 19:47:19 +00:00",
+"spell": null,
+"refinement_chips": null,
+"item_types": [
+"autocomplete"
+],
+"se_results_count": 0,
+"items_count": 10,
+"items": [
+{
+"type": "autocomplete",
+"rank_group": 1,
+"rank_absolute": 1,
+"relevance": null,
+"suggestion": "software development company dubai",
+"suggestion_type": null,
+"search_query_url": "https://www.google.com/search?q=software+development+company+dubai&hl=en&gl=AE&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+"thumbnail_url": null,
+"highlighted": [
+"dubai"
+]
+},
+{
+"type": "autocomplete",
+"rank_group": 2,
+"rank_absolute": 2,
+"relevance": null,
+"suggestion": "software development company",
+"suggestion_type": null,
+"search_query_url": "https://www.google.com/search?q=software+development+company&hl=en&gl=AE&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+"thumbnail_url": null,
+"highlighted": null
+},
+{
+"type": "autocomplete",
+"rank_group": 3,
+"rank_absolute": 3,
+"relevance": null,
+"suggestion": "software development company abu dhabi",
+"suggestion_type": null,
+"search_query_url": "https://www.google.com/search?q=software+development+company+abu+dhabi&hl=en&gl=AE&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+"thumbnail_url": null,
+"highlighted": [
+"abu dhabi"
+]
+},
+{
+"type": "autocomplete",
+"rank_group": 4,
+"rank_absolute": 4,
+"relevance": null,
+"suggestion": "software development company in india",
+"suggestion_type": null,
+"search_query_url": "https://www.google.com/search?q=software+development+company+in+india&hl=en&gl=AE&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+"thumbnail_url": null,
+"highlighted": [
+"in india"
+]
+},
+{
+"type": "autocomplete",
+"rank_group": 5,
+"rank_absolute": 5,
+"relevance": null,
+"suggestion": "software development company near me",
+"suggestion_type": null,
+"search_query_url": "https://www.google.com/search?q=software+development+company+near+me&hl=en&gl=AE&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+"thumbnail_url": null,
+"highlighted": [
+"near me"
+]
+},
+{
+"type": "autocomplete",
+"rank_group": 6,
+"rank_absolute": 6,
+"relevance": null,
+"suggestion": "software development company in noida sector 62 and 63",
+"suggestion_type": null,
+"search_query_url": "https://www.google.com/search?q=software+development+company+in+noida+sector+62+and+63&hl=en&gl=AE&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+"thumbnail_url": null,
+"highlighted": [
+"in noida sector 62 and 63"
+]
+}
+]
+}
+]
+}
+],
+"__dfs_cost_usd": 0.002
+},
+{
+"version": "0.1.20261103",
+"status_code": 20000,
+"status_message": "Ok.",
+"time": "1.3190 sec.",
+"cost": 0.048,
+"tasks_count": 1,
+"tasks_error": 0,
+"tasks": [
+{
+"id": "11081947-2365-0400-0000-fbc67ca5b1f6",
+"status_code": 20000,
+"status_message": "Ok.",
+"time": "1.3105 sec.",
+"cost": 0.048,
+"result_count": 1,
+"path": [
+"v3",
+"dataforseo_labs",
+"google",
+"keyword_ideas",
+"live"
+],
+"data": {
+"api": "dataforseo_labs",
+"function": "keyword_ideas",
+"se_type": "google",
+"keywords": [
+"agentic ai development in uae",
+"software development uae",
+"custom ai solutions uae",
+"microsoft enterprise systems uae",
+"ongoing managed it support uae",
+"open edx services uae",
+"managed services uae",
+"infrastructure & enterprise systems uae",
+"consulting & transformation uae",
+"application & software development uae",
+"intelligent systems & data uae",
+"dynamics 365 uae",
+"microsoft fabric uae",
+"software development company sharjah",
+"custom ai solutions company sharjah",
+"microsoft enterprise systems company sharjah",
+"ongoing managed it support company sharjah",
+"open edx services company sharjah",
+"managed services company sharjah",
+"infrastructure & enterprise systems company sharjah"
+],
+"location_code": 2784,
+"language_code": "en",
+"limit": 300,
+"include_serp_info": false,
+"ignore_synonyms": true
+},
+"result": [
+{
+"se_type": "google",
+"seed_keywords": [
+"agentic ai development in uae",
+"software development uae",
+"custom ai solutions uae",
+"microsoft enterprise systems uae",
+"ongoing managed it support uae",
+"open edx services uae",
+"managed services uae",
+"infrastructure & enterprise systems uae",
+"consulting & transformation uae",
+"application & software development uae",
+"intelligent systems & data uae",
+"dynamics 365 uae",
+"microsoft fabric uae",
+"software development company sharjah",
+"custom ai solutions company sharjah",
+"microsoft enterprise systems company sharjah",
+"ongoing managed it support company sharjah",
+"open edx services company sharjah",
+"managed services company sharjah",
+"infrastructure & enterprise systems company sharjah"
+],
+"location_code": 2784,
+"language_code": "en",
+"total_count": 67096,
+"items_count": 300,
+"offset": 0,
+"offset_token": "<hidden>",
+"items": [
+{
+"se_type": "google",
+"keyword": "software engineer",
+"location_code": 2784,
+"language_code": "en",
+"keyword_info": {
+"se_type": "google",
+"last_updated_time": "2026-10-18 19:35:01 +00:00",
+"competition": 0.05,
+"competition_level": "LOW",
+"cpc": 9.49,
+"search_volume": 1300,
+"low_top_of_page_bid": 1.07,
+"high_top_of_page_bid": 5.58,
+"categories": [
+10016,
+10139,
+10746,
+12029
+],
+"monthly_searches": [
+{
+"year": 2026,
+"month": 9,
+"search_volume": 1600
+},
+{
+"year": 2026,
+"month": 8,
+"search_volume": 1300
+},
+{
+"year": 2026,
+"month": 7,
+"search_volume": 1300
+},
+{
+"year": 2026,
+"month": 6,
+"search_volume": 1300
+},
+{
+"year": 2026,
+"month": 5,
+"search_volume": 1300
+},
+{
+"year": 2026,
+"month": 4,
+"search_volume": 1300
+},
+{
+"year": 2026,
+"month": 3,
+"search_volume": 1000
+},
+{
+"year": 2026,
+"month": 2,
+"search_volume": 1300
+},
+{
+"year": 2026,
+"month": 1,
+"search_volume": 1600
+},
+{
+"year": 2025,
+"month": 12,
+"search_volume": 1300
+},
+{
+"year": 2025,
+"month": 11,
+"search_volume": 1600
+},
+{
+"year": 2025,
+"month": 10,
+"search_volume": 1600
+}
+],
+"search_volume_trend": {
+"monthly": 23,
+"quarterly": 23,
+"yearly": -33
+}
+},
+"keyword_info_normalized_with_bing": null,
+"keyword_info_normalized_with_clickstream": null,
+"clickstream_keyword_info": null,
+"keyword_properties": {
+"se_type": "google",
+"core_keyword": null,
+"synonym_clustering_algorithm": "text_processing",
+"keyword_difficulty": 6,
+"detected_language": "en",
+"is_another_language": false,
+"words_count": 2
+},
+"serp_info": null,
+"avg_backlinks_info": {
+"se_type": "google",
+"backlinks": 914.3,
+"dofollow": 549,
+"referring_pages": 836.8,
+"referring_domains": 261.4,
+"referring_main_domains": 249.5,
+"rank": 87.8,
+"main_domain_rank": 571.8,
+"last_updated_time": "2026-10-06 20:12:52 +00:00"
+},
+"search_intent_info": {
+"se_type": "google",
+"main_intent": "informational",
+"foreign_intent": null,
+"last_updated_time": "2026-04-28 22:27:55 +00:00"
+}
+},
+{
+"se_type": "google",
+"keyword": "key information technology dubai",
+"location_code": 2784,
+"language_code": "en",
+"keyword_info": {
+"se_type": "google",
+"last_updated_time": "2026-10-17 01:56:04 +00:00",
+"competition": 0.06,
+"competition_level": "LOW",
+"cpc": 0.57,
+"search_volume": 1300,
+"low_top_of_page_bid": 0.63,
+"high_top_of_page_bid": 7.07,
+"categories": [
+10016,
+10141,
+10763,
+12059,
+13513
+],
+"monthly_searches": [
+{
+"year": 2026,
+"month": 9,
+"search_volume": 1600
+},
+{
+"year": 2026,
+"month": 8,
+"search_volume": 1300
+},
+{
+"year": 2026,
+"month": 7,
+"search_volume": 1300
+},
+{
+"year": 2026,
+"month": 6,
+"search_volume": 1600
+},
+{
+"year": 2026,
+"month": 5,
+"search_volume": 1000
+},
+{
+"year": 2026,
+"month": 4,
+"search_volume": 1600
+},
+{
+"year": 2026,
+"month": 3,
+"search_volume": 1300
+},
+{
+"year": 2026,
+"month": 2,
+"search_volume": 1600
+},
+{
+"year": 2026,
+"month": 1,
+"search_volume": 1600
+},
+{
+"year": 2025,
+"month": 12,
+"search_volume": 1300
+},
+{
+"year": 2025,
+"month": 11,
+"search_volume": 1300
+},
+{
+"year": 2025,
+"month": 10,
+"search_volume": 1600
+}
+],
+"search_volume_trend": {
+"monthly": 23,
+"quarterly": 23,
+"yearly": 60
+}
+},
+"keyword_info_normalized_with_bing": null,
+"keyword_info_normalized_with_clickstream": null,
+"clickstream_keyword_info": null,
+"keyword_properties": {
+"se_type": "google",
+"core_keyword": null,
+"synonym_clustering_algorithm": "keyword_metrics",
+"keyword_difficulty": 0,
+"detected_language": "en",
+"is_another_language": false,
+"words_count": 4
+},
+"serp_info": null,
+"avg_backlinks_info": {
+"se_type": "google",
+"backlinks": 3.5,
+"dofollow": 1.4,
+"referring_pages": 3.5,
+"referring_domains": 2.1,
+"referring_main_domains": 1.9,
+"rank": 22.2,
+"main_domain_rank": 594.5,
+"last_updated_time": "2026-09-17 23:14:28 +00:00"
+},
+"search_intent_info": {
+"se_type": "google",
+"main_intent": "commercial",
+"foreign_intent": null,
+"last_updated_time": "2026-04-28 13:15:47 +00:00"
+}
+},
+{
+"se_type": "google",
+"keyword": "software engineering professionals",
+"location_code": 2784,
+"language_code": "en",
+"keyword_info": {
+"se_type": "google",
+"last_updated_time": "2026-09-16 22:56:30 +00:00",
+"competition": 0,
+"competition_level": "LOW",
+"cpc": null,
+"search_volume": 1000,
+"low_top_of_page_bid": null,
+"high_top_of_page_bid": null,
+"categories": [
+10016,
+10139,
+10746,
+12029
+],
+"monthly_searches": [
+{
+"year": 2026,
+"month": 8,
+"search_volume": 1300
+},
+{
+"year": 2026,
+"month": 7,
+"search_volume": 720
+},
+{
+"year": 2026,
+"month": 6,
+"search_volume": 880
+},
+{
+"year": 2026,
+"month": 5,
+"search_volume": 880
+},
+{
+"year": 2026,
+"month": 4,
+"search_volume": 880
+},
+{
+"year": 2026,
+"month": 3,
+"search_volume": 880
+},
+{
+"year": 2026,
+"month": 2,
+"search_volume": 880
+},
+{
+"year": 2026,
+"month": 1,
+"search_volume": 880
+},
+{
+"year": 2025,
+"month": 12,
+"search_volume": 880
+},
+{
+"year": 2025,
+"month": 11,
+"search_volume": 1300
+},
+{
+"year": 2025,
+"month": 10,
+"search_volume": 1300
+},
+{
+"year": 2025,
+"month": 9,
+"search_volume": 2900
+}
+],
+"search_volume_trend": {
+"monthly": 81,
+"quarterly": 48,
+"yearly": 30
+}
+},
+"keyword_info_normalized_with_bing": null,
+"keyword_info_normalized_with_clickstream": null,
+"clickstream_keyword_info": null,
+"keyword_properties": {
+"se_type": "google",
+"core_keyword": null,
+"synonym_clustering_algorithm": "text_processing",
+"keyword_difficulty": 39,
+"detected_language": "en",
+"is_another_language": false,
+"words_count": 3
+},
+"serp_info": null,
+"avg_backlinks_info": {
+"se_type": "google",
+"backlinks": 4235.5,
+"dofollow": 3260.1,
+"referring_pages": 3479,
+"referring_domains": 371.1,
+"referring_main_domains": 353,
+"rank": 211.2,
+"main_domain_rank": 587.5,
+"last_updated_time": "2026-09-18 10:55:10 +00:00"
+},
+"search_intent_info": {
+"se_type": "google",
+"main_intent": "informational",
+"foreign_intent": null,
+"last_updated_time": "2026-04-29 21:46:19 +00:00"
+}
+},
+{
+"se_type": "google",
+"keyword": "technical services mohre",
+"location_code": 2784,
+"language_code": "en",
+"keyword_info": {
+"se_type": "google",
+"last_updated_time": "2026-09-16 22:31:40 +00:00",
+"competition": 0,
+"competition_level": "LOW",
+"cpc": null,
+"search_volume": 70,
+"low_top_of_page_bid": null,
+"high_top_of_page_bid": null,
+"categories": [
+10016,
+10139
+],
+"monthly_searches": [
+{
+"year": 2026,
+"month": 8,
+"search_volume": 70
+},
+{
+"year": 2026,
+"month": 7,
+"search_volume": 90
+},
+{
+"year": 2026,
+"month": 6,
+"search_volume": 90
+},
+{
+"year": 2026,
+"month": 5,
+"search_volume": 50
+},
+{
+"year": 2026,
+"month": 4,
+"search_volume": 40
+},
+{
+"year": 2026,
+"month": 3,
+"search_volume": 50
+},
+{
+"year": 2026,
+"month": 2,
+"search_volume": 70
+},
+{
+"year": 2026,
+"month": 1,
+"search_volume": 70
+},
+{
+"year": 2025,
+"month": 12,
+"search_volume": 50
+},
+{
+"year": 2025,
+"month": 11,
+"search_volume": 110
+},
+{
+"year": 2025,
+"month": 10,
+"search_volume": 70
+},
+{
+"year": 2025,
+"month": 9,
+"search_volume": 30
+}
+],
+"search_volume_trend": {
+"monthly": -22,
+"quarterly": -22,
+"yearly": 133
+}
+},
+"keyword_info_normalized_with_bing": null,
+"keyword_info_normalized_with_clickstream": null,
+"clickstream_keyword_info": null,
+"keyword_properties": {
+"se_type": "google",
+"core_keyword": null,
+"synonym_clustering_algorithm": null,
+"keyword_difficulty": null,
+"detected_language": "en",
+"is_another_language": false,
+"words_count": 3
+},
+"serp_info": null,
+"avg_backlinks_info": null,
+"search_intent_info": {
+"se_type": "google",
+"main_intent": "commercial",
+"foreign_intent": null,
+"last_updated_time": "2026-05-04 14:26:18 +00:00"
+}
+},
+{
+"se_type": "google",
+"keyword": "software developer",
+"location_code": 2784,
+"language_code": "en",
+"keyword_info": {
+"se_type": "google",
+"last_updated_time": "2026-10-18 04:21:18 +00:00",
+"competition": 0.17,
+"competition_level": "LOW",
+"cpc": 8.25,
+"search_volume": 390,
+"low_top_of_page_bid": 1.48,
+"high_top_of_page_bid": 7.72,
+"categories": [
+10016,
+10139,
+10746,
+12029
+],
+"monthly_searches": [
+{
+"year": 2026,
+"month": 9,
+"search_volume": 320
+},
+{
+"year": 2026,
+"month": 8,
+"search_volume": 320
+},
+{
+"year": 2026,
+"month": 7,
+"search_volume": 320
+},
+{
+"year": 2026,
+"month": 6,
+"search_volume": 320
+},
+{
+"year": 2026,
+"month": 5,
+"search_volume": 260
+},
+{
+"year": 2026,
+"month": 4,
+"search_volume": 390
+},
+{
+"year": 2026,
+"month": 3,
+"search_volume": 320
+},
+{
+"year": 2026,
+"month": 2,
+"search_volume": 390
+},
+{
+"year": 2026,
+"month": 1,
+"search_volume": 390
+},
+{
+"year": 2025,
+"month": 12,
+"search_volume": 480
+},
+{
+"year": 2025,
+"month": 11,
+"search_volume": 390
+},
+{
+"year": 2025,
+"month": 10,
+"search_volume": 480
+}
+],
+"search_volume_trend": {
+"monthly": 0,
+"quarterly": 0,
+"yearly": -33
+}
+},
+"keyword_info_normalized_with_bing": null,
+"keyword_info_normalized_with_clickstream": null,
+"clickstream_keyword_info": null,
+"keyword_properties": {
+"se_type": "google",
+"core_keyword": null,
+"synonym_clustering_algorithm": "text_processing",
+"keyword_difficulty": 6,
+"detected_language": "en",
+"is_another_language": false,
+"words_count": 2
+},
+"serp_info": null,
+"avg_backlinks_info": {
+"se_type": "google",
+"backlinks": 58.5,
+"dofollow": 40.2,
+"referring_pages": 53.2,
+"referring_domains": 29.2,
+"referring_main_domains": 28.3,
+"rank": 82.6,
+"main_domain_rank": 601.4,
+"last_updated_time": "2026-09-22 22:32:33 +00:00"
+},
+"search_intent_info": {
+"se_type": "google",
+"main_intent": "informational",
+"foreign_intent": [
+"commercial"
+],
+"last_updated_time": "2026-04-29 20:01:38 +00:00"
+}
+},
+{
+"se_type": "google",
+"keyword": "hrms software in dubai",
+"location_code": 2784,
+"language_code": "en",
+"keyword_info": {
+"se_type": "google",
+"last_updated_time": "2026-09-16 18:36:32 +00:00",
+"competition": 0.35,
+"competition_level": "MEDIUM",
+"cpc": 156.81,
+"search_volume": 390,
+"low_top_of_page_bid": 12.5,
+"high_top_of_page_bid": 47.92,
+"categories": [
+10016,
+10141,
+10763,
+12059,
+13513
+],
+"monthly_searches": [
+{
+"year": 2026,
+"month": 8,
+"search_volume": 170
+},
+{
+"year": 2026,
+"month": 7,
+"search_volume": 320
+},
+{
+"year": 2026,
+"month": 6,
+"search_volume": 390
+},
+{
+"year": 2026,
+"month": 5,
+"search_volume": 320
+},
+{
+"year": 2026,
+"month": 4,
+"search_volume": 390
+},
+{
+"year": 2026,
+"month": 3,
+"search_volume": 390
+},
+{
+"year": 2026,
+"month": 2,
+"search_volume": 260
+},
+{
+"year": 2026,
+"month": 1,
+"search_volume": 320
+},
+{
+"year": 2025,
+"month": 12,
+"search_volume": 320
+},
+{
+"year": 2025,
+"month": 11,
+"search_volume": 390
+},
+{
+"year": 2025,
+"month": 10,
+"search_volume": 590
+},
+{
+"year": 2025,
+"month": 9,
+"search_volume": 720
+}
+],
+"search_volume_trend": {
+"monthly": -47,
+"quarterly": -56,
+"yearly": -35
+}
+},
+"keyword_info_normalized_with_bing": null,
+"keyword_info_normalized_with_clickstream": null,
+"clickstream_keyword_info": null,
+"keyword_properties": {
+"se_type": "google",
+"core_keyword": null,
+"synonym_clustering_algorithm": "text_processing",
+"keyword_difficulty": 17,
+"detected_language": "en",
+"is_another_language": false,
+"words_count": 4
+},
+"serp_info": null,
+"avg_backlinks_info": {
+"se_type": "google",
+"backlinks": 38.3,
+"dofollow": 20.7,
+"referring_pages": 32.8,
+"referring_domains": 16.7,
+"referring_main_domains": 16.1,
+"rank": 134.1,
+"main_domain_rank": 319,
+"last_updated_time": "2026-08-27 22:16:25 +00:00"
+},
+"search_intent_info": {
+"se_type": "google",
+"main_intent": "commercial",
+"foreign_intent": null,
+"last_updated_time": "2026-04-28 20:33:31 +00:00"
+}
+}
+]
+}
+]
+}
+],
+"__dfs_cost_usd": 0.048
+},
+{
+"version": "0.1.20261103",
+"status_code": 20000,
+"status_message": "Ok.",
+"time": "0.3162 sec.",
+"cost": 0.036,
+"tasks_count": 1,
+"tasks_error": 0,
+"tasks": [
+{
+"id": "11081947-2365-0399-0000-82296963d9b1",
+"status_code": 20000,
+"status_message": "Ok.",
+"time": "0.3087 sec.",
+"cost": 0.036,
+"result_count": 1,
+"path": [
+"v3",
+"dataforseo_labs",
+"google",
+"keyword_suggestions",
+"live"
+],
+"data": {
+"api": "dataforseo_labs",
+"function": "keyword_suggestions",
+"se_type": "google",
+"keyword": "software development",
+"location_code": 2784,
+"language_code": "en",
+"limit": 200,
+"include_seed_keyword": true,
+"ignore_synonyms": true
+},
+"result": [
+{
+"se_type": "google",
+"seed_keyword": "software development",
+"seed_keyword_data": {
+"se_type": "google",
+"keyword": "software development",
+"location_code": 2784,
+"language_code": "en",
+"keyword_info": {
+"se_type": "google",
+"last_updated_time": "2026-10-16 20:41:26 +00:00",
+"competition": 0.21,
+"competition_level": "LOW",
+"cpc": 9.2,
+"search_volume": 210,
+"low_top_of_page_bid": 1.47,
+"high_top_of_page_bid": 6.83,
+"categories": [
+10019,
+10168,
+10885,
+12197
+],
+"monthly_searches": [
+{
+"year": 2026,
+"month": 9,
+"search_volume": 170
+},
+{
+"year": 2026,
+"month": 8,
+"search_volume": 170
+},
+{
+"year": 2026,
+"month": 7,
+"search_volume": 170
+},
+{
+"year": 2026,
+"month": 6,
+"search_volume": 170
+},
+{
+"year": 2026,
+"month": 5,
+"search_volume": 140
+},
+{
+"year": 2026,
+"month": 4,
+"search_volume": 170
+},
+{
+"year": 2026,
+"month": 3,
+"search_volume": 260
+},
+{
+"year": 2026,
+"month": 2,
+"search_volume": 260
+},
+{
+"year": 2026,
+"month": 1,
+"search_volume": 320
+},
+{
+"year": 2025,
+"month": 12,
+"search_volume": 210
+},
+{
+"year": 2025,
+"month": 11,
+"search_volume": 260
+},
+{
+"year": 2025,
+"month": 10,
+"search_volume": 320
+}
+],
+"search_volume_trend": {
+"monthly": 0,
+"quarterly": 0,
+"yearly": -56
+}
+},
+"keyword_info_normalized_with_bing": null,
+"keyword_info_normalized_with_clickstream": null,
+"clickstream_keyword_info": null,
+"keyword_properties": {
+"se_type": "google",
+"core_keyword": "software developer",
+"synonym_clustering_algorithm": "text_processing",
+"keyword_difficulty": 0,
+"detected_language": "en",
+"is_another_language": false,
+"words_count": 2
+},
+"serp_info": {
+"se_type": "google",
+"check_url": "https://www.google.com/search?q=software%20development&hl=en&gl=AE&ie=UTF-8&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+"serp_item_types": [
+"ai_overview",
+"local_pack",
+"people_also_ask",
+"images",
+"organic",
+"related_searches"
+],
+"se_results_count": 334000,
+"last_updated_time": "2026-09-26 18:14:16 +00:00",
+"previous_updated_time": "2026-06-18 19:07:16 +00:00"
+},
+"search_intent_info": {
+"se_type": "google",
+"main_intent": "informational",
+"foreign_intent": null,
+"last_updated_time": "2026-04-29 19:53:12 +00:00"
+},
+"avg_backlinks_info": null
+},
+"location_code": 2784,
+"language_code": "en",
+"total_count": 4302,
+"items_count": 200,
+"offset": 0,
+"offset_token": "<hidden>",
+"items": [
+{
+"se_type": "google",
+"keyword": "agile software development methodology",
+"location_code": 2784,
+"language_code": "en",
+"keyword_info": {
+"se_type": "google",
+"last_updated_time": "2026-10-16 01:23:08 +00:00",
+"competition": 0.1,
+"competition_level": "LOW",
+"cpc": 3.81,
+"search_volume": 1300,
+"low_top_of_page_bid": 0.47,
+"high_top_of_page_bid": 5.32,
+"categories": [
+10004,
+10276,
+11089
+],
+"monthly_searches": [
+{
+"year": 2026,
+"month": 9,
+"search_volume": 210
+},
+{
+"year": 2026,
+"month": 8,
+"search_volume": 170
+},
+{
+"year": 2026,
+"month": 7,
+"search_volume": 210
+},
+{
+"year": 2026,
+"month": 6,
+"search_volume": 590
+},
+{
+"year": 2026,
+"month": 5,
+"search_volume": 260
+},
+{
+"year": 2026,
+"month": 4,
+"search_volume": 320
+},
+{
+"year": 2026,
+"month": 3,
+"search_volume": 4400
+},
+{
+"year": 2026,
+"month": 2,
+"search_volume": 8100
+},
+{
+"year": 2026,
+"month": 1,
+"search_volume": 480
+},
+{
+"year": 2025,
+"month": 12,
+"search_volume": 720
+},
+{
+"year": 2025,
+"month": 11,
+"search_volume": 590
+},
+{
+"year": 2025,
+"month": 10,
+"search_volume": 590
+}
+],
+"search_volume_trend": {
+"monthly": 24,
+"quarterly": 0,
+"yearly": -56
+}
+},
+"keyword_info_normalized_with_bing": null,
+"keyword_info_normalized_with_clickstream": null,
+"clickstream_keyword_info": null,
+"keyword_properties": {
+"se_type": "google",
+"core_keyword": null,
+"synonym_clustering_algorithm": "text_processing",
+"keyword_difficulty": 34,
+"detected_language": "en",
+"is_another_language": false,
+"words_count": 4
+},
+"serp_info": null,
+"avg_backlinks_info": {
+"se_type": "google",
+"backlinks": 4660.2,
+"dofollow": 3649.4,
+"referring_pages": 4113.1,
+"referring_domains": 1045.3,
+"referring_main_domains": 942.2,
+"rank": 298.5,
+"main_domain_rank": 570,
+"last_updated_time": "2024-10-06 09:38:49 +00:00"
+},
+"search_intent_info": {
+"se_type": "google",
+"main_intent": "informational",
+"foreign_intent": null,
+"last_updated_time": "2026-04-29 01:16:07 +00:00"
+}
+},
+{
+"se_type": "google",
+"keyword": "software development agile",
+"location_code": 2784,
+"language_code": "en",
+"keyword_info": {
+"se_type": "google",
+"last_updated_time": "2026-10-17 01:19:54 +00:00",
+"competition": 0.04,
+"competition_level": "LOW",
+"cpc": null,
+"search_volume": 1000,
+"low_top_of_page_bid": 0.94,
+"high_top_of_page_bid": 14.04,
+"categories": [
+10019,
+10168,
+10885,
+12197
+],
+"monthly_searches": [
+{
+"year": 2026,
+"month": 9,
+"search_volume": 880
+},
+{
+"year": 2026,
+"month": 8,
+"search_volume": 720
+},
+{
+"year": 2026,
+"month": 7,
+"search_volume": 720
+},
+{
+"year": 2026,
+"month": 6,
+"search_volume": 880
+},
+{
+"year": 2026,
+"month": 5,
+"search_volume": 880
+},
+{
+"year": 2026,
+"month": 4,
+"search_volume": 880
+},
+{
+"year": 2026,
+"month": 3,
+"search_volume": 880
+},
+{
+"year": 2026,
+"month": 2,
+"search_volume": 1300
+},
+{
+"year": 2026,
+"month": 1,
+"search_volume": 1300
+},
+{
+"year": 2025,
+"month": 12,
+"search_volume": 880
+},
+{
+"year": 2025,
+"month": 11,
+"search_volume": 1300
+},
+{
+"year": 2025,
+"month": 10,
+"search_volume": 1300
+}
+],
+"search_volume_trend": {
+"monthly": 22,
+"quarterly": 22,
+"yearly": -32
+}
+},
+"keyword_info_normalized_with_bing": null,
+"keyword_info_normalized_with_clickstream": null,
+"clickstream_keyword_info": null,
+"keyword_properties": {
+"se_type": "google",
+"core_keyword": null,
+"synonym_clustering_algorithm": "text_processing",
+"keyword_difficulty": 48,
+"detected_language": "en",
+"is_another_language": false,
+"words_count": 3
+},
+"serp_info": null,
+"avg_backlinks_info": {
+"se_type": "google",
+"backlinks": 10541.1,
+"dofollow": 7783.9,
+"referring_pages": 8223.4,
+"referring_domains": 1535.2,
+"referring_main_domains": 1413.9,
+"rank": 229,
+"main_domain_rank": 512.9,
+"last_updated_time": "2026-03-16 08:51:31 +00:00"
+},
+"search_intent_info": {
+"se_type": "google",
+"main_intent": "informational",
+"foreign_intent": [
+"commercial"
+],
+"last_updated_time": "2026-04-28 22:34:14 +00:00"
+}
+},
+{
+"se_type": "google",
+"keyword": "software development life cycle processes",
+"location_code": 2784,
+"language_code": "en",
+"keyword_info": {
+"se_type": "google",
+"last_updated_time": "2026-11-07 20:09:09 +00:00",
+"competition": 0.01,
+"competition_level": "LOW",
+"cpc": null,
+"search_volume": 720,
+"low_top_of_page_bid": 3.41,
+"high_top_of_page_bid": 33.17,
+"categories": [
+10004,
+10019,
+10168,
+10276,
+10885,
+11089,
+12197,
+13643
+],
+"monthly_searches": [
+{
+"year": 2026,
+"month": 9,
+"search_volume": 880
+},
+{
+"year": 2026,
+"month": 8,
+"search_volume": 480
+},
+{
+"year": 2026,
+"month": 7,
+"search_volume": 590
+},
+{
+"year": 2026,
+"month": 6,
+"search_volume": 590
+},
+{
+"year": 2026,
+"month": 5,
+"search_volume": 480
+},
+{
+"year": 2026,
+"month": 4,
+"search_volume": 590
+},
+{
+"year": 2026,
+"month": 3,
+"search_volume": 590
+},
+{
+"year": 2026,
+"month": 2,
+"search_volume": 880
+},
+{
+"year": 2026,
+"month": 1,
+"search_volume": 720
+},
+{
+"year": 2025,
+"month": 12,
+"search_volume": 480
+},
+{
+"year": 2025,
+"month": 11,
+"search_volume": 720
+},
+{
+"year": 2025,
+"month": 10,
+"search_volume": 880
+}
+],
+"search_volume_trend": {
+"monthly": 83,
+"quarterly": 49,
+"yearly": 0
+}
+},
+"keyword_info_normalized_with_bing": null,
+"keyword_info_normalized_with_clickstream": null,
+"clickstream_keyword_info": null,
+"keyword_properties": {
+"se_type": "google",
+"core_keyword": null,
+"synonym_clustering_algorithm": "text_processing",
+"keyword_difficulty": null,
+"detected_language": "en",
+"is_another_language": false,
+"words_count": 5
+},
+"serp_info": null,
+"avg_backlinks_info": null,
+"search_intent_info": {
+"se_type": "google",
+"main_intent": "informational",
+"foreign_intent": null,
+"last_updated_time": "2026-11-07 20:09:57 +00:00"
+}
+},
+{
+"se_type": "google",
+"keyword": "software development life cycle models",
+"location_code": 2784,
+"language_code": "en",
+"keyword_info": {
+"se_type": "google",
+"last_updated_time": "2026-10-19 21:23:54 +00:00",
+"competition": 0.01,
+"competition_level": "LOW",
+"cpc": null,
+"search_volume": 720,
+"low_top_of_page_bid": 3.41,
+"high_top_of_page_bid": 33.17,
+"categories": [
+10004,
+10276,
+11089
+],
+"monthly_searches": [
+{
+"year": 2026,
+"month": 9,
+"search_volume": 880
+},
+{
+"year": 2026,
+"month": 8,
+"search_volume": 480
+},
+{
+"year": 2026,
+"month": 7,
+"search_volume": 590
+},
+{
+"year": 2026,
+"month": 6,
+"search_volume": 590
+},
+{
+"year": 2026,
+"month": 5,
+"search_volume": 480
+},
+{
+"year": 2026,
+"month": 4,
+"search_volume": 590
+},
+{
+"year": 2026,
+"month": 3,
+"search_volume": 590
+},
+{
+"year": 2026,
+"month": 2,
+"search_volume": 880
+},
+{
+"year": 2026,
+"month": 1,
+"search_volume": 720
+},
+{
+"year": 2025,
+"month": 12,
+"search_volume": 480
+},
+{
+"year": 2025,
+"month": 11,
+"search_volume": 720
+},
+{
+"year": 2025,
+"month": 10,
+"search_volume": 880
+}
+],
+"search_volume_trend": {
+"monthly": 83,
+"quarterly": 49,
+"yearly": 0
+}
+},
+"keyword_info_normalized_with_bing": null,
+"keyword_info_normalized_with_clickstream": null,
+"clickstream_keyword_info": null,
+"keyword_properties": {
+"se_type": "google",
+"core_keyword": null,
+"synonym_clustering_algorithm": "text_processing",
+"keyword_difficulty": 32,
+"detected_language": "en",
+"is_another_language": false,
+"words_count": 5
+},
+"serp_info": null,
+"avg_backlinks_info": {
+"se_type": "google",
+"backlinks": 133.6,
+"dofollow": 108.6,
+"referring_pages": 126.4,
+"referring_domains": 66.8,
+"referring_main_domains": 63.7,
+"rank": 190.1,
+"main_domain_rank": 535.3,
+"last_updated_time": "2026-03-17 10:51:54 +00:00"
+},
+"search_intent_info": {
+"se_type": "google",
+"main_intent": "informational",
+"foreign_intent": null,
+"last_updated_time": "2026-04-29 19:53:12 +00:00"
+}
+},
+{
+"se_type": "google",
+"keyword": "software development life cycle phases",
+"location_code": 2784,
+"language_code": "en",
+"keyword_info": {
+"se_type": "google",
+"last_updated_time": "2026-10-17 22:20:40 +00:00",
+"competition": 0.01,
+"competition_level": "LOW",
+"cpc": null,
+"search_volume": 720,
+"low_top_of_page_bid": 3.41,
+"high_top_of_page_bid": 33.17,
+"categories": [
+10019,
+10168,
+10885,
+12197,
+13643
+],
+"monthly_searches": [
+{
+"year": 2026,
+"month": 9,
+"search_volume": 880
+},
+{
+"year": 2026,
+"month": 8,
+"search_volume": 480
+},
+{
+"year": 2026,
+"month": 7,
+"search_volume": 590
+},
+{
+"year": 2026,
+"month": 6,
+"search_volume": 590
+},
+{
+"year": 2026,
+"month": 5,
+"search_volume": 480
+},
+{
+"year": 2026,
+"month": 4,
+"search_volume": 590
+},
+{
+"year": 2026,
+"month": 3,
+"search_volume": 590
+},
+{
+"year": 2026,
+"month": 2,
+"search_volume": 880
+},
+{
+"year": 2026,
+"month": 1,
+"search_volume": 720
+},
+{
+"year": 2025,
+"month": 12,
+"search_volume": 480
+},
+{
+"year": 2025,
+"month": 11,
+"search_volume": 720
+},
+{
+"year": 2025,
+"month": 10,
+"search_volume": 880
+}
+],
+"search_volume_trend": {
+"monthly": 83,
+"quarterly": 49,
+"yearly": 0
+}
+},
+"keyword_info_normalized_with_bing": null,
+"keyword_info_normalized_with_clickstream": null,
+"clickstream_keyword_info": null,
+"keyword_properties": {
+"se_type": "google",
+"core_keyword": null,
+"synonym_clustering_algorithm": "text_processing",
+"keyword_difficulty": 32,
+"detected_language": "en",
+"is_another_language": false,
+"words_count": 5
+},
+"serp_info": null,
+"avg_backlinks_info": {
+"se_type": "google",
+"backlinks": 128.2,
+"dofollow": 109,
+"referring_pages": 121.6,
+"referring_domains": 67.2,
+"referring_main_domains": 64.5,
+"rank": 210.7,
+"main_domain_rank": 582.8,
+"last_updated_time": "2026-03-17 10:49:00 +00:00"
+},
+"search_intent_info": {
+"se_type": "google",
+"main_intent": "informational",
+"foreign_intent": null,
+"last_updated_time": "2026-04-29 20:55:30 +00:00"
+}
+},
+{
+"se_type": "google",
+"keyword": "software development life cycle",
+"location_code": 2784,
+"language_code": "en",
+"keyword_info": {
+"se_type": "google",
+"last_updated_time": "2026-10-16 09:20:13 +00:00",
+"competition": 0.01,
+"competition_level": "LOW",
+"cpc": null,
+"search_volume": 720,
+"low_top_of_page_bid": 3.41,
+"high_top_of_page_bid": 33.17,
+"categories": [
+10019,
+10168,
+10885,
+12197,
+13643
+],
+"monthly_searches": [
+{
+"year": 2026,
+"month": 9,
+"search_volume": 880
+},
+{
+"year": 2026,
+"month": 8,
+"search_volume": 480
+},
+{
+"year": 2026,
+"month": 7,
+"search_volume": 590
+},
+{
+"year": 2026,
+"month": 6,
+"search_volume": 590
+},
+{
+"year": 2026,
+"month": 5,
+"search_volume": 480
+},
+{
+"year": 2026,
+"month": 4,
+"search_volume": 590
+},
+{
+"year": 2026,
+"month": 3,
+"search_volume": 590
+},
+{
+"year": 2026,
+"month": 2,
+"search_volume": 880
+},
+{
+"year": 2026,
+"month": 1,
+"search_volume": 720
+},
+{
+"year": 2025,
+"month": 12,
+"search_volume": 480
+},
+{
+"year": 2025,
+"month": 11,
+"search_volume": 720
+},
+{
+"year": 2025,
+"month": 10,
+"search_volume": 880
+}
+],
+"search_volume_trend": {
+"monthly": 83,
+"quarterly": 49,
+"yearly": 0
+}
+},
+"keyword_info_normalized_with_bing": null,
+"keyword_info_normalized_with_clickstream": null,
+"clickstream_keyword_info": null,
+"keyword_properties": {
+"se_type": "google",
+"core_keyword": null,
+"synonym_clustering_algorithm": "text_processing",
+"keyword_difficulty": 32,
+"detected_language": "en",
+"is_another_language": false,
+"words_count": 4
+},
+"serp_info": null,
+"avg_backlinks_info": {
+"se_type": "google",
+"backlinks": 451.8,
+"dofollow": 362.9,
+"referring_pages": 406.3,
+"referring_domains": 140,
+"referring_main_domains": 130,
+"rank": 167.9,
+"main_domain_rank": 725.3,
+"last_updated_time": "2026-05-28 03:46:12 +00:00"
+},
+"search_intent_info": {
+"se_type": "google",
+"main_intent": "informational",
+"foreign_intent": null,
+"last_updated_time": "2026-04-29 19:53:12 +00:00"
+}
+}
+]
+}
+]
+}
+],
+"__dfs_cost_usd": 0.036
+},
+{
+"version": "0.1.20261103",
+"status_code": 20000,
+"status_message": "Ok.",
+"time": "0.1757 sec.",
+"cost": 0.01248,
+"tasks_count": 1,
+"tasks_error": 0,
+"tasks": [
+{
+"id": "11081947-2365-0399-0000-2ffc9d261c27",
+"status_code": 20000,
+"status_message": "Ok.",
+"time": "0.1441 sec.",
+"cost": 0.01248,
+"result_count": 1,
+"path": [
+"v3",
+"dataforseo_labs",
+"google",
+"keyword_suggestions",
+"live"
+],
+"data": {
+"api": "dataforseo_labs",
+"function": "keyword_suggestions",
+"se_type": "google",
+"keyword": "custom ai solutions",
+"location_code": 2784,
+"language_code": "en",
+"limit": 200,
+"include_seed_keyword": true,
+"ignore_synonyms": true
+},
+"result": [
+{
+"se_type": "google",
+"seed_keyword": "custom ai solutions",
+"seed_keyword_data": {
+"se_type": "google",
+"keyword": "custom ai solutions",
+"location_code": 2784,
+"language_code": "en",
+"keyword_info": {
+"se_type": "google",
+"last_updated_time": "2026-09-17 00:15:06 +00:00",
+"competition": 0.86,
+"competition_level": "HIGH",
+"cpc": null,
+"search_volume": 10,
+"low_top_of_page_bid": null,
+"high_top_of_page_bid": null,
+"categories": [
+10004,
+10306,
+12566,
+13464
+],
+"monthly_searches": [
+{
+"year": 2026,
+"month": 8,
+"search_volume": 10
+},
+{
+"year": 2026,
+"month": 7,
+"search_volume": 10
+},
+{
+"year": 2026,
+"month": 6,
+"search_volume": 10
+},
+{
+"year": 2026,
+"month": 5,
+"search_volume": 10
+},
+{
+"year": 2026,
+"month": 4,
+"search_volume": 10
+},
+{
+"year": 2026,
+"month": 3,
+"search_volume": 10
+},
+{
+"year": 2026,
+"month": 2,
+"search_volume": 10
+},
+{
+"year": 2026,
+"month": 1,
+"search_volume": 10
+},
+{
+"year": 2025,
+"month": 12,
+"search_volume": 10
+},
+{
+"year": 2025,
+"month": 11,
+"search_volume": 10
+},
+{
+"year": 2025,
+"month": 10,
+"search_volume": 10
+},
+{
+"year": 2025,
+"month": 9,
+"search_volume": 10
+}
+],
+"search_volume_trend": {
+"monthly": 0,
+"quarterly": 0,
+"yearly": null
+}
+},
+"keyword_info_normalized_with_bing": null,
+"keyword_info_normalized_with_clickstream": null,
+"clickstream_keyword_info": null,
+"keyword_properties": {
+"se_type": "google",
+"core_keyword": null,
+"synonym_clustering_algorithm": "text_processing",
+"keyword_difficulty": null,
+"detected_language": "en",
+"is_another_language": false,
+"words_count": 3
+},
+"serp_info": null,
+"search_intent_info": {
+"se_type": "google",
+"main_intent": "commercial",
+"foreign_intent": null,
+"last_updated_time": "2026-04-29 02:19:06 +00:00"
+},
+"avg_backlinks_info": null
+},
+"location_code": 2784,
+"language_code": "en",
+"total_count": 4,
+"items_count": 4,
+"offset": 0,
+"offset_token": "<hidden>",
+"items": [
+{
+"se_type": "google",
+"keyword": "custom ai solutions",
+"location_code": 2784,
+"language_code": "en",
+"keyword_info": {
+"se_type": "google",
+"last_updated_time": "2026-09-17 00:15:06 +00:00",
+"competition": 0.86,
+"competition_level": "HIGH",
+"cpc": null,
+"search_volume": 10,
+"low_top_of_page_bid": null,
+"high_top_of_page_bid": null,
+"categories": [
+10004,
+10306,
+12566,
+13464
+],
+"monthly_searches": [
+{
+"year": 2026,
+"month": 8,
+"search_volume": 10
+},
+{
+"year": 2026,
+"month": 7,
+"search_volume": 10
+},
+{
+"year": 2026,
+"month": 6,
+"search_volume": 10
+},
+{
+"year": 2026,
+"month": 5,
+"search_volume": 10
+},
+{
+"year": 2026,
+"month": 4,
+"search_volume": 10
+},
+{
+"year": 2026,
+"month": 3,
+"search_volume": 10
+},
+{
+"year": 2026,
+"month": 2,
+"search_volume": 10
+},
+{
+"year": 2026,
+"month": 1,
+"search_volume": 10
+},
+{
+"year": 2025,
+"month": 12,
+"search_volume": 10
+},
+{
+"year": 2025,
+"month": 11,
+"search_volume": 10
+},
+{
+"year": 2025,
+"month": 10,
+"search_volume": 10
+},
+{
+"year": 2025,
+"month": 9,
+"search_volume": 10
+}
+],
+"search_volume_trend": {
+"monthly": 0,
+"quarterly": 0,
+"yearly": null
+}
+},
+"keyword_info_normalized_with_bing": null,
+"keyword_info_normalized_with_clickstream": null,
+"clickstream_keyword_info": null,
+"keyword_properties": {
+"se_type": "google",
+"core_keyword": null,
+"synonym_clustering_algorithm": "text_processing",
+"keyword_difficulty": null,
+"detected_language": "en",
+"is_another_language": false,
+"words_count": 3
+},
+"serp_info": null,
+"avg_backlinks_info": null,
+"search_intent_info": {
+"se_type": "google",
+"main_intent": "commercial",
+"foreign_intent": null,
+"last_updated_time": "2026-04-29 02:19:06 +00:00"
+}
+},
+{
+"se_type": "google",
+"keyword": "custom ai solutions development",
+"location_code": 2784,
+"language_code": "en",
+"keyword_info": {
+"se_type": "google",
+"last_updated_time": "2026-11-07 01:19:16 +00:00",
+"competition": null,
+"competition_level": null,
+"cpc": null,
+"search_volume": 10,
+"low_top_of_page_bid": null,
+"high_top_of_page_bid": null,
+"categories": [
+10019,
+10168,
+10885,
+12197,
+12211,
+13111
+],
+"monthly_searches": [
+{
+"year": 2026,
+"month": 9,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 8,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 7,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 6,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 5,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 4,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 3,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 2,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 1,
+"search_volume": 10
+},
+{
+"year": 2025,
+"month": 12,
+"search_volume": 0
+},
+{
+"year": 2025,
+"month": 11,
+"search_volume": 0
+},
+{
+"year": 2025,
+"month": 10,
+"search_volume": 0
+}
+],
+"search_volume_trend": {
+"monthly": 0,
+"quarterly": 0,
+"yearly": 0
+}
+},
+"keyword_info_normalized_with_bing": null,
+"keyword_info_normalized_with_clickstream": null,
+"clickstream_keyword_info": null,
+"keyword_properties": {
+"se_type": "google",
+"core_keyword": null,
+"synonym_clustering_algorithm": null,
+"keyword_difficulty": null,
+"detected_language": "en",
+"is_another_language": false,
+"words_count": 4
+},
+"serp_info": null,
+"avg_backlinks_info": null,
+"search_intent_info": {
+"se_type": "google",
+"main_intent": "commercial",
+"foreign_intent": null,
+"last_updated_time": "2026-11-07 01:20:12 +00:00"
+}
+},
+{
+"se_type": "google",
+"keyword": "custom gpt ai chatbot solutions",
+"location_code": 2784,
+"language_code": "en",
+"keyword_info": {
+"se_type": "google",
+"last_updated_time": "2026-10-15 23:04:38 +00:00",
+"competition": null,
+"competition_level": null,
+"cpc": null,
+"search_volume": 10,
+"low_top_of_page_bid": null,
+"high_top_of_page_bid": null,
+"categories": [
+10007,
+11499,
+13418
+],
+"monthly_searches": [
+{
+"year": 2026,
+"month": 9,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 8,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 7,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 6,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 5,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 4,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 3,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 2,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 1,
+"search_volume": 0
+},
+{
+"year": 2025,
+"month": 12,
+"search_volume": 0
+},
+{
+"year": 2025,
+"month": 11,
+"search_volume": 10
+},
+{
+"year": 2025,
+"month": 10,
+"search_volume": 0
+}
+],
+"search_volume_trend": {
+"monthly": 0,
+"quarterly": 0,
+"yearly": 0
+}
+},
+"keyword_info_normalized_with_bing": null,
+"keyword_info_normalized_with_clickstream": null,
+"clickstream_keyword_info": null,
+"keyword_properties": {
+"se_type": "google",
+"core_keyword": null,
+"synonym_clustering_algorithm": null,
+"keyword_difficulty": null,
+"detected_language": "en",
+"is_another_language": false,
+"words_count": 5
+},
+"serp_info": null,
+"avg_backlinks_info": null,
+"search_intent_info": {
+"se_type": "google",
+"main_intent": "commercial",
+"foreign_intent": null,
+"last_updated_time": "2026-04-26 02:35:16 +00:00"
+}
+},
+{
+"se_type": "google",
+"keyword": "custom ai solutions for business",
+"location_code": 2784,
+"language_code": "en",
+"keyword_info": {
+"se_type": "google",
+"last_updated_time": "2026-10-16 22:38:09 +00:00",
+"competition": null,
+"competition_level": null,
+"cpc": null,
+"search_volume": 0,
+"low_top_of_page_bid": null,
+"high_top_of_page_bid": null,
+"categories": [
+10019,
+10168,
+10882
+],
+"monthly_searches": [
+{
+"year": 2026,
+"month": 9,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 8,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 7,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 6,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 5,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 4,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 3,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 2,
+"search_volume": 0
+},
+{
+"year": 2026,
+"month": 1,
+"search_volume": 0
+},
+{
+"year": 2025,
+"month": 12,
+"search_volume": 0
+},
+{
+"year": 2025,
+"month": 11,
+"search_volume": 0
+},
+{
+"year": 2025,
+"month": 10,
+"search_volume": 0
+}
+],
+"search_volume_trend": {
+"monthly": 0,
+"quarterly": 0,
+"yearly": 0
+}
+},
+"keyword_info_normalized_with_bing": null,
+"keyword_info_normalized_with_clickstream": null,
+"clickstream_keyword_info": null,
+"keyword_properties": {
+"se_type": "google",
+"core_keyword": null,
+"synonym_clustering_algorithm": null,
+"keyword_difficulty": null,
+"detected_language": "en",
+"is_another_language": false,
+"words_count": 5
+},
+"serp_info": null,
+"avg_backlinks_info": null,
+"search_intent_info": {
+"se_type": "google",
+"main_intent": "commercial",
+"foreign_intent": null,
+"last_updated_time": "2026-04-29 05:30:38 +00:00"
+}
+}
+]
+}
+]
+}
+],
+"__dfs_cost_usd": 0.0125
+}
+]
+},
+"serp": {
+"requests": [
+{
+"ki_call": "serp",
+"endpoint": "https://api.dataforseo.com/v3/serp/google/organic/live/advanced",
+"body": [
+{
+"keyword": "autonomous customer service ai",
+"location_code": 2784,
+"language_code": "en",
+"device": "desktop",
+"depth": 10
+}
+],
+"est_usd": 0.002,
+"keyword": "autonomous customer service ai"
+},
+{
+"ki_call": "serp",
+"endpoint": "https://api.dataforseo.com/v3/serp/google/organic/live/advanced",
+"body": [
+{
+"keyword": "infrastructure and enterprise systems uae address",
+"location_code": 2784,
+"language_code": "en",
+"device": "desktop",
+"depth": 10
+}
+],
+"est_usd": 0.002,
+"keyword": "infrastructure and enterprise systems uae address"
+}
+],
+"answers": [
+{
+"version": "0.1.20261103",
+"status_code": 20000,
+"status_message": "Ok.",
+"time": "2.3580 sec.",
+"cost": 0.002,
+"tasks_count": 1,
+"tasks_error": 0,
+"tasks": [
+{
+"id": "11081947-2365-0139-0000-a89fb6991bb4",
+"status_code": 20000,
+"status_message": "Ok.",
+"time": "2.3082 sec.",
+"cost": 0.002,
+"result_count": 1,
+"path": [
+"v3",
+"serp",
+"google",
+"organic",
+"live",
+"advanced"
+],
+"data": {
+"api": "serp",
+"function": "live",
+"se": "google",
+"se_type": "organic",
+"keyword": "autonomous customer service ai",
+"location_code": 2784,
+"language_code": "en",
+"device": "desktop",
+"depth": 10,
+"os": "windows"
+},
+"result": [
+{
+"keyword": "autonomous customer service ai",
+"type": "organic",
+"se_domain": "google.com",
+"location_code": 2784,
+"language_code": "en",
+"check_url": "https://www.google.com/search?q=autonomous%20customer%20service%20ai&hl=en&gl=AE&ie=UTF-8&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+"datetime": "2026-11-08 19:47:42 +00:00",
+"spell": null,
+"refinement_chips": null,
+"item_types": [
+"ai_overview",
+"organic",
+"people_also_ask",
+"related_searches"
+],
+"se_results_count": 88,
+"pages_count": 1,
+"items_count": 12,
+"items": [
+{
+"type": "ai_overview",
+"rank_group": 1,
+"rank_absolute": 1,
+"page": 1,
+"position": "left",
+"xpath": "/html[1]/body[1]/div[3]/div[1]/div[15]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]",
+"asynchronous_ai_overview": true,
+"markdown": null,
+"items": null,
+"references": null,
+"rectangle": null
+},
+{
+"type": "organic",
+"rank_group": 1,
+"rank_absolute": 2,
+"page": 1,
+"position": "left",
+"xpath": "/html[1]/body[1]/div[3]/div[1]/div[15]/div[2]/div[1]/div[2]/div[1]/div[1]/div[3]/div[1]/div[1]",
+"domain": "www.thekeenfolks.com",
+"title": "Custom AI Agents for Customer Service: From Cost Center ...",
+"url": "https://www.thekeenfolks.com/",
+"cache_url": null,
+"related_search_url": null,
+"breadcrumb": "https://www.thekeenfolks.com \u203a blog-article \u203a custom-a...",
+"website_name": "Keenfolks",
+"is_image": false,
+"is_video": false,
+"is_featured_snippet": false,
+"is_malicious": false,
+"is_web_story": false,
+"checks": null,
+"description": "An AI customer service agent is an autonomous system that perceives customer context, reasons across data sources, and executes actions to resolve customer\u00a0... Read more",
+"pre_snippet": null,
+"extended_snippet": null,
+"images": null,
+"amp_version": false,
+"rating": null,
+"price": null,
+"highlighted": [
+"An AI customer service agent is an autonomous system"
+],
+"links": [
+{
+"type": "link_element",
+"title": "Read more",
+"description": null,
+"url": null,
+"domain": null,
+"url_exact": false,
+"redirect_url": "https://google.com/goto?url=CAESgQIBxCJF1_2CmPJHVzVLfwCOJtUzqf5vKZCADOmQkvGuzL0Q3YkItfiAowLmno6XgF7Rr_Jaqb6VmR7w_H10g4rO3O97B78TxbjI2Qc5qUSGygFg1SHQqaQOhkUmfJ_SQn5Kxxs2_80Y1PAmUeJ9BIDSKmCboXW9iKJ2WQEzB_NDfgMtlPFsQG5vYzkBifwbT2R1Eza1WraOU92c4OlhFBhvBWIVeBER7lbqgen2j_DugV-EyQjNgzDp0FWl5m1mmM0aQorv8i1Ec-d1Q5I5Los0kiux1Tb5Mqif-ariC21CmYONSjMbgdUW11pAUEHlmpQMLI-U-OvYM4SxBi0SrWYYvw&gsessionid=v226AixITrieQClG20eOCDvRvxLnsU7qB0ZU6PG-yaLaHMvGh5X0Wg"
+}
+],
+"faq": null,
+"extended_people_also_search": null,
+"about_this_result": null,
+"related_result": null,
+"timestamp": null,
+"rectangle": null,
+"main_domain": "thekeenfolks.com",
+"relative_url": "/",
+"url_exact": false,
+"url_recovered": "breadcrumb",
+"url_partial": true,
+"url_path": "cut",
+"redirect_url": "https://google.com/goto?url=CAESrwEBxCJF12a1EPfZMXC8v3503kSW1cc8ArxnS4zqIavX9_NsVLBaDES5cwxjSUo8yj7AAtUv7ILvCMkO9vklFZOugCYOPRX2LFxcEtthgBp3HIjkDjdk63j6l7zNyvSbDTwCDTz2BaPap1fJVZ14aLbq0Mvsi6tSvYEp_x-MIeXaS74Na_E21dKNkVDKzrQlJSfYNfJWvAUVQg50w0Qgi4bU9D_OUg1IwDXMPvk9nfHB&gsessionid=v226AixITrieQClG20eOCDvRvxLnsU7qB0ZU6PG-yaLaHMvGh5X0Wg"
+},
+{
+"type": "organic",
+"rank_group": 2,
+"rank_absolute": 3,
+"page": 1,
+"position": "left",
+"xpath": "/html[1]/body[1]/div[3]/div[1]/div[15]/div[2]/div[1]/div[2]/div[1]/div[1]/div[5]/div[1]/div[1]",
+"domain": "coworker.ai",
+"title": "17 Best AI Customer Service Platforms [2026]",
+"url": "https://coworker.ai/",
+"cache_url": null,
+"related_search_url": null,
+"breadcrumb": "https://coworker.ai \u203a Blog",
+"website_name": "Coworker AI",
+"is_image": false,
+"is_video": false,
+"is_featured_snippet": false,
+"is_malicious": false,
+"is_web_story": false,
+"checks": null,
+"description": "28 Dec 2025 \u2014 The best AI customer service platforms in 2026 include Intercom Fin, Zendesk AI, Ada, Forethought, and Salesforce Einstein, alongside broader\u00a0... Read more",
+"pre_snippet": "12/28/2025 00:00:00",
+"extended_snippet": null,
+"images": null,
+"amp_version": false,
+"rating": null,
+"price": null,
+"highlighted": [
+"Intercom Fin, Zendesk AI, Ada, Forethought, and Salesforce Einstein"
+],
+"links": [
+{
+"type": "link_element",
+"title": "Read more",
+"description": null,
+"url": null,
+"domain": null,
+"url_exact": false,
+"redirect_url": "https://google.com/goto?url=CAESygEBxCJF19BJ2_faEo-7C4LArGNLyO6d_dsQydd8U4mBcyt8ni15D2EOICfUKt5lFQ0tbWcaEiwBF5OgZWl8F5uCt9P-aVS2eKkqjcFtZKPaoD2rIx1dWmeCyRkTW-h9G-EQf5hQUwPxBef8yzwAU7pzxiN_a0xaC2deSP1xXK3NtJl8sfn4p_-TEWq0ZXXzu7uP2F_YDJAFvp91XF7rHW-6U0B4_CbvZOUeyEizVTopPGUNzWpt8tXVSGY1J8g1QfFEMqT8IL56XG35&gsessionid=v226AixITrieQClG20eOCDvRvxLnsU7qB0ZU6PG-yaLaHMvGh5X0Wg"
+}
+],
+"faq": null,
+"extended_people_also_search": null,
+"about_this_result": null,
+"related_result": null,
+"timestamp": "2025-12-28 00:00:00 +00:00",
+"rectangle": null,
+"main_domain": "coworker.ai",
+"relative_url": "/",
+"url_exact": false,
+"url_recovered": "breadcrumb",
+"url_partial": true,
+"url_path": "labels",
+"redirect_url": "https://google.com/goto?url=CAEScwHEIkXXABYWVABLuxliDTsoDW9AeeqH3KD9rpvBbKRWnScA4DX7aqFW-PqM8eXCevP6GdeTggmr3YJD0KSv-ZMVrCiYY9ctFaoRR-er-_vCXhzO6vWRwBw3JJoP4YhSNMrDAcVQSkEhTo-kxk8vdwlhJKo&gsessionid=v226AixITrieQClG20eOCDvRvxLnsU7qB0ZU6PG-yaLaHMvGh5X0Wg"
+},
+{
+"type": "people_also_ask",
+"rank_group": 1,
+"rank_absolute": 4,
+"page": 1,
+"position": "left",
+"xpath": "/html[1]/body[1]/div[3]/div[1]/div[15]/div[2]/div[1]/div[2]/div[1]/div[1]/div[7]/div[1]/div[1]/div[1]",
+"items": [
+{
+"type": "people_also_ask_element",
+"title": "What is the best AI for customer service?",
+"seed_question": null,
+"xpath": "/html[1]/body[1]/div[3]/div[1]/div[15]/div[2]/div[1]/div[2]/div[1]/div[1]/div[7]/div[1]/div[1]/div[1]/div[1]/div[2]/div[1]",
+"expanded_element": [
+{
+"type": "people_also_ask_ai_overview_expanded_element",
+"items": null,
+"references": null,
+"asynchronous_ai_overview": true
+}
+]
+},
+{
+"type": "people_also_ask_element",
+"title": "What does autonomous AI do?",
+"seed_question": null,
+"xpath": "/html[1]/body[1]/div[3]/div[1]/div[15]/div[2]/div[1]/div[2]/div[1]/div[1]/div[7]/div[1]/div[1]/div[1]/div[1]/div[2]/div[2]",
+"expanded_element": [
+{
+"type": "people_also_ask_ai_overview_expanded_element",
+"items": null,
+"references": null,
+"asynchronous_ai_overview": true
+}
+]
+},
+{
+"type": "people_also_ask_element",
+"title": "What are the 7 Cs of customer service?",
+"seed_question": null,
+"xpath": "/html[1]/body[1]/div[3]/div[1]/div[15]/div[2]/div[1]/div[2]/div[1]/div[1]/div[7]/div[1]/div[1]/div[1]/div[1]/div[2]/div[3]",
+"expanded_element": [
+{
+"type": "people_also_ask_ai_overview_expanded_element",
+"items": null,
+"references": null,
+"asynchronous_ai_overview": true
+}
+]
+},
+{
+"type": "people_also_ask_element",
+"title": "Will CRM be replaced by AI?",
+"seed_question": null,
+"xpath": "/html[1]/body[1]/div[3]/div[1]/div[15]/div[2]/div[1]/div[2]/div[1]/div[1]/div[7]/div[1]/div[1]/div[1]/div[1]/div[2]/div[4]",
+"expanded_element": [
+{
+"type": "people_also_ask_ai_overview_expanded_element",
+"items": null,
+"references": null,
+"asynchronous_ai_overview": true
+}
+]
+}
+],
+"rectangle": null
+},
+{
+"type": "organic",
+"rank_group": 3,
+"rank_absolute": 5,
+"page": 1,
+"position": "left",
+"xpath": "/html[1]/body[1]/div[3]/div[1]/div[15]/div[2]/div[1]/div[2]/div[1]/div[1]/div[9]/div[1]/div[1]",
+"domain": "www.replicant.com",
+"title": "What is Autonomous Customer Service?",
+"url": "https://www.replicant.com/",
+"cache_url": null,
+"related_search_url": null,
+"breadcrumb": "https://www.replicant.com \u203a blog \u203a what-is-autonomous...",
+"website_name": "Replicant AI",
+"is_image": false,
+"is_video": false,
+"is_featured_snippet": false,
+"is_malicious": false,
+"is_web_story": false,
+"checks": null,
+"description": "17 Aug 2022 \u2014 Learn what autonomous customer service is, how it works, and how AI-driven automation improves CX, reduces costs, and scales support\u00a0...",
+"pre_snippet": "08/17/2022 00:00:00",
+"extended_snippet": null,
+"images": null,
+"amp_version": false,
+"rating": null,
+"price": null,
+"highlighted": [
+"Learn what autonomous customer service is"
+],
+"links": null,
+"faq": null,
+"extended_people_also_search": null,
+"about_this_result": null,
+"related_result": null,
+"timestamp": "2022-08-17 00:00:00 +00:00",
+"rectangle": null,
+"main_domain": "replicant.com",
+"relative_url": "/",
+"url_exact": false,
+"url_recovered": "breadcrumb",
+"url_partial": true,
+"url_path": "cut",
+"redirect_url": "https://google.com/goto?url=CAESfwHEIkXXMfH-a1zn_1q8do5bogvEvHfjEVp_fQ00kGYBbQm83cS_9e9RHL8Yow-VeBWgoBsGyV-QYM-X-SO8SAMhtdqFd5uBktXxUepaQdsJ1d_gx86OtrSmMqReOLBaZ8V2znkS_Ezipzjfe7QzdRrB5-0y9ubvh93zYBvPwNg&gsessionid=v226AixITrieQClG20eOCDvRvxLnsU7qB0ZU6PG-yaLaHMvGh5X0Wg"
+},
+{
+"type": "organic",
+"rank_group": 4,
+"rank_absolute": 6,
+"page": 1,
+"position": "left",
+"xpath": "/html[1]/body[1]/div[3]/div[1]/div[15]/div[2]/div[1]/div[2]/div[1]/div[1]/div[10]/div[1]/div[1]/div[1]",
+"domain": "youtube.com",
+"title": "How AI Is Reshaping Customer Operations",
+"url": "https://youtube.com/",
+"cache_url": null,
+"related_search_url": null,
+"breadcrumb": "15.4K+ views  \u00b7  5 months ago",
+"website_name": "YouTube\u00a0\u00b7\u00a0Six Five Media",
+"is_image": false,
+"is_video": true,
+"is_featured_snippet": false,
+"is_malicious": false,
+"is_web_story": false,
+"checks": [
+"is_video"
+],
+"description": null,
+"pre_snippet": null,
+"extended_snippet": null,
+"images": null,
+"amp_version": false,
+"rating": null,
+"price": null,
+"highlighted": null,
+"links": null,
+"faq": null,
+"extended_people_also_search": null,
+"about_this_result": null,
+"related_result": null,
+"timestamp": "2026-05-22 00:00:00 +00:00",
+"rectangle": null,
+"main_domain": "youtube.com",
+"relative_url": "/",
+"url_exact": false,
+"url_recovered": "social",
+"url_partial": true,
+"url_path": "none",
+"redirect_url": "https://google.com/goto?url=CAESaAHEIkXXMkQlyxa8ceW7wPMLfnC8wOdrQoIrVF3EUcGcT1XjbfYi5tlUTrh0Nn9UpOIJELnv8Gqlm_ZCdsZeK1xLuH6wrNMuR-_Cb3JjZQ2RgHrg95Ne3Vxnxz50FC0jita3HSMyEwPw&gsessionid=v226AixITrieQClG20eOCDvRvxLnsU7qB0ZU6PG-yaLaHMvGh5X0Wg"
+}
+],
+"serp_url": {
+"redirects": 9,
+"recovered": 9,
+"unresolved": 0,
+"rule": "SU (v5/code/_serp_url.js): host from the breadcrumb, url approximate"
+}
+}
+]
+}
+],
+"__dfs_cost_usd": 0.002
+},
+{
+"version": "0.1.20261103",
+"status_code": 20000,
+"status_message": "Ok.",
+"time": "1.8751 sec.",
+"cost": 0.002,
+"tasks_count": 1,
+"tasks_error": 0,
+"tasks": [
+{
+"id": "11081948-2365-0139-0000-ab6893b43c9c",
+"status_code": 20000,
+"status_message": "Ok.",
+"time": "1.8197 sec.",
+"cost": 0.002,
+"result_count": 1,
+"path": [
+"v3",
+"serp",
+"google",
+"organic",
+"live",
+"advanced"
+],
+"data": {
+"api": "serp",
+"function": "live",
+"se": "google",
+"se_type": "organic",
+"keyword": "infrastructure and enterprise systems uae address",
+"location_code": 2784,
+"language_code": "en",
+"device": "desktop",
+"depth": 10,
+"os": "windows"
+},
+"result": [
+{
+"keyword": "infrastructure and enterprise systems uae address",
+"type": "organic",
+"se_domain": "google.com",
+"location_code": 2784,
+"language_code": "en",
+"check_url": "https://www.google.com/search?q=infrastructure%20and%20enterprise%20systems%20uae%20address&hl=en&gl=AE&ie=UTF-8&uule=w+CAIQIFISCb0Sq7HfSF4-EacKCMBWL9Mz",
+"datetime": "2026-11-08 19:48:03 +00:00",
+"spell": null,
+"refinement_chips": null,
+"item_types": [
+"ai_overview",
+"organic",
+"related_searches"
+],
+"se_results_count": 98,
+"pages_count": 1,
+"items_count": 11,
+"items": [
+{
+"type": "ai_overview",
+"rank_group": 1,
+"rank_absolute": 1,
+"page": 1,
+"position": "left",
+"xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/div[1]/div[1]",
+"asynchronous_ai_overview": true,
+"markdown": null,
+"items": null,
+"references": null,
+"rectangle": null
+},
+{
+"type": "organic",
+"rank_group": 1,
+"rank_absolute": 2,
+"page": 1,
+"position": "left",
+"xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[2]/div[1]/div[2]/div[1]/div[1]/div[2]/div[1]/div[1]",
+"domain": "linkedin.com",
+"title": "Enterprise Systems Distribution",
+"url": "https://linkedin.com/",
+"cache_url": null,
+"related_search_url": null,
+"breadcrumb": "7.3K+ followers",
+"website_name": "LinkedIn\u00a0\u00b7\u00a0Enterprise Systems Distribution",
+"is_image": false,
+"is_video": false,
+"is_featured_snippet": false,
+"is_malicious": false,
+"is_web_story": false,
+"checks": null,
+"description": "Enterprise Systems Distribution. IT Services and IT Consulting. Dubai, Dubai Internet City 7,265 followers. simplicity in solutions and services. Read more",
+"pre_snippet": null,
+"extended_snippet": null,
+"images": null,
+"amp_version": false,
+"rating": null,
+"price": null,
+"highlighted": [
+"Dubai, Dubai Internet City"
+],
+"links": [
+{
+"type": "link_element",
+"title": "Read more",
+"description": null,
+"url": null,
+"domain": null,
+"url_exact": false,
+"redirect_url": "https://google.com/goto?url=CAES2AEBxCJF12dTEbqNa2WY6vBSAT_1bh-_9NIcnsnYmzDNIULY2v70IUCgINSf6P31lk2AYv3q_xDyB8w14kpO4bxwtTV-iKe-i1rpceT3AqSnrn-Nixrv5pZcPs3mwHw38r45N2qcqj97gJPuMEutYnKlXsmrJTlhpQXQ0xo_FtSEnFrBnYwdUqiutQAOM1R1RkJTOOY6V1_jIoVOlwx6Dul_4tRzjCvkAYcMRx8_ySsCa3ScPY5iIoMOV2GqKZ3BHyFJd54C61IFCcvYy98GbFSOYzJlSwU823A"
+}
+],
+"faq": null,
+"extended_people_also_search": null,
+"about_this_result": null,
+"related_result": null,
+"timestamp": null,
+"rectangle": null,
+"main_domain": "linkedin.com",
+"relative_url": "/",
+"url_exact": false,
+"url_recovered": "social",
+"url_partial": true,
+"url_path": "none",
+"redirect_url": "https://google.com/goto?url=CAESfQHEIkXXP0rRpOlDAw_P5goy4EfsnmCKQzxZ4Fr3BfcSo5P5DCv9BMhq-JaIGU0XJHkrPEVLA0N8wEkf2x56dFEEL1zDJMoOC-ECWyjnCUhYofnxdjMf6tAPI-9zbHPiN1tW1TyAbTW9-UsQpWp5BUhfdMckAQcdnUg25dNb"
+},
+{
+"type": "organic",
+"rank_group": 2,
+"rank_absolute": 3,
+"page": 1,
+"position": "left",
+"xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[2]/div[1]/div[2]/div[1]/div[1]/div[4]/div[1]/div[1]",
+"domain": "www.vrstech.com",
+"title": "IT Infrastructure Solutions in Dubai",
+"url": "https://www.vrstech.com/it-infrastructure-solutions",
+"cache_url": null,
+"related_search_url": null,
+"breadcrumb": "https://www.vrstech.com \u203a it-infrastructure-solutions",
+"website_name": "VRS Technologies LLC",
+"is_image": false,
+"is_video": false,
+"is_featured_snippet": false,
+"is_malicious": false,
+"is_web_story": false,
+"checks": null,
+"description": "Need reliable IT infrastructure setup in UAE? VRS Technologies offer affordable IT infrastructure Solutions in Dubai, Abu Dhabi, and Sharjah.",
+"pre_snippet": null,
+"extended_snippet": null,
+"images": null,
+"amp_version": false,
+"rating": {
+"rating_type": "Max5",
+"value": 4.9,
+"votes_count": 334,
+"rating_max": 5
+},
+"price": null,
+"highlighted": [
+"VRS Technologies"
+],
+"links": null,
+"faq": null,
+"extended_people_also_search": null,
+"about_this_result": null,
+"related_result": null,
+"timestamp": null,
+"rectangle": null,
+"main_domain": "vrstech.com",
+"relative_url": "/it-infrastructure-solutions",
+"url_exact": false,
+"url_recovered": "breadcrumb",
+"url_partial": false,
+"url_path": "path",
+"redirect_url": "https://google.com/goto?url=CAEScQHEIkXXb-pIu0xgjwDTZB1siRagzkmrANkNucCUjXMFguSLOlDlHX2wTf6-bCG265XEHp2dxFtXuLU8YjMO1kWRGNT-uQPkcJ65jPyZv2AY-eBZ2LPkGsGPdKIG2cGlSb5MV0buFgBD9eORnAtBG0Ow"
+},
+{
+"type": "organic",
+"rank_group": 3,
+"rank_absolute": 4,
+"page": 1,
+"position": "left",
+"xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[2]/div[1]/div[2]/div[1]/div[1]/div[6]/div[1]/div[1]",
+"domain": "www.maxtouchgulf.com",
+"title": "IT Infrastructure Solutions UAE | Enterprise IT Services Dubai",
+"url": "https://www.maxtouchgulf.com/",
+"cache_url": null,
+"related_search_url": null,
+"breadcrumb": "https://www.maxtouchgulf.com \u203a Solutions",
+"website_name": "Maxtouch Computers",
+"is_image": false,
+"is_video": false,
+"is_featured_snippet": false,
+"is_malicious": false,
+"is_web_story": false,
+"checks": null,
+"description": "Leading IT infrastructure solutions provider in UAE. Contact Talk to us +971 4 3880 885. Delivered 5 UAE Office Locations 24/7 Technical Support \u2026 across Dubai\u00a0...",
+"pre_snippet": null,
+"extended_snippet": null,
+"images": null,
+"amp_version": false,
+"rating": null,
+"price": null,
+"highlighted": [
+"infrastructure",
+"UAE",
+"UAE Office"
+],
+"links": null,
+"faq": null,
+"extended_people_also_search": null,
+"about_this_result": null,
+"related_result": null,
+"timestamp": null,
+"rectangle": null,
+"main_domain": "maxtouchgulf.com",
+"relative_url": "/",
+"url_exact": false,
+"url_recovered": "breadcrumb",
+"url_partial": true,
+"url_path": "labels",
+"redirect_url": "https://google.com/goto?url=CAESfgHEIkXXDmssWfV3XJuqtlfvkTD2aD3Z3m958R-tH2rY4Zmcp9SXRuvg2xiBMXhwUZ0T2XNJHHVfN_Wr8O6Lcqu6hQrCfr5asRWy41rS7Jg7VgffpIOVsjn3bCpPANlWBSTSACfaOYXB6p9oxPlJxPLdlyK_yCd8grX1Mn_R3A"
+},
+{
+"type": "organic",
+"rank_group": 4,
+"rank_absolute": 5,
+"page": 1,
+"position": "left",
+"xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[2]/div[1]/div[2]/div[1]/div[1]/div[8]/div[1]/div[1]",
+"domain": "xedos.ae",
+"title": "Top 10 IT Infrastructure Companies in Dubai & UAE (2026)",
+"url": "https://xedos.ae/",
+"cache_url": null,
+"related_search_url": null,
+"breadcrumb": "https://xedos.ae \u203a UAE IT Market Insights",
+"website_name": "Xedos Technologies",
+"is_image": false,
+"is_video": false,
+"is_featured_snippet": false,
+"is_malicious": false,
+"is_web_story": false,
+"checks": null,
+"description": "15 Oct 2025 \u2014 Call : +971 52 607 3989. This guide covers ten established IT infrastructure providers in Dubai and the UAE, in Dubai, UAE,",
+"pre_snippet": "10/15/2025 00:00:00",
+"extended_snippet": null,
+"images": null,
+"amp_version": false,
+"rating": null,
+"price": null,
+"highlighted": [
+"infrastructure",
+"UAE"
+],
+"links": null,
+"faq": null,
+"extended_people_also_search": null,
+"about_this_result": null,
+"related_result": null,
+"timestamp": "2025-10-15 00:00:00 +00:00",
+"rectangle": null,
+"main_domain": "xedos.ae",
+"relative_url": "/",
+"url_exact": false,
+"url_recovered": "breadcrumb",
+"url_partial": true,
+"url_path": "labels",
+"redirect_url": "https://google.com/goto?url=CAESfAHEIkXXVfp-pDMv5yG0R46me2gob5b8ghsHh5nMdbbYzKb3lEUWQxr5nXe3VZuk9rmxhr_9rTeAHS1q_nPOqAYtLlKQmQWr5dC6HBTSRIrqk5XuuJXtPVU8lySwVNAfoQGmWcQnH62I07mLm6RKm6c7Hw1iVGVB6PwfW94"
+},
+{
+"type": "organic",
+"rank_group": 5,
+"rank_absolute": 6,
+"page": 1,
+"position": "left",
+"xpath": "/html[1]/body[1]/div[3]/div[1]/div[13]/div[2]/div[1]/div[2]/div[1]/div[1]/div[10]/div[1]/div[1]",
+"domain": "www.iconnectitbs.com",
+"title": "Enterprise Infrastructure Solutions in Dubai, UAE",
+"url": "https://www.iconnectitbs.com/",
+"cache_url": null,
+"related_search_url": null,
+"breadcrumb": "https://www.iconnectitbs.com \u203a Solutions",
+"website_name": "iConnect IT Business Solutions DMCC",
+"is_image": false,
+"is_video": false,
+"is_featured_snippet": false,
+"is_malicious": false,
+"is_web_story": false,
+"checks": null,
+"description": "9 Oct 2026 \u2014 Enterprise infrastructure solutions covering servers, storage, virtualisation, networking, backup and disaster recovery,",
+"pre_snippet": "10/09/2026 00:00:00",
+"extended_snippet": null,
+"images": null,
+"amp_version": false,
+"rating": null,
+"price": null,
+"highlighted": [
+"Enterprise infrastructure"
+],
+"links": null,
+"faq": null,
+"extended_people_also_search": null,
+"about_this_result": null,
+"related_result": null,
+"timestamp": "2026-10-09 00:00:00 +00:00",
+"rectangle": null,
+"main_domain": "iconnectitbs.com",
+"relative_url": "/",
+"url_exact": false,
+"url_recovered": "breadcrumb",
+"url_partial": true,
+"url_path": "labels",
+"redirect_url": "https://google.com/goto?url=CAESfgHEIkXX-QYso_WDnQL5IAj_AIplYmViSEsS1ApqNFtr3JvOfzNRa8NHbHCarrFn9zbDe7dXJnNc0bfTjv1X8ZP96NtA1z-Lx7yti2OSVEEbCAe3vooaDToAj4s2T0EWqYytrX3FNocJ3j3Zh5H4bCUdkO3SaeiJ6sg7A-vvzQ"
+}
+],
+"serp_url": {
+"redirects": 9,
+"recovered": 9,
+"unresolved": 0,
+"rule": "SU (v5/code/_serp_url.js): host from the breadcrumb, url approximate"
+}
+}
+]
+}
+],
+"__dfs_cost_usd": 0.002
+}
+]
+}
+}

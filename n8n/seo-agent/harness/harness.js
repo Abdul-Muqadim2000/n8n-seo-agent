@@ -11,14 +11,24 @@ let scenario = '';
 const staticData = {};
 
 const toItems = (arr) => (Array.isArray(arr) ? arr : [arr]).map(x => (x && typeof x === 'object' && ('json' in x)) ? x : { json: x });
-const wrap = (arr) => ({
-  all: () => arr, first: () => arr[0], last: () => arr[arr.length - 1],
-  get item() { return arr[0]; }, get json() { return arr[0] && arr[0].json; }
-});
+// FX-L 2026-11-10 (KI Trial: every Research / Comp node hanging on an IF's false output read the empty false branch on production): with a
+// workflow's wiring registered (setWiring), $('IF').all() / .first() / .last() WITHOUT a branch index resolves the way n8n does: the output
+// of the first connection from that IF found walking UPSTREAM from the node being run (breadth first). An IF node's false branch is mocked
+// empty, so such a read gets nothing, exactly as production did; .all(0) reads the true branch. Without wiring nothing changes.
+let CUR = null; let WIRING = null; let WIRING_IFS = null;
+const setWiring = (conns, ifNames) => { WIRING = conns || null; WIRING_IFS = ifNames ? new Set(ifNames) : null; };
+const branchOf = (reader, ifName) => { if (!WIRING || !reader || !WIRING_IFS || !WIRING_IFS.has(ifName)) return 0;
+  const parents = {}; for (const [src, outs] of Object.entries(WIRING)) (outs || []).forEach((lst, oi) => (lst || []).forEach(t => (parents[t] = parents[t] || []).push([src, oi])));
+  const seen = new Set([reader]); let q = [reader];
+  while (q.length) { const nx = []; for (const n of q) for (const [src, oi] of (parents[n] || [])) { if (src === ifName) return oi; if (!seen.has(src)) { seen.add(src); nx.push(src); } } q = nx; }
+  return 0; };
+const wrap = (arr, name) => { const pick = (b) => (b === undefined && branchOf(CUR, name) > 0 ? [] : arr); return {
+  all: (b) => pick(b), first: (b) => pick(b)[0], last: (b) => { const a = pick(b); return a[a.length - 1]; },
+  get item() { return arr[0]; }, get json() { return arr[0] && arr[0].json; } }; };
 // R38 (2026-10-16): *Check Page Claims* sits between *Parse Analysis* and *Keyword Data*, and *Merge Keyword Data* reads it. A scenario that
 // ran *Parse Analysis* and never that node gets the analysis as it was (the check changes nothing when no page digest exists), so the
 // older scenarios did not each need a line for a node that is a pass-through for them; S124 runs the real node.
-const $ = (name) => { if (!store[name] && name === 'Check Page Claims' && store['Parse Analysis']) return wrap(store['Parse Analysis']); if (!store[name]) throw new Error(`Referenced node "${name}" has no data in this run`); return wrap(store[name]); };
+const $ = (name) => { if (!store[name] && name === 'Check Page Claims' && store['Parse Analysis']) return wrap(store['Parse Analysis']); if (!store[name]) throw new Error(`Referenced node "${name}" has no data in this run`); return wrap(store[name], name); };
 
 function loadCode(node) {
   // 'legacy:<name>' runs a frozen reference copy from harness/legacy/ (old behaviour to compare against)
@@ -81,12 +91,15 @@ async function runNode(node, input, opts = {}) {
       // and the wait between two reads is recorded instead of slept (n8n's helpers have no `sleep`, so the node waits with setTimeout there)
       sleep: async (ms) => { if (typeof opts.sleep === 'function') return opts.sleep(ms); } } };
     // opts.execId: the execution id n8n would give this run (scenarios_integration.js: every workflow run of a client's life has its own)
+    const prevCur = CUR; CUR = node;
     const out = await fn.call(thisArg, wrap(inputItems), $, opts.runIndex || 0, () => staticData, new Date(), { id: String(opts.execId || 'test-exec') }, { id: 'wf', name: 'test' }, inputItems[0] && inputItems[0].json, undefined, SANDBOX_OBJECT, undefined);
+    CUR = prevCur;
     const items = toItems(out);
     store[node] = items;
     results.push({ scenario, node, ok: true, ms: Date.now() - t0, items });
     return items;
   } catch (e) {
+    CUR = null;
     results.push({ scenario, node, ok: false, ms: Date.now() - t0, error: (e && e.stack || String(e)).split('\n').slice(0, 3).join(' | ') });
     if (opts.expectError) { store[node] = []; return []; }
     throw e;
@@ -192,4 +205,4 @@ function scanHtml(label, html) {
   console.log(`   html-scan ${label}: ${html.length} chars` + (issues.length ? ' | DEFECTS: ' + issues.join(', ') : ' | clean'));
   return issues;
 }
-module.exports = { run, mock, begin, report, save, expectError, store, results, toItems, scanHtml, staticData };
+module.exports = { run, mock, begin, report, save, expectError, store, results, toItems, scanHtml, staticData, setWiring };

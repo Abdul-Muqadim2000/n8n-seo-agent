@@ -61,7 +61,7 @@ describe('KI: words, tones and credits', () => {
   it('one word and one tone per verdict; class, stage and basis labels', () => {
     expect(KI_VERDICTS).toEqual({ go: 'Go', months: 'Takes a few months', hard: 'Hard for your website now', gated: 'Not for you', unknown: 'Not judged yet' });
     expect(Object.keys(KI_VERDICT_TONE)).toEqual(Object.keys(KI_VERDICTS));
-    expect(Object.keys(KI_CLASSES)).toHaveLength(9);
+    expect(Object.keys(KI_CLASSES)).toHaveLength(10);   // FX-L 2026-11-10: + education (training providers, schools, universities)
     expect(Object.keys(KI_STAGES)).toEqual(['hire', 'compare', 'solution', 'problem', 'info']);
     expect(KI_BASIS.modelled).toBe('our estimate');
     // FX-A (review CONSISTENCY L10): a provider's product name never reaches a customer

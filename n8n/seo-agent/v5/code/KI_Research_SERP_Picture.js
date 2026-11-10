@@ -4,7 +4,7 @@
 /*__KI_KITS__*/
 const p = $('KI Plan').first().json || {};
 const pic = $('Research Picture').first().json || {};
-const all = (n) => { try { return $(n).all().map(i => (i && i.json) || {}); } catch (e) { return []; } };
+const all = (n) => { try { return $(n).all(0).map(i => (i && i.json) || {}); } catch (e) { return []; } };
 const now = p.now || new Date().toISOString();
 const m = { location_code: p.location_code, language_code: p.language_code };
 const reqs = all('Any Research SERPs?').filter(r => r && !r.skip && r.ki_call);

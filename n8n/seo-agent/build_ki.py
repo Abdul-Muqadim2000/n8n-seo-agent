@@ -397,6 +397,19 @@ _src = {n['name']: n['parameters'].get('jsCode', '') for n in N if n['type'] == 
 for _f, _s in RAW.items():
     for _ref in re.findall(r"\$\('([^']+)'\)", _s):
         assert _ref in names, _f + ' reads a node that does not exist: ' + _ref
+# FX-L 2026-11-10 (KI Trial on production: Research Candidates / Picture / SERP Picture / Result and Comp Candidates / Result read the empty
+# false branch of their IF through a helper `all(n) => $(n).all()`; section 182 only sees literal reads): a KI Code node that names an IF node
+# anywhere in its own code reads through a helper only with an explicit branch ($(n).all(0)), and an IF node itself only with one
+_IFS_KI = {n['name'] for n in N if n['type'] in ('n8n-nodes-base.if', 'n8n-nodes-base.switch')}
+_nodefile = {}
+for n in N:
+    # KI's own nodes (they inline KIW); the gate's plans (dfs_gate, on the IF's true path) and the shared ledger / callback nodes are not KI code
+    if n['type'] == 'n8n-nodes-base.code' and 'const KIW = (() => {' in n['parameters']['jsCode'] and not n['name'].endswith(' Retry Plan'):
+        _kiown = n['parameters']['jsCode']
+        for _k in KIT_SRC.values(): _kiown = _kiown.replace(_k, '')
+        if any(("'" + _i + "'") in _kiown for _i in _IFS_KI):
+            _bad = re.findall(r"\$\([A-Za-z_][A-Za-z0-9_]*\)\.(?:all|first|last)\(\s*\)", _kiown) + [m for m in re.findall(r"\$\('([^']+)'\)\.(?:all|first|last)\(\s*\)", _kiown) if m in _IFS_KI]
+            assert not _bad, 'IF-BRANCH (KI): ' + n['name'] + ' names an IF node and reads without a branch index: ' + str(_bad[:3]) + ' (use .all(0))'
 for _n, _s in _src.items():
     if 'KIW.' in _s: assert 'const KIW = (() => {' in _s and "var KI = (typeof KI === 'object'" in _s and 'function fitGate(' in _s and 'const CMP = (() => {' in _s, _n + ': the KI kits (fit gate, CMP, KI, KIW) are not inlined'
 

@@ -29,6 +29,8 @@ module.exports = async (ctx) => {
     const TC = require('./table_cols.json');
     const FX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'ki_e2.json'), 'utf8'));
     const W = require('./ki_wiring.json');
+    // FX-L 2026-11-10: $('IF').all() resolves its branch as n8n does (harness.js setWiring): a reader on an IF's false output gets nothing
+    if (H.setWiring) H.setWiring(W.connections, Object.keys(W.connections).filter(n => /\?$/.test(n)));
     const LIVE = (f) => JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'ki_live', 'LIVE_KI_' + f + '.json'), 'utf8'));   // copies of docs/keyword-intel-2026-11-08/r5_shapes (harness runs without docs)
     const liveTask = (f, i) => { const d = LIVE(f); return JSON.parse(J(((d.calls || [d])[i || 0]).task)); };
     const NOW = new Date().toISOString();
@@ -468,5 +470,27 @@ module.exports = async (ctx) => {
     check('KIE2-14 (FX-L H9) one current row per site x market: after the keyword rows are saved, the rows of this site and market another run wrote are deleted (keywords and gaps)',
       ['Drop Old KI Keywords', 'Drop Old KI Gaps'].every(n => nd(n) && nd(n).parameters.filters.conditions.some(c => c.keyName === 'run_id' && c.condition === 'neq') && nd(n).parameters.filters.conditions.some(c => c.keyName === 'market'))
       && J(W.connections['Supersede Keywords?']) === J([['Drop Old KI Keywords'], ['KI Gap Rows']]), J(W.connections['Supersede Keywords?']));
+    // ---- KIE2-15 (FX-L 2026-11-10): the first keyword-research Trial on production, replayed on its REAL live envelopes (trimmed). Every
+    // Research node hanging on its IF's false output read the empty false branch ($('Any X?').all() resolves to the output that leads to the
+    // reader): discovery "could not be read", no volume, 51 of 60 results pages "not read", all of it billed. With n8n's branch resolution
+    // (setWiring above) the fixed nodes read the true branch (.all(0)) and see every answer ----
+    const TR = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'ki_trial', 'devaicon_research_2026-11-08.json'), 'utf8'));
+    reset(); mock('KI Plan', [TR.plan]); mock('Load KI Cache', [{}]); mock('Load SERP Cache (KI Seeds)', [{}]);
+    mock('Any Research Discover?', TR.discover.requests); mock('Run Research Discover Answers', TR.discover.answers);
+    const rc15 = (await run('Research Candidates', [{ json: {} }]))[0].json; const disc15 = (rc15.sections || []).find(x => x.key === 'discovery') || {};
+    const src15 = new Set((rc15.rows || []).concat(rc15.gated || []).flatMap(r => (r.sources || []).map(x => x.source)));
+    check('KIE2-15 production envelopes: the discovery answers (autocomplete, keyword ideas, suggestions) are read from the IF\'s true branch: section ok, Labs and autocomplete rows in the universe',
+      disc15.state === 'ok' && disc15.rows > 0 && src15.has('autocomplete') && (src15.has('labs_ideas') || src15.has('labs_suggestions')), J({ disc15, src: [...src15] }));
+    reset(); mock('KI Plan', [TR.plan]); mock('Research Picture', [{ top_m: TR.serp.requests.map(q => q.keyword), vol_map: {}, rows: [] }]); mock('Load SERP Cache (KI Research)', [{}]);
+    mock('Any Research SERPs?', TR.serp.requests); mock('Run Research SERPs Answers', TR.serp.answers);
+    const sp15 = (await run('Research SERP Picture', [{ json: {} }]))[0].json;
+    check('KIE2-15 production envelopes: the live results pages bought are read (2 of 2, with the hosts their pages name), never "not read: nothing was asked"',
+      sp15.read === 2 && sp15.missing === 0 && Object.values(sp15.by || {}).every(r => r.source === 'live' && (r.top10 || []).length >= 3), J({ read: sp15.read, missing: sp15.missing, by: Object.entries(sp15.by || {}).map(([k, v]) => [k, v.source, (v.top10 || []).length, v.why]) }));
+    check('KIE2-15 the build refuses a KI node that names an IF and reads without a branch index (build_ki.py IF-BRANCH (KI)); every helper reads .all(0)',
+      ['Research Candidates', 'Research Picture', 'Research SERP Picture', 'Research Result', 'Comp Candidates', 'Comp Result'].every(n => /\$\(n\)\.all\(0\)/.test(rd('harness', 'code_v4', n.replace(/ /g, '_') + '.js')) && !/\$\(n\)\.all\(\)/.test(rd('harness', 'code_v4', n.replace(/ /g, '_') + '.js'))), '');
+    const KI_ = new Function('URL', 'structuredClone', ['_fit_gate.js', '_competitors.js', '_kw_inputs.js', '_ki.js'].map(f => rd('v5', 'code', f)).join('\n') + '\nreturn KI;')(undefined, undefined);
+    const g15 = ['software development company sharjah careers', 'microsoft dynamics 365 finance and operations jobs', 'dynamics 365 consultant salary dubai'].map(k => [k, KI_.gate(k, TR.plan.fit_ctx).reason]);
+    check('KIE2-15 the career gate: a job, career, pay or course word is a career search ("software development company sharjah careers" passed on production)', g15.every(([, r]) => r === 'career'), J(g15));
+    if (H.setWiring) H.setWiring(null);
   });
 };

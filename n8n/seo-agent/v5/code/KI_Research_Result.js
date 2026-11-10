@@ -17,7 +17,7 @@ const g = $('KI Gate').first().json || {};
 const c = $('Research Candidates').first().json || {};
 const rp = $('Research Picture').first().json || {};
 const sp = $('Research SERP Picture').first().json || {};
-const all = (n) => { try { return $(n).all().map(i => (i && i.json) || {}); } catch (e) { return []; } };
+const all = (n) => { try { return $(n).all(0).map(i => (i && i.json) || {}); } catch (e) { return []; } };
 const now = p.now || new Date().toISOString();
 const N = KIW.N, S = KIW.S;
 const client = KIW.host(p.domain);
@@ -49,6 +49,11 @@ const by = sp.by || {};
 const siteQ = (p.gsc || []).map(q => ({ query: q.query, impressions: q.impressions, position: q.position, page: q.page }));
 const siteCtx = { domain: p.domain, queries: siteQ, total_impressions: N(p.site_impressions), model, pages, refdomains: rd[client] != null ? rd[client] : null };
 const cfg = KI.cfg({ now });
+// FX-L 2026-11-10: the median referring domains of the results pages read in this market (each page's own median first), the yardstick of
+// Strength for a search whose own page was not read (most of the top N: only the top M are read)
+const medOf = (v) => { const a = v.filter(x => x != null && Number.isFinite(x)).sort((x, y) => x - y); return a.length ? (a.length % 2 ? a[(a.length - 1) / 2] : (a[a.length / 2 - 1] + a[a.length / 2]) / 2) : null; };
+const pageMeds = Object.values(by).map(r => medOf((r.top10 || []).map(t => rd[KIW.host(t.host)]).filter(x => x != null))).filter(x => x != null);
+const marketMed = pageMeds.length >= 3 ? medOf(pageMeds) : null;
 const rows = (rp.rows || []).map(r0 => {
   const v = vm[r0.kw_key] || {};
   const r = { ...r0 }; if (r.volume == null && v.ads_v != null) { r.volume = v.ads_v; r.volume_source = 'Google Ads (Keyword Planner ranges)'; r.volume_basis = 'provider_estimate'; if (r.cpc == null) r.cpc = v.ads_cpc; }
@@ -58,7 +63,7 @@ const rows = (rp.rows || []).map(r0 => {
     if (g2.gate !== 'pass') { r.gate = 'fail'; r.gate_reason = g2.reason; r.gate_code = g2.reason; r.gate_detail = (g2.text || g2.reason) + (g2.detail ? ' (' + g2.detail + ')' : ''); } }
   const intentP = N(r.intent_p);
   const st = KI.stage(top10, r.keyword, r.intent_label ? { label: r.intent_label, probability: intentP } : r.labs_intent, { own_domain: client, cfg });
-  const row = { ...r, top10, serp: sr, stage: st.stage, intent: st.intent || null, intent_confidence: N(st.confidence), needs_review: !!st.needs_review || !sr, stage_evidence: st.evidence ? [st.evidence] : [],
+  const row = { ...r, top10, serp: sr, market_refdomains_median: sr ? null : marketMed, stage: st.stage, intent: st.intent || null, intent_confidence: N(st.confidence), needs_review: !!st.needs_review || !sr, stage_evidence: st.evidence ? [st.evidence] : [],
     aio: sr ? !!(sr.extras || {}).aio : r.aio };
   // the chosen set's positions for the gap (the results page read; else the provider's stored positions, an estimate)
   const labsTop = (r.competitors || []).filter(x => chosen.includes(KIW.host(x.domain)) && N(x.position)).map(x => ({ url: KIW.S(x.url), host: KIW.host(x.domain), pos: N(x.position), exact: false }));
