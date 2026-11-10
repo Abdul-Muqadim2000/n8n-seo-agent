@@ -57,6 +57,16 @@ module.exports = async (ctx) => {
     const known = [T + '/dynamics-365-crm-uae', T + '/dynamics-365-crm-uae-2', T + '/step'];
     check('"/dynamics-365-crm-uae-2" is a copy of the live /dynamics-365-crm-uae; "/step-2" only when /step exists; "-copy" always',
       LRU.copyOf(T + '/dynamics-365-crm-uae-2', known) === T + '/dynamics-365-crm-uae' && LRU.copyOf(T + '/step-2', known) === T + '/step' && LRU.copyOf(T + '/phase-2', known) === '' && !!LRU.copyOf(T + '/about-copy', known), '');
+    check('review L1: /windows-11, /top-10, /ai-agents-new, /d365-v9 are not copies; /step-2 beside a /step with another title is not either',
+      !LRU.copyOf(T + '/windows-11', [T + '/windows']) && !LRU.copyOf(T + '/ai-agents-new', [T + '/ai-agents']) && !LRU.copyOf(T + '/d365-v9', [T + '/d365'])
+      && !LRU.copyOf(T + '/step-2', [{ url: T + '/step', title: 'Step one' }, { url: T + '/step-2', title: 'Step two' }]) && LRU.copyOf(T + '/x-2', [{ url: T + '/x', title: 'CRM UAE' }, { url: T + '/x-2', title: 'CRM UAE' }]) === T + '/x', '');
+    check('review L2: a language prefix is read past (/en/blog/x is a blog address)', LRU.isBlog(T + '/en/blog/x') && !LRU.isBlog(T + '/en/services'), '');
+    check('review M1: a request inside the region the keyword names is that market ("erp software gcc" sent with Saudi Arabia)', LRU.market({ keyword: 'erp software gcc', site_iso: 'AE', request_iso: 'SA' }).ok === true
+      && LRU.market({ keyword: 'erp software gcc', site_iso: 'AE', request_iso: 'SA' }).iso === 'SA', J(LRU.market({ keyword: 'erp software gcc', site_iso: 'AE', request_iso: 'SA' })));
+    const BL = T + '/insights/is-microsoft-dynamics-365-an-erp-system';
+    check('review H5: ranksFor - the rank reading at #16 or a Search Console query at #26.5 with the keyword\'s words keeps the address; nothing = false',
+      LRU.ranksFor(BL, 'dynamics 365 erp system', { rank: { position: 16, url: BL } }) && LRU.ranksFor(BL, 'dynamics 365 erp', { pages: [{ url: BL, queries: [{ query: 'dynamics 365 erp', position: 26.5, impressions: 89 }] }] })
+      && !LRU.ranksFor(BL, 'dynamics 365 erp system', { rank: { position: 45, url: BL }, pages: [] }) && !LRU.ranksFor(BL, 'dynamics 365 erp system', {}), '');
     check('/insights/... is a blog address, / and /services/... are not', LRU.isBlog(T + '/insights/is-microsoft-dynamics-365-an-erp-system') && !LRU.isBlog(T + '/') && !LRU.isBlog(T + '/services/erp'), '');
     const ERP = T + '/insights/is-microsoft-dynamics-365-an-erp-system';
     const own = [{ url: ERP + '/', keyword: 'is microsoft dynamics 365 an erp system', ladder_id: 'lad_mvjsa7995bsr' }];
@@ -196,6 +206,17 @@ module.exports = async (ctx) => {
     console.log('   erp head ->', J({ url: L2.top.target_url, exists: L2.top.exists, guard: (L2.ladder_rules || {}).head_guard }));
     check('the ERP main page leaves the blog address: a commercial page of the site or its own new page', L2.top.target_url !== B && !LRU.isBlog(L2.top.target_url) && ((L2.ladder_rules || {}).head_guard || {}).reason === 'blog', J(L2.top));
     check('no rung page shares the main page\'s address', !pagesOf(L2).some(p => LRU.urlKey(p.target_url) === LRU.urlKey(L2.top.target_url)), J(pagesOf(L2).map(p => p.target_url)));
+    // review H5: the same blog address with Search Console showing it for the main keyword (techand.ai: #26.5 for "dynamics 365 erp", the head #16)
+    const PQ = PAGES.map(p => p.url === B ? { ...p, queries: [{ query: 'dynamics 365 erp system', position: 26.5, impressions: 28 }] } : p);
+    const L3 = await planOf({ head: 'dynamics 365 erp system', cands: [cand('dynamics 365 erp implementation uae', 40), cand('dynamics 365 erp partner uae', 30), cand('dynamics 365 erp pricing uae', 20)], pages: PQ,
+      existing_page: { url: B, source: 'sitemap', title: 'Dynamics 365 ERP System: Right App for UAE Firms', matched_by: 'title', confidence: 0.9, evidence: 'its title' } });
+    console.log('   erp head (ranks) ->', J({ url: L3.top.target_url, guard: (L3.ladder_rules || {}).head_guard }));
+    check('review H5: a blog address that ranks for the main keyword KEEPS it (improve), never a competing new page; the plan says why',
+      L3.top.target_url === B && L3.top.exists === true && ((L3.ladder_rules || {}).head_guard || {}).reason === 'ranks' && (L3.notes || []).some(n => /already ranks for "dynamics 365 erp system", so the main page improves it/.test(n)), J(L3.top));
+    mock('Attach PDF Ladder', [{ json: { ladder: L2, pages_now: 1, domain: 'techand.ai', country: 'United Arab Emirates' } }]);
+    const rows2 = (await run('Ladder Rows', EMPTY)).map(i => i.json);
+    check('a head moved off an address that does not rank stores "moved from <old>" (the app turns it into the redirect step indexing:merge)',
+      /^moved from https:\/\/www\.techand\.ai\/insights\/is-microsoft-dynamics-365-an-erp-system: /.test((rows2.find(r => r.rung === 4) || {}).target_why || ''), J(rows2.find(r => r.rung === 4)));
   });
 
   // ---------- LPK5 rules 2 and 4 in the plan ----------
@@ -214,6 +235,11 @@ module.exports = async (ctx) => {
         && pagesOf(L).some(p => p.keyword === 'dynamics 365 erp partner uae' && p.stage === 'hire'), J(R.steps));
       check('the plan says so', (L.notes || []).some(n => /had no page for people comparing or choosing a provider, so "dynamics 365 erp partner uae"/.test(n)), J((L.notes || []).filter(n => /comparing/.test(n))));
     }
+    // review L6: a SHORT plan that already has a hire rung is left exactly as planned (no added rung, no moved address)
+    const G2 = await planOf({ head: 'dynamics 365 erp system', cands: [cand('dynamics 365 erp modules', 60), cand('dynamics 365 erp partner dubai', 50), cand('dynamics 365 erp features', 40)], pages: [PAGES[0]], kd: 25 });
+    const R2 = G2.ladder_rules || {};
+    check('short-plan golden: commercial step already there, nothing added, no address moved', G2.plan_type !== 'direct' && (R2.steps || {}).checked === true && (R2.steps || {}).commercial_before === true && !(R2.steps || {}).added && (R2.one_url || []).length === 0 && !R2.head_guard,
+      J({ plan: G2.plan_type, steps: R2.steps, ou: R2.one_url }));
     // a definition on a results page of lists, and the same on a page of guides
     const D = [cand('what is a crm company', 60, { intent: 'informational' }), cand('crm service provider dubai', 40), cand('best crm service provider uae', 30)];
     const lists = Array.from({ length: 7 }, (_, i) => 'Top ' + (10 + i) + ' CRM companies in Dubai');
@@ -256,7 +282,16 @@ module.exports = async (ctx) => {
     check('the ladder\'s own page run with AVOID 30: held for real (enforce, not shadow), kind ladder_stop', a.verdict_hold === true && a.hold_mode === 'enforce' && (a.hold.kinds || []).includes('ladder_stop') && a.hold.ladder_stop.band === 'avoid', J(a.hold));
     check('the reason names the ladder and says how to write it anyway', /keyword ladder "crm service provider" is stopped: our check advised against this page \(AVOID, score 30\)/.test(a.hold.reasons[0]) && /Write it anyway/.test(a.hold.reasons[0]), a.hold.reasons[0]);
     const low = await pv({}, { verdict: 'GO_WITH_CHANGES', score: 36 });
-    check('a GO_WITH_CHANGES at 36 (clearly low) stops it too', low.verdict_hold === true && low.hold.ladder_stop && low.hold.ladder_stop.band === 'clearly_low', J(low.hold && low.hold.ladder_stop));
+    check('review H4: a GO_WITH_CHANGES at 36 is never a stop: written as planned, recorded as a shadow hold (kind ladder_low) for the owner\'s review', low.verdict_hold === false && low.would_hold === true && low.hold_mode === 'shadow'
+      && low.hold_shadow && (low.hold_shadow.kinds || []).includes('ladder_low') && !low.hold_shadow.ladder_stop, J({ h: low.verdict_hold, w: low.would_hold, m: low.hold_mode, hs: low.hold_shadow && low.hold_shadow.kinds }));
+    const lowApp = await pv({ client_ip: 'app:0b1c2d3e-anon' }, { verdict: 'GO_WITH_CHANGES', score: 36 });
+    check('...the same from the app\'s Write now: not held either (shadow only)', lowApp.verdict_hold === false && lowApp.hold_mode === 'shadow', J({ h: lowApp.verdict_hold, m: lowApp.hold_mode }));
+    // review H3 (PROBEX): the CRM main page refreshing its own live address, GO_WITH_CHANGES 35, and then with AVOID
+    const OWN = { ...LAD, keyword: 'crm service provider', ladder_rung: 4, ladder_target_url: T + '/dynamics-365-crm-uae', existing_page_url: T + '/dynamics-365-crm-uae', client_ip: 'cadence:site_techand-ai' };
+    const own35 = await pv(OWN, { verdict: 'GO_WITH_CHANGES', score: 35 });
+    check('review H3: the main page refreshing its own live page at 35: not held, no shadow hold', own35.verdict_hold === false && own35.hold === null && !(own35.hold_shadow && (own35.hold_shadow.kinds || []).includes('ladder_low')), J({ h: own35.verdict_hold, hs: own35.hold_shadow && own35.hold_shadow.kinds }));
+    const ownAvoid = await pv(OWN, { verdict: 'AVOID', score: 30 });
+    check('...and with AVOID: still not stopped (its own live page), the AVOID recorded in shadow', ownAvoid.verdict_hold === false && ownAvoid.hold_shadow && (ownAvoid.hold_shadow.kinds || []).includes('ladder_low'), J({ h: ownAvoid.verdict_hold, hs: ownAvoid.hold_shadow && ownAvoid.hold_shadow.kinds }));
     const ok = await pv({}, { verdict: 'GO_WITH_CHANGES', score: 62 });
     check('at 62 nothing stops it (the score hold still exempts ladder pages)', ok.verdict_hold === false && !(ok.hold && ok.hold.ladder_stop), J({ h: ok.verdict_hold, hs: ok.hold_shadow && ok.hold_shadow.kinds }));
     const ack = await pv({ hold_ack: { score: 30 } });
@@ -268,8 +303,16 @@ module.exports = async (ctx) => {
       mock('Content Log Row', [{ json: logRow }]); mock('Save Content Log (Run)', [{ json: { id: 26, keyword: LAD.keyword } }]); return (await run('Ladder Row Written', EMPTY))[0].json; };
     const r1 = await rw(a, { status: 'held', keyword: LAD.keyword });
     check('Ladder Row Written: writing -> stopped, "stopped: ..." with the reason and how to write it anyway', r1.status === 'stopped' && r1.from_status === 'writing' && /^stopped: our check advised against this page \(AVOID, score 30\)/.test(r1.status_note) && /Write it anyway/.test(r1.status_note), J(r1));
-    const r2 = await rw(ack, { status: 'written', keyword: LAD.keyword });
+    const r2all = await (async () => { reset(); mock('Normalize Input', [{ json: { ladder_id: LAD.ladder_id, keyword: LAD.keyword, client_ip: LAD.client_ip } }]); mock('Parse Verdict', [{ json: ack }]);
+      mock('Content Log Row', [{ json: { status: 'written', keyword: LAD.keyword } }]); mock('Save Content Log (Run)', [{ json: { id: 26, keyword: LAD.keyword } }]); return (await run('Ladder Row Written', EMPTY)).map(i => i.json); })();
+    const r2 = r2all[0];
     check('control: a written page still goes written (unchanged)', r2.status === 'written' && r2.from_status === 'writing', J(r2));
+    check('review H1: ...and a row the stuck watcher closed as failed is moved on too (a second item from failed)', r2all.length === 2 && r2all[1].from_status === 'failed' && r2all[1].status === 'written', J(r2all));
+    // review M3: a ladder stop moves the row even when the content log kept an older row (no saved held row)
+    reset(); mock('Normalize Input', [{ json: { ladder_id: LAD.ladder_id, keyword: LAD.keyword, client_ip: LAD.client_ip } }]); mock('Parse Verdict', [{ json: a }]);
+    mock('Content Log Row', [{ json: { skip: true, reason: 'keeps its row' } }]); mock('Save Content Log (Run)', EMPTY);
+    const r3 = (await run('Ladder Row Written', EMPTY))[0].json;
+    check('review M3: a ladder stop with no new content-log row still sets the ladder row stopped', r3.status === 'stopped' && r3.from_status === 'writing', J(r3));
   });
 
   // ---------- LPK7 rule 1 at write and publish time ----------
@@ -303,18 +346,25 @@ module.exports = async (ctx) => {
     check('the main keyword reported live on the guide\'s address: the ladder row is NOT moved there, the conflict is said', x.ladder_row === null && x.url_conflict && /is already the page for "is microsoft dynamics 365 an erp system"/.test(x.url_conflict.text), J(x));
     const y = PR({ site_id: 'site_techand-ai', domain: 'techand.ai', keyword: 'is microsoft dynamics 365 an erp system', url: ERP, live: true, log: null, ladder: { ...head, keyword: 'is microsoft dynamics 365 an erp system', rung: 2 }, request_id: '', now: '2026-11-09T10:00:00.000Z', owners });
     check('the guide reported on its own address: recorded as before', y.ladder_row && y.ladder_row.status === 'published' && !y.url_conflict, J(y));
+    const dm = PR({ site_id: 'site_techand-ai', domain: 'techand.ai', keyword: 'microsoft dynamics erp', url: ERP, live: true, log: { keyword: 'microsoft dynamics erp', existing_page_url: ERP, status: 'written' },
+      ladder: { ...head, keyword: 'microsoft dynamics erp', rung: 3 }, request_id: '', now: '2026-11-09T10:00:00.000Z', owners });
+    check('review H2: a deliberate refresh onto the guide (its content-log row names that page) is recorded: log row published, ladder row merged', dm.log_row.status === 'published' && dm.ladder_row && dm.ladder_row.status === 'merged', J(dm));
+    check('...a non-deliberate one still records the content log (published), only the ladder row stays', x.log_row.status === 'published' && x.log_row.published_url === ERP, J(x.log_row));
     const z = PR({ site_id: 'site_techand-ai', domain: 'techand.ai', keyword: head.keyword, url: ERP, live: true, log: null, ladder: head, request_id: '', now: '2026-11-09T10:00:00.000Z' });
     check('control: without owners (an older caller) the row is built as before', z.ladder_row && z.ladder_row.target_url === ERP, J(z));
     // Publish Candidates: the waiting main page whose "existing address" is the guide's is looked for at its own address only
     reset();
     mock('Site Plan', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai' } }]);
     mock('Site Model (Site)', EMPTY);
-    mock('Load Content Log', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', keyword: 'is microsoft dynamics 365 an erp system', status: 'published', published_url: ERP, ladder_id: 'lad_mvjsa7995bsr', started_at: '2026-10-22T17:21:56Z' } }]);
+    mock('Load Content Log', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', keyword: 'is microsoft dynamics 365 an erp system', status: 'published', published_url: ERP, ladder_id: 'lad_mvjsa7995bsr', started_at: '2026-10-22T17:21:56Z' } },
+      { json: { site_id: 'site_techand-ai', domain: 'techand.ai', keyword: 'erp services uae', status: 'written', source: 'striking', existing_page_url: ERP, published_url: '', started_at: new Date().toISOString() } }]);
     mock('Load Ladders', [{ json: { ladder_id: 'lad_mvjsa7995bsr', domain: 'techand.ai', keyword: 'is microsoft dynamics 365 an erp system', status: 'published', target_url: ERP, page_exists: true, rung: 2 } },
       { json: { ladder_id: 'lad_mvjsa7995bsr', domain: 'techand.ai', keyword: 'dynamics 365 erp system', status: 'writing', target_url: ERP, page_exists: true, rung: 4, start_date: new Date().toISOString() } }]);
     const pc = (await run('Publish Candidates', EMPTY))[0].json;
     const hc = (pc.candidates || []).find(c => c.keyword === 'dynamics 365 erp system');
     console.log('   publish candidates ->', J(hc && { existing_url: hc.existing_url, planned: hc.planned_url, taken: hc.address_taken }));
+    const cr = (pc.candidates || []).find(c => c.keyword === 'erp services uae');
+    check('review H2: a cadence refresh (content log only, no ladder row) of an address a ladder page holds keeps its address to be matched on', !!cr && cr.existing_url === ERP && !cr.address_taken, J(cr));
     check('Publish Candidates: the main page is not matched on the guide\'s address (its "existing address" belongs to another search)', !!hc && hc.existing_url === '' && hc.address_taken && hc.address_taken.keyword === 'is microsoft dynamics 365 an erp system'
       && (pc.owners || []).length >= 1, J(hc));
   });

@@ -706,16 +706,25 @@ let rungPages = rungs.flatMap(r => r.pages);
 // page ended on a blog address. The main page is never a blog / insights address (a commercial page of the site improves instead, else a
 // new page) nor a numbered or "-copy" variant of a live page (the original improves). Then no two pages of this plan share an address
 // (compared without scheme or www): the first keeps it, the same search joins it, any other search gets its own new page.
-const knownLP = [...new Set([...SM.pages(pageModel).map(p => String(p.url || '')), ...(base.site_urls || []).map(String)].filter(Boolean))];
+const knownLP = (() => { const m = new Map(); for (const p of SM.pages(pageModel)) if (p && p.url && !m.has(LRU.urlKey(p.url))) m.set(LRU.urlKey(p.url), { url: String(p.url), title: String(p.title || p.h1 || '') });
+  for (const u of (base.site_urls || []).map(String)) if (u && !m.has(LRU.urlKey(u))) m.set(LRU.urlKey(u), { url: u, title: '' }); return [...m.values()]; })();
 // the blog rule is for a main page people choose a provider on (solution / compare / hire); a problem or learning search whose live answer is
 // an article keeps that article (moving it would write a second page for the same search)
 const head_guard = (() => { if (!planned || !top.target_url) return null;
   const headStage = LRU.stageOf(head, top.intent || '', kiStageOf.get(head) || '');
   if (LRU.isBlog(top.target_url) && !['solution', 'compare', 'hire'].includes(headStage)) return null;
+  // review H5 (2026-11-10): an address that already ranks for the main keyword keeps it (techand.ai's ERP guide holds "dynamics 365 erp
+  // system" at #16): it is improved towards the buying search, never left for a competing new page. The commercial step comes as a rung.
+  if (LRU.ranksFor(top.target_url, head, { rank: headRank ? { position: headRank.position, url: headRank.url } : null, pages: SM.pages(pageModel) })) {
+    return { reason: 'ranks', was: top.target_url, to: '', exists: true, kept: true,
+      text: LRU.pathOf(top.target_url) + ' already ranks for "' + head + '", so the main page improves it (retitled towards the buying search) instead of a second page that would compete with it' }; }
   const nonBlog = { ...pageModel, pages: SM.pages(pageModel).filter(p => p && p.url && !LRU.isBlog(p.url) && !LRU.copyOf(p.url, knownLP)) };
   let com = null; try { com = SM.matchPage(nonBlog, head); } catch (e) { com = null; }
   const g = LRU.headTarget(top.target_url, { known: knownLP, home: homeUrl, planned: plannedUrl(head), commercial: com && com.url ? com.url : '' });
   if (!g || !g.to) return null;
+  // the old address, when nothing ranks there, is a redirect step for the client once the new main page is live (Ladder Rows stores
+  // "moved from <old>" on the main page's row; the app turns it into the site task indexing:merge)
+  g.moved_from = g.was;
   Object.assign(top, { target_url: g.to, exists: !!g.exists, status: g.exists ? 'improve' : 'new', existing_source: g.exists ? 'sitemap' : null,
     existing_confidence: g.exists && com && LRU.urlKey(com.url) === LRU.urlKey(g.to) ? (com.confidence ?? null) : null, existing_evidence: g.exists ? (com && LRU.urlKey(com.url) === LRU.urlKey(g.to) ? com.evidence || '' : 'the original of ' + LRU.pathOf(g.was)) : '' });
   return g; })();

@@ -83,6 +83,7 @@ export declare const LRU: {
   sameSearch(a: string, b: string): boolean;
   ownerOf(url: string, keyword: string, owners: readonly LadderOwner[], mine?: readonly string[]): LadderOwner | null;
   plannedUrl(home: string, keyword: string, slash?: boolean): string;
+  ranksFor(url: string, keyword: string, o: { rank?: { position: number | null; url?: string } | null; pages?: readonly { url: string; queries?: readonly unknown[] }[] }): boolean;
   stageOf(keyword: string, intent?: string, stored?: string): LadderStage;
   isCommercial(stage: string): boolean;
   isDefinitional(keyword: string): boolean;

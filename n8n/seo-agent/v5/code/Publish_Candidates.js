@@ -45,11 +45,13 @@ plan.forEach((s, idx) => {
   // LADDER PACKAGE (2026-11-09, rule 1 at publish time): the addresses other searches of this website hold (published / existing ladder pages,
   // published content-log pages). A waiting page whose "existing address" is ANOTHER search's page is not matched there: that is how three
   // rungs of techand.ai's ERP ladder were recorded live on one blog address (2026-10-29). It is looked for at its own planned address only.
-  const owners = [...LD.filter(l => l.target_url && (l.status === 'published' || isTrue(l.page_exists))).map(l => ({ url: l.target_url, keyword: l.keyword, supporting: l.supporting, ladder_id: l.ladder_id })),
-    ...L.filter(r => String(r.published_url || '').trim()).map(r => ({ url: r.published_url, keyword: r.keyword, ladder_id: r.ladder_id || '' }))];
+  // review M2: never a row merged into the page; a content-log page only where it was FIRST published (not a one-off refresh)
+  const owners = [...LD.filter(l => l.target_url && l.status !== 'merged' && (l.status === 'published' || isTrue(l.page_exists))).map(l => ({ url: l.target_url, keyword: l.keyword, supporting: l.supporting, ladder_id: l.ladder_id })),
+    ...L.filter(r => String(r.published_url || '').trim() && !String(r.existing_page_url || '').trim()).map(r => ({ url: r.published_url, keyword: r.keyword, ladder_id: r.ladder_id || '' }))];
   const list = [...cands.values()].map(c => {
     let existing = String((c.log && c.log.existing_page_url) || '').trim() || (c.ladder && isTrue(c.ladder.page_exists) ? String(c.ladder.target_url || '').trim() : '');
-    const takenBy = existing ? LRU.ownerOf(existing, c.keyword, owners, String((c.ladder || {}).supporting || '').split(',').map(x => x.trim()).filter(Boolean)) : null;
+    // review H2: only a LADDER page is kept off another search's address (a cadence / AI refresh of a page is matched on that page, as before)
+    const takenBy = (existing && c.ladder) ? LRU.ownerOf(existing, c.keyword, owners, String((c.ladder || {}).supporting || '').split(',').map(x => x.trim()).filter(Boolean)) : null;
     if (takenBy) existing = '';
     const planned = c.ladder && !isTrue(c.ladder.page_exists) ? String(c.ladder.target_url || '').trim() : '';
     return { ...c, existing_url: /^https?:\/\//i.test(existing) ? existing : '', planned_url: /^https?:\/\//i.test(planned) ? planned : '', ladder_id: (c.log && c.log.ladder_id) || (c.ladder && c.ladder.ladder_id) || '',

@@ -26,6 +26,7 @@ const LRU = (() => {
   const CFG = {
     stuck_min_minutes: 60, stuck_eta_factor: 3, page_eta_minutes: 20,   // page runs take 15-19 minutes on production (2026-11-08)
     clear_score: 40,                                                    // Parse Verdict's "clearly low" line (HOLD CFG.clear)
+    rank_keep_position: 30, rank_keep_impressions: 10,                  // review H5: a page that ranks for the main keyword keeps it
     blog_dirs: ['blog', 'blogs', 'insights', 'insight', 'articles', 'article', 'news', 'resources', 'resource', 'posts', 'post', 'learn', 'guides', 'guide', 'knowledge', 'academy', 'stories', 'magazine'],
     // the measurable markets (Normalize Input COUNTRIES): ISO-2 -> the country name the engine and the app use
     countries: { US: 'United States', GB: 'United Kingdom', CA: 'Canada', AU: 'Australia', NZ: 'New Zealand', IE: 'Ireland', PK: 'Pakistan', IN: 'India',
@@ -40,18 +41,24 @@ const LRU = (() => {
   const urlKey = (u) => low(u).replace(/^[a-z]+:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
   const pathOf = (u) => { const k = urlKey(u); const i = k.indexOf('/'); return i < 0 ? '' : k.slice(i); };
   const segs = (u) => pathOf(u).split('/').filter(Boolean);
-  /** a blog / insights / news ... address: its first folder is one of CFG.blog_dirs */
-  const isBlog = (u) => { const s = segs(u); return s.length > 1 && CFG.blog_dirs.includes(s[0]); };
-  const COPY_RE = /^(.+?)-(?:copy(?:-\d+)?|\d{1,2}|old|new|draft|backup|bak|v\d)$/;
-  /** a "-2" / "-copy" / "-old" variant of another address of the site: -> the original's address, or ''. A numbered or dated suffix counts
-   *  only when the address without it is a page the site has (so /step-2 is not a copy unless /step exists); "-copy" always counts. */
+  // a language prefix (/en/, /ar-ae/) is not the first folder that says what the page is
+  const LOCALE = /^[a-z]{2}(?:-[a-z]{2})?$/;
+  /** a blog / insights / news ... address: its first folder (after a language prefix) is one of CFG.blog_dirs */
+  const isBlog = (u) => { let s = segs(u); if (s.length > 2 && LOCALE.test(s[0])) s = s.slice(1); return s.length > 1 && CFG.blog_dirs.includes(s[0]); };
+  // review L1 (2026-11-10): only suffixes that mean "another copy of the same page"; -new, -v9, a bare word like /windows-11 are not copies
+  const COPY_RE = /^(.+?)-(copy(?:-\d+)?|\d|old|draft|backup|bak)$/;
+  const titleKey = (t) => low(t).replace(/[^a-z0-9\u0600-\u06ff]+/g, ' ').trim();
+  /** a "-2" / "-copy" / "-old" variant of another address of the site: -> the original's address, or ''. `known`: the site's pages, as
+   *  addresses or { url, title }. A one-digit suffix counts only when the address without it is a page the site has AND, when both titles
+   *  are known, they are the same page title (so /step-2 beside a different /step is not a copy); "-copy" always counts. */
   const copyOf = (u, known) => {
     const s = segs(u); if (!s.length) return '';
     const m = s[s.length - 1].match(COPY_RE); if (!m) return '';
     const base = urlKey(u).replace(/[^/]+$/, m[1]);
-    const ks = new Map((Array.isArray(known) ? known : []).map(x => [urlKey(x && typeof x === 'object' ? x.url : x), x && typeof x === 'object' ? S(x.url) : S(x)]).filter(([k]) => k));
-    if (ks.has(base)) return ks.get(base) || base;
-    return /-copy(?:-\d+)?$/.test(s[s.length - 1]) ? base : '';
+    const list = (Array.isArray(known) ? known : []).map(x => x && typeof x === 'object' ? { k: urlKey(x.url), url: S(x.url), title: titleKey(x.title) } : { k: urlKey(x), url: S(x), title: '' }).filter(x => x.k);
+    const orig = list.find(x => x.k === base), self = list.find(x => x.k === urlKey(u));
+    if (orig) { if (/^\d$/.test(m[2]) && orig.title && self && self.title && orig.title !== self.title) return ''; return orig.url || base; }
+    return /^copy/.test(m[2]) ? base : '';
   };
   // the same search in other words: every word kept, joining words dropped, a plural folded (the H2 target_guard rule of Ladder_Plan.js)
   const JOIN = new Set(['in', 'the', 'a', 'an', 'of', 'for', 'to', 'on', 'at', 'and', 'with', 'by', 'from']);
@@ -73,6 +80,26 @@ const LRU = (() => {
   /** the address a new page gets on the site: home + slug(keyword), with the site's trailing-slash form */
   const plannedUrl = (home, keyword, slash) => { const h = S(home).replace(/\/+$/, ''); const sl = low(keyword).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     return h && sl ? h + '/' + sl + (slash ? '/' : '') : ''; };
+  /** review H5: does this address already rank for the main keyword? o: { rank: { position, url } (the rank check or the ranked pull),
+   *  pages: [{ url, queries: [{ query, impressions, position }] }] (Search Console per page) } -> true when the rank reading puts this
+   *  address at position <= 30, or Search Console shows it for a search holding every word of the keyword at position <= 30 or with
+   *  10+ impressions. A page that ranks is improved, never left for a competing new page. */
+  const ranksFor = (url, keyword, o) => {
+    const x = o || {}; const k = urlKey(url); if (!k) return false;
+    const r = x.rank || null; const rp = r ? Number(r.position) : NaN;
+    if (r && Number.isFinite(rp) && rp >= 1 && rp <= CFG.rank_keep_position && (!S(r.url) || urlKey(r.url) === k)) return true;
+    const want = wordsKey(keyword).split(' ').filter(Boolean); if (!want.length) return false;
+    for (const p of (Array.isArray(x.pages) ? x.pages : [])) {
+      if (!p || urlKey(p.url) !== k) continue;
+      for (const q of (Array.isArray(p.queries) ? p.queries : [])) {
+        const have = new Set(wordsKey((q || {}).query || (q || {}).keyword).split(' '));
+        if (!want.every(w => have.has(w))) continue;
+        const pos = Number((q || {}).position), imp = Number((q || {}).impressions) || 0;
+        if ((Number.isFinite(pos) && pos >= 1 && pos <= CFG.rank_keep_position) || imp >= CFG.rank_keep_impressions) return true;
+      }
+    }
+    return false;
+  };
   /** rule 1 for the MAIN page: a blog address, or a copy of a live page, is never its target. -> null (fine) or { reason, was, to, exists }:
    *  a copy points back to the original page (improve it); a blog address gets the commercial page the site has (`commercial`, a URL
    *  found by the caller among non-blog pages), else a new page at `planned`. */
@@ -108,7 +135,7 @@ const LRU = (() => {
   // ---- the buyer's stage (rule 2) ----
   const Q_START = /^(?:what|who|why|when|where|which|is|are|does|do|can|should|will|how)\b/;
   const W_COMPARE = /\b(?:best|top|vs|versus|alternatives?|compare|comparison|comparing|pricing|prices?|costs?|fees?|quotes?|reviews?|rated|cheapest|affordable|rankings?|list of)\b/;
-  const W_HIRE = /\b(?:compan(?:y|ies)|agenc(?:y|ies)|firms?|providers?|partners?|consultants?|consultanc(?:y|ies)|contractors?|developers?|vendors?|integrators?|resellers?|specialists?|experts?|freelancers?|hire|hiring|near me|services)\b|\b(?:consulting|implementation|development|support|migration|integration|outsourcing) services?\b/;
+  const W_HIRE = /\b(?:compan(?:y|ies)|agenc(?:y|ies)|firms?|providers?|partners?|consultants?|consultanc(?:y|ies)|contractors?|developers?|vendors?|integrators?|resellers?|specialists?|experts?|freelancers?|hire|hiring|near me|services|consulting)\b|\b(?:consulting|implementation|development|support|migration|integration|outsourcing) services?\b/;
   const W_PROBLEM = /\b(?:deadlines?|penalt(?:y|ies)|fines?|mandate|mandatory|requirements?|compliance|compliant|regulations?|law|laws|problems?|issues?|errors?|not working|fix|risks?|challenges?|obligations?)\b/;
   const W_SOLUTION = /\b(?:software|system|systems|platform|platforms|tools?|solutions?|apps?|applications?|modules?|features?|implementation|migration|integration|upgrade|automation|development|hosting|cloud|erp|crm|hrms|lms|setup|service)\b/;
   const W_DEFINE = /^(?:what (?:is|are|does)|what's|whats|define|definition of|meaning of)\b/;
@@ -154,6 +181,9 @@ const LRU = (() => {
     else { iso = req; source = 'request'; }
     const unmeasured = !CFG.countries[iso] && !!site;
     if (unmeasured) { iso = site; source = 'site'; }   // a named market we cannot measure (Qatar): the website's own, said so
+    // review M1: a request for a measurable country INSIDE the places the keyword names is that market ("erp software gcc" sent with Saudi Arabia)
+    const namedIsos = [...new Set(places.flatMap(p => p.iso || []))];
+    if (req && req !== iso && namedIsos.includes(req) && CFG.countries[req]) { iso = req; source = 'keyword'; }
     const ok = !req || req === iso;
     const nm = (i) => countryName(i) || i;
     const note = !iso ? '' : source === 'keyword'
@@ -241,7 +271,7 @@ const LRU = (() => {
       note: 'The supporting pages come from keyword intelligence: ' + heads.length + ' search groups of its last keyword research (' + cur + '), one search per group, with its verdict, page action and Search Console position.' };
   };
 
-  return { CFG, STAGES, COMMERCIAL, kiPool, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, headTarget, oneUrl,
+  return { CFG, STAGES, COMMERCIAL, kiPool, ranksFor, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, headTarget, oneUrl,
     stageOf, isCommercial, isDefinitional, definitionalOk, stageText, countryName, market, marketRefusal, verdictStop, stuck, rungState };
 })();
 

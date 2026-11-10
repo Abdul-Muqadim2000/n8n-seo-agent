@@ -357,8 +357,10 @@ for (const s of list) {
     const head_position = hist.length ? Number(hist[0].position) : null;
     const lastN = hist.slice(0, CONFIG.won_checks);
     const won = lastN.length >= CONFIG.won_checks && lastN.every(h => Number(h.position) >= 1 && Number(h.position) <= CONFIG.won_position);
-    const support = rows.filter(r => !isTop(r));
-    const published = support.filter(r => r.status === 'published' || publishedKw.has(norm(r.keyword))).length;
+    // review M4 (LADDER PACKAGE): a stopped / failed / set-aside rung is no support the client can publish, and a rung merged into another
+    // page is live as that page
+    const support = rows.filter(r => !isTop(r) && !['stopped', 'failed', 'set_aside'].includes(String(r.status || '')));
+    const published = support.filter(r => r.status === 'published' || r.status === 'merged' || publishedKw.has(norm(r.keyword))).length;
     const gate_open = plan_type === 'direct' || !support.length || published * 2 >= support.length || (head_position != null && head_position >= 1 && head_position <= CONFIG.gate_head_position);
     const ordered = plan_type === 'direct' ? [...rows.filter(isTop), ...rows.filter(r => !isTop(r))] : rows;
     const remaining = ordered.filter(open);
@@ -398,22 +400,27 @@ for (const s of list) {
   // because their rows had come to carry that address. A ladder page is never written onto an address another search of this website already
   // holds (a published or existing ladder page, a published content-log page): it is written as its own new page instead. The main page is
   // never written onto a blog address (it gets its own page), and a "-2" / "-copy" copy of a live page improves the original instead.
-  const ownersC = [...lrows.filter(r => r.target_url && (String(r.status || '') === 'published' || r.page_exists === true || r.page_exists === 'true'))
+  // review M2: an address is held by a ladder page that is published / exists there (never a row merged into it as a section), or by the
+  // content-log page FIRST published there (a one-off refresh of a page does not make the page that keyword's)
+  const ownersC = [...lrows.filter(r => r.target_url && String(r.status || '') !== 'merged' && (String(r.status || '') === 'published' || r.page_exists === true || r.page_exists === 'true'))
       .map(r => ({ url: r.target_url, keyword: r.keyword, supporting: r.supporting, ladder_id: r.ladder_id })),
-    ...slog.filter(l => String(l.published_url || '').trim()).map(l => ({ url: l.published_url, keyword: l.keyword }))];
+    ...slog.filter(l => String(l.published_url || '').trim() && !String(l.existing_page_url || '').trim()).map(l => ({ url: l.published_url, keyword: l.keyword }))];
   const knownC = [...new Set([...pageRows.filter(r => r.site_id === s.site_id).map(r => String(r.url || '')), ...ownersC.map(o => String(o.url || ''))].filter(Boolean))];
-  const addressOf = (l) => { const was = String(l.target_url || ''); const exists = l.page_exists === true || l.page_exists === 'true';
+  const pagesQ = pageRows.filter(r => r.site_id === s.site_id).map(r => ({ url: r.url, queries: (() => { try { const q = JSON.parse(r.queries_json || '[]'); return Array.isArray(q) ? q : []; } catch (e) { return []; } })() }));
+  const addressOf = (l, x) => { const was = String(l.target_url || ''); const exists = l.page_exists === true || l.page_exists === 'true';
     const home = (was.match(/^https?:\/\/[^\/?#]+/i) || [''])[0] || ''; const slash = /\/$/.test(was);
     const own = (u) => LRU.plannedUrl(home, l.keyword, slash) || u;
     if (isTop(l)) { const orig = exists ? LRU.copyOf(was, knownC) : '';
       if (orig) return { existing: orig, target: orig, note: LRU.pathOf(was) + ' is a copy of ' + LRU.pathOf(orig) + ': the main page improves the original' };
-      if (LRU.isBlog(was) && ['solution', 'compare', 'hire'].includes(LRU.stageOf(l.keyword, '', String(l.stage || '')))) { const nu = own(was); if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu, note: 'the main page gets its own page (' + LRU.pathOf(nu) + '), not the blog address ' + LRU.pathOf(was) }; } }
+      // review H5: a blog address that ranks for the main keyword (the Rank Tracker's last readable position, or Search Console) keeps it
+      const ranks = LRU.ranksFor(was, l.keyword, { rank: x && x.head_position != null ? { position: x.head_position, url: '' } : null, pages: pagesQ });
+      if (LRU.isBlog(was) && !ranks && ['solution', 'compare', 'hire'].includes(LRU.stageOf(l.keyword, '', String(l.stage || '')))) { const nu = own(was); if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu, note: 'the main page gets its own page (' + LRU.pathOf(nu) + '), not the blog address ' + LRU.pathOf(was) }; } }
     if (exists && was) { const o = LRU.ownerOf(was, l.keyword, ownersC, String(l.supporting || '').split(',').map(x => x.trim()).filter(Boolean));
       if (o) { const nu = own(was); if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu, note: LRU.pathOf(was) + ' is already the page for "' + o.keyword + '": "' + l.keyword + '" gets its own page at ' + LRU.pathOf(nu) }; } }
     return { existing: exists ? was : '', target: was, note: '' }; };
   const ladderCand = (x, l) => {
     const rows = x.rows, top = x.top; const links = [];
-    const addr = addressOf(l);
+    const addr = addressOf(l, x);
     if (isTop(l)) { for (const r of rows.filter(r => !isTop(r) && r.target_url).slice(0, 12)) links.push({ url: r.target_url, role: 'down', keyword: r.keyword }); }   // the top page is the hub: it lists the whole cluster (12, was 6; v4.4)
     else { if (top && top.target_url && top.keyword !== l.keyword) links.push({ url: top.target_url, role: 'top', keyword: top.keyword }); const sib = rows.find(r => Number(r.rung) === Number(l.rung) && r.keyword !== l.keyword && r.target_url); if (sib) links.push({ url: sib.target_url, role: 'sibling', keyword: sib.keyword }); }
     // R15 (2026-10-13): `target_url` is the URL this ladder planned for the page — the run keeps it as the page's slug, so the ladder's

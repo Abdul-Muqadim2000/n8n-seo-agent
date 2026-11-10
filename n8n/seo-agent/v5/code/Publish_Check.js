@@ -158,8 +158,8 @@ const V = live ? verifyPublished({ keyword, url, title, h1: h1Words, text: verif
 // after the warning, stored with its reason). Without it nothing here says the page exists.
 const recorded_live = live && V.accepted === true;
 // LADDER PACKAGE (2026-11-09, rule 1): the addresses other searches of this website already hold, so a rung is never moved onto one of them
-const ownersPC = [...onSite.filter(l => l.target_url && (String(l.status || '') === 'published' || l.page_exists === true || l.page_exists === 'true')).map(l => ({ url: l.target_url, keyword: l.keyword, supporting: l.supporting, ladder_id: l.ladder_id })),
-  ...logs.filter(l => normD(l.domain) === domain && String(l.published_url || '').trim()).map(l => ({ url: l.published_url, keyword: l.keyword, ladder_id: l.ladder_id || '' }))];
+const ownersPC = [...onSite.filter(l => l.target_url && String(l.status || '') !== 'merged' && (String(l.status || '') === 'published' || l.page_exists === true || l.page_exists === 'true')).map(l => ({ url: l.target_url, keyword: l.keyword, supporting: l.supporting, ladder_id: l.ladder_id })),
+  ...logs.filter(l => normD(l.domain) === domain && String(l.published_url || '').trim() && !String(l.existing_page_url || '').trim()).map(l => ({ url: l.published_url, keyword: l.keyword, ladder_id: l.ladder_id || '' }))];   // review M2
 const { log_row, ladder_row, url_conflict } = publishedRows({ site_id, domain, keyword, url, log, ladder, request_id: rid, now, live: recorded_live, owners: ownersPC });
 if (url_conflict) checksOut.push({ name: 'One search, one page', ok: false, detail: url_conflict.text + '. Publish this page at its own address, or keep it as a section of that page.' });
 if (recorded_live && (V.publish_note || (log && log.publish_note))) log_row.publish_note = V.publish_note;   // the reason a page was marked without a match, cleared by a verified report

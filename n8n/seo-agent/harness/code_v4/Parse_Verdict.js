@@ -963,6 +963,7 @@ const LRU = (() => {
   const CFG = {
     stuck_min_minutes: 60, stuck_eta_factor: 3, page_eta_minutes: 20,   // page runs take 15-19 minutes on production (2026-11-08)
     clear_score: 40,                                                    // Parse Verdict's "clearly low" line (HOLD CFG.clear)
+    rank_keep_position: 30, rank_keep_impressions: 10,                  // review H5: a page that ranks for the main keyword keeps it
     blog_dirs: ['blog', 'blogs', 'insights', 'insight', 'articles', 'article', 'news', 'resources', 'resource', 'posts', 'post', 'learn', 'guides', 'guide', 'knowledge', 'academy', 'stories', 'magazine'],
     // the measurable markets (Normalize Input COUNTRIES): ISO-2 -> the country name the engine and the app use
     countries: { US: 'United States', GB: 'United Kingdom', CA: 'Canada', AU: 'Australia', NZ: 'New Zealand', IE: 'Ireland', PK: 'Pakistan', IN: 'India',
@@ -977,18 +978,24 @@ const LRU = (() => {
   const urlKey = (u) => low(u).replace(/^[a-z]+:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
   const pathOf = (u) => { const k = urlKey(u); const i = k.indexOf('/'); return i < 0 ? '' : k.slice(i); };
   const segs = (u) => pathOf(u).split('/').filter(Boolean);
-  /** a blog / insights / news ... address: its first folder is one of CFG.blog_dirs */
-  const isBlog = (u) => { const s = segs(u); return s.length > 1 && CFG.blog_dirs.includes(s[0]); };
-  const COPY_RE = /^(.+?)-(?:copy(?:-\d+)?|\d{1,2}|old|new|draft|backup|bak|v\d)$/;
-  /** a "-2" / "-copy" / "-old" variant of another address of the site: -> the original's address, or ''. A numbered or dated suffix counts
-   *  only when the address without it is a page the site has (so /step-2 is not a copy unless /step exists); "-copy" always counts. */
+  // a language prefix (/en/, /ar-ae/) is not the first folder that says what the page is
+  const LOCALE = /^[a-z]{2}(?:-[a-z]{2})?$/;
+  /** a blog / insights / news ... address: its first folder (after a language prefix) is one of CFG.blog_dirs */
+  const isBlog = (u) => { let s = segs(u); if (s.length > 2 && LOCALE.test(s[0])) s = s.slice(1); return s.length > 1 && CFG.blog_dirs.includes(s[0]); };
+  // review L1 (2026-11-10): only suffixes that mean "another copy of the same page"; -new, -v9, a bare word like /windows-11 are not copies
+  const COPY_RE = /^(.+?)-(copy(?:-\d+)?|\d|old|draft|backup|bak)$/;
+  const titleKey = (t) => low(t).replace(/[^a-z0-9\u0600-\u06ff]+/g, ' ').trim();
+  /** a "-2" / "-copy" / "-old" variant of another address of the site: -> the original's address, or ''. `known`: the site's pages, as
+   *  addresses or { url, title }. A one-digit suffix counts only when the address without it is a page the site has AND, when both titles
+   *  are known, they are the same page title (so /step-2 beside a different /step is not a copy); "-copy" always counts. */
   const copyOf = (u, known) => {
     const s = segs(u); if (!s.length) return '';
     const m = s[s.length - 1].match(COPY_RE); if (!m) return '';
     const base = urlKey(u).replace(/[^/]+$/, m[1]);
-    const ks = new Map((Array.isArray(known) ? known : []).map(x => [urlKey(x && typeof x === 'object' ? x.url : x), x && typeof x === 'object' ? S(x.url) : S(x)]).filter(([k]) => k));
-    if (ks.has(base)) return ks.get(base) || base;
-    return /-copy(?:-\d+)?$/.test(s[s.length - 1]) ? base : '';
+    const list = (Array.isArray(known) ? known : []).map(x => x && typeof x === 'object' ? { k: urlKey(x.url), url: S(x.url), title: titleKey(x.title) } : { k: urlKey(x), url: S(x), title: '' }).filter(x => x.k);
+    const orig = list.find(x => x.k === base), self = list.find(x => x.k === urlKey(u));
+    if (orig) { if (/^\d$/.test(m[2]) && orig.title && self && self.title && orig.title !== self.title) return ''; return orig.url || base; }
+    return /^copy/.test(m[2]) ? base : '';
   };
   // the same search in other words: every word kept, joining words dropped, a plural folded (the H2 target_guard rule of Ladder_Plan.js)
   const JOIN = new Set(['in', 'the', 'a', 'an', 'of', 'for', 'to', 'on', 'at', 'and', 'with', 'by', 'from']);
@@ -1010,6 +1017,26 @@ const LRU = (() => {
   /** the address a new page gets on the site: home + slug(keyword), with the site's trailing-slash form */
   const plannedUrl = (home, keyword, slash) => { const h = S(home).replace(/\/+$/, ''); const sl = low(keyword).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     return h && sl ? h + '/' + sl + (slash ? '/' : '') : ''; };
+  /** review H5: does this address already rank for the main keyword? o: { rank: { position, url } (the rank check or the ranked pull),
+   *  pages: [{ url, queries: [{ query, impressions, position }] }] (Search Console per page) } -> true when the rank reading puts this
+   *  address at position <= 30, or Search Console shows it for a search holding every word of the keyword at position <= 30 or with
+   *  10+ impressions. A page that ranks is improved, never left for a competing new page. */
+  const ranksFor = (url, keyword, o) => {
+    const x = o || {}; const k = urlKey(url); if (!k) return false;
+    const r = x.rank || null; const rp = r ? Number(r.position) : NaN;
+    if (r && Number.isFinite(rp) && rp >= 1 && rp <= CFG.rank_keep_position && (!S(r.url) || urlKey(r.url) === k)) return true;
+    const want = wordsKey(keyword).split(' ').filter(Boolean); if (!want.length) return false;
+    for (const p of (Array.isArray(x.pages) ? x.pages : [])) {
+      if (!p || urlKey(p.url) !== k) continue;
+      for (const q of (Array.isArray(p.queries) ? p.queries : [])) {
+        const have = new Set(wordsKey((q || {}).query || (q || {}).keyword).split(' '));
+        if (!want.every(w => have.has(w))) continue;
+        const pos = Number((q || {}).position), imp = Number((q || {}).impressions) || 0;
+        if ((Number.isFinite(pos) && pos >= 1 && pos <= CFG.rank_keep_position) || imp >= CFG.rank_keep_impressions) return true;
+      }
+    }
+    return false;
+  };
   /** rule 1 for the MAIN page: a blog address, or a copy of a live page, is never its target. -> null (fine) or { reason, was, to, exists }:
    *  a copy points back to the original page (improve it); a blog address gets the commercial page the site has (`commercial`, a URL
    *  found by the caller among non-blog pages), else a new page at `planned`. */
@@ -1045,7 +1072,7 @@ const LRU = (() => {
   // ---- the buyer's stage (rule 2) ----
   const Q_START = /^(?:what|who|why|when|where|which|is|are|does|do|can|should|will|how)\b/;
   const W_COMPARE = /\b(?:best|top|vs|versus|alternatives?|compare|comparison|comparing|pricing|prices?|costs?|fees?|quotes?|reviews?|rated|cheapest|affordable|rankings?|list of)\b/;
-  const W_HIRE = /\b(?:compan(?:y|ies)|agenc(?:y|ies)|firms?|providers?|partners?|consultants?|consultanc(?:y|ies)|contractors?|developers?|vendors?|integrators?|resellers?|specialists?|experts?|freelancers?|hire|hiring|near me|services)\b|\b(?:consulting|implementation|development|support|migration|integration|outsourcing) services?\b/;
+  const W_HIRE = /\b(?:compan(?:y|ies)|agenc(?:y|ies)|firms?|providers?|partners?|consultants?|consultanc(?:y|ies)|contractors?|developers?|vendors?|integrators?|resellers?|specialists?|experts?|freelancers?|hire|hiring|near me|services|consulting)\b|\b(?:consulting|implementation|development|support|migration|integration|outsourcing) services?\b/;
   const W_PROBLEM = /\b(?:deadlines?|penalt(?:y|ies)|fines?|mandate|mandatory|requirements?|compliance|compliant|regulations?|law|laws|problems?|issues?|errors?|not working|fix|risks?|challenges?|obligations?)\b/;
   const W_SOLUTION = /\b(?:software|system|systems|platform|platforms|tools?|solutions?|apps?|applications?|modules?|features?|implementation|migration|integration|upgrade|automation|development|hosting|cloud|erp|crm|hrms|lms|setup|service)\b/;
   const W_DEFINE = /^(?:what (?:is|are|does)|what's|whats|define|definition of|meaning of)\b/;
@@ -1091,6 +1118,9 @@ const LRU = (() => {
     else { iso = req; source = 'request'; }
     const unmeasured = !CFG.countries[iso] && !!site;
     if (unmeasured) { iso = site; source = 'site'; }   // a named market we cannot measure (Qatar): the website's own, said so
+    // review M1: a request for a measurable country INSIDE the places the keyword names is that market ("erp software gcc" sent with Saudi Arabia)
+    const namedIsos = [...new Set(places.flatMap(p => p.iso || []))];
+    if (req && req !== iso && namedIsos.includes(req) && CFG.countries[req]) { iso = req; source = 'keyword'; }
     const ok = !req || req === iso;
     const nm = (i) => countryName(i) || i;
     const note = !iso ? '' : source === 'keyword'
@@ -1178,7 +1208,7 @@ const LRU = (() => {
       note: 'The supporting pages come from keyword intelligence: ' + heads.length + ' search groups of its last keyword research (' + cur + '), one search per group, with its verdict, page action and Search Console position.' };
   };
 
-  return { CFG, STAGES, COMMERCIAL, kiPool, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, headTarget, oneUrl,
+  return { CFG, STAGES, COMMERCIAL, kiPool, ranksFor, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, headTarget, oneUrl,
     stageOf, isCommercial, isDefinitional, definitionalOk, stageText, countryName, market, marketRefusal, verdictStop, stuck, rungState };
 })();
 // Accepts an object (from the Structured Output Parser) or a string with/without code fences or surrounding text
@@ -2404,21 +2434,28 @@ const HOLD = (() => {
     second_signal: { low_demand: lowDemand, duplicate: dupHit, existing_page: existingHit, volume, impressions: gsc.read ? gsc.impressions : null, search_console_read: gsc.read },
     decision: !writes ? 'no page in this run' : ack ? 'acknowledged by the client' + (ackScore != null && runScore != null && ackScore !== runScore ? ': this run read ' + runScore + ', the acknowledged ' + ackScore + ' is kept' : '')
       : score == null ? 'not checked' : valueHit ? (score < CFG.clear ? 'held: clearly low' : 'held: near the line with a second signal') : score < CFG.threshold ? (exemptScore ? 'not held: ' + exemptScore : 'not held: near the line, no second signal') : 'not held for the score' };
-  // ---- LADDER PACKAGE (2026-11-09, rule 4, v5/code/_ladder_rules.js LRU.verdictStop): an AVOID or clearly-low verdict STOPS a ladder page ----
+  // ---- LADDER PACKAGE (2026-11-09, rule 4; review H3 / H4 2026-11-10): an explicit AVOID STOPS a new ladder page; a low score never does ----
   // Production 2026-11-03 (techand.ai, ladder "crm service provider"): the rung "crm for customers" scored 30, AVOID, and was written and
-  // published, because a ladder's page runs carry force_content (the AVOID route is skipped) and the score hold exempts ladder pages and runs
-  // automatic ones in shadow. A ladder page with an AVOID verdict, or a score clearly under the line, is now held for real, automatic or not:
-  // nothing is written, the ladder row says "stopped" with this reason (Ladder Row Written), and only "Write it anyway" (hold_ack) writes it.
-  // The owner's 2026-10-29 priority stays: a ladder page whose own address is already a live page of the site (the guide that ranks, exec 949:
-  // dup.self) is never stopped for its score, only for an AVOID verdict.
-  const ladderOwnLive = ((dup && dup.self) || []).length > 0;
-  const ladderStop0 = (writes && ladderPage && !PU) ? LRU.verdictStop({ verdict: EV56.withheld ? '' : S(verdict.verdict), score: runScore, ack: !!ack }) : { stop: false, reason: '', band: '' };
-  const ladderStop = ladderStop0.stop && ladderStop0.band === 'clearly_low' && ladderOwnLive ? { stop: false, reason: '', band: '', exempt: 'its own page is already live' } : ladderStop0;
-  const would = writes && !ack && ((!PU && (valueHit || dupHit || existingHit)) || ladderStop.stop);   // ladderStop already needs pages that were read   // W07-A: never a hold (score, duplicate or existing page) on pages nobody read
-  const mode = !writes ? 'off' : ladderStop.stop ? 'enforce' : automatic ? CFG.automatic : 'enforce';
+  // published, because a ladder's page runs carry force_content (the AVOID route is skipped) and the score hold exempts ladder pages. Now:
+  //   * an explicit AVOID verdict on a ladder page that is NOT its own live page is held for real (automatic or not): nothing is written, the
+  //     ladder row says "stopped" with the reason (Ladder Row Written), the client gets a Needs-you item, and only "Write it anyway" writes it;
+  //   * a score under 40 (the owner's D17 rule: automatic holds stay in shadow until the owner reviewed the first 20) is only RECORDED: a
+  //     shadow hold (would_hold, hold_shadow, kind ladder_low), the page is written as before;
+  //   * the ladder's own live page (a refresh of its own address: existing_page_url = its planned address, or the address that is already
+  //     the keyword's page, dup.self; the guide that ranks, exec 949) is never stopped nor shadow-held for its score; an AVOID there is recorded.
+  const ladderOwnLive = (!!S(prev.existing_page_url) && (!S(prev.ladder_target_url) || LRU.urlKey(prev.existing_page_url) === LRU.urlKey(prev.ladder_target_url)))
+    || (((dup && dup.self) || []).length > 0);
+  const ladderV = (writes && ladderPage && !PU && !ack) ? LRU.verdictStop({ verdict: EV56.withheld ? '' : S(verdict.verdict), score: runScore, ack: false }) : { stop: false, reason: '', band: '' };
+  const ladderStop = ladderV.stop && ladderV.band === 'avoid' && !ladderOwnLive ? ladderV : { stop: false, reason: '', band: '' };
+  const ladderLow = ladderV.stop && !ladderStop.stop && !(ladderOwnLive && ladderV.band === 'clearly_low') ? ladderV : null;   // recorded, never a stop
+  const would = writes && !ack && ((!PU && (valueHit || dupHit || existingHit)) || ladderStop.stop || !!ladderLow);   // ladderStop / ladderLow already need pages that were read
+  const onlyLow = !!ladderLow && !ladderStop.stop && !valueHit && !dupHit && !existingHit;   // W07-A: never a hold (score, duplicate or existing page) on pages nobody read
+  const mode = !writes ? 'off' : ladderStop.stop ? 'enforce' : onlyLow ? 'shadow' : automatic ? CFG.automatic : 'enforce';
   const kw = S(prev.keyword);
   const reasons = [];
   const demandText = 'little demand (' + (volume === 0 ? 'no measured searches' : 'about ' + volume + ' searches a month') + (gsc.read ? ' and no impressions for your site in Search Console' : '') + ')';
+  if (writes && ladderLow) reasons.push('Recorded, not a stop: ' + ladderLow.reason + ' for this page of your keyword ladder' + (S(prev.ladder_head) ? ' "' + S(prev.ladder_head) + '"' : '')
+    + (ladderOwnLive ? ' (it is the page your website already has for this search, so it is improved as planned)' : ', so it is written as planned') + '.');
   if (writes && ladderStop.stop) reasons.push('This page of your keyword ladder' + (S(prev.ladder_head) ? ' "' + S(prev.ladder_head) + '"' : '') + ' is stopped: ' + ladderStop.reason
     + ((verdict.reasons || [])[0] ? ': ' + String(verdict.reasons[0]).replace(/\s+/g, ' ').slice(0, 260) : '') + '. Nothing was written for it; choose "Write it anyway" if you want this page all the same.');
   if (writes && valueHit) reasons.push('Our verdict scored "' + kw + '" ' + score + ' out of 100' + (score < CFG.clear ? ', clearly under the ' + CFG.threshold + ' we write without asking'
@@ -2470,7 +2507,7 @@ const HOLD = (() => {
     if (kc && S(kc.keyword) && S(kc.keyword).toLowerCase() !== kw.toLowerCase()) addAlt({ kind: 'rung', label: 'Write the planned page', keyword: S(kc.keyword), ladder_id: S(kc.ladder_id),
       why: S(kc.note) || 'this search is already planned on your website' });
   }
-  const hold = would ? { score, threshold: CFG.threshold, clear: CFG.clear, kinds: [ladderStop.stop ? 'ladder_stop' : '', valueHit ? 'score' : '', (dupHit || existingHit) ? 'duplicate' : ''].filter(Boolean), reasons, alternatives,
+  const hold = would ? { score, threshold: CFG.threshold, clear: CFG.clear, kinds: [ladderStop.stop ? 'ladder_stop' : '', ladderLow ? 'ladder_low' : '', valueHit ? 'score' : '', (dupHit || existingHit) ? 'duplicate' : ''].filter(Boolean), reasons, alternatives,
     ladder_stop: ladderStop.stop ? { band: ladderStop.band, reason: ladderStop.reason, ladder_id: S(prev.ladder_id), rung: prev.ladder_rung } : null,
     duplicates: dupHit ? dup.targets : existingHit ? [{ url: EXP.url, title: S(EXP.title) }] : [], mode, held: mode === 'enforce', readings,
     rule: 'A page waits for your OK when our verdict scores its keyword under ' + CFG.clear + ' out of 100, or under ' + CFG.threshold + ' when the search also has little demand, or when your website already has a page for the same search.',

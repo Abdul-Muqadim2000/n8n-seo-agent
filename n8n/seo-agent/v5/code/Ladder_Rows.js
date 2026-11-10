@@ -26,5 +26,8 @@ return [...pages, ...stoppedRows].map(p => ({ json: {
   months: Array.isArray(p.months) ? p.months.join('-') : '', start_date: now, country: String(d.country || ''), location_code: Number(d.location_code) || 0,
   language_code: String(d.language_code || 'en'), email: String(d.email || ''), callback_url: String(d.callback_url || ''), request_id: String(d.request_id || ''),
   chosen_by,
-  stage: String(p.stage || ''), target_why: String(p.target_why || '').slice(0, 300)   // LADDER PACKAGE (2026-11-09): the buyer's stage and why the page sits at its address (ladder_common LADDER_COLS)
+  stage: String(p.stage || ''),
+  // review H5: a main page moved off an address that did not rank says where from, so the app asks for the redirect once it is live
+  // (site task indexing:merge, app/server/src/services/siteTasks.ts ladderMovesOf); target_why is written only here, so it survives
+  target_why: ((p === L.top && L.ladder_rules && L.ladder_rules.head_guard && L.ladder_rules.head_guard.moved_from ? 'moved from ' + L.ladder_rules.head_guard.moved_from + ': ' : '') + String(p.target_why || '')).slice(0, 300)   // LADDER PACKAGE (2026-11-09): the buyer's stage and why the page sits at its address (ladder_common LADDER_COLS)
 } }));

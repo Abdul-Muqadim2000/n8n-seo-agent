@@ -258,21 +258,28 @@ const HOLD = (() => {
     second_signal: { low_demand: lowDemand, duplicate: dupHit, existing_page: existingHit, volume, impressions: gsc.read ? gsc.impressions : null, search_console_read: gsc.read },
     decision: !writes ? 'no page in this run' : ack ? 'acknowledged by the client' + (ackScore != null && runScore != null && ackScore !== runScore ? ': this run read ' + runScore + ', the acknowledged ' + ackScore + ' is kept' : '')
       : score == null ? 'not checked' : valueHit ? (score < CFG.clear ? 'held: clearly low' : 'held: near the line with a second signal') : score < CFG.threshold ? (exemptScore ? 'not held: ' + exemptScore : 'not held: near the line, no second signal') : 'not held for the score' };
-  // ---- LADDER PACKAGE (2026-11-09, rule 4, v5/code/_ladder_rules.js LRU.verdictStop): an AVOID or clearly-low verdict STOPS a ladder page ----
+  // ---- LADDER PACKAGE (2026-11-09, rule 4; review H3 / H4 2026-11-10): an explicit AVOID STOPS a new ladder page; a low score never does ----
   // Production 2026-11-03 (techand.ai, ladder "crm service provider"): the rung "crm for customers" scored 30, AVOID, and was written and
-  // published, because a ladder's page runs carry force_content (the AVOID route is skipped) and the score hold exempts ladder pages and runs
-  // automatic ones in shadow. A ladder page with an AVOID verdict, or a score clearly under the line, is now held for real, automatic or not:
-  // nothing is written, the ladder row says "stopped" with this reason (Ladder Row Written), and only "Write it anyway" (hold_ack) writes it.
-  // The owner's 2026-10-29 priority stays: a ladder page whose own address is already a live page of the site (the guide that ranks, exec 949:
-  // dup.self) is never stopped for its score, only for an AVOID verdict.
-  const ladderOwnLive = ((dup && dup.self) || []).length > 0;
-  const ladderStop0 = (writes && ladderPage && !PU) ? LRU.verdictStop({ verdict: EV56.withheld ? '' : S(verdict.verdict), score: runScore, ack: !!ack }) : { stop: false, reason: '', band: '' };
-  const ladderStop = ladderStop0.stop && ladderStop0.band === 'clearly_low' && ladderOwnLive ? { stop: false, reason: '', band: '', exempt: 'its own page is already live' } : ladderStop0;
-  const would = writes && !ack && ((!PU && (valueHit || dupHit || existingHit)) || ladderStop.stop);   // ladderStop already needs pages that were read   // W07-A: never a hold (score, duplicate or existing page) on pages nobody read
-  const mode = !writes ? 'off' : ladderStop.stop ? 'enforce' : automatic ? CFG.automatic : 'enforce';
+  // published, because a ladder's page runs carry force_content (the AVOID route is skipped) and the score hold exempts ladder pages. Now:
+  //   * an explicit AVOID verdict on a ladder page that is NOT its own live page is held for real (automatic or not): nothing is written, the
+  //     ladder row says "stopped" with the reason (Ladder Row Written), the client gets a Needs-you item, and only "Write it anyway" writes it;
+  //   * a score under 40 (the owner's D17 rule: automatic holds stay in shadow until the owner reviewed the first 20) is only RECORDED: a
+  //     shadow hold (would_hold, hold_shadow, kind ladder_low), the page is written as before;
+  //   * the ladder's own live page (a refresh of its own address: existing_page_url = its planned address, or the address that is already
+  //     the keyword's page, dup.self; the guide that ranks, exec 949) is never stopped nor shadow-held for its score; an AVOID there is recorded.
+  const ladderOwnLive = (!!S(prev.existing_page_url) && (!S(prev.ladder_target_url) || LRU.urlKey(prev.existing_page_url) === LRU.urlKey(prev.ladder_target_url)))
+    || (((dup && dup.self) || []).length > 0);
+  const ladderV = (writes && ladderPage && !PU && !ack) ? LRU.verdictStop({ verdict: EV56.withheld ? '' : S(verdict.verdict), score: runScore, ack: false }) : { stop: false, reason: '', band: '' };
+  const ladderStop = ladderV.stop && ladderV.band === 'avoid' && !ladderOwnLive ? ladderV : { stop: false, reason: '', band: '' };
+  const ladderLow = ladderV.stop && !ladderStop.stop && !(ladderOwnLive && ladderV.band === 'clearly_low') ? ladderV : null;   // recorded, never a stop
+  const would = writes && !ack && ((!PU && (valueHit || dupHit || existingHit)) || ladderStop.stop || !!ladderLow);   // ladderStop / ladderLow already need pages that were read
+  const onlyLow = !!ladderLow && !ladderStop.stop && !valueHit && !dupHit && !existingHit;   // W07-A: never a hold (score, duplicate or existing page) on pages nobody read
+  const mode = !writes ? 'off' : ladderStop.stop ? 'enforce' : onlyLow ? 'shadow' : automatic ? CFG.automatic : 'enforce';
   const kw = S(prev.keyword);
   const reasons = [];
   const demandText = 'little demand (' + (volume === 0 ? 'no measured searches' : 'about ' + volume + ' searches a month') + (gsc.read ? ' and no impressions for your site in Search Console' : '') + ')';
+  if (writes && ladderLow) reasons.push('Recorded, not a stop: ' + ladderLow.reason + ' for this page of your keyword ladder' + (S(prev.ladder_head) ? ' "' + S(prev.ladder_head) + '"' : '')
+    + (ladderOwnLive ? ' (it is the page your website already has for this search, so it is improved as planned)' : ', so it is written as planned') + '.');
   if (writes && ladderStop.stop) reasons.push('This page of your keyword ladder' + (S(prev.ladder_head) ? ' "' + S(prev.ladder_head) + '"' : '') + ' is stopped: ' + ladderStop.reason
     + ((verdict.reasons || [])[0] ? ': ' + String(verdict.reasons[0]).replace(/\s+/g, ' ').slice(0, 260) : '') + '. Nothing was written for it; choose "Write it anyway" if you want this page all the same.');
   if (writes && valueHit) reasons.push('Our verdict scored "' + kw + '" ' + score + ' out of 100' + (score < CFG.clear ? ', clearly under the ' + CFG.threshold + ' we write without asking'
@@ -324,7 +331,7 @@ const HOLD = (() => {
     if (kc && S(kc.keyword) && S(kc.keyword).toLowerCase() !== kw.toLowerCase()) addAlt({ kind: 'rung', label: 'Write the planned page', keyword: S(kc.keyword), ladder_id: S(kc.ladder_id),
       why: S(kc.note) || 'this search is already planned on your website' });
   }
-  const hold = would ? { score, threshold: CFG.threshold, clear: CFG.clear, kinds: [ladderStop.stop ? 'ladder_stop' : '', valueHit ? 'score' : '', (dupHit || existingHit) ? 'duplicate' : ''].filter(Boolean), reasons, alternatives,
+  const hold = would ? { score, threshold: CFG.threshold, clear: CFG.clear, kinds: [ladderStop.stop ? 'ladder_stop' : '', ladderLow ? 'ladder_low' : '', valueHit ? 'score' : '', (dupHit || existingHit) ? 'duplicate' : ''].filter(Boolean), reasons, alternatives,
     ladder_stop: ladderStop.stop ? { band: ladderStop.band, reason: ladderStop.reason, ladder_id: S(prev.ladder_id), rung: prev.ladder_rung } : null,
     duplicates: dupHit ? dup.targets : existingHit ? [{ url: EXP.url, title: S(EXP.title) }] : [], mode, held: mode === 'enforce', readings,
     rule: 'A page waits for your OK when our verdict scores its keyword under ' + CFG.clear + ' out of 100, or under ' + CFG.threshold + ' when the search also has little demand, or when your website already has a page for the same search.',

@@ -45,15 +45,19 @@ const out = state.map(st => {
     const owners = ((sites0.find(x => x.site_id === st.site_id) || {}).owners) || [];   // LADDER PACKAGE (rule 1): other searches' addresses
     const { log_row, ladder_row, url_conflict } = publishedRows({ site_id: (c.log && c.log.site_id) || st.site_id, domain: st.domain, keyword, url: p.url, log: c.log, ladder: c.ladder, request_id: '', now, live, owners });
     if (!live) continue;
-    if (url_conflict) { conflicts.push({ keyword, url: p.url, note: url_conflict.text }); continue; }   // never recorded live on another search's page
+    // review H2 (2026-11-10): the content log always records where a page went live (so no row waits as "written" for ever and trips the
+    // pile-up guard); only the ladder row is left where it was when the address belongs to another search (a deliberate refresh comes back
+    // as `merged` from publishedRows and is stored)
+    if (url_conflict) conflicts.push({ keyword, url: p.url, note: url_conflict.text });
     log_rows.push(log_row); if (ladder_row) ladder_rows.push(ladder_row);
     if (log_row.source === 'case_study' || /case stud/i.test(log_row.page_type)) case_rows.push({ site_id: log_row.site_id, keyword: log_row.keyword, page_url: p.url });
     detected.push({ keyword, url: p.url, ladder_id: log_row.ladder_id || (c.ladder ? c.ladder.ladder_id : ''), matched_by: p.matched_by, source: c.source });
   }
   const unmatched = [...(st.candidates || []).filter(c => !matched.has(c.key)).map(c => ({ keyword: c.keyword, note: (st.notes || {})[c.key] || (c.address_taken ? 'its old address ' + LRU.pathOf(c.address_taken.url) + ' is the page for "' + c.address_taken.keyword + '", so it is looked for at its own address only' : '') })),
-    ...conflicts.map(x => ({ keyword: x.keyword, note: x.note }))];
+    ];
+  const address_notes = conflicts.map(x => ({ keyword: x.keyword, url: x.url, note: x.note }));   // LADDER PACKAGE: carried in this node's output (the page went live there; its ladder row stays where it was)
   // D11: the sitemap URLs this run read, plus the title / H1 of the pages it fetched, feed the week's page inventory (seo_pages)
   const titles = (st.fetches || []).map(u => { const pg = pages.get(u); return (pg && pg.ok) ? { url: u, title: pg.title, h1: pg.h1 } : null; }).filter(Boolean);
-  return { json: { site_idx: st.site_idx, site_id: st.site_id, domain: st.domain, candidates: (st.candidates || []).length, sitemap: st.sitemap, pages_fetched: (st.fetches || []).length, detected, log_rows, ladder_rows, case_rows, unmatched, inventory: st.inventory || [], page_titles: titles } };
+  return { json: { site_idx: st.site_idx, site_id: st.site_id, domain: st.domain, candidates: (st.candidates || []).length, sitemap: st.sitemap, pages_fetched: (st.fetches || []).length, detected, log_rows, ladder_rows, case_rows, unmatched, address_notes, inventory: st.inventory || [], page_titles: titles } };
 });
 return out.length ? out : [{ json: { skip: true, reason: 'nothing to match' } }];   // the chain must reach the Search Console part in every case
