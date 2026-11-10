@@ -12,6 +12,8 @@ import {
   indexImprovementsOf,
   indexMergePairs,
   indexMergeVerdict,
+  isSiteRoot,
+  type SiteTaskPairCheck,
   mergePairsOf,
   type ContentLogRow,
   type LadderRow,
@@ -96,6 +98,8 @@ export function ladderMovesOf(rows: readonly (Pick<LadderRow, 'status' | 'target
   for (const r of rows) {
     const m = String(r.target_why ?? '').match(/^moved from (https?:\/\/[^\s:]+(?::\d+)?[^\s:]*):/);
     if (String(r.status ?? '') !== 'published' || !m || !r.target_url) continue;
+    // prod 2026-11-10: never ask a client to redirect their home page (a main page planned as an update of it is a page of its own)
+    if (isSiteRoot(m[1])) continue;
     // re-review N1: never a redirect from an address another ladder page holds (it may be a live rung page)
     if (rows.some((o) => o !== r && key(String(o.target_url ?? '')) === key(m[1]) && String(o.status ?? '') !== 'merged')) continue;
     out.push({ url: m[1], to: String(r.target_url), at: String(r.updatedAt ?? '') });
@@ -386,6 +390,8 @@ export interface CheckOutcome {
   googleSees?: boolean;
   /** with reached false (RC-3, AIR): the step is checked on an address the client gives, and none was given: the client is asked for it */
   needsAddress?: boolean;
+  /** prod 2026-11-10 (`index_merge`): each pair's own result, stored with the reading (the Content page says "Moved" for the done ones) */
+  pairs?: SiteTaskPairCheck[];
 }
 
 const hostOf = (url: string) => cleanDomain(url.match(/^https?:\/\/([^/?#:]+)/i)?.[1] ?? '');
@@ -466,10 +472,12 @@ async function checkMerge(domain: string, payload: Record<string, unknown>): Pro
       return indexMergeVerdict({ from, to }, first, end ? { status: end.status, finalUrl: end.finalUrl } : null, other);
     }),
   );
+  // the stored pair (not the form we followed it to), with what we found: a pair that did not answer is not done
+  const each: SiteTaskPairCheck[] = pairs.map((x, i) => ({ from: x.from, to: x.to, done: out[i].done }));
   const open = out.filter((v) => !v.done);
   if (open.some((v) => !v.reached) && !open.some((v) => v.reached)) return { ok: false, reached: false, message: open.map((v) => v.message).join(' ') };
-  if (!open.length) return { ok: true, reached: true, message: out.map((v) => v.message).join(' ') };
-  return { ok: false, reached: true, message: open.map((v) => v.message).join(' ') };
+  if (!open.length) return { ok: true, reached: true, message: out.map((v) => v.message).join(' '), pairs: each };
+  return { ok: false, reached: true, message: open.map((v) => v.message).join(' '), pairs: each };
 }
 
 /** A website's sitemap addresses and whether the whole tree was read (FIX_CONTRACT decision 2, A1). */
@@ -858,7 +866,7 @@ export function runSiteTaskCheck(domain: string, kind: SiteTaskKind, payload: Re
 
 async function recordCheck(row: Pick<SiteTaskRow, 'id'>, out: CheckOutcome, by: SiteTaskCheckBy, who?: string): Promise<void> {
   const now = new Date();
-  const check: SiteTaskCheck = { at: now.toISOString(), ok: out.ok, message: out.message, by, ...(who ? { who } : {}) };
+  const check: SiteTaskCheck = { at: now.toISOString(), ok: out.ok, message: out.message, by, ...(who ? { who } : {}), ...(out.pairs ? { pairs: out.pairs } : {}) };
   await db
     .update(schema.siteTasks)
     // `done_at` keeps its stored value on a miss (never a stale copy read before the check started)

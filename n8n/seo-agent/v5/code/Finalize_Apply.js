@@ -1,4 +1,5 @@
 /*__PAGE_FIX__*/
+/*__CRITIC_REREAD__*/
 // H3 (2026-10-28, page review): the client's answers applied to the page, deterministically where a sentence can simply be swapped, and an edit
 // job (one section in, one section out) only where a fact has to be worked into the text:
 //   yes     the neutral wording (or the call-to-action line that took the sentence's place) becomes the original specific sentence
@@ -145,6 +146,26 @@ for (const a of (F.answers || [])) {
   task(part, 'Put this sentence into this section, word for word (it is confirmed by the business), inside the paragraph it belongs to, never as a paragraph of its own at the end: "' + text + '"', { ...a, text });
   applied.push({ id: a.id, how: 'placed', section: part.heading });
 }
+// client reports 2026-11-10 (devaicon.com, section 184C): a page held at 59 by the second read stayed at 59 after the client answered every
+// question, because nothing here ever touched the sentence the read flagged (a claim the WRITER made up: "Our engineers work with Python and
+// Django"); the client cannot answer for words they did not write. Each finding of the page run that still blocks by today's rule
+// (RR.textError: unsupported, wrong, contradicted by its source, a count that does not match its list) and whose words are still on the page
+// becomes an edit task for its section: rewrite the sentence to what the facts given support, or remove it. The client's own sentences are
+// never rewritten. Finalize Verdict keeps the finding open while its words are on the page, so an edit that is refused changes nothing.
+const review_fixes = [];
+{ const clientSays = (F.client_sentences || []).map(norm).filter(Boolean);
+  const reviewTask = (part, line) => { const t = tasks.get(part.id) || { id: part.id, heading: part.heading, tasks: [], answers: [], must_contain: [], weave: [], hosts: [], texts: [] }; t.tasks.push(line); tasks.set(part.id, t); };
+  for (const b of (((P.prc || {}).gating || {}).qa_blocking || [])) {
+    if (S(b && b.code) !== 'review') continue;
+    const err = RR.textError(S(b.text)); if (!err) continue;
+    const m = S(b.text).match(/at "([^"]{8,400})":\s*([\s\S]*)$/); if (!m) continue;
+    const quote = m[1], issue = m[2].replace(/[.;:]+$/, '');
+    if (!PF.onPage(quote, md)) continue;
+    const nq = norm(quote).slice(0, 80); if (clientSays.some(c => c.includes(nq))) { review_fixes.push({ quote, how: 'client_sentence' }); continue; }
+    const part = PF.split(md).parts.find(p0 => PF.onPage(quote, p0.text)); if (!part) continue;
+    reviewTask(part, 'A second read of the page found a problem with the sentence that starts "' + quote.slice(0, 160) + '": ' + issue
+      + '. Rewrite that sentence so it says only what the facts given support, in the same place and keeping its links, or remove it when nothing given supports it. Never add a claim, number, name or credential to make it true.');
+    review_fixes.push({ quote, error: err, section: part.heading, how: 'edit_task' }); } }
 md = PF.tidy(md);
 const sp = PF.split(md);
 const keep = (F.client_sentences || []);
@@ -175,5 +196,5 @@ const editor_prompt = !sections.length ? '' : [
   ...sections.map(s => ['=== SECTION ' + s.id + ' (' + (s.heading || 'introduction') + ') ===', 'TASKS:', ...s.tasks.map((t, i) => (i + 1) + '. ' + t),
     ...(s.keep.length ? ['KEEP WORD FOR WORD:', ...s.keep.map(k => '- ' + k)] : []), 'CURRENT TEXT:', s.text.trim(), '=== END ' + s.id + ' ===', ''].join('\n'))
 ].join('\n');
-return [{ json: { ...P, output: md, finalize_apply: { applied, changes, notes, jobs: sections.map(s => ({ id: s.id, heading: s.heading, text: s.text, tasks: s.tasks, answers: s.answers, must_contain: s.must_contain, weave: s.weave, hosts: s.hosts, texts: s.texts, keep: s.keep, problems: s.tasks })) },
+return [{ json: { ...P, output: md, finalize_apply: { applied, changes, notes, review_fixes, jobs: sections.map(s => ({ id: s.id, heading: s.heading, text: s.text, tasks: s.tasks, answers: s.answers, must_contain: s.must_contain, weave: s.weave, hosts: s.hosts, texts: s.texts, keep: s.keep, problems: s.tasks })) },
   needs_editor: sections.length > 0, editor_prompt } }];

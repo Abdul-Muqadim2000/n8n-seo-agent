@@ -273,7 +273,8 @@ module.exports = async (ctx) => {
     const base = await chain({ ...clone(BODY), page_run: gating([]) });
     const quote = firstWords(base.markdown, 10);
     check('a sentence of the final version to quote', quote.split(' ').length >= 8, quote);
-    const REV = (q) => ({ code: 'review', text: 'A second read of the page found a problem at "' + q + '": this market figure rests only on an agency blog', action: 'correct or remove the words the second read quoted, or check them against a source you trust' });
+    // client reports 2026-11-10 (184C): a stored finding is judged again by today's rule, so this one says what a blocker says (unsupported)
+    const REV = (q) => ({ code: 'review', text: 'A second read of the page found a problem at "' + q + '": the facts on file do not say the business does this, so it is an unsupported claim', action: 'correct or remove the words the second read quoted, or check them against a source you trust' });
     const kept = await chain({ ...clone(BODY), page_run: gating([REV(quote)]) });
     show('final version with a review blocker on the page', { status: kept.delivery_status, kept_open: kept.page_run.kept_open, resolved: kept.page_run.resolved });
     check('kept open while its words are on the page: not ready, the blocker shown', kept.page_run.kept_open.includes('review') && kept.delivery_status === 'not_ready' && kept.delivery.blocking.some(b => b.code === 'review'), J(kept.page_run));
@@ -282,6 +283,51 @@ module.exports = async (ctx) => {
     const wf = await chain({ ...clone(BODY), page_run: gating([{ code: 'weak_figure', text: 'A figure whose only source has no independent authority (x.example): "a figure"', action: '' }]) });
     check('a weak figure of the page run is measured again by the final check (not carried blindly)', wf.page_run.resolved.includes('weak_figure:rechecked') && !wf.page_run.kept_open.includes('weak_figure'), J(wf.page_run));
     check('the final version without these blockers is judged as before (same status as with none)', gone.delivery_status === base.delivery_status && wf.delivery_status === base.delivery_status, J([base.delivery_status, gone.delivery_status, wf.delivery_status]));
+  });
+
+  // ---------- W0H7b client reports 2026-11-10 (section 184B / 184C): what finalize judges again ----------
+  await guard('W0H7b finalize re-judge', async () => {
+    const SN = 'W0H7b (client reports 2026-11-10) the final version: a second-read finding that is not an error is advice (no 59), one that is unsupported becomes an edit task for its section, and a duplicate aimed at another market is not the same search';
+    reset(); begin(SN); const check = mkCheck(SN);
+    const CB = F99.nodes['Build Webhook Response']['0'].items[0].json;
+    const BODY = F36.nodes['Finalize Webhook']['0'].items[0].json.body;
+    const EDITOR = F36.nodes['Finalize Editor']['0'].items;
+    const gating = (qab, dups) => ({ qa_blocking: qab, duplicate_targets: dups || [], verdict: CB.verdict == null ? null : CB.verdict, score: CB.score == null ? null : CB.score, score_withheld: false,
+      page_type: ((CB.meta || {}).page_type) || '', verdict_acknowledged: false, copied_passages: [], content_request_id: CB.request_id || '', length_points: null });
+    let lastApply = null;
+    const chain = async (body) => {
+      reset(); delete store['Finalize Editor'];
+      const pb = await run('Parse Brief', [{ json: { body, headers: {} } }], { code: 'Finalize__Parse_Brief' });
+      mock('Finalize Plan', pb);
+      const ap = await run('Finalize Apply', pb, { code: 'Finalize__Finalize_Apply' }); lastApply = ap[0].json;
+      if (ap[0].json.needs_editor) mock('Finalize Editor', clone(EDITOR));
+      const mg = await run('Finalize Merge', ap, { code: 'Finalize__Finalize_Merge' });
+      const qa = await run('Content QA', mg, { code: 'Finalize__Content_QA' });
+      const oc = await run('Originality Check', qa, { code: 'Finalize__Originality_Check' });
+      return (await run('Finalize Verdict', oc, { code: 'Finalize__Finalize_Verdict' }))[0].json.body;
+    };
+    const base = await chain({ ...clone(BODY), page_run: gating([]) });
+    const quote = firstWords(base.markdown, 10);
+    const ADV = { code: 'review', text: 'A second read of the page found a problem at "' + quote + '": it never mentions the office or the support hours, which are the proof points this buyer needs', action: '' };
+    const a = await chain({ ...clone(BODY), page_run: gating([ADV]) });
+    check('a finding that only says something is missing elsewhere: resolved as advice, shown to the client, never kept open', a.page_run.resolved.includes('review:advice') && !a.page_run.kept_open.includes('review')
+      && (a.delivery.advisory || []).some(x => x.code === 'second_read' && /suggests a change at/.test(x.text)), J({ pr: a.page_run, adv: (a.delivery.advisory || []).map(x => x.code) }));
+    check('... and the version is judged as with no blocker', a.delivery_status === base.delivery_status, J([a.delivery_status, base.delivery_status]));
+    const UNS = { code: 'review', text: 'A second read of the page found a problem at "' + quote + '": the facts on file do not say the business does this, so it is an unsupported claim', action: '' };
+    const u = await chain({ ...clone(BODY), page_run: gating([UNS]) });
+    const rf = (lastApply.finalize_apply || {}).review_fixes || [];
+    check('an unsupported claim still on the page becomes an edit task for its section (the editor is called)', lastApply.needs_editor === true && rf.some(x => x.how === 'edit_task' && x.error === 'claim')
+      && /A second read of the page found a problem with the sentence that starts/.test(lastApply.editor_prompt) && /Never add a claim, number, name or credential/.test(lastApply.editor_prompt), J(rf));
+    check('... and stays open while its words are on the page (the recorded editor answer did not rewrite it)', u.page_run.kept_open.includes('review') && u.delivery_status === 'not_ready', J(u.page_run));
+    // the duplicate: devaicon's "AI Automation Services in Pakistan" page for a UAE page
+    const PKU = 'https://devaicon.com/ai-automation-services-pakistan';
+    const DUPB = { code: 'duplicate_page', text: 'This website already has a page for the same search: ' + PKU + '. Publish this text as an update of that page, or tell us how the new page differs', urls: [PKU] };
+    const DT = [{ url: PKU, title: 'AI Automation Services in Pakistan | ISO 27001 | Devaicon', keyword_words_shared_pct: 100 }];
+    const ae = await chain({ ...clone(BODY), country: 'United Arab Emirates', page_run: gating([DUPB], DT) });
+    check('UAE final version: the Pakistan page is not the same search (resolved, advice to link the two)', ae.page_run.resolved.includes('duplicate_page:other_market') && !ae.page_run.kept_open.includes('duplicate_page')
+      && (ae.delivery.advisory || []).some(x => x.code === 'duplicate_other_market' && /aimed at searches in pakistan/i.test(x.text)), J({ pr: ae.page_run, adv: ae.delivery.advisory }));
+    const pk = await chain({ ...clone(BODY), country: 'Pakistan', page_run: gating([DUPB], DT) });
+    check('Pakistan final version: still the same search, kept open', pk.page_run.kept_open.includes('duplicate_page'), J(pk.page_run));
   });
 
   // ---------- W0H8 the guide that ranks ----------

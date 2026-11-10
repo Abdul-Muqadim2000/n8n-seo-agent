@@ -28,7 +28,13 @@ const ladder = (log && log.ladder_id && logKw ? onSite.find(l => l.ladder_id ===
 const bodyOf = (r) => { const b = r && (r.body != null ? r.body : r.data); return typeof b === 'string' ? b : (b ? JSON.stringify(b) : ''); };   // the HTTP node puts text responses under `data` (live finding 2026-10-02)
 const status = Number(r.statusCode) || 0; const body = bodyOf(r);
 const fetchErr = r.error ? String(r.error.message || r.error.description || r.error).slice(0, 160) : null;
-const pick1 = (re) => { const x = body.match(re); return x ? x[1].replace(/\s+/g, ' ').trim() : ''; };
+// production 2026-11-10 (devaicon.com): a title tag is HTML, so "Banking &amp; Financial Services Technology | Devaicon" failed "Title tag uses
+// the keyword" for "banking & financial services technology" (norm() read "amp" as a word). Entities are decoded before any check reads them.
+const decodeEnt = (t) => String(t || '').replace(/&#x([0-9a-f]{1,6});/gi, (m, h) => { const n = parseInt(h, 16); return n > 0 && n < 0x110000 ? String.fromCodePoint(n) : ' '; })
+  .replace(/&#(\d{1,7});/g, (m, n) => (Number(n) > 0 && Number(n) < 0x110000 ? String.fromCodePoint(Number(n)) : ' '))
+  .replace(/&(?:amp|AMP);/g, '&').replace(/&quot;/gi, '"').replace(/&apos;/gi, "'").replace(/&nbsp;/gi, ' ').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
+  .replace(/&(?:rsquo|lsquo);/gi, "'").replace(/&(?:rdquo|ldquo);/gi, '"').replace(/&(?:ndash|mdash);/gi, '-');
+const pick1 = (re) => { const x = body.match(re); return x ? decodeEnt(x[1]).replace(/\s+/g, ' ').trim() : ''; };
 const title = pick1(/<title[^>]*>([\s\S]*?)<\/title>/i);
 const h1 = pick1(/<h1[^>]*>([\s\S]*?)<\/h1>/i).replace(/<[^>]+>/g, '').trim();
 const metaDesc = pick1(/<meta[^>]+name=["']description["'][^>]*content=["']([^"']*)["']/i) || pick1(/<meta[^>]+content=["']([^"']*)["'][^>]*name=["']description["']/i);
@@ -36,7 +42,7 @@ const canonical = pick1(/<link[^>]+rel=["']canonical["'][^>]*href=["']([^"']+)["
 const robotsMeta = pick1(/<meta[^>]+name=["']robots["'][^>]*content=["']([^"']*)["']/i); const hdrs = r.headers || {}; const xRobots = String(hdrs['x-robots-tag'] || '');
 const noindex = /noindex/i.test(robotsMeta) || /noindex/i.test(xRobots);
 const jsonld = (body.match(/application\/ld\+json/gi) || []).length;
-const text = body.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+const text = decodeEnt(body.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ');
 const words = text.split(' ').filter(Boolean).length;
 const kwIn = (s) => !!kw && norm(s).includes(kw);
 const live = status === 200 && !fetchErr;
@@ -289,11 +295,22 @@ function verifyPublished(o) {
   for (const r of (o.logs || [])) if (r && onSite(r) && !sameRow(r) && String(r.status) === 'published' && hostless(r.published_url) === here && normK(r.keyword) && normK(r.keyword) !== kwKey) owners.push(String(r.keyword));
   for (const r of (o.ladders || [])) if (r && onSite(r) && !(ladder && r.ladder_id === ladder.ladder_id && r.keyword === ladder.keyword) && (String(r.status) === 'published' || r.page_exists === true || r.page_exists === 'true') && hostless(r.target_url) === here && normK(r.keyword) && normK(r.keyword) !== kwKey) owners.push(String(r.keyword));
   const others = [...new Set(owners.map(k => String(k).trim()))];
-  const refreshHere = refresh && hostless(refreshOf) === here;
+  // production 2026-11-10 (devaicon.com): the client published four updates at new /services/ addresses, then redirected every old address
+  // there with a permanent (301) redirect, as we had asked; "Re-check page" still answered "sent at another address than the page it
+  // updates", because nothing here looked at the old address. A permanent redirect (301 / 308) from the page the draft updates to the
+  // address sent IS the move done right: Google treats them as one page. o.redirect = { status, location } of the old address, read
+  // without following redirects (Fetch Updated Address); a temporary redirect (302 / 307) is not a move.
+  const R0 = o.redirect && typeof o.redirect === 'object' ? o.redirect : null;
+  const absLoc = (loc) => { const l = String(loc || '').trim(); if (!l) return ''; if (/^https?:\/\//i.test(l)) return l; if (/^\/\//.test(l)) return 'https:' + l; const h = (String(refreshOf).match(/^(https?:\/\/[^\/?#]+)/i) || [])[1] || ''; return h && /^\//.test(l) ? h + l : l; };
+  const movedHere = !!(refresh && R0 && [301, 308].includes(Number(R0.status)) && hostless(absLoc(R0.location)) === here);
+  // a page planned as an update of the HOME page and published at its own address is a page of its own: a home page is never redirected
+  const homeOf = refresh && /^[^\/]+$/.test(hostless(refreshOf));
+  const refreshHere = refresh && (hostless(refreshOf) === here || movedHere);
   const byWords = inTitle || inH1 || draftMatch;
-  const matched = byWords || (!refresh && textHits >= 3);
+  const asNew = !refresh || (homeOf && !refreshHere);   // a home-page update published at its own address is judged as a new page
+  const matched = byWords || (asNew && textHits >= 3);
   const evidence = { title, h1, keyword_in_title: inTitle, keyword_in_heading: inH1, keyword_in_text: textHits, draft_title: clip(draft.title, 160), draft_heading: clip(draft.h1, 160), draft_match: draftMatch,
-    refresh_of: refreshOf, used_by: others.slice(0, 3) };
+    refresh_of: refreshOf, used_by: others.slice(0, 3), ...(R0 ? { old_address: { status: Number(R0.status) || 0, location: absLoc(R0.location).slice(0, 300), moved_here: movedHere } } : {}) };
   const kwq = '"' + String(o.keyword || '').trim() + '"';
   const seen = 'Its title is "' + (title || 'none') + '" and its main heading is "' + (h1 || 'none') + '".';
   let verify = 'ok', message = '', missing = [], note = '';
@@ -301,20 +318,22 @@ function verifyPublished(o) {
     verify = 'address_used_by_other_keyword';
     message = 'This address is already the published page for "' + others[0] + '"' + (others.length > 1 ? ' (and ' + (others.length - 1) + ' more)' : '') + '. One page can only be recorded for one keyword here, so nothing was marked published. Send the address of the page written for ' + kwq + '. If one page should now cover both searches, write this draft as an update of that page first.';
     missing = ['an address that is not already recorded for another keyword'];
-  } else if (refresh && !refreshHere) {
+  } else if (refresh && !refreshHere && !homeOf) {
     verify = 'refresh_other_address';
     message = 'This draft was planned as an update of ' + refreshOf + ', but you sent ' + o.url + '. Nothing was marked published. Send the address of the page it updates, or confirm that you published it at this new address. '
       + 'If you confirm, redirect the old address to the new one with a permanent (301) redirect: while both open, the two pages compete for the same search.';
     missing = ['the address of the page this draft updates'];
   } else if (!matched) {
-    verify = refresh ? 'refresh_not_live' : 'not_the_draft';
-    missing = [refresh ? 'the keyword ' + kwq + ' in the title or main heading' : 'the keyword ' + kwq + ' in the title, the main heading or the text']
+    verify = !asNew ? 'refresh_not_live' : 'not_the_draft';
+    missing = [!asNew ? 'the keyword ' + kwq + ' in the title or main heading' : 'the keyword ' + kwq + ' in the title, the main heading or the text']
       .concat((draft.title || draft.h1) ? ['the title of the page that was written ("' + clip(draft.title || draft.h1, 120) + '")'] : []);
-    message = refresh
+    message = !asNew
       ? 'This draft is an update of this page, but the update does not look live yet. ' + seen + ' Neither uses ' + kwq + (draft.title ? ' or the new title "' + clip(draft.title, 120) + '"' : '') + '. Nothing was marked published. Put the update on the page, then check again. If the update is live, confirm it.'
       : 'This page does not look like the page written for ' + kwq + '. ' + seen + ' Neither uses the keyword' + (draft.title ? ' or the written title "' + clip(draft.title, 120) + '"' : '') + ', and the text uses it ' + (textHits === 1 ? 'once' : textHits ? textHits + ' times' : 'nowhere') + '. Nothing was marked published. Check the address and send it again. If this is the right page, confirm it.';
   }
-  if (verify === 'ok' && refreshHere && others.length) note = 'This page was already the published page for "' + others[0] + '". This draft is its planned update, so the page now carries both keywords.';
+  if (verify === 'ok' && movedHere) note = 'The page this draft updates, ' + refreshOf + ', now redirects here permanently, so Google treats the two addresses as one page.';
+  if (verify === 'ok' && homeOf && !refreshHere) note = 'This draft was planned as an update of your home page. You published it as a page of its own, so it is recorded at this address and your home page stays as it is.';
+  if (verify === 'ok' && refreshHere && others.length) note = (note ? note + ' ' : '') + 'This page was already the published page for "' + others[0] + '". This draft is its planned update, so the page now carries both keywords.';
   const confirmable = verify !== 'ok' && verify !== 'address_used_by_other_keyword';
   const confirmed = confirmable && o.confirm === true;
   // production 2026-11-05 (devaicon.com): an update confirmed at ANOTHER address leaves two pages for one search; the step is a redirect,
@@ -606,7 +625,13 @@ const LRU = (() => {
 const h1Words = (body.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || [null, ''])[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 const verifyText = mainHtml.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<(h[1-6]|p|li|td|th|div|section|br|dt|dd)\b[^>]*>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/[ \t]+/g, ' ');
 const confirmMismatch = d.confirm_mismatch === true || String(d.confirm_mismatch) === 'true';
-const V = live ? verifyPublished({ keyword, url, title, h1: h1Words, text: verifyText, draft: { title: String(d.draft_title || '').slice(0, 300), h1: String(d.draft_h1 || '').slice(0, 300) }, log, ladder, logs, ladders, domain, confirm: confirmMismatch, now })
+// production 2026-11-10: how the page this draft updates answers now, read without following redirects (a permanent redirect to this address is
+// the move done right). Not read (no planned update, the step did not run, or another address was read) is null: the rule is then as before.
+const oldAddr = (() => { const want = String((log || {}).existing_page_url || '').trim(); if (!want) return null; let o0 = null;
+  try { o0 = ($('Fetch Updated Address').first() || {}).json || null; } catch (e) { o0 = null; }
+  if (!o0 || o0.error) return null; const st = Number(o0.statusCode != null ? o0.statusCode : o0.status) || 0; if (!st) return null;
+  const H = o0.headers || {}; const loc = String(H.location || H.Location || '').trim(); return { status: st, location: loc }; })();
+const V = live ? verifyPublished({ keyword, url, title, h1: h1Words, text: verifyText, draft: { title: String(d.draft_title || '').slice(0, 300), h1: String(d.draft_h1 || '').slice(0, 300) }, log, ladder, logs, ladders, domain, confirm: confirmMismatch, now, redirect: oldAddr })
   : { verified: false, verify: 'not_live', accepted: false, confirmed: false, confirmable: false, message: '', missing: [], note: '', evidence: null, publish_note: '' };
 // INVARIANTS rule 4: the proof is HTTP 200 from this very URL in this run AND the page shown to be the draft (or the owner's confirmation
 // after the warning, stored with its reason). Without it nothing here says the page exists.

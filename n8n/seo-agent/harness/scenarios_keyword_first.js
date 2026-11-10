@@ -506,6 +506,14 @@ module.exports = async (ctx) => {
     const am = await planCase(caseOf('approval_keyword_only_two_items')), as = await planCase(caseOf('approval_by_source'));
     check('a keyword-only approval that fits two different pages writes neither and says so (ambiguous)', !am.picks.some(p => p.approved) && (am.facts.approved_not_written || []).some(x => x.reason === 'ambiguous'), JSON.stringify(am.facts.approved_not_written));
     check('an approval naming its source writes exactly that item', as.picks.filter(p => p.approved).length === 1 && as.picks.find(p => p.approved).source === 'decay', JSON.stringify(ks(as.picks)));
+    // client reports 2026-11-10 (section 184D, devaicon.com): an approval whose item is no longer offered is reported, never dropped in silence
+    check('no approval is reported as "no longer offered" while its item is offered', !(as.facts.approved_not_written || []).some(x => x.reason === 'no_longer_offered') && !(am.facts.approved_not_written || []).some(x => x.reason === 'no_longer_offered'), JSON.stringify([as.facts.approved_not_written, am.facts.approved_not_written]));
+    const gone0 = caseOf('approval_by_source'); const sk0 = gone0.tables.skips[0];
+    gone0.tables.skips.push({ ...sk0, key: sk0.key.replace(sk0.item_key, 'ai industrial automation pakistan'), item_key: 'ai industrial automation pakistan', source: 'ai_refresh' });
+    const gone = await planCase(gone0);
+    const nl = (gone.facts.approved_not_written || []).find(x => x.reason === 'no_longer_offered');
+    check('an approved AI refresh whose question left the list is reported as no_longer_offered with a plain reason; the other approval still writes',
+      !!nl && nl.keyword === 'ai industrial automation pakistan' && /taken off your questions to win/.test(nl.detail) && gone.picks.filter(p => p.approved).length === 1, JSON.stringify([gone.facts.approved_not_written, ks(gone.picks)]));
   });
 
   await guard('KF15 keyword-first safety: every script', async () => {

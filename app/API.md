@@ -403,6 +403,14 @@ local, so two cycles never run days apart. Audited `site.cycle_weekday_changed` 
 `refused`, `autoCredits`, `canDecide`, `closed` (the cycle started: decisions are refused with 409). `ComingUpItem`: `itemKey`,
 `keyword`, `source`, `pageType`, `existingPageUrl`, `ladderId`, `rung`, `why`, `auto`, `credits`, `aiTarget` (question, kind, target id,
 searches, sources, competitors), `decision` (the newest: a skip beats an approval, as in the engine), `canSkip`, `canApprove`.
+I3 (2026-11-10): `phase` ('upcoming' before the due time; 'running' while the cycle's `content_cadence` job has not finished; 'done'
+once it finished, its `content_cadence` report of the same `cycle_key` arrived, a later cycle began, or 24 h passed with no word),
+`outcome` (done only: `known`, `at`, `pages[]` the run started with `state` written / started / failed and the page's `reportId`,
+`pausedReason`, `waitingPublish`, `note`), `nextPreviewAt` / `nextDueAt` (the website's cycle; only future times). Once done, each
+approved item carries `result` (`state`, `at`, `reportId`, `message`): its page from `outcome.pages`, else the reason the run's report
+gives in `approved_not_written` (reason `no_longer_offered` with the engine's plain `detail`), else the plan's, else the run's pile-up,
+else "Not written in that run." (no reason invented). `approvedNotWritten` then lists only approvals no row of the plan shows. The
+pile-up banner of a coming run follows the Pipeline's live `queue.paused` / `queue.waiting`, not the plan's frozen `pausedReason`.
 
 **Decisions** write the engine's `seo_skips` (`SkipRow`, key `skipKey(site_id, scope, cycle_key, itemKey)`; the table is created with
 its columns if missing): `skip` for this cycle or `always`; `approve` for this cycle only (a needs-OK item is then written in the cycle,

@@ -229,7 +229,7 @@ const HOLD = (() => {
   let MODEL = prev.site_model && typeof prev.site_model === 'object' ? prev.site_model : null;
   if (!MODEL) { try { MODEL = ($('Site Model').first().json || {}).site_model || null; } catch (e) { MODEL = null; } }
   const ownUrl = EXP ? EXP.url : '';
-  const dup = (MODEL && !exemptDup) ? DUP.targets(prev.keyword, SM.pages(MODEL), { skip: [ownUrl, S(prev.existing_page_url)], self: [S(prev.ladder_target_url)], self_aware: true, slug_self: true, ladder: ladderPage })
+  const dup = (MODEL && !exemptDup) ? DUP.targets(prev.keyword, SM.pages(MODEL), { skip: [ownUrl, S(prev.existing_page_url)], self: [S(prev.ladder_target_url)], self_aware: true, slug_self: true, ladder: ladderPage, market: S(prev.country) })
     : { targets: [], partial: [], self: [], basis: MODEL ? '' : 'no page inventory of the website was available, so a duplicate could not be checked' };
   const dupHit = !EXP && dup.targets.length > 0;   // a page the verdict already redirected the run to (existing_page) is improved, not duplicated
   // W05-B (BEFORE_AFTER K1): the page this run found for the search (confirmed by its own title, heading or searches in Collect Client Pages)

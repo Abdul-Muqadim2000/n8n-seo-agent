@@ -19,8 +19,26 @@
 //     opts.ladder a page of a keyword ladder: a page that carries only PART of the keyword's weight is the ladder's planned neighbour
 //                 (the rung links up to it), listed in `partial` as advice; only a page carrying all of it is a duplicate target
 //     opts.max    targets kept (3)
+//     opts.market the run's market (ISO-2 or the country name, e.g. "United Arab Emirates"): a page whose title / heading / address names only
+//                 places OUTSIDE that market, for a keyword that names none, is aimed at another market's search: listed in `other_market`, never
+//                 a duplicate target (client report 2026-11-10: "ai automation services" for the UAE was held as the duplicate of devaicon's
+//                 "AI Automation Services in Pakistan" page; "ai" has 2 letters, so the rule compared only "automation services")
 const DUP = (() => {
   const S = (v) => String(v == null ? '' : v);
+  // the fit gate's gazetteer (FIT_PLACES_SRC in _fit_gate.js), put here by the build (kit_src.py) so the two never drift; [] = no market check
+  const PLACES_SRC = /*__FIT_PLACES_SRC__*/[];
+  const PL = PLACES_SRC.flatMap(([iso, ws]) => S(ws).split('|').map(w => ({ w, iso: S(iso).split(' ') }))).sort((a, b) => b.w.split(' ').length - a.w.split(' ').length || b.w.length - a.w.length);
+  const placeText = (t) => ' ' + S(t).toLowerCase().replace(/\./g, '').replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+  const placesIn = (t) => { let x = placeText(t); const out = [];
+    for (const p of PL) { const k = ' ' + p.w + ' '; let i = x.indexOf(k); while (i >= 0) { out.push({ word: p.w, iso: p.iso }); x = x.slice(0, i) + ' | ' + x.slice(i + k.length - 1); i = x.indexOf(k); } }
+    return out; };
+  const marketOf = (m) => { const s0 = S(m).trim(); if (/^[A-Za-z]{2}$/.test(s0)) return s0.toUpperCase(); const ps = placesIn(s0); return ps.length && ps.every(p => p.iso.length === 1 && p.iso[0] === ps[0].iso[0]) ? ps[0].iso[0] : ''; };
+  // the place words that put a page in ANOTHER market than `market` (null: same market, no place named, or the keyword itself names elsewhere)
+  const otherMarket = (keyword, page, market) => { const m = marketOf(market); if (!m || !PL.length) return null;
+    if (placesIn(keyword).some(p => !p.iso.includes(m))) return null;
+    const pp = placesIn(S(page && page.title) + ' ' + S(page && page.h1) + ' ' + S(page && page.url).replace(/^https?:\/\/[^\/]+/i, '').replace(/[-_\/]+/g, ' '));
+    if (!pp.length || pp.some(p => p.iso.includes(m))) return null;
+    return [...new Set(pp.map(p => p.word))]; };
   const SHARE = 75, MAX = 3;
   // the tokenizer of SHG (_shingle.js), character for character, so the late check finds what it always found
   const norm = (t) => S(t)
@@ -42,7 +60,7 @@ const DUP = (() => {
   const targets = (keyword, pages, opts) => {
     const o = opts || {};
     const kw = toks(keyword);
-    const out = { targets: [], partial: [], self: [], keyword_words: kw.size, basis: '' };
+    const out = { targets: [], partial: [], self: [], other_market: [], keyword_words: kw.size, basis: '' };
     if (!kw.size) { out.basis = 'the keyword has no word of 3 letters or more to compare'; return out; }
     const list = (Array.isArray(pages) ? pages : []).filter(p => p && S(p.url));
     const sets = list.map(pageToks);
@@ -67,6 +85,8 @@ const DUP = (() => {
       // common words), it never adds one the late check did not make before
       if (plain < SHARE || share < SHARE) continue;
       const row = { url: S(p.url), title: S(p.title), keyword_words_shared_pct: plain, weighted_pct: share };
+      const om = o.market ? otherMarket(keyword, p, o.market) : null;
+      if (om) { out.other_market.push({ ...row, places: om }); continue; }
       if (o.self_aware && ((selfP.size && selfP.has(pathKey(p.url))) || (o.slug_self && kslug && slugOf(p.url) === kslug))) { out.self.push(row); continue; }
       if (o.ladder && hit < kw.size) { out.partial.push(row); continue; }
       out.targets.push(row);
@@ -76,5 +96,5 @@ const DUP = (() => {
       + 'a page carrying ' + SHARE + '% or more of those words, and of their weight when each word counts by how few of the site\'s pages carry it, is aimed at the same search';
     return out;
   };
-  return { targets, words, slugify, slugOf, SHARE, MAX };
+  return { targets, words, slugify, slugOf, otherMarket, marketOf, placesIn, SHARE, MAX };
 })();

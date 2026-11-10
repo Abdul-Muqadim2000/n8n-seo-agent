@@ -1651,7 +1651,12 @@ for (const s of sites) {
     const won = written && o.named >= CONFIG.win_min_answers;
     const keep = !won && (written || o.answers === 0);   // still being written, or nothing was asked: the row waits rather than lying either way
     const why = won ? 'AI names you for this question: ' + obsLine(o) : o.answers === 0 ? 'not asked in the last 8 days: nothing to judge a win on (kept)'
-      : written ? obsLine(o) + ' — too few to call it won (at least ' + CONFIG.win_min_answers + ' needed)' : 'no longer lost in the latest AI check';
+      : written ? obsLine(o) + ' — too few to call it won (at least ' + CONFIG.win_min_answers + ' needed)'
+      // client reports 2026-11-10 (section 184D): a question taken off the panel is not "no longer lost" (devaicon.com: retired as outside the
+      // site's market while every answer still left the business out); the stored reason now says what happened
+      : (() => { const pr = promptOf.get(String(t.prompt_id || '')) || null; const rr = pr ? String(pr.retire_reason || '').trim() : '';
+          if (pr && (rr || String(pr.retired_at || '').trim() || String(pr.status || '').toLowerCase() === 'retired')) return 'the question was taken off your AI panel' + (rr ? ': ' + rr : '');
+          return 'no longer lost in the latest AI check'; })();
     targets.push({ target_id: id, site_id: s.site_id, domain: dom, prompt_id: t.prompt_id || '', question: t.question || '', keyword: t.keyword || '', kind: t.kind || 'answer', page_url: t.page_url || '', page_type: t.page_type || '', fanout: t.fanout || '', sources_json: t.sources_json || '[]',
       competitors: t.competitors || '', engines: t.engines || '', stage: t.stage || '', value: Number(t.value) || 0, status: won ? 'won' : keep ? t.status : 'skipped', reason: why,
       created_at: t.created_at || iso, updated_at: iso, request_id: t.request_id || '', written_at: t.written_at || '', won_at: won ? iso : (t.won_at || '') });

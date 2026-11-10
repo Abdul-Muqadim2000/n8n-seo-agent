@@ -262,6 +262,7 @@ describe('timeline and traffic', () => {
       ],
       clicks28d: 9,
       impressions28d: 300,
+      basis: 'queries',
     });
     expect(b.clicks28d).toBe(9);
   });
@@ -476,5 +477,78 @@ describe('pages that were never written do not wait to be published (noPageRow)'
     );
     expect(b.details.get('l1')?.pages.find((p) => p.keyword === 'privacy policy uae')?.state).toBe('planned');
     expect(b.waiting).toEqual([]);
+  });
+});
+
+// Production 2026-11-10 (devaicon.com, "Main keyword: Not in the top 50, but Google shows it on page one"): our neutral check was right, but the
+// ladder counted a check taken six hours before the main page existed, showed "0 times shown" because Google reports no single search for
+// these rare keywords, and never said how we check. Client anonymised (novaand-demo.com).
+describe('a live page: readings after it went live, its own Search Console figures, how we check', () => {
+  const D = 'https://novaand-demo.com';
+  const at = (iso: string) => iso;
+  const rows = [
+    lad({ ladder_id: 'lp', head_keyword: 'ai automation services pakistan', keyword: 'ai in industrial automation', rung: 2, page_no: 1, status: 'published', target_url: `${D}/insights/ai-in-industrial-automation`, country: 'Pakistan', start_date: '2026-10-20T00:00:00Z' }),
+    lad({ ladder_id: 'lp', head_keyword: 'ai automation services pakistan', keyword: 'ai automation services pakistan', rung: 4, page_no: 2, status: 'published', target_url: `${D}/ai-automation-services-pakistan`, country: 'Pakistan', start_date: '2026-10-20T00:00:00Z' }),
+  ];
+  const history = [
+    { ladder_id: 'lp', keyword: 'ai automation services pakistan', position: 0, checked_at: at('2026-10-30T01:13:00Z') },
+    { ladder_id: 'lp', keyword: 'ai automation services pakistan', position: -1, checked_at: at('2026-11-06T01:13:00Z') },
+    { ladder_id: 'lp', keyword: 'ai automation services pakistan', position: 0, checked_at: at('2026-11-08T19:38:00Z') },
+    { ladder_id: 'lp', keyword: 'ai in industrial automation', position: 0, checked_at: at('2026-11-08T19:38:00Z') },
+  ] as RankHistoryRow[];
+  const logs = [
+    log({ keyword: 'ai in industrial automation', status: 'published', started_at: '2026-10-26T00:00:00Z', published_url: `${D}/insights/ai-in-industrial-automation`, published_at: '2026-10-27T09:28:16Z', ladder_id: 'lp' }),
+    log({ keyword: 'ai automation services pakistan', status: 'published', started_at: '2026-10-29T00:00:00Z', published_url: `${D}/ai-automation-services-pakistan`, published_at: '2026-10-30T07:52:35Z', ladder_id: 'lp' }),
+  ];
+  const sitePages = [
+    { url: `${D}/insights/ai-in-industrial-automation`, impressions: 10, clicks: 1, position: 4.7, measured_at: '2026-11-06T01:18:48Z' },
+    { url: `${D}/ai-automation-services-pakistan`, impressions: 1, clicks: 0, position: 10, measured_at: '2026-11-06T01:18:48Z' },
+    { url: `${D}/services/ai-automation-services-pakistan`, impressions: 2, clicks: 0, position: 8, measured_at: '2026-11-06T01:18:48Z' },
+  ];
+  const NOW2 = Date.parse('2026-11-10T12:00:00Z');
+  const build = (o: Partial<LadderSources> = {}) => buildLadders(src({ ladders: rows, history, logs, sitePages, ...o }), sched(), { now: NOW2 }).details.get('lp')!;
+
+  it('the check from before the main page went live is kept on the chart, marked, and never counts', () => {
+    const d = build();
+    const main = d.pages.find((p) => p.rung === 4)!;
+    expect(main.history.map((h) => [h.checkedAt, !!h.beforePublish])).toEqual([
+      ['2026-10-30T01:13:00Z', true],
+      ['2026-11-06T01:13:00Z', false],
+      ['2026-11-08T19:38:00Z', false],
+    ]);
+    expect([main.position, main.previousPosition]).toEqual([0, null]);
+    expect([d.headPosition, d.headChange]).toEqual([0, null]);
+    expect(d.headSeries.map((h) => !!h.beforePublish)).toEqual([true, false]);
+  });
+
+  it('a live page Google reports no single search for shows its own Search Console figures, and the traffic counts them', () => {
+    const d = build();
+    const guide = d.pages.find((p) => p.rung === 2)!;
+    expect(guide.gsc).toMatchObject({ impressions: 10, clicks: 1, position: 4.7 });
+    expect(d.traffic).toMatchObject({ points: [], clicks28d: 1, impressions28d: 11, basis: 'pages' });
+    // a page with per-search rows keeps them (no page figures added)
+    const withRows = build({ queries: [{ query: 'ai in industrial automation', period_end: '2026-11-03', checked_at: '2026-11-04T00:00:00Z', clicks: 1, impressions: 6, page: `${D}/insights/ai-in-industrial-automation` } as QueryRow] });
+    expect(withRows.pages.find((p) => p.rung === 2)!.gsc).toBeUndefined();
+    expect(withRows.traffic).toMatchObject({ clicks28d: 1, impressions28d: 7, basis: 'mixed' });
+  });
+
+  it('a page that moved to a new address is read with it (the engine\'s moved pages)', () => {
+    const d = build({ indexMoves: [{ url: `${D}/ai-automation-services-pakistan`, to: `${D}/services/ai-automation-services-pakistan` }] });
+    expect(d.pages.find((p) => p.rung === 4)!.gsc).toMatchObject({ impressions: 3, clicks: 0 });
+    expect(d.traffic.impressions28d).toBe(13);
+  });
+
+  it('says how we check, and both readings in one sentence when Search Console shows the page near the top', () => {
+    const d = build();
+    expect(d.headNote).toMatch(/^Search Console shows this page at about #10 on average \(1 time shown, every search and place, last 28 days\), while our check of "ai automation services pakistan" did not find it in the top 50/);
+    expect(d.headNote).toContain('We check Google Pakistan (google.com.pk), desktop, not signed in; last checked 8 Nov 2026.');
+    expect(d.headNote).not.toMatch(/[\u2014\u2018\u2019\u201c\u201d\u2026]/);
+  });
+
+  it('a main page whose only check came before it went live: no position, and the note says the check did not count', () => {
+    const d = build({ history: [history[0]] });
+    expect(d.headPosition).toBeNull();
+    expect(d.statusText).toBe('2 of 2 pages live; the main keyword is not checked yet.');
+    expect(d.headNote).toMatch(/^Our last check, on 30 Oct 2026, was taken before the page went live on 30 Oct 2026, so it does not count/);
   });
 });

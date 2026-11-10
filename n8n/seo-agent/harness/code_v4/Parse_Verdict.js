@@ -2300,8 +2300,57 @@ if (LM21 && String(LM21.keyword || '').toLowerCase().trim() === String(prev.keyw
 //     opts.ladder a page of a keyword ladder: a page that carries only PART of the keyword's weight is the ladder's planned neighbour
 //                 (the rung links up to it), listed in `partial` as advice; only a page carrying all of it is a duplicate target
 //     opts.max    targets kept (3)
+//     opts.market the run's market (ISO-2 or the country name, e.g. "United Arab Emirates"): a page whose title / heading / address names only
+//                 places OUTSIDE that market, for a keyword that names none, is aimed at another market's search: listed in `other_market`, never
+//                 a duplicate target (client report 2026-11-10: "ai automation services" for the UAE was held as the duplicate of devaicon's
+//                 "AI Automation Services in Pakistan" page; "ai" has 2 letters, so the rule compared only "automation services")
 const DUP = (() => {
   const S = (v) => String(v == null ? '' : v);
+  // the fit gate's gazetteer (FIT_PLACES_SRC in _fit_gate.js), put here by the build (kit_src.py) so the two never drift; [] = no market check
+  const PLACES_SRC = [
+  ['AE', 'uae|united arab emirates|emirates|emirati|dubai|abu dhabi|sharjah|ajman|fujairah|ras al khaimah|umm al quwain|al ain'],
+  ['SA', 'saudi|saudi arabia|ksa|riyadh|jeddah|dammam|khobar|al khobar|mecca|makkah|medina|madinah'],
+  ['PK', 'pakistan|pakistani|lahore|karachi|islamabad|rawalpindi|faisalabad|multan|peshawar|quetta|sialkot|gujranwala'],
+  ['IN', 'india|indian|delhi|new delhi|mumbai|bangalore|bengaluru|chennai|pune|kolkata|ahmedabad|noida|gurgaon|gurugram'],
+  ['IN PK', 'hyderabad'],
+  ['GB', 'uk|united kingdom|britain|great britain|british|england|scotland|wales|london|manchester|birmingham|leeds|glasgow|edinburgh'],
+  ['US', 'usa|united states|united states of america|new york|nyc|california|texas|florida|chicago|los angeles|san francisco|houston|seattle|boston'],
+  ['CA', 'canada|canadian|ottawa|toronto|montreal|vancouver|calgary'],
+  ['AU', 'australia|australian|canberra|sydney|melbourne|brisbane'],
+  ['NZ', 'new zealand|wellington|auckland|christchurch'],
+  ['IE', 'ireland|irish|dublin|galway|limerick'],
+  ['SG', 'singapore|singaporean'],
+  ['ZA', 'south africa|south african|pretoria|johannesburg|cape town|durban'],
+  ['DE', 'germany|deutschland|berlin|hamburg|munich|cologne|frankfurt'],
+  ['FR', 'france|paris|marseille|lyon'],
+  ['ES', 'spain|madrid|barcelona|valencia|seville'],
+  ['IT', 'italy|rome|milan|naples|turin'],
+  ['NL', 'netherlands|holland|amsterdam|rotterdam|the hague|utrecht'],
+  ['BR', 'brazil|brazilian|brasilia|sao paulo|rio de janeiro'],
+  ['MX', 'mexico|mexican|mexico city|guadalajara|monterrey'],
+  // markets the product cannot measure (not in the COUNTRIES table): a keyword about them is flagged, and their rankings cannot be tracked
+  ['QA', 'qatar|qatari|doha'], ['OM', 'oman|omani|muscat'], ['BH', 'bahrain|bahraini|manama'], ['KW', 'kuwait|kuwaiti'],
+  ['EG', 'egypt|egyptian|cairo|alexandria'], ['JO', 'jordan|amman'], ['LB', 'lebanon|beirut'], ['TR', 'turkiye|istanbul|ankara'],
+  ['CN', 'china|beijing|shanghai|shenzhen'], ['JP', 'japan|tokyo|osaka'], ['MY', 'malaysia|kuala lumpur'], ['ID', 'indonesia|jakarta'],
+  ['PH', 'philippines|manila'], ['NG', 'nigeria|lagos|abuja'], ['KE', 'kenya|nairobi'], ['BD', 'bangladesh|dhaka'], ['LK', 'sri lanka|colombo'],
+  ['NP', 'nepal|kathmandu'], ['AF', 'afghanistan|kabul'],
+  // regions: the set of their countries ("gcc" is fine for a UAE website, not for a Pakistan one)
+  ['AE SA QA OM BH KW', 'gcc|gcc countries|gulf|gulf countries|gulf region|arabian gulf|persian gulf|khaleej'],
+  ['AE SA QA OM BH KW EG JO LB', 'middle east|mena|arab world|arab countries'],
+  ['DE FR ES IT NL IE GB', 'europe|european|eu|european union'],
+  ['US CA', 'north america'], ['BR MX', 'latin america|latam'], ['IN PK BD LK NP', 'south asia']];
+  const PL = PLACES_SRC.flatMap(([iso, ws]) => S(ws).split('|').map(w => ({ w, iso: S(iso).split(' ') }))).sort((a, b) => b.w.split(' ').length - a.w.split(' ').length || b.w.length - a.w.length);
+  const placeText = (t) => ' ' + S(t).toLowerCase().replace(/\./g, '').replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+  const placesIn = (t) => { let x = placeText(t); const out = [];
+    for (const p of PL) { const k = ' ' + p.w + ' '; let i = x.indexOf(k); while (i >= 0) { out.push({ word: p.w, iso: p.iso }); x = x.slice(0, i) + ' | ' + x.slice(i + k.length - 1); i = x.indexOf(k); } }
+    return out; };
+  const marketOf = (m) => { const s0 = S(m).trim(); if (/^[A-Za-z]{2}$/.test(s0)) return s0.toUpperCase(); const ps = placesIn(s0); return ps.length && ps.every(p => p.iso.length === 1 && p.iso[0] === ps[0].iso[0]) ? ps[0].iso[0] : ''; };
+  // the place words that put a page in ANOTHER market than `market` (null: same market, no place named, or the keyword itself names elsewhere)
+  const otherMarket = (keyword, page, market) => { const m = marketOf(market); if (!m || !PL.length) return null;
+    if (placesIn(keyword).some(p => !p.iso.includes(m))) return null;
+    const pp = placesIn(S(page && page.title) + ' ' + S(page && page.h1) + ' ' + S(page && page.url).replace(/^https?:\/\/[^\/]+/i, '').replace(/[-_\/]+/g, ' '));
+    if (!pp.length || pp.some(p => p.iso.includes(m))) return null;
+    return [...new Set(pp.map(p => p.word))]; };
   const SHARE = 75, MAX = 3;
   // the tokenizer of SHG (_shingle.js), character for character, so the late check finds what it always found
   const norm = (t) => S(t)
@@ -2323,7 +2372,7 @@ const DUP = (() => {
   const targets = (keyword, pages, opts) => {
     const o = opts || {};
     const kw = toks(keyword);
-    const out = { targets: [], partial: [], self: [], keyword_words: kw.size, basis: '' };
+    const out = { targets: [], partial: [], self: [], other_market: [], keyword_words: kw.size, basis: '' };
     if (!kw.size) { out.basis = 'the keyword has no word of 3 letters or more to compare'; return out; }
     const list = (Array.isArray(pages) ? pages : []).filter(p => p && S(p.url));
     const sets = list.map(pageToks);
@@ -2348,6 +2397,8 @@ const DUP = (() => {
       // common words), it never adds one the late check did not make before
       if (plain < SHARE || share < SHARE) continue;
       const row = { url: S(p.url), title: S(p.title), keyword_words_shared_pct: plain, weighted_pct: share };
+      const om = o.market ? otherMarket(keyword, p, o.market) : null;
+      if (om) { out.other_market.push({ ...row, places: om }); continue; }
       if (o.self_aware && ((selfP.size && selfP.has(pathKey(p.url))) || (o.slug_self && kslug && slugOf(p.url) === kslug))) { out.self.push(row); continue; }
       if (o.ladder && hit < kw.size) { out.partial.push(row); continue; }
       out.targets.push(row);
@@ -2357,7 +2408,7 @@ const DUP = (() => {
       + 'a page carrying ' + SHARE + '% or more of those words, and of their weight when each word counts by how few of the site\'s pages carry it, is aimed at the same search';
     return out;
   };
-  return { targets, words, slugify, slugOf, SHARE, MAX };
+  return { targets, words, slugify, slugOf, otherMarket, marketOf, placesIn, SHARE, MAX };
 })();
 
 // ---- W0-D (page-quality programme 2026-10-29, PLAN Fix 4 + §2.1, REVIEW_CODE H1 / M1 / M3, owner decisions D1 / D2 / D17) ----
@@ -2410,7 +2461,7 @@ const HOLD = (() => {
   let MODEL = prev.site_model && typeof prev.site_model === 'object' ? prev.site_model : null;
   if (!MODEL) { try { MODEL = ($('Site Model').first().json || {}).site_model || null; } catch (e) { MODEL = null; } }
   const ownUrl = EXP ? EXP.url : '';
-  const dup = (MODEL && !exemptDup) ? DUP.targets(prev.keyword, SM.pages(MODEL), { skip: [ownUrl, S(prev.existing_page_url)], self: [S(prev.ladder_target_url)], self_aware: true, slug_self: true, ladder: ladderPage })
+  const dup = (MODEL && !exemptDup) ? DUP.targets(prev.keyword, SM.pages(MODEL), { skip: [ownUrl, S(prev.existing_page_url)], self: [S(prev.ladder_target_url)], self_aware: true, slug_self: true, ladder: ladderPage, market: S(prev.country) })
     : { targets: [], partial: [], self: [], basis: MODEL ? '' : 'no page inventory of the website was available, so a duplicate could not be checked' };
   const dupHit = !EXP && dup.targets.length > 0;   // a page the verdict already redirected the run to (existing_page) is improved, not duplicated
   // W05-B (BEFORE_AFTER K1): the page this run found for the search (confirmed by its own title, heading or searches in Collect Client Pages)

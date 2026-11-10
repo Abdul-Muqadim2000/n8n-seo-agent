@@ -16,6 +16,14 @@ import {
   rungReason,
   LRU,
   COUNTRIES,
+  countedPositions,
+  countedReadings,
+  indexImprovementsOf,
+  markBeforePublish,
+  n8nSiteId,
+  pageSearchConsole,
+  rankCheckNote,
+  type SitePageRow,
   type LadderMarketInfo,
   splitList,
   type ContentLogRow,
@@ -41,6 +49,7 @@ import {
 import { and, desc, eq, gte, inArray, or, sql } from 'drizzle-orm';
 import { db, schema } from '../db';
 import type { OrgRow, SiteRow } from '../db/schema';
+import { rows as n8nRows } from '../n8n/client';
 import { rankSeries } from './data';
 import { NOT_KI_TRIAL_RUN } from './ki';
 import { cachedCalibration } from './engineCost';
@@ -157,6 +166,11 @@ export interface LadderSources {
   detected?: DetectedPage[];
   /** LADDER PACKAGE (2026-11-09): the website's own market (its country in the app), to say when a ladder is measured elsewhere */
   siteCountry?: string;
+  /** prod 2026-11-10: the page inventory's own Search Console figures per page (seo_pages: every search and place, 28 days) */
+  sitePages?: Pick<SitePageRow, 'url' | 'impressions' | 'clicks' | 'position' | 'measured_at'>[];
+  /** prod 2026-11-10: pages whose improved version is live at another address (seo_index_pages `improved_to`), so a page and the address
+   *  it moved to are read together */
+  indexMoves?: { url: string; to: string }[];
 }
 
 /** What the schedules do next (the Pipeline's automations and the Content Cadence mirror, cadence.ts). */
@@ -338,7 +352,10 @@ interface Built {
   planType: PlanType | null;
   plan: PlanInfo | null;
   pages: LadderPage[];
+  /** the main keyword's readings that count (checks that worked, taken while its page was live) */
   headHistory: RankPoint[];
+  /** every check that worked, those from before the page went live marked (the chart) */
+  headChart: RankPoint[];
 }
 
 /** LADDER PACKAGE (2026-11-09, rule 3): the market a ladder is measured in, and one sentence when it is not the website's own (pure; tested) */
@@ -465,6 +482,9 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
           publishedAt ??= det.at;
         }
       }
+      // prod 2026-11-10 (devaicon.com): a check taken before the page went live stays in its chart, marked, and never counts in its position
+      const history = state === 'published' ? markBeforePublish(series.history, publishedAt) : series.history;
+      const counted = countedPositions(history);
       const run = runs.find((x) => x.status !== 'failed');
       const m = metrics.get(k);
       return {
@@ -480,10 +500,10 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
           stage: s((r as LadderRow & { stage?: unknown }).stage),
           ...(['stopped', 'failed', 'merged'].includes(rr.state) ? { reason: rr.why } : {}) }))(rungReason(r as unknown as Record<string, unknown>)),
         publishedUrl,
-        position: series.latest,
-        previousPosition: series.previous,
-        bestPosition: series.best,
-        history: series.history,
+        position: counted.latest,
+        previousPosition: counted.previous,
+        bestPosition: counted.best,
+        history,
         writtenAt,
         publishedAt,
         runId: state === 'planned' ? null : (report?.runId ?? run?.id ?? null),
@@ -497,7 +517,8 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
     });
     const planType = asPlan(st?.plan_type) ?? plan?.planType ?? null;
     const headPage = pages.find((p) => norm(p.keyword) === norm(head)) ?? pages.find((p) => p.rung === 4);
-    const headHistory = (headPage?.history ?? rankSeries(hist.get(`${id}|${head.toLowerCase()}`) ?? []).history).filter((p) => p.position >= 0);
+    const headChart = (headPage?.history ?? rankSeries(hist.get(`${id}|${head.toLowerCase()}`) ?? []).history).filter((p) => p.position >= 0);
+    const headHistory = countedReadings(headChart);
     // the main page waits for support in Short / Full ladders (§6.2)
     const main = pages.find((p) => p.rung === 4 && p.state === 'planned');
     if (gate && main && planType !== 'direct') {
@@ -507,7 +528,7 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
       const headPos = headHistory[headHistory.length - 1]?.position ?? 0;
       if (live < support.length / 2 && !(headPos > 0 && headPos <= 30)) main.state = 'gated';
     }
-    return { id, head, rows, settings: st, mode: asMode(st?.mode, automation.defaultMode), planType, plan, pages, headHistory };
+    return { id, head, rows, settings: st, mode: asMode(st?.mode, automation.defaultMode), planType, plan, pages, headHistory, headChart };
   });
 
   // ---- pages written and not published, ladder pages and other posts (drafts older than 180 days drop out) ----
@@ -563,18 +584,61 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
     if (!cur || s(r.checked_at) > s(cur.checked_at)) latestQ.set(k, r);
   }
   const qByUrl = group([...latestQ.values()], (r) => urlKey(r.page));
+  // prod 2026-11-10 (devaicon.com): a page and the address it moved to (or from) are one page here: the engine's index rows, the content
+  // log's improvement at another address, and a ladder main page that moved ("moved from <old>:")
+  const linked = new Map<string, Set<string>>();
+  const link = (a: string, b: string) => {
+    const [x, y] = [urlKey(a), urlKey(b)];
+    if (!x || !y || x === y) return;
+    for (const [p, q] of [[x, y], [y, x]]) linked.set(p, (linked.get(p) ?? new Set<string>()).add(q));
+  };
+  for (const m of src.indexMoves ?? []) link(m.url, m.to);
+  for (const i of indexImprovementsOf(src.logs)) if (i.to) link(i.url, i.to);
+  for (const r of src.ladders) {
+    const m = s((r as LadderRow & { target_why?: unknown }).target_why).match(/^moved from (https?:\/\/\S+?):/);
+    if (m && r.target_url) link(m[1], s(r.target_url));
+  }
+  const addressesOf = (...urls: string[]): string[] => {
+    const out = new Set<string>();
+    for (const u of urls) {
+      const k = urlKey(u);
+      if (!k) continue;
+      out.add(k);
+      for (const o of linked.get(k) ?? []) out.add(o);
+    }
+    return [...out];
+  };
+  const pageRows = src.sitePages ?? [];
+  // a live page Google reports no single search for (rare searches are left out of the per-search rows): its own figures, every search and place
+  for (const b of built)
+    for (const p of b.pages)
+      if (p.state === 'published' && (p.publishedUrl || p.targetUrl)) {
+        const keys = addressesOf(p.publishedUrl, p.targetUrl);
+        if (!keys.some((k) => (qByUrl.get(k) ?? []).length)) p.gsc = pageSearchConsole(keys, pageRows);
+      }
   const traffic = (urls: Set<string>): LadderDetail['traffic'] => {
     const per = new Map<string, { clicks: number; impressions: number }>();
-    for (const u of urls)
-      for (const r of qByUrl.get(u) ?? []) {
+    const fallback: string[] = [];
+    let measured = 0;
+    for (const u of new Set(addressesOf(...urls))) {
+      const qs = qByUrl.get(u) ?? [];
+      if (!qs.length) {
+        fallback.push(u);
+        continue;
+      }
+      measured++;
+      for (const r of qs) {
         const p = per.get(s(r.period_end)) ?? { clicks: 0, impressions: 0 };
         p.clicks += n(r.clicks);
         p.impressions += n(r.impressions);
         per.set(s(r.period_end), p);
       }
+    }
     const points = [...per.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([periodEnd, v]) => ({ periodEnd, ...v }));
     const last = points[points.length - 1];
-    return { points, clicks28d: last?.clicks ?? 0, impressions28d: last?.impressions ?? 0 };
+    const own = fallback.length ? pageSearchConsole(fallback, pageRows) : null;
+    const basis: LadderDetail['traffic']['basis'] = own && own.urls.length ? (measured ? 'mixed' : 'pages') : 'queries';
+    return { points, clicks28d: (last?.clicks ?? 0) + (own?.clicks ?? 0), impressions28d: (last?.impressions ?? 0) + (own?.impressions ?? 0), basis };
   };
 
   const overlaps = ladderOverlaps(built.map((b) => ({ id: b.id, head: b.head, keywords: b.pages.map((p) => p.keyword) })));
@@ -596,6 +660,8 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
     const counts = { total: pages.length, published: count('published'), waiting: count('waiting'), writing: count('writing'), planned: count('planned') + count('gated') };
     const valid = b.headHistory;
     const headPosition = valid.length ? valid[valid.length - 1].position : null;
+    const headPage = pages.find((p) => norm(p.keyword) === norm(b.head)) ?? pages.find((p) => p.rung === 4);
+    const market = ladderMarketInfo(s(b.rows[0].country), s(src.siteCountry), b.head);
     const prev = valid.length > 1 ? valid[valid.length - 2].position : null;
     // 0 = not in the top 50: counts as 51 when the keyword enters or leaves the top 50
     const eff = (p: number) => (p === 0 ? 51 : p);
@@ -633,13 +699,22 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
       counts,
       headPosition,
       headChange,
-      headSeries: valid,
+      // the chart keeps the checks from before the page went live (marked); the position and its change count only the others
+      headSeries: b.headChart,
       top10: ranked.filter((p) => p <= 10).length,
       top3: ranked.filter((p) => p <= 3).length,
       next,
       months: s(mainRow?.months) || (b.plan?.months ?? ''),
       monthlyCredits,
       overlaps: overlaps.get(b.id) ?? [],
+      headNote: rankCheckNote({
+        head: b.head,
+        country: market?.country ?? '',
+        iso: market?.iso ?? '',
+        history: b.headChart,
+        publishedAt: headPage?.state === 'published' ? headPage.publishedAt : null,
+        gsc: headPage?.state === 'published' ? (headPage.gsc ?? null) : null,
+      }),
     };
     cards.push(card);
 
@@ -654,7 +729,7 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
             ? { at: p.publishedAt, kind: 'published', text: `We found ${q(p.keyword)} live${p.publishedUrl ? ` at ${shortUrl(p.publishedUrl)}` : ''}: spotted automatically by the weekly site check`, future: false, keyword: p.keyword, detected: true }
             : { at: p.publishedAt, kind: 'published', text: `${q(p.keyword)} published${p.publishedUrl ? ` at ${shortUrl(p.publishedUrl)}` : ''}`, future: false, keyword: p.keyword },
         );
-      const h = p.history.filter((x) => x.position >= 0);
+      const h = p.history.filter((x) => x.position >= 0 && !x.beforePublish);
       const top10 = h.find((x) => x.position > 0 && x.position <= 10);
       const top3 = h.find((x) => x.position > 0 && x.position <= 3);
       if (top10) ev.push({ at: top10.checkedAt, kind: 'top10', text: `${q(p.keyword)} reached the top 10 (#${top10.position})`, future: false, keyword: p.keyword });
@@ -695,7 +770,7 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
       annotations: [],
       changeTests: [],
       lineage: [],
-      market: ladderMarketInfo(s(b.rows[0].country), s(src.siteCountry), b.head),
+      market,
     });
   });
 
@@ -918,10 +993,10 @@ export function ladderNeedsYou(b: LadderBuild, cs: { creditValueUsd: number; mar
 const numOrNull = (v: unknown): number | null => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
 
 /** Plan reports, delivered pages and the app's runs of the website. */
-export async function ladderAppSources(org: OrgRow, site: SiteRow): Promise<Pick<LadderSources, 'plans' | 'pageReports' | 'runs' | 'detected'>> {
+export async function ladderAppSources(org: OrgRow, site: SiteRow): Promise<Pick<LadderSources, 'plans' | 'pageReports' | 'runs' | 'detected' | 'sitePages' | 'indexMoves'>> {
   const R = schema.reports;
   const p = R.payload;
-  const [planRows, pageRows, runRows, detectedRows] = await Promise.all([
+  const [planRows, pageRows, runRows, detectedRows, sitePages, indexMoves] = await Promise.all([
     db
       .select({
         id: R.id,
@@ -977,6 +1052,12 @@ export async function ladderAppSources(org: OrgRow, site: SiteRow): Promise<Pick
       .where(and(eq(R.orgId, org.id), eq(R.siteId, site.id), eq(R.stage, 'site_tracker'), gte(R.receivedAt, new Date(Date.now() - 180 * 864e5)), sql`jsonb_typeof(${p}->'detected_published') = 'array'`))
       .orderBy(desc(R.receivedAt))
       .limit(30),
+    // prod 2026-11-10: the page inventory (the same read as the Pipeline's, shared while in flight) and the engine's moved pages; a failed
+    // read is "no figures", never an error of the ladder
+    n8nRows<SitePageRow>('pages', { filters: [{ columnName: 'site_id', condition: 'eq', value: n8nSiteId(site.domain) }], max: 3000 }).catch(() => [] as SitePageRow[]),
+    n8nRows<{ url?: unknown; improved_to?: unknown; domain?: unknown }>('indexPages', { filters: [{ columnName: 'site_id', condition: 'eq', value: n8nSiteId(site.domain) }, { columnName: 'improved_to', condition: 'neq', value: '' }], max: 500 })
+      .then((xs) => xs.filter((x) => !x.domain || String(x.domain).toLowerCase().replace(/^www\./, '') === site.domain.toLowerCase().replace(/^www\./, '')).map((x) => ({ url: s(x.url), to: s(x.improved_to) })).filter((x) => x.url && x.to))
+      .catch(() => [] as { url: string; to: string }[]),
   ]);
   type PlanPage = { keyword?: unknown; volume?: unknown; kd?: unknown };
   const plans: PlanInfo[] = planRows.map((r) => {
@@ -996,6 +1077,8 @@ export async function ladderAppSources(org: OrgRow, site: SiteRow): Promise<Pick
   });
   return {
     plans,
+    sitePages,
+    indexMoves,
     detected: detectedRows.flatMap((r) => detectedPages(r.detected, r.receivedAt.toISOString(), r.id)),
     pageReports: pageRows.map((r) => ({ reportId: r.id, runId: r.runId, keyword: s(r.keyword), ladderId: s(r.ladderId), receivedAt: r.receivedAt.toISOString() })),
     runs: runRows.map((r) => ({

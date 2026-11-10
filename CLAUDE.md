@@ -63,7 +63,17 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-11-10, ladder package + KI Trial fixes DEPLOYED, ladders repaired - latest)
+## Status (2026-11-10 evening, devaicon client reports fixed + engine/API DEPLOYED - latest)
+Five reports from devaicon.com (`Issues.docx`), all checked on production first; read **`n8n/seo-agent/docs/client-reports-2026-11-10/README.md`**.
+Client right on 4 of 5 (moved pages kept "another address" after their 301s and Re-check refused them; the card showed our grade, not the
+live page; Coming up showed a past plan with an approved item that was silently never written; UAE AI page held as duplicate of a Pakistan
+page and scores frozen at 59 after answers); the ladder "not in top 50" reading is correct (neutral google.com.pk), the app now shows page-level
+Search Console and how we check. Engine section 184 (863893e2), app de76f11f + 28f8de07. Deployed ~19:30 UTC: backup pg/2026-11-10/*T192434Z,
+engine 14 updated (prod == build), API at 28f8de07 (rollback image alaventra-app:rollback-4d4a3c69). Web = **PR #64** (owner merges).
+Harness 18581 / 0; app 1174 / 2070 / 359. Open: stale publish notes clear on the client's next Re-check (direct write refused by classifier);
+first real finalize with an unsupported claim is the live check of 184C.
+
+## Status (2026-11-10, ladder package + KI Trial fixes DEPLOYED, ladders repaired - previous)
 **Ladder package** (owner ask: ladders were weak in production) deployed 2026-11-10 ~12:10 UTC at 4d4a3c69 (backup pg/2026-11-10/*T115925Z;
 prod == build after; sync_tables added seo_ladders.stage / target_why; API with the stuck-rung watcher `ladderWatch.ts`): one search one
 address at plan and publish time (a ranking head stays and its page is improved; a move only off a "-2"/copy page with a redirect step),

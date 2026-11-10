@@ -161,6 +161,7 @@ export default function PipelinePage() {
 
         <ComingUp
           cycle={d.cycle}
+          queue={d.queue}
           onWrite={(it) =>
             setWriting({
               keyword: it.keyword,

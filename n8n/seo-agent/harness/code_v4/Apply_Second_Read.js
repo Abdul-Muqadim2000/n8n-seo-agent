@@ -1316,14 +1316,32 @@ const RR = (() => {
   // a date problem that is only a problem on the day the page is written (the deadline falls that day): with the market's day known, the
   // date the read talks about must be that day; without it, the read's own words must say so
   const sameDay = (p, today) => SAME_DAY.test(S(p.issue)) && (!today || isoDates(S(p.location) + ' ' + S(p.issue)).includes(today));
+  // client reports 2026-11-10 (devaicon.com, section 184C): a high "claim" finding blocked whatever it said, so true sentences were held at 59 for
+  // something missing elsewhere ("Devaicon has an office in Sharjah, is ISO 27001 certified and is an AWS partner.": "no strategy-consulting
+  // credential backs the page, trust gap"; "It never mentions the Sharjah office"), and the final version after every answer kept 59. A claim
+  // blocks only when the read's own words say the statement is not supported by what is on file; otherwise it is advice.
+  const UNSUPPORTED = /\b(?:not (?:on file|in the facts|stated|supported|confirmed|verified|backed(?: up)?|sourced|substantiated|evidenced)|(?:the )?(?:facts|information|details?|profile|business facts)(?: on file)? (?:do(?:es)? not|don't|never) (?:say|state|show|support|carry|mention|list|include|confirm|back)|(?:facts|information|details?)(?: on file)? (?:only )?(?:support|list|say|show|mention|carry) only|nothing (?:on file|in the facts|we have)|no (?:source|evidence|support|backing|proof)\b|unverified|unsupported|unsourced|unsubstantiated|without (?:a |any )?(?:source|evidence|support|proof)|(?:is|are) not (?:in|among|part of) the facts|invent(?:ed|s)?\b|made up|fabricat\w*)/i;
+  // or one sentence of the finding that names the facts on file AND limits them ("The facts on file list Dynamics 365 ... but do not say the
+  // practice is built on it", "the facts only say Auto or Manual"); a sentence naming the facts with no limit ("The facts on file list
+  // outsourcing, dedicated teams and staff augmentation") is context, not the error
+  const FACTS_REF = /\b(?:facts?|on file|business profile)\b/i;
+  const LIMITS = /\b(?:not|no|none|never|nothing|only|without|neither|nor)\b|n't\b/i;
+  const unsupported = (issue) => { const t = S(issue); return UNSUPPORTED.test(t) || t.split(/(?<=[.;!?])\s+/).some(x => FACTS_REF.test(x) && LIMITS.test(x)); };
   const errorOf = (p, today) => {
     if (p.severity !== 'high' || !p.on_page) return '';
     if (countMismatch(p.location) && /\b(?:\d{1,2}|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/i.test(S(p.issue))) return 'count';
     if (!GATING.has(p.kind)) return '';
-    if (p.kind === 'claim') return 'claim';
     const issue = S(p.issue);
+    if (p.kind === 'claim' && unsupported(issue)) return 'claim';
     if (!CONTRA_NONE.test(issue) && SRC_CONTRA.test(issue)) return 'contradicted';
     if ((p.kind === 'fact' || p.kind === 'local') && wrongIn(issue) && !sameDay(p, today)) return 'wrong';
+    return ''; };
+  // a stored blocker ("A second read of the page found a problem at \"<quote>\": <issue>", no kind kept): does it still block by this rule?
+  const textError = (text, today) => { const t = S(text); const m = t.match(/at "([^"]{1,400})":\s*([\s\S]*)$/); const location = m ? m[1] : ''; const issue = m ? m[2] : t;
+    if (countMismatch(location) && /\b(?:\d{1,2}|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/i.test(issue)) return 'count';
+    if (unsupported(issue)) return 'claim';
+    if (!CONTRA_NONE.test(issue) && SRC_CONTRA.test(issue)) return 'contradicted';
+    if (wrongIn(issue) && !sameDay({ issue, location }, today)) return 'wrong';
     return ''; };
   const ERROR_LABEL = { count: 'a count that does not match its list', claim: 'a statement about the business that nothing on file supports',
     contradicted: 'a statement its own source contradicts', wrong: 'a wrong or out-of-date statement' };
@@ -1432,7 +1450,7 @@ const RR = (() => {
     } else if (qa.quality && typeof qa.quality === 'object') qa.quality = { ...qa.quality, advisory: advisory.map(a => ({ code: a.code, text: a.text })) };
     qa.delivery = out;
     return qa; };
-  return { MODEL, CFG, GATING, KINDS, SCHEMA, ERROR_LABEL, modeOf, context, plan, read, apply, fill, errorOf, countMismatch, sameDay, fmtDay };
+  return { MODEL, CFG, GATING, KINDS, SCHEMA, ERROR_LABEL, modeOf, context, plan, read, apply, fill, errorOf, textError, unsupported, countMismatch, sameDay, fmtDay };
 })();
 // ---- grade kit (W0-C, page-quality programme 2026-10-29, docs/page-quality-2026-10-29/PLAN.md Fix 3, 2.6, 2.9; REVIEW_CODE H3 / L1 / L5;
 // REVIEW_EVIDENCE H2 / H3 / M1; inlined through the GRADE marker into Content QA, Page Candidates, Apply Second Read and the Finalize

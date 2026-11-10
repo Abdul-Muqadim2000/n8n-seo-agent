@@ -69,7 +69,16 @@ if (!MODEL && d.site_model && typeof d.site_model === 'object') MODEL = d.site_m
 // brief; this late check stays as the safety net. Two refinements, both only ever removing a match: a page that shares only the site's
 // common words is not a duplicate (the weighted share), and the ladder's planned address for this very page is never its own duplicate.
 const readKeys = new Set(sources.map(s => keyOf(s.url)).filter(Boolean));
-const duplicate_targets = MODEL ? DUP.targets(d.keyword, SM.pages(MODEL), { skip: [...readKeys, improving], self: [d.ladder_target_url || ''], self_aware: true }).targets : [];
+// client reports 2026-11-10 (section 184B): the run's market travels to the rule (a page aimed at another country's search is not a duplicate),
+// and a page written for an AI answer is judged as *Parse Verdict* judges it before the brief: a page of the site that shares its keyword
+// words is ADVICE (link the two), never a blocker. The AI growth plan chose "a new answer page" for that question after matching the
+// question against the site's pages; the late check holding it as "Not ready, same search" contradicted it (devaicon.com, run 12467).
+let marketOC = S(d.country); if (!marketOC) { try { marketOC = S(($('Normalize Input').first().json || {}).country); } catch (e) { marketOC = ''; } }
+let aiOC = d.ai_target && typeof d.ai_target === 'object' && S(d.ai_target.question) ? d.ai_target : null;
+if (!aiOC) { try { const at0 = ($('Parse Brief').first().json || {}).ai_target; aiOC = at0 && typeof at0 === 'object' && S(at0.question) ? at0 : null; } catch (e) { aiOC = null; } }
+const DT = MODEL ? DUP.targets(d.keyword, SM.pages(MODEL), { skip: [...readKeys, improving], self: [d.ladder_target_url || ''], self_aware: true, market: marketOC }) : { targets: [], other_market: [] };
+const duplicate_targets = aiOC ? [] : DT.targets;
+const duplicate_advice = (aiOC ? DT.targets : []).map(x => ({ ...x, why: 'ai_page' })).concat((DT.other_market || []).map(x => ({ ...x, why: 'other_market' })));
 
 const worst = measured.filter(m => m.kind !== 'improved')[0] || null;
 const failing = worst && worst.overlap_pct > THRESHOLD ? worst : null;
@@ -88,6 +97,7 @@ const originality = {
   highest_source: worst ? worst.source : null,
   improved_page: improved ? { source: improved.source, overlap_pct: improved.overlap_pct } : null,
   duplicate_targets,
+  duplicate_advice,
   passed: !failing,
   basis: measured.length
     ? 'the share of the draft\'s ' + SHG.N + '-word windows found on one page, measured against ' + measured.length + ' page(s) this run read ('
@@ -114,6 +124,9 @@ if (duplicate_targets.length) {
     + '. Improve that page instead of publishing a second one, or make clear in the brief how this page is different (its text could not be compared: it was not read in this run)');
 }
 
+for (const x of duplicate_advice.slice(0, 2)) warnings.push(x.why === 'ai_page'
+  ? 'Your website also has ' + x.url + ' on a close search. This page answers a question asked in AI answers, so it can stand beside it: link the two pages to each other'
+  : 'Your website also has ' + x.url + ', aimed at searches in ' + (x.places || []).join(', ') + '. This page is for another market, so it is not the same search: link the two pages to each other');
 qa.originality = originality;
 qa.warnings = warnings;
 // CT-FIX (review item 14): the next step said "Then publish it." beside the warning that the site already has a page for this search.

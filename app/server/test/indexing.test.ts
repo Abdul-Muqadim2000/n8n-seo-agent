@@ -707,3 +707,42 @@ describe('fix wave 3: Google still sees it after the client\'s fix (R1)', () => 
     expect((r.body as { task: SiteTask }).task).toMatchObject({ state: 'todo', lastCheck: { by: 'you', ok: false } });
   });
 });
+
+// Production 2026-11-10 (devaicon.com): the merge step listed the home page as an old address to redirect (it can never be done), kept only
+// one message for all pairs (the Content page could not say which page had moved), and the canonical step called /industries/bfsi "still to
+// fix" after the client had 301-redirected it to the very page it named as the main version. Anonymised.
+describe('prod 2026-11-10: merge pairs and canonical redirects', () => {
+  it('the merge check keeps each pair\'s result and never opens the home page', async () => {
+    const d = 'novaand-merge.com';
+    t.web[`https://${d}/a`] = { status: 301, location: `https://${d}/services/a` };
+    t.web[`https://${d}/services/a`] = { status: 200, text: '<html><head><title>A</title></head><body>a</body></html>' };
+    t.web[`https://${d}/b`] = { status: 200, text: '<html><head><title>B</title></head><body>b</body></html>' };
+    t.web[`https://${d}/services/b`] = { status: 200, text: '<html><head><title>B2</title></head><body>b</body></html>' };
+    const payload = { pairs: [{ from: `https://${d}/a`, to: `https://${d}/services/a`, at: '1' }, { from: `https://${d}/b`, to: `https://${d}/services/b`, at: '2' }, { from: `https://${d}/`, to: `https://${d}/ai-page`, at: '3' }] };
+    const out = await svc.runSiteTaskCheck(d, 'index_merge', payload);
+    expect(out).toMatchObject({ ok: false, reached: true });
+    expect(out.pairs).toEqual([{ from: `https://${d}/a`, to: `https://${d}/services/a`, done: true }, { from: `https://${d}/b`, to: `https://${d}/services/b`, done: false }]);
+    expect(out.message).not.toContain('/ai-page');
+    expect(t.fetched.some((u) => u === `https://${d}/` || u === `https://${d}`)).toBe(false);
+    // once the second one redirects too, the step is done with both pairs done
+    t.web[`https://${d}/b`] = { status: 301, location: `https://${d}/services/b` };
+    const done = await svc.runSiteTaskCheck(d, 'index_merge', payload);
+    expect(done.ok).toBe(true);
+    expect(done.pairs?.every((p) => p.done)).toBe(true);
+  });
+
+  it('canonical named elsewhere: a 301 to the page it named is fixed, not "still to fix"', async () => {
+    const d = 'novaand-canon.com';
+    const main = `https://${d}/services/industries-bfsi`;
+    t.web[`https://${d}/industries/bfsi`] = { status: 301, location: main };
+    t.web[main] = { status: 200, text: `<html><head><title>BFSI</title><link rel="canonical" href="${main}"></head><body>bfsi</body></html>`, headers: { 'content-type': 'text/html' } };
+    t.web[`https://${d}/industries/retail`] = { status: 200, text: `<html><head><title>Retail</title><link rel="canonical" href="https://${d}/industries/retail"></head><body>r</body></html>`, headers: { 'content-type': 'text/html' } };
+    const urls = [`https://${d}/industries/bfsi`, `https://${d}/industries/retail`];
+    const out = await svc.runSiteTaskCheck(d, 'indexing', { cause: 'canonical_elsewhere', urls, total: 2, ownTitle: urls });
+    expect(out).toMatchObject({ ok: true, reached: true, message: 'All 2 pages are fixed.' });
+    // a temporary redirect is still to fix
+    t.web[`https://${d}/industries/bfsi`] = { status: 302, location: main };
+    const temp = await svc.runSiteTaskCheck(d, 'indexing', { cause: 'canonical_elsewhere', urls, total: 2, ownTitle: urls });
+    expect(temp.ok).toBe(false);
+  });
+});

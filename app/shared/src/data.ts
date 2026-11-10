@@ -179,6 +179,8 @@ export interface RankPoint {
   position: number;
   /** G6: our modelled share of the clicks page 1 offers at that check (null = not recorded or the check failed) */
   shareOfVoice?: number | null;
+  /** prod 2026-11-10: taken before the page went live (kept in the chart, never counted in its position or change) */
+  beforePublish?: boolean;
 }
 
 /**
@@ -299,6 +301,29 @@ export interface ContentItem {
   publishNote?: string;
   /** H3 (2026-10-28): where the page's review stands (questions, final version, approval, publishing); absent before the page has a report */
   review?: import('./page-review').PageReviewSummary;
+  /** prod 2026-11-10 (devaicon.com): what the newest publish check measured on the LIVE page (the review's grade is of the version we
+   *  delivered); absent before any publish check of the page */
+  liveCheck?: ContentLiveCheck | null;
+  /** prod 2026-11-10: the old address this page improves now redirects permanently to it, as our daily check of the website saw */
+  moved?: { from: string; at: string } | null;
+  /** prod 2026-11-10: the page was planned as an update of the home page and went live as a page of its own (the home page stays) */
+  ownPageFromHome?: boolean;
+}
+
+/** prod 2026-11-10: one publish check of a live page (the `published` report of "I published a page" / Re-check page). */
+export interface ContentLiveCheck {
+  at: string;
+  /** checks the live page passed, of `total` */
+  passed: number;
+  total: number;
+  /** names of the checks it failed, as the report lists them */
+  failed: string[];
+  /** the address that was checked */
+  url: string;
+  /** the report of that check */
+  reportId: string;
+  /** false: the check could not open the live page */
+  live: boolean;
 }
 
 export interface CaseStudy {
@@ -1314,6 +1339,21 @@ export interface LadderPage {
   stage?: string;
   /** stopped / failed / merged: the reason, in the client's words */
   reason?: string;
+  /** prod 2026-11-10: a live page's own Search Console figures (every search and place, last 28 days), shown when Google reports no single
+   *  search for it (rare searches are left out of the per-search rows); null when Search Console has not measured it */
+  gsc?: PageSearchConsole | null;
+}
+
+/** prod 2026-11-10: one page's Search Console figures over 28 days, every search and place together (its own address and the address it
+ *  moved to or from are added up). */
+export interface PageSearchConsole {
+  impressions: number;
+  clicks: number;
+  /** average position over those impressions (null when it was not shown) */
+  position: number | null;
+  measuredAt: string;
+  /** the addresses added up */
+  urls: string[];
 }
 
 /** LADDER PACKAGE (2026-11-09, rule 3): the market a ladder is measured in */
@@ -1359,6 +1399,9 @@ export interface LadderCard {
   /** credits (app/docs/CREDITS.md): about how many credits a month, at the platform's credit rate */
   monthlyCredits: number;
   overlaps: LadderOverlap[];
+  /** prod 2026-11-10: how the main keyword's position is checked (the place, the device, the date) and, when Search Console tells another
+   *  story, both in one sentence ('' before any check) */
+  headNote?: string;
 }
 
 export interface LadderTimelineEvent {
@@ -1376,7 +1419,14 @@ export interface LadderDetail extends LadderCard {
   pages: LadderPage[];
   timeline: LadderTimelineEvent[];
   /** clicks / impressions of the ladder's published pages (Search Console, by page URL) */
-  traffic: { points: { periodEnd: string; clicks: number; impressions: number }[]; clicks28d: number; impressions28d: number };
+  traffic: {
+    points: { periodEnd: string; clicks: number; impressions: number }[];
+    clicks28d: number;
+    impressions28d: number;
+    /** prod 2026-11-10: where the 28-day totals come from: Google's per-search rows, the pages' own figures (every search and place, used
+     *  when Google reports no single search for a page), or both */
+    basis?: 'queries' | 'pages' | 'mixed';
+  };
   reports: Report[];
   /** about how many credits this ladder has used so far (its runs, its pages, its rank checks) */
   creditsSoFar: number;

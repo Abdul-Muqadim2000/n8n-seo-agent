@@ -10,6 +10,7 @@ import {
   INDEXING_LINKS_KEY,
   INDEXING_LINKS_MAX_PAIRS,
   INDEXING_MERGE_KEY,
+  isSiteRoot,
   INDEXING_MERGE_MAX_PAIRS,
   INDEXING_SITEMAP_KEY,
   INDEXING_TASK_MAX_URLS,
@@ -52,6 +53,25 @@ export interface SiteTaskCheck {
   by: SiteTaskCheckBy;
   /** the person who pressed "check now" (by 'you' only) */
   who?: string;
+  /** prod 2026-11-10 (`index_merge` only): what the check found for each old address, so a page that is already one page again can say so
+   *  while the step waits for the others (absent on readings from before) */
+  pairs?: SiteTaskPairCheck[];
+}
+export interface SiteTaskPairCheck {
+  from: string;
+  to: string;
+  done: boolean;
+}
+
+/**
+ * prod 2026-11-10 (devaicon.com): the old addresses of the merge step our own check last found redirected to their improved version. A reading
+ * from before the per-pair results counts every listed pair when the whole step was done. Pure.
+ */
+export function mergedPairsOf(t: { payload?: Record<string, unknown> | null; lastCheck?: SiteTaskCheck | null } | null | undefined): { from: string; to: string; at: string }[] {
+  const c = t?.lastCheck;
+  if (!c) return [];
+  if (Array.isArray(c.pairs)) return c.pairs.filter((x) => x && x.done && x.from && x.to && !isSiteRoot(x.from)).map((x) => ({ from: x.from, to: x.to, at: c.at }));
+  return c.ok ? mergePairsOf(t?.payload ?? {}).map((x) => ({ from: x.from, to: x.to, at: c.at })) : [];
 }
 
 export interface SiteTask {
@@ -258,8 +278,9 @@ function mergeDraft(m: SiteTaskInputs['merges'], stored: StoredSiteTask | undefi
   if (pairs.length) return { key: INDEXING_MERGE_KEY, kind: 'index_merge', engine: null, payload: { pairs } };
   return stored ? { key: INDEXING_MERGE_KEY, kind: 'index_merge', engine: null, payload: stored.payload } : null;
 }
+// prod 2026-11-10: a pair whose old address is the home page (stored before that rule) is never asked for nor checked (isSiteRoot)
 export const mergePairsOf = (p: Record<string, unknown>): { from: string; to: string; at: string }[] =>
-  (Array.isArray(p.pairs) ? (p.pairs as Record<string, unknown>[]) : []).map((x) => ({ from: str(x?.from), to: str(x?.to), at: str(x?.at) })).filter((x) => x.from && x.to);
+  (Array.isArray(p.pairs) ? (p.pairs as Record<string, unknown>[]) : []).map((x) => ({ from: str(x?.from), to: str(x?.to), at: str(x?.at) })).filter((x) => x.from && x.to && !isSiteRoot(x.from));
 
 function redirectDrafts(r: SiteTaskInputs['reclaim'], stored: StoredSiteTask[]): Draft[] {
   const out: Draft[] = [];
