@@ -33,7 +33,7 @@ const out = state.map(st => {
   }
   pairs.sort((a, b) => b.score - a.score);
   for (const p of pairs) if (!matched.has(p.key) && !claimed.has(p.ukey)) { matched.set(p.key, p); claimed.add(p.ukey); }
-  const detected = [], log_rows = [], ladder_rows = [], case_rows = [], conflicts = [];
+  const detected = [], log_rows = [], ladder_rows = [], case_rows = [], conflicts = [], unmatchedC = [];
   for (const c of st.candidates || []) {
     const p = matched.get(c.key); if (!p) continue;
     const keyword = (c.log || c.ladder || {}).keyword || c.keyword;
@@ -49,12 +49,15 @@ const out = state.map(st => {
     // pile-up guard); only the ladder row is left where it was when the address belongs to another search (a deliberate refresh comes back
     // as `merged` from publishedRows and is stored)
     if (url_conflict) conflicts.push({ keyword, url: p.url, note: url_conflict.text });
+    // re-review N2: a TITLE-only match on another search's address is not this keyword's publish (techand.ai's guide carries the main page's
+    // title): it stays unmatched with its note; a slug match of the keyword's own address, or a deliberate refresh (merged), is recorded
+    if (url_conflict && !(ladder_row && ladder_row.status === 'merged') && p.matched_by !== 'slug') { unmatchedC.push({ keyword, note: url_conflict.text + ' (matched by its title only)' }); continue; }
     log_rows.push(log_row); if (ladder_row) ladder_rows.push(ladder_row);
     if (log_row.source === 'case_study' || /case stud/i.test(log_row.page_type)) case_rows.push({ site_id: log_row.site_id, keyword: log_row.keyword, page_url: p.url });
     detected.push({ keyword, url: p.url, ladder_id: log_row.ladder_id || (c.ladder ? c.ladder.ladder_id : ''), matched_by: p.matched_by, source: c.source });
   }
   const unmatched = [...(st.candidates || []).filter(c => !matched.has(c.key)).map(c => ({ keyword: c.keyword, note: (st.notes || {})[c.key] || (c.address_taken ? 'its old address ' + LRU.pathOf(c.address_taken.url) + ' is the page for "' + c.address_taken.keyword + '", so it is looked for at its own address only' : '') })),
-    ];
+    ...unmatchedC];
   const address_notes = conflicts.map(x => ({ keyword: x.keyword, url: x.url, note: x.note }));   // LADDER PACKAGE: carried in this node's output (the page went live there; its ladder row stays where it was)
   // D11: the sitemap URLs this run read, plus the title / H1 of the pages it fetched, feed the week's page inventory (seo_pages)
   const titles = (st.fetches || []).map(u => { const pg = pages.get(u); return (pg && pg.ok) ? { url: u, title: pg.title, h1: pg.h1 } : null; }).filter(Boolean);

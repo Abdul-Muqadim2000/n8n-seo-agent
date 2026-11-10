@@ -1411,7 +1411,11 @@ const LRU = (() => {
   const isBlog = (u) => { let s = segs(u); if (s.length > 2 && LOCALE.test(s[0])) s = s.slice(1); return s.length > 1 && CFG.blog_dirs.includes(s[0]); };
   // review L1 (2026-11-10): only suffixes that mean "another copy of the same page"; -new, -v9, a bare word like /windows-11 are not copies
   const COPY_RE = /^(.+?)-(copy(?:-\d+)?|\d|old|draft|backup|bak)$/;
-  const titleKey = (t) => low(t).replace(/[^a-z0-9\u0600-\u06ff]+/g, ' ').trim();
+  // a page title's own words: the brand after "|" / " - " dropped, joining words out, plurals folded (re-review N3: production's "-2" copy of
+  // "Dynamics 365 CRM in Dubai & UAE: Sales and Service | Tech&" is titled "Dynamics 365 CRM Services UAE | Tech")
+  const titleWords = (t) => { const x = low(t).split(/\s[|\u2013\u2014]\s|\s-\s/)[0] || ''; return wordsKey(x).split(' ').filter(Boolean); };
+  const sameTitle = (a, b) => { const A = titleWords(a), Bw = new Set(titleWords(b)); if (!A.length || !Bw.size) return true;
+    const short = A.length <= Bw.size ? A : [...Bw]; const long = A.length <= Bw.size ? Bw : new Set(A); return short.filter(w => long.has(w)).length >= Math.ceil(0.6 * short.length); };
   /** a "-2" / "-copy" / "-old" variant of another address of the site: -> the original's address, or ''. `known`: the site's pages, as
    *  addresses or { url, title }. A one-digit suffix counts only when the address without it is a page the site has AND, when both titles
    *  are known, they are the same page title (so /step-2 beside a different /step is not a copy); "-copy" always counts. */
@@ -1419,9 +1423,10 @@ const LRU = (() => {
     const s = segs(u); if (!s.length) return '';
     const m = s[s.length - 1].match(COPY_RE); if (!m) return '';
     const base = urlKey(u).replace(/[^/]+$/, m[1]);
-    const list = (Array.isArray(known) ? known : []).map(x => x && typeof x === 'object' ? { k: urlKey(x.url), url: S(x.url), title: titleKey(x.title) } : { k: urlKey(x), url: S(x), title: '' }).filter(x => x.k);
+    const list = (Array.isArray(known) ? known : []).map(x => x && typeof x === 'object' ? { k: urlKey(x.url), url: S(x.url), title: S(x.title) } : { k: urlKey(x), url: S(x), title: '' }).filter(x => x.k);
     const orig = list.find(x => x.k === base), self = list.find(x => x.k === urlKey(u));
-    if (orig) { if (/^\d$/.test(m[2]) && orig.title && self && self.title && orig.title !== self.title) return ''; return orig.url || base; }
+    // a one-digit suffix is a copy unless both titles are known and share under 60% of the shorter title's words (a different page)
+    if (orig) { if (/^\d$/.test(m[2]) && orig.title && self && self.title && !sameTitle(orig.title, self.title)) return ''; return orig.url || base; }
     return /^copy/.test(m[2]) ? base : '';
   };
   // the same search in other words: every word kept, joining words dropped, a plural folded (the H2 target_guard rule of Ladder_Plan.js)
@@ -3341,6 +3346,7 @@ for (const s of list) {
     const hist = headRanks.filter(h => String(h.ladder_id) === String(id) && norm(h.keyword) === norm(head) && String(h.position) !== '' && h.position != null && Number.isFinite(Number(h.position)) && Number(h.position) >= 0)
       .sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));   // failed checks (-1) are "check again", not a position
     const head_position = hist.length ? Number(hist[0].position) : null;
+    const head_url = hist.length ? String(hist[0].url || '') : '';   // LADDER PACKAGE (re-review Low): where the head ranks
     const lastN = hist.slice(0, CONFIG.won_checks);
     const won = lastN.length >= CONFIG.won_checks && lastN.every(h => Number(h.position) >= 1 && Number(h.position) <= CONFIG.won_position);
     // review M4 (LADDER PACKAGE): a stopped / failed / set-aside rung is no support the client can publish, and a rung merged into another
@@ -3367,8 +3373,8 @@ for (const s of list) {
     const hf = top ? fitOf.get(top) : null;
     const head_aside = top && (String(top.status || '') === 'set_aside' || (hf && hf.flagged && !hf.ok))
       ? { keyword: top.keyword, reason: String(top.status || '') === 'set_aside' ? String(top.status_note || 'its main keyword was set aside') : (hf.detail + ' (' + hf.reason + ')') } : null;
-    if (head_aside) return { id, rows, top, head, mode, status, plan_type, priority, start, chosen_by, chosen_ok, head_position, won, won_checks: lastN.length, support: support.length, published, gate_open, main_waiting: false, remaining: [], eligible: [], head_aside, recheck_due: false };
-    return { id, rows, top, head, mode, status, plan_type, priority, start, chosen_by, chosen_ok, head_position, won, won_checks: lastN.length, support: support.length, published, gate_open, main_waiting, remaining, eligible, recheck_due };
+    if (head_aside) return { id, rows, top, head, mode, status, plan_type, priority, start, chosen_by, chosen_ok, head_position, head_url, won, won_checks: lastN.length, support: support.length, published, gate_open, main_waiting: false, remaining: [], eligible: [], head_aside, recheck_due: false };
+    return { id, rows, top, head, mode, status, plan_type, priority, start, chosen_by, chosen_ok, head_position, head_url, won, won_checks: lastN.length, support: support.length, published, gate_open, main_waiting, remaining, eligible, recheck_due };
   }).sort((a, b) => a.priority - b.priority || String(a.start).localeCompare(String(b.start)) || String(a.id).localeCompare(String(b.id)));
   // R-K2: the ladders the client chose (any status except archived: a won ladder still tells us their topics)
   const clientLadders = info.filter(x => clientIds.has(String(x.id)));
@@ -3391,7 +3397,9 @@ for (const s of list) {
   const ownersC = [...lrows.filter(r => r.target_url && String(r.status || '') !== 'merged' && (String(r.status || '') === 'published' || r.page_exists === true || r.page_exists === 'true'))
       .map(r => ({ url: r.target_url, keyword: r.keyword, supporting: r.supporting, ladder_id: r.ladder_id })),
     ...slog.filter(l => String(l.published_url || '').trim() && !String(l.existing_page_url || '').trim()).map(l => ({ url: l.published_url, keyword: l.keyword }))];
-  const knownC = [...new Set([...pageRows.filter(r => r.site_id === s.site_id).map(r => String(r.url || '')), ...ownersC.map(o => String(o.url || ''))].filter(Boolean))];
+  // re-review N3: the page titles travel with the addresses, so the copy rule reads the pages exactly as Ladder Plan does
+  const knownC = (() => { const m = new Map(); for (const r of pageRows.filter(r => r.site_id === s.site_id)) if (r.url && !m.has(LRU.urlKey(r.url))) m.set(LRU.urlKey(r.url), { url: String(r.url), title: String(r.title || r.h1 || '') });
+    for (const o of ownersC) if (o.url && !m.has(LRU.urlKey(o.url))) m.set(LRU.urlKey(o.url), { url: String(o.url), title: '' }); return [...m.values()]; })();
   const pagesQ = pageRows.filter(r => r.site_id === s.site_id).map(r => ({ url: r.url, queries: (() => { try { const q = JSON.parse(r.queries_json || '[]'); return Array.isArray(q) ? q : []; } catch (e) { return []; } })() }));
   const addressOf = (l, x) => { const was = String(l.target_url || ''); const exists = l.page_exists === true || l.page_exists === 'true';
     const home = (was.match(/^https?:\/\/[^\/?#]+/i) || [''])[0] || ''; const slash = /\/$/.test(was);
@@ -3399,7 +3407,7 @@ for (const s of list) {
     if (isTop(l)) { const orig = exists ? LRU.copyOf(was, knownC) : '';
       if (orig) return { existing: orig, target: orig, note: LRU.pathOf(was) + ' is a copy of ' + LRU.pathOf(orig) + ': the main page improves the original' };
       // review H5: a blog address that ranks for the main keyword (the Rank Tracker's last readable position, or Search Console) keeps it
-      const ranks = LRU.ranksFor(was, l.keyword, { rank: x && x.head_position != null ? { position: x.head_position, url: '' } : null, pages: pagesQ });
+      const ranks = LRU.ranksFor(was, l.keyword, { rank: x && x.head_position != null ? { position: x.head_position, url: String(x.head_url || '') } : null, pages: pagesQ });   // re-review Low: the head's own address, as Ladder Plan
       if (LRU.isBlog(was) && !ranks && ['solution', 'compare', 'hire'].includes(LRU.stageOf(l.keyword, '', String(l.stage || '')))) { const nu = own(was); if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu, note: 'the main page gets its own page (' + LRU.pathOf(nu) + '), not the blog address ' + LRU.pathOf(was) }; } }
     if (exists && was) { const o = LRU.ownerOf(was, l.keyword, ownersC, String(l.supporting || '').split(',').map(x => x.trim()).filter(Boolean));
       if (o) { const nu = own(was); if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu, note: LRU.pathOf(was) + ' is already the page for "' + o.keyword + '": "' + l.keyword + '" gets its own page at ' + LRU.pathOf(nu) }; } }

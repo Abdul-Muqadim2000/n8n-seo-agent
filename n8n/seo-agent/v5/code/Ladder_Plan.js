@@ -645,7 +645,7 @@ const stageOfLP = (k) => LRU.stageOf(k.keyword, k.intent, k.stage || kiStageOf.g
 const avoidLP = (() => { const out = [];
   for (const r of rowsOf('Load Content Log (Ladder)')) { if (reachDomain(r.domain) !== reachDomain(domain) || !String(r.keyword || '').trim()) continue;
     const txt = String(r.publish_note || '') + ' ' + String(r.qa_reasons || '');
-    if (/keyword check advised against/i.test(txt) || (String(r.status || '') === 'held' && /\bAVOID\b|clearly under/i.test(txt)))
+    if (/keyword check advised against/i.test(txt) || (String(r.status || '') === 'held' && /\bAVOID\b/.test(txt)))   // re-review: AVOID only, never a low score
       out.push({ keyword: String(r.keyword).toLowerCase().trim(), source: 'content log', why: 'our check advised against "' + String(r.keyword).trim() + '" when it was written on ' + String(r.started_at || r.createdAt || '').slice(0, 10) }); }
   for (const k of ((KI_LP && KI_LP.used) ? (KI_LP.avoid || []) : [])) out.push({ keyword: String(k).toLowerCase().trim(), source: 'keyword intelligence', why: 'keyword intelligence marks "' + k + '" as one to avoid' });
   return out; })();
@@ -722,9 +722,14 @@ const head_guard = (() => { if (!planned || !top.target_url) return null;
   let com = null; try { com = SM.matchPage(nonBlog, head); } catch (e) { com = null; }
   const g = LRU.headTarget(top.target_url, { known: knownLP, home: homeUrl, planned: plannedUrl(head), commercial: com && com.url ? com.url : '' });
   if (!g || !g.to) return null;
-  // the old address, when nothing ranks there, is a redirect step for the client once the new main page is live (Ladder Rows stores
-  // "moved from <old>" on the main page's row; the app turns it into the site task indexing:merge)
-  g.moved_from = g.was;
+  // re-review N1: only a "-2" / "-copy" copy of the original is a redirect step for the client once the main page is live (Ladder Rows
+  // stores "moved from <old>" in the main page's target_why; the app turns it into the site task indexing:merge), and never when the old
+  // address is another page of a ladder of this site or Google shows it for any search (a blog address that moved is left alone: it may be
+  // another rung's live page)
+  const oldK = LRU.urlKey(g.was);
+  const heldByRow = [...others, ...rungs.flatMap(r => r.pages)].some(r => r && LRU.urlKey(r.target_url) === oldK);
+  const seen = SM.pages(pageModel).some(p => p && LRU.urlKey(p.url) === oldK && (Array.isArray(p.queries) ? p.queries : []).some(q => (Number((q || {}).impressions) || 0) > 0));
+  if (g.reason === 'copy' && !heldByRow && !seen) g.moved_from = g.was;
   Object.assign(top, { target_url: g.to, exists: !!g.exists, status: g.exists ? 'improve' : 'new', existing_source: g.exists ? 'sitemap' : null,
     existing_confidence: g.exists && com && LRU.urlKey(com.url) === LRU.urlKey(g.to) ? (com.confidence ?? null) : null, existing_evidence: g.exists ? (com && LRU.urlKey(com.url) === LRU.urlKey(g.to) ? com.evidence || '' : 'the original of ' + LRU.pathOf(g.was)) : '' });
   return g; })();

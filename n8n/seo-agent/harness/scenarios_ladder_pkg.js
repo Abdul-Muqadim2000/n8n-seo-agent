@@ -171,8 +171,9 @@ module.exports = async (ctx) => {
     return out.ladder || out;
   };
   const pagesOf = (L) => (L.rungs || []).flatMap(r => r.pages || []);
-  const PAGES = [{ url: T + '/', title: 'Tech& | Microsoft Dynamics partner' }, { url: T + '/dynamics-365-crm-uae', title: 'Dynamics 365 CRM UAE' },
-    { url: T + '/dynamics-365-crm-uae-2', title: 'Dynamics 365 CRM UAE' }, { url: T + '/insights/is-microsoft-dynamics-365-an-erp-system', title: 'Dynamics 365 ERP System: Right App for UAE Firms' },
+  // re-review N3: the production titles of techand.ai's CRM page and its "-2" copy (seo_pages, 2026-11-08): different, and still one page
+  const PAGES = [{ url: T + '/', title: 'Tech& | Microsoft Dynamics partner' }, { url: T + '/dynamics-365-crm-uae', title: 'Dynamics 365 CRM in Dubai & UAE: Sales and Service | Tech&' },
+    { url: T + '/dynamics-365-crm-uae-2', title: 'Dynamics 365 CRM Services UAE | Tech' }, { url: T + '/insights/is-microsoft-dynamics-365-an-erp-system', title: 'Dynamics 365 ERP System: Right App for UAE Firms' },
     { url: T + '/dynamics-365-business-central-uae', title: 'Dynamics 365 Business Central UAE' }];
 
   // ---------- LPK3 golden: nothing for the rules to do ----------
@@ -215,8 +216,14 @@ module.exports = async (ctx) => {
       L3.top.target_url === B && L3.top.exists === true && ((L3.ladder_rules || {}).head_guard || {}).reason === 'ranks' && (L3.notes || []).some(n => /already ranks for "dynamics 365 erp system", so the main page improves it/.test(n)), J(L3.top));
     mock('Attach PDF Ladder', [{ json: { ladder: L2, pages_now: 1, domain: 'techand.ai', country: 'United Arab Emirates' } }]);
     const rows2 = (await run('Ladder Rows', EMPTY)).map(i => i.json);
-    check('a head moved off an address that does not rank stores "moved from <old>" (the app turns it into the redirect step indexing:merge)',
-      /^moved from https:\/\/www\.techand\.ai\/insights\/is-microsoft-dynamics-365-an-erp-system: /.test((rows2.find(r => r.rung === 4) || {}).target_why || ''), J(rows2.find(r => r.rung === 4)));
+    check('re-review N1: a main page moved off a BLOG address asks for no redirect (the article may be another rung\'s live page)',
+      !/^moved from /.test((rows2.find(r => r.rung === 4) || {}).target_why || ''), J(rows2.find(r => r.rung === 4)));
+    mock('Attach PDF Ladder', [{ json: { ladder: L, pages_now: 1, domain: 'techand.ai', country: 'United Arab Emirates' } }]);
+    const rows1 = (await run('Ladder Rows', EMPTY)).map(i => i.json);
+    check('...a main page moved off a "-2" copy does (the app turns it into the redirect step indexing:merge)',
+      /^moved from https:\/\/www\.techand\.ai\/dynamics-365-crm-uae-2: /.test((rows1.find(r => r.rung === 4) || {}).target_why || ''), J(rows1.find(r => r.rung === 4)));
+    check('re-review N3: the kit calls the production "-2" a copy with its real (different) titles, and with addresses only, as the cadence once did',
+      LRU.copyOf(T + '/dynamics-365-crm-uae-2', PAGES) === T + '/dynamics-365-crm-uae' && LRU.copyOf(T + '/dynamics-365-crm-uae-2', PAGES.map(p => p.url)) === T + '/dynamics-365-crm-uae', '');
   });
 
   // ---------- LPK5 rules 2 and 4 in the plan ----------
@@ -352,6 +359,20 @@ module.exports = async (ctx) => {
     check('...a non-deliberate one still records the content log (published), only the ladder row stays', x.log_row.status === 'published' && x.log_row.published_url === ERP, J(x.log_row));
     const z = PR({ site_id: 'site_techand-ai', domain: 'techand.ai', keyword: head.keyword, url: ERP, live: true, log: null, ladder: head, request_id: '', now: '2026-11-09T10:00:00.000Z' });
     check('control: without owners (an older caller) the row is built as before', z.ladder_row && z.ladder_row.target_url === ERP, J(z));
+    // re-review N2: Detect Published never records a TITLE-only match on another search's address as this keyword's publish
+    const detect = async (matched_by) => { reset();
+      const cand = { key: 'dynamics 365 erp system', keyword: 'dynamics 365 erp system', source: 'ladder', log: null, ladder: head, written_at: '2026-10-29T01:28:13Z' };
+      const st = { site_idx: 0, site_id: 'site_techand-ai', domain: 'techand.ai', candidates: [cand], sitemap: { ok: true }, notes: {}, inventory: [], fetches: matched_by === 'title' ? [ERP] : [],
+        slug_matches: matched_by === 'slug' ? [{ key: cand.key, url: ERP, ukey: 'techand.ai/insights/is-microsoft-dynamics-365-an-erp-system', score: 95, matched_by: 'slug' }] : [],
+        title_checks: matched_by === 'title' ? [{ key: cand.key, tokens: ['dynamics', '365', 'erp', 'system'], options: [{ url: ERP, ukey: 'techand.ai/insights/is-microsoft-dynamics-365-an-erp-system', slug_share: 0.6 }] }] : [] };
+      mock('Match Slugs (Detect)', [{ json: { sites: [st] } }, ...(matched_by === 'title' ? [{ json: { fetch: true, url: ERP } }] : [])]);
+      mock('Fetch Pages (Detect)', [{ json: { statusCode: 200, data: '<html><head><title>Dynamics 365 ERP System: Right App for UAE Firms | Tech</title></head><body><h1>Dynamics 365 ERP System</h1></body></html>' } }]);
+      mock('Publish Candidates', [{ json: { site_id: 'site_techand-ai', owners } }]);
+      return (await run('Detect Published', EMPTY))[0].json; };
+    const dt = await detect('title');
+    console.log('   detect (title on owned) ->', J({ logs: dt.log_rows.length, ladders: dt.ladder_rows.length, unmatched: dt.unmatched }));
+    check('re-review N2: a title-only match of the main keyword on the guide\'s address records nothing (no content-log publish), with its note', dt.log_rows.length === 0 && dt.ladder_rows.length === 0
+      && (dt.unmatched || []).some(u => u.keyword === 'dynamics 365 erp system' && /matched by its title only/.test(u.note)), J(dt));
     // Publish Candidates: the waiting main page whose "existing address" is the guide's is looked for at its own address only
     reset();
     mock('Site Plan', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai' } }]);

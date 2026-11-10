@@ -2478,7 +2478,11 @@ const LRU = (() => {
   const isBlog = (u) => { let s = segs(u); if (s.length > 2 && LOCALE.test(s[0])) s = s.slice(1); return s.length > 1 && CFG.blog_dirs.includes(s[0]); };
   // review L1 (2026-11-10): only suffixes that mean "another copy of the same page"; -new, -v9, a bare word like /windows-11 are not copies
   const COPY_RE = /^(.+?)-(copy(?:-\d+)?|\d|old|draft|backup|bak)$/;
-  const titleKey = (t) => low(t).replace(/[^a-z0-9\u0600-\u06ff]+/g, ' ').trim();
+  // a page title's own words: the brand after "|" / " - " dropped, joining words out, plurals folded (re-review N3: production's "-2" copy of
+  // "Dynamics 365 CRM in Dubai & UAE: Sales and Service | Tech&" is titled "Dynamics 365 CRM Services UAE | Tech")
+  const titleWords = (t) => { const x = low(t).split(/\s[|\u2013\u2014]\s|\s-\s/)[0] || ''; return wordsKey(x).split(' ').filter(Boolean); };
+  const sameTitle = (a, b) => { const A = titleWords(a), Bw = new Set(titleWords(b)); if (!A.length || !Bw.size) return true;
+    const short = A.length <= Bw.size ? A : [...Bw]; const long = A.length <= Bw.size ? Bw : new Set(A); return short.filter(w => long.has(w)).length >= Math.ceil(0.6 * short.length); };
   /** a "-2" / "-copy" / "-old" variant of another address of the site: -> the original's address, or ''. `known`: the site's pages, as
    *  addresses or { url, title }. A one-digit suffix counts only when the address without it is a page the site has AND, when both titles
    *  are known, they are the same page title (so /step-2 beside a different /step is not a copy); "-copy" always counts. */
@@ -2486,9 +2490,10 @@ const LRU = (() => {
     const s = segs(u); if (!s.length) return '';
     const m = s[s.length - 1].match(COPY_RE); if (!m) return '';
     const base = urlKey(u).replace(/[^/]+$/, m[1]);
-    const list = (Array.isArray(known) ? known : []).map(x => x && typeof x === 'object' ? { k: urlKey(x.url), url: S(x.url), title: titleKey(x.title) } : { k: urlKey(x), url: S(x), title: '' }).filter(x => x.k);
+    const list = (Array.isArray(known) ? known : []).map(x => x && typeof x === 'object' ? { k: urlKey(x.url), url: S(x.url), title: S(x.title) } : { k: urlKey(x), url: S(x), title: '' }).filter(x => x.k);
     const orig = list.find(x => x.k === base), self = list.find(x => x.k === urlKey(u));
-    if (orig) { if (/^\d$/.test(m[2]) && orig.title && self && self.title && orig.title !== self.title) return ''; return orig.url || base; }
+    // a one-digit suffix is a copy unless both titles are known and share under 60% of the shorter title's words (a different page)
+    if (orig) { if (/^\d$/.test(m[2]) && orig.title && self && self.title && !sameTitle(orig.title, self.title)) return ''; return orig.url || base; }
     return /^copy/.test(m[2]) ? base : '';
   };
   // the same search in other words: every word kept, joining words dropped, a plural folded (the H2 target_guard rule of Ladder_Plan.js)
@@ -3587,7 +3592,7 @@ const stageOfLP = (k) => LRU.stageOf(k.keyword, k.intent, k.stage || kiStageOf.g
 const avoidLP = (() => { const out = [];
   for (const r of rowsOf('Load Content Log (Ladder)')) { if (reachDomain(r.domain) !== reachDomain(domain) || !String(r.keyword || '').trim()) continue;
     const txt = String(r.publish_note || '') + ' ' + String(r.qa_reasons || '');
-    if (/keyword check advised against/i.test(txt) || (String(r.status || '') === 'held' && /\bAVOID\b|clearly under/i.test(txt)))
+    if (/keyword check advised against/i.test(txt) || (String(r.status || '') === 'held' && /\bAVOID\b/.test(txt)))   // re-review: AVOID only, never a low score
       out.push({ keyword: String(r.keyword).toLowerCase().trim(), source: 'content log', why: 'our check advised against "' + String(r.keyword).trim() + '" when it was written on ' + String(r.started_at || r.createdAt || '').slice(0, 10) }); }
   for (const k of ((KI_LP && KI_LP.used) ? (KI_LP.avoid || []) : [])) out.push({ keyword: String(k).toLowerCase().trim(), source: 'keyword intelligence', why: 'keyword intelligence marks "' + k + '" as one to avoid' });
   return out; })();
@@ -3664,9 +3669,14 @@ const head_guard = (() => { if (!planned || !top.target_url) return null;
   let com = null; try { com = SM.matchPage(nonBlog, head); } catch (e) { com = null; }
   const g = LRU.headTarget(top.target_url, { known: knownLP, home: homeUrl, planned: plannedUrl(head), commercial: com && com.url ? com.url : '' });
   if (!g || !g.to) return null;
-  // the old address, when nothing ranks there, is a redirect step for the client once the new main page is live (Ladder Rows stores
-  // "moved from <old>" on the main page's row; the app turns it into the site task indexing:merge)
-  g.moved_from = g.was;
+  // re-review N1: only a "-2" / "-copy" copy of the original is a redirect step for the client once the main page is live (Ladder Rows
+  // stores "moved from <old>" in the main page's target_why; the app turns it into the site task indexing:merge), and never when the old
+  // address is another page of a ladder of this site or Google shows it for any search (a blog address that moved is left alone: it may be
+  // another rung's live page)
+  const oldK = LRU.urlKey(g.was);
+  const heldByRow = [...others, ...rungs.flatMap(r => r.pages)].some(r => r && LRU.urlKey(r.target_url) === oldK);
+  const seen = SM.pages(pageModel).some(p => p && LRU.urlKey(p.url) === oldK && (Array.isArray(p.queries) ? p.queries : []).some(q => (Number((q || {}).impressions) || 0) > 0));
+  if (g.reason === 'copy' && !heldByRow && !seen) g.moved_from = g.was;
   Object.assign(top, { target_url: g.to, exists: !!g.exists, status: g.exists ? 'improve' : 'new', existing_source: g.exists ? 'sitemap' : null,
     existing_confidence: g.exists && com && LRU.urlKey(com.url) === LRU.urlKey(g.to) ? (com.confidence ?? null) : null, existing_evidence: g.exists ? (com && LRU.urlKey(com.url) === LRU.urlKey(g.to) ? com.evidence || '' : 'the original of ' + LRU.pathOf(g.was)) : '' });
   return g; })();

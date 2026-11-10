@@ -47,7 +47,11 @@ const LRU = (() => {
   const isBlog = (u) => { let s = segs(u); if (s.length > 2 && LOCALE.test(s[0])) s = s.slice(1); return s.length > 1 && CFG.blog_dirs.includes(s[0]); };
   // review L1 (2026-11-10): only suffixes that mean "another copy of the same page"; -new, -v9, a bare word like /windows-11 are not copies
   const COPY_RE = /^(.+?)-(copy(?:-\d+)?|\d|old|draft|backup|bak)$/;
-  const titleKey = (t) => low(t).replace(/[^a-z0-9\u0600-\u06ff]+/g, ' ').trim();
+  // a page title's own words: the brand after "|" / " - " dropped, joining words out, plurals folded (re-review N3: production's "-2" copy of
+  // "Dynamics 365 CRM in Dubai & UAE: Sales and Service | Tech&" is titled "Dynamics 365 CRM Services UAE | Tech")
+  const titleWords = (t) => { const x = low(t).split(/\s[|\u2013\u2014]\s|\s-\s/)[0] || ''; return wordsKey(x).split(' ').filter(Boolean); };
+  const sameTitle = (a, b) => { const A = titleWords(a), Bw = new Set(titleWords(b)); if (!A.length || !Bw.size) return true;
+    const short = A.length <= Bw.size ? A : [...Bw]; const long = A.length <= Bw.size ? Bw : new Set(A); return short.filter(w => long.has(w)).length >= Math.ceil(0.6 * short.length); };
   /** a "-2" / "-copy" / "-old" variant of another address of the site: -> the original's address, or ''. `known`: the site's pages, as
    *  addresses or { url, title }. A one-digit suffix counts only when the address without it is a page the site has AND, when both titles
    *  are known, they are the same page title (so /step-2 beside a different /step is not a copy); "-copy" always counts. */
@@ -55,9 +59,10 @@ const LRU = (() => {
     const s = segs(u); if (!s.length) return '';
     const m = s[s.length - 1].match(COPY_RE); if (!m) return '';
     const base = urlKey(u).replace(/[^/]+$/, m[1]);
-    const list = (Array.isArray(known) ? known : []).map(x => x && typeof x === 'object' ? { k: urlKey(x.url), url: S(x.url), title: titleKey(x.title) } : { k: urlKey(x), url: S(x), title: '' }).filter(x => x.k);
+    const list = (Array.isArray(known) ? known : []).map(x => x && typeof x === 'object' ? { k: urlKey(x.url), url: S(x.url), title: S(x.title) } : { k: urlKey(x), url: S(x), title: '' }).filter(x => x.k);
     const orig = list.find(x => x.k === base), self = list.find(x => x.k === urlKey(u));
-    if (orig) { if (/^\d$/.test(m[2]) && orig.title && self && self.title && orig.title !== self.title) return ''; return orig.url || base; }
+    // a one-digit suffix is a copy unless both titles are known and share under 60% of the shorter title's words (a different page)
+    if (orig) { if (/^\d$/.test(m[2]) && orig.title && self && self.title && !sameTitle(orig.title, self.title)) return ''; return orig.url || base; }
     return /^copy/.test(m[2]) ? base : '';
   };
   // the same search in other words: every word kept, joining words dropped, a plural folded (the H2 target_guard rule of Ladder_Plan.js)
@@ -351,7 +356,7 @@ const out = state.map(st => {
   }
   pairs.sort((a, b) => b.score - a.score);
   for (const p of pairs) if (!matched.has(p.key) && !claimed.has(p.ukey)) { matched.set(p.key, p); claimed.add(p.ukey); }
-  const detected = [], log_rows = [], ladder_rows = [], case_rows = [], conflicts = [];
+  const detected = [], log_rows = [], ladder_rows = [], case_rows = [], conflicts = [], unmatchedC = [];
   for (const c of st.candidates || []) {
     const p = matched.get(c.key); if (!p) continue;
     const keyword = (c.log || c.ladder || {}).keyword || c.keyword;
@@ -367,12 +372,15 @@ const out = state.map(st => {
     // pile-up guard); only the ladder row is left where it was when the address belongs to another search (a deliberate refresh comes back
     // as `merged` from publishedRows and is stored)
     if (url_conflict) conflicts.push({ keyword, url: p.url, note: url_conflict.text });
+    // re-review N2: a TITLE-only match on another search's address is not this keyword's publish (techand.ai's guide carries the main page's
+    // title): it stays unmatched with its note; a slug match of the keyword's own address, or a deliberate refresh (merged), is recorded
+    if (url_conflict && !(ladder_row && ladder_row.status === 'merged') && p.matched_by !== 'slug') { unmatchedC.push({ keyword, note: url_conflict.text + ' (matched by its title only)' }); continue; }
     log_rows.push(log_row); if (ladder_row) ladder_rows.push(ladder_row);
     if (log_row.source === 'case_study' || /case stud/i.test(log_row.page_type)) case_rows.push({ site_id: log_row.site_id, keyword: log_row.keyword, page_url: p.url });
     detected.push({ keyword, url: p.url, ladder_id: log_row.ladder_id || (c.ladder ? c.ladder.ladder_id : ''), matched_by: p.matched_by, source: c.source });
   }
   const unmatched = [...(st.candidates || []).filter(c => !matched.has(c.key)).map(c => ({ keyword: c.keyword, note: (st.notes || {})[c.key] || (c.address_taken ? 'its old address ' + LRU.pathOf(c.address_taken.url) + ' is the page for "' + c.address_taken.keyword + '", so it is looked for at its own address only' : '') })),
-    ];
+    ...unmatchedC];
   const address_notes = conflicts.map(x => ({ keyword: x.keyword, url: x.url, note: x.note }));   // LADDER PACKAGE: carried in this node's output (the page went live there; its ladder row stays where it was)
   // D11: the sitemap URLs this run read, plus the title / H1 of the pages it fetched, feed the week's page inventory (seo_pages)
   const titles = (st.fetches || []).map(u => { const pg = pages.get(u); return (pg && pg.ok) ? { url: u, title: pg.title, h1: pg.h1 } : null; }).filter(Boolean);
