@@ -63,7 +63,19 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-11-10 evening, devaicon client reports fixed + engine/API DEPLOYED - latest)
+## Status (2026-11-11, KI next round DEPLOYED: queue, who-is-searching filter, one page per search - latest)
+Owner asked for the three steps, then the Trial re-run. **Deployed 2026-11-10 ~23:05 UTC** (backup pg/2026-11-10/*T225806Z; prod == main
+before, prod == build after, 0 nodes; API on the VM at 347073cb, branch feature/seo-agent-v4.5; NO rollback image for 28f8de07: the image is
+named alaventra-app:local, rollback = checkout 28f8de07 + rebuild). Web = **PR #65** (owner merges). (1) **QUEUE** (`fixes/QUEUE.md`): results
+pages via DataForSEO normal-priority queue (exact addresses; high priority gives redirects, probe $0.018), 5 free task_get rounds + live
+fallback; found + fixed: the run row left the fallback's money out. (2) **KI-GATE2** (`fixes/GATE2.md`): 800 Trial searches labelled twice
+(harness/accuracy/ki_gate_2026-11-11.json); precision of pass 46.6% -> 78.5%; new reason `practitioner`; shared fit gate unchanged (only the
+KI workflow + main's KI Pool (Ladder) node differ). (3) **KI-ONEURL** (`fixes/ONEURL.md`): page action uses `_ladder_rules.js`. **Trial
+re-run** (execs 12607/12608): 60/60 pages exact, 9 / 5 groups (were 0), CRM page right; but on 196 UNSEEN passing searches only 58.5% /
+57.1% right (`harness/accuracy/ki_gate_unseen_2026-11-11.json`): word rules do not generalise. Next proposed: classify each search by its
+own results page (docs / courses / jobs vs providers), $0.18 a run. Not On yet. Harness 18829 / 0; app 1174 / 2070 / 359.
+
+## Status (2026-11-10 evening, devaicon client reports fixed + engine/API DEPLOYED - previous)
 Five reports from devaicon.com (`Issues.docx`), all checked on production first; read **`n8n/seo-agent/docs/client-reports-2026-11-10/README.md`**.
 Client right on 4 of 5 (moved pages kept "another address" after their 301s and Re-check refused them; the card showed our grade, not the
 live page; Coming up showed a past plan with an approved item that was silently never written; UAE AI page held as duplicate of a Pakistan
