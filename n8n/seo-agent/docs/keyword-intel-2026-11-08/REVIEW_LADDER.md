@@ -252,3 +252,27 @@ for the watcher question.
   running or queued (right; check `status=running` and `status=new` separately, for the H1 reason above). Re-probe
   `/dynamics-365-crm-uae` before pointing row 50 at it.
 - Sections 3 / 4: unchanged, fine.
+
+## Check of 4c18eabf
+
+Diff `f7399da4..4c18eabf` (fda9a8e0 engine, ce93b7cd app, 4c18eabf docs). Harness `ONLY_S='LPK|S40|PV5|W0D'` on 4c18eabf in a throwaway
+`n8nio/n8n:2.41.4`: **565 passed, 0 failed**. The generated workflows carry the fixes (Main / Cadence / Site Tracker), and the app copy
+`ladder-rules.generated.js` equals the kit. I did not re-run the app's own tests; the builder reports them green.
+
+| Item | Status | Evidence |
+|---|---|---|
+| H1 watcher | **fixed** | `client.ts unfinishedVia` makes three calls (`running`, `new`, `waiting`) through `Promise.all`. If any one rejects, the whole result is `null` and nothing is closed. Each item keeps its status. The test uses a fake n8n that hides running executions when no status is given. Cost: 3 calls per 15 minutes in total. |
+| N1 redirect step | **fixed** | Engine (`Ladder_Plan.js` head_guard): `moved_from` is set only when the reason is `copy`, no row of this or another ladder holds the old address (`others` is defined at :69), and Search Console shows no impressions for it. App (`siteTasks.ts ladderMovesOf`): it now reads every ladder row of the domain and skips an old address held by another non-merged row. Both sides guard. |
+| N2 title-only publish | **fixed** | `Detect_Published.js:54`: on a conflict, only a `merged` row or a `slug` match is recorded. Match Slugs also uses `slug` for a URL-changed existing page (`updated: true`), so a real improvement of a page is still caught. Otherwise the candidate stays unmatched with its note. That means no false "published" and no pile-up effect (the content-log row stays `written` only while it really is unpublished). |
+| N3 copy rule | **fixed** | `sameTitle` compares the shorter title's own words (brand after "|" dropped, joining words out, plurals folded), with a 60% overlap. Production titles: "Dynamics 365 CRM Services UAE" vs "Dynamics 365 CRM in Dubai & UAE: Sales and Service" share 5 of 5 words, so it is a copy. "/step-2" with a different title is not a copy. Ladder Plan, Cadence Plan and `cadence.ts` all pass `{ url, title }` now (parity). |
+| Low: cadence ranking address | fixed | Cadence Plan and `cadence.ts` pass the last rank reading's `url` (`head_url` / `headUrl`), the same rule as Ladder Plan. |
+| Low: plan-time stop | fixed | `Ladder_Plan.js:648` stops on `\bAVOID\b` only. |
+
+I found no regression. Leftover Lows, not blocking: `address_notes` / unmatched notes are not shown to the client; the place words "eu" /
+"indian" / "jordan" (fit gate, out of scope).
+
+**Verdict: ship.** No Blocker or High is open. Deploy with the engine node diff against production first (`feature-engine-deploy-check-prod-first`)
+and `sync_tables` before import (`deploy_engine.py` does this).
+
+**Repair plan: safe to apply** after the deploy: section 1 safe option, section 2 `set_aside` and the n8n status checks (running / new / waiting
+separately), sections 3 and 4 unchanged. Re-probe the target pages first, as written.
