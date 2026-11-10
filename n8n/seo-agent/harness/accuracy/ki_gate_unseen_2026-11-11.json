@@ -1,0 +1,1374 @@
+[
+ {
+  "id": 1,
+  "site": "techand.ai",
+  "keyword": "crm share price",
+  "label": "off_topic",
+  "why": "investor share price"
+ },
+ {
+  "id": 2,
+  "site": "techand.ai",
+  "keyword": "peppol directory",
+  "label": "practitioner",
+  "why": "directory lookup tool"
+ },
+ {
+  "id": 3,
+  "site": "techand.ai",
+  "keyword": "peppol service provider",
+  "label": "pass",
+  "why": "looking for e-invoicing provider"
+ },
+ {
+  "id": 4,
+  "site": "techand.ai",
+  "keyword": "best erp solution in dubai",
+  "label": "pass",
+  "why": "ERP buyer in Dubai"
+ },
+ {
+  "id": 5,
+  "site": "techand.ai",
+  "keyword": "erp support services",
+  "label": "pass",
+  "why": "ERP support service buyer"
+ },
+ {
+  "id": 6,
+  "site": "techand.ai",
+  "keyword": "microsoft dynamics 365 erp pricing",
+  "label": "pass",
+  "why": "Dynamics 365 pricing research"
+ },
+ {
+  "id": 7,
+  "site": "techand.ai",
+  "keyword": "erp vs custom development",
+  "label": "pass",
+  "why": "build vs buy comparison"
+ },
+ {
+  "id": 8,
+  "site": "techand.ai",
+  "keyword": "crm company details",
+  "label": "off_topic",
+  "why": "vague, no buyer intent"
+ },
+ {
+  "id": 9,
+  "site": "techand.ai",
+  "keyword": "crm company full form",
+  "label": "job",
+  "why": "definition lookup"
+ },
+ {
+  "id": 10,
+  "site": "techand.ai",
+  "keyword": "crm company meaning",
+  "label": "job",
+  "why": "definition lookup"
+ },
+ {
+  "id": 11,
+  "site": "techand.ai",
+  "keyword": "register for peppol",
+  "label": "pass",
+  "why": "business needing Peppol onboarding"
+ },
+ {
+  "id": 12,
+  "site": "techand.ai",
+  "keyword": "e invoicing in uae",
+  "label": "pass",
+  "why": "UAE e-invoicing research"
+ },
+ {
+  "id": 13,
+  "site": "techand.ai",
+  "keyword": "erp application means",
+  "label": "job",
+  "why": "definition lookup"
+ },
+ {
+  "id": 14,
+  "site": "techand.ai",
+  "keyword": "erp business development",
+  "label": "job",
+  "why": "job role"
+ },
+ {
+  "id": 15,
+  "site": "techand.ai",
+  "keyword": "business operations platform",
+  "label": "off_topic",
+  "why": "too generic"
+ },
+ {
+  "id": 16,
+  "site": "techand.ai",
+  "keyword": "erp features",
+  "label": "pass",
+  "why": "ERP feature research"
+ },
+ {
+  "id": 17,
+  "site": "techand.ai",
+  "keyword": "erp features list",
+  "label": "pass",
+  "why": "ERP feature research"
+ },
+ {
+  "id": 18,
+  "site": "techand.ai",
+  "keyword": "need of erp",
+  "label": "pass",
+  "why": "why a business needs ERP"
+ },
+ {
+  "id": 19,
+  "site": "techand.ai",
+  "keyword": "erp operations",
+  "label": "off_topic",
+  "why": "too vague"
+ },
+ {
+  "id": 20,
+  "site": "techand.ai",
+  "keyword": "bitrix24 crm and projects",
+  "label": "other_brand",
+  "why": "Bitrix24 product"
+ },
+ {
+  "id": 21,
+  "site": "techand.ai",
+  "keyword": "peppol opzoeken",
+  "label": "other_market",
+  "why": "Dutch language"
+ },
+ {
+  "id": 22,
+  "site": "techand.ai",
+  "keyword": "peppol payment",
+  "label": "practitioner",
+  "why": "Peppol payment spec reference"
+ },
+ {
+  "id": 23,
+  "site": "techand.ai",
+  "keyword": "peppol practical",
+  "label": "practitioner",
+  "why": "practical reference material"
+ },
+ {
+  "id": 24,
+  "site": "techand.ai",
+  "keyword": "peppol pronunciation",
+  "label": "off_topic",
+  "why": "pronunciation, no buyer"
+ },
+ {
+  "id": 25,
+  "site": "techand.ai",
+  "keyword": "peppol protocol",
+  "label": "practitioner",
+  "why": "technical protocol spec"
+ },
+ {
+  "id": 26,
+  "site": "techand.ai",
+  "keyword": "peppol reporting",
+  "label": "practitioner",
+  "why": "provider statistics reporting"
+ },
+ {
+  "id": 27,
+  "site": "techand.ai",
+  "keyword": "peppol search",
+  "label": "practitioner",
+  "why": "directory lookup"
+ },
+ {
+  "id": 28,
+  "site": "techand.ai",
+  "keyword": "peppol sml",
+  "label": "practitioner",
+  "why": "technical SML component"
+ },
+ {
+  "id": 29,
+  "site": "techand.ai",
+  "keyword": "peppol test",
+  "label": "practitioner",
+  "why": "test/validator"
+ },
+ {
+  "id": 30,
+  "site": "techand.ai",
+  "keyword": "peppol vida",
+  "label": "other_market",
+  "why": "EU ViDA regulation"
+ },
+ {
+  "id": 31,
+  "site": "techand.ai",
+  "keyword": "peppol vzw",
+  "label": "other_brand",
+  "why": "OpenPeppol organisation"
+ },
+ {
+  "id": 32,
+  "site": "techand.ai",
+  "keyword": "peppol yuki",
+  "label": "other_brand",
+  "why": "Yuki accounting product"
+ },
+ {
+  "id": 33,
+  "site": "techand.ai",
+  "keyword": "best erp system for construction company",
+  "label": "pass",
+  "why": "industry ERP buyer"
+ },
+ {
+  "id": 34,
+  "site": "techand.ai",
+  "keyword": "enterprise system vs erp",
+  "label": "job",
+  "why": "theory comparison"
+ },
+ {
+  "id": 35,
+  "site": "techand.ai",
+  "keyword": "best erp for construction industry",
+  "label": "pass",
+  "why": "industry ERP buyer"
+ },
+ {
+  "id": 36,
+  "site": "techand.ai",
+  "keyword": "sap vs erp",
+  "label": "job",
+  "why": "confused learner comparison"
+ },
+ {
+  "id": 37,
+  "site": "techand.ai",
+  "keyword": "what is peppol id in uae",
+  "label": "pass",
+  "why": "UAE e-invoicing researcher"
+ },
+ {
+  "id": 38,
+  "site": "techand.ai",
+  "keyword": "dynamics 365 finance and operations on premise system requirements",
+  "label": "practitioner",
+  "why": "technical requirements"
+ },
+ {
+  "id": 39,
+  "site": "techand.ai",
+  "keyword": "dynamics 365 finance and operations system requirements",
+  "label": "practitioner",
+  "why": "technical requirements"
+ },
+ {
+  "id": 40,
+  "site": "techand.ai",
+  "keyword": "company erp meaning",
+  "label": "job",
+  "why": "definition lookup"
+ },
+ {
+  "id": 41,
+  "site": "techand.ai",
+  "keyword": "small company erp solutions",
+  "label": "pass",
+  "why": "small business ERP buyer"
+ },
+ {
+  "id": 42,
+  "site": "techand.ai",
+  "keyword": "is microsoft dynamics 365 an erp system",
+  "label": "pass",
+  "why": "buyer asks what product is"
+ },
+ {
+  "id": 43,
+  "site": "techand.ai",
+  "keyword": "new erp system announcement",
+  "label": "practitioner",
+  "why": "announcement template"
+ },
+ {
+  "id": 44,
+  "site": "techand.ai",
+  "keyword": "custom built erp system",
+  "label": "pass",
+  "why": "ERP buyer weighing options"
+ },
+ {
+  "id": 45,
+  "site": "techand.ai",
+  "keyword": "how to choose the right erp system",
+  "label": "pass",
+  "why": "how to choose ERP"
+ },
+ {
+  "id": 46,
+  "site": "techand.ai",
+  "keyword": "erp vs aps",
+  "label": "pass",
+  "why": "planning software comparison"
+ },
+ {
+  "id": 47,
+  "site": "techand.ai",
+  "keyword": "best erp design",
+  "label": "off_topic",
+  "why": "unclear, design not ERP"
+ },
+ {
+  "id": 48,
+  "site": "techand.ai",
+  "keyword": "biggest erp companies in the world",
+  "label": "pass",
+  "why": "vendor shortlist research"
+ },
+ {
+  "id": 49,
+  "site": "techand.ai",
+  "keyword": "cmms vs erp",
+  "label": "pass",
+  "why": "software comparison"
+ },
+ {
+  "id": 50,
+  "site": "techand.ai",
+  "keyword": "erp for ecommerce companies",
+  "label": "pass",
+  "why": "industry ERP buyer"
+ },
+ {
+  "id": 51,
+  "site": "techand.ai",
+  "keyword": "erp system how it works",
+  "label": "pass",
+  "why": "early ERP research"
+ },
+ {
+  "id": 52,
+  "site": "techand.ai",
+  "keyword": "mrp vs erp",
+  "label": "pass",
+  "why": "manufacturer comparing systems"
+ },
+ {
+  "id": 53,
+  "site": "techand.ai",
+  "keyword": "project based erp system",
+  "label": "pass",
+  "why": "project ERP buyer"
+ },
+ {
+  "id": 54,
+  "site": "techand.ai",
+  "keyword": "erp implementation change management",
+  "label": "pass",
+  "why": "implementation planning"
+ },
+ {
+  "id": 55,
+  "site": "techand.ai",
+  "keyword": "importance of erp system in business",
+  "label": "pass",
+  "why": "ERP value research"
+ },
+ {
+  "id": 56,
+  "site": "techand.ai",
+  "keyword": "how does erp system help a company",
+  "label": "pass",
+  "why": "ERP value research"
+ },
+ {
+  "id": 57,
+  "site": "techand.ai",
+  "keyword": "company that use erp system",
+  "label": "off_topic",
+  "why": "list of companies, not buyer"
+ },
+ {
+  "id": 58,
+  "site": "techand.ai",
+  "keyword": "project plan for erp implementation",
+  "label": "pass",
+  "why": "planning implementation"
+ },
+ {
+  "id": 59,
+  "site": "techand.ai",
+  "keyword": "peppol compliant",
+  "label": "pass",
+  "why": "compliance need"
+ },
+ {
+  "id": 60,
+  "site": "techand.ai",
+  "keyword": "peppol requirements",
+  "label": "pass",
+  "why": "compliance need"
+ },
+ {
+  "id": 61,
+  "site": "techand.ai",
+  "keyword": "enterprise erp",
+  "label": "pass",
+  "why": "enterprise ERP buyer"
+ },
+ {
+  "id": 62,
+  "site": "techand.ai",
+  "keyword": "e invoicing company in uae",
+  "label": "pass",
+  "why": "UAE e-invoicing provider search"
+ },
+ {
+  "id": 63,
+  "site": "techand.ai",
+  "keyword": "erp system banner",
+  "label": "off_topic",
+  "why": "graphic design search"
+ },
+ {
+  "id": 64,
+  "site": "techand.ai",
+  "keyword": "erp basic features",
+  "label": "pass",
+  "why": "ERP feature research"
+ },
+ {
+  "id": 65,
+  "site": "techand.ai",
+  "keyword": "erp features and benefits",
+  "label": "pass",
+  "why": "ERP feature research"
+ },
+ {
+  "id": 66,
+  "site": "techand.ai",
+  "keyword": "how to choose erp system",
+  "label": "pass",
+  "why": "how to choose ERP"
+ },
+ {
+  "id": 67,
+  "site": "techand.ai",
+  "keyword": "colleague erp system",
+  "label": "other_brand",
+  "why": "Ellucian Colleague product"
+ },
+ {
+  "id": 68,
+  "site": "techand.ai",
+  "keyword": "erp functions and features",
+  "label": "pass",
+  "why": "ERP feature research"
+ },
+ {
+  "id": 69,
+  "site": "techand.ai",
+  "keyword": "erp key features",
+  "label": "pass",
+  "why": "ERP feature research"
+ },
+ {
+  "id": 70,
+  "site": "techand.ai",
+  "keyword": "good erp system",
+  "label": "pass",
+  "why": "ERP buyer"
+ },
+ {
+  "id": 71,
+  "site": "techand.ai",
+  "keyword": "how to improve erp system",
+  "label": "pass",
+  "why": "existing user may hire optimisation"
+ },
+ {
+  "id": 72,
+  "site": "techand.ai",
+  "keyword": "introduction to erp system",
+  "label": "job",
+  "why": "coursework intro"
+ },
+ {
+  "id": 73,
+  "site": "techand.ai",
+  "keyword": "purpose of an erp system",
+  "label": "pass",
+  "why": "why a business needs ERP"
+ },
+ {
+  "id": 74,
+  "site": "techand.ai",
+  "keyword": "companies that use erp software",
+  "label": "off_topic",
+  "why": "list of companies, not buyer"
+ },
+ {
+  "id": 75,
+  "site": "techand.ai",
+  "keyword": "enterprise management system vs erp",
+  "label": "job",
+  "why": "theory comparison"
+ },
+ {
+  "id": 76,
+  "site": "techand.ai",
+  "keyword": "erp consulting llc",
+  "label": "pass",
+  "why": "ERP consultant search"
+ },
+ {
+  "id": 77,
+  "site": "techand.ai",
+  "keyword": "erp how it works",
+  "label": "pass",
+  "why": "early ERP research"
+ },
+ {
+  "id": 78,
+  "site": "techand.ai",
+  "keyword": "industry specific erp solutions",
+  "label": "pass",
+  "why": "industry ERP buyer"
+ },
+ {
+  "id": 79,
+  "site": "techand.ai",
+  "keyword": "erp for trading industry",
+  "label": "pass",
+  "why": "trading ERP buyer"
+ },
+ {
+  "id": 80,
+  "site": "techand.ai",
+  "keyword": "cloud based erp system for small business",
+  "label": "pass",
+  "why": "SMB cloud ERP buyer"
+ },
+ {
+  "id": 81,
+  "site": "techand.ai",
+  "keyword": "erp and project management",
+  "label": "pass",
+  "why": "project ERP research"
+ },
+ {
+  "id": 82,
+  "site": "techand.ai",
+  "keyword": "project planning erp",
+  "label": "pass",
+  "why": "project ERP research"
+ },
+ {
+  "id": 83,
+  "site": "techand.ai",
+  "keyword": "erp transformation project",
+  "label": "pass",
+  "why": "transformation project buyer"
+ },
+ {
+  "id": 84,
+  "site": "techand.ai",
+  "keyword": "create autonomous agents with copilot studio",
+  "label": "practitioner",
+  "why": "builder how-to in product"
+ },
+ {
+  "id": 85,
+  "site": "techand.ai",
+  "keyword": "copilot studio autonomous agents",
+  "label": "pass",
+  "why": "Copilot Studio capability research"
+ },
+ {
+  "id": 86,
+  "site": "techand.ai",
+  "keyword": "copilot studio managed agents",
+  "label": "practitioner",
+  "why": "product feature/admin reference"
+ },
+ {
+  "id": 87,
+  "site": "techand.ai",
+  "keyword": "what is the best crm software in the uae",
+  "label": "pass",
+  "why": "CRM buyer in UAE"
+ },
+ {
+  "id": 88,
+  "site": "techand.ai",
+  "keyword": "best power platform uae",
+  "label": "pass",
+  "why": "Power Platform buyer UAE"
+ },
+ {
+  "id": 89,
+  "site": "techand.ai",
+  "keyword": "peppol company",
+  "label": "pass",
+  "why": "provider search"
+ },
+ {
+  "id": 90,
+  "site": "techand.ai",
+  "keyword": "power platform company",
+  "label": "pass",
+  "why": "provider search"
+ },
+ {
+  "id": 91,
+  "site": "techand.ai",
+  "keyword": "erp implementation strategies",
+  "label": "pass",
+  "why": "implementation planning"
+ },
+ {
+  "id": 92,
+  "site": "techand.ai",
+  "keyword": "timeline for erp implementation",
+  "label": "pass",
+  "why": "implementation planning"
+ },
+ {
+  "id": 93,
+  "site": "techand.ai",
+  "keyword": "largest erp providers",
+  "label": "pass",
+  "why": "vendor shortlist research"
+ },
+ {
+  "id": 94,
+  "site": "techand.ai",
+  "keyword": "erp for manufacturing business",
+  "label": "pass",
+  "why": "industry ERP buyer"
+ },
+ {
+  "id": 95,
+  "site": "techand.ai",
+  "keyword": "erp stand for in business",
+  "label": "job",
+  "why": "stands for lookup"
+ },
+ {
+  "id": 96,
+  "site": "techand.ai",
+  "keyword": "what is peppol network",
+  "label": "pass",
+  "why": "what is the solution"
+ },
+ {
+  "id": 97,
+  "site": "techand.ai",
+  "keyword": "how to register for e invoicing in uae",
+  "label": "pass",
+  "why": "UAE e-invoicing onboarding"
+ },
+ {
+  "id": 98,
+  "site": "techand.ai",
+  "keyword": "erp business requirements document",
+  "label": "practitioner",
+  "why": "document template"
+ },
+ {
+  "id": 99,
+  "site": "techand.ai",
+  "keyword": "peppol 5 corner model",
+  "label": "pass",
+  "why": "UAE e-invoicing model research"
+ },
+ {
+  "id": 100,
+  "site": "techand.ai",
+  "keyword": "erp activities",
+  "label": "off_topic",
+  "why": "too vague"
+ },
+ {
+  "id": 101,
+  "site": "techand.ai",
+  "keyword": "erp for airlines",
+  "label": "pass",
+  "why": "industry ERP buyer"
+ },
+ {
+  "id": 102,
+  "site": "techand.ai",
+  "keyword": "erp assistance",
+  "label": "pass",
+  "why": "ERP support buyer"
+ },
+ {
+  "id": 103,
+  "site": "techand.ai",
+  "keyword": "erp background",
+  "label": "job",
+  "why": "coursework background"
+ },
+ {
+  "id": 104,
+  "site": "techand.ai",
+  "keyword": "benefit of erp",
+  "label": "pass",
+  "why": "ERP benefits research"
+ },
+ {
+  "id": 105,
+  "site": "techand.ai",
+  "keyword": "how can an erp system help a business",
+  "label": "pass",
+  "why": "ERP value research"
+ },
+ {
+  "id": 106,
+  "site": "techand.ai",
+  "keyword": "erp for small medium business",
+  "label": "pass",
+  "why": "SMB ERP buyer"
+ },
+ {
+  "id": 107,
+  "site": "techand.ai",
+  "keyword": "characteristics of erp",
+  "label": "job",
+  "why": "coursework theory"
+ },
+ {
+  "id": 108,
+  "site": "techand.ai",
+  "keyword": "erp service delivery",
+  "label": "off_topic",
+  "why": "too vague"
+ },
+ {
+  "id": 109,
+  "site": "techand.ai",
+  "keyword": "erp events",
+  "label": "off_topic",
+  "why": "events, not buyer"
+ },
+ {
+  "id": 110,
+  "site": "techand.ai",
+  "keyword": "focus erp wiki",
+  "label": "other_brand",
+  "why": "Focus ERP product"
+ },
+ {
+  "id": 111,
+  "site": "techand.ai",
+  "keyword": "how erp works",
+  "label": "pass",
+  "why": "early ERP research"
+ },
+ {
+  "id": 112,
+  "site": "techand.ai",
+  "keyword": "hr module in erp system",
+  "label": "pass",
+  "why": "ERP module research"
+ },
+ {
+  "id": 113,
+  "site": "techand.ai",
+  "keyword": "learning erp",
+  "label": "job",
+  "why": "learner"
+ },
+ {
+  "id": 114,
+  "site": "techand.ai",
+  "keyword": "erp objectives",
+  "label": "job",
+  "why": "coursework theory"
+ },
+ {
+  "id": 115,
+  "site": "techand.ai",
+  "keyword": "professional services erp",
+  "label": "pass",
+  "why": "services ERP buyer"
+ },
+ {
+  "id": 116,
+  "site": "techand.ai",
+  "keyword": "erp question",
+  "label": "off_topic",
+  "why": "too vague"
+ },
+ {
+  "id": 117,
+  "site": "techand.ai",
+  "keyword": "erp for smbs",
+  "label": "pass",
+  "why": "SMB ERP buyer"
+ },
+ {
+  "id": 118,
+  "site": "techand.ai",
+  "keyword": "erp terms",
+  "label": "job",
+  "why": "glossary lookup"
+ },
+ {
+  "id": 119,
+  "site": "techand.ai",
+  "keyword": "erp today",
+  "label": "other_brand",
+  "why": "ERP Today magazine"
+ },
+ {
+  "id": 120,
+  "site": "techand.ai",
+  "keyword": "best crm service provider in uae",
+  "label": "pass",
+  "why": "CRM provider UAE"
+ },
+ {
+  "id": 121,
+  "site": "techand.ai",
+  "keyword": "how to check if a company is on peppol",
+  "label": "practitioner",
+  "why": "directory lookup"
+ },
+ {
+  "id": 122,
+  "site": "techand.ai",
+  "keyword": "peppol company check",
+  "label": "practitioner",
+  "why": "directory lookup"
+ },
+ {
+  "id": 123,
+  "site": "techand.ai",
+  "keyword": "crm company location",
+  "label": "off_topic",
+  "why": "vague"
+ },
+ {
+  "id": 124,
+  "site": "techand.ai",
+  "keyword": "peppol company search",
+  "label": "practitioner",
+  "why": "directory lookup"
+ },
+ {
+  "id": 125,
+  "site": "techand.ai",
+  "keyword": "what is microsoft dynamics 365 finance and operations",
+  "label": "pass",
+  "why": "what is the product"
+ },
+ {
+  "id": 126,
+  "site": "techand.ai",
+  "keyword": "what is dynamics 365 finance and operations",
+  "label": "pass",
+  "why": "what is the product"
+ },
+ {
+  "id": 127,
+  "site": "techand.ai",
+  "keyword": "is business central an erp",
+  "label": "pass",
+  "why": "what is the product"
+ },
+ {
+  "id": 128,
+  "site": "techand.ai",
+  "keyword": "what is microsoft d365 finance and operations",
+  "label": "pass",
+  "why": "what is the product"
+ },
+ {
+  "id": 129,
+  "site": "techand.ai",
+  "keyword": "what is d365 finance and operations",
+  "label": "pass",
+  "why": "what is the product"
+ },
+ {
+  "id": 130,
+  "site": "techand.ai",
+  "keyword": "why implement erp system",
+  "label": "pass",
+  "why": "why implement ERP"
+ },
+ {
+  "id": 131,
+  "site": "techand.ai",
+  "keyword": "erp system risks",
+  "label": "pass",
+  "why": "buyer risk research"
+ },
+ {
+  "id": 132,
+  "site": "techand.ai",
+  "keyword": "which erp system",
+  "label": "pass",
+  "why": "ERP selection"
+ },
+ {
+  "id": 133,
+  "site": "techand.ai",
+  "keyword": "what is peppol invoicing",
+  "label": "pass",
+  "why": "what is the solution"
+ },
+ {
+  "id": 134,
+  "site": "techand.ai",
+  "keyword": "peppol what is it",
+  "label": "pass",
+  "why": "what is the solution"
+ },
+ {
+  "id": 135,
+  "site": "techand.ai",
+  "keyword": "peppol 5 corner model uae",
+  "label": "pass",
+  "why": "UAE e-invoicing model research"
+ },
+ {
+  "id": 136,
+  "site": "techand.ai",
+  "keyword": "who are the top crm providers",
+  "label": "pass",
+  "why": "CRM vendor shortlist"
+ },
+ {
+  "id": 137,
+  "site": "techand.ai",
+  "keyword": "most used erp system",
+  "label": "pass",
+  "why": "ERP selection research"
+ },
+ {
+  "id": 138,
+  "site": "techand.ai",
+  "keyword": "difference between erp and non erp",
+  "label": "job",
+  "why": "coursework theory"
+ },
+ {
+  "id": 139,
+  "site": "techand.ai",
+  "keyword": "erp for corrugated packaging industry",
+  "label": "pass",
+  "why": "industry ERP buyer"
+ },
+ {
+  "id": 140,
+  "site": "techand.ai",
+  "keyword": "examples of enterprise resource planning erp systems",
+  "label": "job",
+  "why": "homework examples"
+ },
+ {
+  "id": 141,
+  "site": "techand.ai",
+  "keyword": "peppol 4 corner model",
+  "label": "pass",
+  "why": "Peppol model research"
+ },
+ {
+  "id": 142,
+  "site": "techand.ai",
+  "keyword": "what does peppol stand for",
+  "label": "job",
+  "why": "stands for lookup"
+ },
+ {
+  "id": 143,
+  "site": "techand.ai",
+  "keyword": "is peppol down",
+  "label": "practitioner",
+  "why": "service status check"
+ },
+ {
+  "id": 144,
+  "site": "techand.ai",
+  "keyword": "peppol id example",
+  "label": "practitioner",
+  "why": "reference example"
+ },
+ {
+  "id": 145,
+  "site": "techand.ai",
+  "keyword": "peppol invoice example",
+  "label": "practitioner",
+  "why": "reference example"
+ },
+ {
+  "id": 146,
+  "site": "techand.ai",
+  "keyword": "peppol model",
+  "label": "pass",
+  "why": "Peppol model research"
+ },
+ {
+  "id": 147,
+  "site": "techand.ai",
+  "keyword": "who owns peppol",
+  "label": "off_topic",
+  "why": "curiosity, no buyer"
+ },
+ {
+  "id": 1,
+  "site": "devaicon.com",
+  "keyword": "software development",
+  "label": "pass",
+  "why": "core service head term"
+ },
+ {
+  "id": 2,
+  "site": "devaicon.com",
+  "keyword": "managed services uae",
+  "label": "pass",
+  "why": "managed services UAE buyer"
+ },
+ {
+  "id": 3,
+  "site": "devaicon.com",
+  "keyword": "dynamics 365 uae",
+  "label": "pass",
+  "why": "Dynamics 365 UAE buyer"
+ },
+ {
+  "id": 4,
+  "site": "devaicon.com",
+  "keyword": "software development uae",
+  "label": "pass",
+  "why": "core service UAE"
+ },
+ {
+  "id": 5,
+  "site": "devaicon.com",
+  "keyword": "microsoft fabric for personal use",
+  "label": "off_topic",
+  "why": "personal use, not business"
+ },
+ {
+  "id": 6,
+  "site": "devaicon.com",
+  "keyword": "bluechip computer systems llc",
+  "label": "other_brand",
+  "why": "another company"
+ },
+ {
+  "id": 7,
+  "site": "devaicon.com",
+  "keyword": "companies using ai for customer service",
+  "label": "off_topic",
+  "why": "list of companies, not buyer"
+ },
+ {
+  "id": 8,
+  "site": "devaicon.com",
+  "keyword": "pros and cons of outsourcing software development",
+  "label": "pass",
+  "why": "outsourcing buyer research"
+ },
+ {
+  "id": 9,
+  "site": "devaicon.com",
+  "keyword": "why custom software development",
+  "label": "pass",
+  "why": "custom software buyer research"
+ },
+ {
+  "id": 10,
+  "site": "devaicon.com",
+  "keyword": "software development life cycle implementation",
+  "label": "job",
+  "why": "coursework theory"
+ },
+ {
+  "id": 11,
+  "site": "devaicon.com",
+  "keyword": "is software engineering different from software development",
+  "label": "job",
+  "why": "student question"
+ },
+ {
+  "id": 12,
+  "site": "devaicon.com",
+  "keyword": "what is erp software development",
+  "label": "pass",
+  "why": "custom ERP build research"
+ },
+ {
+  "id": 13,
+  "site": "devaicon.com",
+  "keyword": "what industry is software development",
+  "label": "job",
+  "why": "student question"
+ },
+ {
+  "id": 14,
+  "site": "devaicon.com",
+  "keyword": "what is traditional software development",
+  "label": "job",
+  "why": "coursework theory"
+ },
+ {
+  "id": 15,
+  "site": "devaicon.com",
+  "keyword": "software engineering requirements",
+  "label": "job",
+  "why": "coursework theory"
+ },
+ {
+  "id": 16,
+  "site": "devaicon.com",
+  "keyword": "autonomous customer experience",
+  "label": "off_topic",
+  "why": "vague buzzword"
+ },
+ {
+  "id": 17,
+  "site": "devaicon.com",
+  "keyword": "autonomous customer story",
+  "label": "off_topic",
+  "why": "vague, no buyer intent"
+ },
+ {
+  "id": 18,
+  "site": "devaicon.com",
+  "keyword": "custom ai solutions for small businesses",
+  "label": "pass",
+  "why": "AI solutions buyer"
+ },
+ {
+  "id": 19,
+  "site": "devaicon.com",
+  "keyword": "custom ai solutions for enterprises",
+  "label": "pass",
+  "why": "AI solutions buyer"
+ },
+ {
+  "id": 20,
+  "site": "devaicon.com",
+  "keyword": "custom ai solutions for senior living",
+  "label": "off_topic",
+  "why": "vertical not in market"
+ },
+ {
+  "id": 21,
+  "site": "devaicon.com",
+  "keyword": "custom ai solutions for startups",
+  "label": "pass",
+  "why": "AI solutions buyer"
+ },
+ {
+  "id": 22,
+  "site": "devaicon.com",
+  "keyword": "microsoft fabric data residency",
+  "label": "pass",
+  "why": "Fabric buyer compliance question"
+ },
+ {
+  "id": 23,
+  "site": "devaicon.com",
+  "keyword": "open edx services",
+  "label": "pass",
+  "why": "Open edX services buyer"
+ },
+ {
+  "id": 24,
+  "site": "devaicon.com",
+  "keyword": "microsoft enterprise products list",
+  "label": "off_topic",
+  "why": "generic Microsoft product list"
+ },
+ {
+  "id": 25,
+  "site": "devaicon.com",
+  "keyword": "microsoft enterprise systems",
+  "label": "off_topic",
+  "why": "too generic"
+ },
+ {
+  "id": 26,
+  "site": "devaicon.com",
+  "keyword": "software developer projects",
+  "label": "job",
+  "why": "learner project ideas"
+ },
+ {
+  "id": 27,
+  "site": "devaicon.com",
+  "keyword": "customnet ai",
+  "label": "other_brand",
+  "why": "another company"
+ },
+ {
+  "id": 28,
+  "site": "devaicon.com",
+  "keyword": "what is microsoft enterprise",
+  "label": "off_topic",
+  "why": "too generic"
+ },
+ {
+  "id": 29,
+  "site": "devaicon.com",
+  "keyword": "ongoing managed it support internet",
+  "label": "not_a_search",
+  "why": "garbled phrase"
+ },
+ {
+  "id": 30,
+  "site": "devaicon.com",
+  "keyword": "ongoing managed it support news",
+  "label": "not_a_search",
+  "why": "garbled phrase"
+ },
+ {
+  "id": 31,
+  "site": "devaicon.com",
+  "keyword": "ongoing managed it support",
+  "label": "pass",
+  "why": "managed IT support buyer"
+ },
+ {
+  "id": 32,
+  "site": "devaicon.com",
+  "keyword": "is dynamics 365 business central an erp",
+  "label": "pass",
+  "why": "what is the product"
+ },
+ {
+  "id": 33,
+  "site": "devaicon.com",
+  "keyword": "technical support engineer skills",
+  "label": "job",
+  "why": "job skills"
+ },
+ {
+  "id": 34,
+  "site": "devaicon.com",
+  "keyword": "what does microsoft enterprise include",
+  "label": "off_topic",
+  "why": "licence question, not sold"
+ },
+ {
+  "id": 35,
+  "site": "devaicon.com",
+  "keyword": "agentic ai development in uae",
+  "label": "pass",
+  "why": "AI development buyer UAE"
+ },
+ {
+  "id": 36,
+  "site": "devaicon.com",
+  "keyword": "custom ai solutions company sharjah",
+  "label": "pass",
+  "why": "provider search Sharjah"
+ },
+ {
+  "id": 37,
+  "site": "devaicon.com",
+  "keyword": "custom ai solutions uae",
+  "label": "pass",
+  "why": "provider search UAE"
+ },
+ {
+  "id": 38,
+  "site": "devaicon.com",
+  "keyword": "application and software development uae",
+  "label": "pass",
+  "why": "provider search UAE"
+ },
+ {
+  "id": 39,
+  "site": "devaicon.com",
+  "keyword": "open edx services company sharjah",
+  "label": "pass",
+  "why": "provider search Sharjah"
+ },
+ {
+  "id": 40,
+  "site": "devaicon.com",
+  "keyword": "infrastructure and enterprise systems company sharjah",
+  "label": "pass",
+  "why": "provider search Sharjah"
+ },
+ {
+  "id": 41,
+  "site": "devaicon.com",
+  "keyword": "microsoft enterprise systems company sharjah",
+  "label": "pass",
+  "why": "provider search Sharjah"
+ },
+ {
+  "id": 42,
+  "site": "devaicon.com",
+  "keyword": "ongoing managed it support company sharjah",
+  "label": "pass",
+  "why": "provider search Sharjah"
+ },
+ {
+  "id": 43,
+  "site": "devaicon.com",
+  "keyword": "managed services company sharjah",
+  "label": "pass",
+  "why": "provider search Sharjah"
+ },
+ {
+  "id": 44,
+  "site": "devaicon.com",
+  "keyword": "consulting and transformation uae",
+  "label": "pass",
+  "why": "consulting buyer UAE"
+ },
+ {
+  "id": 45,
+  "site": "devaicon.com",
+  "keyword": "intelligent systems and data uae",
+  "label": "not_a_search",
+  "why": "menu label, not a search"
+ },
+ {
+  "id": 46,
+  "site": "devaicon.com",
+  "keyword": "open edx services uae",
+  "label": "pass",
+  "why": "provider search UAE"
+ },
+ {
+  "id": 47,
+  "site": "devaicon.com",
+  "keyword": "infrastructure and enterprise systems uae",
+  "label": "pass",
+  "why": "provider search UAE"
+ },
+ {
+  "id": 48,
+  "site": "devaicon.com",
+  "keyword": "microsoft enterprise systems uae",
+  "label": "pass",
+  "why": "provider search UAE"
+ },
+ {
+  "id": 49,
+  "site": "devaicon.com",
+  "keyword": "microsoft fabric uae",
+  "label": "pass",
+  "why": "Fabric buyer UAE"
+ }
+]

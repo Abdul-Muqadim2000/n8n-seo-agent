@@ -51,3 +51,28 @@ A buyer word (company, partner, services, cost, best, vs, review, support, migra
 KIG-1 (floors on all 800 and on the hold-out), KIG-2 (21 searches the Trial and the owner named, each with its reason), KIG-3 (20 buyer
 searches never caught). KI16 parity (app list of reasons + `practitioner` words), KI26 seed fixture updated (its "pint ae mandatory fields"
 is documentation now). Harness 18829 / 0; app shared 1174, web 359, typecheck clean.
+
+## Trial re-run on production (2026-11-10 23:13 UTC, executions 12607 techand.ai / 12608 devaicon.com, deployed build 347073cb)
+Both runs ok in 5.5 minutes ($0.36 / $0.20). Every results page read through the queue with exact addresses (60 of 60 each; 525 of 525
+and 512 of 512 results). Groups of 2+ searches: 9 (techand) and 5 (devaicon), none before. Stopped by the new rules: techand 41
+practitioner, 20 career, 3 other market; devaicon 51 career, 18 off topic, 11 practitioner. CRM: "best crm service provider in uae" points
+at /dynamics-365-crm-uae, nothing at the "-2" copy.
+
+**Precision on what passed, measured honestly.** The runs reused the stored discovery list, so 334 of the 530 passing searches were in the
+labelled set and 196 were new (the filter freed room the old run never reached). A fresh independent labeller (Opus, never saw the filter)
+labelled the 196 (harness/accuracy/ki_gate_unseen_2026-11-11.json):
+
+| | all that passed, right | the unseen ones, right |
+|---|---|---|
+| techand.ai | 73.0% (old run 57.0%) | 58.5% (147) |
+| devaicon.com | 68.7% (old run 39.7%) | 57.1% (49) |
+
+The word rules do not generalise well enough: the unseen leaks are a long tail (technical Peppol terms: "peppol sml", "peppol protocol",
+"peppol test"; ERP coursework: "characteristics of erp", "sap vs erp"; company lists). A definition / investor rule was tried and gave
++1.6 points on techand's unseen set; not shipped on its own.
+
+**Next (proposed, not built): read who the search is for from its own results page.** With the queue a page costs $0.0006, so every
+candidate can be read (300 a run = $0.18) instead of the top 60. The results page already says who Google thinks searches it:
+documentation hosts (learn.microsoft.com, docs.*, github, community forums), job boards, universities and course sites, vendors and
+providers, directories. A search whose top results are mostly documentation or courses is not a buyer's, whatever its words; the word rules
+stay as the cheap first pass. Measure on the same two labelled sets (800 + 196 unseen).
