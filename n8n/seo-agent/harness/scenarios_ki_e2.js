@@ -584,12 +584,80 @@ module.exports = async (ctx) => {
     const qCsp = items('Research SERP Picture')[0];
     const liveRows = (qLv.cache || []).filter(r => /^serp:/.test(r.key));
     const qC2 = await execute('techand', 'keyword_research', { stored: chosenRows, serpCache: liveRows });
+    const liveKw = new Set(liveRows.map(r => JSON.parse(r.value).keyword)); const topC2 = (items('Research Picture')[0] || {}).top_m || [];
+    const postedC2 = new Set(items('Any Research SERPs?').filter(r => r.ki_call === 'serp_post').map(r => r.keyword));
     check('KIQ-6 the day cache: today\'s exact readings are reused (no post, no collection), today\'s live readings (no exact address) are asked again from the queue',
       exactRows.length >= qPosts && !qCposted.some(k => exactKw.has(k)) && qC.calls.filter(c => c.call === 'serp').length === 0 && qC.gets.length === qCposted.length
       && Object.entries(qCsp.by).filter(([k]) => exactKw.has(k)).every(([, r]) => r.source === 'cache' && r.exact) && Object.entries(qCsp.by).filter(([k]) => exactKw.has(k)).length >= 10
-      && liveRows.length >= qPosts && qC2.calls.filter(c => c.call === 'serp_post').length === qPosts && grouped(qC2) >= 2, J({ reposted: qCposted.filter(k => exactKw.has(k)), exactRows: exactRows.length, newly: qCposted.length, live: liveRows.length, again: qC2.calls.filter(c => c.call === 'serp_post').length }));
+      && liveRows.length >= qPosts && topC2.filter(k => liveKw.has(k)).length >= 10 && topC2.filter(k => liveKw.has(k)).every(k => postedC2.has(k)) && grouped(qC2) >= 2, J({ notAgain: topC2.filter(k => liveKw.has(k) && !postedC2.has(k)), reposted: qCposted.filter(k => exactKw.has(k)), exactRows: exactRows.length, newly: qCposted.length, live: liveRows.length, again: qC2.calls.filter(c => c.call === 'serp_post').length }));
     check('KIQ-6 what the cache keeps is the queue\'s exact reading (another path reading the same search today gets the exact pages too); a live reading is kept with its addresses marked approximate',
       exactRows.length > 0 && exactRows.every(r => !/"url_exact":false/.test(String(r.value)) && !/google\.com\/goto/.test(String(r.value))) && liveRows.every(r => /"url_exact":false/.test(String(r.value))), J({ e: exactRows.length, l: liveRows.length }));
+    // ===================================== KIG (KI-GATE2 2026-11-11, fixes/GATE2.md): who is searching =====================================
+    // 800 searches of the two production Trials, labelled twice by independent agents (harness/accuracy/ki_gate_2026-11-11.json). Before the
+    // change the gate let through 46.6% right (precision of "pass"), caught 27.8% of the wrong ones and kept 93.5% of the right ones.
+    const AG = JSON.parse(fs.readFileSync(path.join(__dirname, 'accuracy', 'ki_gate_2026-11-11.json'), 'utf8'));
+    const score = (cs) => { const o = { tp: 0, fp: 0, fn: 0, tn: 0 }; for (const c of cs) { const g = KI_.gate(c.keyword, { ...AG.fit_ctx[c.site], serp_hosts: c.serp_hosts || [] }).gate === 'pass';
+      const l = c.label === 'pass'; o[l ? (g ? 'tp' : 'fn') : (g ? 'fp' : 'tn')]++; } return { ...o, p: o.tp / Math.max(1, o.tp + o.fp), r: o.tp / Math.max(1, o.tp + o.fn), c: o.tn / Math.max(1, o.tn + o.fp) }; };
+    const sAll = score(AG.cases), sHold = score(AG.cases.filter(c => c.split === 'hold'));
+    const sT = score(AG.cases.filter(c => c.site === 'techand.ai' && c.split === 'hold')), sD = score(AG.cases.filter(c => c.site === 'devaicon.com' && c.split === 'hold'));
+    const r1 = (x) => +(100 * x).toFixed(1);
+    console.log('   KI gate on 800 labelled searches: all precision ' + r1(sAll.p) + '% recall ' + r1(sAll.r) + '% caught ' + r1(sAll.c) + '%; hold-out precision ' + r1(sHold.p) + '% recall ' + r1(sHold.r) + '% (techand ' + r1(sT.p) + ' / ' + r1(sT.r) + ', devaicon ' + r1(sD.p) + ' / ' + r1(sD.r) + ')');
+    check('KIG-1 the gate on 800 labelled Trial searches: right among what it lets through >= 78% (was 46.6%), wrong ones caught >= 80% (was 27.8%), right ones kept >= 90% (was 93.5%); hold-out precision >= 72%, recall >= 90%',
+      sAll.p >= 0.78 && sAll.c >= 0.80 && sAll.r >= 0.90 && sHold.p >= 0.72 && sHold.r >= 0.90 && sT.p >= 0.78 && sD.r >= 0.90, J({ all: sAll, hold: sHold, techand: sT, devaicon: sD }));
+    const G = (site, k) => KI_.gate(k, AG.fit_ctx[site]);
+    const must = [['techand.ai', 'peppol belgium', 'other_market'], ['techand.ai', 'peppol verplicht nederland', 'other_market'], ['techand.ai', 'peppol facture', 'other_market'],
+      ['techand.ai', 'mb 300 microsoft dynamics 365 core finance and operations', 'career'], ['techand.ai', 'dynamics 365 finance and operations interview questions', 'career'],
+      ['techand.ai', 'microsoft dynamics 365 finance and operations training', 'career'], ['techand.ai', 'finance operations specialist', 'career'],
+      ['techand.ai', 'dynamics 365 finance and operations ip ranges', 'practitioner'], ['techand.ai', 'dynamics 365 finance and operations user guide pdf', 'practitioner'],
+      ['techand.ai', 'peppol logo png', 'practitioner'], ['techand.ai', 'peppol bis billing 3 0', 'practitioner'], ['techand.ai', 'budgeting in d365 finance and operations', 'practitioner'],
+      ['techand.ai', 'trade finance operations', 'off_topic'], ['techand.ai', 'facilities management services in uae', 'off_topic'],
+      ['devaicon.com', 'software developer', 'career'], ['devaicon.com', 'software development life cycle phases', 'career'], ['devaicon.com', 'agile software development manifesto', 'career'],
+      ['devaicon.com', 'hrms software in dubai', 'off_topic'], ['devaicon.com', 'attendance software company', 'off_topic'], ['devaicon.com', 'software development companies romania', 'other_market'],
+      ['devaicon.com', 'android software development kit download', 'practitioner']];
+    const mustR = must.map(([s0, k, want]) => [k, want, G(s0, k).reason]);
+    check('KIG-2 the searches the owner and the Trial named are stopped, each with its reason (another market or language, a job or a course, someone using the product, not something you sell)',
+      mustR.every(([, w, got]) => w === got), J(mustR.filter(([, w, got]) => w !== got)));
+    const keep = [['techand.ai', 'business central dubai'], ['techand.ai', 'peppol uae'], ['techand.ai', 'dynamics 365 partner in uae'], ['techand.ai', 'microsoft dynamics partner uae'],
+      ['techand.ai', 'dynamics 365 support services uae'], ['techand.ai', 'dynamics 365 finance and operations pricing'], ['techand.ai', 'e invoicing penalties'], ['techand.ai', 'power bi consultant uae'],
+      ['techand.ai', 'erp implementation partner uae'], ['techand.ai', 'modules in d365 finance and operations'], ['techand.ai', 'dynamics 365 finance and operations customization'], ['techand.ai', 'crm software uae'],
+      ['devaicon.com', 'mobile app development company in dubai'], ['devaicon.com', 'custom software development services'], ['devaicon.com', 'open edx services provider'], ['devaicon.com', 'machine learning model training'], ['devaicon.com', 'chatbot development company dubai'],
+      ['devaicon.com', 'machine learning development company uae'], ['devaicon.com', 'software development cost'], ['devaicon.com', 'custom software development advantages'], ['devaicon.com', 'hrms software development company']];
+    const keepR = keep.map(([s0, k]) => [k, G(s0, k).gate, G(s0, k).reason]);
+    check('KIG-3 a buyer\'s search is never caught by a study, docs or product word: partners, services, costs, a consultant, a module list, custom building, model training, machine learning, Open edX',
+      keepR.every(([, g]) => g === 'pass'), J(keepR.filter(([, g]) => g !== 'pass')));
+    // ===================================== KIO (KI-ONEURL 2026-11-11, fixes/ONEURL.md): the keyword page follows the ladder rules =====================================
+    // Production 2026-11-10: techand.ai's CRM ladder had its main page on /dynamics-365-crm-uae-2, a copy of the live /dynamics-365-crm-uae (repaired
+    // by hand, LADDER_REPAIR.md), and three rungs of its ERP ladder on one blog address. Keyword research chose its pages without those rules.
+    const KO = new Function('URL', 'structuredClone', ['_fit_gate.js', '_competitors.js', '_kw_inputs.js', '_ladder_rules.js', '_ki.js'].map(f => rd('v5', 'code', f)).join('\n') + '\nreturn KI;')(undefined, undefined);
+    const T_ = 'https://www.techand.ai';
+    const crmPages = [{ url: T_ + '/dynamics-365-crm-uae', title: 'Dynamics 365 CRM in Dubai & UAE: Sales and Service | Tech&' }, { url: T_ + '/dynamics-365-crm-uae-2', title: 'Dynamics 365 CRM Services UAE | Tech' },
+      { url: T_ + '/insights/is-microsoft-dynamics-365-an-erp-system', title: 'Is Microsoft Dynamics 365 an ERP system? | Tech&' }];
+    const site0 = (o) => ({ domain: 'techand.ai', pages: crmPages, queries: [], owners: [], ...(o || {}) });
+    const cl = (kw, stage, gscPage, extra) => ({ keyword: kw, stage, members: [{ keyword: kw, stage, gsc_page: gscPage || '' }], top10: [], gate: 'pass', verdict: 'months', ...(extra || {}) });
+    const ladderCrm = [{ url: T_ + '/dynamics-365-crm-uae', keyword: 'crm service provider', by: 'ladder', ladder_id: 'lad_mw0goinsniv1' }];
+    const o1 = KO.pageAction(cl('dynamics 365 crm services uae', 'hire', T_ + '/dynamics-365-crm-uae-2'), site0());
+    check('KIO-1 a "-2" copy of a live page is never the page to work on: the original is, and the copy is to be redirected to it',
+      o1.action === 'refresh' && o1.page_url === T_ + '/dynamics-365-crm-uae' && /copy of \/dynamics-365-crm-uae/.test(o1.reason) && /redirect/.test(o1.reason), J(o1));
+    const o2 = KO.pageAction(cl('dynamics crm partner in uae', 'hire', T_ + '/dynamics-365-crm-uae'), site0({ owners: ladderCrm }));
+    check('KIO-2 a buyer\'s search on a page a ladder holds for another buyer\'s search works into that page (a second page would compete with it), and says whose page it is',
+      o2.action === 'refresh' && o2.page_url === T_ + '/dynamics-365-crm-uae' && o2.shared === true && /keyword ladder for "crm service provider"/.test(o2.reason) && /not a second page/.test(o2.reason), J(o2));
+    const o3 = KO.pageAction(cl('what is crm software', 'info', T_ + '/dynamics-365-crm-uae'), site0({ owners: ladderCrm, queries: [{ query: 'what is crm software', page: T_ + '/dynamics-365-crm-uae', impressions: 3, position: 63.6 }] }));
+    check('KIO-3 a different kind of search (a guide) on the ladder\'s main page gets a page of its own, with the reason: one search, one page',
+      o3.action === 'new' && !o3.page_url && /already belongs to your keyword ladder for "crm service provider"/.test(o3.reason) && /one search, one page/.test(o3.reason), J(o3));
+    const o4 = KO.pageAction(cl('what is crm software', 'info', T_ + '/dynamics-365-crm-uae'), site0({ owners: ladderCrm, queries: [{ query: 'what is crm software', page: T_ + '/dynamics-365-crm-uae', impressions: 40, position: 12 }] }));
+    check('KIO-4 ... unless that page already ranks for it (position 12): it stays there and the reason says it also serves the ladder (a page that ranks is never left for a competing new one)',
+      o4.action === 'refresh' && o4.page_url === T_ + '/dynamics-365-crm-uae' && o4.shared === true && /already ranks for it/.test(o4.reason), J(o4));
+    const erpU = T_ + '/insights/is-microsoft-dynamics-365-an-erp-system';
+    const o5 = KO.pageAction(cl('erp implementation steps', 'solution', erpU), site0({ owners: [{ url: erpU, keyword: 'is microsoft dynamics 365 an erp', by: 'cluster' }] }));
+    const o6 = KO.pageAction(cl('microsoft dynamics 365 is an erp', 'info', erpU), site0({ owners: [{ url: erpU, keyword: 'is microsoft dynamics 365 an erp', by: 'cluster' }] }));
+    check('KIO-5 within one run the stronger cluster keeps a page and a weaker cluster of other words gets its own (the ERP ladder\'s three-rungs-on-one-blog-address case); the same search in other words still improves it',
+      o5.action === 'new' && /the stronger search "is microsoft dynamics 365 an erp"/.test(o5.reason) && o6.action === 'refresh' && o6.page_url === erpU && !o6.shared, J({ o5, o6 }));
+    const o7 = KO.pageAction(cl('dynamics 365 crm services uae', 'hire', T_ + '/dynamics-365-crm-uae'), site0());
+    check('KIO-6 nothing changes for a page nobody else holds and that is not a copy (the page action as before)', o7.action === 'refresh' && o7.page_url === T_ + '/dynamics-365-crm-uae' && !/copy|belongs|ladder/.test(o7.reason), J(o7));
+    const rr = rd('harness', 'code_v4', 'Research_Result.js');
+    check('KIO-7 wiring: Research Result inlines the ladder rules, the plan passes the ladder pages (set aside, merged, stopped and failed pages hold nothing), clusters take pages in score order',
+      /const LRU = \(\(\) => \{/.test(rr) && /siteCtx\.owners\.push/.test(rr) && /const order = Object\.entries\(clusters\)\.sort/.test(rr) && /ladder_owners: ladderOwners/.test(rd('harness', 'code_v4', 'KI_Plan.js'))
+      && /\['set_aside', 'merged', 'stopped', 'failed', 'archived'\]/.test(rd('harness', 'code_v4', 'KI_Plan.js')), '');
     if (H.setWiring) H.setWiring(null);
   });
 };

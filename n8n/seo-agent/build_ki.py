@@ -77,6 +77,7 @@ KIT_SRC = {
     'CMP': read_v5('code/_competitors.js').rstrip('\n'),
     'KWI': read_v5('code/_kw_inputs.js').rstrip('\n'),         # optional for KI (KWI.shapeOf: page shapes), inlined so every node types pages alike
     'SM': read_v5('code/_site_model.js').rstrip('\n'),
+    'LRU': read_v5('code/_ladder_rules.js').rstrip('\n'),   # KI-ONEURL: the ladder rules (one search, one page; copies) for the page action
     'COUNTRIES': "// ---- countries: copied from the main workflow's Normalize Input by build_ki.py (DataForSEO location code = 2000 + ISO numeric) ----" + _COUNTRIES.group(0),
     'KIW': read_v5('code/_ki_io.js').rstrip('\n').replace('__KI_QUOTE__', json.dumps(QUOTE, sort_keys=True)).replace('__KI_COLS__', json.dumps(KI_COLS)),
 }
@@ -84,7 +85,7 @@ assert '__KI_' not in KIT_SRC['KIW'], 'a placeholder is left in _ki_io.js'
 KI_KIT = '_ki.js'
 BASE_KITS = ['FIT', 'CMP', 'KWI', 'RT', 'SC', 'SU', 'KI', 'KIW']
 def kits_for(names):
-    order = ['COUNTRIES', 'FIT', 'CMP', 'KWI', 'SM', 'RT', 'SC', 'SU', 'KI', 'KIW']
+    order = ['COUNTRIES', 'FIT', 'CMP', 'KWI', 'SM', 'LRU', 'RT', 'SC', 'SU', 'KI', 'KIW']
     return '\n'.join(KIT_SRC[k] for k in order if k in names)
 RAW = {}   # file -> the node's own code (before the kits), for the name check below
 def src(f, kits=(), sub=None):
@@ -286,7 +287,7 @@ for _r in range(1, QUEUE_ROUNDS + 1):
 gated_step('Research SERP Fallback', 'Any Research SERPs Live?', 'Run Research SERPs Live', 'Research SERP Picture', 10, 46 + 2 + 4 * QUEUE_ROUNDS, batch=10, interval=100)
 GATED.append(('Run Research SERPs Live', 'keyword results pages the queue did not return (read live)', 'request'))
 code('Research Traffic Requests', src('KI_Research_Traffic_Requests.js'), at(50, 6), executeOnce=True)
-code('Research Result', src('KI_Research_Result.js', ['SM']), at(54, 6), executeOnce=True)
+code('Research Result', src('KI_Research_Result.js', ['SM', 'LRU']), at(54, 6), executeOnce=True)
 link('Research SERP Picture', 'Research Traffic Requests')
 gated_step('Research Traffic Requests', 'Any Research Traffic?', 'Run Research Traffic', 'Research Result', 6, 50); GATED.append(('Run Research Traffic', 'traffic potential of the #1 pages', 'request'))
 code('KI KW Rows', ROWS('KI KW Rows', KI_KW_TABLE, 'kw_rows'), at(55, 6), executeOnce=True)

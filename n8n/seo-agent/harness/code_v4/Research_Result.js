@@ -1790,6 +1790,283 @@ const SM = (() => {
     titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages, confirmPage,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms, coreTerms } };
 })();
+// ---- LADDER PACKAGE (2026-11-09, docs/keyword-intel-2026-11-08/fixes/LADDER.md): the five ladder rules, ONE copy ----
+// Production (2026-10-22 .. 11-08, R3_PROD_OUTPUTS.md F1 F6 F7 F9): three rungs of techand.ai's ERP ladder, the main page included, were written onto
+// ONE blog address (/insights/is-microsoft-dynamics-365-an-erp-system); the CRM ladder's main page pointed at "/dynamics-365-crm-uae-2", a copy
+// of the live CRM page; a rung the verdict called AVOID was written and published because ladder page runs carry force_content; a rung sat
+// in "writing" for days after its run died; devaicon.com's "ai automation solutions gcc" was measured in Pakistan. The rules:
+//   1. one search, one address: two rungs never share a target, a rung whose address already answers its search improves that page, and the
+//      main page is never a blog / insights address or a "-2" / "-copy" variant of a live page (addresses compared without scheme / www);
+//   2. the rungs step towards the main keyword (stage: problem, solution, compare, hire); a plan with no compare / hire rung before the main
+//      page is re-planned from its own pool, and a pure definition ("what is a crm company") is a rung only when its results page is
+//      informational (guides) and it links to the main page;
+//   3. the market is the website's market, or the market the keyword names ("gcc", "uae", "dubai" -> AE); never another country;
+//   4. an AVOID verdict, or a score clearly under the line (40), stops the rung: no page is written until the client says "Write it anyway";
+//   5. a rung "writing" for longer than three times its expected time (at least 60 minutes) with nothing of its run still alive is closed as
+//      failed with its reason, so the next rung can go.
+// Inlined into Ladder Plan, Ladder Duplicate (Words), Parse Verdict's ladder stop (Ladder Row Written), Cadence Plan, Publish Candidates and
+// Publish Check (through _publish_rows.js); the app runs the same source (app/shared/src/ladder-rules.generated.js, ladder_rules_app.py) for
+// its warnings, its rung reasons and its stuck-rung watcher. Pure: no clock (pass `now`), no table, no network. Needs fitPlaces
+// (_fit_gate.js) only for the market rule; everything else stands alone.
+const LRU = (() => {
+  const S = (v) => String(v == null ? '' : v).trim();
+  const low = (v) => S(v).toLowerCase();
+  const CFG = {
+    stuck_min_minutes: 60, stuck_eta_factor: 3, page_eta_minutes: 20,   // page runs take 15-19 minutes on production (2026-11-08)
+    clear_score: 40,                                                    // Parse Verdict's "clearly low" line (HOLD CFG.clear)
+    rank_keep_position: 30, rank_keep_impressions: 10,                  // review H5: a page that ranks for the main keyword keeps it
+    blog_dirs: ['blog', 'blogs', 'insights', 'insight', 'articles', 'article', 'news', 'resources', 'resource', 'posts', 'post', 'learn', 'guides', 'guide', 'knowledge', 'academy', 'stories', 'magazine'],
+    // the measurable markets (Normalize Input COUNTRIES): ISO-2 -> the country name the engine and the app use
+    countries: { US: 'United States', GB: 'United Kingdom', CA: 'Canada', AU: 'Australia', NZ: 'New Zealand', IE: 'Ireland', PK: 'Pakistan', IN: 'India',
+      AE: 'United Arab Emirates', SA: 'Saudi Arabia', SG: 'Singapore', ZA: 'South Africa', DE: 'Germany', FR: 'France', ES: 'Spain', IT: 'Italy',
+      NL: 'Netherlands', BR: 'Brazil', MX: 'Mexico' },
+  };
+  const STAGES = ['problem', 'solution', 'compare', 'hire', 'info'];
+  const COMMERCIAL = ['compare', 'hire'];
+
+  // ---- addresses (rule 1) ----
+  /** the comparable form of an address: no scheme, no www., no query / fragment, no trailing slash, lower case ('' for nothing) */
+  const urlKey = (u) => low(u).replace(/^[a-z]+:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const pathOf = (u) => { const k = urlKey(u); const i = k.indexOf('/'); return i < 0 ? '' : k.slice(i); };
+  const segs = (u) => pathOf(u).split('/').filter(Boolean);
+  // a language prefix (/en/, /ar-ae/) is not the first folder that says what the page is
+  const LOCALE = /^[a-z]{2}(?:-[a-z]{2})?$/;
+  /** a blog / insights / news ... address: its first folder (after a language prefix) is one of CFG.blog_dirs */
+  const isBlog = (u) => { let s = segs(u); if (s.length > 2 && LOCALE.test(s[0])) s = s.slice(1); return s.length > 1 && CFG.blog_dirs.includes(s[0]); };
+  // review L1 (2026-11-10): only suffixes that mean "another copy of the same page"; -new, -v9, a bare word like /windows-11 are not copies
+  const COPY_RE = /^(.+?)-(copy(?:-\d+)?|\d|old|draft|backup|bak)$/;
+  // a page title's own words: the brand after "|" / " - " dropped, joining words out, plurals folded (re-review N3: production's "-2" copy of
+  // "Dynamics 365 CRM in Dubai & UAE: Sales and Service | Tech&" is titled "Dynamics 365 CRM Services UAE | Tech")
+  const titleWords = (t) => { const x = low(t).split(/\s[|\u2013\u2014]\s|\s-\s/)[0] || ''; return wordsKey(x).split(' ').filter(Boolean); };
+  const sameTitle = (a, b) => { const A = titleWords(a), Bw = new Set(titleWords(b)); if (!A.length || !Bw.size) return true;
+    const short = A.length <= Bw.size ? A : [...Bw]; const long = A.length <= Bw.size ? Bw : new Set(A); return short.filter(w => long.has(w)).length >= Math.ceil(0.6 * short.length); };
+  /** a "-2" / "-copy" / "-old" variant of another address of the site: -> the original's address, or ''. `known`: the site's pages, as
+   *  addresses or { url, title }. A one-digit suffix counts only when the address without it is a page the site has AND, when both titles
+   *  are known, they are the same page title (so /step-2 beside a different /step is not a copy); "-copy" always counts. */
+  const copyOf = (u, known) => {
+    const s = segs(u); if (!s.length) return '';
+    const m = s[s.length - 1].match(COPY_RE); if (!m) return '';
+    const base = urlKey(u).replace(/[^/]+$/, m[1]);
+    const list = (Array.isArray(known) ? known : []).map(x => x && typeof x === 'object' ? { k: urlKey(x.url), url: S(x.url), title: S(x.title) } : { k: urlKey(x), url: S(x), title: '' }).filter(x => x.k);
+    const orig = list.find(x => x.k === base), self = list.find(x => x.k === urlKey(u));
+    // a one-digit suffix is a copy unless both titles are known and share under 60% of the shorter title's words (a different page)
+    if (orig) { if (/^\d$/.test(m[2]) && orig.title && self && self.title && !sameTitle(orig.title, self.title)) return ''; return orig.url || base; }
+    return /^copy/.test(m[2]) ? base : '';
+  };
+  // the same search in other words: every word kept, joining words dropped, a plural folded (the H2 target_guard rule of Ladder_Plan.js)
+  const JOIN = new Set(['in', 'the', 'a', 'an', 'of', 'for', 'to', 'on', 'at', 'and', 'with', 'by', 'from']);
+  const wordsKey = (kw) => [...new Set(low(kw).split(/[^a-z0-9؀-ۿ]+/).filter(t => t && !JOIN.has(t)).map(t => t.length > 3 ? t.replace(/ies$/, 'y').replace(/([^s])s$/, '$1') : t))].sort().join(' ');
+  const sameSearch = (a, b) => { const x = low(a), y = low(b); if (!x || !y) return false; if (x === y) return true; const wa = wordsKey(x); return !!wa && wa === wordsKey(y); };
+  /** who already holds an address: owners [{ url, keyword, supporting?: [..], ladder_id?, by? }] -> the owner of `url` whose search is NOT
+   *  `keyword` (nor one of its supporting keywords), or null. The same search may always improve its own page. */
+  const ownerOf = (url, keyword, owners, mine) => {
+    const k = urlKey(url); if (!k) return null;
+    const kws = [keyword, ...(Array.isArray(mine) ? mine : [])].map(low).filter(Boolean);
+    for (const o of (Array.isArray(owners) ? owners : [])) {
+      if (!o || urlKey(o.url) !== k || !S(o.keyword)) continue;
+      const theirs = [o.keyword, ...(Array.isArray(o.supporting) ? o.supporting : String(o.supporting || '').split(','))].map(low).filter(Boolean);
+      if (kws.some(a => theirs.some(b => sameSearch(a, b)))) continue;   // the same search: its own page (another owner may still hold it)
+      return o;
+    }
+    return null;
+  };
+  /** the address a new page gets on the site: home + slug(keyword), with the site's trailing-slash form */
+  const plannedUrl = (home, keyword, slash) => { const h = S(home).replace(/\/+$/, ''); const sl = low(keyword).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return h && sl ? h + '/' + sl + (slash ? '/' : '') : ''; };
+  /** review H5: does this address already rank for the main keyword? o: { rank: { position, url } (the rank check or the ranked pull),
+   *  pages: [{ url, queries: [{ query, impressions, position }] }] (Search Console per page) } -> true when the rank reading puts this
+   *  address at position <= 30, or Search Console shows it for a search holding every word of the keyword at position <= 30 or with
+   *  10+ impressions. A page that ranks is improved, never left for a competing new page. */
+  const ranksFor = (url, keyword, o) => {
+    const x = o || {}; const k = urlKey(url); if (!k) return false;
+    const r = x.rank || null; const rp = r ? Number(r.position) : NaN;
+    if (r && Number.isFinite(rp) && rp >= 1 && rp <= CFG.rank_keep_position && (!S(r.url) || urlKey(r.url) === k)) return true;
+    const want = wordsKey(keyword).split(' ').filter(Boolean); if (!want.length) return false;
+    for (const p of (Array.isArray(x.pages) ? x.pages : [])) {
+      if (!p || urlKey(p.url) !== k) continue;
+      for (const q of (Array.isArray(p.queries) ? p.queries : [])) {
+        const have = new Set(wordsKey((q || {}).query || (q || {}).keyword).split(' '));
+        if (!want.every(w => have.has(w))) continue;
+        const pos = Number((q || {}).position), imp = Number((q || {}).impressions) || 0;
+        if ((Number.isFinite(pos) && pos >= 1 && pos <= CFG.rank_keep_position) || imp >= CFG.rank_keep_impressions) return true;
+      }
+    }
+    return false;
+  };
+  /** rule 1 for the MAIN page: a blog address, or a copy of a live page, is never its target. -> null (fine) or { reason, was, to, exists }:
+   *  a copy points back to the original page (improve it); a blog address gets the commercial page the site has (`commercial`, a URL
+   *  found by the caller among non-blog pages), else a new page at `planned`. */
+  const headTarget = (url, o) => {
+    const opt = o || {}; const u = S(url); if (!u) return null;
+    const orig = copyOf(u, opt.known || []);
+    if (orig) return { reason: 'copy', was: u, to: S(orig).startsWith('http') ? S(orig) : (S(opt.home).replace(/\/+$/, '') + pathOf(orig)), exists: true,
+      text: u.replace(/^https?:\/\/[^\/]+/i, '') + ' is a copy of ' + pathOf(orig) + ', a page your website already has: the main page improves that page instead of a second copy' };
+    if (isBlog(u)) { const c = S(opt.commercial);
+      return c ? { reason: 'blog', was: u, to: c, exists: true, text: 'the main page is a page people choose a provider on, not a blog post: ' + c.replace(/^https?:\/\/[^\/]+/i, '') + ' improves instead of ' + u.replace(/^https?:\/\/[^\/]+/i, '') }
+        : { reason: 'blog', was: u, to: S(opt.planned), exists: false, text: 'the main page is a page people choose a provider on, not a blog post (' + u.replace(/^https?:\/\/[^\/]+/i, '') + '): it gets its own page at ' + S(opt.planned).replace(/^https?:\/\/[^\/]+/i, '') }; }
+    return null;
+  };
+  /** rule 1 inside one plan: pages [{ keyword, target_url, exists, rung, supporting }] in plan order (the main page first) -> { pages, moved }.
+   *  Two pages on one address: the first keeps it; a later page of the SAME search joins it as a supporting keyword, any other gets its own
+   *  new address (`planned(keyword)`). */
+  const oneUrl = (pages, planned) => {
+    const seen = new Map(); const out = []; const moved = [];
+    for (const p of (Array.isArray(pages) ? pages : [])) {
+      const k = urlKey(p && p.target_url); if (!p || !k) { out.push(p); continue; }
+      const o = seen.get(k);
+      if (!o) { seen.set(k, p); out.push(p); continue; }
+      if (sameSearch(o.keyword, p.keyword)) { o.supporting = [...new Set([...(o.supporting || []), p.keyword, ...(p.supporting || [])])]; moved.push({ keyword: p.keyword, to: o.keyword, url: o.target_url, how: 'joined', text: '"' + p.keyword + '" is the same search as "' + o.keyword + '", so it is a supporting keyword of that page' }); continue; }
+      const nu = typeof planned === 'function' ? S(planned(p.keyword)) : '';
+      if (!nu || seen.has(urlKey(nu))) { moved.push({ keyword: p.keyword, to: o.keyword, url: o.target_url, how: 'dropped', text: '"' + p.keyword + '" had the same address as "' + o.keyword + '" and no address of its own could be made, so it waits' }); continue; }
+      moved.push({ keyword: p.keyword, from: p.target_url, url: nu, how: 'own address', text: '"' + p.keyword + '" had the same address as "' + o.keyword + '" (' + pathOf(p.target_url) + '): one search, one page, so it gets its own page at ' + pathOf(nu) });
+      Object.assign(p, { target_url: nu, exists: false, status: 'new', existing_source: null, existing_confidence: null, existing_evidence: '' });
+      seen.set(urlKey(nu), p); out.push(p);
+    }
+    return { pages: out, moved };
+  };
+
+  // ---- the buyer's stage (rule 2) ----
+  const Q_START = /^(?:what|who|why|when|where|which|is|are|does|do|can|should|will|how)\b/;
+  const W_COMPARE = /\b(?:best|top|vs|versus|alternatives?|compare|comparison|comparing|pricing|prices?|costs?|fees?|quotes?|reviews?|rated|cheapest|affordable|rankings?|list of)\b/;
+  const W_HIRE = /\b(?:compan(?:y|ies)|agenc(?:y|ies)|firms?|providers?|partners?|consultants?|consultanc(?:y|ies)|contractors?|developers?|vendors?|integrators?|resellers?|specialists?|experts?|freelancers?|hire|hiring|near me|services|consulting)\b|\b(?:consulting|implementation|development|support|migration|integration|outsourcing) services?\b/;
+  const W_PROBLEM = /\b(?:deadlines?|penalt(?:y|ies)|fines?|mandate|mandatory|requirements?|compliance|compliant|regulations?|law|laws|problems?|issues?|errors?|not working|fix|risks?|challenges?|obligations?)\b/;
+  const W_SOLUTION = /\b(?:software|system|systems|platform|platforms|tools?|solutions?|apps?|applications?|modules?|features?|implementation|migration|integration|upgrade|automation|development|hosting|cloud|erp|crm|hrms|lms|setup|service)\b/;
+  const W_DEFINE = /^(?:what (?:is|are|does)|what's|whats|define|definition of|meaning of)\b/;
+  const W_SELLER_NOUN = /\b(?:compan(?:y|ies)|agenc(?:y|ies)|firms?|providers?|partners?|consultants?|consultanc(?:y|ies)|vendors?|integrators?|specialists?)\b/;
+  /** the stage of a search: a stored KI stage when there is one, else the words, else the intent the research gave -> one of STAGES */
+  const stageOf = (keyword, intent, stored) => {
+    const st = low(stored); if (STAGES.includes(st)) return st;
+    const k = low(keyword).replace(/[^a-z0-9؀-ۿ&]+/g, ' ').trim();
+    if (!k) return 'info';
+    if (W_COMPARE.test(k)) return 'compare';
+    if (Q_START.test(k)) return W_PROBLEM.test(k) ? 'problem' : 'info';
+    if (W_HIRE.test(k)) return 'hire';
+    if (W_PROBLEM.test(k)) return 'problem';
+    if (W_SOLUTION.test(k)) return 'solution';
+    const i = low(intent);
+    return i === 'commercial' || i === 'transactional' ? 'solution' : 'info';
+  };
+  const isCommercial = (stage) => COMMERCIAL.includes(low(stage));
+  /** a pure definition of a seller ("what is a crm company", "meaning of erp partner"): a page for people learning a word, not buyers */
+  const isDefinitional = (keyword) => { const k = low(keyword); return W_DEFINE.test(k) && W_SELLER_NOUN.test(k); };
+  /** rule 2: may a definitional rung stay? only when its results page was read and is informational (guides lead) and it links to the main page */
+  const definitionalOk = (o) => { const x = o || {}; return !!x.serp_informational && !!x.links_up; };
+  const STAGE_WORDS = { problem: 'people with a problem to solve', solution: 'people looking for a solution', compare: 'people comparing providers or options', hire: 'people ready to choose a provider', info: 'people learning about the topic' };
+  const stageText = (stage) => STAGE_WORDS[low(stage)] || STAGE_WORDS.info;
+
+  // ---- the market (rule 3) ----
+  const placesOf = (s) => { try { return typeof fitPlaces === 'function' ? fitPlaces(s) : []; } catch (e) { return []; } };
+  const countryName = (iso) => CFG.countries[S(iso).toUpperCase()] || '';
+  /** -> { iso, country, source: 'keyword' | 'site' | 'request', named: [place words], keyword_iso, ok (the request market is the lock), changed,
+   *  measurable, note }. o: { keyword, site_iso (the website's market), request_iso (what the run was sent with) }.
+   *  A keyword that names places stands for those places: the website's market when it is among them ("gcc" for a UAE website), else the
+   *  first measurable country it names (a region: its first country, "gcc" -> AE); a keyword that names no place is the website's market.
+   *  Never a third country: the request's market is used only when there is neither a place in the keyword nor a website market. */
+  const market = (o) => {
+    const x = o || {}; const site = S(x.site_iso).toUpperCase(), req = S(x.request_iso).toUpperCase();
+    const places = placesOf(x.keyword); const named = places.map(p => p.word);
+    let iso = '', source = '', keyword_iso = '';
+    if (places.length) {
+      const isos = [...new Set(places.flatMap(p => p.iso || []))];
+      keyword_iso = site && isos.includes(site) ? site : (isos.find(i => CFG.countries[i]) || isos[0] || '');
+      iso = keyword_iso; source = site && iso === site ? 'site' : 'keyword';
+    } else if (site) { iso = site; source = 'site'; }
+    else { iso = req; source = 'request'; }
+    const unmeasured = !CFG.countries[iso] && !!site;
+    if (unmeasured) { iso = site; source = 'site'; }   // a named market we cannot measure (Qatar): the website's own, said so
+    // review M1: a request for a measurable country INSIDE the places the keyword names is that market ("erp software gcc" sent with Saudi Arabia)
+    const namedIsos = [...new Set(places.flatMap(p => p.iso || []))];
+    if (req && req !== iso && namedIsos.includes(req) && CFG.countries[req]) { iso = req; source = 'keyword'; }
+    const ok = !req || req === iso;
+    const nm = (i) => countryName(i) || i;
+    const note = !iso ? '' : source === 'keyword'
+      ? 'The keyword names ' + named.join(', ') + ', so this ladder is measured in ' + nm(iso) + (site ? ', not in your website\'s market (' + nm(site) + ')' : '') + '.'
+      : places.length && keyword_iso && keyword_iso !== iso ? 'The keyword names ' + named.join(', ') + ', which we cannot measure, so this ladder is measured in your website\'s market (' + nm(iso) + ').'
+      : places.length ? 'The keyword names ' + named.join(', ') + ', which includes your website\'s market (' + nm(iso) + '), so it is measured there.'
+      : source === 'site' ? 'Measured in your website\'s market (' + nm(iso) + ').' : '';
+    return { iso, country: nm(iso), source, named, keyword_iso, request_iso: req, ok, changed: !!req && req !== iso, measurable: !!CFG.countries[iso], note };
+  };
+  /** the sentence a refused run carries when its market contradicts the lock (Ladder Duplicate (Words), before anything is paid) */
+  const marketRefusal = (m, keyword) => !m || m.ok ? '' : 'This ladder was sent to be measured in ' + (countryName(m.request_iso) || m.request_iso) + ', but "' + S(keyword) + '" '
+    + (m.source === 'keyword' ? 'names ' + m.named.join(', ') + ' (' + m.country + ')' : 'names no place and your website\'s market is ' + m.country)
+    + '. A ladder is measured in one market, so nothing was planned and nothing was charged: start it again in ' + m.country
+    + (m.source === 'site' && !m.named.length ? ', or confirm that you want it measured in ' + (countryName(m.request_iso) || m.request_iso) + ' on purpose.' : '.');
+
+  // ---- verdicts (rule 4) ----
+  /** o: { verdict: 'GO' | 'GO_WITH_CHANGES' | 'AVOID' | ..., score: 0-100 | null, ack: the client said "Write it anyway" } -> { stop, reason, band } */
+  const verdictStop = (o) => {
+    const x = o || {}; const v = S(x.verdict).toUpperCase(); const sc = x.score === '' || x.score == null || !Number.isFinite(Number(x.score)) ? null : Math.round(Number(x.score));
+    const band = v === 'AVOID' ? 'avoid' : sc != null && sc < CFG.clear_score ? 'clearly_low' : '';
+    if (!band) return { stop: false, reason: '', band: '' };
+    if (x.ack) return { stop: false, reason: 'you chose to write it anyway', band, overridden: true };
+    return { stop: true, band, score: sc,
+      reason: band === 'avoid' ? 'our check advised against this page (AVOID' + (sc != null ? ', score ' + sc : '') + ')' : 'our check scored it ' + sc + ' out of 100, clearly under the ' + CFG.clear_score + ' we write without asking' };
+  };
+
+  // ---- stuck rungs (rule 5) ----
+  /** o: { status, since (ISO: when it went to writing / was started), eta_minutes, live: true | false | null (null = could not be asked), now (ISO or ms) }
+   *  -> { stuck, minutes, limit, reason } */
+  const stuck = (o) => {
+    const x = o || {}; const st = low(x.status);
+    const eta = Number.isFinite(Number(x.eta_minutes)) && Number(x.eta_minutes) > 0 ? Number(x.eta_minutes) : CFG.page_eta_minutes;
+    const limit = Math.max(CFG.stuck_min_minutes, CFG.stuck_eta_factor * eta);
+    const t = Date.parse(S(x.since)); const now = typeof x.now === 'number' ? x.now : Date.parse(S(x.now));
+    if (!['writing', 'started'].includes(st) || !Number.isFinite(t) || !Number.isFinite(now)) return { stuck: false, minutes: null, limit, reason: '' };
+    const minutes = Math.max(0, Math.round((now - t) / 60000));
+    if (minutes < limit) return { stuck: false, minutes, limit, reason: '' };
+    if (x.live !== false) return { stuck: false, minutes, limit, reason: x.live === true ? 'still running' : 'the engine could not be asked whether it is still running' };
+    return { stuck: true, minutes, limit, reason: 'the page run stopped without a result: it was being written for ' + minutes + ' minutes (more than ' + limit + ') and nothing of it is still running' };
+  };
+
+  // ---- what a rung row tells the client (the app's ladder page) ----
+  /** row: a seo_ladders row; o: { next: the keyword the ladder writes next, now } -> { state, label, why, url } */
+  const rungState = (row, o) => {
+    const r = row || {}; const st = low(r.status || 'planned'); const url = S(r.target_url); const note = S(r.status_note);
+    const exists = r.page_exists === true || r.page_exists === 'true';
+    const path = url.replace(/^https?:\/\/[^\/]+/i, '') || '/';
+    const tw = S(r.target_why);
+    if (st === 'stopped') return { state: 'stopped', label: 'Stopped', why: note.replace(/^stopped:\s*/i, '') || 'our check advised against this page', url };
+    if (st === 'failed') return { state: 'failed', label: 'Stopped without a result', why: note.replace(/^failed:\s*/i, '') || 'the page run stopped without a result', url };
+    if (st === 'merged') return { state: 'merged', label: 'Part of another page', why: note.replace(/^merged:\s*/i, '') || 'it is a section of another page of this ladder', url };
+    if (st === 'set_aside') return { state: 'set_aside', label: 'Set aside', why: note || 'it is not a search for this website', url };
+    if (st === 'published') return { state: 'published', label: 'Live', why: 'published at ' + path, url };
+    if (st === 'written' || st === 'not_ready') return { state: st, label: st === 'written' ? 'Written, waiting to be published' : 'Written, needs a fix', why: note || (exists ? 'improves ' + path : 'a new page at ' + path), url };
+    if (st === 'writing') return { state: 'writing', label: 'Being written', why: exists ? 'improves ' + path : 'a new page at ' + path, url };
+    const nxt = (o || {}).next ? sameSearch((o || {}).next, r.keyword) : false;
+    return { state: exists ? 'improve' : 'new', label: exists ? 'Improves an existing page' : 'New page', why: (tw || (exists ? 'your page ' + path + ' already answers this search, so it is improved, not written twice' : 'a page you do not have yet, at ' + path))
+      + (nxt ? '' : note ? ' (' + note + ')' : ''), url, waiting: !nxt };
+  };
+
+  // ---- rule 6: keyword intelligence as the ladder's pool ----
+  /** o: { mode (seo_monitors.ki_mode), killed (true | false | null = unread: counts as killed), rows (seo_ki_keywords of the site), runs
+   *  (seo_ki_runs of the site), market ('AE-en'), min (default 3) } -> { used, reason, run_id, rows (one head per cluster, gate pass, not
+   *  gated), avoid (keywords the client's checks advised against), note }. Read only when the site's mode is exactly 'on' and the kill
+   *  switch reads off (fails closed, KI.readable's rule); only the rows of the latest finished keyword-research run of this market
+   *  (CONTRACTS KI_ROW_CURRENT). Fewer than `min` usable heads: not used, and the ladder keeps its own research, said so. */
+  const kiPool = (o) => {
+    const x = o || {}; const mode = low(x.mode); const mk = S(x.market);
+    const off = (reason, note) => ({ used: false, reason, run_id: '', rows: [], avoid: [], note: note || '' });
+    if (mode !== 'on') return off(mode ? 'ki_' + mode : 'ki_off');
+    if (x.killed !== false) return off('killed', 'Keyword intelligence is paused for every website, so this ladder used its own keyword research.');
+    const runs = (Array.isArray(x.runs) ? x.runs : []).filter(r => r && low(r.kind) === 'keyword_research' && ['ok', 'partial'].includes(low(r.status)) && (!mk || S(r.market) === mk))
+      .sort((a, b) => S(b.finished_at || b.started_at).localeCompare(S(a.finished_at || a.started_at)));
+    const cur = runs[0] ? S(runs[0].run_id) : '';
+    if (!cur) return off('no_run', 'Keyword intelligence is on, but no finished keyword research is on file for ' + (mk || 'this market') + ', so this ladder used its own keyword research.');
+    const all = (Array.isArray(x.rows) ? x.rows : []).filter(r => r && S(r.keyword) && S(r.run_id) === cur && (!mk || S(r.market) === mk));
+    const yes = (v) => v === true || v === 'true';
+    const pass = all.filter(r => low(r.gate) === 'pass' && low(r.verdict) !== 'gated');
+    const anyHead = pass.some(r => yes(r.is_head));
+    const heads = pass.filter(r => !anyHead || yes(r.is_head));
+    const avoid = all.filter(r => low(r.gate_reason) === 'avoid').map(r => S(r.keyword));
+    const min = Number(x.min) > 0 ? Number(x.min) : 3;
+    if (heads.length < min) return { ...off('too_few', 'Keyword intelligence holds only ' + heads.length + ' usable search' + (heads.length === 1 ? '' : 'es') + ' for ' + (mk || 'this market') + ' (at least ' + min + ' are needed), so this ladder used its own keyword research.'), run_id: cur, avoid };
+    return { used: true, reason: '', run_id: cur, rows: heads, avoid,
+      note: 'The supporting pages come from keyword intelligence: ' + heads.length + ' search groups of its last keyword research (' + cur + '), one search per group, with its verdict, page action and Search Console position.' };
+  };
+
+  return { CFG, STAGES, COMMERCIAL, kiPool, ranksFor, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, headTarget, oneUrl,
+    stageOf, isCommercial, isDefinitional, definitionalOk, stageText, countryName, market, marketRefusal, verdictStop, stuck, rungState };
+})();
 // ---- the in-200 retry gate, for every provider that answers "failed" with HTTP 200 (R18 / R19, 2026-10-14, FIX_PLAN §3.12) ----
 // n8n's `retryOnFail` only fires when a node FAILS. DataForSEO answers a dead task with HTTP 200 and `status_code` 40101
 // ("Internal SE Server Error."), Google's URL Inspection answers HTTP 200 with an `error` object ("Internal error
@@ -2778,11 +3055,98 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
     'navigational': 'navigational', 'own brand': 'own_brand', 'off topic': 'off_topic', 'too broad': 'too_broad', 'empty': 'empty' };
   const GATE_TEXT = { other_market: 'outside your market', career: 'someone looking for a job or a course', other_brand: 'another company\'s brand', government: 'a government service',
     portal: 'someone looking for a login or a portal', navigational: 'someone looking for one particular website', own_brand: 'your own brand (tracked, not a new opportunity)',
-    off_topic: 'not something you sell', too_broad: 'too broad to point to what you sell', empty: 'no keyword', low_fit: 'too far from what you sell', avoid: 'you or our check said not to write it' };
+    practitioner: 'someone already using the product, looking for its documentation or settings', off_topic: 'not something you sell', too_broad: 'too broad to point to what you sell', empty: 'no keyword', low_fit: 'too far from what you sell', avoid: 'you or our check said not to write it' };
   /** the gate ctx from a site: { own_domain, market, services (list), topics, competitors, serp_domains, brands, intent, protect, serp, career, avoid } */
   const gctx = (ctx) => { const o = ctx || {}; const svc = services(o.services); const topics = uniq(svc.concat(services(o.topics || [])));
     return { own_domain: o.own_domain || o.domain || '', market: S(o.market || '').toUpperCase().slice(0, 2), services: svc, topics, competitors: o.competitors || [],
       serp_domains: o.serp_domains || [], brands: o.brands || {}, intent: o.intent || '', protect: o.protect || [], serp: o.serp || [], career: o.career || null }; };
+  // ---- KI-GATE2: who is searching (job seekers, students, people using the product, another language, a packaged product the site does not sell)
+  const BUYER_RX = /\s(?:company|companies|agency|agencies|firm|firms|partner|partners|provider|providers|vendor|vendors|reseller|resellers|consultant|consultants|consultancy|consulting|service|services|implementation|implementer|implementers|outsourc\w*|cost|costs|price|prices|pricing|quote|quotes|licen[cs]es?|licensing|subscription|best(?!\spractices?)|top|vs|versus|compare|comparison|alternatives?|reviews?|near me|support|managed|migration|migrate|upgrade|integration|integrator|integrators|hire|rates?|benefits|advantages|demo)\s/;
+  // studying or working, not buying: coursework theory, exams, courses, definitions (the CAREER_W words above stay as they were)
+  const STUDY_RX = /\s(?:sdlc|life cycle|lifecycle|methodolog(?:y|ies)|manifesto|waterfall|v model|design patterns?|user stories|wbs|raci|flowchart|syllabus|scrum|kanban|extreme programming|xp|adaptive software development|asd|clean room|cleanroom|interview questions?|exam|exams|certified|associate|tutorials?|course|courses|bootcamp|degree|university|college|nyu|wgu|computer science|thesis|assignment|homework|stands for|abbreviation|acronym|full form|meaning|definition|define|development models?|life ?cycle models?|process models?|phases|hierarchy|team building|team members)\s|\s(?:mb|pl|az|dp|ai|sc|ms|md|ab|da)\s\d{3}\s/;
+  const STRONG_BUYER_RX = /\s(?:company|companies|agency|agencies|firm|firms|partner|partners|provider|providers|vendor|vendors|consultant|consultants|consultancy|consulting|service|services|implementation|outsourc\w*|cost|costs|price|prices|pricing|quote|quotes|hire|rates?)\s/;
+  const STRONG_STUDY_RX = /\s(?:sdlc|life cycle|lifecycle|methodolog(?:y|ies)|manifesto|waterfall|v model|design patterns?|patterns|user stories|wbs|raci|flowchart|syllabus|scrum|kanban|extreme programming|agile|steps|languages|programme|niches|ideas|opportunities|standards?|interview questions?|exam|exams|tutorials?|course|courses|stands for|abbreviation|acronym|full form|cross functional)\s|\s(?:mb|pl|az|dp|ai|sc|ms|md|ab|da)\s\d{3}\s/;
+  // a search for one company: its photos, its phone number, its page on a social site; an event, not a purchase
+  const NAV_RX = /\s(?:photos|pictures|contact number|phone number|whatsapp|office address|linkedin|glassdoor|facebook|instagram)\s$/;
+  const EVENT_RX = /\s(?:conference|summit|expo|exhibition|webinar|meetup|hackathon|tenders?|rfq)\s/;
+  // training is studying unless it is a model's training or a training platform (Open edX, an LMS)
+  const TRAIN_RX = /\s(?!(?:model|data|ai|ml|llm)\s)\S+\straining(?!\s(?:platform|software|system|lms|management))\s|^\straining\s/;
+  // a job title on its own (places and seniority dropped), with no buyer word: "software developer", "finance operations specialist"
+  const ROLE_RX = /\s(?:developer|developers|engineer|engineers|programmer|programmers|analyst|analysts|specialist|specialists|architect|architects|technician|technicians|leader|lead|officer|administrator|admin|intern|interns|professionals|associate)$/;
+  // using the product, not buying a service around it: docs, files, specs, settings, an admin's how-to
+  const DOCS_RX = /\s(?:documentation|docs|user guide|user manual|manual|manuals|guide pdf|pdf|ppt|pptx|download|downloads|cookbook|ebook|template|templates|xls|xlsx|sample|samples|icon|icons|logo|png|svg|jpg|screenshot|sdk|software development kit|api documentation|api reference|api|xml|xsd|json|schema|validator|validation rules?|specification|specifications|spec|data dictionary|mandatory fields|code list|codes|unit of measure|scheme id|as4|ubl|bis\d*|edi|test bed|testbed|ip ranges?|ip address(?:es)?|security roles?|backup policy|update schedule|release plan|release notes|release wave|roadmap|provisioning|installation|install|setup guide|configure|configuration|excel add in|add in|email templates|table browser|task recorder|error|errors|architecture|best practices|kpis?|key performance indicators|cheat sheet|shortcuts?|login|sign in|workflow|workflows|format|formats|number|news|countries|dictionary|members|check|international|document types|questionnaire|estimation|estimates|tools for)\s|\s(?<!low |no )code\s|\s(?:expense|asset|inventory|warehouse|case|document|cash flow|budget)\s(?:management\s)?(?:in\s|for\s)?(?:microsoft\s)?(?:d365|dynamics)\s|\show to (?:manage|use|create|set up|setup|configure|install|find|enable|add|delete|export|import|connect|get started)\s|\sbook(?!\s(?:a|demo|call|meeting|consultation))\s|\s\d+ \d+\s|\s0\d{3}\s/;
+  const KI_PLACES = [['BE', /\s(?:belgium|belgian|belgie|belgique|brussels|bruxelles|antwerp|ghent)\s/], ['PL', /\s(?:poland|polska|warsaw|krakow)\s/], ['RO', /\s(?:romania|bucharest)\s/],
+    ['NL', /\s(?:nederland|dutch)\s/], ['LU', /\sluxembourg\s/], ['DK', /\s(?:denmark|danish|copenhagen)\s/], ['SE', /\s(?:sweden|swedish|stockholm)\s/], ['NO', /\s(?:norway|norwegian|oslo)\s/],
+    ['FI', /\s(?:finland|finnish|helsinki)\s/], ['CH', /\s(?:switzerland|swiss|zurich|geneva)\s/], ['AT', /\s(?:austria|vienna)\s/], ['PT', /\s(?:portugal|lisbon)\s/], ['GR', /\s(?:greece|athens)\s/],
+    ['CZ', /\s(?:czech|czechia|prague)\s/], ['HU', /\s(?:hungary|budapest)\s/], ['GH', /\s(?:ghana|accra)\s/],
+    ['US', /\s(?:tx|dallas|austin|atlanta|denver|miami|phoenix|san diego|san jose|new jersey|virginia)\s/], ['IN', /\s(?:kerala|kochi|jaipur|gujarat|chandigarh|indore)\s/]];
+  const KI_PLACES_RX = new RegExp(KI_PLACES.map(([, rx]) => rx.source).join('|'));
+  // another language (the market is measured in English): Dutch, French, German, Spanish words a search in English never carries
+  const FOREIGN_RX = /\s(?:verplicht|verplichting|facturen|factuur|facturatie|facture|factures|facturation|cest|qu est|quest|wat is|wat zijn|was ist|rechnung|rechnungen|pflicht|obligatoire|obligatorio|factura|facturas|facturacion|que es|voor|pour|und|het|een|welke|hoe)\s/;
+  // a packaged product of a category the site does not sell, with no build / implement word ("hrms software in dubai" for a software house)
+  const PRODUCT_CAT_RX = /\s(game development|game|hrms|hris|hr|payroll|attendance|time attendance|applicant tracking|ats|pos|point of sale|accounting|bookkeeping|inventory|stock|erp|crm|school management|hospital management|clinic management|property management|queue management|fleet management|warehouse management|lms|learning management|project management|document management|billing|invoicing|e invoicing|trading|real estate)\s(?:software|system|systems|app|apps|application|applications|tool|tools|platform|platforms|solution|solutions)(?:\s|$)/;
+  const BUILD_RX = /\s(?:development|developer|developers|develop|custom|customi[sz]ed|bespoke|build|building|agency|outsourc\w*|implementation|partner|partners|consultant|consultants|integration|company|companies)\s/;
+  // generic English names of a vendor's products count as the product only with the vendor named ("finance operations" alone is not F&O)
+  const GENERIC_SVC = /^(?:finance (?:and )?operations|project operations|nav|sales|customer service|field service|commerce|supply chain(?: management)?|human resources|marketing|managed support|managed services|post go live|support|operations|fabric)$/;   // CRM is a category a client sells whatever the vendor: not here
+  const GENERIC_IN = /\b(?:finance (?:and )?operations|project operations|customer service|field service|supply chain(?: management)?|human resources|managed support|managed services|post go live)\b/g;
+  const ANCHOR_RX = /\s(?:dynamics|d365|microsoft|ms|msft|fno|f and o|f o|ax|navision|business central|power|copilot|azure|365|sharepoint)\s/;
+  const SERVICE_PRE = /\s(?:in|on|with|using|to|for)\s(?:microsoft\s)?(?:d365|dynamics(?:\s365)?|business central|power bi|power apps|power automate|finance and operations|fno|sharepoint)\b/;
+  const PRODUCT_TAIL_RX = /\s(?:d365|dynamics(?:\s365)?|business central|finance and operations|fno|power bi)\s(?:\S+\s){0,3}(?:development|intercompany|mobile app|asset management|expense management|human resources|consolidation|budgeting|electronic reporting|business units?|task recorder|table browser)\s|\sbusiness units?\s(?:\S+\s){0,2}(?:d365|dynamics)/;
+  const SCOPE_LEAD = /^(?:modules?|editions?|features?|apps|capabilities|what is new|whats new)$/;
+  const CAT_COVER = { erp: /dynamics|business central|finance (?:and |& )?operations|\berp\b|sap\b|odoo|netsuite/, crm: /\bcrm\b|dynamics 365 sales|salesforce/, lms: /open edx|\blms\b|learning platform|e learning/,
+    'learning management': /open edx|\blms\b|learning/, invoicing: /invoic|peppol/, 'e invoicing': /invoic|peppol/, billing: /invoic|billing/, accounting: /business central|accounting/, bookkeeping: /business central|accounting/,
+    inventory: /business central|finance (?:and |& )?operations|inventory|supply chain/, stock: /business central|finance (?:and |& )?operations|inventory/, 'project management': /project operations|project management/,
+    hr: /human resources|\bhr\b|payroll/, hrms: /human resources|\bhrms\b|payroll/, hris: /human resources|\bhris\b/, payroll: /payroll/, 'document management': /document|sharepoint/ };
+  const anchored = (keyword, o) => { const kt = ' ' + norm(keyword) + ' '; if (ANCHOR_RX.test(kt)) return o;
+    // a generic product name is dropped from the services, and from inside a longer service name ("Dynamics 365 Finance & Operations" -> "Dynamics 365")
+    const keep = (v) => services(v).filter(x => !GENERIC_SVC.test(norm(x))).map(x => norm(x).replace(GENERIC_IN, ' ').replace(/\s+/g, ' ').trim()).filter(x => x.split(' ').length >= 1 && x.length > 2);
+    return { ...o, services: keep(o.services), topics: keep(o.topics || []) }; };
+  const inTopic = (text, o) => { const g = gctx(o); if (typeof fitEvidence !== 'function' || !g.topics.length || !S(text).trim()) return false;
+    return fitEvidence(S(text), g.topics, { services: g.services, market: g.market }).verdict === 'in'; };
+  const TAIL_OK = /^(?:for|uae|dubai|abu|dhabi|sharjah|gcc|middle|east|company|companies|services?|solutions?|partner|partners|provider|providers|agency|agencies|consultant|consultants|consulting|experts?|specialists?|team|teams|support|implementation|migration|upgrade|integration|cost|price|pricing|plans?|licen[cs]e|licensing|modules?|editions?|features?|overview|benefits|advantages|demo|trial|review|reviews|vs|comparison|alternatives?|outsourcing|offshore|nearshore|custom|bespoke|enterprise|small|business|businesses|startups?|sme|smes|online|cloud|managed|it|ai|uk|rates?|near|me|best|top|leading|list|in|the|and|of|a|an|to|on|with|by|at|via|penalt(?:y|ies)|fines?|deadlines?|mandate|mandatory|requirements?|rules|regulations?|compliance|law|customi[sz]ation|expertise|experience|timeline|readiness)$/;
+  const serviceTail = (kt, o) => { const phr = uniq(services(o.services).map(x => norm(x)).filter(x => x.split(' ').length >= 2)).sort((a, b) => b.length - a.length);
+    const t = kt.trim(); const ph = phr.find(x => t === x || t.startsWith(x + ' ')); if (!ph) return null;
+    const rest = t.slice(ph.length).trim().split(' ').filter(Boolean); const svcW = new Set(services(o.services).concat(services(o.topics || [])).join(' ').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 2));
+    if (!rest.length || rest.length > 3 || rest.some(w => TAIL_OK.test(w) || /^\d+$/.test(w) || svcW.has(w))) return null;   // a tail word that is itself one of the services is the service
+    if (typeof fitPlaces === 'function' && fitPlaces(rest.join(' ')).length) return null;
+    return { words: rest.join(' '), anchor: ANCHOR_RX.test(' ' + ph + ' ') || /\s(?:peppol|pint)\s/.test(' ' + ph + ' ') }; };
+  const fail = (reason, detail, text) => ({ gate: 'fail', reason, text: text || GATE_TEXT[reason], detail: ascii(detail) });
+  const whoSearches = (keyword, o) => {
+    const kt = ' ' + norm(keyword) + ' '; const buyer = BUYER_RX.test(kt);
+    const svcText = services(o.services).concat(services(o.topics || [])).join(' | ').toLowerCase();
+    if (FOREIGN_RX.test(kt)) return fail('other_market', 'it is written in another language: ' + (kt.match(FOREIGN_RX) || [''])[0].trim(), 'a search in another language');
+    // markets the shared fit gate does not list (kept here so no other path of the engine changes): the European markets e-invoicing
+    // searches name most, and more US / Indian places; a website measured in one of them is never stopped by its own country
+    const xm = kt.match(KI_PLACES_RX); if (xm) { const iso = (KI_PLACES.find(([, rx]) => rx.test(xm[0])) || [''])[0]; const mk = S(o.market || '').toUpperCase().slice(0, 2);
+      if (iso && iso !== mk) return fail('other_market', 'a search about ' + xm[0].trim() + ', outside the market this website is measured in (' + (mk || 'its market') + ')'); }
+    if (!SELLS_WORK.test(svcText) && !STRONG_BUYER_RX.test(kt)) {
+      const m = buyer ? kt.match(STRONG_STUDY_RX) : (kt.match(STUDY_RX) || kt.match(STRONG_STUDY_RX) || kt.match(TRAIN_RX)); if (m) return fail('career', 'it reads as studying or an exam: ' + m[0].trim());
+    }
+    if (!buyer) { const bare = (typeof fitDropPlaces === 'function' ? fitDropPlaces(keyword, (typeof fitPlaces === 'function' ? fitPlaces(keyword) : []).map(x => x.word)) : S(keyword));
+      const bt = ' ' + norm(bare).replace(/\s(?:i|ii|iii|iv|v|senior|junior|sr|jr|lead|principal|chief)$/g, '') + ' ';
+      if (ROLE_RX.test(bt.trimEnd()) && !/\sfor hire\s|\sfreelance\s/.test(kt)) return fail('career', 'it names a job title: ' + (bt.trimEnd().match(ROLE_RX) || [''])[0].trim()); }
+    if (!buyer) { const m = kt.match(DOCS_RX); if (m) return fail('practitioner', 'it reads as someone using the product: ' + m[0].trim(), GATE_TEXT.practitioner); }
+    // "<a task> in <the product>": an admin's how-to, unless the task itself is something the site sells ("e invoicing in dynamics 365")
+    // a product followed by one of its own modules or a developer's task ("dynamics 365 finance and operations intercompany")
+    if (!buyer && PRODUCT_TAIL_RX.test(kt)) return fail('practitioner', 'it is a task or a module inside the product: ' + (kt.match(PRODUCT_TAIL_RX) || [''])[0].trim(), GATE_TEXT.practitioner);
+    if (!buyer) { const i = kt.search(SERVICE_PRE); if (i > 0) { const lead = kt.slice(0, i).trim(); if (lead && lead.split(' ').length <= 5 && !SCOPE_LEAD.test(lead) && !inTopic(lead, o))
+      return fail('practitioner', 'it is a task inside the product: ' + lead, GATE_TEXT.practitioner); } }
+    if (NAV_RX.test(kt)) return fail('other_brand', 'it looks for one company: ' + (kt.match(NAV_RX) || [''])[0].trim());
+    if (!STRONG_BUYER_RX.test(kt) && EVENT_RX.test(kt)) return fail('off_topic', 'an event or a tender, not a buyer search: ' + (kt.match(EVENT_RX) || [''])[0].trim());
+    // the results page names one company for it: a top-3 website whose name the search carries (not the client, not a directory or a social site)
+    const sh = (Array.isArray(o.serp_hosts) ? o.serp_hosts : []).slice(0, 3);
+    for (const h0 of sh) { const h = S(h0).toLowerCase().replace(/^www\./, ''); const label = h.split('.')[0]; if (!label || label.length < 4 || h === S(o.own_domain || o.domain).toLowerCase().replace(/^www\./, '')) continue;
+      if (/^(?:linkedin|facebook|instagram|youtube|twitter|clutch|goodfirms|glassdoor|indeed|google|wikipedia|reddit|quora|microsoft|amazon|apple)$/.test(label)) continue;
+      if (kt.includes(' ' + label + ' ') && !svcText.includes(label)) return fail('other_brand', 'it looks for ' + h + ' by name (that website is a top result for it)'); }
+    const pc = kt.match(PRODUCT_CAT_RX);
+    if (pc && !BUILD_RX.test(kt.replace(pc[0], ' '))) { const cat = pc[1]; const covered = CAT_COVER[cat] ? CAT_COVER[cat].test(svcText) : svcText.includes(cat);
+      if (!covered) return fail('off_topic', 'a packaged ' + cat + ' product, which is not something you sell'); }
+    // a service name followed by a word that is neither a buyer's, a place, an audience ("for startups") nor a scope word: a concept or a
+    // product detail ("software development standard", "dynamics 365 finance and operations workflow"), not a search for a provider
+    if (!buyer) { const tail = serviceTail(kt, o); if (tail) return tail.anchor ? fail('practitioner', 'a detail of the product: ' + tail.words, GATE_TEXT.practitioner)
+      : fail('career', 'it reads as studying the subject: ' + tail.words); }
+    return null;
+  };
   /** KI.gate(keyword, ctx) -> { gate: 'pass' | 'fail', reason, text, detail }. The KI write path's gate (gate_lint pair: write KI.gate, read KI.readable). */
   const gate = (keyword, ctx) => {
     const o = ctx || {}; const k = key(keyword);
@@ -2795,7 +3159,12 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
     const kn = ' ' + norm(keyword) + ' ';
     if (CAREER_W.test(kn) && !SELLS_WORK.test(services(o.services).concat(services(o.topics || [])).join(' | ').toLowerCase()))
       return { gate: 'fail', reason: 'career', text: GATE_TEXT.career, detail: 'it names a job, a career, pay or a course: ' + ascii((kn.match(CAREER_W) || [''])[0]).trim() };
-    const g = fitGate(S(keyword), gctx(o));
+    // KI-GATE2 (2026-11-11, docs/keyword-intel-2026-11-08/fixes/GATE2.md; measured on 800 labelled Trial searches): who is searching, before
+    // what. Each rule names what it read; a buyer word (company, partner, services, cost, best, vs ...) always lets the search through to the
+    // topic gate below, so "microsoft certified partner dubai" or "dynamics 365 support services" are never caught by a study or a docs word.
+    const intent = whoSearches(keyword, o);
+    if (intent) return intent;
+    const g = fitGate(S(keyword), gctx(anchored(keyword, o)));
     if (g && g.ok) return { gate: 'pass', reason: '', text: '', detail: '' };
     const reason = GATE_REASON[(g || {}).reason] || 'off_topic';
     return { gate: 'fail', reason, text: GATE_TEXT[reason], detail: ascii((g || {}).detail || '') };
@@ -3196,13 +3565,32 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
     const cand = uniq(gp.concat(ownItem && ownItem.exact !== false ? [S(ownItem.url)] : [], match ? [match] : []).filter(Boolean));
     const isBlog = (u) => GUIDE_P.test('/' + pathTokens(u).join('/'));
     const buyer = ['hire', 'compare', 'solution'].includes(S(k.stage || (members[0] || {}).stage));
-    const page = (buyer ? (cand.find(u => !isBlog(u)) || cand[0]) : cand[0]) || '';
+    let page = (buyer ? (cand.find(u => !isBlog(u)) || cand[0]) : cand[0]) || '';
     const blogNote = buyer && page && isBlog(page) ? ' (it is a blog post: people searching this want a service page)' : '';
+    // KI-ONEURL (2026-11-11, the ladder rules LRU, v5/code/_ladder_rules.js): a "-2" / "-copy" variant of a live page is never the page to work
+    // on (the original is), and an address another search already holds (a ladder page, or a stronger cluster of this run) is not taken
+    // again unless this page already ranks for this search; then it gets its own page. The same search may always improve its own page.
+    let note = '', shared = false, blocked = null;
+    const LR = (typeof LRU === 'object' && LRU) ? LRU : null;
+    const known = (Array.isArray(s.pages) ? s.pages : []).map(x => ({ url: S(x && x.url), title: S(x && x.title) })).filter(x => x.url);
+    if (LR && page) { const orig = LR.copyOf(page, known);
+      if (orig) { const abs = /^https?:\/\//i.test(orig) ? orig : ('https://' + LR.urlKey(orig)); note = ' (' + LR.pathOf(page) + ' is a copy of ' + LR.pathOf(abs) + ': improve the original, and redirect the copy to it)'; page = abs; } }
+    if (LR && page) { const mine = members.map(m => S(m.keyword)).filter(Boolean);
+      const o = LR.ownerOf(page, head, s.owners || [], mine);
+      if (o) { const qs = (Array.isArray(s.queries) ? s.queries : []).filter(q => q && LR.urlKey(q.page) === LR.urlKey(page)).map(q => ({ query: q.query, impressions: q.impressions, position: q.position }));
+        const ranks = mine.some(kw => LR.ranksFor(page, kw, { pages: [{ url: page, queries: qs }] }));
+        const holder = o.by === 'ladder' ? 'your keyword ladder for "' + S(o.keyword) + '"' : 'the stronger search "' + S(o.keyword) + '"';
+        // a ladder page for a buyer's search and this buyer's search are one page (a second would compete with it); otherwise its own page
+        const sameKind = o.by === 'ladder' && LR.isCommercial(LR.stageOf(S(o.keyword))) && LR.isCommercial(S(k.stage || (members[0] || {}).stage));
+        if (ranks) { shared = true; note = ' (that page already ranks for it, so it stays there; it also serves ' + holder + ': one page leads, the other searches link to it)'; }
+        else if (sameKind) { shared = true; note = ' (that page is ' + holder + ', a search of the same kind: work this search into it as a section, not a second page that would compete with it)'; }
+        else { blocked = { reason: 'your page ' + LR.pathOf(page) + ' already belongs to ' + holder + ': one search, one page, so this search needs a page of its own', owner: S(o.keyword) }; page = ''; } } }
     if (typed.length && lists.length / typed.length >= c.page_action.list_share)
-      return { action: 'list', page_url: page, reason: lists.length + ' of the top ' + typed.length + ' results are lists or directories: get onto them' + (page ? ' (and keep your page)' : ''),
+      return { action: 'list', page_url: page, reason: lists.length + ' of the top ' + typed.length + ' results are lists or directories: get onto them' + (page ? ' (and keep your page)' : '') + (blocked ? ' (' + blocked.reason + ')' : note),
         list_hosts: uniq(lists.map(x => hostOf(x.u ? { ...x, url: x.u } : (x.host && !x.domain ? { ...x, domain: x.host } : x))).filter(Boolean)).slice(0, 10), cannibal };
-    if ((gp.length || ownItem) && page) return { action: 'refresh', page_url: page, reason: 'your site already ranks for it' + blogNote, list_hosts: [], cannibal };
-    if (match) return { action: 'refresh', page_url: page || match, reason: 'your site has a page for it' + blogNote, list_hosts: [], cannibal };
+    if (blocked) return { action: 'new', page_url: '', reason: blocked.reason, list_hosts: [], cannibal, owner: blocked.owner };
+    if ((gp.length || ownItem) && page) return { action: 'refresh', page_url: page, reason: 'your site already ranks for it' + blogNote + note, list_hosts: [], cannibal, shared };
+    if (match && page) return { action: 'refresh', page_url: page, reason: 'your site has a page for it' + blogNote + note, list_hosts: [], cannibal, shared };
     if (gp.length || ownItem) return { action: 'new', page_url: '', reason: 'your site shows for it, but the page could not be identified: a page of its own answers it', list_hosts: [], cannibal };   // FX-L L6: no refresh without a target
     return { action: 'new', page_url: '', reason: 'no page of yours answers it', list_hosts: [], cannibal };
   };
@@ -3685,7 +4073,7 @@ let model = null; try { model = SM.withPages(SM.from(g.site || { domain: p.domai
 const vm = sp.vol_map || rp.vol_map || {};
 const by = sp.by || {};
 const siteQ = (p.gsc || []).map(q => ({ query: q.query, impressions: q.impressions, position: q.position, page: q.page }));
-const siteCtx = { domain: p.domain, queries: siteQ, total_impressions: N(p.site_impressions), model, pages, refdomains: rd[client] != null ? rd[client] : null };
+const siteCtx = { domain: p.domain, queries: siteQ, total_impressions: N(p.site_impressions), model, pages, refdomains: rd[client] != null ? rd[client] : null, owners: (p.ladder_owners || []).slice() };
 const cfg = KI.cfg({ now });
 // FX-L 2026-11-10: the median referring domains of the results pages read in this market (each page's own median first), the yardstick of
 // Strength for a search whose own page was not read (most of the top N: only the top M are read)
@@ -3697,7 +4085,7 @@ const rows = (rp.rows || []).map(r0 => {
   const r = { ...r0 }; if (r.volume == null && v.ads_v != null) { r.volume = v.ads_v; r.volume_source = 'Google Ads (Keyword Planner ranges)'; r.volume_basis = 'provider_estimate'; if (r.cpc == null) r.cpc = v.ads_cpc; }
   const sr = by[r.keyword] || null; const top10 = sr ? (sr.top10 || []).map(t => ({ ...t, refdomains: rd[KIW.host(t.host)] != null ? rd[KIW.host(t.host)] : null })) : [];
   // FX-L H5: with its results page read, a search naming a business on that page is another company's brand
-  if (sr && r.gate === 'pass') { const g2 = KI.gate(r.keyword, { ...(p.fit_ctx || {}), serp_domains: KI.brandDomains(top10.map(t => t.host).filter(h => KIW.host(h) !== client), { services: p.services }) });
+  if (sr && r.gate === 'pass') { const g2 = KI.gate(r.keyword, { ...(p.fit_ctx || {}), serp_domains: KI.brandDomains(top10.map(t => t.host).filter(h => KIW.host(h) !== client), { services: p.services }), serp_hosts: top10.slice().sort((a, b) => (a.pos || 99) - (b.pos || 99)).map(t => t.host) });   // KI-GATE2: a top-3 website the search names
     if (g2.gate !== 'pass') { r.gate = 'fail'; r.gate_reason = g2.reason; r.gate_code = g2.reason; r.gate_detail = (g2.text || g2.reason) + (g2.detail ? ' (' + g2.detail + ')' : ''); } }
   const intentP = N(r.intent_p);
   const st = KI.stage(top10, r.keyword, r.intent_label ? { label: r.intent_label, probability: intentP } : r.labs_intent, { own_domain: client, cfg });
@@ -3722,9 +4110,13 @@ for (const r of rows) { const x = byKey[r.kw_key] || {}; r.cluster_id = x.cluste
 const clusters = {};
 for (const r of rows) (clusters[r.cluster_id] = clusters[r.cluster_id] || []).push(r);
 const heads = [];
-for (const [id, mem] of Object.entries(clusters)) {
-  const head = mem.find(r => r.is_head) || mem[0];
+// KI-ONEURL: the clusters take their pages in score order, so the strongest search keeps a page and a weaker one with other words gets its own
+const headOf = (mem) => mem.find(r => r.is_head) || mem[0];
+const order = Object.entries(clusters).sort(([, a], [, b]) => (N(headOf(b).score_mid) || 0) - (N(headOf(a).score_mid) || 0) || headOf(a).kw_key.localeCompare(headOf(b).kw_key));
+for (const [id, mem] of order) {
+  const head = headOf(mem);
   const pa = KI.pageAction({ keyword: head.keyword, members: mem, top10: head.top10, gate: head.gate, verdict: head.verdict, stage: head.stage }, siteCtx, cfg);
+  if (pa.page_url && (pa.action === 'refresh' || pa.action === 'list') && !pa.shared) siteCtx.owners.push({ url: pa.page_url, keyword: head.keyword, supporting: mem.map(r => r.keyword).join(','), by: 'cluster' });
   const cannibal = (pa.cannibal || []).length ? { pages: pa.cannibal, why: pa.cannibal.length + ' of your pages get impressions for the searches of this cluster: one should be the page, the others link to it' } : null;
   for (const r of mem) { r.page_action = pa.action; r.page_url = pa.page_url || ''; r.cannibal = cannibal; r.list_hosts = pa.list_hosts || []; }
   heads.push({ ...head, cluster_id: id, head: head.keyword, members: mem.length, page_action: pa.action, page_url: pa.page_url || null, list_hosts: pa.list_hosts || [], _gate: head.gate, _why: pa.reason });

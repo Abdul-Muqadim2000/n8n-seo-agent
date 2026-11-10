@@ -47,7 +47,7 @@ let model = null; try { model = SM.withPages(SM.from(g.site || { domain: p.domai
 const vm = sp.vol_map || rp.vol_map || {};
 const by = sp.by || {};
 const siteQ = (p.gsc || []).map(q => ({ query: q.query, impressions: q.impressions, position: q.position, page: q.page }));
-const siteCtx = { domain: p.domain, queries: siteQ, total_impressions: N(p.site_impressions), model, pages, refdomains: rd[client] != null ? rd[client] : null };
+const siteCtx = { domain: p.domain, queries: siteQ, total_impressions: N(p.site_impressions), model, pages, refdomains: rd[client] != null ? rd[client] : null, owners: (p.ladder_owners || []).slice() };
 const cfg = KI.cfg({ now });
 // FX-L 2026-11-10: the median referring domains of the results pages read in this market (each page's own median first), the yardstick of
 // Strength for a search whose own page was not read (most of the top N: only the top M are read)
@@ -59,7 +59,7 @@ const rows = (rp.rows || []).map(r0 => {
   const r = { ...r0 }; if (r.volume == null && v.ads_v != null) { r.volume = v.ads_v; r.volume_source = 'Google Ads (Keyword Planner ranges)'; r.volume_basis = 'provider_estimate'; if (r.cpc == null) r.cpc = v.ads_cpc; }
   const sr = by[r.keyword] || null; const top10 = sr ? (sr.top10 || []).map(t => ({ ...t, refdomains: rd[KIW.host(t.host)] != null ? rd[KIW.host(t.host)] : null })) : [];
   // FX-L H5: with its results page read, a search naming a business on that page is another company's brand
-  if (sr && r.gate === 'pass') { const g2 = KI.gate(r.keyword, { ...(p.fit_ctx || {}), serp_domains: KI.brandDomains(top10.map(t => t.host).filter(h => KIW.host(h) !== client), { services: p.services }) });
+  if (sr && r.gate === 'pass') { const g2 = KI.gate(r.keyword, { ...(p.fit_ctx || {}), serp_domains: KI.brandDomains(top10.map(t => t.host).filter(h => KIW.host(h) !== client), { services: p.services }), serp_hosts: top10.slice().sort((a, b) => (a.pos || 99) - (b.pos || 99)).map(t => t.host) });   // KI-GATE2: a top-3 website the search names
     if (g2.gate !== 'pass') { r.gate = 'fail'; r.gate_reason = g2.reason; r.gate_code = g2.reason; r.gate_detail = (g2.text || g2.reason) + (g2.detail ? ' (' + g2.detail + ')' : ''); } }
   const intentP = N(r.intent_p);
   const st = KI.stage(top10, r.keyword, r.intent_label ? { label: r.intent_label, probability: intentP } : r.labs_intent, { own_domain: client, cfg });
@@ -84,9 +84,13 @@ for (const r of rows) { const x = byKey[r.kw_key] || {}; r.cluster_id = x.cluste
 const clusters = {};
 for (const r of rows) (clusters[r.cluster_id] = clusters[r.cluster_id] || []).push(r);
 const heads = [];
-for (const [id, mem] of Object.entries(clusters)) {
-  const head = mem.find(r => r.is_head) || mem[0];
+// KI-ONEURL: the clusters take their pages in score order, so the strongest search keeps a page and a weaker one with other words gets its own
+const headOf = (mem) => mem.find(r => r.is_head) || mem[0];
+const order = Object.entries(clusters).sort(([, a], [, b]) => (N(headOf(b).score_mid) || 0) - (N(headOf(a).score_mid) || 0) || headOf(a).kw_key.localeCompare(headOf(b).kw_key));
+for (const [id, mem] of order) {
+  const head = headOf(mem);
   const pa = KI.pageAction({ keyword: head.keyword, members: mem, top10: head.top10, gate: head.gate, verdict: head.verdict, stage: head.stage }, siteCtx, cfg);
+  if (pa.page_url && (pa.action === 'refresh' || pa.action === 'list') && !pa.shared) siteCtx.owners.push({ url: pa.page_url, keyword: head.keyword, supporting: mem.map(r => r.keyword).join(','), by: 'cluster' });
   const cannibal = (pa.cannibal || []).length ? { pages: pa.cannibal, why: pa.cannibal.length + ' of your pages get impressions for the searches of this cluster: one should be the page, the others link to it' } : null;
   for (const r of mem) { r.page_action = pa.action; r.page_url = pa.page_url || ''; r.cannibal = cannibal; r.list_hosts = pa.list_hosts || []; }
   heads.push({ ...head, cluster_id: id, head: head.keyword, members: mem.length, page_action: pa.action, page_url: pa.page_url || null, list_hosts: pa.list_hosts || [], _gate: head.gate, _why: pa.reason });

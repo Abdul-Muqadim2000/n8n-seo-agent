@@ -157,7 +157,7 @@ export const KI_SCORED_CLASSES: readonly KiClass[] = ['direct', 'adjacent'];
 // FX-L (2026-11-08, fixes/FXL.md): the engine is the source of truth for the three rules below (ki_parity.json `gate_reasons`,
 // `gate_fields`, `striking`, `row_current`); ki.parity.test.ts holds them equal.
 /** The gate reason CODES. seo_ki_keywords.gate_reason holds one of them ('' on a row that passes); gate_detail holds the engine's sentence. */
-export const KI_GATE_REASON_IDS = ['other_market', 'career', 'other_brand', 'government', 'portal', 'navigational', 'own_brand', 'off_topic', 'too_broad', 'empty', 'low_fit', 'avoid'] as const;
+export const KI_GATE_REASON_IDS = ['other_market', 'career', 'other_brand', 'government', 'portal', 'navigational', 'own_brand', 'off_topic', 'too_broad', 'empty', 'low_fit', 'avoid', 'practitioner'] as const;
 export type KiGateReason = (typeof KI_GATE_REASON_IDS)[number];
 export const KI_GATE_FIELDS = { code: 'gate_reason', detail: 'gate_detail', pass_code: '' } as const;
 /** Striking distance, one definition (DESIGN.md 3.11, FX-L round 2): Search Console position 8-20 with at least
@@ -209,15 +209,15 @@ export function kiBasisLabel(basis: unknown, source?: unknown): string {
 export const KI_STRIKING_WORDS = `places ${KI_STRIKING.min_position} to ${KI_STRIKING.max_position} in Google, seen often enough for your website's size in 28 days (from ${KI_STRIKING.floor_impressions_28d} times for a small website to ${KI_STRIKING.impressions_28d} for a large one)`;
 
 /**
- * Why a search is "Not for you", in plain words. The engine stores a reason CODE (the 12 of ki_parity.json `gate_reasons`; FX-L moves the detail
+ * Why a search is "Not for you", in plain words. The engine stores a reason CODE (the 13 of ki_parity.json `gate_reasons`; FX-L moves the detail
  * to its own field); the words are the app's. A legacy row may still carry the engine's sentence with its internal detail: it is matched to a
  * code by its words, and anything else gets the general line, so raw detail ("62% of its own words match ...") never reaches a screen.
  */
 export const KI_GATE_CODES = KI_GATE_REASON_IDS;
 export type KiGateCode = KiGateReason;
 export const KI_GATE_WORDS: Record<KiGateCode, string> = {
-  other_market: 'This search is about a place outside your market.',
-  career: 'People searching this are looking for a job.',
+  other_market: 'This search is about a place outside your market, or is written in another language.',
+  career: 'People searching this are looking for a job, a course or an exam.',
   other_brand: 'This is a search for another company by name.',
   government: 'People searching this want a government service.',
   portal: 'People searching this want to log in to a portal or service.',
@@ -228,13 +228,15 @@ export const KI_GATE_WORDS: Record<KiGateCode, string> = {
   empty: 'This search has no words we can use.',
   low_fit: 'This search is too far from what you sell.',
   avoid: 'You asked us to leave this search out.',
+  practitioner: 'People searching this already use the product and want its documentation or settings, not a provider.',
 };
 const GATE_ALIASES: Record<string, KiGateCode> = {
   market: 'other_market', market_mismatch: 'other_market', outside_market: 'other_market', jobs: 'career', job: 'career', brand: 'other_brand',
   competitor_brand: 'other_brand', fit: 'low_fit', off_service: 'off_topic', offtopic: 'off_topic', broad: 'too_broad',
 };
 const GATE_HINTS: [RegExp, KiGateCode][] = [
-  [/\b(job|jobs|career|careers|salary|vacanc|hiring|recruit)/i, 'career'],
+  [/\b(job|jobs|career|careers|salary|vacanc|hiring|recruit|studying|exam|course)/i, 'career'],
+  [/using the product|documentation|its settings/i, 'practitioner'],
   [/your own (brand|name)|own brand/i, 'own_brand'],
   [/another company|other (company|brand)|competitor'?s? (brand|name)|brand name/i, 'other_brand'],
   [/government|ministry|official portal/i, 'government'],
