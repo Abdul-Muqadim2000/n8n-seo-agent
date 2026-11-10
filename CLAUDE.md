@@ -69,7 +69,7 @@ Client right on 4 of 5 (moved pages kept "another address" after their 301s and 
 live page; Coming up showed a past plan with an approved item that was silently never written; UAE AI page held as duplicate of a Pakistan
 page and scores frozen at 59 after answers); the ladder "not in top 50" reading is correct (neutral google.com.pk), the app now shows page-level
 Search Console and how we check. Engine section 184 (863893e2), app de76f11f + 28f8de07. Deployed ~19:30 UTC: backup pg/2026-11-10/*T192434Z,
-engine 14 updated (prod == build), API at 28f8de07 (rollback image alaventra-app:rollback-4d4a3c69). Web = **PR #64** (owner merges).
+engine 14 updated (prod == build), API at 28f8de07 (rollback image alaventra-app:rollback-4d4a3c69). Web: PR #64 merged 19:44 UTC (main 43bd801b), verified live in the bundle (ContentPage, SiteWarnings, LadderPage chunks).
 Harness 18581 / 0; app 1174 / 2070 / 359. Open: stale publish notes clear on the client's next Re-check (direct write refused by classifier);
 first real finalize with an unsupported claim is the live check of 184C.
 
