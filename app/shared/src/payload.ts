@@ -202,6 +202,8 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         // nothing at start). Exact keys, read by Normalize Input as they are; after the fuzzy-matched head.
         chosen_by: input.chosenBy ?? 'client_typed',
         ...(input.ladderMode ? { ladder_mode: input.ladderMode } : {}),
+        // LADDER PACKAGE (2026-11-09, rule 3): the client confirmed measuring a keyword that names no place outside the website's market (exact key)
+        ...(input.marketAck ? { market_ack: true } : {}),
       };
 
     case 'track':

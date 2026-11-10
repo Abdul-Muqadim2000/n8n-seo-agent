@@ -1274,7 +1274,9 @@ export type PlanType = 'direct' | 'short' | 'full';
 /** planned · writing (run in progress) · waiting (written, not published) · published · gated (main page waiting for support) ·
  *  set_aside (R16: the keyword rule refused this planned page, a competitor's brand, a government portal or an off-topic search -
  *  so the Monday runs skip it and nothing is written for it; the engine marks the row `set_aside` with the reason) */
-export type LadderPageState = 'planned' | 'writing' | 'waiting' | 'published' | 'gated' | 'set_aside';
+// LADDER PACKAGE (2026-11-09): `stopped` = an AVOID / clearly-low verdict (rule 4), nothing is written unless the client chooses "Write it anyway";
+// `failed` = a rung whose page run stopped without a result, closed by the app's watcher (rule 5); `merged` = a section of another page of the ladder
+export type LadderPageState = 'planned' | 'writing' | 'waiting' | 'published' | 'gated' | 'set_aside' | 'stopped' | 'failed' | 'merged';
 
 export interface LadderPage {
   keyword: string;
@@ -1305,6 +1307,23 @@ export interface LadderPage {
   /** R111: written, but the draft did not pass the quality check: finished by hand in the draft (never "I published it" as it is, never a re-run) */
   needsFix?: boolean;
   qaReasons?: string[];
+  /** LADDER PACKAGE (2026-11-09): what the page does at its address (a new page / improves your page) and why, in plain words */
+  action?: 'new' | 'improve';
+  why?: string;
+  /** the buyer's stage of the search: problem | solution | compare | hire | info ('' on rows from before) */
+  stage?: string;
+  /** stopped / failed / merged: the reason, in the client's words */
+  reason?: string;
+}
+
+/** LADDER PACKAGE (2026-11-09, rule 3): the market a ladder is measured in */
+export interface LadderMarketInfo {
+  country: string;
+  iso: string;
+  /** the website's own market ('' when unknown) */
+  siteCountry: string;
+  /** one plain sentence when the ladder is measured outside the website's market ('' otherwise) */
+  note: string;
 }
 
 export interface LadderOverlap {
@@ -1368,6 +1387,8 @@ export interface LadderDetail extends LadderCard {
   changeTests: PageChangeTest[];
   /** G29: where the positions, the traffic and the expected visits come from */
   lineage: Lineage[];
+  /** LADDER PACKAGE (2026-11-09): the market this ladder is measured in (null when its rows carry no country) */
+  market?: LadderMarketInfo | null;
 }
 
 export interface NeedsYouItem {

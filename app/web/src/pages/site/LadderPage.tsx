@@ -117,6 +117,7 @@ function Ladder({ ladder: l, back }: { ladder: LadderDetail; back: ReactNode }) 
         description={
           <>
             <span className="block text-ink-3">Keyword ladder · {meta.join(' · ')}</span>
+            {l.market?.note && <span className="mt-1 block text-[13px] text-warning-text [overflow-wrap:anywhere]">{l.market.note}</span>}
             <span className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
               <LadderStatusBadge status={l.status} />
               {!admin && <ModeChip mode={l.mode} />}

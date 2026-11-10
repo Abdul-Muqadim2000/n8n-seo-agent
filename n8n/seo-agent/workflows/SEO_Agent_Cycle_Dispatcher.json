@@ -958,6 +958,14 @@
               {
                 "name": "chosen_by",
                 "type": "string"
+              },
+              {
+                "name": "stage",
+                "type": "string"
+              },
+              {
+                "name": "target_why",
+                "type": "string"
               }
             ]
           },

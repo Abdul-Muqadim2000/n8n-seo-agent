@@ -17,6 +17,8 @@ export interface LadderRow extends DtRow {
   chosen_by?: string;
   /** the word count the ladder's verdict set for this page (0 = unknown); passed to a page run as `ladder_words` (P2-7) */
   target_words?: number;
+  /** LADDER PACKAGE (2026-11-09): the buyer's stage of the page and why it sits at its address ('' on rows from before) */
+  stage?: string; target_why?: string;
 }
 export interface RankHistoryRow extends DtRow {
   /** ladder id, or the site id for Site Tracker live checks */

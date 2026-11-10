@@ -27,6 +27,8 @@ export interface WriteNowItem {
   source?: QueueItem['source'];
   /** the price of the page in credits, when the server priced it */
   credits?: number;
+  /** LADDER PACKAGE (2026-11-09, rule 4): "Write it anyway" on a ladder page our check stopped (the engine writes it, the report says so) */
+  writeAnyway?: boolean;
 }
 
 const SOURCE_WHAT: Record<QueueItem['source'], string> = {
@@ -71,6 +73,7 @@ export function writeNowRequest(item: WriteNowItem, site: Pick<Site, 'id' | 'dom
     ...(item.ladder ? { ladder: item.ladder } : {}),
     ...(aiTarget ? { aiTarget } : {}),
     ...(item.source ? { source: item.source } : {}),
+    ...(item.writeAnyway ? { holdAck: { score: null } } : {}),
     emailCopy: false,
   };
 }

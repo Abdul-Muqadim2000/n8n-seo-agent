@@ -34,6 +34,21 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-11-09',
+    version: '4.12',
+    title: 'Keyword ladders that climb the right way',
+    summary: 'A keyword ladder now keeps one page for each search, steps from reading to choosing a provider, stays in your market, and stops a page our check advised against.',
+    highlights: [
+      'One search, one page: two pages of a ladder never share an address, a page that already answers a search is improved instead of written twice, and the main page is never a blog post or a copy of a page you have',
+      'Every ladder steps towards your main keyword, with a page for people comparing or choosing a provider before the main page',
+      'A ladder is measured in your website\'s market, or in the market your keyword names (GCC or Dubai means the UAE), and the New keyword ladder screen says so before it starts',
+      'A page our check advises against is stopped, with the reason, and is written only when you choose Write it anyway',
+      'A page whose writing stopped without a result is closed with the reason and nothing is charged, so the next page goes on',
+      'Each page of a ladder shows its address, why it sits there and who searches it',
+    ],
+    features: ['keyword-ladders'],
+  },
+  {
     date: '2026-11-08',
     version: '4.11',
     title: 'Competitors and Keyword research, rolling out',

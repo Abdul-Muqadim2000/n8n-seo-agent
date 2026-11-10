@@ -13,6 +13,10 @@ import {
   MODES,
   MONITOR_COSTS,
   normKeyword,
+  rungReason,
+  LRU,
+  COUNTRIES,
+  type LadderMarketInfo,
   splitList,
   type ContentLogRow,
   type DetectedPage,
@@ -151,6 +155,8 @@ export interface LadderSources {
   runs: SiteRun[];
   /** pages the weekly site report found live by itself (Phase 4 `detected_published`), newest first */
   detected?: DetectedPage[];
+  /** LADDER PACKAGE (2026-11-09): the website's own market (its country in the app), to say when a ladder is measured elsewhere */
+  siteCountry?: string;
 }
 
 /** What the schedules do next (the Pipeline's automations and the Content Cadence mirror, cadence.ts). */
@@ -335,6 +341,21 @@ interface Built {
   headHistory: RankPoint[];
 }
 
+/** LADDER PACKAGE (2026-11-09, rule 3): the market a ladder is measured in, and one sentence when it is not the website's own (pure; tested) */
+const countryOfMarket = (v: string) => { const x = String(v || '').trim(); return COUNTRIES.find((c) => c.name.toLowerCase() === x.toLowerCase() || c.iso === x.toUpperCase() || String(c.code) === x); };
+export function ladderMarketInfo(country: string, siteCountry: string, head: string): LadderMarketInfo | null {
+  if (!country) return null;
+  const c = countryOfMarket(country);
+  const site = countryOfMarket(siteCountry);
+  const named = LRU.market({ keyword: head, site_iso: site?.iso ?? '', request_iso: c?.iso ?? '' });
+  const note = site && c && site.iso !== c.iso
+    ? named.source === 'keyword' && named.iso === c.iso
+      ? `Measured in ${c.name}: "${head}" names ${named.named.join(', ')}, which is not your website's market (${site.name}).`
+      : `Measured in ${c.name}, not in your website's market (${site.name}). Re-plan it in ${named.country} or keep it as it is.`
+    : '';
+  return { country: c?.name ?? country, iso: c?.iso ?? '', siteCountry: site?.name ?? siteCountry, note };
+}
+
 export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { now?: number; gate?: boolean } = {}): LadderBuild {
   const now = opts.now ?? Date.now();
   const gate = opts.gate ?? MAIN_PAGE_GATE;
@@ -410,6 +431,10 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
         publishedAt = isoOk(at) ? at : null;
         const started = logs.map((l) => s(l.started_at)).filter(isoOk).sort()[0];
         writtenAt = started ?? report?.receivedAt ?? null;
+      } else if (status === 'stopped' || status === 'failed' || status === 'merged') {
+        // LADDER PACKAGE (2026-11-09): stopped (an AVOID / clearly-low verdict: nothing is written unless the client chooses "Write it anyway"),
+        // failed (its page run stopped without a result, closed by the watcher: the next rung goes on) or merged (a section of another page)
+        state = status;
       } else if (status === 'set_aside') {
         // R16 (2026-10-13): the keyword rule refused this planned page (a competitor's brand, a government portal, an off-topic
         // search). n8n wrote `set_aside` on the row with the reason in its weekly note, and the Monday runs skip it, so the app
@@ -449,6 +474,11 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
         pageType: s(r.page_type),
         state,
         targetUrl: s(r.target_url),
+        // LADDER PACKAGE (2026-11-09): what the page does at its address and why, its buyer's stage, the reason of a stopped / failed / merged rung
+        ...((rr) => ({ action: rr.state === 'improve' ? ('improve' as const) : rr.state === 'new' ? ('new' as const) : (r.page_exists === true || s(r.page_exists) === 'true') ? ('improve' as const) : ('new' as const),
+          why: s((r as LadderRow & { target_why?: unknown }).target_why) || rr.why,
+          stage: s((r as LadderRow & { stage?: unknown }).stage),
+          ...(['stopped', 'failed', 'merged'].includes(rr.state) ? { reason: rr.why } : {}) }))(rungReason(r as unknown as Record<string, unknown>)),
         publishedUrl,
         position: series.latest,
         previousPosition: series.previous,
@@ -471,8 +501,9 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
     // the main page waits for support in Short / Full ladders (§6.2)
     const main = pages.find((p) => p.rung === 4 && p.state === 'planned');
     if (gate && main && planType !== 'direct') {
-      const support = pages.filter((p) => p.rung !== 4);
-      const live = support.filter((p) => p.state === 'published').length;
+      // review M4 (LADDER PACKAGE): stopped / failed / set-aside rungs are no support; a merged rung is live as its page (as the engine counts)
+      const support = pages.filter((p) => p.rung !== 4 && p.state !== 'stopped' && p.state !== 'failed' && p.state !== 'set_aside');
+      const live = support.filter((p) => p.state === 'published' || p.state === 'merged').length;
       const headPos = headHistory[headHistory.length - 1]?.position ?? 0;
       if (live < support.length / 2 && !(headPos > 0 && headPos <= 30)) main.state = 'gated';
     }
@@ -664,6 +695,7 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
       annotations: [],
       changeTests: [],
       lineage: [],
+      market: ladderMarketInfo(s(b.rows[0].country), s(src.siteCountry), b.head),
     });
   });
 

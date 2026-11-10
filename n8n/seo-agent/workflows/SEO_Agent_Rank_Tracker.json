@@ -119,6 +119,14 @@
               {
                 "name": "chosen_by",
                 "type": "string"
+              },
+              {
+                "name": "stage",
+                "type": "string"
+              },
+              {
+                "name": "target_why",
+                "type": "string"
               }
             ]
           },
@@ -1511,6 +1519,26 @@
               {
                 "id": "chosen_by",
                 "displayName": "chosen_by",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "stage",
+                "displayName": "stage",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "target_why",
+                "displayName": "target_why",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,

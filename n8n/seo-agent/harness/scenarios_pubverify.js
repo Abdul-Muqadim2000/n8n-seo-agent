@@ -100,7 +100,9 @@ module.exports = async (ctx) => {
     begin(SN); const check = mkCheck(SN);
     const applied = ERP.replace(/<title>[^<]*<\/title>/i, '<title>ERP Systems in UAE: Is Microsoft Dynamics 365 One? | Tech&amp;</title>');
     const { c } = await check1({ keyword: 'erp systems in uae', content_request_id: '5102', url: 'https://techand.ai/insights/is-microsoft-dynamics-365-an-erp-system' }, ok200(applied), [ERPUAE], [RUNG_ERP, RUNG_D365]);
-    check('verified and recorded on the refreshed page', c.verify === 'ok' && c.recorded_live === true && c.log_row.status === 'published' && c.ladder_row && c.ladder_row.status === 'published', J({ v: c.verify, row: c.log_row.status, lad: c.ladder_row }));
+    // LADDER PACKAGE (2026-11-09, rule 1 at publish time): the guide's address belongs to another search of the ladder, so the rung is recorded
+    // `merged` into that page (the run refreshed it on purpose), never a second rung published on one address; the content log says published
+    check('verified and recorded on the refreshed page; the rung joins it as merged', c.verify === 'ok' && c.recorded_live === true && c.log_row.status === 'published' && c.ladder_row && c.ladder_row.status === 'merged', J({ v: c.verify, row: c.log_row.status, lad: c.ladder_row }));
     check('the note says the page now carries both keywords', /already the published page for "is microsoft dynamics 365 an erp system"/.test(c.verify_note) && /carries both keywords/.test(c.summary), c.summary);
   });
 

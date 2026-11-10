@@ -532,7 +532,9 @@
   "request_id",
   "target_words",
   "status_note",
-  "chosen_by"
+  "chosen_by",
+  "stage",
+  "target_why"
  ],
  "HISTORY": [
   "ladder_id",

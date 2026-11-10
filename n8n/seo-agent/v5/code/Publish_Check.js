@@ -148,6 +148,7 @@ const keyword = (log || ladder || {}).keyword || String(d.keyword || '').trim() 
 // two keywords. The live page must be shown to BE the draft (its keyword in the title / main heading, the draft's own title, or for a
 // new page the keyword in its text) and the address must not be another keyword's published page (v5/code/_publish_verify.js).
 /*__PUBLISH_VERIFY__*/
+/*__LADDER_RULES__*/
 const h1Words = (body.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || [null, ''])[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 const verifyText = mainHtml.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<(h[1-6]|p|li|td|th|div|section|br|dt|dd)\b[^>]*>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/[ \t]+/g, ' ');
 const confirmMismatch = d.confirm_mismatch === true || String(d.confirm_mismatch) === 'true';
@@ -156,7 +157,11 @@ const V = live ? verifyPublished({ keyword, url, title, h1: h1Words, text: verif
 // INVARIANTS rule 4: the proof is HTTP 200 from this very URL in this run AND the page shown to be the draft (or the owner's confirmation
 // after the warning, stored with its reason). Without it nothing here says the page exists.
 const recorded_live = live && V.accepted === true;
-const { log_row, ladder_row } = publishedRows({ site_id, domain, keyword, url, log, ladder, request_id: rid, now, live: recorded_live });
+// LADDER PACKAGE (2026-11-09, rule 1): the addresses other searches of this website already hold, so a rung is never moved onto one of them
+const ownersPC = [...onSite.filter(l => l.target_url && String(l.status || '') !== 'merged' && (String(l.status || '') === 'published' || l.page_exists === true || l.page_exists === 'true')).map(l => ({ url: l.target_url, keyword: l.keyword, supporting: l.supporting, ladder_id: l.ladder_id })),
+  ...logs.filter(l => normD(l.domain) === domain && String(l.published_url || '').trim() && !String(l.existing_page_url || '').trim()).map(l => ({ url: l.published_url, keyword: l.keyword, ladder_id: l.ladder_id || '' }))];   // review M2
+const { log_row, ladder_row, url_conflict } = publishedRows({ site_id, domain, keyword, url, log, ladder, request_id: rid, now, live: recorded_live, owners: ownersPC });
+if (url_conflict) checksOut.push({ name: 'One search, one page', ok: false, detail: url_conflict.text + '. Publish this page at its own address, or keep it as a section of that page.' });
 if (recorded_live && (V.publish_note || (log && log.publish_note))) log_row.publish_note = V.publish_note;   // the reason a page was marked without a match, cleared by a verified report
 const checksFinal = checksOut; const passed = checksFinal.filter(c => c.ok === true).length; const failed = checksFinal.filter(c => c.ok === false);
 const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

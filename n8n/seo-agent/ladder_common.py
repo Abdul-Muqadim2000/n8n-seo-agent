@@ -22,7 +22,13 @@ LADDER_COLS = [('ladder_id', 'string'), ('domain', 'string'), ('head_keyword', '
                # F-KW (2026-10-20): who chose this ladder's keyword (client_typed | client_picked | system_announced), written by the ladder run on
                # every row BEFORE its seo_ladder_settings row, so the Content Cadence still knows when that second write fails; '' = a row from
                # before the column. Run sync_tables.py after deploying.
-               ('chosen_by', 'string')]
+               ('chosen_by', 'string'),
+               # LADDER PACKAGE (2026-11-09, docs/keyword-intel-2026-11-08/fixes/LADDER.md): the buyer's stage of the page (problem | solution |
+               # compare | hire | info, v5/code/_ladder_rules.js LRU.stageOf) and why it sits at its address (a new page / the page it improves /
+               # stopped), written by Ladder Rows; '' on rows from before. New statuses (no column): `stopped` (rule 4, an AVOID / clearly-low
+               # verdict, status_note "stopped: ..."), `failed` (rule 5, a stuck rung closed by the app's watcher, "failed: ..."), `merged`
+               # (a rung folded into another rung's page as a section, "merged: ..."). Run sync_tables.py after deploying.
+               ('stage', 'string'), ('target_why', 'string')]
 HISTORY_COLS = [('ladder_id', 'string'), ('keyword', 'string'), ('checked_at', 'string'), ('position', 'number'), ('url', 'string'), ('serp_features', 'string'), ('domain', 'string'), ('rung', 'number')]
 HISTORY_COLS = [('ladder_id', 'string'), ('keyword', 'string'), ('checked_at', 'string'), ('position', 'number'), ('url', 'string'), ('serp_features', 'string'), ('domain', 'string'), ('rung', 'number'),
                 # v4.16 (G6, 2026-10-12 system review): the whole results page of the same SERP call, so a reading can be read back and

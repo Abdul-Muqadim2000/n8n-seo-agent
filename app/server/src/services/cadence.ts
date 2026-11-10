@@ -11,6 +11,7 @@ import {
   fitStored,
   fitTokens,
   LADDER_SITE_ROW,
+  LRU,
   type AiTargetRow,
   type AutopilotLevel,
   type ChosenBy,
@@ -372,6 +373,8 @@ export interface CadenceLadder {
   chosenBy: ChosenBy | '';
   /** the main keyword's latest valid check (0 = not in the top 50), null before the first one */
   headPosition: number | null;
+  /** LADDER PACKAGE (re-review Low): the address the head's latest readable rank check found ('' = not known) */
+  headUrl?: string;
   won: boolean;
   supporting: number;
   published: number;
@@ -683,10 +686,12 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
         .filter((h) => String(h.ladder_id) === String(id) && norm(h.keyword) === norm(head) && String(h.position) !== '' && h.position != null && Number.isFinite(Number(h.position)) && Number(h.position) >= 0)
         .sort((a, b) => S(b.checked_at).localeCompare(S(a.checked_at)));
       const headPosition = hist.length ? Number(hist[0].position) : null;
+      const headUrl = hist.length ? S((hist[0] as RankHistoryRow).url) : '';
       const lastN = hist.slice(0, CADENCE.wonChecks);
       const won = lastN.length >= CADENCE.wonChecks && lastN.every((h) => Number(h.position) >= 1 && Number(h.position) <= CADENCE.wonPosition);
-      const support = rows.filter((r) => !isTop(r));
-      const published = support.filter((r) => r.status === 'published' || publishedKw.has(norm(r.keyword))).length;
+      // review M4 (LADDER PACKAGE, mirror of Cadence_Plan.js): stopped / failed / set-aside rungs are no support; a merged rung is live as its page
+      const support = rows.filter((r) => !isTop(r) && !['stopped', 'failed', 'set_aside'].includes(S(r.status)));
+      const published = support.filter((r) => r.status === 'published' || r.status === 'merged' || publishedKw.has(norm(r.keyword))).length;
       const gateOpen = planType === 'direct' || !support.length || published * 2 >= support.length || (headPosition != null && headPosition >= 1 && headPosition <= CADENCE.gateHeadPosition);
       const ordered = planType === 'direct' ? [...rows.filter(isTop), ...rows.filter((r) => !isTop(r))] : rows;
       // R87: a ladder whose main keyword is set aside (its row says so, or the gate refuses it now) is paused
@@ -708,7 +713,7 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
         at - plannedAt > CADENCE.recheckDays * 864e5 &&
         !everWritten &&
         !(Number.isFinite(recheckedT) && recheckedT >= plannedAt && at - recheckedT <= CADENCE.recheckDays * 864e5);
-      return { id, rows, top, head, mode, status, planType, prio, start, chosenBy, chosenOk, headPosition, won, wonChecks: lastN.length, supporting: support.length, published, gateOpen, mainWaiting, remaining, eligible, headSetAside, recheckDue };
+      return { id, rows, top, head, mode, status, planType, prio, start, chosenBy, chosenOk, headPosition, headUrl, won, wonChecks: lastN.length, supporting: support.length, published, gateOpen, mainWaiting, remaining, eligible, headSetAside, recheckDue };
     })
     .sort((a, b) => a.prio - b.prio || a.start.localeCompare(b.start) || a.id.localeCompare(b.id));
   type Info = (typeof info)[number];
@@ -722,16 +727,51 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   const manualL = writable.filter((x) => x.mode === 'manual');
   const unchosenL = writable.filter((x) => x.mode === 'auto' && !x.chosenOk);
 
+  // LADDER PACKAGE (2026-11-09, rule 1, mirror of Cadence_Plan.js addressOf): a ladder page is never written onto an address another search of
+  // this website already holds (a published or existing ladder page, a published content-log page); the main page never onto a blog address
+  // (its own page instead), and a "-2" / "-copy" copy of a live page improves the original
+  const ownersC = [
+    // review M2: never a row merged into the page; a content-log page only where it was FIRST published (not a one-off refresh)
+    ...lrows.filter((r) => r.target_url && S(r.status) !== 'merged' && (S(r.status) === 'published' || r.page_exists === true || String(r.page_exists) === 'true')).map((r) => ({ url: r.target_url, keyword: r.keyword, supporting: r.supporting, ladder_id: r.ladder_id })),
+    ...slog.filter((l) => S(l.published_url) && !S(l.existing_page_url)).map((l) => ({ url: l.published_url, keyword: l.keyword })),
+  ];
+  // re-review N3: titles travel with the addresses, so the copy rule reads the pages as Ladder Plan / Cadence Plan do
+  const knownC = (() => {
+    const m = new Map<string, { url: string; title: string }>();
+    for (const p of (input.pages ?? []).filter((p) => p && p.url && (!p.site_id || p.site_id === siteId))) if (!m.has(LRU.urlKey(S(p.url)))) m.set(LRU.urlKey(S(p.url)), { url: S(p.url), title: S(p.title) || S(p.h1) });
+    for (const o of ownersC) if (S(o.url) && !m.has(LRU.urlKey(S(o.url)))) m.set(LRU.urlKey(S(o.url)), { url: S(o.url), title: '' });
+    return [...m.values()];
+  })();
+  const pagesQ = (input.pages ?? []).filter((p) => p && p.url && (!p.site_id || p.site_id === siteId)).map((p) => ({ url: S(p.url), queries: (() => { try { const q = JSON.parse(S(p.queries_json) || '[]'); return Array.isArray(q) ? q : []; } catch { return []; } })() }));
+  const addressOf = (l: LadderRow, x?: Info): { existing: string; target: string } => {
+    const was = S(l.target_url);
+    const exists = l.page_exists === true || String(l.page_exists) === 'true';
+    const home = (was.match(/^https?:\/\/[^/?#]+/i) || [''])[0];
+    const own = (u: string) => LRU.plannedUrl(home, l.keyword, /\/$/.test(was)) || u;
+    if (num(l.rung) === 4) {
+      const orig = exists ? LRU.copyOf(was, knownC) : '';
+      if (orig) return { existing: orig, target: orig };
+      // review H5: a blog address that ranks for the main keyword keeps it
+      const ranks = LRU.ranksFor(was, l.keyword, { rank: x && x.headPosition != null ? { position: x.headPosition, url: x.headUrl ?? '' } : null, pages: pagesQ });   // re-review Low: the head's own address
+      if (LRU.isBlog(was) && !ranks && ['solution', 'compare', 'hire'].includes(LRU.stageOf(l.keyword, '', S((l as LadderRow & { stage?: string }).stage)))) { const nu = own(was); if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu }; }
+    }
+    if (exists && was && LRU.ownerOf(was, l.keyword, ownersC, S(l.supporting).split(',').map((x) => x.trim()).filter(Boolean))) {
+      const nu = own(was);
+      if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu };
+    }
+    return { existing: exists ? was : '', target: was };
+  };
   const ladderCand = (x: Info, l: LadderRow): Cand => {
     const rung = num(l.rung);
+    const addr = addressOf(l, x);
     return {
       keyword: l.keyword,
       source: 'ladder',
       why: `Keyword ladder "${l.head_keyword || ''}", ${rung === 4 ? 'the main page' : `rung ${rung}`}: the next planned page towards the main keyword`,
       pageType: l.page_type || 'Service Page',
-      existingPageUrl: l.page_exists === true || String(l.page_exists) === 'true' ? l.target_url || '' : '',
+      existingPageUrl: addr.existing,
       ladder: { id: l.ladder_id, rung, head: l.head_keyword || '', pageNo: num(l.page_no) },
-      targetUrl: l.target_url || '',
+      targetUrl: addr.target,
       itemKey: cycleNorm(l.keyword),
       auto: true,
       estUsd: estPageUsd,

@@ -39,6 +39,8 @@ export function summarize(stage: string, p: P): Summary {
         put('held', true);
         put('holdScore', num(obj(p.hold).score));
         put('holdDuplicate', Array.isArray(obj(p.hold).kinds) && (obj(p.hold).kinds as unknown[]).includes('duplicate'));
+        // LADDER PACKAGE (2026-11-09, review H4): a page of a keyword ladder our check advised against (AVOID): stopped, "Write it anyway" on the report
+        put('holdLadderStop', Array.isArray(obj(p.hold).kinds) && (obj(p.hold).kinds as unknown[]).includes('ladder_stop'));
       }
       put('volume', num(obj(p.keyword_data).search_volume));
       put('difficulty', num(obj(p.keyword_data).keyword_difficulty));

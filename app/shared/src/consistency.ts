@@ -2,6 +2,7 @@ import type { ModeId } from './constants';
 import type { PipelineData } from './data';
 import { AI_LADDER_NOT_MEASURED, AI_PANEL_OFF_FOCUS, type AiFocusContext } from './ai-focus';
 import { cycleNorm } from './cycles';
+import { ladderMarket } from './ladder-rules';
 import { pipelineNotices, type NoticeFormat, type NoticeInput, type PipelineNotice } from './pipeline-notices';
 import { EARLY_CHECKS, MORE_CHECKS, type CreditsCtx, type LivePage, type StartCtx } from './consistency-more';
 import {
@@ -170,6 +171,33 @@ const PIPELINE: ConsistencyCheck = {
     ),
 };
 
+/** LADDER PACKAGE (2026-11-09, rule 3): a new keyword ladder whose keyword names a market is measured in that market (the website's when it is
+ *  among them: "gcc" for a UAE website), never in the country the form happened to hold (devaicon.com's "ai automation solutions gcc" was
+ *  measured in Pakistan). The server sends the locked market whatever is answered here; this says so before the start. */
+const LADDER_NAMED_MARKET: ConsistencyCheck = {
+  code: 'market.ladder_named',
+  severity: 'market',
+  on: ['run'],
+  run: (action, input, ctx) => {
+    if (action !== 'run' || str(input.mode) !== 'ladder' || !str(input.keyword)) return [];
+    const m = ladderMarket({ keyword: str(input.keyword), siteCountry: ctx.site?.country ?? '', requested: str(input.country) });
+    // the keyword's market is the website's own: market.run_country says it (Use <the website's country>); this one is for another market
+    if (!m.named.length || m.ok || !m.country || m.source !== 'keyword') return [];
+    return [
+      warning({
+        id: `market.ladder_named:${cycleNorm(str(input.keyword))}:${m.iso}`,
+        code: 'market.ladder_named',
+        severity: 'market',
+        title: `This ladder is measured in ${m.country}`,
+        body: `${m.warning} A ladder is planned, written and ranked in one market, so it starts in ${m.country}.`,
+        short: `Measured in ${m.country}`,
+        confirm: `Start it in ${m.country}`,
+        accept: { label: `Use ${m.country}`, change: { kind: 'fields', set: { country: m.country } } },
+      }),
+    ];
+  },
+};
+
 /** M1: a run sent with a country that is not the website's. */
 const RUN_COUNTRY: ConsistencyCheck = {
   code: 'market.run_country',
@@ -177,6 +205,8 @@ const RUN_COUNTRY: ConsistencyCheck = {
   on: ['run', 'keyword_check'],
   run: (action, input, ctx) => {
     if (!ctx.site || (action === 'run' && str(input.mode) === 'profile')) return [];
+    // LADDER PACKAGE: a ladder keyword that names a market is LADDER_NAMED_MARKET's (it is measured there whatever the form holds)
+    if (action === 'run' && str(input.mode) === 'ladder' && ladderMarket({ keyword: str(input.keyword), siteCountry: ctx.site.country }).source === 'keyword') return [];
     const mine = countryOf(ctx.site.country);
     const sent = countryOf(str(input.country));
     if (!mine || !sent || mine.iso === sent.iso) return [];
@@ -526,6 +556,7 @@ const AI_QUESTION_PLACE: ConsistencyCheck = {
 /** Every check, in the order the warnings are shown. A new case is one more entry here. */
 export const CONSISTENCY_CHECKS: readonly ConsistencyCheck[] = [
   ...EARLY_CHECKS,
+  LADDER_NAMED_MARKET,
   RUN_COUNTRY,
   KEYWORD_PLACE,
   KEYWORD_SCRIPT,
