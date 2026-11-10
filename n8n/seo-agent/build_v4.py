@@ -880,7 +880,8 @@ def pv_source():
     src = _rd0('code/Parse_Verdict.js')
     for _k in PV_KITS:
         assert src.count('/*__' + _k + '__*/') == 1, 'Parse_Verdict.js: marker /*__' + _k + '__*/ must appear exactly once'
-    return re.sub(r'/\*__([A-Z_]+)__\*/', lambda m: _rd0(PV_KITS[m.group(1)]).rstrip('\n') if m.group(1) in PV_KITS else m.group(0), src)
+    import kit_src   # client reports 2026-11-10 (section 184B): DUP carries the fit gate's gazetteer
+    return re.sub(r'/\*__([A-Z_]+)__\*/', lambda m: (kit_src.dup_src(_rd0) if m.group(1) == 'DUP_TARGETS' else _rd0(PV_KITS[m.group(1)]).rstrip('\n')) if m.group(1) in PV_KITS else m.group(0), src)
 setcode('Parse Verdict', pv_source())
 set_prompt('Strategy Brief', 'strategy_brief.txt')
 sb = get_schema('Parser — Strategy Brief')
@@ -12693,7 +12694,8 @@ log('The client\'s answers are kept once (H3, 2026-10-28, section 152): Normaliz
 #      * *Content Log Row* writes `held` (M3); the Content Cadence and app/server/src/services/cadence.ts skip a held keyword for 90 days (D1).
 #      * *Originality Check* calls the same DUP kit, so the late safety net and the early check can never disagree about the rule.
 # =============================================================================
-DUP_SRC153 = _rd0('code/_dup_targets.js').rstrip('\n')
+import kit_src
+DUP_SRC153 = kit_src.dup_src(_rd0)   # client reports 2026-11-10 (section 184B): with the fit gate's gazetteer
 assert DUP_SRC153.count('const DUP = (() => {') == 1, 'W0-D: _dup_targets.js must define DUP once'
 assert code('Originality Check').count('/*__DUP_TARGETS__*/') == 1, 'W0-D: Originality_Check.js must carry the /*__DUP_TARGETS__*/ marker once'
 setcode('Originality Check', code('Originality Check').replace('/*__DUP_TARGETS__*/', DUP_SRC153))
@@ -13294,7 +13296,7 @@ patch('Build Webhook Response', "        content_request_id: T(pb.content_reques
 assert code('Build Webhook Response').count('second_read: (() => { const R = d.qa_second_read') == 1
 _rr172 = _rd0('code/_critic_reread.js')
 for _k172 in ('const errorOf = (p, today) =>', 'const countMismatch = (quote) =>', 'const sameDay = (p, today) =>', "const error = errorOf(q, S(pl.today)); return { ...q, error, gates: !!error }; });",
-              "if (p.kind === 'claim') return 'claim';", '!CONTRA_NONE.test(issue) && SRC_CONTRA.test(issue)'):
+              "if (p.kind === 'claim' && unsupported(issue)) return 'claim';", '!CONTRA_NONE.test(issue) && SRC_CONTRA.test(issue)'):   # 184C: a claim blocks only when it is unsupported
     assert _k172 in _rr172, 'W05-A: _critic_reread.js lacks ' + _k172
 assert 'gates: severity === \'high\' && GATING.has(kind) && on_page' not in _rr172, 'W05-A: every high fact / source / claim / local problem blocks again'
 _gr172 = _rd0('code/_grade.js')
@@ -13796,7 +13798,28 @@ open(os.path.join(OUT_CODE, '_ladder_rules.js'), 'w').write("// harness shim (wr
     + "\nreturn $input.all().map(i => ({ json: { r: LRU[i.json.fn].apply(null, i.json.args || []) } }));\n")
 import ladder_rules_app
 ladder_rules_app.write_app_files(_LR_SRC183)
-log('The ladder package (2026-11-09, section 183): one search one address (plan, write, publish), rungs that step towards the main keyword, one market per ladder (refused before any paid step), an AVOID / clearly-low verdict stops a ladder page, stuck rungs closed by the app, and keyword intelligence as the pool for sites switched on (v5/code/_ladder_rules.js, shared with the app)')
+log('The ladder package (2026-11-09, section 183):one search one address (plan, write, publish), rungs that step towards the main keyword, one market per ladder (refused before any paid step), an AVOID / clearly-low verdict stops a ladder page, stuck rungs closed by the app, and keyword intelligence as the pool for sites switched on (v5/code/_ladder_rules.js, shared with the app)')
+
+# =============================================================================
+# 184. CLIENT REPORTS OF 2026-11-10 (devaicon.com on production; docs/client-reports-2026-11-10/README.md)
+#      A. "Re-check page" accepts an update published at a new address once the old address permanently redirects there (301 / 308), and
+#         clears the "marked on your word" note; a home page is never "the page it updates" for a move; the title / heading / text are read
+#         with their HTML entities decoded ("Banking &amp; Financial ..." failed "Title tag uses the keyword").
+# =============================================================================
+_pc184 = pos('Publish Check')
+disconnect('Load Query History (Published)', 'Publish Check')
+add_node('Updated Address Plan', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Updated_Address_Plan.js')}, [_pc184[0] - 60, _pc184[1] + 260])
+if_node('Has Updated Address?', '{{ !$json.skip }}', [_pc184[0] + 160, _pc184[1] + 260])
+add_node('Fetch Updated Address', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'GET', 'url': "={{ $json.old_url }}", 'sendHeaders': True,
+    'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.3; +https://github.com/n8n-io/n8n)'}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
+    # redirects are NOT followed: the first answer of the old address is the question (a permanent redirect to the address sent)
+    'options': {'timeout': 20000, 'redirect': {'redirect': {'followRedirects': False}}, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
+    [_pc184[0] + 380, _pc184[1] + 180], dict(onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True, **retry_lint.RETRY))
+connect('Load Query History (Published)', 'Updated Address Plan'); connect('Updated Address Plan', 'Has Updated Address?')
+connect('Has Updated Address?', 'Fetch Updated Address', 0); connect('Has Updated Address?', 'Publish Check', 1); connect('Fetch Updated Address', 'Publish Check')
+assert "$('Fetch Updated Address')" in code('Publish Check') and 'redirect: oldAddr' in code('Publish Check') and 'const decodeEnt = ' in code('Publish Check'), '184A: Publish Check does not read the old address'
+assert 'movedHere' in code('Publish Check') and 'homeOf' in code('Publish Check'), '184A: the verify kit in Publish Check is not the new one'
+log('Client reports 2026-11-10 (section 184A): "Re-check page" reads the page the draft updates without following redirects; a permanent redirect from it to the address sent is the move done right (verified, the "marked on your word" note cleared); a home page is never asked to be redirected (a home-page update published at its own address is a page of its own); the live title, heading and text are read with their HTML entities decoded')
 
 # =============================================================================
 # 9. WRITE

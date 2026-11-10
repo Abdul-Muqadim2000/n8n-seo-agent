@@ -3692,7 +3692,19 @@ for (const s of list) {
   // an approval that is not written this cycle, with the reason: the pile-up guard, the budget, or a live page already answering its search
   const approved_not_written = approved.filter(o => !picks.some(p => norm(p.keyword) === norm(o.keyword))).map(o => ({ keyword: o.keyword, source: o.source,
     reason: paused_reason || (heldK.has(norm(o.keyword)) ? 'profile' : covered.some(c => norm(c.keyword) === norm(o.keyword)) ? 'covered_by_live_page' : 'budget') }))
-    .concat(approval_ambiguous.map(a => ({ keyword: a.keyword, source: '', reason: 'ambiguous', detail: 'your approval names only the keyword, and ' + a.sources.length + ' different pages share it (' + a.sources.join(', ') + '): approve the one you want again' })));
+    .concat(approval_ambiguous.map(a => ({ keyword: a.keyword, source: '', reason: 'ambiguous', detail: 'your approval names only the keyword, and ' + a.sources.length + ' different pages share it (' + a.sources.join(', ') + '): approve the one you want again' })))
+    // client reports 2026-11-10 (devaicon.com, section 184D): an approval whose item was no longer offered when the run planned (an AI question
+    // taken off the list of questions to win, a ladder page written or set aside meanwhile) vanished without a word: the client saw "Approved"
+    // and a tick, and nothing was written. It is reported with the reason it is known by; an item still offered keeps its own reason above.
+    .concat((() => { const offered = new Set([...cands, ...approvable, ...suggestions, ...awaiting_approval].map(o => cycleNorm(o.keyword)).filter(Boolean)); const seen0 = new Set();
+      return approveRows.filter(r => { const k = cycleNorm(r.item_key); if (!k || seen0.has(k) || approvedSeen.has(k) || offered.has(k) || skipAlways.has(k) || skipCycle.has(k) || approval_ambiguous.some(a => a.item_key === k) || picks.some(p => cycleNorm(p.keyword) === k)) return false; seen0.add(k); return true; })
+        .map(r => { const k = cycleNorm(r.item_key); const src = lc(r.source); const rung = lrows.find(l => cycleNorm(l.keyword) === k && (!String(r.ladder_id || '').trim() || String(l.ladder_id) === String(r.ladder_id)));
+          const st = rung ? lc(rung.status) : '';
+          const detail = rung && ['published', 'merged'].includes(st) ? 'this ladder page is already ' + (st === 'merged' ? 'part of another page' : 'published')
+            : rung && st ? 'this ladder page is no longer planned (' + st.replace(/_/g, ' ') + ')'
+            : /^ai/.test(src) ? 'the AI answer question it was for was taken off your questions to win before the run (it is no longer one we track for your market, or the AI answers changed)'
+            : 'it was no longer among the pages to write when the run planned';
+          return { keyword: String(r.keyword || r.item_key || ''), source: String(r.source || ''), reason: 'no_longer_offered', detail }; }); })());
   const facts = { set_aside, refused, covered_by_live_pages: covered.slice(0, 10), paused_reason, waiting_publish: waitingKw.size,
     needs_fix, needs_fix_keywords: needs_fix.map(w => w.keyword),   // R111: of the waiting pages, the drafts that failed their quality check
     paused_ladders: info.filter(x => x.head_aside).map(x => ({ ladder_id: x.id, head: x.head, reason: x.head_aside.reason })),   // R87

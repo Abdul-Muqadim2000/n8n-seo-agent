@@ -2118,6 +2118,352 @@ const CC = (() => {
     RECONCILE_TOLERANCE, RECONCILE_FLOOR, RUN_OVERSPEND, COUNTER, countUsage, dfsLedger, dfsDay, dfsRun, crawlCost, aiRun,
     family, priceOf, tokensOf, callCost, runCost, keysFor, readCal, estOf, pick, calKey, calStat, calRow, monthRow, part, costBasis, split };
 })();
+// ---- DUP: "the site already has a page aimed at this search", one rule (page-quality W0-D, 2026-10-29; PLAN §2.1, RE M7, R4 G4) ----
+// Inlined by build_v4.py into *Parse Verdict* (before the brief: a hit asks the client first) and *Originality Check* (after the copy:
+// the safety net it always was; the Page Finalize and the Publish Check copy that node's code). Before this the rule lived only in the
+// late check, so run 3299 paid for a brief, a copy and three editor rounds before it learned the site already had a page for the search.
+// The rule: the keyword's words (3+ characters) against each inventory page's title, H1 and address. A page carrying 75% or more of them
+// is a duplicate target. Since W0-D the share must ALSO hold WEIGHTED by how rare each word is on this site (a word every page carries, "dynamics"
+// or "365" on a Dynamics partner's site, says less than one only a page or two carry, "system" or "erp"), so a guide asking "is
+// microsoft dynamics 365 an erp system" is not the duplicate of a Business Central service page that shares the site's own product words
+// (owner priority 2026-10-29: the ranking guide of exec 949 must never be held or flagged by this rule), while "microsoft dynamics erp"
+// and "dynamics 365 erp system" are recognised as the guide's own searches. With every word equally rare (a small site) it is the old
+// unweighted share. No URL constructor (n8n sandbox), no defineProperty.
+//   targets(keyword, pages, opts) -> { targets, partial, self, keyword_words, basis }
+//     opts.skip   URLs never compared (the pages this run read and compares by text, the page being improved)
+//     opts.self   URLs of this run's own page (the ladder's planned address); with opts.self_aware a page at one of them is this run's own
+//                 page: listed in `self`, never a duplicate of itself
+//     opts.slug_self  (before the brief only) a page whose last address segment is the keyword's own slug is the keyword's own page too:
+//                 the run improves it (the verdict's existing page) rather than duplicating it. Not in the late check: there, an unread
+//                 page at the keyword's own address IS the clearest duplicate (harness CTF5)
+//     opts.ladder a page of a keyword ladder: a page that carries only PART of the keyword's weight is the ladder's planned neighbour
+//                 (the rung links up to it), listed in `partial` as advice; only a page carrying all of it is a duplicate target
+//     opts.max    targets kept (3)
+//     opts.market the run's market (ISO-2 or the country name, e.g. "United Arab Emirates"): a page whose title / heading / address names only
+//                 places OUTSIDE that market, for a keyword that names none, is aimed at another market's search: listed in `other_market`, never
+//                 a duplicate target (client report 2026-11-10: "ai automation services" for the UAE was held as the duplicate of devaicon's
+//                 "AI Automation Services in Pakistan" page; "ai" has 2 letters, so the rule compared only "automation services")
+const DUP = (() => {
+  const S = (v) => String(v == null ? '' : v);
+  // the fit gate's gazetteer (FIT_PLACES_SRC in _fit_gate.js), put here by the build (kit_src.py) so the two never drift; [] = no market check
+  const PLACES_SRC = [
+  ['AE', 'uae|united arab emirates|emirates|emirati|dubai|abu dhabi|sharjah|ajman|fujairah|ras al khaimah|umm al quwain|al ain'],
+  ['SA', 'saudi|saudi arabia|ksa|riyadh|jeddah|dammam|khobar|al khobar|mecca|makkah|medina|madinah'],
+  ['PK', 'pakistan|pakistani|lahore|karachi|islamabad|rawalpindi|faisalabad|multan|peshawar|quetta|sialkot|gujranwala'],
+  ['IN', 'india|indian|delhi|new delhi|mumbai|bangalore|bengaluru|chennai|pune|kolkata|ahmedabad|noida|gurgaon|gurugram'],
+  ['IN PK', 'hyderabad'],
+  ['GB', 'uk|united kingdom|britain|great britain|british|england|scotland|wales|london|manchester|birmingham|leeds|glasgow|edinburgh'],
+  ['US', 'usa|united states|united states of america|new york|nyc|california|texas|florida|chicago|los angeles|san francisco|houston|seattle|boston'],
+  ['CA', 'canada|canadian|ottawa|toronto|montreal|vancouver|calgary'],
+  ['AU', 'australia|australian|canberra|sydney|melbourne|brisbane'],
+  ['NZ', 'new zealand|wellington|auckland|christchurch'],
+  ['IE', 'ireland|irish|dublin|galway|limerick'],
+  ['SG', 'singapore|singaporean'],
+  ['ZA', 'south africa|south african|pretoria|johannesburg|cape town|durban'],
+  ['DE', 'germany|deutschland|berlin|hamburg|munich|cologne|frankfurt'],
+  ['FR', 'france|paris|marseille|lyon'],
+  ['ES', 'spain|madrid|barcelona|valencia|seville'],
+  ['IT', 'italy|rome|milan|naples|turin'],
+  ['NL', 'netherlands|holland|amsterdam|rotterdam|the hague|utrecht'],
+  ['BR', 'brazil|brazilian|brasilia|sao paulo|rio de janeiro'],
+  ['MX', 'mexico|mexican|mexico city|guadalajara|monterrey'],
+  // markets the product cannot measure (not in the COUNTRIES table): a keyword about them is flagged, and their rankings cannot be tracked
+  ['QA', 'qatar|qatari|doha'], ['OM', 'oman|omani|muscat'], ['BH', 'bahrain|bahraini|manama'], ['KW', 'kuwait|kuwaiti'],
+  ['EG', 'egypt|egyptian|cairo|alexandria'], ['JO', 'jordan|amman'], ['LB', 'lebanon|beirut'], ['TR', 'turkiye|istanbul|ankara'],
+  ['CN', 'china|beijing|shanghai|shenzhen'], ['JP', 'japan|tokyo|osaka'], ['MY', 'malaysia|kuala lumpur'], ['ID', 'indonesia|jakarta'],
+  ['PH', 'philippines|manila'], ['NG', 'nigeria|lagos|abuja'], ['KE', 'kenya|nairobi'], ['BD', 'bangladesh|dhaka'], ['LK', 'sri lanka|colombo'],
+  ['NP', 'nepal|kathmandu'], ['AF', 'afghanistan|kabul'],
+  // regions: the set of their countries ("gcc" is fine for a UAE website, not for a Pakistan one)
+  ['AE SA QA OM BH KW', 'gcc|gcc countries|gulf|gulf countries|gulf region|arabian gulf|persian gulf|khaleej'],
+  ['AE SA QA OM BH KW EG JO LB', 'middle east|mena|arab world|arab countries'],
+  ['DE FR ES IT NL IE GB', 'europe|european|eu|european union'],
+  ['US CA', 'north america'], ['BR MX', 'latin america|latam'], ['IN PK BD LK NP', 'south asia']];
+  const PL = PLACES_SRC.flatMap(([iso, ws]) => S(ws).split('|').map(w => ({ w, iso: S(iso).split(' ') }))).sort((a, b) => b.w.split(' ').length - a.w.split(' ').length || b.w.length - a.w.length);
+  const placeText = (t) => ' ' + S(t).toLowerCase().replace(/\./g, '').replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+  const placesIn = (t) => { let x = placeText(t); const out = [];
+    for (const p of PL) { const k = ' ' + p.w + ' '; let i = x.indexOf(k); while (i >= 0) { out.push({ word: p.w, iso: p.iso }); x = x.slice(0, i) + ' | ' + x.slice(i + k.length - 1); i = x.indexOf(k); } }
+    return out; };
+  const marketOf = (m) => { const s0 = S(m).trim(); if (/^[A-Za-z]{2}$/.test(s0)) return s0.toUpperCase(); const ps = placesIn(s0); return ps.length && ps.every(p => p.iso.length === 1 && p.iso[0] === ps[0].iso[0]) ? ps[0].iso[0] : ''; };
+  // the place words that put a page in ANOTHER market than `market` (null: same market, no place named, or the keyword itself names elsewhere)
+  const otherMarket = (keyword, page, market) => { const m = marketOf(market); if (!m || !PL.length) return null;
+    if (placesIn(keyword).some(p => !p.iso.includes(m))) return null;
+    const pp = placesIn(S(page && page.title) + ' ' + S(page && page.h1) + ' ' + S(page && page.url).replace(/^https?:\/\/[^\/]+/i, '').replace(/[-_\/]+/g, ' '));
+    if (!pp.length || pp.some(p => p.iso.includes(m))) return null;
+    return [...new Set(pp.map(p => p.word))]; };
+  const SHARE = 75, MAX = 3;
+  // the tokenizer of SHG (_shingle.js), character for character, so the late check finds what it always found
+  const norm = (t) => S(t)
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/https?:\/\/\S+|www\.\S+/g, ' ')
+    .replace(/[‘’ʼ]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-')
+    .toLowerCase().replace(/[^a-z0-9'\s]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const words = (t) => { const s = norm(t); return s ? s.split(' ') : []; };
+  const toks = (t) => new Set(words(t).filter(w => w.length > 2));
+  const keyOf = (u) => S(u).toLowerCase().replace(/[#?].*$/, '').replace(/\/+$/, '');
+  const pathKey = (u) => keyOf(u).replace(/^https?:\/\/[^\/]+/, '');
+  const slugOf = (u) => { const p = pathKey(u).split('/').filter(Boolean); return p.length ? p[p.length - 1].replace(/\.[a-z]{2,5}$/, '') : ''; };
+  const slugify = (k) => S(k).toLowerCase().replace(/[‘’ʼ']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  // the page's words: title + H1 + address (the address with its separators as spaces, exactly as the late check always read it)
+  const pageToks = (p) => toks(S(p && p.title) + ' ' + S(p && p.h1) + ' ' + S(p && p.url).replace(/[-_/]+/g, ' '));
+  const targets = (keyword, pages, opts) => {
+    const o = opts || {};
+    const kw = toks(keyword);
+    const out = { targets: [], partial: [], self: [], other_market: [], keyword_words: kw.size, basis: '' };
+    if (!kw.size) { out.basis = 'the keyword has no word of 3 letters or more to compare'; return out; }
+    const list = (Array.isArray(pages) ? pages : []).filter(p => p && S(p.url));
+    const sets = list.map(pageToks);
+    // how many of the site's pages carry each keyword word: the rarer, the more it says about a page
+    const N = sets.length;
+    const w = {};
+    for (const t of kw) { let df = 0; for (const s of sets) if (s.has(t)) df++; w[t] = Math.log((N + 1) / (df + 1)) + 1; }
+    const total = [...kw].reduce((a, t) => a + w[t], 0);
+    const skip = new Set([...(o.skip || [])].map(keyOf).filter(Boolean));
+    const selfP = new Set([...(o.self || [])].map(pathKey).filter(Boolean));
+    const kslug = slugify(keyword);
+    const max = Number(o.max) > 0 ? Number(o.max) : MAX;
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i]; const k = keyOf(p.url);
+      if (!k || skip.has(k)) continue;
+      const set = sets[i]; if (!set.size) continue;
+      let hit = 0, hw = 0;
+      for (const t of kw) if (set.has(t)) { hit++; hw += w[t]; }
+      const plain = Math.round((hit / kw.size) * 100);
+      const share = Math.round((hw / total) * 100);
+      // both measures must reach the bar: the weighting only ever REMOVES a match the plain share made (a page that shares only the site's
+      // common words), it never adds one the late check did not make before
+      if (plain < SHARE || share < SHARE) continue;
+      const row = { url: S(p.url), title: S(p.title), keyword_words_shared_pct: plain, weighted_pct: share };
+      const om = o.market ? otherMarket(keyword, p, o.market) : null;
+      if (om) { out.other_market.push({ ...row, places: om }); continue; }
+      if (o.self_aware && ((selfP.size && selfP.has(pathKey(p.url))) || (o.slug_self && kslug && slugOf(p.url) === kslug))) { out.self.push(row); continue; }
+      if (o.ladder && hit < kw.size) { out.partial.push(row); continue; }
+      out.targets.push(row);
+      if (out.targets.length >= max) break;
+    }
+    out.basis = 'the keyword\'s ' + kw.size + ' word(s) of 3+ letters against the title, main heading and address of ' + N + ' page(s) of the site, '
+      + 'a page carrying ' + SHARE + '% or more of those words, and of their weight when each word counts by how few of the site\'s pages carry it, is aimed at the same search';
+    return out;
+  };
+  return { targets, words, slugify, slugOf, otherMarket, marketOf, placesIn, SHARE, MAX };
+})();
+// ---- RR: the blind second read of the delivered page (W0-H, 2026-10-29; inlined through the CRITIC_REREAD marker) ----
+// docs/page-quality-2026-10-29/PLAN.md Fix 3b (2.7, 2.8), REVIEW_EVIDENCE H1, R4 G14 / G18. Run 3299: the Critic (Sonnet) scored the first
+// draft 66 against the expert reviewer's 63 while our code grade said 92 then 100, and its three high-severity problems weighed nothing: it
+// read the FIRST draft once and gated nothing. Until the separate grade judge of Wave 2, the Critic's own quality bar (v5/prompts/critic.txt,
+// QUALITY BAR + SOURCE QUALITY, inlined here by the build so the two never drift) reads the page the client RECEIVES once more:
+//   * blind: no earlier review, no edit history, no score of ours, no "confirmed" labels; it does get the site's own live pages (the 3299
+//     Critic, told nothing about them, called live internal links "not confirmed"), the facts on file, the sources the run verified and
+//     the regulatory digest when there is one;
+//   * one Sonnet 5.5 call over HTTP (the Messages API with the Anthropic credential, like the promise judge): adaptive thinking at medium
+//     effort, JSON through structured outputs (output_config.format). No temperature and no forced tool: Sonnet 5.5 refuses both (400);
+//   * a problem counts only when its quoted words are on the page (PF.onPage); a high-severity one of a GATING kind (fact, source, claim,
+//     local: what would mislead a reader or embarrass the business) is a soft blocker; everything else is advice, shown to the client;
+//   * a refused (stop_reason "refusal"), cut (max_tokens), failed or unparsable answer is "not checked", never a pass and never a block;
+//   * runs the system started by itself (the cadence, a ladder's own page runs, the tracker, case-study spawns) are read in SHADOW mode
+//     first, the rule of owner decision D17 for the holds: what would have blocked is logged and reported as advice, the status does not
+//     change. CFG.automatic moves to 'enforce' after two cadence cycles of shadow logs and the owner's review. A page of the client's
+//     keyword ladder is read in shadow mode too, also when a person started it from the app (M4, WAVE0_REVIEW 2026-10-30). Other runs a
+//     person started (the app, the form, the API) are enforced. The page that ranks (exec 949, a ladder page) is therefore never held back
+//     by this read.
+// W05-A (wave 0.5, 2026-10-30, docs/page-quality-2026-10-29/BEFORE_AFTER.md "Our second-read blockers against the judges"): the read held 7
+// of the 8 AFTER pages at "Not ready 59" while the blind strategist judge would publish 7 of 8 (signed error -10.9). Its high items were
+// mostly fix-before-publishing advice given blocker weight. A problem now BLOCKS (enforce mode) only when it is a factual error the page
+// states, decided from the read's own words and the page, never from its score:
+//   * count: a number followed by a list of a different length on the page ("six engines: ..." and seven names), checked on the quote;
+//   * claim: an unsupported statement about the business (kind "claim": what it does, offers, holds or promises, not on file);
+//   * contradicted: a statement its own cited or linked source contradicts (never "contradicts nothing", never a contrast with the framing);
+//   * wrong: a fact or local rule the read calls wrong, false, out of date, superseded or repealed, unhedged ("could be out of date" is advice),
+//     except a date that only falls on the day the page is written: a page is read after that day, so it is advice (add a status line).
+// Everything else the read found on the page (an uncited contrast, a figure that wants a source, a vague market figure, a law with no link,
+// a statistics note) is ADVICE: shown to the client and taken off its part of the grade by the grade kit (GR.cap review), never the 59 cap.
+// "Today" is the website's market day (Regulatory Plan's as_of, the market's time zone, Asia/Dubai for the UAE), told to the reader and used
+// for the same-day rule, so a run at 22:31 UTC on 29 October reads a UAE page as written on 30 October, like the page's own date.
+// Its cost is MEASURED (Anthropic reports the tokens of the answer) and joins the run's Claude figure in the ledger.
+// Pure: no clock, no network, no n8n globals, no URL constructor, no Object.defineProperty, no structuredClone (n8n sandbox rules).
+const RR = (() => {
+  const S = (v) => String(v == null ? '' : v);
+  const MODEL = 'claude-sonnet-5-5';
+  const CFG = { automatic: 'shadow', max_tokens: 16000, effort: 'medium', page_chars: 60000, facts_chars: 6000, sources: 25, site_pages: 40, max_advice: 5 };
+  const GATING = new Set(['fact', 'source', 'claim', 'local']);
+  const KINDS = ['fact', 'source', 'claim', 'local', 'repetition', 'intent', 'depth', 'structure', 'style', 'link', 'other'];
+  const AUTOMATIC = /^(cadence|ladder|tracker|casestudy|audit):/;
+  const TEMPLATE = /*__RR_TEMPLATE__*/'';
+  const BAR = /*__RR_BAR__*/'';
+  const SCHEMA = { type: 'object', additionalProperties: false, required: ['score', 'problems'],
+    properties: { score: { type: 'integer' }, strengths: { type: 'array', items: { type: 'string' } },
+      problems: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['severity', 'kind', 'location', 'issue', 'fix'],
+        properties: { severity: { type: 'string', enum: ['high', 'medium', 'low'] }, kind: { type: 'string', enum: KINDS },
+          location: { type: 'string' }, issue: { type: 'string' }, fix: { type: 'string' } } } } } };
+  const clean = (s) => S(s).replace(/\s*[\u2014\u2013]\s*/g, ': ').replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'").replace(/\u2026/g, '...').replace(/:\s*:/g, ':').trim();
+  const list = (xs, n) => xs.filter(Boolean).slice(0, n);
+  // ---- W05-A: which high problems are factual errors the page states (they block); everything else is advice ----
+  const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+  const fmtDay = (iso) => { const m = S(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/); if (!m) return ''; const mo = MONTHS[Number(m[2]) - 1] || ''; return Number(m[3]) + ' ' + mo.charAt(0).toUpperCase() + mo.slice(1) + ' ' + m[1]; };
+  const pad2 = (n) => (Number(n) < 10 ? '0' : '') + Number(n);
+  const isoDates = (t) => { const out = []; const x = S(t);
+    for (const m of x.matchAll(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})\b/gi))
+      out.push(m[3] + '-' + pad2(MONTHS.indexOf(m[2].toLowerCase()) + 1) + '-' + pad2(m[1]));
+    for (const m of x.matchAll(/\b(\d{4})-(\d{2})-(\d{2})\b/g)) out.push(m[0]);
+    return out; };
+  const NUMW = { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+  const plainQ = (t) => S(t).replace(/!?\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]+/g, '').replace(/\s+/g, ' ').trim();
+  // "six AI engines and answer surfaces: ChatGPT, Gemini, ..., AI Overviews." -> the stated number and the items the list names. Only a
+  // list that ends inside the quote (a full stop or semicolon) is counted, so a quote cut mid-list is never a mismatch.
+  const countMismatch = (quote) => {
+    const t = plainQ(quote);
+    for (const m of t.matchAll(/\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d{1,2})\s+((?:[A-Za-z][\w&'-]*\s+){0,5}?[A-Za-z][\w&'-]*)\s*:\s*([^.;:]+)[.;]/gi)) {
+      const n = NUMW[m[1].toLowerCase()] || Number(m[1]); if (!(n >= 2 && n <= 30)) continue;
+      const items = m[3].split(/\s*,\s*(?:and\s+|or\s+)?|\s+(?:and|or)\s+/i).map(x => x.trim()).filter(x => x && x.split(/\s+/).length <= 6);
+      if (items.length >= 2 && items.length !== n) return { stated: n, listed: items.length, what: m[2] }; }
+    return null; };
+  const WRONG = /\b(?:wrong(?:ly)?|incorrect(?:ly)?|inaccurate(?:ly)?|untrue|not true|false|out of date|outdated|superseded|repealed|revoked|withdrawn|replaced by|no longer (?:applies|apply|in force|current|valid|true|available|offered)|(?:has|have) (?:already )?(?:passed|expired|lapsed)|already passed|expired)\b/gi;
+  const HEDGED = /\b(?:could|may|might|can|possibly|perhaps|likely|risks?|seems?|appears?)\s+(?:\w+\s+){0,2}$/i;
+  const wrongIn = (t) => { const x = S(t); for (const m of x.matchAll(WRONG)) if (!HEDGED.test(x.slice(Math.max(0, m.index - 40), m.index))) return m[0]; return ''; };
+  const CONTRA_NONE = /\bcontradicts? nothing\b|\bdoes not contradict\b|\bno contradiction\b/i;
+  const SRC_CONTRA = /\bcontradict\w*\b[^.;]{0,60}\b(?:source|cited|linked|reference|official (?:text|page)|the law|the decision|the regulation)\b|\bnot what (?:the|its) (?:linked |cited )?(?:source|page|reference)\b|\b(?:source|reference)\b[^.;]{0,60}\b(?:says|states|gives|shows|reports|lists)\b[^.;]{0,60}\b(?:otherwise|the opposite|instead)\b|\bmis(?:quotes?|states?|represents?)\b/i;
+  const SAME_DAY = /\b(?:today|the deadline day|day of writing|(?:is|was) (?:written|dated|published) on|the day (?:this|the) page (?:is|was) (?:written|published|dated)|on the day it is written)\b/i;
+  // a date problem that is only a problem on the day the page is written (the deadline falls that day): with the market's day known, the
+  // date the read talks about must be that day; without it, the read's own words must say so
+  const sameDay = (p, today) => SAME_DAY.test(S(p.issue)) && (!today || isoDates(S(p.location) + ' ' + S(p.issue)).includes(today));
+  // client reports 2026-11-10 (devaicon.com, section 184C): a high "claim" finding blocked whatever it said, so true sentences were held at 59 for
+  // something missing elsewhere ("Devaicon has an office in Sharjah, is ISO 27001 certified and is an AWS partner.": "no strategy-consulting
+  // credential backs the page, trust gap"; "It never mentions the Sharjah office"), and the final version after every answer kept 59. A claim
+  // blocks only when the read's own words say the statement is not supported by what is on file; otherwise it is advice.
+  const UNSUPPORTED = /\b(?:not (?:on file|in the facts|stated|supported|confirmed|verified|backed(?: up)?|sourced|substantiated|evidenced)|(?:the )?(?:facts|information|details?|profile|business facts)(?: on file)? (?:do(?:es)? not|don't|never) (?:say|state|show|support|carry|mention|list|include|confirm|back)|(?:facts|information|details?)(?: on file)? (?:only )?(?:support|list|say|show|mention|carry) only|nothing (?:on file|in the facts|we have)|no (?:source|evidence|support|backing|proof)\b|unverified|unsupported|unsourced|unsubstantiated|without (?:a |any )?(?:source|evidence|support|proof)|(?:is|are) not (?:in|among|part of) the facts|invent(?:ed|s)?\b|made up|fabricat\w*)/i;
+  // or one sentence of the finding that names the facts on file AND limits them ("The facts on file list Dynamics 365 ... but do not say the
+  // practice is built on it", "the facts only say Auto or Manual"); a sentence naming the facts with no limit ("The facts on file list
+  // outsourcing, dedicated teams and staff augmentation") is context, not the error
+  const FACTS_REF = /\b(?:facts?|on file|business profile)\b/i;
+  const LIMITS = /\b(?:not|no|none|never|nothing|only|without|neither|nor)\b|n't\b/i;
+  const unsupported = (issue) => { const t = S(issue); return UNSUPPORTED.test(t) || t.split(/(?<=[.;!?])\s+/).some(x => FACTS_REF.test(x) && LIMITS.test(x)); };
+  const errorOf = (p, today) => {
+    if (p.severity !== 'high' || !p.on_page) return '';
+    if (countMismatch(p.location) && /\b(?:\d{1,2}|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/i.test(S(p.issue))) return 'count';
+    if (!GATING.has(p.kind)) return '';
+    const issue = S(p.issue);
+    if (p.kind === 'claim' && unsupported(issue)) return 'claim';
+    if (!CONTRA_NONE.test(issue) && SRC_CONTRA.test(issue)) return 'contradicted';
+    if ((p.kind === 'fact' || p.kind === 'local') && wrongIn(issue) && !sameDay(p, today)) return 'wrong';
+    return ''; };
+  // a stored blocker ("A second read of the page found a problem at \"<quote>\": <issue>", no kind kept): does it still block by this rule?
+  const textError = (text, today) => { const t = S(text); const m = t.match(/at "([^"]{1,400})":\s*([\s\S]*)$/); const location = m ? m[1] : ''; const issue = m ? m[2] : t;
+    if (countMismatch(location) && /\b(?:\d{1,2}|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/i.test(issue)) return 'count';
+    if (unsupported(issue)) return 'claim';
+    if (!CONTRA_NONE.test(issue) && SRC_CONTRA.test(issue)) return 'contradicted';
+    if (wrongIn(issue) && !sameDay({ issue, location }, today)) return 'wrong';
+    return ''; };
+  const ERROR_LABEL = { count: 'a count that does not match its list', claim: 'a statement about the business that nothing on file supports',
+    contradicted: 'a statement its own source contradicts', wrong: 'a wrong or out-of-date statement' };
+  // M4 (WAVE0_REVIEW 2026-10-30): a page of the client's keyword ladder is read in the same shadow mode wherever it was started (the app's
+  // ladder "Write now" sends client_ip app:..., not ladder:...), as the hold already exempts it by ladder_id + ladder_rung: the false-positive
+  // rate of this blind read is unmeasured, and the guide that ranks (exec 949) is a ladder page. It moves to enforce with the automatic runs,
+  // after the owner has reviewed the first 20 second reads (D17).
+  const ladderPage = (p) => !!S(p.ladder_id).trim() && p.ladder_rung != null && p.ladder_rung !== '';
+  const modeOf = (prev) => { const p = prev || {}; return AUTOMATIC.test(S(p.client_ip).toLowerCase()) || ladderPage(p) ? CFG.automatic : 'enforce'; };
+  // what the reader is told about the website and the run, never what we think of the page
+  const context = (prev, reg, today) => {
+    const p = prev || {}; const b = p.content_brief || {}; const sd = p.site_description || {}; const sp = p.site_profile || {};
+    const own = [...new Set([].concat((p.internal_link_candidates || []).filter(x => x && !x.planned).map(x => S(x.url)), (p.site_urls || []).map(x => S(x && x.url ? x.url : x))).filter(u => /^https?:\/\//.test(u)))];
+    const facts = list([].concat(b.client_facts || [], [p.business_facts, p.case_facts_text], sd.site_facts || sd.products_or_services || []).map(S), 80).join(' | ').slice(0, CFG.facts_chars);
+    const srcs = list([].concat((b.evidence_plan || []).map(e => e && e.source_url ? S(e.fact).slice(0, 240) + ' (' + S(e.source_url) + ')' : ''),
+      (p.facts || []).map(f => f && f.url ? S(f.claim || f.fact || f.text).slice(0, 240) + ' (' + S(f.url) + ')' : '')), CFG.sources);
+    // W07-B (2026-10-31, WAVE06 section 10 finding 3): a separate new page beside a page the client kept says so, or the read advises the
+    // kept page's slug (K1: "Use the slug ms-365-erp-uae"); only on such a page, so every other read gets the same prompt as before
+    const apart = typeof PGA !== 'undefined' ? PGA.readerNote(PGA.of(p), b.slug) : '';
+    return { KEYWORD: S(p.keyword), PAGE_TYPE: S(p.page_type || 'page'), COUNTRY: S(p.country || 'not stated'), AUDIENCE: S(b.target_audience || p.audience || 'not stated'),
+      BUSINESS: S(sp.business_name || sd.business_name || p.domain || 'the business'), DOMAIN: S(p.domain),
+      SITE_PAGES: (own.slice(0, CFG.site_pages).join('\n') || 'none listed') + (apart ? '\n\n' + apart : ''), FACTS: facts || 'none', SOURCES: srcs.join('\n') || 'none',
+      REGULATORY: (today ? 'Today in ' + S(p.country || 'the market') + ': ' + fmtDay(today) + ' (the date this page is published with; it is read after that day too).\n' : '') + (S(reg).trim() || 'none for this page') }; };
+  const fill = (tpl, vals) => S(tpl).replace(/\{\{([A-Z_]+)\}\}/g, (m, k) => (k in vals ? S(vals[k]) : m));
+  // the request, or why there is none
+  const plan = (item, prev, opts) => {
+    const it = item || {}; const o = opts || {}; const qa = it.content_qa || {}; const md = typeof it.output === 'string' ? it.output : '';
+    const mode = modeOf(prev); const today = /^\d{4}-\d{2}-\d{2}$/.test(S(o.today)) ? S(o.today) : '';
+    const skip = (reason) => ({ skip: true, reason, mode, model: MODEL, today });
+    if (!TEMPLATE || !BAR) return skip('the second read is not configured in this build');
+    if ((prev || {}).critic_reread === false) return skip('the second read was switched off for this run');
+    if (!md.trim()) return skip('no page was written');
+    if (!qa.delivery || typeof qa.delivery !== 'object') return skip('the page has no delivered status to check');
+    if (qa.cut_off) return skip('the page stops before its end, so a read of it would say nothing new');
+    const page = md.length > CFG.page_chars ? md.slice(0, CFG.page_chars) : md;
+    const prompt = fill(TEMPLATE, { ...context(prev, o.regulatory_digest, today), BAR, PAGE: page });
+    const body = { model: MODEL, max_tokens: CFG.max_tokens, thinking: { type: 'adaptive' }, output_config: { effort: CFG.effort, format: { type: 'json_schema', schema: SCHEMA } },
+      messages: [{ role: 'user', content: prompt }] };
+    const ap = typeof PGA !== 'undefined' ? PGA.of(prev) : null;   // W07-B: the kept page, so read() can set aside advice that takes it over
+    return { skip: false, reason: '', mode, model: MODEL, today, body: JSON.stringify(body), prompt_chars: prompt.length,
+      ...(ap ? { apart: { url: ap.url, path: ap.path, slugs: ap.pages.map(x => x.slug).filter(Boolean), paths: ap.pages.map(x => x.path).filter(x => x.length > 1) } } : {}) }; };
+  // W07-B: advice that the page take the kept page's address or slug, replace it, merge into it or redirect to it goes against the client's
+  // choice (a separate page at its own address): it is set aside with that reason, never shown and never counted. Plain words here, so the
+  // reader of the answer needs no other kit.
+  const TAKEOVER = /\b(?:slug|url|address|path|redirect\w*|merge\w*|replac\w*|consolidat\w*|canonical\w*|second page)\b/i;
+  const againstChoice = (q, apart) => { if (!apart || /^link$/i.test(S(q.kind).trim())) return false; const t = (S(q.location) + ' ' + S(q.issue) + ' ' + S(q.fix)).toLowerCase();
+    const named = (apart.slugs || []).some(s => new RegExp('(^|[^\\w-])' + S(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\w-])').test(t)) || (apart.paths || []).some(x => t.includes(S(x)));
+    return named && TAKEOVER.test(S(q.issue) + ' ' + S(q.fix)); };
+  // the answer: checked (with every problem, which ones gate and which are advice) or not checked (and why)
+  const read = (resp, md, planned, PFk) => {
+    const r = resp || {}; const pl = planned || {}; const mode = pl.mode || 'enforce';
+    const usage = r.usage && typeof r.usage === 'object' ? { input_tokens: Number(r.usage.input_tokens) || 0, output_tokens: Number(r.usage.output_tokens) || 0 } : null;
+    const nc = (reason) => ({ status: 'not_checked', reason, mode, model: S(r.model || pl.model || MODEL), usage, problems: [], gates: [], advice: [], would_block: [] });
+    if (pl.skip) return { ...nc(S(pl.reason) || 'not run'), usage: null };
+    if (r.error) { const e = r.error; return nc('the second read could not be run (' + clean(S(typeof e === 'object' ? (e.message || e.type || JSON.stringify(e)) : e)).slice(0, 160) + ')'); }
+    if (S(r.stop_reason) === 'refusal') return nc('the reviewer declined to read this page' + (r.stop_details && r.stop_details.category ? ' (' + S(r.stop_details.category) + ')' : ''));
+    if (S(r.stop_reason) === 'max_tokens') return nc('the review was cut off before its end');
+    const texts = (Array.isArray(r.content) ? r.content : []).filter(c => c && c.type === 'text').map(c => S(c.text));
+    if (!texts.length) return nc('the second read gave no answer');
+    let j = null; try { j = JSON.parse(texts[texts.length - 1].trim().replace(/^```(?:json)?\s*|\s*```$/g, '')); } catch (e) { j = null; }
+    if (!j || typeof j !== 'object' || !Array.isArray(j.problems)) return nc('the second read gave an answer we could not read');
+    const onPage = PFk && typeof PFk.onPage === 'function' ? PFk.onPage : () => false;
+    const against = [];
+    const problems = j.problems.filter(p => p && typeof p === 'object').filter(p => { if (!againstChoice(p, pl.apart)) return true;
+      against.push({ severity: S(p.severity).toLowerCase(), kind: S(p.kind).toLowerCase(), location: clean(p.location).slice(0, 300), issue: clean(p.issue).slice(0, 400), fix: clean(p.fix).slice(0, 400),
+        why: 'set aside: it advises taking over the existing page the client chose to keep (' + S(pl.apart.path) + ')' }); return false; }).slice(0, 20).map(p => {
+      const severity = /^(high|medium|low)$/i.test(S(p.severity)) ? S(p.severity).toLowerCase() : 'low'; const kind = KINDS.includes(S(p.kind).toLowerCase()) ? S(p.kind).toLowerCase() : 'other';
+      const location = clean(p.location).slice(0, 300); const on_page = !!location && onPage(location, md);
+      const q = { severity, kind, location, issue: clean(p.issue).slice(0, 400), fix: clean(p.fix).slice(0, 400), on_page };
+      const error = errorOf(q, S(pl.today)); return { ...q, error, gates: !!error }; });
+    const gating = problems.filter(p => p.gates);
+    // W05-A: the most damaging advice first (the high items that are not errors), as the client sees it and the grade counts it
+    const advice = problems.filter(p => !p.gates && p.on_page && p.severity !== 'low').sort((a, b) => (a.severity === 'high' ? 0 : 1) - (b.severity === 'high' ? 0 : 1)).slice(0, CFG.max_advice);
+    return { status: 'checked', reason: '', mode, model: S(r.model || MODEL), usage, today: S(pl.today), score: Number.isFinite(Number(j.score)) ? Number(j.score) : null,
+      problems, gates: mode === 'enforce' ? gating : [], would_block: mode === 'enforce' ? [] : gating, advice,
+      not_shown: problems.filter(p => !p.on_page).length, ...(against.length ? { against_choice: against } : {}) }; };
+  // the delivered page with what the read found: blockers in enforce mode, advice always; the grade object is not touched here
+  const apply = (qa0, rr, PFk) => {
+    const qa = { ...(qa0 || {}) }; const R = rr || {}; const del = qa.delivery && typeof qa.delivery === 'object' ? { ...qa.delivery } : null;
+    const record = { status: R.status, reason: R.reason || '', mode: R.mode, model: R.model, usage: R.usage || null, score: R.score == null ? null : R.score,
+      gates: (R.gates || []).map(g => ({ kind: g.kind, error: g.error || '', location: g.location, issue: g.issue, fix: g.fix })),
+      would_block: (R.would_block || []).map(g => ({ kind: g.kind, error: g.error || '', location: g.location, issue: g.issue, fix: g.fix })),
+      advice: (R.advice || []).map(g => ({ severity: g.severity, kind: g.kind, location: g.location, issue: g.issue, fix: g.fix })), not_shown: R.not_shown || 0,
+      ...((R.against_choice || []).length ? { against_choice: R.against_choice } : {}) };   // W07-B: advice set aside because it takes over the page the client kept
+    qa.critic_reread = record;
+    if (!del || !PFk) return qa;
+    const advisory = (del.advisory || []).slice();
+    const adv = (g, pre) => advisory.push({ code: 'second_read', text: clean(pre + ' "' + S(g.location).slice(0, 140) + '": ' + S(g.issue).replace(/[.;:]+$/, '') + (g.fix ? '. Suggested: ' + S(g.fix).replace(/[.;:]+$/, '') : '')) });
+    for (const g of (R.would_block || [])) adv(g, 'A second read of the page found (reported only while this check is new)');
+    for (const g of (R.advice || [])) adv(g, g.severity === 'high' ? 'A second read of the page found something to fix before publishing at' : 'A second read of the page suggests a change at');
+    if (R.status !== 'checked') advisory.push({ code: 'second_read', text: clean('Not checked by a second read: ' + S(R.reason)) });
+    let out = { ...del, advisory, second_read: { status: R.status, mode: R.mode, blocking: (R.gates || []).length, reported: (R.would_block || []).length } };
+    if (R.mode === 'enforce' && (R.gates || []).length) {
+      const cls0 = { blocking: (del.blocking || []).map(b => ({ code: S(b.code), text: S(b.text), tier: 'carried' })), advisory };
+      const cls = PFk.reviewed(cls0, R);
+      const d2 = PFk.deliver(cls, { questions: del.client_questions || qa.client_questions || [] });
+      const acts = new Map((del.blocking || []).map(b => [S(b.code) + '|' + S(b.text), b.action]));
+      const blocking = d2.blocking.map(b => (acts.has(b.code + '|' + b.text) ? { ...b, action: acts.get(b.code + '|' + b.text) } : b));
+      const grade = del.grade && typeof del.grade === 'object' ? { ...del.grade, blocking: blocking.length } : del.grade;
+      out = { ...out, status: d2.status, label: d2.label, blocking, next_step: d2.next_step || del.next_step || '', grade };
+      const ready = d2.status !== 'not_ready'; const reasons = ready ? [] : blocking.map(b => b.text).slice(0, 8);
+      const oq = qa.quality && typeof qa.quality === 'object' ? qa.quality : {};
+      Object.assign(qa, { passed: ready, publishable: ready, not_ready: !ready, quality_label: d2.label, not_ready_reasons: reasons, delivery_status: d2.status,
+        quality: { ...oq, passed: ready, publishable: ready, not_ready: !ready, label: d2.label, reasons, delivery_status: d2.status, blocking, advisory: out.advisory.map(a => ({ code: a.code, text: a.text })),
+          grade: grade || oq.grade, next_step: out.next_step, fix_by: ready ? '' : 'edit' } });
+    } else if (qa.quality && typeof qa.quality === 'object') qa.quality = { ...qa.quality, advisory: advisory.map(a => ({ code: a.code, text: a.text })) };
+    qa.delivery = out;
+    return qa; };
+  return { MODEL, CFG, GATING, KINDS, SCHEMA, ERROR_LABEL, modeOf, context, plan, read, apply, fill, errorOf, textError, unsupported, countMismatch, sameDay, fmtDay };
+})();
 // H3 (2026-10-28, page review): the answer of `POST /webhook/seo-page-finalize` (the app's FinalizeResult, app/shared/src/page-review.ts).
 // The final version went through the content gate (*Content QA* + *Originality Check*, the content run's own node code). This node reads its
 // verdict by the page pipeline's one rule (PF.classify) and decides:
@@ -2171,10 +2517,18 @@ const RECHECKED = new Set(['cut_off', 'meta', 'author_profile', 'claim', 'figure
 const carried = [], resolved = [];
 const urlIn = (t) => (S(t).match(/https?:\/\/[^\s"<>)]+/) || [''])[0].replace(/[.,;:]+$/, '');
 let dupOpen = null, decision = null;
+// client reports 2026-11-10 (section 184B / 184C): two of the page run's blockers are judged again by today's rule, because the rule itself was
+// wrong: a page of the website aimed at ANOTHER market's search is not the same search (DUP.otherMarket), and a second-read finding blocks
+// only when its own words say the page states something wrong or unsupported (RR.textError); everything else it found is advice, shown
+// to the client and never the 59 cap. A finding that still blocks is the editor's to rewrite (Finalize Apply); it stays open while its words are on the page.
+const away = [], reviewAdvice = [];
+const titleOfDup = (u) => S(((PG.duplicate_targets || []).find(x => x && x.url === u) || {}).title);
 for (const b of (PG.qa_blocking || [])) {
   const code = S(b.code) || 'other'; const keep = (x) => { if (!has0.has(code) && !carried.some(c => c.code === code && c.text === x.text)) { const c0 = { code, tier: 'hard', text: S(b.text), action: S(b.action), ...x }; c0.text = PF.clean(c0.text); carried.push(c0); } };
   if (code === 'duplicate_page') {
     const urls = (PR.duplicate_urls || []).length ? PR.duplicate_urls : (b.urls || []);
+    const elsewhere = urls.length ? urls.map(u => ({ url: u, places: DUP.otherMarket(S(P.keyword), { url: u, title: titleOfDup(u) }, S(P.country)) })) : [];
+    if (elsewhere.length && elsewhere.every(x => x.places)) { away.push(...elsewhere); resolved.push(code + ':other_market'); continue; }
     if (DEC && DEC.applies !== false) { decision = { code, choice: DEC.choice, url: DEC.url, reason: DEC.reason, pages: urls.slice(0, 3) }; resolved.push(code); }
     else { dupOpen = { urls }; keep({ urls, text: 'This website already has a page for the same search: ' + (urls.slice(0, 2).join(', ') || 'see the first check') + '. Publish this text as an update of that page, or tell us how the new page differs',
       action: 'rewrite it as an update of that page (a new page run that keeps its address), or tell us how this page differs' }); }
@@ -2186,7 +2540,10 @@ for (const b of (PG.qa_blocking || [])) {
   else if (code === 'brand') { if (P.style_guide) resolved.push(code + ':rechecked'); else keep({ text: S(b.text) + ' (found by the first check; your style guide did not travel with this page, so it is not checked again here)' }); }
   else if (RECHECKED.has(code)) resolved.push(code + ':rechecked');
   // W0-H (Fix 3b): what the second read of the page run quoted stays open while those words are on the page, and is resolved once they are gone
-  else if (code === 'review') { const q = (S(b.text).match(/"([^"]{8,300})"/) || [])[1] || ''; if (q && PF.onPage(q, md)) keep({}); else resolved.push(code); }
+  else if (code === 'review') { const q = (S(b.text).match(/"([^"]{8,300})"/) || [])[1] || '';
+    if (!(q && PF.onPage(q, md))) resolved.push(code);
+    else if (!RR.textError(S(b.text))) { reviewAdvice.push(S(b.text).replace(/^A second read of the page found a problem at/, 'A second read of the page suggests a change at')); resolved.push(code + ':advice'); }
+    else keep({}); }
   else keep({});
 }
 // the request did not carry what stopped the page in its first check: this version cannot be called ready on that basis
@@ -2216,6 +2573,8 @@ const NOT_CHECKED = { length_band: 'the length of the pages that rank for this s
   facts: 'the figures against the sources the page was written from', style_guide: 'your style guide (the business name and spelling)', site_urls: 'the links to your own pages against your full list of pages',
   sections_removed: 'whether the page run took sections out of this page (as a topic to leave out, or lost in editing)' };
 if (PR.received) for (const k of Object.keys(NOT_CHECKED)) if ((PR.grading_missing || []).includes(k)) del.advisory.push({ code: 'not_checked', text: 'Not checked: ' + NOT_CHECKED[k] + '. This page was written before we kept that with it' });
+for (const x of away.slice(0, 2)) del.advisory.unshift({ code: 'duplicate_other_market', text: PF.clean('Your website also has ' + x.url + ', aimed at searches in ' + x.places.join(', ') + '. This page is for another market, so it is not the same search: link the two pages to each other') });
+for (const t of reviewAdvice.slice(0, 5)) del.advisory.push({ code: 'second_read', text: PF.clean(t) });
 if (decision) del.advisory.unshift({ code: 'duplicate_decision', text: decision.choice === 'update'
   ? 'You chose to publish this text as an update of ' + decision.url + ': publish it at that address, in place of the page there now, not as a new page'
   : 'You chose to publish this as a separate page from ' + (decision.pages[0] || 'the page your website has') + ': "' + decision.reason + '". Two pages for one search can compete with each other, so the grade keeps its limit for fit' });

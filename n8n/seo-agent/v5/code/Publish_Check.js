@@ -28,7 +28,13 @@ const ladder = (log && log.ladder_id && logKw ? onSite.find(l => l.ladder_id ===
 const bodyOf = (r) => { const b = r && (r.body != null ? r.body : r.data); return typeof b === 'string' ? b : (b ? JSON.stringify(b) : ''); };   // the HTTP node puts text responses under `data` (live finding 2026-10-02)
 const status = Number(r.statusCode) || 0; const body = bodyOf(r);
 const fetchErr = r.error ? String(r.error.message || r.error.description || r.error).slice(0, 160) : null;
-const pick1 = (re) => { const x = body.match(re); return x ? x[1].replace(/\s+/g, ' ').trim() : ''; };
+// production 2026-11-10 (devaicon.com): a title tag is HTML, so "Banking &amp; Financial Services Technology | Devaicon" failed "Title tag uses
+// the keyword" for "banking & financial services technology" (norm() read "amp" as a word). Entities are decoded before any check reads them.
+const decodeEnt = (t) => String(t || '').replace(/&#x([0-9a-f]{1,6});/gi, (m, h) => { const n = parseInt(h, 16); return n > 0 && n < 0x110000 ? String.fromCodePoint(n) : ' '; })
+  .replace(/&#(\d{1,7});/g, (m, n) => (Number(n) > 0 && Number(n) < 0x110000 ? String.fromCodePoint(Number(n)) : ' '))
+  .replace(/&(?:amp|AMP);/g, '&').replace(/&quot;/gi, '"').replace(/&apos;/gi, "'").replace(/&nbsp;/gi, ' ').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
+  .replace(/&(?:rsquo|lsquo);/gi, "'").replace(/&(?:rdquo|ldquo);/gi, '"').replace(/&(?:ndash|mdash);/gi, '-');
+const pick1 = (re) => { const x = body.match(re); return x ? decodeEnt(x[1]).replace(/\s+/g, ' ').trim() : ''; };
 const title = pick1(/<title[^>]*>([\s\S]*?)<\/title>/i);
 const h1 = pick1(/<h1[^>]*>([\s\S]*?)<\/h1>/i).replace(/<[^>]+>/g, '').trim();
 const metaDesc = pick1(/<meta[^>]+name=["']description["'][^>]*content=["']([^"']*)["']/i) || pick1(/<meta[^>]+content=["']([^"']*)["'][^>]*name=["']description["']/i);
@@ -36,7 +42,7 @@ const canonical = pick1(/<link[^>]+rel=["']canonical["'][^>]*href=["']([^"']+)["
 const robotsMeta = pick1(/<meta[^>]+name=["']robots["'][^>]*content=["']([^"']*)["']/i); const hdrs = r.headers || {}; const xRobots = String(hdrs['x-robots-tag'] || '');
 const noindex = /noindex/i.test(robotsMeta) || /noindex/i.test(xRobots);
 const jsonld = (body.match(/application\/ld\+json/gi) || []).length;
-const text = body.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+const text = decodeEnt(body.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ');
 const words = text.split(' ').filter(Boolean).length;
 const kwIn = (s) => !!kw && norm(s).includes(kw);
 const live = status === 200 && !fetchErr;
@@ -152,7 +158,13 @@ const keyword = (log || ladder || {}).keyword || String(d.keyword || '').trim() 
 const h1Words = (body.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || [null, ''])[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 const verifyText = mainHtml.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<(h[1-6]|p|li|td|th|div|section|br|dt|dd)\b[^>]*>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/[ \t]+/g, ' ');
 const confirmMismatch = d.confirm_mismatch === true || String(d.confirm_mismatch) === 'true';
-const V = live ? verifyPublished({ keyword, url, title, h1: h1Words, text: verifyText, draft: { title: String(d.draft_title || '').slice(0, 300), h1: String(d.draft_h1 || '').slice(0, 300) }, log, ladder, logs, ladders, domain, confirm: confirmMismatch, now })
+// production 2026-11-10: how the page this draft updates answers now, read without following redirects (a permanent redirect to this address is
+// the move done right). Not read (no planned update, the step did not run, or another address was read) is null: the rule is then as before.
+const oldAddr = (() => { const want = String((log || {}).existing_page_url || '').trim(); if (!want) return null; let o0 = null;
+  try { o0 = ($('Fetch Updated Address').first() || {}).json || null; } catch (e) { o0 = null; }
+  if (!o0 || o0.error) return null; const st = Number(o0.statusCode != null ? o0.statusCode : o0.status) || 0; if (!st) return null;
+  const H = o0.headers || {}; const loc = String(H.location || H.Location || '').trim(); return { status: st, location: loc }; })();
+const V = live ? verifyPublished({ keyword, url, title, h1: h1Words, text: verifyText, draft: { title: String(d.draft_title || '').slice(0, 300), h1: String(d.draft_h1 || '').slice(0, 300) }, log, ladder, logs, ladders, domain, confirm: confirmMismatch, now, redirect: oldAddr })
   : { verified: false, verify: 'not_live', accepted: false, confirmed: false, confirmable: false, message: '', missing: [], note: '', evidence: null, publish_note: '' };
 // INVARIANTS rule 4: the proof is HTTP 200 from this very URL in this run AND the page shown to be the draft (or the owner's confirmation
 // after the warning, stored with its reason). Without it nothing here says the page exists.

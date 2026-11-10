@@ -1,6 +1,8 @@
 /*__PAGE_FIX__*/
 /*__GRADE__*/
 /*__COST_CAL__*/
+/*__DUP_TARGETS__*/
+/*__CRITIC_REREAD__*/
 // H3 (2026-10-28, page review): the answer of `POST /webhook/seo-page-finalize` (the app's FinalizeResult, app/shared/src/page-review.ts).
 // The final version went through the content gate (*Content QA* + *Originality Check*, the content run's own node code). This node reads its
 // verdict by the page pipeline's one rule (PF.classify) and decides:
@@ -54,10 +56,18 @@ const RECHECKED = new Set(['cut_off', 'meta', 'author_profile', 'claim', 'figure
 const carried = [], resolved = [];
 const urlIn = (t) => (S(t).match(/https?:\/\/[^\s"<>)]+/) || [''])[0].replace(/[.,;:]+$/, '');
 let dupOpen = null, decision = null;
+// client reports 2026-11-10 (section 184B / 184C): two of the page run's blockers are judged again by today's rule, because the rule itself was
+// wrong: a page of the website aimed at ANOTHER market's search is not the same search (DUP.otherMarket), and a second-read finding blocks
+// only when its own words say the page states something wrong or unsupported (RR.textError); everything else it found is advice, shown
+// to the client and never the 59 cap. A finding that still blocks is the editor's to rewrite (Finalize Apply); it stays open while its words are on the page.
+const away = [], reviewAdvice = [];
+const titleOfDup = (u) => S(((PG.duplicate_targets || []).find(x => x && x.url === u) || {}).title);
 for (const b of (PG.qa_blocking || [])) {
   const code = S(b.code) || 'other'; const keep = (x) => { if (!has0.has(code) && !carried.some(c => c.code === code && c.text === x.text)) { const c0 = { code, tier: 'hard', text: S(b.text), action: S(b.action), ...x }; c0.text = PF.clean(c0.text); carried.push(c0); } };
   if (code === 'duplicate_page') {
     const urls = (PR.duplicate_urls || []).length ? PR.duplicate_urls : (b.urls || []);
+    const elsewhere = urls.length ? urls.map(u => ({ url: u, places: DUP.otherMarket(S(P.keyword), { url: u, title: titleOfDup(u) }, S(P.country)) })) : [];
+    if (elsewhere.length && elsewhere.every(x => x.places)) { away.push(...elsewhere); resolved.push(code + ':other_market'); continue; }
     if (DEC && DEC.applies !== false) { decision = { code, choice: DEC.choice, url: DEC.url, reason: DEC.reason, pages: urls.slice(0, 3) }; resolved.push(code); }
     else { dupOpen = { urls }; keep({ urls, text: 'This website already has a page for the same search: ' + (urls.slice(0, 2).join(', ') || 'see the first check') + '. Publish this text as an update of that page, or tell us how the new page differs',
       action: 'rewrite it as an update of that page (a new page run that keeps its address), or tell us how this page differs' }); }
@@ -69,7 +79,10 @@ for (const b of (PG.qa_blocking || [])) {
   else if (code === 'brand') { if (P.style_guide) resolved.push(code + ':rechecked'); else keep({ text: S(b.text) + ' (found by the first check; your style guide did not travel with this page, so it is not checked again here)' }); }
   else if (RECHECKED.has(code)) resolved.push(code + ':rechecked');
   // W0-H (Fix 3b): what the second read of the page run quoted stays open while those words are on the page, and is resolved once they are gone
-  else if (code === 'review') { const q = (S(b.text).match(/"([^"]{8,300})"/) || [])[1] || ''; if (q && PF.onPage(q, md)) keep({}); else resolved.push(code); }
+  else if (code === 'review') { const q = (S(b.text).match(/"([^"]{8,300})"/) || [])[1] || '';
+    if (!(q && PF.onPage(q, md))) resolved.push(code);
+    else if (!RR.textError(S(b.text))) { reviewAdvice.push(S(b.text).replace(/^A second read of the page found a problem at/, 'A second read of the page suggests a change at')); resolved.push(code + ':advice'); }
+    else keep({}); }
   else keep({});
 }
 // the request did not carry what stopped the page in its first check: this version cannot be called ready on that basis
@@ -99,6 +112,8 @@ const NOT_CHECKED = { length_band: 'the length of the pages that rank for this s
   facts: 'the figures against the sources the page was written from', style_guide: 'your style guide (the business name and spelling)', site_urls: 'the links to your own pages against your full list of pages',
   sections_removed: 'whether the page run took sections out of this page (as a topic to leave out, or lost in editing)' };
 if (PR.received) for (const k of Object.keys(NOT_CHECKED)) if ((PR.grading_missing || []).includes(k)) del.advisory.push({ code: 'not_checked', text: 'Not checked: ' + NOT_CHECKED[k] + '. This page was written before we kept that with it' });
+for (const x of away.slice(0, 2)) del.advisory.unshift({ code: 'duplicate_other_market', text: PF.clean('Your website also has ' + x.url + ', aimed at searches in ' + x.places.join(', ') + '. This page is for another market, so it is not the same search: link the two pages to each other') });
+for (const t of reviewAdvice.slice(0, 5)) del.advisory.push({ code: 'second_read', text: PF.clean(t) });
 if (decision) del.advisory.unshift({ code: 'duplicate_decision', text: decision.choice === 'update'
   ? 'You chose to publish this text as an update of ' + decision.url + ': publish it at that address, in place of the page there now, not as a new page'
   : 'You chose to publish this as a separate page from ' + (decision.pages[0] || 'the page your website has') + ': "' + decision.reason + '". Two pages for one search can compete with each other, so the grade keeps its limit for fit' });

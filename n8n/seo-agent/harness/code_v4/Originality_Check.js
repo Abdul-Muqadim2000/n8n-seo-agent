@@ -511,8 +511,57 @@ const SM = (() => {
 //     opts.ladder a page of a keyword ladder: a page that carries only PART of the keyword's weight is the ladder's planned neighbour
 //                 (the rung links up to it), listed in `partial` as advice; only a page carrying all of it is a duplicate target
 //     opts.max    targets kept (3)
+//     opts.market the run's market (ISO-2 or the country name, e.g. "United Arab Emirates"): a page whose title / heading / address names only
+//                 places OUTSIDE that market, for a keyword that names none, is aimed at another market's search: listed in `other_market`, never
+//                 a duplicate target (client report 2026-11-10: "ai automation services" for the UAE was held as the duplicate of devaicon's
+//                 "AI Automation Services in Pakistan" page; "ai" has 2 letters, so the rule compared only "automation services")
 const DUP = (() => {
   const S = (v) => String(v == null ? '' : v);
+  // the fit gate's gazetteer (FIT_PLACES_SRC in _fit_gate.js), put here by the build (kit_src.py) so the two never drift; [] = no market check
+  const PLACES_SRC = [
+  ['AE', 'uae|united arab emirates|emirates|emirati|dubai|abu dhabi|sharjah|ajman|fujairah|ras al khaimah|umm al quwain|al ain'],
+  ['SA', 'saudi|saudi arabia|ksa|riyadh|jeddah|dammam|khobar|al khobar|mecca|makkah|medina|madinah'],
+  ['PK', 'pakistan|pakistani|lahore|karachi|islamabad|rawalpindi|faisalabad|multan|peshawar|quetta|sialkot|gujranwala'],
+  ['IN', 'india|indian|delhi|new delhi|mumbai|bangalore|bengaluru|chennai|pune|kolkata|ahmedabad|noida|gurgaon|gurugram'],
+  ['IN PK', 'hyderabad'],
+  ['GB', 'uk|united kingdom|britain|great britain|british|england|scotland|wales|london|manchester|birmingham|leeds|glasgow|edinburgh'],
+  ['US', 'usa|united states|united states of america|new york|nyc|california|texas|florida|chicago|los angeles|san francisco|houston|seattle|boston'],
+  ['CA', 'canada|canadian|ottawa|toronto|montreal|vancouver|calgary'],
+  ['AU', 'australia|australian|canberra|sydney|melbourne|brisbane'],
+  ['NZ', 'new zealand|wellington|auckland|christchurch'],
+  ['IE', 'ireland|irish|dublin|galway|limerick'],
+  ['SG', 'singapore|singaporean'],
+  ['ZA', 'south africa|south african|pretoria|johannesburg|cape town|durban'],
+  ['DE', 'germany|deutschland|berlin|hamburg|munich|cologne|frankfurt'],
+  ['FR', 'france|paris|marseille|lyon'],
+  ['ES', 'spain|madrid|barcelona|valencia|seville'],
+  ['IT', 'italy|rome|milan|naples|turin'],
+  ['NL', 'netherlands|holland|amsterdam|rotterdam|the hague|utrecht'],
+  ['BR', 'brazil|brazilian|brasilia|sao paulo|rio de janeiro'],
+  ['MX', 'mexico|mexican|mexico city|guadalajara|monterrey'],
+  // markets the product cannot measure (not in the COUNTRIES table): a keyword about them is flagged, and their rankings cannot be tracked
+  ['QA', 'qatar|qatari|doha'], ['OM', 'oman|omani|muscat'], ['BH', 'bahrain|bahraini|manama'], ['KW', 'kuwait|kuwaiti'],
+  ['EG', 'egypt|egyptian|cairo|alexandria'], ['JO', 'jordan|amman'], ['LB', 'lebanon|beirut'], ['TR', 'turkiye|istanbul|ankara'],
+  ['CN', 'china|beijing|shanghai|shenzhen'], ['JP', 'japan|tokyo|osaka'], ['MY', 'malaysia|kuala lumpur'], ['ID', 'indonesia|jakarta'],
+  ['PH', 'philippines|manila'], ['NG', 'nigeria|lagos|abuja'], ['KE', 'kenya|nairobi'], ['BD', 'bangladesh|dhaka'], ['LK', 'sri lanka|colombo'],
+  ['NP', 'nepal|kathmandu'], ['AF', 'afghanistan|kabul'],
+  // regions: the set of their countries ("gcc" is fine for a UAE website, not for a Pakistan one)
+  ['AE SA QA OM BH KW', 'gcc|gcc countries|gulf|gulf countries|gulf region|arabian gulf|persian gulf|khaleej'],
+  ['AE SA QA OM BH KW EG JO LB', 'middle east|mena|arab world|arab countries'],
+  ['DE FR ES IT NL IE GB', 'europe|european|eu|european union'],
+  ['US CA', 'north america'], ['BR MX', 'latin america|latam'], ['IN PK BD LK NP', 'south asia']];
+  const PL = PLACES_SRC.flatMap(([iso, ws]) => S(ws).split('|').map(w => ({ w, iso: S(iso).split(' ') }))).sort((a, b) => b.w.split(' ').length - a.w.split(' ').length || b.w.length - a.w.length);
+  const placeText = (t) => ' ' + S(t).toLowerCase().replace(/\./g, '').replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+  const placesIn = (t) => { let x = placeText(t); const out = [];
+    for (const p of PL) { const k = ' ' + p.w + ' '; let i = x.indexOf(k); while (i >= 0) { out.push({ word: p.w, iso: p.iso }); x = x.slice(0, i) + ' | ' + x.slice(i + k.length - 1); i = x.indexOf(k); } }
+    return out; };
+  const marketOf = (m) => { const s0 = S(m).trim(); if (/^[A-Za-z]{2}$/.test(s0)) return s0.toUpperCase(); const ps = placesIn(s0); return ps.length && ps.every(p => p.iso.length === 1 && p.iso[0] === ps[0].iso[0]) ? ps[0].iso[0] : ''; };
+  // the place words that put a page in ANOTHER market than `market` (null: same market, no place named, or the keyword itself names elsewhere)
+  const otherMarket = (keyword, page, market) => { const m = marketOf(market); if (!m || !PL.length) return null;
+    if (placesIn(keyword).some(p => !p.iso.includes(m))) return null;
+    const pp = placesIn(S(page && page.title) + ' ' + S(page && page.h1) + ' ' + S(page && page.url).replace(/^https?:\/\/[^\/]+/i, '').replace(/[-_\/]+/g, ' '));
+    if (!pp.length || pp.some(p => p.iso.includes(m))) return null;
+    return [...new Set(pp.map(p => p.word))]; };
   const SHARE = 75, MAX = 3;
   // the tokenizer of SHG (_shingle.js), character for character, so the late check finds what it always found
   const norm = (t) => S(t)
@@ -534,7 +583,7 @@ const DUP = (() => {
   const targets = (keyword, pages, opts) => {
     const o = opts || {};
     const kw = toks(keyword);
-    const out = { targets: [], partial: [], self: [], keyword_words: kw.size, basis: '' };
+    const out = { targets: [], partial: [], self: [], other_market: [], keyword_words: kw.size, basis: '' };
     if (!kw.size) { out.basis = 'the keyword has no word of 3 letters or more to compare'; return out; }
     const list = (Array.isArray(pages) ? pages : []).filter(p => p && S(p.url));
     const sets = list.map(pageToks);
@@ -559,6 +608,8 @@ const DUP = (() => {
       // common words), it never adds one the late check did not make before
       if (plain < SHARE || share < SHARE) continue;
       const row = { url: S(p.url), title: S(p.title), keyword_words_shared_pct: plain, weighted_pct: share };
+      const om = o.market ? otherMarket(keyword, p, o.market) : null;
+      if (om) { out.other_market.push({ ...row, places: om }); continue; }
       if (o.self_aware && ((selfP.size && selfP.has(pathKey(p.url))) || (o.slug_self && kslug && slugOf(p.url) === kslug))) { out.self.push(row); continue; }
       if (o.ladder && hit < kw.size) { out.partial.push(row); continue; }
       out.targets.push(row);
@@ -568,7 +619,7 @@ const DUP = (() => {
       + 'a page carrying ' + SHARE + '% or more of those words, and of their weight when each word counts by how few of the site\'s pages carry it, is aimed at the same search';
     return out;
   };
-  return { targets, words, slugify, slugOf, SHARE, MAX };
+  return { targets, words, slugify, slugOf, otherMarket, marketOf, placesIn, SHARE, MAX };
 })();
 // Originality check (FIX_PLAN G5, 2026-10-13). Runs between *Content QA* and *Needs Revision?*, so a draft that repeats someone else's
 // words -- or our own page's -- never reaches the customer: the quality check fails, the editor is sent in with the passage named, and the
@@ -638,7 +689,16 @@ if (!MODEL && d.site_model && typeof d.site_model === 'object') MODEL = d.site_m
 // brief; this late check stays as the safety net. Two refinements, both only ever removing a match: a page that shares only the site's
 // common words is not a duplicate (the weighted share), and the ladder's planned address for this very page is never its own duplicate.
 const readKeys = new Set(sources.map(s => keyOf(s.url)).filter(Boolean));
-const duplicate_targets = MODEL ? DUP.targets(d.keyword, SM.pages(MODEL), { skip: [...readKeys, improving], self: [d.ladder_target_url || ''], self_aware: true }).targets : [];
+// client reports 2026-11-10 (section 184B): the run's market travels to the rule (a page aimed at another country's search is not a duplicate),
+// and a page written for an AI answer is judged as *Parse Verdict* judges it before the brief: a page of the site that shares its keyword
+// words is ADVICE (link the two), never a blocker. The AI growth plan chose "a new answer page" for that question after matching the
+// question against the site's pages; the late check holding it as "Not ready, same search" contradicted it (devaicon.com, run 12467).
+let marketOC = S(d.country); if (!marketOC) { try { marketOC = S(($('Normalize Input').first().json || {}).country); } catch (e) { marketOC = ''; } }
+let aiOC = d.ai_target && typeof d.ai_target === 'object' && S(d.ai_target.question) ? d.ai_target : null;
+if (!aiOC) { try { const at0 = ($('Parse Brief').first().json || {}).ai_target; aiOC = at0 && typeof at0 === 'object' && S(at0.question) ? at0 : null; } catch (e) { aiOC = null; } }
+const DT = MODEL ? DUP.targets(d.keyword, SM.pages(MODEL), { skip: [...readKeys, improving], self: [d.ladder_target_url || ''], self_aware: true, market: marketOC }) : { targets: [], other_market: [] };
+const duplicate_targets = aiOC ? [] : DT.targets;
+const duplicate_advice = (aiOC ? DT.targets : []).map(x => ({ ...x, why: 'ai_page' })).concat((DT.other_market || []).map(x => ({ ...x, why: 'other_market' })));
 
 const worst = measured.filter(m => m.kind !== 'improved')[0] || null;
 const failing = worst && worst.overlap_pct > THRESHOLD ? worst : null;
@@ -657,6 +717,7 @@ const originality = {
   highest_source: worst ? worst.source : null,
   improved_page: improved ? { source: improved.source, overlap_pct: improved.overlap_pct } : null,
   duplicate_targets,
+  duplicate_advice,
   passed: !failing,
   basis: measured.length
     ? 'the share of the draft\'s ' + SHG.N + '-word windows found on one page, measured against ' + measured.length + ' page(s) this run read ('
@@ -683,6 +744,9 @@ if (duplicate_targets.length) {
     + '. Improve that page instead of publishing a second one, or make clear in the brief how this page is different (its text could not be compared: it was not read in this run)');
 }
 
+for (const x of duplicate_advice.slice(0, 2)) warnings.push(x.why === 'ai_page'
+  ? 'Your website also has ' + x.url + ' on a close search. This page answers a question asked in AI answers, so it can stand beside it: link the two pages to each other'
+  : 'Your website also has ' + x.url + ', aimed at searches in ' + (x.places || []).join(', ') + '. This page is for another market, so it is not the same search: link the two pages to each other');
 qa.originality = originality;
 qa.warnings = warnings;
 // CT-FIX (review item 14): the next step said "Then publish it." beside the warning that the site already has a page for this search.
