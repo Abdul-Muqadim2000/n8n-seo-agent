@@ -686,8 +686,9 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
       const headPosition = hist.length ? Number(hist[0].position) : null;
       const lastN = hist.slice(0, CADENCE.wonChecks);
       const won = lastN.length >= CADENCE.wonChecks && lastN.every((h) => Number(h.position) >= 1 && Number(h.position) <= CADENCE.wonPosition);
-      const support = rows.filter((r) => !isTop(r));
-      const published = support.filter((r) => r.status === 'published' || publishedKw.has(norm(r.keyword))).length;
+      // review M4 (LADDER PACKAGE, mirror of Cadence_Plan.js): stopped / failed / set-aside rungs are no support; a merged rung is live as its page
+      const support = rows.filter((r) => !isTop(r) && !['stopped', 'failed', 'set_aside'].includes(S(r.status)));
+      const published = support.filter((r) => r.status === 'published' || r.status === 'merged' || publishedKw.has(norm(r.keyword))).length;
       const gateOpen = planType === 'direct' || !support.length || published * 2 >= support.length || (headPosition != null && headPosition >= 1 && headPosition <= CADENCE.gateHeadPosition);
       const ordered = planType === 'direct' ? [...rows.filter(isTop), ...rows.filter((r) => !isTop(r))] : rows;
       // R87: a ladder whose main keyword is set aside (its row says so, or the gate refuses it now) is paused
@@ -727,11 +728,13 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   // this website already holds (a published or existing ladder page, a published content-log page); the main page never onto a blog address
   // (its own page instead), and a "-2" / "-copy" copy of a live page improves the original
   const ownersC = [
-    ...lrows.filter((r) => r.target_url && (S(r.status) === 'published' || r.page_exists === true || String(r.page_exists) === 'true')).map((r) => ({ url: r.target_url, keyword: r.keyword, supporting: r.supporting, ladder_id: r.ladder_id })),
-    ...slog.filter((l) => S(l.published_url)).map((l) => ({ url: l.published_url, keyword: l.keyword })),
+    // review M2: never a row merged into the page; a content-log page only where it was FIRST published (not a one-off refresh)
+    ...lrows.filter((r) => r.target_url && S(r.status) !== 'merged' && (S(r.status) === 'published' || r.page_exists === true || String(r.page_exists) === 'true')).map((r) => ({ url: r.target_url, keyword: r.keyword, supporting: r.supporting, ladder_id: r.ladder_id })),
+    ...slog.filter((l) => S(l.published_url) && !S(l.existing_page_url)).map((l) => ({ url: l.published_url, keyword: l.keyword })),
   ];
   const knownC = [...new Set([...(input.pages ?? []).filter((p) => p && (!p.site_id || p.site_id === siteId)).map((p) => S(p.url)), ...ownersC.map((o) => S(o.url))].filter(Boolean))];
-  const addressOf = (l: LadderRow): { existing: string; target: string } => {
+  const pagesQ = (input.pages ?? []).filter((p) => p && p.url && (!p.site_id || p.site_id === siteId)).map((p) => ({ url: S(p.url), queries: (() => { try { const q = JSON.parse(S(p.queries_json) || '[]'); return Array.isArray(q) ? q : []; } catch { return []; } })() }));
+  const addressOf = (l: LadderRow, x?: Info): { existing: string; target: string } => {
     const was = S(l.target_url);
     const exists = l.page_exists === true || String(l.page_exists) === 'true';
     const home = (was.match(/^https?:\/\/[^/?#]+/i) || [''])[0];
@@ -739,7 +742,9 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
     if (num(l.rung) === 4) {
       const orig = exists ? LRU.copyOf(was, knownC) : '';
       if (orig) return { existing: orig, target: orig };
-      if (LRU.isBlog(was) && ['solution', 'compare', 'hire'].includes(LRU.stageOf(l.keyword, '', S((l as LadderRow & { stage?: string }).stage)))) { const nu = own(was); if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu }; }
+      // review H5: a blog address that ranks for the main keyword keeps it
+      const ranks = LRU.ranksFor(was, l.keyword, { rank: x && x.headPosition != null ? { position: x.headPosition, url: '' } : null, pages: pagesQ });
+      if (LRU.isBlog(was) && !ranks && ['solution', 'compare', 'hire'].includes(LRU.stageOf(l.keyword, '', S((l as LadderRow & { stage?: string }).stage)))) { const nu = own(was); if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu }; }
     }
     if (exists && was && LRU.ownerOf(was, l.keyword, ownersC, S(l.supporting).split(',').map((x) => x.trim()).filter(Boolean))) {
       const nu = own(was);
@@ -749,7 +754,7 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   };
   const ladderCand = (x: Info, l: LadderRow): Cand => {
     const rung = num(l.rung);
-    const addr = addressOf(l);
+    const addr = addressOf(l, x);
     return {
       keyword: l.keyword,
       source: 'ladder',

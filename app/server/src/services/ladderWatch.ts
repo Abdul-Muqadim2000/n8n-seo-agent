@@ -1,7 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { n8nSiteId, normKeyword, stuckRung, type ContentLogRow, type LadderRow } from '@seo/shared';
 import { db, schema } from '../db';
-import { executions, siteRows, updateRows } from '../n8n/client';
+import { recentExecutions, siteRows, updateRows } from '../n8n/client';
 
 // LADDER PACKAGE (2026-11-09, rule 5; n8n/seo-agent/docs/keyword-intel-2026-11-08/fixes/LADDER.md). Production 2026-11-05 (techand.ai, ladder
 // "crm service provider"): the rung "what is a crm company" sat at `writing` (content log `started`) for days after its page run died, so the
@@ -14,15 +14,18 @@ import { executions, siteRows, updateRows } from '../n8n/client';
 // nothing. When the engine cannot be asked whether anything is running, nothing is closed.
 
 export const LADDER_STUCK_MAIN_WORKFLOW = 'SEOagentV4Full01';
-/** a running execution that started this close to the rung's start is taken to be its page run (the cadence spawns them together) */
-export const LADDER_STUCK_START_SLACK_MS = 5 * 60_000;
+/** an unfinished execution that started this long before the rung (or any time after it) may be its page run */
+export const LADDER_STUCK_START_SLACK_MS = 10 * 60_000;
+/** n8n states of an execution that has ended (engineFailures.ts: ENDED + CUT_OFF); anything else (running, new = queued, waiting) is alive */
+export const LADDER_FINISHED = ['success', 'error', 'crashed', 'canceled'];
 const ACTIVE = ['submitting', 'accepted', 'running'];
 
 export interface StuckRungDeps {
   sites: () => Promise<{ id: string; orgId: string; domain: string }[]>;
   ladders: (domain: string) => Promise<LadderRow[]>;
   logs: (domain: string) => Promise<ContentLogRow[]>;
-  running: () => Promise<{ startedAt: string }[] | null>;
+  /** the main workflow's newest executions in any state; null = n8n could not be asked */
+  running: () => Promise<{ startedAt?: string | null; status?: string }[] | null>;
   openRuns: (siteId: string) => Promise<{ id: string; input: unknown }[]>;
   update: typeof updateRows;
 }
@@ -40,7 +43,7 @@ export function stuckRungsOf(o: {
   domain: string;
   ladders: LadderRow[];
   logs: ContentLogRow[];
-  running: { startedAt: string }[] | null;
+  running: { startedAt?: string | null; status?: string }[] | null;
   openKeywords: ReadonlySet<string>;
   now: number;
 }): StuckRung[] {
@@ -57,7 +60,15 @@ export function stuckRungsOf(o: {
       ? true
       : o.running === null
         ? null
-        : Number.isFinite(t) && o.running.some((e) => { const s = Date.parse(e.startedAt); return Number.isFinite(s) && s >= t - LADDER_STUCK_START_SLACK_MS; });
+        : o.running.some((e) => {
+            // review H1 (2026-11-10): production runs n8n with a concurrency limit, so a page run can wait in n8n's queue (`new` / `waiting`)
+            // for over an hour: any queued execution keeps every rung alive, and so does any unfinished one that started around or after it
+            const st = String(e.status ?? 'running');
+            if (LADDER_FINISHED.includes(st)) return false;
+            if (st === 'new' || st === 'waiting' || !e.startedAt) return true;
+            const s = Date.parse(e.startedAt);
+            return !Number.isFinite(t) || !Number.isFinite(s) || s >= t - LADDER_STUCK_START_SLACK_MS;
+          });
     const v = stuckRung({ status: 'writing', since, live, now: o.now });
     if (v.stuck) out.push({ domain: o.domain, ladderId: String(r.ladder_id), keyword: String(r.keyword), minutes: v.minutes ?? 0, reason: v.reason });
   }
@@ -66,9 +77,9 @@ export function stuckRungsOf(o: {
 
 const defaultDeps: StuckRungDeps = {
   sites: () => db.select({ id: schema.sites.id, orgId: schema.sites.orgId, domain: schema.sites.domain }).from(schema.sites),
-  ladders: (domain) => siteRows<LadderRow>('ladders', domain, { fresh: true, max: 2000 }),
+  ladders: (domain) => siteRows<LadderRow>('ladders', domain, { fresh: true, max: 500, extra: [{ columnName: 'status', condition: 'eq', value: 'writing' }] }),   // review L8: only the writing rows
   logs: (domain) => siteRows<ContentLogRow>('contentLog', domain, { fresh: true, max: 2000, sortBy: 'started_at:desc' }),
-  running: () => executions(LADDER_STUCK_MAIN_WORKFLOW, 'running', 100).catch(() => null),
+  running: () => recentExecutions(LADDER_STUCK_MAIN_WORKFLOW, 100).catch(() => null),
   openRuns: (siteId) =>
     db.select({ id: schema.runs.id, input: schema.runs.input }).from(schema.runs).where(and(eq(schema.runs.siteId, siteId), inArray(schema.runs.status, ACTIVE))),
   update: updateRows,
@@ -91,7 +102,7 @@ export async function checkStuckRungs(deps: StuckRungDeps = defaultDeps, now = D
       const openKeywords = new Set(open.map((r) => normKeyword(String(((r.input ?? {}) as { keyword?: unknown }).keyword ?? ''))).filter(Boolean));
       for (const st of stuckRungsOf({ domain: site.domain, ladders, logs, running, openKeywords, now })) {
         const day = new Date(now).toISOString().slice(0, 10);
-        const note = `failed: ${st.reason} (closed ${day}). Nothing was written and nothing is charged for it; the next page of the ladder goes on. Write it again from the ladder page.`.slice(0, 480);
+        const note = `failed: ${st.reason} (closed ${day}). Nothing was written; the next page of the ladder goes on. If the run finishes after all, the page shows here as written; otherwise write it again from the ladder page.`.slice(0, 480);
         const ok = await deps
           .update('ladders', [
             { columnName: 'ladder_id', condition: 'eq', value: st.ladderId },

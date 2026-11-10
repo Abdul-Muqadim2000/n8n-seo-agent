@@ -51,7 +51,8 @@ function pageLine(p: LadderPage, onDay: string): string {
       // R16: the keyword rule refused this planned page (a competitor's brand, a government portal, an off-topic search)
       return 'Set aside: not a search to target (see the weekly content note)';
     case 'stopped':
-      return 'Stopped: our check advised against this page';
+      // review M5: the row's own reason first (a page can be stopped for another reason than our check)
+      return p.reason ? `Stopped: ${p.reason}` : 'Stopped: our check advised against this page';
     case 'failed':
       return 'Its writing stopped without a result; the next page goes on';
     case 'merged':
@@ -234,7 +235,7 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
           <p className="text-[13px] leading-snug text-ink-2 [overflow-wrap:anywhere]">
             {p.reason || pageLine(p, day.on)}
             {p.state === 'stopped' && ' Nothing is written for it. If you want this page all the same, choose Write it anyway.'}
-            {p.state === 'failed' && ' Nothing was written and nothing is charged for it. You can write it again.'}
+            {p.state === 'failed' && ' Nothing was written. If its run finishes after all, the page shows here as written; you can also write it again.'}
           </p>
         )}
         {p.why && p.state !== 'stopped' && p.state !== 'failed' && p.state !== 'merged' && p.state !== 'published' && (

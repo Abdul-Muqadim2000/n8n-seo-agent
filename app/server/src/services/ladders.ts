@@ -501,8 +501,9 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
     // the main page waits for support in Short / Full ladders (§6.2)
     const main = pages.find((p) => p.rung === 4 && p.state === 'planned');
     if (gate && main && planType !== 'direct') {
-      const support = pages.filter((p) => p.rung !== 4);
-      const live = support.filter((p) => p.state === 'published').length;
+      // review M4 (LADDER PACKAGE): stopped / failed / set-aside rungs are no support; a merged rung is live as its page (as the engine counts)
+      const support = pages.filter((p) => p.rung !== 4 && p.state !== 'stopped' && p.state !== 'failed' && p.state !== 'set_aside');
+      const live = support.filter((p) => p.state === 'published' || p.state === 'merged').length;
       const headPos = headHistory[headHistory.length - 1]?.position ?? 0;
       if (live < support.length / 2 && !(headPos > 0 && headPos <= 30)) main.state = 'gated';
     }

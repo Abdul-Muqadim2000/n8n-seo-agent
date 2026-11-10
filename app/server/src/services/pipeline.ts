@@ -368,8 +368,13 @@ export function heldPages(reports: Pick<Report, 'id' | 'runId' | 'stage' | 'summ
       id: `hold:${r.id}`,
       kind: 'hold',
       severity: 'warning',
-      title: holdTitle(kw, { score, kinds: [...(score != null && score < HOLD_THRESHOLD ? (['score'] as const) : []), ...(r.summary.holdDuplicate === true ? (['duplicate'] as const) : [])] }),
-      detail: 'Nothing was written and only the check was used. Open the report to write it anyway, use the recommended target, or improve the page your website already has.',
+      // LADDER PACKAGE (review H4): a ladder page stopped for an AVOID verdict says so; nothing is charged for a page that was not written
+      title: r.summary.holdLadderStop === true
+        ? `Stopped: our check advised against "${kw}", a page of your keyword ladder`
+        : holdTitle(kw, { score, kinds: [...(score != null && score < HOLD_THRESHOLD ? (['score'] as const) : []), ...(r.summary.holdDuplicate === true ? (['duplicate'] as const) : [])] }),
+      detail: r.summary.holdLadderStop === true
+        ? 'Nothing was written for this page, and nothing is charged for a page that was not written (only the check). Open the report to see why, and choose Write it anyway if you want the page all the same.'
+        : 'Nothing was written and only the check was used. Open the report to write it anyway, use the recommended target, or improve the page your website already has.',
       action: { label: 'Choose what to do', reportId: r.id },
     });
   }

@@ -526,6 +526,12 @@ export async function executions(workflowId: string, status: 'error' | 'success'
   return r.data ?? [];
 }
 
+/** LADDER PACKAGE (review H1, 2026-11-10): the newest executions of a workflow in ANY state (queued `new` / `waiting` ones included), newest first. */
+export async function recentExecutions(workflowId: string, limit = 100): Promise<ExecutionSummary[]> {
+  const r: { data: ExecutionSummary[] } = await api(`/executions?workflowId=${encodeURIComponent(workflowId)}&limit=${limit}`);
+  return r.data ?? [];
+}
+
 /** The code of an n8n API error that is a 404: n8n has no such record (an execution pruned, or never saved). */
 export const N8N_NOT_FOUND = 'n8n_not_found';
 export const isN8nNotFound = (err: unknown): boolean => err instanceof HttpError && err.code === N8N_NOT_FOUND;

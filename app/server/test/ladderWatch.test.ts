@@ -3,6 +3,7 @@ import type { ContentLogRow, LadderRow } from '@seo/shared';
 
 import { checkStuckRungs, stuckRungsOf } from '../src/services/ladderWatch';
 import { ladderMarketInfo } from '../src/services/ladders';
+import { ladderMovesOf } from '../src/services/siteTasks';
 
 // LADDER PACKAGE (2026-11-09, rule 5): techand.ai's rung "what is a crm company" sat at `writing` from 2026-11-05 01:33 with its page run gone
 const row = (o: Partial<LadderRow>): LadderRow => ({ id: 47, createdAt: '', updatedAt: '2026-11-05T01:33:12.154Z', ladder_id: 'lad_mw0goinsniv1', domain: 'techand.ai', head_keyword: 'crm service provider', rung: 2,
@@ -20,9 +21,19 @@ describe('stuck ladder rungs (rule 5)', () => {
     expect(out[0].reason).toMatch(/stopped without a result/);
   });
   it('a running execution started after the rung, an open app run, or an engine that cannot be asked: left alone', () => {
-    expect(stuckRungsOf({ domain: 'techand.ai', ladders: [row({})], logs: [log({})], running: [{ startedAt: '2026-11-05T01:33:40Z' }], openKeywords: new Set(), now: NOW })).toHaveLength(0);
+    expect(stuckRungsOf({ domain: 'techand.ai', ladders: [row({})], logs: [log({})], running: [{ status: 'running', startedAt: '2026-11-05T01:33:40Z' }], openKeywords: new Set(), now: NOW })).toHaveLength(0);
     expect(stuckRungsOf({ domain: 'techand.ai', ladders: [row({})], logs: [log({})], running: [], openKeywords: new Set(['what is a crm company']), now: NOW })).toHaveLength(0);
     expect(stuckRungsOf({ domain: 'techand.ai', ladders: [row({})], logs: [log({})], running: null, openKeywords: new Set(), now: NOW })).toHaveLength(0);
+  });
+  it('review H1: a page run queued in n8n (status new / waiting) for 65 minutes is alive, so the rung is not closed; finished executions are not', () => {
+    const t65 = Date.parse('2026-11-05T02:38:00Z');
+    const queued = [{ status: 'new', startedAt: null }];
+    expect(stuckRungsOf({ domain: 'techand.ai', ladders: [row({})], logs: [log({})], running: queued, openKeywords: new Set(), now: t65 })).toHaveLength(0);
+    expect(stuckRungsOf({ domain: 'techand.ai', ladders: [row({})], logs: [log({})], running: [{ status: 'waiting', startedAt: '2026-11-05T01:00:00Z' }], openKeywords: new Set(), now: t65 })).toHaveLength(0);
+    // a long run that started a few minutes BEFORE the content-log row was written is still its run
+    expect(stuckRungsOf({ domain: 'techand.ai', ladders: [row({})], logs: [log({})], running: [{ status: 'running', startedAt: '2026-11-05T01:27:00Z' }], openKeywords: new Set(), now: t65 })).toHaveLength(0);
+    const done = [{ status: 'success', startedAt: '2026-11-05T01:33:20Z' }, { status: 'error', startedAt: '2026-11-05T01:40:00Z' }, { status: 'crashed', startedAt: '2026-11-05T01:41:00Z' }];
+    expect(stuckRungsOf({ domain: 'techand.ai', ladders: [row({})], logs: [log({})], running: done, openKeywords: new Set(), now: t65 })).toHaveLength(1);
   });
   it('a rung writing for 40 minutes is not stuck; a planned or published row never is', () => {
     const recent = Date.parse('2026-11-05T02:13:00Z');
@@ -45,7 +56,8 @@ describe('stuck ladder rungs (rule 5)', () => {
     expect(t1).toBe('ladders');
     expect(f1).toContainEqual({ columnName: 'status', condition: 'eq', value: 'writing' });
     expect(d1.status).toBe('failed');
-    expect(String(d1.status_note)).toMatch(/^failed: .* nothing is charged for it; the next page of the ladder goes on/);
+    expect(String(d1.status_note)).toMatch(/^failed: .*the next page of the ladder goes on\. If the run finishes after all, the page shows here as written/);
+    expect(String(d1.status_note)).not.toMatch(/nothing is charged/);
     expect(update.mock.calls[1][0]).toBe('contentLog');
     expect(update.mock.calls[1][2].status).toBe('failed');
   });
@@ -59,5 +71,16 @@ describe('the ladder market line (rule 3)', () => {
   });
   it('a ladder in the website\'s market: no note', () => {
     expect(ladderMarketInfo('United Arab Emirates', 'United Arab Emirates', 'dynamics 365 erp system')?.note).toBe('');
+  });
+});
+
+describe('the redirect step for a main page that moved (review H5)', () => {
+  it('a published main page whose row says "moved from <old>" asks for the redirect from the old address; anything else asks nothing', () => {
+    const moved = ladderMovesOf([
+      { status: 'published', target_why: 'moved from https://www.techand.ai/dynamics-365-crm-uae-2: /dynamics-365-crm-uae-2 is a copy of /dynamics-365-crm-uae', target_url: 'https://www.techand.ai/dynamics-365-crm-uae', updatedAt: '2026-11-12T10:00:00Z' },
+      { status: 'planned', target_why: 'moved from https://www.techand.ai/x: ...', target_url: 'https://www.techand.ai/y', updatedAt: '' },
+      { status: 'published', target_why: 'a page you do not have yet, at /z', target_url: 'https://www.techand.ai/z', updatedAt: '' },
+    ]);
+    expect(moved).toEqual([{ url: 'https://www.techand.ai/dynamics-365-crm-uae-2', to: 'https://www.techand.ai/dynamics-365-crm-uae', at: '2026-11-12T10:00:00Z' }]);
   });
 });

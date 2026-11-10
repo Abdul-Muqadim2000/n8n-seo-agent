@@ -14,6 +14,7 @@ import {
   indexMergeVerdict,
   mergePairsOf,
   type ContentLogRow,
+  type LadderRow,
   googleStillSees,
   indexingCauseOfKey,
   indexingCauseReadings,
@@ -88,6 +89,17 @@ const s = (v: unknown) => (v == null ? '' : String(v));
  * The latest AI growth run (the IndexNow key and whether the file was found), the newest AI visibility run that read crawler access,
  * and the latest FULL backlink report (the weekly light watch does not look for broken pages, so its silence would read as "fixed").
  */
+/** LADDER PACKAGE (review H5): the old address of a ladder main page that moved, once the page is live there (pure; tested) */
+export function ladderMovesOf(rows: readonly Pick<LadderRow, 'status' | 'target_why' | 'target_url' | 'updatedAt'>[]): { url: string; to: string; at: string }[] {
+  const out: { url: string; to: string; at: string }[] = [];
+  for (const r of rows) {
+    const m = String(r.target_why ?? '').match(/^moved from (https?:\/\/[^\s:]+(?::\d+)?[^\s:]*):/);
+    if (String(r.status ?? '') !== 'published' || !m || !r.target_url) continue;
+    out.push({ url: m[1], to: String(r.target_url), at: String(r.updatedAt ?? '') });
+  }
+  return out;
+}
+
 export async function engineReadings(org: Pick<OrgRow, 'id'>, site: Pick<SiteRow, 'id' | 'domain'>): Promise<SiteTaskInputs> {
   const d = site.domain;
   const [growth, vis, full, indexing, merges, air] = await Promise.all([
@@ -100,8 +112,13 @@ export async function engineReadings(org: Pick<OrgRow, 'id'>, site: Pick<SiteRow
     }),
     indexingReading(d),
     // 2026-11-05: improvements the client confirmed at another address than the page they update (null: not read, a stored step stands)
-    siteRows<ContentLogRow>('contentLog', d, { extra: [{ columnName: 'status', condition: 'eq', value: 'published' }], max: 1000 })
-      .then((xs) => ({ pairs: indexMergePairs(indexImprovementsOf(xs)) }))
+    Promise.all([
+      siteRows<ContentLogRow>('contentLog', d, { extra: [{ columnName: 'status', condition: 'eq', value: 'published' }], max: 1000 }),
+      // LADDER PACKAGE (review H5, 2026-11-10): a ladder's main page moved off an address that did not rank (a blog address, a "-2" copy) asks
+      // the client to redirect the old address once the main page is live: its row's target_why says "moved from <old>" and it is published
+      siteRows<LadderRow>('ladders', d, { extra: [{ columnName: 'status', condition: 'eq', value: 'published' }], max: 1000 }).catch(() => [] as LadderRow[]),
+    ])
+      .then(([xs, ls]) => ({ pairs: indexMergePairs([...indexImprovementsOf(xs), ...ladderMovesOf(ls)]) }))
       .catch(() => null),
     aiRankReading(org, site),
   ]);
