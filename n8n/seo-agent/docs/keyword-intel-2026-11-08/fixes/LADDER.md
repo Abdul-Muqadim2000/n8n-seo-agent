@@ -108,3 +108,17 @@ rung; rung 3 merged; no move, no new competing page, no new content-log status);
 
 Checks after the review fixes (sequential): build exit 0 twice, byte-identical; full harness **18494 passed, 0 failed**; app typecheck
 clean; shared **1158**, server **2047 passed / 46 skipped**, web **344**; web build OK.
+
+## 9. Re-review fixes (REVIEW_LADDER.md "Re-review of f7399da4")
+
+| Item | Fix |
+|---|---|
+| H1 (regression) | n8n 2.41.4's public executions list without a status leaves running executions out (`executions.public.controller.js` `excludeRunning: query.status !== 'running'`, `execution.service.js` 457-461, read in the image). The watcher now asks `status=running`, `status=new` and `status=waiting` separately each sweep (`unfinishedExecutions` = `unfinishedVia(list)`: 3 calls per 15 minutes; any failure = "could not be asked" = nothing closed). Test with a fake API that hides running executions when no status is given, incl. the 189-minute running case. |
+| N1 (High) | The "moved from" redirect step is set only for a "-2" / "-copy" copy move, never for a blog move, and never when the old address is another ladder row's page (this plan's or another ladder's) or has Search Console impressions; the app's `ladderMovesOf` also skips an old address another (not merged) ladder row holds. |
+| N2 | Detect Published: on an address that belongs to another search, a TITLE-only match records nothing (unmatched, with its note); a slug match of the keyword's own address, or a deliberate refresh (merged), is recorded as before. |
+| N3 | One copy rule everywhere: a one-digit suffix is a copy unless both titles are known and share under 60% of the shorter title's words (brand after "|" dropped). Production's "-2" ("Dynamics 365 CRM Services UAE \| Tech" vs "Dynamics 365 CRM in Dubai & UAE: Sales and Service \| Tech&") is a copy with titles and with addresses only. Cadence Plan and cadence.ts now pass the page titles too. LPK4 uses the production titles. |
+| Lows taken | The cadence's ranking check uses the address the head's latest rank check found (as Ladder Plan does); Ladder Plan's plan-time stop reads an explicit AVOID only (no longer a held "clearly under" row). |
+| Lows left | `address_notes` is not shown to the client (it is in the detection output for support); a 100-row window per status call (running / new / waiting lists are short). |
+
+Checks after the re-review fixes (sequential): build exit 0 twice, byte-identical; full harness **18499 passed, 0 failed**; app
+typecheck clean; shared **1158**, server **2048 passed / 46 skipped**, web **344**; web build OK.

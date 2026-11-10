@@ -51,6 +51,9 @@ table, update by `url`), so `SM.isGone` no longer hides it from matching.
 | 37 rung 4 "dynamics 365 erp system" (main) | published, the guide address, page_exists true | `stage: "solution"`, `target_why: "this page already ranks for \"dynamics 365 erp system\" (#16), so the main page improves it, retitled towards the buying search, instead of a second page that would compete with it"`. Status stays `published`; target unchanged. |
 | content log 15 / 16 | published at the guide | unchanged (true records of what was published). No new status. |
 
+Owner note before that optional step: retitling the guide towards "dynamics 365 erp system" changes the page of rung 34 ("is microsoft
+dynamics 365 an erp system", #31.3): a choice between the two searches, and it is the owner's.
+
 Then (owner's choice, from the app, normal credits): "Write it now" on the main page (an improvement of the guide address that retitles
 it towards "dynamics 365 erp system" and adds a partner section linking to the Business Central and MS 365 ERP pages), and a new keyword
 the client picks for the commercial step through the app's "Add to my ladder" (for example "microsoft dynamics erp partner", Search
@@ -71,7 +74,7 @@ orchestrator: KI.pageAction should apply LRU.headTarget, see LADDER.md section 6
 | Row | Now | Change |
 |---|---|---|
 | settings 14 | active, Auto, priority 2 | the app's Pause on the ladder page, or the Data Table: `status: "paused"` (the cadence writes nothing for a paused ladder; ranks are still checked). Then reorder: no change needed to row 11 (priority 1 stays). |
-| 47 rung 2 "what is a crm company" | writing | `status: "failed"`, `status_note: "failed: the page run stopped without a result (started 2026-11-05 01:33, nothing of it still running); nothing was written"` (first confirm in n8n that no execution of the main workflow from 2026-11-05 is still running or queued), `stage: "info"` (the watcher would do this by itself once deployed; doing it by hand is the same write) |
+| 47 rung 2 "what is a crm company" | writing | `status: "failed"`, `status_note: "failed: the page run stopped without a result (started 2026-11-05 01:33, nothing of it still running); nothing was written"` (first confirm in n8n that no execution of the main workflow from 2026-11-05 is still running or queued: ask `status=running`, `status=new` and `status=waiting` separately; a list with no status leaves running executions out), `stage: "info"` (the watcher would do this by itself once deployed; doing it by hand is the same write) |
 | content log 26 "what is a crm company" | started | `status: "failed"`, `qa_reasons: "page run failed: the page run stopped without a result"` |
 | 46 rung 2 "crm for customers" | published, /insights/crm-for-customers | `status_note: "published although our check advised against it (AVOID, score 30): consider removing it or redirecting it to /dynamics-365-crm-uae"`, `stage: "solution"`. Status stays `published` (the page is live). Owner note to the client. |
 | 48 rung 2 "best crm software for customer service" | planned | `status: "set_aside"`, `status_note: "a comparison of CRM software, not of CRM partners: not a search for this ladder; it is re-planned from keyword research"`, `stage: "compare"` (review M5: `set_aside`, not `stopped`, because no check advised against it) |

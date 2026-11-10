@@ -185,3 +185,70 @@ client: a site task to 301 or retitle the article once the commercial page is li
 4. devaicon agentic (`lad_mw28vc20jc4w`): no change. The stage values are right per the kit.
 5. General: before-images, a read-back and a Tuesday-Thursday window are good. Nothing in sections 2-4 loses a published page or ranking
    history: the rows keep `ladder_id` + `keyword`, so `seo_rank_history` stays joined.
+
+## Re-review of f7399da4
+
+Diff reviewed: `7ae27452..f7399da4` (84b1c82b engine, 6376f5df app, f7399da4 docs). Re-ran `ONLY_S=LPK` on f7399da4 in a throwaway
+`n8nio/n8n:2.41.4`: **449 passed, 0 failed**. Kit probes on production shapes (node). I read the n8n 2.41.4 public-API source in the image
+for the watcher question.
+
+### Verdict: **do not ship yet**. One High is still open (H1, now a regression) and one High is new (N1). Both are small fixes. **Repair plan: safe** (see the end).
+
+### Status of the first review's findings
+
+| Item | Status | Evidence |
+|---|---|---|
+| H1 watcher | **NOT fixed, now worse for running runs** | `ladderWatch.ts` `recentExecutions` = `GET /executions?workflowId=..&limit=100` with **no status filter**. In n8n 2.41.4, `executions.public.controller.js:79` passes `excludeRunning: query.status !== 'running'`. `execution.service.js:457-461` then drops every execution that is active with status `running` from the list. So the watcher now sees queued (`new`) runs but **never sees a running one**. A page run still running 60+ minutes after its rung started (long Opus / retry runs, the 189-minute case) is closed as `failed` while it runs. The first version saw it through `status=running`. The late-finish repair (below) softens the damage, but the client is told "stopped without a result" and offered "Write it again", which pays for a second run. The unit test mocks `running` with statuses, so it cannot catch this. **Fix:** three calls per sweep: `status=running`, `status=new` and `status=waiting` (all cheap; still 3 calls per 15 minutes in total, not per site). Keep the new alive rule. Add a test on the real API contract (a fake n8n that hides running executions when no status is given). |
+| H1 late finish | fixed | `Ladder_Row_Written.js` emits two updates (from `writing` and from `failed`). *Mark Ladder Row Written* filters on `status = {{$json.from_status}}` (`build_v4.py` A-20), so only the matching one moves. Side effect, acceptable: when the client already pressed "Write it again" (row `writing`), the first run's late result moves it to `written` while the second run is still going. |
+| H2 publish detection | mostly fixed; one new Medium (N2) | Detect Published always stores the content-log row and stores a `merged` ladder row. Publish Candidates applies the address rule only to ladder candidates, so cadence / AI refreshes are matched as before and the pile-up guard no longer trips on them. `unmatched` no longer lists conflicts. They go to `address_notes`, which nothing downstream shows the client (Low). |
+| H3 own live page | fixed | `Parse_Verdict.js` `ladderOwnLive` now covers a refresh of its own address. Pinned in LPK6 (the CRM main page at 35: not held; AVOID: recorded, not stopped). |
+| H4 noisy score | fixed as decided | Only an explicit AVOID stops. Under 40 is a shadow `ladder_low` record. The Needs-you item is `holdLadderStop` (`pipeline.ts heldPages`, `summaries.ts`). Leftover (Low): Ladder Plan's plan-time stop still treats an old `held` row with "clearly under" as a stop (`Ladder_Plan.js:648`). That row is a person-run score hold the client never overrode, so it is defensible, but it is wider than "AVOID only". Plan-time stops have no Needs-you item, and the run item disappears after 30 days. |
+| H5 ranking head | fixed in plan and cadence; new High N1 on the redirect step | `LRU.ranksFor` is used by Ladder Plan (`headRank` with its URL), Cadence Plan and `cadence.ts` (Rank Tracker head position, **url ''**). Parity is Low: Plan requires the ranking URL to be this address, while the cadence accepts a head that ranks with *any* page. The cadence is more lenient, so it can keep a blog address that another page ranks with. Thresholds are shared through LRU, and the mirrors read the same `queries_json`. |
+| M1 in-region market | fixed | Probe: "erp software gcc" on a UAE site sent with Saudi Arabia gives `iso SA, ok true`. A Pakistan site with a GCC keyword is still refused. |
+| M2 owners | fixed | Merged rows and refreshes (`existing_page_url` set) are no longer owners in all four places. |
+| M3 / M4 / M5 | fixed | Ladder stop is its own evidence. Support excludes stopped / failed / set_aside, and merged counts as live (engine, cadence.ts, ladders.ts agree). The stopped line shows its own reason. |
+| L1 copy suffixes | fixed, but see N3 | |
+| L6 golden | fixed (short-plan golden added) | |
+
+### New findings in the fixes
+
+- **N1 (High): the "moved from" redirect step can tell the client to 301 another rung's live page.** `Ladder_Plan.js` sets
+  `g.moved_from = g.was` for every head move. `Ladder_Rows.js` writes "moved from <old>: ..." into the head's `target_why`. Then
+  `siteTasks.ts ladderMovesOf` turns any published head with that prefix into an `indexing:merge` pair. Neither it nor
+  `indexMergePairs` (`shared/src/indexing.ts:1469`) checks the old address.
+  Scenario: a new ladder whose head matched a blog guide that does not rank yet. The plan moves the head and `oneUrl` leaves the guide
+  to the rung that matched it (the techand ERP shape: rung 2 "is microsoft dynamics 365 an erp system" on the same address). Once the
+  head page is live, "Steps on your website" asks the client to 301 that guide to the head, which deletes a live rung page and its
+  rankings.
+  Fix: set `moved_from` only for the `copy` reason (a "-2" / "-copy" variant, where a 301 is right). For the blog reason, make no
+  redirect step; or, at least, skip it when the old address is another `seo_ladders` row's `target_url`, a content-log page of another
+  keyword, or has Search Console impressions for any query.
+- **N2 (Medium): Detect Published now records a title-only match on another search's address as that keyword's publish.** When a ladder
+  candidate's own address is taken, it can only be matched by slug or title. A title match on the owned address (techand's guide carries
+  the head's title) now stores the content-log row `published` at that address. The cadence then counts the head as published
+  (`publishedKw`, `recent`) and never writes it, although the client may not have published anything.
+  Fix: on `url_conflict`, store the log row only when the match was the candidate's own URL / slug or a deliberate merge. A title-only
+  match onto an owned address stays unmatched with its note.
+- **N3 (Medium): the copy guard no longer catches production's `-2` case in Ladder Plan.** `copyOf` now refuses a one-digit copy when
+  both titles are known and differ. Ladder Plan passes titles (`knownLP`); production's titles are "Dynamics 365 CRM in Dubai & UAE:
+  Sales and Service | Tech&" vs "Dynamics 365 CRM Services UAE | Tech". Probe: `copyOf(.../dynamics-365-crm-uae-2)` returns `''` with
+  titles and the original with URLs only. Cadence Plan / `cadence.ts` pass URLs only, so a new CRM-style plan aims its head at `-2`
+  while the cadence writes onto the original: plan, app and engine disagree. LPK4's fixture uses identical titles, so it passes.
+  Fix: compare titles by word overlap (for example 60% of the shorter title, brand and separators dropped), not by equality; or ignore
+  titles when the page has no Search Console impressions. Pin LPK4 with the production titles.
+- Watcher cost / rate: about 3 n8n API calls per 15 minutes after the H1 fix (now 1), plus one filtered `seo_ladders` read per site
+  (`status=writing`, L8 done). Fine. Cross-site "alive" matches: any queued or unfinished main-workflow execution of any site keeps every
+  rung open. That is conservative, so it can never wrongly close; on a busy system closing is delayed, which is acceptable. A 100-row
+  window can push an older unfinished execution out of view: Low once the per-status calls are used, since `running` / `new` lists are short.
+
+### Repair plan (rewritten) - **safe to apply** after the package with H1 and N1 fixed is deployed
+
+- Section 1 (ERP, safe option): no move and no new page. The guide stays the head's page (it ranks #16). Row 36 is `merged`, which M2
+  no longer counts as an owner. Content-log 15 / 16 are unchanged and no new status is introduced. Stale `seo_pages` 404s are
+  re-probed and corrected first. Nothing in it loses a page or ranking history.
+  One note for the owner before the optional "Write it now": retitling the guide towards "dynamics 365 erp system" changes the page of
+  rung 34 ("is microsoft dynamics 365 an erp system", #31.3). That is a choice between the two searches, and it is the owner's.
+- Section 2 (CRM): rows 48 / 49 are now `set_aside` (right). Row 47 `failed` waits for a check in n8n that nothing of 2026-11-05 is still
+  running or queued (right; check `status=running` and `status=new` separately, for the H1 reason above). Re-probe
+  `/dynamics-365-crm-uae` before pointing row 50 at it.
+- Sections 3 / 4: unchanged, fine.
