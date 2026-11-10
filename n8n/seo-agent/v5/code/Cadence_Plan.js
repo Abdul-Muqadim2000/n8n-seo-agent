@@ -87,6 +87,7 @@
 // government portal planned as a rung is set aside here instead of being written (`set_aside`, with the reason; the Ladder Marks node
 // writes `status: set_aside` back on the row, so the app and the next run see the same thing).
 /*__FIT_GATE__*/
+/*__LADDER_RULES__*/
 /*__SERP_OBS__*/
 /*__RANK_SERP__*/
 /*__COST_CAL__*/
@@ -354,10 +355,13 @@ for (const s of list) {
     const hist = headRanks.filter(h => String(h.ladder_id) === String(id) && norm(h.keyword) === norm(head) && String(h.position) !== '' && h.position != null && Number.isFinite(Number(h.position)) && Number(h.position) >= 0)
       .sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));   // failed checks (-1) are "check again", not a position
     const head_position = hist.length ? Number(hist[0].position) : null;
+    const head_url = hist.length ? String(hist[0].url || '') : '';   // LADDER PACKAGE (re-review Low): where the head ranks
     const lastN = hist.slice(0, CONFIG.won_checks);
     const won = lastN.length >= CONFIG.won_checks && lastN.every(h => Number(h.position) >= 1 && Number(h.position) <= CONFIG.won_position);
-    const support = rows.filter(r => !isTop(r));
-    const published = support.filter(r => r.status === 'published' || publishedKw.has(norm(r.keyword))).length;
+    // review M4 (LADDER PACKAGE): a stopped / failed / set-aside rung is no support the client can publish, and a rung merged into another
+    // page is live as that page
+    const support = rows.filter(r => !isTop(r) && !['stopped', 'failed', 'set_aside'].includes(String(r.status || '')));
+    const published = support.filter(r => r.status === 'published' || r.status === 'merged' || publishedKw.has(norm(r.keyword))).length;
     const gate_open = plan_type === 'direct' || !support.length || published * 2 >= support.length || (head_position != null && head_position >= 1 && head_position <= CONFIG.gate_head_position);
     const ordered = plan_type === 'direct' ? [...rows.filter(isTop), ...rows.filter(r => !isTop(r))] : rows;
     const remaining = ordered.filter(open);
@@ -378,8 +382,8 @@ for (const s of list) {
     const hf = top ? fitOf.get(top) : null;
     const head_aside = top && (String(top.status || '') === 'set_aside' || (hf && hf.flagged && !hf.ok))
       ? { keyword: top.keyword, reason: String(top.status || '') === 'set_aside' ? String(top.status_note || 'its main keyword was set aside') : (hf.detail + ' (' + hf.reason + ')') } : null;
-    if (head_aside) return { id, rows, top, head, mode, status, plan_type, priority, start, chosen_by, chosen_ok, head_position, won, won_checks: lastN.length, support: support.length, published, gate_open, main_waiting: false, remaining: [], eligible: [], head_aside, recheck_due: false };
-    return { id, rows, top, head, mode, status, plan_type, priority, start, chosen_by, chosen_ok, head_position, won, won_checks: lastN.length, support: support.length, published, gate_open, main_waiting, remaining, eligible, recheck_due };
+    if (head_aside) return { id, rows, top, head, mode, status, plan_type, priority, start, chosen_by, chosen_ok, head_position, head_url, won, won_checks: lastN.length, support: support.length, published, gate_open, main_waiting: false, remaining: [], eligible: [], head_aside, recheck_due: false };
+    return { id, rows, top, head, mode, status, plan_type, priority, start, chosen_by, chosen_ok, head_position, head_url, won, won_checks: lastN.length, support: support.length, published, gate_open, main_waiting, remaining, eligible, recheck_due };
   }).sort((a, b) => a.priority - b.priority || String(a.start).localeCompare(String(b.start)) || String(a.id).localeCompare(String(b.id)));
   // R-K2: the ladders the client chose (any status except archived: a won ladder still tells us their topics)
   const clientLadders = info.filter(x => clientIds.has(String(x.id)));
@@ -391,13 +395,40 @@ for (const s of list) {
   // R-K1: an Auto ladder whose keyword the client did not choose (system_announced below level 3, or an unknown chooser) is never written on
   // its own: its next page waits for the client's OK like a Manual ladder's, and the list says why
   const unchosenL = writable.filter(x => x.mode === 'auto' && !x.chosen_ok);
+  // ---- LADDER PACKAGE (2026-11-09, rule 1 at write time, v5/code/_ladder_rules.js): one search, one address ----
+  // Production 2026-10-29 (techand.ai, ladder "dynamics 365 erp system"): the rung "microsoft dynamics erp" and the main page were both written
+  // as refreshes of /insights/is-microsoft-dynamics-365-an-erp-system, the live page of the rung "is microsoft dynamics 365 an erp system",
+  // because their rows had come to carry that address. A ladder page is never written onto an address another search of this website already
+  // holds (a published or existing ladder page, a published content-log page): it is written as its own new page instead. The main page is
+  // never written onto a blog address (it gets its own page), and a "-2" / "-copy" copy of a live page improves the original instead.
+  // review M2: an address is held by a ladder page that is published / exists there (never a row merged into it as a section), or by the
+  // content-log page FIRST published there (a one-off refresh of a page does not make the page that keyword's)
+  const ownersC = [...lrows.filter(r => r.target_url && String(r.status || '') !== 'merged' && (String(r.status || '') === 'published' || r.page_exists === true || r.page_exists === 'true'))
+      .map(r => ({ url: r.target_url, keyword: r.keyword, supporting: r.supporting, ladder_id: r.ladder_id })),
+    ...slog.filter(l => String(l.published_url || '').trim() && !String(l.existing_page_url || '').trim()).map(l => ({ url: l.published_url, keyword: l.keyword }))];
+  // re-review N3: the page titles travel with the addresses, so the copy rule reads the pages exactly as Ladder Plan does
+  const knownC = (() => { const m = new Map(); for (const r of pageRows.filter(r => r.site_id === s.site_id)) if (r.url && !m.has(LRU.urlKey(r.url))) m.set(LRU.urlKey(r.url), { url: String(r.url), title: String(r.title || r.h1 || '') });
+    for (const o of ownersC) if (o.url && !m.has(LRU.urlKey(o.url))) m.set(LRU.urlKey(o.url), { url: String(o.url), title: '' }); return [...m.values()]; })();
+  const pagesQ = pageRows.filter(r => r.site_id === s.site_id).map(r => ({ url: r.url, queries: (() => { try { const q = JSON.parse(r.queries_json || '[]'); return Array.isArray(q) ? q : []; } catch (e) { return []; } })() }));
+  const addressOf = (l, x) => { const was = String(l.target_url || ''); const exists = l.page_exists === true || l.page_exists === 'true';
+    const home = (was.match(/^https?:\/\/[^\/?#]+/i) || [''])[0] || ''; const slash = /\/$/.test(was);
+    const own = (u) => LRU.plannedUrl(home, l.keyword, slash) || u;
+    if (isTop(l)) { const orig = exists ? LRU.copyOf(was, knownC) : '';
+      if (orig) return { existing: orig, target: orig, note: LRU.pathOf(was) + ' is a copy of ' + LRU.pathOf(orig) + ': the main page improves the original' };
+      // review H5: a blog address that ranks for the main keyword (the Rank Tracker's last readable position, or Search Console) keeps it
+      const ranks = LRU.ranksFor(was, l.keyword, { rank: x && x.head_position != null ? { position: x.head_position, url: String(x.head_url || '') } : null, pages: pagesQ });   // re-review Low: the head's own address, as Ladder Plan
+      if (LRU.isBlog(was) && !ranks && ['solution', 'compare', 'hire'].includes(LRU.stageOf(l.keyword, '', String(l.stage || '')))) { const nu = own(was); if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu, note: 'the main page gets its own page (' + LRU.pathOf(nu) + '), not the blog address ' + LRU.pathOf(was) }; } }
+    if (exists && was) { const o = LRU.ownerOf(was, l.keyword, ownersC, String(l.supporting || '').split(',').map(x => x.trim()).filter(Boolean));
+      if (o) { const nu = own(was); if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu, note: LRU.pathOf(was) + ' is already the page for "' + o.keyword + '": "' + l.keyword + '" gets its own page at ' + LRU.pathOf(nu) }; } }
+    return { existing: exists ? was : '', target: was, note: '' }; };
   const ladderCand = (x, l) => {
     const rows = x.rows, top = x.top; const links = [];
+    const addr = addressOf(l, x);
     if (isTop(l)) { for (const r of rows.filter(r => !isTop(r) && r.target_url).slice(0, 12)) links.push({ url: r.target_url, role: 'down', keyword: r.keyword }); }   // the top page is the hub: it lists the whole cluster (12, was 6; v4.4)
     else { if (top && top.target_url && top.keyword !== l.keyword) links.push({ url: top.target_url, role: 'top', keyword: top.keyword }); const sib = rows.find(r => Number(r.rung) === Number(l.rung) && r.keyword !== l.keyword && r.target_url); if (sib) links.push({ url: sib.target_url, role: 'sibling', keyword: sib.keyword }); }
     // R15 (2026-10-13): `target_url` is the URL this ladder planned for the page — the run keeps it as the page's slug, so the ladder's
     // link map, the other rung pages' links and the rank tracking never point at a URL that will not exist
-    return { keyword: l.keyword, page_type: l.page_type || 'Service Page', existing_page_url: l.page_exists ? (l.target_url || '') : '', target_url: l.target_url || '', source: 'ladder', ladder_id: l.ladder_id, rung: Number(l.rung) || 0, page_no: Number(l.page_no) || 0, head: l.head_keyword || '', links, chosen_by: x.chosen_by, why: 'keyword ladder, rung ' + (isTop(l) ? 'top' : l.rung) + ' towards "' + (l.head_keyword || '') + '"' };
+    return { keyword: l.keyword, page_type: l.page_type || 'Service Page', existing_page_url: addr.existing, target_url: addr.target, ...(addr.note ? { address_note: addr.note } : {}), source: 'ladder', ladder_id: l.ladder_id, rung: Number(l.rung) || 0, page_no: Number(l.page_no) || 0, head: l.head_keyword || '', links, chosen_by: x.chosen_by, why: 'keyword ladder, rung ' + (isTop(l) ? 'top' : l.rung) + ' towards "' + (l.head_keyword || '') + '"' };
   };
   const cands = [];
   // F-KW (finding 3b): an active ladder waiting for its fresh check keeps its place (the next ladder does not jump the queue) and writes nothing

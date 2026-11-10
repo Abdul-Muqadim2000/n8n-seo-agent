@@ -77,6 +77,7 @@ rd = lambda p: (seo_events.inline(_rdt(p)).replace('/*__SITE_MODEL__*/', SITE_MO
                 .replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__RANK_SERP__*/', RANK_SERP_SRC).replace('/*__SERP_URL__*/', SERP_URL_SRC).replace('/*__PAGE_WATCH__*/', PAGE_WATCH_SRC)
                 .replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__AI_PANEL__*/', AI_PANEL_SRC).replace('/*__WAITING__*/', WAITING_SRC).replace('/*__READINESS__*/', READINESS_SRC)
                 .replace('/*__SITE_TIME__*/', site_time_src()).replace('/*__GONE__*/', _rdt('code/_gone.js').rstrip('\n'))
+                .replace('/*__LADDER_RULES__*/', _rdt('code/_ladder_rules.js').rstrip('\n'))   # LADDER PACKAGE (2026-11-09, build_v4.py section 183): one search, one address at write and publish time
                 .replace('/*__AI_MEASURE__*/', _rdt('code/_ai_measure.js').rstrip('\n'))
                 .replace('/*__AI_RANK_FLAGS__*/', _rdt('code/_ai_rank_flags.js').rstrip('\n'))   # AIR (2026-11-06, CONTRACTS.md §2, P4): Site Admin validates the AI-ranking settings with the one rule (AIRF)
                 .replace('/*__FACT_ANSWERS__*/', _rdt('code/_fact_answers.js').rstrip('\n'))   # H3 (2026-10-28): the client's stored answers (Site Admin facts, the cadence's page runs)

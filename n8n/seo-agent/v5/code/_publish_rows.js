@@ -13,7 +13,8 @@
 // Without the proof the row keeps the state it already had, records no URL and no date -- there is nothing to claim -- and the ladder row is
 // left alone entirely rather than being moved backwards. The run still answers the owner (the page could not be fetched; the Site Tracker
 // looks again on Monday), and Monday's publish detection, which does prove it, is what closes the row.
-// o: { site_id, domain, keyword, url, live (what proved the page is there), log (content-log row or null), ladder (ladder row or null), request_id, now (ISO) }
+// o: { site_id, domain, keyword, url, live (what proved the page is there), log (content-log row or null), ladder (ladder row or null), request_id, now (ISO),
+//      owners (optional: [{ url, keyword, supporting?, ladder_id? }], the addresses other searches of the site hold; needs LRU inlined) }
 function publishedRows(o) {
   const log = o.log || null, ladder = o.ladder || null, now = o.now;
   const live = o.live === true;
@@ -23,6 +24,19 @@ function publishedRows(o) {
     published_url: live ? o.url : ((log || {}).published_url || ''),
     published_at: live ? now : ((log || {}).published_at || ''),
     week: live ? now.slice(0, 10) : ((log || {}).week || now.slice(0, 10)) };
-  const ladder_row = (ladder && live) ? { ladder_id: ladder.ladder_id, keyword: ladder.keyword, status: 'published', target_url: o.url, page_exists: true } : null;
-  return { log_row, ladder_row, live, not_live_reason: live ? '' : 'nothing confirmed the page is there, so no row says it is' };
+  // LADDER PACKAGE (2026-11-09, rule 1 at publish time, v5/code/_ladder_rules.js): a rung row is never moved onto an address that another search
+  // of this website already holds (o.owners: the published / existing ladder pages and the published content-log pages). Production
+  // 2026-10-29: three rungs of techand.ai's ERP ladder came to point at one blog address; every later write and check then treated three
+  // searches as one page. The content-log row still records where the page went live (that is what happened); the ladder row keeps its own
+  // address and the conflict is said (`url_conflict`), so the ladder and the Rank Tracker never call two searches one page.
+  const conflict = (ladder && live && Array.isArray(o.owners) && typeof LRU !== 'undefined')
+    ? LRU.ownerOf(o.url, ladder.keyword, o.owners, String(ladder.supporting || '').split(',').map(x => x.trim()).filter(Boolean)) : null;
+  const url_conflict = conflict ? { url: o.url, keyword: String(conflict.keyword || ''), ladder_id: String(conflict.ladder_id || ''),
+    text: o.url.replace(/^https?:\/\/[^\/]+/i, '') + ' is already the page for "' + String(conflict.keyword || '') + '": one search, one page, so the ladder page for "' + String(ladder.keyword || '') + '" ' + ((log && typeof LRU !== 'undefined' && LRU.urlKey(log.existing_page_url) === LRU.urlKey(o.url)) ? 'is recorded as part of that page (merged), not as a second page' : 'was not moved to it') } : null;
+  // a page run that DELIBERATELY refreshed that page (its content-log row names it as the page it improves: the client's "Improve the existing
+  // page") joins it: the rung is `merged` into that page, never a second rung published on it; anything else leaves the rung where it was
+  const deliberate = !!conflict && !!log && typeof LRU !== 'undefined' && LRU.urlKey(log.existing_page_url) !== '' && LRU.urlKey(log.existing_page_url) === LRU.urlKey(o.url);
+  const ladder_row = ((ladder && live) && !conflict) ? { ladder_id: ladder.ladder_id, keyword: ladder.keyword, status: 'published', target_url: o.url, page_exists: true }
+    : (ladder && live && deliberate) ? { ladder_id: ladder.ladder_id, keyword: ladder.keyword, status: 'merged', target_url: o.url, page_exists: true } : null;
+  return { log_row, ladder_row, live, url_conflict, not_live_reason: live ? '' : 'nothing confirmed the page is there, so no row says it is' };
 }

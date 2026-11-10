@@ -140,6 +140,11 @@ export const PAGE_STATE: Record<LadderPageState, { label: string; tone: Tone; ic
   gated: { label: 'Waits for support', tone: 'neutral', icon: <Hourglass className="size-3" aria-hidden /> },
   // R16: the keyword rule refused this planned page (a competitor's brand, a government portal, an off-topic search)
   set_aside: { label: 'Set aside', tone: 'warning', icon: <Ban className="size-3" aria-hidden /> },
+  // LADDER PACKAGE (2026-11-09): our check advised against the page (written only after "Write it anyway"); its run stopped without a
+  // result (closed, the next page goes on); a section of another page of the ladder
+  stopped: { label: 'Stopped', tone: 'warning', icon: <Ban className="size-3" aria-hidden /> },
+  failed: { label: 'Stopped without a result', tone: 'critical', icon: <Wrench className="size-3" aria-hidden /> },
+  merged: { label: 'Part of another page', tone: 'neutral', icon: <ListOrdered className="size-3" aria-hidden /> },
 };
 
 /** B1 (pre-launch run 2026-10-21): a written draft the quality check refused is never "Written, publish it" */

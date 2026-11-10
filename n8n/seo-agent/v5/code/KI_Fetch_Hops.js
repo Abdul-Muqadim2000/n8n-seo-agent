@@ -3,7 +3,7 @@
 // name, no credentials) and the SAME registrable domain as the address asked (apex <-> www, http -> https). Every other redirect is an
 // answer, not a page. One hop at most.
 /*__KI_KITS__*/
-const all = (n) => { try { return $(n).all().map(i => (i && i.json) || {}); } catch (e) { return []; } };
+const all = (n) => { try { return $(n).all(0).map(i => (i && i.json) || {}); } catch (e) { return []; } };
 const REQS = '__REQS__', ANS = '__ANS__';
 const reqs = all(REQS).filter(r => r && !r.skip && r.url);
 const ans = all(ANS);

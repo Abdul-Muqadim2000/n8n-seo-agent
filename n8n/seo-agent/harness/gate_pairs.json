@@ -49,7 +49,9 @@
   "keyword fit (KI) | seo_ki_keywords": {
    "gate": "keyword fit (KI)",
    "read": "KI.readable(",
-   "readers": {},
+   "readers": {
+    "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / KI Pool (Ladder)": true
+   },
    "table": "seo_ki_keywords",
    "why": "a stored keyword is another company's brand, a job or another market's search, or the site is switched Off or killed (CONTRACTS.md section 1)",
    "write": "KI.gate(",
@@ -92,6 +94,7 @@
    "write": "fitGate(",
    "writers": [
     "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Brief Context",
+    "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / KI Pool (Ladder)",
     "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Ladder Plan",
     "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Ladder Pool",
     "SEO Agent \u2014 Content Cadence / Cadence Plan"

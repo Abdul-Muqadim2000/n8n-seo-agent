@@ -19,6 +19,11 @@ const reqs = [
   { kind: 'ideas', label: 'ideas around "' + head + '"' + (services.length ? ' and ' + services.length + ' service(s)' : ''), endpoint: L + 'keyword_ideas/live',
     body: [{ keywords: [head, ...services].slice(0, 5), location_code: loc, language_code: lang, limit: 400, include_serp_info: true, ignore_synonyms: true }] }
 ];
+// LADDER PACKAGE (2026-11-09, rule 6): with keyword intelligence ON for this website (seo_monitors.ki_mode 'on', the kill switch off) and a
+// finished keyword research of this market on file, the supporting pages come from its stored clusters (Ladder Pool reads them): the three
+// keyword pulls are not bought again; the "keywords this site ranks for" pull stays, the reach of the plan is measured on it.
+const KIQ = (() => { try { return ($('KI Pool (Ladder)').first().json || {}).ki_pool || { used: false }; } catch (e) { return { used: false }; } })();
+if (KIQ.used && d.domain) reqs.splice(0, reqs.length);   // KIQ.used implies a website (its seo_monitors row), so the ranked pull below is always there
 if (d.domain) reqs.push({ kind: 'ranked', label: 'keywords ' + d.domain + ' ranks for', domain: d.domain, endpoint: L + 'ranked_keywords/live',
   body: [{ target: d.domain, location_code: loc, language_code: lang, limit: 500, order_by: ['keyword_data.keyword_info.search_volume,desc'], filters: [['ranked_serp_element.serp_item.rank_group', '<=', 60]] }] });
-return reqs.map(r => ({ json: { ...r, location_code: loc, language_code: lang } }));
+return reqs.map(r => ({ json: { ...r, location_code: loc, language_code: lang, ki_used: KIQ.used } }));

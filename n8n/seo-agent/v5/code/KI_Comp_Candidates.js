@@ -6,7 +6,7 @@
 /*__KI_KITS__*/
 const p = $('KI Plan').first().json || {};
 const pic = $('Comp SERP Picture').first().json || {};
-const all = (n) => { try { return $(n).all().map(i => (i && i.json) || {}); } catch (e) { return []; } };
+const all = (n) => { try { return $(n).all(0).map(i => (i && i.json) || {}); } catch (e) { return []; } };
 const cache = all('Load KI Cache').filter(r => r && r.key);
 const reqs = all('Any Comp Labs?').filter(r => r && !r.skip && r.ki_call);
 const answers = all('Run Comp Labs Answers');

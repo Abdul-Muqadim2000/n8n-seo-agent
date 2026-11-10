@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
 import {
   aiJoinedOf,
   isKiRunMode,
+  ladderMarket,
   kiNoResultOf,
   creditRate,
   withAiRankCredits,
@@ -302,6 +303,15 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
   const replay = opts.idempotency ? await findIdempotentRun(org.id, opts.idempotency.key).catch(() => null) : null;
   const warnings = replay ? [] : (opts.warnings ?? (await runWarnings(org, site, input, { proposal: !!opts.proposalId, auto, role: a.role })));
   const overridden = replay ? { ids: [] as string[], codes: [] as string[] } : assertConsistent(warnings, auto ? [] : (opts.acknowledge ?? []));
+  // LADDER PACKAGE (2026-11-09, rule 3): a new keyword ladder is measured in the website's market, or in the market its keyword names, never
+  // elsewhere (the engine refuses anything else before it spends: Ladder Duplicate (Words)). A keyword naming places is sent in its own
+  // market whatever the form held (market.ladder_named said so); a keyword naming none, sent elsewhere after "Continue anyway" on
+  // market.run_country, carries market_ack so the engine measures it where the client chose.
+  if (input.mode === 'ladder' && site) {
+    const lm = ladderMarket({ keyword: input.keyword, siteCountry: site.country, requested: input.country, marketAck: overridden.codes.includes('market.run_country') });
+    if (lm.named.length && !lm.ok && lm.country) input = { ...input, country: lm.country as typeof input.country };
+    else if (!lm.ok && !lm.named.length && overridden.codes.includes('market.run_country')) input = { ...input, marketAck: true };
+  }
   const estimated = await estimateCost(input, site);
   // the website's first tracking, kept on every re-save: the anchor of its weekly cycle (the engine accepts it within the last 6 days)
   const trackingStartedAt = site && input.mode === 'track' ? (site.trackingStartedAt ?? new Date()) : null;

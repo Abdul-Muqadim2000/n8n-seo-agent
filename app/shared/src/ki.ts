@@ -136,7 +136,7 @@ export const KI_STAGE_WEIGHT: Record<KiStage, number> = { hire: 1, compare: 0.9,
 export const KI_INTENTS = ['commercial', 'transactional', 'informational', 'navigational'] as const;
 export type KiIntent = (typeof KI_INTENTS)[number];
 
-export const KI_CLASS_IDS = ['direct', 'adjacent', 'principal', 'directory', 'publisher_list', 'platform', 'government', 'job_board', 'media'] as const;
+export const KI_CLASS_IDS = ['direct', 'adjacent', 'principal', 'directory', 'publisher_list', 'platform', 'government', 'job_board', 'media', 'education'] as const;
 export type KiClass = (typeof KI_CLASS_IDS)[number];
 export const KI_CLASSES: Record<KiClass, string> = {
   direct: 'Direct competitor',
@@ -148,6 +148,8 @@ export const KI_CLASSES: Record<KiClass, string> = {
   government: 'Government site',
   job_board: 'Job board',
   media: 'News or media',
+  /** FX-L 2026-11-10: a training provider, school or university (never scored as a competitor) */
+  education: 'Training or education',
 };
 /** Only these two are scored as competitors; the rest become listing, list-placement or format actions. */
 export const KI_SCORED_CLASSES: readonly KiClass[] = ['direct', 'adjacent'];

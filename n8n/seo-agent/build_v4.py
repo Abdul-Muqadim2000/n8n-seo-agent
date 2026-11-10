@@ -768,7 +768,7 @@ RADIUS_SRC = _rd0('code/_radius.js').rstrip('\n')   # 2026-10-13 (G32): the topi
 import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits, one copy each
 SERP_URL_SRC = _rd0('code/_serp_url.js').rstrip('\n')   # SERP-GOTO (2026-11-08): the real host behind a Google redirect link (SU), inlined with every SERP reader
 SERP_CACHE_SRC = SERP_URL_SRC + '\n' + _rd0('code/_serp_cache.js').rstrip('\n')   # KW-SERP (RV-12, 2026-10-21): one results-page reading per search and day, shared by every path (section 145)
-rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__SERP_CACHE__*/', SERP_CACHE_SRC).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__LADDER_DUP__*/', _rd0('code/_ladder_dup.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__PUBLISH_VERIFY__*/', _rd0('code/_publish_verify.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__COMPETITORS__*/', COMPETITORS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n')).replace('/*__GONE__*/', _rd0('code/_gone.js').rstrip('\n')).replace('/*__SERP_URL__*/', SERP_URL_SRC)   # shared kits (RV-1 2026-10-21: _gone.js, the pages that no longer answer) (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
+rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__SERP_CACHE__*/', SERP_CACHE_SRC).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__LADDER_DUP__*/', _rd0('code/_ladder_dup.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__PUBLISH_VERIFY__*/', _rd0('code/_publish_verify.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__COMPETITORS__*/', COMPETITORS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n')).replace('/*__GONE__*/', _rd0('code/_gone.js').rstrip('\n')).replace('/*__SERP_URL__*/', SERP_URL_SRC).replace('/*__LADDER_RULES__*/', _rd0('code/_ladder_rules.js').rstrip('\n'))   # LADDER PACKAGE (2026-11-09, section 183): the ladder rules kit (LRU)   # shared kits (RV-1 2026-10-21: _gone.js, the pages that no longer answer) (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -874,7 +874,8 @@ PV_KITS = {'EXCLUSIONS': 'code/_exclusions.js', 'SITE_MODEL': 'code/_site_model.
            'REACH': 'code/_reach.js', 'KW_INPUTS': 'code/_kw_inputs.js', 'PAGE_TYPE': 'code/_page_type.js',
            'PAGE_CLAIMS': 'code/_page_claims.js', 'VERDICT_OWN': 'code/_verdict_own.js', 'REMEASURE': 'code/_remeasure.js',
            'DUP_TARGETS': 'code/_dup_targets.js',   # W0-D (2026-10-29, section 153): the duplicate rule before the brief
-           'READER': 'code/_reader.js'}   # W07-A (2026-10-31, section 179): pages the page reader refused are never judged
+           'READER': 'code/_reader.js',   # W07-A (2026-10-31, section 179): pages the page reader refused are never judged
+           'LADDER_RULES': 'code/_ladder_rules.js'}   # LADDER PACKAGE (2026-11-09, section 183): an AVOID / clearly-low verdict stops a ladder page
 def pv_source():
     src = _rd0('code/Parse_Verdict.js')
     for _k in PV_KITS:
@@ -13738,6 +13739,66 @@ open(os.path.join(OUT_CODE, '_serp_url.js'), 'w').write("// harness shim (writte
 log('The site behind Google\'s redirect links (SERP-GOTO, 2026-11-08, section 181): since about 2026-10-30 every live Google organic and local-pack result came back as domain google.com with an opaque google.com/goto link, so the Rank Tracker never found the client (three false drops in techand.ai\'s 2026-11-05 report), competitors were google.com and no two keywords ever shared a result; one kit (v5/code/_serp_url.js, SU) recovers the host from Google\'s breadcrumb, marks the address approximate, and is applied where the answers enter - every DataForSEO answer node, the SERP cache (which refuses a stored reading that still holds bare redirects), the rank kit (our site by host, our page "not identified", -1 when a result has no site, a reading with redirects never a baseline) and the five nodes that read a results page directly')
 
 # =============================================================================
+# 183. THE LADDER PACKAGE (2026-11-09, owner-approved; docs/keyword-intel-2026-11-08/fixes/LADDER.md). Production (R3_PROD_OUTPUTS.md F1 F6
+#     F7 F9, the seo_ladders dump of 2026-11-08): techand.ai's ERP ladder wrote three of its four pages, the main page included, onto ONE blog
+#     address; its CRM ladder aimed the main page at a "-2" copy of the live CRM page, published a rung the verdict called AVOID and left a
+#     rung "writing" for days; devaicon.com's GCC ladder was measured in Pakistan. One kit, v5/code/_ladder_rules.js (LRU), shared with the
+#     app (app/shared/src/ladder-rules.generated.js, ladder_rules_app.py):
+#       1. one search, one address: Ladder Plan (the main page never on a blog / insights address or a copy, no two pages on one address),
+#          Cadence Plan (a rung is never written onto another search's address), Publish Candidates / Detect Published / Publish Check (a rung
+#          row is never recorded live on another search's address);
+#       2. the rungs step towards the main keyword: a stage per page; a short / full plan with no compare / hire rung takes one from its pool;
+#          a definition of a seller is a rung only on an informational results page;
+#       3. the market: Ladder Duplicate (Words) refuses a new ladder whose market contradicts the website's market or the keyword's own
+#          places, before anything is paid (Load Site (Market Check)); the app sends the locked market and `market_ack` when the client
+#          chose another market on purpose;
+#       4. an AVOID / clearly-low verdict stops a ladder page (Parse Verdict's hold, enforced for automatic runs too; the row goes `stopped`
+#          with the reason, Ladder Row Written); a rung the site's own checks advised against is stored `stopped` at plan time;
+#       5. a stuck rung is closed by the app's watcher (app/server/src/services/ladderWatch.ts) with LRU.stuck;
+#       6. keyword intelligence ON for a website (seo_monitors.ki_mode 'on', kill switch off): the rung keywords come from its stored clusters
+#          (Load Monitors / KI Kill / KI Runs / KI Keywords (Ladder)) and the three keyword pulls are not bought; every Off site keeps its pool.
+# =============================================================================
+from ladder_common import MONITORS_TABLE as _MT183, CACHE_TABLE as _CT183, SITES_TABLE as _ST183, KI_KW_TABLE as _KKT183, KI_RUNS_TABLE as _KRT183, dt_get_all_where_params as _dgaw183
+_LR_SRC183 = _rd0('code/_ladder_rules.js')
+assert _LR_SRC183.count('const LRU = (() => {') == 1 and '$(' not in _LR_SRC183 and 'new URL(' not in _LR_SRC183, 'LADDER: the rules kit must stay pure (no n8n globals, no URL constructor)'
+# rule 3: the website's market, read with the other free loads right after Rate Limit, for the market lock before any paid step
+_RL_DOM183 = "String($('Rate Limit').first().json.domain || '').toLowerCase().replace(/^www\\./, '')"
+_ldw183 = pos('Ladder Duplicate (Words)')
+disconnect('Load Ladder Settings (Dup Check)', 'Ladder Duplicate (Words)')
+add_node('Load Site (Market Check)', DT_TYPE, DT_VERSION, _dgaw183(_ST183, [('site_id', 'eq', "={{ 'site_' + " + _RL_DOM183 + ".replace(/[^a-z0-9]+/g, '-') }}")]), [_ldw183[0] - 110, _ldw183[1] + 160], LOAD18)
+connect('Load Ladder Settings (Dup Check)', 'Load Site (Market Check)'); connect('Load Site (Market Check)', 'Ladder Duplicate (Words)')
+assert 'LRU.marketRefusal(mk' in code('Ladder Duplicate (Words)') and 'const LRU = (() => {' in code('Ladder Duplicate (Words)'), 'LADDER: the market lock is not in Ladder Duplicate (Words)'
+# the client's explicit "measure it in that market anyway", by its exact key (no pick(): "market_ack" holds none of the picked words)
+patch('Normalize Input', "    force_content: !!p2.force_content,",
+      "    market_ack: p2.market_ack === true,   // LADDER PACKAGE (section 183): the client chose another market than the website's on purpose\n"
+      "    force_content: !!p2.force_content,")
+# rule 6: keyword intelligence's stored picture, loaded in the ladder chain before the research requests (free Data Table reads)
+_SID183 = "={{ 'site_' + String($('Parse Verdict').first().json.domain || '').toLowerCase().replace(/^www\\./, '').replace(/[^a-z0-9]+/g, '-') }}"
+_lr183 = pos('Ladder Requests')
+disconnect('Load Content Log (Ladder)', 'Ladder Requests')
+for _i183, (_n183, _p183) in enumerate([('Load Monitors (Ladder)', _dgaw183(_MT183, [('site_id', 'eq', _SID183)])),
+                                        ('Load KI Kill (Ladder)', _dgaw183(_CT183, [('key', 'eq', 'ki:kill')])),
+                                        ('Load KI Runs (Ladder)', _dgaw183(_KRT183, [('site_id', 'eq', _SID183)])),
+                                        ('Load KI Keywords (Ladder)', _dgaw183(_KKT183, [('site_id', 'eq', _SID183)]))]):
+    add_node(_n183, DT_TYPE, DT_VERSION, _p183, [_lr183[0] - 880 + 220 * _i183, _lr183[1] + 200], LOAD18)
+add_node('KI Pool (Ladder)', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/KI_Pool_Ladder.js').replace('/*__KI__*/', _rd0('code/_ki.js').rstrip('\n'))}, [_lr183[0] - 20, _lr183[1] + 200])
+for _a183, _b183 in [('Load Content Log (Ladder)', 'Load Monitors (Ladder)'), ('Load Monitors (Ladder)', 'Load KI Kill (Ladder)'), ('Load KI Kill (Ladder)', 'Load KI Runs (Ladder)'),
+                     ('Load KI Runs (Ladder)', 'Load KI Keywords (Ladder)'), ('Load KI Keywords (Ladder)', 'KI Pool (Ladder)'), ('KI Pool (Ladder)', 'Ladder Requests')]:
+    connect(_a183, _b183)
+for _n183 in ('KI Pool (Ladder)', 'Ladder Plan', 'Ladder Duplicate (Words)', 'Parse Verdict', 'Publish Check'):
+    assert 'const LRU = (() => {' in code(_n183) and '/*__LADDER_RULES__*/' not in code(_n183), 'LADDER: ' + _n183 + ' lacks the rules kit'
+assert 'LRU.kiPool(' in code('KI Pool (Ladder)') and 'KI.readable(' in code('KI Pool (Ladder)') and "$('KI Pool (Ladder)')" in code('Ladder Requests') and "$('KI Pool (Ladder)')" in code('Ladder Pool'), 'LADDER: rule 6 is not wired'
+assert 'LRU.verdictStop(' in code('Parse Verdict') and "status: 'stopped'" in code('Ladder Row Written'), 'LADDER: rule 4 at page-run time is not wired'
+assert 'LRU.headTarget(' in code('Ladder Plan') and 'LRU.oneUrl(' in code('Ladder Plan') and 'replanLP' in code('Ladder Plan'), 'LADDER: rules 1 / 2 are not in Ladder Plan'
+assert 'owners: ownersPC' in code('Publish Check'), 'LADDER: Publish Check does not guard the rung address'
+assert ('stage', 'string') in LADDER_COLS and ('target_why', 'string') in LADDER_COLS, 'LADDER: seo_ladders lacks stage / target_why (sync_tables.py after deploying)'
+open(os.path.join(OUT_CODE, '_ladder_rules.js'), 'w').write("// harness shim (written by build_v4.py section 183): the ladder rules kit, { fn, args } -> { r }\n" + FIT_GATE_SRC + '\n' + _LR_SRC183.rstrip('\n')
+    + "\nreturn $input.all().map(i => ({ json: { r: LRU[i.json.fn].apply(null, i.json.args || []) } }));\n")
+import ladder_rules_app
+ladder_rules_app.write_app_files(_LR_SRC183)
+log('The ladder package (2026-11-09, section 183): one search one address (plan, write, publish), rungs that step towards the main keyword, one market per ladder (refused before any paid step), an AVOID / clearly-low verdict stops a ladder page, stuck rungs closed by the app, and keyword intelligence as the pool for sites switched on (v5/code/_ladder_rules.js, shared with the app)')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;
@@ -14144,3 +14205,27 @@ for _f181 in sorted(os.listdir(os.path.join(HERE0, 'workflows'))):
             if _n['name'] != _h and _arg.search(_r) and '__LEDGER_NODES' not in _r and not _n['name'].endswith(' Retry Plan') and _n['name'] not in _STATUS_ONLY181:
                 assert _has(_n['name']), 'SERP-GOTO (C): %s / %s reads %s by name without SU' % (_f181, _n['name'], _h); _c181['C'] += 1
 print('SERP-GOTO (section 181): every node that reads a Google results page sees the real host behind a redirect link (A %d kit users, B %d answer nodes, C %d live readers of %d SERP HTTP nodes, D %d stored-reading readers)' % (_c181['A'], _c181['B'], _c181['C'], _c181['serp_nodes'], _c181['D']))
+
+# ---- 182. IF-BRANCH lint (2026-11-09, KI's first Trial run on production) ----
+# n8n resolves $('IF node').all() / .first() / .last() WITHOUT a branch index to the output that connects that IF to the reading node. A node
+# hanging on an IF's false output (index 1) therefore reads the false branch: Comp SERP Picture read 0 of its 20 answered searches. The
+# offline harness's $() ignores branches, so only this lint can catch it: a node connected to a non-zero output of an IF / Switch must name
+# the branch it reads. What it does not look at: reads through a variable node name, and Switch rules that route on purpose to output 0.
+import glob as _g182, re as _re182
+_c182 = 0
+for _f182 in sorted(_g182.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workflows', '*.json'))):
+    _d182 = json.load(open(_f182))
+    for _w182 in (_d182 if isinstance(_d182, list) else [_d182]):
+        _t182 = {n['name']: n['type'] for n in _w182.get('nodes', [])}
+        _ifs182 = {n for n, t in _t182.items() if t.endswith('.if') or t.endswith('.switch')}
+        _C182 = _w182.get('connections', {})
+        for _n182 in _w182.get('nodes', []):
+            _code182 = _n182.get('parameters', {}).get('jsCode') or ''
+            for _m182 in _re182.finditer(r"\$\('([^']+)'\)\.(all|first|last)\(\s*\)", _code182):
+                _src182 = _m182.group(1)
+                if _src182 not in _ifs182:
+                    continue
+                _outs182 = [i for i, o in enumerate(_C182.get(_src182, {}).get('main', [])) for c in (o or []) if c.get('node') == _n182['name']]
+                assert not any(i != 0 for i in _outs182), 'IF-BRANCH: %s / %s reads $(%r).%s() but hangs on its output %s: name the branch, e.g. .all(0)' % (os.path.basename(_f182), _n182['name'], _src182, _m182.group(2), _outs182)
+                _c182 += 1
+print('IF-BRANCH (section 182): every read of an IF / Switch node without a branch index comes from a node on its first output (%d reads checked)' % _c182)

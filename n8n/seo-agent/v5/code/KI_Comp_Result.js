@@ -12,7 +12,7 @@
 const p = $('KI Plan').first().json || {};
 const pic = $('Comp SERP Picture').first().json || {};
 const cc = $('Comp Candidates').first().json || {};
-const all = (n) => { try { return $(n).all().map(i => (i && i.json) || {}); } catch (e) { return []; } };
+const all = (n) => { try { return $(n).all(0).map(i => (i && i.json) || {}); } catch (e) { return []; } };
 const now = p.now || new Date().toISOString();
 const client = KIW.host(p.domain);
 const cache = all('Load KI Cache').filter(r => r && r.key);
@@ -110,6 +110,11 @@ for (const sc of scoredRows) {
   // row with none of them is not seen (it counts a miss below), and a domain with none of them is not a candidate at all
   const evid = (KIW.N(sc.seeds_seen) || 0) > 0 || !!c.labs || !!c.cd || !!c.ai_hits || declared;
   if (!evid) continue;
+  // FX-L 2026-11-10 (Trial: ~50 rows "adjacent, score None, seen 0 of 20", most of them only cited in AI answers): a business never seen on a
+  // results page read and with no title or page of its own has no class we can read, so it is not stored as a competitor (a provider overlap
+  // list or an AI citation alone is not enough; AI visibility keeps the AI side); a row the client declared or set is kept
+  const ownText = (c.titles || []).length > 0 || !!homes[c.domain];
+  if (!declared && !(st && KIW.S(st.status_by) === 'user') && !((KIW.N(sc.seeds_seen) || 0) > 0) && !ownText && ['direct', 'adjacent'].includes(sc.class)) continue;
   const userSt = st && KIW.S(st.status_by) === 'user';
   const wasDeclared = st && KIW.S(st.status_by) === 'declared' && !declared;
   const status = userSt ? KIW.S(st.status) : (declared ? (declaredChosen.has(d) ? 'chosen' : 'watch') : (st && !wasDeclared && ['watch', 'chosen'].includes(KIW.S(st.status)) ? KIW.S(st.status) : 'candidate'));
@@ -125,6 +130,9 @@ for (const sc of scoredRows) {
 for (const st of stored) { const d = KIW.host(st.comp_domain); if (seen.has(d) || seen.has(KI.reg(d))) continue;
   const misses = (KIW.N(st.misses) || 0) + (readAny ? 1 : 0); const user = KIW.S(st.status_by) === 'user';
   if (!user && KIW.S(st.status) === 'candidate' && misses >= (KI.CONFIG.comp_leave_after_misses || 2)) { drops.push({ site_id: p.site_id, market: p.market, comp_domain: d, reason: 'no evidence in two runs' }); continue; }
+  // FX-L 2026-11-10: a stored candidate never seen on any results page (written before this rule, from an overlap list or an AI citation
+  // alone) leaves now: it never had evidence we can classify
+  if (!user && KIW.S(st.status) === 'candidate' && !(KIW.N(st.seeds_seen) > 0) && ['direct', 'adjacent'].includes(KIW.S(st.class)) && KIW.S(st.status_by) !== 'declared') { drops.push({ site_id: p.site_id, market: p.market, comp_domain: d, reason: 'never seen on a results page' }); continue; }
   const keep = {}; for (const c of KIW.COLS.KI_COMP) keep[c] = st[c] === undefined ? null : st[c];
   rows.push({ ...keep, misses, run_id: p.run_id, updated_at: now, _kept: true }); }
 // the set: scored first (by score, then by evidence), then lists / directories / platforms; the client's own choices always stay

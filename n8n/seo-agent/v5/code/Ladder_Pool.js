@@ -60,6 +60,21 @@ const addItem = (raw, source) => {
   if (e.cpc == null && info.cpc != null) e.cpc = info.cpc;
 };
 reqs.forEach((r, i) => { const items = res[i]?.tasks?.[0]?.result?.[0]?.items || []; for (const it of items) addItem(it, r.kind); });
+// LADDER PACKAGE (2026-11-09, rule 6): keyword intelligence ON for this website -> its stored clusters ARE the pool (one search per cluster:
+// its head, the gate it passed, its verdict, page action, Search Console position and stage); Ladder Requests bought only the "keywords this
+// site ranks for" pull, which still measures the reach. Off sites (every site today) keep the pool above, unchanged.
+const ki_pool = (() => { try { const k = ($('KI Pool (Ladder)').first().json || {}).ki_pool; return k && typeof k === 'object' ? { avoid: [], rows: [], ...k } : { used: false, reason: 'not read', run_id: '', note: '', avoid: [], rows: [] }; } catch (e) { return { used: false, reason: 'not read', run_id: '', note: '', avoid: [], rows: [] }; } })();   // KI Pool (Ladder): read once, through KI.readable
+if (ki_pool.used) {
+  pool.clear();   // the ranked pull's own rows only feed `rankings` (the reach), never the pool
+  const n0 = (v) => (v === '' || v == null || !Number.isFinite(Number(v))) ? null : Number(v);
+  for (const r of ki_pool.rows) { const kw = String(r.keyword || '').toLowerCase().replace(/\s+/g, ' ').trim(); if (!kw || pool.has(kw)) continue;
+    const gp = n0(r.gsc_position);
+    pool.set(kw, { keyword: kw, volume: n0(r.volume) || 0, cpc: n0(r.cpc), competition: null, kd: n0(r.kd), intent: classify(kw, String(r.intent || '')), trend_yearly: null, serp_types: [],
+      avg_rd: null, words: kw.split(' ').length, sources: ['ki'], competitors: [], local: tokens(kw).some(t => GEO.has(t)),
+      stage: String(r.stage || ''), ki_verdict: String(r.verdict || ''), ki_page_action: String(r.page_action || ''), ki_page_url: String(r.page_url || ''), ki_striking: r.striking === true || r.striking === 'true',
+      ki_cluster: String(r.cluster_id || ''), ki_score: n0(r.score) });
+    if (gp != null && gp > 0 && !rankings[kw]) rankings[kw] = { position: Math.round(gp), url: String(r.gsc_page || r.page_url || '') || null, volume: n0(r.volume) || 0, kd: n0(r.kd) }; }
+}
 // B6-9 (2026-10-15, benchmark area 6 -- FIX_PLAN §3.16): until today this node carried its OWN copy of the click-loss
 // table, with the APRIL 2025 AI Overview figure (`ctr *= 0.65`, a flat 35% loss) that B1-3 had already removed from the
 // discovery kit and B6-1 from the rank kit. Three copies of one measurement is how three answers start.
@@ -115,8 +130,8 @@ const other_brands = fitBrandList(fitCtx, fitCtx.protect);
 const bySource = {}; for (const e of all) for (const s of e.sources) bySource[s] = (bySource[s] || 0) + 1;
 const failures = reqs.map((r, i) => [r, res[i]]).filter(([r, x]) => !x || x.error || ((x.tasks || [])[0] || {}).status_code >= 40000)
   .map(([r, x]) => r.label + ': ' + ((x && ((x.error && x.error.message) || ((x.tasks || [])[0] || {}).status_message)) || 'no response'));
-if (failures.length === reqs.length) throw new Error('Keyword ladder: every research pull failed (' + failures.join('; ') + '). Check the DataForSEO credential on "Run Ladder Research" and the account balance.');
-if (!all.length) throw new Error('Keyword ladder: no keywords with search volume were found around "' + head + '" in ' + (base.country || 'this market') + '. Try a broader destination keyword.');
+if (!ki_pool.used && failures.length === reqs.length) throw new Error('Keyword ladder: every research pull failed (' + failures.join('; ') + '). Check the DataForSEO credential on "Run Ladder Research" and the account balance.');
+if (!all.length && !ki_pool.used) throw new Error('Keyword ladder: no keywords with search volume were found around "' + head + '" in ' + (base.country || 'this market') + '. Try a broader destination keyword.');
 const headRank = rankings[head] || null;
 // v4.8: did the "keywords the site ranks for" pull answer? (reach falls back to the site's size when it did not)
 const rankedIdx = reqs.findIndex(r => r.kind === 'ranked');
@@ -126,6 +141,7 @@ const sd = base.site_description || {};
 const business = (base.business || sd.business_description || 'unknown') + '. KEYWORD LADDER: this research is for a ladder of pages that climb towards the head keyword "' + head +
   '". A keyword is core (2) only when a page about it would naturally link up to a page about "' + head + '"; neighbouring topics are adjacent (1); jobs, courses, unrelated definitions and other brands are 0.';
 return [{ json: { ...base, business, services: (sd.products_or_services || []).slice(0, 8), other_brands,
+  ki_pool: { used: ki_pool.used, reason: ki_pool.reason, run_id: ki_pool.run_id, note: ki_pool.note, avoid: ki_pool.avoid.slice(0, 200), rows: ki_pool.used ? ki_pool.rows.map(r => ({ keyword: String(r.keyword || ''), stage: String(r.stage || ''), verdict: String(r.verdict || ''), page_action: String(r.page_action || ''), page_url: String(r.page_url || '') })).slice(0, 400) : [] },   // LADDER PACKAGE rule 6
   research: { pool_size: all.length, candidates, by_source: bySource, failures, requests: reqs.length, refused: refused.slice(0, 60), protected_services: declared_services },
   site_rankings: { count: Object.keys(rankings).length, head: headRank, keywords: Object.fromEntries(Object.entries(rankings).slice(0, 400)), available: rankedOk,
     top10: Object.entries(rankings).filter(([k, r]) => r.position >= 1 && r.position <= 10).map(([k, r]) => ({ keyword: k, kd: r.kd, position: r.position })) },

@@ -23,6 +23,15 @@ const RUNG_HINT: Record<number, string> = {
   4: 'the goal',
 };
 
+/** LADDER PACKAGE (2026-11-09): the buyer's stage of a rung's search, in plain words */
+const STAGE_WORDS: Record<string, string> = {
+  problem: 'People with a problem to solve',
+  solution: 'People looking for a solution',
+  compare: 'People comparing providers or options',
+  hire: 'People ready to choose a provider',
+  info: 'People learning about the topic',
+};
+
 /** One line under the keyword: where the page stands. */
 function pageLine(p: LadderPage, onDay: string): string {
   switch (p.state) {
@@ -41,6 +50,13 @@ function pageLine(p: LadderPage, onDay: string): string {
     case 'set_aside':
       // R16: the keyword rule refused this planned page (a competitor's brand, a government portal, an off-topic search)
       return 'Set aside: not a search to target (see the weekly content note)';
+    case 'stopped':
+      // review M5: the row's own reason first (a page can be stopped for another reason than our check)
+      return p.reason ? `Stopped: ${p.reason}` : 'Stopped: our check advised against this page';
+    case 'failed':
+      return 'Its writing stopped without a result; the next page goes on';
+    case 'merged':
+      return 'Covered as a section of another page of this ladder';
     default:
       return p.pageType ? asPageType(p.pageType) : 'Planned';
   }
@@ -138,7 +154,7 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
   const { org, can } = useOrgCtx();
   const { site } = useSiteCtx();
   const day = useCycleDay(site);
-  const canWrite = can('member') && (p.state === 'planned' || p.state === 'gated');
+  const canWrite = can('member') && (p.state === 'planned' || p.state === 'gated' || p.state === 'stopped' || p.state === 'failed');
   const history = sortByDate(p.history ?? [], (h) => h.checkedAt);
   const write = () => {
     onClose();
@@ -148,6 +164,7 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
       pageType: p.pageType,
       existingPageUrl: '',
       ladder: { id: ladder.id, rung: p.rung, head: ladder.head, pageNo: p.pageNo },
+      ...(p.state === 'stopped' ? { writeAnyway: true } : {}),
     });
   };
   return (
@@ -177,8 +194,8 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
             </ButtonLink>
           )}
           {canWrite && (
-            <Button size="sm" variant={p.state === 'gated' ? 'secondary' : 'primary'} icon={<PenSquare className="size-4" />} onClick={write}>
-              Write now
+            <Button size="sm" variant={p.state === 'gated' || p.state === 'stopped' ? 'secondary' : 'primary'} icon={<PenSquare className="size-4" />} onClick={write}>
+              {p.state === 'stopped' ? 'Write it anyway' : p.state === 'failed' ? 'Write it again' : 'Write now'}
             </Button>
           )}
 
@@ -214,6 +231,18 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
             more likely to rank. You can still write it now.
           </p>
         )}
+        {(p.state === 'stopped' || p.state === 'failed' || p.state === 'merged') && (
+          <p className="text-[13px] leading-snug text-ink-2 [overflow-wrap:anywhere]">
+            {p.reason || pageLine(p, day.on)}
+            {p.state === 'stopped' && ' Nothing is written for it. If you want this page all the same, choose Write it anyway.'}
+            {p.state === 'failed' && ' Nothing was written. If its run finishes after all, the page shows here as written; you can also write it again.'}
+          </p>
+        )}
+        {p.why && p.state !== 'stopped' && p.state !== 'failed' && p.state !== 'merged' && p.state !== 'published' && (
+          <p className="text-[13px] leading-snug text-ink-2 [overflow-wrap:anywhere]">
+            <span className="font-medium text-ink">{p.action === 'improve' ? 'Improves an existing page' : 'A new page'}:</span> {p.why}
+          </p>
+        )}
         {p.state === 'set_aside' && (
           <p className="text-[13px] leading-snug text-ink-2">
             This page was planned before the keyword rule existed, and the rule refuses the search: it names another company, a government portal, or something
@@ -225,6 +254,7 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
             { label: 'Page type', value: p.pageType ? asPageType(p.pageType) : '-' },
             ...(p.volume != null ? [{ label: 'Searches a month', value: compactNumber(p.volume) }] : []),
             ...(p.kd != null ? [{ label: 'Difficulty (0-100)', value: String(p.kd) }] : []),
+            ...(p.stage ? [{ label: 'Who searches it', value: STAGE_WORDS[p.stage] ?? p.stage }] : []),
             ...(p.supporting?.length ? [{ label: 'Also covers', value: <Chips items={p.supporting} max={8} /> }] : []),
             ...(p.publishedUrl
               ? [{ label: 'Live at', value: <ExternalLink href={p.publishedUrl}>{urlPath(p.publishedUrl)}</ExternalLink> }]

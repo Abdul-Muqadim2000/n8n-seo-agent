@@ -114,9 +114,11 @@ describe('a run start (the app route; the same path as the API, MCP, proposals a
     const s = await site(co.org.id, 'devaicon-run.com');
     const r = await co.c.post(`/api/orgs/${co.org.id}/runs`, ladder(s.id, 'ai automation solutions gcc'));
     expect([r.status, r.body.code]).toEqual([409, 'confirm_needed']);
-    expect(r.body.needsAcknowledge).toEqual(['market.keyword_place:ai automation solutions gcc:PK']);
+    // LADDER PACKAGE (2026-11-09, rule 3): a ladder also says it is measured in the market its keyword names (the GCC: the UAE)
+    expect(r.body.needsAcknowledge).toEqual(['market.ladder_named:ai automation solutions gcc:AE', 'market.keyword_place:ai automation solutions gcc:PK']);
     expect(r.body.warnings).toEqual(r.body.notices);
-    expect(r.body.warnings[0]).toMatchObject({ code: 'market.keyword_place', severity: 'market', accept: { change: { kind: 'fields', set: { keyword: 'ai automation solutions' } } } });
+    expect(r.body.warnings[0]).toMatchObject({ code: 'market.ladder_named', severity: 'market', accept: { change: { kind: 'fields', set: { country: 'United Arab Emirates' } } } });
+    expect(r.body.warnings[1]).toMatchObject({ code: 'market.keyword_place', severity: 'market', accept: { change: { kind: 'fields', set: { keyword: 'ai automation solutions' } } } });
     expect(t.starts).toEqual([]);
     expect(await db.query.runs.findMany({ where: eq(schema.runs.siteId, s.id) })).toEqual([]);
   });
@@ -135,14 +137,17 @@ describe('a run start (the app route; the same path as the API, MCP, proposals a
     const co = await company('mk-ack@mk.test', 'Ack Co');
     const s = await site(co.org.id, 'devaicon-ack.com');
     const id = 'market.keyword_place:ai automation solutions gcc:PK';
-    const r = await co.c.post(`/api/orgs/${co.org.id}/runs`, { ...ladder(s.id, 'ai automation solutions gcc'), acknowledge: [id] });
+    const named = 'market.ladder_named:ai automation solutions gcc:AE';
+    const r = await co.c.post(`/api/orgs/${co.org.id}/runs`, { ...ladder(s.id, 'ai automation solutions gcc'), acknowledge: [named, id] });
     expect(r.status).toBe(200);
     const run = (await db.query.runs.findFirst({ where: eq(schema.runs.id, r.body.id) }))!;
-    expect((run.input as Record<string, unknown>).acknowledged).toEqual([id]);
+    expect((run.input as Record<string, unknown>).acknowledged).toEqual([named, id]);
     expect('acknowledge' in t.starts[0]!).toBe(false);   // the engine never sees the acknowledgement
+    // LADDER PACKAGE (rule 3): a GCC ladder is sent in the UAE whatever the form held, never in Pakistan
+    expect((t.starts[0] as Record<string, unknown>).country).toBe('United Arab Emirates');
     const ev = await db.query.auditEvents.findFirst({ where: and(eq(schema.auditEvents.orgId, co.org.id), eq(schema.auditEvents.action, 'warning.overridden')) });
     expect(ev).toMatchObject({ targetType: 'run', targetId: run.id });
-    expect(ev!.details).toMatchObject({ codes: ['market.keyword_place'], ids: [id], what: 'run:ladder', keyword: 'ai automation solutions gcc' });
+    expect(ev!.details).toMatchObject({ codes: ['market.ladder_named', 'market.keyword_place'], ids: [named, id], what: 'run:ladder', keyword: 'ai automation solutions gcc' });
   });
 
   it('M1: a run for another country than the website\'s is held; Accept is the website\'s country', async () => {
