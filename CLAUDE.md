@@ -63,7 +63,11 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-11-08, SERP-GOTO hotfix + keyword intelligence (KI) DEPLOYED, every site Off - latest)
+## Status (2026-11-09, PAUSED by the owner: both sites in KI Trial; resume from `n8n/seo-agent/docs/keyword-intel-2026-11-08/fixes/RESUME_2026-11-09.md` - latest)
+SERP data repair done; Trial runs found and fixed one bug (IF branch, build section 182); competitor classification ~50% wrong (fix
+paused on ki/fxl); keyword research Trial runs started 2026-11-08 19:47 UTC, not yet evaluated; ladder package WIP on ladder/package.
+
+## Status (2026-11-08, SERP-GOTO hotfix + keyword intelligence (KI) DEPLOYED, every site Off - previous)
 **SERP-GOTO (live defect, fixed):** since 2026-10-30 DataForSEO's live Google organic results return every result as a google.com/goto
 redirect (real site only in `breadcrumb`); rank checks stopped finding clients, google.com became a competitor. Kit `v5/code/_serp_url.js`
 (SU) at every results reader (build section 181), hidden-but-maybe-ours = -1 with a weekly streak, settled after 3 weeks as "not found

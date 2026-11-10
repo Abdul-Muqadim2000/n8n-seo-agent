@@ -3137,7 +3137,9 @@ const KIW = (() => {
 })();
 const p = $('KI Plan').first().json || {};
 let cacheRows = []; try { cacheRows = $('Load SERP Cache (KI Comp)').all().map(i => i.json).filter(r => r && r.key); } catch (e) { cacheRows = []; }
-let reqItems = []; try { reqItems = $('Any Comp SERPs?').all().map(i => i.json).filter(r => r && !r.skip); } catch (e) { reqItems = []; }
+// IF-BRANCH (2026-11-09, first Trial run on production): this node hangs on the IF's FALSE output, so a bare .all() returned that empty
+// branch inside n8n (it defaults to the connected output) and every answered search read as "nothing was asked". Branch 0 = the requests sent.
+let reqItems = []; try { reqItems = $('Any Comp SERPs?').all(0).map(i => i.json).filter(r => r && !r.skip); } catch (e) { reqItems = []; }
 let answers = []; try { answers = $('Run Comp SERPs Answers').all().map(i => i.json); } catch (e) { answers = []; }
 const m = { location_code: p.location_code, language_code: p.language_code };
 const R = KIW.serpReadings((p.seeds || []).map(s => s.keyword), m, cacheRows, reqItems, answers, p.site_id, p.now, { own_domain: p.domain, services: p.services });
