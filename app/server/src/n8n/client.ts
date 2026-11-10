@@ -521,16 +521,21 @@ export interface ExecutionSummary {
 }
 
 /** Recent executions of a workflow with a status (newest first). */
-export async function executions(workflowId: string, status: 'error' | 'success' | 'running', limit = 20): Promise<ExecutionSummary[]> {
+export async function executions(workflowId: string, status: 'error' | 'success' | 'running' | 'new' | 'waiting', limit = 20): Promise<ExecutionSummary[]> {
   const r: { data: ExecutionSummary[] } = await api(`/executions?workflowId=${encodeURIComponent(workflowId)}&status=${status}&limit=${limit}`);
   return r.data ?? [];
 }
 
-/** LADDER PACKAGE (review H1, 2026-11-10): the newest executions of a workflow in ANY state (queued `new` / `waiting` ones included), newest first. */
-export async function recentExecutions(workflowId: string, limit = 100): Promise<ExecutionSummary[]> {
-  const r: { data: ExecutionSummary[] } = await api(`/executions?workflowId=${encodeURIComponent(workflowId)}&limit=${limit}`);
-  return r.data ?? [];
+/**
+ * LADDER PACKAGE (re-review H1, 2026-11-10): the executions of a workflow that have not finished: running, queued (`new`) and waiting.
+ * Three calls, because n8n 2.41.4's public list WITHOUT a status leaves every running execution out (executions.public.controller.js
+ * `excludeRunning: query.status !== 'running'`), and with one status shows only that one. Each item carries its status.
+ */
+export async function unfinishedVia(list: (status: 'running' | 'new' | 'waiting') => Promise<ExecutionSummary[]>): Promise<ExecutionSummary[]> {
+  const [running, queued, waiting] = await Promise.all((['running', 'new', 'waiting'] as const).map((st) => list(st).then((xs) => xs.map((x) => ({ ...x, status: x.status || st })))));
+  return [...running, ...queued, ...waiting];
 }
+export const unfinishedExecutions = (workflowId: string, limit = 100): Promise<ExecutionSummary[]> => unfinishedVia((st) => executions(workflowId, st, limit));
 
 /** The code of an n8n API error that is a 404: n8n has no such record (an execution pruned, or never saved). */
 export const N8N_NOT_FOUND = 'n8n_not_found';

@@ -1,7 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { n8nSiteId, normKeyword, stuckRung, type ContentLogRow, type LadderRow } from '@seo/shared';
 import { db, schema } from '../db';
-import { recentExecutions, siteRows, updateRows } from '../n8n/client';
+import { siteRows, unfinishedExecutions, updateRows } from '../n8n/client';
 
 // LADDER PACKAGE (2026-11-09, rule 5; n8n/seo-agent/docs/keyword-intel-2026-11-08/fixes/LADDER.md). Production 2026-11-05 (techand.ai, ladder
 // "crm service provider"): the rung "what is a crm company" sat at `writing` (content log `started`) for days after its page run died, so the
@@ -24,7 +24,7 @@ export interface StuckRungDeps {
   sites: () => Promise<{ id: string; orgId: string; domain: string }[]>;
   ladders: (domain: string) => Promise<LadderRow[]>;
   logs: (domain: string) => Promise<ContentLogRow[]>;
-  /** the main workflow's newest executions in any state; null = n8n could not be asked */
+  /** the main workflow's unfinished executions (running, queued, waiting; one call each); null = n8n could not be asked */
   running: () => Promise<{ startedAt?: string | null; status?: string }[] | null>;
   openRuns: (siteId: string) => Promise<{ id: string; input: unknown }[]>;
   update: typeof updateRows;
@@ -79,7 +79,7 @@ const defaultDeps: StuckRungDeps = {
   sites: () => db.select({ id: schema.sites.id, orgId: schema.sites.orgId, domain: schema.sites.domain }).from(schema.sites),
   ladders: (domain) => siteRows<LadderRow>('ladders', domain, { fresh: true, max: 500, extra: [{ columnName: 'status', condition: 'eq', value: 'writing' }] }),   // review L8: only the writing rows
   logs: (domain) => siteRows<ContentLogRow>('contentLog', domain, { fresh: true, max: 2000, sortBy: 'started_at:desc' }),
-  running: () => recentExecutions(LADDER_STUCK_MAIN_WORKFLOW, 100).catch(() => null),
+  running: () => unfinishedExecutions(LADDER_STUCK_MAIN_WORKFLOW, 100).catch(() => null),
   openRuns: (siteId) =>
     db.select({ id: schema.runs.id, input: schema.runs.input }).from(schema.runs).where(and(eq(schema.runs.siteId, siteId), inArray(schema.runs.status, ACTIVE))),
   update: updateRows,

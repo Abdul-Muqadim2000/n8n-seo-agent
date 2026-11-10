@@ -4,6 +4,7 @@ import type { ContentLogRow, LadderRow } from '@seo/shared';
 import { checkStuckRungs, stuckRungsOf } from '../src/services/ladderWatch';
 import { ladderMarketInfo } from '../src/services/ladders';
 import { ladderMovesOf } from '../src/services/siteTasks';
+import { unfinishedVia, type ExecutionSummary } from '../src/n8n/client';
 
 // LADDER PACKAGE (2026-11-09, rule 5): techand.ai's rung "what is a crm company" sat at `writing` from 2026-11-05 01:33 with its page run gone
 const row = (o: Partial<LadderRow>): LadderRow => ({ id: 47, createdAt: '', updatedAt: '2026-11-05T01:33:12.154Z', ladder_id: 'lad_mw0goinsniv1', domain: 'techand.ai', head_keyword: 'crm service provider', rung: 2,
@@ -34,6 +35,20 @@ describe('stuck ladder rungs (rule 5)', () => {
     expect(stuckRungsOf({ domain: 'techand.ai', ladders: [row({})], logs: [log({})], running: [{ status: 'running', startedAt: '2026-11-05T01:27:00Z' }], openKeywords: new Set(), now: t65 })).toHaveLength(0);
     const done = [{ status: 'success', startedAt: '2026-11-05T01:33:20Z' }, { status: 'error', startedAt: '2026-11-05T01:40:00Z' }, { status: 'crashed', startedAt: '2026-11-05T01:41:00Z' }];
     expect(stuckRungsOf({ domain: 'techand.ai', ladders: [row({})], logs: [log({})], running: done, openKeywords: new Set(), now: t65 })).toHaveLength(1);
+  });
+  it('re-review H1: n8n 2.41.4 leaves RUNNING executions out of a list with no status; the watcher asks running / new / waiting one by one and keeps a 189-minute run alive', async () => {
+    const all: ExecutionSummary[] = [
+      { id: '1', workflowId: 'SEOagentV4Full01', status: 'running', startedAt: '2026-11-05T01:33:05Z' },
+      { id: '2', workflowId: 'SEOagentV4Full01', status: 'success', startedAt: '2026-11-05T01:00:00Z' },
+    ];
+    // the API's own behaviour: no status -> running ones excluded (executions.public.controller.js excludeRunning); a status -> only that status
+    const fakeApi = async (status?: string) => all.filter((e) => (status ? e.status === status : e.status !== 'running'));
+    expect((await fakeApi()).some((e) => e.status === 'running')).toBe(false);   // what the f7399da4 watcher saw
+    const seen = await unfinishedVia((st) => fakeApi(st));
+    expect(seen.map((e) => e.id)).toEqual(['1']);
+    const t189 = Date.parse('2026-11-05T04:42:00Z');   // 189 minutes after the rung started
+    expect(stuckRungsOf({ domain: 'techand.ai', ladders: [row({})], logs: [log({})], running: seen, openKeywords: new Set(), now: t189 })).toHaveLength(0);
+    expect(stuckRungsOf({ domain: 'techand.ai', ladders: [row({})], logs: [log({})], running: await fakeApi(), openKeywords: new Set(), now: t189 })).toHaveLength(1);   // the defect, for the record
   });
   it('a rung writing for 40 minutes is not stuck; a planned or published row never is', () => {
     const recent = Date.parse('2026-11-05T02:13:00Z');
@@ -82,5 +97,11 @@ describe('the redirect step for a main page that moved (review H5)', () => {
       { status: 'published', target_why: 'a page you do not have yet, at /z', target_url: 'https://www.techand.ai/z', updatedAt: '' },
     ]);
     expect(moved).toEqual([{ url: 'https://www.techand.ai/dynamics-365-crm-uae-2', to: 'https://www.techand.ai/dynamics-365-crm-uae', at: '2026-11-12T10:00:00Z' }]);
+    // re-review N1: never a redirect from an address another ladder page holds
+    const held = ladderMovesOf([
+      { keyword: 'dynamics 365 erp system', status: 'published', target_why: 'moved from https://www.techand.ai/insights/guide: ...', target_url: 'https://www.techand.ai/dynamics-365-erp-system', updatedAt: '2026-11-12T10:00:00Z' },
+      { keyword: 'is microsoft dynamics 365 an erp system', status: 'published', target_why: '', target_url: 'https://techand.ai/insights/guide/', updatedAt: '' },
+    ]);
+    expect(held).toEqual([]);
   });
 });
