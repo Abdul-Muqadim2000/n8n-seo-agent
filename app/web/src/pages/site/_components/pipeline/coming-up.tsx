@@ -1,10 +1,14 @@
 // "Coming up" (SCHEDULING_KEYWORDS_PLAN.md §5.7): two days before each weekly run, the plan of what it writes. Each item says why it was
 // chosen and its credits; automatic items can be skipped, the others wait for an OK. Decisions are for this week, or "never suggest
 // again"; once the run started they are closed (409 `cycle_started`).
+// I3 (2026-11-10, devaicon.com): a plan whose run is past is not "Coming up": the card says the run is running, or what the last run wrote
+// and when the next plan and run come; approved items have their own group and, once the run is done, their real result; the pile-up
+// banner of the plan shows only while the run is still to come and the live state agrees (the Pipeline's own queue.paused).
 import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { Ban, CalendarClock, Check, CheckCircle2, ChevronDown, Hand, Info, PenSquare, SkipForward, Undo2, Zap } from 'lucide-react';
-import { WEEKDAY_NAMES, weekdayOfDate, type ComingUpItem, type ComingUpView, type SiteCycleView } from '@seo/shared';
+import { WEEKDAY_NAMES, weekdayOfDate, type ComingUpItem, type ComingUpView, type PipelineData, type SiteCycleView } from '@seo/shared';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout, ErrorState, Skeleton } from '@/components/ui/feedback';
@@ -53,7 +57,73 @@ const decisionBadge = (it: ComingUpItem): ReactNode => {
   );
 };
 
-export function ComingUp({ cycle, onWrite }: { cycle?: SiteCycleView; onWrite?: (it: ComingUpItem) => void }) {
+/** The live state of the pages that wait to be published (the Pipeline's queue): the same rule the weekly run applies. */
+export type LiveQueue = Pick<PipelineData['queue'], 'paused' | 'waiting'>;
+
+export type ComingUpPhase = NonNullable<ComingUpView['phase']>;
+/** Where the plan's run stands (an older server sends no phase: a started plan is read as running). */
+export const phaseOf = (v: ComingUpView): ComingUpPhase => v.phase ?? (v.closed ? 'running' : 'upcoming');
+
+const quoteList = (xs: string[], max = 3) => `${xs.slice(0, max).map((k) => `"${k}"`).join(', ')}${xs.length > max ? ` and ${xs.length - max} more` : ''}`;
+const pages = (n: number) => (n === 1 ? '1 page' : `${n} pages`);
+const endStop = (t: string) => (/[.!?]$/.test(t) ? t : `${t}.`);
+
+/** The card's title and first line for each phase (pure). `day` is the run's day ("Friday, November 6"); `fmt` formats an instant. */
+export function comingUpHeading(v: ComingUpView, day: string, weekday: string, fmt: (iso: string) => string): { title: string; description: string } {
+  const phase = phaseOf(v);
+  if (phase === 'upcoming')
+    return { title: day ? `Coming up on ${day}` : 'Coming up', description: `What your ${weekday || 'next'} run will write. Automatic pages are written unless you skip them; the others wait for your OK.` };
+  if (phase === 'running')
+    return { title: day ? `Running now: the weekly run of ${day}` : 'Running now', description: 'This weekly run has started, so its plan can no longer change. What it writes shows here when it is done.' };
+  const o = v.outcome;
+  let did = 'What it wrote is on Content and under Reports.';
+  if (o?.known) {
+    if (o.pages.length) {
+      const all = o.pages.every((p) => p.state === 'written');
+      did = `It ${all ? 'wrote' : 'started'} ${pages(o.pages.length)}: ${quoteList(o.pages.map((p) => p.keyword))}.`;
+    } else if (o.pausedReason === 'pileup') did = `It wrote nothing new: ${o.waitingPublish ? `${pages(o.waitingPublish)} waited` : 'pages waited'} to be published.`;
+    else if (o.pausedReason === 'site_paused') did = 'It wrote nothing: the website was paused.';
+    else did = o.note ? `It wrote nothing: ${endStop(o.note.charAt(0).toLowerCase() + o.note.slice(1))}` : 'It wrote nothing new.';
+  }
+  const next =
+    v.nextPreviewAt && v.nextDueAt
+      ? `Your next plan arrives on ${fmt(v.nextPreviewAt)}, two days before the run on ${fmt(v.nextDueAt)}.`
+      : v.nextDueAt
+        ? `The next run is on ${fmt(v.nextDueAt)}. Its plan arrives two days before.`
+        : 'The next plan arrives two days before the next run.';
+  return { title: day ? `Last weekly run: ${day}` : 'Last weekly run', description: `${did} ${next}` };
+}
+
+/**
+ * The pile-up banner (pure). None once the run started or finished (the outcome says what happened). For a run still to come it follows
+ * the live state when the Pipeline gives it (the plan's own word may be days old), naming the pages that wait; else the plan's word.
+ */
+export function pileupBanner(v: ComingUpView, live?: LiveQueue | null): { tone: 'warning' | 'info'; title: string; body: string } | null {
+  if (phaseOf(v) !== 'upcoming') return null;
+  const planned = v.pausedReason === 'pileup';
+  if (live === undefined)
+    return planned ? { tone: 'warning', title: 'Writing is paused: pages wait to be published', body: 'Publish the pages you have, then the weekly pages continue.' } : null;
+  if (live?.paused) {
+    const names = (live.waiting ?? []).map((w) => `"${w.keyword}"${w.needsFix ? ' (needs a fix)' : ''}`);
+    const n = live.paused.waiting || names.length;
+    const fix = (live.waiting ?? []).some((w) => w.needsFix);
+    return {
+      tone: 'warning',
+      title: `Writing is paused: ${pages(n)} ${n === 1 ? 'waits' : 'wait'} to be published`,
+      body: `${names.length ? `${names.slice(0, 5).join(', ')}${names.length > 5 ? ` and ${names.length - 5} more` : ''}. ` : ''}Your limit is ${live.paused.max}. Publish ${fix ? 'them, or fix the ones that need a fix,' : 'some of them'} and the weekly pages continue.`,
+    };
+  }
+  return planned ? { tone: 'info', title: 'No pages wait to be published any more', body: 'This run is not paused: it picks its pages when it starts.' } : null;
+}
+
+/** The toast after an approval (pure): never "written in this run" while writing is paused for pages that wait. */
+export function approveToast(keyword: string, pileup: boolean): { title: string; description?: string } {
+  return pileup
+    ? { title: `"${keyword}" is approved: it is written once the pages that wait are published`, description: 'If they still wait when this run starts, approve it again in the next plan.' }
+    : { title: `"${keyword}" will be written in this run` };
+}
+
+export function ComingUp({ cycle, onWrite, queue }: { cycle?: SiteCycleView; onWrite?: (it: ComingUpItem) => void; queue?: LiveQueue | null }) {
   const { org } = useOrgCtx();
   const { site } = useSiteCtx();
   const q = useComingUp(org.id, site.id, !!site.verifiedAt);
@@ -67,7 +137,7 @@ export function ComingUp({ cycle, onWrite }: { cycle?: SiteCycleView; onWrite?: 
           <ErrorState error={q.error} onRetry={() => q.refetch()} title="Could not load the plan of your next weekly run" />
         </Panel>
       ) : (
-        <ComingUpPanel view={q.data} cycle={cycle} onWrite={onWrite} />
+        <ComingUpPanel view={q.data} cycle={cycle} onWrite={onWrite} live={queue} />
       )}
     </section>
   );
@@ -98,7 +168,7 @@ export function ComingUpSummary() {
   );
 }
 
-function ComingUpPanel({ view, cycle, onWrite }: { view: ComingUpView; cycle?: SiteCycleView; onWrite?: (it: ComingUpItem) => void }) {
+function ComingUpPanel({ view, cycle, onWrite, live }: { view: ComingUpView; cycle?: SiteCycleView; onWrite?: (it: ComingUpItem) => void; live?: LiveQueue | null }) {
   const { org, can } = useOrgCtx();
   const { site } = useSiteCtx();
   const tz = siteTimezone(site);
@@ -119,21 +189,31 @@ function ComingUpPanel({ view, cycle, onWrite }: { view: ComingUpView; cycle?: S
       </Panel>
     );
   }
-  const auto = view.items.filter((i) => i.auto);
-  const waiting = [...view.items.filter((i) => !i.auto), ...view.suggestions.filter((s) => !view.items.some((i) => i.itemKey === s.itemKey))];
+  const phase = phaseOf(view);
+  const upcoming = phase === 'upcoming';
+  const done = phase === 'done';
+  const all = [...view.items, ...view.suggestions.filter((s) => !view.items.some((i) => i.itemKey === s.itemKey))];
+  const isSkip = (i: ComingUpItem) => i.decision?.decision === 'skip';
+  const isApproved = (i: ComingUpItem) => i.decision?.decision === 'approve';
+  const auto = view.items.filter((i) => i.auto && !isSkip(i));
+  const approved = all.filter((i) => !i.auto && isApproved(i));
+  const waiting = all.filter((i) => !i.auto && !i.decision);
+  const skipped = all.filter(isSkip);
   const weekday = view.cycleDate ? WEEKDAY_NAMES[weekdayOfDate(view.cycleDate)] : '';
+  const head = comingUpHeading(view, day, weekday, (iso) => (validDate(iso) ? fmtDayHead(iso, tz) : ''));
+  const banner = pileupBanner(view, live);
+  // the approve toast follows the same word as the banner: the live state when the Pipeline gives it, else the plan's
+  const pileupNow = live === undefined ? view.pausedReason === 'pileup' : !!live?.paused;
+  const outcome = done && view.outcome?.known ? view.outcome : null;
+  const nothing = outcome ? !outcome.pages.length && !approved.length && !skipped.length : !auto.length && !approved.length && !waiting.length && !skipped.length;
   return (
     <Panel
       icon={<CalendarClock />}
-      title={day ? `Coming up on ${day}` : 'Coming up'}
-      description={
-        view.closed
-          ? 'This weekly run has started, so its plan can no longer change. The next plan arrives two days before the next run.'
-          : `What your ${weekday || 'next'} run will write. Automatic pages are written unless you skip them; the others wait for your OK.`
-      }
+      title={head.title}
+      description={head.description}
       actions={
         <>
-          {view.autoCredits > 0 && (
+          {upcoming && view.autoCredits > 0 && (
             <span className="text-[13px] text-ink-3">
               about <span className="font-medium text-ink">{formatCredits(view.autoCredits)}</span> on its own
             </span>
@@ -143,7 +223,7 @@ function ComingUpPanel({ view, cycle, onWrite }: { view: ComingUpView; cycle?: S
       }
     >
       <div className="space-y-4">
-        {view.waitingForKeyword && (
+        {!done && view.waitingForKeyword && (
           <Callout
             tone="info"
             title="Nothing is written until you choose your keyword"
@@ -159,7 +239,7 @@ function ComingUpPanel({ view, cycle, onWrite }: { view: ComingUpView; cycle?: S
           </Callout>
         )}
         {/* P1 (2026-10-20): no page is written before the author profile and the business facts are on file */}
-        {view.waitingForProfile && (
+        {!done && view.waitingForProfile && (
           <Callout
             tone="warning"
             title="Your pages wait for your author profile and business facts"
@@ -177,45 +257,112 @@ function ComingUpPanel({ view, cycle, onWrite }: { view: ComingUpView; cycle?: S
             </span>
           </Callout>
         )}
-        {view.pausedReason === 'pileup' && (
-          <Callout tone="warning" title="Writing is paused: pages wait to be published">
-            Publish the pages you have, then the weekly pages continue.
+        {banner && (
+          <Callout tone={banner.tone} title={banner.title}>
+            {banner.body}
           </Callout>
         )}
-        {view.pausedReason === 'site_paused' && <Callout tone="warning" title="Tracking is paused for this website: nothing runs until you resume it" />}
-        {view.reason && !view.waitingForKeyword && !view.pausedReason && !view.waitingForProfile && <p className="text-[13px] text-ink-3">{view.reason}</p>}
+        {upcoming && view.pausedReason === 'site_paused' && <Callout tone="warning" title="Tracking is paused for this website: nothing runs until you resume it" />}
+        {upcoming && view.reason && !view.waitingForKeyword && !view.pausedReason && !view.waitingForProfile && <p className="text-[13px] text-ink-3">{view.reason}</p>}
 
-        {!auto.length && !waiting.length ? (
-          <p className="text-sm text-ink-3">Nothing to write in this run. Your checks and reports run as usual.</p>
+        {nothing ? (
+          <p className="text-sm text-ink-3">{done ? 'Nothing was written in this run. Your checks and reports ran as usual.' : 'Nothing to write in this run. Your checks and reports run as usual.'}</p>
         ) : (
           <>
-            {auto.length > 0 && (
-              <Group icon={<Zap />} title="Written on its own">
-                {auto.map((i) => (
-                  <ComingUpRow key={i.itemKey} item={i} closed={view.closed} />
+            {outcome && outcome.pages.length > 0 && (
+              <Group icon={<CheckCircle2 />} title="Written in this run">
+                {outcome.pages.map((p) => (
+                  <WrittenRow key={p.keyword} page={p} tz={tz} />
                 ))}
               </Group>
             )}
-            {waiting.length > 0 && (
-              <Group icon={<Hand />} title="Waits for your OK">
+            {!outcome && auto.length > 0 && (
+              <Group icon={<Zap />} title={done ? 'Planned to be written on its own' : 'Written on its own'}>
+                {auto.map((i) => (
+                  <ComingUpRow key={i.itemKey} item={i} closed={view.closed} pileup={pileupNow} />
+                ))}
+              </Group>
+            )}
+            {approved.length > 0 && (
+              <Group icon={<CheckCircle2 />} title="Approved by you">
+                {approved.map((i) => (
+                  <ComingUpRow key={i.itemKey} item={i} closed={view.closed} onWrite={onWrite} pileup={upcoming && pileupNow} phase={phase} />
+                ))}
+              </Group>
+            )}
+            {!done && waiting.length > 0 && (
+              <Group icon={<Hand />} title={upcoming ? 'Waits for your OK' : 'Not approved before the run, so not written'}>
                 {waiting.map((i) => (
-                  <ComingUpRow key={i.itemKey} item={i} closed={view.closed} onWrite={onWrite} />
+                  <ComingUpRow key={i.itemKey} item={i} closed={view.closed} onWrite={onWrite} pileup={pileupNow} />
+                ))}
+              </Group>
+            )}
+            {skipped.length > 0 && (
+              <Group icon={<SkipForward />} title="Skipped">
+                {skipped.map((i) => (
+                  <ComingUpRow key={i.itemKey} item={i} closed={view.closed} onWrite={onWrite} pileup={pileupNow} />
                 ))}
               </Group>
             )}
           </>
         )}
-        {(view.approvedNotWritten ?? []).length > 0 && <NotWritten list={view.approvedNotWritten} />}
-        {view.refused.length > 0 && <Refused list={view.refused} />}
+        {(view.approvedNotWritten ?? []).length > 0 && <NotWritten list={view.approvedNotWritten} past={done} />}
+        {!done && view.refused.length > 0 && <Refused list={view.refused} />}
       </div>
     </Panel>
   );
 }
 
-/** Approvals the run does not write, each with why (an approval that two different pages share asks for a new one). */
-export function NotWritten({ list }: { list: ComingUpView['approvedNotWritten'] }) {
+/** A page the finished run started: written (with its page), still being written, or not finished. */
+function WrittenRow({ page, tz }: { page: NonNullable<ComingUpView['outcome']>['pages'][number]; tz: string }) {
+  const { org } = useOrgCtx();
+  const when = validDate(page.at) ? fmtDayHead(page.at, tz) : '';
   return (
-    <Callout tone={list.some((x) => x.reason === 'ambiguous') ? 'warning' : 'info'} title={list.length === 1 ? 'One approval is not used in this run' : `${list.length} approvals are not used in this run`}>
+    <li className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3">
+      <div className="flex min-w-0 flex-1 items-start gap-3">
+        <IconTile size="sm" tone="solid" className="mt-0.5">
+          {SOURCE_ICON[page.source] ?? <PenSquare />}
+        </IconTile>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-ink">{page.keyword}</span>
+            <Badge tone={SOURCE_TONE[page.source]}>{SOURCE_LABEL[page.source] ?? page.source}</Badge>
+            {page.approved && <StatusBadge tone="good">Approved by you</StatusBadge>}
+          </div>
+          <p className="mt-1 text-[13px] leading-snug text-ink-2">{resultLine({ state: page.state, at: page.at, reportId: page.reportId, message: '' }, when)}</p>
+        </div>
+      </div>
+      {page.reportId && (
+        <Link to={paths.report(org.id, page.reportId)} className="text-[13px] font-medium text-accent-text hover:underline">
+          Open the page
+        </Link>
+      )}
+      {page.state === 'written' && <CheckCircle2 className="size-4 text-good-text" aria-hidden />}
+    </li>
+  );
+}
+
+/** What became of a page, in one line (pure). */
+export function resultLine(r: NonNullable<ComingUpItem['result']>, when: string): string {
+  switch (r.state) {
+    case 'written':
+      return when ? `Written on ${when}.` : 'Written in that run.';
+    case 'started':
+      return when ? `Started on ${when}: the page arrives under Reports when it is ready.` : 'Started in that run: the page arrives under Reports when it is ready.';
+    case 'failed':
+      return r.message || 'Started in that run, but the page could not be finished.';
+    default:
+      return r.message || 'Not written in that run.';
+  }
+}
+
+/** Approvals the run does not write, each with why (an approval that two different pages share asks for a new one). */
+export function NotWritten({ list, past = false }: { list: ComingUpView['approvedNotWritten']; past?: boolean }) {
+  const title = past
+    ? list.length === 1 ? 'One approval was not used in that run' : `${list.length} approvals were not used in that run`
+    : list.length === 1 ? 'One approval is not used in this run' : `${list.length} approvals are not used in this run`;
+  return (
+    <Callout tone={list.some((x) => x.reason === 'ambiguous') ? 'warning' : 'info'} title={title}>
       <ul className="mt-1 space-y-1">
         {list.map((x) => (
           <li key={`${x.keyword}:${x.reason}`} className="text-[13px] leading-snug">
@@ -244,9 +391,10 @@ function Group({ icon, title, children }: { icon: ReactNode; title: string; chil
   );
 }
 
-function ComingUpRow({ item, closed, onWrite }: { item: ComingUpItem; closed: boolean; onWrite?: (it: ComingUpItem) => void }) {
+function ComingUpRow({ item, closed, onWrite, pileup = false, phase }: { item: ComingUpItem; closed: boolean; onWrite?: (it: ComingUpItem) => void; pileup?: boolean; phase?: ComingUpPhase }) {
   const { org, can } = useOrgCtx();
   const { site } = useSiteCtx();
+  const tz = siteTimezone(site);
   const decide = useComingUpDecision(org.id, site.id);
   const [pending, setPending] = useState<string | null>(null);
   const d = item.decision;
@@ -257,10 +405,13 @@ function ComingUpRow({ item, closed, onWrite }: { item: ComingUpItem; closed: bo
     decide.mutate(
       { itemKey: item.itemKey, decision, scope },
       {
-        onSuccess: () =>
-          toast.success(
-            decision === 'approve' ? `"${item.keyword}" will be written in this run` : scope === 'always' ? `We will not suggest "${item.keyword}" again` : `"${item.keyword}" is skipped this week`,
-          ),
+        onSuccess: () => {
+          if (decision === 'approve') {
+            const t = approveToast(item.keyword, pileup);
+            return void toast.success(t.title, t.description ? { description: t.description } : undefined);
+          }
+          toast.success(scope === 'always' ? `We will not suggest "${item.keyword}" again` : `"${item.keyword}" is skipped this week`);
+        },
         onError: (e) => {
           // only `cycle_started` means the run began; a cancelled "Check this first" (409 confirm_needed) changed nothing and says so
           if (isConfirmCancelled(e)) return void toast.info('Nothing was changed', { description: 'This keyword keeps its place in the plan.' });
@@ -274,6 +425,9 @@ function ComingUpRow({ item, closed, onWrite }: { item: ComingUpItem; closed: bo
     );
   };
   const canAct = can('member') && !closed;
+  const r = item.result ?? null;
+  const when = r && validDate(r.at) ? fmtDayHead(r.at, tz) : '';
+  const written = r?.state === 'written';
   return (
     <li className={cn('flex flex-wrap items-start justify-between gap-3 rounded-xl border px-4 py-3 transition-colors duration-200 ease-brand', skipped ? 'border-line bg-surface-2/50' : 'border-line bg-surface')}>
       <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -285,10 +439,27 @@ function ComingUpRow({ item, closed, onWrite }: { item: ComingUpItem; closed: bo
             <span className={cn('text-sm font-semibold', skipped ? 'text-ink-3 line-through decoration-1' : 'text-ink')}>{item.keyword}</span>
             <Badge tone={SOURCE_TONE[item.source]}>{SOURCE_LABEL[item.source] ?? item.source}</Badge>
             {decisionBadge(item)}
+            {r && (written ? <StatusBadge tone="good">Written</StatusBadge> : r.state === 'started' ? <Badge>Being written</Badge> : <Badge tone="warning">Not written</Badge>)}
             {item.recheck && <Badge tone="warning">Checking again</Badge>}
             {item.held && <Badge tone="warning">Waits for your profile</Badge>}
           </div>
-          {item.recheck ? (
+          {r ? (
+            <p className={cn('mt-1 text-[13px] leading-snug', written || r.state === 'started' ? 'text-ink-2' : 'text-warning-text')}>
+              {resultLine(r, when)}
+              {r.reportId && (
+                <>
+                  {' '}
+                  <Link to={paths.report(org.id, r.reportId)} className="font-medium text-accent-text hover:underline">
+                    Open the page
+                  </Link>
+                </>
+              )}
+            </p>
+          ) : approved && phase === 'done' ? (
+            <p className="mt-1 text-[13px] leading-snug text-ink-3">What became of it is on Content and under Reports.</p>
+          ) : approved && pileup && !closed ? (
+            <p className="mt-1 text-[13px] leading-snug text-ink-2">Written once the pages that wait are published. If they still wait when this run starts, approve it again in the next plan.</p>
+          ) : item.recheck ? (
             <p className="mt-1 text-[13px] leading-snug text-ink-2">{RECHECK_LINE}</p>
           ) : (
             item.why && <p className="mt-1 text-[13px] leading-snug text-ink-2">{item.why}</p>
@@ -307,7 +478,7 @@ function ComingUpRow({ item, closed, onWrite }: { item: ComingUpItem; closed: bo
               Approve
             </Button>
           )}
-          {!item.auto && !item.canApprove && !item.recheck && onWrite && !skipped && (
+          {!item.auto && !item.canApprove && !item.recheck && onWrite && !skipped && !approved && (
             <Button size="sm" variant="secondary" icon={<PenSquare className="size-4" />} onClick={() => onWrite(item)}>
               Write it now
             </Button>
@@ -337,7 +508,14 @@ function ComingUpRow({ item, closed, onWrite }: { item: ComingUpItem; closed: bo
             ))}
         </div>
       )}
-      {approved && !canAct && <CheckCircle2 className="size-4 text-good-text" aria-hidden />}
+      {/* the tick only for a page that was really written (an approval alone is not a result) */}
+      {written && <CheckCircle2 className="size-4 text-good-text" aria-hidden />}
+      {/* I3: an approval the run did not write can still be written by hand */}
+      {r && r.state !== 'written' && r.state !== 'started' && onWrite && can('member') && (
+        <Button size="sm" variant="secondary" icon={<PenSquare className="size-4" />} onClick={() => onWrite(item)}>
+          Write it now
+        </Button>
+      )}
     </li>
   );
 }

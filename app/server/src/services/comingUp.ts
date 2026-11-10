@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   AUTOPILOT_LEVELS,
   SKIPS_COLUMNS,
@@ -11,8 +11,13 @@ import {
   type AutopilotLevel,
   type ComingUpDecisionResult,
   type ComingUpItem,
+  type ComingUpItemResult,
   type ComingUpNotWritten,
+  type ComingUpOutcome,
+  type ComingUpOutcomePage,
   type ComingUpView,
+  type CycleJobRow,
+  type CycleRow,
   type CyclePreview,
   type CyclePreviewItem,
   type Role,
@@ -27,7 +32,7 @@ import { deleteRows, ensureTable, rows as n8nRows, upsertRow } from '../n8n/clie
 import { wholeCreditsOfUsd as creditsOfUsd } from './admin/settings';
 import { billingContacts } from './invoices';
 import { baseUrlFor, senderFor } from './portalMail';
-import { localDayName, siteTimezone } from './cycles';
+import { contentCycleNote, loadCycleRows, localDayName, siteCycleView, siteTimezone } from './cycles';
 import { assertEngineSiteIsOurs, foreignEngineDomain } from './engineSite';
 
 // The weekly "Coming up" plan (SCHEDULING_KEYWORDS_PLAN.md §5.7, §14.4, §14.6): 48 hours before each cycle the engine plans exactly what
@@ -112,6 +117,18 @@ export function previewOf(body: Record<string, unknown>): CyclePreview {
   };
 }
 
+/** Words about our own machinery that never reach a customer (cycles.ts has the same rule for job reasons). */
+const INTERNAL = /execution|ledger|seo_|n8n|workflow|run guard|skip_jobs|target_id|ait_/i;
+
+/** The engine's plain cause as the middle of a sentence: no internal words, no dashes or ellipses, no closing full stop. */
+export function plainDetail(v: unknown): string {
+  let t = S(v).replace(/\s*[\u2014\u2013]\s*/g, ', ').replace(/\u2026/g, '').replace(/[\u201c\u201d]/g, '"').replace(/[\u2018\u2019]/g, "'").replace(/\s+/g, ' ').trim().replace(/[.;:,\s]+$/, '');
+  if (!t || INTERNAL.test(t)) return '';
+  if (t.length > 240) t = t.slice(0, 239).replace(/\s+\S*$/, '');
+  // "The question left ..." reads as "...was not used: the question left ...", but "AI" or "UAE" keep their capitals
+  return /^[A-Z][a-z]/.test(t) ? t.charAt(0).toLowerCase() + t.slice(1) : t;
+}
+
 /** Why an approval is not written this cycle, in the customer's words (the engine's reason codes and details never reach the page). */
 export function notWrittenMessage(x: { keyword: string; reason: string; detail?: string }): ComingUpNotWritten {
   const q = `"${x.keyword}"`;
@@ -128,6 +145,11 @@ export function notWrittenMessage(x: { keyword: string; reason: string; detail?:
       return { keyword: x.keyword, reason: 'budget', message: `${q} did not fit in this cycle: your pages a week are already used. Approve it again in a later plan.` };
     case 'profile':
       return { keyword: x.keyword, reason: 'profile', message: `Your OK for ${q} waits: no page is written until your author profile and business facts are on file (Website settings).` };
+    case 'no_longer_offered': {
+      // I3 (2026-11-10): the item stopped being a candidate before the run (e.g. its question left the AI panel); the engine says why
+      const why = plainDetail(x.detail);
+      return { keyword: x.keyword, reason: 'no_longer_offered', message: `Your OK for ${q} was not used: ${why || 'this page was no longer offered when the run started'}. Use Write it now if you still want this page.` };
+    }
     default:
       return { keyword: x.keyword, reason: 'other', message: `${q} is not written in this cycle.` };
   }
@@ -175,15 +197,102 @@ const decisionOf = (skips: SkipRow[], siteId: string, cycleKey: string, key: str
   return r ? { decision: S(r.decision) === 'approve' ? 'approve' : 'skip', scope: S(r.scope) === 'always' ? 'always' : 'cycle', by: S(r.by), at: S(r.created_at) } : null;
 };
 
+/** I3: what the app knows of the plan's run: its writing job, the cycle being worked on, the run's content report and its pages' reports. */
+export interface PlanRun {
+  /** the cycle's content_cadence job row (seo_cycle_jobs), if the engine has one */
+  job: Pick<CycleJobRow, 'status' | 'finished_at'> | null;
+  /** seo_cycles.current_key */
+  currentKey: string;
+  /** the app's content_cadence report of the same cycle_key */
+  report: { payload: Record<string, unknown>; receivedAt: Date } | null;
+  /** the reports of the pages that run started (by their request id) */
+  pageReports: { id: string; requestId: string | null; status: string; receivedAt: Date }[];
+  nextPreviewAt: string | null;
+  nextDueAt: string | null;
+}
+
+/** After this long with no word of the run, its plan is treated as done (nothing says what it wrote). */
+const RUN_SILENT_MS = 24 * 3_600_000;
+
+/** I3 (pure): where a plan's run stands. Not due: upcoming. Due: done once its writing job finished, its report came, or a later cycle began. */
+export function planPhase(o: { due: number; now: number; cycleKey: string; run?: Pick<PlanRun, 'job' | 'currentKey' | 'report'> | null }): 'upcoming' | 'running' | 'done' {
+  if (!Number.isFinite(o.due) || o.due > o.now) return 'upcoming';
+  const st = S(o.run?.job?.status);
+  if (['done', 'skipped', 'gave_up'].includes(st)) return 'done';
+  if (o.run?.report) return 'done';
+  const cur = S(o.run?.currentKey);
+  if (cur && cur !== o.cycleKey && cycleDateOf(cur) > cycleDateOf(o.cycleKey)) return 'done';
+  return o.now - o.due > RUN_SILENT_MS ? 'done' : 'running';
+}
+
+const arrOf = (v: unknown): Record<string, unknown>[] => (Array.isArray(v) ? v.filter((x): x is Record<string, unknown> => !!x && typeof x === 'object') : []);
+const isoOf = (v: unknown): string | null => {
+  const t = v instanceof Date ? v.getTime() : Date.parse(S(v));
+  return Number.isFinite(t) && t > 0 ? new Date(t).toISOString() : null;
+};
+
+/** I3 (pure): what a finished run wrote, from its own content report (pages, pause) and the reports its pages sent since. */
+export function runOutcome(run: Pick<PlanRun, 'job' | 'report' | 'pageReports'> | null | undefined): ComingUpOutcome {
+  const p = run?.report?.payload ?? null;
+  if (!p) return { known: false, at: isoOf(run?.job?.finished_at), pages: [], pausedReason: '', waitingPublish: 0, note: '' };
+  const startedAt = isoOf(run?.report?.receivedAt);
+  const pages: ComingUpOutcomePage[] = arrOf(p.pages)
+    .filter((x) => S(x.keyword))
+    .map((x) => {
+      const reqId = S(x.request_id);
+      const mine = (run?.pageReports ?? []).filter((r) => reqId && S(r.requestId) === reqId).sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime());
+      const done = mine.find((r) => S(r.status) !== 'failed' && S(r.status) !== 'progress');
+      const failed = !done && mine.find((r) => S(r.status) === 'failed');
+      return {
+        keyword: S(x.keyword),
+        source: asSource(x.source),
+        approved: x.approved === true,
+        state: done ? ('written' as const) : failed ? ('failed' as const) : ('started' as const),
+        at: done ? isoOf(done.receivedAt) : startedAt,
+        reportId: done ? done.id : null,
+      };
+    });
+  const pr = S(p.paused_reason);
+  const key = S(p.cycle_key);
+  const note = pages.length ? '' : S(contentCycleNote(p)[key]?.content_cadence).replace(/^Wrote nothing:\s*/, '');
+  return { known: true, at: startedAt ?? isoOf(run?.job?.finished_at), pages, pausedReason: pr === 'pileup' || pr === 'site_paused' ? pr : '', waitingPublish: Number(p.waiting_publish) || 0, note };
+}
+
+/**
+ * I3 (pure): what became of one approved item once its run is done. Written / started / failed from the run's pages; not written with the
+ * reason the run gave (its content report), else the plan's own, else the pile-up the run reported, else no reason at all (none invented).
+ */
+export function approvedResult(o: { keyword: string; outcome: ComingUpOutcome; reported: CyclePreview['approved_not_written']; planned: CyclePreview['approved_not_written'] }): ComingUpItemResult | null {
+  if (!o.outcome.known) return null;
+  const k = itemKeyOf(o.keyword);
+  const page = o.outcome.pages.find((x) => itemKeyOf(x.keyword) === k);
+  if (page)
+    return {
+      state: page.state,
+      at: page.at,
+      reportId: page.reportId,
+      message: page.state === 'failed' ? 'Started in that run, but the page could not be finished. Use Write it now to try again.' : '',
+    };
+  const why = (o.reported ?? []).find((x) => itemKeyOf(x.keyword) === k) ?? (o.planned ?? []).find((x) => itemKeyOf(x.keyword) === k);
+  if (why) return { state: 'not_written', at: null, reportId: null, message: notWrittenMessage({ keyword: o.keyword, reason: why.reason, detail: why.detail }).message };
+  if (o.outcome.pausedReason === 'pileup') return { state: 'not_written', at: null, reportId: null, message: notWrittenMessage({ keyword: o.keyword, reason: 'pileup' }).message };
+  return { state: 'not_written', at: null, reportId: null, message: 'Not written in that run.' };
+}
+
 /** The view of one plan (pure): items in credits, each with the client's decision on it. */
-export function comingUpView(o: { site: Pick<SiteRow, 'id' | 'domain'>; preview: CyclePreviewRow | null; skips: SkipRow[]; role: Role; now: number; credits: (usd: number) => number }): ComingUpView {
+export function comingUpView(o: { site: Pick<SiteRow, 'id' | 'domain'>; preview: CyclePreviewRow | null; skips: SkipRow[]; role: Role; now: number; credits: (usd: number) => number; run?: PlanRun | null }): ComingUpView {
   const canDecide = roleAtLeast(o.role, 'member');
+  const next = { nextPreviewAt: futureIso(o.run?.nextPreviewAt, o.now), nextDueAt: futureIso(o.run?.nextDueAt, o.now) };
   if (!o.preview)
-    return { available: false, cycleKey: '', cycleDate: '', scheduledFor: null, receivedAt: null, level: 2, pagesPerWeek: 0, waitingForKeyword: false, pausedReason: '', reason: '', items: [], suggestions: [], refused: [], autoCredits: 0, canDecide, closed: false, approvedNotWritten: [], recheckLadders: [], budget: null, waitingForProfile: false, missingText: '' };
+    return { available: false, cycleKey: '', cycleDate: '', scheduledFor: null, receivedAt: null, level: 2, pagesPerWeek: 0, waitingForKeyword: false, pausedReason: '', reason: '', items: [], suggestions: [], refused: [], autoCredits: 0, canDecide, closed: false, phase: 'upcoming', outcome: null, ...next, approvedNotWritten: [], recheckLadders: [], budget: null, waitingForProfile: false, missingText: '' };
   const p = previewOf(o.preview.body);
   const siteId = n8nSiteId(o.site.domain);
   const due = o.preview.scheduledFor?.getTime() ?? Date.parse(p.scheduled_for);
   const closed = Number.isFinite(due) && due <= o.now;
+  const phase = planPhase({ due, now: o.now, cycleKey: p.cycle_key, run: o.run });
+  const outcome = phase === 'done' ? runOutcome(o.run) : null;
+  // the run's own word on approvals it did not write (its content report); an older engine sends none
+  const reported = o.run?.report ? previewOf({ approved_not_written: o.run.report.payload.approved_not_written }).approved_not_written : [];
   const toItem = (x: CyclePreviewItem): ComingUpItem => {
     const t = x.ai_target as (Record<string, unknown> & { question?: unknown }) | null | undefined;
     return {
@@ -215,7 +324,13 @@ export function comingUpView(o: { site: Pick<SiteRow, 'id' | 'domain'>; preview:
       held: x.held === 'profile',
     };
   };
-  const items = p.items.map(toItem);
+  const withResult = (i: ComingUpItem): ComingUpItem =>
+    outcome && i.decision?.decision === 'approve' ? { ...i, result: approvedResult({ keyword: i.keyword, outcome, reported, planned: p.approved_not_written }) } : i;
+  const items = p.items.map(toItem).map(withResult);
+  const suggestions = p.suggestions.map(toItem).map(withResult);
+  // done: each approved row carries its own result; the list keeps only what no row of the plan shows
+  const rowKeys = new Set([...items, ...suggestions].filter((i) => i.result).map((i) => i.itemKey));
+  const notWritten = outcome ? [...(reported ?? []), ...(p.approved_not_written ?? [])].filter((x, n, all) => !rowKeys.has(itemKeyOf(x.keyword)) && all.findIndex((y) => itemKeyOf(y.keyword) === itemKeyOf(x.keyword)) === n) : (p.approved_not_written ?? []);
   return {
     available: true,
     cycleKey: p.cycle_key,
@@ -228,19 +343,28 @@ export function comingUpView(o: { site: Pick<SiteRow, 'id' | 'domain'>; preview:
     pausedReason: p.paused_reason as ComingUpView['pausedReason'],
     reason: p.reason ?? '',
     items,
-    suggestions: p.suggestions.map(toItem),
+    suggestions,
     refused: (p.refused ?? []).map((r) => ({ keyword: r.keyword, source: r.source, reason: r.reason, detail: r.detail })),
     // P1: a page held for the author profile and the business facts uses no credits in this cycle
     autoCredits: items.filter((i) => i.auto && !i.held && i.decision?.decision !== 'skip').reduce((t, i) => t + i.credits, 0),
     canDecide,
     closed,
-    approvedNotWritten: (p.approved_not_written ?? []).map(notWrittenMessage),
+    phase,
+    outcome,
+    ...next,
+    approvedNotWritten: notWritten.map(notWrittenMessage),
     recheckLadders: (p.recheck_ladders ?? []).map((r) => ({ ladderId: r.ladder_id, head: r.head, plannedAt: r.planned_at })),
     budget: p.budget ? { pagesPerWeek: p.budget.pages_per_week, spent: p.budget.spent, room: p.budget.room, ladderStartWindow: p.budget.ladder_start_window || null } : null,
     waitingForProfile: p.waiting_for_profile === true,
     missingText: S(p.readiness?.missing_text),
   };
 }
+
+/** An instant still to come, as ISO (a stale "next" time from the engine row is not shown). */
+const futureIso = (v: unknown, now: number): string | null => {
+  const t = Date.parse(S(v));
+  return Number.isFinite(t) && t > now ? new Date(t).toISOString() : null;
+};
 
 /** The client's decisions in seo_skips (keyed by site id, no domain column): none when the engine holds the site id for another domain. */
 export async function skipsOf(site: Pick<SiteRow, 'domain'>, fresh = false): Promise<SkipRow[]> {
@@ -250,8 +374,42 @@ export async function skipsOf(site: Pick<SiteRow, 'domain'>, fresh = false): Pro
 
 /** GET .../coming-up */
 export async function loadComingUp(site: SiteRow, role: Role, now = Date.now()): Promise<ComingUpView> {
-  const [preview, skips] = await Promise.all([latestPreview(site.id), skipsOf(site)]);
-  return comingUpView({ site, preview, skips, role, now, credits: creditsOfUsd });
+  const [preview, skips, cyc] = await Promise.all([
+    latestPreview(site.id),
+    skipsOf(site),
+    loadCycleRows(site).catch(() => ({ row: null as CycleRow | null, jobs: [] as CycleJobRow[] })),
+  ]);
+  const run = await planRun(site, preview, cyc, role, now).catch(() => null);
+  return comingUpView({ site, preview, skips, role, now, credits: creditsOfUsd, run });
+}
+
+/**
+ * I3: what the app knows of the plan's run. Its job row and the cycle row come from the engine (already read for the cycle view); once the
+ * run is due, its content report (same cycle_key) and the reports of the pages it started come from the app's own reports.
+ */
+async function planRun(site: SiteRow, preview: CyclePreviewRow | null, cyc: { row: CycleRow | null; jobs: CycleJobRow[] }, role: Role, now: number): Promise<PlanRun> {
+  const cv = siteCycleView(site, cyc.row, cyc.jobs, now, role);
+  const base: PlanRun = { job: null, currentKey: S(cyc.row?.current_key), report: null, pageReports: [], nextPreviewAt: cv.nextPreviewAt, nextDueAt: cv.nextDueAt };
+  if (!preview) return base;
+  const cycleKey = preview.cycleKey;
+  const due = preview.scheduledFor?.getTime() ?? Date.parse(S(preview.body.scheduled_for));
+  base.job = cyc.jobs.find((j) => S(j.cycle_key) === cycleKey && S(j.job) === 'content_cadence') ?? null;
+  if (!Number.isFinite(due) || due > now) return base;
+  const reps = await db
+    .select({ payload: schema.reports.payload, receivedAt: schema.reports.receivedAt })
+    .from(schema.reports)
+    .where(and(eq(schema.reports.orgId, site.orgId), eq(schema.reports.siteId, site.id), eq(schema.reports.stage, 'content_cadence'), sql`${schema.reports.payload}->>'cycle_key' = ${cycleKey}`))
+    .orderBy(desc(schema.reports.receivedAt))
+    .limit(5);
+  // the note that lists the pages, else the newest word of the run
+  base.report = reps.find((r) => Array.isArray(r.payload.pages) && (r.payload.pages as unknown[]).length) ?? reps[0] ?? null;
+  const ids = arrOf(base.report?.payload.pages).map((x) => S(x.request_id)).filter(Boolean);
+  if (ids.length)
+    base.pageReports = await db
+      .select({ id: schema.reports.id, requestId: schema.reports.requestId, status: schema.reports.status, receivedAt: schema.reports.receivedAt })
+      .from(schema.reports)
+      .where(and(eq(schema.reports.orgId, site.orgId), eq(schema.reports.siteId, site.id), eq(schema.reports.stage, 'content'), inArray(schema.reports.requestId, ids.slice(0, 20))));
+  return base;
 }
 
 export interface ComingUpDecisionInput {

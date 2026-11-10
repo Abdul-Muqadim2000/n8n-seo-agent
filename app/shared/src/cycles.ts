@@ -272,12 +272,49 @@ export interface ComingUpItem {
   recheck: boolean;
   /** P1: written once the author profile and the business facts are on file (approving it does not write it sooner) */
   held: boolean;
+  /** I3 (2026-11-10): once the run is done, what became of an approved item (null before, or for an item nobody approved) */
+  result?: ComingUpItemResult | null;
+}
+
+/** I3: what the run did with one approved item: written (with its report), started, failed, or not written and why. */
+export interface ComingUpItemResult {
+  state: 'written' | 'started' | 'failed' | 'not_written';
+  /** when the page arrived (written) or the run started it (started); null when not written */
+  at: string | null;
+  /** the page's report in the app, when it arrived */
+  reportId: string | null;
+  /** for `not_written`: why, in the customer's words */
+  message: string;
+}
+
+/** I3: one page the finished run started, and where it stands now. */
+export interface ComingUpOutcomePage {
+  keyword: string;
+  source: TopicSource;
+  approved: boolean;
+  state: 'written' | 'started' | 'failed';
+  at: string | null;
+  reportId: string | null;
+}
+
+/** I3: what a finished weekly run wrote, from the run's own content report of the same cycle. */
+export interface ComingUpOutcome {
+  /** false: nothing says what the run did (no report of it arrived, or its writing step did not run) */
+  known: boolean;
+  /** when the writing step finished (its report, else its job row) */
+  at: string | null;
+  pages: ComingUpOutcomePage[];
+  /** the run itself was paused (pile-up or a paused website) */
+  pausedReason: '' | 'pileup' | 'site_paused';
+  waitingPublish: number;
+  /** why it wrote nothing, in the customer's words ('' when it wrote pages or said nothing) */
+  note: string;
 }
 
 /** An approval the cycle did not write, in the customer's words. */
 export interface ComingUpNotWritten {
   keyword: string;
-  reason: 'pileup' | 'budget' | 'covered_by_live_page' | 'ambiguous' | 'profile' | 'other';
+  reason: 'pileup' | 'budget' | 'covered_by_live_page' | 'ambiguous' | 'profile' | 'no_longer_offered' | 'other';
   message: string;
 }
 
@@ -306,6 +343,16 @@ export interface ComingUpView {
   canDecide: boolean;
   /** the plan is for a cycle that already started: decisions are closed */
   closed: boolean;
+  /**
+   * I3 (2026-11-10): where the plan's run stands. `upcoming`: not due yet; `running`: due, its writing step not finished; `done`: finished
+   * (the card then says "Last weekly run", what it wrote, and when the next plan and run come). An older server leaves it out.
+   */
+  phase?: 'upcoming' | 'running' | 'done';
+  /** I3: what the finished run wrote (phase `done` only) */
+  outcome?: ComingUpOutcome | null;
+  /** I3: when the next plan arrives and the next run is due (the website's cycle; null when paused or unknown) */
+  nextPreviewAt?: string | null;
+  nextDueAt?: string | null;
   /** F-KW: approvals the cycle does not write, each with why (an approval that names only a keyword two pages share is `ambiguous`) */
   approvedNotWritten: ComingUpNotWritten[];
   /** F-KW: ladders planned long ago whose keyword is checked again before their first page */
