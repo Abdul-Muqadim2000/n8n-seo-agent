@@ -188,8 +188,11 @@ const LK = (() => {
     const rel = l.relevance == null || l.relevance === '' ? 0.5 : clamp(Number(l.relevance));
     const visits = Number(l.visits) || 0, kw = Number(l.page_keywords) || 0;
     const traffic = kw > 0 ? clamp(Math.log10(1 + kw) / 2.5) : visits > 0 ? 0.5 : 0.2;
-    const place = { content: 1, body: 0.65, sidebar: 0.4, nav: 0.3, footer: 0.2, comment: 0.1 }[l.placement || 'body'] ?? 0.6;
-    const editorial = (l.original === false ? 0.4 : 1) * (Number(l.sitewide) >= 20 ? 0.5 : 1) * (['guest_post', 'sponsored'].includes(l.link_type) ? 0.4 : 1);
+    // client reports 2026-11-11 (188): a row an index named with no page we ever read (no address, no visits, never found) is not an average
+    // link: its placement and editorial weight are unknown, so they count below average (devaicon: 775 such rows reached 50 and filled "Best")
+    const unseen = !l.from_url && !(Number(l.visits) > 0) && l.verify !== 'found';
+    const place = unseen ? 0.4 : ({ content: 1, body: 0.65, sidebar: 0.4, nav: 0.3, footer: 0.2, comment: 0.1 }[l.placement || 'body'] ?? 0.6);
+    const editorial = (unseen ? 0.6 : 1) * (l.original === false ? 0.4 : 1) * (Number(l.sitewide) >= 20 ? 0.5 : 1) * (['guest_post', 'sponsored'].includes(l.link_type) ? 0.4 : 1);
     const clean = clamp(1 - (Number(l.spam) || 0) / 100) * (Number(l.outbound) > 150 ? 0.5 : Number(l.outbound) > 60 ? 0.8 : 1);
     const anchor = l.anchor_kind === 'money' && rel < 0.5 ? 0.2 : 1;
     let seo = 100 * (0.3 * (authKnown ? auth : 0.15) + 0.2 * rel + 0.15 * traffic + 0.1 * place + 0.1 * editorial + 0.1 * clean + 0.05 * anchor);
@@ -247,7 +250,20 @@ const LK = (() => {
     for (const [p, ds] of byPath) if (ds.size >= 2 && [...ds].some(d => out.has(d))) for (const d of ds) set(d, 'shares its page path with a link-farm page (' + p.slice(0, 60) + ')');
     return out;
   }
-  return { text, attr, hostOf, regDomain, isSuffix, refKey, sameSite, isInfra, isScraper, isSearchPage, isWire, normUrl, cleanUrl, placementAt, anchorPlacements, linksTo, pageFacts, contextAt, challenge, emailsIn, verify, mention, domainKind, quality, values, anchorKind, SPAM_RE, isGambling, footPath, footprints };
+  // client reports 2026-11-11 (section 188, devaicon.com: 774 of 1,289 rows): an AUTOMATIC REPORT PAGE (a site checker / WHOIS / "worth" /
+  // trust checker on an established domain, or a name made of SEO-tool words on a new cheap ending that only a link index has named and our
+  // own check never found a link on). Every site gets hundreds; Google ignores them. Same rule as the app (app/shared/src/backlinks.ts
+  // isAutoReportSite); keep the two equal.
+  const AR_CHEAP_TLD = new Set(['shop', 'store', 'site', 'online', 'website', 'space', 'xyz', 'top', 'icu', 'click', 'link', 'fun', 'buzz', 'monster', 'cfd', 'sbs', 'cyou', 'bond', 'quest', 'rest', 'lol', 'pw', 'cam', 'bar', 'mom', 'vip', 'win', 'bid', 'loan', 'work', 'party']);
+  const AR_TOOL_WORD = /seo|traffic|backlink|rank|serp|visit|audit|analy[sz]|metric|stat|report|monitor|check|crawl|index|domain|url|page|site|web|link|organic|keyword|score|worth|value|bot|hits|click|track|insight|spy|lookup|search|position|authority|referr|views?|boost|signal|scan|tool|data|info|trend|rate|test|review|list|dir|catalog|submit/;
+  const AR_REPORT_HOST = /(^|[.-])(whois|who\.is|worth|siteprice|sitestats?|site-?info|hypestat|similarsites?|sitelike|sitesimilar|websiteoutlook|statshow|domaintools|robtex|builtwith|urlscan|siteindices|dnslytics|ipaddress|host\.io|domainbigdata|webstatsdomain|siteliner|rank2traffic|websiteinformer|informer|valuation|traffic-?estimate|seo-?analy[sz]er|seositecheckup|sitechecker|webrank|domainstats|scamadviser|scam-?detector|trustscam|isitlegit|urlvoid|siteadvisor|scamdoc|gridinsoft)/;
+  const isAutoReport = (domain, row) => { const d = String(domain || '').toLowerCase().trim().replace(/^www\./, '').replace(/\.$/, ''); if (!d) return false; const r = row || {};
+    if (r.link_type === 'scraper' || AR_REPORT_HOST.test(d)) return true;
+    const dot = d.lastIndexOf('.'); if (dot < 0) return false;
+    let src = r.sources; if (typeof src === 'string') { try { src = JSON.parse(src); } catch (e) { src = src.split(/[,\s]+/); } }
+    const onlyIndex = Array.isArray(src) && src.length > 0 && src.every(x => String(x) === 'dfs');
+    return AR_CHEAP_TLD.has(d.slice(dot + 1)) && AR_TOOL_WORD.test(d.slice(0, dot)) && onlyIndex && r.verify !== 'found' && !(Number(r.visits) > 0); };
+  return { text, attr, hostOf, regDomain, isSuffix, refKey, sameSite, isInfra, isScraper, isAutoReport, isSearchPage, isWire, normUrl, cleanUrl, placementAt, anchorPlacements, linksTo, pageFacts, contextAt, challenge, emailsIn, verify, mention, domainKind, quality, values, anchorKind, SPAM_RE, isGambling, footPath, footprints };
 })();
 
 const reqs = $('Verify Requests').all().map(i => i.json); let resps = []; try { resps = $('Fetch Linking Pages').all().map(i => i.json || {}); } catch (e) {}

@@ -18,3 +18,11 @@ def dup_src(read):
     src = read('code/_dup_targets.js')
     assert src.count(FIT_PLACES_MARKER) == 1, 'kit_src: _dup_targets.js must carry %s once' % FIT_PLACES_MARKER
     return src.replace(FIT_PLACES_MARKER, fit_places_literal(read('code/_fit_gate.js'))).rstrip('\n')
+
+
+def index_utility_literal(read):
+    """The UTILITY object literal of v5/code/_index_kit.js (policy / utility pages that need not be in Google): one list for the audit and
+    the Indexing page (client reports 2026-11-11, section 187)."""
+    m = re.search(r'const UTILITY = (\{[\s\S]*?\n  \});', read('code/_index_kit.js'))
+    assert m and "'privacy'" in m.group(1) and "'cookies'" in m.group(1), 'kit_src: _index_kit.js has no UTILITY list'
+    return m.group(1)

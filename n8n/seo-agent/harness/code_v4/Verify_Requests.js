@@ -34,6 +34,9 @@ for (const m of merged) {
     // look: these are checked before the valuable ones and on light runs too. The read half of INVARIANTS rule 2 - the status that
     // branch writes is acted on here, or it would sit at risk for ever.
     const dormant = pv.status === 'at_risk' && pv.lost_reason === 'not_seen';
+    // client reports 2026-11-11 (188): a farm or automatic report page is never fetched again (nothing to win back; a farm page missed once used to
+    // take the first slot of every run): only a row with no label yet is read, so the footprint gate still sees new farms
+    if (['spam', 'scraper'].includes(String(pv.link_type || ''))) return { e, url: '', prio: -9, why: 'junk' };
     const prio = e.footprint ? -1 : miss > 0 ? 1000 : e.dfs_lost ? 900 : dormant ? 850 : won.has(e.ref_domain) ? 800 : !e.prev ? 700 + Math.min(99, (e.authority || 0) / 10) : (val >= 40 || e.visits > 0) ? 500 + val : Math.min(400, days(pv.verified_at));   // link-farm pages (D3): last, full runs only
     return { e, url: urlOf(e), prio, why: e.footprint ? 'footprint' : miss > 0 ? 'missed_once' : e.dfs_lost ? 'reported_lost' : dormant ? 'dormant' : won.has(e.ref_domain) ? 'won' : !e.prev ? 'new' : (val >= 40 || e.visits > 0) ? 'valuable' : 'rotation' };
   }).filter(x => /^https?:\/\//i.test(x.url) && !DOC.test(x.url) && (full || x.prio >= 500)).sort((a, b) => b.prio - a.prio).slice(0, full ? 220 : 60);

@@ -151,23 +151,27 @@ return plans.map(p => {
   for (const row of ledger) {
     if (fp.has(row.ref_domain)) { row.link_type = 'spam'; row.note = ('link farm: ' + fp.get(row.ref_domain)).slice(0, 140); }
     else if (searchPage(row)) { row.link_type = 'scraper'; row.note = ('a search-results page on a site unrelated to your topics (' + String(row.from_url).slice(0, 80) + '): no SEO value, nothing to do').slice(0, 140); }
+    // client reports 2026-11-11 (188): an automatic report page (site stats / traffic / SEO report networks, site checkers) is labelled as such:
+    // SEO value capped at 5, never Best, never at risk or lost (nothing was earned); the app's "What your links are" uses the same rule
+    else if ((!row.link_type || row.link_type === 'other') && LK.isAutoReport(row.ref_domain, row)) { row.link_type = 'scraper'; row.note = 'automatic report page (site statistics, traffic or SEO report network): Google ignores it, nothing to do'; }
     const val = LK.values({ ...row, spam: row.spam_score, relevance: row.relevance === '' ? null : row.relevance });
     row.seo_value = val.seo; row.referral_value = val.referral; row.brand_value = val.brand;
     if (row._found_new && row.link_type !== 'spam' && (val.seo >= 50 || ['editorial', 'press', 'listing', 'resource'].includes(row.link_type))) wins.push({ ref_domain: row.ref_domain, url: row._url, why: 'new', seo: val.seo, link_type: row.link_type });
   }
   const spamSet = new Set(ledger.filter(r => r.link_type === 'spam').map(r => r.ref_domain));
+  const junkSet = new Set(ledger.filter(r => r.link_type === 'spam' || r.link_type === 'scraper').map(r => r.ref_domain));   // 188: farms and automatic report pages
   const farms = ledger.filter(r => spamSet.has(r.ref_domain)).map(r => ({ ref_domain: r.ref_domain, from_url: r.from_url, status: r.status, reason: fp.get(r.ref_domain) || 'labelled spam by the Link Analyst', authority: r.authority, spam: r.spam_score }));
   const liveRows = ledger.filter(r => r.status !== 'lost' && r.kind === 'web');
   const importantOf = (r) => Number(r.spam_score || r.spam) < 40 && !['spam', 'scraper'].includes(r.link_type) && (Number(r.seo_value) >= 35 || r.authority >= 150 || r.dr >= 40 || Number(r.visits) >= 5 || ['editorial', 'press'].includes(r.link_type));   // spam links are never "important", whatever their authority
   // P1-2 (2026-10-12, Phase 1 live check): a link-farm page is never "lost" — the 13 cluster pages filled "Links lost" with "Ask the editor to
   // restore it" and drove the "referring sites fell 17 -> 4" alert. The footprint gate (D3) has labelled them by now, so they are dropped here
   // from the lost list, from the reclaim advice and from the referring-sites drop, exactly as they already were from best / wins / at-risk.
-  const lostRows = lostNow.filter(({ e }) => !spamSet.has(e.ref_domain)).map(({ e, v, reason }) => { const r = ledger.find(x => x.ref_domain === e.ref_domain) || {}; const pv = e.prev || {};
+  const lostRows = lostNow.filter(({ e }) => !junkSet.has(e.ref_domain)).map(({ e, v, reason }) => { const r = ledger.find(x => x.ref_domain === e.ref_domain) || {}; const pv = e.prev || {};
     return { from_domain: e.ref_domain, from_url: v.url || r.from_url, to_url: r.to_url, anchor: r.anchor, dofollow: (pv.rel || r.rel || 'follow') === 'follow', domain_rank: r.authority, dr: r.dr, spam: r.spam_score, last_seen: String(pv.last_seen || '').slice(0, 10) || (e.dfs_lost || {}).last_seen || '', reason: r.lost_reason || reason,
       seo_value: Number(pv.seo_value) || r.seo_value, visits: r.visits, title: pv.page_title || '', important: importantOf({ ...r, seo_value: Number(pv.seo_value) || r.seo_value }) }; });
   const important_lost = lostRows.filter(l => l.important);
   // the DataForSEO-reported losses still unconfirmed are listed as "reported lost — checking"
-  const lost = [...lostRows, ...dfsLost.filter(l => !spamSet.has(LK.refKey(l.from_domain)) && !lostRows.some(x => x.from_domain === LK.refKey(l.from_domain))).map(l => ({ ...l, reason: 'reported_lost', pending: true }))];
+  const lost = [...lostRows, ...dfsLost.filter(l => !junkSet.has(LK.refKey(l.from_domain)) && !lostRows.some(x => x.from_domain === LK.refKey(l.from_domain))).map(l => ({ ...l, reason: 'reported_lost', pending: true }))];
   // ---------------- reclaim: links pointing to own pages that no longer load (DataForSEO + our own status check of the most-linked pages) ----------------
   const reclaimMap = new Map();
   for (const x of ((one('broken').res || {}).items || [])) { const b = { ...link(x), status: Number(x.url_to_status_code) || null }; if (spamSet.has(LK.refKey(b.from_domain))) continue; const r = reclaimMap.get(b.to_url) || { broken_url: b.to_url, status: b.status, links: 0, domains: new Set(), redirect_to: suggest(b.to_url) }; r.links++; r.domains.add(b.from_domain); reclaimMap.set(b.to_url, r); }   // a farm page linking to a dead page of ours is no reason to write to anyone (P1-2)
@@ -320,7 +324,7 @@ return plans.map(p => {
   const CAPPED = ['spam', 'scraper'];
   const by = (k, seo) => [...liveRows].filter(r => !(seo && CAPPED.includes(r.link_type))).sort((a, b) => b[k] - a[k]).filter(r => r[k] > 0).slice(0, 10).map(r => ({ ref_domain: r.ref_domain, from_url: r.from_url, value: r[k], link_type: r.link_type, visits: r.visits }));
   const values = { best_seo: by('seo_value', true), best_referral: by('referral_value'), best_brand: by('brand_value', true) };
-  const best_links = liveRows.filter(r => r.seo_value >= 50).length;
+  const best_links = liveRows.filter(r => r.seo_value >= 50 && !['spam', 'scraper'].includes(r.link_type)).length;   // 188
   const referral = { visits: liveRows.reduce((s, r) => s + (Number(r.visits) || 0), 0), visits_28d: liveRows.reduce((s, r) => s + (Number(r.visits_28d) || 0), 0), key_events: liveRows.reduce((s, r) => s + (Number(r.key_events) || 0), 0) };
   // ---------------- alerts ----------------
   const prev = p.previous; const alerts = [];
@@ -358,7 +362,7 @@ return plans.map(p => {
   if (prev && !sameUnion.comparable && cleanPrev >= 10) not_compared.push('Referring sites (' + cleanPrev + ' then, ' + cleanNow + ' now): ' + sameUnion.why + '.');
   if (prev && sameUnion.comparable && cleanPrev >= 10 && cleanNow < cleanPrev * 0.9) alerts.push({ level: 'medium', text: 'Referring sites (all sources) fell from ' + cleanPrev + ' to ' + cleanNow + '.' + (farmLivePrev || farmLiveNow ? ' (Link-farm pages are not counted.)' : '') });
   else if (prev && sameSources.comparable && !prev.union_domains && summary.available && prev.referring_domains >= 10 && summary.referring_domains < prev.referring_domains * 0.9) alerts.push({ level: 'medium', text: 'Referring domains fell from ' + prev.referring_domains + ' to ' + summary.referring_domains + '.' });
-  const atRiskOut = atRisk.filter(({ e }) => !spamSet.has(e.ref_domain));   // a link-farm page is never "at risk": there is nothing to win back (D3)
+  const atRiskOut = atRisk.filter(({ e }) => !junkSet.has(e.ref_domain));   // a link-farm page is never "at risk": there is nothing to win back (D3)
   const riskImportant = atRiskOut.filter(({ e }) => { const r = ledger.find(x => x.ref_domain === e.ref_domain) || {}; return importantOf(e.prev ? { ...r, seo_value: Number(e.prev.seo_value) || r.seo_value } : r); });
   if (riskImportant.length) alerts.push({ level: 'low', text: riskImportant.length + ' valuable link(s) not found on their page this week (' + riskImportant.slice(0, 3).map(x => x.e.ref_domain).join(', ') + '); checked again next week before calling them lost.' });
   if (reclaim.length) alerts.push({ level: 'low', text: reclaim.reduce((s, r) => s + r.links, 0) + ' link(s) point to ' + reclaim.length + ' broken page(s): redirect them to keep the value.' });

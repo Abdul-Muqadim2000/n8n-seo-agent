@@ -13841,6 +13841,29 @@ assert 'verdict_acknowledged: !!HOLD.ack' in code('Parse Verdict'), '186: Parse 
 log('"Write it anyway" writes (section 186, client reports 2026-11-11): Verdict Router lets an AVOID through when the client acknowledged the hold (verdict_acknowledged, set by Parse Verdict from hold_ack), as it does for force_content')
 
 # =============================================================================
+# 187. THE AUDIT'S INDEXING FINDING COUNTS THE RIGHT PAGES (client reports 2026-11-11, devaicon N6): policy / utility pages (the index kit's
+#      UTILITY list, injected: one rule with the Indexing page) and pages that redirect are out of search on purpose, named and never counted;
+#      the finding's unit is the pages inspected ("15 of 23 pages inspected in Search Console", not "of 30 crawled pages"); the whole list rides
+#      on the finding row (urls_all) so the app can follow each page in the daily index check. Patches on R59's final text (section 90).
+# =============================================================================
+patch('GSC Audit Findings', "  const notIdx = notIdxAll90.filter(i => !elsewhere90(i).length);\n",
+      "  // 187 (client reports 2026-11-11): policy / utility pages and pages that redirect are out of search on purpose: named, never counted\n"
+      "  const IXU187 = " + kit_src.index_utility_literal(_rd0) + ";\n"
+      "  const segs187 = (u) => String(path(u) || '').split('/').filter(Boolean).map(x => { let y = x; try { y = decodeURIComponent(x); } catch (e) { y = x; } return y.toLowerCase().replace(/\\.(?:html?|php|aspx?)$/, ''); });\n"
+      "  const utility187 = (u) => { const g = segs187(u); if (!g.length) return false; if (g.length === 1 && IXU187.top_level_only.includes(g[0])) return true; return IXU187.dirs.includes(g[0]) || IXU187.segments.includes(g[0]); };\n"
+      "  const outOnPurpose187 = notIdxAll90.filter(i => !elsewhere90(i).length && (utility187(i.url) || /redirect/i.test(String(i.coverage || ''))));\n"
+      "  const counted187 = ok.filter(i => !outOnPurpose187.includes(i));\n"
+      "  const notIdx = notIdxAll90.filter(i => !elsewhere90(i).length && !outOnPurpose187.includes(i));\n"
+      "  search_console.out_on_purpose = outOnPurpose187.map(i => ({ url: i.url, reason: /redirect/i.test(String(i.coverage || '')) ? 'redirects to another page' : 'a policy or utility page' }));\n"
+      "  if (outOnPurpose187.length) works.push(outOnPurpose187.length + ' policy, utility or moved page' + (outOnPurpose187.length === 1 ? ' is' : 's are') + ' out of search, which is fine');\n")
+patch('GSC Audit Findings', "    const share = Math.round(notIdx.length / ok.length * 100);\n", "    const share = Math.round(notIdx.length / (counted187.length || 1) * 100);\n")
+patch('GSC Audit Findings', "    const robotsBlocked = ok.filter(i => /disallow|blocked/i.test(i.robots));",
+      "    { const fN = findings.find(f => /not indexed by Google$/.test(f.title));   // 187: the unit is the pages inspected, and the whole list travels with the finding\n"
+      "      if (fN && notIdx.length) { fN.affected_unit = 'pages inspected in Search Console'; fN.affected_of = counted187.length; fN.affected_count = notIdx.length; fN.urls_all = notIdx.map(x => x.url).slice(0, 300); } }\n"
+      "    const robotsBlocked = ok.filter(i => /disallow|blocked/i.test(i.robots));")
+log('The audit indexing finding (section 187, client reports 2026-11-11): policy / utility and redirected pages are out of search on purpose (named, not counted); the unit is the pages inspected; the whole not-indexed list rides on the finding row')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;
