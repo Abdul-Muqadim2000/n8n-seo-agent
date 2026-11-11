@@ -1,8 +1,11 @@
 import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { format, isValid, parseISO } from 'date-fns';
 import { ArrowRight, BarChart3, FileSearch, FileText, Hand, Lightbulb, ListChecks, MousePointerClick, PenLine, Rocket, Search, ShieldAlert, Tags, TrendingUp, Workflow } from 'lucide-react';
-import type { ReportDetail } from '@seo/shared';
+import type { ReportDetail, Run } from '@seo/shared';
+import { api } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
+import { noRetryOn4xx, qk } from '@/lib/queries';
 import { paths } from '@/lib/paths';
 import { ButtonLink } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
@@ -11,7 +14,7 @@ import { ChartCard, TimeSeriesChart } from '@/components/charts';
 import { CountUp, HeroStat, Stagger } from '@/components/insight';
 import { absolutePageUrl, ArticleViewer, findPlaceholders } from './article';
 import { CmsPublishPanel } from './CmsPublish';
-import { cleanMetaDescription, deliveryOf, draftNextStep, gradeDisplay, holdButtons, holdOf, holdTitle, ownerEdits, type HoldInfo } from '@seo/shared';
+import { cleanMetaDescription, deliveryOf, draftNextStep, gradeDisplay, holdButtons, holdLadderLine, holdOf, holdTitle, ladderInputOf, ownerEdits, PAGE_TYPE_VALUES, type HoldInfo } from '@seo/shared';
 import { DeliveryCallout, PageReview } from './review/ReviewPanels';
 import { Block, Bullets, Chips, Facts, has, CreditsCard, n, num, obj, objs, str, strs, usd, verdictLabel, type P } from './kit';
 import { keywordPrefill } from './meta';
@@ -217,7 +220,7 @@ export function ContentReport({ report }: { report: ReportDetail }) {
         }
       />
 
-      {held && hold && <HoldPanel hold={hold} keyword={keyword} pageType={str(p.recommended_page) || str(meta.page_type)} country={country} siteId={report.siteId} />}
+      {held && hold && <HoldPanel hold={hold} keyword={keyword} pageType={str(p.recommended_page) || str(meta.page_type)} country={country} siteId={report.siteId} runId={report.runId} />}
       {pagesUnread && (
         <Callout tone="warning" title="Nothing was decided and nothing was written">
           {str(unread.reason)}
@@ -518,11 +521,42 @@ function ExistingPage({ page }: { page: P }) {
  * Write a page form ready to start: the page the website already has (improved at its own address), the search our verdict recommends, or
  * this page as asked ("Write it anyway", which the report of the written page then records).
  */
-function HoldPanel({ hold, keyword, pageType, country, siteId }: { hold: HoldInfo; keyword: string; pageType: string; country: string; siteId: string | null }) {
+/**
+ * Client reports 2026-11-11 (techand.ai, run 8f0a4bc3): "Write it anyway" on a held page of a keyword ladder went out as a loose page (no
+ * ladder, the verdict's page type), so even a written page would not have landed on its rung. The button now re-sends the ladder page: the
+ * ladder fields and the page type of the run that was held (its stored form input, read once the run is loaded), else the ladder the report
+ * names with the verdict's page type. A page outside a ladder keeps the report's own values, as before.
+ */
+export function holdFormBase(
+  hold: HoldInfo,
+  report: { keyword: string; pageType: string; country: string },
+  runInput: unknown,
+): { keyword: string; pageType: string; country: string; ladder: ReturnType<typeof ladderInputOf> } {
+  if (!hold.ladder) return { ...report, ladder: null };
+  const input = runInput && typeof runInput === 'object' ? (runInput as Record<string, unknown>) : {};
+  const own = input.mode === 'keyword' ? ladderInputOf(input) : null;
+  const ladder = own && own.id === hold.ladder.id ? own : null;
+  const ownType = typeof input.pageType === 'string' && (PAGE_TYPE_VALUES as readonly string[]).includes(input.pageType) ? input.pageType : '';
+  return { ...report, pageType: (ladder && ownType) || report.pageType, ladder };
+}
+
+function HoldPanel({ hold, keyword, pageType, country, siteId, runId }: { hold: HoldInfo; keyword: string; pageType: string; country: string; siteId: string | null; runId: string | null }) {
   const { org, can } = useOrgCtx();
-  const buttons = holdButtons(hold, { keyword, pageType, country });
+  // the held run's own form input (the same query as the run page): only for a ladder page, whose button must carry the run's ladder fields
+  const run = useQuery({
+    queryKey: qk.run(org.id, runId ?? ''),
+    queryFn: () => api<{ run: Run }>(`/api/orgs/${org.id}/runs/${runId}`),
+    enabled: !!runId && !!hold.ladder && can('member'),
+    retry: noRetryOn4xx,
+  });
+  const buttons = holdButtons(hold, holdFormBase(hold, { keyword, pageType, country }, run.data?.run.input));
   return (
     <Block title="Needs your OK" description="Nothing was written and only the check was used" icon={<Hand />} iconTone="warning">
+      {hold.ladder && (
+        <p className="mb-3 text-[13px] leading-relaxed text-ink-2">
+          This is {holdLadderLine(hold.ladder)}.
+        </p>
+      )}
       <Bullets items={hold.reasons} tone="warning" />
       {hold.duplicates.length > 0 && (
         <p className="mt-3 text-[13px] leading-relaxed text-ink-2">

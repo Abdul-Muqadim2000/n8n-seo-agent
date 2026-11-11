@@ -3,9 +3,10 @@ import { PRICES } from '@/lib/prices';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { ArrowUpDown, AtSign, BarChart3, BellRing, Bot, CalendarRange, CheckCircle2, Clock, Download, ExternalLink as ExternalIcon, FileText, FileUp, Globe, Link2, ListOrdered, Mail, Network, Plug, Quote, Send, ShieldAlert, Sparkles, Swords, Target, TriangleAlert, Trophy, Unlink, Wrench } from 'lucide-react';
-import { PROSPECT_STATUSES, compactNumber, titleCase, type BacklinkLink, type BacklinkRef, type BacklinksData, type Prospect, type ProspectStatus } from '@seo/shared';
+import { LINK_KINDS, LINK_KIND_ORDER, PROSPECT_STATUSES, bingSourceText, checkNote, compactNumber, linkBreakdown, linkCounts, linkKindOf, sourcesFromLedger, spamScoreReading, titleCase, type BacklinkLink, type BacklinkRef, type BacklinksData, type BingCheck, type LinkBreakdown, type LinkKind, type Prospect, type ProspectStatus } from '@seo/shared';
+import { useMutation } from '@tanstack/react-query';
 import { GuideButton } from '@/components/guide';
-import { fileUrl, toastError } from '@/lib/api';
+import { api, fileUrl, toastError } from '@/lib/api';
 import { useLinkImport, useSiteAdmin, useSiteData } from '@/lib/queries';
 import { cn, fmtDate } from '@/lib/utils';
 import { BarsChart, ChartCard, ShareBars, Sparkline, TimeSeriesChart, type Series } from '@/components/charts';
@@ -116,11 +117,17 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
   const prevUnion = unionSnaps.length > 1 ? unionSnaps[unionSnaps.length - 2]!.unionDomains : null;
   const sparkUnion = (union != null ? unionSnaps.map((s) => ({ v: s.unionDomains })) : dfsSnaps.map((s) => ({ v: s.referringDomains })));
   const live = d.refs.filter((x) => x.status !== 'lost' && x.kind === 'web');
+  // N45 (client report 2026-11-11): what each referring site is. Automatic report pages and link farms are listed, never counted as links
+  const breakdown = useMemo(() => linkBreakdown(d.refs.filter((x) => x.kind === 'web')), [d.refs]);
+  const ignoredShown = d.refs.length > 0 && breakdown.ignored > 0;
+  const bestCount = live.filter((x) => x.seoValue >= 50 && linkCounts(x)).length;
   const drShown = d.refs.some((x) => x.dr != null);
   // presentation only: counts of what the tabs and the pipeline below already list
   const referring = union ?? D?.referringDomains ?? 0;
-  const lostRefs = d.refs.filter((x) => x.status === 'lost').length;
-  const atRiskRefs = d.refs.filter((x) => x.status === 'at_risk').length;
+  const lostRefs = d.refs.filter((x) => x.status === 'lost' && linkCounts(x)).length;
+  const atRiskRefs = d.refs.filter((x) => x.status === 'at_risk' && linkCounts(x)).length;
+  const droppedJunk = d.refs.filter((x) => (x.status === 'lost' || x.status === 'at_risk') && !linkCounts(x)).length;
+  const spamRead = D ? spamScoreReading(D.spamScore, d.refs.length ? breakdown : null) : null;
   const openProspects = d.prospects.filter((p) => statusOf(p) === 'new').length;
   const perSource = d.latest?.coverage?.perSource ?? {};
 
@@ -140,7 +147,11 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
         <SummaryHero
           tone="blue"
           eyebrow={<HeroEyebrow tag="Backlinks">{L.mode === 'free' ? `Free-sources check of ${fmtDate(L.checkedAt)} (no DataForSEO, no credits used); changes ${since}.` : `${titleCase(L.mode || 'light')} check of ${fmtDate(L.checkedAt)}; changes ${since}.`}</HeroEyebrow>}
-          title={`${compactNumber(referring)} referring ${referring === 1 ? 'site' : 'sites'}: ${compactNumber(L.newLinks)} new, ${compactNumber(L.lostLinks)} lost since the last check`}
+          title={
+            ignoredShown
+              ? `${compactNumber(breakdown.counted)} referring ${breakdown.counted === 1 ? 'site' : 'sites'} that count, plus ${compactNumber(breakdown.ignored)} automatic or spam ${breakdown.ignored === 1 ? 'page' : 'pages'} Google ignores`
+              : `${compactNumber(referring)} referring ${referring === 1 ? 'site' : 'sites'}: ${compactNumber(L.newLinks)} new, ${compactNumber(L.lostLinks)} lost since the last check`
+          }
           description={union != null ? `Merged from every source we can read, each important link checked on its page. DataForSEO alone sees ${D ? compactNumber(D.referringDomains) : '-'}${D && D !== L ? ` (check of ${fmtDate(D.checkedAt)})` : ''}.` : `${compactNumber(D?.referringDomainsNofollow ?? 0)} of them nofollow only.`}
           actions={
             Object.keys(perSource).length > 0 ? (
@@ -163,10 +174,10 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
                 value={<CountUp value={referring} format={compactNumber} />}
                 delta={<Delta value={union != null ? diff(union, prevUnion) : diff(D?.referringDomains, DP?.referringDomains)} suffix="" digits={0} />}
                 trend={<Sparkline data={sparkUnion} dataKey="v" />}
-                hint={union != null ? `all sources · DataForSEO: ${D ? compactNumber(D.referringDomains) : '-'}${D && D !== L ? ` (check of ${fmtDate(D.checkedAt)})` : ''}` : `${compactNumber(D?.referringDomainsNofollow ?? 0)} nofollow only`}
+                hint={ignoredShown ? `${compactNumber(breakdown.counted)} count, ${compactNumber(breakdown.ignored)} ignored by Google · DataForSEO today: ${D ? compactNumber(D.referringDomains) : '-'}` : union != null ? `all sources · DataForSEO: ${D ? compactNumber(D.referringDomains) : '-'}${D && D !== L ? ` (check of ${fmtDate(D.checkedAt)})` : ''}` : `${compactNumber(D?.referringDomainsNofollow ?? 0)} nofollow only`}
               />
-              <HeroStat label="Best links" info="SEO value 50+ (authority, relevance, placement, follow, checked live)" value={L.bestLinks != null ? <CountUp value={L.bestLinks} /> : '-'} hint="SEO value 50+ (authority, relevance, placement, follow, checked live)" />
-              <HeroStat label="Checked on the page" value={L.verifiedLive != null ? <CountUp value={L.verifiedLive} /> : '-'} hint={L.atRisk ? `${L.atRisk} missed once and will be checked again next week` : 'links our crawler found where they should be'} />
+              <HeroStat label="Best links" info="SEO value 50+ (authority, relevance, placement, follow, checked live)" value={d.refs.length ? <CountUp value={bestCount} /> : L.bestLinks != null ? <CountUp value={L.bestLinks} /> : '-'} hint="SEO value 50+, automatic pages and link farms left out" />
+              <HeroStat label="Checked on the page" value={L.verifiedLive != null ? <CountUp value={L.verifiedLive} /> : '-'} hint={L.atRisk ? `${L.atRisk} missed once and will be checked again on the next weekly run` : 'links our crawler found where they should be'} />
               <HeroStat label="Visits from links" value={L.referralVisits != null ? <CountUp value={L.referralVisits} format={compactNumber} /> : '-'} hint="GA4 referrals, past year" />
             </>
           }
@@ -178,17 +189,17 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
           <MetricCard
             label="Spam score"
             icon={<ShieldAlert />}
-            tone={D ? (D.spamScore >= 50 ? 'serious' : D.spamScore >= 30 ? 'warning' : 'good') : 'blue'}
-            info="DataForSEO's spam score of your link profile, 0-100: lower is better"
-            visual={D ? <ScoreRing label="Spam score" value={D.spamScore} tone={D.spamScore >= 50 ? 'critical' : D.spamScore >= 30 ? 'warning' : 'good'} display={<CountUp value={D.spamScore} />} suffix="/100" size={68} /> : undefined}
+            tone={spamRead ? spamRead.tone : 'blue'}
+            info="How spammy the pages that link to you look, 0-100 (DataForSEO). It rates the linking pages, not your website: lower is better"
+            visual={D && spamRead ? <ScoreRing label="Spam score" value={D.spamScore} tone={spamRead.tone === 'serious' ? 'critical' : spamRead.tone} display={<CountUp value={D.spamScore} />} suffix="/100" size={68} /> : undefined}
             value="-"
             delta={<Delta value={diff(D?.spamScore, DP?.spamScore)} suffix="" digits={0} upIsGood={false} />}
             meta={
               D ? (
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  {D.spamScore >= 50 ? <StatusBadge tone="serious">High</StatusBadge> : D.spamScore >= 30 ? <StatusBadge tone="warning">Elevated</StatusBadge> : <StatusBadge tone="good">Low</StatusBadge>}
+                  <StatusBadge tone={spamRead!.tone}>{spamRead!.badge}</StatusBadge>
                   <span>
-                    {D.spammyNew} spammy new {D.spammyNew === 1 ? 'link' : 'links'} · DataForSEO, 0-100{D !== L ? ` (check of ${fmtDate(D.checkedAt)})` : ''}
+                    {spamRead!.text} {D.spammyNew} spammy new {D.spammyNew === 1 ? 'link' : 'links'}{D !== L ? ` (check of ${fmtDate(D.checkedAt)})` : ''}.
                   </span>
                 </span>
               ) : (
@@ -202,12 +213,14 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
             tone={lostRefs ? 'serious' : 'blue'}
             info="Lost means checked twice on the page and gone, with the reason"
             value={<CountUp value={lostRefs} />}
-            meta={atRiskRefs ? `${atRiskRefs} more missed once and will be checked again next week` : lostRefs ? 'in the link ledger: each checked twice on its page and gone' : 'every link checked twice is still there'}
+            meta={[atRiskRefs ? `${atRiskRefs} more missed once and will be checked again on the next weekly run` : lostRefs ? 'each checked twice on its page and gone' : 'every link checked twice is still there', droppedJunk ? `${compactNumber(droppedJunk)} automatic or spam pages that dropped out are not counted` : ''].filter(Boolean).join(' · ')}
           />
           <MetricCard label="New links" icon={<Sparkles />} value={<CountUp value={d.latest?.new.length ?? 0} />} meta={L.newLinks > (d.latest?.new.length ?? 0) ? `listed in the New tab · ${compactNumber(L.newLinks)} new in all since the previous check` : 'since the previous check'} />
           <MetricCard label="Prospects to contact" icon={<Send />} info="Scored by value × likelihood; drafted outreach e-mails are in the pipeline below" value={<CountUp value={openProspects} />} meta={`${plural(d.prospects.length, 'prospect')} in the outreach pipeline`} />
         </div>
       )}
+
+      {ignoredShown && <LinkKinds b={breakdown} />}
 
       <Coverage d={d} />
 
@@ -279,19 +292,63 @@ function valueSegments(rows: BacklinkRef[]) {
   ];
 }
 
+// ---------------- what the links are (N45, client report 2026-11-11) ----------------
+const KIND_TONE: Record<LinkKind, IconTileTone> = { real: 'good', listing: 'blue', unknown: 'neutral', auto: 'neutral', farm: 'warning' };
+const KIND_COLOR: Record<LinkKind, string> = { real: SEQ[5]!, listing: SEQ[3]!, unknown: SEQ[1]!, auto: 'var(--surface-3)', farm: 'var(--line)' };
+function LinkKinds({ b }: { b: LinkBreakdown }) {
+  return (
+    <Panel
+      title="What your links are"
+      icon={<ListOrdered />}
+      description={`Of ${compactNumber(b.total)} referring sites, ${compactNumber(b.counted)} are links or listings and ${compactNumber(b.ignored)} are pages Google ignores. Only the first group counts in Best, Lost and the totals above.`}
+      flush
+    >
+      <div className="border-t border-line px-5 pt-4 pb-2">
+        <DistributionBar label="Referring sites by kind" segments={LINK_KIND_ORDER.map((k) => ({ label: LINK_KINDS[k].label, value: b.counts[k], color: KIND_COLOR[k] }))} format={(v) => compactNumber(v)} />
+      </div>
+      <ul className="divide-y divide-line border-t border-line">
+        {LINK_KIND_ORDER.filter((k) => b.counts[k] > 0).map((k) => (
+          <InsightItem
+            key={k}
+            tone={KIND_TONE[k]}
+            meta={<span className="tabular text-sm font-semibold text-ink">{compactNumber(b.counts[k])}</span>}
+            title={LINK_KINDS[k].label}
+            description={`${LINK_KINDS[k].what} ${LINK_KINDS[k].todo}`}
+          />
+        ))}
+      </ul>
+    </Panel>
+  );
+}
+
 // ---------------- where the links come from ----------------
 function Coverage({ d }: { d: BacklinksData }) {
-  const { can, site } = useSitePage();
+  const { can, site, org } = useSitePage();
   const [upload, setUpload] = useState(false);
   const c = d.latest?.coverage ?? null;
   const st = c?.status ?? null;
+  // N45: a light weekly check reads only the new links, so its own per-source counts said "DataForSEO finds 0%" beside a ledger of 1,288
+  // sites it built. The bars count every source that has reported each site in the ledger.
+  const ledger = useMemo(() => (d.refs.length ? sourcesFromLedger(d.refs) : null), [d.refs]);
+  const bingCheck = useMutation({
+    mutationFn: () => api<BingCheck>(`/api/orgs/${org.id}/sites/${site.id}/backlinks/bing/check`, { method: 'POST', body: {} }),
+    onError: (e) => toastError(e),
+  });
+  const bing = bingSourceText(st ? st.bing : null, bingCheck.data ?? null, d.bingShareWith ?? '');
   const gscUpload = d.imports.filter((i) => i.source.startsWith('gsc')).sort((a, b) => b.importedAt.localeCompare(a.importedAt))[0];
   const other = d.imports.find((i) => i.source === 'csv');
+  const per = ledger?.perSource ?? c?.perSource ?? {};
+  const only = ledger?.onlyIn ?? c?.onlyIn ?? {};
   const rows = ['dfs', 'bing', 'gsc', 'ga4', 'cc', 'wiki', 'hn', 'news', 'web', 'import']
-    .filter((k) => (c?.perSource[k] ?? 0) > 0 || ['dfs', 'bing', 'gsc', 'ga4', 'cc'].includes(k))
-    .map((k) => ({ label: sourceLabel(k), value: c?.perSource[k] ?? 0, sub: c?.onlyIn[k] ? `${c.onlyIn[k]} only here` : undefined }));
+    .filter((k) => (per[k] ?? 0) > 0 || ['dfs', 'bing', 'gsc', 'ga4', 'cc'].includes(k))
+    .map((k) => ({ label: sourceLabel(k), value: per[k] ?? 0, sub: only[k] ? `${only[k]} only here` : undefined }));
+  const union = ledger?.union ?? c?.union ?? 0;
+  const dfsShare = ledger?.dfsShare ?? c?.dfsShare ?? 0;
+  const gSample = ledger?.googleSample ?? c?.gscSample ?? 0;
+  const gDfs = ledger ? ledger.dfsSeesGoogle : (c?.dfsSeesGoogle ?? null);
+  const gAll = ledger ? ledger.allSeeGoogle : (c?.allSeeGoogle ?? null);
   const status: { name: string; ok: boolean | null; text: string; guide?: string }[] = [
-    { name: 'Bing Webmaster Tools', guide: 'bing-webmaster', ok: st ? (st.bing.enabled ? st.bing.connected : null) : null, text: !st ? 'after the next full check' : !st.bing.enabled ? 'not set up on this server (a free API key)' : st.bing.connected ? `${st.bing.links} links read` : st.bing.inAccount === false ? 'add the site in Bing Webmaster Tools (import it from Search Console)' : st.bing.error || 'not connected' },
+    { name: 'Bing Webmaster Tools', guide: 'bing-webmaster', ok: bing.ok, text: bing.text },
     { name: 'Search Console export', guide: 'search-console-links-export', ok: gscUpload ? true : false, text: gscUpload ? `${gscUpload.rows} rows, uploaded ${fmtDate(gscUpload.importedAt)}` : 'not uploaded (Google\'s own sample of your links)' },
     { name: 'GA4 referrals', guide: 'ga4-access', ok: st ? st.ga4.connected : null, text: !st ? 'after the next check' : st.ga4.connected ? `${compactNumber(st.ga4.visits)} visits from ${st.ga4.sources} sites` : st.ga4.property ? st.ga4.error || 'no answer' : 'connect GA4 in tracking settings' },
     { name: 'Common Crawl web graph', ok: d.linkGraph ? true : null, text: d.linkGraph ? `release ${d.linkGraph.release}` : 'the monthly job has not written this site yet' },
@@ -311,11 +368,12 @@ function Coverage({ d }: { d: BacklinksData }) {
         }
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3 xl:items-start">
-        <Panel title="Referring sites by source" icon={<BarChart3 />} description={c ? `${c.union} ${c.union === 1 ? 'site' : 'sites'} in all · DataForSEO finds ${c.dfsShare}%` : 'Fills after the next full check'} className="xl:col-span-2">
-          {c ? <ShareBars items={rows} valueFormat={(v: number) => String(v)} /> : <p className="text-[13px] text-ink-3">Run a backlink check to merge the sources.</p>}
-          {c && c.gscSample > 0 && (
+        <Panel title="Referring sites by source" icon={<BarChart3 />} description={c || ledger ? `${union} ${union === 1 ? 'site' : 'sites'} in all, counted by every source that has reported each one · DataForSEO has reported ${dfsShare}%` : 'Fills after the next full check'} className="xl:col-span-2">
+          {c || ledger ? <ShareBars items={rows} valueFormat={(v: number) => String(v)} /> : <p className="text-[13px] text-ink-3">Run a backlink check to merge the sources.</p>}
+          {gSample > 0 && (
             <p className="mt-4 text-[13px] text-ink-2">
-              Of the <b>{c.gscSample}</b> sites in Google's own sample, DataForSEO sees <b>{c.dfsSeesGoogle ?? 0}%</b>; another source confirms {c.allSeeGoogle ?? 0}%.
+              Of the <b>{gSample}</b> sites in Google's own sample, DataForSEO sees <b>{gDfs ?? 0}%</b>; another source confirms {gAll ?? 0}%.
+              {(gDfs ?? 0) < 50 && dfsShare >= 90 ? ' So the links Google counts for you come from your Search Console upload, while most of what DataForSEO lists are pages Google ignores (see What your links are).' : ''}
             </p>
           )}
           {c && <p className="mt-2 text-xs text-ink-3">{c.verified} {c.verified === 1 ? 'link' : 'links'} checked on their page{c.blocked ? ` · ${c.blocked} pages block bots (never counted as lost)` : ''}{c.social ? ` · ${c.social} social profiles (not counted)` : ''}</p>}
@@ -333,7 +391,14 @@ function Coverage({ d }: { d: BacklinksData }) {
                     {s.ok === true ? <StatusBadge tone="good">On</StatusBadge> : s.ok === false ? <StatusBadge tone="warning">Missing</StatusBadge> : <Badge>Waiting</Badge>}
                   </div>
                   <p className="text-xs text-ink-3">{s.text}</p>
-                  {s.ok !== true && s.guide && <GuideButton id={s.guide} vars={{ domain: site.domain }} variant="link" label="Show me how" className="mt-1" />}
+                  <div className="mt-1 flex flex-wrap items-center gap-3">
+                    {s.ok !== true && s.guide && <GuideButton id={s.guide} vars={{ domain: site.domain }} variant="link" label="Show me how" />}
+                    {s.guide === 'bing-webmaster' && s.ok !== true && can('member') && (!st || st.bing.enabled) && (
+                      <Button variant="link" size="sm" loading={bingCheck.isPending} onClick={() => bingCheck.mutate()}>
+                        Check Bing now
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </li>
             ))}
@@ -398,13 +463,16 @@ function ImportDialog({ onClose }: { onClose: () => void }) {
 
 // ---------------- the link tables ----------------
 function LinkTabs({ d, live }: { d: BacklinksData; live: BacklinkRef[] }) {
-  const lost = d.refs.filter((x) => x.status === 'lost').sort((a, b) => b.lostAt.localeCompare(a.lostAt));
-  const atRisk = d.refs.filter((x) => x.status === 'at_risk');
+  // N45: automatic report pages and link farms are never Best, Lost or at risk: nothing was won there and nothing can be lost
+  const lost = d.refs.filter((x) => x.status === 'lost' && linkCounts(x)).sort((a, b) => b.lostAt.localeCompare(a.lostAt));
+  const atRisk = d.refs.filter((x) => x.status === 'at_risk' && linkCounts(x));
   const sending = live.filter((x) => x.visits > 0).sort((a, b) => b.visits - a.visits);
-  const best = live.filter((x) => x.seoValue >= 50);
+  const best = live.filter((x) => x.seoValue >= 50 && linkCounts(x));
   const [src, setSrc] = useState('all');
+  const [kind, setKind] = useState<'all' | LinkKind>('all');
   const srcCounts = countBy(live.flatMap((x) => x.sources), (s) => s);
-  const all = live.filter((x) => src === 'all' || x.sources.includes(src));
+  const kindCounts = countBy(live, (x) => linkKindOf(x));
+  const all = live.filter((x) => (src === 'all' || x.sources.includes(src)) && (kind === 'all' || linkKindOf(x) === kind));
   const tabs = [
     { key: 'best', label: 'Best', count: best.length },
     { key: 'all', label: 'All', count: live.length },
@@ -445,6 +513,9 @@ function LinkTabs({ d, live }: { d: BacklinksData; live: BacklinkRef[] }) {
         <RefTable rows={best} empty="No link reaches an SEO value of 50 yet." />
       </TabPanel>
       <TabPanel value="all">
+        {Object.keys(kindCounts).length > 1 && (
+          <FilterChips className="mb-2" label="What it is" value={kind} onChange={setKind} options={[{ value: 'all' as const, label: 'Every kind', count: live.length }, ...LINK_KIND_ORDER.filter((k) => kindCounts[k]).map((k) => ({ value: k, label: LINK_KINDS[k].label, count: kindCounts[k] }))]} />
+        )}
         {Object.keys(srcCounts).length > 1 && (
           <FilterChips className="mb-3" label="Source" value={src} onChange={setSrc} options={[{ value: 'all', label: 'All sources', count: live.length }, ...Object.entries(srcCounts).sort((a, b) => b[1] - a[1]).map(([k, n]) => ({ value: k, label: sourceLabel(k), count: n }))]} />
         )}
@@ -511,6 +582,7 @@ function RefTable({ rows, empty, search, sortKey = 'seo' }: { rows: BacklinkRef[
         </span>
       ),
     },
+    { key: 'kind', header: 'What it is', sortValue: (x) => LINK_KIND_ORDER.indexOf(linkKindOf(x)), cell: (x) => <span className={cn('whitespace-nowrap text-[13px]', linkCounts(x) ? 'text-ink-2' : 'text-ink-3')} title={LINK_KINDS[linkKindOf(x)].todo}>{LINK_KINDS[linkKindOf(x)].label}</span> },
     { key: 'type', header: 'Link', hideOnMobile: true, sortValue: (x) => x.linkType, cell: (x) => <span className="whitespace-nowrap text-[13px] text-ink-2">{[x.linkType && titleCase(x.linkType.replace('_', ' ')), x.rel && x.rel !== 'follow' ? x.rel : '', x.placement && x.placement !== 'body' ? x.placement : ''].filter(Boolean).join(' · ') || '-'}</span> },
     { key: 'anchor', header: 'Anchor', hideOnMobile: true, sortValue: (x) => x.anchor, cell: (x) => <span className="block max-w-[12rem] truncate text-[13px] text-ink-2" title={x.anchor}>{x.anchor || <span className="text-ink-3">-</span>}</span> },
     {
@@ -532,7 +604,7 @@ function RefTable({ rows, empty, search, sortKey = 'seo' }: { rows: BacklinkRef[
       sortValue: (x) => x.verifiedAt,
       cell: (x) => (
         <span className="flex flex-col items-start gap-0.5">
-          <StatusBadge tone={verifyOf(x.verify).tone}>{verifyOf(x.verify).label}</StatusBadge>
+          {checkNote(x) ? <span className="text-xs text-ink-3">{checkNote(x)}</span> : <StatusBadge tone={verifyOf(x.verify).tone}>{verifyOf(x.verify).label}</StatusBadge>}
           {x.verifiedAt && <span className="text-[11px] text-ink-3">{fmtDate(x.verifiedAt)}</span>}
         </span>
       ),

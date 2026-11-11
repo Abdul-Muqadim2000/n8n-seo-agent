@@ -1,9 +1,9 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useId, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { BarChart3, BellRing, CheckCircle2, Circle, Eye, FileArchive, FileSearch, FileText, Gauge, ListChecks, Siren, Sparkles, TrendingUp } from 'lucide-react';
-import { foldMinor, minorFoldNote, titleCase, type AuditPoint, type Finding, type FindingStatus, type IndexCoverage, type PageWatch, type RecheckRequest, type TechnicalData } from '@seo/shared';
+import { effectiveSeverity, foldMinor, liveResolved, minorFoldNote, titleCase, type AuditPoint, type Finding, type FindingLive, type FindingStatus, type IndexCoverage, type PageWatch, type RecheckRequest, type TechnicalData } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { api, fileUrl, toastError } from '@/lib/api';
 import { qk, useSiteData } from '@/lib/queries';
@@ -317,23 +317,25 @@ const SEV_TILE: Record<Sev, IconTileTone> = { critical: 'critical', high: 'serio
 
 /** The open critical and high issues (or the medium ones when there are none) as a to-do list; the full table follows below. */
 function FixFirst({ findings, hasPrevious, sel }: { findings: Finding[]; hasPrevious: boolean; sel: AuditPoint }) {
-  const open = findings.filter((f) => f.status !== 'fixed');
-  const urgent = open.filter((f) => SEV_RANK[sevKey(f.severity)] <= 1);
+  // client report 2026-11-11: a finding the daily index check shows resolved is not open any more, and a live finding ranks by today's severity
+  const open = findings.filter((f) => f.status !== 'fixed' && !liveResolved(f));
+  const sevOf = (f: Finding) => sevKey(effectiveSeverity(f));
+  const urgent = open.filter((f) => SEV_RANK[sevOf(f)] <= 1);
   // G26: the audit ranks its findings by likely impact (severity x pages affected x the clicks and impressions those pages get), and the
   // server hands them over in that order. Audits written before 2026-10-12 carry no weight, so they keep the severity order.
-  const rows = (urgent.length ? urgent : open.filter((f) => sevKey(f.severity) === 'medium'))
+  const rows = (urgent.length ? urgent : open.filter((f) => sevOf(f) === 'medium'))
     .slice()
     .sort((a, b) =>
       a.impact != null && b.impact != null
-        ? b.impact - a.impact || SEV_RANK[sevKey(a.severity)] - SEV_RANK[sevKey(b.severity)]
-        : SEV_RANK[sevKey(a.severity)] - SEV_RANK[sevKey(b.severity)] || b.affectedCount - a.affectedCount);
+        ? b.impact - a.impact || SEV_RANK[sevOf(a)] - SEV_RANK[sevOf(b)]
+        : SEV_RANK[sevOf(a)] - SEV_RANK[sevOf(b)] || b.affectedCount - a.affectedCount);
   if (!rows.length) return null;
   const shown = rows.slice(0, 6);
   return (
     <Panel
       title={urgent.length ? 'Fix these first' : 'Worth fixing next'}
       icon={<Siren />}
-      iconTone={urgent.length ? (urgent.some((f) => sevKey(f.severity) === 'critical') ? 'critical' : 'serious') : 'warning'}
+      iconTone={urgent.length ? (urgent.some((f) => sevOf(f) === 'critical') ? 'critical' : 'serious') : 'warning'}
       description={urgent.length ? `${plural(urgent.length, 'critical or high issue')} still open, biggest first` : 'No critical or high issue is open: these medium ones come next'}
       flush
       footer={rows.length > shown.length ? `${rows.length - shown.length} more in the findings table below` : undefined}
@@ -343,21 +345,23 @@ function FixFirst({ findings, hasPrevious, sel }: { findings: Finding[]; hasPrev
       </div>
       <ul className="divide-y divide-line border-t border-line">
         {shown.map((f) => {
-          const sev = sevKey(f.severity);
+          const sev = sevOf(f);
           return (
             <InsightItem
               key={`${f.key}-${f.status}`}
               tone={SEV_TILE[sev]}
               meta={
                 <>
-                  <StatusBadge tone={severityTone(f.severity)}>{titleCase(f.severity)}</StatusBadge>
+                  <StatusBadge tone={severityTone(effectiveSeverity(f))}>{titleCase(effectiveSeverity(f))}</StatusBadge>
                   <span className="text-xs text-ink-3">{f.category}</span>
-                  {hasPrevious && STATUS_META[f.status]?.node}
+                  {f.live ? <LiveBadge live={f.live} /> : hasPrevious && STATUS_META[f.status]?.node}
                 </>
               }
               title={f.title}
               description={
-                f.affectedCount > 0 || f.impactBasis ? (
+                f.live ? (
+                  <LiveIndexNote live={f.live} />
+                ) : f.affectedCount > 0 || f.impactBasis ? (
                   <span className="inline-flex flex-wrap items-center gap-1.5">
                     {f.impactBasis || `${plural(f.affectedCount, 'page')} affected`}
                     {f.previousCount != null && f.previousCount !== f.affectedCount && <Delta value={f.affectedCount - f.previousCount} suffix="" digits={0} upIsGood={false} label="vs previous audit" />}
@@ -454,15 +458,16 @@ function FindingsTable({ findings: all, hasPrevious, auditId }: { findings: Find
   const rows = base.filter((f) => sev === 'all' || sevKey(f.severity) === sev);
 
   const columns: Column<Finding>[] = [
-    { key: 'severity', header: 'Severity', sortValue: (f) => SEV_RANK[sevKey(f.severity)], cell: (f) => <StatusBadge tone={severityTone(f.severity)}>{titleCase(f.severity)}</StatusBadge> },
+    { key: 'severity', header: 'Severity', sortValue: (f) => SEV_RANK[sevKey(effectiveSeverity(f))], cell: (f) => <StatusBadge tone={severityTone(effectiveSeverity(f))}>{titleCase(effectiveSeverity(f))}</StatusBadge> },
     {
       key: 'title',
       header: 'Issue',
       sortValue: (f) => f.title,
       cell: (f) => (
         <div className="min-w-[14rem]">
-          <p className={f.status === 'fixed' ? 'text-ink-3 line-through decoration-ink-3/50' : 'font-medium text-ink'}>{f.title}</p>
+          <p className={f.status === 'fixed' || liveResolved(f) ? 'text-ink-3 line-through decoration-ink-3/50' : 'font-medium text-ink'}>{f.title}</p>
           <p className="text-xs text-ink-3 md:hidden">{f.category}</p>
+          {f.live && <p className="mt-0.5 text-xs text-ink-2">{f.live.headline}</p>}
         </div>
       ),
     },
@@ -479,7 +484,7 @@ function FindingsTable({ findings: all, hasPrevious, auditId }: { findings: Find
         </span>
       ),
     },
-    ...(hasPrevious ? [{ key: 'status', header: 'Status', sortValue: (f: Finding) => ['new', 'open', 'fixed'].indexOf(f.status), cell: (f: Finding) => STATUS_META[f.status]?.node ?? f.status }] : []),
+    ...(hasPrevious ? [{ key: 'status', header: 'Status', sortValue: (f: Finding) => ['new', 'open', 'fixed'].indexOf(f.status), cell: (f: Finding) => (f.live ? <LiveBadge live={f.live} /> : STATUS_META[f.status]?.node ?? f.status) }] : []),
     // G11 (2026-10-13): mark it fixed and the daily key-page watch judges that one finding again the next morning
     { key: 'recheck', header: 'Fix check', sortValue: (f: Finding) => f.recheck?.state ?? '', cell: (f: Finding) => <RecheckCell finding={f} auditId={auditId} /> },
     ...(ticketing
@@ -681,7 +686,7 @@ const RECHECK_META: Record<string, { label: string; tone: 'accent' | 'good' | 'w
 
 /** "I fixed this": asks the daily key-page watch to judge this one finding again, and shows what it answered. */
 function RecheckCell({ finding, auditId }: { finding: Finding; auditId: string }) {
-  const { org, site, can } = useSitePage();
+  const { org, site, can, page } = useSitePage();
   const qc = useQueryClient();
   const [asked, setAsked] = useState<RecheckRequest | null>(null);
   const ask = useMutation({
@@ -693,6 +698,13 @@ function RecheckCell({ finding, auditId }: { finding: Finding; auditId: string }
     },
     onError: (e) => toastError(e),
   });
+  // client report 2026-11-11: the daily index check already re-reads this finding every day; "I fixed this" could only answer "needs the next audit"
+  if (finding.live)
+    return (
+      <ButtonLink to={page('indexing')} size="sm" variant="ghost">
+        See every page
+      </ButtonLink>
+    );
   const state = asked?.state ?? finding.recheck?.state;
   if (state) {
     const m = RECHECK_META[state] ?? { label: state, tone: undefined };
@@ -709,5 +721,61 @@ function RecheckCell({ finding, auditId }: { finding: Finding; auditId: string }
     <Button size="sm" variant="ghost" loading={ask.isPending} onClick={() => ask.mutate()}>
       I fixed this
     </Button>
+  );
+}
+
+// ---- client report 2026-11-11: the "not indexed by Google" finding, read live from the daily index check ----
+const LIVE_META: Record<FindingLive['state'], { label: string; tone: 'good' | 'accent' | 'warning' | undefined }> = {
+  resolved: { label: 'Resolved, checked daily', tone: 'good' },
+  improving: { label: 'Improving, checked daily', tone: 'accent' },
+  unchanged: { label: 'Open, checked daily', tone: 'warning' },
+  partial: { label: 'Checked daily', tone: undefined },
+};
+
+function LiveBadge({ live }: { live: FindingLive }) {
+  const m = LIVE_META[live.state];
+  return (
+    <Badge tone={m.tone} icon={live.state === 'resolved' ? <CheckCircle2 className="size-3" aria-hidden /> : <Eye className="size-3" aria-hidden />}>
+      {m.label}
+    </Badge>
+  );
+}
+
+/** Today's reading of the finding, what the client asked Google and what Google did since, and the pages still out (one click away). */
+function LiveIndexNote({ live }: { live: FindingLive }) {
+  const { page } = useSitePage();
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const still = live.pages.filter((p) => p.now === 'not_indexed' || p.now === 'not_checked');
+  return (
+    <span className="block space-y-1.5">
+      <span className="block text-ink-2">{live.headline}</span>
+      <DisclosureButton open={open} onToggle={() => setOpen(!open)} controls={id} variant="link" label="What changed since the audit" openLabel="Hide the details" />
+      {open && (
+        <span id={id} className="block space-y-1.5 text-xs text-ink-2">
+          {live.lines.map((l) => (
+            <span key={l} className="block">
+              {l}
+            </span>
+          ))}
+          {still.length > 0 && (
+            <span className="block">
+              Still not in Google's index:{' '}
+              {still.map((p, i) => (
+                <span key={p.url} title={p.url}>
+                  {i > 0 && ', '}
+                  {p.path}
+                  {p.now === 'not_checked' ? ' (not read yet)' : p.nowCoverage ? ` (${p.nowCoverage})` : ''}
+                </span>
+              ))}
+              .
+            </span>
+          )}
+          <ButtonLink to={page('indexing')} size="sm" variant="secondary">
+            Open the Indexing page
+          </ButtonLink>
+        </span>
+      )}
+    </span>
   );
 }

@@ -246,6 +246,65 @@ export function rankCheckNote(i: {
   return how;
 }
 
+// ---------- "see what Google showed" (prod 2026-11-11, devaicon.com) ----------
+// The client kept seeing "Not in the top 50" while their own Google showed the blog post on page one. A fresh neutral reading (DataForSEO,
+// Pakistan and Lahore, desktop and mobile, 100 results) put the page at #59 to #64 for "ai in industrial automation": our reading was right,
+// but the client could neither see what our check saw nor open the same search themselves. The ladder now shows the top 10 of the latest
+// check with the site's place, and a link to the same search in the ladder's market.
+
+/**
+ * A link that opens one search on Google as our check reads it: the market's own Google address, the market as the country (gl) and the
+ * language, with personalised results asked off (pws=0; Google may still use the place a search is made from, so a private window is the
+ * closest match). '' without a keyword. Pure.
+ */
+export function googleSearchLink(keyword: string, iso?: string | null, language?: string | null): string {
+  const q = String(keyword || '').trim();
+  if (!q) return '';
+  const cc = String(iso || '').trim().toUpperCase();
+  const host = GOOGLE_DOMAINS[cc] ?? 'google.com';
+  const hl = String(language || '').trim().toLowerCase() || 'en';
+  const params = [`q=${encodeURIComponent(q).replace(/%20/g, '+')}`, `hl=${encodeURIComponent(hl)}`, ...(/^[A-Z]{2}$/.test(cc) ? [`gl=${cc.toLowerCase()}`] : []), 'pws=0'];
+  return `https://www.${host}/search?${params.join('&')}`;
+}
+
+/** One result of a stored check, as the client reads it: the site (the address when Google gave it) and the title. */
+export interface GoogleResultLine {
+  position: number;
+  site: string;
+  url: string;
+  title: string;
+  ours: boolean;
+}
+
+const hostKey = (u: string) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/[/?#].*$/, '').replace(/:\d+$/, '').replace(/^www\./, '');
+
+/**
+ * The top results of the latest check, each with its site and whether it is this website (a subdomain counts). Results Google showed
+ * behind a redirect link carry only their site (`host`), never a guessed address. Pure.
+ */
+export function googleResultLines(top: readonly { position: number; url: string; title: string; host?: string }[], domain: string, max = 10): GoogleResultLine[] {
+  const our = hostKey(domain);
+  return top
+    .map((t) => {
+      const site = hostKey(t.host || t.url);
+      return { position: Number(t.position) || 0, site, url: t.url || '', title: String(t.title || ''), ours: !!our && !!site && (site === our || site.endsWith(`.${our}`)) };
+    })
+    .filter((t) => t.position > 0 && t.site)
+    .sort((a, b) => a.position - b.position)
+    .slice(0, max);
+}
+
+/**
+ * The plain line under that list: where this website was in the check (desktop, and the phone reading when one was bought). Pure.
+ * `position` 0 = not in the results we read (`depth`, 50 for the weekly check), -1 = the check could not tell, null = never checked.
+ */
+export function googleReadingLine(i: { position: number | null; depth?: number; mobile?: { position: number } | null }): string {
+  const depth = i.depth && i.depth > 0 ? i.depth : 50;
+  const at = (p: number | null) => (p == null ? 'not checked yet' : p > 0 ? `#${p}` : p === 0 ? `not in the top ${depth}` : 'could not be told');
+  const phone = i.mobile && i.mobile.position >= 0 ? `; on a phone ${at(i.mobile.position)}` : '';
+  return `Your website in this check: ${at(i.position)} on a computer${phone}.`;
+}
+
 /** A host-agnostic page key: no scheme, no www., no query or fragment, no trailing slash. */
 const pageKey = (u: string) => String(u || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
 

@@ -14,10 +14,13 @@ export * from './estimate';
 export * from './pipeline-notices';
 export * from './publish-verify';
 export * from './meta-description';   // W0-A (2026-10-29): the meta description's field rule, the same as the engine's PF.meta
+export * from './live-grade';   // client reports 2026-11-11: the grade of the live page (Page Finalize grade_only), stored by the app's job
 export * from './page-review';   // H3 (2026-10-28): delivery status, client questions, business facts kept once, the editor, finalise, approve   // 2026-10-27: "I published it" warns when the live page is not the page that was written
 export * from './ladders';
+export * from './technical-live';   // client report 2026-11-11: the technical page's "not indexed" finding follows the daily index check
 export * from './keywords';
 export * from './link-import';
+export * from './backlinks';   // client report 2026-11-11 (N45): what each referring site is (real, listing, automatic report page, farm), Bing check
 export * from './outreach';
 export * from './draft-qa';
 export * from './placeholders';

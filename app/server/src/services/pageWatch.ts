@@ -1,4 +1,4 @@
-import type { FindingRecheck, IndexCoverage, PageWatch, PageWatchRow, RecheckRequest, RecheckState, WatchedPage } from '@seo/shared';
+import { samePageUrl, type FindingRecheck, type IndexCoverage, type IndexPage, type PageWatch, type PageWatchRow, type RecheckRequest, type RecheckState, type WatchedPage } from '@seo/shared';
 import { badRequest, notFound } from '../lib/errors';
 import { rows, updateRows } from '../n8n/client';
 import type { AuditFindingRow } from '@seo/shared';
@@ -63,9 +63,9 @@ export function watchView(watchRows: PageWatchRow[], now = new Date()): PageWatc
 }
 
 /** G25: Google's index view over the watched pages, the ones nobody asked about are counted apart, never as "fine". */
-export function indexCoverage(watchRows: PageWatchRow[], quota = 2000): IndexCoverage | null {
+export function indexCoverage(watchRows: PageWatchRow[], quota = 2000, indexPages: readonly IndexPage[] = []): IndexCoverage | null {
   if (!watchRows.length) return null;
-  const pages = watchRows.map(watchedPage);
+  const pages = watchRows.map(watchedPage).map((p) => newestIndexReading(p, indexPages));
   const answered = pages.filter((p) => p.indexed !== null);
   const indexed = answered.filter((p) => p.indexed === true).length;
   const notIndexed = answered.length - indexed;
@@ -73,9 +73,22 @@ export function indexCoverage(watchRows: PageWatchRow[], quota = 2000): IndexCov
   const canonicalMismatch = answered.filter((p) => p.googleCanonical && p.googleCanonical !== p.url).length;
   const mobileBad = pages.filter((p) => p.mobile === 'fail').length;
   const text = answered.length
-    ? `${indexed} of ${answered.length} key pages are in Google's index${notIndexed ? `, ${notIndexed} ${notIndexed === 1 ? 'is' : 'are'} not` : ''}${notChecked ? `, ${notChecked} not checked yet` : ''} (Search Console URL Inspection; Google allows ${quota.toLocaleString('en-US')} inspections a day per property, so the pages rotate oldest-first).`
+    ? `${indexed} of ${answered.length} key pages are in Google's index${notIndexed ? `, ${notIndexed} ${notIndexed === 1 ? 'is' : 'are'} not` : ''}${notChecked ? `, ${notChecked} not checked yet` : ''} (Search Console URL Inspection, the newest reading of each page from this watch or the daily index check; Google allows ${quota.toLocaleString('en-US')} inspections a day per property, so the pages rotate oldest-first).`
     : `No key page has been inspected in Search Console yet (${notChecked} not checked). Nothing is claimed about Google's index until it answers.`;
   return { checked: answered.length, indexed, notIndexed, notChecked, canonicalMismatch, mobileBad, quota, text };
+}
+
+/**
+ * Client report 2026-11-11 (devaicon.com): the tile said "14/35 in Google's index" from the watch's own inspections (a weekly rotation, all
+ * of 6 Nov) while the daily index check had read the same pages since (18 in Google on 11 Nov, one of them a watched page the watch still
+ * called "unknown to Google"). One page, one answer: the NEWER of the two Google readings wins. A daily check row that Google has not
+ * answered (unknown, error) changes nothing.
+ */
+export function newestIndexReading(p: WatchedPage, indexPages: readonly IndexPage[]): WatchedPage {
+  const ix = indexPages.find((x) => samePageUrl(x.url, p.url));
+  if (!ix || !ix.inspectedAt || (ix.state !== 'indexed' && ix.state !== 'not_indexed' && ix.state !== 'excluded')) return p;
+  if (p.indexed !== null && p.inspectedAt && p.inspectedAt >= ix.inspectedAt) return p;
+  return { ...p, indexed: ix.state === 'indexed', coverage: ix.coverage || p.coverage, inspectedAt: ix.inspectedAt, lastCrawl: ix.lastCrawl || p.lastCrawl, googleCanonical: ix.googleCanonical || p.googleCanonical };
 }
 
 /** The re-check state stored on a finding row (null when nobody asked for one). */

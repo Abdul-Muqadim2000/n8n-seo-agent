@@ -5,7 +5,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { BadgeCheck, Briefcase, CalendarClock, CheckCircle2, Clock, ExternalLink as ExternalIcon, FileText, Flame, Inbox, LayoutGrid, PenSquare, Rows3, Send, Target, TrendingDown, TrendingUp, Trophy, Undo2, UserRound, Wrench, XCircle } from 'lucide-react';
-import { cmsKindLabel, DRAFT_BY_HAND, titleCase, type CaseStudy, type CmsItemView, type ContentData, type ContentItem, type ContentLiveCheck, type Report } from '@seo/shared';
+import { cmsKindLabel, DRAFT_BY_HAND, generatedRowView, gradeDisplay, titleCase, type CaseStudy, type CmsItemView, type ContentData, type ContentItem, type ContentLiveCheck, type Report } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { toastError } from '@/lib/api';
 import { paths } from '@/lib/paths';
@@ -22,7 +22,7 @@ import { DataTable, type Column } from '@/components/ui/table';
 import { CountUp, DistributionBar, HeroLink, HeroNextStep, HeroStat, IconTile, ScoreRing, SEQ, Stagger, SummaryHero, type IconTileTone } from '@/components/insight';
 import { DataGate, FilterChips, SrOnly, Kind, Panel, RunAnalysisMenu, SectionHeading, ToolButton, useSitePage } from './_components/kit';
 import { HeroMeter } from './_components/pipeline/home';
-import { contentGroups, isLiveItem, liveCheckText, liveLine, needsFixItem, publishNoteSettled, publishPrefill } from './_components/content-status';
+import { contentGroups, isLiveItem, liveCheckText, liveGradeLines, liveLine, needsFixItem, publishNoteSettled, publishPrefill } from './_components/content-status';
 import { countBy, daysSince, plural, urlPath } from './_components/format';
 import { FileLinks } from './_components/reports';
 import { PublishCheckPanel } from './_components/publish-check';
@@ -387,6 +387,32 @@ function LiveCheckLine({ check, orgId }: { check: ContentLiveCheck; orgId: strin
   );
 }
 
+/** Client reports 2026-11-11: the grade of the live page (the engine's reading of the published page), the page's main grade once it is live. */
+function LiveGradeLine({ review, orgId }: { review: NonNullable<ContentItem['review']>; orgId: string }) {
+  const l = liveGradeLines(review);
+  if (!l) return null;
+  const tone = l.tone === 'good' ? 'text-good-text' : l.tone === 'warning' ? 'text-warning-text' : l.tone === 'critical' ? 'text-critical-text' : 'text-ink-2';
+  return (
+    <div className="space-y-0.5 [overflow-wrap:anywhere]">
+      {l.grade && <p className={`text-[13px] font-semibold ${tone}`}>{l.grade}</p>}
+      {l.blockers.length > 0 && (
+        <p className="text-ink-2">
+          Still to fix on the live page: {l.blockers.join('; ')}.
+          {l.checkReportId && (
+            <>
+              {' '}
+              <Link to={paths.report(orgId, l.checkReportId)} className="font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
+                See the check
+              </Link>
+            </>
+          )}
+        </p>
+      )}
+      {l.note && <p className="text-ink-3">{l.note}.</p>}
+    </div>
+  );
+}
+
 function PipelineCard({ item, report, cms, onUnpublish }: { item: ContentItem; report?: Report; cms?: CmsItemView; onUnpublish: (i: ContentItem) => void }) {
   const { org, can, tool } = useSitePage();
   const liveNow = isLive(item);
@@ -411,6 +437,7 @@ function PipelineCard({ item, report, cms, onUnpublish }: { item: ContentItem; r
       <div className="mt-2 space-y-1 text-xs text-ink-3">
         <p>Started {fmtDate(item.startedAt)}{liveNow && item.publishedAt ? ` · published ${fmtDate(item.publishedAt)}` : ''}</p>
         {item.existingPageUrl && !liveNow && <p className="truncate">Improves {urlPath(item.existingPageUrl)}</p>}
+        {liveNow && item.review && <LiveGradeLine review={item.review} orgId={org.id} />}
         {item.review && <ReviewLine review={item.review} orgId={org.id} live={liveNow} />}
         {liveNow && item.liveCheck && <LiveCheckLine check={item.liveCheck} orgId={org.id} />}
         {fix && !item.review && (
@@ -765,7 +792,6 @@ function CaseStudies({ items }: { items: CaseStudy[] }) {
 
 function GeneratedTable({ reports, orgId }: { reports: Report[]; orgId: string }) {
   const s = (v: unknown) => (typeof v === 'string' ? v : '');
-  const n = (v: unknown) => (typeof v === 'number' ? v : null);
   const columns: Column<Report>[] = [
     {
       key: 'title',
@@ -774,11 +800,32 @@ function GeneratedTable({ reports, orgId }: { reports: Report[]; orgId: string }
       cell: (r) => (
         <Link to={paths.report(orgId, r.id)} className="block min-w-[9rem] font-medium text-ink transition-colors duration-150 ease-brand hover:text-accent-text">
           {s(r.summary.keyword) || r.title}
+          {/* client reports 2026-11-11 (techand.ai): a final version is the same page made again with the client's answers, not a new page */}
+          {generatedRowView(r).finalVersion && <span className="block text-xs font-normal text-ink-3">Final version of this page</span>}
         </Link>
       ),
     },
-    { key: 'verdict', header: 'Verdict', sortValue: (r) => s(r.summary.verdict), cell: (r) => (s(r.summary.verdict) ? <StatusBadge tone={verdictTone(s(r.summary.verdict))}>{verdictLabel(s(r.summary.verdict))}</StatusBadge> : '-') },
-    { key: 'score', header: 'Score', align: 'right', sortValue: (r) => n(r.summary.score), cell: (r) => n(r.summary.score) ?? '-' },
+    {
+      key: 'verdict',
+      header: 'Verdict',
+      sortValue: (r) => (generatedRowView(r).finalVersion ? 'Final version' : s(r.summary.verdict)),
+      cell: (r) => {
+        const v = generatedRowView(r);
+        if (v.finalVersion) return <Badge tone="accent">Final version</Badge>;
+        return v.verdict ? <StatusBadge tone={verdictTone(v.verdict)}>{verdictLabel(v.verdict)}</StatusBadge> : '-';
+      },
+    },
+    {
+      key: 'score',
+      header: 'Score',
+      align: 'right',
+      sortValue: (r) => generatedRowView(r).score,
+      cell: (r) => {
+        const v = generatedRowView(r);
+        if (v.scoreKind === 'grade') return v.score != null ? <span title="The grade of this final version">grade {gradeDisplay(v.score)}</span> : '-';
+        return v.score ?? '-';
+      },
+    },
     { key: 'page', header: 'Page type', hideOnMobile: true, sortValue: (r) => s(r.summary.page), cell: (r) => (s(r.summary.page) ? <Kind className="h-auto max-w-[18rem] whitespace-normal py-0.5 leading-snug">{s(r.summary.page)}</Kind> : '-') },
     { key: 'kind', header: 'Contains', hideOnMobile: true, cell: (r) => <span className="text-[13px] text-ink-2">{r.summary.hasPage ? 'Report + page' : 'Keyword report'}</span> },
     { key: 'receivedAt', header: 'Delivered', sortValue: (r) => r.receivedAt, cell: (r) => <span className="text-[13px] text-ink-3" title={fmtDate(r.receivedAt)}>{fmtAgo(r.receivedAt)}</span> },

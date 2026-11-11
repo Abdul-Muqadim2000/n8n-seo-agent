@@ -34,7 +34,7 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
-    date: '2026-11-10',
+    date: '2026-11-11',
     version: '4.12',
     title: 'Keyword ladders that climb the right way',
     summary: 'A keyword ladder now keeps one page for each search, steps from reading to choosing a provider, stays in your market, and stops a page our check advised against.',
@@ -46,8 +46,9 @@ export const changelog: ChangelogEntry[] = [
       'A page whose writing stopped without a result is closed with the reason and nothing is charged, so the next page goes on',
       'Each page of a ladder shows its address, why it sits there and who searches it',
       'Clearer readings once a page is live: the Content page shows what our check found on your live page beside the grade of the version we delivered and says "Moved" once the old address redirects to the new one, Steps on your website never ask you to redirect your home page and count a page that redirects to its main version as fixed, and a ladder says how we check its main keyword, shows each live page\'s own Search Console figures and leaves out checks taken before the page went live',
+      'More of what you see now follows your live website: each content card grades the page as it is live, the indexing finding on the Technical page follows the daily index check, the Backlinks page says what each linking site is, explains the spam score and checks Bing for you at once (also from the Bing step on your website), a ladder page shows what Google showed for its search with a link to open that search on Google, "Write it anyway" works on a ladder page, a final version is marked as one in your list of pages, and a final version graded before our checks improved can be made again once for free',
     ],
-    features: ['keyword-ladders'],
+    features: ['keyword-ladders', 'content', 'technical-audits', 'backlinks'],
   },
   {
     date: '2026-11-08',

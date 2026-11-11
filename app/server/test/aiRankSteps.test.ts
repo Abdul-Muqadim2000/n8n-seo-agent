@@ -217,3 +217,79 @@ describe('an AI ranking step checked on the address the client gives', () => {
     expect((await s.u.c.post(`${s.base}/check`, { key: L01 })).status).toBe(409);
   });
 });
+
+// Client reports 2026-11-11 (devaicon.com): "I've done it, check now" on L03 (Bing Webmaster) answered 409 "the weekly check confirms
+// this step", so the client waited for Friday. It now asks Bing right away (the Backlinks page's "Check Bing now": free, nothing stored but
+// the step's reading, the key never logged) and says which half is missing, with the Backlinks page Bing card's words.
+const tasksSvc = await import('../src/services/siteTasks');
+describe('L03 (Bing Webmaster): checked with Bing right away', () => {
+  const L03 = 'ai_rank:L03:site';
+  const realCheck = tasksSvc.bingStep.check;
+  afterAll(() => {
+    tasksSvc.bingStep.check = realCheck;
+  });
+  async function withL03() {
+    const s = await setup();
+    const steps = [{ key: L03, lever: 'L03', what: 'Add your website to Bing Webmaster Tools', why: 'ChatGPT search and Copilot read Bing', check: 'the weekly run reads Bing', url: '', action_id: 'act_L03', status: 'queued' }];
+    await db.insert(schema.reports).values({ orgId: s.org.id, siteId: s.site.id, stage: 'ai_growth', status: 'progress', title: 'AI growth', payload: { stage: 'ai_growth', ai_rank: { v: 1, mode: 'on', checked_at: '2026-11-10T09:30:00Z', steps } }, receivedAt: new Date(Date.now() + 1000) });
+    t.actions = [...t.actions, { action_id: 'act_L03', status: 'queued', mode: 'on' }];
+    return s;
+  }
+  const live = (o: Partial<import('@seo/shared').BingCheck> = {}): import('@seo/shared').BingCheck => ({ configured: true, inAccount: false, verified: false, shareWith: 'reader@alaventra.example', checkedAt: '2026-11-11T10:00:00.000Z', message: '', ...o });
+
+  it('not in our Bing account yet: stays to do, with the Read only step and the reading account', async () => {
+    const s = await withL03();
+    const asked: string[] = [];
+    tasksSvc.bingStep.check = async (d) => (asked.push(d), live());
+    const r = await s.u.c.post(`${s.base}/check`, { key: L03 });
+    expect(r.status).toBe(200);
+    const task = taskOf(r);
+    expect(asked).toEqual([s.site.domain]);
+    expect(task.state).toBe('todo');
+    expect(task.lastCheck?.message).toMatch(/Adding the site to your own Bing account is the first half/);
+    expect(task.lastCheck?.message).toMatch(/choose Add user, enter reader@alaventra\.example and pick Read only\./);
+  });
+
+  it('listed and verified: done', async () => {
+    const s = await withL03();
+    tasksSvc.bingStep.check = async () => live({ inAccount: true, verified: true });
+    const task = taskOf(await s.u.c.post(`${s.base}/check`, { key: L03 }));
+    expect(task.state).toBe('done');
+    expect(task.lastCheck?.message).toMatch(/^We can read your site in Bing now \(checked 2026-11-11\)/);
+  });
+
+  it('listed but not verified yet: to do, says verification can take a day', async () => {
+    const s = await withL03();
+    tasksSvc.bingStep.check = async () => live({ inAccount: true, verified: false });
+    const task = taskOf(await s.u.c.post(`${s.base}/check`, { key: L03 }));
+    expect(task.state).toBe('todo');
+    expect(task.lastCheck?.message).toMatch(/not as verified yet/);
+  });
+
+  it('no reading account e-mail set: the generic Read only step', async () => {
+    const s = await withL03();
+    tasksSvc.bingStep.check = async () => live({ shareWith: '' });
+    expect(taskOf(await s.u.c.post(`${s.base}/check`, { key: L03 })).lastCheck?.message).toMatch(/add the Alaventra reading account as a Read only user/);
+  });
+
+  it('Bing not answering: nothing recorded (409); Bing not set up on this server: the weekly check decides (409)', async () => {
+    const s = await withL03();
+    tasksSvc.bingStep.check = async () => {
+      throw Object.assign(new Error('Bing did not answer just now. Try again in a minute.'), { statusCode: 503 });
+    };
+    const r1 = await s.u.c.post(`${s.base}/check`, { key: L03 });
+    expect(r1.status).toBe(409);
+    expect(JSON.stringify(r1.body)).toMatch(/Bing did not answer just now/);
+    expect((await rowOf(s.site.id, L03))?.lastCheck ?? null).toBeNull();
+    tasksSvc.bingStep.check = async () => live({ configured: false });
+    const r2 = await s.u.c.post(`${s.base}/check`, { key: L03 });
+    expect(r2.status).toBe(409);
+    expect(JSON.stringify(r2.body)).toMatch(/engine_reads_it/);
+  });
+
+  it('pure: bingStepOutcome', () => {
+    expect(tasksSvc.bingStepOutcome(live({ inAccount: true, verified: true }))).toMatchObject({ ok: true, reached: true });
+    expect(tasksSvc.bingStepOutcome(live())).toMatchObject({ ok: false, reached: true });
+    expect(tasksSvc.bingStepOutcome(live({ configured: false }))).toMatchObject({ ok: false, reached: false, engineOnly: true });
+  });
+});

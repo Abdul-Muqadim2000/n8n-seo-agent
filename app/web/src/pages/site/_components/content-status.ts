@@ -2,8 +2,8 @@
 // ladder, Rankings). A draft the quality check refused (`not_ready`, R111) is written but never "waiting to publish": it needs the owner's edits by
 // hand first (never a new run), which is what Needs you says about it. Before this the Content page counted it as waiting and offered "Publish it, then
 // report its address", the Overview counted it as needing a fix, and the two screens disagreed about the same page.
-import type { ContentItem, ContentLiveCheck } from '@seo/shared';
-import { fmtDate } from '@/lib/utils';
+import { gradeDisplay, LIVE_GRADE_STATUS_LABEL, type ContentItem, type ContentLiveCheck, type PageDeliveryStatus, type PageReviewSummary } from '@seo/shared';
+import { fmtDate, fmtDay } from '@/lib/utils';
 
 /** A page that is on the website (reported live, or found by the weekly report). */
 export const isLiveItem = (i: Pick<ContentItem, 'status' | 'publishedUrl'>): boolean => i.status === 'published' || !!i.publishedUrl;
@@ -58,4 +58,45 @@ export function liveCheckText(c: ContentLiveCheck): string {
   const failed = c.failed.slice(0, 3);
   const more = c.failed.length - failed.length;
   return `Live page checked ${fmtDate(c.at)}: ${c.passed} of ${c.total} checks passed${failed.length ? `. Not passed: ${failed.join('; ')}${more > 0 ? ` and ${more} more` : ''}` : ''}`;
+}
+
+/** What the Content card says about the grade of the live page (client reports 2026-11-11). */
+export interface LiveGradeLines {
+  /** the main grade line ("Live page grade 74/100 · needs work · checked 11 Nov"), or "Live page grade: checking"; '' when there is none */
+  grade: string;
+  tone: 'good' | 'warning' | 'critical' | 'neutral';
+  /** what still stops the live page from being ready (at most 2, plain words) */
+  blockers: string[];
+  /** the publish check the grade belongs to ("See the check"); null when there is no grade */
+  checkReportId: string | null;
+  /** a failed read or a new grade being made, beside the grade shown */
+  note: string;
+}
+
+const toneOf = (st: PageDeliveryStatus | ''): LiveGradeLines['tone'] => (st === 'ready' || st === 'ready_with_questions' ? 'good' : st === 'needs_work' ? 'warning' : st === 'not_ready' ? 'critical' : 'neutral');
+const later = (a: string | null | undefined, b: string | null | undefined) => !!a && (!b || new Date(a).getTime() > new Date(b).getTime());
+
+/**
+ * Client reports 2026-11-11 (devaicon.com: "the card still shows the old score of the page"): the grade of the LIVE page, the engine's own
+ * reading of the published page, shown as the page's grade; null when the page has no live grade, no failed read and none on the way.
+ */
+export function liveGradeLines(r: Pick<PageReviewSummary, 'liveGrade' | 'liveGradePending'>): LiveGradeLines | null {
+  const g = r.liveGrade ?? null;
+  const pending = r.liveGradePending === true;
+  const graded = !!g && g.score != null && !!g.checkedAt;
+  const failedNow = !!g?.readFailed && (!graded || later(g.readFailed.at, g.checkedAt));
+  const failed = failedNow ? `We could not read the live page to grade it (checked ${fmtDay(g!.readFailed!.at)})` : '';
+  if (!graded) {
+    if (pending) return { grade: 'Live page grade: checking', tone: 'neutral', blockers: [], checkReportId: null, note: '' };
+    if (failed) return { grade: '', tone: 'neutral', blockers: [], checkReportId: null, note: failed };
+    return null;
+  }
+  const label = g!.status ? LIVE_GRADE_STATUS_LABEL[g!.status as PageDeliveryStatus] ?? '' : '';
+  return {
+    grade: [`Live page grade ${gradeDisplay(g!.score)}/100`, label, `checked ${fmtDay(g!.checkedAt)}`].filter(Boolean).join(' · '),
+    tone: toneOf(g!.status),
+    blockers: g!.blocking.map((b) => b.text.replace(/[.\s]+$/, '')).filter(Boolean).slice(0, 2),
+    checkReportId: g!.publishedReportId || null,
+    note: pending ? 'Checking the newest version of the live page' : failed,
+  };
 }

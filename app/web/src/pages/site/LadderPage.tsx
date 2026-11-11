@@ -347,7 +347,7 @@ function PositionResults({ ladder: l }: { ladder: LadderDetail }) {
           title={checks.length ? 'Not in the top 50 yet' : 'No Google checks yet'}
           description={
             checks.length
-              ? `Checked ${checks.length === 1 ? 'once' : `on ${checks.length} days`} since ${fmtDate(checks[0])}. Pages usually need a few weeks after they go live; the easy pages show up first. The chart starts with the first page in the top 50.${lines.some((x) => x.history.some((h) => h.beforePublish)) ? ` ${BEFORE_PUBLISH_NOTE}` : ''}${l.headNote ? ` ${l.headNote}` : ''}`
+              ? `Checked ${checks.length === 1 ? 'once' : `on ${checks.length} days`} since ${fmtDate(checks[0])}. Pages usually need a few weeks after they go live; the easy pages show up first. The chart starts with the first page in the top 50. Open a page in the climb above to see what Google showed in our check and to open the same search yourself.${lines.some((x) => x.history.some((h) => h.beforePublish)) ? ` ${BEFORE_PUBLISH_NOTE}` : ''}${l.headNote ? ` ${l.headNote}` : ''}`
               : `The rank check runs ${day.every}. Positions show up here once the ladder's pages are checked.`
           }
         />

@@ -1,5 +1,10 @@
 import {
   INDEXING_MERGE_KEY,
+  effectiveSeverity,
+  liveResolved,
+  decodeEntities,
+  liveGradePending,
+  liveGradeTarget,
   isSiteRoot,
   mergedPairsOf,
   samePageUrl,
@@ -145,10 +150,12 @@ import {
 } from '@seo/shared';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db, schema } from '../db';
+import { config } from '../config';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { rows as tableRows, siteRows } from '../n8n/client';
 import { settingsRow } from './admin/settings';
 import { indexCoverage, recheckOf, watchView } from './pageWatch';
+import { liveTechnical } from './technicalLive';
 import { aiChargeEntries, bucketAiCharges } from './runCredits';
 import { callbackUrl, latestReport, reportsList } from './runs';
 import { healGa4 } from './engineSite';
@@ -802,6 +809,20 @@ export interface PublishCheckRef {
   total: number;
   failed: string[];
   live: boolean;
+  /** client reports 2026-11-11: the check marked the page published (false: refused); the live page's main heading and title as it read them */
+  recorded?: boolean;
+  h1?: string;
+  title?: string;
+}
+
+/**
+ * Client reports 2026-11-11: the publish check a live page is graded from (the live-grade job and the board use this one rule): the newest
+ * check that opened the live page and marked it published, by the content-log row's request id, the delivered page's, else the keyword. Pure.
+ */
+export function liveTargetFor(row: Pick<ContentLogRow, 'request_id' | 'keyword'>, page: { requestId?: string | null; payload?: Record<string, unknown> } | null, checks: readonly PublishCheckRef[]): PublishCheckRef | null {
+  if (!page) return null;
+  const ids = [s(row.request_id), s(page.requestId), s(page.payload?.request_id)];
+  return liveGradeTarget({ requestIds: ids, keyword: s(row.keyword) }, checks) as PublishCheckRef | null;
 }
 
 /**
@@ -827,7 +848,7 @@ export function movedFor(row: Pick<ContentLogRow, 'existing_page_url' | 'publish
 }
 
 /** The website's publish checks, newest first: only the fields the board shows (no page text). A failed read is "no check". */
-async function publishChecks(orgId: string, siteId: string): Promise<PublishCheckRef[]> {
+export async function publishChecks(orgId: string, siteId: string): Promise<PublishCheckRef[]> {
   const R = schema.reports;
   const p = R.payload;
   const rows = await db
@@ -841,6 +862,9 @@ async function publishChecks(orgId: string, siteId: string): Promise<PublishChec
       total: sql<number | null>`case when jsonb_typeof(${p}->'checks') = 'array' then jsonb_array_length(${p}->'checks') else 0 end`,
       failed: sql<unknown>`${p}->'failed'`,
       live: sql<string | null>`${p}->>'live'`,
+      recorded: sql<string | null>`${p}->>'recorded'`,
+      h1: sql<string | null>`${p}->'verify_evidence'->>'h1'`,
+      title: sql<string | null>`${p}->'verify_evidence'->>'title'`,
     })
     .from(R)
     .where(and(eq(R.orgId, orgId), eq(R.siteId, siteId), eq(R.stage, 'published')))
@@ -856,6 +880,9 @@ async function publishChecks(orgId: string, siteId: string): Promise<PublishChec
     total: n(r.total),
     failed: Array.isArray(r.failed) ? r.failed.map(String).filter(Boolean) : [],
     live: s(r.live) !== 'false',
+    recorded: s(r.recorded) === 'true',
+    h1: decodeEntities(s(r.h1)),
+    title: decodeEntities(s(r.title)),
   }));
 }
 
@@ -881,12 +908,16 @@ export async function contentData(org: OrgRow, site: SiteRow): Promise<ContentDa
   const profile = profileFromRow(profiles[0]);
   // H3 (2026-10-28): where each written page's review stands (questions, final version, approval, publishing); never fails the board
   const reviews = await import('./pageReview').then((m) => m.siteReviews(org.id, site)).catch(() => null);
-  const reviewOf = (r: ContentLogRow) => {
-    const page = reviews?.pageFor(r);
-    return page && reviews ? { review: reviews.summaryOf(page, r) } : {};
-  };
   // prod 2026-11-10: what the publish check measured on the live page, and an old address the client redirected to it (never fails the board)
   const [checks, merged] = await Promise.all([publishChecks(org.id, site.id).catch(() => [] as PublishCheckRef[]), mergedPairs(site.id).catch(() => [] as { from: string; to: string; at: string }[])]);
+  const reviewOf = (r: ContentLogRow) => {
+    const page = reviews?.pageFor(r);
+    if (!page || !reviews) return {};
+    const review = reviews.summaryOf(page, r);
+    // client reports 2026-11-11: a live page with a publish check newer than its newest live grade is being graded (services/liveGrade.ts)
+    const pending = s(r.status) === 'published' && liveGradePending(review.liveGrade?.attemptedAt ?? null, liveTargetFor(r, page, checks));
+    return { review: pending ? { ...review, liveGradePending: true } : review };
+  };
   const liveOf = (r: ContentLogRow) => {
     if (s(r.status) !== 'published' && !s(r.published_url)) return {};
     const existing = s(r.existing_page_url);
@@ -1033,11 +1064,15 @@ export async function technicalData(org: OrgRow, site: SiteRow, auditId?: string
     a.impact != null && c.impact != null
       ? c.impact - a.impact || (sevRank[a.severity.toLowerCase()] ?? 5) - (sevRank[c.severity.toLowerCase()] ?? 5)
       : (sevRank[a.severity.toLowerCase()] ?? 5) - (sevRank[c.severity.toLowerCase()] ?? 5) || c.affectedCount - a.affectedCount);
+  // client report 2026-11-11 (devaicon.com): the newest audit's "not indexed by Google" finding follows the daily index check, and the
+  // watch's "In Google's index" takes the newest Google reading of each page (services/technicalLive.ts, shared/src/technical-live.ts)
+  const live = await liveTechnical(site, selected, points.length ? points[points.length - 1].auditId : null, findings, cur.map((f) => ({ key: s(f.finding_key), checked: n(f.checked), sampleUrls: safeJson<unknown[]>(s(f.sample_urls), []).map(String) })));
+  findings.splice(0, findings.length, ...live.findings);
   const cats = new Map<string, { category: string; critical: number; high: number; medium: number; low: number }>();
   for (const f of findings) {
-    if (f.status === 'fixed') continue;
+    if (f.status === 'fixed' || liveResolved(f)) continue;
     const c = cats.get(f.category) ?? { category: f.category, critical: 0, high: 0, medium: 0, low: 0 };
-    const k = f.severity.toLowerCase() as 'critical' | 'high' | 'medium' | 'low';
+    const k = effectiveSeverity(f).toLowerCase() as 'critical' | 'high' | 'medium' | 'low';
     if (k in c) c[k] += 1;
     cats.set(f.category, c);
   }
@@ -1049,7 +1084,7 @@ export async function technicalData(org: OrgRow, site: SiteRow, auditId?: string
     byCategory: [...cats.values()].sort((a, c) => c.critical * 100 + c.high * 10 + c.medium - (a.critical * 100 + a.high * 10 + a.medium)),
     reports,
     watch: watchView(watchRows),
-    indexCoverage: indexCoverage(watchRows),
+    indexCoverage: indexCoverage(watchRows, undefined, live.indexPages),
   };
 }
 
@@ -1691,6 +1726,7 @@ export async function backlinksData(org: OrgRow, site: SiteRow): Promise<Backlin
       : null,
     refs: refs.map(toRef).sort((a, c) => c.seoValue - a.seoValue || c.referralValue - a.referralValue),
     imports: [...latestAt].map(([source, at]) => ({ source, rows: imports.filter((r) => s(r.source) === source && s(r.imported_at) === at).length, importedAt: at })),
+    bingShareWith: config.bing.shareWith,
     linkGraph: graphRow
       ? { release: s(graphRow.release), checkedAt: s(graphRow.checked_at), counts: Object.fromEntries(s(graphRow.links_to).split(',').map((x) => x.split('=')).filter((x) => x.length === 2).map(([k, v]) => [k!, n(v)])) }
       : null,

@@ -1103,6 +1103,16 @@ stored fact's `by`) mapped to the person's name, else e-mail, else "a team membe
 - Pipeline: a `questions` Needs-you item per written page with open questions (not approved or published, the newest page of a keyword, at most 5,
   most impactful first), action `{ label: 'Answer them', reportId }`. Content board: each `ContentItem` of a page with a report carries `review:
   PageReviewSummary` (`stage`, `label`, `questions`, `answered`, `grade`).
+- Live page grade (client reports 2026-11-11, `shared/src/live-grade.ts`, `server/src/services/liveGrade.ts`): `grade` above is of the version
+  we delivered; for a live page the summary also carries `liveGrade: PageLiveGradeView | null` (`score`, `status`, `label`, `blocking` (code,
+  text), `advisoryCount`, `url`, `publishedReportId` = the publish check it belongs to, `checkedAt`, `attemptedAt`, `readFailed` { at,
+  publishedReportId, error } when the newest attempt could not read the live page; the previous grade is kept beside it) and `liveGradePending:
+  true` while a publish check is newer than the last grade. A server job (every 10 minutes and shortly after a `published` callback, at most 3
+  pages a run for the platform; `LIVE_GRADE_JOBS=false` stops it) grades each live page (content log `published`) whose newest publish check
+  opened the page and recorded it: it posts the Page Finalize webhook the finalize body of the page's newest version (final version, else the
+  delivered page) with no answers plus `grade_only: true` and `grade_live: { url, h1, title }` (the check's address and the main heading and
+  title it read, decoded), and stores the answer on `page_reviews.live_grade` / `live_graded_at` only when it says `grade_only: true` and
+  `live_read.ok: true`; a 400 whose error starts `grade_live:` is a failed read. Free: no credits, no run row, no report, no e-mail.
 
 ## Agencies and the client portal (G5, `app/docs/WHITE_LABEL.md`, `shared/src/agency.ts`)
 A **client workspace** is an ordinary company with `kind: 'client'` and its agency as parent; every route of a company works on it.

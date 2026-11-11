@@ -58,6 +58,7 @@ import { checkIndexnowStep } from '../services/siteTasks';
 import { invalidateKi } from '../services/ki';
 import { deleteAiPrompts, importAiReport } from '../services/aiWave2';
 import { aiPilotState, startAiPilot } from '../services/aiPilot';
+import { checkBingAccess } from '../services/bingCheck';
 
 export function toSite(s: SiteRow): Site {
   return {
@@ -598,6 +599,22 @@ export async function siteRoutes(app: FastifyInstance) {
     invalidateSite(site.domain);
     req.log.info({ site: site.domain, source: parsed.source, rows: parsed.rows.length }, 'link import');
     return { source: parsed.source, label: parsed.label, rows: parsed.rows.length, domains: parsed.domains, total: parsed.total, skipped: parsed.skipped, importedAt: now };
+  });
+
+  // ---------- client report 2026-11-11 (N45): "Check Bing now" on the Backlinks page ----------
+  // The engine reads Bing through one account's key; a client who added the site to their own Bing account is told at once whether that
+  // account can see it yet (GetUserSites, free), instead of waiting for the next weekly run. Nothing is stored; the next run reads the links.
+  app.post('/api/orgs/:orgId/sites/:siteId/backlinks/bing/check', { config: { rateLimit: { max: 12, timeWindow: '1 hour' } } }, async (req) => {
+    const p = req.params as P;
+    const { site } = await siteAccess(req, p.orgId, p.siteId, 'member');
+    requireVerified(site);
+    try {
+      const out = await checkBingAccess(site.domain);
+      req.log.info({ site: site.domain, inAccount: out.inAccount, verified: out.verified }, 'bing check');
+      return out;
+    } catch (err) {
+      throw new HttpError(503, (err as Error).message, 'bing_unavailable');
+    }
   });
 
   // ---------- W2-A (2026-10-23): the owner's AI report uploads -> seo_ai_imports (WAVE2_CONTRACTS.md §5) ----------

@@ -1,4 +1,4 @@
-import type { CreditPack, FactAnswers, PageAnswer, PageCheck, SiteTaskCheck, SiteTaskKind } from '@seo/shared';
+import type { CreditPack, FactAnswers, PageAnswer, PageCheck, PageLiveGrade, SiteTaskCheck, SiteTaskKind } from '@seo/shared';
 import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
@@ -1625,6 +1625,11 @@ export const pageReviews = pgTable(
     approvedAt: ts('approved_at'),
     approvedBy: uuid('approved_by').references(() => users.id, { onDelete: 'set null' }),
     approvedReportId: uuid('approved_report_id').references(() => reports.id, { onDelete: 'set null' }),
+    /** client reports 2026-11-11: the engine's grade of the LIVE page (services/liveGrade.ts), with the publish check it belongs to; a read
+     *  that failed keeps the previous grade and says so (`read_failed`) */
+    liveGrade: jsonb('live_grade').$type<PageLiveGrade>(),
+    /** the time of the publish check the newest attempt (grade or failed read) covers: a publish check newer than this is graded next */
+    liveGradedAt: ts('live_graded_at'),
     createdAt: created(),
     updatedAt: ts('updated_at').defaultNow().notNull(),
   },

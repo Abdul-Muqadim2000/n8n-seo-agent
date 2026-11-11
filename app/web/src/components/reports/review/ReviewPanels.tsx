@@ -519,7 +519,9 @@ export function FinalVersionCard({ view }: { view: PageReviewView }) {
   if (view.isFinal && !f.needed && f.status !== 'running' && f.status !== 'failed') return null;
   if (f.status === 'none' && !f.needed) return null;
   const onLatestFinal = view.isFinal && !!f.reportId && view.reportId === f.reportId;
-  const price = formatCredits(f.quote.credits);
+  // client reports 2026-11-11: a version made before our checks improved gets one free re-make
+  const recheck = f.recheck ?? null;
+  const price = recheck?.free ? 'Free this time' : formatCredits(f.quote.credits);
   const start = async () => {
     setErr('');
     try {
@@ -531,8 +533,14 @@ export function FinalVersionCard({ view }: { view: PageReviewView }) {
     }
   };
   return (
+    <div id="final-version" className="scroll-mt-20">
     <Block title="Your final version" description="We put your answers and your edits into the page, rewrite only the parts they change, and check the whole page again." icon={<Wand2 />}>
       <div aria-live="polite">
+        {recheck && f.status !== 'running' && (
+          <Callout tone="info" title="Our checks improved" className="mb-3">
+            {`${recheck.reason}.${recheck.free ? ' This re-make is free: no credits are used.' : ''}`}
+          </Callout>
+        )}
         {f.status === 'running' ? (
           <p className="flex items-center gap-2 text-sm text-ink-2">
             <Loader2 className="size-4 animate-spin text-accent-text" aria-hidden />
@@ -544,7 +552,7 @@ export function FinalVersionCard({ view }: { view: PageReviewView }) {
             <div className="flex flex-wrap items-center gap-3">
               <p className="flex items-center gap-1.5 text-sm text-ink">
                 <CheckCircle2 className="size-4 text-good-text" aria-hidden />{' '}
-                {onLatestFinal ? 'You changed this version after it was made.' : 'The final version is ready.'}
+                {recheck ? 'The final version was graded with our older checks.' : onLatestFinal ? 'You changed this version after it was made.' : 'The final version is ready.'}
               </p>
               {!onLatestFinal && (
                 <ButtonLink to={paths.report(org.id, f.reportId)} size="sm" icon={<FileCheck2 className="size-4" />}>
@@ -552,8 +560,8 @@ export function FinalVersionCard({ view }: { view: PageReviewView }) {
                 </ButtonLink>
               )}
               {f.needed && can('member') && (
-                <Button size="sm" variant={onLatestFinal ? 'primary' : 'ghost'} icon={onLatestFinal ? <Wand2 className="size-4" /> : undefined} onClick={() => setConfirm(true)}>
-                  Make it again with my edits and answers
+                <Button size="sm" variant={onLatestFinal || recheck ? 'primary' : 'ghost'} icon={onLatestFinal || recheck ? <Wand2 className="size-4" /> : undefined} onClick={() => setConfirm(true)}>
+                  {recheck ? 'Make it again with the improved checks' : 'Make it again with my edits and answers'}
                 </Button>
               )}
               {f.needed && <span className="text-[13px] text-ink-2">{price}</span>}
@@ -573,7 +581,7 @@ export function FinalVersionCard({ view }: { view: PageReviewView }) {
               </Button>
               <span className="text-[13px] text-ink-2">
                 {price}
-                {f.reason ? <span className="text-ink-3"> · {f.reason}</span> : null}
+                {f.reason && !recheck ? <span className="text-ink-3"> · {f.reason}</span> : null}
               </span>
             </div>
           </div>
@@ -583,19 +591,24 @@ export function FinalVersionCard({ view }: { view: PageReviewView }) {
         open={confirm}
         onOpenChange={setConfirm}
         title="Make the final version?"
-        description={`This costs ${price}. We use your answers and edits, rewrite only what they change and check the page again. Nothing is published until you approve it.`}
+        description={
+          recheck?.free
+            ? 'This one is free. We make the page again with our improved checks, rewrite only what needs it and grade it again. Nothing is published until you approve it.'
+            : `This costs ${price}. We use your answers and edits, rewrite only what they change and check the page again. Nothing is published until you approve it.`
+        }
         footer={
           <>
             <Button variant="ghost" onClick={() => setConfirm(false)}>
               Cancel
             </Button>
             <Button loading={finalize.isPending} onClick={start}>
-              Make it for {price}
+              {recheck?.free ? 'Make it again for free' : `Make it for ${price}`}
             </Button>
           </>
         }
       />
     </Block>
+    </div>
   );
 }
 

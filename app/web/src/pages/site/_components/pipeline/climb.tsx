@@ -1,7 +1,7 @@
 // Keyword-ladder page: "the climb" (rungs side by side, the main page last) and the panel of one page with its actions.
 import { Fragment, useMemo, useState } from 'react';
 import { ArrowDown, ArrowRight, ExternalLink as ExternalIcon, FileText, Flag, Inbox, Mountain, PenSquare, Play } from 'lucide-react';
-import { compactNumber, DRAFT_BY_HAND, NO_RERUN_NEEDED, type LadderDetail, type LadderPage } from '@seo/shared';
+import { compactNumber, DRAFT_BY_HAND, googleReadingLine, googleResultLines, googleSearchLink, NO_RERUN_NEEDED, type LadderDetail, type LadderPage } from '@seo/shared';
 import { ButtonLink, Button } from '@/components/ui/button';
 import { ExternalLink, KeyValue, Meter } from '@/components/ui/misc';
 import { IconTile } from '@/components/insight';
@@ -275,6 +275,7 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
           </p>
         )}
         {history.some((h) => h.beforePublish) && <p className="text-[12px] leading-snug text-ink-3">{BEFORE_PUBLISH_NOTE}</p>}
+        <GoogleReading page={p} ladder={ladder} domain={site.domain} />
         {history.some((h) => h.position > 0) ? (
           <PositionHistoryCard title="Position over time" lines={[{ key: 'p', label: p.keyword, history }]} height={170} />
         ) : (
@@ -286,5 +287,50 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
         )}
       </div>
     </Dialog>
+  );
+}
+
+/**
+ * prod 2026-11-11 (devaicon.com, "Google shows it on page one"): what our latest check of this keyword saw, so the client can compare it
+ * with their own search: the top 10 with this website marked, where the website was on a computer and a phone, and a link that opens the
+ * same search in the ladder's market. Shown once the keyword was checked.
+ */
+export function GoogleReading({ page: p, ladder, domain }: { page: LadderPage; ladder: Pick<LadderDetail, 'market'>; domain: string }) {
+  const serp = p.serp;
+  const link = googleSearchLink(p.keyword, ladder.market?.iso);
+  if (!serp || p.position == null) return null;
+  const lines = serp.features.unavailable ? [] : googleResultLines(serp.snapshot.top, domain);
+  const where = ladder.market?.country ? `Google ${ladder.market.country}` : 'Google';
+  const seen = serp.snapshot.at || serp.features.checkedAt;
+  // a place outside the ten blue links is not a position, but it is where the client may have seen the website
+  const f = serp.features;
+  const also = f.unavailable ? [] : [f.featuredSnippet.ours === true && 'the featured answer at the top', f.aiOverview.citesUs === true && 'the AI Overview', f.localPack.ours === true && 'the map results'].filter((x): x is string => !!x);
+  return (
+    <div className="space-y-2 rounded-lg border border-line bg-surface-2 px-3 py-2.5">
+      <p className="text-[13px] font-medium text-ink">
+        What Google showed in our check{seen ? ` on ${fmtDate(seen)}` : ''} ({where}, computer, not signed in)
+      </p>
+      {lines.length > 0 && (
+        <ol className="space-y-1" aria-label="The top results of our check">
+          {lines.map((t) => (
+            <li key={`${t.position}|${t.site}`} className={cn('flex gap-2 text-[13px]', t.ours ? 'font-medium text-ink' : 'text-ink-2')}>
+              <span className="tabular w-5 shrink-0 text-right text-ink-3">{t.position}</span>
+              <span className="min-w-0 truncate" title={t.title || t.site}>
+                {t.title || t.site} <span className="text-ink-3">({t.site}{t.ours ? ', your website' : ''})</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+      <p className="text-[13px] text-ink-2">{googleReadingLine({ position: p.position, mobile: serp.mobile })}</p>
+      {also.length > 0 && <p className="text-[13px] text-ink-2">Google also showed your website in {also.join(' and ')} of this search.</p>}
+      {link && (
+        <p className="text-[12px] leading-snug text-ink-3">
+          <ExternalLink href={link}>Open this search on Google</ExternalLink>. Use a private window: signed in, Google tailors results to you, your place and the pages you
+          visited, so your own website often shows higher than it does for a new visitor. A longer search, such as one with your city or country in it,
+          is a different search with its own results.
+        </p>
+      )}
+    </div>
   );
 }

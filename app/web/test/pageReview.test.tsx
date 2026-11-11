@@ -339,3 +339,34 @@ describe('page report with the delivered status', () => {
     expect(t).not.toContain('Grade of the page you receive');
   });
 });
+
+// Client reports 2026-11-11: a final version graded before our checks improved (10 November) may be made again once, free; the report page
+// and the Content card say so in plain words.
+describe('a final version graded with our older checks', () => {
+  const REASON = 'Our checks improved on 10 November: make the final version again for an up-to-date grade';
+  const frozen = deliveryOf({ qa_delivery_status: 'not_ready', qa_grade: { score: 59 }, qa_blocking: [{ code: 'review', text: 'A second read of the page found a problem at "Our work runs in three phases:"' }] });
+  const recheck = { ...baseView().finalize, status: 'done' as const, reportId: 'rep-1', needed: true, reason: REASON, quote: { credits: 0, usd: 0 }, recheck: { reason: REASON, free: true } };
+  it('the final version itself offers the free re-make, with the reason, and never a price', () => {
+    const t = text(render(<ReviewBody view={baseView({ isFinal: true, finalOf: 'rep-0', questions: [], answers: {}, delivery: frozen, stage: 'not_ready', finalize: recheck })} report={page} />));
+    expect(t).toContain('Our checks improved');
+    expect(t).toContain(`${REASON}. This re-make is free: no credits are used.`);
+    expect(t).toContain('The final version was graded with our older checks.');
+    expect(t).toContain('Make it again with the improved checks');
+    expect(t).toContain('Free this time');
+    expect(t).not.toContain('You changed this version after it was made.');
+    expect(t).not.toMatch(NO_TELLS);
+  });
+  it('the delivered page with no final version offers it on its main button', () => {
+    const t = text(render(<ReviewBody view={baseView({ questions: [], answers: {}, delivery: frozen, stage: 'not_ready', finalize: { ...recheck, status: 'none', reportId: null } })} report={page} />));
+    expect(t).toContain('Make the final version');
+    expect(t).toContain('Free this time');
+    expect(t).not.toContain(`Free this time · ${REASON}`);
+  });
+  it('the Content card says it with a link to make it again', () => {
+    const html = render(<ReviewLine review={{ reportId: 'rep-1', stage: 'not_ready', label: '', questions: 0, answered: 0, grade: 59, recheck: true }} orgId="org-test" />);
+    expect(text(html)).toContain(`${REASON}. It is free this time.`);
+    expect(text(html)).toContain('Make it again for free');
+    expect(html).toContain('#final-version');
+    expect(text(render(<ReviewLine review={{ reportId: 'rep-1', stage: 'not_ready', label: '', questions: 0, answered: 0, grade: 59 }} orgId="org-test" />))).not.toContain('Our checks improved');
+  });
+});
