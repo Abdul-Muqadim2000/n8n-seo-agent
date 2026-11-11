@@ -19,6 +19,12 @@ const META = /^(Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary
 const clean = (t) => S(t).replace(/\s*[\u2014\u2013]\s*/g, ': ').replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'").replace(/\u2026/g, '...').replace(/\s+/g, ' ').trim();
 
 if (b.mode != null && S(b.mode) !== 'finalize') errors.push('mode must be finalize');
+// client reports 2026-11-11 (section 185): a live-page grade is never made on our own text. The live page must be a page of this website and
+// the reader must have read it (Finalize Live Body), else the request is refused with the reason
+{ const lp = raw.live_plan || null; const lr = (b.live_read && typeof b.live_read === 'object') ? b.live_read : null;
+  if (lp && lp.asked && !lp.read) errors.push('grade_live: ' + (lp.refused || 'the live address could not be used'));
+  else if (lp && lp.read && (!lr || lr.ok !== true)) errors.push('grade_live: the live page could not be read: ' + ((lr && lr.reason) || 'no answer from the page reader')); }
+const grade_only = b.grade_only === true;
 const markdown = S(b.markdown).replace(/\r\n?/g, '\n');
 if (!markdown.trim()) errors.push('markdown is required: the delivered page (or your edited version of it) as Markdown');
 else if (markdown.length > LIM.markdown_chars) errors.push('markdown is longer than ' + LIM.markdown_chars + ' characters');
@@ -236,7 +242,7 @@ return [{ json: {
     second_read: (prc.grading || {}).second_read || null,   // W05-A: the page run's second-read advice (Finalize Verdict deducts what is still on the page)
     sections_removed: (prc.grading || {}).sections_removed || null,   // W06-C: what the page run took out (Finalize Verdict caps coverage and fit while it is still missing)
     duplicate_urls: dupUrls, duplicate_decision },
-  finalize: { answers, client_edited, client_sentences, delivered_markdown: delivered, input_markdown: markdown, answer_texts: answerTexts, stored_keys: stored,
+  finalize: { grade_only, live_read: (b.live_read && typeof b.live_read === 'object') ? b.live_read : null, answers: grade_only ? [] : answers, client_edited, client_sentences, delivered_markdown: delivered, input_markdown: markdown, answer_texts: answerTexts, stored_keys: stored,
     answered_keys: answers.filter(a => a.decision !== 'skip' && a.fact_key).map(a => a.fact_key),
     meta_fix: { how: metaFix.how, description: metaFix.description, problem: metaFix.problem, fixes: metaFix.fixes } }
 } }];

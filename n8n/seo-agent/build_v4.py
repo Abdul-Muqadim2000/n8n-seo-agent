@@ -5216,6 +5216,13 @@ def _check_ledger_order55(path, wiring):
     # parser) has no main connection at all and can never start a path
     starts55 = [n['name'] for n in wf55['nodes'] if n['name'] not in targets55 and ((c55.get(n['name']) or {}).get('main'))]
     early55 = sorted(n for n in _reach55(c55, starts55, reserve55) if n in by_name and _paid55(by_name[n]))
+    # client reports 2026-11-11 (section 185): the Page Finalize reads the LIVE page with the page reader before Parse Brief (the read IS the
+    # version to check); its ledger never refuses (no_gate: the app waits for the answer), so a reservation before the read would guard nothing.
+    # Exempt exactly that node, in that workflow, on the reader's address, and only while the ledger stays no_gate.
+    _rl185 = 'Read Live Page (reader)'   # renamed by the W07-A fallback wrap; the fallback Code node carries no credential
+    if nm55 == 'SEO Agent — Page Finalize' and wiring.get('no_gate') is True and _rl185 in early55 \
+            and str(by_name[_rl185]['parameters'].get('url') or '').startswith('=https://r.jina.ai/'):
+        early55 = [n for n in early55 if n != _rl185]
     assert not early55, 'R17: ' + nm55 + ' can spend before it reserves its ledger row: ' + ', '.join(early55)
     after55 = _reach55(c55, [reserve55], None)
     assert wiring['settle'] in after55, 'R17: ' + nm55 + ': ' + wiring['settle'] + ' is not downstream of ' + reserve55

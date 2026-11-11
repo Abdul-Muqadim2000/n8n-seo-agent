@@ -12,7 +12,7 @@ const V = $input.first().json || {};
 const body = V.body || {};
 const S = (v) => String(v == null ? '' : v);
 const md0 = S(body.markdown);
-if (body.ok !== true || md0.trim().length < 50) return [{ json: { ...V, final_doc: false } }];
+if (body.ok !== true || md0.trim().length < 50 || body.grade_only === true) return [{ json: { ...V, final_doc: false } }];   // 185: a live-page grade makes no document
 
 const esc = (s) => S(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 // a link the document may carry: http(s), a page of the site (/...) or an anchor; anything else (javascript:, data:) is kept as its text

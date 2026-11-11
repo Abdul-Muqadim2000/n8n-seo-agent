@@ -2661,6 +2661,8 @@ const body = {
   delivery_status: del.status,
   delivery: { status: del.status, label: del.label, blocking: del.blocking, advisory: del.advisory, next_step: del.next_step, grade, ...(del.needs_work ? { needs_work: del.needs_work } : {}) },
   client_questions, grade, cost, notes: (FM.notes || []).slice(0, 10), content_score: grade.score,
+  // client reports 2026-11-11 (185): a live-page grade says so, with what was read; the app stores it and never treats it as a final version
+  ...(F.grade_only ? { grade_only: true, live_read: F.live_read || null } : {}),
   basis: 'the content gate of a content run (Content QA + Originality Check, the same node code) over the final version, with your answers and the sentences you wrote counted as on file; no research, no new page',
   writes: 'none'
 };

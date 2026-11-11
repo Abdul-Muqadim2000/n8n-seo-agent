@@ -292,7 +292,8 @@ module.exports = async (ctx) => {
         if (J(outs('Reader Alert Delivery')) !== J(['Save Reader Alert Delivery'])) bad.push(f + ': the delivery is not written back');
       }
     }
-    check('13 reader nodes across the main workflow, the AI Visibility Tracker and the Backlink Monitor, every one wrapped', readers === 13 && !bad.length, J({ readers, bad }));
+    // client reports 2026-11-11 (section 185): + the Page Finalize's live-page read (14)
+    check('14 reader nodes across the main workflow, the AI Visibility Tracker, the Backlink Monitor and the Page Finalize (live grade), every one wrapped', readers === 14 && !bad.length, J({ readers, bad }));
     const wiring = JSON.parse(fs.readFileSync(path.join(__dirname, 'reader_wiring.json'), 'utf8'));
     check('the build recorded the 11 readers of the main workflow', Object.keys(wiring.readers).length === 11, J(Object.keys(wiring.readers)));
   });
