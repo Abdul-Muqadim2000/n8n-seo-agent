@@ -114,4 +114,26 @@ module.exports = async (ctx) => {
     check('a wrong fact still blocks', RR.errorOf({ severity: 'high', kind: 'fact', location: 'The deadline is 31 July 2026.', issue: 'This date is out of date: it was replaced by 30 October 2026', on_page: true }, '') === 'wrong', '');
     check('a medium claim never blocks', RR.errorOf({ severity: 'medium', kind: 'claim', location: F[0][0], issue: F[0][1], on_page: true }, '') === '', '');
   });
+
+  await guard('CR5 write it anyway', async () => {
+    reset(); const SN = 'CR5 (2026-11-11, techand run 12478) "Write it anyway" on an AVOID hold writes: Verdict Router lets an acknowledged AVOID through'; begin(SN); const check = mkCheck(SN);
+    const W = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'workflows', 'SEO_Agent_v4.json'), 'utf8'))[0];
+    const vr = W.nodes.find(n => n.name === 'Verdict Router');
+    const expr = vr.parameters.conditions.conditions[0].leftValue.replace(/^=\{\{\s*|\s*\}\}$/g, '');
+    const stops = (j) => new Function('$json', 'return (' + expr + ');')(j);
+    check('an AVOID with no acknowledgement still stops (report only)', stops({ verdict: 'AVOID' }) === true, expr);
+    check('an AVOID the client acknowledged ("Write it anyway") goes on to Need Content?', stops({ verdict: 'AVOID', verdict_acknowledged: true }) === false, expr);
+    check('force_content still passes; a GO is never stopped', stops({ verdict: 'AVOID', force_content: true }) === false && stops({ verdict: 'GO' }) === false, expr);
+    check('the router\'s false output is Need Content? (the page path)', J((W.connections['Verdict Router'].main[1] || []).map(t => t.node)) === J(['Need Content?']), J(W.connections['Verdict Router'].main));
+  });
+
+  await guard('CR6 backlinks settle', async () => {
+    reset(); const SN = 'CR6 (2026-11-11) the weekly backlinks watch settles its cost row on a quiet week: the snapshot save feeds the settle as well as BL Report'; begin(SN); const check = mkCheck(SN);
+    const W = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'workflows', 'SEO_Agent_Backlink_Monitor.json'), 'utf8'));
+    const wf = Array.isArray(W) ? W[0] : W; const C = wf.connections;
+    const outs = (n) => ((C[n] || {}).main || []).flat().map(t => t.node);
+    const cal = outs('BL Report').find(n => /Cost Factors/.test(n));
+    check('BL Report and Save BL Snapshot both feed the settle chain', !!cal && outs('Save BL Snapshot').includes(cal), J({ report: outs('BL Report'), snap: outs('Save BL Snapshot') }));
+    check('the settle updates only a reserved row (a second pass changes nothing)', JSON.stringify(wf.nodes.find(n => n.name === 'Settle Run Ledger (BL)').parameters).includes('reserved'), '');
+  });
 };

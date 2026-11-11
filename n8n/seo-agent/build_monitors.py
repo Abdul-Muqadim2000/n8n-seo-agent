@@ -786,7 +786,10 @@ step('Outreach Input', 'Any Outreach?', 'Outreach Writer', 'Prospect Rows')
 step('Prospect Rows', 'Any Prospect Rows?', 'Save Prospects', 'Ledger Rows')
 step('Ledger Rows', 'Any Ledger Rows?', 'Save Backlinks', 'BL Snapshot Rows')
 B.chain('BL Snapshot Rows', 'Save BL Snapshot', 'BL Report', 'Prepare PDF BL', 'Render PDF BL', 'Attach PDF BL', 'Has Email (BL)?'); B.link('Attach PDF BL', 'Build BL Callback'); B.link('Build BL Callback', 'Has Callback (BL)?')
-B.run_ledger('backlinks', 'BL', 'BL Plan', ['BL Report'], at(13, 6), measured='Parse Backlinks')
+# client reports 2026-11-11 (N7): BL Report returns nothing on a quiet week (no site to deliver), so a settle hung only on it never ran and the
+# weekly watch left its cost row reserved every week (dispatcher alarms 10-29 and 11-05). The snapshot save always answers for a site the run
+# read, so it settles too; the settle updates only a row still `reserved`, so the second pass is a no-op
+B.run_ledger('backlinks', 'BL', 'BL Plan', ['BL Report', 'Save BL Snapshot'], at(13, 6), measured='Parse Backlinks')
 # B-A10 (2026-10-15, INVARIANTS rule 3): the three paid DataForSEO pulls of the link ledger. Each one's failure is a silent
 # shrinking of the ledger — *Parse Backlinks* counts what came back, so a pull that failed inside a 200 looks like a site with
 # fewer links, which is the shape R20 / B-L5 exist to stop ("not compared" instead of an arrow). A second attempt costs nothing

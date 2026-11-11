@@ -889,6 +889,7 @@
     "BL Report",
     "Nothing To Do (BL)",
     "Refuse Run Ledger (BL)",
+    "Save BL Snapshot",
     "Save Reader Alert Delivery"
    ],
    "settle_from_ends": [

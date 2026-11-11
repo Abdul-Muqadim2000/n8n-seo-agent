@@ -13829,6 +13829,18 @@ assert 'movedHere' in code('Publish Check') and 'homeOf' in code('Publish Check'
 log('Client reports 2026-11-10 (section 184A): "Re-check page" reads the page the draft updates without following redirects; a permanent redirect from it to the address sent is the move done right (verified, the "marked on your word" note cleared); a home page is never asked to be redirected (a home-page update published at its own address is a page of its own); the live title, heading and text are read with their HTML entities decoded')
 
 # =============================================================================
+# 186. "WRITE IT ANYWAY" WRITES (client reports 2026-11-11, techand.ai; docs/client-reports-2026-11-11/README.md). *Verdict Router* stopped
+#      every AVOID unless force_content, and never read the client's acknowledgement, so "Write it anyway" on an AVOID hold paid for the
+#      check again and returned the same report (production run 12478, verdict_acknowledged true, routed to Build Word File). The hold text
+#      and the form promise the page is written: the acknowledgement now passes the router like force_content does.
+# =============================================================================
+_vr186 = nodes['Verdict Router']['parameters']['conditions']['conditions']
+assert len(_vr186) == 1 and _vr186[0]['leftValue'] == "={{ $json.verdict === 'AVOID' && !$json.force_content }}", '186: Verdict Router changed under this section: ' + str(_vr186)
+_vr186[0]['leftValue'] = "={{ $json.verdict === 'AVOID' && !$json.force_content && $json.verdict_acknowledged !== true }}"
+assert 'verdict_acknowledged: !!HOLD.ack' in code('Parse Verdict'), '186: Parse Verdict no longer sets verdict_acknowledged'
+log('"Write it anyway" writes (section 186, client reports 2026-11-11): Verdict Router lets an AVOID through when the client acknowledged the hold (verdict_acknowledged, set by Parse Verdict from hold_ack), as it does for force_content')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;

@@ -3066,7 +3066,7 @@
             "conditions": [
               {
                 "id": "f6f3f548-e602-5365-b46d-382b91e420c5",
-                "leftValue": "={{ $json.verdict === 'AVOID' && !$json.force_content }}",
+                "leftValue": "={{ $json.verdict === 'AVOID' && !$json.force_content && $json.verdict_acknowledged !== true }}",
                 "rightValue": "",
                 "operator": {
                   "type": "boolean",

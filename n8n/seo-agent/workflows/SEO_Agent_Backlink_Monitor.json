@@ -8852,6 +8852,11 @@
               "node": "BL Report",
               "type": "main",
               "index": 0
+            },
+            {
+              "node": "Load Cost Factors (BL)",
+              "type": "main",
+              "index": 0
             }
           ]
         ]
