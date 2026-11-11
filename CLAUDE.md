@@ -63,7 +63,18 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-11-11, KI next round DEPLOYED: queue, who-is-searching filter, one page per search - latest)
+## Status (2026-11-11 evening, second round of devaicon / techand client reports fixed + engine/API DEPLOYED - latest)
+Seven reports (`Alaventra issues.docx`), each verified on prod; read **`n8n/seo-agent/docs/client-reports-2026-11-11/README.md`**. Engine
+sections 185 (the Page Finalize grades the LIVE page: grade_only + grade_live, page reader + W07-A fallback, refused when unread), 186
+("Write it anyway" passes an AVOID; backlinks watch settles on quiet weeks), 187 (audit indexing finding: utility / moved pages named not
+counted, unit "pages inspected"), 188 (backlinks: LK.isAutoReport, junk never Best / lost / fetched) + independent-review fixes (b846d1f2).
+App bd4bd5b2: live page grade job (migration 0026 page_reviews.live_grade), free re-make of pre-fix finals, Final version labels, Technical
+indexing finding live, Backlinks kinds + Check Bing now (BING_SHARE_EMAIL unset: owner), ladder "What Google showed", ladder Write it anyway.
+Deployed ~17:25-17:37 UTC: backup pg/2026-11-11/*T172443Z; engine 14 updated, prod == build (0); API at bd4bd5b2 healthy (rollback image
+alaventra-app:rollback-347073cb). Web rides **PR #65** (with the KI round; owner merges). Live tests on prod: live grade devaicon app page 63
+($0); old final re-made 59 -> 83 ($0.01). Harness 18880 / 0; app 1226 / 2097 / 359+. Owner items in the README (Bing account, 6.27-credit refund).
+
+## Status (2026-11-11, KI next round DEPLOYED: queue, who-is-searching filter, one page per search - previous)
 Owner asked for the three steps, then the Trial re-run. **Deployed 2026-11-10 ~23:05 UTC** (backup pg/2026-11-10/*T225806Z; prod == main
 before, prod == build after, 0 nodes; API on the VM at 347073cb, branch feature/seo-agent-v4.5; NO rollback image for 28f8de07: the image is
 named alaventra-app:local, rollback = checkout 28f8de07 + rebuild). Web = **PR #65** (owner merges). (1) **QUEUE** (`fixes/QUEUE.md`): results
