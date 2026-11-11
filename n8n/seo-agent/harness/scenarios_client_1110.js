@@ -145,6 +145,9 @@ module.exports = async (ctx) => {
     const auto = (d) => { const r = rows.find(x => x.refDomain === d) || { refDomain: d, sources: 'dfs', verify: 'unchecked', visits: 0 }; return LK.isAutoReport(d, { sources: r.sources, verify: r.verify, visits: r.visits, link_type: r.linkType === 'scraper' ? 'scraper' : '' }); };
     check('the report networks of the screenshot are automatic report pages', ['bottraffic.site', 'organicseo.shop', 'websitetr.space', 'offpageseo.website', 'seomonitor.space', 'pagereport.shop', 'sitereport.space', 'scamadviser.com'].every(auto), '');
     check('listings and the real link are not', !['crunchbase.com', 'github.com', 'linkedin.com', 'bebee.com', 'zynbox.cloud'].some(auto), '');
+    const bare = (d, extra) => LK.isAutoReport(d, { sources: 'dfs', verify: 'unchecked', visits: 0, ...(extra || {}) });
+    check('review D11: real sites whose names start like a checker are not automatic', !['worthington.edu', 'informer.ae', 'valuationexperts.com', 'webrankinfo.com', 'builtwithdesign.co'].some(d => bare(d)), J(['worthington.edu', 'informer.ae', 'valuationexperts.com', 'webrankinfo.com', 'builtwithdesign.co'].filter(d => bare(d))));
+    check('review D11: a tool-word name on a cheap ending that sent real visits is not automatic', bare('trafficstats.online') === true && bare('trafficstats.online', { visits: 3 }) === false, '');
     const n = rows.filter(r => r.status !== 'lost' && LK.isAutoReport(r.refDomain, { sources: r.sources, verify: r.verify, visits: r.visits })).length;
     check('most of the ledger is automatic report pages (the app counted 774)', n >= 700, String(n));
     const unseen = LK.values({ authority: 240, relevance: null, spam: 0, rel: '', from_url: '', visits: 0, verify: 'unchecked' }).seo;

@@ -113,7 +113,10 @@ return plans.map(p => {
     else if (!e.sources.length && prevStatus !== 'lost' && String(pv.last_seen || '') && (Date.now() - new Date(pv.last_seen).getTime()) / 864e5 > 120 && !(pv.verify === 'found' && (Date.now() - new Date(pv.verified_at || 0).getTime()) / 864e5 < 60)) {
       const silent = Math.round((Date.now() - new Date(pv.last_seen).getTime()) / 864e5);
       lost_reason = 'not_seen';
-      if (pv.verify === 'missing' || pv.verify === 'gone') { if (prevStatus !== 'lost') { lost_at = now; lostNow.push({ e, v: { url: pv.from_url || from_url, verify: pv.verify }, reason: 'not_seen' }); } status = 'lost'; }
+      // review D12: a farm or automatic report page that no index has seen for four months is gone: lost at once, never left at risk for ever
+      // (they are never fetched again, so nothing would ever settle it), and never reported as a loss (nothing was earned)
+      if (['spam', 'scraper'].includes(String(pv.link_type || ''))) { status = 'lost'; lost_at = lost_at || now; }
+      else if (pv.verify === 'missing' || pv.verify === 'gone') { if (prevStatus !== 'lost') { lost_at = now; lostNow.push({ e, v: { url: pv.from_url || from_url, verify: pv.verify }, reason: 'not_seen' }); } status = 'lost'; }
       else { status = 'at_risk'; dormant.push({ ref_domain: e.ref_domain, url: from_url || (e.pages[0] || {}).url || '', last_seen: String(pv.last_seen).slice(0, 10), days: silent, checked: String(pv.verify || 'unchecked') }); }
     }
     else if (e.sources.length && prevStatus === 'lost' && !['link_removed', 'page_gone', 'domain_gone'].includes(pv.lost_reason)) { status = 'live'; lost_reason = ''; lost_at = ''; }
@@ -153,7 +156,9 @@ return plans.map(p => {
     else if (searchPage(row)) { row.link_type = 'scraper'; row.note = ('a search-results page on a site unrelated to your topics (' + String(row.from_url).slice(0, 80) + '): no SEO value, nothing to do').slice(0, 140); }
     // client reports 2026-11-11 (188): an automatic report page (site stats / traffic / SEO report networks, site checkers) is labelled as such:
     // SEO value capped at 5, never Best, never at risk or lost (nothing was earned); the app's "What your links are" uses the same rule
-    else if ((!row.link_type || row.link_type === 'other') && LK.isAutoReport(row.ref_domain, row)) { row.link_type = 'scraper'; row.note = 'automatic report page (site statistics, traffic or SEO report network): Google ignores it, nothing to do'; }
+    // review D11: our own label is judged again every run (it is never carried blindly): a row the rule no longer calls automatic is unlabelled
+    else if (row.link_type === 'scraper' && /^automatic report page/.test(String(row.note || '')) && !LK.isAutoReport(row.ref_domain, { ...row, link_type: '' })) { row.link_type = ''; row.note = ''; }
+    else if ((!row.link_type || row.link_type === 'other') && LK.isAutoReport(row.ref_domain, { ...row, link_type: '' })) { row.link_type = 'scraper'; row.note = 'automatic report page (site statistics, traffic or SEO report network): Google ignores it, nothing to do'; }
     const val = LK.values({ ...row, spam: row.spam_score, relevance: row.relevance === '' ? null : row.relevance });
     row.seo_value = val.seo; row.referral_value = val.referral; row.brand_value = val.brand;
     if (row._found_new && row.link_type !== 'spam' && (val.seo >= 50 || ['editorial', 'press', 'listing', 'resource'].includes(row.link_type))) wins.push({ ref_domain: row.ref_domain, url: row._url, why: 'new', seo: val.seo, link_type: row.link_type });
@@ -174,7 +179,7 @@ return plans.map(p => {
   const lost = [...lostRows, ...dfsLost.filter(l => !junkSet.has(LK.refKey(l.from_domain)) && !lostRows.some(x => x.from_domain === LK.refKey(l.from_domain))).map(l => ({ ...l, reason: 'reported_lost', pending: true }))];
   // ---------------- reclaim: links pointing to own pages that no longer load (DataForSEO + our own status check of the most-linked pages) ----------------
   const reclaimMap = new Map();
-  for (const x of ((one('broken').res || {}).items || [])) { const b = { ...link(x), status: Number(x.url_to_status_code) || null }; if (spamSet.has(LK.refKey(b.from_domain))) continue; const r = reclaimMap.get(b.to_url) || { broken_url: b.to_url, status: b.status, links: 0, domains: new Set(), redirect_to: suggest(b.to_url) }; r.links++; r.domains.add(b.from_domain); reclaimMap.set(b.to_url, r); }   // a farm page linking to a dead page of ours is no reason to write to anyone (P1-2)
+  for (const x of ((one('broken').res || {}).items || [])) { const b = { ...link(x), status: Number(x.url_to_status_code) || null }; if (junkSet.has(LK.refKey(b.from_domain))) continue; const r = reclaimMap.get(b.to_url) || { broken_url: b.to_url, status: b.status, links: 0, domains: new Set(), redirect_to: suggest(b.to_url) }; r.links++; r.domains.add(b.from_domain); reclaimMap.set(b.to_url, r); }   // a farm page linking to a dead page of ours is no reason to write to anyone (P1-2)
   for (const t of vTarget.filter(t => t.broken)) { const r = reclaimMap.get(t.url) || { broken_url: t.url, status: t.status || null, links: 0, domains: new Set(), redirect_to: suggest(t.url) }; r.links = Math.max(r.links, t.referring || 1); for (const l of ledger.filter(l => l.to_url === t.url && !spamSet.has(l.ref_domain))) r.domains.add(l.ref_domain); reclaimMap.set(t.url, r); }
   const reclaim = [...reclaimMap.values()].filter(r => r.links > 0).map(r => ({ ...r, domains: [...r.domains].slice(0, 8) })).sort((a, b) => b.links - a.links).slice(0, 20);
   // ---------------- mentions (checked on the page), list pages, competitor new links, the gap ----------------

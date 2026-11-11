@@ -8,7 +8,9 @@ const r = $input.first().json || {};
 const S = (v) => String(v == null ? '' : v);
 const b = { ...((plan.body && typeof plan.body === 'object') ? plan.body : {}) };
 const g = (b.grade_live && typeof b.grade_live === 'object') ? b.grade_live : {};
-const status = Number(r.statusCode != null ? r.statusCode : r.status) || 0;
+// review D1: a page the reader refused but its fallback read (W07-A) carries no status code: it was read
+const recovered = !!(r.reader_fallback && r.reader_fallback.via && r.reader_fallback.via !== 'none' && !r.error);
+const status = Number(r.statusCode != null ? r.statusCode : r.status) || (recovered ? 200 : 0);
 const raw = S(r.data != null ? r.data : r.body != null ? r.body : '');
 const err = r.error ? S(r.error.message || r.error.description || r.error).slice(0, 160) : '';
 const title = ((raw.match(/^Title:\s*(.+)$/m) || [])[1] || S(g.title)).trim().slice(0, 300);
@@ -20,8 +22,10 @@ md = md.replace(/\r\n?/g, '\n')
 const words = md.split(/\s+/).filter(Boolean).length;
 const h1 = S(g.h1).replace(/\s+/g, ' ').trim().slice(0, 300);
 if (!/^#\s+\S/m.test(md) && h1) md = '# ' + h1 + '\n\n' + md;
-const okRead = !err && status === 200 && words >= 80;
-const reason = err ? 'the page reader failed (' + err + ')' : status !== 200 ? 'the page reader answered ' + (status || 'nothing') : words < 80 ? 'the page reader returned only ' + words + ' words' : '';
+// review D2: the reader answers 200 with "Warning: Target URL returned error 404" and the error page's own text: a removed page is never graded
+const target = Number((raw.match(/^Warning:\s*Target URL returned error (\d{3})/m) || [])[1]) || 0;
+const okRead = !err && status === 200 && target < 400 && words >= 80;
+const reason = err ? 'the page reader failed (' + err + ')' : status !== 200 ? 'the page reader answered ' + (status || 'nothing') : target >= 400 ? 'the live page answered ' + target : words < 80 ? 'the page reader returned only ' + words + ' words' : '';
 const live_read = { ok: okRead, url: S((plan.live_plan || {}).url), title, words, reason };
 if (okRead) {
   b.markdown = md;

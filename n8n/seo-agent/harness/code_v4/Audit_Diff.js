@@ -670,7 +670,8 @@ const CHECK_CHANGES = [
   { re: /own brand name/i, since: '2026-10-17.1', at: '', what: 'the brand is judged from every brand form and Search Console\'s own brand queries (B-2)' },
   { re: /pages indexed than crawled|more urls indexed than the crawl found/i, since: '2026-10-17.1', at: '', what: 'a site: estimate is not a finding beside the URL Inspection of the same run (B-4)' },
   { re: /keyword gap|low-difficulty keywords|close to page 1|AI Overviews/i, since: '2026-10-17.1', at: '', what: 'the keyword fit gate refuses document services, job searches and words lifted out of longer service names (B-3)' },
-  { re: /recommends other providers/i, since: '2026-10-17.1', at: '', what: 'the directory advice names only cited pages that are not the vendors themselves (B-7)' }
+  { re: /recommends other providers/i, since: '2026-10-17.1', at: '', what: 'the directory advice names only cited pages that are not the vendors themselves (B-7)' },
+  { re: /large share of important pages is not indexed|not indexed by google/i, since: '2026-11-11.1', at: '', what: 'policy, utility and moved pages are no longer counted as important pages Google left out, and the share is of the pages inspected (187)' }
 ];
 const CHECKS_VERSION = CHECK_CHANGES.map(e => e.since).sort().pop();
 const prevChecks128 = prev ? String(prev.checks_version || '') : '';

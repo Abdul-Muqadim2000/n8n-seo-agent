@@ -316,6 +316,10 @@ module.exports = async (ctx) => {
     check('a near-empty read is refused', thin.pb.ok === false && /only \d+ words/.test(thin.pb.error), thin.pb.error);
     const other = await run1({ ...clone(BODY), grade_only: true, grade_live: { ...live, url: 'https://elsewhere.example/page' } }, null);
     check('an address on another website is refused before any read', other.pb.ok === false && /must be a page of/.test(other.pb.error), other.pb.error);
+    const rec = await run1({ ...clone(BODY), grade_only: true, grade_live: live, answers: [] }, { data: READ, reader_fallback: { via: 'direct' } });
+    check('review D1: a page the reader refused but its fallback read is graded (no status code on a recovered item)', rec.v && rec.v.grade_only === true && rec.v.live_read.ok === true, J(rec.pb && rec.pb.error));
+    const gone = await run1({ ...clone(BODY), grade_only: true, grade_live: live }, { statusCode: 200, data: 'Title: Page not found\n\nURL Source: x\n\nWarning: Target URL returned error 404: Not Found\n\nMarkdown Content:\n' + 'Sorry, this page does not exist anymore. '.repeat(40) });
+    check('review D2: a removed page (the reader warns of a 404) is refused, never graded', gone.pb.ok === false && /the live page answered 404/.test(gone.pb.error), gone.pb.error);
     const plain = await run('Live Read Plan', [{ json: { body: clone(BODY), headers: {} } }], { code: 'Finalize__Live_Read_Plan' });
     check('a normal finalize passes the plan unchanged (no read)', plain[0].json.live_plan.read === false && plain[0].json.live_plan.asked === false && plain[0].json.body.markdown === BODY.markdown, J(plain[0].json.live_plan));
   });
