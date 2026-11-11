@@ -76,3 +76,28 @@ candidate can be read (300 a run = $0.18) instead of the top 60. The results pag
 documentation hosts (learn.microsoft.com, docs.*, github, community forums), job boards, universities and course sites, vendors and
 providers, directories. A search whose top results are mostly documentation or courses is not a buyer's, whatever its words; the word rules
 stay as the cheap first pass. Measure on the same two labelled sets (800 + 196 unseen).
+
+## The next step, measured (2026-11-11): read the results page, then judge (fixes/GATE2.md, private evidence in ~/seo-agent-secrets/keyword-intel-2026-11-08/serpintent-2026-11-11/)
+All 996 labelled searches were read once through the normal-priority queue (995 pages, 8,421 results, 8 redirects, $0.60).
+
+**1. The results page's shape alone does not separate them.** A share rule (documentation / learning / job pages vs providers and
+lists, thresholds swept on the tuning halves only) moved unseen precision by +1 to +2 points: the unseen leaks ("peppol directory",
+"sap vs erp", "erp objectives") show mixed or buyer-looking pages. Not shipped.
+
+**2. A model judging each search with its top 5 results does.** One Messages API call per 40 searches, structured JSON output, the
+site described only by what production stores (domain, market, its own services list), effort low; run from the production engine
+container, no workflow touched ($1.10 for all three variants):
+
+| set | words only (deployed) | Haiku 5.5, words | Haiku 5.5 + top 5 results | Opus 5.5 + top 5 results |
+|---|---|---|---|---|
+| all 800: precision / recall | 78.5 / 90.7 | 86.9 / 88.2 | 85.4 / 92.9 | **89.5 / 95.3** |
+| hold-out 400 | 73.2 / 90.9 | 88.6 / 89.1 | 86.0 / 93.3 | **86.8 / 95.8** |
+| unseen 196 (gate passes only) | 58.2 | 83.3 / 87.7 | 83.2 / 95.6 | **89.9 / 93.9** |
+| label agreement (7 classes, all 800) | - | 80.1% | 80.3% | 88.1% (labellers agreed 89-94%) |
+
+Caveat: the labels were made by Claude models too (Sonnet, Opus), so part of the agreement can be a shared bias; the next Trial's output
+is the real check. Putting the word rules in front of the model lowers recall (all 800: 95.3 -> 88.2) for little precision: in the build
+only the sure word rules (another language or country, AVOID, own brand, government / portal) stay in front.
+
+Cost per keyword-research run of ~300 candidates: results pages $0.18 (queue) + Opus 5.5 ~$0.31 or Haiku 5.5 ~$0.01 (measured tokens:
+185,535 in / 14,613 out for 996 searches on Opus).
