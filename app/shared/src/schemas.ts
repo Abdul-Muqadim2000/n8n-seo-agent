@@ -17,11 +17,20 @@ import { cleanDomain, domainOk } from './domain';
 import { isValidTimezone } from './cycle-clock';
 import { TOPIC_SOURCES } from './cycles';
 import { aiAlertRulesSchema } from './ai-trends';
+import { SERVICE_MAX_CHARS, SERVICES_MAX } from './list-entries';
 
 // ---------- building blocks ----------
 const opt = (max: number) => z.string().trim().max(max, `At most ${max} characters`).default('');
 const req = (max: number, msg = 'Required') => z.string().trim().min(1, msg).max(max, `At most ${max} characters`);
 const URL_RE = /^https?:\/\/\S+$/i;
+
+/** F-07: "What do you sell?" entries keep their commas and may be up to SERVICE_MAX_CHARS long (the form shows a counter and refuses
+ *  longer ones; nothing is cut). Shared by the website's business details and "Track my site". */
+const servicesList = z
+  .array(z.string().trim().min(2, 'At least 2 characters').max(SERVICE_MAX_CHARS, `At most ${SERVICE_MAX_CHARS} characters`))
+  .max(SERVICES_MAX, `At most ${SERVICES_MAX}`)
+  .optional();
+
 export const urlField = z.string().trim().regex(URL_RE, 'Enter a full link (https://...)').max(400);
 const optUrl = z.union([z.literal(''), urlField]).default('');
 export const domainField = z
@@ -164,7 +173,7 @@ export const siteBusinessSchema = z.object({
   competitors: domainList(3),
   brandNames: stringList(10, 80),
   /** keyword-first (§5.2): "What do you sell?", the main services or products; sent to the engine with "Track my site" */
-  services: z.array(z.string().trim().min(2, 'At least 2 characters').max(80, 'At most 80 characters')).max(30, 'At most 30').optional(),
+  services: servicesList,
   /** keyword-first (§4.2): the website's IANA time zone (the owner's browser zone in onboarding); its cycles run at 06:00 there */
   timezone: z
     .string()
@@ -340,7 +349,7 @@ export const trackInput = z.object({
     .refine((v) => v === '' || isValidTimezone(v), 'Unknown time zone')
     .optional(),
   /** "What do you sell?": the main services or products (replace the stored list when given; leave out to keep it) */
-  services: z.array(z.string().trim().min(2, 'At least 2 characters').max(80, 'At most 80 characters')).max(30, 'At most 30').optional(),
+  services: servicesList,
   emailCopy,
 });
 

@@ -3,7 +3,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ChevronDown } from 'lucide-react';
-import { cleanDomain, COUNTRIES, createSiteSchema, GOALS, siteBusinessSchema, TONES, type Site } from '@seo/shared';
+import { cleanDomain, COUNTRIES, createSiteSchema, GOALS, serviceEntryError, SERVICE_MAX_CHARS, SERVICES_MAX, siteBusinessSchema, TONES, type Site } from '@seo/shared';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { ChoiceCard, Field, Input, Select, Textarea } from '@/components/ui/field';
@@ -46,8 +46,10 @@ function defaultsFor(site: Site | null | undefined, defaultDomain: string | unde
   };
 }
 
-/** "What do you sell?": a service is 2-80 characters (the schema's rule), so the chip says why before the form does. */
-const serviceValidator = (s: string): string | null => (s.length < 2 ? 'Use at least 2 characters' : null);
+/** "What do you sell?": a service is 2 to SERVICE_MAX_CHARS characters (the schema's rule), so the chip says why before the form does. */
+// F-07: a service keeps its commas and is never cut; one over the limit is refused with a message (shared serviceEntryError)
+const serviceValidator = (s: string): string | null => serviceEntryError(s);
+const brandValidator = (s: string): string | null => (s.length > 80 ? `At most 80 characters (this one has ${s.length})` : null);
 
 const MORE_FIELDS = ['tone', 'cta', 'businessFacts', 'competitors', 'brandNames'] as const;
 
@@ -157,7 +159,7 @@ export function SiteBusinessForm({
           render={({ field, fieldState }) => (
             <Field
               label="What do you sell?"
-              hint="Your main services or products, one at a time (press Enter after each). We only suggest keywords and write pages that fit what you sell."
+              hint="Your main services or products. Press Enter after each one; a comma stays part of the name. We only suggest keywords and write pages that fit what you sell."
               error={errorText(fieldState.error)}
             >
               {(p) => (
@@ -167,8 +169,10 @@ export function SiteBusinessForm({
                   describedBy={p['aria-describedby']}
                   value={field.value ?? []}
                   onChange={field.onChange}
-                  max={30}
-                  normalize={(s) => s.trim().replace(/\s+/g, ' ').slice(0, 80)}
+                  max={SERVICES_MAX}
+                  split="phrases"
+                  maxLength={SERVICE_MAX_CHARS}
+                  normalize={(s) => s.trim().replace(/\s+/g, ' ')}
                   validate={serviceValidator}
                   placeholder="For example: accounting software, then Enter"
                 />
@@ -298,7 +302,9 @@ export function SiteBusinessForm({
                       value={field.value ?? []}
                       onChange={field.onChange}
                       max={10}
-                      normalize={(s) => s.trim().slice(0, 80)}
+                      normalize={(s) => s.trim().replace(/\s+/g, ' ')}
+                      validate={brandValidator}
+                      maxLength={80}
                       placeholder="Your brand name, then Enter"
                     />
                   )}

@@ -1,6 +1,7 @@
 export * from './constants';
 export * from './digest';
 export * from './domain';
+export * from './list-entries';   // F-07 (2026-11-12): how typed or pasted text becomes list entries; the services' limits
 export * from './schemas';
 export * from './payload';
 export * from './tables';
