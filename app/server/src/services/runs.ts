@@ -50,7 +50,7 @@ import { config } from '../config';
 import { db, schema } from '../db';
 import type { OrgRow, ReportRow, RunRow, SiteRow, UserRow } from '../db/schema';
 import { safeEqual } from '../lib/crypto';
-import { badRequest, forbidden, HttpError, notFound } from '../lib/errors';
+import { badRequest, conflict, forbidden, HttpError, notFound } from '../lib/errors';
 import { insertRows, invalidateSite, siteRows, startRun, updateRows } from '../n8n/client';
 import { assertGa4ForDomain } from './google';
 import { extractFiles, shownFileKind } from './files';
@@ -814,11 +814,17 @@ export async function healHookRouting(org: OrgRow, domainRaw: unknown, now = Dat
  * elsewhere" with the button that routes them again (data.ts `reportsToThisApp`).
  */
 export async function rotateHookToken(org: OrgRow, newToken: string, now = Date.now()): Promise<{ org: OrgRow; sitesUpdated: number; sitesFailed: string[] }> {
+  // review S4 (2026-11-12): a second renewal inside the grace period would end the first one's grace for runs still on their way
+  const settled = org.hookTokenRotatedAt ? org.hookTokenRotatedAt.getTime() + HOOK_TOKEN_GRACE_MS : 0;
+  if (settled > now)
+    throw conflict(`The last renewal is still settling: runs started before it may still report to the old address. Try again after ${new Date(settled).toISOString().slice(0, 16).replace('T', ' ')} UTC.`, 'hook_rotation_settling');
+  // and two renewals at the same moment: only the one that still sees the token it read wins (the other is told, nothing changed)
   const [next] = await db
     .update(schema.organizations)
     .set({ hookToken: newToken, previousHookToken: org.hookToken, hookTokenRotatedAt: new Date(now) })
-    .where(eq(schema.organizations.id, org.id))
+    .where(and(eq(schema.organizations.id, org.id), eq(schema.organizations.hookToken, org.hookToken)))
     .returning();
+  if (!next) throw conflict('The address is being renewed right now. Reload the page and check before trying again.', 'hook_rotation_in_progress');
   const sites = await db.query.sites.findMany({ where: eq(schema.sites.orgId, org.id) });
   let sitesUpdated = 0;
   const sitesFailed: string[] = [];

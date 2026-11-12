@@ -40,7 +40,7 @@ vi.mock('../src/n8n/client', async (orig) => {
 const { buildApp } = await import('../src/app');
 const { db, schema } = await import('../src/db');
 const { signUp } = await import('./helpers/client');
-const { orgByHookToken, HOOK_TOKEN_GRACE_MS } = await import('../src/services/runs');
+const { orgByHookToken, HOOK_TOKEN_GRACE_MS, rotateHookToken } = await import('../src/services/runs');
 const { reportsHere } = await import('../src/services/data');
 vi.setConfig({ testTimeout: 30_000 });
 
@@ -109,6 +109,27 @@ describe('the company callback address', () => {
     await db.insert(schema.memberships).values({ orgId: org.id, userId: mu!.id, role: 'member' });
     const r = await member.c.post(`/api/orgs/${org.id}/hook-token/rotate`, {});
     expect(r.status).toBe(403);
+  });
+
+  it('review S4: a second renewal inside the grace period, or two at the same moment, is refused and changes nothing', async () => {
+    const owner = await signUp(app, 'hook-owner3@hook.test');
+    const org = (await owner.c.post('/api/orgs', { name: 'Hook Twice Co' })).body;
+    const t0 = (await orgRow(org.id)).hookToken;
+    // two renewals read the same row: the second one finds the token changed under it
+    const stale = await orgRow(org.id);
+    expect((await owner.c.post(`/api/orgs/${org.id}/hook-token/rotate`, {})).status).toBe(200);
+    const t1 = (await orgRow(org.id)).hookToken;
+    await expect(rotateHookToken({ ...stale, hookTokenRotatedAt: null }, 'x'.repeat(32))).rejects.toMatchObject({ statusCode: 409, code: 'hook_rotation_in_progress' });
+    // a second renewal while the first one's grace runs: 409 with the time it may run again; the original token keeps its grace
+    const again = await owner.c.post(`/api/orgs/${org.id}/hook-token/rotate`, {});
+    expect(again.status).toBe(409);
+    expect(JSON.stringify(again.body)).toMatch(/still settling.*UTC/);
+    const now = await orgRow(org.id);
+    expect([now.hookToken, now.previousHookToken]).toEqual([t1, t0]);
+    expect((await orgByHookToken(t0))?.id).toBe(org.id);
+    // once the grace is over, it may be renewed again
+    await db.update(schema.organizations).set({ hookTokenRotatedAt: new Date(Date.now() - HOOK_TOKEN_GRACE_MS - 60_000) }).where(eq(schema.organizations.id, org.id));
+    expect((await owner.c.post(`/api/orgs/${org.id}/hook-token/rotate`, {})).status).toBe(200);
   });
 
   it('review S3: a report still arriving on the old token re-routes that website (once an hour); a table the engine cannot be asked about is a failure', async () => {
