@@ -2211,7 +2211,7 @@ const DUP = (() => {
   const targets = (keyword, pages, opts) => {
     const o = opts || {};
     const kw = toks(keyword);
-    const out = { targets: [], partial: [], self: [], other_market: [], keyword_words: kw.size, basis: '' };
+    const out = { targets: [], partial: [], self: [], other_market: [], not_live: [], keyword_words: kw.size, basis: '' };
     if (!kw.size) { out.basis = 'the keyword has no word of 3 letters or more to compare'; return out; }
     const list = (Array.isArray(pages) ? pages : []).filter(p => p && S(p.url));
     const sets = list.map(pageToks);
@@ -2227,6 +2227,10 @@ const DUP = (() => {
     for (let i = 0; i < list.length; i++) {
       const p = list[i]; const k = keyOf(p.url);
       if (!k || skip.has(k)) continue;
+      // production review 2026-11-12 (S3-05, section 189): an address that redirects (3xx) or is gone (404 / 410), as the page inventory last
+      // read it, is not a page of the site: never "the page for the same search" (/dynamics-365-business-central-uae had answered 308 for days)
+      const st = Number(p.http_status) || 0;
+      if ((st >= 300 && st < 400) || st === 404 || st === 410) { out.not_live.push({ url: S(p.url), http_status: st }); continue; }
       const set = sets[i]; if (!set.size) continue;
       let hit = 0, hw = 0;
       for (const t of kw) if (set.has(t)) { hit++; hw += w[t]; }
@@ -2522,11 +2526,24 @@ let dupOpen = null, decision = null;
 // only when its own words say the page states something wrong or unsupported (RR.textError); everything else it found is advice, shown
 // to the client and never the 59 cap. A finding that still blocks is the editor's to rewrite (Finalize Apply); it stays open while its words are on the page.
 const away = [], reviewAdvice = [];
+// section 189: the addresses the first check called "the same search", as they answer now (Parse Brief `prc.duplicate_status`)
+const pageK = (u) => S(u).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+const selfK = F.grade_only ? pageK((F.live_read || {}).url) : '';
+const dupMoved = [];
+const dupGone = (u) => { const k = pageK(u); if (!k) return null; if (selfK && k === selfK) return { why: 'self' };
+  const st = (PR.duplicate_status || []).find(x => x && pageK(x.url) === k); const n = st ? Number(st.status) || 0 : 0;
+  if (n >= 300 && n < 400) return { why: 'redirect', status: n, to: S(st.location) };
+  if (n === 404 || n === 410) return { why: 'gone', status: n };
+  return null; };
 const titleOfDup = (u) => S(((PG.duplicate_targets || []).find(x => x && x.url === u) || {}).title);
 for (const b of (PG.qa_blocking || [])) {
   const code = S(b.code) || 'other'; const keep = (x) => { if (!has0.has(code) && !carried.some(c => c.code === code && c.text === x.text)) { const c0 = { code, tier: 'hard', text: S(b.text), action: S(b.action), ...x }; c0.text = PF.clean(c0.text); carried.push(c0); } };
   if (code === 'duplicate_page') {
-    const urls = (PR.duplicate_urls || []).length ? PR.duplicate_urls : (b.urls || []);
+    // production review 2026-11-12 (S3-05, section 189): an address that now redirects, is gone (404 / 410), or is the page being graded is
+    // not a second page for this search; what it answers was read just before (Duplicate Status Plan, no redirect followed). Unread = kept.
+    const urls0 = (PR.duplicate_urls || []).length ? PR.duplicate_urls : (b.urls || []);
+    const urls = urls0.filter(u => { const why = dupGone(u); if (why) { if (!dupMoved.some(x => pageK(x.url) === pageK(u))) dupMoved.push({ url: u, ...why }); return false; } return true; });
+    if (urls0.length && !urls.length) { resolved.push(code + ':moved'); continue; }
     const elsewhere = urls.length ? urls.map(u => ({ url: u, places: DUP.otherMarket(S(P.keyword), { url: u, title: titleOfDup(u) }, S(P.country)) })) : [];
     if (elsewhere.length && elsewhere.every(x => x.places)) { away.push(...elsewhere); resolved.push(code + ':other_market'); continue; }
     if (DEC && DEC.applies !== false) { decision = { code, choice: DEC.choice, url: DEC.url, reason: DEC.reason, pages: urls.slice(0, 3) }; resolved.push(code); }
@@ -2575,6 +2592,12 @@ const NOT_CHECKED = { length_band: 'the length of the pages that rank for this s
 if (PR.received) for (const k of Object.keys(NOT_CHECKED)) if ((PR.grading_missing || []).includes(k)) del.advisory.push({ code: 'not_checked', text: 'Not checked: ' + NOT_CHECKED[k] + '. This page was written before we kept that with it' });
 for (const x of away.slice(0, 2)) del.advisory.unshift({ code: 'duplicate_other_market', text: PF.clean('Your website also has ' + x.url + ', aimed at searches in ' + x.places.join(', ') + '. This page is for another market, so it is not the same search: link the two pages to each other') });
 for (const t of reviewAdvice.slice(0, 5)) del.advisory.push({ code: 'second_read', text: PF.clean(t) });
+// section 189: what happened to the page the first check named (said once, never a blocker)
+for (const x of dupMoved.slice(0, 2)) { if (x.why === 'self') continue;
+  const to = x.to && pageK(x.to) !== selfK ? x.to : '';
+  del.advisory.push({ code: 'duplicate_moved', text: PF.clean(x.why === 'redirect'
+    ? 'The page our first check named for this search, ' + x.url + ', now redirects' + (to ? ' to ' + to : ' here') + ', so it is not a second page for this search any more' + (to ? '. If ' + to + ' answers the same search, link the two pages to each other' : '')
+    : 'The page our first check named for this search, ' + x.url + ', no longer answers (' + x.status + '), so it is not a second page for this search any more') }); }
 if (decision) del.advisory.unshift({ code: 'duplicate_decision', text: decision.choice === 'update'
   ? 'You chose to publish this text as an update of ' + decision.url + ': publish it at that address, in place of the page there now, not as a new page'
   : 'You chose to publish this as a separate page from ' + (decision.pages[0] || 'the page your website has') + ': "' + decision.reason + '". Two pages for one search can compete with each other, so the grade keeps its limit for fit' });
@@ -2654,7 +2677,7 @@ const body = {
   meta: { title: S((d.meta || {}).title), meta_description: S((d.meta || {}).description), slug: S((d.meta || {}).slug),
     // W0-B (D2): published as an update of the website's page for this search: its address and slug
     ...(decision && decision.choice === 'update' ? { target_url: decision.url, slug: (decision.url.replace(/^https?:\/\/[^\/]+/i, '').replace(/[?#].*$/, '').replace(/\/+$/, '').split('/').pop() || S((d.meta || {}).slug)) } : {}) },
-  decision, page_run: { received: !!PR.received, legacy: !!PR.legacy, gating_missing: PR.gating_missing || [], grading_missing: PR.grading_missing || [], kept_open: carried.map(x => x.code), resolved,
+  decision, page_run: { received: !!PR.received, legacy: !!PR.legacy, gating_missing: PR.gating_missing || [], grading_missing: PR.grading_missing || [], kept_open: carried.map(x => x.code), resolved, duplicate_moved: dupMoved,
     // W06-C: what the page run took out, as this version stands (still missing, written back, whether it capped the grade)
     sections_removed: removedNow ? { checked: true, missing: removedNow.sections, missing_headings: removedNow.headings, restored: removedNow.restored, capped: !!(grade.removed && grade.removed.capped) } : { checked: false } },
   applied: (FM.applied || []).map(a => ({ id: a.id, how: a.how, section: S(a.section), ...(a.why ? { why: S(a.why).slice(0, 160) } : {}) })), sections_rewritten: FM.sections_rewritten || [], changes: changes.slice(0, 60),

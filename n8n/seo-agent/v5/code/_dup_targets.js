@@ -60,7 +60,7 @@ const DUP = (() => {
   const targets = (keyword, pages, opts) => {
     const o = opts || {};
     const kw = toks(keyword);
-    const out = { targets: [], partial: [], self: [], other_market: [], keyword_words: kw.size, basis: '' };
+    const out = { targets: [], partial: [], self: [], other_market: [], not_live: [], keyword_words: kw.size, basis: '' };
     if (!kw.size) { out.basis = 'the keyword has no word of 3 letters or more to compare'; return out; }
     const list = (Array.isArray(pages) ? pages : []).filter(p => p && S(p.url));
     const sets = list.map(pageToks);
@@ -76,6 +76,10 @@ const DUP = (() => {
     for (let i = 0; i < list.length; i++) {
       const p = list[i]; const k = keyOf(p.url);
       if (!k || skip.has(k)) continue;
+      // production review 2026-11-12 (S3-05, section 189): an address that redirects (3xx) or is gone (404 / 410), as the page inventory last
+      // read it, is not a page of the site: never "the page for the same search" (/dynamics-365-business-central-uae had answered 308 for days)
+      const st = Number(p.http_status) || 0;
+      if ((st >= 300 && st < 400) || st === 404 || st === 410) { out.not_live.push({ url: S(p.url), http_status: st }); continue; }
       const set = sets[i]; if (!set.size) continue;
       let hit = 0, hw = 0;
       for (const t of kw) if (set.has(t)) { hit++; hw += w[t]; }

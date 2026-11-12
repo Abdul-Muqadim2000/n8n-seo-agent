@@ -3881,6 +3881,17 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Fetch Duplicate Pages",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 15000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "Render Final PDF",
     "onError": "continueRegularOutput",
     "paid": false,

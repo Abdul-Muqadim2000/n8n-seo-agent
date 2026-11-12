@@ -24,6 +24,21 @@ const statusBy = new Map(); stReq.forEach((q, i) => { const r = stRes[i] || {}; 
   if (!st || st === 401 || st === 403 || st === 429) return; statusBy.set(q.site_id + '|' + String(q.url || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, ''), { url: q.url, status: st }); });
 const now = new Date().toISOString();
 const S = (v) => String(v == null ? '' : v).trim();
+// production review 2026-11-12 (F-03 / S3-05, section 189): the daily key-page watch (seo_page_watch, loaded by this run) is a reading of the
+// address too. A 200 it saw after a stored 404 clears the 404; a redirect it saw (3xx to ANOTHER path; a bare-host / https hop to the same path is
+// not a move) is stored as that 3xx, so no reader takes the address for a page (/dynamics-365-business-central-uae answered 308 from
+// 2026-11-07 while seo_pages said 404 from 2026-11-05). The week's own read follows redirects, so it can never disprove a redirect the watch
+// saw in the last WATCH_DAYS: that reading is dated now.
+const WATCH_DAYS = 8;
+const ageD = (d) => { const t = Date.parse(S(d)); return Number.isFinite(t) ? (Date.now() - t) / 864e5 : Infinity; };
+const pathK = (u) => S(u).toLowerCase().replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+const watchRows = grab('Load Page Watch (Site)').filter(r => r.site_id && r.url && !S(r.error) && Number(r.status) > 0 && S(r.checked_at));
+const watchOf = (sid) => watchRows.filter(r => r.site_id === sid).map(r => { const st = Number(r.status) || 0;
+  if (st >= 300 && st < 400) { const loc = S(r.location); const to = /^https?:\/\//i.test(loc) ? loc : loc ? '/' + loc.replace(/^\/+/, '') : '';
+    if (!to || pathK(to) === pathK(r.url)) return null;
+    return { url: r.url, source: 'gsc', http_status: st, status_at: ageD(r.checked_at) <= WATCH_DAYS ? now : S(r.checked_at), watch: true }; }
+  if ((st >= 200 && st < 300) || st === 404 || st === 410) return { url: r.url, source: 'gsc', http_status: st, status_at: S(r.checked_at), watch: true };
+  return null; }).filter(Boolean);
 const ukey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '');
 // B4-2 (2026-10-15, benchmark area 4): the measurement columns count as a change too — a page that went from steady to decaying
 // must reach the Content Cadence this week, not next time its title changes.
@@ -56,6 +71,10 @@ return sites.map((s, idx) => {
   for (const r of stored.filter(r => r.site_id === s.site_id)) add.push({ url: r.url, title: r.title, h1: r.h1, source: r.source || 'sitemap', lastmod: r.lastmod, queries_json: r.queries_json, http_status: r.http_status, status_at: r.status_at });
   // 6. RV-1: this run's answers win over what was stored (SM.withPages keeps the newest reading)
   for (const [k, v] of statusBy) if (k.indexOf(s.site_id + '|') === 0) add.push({ url: v.url, source: 'gsc', http_status: v.status, status_at: now });
+  // 7. section 189: the daily watch's readings of the key pages (newest reading wins; a recent redirect is dated now, see above)
+  const watch = watchOf(s.site_id);
+  const known = new Set(add.map(a => ukey(a.url)));
+  for (const w of watch) if (known.has(ukey(w.url))) add.push(w);   // a reading of an address the inventory has; the watch adds no page
   const merged = SM.withPages(model, add.slice(0, CONFIG.max_pages * 4));
   merged.pages = merged.pages.slice(0, CONFIG.max_pages);
   merged.model_updated_at = merged.model_updated_at || now;
@@ -89,10 +108,16 @@ return sites.map((s, idx) => {
       + ' — until then a search is matched to them on their address alone' : '' };
   // RV-1: the pages that no longer answer, as the inventory knows them now (read this run or before), and what was read this run
   const gone = SM.gonePages(merged).map(p => ({ url: p.url, http_status: p.http_status, status_at: p.status_at }));
+  // section 189 (F-03): a page is advised on as gone (the 301 advice) only after two reads that both found it gone: the stored reading from
+  // before this run, and a reading of this run (or of the daily watch in the last WATCH_DAYS). A first 404 waits for next week's read.
+  const readNow = new Map(); for (const [k, v] of statusBy) if (k.indexOf(s.site_id + '|') === 0) readNow.set(ukey(v.url), Number(v.status) || 0);
+  for (const w of watch) if (ageD(w.status_at) <= WATCH_DAYS && !readNow.has(ukey(w.url))) readNow.set(ukey(w.url), Number(w.http_status) || 0);
+  const goneNum = (n) => n === 404 || n === 410;
+  const gone_confirmed = gone.filter(p => goneNum(readNow.get(ukey(p.url))) && goneNum(Number((was.get(ukey(p.url)) || {}).http_status) || 0)).map(p => p.url);
   const stPlan = ((grabAll('Status Targets (Site)')[0] || {}).status_plan || []).find(x => x && x.site_id === s.site_id) || null;
   const status_check = { read: [...statusBy.keys()].filter(k => k.indexOf(s.site_id + '|') === 0).length, planned: stPlan ? stPlan.planned : 0, left: stPlan ? stPlan.left : 0, gone: gone.length,
     note: stPlan ? 'the pages Google shows that the sitemap does not list are read each week (redirects followed), the most impressions first' + (stPlan.left ? '; ' + stPlan.left + ' are left for next week' : '') : 'not read in this run' };
-  return { json: { site_id: s.site_id, domain: s.domain, pages: merged.pages, rows, total: merged.pages.length, changed: rows.length, stored: was.size, by_source: bySource, title_unknown, gone, status_check,
+  return { json: { site_id: s.site_id, domain: s.domain, pages: merged.pages, rows, total: merged.pages.length, changed: rows.length, stored: was.size, by_source: bySource, title_unknown, gone, gone_confirmed, status_check,
     measured: perfBy.size, decaying: [...perfBy.values()].filter(p => p.state === 'decaying').length,
     decay_summary: (gsc && gsc.decay_summary) || null,
     sitemap_read: !!(det && (det.sitemap || {}).ok), with_queries: merged.pages.filter(p => (p.queries || []).length).length } };

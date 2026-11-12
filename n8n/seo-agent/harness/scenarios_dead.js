@@ -174,6 +174,13 @@ module.exports = async (ctx) => {
       J(GONE_ROWS.map(([p]) => [p, row(p).http_status])));
     const COLS = (() => { try { return require('./table_cols.json').PAGES || null; } catch (e) { return null; } })();
     check('RV-1: every row is exactly the seo_pages columns, http_status and status_at included', INV.rows.every(r => !COLS || J(Object.keys(r).sort()) === J([...COLS].sort())) && 'http_status' in INV.rows[0], J(Object.keys(INV.rows[0])));
+    // production review 2026-11-12 (F-03, section 189): a first 404 is stored but not yet advised on; the next week's read confirms it
+    check('F-03: one read is not enough to advise a redirect (gone_confirmed empty after the first read)', Array.isArray(INV.gone_confirmed) && INV.gone_confirmed.length === 0, J(INV.gone_confirmed));
+    mock('Load Pages (Site)', INV.rows.map(r => ({ json: { ...r, site_id: SID } })));
+    const T2 = (await run('Status Targets (Site)', store['Load Pages (Site)'])).map(i => i.json);
+    mock('Fetch Page Status (Site)', T2.map(() => ({ statusCode: 404, headers: {}, data: page404 })));
+    const INV2 = (await run('Page Inventory (Site)', store['Fetch Page Status (Site)']))[0].json;
+    check('F-03: the stored 404s are read again the next week, and two reads that both found the page gone confirm it', T2.length === GONE_ROWS.length && INV2.gone_confirmed.length === GONE_ROWS.length, J({ t2: T2.length, c: INV2.gone_confirmed }));
     // the weekly report
     const MODEL = (await run('_site_model', [{ json: { site_row: { site_id: SID, domain: DOM, canonical_host: 'www.techand.ai', business_name: 'Tech&', model_updated_at: new Date().toISOString() } } }]))[0].json.model;
     const RANGES = { current: { start: '2026-09-21', end: '2026-10-18' }, previous: { start: '2026-08-24', end: '2026-09-20' }, yoy: { start: '2025-09-21', end: '2025-10-18' } };
