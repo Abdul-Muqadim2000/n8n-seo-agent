@@ -209,8 +209,9 @@ node('Started Pages (Cycle)', DT_TYPE, DT_VERSION, dt_get_where_params(LOG_TABLE
 code('Cycle Page Releases', 'Cycle_Page_Releases.js', at(28, -1)); iff('Any Page Releases?', '{{ !$json.skip }}', at(29, -1))
 node('Mark Dead Pages (Cycle)', DT_TYPE, DT_VERSION, dt_update_where_params(LOG_TABLE, LOG_COLS, [('request_id', 'eq', '={{ $json.request_id }}'), ('keyword', 'eq', '={{ $json.keyword }}'), ('status', 'eq', 'started')],
      {'status': 'failed', 'qa_reasons': '={{ $json.qa_reasons }}'}), at(30, -2), **SAVE)
-node('Requeue Dead AI Targets (Cycle)', DT_TYPE, DT_VERSION, dt_update_where_params(AI_TARGETS_TABLE, AI_TARGETS_COLS, [('request_id', 'eq', '={{ $json.request_id }}'), ('status', 'eq', 'writing')],
-     {'status': 'queued', 'request_id': '', 'reason': "={{ 'the page run stopped without a result (n8n execution ' + $json.run_id + '): the question is queued again rather than left saying being written' }}",
+# review S1: only after its content-log row was really freed (the input is that update's output: the rows it changed; none = '__none__')
+node('Requeue Dead AI Targets (Cycle)', DT_TYPE, DT_VERSION, dt_update_where_params(AI_TARGETS_TABLE, AI_TARGETS_COLS, [('request_id', 'eq', "={{ $json.request_id || '__none__' }}"), ('status', 'eq', 'writing')],
+     {'status': 'queued', 'request_id': '', 'reason': "={{ 'the page run stopped without a result (request ' + $json.request_id + '): the question is queued again rather than left saying being written' }}",
       'updated_at': '={{ new Date().toISOString() }}'}), at(30, 0), **SAVE)
 # ---- the starts: RECORD, read the claim back, then start - one at a time ----
 code('Cycle Start Items', 'Cycle_Start_Items.js', at(26, 1)); iff('Any Cycle Starts?', '{{ !$json.skip }}', at(27, 1))
@@ -258,7 +259,7 @@ link('Any Cycle Updates?', 'Update Cycle Rows', 0); link('Any Cycle Updates?', '
 link('Any Job Rows?', 'Save Cycle Job Rows', 0); link('Any Job Rows?', 'Cycle Release Rows', 1)
 link('Any Releases?', 'Release Dead Runs', 0); link('Any Releases?', 'Cycle Start Items', 1)
 link('Release Dead Runs', 'Started Pages (Cycle)'); link('Started Pages (Cycle)', 'Cycle Page Releases'); link('Cycle Page Releases', 'Any Page Releases?')
-link('Any Page Releases?', 'Mark Dead Pages (Cycle)', 0); link('Any Page Releases?', 'Requeue Dead AI Targets (Cycle)', 0)
+link('Any Page Releases?', 'Mark Dead Pages (Cycle)', 0); link('Mark Dead Pages (Cycle)', 'Requeue Dead AI Targets (Cycle)')
 link('Any Cycle Starts?', 'Loop Cycle Starts', 0); link('Any Cycle Starts?', 'Cycle Retention', 1)
 link('Loop Cycle Starts', 'Cycle Retention', 0); link('Loop Cycle Starts', 'Read Claim (Cycle)', 1)   # splitInBatches v3: 0 = done, 1 = loop
 link('Claim Free?', 'Save Cycle Record', 0); link('Claim Free?', 'Loop Cycle Starts', 1)   # a claim another sweep holds: back off, the report says why

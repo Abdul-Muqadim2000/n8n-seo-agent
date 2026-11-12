@@ -1615,6 +1615,11 @@
      "Page Slot"
     ]
    ],
+   "Load Page Slots (Check)": [
+    [
+     "Slot Check"
+    ]
+   ],
    "Load Slot Override": [
     [
      "Load Page Slots"
@@ -1662,6 +1667,19 @@
      "Requeue AI Target (Refused)"
     ]
    ],
+   "Slot Check": [
+    [
+     "Slot Kept?"
+    ]
+   ],
+   "Slot Kept?": [
+    [
+     "Slot Taken"
+    ],
+    [
+     "Step Back"
+    ]
+   ],
    "Slot Note?": [
     [
      "POST Slot Note"
@@ -1672,9 +1690,14 @@
      "Ensure Cache Table (Site)"
     ]
    ],
+   "Step Back": [
+    [
+     "Wait For Page Slot"
+    ]
+   ],
    "Take Page Slot": [
     [
-     "Slot Taken"
+     "Load Page Slots (Check)"
     ]
    ],
    "Wait For Page Slot": [
@@ -1736,6 +1759,10 @@
    "POST Slot Note",
    "Got Page Slot?",
    "Take Page Slot",
+   "Load Page Slots (Check)",
+   "Slot Check",
+   "Slot Kept?",
+   "Step Back",
    "Slot Taken",
    "Gave Up Waiting?",
    "Hand Off?",

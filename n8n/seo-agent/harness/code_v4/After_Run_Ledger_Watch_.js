@@ -493,6 +493,9 @@ const RG = (() => {
   // slot (the later row counts the earlier one as ahead, whether it is still waiting or already writing). Fails OPEN: with no row of its
   // own or an unreadable ledger the run is admitted and the basis says so (a stuck line is worse than one page too many).
   const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+  const WAITER_MARGIN_MIN = 6;
+  const waiterAlive = (r, nowMs, handoffMin, pollS) => { const t = ms(r && r.created_at);
+    return t > 0 && t >= (nowMs || Date.now()) - ((n0(handoffMin) || PAGE.handoff_minutes) + 2 * (n0(pollS) || PAGE.poll_seconds) / 60 + WAITER_MARGIN_MIN) * 60000; };
   const pageSlot = (o) => {
     const c = o || {}, now = ms(c.now) || Date.now(), mine = c.mine || {};
     const num = (v, d) => (v !== '' && v != null && Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : d);
@@ -516,7 +519,10 @@ const RG = (() => {
     const pages = (c.rows || []).filter(r => r && !r.error && S(r.run_id) && S(r.run_id) !== myRun && (myId > 0 ? n0(r.id) !== myId : true) && yesNo(r.page));
     const running = pages.filter(r => S(r.status) === 'reserved' && !isStale(r, now, runH));
     const before = (r) => { const q = queuedOf(r); return q < myQ || (q === myQ && n0(r.id) < myId); };
-    const ahead = pages.filter(r => S(r.status) === 'waiting' && !isStale(r, now, runH) && before(r));
+    // review S2 (2026-11-12): a live waiter writes a fresh row at least every handoff_minutes (it hands its wait on), so a `waiting` row older
+    // than that plus two looks and a margin belongs to a run that died while in line: it no longer holds anyone back (6 h 15 min was too long:
+    // two dead waiters stopped every page until all of them gave up)
+    const ahead = pages.filter(r => S(r.status) === 'waiting' && waiterAlive(r, now, handoffMin, pollS) && before(r));
     const admit = limit > 0 && running.length + ahead.length < limit;
     const eta = limit > 0 ? (admit ? pageMin : Math.ceil((ahead.length + 1) / limit) * pageMin + pageMin) : null;
     const giveUp = !admit && (waited >= maxWaitH * 60 || hops >= maxHops);
@@ -528,7 +534,7 @@ const RG = (() => {
     const twoAtATime = limit === 1 ? 'Pages are written one at a time' : 'Pages are written ' + limit + ' at a time';
     const note = admit ? STARTED
       : giveUp ? ''
-      : limit === 0 ? 'Page writing is paused for a moment. Your page keeps its place in line and starts as soon as writing resumes. Nothing is charged while it waits.'
+      : limit === 0 ? 'Page writing is paused. Your page keeps its place in line and starts as soon as writing resumes; if it has not started within ' + plural(maxWaitH, 'hour', 'hours') + ' it is stopped and nothing is charged.'
       : 'Your page is waiting for a writing slot. ' + twoAtATime + ': ' + plural(running.length, 'page is', 'pages are') + ' being written now and '
         + plural(ahead.length, 'is', 'are') + ' ahead of yours. It starts as soon as a slot is free, in about ' + eta + ' minutes. Nothing is charged while it waits.';
     const validation_error = giveUp ? 'No writing slot became free in ' + plural(Math.max(1, Math.round(waited / 60)), 'hour', 'hours') + ' ('
@@ -547,7 +553,29 @@ const RG = (() => {
     return (rows || []).find(r => r && !r.error && S(r.run_id) === from && S(r.status) === 'handed_off' && S(r.request_id) === S(d.request_id) && yesNo(r.page)) || null;
   };
 
-  return { gate, liveRuns, heavyBusy, isStale, parentOf, caughtUp, sameSite, pageSlot, isPage, handoffOf, PAGE, PAGE_KEY, STALE_HOURS, MAX_OPEN };
+  // review S3 / N2 (2026-11-12): after *Take Page Slot* the run reads the ledger once more. Two runs that took the last slot at nearly the same
+  // moment (a hand-off keeps an older queued_at, two starts can insert out of order) both see each other's row `reserved` now: of the page
+  // rows writing, the first `limit` by ADMISSION order (created_at, set by the take, then row id) keep their slot and a later one steps back to
+  // waiting. A run whose own row is not `reserved` (the take did not get through) does not write either: it waits and takes again.
+  // Fails open when the ledger cannot be read (the take itself was the best evidence).
+  const slotHeld = (o) => {
+    const c = o || {}, now = ms(c.now) || Date.now(), myRun = S(c.run_id);
+    const limit = (c.limit !== '' && c.limit != null && Number.isFinite(Number(c.limit)) && Number(c.limit) >= 0) ? Math.floor(Number(c.limit)) : PAGE.limit;
+    const runH = n0(c.run_hours) > 0 ? n0(c.run_hours) : PAGE.run_hours;
+    if (c.read_failed) return { keep: true, rank: 0, writing: 0, limit, basis: 'kept without a check: the run ledger could not be read after the take' };
+    const rows = (c.rows || []).filter(r => r && !r.error && S(r.run_id) && yesNo(r.page));
+    const mine = rows.find(r => S(r.run_id) === myRun);
+    if (!mine || S(mine.status) !== 'reserved') return { keep: false, rank: -1, writing: 0, limit, retake: true,
+      basis: 'this run\'s ledger row is ' + (mine ? '`' + S(mine.status) + '`' : 'missing') + ' after the take: it waits and takes the slot again' };
+    const writing = rows.filter(r => S(r.status) === 'reserved' && !isStale(r, now, runH))
+      .sort((a, b) => (ms(a.created_at) - ms(b.created_at)) || (n0(a.id) - n0(b.id)));
+    const rank = writing.findIndex(r => S(r.run_id) === myRun);
+    const keep = limit > 0 && rank >= 0 && rank < limit;
+    return { keep, rank, writing: writing.length, limit, retake: false,
+      basis: writing.length + ' page run(s) writing after the take (' + writing.map(r => S(r.run_id)).join(', ') + '), this run is number ' + (rank + 1) + ' by admission; limit ' + limit + (keep ? ' -> keeps its slot' : ' -> steps back to waiting') };
+  };
+
+  return { gate, liveRuns, heavyBusy, isStale, parentOf, caughtUp, sameSite, pageSlot, slotHeld, isPage, handoffOf, waiterAlive, PAGE, PAGE_KEY, STALE_HOURS, MAX_OPEN };
 })();
 const plan = $('Watch Plan').all();
 let rows = []; try { rows = $('Load Open Runs (Watch)').all().map(i => i.json).filter(r => r && r.run_id && !r.error); } catch (e) { rows = []; }

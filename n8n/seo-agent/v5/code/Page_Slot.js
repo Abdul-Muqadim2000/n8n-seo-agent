@@ -13,7 +13,9 @@ const d = one('Normalize Input');
 const mineRow = one('Run Ledger Row');
 const reserved = one('Reserve Run Ledger');
 const mine = { ...mineRow, ...(reserved && !reserved.error ? reserved : {}) };
-const items = $input.all().map(i => i.json || {});
+// review B1 (2026-11-12): the ledger rows are read BY NAME, never through $input. An executeOnce node gets only the first input item (n8n
+// slices it before the node runs), and the first row of the window is almost never a writing page: that version admitted every run.
+let items = []; try { items = $('Load Page Slots').all().map(i => i.json || {}); } catch (e) { items = [{ error: 'Load Page Slots did not run' }]; }
 const read_failed = items.some(r => r && r.error);
 const rows = items.filter(r => r && r.run_id && !r.error);
 let limit = Number.isFinite(Number(d.page_slots)) && d.page_slots !== '' && d.page_slots != null ? Number(d.page_slots) : RG.PAGE.limit;

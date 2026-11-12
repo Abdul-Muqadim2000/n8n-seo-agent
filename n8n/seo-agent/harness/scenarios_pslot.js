@@ -1,4 +1,4 @@
-// PS1-PS8 (P1, 2026-11-12, prod review S1-01 / S1-05, plans/P1_page_concurrency.md): page runs take a writing slot.
+// PS1-PS9 (P1, 2026-11-12, prod review S1-01 / S1-05, plans/P1_page_concurrency.md): page runs take a writing slot.
 // On 2026-11-12 the Content Cadence started three page runs of one website within 11 seconds (executions 13063-13065); all three ran into the
 // time limit at 90-100% done, none was delivered, and their content-log rows kept saying `started`. Every check runs the GENERATED code
 // (harness/code_v4) or the wiring the build recorded (ledger_wiring.json `page_slot`), and fails on the code before the fix:
@@ -13,6 +13,8 @@
 //       was writing is freed (exact keys only).
 //   PS7 the refusal path: the slot's reason reaches the caller, the run's own started row becomes failed, the AI question is queued again.
 //   PS8 the Content Cadence counts a started page as in flight for 8 h; the hand-off payload and Normalize Input's slot_handoff.
+//   PS9 (review S3 / N2) after the take: the later of two near-simultaneous admissions steps back; a failed take is taken again.
+//   Review B1 (PS3): the slot nodes read the ledger by name, never through $input (n8n hands an executeOnce node only its first item).
 // Called from scenarios_v5.js just before the report (one line).
 const fs = require('fs'); const path = require('path'); const { fakeN8nApi } = require('./fake_n8n_api');
 module.exports = async (ctx) => {
@@ -59,7 +61,7 @@ module.exports = async (ctx) => {
     check('the race pair: of two rows inserted at the same moment for the last slot, only the lower row id is admitted - also after it already took the slot', ra.slot === 'admit' && rb.slot === 'wait' && rb2.slot === 'wait' && rb2.running === 2, J([ra.slot, rb.slot, rb2.slot]));
     // what does not count
     const stale = P([page(1, 'reserved', T(NOW) - 3 * H1), page(2, 'reserved', T(NOW) - 2.5 * H1)], me);
-    const oldWaiter = P([page(1, 'reserved', T(NOW) - 5 * MIN), page(2, 'waiting', T(NOW) - 7 * H1)], me);
+    const oldWaiter = P([page(1, 'reserved', T(NOW) - 5 * MIN), page(2, 'waiting', T(NOW) - 55 * MIN)], me);   // review S2: a live waiter writes a fresh row every 40 min
     const own = P([page(1, 'reserved', T(NOW) - 5 * MIN), { ...me }], me);
     const others = P([{ ...page(1, 'reserved', T(NOW) - 5 * MIN), page: false, mode: 'audit' }, { ...page(2, 'reserved', T(NOW) - 5 * MIN), page: false, mode: 'ai_visibility' }, { ...page(3, 'reserved', NOW), error: 'x' }, page(4, 'stale', NOW), page(6, 'refused', NOW), page(7, 'handed_off', NOW), page(8, 'done', NOW)], me);
     check('never counted: a writer past the 2 h run limit (crashed), a waiter older than 6 h 15 min, my own row, an audit or monitor row, a read error, stale / refused / handed-off / done rows',
@@ -68,7 +70,7 @@ module.exports = async (ctx) => {
     const two = [page(1, 'reserved', T(NOW) - 5 * MIN), page(2, 'reserved', T(NOW) - 4 * MIN)];
     const z = P([], me, { limit: 0, limit_source: 'override slots:page' }), three = P(two, me, { limit: 3 });
     check('the override: 0 holds every page run (a plain "paused" note), 3 admits a third page; the basis names where the limit came from',
-      z.slot === 'wait' && /^Page writing is paused for a moment\./.test(z.note) && z.eta_minutes === null && /override slots:page/.test(z.basis) && three.slot === 'admit', J([z, three.slot]));
+      z.slot === 'wait' && /^Page writing is paused\. Your page keeps its place in line and starts as soon as writing resumes; if it has not started within 6 hours it is stopped and nothing is charged\.$/.test(z.note) && z.eta_minutes === null && /override slots:page/.test(z.basis) && three.slot === 'admit', J([z, three.slot]));
     const late6 = P(two, { ...me, queued_at: ISO(T(NOW) - 6 * H1), created_at: ISO(T(NOW) - 10 * MIN) }, { hops: 8 });
     check('after 6 hours in line it gives up: nothing charged, nothing written, the plain way back', late6.slot === 'give_up'
       && late6.validation_error === 'No writing slot became free in 6 hours (2 pages were ahead of this one). Nothing was charged and nothing was written. Start it again when you like; a page from the weekly plan is picked again in its next cycle.'
@@ -91,6 +93,11 @@ module.exports = async (ctx) => {
     const d = { request_id: 'cad_1', slot_handoff: { from_run_id: '13009', queued_at: NOW, hops: 1 } };
     check('RG.handoffOf: trusted only with the earlier execution\'s row marked handed_off for the same request; a body alone proves nothing',
       RG.handoffOf(d, [prev]) && !RG.handoffOf(d, []) && !RG.handoffOf(d, [{ ...prev, status: 'waiting' }]) && !RG.handoffOf({ ...d, request_id: 'cad_2' }, [prev]) && !RG.handoffOf({ ...d, slot_handoff: { from_run_id: 'x' } }, [prev]) && !RG.handoffOf({ request_id: 'cad_1' }, [prev]), '');
+    // review S2 (2026-11-12): two dead waiters ahead used to stop every page for 6 h 15 min
+    const dead2 = P([page(1, 'waiting', T(NOW) - 52 * MIN, { queued_at: ISO(T(NOW) - 3 * H1) }), page(2, 'waiting', T(NOW) - 51 * MIN, { queued_at: ISO(T(NOW) - 2 * H1) })], me);
+    const live2 = P([page(1, 'waiting', T(NOW) - 30 * MIN, { queued_at: ISO(T(NOW) - 3 * H1) }), page(2, 'waiting', T(NOW) - 45 * MIN, { queued_at: ISO(T(NOW) - 2 * H1) })], me);
+    check('review S2: a waiter whose row is older than the hand-off time plus two looks and a margin (50 min) is dead and holds nobody back; live waiters (30 and 45 min) still do',
+      dead2.slot === 'admit' && dead2.ahead === 0 && live2.slot === 'wait' && live2.ahead === 2 && RG.waiterAlive({ created_at: ISO(T(NOW) - 49 * MIN) }, T(NOW)) && !RG.waiterAlive({ created_at: ISO(T(NOW) - 51 * MIN) }, T(NOW)), J([dead2.basis, live2.basis]));
     check('RG.isStale: a waiting row is gone after 6 h 15 min; a reserved row after the run limit; created_at is the clock',
       !RG.isStale({ status: 'waiting', created_at: ISO(T(NOW) - 6 * H1) }, T(NOW)) && RG.isStale({ status: 'waiting', created_at: ISO(T(NOW) - 6.3 * H1) }, T(NOW))
       && RG.isStale({ status: 'reserved', created_at: ISO(T(NOW) - 2.1 * H1) }, T(NOW), 2) && !RG.isStale({ status: 'reserved', created_at: ISO(T(NOW) - 1.9 * H1) }, T(NOW), 2), '');
@@ -131,7 +138,9 @@ module.exports = async (ctx) => {
     const me = { id: 914, run_id: 'test-exec', created_at: t0, queued_at: t0, page: true, status: 'waiting' };
     mock('Normalize Input', [{ json: NI }]); mock('Run Ledger Row', [{ json: { ...me, id: undefined } }]); mock('Reserve Run Ledger', [{ json: me }]); mock('Load Slot Override', items([]));
     const busy = [page(912, 'reserved', Date.now() - 6 * MIN), page(913, 'reserved', Date.now() - 6 * MIN)];
-    const look = async (rows, runIndex) => (await run('Page Slot', items(rows), { runIndex }))[0].json;
+    // review B1: the node reads the ledger BY NAME; its $input is only the first row (n8n slices an executeOnce node's input; the node is no
+    // longer executeOnce, and either way it must not depend on $input)
+    const look = async (rows, runIndex) => { mock('Load Page Slots', items(rows)); return (await run('Page Slot', items(rows).slice(0, 1), { runIndex }))[0].json; };
     const a = await look(busy, 0), b = await look(busy, 1), c = await look(busy.slice(0, 1), 2), d0 = await look([], 0);
     check('the first look that must wait tells the customer once; the next looks are quiet; the look that gets the slot says "started"; a run admitted at once says nothing',
       a.slot === 'wait' && a.first_wait === true && a.started_after_wait === false && b.first_wait === false && c.slot === 'admit' && c.started_after_wait === true && d0.slot === 'admit' && d0.started_after_wait === false && d0.first_wait === false,
@@ -143,6 +152,9 @@ module.exports = async (ctx) => {
     const three = await look(busy, 0);
     check('the override row of seo_cache wins over the setting: 0 holds the run, 3 admits a third page', z.slot === 'wait' && z.limit === 0 && /override slots:page/.test(z.limit_source) && three.slot === 'admit' && three.limit === 3, J([z.slot, z.limit, three.slot]));
     mock('Load Slot Override', items([]));
+    mock('Load Page Slots', items([{ key: 'audit', mode: 'audit', status: 'done', run_id: '1' }, ...busy]));
+    const b1 = (await run('Page Slot', [{ json: { key: 'audit', mode: 'audit', status: 'done', run_id: '1' } }], { runIndex: 0 }))[0].json;
+    check('review B1: with only the window\'s first row (an audit) as its input, as n8n hands an executeOnce node, the node still sees both writers and waits', b1.slot === 'wait' && b1.running === 2, b1.basis);
     const fo = await look([{ error: 'The table could not be read' }], 0);
     check('an unreadable ledger fails open (admitted, said in the basis)', fo.slot === 'admit' && fo.fail_open === true, fo.basis);
     // the callback body exactly as POST Slot Note builds it
@@ -161,7 +173,8 @@ module.exports = async (ctx) => {
     check('Input OK? -> Page Run? (page runs) -> Load Slot Override -> Load Page Slots -> Page Slot; other runs go straight on', eq(C['Input OK?'], [['Page Run?'], ['Mark Run Refused']])
       && eq(C['Page Run?'], [['Load Slot Override'], ['Ensure Cache Table (Site)']]) && eq(C['Load Slot Override'], [['Load Page Slots']]) && eq(C['Load Page Slots'], [['Page Slot']]), J([C['Input OK?'], C['Page Run?']]));
     check('admitted: the row is taken first (Take Page Slot by this execution\'s run id, reserved, the clock restarted), then the run', eq(C['Page Slot'], [['Slot Note?', 'Got Page Slot?']]) && eq(C['Got Page Slot?'], [['Take Page Slot'], ['Gave Up Waiting?']])
-      && eq(C['Take Page Slot'], [['Slot Taken']]) && eq(C['Slot Taken'], [['Ensure Cache Table (Site)']]) && LW.take && eq(LW.take.filters, [['run_id', '={{ $execution.id }}']]) && LW.take.values.status === 'reserved' && LW.take.values.created_at === '={{ new Date().toISOString() }}' && Object.keys(LW.take.values).length === 2, J(LW.take));
+      && eq(C['Take Page Slot'], [['Load Page Slots (Check)']]) && eq(C['Load Page Slots (Check)'], [['Slot Check']]) && eq(C['Slot Check'], [['Slot Kept?']]) && eq(C['Slot Kept?'], [['Slot Taken'], ['Step Back']])
+      && eq(C['Step Back'], [['Wait For Page Slot']]) && eq(C['Slot Taken'], [['Ensure Cache Table (Site)']]) && LW.take && eq(LW.take.filters, [['run_id', '={{ $execution.id }}']]) && LW.take.values.status === 'reserved' && LW.take.values.created_at === '={{ new Date().toISOString() }}' && Object.keys(LW.take.values).length === 2, J(LW.take));
     check('waiting: a saved Wait (at least 65 s, unit seconds, a webhook id) and back to the override read; give-up -> the refusal; hand-off -> row first, then the new execution; a failed hand-off is refused',
       eq(C['Gave Up Waiting?'], [['Mark Run Refused'], ['Hand Off?']]) && eq(C['Hand Off?'], [['Mark Handed Off'], ['Wait For Page Slot']]) && eq(C['Wait For Page Slot'], [['Load Slot Override']])
       && LW.wait && LW.wait.unit === 'seconds' && /Math\.max\(65,/.test(LW.wait.amount) && LW.wait.webhook === true && eq(C['Mark Handed Off'], [['Hand Off Payload']]) && eq(C['Hand Off Payload'], [['Hand Off Page Run']])
@@ -236,6 +249,7 @@ module.exports = async (ctx) => {
     check('a waiting row older than any run can be (6 h in line + 2 h writing + 30 min) is not read again', !old.reads.length, J(old.reads));
     // the generated nodes: Cycle Release Rows -> Release Dead Runs (matches status_was) and Cycle Page Releases
     mock('Cycle Plan', [{ json: { release: p.release } }]);
+    mock('Release Dead Runs', items(p.release.map(r => ({ run_id: r.run_id, status: 'stale' }))));   // what the update changed: both rows
     const rr = (await run('Cycle Release Rows', [{ json: {} }], { code: 'Cycle__Cycle_Release_Rows' })).map(i => i.json);
     check('Cycle Release Rows hands Release Dead Runs the state each row was released from', eq(rr.map(r => [r.run_id, r.status_was]).sort(), [['13063', 'waiting'], ['13065', 'reserved']]), J(rr));
     const LOG = [{ request_id: 'cad_13063', keyword: 'dynamics ax dubai', status: 'started' }, { request_id: 'cad_13065', keyword: 'Dynamics AX Dubai', status: 'started' },
@@ -243,6 +257,14 @@ module.exports = async (ctx) => {
     const pr = (await run('Cycle Page Releases', items(LOG), { code: 'Cycle__Cycle_Page_Releases' })).map(i => i.json);
     check('the released runs\' own started pages become failed with the reason (request id AND keyword; a sibling of the same request, a live run\'s page and a written page are untouched)',
       eq(pr.map(r => [r.request_id, r.keyword, r.status]), [['cad_13063', 'dynamics ax dubai', 'failed'], ['cad_13065', 'Dynamics AX Dubai', 'failed']]) && pr.every(r => /^page run stopped without a result \(n8n execution 1306[35]\)/.test(r.qa_reasons)), J(pr));
+    // review S1: the run handed its wait on between the plan's ledger read and its execution read: its row is `handed_off`, so Release Dead
+    // Runs changed nothing for it, and its page must not be freed
+    mock('Release Dead Runs', items([{ run_id: '13065', status: 'stale' }]));
+    const pr2 = (await run('Cycle Page Releases', items(LOG), { code: 'Cycle__Cycle_Page_Releases' })).map(i => i.json);
+    check('review S1: only the runs whose row Release Dead Runs really moved to stale have their page freed (a hand-off in between frees nothing)', eq(pr2.map(r => r.request_id), ['cad_13065']), J(pr2));
+    mock('Release Dead Runs', items([]));
+    const pr3 = (await run('Cycle Page Releases', items(LOG), { code: 'Cycle__Cycle_Page_Releases' }))[0].json;
+    check('review S1: an update that changed nothing frees nothing', pr3.skip === true, J(pr3));
     mock('Cycle Plan', [{ json: { release: [] } }]);
     const none = (await run('Cycle Page Releases', items(LOG), { code: 'Cycle__Cycle_Page_Releases' }))[0].json;
     check('nothing released, nothing freed', none.skip === true, J(none));
@@ -293,5 +315,29 @@ module.exports = async (ctx) => {
     const good = await ni({ ...KW, body: { ...KW.body, slot_handoff: { from_run_id: '13070', queued_at: '2026-11-12T01:28:12Z', hops: 2 } } });
     const bad = await ni({ ...KW, body: { ...KW.body, slot_handoff: { from_run_id: 'abc', queued_at: 'soon' } } });
     check('Normalize Input: a well-formed hand-off is kept (normalised), anything else is dropped', eq(good.slot_handoff, { from_run_id: '13070', queued_at: '2026-11-12T01:28:12.000Z', hops: 2 }) && bad.slot_handoff === null, J([good.slot_handoff, bad.slot_handoff]));
+  });
+
+  // ===================================================================================
+  await guard('PS9 slot check', async () => {
+    const SN = 'PS9 P1 review S3 / N2 - after the take, the run checks its slot on a fresh read: of two that took the last slot at nearly the same moment the later admission steps back, and a take that did not get through is taken again'; reset(); begin(SN); const check = mkCheck(SN);
+    const { RG } = kits('Slot_Check.js', ['RG']);
+    const now = Date.now();
+    const W = (id, status, adm, x) => ({ id, run_id: String(id), status, created_at: ISO(adm), page: true, queued_at: ISO(now - 3 * H1), ...(x || {}) });
+    const rows = [W(1, 'reserved', now - 10 * MIN), W(2, 'reserved', now - 2000), W(3, 'reserved', now - 1000)];
+    const h1 = RG.slotHeld({ rows, run_id: '2', limit: 2, now }), h2 = RG.slotHeld({ rows, run_id: '3', limit: 2, now });
+    check('three writing after two near-simultaneous takes: the earlier admission keeps its slot, the later one steps back (whatever their place in line)', h1.keep === true && h1.rank === 1 && h2.keep === false && h2.rank === 2 && h2.writing === 3, J([h1, h2]));
+    const failed = RG.slotHeld({ rows: [W(1, 'reserved', now - MIN), W(4, 'waiting', now - 5 * MIN)], run_id: '4', limit: 2, now });
+    const missing = RG.slotHeld({ rows: [W(1, 'reserved', now - MIN)], run_id: '9', limit: 2, now });
+    check('review N2: a take that did not get through (own row still waiting, or missing) never writes: it waits and takes again', failed.keep === false && failed.retake === true && missing.keep === false, J([failed.basis, missing.basis]));
+    const stale = RG.slotHeld({ rows: [W(1, 'reserved', now - 3 * H1), W(2, 'reserved', now - 5 * H1), W(5, 'reserved', now - 1000)], run_id: '5', limit: 1, now });
+    const ro = RG.slotHeld({ rows: [], read_failed: true, run_id: '5', limit: 2, now });
+    check('stale writers do not count; an unreadable ledger keeps the slot (fail open)', stale.keep === true && stale.writing === 1 && ro.keep === true, J([stale.basis, ro.basis]));
+    // the generated node, reading the ledger by name
+    mock('Page Slot', [{ json: { limit: 2 } }]); mock('Reserve Run Ledger', [{ json: { id: 3, created_at: '2026-11-12T01:28:12.000Z' } }]);
+    mock('Load Page Slots (Check)', items(rows));
+    const sc = (await run('Slot Check', [{ json: {} }], { execId: '3' }))[0].json;
+    check('Slot Check: steps back with the row\'s own queue clock to restore', sc.keep === false && sc.step_back_created_at === '2026-11-12T01:28:12.000Z', J(sc));
+    const sc2 = (await run('Slot Check', [{ json: {} }], { execId: '2' }))[0].json;
+    check('Slot Check: the earlier admission keeps its slot', sc2.keep === true, J(sc2));
   });
 };

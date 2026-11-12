@@ -2272,6 +2272,11 @@ add_node('Run Ledger Row', 'n8n-nodes-base.code', 2, {'jsCode': _lr}, [LX26 + 22
 add_node('Reserve Run Ledger', DT_TYPE, DT_VERSION, dt_insert_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [LX26 + 440, LY26], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
 # the period's rows in one filtered read: today's for a daily budget, the month's for a monthly one (ISO strings compare as text)
 add_node('Load Run Ledger', DT_TYPE, DT_VERSION, dt_get_all_where_params(RUN_LEDGER_TABLE, [('created_at', 'gte', "={{ String($('Run Ledger Row').first().json.created_at).slice(0, $('Normalize Input').first().json.ai_budget_period === 'day' ? 10 : 7) }}")]), [LX26 + 660, LY26], dict(LOAD18))
+# P1 review N1 (2026-11-12): a page run that continues another execution's wait reads the ledger from the day it joined the line, so the row
+# that proves its hand-off is found also when the wait crossed midnight UTC (the period's counts still filter by date)
+nodes['Load Run Ledger']['parameters']['filters']['conditions'][0]['keyValue'] = ("={{ (() => { const n = $('Normalize Input').first().json; "
+    "const p = String($('Run Ledger Row').first().json.created_at).slice(0, n.ai_budget_period === 'day' ? 10 : 7); "
+    "const h = n.slot_handoff && n.slot_handoff.queued_at ? String(n.slot_handoff.queued_at).slice(0, 10) : ''; return h && h < p ? h : p; })() }}")
 _rl_srcs = sorted({s for s, o in conns.items() for lists in o.values() for l in lists for t in l if t['node'] == 'Rate Limit'})
 assert _rl_srcs == ['Normalize Input'], _rl_srcs
 disconnect('Normalize Input', 'Rate Limit')
@@ -13962,7 +13967,9 @@ add_node('Load Slot Override', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TA
 _SLOTS_SINCE190 = "={{ new Date(Date.now() - (%s) * 3600000).toISOString() }}" % (
     "(Number($('Normalize Input').first().json.page_slot_max_wait_hours) || %d) + %d + 0.5" % (_PG190['max_wait_hours'], _PG190['run_hours']))
 add_node('Load Page Slots', DT_TYPE, DT_VERSION, dt_get_all_where_params(RUN_LEDGER_TABLE, [('created_at', 'gte', _SLOTS_SINCE190)]), [_X190 + 440, _Y190 - 120], dict(LOAD18))
-add_node('Page Slot', 'n8n-nodes-base.code', 2, {'jsCode': _rd0('code/Page_Slot.js').replace('/*__RUN_GUARD__*/', _RG190)}, [_X190 + 660, _Y190 - 120], {'executeOnce': True})
+# review B1 (2026-11-12): NOT executeOnce - n8n hands an executeOnce node only its first input item, and this node must see every ledger row
+# (it also reads them by name). A Code node in "run once for all items" mode already runs once.
+add_node('Page Slot', 'n8n-nodes-base.code', 2, {'jsCode': _rd0('code/Page_Slot.js').replace('/*__RUN_GUARD__*/', _RG190)}, [_X190 + 660, _Y190 - 120])
 if_node('Slot Note?', "{{ !!$json.callback_url && ($json.first_wait === true || $json.started_after_wait === true) }}", [_X190 + 880, _Y190 - 320])
 add_node('POST Slot Note', 'n8n-nodes-base.httpRequest', 4.2, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json',
     'jsonBody': "={{ JSON.stringify({ status: 'progress', stage: 'page_slot', request_id: $json.request_id, execution_id: $json.execution_id, domain: $json.domain, keyword: $json.keyword, "
@@ -13975,7 +13982,7 @@ add_node('Take Page Slot', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABL
          {'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
 add_node('Slot Taken', 'n8n-nodes-base.code', 2, {'jsCode': "// P1 (2026-11-12): the slot is taken; the run goes on with the item Input OK? judged (a Data Table node outputs the row, not its input)\n"
          "let __it = null; try { __it = $('Ladder Duplicate (Words)').first().json; } catch (e) {}\nreturn [{ json: __it || $('Rate Limit').first().json }];"},
-         [_X190 + 1320, _Y190 - 200], {'executeOnce': True})
+         [_X190 + 1980, _Y190 - 200], {'executeOnce': True})
 if_node('Gave Up Waiting?', "{{ $json.slot === 'give_up' }}", [_X190 + 1100, _Y190 + 40])
 if_node('Hand Off?', "{{ $json.slot === 'handoff' }}", [_X190 + 1320, _Y190 + 140])
 add_node('Mark Handed Off', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $execution.id }}')],
@@ -13993,7 +14000,16 @@ connect('Page Run?', 'Load Slot Override', 0); connect('Page Run?', 'Ensure Cach
 connect('Load Slot Override', 'Load Page Slots'); connect('Load Page Slots', 'Page Slot')
 connect('Page Slot', 'Slot Note?'); connect('Page Slot', 'Got Page Slot?')   # Slot Note? first in the list and topmost on the canvas: the note leaves before the wait
 connect('Slot Note?', 'POST Slot Note', 0)
-connect('Got Page Slot?', 'Take Page Slot', 0); connect('Take Page Slot', 'Slot Taken'); connect('Slot Taken', 'Ensure Cache Table (Site)')
+# review S3 / N2 (2026-11-12): the take is checked on a fresh read; a run that lost a near-simultaneous race, or whose take did not get
+# through, steps back to waiting (its row `waiting` again, created_at = when it joined) and looks again after the Wait
+add_node('Load Page Slots (Check)', DT_TYPE, DT_VERSION, dt_get_all_where_params(RUN_LEDGER_TABLE, [('created_at', 'gte', _SLOTS_SINCE190)]), [_X190 + 1320, _Y190 - 280], dict(LOAD18))
+add_node('Slot Check', 'n8n-nodes-base.code', 2, {'jsCode': _rd0('code/Slot_Check.js').replace('/*__RUN_GUARD__*/', _RG190)}, [_X190 + 1540, _Y190 - 280])
+if_node('Slot Kept?', '{{ $json.keep === true }}', [_X190 + 1760, _Y190 - 280])
+add_node('Step Back', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $execution.id }}')],
+         {'status': 'waiting', 'created_at': '={{ $json.step_back_created_at }}'}), [_X190 + 1760, _Y190 + 260], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+connect('Got Page Slot?', 'Take Page Slot', 0); connect('Take Page Slot', 'Load Page Slots (Check)'); connect('Load Page Slots (Check)', 'Slot Check'); connect('Slot Check', 'Slot Kept?')
+connect('Slot Kept?', 'Slot Taken', 0); connect('Slot Kept?', 'Step Back', 1); connect('Step Back', 'Wait For Page Slot')
+connect('Slot Taken', 'Ensure Cache Table (Site)')
 connect('Got Page Slot?', 'Gave Up Waiting?', 1)
 connect('Gave Up Waiting?', 'Mark Run Refused', 0); connect('Gave Up Waiting?', 'Hand Off?', 1)
 connect('Hand Off?', 'Mark Handed Off', 0); connect('Mark Handed Off', 'Hand Off Payload'); connect('Hand Off Payload', 'Hand Off Page Run'); connect('Hand Off Page Run', 'Handed Off?')
@@ -14046,7 +14062,13 @@ def _out190(n, i=0):
 assert "const PAGE_KEY = 'slots:page';" in _RG190, 'P1: the override key moved'
 assert _out190('Input OK?') == ['Page Run?'] and _out190('Page Run?', 0) == ['Load Slot Override'] and _out190('Page Run?', 1) == ['Ensure Cache Table (Site)'], 'P1: the slot gate is not between Input OK? and the run'
 assert _out190('Page Slot') == ['Slot Note?', 'Got Page Slot?'] and pos('Slot Note?')[1] < pos('Got Page Slot?')[1], 'P1: the slot note must leave before the run waits'
-assert _out190('Got Page Slot?', 0) == ['Take Page Slot'] and _out190('Take Page Slot') == ['Slot Taken'] and _out190('Slot Taken') == ['Ensure Cache Table (Site)'], 'P1: an admitted run does not take its slot first'
+assert _out190('Got Page Slot?', 0) == ['Take Page Slot'] and _out190('Take Page Slot') == ['Load Page Slots (Check)'] and _out190('Load Page Slots (Check)') == ['Slot Check'] \
+    and _out190('Slot Check') == ['Slot Kept?'] and _out190('Slot Kept?', 0) == ['Slot Taken'] and _out190('Slot Kept?', 1) == ['Step Back'] and _out190('Step Back') == ['Wait For Page Slot'] \
+    and _out190('Slot Taken') == ['Ensure Cache Table (Site)'], 'P1: an admitted run does not take its slot first and check it'
+# review B1: the slot decisions read the ledger BY NAME and never run executeOnce (n8n would hand them one row)
+for _n190 in ('Page Slot', 'Slot Check'):
+    assert not nodes[_n190].get('executeOnce') and '$input.all()' not in code(_n190).split('const RG = (() => {')[0] + code(_n190).split('\n})();', 1)[-1], 'P1 B1: ' + _n190 + ' must read the ledger by name and not run executeOnce'
+assert "$('Load Page Slots').all()" in code('Page Slot') and "$('Load Page Slots (Check)').all()" in code('Slot Check'), 'P1 B1: the slot nodes do not read the ledger by name'
 assert _out190('Gave Up Waiting?', 0) == ['Mark Run Refused'] and _out190('Hand Off?', 1) == ['Wait For Page Slot'] and _out190('Wait For Page Slot') == ['Load Slot Override'], 'P1: the wait loop is broken'
 assert _out190('Handed Off?', 1) == ['Mark Run Refused'] and _out190('Handed Off?', 0) == [], 'P1: a failed hand-off must be refused, a done one must end'
 _wt190 = nodes['Wait For Page Slot']
@@ -14069,10 +14091,10 @@ _lw190p = os.path.join(HERE0, 'harness', 'ledger_wiring.json')
 _lw190 = json.load(open(_lw190p, encoding='utf-8'))
 _lw190['page_slot'] = {
     'page': _PG190, 'execution_timeout': _ET190, 'cadence_in_flight_hours': int(_cad190.group(1)),
-    'nodes': ['Page Run?', 'Load Slot Override', 'Load Page Slots', 'Page Slot', 'Slot Note?', 'POST Slot Note', 'Got Page Slot?', 'Take Page Slot', 'Slot Taken',
+    'nodes': ['Page Run?', 'Load Slot Override', 'Load Page Slots', 'Page Slot', 'Slot Note?', 'POST Slot Note', 'Got Page Slot?', 'Take Page Slot', 'Load Page Slots (Check)', 'Slot Check', 'Slot Kept?', 'Step Back', 'Slot Taken',
               'Gave Up Waiting?', 'Hand Off?', 'Mark Handed Off', 'Hand Off Payload', 'Hand Off Page Run', 'Handed Off?', 'Wait For Page Slot'],
     'connections': {n: [[t['node'] for t in l] for l in conns.get(n, {}).get('main', [])] for n in
-                    ['Input OK?', 'Page Run?', 'Load Slot Override', 'Load Page Slots', 'Page Slot', 'Slot Note?', 'Got Page Slot?', 'Take Page Slot', 'Slot Taken', 'Gave Up Waiting?',
+                    ['Input OK?', 'Page Run?', 'Load Slot Override', 'Load Page Slots', 'Page Slot', 'Slot Note?', 'Got Page Slot?', 'Take Page Slot', 'Load Page Slots (Check)', 'Slot Check', 'Slot Kept?', 'Step Back', 'Slot Taken', 'Gave Up Waiting?',
                      'Hand Off?', 'Mark Handed Off', 'Hand Off Payload', 'Hand Off Page Run', 'Handed Off?', 'Wait For Page Slot', 'Refused Input', 'Load Content Log (Refused)',
                      'Refused Page Row', 'Release Refused Page', 'Mark Page Run Failed']},
     'take': {'filters': [[c['keyName'], c['keyValue']] for c in nodes['Take Page Slot']['parameters']['filters']['conditions']], 'values': nodes['Take Page Slot']['parameters']['columns']['value']},
@@ -14558,3 +14580,7 @@ def _p1_starters():
     json.dump(lw, open(p, 'w', encoding='utf-8'), indent=1)
     print('P1 (section 190): %d starters of the main workflow, every one through its writing slot' % len(found))
 _p1_starters()
+
+# P1 review B1 (2026-11-12): no executeOnce Code node may read its input as many items (n8n hands it the first one only)
+import execute_once_lint
+execute_once_lint.check()
