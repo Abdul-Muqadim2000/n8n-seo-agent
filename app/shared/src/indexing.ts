@@ -1670,7 +1670,7 @@ export function indexEscalationSteps(p: Pick<IndexPage, 'escalateWhy' | 'linkedN
         const k = Math.max(p.linkedN, p.linkedBy.length);
         return {
           code,
-          text: p.linkDepth === 1 || p.linkedBy.some(isSiteRoot)
+          text: p.linkDepth === 1 || (!p.linkDepth && p.linkedBy.some(isSiteRoot))
             ? 'Only your home page links here: also link it from related pages.'
             : k ? `Only ${k} page${k === 1 ? '' : 's'} link${k === 1 ? 's' : ''} here and your home page does not: link it from your home page or main menu.` : 'We found no page of yours that links here: link it from your home page or main menu.',
           guide: 'index-add-internal-links',

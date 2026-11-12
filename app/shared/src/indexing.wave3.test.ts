@@ -41,7 +41,7 @@ const NOW = Date.parse('2026-11-12T12:00:00.000Z');
 const page = (o: Partial<IndexPageRow>): Partial<IndexPageRow> => ({ lane: 'existing', state: 'not_indexed', inspect_at: RUN, fetch_at: RUN, http_status: 200, in_sitemap: true, ...o });
 const wait = (path: string, o: Partial<IndexPageRow> = {}) =>
   page({ url: U(path), cause: 'unknown_to_google', action: 'wait', linked_by: JSON.stringify([U('/')]), robots_ok: 'yes', link_depth: 1, linked_n: 3, words: 900, ...o });
-const run = (o: Partial<IndexRunRow> & { dates?: Record<string, number> } = {}): Partial<IndexRunRow> => {
+const run = (o: Partial<IndexRunRow> & { dates?: Record<string, number | boolean> } = {}): Partial<IndexRunRow> => {
   const { dates, ...rest } = o;
   return { run_at: RUN, known: 40, indexed: 18, inspected: 40, ...(dates ? { sitemaps_json: JSON.stringify({ submitted: 1, read: 1, complete: true, dates }) } : {}), ...rest };
 };
