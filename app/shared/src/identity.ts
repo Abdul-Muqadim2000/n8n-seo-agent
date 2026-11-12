@@ -518,6 +518,7 @@ export const AUDIT_ACTIONS = {
   'site.content_rejected': { label: 'Marked a written page as not what was wanted', category: 'websites' },
   'site.ladder_rechecked': { label: 'Paused a ladder whose keyword no longer fits', category: 'websites' },
   'site.ladder_keyword_added': { label: 'Added a keyword to a ladder', category: 'websites' },
+  'site.ladder_status_changed': { label: 'Paused or resumed a keyword ladder', category: 'websites' },
   // A13 (2026-10-23, AI visibility app audit): every Site Admin change (the AI question panel, the monitor settings incl. the panel size
   // and the engines, competitors, pauses, cadence, prospects) is in the company's audit log, with counts and ids, never question texts
   'site.admin.pause': { label: 'Paused a website\'s weekly runs', category: 'websites' },
