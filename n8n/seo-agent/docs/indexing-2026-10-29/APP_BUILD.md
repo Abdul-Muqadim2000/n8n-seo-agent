@@ -438,3 +438,69 @@ Screenshots in `shots/`: `indexing-w2review-{will,blocked,restricted}-desktop-li
 - W11's second half (a link the client adds on a suggested source page) is the engine's (W11 engine: suggested sources are read now).
 - Tutorials: no new screen; the sitemap switch moved out of onboarding, so the tutorial that shows onboarding's monitors (if it shows the
   Indexing row) needs a re-capture after the deploy; not filmed (owner rule).
+
+## Wave 3 (DESIGN_WAVE3)
+
+Branch `ix3/app` (worktree `alaventra-ix3-app`), from `95c60848`, merged with `feature/seo-agent-v4.5` at `06332af3` before any change.
+DESIGN_WAVE3.md §3 (app), built in parallel with the engine half from the same contract. Not deployed, not pushed, no production access, no
+app migration (the mark lives in `seo_index_pages.type_override`, the new step is text in `site_tasks`). Every column and code is read
+exactly as §2 names it; a row without them reads as before (missing = empty).
+
+### What, where
+| § | What | Where |
+|---|---|---|
+| 2.1 (read) | Row types: `seo_index_pages.priority`, `escalated_at`, `escalate_why`, `type_override`, `robots_ok`, `link_depth`, `linked_n`, `indexnow_at`; `seo_index_runs.escalated`, `asked_waiting`, `indexnow_sent`; `sitemaps_json.dates` read by `runSitemapsOf` into `IndexRunSitemaps.dates` | `shared/src/tables.ts`, `shared/src/indexing.ts` |
+| 3.1 | "Google has not visited these yet" is a to-do: `IndexGroup.todo` (`indexWaitingTodo`: "Google has not visited N pages. M matter most. Do these K things: ask Google to read x pages today; add dates to your sitemap; link y pages from your home page or menu.", only the parts that apply; x = the engine's ask mark not asked about lately, y = `link_depth >= 2`, dates = the newest run's `dates` fails the engine's rule), a "Show me how" per part; pages by `priority` (rows without one by impressions as before; the same sort in the paged list), "Do first" on 1 to 5; per page "What we checked" (`indexPageChecks`: Opens (200) / Can be indexed (no noindex) / robots.txt allows it / In your sitemap / Linked from your home page or from a path (n pages) / words / Sent to Bing <day>; a failed or weak check in the warning colour; a value not read is "... not checked", never a pass; Bing only when sent); rows read "Not visited yet" and the group's subtitle "What helps Google find them" instead of "Give it time"; `youDo` no longer says "Nothing on these pages". The "I asked Google" panel and its states are unchanged | `indexWaitingTodo`, `indexPageChecks`, `INDEX_LINKED_WAITING`; `web/src/pages/site/IndexingPage.tsx` (`GroupPanel`, `PageRow`, `PageChecks`, `PageBadges`) |
+| 3.2 | `IndexingData.escalated` (pages with `escalated_at`, action wait / links, not marked utility, by priority, 50 at most); such a page is in no group (`inIndexGroup`) and counts in `needYou`. Panel "Needs you: Google has not visited after 3 weeks" above the tabs: the lead sentence, the `escalate_why` reasons as numbered steps in the engine's order (`indexEscalationSteps`: not_asked / asked_no_visit / weak_links with the count / short_page with the words / not_in_sitemap / sitemap_no_dates), a "Show me how" each (`index-request-indexing`, `index-add-internal-links`, `index-not-in-sitemap`, `index-sitemap-dates`), "Improve this page" on short_page (never during a freeze: then "..., after Google's update finishes." and no button; never on a job posting), "I asked Google" on a not_asked page (members), the check line | `shared/src/indexing.ts`; `EscalatedPanel` |
+| 3.3 | Step `indexing:sitemap_dates` (kind `indexing`): raised when the newest run's `dates` fails the engine's rule (`sitemapDatesMissing`); payload `{ cause: 'sitemap_dates', urls, withLastmod, distinct }`; our check `checkSitemapDates` reads the tree through `sitemapOf` (`SitemapRead.dates`: each address counted once with its first non-empty `<lastmod>` day, `sitemapDateEntries`), done on `sitemapDatesGood` (>= 90% dated and (< 10 addresses or > 1 distinct day)); no sitemap = not reached (503 / nothing daily); a partial tree that looks done = unsure (409); a partial tree without dates = a miss; the engine's newer reading closes or reopens it (the SITE_TASKS rule). Severity info. Guide `index-sitemap-dates` (what lastmod is, used only when accurate, the real last change never the build time, WordPress plugins / builders / Next.js `lastModified` / a hand-made file); `INDEXING_GUIDE.sitemap_dates`; recommendation `ix:site_fix:sitemap_dates` (its guide prefix sits before `ix:site_fix:sitemap`) | `shared/src/site-tasks.ts`, `shared/src/guides.ts`, `shared/src/guide-links.ts`, `server/src/services/siteTasks.ts`, `server/src/services/recommendations.ts`; `app/docs/SITE_TASKS.md` §8 |
+| 3.4 | The policy card names its pages (`indexUtilityCardText`: "2 pages look like policy pages (privacy, cookies). They do not need to be in Google. If one of them should rank, press This is an important page.") with the sitemap tip in "What you do"; per page "This is an important page"; "Fine to leave out" on every other page not in Google (state not_indexed / excluded, action not leave_out / none); a marked page says "You marked this page ..." with "Undo" (`indexPageTypeAction`). Overlay from the row itself (`indexPageOf`): `utility` on a page not in search = cause low_value, action leave_out, the engine's note, never asked about, ranked or escalated (group `marked_utility`); `important` = never a utility page, and while the engine still files a policy page low_value / leave_out it is `typePending` (action wait, group `type_pending` "Waiting for our next check"); an undone mark on a row the engine left out with its "You marked this page as fine to leave out" note is pending too. Endpoint below; hook `usePageType` re-reads the page | `shared/src/indexing.ts`, `server/src/services/indexing.ts` (`markPageType`), `server/src/routes/indexing.ts`, `shared/src/identity.ts` (audit label), `web/src/lib/queries.ts`, `PageTypeButton` |
+| 3.5 | Report: block "Pages Google has not visited yet" (waiting, need you after 3 weeks, asked and not read yet, read within 7 days of asking, sent to Bing, the five to do first with the reason in words, the sitemap dates line), only when the summary carries the new fields; summaries `waiting`, `escalated`, `askedWaiting`, `readAfterAsk`, `indexnowSent`; the report list line adds "N not visited by Google after 3 weeks". The Overview has no index card of its own: it shows the new step through the recommendations | `web/src/components/reports/indexing.tsx`, `ReportSummaryLine.tsx`, `server/src/services/summaries.ts` |
+| 3.6 | Changelog 4.13 "A daily to-do for pages Google has not visited", five index-coverage benefits, the pricing hint and one solutions line; guided-setup count 97 -> 98; tutorials backlog row (video-skills `e3c9c13`, pushed) | `web/src/marketing/content/*` |
+
+New endpoint: `POST /api/orgs/:orgId/sites/:siteId/data/indexing/page-type` `{ url, type: 'important' | 'utility' | '' }` -> `{ page }`. Member and
+up, verified websites, 30 per 10 minutes per person, audited (`indexing.page_type`, `{ url, type, was }`); writes ONLY `type_override` on that
+page's row through the Data Table `rows/update` (filter `site_id` + `url`, the asked-google path). 400 `bad_type`; 404 another website's
+address or a page the check does not know; 409 `already_in_search` for `utility` on a page in search; 503 when the read or the write fails
+(nothing saved, no audit). The same mark twice writes nothing. Documented in `app/API.md` (Index coverage, "Wave 3").
+
+### Contract points and deviations
+- One deliberate rule change from wave 2: `indexPageOf` no longer drops the engine's ask-Google mark on a job posting (§2.6 makes them the
+  last tier). `indexing.wave2.test.ts` was updated for it (commented).
+- `escalated_at` is shown only on a row whose action is `wait` or `links` and that is not marked utility (the engine's own rule, read
+  defensively); an escalated page is never also listed in a group.
+- `type_pending` is the app's reading of "overlay until the engine's next run re-diagnoses": decided from the row (the mark, the engine's
+  cause / action and its note), not from timestamps, so it holds across reloads and ends when the engine files the page again. If the engine
+  writes another note for a marked page than "You marked this page as fine to leave out of Google.", an undone mark simply shows the engine's
+  old reading until its next run (no wrong state, only no "waiting" badge).
+- `summary.sitemap_dates` is read as `{ urls, with_lastmod, distinct }` (the engine's `dates` shape); `do_first[].why` is shown as words when
+  it has a space, a known code is put in words, anything else is left out.
+
+### Tests
+New: `shared/src/indexing.wave3.test.ts` (21: the columns and old rows, the to-do sentence, priority order in the group and the paged list,
+"What we checked" incl. "not checked", escalation out of groups / in needYou / the steps and guides / the freeze / never on a visited,
+indexed or marked page, the policy card and the three marks with their overlay, the dates rules, `dates` read, `sitemapDateEntries`, the
+step raised / done by our check / reopened by the engine / closed by the engine / kept, guides and recommendation mapping, copy),
+`server/test/indexingWave3.test.ts` (8: the page with the new columns; `page-type` writes only `type_override`, audits, shows the new state at
+once, writes nothing twice, Undo; important on a policy page waits; viewer 403, other company, other host, unknown page, bad type 400,
+indexed 409, failed write 503 with no audit; the dates step raised, a miss, done, a sitemap index counted once, unreachable 503 records
+nothing of ours, a partial tree 409, closed by the engine, not raised on usable dates; its recommendation), `web/test/indexingWave3.test.tsx`
+(7: the to-do, Do first, the check line, "Not visited yet" and no "Give it time"; the escalated list with steps, the I asked Google and
+Improve buttons; no Improve during a freeze; the policy card, the marks for members only; copy; the report block and an older report
+without it). Every new case calls code that did not exist before this branch (each file fails to import on `06332af3`). Updated:
+`indexing.wave2.test.ts` (job postings may carry the ask mark, §2.6).
+
+### Checks (Docker `node:22-bookworm-slim`, `TZ=UTC`, the whole repo mounted, `npm ci`)
+| | before (`06332af3`) | after (`ix3/app`) |
+|---|---|---|
+| typecheck shared / server / web | clean | clean |
+| shared | 1229 passed (80 files) | **1250 passed** (81 files) |
+| server | 2097 passed, 46 skipped | **2105 passed, 46 skipped** (102 files, 3 skipped) |
+| web | 374 passed (41 files) | **381 passed** (42 files) |
+| web build | ok | ok |
+
+### Not done / left
+- No browser pass on fixtures this wave and no live dev stack (`smoke.py`); rendering is covered by the web tests (server-rendered).
+- Not run against the engine branch: column and code names follow DESIGN_WAVE3 §2 exactly; the engine's note for a marked page is matched
+  on its first words "You marked this page as fine to leave out".
+- No new recommendation for escalated pages (the contract asks for the page's Needs-you group only); they count in the hero's "Need you".
+- Tutorials: backlog row only (owner rule), nothing filmed.

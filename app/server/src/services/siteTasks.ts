@@ -37,6 +37,10 @@ import {
   INDEXING_SITEMAP_KEY,
   INDEX_SITE_FIX_CAUSES,
   indexingSitemapReading,
+  indexingSitemapDatesReading,
+  sitemapDateEntries,
+  sitemapDatesGood,
+  sitemapDatesLine,
   indexRunOf,
   isSitemapIndex,
   n8nSiteId,
@@ -267,6 +271,8 @@ async function readIndexing(domain: string): Promise<SiteTaskInputs['indexing']>
     runAt: good.runAt,
     causes: indexingCauseReadings(mine(reads.flat()), { capped, read: causes }),
     sitemap: indexingSitemapReading(runs),
+    // wave 3 (DESIGN_WAVE3 §3.3): the newest run's sitemap date counts
+    sitemapDates: indexingSitemapDatesReading(runs),
     links: indexingLinksReading(mine(linkRows), { runAt: good.runAt, capped: linkRows.length >= INDEXING_CAUSE_READ_MAX }),
     // wave 2 review W1: only when the engine says it WILL submit on its next run is the client not asked to (Full access alone is not
     // enough: the kill switch, no readable sitemap or a sitemap outside the property stop it); otherwise the step says why
@@ -488,6 +494,8 @@ export interface SitemapRead {
   urls: Set<string>;
   /** every sitemap listed (robots.txt `Sitemap:` lines, /sitemap.xml, the children of an index) was an XML list we read in full */
   complete: boolean;
+  /** wave 3 (DESIGN_WAVE3 §3.3): the addresses read, how many carry a `<lastmod>` and how many distinct days (each address counted once) */
+  dates: { urls: number; withLastmod: number; distinct: number };
 }
 /** caps of one read (the whole check must fit inside 45 s; nothing but the addresses is kept, A27) */
 const SITEMAP_ROOTS = 5;
@@ -530,6 +538,8 @@ async function readSitemap(d: string): Promise<SitemapRead | null> {
   const fallback = `https://${d}/sitemap.xml`;
   const roots = [...new Set([...onSiteListed.slice(0, SITEMAP_ROOTS), fallback])];
   const out = new Set<string>();
+  // wave 3: each address's lastmod day ('' = none), counted once per address; only days are kept, never the bodies
+  const days = new Map<string, string>();
   let read = false;
   const take = async (urls: string[], level: number): Promise<string[]> => {
     const answers = await Promise.all(urls.map((u) => fetchPublicText(u, SITEMAP_BYTES, 4, { headers: true }).catch(() => null)));
@@ -571,6 +581,11 @@ async function readSitemap(d: string): Promise<SitemapRead | null> {
         }
         out.add(x);
       }
+      for (const e of sitemapDateEntries(xml)) {
+        if (days.size >= SITEMAP_URLS) break;
+        const k = e.loc.replace(/^http:\/\//i, 'https://');
+        if (!days.get(k)) days.set(k, e.day);
+      }
     }
     return children;
   };
@@ -579,7 +594,24 @@ async function readSitemap(d: string): Promise<SitemapRead | null> {
   // the children a few at a time (bodies are dropped once their addresses are read)
   const kids = children.slice(0, SITEMAP_CHILDREN);
   for (let i = 0; i < kids.length; i += 4) await take(kids.slice(i, i + 4), 1);
-  return read ? { urls: out, complete } : null;
+  const dated = [...days.values()].filter(Boolean);
+  return read ? { urls: out, complete, dates: { urls: days.size, withLastmod: dated.length, distinct: new Set(dated).size } } : null;
+}
+
+/**
+ * wave 3 (DESIGN_WAVE3 §3.3): the app's own check of `indexing:sitemap_dates`. Done when at least 90% of the addresses carry a date and the
+ * dates differ (a sitemap under 10 addresses may share one day). No sitemap read: the website did not answer, nothing is recorded. A tree
+ * read only in part that looks done is "could not tell" (the engine's next reading decides); one that still lacks dates is a miss.
+ */
+async function checkSitemapDates(domain: string, opts: { fresh?: boolean }): Promise<CheckOutcome> {
+  const sm = await sitemapOf(domain, opts);
+  if (!sm) return { ok: false, reached: false, message: `We could not read a sitemap at https://${cleanDomain(domain)}/sitemap.xml or in your robots.txt.` };
+  const d = sm.dates;
+  if (!d.urls) return { ok: false, reached: false, unsure: true, message: 'Your sitemap lists no page we could read, so we could not tell.' };
+  const line = sitemapDatesLine(d);
+  if (!sitemapDatesGood(d)) return { ok: false, reached: true, message: `${line} We tick this off once at least 9 in 10 pages carry a date and the dates differ.` };
+  if (!sm.complete) return { ok: false, reached: false, unsure: true, message: `${line} Part of your sitemap did not open for us, so the daily index check confirms the rest.` };
+  return { ok: true, reached: true, message: line };
 }
 
 /**
@@ -593,6 +625,7 @@ async function readSitemap(d: string): Promise<SitemapRead | null> {
 async function checkIndexing(domain: string, payload: Record<string, unknown>, opts: { fresh?: boolean } = {}): Promise<CheckOutcome> {
   if (str(payload.cause) === 'sitemap')
     return { ok: false, reached: false, engineOnly: true, message: 'Search Console\'s list of your sitemaps is read by the daily index check, so this step is ticked off the day after you submit the sitemap or fix its errors.' };
+  if (str(payload.cause) === 'sitemap_dates') return checkSitemapDates(domain, opts);
   const cause = indexingCauseOfKey(`indexing:${str(payload.cause)}`);
   const urls = (Array.isArray(payload.urls) ? payload.urls : []).map(String).map((u) => u.replace(/^http:\/\//i, 'https://')).filter((u) => /^https:\/\//i.test(u) && onSite(u, domain)).slice(0, INDEXING_CHECK_MAX_URLS);
   if (!cause) return { ok: false, reached: true, message: 'This step names no problem we know, so there is nothing we can check.' };

@@ -40,6 +40,7 @@ import {
   findingAsksSameFix,
   INDEX_CAUSE_INFO,
   INDEXING_SITEMAP_KEY,
+  INDEXING_SITEMAP_DATES_KEY,
   indexingCauseOfKey,
   indexPath,
   improveKeywordOf,
@@ -485,6 +486,11 @@ export function indexingRecommendations(
   for (const t of (tasks ?? []).filter((t) => t.kind === 'indexing' && t.state === 'todo')) {
     if (t.key === INDEXING_SITEMAP_KEY) {
       add({ id: 'ix:site_fix:sitemap', taskKey: t.key, category: 'technical', priority: 'medium', title: t.title, detail: t.detail, action: { label: 'See the step', page: 'pipeline' }, guideVars: t.guideVars });
+      continue;
+    }
+    // wave 3 (DESIGN_WAVE3 §3.3): the sitemap without usable dates is one step too
+    if (t.key === INDEXING_SITEMAP_DATES_KEY) {
+      add({ id: 'ix:site_fix:sitemap_dates', taskKey: t.key, category: 'technical', priority: 'low', title: t.title, detail: t.detail, action: { label: 'See the step', page: 'pipeline' }, guideVars: t.guideVars });
       continue;
     }
     const cause = indexingCauseOfKey(t.key);
