@@ -29,7 +29,7 @@ import {
   type SkipRow,
   type TopicSource,
   type TrendRow,
-  PAGE_IN_FLIGHT_HOURS,
+  CADENCE_IN_FLIGHT_HOURS,
 } from '@seo/shared';
 
 // The app's mirror of the Content Cadence (n8n/seo-agent/v5/code/Cadence_Plan.js, the source of truth): what one cycle of a website
@@ -85,8 +85,8 @@ export const CADENCE = {
   decayRefreshDays: 60,
   /** R-K7: outside a cycle, the pages started in the last 6 days count as this week's */
   cycleWindowDays: 6,
-  /** S1-05: mirrors Cadence_Plan.js `in_flight_hours` (2 -> 8: a page run may wait 6 h for a writing slot, then run 2 h) */
-  inFlightHours: PAGE_IN_FLIGHT_HOURS,
+  /** mirrors Cadence_Plan.js `in_flight_hours` (2; 8 when the writing-slot gate of plan P1 ships) */
+  inFlightHours: CADENCE_IN_FLIGHT_HOURS,
   /** F-KW: a ladder planned longer ago than this waits for a fresh keyword check before its first page (cycles.ts QUEUED_RECHECK_DAYS) */
   recheckDays: 60,
   cycleDays: 7,

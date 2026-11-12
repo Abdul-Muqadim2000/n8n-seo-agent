@@ -19,8 +19,11 @@ export function runOverdueMinutes(etaMinutes: number | null | undefined): number
 export const RUN_RESULT_GRACE_MINUTES = 10;
 
 /**
- * Prod review 2026-11-12 (S1-05): how long a page run may be on its way. A page run may wait up to 6 hours for a writing slot and then run
- * up to 2 hours (the engine's Cadence_Plan.js `in_flight_hours`). A content-log row still `started` after this never finished: it is no
- * page, never a page waiting to be published, and it never counts towards the pile-up limit.
+ * Prod review 2026-11-12 (S1-05): how long a page run may be on its way. A page run runs at most 2 hours (the engine's executionTimeout
+ * 7200, AIR-PAGETIME); one more hour of margin for a slow callback. A content-log row still `started` after this never finished: it is no
+ * page, never a page waiting to be published, and it never counts towards the pile-up limit. The writing-slot gate (plan P1, branch
+ * fix/page-slots, not deployed) lets a page wait up to 6 hours before it runs and raises this to 8 together with Cadence_Plan.js.
  */
-export const PAGE_IN_FLIGHT_HOURS = 8;
+export const PAGE_IN_FLIGHT_HOURS = 3;
+/** the engine's Cadence_Plan.js `in_flight_hours` (the cadence's "already started this week" window); 8 with plan P1 */
+export const CADENCE_IN_FLIGHT_HOURS = 2;

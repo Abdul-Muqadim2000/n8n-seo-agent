@@ -14,7 +14,7 @@ describe('pipeline: pages already written', () => {
         log({ keyword: 'Peppol UAE', status: 'published', started_at: '2026-08-01T10:00:00Z', published_url: 'https://techand.ai/peppol' }),
         log({ keyword: 'peppol uae', status: 'started', started_at: '2026-10-02T10:00:00Z' }),
         // S1-05: a page run being written now (started within PAGE_IN_FLIGHT_HOURS)
-        log({ keyword: 'vat rules', request_id: 'cad_2026-09-29_techand-ai_1', started_at: '2026-10-03T09:00:00Z' }),
+        log({ keyword: 'vat rules', request_id: 'cad_2026-09-29_techand-ai_1', started_at: '2026-10-03T10:30:00Z' }),
       ],
       [],
       NOW,
@@ -31,7 +31,7 @@ describe('pipeline: pages already written', () => {
   });
 
   it('ladder pages being written or published count, the content log\'s date wins', () => {
-    const w = writtenPages([log({ keyword: 'rung two', started_at: '2026-10-03T09:00:00Z' })], [lad({ keyword: 'rung two', status: 'writing' }), lad({ keyword: 'rung three', status: 'published', target_url: 'https://x.com/r3' }), lad({ keyword: 'rung four' })], NOW);
+    const w = writtenPages([log({ keyword: 'rung two', started_at: '2026-10-03T10:30:00Z' })], [lad({ keyword: 'rung two', status: 'writing' }), lad({ keyword: 'rung three', status: 'published', target_url: 'https://x.com/r3' }), lad({ keyword: 'rung four' })], NOW);
     expect(w.map((x) => [x.keyword, x.status, x.startedAt !== ''])).toEqual([
       ['rung two', 'started', true],
       ['rung three', 'published', false],
