@@ -13,6 +13,7 @@ import { IconTile } from '@/components/insight';
 import { cn } from '@/lib/utils';
 import { estimateCost, estimateEta } from '../estimate';
 import { CountryField, DeliveryCard, EmailCopyField, errMsg, FormCard, GoalField, PageTypeField, setPristine, siteDefaults, SiteField, ToneField, ToolShell, useRunSubmit, useSiteChange, useSyncSiteParam } from '../kit';
+import { KeywordStatsCheck } from '../KeywordStatsCheck';
 import { OPTION_BOX, TextAreaField, TextField, withChecks, withPrefill, type ToolFormProps } from '../form-utils';
 
 const isVideoUrl = (u: string) => /youtube\.com|youtu\.be|vimeo\.com/i.test(u);
@@ -149,6 +150,7 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
       <FormCard title="Keyword" description="Competitor research, a verdict, a brief, the copy, an editor pass and SEO QA, for one keyword.">
         <SiteField optional value={v.siteId} onChange={(id) => form.setValue('siteId', id, { shouldDirty: true, shouldValidate: form.formState.isSubmitted })} error={errMsg(e.siteId)} />
         <TextField label="Keyword" reg={form.register('keyword')} error={errMsg(e.keyword)} placeholder="e.g. erp implementation services dubai" hint="The main search phrase the page should rank for. Related phrases are found and covered automatically." />
+        {site?.verifiedAt && <KeywordStatsCheck siteId={site.id} keyword={v.keyword ?? ''} country={v.country || undefined} />}
         {v.ladder && (
           <Callout tone="info" title={`Part of the keyword ladder "${v.ladder.head || 'your ladder'}"`}>
             {v.ladder.rung === 4 ? 'The top page of the ladder' : `Rung ${v.ladder.rung}`}: the page links to the ladder's top page and a sibling, and the ladder marks it as written so the weekly cadence moves on.

@@ -2,8 +2,8 @@
 // website's chances, why we suggest it, the plan and the credits of a page. Used by onboarding's "Your first keyword", the keyword
 // proposals on the Pipeline and the Coming-up plan.
 import type { ReactNode } from 'react';
-import { CalendarRange, Check, Coins, Search, Sparkles, Users } from 'lucide-react';
-import { CHANCE_WORDS, compactNumber, type DifficultyForYou, type PlanChoice } from '@seo/shared';
+import { AlertTriangle, CalendarRange, Check, Coins, Search, Sparkles, Users } from 'lucide-react';
+import { CHANCE_WORDS, compactNumber, lowDemandNote, type DifficultyForYou, type PlanChoice } from '@seo/shared';
 import { Badge, type Tone } from '@/components/ui/badge';
 import { IconTile } from '@/components/insight';
 import { PRICES } from '@/lib/prices';
@@ -99,6 +99,13 @@ export function KeywordChoiceCard({
           <Users className="mt-0.5 size-3.5 shrink-0 text-ink-3" aria-hidden />
           {searchesWords(k.volume)}
         </span>
+        {/* owner decision 2026-11-12: few searches a month is a warning, never a refusal */}
+        {lowDemandNote(k.volume) && (
+          <span className="flex items-start gap-2 text-warning-text">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+            {lowDemandNote(k.volume)}
+          </span>
+        )}
         {plan && (
           <span className="flex items-start gap-2">
             <CalendarRange className="mt-0.5 size-3.5 shrink-0 text-ink-3" aria-hidden />
