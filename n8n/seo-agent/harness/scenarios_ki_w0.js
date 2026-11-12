@@ -80,8 +80,8 @@ module.exports = async (ctx) => {
     const q4 = await qv({ mode: 'keyword_research', ...B, seeds: Array.from({ length: 21 }, (_, i) => 'seed ' + i) });
     const q5 = await qv({ mode: 'keyword_research', ...B, seeds: 'erp uae' });
     const q6 = await qv({ mode: 'backlinks', ...B }); const q7 = await qv({ mode: 'keyword', keyword: 'erp uae', ...B });
-    check('KIW0-5 Quick Validate accepts both KI modes (ETA 6 / 12 minutes) and sends them to the KI workflow',
-      q1.ok && q2.ok && q1.target === 'ki' && q2.target === 'ki' && q1.estimated_minutes === 6 && q2.estimated_minutes === 12 && q1.forward.body.request_id === q1.request_id, J({ q1: [q1.ok, q1.error, q1.target, q1.estimated_minutes], q2: [q2.ok, q2.error, q2.target, q2.estimated_minutes] }));
+    check('KIW0-5 Quick Validate accepts both KI modes (ETA 6 / 25 minutes: KI-JUDGE reads 300 results pages and judges them) and sends them to the KI workflow',
+      q1.ok && q2.ok && q1.target === 'ki' && q2.target === 'ki' && q1.estimated_minutes === 6 && q2.estimated_minutes === 25 && q1.forward.body.request_id === q1.request_id, J({ q1: [q1.ok, q1.error, q1.target, q1.estimated_minutes], q2: [q2.ok, q2.error, q2.target, q2.estimated_minutes] }));
     check('KIW0-5 a KI request needs the website; seeds are a list of at most 20', !q3.ok && /domain is required/.test(q3.error) && !q4.ok && /at most 20/.test(q4.error) && !q5.ok && /seeds must be an array/.test(q5.error), J([q3.error, q4.error, q5.error]));
     check('KIW0-5 every other mode still goes to the main workflow', q6.ok && q6.target === 'main' && q7.ok && q7.target === 'main' && q6.estimated_minutes === 5, J([q6.target, q7.target]));
     const k1 = (await run('KI Input', [{ json: q2.forward }]))[0].json;

@@ -3404,7 +3404,8 @@ if (ads && ads.ok) for (const it of (KIW.task0(ads.a).result || [])) { if (!it |
 const sections = [{ key: 'results_pages', state: !R.read && (pic.top_m || []).length ? 'missing' : (R.missing ? 'partial' : 'ok'),
   reason: !R.read && (pic.top_m || []).length ? 'no results page could be read: ' + ((Object.values(R.by).find(r => r.source === 'missing') || {}).why || 'no answer') : (R.missing ? R.missing + ' of ' + (pic.top_m || []).length + ' results pages could not be read (those searches are scored without one, at low confidence)' : ''), rows: R.read },
   // QUEUE: how the pages were read; searches are grouped only on pages with exact addresses
-  { key: 'results_pages_exact', state: !R.read ? 'skipped' : (exactN >= R.read ? 'ok' : (exactN ? 'partial' : 'missing')),
+  // a few pages without exact addresses do not make the run partial: under 90% exact it is, and none at all is missing (the count is always said)
+  { key: 'results_pages_exact', state: !R.read ? 'skipped' : (exactN >= R.read * 0.9 ? 'ok' : (exactN ? 'partial' : 'missing')),
     reason: !R.read ? '' : (exactN >= R.read ? '' : (R.read - exactN) + ' of ' + R.read + ' results pages were read without exact page addresses (searches on them are scored but not grouped)'), rows: exactN }];
 if (ads) sections.push({ key: 'ads_volume', ...KIW.callState([ads], 'the Google Ads volumes'), rows: adsN });
 const volRow = adsN ? [KIW.cacheRow(p.site_id, KIW.cacheKey(p.site_id, 'vol', p.market), { fetched_at: now, map: volMap })] : [];

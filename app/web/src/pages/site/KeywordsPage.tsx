@@ -152,7 +152,7 @@ export function Keywords({ o, summary, striking: strikingRows, questionRows, pla
           <EmptyState
             icon={<Telescope className="size-5" />}
             title="Find what your buyers search"
-            description="We collect searches from your Search Console, Google's own suggestions and questions, and your competitors; keep the ones that fit what you sell; group them by topic and tell you which ones you can win. It takes about 12 minutes."
+            description="We collect searches from your Search Console, Google's own suggestions and questions, and your competitors; read who searches each one from its Google results; keep the ones that fit what you sell; group them by topic and tell you which ones you can win. It takes about 25 minutes."
             action={<KiRunButton kind="keyword_research" o={o} />}
           />
           <p className="px-6 pb-5 text-center text-xs text-ink-3">

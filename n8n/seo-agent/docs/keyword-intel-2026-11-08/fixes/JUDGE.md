@@ -34,6 +34,21 @@ one retry of failed calls only, a refusal, measured money on the row and the led
 soft stop is read and judged, and says so). The fake judge mirrors the word rules by default so the older scenarios keep their meaning.
 Harness 19143 / 0; app shared 1226, server 2097, web 374, typecheck clean.
 
-## Live check (next)
-Trial re-run on both sites: the judge's section ok, every kept search judged, cost about $0.30-0.45 a run; then an independent label of
-what passed (the honest measure).
+## Live check on production (2026-11-12, deployed ~09:45 UTC; Trial runs 13297 techand.ai / 13298 devaicon.com)
+| | techand.ai | devaicon.com |
+|---|---|---|
+| results pages read | 300 of 300 (299 queue, 1 live) | 300 of 300 (299 queue, 1 live) |
+| searches judged | 300 of 300, no retry needed | 300 of 300 |
+| Claude (measured) / search data | $0.34 / $0.52 | $0.30 / $0.35 |
+| groups of 2+ searches | 17 (was 9) | 14 (was 5) |
+| passing, right (labelled before) | 113 of 120 = 94.2% | 109 of 125 = 87.2% |
+| passing, right (new, fresh independent label) | 70 of 72 | 3 of 4 |
+| **passing, right, all** | **183 of 192 = 95.3%** (words only 73%, start 57%) | **112 of 129 = 86.8%** (words only 69%, start 40%) |
+
+The judge overruled the words both ways (techand: kept 17 "too broad" and 11 "documentation" searches, stopped 11 word-passes; devaicon:
+stopped 37 word-passes). Labels of the new passes: `harness/accuracy/ki_gate_trial3_2026-11-12.json`.
+
+Run time 21 minutes (was 5.5): the queue used all five rounds, the per-search day-cache load and the 330-row keyword save are the slow
+parts (the judge's calls take seconds). Follow-ups shipped with this record: the app and the front door say 25 minutes; the run is no longer
+"partial" for a few pages without exact addresses (under 90% exact is). Still to do: load the day cache in one read and batch the keyword
+save.
