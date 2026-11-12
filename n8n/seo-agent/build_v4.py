@@ -525,7 +525,11 @@ log('Audit pipeline: DataForSEO calls use the market language (de/fr/es/it/nl/pt
 # =============================================================================
 rename('Form', 'Download Report')
 rename('OpenAI Chat Model2', 'Site Describer Model (OpenAI)')
-w['settings'].update({'executionTimeout': 3600, 'saveManualExecutions': True, 'saveDataErrorExecution': 'all', 'saveDataSuccessExecution': 'all', 'saveExecutionProgress': True})
+w['settings'].update({'executionTimeout': 7200, 'saveManualExecutions': True, 'saveDataErrorExecution': 'all', 'saveDataSuccessExecution': 'all', 'saveExecutionProgress': True})
+# AIR-PAGETIME (2026-11-12): a page run takes ~20 min alone on the production VM; with the reserved AI page a site's cadence starts up to
+# three at once and on 2026-11-12 all three hit the 1-hour limit at 90-100% done (executions 13063-13065). 2 h = EXECUTIONS_TIMEOUT_MAX.
+# Cadence_Plan's in_flight_hours (2) must stay >= this limit: a `started` row younger than it may still be running.
+assert w['settings']['executionTimeout'] == 7200, 'AIR-PAGETIME: the page run limit is no longer 2 h'
 log('Settings: 60-minute execution timeout, progress saved (Wait-node resumes survive restarts); "Form" renamed "Download Report"')
 
 def sticky(content, x, y, wdt, hgt, color=4):

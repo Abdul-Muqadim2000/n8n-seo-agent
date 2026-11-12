@@ -39754,7 +39754,7 @@
     "settings": {
       "executionOrder": "v1",
       "binaryMode": "separate",
-      "executionTimeout": 3600,
+      "executionTimeout": 7200,
       "saveManualExecutions": true,
       "saveDataErrorExecution": "all",
       "saveDataSuccessExecution": "all",
