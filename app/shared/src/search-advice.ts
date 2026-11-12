@@ -24,52 +24,90 @@ export interface SearchAdviceSite {
 const S = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim();
 const low = (v: unknown) => S(v).toLowerCase();
 
-// "zylo com", "zylo com pk", "zylo co uk" ("net" is left out: "asp net" is a subject, not an address)
-const ADDRESS_TAIL = /(?:^|\s)(?:com|org|biz|info)(?:\s[a-z]{2})?$|(?:^|\s)co\s[a-z]{2}$/;
-// "zylo.com", "www.zylo.ae/pricing" (a top-level domain people type; "node.js" and "asp.net" are subjects, not addresses)
-const HOST_TOKEN = /(?:^|\s)(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|org|io|ai|co|ae|sa|pk|qa|om|kw|bh|eg|in|uk|us|de|fr|biz|info)(?:\/\S*)?(?=\s|$)/;
+// Address searches (review S2, 2026-11-12): only a short search that is plainly an address, with a label that is a name (the gate's label
+// rule: 4+ letters, not a generic, category or place word, not a word of what the client sells):
+// - the whole search is a host: "zylo.com", "www.zylo.ae/pricing", "devassistant.ai" ("socket.io developers", "zoho.in pricing" and
+//   "gen.ai course" are searches about a product; "invoice.ai" has no name in it);
+// - a name followed by com / net / org, or by "co" and a country ("zylo com", "zylo com pk", "zylo co uk"); org only after one word
+//   ("non profit org" is a subject); "info", "io" and "ai" never ("vat info", "generative ai");
+// - "www" and one name ("www zylo").
+const CC = 'uk|ae|in|za|nz|au|pk|sa|qa|om|kw|bh|eg|jp|sg|my';
+const HOST_ONLY = new RegExp(`^(?:https?://)?(?:www\\.)?([a-z0-9-]+)\\.(?:com|net|org|io|ai|co|ae|sa|pk|qa|om|kw|bh|eg|in|uk|us|de|fr)(?:\\.(?:${CC}))?(?:/\\S*)?$`);
+const NAME_TAIL = new RegExp(`^(\\S+(?:\\s\\S+)?)\\s(com|net|org|co)(?:\\s(${CC}))?$`);
 
-/** a search for one website by its address: the label typed, or '' */
-export function addressSearchLabel(query: string): string {
-  const q = low(query);
+/** the label of a search for one website by its address ('' when the search is not one). `protect`: words of what the client sells. */
+export function addressSearchLabel(query: string, protect: readonly string[] = [], ownLabel = ''): string {
+  let q = low(query);
   if (!q) return '';
-  const host = q.match(HOST_TOKEN);
-  if (host) return host[0].trim().replace(/^https?:\/\//, '').replace(/^www\./, '').split(/[./]/)[0];
-  if (/^www(\s|\.|$)/.test(q)) return q.replace(/^www[\s.]*/, '').split(/[\s.]/)[0] || 'www';
-  const tail = q.match(ADDRESS_TAIL);
-  if (tail) {
-    const rest = q.slice(0, tail.index).trim();
-    const words = rest.split(' ').filter(Boolean);
-    if (words.length >= 1 && words.length <= 2) return words.join('');
+  const www = /^www(\s|\.)/.test(q) && !/^www\.[a-z0-9-]+\.[a-z]/.test(q) ? (q = q.replace(/^www[\s.]+/, ''), true) : false;
+  let label = '';
+  const host = q.match(HOST_ONLY);
+  if (host) label = host[1];
+  else {
+    const t = q.match(NAME_TAIL);
+    if (t) {
+      const words = t[1].split(' ');
+      const tld = t[2];
+      if ((tld === 'co' && t[3]) || (tld !== 'co' && (tld !== 'org' || words.length === 1))) label = words.join('');
+    } else if (www && /^[a-z0-9-]+$/.test(q)) label = q;
+  }
+  if (!label) return '';
+  if (ownLabel && ownLabel.length >= 4 && label.startsWith(ownLabel)) return label;
+  return label.replace(/-/g, '').length >= 4 && fitOwnLabels(`${label}.example`, [], [...protect]).length ? label : '';
+}
+
+const STOP = new Set(['the', 'a', 'an', 'al', 'el', 'my', 'our', 'and', 'of', '&']);
+/** everyday words a business name is often built from: alone they never stand for the client's brand ("Prime", "Blue", "Apex") */
+const COMMON_NAME_WORDS = new Set([
+  'blue', 'red', 'green', 'black', 'white', 'gold', 'golden', 'silver', 'prime', 'apex', 'alpha', 'beta', 'delta', 'omega', 'dynamics', 'dynamic',
+  'smart', 'global', 'digital', 'united', 'first', 'best', 'star', 'stars', 'sun', 'sky', 'ocean', 'royal', 'national', 'modern', 'future', 'next',
+  'bright', 'true', 'open', 'quick', 'fast', 'cloud', 'data', 'soft', 'info', 'tech', 'net', 'link', 'core', 'peak', 'summit', 'vision', 'nova',
+  'pro', 'max', 'plus', 'one', 'square', 'circle', 'bridge', 'pioneer', 'elite', 'premier', 'master', 'express', 'direct', 'simple', 'clear',
+  'fusion', 'matrix', 'vertex', 'zenith', 'orbit', 'nexus', 'quantum', 'infinity', 'horizon', 'atlas', 'titan', 'eagle', 'falcon', 'lion',
+  'tiger', 'arrow', 'rock', 'stone', 'pearl', 'crystal', 'diamond', 'phoenix', 'unity', 'trust', 'value', 'smartway', 'mega', 'micro',
+]);
+
+/**
+ * The client's brand name a search names, or '' (review S1, 2026-11-12). Whole words only, never a piece of another word:
+ * - the whole name ("northwind trading reviews");
+ * - the name written as one word, 6+ letters and a name (the gate's label rule), as a word or the start of one ("techandkey");
+ * - its distinctive words together ("blue ocean" of "Blue Ocean Consulting"); when one distinctive word is left and it is not an everyday
+ *   word, that word leading the search ("kestrel erp" for "Kestrel Labs"). "blue prism", "amazon prime", "oracle apex", "data alphabet"
+ *   and "dynamics 365 partner" never match "Blue Ocean", "Prime Systems", "Apex", "Alpha Data" or "Dynamics Square".
+ */
+export function brandNamed(toks: readonly string[], brandNames: readonly string[], protect: readonly string[]): string {
+  const text = ` ${toks.join(' ')} `;
+  // a word that is a name: 4+ letters, not a word of what the client sells, and not a generic, category or place word of the gate. The
+  // gate never counts a label as its own vocabulary, so the word is judged doubled ("labslabs" breaks into "labs" + "labs": a category word)
+  const named = (w: string) => w.length >= 4 && !protect.includes(w) && fitOwnLabels(`${w}${w}.example`, [], [...protect]).length > 0;
+  for (const b of brandNames) {
+    const words = fitTokens(b).filter((w) => !STOP.has(w));
+    const dist = words.filter(named);
+    // a name made only of what the client sells or of generic words ("ERP Experts") is its subject, never its brand
+    if (!dist.length) continue;
+    if (toks.join(' ') === words.join(' ') || (words.length >= 2 && text.includes(` ${words.join(' ')} `))) return S(b);
+    const joined = words.join('');
+    if (joined.length >= 6 && toks.some((t) => t === joined || t.startsWith(joined))) return S(b);
+    if (dist.length >= 2 && text.includes(` ${dist.join(' ')} `)) return S(b);
+    if (dist.length === 1 && !COMMON_NAME_WORDS.has(dist[0]) && toks[0] === dist[0]) return S(b);
   }
   return '';
 }
 
-const STOP = new Set(['the', 'a', 'an', 'al', 'el', 'my', 'our']);
-
-/** the distinctive labels of the client's brand names, judged against one keyword's words (the gate's own rule) */
-function brandLabels(brandNames: readonly string[], toks: string[], protect: string[]): string[] {
-  const out = new Set<string>();
-  for (const b of brandNames) {
-    const words = fitTokens(b).filter((w) => !STOP.has(w));
-    if (!words.length) continue;
-    for (const cand of [words.join(''), words[0]]) for (const l of fitOwnLabels(`${cand}.example`, toks, protect)) out.add(l);
-  }
-  return [...out];
-}
-
-/** The fit context of a website's advice: its own domain, competitors, what it sells and the keywords it chose (protected, and its topics). */
+/**
+ * The fit context of a website's advice: its own domain, competitors, and what it sells with the keywords it chose (protected words).
+ * Review S4 (2026-11-12): no topic bar. These are searches the website already earns impressions for or the engine chose for it; F-10 is
+ * about addresses and brands, and the stored services can be short or cut (F-07), so "off topic" / "too broad" would hide core searches.
+ */
 export function searchAdviceContext(site: SearchAdviceSite): FitContext {
   const services = [...new Set((site.services ?? []).map(S).filter(Boolean))];
   const chosen = [...new Set((site.chosen ?? []).map(S).filter(Boolean))];
-  const topics = [...new Set([...chosen, ...services])];
   return {
     own_domain: low(site.domain),
     competitors: [...new Set((site.competitors ?? []).map(low).filter((d) => d && d !== low(site.domain)))].slice(0, 8),
     services,
-    protect: topics,
-    topics: topics.length ? topics : null,
-    topic_label: 'what this website sells and the keywords you chose',
+    protect: [...new Set([...chosen, ...services])],
+    topics: null,
   };
 }
 
@@ -79,18 +117,15 @@ export function searchAdviceContext(site: SearchAdviceSite): FitContext {
  */
 export function searchAdviceFit(query: string, site: SearchAdviceSite, ctx: FitContext = searchAdviceContext(site)): FitResult {
   const q = low(query);
-  const label = addressSearchLabel(q);
-  if (label) {
-    const own = low(site.domain).replace(/^www\./, '').split('.')[0];
-    return label === own || (own.length >= 4 && label.includes(own))
+  const protect = (ctx.protect ?? []).flatMap((p) => fitTokens(p));
+  const own = low(site.domain).replace(/^www\./, '').split('.')[0].replace(/[^a-z0-9]/g, '');
+  const label = addressSearchLabel(q, protect, own);
+  if (label)
+    return own.length >= 4 && label.startsWith(own)
       ? { ok: false, reason: 'own brand', detail: `people looking for your own website by its address (${S(query)})` }
       : { ok: false, reason: 'navigational', detail: `people looking for one website by its address (${S(query)}), not for what you sell` };
-  }
-  const toks = fitTokens(q);
-  const squashed = toks.join('');
-  const protect = (ctx.protect ?? []).flatMap((p) => fitTokens(p));
-  for (const l of brandLabels(site.brandNames ?? [], toks, protect))
-    if (toks.includes(l) || squashed.includes(l)) return { ok: false, reason: 'own brand', detail: `people already looking for you by name (${l})` };
+  const brand = brandNamed(fitTokens(q), site.brandNames ?? [], protect);
+  if (brand) return { ok: false, reason: 'own brand', detail: `people already looking for you by name (${brand})` };
   return fitGate(query, ctx);
 }
 

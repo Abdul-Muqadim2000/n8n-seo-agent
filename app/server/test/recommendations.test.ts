@@ -136,6 +136,14 @@ describe('recommend', () => {
     expect(ids).not.toContain('engine:site_tracker:new_page:zylokey com');
   });
 
+  // review S3 (2026-11-12): only runs that write or improve a page are gated; asking Google to index a page or two pages competing pass
+  it('keeps engine actions that write nothing, whatever their keyword', () => {
+    const act = (type: string, keyword: string) => ({ source: 'site_tracker' as const, priority: 1, type, action: `Check ${keyword}`, why: 'w', keyword, url: 'https://northwind-erp.com/x/', receivedAt: '', apiBody: null });
+    const snapshot = { receivedAt: '2026-11-10T06:00:00Z', gsc: { connected: true, property: 'sc-domain:northwind-erp.com', error: null }, ga4: { connected: true }, actions: [act('index', 'zylokey com'), act('cannibalisation', 'zylokey com')] } as unknown as SiteBundle['search']['snapshot'];
+    const ids = recommend(site, bundle({ search: { ...bundle().search, snapshot } })).map((r) => r.id);
+    expect(ids).toEqual(expect.arrayContaining(['engine:site_tracker:index:zylokey com', 'engine:site_tracker:cannibalisation:zylokey com']));
+  });
+
   // F-06 (prod review 2026-11-12): engine actions and search lists offered a new paid page for searches the website already had a page for
   describe('a search the website already has a page for', () => {
     const item = (keyword: string, status: string, over: Record<string, unknown> = {}) => ({ keyword, source: 'cadence', pageType: 'Service Page', rung: 0, ladderId: '', requestId: '', startedAt: new Date(Date.now() - 10 * 864e5).toISOString(), status, publishedUrl: '', publishedAt: '', week: '', existingPageUrl: '', ...over });

@@ -57,3 +57,41 @@ describe('searchAdviceGate', () => {
     expect(g.refused.get('zylokey com')?.reason).toBe('navigational');
   });
 });
+
+// review S1 / S2 / S4 (2026-11-12): the brand and address rules must not hide ordinary searches
+describe('review: no false refusals', () => {
+  const plain = { domain: 'northpeak.ae', brandNames: [] as string[], services: [] as string[], chosen: [] as string[] };
+  it('S2: ordinary searches that end in an address-like word pass', () => {
+    for (const q of ['vat info', 'company info', 'contact info', 'business central info', 'non profit org', 'housing co op', 'erp com', 'socket.io developers', 'gen.ai tools', 'invoice.ai', 'zoho.in pricing', 'generative ai', 'asp net core', 'accounting software uk'])
+      expect([q, searchAdviceFit(q, plain).ok]).toEqual([q, true]);
+  });
+  it('S2: "gen.ai course" is not an address (the gate may still call it a course search)', () => {
+    expect(addressSearchLabel('gen.ai course')).toBe('');
+  });
+  it('S2: a short address search is still refused', () => {
+    expect(searchAdviceFit('devassistant.ai', plain)).toMatchObject({ ok: false, reason: 'navigational' });
+    expect(searchAdviceFit('zylokey com', plain)).toMatchObject({ ok: false, reason: 'navigational' });
+    expect(searchAdviceFit('northpeakkey com', plain)).toMatchObject({ ok: false, reason: 'own brand' });
+  });
+  it('S1: a brand built from everyday words never refuses other searches with those words', () => {
+    const cases: [string, string[]][] = [
+      ['Blue Ocean Consulting', ['blue prism consultants dubai', 'bluetooth erp scanner']],
+      ['Prime Systems', ['erp primer', 'amazon prime business']],
+      ['Alpha Data', ['data alphabet']],
+      ['Apex', ['oracle apex developers dubai', 'apex erp pricing']],
+      ['Dynamics Square', ['dynamics 365 partner uae', 'microsoft dynamics ax dubai']],
+    ];
+    for (const [brand, qs] of cases) for (const q of qs) expect([brand, q, searchAdviceFit(q, { ...plain, brandNames: [brand] }).ok]).toEqual([brand, q, true]);
+  });
+  it('S1: the brand itself is still refused', () => {
+    expect(searchAdviceFit('blue ocean consulting', { ...plain, brandNames: ['Blue Ocean Consulting'] })).toMatchObject({ ok: false, reason: 'own brand' });
+    expect(searchAdviceFit('blue ocean dubai', { ...plain, brandNames: ['Blue Ocean Consulting'] })).toMatchObject({ ok: false, reason: 'own brand' });
+    expect(searchAdviceFit('apex', { ...plain, brandNames: ['Apex'] })).toMatchObject({ ok: false, reason: 'own brand' });
+    expect(searchAdviceFit('dynamics square reviews', { ...plain, brandNames: ['Dynamics Square'] })).toMatchObject({ ok: false, reason: 'own brand' });
+  });
+  it('S4: core searches of a partner pass even with short stored services (no topic bar)', () => {
+    const partner = { ...plain, services: ['Microsoft Dynamics 365 consulting and im', 'GCC: Busines'], chosen: ['erp software uae'] };
+    for (const q of ['business central uae', 'business central dubai', 'business central saas dubai', 'ax to supply chain upgrade', 'microsoft erp', '365 erp'])
+      expect([q, searchAdviceFit(q, partner).ok]).toEqual([q, true]);
+  });
+});

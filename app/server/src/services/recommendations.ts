@@ -344,14 +344,15 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
   const engine = [...(snap?.actions ?? []), ...(x.ai.report?.actions ?? []), ...(x.rankNext ? [x.rankNext] : [])];
   for (const a of engine) {
     const fixDraft = a.type === 'fix_draft';   // R111: the engine's action for a page whose last quality round failed
-    // F-10: a new page or an improvement for a search the gate refuses is never advised; a written page (publish, fix) and the client's
-    // own ladder (the rank tracker's next rung) are kept
-    if (a.keyword && !fixDraft && a.type !== 'publish' && a.source !== 'rank_tracker' && !fits(a.keyword)) continue;
     const cat: RecommendationCategory = a.source === 'ai_visibility' ? 'ai' : a.source === 'rank_tracker' ? 'rankings' : a.type === 'publish' || fixDraft ? 'content' : 'search';
     // never "Report the published URL" for a draft that failed its quality check, and never a fresh (paid) run of it either (E-QA,
     // 2026-10-21): the draft is finished by hand, so the button opens its report, where each bracket and what to do with it is listed
     let action: RecommendationAction | undefined = fixDraft ? draftAction(a.keyword) : actionFromApiBody(a.apiBody, a.source === 'ai_visibility' ? 'Write the answer page' : 'Run it');
     if (!action && a.type === 'publish' && a.keyword) action = { label: 'Report the published URL', mode: 'published', prefill: { keyword: a.keyword, ...(a.url ? { publishedUrl: a.url } : {}) } };
+    // F-10: a run that writes or improves a page for a search the gate refuses is never advised. Only those: a written page (publish, fix),
+    // the client's own ladder (the rank tracker's next rung) and every action that writes nothing (ask Google to index a page, two pages
+    // competing, a redirect) pass untouched (review S3)
+    if (a.keyword && !fixDraft && a.type !== 'publish' && a.source !== 'rank_tracker' && (action?.mode === 'keyword' || action?.mode === 'ladder') && !fits(a.keyword)) continue;
     // the engine may point at a subdomain page: the page form accepts only the site itself
     if (action?.prefill?.existingPageUrl && !urlOnHost(String(action.prefill.existingPageUrl), site.domain)) delete action.prefill.existingPageUrl;
     // F-06: a NEW page for a search this website already has a page for is never offered (it would be paid for twice and compete with the
