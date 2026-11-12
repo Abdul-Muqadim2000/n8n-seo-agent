@@ -31,6 +31,12 @@ describe('a run error as a client reads it', () => {
     expect(customerError(`${ENGINE_LOST_ERROR} (n8n execution 9, success)`)).toBe(ENGINE_LOST_ERROR);
   });
 
+  it('review N3: a plain reason behind our tool\'s name stays readable', () => {
+    expect(customerError('n8n: crawl timed out')).toBe('crawl timed out');
+    expect(customerError('n8n: Model output doesn\'t fit required format')).toBe(ENGINE_STOPPED_ERROR);
+    expect(customerError('n8n:')).toBe(ENGINE_STOPPED_ERROR);
+  });
+
   it('a plain engine refusal is unchanged; a provider or dollar figure still reads as capacity', () => {
     expect(customerError('The site could not be crawled (403).')).toBe('The site could not be crawled (403).');
     expect(customerError('This keyword is a competitor\'s brand name, so no page is written for it.')).toBe('This keyword is a competitor\'s brand name, so no page is written for it.');
