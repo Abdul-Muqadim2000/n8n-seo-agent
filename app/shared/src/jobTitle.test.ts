@@ -7,10 +7,11 @@ import { profileFields, profileInput } from './schemas';
 // while the profile check said 100%.
 describe('placeholder job titles', () => {
   it('reads "User", role names, "N/A", dashes and form labels as no job title', () => {
-    for (const t of ['User', ' user ', 'ADMIN', 'Owner', 'Member', 'N/A', 'n.a.', '-', '--', '...', 'Job title', 'TBD', 'test']) expect(isPlaceholderJobTitle(t)).toBe(true);
+    for (const t of ['User', ' user ', 'ADMIN', 'Member', 'N/A', 'n.a.', '-', '--', '...', 'Job title', 'TBD', 'test', 'none']) expect(isPlaceholderJobTitle(t)).toBe(true);
   });
   it('keeps real titles, including ones that contain those words', () => {
-    for (const t of ['Founder', 'Head of Finance', 'Business Owner', 'Founder and Owner', 'User Research Lead', 'IT Administrator', 'Managing Partner']) {
+    // review S7: "Owner", "Administrator" and "Tester" are real titles
+    for (const t of ['Founder', 'Head of Finance', 'Owner', 'Administrator', 'Tester', 'Business Owner', 'Founder and Owner', 'User Research Lead', 'IT Administrator', 'Managing Partner']) {
       expect(isPlaceholderJobTitle(t)).toBe(false);
       expect(realJobTitle(t)).toBe(t);
     }
@@ -35,17 +36,19 @@ describe('the profile form and the engine body', () => {
     expect(profileFields.safeParse({ author: { name: 'Sara Khan', jobTitle: '' } }).success).toBe(true);
     expect(profileFields.safeParse({ reviewer: { name: 'Omar Ali', jobTitle: 'admin' } }).success).toBe(false);
   });
-  it('never sends a placeholder; an emptied title next to a name clears the stored one; without a name nothing changes', () => {
+  it('never sends a placeholder; an emptied title clears the stored one only from the form (clearEmpty), never without a name', () => {
     expect(jobTitleOut('Head of Tax', 'Sara Khan')).toBe('Head of Tax');
     expect(jobTitleOut('User', 'Sara Khan')).toBe('-');
     expect(jobTitleOut('User', '')).toBe('-');
-    expect(jobTitleOut('', 'Sara Khan')).toBe('-');
-    expect(jobTitleOut('', '')).toBe('');
+    expect(jobTitleOut('', 'Sara Khan')).toBe('');
+    expect(jobTitleOut('', 'Sara Khan', true)).toBe('-');
+    expect(jobTitleOut('', '', true)).toBe('');
   });
-  it('the profile run body carries the cleared title', () => {
-    const input = profileInput.parse({ mode: 'profile', siteId: '7a1c2d3e-4f50-4a61-8b72-93a4b5c6d7e8', author: { name: 'Sara Khan', jobTitle: '' }, reviewer: { name: '', jobTitle: '' } });
-    const body = buildN8nPayload(input, null, { callbackUrl: 'http://localhost/hook', email: '' }) as { author: { job_title: string }; reviewer: { job_title: string } };
-    expect(body.author.job_title).toBe('-');
-    expect(body.reviewer.job_title).toBe('');
+  it('the form clears an emptied title; an API caller that leaves the flag out keeps the stored one (review S8)', () => {
+    const base = { mode: 'profile', siteId: '7a1c2d3e-4f50-4a61-8b72-93a4b5c6d7e8', author: { name: 'Sara Khan', jobTitle: '' }, reviewer: { name: '', jobTitle: '' } };
+    const bodyOf = (v: Record<string, unknown>) => buildN8nPayload(profileInput.parse(v), null, { callbackUrl: 'http://localhost/hook', email: '' }) as { author: { job_title: string }; reviewer: { job_title: string } };
+    expect(bodyOf({ ...base, clearEmptyTitles: true }).author.job_title).toBe('-');
+    expect(bodyOf({ ...base, clearEmptyTitles: true }).reviewer.job_title).toBe('');
+    expect(bodyOf(base).author.job_title).toBe('');
   });
 });

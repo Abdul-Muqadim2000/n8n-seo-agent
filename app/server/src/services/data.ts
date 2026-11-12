@@ -147,7 +147,6 @@ import {
   type AiFilter,
   type AiScope,
   type AiScopeSummary,
-  realJobTitle,
 } from '@seo/shared';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db, schema } from '../db';
@@ -749,7 +748,9 @@ export function profileFromRow(r: ProfileRow | null | undefined): ProfileFields 
   return {
     author: {
       name: s(r.author_name),
-      jobTitle: realJobTitle(r.author_job_title),   // F-29: a stored placeholder ("User") shows as empty, so the form asks for a real one
+      // F-29 / review S6: the stored title as it is, so the content readiness here reads what the engine's _readiness.js reads (a stored
+      // "User" counts as a title on both sides); the form refuses it on save and the page bylines here leave it out (realJobTitle)
+      jobTitle: s(r.author_job_title),
       credentials: s(r.author_credentials),
       bio: s(r.author_bio),
       url: s(r.author_url),
@@ -757,7 +758,7 @@ export function profileFromRow(r: ProfileRow | null | undefined): ProfileFields 
       imageUrl: s(r.author_image_url),
       knowsAbout: splitList(r.author_knows_about),
     },
-    reviewer: { name: s(r.reviewer_name), jobTitle: realJobTitle(r.reviewer_job_title), url: s(r.reviewer_url) },
+    reviewer: { name: s(r.reviewer_name), jobTitle: s(r.reviewer_job_title), url: s(r.reviewer_url) },
     businessName: s(r.business_name),
     businessType: s(r.business_type),
     address: { street: s(r.street_address), city: s(r.city), region: s(r.region), postalCode: s(r.postal_code), country: country as ProfileFields['address']['country'] },

@@ -19,9 +19,11 @@ const has = (s: string | undefined) => !!s && !!s.trim();
 
 /** words people (or a browser's autofill) leave in a job title field that are not a job title */
 const PLACEHOLDER_JOB_TITLES = new Set([
-  'user', 'users', 'owner', 'admin', 'administrator', 'member', 'viewer', 'guest', 'test', 'testing', 'tester', 'demo', 'sample', 'example',
-  'na', 'n/a', 'n a', 'none', 'null', 'undefined', 'nil', 'nothing', 'tbd', 'tba', 'todo', 'x', 'xx', 'xxx', 'abc', 'asdf', 'qwerty',
-  'title', 'job title', 'your title', 'your job title', 'job', 'position', 'role', 'designation', 'employee', 'staff',
+  // review S7 (2026-11-12): only what is never a title. "Owner", "Administrator" and "Tester" are real titles (a shop owner, a clinic
+  // administrator, a QA tester) and are kept
+  'user', 'users', 'admin', 'member', 'viewer', 'guest', 'test', 'testing',
+  'na', 'n/a', 'n a', 'none', 'null', 'undefined', 'nil', 'tbd', 'tba', 'todo', 'x', 'xx', 'xxx', 'abc', 'asdf', 'qwerty',
+  'title', 'job title', 'your title', 'your job title', 'enter job title',
 ]);
 
 const normTitle = (v: unknown) => String(v ?? '').toLowerCase().replace(/[^a-z0-9/ ]+/g, ' ').replace(/\s+/g, ' ').trim();

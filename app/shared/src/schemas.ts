@@ -453,7 +453,8 @@ export const profileFields = z.object({
 export type ProfileFields = z.output<typeof profileFields>;
 
 export const profileInput = profileFields
-  .extend({ mode: z.literal('profile'), siteId, emailCopy: z.boolean().default(false) })
+  // review S8: `clearEmptyTitles` (the app's profile form only): an emptied job title next to a name clears the stored one
+  .extend({ mode: z.literal('profile'), siteId, emailCopy: z.boolean().default(false), clearEmptyTitles: z.boolean().default(false) })
   .refine(
     (v) =>
       !!(

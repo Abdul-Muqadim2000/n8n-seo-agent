@@ -39,10 +39,11 @@ describe('the Reply Reader call (D14)', () => {
 });
 
 describe('the stored profile in the form (F-29)', () => {
-  it('a stored placeholder job title shows as empty, so the form asks for a real one', () => {
+  // review S6: the stored value is kept, so the app's content readiness reads what the engine's _readiness.js reads (both see a title)
+  it('a stored placeholder job title is read as stored (the form refuses it on save; bylines leave it out)', () => {
     const row = { site_id: 's', domain: 'example.com', author_name: 'Sara Khan', author_job_title: 'User', reviewer_name: 'Omar Ali', reviewer_job_title: 'Tax Partner', country_code: 'AE' } as unknown as ProfileRow;
     const p = profileFromRow(row)!;
-    expect(p.author.jobTitle).toBe('');
+    expect(p.author.jobTitle).toBe('User');
     expect(p.reviewer.jobTitle).toBe('Tax Partner');
   });
 });

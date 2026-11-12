@@ -507,6 +507,11 @@ Keyword-first fields (§14.5): `track` takes `timezone` (IANA; 400 when unknown)
 itself; the app never calls the Site Kickoff). `ladder` takes `chosenBy` (`client_typed` default, `client_picked`; `system_announced` only
 from the server's announcement) and `ladderMode` (`auto` | `manual`; a Manual ladder writes nothing at start; admins only, defaults to
 the flow's `ladderPrefs.mode`). `discover` never asks for a page (`receiveContent` is accepted and stored false).
+`profile` (F-29, 2026-11-12): an author or reviewer job title that is not a title ("User", "Admin", "Member", "N/A", "-", "Job title",
+`shared/src/profile.ts` `isPlaceholderJobTitle`) is refused with 400; "Owner", "Administrator" and "Tester" are titles. An empty job
+title keeps the stored one (the engine's rule: an empty field keeps what is stored), except with `clearEmptyTitles: true` (sent by the
+app's profile form, which shows the stored profile): then an empty title next to a name clears the stored title. API v1 and MCP callers
+that leave the flag out never clear a title by omitting it.
 | GET | /api/orgs/:orgId/runs?siteId=&mode=&status=&cursor=&limit= | | `Page<Run>` |
 | GET | /api/orgs/:orgId/runs/:runId | | `{ run: Run, reports: Report[] }` |
 | GET | /api/orgs/:orgId/reports?siteId=&stage=&limit=&before= | | `Report[]` |

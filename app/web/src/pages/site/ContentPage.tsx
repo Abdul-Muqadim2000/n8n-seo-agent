@@ -5,7 +5,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { BadgeCheck, Briefcase, CalendarClock, CheckCircle2, Clock, ExternalLink as ExternalIcon, FileText, Flame, Inbox, LayoutGrid, PenSquare, Rows3, Send, Target, TrendingDown, TrendingUp, Trophy, Undo2, UserRound, Wrench, XCircle } from 'lucide-react';
-import { cmsKindLabel, DRAFT_BY_HAND, generatedRowView, gradeDisplay, titleCase, type CaseStudy, type CmsItemView, type ContentData, type ContentItem, type ContentLiveCheck, type Report } from '@seo/shared';
+import { cmsKindLabel, DRAFT_BY_HAND, generatedRowView, gradeDisplay, realJobTitle, titleCase, type CaseStudy, type CmsItemView, type ContentData, type ContentItem, type ContentLiveCheck, type Report } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { toastError } from '@/lib/api';
 import { paths } from '@/lib/paths';
@@ -687,7 +687,7 @@ function ProfileCard({ d }: { d: ContentData }) {
                 <dt className="text-xs text-ink-3">Author</dt>
                 <dd className="text-ink">
                   {p.author.name}
-                  {p.author.jobTitle ? `, ${p.author.jobTitle}` : ''}
+                  {realJobTitle(p.author.jobTitle) ? `, ${realJobTitle(p.author.jobTitle)}` : ''}
                 </dd>
               </div>
             </div>
@@ -699,7 +699,7 @@ function ProfileCard({ d }: { d: ContentData }) {
                 <dt className="text-xs text-ink-3">Expert reviewer</dt>
                 <dd className="text-ink">
                   {p.reviewer.name}
-                  {p.reviewer.jobTitle ? `, ${p.reviewer.jobTitle}` : ''}
+                  {realJobTitle(p.reviewer.jobTitle) ? `, ${realJobTitle(p.reviewer.jobTitle)}` : ''}
                 </dd>
               </div>
             </div>
