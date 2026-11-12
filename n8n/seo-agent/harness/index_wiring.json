@@ -103,6 +103,22 @@
     "Wait (Index Watch)"
    ]
   ],
+  "Any IndexNow Key (Index)?": [
+   [
+    "Fetch IndexNow Key (Index)"
+   ],
+   [
+    "IndexNow Submit Requests (Index)"
+   ]
+  ],
+  "Any IndexNow Submit (Index)?": [
+   [
+    "Submit IndexNow (Index)"
+   ],
+   [
+    "Index Page Rows"
+   ]
+  ],
   "Any Inspections (Index)?": [
    [
     "Inspect URL (Index)"
@@ -393,6 +409,11 @@
     "Any Hops?"
    ]
   ],
+  "Fetch IndexNow Key (Index)": [
+   [
+    "IndexNow Submit Requests (Index)"
+   ]
+  ],
   "Fetch Link Pages": [
    [
     "Site Links"
@@ -500,7 +521,7 @@
   ],
   "Index Diagnose": [
    [
-    "Index Page Rows"
+    "IndexNow Key Check (Index)"
    ]
   ],
   "Index History Moves": [
@@ -604,6 +625,16 @@
     "Any Index Watch?"
    ]
   ],
+  "IndexNow Key Check (Index)": [
+   [
+    "Any IndexNow Key (Index)?"
+   ]
+  ],
+  "IndexNow Submit Requests (Index)": [
+   [
+    "Any IndexNow Submit (Index)?"
+   ]
+  ],
   "Inspect Retry Requests": [
    [
     "Any Rate Retry?"
@@ -640,6 +671,11 @@
     "Any Link Reads?"
    ]
   ],
+  "Load AI Pages (Index)": [
+   [
+    "GSC Sites (Index)"
+   ]
+  ],
   "Load Catch-up Records (Index)": [
    [
     "Run Ledger Row (Index)"
@@ -663,6 +699,11 @@
   "Load Index Runs": [
    [
     "Load Google Events"
+   ]
+  ],
+  "Load IndexNow Key (Index)": [
+   [
+    "Load AI Pages (Index)"
    ]
   ],
   "Load Monitors (Index)": [
@@ -727,7 +768,7 @@
   ],
   "Load Update Impact": [
    [
-    "GSC Sites (Index)"
+    "Load IndexNow Key (Index)"
    ]
   ],
   "Manual Run": [
@@ -1029,6 +1070,11 @@
     "Load Start Alerts (Next)"
    ]
   ],
+  "Submit IndexNow (Index)": [
+   [
+    "Index Page Rows"
+   ]
+  ],
   "Submit Setup Alert": [
    [
     "Any Submit Alert?"
@@ -1085,6 +1131,7 @@
  ],
  "external": [
   "Fetch Google Incidents",
+  "Fetch IndexNow Key (Index)",
   "Fetch Link Pages",
   "Fetch Page (Final)",
   "Fetch Page (Index)",
@@ -1109,6 +1156,7 @@
   "Post Index Start Alert (After Settle)",
   "Post Index Start Alert (Before Settle)",
   "Post Refusal (Index)",
+  "Submit IndexNow (Index)",
   "Submit Sitemap (Index)"
  ],
  "file": "SEO_Agent_Index_Coverage.json",
@@ -1139,6 +1187,30 @@
   "pages_json",
   "note"
  ],
+ "indexnow": {
+  "from": [
+   "Submit IndexNow (Index)"
+  ],
+  "key_fetch": "Fetch IndexNow Key (Index)",
+  "key_redirect": {
+   "redirect": {
+    "followRedirects": false
+   }
+  },
+  "kill_switch": "on",
+  "on_error": "continueRegularOutput",
+  "post": "Submit IndexNow (Index)",
+  "response": {
+   "fullResponse": true,
+   "neverError": true,
+   "responseFormat": "text"
+  },
+  "retry": {
+   "maxTries": 3,
+   "retryOnFail": true,
+   "waitBetweenTries": 5000
+  }
+ },
  "inspect_batch": {
   "batchInterval": 150,
   "batchSize": 1
@@ -1160,6 +1232,8 @@
   "Any Impact Queries?",
   "Any Index Rows?",
   "Any Index Watch?",
+  "Any IndexNow Key (Index)?",
+  "Any IndexNow Submit (Index)?",
   "Any Inspections (Index)?",
   "Any Link Reads?",
   "Any Next Part?",
@@ -1203,6 +1277,7 @@
   "Ensure Update Impact Table",
   "Fetch Google Incidents",
   "Fetch Hop Requests",
+  "Fetch IndexNow Key (Index)",
   "Fetch Link Pages",
   "Fetch Page (Final)",
   "Fetch Page (Index)",
@@ -1245,6 +1320,8 @@
   "Index Start Send (After Settle)",
   "Index Start Send (Before Settle)",
   "Index Watch Plan",
+  "IndexNow Key Check (Index)",
+  "IndexNow Submit Requests (Index)",
   "Inspect Retry Requests",
   "Inspect URL (Index)",
   "Inspect URL (Probe)",
@@ -1252,11 +1329,13 @@
   "Ledger Join (Index)",
   "Ledger Settle (Index)",
   "Link Read Requests",
+  "Load AI Pages (Index)",
   "Load Catch-up Records (Index)",
   "Load Content Log (Index)",
   "Load Google Events",
   "Load Index Pages",
   "Load Index Runs",
+  "Load IndexNow Key (Index)",
   "Load Monitors (Index)",
   "Load Open Alerts (Index)",
   "Load Open Runs (Index)",
@@ -1331,6 +1410,7 @@
   "Start Index Part",
   "Start Index Watch",
   "Start Next Index Part",
+  "Submit IndexNow (Index)",
   "Submit Setup Alert",
   "Submit Sitemap (Index)",
   "Tell Caller (Index)?",
@@ -1400,7 +1480,15 @@
   "asked_google_at",
   "google_read_after_ask_at",
   "improved_at",
-  "improved_to"
+  "improved_to",
+  "priority",
+  "escalated_at",
+  "escalate_why",
+  "type_override",
+  "robots_ok",
+  "link_depth",
+  "linked_n",
+  "indexnow_at"
  ],
  "run_cols": [
   "site_id",
@@ -1426,7 +1514,10 @@
   "freeze",
   "freeze_reason",
   "note",
-  "sitemaps_json"
+  "sitemaps_json",
+  "escalated",
+  "asked_waiting",
+  "indexnow_sent"
  ],
  "schedule": {
   "every": "day",

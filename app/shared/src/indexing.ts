@@ -507,10 +507,43 @@ export interface IndexPage {
   /** 2026-11-05: the improved version went live at ANOTHER address while this one still opens ('' = no): the step is a permanent
    *  redirect to it (site task `indexing:merge`); never "Improve this page" again */
   improvedTo: string;
+  /** wave 3 (DESIGN_WAVE3 §2.7): the engine's rank among the pages that should be in Google and are not (0 = not ranked) */
+  priority: number;
+  /** wave 3: one of the first INDEX_DO_FIRST of that ranking ("Do first") */
+  doFirst: boolean;
+  /** wave 3 (§2.2): Google has not visited the page in the 3 weeks we watched it ('' = no); its likely reasons in order */
+  escalatedAt: string;
+  escalateWhy: IndexEscalateWhy[];
+  /** wave 3 (§2.4): the client's own mark ('' = the rules decide) */
+  typeOverride: IndexPageType;
+  /** wave 3 (§3.4): the client changed the mark and the daily check has not filed the page again yet (shown as waiting for our check) */
+  typePending: boolean;
+  /** wave 3 (§1): our robots.txt reading ('' = not read), where the page is linked from (1 = home page, 2 = a page the home page links to,
+   *  0 = not known) and how many pages link to it, when we sent it to Bing (IndexNow, '' = never) */
+  robotsOk: 'yes' | 'no' | '';
+  linkDepth: number;
+  linkedN: number;
+  indexnowAt: string;
+  /** whether the row says anything about the sitemap at all (an empty `in_sitemap` is "not checked", never "not listed", in the check line) */
+  inSitemapRead: boolean;
 }
 
+/** wave 3 (DESIGN_WAVE3 §2.2): the engine's reasons a page Google has not visited in 3 weeks is still waiting, in the engine's order. */
+export const INDEX_ESCALATE_WHY = ['not_asked', 'asked_no_visit', 'weak_links', 'short_page', 'not_in_sitemap', 'sitemap_no_dates'] as const;
+export type IndexEscalateWhy = (typeof INDEX_ESCALATE_WHY)[number];
+/** wave 3 (§2.4): the client's own mark on a page (written by the app only; '' = the rules decide). */
+export const INDEX_PAGE_TYPES = ['important', 'utility', ''] as const;
+export type IndexPageType = (typeof INDEX_PAGE_TYPES)[number];
+export const isIndexPageType = (v: unknown): v is IndexPageType => typeof v === 'string' && (INDEX_PAGE_TYPES as readonly string[]).includes(v);
+/** wave 3 (§2.7): the first pages of the engine's ranking are "Do first". */
+export const INDEX_DO_FIRST = 5;
+/** wave 3 (§2.2): days without a Google visit before a page needs the client. */
+export const INDEX_ESCALATE_DAYS = 21;
+/** wave 3 (§2.4): the engine's note on a page the client marked as fine to leave out (its first words; the app writes the same at once). */
+export const INDEX_MARKED_UTILITY_NOTE = 'You marked this page as fine to leave out of Google.';
+
 /** What a group is about: a cause, a code the app does not know, or pages fixed on the site that Google has not read again yet. */
-export type IndexGroupCause = IndexCause | 'other' | 'fixed_on_site' | 'improved_waiting' | 'improved_elsewhere' | 'linked_waiting' | 'canonical_parent' | 'utility';
+export type IndexGroupCause = IndexCause | 'other' | 'fixed_on_site' | 'improved_waiting' | 'improved_elsewhere' | 'linked_waiting' | 'canonical_parent' | 'utility' | 'marked_utility' | 'type_pending';
 
 export interface IndexGroup {
   /** `<lane>:<action>:<cause>` */
@@ -528,6 +561,8 @@ export interface IndexGroup {
   taskKey: string | null;
   /** the first pages of the group (the rest page in through …/data/indexing/pages) */
   pages: IndexPage[];
+  /** wave 3 (DESIGN_WAVE3 §3.1): the "Google has not visited these yet" group's to-do (absent on every other group) */
+  todo?: IndexWaitTodo;
 }
 
 export interface IndexLaneSummary {
@@ -606,7 +641,22 @@ export interface IndexRunSitemaps {
   willSubmit: boolean;
   /** wave 2 review W1: why the engine will not submit (`submit.blocked`, one of SITEMAP_BLOCKED; '' = nothing blocks, or not sent / unknown) */
   blocked: SitemapBlocked | '';
+  /** wave 3 (DESIGN_WAVE3 §2.5): the addresses this run's sitemap read listed, how many carry a date (`<lastmod>`) and how many distinct days
+   *  (null: not sent, an older row) */
+  dates: IndexSitemapDates | null;
 }
+
+/** wave 3 (§2.5): a sitemap's date counts. */
+export interface IndexSitemapDates {
+  urls: number;
+  withLastmod: number;
+  distinct: number;
+}
+/** wave 3 (§2.5, the engine's rule): "no usable dates" = at least 5 addresses and (under half carry a date, or 10 or more share one day). */
+export const sitemapDatesMissing = (d: IndexSitemapDates): boolean => d.urls >= 5 && (d.withLastmod < d.urls * 0.5 || (d.urls >= 10 && d.distinct <= 1));
+/** wave 3 (§3.3, the app's own check): done when at least 90% of the addresses carry a date and the dates differ (a sitemap under 10 addresses
+ *  may share one day). An empty read is never done. */
+export const sitemapDatesGood = (d: IndexSitemapDates): boolean => d.urls > 0 && d.withLastmod >= d.urls * 0.9 && (d.urls < 10 || d.distinct > 1);
 
 /** One sitemap submission the engine made (`sitemaps_json.submissions[]`: path, at, status, reason). */
 export interface IndexSitemapSubmissionRow {
@@ -691,6 +741,10 @@ export interface IndexingData {
   /** more page rows exist than the app reads at once */
   capped: boolean;
   pagesRead: number;
+  /** wave 3 (DESIGN_WAVE3 §3.2): pages Google has not visited in the 3 weeks we watched them, with their reasons (both lanes, by priority) */
+  escalated: IndexPage[];
+  /** wave 3 (§2.5): the newest sitemap date reading (null: no run sent one) */
+  sitemapDates: (IndexSitemapDates & { at: string; missing: boolean }) | null;
 }
 
 /** One page of a group's URLs (…/data/indexing/pages). */
@@ -797,14 +851,37 @@ export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
   const imp = improveStateOf(r);
   const improvedAt = imp ? s(r.improved_at).trim() : '';
   // 'moved': a step on the website (a permanent redirect to the improved version), whatever the engine's row of the day before said
-  const shown = imp === 'moved' ? 'site_fix' : imp === 'waiting' ? 'wait' : imp === 'read' && (action === 'wait' || action === 'site_fix') && isCause(c) ? INDEX_CAUSE_INFO[c].action : fixSeenAt && action === 'site_fix' ? 'wait' : action;
+  const shownRaw = imp === 'moved' ? 'site_fix' : imp === 'waiting' ? 'wait' : imp === 'read' && (action === 'wait' || action === 'site_fix') && isCause(c) ? INDEX_CAUSE_INFO[c].action : fixSeenAt && action === 'site_fix' ? 'wait' : action;
+  // wave 3 (DESIGN_WAVE3 §2.4 / §3.4): the client's own mark, shown at once (the engine files the page the same way on its next run)
+  const ov = typeOverrideOf(r.type_override);
+  const out = st !== 'indexed';
+  const markedUtility = ov === 'utility' && out;
+  const engineNote = s(r.note).trim();
+  // marked important on a policy page the engine still files as left out on purpose, or a mark undone on a page the engine left out because
+  // of that mark: waiting for our next check, which files it again (never "fine to leave out" for a page the client says matters)
+  const pendingImportant = ov === 'important' && out && c === 'low_value' && shownRaw === 'leave_out' && isUtilityPage(s(r.url));
+  const pendingUndo = ov === '' && out && c === 'low_value' && shownRaw === 'leave_out' && engineNote.includes(INDEX_MARKED_UTILITY_PREFIX);
+  const typePending = pendingImportant || pendingUndo;
+  const shown: IndexAction = markedUtility ? 'leave_out' : typePending ? 'wait' : shownRaw;
+  const utilityShown = ov === 'important' ? false : utility;
+  const escalatedAt = !markedUtility && !typePending && out && (shown === 'wait' || shown === 'links') ? s(r.escalated_at).trim() : '';
+  const priority = markedUtility || !out ? 0 : Math.max(0, Math.round(n(r.priority)));
+  const depth = Math.max(0, Math.round(n(r.link_depth)));
+  const robots = s(r.robots_ok).trim().toLowerCase();
+  const pageNote = markedUtility
+    ? INDEX_MARKED_UTILITY_NOTE
+    : pendingImportant
+      ? 'You marked this page as important. Our next daily check reads it again as a normal page and says what it needs.'
+      : pendingUndo
+        ? 'You undid your mark. Our next daily check reads this page again and files it where it belongs.'
+        : '';
   return {
     url: s(r.url),
     path: indexPath(s(r.url)),
     title: s(r.title).slice(0, 200),
     lane: s(r.lane) === 'new' ? 'new' : 'existing',
     state: st,
-    cause: c,
+    cause: markedUtility ? 'low_value' : c,
     action: shown,
     inSitemap: b(r.in_sitemap),
     impressions28d: n(r.impressions_28d),
@@ -834,24 +911,48 @@ export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
     mergeInto: s(r.merge_into),
     // wave 2 review W9: the engine's 14-day "asked Google" note replaced the whole note, whatever the action; a page that now needs the client
     // (a fix on the website, a link...) never reads "nothing more to do on your side"
-    note: improvedNote(imp, improvedAt, s(r.last_crawl), s(r.improved_to), (INDEX_ACTIONS_NEED_YOU.has(shown) ? s(r.note).replace(NOTHING_MORE_TO_DO, '').trim() : s(r.note))).slice(0, 500),
+    note: (pageNote || improvedNote(imp, improvedAt, s(r.last_crawl), s(r.improved_to), (INDEX_ACTIONS_NEED_YOU.has(shown) ? s(r.note).replace(NOTHING_MORE_TO_DO, '').trim() : s(r.note)))).slice(0, 500),
     publishedAt: s(r.published_at),
     inspectedAt: s(r.inspect_at),
     fetchedAt: s(r.fetch_at),
     fixSeenAt,
     fixFailedAt,
-    askGoogle: b(r.ask_google) && st !== 'indexed' && !utility && !isJobPosting(s(r.url)),
+    // wave 3 (§2.6): the engine now offers job postings last; a page the client marked as fine to leave out is never asked about
+    askGoogle: b(r.ask_google) && st !== 'indexed' && !utilityShown && !markedUtility && !typePending,
     linkedBy: linked.urls,
     linkedRead: linked.read,
     askedGoogleAt: s(r.asked_google_at).trim(),
     googleReadAfterAskAt: s(r.google_read_after_ask_at).trim(),
     askNotRecorded: '',
-    utility,
+    utility: utilityShown,
     improvedAt,
     improvedWaiting: imp === 'waiting',
     improvedReadAt: imp === 'read' ? s(r.last_crawl) : '',
     improvedTo: imp === 'moved' ? s(r.improved_to).trim() : '',
+    priority,
+    doFirst: priority >= 1 && priority <= INDEX_DO_FIRST,
+    escalatedAt,
+    escalateWhy: escalatedAt ? escalateWhyOf(r.escalate_why) : [],
+    typeOverride: ov,
+    typePending,
+    robotsOk: robots === 'yes' || robots === 'no' ? robots : '',
+    linkDepth: depth,
+    linkedN: Math.max(0, Math.round(n(r.linked_n))),
+    indexnowAt: s(r.indexnow_at).trim(),
+    inSitemapRead: r.in_sitemap != null && s(r.in_sitemap) !== '',
   };
+}
+
+/** wave 3: the engine's note on a page the client marked as fine to leave out starts with this (case aside). */
+const INDEX_MARKED_UTILITY_PREFIX = 'You marked this page as fine to leave out';
+const typeOverrideOf = (v: unknown): IndexPageType => {
+  const x = s(v).trim().toLowerCase();
+  return x === 'important' || x === 'utility' ? x : '';
+};
+/** wave 3 (§2.2): the reasons in the engine's order, unknown codes dropped, each once. */
+function escalateWhyOf(v: unknown): IndexEscalateWhy[] {
+  const xs = new Set(s(v).split(',').map((x) => x.trim().toLowerCase()));
+  return INDEX_ESCALATE_WHY.filter((c) => xs.has(c));
 }
 
 export function indexRunOf(r: Partial<IndexRunRow>): IndexRun {
@@ -919,7 +1020,21 @@ function runSitemapsOf(v: unknown): IndexRunSitemaps | null {
     // W1: only an explicit true from the engine is "we will submit" (an older row without the field never promises a submission)
     willSubmit: x.submit && typeof x.submit === 'object' ? (x.submit as P).will_submit === true : false,
     blocked: x.submit && typeof x.submit === 'object' ? sitemapBlockedOf((x.submit as P).blocked, (x.submit as P).gate) : '',
+    dates: sitemapDatesOf(x.dates),
   };
+}
+
+/** wave 3 (§2.5): `sitemaps_json.dates` = `{ urls, with_lastmod, distinct }` (null when absent or not numbers). */
+function sitemapDatesOf(v: unknown): IndexSitemapDates | null {
+  const x = json<P | null>(v, null);
+  if (!x || typeof x !== 'object') return null;
+  const k = (a: unknown) => (a == null || a === '' || !Number.isFinite(Number(a)) ? null : Math.max(0, Math.round(Number(a))));
+  const urls = k(x.urls);
+  const withLastmod = k(x.with_lastmod ?? x.withLastmod);
+  const distinct = k(x.distinct);
+  // review M2: a reading of a sitemap the engine could not read (in full) decides nothing
+  if (x.read === false || urls === 0) return null;
+  return urls == null || withLastmod == null || distinct == null ? null : { urls, withLastmod: Math.min(withLastmod, urls), distinct };
 }
 
 /**
@@ -1161,8 +1276,33 @@ export function rollingOutEvent(events: readonly GoogleEvent[]): GoogleEvent | n
 export const INDEX_LINKED_WAITING = {
   label: 'Google has not visited these yet',
   meaning: 'Your website already links to these pages, so Google can find them. Google has not visited them yet, which is common for a young website: Google visits a new website slowly at first.',
-  weDo: 'We look up Google\'s reading of them again on the usual schedule and tell you when they are in search.',
-  youDo: 'Nothing on these pages. What helps: links from other websites to yours, and asking Google in Search Console to read your most important pages.',
+  weDo: 'We look up Google\'s reading of them again on the usual schedule, tell Bing about them, and tell you when they are in search. After 3 weeks without a visit from Google a page moves to Needs you, with what to do.',
+  // wave 3 (DESIGN_WAVE3 §3.1): a to-do, never "nothing on these pages"
+  youDo: 'Work through the to-do above, the pages marked Do first before the others. What also helps: links from other websites to yours.',
+} as const;
+
+/** wave 3 (§3.2): pages Google has not visited in the 3 weeks we watched them. */
+export const INDEX_ESCALATED = {
+  label: 'Needs you: Google has not visited after 3 weeks',
+  meaning: 'Google has not visited these pages in the 3 weeks we have watched them. Each page lists what is most likely holding it back, most likely first.',
+  weDo: 'We keep looking up Google\'s reading of them, tell Bing about them, and move a page back once Google has visited it.',
+  youDo: 'Do the steps under each page, in order. Google still decides when it visits.',
+} as const;
+
+/** wave 3 (§3.4): pages the client marked as fine to leave out. */
+export const INDEX_MARKED_UTILITY_GROUP = {
+  label: 'Pages you marked as fine to leave out',
+  meaning: 'You told us these pages do not need to be in Google. We no longer count them as missing and do not suggest asking Google about them.',
+  weDo: 'We still look at them now and then and keep them here.',
+  youDo: 'Nothing. Press Undo on a page if it should be in Google after all.',
+} as const;
+
+/** wave 3 (§3.4): pages whose mark the client changed, until the next daily check files them again. */
+export const INDEX_TYPE_PENDING_GROUP = {
+  label: 'Waiting for our next check',
+  meaning: 'You changed how these pages should be treated. Until our next daily check reads them again, they wait here.',
+  weDo: 'Our next daily check reads them again and files each one where it belongs, usually the next morning.',
+  youDo: 'Nothing for now.',
 } as const;
 
 /** wave 2 (§2.2): pages with a title of their own whose canonical tag names another page (`canonical_elsewhere` outside the sitemap, or with
@@ -1180,7 +1320,8 @@ export const INDEX_UTILITY_GROUP = {
   label: 'Policy and utility pages: fine to leave out',
   meaning: 'Privacy, cookie and terms pages, logins, carts and search pages do not need to be in Google. Nothing is wrong.',
   weDo: 'Nothing. We look again every 8 weeks.',
-  youDo: 'Nothing.',
+  // wave 3 (DESIGN_WAVE3 §3.4): the optional tip
+  youDo: 'Nothing. You may also leave them out of your sitemap; it is optional.',
 } as const;
 
 const groupLabel = (c: IndexGroupCause): Pick<IndexCauseInfo, 'label' | 'meaning' | 'weDo' | 'youDo'> =>
@@ -1196,6 +1337,10 @@ const groupLabel = (c: IndexGroupCause): Pick<IndexCauseInfo, 'label' | 'meaning
         ? INDEX_CANONICAL_PARENT
         : c === 'utility'
           ? INDEX_UTILITY_GROUP
+          : c === 'marked_utility'
+            ? INDEX_MARKED_UTILITY_GROUP
+            : c === 'type_pending'
+              ? INDEX_TYPE_PENDING_GROUP
           : c === 'other'
       ? { label: 'Other', meaning: 'A reading we do not have words for yet.', weDo: 'We keep checking.', youDo: 'Open the address in Search Console (URL Inspection) to read Google\'s own words.' }
       : INDEX_CAUSE_INFO[c];
@@ -1207,7 +1352,7 @@ const groupGuide = (c: IndexGroupCause): string | null =>
     ? 'index-request-indexing'
     : c === 'canonical_parent'
       ? 'index-canonical-sitemap'
-      : c === 'utility'
+      : c === 'utility' || c === 'marked_utility' || c === 'type_pending'
         ? null
         : c === 'unknown_to_google' || c === 'discovered_not_crawled'
           ? 'index-add-internal-links'
@@ -1219,6 +1364,9 @@ export const INDEX_GROUP_PREVIEW = 25;
 /** The group a page is shown in (pages fixed on the site have their own), and whether it is in one at all. One rule for the summary and
  *  the paged lists (A19): pages in search with nothing to do, and pages not checked yet that the engine did not file, are in none. */
 export const indexGroupCauseOf = (p: IndexPage): IndexGroupCause => {
+  // wave 3 (§3.4): the client's own mark first (shown at once, before the engine files the page again)
+  if (p.typePending) return 'type_pending';
+  if (p.typeOverride === 'utility' && p.action === 'leave_out') return 'marked_utility';
   if (p.fixSeenAt) return 'fixed_on_site';
   if (p.improvedWaiting) return 'improved_waiting';
   if (p.improvedTo) return 'improved_elsewhere';
@@ -1259,8 +1407,14 @@ export function askGoogleStatus(p: Pick<IndexPage, 'askedGoogleAt' | 'googleRead
     };
   return { state: 'waiting', text: `Waiting for Google to read it again (you asked on ${indexDayText(p.askedGoogleAt)}).` };
 }
-export const inIndexGroup = (p: IndexPage): boolean => p.action !== 'none' && !(p.state === 'unknown' && p.cause === 'other');
+/** wave 3 (§3.2): an escalated page is shown once, under "Needs you: Google has not visited after 3 weeks" (`IndexingData.escalated`), never
+ *  also in a group. */
+export const isEscalated = (p: IndexPage): boolean => !!p.escalatedAt;
+export const inIndexGroup = (p: IndexPage): boolean => p.action !== 'none' && !(p.state === 'unknown' && p.cause === 'other') && !isEscalated(p);
 const byImportance = (a: IndexPage, b: IndexPage) => b.impressions28d - a.impressions28d || b.clicks28d - a.clicks28d || a.path.localeCompare(b.path);
+/** wave 3 (§2.7): the engine's ranking first (pages it ranked, 1 first), then the importance order as before (rows without a rank). */
+const rankOf = (p: IndexPage) => (p.priority > 0 ? p.priority : Number.MAX_SAFE_INTEGER);
+const byPriority = (a: IndexPage, b: IndexPage) => rankOf(a) - rankOf(b) || byImportance(a, b);
 
 /**
  * The page's figures from the engine's rows (pure). `rows`: the website's page rows (capped by the caller); `runs` newest first.
@@ -1322,7 +1476,8 @@ export function buildIndexingData(input: {
       known: xs.length + more,
       indexed: xs.filter((p) => p.state === 'indexed').length + more,
       shouldBe: checked.filter((p) => p.action !== 'leave_out').length + more,
-      needYou: xs.filter((p) => INDEX_ACTIONS_NEED_YOU.has(p.action)).length,
+      // wave 3 (§3.2): a page Google has not visited after 3 weeks needs the client, whatever its action
+      needYou: xs.filter((p) => INDEX_ACTIONS_NEED_YOU.has(p.action) || isEscalated(p)).length,
       checked: checked.length + more,
       unknown: xs.filter((p) => p.state === 'unknown').length,
       errors: xs.filter((p) => p.state === 'error').length,
@@ -1336,6 +1491,9 @@ export function buildIndexingData(input: {
   const perDay = Math.max(1, clampIndexDailyCap(input.settings.dailyCap));
   const daysToFinish = backlogLeft > 0 ? Math.ceil(backlogLeft / perDay) : pages.length ? 0 : null;
 
+  // wave 3 (§2.5): the newest run that sent a sitemap date reading
+  const datesRun = runs.find((r) => !r.failed && r.sitemaps?.dates);
+  const sitemapDates = datesRun?.sitemaps?.dates ? { ...datesRun.sitemaps.dates, at: datesRun.runAt, missing: sitemapDatesMissing(datesRun.sitemaps.dates) } : null;
   const byGroup = new Map<string, IndexPage[]>();
   for (const p of pages) {
     if (!inIndexGroup(p)) continue;
@@ -1362,7 +1520,11 @@ export function buildIndexingData(input: {
       youDo: info.youDo,
       guide: groupGuide(cause),
       taskKey: taskKey && (!input.taskKeys || input.taskKeys.has(taskKey)) ? taskKey : null,
-      pages: [...xs].sort(byImportance).slice(0, INDEX_GROUP_PREVIEW),
+      pages: [...xs].sort(byPriority).slice(0, INDEX_GROUP_PREVIEW),
+      // wave 3 (§3.4): the policy card names the pages it holds
+      ...(cause === 'utility' ? { meaning: indexUtilityCardText(xs) } : {}),
+      // wave 3 (§3.1): the waiting group is a to-do
+      ...(cause === 'linked_waiting' ? { todo: indexWaitingTodo(xs, { sitemapNoDates: !!sitemapDates?.missing }) } : {}),
     };
   });
   groups.sort((a, b) => INDEX_ACTION_ORDER.indexOf(a.action) - INDEX_ACTION_ORDER.indexOf(b.action) || b.count - a.count || a.id.localeCompare(b.id));
@@ -1372,7 +1534,7 @@ export function buildIndexingData(input: {
     .sort((a, b) => (b.droppedAt > a.droppedAt ? 1 : -1))
     .slice(0, 50);
   // FIX_CONTRACT (X8): never a page left out on purpose, never a rewrite while an update rolls out
-  const askGoogle = pages.filter((p) => p.askGoogle && p.action !== 'leave_out' && !(freeze.on && p.action === 'quality')).sort(byImportance).slice(0, 5);
+  const askGoogle = pages.filter((p) => p.askGoogle && p.action !== 'leave_out' && !(freeze.on && p.action === 'quality')).sort(byPriority).slice(0, 5);
   // wave 2 (§3.2): pages the client said they asked Google about that left the engine's list, with what happened since (newest first)
   const askedSince = (input.now ?? Date.now()) - INDEX_ASKED_SHOWN_DAYS * 864e5;
   const askedAt = (p: IndexPage) => p.askNotRecorded || p.askedGoogleAt;
@@ -1417,6 +1579,8 @@ export function buildIndexingData(input: {
     impacts,
     capped: !!input.capped,
     pagesRead: pages.length,
+    escalated: pages.filter(isEscalated).sort(byPriority).slice(0, 50),
+    sitemapDates,
   };
 }
 
@@ -1432,7 +1596,7 @@ export function indexPagesPage(rows: readonly Partial<IndexPageRow>[], q: { lane
         ? !!p.droppedAt && p.state !== 'indexed'
         : inIndexGroup(p) && (!q.lane || p.lane === q.lane) && (!q.action || p.action === q.action) && (!q.cause || indexGroupCauseOf(p) === q.cause),
     )
-    .sort(byImportance);
+    .sort(byPriority);
   return { items: all.slice((page - 1) * pageSize, page * pageSize), total: all.length, page, pageSize };
 }
 
@@ -1441,6 +1605,156 @@ export function indexHistoryLabel(state: string, cause: string): string {
   if (state === 'indexed') return INDEX_CAUSE_INFO.indexed.label;
   if (state === 'unknown') return 'Not checked yet';
   return state ? state.replace(/_/g, ' ') : 'Unknown';
+}
+
+// ---------------------------------------------------------------- wave 3: a to-do for every page Google left out (DESIGN_WAVE3 §3)
+
+/** ok: passed; fail / warn: shown in the warning colour; unknown: we could not read it ("not checked", never shown as passed). */
+export type IndexCheckStatus = 'ok' | 'fail' | 'warn' | 'unknown';
+export interface IndexPageCheck {
+  key: 'opens' | 'indexable' | 'robots' | 'sitemap' | 'links' | 'words' | 'bing';
+  status: IndexCheckStatus;
+  text: string;
+}
+/** A page under this many words is short (the engine's `short_page`), job postings aside. */
+export const INDEX_SHORT_PAGE_WORDS = 300;
+
+/** wave 3 (§3.1): "What we checked" for one page, from its row only. A value the engine did not read is "not checked", never a pass. */
+export function indexPageChecks(p: IndexPage): IndexPageCheck[] {
+  const out: IndexPageCheck[] = [];
+  out.push(!p.httpStatus ? { key: 'opens', status: 'unknown', text: 'Opens: not checked' } : p.httpStatus === 200 ? { key: 'opens', status: 'ok', text: 'Opens (200)' } : { key: 'opens', status: 'fail', text: `Answers ${p.httpStatus}` });
+  out.push(
+    p.noindex
+      ? { key: 'indexable', status: 'fail', text: `Says noindex in the ${p.noindex === 'header' ? 'server answer' : 'page'}` }
+      : p.httpStatus === 200
+        ? { key: 'indexable', status: 'ok', text: 'Can be indexed (no noindex)' }
+        : { key: 'indexable', status: 'unknown', text: 'Can be indexed: not checked' },
+  );
+  out.push(p.robotsOk === 'yes' ? { key: 'robots', status: 'ok', text: 'robots.txt allows it' } : p.robotsOk === 'no' ? { key: 'robots', status: 'fail', text: 'robots.txt blocks it' } : { key: 'robots', status: 'unknown', text: 'robots.txt: not checked' });
+  out.push(!p.inSitemapRead ? { key: 'sitemap', status: 'unknown', text: 'Sitemap: not checked' } : p.inSitemap ? { key: 'sitemap', status: 'ok', text: 'In your sitemap' } : { key: 'sitemap', status: 'fail', text: 'Not in your sitemap' });
+  const linkedN = Math.max(p.linkedN, p.linkedBy.length);
+  if (!p.linkedRead) out.push({ key: 'links', status: 'unknown', text: 'Links to it: not checked' });
+  else if (p.linkDepth === 1 || p.linkedBy.some(isSiteRoot)) out.push({ key: 'links', status: 'ok', text: `Linked from your home page${linkedN > 1 ? ` (${linkedN} pages)` : ''}` });
+  else if (!linkedN) out.push({ key: 'links', status: 'fail', text: 'No page of yours links to it that we found' });
+  else
+    out.push({
+      key: 'links',
+      status: linkedN <= 1 ? 'warn' : 'ok',
+      text: p.linkedBy.length ? `Linked from ${indexPath(p.linkedBy[0])}${linkedN > 1 ? ` (${linkedN} pages)` : ''}` : `Linked from ${linkedN} page${linkedN === 1 ? '' : 's'} of yours`,
+    });
+  out.push(!p.words ? { key: 'words', status: 'unknown', text: 'Length: not checked' } : { key: 'words', status: p.words < INDEX_SHORT_PAGE_WORDS && !isJobPosting(p.url) ? 'warn' : 'ok', text: `${p.words.toLocaleString('en-US')} words` });
+  if (p.indexnowAt) out.push({ key: 'bing', status: 'ok', text: `Sent to Bing ${indexDayText(p.indexnowAt)}` });
+  return out;
+}
+
+/** One step for a page Google has not visited after 3 weeks (§3.2), in the engine's order. */
+export interface IndexEscalationStep {
+  code: IndexEscalateWhy;
+  text: string;
+  /** the "Show me how" guide (null: none) */
+  guide: string | null;
+  /** the step is to improve the page ("Improve this page"); never while a Google update rolls out */
+  improve: boolean;
+}
+/** wave 3 (§3.2): the first sentence of every escalated page. */
+export const INDEX_ESCALATED_LEAD = 'Google has not visited this page in the 3 weeks we have watched it.';
+export function indexEscalationSteps(p: Pick<IndexPage, 'escalateWhy' | 'linkedN' | 'linkedBy' | 'words' | 'url'> & { linkDepth?: number }, opts: { freeze: boolean }): IndexEscalationStep[] {
+  return p.escalateWhy.map((code): IndexEscalationStep => {
+    switch (code) {
+      case 'not_asked':
+        return { code, text: 'Ask Google to read it in Search Console, then press I asked Google here.', guide: 'index-request-indexing', improve: false };
+      case 'asked_no_visit':
+        return { code, text: 'Google did not come even after you asked, so it does not see the page as important yet: link it from your home page or main menu, and get a link from another website.', guide: 'index-add-internal-links', improve: false };
+      case 'weak_links': {
+        // review M1: the same three wordings as the engine's note (a page the home page links is never called weakly linked by the engine)
+        const k = Math.max(p.linkedN, p.linkedBy.length);
+        return {
+          code,
+          text: p.linkDepth === 1 || (!p.linkDepth && p.linkedBy.some(isSiteRoot))
+            ? 'Only your home page links here: also link it from related pages.'
+            : k ? `Only ${k} page${k === 1 ? '' : 's'} link${k === 1 ? 's' : ''} here and your home page does not: link it from your home page or main menu.` : 'We found no page of yours that links here: link it from your home page or main menu.',
+          guide: 'index-add-internal-links',
+          improve: false,
+        };
+      }
+      case 'short_page': {
+        const w = p.words ? ` (${p.words.toLocaleString('en-US')} words)` : '';
+        return opts.freeze
+          ? { code, text: `The page is short${w}: add what a buyer needs to know, after Google's update finishes.`, guide: null, improve: false }
+          : { code, text: `The page is short${w}: add what a buyer needs to know.`, guide: null, improve: !isJobPosting(p.url) };
+      }
+      case 'not_in_sitemap':
+        return { code, text: 'Add it to your sitemap.', guide: 'index-not-in-sitemap', improve: false };
+      case 'sitemap_no_dates':
+        return { code, text: 'Add the date each page last changed to your sitemap.', guide: 'index-sitemap-dates', improve: false };
+      default: {
+        const never: never = code;
+        return { code: never, text: '', guide: null, improve: false };
+      }
+    }
+  });
+}
+
+/** wave 3 (§3.1): the to-do of the "Google has not visited these yet" group. */
+export interface IndexWaitTodo {
+  total: number;
+  /** pages marked Do first (the engine's top 5) in this group */
+  matterMost: number;
+  /** pages to ask Google about today (marked by the engine, not asked about lately) */
+  askToday: number;
+  /** pages linked from your website, but not from the home page (where we know it) */
+  notFromHome: number;
+  /** the website's sitemap has no usable dates */
+  sitemapDates: boolean;
+  /** the summary sentence, only the parts that apply */
+  text: string;
+}
+const pg = (x: number) => `${x.toLocaleString('en-US')} page${x === 1 ? '' : 's'}`;
+export function indexWaitingTodo(pages: readonly IndexPage[], opts: { sitemapNoDates: boolean; now?: number }): IndexWaitTodo {
+  const total = pages.length;
+  const matterMost = pages.filter((p) => p.doFirst).length;
+  const askToday = pages.filter((p) => p.askGoogle && ['none', 'quiet', 'lost'].includes(askGoogleStatus(p, opts.now).state)).length;
+  const notFromHome = pages.filter((p) => p.linkDepth >= 2).length;
+  const parts = [
+    askToday ? `ask Google to read ${pg(askToday)} today` : '',
+    opts.sitemapNoDates ? 'add dates to your sitemap' : '',
+    notFromHome ? `link ${pg(notFromHome)} from your home page or menu` : '',
+  ].filter(Boolean);
+  const head = `Google has not visited ${pg(total)}.${matterMost ? ` ${matterMost.toLocaleString('en-US')} matter${matterMost === 1 ? 's' : ''} most.` : ''}`;
+  const tail = parts.length
+    ? ` Do ${parts.length === 1 ? 'this' : `these ${parts.length} things`}: ${parts.join('; ')}.`
+    : ' There is nothing to do on them today: we look them up again every day and tell Bing about them.';
+  return { total, matterMost, askToday, notFromHome, sitemapDates: opts.sitemapNoDates, text: `${head}${tail}` };
+}
+
+/** wave 3 (§3.4): the policy card's sentence, naming the pages it holds. */
+export function indexUtilityCardText(pages: readonly Pick<IndexPage, 'path'>[]): string {
+  const names = [...new Set(pages.map((p) => (p.path.split(/[/?#]/).filter(Boolean).pop() ?? '').replace(/\.[a-z]+$/i, '').replace(/[-_]+/g, ' ').toLowerCase()).filter(Boolean))];
+  const shown = names.length ? ` (${names.slice(0, 3).join(', ')}${names.length > 3 ? ' and others' : ''})` : '';
+  const one = pages.length === 1;
+  return `${one ? '1 page looks like a policy page' : `${pages.length.toLocaleString('en-US')} pages look like policy pages`}${shown}. ${one ? 'It does' : 'They do'} not need to be in Google. If ${one ? 'it' : 'one of them'} should rank, press This is an important page.`;
+}
+
+/** wave 3 (§3.4): the mark a page's row offers (null: none). `type` is what the button writes. */
+export function indexPageTypeAction(p: Pick<IndexPage, 'typeOverride' | 'typePending' | 'state' | 'utility' | 'action'>): { type: IndexPageType; label: string; text: string } | null {
+  if (p.typeOverride)
+    return { type: '', label: 'Undo', text: p.typeOverride === 'utility' ? INDEX_MARKED_UTILITY_NOTE : 'You marked this page as important.' };
+  if (p.typePending || p.state === 'indexed') return null;
+  if (p.utility && p.action === 'leave_out') return { type: 'important', label: 'This is an important page', text: '' };
+  if ((p.state === 'not_indexed' || p.state === 'excluded') && p.action !== 'leave_out' && p.action !== 'none') return { type: 'utility', label: 'Fine to leave out', text: '' };
+  return null;
+}
+
+/** wave 3 (§3.3): each `<url>` of a sitemap with its `<lastmod>` day (YYYY-MM-DD, '' = none). An index's `<sitemap>` entries are not counted. */
+export function sitemapDateEntries(xml: string): { loc: string; day: string }[] {
+  const out: { loc: string; day: string }[] = [];
+  for (const m of s(xml).matchAll(/<url\b[^>]*>([\s\S]*?)<\/url>/gi)) {
+    const loc = m[1].match(/<loc>\s*(?:<!\[CDATA\[)?\s*([^<\]\s]+)/i)?.[1];
+    if (!loc) continue;
+    const lm = m[1].match(/<lastmod>\s*(?:<!\[CDATA\[)?\s*([^<\]\s]+)/i)?.[1] ?? '';
+    out.push({ loc: loc.replace(/&amp;/g, '&'), day: /^\d{4}-\d{2}-\d{2}/.test(lm) ? lm.slice(0, 10) : '' });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- steps on the client's website
@@ -1936,6 +2250,19 @@ export interface IndexingForRecs {
 /** The step for a sitemap Search Console does not have, or reports errors in (`seo_index_runs.sitemaps_json`, contract change 2). Read
  *  by the daily index check only: Search Console's list of sitemaps is Google's, so the app's own check cannot tick it off. */
 export const INDEXING_SITEMAP_KEY = 'indexing:sitemap';
+/** wave 3 (DESIGN_WAVE3 §3.3): the step for a sitemap without usable dates (a site-level step like `indexing:sitemap`, kind `indexing`). */
+export const INDEXING_SITEMAP_DATES_KEY = 'indexing:sitemap_dates';
+export interface IndexingSitemapDatesReading extends IndexSitemapDates {
+  at: string;
+  /** the engine's rule: no usable dates */
+  missing: boolean;
+}
+/** The newest run's sitemap date reading (null: no run that read the website sent one). */
+export function indexingSitemapDatesReading(runs: readonly Partial<IndexRunRow>[]): IndexingSitemapDatesReading | null {
+  const r = [...runs].map(indexRunOf).filter((x) => x.runAt && !x.failed && !x.reservation && x.sitemaps?.dates).sort((a, b) => (b.runAt > a.runAt ? 1 : -1))[0];
+  const d = r?.sitemaps?.dates;
+  return r && d ? { ...d, at: r.runAt, missing: sitemapDatesMissing(d) } : null;
+}
 export interface IndexingSitemapReading {
   /** the run that read Search Console's sitemap list */
   at: string;

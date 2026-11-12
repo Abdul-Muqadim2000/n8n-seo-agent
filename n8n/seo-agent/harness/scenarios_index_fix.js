@@ -321,7 +321,8 @@ module.exports = async (ctx) => {
     const rows = Array.from({ length: 8 }, (_, i) => ({ url: W + '/ours-' + i, state: 'not_indexed', cause: 'wait_new', action: 'wait', sources: 'sitemap,ours', in_sitemap: true, published_at: iso(NOW - 10 * DAY), impressions_28d: i }))
       .concat([{ url: W + '/alt', state: 'excluded', cause: 'alternate', action: 'leave_out', sources: 'ours', published_at: iso(NOW - 20 * DAY) }]);
     const n = T(() => IX.askGoogle(rows, { now: NOW, reselect: true }));
-    check('X8: at most 5 pages are marked "ask Google to read it", never one left out on purpose', n === 5 && rows.filter(x => x.ask_google).length === 5 && !rows.find(x => /alt$/.test(x.url)).ask_google, J(rows.map(x => [x.url, x.ask_google])));
+    // wave 3 (DESIGN_WAVE3.md §2.6): at most 3 NEW marks a day (5 at once, 10 a week)
+    check('X8: at most 3 pages are newly marked "ask Google to read it" on one day (wave 3), never one left out on purpose', n === 3 && rows.filter(x => x.ask_google).length === 3 && !rows.find(x => /alt$/.test(x.url)).ask_google, J(rows.map(x => [x.url, x.ask_google])));
     const fo = (F.rows || []).map(x => x.json)[0] || {};
     check('X7 / X8: the two new seo_index_pages columns are written', Object.prototype.hasOwnProperty.call(fo, 'fix_seen_at') && Object.prototype.hasOwnProperty.call(fo, 'ask_google'), J(Object.keys(fo).slice(-4)));
   });

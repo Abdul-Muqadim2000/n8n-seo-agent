@@ -13,6 +13,7 @@ import {
   improveStateOf,
   withImprovements,
   isUtilityPage,
+  isIndexPageType,
   INDEX_ASK_QUIET_DAYS,
   INDEX_ASKED_SHOWN_DAYS,
   INDEX_DAILY_CAP,
@@ -316,6 +317,44 @@ export async function markAskedGoogle(a: SiteAccess, req: FastifyRequest, body: 
     await audit(req, a.org.id, { action: 'indexing.asked_google', target: { type: 'site', id: a.site.id, label: d }, details: { url: url.slice(0, 500) } });
   }
   return { page: indexPageOf({ ...row, asked_google_at: at }) };
+}
+
+/**
+ * wave 3 (DESIGN_WAVE3 §3.4): the client's own mark on one page ({ url, type: 'important' | 'utility' | '' }). Members and above, verified
+ * websites only, a page of this website the daily index check knows. Writes ONLY `type_override` on that page's row (the same Data Table write
+ * as "I asked Google"); the engine reads it and keeps it, and files the page again on its next run. Until then the page shows the new state
+ * from the row itself (`indexPageOf`). A page in search cannot be marked as fine to leave out (nothing to leave out). Written to the audit log;
+ * the same mark twice writes nothing.
+ */
+export async function markPageType(a: SiteAccess, req: FastifyRequest, body: unknown): Promise<{ page: IndexPage }> {
+  const d = a.site.domain;
+  const b = (body as Record<string, unknown> | null) ?? {};
+  const url = String(b.url ?? '').trim();
+  const type = b.type == null ? '' : b.type;
+  if (!isIndexPageType(type)) throw new HttpError(400, 'Choose important, fine to leave out, or undo.', 'bad_type');
+  if (!url || url.length > 2000 || !/^https?:\/\//i.test(url) || !urlOnHost(url, d)) throw notFound('That address is not a page of this website');
+  let found: IndexPageRow[];
+  try {
+    found = mine(d, await rows<IndexPageRow>('indexPages', { filters: [bySite(d), { columnName: 'url', condition: 'eq', value: url }], max: 1, fresh: true }));
+  } catch {
+    throw new HttpError(503, 'We could not reach your index check just now, so nothing was saved. Try again in a few minutes.', 'engine_unreachable');
+  }
+  const row = found[0];
+  if (!row) throw notFound('The daily index check does not know this page yet.');
+  if (type === 'utility' && String(row.state ?? '') === 'indexed') throw new HttpError(409, 'This page is in Google search, so there is nothing to leave out.', 'already_in_search');
+  const had = String(row.type_override ?? '').trim().toLowerCase();
+  if (had !== type) {
+    let ok = false;
+    try {
+      ok = await updateRows('indexPages', [bySite(d), { columnName: 'url', condition: 'eq', value: url }], { type_override: type });
+    } catch {
+      ok = false;
+    }
+    // an engine table without the column (an engine from before wave 3) or n8n not answering: nothing was saved, and the person is told
+    if (!ok) throw new HttpError(503, 'We could not save it just now, so nothing changed. Try again in a few minutes.', 'engine_not_saved');
+    await audit(req, a.org.id, { action: 'indexing.page_type', target: { type: 'site', id: a.site.id, label: d }, details: { url: url.slice(0, 500), type, was: had } });
+  }
+  return { page: indexPageOf({ ...row, type_override: type }) };
 }
 
 /** The cause a task key names, for the recommendations (re-exported for one import). */

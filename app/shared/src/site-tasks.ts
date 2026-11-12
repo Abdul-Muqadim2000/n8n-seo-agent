@@ -13,6 +13,7 @@ import {
   isSiteRoot,
   INDEXING_MERGE_MAX_PAIRS,
   INDEXING_SITEMAP_KEY,
+  INDEXING_SITEMAP_DATES_KEY,
   INDEXING_TASK_MAX_URLS,
   indexingCauseOfKey,
   indexingTaskKey,
@@ -24,6 +25,7 @@ import {
   type IndexingCauseReading,
   type IndexingLinksReading,
   type IndexingSitemapReading,
+  type IndexingSitemapDatesReading,
   type IndexSiteFixCause,
 } from './indexing';
 import { aiExportTaskKey, aiRankAddressLabel, aiRankAddressNeed, aiRankGuideOf, aiRankLeverLabel, type AiRankStep } from './ai-rank';
@@ -122,6 +124,8 @@ export interface SiteTaskInputs {
     sitemapAuto?: boolean;
     /** W1: with the switch on, why the engine will not submit (`submit.blocked`); the step says it in words ('' / absent: nothing to say) */
     sitemapBlocked?: SitemapBlocked | '';
+    /** wave 3 (DESIGN_WAVE3 §3.3): the newest run's sitemap date counts (absent or null: not sent; a stored step keeps its state) */
+    sitemapDates?: IndexingSitemapDatesReading | null;
   } | null;
   /** 2026-11-05 (production, devaicon.com): improvements the client confirmed at ANOTHER address than the page they update (the content
    *  log; `indexMergePairs`). Absent or null: not read (a stored step keeps its state). */
@@ -408,6 +412,22 @@ function indexingDrafts(ix: SiteTaskInputs['indexing'], stored: StoredSiteTask[]
     const later = !!sm && sm.at > smStored.createdAt;
     out.push({ key: INDEXING_SITEMAP_KEY, kind: 'indexing', engine: later ? { at: sm!.at, ok: true, by: 'index', message: 'Search Console lists your sitemap and reports no errors in it.' } : null, payload: smStored.payload });
   }
+  // wave 3 (DESIGN_WAVE3 §3.3): a sitemap without usable dates (the engine's rule raises it; our own check and the engine's next reading close it)
+  const sd = ix?.sitemapDates ?? null;
+  const sdStored = stored.find((x) => x.key === INDEXING_SITEMAP_DATES_KEY);
+  if (sd?.missing) {
+    handled.add(INDEXING_SITEMAP_DATES_KEY);
+    out.push({
+      key: INDEXING_SITEMAP_DATES_KEY,
+      kind: 'indexing',
+      engine: { at: sd.at, ok: false, by: 'index', message: sitemapDatesLine(sd) },
+      payload: { cause: 'sitemap_dates', urls: sd.urls, withLastmod: sd.withLastmod, distinct: sd.distinct },
+    });
+  } else if (sdStored) {
+    handled.add(INDEXING_SITEMAP_DATES_KEY);
+    const later = !!sd && sd.at > sdStored.createdAt;
+    out.push({ key: INDEXING_SITEMAP_DATES_KEY, kind: 'indexing', engine: later ? { at: sd!.at, ok: true, by: 'index', message: SITEMAP_DATES_DONE } : null, payload: sdStored.payload });
+  }
   for (const st of stored.filter((x) => x.kind === 'indexing' && !handled.has(x.key))) {
     if (!indexingCauseOfKey(st.key)) continue;
     out.push(ix ? storedDone(st, ix.runAt) : { key: st.key, kind: 'indexing', engine: null, payload: st.payload });
@@ -483,6 +503,17 @@ function linksDraft(l: IndexingLinksReading | null | undefined, st: StoredSiteTa
 }
 
 const isSitemapStep = (p: Record<string, unknown>) => str(p.cause) === 'sitemap';
+/** wave 3 (§3.3): the sitemap dates step (`indexing:sitemap_dates`), a site-level step that names no cause of a page */
+const isSitemapDatesStep = (p: Record<string, unknown>) => str(p.cause) === 'sitemap_dates';
+const SITEMAP_DATES_DONE = 'Your sitemap gives the date each page last changed.';
+/** What a sitemap's date counts say, in words (the engine's reading and our own check). */
+export function sitemapDatesLine(d: { urls: number; withLastmod: number; distinct: number }): string {
+  const urls = `${d.urls.toLocaleString('en-US')} page${d.urls === 1 ? '' : 's'}`;
+  if (!d.withLastmod) return `Your sitemap lists ${urls} and gives no date for any of them.`;
+  if (d.withLastmod < d.urls) return `Your sitemap lists ${urls} and gives a date for ${d.withLastmod.toLocaleString('en-US')} of them.`;
+  if (d.distinct <= 1) return `Your sitemap lists ${urls} and gives every one the same date, so Google cannot tell which pages changed.`;
+  return `Your sitemap lists ${urls} and gives a date for each of them.`;
+}
 /** R1: how many of a step's pages Google read again after a fix we saw and still sees with the problem (0: none, or not an indexing step) */
 export const googleStillSees = (p: Record<string, unknown> | null | undefined): number => Math.max(0, Number(p?.googleStillSees) || 0);
 const indexingCauseOf = (p: Record<string, unknown>): IndexSiteFixCause => (indexingCauseOfKey(`indexing:${str(p.cause)}`) ?? 'noindex');
@@ -520,6 +551,7 @@ function doneDetail(d: Draft, domain: string): string {
     }
     case 'indexing': {
       if (isSitemapStep(p)) return 'Search Console lists your sitemap and reports no errors in it. The daily index check keeps reading it.';
+      if (isSitemapDatesStep(p)) return `${SITEMAP_DATES_DONE} Google uses those dates when they are accurate; the daily index check keeps reading your sitemap.`;
       const what = INDEXING_DONE[indexingCauseOf(p)];
       if (d.pendingGoogle) return `${what} We saw the change on your website; Google shows its older reading until it reads the pages again, usually within a few days. The daily index check looks up Google's reading of them again within a day or two.`;
       if (d.engine?.ok && d.engine.by === 'index') return `${INDEXING_NONE_LEFT} It keeps watching these pages.`;
@@ -583,6 +615,19 @@ export function googleStillSeesText(n: number): string {
 }
 
 function presentIndexing(p: Record<string, unknown>, domain: string): Pick<SiteTask, 'title' | 'detail' | 'values' | 'guide' | 'guideVars'> {
+  if (isSitemapDatesStep(p)) {
+    const d = { urls: Number(p.urls) || 0, withLastmod: Number(p.withLastmod) || 0, distinct: Number(p.distinct) || 0 };
+    return {
+      title: 'Add the date each page last changed to your sitemap',
+      detail:
+        `${d.urls ? `${sitemapDatesLine(d)} ` : ''}Google uses the date a page last changed to decide which pages to read again, but only when the dates are accurate. ` +
+        'Give each page the date its main content last changed, never the time your website was built. Most SEO plugins and website builders can add it for you. ' +
+        'We read your sitemap and tick this step off once at least 9 in 10 pages carry a date and the dates differ.',
+      values: [{ label: 'Your sitemap', value: `https://${domain}/sitemap.xml` }],
+      guide: 'index-sitemap-dates',
+      guideVars: {},
+    };
+  }
   if (isSitemapStep(p)) {
     const errors = Number(p.errors) || 0;
     const none = Number(p.submitted) === 0;
@@ -781,7 +826,7 @@ export function deriveSiteTasks(inputs: SiteTaskInputs, stored: StoredSiteTask[]
     const searchBlocked =
       (d.kind === 'ai_crawlers' && ((d.payload.bots as { bot: string }[]) ?? []).some((b) => /^(googlebot|bingbot)$/i.test(b.bot))) ||
       // Index coverage: a step that keeps Google out of pages altogether (noindex, robots.txt, errors, a login) is important
-      (d.kind === 'indexing' && !isSitemapStep(d.payload) && INDEX_BLOCKING_CAUSES.has(indexingCauseOf(d.payload)));
+      (d.kind === 'indexing' && !isSitemapStep(d.payload) && !isSitemapDatesStep(d.payload) && INDEX_BLOCKING_CAUSES.has(indexingCauseOf(d.payload)));
     return {
       key: d.key,
       kind: d.kind,
@@ -852,7 +897,7 @@ export function siteTaskKindOfKey(key: string): SiteTaskKind | null {
   if (key === INDEXING_MERGE_KEY) return 'index_merge';
   if (/^ai_rank:L\d{2}:/.test(key)) return 'ai_rank';
   if (/^ai_export:\d{4}-\d{2}$/.test(key)) return 'ai_export';
-  if (indexingCauseOfKey(key) || key === INDEXING_SITEMAP_KEY) return 'indexing';
+  if (indexingCauseOfKey(key) || key === INDEXING_SITEMAP_KEY || key === INDEXING_SITEMAP_DATES_KEY) return 'indexing';
   return null;
 }
 

@@ -26,7 +26,8 @@ from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_para
                            SITES_TABLE, MONITORS_TABLE, PAGES_TABLE, PAGE_WATCH_TABLE, LOG_TABLE,
                            INDEX_PAGES_TABLE, INDEX_PAGES_COLS, INDEX_HISTORY_TABLE, INDEX_HISTORY_COLS, INDEX_RUNS_TABLE, INDEX_RUNS_COLS,
                            GOOGLE_EVENTS_TABLE, GOOGLE_EVENTS_COLS, UPDATE_IMPACT_TABLE, UPDATE_IMPACT_COLS,
-                           RUN_LEDGER_TABLE, RUN_LEDGER_COLS, monitor_ledger_js, LEDGER_EST, ledger_mainline, OPS_ALERTS_TABLE, OPS_ALERTS_COLS, ALERT_WEBHOOK_PLACEHOLDER)
+                           RUN_LEDGER_TABLE, RUN_LEDGER_COLS, monitor_ledger_js, LEDGER_EST, ledger_mainline, OPS_ALERTS_TABLE, OPS_ALERTS_COLS, ALERT_WEBHOOK_PLACEHOLDER,
+                           CACHE_TABLE, AI_PAGES_TABLE)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
@@ -42,6 +43,9 @@ GOOGLE_W = {'googleApi': {'id': 'SEOcredGoogleSvcW', 'name': 'Google Service Acc
 SUBMIT_NODE = 'Submit Sitemap (Index)'
 from env_settings import ENV as _ENVS
 SITEMAP_SUBMIT = 'off' if (_ENVS.get('SEO_SITEMAP_SUBMIT') or '').strip().lower() == 'off' else 'on'   # the kill switch, baked at build (default on)
+# wave 3 (DESIGN_WAVE3.md §2.3): IndexNow from the index watch - SEO_INDEXNOW=off in n8n/.env stops every IndexNow POST of this workflow (default on)
+INDEXNOW = 'off' if (_ENVS.get('SEO_INDEXNOW') or '').strip().lower() == 'off' else 'on'
+INDEXNOW_URL = 'https://api.indexnow.org/indexnow'
 INSPECT_URL = 'https://searchconsole.googleapis.com/v1/urlInspection/index:inspect'
 INCIDENTS_URL = 'https://status.search.google.com/incidents.json'
 POLICY_URL = 'https://developers.google.com/search/docs/essentials/spam-policies'
@@ -64,8 +68,8 @@ def _fill(src, round_no=None, start=None, sub=None):
     for k_, v_ in (sub or {}).items():
         s = s.replace(k_, v_)
     s = s.replace('/*__ALERT_RETRY__*/', AR_SRC).replace('__ALERT_WEBHOOK_URL__', ALERT_WEBHOOK_PLACEHOLDER)
-    s = s.replace('__SITEMAP_SUBMIT__', SITEMAP_SUBMIT)
-    for ph in ('/*__PAGE_WATCH__*/', '/*__INDEX_KIT__*/', '/*__OPS_ALERT__*/', '/*__ALERT_RETRY__*/', '__ENGINE_TZ__', '__ROUND__', '__START__', '__G__', '__LB__', '__ALERT_WEBHOOK_URL__', '__SITEMAP_SUBMIT__'):
+    s = s.replace('__SITEMAP_SUBMIT__', SITEMAP_SUBMIT).replace('__INDEXNOW__', INDEXNOW)
+    for ph in ('/*__PAGE_WATCH__*/', '/*__INDEX_KIT__*/', '/*__OPS_ALERT__*/', '/*__ALERT_RETRY__*/', '__ENGINE_TZ__', '__ROUND__', '__START__', '__G__', '__LB__', '__ALERT_WEBHOOK_URL__', '__SITEMAP_SUBMIT__', '__INDEXNOW__'):
         assert ph not in s, ph + ' left in a node of ' + NAME
     return s
 
@@ -150,7 +154,10 @@ SITE_LOADS = [('Load Index Pages', dt_get_all_where_params(INDEX_PAGES_TABLE, [(
               # our own pages: the content log's rows of this site (published ones are kept by the code). seo_ladders is not read: its rows are
               # keyword rungs, a read path the fit gate guards (gate_lint), and the content log already carries every published URL
               ('Load Content Log (Index)', dt_get_any_params(LOG_TABLE, [('site_id', SID), ('domain', DOM), ('domain', "={{ 'www.' + $('Index Plan').first().json.domain }}")])),
-              ('Load Update Impact', dt_get_all_where_params(UPDATE_IMPACT_TABLE, [('site_id', 'eq', SID)]))]
+              ('Load Update Impact', dt_get_all_where_params(UPDATE_IMPACT_TABLE, [('site_id', 'eq', SID)])),
+              # wave 3 (§2.3): the site's IndexNow key (made by AI Growth) and the pages AI Growth already sent - read only
+              ('Load IndexNow Key (Index)', dt_get_all_where_params(CACHE_TABLE, [('key', 'eq', "={{ 'indexnow:' + $('Index Plan').first().json.site_id }}")])),
+              ('Load AI Pages (Index)', dt_get_all_where_params(AI_PAGES_TABLE, [('site_id', 'eq', SID)]))]
 for i, (nm, params) in enumerate(SITE_LOADS):
     node(nm, DT_TYPE, DT_VERSION, params, at(25 + i, 3), **LOAD)
 # R2 (fix wave 3): the run's ATTEMPT row, written once the run guard let the part in and before anything that can fail (sitemap rounds,
@@ -213,6 +220,17 @@ node('Fetch Page (Final)', 'n8n-nodes-base.httpRequest', 4.5, text_get('={{ $jso
 code('Page Signals', rd('IX_Page_Signals.js'), at(90, 4))
 # ---- diagnosis, saves, moves, update impact, run rows, the next website, report ----
 code('Index Diagnose', rd('IX_Diagnose.js'), at(91, 5))
+# wave 3 (DESIGN_WAVE3.md §2.3): IndexNow - the key file checked (one GET, no redirect followed), then ONE POST a website a run to IndexNow
+# (Bing, Yandex, Seznam, Naver, Yep: never Google). neverError + fullResponse: a 4xx is an answer, recorded as "not accepted", never retried
+# and never a failed run; the retry rule covers only a call that did not get through. Index Page Rows records indexnow_at on a 200 / 202.
+code('IndexNow Key Check (Index)', rd('IX_IndexNow_Key_Check.js'), at(91, 8)); iff('Any IndexNow Key (Index)?', '{{ !$json.skip }}', at(92, 8))
+node('Fetch IndexNow Key (Index)', 'n8n-nodes-base.httpRequest', 4.5, text_get('={{ $json.url }}', follow=False, batch=1, interval=0, timeout=15000), at(93, 7), **HTTP_X)
+code('IndexNow Submit Requests (Index)', rd('IX_IndexNow_Submit_Requests.js'), at(94, 8)); iff('Any IndexNow Submit (Index)?', '{{ !$json.skip }}', at(95, 8))
+node('Submit IndexNow (Index)', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.url }}', 'sendHeaders': True,
+     'headerParameters': {'parameters': [{'name': 'Content-Type', 'value': 'application/json; charset=utf-8'}, {'name': 'User-Agent', 'value': UA}]},
+     'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}',
+     'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 1000}}, 'timeout': 30000,
+                 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}}, at(96, 7), **HTTP_X)
 code('Index Page Rows', rd('IX_Page_Rows.js'), at(92, 5)); iff('Any Index Rows?', '{{ !$json.skip }}', at(93, 5))
 node('Save Index Pages', DT_TYPE, DT_VERSION, dt_upsert_params_keys(INDEX_PAGES_TABLE, INDEX_PAGES_COLS, ['site_id', 'url']), at(94, 4), **SAVE)
 code('Index Delete Rows', rd('IX_Delete_Rows.js'), at(95, 5)); iff('Any Deletes?', '{{ !$json.skip }}', at(96, 5))
@@ -252,6 +270,7 @@ Every day at **05:15** (n8n's clock) and on demand (*Manual Run* `{ domain | sit
 **Wave 2 (2026-10-30, DESIGN_WAVE2.md):** the home page and up to 10 parent pages are read for the website's own links (`linked_by`, pages found there join the inventory); a page already linked that Google has not visited waits; a canonical to another page from a page with its own title is a site step; policy / utility pages are left out; "ask Google" is ranked by value and "I asked Google" is checked back. **Sitemap submission** (`Submit Sitemap (Index)`, credential `SEOcredGoogleSvcW`, the ONLY write to Search Console) runs only when the client switched `index_sitemap_submit` on AND Google reports full access; never an unchanged resubmit; `SEO_SITEMAP_SUBMIT=off` in n8n/.env switches it off for the engine.
 **One execution per website.** The 05:15 run (or the catch-up, or a Manual Run naming no website) is the *dispatch*: it reads Google's news, prunes history older than 400 days and starts the first website's own execution (`ix_chain`); each website saves its rows, then starts the next one - one at a time. Before its first URL Inspection a website writes its **reservation** (`seo_index_runs` row with the planned count), replaced by the final row, so no crash or replay can spend past the daily cap (`index_daily_cap`, default 300, 20-1,200).
 Per website: the sitemap tree (complete or not: only a complete read says "not in the sitemap"), the submitted sitemaps, Search Console pages (by page, four windows, paged), the inventory, our own pages -> **one cause per page** (DESIGN §4), its action and one sentence; Google's documented fields beat our own read; a bot wall is "could not check". `fix_seen_at` when our read sees the step done; `ask_google` on up to 5 pages a week.
+**Wave 3 (2026-11-12, DESIGN_WAVE3.md):** a page Google never visited in 3 weeks is escalated (`escalated_at`, `escalate_why`), every page Google should have gets a `priority` (top 5 = do first), "ask Google" is a daily to-do (3 new a day, 10 a week, 5 at once; job postings last; `type_override` important first, utility never), the sitemap's dates are counted, and **IndexNow** (Bing, Yandex, Seznam, Naver, Yep - never Google) is told once about every page that should be found, and again when it changes: only with the site's verified key (AI Growth's), one POST a site a day, at most 500 URLs, never on a dry run; `SEO_INDEXNOW=off` in n8n/.env switches it off.
 Writes only `seo_index_pages`, `seo_index_history`, `seo_index_runs`, `seo_google_events`, `seo_update_impact`. Callback `index_coverage` on Mondays, or the day a page drops out or an update starts / finishes. Never submits a URL to Google (no Indexing API), never changes a site, never says a page "will be indexed".""",
      'height': 460, 'width': 1300, 'color': 5}, [16 * 220 - 40, -600])
 
@@ -293,7 +312,9 @@ gate('Page Fetch Requests', 'Any Page Fetches?', 'Fetch Page (Index)', 'Page Fir
 link('Page First Reads', 'Fetch Hop Requests')
 gate('Fetch Hop Requests', 'Any Hops?', 'Fetch Page (Final)', 'Page Signals')
 link('Page Signals', 'Index Diagnose')
-link('Index Diagnose', 'Index Page Rows')
+link('Index Diagnose', 'IndexNow Key Check (Index)')
+gate('IndexNow Key Check (Index)', 'Any IndexNow Key (Index)?', 'Fetch IndexNow Key (Index)', 'IndexNow Submit Requests (Index)')
+gate('IndexNow Submit Requests (Index)', 'Any IndexNow Submit (Index)?', 'Submit IndexNow (Index)', 'Index Page Rows')
 gate('Index Page Rows', 'Any Index Rows?', 'Save Index Pages', 'Index Delete Rows')
 gate('Index Delete Rows', 'Any Deletes?', 'Delete Index Pages', 'Index History Moves')
 gate('Index History Moves', 'Any History Moves?', 'Move Index History', 'Index History Rows')
@@ -452,6 +473,16 @@ assert [n['name'] for n in N if (n.get('credentials') or {}).get('googleApi', {}
 _isrc = by['Sitemap Submit Requests']['parameters']['jsCode']
 assert "const KILL_OFF = '" + SITEMAP_SUBMIT + "' === 'off';" in _isrc and 'webmasters/v3/sites/' in _isrc and '/sitemaps/' in _isrc, 'Sitemap Submit Requests: the kill switch is baked and only sitemaps.submit is built'
 assert by['Inspect URL (Index)']['parameters']['options']['batching']['batch'] == {'batchSize': 1, 'batchInterval': 150}, '150 ms between inspections'
+# wave 3 (§2.3): the IndexNow POST - only from its request node through its IF, only to IndexNow's own endpoint (built there), a 4xx read as
+# an answer (never retried, never a failed run), the kill switch baked; and no other node of this workflow names IndexNow
+_inx = by['Submit IndexNow (Index)']
+assert _inx['parameters']['method'] == 'POST' and _inx['parameters']['options']['response']['response'] == {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'} and _inx.get('onError') == 'continueRegularOutput', 'Submit IndexNow (Index): a 4xx is an answer, the run never fails on it'
+assert outs('IndexNow Submit Requests (Index)') == ['Any IndexNow Submit (Index)?'] and outs('Any IndexNow Submit (Index)?')[0] == 'Submit IndexNow (Index)', 'only IndexNow Submit Requests (Index) feeds the POST'
+_isub = by['IndexNow Submit Requests (Index)']['parameters']['jsCode']
+assert "url: '" + INDEXNOW_URL + "'" in _isub and 'plan.dry_run === true' in _isub and "body === q.key" in _isub, 'IndexNow: its own endpoint, the dry run, the key file must answer the key'
+assert "const KILL_OFF = '" + INDEXNOW + "' === 'off';" in by['IndexNow Key Check (Index)']['parameters']['jsCode'], 'IndexNow: the kill switch is baked'
+assert [n['name'] for n in N if n['type'] == 'n8n-nodes-base.httpRequest' and 'indexnow' in json.dumps(n['parameters']).lower()] == [], 'no HTTP node names IndexNow itself (the URL comes from the request node)'
+assert not by['Fetch IndexNow Key (Index)']['parameters']['options'].get('redirect') is None and by['Fetch IndexNow Key (Index)']['parameters']['options']['redirect'] == {'redirect': {'followRedirects': False}}, 'the key file must answer at its own address'
 assert 'Callback Ledger (' + TAG + ')' in by and outs('Callback Ledger (' + TAG + ')') == ['Has Callback (Index)?'], 'R115: the callback waits for the settle'
 
 json.dump([wfobj], open(os.path.join(OUT, FILE), 'w'), indent=2, ensure_ascii=False)
@@ -477,6 +508,10 @@ json.dump({'workflow': WID, 'name': NAME, 'file': FILE, 'schedule': dict(SCHEDUL
            'write_credential': {'id': 'SEOcredGoogleSvcW', 'nodes': [n['name'] for n in N if (n.get('credentials') or {}).get('googleApi', {}).get('id') == 'SEOcredGoogleSvcW'],
                                 'method': by[SUBMIT_NODE]['parameters']['method'], 'from': outs('Any Sitemap Submit?')[:1], 'kill_switch': SITEMAP_SUBMIT},
            'callback': {'has': 'Has Callback (Index)?', 'post': 'POST Index Report', 'body': by['POST Index Report']['parameters']['jsonBody']},
+           'indexnow': {'post': 'Submit IndexNow (Index)', 'from': outs('Any IndexNow Submit (Index)?')[:1], 'key_fetch': 'Fetch IndexNow Key (Index)', 'kill_switch': INDEXNOW,
+                        'response': by['Submit IndexNow (Index)']['parameters']['options']['response']['response'], 'on_error': by['Submit IndexNow (Index)'].get('onError'),
+                        'retry': {k: by['Submit IndexNow (Index)'].get(k) for k in ('retryOnFail', 'maxTries', 'waitBetweenTries')},
+                        'key_redirect': by['Fetch IndexNow Key (Index)']['parameters']['options'].get('redirect')},
            'page_cols': [c for c, _ in INDEX_PAGES_COLS], 'run_cols': [c for c, _ in INDEX_RUNS_COLS], 'impact_cols': [c for c, _ in UPDATE_IMPACT_COLS],
            'event_cols': [c for c, _ in GOOGLE_EVENTS_COLS], 'history_cols': [c for c, _ in INDEX_HISTORY_COLS]},
           open(os.path.join(HERE, 'harness', 'index_wiring.json'), 'w'), indent=1, sort_keys=True)

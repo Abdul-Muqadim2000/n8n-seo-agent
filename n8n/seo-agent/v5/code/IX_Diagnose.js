@@ -28,6 +28,7 @@ const fresh = IX.readingsOf([[pq, grab('Inspect URL (Probe)').slice(0, pq.length
   [grab('Inspect Retry Requests').filter(q => q && !q.skip), grab('Inspect URL (Retry)'), true]]);
 const fetches = new Map(); for (const x of grab('Page Signals')) if (x && x.site_id && x.f) fetches.set(x.site_id + '|' + IX.key(x.url), x.f);
 let saved = []; try { saved = $('Save Index Reservation').all().map(i => i.json); } catch (e) { saved = []; }
+const aiPages = grab('Load AI Pages (Index)').filter(x => x && !x.error && x.url);   // wave 3 (§2.3): what AI Growth already sent to IndexNow / Bing
 const dow = (() => { try { return new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' }).format(new Date(now)); } catch (e) { return new Date(now).toUTCString().slice(0, 3); } })();
 const monday = dow === 'Mon';
 const out = [];
@@ -37,7 +38,9 @@ for (const v of inv) {
     // E14: the stored rows stand as they are (the figures of the last check), the run says it could not check, nothing is written
     const all = (v.pages || []).map(r => ({ url: S(r.url), state: S(r.state) || 'unknown', cause: S(r.cause), action: S(r.action) || 'none', lane: S(r.lane), needs_person: r.needs_person === true || r.needs_person === 'true',
       note: S(r.note), merge_into: S(r.merge_into), final_url: S(r.final_url), http_status: n0(r.http_status), fix_seen_at: S(r.fix_seen_at), ask_google: r.ask_google === true || r.ask_google === 'true',
-      improved_at: S(r.improved_at), improved_to: S(r.improved_to), last_crawl: S(r.last_crawl) }));
+      improved_at: S(r.improved_at), improved_to: S(r.improved_to), last_crawl: S(r.last_crawl), priority: n0(r.priority), escalated_at: S(r.escalated_at),
+      escalate_why: S(r.escalate_why), type_override: S(r.type_override), asked_google_at: S(r.asked_google_at), google_read_after_ask_at: S(r.google_read_after_ask_at),
+      words: n0(r.words), link_depth: n0(r.link_depth), linked_n: n0(r.linked_n), indexnow_at: S(r.indexnow_at) }));
     out.push({ json: { ...base, upserts: [], history: [], deletes: [], history_moves: [], all, dropped: [], counts: { inspected: 0, reused: 0, fetched: 0, errors: 0 }, failed: true,
       why: IX.plainWhy(v.why), why_detail: S(v.why_detail), plan: {}, freeze: fr, news_today: 0, submit: v.submit || null } });   // R5: plain words only; the raw error stays internal
     continue;
@@ -94,6 +97,12 @@ for (const v of inv) {
       } else if (reading || (f && f.ok && !f.blocked)) {
         const basis = reading || IX.storedReading(row);
         if (!(row._evidence_search && !reading)) d = IX.diagnose(row, basis, f && f.ok && !f.blocked ? f : null, ctx);
+      }
+      // wave 3 (§2.4): a page left out as low value only because of the client's word - marked important now, or "fine to leave out"
+      // undone - gets its cause back from Google's stored reading today (no new inspection needed), and is inspected again on the next run
+      else if (S(row.cause) === 'low_value' && IX.storedReading(row) && IX.typeOverride(row) !== 'utility'
+        && (IX.typeOverride(row) === 'important' || (!IX.isUtilityRow(row) && !IX.isLowValue(row.url, row)))) {
+        d = IX.diagnose(row, IX.storedReading(row), null, ctx); if (d && d.cause !== 'low_value') row.next_check_at = nowIso;
       }
       // wave 2: the canonical with its own title, utility pages, pages already linked (IX.refine) - before `checks`, so a refined cause counts its re-checks
       if (d) { const rf = IX.refine({ ...row, ...d }, { ...rctx, prev }); d = { ...d, cause: rf.cause, action: rf.action, state: rf.state }; row._own_title = rf.own_title; }
@@ -154,7 +163,17 @@ for (const v of inv) {
     for (const r of rows) { if (r.state === 'indexed' && !S(r.cause)) r.action = 'none'; }
     // X8: "ask Google to read it" - at most 5 a site; chosen again on the engine's Monday
     const asked = IX.askGoogle(rows, { now, home_keys: new Set(v.home_links || []), freeze: fr, reselect: monday });
+    // wave 3 (DESIGN_WAVE3.md §2.1 / §2.2 / §2.7): our robots.txt verdict per page, the escalation after 3 weeks with no visit from Google
+    // (escalated_at kept while it holds, '' as soon as it does not; the action is unchanged), then the order of the work
+    const datesOk = IX.datesUsable((v.sitemap || {}).dates);
+    for (const r of rows) {
+      const ra = IX.robotsAllows(robots.text, robots.status, IX.pathOf(r.url)); r.robots_ok = ra === true ? 'yes' : ra === false ? 'no' : '';
+      const e = IX.escalation(r, { now, dates_usable: datesOk, freeze: fr });
+      r.escalated_at = e.on ? (S(r.escalated_at) || nowIso) : ''; r.escalate_why = e.on ? e.why.join(',') : '';
+    }
+    IX.priorityRank(rows, { home_keys: new Set(v.home_links || []) });
     for (const r of rows) { r.note = IX.noteOf(r, { freeze: fr, now, site }); r.updated_at = nowIso; }
+    const do_first = IX.doFirst(rows, { freeze: fr });
     const upserts = [], history = [];
     for (const r of rows) {
       const o = IX.rowOut(r);
@@ -173,9 +192,19 @@ for (const v of inv) {
       .concat((v.prune || []).map(x => ({ site_id: v.site_id, url: x.url, why: S(x.why) || 'gone', keep: S(x.keep) })))
       .filter(x => x.url && !live.has(x.url));
     const history_moves = netMoves.filter(m => !live.has(m.from));
+    // wave 3 (§2.3): the pages to tell IndexNow about (the key check and the POST come next; Index Page Rows records indexnow_at on the
+    // rows IndexNow accepted). One POST a site a day; a URL AI Growth sent in the last 30 days is not sent again.
+    const aiSent = new Map(); for (const a of aiPages) if (S(a.site_id) === v.site_id && S(a.submitted_at)) { const kk = IX.key(a.url); if (S(a.submitted_at) > S(aiSent.get(kk) || '')) aiSent.set(kk, S(a.submitted_at)); }
+    const inHost = IX.siteHost(site);
+    const recent = IX.indexnowSentRecently(rows, now);
+    const inUrls = recent ? [] : IX.indexnowCandidates(rows, { now, host: inHost, ai_sent: aiSent, dates_usable: IX.datesUsable((v.sitemap || {}).dates) });
+    const inSet = new Set(inUrls);
+    const indexnow = { host: inHost, urls: inUrls, why: recent ? 'sent_today' : inUrls.length ? '' : 'nothing_new', rows: rows.filter(r => inSet.has(S(r.url))).map(r => IX.rowOut(r)) };
     const all = rows.map(r => ({ url: r.url, state: S(r.state), cause: S(r.cause), action: S(r.action), lane: S(r.lane), needs_person: !!r.needs_person, note: S(r.note),
       merge_into: S(r.merge_into), final_url: S(r.final_url), http_status: n0(r.http_status), fix_seen_at: S(r.fix_seen_at), ask_google: !!r.ask_google, fix_failed_at: S(r.fix_failed_at),
-      own_title: !!r._own_title, linked: IX.linkedList(r.linked_by).length > 0, improved_at: S(r.improved_at), improved_to: S(r.improved_to), last_crawl: S(r.last_crawl) }));
+      own_title: !!r._own_title, linked: IX.linkedList(r.linked_by).length > 0, improved_at: S(r.improved_at), improved_to: S(r.improved_to), last_crawl: S(r.last_crawl),
+      priority: n0(r.priority), escalated_at: S(r.escalated_at), escalate_why: S(r.escalate_why), type_override: S(r.type_override), asked_google_at: S(r.asked_google_at),
+      google_read_after_ask_at: S(r.google_read_after_ask_at), words: n0(r.words), link_depth: n0(r.link_depth), linked_n: n0(r.linked_n), indexnow_at: S(r.indexnow_at) }));
     // X13: no same-day callback for news on the site's first run, nor for an update that started before the site was first checked
     const firstRun = !(v.pages || []).some(p => p._prev);
     const since = S(v.watch_since);
@@ -183,7 +212,7 @@ for (const v of inv) {
     const news_today = newsFor(g.started) + newsFor(g.completed) + (g.policy_news && !firstRun ? 1 : 0);
     out.push({ json: { ...base, upserts, history, deletes: deletes.slice(0, IX.CFG.moves_max * 2), history_moves, all, dropped: dropped.slice(0, IX.CFG.dropped_max), counts: c, plan: v.plan || {},
       freeze: fr, sitemap: v.sitemap || {}, gsc_sitemaps: v.gsc_sitemaps, search: v.search || {}, quota_stop: !!v.quota_stop || c.quota, access_lost: c.access, capped: !!v.capped,
-      reserved, ask_google: asked, first_run: firstRun, news_today, failed: false, submit: v.submit || null, links: v.links || null } });
+      reserved, ask_google: asked, first_run: firstRun, news_today, failed: false, submit: v.submit || null, links: v.links || null, do_first, indexnow } });
   } catch (e) {
     out.push({ json: { ...base, upserts: [], history: [], deletes: [], history_moves: [], all: [], dropped: [], counts: { inspected: 0, reused: 0, fetched: 0, errors: 0 }, failed: true,
       why: IX.PLAIN_FAIL, why_detail: 'diagnosis failed: ' + S(e && e.message).slice(0, 160), plan: {}, freeze: fr, news_today: 0, submit: v.submit || null } });   // R5
