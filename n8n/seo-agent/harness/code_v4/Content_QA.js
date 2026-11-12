@@ -1605,6 +1605,23 @@ function anchorText(p) {
   const path = String(o.url || '').replace(/^https?:\/\/[^\/]+/i, '').replace(/[?#].*$/, '').replace(/^\/+|\/+$/g, '').split('/').pop().replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[-_]+/g, ' ').trim();
   return titleCaseKeyword(path) || String(o.url || '');
 }
+// ---- JOBT: a placeholder author job title is no job title (F-29, production review 2026-11-12; build section 189) ----
+// An author job title of "User" was accepted and printed on every byline ("Name, User"), in the Person schema and in the author box. The
+// web app now refuses such a title; profile rows stored before that still carry it, so every engine node that PRINTS a job title reads it
+// through JOBT.real: a placeholder is '' (the line is left out), never printed. The placeholders are only these words, whole, case and
+// spacing aside: "User", "N/A", "-", "none", "test", "job title", "title" ("Owner", "Administrator", "Tester" are real titles). The content
+// readiness rule (_readiness.js, word for word app/shared/src/readiness.ts) is not changed. Inlined by build_v4.py / build_monitors.py
+// (marker JOB_TITLE in a block comment). Pure.
+const JOBT = (() => {
+  const LIST = ['user', 'n/a', '-', 'none', 'test', 'job title', 'title'];
+  const SET = new Set(LIST);
+  const norm = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toLowerCase();
+  /** true for a job title that is not one; an empty title is missing, not a placeholder */
+  const isPlaceholder = (v) => SET.has(norm(v));
+  /** the job title to print: '' for a placeholder, else the title with its spacing collapsed */
+  const real = (v) => (isPlaceholder(v) ? '' : String(v == null ? '' : v).replace(/\s+/g, ' ').trim());
+  return { isPlaceholder, real, LIST };
+})();
 // ---- the one site model (G19, 2026-10-12; see SITE_MODEL_SPEC.md; the builders inline this file where a node asks for the SITE_MODEL kit) ----
 // Every workflow reads the same facts about a site through SM: the canonical host, the business name / logo / NAP (seo_profiles ->
 // the homepage Organization / LocalBusiness schema -> Google Business Profile -> the fields the web app sent), the services and nav
@@ -4849,7 +4866,7 @@ const P = MNAP ? { ...P0, business_name: String(P0.business_name || SM.name(MODE
   phone: P0.phone || MNAP.phone || '', public_email: P0.public_email || MNAP.public_email || '', price_range: P0.price_range || MNAP.price_range || '',
   address: { street: PA0.street || MNAP.street_address || '', city: PA0.city || MNAP.city || '', region: PA0.region || MNAP.region || '',
     postal_code: PA0.postal_code || MNAP.postal_code || '', country_code: PA0.country_code || MNAP.country_code || '' } } : P0;
-const PA = P.address || {}; const AU = prev.author || null; const RV = prev.reviewer || null; const role = prev.page_role || 'standard';
+const PA = P.address || {}; const AU = prev.author ? { ...prev.author, job_title: JOBT.real(prev.author.job_title) } : null; const RV = prev.reviewer ? { ...prev.reviewer, job_title: JOBT.real(prev.reviewer.job_title) } : null;   /* F-29: no "User" in the schema */ const role = prev.page_role || 'standard';
 const nap_source = MNAP ? (P0.street_address || PA0.street || P0.phone ? 'profile' : (MNAP.source || '')) : (PA0.street || P0.phone ? 'profile' : '');
 const bizName = String(P.business_name || ((prev.site_description && prev.site_description.business_name) ? prev.site_description.business_name : '')).trim();
 const biz = bizName || '[Your Business Name]';

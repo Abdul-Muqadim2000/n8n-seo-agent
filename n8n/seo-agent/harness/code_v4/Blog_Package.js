@@ -622,6 +622,23 @@ const SM = (() => {
     titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, isMoved, gonePages, confirmPage,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms, coreTerms } };
 })();
+// ---- JOBT: a placeholder author job title is no job title (F-29, production review 2026-11-12; build section 189) ----
+// An author job title of "User" was accepted and printed on every byline ("Name, User"), in the Person schema and in the author box. The
+// web app now refuses such a title; profile rows stored before that still carry it, so every engine node that PRINTS a job title reads it
+// through JOBT.real: a placeholder is '' (the line is left out), never printed. The placeholders are only these words, whole, case and
+// spacing aside: "User", "N/A", "-", "none", "test", "job title", "title" ("Owner", "Administrator", "Tester" are real titles). The content
+// readiness rule (_readiness.js, word for word app/shared/src/readiness.ts) is not changed. Inlined by build_v4.py / build_monitors.py
+// (marker JOB_TITLE in a block comment). Pure.
+const JOBT = (() => {
+  const LIST = ['user', 'n/a', '-', 'none', 'test', 'job title', 'title'];
+  const SET = new Set(LIST);
+  const norm = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toLowerCase();
+  /** true for a job title that is not one; an empty title is missing, not a placeholder */
+  const isPlaceholder = (v) => SET.has(norm(v));
+  /** the job title to print: '' for a placeholder, else the title with its spacing collapsed */
+  const real = (v) => (isPlaceholder(v) ? '' : String(v == null ? '' : v).replace(/\s+/g, ' ').trim());
+  return { isPlaceholder, real, LIST };
+})();
 // ---- lineage (G29, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.11) ----
 // Every number a customer reads has to say where it came from, over what period, and how big the sample was. Before this, the AI
 // visibility report said it (sample sizes, Wilson ranges) and the others did not: the weekly report printed "1,240 impressions" and
@@ -850,7 +867,8 @@ let bodyHtml = mdToHtml(md); let mdOut = md;
 // ---- v4.4 blocks: E-E-A-T byline and author box, table of contents, hub cluster block, case snapshot, local NAP, video ----
 const role = d.page_role || 'standard'; const pt = String(d.recommended_page || d.page_type || '').toLowerCase();
 const articleLike = d.article_like != null ? !!d.article_like : /blog|guide|article|pillar|hub|case stud/.test(pt);
-const AU = d.author || null, RV = d.reviewer || null, P = d.site_profile || null, V = d.video && d.video.url ? d.video : null, CS = d.case_study || null;
+const AU = d.author ? { ...d.author, job_title: JOBT.real(d.author.job_title) } : null, RV = d.reviewer ? { ...d.reviewer, job_title: JOBT.real(d.reviewer.job_title) } : null,   // F-29: no "User" in a byline
+  P = d.site_profile || null, V = d.video && d.video.url ? d.video : null, CS = d.case_study || null;
 // W05-A (wave 0.5, 2026-10-30): the visible "Updated" date is the website's market day (Regulatory Plan's as_of, in the market's time
 // zone: Asia/Dubai for the UAE), the day the second read and the regulatory status take as today. A run at 22:31 UTC on 29 October dated
 // a UAE page 29 October while the read and the deadlines said 30 October. UTC only when no market day is known.

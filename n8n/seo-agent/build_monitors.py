@@ -43,6 +43,7 @@ def src(p):   # a Code node source with the shared snippets inlined
     s = seo_events.inline(rd('code/' + p))
     s = s.replace('/*__MONITOR_SITES__*/', rd('code/_monitor_sites.js')).replace('/*__REPORT_KIT__*/', rd('code/_report_kit.js')).replace('/*__AI_STATS__*/', rd('code/_ai_stats.js'))
     s = s.replace('/*__SITE_TIME__*/', site_time_src())   # 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): the website's calendar and the cycle run (ST), inside _monitor_sites.js or on its own
+    s = s.replace('/*__JOB_TITLE__*/', rd('code/_job_title.js').rstrip('\n'))   # section 189 (F-29): a placeholder job title is never printed
     s = s.replace('/*__GONE__*/', rd('code/_gone.js').rstrip('\n'))   # RV-1 (2026-10-21): the pages that no longer answer, one message in every report
     s = s.replace('/*__SITE_MODEL__*/', rd('code/_site_model.js').rstrip('\n'))   # G19 (SITE_MODEL_SPEC.md): the one site model, one copy per node that asks for it
     s = s.replace('/*__FIT_GATE__*/', rd('code/_fit_gate.js').rstrip('\n'))   # B-G1 / B-G2 (2026-10-15): the fit gate, on the READ path too (FITR, INVARIANTS rule 2)

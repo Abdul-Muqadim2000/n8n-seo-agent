@@ -14,6 +14,8 @@
 //        run dead after 18.6 minutes): auto-fix on, one Claude Haiku model (no thinking, declared limits) feeding only that parser
 //   PR5  F-05: a page whose title has no Latin letters is packaged at its keyword's slug, never at "/page" (the home-page guard of the ladder
 //        is pinned in scenarios_ladder_pkg.js LPK4)
+//   PR7  F-29: a placeholder author job title ("User", "N/A", "-", "none", "test", "job title", "title") is never printed in a byline, the
+//        Person schema, the author box or an outreach signature (JOBT)
 //   PR6  services up to 120 characters, as the app now allows (SERVICE_MAX_CHARS): the site model and Normalize Input keep them whole
 module.exports = async (ctx) => {
   const { H, run, mock, store, guard, reset, begin } = ctx;
@@ -291,6 +293,30 @@ module.exports = async (ctx) => {
     check('Normalize Input keeps services up to 120 characters', /const KF_SERVICES = [^\n]*\.slice\(0, 120\)\)/.test(ni) && !/const KF_SERVICES = [^\n]*\.slice\(0, 80\)\)/.test(ni), (ni.match(/const KF_SERVICES = [^\n]*/) || [''])[0].slice(0, 200));
     const ap = SRC('_ai_panel.js');
     check('the AI panel\'s services read keeps 120 characters too', /arr\(r\.services_json\)\]\.map\(s => S\(s\)\.slice\(0, 120\)\)/.test(ap), '');
+  });
+
+  // ---------- PR7 a placeholder job title is never printed ----------
+  await guard('PR7 placeholder job title', async () => {
+    const SN = 'PR7 (F-29) a placeholder author job title ("User") is never printed: JOBT says so, Blog Package leaves it out of the byline';
+    reset(); begin(SN); const check = mkCheck(SN);
+    const JOBT = new Function(SRC('_job_title.js') + '\nreturn JOBT;')();
+    const bad = ['User', 'user ', 'N/A', 'n/a', '-', 'None', 'TEST', 'Job title', ' job  title ', 'Title'];
+    const good = ['Head of Finance', 'Founder', 'Owner', 'Administrator', 'Tester', 'User experience designer', 'Test manager'];
+    check('the seven placeholders are no job title (case and spacing aside); Owner, Administrator, Tester and titles containing such a word are real; empty is missing, not a placeholder',
+      bad.every(t => JOBT.isPlaceholder(t) && JOBT.real(t) === '') && good.every(t => !JOBT.isPlaceholder(t) && JOBT.real(t) === t) && !JOBT.isPlaceholder('') && JOBT.real('  Head  of Finance ') === 'Head of Finance',
+      J(bad.map(t => [t, JOBT.isPlaceholder(t)]).concat(good.map(t => [t, JOBT.isPlaceholder(t)]))));
+    const zlib = require('zlib');
+    const FX = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures_eqa_42.json.gz'))).toString());
+    mock('Site Model', [{ json: { site_model: { ...(FX.parse_brief.site_model || {}), domain: 'novaand-demo.com', canonical_host: 'www.novaand-demo.com' } } }]);
+    const bw = clone(FX.build_word_file); bw.author = { ...(bw.author || {}), name: (bw.author || {}).name || 'Sara Haddad', job_title: 'User' };
+    const P = (await run('Blog Package', [{ json: bw }]))[0].json;
+    const by = (P.article_html.match(/<p class="byline[^>]*>.*?<\/p>/) || [''])[0];
+    check('the byline names the author without ", User"', by && !/,\s*User\b/.test(by) && !/,\s*User\b/.test(P.article_markdown), by.slice(0, 200));
+    const nodes = (f) => JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'workflows', f), 'utf8'))[0].nodes;
+    const code = (f, n) => ((nodes(f).find(x => x.name === n) || {}).parameters || {}).jsCode || '';
+    check('every node that prints a job title reads it through JOBT (byline, schema, author box, profile check, outreach signer)',
+      [['SEO_Agent_v4.json', 'Brief Context'], ['SEO_Agent_v4.json', 'Blog Package'], ['SEO_Agent_v4.json', 'Content QA'], ['SEO_Agent_v4.json', 'Profile Delivery'],
+        ['SEO_Agent_Link_Builder.json', 'LB Writer Input']].every(([f, n]) => /const JOBT = \(\(\) =>/.test(code(f, n)) && /JOBT\.real\(/.test(code(f, n)) && !/__JOB_TITLE__/.test(code(f, n))), '');
   });
 
 };
