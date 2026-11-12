@@ -138,8 +138,8 @@ module.exports = async (ctx) => {
 
     // ---- KIW0-8 money and words ----
     const CC = new Function(rd('v5', 'code', '_cost_cal.js') + '\nreturn CC;')();
-    check('KIW0-8 the engine estimates: competitors $0.35 search data, keyword_research $0.90 (CONTRACTS.md §7), no Claude row (FX-L: the worker calls no model), and keysFor finds them',
-      CC.DFS_EST.competitors === 0.35 && CC.DFS_EST.keyword_research === 0.9 && CC.EST.competitors === 0 && CC.EST.keyword_research === 0
+    check('KIW0-8 the engine estimates: competitors $0.35 search data, keyword_research $0.90 (CONTRACTS.md §7); Claude: none for competitors, $0.45 for keyword research (KI-JUDGE 2026-11-12: the keyword judge), and keysFor finds them',
+      CC.DFS_EST.competitors === 0.35 && CC.DFS_EST.keyword_research === 0.9 && CC.EST.competitors === 0 && CC.EST.keyword_research === 0.45
       && J(CC.keysFor('dfs', { mode: 'competitors' })) === J(['competitors']) && J(CC.keysFor('ai', { mode: 'keyword_research' })) === J(['keyword_research']), J({ e: [CC.EST.competitors, CC.EST.keyword_research], d: [CC.DFS_EST.competitors, CC.DFS_EST.keyword_research] }));
     const costTs = fs.readFileSync(path.join(ROOT, '..', '..', 'app', 'shared', 'src', 'cost.ts'), 'utf8');
     const row = (k) => { const m = costTs.match(new RegExp('\\n  ' + k + ': \\{ ai: ([0-9.]+), dfs: ([0-9.]+),')); return m ? [Number(m[1]), Number(m[2])] : null; };

@@ -290,6 +290,22 @@
     "Research Picture"
    ]
   ],
+  "Any Research Judge Retries?": [
+   [
+    "Wait Before Judge Retry"
+   ],
+   [
+    "Research Judge Picture"
+   ]
+  ],
+  "Any Research Judge?": [
+   [
+    "Run Research Judge"
+   ],
+   [
+    "Research Judge Picture"
+   ]
+  ],
   "Any Research SERPs Live?": [
    [
     "Run Research SERPs Live"
@@ -837,6 +853,21 @@
     "Any Research Enrich?"
    ]
   ],
+  "Research Judge Picture": [
+   [
+    "Research Traffic Requests"
+   ]
+  ],
+  "Research Judge Requests": [
+   [
+    "Any Research Judge?"
+   ]
+  ],
+  "Research Judge Retry Plan": [
+   [
+    "Any Research Judge Retries?"
+   ]
+  ],
   "Research Picture": [
    [
     "Research SERP Keys"
@@ -859,7 +890,7 @@
   ],
   "Research SERP Picture": [
    [
-    "Research Traffic Requests"
+    "Research Judge Requests"
    ]
   ],
   "Research SERP Requests": [
@@ -1006,6 +1037,16 @@
   "Run Research Enrich Retry Plan": [
    [
     "Any Run Research Enrich Retries?"
+   ]
+  ],
+  "Run Research Judge": [
+   [
+    "Research Judge Retry Plan"
+   ]
+  ],
+  "Run Research Judge (Retry)": [
+   [
+    "Research Judge Picture"
    ]
   ],
   "Run Research SERPs": [
@@ -1177,6 +1218,11 @@
    ],
    []
   ],
+  "Wait Before Judge Retry": [
+   [
+    "Run Research Judge (Retry)"
+   ]
+  ],
   "Wait Before Run Comp Labs Retry": [
    [
     "Run Comp Labs (Retry)"
@@ -1345,6 +1391,8 @@
   "Any KI KW Rows?",
   "Any Research Discover?",
   "Any Research Enrich?",
+  "Any Research Judge Retries?",
+  "Any Research Judge?",
   "Any Research SERPs Live?",
   "Any Research SERPs?",
   "Any Research Traffic?",
@@ -1448,6 +1496,9 @@
   "Research Candidates",
   "Research Discover Requests",
   "Research Enrich Requests",
+  "Research Judge Picture",
+  "Research Judge Requests",
+  "Research Judge Retry Plan",
   "Research Picture",
   "Research Result",
   "Research SERP Fallback",
@@ -1481,6 +1532,8 @@
   "Run Research Enrich (Retry)",
   "Run Research Enrich Answers",
   "Run Research Enrich Retry Plan",
+  "Run Research Judge",
+  "Run Research Judge (Retry)",
   "Run Research SERPs",
   "Run Research SERPs (Retry)",
   "Run Research SERPs Answers",
@@ -1512,6 +1565,7 @@
   "Supersede Gaps?",
   "Supersede Keywords?",
   "Tell Caller (KI)?",
+  "Wait Before Judge Retry",
   "Wait Before Run Comp Labs Retry",
   "Wait Before Run Comp Profiles Retry",
   "Wait Before Run Comp SERPs Retry",

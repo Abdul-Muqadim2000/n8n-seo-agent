@@ -31,7 +31,7 @@
     "DFS Balance (KI)"
    ],
    "est": {
-    "ai": 0.0,
+    "ai": 0.45,
     "dfs": 0.9
    },
    "plan": "KI Plan",

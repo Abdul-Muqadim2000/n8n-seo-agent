@@ -30,7 +30,9 @@ const NOTE = {
   no_market: 'No market could be set: ' + S(mk.detail) + '. Nothing ran and nothing was spent.',
 };
 const ctx = { ...q, ki_mode: kiMode, market: mk.ok ? mk.market : '' };
-const out = { ...q, ki_mode: kiMode, killed, refused: !!reason, reason, site, monitors: mon,
+// KI-JUDGE (2026-11-12): seo_cache ki:kill = 'judge' switches only the keyword judge off (every website; the word rules decide alone)
+const judgeOff = !killUnread && (kill || []).some(r => S(r.key) === '__KILL_KEY__' && /^judge$/i.test(S(r.value)));
+const out = { ...q, ki_mode: kiMode, killed, refused: !!reason, reason, site, monitors: mon, judge_off: judgeOff,
   country_name: mk.country || '', iso: mk.iso || '', location_code: mk.location_code || null, language_code: mk.language_code || '', market: mk.ok ? mk.market : '', market_from: mk.from || '' };
 if (reason) { out.callback_body = KIW.refusalBody(ctx, reason, NOTE[reason] || reason); out.note = NOTE[reason] || reason; }
 return [{ json: out }];

@@ -84,15 +84,23 @@ const protect = [...(fc.protect || []), ...(p.tracked || []), ...(p.ladders || [
 const lowFitText = (KI.GATE_TEXT || {}).low_fit || 'too far from what you sell';
 const rows = [], gated = [];
 for (const r of merged) {
-  const g = KI.gate(r.keyword, { ...fc, protect, intent: r.labs_intent === 'navigational' ? 'navigational' : '' });
+  const g0 = KI.gate(r.keyword, { ...fc, protect, intent: r.labs_intent === 'navigational' ? 'navigational' : '' });
+  // KI-JUDGE (2026-11-12, fixes/JUDGE.md): a soft stop (a word rule's opinion of who is searching) keeps the search for the judge, which
+  // reads it with its results page; the opinion rides along and decides only when the judge cannot answer. A hard stop is final.
+  const judging = p.ki_judge !== false;
+  const soft = judging && g0.gate === 'fail' && g0.soft ? { reason: g0.reason, detail: (g0.text || g0.reason) + (g0.detail ? ' (' + g0.detail + ')' : '') } : null;
+  const g = soft ? { gate: 'pass', reason: '', text: '', detail: '' } : g0;
   const f = g.gate === 'pass' ? KI.fit(r.keyword, fc) : { fit: 0, low: 0, high: 0 };
   // FX-L H8: a search the site already earns impressions for on page 1-2 is never "too far from what you sell"
   const ranks = KIW.N(r.gsc_position) != null && KIW.N(r.gsc_position) <= 20 && (KIW.N(r.gsc_impressions) || 0) > 0;
-  const lowFit = g.gate === 'pass' && f.fit < (KI.CONFIG.fit_gate || 0.35) && !ranks;
+  const lowFit0 = g.gate === 'pass' && f.fit < (KI.CONFIG.fit_gate || 0.35) && !ranks;
+  const softLow = judging && lowFit0 && !soft ? { reason: 'low_fit', detail: lowFitText + (f.detail ? ' (' + f.detail + ')' : '') } : null;
+  const lowFit = lowFit0 && !judging;
   // FX-L consistency M3: the stored reason is a CODE (gate_reason), the engine's sentence goes to gate_detail; the app has the words
   const row = { ...r, gate: g.gate === 'pass' && !lowFit ? 'pass' : 'fail', gate_reason: g.gate === 'pass' ? (lowFit ? 'low_fit' : '') : g.reason,
     gate_detail: g.gate === 'pass' ? (lowFit ? lowFitText + (f.detail ? ' (' + f.detail + ')' : '') : '') : (g.text || g.reason) + (g.detail ? ' (' + g.detail + ')' : ''),
     gate_code: g.gate === 'pass' ? (lowFit ? 'low_fit' : '') : g.reason, fit: ranks && f.fit < (KI.CONFIG.fit_gate || 0.35) ? (KI.CONFIG.fit_gate || 0.35) : f.fit, fit_low: f.low, fit_high: f.high, competitors: compPos[r.kw_key] || [] };
+  if (soft || softLow) row.soft_gate = soft || softLow;
   row.prescore = KI.prescore(row, KI.CONFIG);
   (row.gate === 'pass' ? rows : gated).push(row); }
 rows.sort((a, b) => b.prescore - a.prescore || a.kw_key.localeCompare(b.kw_key));

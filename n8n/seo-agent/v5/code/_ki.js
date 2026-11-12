@@ -557,7 +557,7 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
     'navigational': 'navigational', 'own brand': 'own_brand', 'off topic': 'off_topic', 'too broad': 'too_broad', 'empty': 'empty' };
   const GATE_TEXT = { other_market: 'outside your market', career: 'someone looking for a job or a course', other_brand: 'another company\'s brand', government: 'a government service',
     portal: 'someone looking for a login or a portal', navigational: 'someone looking for one particular website', own_brand: 'your own brand (tracked, not a new opportunity)',
-    practitioner: 'someone already using the product, looking for its documentation or settings', off_topic: 'not something you sell', too_broad: 'too broad to point to what you sell', empty: 'no keyword', low_fit: 'too far from what you sell', avoid: 'you or our check said not to write it' };
+    practitioner: 'someone already using the product, looking for its documentation or settings', not_a_search: 'not a search people make', off_topic: 'not something you sell', too_broad: 'too broad to point to what you sell', empty: 'no keyword', low_fit: 'too far from what you sell', avoid: 'you or our check said not to write it' };
   /** the gate ctx from a site: { own_domain, market, services (list), topics, competitors, serp_domains, brands, intent, protect, serp, career, avoid } */
   const gctx = (ctx) => { const o = ctx || {}; const svc = services(o.services); const topics = uniq(svc.concat(services(o.topics || [])));
     return { own_domain: o.own_domain || o.domain || '', market: S(o.market || '').toUpperCase().slice(0, 2), services: svc, topics, competitors: o.competitors || [],
@@ -612,7 +612,9 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
     if (!rest.length || rest.length > 3 || rest.some(w => TAIL_OK.test(w) || /^\d+$/.test(w) || svcW.has(w))) return null;   // a tail word that is itself one of the services is the service
     if (typeof fitPlaces === 'function' && fitPlaces(rest.join(' ')).length) return null;
     return { words: rest.join(' '), anchor: ANCHOR_RX.test(' ' + ph + ' ') || /\s(?:peppol|pint)\s/.test(' ' + ph + ' ') }; };
-  const fail = (reason, detail, text) => ({ gate: 'fail', reason, text: text || GATE_TEXT[reason], detail: ascii(detail) });
+  // KI-JUDGE (2026-11-12): a word rule about WHO is searching is a second opinion (soft): keyword research hands the search to the judge with
+  // its results page and the judge decides; another market or language is final (hard)
+  const fail = (reason, detail, text) => ({ gate: 'fail', reason, text: text || GATE_TEXT[reason], detail: ascii(detail), soft: reason !== 'other_market' });
   const whoSearches = (keyword, o) => {
     const kt = ' ' + norm(keyword) + ' '; const buyer = BUYER_RX.test(kt);
     const svcText = services(o.services).concat(services(o.topics || [])).join(' | ').toLowerCase();
@@ -669,7 +671,9 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
     const g = fitGate(S(keyword), gctx(anchored(keyword, o)));
     if (g && g.ok) return { gate: 'pass', reason: '', text: '', detail: '' };
     const reason = GATE_REASON[(g || {}).reason] || 'off_topic';
-    return { gate: 'fail', reason, text: GATE_TEXT[reason], detail: ascii((g || {}).detail || '') };
+    // KI-JUDGE: "not something you sell" / "too broad" read from the words alone are a second opinion; another market, a brand, a portal,
+    // a government service, a navigational or an own-brand search are final
+    return { gate: 'fail', reason, text: GATE_TEXT[reason], detail: ascii((g || {}).detail || ''), soft: reason === 'off_topic' || reason === 'too_broad' };
   };
   const BUYER_W = new Set(['provider', 'providers', 'company', 'companies', 'service', 'services', 'partner', 'partners', 'agency', 'agencies', 'firm', 'firms', 'vendor', 'vendors',
     'best', 'top', 'leading', 'cost', 'costs', 'price', 'prices', 'pricing', 'hire', 'expert', 'experts', 'specialist', 'specialists', 'consultant', 'consultants', 'solution',
