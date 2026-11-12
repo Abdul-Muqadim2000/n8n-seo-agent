@@ -2,7 +2,7 @@ import { resolve4, resolveMx, resolveTxt } from 'node:dns/promises';
 import { ImapFlow } from 'imapflow';
 import { simpleParser, type AddressObject } from 'mailparser';
 import nodemailer from 'nodemailer';
-import { emailDomain, footerLines, isAutoReply, isBounce, replySubject, type DnsCheck } from '@seo/shared';
+import { emailDomain, footerLines, isAutoReply, isBounce, realJobTitle, replySubject, type DnsCheck } from '@seo/shared';
 import { config } from '../config';
 import type { MailboxRow } from '../db/schema';
 import { randomToken } from '../lib/crypto';
@@ -111,7 +111,7 @@ export interface ComposedMail { from: string; to: string; subject: string; text:
 /** One e-mail of a sequence: plain text (no tracking), the footer every e-mail carries, threaded on the earlier messages. */
 export function compose(m: MailboxRow, o: { sequenceId: string; step: number; to: string; subject: string; body: string; firstSubject: string; country: string; foundOn: string; previousIds: string[]; manual?: boolean }): ComposedMail {
   const first = o.step === 0 && !o.manual;
-  const lines = footerLines({ name: m.signatureName || m.fromName, title: m.signatureTitle, company: m.company, postalAddress: m.postalAddress }, { firstEmail: first, country: o.country, foundOn: o.foundOn });
+  const lines = footerLines({ name: m.signatureName || m.fromName, title: realJobTitle(m.signatureTitle), company: m.company, postalAddress: m.postalAddress }, { firstEmail: first, country: o.country, foundOn: o.foundOn });
   const body = o.body.replace(/\r/g, '').trim();
   const text = (o.manual ? body : body + '\n' + lines.join('\n')).replace(/\n{3,}/g, '\n\n');
   const prev = o.previousIds.filter(Boolean);

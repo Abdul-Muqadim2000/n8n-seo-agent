@@ -18,6 +18,7 @@ import { isValidTimezone } from './cycle-clock';
 import { TOPIC_SOURCES } from './cycles';
 import { aiAlertRulesSchema } from './ai-trends';
 import { SERVICE_MAX_CHARS, SERVICES_MAX } from './list-entries';
+import { isPlaceholderJobTitle, PLACEHOLDER_JOB_TITLE_MESSAGE } from './profile';
 
 // ---------- building blocks ----------
 const opt = (max: number) => z.string().trim().max(max, `At most ${max} characters`).default('');
@@ -401,11 +402,14 @@ export const caseStudyInput = z.object({
   emailCopy,
 });
 
+/** F-29: a job title shown under a name on every page; "User", "Admin", "N/A" and the like are refused with a message (empty is fine) */
+const jobTitleField = opt(160).refine((v) => !isPlaceholderJobTitle(v), PLACEHOLDER_JOB_TITLE_MESSAGE);
+
 export const profileFields = z.object({
   author: z
     .object({
       name: opt(120),
-      jobTitle: opt(160),
+      jobTitle: jobTitleField,
       credentials: opt(600),
       bio: opt(1200),
       url: optUrl,
@@ -414,7 +418,7 @@ export const profileFields = z.object({
       knowsAbout: stringList(12, 80),
     })
     .default({ name: '', jobTitle: '', credentials: '', bio: '', url: '', sameAs: [], imageUrl: '', knowsAbout: [] }),
-  reviewer: z.object({ name: opt(120), jobTitle: opt(160), url: optUrl }).default({ name: '', jobTitle: '', url: '' }),
+  reviewer: z.object({ name: opt(120), jobTitle: jobTitleField, url: optUrl }).default({ name: '', jobTitle: '', url: '' }),
   businessName: opt(160),
   businessType: opt(80),
   address: z

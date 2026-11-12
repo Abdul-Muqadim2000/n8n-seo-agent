@@ -1,4 +1,4 @@
-import type { ProfileRow } from '@seo/shared';
+import { realJobTitle, type ProfileRow } from '@seo/shared';
 import type { MailboxRow, OutreachSequenceRow, SiteRow } from '../db/schema';
 
 // D14 (2026-10-11): the Reply Reader may state about the business only what is on file. With the facts empty it invented "we're not
@@ -12,7 +12,8 @@ const PROFILE_KEYS = ['business_name', 'business_type', 'author_name', 'author_j
 export function profileFacts(p: ProfileRow | null | undefined): Record<string, string> {
   const out: Record<string, string> = {};
   if (!p) return out;
-  for (const k of PROFILE_KEYS) { const v = String((p as unknown as Record<string, unknown>)[k] ?? '').trim(); if (v) out[k] = v.slice(0, 200); }
+  // F-29: a placeholder job title ("User") is not a fact about anybody: left out, as an empty one
+  for (const k of PROFILE_KEYS) { const raw = (p as unknown as Record<string, unknown>)[k]; const v = (k.endsWith('_job_title') ? realJobTitle(raw) : String(raw ?? '')).trim(); if (v) out[k] = v.slice(0, 200); }
   return out;
 }
 
@@ -35,7 +36,7 @@ export function replyReadBody(a: ReplyReadInput): Record<string, unknown> {
   return {
     domain: a.site.domain, prospect_domain: a.sequence.prospectDomain, page_url: a.sequence.pageUrl,
     business: a.site.business ? a.site.business.slice(0, 120) : a.site.domain,
-    signer: [a.mailbox.signatureName || a.mailbox.fromName, a.mailbox.signatureTitle, a.mailbox.company].filter(Boolean).join(', '),
+    signer: [a.mailbox.signatureName || a.mailbox.fromName, realJobTitle(a.mailbox.signatureTitle), a.mailbox.company].filter(Boolean).join(', '),
     facts, business_facts: facts, profile: profileFacts(a.profile),
     our_subject: a.ourSubject, our_body: a.ourBody, reply_from: a.from, reply_subject: a.subject, reply_text: a.text, received_at: a.now.toISOString(),
   };

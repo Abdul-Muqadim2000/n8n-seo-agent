@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProfileRow } from '@seo/shared';
 import { profileFacts, replyReadBody } from '../src/services/replyFacts';
+import { profileFromRow } from '../src/services/data';
 import type { MailboxRow, OutreachSequenceRow, SiteRow } from '../src/db/schema';
 
 // D14 (fix plan 2026-10-11): the Reply Reader call carries the owner's business facts and the business profile with every reply
@@ -22,10 +23,26 @@ describe('the Reply Reader call (D14)', () => {
     const b = replyReadBody({ site: { ...site, business: '', businessFacts: '' }, profile: null, mailbox: { ...mb, signatureName: '', signatureTitle: '', company: '' } as MailboxRow, sequence: seq, ourSubject: '', ourBody: '', from: 'a@b.ae', subject: 's', text: 't', now });
     expect(b.facts).toBe(''); expect(b.business_facts).toBe(''); expect(b.profile).toEqual({}); expect(b.business).toBe('techand.ai'); expect(b.signer).toBe('Sara Khan');
   });
+  // F-29 (prod review 2026-11-12): a placeholder job title ("User") signed outreach answers
+  it('a placeholder job title is left out of the facts and the signature', () => {
+    expect(profileFacts({ ...profile, author_job_title: 'User', reviewer_job_title: 'N/A' } as ProfileRow)).not.toHaveProperty('author_job_title');
+    expect(profileFacts({ ...profile, author_job_title: 'User', reviewer_job_title: 'N/A' } as ProfileRow)).not.toHaveProperty('reviewer_job_title');
+    const b = replyReadBody({ site, profile, mailbox: { ...mb, signatureTitle: 'User' } as MailboxRow, sequence: seq, ourSubject: '', ourBody: '', from: 'a@b.ae', subject: 's', text: 't', now });
+    expect(b.signer).toBe(`${mb.signatureName}, ${mb.company}`);
+  });
   it('profile facts: only the fact fields, trimmed, empty ones left out, the bio and the logo never sent', () => {
     expect(profileFacts({ ...profile, city: '  Dubai  ', phone: '' } as ProfileRow)).toMatchObject({ city: 'Dubai' });
     expect(profileFacts({ ...profile, phone: '' } as ProfileRow)).not.toHaveProperty('phone');
     expect(profileFacts(profile)).not.toHaveProperty('author_bio'); expect(profileFacts(profile)).not.toHaveProperty('logo_url');
     expect(profileFacts(null)).toEqual({});
+  });
+});
+
+describe('the stored profile in the form (F-29)', () => {
+  it('a stored placeholder job title shows as empty, so the form asks for a real one', () => {
+    const row = { site_id: 's', domain: 'example.com', author_name: 'Sara Khan', author_job_title: 'User', reviewer_name: 'Omar Ali', reviewer_job_title: 'Tax Partner', country_code: 'AE' } as unknown as ProfileRow;
+    const p = profileFromRow(row)!;
+    expect(p.author.jobTitle).toBe('');
+    expect(p.reviewer.jobTitle).toBe('Tax Partner');
   });
 });
