@@ -11,6 +11,34 @@ import { cn } from '@/lib/utils';
  * key types a comma, and commas split only a plain list of short items (shared `splitListEntries`). `maxLength` shows a live character
  * counter under the field; an entry over it is refused by `validate` with a message, never cut.
  */
+/**
+ * Typed or pasted text added to a list: the new list, what stays in the field and the message. Review N1 (2026-11-12): one bad entry of a
+ * paste never loses the others: the good ones are added, the bad ones stay in the field with the first message, for the person to fix.
+ * null when the text holds no entry.
+ */
+export function addEntries(
+  value: readonly string[],
+  raw: string,
+  o: { split?: ListSplit; normalize?: (s: string) => string; validate?: (s: string) => string | null; max?: number },
+): { next: string[]; draft: string; error: string | null } | null {
+  const parts = splitListEntries(raw, o.split ?? 'items').map(o.normalize ?? ((s) => s.trim())).filter(Boolean);
+  if (!parts.length) return null;
+  const next = [...value];
+  const bad: string[] = [];
+  let error: string | null = null;
+  for (const p of parts) {
+    if (o.max != null && next.length >= o.max) break;
+    const err = o.validate?.(p) ?? null;
+    if (err) {
+      bad.push(p);
+      error ??= err;
+      continue;
+    }
+    if (!next.includes(p)) next.push(p);
+  }
+  return { next, draft: bad.join('; '), error };
+}
+
 export function TagInput({
   value,
   onChange,
@@ -45,21 +73,11 @@ export function TagInput({
   const draftLen = draft.replace(/\s+/g, ' ').trim().length;
 
   const add = (raw: string) => {
-    const parts = splitListEntries(raw, split).map(normalize).filter(Boolean);
-    if (!parts.length) return;
-    const next = [...value];
-    for (const p of parts) {
-      if (max != null && next.length >= max) break;
-      const err = validate?.(p) ?? null;
-      if (err) {
-        setError(err);
-        return;
-      }
-      if (!next.includes(p)) next.push(p);
-    }
-    setError(null);
-    onChange(next);
-    setDraft('');
+    const r = addEntries(value, raw, { split, normalize, validate, max });
+    if (!r) return;
+    setError(r.error);
+    if (r.next.length !== value.length) onChange(r.next);
+    setDraft(r.draft);
   };
 
   const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -126,16 +144,18 @@ export function TagInput({
           <span className="min-w-0">{error}</span>
         </p>
       )}
-      {(max != null || (maxLength != null && draftLen > 0)) && (
+      {(max != null || maxLength != null) && (
         <p className="mt-1 flex flex-wrap gap-x-3 text-xs tabular text-ink-3">
           {max != null && (
             <span>
               {value.length} of {max}
             </span>
           )}
-          {maxLength != null && draftLen > 0 && (
-            <span className={cn(draftLen > maxLength && 'text-critical-text')} aria-live="polite">
-              {draftLen}/{maxLength} characters
+          {maxLength != null && draftLen > 0 && <span className={cn(draftLen > maxLength && 'text-critical-text')}>{draftLen}/{maxLength} characters</span>}
+          {/* review N2: a screen reader hears the count only once the entry is too long, not on every key */}
+          {maxLength != null && (
+            <span className="sr-only" aria-live="polite">
+              {draftLen > maxLength ? `Too long: ${draftLen} of ${maxLength} characters` : ''}
             </span>
           )}
         </p>
