@@ -221,8 +221,10 @@ describe('S2-02: a final version is charged once, through its own run', () => {
   it('each run takes the row nearest its start; a second row in the window is not charged to it', () => {
     const t0 = Date.parse('2026-11-11T10:00:00Z');
     const run = (id: string, min: number) => ({ id, orgId: 'o', siteId: 's', userId: null, mode: 'finalize', domain: 'fin.test', createdAt: new Date(t0 + min * MIN), completedAt: new Date(t0 + (min + 2) * MIN) });
-    const row = (id: string, min: number, domain = 'fin.test') => ({ run_id: id, mode: 'page_finalize', domain, created_at: new Date(t0 + min * MIN + 3_000).toISOString() });
-    const m = matchFinalizeRows([row('a', 0), row('b', 1), row('c', 30), row('d', 0, 'other.test'), { ...row('e', 30), mode: 'ai_pulse' }], [run('r1', 0), run('r2', 30)]);
+    const row = (id: string, min: number, domain = 'fin.test', usd = 0.02) => ({ run_id: id, mode: 'page_finalize', domain, ai_usd: usd, measured_usd: usd, estimated_usd: 0, created_at: new Date(t0 + min * MIN + 3_000).toISOString() });
+    // N1: a $0 live grade started right at the run's start does not take its place
+    const m = matchFinalizeRows([row('grade', 0, 'fin.test', 0), row('a', 0.1), row('b', 1), row('c', 30), row('d', 0, 'other.test'), { ...row('e', 30), mode: 'ai_pulse' }], [run('r1', 0), run('r2', 30)]);
+    expect(m.has('grade')).toBe(false);
     expect(m.get('a')?.id).toBe('r1');
     expect(m.has('b')).toBe(false);
     expect(m.get('c')?.id).toBe('r2');

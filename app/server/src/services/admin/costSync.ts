@@ -219,6 +219,10 @@ export function matchFinalizeRows(rows: LedgerRow[], runs: FinalizeRunRef[]): Ma
     const start = date(row.created_at, row.createdAt);
     const host = bareHost(row.domain);
     if (!exec || !start || !host) continue;
+    // review N1 (2026-11-12): a live page grade costs $0 and runs every 10 minutes; it never takes a final version's place (the engine row
+    // cannot tell the two apart until it carries the app's request id)
+    const c = engineCost(row);
+    if (c.claudeUsd + c.dataforseoUsd <= 0) continue;
     for (const run of runs) {
       if (bareHost(run.domain) !== host) continue;
       const from = run.createdAt.getTime() - FIN_BEFORE_MS;
