@@ -1393,6 +1393,8 @@ export interface LadderCard {
   status: LadderStatus;
   /** one plain-language line about the status */
   statusText: string;
+  /** review S1 (2026-11-12): the ladder is archived (its card status reads `paused`): no Pause / Resume is offered, the server refuses both */
+  archived?: boolean;
   counts: { total: number; published: number; waiting: number; writing: number; planned: number };
   headPosition: number | null;
   /** positive = moved up since the previous check */
