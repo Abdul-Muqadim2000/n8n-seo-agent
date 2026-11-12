@@ -805,7 +805,9 @@ const opaqueRedirect = (v) => typeof v === 'string' && SRC.isRedirect(v) && !SRC
 const cleanUrls = (x) => Array.isArray(x) ? x.filter(v => !opaqueRedirect(v)).map(cleanUrls) : opaqueRedirect(x) ? '' : (x && typeof x === 'object') ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, cleanUrls(v)])) : (typeof x === 'string' && /^https?:\/\//i.test(x) ? SRC.clean(x) : x);
 const schema = (Array.isArray(d.schema_blocks) ? d.schema_blocks : []).map(b => (b && b.json) ? { ...b, json: cleanUrls(b.json) } : cleanUrls(b));
 const title = metaLines.title || h1 || d.keyword || 'New page';
-const slug = (String(d.content_brief_slug || metaLines.slug || title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)) || 'page';
+const slugOf = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
+// F-05 (production review 2026-11-12): a title with no Latin letters left the slug "page" (every such page at /page); the keyword's own slug comes first
+const slug = slugOf(d.content_brief_slug || metaLines.slug || title) || slugOf(d.keyword) || 'page';
 const description = /^(?:Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary Keywords|URL|Page Type)\s*:/i.test(metaLines['meta description'] || '') ? '' : (metaLines['meta description'] || '');   // W0-A: a field label is never a description
 const headings = [...md.matchAll(/^(#{2,3})\s+(.+)$/gm)].map(x => ({ level: x[1].length, text: x[2].trim() }));
 const links = [...md.matchAll(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g)].map(x => ({ text: x[1], url: x[2] }));

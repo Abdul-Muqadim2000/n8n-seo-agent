@@ -214,6 +214,17 @@ module.exports = async (ctx) => {
     console.log('   erp head (ranks) ->', J({ url: L3.top.target_url, guard: (L3.ladder_rules || {}).head_guard }));
     check('review H5: a blog address that ranks for the main keyword KEEPS it (improve), never a competing new page; the plan says why',
       L3.top.target_url === B && L3.top.exists === true && ((L3.ladder_rules || {}).head_guard || {}).reason === 'ranks' && (L3.notes || []).some(n => /already ranks for "dynamics 365 erp system", so the main page improves it/.test(n)), J(L3.top));
+    // production review 2026-11-12 (F-05, section 189): the home page ranked for the head search and was planned as the main page (a rewrite of
+    // the client's home page); it never is, even when it ranks: the main page gets its own address
+    const PH = PAGES.map(p => p.url === T + '/' ? { ...p, queries: [{ query: 'crm service provider', position: 9, impressions: 40 }] } : p);
+    const L4 = await planOf({ head: 'crm service provider', cands: [cand('crm service provider dubai', 40), cand('best crm service provider uae', 30), cand('crm service provider pricing uae', 20)], pages: PH,
+      existing_page: { url: T + '/', source: 'ranking', title: PAGES[0].title, matched_by: 'query', confidence: 1, evidence: 'it ranks' } });
+    console.log('   home head ->', J({ url: L4.top.target_url, exists: L4.top.exists, guard: (L4.ladder_rules || {}).head_guard }));
+    check('F-05: the home page is never the main page of a ladder, even when it ranks for the head: a new page at its own address',
+      L4.planned === true && LRU.pathOf(L4.top.target_url) !== '' && L4.top.exists === false && ((L4.ladder_rules || {}).head_guard || {}).reason === 'home', J(L4.top));
+    check('F-05: no rung page is planned on the home page either', !pagesOf(L4).some(p => LRU.pathOf(p.target_url) === ''), J(pagesOf(L4).map(p => p.target_url)));
+    check('F-05: the kit says the same for any caller (headTarget refuses the root address)', (LRU.headTarget(T + '/', { planned: T + '/crm-service-provider' }) || {}).reason === 'home'
+      && (LRU.headTarget(T + '/', { planned: T + '/crm-service-provider' }) || {}).to === T + '/crm-service-provider', J(LRU.headTarget(T + '/', { planned: T + '/x' })));
     mock('Attach PDF Ladder', [{ json: { ladder: L2, pages_now: 1, domain: 'techand.ai', country: 'United Arab Emirates' } }]);
     const rows2 = (await run('Ladder Rows', EMPTY)).map(i => i.json);
     check('re-review N1: a main page moved off a BLOG address asks for no redirect (the article may be another rung\'s live page)',

@@ -12,6 +12,8 @@
 //        never "write or improve"; a "-2" copy of a live page is never the page to refresh
 //   PR4  the Strategy Brief parser repairs its own format (S1-06, execution 13196: "Model output doesn't fit required format" twice, a page
 //        run dead after 18.6 minutes): auto-fix on, one Claude Haiku model (no thinking, declared limits) feeding only that parser
+//   PR5  F-05: a page whose title has no Latin letters is packaged at its keyword's slug, never at "/page" (the home-page guard of the ladder
+//        is pinned in scenarios_ladder_pkg.js LPK4)
 module.exports = async (ctx) => {
   const { H, run, mock, store, guard, reset, begin } = ctx;
   const fs = require('fs');
@@ -255,5 +257,19 @@ module.exports = async (ctx) => {
       && M.parameters.options.maxTokensToSample === 32000 && M.parameters.options.streaming === true && M.credentials.anthropicApi.id === 'SEOcredAnthropic' && J(to) === J(['Parser — Strategy Brief']), J({ M, to }));
     check('the brief agent itself is unchanged: still Opus, still its own parser, still one retry', N['Strategy Brief'].maxTries === 2 && ((wf.connections['Parser — Strategy Brief'] || {}).ai_outputParser || []).flat().map(t => t.node).includes('Strategy Brief')
       && N['Claude — Strategy Brief'].parameters.model.value === 'claude-opus-5-5', J(N['Strategy Brief'].maxTries));
+  });
+
+  // ---------- PR5 the package slug never falls back to "page" while the keyword has one ----------
+  await guard('PR5 package slug', async () => {
+    const SN = 'PR5 (F-05) Blog Package: a title with no Latin letters is packaged at the keyword\'s slug, not "/page"';
+    reset(); begin(SN); const check = mkCheck(SN);
+    const zlib = require('zlib');
+    const FX = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures_eqa_42.json.gz'))).toString());
+    mock('Site Model', [{ json: { site_model: { ...(FX.parse_brief.site_model || {}), domain: 'novaand-demo.com', canonical_host: 'www.novaand-demo.com' } } }]);
+    const bw = clone(FX.build_word_file);
+    bw.content_brief_slug = ''; bw.keyword = 'ai consultant uae'; bw.domain = 'novaand-demo.com';
+    bw.page_markdown = String(bw.page_markdown).replace(/^Slug:.*$/m, '').replace(/^Title:.*$/m, 'Title: استشارات الذكاء الاصطناعي').replace(/^#\s+.+$/m, '# استشارات الذكاء الاصطناعي');
+    const P = (await run('Blog Package', [{ json: bw }]))[0].json;
+    check('the package slug is the keyword\'s, not "page"', P.article_slug === 'ai-consultant-uae' && P.article_meta.slug === 'ai-consultant-uae' && !/(^|\/)page\.(html|md)$/.test(P.article_meta.slug), J({ slug: P.article_slug, url: P.article_meta && P.article_meta.suggested_url }));
   });
 };
