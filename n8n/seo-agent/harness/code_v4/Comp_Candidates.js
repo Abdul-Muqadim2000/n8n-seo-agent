@@ -524,18 +524,29 @@ function fitCareer(keyword, o) {
 // is navigational whatever the search data says: people want that site, not a page of yours (the Recommendations told a client to move
 // "otherbrand com" into the top 3). The same rule as the web app's addressSearchLabel (app/shared/src/search-advice.ts). "net" is left out
 // ("asp net" is a subject), and so are "node.js" / "asp.net" (js and net are not a top-level domain people type here).
-const FIT_ADDRESS_TAIL = /(?:^|\s)(?:com|org|biz|info)(?:\s[a-z]{2})?$|(?:^|\s)co\s[a-z]{2}$/;
-const FIT_HOST_TOKEN = /(?:^|\s)(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|org|io|ai|co|ae|sa|pk|qa|om|kw|bh|eg|in|uk|us|de|fr|biz|info)(?:\/\S*)?(?=\s|$)/;
-/** a search for one website by its address: the label typed ("zylo"), or '' */
-const fitAddressLabel = (query) => {
-  const q = String(query == null ? '' : query).replace(/\s+/g, ' ').trim().toLowerCase();
+// Kept identical in effect to the app's addressSearchLabel after its review (2026-11-12): the whole search is a host ("zylo.com"); a name
+// followed by com / net / org (org only after one word) or by "co" and a country ("zylo com pk", "zylo co uk"); "www" and one name. "info",
+// "io" and "ai" as a separate word never ("vat info", "generative ai"); the label must be a distinctive name (4+ letters, the gate's own
+// label rule), so "erp com", "company info", "non profit org" and "socket.io developers" are subjects, not addresses.
+const FIT_CC = 'uk|ae|in|za|nz|au|pk|sa|qa|om|kw|bh|eg|jp|sg|my';
+const FIT_HOST_ONLY = new RegExp('^(?:https?://)?(?:www\\.)?([a-z0-9-]+)\\.(?:com|net|org|io|ai|co|ae|sa|pk|qa|om|kw|bh|eg|in|uk|us|de|fr)(?:\\.(?:' + FIT_CC + '))?(?:/\\S*)?$');
+const FIT_NAME_TAIL = new RegExp('^(\\S+(?:\\s\\S+)?)\\s(com|net|org|co)(?:\\s(' + FIT_CC + '))?$');
+/** a search for one website by its address: the label typed ("zylo"), or '' (own = the site's own label, always an address of it) */
+const fitAddressLabel = (query, own) => {
+  let q = String(query == null ? '' : query).replace(/\s+/g, ' ').trim().toLowerCase();
   if (!q) return '';
-  const host = q.match(FIT_HOST_TOKEN);
-  if (host) return host[0].trim().replace(/^https?:\/\//, '').replace(/^www\./, '').split(/[./]/)[0];
-  if (/^www(\s|\.|$)/.test(q)) return q.replace(/^www[\s.]*/, '').split(/[\s.]/)[0] || 'www';
-  const tail = q.match(FIT_ADDRESS_TAIL);
-  if (tail) { const words = q.slice(0, tail.index).trim().split(' ').filter(Boolean); if (words.length >= 1 && words.length <= 2) return words.join(''); }
-  return '';
+  const www = /^www(\s|\.)/.test(q) && !/^www\.[a-z0-9-]+\.[a-z]/.test(q) ? (q = q.replace(/^www[\s.]+/, ''), true) : false;
+  let label = '';
+  const host = q.match(FIT_HOST_ONLY);
+  if (host) label = host[1];
+  else {
+    const t = q.match(FIT_NAME_TAIL);
+    if (t) { const words = t[1].split(' '); const tld = t[2]; if ((tld === 'co' && t[3]) || (tld !== 'co' && (tld !== 'org' || words.length === 1))) label = words.join(''); }
+    else if (www && /^[a-z0-9-]+$/.test(q)) label = q;
+  }
+  if (!label) return '';
+  if (own && own.length >= 4 && label.startsWith(own)) return label;
+  return label.replace(/-/g, '').length >= 4 && fitOwnLabels(label + '.example', [], []).length ? label : '';
 };
 function fitGate(keyword, ctx) {
   ctx = ctx || {};
@@ -563,7 +574,7 @@ function fitGate(keyword, ctx) {
     return { ok: false, reason: 'own brand', detail: 'names the website itself (' + l + ')' };
   }
   // 1b. F-10 (section 189): a search for a website by its address (the website's own, or another one)
-  { const al = fitAddressLabel(kw); if (al) { const own = fitHost(ctx.own_domain).split('.')[0];
+  { const own = fitHost(ctx.own_domain).split('.')[0]; const al = fitAddressLabel(kw, own); if (al) {
     return (own && (al === own || (own.length >= 4 && al.includes(own))))
       ? { ok: false, reason: 'own brand', detail: 'people looking for your own website by its address (' + kw + ')' }
       : { ok: false, reason: 'navigational', detail: 'people looking for one website by its address (' + kw + '), not for what you sell' }; } }
