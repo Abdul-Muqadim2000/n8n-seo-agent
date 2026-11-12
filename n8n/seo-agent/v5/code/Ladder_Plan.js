@@ -234,9 +234,13 @@ const redirectedLP = ((PAGE_TITLES || {}).redirected || []).filter(r => r && r.u
 if (redirectedLP.length) { const rk = new Set(redirectedLP.map(r => SM.helpers.pathOf(r.url).replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase()));
   pageModel.pages = (pageModel.pages || []).filter(p => !rk.has(SM.helpers.pathOf(p.url).replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase())); }
 const mayOverlapLP = new Map();
+// production review 2026-11-12 (F-05, section 189): the home page is never the page a ladder rewrites: a client's home page that ranked for the
+// head search was planned as the ladder's main page (a home-page rewrite). Its ranking address, or a match on it, is left out: the page gets
+// its own address (the plan's planned URL)
+const isHomeLP = (u) => !!String(u || '').trim() && LRU.pathOf(u) === '';
 const findExisting = (keyword, yourUrl, isHead) => {
-  if (yourUrl) return { url: yourUrl, source: 'ranking' };
-  const pmx = SM.pageMatch(pageModel, keyword); let m = pmx.match;   // K8: the page ABOUT the search, with its confidence and evidence
+  if (yourUrl && !isHomeLP(yourUrl)) return { url: yourUrl, source: 'ranking' };
+  const pmx = SM.pageMatch(pageModel, keyword); let m = pmx.match && !isHomeLP(pmx.match.url) ? pmx.match : null;   // K8: the page ABOUT the search, with its confidence and evidence
   // a rung keyword keeps its own page unless a page carries its words (or its exact search): which rung searches are ONE page is decided by
   // their results pages (F-LADDER, 3 of 7), not by a shared topic word; the topic match is named as "may overlap" there
   if (m && !isHead && m.pass === 'topic') { mayOverlapLP.set(keyword, { url: m.url, title: m.title || '', confidence: m.confidence, note: 'may overlap: ' + String(m.url).replace(/^https?:\/\/[^\/]+/i, '') + ' is about the same subject (' + m.evidence + ')' }); m = null; }
@@ -711,6 +715,8 @@ const knownLP = (() => { const m = new Map(); for (const p of SM.pages(pageModel
 // the blog rule is for a main page people choose a provider on (solution / compare / hire); a problem or learning search whose live answer is
 // an article keeps that article (moving it would write a second page for the same search)
 const head_guard = (() => { if (!planned || !top.target_url) return null;
+  if (isHomeLP(top.target_url)) { const to = plannedUrl(head); Object.assign(top, { target_url: to, exists: false, status: 'new', existing_source: null, existing_confidence: null, existing_evidence: '' });
+    return { reason: 'home', was: homeUrl || '/', to, exists: false, text: 'the home page is never rewritten as the main page of a ladder: the main page gets its own address, ' + LRU.pathOf(to) }; }   // F-05
   const headStage = LRU.stageOf(head, top.intent || '', kiStageOf.get(head) || '');
   if (LRU.isBlog(top.target_url) && !['solution', 'compare', 'hire'].includes(headStage)) return null;
   // review H5 (2026-11-10): an address that already ranks for the main keyword keeps it (techand.ai's ERP guide holds "dynamics 365 erp

@@ -5,6 +5,7 @@
 /*__ANNOTATIONS__*/
 /*__LINEAGE__*/
 /*__REPLAN__*/
+/*__LADDER_RULES__*/
 /*__FIT_GATE__*/
 // Rank tracker report: per ladder, positions vs the previous check, rungs reached, drops and the recommended next step.
 // G32 (2026-10-13, FIX_PLAN): a ladder that has not moved for the configured number of weeks (`seo_monitors.stuck_weeks`, empty = 8)
@@ -41,6 +42,11 @@ let queryRows = []; try { queryRows = $('Load Query History (Tracker)').all().ma
 // 2026-10-12 (FIX_PLAN D11): the site's page inventory (seo_pages, filled weekly by the Site Tracker). A ladder keyword that a live page
 // already answers is never "write it" or "publish it": the next step names that page and asks for a refresh, because a second page for the
 // same search splits the signals. With no inventory stored nothing changes.
+// section 189 (production review 2026-11-12, S2-07): the ladder's state on the Pipeline page. The 11-12 report of a ladder the owner had paused
+// (seo_ladder_settings `paused`) still said "Write or improve: ..., \"what is a crm company\" (the -2 copy page already answers this search:
+// refresh that page)" for a rung our own check had stopped (AVOID). A paused or archived ladder gets no write advice.
+let settingsRowsT = []; try { settingsRowsT = $('Load Ladder Settings (Tracker)').all().map(i => i.json).filter(r => r && r.ladder_id && !r.error); } catch (e) {}
+const ladderStateOf = (id) => { const r = settingsRowsT.find(x => x.ladder_id === id); const st = String((r || {}).status || '').toLowerCase(); return ['paused', 'archived'].includes(st) ? st : ''; };
 let pageRows = []; try { pageRows = $('Load Pages (Tracker)').all().map(i => i.json).filter(r => r && r.site_id && r.url && !r.error); } catch (e) {}
 const modelFor = (domain) => SM.from({ site_id: 'site_' + normD(domain).replace(/[^a-z0-9]+/g, '-'), domain: normD(domain) },
   { pages: pageRows.filter(r => r.site_id === 'site_' + normD(domain).replace(/[^a-z0-9]+/g, '-')) });
@@ -168,7 +174,12 @@ for (const [id, items] of byLadder) {
   for (const r of rowsK) { if (asideKw.has(r.keyword)) continue; const lr = rowOf(r.keyword); if (String(lr.status || r.status || '') !== 'set_aside') continue;
     asideKw.add(r.keyword); fitAside.push({ ladder_id: id, keyword: r.keyword, rung: r.rung, page_no: r.page_no, status: 'set_aside', target_url: lr.target_url || '',
       reason: String(lr.status_note || 'set aside by an earlier check').slice(0, 200), detail: '', note: String(lr.status_note || ''), written: false, dropped: true, seen: 'stored' }); }
-  const rungs = rungStats(asideKw);   // C-12: set-aside rungs neither count as pages of their rung nor keep it from being reached
+  // section 189 (S2-07): a rung our check STOPPED (an AVOID verdict: no page until the client says "Write it anyway"), or merged into another
+  // page, is not a page to write or improve, and does not hold its rung open (it is not set aside either: the client can still write it anyway)
+  const STOPPED = ['stopped', 'merged', 'archived'];
+  const stoppedKw = new Set(rowsK.filter(r => STOPPED.includes(String(rowOf(r.keyword).status || r.status || '').toLowerCase())).map(r => r.keyword));
+  const holdKw = new Set([...asideKw, ...stoppedKw]);
+  const rungs = rungStats(holdKw);   // C-12: set-aside rungs neither count as pages of their rung nor keep it from being reached
   // R87: a ladder whose MAIN keyword is set aside — by this check, by the plan, or already on its row — is paused: nothing asks for its
   // rungs (they exist only to climb towards that keyword), the head's row is written back `set_aside` with the reason, and the next step
   // says so and offers a re-plan. Setting the head aside is not dropping the topic: nothing is deleted.
@@ -181,7 +192,12 @@ for (const [id, items] of byLadder) {
   const invModel = pageRows.length ? modelFor(head.domain) : null;
   const ukeyT = (u) => String(u || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '');
   // D11: the live page that already answers this keyword (never the ladder's own planned URL)
-  const coveredBy = (r) => { if (!invModel) return null; const m = SM.matchPage(invModel, r.keyword); return (m && ukeyT(m.url) !== ukeyT(r.target_url)) ? m : null; };
+  // section 189 (S2-07): never a "-2" / "-copy" variant of a live page (the ladder repair moved this ladder off one): its original is the page
+  // that answers the search when the site has it, else nothing is named
+  const invKnown = invModel ? SM.pages(invModel).map(p => ({ url: p.url, title: p.title })) : [];
+  const coveredBy = (r) => { if (!invModel) return null; let m = SM.matchPage(invModel, r.keyword); if (!m) return null;
+    const orig = LRU.copyOf(m.url, invKnown); if (orig) { const o = SM.pages(invModel).find(p => ukeyT(p.url) === ukeyT(orig) && !SM.isGone(p) && !SM.isMoved(p)); m = o ? { ...m, url: o.url, title: o.title, copy_of: m.url } : null; }
+    return (m && ukeyT(m.url) !== ukeyT(r.target_url)) ? m : null; };
   const liveOf = (r) => { const lr = rowOf(r.keyword); return r.status === 'published' || !!logOf(r.keyword) || lr.page_exists === true || lr.page_exists === 'true' || r.current > 0 || !!coveredBy(r); };
   const writtenOf = (kw) => writtenLog.some(l => normK(l.keyword) === normK(kw) && (!l.domain || normD(l.domain) === normD(head.domain)));   // R1
   const notReadyOf = (kw) => (writtenOf(kw) ? null : notReadyLog.filter(l => normK(l.keyword) === normK(kw) && (!l.domain || normD(l.domain) === normD(head.domain))).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0]) || null;   // R111
@@ -197,7 +213,11 @@ for (const [id, items] of byLadder) {
   // "fix the draft" ("it consulting dubai" was told "write the main page" while the Site Tracker and the cadence said "fix it"), and it is
   // asked before "write the main page", which used to match first and made this branch unreachable
   const mainNotReady = !!topRow && !mainLive && !mainWritten && !!notReadyOf(topRow.keyword);   // R111
-  if (paused) next = { action: 'paused', rung: 4, main_page: mainLive ? 'live' : 'planned', reason: paused.reason,
+  const ladderState = ladderStateOf(id);
+  if (ladderState) next = { action: 'paused', rung: 4, main_page: mainLive ? 'live' : 'planned', reason: ladderState === 'archived' ? 'archived' : 'paused_by_owner',
+    text: (ladderState === 'archived' ? 'This ladder is archived' : 'This ladder is paused') + ' on your Pipeline page, so none of its pages is written or asked for'
+      + (ladderState === 'archived' ? '.' : ' until you resume it.') + ' The pages that are already live keep being checked.', pages: [] };
+  else if (paused) next = { action: 'paused', rung: 4, main_page: mainLive ? 'live' : 'planned', reason: paused.reason,
     text: 'This ladder is paused: its main keyword "' + paused.keyword + '" is not a search this website should target (' + (paused.detail || paused.reason) + ')'
       + (paused.seen === 'this check' ? ', as this week\'s check of its results page showed' : '') + '. None of its pages is written or asked for until you re-plan the ladder towards another main keyword, or tell us the keyword is deliberate; the pages that are already live keep being checked.', pages: [] };
   else if (done) next = { action: 'complete', rung: 4, text: 'The top rung "' + head.keyword + '" has held the top 3 for 4 checks. From now on it is checked once a month with the published pages, so a drop is noticed; keep the pages fresh and the links growing.', pages: [] };
@@ -208,7 +228,7 @@ for (const [id, items] of byLadder) {
   else if (topRow && mainWritten && !mainLive && (mainFirst || allIn)) next = { action: 'publish_top', rung: 4, main_page: 'written', publish_url: topRow.target_url || '',
     text: 'The main page "' + head.keyword + '" is written but not live yet: publish it' + (topRow.target_url ? ' at ' + topRow.target_url : '') + '. Nothing climbs until it is published' + (rungs.length && mainFirst ? ', and its supporting pages wait for it' : '') + '.', pages: [] };
   else if (pending) {
-    const target = rowsK.filter(x => x.rung === pending.rung && !asideKw.has(x.keyword));   // R16: never ask for a page we should not write
+    const target = rowsK.filter(x => x.rung === pending.rung && !holdKw.has(x.keyword));   // R16: never ask for a page we should not write; section 189: nor one our check stopped
     next = { action: 'write_rung_' + pending.rung, rung: pending.rung, main_page: mainLive ? 'live' : mainWritten ? 'written' : 'planned',
       text: 'Work on rung ' + pending.rung + ': ' + (pending.top10 ? pending.top10 + ' of ' + pending.pages + ' pages are in the top 10. ' : 'none of its pages is in the top 10 yet. ') + 'Write or improve: ' + target.map(t => { const c = coveredBy(t);
         return '"' + t.keyword + '"' + (() => { const nr = notReadyOf(t.keyword); const st = SM.pageStep({ keyword: t.keyword, covered_url: c ? c.url : '', written: ['writing', 'written', 'not_ready'].includes(t.status) && writtenOf(t.keyword), not_ready: !!nr, reasons: nr ? nr.qa_reasons : '', started: t.status === 'writing' });   // C-7: one page state, the Site Tracker's too

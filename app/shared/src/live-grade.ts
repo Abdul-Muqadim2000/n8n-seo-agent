@@ -174,6 +174,23 @@ const items = (v: unknown, max: number) =>
     .slice(0, max);
 
 /**
+ * Production review 2026-11-12 (S2-05): the card's label was cut at a fixed 160 characters, mid-sentence ("... Publish this text as an").
+ * A label longer than `max` ends at its last full sentence (or clause) inside the limit, else at its last whole word, never inside a word.
+ */
+export function cutLabel(t: string, max: number): string {
+  const x = s(t).replace(/\s+/g, ' ').trim();
+  if (x.length <= max) return x;
+  const head = x.slice(0, max + 1);
+  const ends = [...head.matchAll(/[.!?](?=\s|$)/g)].map((m) => m.index! + 1).filter((i) => i <= max);
+  const sentence = ends.length ? ends[ends.length - 1]! : 0;
+  if (sentence >= max * 0.4) return x.slice(0, sentence).trim();
+  const clause = Math.max(head.lastIndexOf(': '), head.lastIndexOf('; '));
+  if (clause >= max * 0.4 && clause <= max) return x.slice(0, clause).trim();
+  const word = head.lastIndexOf(' ');
+  return (word > 0 ? x.slice(0, word) : x.slice(0, max)).replace(/[\s,;:]+$/, '').trim();
+}
+
+/**
  * The engine's answer to a live-grade request (pure): a grade to store, a live page it could not read (400 "grade_live: ..."), or nothing
  * to store (`skip`: the engine was not reachable, timed out, or does not grade live pages yet; `pause` = stop asking for a while).
  */
@@ -207,7 +224,7 @@ export function interpretLiveGrade(res: { kind: 'answered' | 'unreachable' | 'ti
     grade: {
       score: Math.max(0, Math.min(100, Math.round(score))),
       status,
-      label: plainWords(s(delivery.label)).slice(0, 160),
+      label: cutLabel(plainWords(s(delivery.label)), 160),
       blocking: items(delivery.blocking, 10),
       advisory_count: arr(delivery.advisory).length,
       url: s(read.url),

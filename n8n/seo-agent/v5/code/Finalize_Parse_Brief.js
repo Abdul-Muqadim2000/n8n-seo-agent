@@ -126,6 +126,11 @@ const prc = (() => {
   return { received: !!pr, legacy, legacy_unknown: legacy ? ['duplicate_targets', 'copied_passages', 'dead_links'] : [], gating, gating_missing, blocks_known: gating_missing.length === 0, grading, grading_missing,
     content_request_id: S(g.content_request_id || b.content_request_id).trim().slice(0, 120) };
 })();
+// production review 2026-11-12 (S3-05, section 189): what each "same search" address answers now (Duplicate Status Plan -> Fetch Duplicate
+// Pages, no redirect followed): [{ url, status, location }], status 0 = not read. Finalize Verdict never keeps a duplicate that redirects, is gone
+// or is the page itself
+const dupStatus = (Array.isArray(b.duplicate_status) ? b.duplicate_status : []).filter(isObj).map(x => ({ url: httpUrl(x.url), status: Math.max(0, Math.min(999, Math.round(Number(x.status) || 0))), location: httpUrl(x.location) }))
+  .filter(x => x.url).slice(0, 5);
 const dupUrls = [...new Set(prc.gating.duplicate_targets.map(d => d.url).concat(...prc.gating.qa_blocking.filter(x => x.code === 'duplicate_page').map(x => x.urls || [])))];
 let duplicate_decision = null;
 if (b.duplicate_decision != null) {
@@ -241,7 +246,7 @@ return [{ json: {
     length_points: LEN.points == null ? null : LEN.points,
     second_read: (prc.grading || {}).second_read || null,   // W05-A: the page run's second-read advice (Finalize Verdict deducts what is still on the page)
     sections_removed: (prc.grading || {}).sections_removed || null,   // W06-C: what the page run took out (Finalize Verdict caps coverage and fit while it is still missing)
-    duplicate_urls: dupUrls, duplicate_decision },
+    duplicate_urls: dupUrls, duplicate_status: dupStatus, duplicate_decision },
   finalize: { grade_only, live_read: (b.live_read && typeof b.live_read === 'object') ? b.live_read : null, answers: grade_only ? [] : answers, client_edited, client_sentences, delivered_markdown: delivered, input_markdown: markdown, answer_texts: answerTexts, stored_keys: stored,
     answered_keys: answers.filter(a => a.decision !== 'skip' && a.fact_key).map(a => a.fact_key),
     meta_fix: { how: metaFix.how, description: metaFix.description, problem: metaFix.problem, fixes: metaFix.fixes } }

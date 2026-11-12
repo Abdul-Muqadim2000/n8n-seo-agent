@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeEntities, interpretLiveGrade, liveGradeBody, liveGradePending, liveGradeTarget, liveGradeView, nextLiveGrade, type LiveGradeCheck } from './live-grade';
+import { cutLabel, decodeEntities, interpretLiveGrade, liveGradeBody, liveGradePending, liveGradeTarget, liveGradeView, nextLiveGrade, type LiveGradeCheck } from './live-grade';
 
 // Client reports 2026-11-11 (devaicon.com: "the card still shows the old score of the page instead of the updated one"): the grade of the
 // live page. Client text is anonymised (Nova&, novaand-demo.com).
@@ -102,3 +102,28 @@ describe('review M1: a failed live read is tried again', () => {
   });
 });
 
+// Production review 2026-11-12 (S2-05): the stored label was cut at 160 characters in the middle of a sentence ("... Publish this text as an").
+describe('cutLabel', () => {
+  const LONG = 'Not ready to publish yet: this website already has a page for the same search: https://www.novaand-demo.com/dynamics-365-business-central-uae. Publish this text as an update of that page, or tell us how the new page differs';
+  it('ends at the last full sentence inside the limit, never mid-sentence', () => {
+    const l = cutLabel(LONG, 160);
+    expect(l.length).toBeLessThanOrEqual(160);
+    expect(l.endsWith('business-central-uae.')).toBe(true);
+    expect(l).not.toMatch(/as an$/);
+  });
+  it('a short label is unchanged; with no sentence end it stops at a clause or a whole word', () => {
+    expect(cutLabel('Ready to publish', 160)).toBe('Ready to publish');
+    const words = cutLabel('Needs work: ' + 'specificity readability sources '.repeat(10), 60);
+    expect(words.length).toBeLessThanOrEqual(60);
+    expect(words).toMatch(/^Needs work/);
+    expect(words).not.toMatch(/[,;: ]$/);
+    const w2 = cutLabel('word '.repeat(40), 30);
+    expect(w2.length).toBeLessThanOrEqual(30);
+    expect(w2.endsWith('word')).toBe(true);
+  });
+  it('the stored grade carries the cut label', () => {
+    const o = interpretLiveGrade(answered(200, { ...GRADED, delivery: { ...GRADED.delivery, status: 'not_ready', label: LONG } }));
+    expect(o.kind).toBe('graded');
+    if (o.kind === 'graded') expect(o.grade.label.endsWith('business-central-uae.')).toBe(true);
+  });
+});

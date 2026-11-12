@@ -21,10 +21,16 @@ sites.forEach((s, idx) => {
   const cand = new Map();
   for (const p of ((gsc && gsc.pages) || [])) { const u = String(p.page || '').trim(); const k = key(u); if (!u || !k || inSitemap.has(k)) continue;
     const c = cand.get(k) || { url: u, impressions: 0, clicks: 0 }; c.impressions += Number(p.impressions) || 0; c.clicks += Number(p.clicks) || 0; cand.set(k, c); }
-  // an address found gone before is read again every week until it redirects (or Google forgets it)
-  for (const [k, r] of storedBy) { const st = Number(r.http_status) || 0; if ((st === 404 || st === 410) && !cand.has(k) && !inSitemap.has(k)) cand.set(k, { url: r.url, impressions: Number(r.impressions) || 0, clicks: Number(r.clicks) || 0 }); }
+  // an address found gone before is read again every week until it answers again or redirects (or Google forgets it). Production review
+  // 2026-11-12 (F-03, section 189): this skipped every address the sitemap lists, so a page stored 404 on 2026-10-22 that the site put back
+  // (and listed in its sitemap) was never read again, and the weekly report told the client to 301 eleven pages that answer 200. A stored
+  // 404 / 410 is now read every week wherever it is listed, before the other addresses (the 301 advice depends on it: Page Inventory
+  // advises a redirect only after two reads that both found the page gone, the newer one this week)
+  const wasGone = new Set();
+  for (const [k, r] of storedBy) { const st = Number(r.http_status) || 0; if (st === 404 || st === 410) { wasGone.add(k); if (!cand.has(k)) cand.set(k, { url: r.url, impressions: Number(r.impressions) || 0, clicks: Number(r.clicks) || 0 }); } }
   const list = [...cand.entries()].filter(([k]) => { const r = storedBy.get(k); const st = r ? Number(r.http_status) || 0 : 0;
-    return !(st >= 200 && st < 300 && days(r.status_at) < CONFIG.recheck_days); }).map(([, c]) => c).sort((a, b) => b.impressions - a.impressions || b.clicks - a.clicks);
+    return !(st >= 200 && st < 300 && days(r.status_at) < CONFIG.recheck_days); })
+    .sort(([ka, a], [kb, b]) => Number(wasGone.has(kb)) - Number(wasGone.has(ka)) || b.impressions - a.impressions || b.clicks - a.clicks).map(([, c]) => c);
   const take = []; for (const c of list) { if (take.length >= CONFIG.per_site || run >= CONFIG.per_run) break; take.push(c); run++; }
   plan.push({ site_id: s.site_id, wanted: list.length, planned: take.length, left: list.length - take.length, sitemap_read: !!(det && det.inventory && det.inventory.length) });
   for (const c of take) items.push({ site_id: s.site_id, site_idx: idx, url: c.url, impressions: c.impressions, clicks: c.clicks });

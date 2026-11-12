@@ -60,6 +60,10 @@ LIMITS = {
     (MAIN, 'Claude — Ladder Relevance'): dict(_SONNET, effort='low', kind='keyword labels (JSON)', old=dict(max=16384, stream=False, think=None)),
     (MAIN, 'Claude — Site Describer'): dict(model='claude-haiku-4-5-20251001', effort='', think=0, head=3000, max=4096, stream=False, cost_think=0,
                                             kind='site description (JSON)', old=dict(max=4096, stream=False, think=0)),
+    # section 189 (2026-11-12, S1-06): the Strategy Brief parser's auto-fix model, called only when the brief's JSON does not fit its format; it
+    # writes the whole brief again (the brief's own headroom), no thinking
+    (MAIN, 'Claude — Brief Fixer'): dict(model='claude-haiku-4-5-20251001', effort='', think=0, head=32000, max=32000, stream=True, cost_think=0,
+                                         kind='brief (JSON) put back into its format', old=dict(max=0, stream=False, think=0)),
     # ---- the scheduled monitors ----
     ('SEO_Agent_AI_Visibility.json', 'Claude — Prompt Writer'): dict(_SONNET, effort='low', kind='question panel (JSON)', old=dict(max=8192, stream=False, think=None)),
     ('SEO_Agent_AI_Visibility.json', 'Claude — Answer Analyst'): dict(_SONNET, effort='low', kind='answer analysis (JSON)', old=dict(max=8192, stream=False, think=None)),
