@@ -111,8 +111,8 @@ const SM = (() => {
     // seo_sites.declared_services) comes first and is never dropped by what a crawl read; it is kept apart as well, so SM.toRow writes it back
     // unchanged and the weekly Site Tracker can never overwrite it
     const declListOf = (v) => { if (Array.isArray(v)) return v; const j = jparse(v, null); return Array.isArray(j) ? j : listOf(v); };
-    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
-    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
+    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
     const navStored = jparse(row.nav_pages_json, []) || [];
     const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);
     const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);
@@ -464,7 +464,7 @@ const S = (v) => String(v == null ? '' : v).trim();
 // not a move) is stored as that 3xx, so no reader takes the address for a page (/dynamics-365-business-central-uae answered 308 from
 // 2026-11-07 while seo_pages said 404 from 2026-11-05). The week's own read follows redirects, so it can never disprove a redirect the watch
 // saw in the last WATCH_DAYS: that reading is dated now.
-const WATCH_DAYS = 8;
+const WATCH_DAYS = 8, STATUS_REDATE_DAYS = 6;
 const ageD = (d) => { const t = Date.parse(S(d)); return Number.isFinite(t) ? (Date.now() - t) / 864e5 : Infinity; };
 const pathK = (u) => S(u).toLowerCase().replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
 const watchRows = grab('Load Page Watch (Site)').filter(r => r.site_id && r.url && !S(r.error) && Number(r.status) > 0 && S(r.checked_at));
@@ -480,7 +480,7 @@ const ukey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www
 const PERF = ['clicks', 'impressions', 'position', 'prev_clicks', 'yoy_clicks', 'decay_state', 'decay_pct', 'decay_lost', 'decay_kind', 'decay_basis'];
 const sameRow = (a, b) => !!b && S(a.title) === S(b.title) && S(a.h1) === S(b.h1) && S(a.source) === S(b.source) && S(a.lastmod) === S(b.lastmod) && S(a.queries_json) === S(b.queries_json)
   && PERF.every(k => S(a[k]) === S(b[k])) && (Number(a.http_status) || 0) === (Number(b.http_status) || 0)   // RV-1: a page that went from live to gone (or back) is written
-  && S(a.status_at) === S(b.status_at);   // section 189: a status read again is written with its new date, so a reader can tell a fresh reading from a stale one
+  && !(S(a.status_at) !== S(b.status_at) && ageD(b.status_at) > STATUS_REDATE_DAYS);   // section 189: a status read again is re-dated once its stored date is a week old (a fresh reading stays fresh; review N3: not every watched page every week)
 // the empty measurement: a page Search Console said nothing about this week keeps the columns it already had, and a page that was
 // never measured carries zeros with `decay_state: ''` — never a "steady" that nothing stood behind.
 const EMPTY_PERF = { clicks: 0, impressions: 0, position: 0, prev_clicks: 0, yoy_clicks: 0, decay_state: '', decay_pct: 0, decay_lost: 0, decay_kind: '', decay_basis: '', measured_at: '' };

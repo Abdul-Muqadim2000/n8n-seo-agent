@@ -1,6 +1,7 @@
 /*__FIT_GATE__*/
 /*__ANCHOR__*/
 /*__SITE_MODEL__*/
+/*__JOB_TITLE__*/
 /*__EXCLUSIONS__*/
 // Content runs (v4.4): what the brief, the copy, the schema and the blog package need beyond the keyword research —
 // the site's business profile (author, reviewer, address / NAP), proof from its case studies, the page role (hub, case study, local,
@@ -22,9 +23,10 @@ const P = { ...(stored || {}) }; const over = d.profile_input || {};
 if (over.author_name) for (const k of AUTHOR_KEYS.filter(k => k.startsWith('author_'))) P[k] = s(over[k]);
 if (over.reviewer_name) for (const k of AUTHOR_KEYS.filter(k => k.startsWith('reviewer_'))) P[k] = s(over[k]);
 const sameAs = list(P.author_same_as, /\s+/).filter(u => /^https?:\/\//i.test(u));
-const author = s(P.author_name) ? { name: s(P.author_name), job_title: s(P.author_job_title), credentials: s(P.author_credentials), bio: s(P.author_bio), url: s(P.author_url) || sameAs[0] || '', has_author_page: !!s(P.author_url), image_url: s(P.author_image_url),
+const author = s(P.author_name) ? { name: s(P.author_name), job_title: JOBT.real(s(P.author_job_title)),   // F-29: never "User"
+  credentials: s(P.author_credentials), bio: s(P.author_bio), url: s(P.author_url) || sameAs[0] || '', has_author_page: !!s(P.author_url), image_url: s(P.author_image_url),
   same_as: sameAs, knows_about: list(P.author_knows_about) } : null;   // no author page on the site: the byline links to the first public profile
-const reviewer = s(P.reviewer_name) ? { name: s(P.reviewer_name), job_title: s(P.reviewer_job_title), url: s(P.reviewer_url) } : null;
+const reviewer = s(P.reviewer_name) ? { name: s(P.reviewer_name), job_title: JOBT.real(s(P.reviewer_job_title)), url: s(P.reviewer_url) } : null;
 const hasBiz = ['business_name', 'street_address', 'city', 'phone'].some(k => s(P[k]));
 const site_profile = hasBiz || author ? { business_name: s(P.business_name), business_type: s(P.business_type), logo_url: s(P.logo_url),
   address: { street: s(P.street_address), city: s(P.city), region: s(P.region), postal_code: s(P.postal_code), country_code: s(P.country_code) || s(d.country_iso) },

@@ -106,8 +106,8 @@ const SM = (() => {
     // seo_sites.declared_services) comes first and is never dropped by what a crawl read; it is kept apart as well, so SM.toRow writes it back
     // unchanged and the weekly Site Tracker can never overwrite it
     const declListOf = (v) => { if (Array.isArray(v)) return v; const j = jparse(v, null); return Array.isArray(j) ? j : listOf(v); };
-    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
-    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
+    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
     const navStored = jparse(row.nav_pages_json, []) || [];
     const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);
     const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);
@@ -547,7 +547,7 @@ const LRU = (() => {
   const headTarget = (url, o) => {
     const opt = o || {}; const u = S(url); if (!u) return null;
     // production review 2026-11-12 (F-05): the home page is never a ladder's main page (it would be rewritten): a new page at `planned`
-    if (pathOf(u) === '') return { reason: 'home', was: u, to: S(opt.planned), exists: false, text: 'the home page is never rewritten as the main page of a ladder: it gets its own page at ' + S(opt.planned).replace(/^https?:\/\/[^\/]+/i, '') };
+    if (/^(?:\/[a-z]{2}(?:-[a-z]{2})?)?$/.test(pathOf(u))) return { reason: 'home', was: u, to: S(opt.planned), exists: false, text: 'the home page is never rewritten as the main page of a ladder: it gets its own page at ' + S(opt.planned).replace(/^https?:\/\/[^\/]+/i, '') };
     const orig = copyOf(u, opt.known || []);
     if (orig) return { reason: 'copy', was: u, to: S(orig).startsWith('http') ? S(orig) : (S(opt.home).replace(/\/+$/, '') + pathOf(orig)), exists: true,
       text: u.replace(/^https?:\/\/[^\/]+/i, '') + ' is a copy of ' + pathOf(orig) + ', a page your website already has: the main page improves that page instead of a second copy' };

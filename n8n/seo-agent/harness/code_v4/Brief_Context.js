@@ -1938,6 +1938,23 @@ function fitCareer(keyword, o) {
 }
 // ctx: { intent, own_domain, competitors: [domains, declared], serp_domains: [domains on the results page / auto-detected rivals], brands: { name: domain } (learned),
 //       serp: [this keyword's own top domains, in rank order] (optional), protect: [words of the head term / seeds / services], relevance: fn (G19 hook) }
+// F-10 (production review 2026-11-12, section 189): a search for one website by its ADDRESS ("zylo com", "zylo.com", "www zylo", "zylo co uk")
+// is navigational whatever the search data says: people want that site, not a page of yours (the Recommendations told a client to move
+// "otherbrand com" into the top 3). The same rule as the web app's addressSearchLabel (app/shared/src/search-advice.ts). "net" is left out
+// ("asp net" is a subject), and so are "node.js" / "asp.net" (js and net are not a top-level domain people type here).
+const FIT_ADDRESS_TAIL = /(?:^|\s)(?:com|org|biz|info)(?:\s[a-z]{2})?$|(?:^|\s)co\s[a-z]{2}$/;
+const FIT_HOST_TOKEN = /(?:^|\s)(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|org|io|ai|co|ae|sa|pk|qa|om|kw|bh|eg|in|uk|us|de|fr|biz|info)(?:\/\S*)?(?=\s|$)/;
+/** a search for one website by its address: the label typed ("zylo"), or '' */
+const fitAddressLabel = (query) => {
+  const q = String(query == null ? '' : query).replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!q) return '';
+  const host = q.match(FIT_HOST_TOKEN);
+  if (host) return host[0].trim().replace(/^https?:\/\//, '').replace(/^www\./, '').split(/[./]/)[0];
+  if (/^www(\s|\.|$)/.test(q)) return q.replace(/^www[\s.]*/, '').split(/[\s.]/)[0] || 'www';
+  const tail = q.match(FIT_ADDRESS_TAIL);
+  if (tail) { const words = q.slice(0, tail.index).trim().split(' ').filter(Boolean); if (words.length >= 1 && words.length <= 2) return words.join(''); }
+  return '';
+};
 function fitGate(keyword, ctx) {
   ctx = ctx || {};
   // KW-GATE (2026-10-21): an Arabic keyword is judged on its English reading (fitArabic); the sentence says how it was read
@@ -1963,6 +1980,11 @@ function fitGate(keyword, ctx) {
     if (has(FIT_JOBS) && !sellsWhat.jobs) return { ok: false, reason: 'job search', detail: 'people looking for work at this company (' + l + '), not buyers of what it sells' };
     return { ok: false, reason: 'own brand', detail: 'names the website itself (' + l + ')' };
   }
+  // 1b. F-10 (section 189): a search for a website by its address (the website's own, or another one)
+  { const al = fitAddressLabel(kw); if (al) { const own = fitHost(ctx.own_domain).split('.')[0];
+    return (own && (al === own || (own.length >= 4 && al.includes(own))))
+      ? { ok: false, reason: 'own brand', detail: 'people looking for your own website by its address (' + kw + ')' }
+      : { ok: false, reason: 'navigational', detail: 'people looking for one website by its address (' + kw + '), not for what you sell' }; } }
   // 2. the search data says navigational
   if (String(ctx.intent || '').toLowerCase() === 'navigational') return { ok: false, reason: 'navigational', detail: 'the search data classifies it as navigational (people look for one particular website)' };
   // 2b. MKT (2026-10-27, AUDIT M4): with the website's market given (ctx.market, ISO-2), a keyword that names only places outside it is a
@@ -2304,8 +2326,8 @@ const SM = (() => {
     // seo_sites.declared_services) comes first and is never dropped by what a crawl read; it is kept apart as well, so SM.toRow writes it back
     // unchanged and the weekly Site Tracker can never overwrite it
     const declListOf = (v) => { if (Array.isArray(v)) return v; const j = jparse(v, null); return Array.isArray(j) ? j : listOf(v); };
-    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
-    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
+    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
     const navStored = jparse(row.nav_pages_json, []) || [];
     const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);
     const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);
@@ -2636,6 +2658,23 @@ const SM = (() => {
     titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, isMoved, gonePages, confirmPage,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms, coreTerms } };
 })();
+// ---- JOBT: a placeholder author job title is no job title (F-29, production review 2026-11-12; build section 189) ----
+// An author job title of "User" was accepted and printed on every byline ("Name, User"), in the Person schema and in the author box. The
+// web app now refuses such a title; profile rows stored before that still carry it, so every engine node that PRINTS a job title reads it
+// through JOBT.real: a placeholder is '' (the line is left out), never printed. The placeholders are only these words, whole, case and
+// spacing aside: "User", "N/A", "-", "none", "test", "job title", "title" ("Owner", "Administrator", "Tester" are real titles). The content
+// readiness rule (_readiness.js, word for word app/shared/src/readiness.ts) is not changed. Inlined by build_v4.py / build_monitors.py
+// (marker JOB_TITLE in a block comment). Pure.
+const JOBT = (() => {
+  const LIST = ['user', 'n/a', '-', 'none', 'test', 'job title', 'title'];
+  const SET = new Set(LIST);
+  const norm = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toLowerCase();
+  /** true for a job title that is not one; an empty title is missing, not a placeholder */
+  const isPlaceholder = (v) => SET.has(norm(v));
+  /** the job title to print: '' for a placeholder, else the title with its spacing collapsed */
+  const real = (v) => (isPlaceholder(v) ? '' : String(v == null ? '' : v).replace(/\s+/g, ' ').trim());
+  return { isPlaceholder, real, LIST };
+})();
 // ---- verdict exclusions kit (A-18, 2026-10-17; inlined through the EXCLUSIONS marker and prepended to Parse Verdict) ----
 // What the verdict said this page must NOT cover reaches the brief, the writer and the quality check. Live (exec 771) the verdict's
 // own `what_must_change[3]` said "Skip the consultancy-licence and start-an-IT-company questions, which don't match buyer intent", and
@@ -2845,9 +2884,10 @@ const P = { ...(stored || {}) }; const over = d.profile_input || {};
 if (over.author_name) for (const k of AUTHOR_KEYS.filter(k => k.startsWith('author_'))) P[k] = s(over[k]);
 if (over.reviewer_name) for (const k of AUTHOR_KEYS.filter(k => k.startsWith('reviewer_'))) P[k] = s(over[k]);
 const sameAs = list(P.author_same_as, /\s+/).filter(u => /^https?:\/\//i.test(u));
-const author = s(P.author_name) ? { name: s(P.author_name), job_title: s(P.author_job_title), credentials: s(P.author_credentials), bio: s(P.author_bio), url: s(P.author_url) || sameAs[0] || '', has_author_page: !!s(P.author_url), image_url: s(P.author_image_url),
+const author = s(P.author_name) ? { name: s(P.author_name), job_title: JOBT.real(s(P.author_job_title)),   // F-29: never "User"
+  credentials: s(P.author_credentials), bio: s(P.author_bio), url: s(P.author_url) || sameAs[0] || '', has_author_page: !!s(P.author_url), image_url: s(P.author_image_url),
   same_as: sameAs, knows_about: list(P.author_knows_about) } : null;   // no author page on the site: the byline links to the first public profile
-const reviewer = s(P.reviewer_name) ? { name: s(P.reviewer_name), job_title: s(P.reviewer_job_title), url: s(P.reviewer_url) } : null;
+const reviewer = s(P.reviewer_name) ? { name: s(P.reviewer_name), job_title: JOBT.real(s(P.reviewer_job_title)), url: s(P.reviewer_url) } : null;
 const hasBiz = ['business_name', 'street_address', 'city', 'phone'].some(k => s(P[k]));
 const site_profile = hasBiz || author ? { business_name: s(P.business_name), business_type: s(P.business_type), logo_url: s(P.logo_url),
   address: { street: s(P.street_address), city: s(P.city), region: s(P.region), postal_code: s(P.postal_code), country_code: s(P.country_code) || s(d.country_iso) },

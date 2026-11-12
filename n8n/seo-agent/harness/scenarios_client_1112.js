@@ -14,6 +14,11 @@
 //        run dead after 18.6 minutes): auto-fix on, one Claude Haiku model (no thinking, declared limits) feeding only that parser
 //   PR5  F-05: a page whose title has no Latin letters is packaged at its keyword's slug, never at "/page" (the home-page guard of the ladder
 //        is pinned in scenarios_ladder_pkg.js LPK4)
+//   PR7  F-29: a placeholder author job title ("User", "N/A", "-", "none", "test", "job title", "title") is never printed in a byline, the
+//        Person schema, the author box or an outreach signature (JOBT)
+//   PR8  F-10: a search for a website by its address ("zylo com", "zylo.com", "www zylo", "zylo co uk") is refused by the fit gate; "asp net",
+//        "node.js" are not
+//   PR6  services up to 120 characters, as the app now allows (SERVICE_MAX_CHARS): the site model and Normalize Input keep them whole
 module.exports = async (ctx) => {
   const { H, run, mock, store, guard, reset, begin } = ctx;
   const fs = require('fs');
@@ -31,7 +36,7 @@ module.exports = async (ctx) => {
 
   // ---------- PR1a the live grade: the "same search" page the first check named now redirects ----------
   await guard('PR1a live grade duplicate moved', async () => {
-    const SN = 'PR1a (S3-05 / S2-05) the live grade never keeps a "same search" page that now redirects (308), is gone (404) or is the page itself; one that still answers 200 stays; the page\'s own title is recorded; a read of another page is refused';
+    const SN = 'PR1a (S3-05 / S2-05) the live grade: a "same search" page that redirects to another page of the site moves there, one gone by two reads or that is the page itself is dropped, a host / slash / language hop or one 404 changes nothing; the page\'s own title is recorded; a read of another page is refused';
     reset(); begin(SN); const check = mkCheck(SN);
     const F99 = R.load('replay_3299.json.gz'); const F36 = R.load('replay_3336.json.gz');
     const CB = F99.nodes['Build Webhook Response']['0'].items[0].json;
@@ -44,15 +49,16 @@ module.exports = async (ctx) => {
     const gating = { qa_blocking: [{ code: 'duplicate_page', text: dupText, action: 'publish it as an update of your existing page for this search, or tell us how the new page differs' }],
       duplicate_targets: [{ url: DUPURL, title: 'Business Central Implementation UAE | Nova', keyword_words_shared_pct: 100 }], verdict: CB.verdict == null ? null : CB.verdict, score: CB.score == null ? null : CB.score,
       score_withheld: false, page_type: ((CB.meta || {}).page_type) || '', verdict_acknowledged: false, copied_passages: [], content_request_id: CB.request_id || '', length_points: null };
-    const live = { url: LIVE, h1: 'Banking & Financial Services Technology Solutions', title: 'Banking & Financial Services Technology | Devaicon' };
-    const chain = async (body, reader, dupAnswer) => {
+    const live = { url: LIVE, h1: 'Banking & Financial Services Technology Solutions', title: 'Banking & Financial Services Technology | Nova' };
+    const chain = async (body, reader, dupAnswer, stored) => {
       reset(); delete store['Finalize Editor'];
       const lp = await run('Live Read Plan', [{ json: { body, headers: {} } }], { code: 'Finalize__Live_Read_Plan' });
       mock('Live Read Plan', lp);
       const lb = lp[0].json.live_plan.read ? await run('Live Page Body', [{ json: reader }], { code: 'Finalize__Live_Page_Body' }) : lp;
       const dp = await run('Duplicate Status Plan', lb, { code: 'Finalize__Duplicate_Status_Plan' });
       let pbIn = dp;
-      if (dp[0].json.dup_check && dp[0].json.dup_check.url) { mock('Duplicate Status Plan', dp); pbIn = await run('Duplicate Status', dp.map(() => ({ json: clone(dupAnswer) })), { code: 'Finalize__Duplicate_Status' }); }
+      if (dp[0].json.dup_check && dp[0].json.dup_check.url) { mock('Duplicate Status Plan', dp); mock('Fetch Duplicate Pages', dp.map(() => ({ json: clone(dupAnswer) })));
+        pbIn = await run('Duplicate Status', (stored && stored.length ? stored : [{}]).map(json => ({ json })), { code: 'Finalize__Duplicate_Status' }); }
       const pb = await run('Parse Brief', pbIn, { code: 'Finalize__Parse_Brief' });
       if (!pb[0].json.ok) return { dp, pb: pb[0].json };
       mock('Finalize Plan', pb);
@@ -64,32 +70,49 @@ module.exports = async (ctx) => {
     };
     const body = { ...clone(BODY0), grade_only: true, grade_live: live, answers: [], page_run: gating };
     const reader = { statusCode: 200, data: READ };
+    const TO = D + '/business-central-implementation-uae';
+    const kept = (r) => r.v && r.v.page_run.kept_open.includes('duplicate_page') && r.v.delivery.blocking.some(x => x.code === 'duplicate_page');
+    const blockText = (r) => J((r.v.delivery.blocking.find(x => x.code === 'duplicate_page') || {}).text || '');
+    // production: /dynamics-365-business-central-uae answers 308 to /business-central-implementation-uae (the same subject, moved)
     const moved = await chain(body, reader, { statusCode: 308, headers: { location: '/business-central-implementation-uae' } });
     check('the plan reads the one address the first check named, on this website only', moved.dp.length === 1 && moved.dp[0].json.dup_check.url === DUPURL, J(moved.dp.map(x => x.json.dup_check)));
-    check('Parse Brief carries what it answered (308 and where to)', J(moved.pb.prc.duplicate_status) === J([{ url: DUPURL, status: 308, location: D + '/business-central-implementation-uae' }]), J(moved.pb.prc.duplicate_status));
-    check('a duplicate that redirects is not held: no duplicate blocker, resolved as moved, said once as advice', moved.v.delivery.blocking.every(b => b.code !== 'duplicate_page') && moved.v.page_run.resolved.includes('duplicate_page:moved')
-      && !moved.v.page_run.kept_open.includes('duplicate_page') && moved.v.delivery.advisory.some(a => a.code === 'duplicate_moved' && a.text.includes('now redirects to ' + D + '/business-central-implementation-uae')), J({ b: moved.v.delivery.blocking, r: moved.v.page_run.resolved, a: moved.v.delivery.advisory.map(a => a.code) }));
-    check('... and its status is not "Not ready to publish yet: same search" (the production label)', !/same search/.test(moved.v.delivery.label), moved.v.delivery.label);
+    check('Parse Brief carries what it answered (308, where to, the stored reading)', J(moved.pb.prc.duplicate_status) === J([{ url: DUPURL, status: 308, location: TO, stored_status: 0 }]), J(moved.pb.prc.duplicate_status));
+    check('review S1: a redirect to ANOTHER page of the site moves the duplicate there (kept, naming the page it redirects to), said once as advice',
+      kept(moved) && blockText(moved).includes(TO) && !blockText(moved).includes(DUPURL) && moved.v.delivery.advisory.some(a => a.code === 'duplicate_moved' && a.text.includes(TO)), J({ b: moved.v.delivery.blocking, a: moved.v.delivery.advisory.map(a => a.code) }));
+    const hostHop = await chain(body, reader, { statusCode: 308, headers: { location: D.replace('https://', 'https://www.') + '/dynamics-365-business-central-uae' } });
+    check('review B1: a 308 to the same path on www (production\'s bare-host hops) is no move: the duplicate stays as it was', kept(hostHop) && blockText(hostHop).includes(DUPURL), J(hostHop.v.page_run));
+    const slash = await chain(body, reader, { statusCode: 301, headers: { location: '/dynamics-365-business-central-uae/' } });
+    check('review B1: a 301 that adds a trailing slash is no move', kept(slash) && blockText(slash).includes(DUPURL), J(slash.v.page_run));
+    const locale = await chain(body, reader, { statusCode: 301, headers: { location: '/en/dynamics-365-business-central-uae' } });
+    check('review B1: a hop into a language folder (/x -> /en/x) is no move', kept(locale) && blockText(locale).includes(DUPURL), J(locale.v.page_run));
+    const toSelf = await chain(body, reader, { statusCode: 301, headers: { location: LIVE } });
+    check('a duplicate that redirects to the page graded is that page: resolved', !toSelf.v.page_run.kept_open.includes('duplicate_page') && toSelf.v.page_run.resolved.includes('duplicate_page:moved'), J(toSelf.v.page_run));
     const still = await chain(body, reader, { statusCode: 200, headers: {} });
-    check('a duplicate that still answers 200 stays open (the rule is unchanged for a real second page)', still.v.page_run.kept_open.includes('duplicate_page') && still.v.delivery.blocking.some(b => b.code === 'duplicate_page'), J(still.v.page_run));
-    const gone = await chain(body, reader, { statusCode: 404, headers: {} });
-    check('a duplicate that is gone (404) is not held either', !gone.v.page_run.kept_open.includes('duplicate_page') && gone.v.delivery.advisory.some(a => a.code === 'duplicate_moved' && /no longer answers \(404\)/.test(a.text)), J(gone.v.delivery.advisory));
+    check('a duplicate that still answers 200 stays open (the rule is unchanged for a real second page)', kept(still), J(still.v.page_run));
+    const once = await chain(body, reader, { statusCode: 404, headers: {} });
+    check('review S3: one 404 alone (the inventory never saw it gone) does not drop the duplicate', kept(once), J(once.v.page_run));
+    const gone = await chain(body, reader, { statusCode: 404, headers: {} }, [{ site_id: BODY0.site_id, url: DUPURL.replace('https://', 'https://www.'), http_status: 404, status_at: '2026-11-10T09:00:00Z' }]);
+    check('a 404 the inventory had read as gone too (two reads) drops it, said as advice', !gone.v.page_run.kept_open.includes('duplicate_page') && gone.v.delivery.advisory.some(a => a.code === 'duplicate_moved' && /no longer answers \(404\)/.test(a.text)), J(gone.v.delivery.advisory));
     const unread = await chain(body, reader, { error: { message: 'timeout' } });
-    check('an address that could not be read keeps the first check\'s duplicate (unknown is not "moved")', unread.v.page_run.kept_open.includes('duplicate_page'), J(unread.v.page_run));
+    check('an address that could not be read keeps the first check\'s duplicate (unknown is not "moved")', kept(unread), J(unread.v.page_run));
     const selfBody = { ...body, page_run: { ...gating, qa_blocking: [{ ...gating.qa_blocking[0], text: gating.qa_blocking[0].text.replace(DUPURL, LIVE) }], duplicate_targets: [{ url: LIVE, title: 'x' }] } };
     const self = await chain(selfBody, reader, { statusCode: 200, headers: {} });
     check('the page graded is never its own duplicate (the first check named the address it was then published at)', !self.v.page_run.kept_open.includes('duplicate_page') && self.v.page_run.resolved.includes('duplicate_page:moved'), J(self.v.page_run));
     const other = await chain({ ...body, page_run: { ...gating, duplicate_targets: [{ url: 'https://elsewhere.example/x' }], qa_blocking: [] } }, reader, null);
     check('an address of another website is never read', !(other.dp[0].json.dup_check || {}).url, J(other.dp[0].json.dup_check));
+    const sneaky = await chain({ ...body, page_run: { ...gating, duplicate_targets: [{ url: 'https://evil.example\\@' + BODY0.domain + '/x' }, { url: 'https://evil.example@' + BODY0.domain + '/y' }], qa_blocking: [] } }, reader, null);
+    check('review N1: an address with a backslash or an "@" is never read', !(sneaky.dp[0].json.dup_check || {}).url, J(sneaky.dp[0].json.dup_check));
+    const forged = await chain({ ...body, duplicate_status: [{ url: DUPURL, status: 308, location: TO }], page_run: { ...gating, duplicate_targets: [], qa_blocking: [{ ...gating.qa_blocking[0], text: 'This website already has a page for the same search: https://elsewhere.example/x' }] } }, reader, null);
+    check('review N2: a duplicate_status the caller sent is dropped when nothing is read', J(forged.pb.prc.duplicate_status) === '[]', J(forged.pb.prc.duplicate_status));
     // the title: production recorded the site's home-page title for /ms-365-erp-uae
-    const generic = READ.replace(/^Title:.*$/m, 'Title: Devaicon | Software, AI and Automation');
+    const generic = READ.replace(/^Title:.*$/m, 'Title: Nova | Software, AI and Automation');
     const t = await chain(body, { statusCode: 200, data: generic }, { statusCode: 308, headers: { location: '/business-central-implementation-uae' } });
     check('the recorded title is the page\'s own (the publish check\'s reading), not the reader\'s generic one', t.v && t.v.live_read.title === live.title, J(t.v && t.v.live_read));
-    const wrong = READ.replace(/^Title:.*$/m, 'Title: Devaicon | Software, AI and Automation').replace(/^## What is banking & financial services technology\?$/m, '# Build software that grows with you');
+    const wrong = READ.replace(/^Title:.*$/m, 'Title: Nova | Software, AI and Automation').replace(/^## What is banking & financial services technology\?$/m, '# Build software that grows with you');
     const w = await chain(body, { statusCode: 200, data: wrong }, null);
     check('a read whose title AND main heading are another page\'s is refused with the reason, never graded', w.pb.ok === false && /returned another page/.test(w.pb.error), w.pb.error);
-    const normal = await chain({ ...clone(BODY0), page_run: gating }, null, { statusCode: 308, headers: { location: '/business-central-implementation-uae' } });
-    check('a normal final version (not a live grade) is judged by what the address answers now too', normal.v && !normal.v.page_run.kept_open.includes('duplicate_page'), J(normal.v && normal.v.page_run));
+    const normal = await chain({ ...clone(BODY0), page_run: gating }, null, { statusCode: 301, headers: { location: 'https://elsewhere.example/' } });
+    check('a normal final version (not a live grade) is judged by what the address answers now too (a redirect off the site: not a page of it)', normal.v && !normal.v.page_run.kept_open.includes('duplicate_page'), J(normal.v && normal.v.page_run));
   });
 
   // ---------- PR1b content runs: DUP and the site model skip addresses that redirect or are gone ----------
@@ -148,7 +171,7 @@ module.exports = async (ctx) => {
 
   // ---------- PR2 the re-make of a final version: the flagged row was rewritten, its label (the quote) kept ----------
   await guard('PR2 finalize rewritten finding', async () => {
-    const SN = 'PR2 (S3-04) a second-read finding the editor rewrote on its task (the row that holds the quote changed) no longer holds the final version at 59; a refused or missed edit still does';
+    const SN = 'PR2 (S3-04) a second-read finding in a table row the editor rewrote on its task (a real part of the row gone) no longer holds the final version at 59; a refused or missed edit, a row that only gained words, and every prose rewrite that keeps the claim still do';
     reset(); begin(SN); const check = mkCheck(SN);
     const F99 = R.load('replay_3299.json.gz'); const F36 = R.load('replay_3336.json.gz');
     const CB = F99.nodes['Build Webhook Response']['0'].items[0].json;
@@ -197,6 +220,35 @@ module.exports = async (ctx) => {
     check('an edit that left the row as it was keeps the finding open (the page stays not ready)', refused.v.page_run.kept_open.includes('review') && refused.v.delivery_status === 'not_ready', J({ k: refused.v.page_run.kept_open, s: refused.v.delivery_status }));
     const elsewhere = await chain(SEC(ROW0, INTRO.replace('Choose based on', 'Pick a provider based on')));
     check('an edit of another sentence of the section, the flagged row untouched, keeps it open too', elsewhere.v.page_run.kept_open.includes('review'), J(elsewhere.v.page_run));
+    const small = await chain(SEC(ROW0.replace('Mid-size and large organisations with several systems', 'Mid-size and large organisations with several systems in the UAE')));
+    check('review B2: a row that only GAINED words keeps the finding open (its claims are all still there)', small.v.page_run.kept_open.includes('review'), J(small.v.page_run));
+    // review B2: three prose rewrites that keep the claim (an appended clause, a woven fact, a split sentence) all stay open
+    const CLAIM = 'Our engineers work with Python and Django';
+    const PROSE0 = 'We build automation for UAE teams. ' + CLAIM + ' on every project we deliver. Each workflow is documented for your team.';
+    const HEAD2 = '## What AI automation covers for a UAE business';
+    const MD2 = MD.replace(/## What AI automation covers for a UAE business\n\n[^\n]+/, HEAD2 + '\n\n' + PROSE0);
+    const REV2 = 'A second read of the page found a problem at "' + CLAIM + '": the facts on file do not say the business does this, so it is an unsupported claim';
+    const body2 = { ...body, markdown: MD2, delivered_markdown: MD2, page_run: { ...gating, qa_blocking: [{ code: 'review', text: REV2, action: 'correct or remove the words the second read quoted' }] } };
+    const chain2 = async (para) => {
+      reset(); delete store['Finalize Editor'];
+      const pb = await run('Parse Brief', [{ json: { body: clone(body2), headers: {} } }], { code: 'Finalize__Parse_Brief' });
+      mock('Finalize Plan', pb);
+      const ap = await run('Finalize Apply', pb, { code: 'Finalize__Finalize_Apply' });
+      const job = ((ap[0].json.finalize_apply || {}).jobs || [])[0] || null;
+      if (ap[0].json.needs_editor && job) mock('Finalize Editor', [{ json: { output: { sections: [{ id: job.id, text: HEAD2 + '\n\n' + para }] } } }]);
+      const mg = await run('Finalize Merge', ap, { code: 'Finalize__Finalize_Merge' });
+      const qa = await run('Content QA', mg, { code: 'Finalize__Content_QA' });
+      const oc = await run('Originality Check', qa, { code: 'Finalize__Originality_Check' });
+      return { job, v: (await run('Finalize Verdict', oc, { code: 'Finalize__Finalize_Verdict' }))[0].json.body };
+    };
+    const prose = [['an appended clause', PROSE0.replace(' on every project we deliver.', ' on every project we deliver from our Sharjah office.')],
+      ['a woven fact', PROSE0.replace(' on every project we deliver.', ' on every project we deliver, and we are an AWS partner.')],
+      ['a split sentence', PROSE0.replace(' on every project we deliver.', '. They do so on every project we deliver.')]];
+    for (const [label, para] of prose) { const r = await chain2(para);
+      console.log('   B2 ' + label + ' ->', J({ r: r.v.page_run.resolved, k: r.v.page_run.kept_open, para: ((r.v.markdown || '').match(/## What AI automation covers[^\n]*\n\n([^\n]+)/) || [])[1], ch: (r.v.changes || []).map(c => c.what) }));
+      const onPage = String(r.v.markdown || '').includes(CLAIM);
+      check('review B2: after ' + label + ' a prose finding is never resolved as "rewritten": it stays open while the claim is on the page (the system may also take the new sentence out, claim and all)',
+        r.job && !r.v.page_run.resolved.includes('review:rewritten') && (onPage ? r.v.page_run.kept_open.includes('review') && r.v.delivery_status === 'not_ready' : r.v.page_run.resolved.includes('review')), J({ onPage, k: r.v.page_run.kept_open, r: r.v.page_run.resolved, s: r.v.delivery_status })); }
   });
 
   // ---------- PR3 the rank report of a paused ladder ----------
@@ -274,5 +326,60 @@ module.exports = async (ctx) => {
     bw.page_markdown = String(bw.page_markdown).replace(/^Slug:.*$/m, '').replace(/^Title:.*$/m, 'Title: استشارات الذكاء الاصطناعي').replace(/^#\s+.+$/m, '# استشارات الذكاء الاصطناعي');
     const P = (await run('Blog Package', [{ json: bw }]))[0].json;
     check('the package slug is the keyword\'s, not "page"', P.article_slug === 'ai-consultant-uae' && P.article_meta.slug === 'ai-consultant-uae' && !/(^|\/)page\.(html|md)$/.test(P.article_meta.slug), J({ slug: P.article_slug, url: P.article_meta && P.article_meta.suggested_url }));
+  });
+
+  // ---------- PR6 services up to 120 characters ----------
+  await guard('PR6 services 120', async () => {
+    const SN = 'PR6 services up to 120 characters (the app\'s SERVICE_MAX_CHARS) are kept whole by the site model and Normalize Input';
+    reset(); begin(SN); const check = mkCheck(SN);
+    const SM = new Function(SRC('_site_model.js') + '\nreturn SM;')();
+    const long = 'Microsoft Dynamics 365 consulting and implementation for UAE and GCC companies: Business Central, F&O and CRM';   // 110 characters, production shape
+    const m = SM.from({ site_id: 'site_novaand-demo-com', domain: 'novaand-demo.com', canonical_host: 'www.novaand-demo.com', declared_services: JSON.stringify([long, 'x'.repeat(130)]) }, {});
+    check('a 110-character service is kept whole (it was cut at 80: "...GCC: Busines")', (m.declared_services || []).includes(long) && SM.services(m).includes(long), J(m.declared_services));
+    check('... and a longer one is cut at 120, never more', (m.declared_services || []).some(x => x.length === 120), J((m.declared_services || []).map(x => x.length)));
+    const wf = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'workflows', 'SEO_Agent_v4.json'), 'utf8'))[0];
+    const ni = (wf.nodes.find(n => n.name === 'Normalize Input') || {}).parameters.jsCode || '';
+    check('Normalize Input keeps services up to 120 characters', /const KF_SERVICES = [^\n]*\.slice\(0, 120\)\)/.test(ni) && !/const KF_SERVICES = [^\n]*\.slice\(0, 80\)\)/.test(ni), (ni.match(/const KF_SERVICES = [^\n]*/) || [''])[0].slice(0, 200));
+    const ap = SRC('_ai_panel.js');
+    check('the AI panel\'s services read keeps 120 characters too', /arr\(r\.services_json\)\]\.map\(s => S\(s\)\.slice\(0, 120\)\)/.test(ap), '');
+  });
+
+  // ---------- PR7 a placeholder job title is never printed ----------
+  await guard('PR7 placeholder job title', async () => {
+    const SN = 'PR7 (F-29) a placeholder author job title ("User") is never printed: JOBT says so, Blog Package leaves it out of the byline';
+    reset(); begin(SN); const check = mkCheck(SN);
+    const JOBT = new Function(SRC('_job_title.js') + '\nreturn JOBT;')();
+    const bad = ['User', 'user ', 'N/A', 'n/a', '-', 'None', 'TEST', 'Job title', ' job  title ', 'Title'];
+    const good = ['Head of Finance', 'Founder', 'Owner', 'Administrator', 'Tester', 'User experience designer', 'Test manager'];
+    check('the seven placeholders are no job title (case and spacing aside); Owner, Administrator, Tester and titles containing such a word are real; empty is missing, not a placeholder',
+      bad.every(t => JOBT.isPlaceholder(t) && JOBT.real(t) === '') && good.every(t => !JOBT.isPlaceholder(t) && JOBT.real(t) === t) && !JOBT.isPlaceholder('') && JOBT.real('  Head  of Finance ') === 'Head of Finance',
+      J(bad.map(t => [t, JOBT.isPlaceholder(t)]).concat(good.map(t => [t, JOBT.isPlaceholder(t)]))));
+    const zlib = require('zlib');
+    const FX = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures_eqa_42.json.gz'))).toString());
+    mock('Site Model', [{ json: { site_model: { ...(FX.parse_brief.site_model || {}), domain: 'novaand-demo.com', canonical_host: 'www.novaand-demo.com' } } }]);
+    const bw = clone(FX.build_word_file); bw.author = { ...(bw.author || {}), name: (bw.author || {}).name || 'Sara Haddad', job_title: 'User' };
+    const P = (await run('Blog Package', [{ json: bw }]))[0].json;
+    const by = (P.article_html.match(/<p class="byline[^>]*>.*?<\/p>/) || [''])[0];
+    check('the byline names the author without ", User"', by && !/,\s*User\b/.test(by) && !/,\s*User\b/.test(P.article_markdown), by.slice(0, 200));
+    const nodes = (f) => JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'workflows', f), 'utf8'))[0].nodes;
+    const code = (f, n) => ((nodes(f).find(x => x.name === n) || {}).parameters || {}).jsCode || '';
+    check('every node that prints a job title reads it through JOBT (byline, schema, author box, profile check, outreach signer)',
+      [['SEO_Agent_v4.json', 'Brief Context'], ['SEO_Agent_v4.json', 'Blog Package'], ['SEO_Agent_v4.json', 'Content QA'], ['SEO_Agent_v4.json', 'Profile Delivery'],
+        ['SEO_Agent_Link_Builder.json', 'LB Writer Input']].every(([f, n]) => /const JOBT = \(\(\) =>/.test(code(f, n)) && /JOBT\.real\(/.test(code(f, n)) && !/__JOB_TITLE__/.test(code(f, n))), '');
+  });
+
+  // ---------- PR8 a search for a website by its address ----------
+  await guard('PR8 address search', async () => {
+    const SN = 'PR8 (F-10) the fit gate refuses a search for one website by its address ("zylo com", "zylo.com", "www zylo", "zylo co uk"), the own site as its own brand; "asp net", "node.js" are subjects';
+    reset(); begin(SN); const check = mkCheck(SN);
+    const fitGate = new Function(SRC('_fit_gate.js') + '\nreturn fitGate;')();
+    const ctx = { own_domain: 'novaand.example', topics: ['software development', 'dynamics 365 consulting'] };
+    const addr = ['zylo com', 'zylo.com', 'www zylo', 'zylo co uk', 'zylo com pk', 'https://www.zylo.ae/pricing', 'otherbrand com'];
+    const rs = addr.map(q => [q, fitGate(q, ctx)]);
+    check('each is refused as navigational, by its address', rs.every(([, r]) => r.ok === false && r.reason === 'navigational' && /by its address/.test(r.detail)), J(rs));
+    const own = fitGate('novaand com', ctx);
+    check('the website\'s own address is its own brand', own.ok === false && own.reason === 'own brand', J(own));
+    const subj = ['asp net development', 'node.js developers', 'e commerce development', 'dot net consulting'].map(q => [q, fitGate(q, ctx)]);
+    check('subjects that look like addresses are not refused for it', subj.every(([, r]) => !(r.ok === false && /by its address/.test(String(r.detail)))), J(subj));
   });
 };
