@@ -129,7 +129,8 @@ const prc = (() => {
 // production review 2026-11-12 (S3-05, section 189): what each "same search" address answers now (Duplicate Status Plan -> Fetch Duplicate
 // Pages, no redirect followed): [{ url, status, location }], status 0 = not read. Finalize Verdict never keeps a duplicate that redirects, is gone
 // or is the page itself
-const dupStatus = (Array.isArray(b.duplicate_status) ? b.duplicate_status : []).filter(isObj).map(x => ({ url: httpUrl(x.url), status: Math.max(0, Math.min(999, Math.round(Number(x.status) || 0))), location: httpUrl(x.location) }))
+const dupStatus = (Array.isArray(b.duplicate_status) ? b.duplicate_status : []).filter(isObj).map(x => ({ url: httpUrl(x.url), status: Math.max(0, Math.min(999, Math.round(Number(x.status) || 0))), location: httpUrl(x.location),
+  stored_status: Math.max(0, Math.min(999, Math.round(Number(x.stored_status) || 0))) }))
   .filter(x => x.url).slice(0, 5);
 const dupUrls = [...new Set(prc.gating.duplicate_targets.map(d => d.url).concat(...prc.gating.qa_blocking.filter(x => x.code === 'duplicate_page').map(x => x.urls || [])))];
 let duplicate_decision = null;

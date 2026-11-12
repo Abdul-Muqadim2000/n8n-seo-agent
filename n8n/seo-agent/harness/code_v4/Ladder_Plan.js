@@ -2567,7 +2567,7 @@ const LRU = (() => {
   const headTarget = (url, o) => {
     const opt = o || {}; const u = S(url); if (!u) return null;
     // production review 2026-11-12 (F-05): the home page is never a ladder's main page (it would be rewritten): a new page at `planned`
-    if (pathOf(u) === '') return { reason: 'home', was: u, to: S(opt.planned), exists: false, text: 'the home page is never rewritten as the main page of a ladder: it gets its own page at ' + S(opt.planned).replace(/^https?:\/\/[^\/]+/i, '') };
+    if (/^(?:\/[a-z]{2}(?:-[a-z]{2})?)?$/.test(pathOf(u))) return { reason: 'home', was: u, to: S(opt.planned), exists: false, text: 'the home page is never rewritten as the main page of a ladder: it gets its own page at ' + S(opt.planned).replace(/^https?:\/\/[^\/]+/i, '') };
     const orig = copyOf(u, opt.known || []);
     if (orig) return { reason: 'copy', was: u, to: S(orig).startsWith('http') ? S(orig) : (S(opt.home).replace(/\/+$/, '') + pathOf(orig)), exists: true,
       text: u.replace(/^https?:\/\/[^\/]+/i, '') + ' is a copy of ' + pathOf(orig) + ', a page your website already has: the main page improves that page instead of a second copy' };
@@ -3230,7 +3230,7 @@ const mayOverlapLP = new Map();
 // production review 2026-11-12 (F-05, section 189): the home page is never the page a ladder rewrites: a client's home page that ranked for the
 // head search was planned as the ladder's main page (a home-page rewrite). Its ranking address, or a match on it, is left out: the page gets
 // its own address (the plan's planned URL)
-const isHomeLP = (u) => !!String(u || '').trim() && LRU.pathOf(u) === '';
+const isHomeLP = (u) => !!String(u || '').trim() && /^(?:\/[a-z]{2}(?:-[a-z]{2})?)?$/i.test(LRU.pathOf(u));   // review S2: a language root (/en, /ar-ae) is the home page too
 const findExisting = (keyword, yourUrl, isHead) => {
   if (yourUrl && !isHomeLP(yourUrl)) return { url: yourUrl, source: 'ranking' };
   const pmx = SM.pageMatch(pageModel, keyword); let m = pmx.match && !isHomeLP(pmx.match.url) ? pmx.match : null;   // K8: the page ABOUT the search, with its confidence and evidence
@@ -3707,7 +3707,20 @@ const knownLP = (() => { const m = new Map(); for (const p of SM.pages(pageModel
   for (const u of (base.site_urls || []).map(String)) if (u && !m.has(LRU.urlKey(u))) m.set(LRU.urlKey(u), { url: u, title: '' }); return [...m.values()]; })();
 // the blog rule is for a main page people choose a provider on (solution / compare / hire); a problem or learning search whose live answer is
 // an article keeps that article (moving it would write a second page for the same search)
-const head_guard = (() => { if (!planned || !top.target_url) return null;
+// review S2 (2026-11-12): the home page ranking in the top 20 for the main keyword (the Rank Tracker's reading or Search Console's) is not
+// left for a competing new page (one search, one page), and it is never rewritten automatically either: it stays the main page, tracked,
+// stored as live (never written by the cadence), with the advice to improve it by hand
+const homeRankLP = (() => { const pos = (v) => { const n = Number(v); return Number.isFinite(n) && n >= 1 && n <= 20 ? Math.round(n) : 0; };
+  if (headRank && isHomeLP(headRank.url)) { const p = pos(headRank.position); if (p) return p; }
+  const hp = SM.pages(pageModel).find(p => p && isHomeLP(p.url)); const want = LRU.wordsKey(head);
+  const q = hp ? (Array.isArray(hp.queries) ? hp.queries : []).find(x => LRU.wordsKey((x || {}).query || (x || {}).keyword) === want && pos((x || {}).position)) : null;
+  return q ? pos(q.position) : 0; })();
+const head_guard = (() => { if (!planned) return null;
+  if (homeRankLP && homeUrl) { const was = top.target_url;
+    const text = 'your home page ranks #' + homeRankLP + ' for "' + head + '", so it stays the page for this search and is tracked; it is never rewritten automatically: improve it by hand (keep its title on your brand, and work the search into its text and links)';
+    Object.assign(top, { target_url: homeUrl, exists: true, status: 'improve', existing_source: 'ranking', existing_confidence: null, existing_evidence: 'it ranks #' + homeRankLP, status_override: 'published', manual_only: true, note: text });
+    return { reason: 'home_ranks', was: was || homeUrl, to: homeUrl, exists: true, kept: true, manual: true, position: homeRankLP, text }; }
+  if (!top.target_url) return null;
   if (isHomeLP(top.target_url)) { const to = plannedUrl(head); Object.assign(top, { target_url: to, exists: false, status: 'new', existing_source: null, existing_confidence: null, existing_evidence: '' });
     return { reason: 'home', was: homeUrl || '/', to, exists: false, text: 'the home page is never rewritten as the main page of a ladder: the main page gets its own address, ' + LRU.pathOf(to) }; }   // F-05
   const headStage = LRU.stageOf(head, top.intent || '', kiStageOf.get(head) || '');
@@ -3937,7 +3950,7 @@ const whyOf = (p) => { const f = whyFactorsOf(p); const b = [];
 for (const p of allPlanned) { p.why = whyOf(p); p.why_factors = whyFactorsOf(p); }
 
 // ---- pages to write now, in the plan's order (direct: the main page first; otherwise the supporting pages, the main page waits for support) ----
-const order = !planned ? [] : mainFirst ? [top, ...rungPages] : rungPages;
+const order = (!planned ? [] : mainFirst ? [top, ...rungPages] : rungPages).filter(p => !p.manual_only);   // review S2: the home page is never written
 const write_now = order.slice(0, pagesNow).map(p => ({ page_no: p.page_no, rung: p.rung, keyword: p.keyword, page_type: p.page_type, target_url: p.target_url, exists: p.exists, supporting: p.supporting, links_to: p.links_to, target_words: Number(p.target_words) || 0, why: p.why || '' }));   // R8: a rung page carries its own measured target now, not 0   // B2-3: and the reason it is first
 // ---- F-A1 / A-12 (2026-10-17, re-rating exec 770): the website's own limits, the same ones the Content Cadence applies ----
 // Exec 770 started a seventh active ladder against `max_active: 2` without a word, and wrote the main page while its own note said

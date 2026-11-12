@@ -1218,10 +1218,12 @@ FN.node('Fetch Duplicate Pages', 'n8n-nodes-base.httpRequest', 4.5, {'method': '
     'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.8)'}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
     'options': {'timeout': 15000, 'redirect': {'redirect': {'followRedirects': False}}, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}}, at(3, 5),
     onError='continueRegularOutput', alwaysOutputData=True, **retry_lint.RETRY)
+# review S3 (2026-11-12): what the page inventory last read for those addresses, so one 404 alone never drops a duplicate (two reads)
+FN.node('Load Stored Pages (Dup)', DT_TYPE, DT_VERSION, dt_get_where_params(_PAGES_TABLE_RV1, 'site_id', 'eq', "={{ String(($('Duplicate Status Plan').first().json.body || {}).site_id || '') }}"), at(4, 5), **LOAD)
 FN.code('Duplicate Status', 'Finalize_Dup_Status.js', at(4, 4))
 FN.chain('Finalize Webhook', 'Live Read Plan', 'Read Live?'); FN.link('Read Live?', 'Read Live Page', 0); FN.link('Read Live?', 'Duplicate Status Plan', 1)
 FN.chain('Read Live Page', 'Live Page Body', 'Duplicate Status Plan', 'Check Duplicates?'); FN.link('Check Duplicates?', 'Fetch Duplicate Pages', 0); FN.link('Check Duplicates?', 'Parse Brief', 1)
-FN.chain('Fetch Duplicate Pages', 'Duplicate Status', 'Parse Brief')
+FN.chain('Fetch Duplicate Pages', 'Load Stored Pages (Dup)', 'Duplicate Status', 'Parse Brief')
 assert [t['node'] for t in FN.C['Check Duplicates?']['main'][1]] == ['Parse Brief'] and [t['node'] for t in FN.C['Read Live?']['main'][1]] == ['Duplicate Status Plan'] \
     and next(n for n in FN.N if n['name'] == 'Fetch Duplicate Pages')['parameters']['options']['redirect']['redirect']['followRedirects'] is False, 'section 189: the finalize must read the "same search" addresses, without following redirects, before Parse Brief'
 FN.chain('Parse Brief', 'Finalize OK?'); FN.link('Finalize OK?', 'Finalize Plan', 0); FN.link('Finalize OK?', 'Respond Finalize Bad Request', 1)

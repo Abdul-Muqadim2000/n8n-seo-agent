@@ -61,23 +61,35 @@ let dupOpen = null, decision = null;
 // only when its own words say the page states something wrong or unsupported (RR.textError); everything else it found is advice, shown
 // to the client and never the 59 cap. A finding that still blocks is the editor's to rewrite (Finalize Apply); it stays open while its words are on the page.
 const away = [], reviewAdvice = [];
-// section 189 (S3-04): the unit that holds a quote (a table row or a list item: its line; prose: its sentence), normalised, '' when not found
+// section 189 (S3-04): the TABLE ROW or LIST ITEM that holds a quote (its line, normalised), '' when the quote is not in one. Prose is never
+// judged this way (review B2, 2026-11-12): an appended clause, a woven fact or a split sentence changes a sentence while the claim stays,
+// so a finding in prose stays open while its words are on the page, as before.
 const unitOf = (q, text) => { const nq = norm(S(q).split(/\.{3}|\u2026/)[0]); if (nq.length < 8) return '';
   for (const line of S(text).split('\n')) { if (!norm(line).includes(nq)) continue;
-    if (/^\s*\|/.test(line) || /^\s*(?:[-*+]|\d{1,3}[.)])\s+/.test(line)) return norm(line);
-    const sent = line.split(/(?<=[.!?])\s+/).find(x => norm(x).includes(nq)); return norm(sent || line); }
+    return (/^\s*\|/.test(line) || /^\s*(?:[-*+]|\d{1,3}[.)])\s+/.test(line)) ? norm(line) : ''; }
   return ''; };
 const editTasks = ((A.finalize_apply || {}).review_fixes || []).filter(r => r && r.how === 'edit_task');
+// rewritten = the row / item lost at least REWRITE_SHARE of its words other than the quote (an edit that only adds words keeps the claim)
+const REWRITE_SHARE = 0.3;
 const rewrote = (q) => { const nq = norm(q); if (!editTasks.some(r => norm(r.quote) === nq)) return false;
-  const was = unitOf(q, S(A.output)), now = unitOf(q, md); return !!was && !!now && was !== now; };
+  const was = unitOf(q, S(A.output)), now = unitOf(q, md); if (!was || !now || was === now) return false;
+  const qw = new Set(nq.split(' ')); const rest = [...new Set(was.split(' ').filter(w => w && !qw.has(w)))]; if (rest.length < 3) return false;
+  const nowW = new Set(now.split(' ')); return rest.filter(w => !nowW.has(w)).length / rest.length >= REWRITE_SHARE; };
 // section 189: the addresses the first check called "the same search", as they answer now (Parse Brief `prc.duplicate_status`)
 const pageK = (u) => S(u).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
 const selfK = F.grade_only ? pageK((F.live_read || {}).url) : '';
 const dupMoved = [];
+// review 2026-11-12: B1 a redirect to the SAME page (another host form, http -> https, a trailing slash, a language folder) is no move: unknown,
+// the duplicate stays; S1 a redirect to ANOTHER page of the site moves the duplicate there (the content moved with it: that page is now the
+// one for this search), it is not resolved; S3 a 404 / 410 counts only when the page inventory had it gone too (two reads)
+const samePage = (a, b) => { const p = (u) => pageK(u).replace(/^[^\/]+/, '').replace(/^\/[a-z]{2}(?:-[a-z]{2})?(?=\/|$)/, ''); return pageK(a).split('/')[0] === pageK(b).split('/')[0] && p(a) === p(b); };
+const sameSite = (a, b) => pageK(a).split('/')[0] === pageK(b).split('/')[0];
 const dupGone = (u) => { const k = pageK(u); if (!k) return null; if (selfK && k === selfK) return { why: 'self' };
   const st = (PR.duplicate_status || []).find(x => x && pageK(x.url) === k); const n = st ? Number(st.status) || 0 : 0;
-  if (n >= 300 && n < 400) return { why: 'redirect', status: n, to: S(st.location) };
-  if (n === 404 || n === 410) return { why: 'gone', status: n };
+  if (n >= 300 && n < 400) { const to = S(st.location); if (!to || samePage(to, u)) return null;
+    if (selfK && pageK(to) === selfK) return { why: 'self', status: n, to };
+    return sameSite(to, u) ? { why: 'retarget', status: n, to } : { why: 'redirect', status: n, to }; }
+  if ((n === 404 || n === 410) && [404, 410].includes(Number(st.stored_status) || 0)) return { why: 'gone', status: n };
   return null; };
 const titleOfDup = (u) => S(((PG.duplicate_targets || []).find(x => x && x.url === u) || {}).title);
 for (const b of (PG.qa_blocking || [])) {
@@ -86,7 +98,8 @@ for (const b of (PG.qa_blocking || [])) {
     // production review 2026-11-12 (S3-05, section 189): an address that now redirects, is gone (404 / 410), or is the page being graded is
     // not a second page for this search; what it answers was read just before (Duplicate Status Plan, no redirect followed). Unread = kept.
     const urls0 = (PR.duplicate_urls || []).length ? PR.duplicate_urls : (b.urls || []);
-    const urls = urls0.filter(u => { const why = dupGone(u); if (why) { if (!dupMoved.some(x => pageK(x.url) === pageK(u))) dupMoved.push({ url: u, ...why }); return false; } return true; });
+    const urls = [...new Set(urls0.flatMap(u => { const why = dupGone(u); if (!why) return [u]; if (!dupMoved.some(x => pageK(x.url) === pageK(u))) dupMoved.push({ url: u, ...why });
+      return why.why === 'retarget' ? [why.to] : []; }))];
     if (urls0.length && !urls.length) { resolved.push(code + ':moved'); continue; }
     const elsewhere = urls.length ? urls.map(u => ({ url: u, places: DUP.otherMarket(S(P.keyword), { url: u, title: titleOfDup(u) }, S(P.country)) })) : [];
     if (elsewhere.length && elsewhere.every(x => x.places)) { away.push(...elsewhere); resolved.push(code + ':other_market'); continue; }
@@ -144,6 +157,7 @@ for (const x of away.slice(0, 2)) del.advisory.unshift({ code: 'duplicate_other_
 for (const t of reviewAdvice.slice(0, 5)) del.advisory.push({ code: 'second_read', text: PF.clean(t) });
 // section 189: what happened to the page the first check named (said once, never a blocker)
 for (const x of dupMoved.slice(0, 2)) { if (x.why === 'self') continue;
+  if (x.why === 'retarget') { del.advisory.push({ code: 'duplicate_moved', text: PF.clean('The page our first check named for this search, ' + x.url + ', now redirects to ' + x.to + ', so that page is the one your website has for this search') }); continue; }
   const to = x.to && pageK(x.to) !== selfK ? x.to : '';
   del.advisory.push({ code: 'duplicate_moved', text: PF.clean(x.why === 'redirect'
     ? 'The page our first check named for this search, ' + x.url + ', now redirects' + (to ? ' to ' + to : ' here') + ', so it is not a second page for this search any more' + (to ? '. If ' + to + ' answers the same search, link the two pages to each other' : '')

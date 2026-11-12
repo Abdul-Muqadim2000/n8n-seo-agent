@@ -214,17 +214,28 @@ module.exports = async (ctx) => {
     console.log('   erp head (ranks) ->', J({ url: L3.top.target_url, guard: (L3.ladder_rules || {}).head_guard }));
     check('review H5: a blog address that ranks for the main keyword KEEPS it (improve), never a competing new page; the plan says why',
       L3.top.target_url === B && L3.top.exists === true && ((L3.ladder_rules || {}).head_guard || {}).reason === 'ranks' && (L3.notes || []).some(n => /already ranks for "dynamics 365 erp system", so the main page improves it/.test(n)), J(L3.top));
-    // production review 2026-11-12 (F-05, section 189): the home page ranked for the head search and was planned as the main page (a rewrite of
-    // the client's home page); it never is, even when it ranks: the main page gets its own address
+    // production review 2026-11-12 (F-05, section 189; review S2): the home page is never written by a ladder. When it ranks in the top 20
+    // for the head search it stays the main page, tracked and stored as live, with the advice to improve it by hand (no competing new page,
+    // no automatic rewrite); when it does not rank, the main page gets its own address
     const PH = PAGES.map(p => p.url === T + '/' ? { ...p, queries: [{ query: 'crm service provider', position: 9, impressions: 40 }] } : p);
-    const L4 = await planOf({ head: 'crm service provider', cands: [cand('crm service provider dubai', 40), cand('best crm service provider uae', 30), cand('crm service provider pricing uae', 20)], pages: PH,
-      existing_page: { url: T + '/', source: 'ranking', title: PAGES[0].title, matched_by: 'query', confidence: 1, evidence: 'it ranks' } });
-    console.log('   home head ->', J({ url: L4.top.target_url, exists: L4.top.exists, guard: (L4.ladder_rules || {}).head_guard }));
-    check('F-05: the home page is never the main page of a ladder, even when it ranks for the head: a new page at its own address',
-      L4.planned === true && LRU.pathOf(L4.top.target_url) !== '' && L4.top.exists === false && ((L4.ladder_rules || {}).head_guard || {}).reason === 'home', J(L4.top));
-    check('F-05: no rung page is planned on the home page either', !pagesOf(L4).some(p => LRU.pathOf(p.target_url) === ''), J(pagesOf(L4).map(p => p.target_url)));
-    check('F-05: the kit says the same for any caller (headTarget refuses the root address)', (LRU.headTarget(T + '/', { planned: T + '/crm-service-provider' }) || {}).reason === 'home'
-      && (LRU.headTarget(T + '/', { planned: T + '/crm-service-provider' }) || {}).to === T + '/crm-service-provider', J(LRU.headTarget(T + '/', { planned: T + '/x' })));
+    const CANDS = [cand('crm service provider dubai', 40), cand('best crm service provider uae', 30), cand('crm service provider pricing uae', 20)];
+    const HOMEP = { url: T + '/', source: 'ranking', title: PAGES[0].title, matched_by: 'query', confidence: 1, evidence: 'it ranks' };
+    const L4 = await planOf({ head: 'crm service provider', cands: CANDS, pages: PH, existing_page: HOMEP });
+    const g4 = (L4.ladder_rules || {}).head_guard || {};
+    console.log('   home head (ranks #9) ->', J({ url: L4.top.target_url, guard: g4, write_now: (L4.write_now || []).map(w => w.keyword) }));
+    check('review S2: the home page ranking #9 for the head stays the main page, kept and marked to improve by hand (no competing new page)',
+      L4.planned === true && L4.top.target_url === T + '/' && g4.reason === 'home_ranks' && g4.manual === true && /never rewritten automatically/.test(g4.text) && !(L4.write_now || []).some(w => w.rung === 4), J({ top: L4.top, g4 }));
+    check('F-05: no rung page is planned on the home page', !pagesOf(L4).some(p => LRU.pathOf(p.target_url) === ''), J(pagesOf(L4).map(p => p.target_url)));
+    mock('Attach PDF Ladder', [{ json: { ladder: L4, pages_now: 1, domain: 'techand.ai', country: 'United Arab Emirates' } }]);
+    const rows4 = (await run('Ladder Rows', EMPTY)).map(i => i.json);
+    const top4 = rows4.find(r => r.rung === 4) || {};
+    check('review S2: its row is stored live (published), so the cadence never writes it, with the advice in its note', top4.status === 'published' && /improve it by hand/.test(top4.status_note || ''), J(top4));
+    const L5 = await planOf({ head: 'crm service provider', cands: CANDS, pages: PAGES, existing_page: HOMEP });
+    const g5 = (L5.ladder_rules || {}).head_guard || {};
+    check('F-05: a home page that does not rank for the head is never the main page: a new page at its own address',
+      L5.planned === true && LRU.pathOf(L5.top.target_url) !== '' && L5.top.exists === false && g5.reason === 'home', J({ top: L5.top, g5 }));
+    check('F-05: the kit refuses the root and a language root (/en, /ar-ae) as a main page', ['/', '/en', '/ar-ae/'].every(p => (LRU.headTarget(T + p, { planned: T + '/crm-service-provider' }) || {}).reason === 'home')
+      && (LRU.headTarget(T + '/en/crm', { planned: T + '/x' }) || {}).reason !== 'home', J(['/', '/en', '/ar-ae/'].map(p => LRU.headTarget(T + p, { planned: T + '/x' }))));
     mock('Attach PDF Ladder', [{ json: { ladder: L2, pages_now: 1, domain: 'techand.ai', country: 'United Arab Emirates' } }]);
     const rows2 = (await run('Ladder Rows', EMPTY)).map(i => i.json);
     check('re-review N1: a main page moved off a BLOG address asks for no redirect (the article may be another rung\'s live page)',
