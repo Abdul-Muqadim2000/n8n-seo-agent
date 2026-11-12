@@ -432,7 +432,8 @@ module.exports = async (ctx) => {
     H.save('index_coverage_techand.md', rep.report_markdown); H.save('index_coverage_techand_rows.json', X.rows.map(r => r.json));   // for eyeballing (OUT_DIR)
     const SHAPE = ['stage', 'status', 'domain', 'site_id', 'request_id', 'summary', 'report_markdown', 'cost', 'callback_url'];
     const SUM = ['known', 'indexed', 'not_indexed', 'excluded', 'unknown', 'backlog_left', 'new_pages', 'new_indexed', 'by_action', 'by_cause', 'dropped', 'freeze', 'freeze_reason', 'events', 'impact',
-      'failed', 'checked', 'note', 'figures_from'];   // fix wave 2 (N12): a run that could not read the site says so in the summary
+      'failed', 'checked', 'note', 'figures_from',   // fix wave 2 (N12): a run that could not read the site says so in the summary
+      'waiting', 'escalated', 'asked_waiting', 'read_after_ask_7d', 'indexnow_sent', 'do_first', 'sitemap_dates'];   // wave 3 (DESIGN_WAVE3.md §2.8)
     check('the callback on a Monday: stage index_coverage, the §5 shape, cost $0, the summary keys', X.rep.length === 1 && rep.stage === 'index_coverage' && rep.status === 'complete' && J(Object.keys(rep).sort()) === J(SHAPE.slice().sort())
       && J(Object.keys(rep.summary).sort()) === J(SUM.slice().sort()) && rep.cost.usd === 0 && rep.request_id === 'req-ix' && J(Object.keys(rep.summary.impact).sort()) === J(['dropped', 'event_title', 'gained', 'stable'])
       && rep.summary.events.every(e => J(Object.keys(e).sort()) === J(['ended_at', 'kind', 'started_at', 'status', 'title'])), J(rep));

@@ -451,6 +451,17 @@ const IX = (() => {
     ask_first_check_hours: 20, ask_recheck_days: 3, ask_read_note_days: 28,   // §2.3: the check-back inspections after "I asked Google"
     submit_space_days: 7, submit_max: 3, submit_denied_days: 28,   // §2.5: one submission per sitemap per 7 days, 3 sitemaps a run; a 403 holds
     submissions_keep: 10,                          // §2.5: submissions carried in seo_index_runs.sitemaps_json
+    // wave 3 (2026-11-12, docs/indexing-2026-10-29/DESIGN_WAVE3.md)
+    escalate_days: 21,                             // §2.2: a page Google never visited in 3 weeks of watching goes to "Needs you"
+    short_words: 300,                              // §2.2: a page under this many words (our read) is short
+    ask_daily_new: 3, ask_daily_hours: 20,         // §2.6: at most 3 NEW "ask Google" marks a day (a 20-hour window: the daily run's start
+                                                   //     drifts by minutes, and a strict 24 hours would skip every other day)
+    ask_window_max: 10,                            // §2.6: at most 10 NEW marks in any ask_window_days (7); at most ask_max (5) shown at once
+    read_after_ask_days: 7,                        // §2.8: "read after asking" in the weekly summary
+    do_first: 5,                                   // §2.7: the top of the priority list
+    indexnow_cap: 500, indexnow_ai_days: 30,       // §2.3: URLs a site a run; a URL AI Growth sent in the last 30 days is not sent again
+    indexnow_space_hours: 20,                      // §4: one IndexNow POST a site a day
+    dates_min_urls: 5, dates_share: 0.5, dates_flat_urls: 10,   // §2.5: "no usable dates" = >= 5 URLs and (< 50% with lastmod, or >= 10 URLs and one date)
   };
   // ---- URLs: strict parsing (E11), canonical host, host-agnostic keys, own host only ----
   // A URL is read only when it is plain http(s)://host[:80|443]/path?query: no userinfo, no backslash, no whitespace, no IP literal, no bare
@@ -842,10 +853,15 @@ const IX = (() => {
     return safe(abs, site);
   };
   /** Googlebot's robots.txt rules (E-X7): may Google crawl this path? true / false, or null when robots.txt was not read as a real answer. */
+  // wave 3 (§2.1 robots_ok): every page of a site is judged against the same robots.txt, so its rules are parsed once (the last text kept)
+  let robotsMemo = { k: null, rules: null };
   const robotsAllows = (text, status, path) => {
     const st = n0(status);
     if (st === 404 || st === 410) return true;
     if (!(st >= 200 && st < 300)) return null;
+    const P = S(path) || '/';
+    const mk = st + '|' + S(text).slice(0, CFG.robots_max);
+    const rules = robotsMemo.k === mk ? robotsMemo.rules : (() => {
     const lines = S(text).slice(0, CFG.robots_max).replace(/\r/g, '').split('\n').map(l => l.replace(/#.*$/, '').trim()).filter(Boolean);
     const groups = []; let cur = null, lastUa = false;
     for (const l of lines) {
@@ -857,8 +873,8 @@ const IX = (() => {
       if (f === 'allow' || f === 'disallow') cur.rules.push({ allow: f === 'allow', p: v });
     }
     const pick = groups.filter(g => g.ua.includes('googlebot'));
-    const rules = (pick.length ? pick : groups.filter(g => g.ua.includes('*'))).flatMap(g => g.rules).filter(r => r.p !== '' || !r.allow);
-    const P = S(path) || '/';
+    const rl = (pick.length ? pick : groups.filter(g => g.ua.includes('*'))).flatMap(g => g.rules).filter(r => r.p !== '' || !r.allow);
+    robotsMemo = { k: mk, rules: rl }; return rl; })();
     const match = (pat) => {   // Google's rules: '*' any run, '$' end; matched left to right without backtracking blow-ups (patterns are short)
       if (pat === '') return false;
       const parts = pat.replace(/\$$/, '').split('*'); const anchored = /\$$/.test(pat);
@@ -1019,7 +1035,8 @@ const IX = (() => {
     if (cause === 'noindex' && !important) cause = 'noindex_intended';
     if (cause === 'robots') cause = important ? 'robots_blocked' : 'robots_intended';
     if (cause === 'indexed' && !p.in_sitemap && !isLowValue(p.url, p) && smKnown && c.has_sitemap) cause = 'indexed_not_in_sitemap';
-    if (stateOf(cause) !== 'indexed' && isLowValue(p.url, p) && (SOFT.includes(cause) || cause === 'duplicate_no_canonical' || cause === 'google_chose_other')) cause = 'low_value';
+    // wave 3 (§2.4): a page the client marked important is never a low-value listing either
+    if (stateOf(cause) !== 'indexed' && typeOverride(p) !== 'important' && isLowValue(p.url, p) && (SOFT.includes(cause) || cause === 'duplicate_no_canonical' || cause === 'google_chose_other')) cause = 'low_value';
     if ((cause === 'unknown_to_google' || cause === 'discovered_not_crawled') && p.lane === 'new') {
       const a = anchorOf(p); if (a && now - a <= CFG.wait_days * DAY) cause = 'wait_new';
     }
@@ -1152,7 +1169,8 @@ const IX = (() => {
       s = 'This page tells Google it is a copy of ' + pathOf(tgt) + ', so Google shows that page instead. If this page should be found on its own, point its canonical tag to itself'
         + (row.in_sitemap === true || row.in_sitemap === 'true' ? '.' : ' and add it to your sitemap.');
     }
-    if (cause === 'low_value' && isUtility(row.url)) s = 'Policy and utility pages do not need to be in Google.';
+    if (cause === 'low_value' && typeOverride(row) === 'utility') s = 'You marked this page as fine to leave out of Google.';   // wave 3 (§2.4)
+    else if (cause === 'low_value' && isUtilityRow(row)) s = 'Policy and utility pages do not need to be in Google.';
     if (S(row.state) === 'unknown') s = 'We have not checked this page with Google yet. It is in the queue.';
     if (S(row.fix_seen_at) && S(row.action) === 'wait') s = 'Fixed on your site. Waiting for Google to read it again.';
     // N3: Google read the page after the change we saw on the site and still reports the same reason
@@ -1178,6 +1196,8 @@ const IX = (() => {
     else if (ak.state === 'quiet') s = ['wait', 'none', ''].includes(S(row.action))
       ? 'You asked Google on ' + S(row.asked_google_at).slice(0, 10) + '; Google has not read it again yet. There is nothing more to do on your side for now.'
       : 'You asked Google on ' + S(row.asked_google_at).slice(0, 10) + '; Google has not read it again yet. ' + s;
+    // wave 3 (§2.2): 3 weeks with no visit from Google: the likely reasons, the first one's step
+    if (S(row.escalated_at)) s = escalationNote(row, c) + (row.needs_person ? ' We have checked it ' + CFG.person_after + ' times with no change, so it needs a person to look at it.' : '');
     return s.replace(/[—–]/g, '-').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/…/g, '...');
   };
 
@@ -1188,7 +1208,8 @@ const IX = (() => {
     indexed_since: S(r.indexed_since), dropped_at: S(r.dropped_at), lane: S(r.lane), in_sitemap: yes(r.in_sitemap), first_seen_at: S(r.first_seen_at),
     fix_seen_at: S(r.fix_seen_at), ask_google: yes(r.ask_google), next_check_at: S(r.next_check_at), sig: rowSig(r), improved_at: S(r.improved_at),
     fix_failed_at: S(r.fix_failed_at), ask_google_at: S(r.ask_google_at), sources: S(r.sources),
-    linked_by: S(r.linked_by), asked_google_at: S(r.asked_google_at), google_read_after_ask_at: S(r.google_read_after_ask_at) });
+    linked_by: S(r.linked_by), asked_google_at: S(r.asked_google_at), google_read_after_ask_at: S(r.google_read_after_ask_at),
+    escalated_at: S(r.escalated_at), indexnow_at: S(r.indexnow_at), type_override: S(r.type_override), link_depth: n0(r.link_depth), linked_n: n0(r.linked_n) });
   /**
    * c: { site, now, stored (seo_index_pages rows), inventory (seo_pages rows), sitemap: { read, complete, urls: [{loc, lastmod, gsc}] },
    * ours: [{url, published_at}], search: searchEvidence() result + { read }, watch: seo_page_watch rows, prev_complete, prev_complete_at }.
@@ -1280,6 +1301,10 @@ const IX = (() => {
       row.linked_by = linksRead ? (() => { const a = linkedOf(url, linkIdx).slice(0, CFG.linked_by_max); if (a.length) return JSON.stringify(a);
         const pk = key(parentOf(url)); if (pk && unreadPar.has(pk)) return S(pv.linked_by) || 'unread';
         return ''; })() : 'unread';
+      // wave 3 (§2.1): how deep the website links it (1 = from the home page, 2 = from a page the home page links, 0 = unknown / deeper /
+      // not linked) and from how many of the pages read; a day the links could not be read keeps what was stored
+      if (S(row.linked_by) === 'unread') { row.link_depth = n0(pv.link_depth); row.linked_n = n0(pv.linked_n); row._links_known = !!prev && S(pv.linked_by) !== 'unread'; }
+      else { const lk = linkedOf(url, linkIdx); Object.assign(row, linkDepthOf(url, lk, c.home_keys, site)); row._links_known = true; }
       if (!S(row.title) && c.titles && c.titles[k]) row.title = S(c.titles[k]).slice(0, 300);
       row.lane = laneOf(row, ctx);
       // our own sitemap check settles the sitemap half of a cause without waiting for Google (a complete read only)
@@ -1386,29 +1411,33 @@ const IX = (() => {
    * the day after it was marked still counts against the week. A marked page keeps its mark (and its date) while it still qualifies.
    * `opts.reselect` is no longer used (the rolling window replaced the Monday choice).
    */
+  // wave 3 (DESIGN_WAVE3.md §2.6): a daily to-do - at most ask_max (5) marked at once, at most ask_daily_new (3) NEW marks a day and
+  // ask_window_max (10) in any ask_window_days (7); job postings are eligible as the LAST value tier, a page the client marked important is
+  // tier 1 whatever its address, a page marked fine to leave out is never offered (isUtilityRow). Kept marks never spend the budget.
   const askGoogle = (rows, o) => {
     const opts = o || {}; const now = n0(opts.now); const nowIso = new Date(now).toISOString(); const home = opts.home_keys || new Set(); const frz = !!(opts.freeze && opts.freeze.freeze);
-    // wave 2 (DESIGN_WAVE2.md §2.3): never a utility page or a job posting; a page the client already asked Google about waits ask_reoffer_days;
+    // wave 2 (DESIGN_WAVE2.md §2.3): never a utility page; a page the client already asked Google about waits ask_reoffer_days;
     // important existing pages are the ones in the sitemap OR linked from the website (linked_by)
     const eligible = (r) => {
       if (S(r.state) === 'indexed' || S(r.action) === 'leave_out' || S(r.action) === 'none' && !S(r.fix_seen_at)) return 0;
       if (frz && S(r.action) === 'quality') return 0;
-      if (isUtility(r.url) || isJobPosting(r.url)) return 0;
+      if (isUtilityRow(r)) return 0;
       const ak = ts(r.asked_google_at); if (ak && now - ak < CFG.ask_reoffer_days * DAY) return 0;
       if (S(r.fix_seen_at) || improveState(r) === 'waiting') return 3;   // a fix we saw, or an improved version Google has not read yet
       const pub = ts(r.published_at);
       if (S(r.sources).split(',').includes('ours') && pub && now - pub >= CFG.ask_ours_days * DAY) return 2;
-      if ((r.in_sitemap || linkedList(r.linked_by).length || home.has(key(r.url))) && ['discovered_not_crawled', 'unknown_to_google'].includes(S(r.cause))) return 1;
+      if ((r.in_sitemap || linkedList(r.linked_by).length || home.has(key(r.url)) || typeOverride(r) === 'important') && UNSEEN.includes(S(r.cause))) return 1;
       return 0;
     };
     const R = rows || [];
     const wasMarked = (r) => !!(r._prev ? r._prev.ask_google : yes(r.ask_google));
     const markedAt = (r) => S(r._prev && S(r._prev.ask_google_at) ? r._prev.ask_google_at : r.ask_google_at);
     // wave 2 follow-up (production 2026-10-30, devaicon.com): one ranking for marked and unmarked pages, so a capability page takes the slot of
-    // a lower-value page the client has not asked about yet; only NEW marks spend the weekly budget, and a mark the current rules no longer
-    // allow (a utility page, a job posting, a page left out) does not count against the week
-    const countsForWeek = (r) => { const t = ts(markedAt(r)); return t && now - t < CFG.ask_window_days * DAY && !isUtility(r.url) && !isJobPosting(r.url) && S(r.action) !== 'leave_out'; };
-    let budget = Math.max(0, CFG.ask_max - R.filter(countsForWeek).length);
+    // a lower-value page the client has not asked about yet; only NEW marks spend the budget, and a mark the current rules no longer allow (a
+    // utility page, a page left out) does not count against it
+    const counts = (r, ms) => { const t = ts(markedAt(r)); return !!t && now - t < ms && !isUtilityRow(r) && S(r.action) !== 'leave_out'; };
+    const inWindow = R.filter(r => counts(r, CFG.ask_window_days * DAY)).length, inDay = R.filter(r => counts(r, CFG.ask_daily_hours * 3600e3)).length;
+    let budget = Math.max(0, Math.min(CFG.ask_window_max - inWindow, CFG.ask_daily_new - inDay));
     const pool = R.map(r => ({ r, w: eligible(r), v: askValue(r, home), m: wasMarked(r) })).filter(x => x.w > 0)
       .sort((a, b) => ((b.w === 3) - (a.w === 3)) || a.v - b.v || (b.m - a.m) || n0(b.r.impressions_28d) - n0(a.r.impressions_28d) || depth(a.r.url) - depth(b.r.url) || S(a.r.url).localeCompare(S(b.r.url)));
     const kept = [], fresh = [];
@@ -1609,10 +1638,11 @@ const IX = (() => {
     'last_impression_at', 'state', 'evidence', 'cause', 'action', 'verdict', 'coverage', 'indexing_state', 'robots_state', 'page_fetch_state', 'crawled_as',
     'google_canonical', 'user_canonical', 'last_crawl', 'referring_count', 'google_sitemaps', 'inspect_at', 'fetch_at', 'http_status', 'final_url', 'noindex',
     'page_canonical', 'words', 'title', 'indexed_since', 'dropped_at', 'checks', 'next_check_at', 'needs_person', 'link_from', 'merge_into', 'note', 'updated_at',
-    'fix_seen_at', 'ask_google', 'fix_failed_at', 'ask_google_at', 'linked_by', 'asked_google_at', 'google_read_after_ask_at', 'improved_at', 'improved_to'];
+    'fix_seen_at', 'ask_google', 'fix_failed_at', 'ask_google_at', 'linked_by', 'asked_google_at', 'google_read_after_ask_at', 'improved_at', 'improved_to',
+    'priority', 'escalated_at', 'escalate_why', 'type_override', 'robots_ok', 'link_depth', 'linked_n', 'indexnow_at'];   // wave 3 (DESIGN_WAVE3.md §2.1)
   // fix wave 1 (FIX_CONTRACT.md): our fetch saw the site fix (X7), and "ask Google to read it" (X8); fix wave 2: Google read the page after
   // that fix and still saw the cause (N3), and when the page was last newly marked (N6)
-  const NUM = ['impressions_28d', 'clicks_28d', 'referring_count', 'google_sitemaps', 'http_status', 'words', 'checks'];
+  const NUM = ['impressions_28d', 'clicks_28d', 'referring_count', 'google_sitemaps', 'http_status', 'words', 'checks', 'priority', 'link_depth', 'linked_n'];
   const BOOL = ['in_sitemap', 'needs_person', 'ask_google'];
   const colVal = (p, k) => NUM.includes(k) ? n0(p[k]) : BOOL.includes(k) ? (p[k] === true || p[k] === 'true') : S(p[k]);
   const rowOut = (p) => { const o = {}; for (const k of PAGE_COLS) o[k] = colVal(p, k); return o; };
@@ -1652,7 +1682,8 @@ const IX = (() => {
   const groupNote = (row, ctx) => GROUP[S(row.cause)] && !(S(row.cause) === 'redirect' && S(row.action) !== 'site_fix') ? GROUP[S(row.cause)]
     : (S(row.action) === 'wait' && (S(row.cause) === 'unknown_to_google' || S(row.cause) === 'discovered_not_crawled') && !S(row.fix_seen_at))
       ? 'Already linked from your website. Google has not visited these pages yet, which is common for a young website. What helps: links from other websites to your site, and asking Google to read your most important pages.'
-    : (S(row.cause) === 'low_value' && isUtility(row.url)) ? 'Policy and utility pages do not need to be in Google.'
+    : (S(row.cause) === 'low_value' && typeOverride(row) === 'utility') ? 'You marked these pages as fine to leave out of Google.'
+    : (S(row.cause) === 'low_value' && isUtilityRow(row)) ? 'Policy and utility pages do not need to be in Google.'
     : noteOf({ cause: row.cause, action: row.action, state: row.state }, ctx).replace(/ We have checked it [\s\S]*$/, '');
   const lineOf = (r) => '  - ' + r.url + (improveState(r) === 'moved' ? ' (improved version at ' + S(r.improved_to) + ')' : '') + (S(r.merge_into) ? ' (Google uses ' + r.merge_into + ')' : '') + (S(r.final_url) ? ' (redirects to ' + r.final_url + ')' : '')
     + (n0(r.http_status) >= 400 ? ' (answers ' + n0(r.http_status) + ')' : '') + (r.needs_person ? ' (needs a person: checked ' + CFG.person_after + ' times with no change)' : '');
@@ -1669,6 +1700,18 @@ const IX = (() => {
     if (S(run.note) && !opts.failed) L.push(S(run.note));
     if (opts.freeze && opts.freeze.freeze) L.push('**' + opts.freeze.reason + '**');
     L.push('');
+    // wave 3 (DESIGN_WAVE3.md §2.8): the to-do in one short block - only the lines that apply
+    const td = opts.todo || null;
+    if (td && !opts.failed) {
+      const T = [];
+      if (n0(td.waiting) || n0(td.escalated)) T.push('- Google has not visited ' + (n0(td.waiting) + n0(td.escalated)) + ' page(s) yet' + (n0(td.escalated) ? '; ' + n0(td.escalated) + ' of them in the 3 weeks or more we have watched them, so they need you (the likely reasons are listed with each page)' : '') + '.');
+      if (n0(td.asked_waiting) || n0(td.read_after_ask_7d)) T.push(('- ' + (n0(td.asked_waiting) ? 'You asked Google about ' + n0(td.asked_waiting) + ' page(s) it has not read yet. ' : '') + (n0(td.read_after_ask_7d) ? 'Google read ' + n0(td.read_after_ask_7d) + ' page(s) in the last 7 days after you asked.' : '')).trim());
+      if (n0(td.indexnow_sent)) T.push('- We told Bing and the other IndexNow search engines about ' + n0(td.indexnow_sent) + ' page(s) today.');
+      if (td.sitemap_dates && td.sitemap_dates.usable === false) T.push('- Your sitemap does not give the date each page last changed: add it, so search engines know what is new.');
+      const df = (td.do_first || []).slice(0, CFG.do_first);
+      if (df.length) { T.push('- Do first:'); df.forEach((x, i) => T.push('  ' + (i + 1) + '. ' + S(x.url) + ': ' + S(x.why))); }
+      if (T.length) { L.push('## Your to-do'); L.push(...T); L.push(''); }
+    }
     for (const a of ['moved', 'site_fix', 'fixed', 'links', 'quality', 'improved', 'duplicate', 'wait', 'none', 'leave_out']) {
       // X7: a fix we saw on the site, waiting for Google to read it again, is its own group (not "new pages"); so is (2026-11-05) a page the
       // client improved that Google has not read since
@@ -1679,7 +1722,7 @@ const IX = (() => {
       if (!rows.length) continue;
       L.push('## ' + ACTION_LABEL[a] + ' (' + rows.length + ')');
       // wave 2: a canonical to another page from a page with its own title is a group of its own (another step than a non-main address in the sitemap)
-      const gk = (r) => S(r.cause) + (r.own_title ? '#own' : '');
+      const gk = (r) => S(r.cause) + (r.own_title ? '#own' : '') + (typeOverride(r) === 'utility' ? '#mine' : '');   // wave 3: pages the client marked fine to leave out
       const causes = [...new Set(rows.map(gk))];
       for (const c0 of causes) {
         const cr = rows.filter(r => gk(r) === c0); const c = S(cr[0].cause);
@@ -1727,6 +1770,14 @@ const IX = (() => {
     if (g.length === 1 && UTILITY.top_level_only.includes(g[0])) return true;
     return UTILITY.dirs.includes(g[0]) || UTILITY.segments.includes(g[0]); };
   const isJobPosting = (u) => { const g = segsOf(u); return g.length >= 2 && UTILITY.job_dirs.includes(g[0]); };
+  /**
+   * wave 3 (DESIGN_WAVE3.md §2.4): the client's own word on a page (`type_override`, written by the APP only; the engine reads it and writes
+   * back what it read, like asked_google_at). 'important' = never a utility page (its own cause, ranked, escalated, offered to "ask Google"
+   * first); 'utility' = fine to leave out (a page Google does not have: low_value / leave_out, never escalated, never asked, never sent to
+   * IndexNow; an indexed page stays indexed); '' (or anything else) = the rules decide.
+   */
+  const typeOverride = (r) => { const t = S(r && r.type_override).toLowerCase(); return t === 'important' || t === 'utility' ? t : ''; };
+  const isUtilityRow = (r) => { const t = typeOverride(r); return t === 'important' ? false : t === 'utility' ? true : isUtility(r && r.url); };
   // Wave 2 review W12: careers, contact and about pages are never suggested as the page to add a link from (their topic is the company)
   const NOT_SOURCE = { dirs: ['careers', 'career', 'jobs', 'contact', 'contact-us', 'about', 'about-us'], prefixes: ['about-', 'contact-'] };
   const notSource = (u) => { const g = segsOf(u); return !!g.length && (NOT_SOURCE.dirs.includes(g[0]) || NOT_SOURCE.prefixes.some(p => g[0].indexOf(p) === 0)); };
@@ -1782,6 +1833,19 @@ const IX = (() => {
     return m;
   };
   const linkedOf = (url, index) => ((index || {})[key(url)] || []).filter(x => !same(x, url));
+  /**
+   * wave 3 (§2.1): { link_depth, linked_n } of a page from the sources that link to it (the home page, the parents read) and the keys the home
+   * page links to (homeLinks). 1 = the home page links it, 2 = a page the home page links links it, 0 = deeper, not linked, or the home page
+   * itself. linked_n = the pages read that link here (at most 5 kept per page by linkIndex).
+   */
+  const linkDepthOf = (url, sources, homeKeys, site) => {
+    const lk = (sources || []).filter(Boolean); const hk = new Set(Array.isArray(homeKeys) ? homeKeys : homeKeys instanceof Set ? [...homeKeys] : []);
+    const homeK = key('https://' + siteHost(site || {}) + '/');
+    if (!depth(url)) return { link_depth: 0, linked_n: lk.length };
+    const isHome = (u) => { const k = key(u); return !!k && k === homeK; };
+    const d = (hk.has(key(url)) || lk.some(isHome)) ? 1 : lk.some(u => hk.has(key(u))) ? 2 : 0;
+    return { link_depth: d, linked_n: lk.length };
+  };
   /** The JSON list stored in linked_by ('' and 'unread' are no list). */
   const linkedList = (v) => { const s = S(v); if (!s || s === 'unread' || s[0] !== '[') return []; try { const a = JSON.parse(s); return Array.isArray(a) ? a.filter(x => typeof x === 'string' && x) : []; } catch (e) { return []; } };
   const parentOf = (u) => { const p = parseUrl(u); if (!p) return ''; const g = p.path.split('/').filter(Boolean); return g.length < 2 ? '' : 'https://' + p.host + '/' + g.slice(0, -1).join('/'); };
@@ -1873,7 +1937,9 @@ const IX = (() => {
     const pass = { cause, action, state: S(row.state) || stateOf(cause), own_title: false, changed: false };
     if (!cause || stateOf(cause) === 'indexed' || cause === 'not_checked' || S(row.state) === 'unknown' || S(row.state) === 'indexed') return pass;
     if (cause === 'alternate' || cause === 'canonical_elsewhere') { if (canonicalOwn(row, x.titles, x.site) === true) { cause = 'canonical_elsewhere'; action = 'site_fix'; own_title = true; } }
-    if (isUtility(row.url) && !UTILITY_KEEP.includes(cause)) { cause = 'low_value'; action = 'leave_out'; own_title = false; }
+    // wave 3 (§2.4): the client marked it fine to leave out -> left out whatever Google's reason; marked important -> never a utility page
+    if (typeOverride(row) === 'utility') { cause = 'low_value'; action = 'leave_out'; own_title = false; }
+    else if (isUtilityRow(row) && !UTILITY_KEEP.includes(cause)) { cause = 'low_value'; action = 'leave_out'; own_title = false; }
     if (UNSEEN.includes(cause) && (action === 'links' || action === 'wait') && !S(row.fix_seen_at)) {
       const lb = S(row.linked_by);
       // 'unread': the home page, or (W5) this page's parent, could not be read today - the stored action stands (a cause that moved between
@@ -1904,8 +1970,11 @@ const IX = (() => {
   const SERVICE_RX = /(?:^|[\s\/_-])(?:services?|products?|capabilit(?:y|ies)|solutions?|industr(?:y|ies)|whatwedo|what-we-do|offerings?|platforms?|features?)(?=$|[\s\/_-])/i;
   const ARTICLE_RX = /^\/(?:[^\/]+\/)?(?:insights?|blog|blogs|news|guides?|articles?|posts?|stories)\/[^\/]+/i;
   const DATED_RX = /\/(?:19|20)\d{2}\/\d{1,2}\/(?:\d{1,2}\/)?[^\/]+/;
+  // wave 3 (§2.6 / §2.7): 0 = the client marked it important (first), 4 = a job posting (last: eligible, after every other content page)
   const askValue = (r, home) => {
     const p = pathOf(r.url);
+    if (typeOverride(r) === 'important') return 0;
+    if (isJobPosting(r.url)) return 4;
     if (home && home.has(key(r.url)) && (SERVICE_RX.test(p) || SERVICE_RX.test(' ' + titleCore(r.title, { domain: r.domain }) + ' '))) return 1;
     if (ARTICLE_RX.test(p) || DATED_RX.test(p)) return 2;
     return 3;
@@ -2065,6 +2134,120 @@ const IX = (() => {
     return { today, submissions: today.concat(p.submissions || []).slice(0, CFG.submissions_keep), submit_denied, permission_full: !!p.permission_full };
   };
 
+  // =================================================================================================================================
+  // wave 3 (2026-11-12, docs/indexing-2026-10-29/DESIGN_WAVE3.md): a to-do for every page Google left out - the escalation after 3 weeks,
+  // the priority, the sitemap's dates, IndexNow. Pure functions, like the rest of the kit.
+  // =================================================================================================================================
+  /** §2.5: the dates a sitemap gives: { urls, with_lastmod, distinct } (distinct = different YYYY-MM-DD days among the lastmods). */
+  const sitemapDates = (urls) => {
+    const L = Array.isArray(urls) ? urls : []; const days = new Set(); let w = 0;
+    for (const u of L) { const m = S(u && u.lastmod).match(/^(\d{4}-\d{2}-\d{2})/); if (m && Number.isFinite(Date.parse(m[1]))) { w++; days.add(m[1]); } }
+    return { urls: L.length, with_lastmod: w, distinct: days.size };
+  };
+  /** §2.5: false = "no usable dates": at least 5 URLs AND (fewer than half carry a lastmod, OR 10+ URLs that all carry one single date). */
+  const datesUsable = (d) => { const x = d || {}; const u = n0(x.urls);
+    if (u < CFG.dates_min_urls) return true;
+    return !(n0(x.with_lastmod) < CFG.dates_share * u || (u >= CFG.dates_flat_urls && n0(x.distinct) <= 1)); };
+  /**
+   * §2.2: is this page escalated, and why. A page Google never crawled (last_crawl empty), not indexed, unknown to Google or found and not
+   * crawled, with nothing on the client's site left to do but wait or link it (action wait / links), watched for escalate_days since it was
+   * published (our page) or first seen. -> { on, why: [codes in the contract's order] }. c: { now, dates_usable, freeze }.
+   */
+  const ESC_WHY = ['not_asked', 'asked_no_visit', 'weak_links', 'short_page', 'not_in_sitemap', 'sitemap_no_dates'];
+  const escalation = (row, c) => {
+    const r = row || {}; const x = c || {}; const now = n0(x.now);
+    const off = { on: false, why: [] };
+    if (S(r.state) !== 'not_indexed' || !UNSEEN.includes(S(r.cause)) || !['wait', 'links'].includes(S(r.action)) || S(r.last_crawl)) return off;
+    if (typeOverride(r) === 'utility') return off;
+    const anchor = ts(r.published_at) || ts(r.first_seen_at); if (!anchor || now - anchor < CFG.escalate_days * DAY) return off;
+    const why = []; const ak = ts(r.asked_google_at);
+    if (!ak || now - ak > CFG.ask_reoffer_days * DAY) why.push('not_asked');
+    if (ak && now - ak >= CFG.ask_wait_note_days * DAY) why.push('asked_no_visit');
+    if (r._links_known !== false && (n0(r.link_depth) !== 1 || n0(r.linked_n) <= 1)) why.push('weak_links');
+    const w = n0(r.words); if (w > 0 && w < CFG.short_words && !isJobPosting(r.url)) why.push('short_page');
+    if (!yes(r.in_sitemap)) why.push('not_in_sitemap');
+    if (x.dates_usable === false) why.push('sitemap_no_dates');
+    return { on: true, why };
+  };
+  const escalationNote = (row, c) => {
+    const r = row || {}; const x = c || {}; const frz = !!(x.freeze && x.freeze.freeze);
+    const first = S(r.escalate_why).split(',').map(S).filter(Boolean)[0] || '';
+    const n = n0(r.linked_n), dp = n0(r.link_depth);
+    const step = first === 'not_asked' ? (yes(r.ask_google) ? 'Ask Google to read it in Search Console (it is on your list today).' : 'Ask Google to read it in Search Console (it comes onto your daily list as the pages before it are done).')
+      : first === 'asked_no_visit' ? 'Google did not come even after you asked, so it does not see the page as important yet: link it from your home page or main menu, and get a link from another website.'
+      : first === 'weak_links' ? (dp === 1 ? 'Only your home page links here: also link it from your main menu and from related pages.'
+        : n === 0 ? 'No page of your website links here that we could find: link it from your home page or main menu.'
+        : 'Only ' + n + ' page(s) link here and your home page does not: link it from your home page or main menu.')
+      : first === 'short_page' ? 'The page is short (' + n0(r.words) + ' words): add what a buyer needs to know' + (frz ? ' after Google\'s current update finishes.' : '.')
+      : first === 'not_in_sitemap' ? 'Add it to your sitemap.'
+      : first === 'sitemap_no_dates' ? 'Add the date each page last changed to your sitemap.'
+      : 'Keep it linked from your important pages and in your sitemap.';
+    return 'Google has not visited this page in the 3 weeks we have watched it. ' + step;
+  };
+  /** §2.7: the order of the work: 1 a fix we saw / an improvement waiting for Google, then the ask value tier, impressions, depth, url. */
+  const priorityTier = (r) => (S(r.fix_seen_at) || improveState(r) === 'waiting') ? 0 : 1;
+  const priorityRank = (rows, o) => {
+    const opts = o || {}; const home = opts.home_keys || new Set(); const R = rows || [];
+    const ranked = R.filter(r => S(r.state) !== 'indexed' && !['leave_out', 'none', ''].includes(S(r.action)) && !isUtilityRow(r))
+      .map(r => ({ r, t: priorityTier(r), v: askValue(r, home) }))
+      .sort((a, b) => a.t - b.t || a.v - b.v || n0(b.r.impressions_28d) - n0(a.r.impressions_28d) || depth(a.r.url) - depth(b.r.url) || S(a.r.url).localeCompare(S(b.r.url)));
+    const at = new Map(); ranked.forEach((x, i) => at.set(x.r, i + 1));
+    for (const r of R) r.priority = at.get(r) || 0;
+    return ranked.length;
+  };
+  /** §2.8: one plain reason a page is on the "do first" list. */
+  const doFirstWhy = (r, c) => {
+    if (S(r.fix_seen_at)) return 'Fixed on your site: waiting for Google to read it again.';
+    if (improveState(r) === 'waiting') return 'Improved by you: waiting for Google to read it again.';
+    if (S(r.escalated_at)) return escalationNote(r, c).replace(/^Google has not visited this page in the 3 weeks we have watched it\. /, '');
+    if (yes(r.ask_google)) return 'Ask Google to read it in Search Console.';
+    const a = S(r.action);
+    return a === 'site_fix' ? 'A step on your website.' : a === 'links' ? 'Link to it from your other pages.' : a === 'quality' ? 'Improve the page.'
+      : a === 'duplicate' ? 'Merge it with the page Google prefers, or make it clearly different.' : 'Waiting for Google to visit it.';
+  };
+  const doFirst = (rows, c) => (rows || []).filter(r => n0(r.priority) > 0).sort((a, b) => n0(a.priority) - n0(b.priority)).slice(0, CFG.do_first)
+    .map(r => ({ url: S(r.url), why: doFirstWhy(r, c) }));
+  /**
+   * §2.3: the pages to tell IndexNow about (Bing, Yandex, Seznam, Naver, Yep: never Google). o: { now, host (the site's host: IndexNow takes
+   * one host a POST), ai_sent: Map(key -> ISO of AI Growth's last submission) }. A page qualifies when it opens (200 in our read, or not
+   * read and indexed / in the sitemap), is not left out / noindex / a redirect / gone, and was never sent (and not sent by AI Growth in the
+   * last 30 days), or changed since it was sent (sitemap lastmod, an improvement, a fix we saw). Pages Google does not have first, then the
+   * priority. -> [url] (at most indexnow_cap).
+   */
+  const INDEXNOW_NO = ['redirect', 'redirect_error', 'not_found', 'soft_404', 'noindex', 'noindex_intended', 'robots_blocked', 'robots_intended', 'server_error', 'access_denied', 'low_value', 'alternate', 'canonical_elsewhere'];
+  const indexnowCandidates = (rows, o) => {
+    const x = o || {}; const now = n0(x.now); const host = S(x.host).toLowerCase(); const ai = x.ai_sent || new Map();
+    const out = [];
+    for (const r of (rows || [])) {
+      const u = S(r.url); const p = parseUrl(u); if (!p || (host && p.host !== host)) continue;
+      if (S(r.action) === 'leave_out' || (INDEXNOW_NO.includes(S(r.cause)) && !S(r.fix_seen_at)) || S(r.noindex) || isGone(r)) continue;   // a fix we saw on the site is sent
+      const st = n0(r.http_status);
+      const opens = st ? (st >= 200 && st < 300 && !S(r.final_url)) : (S(r.state) === 'indexed' || yes(r.in_sitemap));
+      if (!opens) continue;
+      const sent = ts(r.indexnow_at);
+      if (sent) { const changed = [r.sitemap_lastmod, r.improved_at, r.fix_seen_at].some(v => ts(v) > sent); if (!changed) continue; }
+      else { const a = ts(ai.get(key(u))); if (a && now - a < CFG.indexnow_ai_days * DAY) continue; }
+      out.push(r);
+    }
+    out.sort((a, b) => ((S(a.state) === 'indexed') - (S(b.state) === 'indexed')) || ((n0(a.priority) || 1e9) - (n0(b.priority) || 1e9)) || S(a.url).localeCompare(S(b.url)));
+    return out.slice(0, CFG.indexnow_cap).map(r => S(r.url));
+  };
+  /** §2.3 / §4: one IndexNow POST a site a day - the newest indexnow_at of the site's rows. */
+  const indexnowSentRecently = (rows, now) => (rows || []).some(r => { const t = ts(r.indexnow_at); return t && n0(now) - t < CFG.indexnow_space_hours * 3600e3; });
+  /** §2.3: an IndexNow answer that accepted the list (200 OK, 202 Accepted); anything else records nothing. */
+  const indexnowAccepted = (ans) => { const st = n0((ans || {}).statusCode ?? (ans || {}).status); return st === 200 || st === 202; };
+  /** §2.3: an IndexNow key as the protocol allows it (8-128 of a-z A-Z 0-9 -). */
+  const indexnowKeyOk = (k) => /^[A-Za-z0-9-]{8,128}$/.test(S(k));
+  /** §2.8: the weekly figures of wave 3, from the run's rows (after Index Diagnose). */
+  const summaryWave3 = (rows, o) => {
+    const x = o || {}; const now = n0(x.now); const R = rows || [];
+    const unseenWait = (r) => S(r.action) === 'wait' && UNSEEN.includes(S(r.cause)) && !S(r.fix_seen_at) && improveState(r) !== 'waiting';
+    const asked = (r) => { const a = askState(r, now); return S(r.state) !== 'indexed' && (a.state === 'waiting' || a.state === 'quiet'); };
+    const readRecent = (r) => { const t = ts(r.google_read_after_ask_at); return t && ts(r.asked_google_at) && t >= ts(r.asked_google_at) && now - t <= CFG.read_after_ask_days * DAY; };
+    return { waiting: R.filter(r => unseenWait(r) && !S(r.escalated_at)).length, escalated: R.filter(r => S(r.escalated_at)).length,
+      asked_waiting: R.filter(asked).length, read_after_ask_7d: R.filter(readRecent).length };
+  };
+
   return { CFG, key, same, norm, own, safe, parseUrl, siteHost, hostOf, bare, pathOf, depth, isLowValue, LOW_VALUE, robotsSitemaps, parseSitemap, sitemapRoots, sitemapAccept,
     sitemapQueue, sitemapComplete, searchEvidence, saWindows, readInspection, readingsOf, reuseOf, storedReading, readFetch, hopOf, robotsAllows, mainWords, diagnose, fixSeen, covCause,
     stateOf, ACTION, CAUSES, laneOf, anchorOf, noteOf, plan, inProperty, nextCheck, capOf, isGone, askGoogle, homeLinks, linkSuggestions, topicOf, kindOf, parseEvents,
@@ -2073,7 +2256,9 @@ const IX = (() => {
     fixState, xRobotsNoindex, metaNoindex, sitemapBatch, answerText, sizeOf, plainWhy, PLAIN_FAIL,
     UTILITY, isUtility, isJobPosting, resolveHref, pageLinks, linkIndex, linkedOf, linkedList, parentOf, parentPlan, titleOf, titleCore, canonicalOwn,
     refine, askState, readAfterAsk, askValue, FULL_ACCESS, treeFp, submitPlan, submitResults,
-    sitemapsListOf, submitOutlook, submitRequests, submitPending, parentKnown, sourcePlan, NOT_SOURCE, notSource, IMPROVABLE, improvementsOf, improveState };
+    sitemapsListOf, submitOutlook, submitRequests, submitPending, parentKnown, sourcePlan, NOT_SOURCE, notSource, IMPROVABLE, improvementsOf, improveState,
+    typeOverride, isUtilityRow, linkDepthOf, sitemapDates, datesUsable, ESC_WHY, escalation, escalationNote, priorityRank, doFirst, doFirstWhy,
+    indexnowCandidates, indexnowSentRecently, indexnowAccepted, indexnowKeyOk, summaryWave3, UNSEEN };
 })();
 const S = (v) => String(v == null ? '' : v).trim();
 const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
@@ -2088,6 +2273,7 @@ const fresh = IX.readingsOf([[pq, grab('Inspect URL (Probe)').slice(0, pq.length
   [grab('Inspect Retry Requests').filter(q => q && !q.skip), grab('Inspect URL (Retry)'), true]]);
 const fetches = new Map(); for (const x of grab('Page Signals')) if (x && x.site_id && x.f) fetches.set(x.site_id + '|' + IX.key(x.url), x.f);
 let saved = []; try { saved = $('Save Index Reservation').all().map(i => i.json); } catch (e) { saved = []; }
+const aiPages = grab('Load AI Pages (Index)').filter(x => x && !x.error && x.url);   // wave 3 (§2.3): what AI Growth already sent to IndexNow / Bing
 const dow = (() => { try { return new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' }).format(new Date(now)); } catch (e) { return new Date(now).toUTCString().slice(0, 3); } })();
 const monday = dow === 'Mon';
 const out = [];
@@ -2097,7 +2283,9 @@ for (const v of inv) {
     // E14: the stored rows stand as they are (the figures of the last check), the run says it could not check, nothing is written
     const all = (v.pages || []).map(r => ({ url: S(r.url), state: S(r.state) || 'unknown', cause: S(r.cause), action: S(r.action) || 'none', lane: S(r.lane), needs_person: r.needs_person === true || r.needs_person === 'true',
       note: S(r.note), merge_into: S(r.merge_into), final_url: S(r.final_url), http_status: n0(r.http_status), fix_seen_at: S(r.fix_seen_at), ask_google: r.ask_google === true || r.ask_google === 'true',
-      improved_at: S(r.improved_at), improved_to: S(r.improved_to), last_crawl: S(r.last_crawl) }));
+      improved_at: S(r.improved_at), improved_to: S(r.improved_to), last_crawl: S(r.last_crawl), priority: n0(r.priority), escalated_at: S(r.escalated_at),
+      escalate_why: S(r.escalate_why), type_override: S(r.type_override), asked_google_at: S(r.asked_google_at), google_read_after_ask_at: S(r.google_read_after_ask_at),
+      words: n0(r.words), link_depth: n0(r.link_depth), linked_n: n0(r.linked_n), indexnow_at: S(r.indexnow_at) }));
     out.push({ json: { ...base, upserts: [], history: [], deletes: [], history_moves: [], all, dropped: [], counts: { inspected: 0, reused: 0, fetched: 0, errors: 0 }, failed: true,
       why: IX.plainWhy(v.why), why_detail: S(v.why_detail), plan: {}, freeze: fr, news_today: 0, submit: v.submit || null } });   // R5: plain words only; the raw error stays internal
     continue;
@@ -2154,6 +2342,12 @@ for (const v of inv) {
       } else if (reading || (f && f.ok && !f.blocked)) {
         const basis = reading || IX.storedReading(row);
         if (!(row._evidence_search && !reading)) d = IX.diagnose(row, basis, f && f.ok && !f.blocked ? f : null, ctx);
+      }
+      // wave 3 (§2.4): a page left out as low value only because of the client's word - marked important now, or "fine to leave out"
+      // undone - gets its cause back from Google's stored reading today (no new inspection needed), and is inspected again on the next run
+      else if (S(row.cause) === 'low_value' && IX.storedReading(row) && IX.typeOverride(row) !== 'utility'
+        && (IX.typeOverride(row) === 'important' || (!IX.isUtilityRow(row) && !IX.isLowValue(row.url, row)))) {
+        d = IX.diagnose(row, IX.storedReading(row), null, ctx); if (d && d.cause !== 'low_value') row.next_check_at = nowIso;
       }
       // wave 2: the canonical with its own title, utility pages, pages already linked (IX.refine) - before `checks`, so a refined cause counts its re-checks
       if (d) { const rf = IX.refine({ ...row, ...d }, { ...rctx, prev }); d = { ...d, cause: rf.cause, action: rf.action, state: rf.state }; row._own_title = rf.own_title; }
@@ -2214,7 +2408,17 @@ for (const v of inv) {
     for (const r of rows) { if (r.state === 'indexed' && !S(r.cause)) r.action = 'none'; }
     // X8: "ask Google to read it" - at most 5 a site; chosen again on the engine's Monday
     const asked = IX.askGoogle(rows, { now, home_keys: new Set(v.home_links || []), freeze: fr, reselect: monday });
+    // wave 3 (DESIGN_WAVE3.md §2.1 / §2.2 / §2.7): our robots.txt verdict per page, the escalation after 3 weeks with no visit from Google
+    // (escalated_at kept while it holds, '' as soon as it does not; the action is unchanged), then the order of the work
+    const datesOk = IX.datesUsable((v.sitemap || {}).dates);
+    for (const r of rows) {
+      const ra = IX.robotsAllows(robots.text, robots.status, IX.pathOf(r.url)); r.robots_ok = ra === true ? 'yes' : ra === false ? 'no' : '';
+      const e = IX.escalation(r, { now, dates_usable: datesOk, freeze: fr });
+      r.escalated_at = e.on ? (S(r.escalated_at) || nowIso) : ''; r.escalate_why = e.on ? e.why.join(',') : '';
+    }
+    IX.priorityRank(rows, { home_keys: new Set(v.home_links || []) });
     for (const r of rows) { r.note = IX.noteOf(r, { freeze: fr, now, site }); r.updated_at = nowIso; }
+    const do_first = IX.doFirst(rows, { freeze: fr });
     const upserts = [], history = [];
     for (const r of rows) {
       const o = IX.rowOut(r);
@@ -2233,9 +2437,19 @@ for (const v of inv) {
       .concat((v.prune || []).map(x => ({ site_id: v.site_id, url: x.url, why: S(x.why) || 'gone', keep: S(x.keep) })))
       .filter(x => x.url && !live.has(x.url));
     const history_moves = netMoves.filter(m => !live.has(m.from));
+    // wave 3 (§2.3): the pages to tell IndexNow about (the key check and the POST come next; Index Page Rows records indexnow_at on the
+    // rows IndexNow accepted). One POST a site a day; a URL AI Growth sent in the last 30 days is not sent again.
+    const aiSent = new Map(); for (const a of aiPages) if (S(a.site_id) === v.site_id && S(a.submitted_at)) { const kk = IX.key(a.url); if (S(a.submitted_at) > S(aiSent.get(kk) || '')) aiSent.set(kk, S(a.submitted_at)); }
+    const inHost = IX.siteHost(site);
+    const recent = IX.indexnowSentRecently(rows, now);
+    const inUrls = recent ? [] : IX.indexnowCandidates(rows, { now, host: inHost, ai_sent: aiSent });
+    const inSet = new Set(inUrls);
+    const indexnow = { host: inHost, urls: inUrls, why: recent ? 'sent_today' : inUrls.length ? '' : 'nothing_new', rows: rows.filter(r => inSet.has(S(r.url))).map(r => IX.rowOut(r)) };
     const all = rows.map(r => ({ url: r.url, state: S(r.state), cause: S(r.cause), action: S(r.action), lane: S(r.lane), needs_person: !!r.needs_person, note: S(r.note),
       merge_into: S(r.merge_into), final_url: S(r.final_url), http_status: n0(r.http_status), fix_seen_at: S(r.fix_seen_at), ask_google: !!r.ask_google, fix_failed_at: S(r.fix_failed_at),
-      own_title: !!r._own_title, linked: IX.linkedList(r.linked_by).length > 0, improved_at: S(r.improved_at), improved_to: S(r.improved_to), last_crawl: S(r.last_crawl) }));
+      own_title: !!r._own_title, linked: IX.linkedList(r.linked_by).length > 0, improved_at: S(r.improved_at), improved_to: S(r.improved_to), last_crawl: S(r.last_crawl),
+      priority: n0(r.priority), escalated_at: S(r.escalated_at), escalate_why: S(r.escalate_why), type_override: S(r.type_override), asked_google_at: S(r.asked_google_at),
+      google_read_after_ask_at: S(r.google_read_after_ask_at), words: n0(r.words), link_depth: n0(r.link_depth), linked_n: n0(r.linked_n), indexnow_at: S(r.indexnow_at) }));
     // X13: no same-day callback for news on the site's first run, nor for an update that started before the site was first checked
     const firstRun = !(v.pages || []).some(p => p._prev);
     const since = S(v.watch_since);
@@ -2243,7 +2457,7 @@ for (const v of inv) {
     const news_today = newsFor(g.started) + newsFor(g.completed) + (g.policy_news && !firstRun ? 1 : 0);
     out.push({ json: { ...base, upserts, history, deletes: deletes.slice(0, IX.CFG.moves_max * 2), history_moves, all, dropped: dropped.slice(0, IX.CFG.dropped_max), counts: c, plan: v.plan || {},
       freeze: fr, sitemap: v.sitemap || {}, gsc_sitemaps: v.gsc_sitemaps, search: v.search || {}, quota_stop: !!v.quota_stop || c.quota, access_lost: c.access, capped: !!v.capped,
-      reserved, ask_google: asked, first_run: firstRun, news_today, failed: false, submit: v.submit || null, links: v.links || null } });
+      reserved, ask_google: asked, first_run: firstRun, news_today, failed: false, submit: v.submit || null, links: v.links || null, do_first, indexnow } });
   } catch (e) {
     out.push({ json: { ...base, upserts: [], history: [], deletes: [], history_moves: [], all: [], dropped: [], counts: { inspected: 0, reused: 0, fetched: 0, errors: 0 }, failed: true,
       why: IX.PLAIN_FAIL, why_detail: 'diagnosis failed: ' + S(e && e.message).slice(0, 160), plan: {}, freeze: fr, news_today: 0, submit: v.submit || null } });   // R5

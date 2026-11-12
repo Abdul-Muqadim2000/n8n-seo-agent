@@ -76,7 +76,7 @@ for (const s of sites) {
     const m = IX.merge({ site, now, stored: mineStored, inventory: inventory.filter(r => r.site_id === s.site_id),
       sitemap: { read: (st.read || 0) > 0, complete, urls: st.urls || [] }, ours, improved, search: { read: saOk, by: ev.by, truncated: ev.truncated },
       watch: watch.filter(r => r.site_id === s.site_id), prev_complete: !!s.prev_complete, prev_complete_at: S(s.prev_complete_at),
-      link_index: linkIndex, links_read: linksRead, linked, titles: linkTitles, unread_parents: sl ? (sl.unread_parents || []) : [] });
+      link_index: linkIndex, links_read: linksRead, linked, titles: linkTitles, unread_parents: sl ? (sl.unread_parents || []) : [], home_keys: linksRead ? (st.home_links || []) : [] });
     // wave 2 (§2.5): the sitemap submission, decided before anything is written (Sitemap Submit Requests asks; Index Run Rows records)
     const submit = IX.submitPlan({ on: s.sitemap_submit === true, kill_off: SUBMIT_KILL_OFF, permission: S(s.gsc_permission), property: s.gsc_property, site, ok: st.ok || [],
       gsc: gscSitemaps, complete, urls: st.urls || [], prev: prevOf(s), now });
@@ -89,7 +89,9 @@ for (const s of sites) {
       take: pl.take.map(p => ({ url: p.url, bucket: p._bucket })), reuse: m.pages.filter(p => p._reuse).map(p => p.url),
       plan: { limit: pl.limit, due: pl.due, backlog_left: pl.backlog_left, by_bucket: pl.by_bucket, outside: pl.outside },
       sitemap: { read: st.read || 0, fetched: (st.fetched || []).length, urls: (st.urls || []).length, errors: (st.errors || []).slice(0, 10), capped: !!(st.capped || st.capped_sitemaps),
-        complete, left: (st.next || []).length, robots_status: st.robots_status || 0, home_host: S(site.home_host) },
+        complete, left: (st.next || []).length, robots_status: st.robots_status || 0, home_host: S(site.home_host),
+        // wave 3 (§2.5): the dates the sitemap gives; a day nothing of it could be read keeps the last run's reading
+        dates: (st.urls || []).length || complete ? { ...IX.sitemapDates(st.urls || []), read: true } : (s.prev_sitemap_dates ? { ...s.prev_sitemap_dates, read: false } : { ...IX.sitemapDates([]), read: false }) },
       gsc_sitemaps: gscSitemaps, search: { read: saOk, rows: ev.rows, end: ev.end, truncated: ev.truncated, truncated_windows: ev.truncated_windows, why: saOk ? '' : saWhy },
       quota_stop, failed: false, submit, links: { read: linksRead, parents: sl ? (sl.parents || []) : [], sources: sl ? (sl.sources || []).length : (st.home_read ? 1 : 0), found: linked.length,
         suggested: sl ? (sl.suggested || []) : [], unread_parents: sl ? (sl.unread_parents || []).length : 0 }, link_titles: linkTitles } });

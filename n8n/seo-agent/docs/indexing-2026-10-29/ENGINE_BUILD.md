@@ -541,3 +541,81 @@ Alert?`, `Save Submit Alert`). Harness: `harness/scenarios_index_wave2.js` gains
 * Full harness in Docker (`n8nio/n8n:2.41.4`, ~16:45 UTC): **14050 passed, 0 failed** (fb6bdbf3 baseline 13988 per REVIEW_WAVE2; +62 IXW checks).
   The first full run found IX5 (the Peppol fixture: "Peppol e-invoicing" vs "E-invoicing software") empty under the two-word rule; fixed by
   keeping short words in the phrase match ("e invoicing"), not by loosening the rule.
+
+## Wave 3 (DESIGN_WAVE3)
+Branch `ix3/engine` (worktree `alaventra-ix3-engine`), on top of `feature/seo-agent-v4.5` 06332af3. Additive only; nothing deployed.
+
+### What each §2 item does and where
+* **2.1 columns** (`ladder_common.py`, `IX.PAGE_COLS`): `seo_index_pages` + `priority`, `escalated_at`, `escalate_why`, `type_override`, `robots_ok`,
+  `link_depth`, `linked_n`, `indexnow_at` (last, in this order); `seo_index_runs` + `escalated`, `asked_waiting`, `indexnow_sent`;
+  `sitemaps_json.dates` = `{ urls, with_lastmod, distinct, usable, read }` and `sitemaps_json.indexnow` = `{ status, sent, http_status?, asked?,
+  would_send? }`. The attempt and reservation rows write the three new run columns as 0 (exact columns). Reaches the live tables only through
+  `sync_tables.py` on deploy. `robots_ok` is set in `IX_Diagnose.js` from `IX.robotsAllows` (rules now parsed once per robots.txt, memo);
+  `link_depth` / `linked_n` in `IX.merge` (`IX.linkDepthOf`: 1 = the home page links it, 2 = a page the home page links links it, 0 = deeper /
+  none / the home page itself; a day the links could not be read keeps the stored values).
+* **2.2 escalation** (`IX.escalation`, `IX.escalationNote`, called in `IX_Diagnose.js` after `askGoogle`): state `not_indexed`, cause
+  `unknown_to_google` / `discovered_not_crawled`, action `wait` / `links`, `last_crawl` empty, `published_at || first_seen_at` 21+ days ago, not
+  marked `utility`. `escalated_at` kept while it holds, '' as soon as it does not; the action is unchanged. `escalate_why` in the contract's order.
+  The escalation note replaces the page's note (`IX.noteOf`), short_page during a freeze says "... after Google's current update finishes."
+* **2.3 IndexNow** (new nodes after *Index Diagnose*): *Load IndexNow Key (Index)* (seo_cache `indexnow:<site_id>`) and *Load AI Pages (Index)*
+  (seo_ai_pages, read only) join the site loads; *Index Diagnose* picks the pages (`IX.indexnowCandidates`, cap 500, pages Google does not have
+  first, then priority; `IX.indexnowSentRecently`: one POST a site in 20 hours); *IndexNow Key Check (Index)* (`IX_IndexNow_Key_Check.js`:
+  kill switch, a key, pages to send) -> *Fetch IndexNow Key (Index)* (GET `https://<host>/<key>.txt`, no redirect followed, retry rule) ->
+  *IndexNow Submit Requests (Index)* (`IX_IndexNow_Submit_Requests.js`: 200 and the body equal to the key, dry run, one POST body) ->
+  *Submit IndexNow (Index)* (POST `https://api.indexnow.org/indexnow`, `neverError` + `fullResponse`: a 4xx is an answer, never retried and never a
+  failed run; the retry rule covers only a call that did not get through) -> *Index Page Rows* sets `indexnow_at` on every URL of an accepted
+  list (200 / 202), also on rows that did not change otherwise; *Index Run Rows* records `indexnow_sent` and one note line (accepted, not
+  accepted with the status, no key, key file not answering, dry run). Build flag `SEO_INDEXNOW` (n8n/.env, default on, `off` stops it), baked
+  as `__INDEXNOW__`. Dry run: `dry_run` on the Manual Run (like AI Growth's), carried in `ix_chain` / `ix_watch` by *Dispatch Start*, *Index
+  Watch Plan*, *Retry Index Part*; *Index Plan* outputs `dry_run`. Build proofs in `build_index_coverage.py`; `harness/index_wiring.json`
+  gains `indexnow`.
+* **2.4 overrides** (`IX.typeOverride`, `IX.isUtilityRow`): read in `IX.refine` (utility -> low_value / leave_out, "You marked this page as fine to
+  leave out of Google."; important -> never a utility page), `IX.diagnose` (important is never a low-value listing either), `askGoogle`,
+  `priorityRank`, `escalation`, `noteOf` / `groupNote` / the report's grouping. Carried exactly like `asked_google_at` (merge `...pv`, written
+  back as read). When a page is low_value only because of the client's word (marked important, or "fine to leave out" undone), *Index Diagnose*
+  gives it its cause back from Google's stored reading the same day and plans an inspection on the next run.
+* **2.5 sitemap dates** (`IX.sitemapDates`, `IX.datesUsable`): counted in *Index Inventory* from the addresses the sitemap rounds read (a day
+  nothing of the sitemap could be read keeps the last run's reading, `read: false`); stored by *Index Run Rows*; `sitemap_no_dates` uses it.
+* **2.6 ask Google** (`IX.askGoogle` rewritten, `IX.askValue`): `ask_max` 5 at once, `ask_daily_new` 3, `ask_window_max` 10 in
+  `ask_window_days` 7; job postings eligible as value tier 4 (last); `type_override = important` tier 0 (first) and eligible without being in
+  the sitemap or linked; utility (by path or by the client's word) never. Kept marks spend nothing (unchanged).
+* **2.7 priority** (`IX.priorityRank`, `IX.doFirst`, `IX.doFirstWhy`): after `askGoogle`; a fix seen / an improvement waiting first, then the ask
+  value tier, impressions desc, depth, url; 0 for indexed, leave_out, none, utility. *Index Diagnose* outputs `do_first` (top 5 `{ url, why }`).
+* **2.8 summary** (`IX_Report.js`, `IX.summaryWave3`, `IX.reportMarkdown` `todo`): `summary.waiting` (action wait, unseen cause, not escalated,
+  no fix seen / improvement waiting), `escalated`, `asked_waiting` (asked, not read, ask under 28 days, not indexed), `read_after_ask_7d`,
+  `indexnow_sent`, `do_first`, `sitemap_dates`; one "## Your to-do" block in `report_markdown`.
+
+### Deviations from the contract (written down for the app)
+1. `ask_daily_new` is counted over **20 hours** (`ask_daily_hours`), not 24: the daily run's start drifts by minutes, and a strict 24-hour
+   window would leave every other day without new marks. Two runs on one day still cannot pass 3.
+2. The `weak_links` note has two more wordings: home page as the only link -> "Only your home page links here: also link it from your main
+   menu and from related pages."; no link found -> "No page of your website links here that we could find: link it from your home page or main
+   menu." (the contract's sentence would say "your home page does not" when it does). `weak_links` is not raised for a page whose links were
+   never read (`linked_by` 'unread' with no earlier reading).
+3. The `not_asked` note says "(it is on your list today)" only when the page carries the mark today, otherwise "(it comes onto your daily list
+   as the pages before it are done)".
+4. `asked 40 days ago` gives both `not_asked` and `asked_no_visit` (both conditions hold literally).
+5. IndexNow also leaves out `soft_404`, `server_error`, `access_denied`, `robots_*`, `alternate` and `canonical_elsewhere` (unless a fix was seen
+   on the site), and a URL on another host than the site's (IndexNow takes one host a POST).
+6. `summary.waiting` counts unseen-cause wait rows only (the "Google has not visited these yet" card; 13 on devaicon), not wait_new or fixed pages.
+7. The key file is read without following a redirect (a key file that redirects is "not verified").
+
+### Known limits
+* The same race as `asked_google_at`: an override the app writes while a run is in flight is overwritten by that run's upsert of the row (if the
+  row changed that run). The next app write wins again; the app's overlay covers the gap.
+* The first wave 3 run rewrites every row once (new columns change every row's fingerprint); afterwards priority shifts rewrite ranked rows only.
+* Existing harness checks updated for the new ask rule (contract change, not regressions): IXV1, IXV3, IXV8 (wave 2), IXW6 (fix wave 2), IXF11 X8.
+
+### Tests
+* `harness/scenarios_index_wave3.js` IXT1-IXT9 (78 checks, devaicon-shaped: the 2026-10-30 pages, the 2026-11-12 sitemap without lastmod,
+  23 simulated days through the generated nodes): escalation day 20 / 21 / kept / cleared by a crawl; each `escalate_why` code and wording incl.
+  the freeze; ask Google over 10 days (3 a day, 10 a week, 5 at once, important first, job postings last, utility and "fine to leave out"
+  never); priority / do first; overrides over three runs incl. undo; IndexNow (no key, wrong body, redirecting key file, dry run, 200, 422,
+  AI Growth sent 5 / 40 days ago, changed since sent, cap, one a day, wiring); sitemap dates; robots_ok / link_depth (home page down keeps them);
+  the summary and markdown; the columns. Run against the pre-change build (06332af3's code_v4): 4 passed (all `control:`), 74 failed.
+* Full harness in Docker (`n8nio/n8n:2.41.4`, `app/` mounted at `/app` so the KI scenarios find the app's sources), 2026-11-12:
+  before (06332af3, without `/app`): 18586 passed, 2 failed (the two KI scenarios that read `/app/shared`); after: **19220 passed, 1 failed**.
+  The one failure is AD10's wall-clock speed check in the AIR kit (`scenarios_air_diag.js`, "under 200 ms in the steady state": 246 ms),
+  code this wave does not touch, measured while the laptop's load average was ~108 (other stacks running); the same branch passed it at
+  134 ms in an earlier full run, and the baseline measured 182 ms. Re-run on a quiet machine before merging.
+* `n8n/.env.seo.example` documents `SEO_INDEXNOW`.

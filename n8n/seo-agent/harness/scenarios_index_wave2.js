@@ -178,7 +178,8 @@ module.exports = async (ctx) => {
     check('control: the 9 indexed pages stay indexed with nothing to do', G.indexed.every(p => row(D, p).state === 'indexed' && row(D, p).action === 'none'), J(G.indexed.map(p => [p, row(D, p).state, row(D, p).action])));
     // §2.3 ask Google by value
     const askedP = D.stored.filter(r => r.ask_google === true).map(r => P(r.url));
-    check('"ask Google" (5): the capability / industry pages linked from the home page first, then articles', J(askedP.slice().sort()) === J(['/capabilities/infrastructure-enterprise-systems', '/capabilities/open-edx-services', '/industries', '/insights/agentic-ai', '/insights/autonomous-ai-customer-service'].sort()), J(askedP));
+    // wave 3 (DESIGN_WAVE3.md §2.6) changed the rule: at most 3 NEW marks a day (5 at once, 10 a week) - day 1 marks the top 3 by value
+    check('"ask Google" (3 new on day 1, wave 3): the capability / industry pages linked from the home page first', J(askedP.slice().sort()) === J(['/capabilities/infrastructure-enterprise-systems', '/capabilities/open-edx-services', '/industries'].sort()), J(askedP));
     check('"ask Google" never a utility page, a job posting, /about-devaicon or the /insights listing while service pages wait', !askedP.some(p => /^\/(cookies|security|privacy|about-devaicon|insights)$|^\/careers\//.test(p)), J(askedP));
     check('the run row records the link read and the access Google reports for us', (() => { const j = JSON.parse(S0((d1.run || {}).sitemaps_json) || '{}'); return j.permission === 'siteFullUser' && j.permission_full === true && j.links && j.links.read === true && j.submit && j.submit.on === false && j.submit.gate === 'off'; })(), S0((d1.run || {}).sitemaps_json).slice(0, 600));
     // day 2: the home page does not answer -> linked_by 'unread', nothing concluded, no wait flips to links
@@ -241,7 +242,8 @@ module.exports = async (ctx) => {
     const rs = [mk('/about'), mk('/insights'), mk('/insights/c'), mk('/blog/2025/03/d', { impressions_28d: 0 }), mk('/capabilities/a'), mk('/industries/b'), mk('/privacy'), mk('/careers/x'), mk('/x/y/z/deep')];
     const n = T(() => IX.askGoogle(rs, { now: T0, home_keys: home, freeze: { freeze: false } }));
     const on = rs.filter(r => r.ask_google).map(r => P(r.url));
-    check('5 marked, by value: /industries/b and /capabilities/a (service pages linked from home), the two articles, then the shallowest other page', n === 5 && J(on.slice().sort()) === J(['/about', '/blog/2025/03/d', '/capabilities/a', '/industries/b', '/insights/c'].sort()), J({ n, on }));
+    // wave 3 (§2.6): 3 new marks a day - the order is unchanged, the day's budget is 3
+    check('3 marked (wave 3: 3 new a day), by value: /industries/b and /capabilities/a (service pages linked from home), then the shallower article', n === 3 && J(on.slice().sort()) === J(['/capabilities/a', '/industries/b', '/insights/c'].sort()), J({ n, on }));
     check('never /privacy (utility) or /careers/x (a job posting), even with room', !on.includes('/privacy') && !on.includes('/careers/x'), J(on));
     // §2.2: a canonical to another page is a site step only when the page has a title of its own; a real duplicate stays "fine to leave out"
     const titles = new Map([[IX.key(DEV + '/blog'), 'Blog | Devaicon'], [IX.key(DEV + '/industries'), 'Industries We Serve | Devaicon']]);
@@ -621,7 +623,8 @@ module.exports = async (ctx) => {
     const on = rs.filter(r => r.ask_google).map(r => P(r.url));
     check('the two free slots go to service pages linked from the home page (shallowest first: /whatwedo, then a capability page), not blocked by the two utility marks', on.includes('/whatwedo') && on.includes('/capabilities/infrastructure-enterprise-systems') && on.includes('/industries'), J(on));
     check('never the utility pages, at most 5 marked', !on.includes('/cookies') && !on.includes('/security') && n <= 5 && on.length <= 5, J([n, on]));
-    check('the weekly budget still holds: at most 2 NEW marks (5 minus the 3 old marks that still count)', rs.filter(r => r.ask_google && r.ask_google_at === new Date(T0).toISOString()).length <= 2, J(rs.map(r => [P(r.url), r.ask_google, r.ask_google_at])));
+    // wave 3 (§2.6): the old marks are a day old (outside the day's window, inside the week's 10): the day's 3 new marks apply
+    check('the budget still holds (wave 3): at most 3 NEW marks today, and at most 5 marked at once', rs.filter(r => r.ask_google && r.ask_google_at === new Date(T0).toISOString()).length <= 3 && rs.filter(r => r.ask_google).length <= 5, J(rs.map(r => [P(r.url), r.ask_google, r.ask_google_at])));
     // a page the client already asked Google about is never displaced (it is not offered again for the re-offer window anyway)
     const asked = mk('/industries', { ...old, asked_google_at: new Date(D1).toISOString() });
     const rs2 = [asked, mk('/capabilities/intelligent-systems-data')];
