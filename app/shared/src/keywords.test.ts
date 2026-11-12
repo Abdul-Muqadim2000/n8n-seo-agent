@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { baseRateText, CAREER_NOTE, chanceLabel, checkEvidenceLines, chanceText, chooseForMe, FIT_UNKNOWN_NOTE, forYouLabel, ladderOverlapsOf, PLAN_CHANCE, planChance, REACH_BASE_RATE, reachMeasured, recommendedFromStrategy, SERVICE_OUT_NOTE, toAssessment, toChance, UNMEASURED_CHANCE, type LadderKeywords } from './keywords';
+import { baseRateText, CAREER_NOTE, chanceLabel, checkEvidenceLines, chanceText, chooseForMe, FIT_UNKNOWN_NOTE, forYouLabel, ladderOverlapsOf, LOW_DEMAND_MAX, lowDemandNote, PLAN_CHANCE, planChance, REACH_BASE_RATE, reachMeasured, recommendedFromStrategy, SERVICE_OUT_NOTE, toAssessment, toChance, UNMEASURED_CHANCE, type LadderKeywords } from './keywords';
 
 // FIX_PLAN G3 (2026-10-11): the 2025 base rate and the chance band per plan, the same words as n8n's _reach.js (reachChance / reachBaseRateText /
 // reachChanceText); the band is marked uncalibrated everywhere until the system has measured its own ladders.
@@ -316,5 +316,23 @@ describe('what a keyword check matched and how it read Google', () => {
     expect([none.existingPage, none.reading, checkEvidenceLines(none)]).toEqual([null, null, []]);
     expect(checkEvidenceLines(toAssessment({}))).toEqual([]);
     for (const line of checkEvidenceLines(live)) expect(/[\u2014\u2013\u2026\u201c\u201d]|SERP|lad_/.test(line)).toBe(false);
+  });
+});
+
+describe('lowDemandNote (owner decision 2026-11-12: warn, never refuse)', () => {
+  it('warns at 10 searches a month or fewer, and when the data has no number', () => {
+    expect(lowDemandNote(10)).toMatch(/^Only about 10 searches a month/);
+    expect(lowDemandNote(1)).toMatch(/^Only about 1 search a month/);
+    expect(lowDemandNote(0)).toMatch(/^Almost nobody searches this/);
+    expect(lowDemandNote(null)).toMatch(/no search numbers/);
+    expect(lowDemandNote(undefined)).toMatch(/no search numbers/);
+  });
+  it('says nothing above the line', () => {
+    expect(LOW_DEMAND_MAX).toBe(10);
+    expect(lowDemandNote(11)).toBeNull();
+    expect(lowDemandNote(5400)).toBeNull();
+  });
+  it('plain customer text (no em dash, curly quote or ellipsis character)', () => {
+    for (const v of [null, 0, 1, 10]) expect(lowDemandNote(v)).not.toMatch(/[—–‘’“”…]/);
   });
 });

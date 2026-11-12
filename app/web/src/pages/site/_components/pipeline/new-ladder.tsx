@@ -6,6 +6,7 @@ import {
   compactNumber,
   DIFFICULTY_LABEL,
   ladderOverlapsOf,
+  lowDemandNote,
   type DifficultyForYou,
   type KeywordCheck,
   type LadderKeywords,
@@ -218,6 +219,8 @@ export function KeywordCard({
         </div>
       </dl>
       {k.why && <p className="mt-3 line-clamp-3 text-[13px] leading-snug text-ink-2">{k.why}</p>}
+      {/* owner decision 2026-11-12: few searches a month is a warning, never a refusal */}
+      {realistic && lowDemandNote(k.volume) && <WarnLine className="mt-3">{lowDemandNote(k.volume)}</WarnLine>}
       {k.overlaps.length > 0 && (
         <WarnLine className="mt-3">
           Your ladder "{k.overlaps[0].head}" already covers this search
