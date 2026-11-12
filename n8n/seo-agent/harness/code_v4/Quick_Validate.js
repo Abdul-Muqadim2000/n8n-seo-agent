@@ -76,5 +76,7 @@ return [{ json: {
   delivery: b.callback_url ? 'POST to callback_url when finished' : 'email when finished', estimated_minutes: eta,
   idem_key, idem_window_min: IDEM_WINDOW_MIN, idem_source: forceNew ? 'force_new' : (idemGiven ? 'caller' : 'request fingerprint'),
   target: ki ? 'ki' : 'main',   // KI: which workflow Start Which Run? hands the request to
-  forward: { ...raw, body: { ...b, request_id, client_ip } }
+  // P1 (2026-11-12): `slot_handoff` is written only by the engine itself when a page run continues its wait in a new execution; a caller's
+  // own value is dropped here (the main run also trusts one only when its ledger row says `handed_off` for the same request)
+  forward: { ...raw, body: { ...b, slot_handoff: null, request_id, client_ip } }
 } }];

@@ -15,7 +15,7 @@ const myId = n0(mine.id);
 const today = new Date().toISOString().slice(0, 10);
 const staleMs = n0(CONFIG.run_stale_hours || 2) * 36e5;
 const isStale = (r) => S(r.status) === 'stale' || (S(r.status) === 'reserved' && Date.now() - Date.parse(S(r.created_at)) > staleMs);
-const earlier = rows.filter(r => r.mode !== 'assess' && r.status !== 'refused' && !isStale(r) && (myId > 0 ? n0(r.id) < myId : S(r.run_id) !== S($execution.id)));
+const earlier = rows.filter(r => r.mode !== 'assess' && r.status !== 'refused' && r.status !== 'handed_off' && !isStale(r) && (myId > 0 ? n0(r.id) < myId : S(r.run_id) !== S($execution.id)));
 const todayRows = earlier.filter(r => S(r.created_at).slice(0, 10) === today);
 const key = S(p.client_key).toLowerCase();
 const fromApp = /^app:[a-z0-9-]{6,64}$/i.test(key);

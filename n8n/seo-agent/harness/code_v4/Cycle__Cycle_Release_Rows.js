@@ -11,4 +11,7 @@ const HEAD = 'stale (released by the cycle dispatcher): ';
 const basis = (r) => { const was = r.was ? ' | the reservation said: ' + String(r.was).slice(0, 120) : '';
   const why = String(r.reason || 'its run is no longer running'), room = Math.max(60, 400 - HEAD.length - was.length);
   return (HEAD + (why.length > room ? why.slice(0, room - 3) + '...' : why) + was).slice(0, 400); };
-return rows.length ? rows.map(r => ({ json: { run_id: String(r.run_id), key: r.key, reason: String(r.reason || '').slice(0, 300), ghost: !!r.ghost, cost_basis: basis(r) } })) : [{ json: { skip: true } }];
+// P1 (2026-11-12): a page run's row may be released from `waiting` (it died while in line for a writing slot); *Release Dead Runs* matches
+// the state the plan saw (`status_was`), so a row that moved on meanwhile (admitted, settled, refused) is never touched.
+const was = (r) => (['reserved', 'waiting'].includes(String(r.status_was || '')) ? String(r.status_was) : 'reserved');
+return rows.length ? rows.map(r => ({ json: { run_id: String(r.run_id), key: r.key, reason: String(r.reason || '').slice(0, 300), ghost: !!r.ghost, cost_basis: basis(r), status_was: was(r) } })) : [{ json: { skip: true } }];

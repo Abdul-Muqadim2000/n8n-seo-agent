@@ -26,7 +26,7 @@ from env_settings import ENV
 from ladder_common import (DT_TYPE, DT_VERSION, dt_schema, CACHE_TABLE, CACHE_COLS, RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, RUN_GUARD_SRC, CATCHUP_SRC, SITES_TABLE, MONITORS_TABLE,
                            CADENCE_TABLE, LADDER_TABLE, LADDER_SETTINGS_TABLE, SITES_COLS, MONITORS_COLS, CADENCE_COLS, LADDER_COLS, LADDER_SETTINGS_COLS, CYCLES_TABLE, CYCLES_COLS, CYCLE_JOBS_TABLE, CYCLE_JOBS_COLS, SKIPS_TABLE, SKIPS_COLS,
                            dt_create_params, dt_upsert_params, dt_get_all_params, dt_get_where_params, dt_get_all_where_params, dt_delete_where_params,
-                           node_id, freeze_ids, read_v5)
+                           node_id, freeze_ids, read_v5, LOG_TABLE, LOG_COLS, AI_TARGETS_TABLE, AI_TARGETS_COLS, dt_update_where_params)
 
 HERE = os.path.dirname(os.path.abspath(__file__)); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
 WID, NAME, FILE = 'SEOagentCycleDsp', 'SEO Agent — Cycle Dispatcher', 'SEO_Agent_Cycle_Dispatcher.json'
@@ -198,8 +198,20 @@ node('Save Cycle Job Rows', DT_TYPE, DT_VERSION, dt_upsert_params(CYCLE_JOBS_TAB
 # than the stale window whose execution is dead / finished unsettled / gone (read by id, at most max_ledger_reads a sweep) is released the same
 # way - a deploy's restart no longer blocks a run-guard slot for 2 hours - and its cost_basis says why
 code('Cycle Release Rows', 'Cycle_Release_Rows.js', at(25, 2)); iff('Any Releases?', '{{ !$json.skip }}', at(25, 3))
-node('Release Dead Runs', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $json.run_id }}'), ('status', 'reserved')], {'status': 'stale', 'cost_basis': '={{ $json.cost_basis }}'}),
+# P1 (2026-11-12): a page run's row may die while `waiting` for a writing slot; the update matches the state the plan saw (`status_was`)
+node('Release Dead Runs', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $json.run_id }}'), ('status', "={{ $json.status_was || 'reserved' }}")], {'status': 'stale', 'cost_basis': '={{ $json.cost_basis }}'}),
      at(26, 3), **SAVE)
+# P1 (2026-11-12, prod review S1-05): the page a released page run was writing. Its content-log row (`started`, opened by the app or the
+# cadence) becomes `failed` with the reason and an AI question it was writing goes back to `queued`, so nothing reads a dead run as a page
+# on its way. Placed above *Cycle Start Items* on the canvas: n8n's v1 order runs this branch first, before any job is started.
+# (Not named `Load ...`: Cycle Plan never reads it - it runs after the plan; an unreadable table frees nothing this sweep and the next one tries.)
+node('Started Pages (Cycle)', DT_TYPE, DT_VERSION, dt_get_where_params(LOG_TABLE, 'status', 'eq', 'started'), at(27, -1), **LOAD)
+code('Cycle Page Releases', 'Cycle_Page_Releases.js', at(28, -1)); iff('Any Page Releases?', '{{ !$json.skip }}', at(29, -1))
+node('Mark Dead Pages (Cycle)', DT_TYPE, DT_VERSION, dt_update_where_params(LOG_TABLE, LOG_COLS, [('request_id', 'eq', '={{ $json.request_id }}'), ('keyword', 'eq', '={{ $json.keyword }}'), ('status', 'eq', 'started')],
+     {'status': 'failed', 'qa_reasons': '={{ $json.qa_reasons }}'}), at(30, -2), **SAVE)
+node('Requeue Dead AI Targets (Cycle)', DT_TYPE, DT_VERSION, dt_update_where_params(AI_TARGETS_TABLE, AI_TARGETS_COLS, [('request_id', 'eq', '={{ $json.request_id }}'), ('status', 'eq', 'writing')],
+     {'status': 'queued', 'request_id': '', 'reason': "={{ 'the page run stopped without a result (n8n execution ' + $json.run_id + '): the question is queued again rather than left saying being written' }}",
+      'updated_at': '={{ new Date().toISOString() }}'}), at(30, 0), **SAVE)
 # ---- the starts: RECORD, read the claim back, then start - one at a time ----
 code('Cycle Start Items', 'Cycle_Start_Items.js', at(26, 1)); iff('Any Cycle Starts?', '{{ !$json.skip }}', at(27, 1))
 node('Loop Cycle Starts', 'n8n-nodes-base.splitInBatches', 3, {'batchSize': 1, 'options': {}}, at(28, 1))
@@ -245,6 +257,8 @@ link('Any Cycle Rows?', 'Save Cycle Rows', 0); link('Any Cycle Rows?', 'Cycle St
 link('Any Cycle Updates?', 'Update Cycle Rows', 0); link('Any Cycle Updates?', 'Cycle Job Rows', 1)
 link('Any Job Rows?', 'Save Cycle Job Rows', 0); link('Any Job Rows?', 'Cycle Release Rows', 1)
 link('Any Releases?', 'Release Dead Runs', 0); link('Any Releases?', 'Cycle Start Items', 1)
+link('Release Dead Runs', 'Started Pages (Cycle)'); link('Started Pages (Cycle)', 'Cycle Page Releases'); link('Cycle Page Releases', 'Any Page Releases?')
+link('Any Page Releases?', 'Mark Dead Pages (Cycle)', 0); link('Any Page Releases?', 'Requeue Dead AI Targets (Cycle)', 0)
 link('Any Cycle Starts?', 'Loop Cycle Starts', 0); link('Any Cycle Starts?', 'Cycle Retention', 1)
 link('Loop Cycle Starts', 'Cycle Retention', 0); link('Loop Cycle Starts', 'Read Claim (Cycle)', 1)   # splitInBatches v3: 0 = done, 1 = loop
 link('Claim Free?', 'Save Cycle Record', 0); link('Claim Free?', 'Loop Cycle Starts', 1)   # a claim another sweep holds: back off, the report says why

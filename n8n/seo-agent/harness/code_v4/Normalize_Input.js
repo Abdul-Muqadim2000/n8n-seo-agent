@@ -101,6 +101,12 @@ const CONFIG = {
   // the similarity checkers). Over this, *Originality Check* fails the quality check and the editor rewrites those passages.
   originality_max_overlap_pct: 15,
   run_stale_hours: 2,
+  // P1 (2026-11-12): page runs written at the same time (seo_cache `slots:page` {"limit": n} overrides it), how often a waiting run looks
+  // again, how long it may wait, and how long one execution may wait before it hands its place in line to a new one (v5/code/_run_guard.js)
+  page_slots: 2,
+  page_slot_poll_seconds: 120,
+  page_slot_max_wait_hours: 6,
+  page_slot_handoff_minutes: 40,
   heavy_audit_pages: 100,
   // G8 / K4 (2026-10-13): how many keywords discovery checks live on Google for intent, page type and who ranks. One check is a
   // DataForSEO live-advanced SERP at depth 10 (about $0.002), so 16 costs ~$0.032 a run; KWI.liveChecks caps it at 25.
@@ -460,6 +466,12 @@ return [{
     via_webhook,
     callback_url,
     request_id: String(p2.request_id || ''),
+    // P1: a page run that continues another execution's wait for a writing slot (Page Handoff); only a well-formed one is kept, and Rate
+    // Limit trusts it only when the ledger says that execution handed it off for this request
+    slot_handoff: (() => { const h = p2.slot_handoff; if (!h || typeof h !== 'object' || Array.isArray(h)) return null;
+      const from = String(h.from_run_id || '').trim(), q = Date.parse(String(h.queued_at || ''));
+      if (!/^\d+$/.test(from) || !Number.isFinite(q)) return null;
+      return { from_run_id: from, queued_at: new Date(q).toISOString(), hops: Math.max(0, Math.min(99, Math.floor(Number(h.hops) || 0))) }; })(),
     client_ip: String(p2.client_ip || ''),
     run_page_check: domain !== '' && (features.some(f => f.includes('page exists')) || !!existing_page_url || mode === 'ladder'),
     pages_now,
@@ -526,6 +538,10 @@ return [{
     dfs_balance_floor_usd: CONFIG.dfs_balance_floor_usd,
     originality_max_overlap_pct: CONFIG.originality_max_overlap_pct,
     run_stale_hours: CONFIG.run_stale_hours,
+    page_slots: CONFIG.page_slots,
+    page_slot_poll_seconds: CONFIG.page_slot_poll_seconds,
+    page_slot_max_wait_hours: CONFIG.page_slot_max_wait_hours,
+    page_slot_handoff_minutes: CONFIG.page_slot_handoff_minutes,
     live_serp_checks: CONFIG.live_serp_checks,
     heavy_audit_pages: CONFIG.heavy_audit_pages,
     render_diff_pages: CONFIG.render_diff_pages,

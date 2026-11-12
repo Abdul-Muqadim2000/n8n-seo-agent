@@ -354,6 +354,7 @@ const CYC = (() => {
   const yes = (v) => v === true || /^(true|1|yes|on)$/i.test(S(v));
   const flag = (x, dflt) => (x === undefined || x === null || x === '') ? dflt : !(x === false || /^(false|0|no|off)$/i.test(String(x)));
   const normD = (x) => S(x).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+  const yesNo = (v) => v === true || /^(true|1|yes|on)$/i.test(S(v));
   const listOf = (v) => (Array.isArray(v) ? v : S(v).split(/[\s,;]+/)).map(x => S(x).toLowerCase()).filter(Boolean);
   // ---- the contract: app/shared/src/cycles.ts CYCLE_JOBS, in the same order (harness CY1 and build section 140 compare the two). `mode` is
   // the run ledger mode each workflow reserves under (the run guard's twin check), `heavy` a job that crawls the site.
@@ -399,6 +400,7 @@ const CYC = (() => {
   const CAPACITY = new Set(['same_mode', 'too_many_open', 'heavy_busy']);
   // F-REH: the key under which runsFrom() hands the plan what n8n said about each reservation's execution by id (no workflow has this id)
   const LEDGER_RUNS = '*ledger';
+  const WAIT_HOURS = 6;   // P1: RG.PAGE.max_wait_hours (asserted equal by build_v4.py section 190)
   // ---- time: local dates in a website's zone, with the catch-up kit's Intl rule ----
   const validTz = (tz) => { if (!S(tz)) return false; try { new Intl.DateTimeFormat('en-US', { timeZone: S(tz) }).format(0); return true; } catch (e) { return false; } };
   const local = (tz, t) => { const d = new Date(t + CU.offset(tz, t));
@@ -591,7 +593,13 @@ const CYC = (() => {
     if (/catch-up already ran this scheduled slot/i.test(txt)) return 'caught_up';
     return 'other';
   };
-  const isStale = (r, now, h) => { const st = S(r && r.status); if (st === 'stale') return true; const t = ms(r && r.created_at); return st === 'reserved' && t > 0 && t < now - h * H; };
+  const isStale = (r, now, h) => { const st = S(r && r.status); if (st === 'stale') return true; const t = ms(r && r.created_at);
+    // P1 (2026-11-12): a page run waits for a writing slot at most 6 h (RG.PAGE.max_wait_hours) and then writes for at most `h`: a row still
+    // `waiting` past both (+ half an hour) is beyond any run (RG.isStale gives up on it earlier, at 6.25 h, for the counts)
+    if (st === 'waiting') return t > 0 && t < now - (WAIT_HOURS + h + 0.5) * H;
+    return st === 'reserved' && t > 0 && t < now - h * H; };
+  // P1: the ledger states of a run that holds or waits for room (`waiting` = a page run in line for a writing slot)
+  const OPEN_ROW = new Set(['reserved', 'waiting']);
   const shortBasis = (r) => S(r && r.cost_basis).replace(/\s+/g, ' ').slice(0, 160);
   // ---- the outcome of a job the dispatcher started, from the ledger first and n8n's executions second ----
   // a: { row, ledger, runs: {workflow_id: {ok, data: [{id, mode, status, startedAt, stoppedAt}], byId: {id: execution}, incomplete: [{from, to, oldest}],
@@ -706,7 +714,7 @@ const CYC = (() => {
     // row older than the stale window is already ignored by the guard (and marked by *Release Stale Runs*), so only younger rows are read,
     // oldest first, at most max_ledger_reads a sweep; a read the cap leaves out is reported in `unread` and judged at a later sweep.
     const now = ms(c.now) || 0, sh = Number(cfg.stale_hours) > 0 ? Number(cfg.stale_hours) : DEFAULTS.stale_hours;
-    const ghosts = ledger.filter(l => S(l.status) === 'reserved' && /^\d+$/.test(S(l.run_id)) && (!now || !isStale(l, now, sh)))
+    const ghosts = ledger.filter(l => OPEN_ROW.has(S(l.status)) && /^\d+$/.test(S(l.run_id)) && (!now || !isStale(l, now, sh)))
       .sort((x, y) => ms(x.created_at) - ms(y.created_at) || Number(x.run_id) - Number(y.run_id));
     const greads = [];
     for (const l of ghosts) { const url = api + '/executions/' + q(S(l.run_id)); if (seen.has(url)) continue; seen.add(url); greads.push({ workflow_id: '', kind: 'ledger', run_id: S(l.run_id), key: S(l.key), url }); }
@@ -854,7 +862,7 @@ const CYC = (() => {
       const alive = new Set(); for (const [w, r] of Object.entries(runs)) if (w !== LEDGER_RUNS && r && Array.isArray(r.data)) for (const e of r.data) if (!DEAD.has(S(e.status)) && S(e.status) !== 'success') alive.add(S(e.id));
       for (const l of ledger) {
         const id = S(l.run_id);
-        if (S(l.status) !== 'reserved' || !/^\d+$/.test(id) || release.has(id) || isStale(l, now, cfg.stale_hours)) continue;
+        if (!OPEN_ROW.has(S(l.status)) || !/^\d+$/.test(id) || release.has(id) || isStale(l, now, cfg.stale_hours)) continue;
         const x = LR.byId[id] || null, xs = x ? S(x.status) : '';
         const what = (S(l.mode) || 'a') + ' run' + (normD(l.domain) ? ' of ' + normD(l.domain) : '') + ' (execution ' + id + ', ledger row ' + (S(l.key) || '?') + ', reserved ' + (S(l.created_at) || '?') + ')';
         let why = '';
@@ -863,12 +871,13 @@ const CYC = (() => {
         else if (!x && LR.gone[id] && !alive.has(id)) why = 'n8n no longer has the ' + what + ' and no read lists it running';
         if (!why) continue;
         why += ', so it no longer holds a run-guard slot (released by the cycle dispatcher, not after the ' + cfg.stale_hours + '-hour stale rule)';
-        release.set(id, { run_id: id, key: S(l.key), reason: why, ghost: true });
+        // P1: a page run's row may be `waiting` (released from that state), and the dead run's page is named so its content-log row is freed
+        release.set(id, { run_id: id, key: S(l.key), reason: why, ghost: true, status_was: S(l.status), page: yesNo(l.page), request_id: S(l.request_id), keyword: S(l.keyword) });
         ghosts.push({ run_id: id, key: S(l.key), mode: S(l.mode), domain: normD(l.domain), status: xs || 'gone', reserved_at: S(l.created_at), reason: why });
       }
     }
     // the release carries the row's own cost_basis, so *Release Dead Runs* keeps what the reservation said beside why it was released
-    for (const [id, v] of release) { const l = ledger.find(r => S(r.run_id) === id && S(r.status) === 'reserved'); if (l && !v.was) v.was = S(l.cost_basis).slice(0, 200); }
+    for (const [id, v] of release) { const l = ledger.find(r => S(r.run_id) === id && OPEN_ROW.has(S(r.status))); if (l && !v.was) v.was = S(l.cost_basis).slice(0, 200); if (l && !v.status_was) v.status_was = S(l.status); }
 
     // ---- 2. adoption: a tracked, active website with no cycle row gets one now (the kickoff's safety net, plan §4.7) ----
     const cyc = new Map(cycles.map(r => [S(r.site_id), r]));
@@ -1125,7 +1134,28 @@ const CYC = (() => {
     const reason = busy ? why : 'nothing starting and nothing due in the next ' + Math.round(win / MIN) + ' min';
     return { busy, starting, running, due, ignored_stale: ignored, minutes: Math.round(win / MIN), reason, note };
   };
-  return { plan, deployWindow, DEPLOY, outcome, execReads, runsFrom, claimFree, claimToken, refusalOf, refusedSince, settingsOf, jobsFor, skipEvidence, LEDGER_RUNS, payload, newCycleRow, cycleRow, anchorOf, ANCHOR, siteIdOf, read, nextAfter, mostRecent, local, validTz, dueAt,
+  // ---- P1 (2026-11-12, prod review S1-05): the page a dead page run was writing ----
+  // A page run that dies (canceled at the time limit, crashed, gone) leaves the content-log row its start opened saying `started`, and
+  // the app and the cadence read that as a page on its way (2026-11-12: three rows `started` with nothing behind them). For
+  // each released ledger row of a page run, the content-log rows of THAT run (its request id and its keyword; a ladder start gives several
+  // page runs one request id) still `started` become `failed` with the reason. Rows in any other state are never touched. Pure.
+  // release: CYC.plan's `release` entries ({run_id, page, request_id, keyword, reason}); rows: seo_content_log rows status `started`.
+  const normK = (x) => S(x).normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ').trim();
+  const pageReleases = (release, rows) => {
+    const out = [], seen = new Set();
+    for (const r of release || []) {
+      if (!r || !yesNo(r.page) || !S(r.request_id) || !normK(r.keyword)) continue;
+      for (const l of rows || []) {
+        if (!l || l.error || S(l.status) !== 'started' || S(l.request_id) !== S(r.request_id) || normK(l.keyword) !== normK(r.keyword)) continue;
+        const k = S(l.request_id) + '|' + S(l.keyword);
+        if (seen.has(k)) continue; seen.add(k);
+        out.push({ request_id: S(l.request_id), keyword: S(l.keyword), status: 'failed', run_id: S(r.run_id),
+          qa_reasons: ('page run stopped without a result (n8n execution ' + S(r.run_id) + '): ' + S(r.reason)).slice(0, 480) });
+      }
+    }
+    return out;
+  };
+  return { pageReleases, plan, deployWindow, DEPLOY, outcome, execReads, runsFrom, claimFree, claimToken, refusalOf, refusedSince, settingsOf, jobsFor, skipEvidence, LEDGER_RUNS, payload, newCycleRow, cycleRow, anchorOf, ANCHOR, siteIdOf, read, nextAfter, mostRecent, local, validTz, dueAt,
     dateAdd, weekdayOf, cycleKey, dateOfKey, requestId, ledgerKey, periodKey, monthlyDayOf, jobRow, cycleRowOf, JOBS, PREVIEW, BY_JOB, NAMES, DEFAULTS, TERMINAL, LIVE, DEAD, CAPACITY };
 })();
 const TZ = 'America/New_York';

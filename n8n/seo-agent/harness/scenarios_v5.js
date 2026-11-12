@@ -19807,5 +19807,6 @@ await require('./scenarios_serp_goto')({ H, run, mock, store, guard, reset, begi
 await require('./scenarios_ki_e2')({ H, run, mock, store, guard, reset, begin });   // KIE2-1..13: the keyword-intelligence worker (E2) replayed on fixtures
 await require('./scenarios_ladder_pkg')({ H, run, mock, store, guard, reset, begin });
 await require('./scenarios_client_1110')({ H, run, mock, store, guard, reset, begin });   // CR1-CR4 (client reports 2026-11-10, devaicon.com): the move behind a 301, entities in the title, duplicates by market, second-read claims   // LPK1-LPK8 (LADDER PACKAGE 2026-11-09, fixes/LADDER.md): one search one address, steps to the head, market lock, AVOID stops a rung, stuck rungs, KI as the pool
+await require('./scenarios_pslot')({ H, run, mock, store, guard, reset, begin });   // PS1-PS8 (P1 2026-11-12, prod review S1-01 / S1-05): page runs take a writing slot; a page run that never wrote leaves no started page
 H.report();
 })();
