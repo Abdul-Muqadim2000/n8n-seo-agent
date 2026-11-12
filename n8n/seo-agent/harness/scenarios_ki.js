@@ -458,7 +458,7 @@ module.exports = async (ctx) => {
     const KIWsrc = rd('_ki_io.js').replace('__KI_QUOTE__', '{"competitors":0.35,"keyword_research":0.9}').replace('__KI_COLS__', '{"KI_RUNS":[],"KI_COMP":[],"KI_KW":[],"KI_GAPS":[]}');
     const KW = new Function('KI', 'SU', 'SC', 'RT', KIWsrc + '\nreturn KIW;')(KI, undefined, undefined, undefined);
     const sd26 = KW.compSeeds({ iso: 'AE', country: 'United Arab Emirates', city: 'dubai', services: KW.seedServices(fr), products: ['dynamics 365'], seeds: [],
-      gsc: [{ query: 'peppol access point provider uae', impressions: 77 }, { query: 'dynamics ax dubai', impressions: 43 }, { query: 'pint ae mandatory fields', impressions: 30 }], tracked: ['crm service provider in uae'], ladders: ['dynamics 365 erp system'],
+      gsc: [{ query: 'peppol access point provider uae', impressions: 77 }, { query: 'dynamics ax dubai', impressions: 43 }, { query: 'e invoicing service provider uae', impressions: 30 }], tracked: ['crm service provider in uae'], ladders: ['dynamics 365 erp system'],
       gate: (k) => KI.gate(k, tctx) });
     const bySrc = {}; for (const x of sd26.seeds) bySrc[x.source] = (bySrc[x.source] || 0) + 1;
     check('KI26 H1 competitor seeds: Search Console, tracked and ladder heads make the cap beside the service phrases; no fragment, no punctuation, no single generic word',

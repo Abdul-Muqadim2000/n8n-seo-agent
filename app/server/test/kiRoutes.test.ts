@@ -507,7 +507,7 @@ describe('KI A1: recommendations, Needs you and API v1 follow the switch', () =>
     const r2 = await kiData.kiTableRowsV1({ id: ORG_A }, SITES[SITE_A] as never, 'ki_keywords', {}, page);
     const k3 = r2.items.find((x) => x.kw_key === 'k3')!;
     expect(k3).not.toHaveProperty('gate_detail');
-    expect(k3).toMatchObject({ gate_reason: 'career', gate_words: 'People searching this are looking for a job.', volume_source: 'our keyword data' });
+    expect(k3).toMatchObject({ gate_reason: 'career', gate_words: 'People searching this are looking for a job, a course or an exam.', volume_source: 'our keyword data' });
     expect(JSON.stringify(r2)).not.toContain('secret detail');
     const runsV1 = await kiData.kiTableRowsV1({ id: ORG_A }, SITES[SITE_A] as never, 'ki_runs', {}, page);
     for (const c of ['cost_dfs_usd', 'cost_claude_usd', 'config_json']) expect(runsV1.items[0]).not.toHaveProperty(c);

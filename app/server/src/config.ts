@@ -53,6 +53,8 @@ const Env = z.object({
   LINK_BUILDER_JOBS: bool(true),
   /** site tasks (app/docs/SITE_TASKS.md): the daily check of the steps on clients' websites */
   SITE_TASK_JOBS: bool(true),
+  /** client reports 2026-11-11: the engine grades live pages after each publish check (services/liveGrade.ts); free, no report, no e-mail */
+  LIVE_GRADE_JOBS: bool(true),
   /** L1: check the recipient's domain for a mail server before the first e-mail; false only for a local mail test with made-up domains */
   OUTREACH_MX_CHECK: bool(true),
   /** G2: a CMS on localhost / a private address (a local WordPress in development). Ignored in production. */
@@ -77,6 +79,11 @@ const Env = z.object({
    *  named in them and used as their Reply-To (default support@alaventra.com; set it empty to name none) */
   SUPPORT_URL: str(''),
   SUPPORT_EMAIL: str('support@alaventra.com'),
+  /** Bing Webmaster Tools (client report 2026-11-11, N45): the engine's key (from ../n8n/.env) for the Backlinks page's live "Check Bing",
+   *  and the e-mail address of the Bing account that key belongs to, which a client adds as a Read only user (empty = the page asks
+   *  the client to request it) */
+  SEO_BING_WEBMASTER_API_KEY: str(''),
+  BING_SHARE_EMAIL: str(''),
   /** invoices of paid credit purchases (app/docs/CREDITS.md "Invoices"): the seller as printed on them. The legal name, the
    *  address (lines separated by "|"), a tax / VAT number when registered (empty = none printed), the billing contact (empty = the
    *  support address) and the number prefix (ALV-2026-0001). */
@@ -205,6 +212,10 @@ export const config = {
   // SEO_BRAND, the engine's report brand, read from n8n/.env and "Dev SEO" by default, so every MCP client of this install was told
   // it was talking to "Dev SEO". The product is Alaventra (web/src/components/layout/Brand.tsx BRAND_NAME).
   brand: 'Alaventra',
+  bing: {
+    apiKey: e.SEO_BING_WEBMASTER_API_KEY,
+    shareWith: /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e.BING_SHARE_EMAIL.trim()) ? e.BING_SHARE_EMAIL.trim() : '',
+  },
   support: {
     url: (e.SUPPORT_URL || `${e.APP_URL.replace(/\/+$/, '')}/contact?topic=support`).trim(),
     email: /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e.SUPPORT_EMAIL.trim()) ? e.SUPPORT_EMAIL.trim() : '',
@@ -256,6 +267,8 @@ export const config = {
   },
   linkBuilderJobs: e.LINK_BUILDER_JOBS,
   siteTaskJobs: e.SITE_TASK_JOBS,
+  // the test runner never grades in the background (a callback test would otherwise start the job against its own database)
+  liveGradeJobs: e.LIVE_GRADE_JOBS && e.NODE_ENV !== 'test',
   crawlers: {
     jobs: e.CRAWLER_JOBS,
     spoolDir: e.LOG_SPOOL_DIR || join(tmpdir(), 'alaventra-logs'),

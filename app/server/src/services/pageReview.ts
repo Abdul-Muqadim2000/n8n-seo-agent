@@ -19,8 +19,11 @@ import {
   finalizeNeeded,
   finalReportPayload,
   keyCost,
+  liveGradeView,
   metaDescriptionView,
   cleanMetaDescription,
+  checksImprovedRecheck,
+  CHECKS_IMPROVED_REASON,
   n8nSiteId,
   NEEDS_YOU_QUESTION_PAGES,
   openQuestions,
@@ -174,8 +177,10 @@ export function finalizeStateOf(row: Pick<PageReviewRow, 'finalRunId' | 'finalRe
 }
 
 /** Whether a final version is worth making now (anything changed since the last one started) and, if not, why (pure). */
-export function finalizeNeedOf(o: { answers: Record<string, PageAnswer>; clientMarkdown: string | null; clientSavedAt: Date | null; since: Date | null; status: FinalizeState['status']; openCount?: number }): { needed: boolean; reason: string } {
+export function finalizeNeedOf(o: { answers: Record<string, PageAnswer>; clientMarkdown: string | null; clientSavedAt: Date | null; since: Date | null; status: FinalizeState['status']; openCount?: number; recheck?: boolean }): { needed: boolean; reason: string } {
   if (o.status === 'running') return { needed: false, reason: 'The final version is being made now.' };
+  // client reports 2026-11-11: a version made before our checks improved may be made again, even with nothing new (checksImprovedRecheck)
+  if (o.recheck) return { needed: true, reason: CHECKS_IMPROVED_REASON };
   const after = (at: string | Date | null | undefined) => !o.since || (at ? new Date(at).getTime() > o.since.getTime() : false);
   const fresh = Object.values(o.answers).filter((a) => after(a.at));
   const edited = !!o.clientMarkdown && after(o.clientSavedAt);
@@ -216,9 +221,28 @@ async function publishState(orgId: string, l: Loaded): Promise<PublishState> {
   return publishStateOf({ log: logRowFor(logs, str(p.request_id) || (l.original.requestId ?? ''), str(p.keyword) || str(obj(p.meta).primary_keyword)), cms });
 }
 
-export async function finalizeQuote(): Promise<{ credits: number; usd: number }> {
+export async function finalizeQuote(free = false): Promise<{ credits: number; usd: number }> {
+  if (free) return { usd: 0, credits: 0 };
   const usd = keyCost('finalize');
   return { usd, credits: quoteOf(usd, await settingsRow()) };
+}
+
+/** client reports 2026-11-11: the free re-make of a page made before our checks improved was already made (a completed run): once per page. */
+export async function freeRecheckUsed(orgId: string, originalIds: string[]): Promise<Set<string>> {
+  const ids = [...new Set(originalIds)].filter((id) => UUID.test(id));
+  if (!ids.length) return new Set();
+  const rows = await db
+    .select({ original: sql<string>`${schema.runs.input}->>'originalReportId'` })
+    .from(schema.runs)
+    .where(and(eq(schema.runs.orgId, orgId), eq(schema.runs.mode, 'finalize'), eq(schema.runs.status, 'completed'), sql`${schema.runs.input}->>'checksImproved' = 'true'`, inArray(sql`${schema.runs.input}->>'originalReportId'`, ids)));
+  return new Set(rows.map((r) => r.original));
+}
+
+/** Whether the version the client works on now gets the free re-make with the improved checks (pure apart from the run lookup). */
+async function recheckOf(orgId: string, l: Pick<Loaded, 'original' | 'final'>): Promise<boolean> {
+  const base = baseOf(l);
+  if (!checksImprovedRecheck({ madeAt: base.receivedAt, payload: obj(base.payload), isFinal: !!l.final })) return false;
+  return !(await freeRecheckUsed(orgId, [l.original.id])).has(l.original.id);
 }
 
 export async function reviewView(a: OrgAccess, l: Loaded): Promise<PageReviewView> {
@@ -241,7 +265,8 @@ export async function reviewView(a: OrgAccess, l: Loaded): Promise<PageReviewVie
   const questions = questionsOf(payload);
   const open = openQuestions(questions, answers, facts);
   const openBase = openQuestions(questionsOf(obj(base.payload)), baseAnswers, facts).length;
-  const need = finalizeNeedOf({ answers: { ...baseAnswers, ...(decision ? { [DUPLICATE_DECISION_KEY]: decision } : {}) }, clientMarkdown: row?.clientMarkdown ?? null, clientSavedAt: row?.clientSavedAt ?? null, since: row?.finalReportId ? (row.finalStartedAt ?? null) : null, status: fin.status, openCount: openBase });
+  const recheck = await recheckOf(a.org.id, l);
+  const need = finalizeNeedOf({ answers: { ...baseAnswers, ...(decision ? { [DUPLICATE_DECISION_KEY]: decision } : {}) }, clientMarkdown: row?.clientMarkdown ?? null, clientSavedAt: row?.clientSavedAt ?? null, since: row?.finalReportId ? (row.finalStartedAt ?? null) : null, status: fin.status, openCount: openBase, recheck });
   // W0-B (D2): the website's page this one duplicates, while that blocker is open on the delivered page, and what the client decided
   const dupPages = duplicatePagesOf(obj(l.original.payload));
   const publish = await publishState(a.org.id, l);
@@ -267,9 +292,10 @@ export async function reviewView(a: OrgAccess, l: Loaded): Promise<PageReviewVie
       reportId: row?.finalReportId ?? null,
       error: fin.status === 'failed' ? (row?.finalError ?? 'The final version could not be made. Nothing was charged; try again.') : null,
       startedAt: row?.finalStartedAt?.toISOString() ?? null,
-      quote: await finalizeQuote(),
+      quote: await finalizeQuote(recheck),
       needed: need.needed,
       reason: need.reason,
+      recheck: recheck && fin.status !== 'running' ? { reason: CHECKS_IMPROVED_REASON, free: true } : null,
     },
     approval: row?.approvedAt && approvedReport ? { approvedAt: row.approvedAt.toISOString(), approvedBy: row.approvedBy ?? null, reportId: approvedReport } : null,
     publish,
@@ -536,6 +562,8 @@ export function interpretFinalize(res: { kind: 'answered' | 'unreachable' | 'tim
 
 /** What the run is called in the runs list. */
 export const finalizeTitle = (keyword: string) => `Final version: "${keyword || 'page'}"`;
+/** client reports 2026-11-11: the free re-make with the improved checks says so in the runs list */
+export const freeRecheckTitle = (keyword: string) => `${finalizeTitle(keyword)}, free: our checks improved`;
 
 /** Starts the final version: a charged run, answered at once ("running"); the engine is called in the background. */
 export async function startFinalize(a: OrgAccess, req: FastifyRequest | null, reportId: unknown, opts: { wait?: boolean } = {}): Promise<PageReviewView> {
@@ -553,17 +581,22 @@ export async function startFinalize(a: OrgAccess, req: FastifyRequest | null, re
   const baseAnswers = answersFor(row.answers, l.original.id, base.id);
   const decision = duplicateDecisionOf(row.answers);
   const openBase = openQuestions(questionsOf(obj(base.payload)), baseAnswers, (l.site?.factAnswers ?? {}) as FactAnswers).length;
-  const need = finalizeNeedOf({ answers: { ...baseAnswers, ...(decision ? { [DUPLICATE_DECISION_KEY]: decision } : {}) }, clientMarkdown: row.clientMarkdown, clientSavedAt: row.clientSavedAt, since: row.finalReportId ? row.finalStartedAt : null, status: st.status, openCount: openBase });
+  // client reports 2026-11-11: one free re-make of a version made before our checks improved (quoted and charged 0 credits)
+  const free = await recheckOf(a.org.id, l);
+  const need = finalizeNeedOf({ answers: { ...baseAnswers, ...(decision ? { [DUPLICATE_DECISION_KEY]: decision } : {}) }, clientMarkdown: row.clientMarkdown, clientSavedAt: row.clientSavedAt, since: row.finalReportId ? row.finalStartedAt : null, status: st.status, openCount: openBase, recheck: free });
   if (!need.needed) throw conflict(need.reason, 'finalize_not_needed');
-  const quote = await finalizeQuote();
+  const quote = await finalizeQuote(free);
+  const workUsd = keyCost('finalize');
   const keyword = str(obj(base.payload).keyword) || str(obj(obj(base.payload).meta).primary_keyword);
   const requestId = `app-fin-${randomUUID()}`;
   await siteForecasts(org.id).catch(() => []);
   const run = await db.transaction(async (tx) => {
     await lockCompany(tx, org.id);
-    if (!org.creditsEnforced) await assertBudget(tx, org, quote.usd, 'This final version');
+    // the free re-make skips the company's own checks; the platform's daily ceiling still applies (as the free setup research)
+    if (free) await assertPlatformCapacity(tx, workUsd);
+    else if (!org.creditsEnforced) await assertBudget(tx, org, quote.usd, 'This final version');
     else await assertPlatformCapacity(tx, quote.usd);
-    const quoted = await assertCredits(tx, org, quote.usd, 'This final version');
+    const quoted = free ? 0 : await assertCredits(tx, org, quote.usd, 'This final version');
     // a second click in the same moment: the row is taken under the company's lock
     const fresh = await tx.query.pageReviews.findFirst({ where: eq(schema.pageReviews.id, row.id) });
     if (fresh?.finalRunId && fresh.finalRunId !== row.finalRunId) throw conflict('The final version is being made now.', 'finalize_running');
@@ -574,11 +607,12 @@ export async function startFinalize(a: OrgAccess, req: FastifyRequest | null, re
         siteId: l.site!.id,
         userId: user.id,
         mode: 'finalize',
-        title: finalizeTitle(keyword),
+        title: free ? freeRecheckTitle(keyword) : finalizeTitle(keyword),
         status: 'running',
         requestId,
-        input: { mode: 'finalize', siteId: l.site!.id, reportId: base.id, originalReportId: l.original.id, keyword, clientEdited: !!row.clientMarkdown },
-        estimatedCostUsd: quote.usd,
+        input: { mode: 'finalize', siteId: l.site!.id, reportId: base.id, originalReportId: l.original.id, keyword, clientEdited: !!row.clientMarkdown, ...(free ? { checksImproved: true, freeRecheck: true } : {}) },
+        estimatedCostUsd: free ? workUsd : quote.usd,
+        // a quote of 0 caps every charge of the run at 0 (the cost sync), so the free re-make is never charged
         quotedCredits: quoted,
         etaMinutes: 3,
         acceptedAt: new Date(),
@@ -587,7 +621,7 @@ export async function startFinalize(a: OrgAccess, req: FastifyRequest | null, re
     await tx.update(schema.pageReviews).set({ finalRunId: r!.id, finalStartedAt: new Date(), finalError: null, updatedAt: new Date() }).where(eq(schema.pageReviews.id, row.id));
     return r!;
   });
-  await audit(req, org.id, { action: 'page.finalize_started', target: { type: 'report', id: l.original.id, label: keyword || l.original.title }, details: { runId: run.id, credits: run.quotedCredits, clientEdited: !!row.clientMarkdown } });
+  await audit(req, org.id, { action: 'page.finalize_started', target: { type: 'report', id: l.original.id, label: keyword || l.original.title }, details: { runId: run.id, credits: run.quotedCredits, clientEdited: !!row.clientMarkdown, ...(free ? { free: 'checks_improved' } : {}) } });
   const body: P = { ...finalizeBody({
     requestId,
     domain: l.site.domain,
@@ -770,7 +804,7 @@ async function writeFacts(a: SiteAccess, req: FastifyRequest | null, facts: Fact
 // 8. The content board and the Pipeline's Needs you
 // ---------------------------------------------------------------------------------------------------------------------------------
 
-interface PageRef {
+export interface PageRef {
   id: string;
   requestId: string | null;
   receivedAt: Date;
@@ -807,6 +841,8 @@ export interface SiteReviews {
   originals: PageRef[];
   /** the delivered page of a content-log row */
   pageFor(log: Pick<ContentLogRow, 'request_id' | 'keyword'>): PageRef | null;
+  /** the review row of a delivered page (null before anyone opened its review) */
+  rowOf(originalId: string): PageReviewRow | null;
 }
 
 export async function siteReviews(orgId: string, site: SiteRow): Promise<SiteReviews> {
@@ -827,8 +863,17 @@ export async function siteReviews(orgId: string, site: SiteRow): Promise<SiteRev
     : [];
   const facts = (site.factAnswers ?? {}) as FactAnswers;
   const kw = (r: PageRef) => (str(r.payload.keyword) || str(obj(r.payload.meta).primary_keyword)).trim().toLowerCase();
+  // client reports 2026-11-11: the pages whose newest version was made before our checks improved, less those already made again for free
+  const baseRef = (original: PageRef): PageRef => {
+    const row = byReport.get(original.id) ?? null;
+    return (row?.finalReportId ? finals.get(row.finalReportId) : null) ?? original;
+  };
+  const stale = originals.filter((o) => { const b = baseRef(o); return checksImprovedRecheck({ madeAt: b.receivedAt, payload: b.payload, isFinal: b !== o }); }).map((o) => o.id);
+  const used = stale.length ? await freeRecheckUsed(orgId, stale) : new Set<string>();
+  const recheckIds = new Set(stale.filter((id) => !used.has(id)));
   return {
     originals,
+    rowOf: (originalId) => byReport.get(originalId) ?? null,
     pageFor(log) {
       const rid = str(log.request_id);
       const k = str(log.keyword).trim().toLowerCase();
@@ -840,7 +885,7 @@ export async function siteReviews(orgId: string, site: SiteRow): Promise<SiteRev
       const base = final ?? original;
       const fin = finalizeStateOf(row, row?.finalRunId ? (runOf.get(row.finalRunId) ?? null) : null);
       const publish = publishStateOf({ log, cms: cms.filter((c) => c.lastReportId === original.id || (final && c.lastReportId === final.id)) });
-      return reviewSummaryOf(base.id, base.payload, {
+      const summary = reviewSummaryOf(base.id, base.payload, {
         answers: answersFor(row?.answers, original.id, base.id),
         facts,
         finalize: fin.status,
@@ -848,6 +893,10 @@ export async function siteReviews(orgId: string, site: SiteRow): Promise<SiteRev
         approved: !!row?.approvedAt,
         publish: publish.status,
       });
+      // client reports 2026-11-11: the grade of the live page (services/liveGrade.ts), when one was made or its read failed
+      const live = liveGradeView(row?.liveGrade ?? null, row?.liveGradedAt ?? null);
+      const recheck = recheckIds.has(original.id) && fin.status !== 'running';
+      return { ...summary, ...(live ? { liveGrade: live } : {}), ...(recheck ? { recheck: true } : {}) };
     },
   };
 }

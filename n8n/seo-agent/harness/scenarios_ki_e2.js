@@ -56,10 +56,27 @@ module.exports = async (ctx) => {
       items.push({ type: 'people_also_ask', rank_group: 1, items: [{ type: 'people_also_ask_element', title: 'how much does ' + kw + ' cost?' }, { type: 'people_also_ask_element', title: 'what is the best ' + kw.split(' ').slice(0, 3).join(' ') + '?' }] });
       items.push({ type: 'related_searches', rank_group: 1, items: [kw + ' price', kw + ' near me', 'top ' + kw] });
       return env({ ...T.serp, data: { ...T.serp.data, keyword: kw } }, 0.002, [{ ...T.serp.result[0], keyword: kw, datetime: new Date().toISOString().replace('T', ' ').slice(0, 19) + ' +00:00', items }]); };
+    // QUEUE (2026-11-11): the normal-priority queue answers with EXACT page addresses (probe on production 2026-11-11: 0 redirects in 10 of 10).
+    // A site's pages are one per topic (the first two words of the search), so close searches share their pages and can be grouped.
+    const serpExact = (kw) => { const a = serpAnswer(kw); const slug = kw.split(' ').slice(0, 2).join('-');
+      a.tasks[0].result[0].items = a.tasks[0].result[0].items.map(x => x.type !== 'organic' ? x : (() => { const h = String(x.breadcrumb).replace(/^https:\/\//, '').split(' › ')[0];
+        return { ...x, domain: h, main_domain: h.replace(/^www\./, ''), url: 'https://' + h + '/' + slug + '/', relative_url: '/' + slug + '/' }; })());
+      return a; };
+    const QUEUE = new Map(); const gets = []; let QOPT = {};
+    const taskCreated = (b) => { const id = 'ki-q-' + (++taskSeq); const kw = String(b.keyword || ''); QUEUE.set(id, { kw, ready: (QOPT.late || {})[kw] || 1, never: (QOPT.never || []).includes(kw) });
+      return { version: '0.1', status_code: 20000, status_message: 'Ok.', cost: 0.0006, tasks_count: 1, tasks_error: 0,
+        tasks: [{ id, status_code: 20100, status_message: 'Task Created.', time: '0.0050 sec.', cost: 0.0006, result_count: 0, path: ['v3', 'serp', 'google', 'organic', 'task_post'], data: { api: 'serp', function: 'task_post', se: 'google', se_type: 'organic', ...b }, result: null }] }; };
+    const providerGet = (q, round) => { gets.push({ task: q.task_id, round, keyword: q.keyword });
+      if ((QOPT.getFails || []).includes(round)) return { error: { message: 'getaddrinfo EAI_AGAIN api.dataforseo.com' } };
+      const t = QUEUE.get(q.task_id); if (!t) return { version: '0.1', status_code: 20000, status_message: 'Ok.', cost: 0, tasks_count: 1, tasks_error: 1, tasks: [{ id: q.task_id, status_code: 40400, status_message: 'Not Found.', cost: 0, result: null }] };
+      if (t.never || round < t.ready) return { version: '0.1', status_code: 20000, status_message: 'Ok.', cost: 0, tasks_count: 1, tasks_error: 1, tasks: [{ id: q.task_id, status_code: 40602, status_message: 'Task In Queue.', cost: 0, result: null }] };
+      const a = serpExact(t.kw); a.tasks[0].id = q.task_id; a.cost = 0.0006; a.tasks[0].cost = 0.0006; a.tasks[0].data = { ...a.tasks[0].data, tag: t.kw, priority: 1 };   // the real task_get repeats the task's cost: it must not be counted again
+      return a; };
     const SIZE = (d) => (SITE.sizes || {})[d] || null;
     const provider = (q, attempt) => {
       const path0 = q.endpoint.replace(/^https:\/\/api\.dataforseo\.com\/v3\//, ''); const b = (q.body || [])[0] || {}; calls.push({ path: path0, attempt, call: q.ki_call });
       if ([...fails].some(f => path0.includes(f) || q.ki_call === f)) return fail();
+      if (path0 === 'serp/google/organic/task_post') return taskCreated(b);
       if (path0.startsWith('serp/google/organic')) return serpAnswer(b.keyword);
       if (path0.includes('serp_competitors')) return env(T.sc, 0.012, [{ ...T.sc.result[0], seed_keywords: b.keywords, total_count: null, items_count: 0, items: null }]);   // R5 §13 #5: B2B seeds unknown to Labs
       if (path0.includes('bulk_traffic_estimation')) { const items = (b.targets || []).map(t => { const z = SIZE(String(t).replace(/^https:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '')); return { se_type: 'google', target: t, metrics: { organic: { etv: /^https/.test(t) ? 33.5 : (z ? z[0] : 0), count: /^https/.test(t) ? 9 : (z ? z[1] : 0) }, paid: null, local_pack: null, featured_snippet: null } }; }).reverse();   // R5 §13 #1: not in request order
@@ -118,7 +135,7 @@ module.exports = async (ctx) => {
     const plainGet0 = async (reqNode, ifNode, http) => { const reqs = items(reqNode).filter(r => !r.skip); drop(ifNode, http); if (!reqs.length) return 0; mock(ifNode, reqs); mock(http, reqs.map(free)); return reqs.length; };
     const LEDGER = { rows: [], seq: 100 };
     const execute = async (k, kind, o) => {
-      o = o || {}; reset(); SITE = site(k); calls.length = 0;
+      o = o || {}; reset(); SITE = site(k); calls.length = 0; gets.length = 0; QUEUE.clear(); QOPT = o.queue || {};
       const fwd = forwardOf(k, kind, o.body);
       mock('Manual Run', [fwd]);
       await run('KI Input', [fwd]);
@@ -170,6 +187,13 @@ module.exports = async (ctx) => {
         await run('Research Picture', [{ json: {} }]);
         await run('Research SERP Keys', [{ json: {} }]); loadSerp('Research SERP Keys', 'Load SERP Cache (KI Research)');
         await run('Research SERP Requests', [{ json: {} }]); await gated('Research SERP Requests', 'Any Research SERPs?', 'Run Research SERPs');
+        // QUEUE: the collection rounds as n8n runs them (Wait -> free task_get -> check -> the still-queued ones go round again), then the fallback
+        await run('Research SERP Tasks', [{ json: {} }]);
+        for (let r = 1; r <= W.queue.rounds; r++) drop('Wait For SERP Tasks (' + r + ')', 'Get SERP Tasks (' + r + ')', 'SERP Tasks Check (' + r + ')');
+        let cur = items('Research SERP Tasks').filter(x => !x.skip);
+        for (let r = 1; r <= W.queue.rounds && cur.length; r++) { mock('Wait For SERP Tasks (' + r + ')', cur); mock('Get SERP Tasks (' + r + ')', cur.map(q => providerGet(q, r)));
+          await run('SERP Tasks Check (' + r + ')', [{ json: {} }]); cur = items('SERP Tasks Check (' + r + ')').filter(x => !x.skip); }
+        await run('Research SERP Fallback', [{ json: {} }]); await gated('Research SERP Fallback', 'Any Research SERPs Live?', 'Run Research SERPs Live');
         await run('Research SERP Picture', [{ json: {} }]);
         await run('Research Traffic Requests', [{ json: {} }]); await gated('Research Traffic Requests', 'Any Research Traffic?', 'Run Research Traffic');
         await run('Research Result', [{ json: {} }]);
@@ -182,7 +206,7 @@ module.exports = async (ctx) => {
       mock('DFS Balance End (KI)', [{}]); mock('Load Run Ledger (KI)', [reserved]);
       const settle = (await run('Ledger Settle (KI)', [{ json: {} }]))[0].json;
       const result = items(kind === 'competitors' ? 'Comp Result' : 'Research Result')[0];
-      return { gate, plan, row, reserved, after, limit, started, result, cache, runRow, report, settle, calls: calls.slice(), comp: items('KI Comp Rows'), drops: items('KI Comp Drops'), kw: items('KI KW Rows'), gaps: items('KI Gap Rows') };
+      return { gate, plan, row, reserved, after, limit, started, result, cache, runRow, report, settle, calls: calls.slice(), gets: gets.slice(), comp: items('KI Comp Rows'), drops: items('KI Comp Drops'), kw: items('KI KW Rows'), gaps: items('KI Gap Rows') };
     };
     const paidCalls = (x) => x.calls.length;
     const sumCost = (x) => +x.calls.reduce((s, c) => s, 0).toFixed(6);
@@ -191,8 +215,8 @@ module.exports = async (ctx) => {
     const C = W.connections; const outs = (n) => (C[n] || []).flat();
     const reachW = (from, stop) => { const seen = new Set(); const todo = [...from]; while (todo.length) { const n = todo.pop(); if (seen.has(n) || (stop || []).includes(n)) continue; seen.add(n); todo.push(...outs(n)); } return seen; };
     const before = reachW(['Manual Run'], ['Reserve Run Ledger (KI)']);
-    check('KIE2-1 nothing paid runs before the run ledger reserves; seven DataForSEO calls, each behind its in-200 gate with no node-level retry',
-      W.paid.length === 14 && !W.paid.some(n => before.has(n)) && Object.keys(W.gates).length === 7 && Object.values(W.gates).every(ch => ch.length === 6), J({ paid: W.paid, early: W.paid.filter(n => before.has(n)) }));
+    check('KIE2-1 nothing paid runs before the run ledger reserves; eight DataForSEO calls (QUEUE: + the live fallback of the results pages), each behind its in-200 gate with no node-level retry',
+      W.paid.length === 16 && !W.paid.some(n => before.has(n)) && Object.keys(W.gates).length === 8 && Object.values(W.gates).every(ch => ch.length === 6), J({ paid: W.paid, early: W.paid.filter(n => before.has(n)) }));   // QUEUE: + Run Research SERPs Live (+ its retry)
     const wf = JSON.parse(rd('workflows', W.file))[0]; const byN = Object.fromEntries(wf.nodes.map(n => [n.name, n]));
     check('KIE2-1 the paid calls are retried per item (N3): no retryOnFail, continueRegularOutput, so a failed request is an { error } item the gate re-sends once',
       W.paid.every(n => !byN[n].retryOnFail && byN[n].onError === 'continueRegularOutput'), J(W.paid.filter(n => byN[n].retryOnFail)));
@@ -491,6 +515,149 @@ module.exports = async (ctx) => {
     const KI_ = new Function('URL', 'structuredClone', ['_fit_gate.js', '_competitors.js', '_kw_inputs.js', '_ki.js'].map(f => rd('v5', 'code', f)).join('\n') + '\nreturn KI;')(undefined, undefined);
     const g15 = ['software development company sharjah careers', 'microsoft dynamics 365 finance and operations jobs', 'dynamics 365 consultant salary dubai'].map(k => [k, KI_.gate(k, TR.plan.fit_ctx).reason]);
     check('KIE2-15 the career gate: a job, career, pay or course word is a career search ("software development company sharjah careers" passed on production)', g15.every(([, r]) => r === 'career'), J(g15));
+    // ===================================== KIQ (QUEUE 2026-11-11, fixes/QUEUE.md): the results pages through the normal-priority queue =====================================
+    // Since 2026-10-30 a live (or high-priority) results page gives every result as a google.com/goto redirect: the site is known, the page is
+    // not, so no two searches could ever share a page and keyword research formed no group (Trial 12317: 0 of 517 addresses exact). The
+    // normal-priority queue still answers with the exact pages (probe on production 2026-11-11: ready in 86-118 s, 0 redirects in 10 of 10).
+    const byW = Object.fromEntries(wf.nodes.map(n => [n.name, n]));
+    const rounds = W.queue.rounds;
+    const getsN = Array.from({ length: rounds }, (_, i) => 'Get SERP Tasks (' + (i + 1) + ')'), waitsN = Array.from({ length: rounds }, (_, i) => 'Wait For SERP Tasks (' + (i + 1) + ')');
+    check('KIQ-1 wiring: posted to the queue behind the in-200 gate, collected by ' + rounds + ' free task_get rounds a minute apart (each Wait under the 65 s in-memory limit, seconds spelled out), all after the reservation; what is left is read live behind its own gate',
+      rounds === 5 && W.queue.wait_s === 60 && waitsN.every(n => byW[n] && byW[n].type === 'n8n-nodes-base.wait' && byW[n].parameters.amount === 60 && byW[n].parameters.unit === 'seconds' && byW[n].webhookId)
+      && getsN.every(n => byW[n] && byW[n].parameters.method === 'GET' && /^=https:\/\/api\.dataforseo\.com\/v3\/serp\/google\/organic\/task_get\/advanced\/\{\{/.test(byW[n].parameters.url) && byW[n].retryOnFail === true && byW[n].maxTries === 3 && byW[n].waitBetweenTries === 5000 && byW[n].onError === 'continueRegularOutput')
+      && J(W.free_reads) === J(getsN) && !W.paid.some(n => getsN.includes(n)) && !getsN.some(n => before.has(n)) && W.gates['Run Research SERPs Live'] && W.gates['Run Research SERPs']
+      && J(outs('Run Research SERPs Answers')) === J(['Research SERP Tasks']) && J(W.connections['Any SERP Tasks?']) === J([['Wait For SERP Tasks (1)'], ['Research SERP Fallback']])
+      && J(outs('SERP Tasks Check (' + rounds + ')')) === J(['Research SERP Fallback']) && J(outs('Run Research SERPs Live Answers')) === J(['Research SERP Picture']),
+      J({ free: W.free_reads, q: W.queue, tasks: W.connections['Any SERP Tasks?'], last: outs('SERP Tasks Check (' + rounds + ')') }));
+    // the kit: what a collection answer means
+    const KIS_ = new Function('URL', 'structuredClone', ['_fit_gate.js', '_competitors.js', '_kw_inputs.js', '_dfs_retry.js', '_serp_cache.js', '_serp_url.js', '_ki.js'].map(f => rd('v5', 'code', f)).join('\n') + '\n' + rd('v5', 'code', '_ki_io.js').replace('__KI_QUOTE__', '{}').replace('__KI_COLS__', J(W.cols)) + '\nreturn { KIW, SC };')(undefined, undefined);
+    const KIW_ = KIS_.KIW, SC_ = KIS_.SC;
+    const qi = (id, kw) => ({ task_id: id, keyword: kw });
+    const cr = KIW_.collectRound([qi('a', 'erp uae'), qi('b', 'crm uae'), qi('c', 'bc uae'), qi('d', 'ax uae'), qi('e', 'nav uae'), null],
+      [{ status_code: 20000, tasks: [{ id: 'a', status_code: 20000, result: [{ items: [] }] }] }, { status_code: 20000, tasks: [{ id: 'b', status_code: 40602, status_message: 'Task In Queue.' }] },
+       { status_code: 20000, tasks: [{ id: 'c', status_code: 40601, status_message: 'Task Handed.' }] }, { error: { message: 'socket hang up' } }, { status_code: 20000, tasks: [{ id: 'e', status_code: 40400, status_message: 'Not Found.' }] }]);
+    check('KIQ-2 a collection answer: ready on 20000 with a result; still queued on 40602 / 40601 or a failed request (asked again next round); anything else is failed (read live instead), with the provider\'s own words',
+      J(cr.ready.map(x => x.task_id)) === J(['a']) && J(cr.pending.map(x => x.task_id)) === J(['b', 'c', 'd']) && J(cr.failed.map(x => x.keyword)) === J(['nav uae']) && /Not Found/.test(cr.failed[0].why), J(cr));
+    check('KIQ-2 a reading counts as exact only when at least half of its top-10 organic results carry their own page address (a live reading since the redirect change has none)',
+      KIW_.exactEnough(serpExact('dynamics 365 partner uae')) === true && KIW_.exactEnough(serpAnswer('dynamics 365 partner uae')) === false && KIW_.exactEnough({}) === false, '');
+    const rq0 = KIW_.rq.serpPost('Dynamics 365 Partner UAE ', { location_code: 2784, language_code: 'en' });
+    check('KIQ-2 the post: normal priority (1, the exact one; high priority 2 answers with redirects), the keyword as its tag, the day-cache body otherwise, $0.0006',
+      /serp\/google\/organic\/task_post$/.test(rq0.endpoint) && rq0.body[0].priority === 1 && rq0.body[0].tag === 'dynamics 365 partner uae' && rq0.body[0].depth === 10 && rq0.est_usd === 0.0006 && rq0.ki_call === 'serp_post', J(rq0));
+    // end to end on the techand fixture: the queue path against the same run read live (every task "never" ready -> the fallback)
+    const dfsOf = (n) => Number((((items(n).find(j => j && j.__dfs)) || {}).__dfs || {}).cost_usd) || 0;
+    const answersCost = () => +W.answers.reduce((a, n) => a + dfsOf(n), 0).toFixed(6);
+    const qq = await execute('techand', 'keyword_research', { stored: chosenRows, serpCache: [] });
+    const qqSerp = dfsOf('Run Research SERPs Answers'), qqLive = dfsOf('Run Research SERPs Live Answers'), qqAll = answersCost();
+    const qPosts = qq.calls.filter(c => c.call === 'serp_post').length, qLive = qq.calls.filter(c => c.call === 'serp').length;
+    const qSp = items('Research SERP Picture')[0];
+    const qLv = await execute('techand', 'keyword_research', { stored: chosenRows, serpCache: [], queue: { never: Object.keys(qSp.by || {}) } });
+    const lSp = items('Research SERP Picture')[0];
+    const lvSerp = dfsOf('Run Research SERPs Answers'), lvLive = dfsOf('Run Research SERPs Live Answers'), lvAll = answersCost();
+    const grouped = (x) => x.report.callback_body.clusters.filter(c => c.members >= 2).length;
+    check('KIQ-3 the queue path: every results page posted once at normal priority, collected in round 1, none read live; every page read with its exact addresses (section results_pages_exact ok)',
+      qPosts > 5 && qLive === 0 && qq.gets.length === qPosts && qq.gets.every(g => g.round === 1) && qSp.queued === qPosts && qSp.live === 0 && qSp.exact === qSp.read && qSp.read === qPosts
+      && Object.values(qSp.by).every(r => r.source === 'queue' && r.exact) && (qq.result.sections.find(s => s.key === 'results_pages_exact') || {}).state === 'ok', J({ qPosts, qLive, gets: qq.gets.length, sp: { q: qSp.queued, l: qSp.live, e: qSp.exact, r: qSp.read } }));
+    check('KIQ-3 groups form on the exact pages: searches that share 3 of their top 10 pages are one group with one head, never fewer groups than the live reading of the same run',
+      grouped(qq) >= 2 && grouped(qq) >= grouped(qLv) && qq.kw.filter(r => r.is_head === false && r.cluster_id).length >= 3, J({ queue: qq.report.callback_body.clusters.filter(c => c.members >= 2).map(c => [c.head, c.members]), live: grouped(qLv) }));
+    check('KIQ-3 money: the queue costs $0.0006 a page, the task_get that repeats the task\'s cost is never counted again; the same run read live costs exactly $0.002 a page more (the post and the live read)',
+      Math.abs(qqSerp - lvSerp) < 1e-6 && qqLive === 0 && Math.abs(lvLive - qPosts * 0.002) < 1e-6 && qPosts * 0.0006 <= qqSerp + 1e-9
+      && Math.abs(qq.runRow.cost_dfs_usd - qqAll) < 1e-6 && Math.abs(qLv.runRow.cost_dfs_usd - lvAll) < 1e-6 && qq.runRow.cost_dfs_usd <= qq.plan.est_dfs_usd + 1e-9,
+      J({ qqSerp, lvSerp, qqLive, lvLive, posts: qPosts, run: [qq.runRow.cost_dfs_usd, qqAll, qLv.runRow.cost_dfs_usd, lvAll] }));
+    check('KIQ-4 nothing the queue failed to return is lost: every page it never returned is read live (approximate addresses: scored, not grouped) and the run says so in plain words',
+      lSp.live === qPosts && lSp.queued === 0 && lSp.exact === 0 && Object.values(lSp.by).every(r => r.source === 'live' && !r.exact) && qLv.gets.length === qPosts * rounds
+      && (() => { const s = qLv.result.sections.find(x => x.key === 'results_pages_exact') || {}; return s.state === 'missing' && /without exact page addresses/.test(s.reason) && /scored but not grouped/.test(s.reason); })(), J({ l: lSp.live, q: lSp.queued, e: lSp.exact, gets: qLv.gets.length, sec: qLv.result.sections.find(x => x.key === 'results_pages_exact') }));
+    const someKw = Object.keys(qSp.by).slice(0, 3);
+    const qLate = await execute('techand', 'keyword_research', { stored: chosenRows, serpCache: [], queue: { late: Object.fromEntries(someKw.map((k, i) => [k, i + 2])) } });
+    const lateSp = items('Research SERP Picture')[0];
+    check('KIQ-5 a page that takes longer is collected in a later round (rounds 2, 3, 4 here), never bought twice: no live read, the others not asked again',
+      lateSp.queued === qPosts && lateSp.live === 0 && qLate.calls.filter(c => c.call === 'serp').length === 0 && Math.max(...qLate.gets.map(g => g.round)) === 4
+      && qLate.gets.filter(g => g.round >= 2).every(g => someKw.includes(g.keyword)) && qLate.gets.filter(g => g.round === 4).length === 1, J({ gets: qLate.gets.filter(g => g.round > 1), sp: [lateSp.queued, lateSp.live] }));
+    const qErr = await execute('techand', 'keyword_research', { stored: chosenRows, serpCache: [], queue: { getFails: [1] } });
+    const errSp = items('Research SERP Picture')[0];
+    check('KIQ-5 a collection round that could not be asked (DNS) loses nothing: every task is asked again the next round and collected there',
+      errSp.queued === qPosts && errSp.live === 0 && qErr.gets.filter(g => g.round === 2).length === qPosts, J({ sp: [errSp.queued, errSp.live], r2: qErr.gets.filter(g => g.round === 2).length }));
+    // the day cache: an exact reading of today is reused (nothing posted); a reading without exact addresses (a live one) is asked again
+    const exactRows = (qq.cache || []).filter(r => /^serp:/.test(r.key));
+    const qC = await execute('techand', 'keyword_research', { stored: chosenRows, cache: qq.cache, serpCache: exactRows });
+    const exactKw = new Set(exactRows.map(r => JSON.parse(r.value).keyword));
+    const qCposted = items('Any Research SERPs?').filter(r => r.ki_call === 'serp_post').map(r => r.keyword);
+    const qCsp = items('Research SERP Picture')[0];
+    const liveRows = (qLv.cache || []).filter(r => /^serp:/.test(r.key));
+    const qC2 = await execute('techand', 'keyword_research', { stored: chosenRows, serpCache: liveRows });
+    const liveKw = new Set(liveRows.map(r => JSON.parse(r.value).keyword)); const topC2 = (items('Research Picture')[0] || {}).top_m || [];
+    const postedC2 = new Set(items('Any Research SERPs?').filter(r => r.ki_call === 'serp_post').map(r => r.keyword));
+    check('KIQ-6 the day cache: today\'s exact readings are reused (no post, no collection), today\'s live readings (no exact address) are asked again from the queue',
+      exactRows.length >= qPosts && !qCposted.some(k => exactKw.has(k)) && qC.calls.filter(c => c.call === 'serp').length === 0 && qC.gets.length === qCposted.length
+      && Object.entries(qCsp.by).filter(([k]) => exactKw.has(k)).every(([, r]) => r.source === 'cache' && r.exact) && Object.entries(qCsp.by).filter(([k]) => exactKw.has(k)).length >= 10
+      && liveRows.length >= qPosts && topC2.filter(k => liveKw.has(k)).length >= 10 && topC2.filter(k => liveKw.has(k)).every(k => postedC2.has(k)) && grouped(qC2) >= 2, J({ notAgain: topC2.filter(k => liveKw.has(k) && !postedC2.has(k)), reposted: qCposted.filter(k => exactKw.has(k)), exactRows: exactRows.length, newly: qCposted.length, live: liveRows.length, again: qC2.calls.filter(c => c.call === 'serp_post').length }));
+    check('KIQ-6 what the cache keeps is the queue\'s exact reading (another path reading the same search today gets the exact pages too); a live reading is kept with its addresses marked approximate',
+      exactRows.length > 0 && exactRows.every(r => !/"url_exact":false/.test(String(r.value)) && !/google\.com\/goto/.test(String(r.value))) && liveRows.every(r => /"url_exact":false/.test(String(r.value))), J({ e: exactRows.length, l: liveRows.length }));
+    // ===================================== KIG (KI-GATE2 2026-11-11, fixes/GATE2.md): who is searching =====================================
+    // 800 searches of the two production Trials, labelled twice by independent agents (harness/accuracy/ki_gate_2026-11-11.json). Before the
+    // change the gate let through 46.6% right (precision of "pass"), caught 27.8% of the wrong ones and kept 93.5% of the right ones.
+    const AG = JSON.parse(fs.readFileSync(path.join(__dirname, 'accuracy', 'ki_gate_2026-11-11.json'), 'utf8'));
+    const score = (cs) => { const o = { tp: 0, fp: 0, fn: 0, tn: 0 }; for (const c of cs) { const g = KI_.gate(c.keyword, { ...AG.fit_ctx[c.site], serp_hosts: c.serp_hosts || [] }).gate === 'pass';
+      const l = c.label === 'pass'; o[l ? (g ? 'tp' : 'fn') : (g ? 'fp' : 'tn')]++; } return { ...o, p: o.tp / Math.max(1, o.tp + o.fp), r: o.tp / Math.max(1, o.tp + o.fn), c: o.tn / Math.max(1, o.tn + o.fp) }; };
+    const sAll = score(AG.cases), sHold = score(AG.cases.filter(c => c.split === 'hold'));
+    const sT = score(AG.cases.filter(c => c.site === 'techand.ai' && c.split === 'hold')), sD = score(AG.cases.filter(c => c.site === 'devaicon.com' && c.split === 'hold'));
+    const r1 = (x) => +(100 * x).toFixed(1);
+    console.log('   KI gate on 800 labelled searches: all precision ' + r1(sAll.p) + '% recall ' + r1(sAll.r) + '% caught ' + r1(sAll.c) + '%; hold-out precision ' + r1(sHold.p) + '% recall ' + r1(sHold.r) + '% (techand ' + r1(sT.p) + ' / ' + r1(sT.r) + ', devaicon ' + r1(sD.p) + ' / ' + r1(sD.r) + ')');
+    check('KIG-1 the gate on 800 labelled Trial searches: right among what it lets through >= 78% (was 46.6%), wrong ones caught >= 80% (was 27.8%), right ones kept >= 90% (was 93.5%); hold-out precision >= 72%, recall >= 90%',
+      sAll.p >= 0.78 && sAll.c >= 0.80 && sAll.r >= 0.90 && sHold.p >= 0.72 && sHold.r >= 0.90 && sT.p >= 0.78 && sD.r >= 0.90, J({ all: sAll, hold: sHold, techand: sT, devaicon: sD }));
+    const G = (site, k) => KI_.gate(k, AG.fit_ctx[site]);
+    const must = [['techand.ai', 'peppol belgium', 'other_market'], ['techand.ai', 'peppol verplicht nederland', 'other_market'], ['techand.ai', 'peppol facture', 'other_market'],
+      ['techand.ai', 'mb 300 microsoft dynamics 365 core finance and operations', 'career'], ['techand.ai', 'dynamics 365 finance and operations interview questions', 'career'],
+      ['techand.ai', 'microsoft dynamics 365 finance and operations training', 'career'], ['techand.ai', 'finance operations specialist', 'career'],
+      ['techand.ai', 'dynamics 365 finance and operations ip ranges', 'practitioner'], ['techand.ai', 'dynamics 365 finance and operations user guide pdf', 'practitioner'],
+      ['techand.ai', 'peppol logo png', 'practitioner'], ['techand.ai', 'peppol bis billing 3 0', 'practitioner'], ['techand.ai', 'budgeting in d365 finance and operations', 'practitioner'],
+      ['techand.ai', 'trade finance operations', 'off_topic'], ['techand.ai', 'facilities management services in uae', 'off_topic'],
+      ['devaicon.com', 'software developer', 'career'], ['devaicon.com', 'software development life cycle phases', 'career'], ['devaicon.com', 'agile software development manifesto', 'career'],
+      ['devaicon.com', 'hrms software in dubai', 'off_topic'], ['devaicon.com', 'attendance software company', 'off_topic'], ['devaicon.com', 'software development companies romania', 'other_market'],
+      ['devaicon.com', 'android software development kit download', 'practitioner']];
+    const mustR = must.map(([s0, k, want]) => [k, want, G(s0, k).reason]);
+    check('KIG-2 the searches the owner and the Trial named are stopped, each with its reason (another market or language, a job or a course, someone using the product, not something you sell)',
+      mustR.every(([, w, got]) => w === got), J(mustR.filter(([, w, got]) => w !== got)));
+    const keep = [['techand.ai', 'business central dubai'], ['techand.ai', 'peppol uae'], ['techand.ai', 'dynamics 365 partner in uae'], ['techand.ai', 'microsoft dynamics partner uae'],
+      ['techand.ai', 'dynamics 365 support services uae'], ['techand.ai', 'dynamics 365 finance and operations pricing'], ['techand.ai', 'e invoicing penalties'], ['techand.ai', 'power bi consultant uae'],
+      ['techand.ai', 'erp implementation partner uae'], ['techand.ai', 'modules in d365 finance and operations'], ['techand.ai', 'dynamics 365 finance and operations customization'], ['techand.ai', 'crm software uae'],
+      ['devaicon.com', 'mobile app development company in dubai'], ['devaicon.com', 'custom software development services'], ['devaicon.com', 'open edx services provider'], ['devaicon.com', 'machine learning model training'], ['devaicon.com', 'chatbot development company dubai'],
+      ['devaicon.com', 'machine learning development company uae'], ['devaicon.com', 'software development cost'], ['devaicon.com', 'custom software development advantages'], ['devaicon.com', 'hrms software development company']];
+    const keepR = keep.map(([s0, k]) => [k, G(s0, k).gate, G(s0, k).reason]);
+    check('KIG-3 a buyer\'s search is never caught by a study, docs or product word: partners, services, costs, a consultant, a module list, custom building, model training, machine learning, Open edX',
+      keepR.every(([, g]) => g === 'pass'), J(keepR.filter(([, g]) => g !== 'pass')));
+    // ===================================== KIO (KI-ONEURL 2026-11-11, fixes/ONEURL.md): the keyword page follows the ladder rules =====================================
+    // Production 2026-11-10: techand.ai's CRM ladder had its main page on /dynamics-365-crm-uae-2, a copy of the live /dynamics-365-crm-uae (repaired
+    // by hand, LADDER_REPAIR.md), and three rungs of its ERP ladder on one blog address. Keyword research chose its pages without those rules.
+    const KO = new Function('URL', 'structuredClone', ['_fit_gate.js', '_competitors.js', '_kw_inputs.js', '_ladder_rules.js', '_ki.js'].map(f => rd('v5', 'code', f)).join('\n') + '\nreturn KI;')(undefined, undefined);
+    const T_ = 'https://www.techand.ai';
+    const crmPages = [{ url: T_ + '/dynamics-365-crm-uae', title: 'Dynamics 365 CRM in Dubai & UAE: Sales and Service | Tech&' }, { url: T_ + '/dynamics-365-crm-uae-2', title: 'Dynamics 365 CRM Services UAE | Tech' },
+      { url: T_ + '/insights/is-microsoft-dynamics-365-an-erp-system', title: 'Is Microsoft Dynamics 365 an ERP system? | Tech&' }];
+    const site0 = (o) => ({ domain: 'techand.ai', pages: crmPages, queries: [], owners: [], ...(o || {}) });
+    const cl = (kw, stage, gscPage, extra) => ({ keyword: kw, stage, members: [{ keyword: kw, stage, gsc_page: gscPage || '' }], top10: [], gate: 'pass', verdict: 'months', ...(extra || {}) });
+    const ladderCrm = [{ url: T_ + '/dynamics-365-crm-uae', keyword: 'crm service provider', by: 'ladder', ladder_id: 'lad_mw0goinsniv1' }];
+    const o1 = KO.pageAction(cl('dynamics 365 crm services uae', 'hire', T_ + '/dynamics-365-crm-uae-2'), site0());
+    check('KIO-1 a "-2" copy of a live page is never the page to work on: the original is, and the copy is to be redirected to it',
+      o1.action === 'refresh' && o1.page_url === T_ + '/dynamics-365-crm-uae' && /copy of \/dynamics-365-crm-uae/.test(o1.reason) && /redirect/.test(o1.reason), J(o1));
+    const o2 = KO.pageAction(cl('dynamics crm partner in uae', 'hire', T_ + '/dynamics-365-crm-uae'), site0({ owners: ladderCrm }));
+    check('KIO-2 a buyer\'s search on a page a ladder holds for another buyer\'s search works into that page (a second page would compete with it), and says whose page it is',
+      o2.action === 'refresh' && o2.page_url === T_ + '/dynamics-365-crm-uae' && o2.shared === true && /keyword ladder for "crm service provider"/.test(o2.reason) && /not a second page/.test(o2.reason), J(o2));
+    const o3 = KO.pageAction(cl('what is crm software', 'info', T_ + '/dynamics-365-crm-uae'), site0({ owners: ladderCrm, queries: [{ query: 'what is crm software', page: T_ + '/dynamics-365-crm-uae', impressions: 3, position: 63.6 }] }));
+    check('KIO-3 a different kind of search (a guide) on the ladder\'s main page gets a page of its own, with the reason: one search, one page',
+      o3.action === 'new' && !o3.page_url && /already belongs to your keyword ladder for "crm service provider"/.test(o3.reason) && /one search, one page/.test(o3.reason), J(o3));
+    const o4 = KO.pageAction(cl('what is crm software', 'info', T_ + '/dynamics-365-crm-uae'), site0({ owners: ladderCrm, queries: [{ query: 'what is crm software', page: T_ + '/dynamics-365-crm-uae', impressions: 40, position: 12 }] }));
+    check('KIO-4 ... unless that page already ranks for it (position 12): it stays there and the reason says it also serves the ladder (a page that ranks is never left for a competing new one)',
+      o4.action === 'refresh' && o4.page_url === T_ + '/dynamics-365-crm-uae' && o4.shared === true && /already ranks for it/.test(o4.reason), J(o4));
+    const erpU = T_ + '/insights/is-microsoft-dynamics-365-an-erp-system';
+    const o5 = KO.pageAction(cl('erp implementation steps', 'solution', erpU), site0({ owners: [{ url: erpU, keyword: 'is microsoft dynamics 365 an erp', by: 'cluster' }] }));
+    const o6 = KO.pageAction(cl('microsoft dynamics 365 is an erp', 'info', erpU), site0({ owners: [{ url: erpU, keyword: 'is microsoft dynamics 365 an erp', by: 'cluster' }] }));
+    check('KIO-5 within one run the stronger cluster keeps a page and a weaker cluster of other words gets its own (the ERP ladder\'s three-rungs-on-one-blog-address case); the same search in other words still improves it',
+      o5.action === 'new' && /the stronger search "is microsoft dynamics 365 an erp"/.test(o5.reason) && o6.action === 'refresh' && o6.page_url === erpU && !o6.shared, J({ o5, o6 }));
+    const o7 = KO.pageAction(cl('dynamics 365 crm services uae', 'hire', T_ + '/dynamics-365-crm-uae'), site0());
+    check('KIO-6 nothing changes for a page nobody else holds and that is not a copy (the page action as before)', o7.action === 'refresh' && o7.page_url === T_ + '/dynamics-365-crm-uae' && !/copy|belongs|ladder/.test(o7.reason), J(o7));
+    const rr = rd('harness', 'code_v4', 'Research_Result.js');
+    check('KIO-7 wiring: Research Result inlines the ladder rules, the plan passes the ladder pages (set aside, merged, stopped and failed pages hold nothing), clusters take pages in score order',
+      /const LRU = \(\(\) => \{/.test(rr) && /siteCtx\.owners\.push/.test(rr) && /const order = Object\.entries\(clusters\)\.sort/.test(rr) && /ladder_owners: ladderOwners/.test(rd('harness', 'code_v4', 'KI_Plan.js'))
+      && /\['set_aside', 'merged', 'stopped', 'failed', 'archived'\]/.test(rd('harness', 'code_v4', 'KI_Plan.js')), '');
     if (H.setWiring) H.setWiring(null);
   });
 };

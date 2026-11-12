@@ -88,7 +88,7 @@ const task = (part, line, a, host) => { if (!part) return; const t = tasks.get(p
   if (host) t.hosts.push(host);
   if (a.decision === 'yes' || a.decision === 'edit') t.must_contain.push(a.text); else t.weave.push(a.text); tasks.set(part.id, t); };
 
-for (const a of (F.answers || [])) {
+for (const a of (F.grade_only ? [] : (F.answers || []))) {   // client reports 2026-11-11 (185): a live-page grade changes nothing
   const neutral = S(a.neutral).trim();
   if (a.decision === 'skip') { applied.push({ id: a.id, how: 'skipped', section: a.section }); continue; }
   if (a.decision === 'general') { applied.push({ id: a.id, how: 'left_general', section: a.section }); continue; }
@@ -155,7 +155,7 @@ for (const a of (F.answers || [])) {
 const review_fixes = [];
 { const clientSays = (F.client_sentences || []).map(norm).filter(Boolean);
   const reviewTask = (part, line) => { const t = tasks.get(part.id) || { id: part.id, heading: part.heading, tasks: [], answers: [], must_contain: [], weave: [], hosts: [], texts: [] }; t.tasks.push(line); tasks.set(part.id, t); };
-  for (const b of (((P.prc || {}).gating || {}).qa_blocking || [])) {
+  for (const b of (F.grade_only ? [] : (((P.prc || {}).gating || {}).qa_blocking || []))) {
     if (S(b && b.code) !== 'review') continue;
     const err = RR.textError(S(b.text)); if (!err) continue;
     const m = S(b.text).match(/at "([^"]{8,400})":\s*([\s\S]*)$/); if (!m) continue;

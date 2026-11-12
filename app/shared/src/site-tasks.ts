@@ -695,7 +695,10 @@ function presentAiRank(p: Record<string, unknown>): Pick<SiteTask, 'title' | 'de
       ? 'Once it is live, paste its address below and press "I\'ve done it, check now": we open the page and look for your business. The step is done when we find it'
       : need === 'optional'
         ? 'The weekly check looks for your listing. To have it checked now, paste your profile address below and press "I\'ve done it, check now"'
-        : str(p.check);
+        : lever === 'L03'
+          ? // client reports 2026-11-11: L03 is asked of Bing right away (the server's live Bing check)
+            'Add your website in Bing Webmaster Tools, add our reading account as a Read only user, then press "I\'ve done it, check now": we ask Bing right away whether we can see your site'
+          : str(p.check);
   return {
     title: str(p.what) || str(p.label) || aiRankLeverLabel(lever),
     detail: [why ? `${why.replace(/[.\s]+$/, '')}.` : 'A step from your AI ranking plan: it helps AI assistants find, trust and name your business.', check ? `How we check it: ${check.replace(/[.\s]+$/, '')}.` : 'The weekly AI ranking check ticks it off once it finds it done.'].join(' '),

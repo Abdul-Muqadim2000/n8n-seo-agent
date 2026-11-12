@@ -1,5 +1,5 @@
 {
- "_comment": "KI parity fixture (W0 2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md \u00a76). The one source both sides are held to: the app (app/shared/src/ki.parity.test.ts reads it with the repo root mounted) and the engine kit v5/code/_ki.js (E1 adds its harness check). Verdict words and the Win thresholds of DESIGN.md \u00a73.8; the cases are the boundaries. A change here is a contract change.",
+ "_comment": "KI parity fixture (W0 2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §6). The one source both sides are held to: the app (app/shared/src/ki.parity.test.ts reads it with the repo root mounted) and the engine kit v5/code/_ki.js (E1 adds its harness check). Verdict words and the Win thresholds of DESIGN.md §3.8; the cases are the boundaries. A change here is a contract change.",
  "rule_version": "ki-1",
  "verdicts": {
   "go": "Go",
@@ -121,7 +121,8 @@
   "too_broad",
   "empty",
   "low_fit",
-  "avoid"
+  "avoid",
+  "practitioner"
  ],
  "score_cases": [
   {

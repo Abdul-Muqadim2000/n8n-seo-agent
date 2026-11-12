@@ -527,3 +527,98 @@ describe('a broken meta description (W0-A)', () => {
     expect(((rep!.payload as Record<string, unknown>).meta as Record<string, unknown>).meta_description).toBe(REBUILT);
   });
 });
+
+// Client reports 2026-11-11: engine section 184 (deployed 2026-11-10 ~19:30 UTC) stopped two rules that froze final versions at 59 "Not
+// ready" (a page for another market read as "the same search"; any second-read finding blocking). A version made before then, with nothing
+// new to put in, could never be made again ("Nothing changed since the last final version"). It may now be made again once, for free.
+describe('a version made before our checks improved: one free re-make', () => {
+  const BEFORE = new Date('2026-11-10T15:33:59Z');
+  const frozen = () =>
+    payload({
+      qa_delivery_status: 'not_ready',
+      qa_client_questions: [],
+      qa_grade: { score: 59 },
+      qa_publishable: false,
+      qa_not_ready: true,
+      qa_blocking: [
+        { code: 'duplicate_page', text: 'This website already has a page for the same search: https://novaand-demo.com/erp-systems-pakistan.' },
+        { code: 'review', text: 'A second read of the page found a problem at "Our work runs in three phases:"' },
+      ],
+    });
+  const remade = {
+    kind: 'answered' as const,
+    status: 200,
+    error: null,
+    json: {
+      ok: true, request_id: 'x', markdown: MD, applied: [], sections_rewritten: ['s2'], changes: [],
+      delivery_status: 'needs_work', delivery: { status: 'needs_work', label: 'Needs work', blocking: [], advisory: [], next_step: '', grade: { score: 83 } },
+      client_questions: [], grade: { score: 83 }, cost: { claude_usd: 0.04, dfs_usd: 0, estimated: true, model_calls: 1 },
+    },
+  };
+  async function frozenPage() {
+    const s = await setup({ payload: frozen() });
+    await db.update(schema.reports).set({ receivedAt: BEFORE }).where(eq(schema.reports.id, s.report.id));
+    // review M2: only a FINAL version made before the fix is re-made for free, so the page has one (made 10 Nov, held at 59)
+    const [orig] = await db.select().from(schema.reports).where(eq(schema.reports.id, s.report.id));
+    const { id: _id, ...rest } = orig!;
+    const [fin] = await db.insert(schema.reports).values({ ...rest, requestId: 'app-fin-old', title: 'Final version: "erp systems in uae"', payload: { ...(orig!.payload as Record<string, unknown>), finalized_from: s.report.id }, receivedAt: BEFORE }).returning();
+    await db.insert(schema.pageReviews).values({ orgId: s.org.id, siteId: s.site.id, reportId: s.report.id, finalReportId: fin!.id, finalStartedAt: BEFORE });
+    // credits enforced with an empty balance: any charged final version is refused (402), so a start proves the re-make is free
+    await db.update(schema.organizations).set({ creditsEnforced: true }).where(eq(schema.organizations.id, s.org.id));
+    await db.delete(schema.creditLots).where(eq(schema.creditLots.orgId, s.org.id));
+    return s;
+  }
+
+  it('the review offers it with the reason, at 0 credits', async () => {
+    const s = await frozenPage();
+    const v = view(await s.u.c.get(s.base));
+    expect(v.finalize).toMatchObject({ needed: true, reason: 'Our checks improved on 10 November: make the final version again for an up-to-date grade', quote: { credits: 0, usd: 0 }, recheck: { free: true } });
+    // the content board says it too
+    const sr = await svc.siteReviews(s.org.id, s.site);
+    expect(sr.summaryOf(sr.originals[0]!, null).recheck).toBe(true);
+  });
+
+  it('is made with nothing new, quoted and charged 0 credits, and the run says so; a later re-make is charged as before', async () => {
+    const s = await frozenPage();
+    t.finalizeAnswer = remade;
+    const started = await s.u.c.post(`${s.base}/finalize`, {});
+    expect(started.status).toBe(200);
+    const v = await waitFinal(s.u.c, s.base);
+    expect(v.finalize.status).toBe('done');
+    expect(t.finalize).toHaveLength(1);
+    const [run] = await db.select().from(schema.runs).where(eq(schema.runs.id, v.finalize.runId!));
+    expect(run).toMatchObject({ mode: 'finalize', status: 'completed', quotedCredits: 0, title: 'Final version: "erp systems in uae", free: our checks improved' });
+    expect(run!.input).toMatchObject({ checksImproved: true, freeRecheck: true, originalReportId: s.report.id });
+    // the new final version is graded with the improved checks: the free offer is gone, the price is back, nothing new = nothing to make
+    expect(v.finalize.recheck ?? null).toBeNull();
+    expect(v.finalize.quote.credits).toBeGreaterThan(0);
+    expect(v.finalize.needed).toBe(false);
+    const sr = await svc.siteReviews(s.org.id, s.site);
+    expect(sr.summaryOf(sr.originals[0]!, null).recheck).toBeUndefined();
+    expect((await s.u.c.post(`${s.base}/finalize`, {})).status).toBe(409);
+  });
+
+  it('once per page: after a completed free re-make the old rule applies again', async () => {
+    const s = await frozenPage();
+    await db.insert(schema.runs).values({ orgId: s.org.id, siteId: s.site.id, mode: 'finalize', title: 'x', status: 'completed', requestId: 'app-fin-used', input: { mode: 'finalize', originalReportId: s.report.id, checksImproved: true, freeRecheck: true }, quotedCredits: 0 });
+    const v = view(await s.u.c.get(s.base));
+    expect(v.finalize.needed).toBe(false);
+    expect(v.finalize.recheck ?? null).toBeNull();
+    expect(v.finalize.quote.credits).toBeGreaterThan(0);
+    expect((await s.u.c.post(`${s.base}/finalize`, {})).status).toBe(409);
+  });
+
+  it('a page made after the fix, or held for another reason, gets no free re-make', async () => {
+    const after = await setup({ payload: frozen() });
+    expect(view(await after.u.c.get(after.base)).finalize).toMatchObject({ needed: false, recheck: null });
+    const copied = await setup({ payload: { ...frozen(), qa_blocking: [{ code: 'copied', text: 'Part of the text repeats another page word for word' }] } });
+    await db.update(schema.reports).set({ receivedAt: BEFORE }).where(eq(schema.reports.id, copied.report.id));
+    expect(view(await copied.u.c.get(copied.base)).finalize).toMatchObject({ needed: false, recheck: null });
+  });
+
+  it('pure: finalizeNeedOf with the re-check', () => {
+    expect(svc.finalizeNeedOf({ answers: {}, clientMarkdown: null, clientSavedAt: null, since: BEFORE, status: 'done', recheck: true })).toEqual({ needed: true, reason: 'Our checks improved on 10 November: make the final version again for an up-to-date grade' });
+    expect(svc.finalizeNeedOf({ answers: {}, clientMarkdown: null, clientSavedAt: null, since: BEFORE, status: 'running', recheck: true }).needed).toBe(false);
+    expect(svc.finalizeNeedOf({ answers: {}, clientMarkdown: null, clientSavedAt: null, since: BEFORE, status: 'done' }).reason).toMatch(/^Nothing changed since the last final version/);
+  });
+});

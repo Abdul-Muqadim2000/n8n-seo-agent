@@ -7,6 +7,7 @@ import { runMigrations, sqlClient } from './db';
 import { startProposalJobs } from './services/autoStart';
 import { checkEngineFailures } from './services/engineFailures';
 import { checkStuckRungs } from './services/ladderWatch';
+import { startLiveGradeJobs } from './services/liveGrade';
 import { autoApproveTick, pollTick, senderTick } from './services/outreachJobs';
 import { startCrawlerJobs } from './services/crawlers/jobs';
 import { deliveryTick, retryTick } from './services/reportDelivery';
@@ -57,6 +58,8 @@ async function main() {
         .catch((err) => app.log.warn({ err: String(err) }, 'stuck ladder rung check failed')),
     15 * 60 * 1000,
   );
+  // client reports 2026-11-11: the engine grades each live page after its publish check (free; services/liveGrade.ts); LIVE_GRADE_JOBS=false stops it
+  const stopLiveGrade = startLiveGradeJobs(app.log);
   // keyword-first (SCHEDULING_KEYWORDS_PLAN.md §5.6 / §5.7): keyword proposals and the start of announced keywords (level 3), every
   // 10 minutes; AUTO_START_LADDERS is the platform's switch (default: on in production, off elsewhere; app/server/src/config.ts)
   const stopProposals = startProposalJobs(app.log);
@@ -104,6 +107,7 @@ async function main() {
     clearInterval(exportTimer);
     clearInterval(failureTimer);
     clearInterval(stuckRungTimer);
+    stopLiveGrade();
     clearInterval(timer);
     clearInterval(flowTimer);
     clearInterval(auditTimer);

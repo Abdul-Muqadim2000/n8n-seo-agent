@@ -236,7 +236,7 @@
     "tell": "Tell Caller (KI)?"
    },
    "ledger_load": "Load Run Ledger (KI)",
-   "measured": "!Run Comp SERPs Answers|Run Comp Labs Answers|Run Comp Profiles Answers|Run Research Discover Answers|Run Research Enrich Answers|Run Research SERPs Answers|Run Research Traffic Answers",
+   "measured": "!Run Comp SERPs Answers|Run Comp Labs Answers|Run Comp Profiles Answers|Run Research Discover Answers|Run Research Enrich Answers|Run Research SERPs Answers|Run Research SERPs Live Answers|Run Research Traffic Answers",
    "mode": "keyword_research",
    "open_runs": "Load Open Runs (KI)",
    "plan": "KI Plan",
@@ -889,6 +889,7 @@
     "BL Report",
     "Nothing To Do (BL)",
     "Refuse Run Ledger (BL)",
+    "Save BL Snapshot",
     "Save Reader Alert Delivery"
    ],
    "settle_from_ends": [

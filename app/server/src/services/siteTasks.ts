@@ -7,6 +7,8 @@ import {
   aiRankReportOf,
   aiRankSettingsOf,
   type AiRankActionRow,
+  bingSourceText,
+  type BingCheck,
   cleanDomain,
   deriveSiteTasks,
   indexImprovementsOf,
@@ -64,6 +66,7 @@ import { badRequest, HttpError, notFound } from '../lib/errors';
 import { rows as n8nRows, siteRows, updateRows, upsertRow } from '../n8n/client';
 import { audit } from './audit';
 import { fetchPublicOnce, fetchPublicText, publicHttpsHost } from './verify';
+import { checkBingAccess } from './bingCheck';
 
 /** what this module logs through: a request's or the app's logger, or the callback's delivery log */
 type Log = { warn: (o: object, msg: string) => void };
@@ -753,6 +756,9 @@ function checkOf(domain: string, kind: SiteTaskKind, payload: Record<string, unk
     // RC-3 (review C): a step done somewhere only the client knows (an article, a post, a video, a profile) is checked on the address the
     // client pastes on it: we open it and look for the business. Without an address a required one asks for it.
     case 'ai_rank': {
+      // client reports 2026-11-11 (devaicon.com): L03 (Bing Webmaster) is asked of Bing right away, the same check as the Backlinks page's
+      // "Check Bing now", instead of "the weekly check confirms this step" (409)
+      if (String(payload.lever ?? '') === 'L03') return checkBingStep(domain);
       const need = aiRankAddressNeed(String(payload.lever ?? ''));
       if (need && s(payload.clientUrl)) return checkAiRankAddress(domain, payload);
       if (need === 'required') return Promise.resolve({ ok: false, reached: false, needsAddress: true, message: AI_RANK_ADDRESS_ASK });
@@ -765,6 +771,25 @@ function checkOf(domain: string, kind: SiteTaskKind, payload: Record<string, unk
       // a row of a kind this build does not know (written by a newer one): nothing is read and nothing recorded
       return Promise.resolve({ ok: false, reached: false, message: `Unknown step ${String(never)}.` });
     }
+  }
+}
+
+/** L03: the outcome of the live Bing check (free; nothing stored but the step's own reading; the key is never logged), in the Backlinks
+ *  page's Bing card words. Bing not set up on this server: the weekly check still decides (409). Bing not answering: nothing changes. */
+export function bingStepOutcome(live: BingCheck): CheckOutcome {
+  const text = bingSourceText(null, live, live.shareWith).text;
+  if (!live.configured) return { ok: false, reached: false, engineOnly: true, message: `${text} The weekly AI ranking check confirms this step.` };
+  return { ok: live.inAccount && live.verified, reached: true, message: text };
+}
+
+/** Swappable for tests (the Bing check itself is tested in bingCheck.test.ts). */
+export const bingStep = { check: (domain: string): Promise<BingCheck> => checkBingAccess(domain) };
+
+async function checkBingStep(domain: string): Promise<CheckOutcome> {
+  try {
+    return bingStepOutcome(await bingStep.check(domain));
+  } catch (err) {
+    return { ok: false, reached: false, unsure: true, message: s((err as Error)?.message) || 'Bing did not answer just now. Try again in a minute.' };
   }
 }
 

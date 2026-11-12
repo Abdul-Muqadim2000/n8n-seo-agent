@@ -324,7 +324,7 @@ const first = (() => { try { return $('Run Research SERPs').all().map(i => (i &&
 const retryItems = (() => { try { return $('Run Research SERPs Retry Plan').all().map(i => (i && i.json) || {}).filter(x => x && x.is_retry); } catch (e) { return []; } })();
 const retryAnswers = (() => { try { return $('Run Research SERPs (Retry)').all().map(i => (i && i.json) || {}); } catch (e) { return []; } })();
 const stats = RT.stats(first, {}, retryItems, retryAnswers);
-const ev = RT.evidence("keyword results pages and Google Ads volumes", stats, { unit: "request" });
+const ev = RT.evidence("keyword results pages (queue) and Google Ads volumes", stats, { unit: "request" });
 // R28: a task's cost counts once, by its own id, across BOTH attempts - a figure that is money that moved, never a quote
 const seen = new Set(); let spent = 0; let noId = 0;
 for (const a of [...first, ...retryAnswers]) {

@@ -1,0 +1,7949 @@
+{
+"about": "KI-GATE2 (2026-11-11): 800 searches from the two production keyword-research Trials of 2026-11-10 (execs 12315 techand.ai, 12317 devaicon.com), labelled twice by independent agents that never saw the filter (labels 1: Sonnet, per-site default; labels 2: Opus, every search judged on its own; binary agreement 89.0% / 93.5%). The final label is the second labelling, with one written override: a search naming another country (Gulf states too) is other_market, because the site is measured on Google UAE (3 searches). dev = even ids (rules tuned on them), hold = odd ids (measured only). serp_hosts = the top-3 websites the Trial read for the search, when it read one.",
+"fit_ctx": {
+"techand.ai": {
+"own_domain": "techand.ai",
+"market": "AE",
+"services": [
+"Finance & Operations",
+"Peppol",
+"e-invoicing",
+"Power Platform",
+"CRM",
+"Power BI",
+"Microsoft Dynamics 365 implementation",
+"Project Operations",
+"NAV",
+"GP migrations",
+"post-go-live",
+"Copilot Studio AI agents",
+"VAT compliance",
+"Dynamics 365 Finance & Operations",
+"Microsoft Dynamics 365 consulting",
+"AX migrations",
+"managed support",
+"Dynamics 365 Business Central",
+"Dynamics 365 Managed Services",
+"Dynamics 365 Cloud Migration",
+"Power Automate",
+"Dynamics 365 Sales & CRM",
+"Dynamics 365 Project Operations",
+"Microsoft Copilot for Microsoft 365",
+"Copilot Studio",
+"Dynamics 365 Copilot",
+"Azure OpenAI Service",
+"AI Builder",
+"Azure AI Services",
+"Intelligent Document Processing",
+"Predictive Models",
+"Microsoft Fabric",
+"Power Apps",
+"Custom website",
+"portal development",
+"Mobile app development",
+"NAV & GP Migration services"
+],
+"topics": [
+"Finance & Operations",
+"Peppol",
+"e-invoicing",
+"Power Platform",
+"CRM",
+"Power BI",
+"Microsoft Dynamics 365 implementation",
+"Project Operations",
+"NAV",
+"GP migrations",
+"post-go-live",
+"Copilot Studio AI agents",
+"VAT compliance",
+"Dynamics 365 Finance & Operations",
+"Microsoft Dynamics 365 consulting",
+"AX migrations",
+"managed support",
+"Dynamics 365 Business Central",
+"Dynamics 365 Managed Services",
+"Dynamics 365 Cloud Migration",
+"Power Automate",
+"Dynamics 365 Sales & CRM",
+"Dynamics 365 Project Operations",
+"Microsoft Copilot for Microsoft 365",
+"Copilot Studio",
+"Dynamics 365 Copilot",
+"Azure OpenAI Service",
+"AI Builder",
+"Azure AI Services",
+"Intelligent Document Processing",
+"Predictive Models",
+"Microsoft Fabric",
+"Power Apps",
+"Custom website",
+"portal development",
+"Mobile app development",
+"NAV & GP Migration services"
+],
+"competitors": [
+"aassurecomply.com",
+"intwo.cloud",
+"concettolabs.com",
+"uae-asp.ae",
+"qeemahcloud.com",
+"hlbhamt.com",
+"visionet.com",
+"deloitte.com",
+"gostride.ventures",
+"alfazance.com",
+"cetastech.com",
+"cherriebs.com",
+"convexsol.com",
+"datatobiz.com",
+"dynamicsstream.com",
+"edoxi.com",
+"erbrains.ae",
+"hamtinfotech.com",
+"logisam.com",
+"lumifywork.com",
+"neologix.ae",
+"nobleprog.ae",
+"talentmate.com",
+"addendanalytics.com",
+"aiverix.ae",
+"alaan.com",
+"alvarezandmarsal.com",
+"andersen.com",
+"bemea.com",
+"lits.services",
+"cleartax.com",
+"randgroup.com",
+"invopop.com",
+"daftra.com",
+"cargas.com",
+"datasemantics.co",
+"edstellar.com",
+"flowbe.ae",
+"isyssolutions.com",
+"maisonconsulting.com",
+"novasoft.global",
+"qzinfomatics.com",
+"seerdynamics.com",
+"shyphan.com",
+"aiscorp.ai",
+"corporatestack.com",
+"doforttech.com",
+"dynamicssmartz.com"
+],
+"protect": [
+"finance & operations",
+"peppol",
+"power platform",
+"power bi",
+"microsoft dynamics 365",
+"copilot studio",
+"dynamics 365"
+]
+},
+"devaicon.com": {
+"own_domain": "devaicon.com",
+"market": "AE",
+"services": [
+"automation",
+"software development",
+"cloud",
+"custom AI solutions",
+"Microsoft enterprise systems",
+"ongoing managed IT support",
+"Open edX Services",
+"Managed Services",
+"Infrastructure & Enterprise Systems",
+"Consulting & Transformation",
+"Application & Software Development",
+"Intelligent Systems & Data",
+"Dynamics 365",
+"Microsoft Fabric",
+"Power Platform",
+"Artificial Intelligence & Machine Learning",
+"Data Science & Analytics",
+"Natural Language Processing",
+"NLP",
+"Computer Vision",
+"AR & VR Solutions",
+"Custom Software Development",
+"Website & Portal Development",
+"Mobile App Development",
+"Business Discovery & Requirements Analysis",
+"Gap-Fit Analysis",
+"ROI Assessment",
+"Global Rollouts",
+"System Optimization",
+"Microsoft Solutions Implementation",
+"Enterprise Chatbots",
+"Data Pipeline Design"
+],
+"topics": [
+"automation",
+"software development",
+"cloud",
+"custom AI solutions",
+"Microsoft enterprise systems",
+"ongoing managed IT support",
+"Open edX Services",
+"Managed Services",
+"Infrastructure & Enterprise Systems",
+"Consulting & Transformation",
+"Application & Software Development",
+"Intelligent Systems & Data",
+"Dynamics 365",
+"Microsoft Fabric",
+"Power Platform",
+"Artificial Intelligence & Machine Learning",
+"Data Science & Analytics",
+"Natural Language Processing",
+"NLP",
+"Computer Vision",
+"AR & VR Solutions",
+"Custom Software Development",
+"Website & Portal Development",
+"Mobile App Development",
+"Business Discovery & Requirements Analysis",
+"Gap-Fit Analysis",
+"ROI Assessment",
+"Global Rollouts",
+"System Optimization",
+"Microsoft Solutions Implementation",
+"Enterprise Chatbots",
+"Data Pipeline Design"
+],
+"competitors": [
+"adamastechconsulting.com",
+"aeserver.com",
+"competenza.ae",
+"edly.io",
+"emtech.ae",
+"drcsystems.com",
+"bluechipgulf.ae",
+"missanglobal.com",
+"xccel8.com",
+"appikr.com",
+"appventurez.com",
+"arcitech.ai",
+"aulasneo.com",
+"baone.ae",
+"blend-ed.com",
+"bpsme.com",
+"carmatec.com",
+"codetrade.io",
+"codexlogy.com",
+"coredevsltd.com",
+"gravitybase.ai",
+"growthfactors.ae",
+"iihglobal.com",
+"loop-wise.com",
+"mdscomputers.ae",
+"pnpcglobal.com",
+"raccoongang.com",
+"radixweb.com",
+"lumitech.co",
+"sisgain.ae",
+"bemea.com",
+"pixeltech.ai",
+"elioplus.com",
+"alnajahksa.com",
+"apptunix.ae",
+"avanade.com",
+"enosisoutsourcing.com",
+"fidigital.ae",
+"iaxservices.ae",
+"obliqueconsult.com",
+"pinnacledxb.com",
+"silwatech.com",
+"suffescom.ae",
+"techgropse.ae",
+"teqnovos.com",
+"titananalytics.ae"
+],
+"protect": [
+"open edx",
+"dynamics 365",
+"power platform"
+]
+}
+},
+"cases": [
+{
+"site": "techand.ai",
+"keyword": "power automate services uae",
+"label": "pass",
+"why": "Power Automate services buyer in UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"capterra.ae",
+"iqratechnology.com",
+"dynamicsstream.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "end to end analytics",
+"label": "off_topic",
+"why": "too generic, no product or service named",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol system",
+"label": "pass",
+"why": "business researching Peppol e-invoicing system",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol electronic invoicing",
+"label": "pass",
+"why": "researching Peppol e-invoicing, techand does compliance",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations workflow",
+"label": "practitioner",
+"why": "workflow configuration inside F&O",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "construction project erp",
+"label": "pass",
+"why": "construction firm shopping for an ERP",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations",
+"label": "pass",
+"why": "product name, buyer could research F&O",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "cost management power bi app",
+"label": "practitioner",
+"why": "Azure cost management template app for Power BI",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "top facility management companies in uae",
+"label": "off_topic",
+"why": "facility management companies, not sold",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "cash flow forecast in d365 finance and operations",
+"label": "practitioner",
+"why": "feature how-to inside F&O",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 business central essentials nce",
+"label": "pass",
+"why": "Business Central Essentials NCE licence purchase",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations licensing guide",
+"label": "pass",
+"why": "licensing guide is a pre-purchase cost question",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "d365 finance and operations uae",
+"label": "pass",
+"why": "F&O in UAE, implementation buyer",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"dynamicssmartz.com",
+"sqitconsulting.com",
+"linkedin.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "ms dynamics business central",
+"label": "pass",
+"why": "Business Central product research",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "case management dynamics 365 for finance and operations",
+"label": "practitioner",
+"why": "case management feature inside F&O",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol bis 3 0",
+"label": "practitioner",
+"why": "Peppol BIS 3.0 standard version",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "d365 finance and operations modules list",
+"label": "pass",
+"why": "buyer evaluating F&O scope by modules",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "power bi consultancy in uae",
+"label": "pass",
+"why": "Power BI consultancy buyer in UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"naukrigulf.com",
+"clutch.co",
+"leitenindia.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "peppol id belgium",
+"label": "other_market",
+"why": "Belgian Peppol identifier",
+"split": "dev",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp consultants in uae",
+"label": "pass",
+"why": "ERP consultants wanted in UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "what is the best erp system for small business",
+"label": "pass",
+"why": "best ERP for small business, Business Central fits",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations electronic reporting",
+"label": "practitioner",
+"why": "electronic reporting configuration in F&O",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "custom erp development services",
+"label": "pass",
+"why": "ERP services buyer, D365 customisation fits",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "power bi with business central",
+"label": "practitioner",
+"why": "connecting Power BI to Business Central data",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "how to implement a new erp system",
+"label": "pass",
+"why": "how to implement ERP, implementation buyer",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "list of facility management companies in uae",
+"label": "off_topic",
+"why": "facility management companies list",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol bis3",
+"label": "practitioner",
+"why": "Peppol BIS3 specification version",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol go",
+"label": "not_a_search",
+"why": "fragment, no clear meaning",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "rfz accounting and bookkeeping services in dubai uae",
+"label": "other_brand",
+"why": "named accounting firm RFZ",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "accounting consulting service",
+"label": "off_topic",
+"why": "accounting consulting not sold",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "pint ae xml format mandatory fields",
+"label": "practitioner",
+"why": "XML mandatory fields of PINT AE",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "business central uae",
+"label": "pass",
+"why": "Business Central in UAE buyer",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"microsoft.com",
+"dynamics.ae",
+"tridentinfo.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "leading facility management companies in uae",
+"label": "off_topic",
+"why": "facility management companies",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 business central review",
+"label": "pass",
+"why": "Business Central review before purchase",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "advantages and disadvantages of erp",
+"label": "pass",
+"why": "ERP pros and cons, early buyer research",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "power bi reports",
+"label": "practitioner",
+"why": "Power BI reports usage, generic",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 for finance and operations development cookbook",
+"label": "practitioner",
+"why": "F&O developer cookbook book",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "full service accounting firms",
+"label": "off_topic",
+"why": "accounting firms not sold",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 business central finance and operations",
+"label": "pass",
+"why": "comparing Business Central and F&O",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 managed services uae",
+"label": "pass",
+"why": "Dynamics 365 managed services in UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"terracez.com",
+"iaxservices.ae",
+"gritservices.ae"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "peppol dictionary",
+"label": "practitioner",
+"why": "Peppol data dictionary reference",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol bis billing 3 0 specification",
+"label": "practitioner",
+"why": "Peppol billing 3.0 specification",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "how to register peppol id",
+"label": "pass",
+"why": "business needing Peppol registration, onboarding help",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "tally erp 9 select company",
+"label": "other_brand",
+"why": "Tally ERP 9 product how-to",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations logo",
+"label": "practitioner",
+"why": "logo image download",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp and hr",
+"label": "off_topic",
+"why": "too generic ERP and HR pairing",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 business central field service",
+"label": "pass",
+"why": "Business Central with field service capability",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol validator online",
+"label": "practitioner",
+"why": "online Peppol validator tool",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 for finance and operations technical certification",
+"label": "job",
+"why": "technical certification",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations training materials pdf",
+"label": "job",
+"why": "training materials PDF",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics business central vs finance and operations",
+"label": "pass",
+"why": "Business Central vs F&O comparison",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol exchange",
+"label": "pass",
+"why": "Peppol exchange of invoices, e-invoicing research",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "ai powered e invoice compliance",
+"label": "pass",
+"why": "AI e-invoice compliance solution buyer",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol billit",
+"label": "other_brand",
+"why": "Billit, Belgian Peppol provider",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol bis billing",
+"label": "practitioner",
+"why": "Peppol BIS Billing specification",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "uae e invoicing penalties",
+"label": "pass",
+"why": "UAE e-invoicing penalties drive compliance purchase",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol countries",
+"label": "practitioner",
+"why": "reference list of Peppol countries",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "business support system",
+"label": "off_topic",
+"why": "telecom business support system, not sold",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "uae business e invoicing compliance requirements",
+"label": "pass",
+"why": "UAE e-invoicing compliance requirements research",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "business dynamics 365",
+"label": "pass",
+"why": "Dynamics 365 for business, garbled buyer query",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "best accounting system for small businesses",
+"label": "pass",
+"why": "best accounting system, Business Central fits",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "business central dubai",
+"label": "pass",
+"why": "Business Central Dubai buyer",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"intwo.cloud",
+"maisonconsulting.com",
+"cushwake.ae"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations",
+"label": "pass",
+"why": "F&O product research",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol bis billing 3",
+"label": "practitioner",
+"why": "Peppol BIS Billing 3 spec",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "pint ae data dictionary",
+"label": "practitioner",
+"why": "PINT AE data dictionary reference",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": [
+"e-invoice.app",
+"zoho.com",
+"test-docs.peppol.eu"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "e invoicing belgium peppol",
+"label": "other_market",
+"why": "Belgium Peppol e-invoicing",
+"split": "dev",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 cloud migration services in uae",
+"label": "pass",
+"why": "Dynamics 365 cloud migration services UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"code3.ae",
+"skytechdigital.ae",
+"clutch.co"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "top erp provider",
+"label": "pass",
+"why": "looking for top ERP provider",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations security roles",
+"label": "practitioner",
+"why": "security roles admin in F&O",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "management accounting system",
+"label": "off_topic",
+"why": "generic accounting concept, no product",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "expense management d365 finance and operations",
+"label": "practitioner",
+"why": "expense management feature in F&O",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp providers",
+"label": "pass",
+"why": "looking for ERP providers",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol verplicht nederland",
+"label": "other_market",
+"why": "Dutch Peppol mandate Netherlands",
+"split": "dev",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "using microsoft dynamics 365 for finance and operations",
+"label": "practitioner",
+"why": "using F&O, user reference",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "business basic license 365",
+"label": "pass",
+"why": "Microsoft 365 Business Basic licence purchase",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations supply chain management",
+"label": "pass",
+"why": "F&O supply chain management research",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol documentation",
+"label": "practitioner",
+"why": "Peppol documentation",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol facture",
+"label": "other_market",
+"why": "French word facture",
+"split": "hold",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol abbreviation",
+"label": "job",
+"why": "definition lookup of Peppol abbreviation",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "power bi best practices",
+"label": "practitioner",
+"why": "Power BI best practices for users",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "mb 300 microsoft dynamics 365 core finance and operations",
+"label": "job",
+"why": "MB-300 exam",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol id",
+"label": "practitioner",
+"why": "Peppol identifier lookup",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations email templates",
+"label": "practitioner",
+"why": "email templates setup in F&O",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "management control system in accounting",
+"label": "job",
+"why": "accounting coursework theory",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 business central dubai",
+"label": "pass",
+"why": "Business Central Dubai buyer",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"dynamics.ae",
+"bemea.com",
+"think-tribe.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "peppol belgium",
+"label": "other_market",
+"why": "Peppol Belgium",
+"split": "dev",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol logistics",
+"label": "practitioner",
+"why": "Peppol logistics documents reference",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "scm erp",
+"label": "pass",
+"why": "SCM ERP buyer research",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "finance operations analyst jobs",
+"label": "job",
+"why": "jobs",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "power platform services uae",
+"label": "pass",
+"why": "Power Platform services UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"me.kddi.com",
+"ae.indeed.com",
+"dynamicsstream.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "crm erp for small business",
+"label": "pass",
+"why": "CRM and ERP for small business buyer",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "d365 upgrade services",
+"label": "pass",
+"why": "D365 upgrade services buyer",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"learn.microsoft.com",
+"terracez.com",
+"nalashaadigital.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "online accounting system for small business",
+"label": "pass",
+"why": "online accounting system, Business Central cloud fits",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp customer relationship management",
+"label": "pass",
+"why": "ERP with CRM buyer research",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations logo",
+"label": "practitioner",
+"why": "logo download",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft certified dynamics 365 finance and operations apps developer associate",
+"label": "job",
+"why": "developer associate certification",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics finance and operations modules",
+"label": "pass",
+"why": "F&O modules, buyer scoping",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "pdf vs e invoice uae",
+"label": "pass",
+"why": "UAE PDF vs e-invoice compliance question",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"tax.gov.ae",
+"u.ae",
+"facebook.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "peppol registration belgium",
+"label": "other_market",
+"why": "Peppol registration Belgium",
+"split": "dev",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations functional consultant jobs",
+"label": "job",
+"why": "functional consultant jobs",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations architecture",
+"label": "practitioner",
+"why": "F&O technical architecture reference",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations jobs",
+"label": "job",
+"why": "jobs",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "excel group of companies uae",
+"label": "other_brand",
+"why": "Excel Group, named company",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "pint ae",
+"label": "pass",
+"why": "UAE PINT AE standard, compliance buyer research",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"docs.peppol.eu",
+"docs.peppol.eu",
+"deloitte.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics ax upgrade",
+"label": "pass",
+"why": "Dynamics AX upgrade service buyer",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol access point provider",
+"label": "pass",
+"why": "seeking Peppol access point provider",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol members",
+"label": "practitioner",
+"why": "OpenPeppol membership list reference",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations documentation",
+"label": "practitioner",
+"why": "documentation",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "one erp system",
+"label": "other_brand",
+"why": "OneERP product name",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp services",
+"label": "pass",
+"why": "ERP services buyer",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics implementation in uae",
+"label": "pass",
+"why": "Microsoft Dynamics implementation UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"zenzero.co.uk",
+"terracez.com",
+"maisonconsulting.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "power bi vs business objects",
+"label": "pass",
+"why": "BI tool comparison, Power BI services",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "copilot is changing business productivity",
+"label": "not_a_search",
+"why": "headline about Copilot productivity",
+"split": "hold",
+"first_label": "not_a_search",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol be",
+"label": "other_market",
+"why": "Belgian Peppol (.be)",
+"split": "hold",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 for finance and operations task recorder screenshot extension",
+"label": "practitioner",
+"why": "task recorder extension technical",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol unit codes",
+"label": "practitioner",
+"why": "Peppol unit code list",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol pint uae",
+"label": "pass",
+"why": "Peppol PINT for UAE compliance",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"qeemahcloud.com",
+"youtube.com",
+"test-docs.peppol.eu"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance migration services uae",
+"label": "pass",
+"why": "Dynamics 365 Finance migration services UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"zenzero.co.uk",
+"dynamicssmartz.com",
+"linkedin.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics ax dubai",
+"label": "pass",
+"why": "Dynamics AX Dubai, upgrade buyer",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"dynatechconsultancy.com",
+"theirstack.com",
+"ae.indeed.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "peppol e invoicing format",
+"label": "practitioner",
+"why": "Peppol invoice format spec",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "power automate consultant uae",
+"label": "pass",
+"why": "hiring Power Automate consultant UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"nimapinfotech.com",
+"datasemantics.co",
+"vidi-corp.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "peppol scheme id list",
+"label": "practitioner",
+"why": "Peppol scheme ID code list",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "finance and operations rollout services",
+"label": "pass",
+"why": "F&O rollout services",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"centricconsulting.com",
+"abouttmc.com",
+"onactuate.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations modules",
+"label": "pass",
+"why": "F&O modules, buyer scoping",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics f and o reporting",
+"label": "practitioner",
+"why": "reporting inside F&O",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 business central overview",
+"label": "pass",
+"why": "Business Central overview, early buyer",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol belgique",
+"label": "other_market",
+"why": "French Belgian Peppol",
+"split": "hold",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol news",
+"label": "practitioner",
+"why": "Peppol news for insiders",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "accounting service ltd",
+"label": "off_topic",
+"why": "accounting service, not sold",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol acronym",
+"label": "job",
+"why": "definition lookup of Peppol acronym",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 implementation in uae",
+"label": "pass",
+"why": "Dynamics 365 implementation UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"brightpointinfotech.com",
+"maisonconsulting.com",
+"facebook.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations training",
+"label": "job",
+"why": "training",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "hrms management system",
+"label": "off_topic",
+"why": "HRMS system not sold",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp services provider",
+"label": "pass",
+"why": "ERP services provider wanted",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 crm integration with finance and operations",
+"label": "pass",
+"why": "CRM to F&O integration service",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 for finance and operations enterprise edition",
+"label": "pass",
+"why": "F&O enterprise edition licence research",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 erp finance and operations",
+"label": "pass",
+"why": "Dynamics 365 ERP F&O research",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 migration company",
+"label": "pass",
+"why": "Dynamics 365 migration company wanted",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"companial.com",
+"marketplace.microsoft.com",
+"applytosupply.digitalmarketplace.service.gov.uk"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations api documentation",
+"label": "practitioner",
+"why": "API documentation",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "how much does dynamics 365 finance and supply chain management implementation cost for a retail business in the uae",
+"label": "pass",
+"why": "F&O implementation cost in UAE retail",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "d365 cloud migration uae",
+"label": "pass",
+"why": "D365 cloud migration UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"cloudtechnologies.ae",
+"flowbe.ae",
+"digitronix.io"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "outsource accounting service",
+"label": "off_topic",
+"why": "accounting outsourcing not sold",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations on premise",
+"label": "pass",
+"why": "deployment option research before buying",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "f and o implementation uae",
+"label": "pass",
+"why": "F&O implementation UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"dfsaen.thomsonreuters.com",
+"gulftoday.ae",
+"arnifi.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations copilot",
+"label": "pass",
+"why": "Copilot in F&O, buyer research",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "sis erp bits",
+"label": "other_brand",
+"why": "BITS Pilani SIS ERP portal",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 support services uae",
+"label": "pass",
+"why": "Dynamics 365 support services UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"bdo.ae",
+"dynamicsstream.com",
+"lits.services"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "d365 finance and operations license cost",
+"label": "pass",
+"why": "F&O licence cost",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 business central provider for hospitality uae",
+"label": "pass",
+"why": "Business Central provider for UAE hospitality",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"maisonconsulting.com",
+"lits.services",
+"citytechme.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "ai in dynamics 365 finance and operations",
+"label": "pass",
+"why": "AI in F&O, buyer research",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "best facility management company in uae",
+"label": "off_topic",
+"why": "facility management company",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance in uae",
+"label": "pass",
+"why": "Dynamics 365 Finance UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"eand.ae",
+"dynatechconsultancy.com",
+"zabeelinstitute.ae"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "implementing microsoft dynamics 365 for finance and operations apps",
+"label": "pass",
+"why": "implementing F&O apps, implementation buyer",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "how to get peppol id",
+"label": "pass",
+"why": "business needing Peppol ID, onboarding help",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 business central project management",
+"label": "pass",
+"why": "Business Central project management capability",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics crm partner in uae",
+"label": "pass",
+"why": "Dynamics CRM partner UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"alletec.com",
+"metadatacorp.com",
+"startbiz.ae"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations user guide",
+"label": "practitioner",
+"why": "user guide",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol participant identifier",
+"label": "practitioner",
+"why": "Peppol participant identifier spec",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "monday crm and project management",
+"label": "other_brand",
+"why": "monday.com CRM",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "d365 finance and operations pdf",
+"label": "practitioner",
+"why": "F&O PDF material",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol account",
+"label": "pass",
+"why": "business wanting a Peppol account",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "trade finance operations",
+"label": "off_topic",
+"why": "trade finance not sold",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations provisioning app",
+"label": "practitioner",
+"why": "provisioning app technical setup",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "d365 finance uae",
+"label": "pass",
+"why": "D365 Finance UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"techmantraglobal.com",
+"maisonconsulting.com",
+"learn.microsoft.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations backup policy",
+"label": "practitioner",
+"why": "backup policy technical setting",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations api documentation",
+"label": "practitioner",
+"why": "API documentation",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft power automate services uae",
+"label": "pass",
+"why": "Power Automate services UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"iqratechnology.com",
+"neologix.ae",
+"facebook.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "operations management vs finance",
+"label": "job",
+"why": "career comparison operations vs finance",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 erp",
+"label": "pass",
+"why": "Microsoft Dynamics 365 ERP research",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"microsoft.com",
+"tipalti.com",
+"en.wikipedia.org"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "finance operations analyst salary",
+"label": "job",
+"why": "salary",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations development",
+"label": "practitioner",
+"why": "F&O development for developers",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations on premise installation",
+"label": "practitioner",
+"why": "on-premise installation steps",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "budgeting in d365 finance and operations",
+"label": "practitioner",
+"why": "budgeting feature in F&O",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol facturen",
+"label": "other_market",
+"why": "Dutch facturen",
+"split": "dev",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations free trial",
+"label": "pass",
+"why": "free trial, evaluating F&O",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations vs business central",
+"label": "pass",
+"why": "F&O vs Business Central comparison",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations microsoft learn",
+"label": "job",
+"why": "Microsoft Learn training",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "modules in d365 finance and operations",
+"label": "pass",
+"why": "F&O modules, buyer scoping",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol payment means code",
+"label": "practitioner",
+"why": "Peppol payment means code list",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol international",
+"label": "practitioner",
+"why": "Peppol international network reference",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "e invoicing penalties",
+"label": "pass",
+"why": "e-invoicing penalties drive compliance purchase",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "company master data",
+"label": "off_topic",
+"why": "too generic data term",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "d365 finance and operations interview questions",
+"label": "job",
+"why": "interview questions",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics managed services",
+"label": "pass",
+"why": "Microsoft Dynamics managed services",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"veelead.com",
+"telefonicatech.uk",
+"osmosys.co"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "peppol verplicht 2026",
+"label": "other_market",
+"why": "Dutch Peppol mandate 2026",
+"split": "hold",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol 0208",
+"label": "practitioner",
+"why": "Peppol scheme code 0208",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp integration partner uae",
+"label": "pass",
+"why": "ERP integration partner UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations trial",
+"label": "pass",
+"why": "F&O trial, evaluating",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft erp system",
+"label": "pass",
+"why": "Microsoft ERP system research",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "one erp",
+"label": "other_brand",
+"why": "One ERP product name",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations certification training",
+"label": "job",
+"why": "certification training",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "sap and erp courses",
+"label": "job",
+"why": "SAP and ERP courses",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations jobs",
+"label": "job",
+"why": "jobs",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp roleplay examples",
+"label": "job",
+"why": "coursework roleplay",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft d365 uae",
+"label": "pass",
+"why": "Microsoft D365 UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"dynamics.ae",
+"bemea.com",
+"dynamicssmartz.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "financial management in microsoft dynamics 365 for finance and operations",
+"label": "practitioner",
+"why": "financial management usage in F&O",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "customized erp solutions",
+"label": "pass",
+"why": "customised ERP solutions buyer",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "facts erp",
+"label": "other_brand",
+"why": "Facts ERP product",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol api",
+"label": "practitioner",
+"why": "Peppol API for developers",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "crm software for legal services",
+"label": "pass",
+"why": "CRM for law firms, D365 Sales fits",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol cest quoi",
+"label": "other_market",
+"why": "French \"c'est quoi\"",
+"split": "hold",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations asset management",
+"label": "practitioner",
+"why": "asset management module feature",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations license cost",
+"label": "pass",
+"why": "F&O licence cost",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol code list",
+"label": "practitioner",
+"why": "Peppol code list",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "data direct group of companies reviews",
+"label": "other_brand",
+"why": "Data Direct Group reviews",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations uae",
+"label": "pass",
+"why": "F&O UAE buyer",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"dynamicssmartz.com",
+"dynamicssmartz.com",
+"eand.ae"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "peppol standard for invoice generation",
+"label": "practitioner",
+"why": "Peppol invoice standard reference",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp stands for",
+"label": "job",
+"why": "definition of ERP acronym",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol tax category",
+"label": "practitioner",
+"why": "Peppol tax category codes",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 partner in uae",
+"label": "pass",
+"why": "Dynamics 365 partner UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"evinciblesolutions.com",
+"quora.com",
+"tridentinfo.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 business central book",
+"label": "job",
+"why": "book for learning Business Central",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "pint ae validation rules",
+"label": "practitioner",
+"why": "PINT AE validation rules",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "what is pint ae",
+"label": "pass",
+"why": "UAE business learning PINT AE mandate",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 erp",
+"label": "pass",
+"why": "Dynamics 365 ERP research",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"microsoft.com",
+"erpsoftwareblog.com",
+"microsoft.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "peppol belgie",
+"label": "other_market",
+"why": "Dutch Belgie Peppol",
+"split": "hold",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "no 1 erp",
+"label": "pass",
+"why": "best ERP research",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "inventory management system for small business",
+"label": "pass",
+"why": "inventory system for small business, Business Central fits",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 erp for aec",
+"label": "pass",
+"why": "Dynamics 365 ERP for AEC sector",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol e invoicing uae",
+"label": "pass",
+"why": "Peppol e-invoicing UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"docs.peppol.eu",
+"peppol.org",
+"arratech.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "ifs erp company",
+"label": "other_brand",
+"why": "IFS ERP",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 business central uae",
+"label": "pass",
+"why": "Business Central UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"dynamics.ae",
+"aplicatech.com",
+"theirstack.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "peppol check",
+"label": "practitioner",
+"why": "checking a Peppol ID or document",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol e invoicing countries",
+"label": "practitioner",
+"why": "reference list of Peppol countries",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp crm project management",
+"label": "pass",
+"why": "ERP CRM project management buyer",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "finance operations software",
+"label": "pass",
+"why": "finance operations software buyer",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol unit of measure codes",
+"label": "practitioner",
+"why": "Peppol unit of measure codes",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol number",
+"label": "practitioner",
+"why": "Peppol number lookup",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol certification",
+"label": "practitioner",
+"why": "provider certification process",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol bis billing 3 0 validator",
+"label": "practitioner",
+"why": "Peppol 3.0 validator",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations pdf",
+"label": "practitioner",
+"why": "F&O PDF material",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "power bi partner in uae",
+"label": "pass",
+"why": "Power BI partner UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"bemea.com",
+"getondata.com",
+"burhani.co"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "erp implementation project",
+"label": "pass",
+"why": "ERP implementation project buyer",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol edi",
+"label": "practitioner",
+"why": "Peppol EDI technical",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp",
+"label": "pass",
+"why": "ERP research, early-stage buyer",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "cost accounting in service industry",
+"label": "job",
+"why": "cost accounting coursework",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp business applications",
+"label": "pass",
+"why": "ERP business applications research",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol box",
+"label": "other_market",
+"why": "Belgian government Peppol Box",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "d365 operations uae",
+"label": "pass",
+"why": "D365 Operations UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"linkedin.com",
+"careers.grantthornton.ae",
+"burhani.co"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "power bi best practices ppt",
+"label": "practitioner",
+"why": "Power BI slides template",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol pint",
+"label": "practitioner",
+"why": "Peppol PINT specification",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp 5",
+"label": "not_a_search",
+"why": "fragment",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics erp partner",
+"label": "pass",
+"why": "Microsoft Dynamics ERP partner",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"erpsoftwareblog.com",
+"navisionindia.in",
+"microsoft.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft erp",
+"label": "pass",
+"why": "Microsoft ERP research",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations course",
+"label": "job",
+"why": "course",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics ax dubai",
+"label": "pass",
+"why": "Dynamics AX Dubai upgrade buyer",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"dynamicssolution.com",
+"ae.indeed.com",
+"naukri.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 operations uae",
+"label": "pass",
+"why": "Dynamics 365 Operations UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"dynamicssmartz.com",
+"dynamicssmartz.com",
+"lits.services"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics services",
+"label": "pass",
+"why": "Dynamics services buyer",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "e invoicing via peppol",
+"label": "pass",
+"why": "e-invoicing via Peppol research",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations modules",
+"label": "pass",
+"why": "F&O modules, buyer scoping",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "quickbooks peppol integration uae",
+"label": "pass",
+"why": "QuickBooks user needing UAE Peppol compliance",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "small business crm and accounting software",
+"label": "pass",
+"why": "small business CRM and accounting buyer",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "infor erp",
+"label": "other_brand",
+"why": "Infor ERP",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "d365 finance and operations",
+"label": "pass",
+"why": "D365 F&O research",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "facility management companies in uae",
+"label": "off_topic",
+"why": "facility management companies",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "uae peppol pint ae compliance",
+"label": "pass",
+"why": "UAE PINT AE compliance",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol belgium 2026",
+"label": "other_market",
+"why": "Peppol Belgium 2026",
+"split": "hold",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations license",
+"label": "pass",
+"why": "F&O licence",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations training free",
+"label": "job",
+"why": "free training",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "enterprise resource planning erp and supply chain management scm",
+"label": "job",
+"why": "textbook ERP and SCM topic",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations roadmap",
+"label": "practitioner",
+"why": "F&O release roadmap",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "finance operations analyst job description",
+"label": "job",
+"why": "job description",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp vs crm vs bpm",
+"label": "job",
+"why": "academic comparison of ERP, CRM, BPM",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations apps developer associate",
+"label": "job",
+"why": "developer associate certification",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations uae",
+"label": "pass",
+"why": "F&O UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"eand.ae",
+"careers.grantthornton.ae",
+"cynoteck.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics finance and operations training",
+"label": "job",
+"why": "training",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "sap erp training",
+"label": "job",
+"why": "SAP ERP training",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "document management in d365 finance and operations",
+"label": "practitioner",
+"why": "document management feature in F&O",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol certified",
+"label": "practitioner",
+"why": "Peppol certification status",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations human resources",
+"label": "practitioner",
+"why": "human resources module in F&O",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations table browser",
+"label": "practitioner",
+"why": "table browser admin tool",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations mobile app",
+"label": "practitioner",
+"why": "F&O mobile app usage",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp changes",
+"label": "not_a_search",
+"why": "fragment",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol tax codes",
+"label": "practitioner",
+"why": "Peppol tax codes",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol xml format",
+"label": "practitioner",
+"why": "Peppol XML format",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 partner in uae",
+"label": "pass",
+"why": "Dynamics 365 partner UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"startbiz.ae",
+"dynamics.ae",
+"tridentinfo.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics partner in uae",
+"label": "pass",
+"why": "Microsoft Dynamics partner UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"intwo.cloud",
+"facebook.com",
+"tridentinfo.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "inventory management in d365 finance and operations",
+"label": "practitioner",
+"why": "inventory management feature in F&O",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol bis billing 3 0",
+"label": "practitioner",
+"why": "Peppol BIS Billing 3.0 spec",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol as4",
+"label": "practitioner",
+"why": "Peppol AS4 protocol",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "corporate finance operations",
+"label": "off_topic",
+"why": "corporate finance not sold",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol e invoicing",
+"label": "pass",
+"why": "Peppol e-invoicing research",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations certification",
+"label": "job",
+"why": "certification",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations interview questions",
+"label": "job",
+"why": "interview questions",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations integration",
+"label": "pass",
+"why": "F&O integration service",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "connect to peppol",
+"label": "pass",
+"why": "business wanting to connect to Peppol",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "finance operations specialist",
+"label": "job",
+"why": "job title",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "top 10 facilities management companies in uae",
+"label": "off_topic",
+"why": "facilities management companies",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 migration uae",
+"label": "pass",
+"why": "Dynamics 365 migration UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"zenzero.co.uk",
+"dynamicssolution.com",
+"gritservices.ae"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations demo",
+"label": "pass",
+"why": "F&O demo, evaluating",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations licensing guide",
+"label": "pass",
+"why": "licensing guide, pre-purchase cost",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol credit note",
+"label": "practitioner",
+"why": "Peppol credit note document",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol pint ae",
+"label": "pass",
+"why": "Peppol PINT AE for UAE compliance",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp company",
+"label": "pass",
+"why": "ERP company wanted",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "operations vs finance",
+"label": "job",
+"why": "career comparison",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "facilities management services in uae",
+"label": "off_topic",
+"why": "facilities management services",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol tax category code",
+"label": "practitioner",
+"why": "Peppol tax category code",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations documentation",
+"label": "practitioner",
+"why": "documentation",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol access points",
+"label": "pass",
+"why": "looking for Peppol access points",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "how to implement erp system",
+"label": "pass",
+"why": "how to implement ERP",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp implementation in uae",
+"label": "pass",
+"why": "ERP implementation UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations dubai",
+"label": "pass",
+"why": "F&O Dubai",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"dynamicssmartz.com",
+"ae.indeed.com",
+"dynamicssmartz.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "erp dynamics 365 finance and operations",
+"label": "pass",
+"why": "ERP F&O research",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 erp review",
+"label": "pass",
+"why": "Dynamics 365 ERP review",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol uae",
+"label": "pass",
+"why": "Peppol UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"e-invoicingsoftware.ae",
+"hellobooks.ai",
+"aassurecomply.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations pricing",
+"label": "pass",
+"why": "F&O pricing",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "pint ae format uae",
+"label": "practitioner",
+"why": "PINT AE format details",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"mof.gov.ae",
+"phoenixadvisory.me",
+"storecove.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "business central vs finance and operations",
+"label": "pass",
+"why": "Business Central vs F&O",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations user guide pdf",
+"label": "practitioner",
+"why": "user guide PDF",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "how to manage erp system",
+"label": "practitioner",
+"why": "operating an ERP system",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics ax upgrade",
+"label": "pass",
+"why": "Dynamics AX upgrade",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "key performance indicators power bi",
+"label": "practitioner",
+"why": "Power BI KPI how-to",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations pricing",
+"label": "pass",
+"why": "F&O pricing",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp software company dubai",
+"label": "pass",
+"why": "ERP software company Dubai",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"gear-up.ae",
+"sage.com",
+"dynamicsaxis.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "peppol 3 0",
+"label": "practitioner",
+"why": "Peppol 3.0 standard version",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp business",
+"label": "pass",
+"why": "ERP for business, vague buyer",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations login",
+"label": "practitioner",
+"why": "login page",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations customization",
+"label": "pass",
+"why": "F&O customisation service",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "finance and operations implementation uae",
+"label": "pass",
+"why": "F&O implementation UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"maisonconsulting.com",
+"facebook.com",
+"iaxservices.ae"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "peppol helger",
+"label": "practitioner",
+"why": "Helger open-source Peppol tools",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol network countries",
+"label": "practitioner",
+"why": "Peppol network country list",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations training",
+"label": "job",
+"why": "training",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 for project management in uae",
+"label": "pass",
+"why": "Dynamics 365 project management UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"dynatechconsultancy.com",
+"oneplan.ai",
+"careerjet.ae"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "peppol conference 2026",
+"label": "off_topic",
+"why": "industry conference event",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol ubl 2 1",
+"label": "practitioner",
+"why": "UBL 2.1 standard",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations overview",
+"label": "pass",
+"why": "F&O overview, early buyer",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations apps solution architect expert",
+"label": "job",
+"why": "solution architect certification",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol bis 4 0",
+"label": "practitioner",
+"why": "Peppol BIS 4.0 version",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "accounting system and internal control",
+"label": "job",
+"why": "accounting coursework theory",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations certification",
+"label": "job",
+"why": "certification",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol invoice format",
+"label": "practitioner",
+"why": "Peppol invoice format",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "connect power bi to dynamics 365 finance and operations",
+"label": "practitioner",
+"why": "connecting Power BI to F&O how-to",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "how to find peppol id",
+"label": "practitioner",
+"why": "looking up an existing Peppol ID",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations intercompany",
+"label": "practitioner",
+"why": "intercompany feature in F&O",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "finance operations",
+"label": "off_topic",
+"why": "too generic finance term",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol bis format",
+"label": "practitioner",
+"why": "Peppol BIS format",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations excel add in",
+"label": "practitioner",
+"why": "Excel add-in usage",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol poland",
+"label": "other_market",
+"why": "Poland Peppol",
+"split": "dev",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "finance business operations",
+"label": "off_topic",
+"why": "too generic finance term",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations ip ranges",
+"label": "practitioner",
+"why": "IP ranges technical setting",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "business units dynamics 365",
+"label": "practitioner",
+"why": "business units configuration",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics ax abu dhabi",
+"label": "pass",
+"why": "Dynamics AX Abu Dhabi upgrade buyer",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"dynamic.facts.ae",
+"dynamics.ae",
+"ae.indeed.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics ax 365 finance and operations",
+"label": "pass",
+"why": "AX to F&O research",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "accounting outsourcing service provider",
+"label": "off_topic",
+"why": "accounting outsourcing not sold",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol id registration",
+"label": "pass",
+"why": "business needing Peppol ID registration",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "stock management system for small business",
+"label": "pass",
+"why": "stock system for small business, Business Central fits",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "finance and operations implementation and rollout services",
+"label": "pass",
+"why": "F&O implementation and rollout services",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp companies uae",
+"label": "pass",
+"why": "ERP companies UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol document types",
+"label": "practitioner",
+"why": "Peppol document types",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "crm software for small companies",
+"label": "pass",
+"why": "CRM for small companies buyer",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp development company in uae",
+"label": "pass",
+"why": "ERP development company UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 business central essential",
+"label": "pass",
+"why": "Business Central Essentials licence",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft d365 saudi arabia",
+"label": "other_market",
+"why": "adjudicated: names another country (site measured in the UAE)",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol certified service provider",
+"label": "pass",
+"why": "seeking Peppol certified provider",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 business central provider uae",
+"label": "pass",
+"why": "Business Central provider UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"clusterknot.com",
+"singleclic.com",
+"theirstack.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations download",
+"label": "practitioner",
+"why": "download",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "top 3 erp companies",
+"label": "pass",
+"why": "top ERP companies",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "how to install dynamics 365 finance and operations",
+"label": "practitioner",
+"why": "installation steps",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol logo png",
+"label": "practitioner",
+"why": "logo image",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations apps developer",
+"label": "job",
+"why": "developer job title",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "tech and tech",
+"label": "other_brand",
+"why": "different company, not Tech&",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "mb 500 microsoft dynamics 365 finance and operations apps developer",
+"label": "job",
+"why": "MB-500 exam",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "hermes belgium peppol",
+"label": "other_market",
+"why": "Belgian Hermes Peppol platform",
+"split": "hold",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations update schedule",
+"label": "practitioner",
+"why": "update schedule reference",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol bis",
+"label": "practitioner",
+"why": "Peppol BIS spec",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "efg corporate services provider",
+"label": "other_brand",
+"why": "EFG corporate services",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 core finance and operations",
+"label": "job",
+"why": "MB-300 exam title",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "quickbooks pint ae integration",
+"label": "pass",
+"why": "QuickBooks user needing PINT AE compliance",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol e invoicing network",
+"label": "pass",
+"why": "Peppol e-invoicing network research",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics erp",
+"label": "pass",
+"why": "Microsoft Dynamics ERP",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 erp services",
+"label": "pass",
+"why": "Dynamics 365 ERP services",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations vs business central",
+"label": "pass",
+"why": "F&O vs Business Central",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "ms dynamics 365 finance and operations",
+"label": "pass",
+"why": "F&O research",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol network belgium",
+"label": "other_market",
+"why": "Peppol network Belgium",
+"split": "dev",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "netsuite vs dynamics 365 finance and operations",
+"label": "pass",
+"why": "NetSuite vs F&O comparison",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations technical training",
+"label": "job",
+"why": "technical training",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "right way accounting and auditing uae dubai",
+"label": "other_brand",
+"why": "Right Way accounting firm",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "enterprise resource planning crm",
+"label": "pass",
+"why": "ERP with CRM research",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 for finance and operations development cookbook pdf",
+"label": "practitioner",
+"why": "developer cookbook PDF",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol mls",
+"label": "practitioner",
+"why": "Peppol message level status spec",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations apps solution architect",
+"label": "job",
+"why": "solution architect role",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft power bi partners uae",
+"label": "pass",
+"why": "Power BI partners UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"iconnectitbs.com",
+"techcommunity.microsoft.com",
+"visiontechme.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "crm for property management",
+"label": "pass",
+"why": "CRM for property management, D365 Sales fits",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "pint format uae",
+"label": "practitioner",
+"why": "PINT format details",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"orchidatax.com",
+"citytechme.com",
+"orchidatax.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 erp system",
+"label": "pass",
+"why": "Dynamics 365 ERP system",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp system for trading company",
+"label": "pass",
+"why": "ERP for trading company",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft erp system for marine infrastructure",
+"label": "pass",
+"why": "Microsoft ERP for marine infrastructure",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "d365 erp",
+"label": "pass",
+"why": "D365 ERP",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp system provider",
+"label": "pass",
+"why": "ERP system provider",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol test bed",
+"label": "practitioner",
+"why": "Peppol test bed",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp implementation partner uae",
+"label": "pass",
+"why": "ERP implementation partner UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "erp system consultant company",
+"label": "pass",
+"why": "ERP consultant company",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol access point service provider uae",
+"label": "pass",
+"why": "Peppol access point provider UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"softwaredevelopers.ato.gov.au",
+"peppol.nu",
+"storecove.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "peppol international invoice",
+"label": "practitioner",
+"why": "international Peppol invoice reference",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics erp",
+"label": "pass",
+"why": "Dynamics ERP",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"cargas.com",
+"dynamicssquare.com",
+"en.wikipedia.org"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "dynamics 365 finance and operations icon",
+"label": "practitioner",
+"why": "icon image",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "pint ae mandatory fields",
+"label": "practitioner",
+"why": "PINT AE mandatory fields",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "peppol id in uae",
+"label": "pass",
+"why": "UAE business needing a Peppol ID",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "e invoice vs pdf invoice uae",
+"label": "pass",
+"why": "UAE e-invoice vs PDF compliance",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"dhruvaconsultants.com",
+"alaan.com",
+"facebook.com"
+]
+},
+{
+"site": "techand.ai",
+"keyword": "microsoft dynamics 365 finance and operations download",
+"label": "practitioner",
+"why": "download",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "techand.ai",
+"keyword": "tech and ai",
+"label": "pass",
+"why": "own brand Tech& AI navigational",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "adaptive software development asd",
+"label": "job",
+"why": "methodology theory",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development tenders",
+"label": "off_topic",
+"why": "vendors seeking tenders, not buyers",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "offshore software development center",
+"label": "pass",
+"why": "offshore development centre buyer",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "microsoft enterprise systems company abu dhabi",
+"label": "other_brand",
+"why": "named company Microsoft Enterprise Systems",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development niches",
+"label": "job",
+"why": "developers choosing a niche",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "attendance software company",
+"label": "off_topic",
+"why": "packaged attendance product",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development engineer iii",
+"label": "job",
+"why": "job title",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom ai solutions company",
+"label": "pass",
+"why": "custom AI solutions company",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development methodology",
+"label": "job",
+"why": "methodology theory",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development services for startups",
+"label": "pass",
+"why": "software services for startups",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "gtech dubai",
+"label": "other_brand",
+"why": "GTech Dubai",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom app development in dubai",
+"label": "pass",
+"why": "custom app development Dubai",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"tekrevol.com",
+"vlinkinfo.com",
+"linkedin.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "sculptsoft ai software development company photos",
+"label": "other_brand",
+"why": "SculptSoft photos",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "bug fixing in software development",
+"label": "job",
+"why": "development concept",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "mobile app development company in dubai",
+"label": "pass",
+"why": "mobile app development company Dubai",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"websenor.com",
+"quora.com",
+"vlinkinfo.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "lean technologies dubai",
+"label": "other_brand",
+"why": "Lean Technologies",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "it support vs software development",
+"label": "job",
+"why": "career comparison",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "it project management dubai",
+"label": "job",
+"why": "IT project management roles or courses",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development raci",
+"label": "practitioner",
+"why": "RACI template for projects",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "open edx services company profile",
+"label": "pass",
+"why": "Open edX services company",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "betting software development company",
+"label": "pass",
+"why": "custom betting software buyer",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "system integrators in uae",
+"label": "pass",
+"why": "system integrators UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "questions to ask software development companies",
+"label": "pass",
+"why": "buyer vetting software companies",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "top software development tools",
+"label": "practitioner",
+"why": "developer tools",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom fintech software development",
+"label": "pass",
+"why": "custom fintech software",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development project plan sample",
+"label": "practitioner",
+"why": "project plan template",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "sdk software development kit download",
+"label": "practitioner",
+"why": "SDK download",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development technician",
+"label": "job",
+"why": "job title",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "technology conference dubai",
+"label": "off_topic",
+"why": "technology conference event",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software it jobs",
+"label": "job",
+"why": "jobs",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development companies romania",
+"label": "other_market",
+"why": "Romania",
+"split": "dev",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development standard",
+"label": "practitioner",
+"why": "development standards reference",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "it companies software development",
+"label": "pass",
+"why": "IT software development companies",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": [
+"effortz.com",
+"wellfound.com",
+"carmatec.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development vs waterfall",
+"label": "job",
+"why": "agile vs waterfall theory",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": [
+"sevenpeakssoftware.com",
+"manektech.com",
+"youtube.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "microsoft enterprise systems company 1 abu dhabi reviews",
+"label": "other_brand",
+"why": "reviews of named company Enterprise Systems Company 1",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software engineer jobs",
+"label": "job",
+"why": "jobs",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom ai solutions development",
+"label": "pass",
+"why": "custom AI solutions development",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development company sharjah reviews",
+"label": "pass",
+"why": "Sharjah software company reviews, Devaicon is there",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "ongoing managed it support providers in uae",
+"label": "pass",
+"why": "managed IT support providers UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development requirements",
+"label": "job",
+"why": "requirements concept",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "app development software ios",
+"label": "practitioner",
+"why": "iOS app development tools",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development life cycle phases",
+"label": "job",
+"why": "SDLC phases coursework",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "talent technical services",
+"label": "other_brand",
+"why": "Talent Technical Services",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "real estate application development",
+"label": "pass",
+"why": "real estate app development",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "iphone software development kit",
+"label": "practitioner",
+"why": "iPhone SDK",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "applied technical services jobs",
+"label": "job",
+"why": "jobs",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development methodology definition",
+"label": "job",
+"why": "definition",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "bespoke software development services",
+"label": "pass",
+"why": "bespoke software development services",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"radixweb.com",
+"devsdata.com",
+"linkedin.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "ongoing managed it support companies",
+"label": "pass",
+"why": "managed IT support companies",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "best software development company in uae",
+"label": "pass",
+"why": "best software company UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "microsoft enterprise systems company 1 abu dhabi",
+"label": "other_brand",
+"why": "named company Microsoft Enterprise Systems",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software engineering masters degree",
+"label": "job",
+"why": "degree",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development with scrum",
+"label": "job",
+"why": "agile with Scrum learning",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "sign cb information technology uae",
+"label": "other_brand",
+"why": "Sign CB company",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development agile",
+"label": "job",
+"why": "methodology theory",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": [
+"wirtek.com",
+"redhat.com",
+"project-management.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "bsc software engineering",
+"label": "job",
+"why": "degree",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "uae hr software",
+"label": "off_topic",
+"why": "packaged HR software",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development vs application development",
+"label": "job",
+"why": "definition comparison",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development rates",
+"label": "pass",
+"why": "software development rates",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development kit download",
+"label": "practitioner",
+"why": "SDK download",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "artificial intelligence software development company",
+"label": "pass",
+"why": "AI software development company",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"spec-india.com",
+"indatalabs.com",
+"en.wikipedia.org"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development models",
+"label": "job",
+"why": "agile models theory",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "advanced technology services jobs",
+"label": "job",
+"why": "jobs",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development courses",
+"label": "job",
+"why": "courses",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "it support technical interview questions",
+"label": "job",
+"why": "interview questions",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software employment agency",
+"label": "job",
+"why": "recruitment agency",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "microsoft enterprise systems company 1",
+"label": "other_brand",
+"why": "named company Microsoft Enterprise Systems",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "instrumentation and control engineering jobs in dubai",
+"label": "job",
+"why": "jobs",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software engineering company in bangalore",
+"label": "other_market",
+"why": "Bangalore",
+"split": "dev",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "definition of software development life cycle",
+"label": "job",
+"why": "SDLC definition",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "solution architect vs software architect",
+"label": "job",
+"why": "role comparison",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "programmers and software development professionals",
+"label": "job",
+"why": "occupation classification",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development life cycle",
+"label": "job",
+"why": "SDLC coursework",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "technology jobs in uae",
+"label": "job",
+"why": "jobs",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software housee",
+"label": "pass",
+"why": "misspelt software house, company seeker",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "gligx web design and software development company dubai uae",
+"label": "other_brand",
+"why": "Gligx",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development business requirements",
+"label": "practitioner",
+"why": "business requirements template",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "e learning software development company",
+"label": "pass",
+"why": "e-learning software company, Open edX fits",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"springsapps.com",
+"hiddenbrains.com",
+"octalsoftware.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "what is software development life cycle",
+"label": "job",
+"why": "SDLC definition",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "top applicant tracking systems",
+"label": "off_topic",
+"why": "packaged applicant tracking systems",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "soc 2 software",
+"label": "off_topic",
+"why": "SOC 2 compliance software",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "dubai future solutions",
+"label": "other_brand",
+"why": "Dubai Future Solutions",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "it infrastructure management services companies in uae",
+"label": "pass",
+"why": "IT infrastructure management services UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "outsourcing software development for startups",
+"label": "pass",
+"why": "outsourcing development for startups",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "electrical engineering consultants in dubai",
+"label": "off_topic",
+"why": "electrical engineering",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "hire custom software development company",
+"label": "pass",
+"why": "hire custom software company",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development agency new york",
+"label": "other_market",
+"why": "New York",
+"split": "hold",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "android software development kit",
+"label": "practitioner",
+"why": "Android SDK",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "real estate software development services",
+"label": "pass",
+"why": "real estate software development services",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "it careers in uae",
+"label": "job",
+"why": "careers",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom software development",
+"label": "pass",
+"why": "custom software development",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development engineer ii",
+"label": "job",
+"why": "job title",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "technical services mohre",
+"label": "off_topic",
+"why": "MOHRE licence activity",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "daiyra website and software development company in dubai",
+"label": "other_brand",
+"why": "Daiyra",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": [
+"linkedin.com",
+"digitalagencies.ae",
+"daiyra.ae"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "software development estimation template xls",
+"label": "practitioner",
+"why": "estimation spreadsheet template",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development team building",
+"label": "practitioner",
+"why": "team management for dev leads",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development steps",
+"label": "job",
+"why": "process steps coursework",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "front end and back end software development",
+"label": "job",
+"why": "front-end vs back-end learning",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development background",
+"label": "off_topic",
+"why": "background images, not a service",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software engineering support",
+"label": "pass",
+"why": "software support service buyer",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development lifecycle security",
+"label": "job",
+"why": "SDLC security theory",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "how much does software development cost",
+"label": "pass",
+"why": "software development cost",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development companies in calicut",
+"label": "other_market",
+"why": "Calicut India",
+"split": "hold",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "microsoft fabric uae price",
+"label": "pass",
+"why": "Fabric price UAE, implementation buyer",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "microsoft enterprise systems company in dubai",
+"label": "pass",
+"why": "Microsoft systems company in Dubai buyer",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development lifecycle definition",
+"label": "job",
+"why": "SDLC definition",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "information technology company in chennai",
+"label": "other_market",
+"why": "Chennai",
+"split": "hold",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "ongoing managed it support dubai",
+"label": "pass",
+"why": "managed IT support Dubai",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "agile development model in software testing",
+"label": "job",
+"why": "agile in testing theory",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "smoke test software development",
+"label": "job",
+"why": "smoke test concept",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "java software development kit download",
+"label": "practitioner",
+"why": "Java SDK download",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software engineering resume",
+"label": "job",
+"why": "resume",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom real estate software development",
+"label": "pass",
+"why": "custom real estate software",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development project management",
+"label": "job",
+"why": "agile project management theory",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": [
+"bakkah.com",
+"geeksforgeeks.org",
+"business.adobe.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "education software development services",
+"label": "pass",
+"why": "education software services, Open edX fits",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "ongoing managed it support provider dubai",
+"label": "pass",
+"why": "managed IT support provider Dubai",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "it solutions company in uae",
+"label": "pass",
+"why": "IT solutions company UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"bayzat.com",
+"emtech.ae",
+"swiftit.ae"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "high tech campus companies",
+"label": "off_topic",
+"why": "Eindhoven campus companies",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "bss technology dubai",
+"label": "other_brand",
+"why": "BSS Technology",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development services",
+"label": "pass",
+"why": "agile software development services",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "ai software development companies",
+"label": "pass",
+"why": "AI software development companies",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"sapphiresolutions.net",
+"esferasoft.com",
+"zoolatech.mystrikingly.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "mindware office dubai",
+"label": "other_brand",
+"why": "Mindware",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "what is a software development kit",
+"label": "job",
+"why": "SDK definition",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "what software development life cycle",
+"label": "job",
+"why": "SDLC definition",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "clean room software development",
+"label": "job",
+"why": "methodology theory",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development estimates",
+"label": "practitioner",
+"why": "estimation technique",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software engineer",
+"label": "job",
+"why": "job title",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development life cycle sdlc",
+"label": "job",
+"why": "SDLC coursework",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development benefits",
+"label": "job",
+"why": "agile methodology benefits, theory",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "open edx services abu dhabi",
+"label": "pass",
+"why": "Open edX services Abu Dhabi",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "best erp software in uae",
+"label": "off_topic",
+"why": "packaged ERP software",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": [
+"pactsoft.ae",
+"sage.com",
+"linkedin.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "software development life cycle 5 phases",
+"label": "job",
+"why": "SDLC phases",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "top 10 software companies in dubai",
+"label": "pass",
+"why": "top software companies Dubai",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"rightfirms.co",
+"techreviewer.co",
+"techgropse.ae"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "custom software development in dubai",
+"label": "pass",
+"why": "custom software development Dubai",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"daffodilsw.com",
+"linkedin.com",
+"aarmeh.ae"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development and devops nyu",
+"label": "job",
+"why": "NYU course",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development team leader",
+"label": "job",
+"why": "job title",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development company dallas tx",
+"label": "other_market",
+"why": "Dallas",
+"split": "dev",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "hiring manager software",
+"label": "off_topic",
+"why": "hiring software product",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "it software development",
+"label": "pass",
+"why": "IT software development",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": [
+"learn.microsoft.com",
+"uk.indeed.com",
+"walbrook.ac.uk"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "chief software development officer",
+"label": "job",
+"why": "job title",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "it support technical interview questions and answers",
+"label": "job",
+"why": "interview questions",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development services in dubai",
+"label": "pass",
+"why": "software development services Dubai",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"smbdigitalzone.com",
+"tekrevol.com",
+"linkedin.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "software dev services",
+"label": "pass",
+"why": "software development services",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "key information technology dubai",
+"label": "other_brand",
+"why": "Key Information Technology",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "what is adaptive software development",
+"label": "job",
+"why": "definition",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development design patterns",
+"label": "job",
+"why": "design patterns learning",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development partner",
+"label": "pass",
+"why": "software development partner",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development studio",
+"label": "pass",
+"why": "software development studio",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "ai based software development tools",
+"label": "practitioner",
+"why": "AI coding tools",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development pdf",
+"label": "job",
+"why": "agile PDF learning",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development and devops",
+"label": "job",
+"why": "agile and DevOps theory",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software engineering professionals",
+"label": "job",
+"why": "professionals occupation",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development kits",
+"label": "job",
+"why": "SDK concept",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": [
+"reddit.com",
+"ituonline.com",
+"qarea.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "software house in uae",
+"label": "pass",
+"why": "software house UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"techreviewer.co",
+"sysberries.com",
+"nextuae.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "computer science uae",
+"label": "job",
+"why": "degree",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development team hierarchy",
+"label": "job",
+"why": "team hierarchy theory",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "acuity infotech cloud software development company in dubai",
+"label": "other_brand",
+"why": "Acuity Infotech",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": [
+"hiremee.co.in",
+"bebee.com",
+"linkedin.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "software development sites",
+"label": "practitioner",
+"why": "developer websites",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "information technology jobs in uae",
+"label": "job",
+"why": "jobs",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development scope of work sample",
+"label": "practitioner",
+"why": "scope of work template",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development and services",
+"label": "pass",
+"why": "software development and services",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "kpis for software development",
+"label": "practitioner",
+"why": "engineering KPIs",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "dubai software market",
+"label": "off_topic",
+"why": "market research, not buying",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": [
+"brainstation-23.com",
+"techreviewer.co",
+"jumpgrowth.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "software companies in sharjah",
+"label": "pass",
+"why": "software companies Sharjah",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"progressive.in",
+"techbehemoths.com",
+"missanglobal.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "corporate software development",
+"label": "pass",
+"why": "corporate software development",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"topdevelopers.co",
+"coderower.com",
+"yeasitech.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "microsoft fabric pricing",
+"label": "pass",
+"why": "Fabric pricing, implementation buyer",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"dataroots.io",
+"reddit.com",
+"kanerika.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "second step software development",
+"label": "other_brand",
+"why": "Second Step company",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "xp software development",
+"label": "job",
+"why": "XP methodology",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "difference between it and software development",
+"label": "job",
+"why": "definition comparison",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development life cycle waterfall model",
+"label": "job",
+"why": "waterfall model",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development user stories",
+"label": "job",
+"why": "user stories theory",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "erp software development company in dubai",
+"label": "pass",
+"why": "custom ERP development company Dubai",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"firstbit.ae",
+"delemontechnology.com",
+"penieltech.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development roles",
+"label": "job",
+"why": "agile roles",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "queue management system dubai",
+"label": "off_topic",
+"why": "queue management product",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software engineering internships",
+"label": "job",
+"why": "internships",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development and security",
+"label": "job",
+"why": "security theory",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development opportunities",
+"label": "job",
+"why": "job opportunities",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development life cycle stages",
+"label": "job",
+"why": "SDLC stages",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "engineering team services",
+"label": "pass",
+"why": "engineering team as a service",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "dubai technology entrepreneurship centre",
+"label": "other_brand",
+"why": "Dubai Technology Entrepreneur Centre",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "windows software development kit",
+"label": "practitioner",
+"why": "Windows SDK",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development analyst accenture salary",
+"label": "job",
+"why": "salary",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development company blog",
+"label": "off_topic",
+"why": "blog ideas, not buyer",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development company bahrain",
+"label": "other_market",
+"why": "adjudicated: names another country (site measured in the UAE)",
+"split": "dev",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development meaning",
+"label": "job",
+"why": "definition",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development sla",
+"label": "practitioner",
+"why": "SLA template",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "microsoft enterprise price",
+"label": "off_topic",
+"why": "Microsoft licence price, not resold",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development programme",
+"label": "job",
+"why": "programme of study",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "app developers in uae",
+"label": "pass",
+"why": "app developers UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"uaeappdevelopers.com",
+"linkedin.com",
+"dxbapps.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "software development life cycle processes",
+"label": "job",
+"why": "SDLC processes",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "dashboard for software development",
+"label": "practitioner",
+"why": "engineering dashboard",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development agreement pdf",
+"label": "practitioner",
+"why": "agreement template PDF",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "master program software engineering",
+"label": "job",
+"why": "master's program",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development business ideas",
+"label": "off_topic",
+"why": "ideas for starting a business",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "technology jobs in dubai",
+"label": "job",
+"why": "jobs",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development companies in abu dhabi",
+"label": "pass",
+"why": "software companies Abu Dhabi",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"tranetech.com",
+"techbehemoths.com",
+"techgropse.ae"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "outsourced software development",
+"label": "pass",
+"why": "outsourced software development",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "top healthcare software development companies",
+"label": "pass",
+"why": "healthcare software companies",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "android software development kit download",
+"label": "practitioner",
+"why": "Android SDK download",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "secure software development life cycle phases",
+"label": "job",
+"why": "secure SDLC phases",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development languages list",
+"label": "job",
+"why": "languages list learning",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "uts engineering services dubai",
+"label": "other_brand",
+"why": "UTS Engineering",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "secure software development life cycle processes",
+"label": "job",
+"why": "secure SDLC processes",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "open edx services provider",
+"label": "pass",
+"why": "Open edX services provider",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "questionnaire for software development",
+"label": "practitioner",
+"why": "requirements questionnaire template",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software lifecycle development",
+"label": "job",
+"why": "SDLC concept",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "best it solutions company in dubai",
+"label": "pass",
+"why": "IT solutions company Dubai",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"gs-it.ae",
+"ibtevolve.com",
+"xedos.ae"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "open edx services company details",
+"label": "pass",
+"why": "Open edX services company",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "fintech application development",
+"label": "pass",
+"why": "fintech app development",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development forum",
+"label": "practitioner",
+"why": "developer forum",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "ongoing managed it support company in dubai",
+"label": "pass",
+"why": "managed IT support Dubai",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "kodexo labs austin custom software development company austin tx",
+"label": "other_brand",
+"why": "Kodexo Labs Austin",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "intertech software development",
+"label": "other_brand",
+"why": "Intertech",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "ongoing managed it support company provider dubai",
+"label": "pass",
+"why": "managed IT support Dubai",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "gac technology centre dubai",
+"label": "other_brand",
+"why": "GAC Technology Centre",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "ai and software development",
+"label": "job",
+"why": "general topic of AI in development",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "dubai technology entrepreneur centre",
+"label": "other_brand",
+"why": "Dubai Technology Entrepreneur Centre",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development post",
+"label": "job",
+"why": "job post",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development companies in south africa",
+"label": "other_market",
+"why": "South Africa",
+"split": "dev",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "mvp in software development",
+"label": "pass",
+"why": "startup founder researching MVP build",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development toolkit",
+"label": "job",
+"why": "SDK concept",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": [
+"techslang.com",
+"compdf.com",
+"qarea.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "software design and development syllabus",
+"label": "job",
+"why": "syllabus",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development process cycle",
+"label": "job",
+"why": "process cycle coursework",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development interview questions",
+"label": "job",
+"why": "interview questions",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development experts",
+"label": "pass",
+"why": "software development experts",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "security in software development life cycle",
+"label": "job",
+"why": "SDLC security theory",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "open edx services company",
+"label": "pass",
+"why": "Open edX services company",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "computer software development",
+"label": "pass",
+"why": "computer software development",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": [
+"edx.org",
+"simplilearn.com",
+"halvorsen.blog"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "software development companies in ghana",
+"label": "other_market",
+"why": "Ghana",
+"split": "hold",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development firms",
+"label": "pass",
+"why": "software development firms",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"seasiainfotech.com",
+"linkedin.com",
+"nomadx.ae"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "managed services uae reviews",
+"label": "pass",
+"why": "managed services UAE reviews",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development kit definition",
+"label": "job",
+"why": "SDK definition",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "trading system development software",
+"label": "off_topic",
+"why": "trading system building tool",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom software development agencies",
+"label": "pass",
+"why": "custom software agencies",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"itransition.com",
+"fullstack.com",
+"skytechdigital.ae"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development methodology pdf",
+"label": "job",
+"why": "agile PDF learning",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "technology services and software development",
+"label": "pass",
+"why": "technology services and development",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "v model of software development",
+"label": "job",
+"why": "V-model",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software developer internship",
+"label": "job",
+"why": "internship",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "dubai research and development",
+"label": "off_topic",
+"why": "R&D generic",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "k a a f for it services",
+"label": "other_brand",
+"why": "KAAF IT services",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": [
+"kaafdigital.pk",
+"facebook.com",
+"shield.kaaffoods.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "android software development company",
+"label": "pass",
+"why": "Android development company",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"jploft.com",
+"molecularcloud.org",
+"en.wikipedia.org"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "embedded systems jobs in uae",
+"label": "job",
+"why": "jobs",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development companies in sharjah",
+"label": "pass",
+"why": "software companies Sharjah",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"sapphiresolutions.net",
+"mirageminds.ae",
+"techbehemoths.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "software jobs",
+"label": "job",
+"why": "jobs",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development company profile sample",
+"label": "off_topic",
+"why": "vendor drafting its own profile",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "dissertation support services",
+"label": "off_topic",
+"why": "dissertation help",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software developer",
+"label": "job",
+"why": "job title",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": [
+"ae.indeed.com",
+"computerscience.org",
+"naukrigulf.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "ibm office dubai",
+"label": "other_brand",
+"why": "IBM",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "technical resources est dubai",
+"label": "other_brand",
+"why": "Technical Resources Est",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development company in salem",
+"label": "other_market",
+"why": "Salem India",
+"split": "hold",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "internet of things courses",
+"label": "job",
+"why": "courses",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "top software companies in dubai",
+"label": "pass",
+"why": "top software companies Dubai",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"rightfirms.co",
+"techgropse.ae",
+"bluechipgulf.ae"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "future experts for technical consultancy",
+"label": "other_brand",
+"why": "Future Experts consultancy",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development companies near me",
+"label": "pass",
+"why": "nearby software companies",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"toxsl.ae",
+"rightfirms.co",
+"techbehemoths.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "smart dubai initiative",
+"label": "off_topic",
+"why": "government initiative",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "bespoke software development agency",
+"label": "pass",
+"why": "bespoke software agency",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software system architect",
+"label": "job",
+"why": "job title",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development languages",
+"label": "job",
+"why": "languages learning",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "open edx services company in uae",
+"label": "pass",
+"why": "Open edX services UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development company dallas",
+"label": "other_market",
+"why": "Dallas",
+"split": "dev",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "it solution company in dubai",
+"label": "pass",
+"why": "IT solution company Dubai",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"itsolutions.ae",
+"bluechipgulf.ae",
+"xedos.ae"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "top 10 software skills in demand",
+"label": "job",
+"why": "skills in demand",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "top 10 software engineering books",
+"label": "job",
+"why": "books",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "managed it services for education",
+"label": "pass",
+"why": "managed IT for education",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development company kuwait",
+"label": "other_market",
+"why": "adjudicated: names another country (site measured in the UAE)",
+"split": "hold",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom gpt ai chatbot solutions",
+"label": "pass",
+"why": "custom GPT chatbot solutions",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development flowchart",
+"label": "job",
+"why": "flowchart learning",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "web software development",
+"label": "pass",
+"why": "web software development",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom software product development services",
+"label": "pass",
+"why": "custom software product development",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom computer vision software development",
+"label": "pass",
+"why": "custom computer vision development",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "recruiting software",
+"label": "off_topic",
+"why": "packaged recruiting software",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "ongoing managed it support solutions dubai",
+"label": "pass",
+"why": "managed IT support Dubai",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "top mobile software development companies",
+"label": "pass",
+"why": "mobile software companies",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"topappdevelopmentcompanies.com",
+"themanifest.com",
+"linkedin.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "enterprise software development services",
+"label": "pass",
+"why": "enterprise software services",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "uae innovation examples",
+"label": "off_topic",
+"why": "innovation examples",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development companies kerala",
+"label": "other_market",
+"why": "Kerala",
+"split": "dev",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom trading software development",
+"label": "pass",
+"why": "custom trading software",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development support",
+"label": "pass",
+"why": "software support service buyer",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "ongoing managed it support company abu dhabi",
+"label": "pass",
+"why": "managed IT support Abu Dhabi",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom ai solutions",
+"label": "pass",
+"why": "custom AI solutions",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "business and domestic software development",
+"label": "off_topic",
+"why": "industry classification term",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "app development software without coding",
+"label": "off_topic",
+"why": "no-code app tools",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "qube research and technologies dubai",
+"label": "other_brand",
+"why": "Qube Research",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development patterns",
+"label": "job",
+"why": "patterns learning",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "enterprise software development",
+"label": "pass",
+"why": "enterprise software development",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development for small businesses",
+"label": "pass",
+"why": "software for small businesses",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "dubai software houses list",
+"label": "pass",
+"why": "Dubai software houses list",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development team",
+"label": "job",
+"why": "agile team theory",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software company at bangalore",
+"label": "other_market",
+"why": "Bangalore",
+"split": "dev",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "ongoing managed it support company provider",
+"label": "pass",
+"why": "managed IT support provider",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "minimum viable product software development",
+"label": "pass",
+"why": "MVP software development buyer",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "gs it services",
+"label": "other_brand",
+"why": "GS IT Services",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "d tech dubai",
+"label": "other_brand",
+"why": "D Tech",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "saas in software development",
+"label": "job",
+"why": "SaaS concept",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "uae computer hardware jobs",
+"label": "job",
+"why": "jobs",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "andersen software development company reviews",
+"label": "other_brand",
+"why": "Andersen reviews",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom mobile software development",
+"label": "pass",
+"why": "custom mobile software",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "how software development company works",
+"label": "pass",
+"why": "buyer learning how dev companies work",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "best companies for software development",
+"label": "pass",
+"why": "best software development companies",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development lifecycle models",
+"label": "job",
+"why": "SDLC models",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "key information technology dubai reviews",
+"label": "other_brand",
+"why": "Key Information Technology reviews",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "what is it software development",
+"label": "job",
+"why": "definition",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development benefits",
+"label": "pass",
+"why": "software development benefits, buyer research",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development life cycle meaning",
+"label": "job",
+"why": "SDLC meaning",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development expertise",
+"label": "pass",
+"why": "software development expertise",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "what are software development models",
+"label": "job",
+"why": "development models",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "best software development language to learn",
+"label": "job",
+"why": "language to learn",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": [
+"pluralsight.com",
+"simplilearn.com",
+"computerscience.org"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "game development software unity",
+"label": "other_brand",
+"why": "Unity engine",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development agency",
+"label": "pass",
+"why": "software development agency",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"linkedin.com",
+"teqnovos.com",
+"digitalagencies.ae"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "software development engineer in test",
+"label": "job",
+"why": "job title",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development dubai",
+"label": "pass",
+"why": "software development Dubai",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"arcitech.ai",
+"azinovatechnologies.com",
+"zerotaxjobs.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "it services in dubai",
+"label": "pass",
+"why": "IT services Dubai",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"cloudtech24.com",
+"naukrigulf.com",
+"microbyte.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "ongoing managed it support uae",
+"label": "pass",
+"why": "managed IT support UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development company in uae",
+"label": "pass",
+"why": "software company UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"sysberries.com",
+"carmatec.com",
+"sapphiresolutions.net"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "effort estimation in software development",
+"label": "practitioner",
+"why": "effort estimation technique",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "rig support global services",
+"label": "other_brand",
+"why": "Rig Support Global",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "game development software",
+"label": "off_topic",
+"why": "game engines, not sold",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software engineering scope in pakistan",
+"label": "job",
+"why": "career scope in Pakistan",
+"split": "hold",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development wgu",
+"label": "job",
+"why": "WGU degree",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development banner",
+"label": "off_topic",
+"why": "banner images",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "dubai tech conference",
+"label": "off_topic",
+"why": "tech conference event",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development professionals",
+"label": "job",
+"why": "professionals occupation",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "app development vs software development",
+"label": "job",
+"why": "definition comparison",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "what is software development lifecycle",
+"label": "job",
+"why": "SDLC definition",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development companies bangalore",
+"label": "other_market",
+"why": "Bangalore",
+"split": "hold",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software house in dubai",
+"label": "pass",
+"why": "software house Dubai",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"rightfirms.co",
+"carmatec.com",
+"techreviewer.co"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "software development and consulting",
+"label": "pass",
+"why": "software development and consulting",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development kit sdk",
+"label": "job",
+"why": "SDK definition",
+"split": "dev",
+"first_label": "practitioner",
+"serp_hosts": [
+"hyperswitch.io",
+"pubnub.com",
+"reddit.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "software development concept",
+"label": "job",
+"why": "concept",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom software development company dubai",
+"label": "pass",
+"why": "custom software company Dubai",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"creativewebo.com",
+"daffodilsw.com",
+"scd-company.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "m tech dubai",
+"label": "job",
+"why": "M.Tech degree Dubai",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "production technology dubai",
+"label": "off_topic",
+"why": "production technology generic",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "dubai software development company",
+"label": "pass",
+"why": "Dubai software company",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"seasiainfotech.com",
+"linkedin.com",
+"apptunix.ae"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "managed it services dubai",
+"label": "pass",
+"why": "managed IT services Dubai",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"cloudtechnologies.ae",
+"linkedin.com",
+"logixer.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "fabtech dubai",
+"label": "other_brand",
+"why": "Fabtech",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software engineering qualification",
+"label": "job",
+"why": "qualification",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "leading software development companies",
+"label": "pass",
+"why": "leading software companies",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development life cycle models",
+"label": "job",
+"why": "SDLC models",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development company business plan",
+"label": "off_topic",
+"why": "vendor business plan",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "logistics software development companies",
+"label": "pass",
+"why": "logistics software companies",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"techreviewer.co",
+"locus.sh",
+"citrusbug.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "nearshoring software development",
+"label": "pass",
+"why": "nearshoring, buyer research",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "microsoft enterprise systems company in uae",
+"label": "pass",
+"why": "Microsoft systems company in UAE buyer",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "ongoing managed it support companies in uae",
+"label": "pass",
+"why": "managed IT support UAE",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "nearshore software development services",
+"label": "pass",
+"why": "nearshore development services",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "swot analysis for software development company",
+"label": "job",
+"why": "SWOT coursework",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "offshore software development",
+"label": "pass",
+"why": "offshore software development",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "ministry of artificial intelligence dubai",
+"label": "off_topic",
+"why": "government ministry",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "restaurant software development",
+"label": "pass",
+"why": "restaurant software development",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "hi tech dubai",
+"label": "other_brand",
+"why": "Hi Tech Dubai",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development tools for java",
+"label": "practitioner",
+"why": "Java tools",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development devops",
+"label": "job",
+"why": "DevOps topic",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "ongoing managed it support services",
+"label": "pass",
+"why": "managed IT support services",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom software development company in uae",
+"label": "pass",
+"why": "custom software company UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"seasiainfotech.com",
+"apptunix.ae",
+"baone.ae"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "which software is best for game development",
+"label": "off_topic",
+"why": "game engine choice",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software technologist",
+"label": "job",
+"why": "job title",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development artificial intelligence",
+"label": "pass",
+"why": "AI software development",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software expert choice",
+"label": "other_brand",
+"why": "Expert Choice product",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software as a service course",
+"label": "job",
+"why": "course",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development wbs",
+"label": "practitioner",
+"why": "WBS template",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development manifesto",
+"label": "job",
+"why": "agile manifesto",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": [
+"agilemanifesto.org",
+"agilealliance.org",
+"atlassian.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "nearshore software development companies",
+"label": "pass",
+"why": "nearshore companies",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development process diagram",
+"label": "job",
+"why": "process diagram",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development lawyer",
+"label": "off_topic",
+"why": "lawyer",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development life cycle sdlc phases",
+"label": "job",
+"why": "SDLC phases",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "agile software development company",
+"label": "pass",
+"why": "agile software company",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software engineering degree",
+"label": "job",
+"why": "degree",
+"split": "dev",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "real estate software development company",
+"label": "pass",
+"why": "real estate software company",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "best software development companies in dubai",
+"label": "pass",
+"why": "best software companies Dubai",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"toxsl.ae",
+"daffodilsw.com",
+"wellfound.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "amc in software development",
+"label": "pass",
+"why": "annual maintenance contract buyer",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom software development advantages",
+"label": "pass",
+"why": "custom software advantages",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "small software development companies",
+"label": "pass",
+"why": "small software companies",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "qube development reviews",
+"label": "other_brand",
+"why": "Qube Development reviews",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "real estate development software systems",
+"label": "off_topic",
+"why": "packaged real estate developer systems",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "five tech international dubai",
+"label": "other_brand",
+"why": "Five Tech International",
+"split": "dev",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development design and coding pdf",
+"label": "job",
+"why": "PDF learning",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "microsoft enterprise systems uae office 365",
+"label": "other_brand",
+"why": "named company Microsoft Enterprise Systems",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software companies in chennai",
+"label": "other_market",
+"why": "Chennai",
+"split": "dev",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "opula software development",
+"label": "other_brand",
+"why": "Opula",
+"split": "hold",
+"first_label": "other_brand",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "what are the software development life cycle models",
+"label": "job",
+"why": "SDLC models",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "embedded software development engineer",
+"label": "job",
+"why": "job title",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software industry development",
+"label": "off_topic",
+"why": "industry development generic",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom software development business",
+"label": "pass",
+"why": "custom software business wanted",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom software development firms",
+"label": "pass",
+"why": "custom software firms",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"nix-united.com",
+"daffodilsw.com",
+"esparkinfo.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "desktop software development",
+"label": "pass",
+"why": "desktop software development",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "hrms software in dubai",
+"label": "off_topic",
+"why": "packaged HRMS",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": [
+"sage.com",
+"yomly.com",
+"zelt.app"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "php web development software",
+"label": "practitioner",
+"why": "PHP tools",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development team members",
+"label": "job",
+"why": "team members roles",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development company ahmedabad",
+"label": "other_market",
+"why": "Ahmedabad",
+"split": "dev",
+"first_label": "other_market",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom ai solutions for business",
+"label": "pass",
+"why": "custom AI for business",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "what is the software development life cycle sdlc",
+"label": "job",
+"why": "SDLC definition",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development executive",
+"label": "job",
+"why": "job title",
+"split": "hold",
+"first_label": "job",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom software development services",
+"label": "pass",
+"why": "custom software services",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": [
+"softwebsolutions.com",
+"blackthorn-vision.com",
+"competenza.ae"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "cross functional team in software development",
+"label": "job",
+"why": "team theory",
+"split": "dev",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "customized software development companies",
+"label": "pass",
+"why": "customised software companies",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"deployflow.co",
+"daffodilsw.com",
+"arcitech.ai"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "java software development kit",
+"label": "practitioner",
+"why": "Java SDK",
+"split": "hold",
+"first_label": "practitioner",
+"serp_hosts": [
+"jdk.java.net",
+"oracle.com",
+"youtube.com"
+]
+},
+{
+"site": "devaicon.com",
+"keyword": "autonomous customer service ai",
+"label": "pass",
+"why": "AI customer service, enterprise chatbots",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development organizations",
+"label": "pass",
+"why": "software development organisations",
+"split": "hold",
+"first_label": "off_topic",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "custom software development benefits",
+"label": "pass",
+"why": "custom software benefits",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "enterprise systems uae",
+"label": "other_brand",
+"why": "Enterprise Systems company UAE",
+"split": "hold",
+"first_label": "pass",
+"serp_hosts": []
+},
+{
+"site": "devaicon.com",
+"keyword": "software development company",
+"label": "pass",
+"why": "software development company",
+"split": "dev",
+"first_label": "pass",
+"serp_hosts": [
+"techreviewer.co",
+"linkedin.com",
+"dunitech.ae"
+]
+}
+]
+}

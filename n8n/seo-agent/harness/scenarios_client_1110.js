@@ -114,4 +114,47 @@ module.exports = async (ctx) => {
     check('a wrong fact still blocks', RR.errorOf({ severity: 'high', kind: 'fact', location: 'The deadline is 31 July 2026.', issue: 'This date is out of date: it was replaced by 30 October 2026', on_page: true }, '') === 'wrong', '');
     check('a medium claim never blocks', RR.errorOf({ severity: 'medium', kind: 'claim', location: F[0][0], issue: F[0][1], on_page: true }, '') === '', '');
   });
+
+  await guard('CR5 write it anyway', async () => {
+    reset(); const SN = 'CR5 (2026-11-11, techand run 12478) "Write it anyway" on an AVOID hold writes: Verdict Router lets an acknowledged AVOID through'; begin(SN); const check = mkCheck(SN);
+    const W = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'workflows', 'SEO_Agent_v4.json'), 'utf8'))[0];
+    const vr = W.nodes.find(n => n.name === 'Verdict Router');
+    const expr = vr.parameters.conditions.conditions[0].leftValue.replace(/^=\{\{\s*|\s*\}\}$/g, '');
+    const stops = (j) => new Function('$json', 'return (' + expr + ');')(j);
+    check('an AVOID with no acknowledgement still stops (report only)', stops({ verdict: 'AVOID' }) === true, expr);
+    check('an AVOID the client acknowledged ("Write it anyway") goes on to Need Content?', stops({ verdict: 'AVOID', verdict_acknowledged: true }) === false, expr);
+    check('force_content still passes; a GO is never stopped', stops({ verdict: 'AVOID', force_content: true }) === false && stops({ verdict: 'GO' }) === false, expr);
+    check('the router\'s false output is Need Content? (the page path)', J((W.connections['Verdict Router'].main[1] || []).map(t => t.node)) === J(['Need Content?']), J(W.connections['Verdict Router'].main));
+  });
+
+  await guard('CR6 backlinks settle', async () => {
+    reset(); const SN = 'CR6 (2026-11-11) the weekly backlinks watch settles its cost row on a quiet week: the snapshot save feeds the settle as well as BL Report'; begin(SN); const check = mkCheck(SN);
+    const W = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'workflows', 'SEO_Agent_Backlink_Monitor.json'), 'utf8'));
+    const wf = Array.isArray(W) ? W[0] : W; const C = wf.connections;
+    const outs = (n) => ((C[n] || {}).main || []).flat().map(t => t.node);
+    const cal = outs('BL Report').find(n => /Cost Factors/.test(n));
+    check('BL Report and Save BL Snapshot both feed the settle chain', !!cal && outs('Save BL Snapshot').includes(cal), J({ report: outs('BL Report'), snap: outs('Save BL Snapshot') }));
+    check('the settle updates only a reserved row (a second pass changes nothing)', JSON.stringify(wf.nodes.find(n => n.name === 'Settle Run Ledger (BL)').parameters).includes('reserved'), '');
+  });
+
+  await guard('CR7 backlinks kinds', async () => {
+    reset(); const SN = 'CR7 (2026-11-11, devaicon ledger of 1,289 rows) automatic report pages are labelled, never Best, never fetched or lost; a page nobody read cannot reach 50 on defaults'; begin(SN); const check = mkCheck(SN);
+    const LK = new Function(SRC('_link_kit.js') + '\nreturn LK;')();
+    const F = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'backlinks_devaicon_2026-11-11.json'), 'utf8'));
+    const rows = F.rows.map(r => Object.fromEntries(F.cols.map((c, i) => [c, r[i]])));
+    const auto = (d) => { const r = rows.find(x => x.refDomain === d) || { refDomain: d, sources: 'dfs', verify: 'unchecked', visits: 0 }; return LK.isAutoReport(d, { sources: r.sources, verify: r.verify, visits: r.visits, link_type: r.linkType === 'scraper' ? 'scraper' : '' }); };
+    check('the report networks of the screenshot are automatic report pages', ['bottraffic.site', 'organicseo.shop', 'websitetr.space', 'offpageseo.website', 'seomonitor.space', 'pagereport.shop', 'sitereport.space', 'scamadviser.com'].every(auto), '');
+    check('listings and the real link are not', !['crunchbase.com', 'github.com', 'linkedin.com', 'bebee.com', 'zynbox.cloud'].some(auto), '');
+    const bare = (d, extra) => LK.isAutoReport(d, { sources: 'dfs', verify: 'unchecked', visits: 0, ...(extra || {}) });
+    check('review D11: real sites whose names start like a checker are not automatic', !['worthington.edu', 'informer.ae', 'valuationexperts.com', 'webrankinfo.com', 'builtwithdesign.co'].some(d => bare(d)), J(['worthington.edu', 'informer.ae', 'valuationexperts.com', 'webrankinfo.com', 'builtwithdesign.co'].filter(d => bare(d))));
+    check('review D11: a tool-word name on a cheap ending that sent real visits is not automatic', bare('trafficstats.online') === true && bare('trafficstats.online', { visits: 3 }) === false, '');
+    const n = rows.filter(r => r.status !== 'lost' && LK.isAutoReport(r.refDomain, { sources: r.sources, verify: r.verify, visits: r.visits })).length;
+    check('most of the ledger is automatic report pages (the app counted 774)', n >= 700, String(n));
+    const unseen = LK.values({ authority: 240, relevance: null, spam: 0, rel: '', from_url: '', visits: 0, verify: 'unchecked' }).seo;
+    const read = LK.values({ authority: 240, relevance: null, spam: 0, rel: 'follow', from_url: 'https://x.example/a', placement: 'content', visits: 0, verify: 'found' }).seo;
+    check('a domain an index named with no page we read stays under 50 on defaults (it was 52)', unseen < 50 && read > unseen, J({ unseen, read }));
+    check('a scraper row is capped at 5 and has no brand value', LK.values({ authority: 240, link_type: 'scraper', from_url: '' }).seo <= 5 && LK.values({ authority: 240, link_type: 'scraper' }).brand === 0, '');
+    const V = fs.readFileSync(path.join(process.env.CODE_DIR || path.join(__dirname, 'code_v4'), 'Verify_Requests.js'), 'utf8');
+    check('Verify Requests never fetches a row already labelled spam or automatic', /\['spam', 'scraper'\]\.includes\(String\(pv\.link_type/.test(V), '');
+  });
 };

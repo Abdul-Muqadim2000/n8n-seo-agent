@@ -552,3 +552,26 @@ describe('a live page: readings after it went live, its own Search Console figur
     expect(d.headNote).toMatch(/^Our last check, on 30 Oct 2026, was taken before the page went live on 30 Oct 2026, so it does not count/);
   });
 });
+
+// prod 2026-11-11 (devaicon.com, "Google shows it on page one"): each page carries what Google showed in its latest check, so the ladder can
+// show the top 10 with the website marked and the phone reading next to "not in the top 50"
+describe('ladder pages: what Google showed in the latest check', () => {
+  const rows = [lad({ ladder_id: 'g1', head_keyword: 'ai automation services pakistan', keyword: 'ai in industrial automation', rung: 2, page_no: 1, status: 'published', page_exists: true, country: 'Pakistan', target_url: 'https://novaand-demo.com/insights/ai-in-industrial-automation' })];
+  const snap = JSON.stringify({ at: ago(2), device: 'desktop', top: [{ p: 1, u: 'https://kaopiz.com/', t: 'How AI in Industrial Automation Transforms Businesses', x: 1 }, { p: 2, u: 'https://google.com/goto?url=abc', t: 'hidden' }, { p: 3, u: 'https://www.ifs.com/what-is-industrial-ai', t: 'What is Industrial AI?' }] });
+  const feats = JSON.stringify({ unavailable: false, checked_at: ago(2), types: ['organic', 'ai_overview'], ai_overview: { shown: true, cites_us: false, content_loaded: true, cited_domains: ['ibm.com'] } });
+  const history = [
+    { ladder_id: 'g1', keyword: 'ai in industrial automation', position: 0, checked_at: ago(9), device: 'desktop' },
+    { ladder_id: 'g1', keyword: 'ai in industrial automation', position: 0, checked_at: ago(2), device: 'desktop', snapshot_json: snap, features_json: feats },
+    { ladder_id: 'g1', keyword: 'ai in industrial automation', position: 0, checked_at: ago(2), device: 'mobile' },
+  ] as RankHistoryRow[];
+  it('the latest desktop snapshot (Google redirect links left out, breadcrumb sites without an address) and the phone reading', () => {
+    const p = buildLadders(src({ ladders: rows, history }), sched(), { now: NOW }).details.get('g1')!.pages[0];
+    expect(p.serp?.snapshot.top.map((t) => [t.position, t.url || t.host])).toEqual([[1, 'kaopiz.com'], [3, 'https://www.ifs.com/what-is-industrial-ai']]);
+    expect(p.serp?.snapshot.at).toBe(ago(2));
+    expect(p.serp?.mobile).toEqual({ position: 0, checkedAt: ago(2) });
+    expect(p.serp?.features.aiOverview.citesUs).toBe(false);
+  });
+  it('never checked: no reading', () => {
+    expect(buildLadders(src({ ladders: rows }), sched(), { now: NOW }).details.get('g1')!.pages[0].serp).toBeNull();
+  });
+});

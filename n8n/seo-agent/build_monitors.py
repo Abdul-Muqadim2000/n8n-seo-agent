@@ -786,7 +786,10 @@ step('Outreach Input', 'Any Outreach?', 'Outreach Writer', 'Prospect Rows')
 step('Prospect Rows', 'Any Prospect Rows?', 'Save Prospects', 'Ledger Rows')
 step('Ledger Rows', 'Any Ledger Rows?', 'Save Backlinks', 'BL Snapshot Rows')
 B.chain('BL Snapshot Rows', 'Save BL Snapshot', 'BL Report', 'Prepare PDF BL', 'Render PDF BL', 'Attach PDF BL', 'Has Email (BL)?'); B.link('Attach PDF BL', 'Build BL Callback'); B.link('Build BL Callback', 'Has Callback (BL)?')
-B.run_ledger('backlinks', 'BL', 'BL Plan', ['BL Report'], at(13, 6), measured='Parse Backlinks')
+# client reports 2026-11-11 (N7): BL Report returns nothing on a quiet week (no site to deliver), so a settle hung only on it never ran and the
+# weekly watch left its cost row reserved every week (dispatcher alarms 10-29 and 11-05). The snapshot save always answers for a site the run
+# read, so it settles too; the settle updates only a row still `reserved`, so the second pass is a no-op
+B.run_ledger('backlinks', 'BL', 'BL Plan', ['BL Report', 'Save BL Snapshot'], at(13, 6), measured='Parse Backlinks')
 # B-A10 (2026-10-15, INVARIANTS rule 3): the three paid DataForSEO pulls of the link ledger. Each one's failure is a silent
 # shrinking of the ledger — *Parse Backlinks* counts what came back, so a pull that failed inside a 200 looks like a site with
 # fewer links, which is the shape R20 / B-L5 exist to stop ("not compared" instead of an arrow). A second attempt costs nothing
@@ -1198,7 +1201,17 @@ FN.code('Content QA', _FIN_MAIN['Content QA'], at(8, 0)); FN.code('Originality C
 FN.code('Finalize Verdict', _fin('Finalize_Verdict.js'), at(10, 0))
 FN.node('Respond Finalize', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': '={{ JSON.stringify($json.body) }}', 'options': {'responseCode': 200}}, at(11, 0))
 FN.node('Respond Finalize Bad Request', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': "={{ JSON.stringify({ ok: false, error: $json.error, errors: $json.errors, writes: 'none' }) }}", 'options': {'responseCode': 400}}, at(3, 2))
-FN.chain('Finalize Webhook', 'Parse Brief', 'Finalize OK?'); FN.link('Finalize OK?', 'Finalize Plan', 0); FN.link('Finalize OK?', 'Respond Finalize Bad Request', 1)
+# client reports 2026-11-11 (section 185): the live page graded. A request with grade_live { url, h1, title } reads that page with the page reader
+# (Markdown) and is graded as the version, editor never called; any other request passes Live Read Plan unchanged
+FN.code('Live Read Plan', 'Finalize_Live_Plan.js', at(0, 2)); FN.iff('Read Live?', '{{ $json.live_plan.read === true }}', at(0, 3))
+FN.node('Read Live Page', 'n8n-nodes-base.httpRequest', 4.5, {'url': '=https://r.jina.ai/{{ $json.live_plan.url }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+    'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'X-Remove-Selector', 'value': 'nav, footer, aside, form'}]},
+    'options': {'timeout': 45000, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}}, at(1, 3),
+    credentials={'httpHeaderAuth': {'id': 'SEOcredJinaReade', 'name': 'Jina Reader'}}, onError='continueRegularOutput', alwaysOutputData=True, **retry_lint.RETRY)
+FN.code('Live Page Body', 'Finalize_Live_Body.js', at(2, 3))
+FN.chain('Finalize Webhook', 'Live Read Plan', 'Read Live?'); FN.link('Read Live?', 'Read Live Page', 0); FN.link('Read Live?', 'Parse Brief', 1)
+FN.chain('Read Live Page', 'Live Page Body', 'Parse Brief')
+FN.chain('Parse Brief', 'Finalize OK?'); FN.link('Finalize OK?', 'Finalize Plan', 0); FN.link('Finalize OK?', 'Respond Finalize Bad Request', 1)
 FN.chain('Finalize Plan', 'Finalize Apply', 'Needs Editor?'); FN.link('Needs Editor?', 'Finalize Editor', 0); FN.link('Needs Editor?', 'Finalize Merge', 1)
 FN.link('Finalize Editor', 'Finalize Merge')
 FN.chain('Finalize Merge', 'Content QA', 'Originality Check', 'Finalize Verdict', 'Respond Finalize')
@@ -1240,6 +1253,9 @@ assert 'body.files' not in _fc['Finalize Verdict'], 'W0-G: the files are added a
 FN.sticky("""## SEO Agent — Page Finalize (H3, 2026-10-28)
 `POST /webhook/seo-page-finalize` (header X-API-Key, credential **SEO API Key**), synchronous. Body (app/shared/src/page-review.ts FinalizeBody): `{ mode: 'finalize', request_id, domain, site_id, keyword, country, page_type, markdown, delivered_markdown, client_edited, meta: { title, meta_description, slug, h1 }, answers: [{ id, fact_key, source, decision: yes|edit|remove|general|answer|skip, text, question, original, neutral, in_page, section }], business_facts, business_facts_kv, stored_fact_keys, page_run: { the gating fields of the original report (qa_blocking, duplicate_targets, verdict, score, score_withheld, page_type, verdict_acknowledged, copied_passages, missing) + the page run's grading fields (length_band, coverage_target, terms, facts, sources_cited, style_guide, site_urls, serp_shapes, regulatory_facts) }, duplicate_decision: { choice: update | differs, url, reason } }` (W0-B: the page run's blockers this check cannot see stay open until they are gone or the client decides; without them the page is never ready).
 **Parse Brief** checks the request (400 with the reasons) and builds the content gate's context: the business facts + the stored answers + this request's confirmed texts + every sentence the client wrote are on file. **Finalize Apply** swaps sentences (yes / edit / remove) and plans an edit only for the sections a fact must be worked into; **Finalize Editor** (Claude Sonnet) rewrites only those sections; **Finalize Merge** keeps a section only when it holds every confirmed sentence and every sentence the client wrote. **Content QA** + **Originality Check** are the content run's own code. **Finalize Verdict** answers `{ ok, markdown, applied, sections_rewritten, changes, delivery_status, delivery, client_questions, grade, cost, writes: 'none' }`: a statement the editor added that nothing supports is taken back by the system and asked; nothing the client wrote is ever changed.""", at(0, 4), 1100, 260)
+# client reports 2026-11-11 (section 185): the live-page read has the page reader's fallback and its one ops alert (W07-A), like every reader
+import reader_fallback as _rf_185
+_rf_185.apply({'id': FN.wid, 'name': FN.name, 'nodes': FN.N, 'connections': FN.C}, {'Read Live Page': {'label': 'the live page (its grade)', 'target': 'String((q.live_plan || {}).url || \'\')', 'domain': "String((q.body || {}).domain || '')"}})
 FN.write('SEO_Agent_Page_Finalize.json')
 
 # R9: the monitors' ledger wiring goes into the same harness file the main workflow's wiring uses (S36 / S57)

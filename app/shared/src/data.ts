@@ -12,6 +12,7 @@ import type { AiPanelInfo, AiSegments } from './ai-panel';
 import type { AiRankPlanData, AiRankSettings } from './ai-rank';
 import type { AiAnswerDetail, AiEngineRate, AiLatestExtras, AiSovPoint } from './ai-detail';
 import type { AiFilter, AiFilterDim } from './ai-trends';
+import type { FindingLive } from './technical-live';
 
 export interface MetricsPoint {
   periodStart: string;
@@ -383,7 +384,9 @@ export interface Finding {
   impact: number | null;
   impactBasis: string;
   /** G11: the state of a re-check the owner asked for with "I fixed this" (null when nobody asked). */
-  recheck: FindingRecheck | null;
+  recheck: FindingRecheck | null;  /** client report 2026-11-11: the daily index check's reading of this finding today (only the "not indexed by Google" finding of the
+   *  newest audit; absent = the audit's reading is all there is). See technical-live.ts. */
+  live?: FindingLive | null;
 }
 
 /** G11 (2026-10-13, FIX_PLAN): "I fixed this" asks the daily key-page watch to judge this one finding again, within a day, not at the
@@ -1014,6 +1017,8 @@ export interface BacklinksData {
   refs: BacklinkRef[];
   /** v4.10: the uploads (latest per kind) */
   imports: { source: string; rows: number; importedAt: string }[];
+  /** N45 (2026-11-11): the e-mail address of the Bing account the engine reads, to add as a Read only user ('' = not set) */
+  bingShareWith?: string;
   /** v4.10: the Common Crawl graph rows written for this site (monthly job) */
   linkGraph: { release: string; checkedAt: string; counts: Record<string, number> } | null;
   prospects: Prospect[];
@@ -1342,6 +1347,8 @@ export interface LadderPage {
   /** prod 2026-11-10: a live page's own Search Console figures (every search and place, last 28 days), shown when Google reports no single
    *  search for it (rare searches are left out of the per-search rows); null when Search Console has not measured it */
   gsc?: PageSearchConsole | null;
+  /** prod 2026-11-11: the results page of the latest check of this keyword (its top 10 kept as proof, the phone reading); null when never read */
+  serp?: SerpReading | null;
 }
 
 /** prod 2026-11-10: one page's Search Console figures over 28 days, every search and place together (its own address and the address it

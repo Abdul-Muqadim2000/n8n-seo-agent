@@ -4,7 +4,7 @@
 /*__KI_KITS__*/
 const p = $('KI Plan').first().json || {};
 let r = {}; try { r = $(p.kind === 'keyword_research' ? 'Research Result' : 'Comp Result').first().json || {}; } catch (e) { r = {}; }
-const NODES = p.kind === 'keyword_research' ? ['Run Research Discover Answers', 'Run Research Enrich Answers', 'Run Research SERPs Answers', 'Run Research Traffic Answers']
+const NODES = p.kind === 'keyword_research' ? ['Run Research Discover Answers', 'Run Research Enrich Answers', 'Run Research SERPs Answers', 'Run Research SERPs Live Answers', 'Run Research Traffic Answers']   // QUEUE: + the live reads of the pages the queue did not return
   : ['Run Comp SERPs Answers', 'Run Comp Labs Answers', 'Run Comp Profiles Answers'];
 let dfs = 0; for (const n of NODES) { try { dfs += KIW.measured($(n).all(0).map(i => i.json)); } catch (e) {} }
 const row = KIW.shape('KI_RUNS', { site_id: p.site_id, domain: p.domain, run_id: p.run_id, request_id: p.request_id, kind: p.kind, market: p.market, location_code: p.location_code,

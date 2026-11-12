@@ -57,6 +57,10 @@ const ladderRows = rowsOf('Load Ladders (KI)');
 const heads = KIW.uniq(ladderRows.map(r => KIW.normKw(r.head_keyword)));
 const fr = FITR.rungs(heads.map(h => ({ keyword: h })), { ...FITR.ctx({ own_domain: g.domain, services, competitors: fitCtx.competitors, topics: services }), market: g.iso }, { where: 'KI Plan' });   // the website's market: a head stored for another country is set aside
 const ladders = fr.keep.map(r => r.keyword);
+// KI-ONEURL (2026-11-11): the addresses the ladders hold and the search each holds them for (one search, one page: LRU.ownerOf); a page that
+// was set aside, merged into another or stopped holds nothing
+const ladderOwners = ladderRows.filter(r => S(r.target_url) && S(r.keyword) && !['set_aside', 'merged', 'stopped', 'failed', 'archived'].includes(S(r.status).toLowerCase()))
+  .slice(0, 300).map(r => ({ url: S(r.target_url), keyword: KIW.normKw(r.keyword), supporting: S(r.supporting), ladder_id: S(r.ladder_id), by: 'ladder' }));
 const tracked = KIW.uniq(S(site.keywords).split(',').map(KIW.normKw)).slice(0, 20);
 const sd = KIW.compSeeds({ iso: g.iso, country: g.country_name, city: (KIW.J(site.nap_json, {}) || {}).city, services: seedSvc, products, seeds: g.seeds || [],
   gsc: gsc.slice(0, KIW.CAPS.gsc_seeds), tracked, ladders, gate: (kw) => gate(kw) });
@@ -94,7 +98,7 @@ const est = KIW.r6(Math.min(quote || Infinity, base + (g.kind === 'competitors' 
 return [{ json: { kind: g.kind, stage: g.stage, site_id: g.site_id, domain: g.domain, canonical_host: S(site.canonical_host) || g.domain, ...m, client_key: g.client_key || '',
   request_id: g.request_id, run_id: g.run_id, callback_url: g.callback_url, ki_mode: g.ki_mode, ki_force: !!g.ki_force, started_at: g.started_at || now, now,
   services, seed_services: seedSvc, products, brand_words: brandWords, declared, chosen, dismissed, max_chosen: maxChosen, seeds: sd.seeds, seeds_refused: sd.refused, seeds_dropped: sd.dropped,
-  gsc: gsc.slice(0, 500), gsc_period_end: lastPeriod, site_impressions: siteImpr, site_impressions_basis: siteImprBasis, seed_key: seedKey, avoid, known_rivals: knownRivals, tracked, ladders, ladders_set_aside: fr.set_aside, fit_ctx: fitCtx,
+  gsc: gsc.slice(0, 500), gsc_period_end: lastPeriod, site_impressions: siteImpr, site_impressions_basis: siteImprBasis, seed_key: seedKey, avoid, known_rivals: knownRivals, tracked, ladders, ladders_set_aside: fr.set_aside, ladder_owners: ladderOwners, fit_ctx: fitCtx,
   profile_cap: profileCap, comp_rk_cap: compRkCap, quote, notes, business: g.business || '',
   est_dfs_usd: est, est_ai_usd: 0,
   est_basis: 'modelled before the run from the price of every request it may send ($' + est.toFixed(4) + ', every results page counted as not read today; the quote is $' + quote.toFixed(2) + ')' } }];

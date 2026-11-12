@@ -414,6 +414,50 @@ export function finalizeNeeded(answers: readonly Pick<PageAnswer, 'decision'>[],
   return clientEdited || answers.some((a) => a.decision === 'yes' || a.decision === 'edit' || a.decision === 'remove' || a.decision === 'answer');
 }
 
+/**
+ * client reports 2026-11-11: engine section 184 (deployed 2026-11-10 ~19:30 UTC) fixed two rules that froze final versions at 59 "Not
+ * ready": a page aimed at another market is no longer "the same search" as an existing page, and a second-read finding blocks only when it
+ * says the statement is unsupported (finalize now rewrites such sentences). A version made before then still carries the old verdict and,
+ * with nothing new to put in, could never be made again. `checksImprovedRecheck` says when it may: the newest version (the final version,
+ * else the delivered page) was made before the fix, is not ready or needs work, and was held by one of those two blockers. That one
+ * re-make is free (quote 0), once per page (`used`: a free re-make of this page already completed).
+ */
+/**
+ * client reports 2026-11-11 (techand.ai: "the pipeline writes the same content again with the same score"): a final version's report
+ * copies its page's summary (the keyword check's verdict and score), so on the content table the two rows looked identical. A row of the
+ * table as it is shown: a final version is labelled as one and carries its own grade, never the verdict score it copied.
+ */
+export interface GeneratedRowView {
+  finalVersion: boolean;
+  /** the verdict to show ('' for a final version: it is labelled "Final version" instead) */
+  verdict: string;
+  /** the number in the Score column: the verdict score of a page report, the grade of a final version */
+  score: number | null;
+  scoreKind: 'verdict' | 'grade';
+}
+export function isFinalVersionReport(r: { title?: string | null; summary?: Record<string, unknown> | null }): boolean {
+  return r.summary?.finalVersion === true || /^Final version: /.test(s(r.title));
+}
+export function generatedRowView(r: { title?: string | null; summary?: Record<string, unknown> | null }): GeneratedRowView {
+  const sum = r.summary ?? {};
+  if (isFinalVersionReport(r)) return { finalVersion: true, verdict: '', score: num(sum.grade), scoreKind: 'grade' };
+  return { finalVersion: false, verdict: s(sum.verdict), score: num(sum.score), scoreKind: 'verdict' };
+}
+
+export const CHECKS_IMPROVED_AT = '2026-11-10T19:30:00Z';
+export const CHECKS_IMPROVED_REASON = 'Our checks improved on 10 November: make the final version again for an up-to-date grade';
+const CHECKS_IMPROVED_CODES: readonly string[] = ['review', 'duplicate_page'];
+export function checksImprovedRecheck(o: { madeAt: Date | string | null | undefined; payload: P | null | undefined; used?: boolean; isFinal?: boolean }): boolean {
+  // review M2 (2026-11-11): only a FINAL version made before the fix is re-made for free (a page that never had one makes its first final
+  // version as usual, after its questions, so the free re-make is never spent before the client answered)
+  if (o.used || !o.madeAt || o.isFinal !== true) return false;
+  const at = new Date(o.madeAt).getTime();
+  if (!Number.isFinite(at) || at >= Date.parse(CHECKS_IMPROVED_AT)) return false;
+  const d = deliveryOf(o.payload ?? {});
+  if (d.status !== 'not_ready' && d.status !== 'needs_work') return false;
+  return d.blocking.some((b) => CHECKS_IMPROVED_CODES.includes(b.code));
+}
+
 // ---------------------------------------------------------------------------------------------------------------------------------
 // 4. The engine's finalize request (mode `finalize`, POST /webhook/seo-page-finalize, synchronous)
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -729,6 +773,13 @@ export interface PageReviewSummary {
   questions: number;
   answered: number;
   grade: number | null;
+  /** client reports 2026-11-11: the grade of the LIVE page (the engine read and graded the published page; `grade` above is of the version
+   *  we delivered). Absent from older servers and before the page's first live grade or failed read. */
+  liveGrade?: import('./live-grade').PageLiveGradeView | null;
+  /** client reports 2026-11-11: a publish check newer than the newest live grade: the live page is being graded */
+  liveGradePending?: boolean;
+  /** client reports 2026-11-11: the newest version was made before our checks improved: one free re-make is offered (checksImprovedRecheck) */
+  recheck?: boolean;
 }
 
 export interface PageReviewView {
@@ -751,8 +802,11 @@ export interface PageReviewView {
     /** the price shown before starting */
     quote: { credits: number; usd: number };
     needed: boolean;
-    /** why the button is off ('' when it is on) */
+    /** why the button is off ('' when it is on; CHECKS_IMPROVED_REASON when `recheck` turned it on) */
     reason: string;
+    /** client reports 2026-11-11: the version was made before our checks improved (checksImprovedRecheck): this re-make is free
+     *  (`quote` is 0). Absent from older servers. */
+    recheck?: { reason: string; free: boolean } | null;
   };
   approval: { approvedAt: string; approvedBy: string | null; reportId: string } | null;
   publish: { status: 'not_published' | 'sent_draft' | 'published' | 'live_verified'; url: string | null; at: string | null };

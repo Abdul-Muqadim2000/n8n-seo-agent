@@ -68,6 +68,31 @@ describe('the daily key-page watch on the technical page', () => {
     expect(none.text).toContain('Nothing is claimed');
   });
 
+  it('client report 2026-11-11: the newest Google reading of each page wins, the watch\'s weekly one or the daily index check\'s', async () => {
+    const { indexPageOf } = await import('@seo/shared');
+    const watch = [
+      watchRow({ url: `${W}/`, inspect_at: '2026-11-06T10:00:00Z', indexed: 'yes', coverage: 'Submitted and indexed' }),
+      watchRow({ url: `${W}/data/`, inspect_at: '2026-11-06T10:00:00Z', indexed: 'no', coverage: 'URL is unknown to Google' }),
+      watchRow({ url: `${W}/new/`, inspect_at: '', indexed: '' }),
+      watchRow({ url: `${W}/old/`, inspect_at: '2026-11-08T10:00:00Z', indexed: 'yes', coverage: 'Submitted and indexed' }),
+    ];
+    const daily = [
+      // newer than the watch: Google indexed it after the client asked
+      { url: 'https://northwind-erp.com/data', state: 'indexed', coverage: 'Submitted and indexed', inspect_at: '2026-11-11T10:15:00Z' },
+      // the watch never asked Google; the daily check did
+      { url: `${W}/new`, state: 'not_indexed', cause: 'wait_new', coverage: 'Discovered - currently not indexed', inspect_at: '2026-11-09T10:15:00Z' },
+      // older than the watch: the watch's newer answer stays
+      { url: `${W}/old/`, state: 'not_indexed', coverage: 'Crawled - currently not indexed', inspect_at: '2026-11-01T10:15:00Z' },
+      // not answered by Google: changes nothing
+      { url: `${W}/`, state: 'unknown', inspect_at: '2026-11-11T10:15:00Z' },
+    ].map((r) => indexPageOf(r as never));
+    const before = indexCoverage(watch)!;
+    expect(before).toMatchObject({ checked: 3, indexed: 2, notIndexed: 1, notChecked: 1 });
+    const after = indexCoverage(watch, 2000, daily)!;
+    expect(after).toMatchObject({ checked: 4, indexed: 3, notIndexed: 1, notChecked: 0 });
+    expect(after.text).toContain('the daily index check');
+  });
+
   it('reads the Google view of one page without inventing one (empty answers stay empty)', () => {
     const v = watchView([watchRow({ indexed: '', mobile: '', rich_results: '', inspect_error: 'Search Console access is missing for this property: not checked.' })])!;
     expect(v.pages[0].indexed).toBeNull();

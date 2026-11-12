@@ -50,7 +50,7 @@ import { and, desc, eq, gte, inArray, or, sql } from 'drizzle-orm';
 import { db, schema } from '../db';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { rows as n8nRows } from '../n8n/client';
-import { rankSeries } from './data';
+import { rankSeries, serpReading } from './data';
 import { NOT_KI_TRIAL_RUN } from './ki';
 import { cachedCalibration } from './engineCost';
 import { actionFromApiBody } from './recommendations';
@@ -432,7 +432,8 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
       const report = reports.find((x) => x.ladderId === id) ?? reports[0] ?? null;
       const pub = logs.find((l) => l.published_url || l.status === 'published');
       const status = s(r.status) || 'planned';
-      const series = rankSeries(hist.get(`${id}|${s(r.keyword).toLowerCase()}`) ?? []);
+      const kwRows = hist.get(`${id}|${s(r.keyword).toLowerCase()}`) ?? [];
+      const series = rankSeries(kwRows);
       if ((r.page_exists === true || s(r.page_exists) === 'true') && r.target_url) existingPages.set(`${id}|${k}`, s(r.target_url));
       let state: LadderPageState = 'planned';
       let writtenAt: string | null = null;
@@ -504,6 +505,8 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
         previousPosition: counted.previous,
         bestPosition: counted.best,
         history,
+        // prod 2026-11-11 (devaicon.com): what Google showed in the latest check (top 10, the phone reading), so a client can compare it with their own search
+        serp: kwRows.length ? serpReading(kwRows) : null,
         writtenAt,
         publishedAt,
         runId: state === 'planned' ? null : (report?.runId ?? run?.id ?? null),

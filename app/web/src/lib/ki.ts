@@ -558,6 +558,7 @@ const SECTION_WORDS: Record<string, string> = {
   serp: 'Google results for your services',
   serps: 'Google results for your services',
   results: 'Google results for your services',
+  results_pages_exact: 'grouping the searches',
   overlap: 'the comparison of the searches you and others rank for',
   ai: 'the AI answers',
   classify: 'sorting the websites by type',

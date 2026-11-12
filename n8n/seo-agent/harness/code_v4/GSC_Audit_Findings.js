@@ -835,14 +835,31 @@ if (!connected) {
   rowsByKey90 = new Map(); for (const r of pagesRows) { const k = key(r.page); if (!k) continue; const l = rowsByKey90.get(k) || []; l.push(r); rowsByKey90.set(k, l); }
   const notIdxAll90 = ok.filter(i => i.indexed === false);
   servedAlt90 = notIdxAll90.filter(i => elsewhere90(i).length);
-  const notIdx = notIdxAll90.filter(i => !elsewhere90(i).length);
+  // 187 (client reports 2026-11-11): policy / utility pages and pages that redirect are out of search on purpose: named, never counted
+  const IXU187 = {
+    rule: 'first_segment',
+    segments: ['privacy', 'privacy-policy', 'cookies', 'cookie-policy', 'terms', 'terms-of-service', 'terms-and-conditions', 'legal', 'imprint', 'impressum',
+      'disclaimer', 'accessibility', 'sitemap', 'login', 'signin', 'sign-in', 'register', 'signup', 'account', 'cart', 'checkout', 'search', 'thank-you', 'thanks'],
+    dirs: ['legal', 'policies'],
+    top_level_only: ['security'],
+    job_dirs: ['careers', 'jobs'],
+  };
+  const segs187 = (u) => String(path(u) || '').split('/').filter(Boolean).map(x => { let y = x; try { y = decodeURIComponent(x); } catch (e) { y = x; } return y.toLowerCase().replace(/\.(?:html?|php|aspx?)$/, ''); });
+  const utility187 = (u) => { const g = segs187(u); if (!g.length) return false; if (g.length === 1 && IXU187.top_level_only.includes(g[0])) return true; return IXU187.dirs.includes(g[0]) || IXU187.segments.includes(g[0]); };
+  const outOnPurpose187 = notIdxAll90.filter(i => !elsewhere90(i).length && (utility187(i.url) || (/redirect/i.test(String(i.coverage || '')) && !/redirect error/i.test(String(i.coverage || '')))));
+  const counted187 = ok.filter(i => !outOnPurpose187.includes(i));
+  const notIdx = notIdxAll90.filter(i => !elsewhere90(i).length && !outOnPurpose187.includes(i));
+  search_console.out_on_purpose = outOnPurpose187.map(i => ({ url: i.url, reason: (/redirect/i.test(String(i.coverage || '')) && !/redirect error/i.test(String(i.coverage || ''))) ? 'redirects to another page' : 'a policy or utility page' }));
+  if (outOnPurpose187.length) works.push(outOnPurpose187.length + ' policy, utility or moved page' + (outOnPurpose187.length === 1 ? ' is' : 's are') + ' out of search, which is fine');
   search_console.not_indexed = notIdxAll90.map(i => { const o = elsewhere90(i); return o.length ? { url: i.url, reason: i.coverage, shown_as: o[0].page, shown_impressions: o.reduce((n, r) => n + r.impressions, 0), shown_clicks: o.reduce((n, r) => n + r.clicks, 0) } : { url: i.url, reason: i.coverage }; });
   const notIdxCov90 = {}; for (const i of notIdx) { const k = i.coverage || i.verdict || 'unknown'; notIdxCov90[k] = (notIdxCov90[k] || 0) + 1; }
   if (ok.length) {
-    const share = Math.round(notIdx.length / ok.length * 100);
+    const share = Math.round(notIdx.length / (counted187.length || 1) * 100);
     if (notIdx.length && share >= 20) F('High', 'A large share of important pages is not indexed by Google', 'Pages that Google has not indexed cannot rank at all, whatever their content.', 'Open each URL in Search Console\'s URL inspection, fix the stated reason (crawled but not indexed usually means thin or duplicate content; discovered but not indexed means too few internal links), then request indexing.', notIdx.length + ' of ' + ok.length + ' sampled pages: ' + Object.entries(notIdxCov90).filter(([k]) => !/indexed/i.test(k) || /not indexed/i.test(k)).map(([k, v]) => v + ' × ' + k).join(', ') + ', with no impressions under any host' + (servedAlt90.length ? '; ' + servedAlt90.length + ' more are not indexed under this address but shown by Google under the other one (see the www and non-www finding)' : ''), notIdx.map(i => i.url), notIdx.length, share);
     else if (notIdx.length) F('Medium', 'Some sampled pages are not indexed by Google', 'These pages cannot rank until Google indexes them.', 'Check the reason in Search Console\'s URL inspection, strengthen internal links to them and request indexing.', (notIdx.map(i => i.coverage).filter(Boolean).filter((v, k, a) => a.indexOf(v) === k).join('; ') || (notIdx.length + ' of ' + ok.length + ' inspected pages are not in Google\'s index (Search Console gave no reason for them)')), notIdx.map(i => i.url), notIdx.length, share);
-    else if (!servedAlt90.length) works.push('All ' + ok.length + ' sampled pages are indexed by Google');
+    else if (!servedAlt90.length) works.push('All ' + counted187.length + ' important sampled pages are indexed by Google');
+    { const fN = findings.find(f => /not indexed by Google$/.test(f.title));   // 187: the unit is the pages inspected, and the whole list travels with the finding
+      if (fN && notIdx.length) { fN.affected_unit = 'pages inspected in Search Console'; fN.affected_of = counted187.length; fN.affected_count = notIdx.length; fN.urls_all = notIdx.map(x => x.url).slice(0, 300); } }
     const robotsBlocked = ok.filter(i => /disallow|blocked/i.test(i.robots)); if (robotsBlocked.length) F('High', 'Important pages blocked by robots.txt', 'Google cannot crawl these pages, so it cannot rank them on their content.', 'Remove the Disallow rule that matches them in robots.txt.', robotsBlocked.map(i => i.robots).join(', '), robotsBlocked.map(i => i.url), robotsBlocked.length, Math.round(robotsBlocked.length / ok.length * 100));
     // R59: index_coverage.canonical_mismatch read 3 and search_console.canonical_mismatch 0 for the same pages (one counted every page
     // host-sensitively, the other indexed pages only). One definition now; a different HOST of the same page goes to the host-split finding.

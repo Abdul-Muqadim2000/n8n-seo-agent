@@ -5216,6 +5216,13 @@ def _check_ledger_order55(path, wiring):
     # parser) has no main connection at all and can never start a path
     starts55 = [n['name'] for n in wf55['nodes'] if n['name'] not in targets55 and ((c55.get(n['name']) or {}).get('main'))]
     early55 = sorted(n for n in _reach55(c55, starts55, reserve55) if n in by_name and _paid55(by_name[n]))
+    # client reports 2026-11-11 (section 185): the Page Finalize reads the LIVE page with the page reader before Parse Brief (the read IS the
+    # version to check); its ledger never refuses (no_gate: the app waits for the answer), so a reservation before the read would guard nothing.
+    # Exempt exactly that node, in that workflow, on the reader's address, and only while the ledger stays no_gate.
+    _rl185 = 'Read Live Page (reader)'   # renamed by the W07-A fallback wrap; the fallback Code node carries no credential
+    if nm55 == 'SEO Agent — Page Finalize' and wiring.get('no_gate') is True and _rl185 in early55 \
+            and str(by_name[_rl185]['parameters'].get('url') or '').startswith('=https://r.jina.ai/'):
+        early55 = [n for n in early55 if n != _rl185]
     assert not early55, 'R17: ' + nm55 + ' can spend before it reserves its ledger row: ' + ', '.join(early55)
     after55 = _reach55(c55, [reserve55], None)
     assert wiring['settle'] in after55, 'R17: ' + nm55 + ': ' + wiring['settle'] + ' is not downstream of ' + reserve55
@@ -13820,6 +13827,47 @@ connect('Has Updated Address?', 'Fetch Updated Address', 0); connect('Has Update
 assert "$('Fetch Updated Address')" in code('Publish Check') and 'redirect: oldAddr' in code('Publish Check') and 'const decodeEnt = ' in code('Publish Check'), '184A: Publish Check does not read the old address'
 assert 'movedHere' in code('Publish Check') and 'homeOf' in code('Publish Check'), '184A: the verify kit in Publish Check is not the new one'
 log('Client reports 2026-11-10 (section 184A): "Re-check page" reads the page the draft updates without following redirects; a permanent redirect from it to the address sent is the move done right (verified, the "marked on your word" note cleared); a home page is never asked to be redirected (a home-page update published at its own address is a page of its own); the live title, heading and text are read with their HTML entities decoded')
+
+# =============================================================================
+# 186. "WRITE IT ANYWAY" WRITES (client reports 2026-11-11, techand.ai; docs/client-reports-2026-11-11/README.md). *Verdict Router* stopped
+#      every AVOID unless force_content, and never read the client's acknowledgement, so "Write it anyway" on an AVOID hold paid for the
+#      check again and returned the same report (production run 12478, verdict_acknowledged true, routed to Build Word File). The hold text
+#      and the form promise the page is written: the acknowledgement now passes the router like force_content does.
+# =============================================================================
+_vr186 = nodes['Verdict Router']['parameters']['conditions']['conditions']
+assert len(_vr186) == 1 and _vr186[0]['leftValue'] == "={{ $json.verdict === 'AVOID' && !$json.force_content }}", '186: Verdict Router changed under this section: ' + str(_vr186)
+_vr186[0]['leftValue'] = "={{ $json.verdict === 'AVOID' && !$json.force_content && $json.verdict_acknowledged !== true }}"
+assert 'verdict_acknowledged: !!HOLD.ack' in code('Parse Verdict'), '186: Parse Verdict no longer sets verdict_acknowledged'
+log('"Write it anyway" writes (section 186, client reports 2026-11-11): Verdict Router lets an AVOID through when the client acknowledged the hold (verdict_acknowledged, set by Parse Verdict from hold_ack), as it does for force_content')
+
+# =============================================================================
+# 187. THE AUDIT'S INDEXING FINDING COUNTS THE RIGHT PAGES (client reports 2026-11-11, devaicon N6): policy / utility pages (the index kit's
+#      UTILITY list, injected: one rule with the Indexing page) and pages that redirect are out of search on purpose, named and never counted;
+#      the finding's unit is the pages inspected ("15 of 23 pages inspected in Search Console", not "of 30 crawled pages"); the whole list rides
+#      on the finding row (urls_all) so the app can follow each page in the daily index check. Patches on R59's final text (section 90).
+# =============================================================================
+patch('GSC Audit Findings', "  const notIdx = notIdxAll90.filter(i => !elsewhere90(i).length);\n",
+      "  // 187 (client reports 2026-11-11): policy / utility pages and pages that redirect are out of search on purpose: named, never counted\n"
+      "  const IXU187 = " + kit_src.index_utility_literal(_rd0) + ";\n"
+      "  const segs187 = (u) => String(path(u) || '').split('/').filter(Boolean).map(x => { let y = x; try { y = decodeURIComponent(x); } catch (e) { y = x; } return y.toLowerCase().replace(/\\.(?:html?|php|aspx?)$/, ''); });\n"
+      "  const utility187 = (u) => { const g = segs187(u); if (!g.length) return false; if (g.length === 1 && IXU187.top_level_only.includes(g[0])) return true; return IXU187.dirs.includes(g[0]) || IXU187.segments.includes(g[0]); };\n"
+      "  const outOnPurpose187 = notIdxAll90.filter(i => !elsewhere90(i).length && (utility187(i.url) || (/redirect/i.test(String(i.coverage || '')) && !/redirect error/i.test(String(i.coverage || '')))));\n"
+      "  const counted187 = ok.filter(i => !outOnPurpose187.includes(i));\n"
+      "  const notIdx = notIdxAll90.filter(i => !elsewhere90(i).length && !outOnPurpose187.includes(i));\n"
+      "  search_console.out_on_purpose = outOnPurpose187.map(i => ({ url: i.url, reason: (/redirect/i.test(String(i.coverage || '')) && !/redirect error/i.test(String(i.coverage || ''))) ? 'redirects to another page' : 'a policy or utility page' }));\n"
+      "  if (outOnPurpose187.length) works.push(outOnPurpose187.length + ' policy, utility or moved page' + (outOnPurpose187.length === 1 ? ' is' : 's are') + ' out of search, which is fine');\n")
+patch('GSC Audit Findings', "    const share = Math.round(notIdx.length / ok.length * 100);\n", "    const share = Math.round(notIdx.length / (counted187.length || 1) * 100);\n")
+patch('GSC Audit Findings', "    const robotsBlocked = ok.filter(i => /disallow|blocked/i.test(i.robots));",
+      "    { const fN = findings.find(f => /not indexed by Google$/.test(f.title));   // 187: the unit is the pages inspected, and the whole list travels with the finding\n"
+      "      if (fN && notIdx.length) { fN.affected_unit = 'pages inspected in Search Console'; fN.affected_of = counted187.length; fN.affected_count = notIdx.length; fN.urls_all = notIdx.map(x => x.url).slice(0, 300); } }\n"
+      "    const robotsBlocked = ok.filter(i => /disallow|blocked/i.test(i.robots));")
+# review D7: "All N sampled pages are indexed" counts the important pages only (policy / moved pages are said separately)
+patch('GSC Audit Findings', "    else if (!servedAlt90.length) works.push('All ' + ok.length + ' sampled pages are indexed by Google');",
+      "    else if (!servedAlt90.length) works.push('All ' + counted187.length + ' important sampled pages are indexed by Google');")
+# review D5: the next audit diff must say the indexing check changed, not "fixed" / "new"
+patch('Audit Diff', "  { re: /recommends other providers/i, since: '2026-10-17.1', at: '', what: 'the directory advice names only cited pages that are not the vendors themselves (B-7)' }\n];",
+      "  { re: /recommends other providers/i, since: '2026-10-17.1', at: '', what: 'the directory advice names only cited pages that are not the vendors themselves (B-7)' },\n  { re: /large share of important pages is not indexed|not indexed by google/i, since: '2026-11-11.1', at: '', what: 'policy, utility and moved pages are no longer counted as important pages Google left out, and the share is of the pages inspected (187)' }\n];")
+log('The audit indexing finding (section 187, client reports 2026-11-11): policy / utility and redirected pages are out of search on purpose (named, not counted); the unit is the pages inspected; the whole not-indexed list rides on the finding row')
 
 # =============================================================================
 # 9. WRITE

@@ -63,13 +63,36 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-11-10 evening, devaicon client reports fixed + engine/API DEPLOYED - latest)
+## Status (2026-11-11 evening, second round of devaicon / techand client reports fixed + engine/API DEPLOYED - latest)
+Seven reports (`Alaventra issues.docx`), each verified on prod; read **`n8n/seo-agent/docs/client-reports-2026-11-11/README.md`**. Engine
+sections 185 (the Page Finalize grades the LIVE page: grade_only + grade_live, page reader + W07-A fallback, refused when unread), 186
+("Write it anyway" passes an AVOID; backlinks watch settles on quiet weeks), 187 (audit indexing finding: utility / moved pages named not
+counted, unit "pages inspected"), 188 (backlinks: LK.isAutoReport, junk never Best / lost / fetched) + independent-review fixes (b846d1f2).
+App bd4bd5b2: live page grade job (migration 0026 page_reviews.live_grade), free re-make of pre-fix finals, Final version labels, Technical
+indexing finding live, Backlinks kinds + Check Bing now (BING_SHARE_EMAIL unset: owner), ladder "What Google showed", ladder Write it anyway.
+Deployed ~17:25-17:37 UTC: backup pg/2026-11-11/*T172443Z; engine 14 updated, prod == build (0); API at bd4bd5b2 healthy (rollback image
+alaventra-app:rollback-347073cb). Web rides **PR #65** (with the KI round; owner merges). Live tests on prod: live grade devaicon app page 63
+($0); old final re-made 59 -> 83 ($0.01). Harness 18880 / 0; app 1226 / 2097 / 359+. Owner items in the README (Bing account, 6.27-credit refund).
+
+## Status (2026-11-11, KI next round DEPLOYED: queue, who-is-searching filter, one page per search - previous)
+Owner asked for the three steps, then the Trial re-run. **Deployed 2026-11-10 ~23:05 UTC** (backup pg/2026-11-10/*T225806Z; prod == main
+before, prod == build after, 0 nodes; API on the VM at 347073cb, branch feature/seo-agent-v4.5; NO rollback image for 28f8de07: the image is
+named alaventra-app:local, rollback = checkout 28f8de07 + rebuild). Web = **PR #65** (owner merges). (1) **QUEUE** (`fixes/QUEUE.md`): results
+pages via DataForSEO normal-priority queue (exact addresses; high priority gives redirects, probe $0.018), 5 free task_get rounds + live
+fallback; found + fixed: the run row left the fallback's money out. (2) **KI-GATE2** (`fixes/GATE2.md`): 800 Trial searches labelled twice
+(harness/accuracy/ki_gate_2026-11-11.json); precision of pass 46.6% -> 78.5%; new reason `practitioner`; shared fit gate unchanged (only the
+KI workflow + main's KI Pool (Ladder) node differ). (3) **KI-ONEURL** (`fixes/ONEURL.md`): page action uses `_ladder_rules.js`. **Trial
+re-run** (execs 12607/12608): 60/60 pages exact, 9 / 5 groups (were 0), CRM page right; but on 196 UNSEEN passing searches only 58.5% /
+57.1% right (`harness/accuracy/ki_gate_unseen_2026-11-11.json`): word rules do not generalise. Next proposed: classify each search by its
+own results page (docs / courses / jobs vs providers), $0.18 a run. Not On yet. Harness 18829 / 0; app 1174 / 2070 / 359.
+
+## Status (2026-11-10 evening, devaicon client reports fixed + engine/API DEPLOYED - previous)
 Five reports from devaicon.com (`Issues.docx`), all checked on production first; read **`n8n/seo-agent/docs/client-reports-2026-11-10/README.md`**.
 Client right on 4 of 5 (moved pages kept "another address" after their 301s and Re-check refused them; the card showed our grade, not the
 live page; Coming up showed a past plan with an approved item that was silently never written; UAE AI page held as duplicate of a Pakistan
 page and scores frozen at 59 after answers); the ladder "not in top 50" reading is correct (neutral google.com.pk), the app now shows page-level
 Search Console and how we check. Engine section 184 (863893e2), app de76f11f + 28f8de07. Deployed ~19:30 UTC: backup pg/2026-11-10/*T192434Z,
-engine 14 updated (prod == build), API at 28f8de07 (rollback image alaventra-app:rollback-4d4a3c69). Web = **PR #64** (owner merges).
+engine 14 updated (prod == build), API at 28f8de07 (rollback image alaventra-app:rollback-4d4a3c69). Web: PR #64 merged 19:44 UTC (main 43bd801b), verified live in the bundle (ContentPage, SiteWarnings, LadderPage chunks).
 Harness 18581 / 0; app 1174 / 2070 / 359. Open: stale publish notes clear on the client's next Re-check (direct write refused by classifier);
 first real finalize with an unsupported claim is the live check of 184C.
 

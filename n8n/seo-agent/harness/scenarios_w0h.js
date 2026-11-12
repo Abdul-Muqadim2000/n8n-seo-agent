@@ -285,6 +285,45 @@ module.exports = async (ctx) => {
     check('the final version without these blockers is judged as before (same status as with none)', gone.delivery_status === base.delivery_status && wf.delivery_status === base.delivery_status, J([base.delivery_status, gone.delivery_status, wf.delivery_status]));
   });
 
+  // ---------- W0H7c client reports 2026-11-11 (section 185): the LIVE page graded ----------
+  await guard('W0H7c live page grade', async () => {
+    const SN = 'W0H7c (client reports 2026-11-11) the Page Finalize grades the LIVE page: the reader text replaces the request markdown, the hero H1 is put back, the editor is never called, a failed read is refused, a normal finalize is unchanged';
+    reset(); begin(SN); const check = mkCheck(SN);
+    const BODY = F36.nodes['Finalize Webhook']['0'].items[0].json.body;
+    const READ = require('fs').readFileSync(require('path').join(__dirname, 'fixtures', 'reader_devaicon_bfsi_2026-11-11.md'), 'utf8');
+    const live = { url: 'https://' + BODY.domain + '/services/industries-bfsi', h1: 'Banking & Financial Services Technology Solutions', title: 'Banking & Financial Services Technology | Devaicon' };
+    const run1 = async (body, reader) => {
+      reset(); delete store['Finalize Editor']; delete store['Read Live Page'];
+      const lp = await run('Live Read Plan', [{ json: { body, headers: {} } }], { code: 'Finalize__Live_Read_Plan' });
+      let pbIn = lp;
+      if (lp[0].json.live_plan.read) { mock('Live Read Plan', lp); pbIn = await run('Live Page Body', [{ json: reader }], { code: 'Finalize__Live_Page_Body' }); }
+      const pb = await run('Parse Brief', pbIn, { code: 'Finalize__Parse_Brief' });
+      if (!pb[0].json.ok) return { pb: pb[0].json };
+      mock('Finalize Plan', pb);
+      const ap = await run('Finalize Apply', pb, { code: 'Finalize__Finalize_Apply' });
+      const mg = await run('Finalize Merge', ap, { code: 'Finalize__Finalize_Merge' });
+      const qa = await run('Content QA', mg, { code: 'Finalize__Content_QA' });
+      const oc = await run('Originality Check', qa, { code: 'Finalize__Originality_Check' });
+      return { pb: pb[0].json, ap: ap[0].json, v: (await run('Finalize Verdict', oc, { code: 'Finalize__Finalize_Verdict' }))[0].json.body };
+    };
+    const ok = await run1({ ...clone(BODY), grade_only: true, grade_live: live, answers: [] }, { statusCode: 200, data: READ });
+    check('the live text is the version graded (the reader text, not the request markdown), with the hero H1 put back', /^# Banking & Financial Services Technology Solutions/m.test(ok.pb.output) && /What is banking & financial services technology\?/.test(ok.pb.output) && ok.pb.finalize.grade_only === true && ok.pb.finalize.client_edited === true, ok.pb.output.slice(0, 300));
+    check('no editor call: no task, needs_editor false', ok.ap.needs_editor === false && (ok.ap.finalize_apply.jobs || []).length === 0, J(ok.ap.finalize_apply.jobs));
+    check('the answer is a grade of the live page and says so (grade_only, live_read ok with the words read)', ok.v.grade_only === true && ok.v.live_read && ok.v.live_read.ok === true && ok.v.live_read.words > 500 && typeof ok.v.grade.score === 'number', J({ g: ok.v.grade && ok.v.grade.score, lr: ok.v.live_read }));
+    const bad = await run1({ ...clone(BODY), grade_only: true, grade_live: live }, { statusCode: 402, data: '{"code":402}' });
+    check('a reader that answers 402 is refused with the reason (never a grade of our own text)', bad.pb.ok === false && /the live page could not be read: the page reader answered 402/.test(bad.pb.error), bad.pb.error);
+    const thin = await run1({ ...clone(BODY), grade_only: true, grade_live: live }, { statusCode: 200, data: 'Title: x\n\nMarkdown Content:\nAccess denied' });
+    check('a near-empty read is refused', thin.pb.ok === false && /only \d+ words/.test(thin.pb.error), thin.pb.error);
+    const other = await run1({ ...clone(BODY), grade_only: true, grade_live: { ...live, url: 'https://elsewhere.example/page' } }, null);
+    check('an address on another website is refused before any read', other.pb.ok === false && /must be a page of/.test(other.pb.error), other.pb.error);
+    const rec = await run1({ ...clone(BODY), grade_only: true, grade_live: live, answers: [] }, { data: READ, reader_fallback: { via: 'direct' } });
+    check('review D1: a page the reader refused but its fallback read is graded (no status code on a recovered item)', rec.v && rec.v.grade_only === true && rec.v.live_read.ok === true, J(rec.pb && rec.pb.error));
+    const gone = await run1({ ...clone(BODY), grade_only: true, grade_live: live }, { statusCode: 200, data: 'Title: Page not found\n\nURL Source: x\n\nWarning: Target URL returned error 404: Not Found\n\nMarkdown Content:\n' + 'Sorry, this page does not exist anymore. '.repeat(40) });
+    check('review D2: a removed page (the reader warns of a 404) is refused, never graded', gone.pb.ok === false && /the live page answered 404/.test(gone.pb.error), gone.pb.error);
+    const plain = await run('Live Read Plan', [{ json: { body: clone(BODY), headers: {} } }], { code: 'Finalize__Live_Read_Plan' });
+    check('a normal finalize passes the plan unchanged (no read)', plain[0].json.live_plan.read === false && plain[0].json.live_plan.asked === false && plain[0].json.body.markdown === BODY.markdown, J(plain[0].json.live_plan));
+  });
+
   // ---------- W0H7b client reports 2026-11-10 (section 184B / 184C): what finalize judges again ----------
   await guard('W0H7b finalize re-judge', async () => {
     const SN = 'W0H7b (client reports 2026-11-10) the final version: a second-read finding that is not an error is advice (no 59), one that is unsupported becomes an edit task for its section, and a duplicate aimed at another market is not the same search';

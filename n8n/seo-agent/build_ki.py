@@ -77,6 +77,7 @@ KIT_SRC = {
     'CMP': read_v5('code/_competitors.js').rstrip('\n'),
     'KWI': read_v5('code/_kw_inputs.js').rstrip('\n'),         # optional for KI (KWI.shapeOf: page shapes), inlined so every node types pages alike
     'SM': read_v5('code/_site_model.js').rstrip('\n'),
+    'LRU': read_v5('code/_ladder_rules.js').rstrip('\n'),   # KI-ONEURL: the ladder rules (one search, one page; copies) for the page action
     'COUNTRIES': "// ---- countries: copied from the main workflow's Normalize Input by build_ki.py (DataForSEO location code = 2000 + ISO numeric) ----" + _COUNTRIES.group(0),
     'KIW': read_v5('code/_ki_io.js').rstrip('\n').replace('__KI_QUOTE__', json.dumps(QUOTE, sort_keys=True)).replace('__KI_COLS__', json.dumps(KI_COLS)),
 }
@@ -84,7 +85,7 @@ assert '__KI_' not in KIT_SRC['KIW'], 'a placeholder is left in _ki_io.js'
 KI_KIT = '_ki.js'
 BASE_KITS = ['FIT', 'CMP', 'KWI', 'RT', 'SC', 'SU', 'KI', 'KIW']
 def kits_for(names):
-    order = ['COUNTRIES', 'FIT', 'CMP', 'KWI', 'SM', 'RT', 'SC', 'SU', 'KI', 'KIW']
+    order = ['COUNTRIES', 'FIT', 'CMP', 'KWI', 'SM', 'LRU', 'RT', 'SC', 'SU', 'KI', 'KIW']
     return '\n'.join(KIT_SRC[k] for k in order if k in names)
 RAW = {}   # file -> the node's own code (before the kits), for the name check below
 def src(f, kits=(), sub=None):
@@ -94,7 +95,7 @@ def src(f, kits=(), sub=None):
     s = s.replace('__RULE_VERSION__', RULE_VERSION).replace('__KILL_KEY__', KILL_KEY).replace('__KI_LIMITS__', json.dumps(LIMITS, sort_keys=True)) \
          .replace('__KI_BUDGET__', json.dumps(BUDGET, sort_keys=True)).replace('__KI_PAGE_CREDITS__', str(PAGE_CREDITS))
     for k, v in (sub or {}).items(): s = s.replace(k, v)
-    for ph in ('/*__KI_KITS__*/', '__RULE_VERSION__', '__KILL_KEY__', '__KI_LIMITS__', '__KI_BUDGET__', '__KI_PAGE_CREDITS__', '__WHAT__', '__TABLE__', '__FIELD__'):
+    for ph in ('/*__KI_KITS__*/', '__RULE_VERSION__', '__KILL_KEY__', '__KI_LIMITS__', '__KI_BUDGET__', '__KI_PAGE_CREDITS__', '__WHAT__', '__TABLE__', '__FIELD__', '__ROUNDS__', '__ROUND__'):
         assert ph not in s, ph + ' left in ' + f
     return s
 
@@ -252,11 +253,41 @@ gated_step('Research Enrich Requests', 'Any Research Enrich?', 'Run Research Enr
 code('Research SERP Keys', src('KI_Research_SERP_Keys.js'), at(43, 6), executeOnce=True)
 node('Load SERP Cache (KI Research)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'key', 'eq', "={{ $json.serp_cache_key || 'serp:none' }}"), at(44, 6), onError='continueRegularOutput', alwaysOutputData=True)
 code('Research SERP Requests', src('KI_Research_SERP_Requests.js'), at(45, 6), executeOnce=True)
-code('Research SERP Picture', src('KI_Research_SERP_Picture.js'), at(49, 6), executeOnce=True)
+QUEUE_ROUNDS, QUEUE_WAIT = 5, 60   # QUEUE: collection rounds of the results-page queue and the seconds between them (see below)
+code('Research SERP Picture', src('KI_Research_SERP_Picture.js', sub={'__ROUNDS__': str(QUEUE_ROUNDS)}), at(49, 6), executeOnce=True)
 chain('Research Picture', 'Research SERP Keys', 'Load SERP Cache (KI Research)', 'Research SERP Requests')
-gated_step('Research SERP Requests', 'Any Research SERPs?', 'Run Research SERPs', 'Research SERP Picture', 6, 45, batch=10, interval=100); GATED.append(('Run Research SERPs', 'keyword results pages and Google Ads volumes', 'request'))
+gated_step('Research SERP Requests', 'Any Research SERPs?', 'Run Research SERPs', 'Research SERP Tasks', 6, 45, batch=10, interval=100); GATED.append(('Run Research SERPs', 'keyword results pages (queue) and Google Ads volumes', 'request'))
+# QUEUE (2026-11-11, docs/keyword-intel-2026-11-08/fixes/QUEUE.md): the results pages go to DataForSEO's normal-priority queue (the only reading
+# that still gives exact page addresses since Google's redirect change; probe on production 2026-11-11: ready in 86-118 s, 0 redirects) and are
+# collected free by task id, a minute apart, for up to QUEUE_ROUNDS rounds; what the queue did not return is read live (gated) before the
+# picture. The waits are under n8n's 65-second in-memory limit, so the run never parks in the database between rounds.
+_QSUB = {'__ROUNDS__': str(QUEUE_ROUNDS)}
+code('Research SERP Tasks', src('KI_Research_SERP_Tasks.js'), at(46, 9), executeOnce=True)
+iff('Any SERP Tasks?', '{{ !$json.skip }}', at(47, 9))
+chain('Research SERP Tasks', 'Any SERP Tasks?')
+code('Research SERP Fallback', src('KI_Research_SERP_Fallback.js', sub=_QSUB), at(46 + 2 + 4 * QUEUE_ROUNDS, 9), executeOnce=True)
+link('Any SERP Tasks?', 'Research SERP Fallback', 1)
+_prev = ('Any SERP Tasks?', 0)
+for _r in range(1, QUEUE_ROUNDS + 1):
+    _c = 48 + 4 * (_r - 1)
+    _w, _g, _k, _i = 'Wait For SERP Tasks (%d)' % _r, 'Get SERP Tasks (%d)' % _r, 'SERP Tasks Check (%d)' % _r, 'SERP Tasks Pending (%d)?' % _r
+    node(_w, 'n8n-nodes-base.wait', 1.1, {'amount': QUEUE_WAIT, 'unit': 'seconds'}, at(_c, 9), webhookId=nid(_w + ':hook'))
+    # the free task_get: idempotent, so the node-level retry rule applies (3 tries, 5 s); the round loop is its in-200 retry. Its url is a fixed
+    # task_get address so retry_lint.is_free_dfs can see it bills nothing (an expression url would be judged paid)
+    assert retry_lint.is_free_dfs({'type': 'n8n-nodes-base.httpRequest', 'parameters': {'url': '=https://api.dataforseo.com/v3/serp/google/organic/task_get/advanced/{{ x }}'}})
+    node(_g, 'n8n-nodes-base.httpRequest', 4.5, {'method': 'GET', 'url': '=https://api.dataforseo.com/v3/serp/google/organic/task_get/advanced/{{ encodeURIComponent($json.task_id) }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpBasicAuth',
+         'options': {'batching': {'batch': {'batchSize': 20, 'batchInterval': 100}}, 'timeout': 60000}}, at(_c + 1, 9), credentials=DFS_CRED, onError='continueRegularOutput',
+         retryOnFail=True, maxTries=3, waitBetweenTries=5000)
+    code(_k, src('KI_Research_SERP_Check.js', sub={**_QSUB, '__ROUND__': str(_r)}), at(_c + 2, 9), executeOnce=True)
+    link(_prev[0], _w, _prev[1]); chain(_w, _g, _k)
+    if _r < QUEUE_ROUNDS:
+        iff(_i, '{{ !$json.skip }}', at(_c + 3, 9)); link(_k, _i); link(_i, 'Research SERP Fallback', 1); _prev = (_i, 0)
+    else:
+        link(_k, 'Research SERP Fallback')
+gated_step('Research SERP Fallback', 'Any Research SERPs Live?', 'Run Research SERPs Live', 'Research SERP Picture', 10, 46 + 2 + 4 * QUEUE_ROUNDS, batch=10, interval=100)
+GATED.append(('Run Research SERPs Live', 'keyword results pages the queue did not return (read live)', 'request'))
 code('Research Traffic Requests', src('KI_Research_Traffic_Requests.js'), at(50, 6), executeOnce=True)
-code('Research Result', src('KI_Research_Result.js', ['SM']), at(54, 6), executeOnce=True)
+code('Research Result', src('KI_Research_Result.js', ['SM', 'LRU']), at(54, 6), executeOnce=True)
 link('Research SERP Picture', 'Research Traffic Requests')
 gated_step('Research Traffic Requests', 'Any Research Traffic?', 'Run Research Traffic', 'Research Result', 6, 50); GATED.append(('Run Research Traffic', 'traffic potential of the #1 pages', 'request'))
 code('KI KW Rows', ROWS('KI KW Rows', KI_KW_TABLE, 'kw_rows'), at(55, 6), executeOnce=True)
@@ -347,6 +378,11 @@ _after = next(n for n in N if n['name'] == 'After Run Ledger (' + TAG + ')')
 _g_old = "mode: '" + MODE + "', where: '"
 assert _after['parameters']['jsCode'].count(_g_old) == 1, 'After Run Ledger (KI): the gate call moved'
 _after['parameters']['jsCode'] = _after['parameters']['jsCode'].replace(_g_old, "mode: String((mine && mine.mode) || (__row && __row.mode) || '" + MODE + "'), where: '")
+# QUEUE (2026-11-11, found by KIQ-3: the live fallback's money was missing from the run's cost): the run row names every gated Answers
+# node of the workflow, so a new paid call cannot be left out of the figure the run reports
+_rr = read_v5('code/KI_Run_Row.js')
+_miss = [a for a in ANSWERS if ("'" + a + "'") not in _rr]
+assert not _miss, 'KI Run Row: its cost lists leave out ' + str(_miss)
 url_lint.check(wfobj, NAME)
 retry_lint.check(wfobj, NAME)
 retry_lint.check_in200(wfobj, NAME)
@@ -369,9 +405,13 @@ def reach(starts, blocked=()):
     return seen
 _orphans = sorted(n['name'] for n in N if n['type'] != 'n8n-nodes-base.stickyNote' and n['name'] not in reach(['Manual Run']))
 assert not _orphans, 'nodes no door reaches: ' + str(_orphans)
-_paid = sorted(n['name'] for n in N if retry_lint.is_dfs(n) and n['name'] not in ('DFS Balance (' + TAG + ')', 'DFS Balance End (' + TAG + ')'))
+_paid = sorted(n['name'] for n in N if retry_lint.is_paid(n) and n['name'] not in ('DFS Balance (' + TAG + ')', 'DFS Balance End (' + TAG + ')'))
+# QUEUE: the free task_get reads (fixed task_get urls), proved free and kept out of the paid list; they still run only after the reservation
+_free_reads = sorted(n['name'] for n in N if retry_lint.is_dfs(n) and retry_lint.is_free_dfs(n))
+assert _free_reads == ['Get SERP Tasks (%d)' % r for r in range(1, QUEUE_ROUNDS + 1)], 'QUEUE: the free reads are the collection rounds only: ' + str(_free_reads)
 _before = reach(['Manual Run'], blocked={'Reserve Run Ledger (' + TAG + ')'})
 assert not [h for h in _paid if h in _before], 'a paid call runs before the run ledger reserves: ' + str([h for h in _paid if h in _before])
+assert not [h for h in _free_reads if h in _before], 'QUEUE: a collection read runs before the run ledger reserves'
 # nothing paid, external or written before the gate's refusal: the refusal path is free and writes nothing
 _refusal = reach(['Has Callback (KI Refusal)?'])
 assert not [x for x in _refusal if retry_lint.is_dfs(by[x]) or (by[x]['type'] == DT_TYPE and by[x]['parameters'].get('operation') != 'get')], 'the refusal path spends or writes: ' + str(sorted(_refusal))
@@ -432,7 +472,7 @@ json.dump({'workflow': WID, 'name': NAME, 'file': FILE, 'rule_version': RULE_VER
            'connections': {s_: [[t_['node'] for t_ in l_] for l_ in o_.get('main', [])] for s_, o_ in sorted(C.items())},
            'callback': {'post': 'POST KI Report', 'body': by['POST KI Report']['parameters']['jsonBody'], 'retry': bool(by['POST KI Report'].get('retryOnFail')),
                         'refusal_post': 'POST KI Refusal', 'started_post': 'POST KI Started'},
-           'gates': {h: g['chain'] for h, g in GATES.items()}, 'answers': ANSWERS, 'paid': _paid,
+           'gates': {h: g['chain'] for h, g in GATES.items()}, 'answers': ANSWERS, 'paid': _paid, 'free_reads': _free_reads, 'queue': {'rounds': QUEUE_ROUNDS, 'wait_s': QUEUE_WAIT},
            'writes': {t: sorted(v) for t, v in sorted(_writes.items())}, 'own_tables': sorted(_own), 'shared_tables': sorted(_shared),
            'limits': LIMITS, 'budget': BUDGET, 'quote': QUOTE, 'page_credits': PAGE_CREDITS, 'cols': KI_COLS,
            'refusal_path': sorted(_refusal), 'settings': wfobj['settings']},
