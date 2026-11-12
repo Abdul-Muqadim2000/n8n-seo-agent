@@ -101,6 +101,105 @@ describe('recommend', () => {
     expect(recs.some((x) => x.id === 'search:striking:tiny')).toBe(false);
   });
 
+  // F-10 (prod review 2026-11-12): another company's address search and the client's own brand were advised as striking-distance wins
+  it('never advises another website by its address, the own brand or a competitor, in any search list', () => {
+    const q = (query: string, over: Record<string, unknown> = {}) => ({ query, periodEnd: '2026-11-09', clicks: 2, impressions: 264, ctr: 0.008, position: 7.2, prevClicks: 0, prevImpressions: 0, prevPosition: 0, page: '', tracked: false, serpPosition: -1, ...over });
+    const branded = { ...site, brandNames: ['Northwind Trading'], competitors: ['rivalsoft.example'], services: ['ERP implementation'] } as unknown as SiteRow;
+    const recs = recommend(
+      branded,
+      bundle({
+        search: {
+          ...bundle().search,
+          periods: ['2026-11-09'],
+          queries: [
+            q('zylokey com'),
+            q('northwind', { position: 4.7 }),
+            q('northwind trading reviews'),
+            q('rivalsoft erp'),
+            q('erp implementation dubai'),
+            q('zylo com pk', { position: 2, impressions: 500, ctr: 0.01 }),
+            q('www zylo', { prevClicks: 20, clicks: 2 }),
+          ],
+          trends: [{ keyword: 'zylo.com', direction: 'rising', changePct: 120, rising: [] } as unknown as SiteBundle['search']['trends'][number]],
+        },
+      }),
+    );
+    const ids = recs.map((r) => r.id).filter((id) => id.startsWith('search:') || id.startsWith('content:trend'));
+    expect(ids).toEqual(['search:striking:erp implementation dubai']);
+  });
+
+  it('drops an engine action that would write a page for another website, keeps its publish step', () => {
+    const act = (type: string, keyword: string) => ({ source: 'site_tracker' as const, priority: 1, type, action: `Do it for ${keyword}`, why: 'w', keyword, url: null, receivedAt: '', apiBody: { mode: 'keyword', keyword } });
+    const recs = recommend(site, bundle({ search: { ...bundle().search, snapshot: { receivedAt: '2026-11-10T06:00:00Z', gsc: { connected: true, property: 'sc-domain:northwind-erp.com', error: null }, ga4: { connected: true }, actions: [act('new_page', 'zylokey com'), act('publish', 'zylokey com'), act('new_page', 'erp for distributors')] } as unknown as SiteBundle['search']['snapshot'] } }));
+    const ids = recs.map((r) => r.id).filter((id) => id.startsWith('engine:'));
+    expect(ids).toEqual(expect.arrayContaining(['engine:site_tracker:publish:zylokey com', 'engine:site_tracker:new_page:erp for distributors']));
+    expect(ids).not.toContain('engine:site_tracker:new_page:zylokey com');
+  });
+
+  // review S3 (2026-11-12): only runs that write or improve a page are gated; asking Google to index a page or two pages competing pass
+  it('keeps engine actions that write nothing, whatever their keyword', () => {
+    const act = (type: string, keyword: string) => ({ source: 'site_tracker' as const, priority: 1, type, action: `Check ${keyword}`, why: 'w', keyword, url: 'https://northwind-erp.com/x/', receivedAt: '', apiBody: null });
+    const snapshot = { receivedAt: '2026-11-10T06:00:00Z', gsc: { connected: true, property: 'sc-domain:northwind-erp.com', error: null }, ga4: { connected: true }, actions: [act('index', 'zylokey com'), act('cannibalisation', 'zylokey com')] } as unknown as SiteBundle['search']['snapshot'];
+    const ids = recommend(site, bundle({ search: { ...bundle().search, snapshot } })).map((r) => r.id);
+    expect(ids).toEqual(expect.arrayContaining(['engine:site_tracker:index:zylokey com', 'engine:site_tracker:cannibalisation:zylokey com']));
+  });
+
+  // F-06 (prod review 2026-11-12): engine actions and search lists offered a new paid page for searches the website already had a page for
+  describe('a search the website already has a page for', () => {
+    const item = (keyword: string, status: string, over: Record<string, unknown> = {}) => ({ keyword, source: 'cadence', pageType: 'Service Page', rung: 0, ladderId: '', requestId: '', startedAt: new Date(Date.now() - 10 * 864e5).toISOString(), status, publishedUrl: '', publishedAt: '', week: '', existingPageUrl: '', ...over });
+    const act = (keyword: string) => ({ source: 'ai_visibility' as const, priority: 1, type: 'answer_page', action: `Write the answer page for ${keyword}`, why: 'AI names others.', keyword, url: null, receivedAt: '', apiBody: { mode: 'keyword', keyword } });
+    const withItems = (items: ReturnType<typeof item>[], actions: ReturnType<typeof act>[], extra: Partial<SiteBundle> = {}) =>
+      bundle({ content: { ...bundle().content, items }, ai: { ...bundle().ai, report: { actions } as unknown as SiteBundle['ai']['report'] }, ...extra });
+
+    it('a published page turns "write" into "Improve the existing page" with its address (same search, other word form)', () => {
+      const recs = recommend(site, withItems([item('erp software uae', 'published', { publishedUrl: 'https://northwind-erp.com/erp-software-uae/' })], [act('ERP softwares UAE')]));
+      const r = recs.find((x) => x.id.startsWith('engine:ai_visibility:answer_page:'))!;
+      expect(r.title).toBe('Improve your page for "ERP softwares UAE"');
+      expect(r.detail).toContain('You already have a page for this search');
+      expect(r.action).toMatchObject({ label: 'Improve the existing page', mode: 'keyword', prefill: { existingPageUrl: 'https://northwind-erp.com/erp-software-uae/' } });
+    });
+
+    it('a draft to finish, a written page or one being written: no new page is offered', () => {
+      for (const it of [item('erp pricing', 'not_ready'), item('erp pricing', 'written'), item('erp pricing', 'started', { startedAt: new Date(Date.now() - 2 * 36e5).toISOString() })]) {
+        const recs = recommend(site, withItems([it], [act('erp pricing')]));
+        expect(recs.some((x) => x.id.startsWith('engine:ai_visibility:'))).toBe(false);
+      }
+    });
+
+    it('a failed or held run, or an old run that never finished, is not a page: the action stays', () => {
+      for (const it of [item('erp pricing', 'failed'), item('erp pricing', 'held'), item('erp pricing', 'started')]) {
+        const recs = recommend(site, withItems([it], [act('erp pricing')]));
+        expect(recs.find((x) => x.id === 'engine:ai_visibility:answer_page:erp pricing')?.action).toMatchObject({ label: 'Write the answer page', mode: 'keyword' });
+      }
+    });
+
+    it('a different search keeps its own new page', () => {
+      const recs = recommend(site, withItems([item('erp software uae', 'published', { publishedUrl: 'https://northwind-erp.com/erp/' })], [act('crm software uae')]));
+      expect(recs.find((x) => x.id === 'engine:ai_visibility:answer_page:crm software uae')?.action).toMatchObject({ label: 'Write the answer page' });
+    });
+
+    it('striking distance and rising searches with no ranking page improve the live page, and skip a page not yet live', () => {
+      const q = (query: string) => ({ query, periodEnd: '2026-11-09', clicks: 2, impressions: 300, ctr: 0.01, position: 8, prevClicks: 0, prevImpressions: 0, prevPosition: 0, page: '', tracked: false, serpPosition: -1 });
+      const recs = recommend(
+        site,
+        withItems([item('erp implementation dubai', 'published', { publishedUrl: 'https://northwind-erp.com/erp-implementation/' }), item('erp support dubai', 'written')], [], {
+          search: {
+            ...bundle().search,
+            periods: ['2026-11-09'],
+            queries: [q('erp implementation dubai'), q('erp support dubai')],
+            trends: [
+              { keyword: 'erp implementation dubai', direction: 'rising', changePct: 80, rising: [] },
+              { keyword: 'erp support dubai', direction: 'rising', changePct: 80, rising: [] },
+            ] as unknown as SiteBundle['search']['trends'],
+          },
+        }),
+      );
+      expect(recs.find((x) => x.id === 'search:striking:erp implementation dubai')?.action).toMatchObject({ label: 'Improve the existing page', prefill: { existingPageUrl: 'https://northwind-erp.com/erp-implementation/' } });
+      expect(recs.find((x) => x.id === 'content:trend:erp implementation dubai')?.action).toMatchObject({ label: 'Improve the existing page' });
+      expect(recs.some((x) => x.id === 'search:striking:erp support dubai' || x.id === 'content:trend:erp support dubai')).toBe(false);
+    });
+  });
+
   it('asks to publish written pages and to route reports here', () => {
     const recs = recommend(
       site,

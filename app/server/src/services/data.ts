@@ -763,6 +763,8 @@ export function profileFromRow(r: ProfileRow | null | undefined): ProfileFields 
   return {
     author: {
       name: s(r.author_name),
+      // F-29 / review S6: the stored title as it is, so the content readiness here reads what the engine's _readiness.js reads (a stored
+      // "User" counts as a title on both sides); the form refuses it on save and the page bylines here leave it out (realJobTitle)
       jobTitle: s(r.author_job_title),
       credentials: s(r.author_credentials),
       bio: s(r.author_bio),

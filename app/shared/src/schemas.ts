@@ -17,11 +17,21 @@ import { cleanDomain, domainOk } from './domain';
 import { isValidTimezone } from './cycle-clock';
 import { TOPIC_SOURCES } from './cycles';
 import { aiAlertRulesSchema } from './ai-trends';
+import { SERVICE_MAX_CHARS, SERVICES_MAX } from './list-entries';
+import { isPlaceholderJobTitle, PLACEHOLDER_JOB_TITLE_MESSAGE } from './profile';
 
 // ---------- building blocks ----------
 const opt = (max: number) => z.string().trim().max(max, `At most ${max} characters`).default('');
 const req = (max: number, msg = 'Required') => z.string().trim().min(1, msg).max(max, `At most ${max} characters`);
 const URL_RE = /^https?:\/\/\S+$/i;
+
+/** F-07: "What do you sell?" entries keep their commas and may be up to SERVICE_MAX_CHARS long (the form shows a counter and refuses
+ *  longer ones; nothing is cut). Shared by the website's business details and "Track my site". */
+const servicesList = z
+  .array(z.string().trim().min(2, 'At least 2 characters').max(SERVICE_MAX_CHARS, `At most ${SERVICE_MAX_CHARS} characters`))
+  .max(SERVICES_MAX, `At most ${SERVICES_MAX}`)
+  .optional();
+
 export const urlField = z.string().trim().regex(URL_RE, 'Enter a full link (https://...)').max(400);
 const optUrl = z.union([z.literal(''), urlField]).default('');
 export const domainField = z
@@ -164,7 +174,7 @@ export const siteBusinessSchema = z.object({
   competitors: domainList(3),
   brandNames: stringList(10, 80),
   /** keyword-first (§5.2): "What do you sell?", the main services or products; sent to the engine with "Track my site" */
-  services: z.array(z.string().trim().min(2, 'At least 2 characters').max(80, 'At most 80 characters')).max(30, 'At most 30').optional(),
+  services: servicesList,
   /** keyword-first (§4.2): the website's IANA time zone (the owner's browser zone in onboarding); its cycles run at 06:00 there */
   timezone: z
     .string()
@@ -340,7 +350,7 @@ export const trackInput = z.object({
     .refine((v) => v === '' || isValidTimezone(v), 'Unknown time zone')
     .optional(),
   /** "What do you sell?": the main services or products (replace the stored list when given; leave out to keep it) */
-  services: z.array(z.string().trim().min(2, 'At least 2 characters').max(80, 'At most 80 characters')).max(30, 'At most 30').optional(),
+  services: servicesList,
   emailCopy,
 });
 
@@ -392,11 +402,14 @@ export const caseStudyInput = z.object({
   emailCopy,
 });
 
+/** F-29: a job title shown under a name on every page; "User", "Admin", "N/A" and the like are refused with a message (empty is fine) */
+const jobTitleField = opt(160).refine((v) => !isPlaceholderJobTitle(v), PLACEHOLDER_JOB_TITLE_MESSAGE);
+
 export const profileFields = z.object({
   author: z
     .object({
       name: opt(120),
-      jobTitle: opt(160),
+      jobTitle: jobTitleField,
       credentials: opt(600),
       bio: opt(1200),
       url: optUrl,
@@ -405,7 +418,7 @@ export const profileFields = z.object({
       knowsAbout: stringList(12, 80),
     })
     .default({ name: '', jobTitle: '', credentials: '', bio: '', url: '', sameAs: [], imageUrl: '', knowsAbout: [] }),
-  reviewer: z.object({ name: opt(120), jobTitle: opt(160), url: optUrl }).default({ name: '', jobTitle: '', url: '' }),
+  reviewer: z.object({ name: opt(120), jobTitle: jobTitleField, url: optUrl }).default({ name: '', jobTitle: '', url: '' }),
   businessName: opt(160),
   businessType: opt(80),
   address: z
@@ -440,7 +453,8 @@ export const profileFields = z.object({
 export type ProfileFields = z.output<typeof profileFields>;
 
 export const profileInput = profileFields
-  .extend({ mode: z.literal('profile'), siteId, emailCopy: z.boolean().default(false) })
+  // review S8: `clearEmptyTitles` (the app's profile form only): an emptied job title next to a name clears the stored one
+  .extend({ mode: z.literal('profile'), siteId, emailCopy: z.boolean().default(false), clearEmptyTitles: z.boolean().default(false) })
   .refine(
     (v) =>
       !!(
