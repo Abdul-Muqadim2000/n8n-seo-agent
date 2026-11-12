@@ -39,6 +39,7 @@ import { deliveryOverview, listDeliveries, saveSettings, sendTest } from '../ser
 import { applyNewCompanyCredits } from '../services/admin/credits';
 import { settingsRow } from '../services/admin/settings';
 import { deleteCompany } from '../services/companyDelete';
+import { HOOK_TOKEN_GRACE_MS, rotateHookToken } from '../services/runs';
 
 // G5: the company answer (with its kind, agency and brand) lives in services/agency.ts
 export { toOrg };
@@ -160,6 +161,16 @@ export async function orgRoutes(app: FastifyInstance) {
   // Where this company's finished reports are pushed. Reading it needs membership (a viewer may see where reports go); changing it
   // or sending a test is an owner's decision, like the budget, because it sends mail in the company's name and can carry a share
   // link to anyone with the address.
+  // S5-05 (prod review 2026-11-12): a new address for the SEO engine's reports (the company's hook token). The old one keeps delivering for
+  // a grace period (runs already on their way); the token itself is never sent back, nor written into the audit log.
+  app.post('/api/orgs/:orgId/hook-token/rotate', { config: { rateLimit: { max: 5, timeWindow: '1 hour' } } }, async (req) => {
+    const a = await orgAccess(req, (req.params as { orgId: string }).orgId, 'admin');
+    if (a.org.disabled) throw forbidden('This company is disabled. Contact the platform administrator.');
+    const r = await rotateHookToken(a.org, randomToken(24));
+    await audit(req, a.org.id, { action: 'company.hook_token_rotated', target: { type: 'company', id: a.org.id, label: a.org.name }, details: { sitesUpdated: r.sitesUpdated, sitesFailed: r.sitesFailed, graceHours: HOOK_TOKEN_GRACE_MS / 3600_000 } });
+    return { rotatedAt: r.org.hookTokenRotatedAt?.toISOString() ?? null, sitesUpdated: r.sitesUpdated, sitesFailed: r.sitesFailed, oldAddressWorksUntil: new Date(Date.now() + HOOK_TOKEN_GRACE_MS).toISOString() };
+  });
+
   app.get('/api/orgs/:orgId/delivery', async (req) => {
     const a = await orgAccess(req, (req.params as { orgId: string }).orgId);
     return deliveryOverview(a.org);

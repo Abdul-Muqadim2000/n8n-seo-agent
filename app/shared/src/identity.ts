@@ -549,6 +549,7 @@ export const AUDIT_ACTIONS = {
   'company.credit_limits_changed': { label: 'Changed the credit limits', category: 'settings' },
   'company.credits_requested': { label: 'Asked for credits', category: 'settings' },
   'company.delivery_changed': { label: 'Changed report delivery', category: 'settings' },
+  'company.hook_token_rotated': { label: 'Renewed the address the SEO engine reports to', category: 'settings' },
   'company.security_changed': { label: 'Changed security settings', category: 'settings' },
   'company.admin_changed': { label: 'Platform administrator changed the company', category: 'settings' },
   'mailbox.connected': { label: 'Connected a mailbox', category: 'settings' },

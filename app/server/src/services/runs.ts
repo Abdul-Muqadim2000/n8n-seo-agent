@@ -763,10 +763,43 @@ export function wonLadderOf(stage: string, body: Record<string, unknown>): strin
   return /^[A-Za-z0-9_-]{1,80}$/.test(id) && id !== '_site' ? id : null;
 }
 
-export async function orgByHookToken(token: string): Promise<OrgRow | null> {
+/** S5-05: how long a rotated-out token still delivers (a page run may wait 6 h for a slot and run 2 h; a split monitor run longer) */
+export const HOOK_TOKEN_GRACE_MS = 48 * 3600_000;
+
+export async function orgByHookToken(token: string, now = Date.now()): Promise<OrgRow | null> {
   if (!token || token.length < 20 || token.length > 100) return null;
   const org = await db.query.organizations.findFirst({ where: eq(schema.organizations.hookToken, token) });
-  return org && safeEqual(org.hookToken, token) ? org : null;
+  if (org && safeEqual(org.hookToken, token)) return org;
+  // the token before the last rotation, for the runs that were already on their way when it was rotated
+  const prev = await db.query.organizations.findFirst({ where: eq(schema.organizations.previousHookToken, token) });
+  if (!prev?.previousHookToken || !safeEqual(prev.previousHookToken, token)) return null;
+  return prev.hookTokenRotatedAt && now - prev.hookTokenRotatedAt.getTime() < HOOK_TOKEN_GRACE_MS ? prev : null;
+}
+
+/**
+ * S5-05 (prod review 2026-11-12): a new hook token for the company. The engine learns the callback address only from its rows (seo_sites,
+ * seo_ladders: `routeSiteToApp`, as saving tracking does), so every verified website of the company is pointed at the new address; the old
+ * token keeps delivering for HOOK_TOKEN_GRACE_MS. A website whose rows could not be updated is named: its Overview shows "reports go
+ * elsewhere" with the button that routes them again (data.ts `reportsToThisApp`).
+ */
+export async function rotateHookToken(org: OrgRow, newToken: string): Promise<{ org: OrgRow; sitesUpdated: number; sitesFailed: string[] }> {
+  const [next] = await db
+    .update(schema.organizations)
+    .set({ hookToken: newToken, previousHookToken: org.hookToken, hookTokenRotatedAt: new Date() })
+    .where(eq(schema.organizations.id, org.id))
+    .returning();
+  const sites = await db.query.sites.findMany({ where: eq(schema.sites.orgId, org.id) });
+  let sitesUpdated = 0;
+  const sitesFailed: string[] = [];
+  for (const s of sites.filter((x) => x.verifiedAt)) {
+    try {
+      await routeSiteToApp(next!, s);
+      sitesUpdated++;
+    } catch {
+      sitesFailed.push(s.domain);
+    }
+  }
+  return { org: next!, sitesUpdated, sitesFailed };
 }
 
 /** `deliverReport` wants a logger; a callback has no request logger to hand, so delivery notes go to the process log. */
