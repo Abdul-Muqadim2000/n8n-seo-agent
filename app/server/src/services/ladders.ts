@@ -712,6 +712,7 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
       priority: i + 1,
       status,
       statusText,
+      ...(s(b.settings?.status).toLowerCase() === 'archived' ? { archived: true } : {}),
       counts,
       headPosition,
       headChange,

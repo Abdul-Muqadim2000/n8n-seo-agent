@@ -30,11 +30,16 @@ const TECHNICAL = /\bn8n\b|\bthe operator\b|\bexecution\s+\d+|^the seo engine st
 /** does this run error carry technical text a client must not read? */
 export const isTechnicalError = (text: string | null | undefined): boolean => !!text && TECHNICAL.test(text.replace(EXEC_SUFFIX, ''));
 
+/** words meant for us, not the client: our tool's name as a prefix, the instruction to the operator */
+const FOR_US = [/^n8n\s*:\s*/i, /\s*Start it again; if it repeats, the operator can open that execution in n8n\.?/gi, /,?\s*or check its execution in n8n\.?/gi];
+
 /** a run's error as a customer reads it: a provider or a dollar amount reads as a capacity limit, technical text as one plain sentence */
 export function customerError(text: string | null | undefined): string | null {
   if (text == null) return null;
   if (namesProviderCost(text)) return CAPACITY_ERROR;
-  const plain = text.replace(EXEC_SUFFIX, '').trim();
+  // review N3: a plain reason behind our tool's name ("n8n: crawl timed out") stays readable; only what is left decides
+  const plain = FOR_US.reduce((t, re) => t.replace(re, ''), text.replace(EXEC_SUFFIX, '')).trim();
+  if (!plain) return ENGINE_STOPPED_ERROR;
   if (/^no result arrived from the seo engine in time/i.test(plain)) return ENGINE_NO_RESULT_ERROR;
   if (TECHNICAL.test(plain)) return ENGINE_STOPPED_ERROR;
   return plain;

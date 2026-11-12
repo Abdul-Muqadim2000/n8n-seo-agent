@@ -221,12 +221,38 @@ describe('S2-02: a final version is charged once, through its own run', () => {
   it('each run takes the row nearest its start; a second row in the window is not charged to it', () => {
     const t0 = Date.parse('2026-11-11T10:00:00Z');
     const run = (id: string, min: number) => ({ id, orgId: 'o', siteId: 's', userId: null, mode: 'finalize', domain: 'fin.test', createdAt: new Date(t0 + min * MIN), completedAt: new Date(t0 + (min + 2) * MIN) });
-    const row = (id: string, min: number, domain = 'fin.test') => ({ run_id: id, mode: 'page_finalize', domain, created_at: new Date(t0 + min * MIN + 3_000).toISOString() });
-    const m = matchFinalizeRows([row('a', 0), row('b', 1), row('c', 30), row('d', 0, 'other.test'), { ...row('e', 30), mode: 'ai_pulse' }], [run('r1', 0), run('r2', 30)]);
+    const row = (id: string, min: number, domain = 'fin.test', usd = 0.02) => ({ run_id: id, mode: 'page_finalize', domain, ai_usd: usd, measured_usd: usd, estimated_usd: 0, created_at: new Date(t0 + min * MIN + 3_000).toISOString() });
+    // N1: a $0 live grade started right at the run's start does not take its place
+    const m = matchFinalizeRows([row('grade', 0, 'fin.test', 0), row('a', 0.1), row('b', 1), row('c', 30), row('d', 0, 'other.test'), { ...row('e', 30), mode: 'ai_pulse' }], [run('r1', 0), run('r2', 30)]);
+    expect(m.has('grade')).toBe(false);
     expect(m.get('a')?.id).toBe('r1');
     expect(m.has('b')).toBe(false);
     expect(m.get('c')?.id).toBe('r2');
     expect(m.has('d')).toBe(false);
     expect(m.has('e')).toBe(false);
+  });
+});
+
+describe('review S5: an engine figure tied to a run after its own figure was charged', () => {
+  it('the app debit is given back against the run, and the engine figure is charged within the quote (not about 0)', async () => {
+    const org = await company('late@billing.test', 'Late Co');
+    const t = new Date(Date.now() - 3 * 3600_000);
+    const [run] = await db
+      .insert(schema.runs)
+      .values({ orgId: org, mode: 'verdict', title: 'v', status: 'completed', requestId: 'req-late-1', input: { mode: 'verdict' }, quotedCredits: 10, actualCostUsd: 0.1, createdAt: t, acceptedAt: t, completedAt: new Date(t.getTime() + 2 * MIN) })
+      .returning();
+    // the engine's ledger could not be tied for an hour: the run is counted from its own figure ($0.10 = 6 credits)
+    await syncCosts({ readLedger: async () => [], full: true, appGraceMinutes: 0 });
+    const usage = async () => (await db.query.creditLedger.findMany({ where: eq(schema.creditLedger.orgId, org) })).filter((x) => x.kind === 'usage');
+    expect((await usage()).reduce((s, x) => s + x.credits, 0)).toBe(-6);
+    // its callback names the engine execution; the engine's figure ($0.10) replaces the app's
+    await db.insert(schema.reports).values({ orgId: org, runId: run!.id, stage: 'verdict', status: 'completed', title: 'x', requestId: 'req-late-1', payload: { request_id: 'req-late-1', execution_id: 'late-e1', run_ledger: {} } });
+    await syncCosts({ readLedger: async () => [{ ...engineRow({ id: 'late-e1', key: `app:${org}`, mode: 'verdict', usd: 0.1, min: 170 }) }], full: true, appGraceMinutes: 0 });
+    const all = await usage();
+    const back = all.find((x) => x.refKey === `reprice:run:${run!.id}`)!;
+    expect(back.credits).toBe(6);
+    expect((back.ref as { runId?: string }).runId).toBe(run!.id);
+    expect((await debitOf('late-e1'))!.credits).toBe(-6);
+    expect(all.reduce((s, x) => s + x.credits, 0)).toBe(-6); // charged once, at the engine's figure
   });
 });

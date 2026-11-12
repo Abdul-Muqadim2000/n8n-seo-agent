@@ -81,6 +81,7 @@ describe('ladder status', () => {
   it('settings come first: paused, archived, won, queued', () => {
     expect(ladderStatus({ ...base, settingsStatus: 'paused' }).status).toBe('paused');
     expect(ladderStatus({ ...base, settingsStatus: 'archived' }).statusText).toMatch(/^Archived/);
+    expect(ladderStatus({ ...base, settingsStatus: 'archived' }).statusText).toMatch(/cannot be resumed here/);
     expect(ladderStatus({ ...base, settingsStatus: 'won' }).status).toBe('won');
     expect(ladderStatus({ ...base, headHistory: weekly([3, 2, 1, 1]) }).status).toBe('won');
     expect(ladderStatus({ ...base, queued: true }).status).toBe('queued');
