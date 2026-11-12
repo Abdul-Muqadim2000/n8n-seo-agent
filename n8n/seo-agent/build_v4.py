@@ -7801,11 +7801,9 @@ def _b76_checks():
                 for _ag in [t['node'] for l in ((_cn.get(_mn) or {}).get('ai_languageModel') or [[]]) for t in (l or [])]:
                     # section 189 (S1-06): a model that serves a structured output parser's auto-fix is not an agent of the run: it is
                     # called only when an agent's answer did not fit its format (no main path, nothing a counter chain could sit behind).
-                    # It is recorded with that reason instead of excusing its whole workflow
+                    # It is not an agent (claude_count.json lists agents), and only a parser with auto-fix on may have one
                     if ((_nm.get(_ag) or {}).get('type') or '') == '@n8n/n8n-nodes-langchain.outputParserStructured':
                         assert (_nm[_ag].get('parameters') or {}).get('autoFix') is True, 'section 189: ' + _f + ' / ' + _mn + ' feeds a parser that has no auto-fix'
-                        _out76[_f + ' / ' + _ag] = {'counted': False, 'model': _m['parameters']['model']['value'],
-                                                    'why_not': 'the auto-fix model of a structured output parser: it runs only when the agent\'s answer did not fit its format (one call, rare), so it is not priced in the run figure'}
                         continue
                     _counted = ('Count Prompt (' + _ag + ')') in _nm and ('Count Answer (' + _ag + ')') in _nm
                     _out76[_f + ' / ' + _ag] = {'counted': _counted, 'model': _m['parameters']['model']['value'],
