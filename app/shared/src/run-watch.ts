@@ -32,11 +32,11 @@ export const PAGE_WRITING = 'page_writing';
 /** what the run page says while a page waits for its slot */
 export const PAGE_WAITING_NOTE = 'Pages are written two at a time; yours starts as soon as one finishes. Nothing is charged while it waits.';
 /**
- * Prod review 2026-11-12 (S1-05): how long a page run may be on its way. A page run runs at most 2 hours (the engine's executionTimeout
- * 7200, AIR-PAGETIME); one more hour of margin for a slow callback. A content-log row still `started` after this never finished: it is no
- * page, never a page waiting to be published, and it never counts towards the pile-up limit. The writing-slot gate (plan P1, branch
- * fix/page-slots, not deployed) lets a page wait up to 6 hours before it runs and raises this to 8 together with Cadence_Plan.js.
+ * Prod review 2026-11-12 (S1-05): how long a page run may be on its way. With the writing slots (plan P1) a page may wait up to 6 hours
+ * in line before it writes, then runs at most 2 hours (the engine's executionTimeout 7200, AIR-PAGETIME): 8 hours. A content-log row still
+ * `started` after this never finished: it is no page, never a page waiting to be published, and it never counts towards the pile-up limit.
+ * (It was 3 before the writing slots: a 2-hour run plus margin.)
  */
-export const PAGE_IN_FLIGHT_HOURS = 3;
-/** the engine's Cadence_Plan.js `in_flight_hours` (the cadence's "already started this week" window); 8 with plan P1 */
-export const CADENCE_IN_FLIGHT_HOURS = 2;
+export const PAGE_IN_FLIGHT_HOURS = 8;
+/** the engine's Cadence_Plan.js `in_flight_hours` (the cadence's "already started this week" window): 8 with the writing slots (P1) */
+export const CADENCE_IN_FLIGHT_HOURS = 8;
