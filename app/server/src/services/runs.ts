@@ -735,9 +735,11 @@ export async function routeSiteToApp(org: OrgRow, site: SiteRow): Promise<void> 
   const data: Record<string, unknown> = { callback_url: callbackUrl(org) };
   if (!config.engineEmails) data.email = '';
   const byDomain = [{ columnName: 'domain', condition: 'eq' as const, value: site.domain }];
-  await updateRows('ladders', byDomain, data);
-  await updateRows('sites', byDomain, data);
+  // review S3 (2026-11-12): a table the engine could not be asked about is a failure, never "routed" (the caller names the website)
+  const ladders = await updateRows('ladders', byDomain, data);
+  const sites = await updateRows('sites', byDomain, data);
   invalidateSite(site.domain);
+  if (!ladders || !sites) throw new Error(`the engine's ${!sites ? 'site' : 'ladder'} rows of ${site.domain} could not be updated`);
 }
 
 // ---------------- callbacks ----------------
@@ -766,14 +768,43 @@ export function wonLadderOf(stage: string, body: Record<string, unknown>): strin
 /** S5-05: how long a rotated-out token still delivers (a page run may wait 6 h for a slot and run 2 h; a split monitor run longer) */
 export const HOOK_TOKEN_GRACE_MS = 48 * 3600_000;
 
-export async function orgByHookToken(token: string, now = Date.now()): Promise<OrgRow | null> {
+/** the company a callback token belongs to, and whether it is the token before the last rotation (still in its grace period) */
+export async function orgByHookTokenMatch(token: string, now = Date.now()): Promise<{ org: OrgRow; previous: boolean } | null> {
   if (!token || token.length < 20 || token.length > 100) return null;
   const org = await db.query.organizations.findFirst({ where: eq(schema.organizations.hookToken, token) });
-  if (org && safeEqual(org.hookToken, token)) return org;
+  if (org && safeEqual(org.hookToken, token)) return { org, previous: false };
   // the token before the last rotation, for the runs that were already on their way when it was rotated
   const prev = await db.query.organizations.findFirst({ where: eq(schema.organizations.previousHookToken, token) });
   if (!prev?.previousHookToken || !safeEqual(prev.previousHookToken, token)) return null;
-  return prev.hookTokenRotatedAt && now - prev.hookTokenRotatedAt.getTime() < HOOK_TOKEN_GRACE_MS ? prev : null;
+  return prev.hookTokenRotatedAt && now - prev.hookTokenRotatedAt.getTime() < HOOK_TOKEN_GRACE_MS ? { org: prev, previous: true } : null;
+}
+
+export async function orgByHookToken(token: string, now = Date.now()): Promise<OrgRow | null> {
+  return (await orgByHookTokenMatch(token, now))?.org ?? null;
+}
+
+/**
+ * Review S3 (2026-11-12): a callback still arriving on the previous token means some engine row of that website still carries the old
+ * address (a ladder plan that started before the rotation writes its new seo_ladders rows with the address of its own request, and the
+ * Rank Tracker then posts to it). That website's engine rows are pointed at the current address again, at most once an hour per website,
+ * so nothing is lost when the grace period ends. -> true when it re-routed.
+ */
+const healedAt = new Map<string, number>();
+export async function healHookRouting(org: OrgRow, domainRaw: unknown, now = Date.now()): Promise<boolean> {
+  const domain = cleanDomain(domainRaw);
+  if (!domain) return false;
+  const key = `${org.id}|${domain}`;
+  if (now - (healedAt.get(key) ?? 0) < 3600_000) return false;
+  healedAt.set(key, now);
+  const site = await db.query.sites.findFirst({ where: and(eq(schema.sites.orgId, org.id), eq(schema.sites.domain, domain)) });
+  if (!site?.verifiedAt) return false;
+  try {
+    await routeSiteToApp(org, site);
+    return true;
+  } catch {
+    healedAt.delete(key);
+    return false;
+  }
 }
 
 /**
@@ -782,10 +813,10 @@ export async function orgByHookToken(token: string, now = Date.now()): Promise<O
  * token keeps delivering for HOOK_TOKEN_GRACE_MS. A website whose rows could not be updated is named: its Overview shows "reports go
  * elsewhere" with the button that routes them again (data.ts `reportsToThisApp`).
  */
-export async function rotateHookToken(org: OrgRow, newToken: string): Promise<{ org: OrgRow; sitesUpdated: number; sitesFailed: string[] }> {
+export async function rotateHookToken(org: OrgRow, newToken: string, now = Date.now()): Promise<{ org: OrgRow; sitesUpdated: number; sitesFailed: string[] }> {
   const [next] = await db
     .update(schema.organizations)
-    .set({ hookToken: newToken, previousHookToken: org.hookToken, hookTokenRotatedAt: new Date() })
+    .set({ hookToken: newToken, previousHookToken: org.hookToken, hookTokenRotatedAt: new Date(now) })
     .where(eq(schema.organizations.id, org.id))
     .returning();
   const sites = await db.query.sites.findMany({ where: eq(schema.sites.orgId, org.id) });

@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 // payload, and an owner or admin can rotate it: the engine's rows of every website are pointed at the new address, the old one keeps
 // working for a grace period so runs already in flight still deliver.
 
-const sa = vi.hoisted(() => ({ updates: [] as { table: string; filters: unknown; data: Record<string, unknown> }[] }));
+const sa = vi.hoisted(() => ({ updates: [] as { table: string; filters: unknown; data: Record<string, unknown> }[], refuse: '' }));
 vi.hoisted(() => {
   process.env.APP_URL = 'http://localhost:5173';
   process.env.LINK_BUILDER_JOBS = 'false';
@@ -28,7 +28,8 @@ vi.mock('../src/n8n/client', async (orig) => {
     rows: vi.fn(async () => []),
     siteRows: vi.fn(async () => []),
     insertRows: vi.fn(async () => true),
-    updateRows: vi.fn(async (table: string, filters: unknown, data: Record<string, unknown>) => (sa.updates.push({ table, filters, data }), true)),
+    // a domain named in `sa.refuse` stands for a table the engine could not be asked about (updateRows answers false)
+    updateRows: vi.fn(async (table: string, filters: unknown, data: Record<string, unknown>) => (sa.updates.push({ table, filters, data }), !(sa.refuse && JSON.stringify(filters).includes(sa.refuse)))),
     deleteRows: vi.fn(async () => true),
     siteAdmin: vi.fn(async (b: Record<string, unknown>) => ({ ok: true, action: String(b.action), affected: 1, error: null })),
     invalidateSite: vi.fn(),
@@ -40,6 +41,7 @@ const { buildApp } = await import('../src/app');
 const { db, schema } = await import('../src/db');
 const { signUp } = await import('./helpers/client');
 const { orgByHookToken, HOOK_TOKEN_GRACE_MS } = await import('../src/services/runs');
+const { reportsHere } = await import('../src/services/data');
 vi.setConfig({ testTimeout: 30_000 });
 
 let app: FastifyInstance;
@@ -107,5 +109,43 @@ describe('the company callback address', () => {
     await db.insert(schema.memberships).values({ orgId: org.id, userId: mu!.id, role: 'member' });
     const r = await member.c.post(`/api/orgs/${org.id}/hook-token/rotate`, {});
     expect(r.status).toBe(403);
+  });
+
+  it('review S3: a report still arriving on the old token re-routes that website (once an hour); a table the engine cannot be asked about is a failure', async () => {
+    const owner = await signUp(app, 'hook-owner4@hook.test');
+    const org = (await owner.c.post('/api/orgs', { name: 'Hook Heal Co' })).body;
+    await db.insert(schema.sites).values([
+      { orgId: org.id, domain: 'heal-one.test', country: 'United States', verificationToken: 'h1', verifiedAt: new Date() },
+      { orgId: org.id, domain: 'heal-refused.test', country: 'United States', verificationToken: 'h2', verifiedAt: new Date() },
+    ]);
+    const t0 = (await orgRow(org.id)).hookToken;
+    sa.refuse = 'heal-refused.test';
+    const r = await owner.c.post(`/api/orgs/${org.id}/hook-token/rotate`, {});
+    sa.refuse = '';
+    expect(r.body).toMatchObject({ sitesUpdated: 1, sitesFailed: ['heal-refused.test'] });
+    const t1 = (await orgRow(org.id)).hookToken;
+    // a ladder plan that started before the renewal reports on the old token: stored, and the website's rows get the current address
+    sa.updates.length = 0;
+    const post = () => app.inject({ method: 'POST', url: `/api/hooks/n8n/${t0}`, payload: { stage: 'rank_tracker', status: 'completed', domain: 'heal-one.test' } });
+    expect((await post()).statusCode).toBeLessThan(300);
+    await vi.waitFor(() => expect(sa.updates.filter((x) => String(x.data.callback_url ?? '').endsWith(t1) && JSON.stringify(x.filters).includes('heal-one.test')).map((x) => x.table).sort()).toEqual(['ladders', 'sites']));
+    // within the hour, no second re-route
+    sa.updates.length = 0;
+    expect((await post()).statusCode).toBeLessThan(300);
+    await new Promise((res) => setTimeout(res, 50));
+    expect(sa.updates).toEqual([]);
+    // a report on the current token re-routes nothing
+    expect((await app.inject({ method: 'POST', url: `/api/hooks/n8n/${t1}`, payload: { stage: 'rank_tracker', status: 'completed', domain: 'heal-one.test' } })).statusCode).toBeLessThan(300);
+    await new Promise((res) => setTimeout(res, 50));
+    expect(sa.updates).toEqual([]);
+  });
+
+  it('review S3: "reports go to this app" only when the site row and every ladder row carry the current address', () => {
+    const cur = 'https://app.example.test/api/hooks/n8n/current-token-0000000000';
+    const old = 'https://app.example.test/api/hooks/n8n/old-token-00000000000000';
+    expect(reportsHere({ callback_url: cur }, [{ callback_url: cur }, { callback_url: '' }], cur)).toBe(true);
+    expect(reportsHere({ callback_url: cur }, [{ callback_url: cur }, { callback_url: old }], cur)).toBe(false);
+    expect(reportsHere({ callback_url: old }, [], cur)).toBe(false);
+    expect(reportsHere(null, [], cur)).toBe(false);
   });
 });

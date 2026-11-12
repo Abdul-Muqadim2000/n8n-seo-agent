@@ -219,13 +219,28 @@ export function gscNow(snapshot: Pick<TrackerSnapshot, 'receivedAt' | 'gsc'> | n
   return gscConnectionState({ report: snapshot ? { receivedAt: snapshot.receivedAt, connected: snapshot.gsc.connected, property: snapshot.gsc.property } : null, tracking });
 }
 
-function connection(row: DtSiteRow | null, org: OrgRow, site: SiteRow): TrackingConnection {
+/**
+ * Review S3 (2026-11-12): the engine's reports reach this company only when its site row AND every ladder row of the domain carry the
+ * company's current callback address (the Rank Tracker posts each ladder's report to the ladder's own address). A ladder row written by a
+ * run that started before a token rotation carries the old one.
+ */
+export function reportsHere(row: Pick<DtSiteRow, 'callback_url'> | null, ladders: Pick<LadderRow, 'callback_url'>[], current: string): boolean {
+  if (!row || row.callback_url !== current) return false;
+  return !ladders.some((l) => s(l.callback_url) && s(l.callback_url) !== current);
+}
+
+/** the website's ladder rows' callback addresses (cached read; a failed read hides nothing: [] = only the site row decides) */
+async function ladderCallbacks(site: SiteRow): Promise<Pick<LadderRow, 'callback_url'>[]> {
+  return siteRows<LadderRow>('ladders', site.domain, { max: 2000 }).catch(() => [] as LadderRow[]);
+}
+
+function connection(row: DtSiteRow | null, org: OrgRow, site: SiteRow, ladders: Pick<LadderRow, 'callback_url'>[] = []): TrackingConnection {
   // 2026-10-28: a GA4 property chosen in the app that the engine row does not carry yet is sent once, in the background
   if (row) healGa4(site, row.ga4_property_id);
   return {
     gscLiveCheck: gscLiveCheckOf(site),
     ga4LiveCheck: ga4LiveCheckOf(site),
-    reportsToThisApp: !!row && row.callback_url === callbackUrl(org),
+    reportsToThisApp: !!row && reportsHere(row, ladders, callbackUrl(org)),
     tracked: !!row,
     status: row?.status ?? null,
     gscProperty: row?.gsc_property || null,
@@ -451,7 +466,7 @@ export async function searchData(org: OrgRow, site: SiteRow): Promise<SearchData
   const curImpressions = snapshot?.gsc.current?.impressions ?? (ms.length ? n(ms[ms.length - 1]!.impressions) : null);
   const curSessions = snapshot?.ga4.organic?.sessions ?? (ms.length ? n(ms[ms.length - 1]!.sessions) : null);
   const gscOn = snapshot?.gsc.connected ?? !!ms[ms.length - 1]?.gsc_connected;
-  const conn = connection(siteRow, org, site);
+  const conn = connection(siteRow, org, site, await ladderCallbacks(site));
   const gscState = gscNow(snapshot, conn);
   const gaOn = snapshot?.ga4.connected ?? !!ms[ms.length - 1]?.ga4_connected;
   const ga4State = ga4Now(snapshot, conn);
@@ -1899,7 +1914,7 @@ export async function settingsData(org: OrgRow, site: SiteRow): Promise<SiteSett
   // column: any one row of the table says so (the Data Tables API returns every column on every row); the setting then reads as off
   const aiRankColumn = monitors[0] ? 'ai_rank_mode' in (monitors[0] as object) : await tableRows<MonitorsRow>('monitors', { max: 1 }).then((r) => !!r[0] && 'ai_rank_mode' in (r[0] as object)).catch(() => false);
   return {
-    tracking: connection(siteRow, org, site),
+    tracking: connection(siteRow, org, site, await ladderCallbacks(site)),
     monitors: monitorsFromRow(monitors[0]),
     cadence: cadence[0] ? { pagesPerWeek: n(cadence[0].pages_per_week), status: s(cadence[0].status) } : null,
     profile,
