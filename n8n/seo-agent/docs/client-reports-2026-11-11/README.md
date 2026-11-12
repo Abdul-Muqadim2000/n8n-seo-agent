@@ -37,7 +37,8 @@ asks Bing.
 
 ## Owner items
 
-- Set `BING_SHARE_EMAIL` (the Microsoft account that owns the production Bing key) and confirm which account it is; accept access requests.
+- DONE 2026-11-12: `BING_SHARE_EMAIL` set on production to the account that owns the Bing key (owner confirmed; Secret Manager
+  `alaventra-app-env` v4 + the VM's app.env, API container recreated, healthy). Still the owner's: accept the access requests in Bing.
 - Refund 6.27 credits to Techand Systems (ledger seq 359, run 8f0a4bc3: the "Write it anyway" that could not write); optional goodwill
   68.75 credits (seq 103, execution 3751, the second rewrite of one page in one cadence run on 10-29).
 - Decide: warn or refuse a typed ladder head with 10 or fewer searches; screen rung candidates with the buyer-fit model (KI, 10cb6f5e).
