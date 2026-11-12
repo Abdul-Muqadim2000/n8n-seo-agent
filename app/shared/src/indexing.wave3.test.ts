@@ -232,6 +232,20 @@ describe('§3.3 the sitemap dates step (indexing:sitemap_dates)', () => {
     expect(sitemapDatesGood({ urls: 8, withLastmod: 8, distinct: 1 })).toBe(true);
     expect(sitemapDatesGood({ urls: 0, withLastmod: 0, distinct: 0 })).toBe(false);
   });
+  it('review M2: a sitemap the engine could not read in full, or an empty reading, decides nothing', () => {
+    expect(indexRunOf(run({ dates: { urls: 0, with_lastmod: 0, distinct: 0, read: false } })).sitemaps!.dates).toBeNull();
+    expect(indexRunOf(run({ dates: { urls: 40, with_lastmod: 40, distinct: 12, read: false } })).sitemaps!.dates).toBeNull();
+    expect(indexRunOf(run({ dates: { urls: 0, with_lastmod: 0, distinct: 0 } })).sitemaps!.dates).toBeNull();
+    // the newest run read nothing: the reading before it still decides
+    const r = indexingSitemapDatesReading([run({ run_at: '2026-11-12T05:15:00.000Z', dates: { urls: 0, with_lastmod: 0, distinct: 0, read: false } }), run({ dates: NO_DATES })]);
+    expect(r && r.missing).toBe(true);
+  });
+  it('review M1: a page the home page links is never told "your home page does not" link it', () => {
+    const p = indexPageOf(wait('/industries/retail', { escalated_at: '2026-11-11T05:15:00Z', escalate_why: 'not_asked,weak_links', linked_n: 1, link_depth: 1, linked_by: JSON.stringify(['https://devaicon.com/']) }));
+    const t = indexEscalationSteps(p, { freeze: false }).find((x) => x.code === 'weak_links')!.text;
+    expect(t).toBe('Only your home page links here: also link it from related pages.');
+    expect(t).not.toContain('does not');
+  });
   it('reads `sitemaps_json.dates` from the newest run that read the website; an older row has none', () => {
     expect(indexRunOf(run({ dates: NO_DATES })).sitemaps!.dates).toEqual({ urls: 40, withLastmod: 0, distinct: 0 });
     expect(indexRunOf(run({ sitemaps_json: JSON.stringify({ submitted: 1 }) })).sitemaps!.dates).toBeNull();

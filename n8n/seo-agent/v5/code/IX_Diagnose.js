@@ -197,7 +197,7 @@ for (const v of inv) {
     const aiSent = new Map(); for (const a of aiPages) if (S(a.site_id) === v.site_id && S(a.submitted_at)) { const kk = IX.key(a.url); if (S(a.submitted_at) > S(aiSent.get(kk) || '')) aiSent.set(kk, S(a.submitted_at)); }
     const inHost = IX.siteHost(site);
     const recent = IX.indexnowSentRecently(rows, now);
-    const inUrls = recent ? [] : IX.indexnowCandidates(rows, { now, host: inHost, ai_sent: aiSent });
+    const inUrls = recent ? [] : IX.indexnowCandidates(rows, { now, host: inHost, ai_sent: aiSent, dates_usable: IX.datesUsable((v.sitemap || {}).dates) });
     const inSet = new Set(inUrls);
     const indexnow = { host: inHost, urls: inUrls, why: recent ? 'sent_today' : inUrls.length ? '' : 'nothing_new', rows: rows.filter(r => inSet.has(S(r.url))).map(r => IX.rowOut(r)) };
     const all = rows.map(r => ({ url: r.url, state: S(r.state), cause: S(r.cause), action: S(r.action), lane: S(r.lane), needs_person: !!r.needs_person, note: S(r.note),

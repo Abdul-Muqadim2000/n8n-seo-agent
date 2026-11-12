@@ -91,7 +91,7 @@ for (const s of sites) {
       sitemap: { read: st.read || 0, fetched: (st.fetched || []).length, urls: (st.urls || []).length, errors: (st.errors || []).slice(0, 10), capped: !!(st.capped || st.capped_sitemaps),
         complete, left: (st.next || []).length, robots_status: st.robots_status || 0, home_host: S(site.home_host),
         // wave 3 (§2.5): the dates the sitemap gives; a day nothing of it could be read keeps the last run's reading
-        dates: (st.urls || []).length || complete ? { ...IX.sitemapDates(st.urls || []), read: true } : (s.prev_sitemap_dates ? { ...s.prev_sitemap_dates, read: false } : { ...IX.sitemapDates([]), read: false }) },
+        dates: (st.urls || []).length || complete ? { ...IX.sitemapDates(st.urls || []), read: !!complete } : (s.prev_sitemap_dates ? { ...s.prev_sitemap_dates, read: false } : { ...IX.sitemapDates([]), read: false }) },
       gsc_sitemaps: gscSitemaps, search: { read: saOk, rows: ev.rows, end: ev.end, truncated: ev.truncated, truncated_windows: ev.truncated_windows, why: saOk ? '' : saWhy },
       quota_stop, failed: false, submit, links: { read: linksRead, parents: sl ? (sl.parents || []) : [], sources: sl ? (sl.sources || []).length : (st.home_read ? 1 : 0), found: linked.length,
         suggested: sl ? (sl.suggested || []) : [], unread_parents: sl ? (sl.unread_parents || []).length : 0 }, link_titles: linkTitles } });

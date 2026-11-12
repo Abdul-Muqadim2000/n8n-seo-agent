@@ -860,7 +860,7 @@ export function indexPageOf(r: Partial<IndexPageRow>): IndexPage {
   // marked important on a policy page the engine still files as left out on purpose, or a mark undone on a page the engine left out because
   // of that mark: waiting for our next check, which files it again (never "fine to leave out" for a page the client says matters)
   const pendingImportant = ov === 'important' && out && c === 'low_value' && shownRaw === 'leave_out' && isUtilityPage(s(r.url));
-  const pendingUndo = ov === '' && out && c === 'low_value' && shownRaw === 'leave_out' && engineNote.startsWith(INDEX_MARKED_UTILITY_PREFIX);
+  const pendingUndo = ov === '' && out && c === 'low_value' && shownRaw === 'leave_out' && engineNote.includes(INDEX_MARKED_UTILITY_PREFIX);
   const typePending = pendingImportant || pendingUndo;
   const shown: IndexAction = markedUtility ? 'leave_out' : typePending ? 'wait' : shownRaw;
   const utilityShown = ov === 'important' ? false : utility;
@@ -1032,6 +1032,8 @@ function sitemapDatesOf(v: unknown): IndexSitemapDates | null {
   const urls = k(x.urls);
   const withLastmod = k(x.with_lastmod ?? x.withLastmod);
   const distinct = k(x.distinct);
+  // review M2: a reading of a sitemap the engine could not read (in full) decides nothing
+  if (x.read === false || urls === 0) return null;
   return urls == null || withLastmod == null || distinct == null ? null : { urls, withLastmod: Math.min(withLastmod, urls), distinct };
 }
 
@@ -1656,7 +1658,7 @@ export interface IndexEscalationStep {
 }
 /** wave 3 (§3.2): the first sentence of every escalated page. */
 export const INDEX_ESCALATED_LEAD = 'Google has not visited this page in the 3 weeks we have watched it.';
-export function indexEscalationSteps(p: Pick<IndexPage, 'escalateWhy' | 'linkedN' | 'linkedBy' | 'words' | 'url'>, opts: { freeze: boolean }): IndexEscalationStep[] {
+export function indexEscalationSteps(p: Pick<IndexPage, 'escalateWhy' | 'linkedN' | 'linkedBy' | 'words' | 'url'> & { linkDepth?: number }, opts: { freeze: boolean }): IndexEscalationStep[] {
   return p.escalateWhy.map((code): IndexEscalationStep => {
     switch (code) {
       case 'not_asked':
@@ -1664,10 +1666,13 @@ export function indexEscalationSteps(p: Pick<IndexPage, 'escalateWhy' | 'linkedN
       case 'asked_no_visit':
         return { code, text: 'Google did not come even after you asked, so it does not see the page as important yet: link it from your home page or main menu, and get a link from another website.', guide: 'index-add-internal-links', improve: false };
       case 'weak_links': {
+        // review M1: the same three wordings as the engine's note (a page the home page links is never called weakly linked by the engine)
         const k = Math.max(p.linkedN, p.linkedBy.length);
         return {
           code,
-          text: k ? `Only ${k} page${k === 1 ? '' : 's'} link${k === 1 ? 's' : ''} here and your home page does not: link it from your home page or main menu.` : 'We found no page of yours that links here: link it from your home page or main menu.',
+          text: p.linkDepth === 1 || p.linkedBy.some(isSiteRoot)
+            ? 'Only your home page links here: also link it from related pages.'
+            : k ? `Only ${k} page${k === 1 ? '' : 's'} link${k === 1 ? 's' : ''} here and your home page does not: link it from your home page or main menu.` : 'We found no page of yours that links here: link it from your home page or main menu.',
           guide: 'index-add-internal-links',
           improve: false,
         };

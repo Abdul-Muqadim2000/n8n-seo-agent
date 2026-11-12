@@ -2163,7 +2163,7 @@ const IX = (() => {
     const why = []; const ak = ts(r.asked_google_at);
     if (!ak || now - ak > CFG.ask_reoffer_days * DAY) why.push('not_asked');
     if (ak && now - ak >= CFG.ask_wait_note_days * DAY) why.push('asked_no_visit');
-    if (r._links_known !== false && (n0(r.link_depth) !== 1 || n0(r.linked_n) <= 1)) why.push('weak_links');
+    if (r._links_known !== false && n0(r.link_depth) !== 1) why.push('weak_links');   // review M1: a page the home page links is not weakly linked
     const w = n0(r.words); if (w > 0 && w < CFG.short_words && !isJobPosting(r.url)) why.push('short_page');
     if (!yes(r.in_sitemap)) why.push('not_in_sitemap');
     if (x.dates_usable === false) why.push('sitemap_no_dates');
@@ -2175,7 +2175,7 @@ const IX = (() => {
     const n = n0(r.linked_n), dp = n0(r.link_depth);
     const step = first === 'not_asked' ? (yes(r.ask_google) ? 'Ask Google to read it in Search Console (it is on your list today).' : 'Ask Google to read it in Search Console (it comes onto your daily list as the pages before it are done).')
       : first === 'asked_no_visit' ? 'Google did not come even after you asked, so it does not see the page as important yet: link it from your home page or main menu, and get a link from another website.'
-      : first === 'weak_links' ? (dp === 1 ? 'Only your home page links here: also link it from your main menu and from related pages.'
+      : first === 'weak_links' ? (dp === 1 ? 'Only your home page links here: also link it from related pages.'
         : n === 0 ? 'No page of your website links here that we could find: link it from your home page or main menu.'
         : 'Only ' + n + ' page(s) link here and your home page does not: link it from your home page or main menu.')
       : first === 'short_page' ? 'The page is short (' + n0(r.words) + ' words): add what a buyer needs to know' + (frz ? ' after Google\'s current update finishes.' : '.')
@@ -2225,7 +2225,7 @@ const IX = (() => {
       const opens = st ? (st >= 200 && st < 300 && !S(r.final_url)) : (S(r.state) === 'indexed' || yes(r.in_sitemap));
       if (!opens) continue;
       const sent = ts(r.indexnow_at);
-      if (sent) { const changed = [r.sitemap_lastmod, r.improved_at, r.fix_seen_at].some(v => ts(v) > sent); if (!changed) continue; }
+      if (sent) { const changed = [x.dates_usable === false ? '' : r.sitemap_lastmod, r.improved_at, r.fix_seen_at].some(v => ts(v) > sent); if (!changed) continue; }   // review L1: build-time sitemap dates are no change
       else { const a = ts(ai.get(key(u))); if (a && now - a < CFG.indexnow_ai_days * DAY) continue; }
       out.push(r);
     }
@@ -2442,7 +2442,7 @@ for (const v of inv) {
     const aiSent = new Map(); for (const a of aiPages) if (S(a.site_id) === v.site_id && S(a.submitted_at)) { const kk = IX.key(a.url); if (S(a.submitted_at) > S(aiSent.get(kk) || '')) aiSent.set(kk, S(a.submitted_at)); }
     const inHost = IX.siteHost(site);
     const recent = IX.indexnowSentRecently(rows, now);
-    const inUrls = recent ? [] : IX.indexnowCandidates(rows, { now, host: inHost, ai_sent: aiSent });
+    const inUrls = recent ? [] : IX.indexnowCandidates(rows, { now, host: inHost, ai_sent: aiSent, dates_usable: IX.datesUsable((v.sitemap || {}).dates) });
     const inSet = new Set(inUrls);
     const indexnow = { host: inHost, urls: inUrls, why: recent ? 'sent_today' : inUrls.length ? '' : 'nothing_new', rows: rows.filter(r => inSet.has(S(r.url))).map(r => IX.rowOut(r)) };
     const all = rows.map(r => ({ url: r.url, state: S(r.state), cause: S(r.cause), action: S(r.action), lane: S(r.lane), needs_person: !!r.needs_person, note: S(r.note),

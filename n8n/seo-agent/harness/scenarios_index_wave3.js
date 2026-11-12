@@ -161,7 +161,7 @@ module.exports = async (ctx) => {
     check('escalate_why: never asked -> not_asked first; the 2026-11-12 sitemap has no lastmod -> sitemap_no_dates last; all in the sitemap -> no not_in_sitemap',
       esc21.length > 0 && D.stored.filter(r => S0(r.escalated_at)).every(r => { const w = S0(r.escalate_why).split(','); return w[0] === 'not_asked' && w[w.length - 1] === 'sitemap_no_dates' && !w.includes('not_in_sitemap'); }),
       J(D.stored.filter(r => S0(r.escalated_at)).map(r => [P(r.url), r.escalate_why])));
-    check('weak_links exactly when the home page does not link it or one page at most does (link_depth != 1 or linked_n <= 1)', esc21.length > 0 && D.stored.filter(r => S0(r.escalated_at)).every(r => S0(r.escalate_why).split(',').includes('weak_links') === (Number(r.link_depth) !== 1 || Number(r.linked_n) <= 1)),
+    check('weak_links exactly when the home page does not link it (link_depth != 1; review M1)', esc21.length > 0 && D.stored.filter(r => S0(r.escalated_at)).every(r => S0(r.escalate_why).split(',').includes('weak_links') === (Number(r.link_depth) !== 1)),
       J(D.stored.filter(r => S0(r.escalated_at)).map(r => [P(r.url), r.link_depth, r.linked_n, r.escalate_why])));
     check('a job page (linked from /careers only) has weak_links; the reasons keep the contract\'s order', /^not_asked,weak_links,sitemap_no_dates$/.test(S0(job.escalate_why)) && job.link_depth === 2, J([job.escalate_why, job.link_depth, job.linked_n]));
     const H3 = 'Google has not visited this page in the 3 weeks we have watched it. ';
@@ -195,7 +195,7 @@ module.exports = async (ctx) => {
     check('asked 5 days ago: none of the ask reasons; asked 15 days ago: asked_no_visit only; asked 40 days ago: not_asked and asked_no_visit',
       w({ asked_google_at: iso(now - 5 * DAY) }) === '' && w({ asked_google_at: iso(now - 15 * DAY) }) === 'asked_no_visit' && w({ asked_google_at: iso(now - 40 * DAY) }) === 'not_asked,asked_no_visit',
       J([w({ asked_google_at: iso(now - 5 * DAY) }), w({ asked_google_at: iso(now - 15 * DAY) }), w({ asked_google_at: iso(now - 40 * DAY) })]));
-    check('weak_links: depth 2 with 3 pages, or the home page as the only link; not for depth 1 with 2+ pages', w({ link_depth: 2, linked_n: 3 }) === 'not_asked,weak_links' && w({ link_depth: 1, linked_n: 1 }) === 'not_asked,weak_links' && w({ link_depth: 1, linked_n: 2 }) === 'not_asked', J([w({ link_depth: 2, linked_n: 3 }), w({ link_depth: 1, linked_n: 1 })]));
+    check('weak_links: depth 2 with 3 pages; never when the home page links it (review M1)', w({ link_depth: 2, linked_n: 3 }) === 'not_asked,weak_links' && w({ link_depth: 1, linked_n: 1 }) === 'not_asked' && w({ link_depth: 1, linked_n: 2 }) === 'not_asked', J([w({ link_depth: 2, linked_n: 3 }), w({ link_depth: 1, linked_n: 1 })]));
     check('short_page under 300 words (our read), never a job posting, never an unread page (0 words)', w({ words: 120 }) === 'not_asked,short_page' && w({ words: 120, url: DEV + '/careers/data-engineer' }) === 'not_asked' && w({ words: 0 }) === 'not_asked',
       J([w({ words: 120 }), w({ words: 120, url: DEV + '/careers/data-engineer' })]));
     check('not_in_sitemap, sitemap_no_dates; all six in the contract\'s order', w({ in_sitemap: false }) === 'not_asked,not_in_sitemap' && w({ asked_google_at: iso(now - 40 * DAY), link_depth: 0, linked_n: 0, words: 100, in_sitemap: false }, { dates_usable: false }) === 'not_asked,asked_no_visit,weak_links,short_page,not_in_sitemap,sitemap_no_dates',
