@@ -1,5 +1,5 @@
 # Production image: builds the React app and the API server; the server serves both on :4000.
-FROM node:22-bookworm-slim AS build
+FROM node:26-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY shared/package.json shared/
@@ -12,7 +12,7 @@ COPY server server
 COPY web web
 RUN npm run build -w @seo/web && npm run build -w @seo/server
 
-FROM node:22-bookworm-slim AS runtime
+FROM node:26-bookworm-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json package-lock.json ./
