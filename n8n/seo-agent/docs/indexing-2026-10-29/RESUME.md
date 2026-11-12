@@ -2,6 +2,15 @@
 
 Read this first if you are picking the work up. Owner's ask: OWNER_BRIEF.md. Contract: DESIGN.md + FIX_CONTRACT.md.
 
+## 2026-11-12: WAVE 3 (client document "Indexing Module Upgrade", devaicon.com) - see DESIGN_WAVE3.md
+Verdict and evidence: DESIGN_WAVE3.md §0-§1 (about two thirds of the client's 12 commands already existed; six real gaps + the sitemap
+without dates the client missed). Built in worktrees ix3/engine (e819f577) and ix3/app (c6bbdb84), merged into feature/seo-agent-v4.5
+with the other session's KI judge / AIR work; independent review: no High, M1 / M2 / L1 / L2 fixed in d90328f0 (with tests). Deferred:
+M3 (a mark or "I asked Google" pressed while that site's run is saving can be overwritten by the run; same race asked_google_at has had
+since wave 2; fix = leave app-written columns out of the update for stored rows, needs a check of n8n upsert semantics), L3 (an
+"important" mark on a policy page with no stored Google reading waits for the next inspection), L4 (daily ask window 20 h, documented).
+Builders' notes: ENGINE_BUILD.md / APP_BUILD.md "Wave 3". Owner decision open: Google Indexing API for the 6 job pages (§6).
+
 ## 2026-11-05: improved pages (client report, devaicon.com) - built, NOT deployed
 Client: "I improved these pages with Alaventra, published them and reported them, but Indexing still lists them under 'Google read it
 and left it out' with 'Improve this page'". Half right: Google decides only after it reads the page again (RESEARCH §B), so the page must

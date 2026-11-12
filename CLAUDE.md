@@ -63,7 +63,17 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-11-11 evening, second round of devaicon / techand client reports fixed + engine/API DEPLOYED - latest)
+## Status (2026-11-12 evening, Index coverage wave 3: a to-do for every page Google has not visited - latest)
+Client document "Indexing Module Upgrade" (devaicon.com). Prod read first: about two thirds already existed; the client was right on six
+gaps (ask-Google cap 5 a week blocked the queue although 9 of 10 asked pages were indexed within hours, no 21-day escalation, no priority,
+no per-page "what we checked", no important / utility mark, the 13 waiting pages never sent to IndexNow) and missed one (sitemap without
+lastmod). Read **`n8n/seo-agent/docs/indexing-2026-10-29/DESIGN_WAVE3.md`** (verdict, contract) and RESUME.md "WAVE 3". Engine: ask-Google
+3 a day / 10 a week / 5 at once, escalation codes, priority, robots_ok / link_depth / linked_n, IndexNow from Index coverage (verified key,
+`SEO_INDEXNOW`, cap 500), type_override, sitemap dates, weekly summary; app: to-do card, Needs-you group, `indexing:sitemap_dates` step +
+guide, `POST .../data/indexing/page-type`, report block, marketing changelog 4.13. Review: no High; M1 M2 L1 L2 fixed (d90328f0); M3
+(override race) deferred. Harness 19221 / 0; app shared 1252, server green (load-timeouts re-run alone), web 381.
+
+## Status (2026-11-11 evening, second round of devaicon / techand client reports fixed + engine/API DEPLOYED - previous)
 Seven reports (`Alaventra issues.docx`), each verified on prod; read **`n8n/seo-agent/docs/client-reports-2026-11-11/README.md`**. Engine
 sections 185 (the Page Finalize grades the LIVE page: grade_only + grade_live, page reader + W07-A fallback, refused when unread), 186
 ("Write it anyway" passes an AVOID; backlinks watch settles on quiet weeks), 187 (audit indexing finding: utility / moved pages named not
