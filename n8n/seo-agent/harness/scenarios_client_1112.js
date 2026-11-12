@@ -16,6 +16,8 @@
 //        is pinned in scenarios_ladder_pkg.js LPK4)
 //   PR7  F-29: a placeholder author job title ("User", "N/A", "-", "none", "test", "job title", "title") is never printed in a byline, the
 //        Person schema, the author box or an outreach signature (JOBT)
+//   PR8  F-10: a search for a website by its address ("zylo com", "zylo.com", "www zylo", "zylo co uk") is refused by the fit gate; "asp net",
+//        "node.js" are not
 //   PR6  services up to 120 characters, as the app now allows (SERVICE_MAX_CHARS): the site model and Normalize Input keep them whole
 module.exports = async (ctx) => {
   const { H, run, mock, store, guard, reset, begin } = ctx;
@@ -319,4 +321,18 @@ module.exports = async (ctx) => {
         ['SEO_Agent_Link_Builder.json', 'LB Writer Input']].every(([f, n]) => /const JOBT = \(\(\) =>/.test(code(f, n)) && /JOBT\.real\(/.test(code(f, n)) && !/__JOB_TITLE__/.test(code(f, n))), '');
   });
 
+  // ---------- PR8 a search for a website by its address ----------
+  await guard('PR8 address search', async () => {
+    const SN = 'PR8 (F-10) the fit gate refuses a search for one website by its address ("zylo com", "zylo.com", "www zylo", "zylo co uk"), the own site as its own brand; "asp net", "node.js" are subjects';
+    reset(); begin(SN); const check = mkCheck(SN);
+    const fitGate = new Function(SRC('_fit_gate.js') + '\nreturn fitGate;')();
+    const ctx = { own_domain: 'novaand.example', topics: ['software development', 'dynamics 365 consulting'] };
+    const addr = ['zylo com', 'zylo.com', 'www zylo', 'zylo co uk', 'zylo com pk', 'https://www.zylo.ae/pricing', 'otherbrand com'];
+    const rs = addr.map(q => [q, fitGate(q, ctx)]);
+    check('each is refused as navigational, by its address', rs.every(([, r]) => r.ok === false && r.reason === 'navigational' && /by its address/.test(r.detail)), J(rs));
+    const own = fitGate('novaand com', ctx);
+    check('the website\'s own address is its own brand', own.ok === false && own.reason === 'own brand', J(own));
+    const subj = ['asp net development', 'node.js developers', 'e commerce development', 'dot net consulting'].map(q => [q, fitGate(q, ctx)]);
+    check('subjects that look like addresses are not refused for it', subj.every(([, r]) => !(r.ok === false && /by its address/.test(String(r.detail)))), J(subj));
+  });
 };
