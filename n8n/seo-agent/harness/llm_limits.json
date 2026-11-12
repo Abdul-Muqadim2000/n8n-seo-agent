@@ -222,6 +222,23 @@
    "workflow": "SEO_Agent_v4.json"
   },
   {
+   "cost_think": 0,
+   "effort": "",
+   "head": 32000,
+   "kind": "brief (JSON) put back into its format",
+   "max": 32000,
+   "model": "claude-haiku-4-5-20251001",
+   "node": "Claude \u2014 Brief Fixer",
+   "old": {
+    "max": 0,
+    "stream": false,
+    "think": 0
+   },
+   "stream": true,
+   "think": 0,
+   "workflow": "SEO_Agent_v4.json"
+  },
+  {
    "cost_think": "seen",
    "effort": "medium",
    "head": 24000,
@@ -490,6 +507,10 @@
   [
    "SEO_Agent_v4.json",
    "Claude \u2014 Ladder Relevance"
+  ],
+  [
+   "SEO_Agent_v4.json",
+   "Claude \u2014 Brief Fixer"
   ]
  ],
  "self_test_cases": 8

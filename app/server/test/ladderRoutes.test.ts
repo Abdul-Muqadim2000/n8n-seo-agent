@@ -63,6 +63,26 @@ beforeEach(() => {
 const base = '/api/orgs/00000000-0000-0000-0000-000000000001/sites/00000000-0000-0000-0000-000000000002';
 const send = (method: 'PATCH' | 'PUT' | 'DELETE' | 'POST', url: string, payload?: unknown) => app.inject({ method, url: base + url, payload: payload as object });
 
+describe('S3-06: ladder status changes', () => {
+  it('Pause and Resume are audited with who, from and to; a mode change alone is not a status change', async () => {
+    n8n.settings = [{ ladder_id: 'lad_mine', domain: 'techand.ai', mode: '', status: 'active', priority: 1 } as unknown as LadderSettingsRow];
+    expect((await send('PATCH', '/ladders/lad_mine', { status: 'paused' })).statusCode).toBe(200);
+    expect(n8n.audits).toEqual([expect.objectContaining({ action: 'site.ladder_status_changed', details: { ladderId: 'lad_mine', from: 'active', to: 'paused' } })]);
+    n8n.audits = [];
+    expect((await send('PATCH', '/ladders/lad_mine', { mode: 'manual' })).statusCode).toBe(200);
+    expect(n8n.audits).toEqual([]);
+  });
+
+  it('Resume of an archived ladder is a 409 with a plain message; nothing is written, nothing audited', async () => {
+    n8n.settings = [{ ladder_id: 'lad_mine', domain: 'techand.ai', mode: '', status: 'archived', priority: 2 } as unknown as LadderSettingsRow];
+    const r = await send('PATCH', '/ladders/lad_mine', { status: 'active' });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().error).toMatch(/archived/);
+    expect(n8n.upserts).toEqual([]);
+    expect(n8n.audits).toEqual([]);
+  });
+});
+
 describe('ladder routes', () => {
   it('a ladder of another website (or no ladder) is a 404 and nothing is written', async () => {
     for (const r of [await send('PATCH', '/ladders/lad_other', { mode: 'manual' }), await send('DELETE', '/ladders/lad_other'), await send('PATCH', '/ladders/_site', { mode: 'manual' }), await send('PATCH', '/ladders/bad%20id', { mode: 'manual' })])

@@ -108,8 +108,8 @@ const SM = (() => {
     // seo_sites.declared_services) comes first and is never dropped by what a crawl read; it is kept apart as well, so SM.toRow writes it back
     // unchanged and the weekly Site Tracker can never overwrite it
     const declListOf = (v) => { if (Array.isArray(v)) return v; const j = jparse(v, null); return Array.isArray(j) ? j : listOf(v); };
-    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
-    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
+    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
     const navStored = jparse(row.nav_pages_json, []) || [];
     const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);
     const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);
@@ -176,6 +176,9 @@ const SM = (() => {
   // 404s) is GONE. It is still in the inventory (Google keeps showing it), but no advice may point at it: matchPage never returns it as
   // "the page that answers this search", and the readers list it as a redirect to make (v5/code/_gone.js). Unknown (0) is not gone.
   const isGone = (p) => { const n = Number((p || {}).http_status) || 0; return n === 404 || n === 410; };
+  // section 189 (production review 2026-11-12): an address that answers a redirect (3xx to another path, read by the daily page watch) is not a
+  // page: no search is matched to it and no rule names it as the page for a search
+  const isMoved = (p) => { const n = Number((p || {}).http_status) || 0; return n >= 300 && n < 400; };
   const gonePages = (model) => pages(model).filter(isGone);
   // ---- K8 (2026-10-21, KW-MATCH): the page that is ABOUT the search, not only the page that repeats its words ----
   // The 75% word rule missed techand.ai's live "AI & Automation | What We Do | Tech&" (/whatwedo/ai-automation) for "ai consulting dubai"
@@ -272,7 +275,7 @@ const SM = (() => {
     const isPref = (u) => !!prefKey && (bare(hostOf(u)) + pathOf(u).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase()) === prefKey;
     const want = matchTerms(keyword); if (!want.length) return { match: null, may_overlap: null };
     const key = tokensOf(keyword).join(' ');
-    const inv = pages(model).filter(p => !isGone(p));   // RV-1: a gone page answers nothing
+    const inv = pages(model).filter(p => !isGone(p) && !isMoved(p));   // RV-1: a gone page answers nothing; section 189: nor does an address that redirects
     const brands = brandWords(model); const core = coreTerms(keyword, brands);
     const kSvc = core.length ? serviceHits(model, core, brands) : [];
     const otherService = (p) => { if (!kSvc.length) return false; const ps = serviceHits(model, fieldsOf(p, brands).own, brands); return ps.length > 0 && !ps.some(sv => kSvc.includes(sv)); };
@@ -434,7 +437,7 @@ const SM = (() => {
     return { state: 'planned', text: '' };
   };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, pageMatch, MATCH_CONF, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages, confirmPage,
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, isMoved, gonePages, confirmPage,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms, coreTerms } };
 })();
 // ---- SERP-GOTO (2026-11-08, R5 L-1): the real site behind a Google results-page redirect (SU) ----
@@ -1692,8 +1695,12 @@ return sites.map((s, idx) => {
   const goneRows = SM.gonePages(model); const goneKeys = new Set(goneRows.map(p => GONE.keyOf(p.url)));
   const isGoneUrl = (u) => !!u && goneKeys.has(GONE.keyOf(u));
   const trafficBy = new Map(); for (const p0 of ((gsc && gsc.pages) || [])) { const k = GONE.keyOf(p0.page); const t = trafficBy.get(k) || { impressions: 0, clicks: 0 }; t.impressions += Number(p0.impressions) || 0; t.clicks += Number(p0.clicks) || 0; trafficBy.set(k, t); }
-  const liveForRedirect = SM.pages(model).filter(p => !SM.isGone(p) && (p.source === 'sitemap' || (Number(p.http_status) >= 200 && Number(p.http_status) < 300)));
-  const gone_pages = GONE.plan(goneRows.map(p => ({ url: p.url, status: p.http_status, ...(trafficBy.get(GONE.keyOf(p.url)) || {}) })), liveForRedirect, SM.siteUrl(model, '/'));
+  const liveForRedirect = SM.pages(model).filter(p => !SM.isGone(p) && !SM.isMoved(p) && (p.source === 'sitemap' || (Number(p.http_status) >= 200 && Number(p.http_status) < 300)));
+  // production review 2026-11-12 (F-03, section 189): the 301 advice names only the pages two reads found gone, the newer this week (Page
+  // Inventory `gone_confirmed`); a stored 404 nobody read again is not advised on (11 of them answered 200 on 2026-11-12)
+  const confirmedG = inv && Array.isArray(inv.gone_confirmed) ? new Set(inv.gone_confirmed.map(u => GONE.keyOf(u))) : null;
+  const goneAdvise = confirmedG ? goneRows.filter(p => confirmedG.has(GONE.keyOf(p.url))) : goneRows;
+  const gone_pages = GONE.plan(goneAdvise.map(p => ({ url: p.url, status: p.http_status, ...(trafficBy.get(GONE.keyOf(p.url)) || {}) })), liveForRedirect, SM.siteUrl(model, '/'));
   { const ga = GONE.action(gone_pages); if (ga) actions.push(ga); }
   const pageBody = (keyword, url, page_type) => ({ mode: 'keyword', keyword, page_type: page_type || 'Service Page', ...apiBase, existing_page_url: url || '', receive: ['Keyword Report', 'Page Content'] });
   // B4-3: the search a page is really refreshed FOR — the query that brings it the most impressions, from this run's own

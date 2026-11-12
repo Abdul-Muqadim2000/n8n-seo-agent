@@ -288,8 +288,8 @@ const SM = (() => {
     // seo_sites.declared_services) comes first and is never dropped by what a crawl read; it is kept apart as well, so SM.toRow writes it back
     // unchanged and the weekly Site Tracker can never overwrite it
     const declListOf = (v) => { if (Array.isArray(v)) return v; const j = jparse(v, null); return Array.isArray(j) ? j : listOf(v); };
-    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
-    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
+    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
     const navStored = jparse(row.nav_pages_json, []) || [];
     const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);
     const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);
@@ -356,6 +356,9 @@ const SM = (() => {
   // 404s) is GONE. It is still in the inventory (Google keeps showing it), but no advice may point at it: matchPage never returns it as
   // "the page that answers this search", and the readers list it as a redirect to make (v5/code/_gone.js). Unknown (0) is not gone.
   const isGone = (p) => { const n = Number((p || {}).http_status) || 0; return n === 404 || n === 410; };
+  // section 189 (production review 2026-11-12): an address that answers a redirect (3xx to another path, read by the daily page watch) is not a
+  // page: no search is matched to it and no rule names it as the page for a search
+  const isMoved = (p) => { const n = Number((p || {}).http_status) || 0; return n >= 300 && n < 400; };
   const gonePages = (model) => pages(model).filter(isGone);
   // ---- K8 (2026-10-21, KW-MATCH): the page that is ABOUT the search, not only the page that repeats its words ----
   // The 75% word rule missed techand.ai's live "AI & Automation | What We Do | Tech&" (/whatwedo/ai-automation) for "ai consulting dubai"
@@ -452,7 +455,7 @@ const SM = (() => {
     const isPref = (u) => !!prefKey && (bare(hostOf(u)) + pathOf(u).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase()) === prefKey;
     const want = matchTerms(keyword); if (!want.length) return { match: null, may_overlap: null };
     const key = tokensOf(keyword).join(' ');
-    const inv = pages(model).filter(p => !isGone(p));   // RV-1: a gone page answers nothing
+    const inv = pages(model).filter(p => !isGone(p) && !isMoved(p));   // RV-1: a gone page answers nothing; section 189: nor does an address that redirects
     const brands = brandWords(model); const core = coreTerms(keyword, brands);
     const kSvc = core.length ? serviceHits(model, core, brands) : [];
     const otherService = (p) => { if (!kSvc.length) return false; const ps = serviceHits(model, fieldsOf(p, brands).own, brands); return ps.length > 0 && !ps.some(sv => kSvc.includes(sv)); };
@@ -614,8 +617,25 @@ const SM = (() => {
     return { state: 'planned', text: '' };
   };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, pageMatch, MATCH_CONF, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages, confirmPage,
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, isMoved, gonePages, confirmPage,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms, coreTerms } };
+})();
+// ---- JOBT: a placeholder author job title is no job title (F-29, production review 2026-11-12; build section 189) ----
+// An author job title of "User" was accepted and printed on every byline ("Name, User"), in the Person schema and in the author box. The
+// web app now refuses such a title; profile rows stored before that still carry it, so every engine node that PRINTS a job title reads it
+// through JOBT.real: a placeholder is '' (the line is left out), never printed. The placeholders are only these words, whole, case and
+// spacing aside: "User", "N/A", "-", "none", "test", "job title", "title" ("Owner", "Administrator", "Tester" are real titles). The content
+// readiness rule (_readiness.js, word for word app/shared/src/readiness.ts) is not changed. Inlined by build_v4.py / build_monitors.py
+// (marker JOB_TITLE in a block comment). Pure.
+const JOBT = (() => {
+  const LIST = ['user', 'n/a', '-', 'none', 'test', 'job title', 'title'];
+  const SET = new Set(LIST);
+  const norm = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toLowerCase();
+  /** true for a job title that is not one; an empty title is missing, not a placeholder */
+  const isPlaceholder = (v) => SET.has(norm(v));
+  /** the job title to print: '' for a placeholder, else the title with its spacing collapsed */
+  const real = (v) => (isPlaceholder(v) ? '' : String(v == null ? '' : v).replace(/\s+/g, ' ').trim());
+  return { isPlaceholder, real, LIST };
 })();
 const r = $('Profile Row').first().json; const d = $('Normalize Input').first().json;
 // D15 (system review 2026-10-11): every URL we emit uses the site model's canonical host (SITE_MODEL_SPEC.md §6) -- the bare domain
@@ -626,7 +646,7 @@ let stored = true, store_error = null;
 try { const s = ($('Save Profile').first() || {}).json || {}; if (s.error) { stored = false; store_error = String(s.error.message || s.error.description || s.error).slice(0, 200); } } catch (e) { stored = false; store_error = 'Data Table step did not run: ' + String(e.message || e).slice(0, 160); }
 let old = {}; try { old = $('Load Profile (Profile)').all().map(i => i.json).find(x => x && x.site_id === r.site_id) || {}; } catch (e) {}
 const existed = !!old.site_id; const changed = Object.keys(r).filter(k => !['site_id', 'domain', 'updated_at', 'request_id'].includes(k) && String(r[k] || '') !== String(old[k] == null ? '' : old[k]));
-const has = (k) => !!String(r[k] || '').trim();
+const has = (k) => !!String(/job_title$/.test(k) ? JOBT.real(r[k]) : (r[k] || '')).trim();   // F-29: a placeholder job title ("User") counts as missing
 const onSite = (u) => { const m = String(u || '').match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); const h = m ? m[1].toLowerCase().replace(/^www\./, '') : ''; return !!h && (h === d.domain || h.endsWith('.' + d.domain)); };
 const eeat = [
   { item: 'Author name', ok: has('author_name') },
@@ -645,7 +665,7 @@ const local = [
 const score = (l) => Math.round(100 * l.filter(x => x.ok).length / l.length);
 const home = siteUrlOf(d.domain, '/');
 const sameAs = String(r.author_same_as || '').split(/\s+/).filter(u => /^https?:\/\//.test(u));
-const person = has('author_name') ? { '@context': 'https://schema.org', '@type': 'Person', '@id': home + '#author-' + String(r.author_name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), name: r.author_name, ...(has('author_job_title') ? { jobTitle: r.author_job_title } : {}), ...(has('author_url') ? { url: r.author_url } : (sameAs[0] ? { url: sameAs[0] } : {})), ...(has('author_image_url') ? { image: r.author_image_url } : {}), ...(sameAs.length ? { sameAs } : {}), ...(has('author_knows_about') ? { knowsAbout: String(r.author_knows_about).split(/\s*,\s*/).filter(Boolean) } : {}), worksFor: { '@id': home + '#organization', name: r.business_name || d.domain } } : null;
+const person = has('author_name') ? { '@context': 'https://schema.org', '@type': 'Person', '@id': home + '#author-' + String(r.author_name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), name: r.author_name, ...(has('author_job_title') ? { jobTitle: JOBT.real(r.author_job_title) } : {}), ...(has('author_url') ? { url: r.author_url } : (sameAs[0] ? { url: sameAs[0] } : {})), ...(has('author_image_url') ? { image: r.author_image_url } : {}), ...(sameAs.length ? { sameAs } : {}), ...(has('author_knows_about') ? { knowsAbout: String(r.author_knows_about).split(/\s*,\s*/).filter(Boolean) } : {}), worksFor: { '@id': home + '#organization', name: r.business_name || d.domain } } : null;
 const localBusiness = (has('street_address') || has('phone')) ? { '@context': 'https://schema.org', '@type': 'LocalBusiness', '@id': home + '#business', name: r.business_name || d.domain, url: home, ...(has('phone') ? { telephone: r.phone } : {}), address: { '@type': 'PostalAddress', ...(has('street_address') ? { streetAddress: r.street_address } : {}), ...(has('city') ? { addressLocality: r.city } : {}), ...(has('region') ? { addressRegion: r.region } : {}), ...(has('postal_code') ? { postalCode: r.postal_code } : {}), ...(has('country_code') ? { addressCountry: r.country_code } : {}) } } : null;
 const missE = eeat.filter(x => !x.ok).map(x => x.item.toLowerCase() + (x.hint ? ' (' + x.hint + ')' : '')), missL = local.filter(x => !x.ok).map(x => x.item.toLowerCase());
 const style_guide = ST.from(r, {});   // G31: what is on file about how they write

@@ -44,6 +44,8 @@ import {
   indexPath,
   improveKeywordOf,
   type IndexingForRecs,
+  searchAdviceGate,
+  LRU,
 } from '@seo/shared';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { aiData, alertsData, backlinksData, contentData, ga4Now, gscNow, previousOfType, rankingsData, searchData, settingsData, technicalData } from './data';
@@ -177,6 +179,24 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
     }
     return best ? { label: 'Add to my ladder', addToLadder: { ladderId: best.l.ladderId, head: best.l.headKeyword, keyword: kw } } : undefined;
   };
+  // F-06 (prod review 2026-11-12): a page the website already has for a search (one search one page: the ladder rule LRU.sameSearch, so
+  // "erp software uae" and "erp softwares uae" are one search). Live first, then a draft to finish, then a written page to publish, then
+  // one being written right now (started in the last day). Recommendations never offer a second, paid page for that search.
+  const ownPageFor = (kw: string | null | undefined): ContentItem | undefined => {
+    const k = String(kw ?? '').trim();
+    if (!k) return undefined;
+    const same = x.content.items.filter((c) => c.keyword && LRU.sameSearch(c.keyword, k));
+    const writingNow = (c: ContentItem) => c.status === 'started' && !!c.startedAt && Date.now() - Date.parse(c.startedAt) < 864e5;
+    return same.find((c) => c.status === 'published' || !!c.publishedUrl) ?? same.find((c) => c.status === 'not_ready') ?? same.find((c) => c.status === 'written') ?? same.find(writingNow);
+  };
+  const isLive = (c: ContentItem) => c.status === 'published' || !!c.publishedUrl;
+  /** "Improve the existing page" for a search whose page is live (the Write-a-page form with that page's address) */
+  const improveOwn = (c: ContentItem, kw: string): RecommendationAction => ({
+    label: 'Improve the existing page',
+    mode: 'keyword',
+    prefill: { keyword: kw, ...(c.publishedUrl && urlOnHost(c.publishedUrl, site.domain) ? { existingPageUrl: c.publishedUrl } : {}), receiveReport: true, receiveContent: true },
+  });
+  const OWN_PAGE_NOTE = 'You already have a page for this search, so we improve it instead of writing a second one that would compete with it.';
 
   // ---------- setup ----------
   if (!tracked)
@@ -238,20 +258,38 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
     add({ id: 'setup:checkin', category: 'setup', priority: 'medium', title: 'Monthly Search Console check-in', detail: 'Two questions (manual action? security issue?) and the Pages report, the parts of Search Console the API cannot see.', action: { label: 'Do the check-in', mode: 'checkin' } });
 
   // ---------- search opportunities (latest Search Console period) ----------
+  // F-10 (prod review 2026-11-12): every keyword this page advises on passes the shared fit gate (the engine's kit, as the cadence, the
+  // ladder and the research use it) plus address searches and the client's own brand names (shared search-advice.ts). Before it, a client
+  // was told to "Move 'otherbrand com' into the top 3" (another company's address) and to push its own brand name up.
+  const fits = searchAdviceGate({
+    domain: site.domain,
+    brandNames: site.brandNames ?? [],
+    competitors: [...(site.competitors ?? []), ...(x.settings.monitors?.competitors ?? [])],
+    services: site.services ?? [],
+    chosen: x.rankings.ladders.flatMap((l) => [l.headKeyword, ...l.rungs.map((r) => r.keyword)]),
+  }).ok;
   const period = x.search.periods[0];
-  const queries = x.search.queries.filter((q) => q.periodEnd === period);
+  const queries = x.search.queries.filter((q) => q.periodEnd === period && fits(q.query));
   const striking = queries.filter((q) => q.position >= 4 && q.position <= 20 && q.impressions >= 20).sort((a, b) => b.impressions - a.impressions).slice(0, 6);
   for (const q of striking) {
     const onPage1 = q.position <= 10;
+    // F-06: with no ranking page reported, a page of ours for this search decides: live -> improve it; a draft, a written page or one being
+    // written -> nothing new here (the Content items below ask to finish or publish it)
+    const own = q.page ? undefined : ownPageFor(q.query);
+    if (own && !isLive(own)) continue;
     add({
       id: `search:striking:${q.query}`,
       category: 'search',
       priority: onPage1 && q.impressions >= 100 ? 'high' : 'medium',
       title: onPage1 ? `Move "${q.query}" into the top 3` : `Push "${q.query}" onto page one`,
-      detail: q.page ? `It already ranks with ${q.page.replace(/^https?:\/\/(www\.)?/, '')}. Improving that page (depth, intent match, internal links) is the fastest win.` : 'It already earns impressions; a focused page can win clicks.',
+      detail: q.page ? `It already ranks with ${q.page.replace(/^https?:\/\/(www\.)?/, '')}. Improving that page (depth, intent match, internal links) is the fastest win.` : own && isLive(own) ? `It already earns impressions. ${OWN_PAGE_NOTE}` : 'It already earns impressions; a focused page can win clicks.',
       evidence: `position ${fmtPos(q.position)} · ${q.impressions} impressions · ${q.clicks} clicks in the last period`,
-      action: { label: q.page ? 'Improve the page' : 'Write the page', mode: 'keyword', prefill: { keyword: q.query, ...(q.page && urlOnHost(q.page, site.domain) ? { existingPageUrl: q.page } : {}), receiveReport: true, receiveContent: true } },
-      ...(q.page ? {} : (() => { const a = ladderFor(q.query); return a ? { secondary: a } : {}; })()),
+      action: q.page
+        ? { label: 'Improve the page', mode: 'keyword', prefill: { keyword: q.query, ...(urlOnHost(q.page, site.domain) ? { existingPageUrl: q.page } : {}), receiveReport: true, receiveContent: true } }
+        : own && isLive(own)
+          ? improveOwn(own, q.query)
+          : { label: 'Write the page', mode: 'keyword', prefill: { keyword: q.query, receiveReport: true, receiveContent: true } },
+      ...(q.page || own ? {} : (() => { const a = ladderFor(q.query); return a ? { secondary: a } : {}; })()),
     }, {
       // the impressions and the CTR are this site's own; the CTR it could reach is a published benchmark, so the whole figure is modelled
       impact: impactFromClicks(Math.max(0, (onPage1 ? CTR_AT.top3 : CTR_AT.page1) - q.ctr) * q.impressions * TO_MONTH),
@@ -311,16 +349,34 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
     // 2026-10-21): the draft is finished by hand, so the button opens its report, where each bracket and what to do with it is listed
     let action: RecommendationAction | undefined = fixDraft ? draftAction(a.keyword) : actionFromApiBody(a.apiBody, a.source === 'ai_visibility' ? 'Write the answer page' : 'Run it');
     if (!action && a.type === 'publish' && a.keyword) action = { label: 'Report the published URL', mode: 'published', prefill: { keyword: a.keyword, ...(a.url ? { publishedUrl: a.url } : {}) } };
+    // F-10: a run that writes or improves a page for a search the gate refuses is never advised. Only those: a written page (publish, fix),
+    // the client's own ladder (the rank tracker's next rung) and every action that writes nothing (ask Google to index a page, two pages
+    // competing, a redirect) pass untouched (review S3)
+    if (a.keyword && !fixDraft && a.type !== 'publish' && a.source !== 'rank_tracker' && (action?.mode === 'keyword' || action?.mode === 'ladder') && !fits(a.keyword)) continue;
     // the engine may point at a subdomain page: the page form accepts only the site itself
     if (action?.prefill?.existingPageUrl && !urlOnHost(String(action.prefill.existingPageUrl), site.domain)) delete action.prefill.existingPageUrl;
+    // F-06: a NEW page for a search this website already has a page for is never offered (it would be paid for twice and compete with the
+    // first). Live -> "Improve the existing page"; a draft to finish, a written page to publish or one being written -> left to the Content
+    // items, which ask exactly that
+    let ownNote = '';
+    let ownTitle = '';
+    if (!fixDraft && a.type !== 'publish' && action?.mode === 'keyword' && !action.prefill?.existingPageUrl && a.keyword) {
+      const own = ownPageFor(a.keyword);
+      if (own && !isLive(own)) continue;
+      if (own) {
+        action = improveOwn(own, String(action.prefill?.keyword ?? a.keyword));
+        ownNote = ` ${OWN_PAGE_NOTE}`;
+        ownTitle = `Improve your page for "${a.keyword}"`;
+      }
+    }
     if (!action && a.url) action = { label: 'Open', href: a.url };
     if (!action) action = a.source === 'ai_visibility' ? { label: 'Open AI visibility', page: 'ai' } : a.source === 'rank_tracker' ? { label: 'Open rankings', page: 'rankings' } : { label: 'Open search & traffic', page: 'search' };
     add({
       id: `engine:${a.source}:${a.type}:${a.keyword ?? a.action.slice(0, 60)}`,
       category: cat,
       priority: a.priority <= 1 ? 'high' : a.priority === 2 ? 'medium' : 'low',
-      title: a.action.length > 140 ? a.action.slice(0, 137) + '...' : a.action,
-      detail: a.why,
+      title: ownTitle || (a.action.length > 140 ? a.action.slice(0, 137) + '...' : a.action),
+      detail: a.why + ownNote,
       evidence: `from the ${a.source.replace('_', ' ')} report`,
       action,
     }, {
@@ -432,7 +488,9 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
     add({ id: `content:fix:${c.keyword}`, category: 'content', priority: 'high', title: `Finish the draft for "${c.keyword}" by hand`, detail: `It did not pass the quality check${reasons.length ? `: ${reasons.slice(0, 3).join('; ')}` : ''}. ${DRAFT_BY_HAND}. ${NO_RERUN_NEEDED}`, evidence: c.startedAt ? `written ${Math.max(0, Math.round((now - Date.parse(c.startedAt)) / 864e5))} days ago` : undefined, action: draftAction(c.keyword) });
   }
   // W0-D (2026-10-29): a `held` row is a page that was never written (it waits for the client's OK), so it is never offered as "publish it"
-  for (const c of x.content.items.filter((c) => c.status !== 'published' && c.status !== 'not_ready' && c.status !== 'held' && c.startedAt && now - Date.parse(c.startedAt) > 3 * 864e5).slice(0, 4))
+  // S1-05 (prod review 2026-11-12): nor is a `started` row (a page run that is still writing, or that never finished) or a `failed` one:
+  // only a page the engine wrote (`written`) is offered for publishing
+  for (const c of x.content.items.filter((c) => c.status === 'written' && !c.publishedUrl && c.startedAt && now - Date.parse(c.startedAt) > 3 * 864e5).slice(0, 4))
     add({ id: `content:publish:${c.keyword}`, category: 'content', priority: 'high', title: `Publish the page for "${c.keyword}"`, detail: 'It is written but not live; nothing can rank before it is published. Then report the URL so tracking and link suggestions start.', evidence: `written ${Math.round((now - Date.parse(c.startedAt)) / 864e5)} days ago`, action: { label: 'I published it', mode: 'published', prefill: { keyword: c.keyword } } });
   // keyword-first (SCHEDULING_KEYWORDS_PLAN.md §5.3): nothing is written without a keyword the client chose, so the first step is the keyword
   const ladderCount = x.rankings.ladders.length;
@@ -443,8 +501,12 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
     add({ id: 'keyword:first', category: 'content', priority: 'high', title: 'Choose your first keyword', detail: 'Your keyword research is ready. Pick the keyword you want to be found for (or type your own): its pages are then written every week. Nothing is written before you choose.', action: { label: 'Choose a keyword', page: 'pipeline/new' } });
   if (tracked && ladderCount && (x.content.cadence?.pagesPerWeek ?? 0) === 0)
     add({ id: 'content:cadence', category: 'content', priority: 'low', title: 'Turn on weekly pages for your keywords', detail: 'Your keyword ladders have pages to write, but pages a week is 0, so they wait. Set how many pages a week we write for your keywords.', action: { label: 'Set pages a week', page: 'settings/tracking' } });
-  for (const tr of x.search.trends.filter((t) => /ris|up/i.test(t.direction) && t.changePct >= 50).slice(0, 2))
-    add({ id: `content:trend:${tr.keyword}`, category: 'content', priority: 'medium', title: `Rising search: "${tr.keyword}" (+${Math.round(tr.changePct)}%)`, detail: tr.rising.length ? `Rising related searches: ${tr.rising.slice(0, 3).join(', ')}.` : 'Demand is growing; a timely page can capture it.', action: { label: 'Write a page', mode: 'keyword', prefill: { keyword: tr.keyword } }, ...(() => { const a = ladderFor(tr.keyword); return a ? { secondary: a } : {}; })() });
+  // F-06: a rising search the website already has a page for: improve that page (live), or nothing new (a draft or a page not yet live)
+  for (const tr of x.search.trends.filter((t) => /ris|up/i.test(t.direction) && t.changePct >= 50 && fits(t.keyword) && !(ownPageFor(t.keyword) && !isLive(ownPageFor(t.keyword)!))).slice(0, 2)) {
+    const own = ownPageFor(tr.keyword);
+    const rising = tr.rising.length ? `Rising related searches: ${tr.rising.slice(0, 3).join(', ')}.` : 'Demand is growing; a timely page can capture it.';
+    add({ id: `content:trend:${tr.keyword}`, category: 'content', priority: 'medium', title: `Rising search: "${tr.keyword}" (+${Math.round(tr.changePct)}%)`, detail: own ? `${rising} ${OWN_PAGE_NOTE}` : rising, action: own ? improveOwn(own, tr.keyword) : { label: 'Write a page', mode: 'keyword', prefill: { keyword: tr.keyword } }, ...(own ? {} : (() => { const a = ladderFor(tr.keyword); return a ? { secondary: a } : {}; })()) });
+  }
 
   // ---------- rankings ----------
   for (const l of x.rankings.ladders) {

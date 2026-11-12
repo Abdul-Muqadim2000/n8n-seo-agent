@@ -791,6 +791,23 @@ function fitCareer(keyword, o) {
 }
 // ctx: { intent, own_domain, competitors: [domains, declared], serp_domains: [domains on the results page / auto-detected rivals], brands: { name: domain } (learned),
 //       serp: [this keyword's own top domains, in rank order] (optional), protect: [words of the head term / seeds / services], relevance: fn (G19 hook) }
+// F-10 (production review 2026-11-12, section 189): a search for one website by its ADDRESS ("zylo com", "zylo.com", "www zylo", "zylo co uk")
+// is navigational whatever the search data says: people want that site, not a page of yours (the Recommendations told a client to move
+// "otherbrand com" into the top 3). The same rule as the web app's addressSearchLabel (app/shared/src/search-advice.ts). "net" is left out
+// ("asp net" is a subject), and so are "node.js" / "asp.net" (js and net are not a top-level domain people type here).
+const FIT_ADDRESS_TAIL = /(?:^|\s)(?:com|org|biz|info)(?:\s[a-z]{2})?$|(?:^|\s)co\s[a-z]{2}$/;
+const FIT_HOST_TOKEN = /(?:^|\s)(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|org|io|ai|co|ae|sa|pk|qa|om|kw|bh|eg|in|uk|us|de|fr|biz|info)(?:\/\S*)?(?=\s|$)/;
+/** a search for one website by its address: the label typed ("zylo"), or '' */
+const fitAddressLabel = (query) => {
+  const q = String(query == null ? '' : query).replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!q) return '';
+  const host = q.match(FIT_HOST_TOKEN);
+  if (host) return host[0].trim().replace(/^https?:\/\//, '').replace(/^www\./, '').split(/[./]/)[0];
+  if (/^www(\s|\.|$)/.test(q)) return q.replace(/^www[\s.]*/, '').split(/[\s.]/)[0] || 'www';
+  const tail = q.match(FIT_ADDRESS_TAIL);
+  if (tail) { const words = q.slice(0, tail.index).trim().split(' ').filter(Boolean); if (words.length >= 1 && words.length <= 2) return words.join(''); }
+  return '';
+};
 function fitGate(keyword, ctx) {
   ctx = ctx || {};
   // KW-GATE (2026-10-21): an Arabic keyword is judged on its English reading (fitArabic); the sentence says how it was read
@@ -816,6 +833,11 @@ function fitGate(keyword, ctx) {
     if (has(FIT_JOBS) && !sellsWhat.jobs) return { ok: false, reason: 'job search', detail: 'people looking for work at this company (' + l + '), not buyers of what it sells' };
     return { ok: false, reason: 'own brand', detail: 'names the website itself (' + l + ')' };
   }
+  // 1b. F-10 (section 189): a search for a website by its address (the website's own, or another one)
+  { const al = fitAddressLabel(kw); if (al) { const own = fitHost(ctx.own_domain).split('.')[0];
+    return (own && (al === own || (own.length >= 4 && al.includes(own))))
+      ? { ok: false, reason: 'own brand', detail: 'people looking for your own website by its address (' + kw + ')' }
+      : { ok: false, reason: 'navigational', detail: 'people looking for one website by its address (' + kw + '), not for what you sell' }; } }
   // 2. the search data says navigational
   if (String(ctx.intent || '').toLowerCase() === 'navigational') return { ok: false, reason: 'navigational', detail: 'the search data classifies it as navigational (people look for one particular website)' };
   // 2b. MKT (2026-10-27, AUDIT M4): with the website's market given (ctx.market, ISO-2), a keyword that names only places outside it is a
@@ -1370,7 +1392,7 @@ const AIP = (() => {
   // could be refused on one path and asked on the other. Both now build the gate's input here, from the same rows.
   const servicesOfRow = (row) => { const r = row || {}; if (!(S(r.canonical_host) || S(r.model_updated_at))) return [];
     const arr = (v) => { const x = parse(v, null); return Array.isArray(x) ? x : listOf(v); };
-    return [...new Set([...arr(r.declared_services), ...arr(r.services_json)].map(s => S(s).slice(0, 80)).filter(Boolean))].slice(0, 30); };
+    return [...new Set([...arr(r.declared_services), ...arr(r.services_json)].map(s => S(s).slice(0, 120)).filter(Boolean))].slice(0, 30); };
   const fitInput = (o) => { const x = o || {};
     return { own_domain: S(x.domain), competitors: [...new Set((x.competitors || []).map(S).filter(Boolean))].slice(0, 8), brands: x.aliases || {},
       heads: [...new Set((x.ladders || []).map(l => S(l.head_keyword)).filter(Boolean))], services: (x.services || []).slice(0, 30), keywords: x.keywords || [] }; };
@@ -1992,7 +2014,7 @@ const AIE = (() => {
     return [...new Set([dom, ...(plan.brand_names || [])].map(x => L(x).trim()).filter(x => x.length >= 3 && !(low(x) === label && commonWord(label) && low(plan.business_name || '') !== label)))]; };
 
   /** what a site row says it sells (seo_sites: declared_services, services_json) - the pulse has no site model of its own */
-  const servicesOf = (row) => { const r = row || {}; const out = []; const add = (v) => { if (Array.isArray(v)) v.forEach(add); else if (v) String(v).split(/\n|;|\|/).forEach(x => { const t = x.trim(); if (t) out.push(t.slice(0, 80)); }); };
+  const servicesOf = (row) => { const r = row || {}; const out = []; const add = (v) => { if (Array.isArray(v)) v.forEach(add); else if (v) String(v).split(/\n|;|\|/).forEach(x => { const t = x.trim(); if (t) out.push(t.slice(0, 120)); }); };
     add(r.services); add(r.declared_services); try { add(JSON.parse(r.services_json || '[]')); } catch (e) {} return [...new Set(out)].slice(0, 30); };
   // ---- the client's platforms: what its services, topics and facts name ----
   const clientText = (plan) => [plan.business_type, ...(plan.services || []), ...(plan.topics || []), plan.business_facts, plan.accreditation].filter(Boolean).map(String).join(' \n ');

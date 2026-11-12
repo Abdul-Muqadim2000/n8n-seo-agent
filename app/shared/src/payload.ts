@@ -9,6 +9,7 @@
 import { GOALS, PAGE_TYPES } from './constants';
 import type { MonitorSettings, RunInput } from './schemas';
 import { factsForEngine, type FactAnswers } from './page-review';
+import { isPlaceholderJobTitle, realJobTitle } from './profile';
 
 export interface SiteContext {
   domain: string;
@@ -117,6 +118,19 @@ export function factsBody(s: Pick<SiteContext, 'factAnswers'> | null | undefined
 /** The fixed head every body starts with (see the note above). */
 function head(mode: string, keyword: string, country: string, domain: string, d: Delivery, business = '', customers = ''): Body {
   return { mode, keyword, country, domain, email: d.email, callback_url: d.callbackUrl, business, customers };
+}
+
+
+/**
+ * F-29 (prod review 2026-11-12): the job title the engine stores for a byline. The engine keeps a stored field when it gets '' and clears
+ * it on '-' (Profile_Row.js), so a placeholder ("User", "N/A") is sent as '-' (never stored, never printed). An empty title next to a name
+ * is sent as '-' only from the app's profile form (`clearEmptyTitles`): the form is filled from the stored row, so an emptied title there
+ * means the person has none. Every other caller (API v1, MCP) keeps the stored title with an empty one (review S8; app/API.md).
+ */
+export function jobTitleOut(title: string | null | undefined, name: string | null | undefined, clearEmpty = false): string {
+  const real = realJobTitle(title);
+  if (real) return real;
+  return isPlaceholderJobTitle(title) || (clearEmpty && String(name ?? '').trim()) ? '-' : '';
 }
 
 export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: Delivery): Body {
@@ -268,7 +282,7 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         ...head('profile', '', input.address.country, dom, d),
         author: {
           name: input.author.name,
-          job_title: input.author.jobTitle,
+          job_title: jobTitleOut(input.author.jobTitle, input.author.name, input.clearEmptyTitles),
           credentials: input.author.credentials,
           bio: input.author.bio,
           url: input.author.url,
@@ -276,7 +290,7 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
           image_url: input.author.imageUrl,
           knows_about: input.author.knowsAbout,
         },
-        reviewer: { name: input.reviewer.name, job_title: input.reviewer.jobTitle, url: input.reviewer.url },
+        reviewer: { name: input.reviewer.name, job_title: jobTitleOut(input.reviewer.jobTitle, input.reviewer.name, input.clearEmptyTitles), url: input.reviewer.url },
         business_name: input.businessName,
         business_type: input.businessType,
         address: {

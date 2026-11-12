@@ -1,6 +1,7 @@
 /*__SOURCES__*/
 /*__GRADE__*/
 /*__ANCHOR__*/
+/*__JOB_TITLE__*/
 /*__SITE_MODEL__*/
 /*__COVERAGE__*/
 /*__PLACEHOLDERS__*/
@@ -863,7 +864,7 @@ const P = MNAP ? { ...P0, business_name: String(P0.business_name || SM.name(MODE
   phone: P0.phone || MNAP.phone || '', public_email: P0.public_email || MNAP.public_email || '', price_range: P0.price_range || MNAP.price_range || '',
   address: { street: PA0.street || MNAP.street_address || '', city: PA0.city || MNAP.city || '', region: PA0.region || MNAP.region || '',
     postal_code: PA0.postal_code || MNAP.postal_code || '', country_code: PA0.country_code || MNAP.country_code || '' } } : P0;
-const PA = P.address || {}; const AU = prev.author || null; const RV = prev.reviewer || null; const role = prev.page_role || 'standard';
+const PA = P.address || {}; const AU = prev.author ? { ...prev.author, job_title: JOBT.real(prev.author.job_title) } : null; const RV = prev.reviewer ? { ...prev.reviewer, job_title: JOBT.real(prev.reviewer.job_title) } : null;   /* F-29: no "User" in the schema */ const role = prev.page_role || 'standard';
 const nap_source = MNAP ? (P0.street_address || PA0.street || P0.phone ? 'profile' : (MNAP.source || '')) : (PA0.street || P0.phone ? 'profile' : '');
 const bizName = String(P.business_name || ((prev.site_description && prev.site_description.business_name) ? prev.site_description.business_name : '')).trim();
 const biz = bizName || '[Your Business Name]';

@@ -1,6 +1,7 @@
 /*__SOURCES__*/
 /*__ANCHOR__*/
 /*__SITE_MODEL__*/
+/*__JOB_TITLE__*/
 /*__LINEAGE__*/
 // Framework-agnostic blog package for every content run: the article as clean HTML (with the JSON-LD blocks), as Markdown, and a meta.json
 // (title, slug, meta description, H1, keywords, headings, links, schema, word count, content score, suggested URL, publish checklist).
@@ -71,7 +72,9 @@ const opaqueRedirect = (v) => typeof v === 'string' && SRC.isRedirect(v) && !SRC
 const cleanUrls = (x) => Array.isArray(x) ? x.filter(v => !opaqueRedirect(v)).map(cleanUrls) : opaqueRedirect(x) ? '' : (x && typeof x === 'object') ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, cleanUrls(v)])) : (typeof x === 'string' && /^https?:\/\//i.test(x) ? SRC.clean(x) : x);
 const schema = (Array.isArray(d.schema_blocks) ? d.schema_blocks : []).map(b => (b && b.json) ? { ...b, json: cleanUrls(b.json) } : cleanUrls(b));
 const title = metaLines.title || h1 || d.keyword || 'New page';
-const slug = (String(d.content_brief_slug || metaLines.slug || title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)) || 'page';
+const slugOf = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
+// F-05 (production review 2026-11-12): a title with no Latin letters left the slug "page" (every such page at /page); the keyword's own slug comes first
+const slug = slugOf(d.content_brief_slug || metaLines.slug || title) || slugOf(d.keyword) || 'page';
 const description = /^(?:Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary Keywords|URL|Page Type)\s*:/i.test(metaLines['meta description'] || '') ? '' : (metaLines['meta description'] || '');   // W0-A: a field label is never a description
 const headings = [...md.matchAll(/^(#{2,3})\s+(.+)$/gm)].map(x => ({ level: x[1].length, text: x[2].trim() }));
 const links = [...md.matchAll(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g)].map(x => ({ text: x[1], url: x[2] }));
@@ -114,7 +117,8 @@ let bodyHtml = mdToHtml(md); let mdOut = md;
 // ---- v4.4 blocks: E-E-A-T byline and author box, table of contents, hub cluster block, case snapshot, local NAP, video ----
 const role = d.page_role || 'standard'; const pt = String(d.recommended_page || d.page_type || '').toLowerCase();
 const articleLike = d.article_like != null ? !!d.article_like : /blog|guide|article|pillar|hub|case stud/.test(pt);
-const AU = d.author || null, RV = d.reviewer || null, P = d.site_profile || null, V = d.video && d.video.url ? d.video : null, CS = d.case_study || null;
+const AU = d.author ? { ...d.author, job_title: JOBT.real(d.author.job_title) } : null, RV = d.reviewer ? { ...d.reviewer, job_title: JOBT.real(d.reviewer.job_title) } : null,   // F-29: no "User" in a byline
+  P = d.site_profile || null, V = d.video && d.video.url ? d.video : null, CS = d.case_study || null;
 // W05-A (wave 0.5, 2026-10-30): the visible "Updated" date is the website's market day (Regulatory Plan's as_of, in the market's time
 // zone: Asia/Dubai for the UAE), the day the second read and the regulatory status take as today. A run at 22:31 UTC on 29 October dated
 // a UAE page 29 October while the read and the deadlines said 30 October. UTC only when no market day is known.

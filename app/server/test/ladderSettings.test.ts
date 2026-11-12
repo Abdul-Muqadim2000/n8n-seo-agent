@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LADDER_SETTINGS_COLUMNS, type LadderRow, type LadderSettingsRow } from '@seo/shared';
 import { HttpError } from '../src/lib/errors';
-import { assertLadderOfSite, automationWrite, ladderOrder, ladderOrderWrites, ladderSettingsWrites, settingsData, wonWrite, type SettingsWrite } from '../src/services/ladderSettings';
+import { ARCHIVED_LADDER_MESSAGE, assertLadderOfSite, automationWrite, ladderOrder, ladderOrderWrites, ladderSettingsWrites, settingsData, wonWrite, type SettingsWrite } from '../src/services/ladderSettings';
 
 const site = { domain: 'techand.ai' };
 const NOW = '2026-10-03T12:00:00.000Z';
@@ -113,5 +113,25 @@ describe('ladder settings: order, won, website defaults', () => {
   it('a ladder that is not one of the website\'s is a 404', () => {
     expect(() => assertLadderOfSite(ladders, 'lad_a')).not.toThrow();
     for (const id of ['lad_other', '_site', '']) expect(() => assertLadderOfSite(ladders, id)).toThrow(expect.objectContaining({ statusCode: 404 }));
+  });
+});
+
+describe('S3-06: an archived ladder stays archived', () => {
+  it('Resume or Pause of an archived ladder is refused (409, plain words) and nothing is written; its mode can still change', () => {
+    const settings = [row('lad_a', { status: 'archived', priority: 2 })];
+    for (const status of ['active', 'paused'] as const) {
+      let err: unknown = null;
+      try {
+        ladderSettingsWrites({ site, ladders, settings, ladderId: 'lad_a', change: { status }, now: NOW });
+      } catch (e) {
+        err = e;
+      }
+      expect(err).toBeInstanceOf(HttpError);
+      expect((err as HttpError).statusCode).toBe(409);
+      expect((err as HttpError).message).toBe(ARCHIVED_LADDER_MESSAGE);
+    }
+    expect(ladderSettingsWrites({ site, ladders, settings, ladderId: 'lad_a', change: { mode: 'manual' }, now: NOW })).toEqual([{ ladderId: 'lad_a', insert: false, data: { mode: 'manual', updated_at: NOW } }]);
+    // a paused ladder resumes as before
+    expect(ladderSettingsWrites({ site, ladders, settings: [row('lad_a', { status: 'paused', priority: 1 })], ladderId: 'lad_a', change: { status: 'active' }, now: NOW })).toEqual([{ ladderId: 'lad_a', insert: false, data: { status: 'active', updated_at: NOW } }]);
   });
 });

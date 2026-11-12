@@ -1,15 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 import { nudgeLiveGrade } from '../services/liveGrade';
-import { ingestCallback, orgByHookToken } from '../services/runs';
+import { healHookRouting, ingestCallback, orgByHookTokenMatch } from '../services/runs';
 
 /** n8n -> app: every callback of a company's runs and scheduled reports. The company is identified by the token in the URL. */
 export async function hookRoutes(app: FastifyInstance) {
   app.post('/api/hooks/n8n/:token', { bodyLimit: 40 * 1024 * 1024, config: { rateLimit: { max: 600, timeWindow: '1 minute' } } }, async (req, reply) => {
-    const org = await orgByHookToken((req.params as { token: string }).token);
-    if (!org) return reply.status(404).send({ error: 'Unknown callback' });
+    const match = await orgByHookTokenMatch((req.params as { token: string }).token);
+    if (!match) return reply.status(404).send({ error: 'Unknown callback' });
+    const org = match.org;
     const body = req.body;
     if (!body || typeof body !== 'object' || Array.isArray(body)) return reply.status(400).send({ error: 'JSON object expected' });
     const r = await ingestCallback(org, body as Record<string, unknown>);
+    // review S3: a report on the token before the last rotation: that website's engine rows are pointed at the current address again
+    if (match.previous) void healHookRouting(org, (body as Record<string, unknown>).domain).catch(() => undefined);
     // client reports 2026-11-11: a publish check of a live page: its live grade is made shortly (the 10-minute job alone is enough)
     if (r.stage === 'published') nudgeLiveGrade(req.log);
     req.log.info({ org: org.id, stage: r.stage, run: r.runId, report: r.reportId, ...(r.ladderWon !== undefined ? { ladderWon: r.ladderWon } : {}), ...(r.prefsApplied !== undefined ? { prefsApplied: r.prefsApplied } : {}) }, 'n8n callback stored');

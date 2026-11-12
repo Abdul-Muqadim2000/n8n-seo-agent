@@ -29,10 +29,14 @@ export const PAGE_SLOT_STAGE = 'page_slot';
 export const PAGE_WAITING = 'page_waiting';
 /** the run's lastStage once its page took a slot after waiting */
 export const PAGE_WRITING = 'page_writing';
-/**
- * How long a page run's opening content-log row (`started`) can still belong to a live run: up to 6 hours in line for a writing slot plus
- * the 2-hour run limit. An older `started` row is a run that never finished: no page is on its way.
- */
-export const PAGE_IN_FLIGHT_HOURS = 8;
 /** what the run page says while a page waits for its slot */
 export const PAGE_WAITING_NOTE = 'Pages are written two at a time; yours starts as soon as one finishes. Nothing is charged while it waits.';
+/**
+ * Prod review 2026-11-12 (S1-05): how long a page run may be on its way. A page run runs at most 2 hours (the engine's executionTimeout
+ * 7200, AIR-PAGETIME); one more hour of margin for a slow callback. A content-log row still `started` after this never finished: it is no
+ * page, never a page waiting to be published, and it never counts towards the pile-up limit. The writing-slot gate (plan P1, branch
+ * fix/page-slots, not deployed) lets a page wait up to 6 hours before it runs and raises this to 8 together with Cadence_Plan.js.
+ */
+export const PAGE_IN_FLIGHT_HOURS = 3;
+/** the engine's Cadence_Plan.js `in_flight_hours` (the cadence's "already started this week" window); 8 with plan P1 */
+export const CADENCE_IN_FLIGHT_HOURS = 2;

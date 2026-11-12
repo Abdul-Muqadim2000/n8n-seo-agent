@@ -195,8 +195,12 @@ return sites.map((s, idx) => {
   const goneRows = SM.gonePages(model); const goneKeys = new Set(goneRows.map(p => GONE.keyOf(p.url)));
   const isGoneUrl = (u) => !!u && goneKeys.has(GONE.keyOf(u));
   const trafficBy = new Map(); for (const p0 of ((gsc && gsc.pages) || [])) { const k = GONE.keyOf(p0.page); const t = trafficBy.get(k) || { impressions: 0, clicks: 0 }; t.impressions += Number(p0.impressions) || 0; t.clicks += Number(p0.clicks) || 0; trafficBy.set(k, t); }
-  const liveForRedirect = SM.pages(model).filter(p => !SM.isGone(p) && (p.source === 'sitemap' || (Number(p.http_status) >= 200 && Number(p.http_status) < 300)));
-  const gone_pages = GONE.plan(goneRows.map(p => ({ url: p.url, status: p.http_status, ...(trafficBy.get(GONE.keyOf(p.url)) || {}) })), liveForRedirect, SM.siteUrl(model, '/'));
+  const liveForRedirect = SM.pages(model).filter(p => !SM.isGone(p) && !SM.isMoved(p) && (p.source === 'sitemap' || (Number(p.http_status) >= 200 && Number(p.http_status) < 300)));
+  // production review 2026-11-12 (F-03, section 189): the 301 advice names only the pages two reads found gone, the newer this week (Page
+  // Inventory `gone_confirmed`); a stored 404 nobody read again is not advised on (11 of them answered 200 on 2026-11-12)
+  const confirmedG = inv && Array.isArray(inv.gone_confirmed) ? new Set(inv.gone_confirmed.map(u => GONE.keyOf(u))) : null;
+  const goneAdvise = confirmedG ? goneRows.filter(p => confirmedG.has(GONE.keyOf(p.url))) : goneRows;
+  const gone_pages = GONE.plan(goneAdvise.map(p => ({ url: p.url, status: p.http_status, ...(trafficBy.get(GONE.keyOf(p.url)) || {}) })), liveForRedirect, SM.siteUrl(model, '/'));
   { const ga = GONE.action(gone_pages); if (ga) actions.push(ga); }
   const pageBody = (keyword, url, page_type) => ({ mode: 'keyword', keyword, page_type: page_type || 'Service Page', ...apiBase, existing_page_url: url || '', receive: ['Keyword Report', 'Page Content'] });
   // B4-3: the search a page is really refreshed FOR — the query that brings it the most impressions, from this run's own

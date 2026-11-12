@@ -1,3 +1,4 @@
+/*__JOB_TITLE__*/
 // One writer job per site with this week's best ready prospects: what the e-mails may say (business profile facts, our page and its title,
 // the link text to ask for) and what each one is about (their page, the evidence to quote, the angle, the contact, the deadline).
 const sites = $('LB Assemble').all().map(i => i.json).filter(s => !s.skip);
@@ -20,7 +21,7 @@ for (const s of sites) {
     p.accreditation ? 'Accreditation on file: ' + p.accreditation : '',   // nothing on file -> the word does not appear here at all: the draft gate checks every claim against these facts, and the prompt forbids claiming one
     p.brand_known ? '' : 'The business name is not on file: write [Confirm: the business name], never the website address',
     p.competitors.length ? 'Competitors (never praise or attack them): ' + p.competitors.join(', ') : ''].filter(Boolean).join('\n');
-  const signer = pr.author_name ? pr.author_name + (pr.author_job_title ? ', ' + pr.author_job_title : '') + ', ' + business : '[Your name], ' + business;
+  const signer = pr.author_name ? pr.author_name + (JOBT.real(pr.author_job_title) ? ', ' + JOBT.real(pr.author_job_title) : '') + ', ' + business : '[Your name], ' + business;
   out.push({ json: { site_id: s.site_id, domain: s.domain, business, facts, signer, home: p.home,
     jobs: s.jobs.map((j, i) => { const ck = parse(j.checks_json, {}) || {}; const c = (parse(j.contacts_json, []) || [])[0] || {};
       return { n: i + 1, prospect_domain: j.prospect_domain, type: j.type, angle: ck.angle === 'broken' || j.type === 'broken' ? 'broken' : j.type, page_url: j.page_url, page_title: j.page_title, evidence: j.evidence,

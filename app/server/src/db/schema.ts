@@ -304,6 +304,9 @@ export const organizations = pgTable(
     website: text('website').notNull().default(''),
     /** capability token in the n8n callback URL (/api/hooks/n8n/<token>) */
     hookToken: text('hook_token').notNull(),
+    /** S5-05: the token before the last rotation, still accepted until `hookTokenRotatedAt` + the grace period (runs already in flight) */
+    previousHookToken: text('previous_hook_token'),
+    hookTokenRotatedAt: ts('hook_token_rotated_at'),
     monthlyBudgetUsd: doublePrecision('monthly_budget_usd').notNull(),
     /** B-R1: where this company's finished reports are pushed (shared/src/report-delivery.ts `DeliverySettings`); the webhook's
      *  signing secret is sealed into `deliveryWebhookSecret`, never into here, so the settings can go back to the browser as they are */

@@ -161,8 +161,8 @@ const SM = (() => {
     // seo_sites.declared_services) comes first and is never dropped by what a crawl read; it is kept apart as well, so SM.toRow writes it back
     // unchanged and the weekly Site Tracker can never overwrite it
     const declListOf = (v) => { if (Array.isArray(v)) return v; const j = jparse(v, null); return Array.isArray(j) ? j : listOf(v); };
-    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
-    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
+    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
     const navStored = jparse(row.nav_pages_json, []) || [];
     const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);
     const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);
@@ -229,6 +229,9 @@ const SM = (() => {
   // 404s) is GONE. It is still in the inventory (Google keeps showing it), but no advice may point at it: matchPage never returns it as
   // "the page that answers this search", and the readers list it as a redirect to make (v5/code/_gone.js). Unknown (0) is not gone.
   const isGone = (p) => { const n = Number((p || {}).http_status) || 0; return n === 404 || n === 410; };
+  // section 189 (production review 2026-11-12): an address that answers a redirect (3xx to another path, read by the daily page watch) is not a
+  // page: no search is matched to it and no rule names it as the page for a search
+  const isMoved = (p) => { const n = Number((p || {}).http_status) || 0; return n >= 300 && n < 400; };
   const gonePages = (model) => pages(model).filter(isGone);
   // ---- K8 (2026-10-21, KW-MATCH): the page that is ABOUT the search, not only the page that repeats its words ----
   // The 75% word rule missed techand.ai's live "AI & Automation | What We Do | Tech&" (/whatwedo/ai-automation) for "ai consulting dubai"
@@ -325,7 +328,7 @@ const SM = (() => {
     const isPref = (u) => !!prefKey && (bare(hostOf(u)) + pathOf(u).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase()) === prefKey;
     const want = matchTerms(keyword); if (!want.length) return { match: null, may_overlap: null };
     const key = tokensOf(keyword).join(' ');
-    const inv = pages(model).filter(p => !isGone(p));   // RV-1: a gone page answers nothing
+    const inv = pages(model).filter(p => !isGone(p) && !isMoved(p));   // RV-1: a gone page answers nothing; section 189: nor does an address that redirects
     const brands = brandWords(model); const core = coreTerms(keyword, brands);
     const kSvc = core.length ? serviceHits(model, core, brands) : [];
     const otherService = (p) => { if (!kSvc.length) return false; const ps = serviceHits(model, fieldsOf(p, brands).own, brands); return ps.length > 0 && !ps.some(sv => kSvc.includes(sv)); };
@@ -487,7 +490,7 @@ const SM = (() => {
     return { state: 'planned', text: '' };
   };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, pageMatch, MATCH_CONF, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages, confirmPage,
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, isMoved, gonePages, confirmPage,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms, coreTerms } };
 })();
 // ---- DUP: "the site already has a page aimed at this search", one rule (page-quality W0-D, 2026-10-29; PLAN §2.1, RE M7, R4 G4) ----
@@ -562,7 +565,8 @@ const DUP = (() => {
     const pp = placesIn(S(page && page.title) + ' ' + S(page && page.h1) + ' ' + S(page && page.url).replace(/^https?:\/\/[^\/]+/i, '').replace(/[-_\/]+/g, ' '));
     if (!pp.length || pp.some(p => p.iso.includes(m))) return null;
     return [...new Set(pp.map(p => p.word))]; };
-  const SHARE = 75, MAX = 3;
+  const SHARE = 75, MAX = 3, FRESH_DAYS = 14;
+  const fresh = (at) => { const t = Date.parse(S(at)); return Number.isFinite(t) && (Date.now() - t) / 864e5 <= FRESH_DAYS; };
   // the tokenizer of SHG (_shingle.js), character for character, so the late check finds what it always found
   const norm = (t) => S(t)
     .replace(/```[\s\S]*?```/g, ' ')
@@ -583,7 +587,7 @@ const DUP = (() => {
   const targets = (keyword, pages, opts) => {
     const o = opts || {};
     const kw = toks(keyword);
-    const out = { targets: [], partial: [], self: [], other_market: [], keyword_words: kw.size, basis: '' };
+    const out = { targets: [], partial: [], self: [], other_market: [], not_live: [], keyword_words: kw.size, basis: '' };
     if (!kw.size) { out.basis = 'the keyword has no word of 3 letters or more to compare'; return out; }
     const list = (Array.isArray(pages) ? pages : []).filter(p => p && S(p.url));
     const sets = list.map(pageToks);
@@ -599,6 +603,11 @@ const DUP = (() => {
     for (let i = 0; i < list.length; i++) {
       const p = list[i]; const k = keyOf(p.url);
       if (!k || skip.has(k)) continue;
+      // production review 2026-11-12 (S3-05, section 189): an address that redirects (3xx) or is gone (404 / 410), as the page inventory read
+      // it in the last FRESH_DAYS, is not a page of the site: never "the page for the same search" (/dynamics-365-business-central-uae had
+      // answered 308 for days). An older reading is not trusted either way (a stored 404 from weeks ago answered 200 again: F-03)
+      const st = Number(p.http_status) || 0;
+      if (((st >= 300 && st < 400) || st === 404 || st === 410) && fresh(p.status_at)) { out.not_live.push({ url: S(p.url), http_status: st }); continue; }
       const set = sets[i]; if (!set.size) continue;
       let hit = 0, hw = 0;
       for (const t of kw) if (set.has(t)) { hit++; hw += w[t]; }
