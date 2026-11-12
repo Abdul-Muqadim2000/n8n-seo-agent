@@ -57,6 +57,7 @@ import { actionFromApiBody } from './recommendations';
 import { filesFor, toReport } from './runs';
 import { quoteCredits } from './billing';
 import { customerError } from '../lib/customerError';
+import { PAGE_IN_FLIGHT_HOURS } from '@seo/shared';
 import { creditsOfUsd } from './admin/settings';
 
 // Keyword ladders on the Pipeline page (PIPELINE_FEATURE_SPEC.md §4, §6, §8): one card per ladder and its detail (the climb,
@@ -84,7 +85,8 @@ export const SITE_ROW = LADDER_SITE_ROW;
 /** keyword-first (2026-10-19): the autopilot level decides what is written on its own (default 2); `opportunities` and `autoStartLadders`
  *  are kept for older screens and decide nothing (a stored `auto` reads as "suggest", R-K3). */
 export const SITE_DEFAULTS: SiteAutomation = { autopilotLevel: DEFAULT_AUTOPILOT_LEVEL, defaultMode: 'auto', opportunities: 'auto', autoStartLadders: false, maxActiveLadders: 2, maxWaiting: 3 };
-const WRITING_WINDOW_MS = 3 * 3600_000;
+// S1-05: a page run may be on its way this long (a writing slot, then the run itself)
+const WRITING_WINDOW_MS = PAGE_IN_FLIGHT_HOURS * 3600_000;
 const ACTIVE_RUN = ['submitting', 'accepted', 'running'];
 
 const norm = normKeyword;
@@ -315,8 +317,19 @@ export function failedPageRequests(runs: Pick<SiteRun, 'mode' | 'status' | 'requ
  * 2026-11-03) and a keyword held for the client's OK (`held`, W05-B; it has its own Needs-you item). The engine's count
  * (v5/code/_waiting.js WAITS) agrees: only `written` / `not_ready` wait. A `not_ready` draft is a written page and still waits.
  */
-export function noPageRow(l: Pick<ContentLogRow, 'status' | 'request_id'>, failedRequests?: ReadonlySet<string>): boolean {
-  return l.status === 'held' || failedPageRow(l, failedRequests);
+export function noPageRow(l: Pick<ContentLogRow, 'status' | 'request_id'> & { started_at?: string }, failedRequests?: ReadonlySet<string>, now: number = Date.now()): boolean {
+  return l.status === 'held' || failedPageRow(l, failedRequests) || unfinishedPageRow(l, now);
+}
+
+/**
+ * Prod review 2026-11-12 (S1-05): a page run cancelled at its time limit, or cut off by a crash, leaves its opening content-log row at
+ * `started` (the engine marks nothing; three such rows held a client's autopilot behind the pile-up limit). A `started` row older than
+ * PAGE_IN_FLIGHT_HOURS did not finish: no page, shown as "did not finish". A younger one is still being written (not waiting to be published).
+ */
+export function unfinishedPageRow(l: { status?: string; started_at?: string }, now: number = Date.now()): boolean {
+  if (l.status !== 'started') return false;
+  const t = Date.parse(String(l.started_at || ''));
+  return !Number.isFinite(t) || now - t >= WRITING_WINDOW_MS;
 }
 
 /** State of a page from its content-log rows (newest first), reports and app runs. */
@@ -331,7 +344,7 @@ function logState(allLogs: ContentLogRow[], reports: PageReport[], runs: SiteRun
     if (!arrived && !retried) return { state: 'planned', writtenAt: null };
   }
   // rows that stand for no page are not a written page; when they are all the keyword has, no page exists: it is planned again
-  const logs = allLogs.filter((l) => !noPageRow(l, failedPageRequests(runs)));
+  const logs = allLogs.filter((l) => !noPageRow(l, failedPageRequests(runs), now));
   if (!logs.length && allLogs.length) return { state: 'planned', writtenAt: null };
   const log = logs.find((l) => l.status !== 'published' && !l.published_url);
   if (!log) return null;

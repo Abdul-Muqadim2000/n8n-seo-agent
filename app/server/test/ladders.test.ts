@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ENGINE_STOPPED_ERROR } from '../src/lib/customerError';
 import { MODES, type ContentLogRow, type LadderRow, type LadderSettingsRow, type QueryRow, type QueueItem, type RankHistoryRow } from '@seo/shared';
 import { buildLadders, ladderNeedsYou, siteAutomation, type LadderSchedule, type LadderSources, type SiteRun } from '../src/services/ladders';
 import { simulateCadence } from '../src/services/cadence';
@@ -339,7 +340,8 @@ describe('needs you', () => {
       ],
       NOW,
     );
-    expect(f.map((x) => [x.id, x.title, x.detail, x.action?.runId])).toEqual([['failed:audit-fail', 'Technical audit: did not finish', 'n8n: crawl timed out', 'audit-fail']]);
+    // S2-08: the engine's raw text ('n8n: crawl timed out') is never shown to the client; the plain sentence is
+    expect(f.map((x) => [x.id, x.title, x.detail, x.action?.runId])).toEqual([['failed:audit-fail', 'Technical audit: did not finish', ENGINE_STOPPED_ERROR, 'audit-fail']]);
   });
 });
 

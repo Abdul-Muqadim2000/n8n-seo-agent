@@ -12,8 +12,30 @@ const PROVIDER_TEXT = /\$\s?\d|\d\s?\$|\bUSD\b|data\s?for\s?seo|\bclaude\b|anthr
 
 export const namesProviderCost = (text: string | null | undefined): boolean => !!text && PROVIDER_TEXT.test(text);
 
-/** a run's error as a customer reads it: unchanged, unless it names a dollar amount or a provider */
+/**
+ * Prod review 2026-11-12 (S2-08): a run the engine's failure watcher closed (services/engineFailures.ts) carried the node's name, the raw
+ * model or n8n error, the execution id and "the operator can open that execution in n8n" into the client's runs list. A client reads
+ * what happened, that it was not charged and what to do; the technical text stays in the database for the platform admin panel (and is
+ * sent to platform admins as `errorDetail`).
+ */
+export const ENGINE_STOPPED_ERROR =
+  'This run stopped because of a problem on our side, so nothing was delivered. No credits are charged for it. Start it again; if it stops again, contact us and we will look into it.';
+export const ENGINE_NO_RESULT_ERROR =
+  'No result arrived from the SEO engine in time, so nothing was delivered. No credits are charged for it. Start it again.';
+/** the technical tail the watcher appends: "(n8n execution 13196)", "(n8n execution 6569, crashed)" */
+const EXEC_SUFFIX = /\s*\((?:n8n\s+)?execution\b[^)]*\)/gi;
+/** our workflow tool, an instruction meant for us, a node name, a raw model / parser / runtime / network error */
+const TECHNICAL = /\bn8n\b|\bthe operator\b|\bexecution\s+\d+|^the seo engine stopped with an error|\bmodel output\b|\boutput parser\b|\bparser\b|\b(TypeError|ReferenceError|SyntaxError|RangeError)\b|\bECONN[A-Z]+\b|\bETIMEDOUT\b|\bEAI_AGAIN\b|\bcannot read propert|\bstack trace\b|\bnode "/i;
+
+/** does this run error carry technical text a client must not read? */
+export const isTechnicalError = (text: string | null | undefined): boolean => !!text && TECHNICAL.test(text.replace(EXEC_SUFFIX, ''));
+
+/** a run's error as a customer reads it: a provider or a dollar amount reads as a capacity limit, technical text as one plain sentence */
 export function customerError(text: string | null | undefined): string | null {
   if (text == null) return null;
-  return namesProviderCost(text) ? CAPACITY_ERROR : text;
+  if (namesProviderCost(text)) return CAPACITY_ERROR;
+  const plain = text.replace(EXEC_SUFFIX, '').trim();
+  if (/^no result arrived from the seo engine in time/i.test(plain)) return ENGINE_NO_RESULT_ERROR;
+  if (TECHNICAL.test(plain)) return ENGINE_STOPPED_ERROR;
+  return plain;
 }

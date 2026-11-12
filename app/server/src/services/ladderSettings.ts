@@ -87,9 +87,19 @@ function write(site: { domain: string }, ladders: LadderRow[], existing: LadderS
     : { ladderId, insert: true, data: newLadderRow(site, ladderId, ladders, now, change) };
 }
 
+/** S3-06: what a client is told when it tries to resume (or pause) an archived ladder */
+export const ARCHIVED_LADDER_MESSAGE =
+  'This keyword ladder is archived, so it cannot be resumed or paused. Start a new keyword ladder for this search, or contact us if it should come back.';
+
+/** S3-06: a ladder's stored status as the cadence reads it ('' when it has no settings row: active) */
+export const ladderStatusOf = (settings: LadderSettingsRow[], ladderId: string): string => String(settingsByLadder(settings).get(ladderId)?.status || '').trim().toLowerCase();
+
 /** Writes for one ladder's mode / status (PATCH .../ladders/:ladderId), with the priorities that keep the order as it is. */
 export function ladderSettingsWrites(o: { site: { domain: string }; ladders: LadderRow[]; settings: LadderSettingsRow[]; ladderId: string; change: LadderSettingsInput; now: string }): SettingsWrite[] {
   const of = settingsByLadder(o.settings);
+  // S3-06 (prod review 2026-11-12): an archived ladder came back as active (a repair undone, nobody knew by whom). Resume and Pause never
+  // touch an archived ladder; only its mode can still change.
+  if (o.change.status && ladderStatusOf(o.settings, o.ladderId) === 'archived') throw conflict(ARCHIVED_LADDER_MESSAGE, 'ladder_archived');
   const change: Record<string, unknown> = {};
   if (o.change.mode) change.mode = o.change.mode;
   if (o.change.status) change.status = o.change.status;
@@ -226,10 +236,13 @@ async function apply(site: SiteRow, writes: SettingsWrite[]) {
   for (const w of writes) await upsertRow('ladderSettings', [byLadder(w.ladderId), byDomain(site.domain)], w.data);
 }
 
-export async function updateLadderSettings(site: SiteRow, ladderId: string, change: LadderSettingsInput): Promise<void> {
+/** -> the ladder's status before and after the change (S3-06: every status change is audited by the caller) */
+export async function updateLadderSettings(site: SiteRow, ladderId: string, change: LadderSettingsInput): Promise<{ from: string; to: string }> {
   const cur = await current(site);
   assertLadderOfSite(cur.ladders, ladderId);
+  const from = ladderStatusOf(cur.settings, ladderId) || 'active';
   await apply(site, ladderSettingsWrites({ site, ...cur, ladderId, change, now: new Date().toISOString() }));
+  return { from, to: change.status ?? from };
 }
 
 /**

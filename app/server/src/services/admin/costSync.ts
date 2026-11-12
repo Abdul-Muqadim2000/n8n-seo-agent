@@ -1,8 +1,9 @@
 import { eq, sql } from 'drizzle-orm';
-import { COST_TABLE, costKeys, creditsFor, estOf, ledgerBreakdown, n8nSiteId, type CostCertainty, type CostKey, type ModeId } from '@seo/shared';
+import { COST_TABLE, costKeys, creditsFor, estOf, isKiRunMode, ledgerBreakdown, n8nSiteId, type CostCertainty, type CostKey, type ModeId } from '@seo/shared';
 import { db, schema } from '../../db';
 import { rows as n8nRows } from '../../n8n/client';
 import { cachedCalibration } from '../engineCost';
+import { KI_STAGE_LIST } from '../ki';
 import { callbackCostCountsForRun, SCHEDULED_STAGES } from '../runs';
 import { addCreditEntry } from './credits';
 import { settingsRow } from './settings';
@@ -32,6 +33,17 @@ import { execRows, tsv } from './sqlRows';
 // `app:<company id>` -> that company, when the company existed by then; else its `domain` (or the `site_...` id in an internal key such as
 // `cadence:site_x`) is a website verified BEFORE the row settled, of a company created before it -> that company (origin schedule);
 // else unattributed (org null). A cost made unattributed by its company's deletion (`detached_from`) is never attributed again.
+//
+// Platform spend, never a company's (prod review 2026-11-12, S2-01): a keyword-intelligence run (mode competitors / keyword_research) that is
+// not tied to an app run is billed to nobody when its callbacks say it was our team's Trial (`mode: trial`, stored as `summary.trial`), or
+// when no callback of it ever reached the app (nothing was delivered). Its ledger key is still `app:<company>` (the front door's caller key),
+// which is why the key alone may not decide it. A client's own KI run always has an app run (quoted; a Trial app run is quoted 0).
+//
+// A final version (S2-02): the engine's Page Finalize row (mode page_finalize, key `schedule:page_finalize`, only a domain) is reached only
+// through its webhook, which the app calls for a "Final version" run, a live page grade, or our team calls by hand. It is tied to the app
+// finalize run of the same website whose call it was (its row started between 2 minutes before the run and 5 minutes after the run ended,
+// the nearest one), so the run is charged once, from the engine's figure, within its quote (a free re-make: 0). A row tied to no finalize
+// run (a live grade, a test of ours) is platform spend: never the website's through its domain, never autopilot.
 //
 // No double count: an engine event and an app event never stand for the same run. Rows stored before their run could be tied are
 // linked on every sync (back-fill). Before an app run is counted from its own figure, an unlinked engine event keyed `app:<company>`
@@ -113,6 +125,12 @@ export interface Lookups {
   orgs: Map<string, Date>;
   /** attribution of engine rows already stored (for `parent:` rows whose parent is not in this read) */
   stored: Map<string, Attribution>;
+  /** S2-01: KI executions whose callbacks say Trial (our team's check): never billed to a company */
+  kiTrialExecs?: Set<string>;
+  /** S2-01: KI executions that sent the app at least one callback; when given, a KI row not in it was never delivered: not billed */
+  kiReportedExecs?: Set<string>;
+  /** S2-02: page_finalize executions tied to the app finalize run that called them (not yet stored rows only) */
+  finalizeRuns?: Map<string, RunRef>;
 }
 
 const NONE: Attribution = { orgId: null, siteId: null, userId: null, runId: null, origin: 'schedule' };
@@ -131,6 +149,13 @@ export function attributeLedgerRow(row: LedgerRow, lk: Lookups, batch: Map<strin
   const at = occurredOf(row);
   const run = runId ? lk.runsByExec.get(runId) : undefined;
   if (run) return fromRun(run);
+  // S2-01: a KI run with no app run is a client's charge only when it reported to the app and was not our team's Trial
+  if (isKiRunMode(str(row.mode)) && (lk.kiTrialExecs?.has(runId) || (lk.kiReportedExecs && !lk.kiReportedExecs.has(runId)))) return NONE;
+  // S2-02: a final version is charged through its app run only
+  if (str(row.mode) === FINALIZE_MODE) {
+    const fin = runId ? lk.finalizeRuns?.get(runId) : undefined;
+    return fin ? fromRun(fin) : NONE;
+  }
   const parent = key.startsWith('parent:') ? key.slice(7) : '';
   // A20 (2026-10-23, AI visibility app audit): a split run (500 questions x 9 engines = 7 executions, each `parent:` of the one before)
   // is followed to its first execution however long the chain; a cycle stops at a visited id, never at a fixed depth (it was 5, so the
@@ -164,6 +189,52 @@ export function attributeLedgerRow(row: LedgerRow, lk: Lookups, batch: Map<strin
   // a website verified after the money was spent did not cause it (its domain may have had another owner then)
   if (site && at.getTime() >= site.verifiedAt.getTime() && existed(site.orgId)) return { orgId: site.orgId, siteId: site.id, userId: null, runId: null, origin: 'schedule' };
   return NONE;
+}
+
+/** the engine's ledger mode of a Page Finalize call (build_monitors.py `FN.run_ledger('page_finalize', ...)`) */
+export const FINALIZE_MODE = 'page_finalize';
+
+/** an app finalize run as the matching reads it */
+export interface FinalizeRunRef extends RunRef {
+  domain: string;
+  createdAt: Date;
+  completedAt: Date | null;
+}
+const bareHost = (d: unknown) => str(d).toLowerCase().replace(/^www\./, '');
+/** the window of an app finalize run in which its engine row starts (the call is made right after the run is created; it times out at 5 min) */
+const FIN_BEFORE_MS = 2 * 60_000;
+const FIN_AFTER_MS = 5 * 60_000;
+const FIN_OPEN_MS = 15 * 60_000;
+
+/**
+ * S2-02: which app finalize run each page_finalize engine row belongs to. Each run takes at most one row: the one of its website whose start
+ * is nearest the run's start, within the run's window. Pure.
+ */
+export function matchFinalizeRows(rows: LedgerRow[], runs: FinalizeRunRef[]): Map<string, RunRef> {
+  const out = new Map<string, RunRef>();
+  const pairs: { exec: string; run: FinalizeRunRef; gap: number }[] = [];
+  for (const row of rows) {
+    if (str(row.mode) !== FINALIZE_MODE) continue;
+    const exec = str(row.run_id);
+    const start = date(row.created_at, row.createdAt);
+    const host = bareHost(row.domain);
+    if (!exec || !start || !host) continue;
+    for (const run of runs) {
+      if (bareHost(run.domain) !== host) continue;
+      const from = run.createdAt.getTime() - FIN_BEFORE_MS;
+      const to = (run.completedAt?.getTime() ?? run.createdAt.getTime() + FIN_OPEN_MS) + FIN_AFTER_MS;
+      const t = start.getTime();
+      if (t >= from && t <= to) pairs.push({ exec, run, gap: Math.abs(t - run.createdAt.getTime()) });
+    }
+  }
+  pairs.sort((a, b) => a.gap - b.gap);
+  const taken = new Set<string>();
+  for (const p of pairs) {
+    if (out.has(p.exec) || taken.has(p.run.id)) continue;
+    out.set(p.exec, { id: p.run.id, orgId: p.run.orgId, siteId: p.run.siteId, userId: p.run.userId, auto: p.run.auto, mode: p.run.mode });
+    taken.add(p.run.id);
+  }
+  return out;
 }
 
 /** the money of one engine row: Claude, the part of it that is an estimate, DataForSEO, and how sure the total is */
@@ -361,6 +432,8 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
       ),
     ];
     const runsByExec = new Map<string, RunRef>();
+    const kiTrialExecs = new Set<string>();
+    const kiReportedExecs = new Set<string>();
     for (let i = 0; i < ids.length; i += 500) {
       const chunk = sql.join(ids.slice(i, i + 500).map((c) => sql`${c}`), sql`, `);
       const viaCallbacks = await execRows<{ exec: string; id: string; org_id: string; site_id: string | null; user_id: string | null; auto: boolean | null; mode: string | null }>(
@@ -370,6 +443,20 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
               union select r.run_id, r.payload->'run_ledger'->>'run_id' as exec from ${schema.reports} r where ${countsForRun} and r.payload->'run_ledger'->>'run_id' in (${chunk})
             ) x join ${schema.runs} ru on ru.id = x.run_id`,
       );
+      // S2-01: a KI callback names its execution as `run_id` (its started notice arrives long before the row settles, so the app run is
+      // known before the money is read); and which KI executions were our team's Trial, or reported at all
+      const viaKi = await execRows<{ exec: string; id: string | null; org_id: string | null; site_id: string | null; user_id: string | null; auto: boolean | null; mode: string | null; trial: boolean }>(
+        tx,
+        sql`select r.payload->>'run_id' as exec, ru.id, ru.org_id, ru.site_id, ru.user_id, (ru.input->>'autoStart') = 'true' as auto, ru.mode,
+              (coalesce(r.summary->>'trial', '') = 'true' or lower(coalesce(r.payload->>'mode', '')) = 'trial' or coalesce(ru.input->>'kiTrial', '') = 'true') as trial
+            from ${schema.reports} r left join ${schema.runs} ru on ru.id = r.run_id
+            where r.stage in (${sql.join(KI_STAGE_LIST.map((x) => sql`${x}`), sql`, `)}) and r.payload->>'run_id' in (${chunk})`,
+      );
+      for (const r of viaKi) {
+        kiReportedExecs.add(r.exec);
+        if (r.trial) kiTrialExecs.add(r.exec);
+        if (r.id && r.org_id && !runsByExec.has(r.exec)) runsByExec.set(r.exec, { id: r.id, orgId: r.org_id, siteId: r.site_id, userId: r.user_id, auto: r.auto === true, mode: r.mode ?? undefined });
+      }
       for (const r of viaCallbacks) if (!runsByExec.has(r.exec)) runsByExec.set(r.exec, { id: r.id, orgId: r.org_id, siteId: r.site_id, userId: r.user_id, auto: r.auto === true, mode: r.mode ?? undefined });
       const viaRequest = await execRows<{ id: string; org_id: string; site_id: string | null; user_id: string | null; request_id: string; auto: boolean | null; mode: string | null }>(
         tx,
@@ -377,7 +464,27 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
       );
       for (const r of viaRequest) if (!runsByExec.has(r.request_id)) runsByExec.set(r.request_id, { id: r.id, orgId: r.org_id, siteId: r.site_id, userId: r.user_id, auto: r.auto === true, mode: r.mode ?? undefined });
     }
-    const lk: Lookups = { runsByExec, sitesByDomain, sitesByEngineId, orgs, stored };
+    // S2-02: the app finalize runs the new page_finalize rows of this read belong to (a row stored before keeps what it had: its credits
+    // were already written, and the owner corrects those by hand)
+    const finRows = ledger.filter((r) => str(r.mode) === FINALIZE_MODE && !stored.has(str(r.run_id)) && !runsByExec.has(str(r.run_id)));
+    let finalizeRuns = new Map<string, RunRef>();
+    if (finRows.length) {
+      const starts = finRows.map((r) => date(r.created_at, r.createdAt)?.getTime()).filter((t): t is number => t != null);
+      const lo = new Date(Math.min(...starts) - FIN_OPEN_MS - FIN_AFTER_MS - DAY_MS);
+      const hi = new Date(Math.max(...starts) + FIN_BEFORE_MS);
+      const fr = await execRows<{ id: string; org_id: string; site_id: string | null; user_id: string | null; auto: boolean | null; created_at: string; completed_at: string | null; domain: string }>(
+        tx,
+        sql`select r.id, r.org_id, r.site_id, r.user_id, (r.input->>'autoStart') = 'true' as auto, r.created_at, r.completed_at, s.domain
+            from ${schema.runs} r join ${schema.sites} s on s.id = r.site_id
+            where r.mode = 'finalize' and r.created_at >= ${tsv(lo)} and r.created_at <= ${tsv(hi)}
+              and not exists (select 1 from ${schema.costEvents} e where e.run_id = r.id and e.source = 'engine')`,
+      );
+      finalizeRuns = matchFinalizeRows(
+        finRows,
+        fr.map((r) => ({ id: r.id, orgId: r.org_id, siteId: r.site_id, userId: r.user_id, auto: r.auto === true, mode: 'finalize', domain: r.domain, createdAt: new Date(r.created_at), completedAt: r.completed_at ? new Date(r.completed_at) : null })),
+      );
+    }
+    const lk: Lookups = { runsByExec, sitesByDomain, sitesByEngineId, orgs, stored, kiTrialExecs, kiReportedExecs, finalizeRuns };
     const batch = new Map(ledger.map((r) => [str(r.run_id), r]));
 
     const debitedSoFar = async (eventKey: string) => {
@@ -509,7 +616,7 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
       const [orphan] = await execRows<{ engine_run_id: string }>(
         tx,
         sql`select engine_run_id from ${schema.costEvents}
-            where source = 'engine' and run_id is null and detached_from is null and engine_key = ${'app:' + r.org_id}
+            where source = 'engine' and run_id is null and detached_from is null and engine_key = ${'app:' + r.org_id} and org_id = ${r.org_id}
               and coalesce(started_at, occurred_at) >= ${tsv(new Date(runStart.getTime() - 2 * 60_000))}
               and coalesce(started_at, occurred_at) <= ${tsv(new Date(runEnd.getTime() + 5 * 60_000))}
             order by coalesce(started_at, occurred_at) asc limit 1`,

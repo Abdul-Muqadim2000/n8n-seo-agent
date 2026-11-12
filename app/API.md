@@ -144,6 +144,7 @@ cost or a dollar budget in them (`customerAuditDetails`: keys ending in `Usd` or
 | DELETE | /api/orgs/:orgId | `{ confirm: <company name> }` (owner) | `{ ok }` (stops tracking of its sites in n8n, deletes the company's data in the app) |
 | PATCH | /api/orgs/:orgId/onboarding | `{ step, done? }` (admin); `step` is one of `ONBOARDING_STEPS` (shared/src/constants.ts: the wizard's steps in order, `keyword` included, then `done`) | `Org` |
 | PATCH | /api/orgs/:orgId/budget | `{ monthlyBudgetUsd }` (**platform admin only**; anyone else 403 "Limits are in Settings → Credits.") | `Org` |
+| POST | /api/orgs/:orgId/hook-token/rotate | (owner / admin; 5 an hour) a new address for the SEO engine's reports: every verified website's engine rows are pointed at it, the old one still delivers for 48 h; the token is never returned | `{ rotatedAt, sitesUpdated, sitesFailed: string[], oldAddressWorksUntil }` |
 | GET | /api/orgs/:orgId/delivery | | `{ settings: DeliverySettings, nextAt, mailReady, signingReady, recent: DeliveryRecord[] }` |
 | PUT | /api/orgs/:orgId/delivery | `DeliverySettings` (+ `webhook.secret`; owner) | the same shape |
 | POST | /api/orgs/:orgId/delivery/test | (owner) | `{ delivered, outcomes: [{ channel, ok, target, error }] }` |

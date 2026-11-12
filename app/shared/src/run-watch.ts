@@ -17,3 +17,10 @@ export function runOverdueMinutes(etaMinutes: number | null | undefined): number
 
 /** Minutes a result may take to arrive after the engine's last execution of the run ended, before it counts as lost on the way. */
 export const RUN_RESULT_GRACE_MINUTES = 10;
+
+/**
+ * Prod review 2026-11-12 (S1-05): how long a page run may be on its way. A page run may wait up to 6 hours for a writing slot and then run
+ * up to 2 hours (the engine's Cadence_Plan.js `in_flight_hours`). A content-log row still `started` after this never finished: it is no
+ * page, never a page waiting to be published, and it never counts towards the pile-up limit.
+ */
+export const PAGE_IN_FLIGHT_HOURS = 8;

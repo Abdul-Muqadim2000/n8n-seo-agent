@@ -106,12 +106,20 @@ describe('recommend', () => {
       site,
       bundle({
         reportsElsewhere: true,
-        content: { ...bundle().content, items: [{ keyword: 'erp pricing', source: 'cadence', pageType: 'Blog Post', rung: 0, ladderId: '', requestId: '', startedAt: new Date(Date.now() - 6 * 864e5).toISOString(), status: 'started', publishedUrl: '', publishedAt: '', week: '', existingPageUrl: '' }] },
+        content: {
+          ...bundle().content,
+          items: [
+            { keyword: 'erp pricing', source: 'cadence', pageType: 'Blog Post', rung: 0, ladderId: '', requestId: '', startedAt: new Date(Date.now() - 6 * 864e5).toISOString(), status: 'written', publishedUrl: '', publishedAt: '', week: '', existingPageUrl: '' },
+            // S1-05: a cadence page run cancelled at its time limit left its row at `started`: there is no page to publish
+            { keyword: 'dynamics ax dubai', source: 'cadence', pageType: 'Blog Post', rung: 0, ladderId: '', requestId: 'cad_x_1', startedAt: new Date(Date.now() - 6 * 864e5).toISOString(), status: 'started', publishedUrl: '', publishedAt: '', week: '', existingPageUrl: '' },
+          ],
+        },
       }),
     );
     expect(recs[0].priority).toBe('high');
     expect(recs.find((r) => r.id === 'setup:delivery')).toBeTruthy();
     expect(recs.find((r) => r.id === 'content:publish:erp pricing')?.action).toMatchObject({ mode: 'published', prefill: { keyword: 'erp pricing' } });
+    expect(recs.find((r) => r.id === 'content:publish:dynamics ax dubai')).toBeUndefined();
   });
 
   it('the next ladder rung opens the ladder on the Pipeline page', () => {

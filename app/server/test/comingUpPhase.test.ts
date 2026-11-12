@@ -92,7 +92,9 @@ describe('I3: the devaicon.com plan of 11-06 seen on Tuesday 11-10', () => {
   it('an approval the run wrote shows "written" with its page; one it only started shows "started"', () => {
     const wrote = run({ report: report({ pages: [{ keyword: SUGGESTION, source: 'ai_refresh', approved: true, request_id: 'cad_x_1' }] }), pageReports: [{ id: 'rep-2', requestId: 'cad_x_1', status: 'completed', receivedAt: new Date('2026-11-06T01:50:00.000Z') }] });
     expect(view({ run: wrote }).suggestions[0].result).toEqual({ state: 'written', at: '2026-11-06T01:50:00.000Z', reportId: 'rep-2', message: '' });
-    expect(view({ run: { ...wrote, pageReports: [] } }).suggestions[0].result).toMatchObject({ state: 'started', reportId: null, at: '2026-11-06T01:28:15.000Z' });
+    expect(view({ now: Date.parse('2026-11-06T03:00:00.000Z'), run: { ...wrote, pageReports: [] } }).suggestions[0].result).toMatchObject({ state: 'started', reportId: null, at: '2026-11-06T01:28:15.000Z' });
+    // S1-05: still no page four days later (seen on Tuesday): the run did not finish it
+    expect(view({ run: { ...wrote, pageReports: [] } }).suggestions[0].result).toMatchObject({ state: 'failed', reportId: null });
     expect(view({ run: { ...wrote, pageReports: [{ id: 'rep-3', requestId: 'cad_x_1', status: 'failed', receivedAt: new Date() }] } }).suggestions[0].result).toMatchObject({ state: 'failed', reportId: null });
   });
   it('before the run is due nothing has a result, and the next plan / run times in the past are not shown', () => {
