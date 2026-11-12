@@ -20,6 +20,18 @@ const diag = grab('Index Diagnose').filter(x => x && x.site_id);
 const plan0 = grab('Index Plan')[0] || {};   // R8: the dispatch this run belongs to (chain_id), so another chain can see it was here
 const subReqs = grab('Sitemap Submit Requests').filter(q => q && !q.skip && q.site_id);
 const subRes = grab('Submit Sitemap (Index)');
+// wave 3 (DESIGN_WAVE3.md §2.3): what IndexNow was told today, and why nothing was sent when nothing was
+const inReqs = grab('IndexNow Submit Requests (Index)'); const inAns = grab('Submit IndexNow (Index)');
+const inSent = inReqs.filter(q => q && !q.skip && q.site_id);
+const inReasons = { ...((grab('IndexNow Key Check (Index)').find(q => q && q.reasons) || {}).reasons || {}), ...((inReqs.find(q => q && q.reasons) || {}).reasons || {}) };
+const inDry = (inReqs.find(q => q && q.would_submit) || {}).would_submit || {};
+const indexnowOf = (d) => {
+  const i = inSent.findIndex(q => q.site_id === d.site_id);
+  if (i >= 0) { const a = inAns[i] || {}; const st = n0(a.statusCode ?? a.status);
+    return IX.indexnowAccepted(a) ? { status: 'accepted', sent: (inSent[i].urls || []).length, http_status: st } : { status: 'refused', sent: 0, http_status: st, asked: (inSent[i].urls || []).length }; }
+  const why = S(inReasons[d.site_id]) || (d.failed ? 'not_checked' : (d.indexnow && S(d.indexnow.why)) || '');
+  return { status: why || 'not_sent', sent: 0, ...(why === 'dry_run' ? { would_send: (inDry[d.site_id] || []).length } : {}) };
+};
 const out = [];
 for (const d of diag) {
   const sum = IX.summarize(d.all || [], {});
@@ -56,6 +68,15 @@ for (const d of diag) {
   // W1: the outlook the app reads - would the next run submit if nothing changes, and if not, what holds it (after today's attempts)
   const outlook = IX.submitOutlook(sp, sr.submissions, Date.parse(nowIso));
   if (!d.failed && sp.on && sp.gate === 'not_full_access') notes.push('You switched on sitemap submission, but Google gives us read-only access, so we cannot submit your sitemap. Give us Full access in Search Console, or submit it yourself.');
+  // wave 3 (§2.3 / §2.8): IndexNow, the escalation and the asks in the run row; one plain line when IndexNow was not told and should have been
+  const inx = indexnowOf(d);
+  if (inx.status === 'accepted') notes.push('We told Bing and the other IndexNow search engines about ' + inx.sent + ' page(s) today (Google does not take part in IndexNow; each engine still decides).');
+  else if (inx.status === 'refused') notes.push('IndexNow did not accept our list of ' + n0(inx.asked) + ' page(s) today' + (inx.http_status ? ' (answered ' + inx.http_status + ')' : '') + '; nothing is recorded and we try again on the next run.');
+  else if (inx.status === 'no_key') notes.push('IndexNow is not set up for this website yet (no key), so Bing was not told about your pages.');
+  else if (inx.status === 'key_not_verified') notes.push('Your IndexNow key file did not answer with the key today, so Bing was not told about your pages.');
+  else if (inx.status === 'dry_run') notes.push('Test run: nothing was sent to IndexNow (' + n0(inx.would_send) + ' page(s) would have been).');
+  const w3 = IX.summaryWave3(d.all || [], { now: Date.parse(nowIso) });
+  const dates = (d.sitemap || {}).dates || null;
   const fr = d.freeze || {};
   out.push({ json: { site_id: d.site_id, domain: S(d.domain), run_at: S(d.run_at) || nowIso, request_id: S(d.request_id),
     known: sum.known, indexed: sum.indexed, not_indexed: sum.not_indexed, excluded: sum.excluded, unknown: sum.unknown, errors: n0(cnt.errors) + sum.errors,
@@ -72,6 +93,9 @@ for (const d of diag) {
       submissions: sr.submissions, tree_fp: sp.tree_fp || null, submit_denied: sr.submit_denied || null,
       ...(d.links ? { links: { read: !!d.links.read, sources: n0(d.links.sources), found: n0(d.links.found), parents: (d.links.parents || []).slice(0, 10).map(x => ({ url: S(x.url), read: !!x.read })),
         suggested: (d.links.suggested || []).slice(0, 10).map(x => ({ url: S(x.url), read: !!x.read })), unread_parents: n0(d.links.unread_parents) } } : {}),
-      ...(S(d.why_detail) ? { error_detail: S(d.why_detail).slice(0, 300) } : {}) }) } });
+      ...(S(d.why_detail) ? { error_detail: S(d.why_detail).slice(0, 300) } : {}),
+      ...(dates ? { dates: { urls: n0(dates.urls), with_lastmod: n0(dates.with_lastmod), distinct: n0(dates.distinct), usable: IX.datesUsable(dates), read: dates.read !== false } } : {}),
+      indexnow: inx }),
+    escalated: w3.escalated, asked_waiting: w3.asked_waiting, indexnow_sent: n0(inx.sent) } });
 }
 return out.length ? out : [{ json: { skip: true, reason: 'no website' } }];

@@ -11,6 +11,6 @@ if (!p.site_id || p.nothing_to_do || p.dispatch) return [{ json: { skip: true, r
 const at = S(p.run_at) || new Date().toISOString();
 return [{ json: { site_id: S(p.site_id), domain: S(p.domain), run_at: at, request_id: S(p.request_id),
   known: 0, indexed: 0, not_indexed: 0, excluded: 0, unknown: 0, errors: 0, new_pages: 0, new_indexed: 0, inspected: 0, reused: 0, fetched: 0,
-  quota_cap: Number(p.cap) || 0, backlog_left: 0, by_cause_json: '{}', by_action_json: '{}', dropped_json: '[]', freeze: false, freeze_reason: '',
+  quota_cap: Number(p.cap) || 0, backlog_left: 0, by_cause_json: '{}', by_action_json: '{}', dropped_json: '[]', freeze: false, freeze_reason: '', escalated: 0, asked_waiting: 0, indexnow_sent: 0,
   note: 'Today\'s check started at ' + at.slice(11, 16) + ' UTC and had not finished when this row was written; the figures are from the last check.',
   sitemaps_json: JSON.stringify({ reservation: true, attempt: true, chain_id: S(p.chain_id) }) } }];

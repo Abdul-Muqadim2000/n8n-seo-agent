@@ -14,4 +14,4 @@ const slim = (e) => ({ event_id: S(e.event_id), title: S(e.title), kind: S(e.kin
 const news = { started: (g.started || []).map(slim).slice(0, 10), completed: (g.completed || []).map(slim).slice(0, 10), policy: g.policy_news ? slim(g.policy_news) : null };
 const nowIso = new Date().toISOString();
 return [{ json: { trigger: 'ix_chain', parent_run_id: String($execution.id), site_id: ids[0],
-  ix_chain: { date: nowIso.slice(0, 10), started_at: nowIso, dispatch_id: String($execution.id), rest: ids.slice(1), part: 1, of: ids.length, attempt: 0, news } } }];
+  ix_chain: { date: nowIso.slice(0, 10), started_at: nowIso, dispatch_id: String($execution.id), rest: ids.slice(1), part: 1, of: ids.length, attempt: 0, news, ...(plan.dry_run ? { dry_run: true } : {}) } } }];   // wave 3: a test dispatch stays a test

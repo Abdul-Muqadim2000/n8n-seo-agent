@@ -236,7 +236,8 @@ module.exports = async (ctx) => {
       // the next day: the pages marked today are indexed (Google read them); the rest unchanged
       rows = rows.map(r => ({ ...r, _prev: { ask_google: !!r.ask_google, ask_google_at: S0(r.ask_google_at) }, ...(r.ask_google ? { state: 'indexed', cause: '', action: 'none' } : {}) }));
     }
-    check('15 eligible pages over 7 days (marked ones indexed the next day): at most 5 different pages marked in the week', marked.size <= 5 && marked.size > 0, J({ distinct: marked.size, perDay }));
+    // wave 3 (DESIGN_WAVE3.md §2.6) changed the rule: at most 3 NEW marks a day and 10 in any 7 days (5 shown at once)
+    check('15 eligible pages over 7 days (marked ones indexed the next day): at most 10 different pages marked in the week, at most 3 a day (wave 3)', marked.size <= 10 && marked.size > 0 && perDay.every(x => x[2] <= 3), J({ distinct: marked.size, perDay }));
     T(() => IX.askGoogle(rows, { now: T0 + 8 * DAY, home_keys: home, freeze: { freeze: false } }));
     check('after 7 days, new pages can be marked again', rows.some(r => r.ask_google && !marked.has(r.url)), J(rows.filter(r => r.ask_google).map(r => r.url)));
   });

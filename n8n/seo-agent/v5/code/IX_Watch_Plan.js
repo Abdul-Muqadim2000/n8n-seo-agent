@@ -13,4 +13,4 @@ if (!plan.dispatch) return [{ json: { skip: true, reason: 'not a dispatch' } }];
 const n = (Number(plan.watch_n) || 0) + 1;
 if (n > IX.CFG.watch_max) return [{ json: { skip: true, reason: 'the day was watched ' + IX.CFG.watch_max + ' times; tomorrow\'s dispatch takes the websites left first' } }];
 const today = S(plan.today) || new Date().toISOString().slice(0, 10);
-return [{ json: { trigger: 'ix_watch', ix_watch: { date: today, n, after: 'started' }, wait_minutes: IX.CFG.watch_minutes } }];
+return [{ json: { trigger: 'ix_watch', ix_watch: { date: today, n, after: 'started', ...(plan.dry_run ? { dry_run: true } : {}) }, wait_minutes: IX.CFG.watch_minutes } }];
