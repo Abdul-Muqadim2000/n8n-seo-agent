@@ -39,7 +39,7 @@ vi.mock('../src/n8n/client', async (orig) => {
 const { buildApp } = await import('../src/app');
 const { db, schema } = await import('../src/db');
 const { signUp } = await import('./helpers/client');
-const { syncCosts, attributeLedgerRow } = await import('../src/services/admin/costSync');
+const { syncCosts, attributeLedgerRow, matchFinalizeRows } = await import('../src/services/admin/costSync');
 vi.setConfig({ testTimeout: 30_000 });
 
 let app: FastifyInstance;
@@ -162,5 +162,71 @@ describe('S2-01: keyword-intelligence Trial runs are never billed to the client'
       { runsByExec: new Map(), sitesByDomain: new Map(), sitesByEngineId: new Map(), orgs, stored: new Map(), kiTrialExecs: new Set(['ki-r2']), kiReportedExecs: new Set(['ki-r2']) },
     );
     expect(b.orgId).toBeNull();
+  });
+});
+
+describe('S2-02: a final version is charged once, through its own run', () => {
+  let org = '';
+  let siteId = '';
+  beforeAll(async () => {
+    org = await company('fin@billing.test', 'Fin Co');
+    siteId = (await site(org, 'fin.test')).id;
+  });
+  const finRun = async (o: { quoted: number; minAgo: number; free?: boolean; status?: string }) => {
+    const created = new Date(Date.now() - o.minAgo * MIN);
+    const [r] = await db
+      .insert(schema.runs)
+      .values({
+        orgId: org, siteId, mode: 'finalize', title: 'Final version', status: o.status ?? 'completed', requestId: `app-fin-${o.minAgo}-${o.quoted}`,
+        input: { mode: 'finalize', ...(o.free ? { freeRecheck: true } : {}) }, quotedCredits: o.quoted, actualCostUsd: 0.03,
+        createdAt: created, acceptedAt: created, completedAt: new Date(created.getTime() + 2 * MIN),
+      })
+      .returning();
+    return r!;
+  };
+  /** the engine row of a call made `minAgo` minutes ago (it starts a few seconds after the run) */
+  const finRow = (id: string, minAgo: number, usd: number, domain = 'www.fin.test') => ({
+    run_id: id, key: 'schedule:page_finalize', mode: 'page_finalize', status: 'done', domain, ai_usd: usd, dfs_usd: 0, measured_usd: usd, estimated_usd: 0,
+    created_at: new Date(Date.now() - minAgo * MIN + 5_000).toISOString(), settled_at: new Date(Date.now() - minAgo * MIN + 90_000).toISOString(),
+  });
+  const usageOfRun = async (runId: string) => (await db.query.creditLedger.findMany({ where: eq(schema.creditLedger.orgId, org) })).filter((x) => (x.ref as { runId?: string } | null)?.runId === runId && x.kind === 'usage');
+
+  it('the engine row is tied to the finalize run: one charge, on demand, within the quote; the run is not counted again from its own figure', async () => {
+    const run = await finRun({ quoted: 2, minAgo: 120 });
+    await syncCosts({ readLedger: async () => [finRow('fin-e1', 120, 0.05)], full: true, appGraceMinutes: 0 });
+    expect((await eventOf('fin-e1'))!).toMatchObject({ orgId: org, runId: run.id, origin: 'app' });
+    expect(await db.query.costEvents.findFirst({ where: eq(schema.costEvents.eventKey, `run:${run.id}`) })).toBeUndefined();
+    const used = await usageOfRun(run.id);
+    expect(used).toHaveLength(1);
+    expect(used[0]!.credits).toBe(-2); // $0.05 is 3 credits, capped at the quote of 2
+    expect(used[0]!.ref).toMatchObject({ origin: 'on_demand' });
+    // a second sync changes nothing
+    await syncCosts({ readLedger: async () => [finRow('fin-e1', 120, 0.05)], full: true, appGraceMinutes: 0 });
+    expect(await usageOfRun(run.id)).toHaveLength(1);
+  });
+
+  it('the free re-make (quoted 0) is charged 0, its engine row included', async () => {
+    const run = await finRun({ quoted: 0, minAgo: 90, free: true });
+    await syncCosts({ readLedger: async () => [finRow('fin-e2', 90, 0.03)], full: true, appGraceMinutes: 0 });
+    expect((await eventOf('fin-e2'))!.runId).toBe(run.id);
+    expect((await usageOfRun(run.id)).reduce((s, x) => s + x.credits, 0)).toBe(0);
+  });
+
+  it('a Page Finalize call no app run made (our own test, a live grade) is platform spend, never the website\'s autopilot', async () => {
+    await syncCosts({ readLedger: async () => [finRow('fin-e3', 60 * 24 * 3, 0.03)], full: true, appGraceMinutes: 0 });
+    expect((await eventOf('fin-e3'))!).toMatchObject({ orgId: null, runId: null });
+    expect(await debitOf('fin-e3')).toBeUndefined();
+  });
+
+  it('each run takes the row nearest its start; a second row in the window is not charged to it', () => {
+    const t0 = Date.parse('2026-11-11T10:00:00Z');
+    const run = (id: string, min: number) => ({ id, orgId: 'o', siteId: 's', userId: null, mode: 'finalize', domain: 'fin.test', createdAt: new Date(t0 + min * MIN), completedAt: new Date(t0 + (min + 2) * MIN) });
+    const row = (id: string, min: number, domain = 'fin.test') => ({ run_id: id, mode: 'page_finalize', domain, created_at: new Date(t0 + min * MIN + 3_000).toISOString() });
+    const m = matchFinalizeRows([row('a', 0), row('b', 1), row('c', 30), row('d', 0, 'other.test'), { ...row('e', 30), mode: 'ai_pulse' }], [run('r1', 0), run('r2', 30)]);
+    expect(m.get('a')?.id).toBe('r1');
+    expect(m.has('b')).toBe(false);
+    expect(m.get('c')?.id).toBe('r2');
+    expect(m.has('d')).toBe(false);
+    expect(m.has('e')).toBe(false);
   });
 });
