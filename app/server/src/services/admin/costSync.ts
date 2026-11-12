@@ -654,9 +654,9 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
     }
 
     // ---- 3. an engine figure replaces an app one for the same run (never both) ----
-    const replaced = await execRows<{ id: string; event_key: string; org_id: string | null; occurred_at: string }>(
+    const replaced = await execRows<{ id: string; event_key: string; org_id: string | null; run_id: string; occurred_at: string }>(
       tx,
-      sql`select a.id, a.event_key, a.org_id, a.occurred_at from ${schema.costEvents} a
+      sql`select a.id, a.event_key, a.org_id, a.run_id, a.occurred_at from ${schema.costEvents} a
           where a.source = 'app' and a.run_id is not null
             and exists (select 1 from ${schema.costEvents} e where e.source = 'engine' and e.run_id = a.run_id)`,
     );
@@ -668,7 +668,9 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
           kind: 'usage',
           credits: done.credits,
           note: "Re-priced: the engine's own figure replaced the app's for this run",
-          ref: { runId: null, engineRunId: null, mode: null, domain: null, origin: 'on_demand' },
+          // review S5 (2026-11-12): the run's own id, so the run's other usage (runCharge) and its failed-run refund net it with the debit it
+          // gives back (with runId null the replaced debit still counted against the quote and a late-tied run was charged about 0)
+          ref: { runId: r.run_id, engineRunId: null, mode: null, domain: null, origin: 'on_demand' },
           refKey: `reprice:${r.event_key}`,
           at: date(r.occurred_at) ?? undefined,
         });

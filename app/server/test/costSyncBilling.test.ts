@@ -230,3 +230,27 @@ describe('S2-02: a final version is charged once, through its own run', () => {
     expect(m.has('e')).toBe(false);
   });
 });
+
+describe('review S5: an engine figure tied to a run after its own figure was charged', () => {
+  it('the app debit is given back against the run, and the engine figure is charged within the quote (not about 0)', async () => {
+    const org = await company('late@billing.test', 'Late Co');
+    const t = new Date(Date.now() - 3 * 3600_000);
+    const [run] = await db
+      .insert(schema.runs)
+      .values({ orgId: org, mode: 'verdict', title: 'v', status: 'completed', requestId: 'req-late-1', input: { mode: 'verdict' }, quotedCredits: 10, actualCostUsd: 0.1, createdAt: t, acceptedAt: t, completedAt: new Date(t.getTime() + 2 * MIN) })
+      .returning();
+    // the engine's ledger could not be tied for an hour: the run is counted from its own figure ($0.10 = 6 credits)
+    await syncCosts({ readLedger: async () => [], full: true, appGraceMinutes: 0 });
+    const usage = async () => (await db.query.creditLedger.findMany({ where: eq(schema.creditLedger.orgId, org) })).filter((x) => x.kind === 'usage');
+    expect((await usage()).reduce((s, x) => s + x.credits, 0)).toBe(-6);
+    // its callback names the engine execution; the engine's figure ($0.10) replaces the app's
+    await db.insert(schema.reports).values({ orgId: org, runId: run!.id, stage: 'verdict', status: 'completed', title: 'x', requestId: 'req-late-1', payload: { request_id: 'req-late-1', execution_id: 'late-e1', run_ledger: {} } });
+    await syncCosts({ readLedger: async () => [{ ...engineRow({ id: 'late-e1', key: `app:${org}`, mode: 'verdict', usd: 0.1, min: 170 }) }], full: true, appGraceMinutes: 0 });
+    const all = await usage();
+    const back = all.find((x) => x.refKey === `reprice:run:${run!.id}`)!;
+    expect(back.credits).toBe(6);
+    expect((back.ref as { runId?: string }).runId).toBe(run!.id);
+    expect((await debitOf('late-e1'))!.credits).toBe(-6);
+    expect(all.reduce((s, x) => s + x.credits, 0)).toBe(-6); // charged once, at the engine's figure
+  });
+});
