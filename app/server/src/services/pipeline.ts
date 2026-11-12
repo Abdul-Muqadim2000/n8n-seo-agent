@@ -58,6 +58,7 @@ import { db } from '../db';
 import { monthStartUtc, siteAutopilotRows, usageSince } from './billing';
 import { creditsOfUsd, settingsRow, wholeCreditsOfUsd } from './admin/settings';
 import type { OrgRow, SiteRow } from '../db/schema';
+import { customerError } from '../lib/customerError';
 import { notFound } from '../lib/errors';
 import { executions, rows as n8nRows, siteRows, type ExecutionSummary } from '../n8n/client';
 import { aiQuotaOf, chosenLadderWriting, competitorsOf, declaredServicesOf, levelOf, navPagesOf, servicesOf, type CadenceSiteRow } from './cadence';
@@ -393,7 +394,8 @@ export function failedRuns(runs: SiteRun[], now = Date.now()): NeedsYouItem[] {
         kind: 'failed',
         severity: 'warning',
         title: `${r.title}: did not finish`,
-        detail: r.error ? r.error.slice(0, 240) : 'The SEO engine stopped before the result arrived.',
+        // S2-08: the client's words, never the engine's raw error
+        detail: r.error ? (customerError(r.error) ?? '').slice(0, 240) : 'The SEO engine stopped before the result arrived.',
         action: { label: 'Open the run', runId: r.id },
       });
     seen.add(key);

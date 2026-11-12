@@ -178,7 +178,10 @@ export interface Run {
   title: string;
   status: RunStatus;
   requestId: string | null;
+  /** what went wrong, in the client's words (server lib/customerError.ts) */
   error: string | null;
+  /** S2-08: the engine's own text of the error (node, raw message, execution id): sent to platform admins only, never to a client */
+  errorDetail?: string | null;
   /** R-A3: what happened to a `joined` run, in words ("Part of the open run (finishes about 09:40 UTC). ..."); null otherwise */
   note?: string | null;
   /**
