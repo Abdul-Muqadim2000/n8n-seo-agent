@@ -14,6 +14,7 @@
 //        run dead after 18.6 minutes): auto-fix on, one Claude Haiku model (no thinking, declared limits) feeding only that parser
 //   PR5  F-05: a page whose title has no Latin letters is packaged at its keyword's slug, never at "/page" (the home-page guard of the ladder
 //        is pinned in scenarios_ladder_pkg.js LPK4)
+//   PR6  services up to 120 characters, as the app now allows (SERVICE_MAX_CHARS): the site model and Normalize Input keep them whole
 module.exports = async (ctx) => {
   const { H, run, mock, store, guard, reset, begin } = ctx;
   const fs = require('fs');
@@ -275,4 +276,21 @@ module.exports = async (ctx) => {
     const P = (await run('Blog Package', [{ json: bw }]))[0].json;
     check('the package slug is the keyword\'s, not "page"', P.article_slug === 'ai-consultant-uae' && P.article_meta.slug === 'ai-consultant-uae' && !/(^|\/)page\.(html|md)$/.test(P.article_meta.slug), J({ slug: P.article_slug, url: P.article_meta && P.article_meta.suggested_url }));
   });
+
+  // ---------- PR6 services up to 120 characters ----------
+  await guard('PR6 services 120', async () => {
+    const SN = 'PR6 services up to 120 characters (the app\'s SERVICE_MAX_CHARS) are kept whole by the site model and Normalize Input';
+    reset(); begin(SN); const check = mkCheck(SN);
+    const SM = new Function(SRC('_site_model.js') + '\nreturn SM;')();
+    const long = 'Microsoft Dynamics 365 consulting and implementation for UAE and GCC companies: Business Central, F&O and CRM';   // 110 characters, production shape
+    const m = SM.from({ site_id: 'site_novaand-demo-com', domain: 'novaand-demo.com', canonical_host: 'www.novaand-demo.com', declared_services: JSON.stringify([long, 'x'.repeat(130)]) }, {});
+    check('a 110-character service is kept whole (it was cut at 80: "...GCC: Busines")', (m.declared_services || []).includes(long) && SM.services(m).includes(long), J(m.declared_services));
+    check('... and a longer one is cut at 120, never more', (m.declared_services || []).some(x => x.length === 120), J((m.declared_services || []).map(x => x.length)));
+    const wf = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'workflows', 'SEO_Agent_v4.json'), 'utf8'))[0];
+    const ni = (wf.nodes.find(n => n.name === 'Normalize Input') || {}).parameters.jsCode || '';
+    check('Normalize Input keeps services up to 120 characters', /const KF_SERVICES = [^\n]*\.slice\(0, 120\)\)/.test(ni) && !/const KF_SERVICES = [^\n]*\.slice\(0, 80\)\)/.test(ni), (ni.match(/const KF_SERVICES = [^\n]*/) || [''])[0].slice(0, 200));
+    const ap = SRC('_ai_panel.js');
+    check('the AI panel\'s services read keeps 120 characters too', /arr\(r\.services_json\)\]\.map\(s => S\(s\)\.slice\(0, 120\)\)/.test(ap), '');
+  });
+
 };

@@ -1159,7 +1159,7 @@ const AIP = (() => {
   // could be refused on one path and asked on the other. Both now build the gate's input here, from the same rows.
   const servicesOfRow = (row) => { const r = row || {}; if (!(S(r.canonical_host) || S(r.model_updated_at))) return [];
     const arr = (v) => { const x = parse(v, null); return Array.isArray(x) ? x : listOf(v); };
-    return [...new Set([...arr(r.declared_services), ...arr(r.services_json)].map(s => S(s).slice(0, 80)).filter(Boolean))].slice(0, 30); };
+    return [...new Set([...arr(r.declared_services), ...arr(r.services_json)].map(s => S(s).slice(0, 120)).filter(Boolean))].slice(0, 30); };
   const fitInput = (o) => { const x = o || {};
     return { own_domain: S(x.domain), competitors: [...new Set((x.competitors || []).map(S).filter(Boolean))].slice(0, 8), brands: x.aliases || {},
       heads: [...new Set((x.ladders || []).map(l => S(l.head_keyword)).filter(Boolean))], services: (x.services || []).slice(0, 30), keywords: x.keywords || [] }; };

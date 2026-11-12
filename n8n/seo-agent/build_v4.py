@@ -1887,7 +1887,7 @@ patch('Normalize Input', "const ladder_links = Array.isArray(p2.ladder_links)",
       "const KF_CHOSEN = ['client_typed', 'client_picked', 'system_announced'].includes(String(p2.chosen_by || '').trim().toLowerCase()) ? String(p2.chosen_by).trim().toLowerCase() : '';\n"
       "const KF_LADDER_MODE = ['auto', 'manual'].includes(String(p2.ladder_mode || '').trim().toLowerCase()) ? String(p2.ladder_mode).trim().toLowerCase() : '';\n"
       "const KF_SERVICES_GIVEN = Array.isArray(p2.services) || typeof p2.services === 'string';\n"
-      "const KF_SERVICES = (Array.isArray(p2.services) ? p2.services : String(p2.services || '').split(/[\\n,;]+/)).map(x => String(x == null ? '' : x).replace(/\\s+/g, ' ').trim().slice(0, 80)).filter(x => x.length >= 2).filter((x, i, a) => a.findIndex(y => y.toLowerCase() === x.toLowerCase()) === i).slice(0, 30);\n"
+      "const KF_SERVICES = (Array.isArray(p2.services) ? p2.services : String(p2.services || '').split(/[\\n,;]+/)).map(x => String(x == null ? '' : x).replace(/\\s+/g, ' ').trim().slice(0, 120)).filter(x => x.length >= 2).filter((x, i, a) => a.findIndex(y => y.toLowerCase() === x.toLowerCase()) === i).slice(0, 30);\n"
       "const KF_TZ = (() => { const t = String(p2.timezone || '').trim(); if (!t || t.length > 64 || !/^[A-Za-z][A-Za-z0-9_+\\-]*(\\/[A-Za-z0-9_+\\-]+)*$/.test(t)) return ''; try { new Intl.DateTimeFormat('en-US', { timeZone: t }); return t; } catch (e) { return ''; } })();\n"
       "const ladder_links = Array.isArray(p2.ladder_links)")
 patch('Normalize Input', "    pipeline_source: String(p2.pipeline_source || ''),",
