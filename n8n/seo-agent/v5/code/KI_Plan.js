@@ -64,6 +64,7 @@ const ladderOwners = ladderRows.filter(r => S(r.target_url) && S(r.keyword) && !
 const tracked = KIW.uniq(S(site.keywords).split(',').map(KIW.normKw)).slice(0, 20);
 const sd = KIW.compSeeds({ iso: g.iso, country: g.country_name, city: (KIW.J(site.nap_json, {}) || {}).city, services: seedSvc, products, seeds: g.seeds || [],
   gsc: gsc.slice(0, KIW.CAPS.gsc_seeds), tracked, ladders, gate: (kw) => gate(kw) });
+// KI-JUDGE (2026-11-12): ki_judge is off when seo_cache ki:kill = 'judge' (KI_Gate.js judge_off)
 // ---- what it may cost: every request priced, cache hits free, held under the quote ----
 const quote = N(KIW.QUOTE[g.kind]) || 0;
 const has = (k, kind) => KIW.fresh(KIW.cacheRead(cache, k), kind, now, g.ki_force);
@@ -87,7 +88,8 @@ if (g.kind === 'competitors') {
   if (!has(ck('disc', g.market, seedKey), 'discovery')) base += (KIW.PRICE.labs + KIW.CAPS.ideas_limit * KIW.PRICE.labs_row) + KIW.CAPS.sugg_n * (KIW.PRICE.labs + KIW.CAPS.sugg_limit * KIW.PRICE.labs_row) + KIW.CAPS.related_n * (KIW.PRICE.labs + KIW.CAPS.related_limit * KIW.PRICE.labs_row);
   if (chosen.length && !has(ck('pi', g.market, KIW.hash(chosen.slice().sort().join('|'))), 'ranked')) base += KIW.PRICE.labs + KIW.CAPS.pi_limit * KIW.PRICE.labs_row;
   base += 2 * (KIW.PRICE.labs + KIW.CAPS.top_n * KIW.PRICE.labs_row) + KIW.PRICE.ads;   // overview + intent for the top N, Google Ads for what Labs does not know
-  base += KIW.CAPS.top_m * KIW.PRICE.serp10 + (KIW.PRICE.labs + KIW.CAPS.tp_urls * KIW.PRICE.labs_row);
+  // QUEUE / KI-JUDGE (2026-11-12): every kept candidate's results page through the queue, plus a live-read allowance for what it does not return
+  base += KIW.CAPS.top_m * KIW.PRICE.serp_std + 30 * KIW.PRICE.serp10 + (KIW.PRICE.labs + KIW.CAPS.tp_urls * KIW.PRICE.labs_row);
   base += KIW.PRICE.bl + (KIW.CAPS.rd_targets || 300) * KIW.PRICE.bl_row;   // FX-L H2: the referring domains of the client and the read top-10 hosts (Strength)
   const need = chosen.filter(d => !has(ck('rk', g.market, d), 'ranked')).length;
   compRkCap = Math.max(0, Math.min(need, Math.floor((quote - base + 1e-9) / rkCost)));
@@ -98,7 +100,7 @@ const est = KIW.r6(Math.min(quote || Infinity, base + (g.kind === 'competitors' 
 return [{ json: { kind: g.kind, stage: g.stage, site_id: g.site_id, domain: g.domain, canonical_host: S(site.canonical_host) || g.domain, ...m, client_key: g.client_key || '',
   request_id: g.request_id, run_id: g.run_id, callback_url: g.callback_url, ki_mode: g.ki_mode, ki_force: !!g.ki_force, started_at: g.started_at || now, now,
   services, seed_services: seedSvc, products, brand_words: brandWords, declared, chosen, dismissed, max_chosen: maxChosen, seeds: sd.seeds, seeds_refused: sd.refused, seeds_dropped: sd.dropped,
-  gsc: gsc.slice(0, 500), gsc_period_end: lastPeriod, site_impressions: siteImpr, site_impressions_basis: siteImprBasis, seed_key: seedKey, avoid, known_rivals: knownRivals, tracked, ladders, ladders_set_aside: fr.set_aside, ladder_owners: ladderOwners, fit_ctx: fitCtx,
+  gsc: gsc.slice(0, 500), gsc_period_end: lastPeriod, site_impressions: siteImpr, site_impressions_basis: siteImprBasis, seed_key: seedKey, avoid, known_rivals: knownRivals, tracked, ladders, ladders_set_aside: fr.set_aside, ladder_owners: ladderOwners, country_name: g.country_name || '', business_facts: S(site.business_facts).slice(0, 600), ki_judge: !(g.ki_judge === false || g.judge_off === true), fit_ctx: fitCtx,
   profile_cap: profileCap, comp_rk_cap: compRkCap, quote, notes, business: g.business || '',
   est_dfs_usd: est, est_ai_usd: 0,
   est_basis: 'modelled before the run from the price of every request it may send ($' + est.toFixed(4) + ', every results page counted as not read today; the quote is $' + quote.toFixed(2) + ')' } }];

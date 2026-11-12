@@ -125,3 +125,31 @@ Owner to provide: Brave Search API key.
   privately in run2/before.json (cycles unchanged: techand next 11-12 01:00Z, devaicon 11-13 01:00Z). Without the re-run the fixed code
   first runs on the normal schedule: techand Thu 2026-11-12, devaicon Fri 2026-11-13 (06:00 Asia/Karachi).
 - Left by hand: the old linkedin.com not_fit row (devaicon) in seo_link_outreach (AIR never pitches platform pages anyway).
+
+## 2026-11-12: Brave Search ON for both sites
+- Owner gave SEO_BRAVE_API_KEY (free tier: $5 credit a month; AIR caps Brave at 10 searches per site a week, ~90 a month for both
+  sites, ~$0.45, inside the credit). Key only in n8n/.env and the n8n credential SEOcredBraveApi1 (never in the repo). Tested from the VM:
+  200, 5 results (the office router's DNS does not resolve api.search.brave.com; the VM does).
+- Build from a clean worktree at 7cab7bf2 (another session had uncommitted KI edits in the shared checkout): only BRAVE_ON false -> true
+  in 7 AI Growth nodes; harness 18880 / 0 (mount app/ at /app: the KI scenarios read app/shared/src/cost.ts). Before: prod == 7cab7bf2
+  (33 / 0); backup pg/2026-11-12/*T085834Z; deploy_engine --no-build --apply --credentials --only-credentials SEOcredBraveApi1
+  --create-missing (guard ok, 29 published, 1 credential written); after: prod == build (33 / 0). Site Admin monitors ai_rank_brave=true
+  for techand.ai and devaicon.com (200 each; read back: mode on, reserve, mentions, fan-out 20, brave true; other fields unchanged).
+- First Brave reads: the next AI Growth runs (devaicon Fri 2026-11-13, techand Thu 2026-11-19). Claude's "can it find your page" stage
+  moves from unknown to a reading; Brave rank is a hint for Claude, not proof (a second provider was reported in 2026).
+
+## 2026-11-12: first weekly run with the fixes (techand) and the page time limit
+- techand's cycle (01:00 UTC) ran every job. AIR worked as designed: the reserved slot took the AIR target "Can an ERP with project
+  management features handle..." (answer, page /dynamics-365-project-operations-uae) and started "erp project management uae" next to two
+  ordinary pages. All three page runs (13063-13065) were cancelled at the 1-hour limit at 90-100% done (214-246 of ~235-241 node runs):
+  on the 4 GB VM one page takes 17-21 min alone, two at once 18 / 33 min (11-10), three at once > 60 min. The extra AIR slot made three.
+- Fix AIR-PAGETIME (9b17890a): the main workflow's executionTimeout 3600 -> 7200 (= EXECUTIONS_TIMEOUT_MAX; n8n strips a timeout equal to
+  the server default, which is why production showed none); Cadence_Plan in_flight_hours (2) stays >= the limit. Harness 19143 / 0 (one
+  timing check, AD10 204 ms vs 200 ms, failed once under load and passed on the rerun at 107 ms). Merged with the KI judge deploy
+  (47562ddb) as c4945235; before: prod == merged build (33 / 0); backup pg/2026-11-12/*T132930Z; deploy guard ok, 29 published; after:
+  main executionTimeout 7200 on prod, prod == build (33 / 0).
+- Not re-run: techand's three pages (they come back next Thursday 11-19, or now with the owner's OK for the job re-open). devaicon's cycle
+  runs Fri 2026-11-13 01:00 UTC with the 2 h limit and Brave on.
+- Levers if pages are still slow: start a site's pages one after another (the cadence fires them at once with waitForSubWorkflow false;
+  waiting changes what AI Target Marks reads, B9-6), saveExecutionProgress off for page runs (each node rewrites the whole run to Postgres,
+  ~15 s a node at the end of a page with three running), or a larger VM.

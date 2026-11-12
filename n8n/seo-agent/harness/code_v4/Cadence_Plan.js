@@ -2588,7 +2588,7 @@ const CC = (() => {
     track: 0, published: 0, checkin: 0, profile: 0, case_study: 0,   // these spawn the work that costs; each spawn reserves its own row
     // KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §7, R5 prices): no run yet, so these are the design's ceilings, not measured
     competitors: 0,           // FX-L: the worker calls no model (fixes/E2.md 7.1); the tie-break of DESIGN.md §2.5 is not built
-    keyword_research: 0,      // FX-L: no model is called (DESIGN.md §3.6's tie-break is not built)
+    keyword_research: 0.45,   // KI-JUDGE (2026-11-12): Claude Opus 5.5 judges up to 300 searches with their top results; $1.03 for 996 offline (fixes/JUDGE.md)
   };
   const DFS_EST = {           // measured DataForSEO cost of that run →
     crawl: 0.09,              // 0.09   (execs 497 and 513, both exactly)

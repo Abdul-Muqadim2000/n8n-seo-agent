@@ -13,7 +13,7 @@
 //   brave     Brave Search web results (`ai_rank_brave` + the key, built in only with the key)  -> AI Rank Brave Call
 // Nothing here is paid unless the planner put it there, and the planner plans only for a site where AIRF.mayPay is true.
 const CALL = "brave";
-const BRAVE_ON = false;   // baked by ai_rank_requests_wiring.py: true only when SEO_BRAVE_API_KEY is set in n8n/.env
+const BRAVE_ON = true;   // baked by ai_rank_requests_wiring.py: true only when SEO_BRAVE_API_KEY is set in n8n/.env
 const API = 'https://api.dataforseo.com/v3/', BING_API = 'https://ssl.bing.com/webmaster/api.svc/json/', CC_INDEX = 'https://index.commoncrawl.org/',
   BRAVE_API = 'https://api.search.brave.com/res/v1/web/search';
 const PRICE = { serp: 0.002, mentions_pages: 0.15, mentions_metrics: 0.101 };   // planning figures only (the ledger reads each task's reported cost)

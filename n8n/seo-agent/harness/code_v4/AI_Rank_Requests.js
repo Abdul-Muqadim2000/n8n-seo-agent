@@ -1002,7 +1002,7 @@ const AIRC = { API: 'https://api.dataforseo.com/v3/', serp_depth: 10, serp_fresh
   mentions_keywords: 5, cc_every_days: 28,
   // planning prices (USD) only: the ledger settles what each DataForSEO task reports, counted once by its task id (AI Rank Fetched)
   price: { serp: 0.002, mentions_pages: 0.15, mentions_metrics: 0.101, brave: 0.005 }, site_usd_max: 0.6 };
-const BRAVE_ON = false;   // baked by ai_rank_requests_wiring.py: true only when SEO_BRAVE_API_KEY is set in n8n/.env
+const BRAVE_ON = true;   // baked by ai_rank_requests_wiring.py: true only when SEO_BRAVE_API_KEY is set in n8n/.env
 const BING_ON = true;    // baked by build_monitors.py: true only when SEO_BING_WEBMASTER_API_KEY is set
 const nowMs = Date.now(); const nowIso = new Date(nowMs).toISOString(); const DAY = 864e5;
 const S0 = (v) => (v == null ? '' : String(v)).trim();

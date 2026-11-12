@@ -34,6 +34,8 @@ ALLOW = {
     'POST Pilot Report': 'callback to the customer app: every POST inserts a report (not idempotent)',   # W2-E2 (2026-10-23): the AI repeat pilot
     'POST Index Report': 'callback to the customer app: every POST inserts a report (not idempotent)',   # Index coverage (2026-10-29)
     'POST KI Report': 'callback to the customer app: every POST inserts a report (not idempotent)',   # KI keyword intelligence (2026-11-08)
+    'Run Research Judge': 'KI-JUDGE (2026-11-12): a paid Claude Messages call that carries several items (one per 40 searches); a node-level retry would re-send and re-bill every answered call, so Research Judge Retry Plan re-sends only the calls with no usable answer, once',
+    'Run Research Judge (Retry)': 'KI-JUDGE: the one re-send of the judge calls that had no usable answer; a second retry would bill again for a call Anthropic may already have answered',
     'POST KI Refusal': 'callback to the customer app: every POST inserts a report (not idempotent)',   # KI E2 (2026-11-08): the refusal before any spend
     'POST KI Started': 'callback to the customer app: every POST inserts a report (not idempotent)',   # KI E2 (2026-11-08): the started notice
     'POST BL Report': 'callback to the customer app: every POST inserts a report (not idempotent)',
