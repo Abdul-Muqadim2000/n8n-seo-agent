@@ -14,6 +14,7 @@ from ladder_common import (LADDER_TABLE, HISTORY_TABLE, LADDER_COLS, HISTORY_COL
                            ledger_mainline,   # R17 (2026-10-14): the reserve chain sits on the MAIN path, before the first paid call
                            CACHE_TABLE,       # R90 (2026-10-16): the names AI uses for other companies (seo_cache ai_brands:<site>)
                            QUERY_TABLE, QUERY_COLS,   # B6-14 (2026-10-16): the site's Search Console impressions per query weigh the share of voice
+                           LADDER_SETTINGS_TABLE, LADDER_SETTINGS_COLS,   # section 189 (S2-07): a ladder paused / archived on the Pipeline page gets no write advice
                            site_time_src)   # 2026-10-19: the cycle run (ST.cycleOf, v5/code/_site_time.js) behind the Rank Tracker's one-site input
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
@@ -27,6 +28,7 @@ rd = lambda p: (seo_events.inline(_rd0(p)).replace('/*__ANCHOR__*/', _rd0('code/
                 .replace('/*__FIT_GATE__*/', _rd0('code/_fit_gate.js').rstrip('\n'))   # R16 (build_v4.py section 53): the gate also reads the rungs stored before it existed
                 .replace('/*__RANK_SERP__*/', _rd0('code/_serp_url.js').rstrip('\n') + '\n' + _rd0('code/_rank_serp.js').rstrip('\n'))   # SERP-GOTO (2026-11-08): RS reads hosts through SU
                 .replace('/*__REPLAN__*/', _rd0('code/_replan.js').rstrip('\n'))   # G32: the re-plan proposal for a stuck ladder
+                .replace('/*__LADDER_RULES__*/', _rd0('code/_ladder_rules.js').rstrip('\n'))   # section 189 (S2-07): a "-2" copy is never the page to refresh (LRU.copyOf)
                 .replace('/*__SITE_TIME__*/', site_time_src()))   # 2026-10-19: the cycle run (ST.cycleOf) for the Rank Tracker's one-site input
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
 nid = lambda name: str(uuid.uuid5(NS, 'extras:' + name))
@@ -136,6 +138,10 @@ N.append(node('Load Query History (Tracker)', DT_TYPE, DT_VERSION, _q_load_t, [9
 # R90 (2026-10-16, re-rating 2026-10-15): the fit gate of the stored rungs is given the names AI uses for other companies, as Ladder Pool
 # and Rank Keywords already are (seo_cache rows of kind 'ai', key ai_brands:<site_id>, written by the AI Visibility Tracker)
 N.append(node('Load AI Brands (Tracker)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), [1120, 820], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
+# section 189 (production review 2026-11-12, S2-07): the ladder's own state on the Pipeline page (seo_ladder_settings: paused / archived), so the
+# report of a ladder the owner paused gives no "write this" advice
+N.append(node('Ensure Ladder Settings Table (Tracker)', DT_TYPE, DT_VERSION, dt_create_params(LADDER_SETTINGS_TABLE, LADDER_SETTINGS_COLS), [1010, 960], executeOnce=True, onError='continueRegularOutput'))
+N.append(node('Load Ladder Settings (Tracker)', DT_TYPE, DT_VERSION, dt_get_all_params(LADDER_SETTINGS_TABLE), [1120, 960], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
 N.append(code('Tracker Plan', rd('code/Tracker_Plan.js'), [1120, 100]))
 N.append(iff('Any Checks?', '{{ !$json.nothing_to_do }}', [1340, 100]))
 N.append(node('SERP Check', 'n8n-nodes-base.httpRequest', 4.5, DFS_HTTP, [1560, 0], credentials=DFS, onError='continueRegularOutput', **retry_lint.RETRY))
@@ -168,7 +174,7 @@ for a, b in [('Manual Run', 'Ensure Ladder Table'), ('Ensure Ladder Table', 'Ens
                  ('Load Pages (Tracker)', 'Ensure Sites Table (Tracker)'), ('Ensure Sites Table (Tracker)', 'Load Sites (Tracker)'),
                  ('Load Sites (Tracker)', 'Ensure Query Table (Tracker)'), ('Ensure Query Table (Tracker)', 'Load Query History (Tracker)'),   # B6-14
                  ('Load Query History (Tracker)', 'Ensure Monitors Table (Tracker)'), ('Ensure Monitors Table (Tracker)', 'Load Monitors (Tracker)'),
-                 ('Load Monitors (Tracker)', 'Load AI Brands (Tracker)'), ('Load AI Brands (Tracker)', 'Tracker Plan'), ('Tracker Plan', 'Any Checks?'),
+                 ('Load Monitors (Tracker)', 'Load AI Brands (Tracker)'), ('Load AI Brands (Tracker)', 'Ensure Ladder Settings Table (Tracker)'), ('Ensure Ladder Settings Table (Tracker)', 'Load Ladder Settings (Tracker)'), ('Load Ladder Settings (Tracker)', 'Tracker Plan'), ('Tracker Plan', 'Any Checks?'),
                  ('Tracker Report', 'Tracker Ladder Marks'), ('Tracker Ladder Marks', 'Any Tracker Marks?'), ('SERP Check', 'Parse Positions'), ('Parse Positions', 'Save History'), ('Save History', 'Tracker Report'), ('Tracker Report', 'Has Report?')]:
     link(C, a, b)
 link(C, 'Any Checks?', 'SERP Check', 0); link(C, 'Any Checks?', 'Nothing To Track', 1)

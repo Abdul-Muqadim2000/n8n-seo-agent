@@ -9895,7 +9895,8 @@ def _b95_checks():
                     d.setdefault(s_, []).append(t_['node'])
         return d
     _rt = _wf95('SEO_Agent_Rank_Tracker.json'); _rtd = _down95(_rt); _rtn = {n['name']: n for n in _rt['nodes']}
-    for _a, _b in (('Load Monitors (Tracker)', 'Load AI Brands (Tracker)'), ('Load AI Brands (Tracker)', 'Tracker Plan'),
+    for _a, _b in (('Load Monitors (Tracker)', 'Load AI Brands (Tracker)'), ('Load AI Brands (Tracker)', 'Ensure Ladder Settings Table (Tracker)'),   # section 189: the ladder settings sit between
+                   ('Load Ladder Settings (Tracker)', 'Tracker Plan'),
                    ('Tracker Report', 'Tracker Ladder Marks'), ('Tracker Ladder Marks', 'Any Tracker Marks?'), ('Any Tracker Marks?', 'Mark Set Aside (Tracker)')):
         assert _b in (_rtd.get(_a) or []), 'R87 / R90: %s does not feed %s in the Rank Tracker' % (_a, _b)
     _v95 = ((_rtn['Mark Set Aside (Tracker)'].get('parameters') or {}).get('columns') or {}).get('value') or {}

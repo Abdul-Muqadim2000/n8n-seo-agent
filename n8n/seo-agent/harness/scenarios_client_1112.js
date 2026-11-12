@@ -8,6 +8,8 @@
 //   PR2  a client's free re-make stayed 59 "Not ready" (S3-04): the editor rewrote the provider-table row the second read flagged, but kept
 //        the row's label, which is the quote; a finding whose sentence / row the editor rewrote on its task is resolved (advice to check),
 //        one the editor left as it was stays open
+//   PR3  the Rank Tracker's next step (S2-07): a ladder paused on the Pipeline page gets no write advice; a rung our check stopped (AVOID) is
+//        never "write or improve"; a "-2" copy of a live page is never the page to refresh
 module.exports = async (ctx) => {
   const { H, run, mock, store, guard, reset, begin } = ctx;
   const fs = require('fs');
@@ -188,5 +190,50 @@ module.exports = async (ctx) => {
     check('an edit that left the row as it was keeps the finding open (the page stays not ready)', refused.v.page_run.kept_open.includes('review') && refused.v.delivery_status === 'not_ready', J({ k: refused.v.page_run.kept_open, s: refused.v.delivery_status }));
     const elsewhere = await chain(SEC(ROW0, INTRO.replace('Choose based on', 'Pick a provider based on')));
     check('an edit of another sentence of the section, the flagged row untouched, keeps it open too', elsewhere.v.page_run.kept_open.includes('review'), J(elsewhere.v.page_run));
+  });
+
+  // ---------- PR3 the rank report of a paused ladder ----------
+  await guard('PR3 rank report advice', async () => {
+    const SN = 'PR3 (S2-07) the rank report: a paused ladder gets no write advice; a stopped (AVOID) rung is never "write or improve"; a "-2" copy page is never the page to refresh';
+    reset(); begin(SN); const check = mkCheck(SN);
+    const V = require('./fixtures_v5');
+    const D = 'novaand-demo.com', SITE = 'site_novaand-demo-com', HOST = 'https://www.novaand-demo.com';
+    const EMPTY = [{ json: {} }];
+    const start = new Date(Date.now() - 9 * 864e5).toISOString();
+    // production seo_ladders 46-50 (lad_mw0goinsniv1, 2026-11-12), the brand replaced
+    const row = (rung, page_no, keyword, status, target, o = {}) => ({ json: { id: page_no, ladder_id: 'lad_crm', domain: D, head_keyword: 'crm service provider', rung, page_no, keyword, supporting: '', page_type: rung === 4 ? 'Service Page' : 'Guide',
+      target_url: HOST + target, page_exists: status === 'published', status, months: '1-3', start_date: start, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: '', callback_url: '', request_id: '7338', target_words: 2400, status_note: '', ...o } });
+    const LAD = [row(2, 1, 'crm for customers', 'published', '/insights/crm-for-customers'),
+      row(2, 2, 'what is a crm company', 'stopped', '/what-is-a-crm-company', { status_note: 'stopped: our check advised against this page (AVOID, score 22)' }),
+      row(2, 3, 'best crm software for customer service', 'set_aside', '/best-crm-software-for-customer-service'),
+      row(2, 4, 'dynamics 365 crm services uae', 'planned', '/dynamics-365-crm-services-uae'),
+      row(4, 5, 'crm service provider', 'planned', '/dynamics-365-crm-uae')];
+    const PAGES = [{ url: HOST + '/dynamics-365-crm-uae', title: 'Dynamics 365 CRM in Dubai & UAE: Sales and Service | Nova&', h1: 'Dynamics 365 CRM Services in Dubai and the UAE', http_status: 200 },
+      { url: HOST + '/dynamics-365-crm-uae-2', title: 'Dynamics 365 CRM Services UAE | Nova&', h1: 'Dynamics 365 CRM Services in UAE', http_status: 200 },
+      { url: HOST + '/insights/crm-for-customers', title: 'CRM for Customers: What It Does and How UAE Businesses Choose One', h1: '', http_status: 200 }]
+      .map(p => ({ json: { site_id: SITE, source: 'sitemap', queries_json: '[]', lastmod: '', status_at: '', ...p } }));
+    const report = async (settings) => {
+      reset();
+      mock('Load Ladders', LAD); mock('Load History', EMPTY); mock('Load Content Log (Tracker)', EMPTY); mock('Load Pages (Tracker)', PAGES);
+      mock('Load Ladder Settings (Tracker)', settings.length ? settings : EMPTY);
+      const tp = await run('Tracker Plan', store['Load History']);
+      if (tp[0].json.nothing_to_do) return { tp, next: null };
+      mock('SERP Check', tp.map(c => V.serpFor(c.json.keyword, c.json.domain, 0)));
+      const pp = await run('Parse Positions', store['SERP Check']); mock('Save History', pp);
+      const tr = await run('Tracker Report', pp);
+      return { tp, tr: tr[0].json, next: tr[0].json.next_step };
+    };
+    const set = (status) => [{ json: { ladder_id: 'lad_crm', site_id: SITE, domain: D, head_keyword: 'crm service provider', mode: 'auto', status } }];
+    const paused = await report(set('paused'));
+    check('a ladder paused on the Pipeline page: "paused", no page to write, nothing named', paused.next && paused.next.action === 'paused' && paused.next.reason === 'paused_by_owner' && !paused.next.pages.length
+      && !/Write or improve|what is a crm company|-2/.test(paused.next.text), J(paused.next));
+    const archived = await report(set('archived'));
+    check('an archived ladder: the same, said as archived', archived.next && archived.next.action === 'paused' && archived.next.reason === 'archived' && /archived/.test(archived.next.text), J(archived.next));
+    const active = await report(set('active'));
+    const txt = J(active.next);
+    console.log('   PR3 active next ->', active.next && active.next.text, J(active.next && active.next.pages));
+    check('an active ladder\'s next step never asks for the rung our check stopped (AVOID) nor the set-aside one', active.next && !/what is a crm company|best crm software for customer service/.test(txt), txt);
+    check('... and never names the "-2" copy as the page to refresh (its original is named instead, or nothing)', !/dynamics-365-crm-uae-2/.test(txt), txt);
+    check('... while the rungs still to work on are listed', /dynamics 365 crm services uae|crm for customers/.test(txt), txt);
   });
 };
