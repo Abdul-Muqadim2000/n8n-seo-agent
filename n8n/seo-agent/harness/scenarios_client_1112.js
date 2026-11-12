@@ -10,6 +10,8 @@
 //        one the editor left as it was stays open
 //   PR3  the Rank Tracker's next step (S2-07): a ladder paused on the Pipeline page gets no write advice; a rung our check stopped (AVOID) is
 //        never "write or improve"; a "-2" copy of a live page is never the page to refresh
+//   PR4  the Strategy Brief parser repairs its own format (S1-06, execution 13196: "Model output doesn't fit required format" twice, a page
+//        run dead after 18.6 minutes): auto-fix on, one Claude Haiku model (no thinking, declared limits) feeding only that parser
 module.exports = async (ctx) => {
   const { H, run, mock, store, guard, reset, begin } = ctx;
   const fs = require('fs');
@@ -235,5 +237,23 @@ module.exports = async (ctx) => {
     check('an active ladder\'s next step never asks for the rung our check stopped (AVOID) nor the set-aside one', active.next && !/what is a crm company|best crm software for customer service/.test(txt), txt);
     check('... and never names the "-2" copy as the page to refresh (its original is named instead, or nothing)', !/dynamics-365-crm-uae-2/.test(txt), txt);
     check('... while the rungs still to work on are listed', /dynamics 365 crm services uae|crm for customers/.test(txt), txt);
+  });
+
+  // ---------- PR4 the brief parser's auto-fix (the generated workflow, as n8n 2.41.4 reads it) ----------
+  await guard('PR4 brief parser auto-fix', async () => {
+    const SN = 'PR4 (S1-06) the Strategy Brief parser repairs a brief whose JSON does not fit with one Claude Haiku call (auto-fix), wired as n8n 2.41.4 requires';
+    reset(); begin(SN); const check = mkCheck(SN);
+    const wf = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'workflows', 'SEO_Agent_v4.json'), 'utf8'))[0];
+    const N = Object.fromEntries(wf.nodes.map(n => [n.name, n]));
+    const P = N['Parser — Strategy Brief'], M = N['Claude — Brief Fixer'];
+    check('the parser has auto-fix on, with a prompt that carries {instructions}, {completion} and {error} (n8n refuses a fix prompt without {error})',
+      P && P.parameters.autoFix === true && P.parameters.customizeRetryPrompt === true && ['{instructions}', '{completion}', '{error}'].every(x => P.parameters.prompt.includes(x)), J(P && P.parameters && { a: P.parameters.autoFix }));
+    check('the prompt forbids new facts and asks for the JSON only', /Add no fact, number, address or name/.test(P.parameters.prompt) && /Answer with the JSON only/.test(P.parameters.prompt), P.parameters.prompt.slice(-300));
+    const to = ((wf.connections[M && M.name] || {}).ai_languageModel || []).flat().map(t => t.node);
+    check('one Claude Haiku model, no thinking, room for a whole brief (32,000, streaming), the Anthropic credential, feeding only that parser',
+      M && M.type === '@n8n/n8n-nodes-langchain.lmChatAnthropic' && M.parameters.model.value === 'claude-haiku-4-5-20251001' && !M.parameters.options.thinking
+      && M.parameters.options.maxTokensToSample === 32000 && M.parameters.options.streaming === true && M.credentials.anthropicApi.id === 'SEOcredAnthropic' && J(to) === J(['Parser — Strategy Brief']), J({ M, to }));
+    check('the brief agent itself is unchanged: still Opus, still its own parser, still one retry', N['Strategy Brief'].maxTries === 2 && ((wf.connections['Parser — Strategy Brief'] || {}).ai_outputParser || []).flat().map(t => t.node).includes('Strategy Brief')
+      && N['Claude — Strategy Brief'].parameters.model.value === 'claude-opus-5-5', J(N['Strategy Brief'].maxTries));
   });
 };

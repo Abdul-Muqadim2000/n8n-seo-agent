@@ -104,6 +104,11 @@
   "model": "claude-sonnet-5-5",
   "why_not": ""
  },
+ "SEO_Agent_v4.json / Parser \u2014 Strategy Brief": {
+  "counted": false,
+  "model": "claude-haiku-4-5-20251001",
+  "why_not": "the auto-fix model of a structured output parser: it runs only when the agent's answer did not fit its format (one call, rare), so it is not priced in the run figure"
+ },
  "SEO_Agent_v4.json / Site Describer": {
   "counted": true,
   "model": "claude-haiku-4-5-20251001",

@@ -7799,6 +7799,14 @@ def _b76_checks():
                 if _m.get('type') != '@n8n/n8n-nodes-langchain.lmChatAnthropic':
                     continue
                 for _ag in [t['node'] for l in ((_cn.get(_mn) or {}).get('ai_languageModel') or [[]]) for t in (l or [])]:
+                    # section 189 (S1-06): a model that serves a structured output parser's auto-fix is not an agent of the run: it is
+                    # called only when an agent's answer did not fit its format (no main path, nothing a counter chain could sit behind).
+                    # It is recorded with that reason instead of excusing its whole workflow
+                    if ((_nm.get(_ag) or {}).get('type') or '') == '@n8n/n8n-nodes-langchain.outputParserStructured':
+                        assert (_nm[_ag].get('parameters') or {}).get('autoFix') is True, 'section 189: ' + _f + ' / ' + _mn + ' feeds a parser that has no auto-fix'
+                        _out76[_f + ' / ' + _ag] = {'counted': False, 'model': _m['parameters']['model']['value'],
+                                                    'why_not': 'the auto-fix model of a structured output parser: it runs only when the agent\'s answer did not fit its format (one call, rare), so it is not priced in the run figure'}
+                        continue
                     _counted = ('Count Prompt (' + _ag + ')') in _nm and ('Count Answer (' + _ag + ')') in _nm
                     _out76[_f + ' / ' + _ag] = {'counted': _counted, 'model': _m['parameters']['model']['value'],
                                                 # B-C2 (section 84): each uncounted workflow carries ITS OWN reason, not one shared
@@ -12404,6 +12412,28 @@ log('The front door reserves the website\'s whole AI panel (W2-FIX, 2026-10-23):
 import llm_limits as _ll150
 COMPLETE_SRC150 = _rd0('code/_complete.js').rstrip('\n')
 assert 'const CK = (() => {' in COMPLETE_SRC150
+
+# ---------- 189. (production review 2026-11-12, S1-06) the brief parser repairs its own format ----------
+# Execution 13196: "Parser - Strategy Brief" answered "Model output doesn't fit required format" twice (the agent retries once) and a client's
+# page run died after 18.6 minutes, two Opus briefs spent. n8n's structured output parser has an auto-fix mode: when the brief's JSON does
+# not fit the schema it hands the answer, the schema and the error to a model ONCE and parses that model's answer instead. The fixer is
+# Claude Haiku 4.5 with no thinking (it rewrites JSON it is given, it plans nothing); it runs only on a parse failure, so a normal run costs
+# nothing more, and a failing one at most one Haiku call per brief attempt (two with the agent's own retry) before the run fails as before.
+_bf189 = 'Claude — Brief Fixer'
+add_node(_bf189, '@n8n/n8n-nodes-langchain.lmChatAnthropic', 1.6, {'model': {'__rl': True, 'mode': 'list', 'value': 'claude-haiku-4-5-20251001', 'cachedResultName': 'Claude Haiku 4.5'}, 'options': {}},
+         [pos('Parser — Strategy Brief')[0] + 160, pos('Parser — Strategy Brief')[1] + 200], {'credentials': {'anthropicApi': {'id': 'SEOcredAnthropic', 'name': 'Anthropic (SEO Agent)'}}})
+conns[_bf189] = {'ai_languageModel': [[{'node': 'Parser — Strategy Brief', 'type': 'ai_languageModel', 'index': 0}]]}
+_FIX_PROMPT189 = ('The JSON below was written to a fixed format, but it does not fit it. Return the same content in the required format.\n\n'
+    'Required format:\n--------------\n{instructions}\n--------------\n\n'
+    'The JSON as it was written:\n--------------\n{completion}\n--------------\n\n'
+    'Why it does not fit:\n--------------\n{error}\n--------------\n\n'
+    'Rules: keep every value as it was written; change only what breaks the format (a wrong type, a missing required field filled from the '
+    'written content, a broken bracket or quote, text around the JSON). Add no fact, number, address or name that is not in the written JSON. '
+    'Answer with the JSON only.')
+nodes['Parser — Strategy Brief']['parameters'].update({'autoFix': True, 'customizeRetryPrompt': True, 'prompt': _FIX_PROMPT189})
+assert all(x in _FIX_PROMPT189 for x in ('{instructions}', '{completion}', '{error}')) and _FIX_PROMPT189.count('{') == 3, 'section 189: the fix prompt must carry exactly its three placeholders'
+assert [t['node'] for l in conns[_bf189]['ai_languageModel'] for t in l] == ['Parser — Strategy Brief'] and nodes['Parser — Strategy Brief']['parameters']['autoFix'] is True
+log('Production review 2026-11-12 (S1-06, section 189): the Strategy Brief parser repairs a brief whose JSON does not fit its format with one Claude Haiku call (auto-fix), instead of failing the page run after 18 minutes')
 
 # ---------- A. the limits, and the cost table that prices the thinking (not the ceiling) ----------
 _set150 = _ll150.apply(_ll150.MAIN, nodes.values())
