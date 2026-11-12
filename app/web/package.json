@@ -26,7 +26,7 @@
     "@tanstack/react-query": "^5.87.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "lucide-react": "^0.544.0",
+    "lucide-react": "^1.57.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-hook-form": "^7.62.0",
