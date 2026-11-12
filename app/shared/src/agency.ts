@@ -674,19 +674,49 @@ const PROVIDER_KEY = /^(run_ledger|by_node|ai_nodes|ai_cost.*|ai_usd|dataforseo.
 const KEEP_KEY = /cpc/i;
 export const isCostKey = (k: string): boolean => !KEEP_KEY.test(k) && (COST_KEY.test(k) || PROVIDER_KEY.test(k));
 
-/** a report payload without its cost / ledger / budget keys, at any depth up to 6 */
+/**
+ * Prod review 2026-11-12 (S2-10 / S5-05): the company's callback URL carries its hook token (`/api/hooks/n8n/<token>`), and with it anyone
+ * can post results into the company. The engine echoed it inside report payloads (`state_before.callback_url`), served to every member,
+ * portal viewer and API key. Never served: a callback / hook key (`callback_url`, `callbackUrl`, `hook_url`, `hook_token`, ...) is dropped,
+ * and a hook address written inside any text is replaced.
+ */
+const HOOK_KEY = /^(callback|hook)$|callback_?(url|token|uri)|hook_?(url|token|uri|secret)/i;
+const HOOK_PATH = '/api/hooks/';
+const HOOK_URL = /(?:[a-z][a-z0-9+.-]*:\/\/[^\s"'<>()]*)?\/api\/hooks\/[^\s"'<>()]*/gi;
+export const isHookKey = (k: string): boolean => HOOK_KEY.test(k);
+/** a text with every hook address in it replaced */
+export const withoutHookUrls = (t: string): string => (t.includes(HOOK_PATH) ? t.replace(HOOK_URL, '[address removed]') : t);
+
+/** any value without its callback / hook keys and hook addresses, at any depth up to 16 (the stored value is untouched) */
+export function stripHookSecrets<T>(v: T, depth = 0): T {
+  if (v == null || depth > 16) return v;
+  if (typeof v === 'string') return withoutHookUrls(v) as T;
+  if (typeof v !== 'object' || v instanceof Date) return v;
+  if (Array.isArray(v)) return v.map((x) => stripHookSecrets(x, depth + 1)) as T;
+  const out: Record<string, unknown> = {};
+  for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+    if (isHookKey(k)) continue;
+    out[k] = stripHookSecrets(x, depth + 1);
+  }
+  return out as T;
+}
+
+/** a report payload without its cost / ledger / budget keys (at any depth up to 6), nor any callback / hook address (stripHookSecrets) */
 export function clientSafePayload<T>(v: T, depth = 0): T {
+  return stripHookSecrets(costSafe(v, depth));
+}
+function costSafe<T>(v: T, depth = 0): T {
   if (depth > 6 || v == null || typeof v !== 'object') return v;
-  if (Array.isArray(v)) return v.map((x) => clientSafePayload(x, depth + 1)) as T;
+  if (Array.isArray(v)) return v.map((x) => costSafe(x, depth + 1)) as T;
   const out: Record<string, unknown> = {};
   for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
     if (isCostKey(k)) continue;
     // FX-C RC-1: the AI ranking plan's key keeps only the client view and the steps; dollar amounts written into its text are removed too
     if (k === 'ai_rank') {
-      out[k] = clientSafePayload(aiRankCustomerSafe(x), depth + 1);
+      out[k] = costSafe(aiRankCustomerSafe(x), depth + 1);
       continue;
     }
-    out[k] = clientSafePayload(x, depth + 1);
+    out[k] = costSafe(x, depth + 1);
   }
   return out as T;
 }

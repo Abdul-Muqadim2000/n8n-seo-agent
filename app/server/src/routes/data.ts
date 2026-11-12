@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { AI_EXPORT_KINDS, aiExportFileName, aiFilterFrom, clientSafePayload, isClientRole, type AiExportKind, type Role } from '@seo/shared';
+import { AI_EXPORT_KINDS, aiExportFileName, aiFilterFrom, clientSafePayload, isClientRole, stripHookSecrets, type AiExportKind, type Role } from '@seo/shared';
 import { and, eq } from 'drizzle-orm';
 import { isPlatformAdmin, isUuid, requireUser, requireVerified, siteAccess } from '../auth/access';
 import { db, schema } from '../db';
@@ -22,7 +22,8 @@ export async function dataRoutes(app: FastifyInstance) {
   };
   // G5 (WHITE_LABEL.md §4): the dashboards of the client portal, open to client people, without a cost figure in them
   const portal = (req: Parameters<typeof siteAccess>[0]) => guard(req, 'client_viewer');
-  const shown = <T,>(role: Role, data: T): T => (isClientRole(role) ? clientSafePayload(data) : data);
+  // S2-10: the engine rows behind a dashboard may carry the company's callback address (its hook token): never served, to anybody
+  const shown = <T,>(role: Role, data: T): T => (isClientRole(role) ? clientSafePayload(data) : stripHookSecrets(data));
 
   app.get('/api/orgs/:orgId/sites/:siteId/data/overview', async (req) => {
     const a = await portal(req);

@@ -43,6 +43,7 @@ import {
   type RunInput,
   type SiteContext,
   holdOf,
+  stripHookSecrets,
 } from '@seo/shared';
 import { requireVerified, type OrgAccess } from '../auth/access';
 import { config } from '../config';
@@ -850,7 +851,8 @@ export async function ingestCallback(
   const { callback_url: _cb, ...rest } = body; // the callback URL carries the company's hook token: never stored
   const { payload: raw, files } = extractFiles(rest);
   // older n8n builds listed other customers' Search Console properties in "no access" errors: never stored
-  const payload0 = JSON.parse(JSON.stringify(raw).replace(/ \(it can see: [^)]*\)/g, '')) as Record<string, unknown>;
+  // S2-10 (prod review 2026-11-12): nor any callback / hook address the engine echoed deeper in the body (`state_before.callback_url`)
+  const payload0 = stripHookSecrets(JSON.parse(JSON.stringify(raw).replace(/ \(it can see: [^)]*\)/g, '')) as Record<string, unknown>);
   // FX-C RC-1: the AI ranking plan's raw spend becomes credits on its client view (customers see credits, never the provider's dollars)
   const payload = payload0.ai_rank && typeof payload0.ai_rank === 'object' ? withAiRankCredits(payload0, await settingsRow().then((x) => creditRate(x)).catch(() => null)) : payload0;
 
