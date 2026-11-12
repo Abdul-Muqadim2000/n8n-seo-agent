@@ -54,6 +54,21 @@ export const KEYWORD_CHECK = {
 /** recommendations older than this are shown with a "find fresh keywords" warning; auto-start ignores them */
 export const RECOMMENDATIONS_MAX_AGE_DAYS = 90;
 
+/**
+ * Owner decision 2026-11-12 (client report 7, techand.ai's ladder head had 10 searches a month): a keyword with this many searches a
+ * month or fewer gets a warning wherever a client chooses it. It is never refused: the client may know demand our data does not show.
+ */
+export const LOW_DEMAND_MAX = 10;
+/** The warning for a keyword few people search, or null when the demand is fine. `volume` null = the data has no number for it. */
+export function lowDemandNote(volume: number | null | undefined): string | null {
+  if (volume == null)
+    return 'We have no search numbers for this keyword, which usually means very few people search it. Check a more common way of saying it before you build on it.';
+  if (volume > LOW_DEMAND_MAX) return null;
+  const how = volume <= 0 ? 'Almost nobody searches this' : `Only about ${volume} ${volume === 1 ? 'search' : 'searches'} a month`;
+  return `${how}: even at number one it would bring few visitors. A more common way of saying it usually works better as the main keyword; this one can still be a page of the ladder.`;
+}
+
+
 const DIFFS: readonly DifficultyForYou[] = ['easy', 'reachable', 'hard', 'very_hard', 'not_realistic'];
 export const asDifficulty = (v: unknown): DifficultyForYou | null => (typeof v === 'string' && (DIFFS as readonly string[]).includes(v) ? (v as DifficultyForYou) : null);
 export const asPlanChoice = (v: unknown): PlanChoice | null => (v === 'direct' || v === 'short' || v === 'full' || v === 'none' ? v : null);

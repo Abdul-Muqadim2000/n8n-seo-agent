@@ -328,6 +328,7 @@ export const features: Feature[] = [
       'One address per search: no two pages of a ladder share one, and the main page is never a blog post or a copy of a page you have',
       'Each page shows who searches it (people learning, comparing or ready to choose a provider), and every ladder has a page for people comparing or choosing before its main page',
       'Measured in your market, or in the market your keyword names, with a warning before a ladder starts anywhere else',
+      'Every keyword you can choose shows how many people search it each month and how hard it is for your website, with a warning when very few people search it',
       'A page our check advises against is stopped with the reason and written only after Write it anyway; a page whose writing stopped is closed and nothing is charged for it',
       'Searches Google answers with the same pages become one page, not two: before planning, Alaventra reads the results page for each supporting keyword and groups the ones that share them',
       'A keyword whose results page could not be read is named in the plan and left in its own group, and is never merged or quietly dropped',
