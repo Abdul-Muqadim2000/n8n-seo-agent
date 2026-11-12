@@ -55,6 +55,7 @@ export * from './autopilot'; // one breakdown of a website's schedules, for the 
 export * from './cycle-clock'; // the per-website cycle's clock (v5/code/_cycle.js mirrored): due times, monthly cycles, previews
 export * from './ladder-rules';   // LADDER PACKAGE (2026-11-09): the engine's ladder rules (v5/code/_ladder_rules.js), generated: market lock, rung reasons, stuck rungs
 export * from './fit-gate';  // the engine's fit gate (v5/code/_fit_gate.js), generated from the kit by build_v4.py (KW-PARITY), the same code
+export * from './search-advice';   // F-10 (2026-11-12): the fit gate + address searches + the client's brand names, for every keyword list Recommendations shows
 export * from './cycles';    // the per-website 7-day cycle and keyword-first autopilot contract (SCHEDULING_KEYWORDS_PLAN.md §14)
 export * from './readiness';   // P1 (2026-10-20): author profile + business facts before a written page (the engine's v5/code/_readiness.js)
 export * from './markets';   // MKT (2026-10-27): which market a website, a keyword or a text points to (the engine's gazetteer)

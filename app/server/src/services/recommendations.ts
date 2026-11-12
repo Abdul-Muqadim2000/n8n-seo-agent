@@ -44,6 +44,7 @@ import {
   indexPath,
   improveKeywordOf,
   type IndexingForRecs,
+  searchAdviceGate,
 } from '@seo/shared';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { aiData, alertsData, backlinksData, contentData, ga4Now, gscNow, previousOfType, rankingsData, searchData, settingsData, technicalData } from './data';
@@ -238,8 +239,18 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
     add({ id: 'setup:checkin', category: 'setup', priority: 'medium', title: 'Monthly Search Console check-in', detail: 'Two questions (manual action? security issue?) and the Pages report, the parts of Search Console the API cannot see.', action: { label: 'Do the check-in', mode: 'checkin' } });
 
   // ---------- search opportunities (latest Search Console period) ----------
+  // F-10 (prod review 2026-11-12): every keyword this page advises on passes the shared fit gate (the engine's kit, as the cadence, the
+  // ladder and the research use it) plus address searches and the client's own brand names (shared search-advice.ts). Before it, a client
+  // was told to "Move 'otherbrand com' into the top 3" (another company's address) and to push its own brand name up.
+  const fits = searchAdviceGate({
+    domain: site.domain,
+    brandNames: site.brandNames ?? [],
+    competitors: [...(site.competitors ?? []), ...(x.settings.monitors?.competitors ?? [])],
+    services: site.services ?? [],
+    chosen: x.rankings.ladders.flatMap((l) => [l.headKeyword, ...l.rungs.map((r) => r.keyword)]),
+  }).ok;
   const period = x.search.periods[0];
-  const queries = x.search.queries.filter((q) => q.periodEnd === period);
+  const queries = x.search.queries.filter((q) => q.periodEnd === period && fits(q.query));
   const striking = queries.filter((q) => q.position >= 4 && q.position <= 20 && q.impressions >= 20).sort((a, b) => b.impressions - a.impressions).slice(0, 6);
   for (const q of striking) {
     const onPage1 = q.position <= 10;
@@ -306,6 +317,9 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
   const engine = [...(snap?.actions ?? []), ...(x.ai.report?.actions ?? []), ...(x.rankNext ? [x.rankNext] : [])];
   for (const a of engine) {
     const fixDraft = a.type === 'fix_draft';   // R111: the engine's action for a page whose last quality round failed
+    // F-10: a new page or an improvement for a search the gate refuses is never advised; a written page (publish, fix) and the client's
+    // own ladder (the rank tracker's next rung) are kept
+    if (a.keyword && !fixDraft && a.type !== 'publish' && a.source !== 'rank_tracker' && !fits(a.keyword)) continue;
     const cat: RecommendationCategory = a.source === 'ai_visibility' ? 'ai' : a.source === 'rank_tracker' ? 'rankings' : a.type === 'publish' || fixDraft ? 'content' : 'search';
     // never "Report the published URL" for a draft that failed its quality check, and never a fresh (paid) run of it either (E-QA,
     // 2026-10-21): the draft is finished by hand, so the button opens its report, where each bracket and what to do with it is listed
@@ -443,7 +457,7 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
     add({ id: 'keyword:first', category: 'content', priority: 'high', title: 'Choose your first keyword', detail: 'Your keyword research is ready. Pick the keyword you want to be found for (or type your own): its pages are then written every week. Nothing is written before you choose.', action: { label: 'Choose a keyword', page: 'pipeline/new' } });
   if (tracked && ladderCount && (x.content.cadence?.pagesPerWeek ?? 0) === 0)
     add({ id: 'content:cadence', category: 'content', priority: 'low', title: 'Turn on weekly pages for your keywords', detail: 'Your keyword ladders have pages to write, but pages a week is 0, so they wait. Set how many pages a week we write for your keywords.', action: { label: 'Set pages a week', page: 'settings/tracking' } });
-  for (const tr of x.search.trends.filter((t) => /ris|up/i.test(t.direction) && t.changePct >= 50).slice(0, 2))
+  for (const tr of x.search.trends.filter((t) => /ris|up/i.test(t.direction) && t.changePct >= 50 && fits(t.keyword)).slice(0, 2))
     add({ id: `content:trend:${tr.keyword}`, category: 'content', priority: 'medium', title: `Rising search: "${tr.keyword}" (+${Math.round(tr.changePct)}%)`, detail: tr.rising.length ? `Rising related searches: ${tr.rising.slice(0, 3).join(', ')}.` : 'Demand is growing; a timely page can capture it.', action: { label: 'Write a page', mode: 'keyword', prefill: { keyword: tr.keyword } }, ...(() => { const a = ladderFor(tr.keyword); return a ? { secondary: a } : {}; })() });
 
   // ---------- rankings ----------

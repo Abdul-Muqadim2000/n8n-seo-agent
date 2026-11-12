@@ -101,6 +101,41 @@ describe('recommend', () => {
     expect(recs.some((x) => x.id === 'search:striking:tiny')).toBe(false);
   });
 
+  // F-10 (prod review 2026-11-12): another company's address search and the client's own brand were advised as striking-distance wins
+  it('never advises another website by its address, the own brand or a competitor, in any search list', () => {
+    const q = (query: string, over: Record<string, unknown> = {}) => ({ query, periodEnd: '2026-11-09', clicks: 2, impressions: 264, ctr: 0.008, position: 7.2, prevClicks: 0, prevImpressions: 0, prevPosition: 0, page: '', tracked: false, serpPosition: -1, ...over });
+    const branded = { ...site, brandNames: ['Northwind Trading'], competitors: ['rivalsoft.example'], services: ['ERP implementation'] } as unknown as SiteRow;
+    const recs = recommend(
+      branded,
+      bundle({
+        search: {
+          ...bundle().search,
+          periods: ['2026-11-09'],
+          queries: [
+            q('zylokey com'),
+            q('northwind', { position: 4.7 }),
+            q('northwind trading reviews'),
+            q('rivalsoft erp'),
+            q('erp implementation dubai'),
+            q('zylo com pk', { position: 2, impressions: 500, ctr: 0.01 }),
+            q('www zylo', { prevClicks: 20, clicks: 2 }),
+          ],
+          trends: [{ keyword: 'zylo.com', direction: 'rising', changePct: 120, rising: [] } as unknown as SiteBundle['search']['trends'][number]],
+        },
+      }),
+    );
+    const ids = recs.map((r) => r.id).filter((id) => id.startsWith('search:') || id.startsWith('content:trend'));
+    expect(ids).toEqual(['search:striking:erp implementation dubai']);
+  });
+
+  it('drops an engine action that would write a page for another website, keeps its publish step', () => {
+    const act = (type: string, keyword: string) => ({ source: 'site_tracker' as const, priority: 1, type, action: `Do it for ${keyword}`, why: 'w', keyword, url: null, receivedAt: '', apiBody: { mode: 'keyword', keyword } });
+    const recs = recommend(site, bundle({ search: { ...bundle().search, snapshot: { receivedAt: '2026-11-10T06:00:00Z', gsc: { connected: true, property: 'sc-domain:northwind-erp.com', error: null }, ga4: { connected: true }, actions: [act('new_page', 'zylokey com'), act('publish', 'zylokey com'), act('new_page', 'erp for distributors')] } as unknown as SiteBundle['search']['snapshot'] } }));
+    const ids = recs.map((r) => r.id).filter((id) => id.startsWith('engine:'));
+    expect(ids).toEqual(expect.arrayContaining(['engine:site_tracker:publish:zylokey com', 'engine:site_tracker:new_page:erp for distributors']));
+    expect(ids).not.toContain('engine:site_tracker:new_page:zylokey com');
+  });
+
   it('asks to publish written pages and to route reports here', () => {
     const recs = recommend(
       site,
