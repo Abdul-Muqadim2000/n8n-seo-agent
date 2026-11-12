@@ -6,6 +6,7 @@ import {
   engineRowIsDomain,
   itemKey as itemKeyOf,
   n8nSiteId,
+  PAGE_IN_FLIGHT_HOURS,
   roleAtLeast,
   skipKey,
   type AutopilotLevel,
@@ -232,7 +233,7 @@ const isoOf = (v: unknown): string | null => {
 };
 
 /** I3 (pure): what a finished run wrote, from its own content report (pages, pause) and the reports its pages sent since. */
-export function runOutcome(run: Pick<PlanRun, 'job' | 'report' | 'pageReports'> | null | undefined): ComingUpOutcome {
+export function runOutcome(run: Pick<PlanRun, 'job' | 'report' | 'pageReports'> | null | undefined, now: number = Date.now()): ComingUpOutcome {
   const p = run?.report?.payload ?? null;
   if (!p) return { known: false, at: isoOf(run?.job?.finished_at), pages: [], pausedReason: '', waitingPublish: 0, note: '' };
   const startedAt = isoOf(run?.report?.receivedAt);
@@ -242,7 +243,9 @@ export function runOutcome(run: Pick<PlanRun, 'job' | 'report' | 'pageReports'> 
       const reqId = S(x.request_id);
       const mine = (run?.pageReports ?? []).filter((r) => reqId && S(r.requestId) === reqId).sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime());
       const done = mine.find((r) => S(r.status) !== 'failed' && S(r.status) !== 'progress');
-      const failed = !done && mine.find((r) => S(r.status) === 'failed');
+      // S1-05: a page with no report PAGE_IN_FLIGHT_HOURS after its run started did not finish (cancelled at its time limit, or cut off)
+      const startT = Date.parse(S(run?.report?.receivedAt instanceof Date ? run.report.receivedAt.toISOString() : run?.report?.receivedAt));
+      const failed = !done && (mine.find((r) => S(r.status) === 'failed') || (Number.isFinite(startT) && now - startT >= PAGE_IN_FLIGHT_HOURS * 3600_000));
       return {
         keyword: S(x.keyword),
         source: asSource(x.source),
@@ -290,7 +293,7 @@ export function comingUpView(o: { site: Pick<SiteRow, 'id' | 'domain'>; preview:
   const due = o.preview.scheduledFor?.getTime() ?? Date.parse(p.scheduled_for);
   const closed = Number.isFinite(due) && due <= o.now;
   const phase = planPhase({ due, now: o.now, cycleKey: p.cycle_key, run: o.run });
-  const outcome = phase === 'done' ? runOutcome(o.run) : null;
+  const outcome = phase === 'done' ? runOutcome(o.run, o.now) : null;
   // the run's own word on approvals it did not write (its content report); an older engine sends none
   const reported = o.run?.report ? previewOf({ approved_not_written: o.run.report.payload.approved_not_written }).approved_not_written : [];
   const toItem = (x: CyclePreviewItem): ComingUpItem => {
