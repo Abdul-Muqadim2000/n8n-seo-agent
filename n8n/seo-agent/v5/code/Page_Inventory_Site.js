@@ -44,7 +44,8 @@ const ukey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www
 // must reach the Content Cadence this week, not next time its title changes.
 const PERF = ['clicks', 'impressions', 'position', 'prev_clicks', 'yoy_clicks', 'decay_state', 'decay_pct', 'decay_lost', 'decay_kind', 'decay_basis'];
 const sameRow = (a, b) => !!b && S(a.title) === S(b.title) && S(a.h1) === S(b.h1) && S(a.source) === S(b.source) && S(a.lastmod) === S(b.lastmod) && S(a.queries_json) === S(b.queries_json)
-  && PERF.every(k => S(a[k]) === S(b[k])) && (Number(a.http_status) || 0) === (Number(b.http_status) || 0);   // RV-1: a page that went from live to gone (or back) is written
+  && PERF.every(k => S(a[k]) === S(b[k])) && (Number(a.http_status) || 0) === (Number(b.http_status) || 0)   // RV-1: a page that went from live to gone (or back) is written
+  && S(a.status_at) === S(b.status_at);   // section 189: a status read again is written with its new date, so a reader can tell a fresh reading from a stale one
 // the empty measurement: a page Search Console said nothing about this week keeps the columns it already had, and a page that was
 // never measured carries zeros with `decay_state: ''` — never a "steady" that nothing stood behind.
 const EMPTY_PERF = { clicks: 0, impressions: 0, position: 0, prev_clicks: 0, yoy_clicks: 0, decay_state: '', decay_pct: 0, decay_lost: 0, decay_kind: '', decay_basis: '', measured_at: '' };

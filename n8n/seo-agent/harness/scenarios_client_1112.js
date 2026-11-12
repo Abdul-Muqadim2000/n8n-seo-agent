@@ -94,10 +94,11 @@ module.exports = async (ctx) => {
 
   // ---------- PR1b content runs: DUP and the site model skip addresses that redirect or are gone ----------
   await guard('PR1b DUP skips moved pages', async () => {
-    const SN = 'PR1b (S3-05) DUP.targets never names an inventory address that redirects (3xx) or is gone (404 / 410) as the page for the same search; a live one still is';
+    const SN = 'PR1b (S3-05) DUP.targets never names an inventory address that redirects (3xx) or is gone (404 / 410) by a recent reading as the page for the same search; a live one still is, and a stale reading is not trusted';
     reset(); begin(SN); const check = mkCheck(SN);
-    const pages = [{ url: W + '/dynamics-365-business-central-uae', title: 'Business Central Implementation UAE | Nova', h1: 'Business Central Implementation in UAE', http_status: 308 },
-      { url: W + '/business-central-implementation-old', title: 'Business Central Implementation UAE | Nova', h1: '', http_status: 404 },
+    const now = new Date().toISOString();
+    const pages = [{ url: W + '/dynamics-365-business-central-uae', title: 'Business Central Implementation UAE | Nova', h1: 'Business Central Implementation in UAE', http_status: 308, status_at: now },
+      { url: W + '/business-central-implementation-old', title: 'Business Central Implementation UAE | Nova', h1: '', http_status: 404, status_at: now },
       { url: W + '/about', title: 'About Nova&', h1: 'About', http_status: 200 }];
     const a = DUP.targets('business central implementation uae', pages, {});
     check('the 308 and the 404 address are not targets; they are listed as not live', a.targets.length === 0 && a.not_live.length === 2, J(a));
@@ -105,6 +106,8 @@ module.exports = async (ctx) => {
     check('the live page at the address it moved to is the target', b.targets.length === 1 && b.targets[0].url === W + '/business-central-implementation-uae', J(b.targets));
     const c = DUP.targets('business central implementation uae', pages.map(p => ({ ...p, http_status: 0 })), {});
     check('an address never read (status 0) is judged as before', c.targets.length >= 1, J(c.targets));
+    const d = DUP.targets('business central implementation uae', pages.map(p => ({ ...p, status_at: '2026-10-22T17:00:21.156Z' })), {});
+    check('a stale reading (a 404 stored weeks ago, F-03) is not trusted: judged as before', d.targets.length >= 1 && d.not_live.length === 0, J(d));
   });
 
   // ---------- PR1c the inventory: the page watch's readings, the weekly re-read of stored 404s, two reads before the 301 advice ----------

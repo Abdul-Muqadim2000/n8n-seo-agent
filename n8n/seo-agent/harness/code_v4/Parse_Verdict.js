@@ -2356,7 +2356,8 @@ const DUP = (() => {
     const pp = placesIn(S(page && page.title) + ' ' + S(page && page.h1) + ' ' + S(page && page.url).replace(/^https?:\/\/[^\/]+/i, '').replace(/[-_\/]+/g, ' '));
     if (!pp.length || pp.some(p => p.iso.includes(m))) return null;
     return [...new Set(pp.map(p => p.word))]; };
-  const SHARE = 75, MAX = 3;
+  const SHARE = 75, MAX = 3, FRESH_DAYS = 14;
+  const fresh = (at) => { const t = Date.parse(S(at)); return Number.isFinite(t) && (Date.now() - t) / 864e5 <= FRESH_DAYS; };
   // the tokenizer of SHG (_shingle.js), character for character, so the late check finds what it always found
   const norm = (t) => S(t)
     .replace(/```[\s\S]*?```/g, ' ')
@@ -2393,10 +2394,11 @@ const DUP = (() => {
     for (let i = 0; i < list.length; i++) {
       const p = list[i]; const k = keyOf(p.url);
       if (!k || skip.has(k)) continue;
-      // production review 2026-11-12 (S3-05, section 189): an address that redirects (3xx) or is gone (404 / 410), as the page inventory last
-      // read it, is not a page of the site: never "the page for the same search" (/dynamics-365-business-central-uae had answered 308 for days)
+      // production review 2026-11-12 (S3-05, section 189): an address that redirects (3xx) or is gone (404 / 410), as the page inventory read
+      // it in the last FRESH_DAYS, is not a page of the site: never "the page for the same search" (/dynamics-365-business-central-uae had
+      // answered 308 for days). An older reading is not trusted either way (a stored 404 from weeks ago answered 200 again: F-03)
       const st = Number(p.http_status) || 0;
-      if ((st >= 300 && st < 400) || st === 404 || st === 410) { out.not_live.push({ url: S(p.url), http_status: st }); continue; }
+      if (((st >= 300 && st < 400) || st === 404 || st === 410) && fresh(p.status_at)) { out.not_live.push({ url: S(p.url), http_status: st }); continue; }
       const set = sets[i]; if (!set.size) continue;
       let hit = 0, hw = 0;
       for (const t of kw) if (set.has(t)) { hit++; hw += w[t]; }
