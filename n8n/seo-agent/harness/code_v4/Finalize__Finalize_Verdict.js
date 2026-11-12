@@ -2526,6 +2526,15 @@ let dupOpen = null, decision = null;
 // only when its own words say the page states something wrong or unsupported (RR.textError); everything else it found is advice, shown
 // to the client and never the 59 cap. A finding that still blocks is the editor's to rewrite (Finalize Apply); it stays open while its words are on the page.
 const away = [], reviewAdvice = [];
+// section 189 (S3-04): the unit that holds a quote (a table row or a list item: its line; prose: its sentence), normalised, '' when not found
+const unitOf = (q, text) => { const nq = norm(S(q).split(/\.{3}|\u2026/)[0]); if (nq.length < 8) return '';
+  for (const line of S(text).split('\n')) { if (!norm(line).includes(nq)) continue;
+    if (/^\s*\|/.test(line) || /^\s*(?:[-*+]|\d{1,3}[.)])\s+/.test(line)) return norm(line);
+    const sent = line.split(/(?<=[.!?])\s+/).find(x => norm(x).includes(nq)); return norm(sent || line); }
+  return ''; };
+const editTasks = ((A.finalize_apply || {}).review_fixes || []).filter(r => r && r.how === 'edit_task');
+const rewrote = (q) => { const nq = norm(q); if (!editTasks.some(r => norm(r.quote) === nq)) return false;
+  const was = unitOf(q, S(A.output)), now = unitOf(q, md); return !!was && !!now && was !== now; };
 // section 189: the addresses the first check called "the same search", as they answer now (Parse Brief `prc.duplicate_status`)
 const pageK = (u) => S(u).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
 const selfK = F.grade_only ? pageK((F.live_read || {}).url) : '';
@@ -2560,6 +2569,12 @@ for (const b of (PG.qa_blocking || [])) {
   else if (code === 'review') { const q = (S(b.text).match(/"([^"]{8,300})"/) || [])[1] || '';
     if (!(q && PF.onPage(q, md))) resolved.push(code);
     else if (!RR.textError(S(b.text))) { reviewAdvice.push(S(b.text).replace(/^A second read of the page found a problem at/, 'A second read of the page suggests a change at')); resolved.push(code + ':advice'); }
+    // production review 2026-11-12 (S3-04, section 189): the quote is where the problem stood, not the problem. A client's free re-make stayed
+    // 59 because the editor rewrote the table row the read flagged ("High across CRM, ERP and cloud", "cloud partner status" gone, only facts
+    // on file left) but kept the row's label, which IS the quote. When this run gave the editor the task for this finding and the sentence /
+    // row / list item that holds the quote is no longer what it was, the finding is resolved and said as advice to check; an edit that was
+    // refused or never made leaves the unit as it was, so it stays open as before.
+    else if (rewrote(q)) { reviewAdvice.push(S(b.text).replace(/^A second read of the page found a problem at "([^"]*)":[\s\S]*$/, 'A second read of the page found a problem at "$1"; this version rewrote that part: check that it now says only what your facts support')); resolved.push(code + ':rewritten'); }
     else keep({}); }
   else keep({});
 }

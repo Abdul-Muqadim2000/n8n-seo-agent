@@ -5,6 +5,9 @@
 //        is not held; the page's own title is recorded (not the site's generic one); a read of another page is refused; DUP (content runs)
 //        skips 3xx / 404 pages; the inventory takes the daily page watch's readings (200 clears a stale 404, a 308 to another path is
 //        stored) and re-reads a stored 404 every week even when the sitemap lists it; the 301 advice needs two reads (F-03)
+//   PR2  a client's free re-make stayed 59 "Not ready" (S3-04): the editor rewrote the provider-table row the second read flagged, but kept
+//        the row's label, which is the quote; a finding whose sentence / row the editor rewrote on its task is resolved (advice to check),
+//        one the editor left as it was stays open
 module.exports = async (ctx) => {
   const { H, run, mock, store, guard, reset, begin } = ctx;
   const fs = require('fs');
@@ -132,5 +135,58 @@ module.exports = async (ctx) => {
     const MODEL = (await run('_site_model', [{ json: { site_row: { site_id: SID, domain: DOM, canonical_host: 'www.novaand-demo.com', business_name: 'Nova&', model_updated_at: today }, extras: { pages: INV.pages }, keyword: 'dynamics 365 business central uae' } }]))[0].json;
     const m = MODEL.match || null;
     check('the site model never answers a search with an address that redirects', !m || !/dynamics-365-business-central-uae/.test(J(m)), J(m));
+  });
+
+  // ---------- PR2 the re-make of a final version: the flagged row was rewritten, its label (the quote) kept ----------
+  await guard('PR2 finalize rewritten finding', async () => {
+    const SN = 'PR2 (S3-04) a second-read finding the editor rewrote on its task (the row that holds the quote changed) no longer holds the final version at 59; a refused or missed edit still does';
+    reset(); begin(SN); const check = mkCheck(SN);
+    const F99 = R.load('replay_3299.json.gz'); const F36 = R.load('replay_3336.json.gz');
+    const CB = F99.nodes['Build Webhook Response']['0'].items[0].json;
+    const BODY0 = F36.nodes['Finalize Webhook']['0'].items[0].json.body;
+    // production report of 2026-11-12 10:00 (the free re-make), the client's name replaced by Nova
+    const Q = 'Delivery partner with a UAE office and offshore engineering';
+    const ROW0 = '| ' + Q + ' | High across CRM, ERP and cloud | Contract-based, often extended hours | Shared, with a local contact | Certifications such as ISO 27001, cloud partner status | Mid-size and large organisations with several systems |';
+    const ROW1 = '| ' + Q + ' (we have an office in Sharjah, a presence in Multan and an AWS partnership) | Varies by partner; ask for a live example | Contract-based | Shared, with a local contact | Certifications and partnerships to check with the issuing body | Mid-size and large organisations with several systems |';
+    const HEAD = '## Which companies offer AI automation services in Dubai, and how do you choose one?';
+    const INTRO = 'Options include in-house teams, local agencies, delivery partners with a UAE office, no-code freelancers and the professional services teams of platform vendors. Choose based on how deeply they integrate with your CRM and ERP, how they handle Arabic, where your data is processed, the security certifications they hold and who supports the system after launch.';
+    const TABLE = (row) => ['| Provider option | Integration depth | Ongoing support | Your control | Security assurance to check | Who it suits |', '|---|---|---|---|---|---|',
+      '| In-house team | High, if the skills exist | Depends on retaining staff | Full | Your own policies | Large organisations with steady demand |',
+      '| Local agency | Varies; often front-end and marketing tools | Contract-based | Shared | Certifications and data handling terms | Marketing-led chatbot and lead projects |', row].join('\n');
+    const SEC = (row, intro) => HEAD + '\n\n' + (intro || INTRO) + '\n\n' + TABLE(row);
+    const OTHER = '## What AI automation covers for a UAE business\n\n' + 'AI automation connects your CRM, your ERP and the documents your teams handle every day, so routine steps run without re-keying and each request reaches the right person with its history attached. '.repeat(6).trim()
+      + '\n\n## Talk to us about your automation priorities\n\nTell us which process costs your team the most time, and we will map how it could run with fewer manual steps.';
+    const MD = '# AI Automation Services in the UAE\n\n' + 'Most UAE teams still move data between their systems by hand, and each hand-off costs time and creates errors that someone has to find later. '.repeat(3).trim() + '\n\n' + SEC(ROW0) + '\n\n' + OTHER + '\n';
+    const REV = 'A second read of the page found a problem at "' + Q + '": This row of the provider table describes Nova without naming it and attributes properties to it (high integration across CRM, ERP and cloud; extended hours; cloud partner status). The facts on file support only a Sharjah office, Multan, AWS partnership, IS';
+    const gating = { qa_blocking: [{ code: 'review', text: REV, action: 'correct or remove the words the second read quoted, or check them against a source you trust' }], duplicate_targets: [], verdict: CB.verdict == null ? null : CB.verdict,
+      score: CB.score == null ? null : CB.score, score_withheld: false, page_type: ((CB.meta || {}).page_type) || '', verdict_acknowledged: false, copied_passages: [], content_request_id: CB.request_id || '', length_points: null };
+    const body = { ...clone(BODY0), keyword: 'ai automation services', markdown: MD, delivered_markdown: MD, client_edited: false, answers: [], page_run: gating,
+      business_facts: 'Nova has an office in Sharjah, UAE and an office in Multan, Pakistan. Nova is an AWS partner, is ISO 27001 certified and offers 24/7 support.' };
+    const chain = async (sectionText) => {
+      reset(); delete store['Finalize Editor'];
+      const pb = await run('Parse Brief', [{ json: { body: clone(body), headers: {} } }], { code: 'Finalize__Parse_Brief' });
+      mock('Finalize Plan', pb);
+      const ap = await run('Finalize Apply', pb, { code: 'Finalize__Finalize_Apply' });
+      const job = ((ap[0].json.finalize_apply || {}).jobs || [])[0] || null;
+      if (ap[0].json.needs_editor && job) mock('Finalize Editor', [{ json: { output: { sections: [{ id: job.id, text: sectionText }] } } }]);
+      const mg = await run('Finalize Merge', ap, { code: 'Finalize__Finalize_Merge' });
+      const qa = await run('Content QA', mg, { code: 'Finalize__Content_QA' });
+      const oc = await run('Originality Check', qa, { code: 'Finalize__Originality_Check' });
+      return { ap: ap[0].json, job, v: (await run('Finalize Verdict', oc, { code: 'Finalize__Finalize_Verdict' }))[0].json.body };
+    };
+    let refusedBody = null; const refusedV = () => refusedBody || {};
+    refusedBody = (await chain(SEC(ROW0))).v;
+    const fixed = await chain(SEC(ROW1));
+    check('the finding is an edit task for the row\'s section (184C), as on production', fixed.ap.needs_editor === true && (fixed.ap.finalize_apply.review_fixes || []).some(r => r.how === 'edit_task' && r.quote === Q) && fixed.job && /Which companies offer/.test(fixed.job.heading), J(fixed.ap.finalize_apply.review_fixes));
+    check('the row was rewritten (its label, the quote, kept): the finding no longer holds the page; it is resolved as rewritten and said as advice to check',
+      !fixed.v.page_run.kept_open.includes('review') && fixed.v.page_run.resolved.includes('review:rewritten') && fixed.v.delivery.blocking.every(b => b.code !== 'review')
+      && fixed.v.delivery.advisory.some(a => a.code === 'second_read' && /this version rewrote that part/.test(a.text)), J({ k: fixed.v.page_run.kept_open, r: fixed.v.page_run.resolved, b: fixed.v.delivery.blocking }));
+    check('... so no blocker caps the grade at 59 for it (production: "1 point still stops this page")', !((fixed.v.grade || {}).caps || []).some(c => /still stops/.test(String(c.why))) && (fixed.v.delivery.blocking.length > 0 || fixed.v.delivery_status !== 'not_ready'),
+      J({ s: fixed.v.delivery_status, g: fixed.v.grade && fixed.v.grade.score, caps: fixed.v.grade && fixed.v.grade.caps }));
+    check('... while the refused edit keeps that cap', ((refusedV().grade || {}).caps || []).some(c => /still stops/.test(String(c.why))), J(refusedV().grade && refusedV().grade.caps));
+    const refused = await chain(SEC(ROW0));
+    check('an edit that left the row as it was keeps the finding open (the page stays not ready)', refused.v.page_run.kept_open.includes('review') && refused.v.delivery_status === 'not_ready', J({ k: refused.v.page_run.kept_open, s: refused.v.delivery_status }));
+    const elsewhere = await chain(SEC(ROW0, INTRO.replace('Choose based on', 'Pick a provider based on')));
+    check('an edit of another sentence of the section, the flagged row untouched, keeps it open too', elsewhere.v.page_run.kept_open.includes('review'), J(elsewhere.v.page_run));
   });
 };
