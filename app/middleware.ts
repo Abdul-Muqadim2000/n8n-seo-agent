@@ -58,6 +58,11 @@ export default function middleware(request: Request): Response {
   const primary = hostsOf(process.env.PRIMARY_HOSTS);
   const ours = primary.size === 0 || primary.has(host) || host.endsWith('.vercel.app') || host === 'localhost';
   const origin = (process.env.API_ORIGIN ?? '').trim().replace(/\/+$/, '');
+  // app.<domain> serves the same build as the business site: its marketing pages would be duplicates of www's, and the signed-in
+  // app is not for search engines, so its robots.txt shuts everything (www keeps the build's own robots.txt + sitemap.xml)
+  if (url.pathname === '/robots.txt' && host.startsWith('app.')) {
+    return new Response('User-agent: *\nDisallow: /\n', { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
+  }
   if (!isApi && ours) return next({ headers: { 'content-security-policy': csp(origin, process.env.VITE_TUTORIALS_VIDEO_BASE ?? '') } });
 
   if (!/^https?:\/\/[^/]+$/.test(origin)) {
