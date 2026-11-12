@@ -92,7 +92,9 @@ export function invalidateKi(domain: string): void {
   for (const k of [...kiCache.keys()]) if (k === d || k.startsWith(d + '|')) kiCache.delete(k);
 }
 
-const KI_STAGE_SET = new Set(['ki_competitors', 'ki_research', 'ki_competitors_started', 'ki_research_started']);
+/** every callback stage of a KI run (started notices and final answers): the cost sync reads them by name (services/admin/costSync.ts) */
+export const KI_STAGE_LIST: readonly string[] = ['ki_competitors', 'ki_research', 'ki_competitors_started', 'ki_research_started'];
+const KI_STAGE_SET = new Set(KI_STAGE_LIST);
 export const isKiStage = (stage: string): boolean => KI_STAGE_SET.has(stage);
 
 /** A KI callback of a run in Trial (the body says so). */
