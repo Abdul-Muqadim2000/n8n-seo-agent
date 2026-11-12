@@ -6,7 +6,8 @@
 #   - ~2.7 GB of docker build cache from app rebuilds on the VM, and one ~540 MB rollback image per API deploy;
 #   - ~700 MB of systemd journal.
 # Every step below only removes things nothing can still be using; the alarm posts to the ops webhook (SEO_ALERT_WEBHOOK_URL in the
-# engine settings) when the boot disk or the data disk is at or above ALARM_PCT, so a full disk is never found by accident again.
+# engine settings) when the boot disk or the data disk is at or above ALARM_PCT, or when the nightly backup did not complete, so a
+# full disk or a missing backup is never found by accident again.
 #
 #   sudo bash hygiene.sh            clean + check
 #   sudo bash hygiene.sh --check    check only (no cleaning)
@@ -77,8 +78,12 @@ if [ "${1:-}" != "--check" ]; then
   log "boot disk ${before}% -> $(pct /)% ($(free_h /) free)"
 fi
 
-# Alarm: boot disk and data disk.
+# Alarm: boot disk and data disk; and the nightly backup (backup.sh keeps the last two complete dumps on the data disk).
 msg=""
+find "$DATA/backups" -maxdepth 1 -name '*.dump.part' -mmin +240 -delete 2>/dev/null
+if [ -d "$DATA/backups" ] && [ -z "$(find "$DATA/backups" -maxdepth 1 -name 'app-*.dump' -mmin -1800 2>/dev/null | head -1)" ]; then
+  msg="$msg no complete nightly backup in the last 30 hours (journalctl -u alaventra-backup);"
+fi
 for m in / "$DATA"; do
   p=$(pct "$m"); [ -n "$p" ] || continue
   if [ "$p" -ge "$ALARM_PCT" ]; then msg="$msg $m at ${p}% ($(free_h "$m") free);"; fi
@@ -87,7 +92,7 @@ if [ -n "$msg" ]; then
   log "ALARM:$msg"
   HOOK=$(grep -E '^SEO_ALERT_WEBHOOK_URL=' "$SECRETS/n8n.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'"'" || true)
   if [ -n "$HOOK" ]; then
-    text="Alaventra production disk alarm on $(hostname):$msg check with: sudo docker system df; sudo du -xh --max-depth=2 / | sort -rh | head"
+    text="Alaventra production alarm on $(hostname):$msg check with: sudo docker system df; sudo du -xh --max-depth=2 / | sort -rh | head"
     curl -fsS -m 20 -X POST -H 'Content-Type: application/json' \
       --data "$(python3 -c 'import json,sys; print(json.dumps({"text": sys.argv[1]}))' "$text")" "$HOOK" >/dev/null \
       && log "alarm posted to the ops webhook" || log "alarm could not be posted"

@@ -28,9 +28,14 @@
 
 api.{$DOMAIN} {
 	encode zstd gzip
-	# n8n posts its callbacks to the app inside the VM (CALLBACK_BASE_URL); the callback route is not served publicly at all
+	# n8n posts its callbacks to the app inside the VM (CALLBACK_BASE_URL); the callback route is not served publicly at all.
+	# It must be a `handle` and come first: Caddy runs every `handle` before a bare `respond`, so the earlier `respond @hooks 404`
+	# never ran and /api/hooks/* reached the app from the internet (found 2026-10-31, F-01; still open 2026-11-12). Named-matcher
+	# `handle` blocks keep their written order and are mutually exclusive, so this one wins for Vercel-proxied requests too.
 	@hooks path /api/hooks/*
-	respond @hooks 404
+	handle @hooks {
+		respond 404
+	}
 
 	# Requests proxied by Vercel carry the shared secret (deploy/vercel: routes transform, env ORIGIN_SECRET). For those - and only
 	# those - the visitor's address is the one Vercel reports in X-Real-IP; otherwise every visitor would share Vercel's address and
