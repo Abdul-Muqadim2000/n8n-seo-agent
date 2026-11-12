@@ -8,7 +8,7 @@
 // MODE / EST / HEAVY are written in by the builder at build time (one source: build_monitors.py's WF.run_ledger).
 const PLAN = 'KI Plan';
 const MODE = (() => { try { const k = String(($('KI Plan').first().json || {}).kind || ''); return k === 'competitors' || k === 'keyword_research' ? k : 'keyword_research'; } catch (e) { return 'keyword_research'; } })();   // KI: the run's own kind
-const EST = {"ai": 0.0, "dfs": 0.9};   // { ai: <usd per site>, dfs: <usd per site>, dfs_full?: <usd per site for a full run> }
+const EST = {"ai": 0.45, "dfs": 0.9};   // { ai: <usd per site>, dfs: <usd per site>, dfs_full?: <usd per site for a full run> }
 const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 let rows = [];
 try { rows = $(PLAN).all().map(i => i.json || {}).filter(r => !r.nothing_to_do && !r.skip && (r.domain || r.site_id)); } catch (e) { rows = []; }

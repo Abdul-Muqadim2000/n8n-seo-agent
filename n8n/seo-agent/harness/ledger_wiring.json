@@ -184,7 +184,10 @@
  },
  "monitors": {
   "SEO Agent - Keyword Intelligence": {
-   "ai_nodes": [],
+   "ai_nodes": [
+    "Run Research Judge",
+    "Run Research Judge (Retry)"
+   ],
    "alert_retry": {
     "from": "Settle Run Ledger (KI)",
     "gate": "Any Alert Retry (KI)?",
@@ -215,7 +218,7 @@
    ],
    "catchup_records": "",
    "est": {
-    "ai": 0.0,
+    "ai": 0.45,
     "dfs": 0.9
    },
    "guard": {

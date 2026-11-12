@@ -96,7 +96,7 @@ export const COST_TABLE: Record<CostKey, CostRow> = {
   // KI (2026-11-08, CONTRACTS.md §7): mirrored from _cost_cal.js EST / DFS_EST; no run has been measured yet, so these are the design's
   // ceilings from the provider's prices (R5_DATAFORSEO.md), and the engine's own rolling figure replaces them once runs report
   competitors: { ai: 0, dfs: 0.35, measured: 0, basis: 'competitor research: up to 20 results pages for your services, the domain overlap and a profile of each competitor you choose, at the provider\'s prices (no run measured yet)' },
-  keyword_research: { ai: 0, dfs: 0.9, measured: 0, basis: 'keyword research: keyword ideas, search volumes, autocomplete, up to 60 results pages and the gap against your competitors, at the provider\'s prices (no run measured yet)' },
+  keyword_research: { ai: 0.45, dfs: 0.9, measured: 0, basis: 'keyword research: keyword ideas, search volumes, autocomplete, the results page of every kept search, a reading of who is searching each one, and the gap against your competitors, at the provider\'s prices (no run measured yet)' },
   finalize: { ai: 0.1, dfs: 0, measured: 0.04, basis: 'the final version of a written page: the sections your answers change are rewritten (one model call on those sections), then the whole page is checked again; no search data' },
 };
 

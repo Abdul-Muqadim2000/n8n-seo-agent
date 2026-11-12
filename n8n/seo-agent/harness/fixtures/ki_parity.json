@@ -122,7 +122,8 @@
   "empty",
   "low_fit",
   "avoid",
-  "practitioner"
+  "practitioner",
+  "not_a_search"
  ],
  "score_cases": [
   {

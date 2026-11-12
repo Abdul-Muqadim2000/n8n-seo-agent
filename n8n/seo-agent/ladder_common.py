@@ -694,7 +694,7 @@ LEDGER_EST = {
     # KI (E2 2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §7): the two keyword-intelligence runs (SEOagentKIntel1, build_ki.py). The worker
     # calls no model; its plan prices its own run (est_dfs_usd, held under these quotes = _cost_cal.js DFS_EST), so these are the ceilings only.
     'competitors':     {'ai': 0.0, 'dfs': 0.35},
-    'keyword_research': {'ai': 0.0, 'dfs': 0.90},
+    'keyword_research': {'ai': 0.45, 'dfs': 0.90},   # KI-JUDGE (2026-11-12): the keyword judge (Claude Opus 5.5)
 }
 
 

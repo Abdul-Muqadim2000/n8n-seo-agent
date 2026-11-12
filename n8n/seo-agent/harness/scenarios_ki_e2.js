@@ -72,6 +72,18 @@ module.exports = async (ctx) => {
       if (t.never || round < t.ready) return { version: '0.1', status_code: 20000, status_message: 'Ok.', cost: 0, tasks_count: 1, tasks_error: 1, tasks: [{ id: q.task_id, status_code: 40602, status_message: 'Task In Queue.', cost: 0, result: null }] };
       const a = serpExact(t.kw); a.tasks[0].id = q.task_id; a.cost = 0.0006; a.tasks[0].cost = 0.0006; a.tasks[0].data = { ...a.tasks[0].data, tag: t.kw, priority: 1 };   // the real task_get repeats the task's cost: it must not be counted again
       return a; };
+    // KI-JUDGE (2026-11-12): the fake Claude judge. By default it MIRRORS the word rules (a soft stop's reason, else pass), so the scenarios
+    // written before the judge keep their meaning; KIJ sets its own labels, failures and a refusal through o.judge
+    let JOPT = {}; const judgeCalls = [];
+    const SOFT_LABEL = { career: 'job', practitioner: 'practitioner', off_topic: 'off_topic', too_broad: 'off_topic', low_fit: 'off_topic', other_brand: 'other_brand' };
+    const judgeAnswer = (q, attempt) => { judgeCalls.push({ chunk: q.chunk, attempt, n: (q.keywords || []).length });
+      if ((JOPT.fail || []).includes(attempt)) return { error: { message: 'Request failed with status code 529' } };
+      if (JOPT.refuse) return { id: 'msg_fake', type: 'message', role: 'assistant', model: 'claude-opus-5-5', content: [], stop_reason: 'refusal', usage: { input_tokens: 1800, output_tokens: 0 } };
+      const soft = Object.fromEntries(((items('Research Picture')[0] || {}).rows || []).map(r => [r.keyword, r.soft_gate ? r.soft_gate.reason : '']));
+      const its = (q.keywords || []).map((k, i) => ({ i, label: (JOPT.labels || {})[k] || (soft[k] ? SOFT_LABEL[soft[k]] || 'off_topic' : 'pass') }));
+      return { id: 'msg_fake_' + q.chunk + '_' + attempt, type: 'message', role: 'assistant', model: 'claude-opus-5-5',
+        content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: JSON.stringify({ items: its }) }], stop_reason: 'end_turn',
+        usage: { input_tokens: 1800 + 120 * its.length, output_tokens: 15 * its.length + 200, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } }; };
     const SIZE = (d) => (SITE.sizes || {})[d] || null;
     const provider = (q, attempt) => {
       const path0 = q.endpoint.replace(/^https:\/\/api\.dataforseo\.com\/v3\//, ''); const b = (q.body || [])[0] || {}; calls.push({ path: path0, attempt, call: q.ki_call });
@@ -135,7 +147,7 @@ module.exports = async (ctx) => {
     const plainGet0 = async (reqNode, ifNode, http) => { const reqs = items(reqNode).filter(r => !r.skip); drop(ifNode, http); if (!reqs.length) return 0; mock(ifNode, reqs); mock(http, reqs.map(free)); return reqs.length; };
     const LEDGER = { rows: [], seq: 100 };
     const execute = async (k, kind, o) => {
-      o = o || {}; reset(); SITE = site(k); calls.length = 0; gets.length = 0; QUEUE.clear(); QOPT = o.queue || {};
+      o = o || {}; reset(); SITE = site(k); calls.length = 0; gets.length = 0; QUEUE.clear(); QOPT = o.queue || {}; JOPT = o.judge || {}; judgeCalls.length = 0;
       const fwd = forwardOf(k, kind, o.body);
       mock('Manual Run', [fwd]);
       await run('KI Input', [fwd]);
@@ -195,6 +207,15 @@ module.exports = async (ctx) => {
           await run('SERP Tasks Check (' + r + ')', [{ json: {} }]); cur = items('SERP Tasks Check (' + r + ')').filter(x => !x.skip); }
         await run('Research SERP Fallback', [{ json: {} }]); await gated('Research SERP Fallback', 'Any Research SERPs Live?', 'Run Research SERPs Live');
         await run('Research SERP Picture', [{ json: {} }]);
+        // KI-JUDGE: the judge calls (six at a time in n8n), the plan's one retry of the calls with no usable answer, the picture
+        drop('Any Research Judge?', 'Run Research Judge', 'Research Judge Retry Plan', 'Any Research Judge Retries?', 'Run Research Judge (Retry)', 'Research Judge Picture');
+        await run('Research Judge Requests', [{ json: {} }]);
+        const jq = items('Research Judge Requests');
+        mock('Any Research Judge?', jq);
+        if (jq.some(x => !x.skip)) { mock('Run Research Judge', jq.filter(x => !x.skip).map(q => judgeAnswer(q, 1)));
+          await run('Research Judge Retry Plan', [{ json: {} }]); const jr = items('Research Judge Retry Plan').filter(x => x.is_retry);
+          if (jr.length) { mock('Any Research Judge Retries?', jr); mock('Run Research Judge (Retry)', jr.map(q => judgeAnswer(q, 2))); } }
+        await run('Research Judge Picture', [{ json: {} }]);
         await run('Research Traffic Requests', [{ json: {} }]); await gated('Research Traffic Requests', 'Any Research Traffic?', 'Run Research Traffic');
         await run('Research Result', [{ json: {} }]);
         await run('KI KW Rows', [{ json: {} }]); await run('KI Gap Rows', [{ json: {} }]);
@@ -206,7 +227,7 @@ module.exports = async (ctx) => {
       mock('DFS Balance End (KI)', [{}]); mock('Load Run Ledger (KI)', [reserved]);
       const settle = (await run('Ledger Settle (KI)', [{ json: {} }]))[0].json;
       const result = items(kind === 'competitors' ? 'Comp Result' : 'Research Result')[0];
-      return { gate, plan, row, reserved, after, limit, started, result, cache, runRow, report, settle, calls: calls.slice(), gets: gets.slice(), comp: items('KI Comp Rows'), drops: items('KI Comp Drops'), kw: items('KI KW Rows'), gaps: items('KI Gap Rows') };
+      return { gate, plan, row, reserved, after, limit, started, result, cache, runRow, report, settle, calls: calls.slice(), gets: gets.slice(), judge: judgeCalls.slice(), comp: items('KI Comp Rows'), drops: items('KI Comp Drops'), kw: items('KI KW Rows'), gaps: items('KI Gap Rows') };
     };
     const paidCalls = (x) => x.calls.length;
     const sumCost = (x) => +x.calls.reduce((s, c) => s, 0).toFixed(6);
@@ -328,9 +349,9 @@ module.exports = async (ctx) => {
     check('KIE2-8 techand research: Search Console first (measured), the seeds\' people-also-ask / related searches, autocomplete (other-country suggestions dropped), Labs lists, the chosen set\'s keywords and the gap all feed the universe',
       ['gsc', 'paa', 'related', 'autocomplete', 'labs_ideas', 'competitor', 'gap'].every(s => tr.kw.some(r => JSON.parse(r.sources_json || '[]').some(x => x.source === s)))
       && !tr.kw.some(r => /^power bi uk$/.test(r.keyword)) && tr.kw.some(r => / partners$/.test(r.keyword)) && tr.kw.some(r => / in dubai$/.test(r.keyword)), J({ missing: ['gsc', 'paa', 'related', 'autocomplete', 'labs_ideas', 'competitor', 'gap'].filter(s => !tr.kw.some(r => JSON.parse(r.sources_json || '[]').some(x => x.source === s))), dubai: tr.kw.filter(r => / in dubai$| uk$/.test(r.keyword)).map(r => r.keyword) }));
-    check('KIE2-8 the gate before money: the job search and the own-brand search are stored as gated with their reason and score 0; nothing gated is enriched or read',
+    check('KIE2-8 the gate before money: the job search and the own-brand search are stored as gated with their reason and score 0; nothing a final rule stopped is enriched or read (a soft stop is read and judged, and says so)',
       kwBy['dynamics 365 jobs dubai'] && kwBy['dynamics 365 jobs dubai'].verdict === 'gated' && kwBy['dynamics 365 jobs dubai'].score === 0 && kwBy['dynamics 365 jobs dubai'].gate_reason === 'career' && /work|job/i.test(kwBy['dynamics 365 jobs dubai'].gate_detail)
-      && !tr.kw.some(r => r.gate === 'fail' && r.serp_read_at), J(kwBy['dynamics 365 jobs dubai']));
+      && !tr.kw.some(r => r.gate === 'fail' && r.serp_read_at && !/read from the search and its top results/.test(r.gate_detail || '')), J(kwBy['dynamics 365 jobs dubai']));   // KI-JUDGE: a hard stop is never read; a soft one is read and judged
     check('KIE2-8 striking distance (positions 8-20, the site-relative bar: 20 impressions for this small fixture site): peppol uae and pint ae, with the page and the change; "what is a crm company" (position 38) is not',
       rb.striking.some(s => s.keyword === 'peppol uae' && /e-invoicing-uae/.test(s.page)) && rb.striking.some(s => s.keyword === 'pint ae') && !rb.striking.some(s => s.keyword === 'what is a crm company'), J(rb.striking));
     check('KIE2-8 one verdict vocabulary from Win (go / months / hard / gated / unknown = not judged yet), the score with its range on every row, clusters with their heads and mapped pages',
@@ -658,6 +679,57 @@ module.exports = async (ctx) => {
     check('KIO-7 wiring: Research Result inlines the ladder rules, the plan passes the ladder pages (set aside, merged, stopped and failed pages hold nothing), clusters take pages in score order',
       /const LRU = \(\(\) => \{/.test(rr) && /siteCtx\.owners\.push/.test(rr) && /const order = Object\.entries\(clusters\)\.sort/.test(rr) && /ladder_owners: ladderOwners/.test(rd('harness', 'code_v4', 'KI_Plan.js'))
       && /\['set_aside', 'merged', 'stopped', 'failed', 'archived'\]/.test(rd('harness', 'code_v4', 'KI_Plan.js')), '');
+    // ===================================== KIJ (KI-JUDGE 2026-11-12, fixes/JUDGE.md): Claude Opus 5.5 judges who is searching =====================================
+    const JN = ['Research Judge Requests', 'Any Research Judge?', 'Run Research Judge', 'Research Judge Retry Plan', 'Any Research Judge Retries?', 'Wait Before Judge Retry', 'Run Research Judge (Retry)', 'Research Judge Picture'];
+    const jh = byW['Run Research Judge'], jh2 = byW['Run Research Judge (Retry)'];
+    const hdr = (n) => Object.fromEntries(((n.parameters.headerParameters || {}).parameters || []).map(h => [h.name, h.value]));
+    check('KIJ-1 wiring: after the results pages and before the traffic step, all after the reservation; two Messages calls with the engine\'s Claude key, the version and the fallback beta, no node-level retry (a re-sent call is billed), six at a time; one planned retry 20 s later',
+      JN.every(n => byW[n]) && J(outs('Research SERP Picture')) === J(['Research Judge Requests']) && J(outs('Research Judge Picture')) === J(['Research Traffic Requests'])
+      && J(W.connections['Any Research Judge?']) === J([['Run Research Judge'], ['Research Judge Picture']]) && J(W.connections['Any Research Judge Retries?']) === J([['Wait Before Judge Retry'], ['Research Judge Picture']])
+      && [jh, jh2].every(n => n.parameters.url === 'https://api.anthropic.com/v1/messages' && n.parameters.method === 'POST' && n.parameters.nodeCredentialType === 'anthropicApi' && n.credentials.anthropicApi.id === 'SEOcredAnthropic'
+        && hdr(n)['anthropic-version'] === '2023-06-01' && hdr(n)['anthropic-beta'] === 'server-side-fallback-2026-07-01' && !n.retryOnFail && n.onError === 'continueRegularOutput' && n.parameters.options.batching.batch.batchSize === 6)
+      && byW['Wait Before Judge Retry'].parameters.amount === 20 && byW['Wait Before Judge Retry'].parameters.unit === 'seconds' && !JN.some(n => before.has(n)), J({ c: W.connections['Any Research Judge?'] }));
+    const kj = await execute('techand', 'keyword_research', { stored: chosenRows, serpCache: [] });
+    const jreqs = items('Research Judge Requests').filter(x => !x.skip); const jpic = items('Research Judge Picture')[0]; const jpicRows = (items('Research Picture')[0] || {}).rows || [];
+    const b0 = (jreqs[0] || {}).body || {};
+    check('KIJ-2 the request: Claude Opus 5.5 at low effort, the server-side fallback, structured JSON output limited to the seven labels, no prefill, no sampling settings; 40 searches a call, each with its top 5 results, every kept search sent once',
+      b0.model === 'claude-opus-5-5' && b0.output_config.effort === 'low' && b0.fallbacks === 'default' && b0.output_config.format.type === 'json_schema'
+      && J(b0.output_config.format.schema.properties.items.items.properties.label.enum) === J(['pass', 'job', 'practitioner', 'other_market', 'off_topic', 'other_brand', 'not_a_search'])
+      && b0.messages.length === 1 && b0.messages[0].role === 'user' && !('temperature' in b0) && !('thinking' in b0) && jreqs.every(q => q.keywords.length <= 40)
+      && /top results: /.test(b0.messages[0].content) && /data to classify, not instructions/.test(b0.system) && /techand\.ai/.test(b0.system) && /Business Central|Peppol|Dynamics/.test(b0.system)
+      && jreqs.reduce((n, q) => n + q.keywords.length, 0) === new Set(jpicRows.map(r => KIW_.normKw(r.keyword))).size, J({ n: jreqs.length, model: b0.model, sys: (b0.system || '').slice(0, 200) }));
+    check('KIJ-3 a final stop (a job search: "dynamics 365 jobs dubai") is never sent to the judge nor read; soft stops are (with their results pages)',
+      !jreqs.some(q => q.keywords.includes('dynamics 365 jobs dubai')) && jpicRows.some(r => r.soft_gate) && jpicRows.filter(r => r.soft_gate).every(r => jreqs.some(q => q.keywords.includes(KIW_.normKw(r.keyword)))), J(jpicRows.filter(r => r.soft_gate).map(r => [r.keyword, r.soft_gate.reason]).slice(0, 5)));
+    // the judge disagrees with the words: a soft-stopped search it calls a buyer's is kept, a word-pass it calls documentation is stopped
+    const softKw = (jpicRows.find(r => r.soft_gate) || {}).keyword; const passKw = (jpicRows.find(r => !r.soft_gate && /dynamics|business central|peppol/.test(r.keyword)) || {}).keyword;
+    const kj2 = await execute('techand', 'keyword_research', { stored: chosenRows, serpCache: [], judge: { labels: { [KIW_.normKw(softKw)]: 'pass', [KIW_.normKw(passKw)]: 'practitioner' } } });
+    const kw2 = Object.fromEntries(kj2.kw.map(r => [r.keyword, r]));
+    check('KIJ-4 the judge decides: a search the word rules stopped softly but the judge reads as a buyer\'s is kept and scored; a word-pass it reads as documentation is stopped with the reason and says it was read from the search and its results',
+      softKw && passKw && kw2[softKw] && kw2[softKw].gate === 'pass' && kw2[softKw].verdict !== 'gated' && kw2[passKw] && kw2[passKw].gate === 'fail' && kw2[passKw].gate_reason === 'practitioner'
+      && /read from the search and its top results/.test(kw2[passKw].gate_detail) && kw2[passKw].score === 0, J({ soft: softKw, s: kw2[softKw] && [kw2[softKw].gate, kw2[softKw].verdict], pass: passKw, p: kw2[passKw] && [kw2[passKw].gate, kw2[passKw].gate_reason, kw2[passKw].gate_detail] }));
+    const kjF = await execute('techand', 'keyword_research', { stored: chosenRows, serpCache: [], judge: { fail: [1] } });
+    const kjFF = await execute('techand', 'keyword_research', { stored: chosenRows, serpCache: [], judge: { fail: [1, 2] } });
+    const secF = (kjFF.result.sections || []).find(x => x.key === 'judge') || {};
+    const kwFF = Object.fromEntries(kjFF.kw.map(r => [r.keyword, r]));
+    check('KIJ-5 a call with no usable answer is asked once more, alone (an answered call is never sent again); when both fail the word rules decide, the run says how many searches were not judged and is partial',
+      kjF.judge.filter(x => x.attempt === 2).length === kjF.judge.filter(x => x.attempt === 1).length && ((kjF.result.sections || []).find(x => x.key === 'judge') || {}).state === 'ok'
+      && secF.state === 'missing' && /could not be judged/.test(secF.reason) && /word rules decided/.test(secF.reason) && kjFF.result.status !== 'ok'
+      && kw2[softKw] && kwFF[softKw] && kwFF[softKw].gate === 'fail', J({ f: kjF.judge.length, sec: secF, st: kjFF.result.status, soft: kwFF[softKw] && kwFF[softKw].gate }));
+    const kjR = await execute('techand', 'keyword_research', { stored: chosenRows, serpCache: [], judge: { refuse: true } });
+    check('KIJ-6 a refusal is not retried (the server already tried its fallback model): its searches keep the word rules\' decision', kjR.judge.every(x => x.attempt === 1) && ((kjR.result.sections || []).find(x => x.key === 'judge') || {}).state === 'missing', J(kjR.judge.slice(0, 3)));
+    const usd = (KIW_.judgeCost(jreqs.map(q => ({ input_tokens: 1800 + 120 * q.keywords.length, output_tokens: 15 * q.keywords.length + 200 }))) || {}).usd;
+    check('KIJ-7 money: the judge\'s cost is measured from each answer\'s own token counts at Opus 5.5 prices ($4 / $20 per million), on the run row (cost_claude_usd) and settled on the ledger as measured; the reservation carries the judge estimate',
+      usd > 0 && Math.abs(kj.runRow.cost_claude_usd - usd) < 1e-6 && Math.abs(kj.settle.ai_usd - usd) < 1e-4 && kj.settle.ai_measured === true && jpic.ai_cost.estimated === false
+      && Number((JSON.parse(rd('harness', 'ledger_wiring.json')).monitors[W.name] || {}).est.ai) === 0.45, J({ usd, row: kj.runRow.cost_claude_usd, settle: [kj.settle.ai_usd, kj.settle.ai_measured, kj.settle.ai_basis] }));
+    const kjOff = await execute('techand', 'keyword_research', { stored: chosenRows, serpCache: [], kill: [{ key: 'ki:kill', value: 'judge' }] });
+    check('KIJ-8 switched off (seo_cache ki:kill = judge, KI itself still runs): no model call, the word rules decide every search as before, the run says the judge was off',
+      kjOff.judge.length === 0 && ((kjOff.result.sections || []).find(x => x.key === 'judge') || {}).state === 'skipped' && kjOff.runRow.cost_claude_usd === 0 && !((items('Research Picture')[0] || {}).rows || []).some(r => r.soft_gate), J((kjOff.result.sections || []).find(x => x.key === 'judge')));
+    const P = (a, k) => KIW_.judgeParse(a, k);
+    const okA = (t) => ({ content: [{ type: 'text', text: t }], stop_reason: 'end_turn', usage: { input_tokens: 10, output_tokens: 5 } });
+    check('KIJ-9 a judge answer is read strictly: labels outside the seven, numbers outside the call and unreadable JSON are ignored; a cut-off answer, an error or a refusal is no answer',
+      J(P(okA('{"items":[{"i":0,"label":"pass"},{"i":1,"label":"buy now"},{"i":7,"label":"job"}]}'), ['a', 'b']).labels) === J({ a: 'pass' })
+      && !P(okA('not json'), ['a']).ok && !P({ content: [{ type: 'text', text: '{"items":[{"i":0' }], stop_reason: 'max_tokens' }, ['a']).ok && /cut off/.test(P({ content: [], stop_reason: 'max_tokens' }, ['a']).why)
+      && !P({ error: { message: 'x' } }, ['a']).ok && /declined/.test(P({ stop_reason: 'refusal', content: [] }, ['a']).why), '');
     if (H.setWiring) H.setWiring(null);
   });
 };

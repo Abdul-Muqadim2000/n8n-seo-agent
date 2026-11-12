@@ -21,11 +21,14 @@
  },
  "monitors": {
   "SEO Agent - Keyword Intelligence": {
-   "ai_nodes": [],
+   "ai_nodes": [
+    "Run Research Judge",
+    "Run Research Judge (Retry)"
+   ],
    "balance": "DFS Balance (KI)",
    "dead_ends": [],
    "est": {
-    "ai": 0.0,
+    "ai": 0.45,
     "dfs": 0.9
    },
    "settle": "Settle Run Ledger (KI)",
