@@ -164,8 +164,15 @@ type Verdict =
   | { kind: 'cut_off'; execution: string; status: string }
   | { kind: 'ended'; execution: string; status: string; lastStop: number | null };
 
-/** How the work of a run stands: the work execution, then (once it has ended) every execution it handed the work to. */
-async function readWork(work: string): Promise<Verdict> {
+/**
+ * P1 (2026-11-12): how deep a chain of hand-offs is followed. A page run that waits for a writing slot longer than one execution may wait
+ * hands its place in line to a new execution of itself (6 hours in line is about 9 hand-offs); every link is an execution its predecessor
+ * started, so the chain is read link by link.
+ */
+const HANDOFF_DEPTH = 16;
+
+/** How the work of a run stands: the work execution, then (once it has ended) every execution it handed the work to, and theirs in turn. */
+async function readWork(work: string, depth = 0): Promise<Verdict> {
   const own = await executionState(work);
   if (own === undefined) return { kind: 'unknown' };
   if (own === null) return { kind: 'ended', execution: work, status: 'missing', lastStop: null };
@@ -183,6 +190,13 @@ async function readWork(work: string): Promise<Verdict> {
   }
   let lastStop = own.stoppedAt;
   for (const c of children) {
+    if (depth < HANDOFF_DEPTH) {
+      // the child and, once it has ended, what it handed on in turn (a page run's wait for a writing slot continues in a new execution)
+      const v = await readWork(c, depth + 1);
+      if (v.kind !== 'ended') return v;
+      if (v.lastStop != null) lastStop = Math.max(lastStop ?? 0, v.lastStop); // a pruned child (missing) ended long ago: nothing to add
+      continue;
+    }
     const st = await executionState(c);
     if (st === undefined) return { kind: 'unknown' };
     if (st === null) continue; // pruned: it ended long ago

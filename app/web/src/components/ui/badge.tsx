@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { AlertOctagon, AlertTriangle, CheckCircle2, Circle, Clock, Info, Loader2, XCircle } from 'lucide-react';
-import type { RunStatus } from '@seo/shared';
+import { PAGE_WAITING, type RunStatus } from '@seo/shared';
 import { cn } from '@/lib/utils';
 
 export type Tone = 'neutral' | 'accent' | 'good' | 'warning' | 'serious' | 'critical';
@@ -49,6 +49,13 @@ export function RunStatusBadge({ status, className, lastStage }: { status: RunSt
     return (
       <Badge tone="accent" icon={<Clock className="size-3" aria-hidden />} className={className}>
         {lastStage === 'already_measured' ? 'Already measured' : 'Part of the open run'}
+      </Badge>
+    );
+  // P1 (2026-11-12): pages are written two at a time; a page run in line for a writing slot is not stuck
+  if (lastStage === PAGE_WAITING && (status === 'accepted' || status === 'running' || status === 'submitting'))
+    return (
+      <Badge tone="accent" icon={<Clock className="size-3" aria-hidden />} className={className}>
+        Waiting for a writing slot
       </Badge>
     );
   const map: Record<RunStatus, { tone: Tone; label: string; icon: ReactNode }> = {
