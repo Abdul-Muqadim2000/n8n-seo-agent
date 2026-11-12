@@ -137,3 +137,19 @@ Owner to provide: Brave Search API key.
   for techand.ai and devaicon.com (200 each; read back: mode on, reserve, mentions, fan-out 20, brave true; other fields unchanged).
 - First Brave reads: the next AI Growth runs (devaicon Fri 2026-11-13, techand Thu 2026-11-19). Claude's "can it find your page" stage
   moves from unknown to a reading; Brave rank is a hint for Claude, not proof (a second provider was reported in 2026).
+
+## 2026-11-12: first weekly run with the fixes (techand) and the page time limit
+- techand's cycle (01:00 UTC) ran every job. AIR worked as designed: the reserved slot took the AIR target "Can an ERP with project
+  management features handle..." (answer, page /dynamics-365-project-operations-uae) and started "erp project management uae" next to two
+  ordinary pages. All three page runs (13063-13065) were cancelled at the 1-hour limit at 90-100% done (214-246 of ~235-241 node runs):
+  on the 4 GB VM one page takes 17-21 min alone, two at once 18 / 33 min (11-10), three at once > 60 min. The extra AIR slot made three.
+- Fix AIR-PAGETIME (9b17890a): the main workflow's executionTimeout 3600 -> 7200 (= EXECUTIONS_TIMEOUT_MAX; n8n strips a timeout equal to
+  the server default, which is why production showed none); Cadence_Plan in_flight_hours (2) stays >= the limit. Harness 19143 / 0 (one
+  timing check, AD10 204 ms vs 200 ms, failed once under load and passed on the rerun at 107 ms). Merged with the KI judge deploy
+  (47562ddb) as c4945235; before: prod == merged build (33 / 0); backup pg/2026-11-12/*T132930Z; deploy guard ok, 29 published; after:
+  main executionTimeout 7200 on prod, prod == build (33 / 0).
+- Not re-run: techand's three pages (they come back next Thursday 11-19, or now with the owner's OK for the job re-open). devaicon's cycle
+  runs Fri 2026-11-13 01:00 UTC with the 2 h limit and Brave on.
+- Levers if pages are still slow: start a site's pages one after another (the cadence fires them at once with waitForSubWorkflow false;
+  waiting changes what AI Target Marks reads, B9-6), saveExecutionProgress off for page runs (each node rewrites the whole run to Postgres,
+  ~15 s a node at the end of a page with three running), or a larger VM.
