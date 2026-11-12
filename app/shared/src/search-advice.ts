@@ -70,7 +70,7 @@ const COMMON_NAME_WORDS = new Set([
 /**
  * The client's brand name a search names, or '' (review S1, 2026-11-12). Whole words only, never a piece of another word:
  * - the whole name ("northwind trading reviews");
- * - the name written as one word, 6+ letters and a name (the gate's label rule), as a word or the start of one ("techandkey");
+ * - the name written as one word, 6+ letters and a name (the gate's label rule), as a word or the start of one ("zentrovakey" for "Zentrova");
  * - its distinctive words together ("blue ocean" of "Blue Ocean Consulting"); when one distinctive word is left and it is not an everyday
  *   word, that word leading the search ("kestrel erp" for "Kestrel Labs"). "blue prism", "amazon prime", "oracle apex", "data alphabet"
  *   and "dynamics 365 partner" never match "Blue Ocean", "Prime Systems", "Apex", "Alpha Data" or "Dynamics Square".
