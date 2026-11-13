@@ -43,6 +43,9 @@ import {
   type RunInput,
   type SiteContext,
   holdOf,
+  PAGE_SLOT_STAGE,
+  PAGE_WAITING,
+  PAGE_WRITING,
   stripHookSecrets,
 } from '@seo/shared';
 import { requireVerified, type OrgAccess } from '../auth/access';
@@ -918,6 +921,8 @@ export async function ingestCallback(
 ): Promise<{ reportId: string; runId: string | null; stage: string; ladderWon?: boolean; prefsApplied?: boolean }> {
   const stage = stageOf(body);
   const requestId = body.request_id != null && body.request_id !== '' ? String(body.request_id) : null;
+  // P1 (2026-11-12): a page run in line for a writing slot (or starting after it waited) is not a report: nothing is stored, delivered or announced
+  if (stage === PAGE_SLOT_STAGE) return ingestPageSlot(org, body, requestId);
   const { callback_url: _cb, ...rest } = body; // the callback URL carries the company's hook token: never stored
   const { payload: raw, files } = extractFiles(rest);
   // older n8n builds listed other customers' Search Console properties in "no access" errors: never stored
@@ -1026,6 +1031,35 @@ export async function ingestCallback(
   // site tasks (app/docs/SITE_TASKS.md): new engine readings of the website's steps (IndexNow file, AI crawlers, broken pages) are stored
   if (site?.verifiedAt) void import('./siteTasks').then((m) => (m.SITE_TASK_STAGES.has(stage) ? m.afterSiteTaskCallback(org, site, { warn: deliveryLog.error }) : undefined)).catch((err) => deliveryLog.error({ err: String(err), stage }, 'site tasks could not be stored'));
   return { reportId, runId: run?.id ?? null, stage, ...(ladderWon !== undefined ? { ladderWon } : {}), ...(prefsApplied !== undefined ? { prefsApplied } : {}) };
+}
+
+/** the run statuses a page-slot callback may still move (a finished or failed run keeps its stage) */
+const SLOT_ACTIVE = ['submitting', 'accepted', 'running'];
+
+/**
+ * P1 (2026-11-12, prod review S1-01): the engine writes at most two pages at once, and a page run that finds both slots taken waits in line
+ * (`stage: page_slot`, `slot: 'waiting'`, with the pages ahead and an estimate in minutes), then says `slot: 'started'` when it writes. The
+ * app's run (matched by request id, like every callback) shows "Waiting for a writing slot" and its expected time grows to the time already
+ * spent plus the engine's estimate, so the watcher never takes a run in line for an overdue one and the expiry never closes it. A cycle's or
+ * the cadence's page (no app run) changes nothing. No report row, no delivery, no event.
+ */
+export async function ingestPageSlot(org: OrgRow, body: Record<string, unknown>, requestId: string | null): Promise<{ reportId: string; runId: string | null; stage: string }> {
+  const none = { reportId: '', runId: null, stage: PAGE_SLOT_STAGE };
+  if (!requestId || isCycleRequestId(requestId)) return none;
+  const run = await db.query.runs.findFirst({ where: and(eq(schema.runs.orgId, org.id), eq(schema.runs.requestId, requestId)), orderBy: desc(schema.runs.createdAt) });
+  if (!run || !SLOT_ACTIVE.includes(run.status)) return { ...none, runId: run?.id ?? null };
+  const waiting = String(body.slot ?? '') !== 'started';
+  const patch: { lastStage: string; etaMinutes?: number } = { lastStage: waiting ? PAGE_WAITING : PAGE_WRITING };
+  const eta = Number(body.eta_minutes);
+  if (Number.isFinite(eta) && eta > 0) {
+    const since = Math.max(0, (Date.now() - (run.acceptedAt ?? run.createdAt).getTime()) / 60_000);
+    patch.etaMinutes = Math.max(run.etaMinutes ?? 0, Math.ceil(since + Math.min(eta, 24 * 60)));
+  }
+  await db
+    .update(schema.runs)
+    .set(patch)
+    .where(and(eq(schema.runs.id, run.id), inArray(schema.runs.status, SLOT_ACTIVE)));
+  return { ...none, runId: run.id };
 }
 
 /** The keyword-first follow-ups of a callback (services/autopilot.ts), loaded lazily: that module imports this one. */

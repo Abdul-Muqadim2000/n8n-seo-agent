@@ -1554,6 +1554,348 @@
    ]
   }
  },
+ "page_slot": {
+  "cadence_in_flight_hours": 8,
+  "connections": {
+   "Gave Up Waiting?": [
+    [
+     "Mark Run Refused"
+    ],
+    [
+     "Hand Off?"
+    ]
+   ],
+   "Got Page Slot?": [
+    [
+     "Take Page Slot"
+    ],
+    [
+     "Gave Up Waiting?"
+    ]
+   ],
+   "Hand Off Page Run": [
+    [
+     "Handed Off?"
+    ]
+   ],
+   "Hand Off Payload": [
+    [
+     "Hand Off Page Run"
+    ]
+   ],
+   "Hand Off?": [
+    [
+     "Mark Handed Off"
+    ],
+    [
+     "Wait For Page Slot"
+    ]
+   ],
+   "Handed Off?": [
+    [],
+    [
+     "Mark Run Refused"
+    ]
+   ],
+   "Input OK?": [
+    [
+     "Page Run?"
+    ],
+    [
+     "Mark Run Refused"
+    ]
+   ],
+   "Load Content Log (Refused)": [
+    [
+     "Refused Page Row"
+    ]
+   ],
+   "Load Page Slots": [
+    [
+     "Page Slot"
+    ]
+   ],
+   "Load Page Slots (Check)": [
+    [
+     "Slot Check"
+    ]
+   ],
+   "Load Slot Override": [
+    [
+     "Load Page Slots"
+    ]
+   ],
+   "Mark Handed Off": [
+    [
+     "Hand Off Payload"
+    ]
+   ],
+   "Mark Page Run Failed": [
+    [
+     "Requeue AI Target (Failed)",
+     "DFS Balance End"
+    ]
+   ],
+   "Page Run?": [
+    [
+     "Load Slot Override"
+    ],
+    [
+     "Ensure Cache Table (Site)"
+    ]
+   ],
+   "Page Slot": [
+    [
+     "Slot Note?",
+     "Got Page Slot?"
+    ]
+   ],
+   "Refused Input": [
+    [
+     "Load Content Log (Refused)",
+     "Error Via API?",
+     "Refused Ladder Row"
+    ]
+   ],
+   "Refused Page Row": [
+    [
+     "Release Refused Page"
+    ]
+   ],
+   "Release Refused Page": [
+    [
+     "Requeue AI Target (Refused)"
+    ]
+   ],
+   "Slot Check": [
+    [
+     "Slot Kept?"
+    ]
+   ],
+   "Slot Kept?": [
+    [
+     "Slot Taken"
+    ],
+    [
+     "Step Back"
+    ]
+   ],
+   "Slot Note?": [
+    [
+     "POST Slot Note"
+    ]
+   ],
+   "Slot Taken": [
+    [
+     "Ensure Cache Table (Site)"
+    ]
+   ],
+   "Step Back": [
+    [
+     "Wait For Page Slot"
+    ]
+   ],
+   "Take Page Slot": [
+    [
+     "Load Page Slots (Check)"
+    ]
+   ],
+   "Wait For Page Slot": [
+    [
+     "Load Slot Override"
+    ]
+   ]
+  },
+  "execution_timeout": 7200,
+  "handed_off": {
+   "filters": [
+    [
+     "run_id",
+     "={{ $execution.id }}"
+    ]
+   ],
+   "values": [
+    "cost_basis",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_at",
+    "settled_usd",
+    "status"
+   ]
+  },
+  "ledger_cols": [
+   "run_id",
+   "key",
+   "mode",
+   "est_usd",
+   "created_at",
+   "status",
+   "settled_usd",
+   "domain",
+   "heavy",
+   "dfs_est_usd",
+   "dfs_usd",
+   "dfs_balance",
+   "cost_mode",
+   "ai_usd",
+   "measured_usd",
+   "estimated_usd",
+   "cost_basis",
+   "settled_at",
+   "dfs_balance_end",
+   "dfs_source",
+   "page",
+   "request_id",
+   "keyword",
+   "queued_at"
+  ],
+  "nodes": [
+   "Page Run?",
+   "Load Slot Override",
+   "Load Page Slots",
+   "Page Slot",
+   "Slot Note?",
+   "POST Slot Note",
+   "Got Page Slot?",
+   "Take Page Slot",
+   "Load Page Slots (Check)",
+   "Slot Check",
+   "Slot Kept?",
+   "Step Back",
+   "Slot Taken",
+   "Gave Up Waiting?",
+   "Hand Off?",
+   "Mark Handed Off",
+   "Hand Off Payload",
+   "Hand Off Page Run",
+   "Handed Off?",
+   "Wait For Page Slot"
+  ],
+  "page": {
+   "handoff_minutes": 40,
+   "limit": 2,
+   "max_hops": 12,
+   "max_wait_hours": 6,
+   "page_minutes": 20,
+   "poll_seconds": 120,
+   "run_hours": 2
+  },
+  "post_body": "={{ JSON.stringify({ status: 'progress', stage: 'page_slot', request_id: $json.request_id, execution_id: $json.execution_id, domain: $json.domain, keyword: $json.keyword, slot: $json.slot === 'admit' ? 'started' : 'waiting', ahead: $json.ahead, running: $json.running, limit: $json.limit, waited_minutes: $json.waited_minutes, eta_minutes: $json.eta_minutes, note: $json.note }) }}",
+  "release_refused": [
+   [
+    "request_id",
+    "eq",
+    "={{ $json.request_id }}"
+   ],
+   [
+    "keyword",
+    "eq",
+    "={{ $json.keyword }}"
+   ],
+   [
+    "status",
+    "eq",
+    "started"
+   ]
+  ],
+  "requeue": {
+   "Requeue AI Target (Failed)": {
+    "filters": [
+     [
+      "request_id",
+      "eq",
+      "={{ String($('Normalize Input').first().json.request_id || '') || '__no_request__' }}"
+     ],
+     [
+      "status",
+      "eq",
+      "writing"
+     ]
+    ],
+    "values": [
+     "reason",
+     "request_id",
+     "status",
+     "updated_at",
+     "written_at"
+    ]
+   },
+   "Requeue AI Target (Refused)": {
+    "filters": [
+     [
+      "request_id",
+      "eq",
+      "={{ String($('Normalize Input').first().json.request_id || '') || '__no_request__' }}"
+     ],
+     [
+      "status",
+      "eq",
+      "writing"
+     ]
+    ],
+    "values": [
+     "reason",
+     "request_id",
+     "status",
+     "updated_at",
+     "written_at"
+    ]
+   }
+  },
+  "self_run": "SEOagentV4Full01",
+  "take": {
+   "filters": [
+    [
+     "run_id",
+     "={{ $execution.id }}"
+    ]
+   ],
+   "values": {
+    "created_at": "={{ new Date().toISOString() }}",
+    "status": "reserved"
+   }
+  },
+  "wait": {
+   "amount": "={{ Math.max(65, Number($('Normalize Input').first().json.page_slot_poll_seconds) || 120) }}",
+   "unit": "seconds",
+   "webhook": true
+  },
+  "starters": [
+   [
+    "SEOagentAPIentry",
+    "Start SEO Run"
+   ],
+   [
+    "SEOagentAuditSc1",
+    "Start Scheduled Audits"
+   ],
+   [
+    "SEOagentCadence1",
+    "Start Content Runs"
+   ],
+   [
+    "SEOagentV4Full01",
+    "Hand Off Page Run"
+   ],
+   [
+    "SEOagentV4Full01",
+    "Start Audit Run"
+   ],
+   [
+    "SEOagentV4Full01",
+    "Start Case Study Run"
+   ],
+   [
+    "SEOagentV4Full01",
+    "Start Follow-up Runs"
+   ],
+   [
+    "SEOagentV4Full01",
+    "Start Page Runs"
+   ]
+  ]
+ },
  "refused_conditions": [
   [
    "run_id",

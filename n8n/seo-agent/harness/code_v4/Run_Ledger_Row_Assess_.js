@@ -17,4 +17,6 @@ return [{ json: { run_id: String($execution.id), key: String(v.caller || 'anon')
   // B-A5 (2026-10-15, build section 62): a reserved row has not settled, has taken no second balance reading and carries the cost its
   // own tasks report. `settled_at` is stamped by the settle, and it is what lets ANOTHER run tell whether this one overlapped it:
   // a `done` row with no settled_at is treated as having been open the whole time, which is the safe answer, not the useful one.
-  settled_at: '', dfs_balance_end: 0, dfs_source: 'tasks' } }];
+  settled_at: '', dfs_balance_end: 0, dfs_source: 'tasks',
+  // P1 (2026-11-12): only a page run of the main workflow takes a writing slot; this row is never one
+  page: false, request_id: '', keyword: '', queued_at: '' } }];

@@ -19,7 +19,11 @@
   "cost_basis",
   "settled_at",
   "dfs_balance_end",
-  "dfs_source"
+  "dfs_source",
+  "page",
+  "request_id",
+  "keyword",
+  "queued_at"
  ],
  "AI_PAGES": [
   "site_id",

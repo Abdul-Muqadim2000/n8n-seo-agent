@@ -559,6 +559,8 @@ N.append(node('Ensure Profile Table (Cadence)', DT_TYPE, DT_VERSION, dt_create_p
 N.append(node('Load Profiles (Cadence)', DT_TYPE, DT_VERSION, dt_get_all_params(PROFILE_TABLE), at(17, 3), **LOAD))
 _COST_SRC = _rdt('code/_cost_cal.js').rstrip('\n')
 N.append(code('Cadence Plan', rd('code/Cadence_Plan.js').replace('/*__COST_CAL__*/', _COST_SRC), at(10, 0)))
+# P1 (2026-11-12): a `started` page is in flight while its run may still be waiting for a writing slot (6 h) or writing (2 h)
+assert 'in_flight_hours: 8,' in rd('code/Cadence_Plan.js'), 'P1: Cadence Plan counts a started page as in flight for less than a page run can take (6 h wait + 2 h writing)'
 # a preview (the dispatcher's `preview` job, 48 h before a cycle) leaves the plan here: nothing is started, logged or marked, one callback goes out
 N.append(iff('Preview?', '{{ $json.preview === true }}', at(10, 1)))
 N.append(code('Cadence Preview', rd('code/Cadence_Preview.js'), at(19, 3)))

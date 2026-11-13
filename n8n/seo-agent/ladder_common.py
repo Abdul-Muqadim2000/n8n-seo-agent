@@ -665,7 +665,13 @@ RUN_LEDGER_COLS = [('run_id', 'string'), ('key', 'string'), ('mode', 'string'), 
                    # `appendix/user_data` reading (`dfs_balance_end`) and stamps the moment it settled (`settled_at`), so the move between
                    # a row's two readings can be attributed to that row when no other row was open across its window, and `dfs_source`
                    # says which figure the row carries: 'account' (measured against the balance) or 'tasks' (its own per-task sum).
-                   ('settled_at', 'string'), ('dfs_balance_end', 'number'), ('dfs_source', 'string')]
+                   ('settled_at', 'string'), ('dfs_balance_end', 'number'), ('dfs_source', 'string'),
+                   # P1 (2026-11-12, prod review S1-01, plans/P1_page_concurrency.md): page runs take a writing slot. `page` marks the row of a
+                   # run that writes a page (status `waiting` until it is admitted, then `reserved`), `request_id` / `keyword` say which page
+                   # (the dispatcher frees that page's content-log row when the run dies), and `queued_at` is when the request joined the line:
+                   # a run that hands its wait to a new execution (n8n measures the time limit from an execution's first start) keeps its
+                   # place through it. status gains `waiting` and `handed_off` (settled $0, never counted as a run).
+                   ('page', 'boolean'), ('request_id', 'string'), ('keyword', 'string'), ('queued_at', 'string')]
 
 # ---- R9 (2026-10-13, re-rating): every scheduled run reserves and settles a seo_run_ledger row too. Before this the ledger held nothing for
 # the AI Pulse, the Rank Tracker, the Content Cadence, the Link Builder, AI Growth or the Site Tracker, so the day's guard refused

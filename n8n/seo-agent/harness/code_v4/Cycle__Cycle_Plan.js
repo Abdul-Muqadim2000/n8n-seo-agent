@@ -348,13 +348,35 @@ const RG = (() => {
   const ms = (v) => { const t = Date.parse(S(v)); return Number.isFinite(t) && t > 0 ? t : 0; };
   const yesNo = (v) => v === true || /^(true|1|yes|on)$/i.test(S(v));
 
+  // ---- P1 (2026-11-12, prod review S1-01): page runs take a WRITING SLOT ----
+  // On 2026-11-12 the Content Cadence started three page runs of one website within 11 seconds; all three ran into the time limit at
+  // 90-100% done and none was delivered. Measured on production: one page alone takes 16.5-21 minutes, two at once 17.8 and 33.2,
+  // three at once more than 60 each. Nothing capped them: this gate covered the schedules only, and n8n's own concurrency limit does
+  // not count sub-executions. Every page run now takes one of `limit` slots before its first paid node and waits for one otherwise.
+  //   limit           pages written at the same time (seo_cache `slots:page` {"limit": n} overrides it; 0 holds every page run)
+  //   poll_seconds    how often a waiting run looks again (a Wait of >= 65 s is saved to the database and holds no memory)
+  //   max_wait_hours  after this long in line the run gives up, charged nothing
+  //   run_hours       a page run's time limit (= STALE_HOURS = the main workflow's executionTimeout, asserted by the build)
+  //   page_minutes    what one page takes alone (for the estimate the customer is shown)
+  //   handoff_minutes n8n measures a resumed execution's time limit from its ORIGINAL start (read in n8n 2.41.4: wait-tracker.js passes
+  //                   the stored startedAt, workflow-runner.js subtracts the time since it, and setRunning keeps the first startedAt), so
+  //                   a run may wait inside its own execution only this long; past it, it hands its place in line to a new execution of
+  //                   itself (the page then still has run_hours - handoff_minutes of its own limit left: 80 minutes, a page takes 17-33)
+  //   max_hops        a backstop on those hand-offs (6 h of waiting needs about 9)
+  const PAGE = { limit: 2, poll_seconds: 120, max_wait_hours: 6, run_hours: 2, page_minutes: 20, handoff_minutes: 40, max_hops: 12 };
+  const PAGE_KEY = 'slots:page';
+  // a page run: the same test as the cost kit's `content` key (CC.keysFor), started through the API door (a form run cannot hand off)
+  const isPage = (d) => { const x = d || {}; return S(x.mode) === 'keyword' && yesNo(x.include_content) && !yesNo(x.verdict_only) && yesNo(x.via_webhook) && !S(x.validation_error); };
+
   // P34-5's rule, in one place: a reservation that never settled must not hold anything for ever. `stale` is what *Release Stale Runs*
   // writes; a row still `reserved` past the window counts as stale whether that update got through or not.
+  // P1: a row still `waiting` longer than anyone may wait (max_wait_hours + a quarter of an hour) belongs to a run that is gone.
   const isStale = (r, nowMs, hours) => {
     const st = S(r && r.status);
     if (st === 'stale') return true;
     const h = n0(hours) > 0 ? n0(hours) : STALE_HOURS;
     const t = ms(r && r.created_at);
+    if (st === 'waiting') return t > 0 && t < (nowMs || Date.now()) - (PAGE.max_wait_hours + 0.25) * 3600000;
     return st === 'reserved' && t > 0 && t < (nowMs || Date.now()) - h * 3600000;
   };
   // R77 (2026-10-16, re-rating C-1): the run that STARTED this one. An on-demand monitor is spawned by the main workflow's front door, whose
@@ -460,7 +482,99 @@ const RG = (() => {
       stale_ignored: stale, max_open, mode, where, basis, checked_at: ctx.now, parent_run_id, site, retry: false };
   };
 
-  return { gate, liveRuns, heavyBusy, isStale, parentOf, caughtUp, sameSite, STALE_HOURS, MAX_OPEN };
+  // ---- P1: the writing-slot decision of one page run ----
+  // rows: seo_run_ledger rows (the page runs of the last hours); mine: this run's own row (id, run_id, created_at, queued_at). Page rows are
+  // inserted `waiting`; the run that is admitted flips its own row to `reserved` with created_at = the moment it was admitted, so every
+  // clock that reads created_at (the stale rule, Release Stale Runs, the dispatcher) counts from the start of the writing.
+  //   running = page rows `reserved` and not stale (a crashed writer frees its slot after run_hours, or at once through the dispatcher)
+  //   ahead   = page rows `waiting`, not stale, that joined the line before mine (queued_at, then row id: a hand-off keeps its place)
+  // admit when running + ahead < limit; first in line first (FIFO), and two runs inserted at the same moment can never both take the last
+  // slot (the later row counts the earlier one as ahead, whether it is still waiting or already writing). Fails OPEN: with no row of its
+  // own or an unreadable ledger the run is admitted and the basis says so (a stuck line is worse than one page too many).
+  const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+  const WAITER_MARGIN_MIN = 6;
+  const waiterAlive = (r, nowMs, handoffMin, pollS) => { const t = ms(r && r.created_at);
+    return t > 0 && t >= (nowMs || Date.now()) - ((n0(handoffMin) || PAGE.handoff_minutes) + 2 * (n0(pollS) || PAGE.poll_seconds) / 60 + WAITER_MARGIN_MIN) * 60000; };
+  const pageSlot = (o) => {
+    const c = o || {}, now = ms(c.now) || Date.now(), mine = c.mine || {};
+    const num = (v, d) => (v !== '' && v != null && Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : d);
+    const limit = (c.limit !== '' && c.limit != null && Number.isFinite(Number(c.limit)) && Number(c.limit) >= 0) ? Math.floor(Number(c.limit)) : PAGE.limit;
+    const maxWaitH = num(c.max_wait_hours, PAGE.max_wait_hours), runH = num(c.run_hours, PAGE.run_hours), pageMin = num(c.page_minutes, PAGE.page_minutes);
+    const pollS = num(c.poll_seconds, PAGE.poll_seconds), handoffMin = num(c.handoff_minutes, PAGE.handoff_minutes), maxHops = num(c.max_hops, PAGE.max_hops);
+    const hops = Math.max(0, Math.floor(n0(c.hops)));
+    const myRun = S(mine.run_id) || S(c.run_id), myId = n0(mine.id);
+    const queuedOf = (r) => ms(r && r.queued_at) || ms(r && r.created_at);
+    const myQ = ms(c.queued_at) || queuedOf(mine) || now;
+    const execStart = ms(c.exec_started_at) || ms(mine.created_at) || now;
+    const waited = Math.max(0, Math.round((now - myQ) / 60000));
+    const execAge = Math.max(0, (now - execStart) / 60000);
+    const src = S(c.limit_source) || 'config';
+    const base = { limit, limit_source: src, waited_minutes: waited, exec_minutes: Math.round(execAge), hops, max_hops: maxHops, poll_seconds: pollS,
+      max_wait_hours: maxWaitH, queued_at: new Date(myQ).toISOString(), checked_at: new Date(now).toISOString() };
+    const STARTED = 'A writing slot is free: your page is being written now (about ' + pageMin + ' minutes).';
+    if (c.read_failed || !(myId > 0)) return { ...base, slot: 'admit', ahead: 0, running: 0, running_ids: [], ahead_ids: [], eta_minutes: pageMin, fail_open: true,
+      basis: 'admitted without a check (fail open): ' + (c.read_failed ? 'the run ledger could not be read' : 'this run has no ledger row of its own') + '; limit ' + limit + ' (' + src + ')',
+      note: STARTED, validation_error: '' };
+    const pages = (c.rows || []).filter(r => r && !r.error && S(r.run_id) && S(r.run_id) !== myRun && (myId > 0 ? n0(r.id) !== myId : true) && yesNo(r.page));
+    const running = pages.filter(r => S(r.status) === 'reserved' && !isStale(r, now, runH));
+    const before = (r) => { const q = queuedOf(r); return q < myQ || (q === myQ && n0(r.id) < myId); };
+    // review S2 (2026-11-12): a live waiter writes a fresh row at least every handoff_minutes (it hands its wait on), so a `waiting` row older
+    // than that plus two looks and a margin belongs to a run that died while in line: it no longer holds anyone back (6 h 15 min was too long:
+    // two dead waiters stopped every page until all of them gave up)
+    const ahead = pages.filter(r => S(r.status) === 'waiting' && waiterAlive(r, now, handoffMin, pollS) && before(r));
+    const admit = limit > 0 && running.length + ahead.length < limit;
+    const eta = limit > 0 ? (admit ? pageMin : Math.ceil((ahead.length + 1) / limit) * pageMin + pageMin) : null;
+    const giveUp = !admit && (waited >= maxWaitH * 60 || hops >= maxHops);
+    const handoff = !admit && !giveUp && execAge + pollS / 60 >= handoffMin;
+    const slot = admit ? 'admit' : giveUp ? 'give_up' : handoff ? 'handoff' : 'wait';
+    const basis = running.length + ' page run(s) writing (' + (running.map(r => S(r.run_id)).join(', ') || 'none') + '), ' + ahead.length + ' waiting ahead ('
+      + (ahead.map(r => S(r.run_id)).join(', ') || 'none') + '); limit ' + limit + ' (' + src + '); waited ' + waited + ' min, this execution ' + Math.round(execAge)
+      + ' min old, hand-offs ' + hops + ' -> ' + slot;
+    const twoAtATime = limit === 1 ? 'Pages are written one at a time' : 'Pages are written ' + limit + ' at a time';
+    const note = admit ? STARTED
+      : giveUp ? ''
+      : limit === 0 ? 'Page writing is paused. Your page keeps its place in line and starts as soon as writing resumes; if it has not started within ' + plural(maxWaitH, 'hour', 'hours') + ' it is stopped and nothing is charged.'
+      : 'Your page is waiting for a writing slot. ' + twoAtATime + ': ' + plural(running.length, 'page is', 'pages are') + ' being written now and '
+        + plural(ahead.length, 'is', 'are') + ' ahead of yours. It starts as soon as a slot is free, in about ' + eta + ' minutes. Nothing is charged while it waits.';
+    const validation_error = giveUp ? 'No writing slot became free in ' + plural(Math.max(1, Math.round(waited / 60)), 'hour', 'hours') + ' ('
+      + plural(running.length + ahead.length, 'page was', 'pages were') + ' ahead of this one). Nothing was charged and nothing was written. Start it again when you like; '
+      + 'a page from the weekly plan is picked again in its next cycle.' : '';
+    return { ...base, slot, ahead: ahead.length, running: running.length, running_ids: running.map(r => S(r.run_id)), ahead_ids: ahead.map(r => S(r.run_id)),
+      eta_minutes: eta, fail_open: false, basis, note, validation_error };
+  };
+  // P1: a run that continues another execution's place in line. Trusted only when the ledger holds that execution's row, marked
+  // `handed_off`, for the same request: a body that merely carries `slot_handoff` (an API caller) proves nothing and skips nothing.
+  const handoffOf = (d, rows) => {
+    const h = d && d.slot_handoff;
+    if (!h || typeof h !== 'object') return null;
+    const from = S(h.from_run_id);
+    if (!/^\d+$/.test(from) || !S(d.request_id)) return null;
+    return (rows || []).find(r => r && !r.error && S(r.run_id) === from && S(r.status) === 'handed_off' && S(r.request_id) === S(d.request_id) && yesNo(r.page)) || null;
+  };
+
+  // review S3 / N2 (2026-11-12): after *Take Page Slot* the run reads the ledger once more. Two runs that took the last slot at nearly the same
+  // moment (a hand-off keeps an older queued_at, two starts can insert out of order) both see each other's row `reserved` now: of the page
+  // rows writing, the first `limit` by ADMISSION order (created_at, set by the take, then row id) keep their slot and a later one steps back to
+  // waiting. A run whose own row is not `reserved` (the take did not get through) does not write either: it waits and takes again.
+  // Fails open when the ledger cannot be read (the take itself was the best evidence).
+  const slotHeld = (o) => {
+    const c = o || {}, now = ms(c.now) || Date.now(), myRun = S(c.run_id);
+    const limit = (c.limit !== '' && c.limit != null && Number.isFinite(Number(c.limit)) && Number(c.limit) >= 0) ? Math.floor(Number(c.limit)) : PAGE.limit;
+    const runH = n0(c.run_hours) > 0 ? n0(c.run_hours) : PAGE.run_hours;
+    if (c.read_failed) return { keep: true, rank: 0, writing: 0, limit, basis: 'kept without a check: the run ledger could not be read after the take' };
+    const rows = (c.rows || []).filter(r => r && !r.error && S(r.run_id) && yesNo(r.page));
+    const mine = rows.find(r => S(r.run_id) === myRun);
+    if (!mine || S(mine.status) !== 'reserved') return { keep: false, rank: -1, writing: 0, limit, retake: true,
+      basis: 'this run\'s ledger row is ' + (mine ? '`' + S(mine.status) + '`' : 'missing') + ' after the take: it waits and takes the slot again' };
+    const writing = rows.filter(r => S(r.status) === 'reserved' && !isStale(r, now, runH))
+      .sort((a, b) => (ms(a.created_at) - ms(b.created_at)) || (n0(a.id) - n0(b.id)));
+    const rank = writing.findIndex(r => S(r.run_id) === myRun);
+    const keep = limit > 0 && rank >= 0 && rank < limit;
+    return { keep, rank, writing: writing.length, limit, retake: false,
+      basis: writing.length + ' page run(s) writing after the take (' + writing.map(r => S(r.run_id)).join(', ') + '), this run is number ' + (rank + 1) + ' by admission; limit ' + limit + (keep ? ' -> keeps its slot' : ' -> steps back to waiting') };
+  };
+
+  return { gate, liveRuns, heavyBusy, isStale, parentOf, caughtUp, sameSite, pageSlot, slotHeld, isPage, handoffOf, waiterAlive, PAGE, PAGE_KEY, STALE_HOURS, MAX_OPEN };
 })();
 // ---- the per-website 7-day cycle (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §4 / §7 / §14; build_cycle.py, build section 140) ----
 // Every website gets its own week: cycle 0 starts the moment its tracking does, and every later cycle at 06:00 in the website's own time
@@ -486,6 +600,7 @@ const CYC = (() => {
   const yes = (v) => v === true || /^(true|1|yes|on)$/i.test(S(v));
   const flag = (x, dflt) => (x === undefined || x === null || x === '') ? dflt : !(x === false || /^(false|0|no|off)$/i.test(String(x)));
   const normD = (x) => S(x).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+  const yesNo = (v) => v === true || /^(true|1|yes|on)$/i.test(S(v));
   const listOf = (v) => (Array.isArray(v) ? v : S(v).split(/[\s,;]+/)).map(x => S(x).toLowerCase()).filter(Boolean);
   // ---- the contract: app/shared/src/cycles.ts CYCLE_JOBS, in the same order (harness CY1 and build section 140 compare the two). `mode` is
   // the run ledger mode each workflow reserves under (the run guard's twin check), `heavy` a job that crawls the site.
@@ -531,6 +646,7 @@ const CYC = (() => {
   const CAPACITY = new Set(['same_mode', 'too_many_open', 'heavy_busy']);
   // F-REH: the key under which runsFrom() hands the plan what n8n said about each reservation's execution by id (no workflow has this id)
   const LEDGER_RUNS = '*ledger';
+  const WAIT_HOURS = 6;   // P1: RG.PAGE.max_wait_hours (asserted equal by build_v4.py section 190)
   // ---- time: local dates in a website's zone, with the catch-up kit's Intl rule ----
   const validTz = (tz) => { if (!S(tz)) return false; try { new Intl.DateTimeFormat('en-US', { timeZone: S(tz) }).format(0); return true; } catch (e) { return false; } };
   const local = (tz, t) => { const d = new Date(t + CU.offset(tz, t));
@@ -723,7 +839,13 @@ const CYC = (() => {
     if (/catch-up already ran this scheduled slot/i.test(txt)) return 'caught_up';
     return 'other';
   };
-  const isStale = (r, now, h) => { const st = S(r && r.status); if (st === 'stale') return true; const t = ms(r && r.created_at); return st === 'reserved' && t > 0 && t < now - h * H; };
+  const isStale = (r, now, h) => { const st = S(r && r.status); if (st === 'stale') return true; const t = ms(r && r.created_at);
+    // P1 (2026-11-12): a page run waits for a writing slot at most 6 h (RG.PAGE.max_wait_hours) and then writes for at most `h`: a row still
+    // `waiting` past both (+ half an hour) is beyond any run (RG.isStale gives up on it earlier, at 6.25 h, for the counts)
+    if (st === 'waiting') return t > 0 && t < now - (WAIT_HOURS + h + 0.5) * H;
+    return st === 'reserved' && t > 0 && t < now - h * H; };
+  // P1: the ledger states of a run that holds or waits for room (`waiting` = a page run in line for a writing slot)
+  const OPEN_ROW = new Set(['reserved', 'waiting']);
   const shortBasis = (r) => S(r && r.cost_basis).replace(/\s+/g, ' ').slice(0, 160);
   // ---- the outcome of a job the dispatcher started, from the ledger first and n8n's executions second ----
   // a: { row, ledger, runs: {workflow_id: {ok, data: [{id, mode, status, startedAt, stoppedAt}], byId: {id: execution}, incomplete: [{from, to, oldest}],
@@ -838,7 +960,7 @@ const CYC = (() => {
     // row older than the stale window is already ignored by the guard (and marked by *Release Stale Runs*), so only younger rows are read,
     // oldest first, at most max_ledger_reads a sweep; a read the cap leaves out is reported in `unread` and judged at a later sweep.
     const now = ms(c.now) || 0, sh = Number(cfg.stale_hours) > 0 ? Number(cfg.stale_hours) : DEFAULTS.stale_hours;
-    const ghosts = ledger.filter(l => S(l.status) === 'reserved' && /^\d+$/.test(S(l.run_id)) && (!now || !isStale(l, now, sh)))
+    const ghosts = ledger.filter(l => OPEN_ROW.has(S(l.status)) && /^\d+$/.test(S(l.run_id)) && (!now || !isStale(l, now, sh)))
       .sort((x, y) => ms(x.created_at) - ms(y.created_at) || Number(x.run_id) - Number(y.run_id));
     const greads = [];
     for (const l of ghosts) { const url = api + '/executions/' + q(S(l.run_id)); if (seen.has(url)) continue; seen.add(url); greads.push({ workflow_id: '', kind: 'ledger', run_id: S(l.run_id), key: S(l.key), url }); }
@@ -986,7 +1108,7 @@ const CYC = (() => {
       const alive = new Set(); for (const [w, r] of Object.entries(runs)) if (w !== LEDGER_RUNS && r && Array.isArray(r.data)) for (const e of r.data) if (!DEAD.has(S(e.status)) && S(e.status) !== 'success') alive.add(S(e.id));
       for (const l of ledger) {
         const id = S(l.run_id);
-        if (S(l.status) !== 'reserved' || !/^\d+$/.test(id) || release.has(id) || isStale(l, now, cfg.stale_hours)) continue;
+        if (!OPEN_ROW.has(S(l.status)) || !/^\d+$/.test(id) || release.has(id) || isStale(l, now, cfg.stale_hours)) continue;
         const x = LR.byId[id] || null, xs = x ? S(x.status) : '';
         const what = (S(l.mode) || 'a') + ' run' + (normD(l.domain) ? ' of ' + normD(l.domain) : '') + ' (execution ' + id + ', ledger row ' + (S(l.key) || '?') + ', reserved ' + (S(l.created_at) || '?') + ')';
         let why = '';
@@ -995,12 +1117,13 @@ const CYC = (() => {
         else if (!x && LR.gone[id] && !alive.has(id)) why = 'n8n no longer has the ' + what + ' and no read lists it running';
         if (!why) continue;
         why += ', so it no longer holds a run-guard slot (released by the cycle dispatcher, not after the ' + cfg.stale_hours + '-hour stale rule)';
-        release.set(id, { run_id: id, key: S(l.key), reason: why, ghost: true });
+        // P1: a page run's row may be `waiting` (released from that state), and the dead run's page is named so its content-log row is freed
+        release.set(id, { run_id: id, key: S(l.key), reason: why, ghost: true, status_was: S(l.status), page: yesNo(l.page), request_id: S(l.request_id), keyword: S(l.keyword) });
         ghosts.push({ run_id: id, key: S(l.key), mode: S(l.mode), domain: normD(l.domain), status: xs || 'gone', reserved_at: S(l.created_at), reason: why });
       }
     }
     // the release carries the row's own cost_basis, so *Release Dead Runs* keeps what the reservation said beside why it was released
-    for (const [id, v] of release) { const l = ledger.find(r => S(r.run_id) === id && S(r.status) === 'reserved'); if (l && !v.was) v.was = S(l.cost_basis).slice(0, 200); }
+    for (const [id, v] of release) { const l = ledger.find(r => S(r.run_id) === id && OPEN_ROW.has(S(r.status))); if (l && !v.was) v.was = S(l.cost_basis).slice(0, 200); if (l && !v.status_was) v.status_was = S(l.status); }
 
     // ---- 2. adoption: a tracked, active website with no cycle row gets one now (the kickoff's safety net, plan §4.7) ----
     const cyc = new Map(cycles.map(r => [S(r.site_id), r]));
@@ -1257,7 +1380,28 @@ const CYC = (() => {
     const reason = busy ? why : 'nothing starting and nothing due in the next ' + Math.round(win / MIN) + ' min';
     return { busy, starting, running, due, ignored_stale: ignored, minutes: Math.round(win / MIN), reason, note };
   };
-  return { plan, deployWindow, DEPLOY, outcome, execReads, runsFrom, claimFree, claimToken, refusalOf, refusedSince, settingsOf, jobsFor, skipEvidence, LEDGER_RUNS, payload, newCycleRow, cycleRow, anchorOf, ANCHOR, siteIdOf, read, nextAfter, mostRecent, local, validTz, dueAt,
+  // ---- P1 (2026-11-12, prod review S1-05): the page a dead page run was writing ----
+  // A page run that dies (canceled at the time limit, crashed, gone) leaves the content-log row its start opened saying `started`, and
+  // the app and the cadence read that as a page on its way (2026-11-12: three rows `started` with nothing behind them). For
+  // each released ledger row of a page run, the content-log rows of THAT run (its request id and its keyword; a ladder start gives several
+  // page runs one request id) still `started` become `failed` with the reason. Rows in any other state are never touched. Pure.
+  // release: CYC.plan's `release` entries ({run_id, page, request_id, keyword, reason}); rows: seo_content_log rows status `started`.
+  const normK = (x) => S(x).normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ').trim();
+  const pageReleases = (release, rows) => {
+    const out = [], seen = new Set();
+    for (const r of release || []) {
+      if (!r || !yesNo(r.page) || !S(r.request_id) || !normK(r.keyword)) continue;
+      for (const l of rows || []) {
+        if (!l || l.error || S(l.status) !== 'started' || S(l.request_id) !== S(r.request_id) || normK(l.keyword) !== normK(r.keyword)) continue;
+        const k = S(l.request_id) + '|' + S(l.keyword);
+        if (seen.has(k)) continue; seen.add(k);
+        out.push({ request_id: S(l.request_id), keyword: S(l.keyword), status: 'failed', run_id: S(r.run_id),
+          qa_reasons: ('page run stopped without a result (n8n execution ' + S(r.run_id) + '): ' + S(r.reason)).slice(0, 480) });
+      }
+    }
+    return out;
+  };
+  return { pageReleases, plan, deployWindow, DEPLOY, outcome, execReads, runsFrom, claimFree, claimToken, refusalOf, refusedSince, settingsOf, jobsFor, skipEvidence, LEDGER_RUNS, payload, newCycleRow, cycleRow, anchorOf, ANCHOR, siteIdOf, read, nextAfter, mostRecent, local, validTz, dueAt,
     dateAdd, weekdayOf, cycleKey, dateOfKey, requestId, ledgerKey, periodKey, monthlyDayOf, jobRow, cycleRowOf, JOBS, PREVIEW, BY_JOB, NAMES, DEFAULTS, TERMINAL, LIVE, DEAD, CAPACITY };
 })();
 // ---- fit gate (2026-10-11, FIX_PLAN D4 / D8): ONE rule for keywords that no page of this website should target. Inlined by the build

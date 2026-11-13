@@ -2063,6 +2063,7 @@ const CC = (() => {
       const c = String(r.created_at || '');
       if (!c || (to && c >= to)) return false;                       // reserved after this run had already settled
       const st = String(r.status || '');
+      if (st === 'waiting' || st === 'handed_off') return false;     // P1: a page run waiting for a writing slot spends nothing
       if (st === 'reserved' || st === '') return true;               // still reserved: it was open the whole time
       const s = closedAt(r);
       return !from || s > from;                                      // closed, but only after this run reserved: it overlapped

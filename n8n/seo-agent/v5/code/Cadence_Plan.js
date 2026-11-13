@@ -100,7 +100,9 @@ const CONFIG = { default_pages_per_week: 1, max_pages_per_week: 3, skip_recent_d
   // months before judging a refresh: https://www.semrush.com/blog/content-audit/)
   decay_per_week: 2, decay_refresh_days: 60,
   // R-K7: a run outside a cycle (on demand, the old weekly schedule) counts the pages started in the last 6 days as this week's
-  cycle_window_days: 6, in_flight_hours: 2,
+  // P1 (2026-11-12): a page run may wait up to 6 h for a writing slot and then write for up to 2 h, so a `started` row is in flight for 8 h
+  // (app/server/src/services/cadence.ts CADENCE.inFlightHours, shared PAGE_IN_FLIGHT_HOURS)
+  cycle_window_days: 6, in_flight_hours: 8,
   // F-KW: a ladder planned longer ago than this is checked again before its first page (cycles.ts QUEUED_RECHECK_DAYS); a cycle is 7 days
   recheck_days: 60, cycle_days: 7 };
 // ---- the contract (app/shared/src/cycles.ts): levels, the sources each level writes on its own, the item key ----

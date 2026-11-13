@@ -103,7 +103,7 @@ module.exports = async (ctx) => {
       && mk.parameters.columns.value.status === '={{ $json.status }}' && mk.parameters.columns.value.qa_reasons === '={{ $json.qa_reasons }}' && mk.onError === 'continueRegularOutput' && mk.alwaysOutputData === true, J([conds, mk.parameters.columns.value]));
     check('the failure path: Draft Written? (false) -> Load Content Log (Failed) -> Page Run Failed Row -> Mark Page Run Failed -> the settle chain (DFS Balance End); Settle Run Ledger -> Stop Failed Run',
       J(outs('Draft Written? (Copywriter)')[1]) === J(['Load Content Log (Failed)']) && J(outs('Load Content Log (Failed)')) === J([['Page Run Failed Row']])
-      && J(outs('Page Run Failed Row')) === J([['Mark Page Run Failed']]) && J(outs('Mark Page Run Failed')) === J([['DFS Balance End']]) && outs('Settle Run Ledger')[0].includes('Stop Failed Run')
+      && J(outs('Page Run Failed Row')) === J([['Mark Page Run Failed']]) && J(outs('Mark Page Run Failed')) === J([['Requeue AI Target (Failed)', 'DFS Balance End']])   /* P1 (2026-11-12, section 190): the AI question goes back to queued first */ && outs('Settle Run Ledger')[0].includes('Stop Failed Run')
       && N['Draft Written? (Copywriter)'].parameters.conditions.conditions[0].leftValue === '={{ !($json.llm_check && $json.llm_check.failed) }}', J([outs('Draft Written? (Copywriter)'), outs('Settle Run Ledger')]));
     // the settle: done, with the money of the run, saying first that it failed
     const LED = { run_id: 'exec-379', key: 'app:co_1', mode: 'keyword', est_usd: 1.2, created_at: new Date(Date.now() - 600000).toISOString(), status: 'reserved', settled_usd: 0,
