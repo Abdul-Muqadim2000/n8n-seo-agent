@@ -64,13 +64,13 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-11-13, KI judge: Claude Opus 5.5 reads who is searching - DEPLOYED, still Trial - latest)
+## Status (2026-11-13, KI judge: Claude Opus 5.5 reads who is searching - DEPLOYED, KI ON for both sites - latest)
 Keyword research reads every kept search's results page (queue, up to 300) and a Claude Opus 5.5 judge labels each search with its top 5
 results; word rules are soft opinions, only market / AVOID / brand / government / job words are final. Live Trial (13297 / 13298): passing
 searches right 95.3% techand (words 73%, start 57%), 86.8% devaicon; groups 17 / 14; Claude ~$0.32 + search data ~$0.45 a run; 21 minutes
 (app says 25). Read **`n8n/seo-agent/docs/keyword-intel-2026-11-08/fixes/JUDGE.md`**. Switch: `seo_cache ki:kill` = `judge` turns only
 the judge off. Deployed 2026-11-12 (judge) + 2026-11-13 ~06:50 UTC (follow-ups; backup *T063542Z; prod == build, 0 nodes); web PR #67
-merged. Next: one-read day-cache load + batched keyword save (run time); owner decides switching techand On.
+merged. **Switched ON for techand.ai and devaicon.com 2026-11-13 09:21 UTC** (owner). Next: one-read day-cache load + batched keyword save.
 
 ## Status (2026-11-12 evening, readiness review for new clients: fixes DEPLOYED, writing slots built not deployed - previous)
 Read **`n8n/seo-agent/docs/readiness-2026-11-12/README.md`** (private findings / reviews / snapshot: `~/seo-agent-secrets/prod-review-2026-11-12/`,
