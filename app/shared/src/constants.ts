@@ -333,7 +333,7 @@ export const MODES: Record<ModeId, ModeInfo> = {
     delivers: 'Every search buyers use for your services, with where it came from, its topic, buyer stage and verdict, the gaps against your competitors and a ranked plan',
     category: 'keywords',
     costUsd: modeCostUsd('keyword_research'),
-    etaMinutes: 12,
+    etaMinutes: 25,   // KI-JUDGE (2026-11-12): every kept search's results page + the keyword judge; measured 21 minutes on production
     siteBound: true,
     finalStages: ['ki_research'],
     startStages: ['ki_research_started'],

@@ -38,7 +38,10 @@ export async function ladderRoutes(app: FastifyInstance) {
     const body = parse(ladderSettingsSchema, req.body);
     // MKT S5 (2026-10-27): a ladder switched to Auto or resumed while the limit is full waits as Queued: said before it is saved
     await checkSettings(req, a, { setting: 'ladder', ladderId, ...(body.mode ? { mode: body.mode } : {}), ...(body.status ? { status: body.status } : {}) });
-    await updateLadderSettings(a.site, ladderId, body);
+    const moved = await updateLadderSettings(a.site, ladderId, body);
+    // S3-06: who changed a ladder's status, from what to what
+    if (moved.from !== moved.to)
+      await audit(req, a.org.id, { action: 'site.ladder_status_changed', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { ladderId, from: moved.from, to: moved.to } });
     const card = (await ladderCards(a.org, a.site)).find((c) => c.id === ladderId);
     if (!card) throw notFound('Keyword ladder not found');
     return card;

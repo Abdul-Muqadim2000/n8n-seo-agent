@@ -111,8 +111,8 @@ const SM = (() => {
     // seo_sites.declared_services) comes first and is never dropped by what a crawl read; it is kept apart as well, so SM.toRow writes it back
     // unchanged and the weekly Site Tracker can never overwrite it
     const declListOf = (v) => { if (Array.isArray(v)) return v; const j = jparse(v, null); return Array.isArray(j) ? j : listOf(v); };
-    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
-    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
+    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
     const navStored = jparse(row.nav_pages_json, []) || [];
     const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);
     const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);
@@ -179,6 +179,9 @@ const SM = (() => {
   // 404s) is GONE. It is still in the inventory (Google keeps showing it), but no advice may point at it: matchPage never returns it as
   // "the page that answers this search", and the readers list it as a redirect to make (v5/code/_gone.js). Unknown (0) is not gone.
   const isGone = (p) => { const n = Number((p || {}).http_status) || 0; return n === 404 || n === 410; };
+  // section 189 (production review 2026-11-12): an address that answers a redirect (3xx to another path, read by the daily page watch) is not a
+  // page: no search is matched to it and no rule names it as the page for a search
+  const isMoved = (p) => { const n = Number((p || {}).http_status) || 0; return n >= 300 && n < 400; };
   const gonePages = (model) => pages(model).filter(isGone);
   // ---- K8 (2026-10-21, KW-MATCH): the page that is ABOUT the search, not only the page that repeats its words ----
   // The 75% word rule missed techand.ai's live "AI & Automation | What We Do | Tech&" (/whatwedo/ai-automation) for "ai consulting dubai"
@@ -275,7 +278,7 @@ const SM = (() => {
     const isPref = (u) => !!prefKey && (bare(hostOf(u)) + pathOf(u).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase()) === prefKey;
     const want = matchTerms(keyword); if (!want.length) return { match: null, may_overlap: null };
     const key = tokensOf(keyword).join(' ');
-    const inv = pages(model).filter(p => !isGone(p));   // RV-1: a gone page answers nothing
+    const inv = pages(model).filter(p => !isGone(p) && !isMoved(p));   // RV-1: a gone page answers nothing; section 189: nor does an address that redirects
     const brands = brandWords(model); const core = coreTerms(keyword, brands);
     const kSvc = core.length ? serviceHits(model, core, brands) : [];
     const otherService = (p) => { if (!kSvc.length) return false; const ps = serviceHits(model, fieldsOf(p, brands).own, brands); return ps.length > 0 && !ps.some(sv => kSvc.includes(sv)); };
@@ -437,7 +440,7 @@ const SM = (() => {
     return { state: 'planned', text: '' };
   };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, pageMatch, MATCH_CONF, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages, confirmPage,
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, isMoved, gonePages, confirmPage,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms, coreTerms } };
 })();
 const CONFIG = { max_pages: 2000, queries_per_page: 10, min_impressions: 1 };
@@ -456,12 +459,28 @@ const statusBy = new Map(); stReq.forEach((q, i) => { const r = stRes[i] || {}; 
   if (!st || st === 401 || st === 403 || st === 429) return; statusBy.set(q.site_id + '|' + String(q.url || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, ''), { url: q.url, status: st }); });
 const now = new Date().toISOString();
 const S = (v) => String(v == null ? '' : v).trim();
+// production review 2026-11-12 (F-03 / S3-05, section 189): the daily key-page watch (seo_page_watch, loaded by this run) is a reading of the
+// address too. A 200 it saw after a stored 404 clears the 404; a redirect it saw (3xx to ANOTHER path; a bare-host / https hop to the same path is
+// not a move) is stored as that 3xx, so no reader takes the address for a page (/dynamics-365-business-central-uae answered 308 from
+// 2026-11-07 while seo_pages said 404 from 2026-11-05). The week's own read follows redirects, so it can never disprove a redirect the watch
+// saw in the last WATCH_DAYS: that reading is dated now.
+const WATCH_DAYS = 8, STATUS_REDATE_DAYS = 6;
+const ageD = (d) => { const t = Date.parse(S(d)); return Number.isFinite(t) ? (Date.now() - t) / 864e5 : Infinity; };
+const pathK = (u) => S(u).toLowerCase().replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+const watchRows = grab('Load Page Watch (Site)').filter(r => r.site_id && r.url && !S(r.error) && Number(r.status) > 0 && S(r.checked_at));
+const watchOf = (sid) => watchRows.filter(r => r.site_id === sid).map(r => { const st = Number(r.status) || 0;
+  if (st >= 300 && st < 400) { const loc = S(r.location); const to = /^https?:\/\//i.test(loc) ? loc : loc ? '/' + loc.replace(/^\/+/, '') : '';
+    if (!to || pathK(to) === pathK(r.url)) return null;
+    return { url: r.url, source: 'gsc', http_status: st, status_at: ageD(r.checked_at) <= WATCH_DAYS ? now : S(r.checked_at), watch: true }; }
+  if ((st >= 200 && st < 300) || st === 404 || st === 410) return { url: r.url, source: 'gsc', http_status: st, status_at: S(r.checked_at), watch: true };
+  return null; }).filter(Boolean);
 const ukey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '');
 // B4-2 (2026-10-15, benchmark area 4): the measurement columns count as a change too — a page that went from steady to decaying
 // must reach the Content Cadence this week, not next time its title changes.
 const PERF = ['clicks', 'impressions', 'position', 'prev_clicks', 'yoy_clicks', 'decay_state', 'decay_pct', 'decay_lost', 'decay_kind', 'decay_basis'];
 const sameRow = (a, b) => !!b && S(a.title) === S(b.title) && S(a.h1) === S(b.h1) && S(a.source) === S(b.source) && S(a.lastmod) === S(b.lastmod) && S(a.queries_json) === S(b.queries_json)
-  && PERF.every(k => S(a[k]) === S(b[k])) && (Number(a.http_status) || 0) === (Number(b.http_status) || 0);   // RV-1: a page that went from live to gone (or back) is written
+  && PERF.every(k => S(a[k]) === S(b[k])) && (Number(a.http_status) || 0) === (Number(b.http_status) || 0)   // RV-1: a page that went from live to gone (or back) is written
+  && !(S(a.status_at) !== S(b.status_at) && ageD(b.status_at) > STATUS_REDATE_DAYS);   // section 189: a status read again is re-dated once its stored date is a week old (a fresh reading stays fresh; review N3: not every watched page every week)
 // the empty measurement: a page Search Console said nothing about this week keeps the columns it already had, and a page that was
 // never measured carries zeros with `decay_state: ''` — never a "steady" that nothing stood behind.
 const EMPTY_PERF = { clicks: 0, impressions: 0, position: 0, prev_clicks: 0, yoy_clicks: 0, decay_state: '', decay_pct: 0, decay_lost: 0, decay_kind: '', decay_basis: '', measured_at: '' };
@@ -488,6 +507,10 @@ return sites.map((s, idx) => {
   for (const r of stored.filter(r => r.site_id === s.site_id)) add.push({ url: r.url, title: r.title, h1: r.h1, source: r.source || 'sitemap', lastmod: r.lastmod, queries_json: r.queries_json, http_status: r.http_status, status_at: r.status_at });
   // 6. RV-1: this run's answers win over what was stored (SM.withPages keeps the newest reading)
   for (const [k, v] of statusBy) if (k.indexOf(s.site_id + '|') === 0) add.push({ url: v.url, source: 'gsc', http_status: v.status, status_at: now });
+  // 7. section 189: the daily watch's readings of the key pages (newest reading wins; a recent redirect is dated now, see above)
+  const watch = watchOf(s.site_id);
+  const known = new Set(add.map(a => ukey(a.url)));
+  for (const w of watch) if (known.has(ukey(w.url))) add.push(w);   // a reading of an address the inventory has; the watch adds no page
   const merged = SM.withPages(model, add.slice(0, CONFIG.max_pages * 4));
   merged.pages = merged.pages.slice(0, CONFIG.max_pages);
   merged.model_updated_at = merged.model_updated_at || now;
@@ -521,10 +544,16 @@ return sites.map((s, idx) => {
       + ' — until then a search is matched to them on their address alone' : '' };
   // RV-1: the pages that no longer answer, as the inventory knows them now (read this run or before), and what was read this run
   const gone = SM.gonePages(merged).map(p => ({ url: p.url, http_status: p.http_status, status_at: p.status_at }));
+  // section 189 (F-03): a page is advised on as gone (the 301 advice) only after two reads that both found it gone: the stored reading from
+  // before this run, and a reading of this run (or of the daily watch in the last WATCH_DAYS). A first 404 waits for next week's read.
+  const readNow = new Map(); for (const [k, v] of statusBy) if (k.indexOf(s.site_id + '|') === 0) readNow.set(ukey(v.url), Number(v.status) || 0);
+  for (const w of watch) if (ageD(w.status_at) <= WATCH_DAYS && !readNow.has(ukey(w.url))) readNow.set(ukey(w.url), Number(w.http_status) || 0);
+  const goneNum = (n) => n === 404 || n === 410;
+  const gone_confirmed = gone.filter(p => goneNum(readNow.get(ukey(p.url))) && goneNum(Number((was.get(ukey(p.url)) || {}).http_status) || 0)).map(p => p.url);
   const stPlan = ((grabAll('Status Targets (Site)')[0] || {}).status_plan || []).find(x => x && x.site_id === s.site_id) || null;
   const status_check = { read: [...statusBy.keys()].filter(k => k.indexOf(s.site_id + '|') === 0).length, planned: stPlan ? stPlan.planned : 0, left: stPlan ? stPlan.left : 0, gone: gone.length,
     note: stPlan ? 'the pages Google shows that the sitemap does not list are read each week (redirects followed), the most impressions first' + (stPlan.left ? '; ' + stPlan.left + ' are left for next week' : '') : 'not read in this run' };
-  return { json: { site_id: s.site_id, domain: s.domain, pages: merged.pages, rows, total: merged.pages.length, changed: rows.length, stored: was.size, by_source: bySource, title_unknown, gone, status_check,
+  return { json: { site_id: s.site_id, domain: s.domain, pages: merged.pages, rows, total: merged.pages.length, changed: rows.length, stored: was.size, by_source: bySource, title_unknown, gone, gone_confirmed, status_check,
     measured: perfBy.size, decaying: [...perfBy.values()].filter(p => p.state === 'decaying').length,
     decay_summary: (gsc && gsc.decay_summary) || null,
     sitemap_read: !!(det && (det.sitemap || {}).ok), with_queries: merged.pages.filter(p => (p.queries || []).length).length } };

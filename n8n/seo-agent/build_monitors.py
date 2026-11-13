@@ -43,6 +43,7 @@ def src(p):   # a Code node source with the shared snippets inlined
     s = seo_events.inline(rd('code/' + p))
     s = s.replace('/*__MONITOR_SITES__*/', rd('code/_monitor_sites.js')).replace('/*__REPORT_KIT__*/', rd('code/_report_kit.js')).replace('/*__AI_STATS__*/', rd('code/_ai_stats.js'))
     s = s.replace('/*__SITE_TIME__*/', site_time_src())   # 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.8): the website's calendar and the cycle run (ST), inside _monitor_sites.js or on its own
+    s = s.replace('/*__JOB_TITLE__*/', rd('code/_job_title.js').rstrip('\n'))   # section 189 (F-29): a placeholder job title is never printed
     s = s.replace('/*__GONE__*/', rd('code/_gone.js').rstrip('\n'))   # RV-1 (2026-10-21): the pages that no longer answer, one message in every report
     s = s.replace('/*__SITE_MODEL__*/', rd('code/_site_model.js').rstrip('\n'))   # G19 (SITE_MODEL_SPEC.md): the one site model, one copy per node that asks for it
     s = s.replace('/*__FIT_GATE__*/', rd('code/_fit_gate.js').rstrip('\n'))   # B-G1 / B-G2 (2026-10-15): the fit gate, on the READ path too (FITR, INVARIANTS rule 2)
@@ -1209,8 +1210,22 @@ FN.node('Read Live Page', 'n8n-nodes-base.httpRequest', 4.5, {'url': '=https://r
     'options': {'timeout': 45000, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}}, at(1, 3),
     credentials={'httpHeaderAuth': {'id': 'SEOcredJinaReade', 'name': 'Jina Reader'}}, onError='continueRegularOutput', alwaysOutputData=True, **retry_lint.RETRY)
 FN.code('Live Page Body', 'Finalize_Live_Body.js', at(2, 3))
-FN.chain('Finalize Webhook', 'Live Read Plan', 'Read Live?'); FN.link('Read Live?', 'Read Live Page', 0); FN.link('Read Live?', 'Parse Brief', 1)
-FN.chain('Read Live Page', 'Live Page Body', 'Parse Brief')
+# production review 2026-11-12 (S3-05 / S2-05, section 189): the addresses the first check called "the same search" are read once, without
+# following redirects (free: the client's own site, at most 3), before Parse Brief; Finalize Verdict never keeps a duplicate that redirects,
+# is gone, or is the page graded. Live grade or not: a final version made after the duplicate moved is judged by what it answers now.
+FN.code('Duplicate Status Plan', 'Finalize_Dup_Plan.js', at(1, 4)); FN.iff('Check Duplicates?', '{{ !!($json.dup_check || {}).url }}', at(2, 4))
+FN.node('Fetch Duplicate Pages', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'GET', 'url': '={{ $json.dup_check.url }}', 'sendHeaders': True,
+    'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.8)'}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
+    'options': {'timeout': 15000, 'redirect': {'redirect': {'followRedirects': False}}, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}}, at(3, 5),
+    onError='continueRegularOutput', alwaysOutputData=True, **retry_lint.RETRY)
+# review S3 (2026-11-12): what the page inventory last read for those addresses, so one 404 alone never drops a duplicate (two reads)
+FN.node('Load Stored Pages (Dup)', DT_TYPE, DT_VERSION, dt_get_where_params(_PAGES_TABLE_RV1, 'site_id', 'eq', "={{ String(($('Duplicate Status Plan').first().json.body || {}).site_id || '') }}"), at(4, 5), **LOAD)
+FN.code('Duplicate Status', 'Finalize_Dup_Status.js', at(4, 4))
+FN.chain('Finalize Webhook', 'Live Read Plan', 'Read Live?'); FN.link('Read Live?', 'Read Live Page', 0); FN.link('Read Live?', 'Duplicate Status Plan', 1)
+FN.chain('Read Live Page', 'Live Page Body', 'Duplicate Status Plan', 'Check Duplicates?'); FN.link('Check Duplicates?', 'Fetch Duplicate Pages', 0); FN.link('Check Duplicates?', 'Parse Brief', 1)
+FN.chain('Fetch Duplicate Pages', 'Load Stored Pages (Dup)', 'Duplicate Status', 'Parse Brief')
+assert [t['node'] for t in FN.C['Check Duplicates?']['main'][1]] == ['Parse Brief'] and [t['node'] for t in FN.C['Read Live?']['main'][1]] == ['Duplicate Status Plan'] \
+    and next(n for n in FN.N if n['name'] == 'Fetch Duplicate Pages')['parameters']['options']['redirect']['redirect']['followRedirects'] is False, 'section 189: the finalize must read the "same search" addresses, without following redirects, before Parse Brief'
 FN.chain('Parse Brief', 'Finalize OK?'); FN.link('Finalize OK?', 'Finalize Plan', 0); FN.link('Finalize OK?', 'Respond Finalize Bad Request', 1)
 FN.chain('Finalize Plan', 'Finalize Apply', 'Needs Editor?'); FN.link('Needs Editor?', 'Finalize Editor', 0); FN.link('Needs Editor?', 'Finalize Merge', 1)
 FN.link('Finalize Editor', 'Finalize Merge')

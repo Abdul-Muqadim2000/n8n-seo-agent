@@ -228,6 +228,12 @@ export function summarize(stage: string, p: P): Summary {
       put('newIndexed', num(m.new_indexed));
       put('siteFixes', num(by.site_fix));
       put('dropped', len(m.dropped));
+      // wave 3 (DESIGN_WAVE3 §2.8): absent on older reports (put skips null)
+      put('waiting', num(m.waiting));
+      put('escalated', num(m.escalated));
+      put('askedWaiting', num(m.asked_waiting));
+      put('readAfterAsk', num(m.read_after_ask_7d));
+      put('indexnowSent', num(m.indexnow_sent));
       if (m.freeze === true) put('freeze', true);
       const ev = arr(m.events).map(obj).find((e) => e.status === 'rolling_out');
       put('updateRollingOut', ev ? str(ev.title) : null);

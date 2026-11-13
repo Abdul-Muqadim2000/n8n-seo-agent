@@ -1,7 +1,7 @@
 // Index coverage (2026-10-29, n8n/seo-agent/docs/indexing-2026-10-29/DESIGN.md §5): the daily index check's report. Weekly on Mondays,
 // and the same day when a page drops out of Google search or a Google update starts or ends. Free (Google data only).
-import { ArrowRight, CalendarClock, FileSearch, ListChecks, TrendingDown } from 'lucide-react';
-import { INDEX_ACTION_INFO, INDEX_ACTIONS_NEED_YOU, INDEX_CAUSE_INFO, INDEX_CAUSES, indexDayText, indexInSearchLine, indexingNoteText, indexingReportFailed, indexPath, type IndexAction, type IndexCause, type ReportDetail } from '@seo/shared';
+import { ArrowRight, CalendarClock, CircleDashed, FileSearch, ListChecks, TrendingDown } from 'lucide-react';
+import { INDEX_ACTION_INFO, INDEX_ACTIONS_NEED_YOU, INDEX_CAUSE_INFO, INDEX_CAUSES, indexDayText, indexInSearchLine, indexingNoteText, indexingReportFailed, indexPath, sitemapDatesLine, sitemapDatesMissing, type IndexAction, type IndexCause, type ReportDetail } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { ButtonLink } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
@@ -17,6 +17,16 @@ const causeLabel = (c: string) => (c === LINKS_ROW ? 'Need a link from another p
 /** final browser check: a day as the rest of the app writes it ("29 Oct"), never an ISO string; a status in words, never a raw code */
 const day = (v: unknown) => (str(v) ? indexDayText(str(v)) : '');
 const EVENT_STATUS: Record<string, string> = { rolling_out: 'rolling out', complete: 'finished', changed: 'policy page changed' };
+/** wave 3 (DESIGN_WAVE3 §2.8): why a "do first" page is on the list, when the engine sends a reason code rather than words */
+const DO_FIRST_WHY: Record<string, string> = {
+  not_asked: 'not asked about in Search Console yet',
+  asked_no_visit: 'Google did not visit after you asked',
+  weak_links: 'few of your pages link to it',
+  short_page: 'the page is short',
+  not_in_sitemap: 'not in your sitemap',
+  sitemap_no_dates: 'your sitemap gives no dates',
+};
+const doFirstWhy = (v: string) => DO_FIRST_WHY[v] ?? (/\s/.test(v) ? v.slice(0, 200) : '');
 
 export function IndexCoverageReport({ report }: { report: ReportDetail }) {
   const { org } = useOrgCtx();
@@ -51,6 +61,17 @@ export function IndexCoverageReport({ report }: { report: ReportDetail }) {
   const note = failed ? indexingNoteText(str(m.note) || str(m.why) || str(p.note)) : '';
   const last = failed ? ' (last check)' : '';
   const domain = str(p.domain) || 'your website';
+  // wave 3 (DESIGN_WAVE3 §2.8 / §3.5): pages Google has not visited, asked about, sent to Bing (absent on reports from before)
+  const waiting = num(m.waiting);
+  const escalated = num(m.escalated);
+  const askedWaiting = num(m.asked_waiting);
+  const readAfterAsk = num(m.read_after_ask_7d);
+  const indexnowSent = num(m.indexnow_sent);
+  const doFirst = objs(m.do_first).filter((x) => str(x.url)).slice(0, 5);
+  const sd = obj(m.sitemap_dates);
+  const sdCounts = num(sd.urls) != null && num(sd.with_lastmod ?? sd.withLastmod) != null ? { urls: num(sd.urls) ?? 0, withLastmod: num(sd.with_lastmod ?? sd.withLastmod) ?? 0, distinct: num(sd.distinct) ?? 0 } : null;
+  const sitemapNoDates = !!sdCounts && sitemapDatesMissing(sdCounts);
+  const wave3 = [waiting, escalated, askedWaiting, readAfterAsk, indexnowSent].some((v) => v != null) || doFirst.length > 0;
   return (
     <Stagger className="space-y-5">
       <ReportHero
@@ -132,6 +153,35 @@ export function IndexCoverageReport({ report }: { report: ReportDetail }) {
           <Empty>No page needs anything.</Empty>
         )}
       </Block>
+
+      {wave3 && !failed && (
+        <Block title="Pages Google has not visited yet" icon={<CircleDashed />} description="What waits for Google's first visit, what needs you after 3 weeks, and the pages you asked Google to read.">
+          <Facts
+            items={[
+              { label: 'Waiting for a first visit', value: fmt(waiting) },
+              { label: 'Need you after 3 weeks', value: fmt(escalated) },
+              { label: 'Asked Google, not read yet', value: fmt(askedWaiting) },
+              { label: 'Read within 7 days of asking', value: fmt(readAfterAsk) },
+              { label: 'Sent to Bing', value: fmt(indexnowSent) },
+            ]}
+            cols="sm:grid-cols-3"
+          />
+          {doFirst.length > 0 && (
+            <div className="mt-4">
+              <p className="text-sm font-medium text-ink">Do first</p>
+              <ol className="mt-1.5 list-decimal space-y-1 pl-5 text-sm text-ink-2">
+                {doFirst.map((x) => (
+                  <li key={str(x.url)} className="break-all">
+                    <span className="text-ink">{indexPath(str(x.url))}</span>
+                    {doFirstWhy(str(x.why)) ? `: ${doFirstWhy(str(x.why))}` : ''}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+          {sitemapNoDates && sdCounts && <p className="mt-3 text-sm text-ink-2">{sitemapDatesLine(sdCounts)} Adding the date each page last changed is a step on your website.</p>}
+        </Block>
+      )}
 
       {(events.length > 0 || str(impact.event_title)) && (
         <Block title="Google updates" icon={<CalendarClock />}>

@@ -518,6 +518,7 @@ export const AUDIT_ACTIONS = {
   'site.content_rejected': { label: 'Marked a written page as not what was wanted', category: 'websites' },
   'site.ladder_rechecked': { label: 'Paused a ladder whose keyword no longer fits', category: 'websites' },
   'site.ladder_keyword_added': { label: 'Added a keyword to a ladder', category: 'websites' },
+  'site.ladder_status_changed': { label: 'Paused or resumed a keyword ladder', category: 'websites' },
   // A13 (2026-10-23, AI visibility app audit): every Site Admin change (the AI question panel, the monitor settings incl. the panel size
   // and the engines, competitors, pauses, cadence, prospects) is in the company's audit log, with counts and ids, never question texts
   'site.admin.pause': { label: 'Paused a website\'s weekly runs', category: 'websites' },
@@ -549,6 +550,7 @@ export const AUDIT_ACTIONS = {
   'company.credit_limits_changed': { label: 'Changed the credit limits', category: 'settings' },
   'company.credits_requested': { label: 'Asked for credits', category: 'settings' },
   'company.delivery_changed': { label: 'Changed report delivery', category: 'settings' },
+  'company.hook_token_rotated': { label: 'Renewed the address the SEO engine reports to', category: 'settings' },
   'company.security_changed': { label: 'Changed security settings', category: 'settings' },
   'company.admin_changed': { label: 'Platform administrator changed the company', category: 'settings' },
   'mailbox.connected': { label: 'Connected a mailbox', category: 'settings' },
@@ -622,6 +624,7 @@ export const AUDIT_ACTIONS = {
   'site_task.restored': { label: 'Brought back a skipped step on the website', category: 'websites' },
   // Index coverage wave 2 (DESIGN_WAVE2 §3.2): the client says they asked Google (in Search Console) to read a page again
   'indexing.asked_google': { label: 'Said Google was asked to read a page again', category: 'websites' },
+  'indexing.page_type': { label: 'Marked a page as important or as fine to leave out of Google', category: 'websites' },
   'crawler.push_key_created': { label: 'Made a crawler log push key', category: 'integrations' },
   'crawler.push_key_revoked': { label: 'Switched crawler log pushes off', category: 'integrations' },
   'crawler.log_uploaded': { label: 'Uploaded a server log', category: 'integrations' },

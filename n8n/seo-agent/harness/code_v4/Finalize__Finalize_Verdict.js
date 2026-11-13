@@ -1729,7 +1729,7 @@ const CC = (() => {
     track: 0, published: 0, checkin: 0, profile: 0, case_study: 0,   // these spawn the work that costs; each spawn reserves its own row
     // KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §7, R5 prices): no run yet, so these are the design's ceilings, not measured
     competitors: 0,           // FX-L: the worker calls no model (fixes/E2.md 7.1); the tie-break of DESIGN.md §2.5 is not built
-    keyword_research: 0,      // FX-L: no model is called (DESIGN.md §3.6's tie-break is not built)
+    keyword_research: 0.45,   // KI-JUDGE (2026-11-12): Claude Opus 5.5 judges up to 300 searches with their top results; $1.03 for 996 offline (fixes/JUDGE.md)
   };
   const DFS_EST = {           // measured DataForSEO cost of that run →
     crawl: 0.09,              // 0.09   (execs 497 and 513, both exactly)
@@ -2190,7 +2190,8 @@ const DUP = (() => {
     const pp = placesIn(S(page && page.title) + ' ' + S(page && page.h1) + ' ' + S(page && page.url).replace(/^https?:\/\/[^\/]+/i, '').replace(/[-_\/]+/g, ' '));
     if (!pp.length || pp.some(p => p.iso.includes(m))) return null;
     return [...new Set(pp.map(p => p.word))]; };
-  const SHARE = 75, MAX = 3;
+  const SHARE = 75, MAX = 3, FRESH_DAYS = 14;
+  const fresh = (at) => { const t = Date.parse(S(at)); return Number.isFinite(t) && (Date.now() - t) / 864e5 <= FRESH_DAYS; };
   // the tokenizer of SHG (_shingle.js), character for character, so the late check finds what it always found
   const norm = (t) => S(t)
     .replace(/```[\s\S]*?```/g, ' ')
@@ -2211,7 +2212,7 @@ const DUP = (() => {
   const targets = (keyword, pages, opts) => {
     const o = opts || {};
     const kw = toks(keyword);
-    const out = { targets: [], partial: [], self: [], other_market: [], keyword_words: kw.size, basis: '' };
+    const out = { targets: [], partial: [], self: [], other_market: [], not_live: [], keyword_words: kw.size, basis: '' };
     if (!kw.size) { out.basis = 'the keyword has no word of 3 letters or more to compare'; return out; }
     const list = (Array.isArray(pages) ? pages : []).filter(p => p && S(p.url));
     const sets = list.map(pageToks);
@@ -2227,6 +2228,11 @@ const DUP = (() => {
     for (let i = 0; i < list.length; i++) {
       const p = list[i]; const k = keyOf(p.url);
       if (!k || skip.has(k)) continue;
+      // production review 2026-11-12 (S3-05, section 189): an address that redirects (3xx) or is gone (404 / 410), as the page inventory read
+      // it in the last FRESH_DAYS, is not a page of the site: never "the page for the same search" (/dynamics-365-business-central-uae had
+      // answered 308 for days). An older reading is not trusted either way (a stored 404 from weeks ago answered 200 again: F-03)
+      const st = Number(p.http_status) || 0;
+      if (((st >= 300 && st < 400) || st === 404 || st === 410) && fresh(p.status_at)) { out.not_live.push({ url: S(p.url), http_status: st }); continue; }
       const set = sets[i]; if (!set.size) continue;
       let hit = 0, hw = 0;
       for (const t of kw) if (set.has(t)) { hit++; hw += w[t]; }
@@ -2522,11 +2528,46 @@ let dupOpen = null, decision = null;
 // only when its own words say the page states something wrong or unsupported (RR.textError); everything else it found is advice, shown
 // to the client and never the 59 cap. A finding that still blocks is the editor's to rewrite (Finalize Apply); it stays open while its words are on the page.
 const away = [], reviewAdvice = [];
+// section 189 (S3-04): the TABLE ROW or LIST ITEM that holds a quote (its line, normalised), '' when the quote is not in one. Prose is never
+// judged this way (review B2, 2026-11-12): an appended clause, a woven fact or a split sentence changes a sentence while the claim stays,
+// so a finding in prose stays open while its words are on the page, as before.
+const unitOf = (q, text) => { const nq = norm(S(q).split(/\.{3}|\u2026/)[0]); if (nq.length < 8) return '';
+  for (const line of S(text).split('\n')) { if (!norm(line).includes(nq)) continue;
+    return (/^\s*\|/.test(line) || /^\s*(?:[-*+]|\d{1,3}[.)])\s+/.test(line)) ? norm(line) : ''; }
+  return ''; };
+const editTasks = ((A.finalize_apply || {}).review_fixes || []).filter(r => r && r.how === 'edit_task');
+// rewritten = the row / item lost at least REWRITE_SHARE of its words other than the quote (an edit that only adds words keeps the claim)
+const REWRITE_SHARE = 0.3;
+const rewrote = (q) => { const nq = norm(q); if (!editTasks.some(r => norm(r.quote) === nq)) return false;
+  const was = unitOf(q, S(A.output)), now = unitOf(q, md); if (!was || !now || was === now) return false;
+  const qw = new Set(nq.split(' ')); const rest = [...new Set(was.split(' ').filter(w => w && !qw.has(w)))]; if (rest.length < 3) return false;
+  const nowW = new Set(now.split(' ')); return rest.filter(w => !nowW.has(w)).length / rest.length >= REWRITE_SHARE; };
+// section 189: the addresses the first check called "the same search", as they answer now (Parse Brief `prc.duplicate_status`)
+const pageK = (u) => S(u).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+const selfK = F.grade_only ? pageK((F.live_read || {}).url) : '';
+const dupMoved = [];
+// review 2026-11-12: B1 a redirect to the SAME page (another host form, http -> https, a trailing slash, a language folder) is no move: unknown,
+// the duplicate stays; S1 a redirect to ANOTHER page of the site moves the duplicate there (the content moved with it: that page is now the
+// one for this search), it is not resolved; S3 a 404 / 410 counts only when the page inventory had it gone too (two reads)
+const samePage = (a, b) => { const p = (u) => pageK(u).replace(/^[^\/]+/, '').replace(/^\/[a-z]{2}(?:-[a-z]{2})?(?=\/|$)/, ''); return pageK(a).split('/')[0] === pageK(b).split('/')[0] && p(a) === p(b); };
+const sameSite = (a, b) => pageK(a).split('/')[0] === pageK(b).split('/')[0];
+const dupGone = (u) => { const k = pageK(u); if (!k) return null; if (selfK && k === selfK) return { why: 'self' };
+  const st = (PR.duplicate_status || []).find(x => x && pageK(x.url) === k); const n = st ? Number(st.status) || 0 : 0;
+  if (n >= 300 && n < 400) { const to = S(st.location); if (!to || samePage(to, u)) return null;
+    if (selfK && pageK(to) === selfK) return { why: 'self', status: n, to };
+    return sameSite(to, u) ? { why: 'retarget', status: n, to } : { why: 'redirect', status: n, to }; }
+  if ((n === 404 || n === 410) && [404, 410].includes(Number(st.stored_status) || 0)) return { why: 'gone', status: n };
+  return null; };
 const titleOfDup = (u) => S(((PG.duplicate_targets || []).find(x => x && x.url === u) || {}).title);
 for (const b of (PG.qa_blocking || [])) {
   const code = S(b.code) || 'other'; const keep = (x) => { if (!has0.has(code) && !carried.some(c => c.code === code && c.text === x.text)) { const c0 = { code, tier: 'hard', text: S(b.text), action: S(b.action), ...x }; c0.text = PF.clean(c0.text); carried.push(c0); } };
   if (code === 'duplicate_page') {
-    const urls = (PR.duplicate_urls || []).length ? PR.duplicate_urls : (b.urls || []);
+    // production review 2026-11-12 (S3-05, section 189): an address that now redirects, is gone (404 / 410), or is the page being graded is
+    // not a second page for this search; what it answers was read just before (Duplicate Status Plan, no redirect followed). Unread = kept.
+    const urls0 = (PR.duplicate_urls || []).length ? PR.duplicate_urls : (b.urls || []);
+    const urls = [...new Set(urls0.flatMap(u => { const why = dupGone(u); if (!why) return [u]; if (!dupMoved.some(x => pageK(x.url) === pageK(u))) dupMoved.push({ url: u, ...why });
+      return why.why === 'retarget' ? [why.to] : []; }))];
+    if (urls0.length && !urls.length) { resolved.push(code + ':moved'); continue; }
     const elsewhere = urls.length ? urls.map(u => ({ url: u, places: DUP.otherMarket(S(P.keyword), { url: u, title: titleOfDup(u) }, S(P.country)) })) : [];
     if (elsewhere.length && elsewhere.every(x => x.places)) { away.push(...elsewhere); resolved.push(code + ':other_market'); continue; }
     if (DEC && DEC.applies !== false) { decision = { code, choice: DEC.choice, url: DEC.url, reason: DEC.reason, pages: urls.slice(0, 3) }; resolved.push(code); }
@@ -2543,6 +2584,12 @@ for (const b of (PG.qa_blocking || [])) {
   else if (code === 'review') { const q = (S(b.text).match(/"([^"]{8,300})"/) || [])[1] || '';
     if (!(q && PF.onPage(q, md))) resolved.push(code);
     else if (!RR.textError(S(b.text))) { reviewAdvice.push(S(b.text).replace(/^A second read of the page found a problem at/, 'A second read of the page suggests a change at')); resolved.push(code + ':advice'); }
+    // production review 2026-11-12 (S3-04, section 189): the quote is where the problem stood, not the problem. A client's free re-make stayed
+    // 59 because the editor rewrote the table row the read flagged ("High across CRM, ERP and cloud", "cloud partner status" gone, only facts
+    // on file left) but kept the row's label, which IS the quote. When this run gave the editor the task for this finding and the sentence /
+    // row / list item that holds the quote is no longer what it was, the finding is resolved and said as advice to check; an edit that was
+    // refused or never made leaves the unit as it was, so it stays open as before.
+    else if (rewrote(q)) { reviewAdvice.push(S(b.text).replace(/^A second read of the page found a problem at "([^"]*)":[\s\S]*$/, 'A second read of the page found a problem at "$1"; this version rewrote that part: check that it now says only what your facts support')); resolved.push(code + ':rewritten'); }
     else keep({}); }
   else keep({});
 }
@@ -2575,6 +2622,13 @@ const NOT_CHECKED = { length_band: 'the length of the pages that rank for this s
 if (PR.received) for (const k of Object.keys(NOT_CHECKED)) if ((PR.grading_missing || []).includes(k)) del.advisory.push({ code: 'not_checked', text: 'Not checked: ' + NOT_CHECKED[k] + '. This page was written before we kept that with it' });
 for (const x of away.slice(0, 2)) del.advisory.unshift({ code: 'duplicate_other_market', text: PF.clean('Your website also has ' + x.url + ', aimed at searches in ' + x.places.join(', ') + '. This page is for another market, so it is not the same search: link the two pages to each other') });
 for (const t of reviewAdvice.slice(0, 5)) del.advisory.push({ code: 'second_read', text: PF.clean(t) });
+// section 189: what happened to the page the first check named (said once, never a blocker)
+for (const x of dupMoved.slice(0, 2)) { if (x.why === 'self') continue;
+  if (x.why === 'retarget') { del.advisory.push({ code: 'duplicate_moved', text: PF.clean('The page our first check named for this search, ' + x.url + ', now redirects to ' + x.to + ', so that page is the one your website has for this search') }); continue; }
+  const to = x.to && pageK(x.to) !== selfK ? x.to : '';
+  del.advisory.push({ code: 'duplicate_moved', text: PF.clean(x.why === 'redirect'
+    ? 'The page our first check named for this search, ' + x.url + ', now redirects' + (to ? ' to ' + to : ' here') + ', so it is not a second page for this search any more' + (to ? '. If ' + to + ' answers the same search, link the two pages to each other' : '')
+    : 'The page our first check named for this search, ' + x.url + ', no longer answers (' + x.status + '), so it is not a second page for this search any more') }); }
 if (decision) del.advisory.unshift({ code: 'duplicate_decision', text: decision.choice === 'update'
   ? 'You chose to publish this text as an update of ' + decision.url + ': publish it at that address, in place of the page there now, not as a new page'
   : 'You chose to publish this as a separate page from ' + (decision.pages[0] || 'the page your website has') + ': "' + decision.reason + '". Two pages for one search can compete with each other, so the grade keeps its limit for fit' });
@@ -2654,7 +2708,7 @@ const body = {
   meta: { title: S((d.meta || {}).title), meta_description: S((d.meta || {}).description), slug: S((d.meta || {}).slug),
     // W0-B (D2): published as an update of the website's page for this search: its address and slug
     ...(decision && decision.choice === 'update' ? { target_url: decision.url, slug: (decision.url.replace(/^https?:\/\/[^\/]+/i, '').replace(/[?#].*$/, '').replace(/\/+$/, '').split('/').pop() || S((d.meta || {}).slug)) } : {}) },
-  decision, page_run: { received: !!PR.received, legacy: !!PR.legacy, gating_missing: PR.gating_missing || [], grading_missing: PR.grading_missing || [], kept_open: carried.map(x => x.code), resolved,
+  decision, page_run: { received: !!PR.received, legacy: !!PR.legacy, gating_missing: PR.gating_missing || [], grading_missing: PR.grading_missing || [], kept_open: carried.map(x => x.code), resolved, duplicate_moved: dupMoved,
     // W06-C: what the page run took out, as this version stands (still missing, written back, whether it capped the grade)
     sections_removed: removedNow ? { checked: true, missing: removedNow.sections, missing_headings: removedNow.headings, restored: removedNow.restored, capped: !!(grade.removed && grade.removed.capped) } : { checked: false } },
   applied: (FM.applied || []).map(a => ({ id: a.id, how: a.how, section: S(a.section), ...(a.why ? { why: S(a.why).slice(0, 160) } : {}) })), sections_rewritten: FM.sections_rewritten || [], changes: changes.slice(0, 60),

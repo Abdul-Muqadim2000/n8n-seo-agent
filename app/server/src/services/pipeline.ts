@@ -58,6 +58,7 @@ import { db } from '../db';
 import { monthStartUtc, siteAutopilotRows, usageSince } from './billing';
 import { creditsOfUsd, settingsRow, wholeCreditsOfUsd } from './admin/settings';
 import type { OrgRow, SiteRow } from '../db/schema';
+import { customerError } from '../lib/customerError';
 import { notFound } from '../lib/errors';
 import { executions, rows as n8nRows, siteRows, type ExecutionSummary } from '../n8n/client';
 import { aiQuotaOf, chosenLadderWriting, competitorsOf, declaredServicesOf, levelOf, navPagesOf, servicesOf, type CadenceSiteRow } from './cadence';
@@ -92,6 +93,9 @@ const norm = normKeyword;
 /** A waiting page as the Pipeline returns it; R111 adds whether its draft failed the quality check (and why). */
 export type WaitingEntry = PipelineData['queue']['waiting'][number];
 
+/** the content-log statuses of a page written and not published (the engine's WAITS) */
+const WAITING_STATUSES = new Set(['written', 'not_ready']);
+
 // W06-B / 2026-11-05: the no-page rule lives in ladders.ts (noPageRow), one rule for every path; re-exported for older callers
 export { failedPageRow, failedPageRequests } from './ladders';
 
@@ -104,7 +108,10 @@ export function waitingPages(logs: ContentLogRow[], now = Date.now(), failedRequ
   // W05-B (2026-10-30, BEFORE_AFTER "Holds"): a keyword held for the client's OK wrote nothing, so it never waits to be published, and a
   // keyword counts once (its held row and the row of the page "Write it anyway" then wrote were listed twice: "5 pages are already waiting")
   // W06-B: nor does a page run that failed
-  const live = logs.filter((l) => l.status !== 'published' && !l.published_url && !noPageRow(l, failedRequests)); // D5: 'started' (the run was spawned) and 'written' (the page exists) both wait
+  // S1-05 (prod review 2026-11-12): only a page that was written waits (`written`, or `not_ready`: written, its last quality round failed),
+  // as the engine counts it (v5/code/_waiting.js WAITS, cadence.ts waitingOf). A `started` row is a page being written, or (after
+  // PAGE_IN_FLIGHT_HOURS) one that never finished: three cancelled cadence runs read as "3 pages to publish" and fed the pile-up warning.
+  const live = logs.filter((l) => WAITING_STATUSES.has(l.status) && !l.published_url && !noPageRow(l, failedRequests, now));
   const newest = new Map<string, ContentLogRow>();
   for (const [i, l] of live.entries()) {
     const k = norm(l.keyword || '') || `#${i}`;
@@ -393,7 +400,8 @@ export function failedRuns(runs: SiteRun[], now = Date.now()): NeedsYouItem[] {
         kind: 'failed',
         severity: 'warning',
         title: `${r.title}: did not finish`,
-        detail: r.error ? r.error.slice(0, 240) : 'The SEO engine stopped before the result arrived.',
+        // S2-08: the client's words, never the engine's raw error
+        detail: r.error ? (customerError(r.error) ?? '').slice(0, 240) : 'The SEO engine stopped before the result arrived.',
         action: { label: 'Open the run', runId: r.id },
       });
     seen.add(key);
@@ -487,11 +495,11 @@ export function writtenPages(logs: ContentLogRow[], ladders: LadderRow[], now = 
   // waiting to be published" about the run that had just failed. Its row is left out, and so is a ladder row the app moved to `writing` for
   // that run while no other row of the keyword says a page exists or is on its way.
   const failedKw = new Set(logs.filter((l) => l.keyword && failedPageRow(l, failedRequests)).map((l) => norm(l.keyword)));
-  const liveKw = new Set(logs.filter((l) => l.keyword && !noPageRow(l, failedRequests)).map((l) => norm(l.keyword)));
+  const liveKw = new Set(logs.filter((l) => l.keyword && !noPageRow(l, failedRequests, now)).map((l) => norm(l.keyword)));
   const all: PipelineData['written'] = [
     ...logs
       // W05-B: a held keyword wrote nothing (only the check ran), so it is never "a page already written" ("Write it anyway" warned falsely)
-      .filter((l) => l.keyword && !noPageRow(l, failedRequests) && (l.status === 'published' || now - Date.parse(l.started_at || '1970-01-01') < 180 * 864e5))
+      .filter((l) => l.keyword && !noPageRow(l, failedRequests, now) && (l.status === 'published' || now - Date.parse(l.started_at || '1970-01-01') < 180 * 864e5))
       .map((l) => ({
         keyword: l.keyword,
         status: (l.status === 'published' ? 'published' : 'started') as 'published' | 'started',

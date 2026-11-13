@@ -60,7 +60,9 @@ describe('utility pages (DESIGN_WAVE2 §2.4)', () => {
     const p = indexPageOf(page({ url: U('/capabilities/data'), cause: 'unknown_to_google', action: 'links', ask_google: true, link_from: JSON.stringify([{ url: U('/cookies'), title: 'Cookies' }, { url: U('/insights/data-sovereignty'), title: 'Data sovereignty' }]) }));
     expect(p.linkFrom.map((l) => l.url)).toEqual([U('/insights/data-sovereignty')]);
     expect(indexPageOf(page({ url: U('/cookies'), cause: 'unknown_to_google', action: 'wait', ask_google: true })).askGoogle).toBe(false);
-    expect(indexPageOf(page({ url: U('/careers/dev'), cause: 'unknown_to_google', action: 'wait', ask_google: true })).askGoogle).toBe(false);
+    // wave 3 (DESIGN_WAVE3 §2.6) changed this rule: the engine now offers job postings as its LAST tier, so its mark is shown (it is never
+    // a utility page, never a page to link from)
+    expect(indexPageOf(page({ url: U('/careers/dev'), cause: 'unknown_to_google', action: 'wait', ask_google: true })).askGoogle).toBe(true);
   });
 });
 

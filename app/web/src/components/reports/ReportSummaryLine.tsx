@@ -102,6 +102,8 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
         s.failed === true ? 'could not check the website this time' : null,
         nm(s, 'known') != null && `${compactNumber(nm(s, 'indexed') ?? 0)} of ${compactNumber(nm(s, 'known'))} pages in Google search${s.failed === true ? ' (last check)' : ''}`,
         nm(s, 'siteFixes') ? `${nm(s, 'siteFixes')} to fix on your website` : null,
+        // wave 3: pages Google has not visited after 3 weeks need the client
+        nm(s, 'escalated') ? `${nm(s, 'escalated')} not visited by Google after 3 weeks` : null,
         nm(s, 'dropped') ? `${nm(s, 'dropped')} dropped out` : null,
         nm(s, 'backlogLeft') ? `${compactNumber(nm(s, 'backlogLeft'))} not checked yet` : null,
         typeof s.updateRollingOut === 'string' && s.updateRollingOut ? `${s.updateRollingOut} rolling out` : null,

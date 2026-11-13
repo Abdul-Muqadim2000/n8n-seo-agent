@@ -10,6 +10,7 @@ import { clientSafePayload, customerSafePayload, DEFAULT_PLATFORM_SETTINGS, isCo
 
 vi.hoisted(() => {
   process.env.APP_URL = 'http://localhost:5173';
+  process.env.PLATFORM_ADMIN_EMAILS = 'ops@runcredits.test';
   process.env.LINK_BUILDER_JOBS = 'false';
   process.env.ADMIN_COST_SYNC = 'false';
   process.env.CREDIT_GUARD = 'false';
@@ -29,7 +30,7 @@ const { signUp } = await import('./helpers/client');
 const { addCreditEntry } = await import('../src/services/admin/credits');
 const { quoteCredits } = await import('../src/services/billing');
 const { quoteOf, runCreditsOf } = await import('../src/services/runCredits');
-const { CAPACITY_ERROR, customerError } = await import('../src/lib/customerError');
+const { CAPACITY_ERROR, customerError, ENGINE_STOPPED_ERROR } = await import('../src/lib/customerError');
 vi.setConfig({ testTimeout: 30_000 });
 
 let app: FastifyInstance;
@@ -111,6 +112,24 @@ describe('an error as the customer reads it', () => {
     const one = await c.get(`/api/orgs/${orgId}/runs/${r.id}`);
     expect(one.body.run.error).toBe(CAPACITY_ERROR);
     expect((await db.query.runs.findFirst({ where: eq(schema.runs.id, r.id) }))!.error).toBe(raw);
+  });
+
+  it('S2-08: the engine\'s technical text reaches a platform admin only (errorDetail); the company reads the plain sentence', async () => {
+    const raw = 'The SEO engine stopped with an error in "Parser - Strategy Brief": Model output doesn\'t fit required format (n8n execution 13196). Start it again; if it repeats, the operator can open that execution in n8n.';
+    const r = await newRun({ status: 'failed', quotedCredits: 4, error: raw });
+    const mine = await c.get(`/api/orgs/${orgId}/runs/${r.id}`);
+    expect(mine.body.run.error).toBe(ENGINE_STOPPED_ERROR);
+    expect(mine.body.run.errorDetail).toBeUndefined();
+    const list = await c.get(`/api/orgs/${orgId}/runs`);
+    expect(JSON.stringify(list.body)).not.toContain('n8n');
+    const ops = await signUp(app, 'ops@runcredits.test');
+    await db.update(schema.users).set({ emailVerifiedAt: new Date() }).where(eq(schema.users.email, 'ops@runcredits.test'));
+    // a platform admin who is a member of the company (our team on a client's workspace)
+    const opsUser = (await db.query.users.findFirst({ where: eq(schema.users.email, 'ops@runcredits.test') }))!;
+    await db.insert(schema.memberships).values({ orgId, userId: opsUser.id, role: 'member' });
+    const seen = await ops.c.get(`/api/orgs/${orgId}/runs/${r.id}`);
+    expect(seen.status).toBe(200);
+    expect(seen.body.run).toMatchObject({ error: ENGINE_STOPPED_ERROR, errorDetail: raw });
   });
 });
 

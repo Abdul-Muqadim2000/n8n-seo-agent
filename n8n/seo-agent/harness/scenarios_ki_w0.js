@@ -80,8 +80,8 @@ module.exports = async (ctx) => {
     const q4 = await qv({ mode: 'keyword_research', ...B, seeds: Array.from({ length: 21 }, (_, i) => 'seed ' + i) });
     const q5 = await qv({ mode: 'keyword_research', ...B, seeds: 'erp uae' });
     const q6 = await qv({ mode: 'backlinks', ...B }); const q7 = await qv({ mode: 'keyword', keyword: 'erp uae', ...B });
-    check('KIW0-5 Quick Validate accepts both KI modes (ETA 6 / 12 minutes) and sends them to the KI workflow',
-      q1.ok && q2.ok && q1.target === 'ki' && q2.target === 'ki' && q1.estimated_minutes === 6 && q2.estimated_minutes === 12 && q1.forward.body.request_id === q1.request_id, J({ q1: [q1.ok, q1.error, q1.target, q1.estimated_minutes], q2: [q2.ok, q2.error, q2.target, q2.estimated_minutes] }));
+    check('KIW0-5 Quick Validate accepts both KI modes (ETA 6 / 25 minutes: KI-JUDGE reads 300 results pages and judges them) and sends them to the KI workflow',
+      q1.ok && q2.ok && q1.target === 'ki' && q2.target === 'ki' && q1.estimated_minutes === 6 && q2.estimated_minutes === 25 && q1.forward.body.request_id === q1.request_id, J({ q1: [q1.ok, q1.error, q1.target, q1.estimated_minutes], q2: [q2.ok, q2.error, q2.target, q2.estimated_minutes] }));
     check('KIW0-5 a KI request needs the website; seeds are a list of at most 20', !q3.ok && /domain is required/.test(q3.error) && !q4.ok && /at most 20/.test(q4.error) && !q5.ok && /seeds must be an array/.test(q5.error), J([q3.error, q4.error, q5.error]));
     check('KIW0-5 every other mode still goes to the main workflow', q6.ok && q6.target === 'main' && q7.ok && q7.target === 'main' && q6.estimated_minutes === 5, J([q6.target, q7.target]));
     const k1 = (await run('KI Input', [{ json: q2.forward }]))[0].json;
@@ -138,8 +138,8 @@ module.exports = async (ctx) => {
 
     // ---- KIW0-8 money and words ----
     const CC = new Function(rd('v5', 'code', '_cost_cal.js') + '\nreturn CC;')();
-    check('KIW0-8 the engine estimates: competitors $0.35 search data, keyword_research $0.90 (CONTRACTS.md §7), no Claude row (FX-L: the worker calls no model), and keysFor finds them',
-      CC.DFS_EST.competitors === 0.35 && CC.DFS_EST.keyword_research === 0.9 && CC.EST.competitors === 0 && CC.EST.keyword_research === 0
+    check('KIW0-8 the engine estimates: competitors $0.35 search data, keyword_research $0.90 (CONTRACTS.md §7); Claude: none for competitors, $0.45 for keyword research (KI-JUDGE 2026-11-12: the keyword judge), and keysFor finds them',
+      CC.DFS_EST.competitors === 0.35 && CC.DFS_EST.keyword_research === 0.9 && CC.EST.competitors === 0 && CC.EST.keyword_research === 0.45
       && J(CC.keysFor('dfs', { mode: 'competitors' })) === J(['competitors']) && J(CC.keysFor('ai', { mode: 'keyword_research' })) === J(['keyword_research']), J({ e: [CC.EST.competitors, CC.EST.keyword_research], d: [CC.DFS_EST.competitors, CC.DFS_EST.keyword_research] }));
     const costTs = fs.readFileSync(path.join(ROOT, '..', '..', 'app', 'shared', 'src', 'cost.ts'), 'utf8');
     const row = (k) => { const m = costTs.match(new RegExp('\\n  ' + k + ': \\{ ai: ([0-9.]+), dfs: ([0-9.]+),')); return m ? [Number(m[1]), Number(m[2])] : null; };

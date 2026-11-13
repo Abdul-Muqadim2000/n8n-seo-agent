@@ -290,8 +290,8 @@ const SM = (() => {
     // seo_sites.declared_services) comes first and is never dropped by what a crawl read; it is kept apart as well, so SM.toRow writes it back
     // unchanged and the weekly Site Tracker can never overwrite it
     const declListOf = (v) => { if (Array.isArray(v)) return v; const j = jparse(v, null); return Array.isArray(j) ? j : listOf(v); };
-    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
-    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
+    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
     const navStored = jparse(row.nav_pages_json, []) || [];
     const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);
     const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);
@@ -358,6 +358,9 @@ const SM = (() => {
   // 404s) is GONE. It is still in the inventory (Google keeps showing it), but no advice may point at it: matchPage never returns it as
   // "the page that answers this search", and the readers list it as a redirect to make (v5/code/_gone.js). Unknown (0) is not gone.
   const isGone = (p) => { const n = Number((p || {}).http_status) || 0; return n === 404 || n === 410; };
+  // section 189 (production review 2026-11-12): an address that answers a redirect (3xx to another path, read by the daily page watch) is not a
+  // page: no search is matched to it and no rule names it as the page for a search
+  const isMoved = (p) => { const n = Number((p || {}).http_status) || 0; return n >= 300 && n < 400; };
   const gonePages = (model) => pages(model).filter(isGone);
   // ---- K8 (2026-10-21, KW-MATCH): the page that is ABOUT the search, not only the page that repeats its words ----
   // The 75% word rule missed techand.ai's live "AI & Automation | What We Do | Tech&" (/whatwedo/ai-automation) for "ai consulting dubai"
@@ -454,7 +457,7 @@ const SM = (() => {
     const isPref = (u) => !!prefKey && (bare(hostOf(u)) + pathOf(u).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase()) === prefKey;
     const want = matchTerms(keyword); if (!want.length) return { match: null, may_overlap: null };
     const key = tokensOf(keyword).join(' ');
-    const inv = pages(model).filter(p => !isGone(p));   // RV-1: a gone page answers nothing
+    const inv = pages(model).filter(p => !isGone(p) && !isMoved(p));   // RV-1: a gone page answers nothing; section 189: nor does an address that redirects
     const brands = brandWords(model); const core = coreTerms(keyword, brands);
     const kSvc = core.length ? serviceHits(model, core, brands) : [];
     const otherService = (p) => { if (!kSvc.length) return false; const ps = serviceHits(model, fieldsOf(p, brands).own, brands); return ps.length > 0 && !ps.some(sv => kSvc.includes(sv)); };
@@ -616,8 +619,25 @@ const SM = (() => {
     return { state: 'planned', text: '' };
   };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, pageMatch, MATCH_CONF, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages, confirmPage,
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, isMoved, gonePages, confirmPage,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms, coreTerms } };
+})();
+// ---- JOBT: a placeholder author job title is no job title (F-29, production review 2026-11-12; build section 189) ----
+// An author job title of "User" was accepted and printed on every byline ("Name, User"), in the Person schema and in the author box. The
+// web app now refuses such a title; profile rows stored before that still carry it, so every engine node that PRINTS a job title reads it
+// through JOBT.real: a placeholder is '' (the line is left out), never printed. The placeholders are only these words, whole, case and
+// spacing aside: "User", "N/A", "-", "none", "test", "job title", "title" ("Owner", "Administrator", "Tester" are real titles). The content
+// readiness rule (_readiness.js, word for word app/shared/src/readiness.ts) is not changed. Inlined by build_v4.py / build_monitors.py
+// (marker JOB_TITLE in a block comment). Pure.
+const JOBT = (() => {
+  const LIST = ['user', 'n/a', '-', 'none', 'test', 'job title', 'title'];
+  const SET = new Set(LIST);
+  const norm = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toLowerCase();
+  /** true for a job title that is not one; an empty title is missing, not a placeholder */
+  const isPlaceholder = (v) => SET.has(norm(v));
+  /** the job title to print: '' for a placeholder, else the title with its spacing collapsed */
+  const real = (v) => (isPlaceholder(v) ? '' : String(v == null ? '' : v).replace(/\s+/g, ' ').trim());
+  return { isPlaceholder, real, LIST };
 })();
 // ---- lineage (G29, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.11) ----
 // Every number a customer reads has to say where it came from, over what period, and how big the sample was. Before this, the AI
@@ -802,7 +822,9 @@ const opaqueRedirect = (v) => typeof v === 'string' && SRC.isRedirect(v) && !SRC
 const cleanUrls = (x) => Array.isArray(x) ? x.filter(v => !opaqueRedirect(v)).map(cleanUrls) : opaqueRedirect(x) ? '' : (x && typeof x === 'object') ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, cleanUrls(v)])) : (typeof x === 'string' && /^https?:\/\//i.test(x) ? SRC.clean(x) : x);
 const schema = (Array.isArray(d.schema_blocks) ? d.schema_blocks : []).map(b => (b && b.json) ? { ...b, json: cleanUrls(b.json) } : cleanUrls(b));
 const title = metaLines.title || h1 || d.keyword || 'New page';
-const slug = (String(d.content_brief_slug || metaLines.slug || title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)) || 'page';
+const slugOf = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
+// F-05 (production review 2026-11-12): a title with no Latin letters left the slug "page" (every such page at /page); the keyword's own slug comes first
+const slug = slugOf(d.content_brief_slug || metaLines.slug || title) || slugOf(d.keyword) || 'page';
 const description = /^(?:Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary Keywords|URL|Page Type)\s*:/i.test(metaLines['meta description'] || '') ? '' : (metaLines['meta description'] || '');   // W0-A: a field label is never a description
 const headings = [...md.matchAll(/^(#{2,3})\s+(.+)$/gm)].map(x => ({ level: x[1].length, text: x[2].trim() }));
 const links = [...md.matchAll(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g)].map(x => ({ text: x[1], url: x[2] }));
@@ -845,7 +867,8 @@ let bodyHtml = mdToHtml(md); let mdOut = md;
 // ---- v4.4 blocks: E-E-A-T byline and author box, table of contents, hub cluster block, case snapshot, local NAP, video ----
 const role = d.page_role || 'standard'; const pt = String(d.recommended_page || d.page_type || '').toLowerCase();
 const articleLike = d.article_like != null ? !!d.article_like : /blog|guide|article|pillar|hub|case stud/.test(pt);
-const AU = d.author || null, RV = d.reviewer || null, P = d.site_profile || null, V = d.video && d.video.url ? d.video : null, CS = d.case_study || null;
+const AU = d.author ? { ...d.author, job_title: JOBT.real(d.author.job_title) } : null, RV = d.reviewer ? { ...d.reviewer, job_title: JOBT.real(d.reviewer.job_title) } : null,   // F-29: no "User" in a byline
+  P = d.site_profile || null, V = d.video && d.video.url ? d.video : null, CS = d.case_study || null;
 // W05-A (wave 0.5, 2026-10-30): the visible "Updated" date is the website's market day (Regulatory Plan's as_of, in the market's time
 // zone: Asia/Dubai for the UAE), the day the second read and the regulatory status take as today. A run at 22:31 UTC on 29 October dated
 // a UAE page 29 October while the read and the deadlines said 30 October. UTC only when no market day is known.

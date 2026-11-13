@@ -144,6 +144,7 @@ cost or a dollar budget in them (`customerAuditDetails`: keys ending in `Usd` or
 | DELETE | /api/orgs/:orgId | `{ confirm: <company name> }` (owner) | `{ ok }` (stops tracking of its sites in n8n, deletes the company's data in the app) |
 | PATCH | /api/orgs/:orgId/onboarding | `{ step, done? }` (admin); `step` is one of `ONBOARDING_STEPS` (shared/src/constants.ts: the wizard's steps in order, `keyword` included, then `done`) | `Org` |
 | PATCH | /api/orgs/:orgId/budget | `{ monthlyBudgetUsd }` (**platform admin only**; anyone else 403 "Limits are in Settings → Credits.") | `Org` |
+| POST | /api/orgs/:orgId/hook-token/rotate | (owner / admin; 5 an hour) a new address for the SEO engine's reports: every verified website's engine rows are pointed at it, the old one still delivers for 48 h (a report still arriving on it re-routes its website); the token is never returned. 409 `hook_rotation_settling` inside the previous renewal's 48 h, 409 `hook_rotation_in_progress` when another renewal won the race | `{ rotatedAt, sitesUpdated, sitesFailed: string[], oldAddressWorksUntil }` |
 | GET | /api/orgs/:orgId/delivery | | `{ settings: DeliverySettings, nextAt, mailReady, signingReady, recent: DeliveryRecord[] }` |
 | PUT | /api/orgs/:orgId/delivery | `DeliverySettings` (+ `webhook.secret`; owner) | the same shape |
 | POST | /api/orgs/:orgId/delivery/test | (owner) | `{ delivered, outcomes: [{ channel, ok, target, error }] }` |
@@ -507,6 +508,11 @@ Keyword-first fields (§14.5): `track` takes `timezone` (IANA; 400 when unknown)
 itself; the app never calls the Site Kickoff). `ladder` takes `chosenBy` (`client_typed` default, `client_picked`; `system_announced` only
 from the server's announcement) and `ladderMode` (`auto` | `manual`; a Manual ladder writes nothing at start; admins only, defaults to
 the flow's `ladderPrefs.mode`). `discover` never asks for a page (`receiveContent` is accepted and stored false).
+`profile` (F-29, 2026-11-12): an author or reviewer job title that is not a title ("User", "Admin", "Member", "N/A", "-", "Job title",
+`shared/src/profile.ts` `isPlaceholderJobTitle`) is refused with 400; "Owner", "Administrator" and "Tester" are titles. An empty job
+title keeps the stored one (the engine's rule: an empty field keeps what is stored), except with `clearEmptyTitles: true` (sent by the
+app's profile form, which shows the stored profile): then an empty title next to a name clears the stored title. API v1 and MCP callers
+that leave the flag out never clear a title by omitting it.
 | GET | /api/orgs/:orgId/runs?siteId=&mode=&status=&cursor=&limit= | | `Page<Run>` |
 | GET | /api/orgs/:orgId/runs/:runId | | `{ run: Run, reports: Report[] }` |
 | GET | /api/orgs/:orgId/reports?siteId=&stage=&limit=&before= | | `Report[]` |
@@ -997,6 +1003,33 @@ that fails answers `status: 'unreadable'` with a sentence, never an error, and n
     engine = off. With it on and Google reporting Full access (`siteOwner` / `siteFullUser`) there is no `indexing:sitemap` step for a
     missing sitemap (errors in a submitted one stay the client's). The report counts the pages that need a link from `by_action.links`.
   - Rollback: an API from before wave 2 ignores `site_tasks` rows with `kind = 'index_links'` (an unknown kind reads and records nothing).
+- **Wave 3** (2026-11-12, `n8n/seo-agent/docs/indexing-2026-10-29/DESIGN_WAVE3.md` §3). Engine columns read (all optional: a row without
+  them reads as before): `seo_index_pages.priority`, `escalated_at`, `escalate_why` (comma list of `not_asked`, `asked_no_visit`,
+  `weak_links`, `short_page`, `not_in_sitemap`, `sitemap_no_dates`), `type_override` (written by the APP, below), `robots_ok`, `link_depth`,
+  `linked_n`, `indexnow_at`; `seo_index_runs.sitemaps_json.dates` = `{ urls, with_lastmod, distinct }`; the callback summary's `waiting`,
+  `escalated`, `asked_waiting`, `read_after_ask_7d`, `indexnow_sent`, `do_first[{ url, why }]`, `sitemap_dates`.
+  - `IndexPage` adds `priority`, `doFirst` (1 to 5), `escalatedAt`, `escalateWhy`, `typeOverride`, `typePending`, `robotsOk`, `linkDepth`,
+    `linkedN`, `indexnowAt`, `inSitemapRead`. Pages are ordered by `priority` (rows without one by impressions, as before). An escalated page
+    is in `IndexingData.escalated` (by priority, 50 at most) and in no group, and counts in `needYou`. The `linked_waiting` group carries
+    `todo` (`{ total, matterMost, askToday, notFromHome, sitemapDates, text }`); group causes add `marked_utility` and `type_pending`.
+    `IndexingData.sitemapDates` = the newest run's date counts with `missing` (the engine's rule). Job postings may now carry the engine's
+    ask-Google mark (its last tier).
+  - `POST …/data/indexing/page-type` (member, 30 / 10 min per person) `{ url, type: 'important' | 'utility' | '' }` → `{ page }`: the
+    client's own mark ("This is an important page", "Fine to leave out", "Undo"). Writes ONLY `type_override` on that page's row (n8n Data
+    Table `rows/update`, filter `site_id` + `url`, the same write as `asked-google`), audit `indexing.page_type` (`{ url, type, was }`). 400
+    `bad_type`, 404 for an address of another website or a page the check does not know, 409 `already_in_search` for `utility` on a page in
+    search, 503 when the write fails (nothing saved). The same mark twice writes nothing. The page shows the new state at once from the row
+    itself: `utility` on a page not in search is left out on purpose (`marked_utility`, never asked about, ranked or escalated);
+    `important` on a policy page the engine still leaves out, and an undone mark on a page the engine left out because of it, wait for the
+    next daily check (`type_pending`); the engine files the page again on its next run.
+  - Step `indexing:sitemap_dates` (kind `indexing`, one per website): raised when the newest run's `sitemaps_json.dates` has no usable dates
+    (at least 5 addresses and under half dated, or 10 or more sharing one day); payload `{ cause: 'sitemap_dates', urls, withLastmod,
+    distinct }`. Its own check reads the sitemap tree (`sitemapOf`, which now counts each address's `<lastmod>` once): done when at least 90%
+    carry a date and (under 10 addresses, or more than one distinct day); no sitemap read is 503 / nothing daily; a tree read in part that
+    looks done is 409 `site_unsure`. The engine's newer reading with usable dates closes it. Guide `index-sitemap-dates`, recommendation
+    `ix:site_fix:sitemap_dates`.
+  - Rollback: an API from before wave 3 reads `indexing:sitemap_dates` rows as unknown (`siteTaskKindOfKey` null: nothing read or recorded);
+    the engine keeps `type_override` as written.
 
 ## Keyword intelligence: Competitors and Keyword research (KI, 2026-11-08; `shared/src/ki.ts`, `shared/src/ki-api.ts`, `server/src/services/kiData.ts`, `server/src/routes/ki.ts`, `n8n/seo-agent/docs/keyword-intel-2026-11-08/CONTRACTS.md`)
 

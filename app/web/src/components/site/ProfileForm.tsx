@@ -125,7 +125,8 @@ export function useSaveProfile(orgId: string, siteId: string) {
   const start = useStartRun(orgId);
   const qc = useQueryClient();
   const save = async (values: ProfileFields): Promise<Run> => {
-    const run = await start.mutateAsync({ mode: 'profile', siteId, ...values, emailCopy: false });
+    // clearEmptyTitles: the form shows the stored profile, so an emptied job title here means "none" (F-29 / review S8)
+    const run = await start.mutateAsync({ mode: 'profile', siteId, ...values, emailCopy: false, clearEmptyTitles: true });
     if (run.status === 'failed') throw new Error(run.error || 'The SEO engine did not accept the profile. Try again in a minute.');
     // the engine stores it within a minute: refresh what the settings show
     const refresh = () => qc.invalidateQueries({ queryKey: [...qk.site(siteId), 'data'] });

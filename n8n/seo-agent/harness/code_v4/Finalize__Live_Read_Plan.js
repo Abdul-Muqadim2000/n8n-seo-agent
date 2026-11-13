@@ -11,5 +11,5 @@ const host = (u) => (S(u).trim().match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i
 const bare = (h) => S(h).toLowerCase().replace(/^www\./, '');
 const domain = bare(S(b.domain).trim().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, ''));
 const url = g ? S(g.url).trim() : '';
-const ok = !!g && /^https?:\/\/[^\s]+$/i.test(url) && url.length <= 600 && !!domain && bare(host(url)) === domain;
+const ok = !!g && /^https?:\/\/[^\s]+$/i.test(url) && !/[\\@]/.test(url) && url.length <= 600 && !!domain && bare(host(url)) === domain;   // review N1: no backslash or "@" (another host for the fetcher)
 return [{ json: { ...it, live_plan: { read: ok, url: ok ? url : '', asked: !!g, refused: !!g && !ok ? 'the live address must be a page of ' + (domain || 'this website') : '' } } }];

@@ -17,7 +17,7 @@ E2 (2026-11-08) replaces W0's skeleton with the worker. The API front door (buil
   4. writes seo_ki_competitors / seo_ki_keywords / seo_ki_gaps / seo_ki_runs (exactly their columns) and the cache rows, settles its ledger row at
      every end (the refusal ends are their own settle), and posts the final callback after the settle with its `run_ledger` (R115).
 
-It calls no model. Kits inlined: KIW (v5/code/_ki_io.js, this worker's input / output), KI (v5/code/_ki.js, E1) with the kits it calls before it
+Its only model call is the keyword judge (KI-JUDGE 2026-11-12, Claude Opus 5.5 over HTTP, fixes/JUDGE.md). Kits inlined: KIW (v5/code/_ki_io.js, this worker's input / output), KI (v5/code/_ki.js, E1) with the kits it calls before it
 (the fit gate _fit_gate.js, CMP _competitors.js, KWI _kw_inputs.js), SU (v5/code/_serp_url.js, the SERP-GOTO kit), SC (_serp_cache.js), RT
 (_dfs_retry.js), SM (_site_model.js, page mapping) and COUNTRIES (the main workflow's Normalize Input).
 Code nodes are also written to harness/code_v4 for the offline harness (scenarios_ki_w0.js, scenarios_ki_e2.js)."""
@@ -44,6 +44,7 @@ STAGES = {'competitors': 'ki_competitors', 'keyword_research': 'ki_research'}
 NS = uuid.UUID('6c1e0b7a-4d2f-4a9e-b3c1-0000ce110de1')
 nid = lambda name: str(uuid.uuid5(NS, 'kintel:' + name))
 DFS_CRED = {'httpBasicAuth': {'id': 'SEOcredDataForSE', 'name': 'DataForSEO'}}
+ANTHROPIC_CRED = {'anthropicApi': {'id': 'SEOcredAnthropic', 'name': 'Anthropic (SEO Agent)'}}   # KI-JUDGE: the engine's Claude key
 UA = 'Mozilla/5.0 (compatible; SEO-Agent/4.16; +keyword-intelligence)'
 
 # ---- what is baked in: the main workflow's own figures, read from its generated nodes (one source, never retyped) ----
@@ -288,7 +289,28 @@ gated_step('Research SERP Fallback', 'Any Research SERPs Live?', 'Run Research S
 GATED.append(('Run Research SERPs Live', 'keyword results pages the queue did not return (read live)', 'request'))
 code('Research Traffic Requests', src('KI_Research_Traffic_Requests.js'), at(50, 6), executeOnce=True)
 code('Research Result', src('KI_Research_Result.js', ['SM', 'LRU']), at(54, 6), executeOnce=True)
-link('Research SERP Picture', 'Research Traffic Requests')
+# KI-JUDGE (2026-11-12, docs/keyword-intel-2026-11-08/fixes/JUDGE.md): Claude Opus 5.5 reads every kept search with its top results and
+# says who is searching (measured offline: 89.9% right on searches the word rules were never tuned on, 94% of the right ones kept). One
+# Messages call per 40 searches, six at a time; no node-level retry (a re-sent call is billed again): the retry plan re-sends only calls with
+# no usable answer, once, after 20 s. A search the judge could not label keeps the word rules' decision.
+def judge_http(name, pos):
+    return node(name, 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': 'https://api.anthropic.com/v1/messages', 'authentication': 'predefinedCredentialType',
+        'nodeCredentialType': 'anthropicApi', 'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'anthropic-version', 'value': '2023-06-01'},
+        {'name': 'anthropic-beta', 'value': 'server-side-fallback-2026-07-01'}]}, 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}',
+        'options': {'batching': {'batch': {'batchSize': 6, 'batchInterval': 200}}, 'timeout': 180000}}, pos, credentials=ANTHROPIC_CRED, onError='continueRegularOutput')
+code('Research Judge Requests', src('KI_Research_Judge_Requests.js'), at(49, 11), executeOnce=True)
+iff('Any Research Judge?', '{{ !$json.skip }}', at(50, 11))
+judge_http('Run Research Judge', at(51, 11))
+code('Research Judge Retry Plan', src('KI_Research_Judge_Retry_Plan.js'), at(52, 11), executeOnce=True)
+iff('Any Research Judge Retries?', '{{ $json.is_retry === true }}', at(53, 11))
+node('Wait Before Judge Retry', 'n8n-nodes-base.wait', 1.1, {'amount': 20, 'unit': 'seconds'}, at(54, 11), webhookId=nid('Wait Before Judge Retry:hook'))
+judge_http('Run Research Judge (Retry)', at(55, 11))
+code('Research Judge Picture', src('KI_Research_Judge_Picture.js'), at(56, 11), executeOnce=True)
+chain('Research SERP Picture', 'Research Judge Requests', 'Any Research Judge?'); link('Any Research Judge?', 'Run Research Judge', 0); link('Any Research Judge?', 'Research Judge Picture', 1)
+chain('Run Research Judge', 'Research Judge Retry Plan', 'Any Research Judge Retries?'); link('Any Research Judge Retries?', 'Wait Before Judge Retry', 0); link('Any Research Judge Retries?', 'Research Judge Picture', 1)
+chain('Wait Before Judge Retry', 'Run Research Judge (Retry)', 'Research Judge Picture')
+link('Research Judge Picture', 'Research Traffic Requests')
+JUDGE_NODES = ['Run Research Judge', 'Run Research Judge (Retry)']
 gated_step('Research Traffic Requests', 'Any Research Traffic?', 'Run Research Traffic', 'Research Result', 6, 50); GATED.append(('Run Research Traffic', 'traffic potential of the #1 pages', 'request'))
 code('KI KW Rows', ROWS('KI KW Rows', KI_KW_TABLE, 'kw_rows'), at(55, 6), executeOnce=True)
 iff('Any KI KW Rows?', '{{ !$json.skip }}', at(56, 6))
@@ -335,7 +357,7 @@ Started by the API front door (`SEOagentAPIentry`, Execute Workflow, no wait) fo
 
 Refuses before any spend (no ledger row) when killed (seo_cache `ki:kill`), Off (seo_monitors.ki_mode) or asked for another country than the website's market. Then: plan + estimate (held under the quote), the run ledger on the main path, the front door's guards (company runs today, budgets, balance), the started notice, the pipeline (every DataForSEO call behind the in-200 gate, the results-page day cache and the ki:* cache), the four KI tables, the settle at every end, the final callback after the settle.
 
-Calls no model. Writes only seo_ki_*, seo_cache (ki:* and serp:*) and the shared run-ledger / ops-alert rows.""", 'height': 360, 'width': 700, 'color': 4}, at(0, -3))
+Its only model call is the keyword judge (Claude Opus 5.5 reads each kept search with its top results; measured cost on the ledger). Writes only seo_ki_*, seo_cache (ki:* and serp:*) and the shared run-ledger / ops-alert rows.""", 'height': 360, 'width': 700, 'color': 4}, at(0, -3))
 
 # ---- the in-200 gate around every DataForSEO call (B-A10) ----
 wfobj = {'id': WID, 'name': NAME, 'active': False,
@@ -350,6 +372,10 @@ ANSWERS = [http + ' Answers' for http, _w, _u in GATED]
 # ---- the run ledger (R9 / R17 / B-A9 / R115) ----
 ROW, SETTLE = 'Run Ledger Row (' + TAG + ')', 'Settle Run Ledger (' + TAG + ')'
 _res_js, _set_js = monitor_ledger_js(V5, MODE, 'KI Plan', ROW, '!' + '|'.join(ANSWERS))
+# KI-JUDGE: the run's Claude figure is the judge's, measured from each answer's own token counts (no agent node to read)
+_old_fig = "const aiFig = __costCalls.length ? CC.runCost(__costCalls, __factors) : null;"
+assert _set_js.count(_old_fig) == 1, 'Ledger Settle (KI): its Claude figure line moved'
+_set_js = _set_js.replace(_old_fig, "let aiFig = __costCalls.length ? CC.runCost(__costCalls, __factors) : null;\ntry { const __j = $('Research Judge Picture').first().json; if (__j && __j.ai_cost && Number(__j.ai_cost.calls) > 0) aiFig = __j.ai_cost; } catch (e) {}   // KI-JUDGE: measured from the judge's answers")
 # the row is the run's own kind (competitors | keyword_research), so the self-correcting estimates and the run guard's twin rule are per kind,
 # and its key is the caller's (app:<company id>), the key the main workflow's Rate Limit counts a company's runs by
 _old_mode = "const MODE = '" + MODE + "';"
@@ -429,9 +455,17 @@ for n in N:
     if op_ in ('insert', 'upsert', 'update', 'delete', 'deleteRows', 'create'): _writes.setdefault(t_, []).append(n['name'])
 _foreign = {t: v for t, v in _writes.items() if t not in _own | _shared}
 assert not _foreign, 'Keyword Intelligence writes a table that is not its own: ' + str(_foreign)
-assert not any('langchain' in n['type'] or 'api.anthropic.com' in json.dumps(n.get('parameters') or {}) for n in N), 'KI E2: no model call in the worker'
+# KI-JUDGE: the only model calls are the judge's two Messages nodes (no agent, no LangChain node), both after the reservation
+assert not any('langchain' in n['type'] or (n['type'] == 'n8n-nodes-base.httpRequest' and 'api.anthropic.com' in json.dumps(n.get('parameters') or {}) and n['name'] not in JUDGE_NODES) for n in N), 'KI: a model call outside the keyword judge'
+assert all(by[j].get('onError') == 'continueRegularOutput' and not by[j].get('retryOnFail') and j in retry_lint.ALLOW for j in JUDGE_NODES), 'KI-JUDGE: the judge calls retry only through their plan'
+assert not [j for j in JUDGE_NODES if j in _before], 'KI-JUDGE: a judge call runs before the run ledger reserves'
 assert 'Callback Ledger (' + TAG + ')' in by and outs('Callback Ledger (' + TAG + ')') == ['Has Callback (KI)?'], 'R115: the callback waits for the settle'
 for nm in ('POST KI Report', 'POST KI Refusal', 'POST KI Started'): assert nm in retry_lint.ALLOW, nm + ': a callback POST must be on retry_lint.ALLOW (it inserts a report)'
+# KI-JUDGE (2026-11-12): KI Plan's output carries what every later node reads (an inline // comment once swallowed fit_ctx from it)
+_plan_src = RAW.get('KI_Plan.js', '')
+for _f in ('fit_ctx: fitCtx', 'ki_judge:', 'country_name:', 'business_facts:', 'ladder_owners:'):
+    _ln = next((l for l in _plan_src.split('\n') if _f in l), '')
+    assert _ln and '//' not in _ln.split(_f)[0].split("'")[-1], 'KI Plan: ' + _f + ' is missing from its output or sits behind an inline comment'
 # the code nodes read each other by these names; a rename that misses one must fail here, not in production
 _src = {n['name']: n['parameters'].get('jsCode', '') for n in N if n['type'] == 'n8n-nodes-base.code'}
 for _f, _s in RAW.items():

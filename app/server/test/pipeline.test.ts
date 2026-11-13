@@ -13,7 +13,8 @@ describe('pipeline: pages already written', () => {
       [
         log({ keyword: 'Peppol UAE', status: 'published', started_at: '2026-08-01T10:00:00Z', published_url: 'https://techand.ai/peppol' }),
         log({ keyword: 'peppol uae', status: 'started', started_at: '2026-10-02T10:00:00Z' }),
-        log({ keyword: 'vat rules', request_id: 'cad_2026-09-29_techand-ai_1' }),
+        // S1-05: a page run being written now (started within PAGE_IN_FLIGHT_HOURS)
+        log({ keyword: 'vat rules', request_id: 'cad_2026-09-29_techand-ai_1', started_at: '2026-10-03T10:30:00Z' }),
       ],
       [],
       NOW,
@@ -30,7 +31,7 @@ describe('pipeline: pages already written', () => {
   });
 
   it('ladder pages being written or published count, the content log\'s date wins', () => {
-    const w = writtenPages([log({ keyword: 'rung two' })], [lad({ keyword: 'rung two', status: 'writing' }), lad({ keyword: 'rung three', status: 'published', target_url: 'https://x.com/r3' }), lad({ keyword: 'rung four' })], NOW);
+    const w = writtenPages([log({ keyword: 'rung two', started_at: '2026-10-03T10:30:00Z' })], [lad({ keyword: 'rung two', status: 'writing' }), lad({ keyword: 'rung three', status: 'published', target_url: 'https://x.com/r3' }), lad({ keyword: 'rung four' })], NOW);
     expect(w.map((x) => [x.keyword, x.status, x.startedAt !== ''])).toEqual([
       ['rung two', 'started', true],
       ['rung three', 'published', false],
@@ -81,7 +82,7 @@ describe('W06-B (2026-10-30, WAVE05 3.2): a page run that failed wrote no page',
     expect(waitingPages([STRANDED, log({ keyword: 'ms 365 erp', status: 'written' })], NOW, failed).map((x) => x.keyword)).toEqual(['ms 365 erp']);
   });
   it('the retry that is running, and a page written later, still count', () => {
-    const retry = log({ keyword: K, status: 'started', request_id: '389', started_at: '2026-10-02T09:58:00Z' });
+    const retry = log({ keyword: K, status: 'started', request_id: '389', started_at: '2026-10-03T09:58:00Z' });
     expect(writtenPages([STRANDED, retry], [], NOW, failed).map((x) => [x.keyword, x.status])).toEqual([[K, 'started']]);
     const done = log({ keyword: K, status: 'written', request_id: '389', started_at: '2026-10-02T10:10:00Z' });
     expect(waitingPages([FAILED_ROW, done], NOW).map((x) => x.keyword)).toEqual([K]);
@@ -90,7 +91,7 @@ describe('W06-B (2026-10-30, WAVE05 3.2): a page run that failed wrote no page',
     const L = lad({ keyword: K, status: 'writing' });
     expect(writtenPages([FAILED_ROW], [L], NOW)).toEqual([]);
     expect(writtenPages([STRANDED], [L], NOW, failed)).toEqual([]);
-    expect(writtenPages([FAILED_ROW, log({ keyword: K, status: 'started', request_id: '389' })], [L], NOW).map((x) => x.keyword)).toEqual([K]);
+    expect(writtenPages([FAILED_ROW, log({ keyword: K, status: 'started', request_id: '389', started_at: '2026-10-03T09:58:00Z' })], [L], NOW).map((x) => x.keyword)).toEqual([K]);
     expect(writtenPages([], [L], NOW).map((x) => [x.keyword, x.status])).toEqual([[K, 'writing']]);
   });
   it('the app marks exactly the failed run\'s own started row, and only for a page run', () => {

@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, lt, type SQL } from 'drizzle-orm';
 import { audit } from '../services/audit';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { isClientRole, isShareToken, MODE_IDS, parseRunInput, RUN_STATUSES, SHARE, shareDays, shareRefusal, shareState, shareUrl, type Page, type ReportDetail, type Run } from '@seo/shared';
-import { isUuid, orgAccess } from '../auth/access';
+import { isPlatformAdmin, isUuid, orgAccess } from '../auth/access';
 import { config } from '../config';
 import { db, schema } from '../db';
 import type { FileRow } from '../db/schema';
@@ -36,6 +36,10 @@ export function sendFile(reply: FastifyReply, f: Pick<FileRow, 'kind' | 'fileNam
   if (f.kind === 'pdf') reply.header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; img-src data:; object-src 'self'; plugin-types application/pdf");
   return reply.send(f.data);
 }
+
+/** S2-08: a platform admin also gets the engine's own text of a run's error (clients read the plain sentence only) */
+const withDetail = (run: Run, raw: string | null, user: Parameters<typeof isPlatformAdmin>[0]): Run =>
+  isPlatformAdmin(user) && raw && raw !== run.error && run.status !== 'joined' ? { ...run, errorDetail: raw } : run;
 
 async function runWithNames(runId: string): Promise<Run | null> {
   const rows = await db
@@ -86,7 +90,7 @@ export async function runRoutes(app: FastifyInstance) {
     // credits (app/docs/CREDITS.md): one ledger read for the page, not one per run
     const page = rows.slice(0, limit);
     const credits = await creditsForRuns(a.org.id, page.map((x) => x.r));
-    const items = page.map((x) => toRun(x.r, { siteDomain: x.domain, userName: x.userName, apiKeyName: x.keyName, credits: credits.get(x.r.id)! }));
+    const items = page.map((x) => withDetail(toRun(x.r, { siteDomain: x.domain, userName: x.userName, apiKeyName: x.keyName, credits: credits.get(x.r.id)! }), x.r.error, a.user));
     return { items, nextCursor: rows.length > limit ? rows[limit - 1].r.createdAt.toISOString() : null };
   });
 
@@ -99,7 +103,7 @@ export async function runRoutes(app: FastifyInstance) {
     if (!kiRunVisible(row, a.user)) throw notFound('Run not found');
     // R-A3: a check joined to the website's open run shows that run's report once it has arrived
     const [run, reports, joined] = await Promise.all([runWithNames(p.runId), reportsList(a.org.id, { runId: p.runId, limit: 100, viewer: a.user }), runJoinedResult(a.org.id, row)]);
-    return { run: run!, reports: reports.reverse(), ...(joined ? { joined } : {}) };
+    return { run: withDetail(run!, row.error, a.user), reports: reports.reverse(), ...(joined ? { joined } : {}) };
   });
 
   // G5: reports are part of the client portal (client viewers and approvers read them; files are rebranded below)

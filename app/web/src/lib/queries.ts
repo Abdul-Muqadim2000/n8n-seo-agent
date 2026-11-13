@@ -75,6 +75,7 @@ import type {
   IndexingData,
   IndexPage,
   IndexPagesPage,
+  IndexPageType,
   CrawlerSettingsInput,
   LogPushKeyCreated,
   LogUploadAccepted,
@@ -1553,6 +1554,16 @@ export function useAskedGoogle(orgId: string, siteId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (url: string) => api<{ page: IndexPage }>(`/api/orgs/${orgId}/sites/${siteId}/data/indexing/asked-google`, { method: 'POST', body: { url } }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: indexingKey(siteId) }),
+  });
+}
+
+/** wave 3 (DESIGN_WAVE3 §3.4): the client's own mark on a page ('important', 'utility' = fine to leave out, '' = undo). The page reads the
+ *  index check again at once: the row holds the mark, so the page shows the new state before the engine's next run. */
+export function usePageType(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { url: string; type: IndexPageType }) => api<{ page: IndexPage }>(`/api/orgs/${orgId}/sites/${siteId}/data/indexing/page-type`, { method: 'POST', body: v }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: indexingKey(siteId) }),
   });
 }

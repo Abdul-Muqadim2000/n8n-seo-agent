@@ -55,7 +55,7 @@ if (!['describe', 'profile'].includes(mode) && !b.country) errors.push('country 
 if (!b.callback_url && !b.email) errors.push('callback_url (https) or email is required so the result can be delivered');
 if (b.callback_url && !/^(https:\/\/\S+|http:\/\/(localhost|127\.0\.0\.1|host\.docker\.internal|n8n)(:\d+)?\/\S*)$/.test(String(b.callback_url))) errors.push('callback_url must be an https URL (http only for localhost while testing)');
 const request_id = $execution.id;
-const eta = mode === 'audit' ? 20 : (['verdict', 'check'].includes(mode) ? 4 : mode === 'ladder' ? 8 : mode === 'track' ? 3 : mode === 'published' || mode === 'checkin' || mode === 'profile' ? 1 : mode === 'case_study' ? 15 : mode === 'ai_visibility' ? 10 : mode === 'backlinks' ? 5 : mode === 'competitors' ? 6 : mode === 'keyword_research' ? 12 : 10);
+const eta = mode === 'audit' ? 20 : (['verdict', 'check'].includes(mode) ? 4 : mode === 'ladder' ? 8 : mode === 'track' ? 3 : mode === 'published' || mode === 'checkin' || mode === 'profile' ? 1 : mode === 'case_study' ? 15 : mode === 'ai_visibility' ? 10 : mode === 'backlinks' ? 5 : mode === 'competitors' ? 6 : mode === 'keyword_research' ? 25 : 10);   // KI-JUDGE 2026-11-12: 300 results pages + the judge, measured 21 minutes
 
 // ---- B-A6 (2026-10-15, build section 63): the key a repeated POST is recognised by -------------------------------------------
 // A POST that arrives twice — a caller that timed out and retried, a proxy or a webhook delivered twice, a double submit — started a

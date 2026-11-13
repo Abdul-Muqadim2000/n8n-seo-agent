@@ -339,7 +339,8 @@ describe('needs you', () => {
       ],
       NOW,
     );
-    expect(f.map((x) => [x.id, x.title, x.detail, x.action?.runId])).toEqual([['failed:audit-fail', 'Technical audit: did not finish', 'n8n: crawl timed out', 'audit-fail']]);
+    // S2-08 / review N3: our tool's name is dropped, the plain reason stays
+    expect(f.map((x) => [x.id, x.title, x.detail, x.action?.runId])).toEqual([['failed:audit-fail', 'Technical audit: did not finish', 'crawl timed out', 'audit-fail']]);
   });
 });
 
@@ -389,6 +390,10 @@ describe('cards and Needs you from the cadence mirror', () => {
     ]);
     const p = build({ ladders: three, settings: [settings({ ladder_id: 'm', status: 'paused' })] });
     expect(p.cards.map((c) => c.status)).toEqual(['paused', 'planning', 'planning']);
+    expect(p.cards[0].archived).toBeUndefined();
+    // review S1 (2026-11-12): an archived ladder reads paused but says it is archived, so no Resume is offered for it
+    const ar = build({ ladders: three, settings: [settings({ ladder_id: 'm', status: 'archived' })] });
+    expect(ar.cards.find((c) => c.id === 'm')).toMatchObject({ status: 'paused', archived: true, statusText: expect.stringMatching(/^Archived: .*cannot be resumed/) });
     const w = build({ ladders: three, settings: [settings({ ladder_id: 'm', status: 'won' })] });
     expect(w.cards.map((c) => [c.status, c.next.kind])).toEqual([
       ['won', 'check'],

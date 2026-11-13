@@ -6,7 +6,7 @@
 #   3. Docker Engine + the compose plugin + git (once), with log rotation as the daemon default
 #   4. the three settings files from Secret Manager -> /mnt/data/secrets (0600, root); values are never printed
 #   5. the repository at the ref in metadata `alaventra-ref` -> /mnt/data/repo
-#   6. the nightly backup timer (backup.sh -> the Cloud Storage bucket)
+#   6. the nightly backup timer (backup.sh -> the Cloud Storage bucket) and the daily disk hygiene + alarm timer (hygiene.sh)
 #   7. docker compose up -d (builds the app image when it is missing)
 # Logs: `sudo journalctl -u google-startup-scripts` on the VM.
 set -euo pipefail
@@ -131,6 +131,8 @@ WantedBy=timers.target
 EOF
 systemctl daemon-reload
 systemctl enable --now alaventra-backup.timer >/dev/null
+# daily boot-disk hygiene + disk alarm (2026-11-12: the boot disk reached 99% unnoticed; hygiene.sh says what filled it)
+bash "$DATA/repo/deploy/gcp/hygiene.sh" --install || log "hygiene timer could not be installed"
 
 # ---- 7. the stack -------------------------------------------------------------------------------------------------------
 cd "$DATA/repo/deploy/gcp"

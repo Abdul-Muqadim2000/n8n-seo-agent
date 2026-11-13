@@ -54,11 +54,12 @@ export function LadderModeSwitch({ ladder, size = 'sm', className }: { ladder: P
 }
 
 /** Pause / Resume for one ladder (not for a won ladder: nothing more is written for it anyway). */
-export function LadderPauseButton({ ladder, size = 'sm' }: { ladder: Pick<LadderCard, 'id' | 'head' | 'status'>; size?: 'sm' | 'md' }) {
+export function LadderPauseButton({ ladder, size = 'sm' }: { ladder: Pick<LadderCard, 'id' | 'head' | 'status' | 'archived'>; size?: 'sm' | 'md' }) {
   const { org } = useOrgCtx();
   const { site } = useSiteCtx();
   const update = useUpdateLadder(org.id, site.id);
-  if (ladder.status === 'won') return null;
+  // an archived ladder cannot be resumed or paused (the server refuses both); its status line says so
+  if (ladder.status === 'won' || ladder.archived) return null;
   const paused = ladder.status === 'paused';
   const go = () =>
     update.mutate(

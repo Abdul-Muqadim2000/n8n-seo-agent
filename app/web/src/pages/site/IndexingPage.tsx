@@ -3,15 +3,21 @@
 // pages that dropped out; Google's own updates and what they did to this website. Read only: the engine's daily index check writes the
 // data; the client's fixes are "Steps on your website" (checked by us) and a rewrite is always the client's click.
 import { useState } from 'react';
-import { ArrowRight, CalendarClock, CheckCircle2, CircleDashed, FileSearch, History, Link2, ListChecks, Map as MapIcon, MousePointerClick, SearchCheck, Settings2, Sparkles, TrendingDown, TriangleAlert } from 'lucide-react';
+import { ArrowRight, CalendarClock, CheckCircle2, CircleDashed, FileSearch, History, Link2, ListChecks, Map as MapIcon, MousePointerClick, SearchCheck, Settings2, Sparkles, TrendingDown, TriangleAlert, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   askGoogleStatus,
   INDEX_ACTION_INFO,
+  INDEX_ESCALATED,
+  INDEX_ESCALATED_LEAD,
   INDEX_GROUP_PREVIEW,
   improveKeywordOf,
+  indexEscalationSteps,
   indexInSearchLine,
+  indexPageChecks,
+  indexPageTypeAction,
   indexPath,
+  type IndexCheckStatus,
   type IndexSitemapState,
   type GoogleEvent,
   type IndexGroup,
@@ -29,7 +35,7 @@ import { PageHeader } from '@/components/ui/misc';
 import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
 import { SitemapAccessLine } from '@/components/site/MonitorSettingsFields';
 import { toastError } from '@/lib/api';
-import { useAskedGoogle, useIndexing, useIndexingHistory, useIndexingPages } from '@/lib/queries';
+import { useAskedGoogle, useIndexing, useIndexingHistory, useIndexingPages, usePageType } from '@/lib/queries';
 import { paths } from '@/lib/paths';
 import { fmtDay } from '@/lib/utils';
 import { DataGate, Panel, useSitePage } from './_components/kit';
@@ -154,12 +160,14 @@ function IndexingBody({ d, orgId, siteId, domain, member }: { d: IndexingData; o
         stats={
           <>
             <HeroStat label="In Google search" value={<CountUp value={t.indexed} format={n} />} info="Pages Google has and can show in search: its own inspection said so, or the page had search impressions in the last 28 days." />
-            <HeroStat label="Need you" value={<CountUp value={t.needYou} format={n} />} info="Pages to fix on your website, to improve, to merge, or to link to." />
+            <HeroStat label="Need you" value={<CountUp value={t.needYou} format={n} />} info="Pages to fix on your website, to improve, to merge, or to link to, and pages Google has not visited after 3 weeks." />
             <HeroStat label="Not checked yet" value={<CountUp value={t.unknown} format={n} />} info="Google lets each website be checked a limited number of times a day, shared with every tool you use. We check new pages first, then work through the rest." />
             <HeroStat label="Dropped out" value={<CountUp value={d.dropped.length} format={n} />} info="Pages that were in Google search and are not any more." />
           </>
         }
       />
+
+      {(d.escalated?.length ?? 0) > 0 && <EscalatedPanel items={d.escalated} orgId={orgId} siteId={siteId} domain={domain} member={member} freeze={d.freeze.on} />}
 
       <Tabs value={lane} onValueChange={(v) => setLane(v as IndexLane)}>
         <TabList>
@@ -373,7 +381,9 @@ function GroupPanel({ g, orgId, siteId, domain, member, freeze }: { g: IndexGrou
   const [page, setPage] = useState(1);
   // a short list first (none for pages that need nothing), the whole group on request, paged by 25
   const [all, setAll] = useState(false);
-  const first = g.action === 'leave_out' || g.action === 'wait' || g.action === 'retry' || g.action === 'none' ? 0 : 5;
+  // wave 3 (DESIGN_WAVE3 §3.1 / §3.4): the waiting to-do and the policy card show their first pages, with what can be done on each
+  const listed = g.cause === 'linked_waiting' || g.cause === 'utility' || g.cause === 'marked_utility' || g.cause === 'type_pending';
+  const first = !listed && (g.action === 'leave_out' || g.action === 'wait' || g.action === 'retry' || g.action === 'none') ? 0 : 5;
   const more = all && g.count > INDEX_GROUP_PREVIEW;
   const q = useIndexingPages(orgId, siteId, more && page > 1 ? { lane: g.lane, action: g.action, cause: g.cause, page } : null);
   // A19: page 2 and on show their own rows only (never page 1's under a "Page 2" label while reading or after a failed read)
@@ -390,7 +400,8 @@ function GroupPanel({ g, orgId, siteId, domain, member, freeze }: { g: IndexGrou
           <span className="rounded-full bg-surface-2 px-2 text-xs font-semibold tabular text-ink-2">{n(g.count)}</span>
         </span>
       }
-      description={INDEX_ACTION_INFO[g.action].label}
+      // wave 3 (§3.1): the waiting group is a to-do, never "Give it time"
+      description={g.todo ? 'What helps Google find them' : INDEX_ACTION_INFO[g.action].label}
       actions={
         <span className="flex flex-wrap items-center gap-1.5">
           {g.taskKey && (
@@ -417,6 +428,21 @@ function GroupPanel({ g, orgId, siteId, domain, member, freeze }: { g: IndexGrou
           <dd className="mt-0.5 text-ink-2">{g.youDo}</dd>
         </div>
       </dl>
+      {g.todo && (
+        <div className="border-t border-line bg-surface-2 px-5 py-3 text-[13px] text-ink">
+          <p className="flex items-start gap-2">
+            <ListChecks className="mt-0.5 size-4 shrink-0 text-accent-text" aria-hidden />
+            <span>{g.todo.text}</span>
+          </p>
+          {(g.todo.askToday > 0 || g.todo.sitemapDates || g.todo.notFromHome > 0) && (
+            <span className="mt-2 flex flex-wrap gap-1.5 pl-6">
+              {g.todo.askToday > 0 && <GuideButton id="index-request-indexing" vars={{ domain, pageUrl: g.pages.find((p) => p.askGoogle)?.url ?? '' }} label="How to ask Google" />}
+              {g.todo.sitemapDates && <GuideButton id="index-sitemap-dates" vars={{ domain }} label="How to add dates" />}
+              {g.todo.notFromHome > 0 && <GuideButton id="index-add-internal-links" vars={{ domain, pageUrl: g.pages.find((p) => p.linkDepth >= 2)?.url ?? '' }} label="How to add links" />}
+            </span>
+          )}
+        </div>
+      )}
       {g.action === 'quality' && freeze && <p className="border-t border-line px-5 py-3 text-[13px] text-ink-2">A Google update is rolling out. Wait until it is over before you change these pages.</p>}
       {all && page > 1 && !pageRead && (
         <p className="border-t border-line px-5 py-3 text-[13px] text-ink-3">{q.isError || q.data?.status === 'unreadable' ? 'This page of the list could not be read just now.' : 'Reading this page of the list'}</p>
@@ -424,7 +450,7 @@ function GroupPanel({ g, orgId, siteId, domain, member, freeze }: { g: IndexGrou
       {shown.length > 0 && (
         <ul className="divide-y divide-line border-t border-line">
           {shown.map((p) => (
-            <PageRow key={p.url} p={p} orgId={orgId} siteId={siteId} member={member} freeze={freeze} />
+            <PageRow key={p.url} p={p} orgId={orgId} siteId={siteId} member={member} freeze={freeze} checks={g.cause === 'linked_waiting'} />
           ))}
         </ul>
       )}
@@ -462,14 +488,18 @@ const STATE: Record<IndexPage['state'], { tone: Tone; label: string }> = {
   error: { tone: 'neutral', label: 'Could not check' },
 };
 
-function PageRow({ p, orgId, siteId, member, freeze }: { p: IndexPage; orgId: string; siteId: string; member: boolean; freeze: boolean }) {
-  const st = p.fixSeenAt
+function PageRow({ p, orgId, siteId, member, freeze, checks = false }: { p: IndexPage; orgId: string; siteId: string; member: boolean; freeze: boolean; checks?: boolean }) {
+  const st = p.typePending
+    ? { tone: 'neutral' as Tone, label: 'Waiting for our next check' }
+    : p.fixSeenAt
     ? { tone: 'good' as Tone, label: 'Fixed, waiting for Google' }
     : p.improvedWaiting
       ? { tone: 'good' as Tone, label: 'Improved, waiting for Google' }
       : p.improvedTo
         ? { tone: 'warning' as Tone, label: 'Improved at another address' }
-        : STATE[p.state];
+        : p.action === 'wait' && (p.cause === 'unknown_to_google' || p.cause === 'discovered_not_crawled')
+          ? { tone: 'neutral' as Tone, label: 'Not visited yet' }
+          : STATE[p.state];
   const facts = [
     p.checkedAt ? `checked ${fmtDay(p.checkedAt)}` : 'not checked yet',
     p.fixSeenAt ? `we saw it fixed on ${fmtDay(p.fixSeenAt)}` : null,
@@ -487,25 +517,168 @@ function PageRow({ p, orgId, siteId, member, freeze }: { p: IndexPage; orgId: st
     p.needsPerson ? 'unchanged after 4 checks: worth a closer look' : null,
   ].filter(Boolean);
   const improve = p.action === 'quality' && !freeze && member && !p.utility;
+  const mark = indexPageTypeAction(p);
   return (
     <InsightItem
       tone={p.state === 'indexed' ? 'good' : p.action === 'site_fix' ? 'warning' : 'blue'}
       icon={<FileSearch className="size-4" />}
-      meta={<StatusBadge tone={st.tone}>{st.label}</StatusBadge>}
+      meta={<PageBadges st={st} p={p} />}
       title={<span className="break-all">{p.path}</span>}
       titleAttr={p.title || p.url}
-      description={facts.join(' · ')}
+      description={
+        <>
+          {facts.join(' · ')}
+          {mark?.text && <span className="mt-1 block text-ink">{mark.text}</span>}
+          {checks && <PageChecks p={p} />}
+        </>
+      }
       detail={<PageDetail p={p} orgId={orgId} siteId={siteId} />}
       detailLabel="Details and history"
       actionPosition="side"
       action={
-        improve ? (
-          <ButtonLink size="sm" variant="secondary" to={paths.tool(orgId, 'keyword', { siteId, prefill: { keyword: improveKeywordOf(p.title, p.url), existingPageUrl: p.url } })} icon={<ArrowRight className="size-4" />}>
-            Improve this page
-          </ButtonLink>
+        improve || (mark && member) ? (
+          <span className="flex flex-wrap items-center gap-1.5">
+            {improve && (
+              <ButtonLink size="sm" variant="secondary" to={paths.tool(orgId, 'keyword', { siteId, prefill: { keyword: improveKeywordOf(p.title, p.url), existingPageUrl: p.url } })} icon={<ArrowRight className="size-4" />}>
+                Improve this page
+              </ButtonLink>
+            )}
+            {mark && member && <PageTypeButton p={p} orgId={orgId} siteId={siteId} />}
+          </span>
         ) : undefined
       }
     />
+  );
+}
+
+function PageBadges({ st, p }: { st: { tone: Tone; label: string }; p: IndexPage }) {
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      {p.doFirst && <StatusBadge tone="accent">Do first</StatusBadge>}
+      <StatusBadge tone={st.tone}>{st.label}</StatusBadge>
+    </span>
+  );
+}
+
+const CHECK_TONE: Record<IndexCheckStatus, string> = { ok: 'text-ink-2', fail: 'text-warning-text', warn: 'text-warning-text', unknown: 'text-ink-3' };
+
+/** wave 3 (DESIGN_WAVE3 §3.1): "What we checked" on one page, from its row. A failed check in the warning colour; a value we could not read
+ *  says "not checked", never a pass. */
+function PageChecks({ p }: { p: IndexPage }) {
+  const xs = indexPageChecks(p);
+  return (
+    <span className="mt-1.5 block text-[12px] leading-snug">
+      <span className="font-medium text-ink">What we checked: </span>
+      {xs.map((c, i) => (
+        <span key={c.key} className={CHECK_TONE[c.status]}>
+          {c.text}
+          {i < xs.length - 1 ? ' · ' : ''}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** wave 3 (§3.4): "This is an important page", "Fine to leave out", or "Undo" on a page the client marked. Members and up. */
+function PageTypeButton({ p, orgId, siteId }: { p: IndexPage; orgId: string; siteId: string }) {
+  const m = usePageType(orgId, siteId);
+  const a = indexPageTypeAction(p);
+  if (!a) return null;
+  const done: Record<string, string> = {
+    important: `Noted. ${p.path} is marked as important; our next daily check reads it again as a normal page.`,
+    utility: `Noted. ${p.path} is marked as fine to leave out of Google.`,
+    '': `Undone. Our next daily check files ${p.path} again.`,
+  };
+  return (
+    <Button
+      size="sm"
+      variant={a.type === 'important' ? 'secondary' : 'ghost'}
+      icon={a.type === '' ? <Undo2 className="size-4" /> : a.type === 'important' ? <CheckCircle2 className="size-4" /> : undefined}
+      loading={m.isPending}
+      onClick={() => m.mutate({ url: p.url, type: a.type }, { onSuccess: () => toast.success(done[a.type]), onError: (e) => toastError(e) })}
+    >
+      {a.label}
+    </Button>
+  );
+}
+
+/** wave 3 (DESIGN_WAVE3 §3.2): pages Google has not visited in the 3 weeks we watched them, each with its likely reasons as steps. */
+function EscalatedPanel({ items, orgId, siteId, domain, member, freeze }: { items: IndexPage[]; orgId: string; siteId: string; domain: string; member: boolean; freeze: boolean }) {
+  const ask = useAskedGoogle(orgId, siteId);
+  return (
+    <Panel
+      icon={<TriangleAlert />}
+      iconTone="warning"
+      title={
+        <span className="inline-flex flex-wrap items-center gap-2">
+          {INDEX_ESCALATED.label}
+          <span className="rounded-full bg-surface-2 px-2 text-xs font-semibold tabular text-ink-2">{n(items.length)}</span>
+        </span>
+      }
+      description={INDEX_ESCALATED.meaning}
+      flush
+    >
+      <ul className="divide-y divide-line border-t border-line">
+        {items.map((p) => {
+          const steps = indexEscalationSteps(p, { freeze });
+          const st = askGoogleStatus(p);
+          const canAsk = member && p.escalateWhy.includes('not_asked') && (st.state === 'none' || st.state === 'quiet' || st.state === 'lost');
+          return (
+            <InsightItem
+              key={p.url}
+              tone="warning"
+              icon={<CircleDashed className="size-4" />}
+              meta={<PageBadges st={{ tone: 'warning', label: 'Not visited after 3 weeks' }} p={p} />}
+              title={<span className="break-all">{p.path}</span>}
+              titleAttr={p.title || p.url}
+              description={
+                <>
+                  {INDEX_ESCALATED_LEAD}
+                  {st.text ? ` ${st.text}` : ''}
+                  {steps.length > 0 && (
+                    <ol className="mt-1.5 list-decimal space-y-1 pl-5 text-ink">
+                      {steps.map((x) => (
+                        <li key={x.code}>
+                          <span>{x.text}</span>{' '}
+                          {x.guide && <GuideButton id={x.guide} vars={{ domain, pageUrl: p.url }} />}
+                          {x.improve && member && (
+                            <ButtonLink size="sm" variant="ghost" to={paths.tool(orgId, 'keyword', { siteId, prefill: { keyword: improveKeywordOf(p.title, p.url), existingPageUrl: p.url } })} icon={<ArrowRight className="size-4" />}>
+                              Improve this page
+                            </ButtonLink>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                  <PageChecks p={p} />
+                </>
+              }
+              detail={<PageDetail p={p} orgId={orgId} siteId={siteId} />}
+              detailLabel="Details and history"
+              actionPosition="side"
+              action={
+                member ? (
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    {canAsk && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        icon={<CheckCircle2 className="size-4" />}
+                        loading={ask.isPending && ask.variables === p.url}
+                        onClick={() => ask.mutate(p.url, { onSuccess: () => toast.success(`Noted. ${indexPath(p.url)} is waiting for Google to read it.`), onError: (e) => toastError(e) })}
+                      >
+                        I asked Google
+                      </Button>
+                    )}
+                    <PageTypeButton p={p} orgId={orgId} siteId={siteId} />
+                  </span>
+                ) : undefined
+              }
+            />
+          );
+        })}
+      </ul>
+    </Panel>
   );
 }
 

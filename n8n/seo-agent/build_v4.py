@@ -525,7 +525,11 @@ log('Audit pipeline: DataForSEO calls use the market language (de/fr/es/it/nl/pt
 # =============================================================================
 rename('Form', 'Download Report')
 rename('OpenAI Chat Model2', 'Site Describer Model (OpenAI)')
-w['settings'].update({'executionTimeout': 3600, 'saveManualExecutions': True, 'saveDataErrorExecution': 'all', 'saveDataSuccessExecution': 'all', 'saveExecutionProgress': True})
+w['settings'].update({'executionTimeout': 7200, 'saveManualExecutions': True, 'saveDataErrorExecution': 'all', 'saveDataSuccessExecution': 'all', 'saveExecutionProgress': True})
+# AIR-PAGETIME (2026-11-12): a page run takes ~20 min alone on the production VM; with the reserved AI page a site's cadence starts up to
+# three at once and on 2026-11-12 all three hit the 1-hour limit at 90-100% done (executions 13063-13065). 2 h = EXECUTIONS_TIMEOUT_MAX.
+# Cadence_Plan's in_flight_hours (2) must stay >= this limit: a `started` row younger than it may still be running.
+assert w['settings']['executionTimeout'] == 7200, 'AIR-PAGETIME: the page run limit is no longer 2 h'
 log('Settings: 60-minute execution timeout, progress saved (Wait-node resumes survive restarts); "Form" renamed "Download Report"')
 
 def sticky(content, x, y, wdt, hgt, color=4):
@@ -768,7 +772,7 @@ RADIUS_SRC = _rd0('code/_radius.js').rstrip('\n')   # 2026-10-13 (G32): the topi
 import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits, one copy each
 SERP_URL_SRC = _rd0('code/_serp_url.js').rstrip('\n')   # SERP-GOTO (2026-11-08): the real host behind a Google redirect link (SU), inlined with every SERP reader
 SERP_CACHE_SRC = SERP_URL_SRC + '\n' + _rd0('code/_serp_cache.js').rstrip('\n')   # KW-SERP (RV-12, 2026-10-21): one results-page reading per search and day, shared by every path (section 145)
-rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__SERP_CACHE__*/', SERP_CACHE_SRC).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__LADDER_DUP__*/', _rd0('code/_ladder_dup.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__PUBLISH_VERIFY__*/', _rd0('code/_publish_verify.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__COMPETITORS__*/', COMPETITORS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n')).replace('/*__GONE__*/', _rd0('code/_gone.js').rstrip('\n')).replace('/*__SERP_URL__*/', SERP_URL_SRC).replace('/*__LADDER_RULES__*/', _rd0('code/_ladder_rules.js').rstrip('\n'))   # LADDER PACKAGE (2026-11-09, section 183): the ladder rules kit (LRU)   # shared kits (RV-1 2026-10-21: _gone.js, the pages that no longer answer) (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
+rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__SERP_CACHE__*/', SERP_CACHE_SRC).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__LADDER_DUP__*/', _rd0('code/_ladder_dup.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__PUBLISH_VERIFY__*/', _rd0('code/_publish_verify.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__COMPETITORS__*/', COMPETITORS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC).replace('/*__WAITING__*/', _rd0('code/_waiting.js').rstrip('\n')).replace('/*__READINESS__*/', _rd0('code/_readiness.js').rstrip('\n')).replace('/*__GONE__*/', _rd0('code/_gone.js').rstrip('\n')).replace('/*__SERP_URL__*/', SERP_URL_SRC).replace('/*__LADDER_RULES__*/', _rd0('code/_ladder_rules.js').rstrip('\n')).replace('/*__JOB_TITLE__*/', _rd0('code/_job_title.js').rstrip('\n'))   # section 189 (F-29): a placeholder job title is never printed   # LADDER PACKAGE (2026-11-09, section 183): the ladder rules kit (LRU)   # shared kits (RV-1 2026-10-21: _gone.js, the pages that no longer answer) (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -1883,7 +1887,7 @@ patch('Normalize Input', "const ladder_links = Array.isArray(p2.ladder_links)",
       "const KF_CHOSEN = ['client_typed', 'client_picked', 'system_announced'].includes(String(p2.chosen_by || '').trim().toLowerCase()) ? String(p2.chosen_by).trim().toLowerCase() : '';\n"
       "const KF_LADDER_MODE = ['auto', 'manual'].includes(String(p2.ladder_mode || '').trim().toLowerCase()) ? String(p2.ladder_mode).trim().toLowerCase() : '';\n"
       "const KF_SERVICES_GIVEN = Array.isArray(p2.services) || typeof p2.services === 'string';\n"
-      "const KF_SERVICES = (Array.isArray(p2.services) ? p2.services : String(p2.services || '').split(/[\\n,;]+/)).map(x => String(x == null ? '' : x).replace(/\\s+/g, ' ').trim().slice(0, 80)).filter(x => x.length >= 2).filter((x, i, a) => a.findIndex(y => y.toLowerCase() === x.toLowerCase()) === i).slice(0, 30);\n"
+      "const KF_SERVICES = (Array.isArray(p2.services) ? p2.services : String(p2.services || '').split(/[\\n,;]+/)).map(x => String(x == null ? '' : x).replace(/\\s+/g, ' ').trim().slice(0, 120)).filter(x => x.length >= 2).filter((x, i, a) => a.findIndex(y => y.toLowerCase() === x.toLowerCase()) === i).slice(0, 30);\n"
       "const KF_TZ = (() => { const t = String(p2.timezone || '').trim(); if (!t || t.length > 64 || !/^[A-Za-z][A-Za-z0-9_+\\-]*(\\/[A-Za-z0-9_+\\-]+)*$/.test(t)) return ''; try { new Intl.DateTimeFormat('en-US', { timeZone: t }); return t; } catch (e) { return ''; } })();\n"
       "const ladder_links = Array.isArray(p2.ladder_links)")
 patch('Normalize Input', "    pipeline_source: String(p2.pipeline_source || ''),",
@@ -7795,6 +7799,12 @@ def _b76_checks():
                 if _m.get('type') != '@n8n/n8n-nodes-langchain.lmChatAnthropic':
                     continue
                 for _ag in [t['node'] for l in ((_cn.get(_mn) or {}).get('ai_languageModel') or [[]]) for t in (l or [])]:
+                    # section 189 (S1-06): a model that serves a structured output parser's auto-fix is not an agent of the run: it is
+                    # called only when an agent's answer did not fit its format (no main path, nothing a counter chain could sit behind).
+                    # It is not an agent (claude_count.json lists agents), and only a parser with auto-fix on may have one
+                    if ((_nm.get(_ag) or {}).get('type') or '') == '@n8n/n8n-nodes-langchain.outputParserStructured':
+                        assert (_nm[_ag].get('parameters') or {}).get('autoFix') is True, 'section 189: ' + _f + ' / ' + _mn + ' feeds a parser that has no auto-fix'
+                        continue
                     _counted = ('Count Prompt (' + _ag + ')') in _nm and ('Count Answer (' + _ag + ')') in _nm
                     _out76[_f + ' / ' + _ag] = {'counted': _counted, 'model': _m['parameters']['model']['value'],
                                                 # B-C2 (section 84): each uncounted workflow carries ITS OWN reason, not one shared
@@ -9891,7 +9901,8 @@ def _b95_checks():
                     d.setdefault(s_, []).append(t_['node'])
         return d
     _rt = _wf95('SEO_Agent_Rank_Tracker.json'); _rtd = _down95(_rt); _rtn = {n['name']: n for n in _rt['nodes']}
-    for _a, _b in (('Load Monitors (Tracker)', 'Load AI Brands (Tracker)'), ('Load AI Brands (Tracker)', 'Tracker Plan'),
+    for _a, _b in (('Load Monitors (Tracker)', 'Load AI Brands (Tracker)'), ('Load AI Brands (Tracker)', 'Ensure Ladder Settings Table (Tracker)'),   # section 189: the ladder settings sit between
+                   ('Load Ladder Settings (Tracker)', 'Tracker Plan'),
                    ('Tracker Report', 'Tracker Ladder Marks'), ('Tracker Ladder Marks', 'Any Tracker Marks?'), ('Any Tracker Marks?', 'Mark Set Aside (Tracker)')):
         assert _b in (_rtd.get(_a) or []), 'R87 / R90: %s does not feed %s in the Rank Tracker' % (_a, _b)
     _v95 = ((_rtn['Mark Set Aside (Tracker)'].get('parameters') or {}).get('columns') or {}).get('value') or {}
@@ -12399,6 +12410,28 @@ log('The front door reserves the website\'s whole AI panel (W2-FIX, 2026-10-23):
 import llm_limits as _ll150
 COMPLETE_SRC150 = _rd0('code/_complete.js').rstrip('\n')
 assert 'const CK = (() => {' in COMPLETE_SRC150
+
+# ---------- 189. (production review 2026-11-12, S1-06) the brief parser repairs its own format ----------
+# Execution 13196: "Parser - Strategy Brief" answered "Model output doesn't fit required format" twice (the agent retries once) and a client's
+# page run died after 18.6 minutes, two Opus briefs spent. n8n's structured output parser has an auto-fix mode: when the brief's JSON does
+# not fit the schema it hands the answer, the schema and the error to a model ONCE and parses that model's answer instead. The fixer is
+# Claude Haiku 4.5 with no thinking (it rewrites JSON it is given, it plans nothing); it runs only on a parse failure, so a normal run costs
+# nothing more, and a failing one at most one Haiku call per brief attempt (two with the agent's own retry) before the run fails as before.
+_bf189 = 'Claude — Brief Fixer'
+add_node(_bf189, '@n8n/n8n-nodes-langchain.lmChatAnthropic', 1.6, {'model': {'__rl': True, 'mode': 'list', 'value': 'claude-haiku-4-5-20251001', 'cachedResultName': 'Claude Haiku 4.5'}, 'options': {}},
+         [pos('Parser — Strategy Brief')[0] + 160, pos('Parser — Strategy Brief')[1] + 200], {'credentials': {'anthropicApi': {'id': 'SEOcredAnthropic', 'name': 'Anthropic (SEO Agent)'}}})
+conns[_bf189] = {'ai_languageModel': [[{'node': 'Parser — Strategy Brief', 'type': 'ai_languageModel', 'index': 0}]]}
+_FIX_PROMPT189 = ('The JSON below was written to a fixed format, but it does not fit it. Return the same content in the required format.\n\n'
+    'Required format:\n--------------\n{instructions}\n--------------\n\n'
+    'The JSON as it was written:\n--------------\n{completion}\n--------------\n\n'
+    'Why it does not fit:\n--------------\n{error}\n--------------\n\n'
+    'Rules: keep every value as it was written; change only what breaks the format (a wrong type, a missing required field filled from the '
+    'written content, a broken bracket or quote, text around the JSON). Add no fact, number, address or name that is not in the written JSON. '
+    'Answer with the JSON only.')
+nodes['Parser — Strategy Brief']['parameters'].update({'autoFix': True, 'customizeRetryPrompt': True, 'prompt': _FIX_PROMPT189})
+assert all(x in _FIX_PROMPT189 for x in ('{instructions}', '{completion}', '{error}')) and _FIX_PROMPT189.count('{') == 3, 'section 189: the fix prompt must carry exactly its three placeholders'
+assert [t['node'] for l in conns[_bf189]['ai_languageModel'] for t in l] == ['Parser — Strategy Brief'] and nodes['Parser — Strategy Brief']['parameters']['autoFix'] is True
+log('Production review 2026-11-12 (S1-06, section 189): the Strategy Brief parser repairs a brief whose JSON does not fit its format with one Claude Haiku call (auto-fix), instead of failing the page run after 18 minutes')
 
 # ---------- A. the limits, and the cost table that prices the thinking (not the ceiling) ----------
 _set150 = _ll150.apply(_ll150.MAIN, nodes.values())

@@ -13,6 +13,9 @@ STAMP=$(date -u +%Y-%m-%dT%H%M%SZ)
 # ALAVENTRA_COMPOSE: another compose command line (the local rehearsal of RUNBOOK §5 points it at a scratch project)
 read -r -a COMPOSE <<< "${ALAVENTRA_COMPOSE:-docker compose -p alaventra --env-file $SECRETS/prod.env -f compose.prod.yml}"
 mkdir -p "$OUT"
+# a dump that dies part-way (2026-11-05: a 209 MB .part stayed on the disk, no nightly reached the bucket) leaves nothing behind;
+# hygiene.sh raises the alarm when no complete dump is younger than 30 hours
+trap 'rm -f "$OUT"/*-"$STAMP".dump.part' EXIT
 for db in n8n app; do
   f="$OUT/$db-$STAMP.dump"
   "${COMPOSE[@]}" exec -T postgres pg_dump -U postgres -Fc -Z 6 "$db" > "$f.part"

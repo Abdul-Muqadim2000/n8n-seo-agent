@@ -22,7 +22,11 @@ const now = p.now || new Date().toISOString();
 const N = KIW.N, S = KIW.S;
 const client = KIW.host(p.domain);
 const chosen = p.chosen || [];
-const sections = [...(c.sections || []), ...(rp.sections || []), ...(sp.sections || [])];
+// KI-JUDGE (2026-11-12, fixes/JUDGE.md): the judge's labels (Claude Opus 5.5 read each search with its top results); none when it was off or
+// could not answer, and then a soft word-rule stop decides as before
+let jp = {}; try { jp = $('Research Judge Picture').first().json || {}; } catch (e) { jp = {}; }
+const JL = jp.labels || {};
+const sections = [...(c.sections || []), ...(rp.sections || []), ...(sp.sections || []), ...(jp.sections || [])];
 const saveRows = [...(c.cache_rows || []), ...(rp.cache_rows || []), ...(sp.cache_rows || [])];
 // ---- traffic potential of the #1 page (exact addresses only) ----
 const cache = all('Load KI Cache').filter(r => r && r.key);
@@ -60,7 +64,15 @@ const rows = (rp.rows || []).map(r0 => {
   const sr = by[r.keyword] || null; const top10 = sr ? (sr.top10 || []).map(t => ({ ...t, refdomains: rd[KIW.host(t.host)] != null ? rd[KIW.host(t.host)] : null })) : [];
   // FX-L H5: with its results page read, a search naming a business on that page is another company's brand
   if (sr && r.gate === 'pass') { const g2 = KI.gate(r.keyword, { ...(p.fit_ctx || {}), serp_domains: KI.brandDomains(top10.map(t => t.host).filter(h => KIW.host(h) !== client), { services: p.services }), serp_hosts: top10.slice().sort((a, b) => (a.pos || 99) - (b.pos || 99)).map(t => t.host) });   // KI-GATE2: a top-3 website the search names
-    if (g2.gate !== 'pass') { r.gate = 'fail'; r.gate_reason = g2.reason; r.gate_code = g2.reason; r.gate_detail = (g2.text || g2.reason) + (g2.detail ? ' (' + g2.detail + ')' : ''); } }
+    if (g2.gate !== 'pass' && (!g2.soft || !JL[KIW.normKw(r.keyword)])) { r.gate = 'fail'; r.gate_reason = g2.reason; r.gate_code = g2.reason; r.gate_detail = (g2.text || g2.reason) + (g2.detail ? ' (' + g2.detail + ')' : ''); r.hard_after_serp = !g2.soft; } }
+  // KI-JUDGE: the judge decides every search it labelled, except one a final rule stopped after its results page was read (another
+  // company's brand on that page); a search it could not label keeps the word rules' opinion
+  const jl = JL[KIW.normKw(r.keyword)] || '';
+  if (jl && !r.hard_after_serp) { r.judge = jl;
+    if (jl === 'pass') { r.gate = 'pass'; r.gate_reason = ''; r.gate_code = ''; r.gate_detail = ''; }
+    else { const why = KIW.JUDGE_REASON[jl] || 'off_topic'; r.gate = 'fail'; r.gate_reason = why; r.gate_code = why;
+      r.gate_detail = ((KI.GATE_TEXT || {})[why] || why) + ' (read from the search and its top results' + (r.soft_gate ? '; the word rules said: ' + r.soft_gate.reason : '') + ')'; } }
+  else if (!jl && r.soft_gate && r.gate === 'pass') { r.gate = 'fail'; r.gate_reason = r.soft_gate.reason; r.gate_code = r.soft_gate.reason; r.gate_detail = r.soft_gate.detail; }
   const intentP = N(r.intent_p);
   const st = KI.stage(top10, r.keyword, r.intent_label ? { label: r.intent_label, probability: intentP } : r.labs_intent, { own_domain: client, cfg });
   const row = { ...r, top10, serp: sr, market_refdomains_median: sr ? null : marketMed, stage: st.stage, intent: st.intent || null, intent_confidence: N(st.confidence), needs_review: !!st.needs_review || !sr, stage_evidence: st.evidence ? [st.evidence] : [],

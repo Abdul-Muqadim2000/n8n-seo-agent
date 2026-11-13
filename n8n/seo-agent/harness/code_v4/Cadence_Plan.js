@@ -184,8 +184,8 @@ const SM = (() => {
     // seo_sites.declared_services) comes first and is never dropped by what a crawl read; it is kept apart as well, so SM.toRow writes it back
     // unchanged and the weekly Site Tracker can never overwrite it
     const declListOf = (v) => { if (Array.isArray(v)) return v; const j = jparse(v, null); return Array.isArray(j) ? j : listOf(v); };
-    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
-    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
+    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
     const navStored = jparse(row.nav_pages_json, []) || [];
     const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);
     const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);
@@ -252,6 +252,9 @@ const SM = (() => {
   // 404s) is GONE. It is still in the inventory (Google keeps showing it), but no advice may point at it: matchPage never returns it as
   // "the page that answers this search", and the readers list it as a redirect to make (v5/code/_gone.js). Unknown (0) is not gone.
   const isGone = (p) => { const n = Number((p || {}).http_status) || 0; return n === 404 || n === 410; };
+  // section 189 (production review 2026-11-12): an address that answers a redirect (3xx to another path, read by the daily page watch) is not a
+  // page: no search is matched to it and no rule names it as the page for a search
+  const isMoved = (p) => { const n = Number((p || {}).http_status) || 0; return n >= 300 && n < 400; };
   const gonePages = (model) => pages(model).filter(isGone);
   // ---- K8 (2026-10-21, KW-MATCH): the page that is ABOUT the search, not only the page that repeats its words ----
   // The 75% word rule missed techand.ai's live "AI & Automation | What We Do | Tech&" (/whatwedo/ai-automation) for "ai consulting dubai"
@@ -348,7 +351,7 @@ const SM = (() => {
     const isPref = (u) => !!prefKey && (bare(hostOf(u)) + pathOf(u).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase()) === prefKey;
     const want = matchTerms(keyword); if (!want.length) return { match: null, may_overlap: null };
     const key = tokensOf(keyword).join(' ');
-    const inv = pages(model).filter(p => !isGone(p));   // RV-1: a gone page answers nothing
+    const inv = pages(model).filter(p => !isGone(p) && !isMoved(p));   // RV-1: a gone page answers nothing; section 189: nor does an address that redirects
     const brands = brandWords(model); const core = coreTerms(keyword, brands);
     const kSvc = core.length ? serviceHits(model, core, brands) : [];
     const otherService = (p) => { if (!kSvc.length) return false; const ps = serviceHits(model, fieldsOf(p, brands).own, brands); return ps.length > 0 && !ps.some(sv => kSvc.includes(sv)); };
@@ -510,7 +513,7 @@ const SM = (() => {
     return { state: 'planned', text: '' };
   };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, pageMatch, MATCH_CONF, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages, confirmPage,
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, isMoved, gonePages, confirmPage,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms, coreTerms } };
 })();
 // ---- the pages written and not yet published, and the ladders being written: ONE rule for the Content Cadence and the ladder mode ----
@@ -1137,6 +1140,34 @@ function fitCareer(keyword, o) {
 }
 // ctx: { intent, own_domain, competitors: [domains, declared], serp_domains: [domains on the results page / auto-detected rivals], brands: { name: domain } (learned),
 //       serp: [this keyword's own top domains, in rank order] (optional), protect: [words of the head term / seeds / services], relevance: fn (G19 hook) }
+// F-10 (production review 2026-11-12, section 189): a search for one website by its ADDRESS ("zylo com", "zylo.com", "www zylo", "zylo co uk")
+// is navigational whatever the search data says: people want that site, not a page of yours (the Recommendations told a client to move
+// "otherbrand com" into the top 3). The same rule as the web app's addressSearchLabel (app/shared/src/search-advice.ts). "net" is left out
+// ("asp net" is a subject), and so are "node.js" / "asp.net" (js and net are not a top-level domain people type here).
+// Kept identical in effect to the app's addressSearchLabel after its review (2026-11-12): the whole search is a host ("zylo.com"); a name
+// followed by com / net / org (org only after one word) or by "co" and a country ("zylo com pk", "zylo co uk"); "www" and one name. "info",
+// "io" and "ai" as a separate word never ("vat info", "generative ai"); the label must be a distinctive name (4+ letters, the gate's own
+// label rule), so "erp com", "company info", "non profit org" and "socket.io developers" are subjects, not addresses.
+const FIT_CC = 'uk|ae|in|za|nz|au|pk|sa|qa|om|kw|bh|eg|jp|sg|my';
+const FIT_HOST_ONLY = new RegExp('^(?:https?://)?(?:www\\.)?([a-z0-9-]+)\\.(?:com|net|org|io|ai|co|ae|sa|pk|qa|om|kw|bh|eg|in|uk|us|de|fr)(?:\\.(?:' + FIT_CC + '))?(?:/\\S*)?$');
+const FIT_NAME_TAIL = new RegExp('^(\\S+(?:\\s\\S+)?)\\s(com|net|org|co)(?:\\s(' + FIT_CC + '))?$');
+/** a search for one website by its address: the label typed ("zylo"), or '' (own = the site's own label, always an address of it) */
+const fitAddressLabel = (query, own) => {
+  let q = String(query == null ? '' : query).replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!q) return '';
+  const www = /^www(\s|\.)/.test(q) && !/^www\.[a-z0-9-]+\.[a-z]/.test(q) ? (q = q.replace(/^www[\s.]+/, ''), true) : false;
+  let label = '';
+  const host = q.match(FIT_HOST_ONLY);
+  if (host) label = host[1];
+  else {
+    const t = q.match(FIT_NAME_TAIL);
+    if (t) { const words = t[1].split(' '); const tld = t[2]; if ((tld === 'co' && t[3]) || (tld !== 'co' && (tld !== 'org' || words.length === 1))) label = words.join(''); }
+    else if (www && /^[a-z0-9-]+$/.test(q)) label = q;
+  }
+  if (!label) return '';
+  if (own && own.length >= 4 && label.startsWith(own)) return label;
+  return label.replace(/-/g, '').length >= 4 && fitOwnLabels(label + '.example', [], []).length ? label : '';
+};
 function fitGate(keyword, ctx) {
   ctx = ctx || {};
   // KW-GATE (2026-10-21): an Arabic keyword is judged on its English reading (fitArabic); the sentence says how it was read
@@ -1162,6 +1193,11 @@ function fitGate(keyword, ctx) {
     if (has(FIT_JOBS) && !sellsWhat.jobs) return { ok: false, reason: 'job search', detail: 'people looking for work at this company (' + l + '), not buyers of what it sells' };
     return { ok: false, reason: 'own brand', detail: 'names the website itself (' + l + ')' };
   }
+  // 1b. F-10 (section 189): a search for a website by its address (the website's own, or another one)
+  { const own = fitHost(ctx.own_domain).split('.')[0]; const al = fitAddressLabel(kw, own); if (al) {
+    return (own && (al === own || (own.length >= 4 && al.includes(own))))
+      ? { ok: false, reason: 'own brand', detail: 'people looking for your own website by its address (' + kw + ')' }
+      : { ok: false, reason: 'navigational', detail: 'people looking for one website by its address (' + kw + '), not for what you sell' }; } }
   // 2. the search data says navigational
   if (String(ctx.intent || '').toLowerCase() === 'navigational') return { ok: false, reason: 'navigational', detail: 'the search data classifies it as navigational (people look for one particular website)' };
   // 2b. MKT (2026-10-27, AUDIT M4): with the website's market given (ctx.market, ISO-2), a keyword that names only places outside it is a
@@ -1474,6 +1510,8 @@ const LRU = (() => {
    *  found by the caller among non-blog pages), else a new page at `planned`. */
   const headTarget = (url, o) => {
     const opt = o || {}; const u = S(url); if (!u) return null;
+    // production review 2026-11-12 (F-05): the home page is never a ladder's main page (it would be rewritten): a new page at `planned`
+    if (/^(?:\/[a-z]{2}(?:-[a-z]{2})?)?$/.test(pathOf(u))) return { reason: 'home', was: u, to: S(opt.planned), exists: false, text: 'the home page is never rewritten as the main page of a ladder: it gets its own page at ' + S(opt.planned).replace(/^https?:\/\/[^\/]+/i, '') };
     const orig = copyOf(u, opt.known || []);
     if (orig) return { reason: 'copy', was: u, to: S(orig).startsWith('http') ? S(orig) : (S(opt.home).replace(/\/+$/, '') + pathOf(orig)), exists: true,
       text: u.replace(/^https?:\/\/[^\/]+/i, '') + ' is a copy of ' + pathOf(orig) + ', a page your website already has: the main page improves that page instead of a second copy' };
@@ -2588,7 +2626,7 @@ const CC = (() => {
     track: 0, published: 0, checkin: 0, profile: 0, case_study: 0,   // these spawn the work that costs; each spawn reserves its own row
     // KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §7, R5 prices): no run yet, so these are the design's ceilings, not measured
     competitors: 0,           // FX-L: the worker calls no model (fixes/E2.md 7.1); the tie-break of DESIGN.md §2.5 is not built
-    keyword_research: 0,      // FX-L: no model is called (DESIGN.md §3.6's tie-break is not built)
+    keyword_research: 0.45,   // KI-JUDGE (2026-11-12): Claude Opus 5.5 judges up to 300 searches with their top results; $1.03 for 996 offline (fixes/JUDGE.md)
   };
   const DFS_EST = {           // measured DataForSEO cost of that run →
     crawl: 0.09,              // 0.09   (execs 497 and 513, both exactly)

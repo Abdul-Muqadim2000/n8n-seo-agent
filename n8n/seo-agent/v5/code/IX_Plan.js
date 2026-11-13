@@ -50,6 +50,7 @@ const chainOf = (r) => S(json(r.sitemaps_json).chain_id);
 const todayOf = (sid) => runsOf(sid).filter(r => S(r.run_at).slice(0, 10) === today);
 const doneToday = (sid) => { const t = todayOf(sid); return t.some(r => !isReservation(r)) || t.filter(isReservation).length >= IX.CFG.gave_up_after; };
 const watch = trigger.ix_watch && typeof trigger.ix_watch === 'object' ? trigger.ix_watch : null;
+const dryRun = trigger.dry_run === true || /^(true|1|yes|on)$/i.test(String(trigger.dry_run ?? '')) || !!(chain && chain.dry_run === true) || !!(watch && watch.dry_run === true);   // wave 3 (§2.3)
 
 // ---- the dispatch: today's chain of websites ----
 if (!want && !chain) {
@@ -69,7 +70,7 @@ if (!want && !chain) {
   const fresh = list.filter(x => !x.retry);
   if (wn && fresh.length > 1) { const k = wn % fresh.length; fresh.push(...fresh.splice(0, k)); list.splice(0, fresh.length, ...fresh); }
   if (!list.length) return [{ json: { nothing_to_do: true, skip: true, reason: served.length ? 'every tracked website with the index watch on was already checked today (' + served.length + ')' : 'no tracked website has the index watch on', sites: sites.length, watch_n: wn } }];
-  return [{ json: { dispatch: true, chain: list.map(x => x.site_id), domains: list.map(x => x.domain), served_today: served, run_at, trigger: S(trigger.trigger), today, watch_n: wn } }];
+  return [{ json: { dispatch: true, dry_run: dryRun, chain: list.map(x => x.site_id), domains: list.map(x => x.domain), served_today: served, run_at, trigger: S(trigger.trigger), today, watch_n: wn } }];
 }
 
 // ---- one website: a chain part or an on-demand run ----
@@ -99,4 +100,7 @@ return [{ json: { site_id: sid, domain: normD(s.domain), canonical_host: S(s.can
   // submissions to check back and to space 7 days apart, the sitemap tree's fingerprint, a 403 that holds the next submission)
   sitemap_submit: flag(m.index_sitemap_submit, false),
   prev_submissions: Array.isArray(pj.submissions) ? pj.submissions : [], prev_tree_fp: pj.tree_fp && typeof pj.tree_fp === 'object' ? pj.tree_fp : null,
-  prev_submit_denied: pj.submit_denied && typeof pj.submit_denied === 'object' ? pj.submit_denied : null } }];
+  prev_submit_denied: pj.submit_denied && typeof pj.submit_denied === 'object' ? pj.submit_denied : null,
+  // wave 3 (DESIGN_WAVE3.md §2.5 / §2.3): the last run's sitemap dates (used when today's tree could not be read), and a test run: nothing is
+  // sent to IndexNow (`dry_run` on the Manual Run, carried along the chain like AI Growth's)
+  prev_sitemap_dates: pj.dates && typeof pj.dates === 'object' ? pj.dates : null, dry_run: dryRun } }];

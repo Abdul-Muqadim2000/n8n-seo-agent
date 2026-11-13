@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { requireVerified, siteAccess } from '../auth/access';
 import { notFound } from '../lib/errors';
-import { indexingData, indexingHistory, indexingPages, markAskedGoogle } from '../services/indexing';
+import { indexingData, indexingHistory, indexingPages, markAskedGoogle, markPageType } from '../services/indexing';
 
 /**
  * Index coverage (2026-10-29, app/API.md "Index coverage"): the Indexing page's reads. Everybody in the company sees them (viewer and up,
@@ -50,6 +50,15 @@ export async function indexingRoutes(app: FastifyInstance) {
     const a = await siteAccess(req, p.orgId, p.siteId, 'member');
     requireVerified(a.site);
     return markAskedGoogle(a, req, req.body);
+  });
+
+  // wave 3 (DESIGN_WAVE3 §3.4): the client's own mark on one page ({ url, type: 'important' | 'utility' | '' }). Members and above; written to
+  // the audit log. Only `type_override` on that page's row is written; the engine files the page again on its next daily run.
+  app.post('/api/orgs/:orgId/sites/:siteId/data/indexing/page-type', { config: perUser(30) }, async (req) => {
+    const p = req.params as P;
+    const a = await siteAccess(req, p.orgId, p.siteId, 'member');
+    requireVerified(a.site);
+    return markPageType(a, req, req.body);
   });
 
   // what happened to one page over time: ?url=<an address on this website>

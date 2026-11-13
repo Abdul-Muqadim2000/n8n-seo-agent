@@ -399,6 +399,22 @@ export interface IndexPageRow extends DtRow {
   /** 2026-11-05: where that improvement went live when it is ANOTHER address ('' = this one): the old page then needs a permanent
    *  redirect to it (site task indexing:merge) */
   improved_to?: string;
+  /** wave 3 (DESIGN_WAVE3 §2.7): the page's rank among the pages that should be in Google and are not (1 = first; 0 / absent = not ranked) */
+  priority?: number | string;
+  /** wave 3 (§2.2): ISO, the first run that found Google had not visited the page in 21 days ('' = not escalated) */
+  escalated_at?: string;
+  /** wave 3 (§2.2): comma list of the likely reasons, in order: not_asked, asked_no_visit, weak_links, short_page, not_in_sitemap, sitemap_no_dates */
+  escalate_why?: string;
+  /** wave 3 (§2.4): written by the APP only ('important' | 'utility' | '' = the rules decide); the engine reads and keeps it */
+  type_override?: string;
+  /** wave 3 (§1): our robots.txt verdict for the page ('yes' | 'no' | '' = not read) */
+  robots_ok?: string;
+  /** wave 3 (§1): 1 = linked from the home page, 2 = from a page the home page links to, 0 / absent = unknown */
+  link_depth?: number | string;
+  /** wave 3 (§1): how many pages of the website we found linking to it */
+  linked_n?: number | string;
+  /** wave 3 (§2.3): ISO, when we last sent the page to IndexNow (Bing and others, never Google; '' = never) */
+  indexnow_at?: string;
 }
 /** One row per state / cause change of a page (insert only). */
 export interface IndexHistoryRow extends DtRow {
@@ -413,6 +429,11 @@ export interface IndexRunRow extends DtRow {
   /** contract change 2 (ENGINE_BUILD): Search Console's submitted sitemaps and our own sitemap read, as JSON
    *  `{submitted, submitted_errors, submitted_warnings, pending, read, fetched, urls, capped, robots_status, errors[]}` (+ `complete` later) */
   sitemaps_json?: string;
+  /** wave 3 (DESIGN_WAVE3 §2.1): pages escalated after 21 days, pages asked about that Google has not read yet, pages sent to IndexNow;
+   *  `sitemaps_json.dates` = `{ urls, with_lastmod, distinct }` */
+  escalated?: number | string;
+  asked_waiting?: number | string;
+  indexnow_sent?: number | string;
 }
 /** Google's own announcements (Search Status Dashboard, spam policies page); global, one row per event. */
 export interface GoogleEventRow extends DtRow {

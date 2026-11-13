@@ -37,7 +37,7 @@ describe('KI: the two run modes', () => {
       expect(COST_TABLE[m].basis.length).toBeGreaterThan(10);
       for (const s of [...MODES[m].finalStages, ...(MODES[m].startStages ?? [])]) expect(STAGE_LABELS[s]).toBeTruthy();
     }
-    expect([MODES.competitors.etaMinutes, MODES.keyword_research.etaMinutes]).toEqual([6, 12]);
+    expect([MODES.competitors.etaMinutes, MODES.keyword_research.etaMinutes]).toEqual([6, 25]);
     expect([...MODES.competitors.finalStages, ...MODES.keyword_research.finalStages]).toEqual([...KI_FINAL_STAGES]);
     expect(LISTED_MODE_IDS.length).toBe(MODE_IDS.length - 2);
   });

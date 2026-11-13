@@ -193,3 +193,21 @@ Also in wave 2: `indexing:canonical_elsewhere` lists pages with a title of their
 or the engine's note "This page tells Google it is a copy of"; payload `ownTitle`); for those the own check counts only a canonical tag that
 names the page itself (their absence from the sitemap is never the fix). `indexing:sitemap` is not listed for a missing sitemap when the client switched on sitemap submission and Google
 reports Full access for us (Alaventra submits it then).
+
+## 8. Key `indexing:sitemap_dates` (Index coverage wave 3, 2026-11-12)
+
+`n8n/seo-agent/docs/indexing-2026-10-29/DESIGN_WAVE3.md` §3.3. A site-level step of kind `indexing` (like `indexing:sitemap`) for a sitemap
+whose pages carry no usable `<lastmod>` dates. Google uses the dates only when they are accurate, so the step asks for the date each page's
+main content last changed, never the build time.
+
+- **Raised by the engine's reading**: the newest run that read the website sent `sitemaps_json.dates` = `{ urls, with_lastmod, distinct }`
+  and the engine's rule says no usable dates (at least 5 addresses and under half dated, or 10 or more sharing one day).
+- **Our own check**: "I've done it, check now" and the daily check read the sitemap tree (`sitemapOf`, the same read and 30-minute cache as the
+  other sitemap steps; each address counted once with its first non-empty date). Done when at least 90% of the addresses carry a date and
+  (fewer than 10 addresses, or more than one distinct day); otherwise a miss with the counts in words (two misses an hour apart reopen a done
+  step).
+- **Unreachable never records**: no sitemap could be read is 503 on a click and nothing daily; a tree read only in part whose part looks done
+  is 409 `site_unsure` (nothing recorded; the engine decides); a part that still lacks dates is a miss.
+- **The engine's next reading decides when newer**: a newer run with usable dates closes it, a newer run without reopens it.
+- Guide `index-sitemap-dates`; Needs-you `task:indexing:sitemap_dates` and the recommendation `ix:site_fix:sitemap_dates` open it. Severity
+  info (it never keeps Google out of a page).

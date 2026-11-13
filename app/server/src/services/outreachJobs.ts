@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNotNull, lte, or, sql } from 'drizzle-orm';
-import { addWorkingDays, consentGate, digestOpen, digestProspect, emailDomain, inSendWindow, isDigestEmail, n8nSiteId, parseDigest, parseReturnDate, sendGap, warmupCap, type DnsCheck, type LinkOutreachRow, type ProfileRow, type ProspectRow } from '@seo/shared';
+import { addWorkingDays, consentGate, digestOpen, digestProspect, emailDomain, inSendWindow, isDigestEmail, n8nSiteId, parseDigest, parseReturnDate, realJobTitle, sendGap, warmupCap, type DnsCheck, type LinkOutreachRow, type ProfileRow, type ProspectRow } from '@seo/shared';
 import { db, schema } from '../db';
 import type { MailboxRow, OutreachSequenceRow, SiteRow } from '../db/schema';
 import { replyRead, siteRows, upsertRow } from '../n8n/client';
@@ -298,7 +298,7 @@ export async function sendManual(q: OutreachSequenceRow, body: string, log: Log)
   const thread = await db.select().from(schema.outreachMessages).where(eq(schema.outreachMessages.sequenceId, q.id)).orderBy(schema.outreachMessages.at);
   const lastIn = [...thread].reverse().find((m) => m.direction === 'in' && m.kind === 'reply');
   const to = lastIn?.fromEmail || q.toEmail;
-  const mail = compose(mb, { sequenceId: q.id, step: q.step, to, subject: q.steps[0]!.subject, body: body + `\n\n${[mb.signatureName || mb.fromName, mb.signatureTitle, mb.company].filter(Boolean).join(', ')}`, firstSubject: q.steps[0]!.subject, country: q.country, foundOn: '', previousIds: thread.map((m) => m.messageId), manual: true });
+  const mail = compose(mb, { sequenceId: q.id, step: q.step, to, subject: q.steps[0]!.subject, body: body + `\n\n${[mb.signatureName || mb.fromName, realJobTitle(mb.signatureTitle), mb.company].filter(Boolean).join(', ')}`, firstSubject: q.steps[0]!.subject, country: q.country, foundOn: '', previousIds: thread.map((m) => m.messageId), manual: true });
   const oauth = isOauthMailbox(mb);
   const conn = oauth ? null : connOf(mb);
   const mid = oauth

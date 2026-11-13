@@ -5,6 +5,8 @@ import {
   brandingSchema,
   brandTokens,
   clientSafePayload,
+  customerSafePayload,
+  stripHookSecrets,
   clientWorkspaceRole,
   contrastRatio,
   effectiveBrand,
@@ -193,5 +195,34 @@ describe('what a client person sees', () => {
     const line = overviewCsvRow(r, csvCell);
     expect(line.startsWith(`"'=HYPERLINK`)).toBe(true);
     expect(line.split('","').length).toBe(OVERVIEW_CSV_COLUMNS.length);
+  });
+});
+
+describe('S2-10: the company callback address (its hook token) never reaches a reader', () => {
+  const HOOK = 'http://host.docker.internal:4000/api/hooks/n8n/abcdefghijklmnopqrstuvwx';
+  const stored = {
+    stage: 'ai_visibility',
+    summary: 'ok',
+    callback_url: HOOK,
+    state_before: { callback_url: HOOK, repaired_from: { note: `posted to ${HOOK} twice`, hookToken: 'abcdefghijklmnopqrstuvwx' } },
+    rows: [{ keyword: 'crm', callbackUrl: HOOK, hook_url: HOOK, url: 'https://www.example.com/crm' }],
+    webhook: { url: 'https://hooks.example.com/mine' },
+  };
+  it('clientSafePayload and customerSafePayload drop callback / hook keys at any depth and replace hook addresses in text', () => {
+    for (const out of [clientSafePayload(stored), customerSafePayload(stored)]) {
+      expect(JSON.stringify(out)).not.toContain('/api/hooks/');
+      expect(JSON.stringify(out)).not.toContain('abcdefghijklmnopqrstuvwx');
+      expect(out).toMatchObject({ stage: 'ai_visibility', summary: 'ok', rows: [{ keyword: 'crm', url: 'https://www.example.com/crm' }] });
+      expect((out as typeof stored).state_before.repaired_from.note).toBe('posted to [address removed] twice');
+      // a company's own outgoing webhook settings are not the hook token
+      expect((out as typeof stored).webhook).toEqual({ url: 'https://hooks.example.com/mine' });
+    }
+  });
+  it('stripHookSecrets keeps everything else as it is, deep arrays and dates included; the stored value is untouched', () => {
+    const d = new Date('2026-11-12T00:00:00Z');
+    const deep = { a: [[[{ b: [{ c: { callback_url: HOOK, d: 1, at: d } }] }]]] };
+    const out = stripHookSecrets(deep);
+    expect(out).toEqual({ a: [[[{ b: [{ c: { d: 1, at: d } }] }]]] });
+    expect(deep.a[0]![0]![0]!.b[0]!.c.callback_url).toBe(HOOK);
   });
 });

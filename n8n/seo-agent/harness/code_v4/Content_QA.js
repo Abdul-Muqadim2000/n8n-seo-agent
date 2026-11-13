@@ -1605,6 +1605,23 @@ function anchorText(p) {
   const path = String(o.url || '').replace(/^https?:\/\/[^\/]+/i, '').replace(/[?#].*$/, '').replace(/^\/+|\/+$/g, '').split('/').pop().replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[-_]+/g, ' ').trim();
   return titleCaseKeyword(path) || String(o.url || '');
 }
+// ---- JOBT: a placeholder author job title is no job title (F-29, production review 2026-11-12; build section 189) ----
+// An author job title of "User" was accepted and printed on every byline ("Name, User"), in the Person schema and in the author box. The
+// web app now refuses such a title; profile rows stored before that still carry it, so every engine node that PRINTS a job title reads it
+// through JOBT.real: a placeholder is '' (the line is left out), never printed. The placeholders are only these words, whole, case and
+// spacing aside: "User", "N/A", "-", "none", "test", "job title", "title" ("Owner", "Administrator", "Tester" are real titles). The content
+// readiness rule (_readiness.js, word for word app/shared/src/readiness.ts) is not changed. Inlined by build_v4.py / build_monitors.py
+// (marker JOB_TITLE in a block comment). Pure.
+const JOBT = (() => {
+  const LIST = ['user', 'n/a', '-', 'none', 'test', 'job title', 'title'];
+  const SET = new Set(LIST);
+  const norm = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toLowerCase();
+  /** true for a job title that is not one; an empty title is missing, not a placeholder */
+  const isPlaceholder = (v) => SET.has(norm(v));
+  /** the job title to print: '' for a placeholder, else the title with its spacing collapsed */
+  const real = (v) => (isPlaceholder(v) ? '' : String(v == null ? '' : v).replace(/\s+/g, ' ').trim());
+  return { isPlaceholder, real, LIST };
+})();
 // ---- the one site model (G19, 2026-10-12; see SITE_MODEL_SPEC.md; the builders inline this file where a node asks for the SITE_MODEL kit) ----
 // Every workflow reads the same facts about a site through SM: the canonical host, the business name / logo / NAP (seo_profiles ->
 // the homepage Organization / LocalBusiness schema -> Google Business Profile -> the fields the web app sent), the services and nav
@@ -1709,8 +1726,8 @@ const SM = (() => {
     // seo_sites.declared_services) comes first and is never dropped by what a crawl read; it is kept apart as well, so SM.toRow writes it back
     // unchanged and the weekly Site Tracker can never overwrite it
     const declListOf = (v) => { if (Array.isArray(v)) return v; const j = jparse(v, null); return Array.isArray(j) ? j : listOf(v); };
-    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
-    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    const declared_services = uniq([...declListOf(x.declared_services), ...declListOf(row.declared_services)].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
+    const services = uniq([...declared_services, ...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 120))).filter(Boolean).slice(0, 30);
     const navStored = jparse(row.nav_pages_json, []) || [];
     const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);
     const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);
@@ -1777,6 +1794,9 @@ const SM = (() => {
   // 404s) is GONE. It is still in the inventory (Google keeps showing it), but no advice may point at it: matchPage never returns it as
   // "the page that answers this search", and the readers list it as a redirect to make (v5/code/_gone.js). Unknown (0) is not gone.
   const isGone = (p) => { const n = Number((p || {}).http_status) || 0; return n === 404 || n === 410; };
+  // section 189 (production review 2026-11-12): an address that answers a redirect (3xx to another path, read by the daily page watch) is not a
+  // page: no search is matched to it and no rule names it as the page for a search
+  const isMoved = (p) => { const n = Number((p || {}).http_status) || 0; return n >= 300 && n < 400; };
   const gonePages = (model) => pages(model).filter(isGone);
   // ---- K8 (2026-10-21, KW-MATCH): the page that is ABOUT the search, not only the page that repeats its words ----
   // The 75% word rule missed techand.ai's live "AI & Automation | What We Do | Tech&" (/whatwedo/ai-automation) for "ai consulting dubai"
@@ -1873,7 +1893,7 @@ const SM = (() => {
     const isPref = (u) => !!prefKey && (bare(hostOf(u)) + pathOf(u).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase()) === prefKey;
     const want = matchTerms(keyword); if (!want.length) return { match: null, may_overlap: null };
     const key = tokensOf(keyword).join(' ');
-    const inv = pages(model).filter(p => !isGone(p));   // RV-1: a gone page answers nothing
+    const inv = pages(model).filter(p => !isGone(p) && !isMoved(p));   // RV-1: a gone page answers nothing; section 189: nor does an address that redirects
     const brands = brandWords(model); const core = coreTerms(keyword, brands);
     const kSvc = core.length ? serviceHits(model, core, brands) : [];
     const otherService = (p) => { if (!kSvc.length) return false; const ps = serviceHits(model, fieldsOf(p, brands).own, brands); return ps.length > 0 && !ps.some(sv => kSvc.includes(sv)); };
@@ -2035,7 +2055,7 @@ const SM = (() => {
     return { state: 'planned', text: '' };
   };
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, pageMatch, MATCH_CONF, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
-    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, gonePages, confirmPage,
+    titleShare, titleGap, canonUrl, isListing, pageScore, pageStep, isGone, isMoved, gonePages, confirmPage,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml, matchTerms, coreTerms } };
 })();
 // Coverage kit (FIX_PLAN G33, 2026-10-13; inlined through the marker /*__COVERAGE__*/).
@@ -3742,6 +3762,34 @@ function fitCareer(keyword, o) {
 }
 // ctx: { intent, own_domain, competitors: [domains, declared], serp_domains: [domains on the results page / auto-detected rivals], brands: { name: domain } (learned),
 //       serp: [this keyword's own top domains, in rank order] (optional), protect: [words of the head term / seeds / services], relevance: fn (G19 hook) }
+// F-10 (production review 2026-11-12, section 189): a search for one website by its ADDRESS ("zylo com", "zylo.com", "www zylo", "zylo co uk")
+// is navigational whatever the search data says: people want that site, not a page of yours (the Recommendations told a client to move
+// "otherbrand com" into the top 3). The same rule as the web app's addressSearchLabel (app/shared/src/search-advice.ts). "net" is left out
+// ("asp net" is a subject), and so are "node.js" / "asp.net" (js and net are not a top-level domain people type here).
+// Kept identical in effect to the app's addressSearchLabel after its review (2026-11-12): the whole search is a host ("zylo.com"); a name
+// followed by com / net / org (org only after one word) or by "co" and a country ("zylo com pk", "zylo co uk"); "www" and one name. "info",
+// "io" and "ai" as a separate word never ("vat info", "generative ai"); the label must be a distinctive name (4+ letters, the gate's own
+// label rule), so "erp com", "company info", "non profit org" and "socket.io developers" are subjects, not addresses.
+const FIT_CC = 'uk|ae|in|za|nz|au|pk|sa|qa|om|kw|bh|eg|jp|sg|my';
+const FIT_HOST_ONLY = new RegExp('^(?:https?://)?(?:www\\.)?([a-z0-9-]+)\\.(?:com|net|org|io|ai|co|ae|sa|pk|qa|om|kw|bh|eg|in|uk|us|de|fr)(?:\\.(?:' + FIT_CC + '))?(?:/\\S*)?$');
+const FIT_NAME_TAIL = new RegExp('^(\\S+(?:\\s\\S+)?)\\s(com|net|org|co)(?:\\s(' + FIT_CC + '))?$');
+/** a search for one website by its address: the label typed ("zylo"), or '' (own = the site's own label, always an address of it) */
+const fitAddressLabel = (query, own) => {
+  let q = String(query == null ? '' : query).replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!q) return '';
+  const www = /^www(\s|\.)/.test(q) && !/^www\.[a-z0-9-]+\.[a-z]/.test(q) ? (q = q.replace(/^www[\s.]+/, ''), true) : false;
+  let label = '';
+  const host = q.match(FIT_HOST_ONLY);
+  if (host) label = host[1];
+  else {
+    const t = q.match(FIT_NAME_TAIL);
+    if (t) { const words = t[1].split(' '); const tld = t[2]; if ((tld === 'co' && t[3]) || (tld !== 'co' && (tld !== 'org' || words.length === 1))) label = words.join(''); }
+    else if (www && /^[a-z0-9-]+$/.test(q)) label = q;
+  }
+  if (!label) return '';
+  if (own && own.length >= 4 && label.startsWith(own)) return label;
+  return label.replace(/-/g, '').length >= 4 && fitOwnLabels(label + '.example', [], []).length ? label : '';
+};
 function fitGate(keyword, ctx) {
   ctx = ctx || {};
   // KW-GATE (2026-10-21): an Arabic keyword is judged on its English reading (fitArabic); the sentence says how it was read
@@ -3767,6 +3815,11 @@ function fitGate(keyword, ctx) {
     if (has(FIT_JOBS) && !sellsWhat.jobs) return { ok: false, reason: 'job search', detail: 'people looking for work at this company (' + l + '), not buyers of what it sells' };
     return { ok: false, reason: 'own brand', detail: 'names the website itself (' + l + ')' };
   }
+  // 1b. F-10 (section 189): a search for a website by its address (the website's own, or another one)
+  { const own = fitHost(ctx.own_domain).split('.')[0]; const al = fitAddressLabel(kw, own); if (al) {
+    return (own && (al === own || (own.length >= 4 && al.includes(own))))
+      ? { ok: false, reason: 'own brand', detail: 'people looking for your own website by its address (' + kw + ')' }
+      : { ok: false, reason: 'navigational', detail: 'people looking for one website by its address (' + kw + '), not for what you sell' }; } }
   // 2. the search data says navigational
   if (String(ctx.intent || '').toLowerCase() === 'navigational') return { ok: false, reason: 'navigational', detail: 'the search data classifies it as navigational (people look for one particular website)' };
   // 2b. MKT (2026-10-27, AUDIT M4): with the website's market given (ctx.market, ISO-2), a keyword that names only places outside it is a
@@ -4846,7 +4899,7 @@ const P = MNAP ? { ...P0, business_name: String(P0.business_name || SM.name(MODE
   phone: P0.phone || MNAP.phone || '', public_email: P0.public_email || MNAP.public_email || '', price_range: P0.price_range || MNAP.price_range || '',
   address: { street: PA0.street || MNAP.street_address || '', city: PA0.city || MNAP.city || '', region: PA0.region || MNAP.region || '',
     postal_code: PA0.postal_code || MNAP.postal_code || '', country_code: PA0.country_code || MNAP.country_code || '' } } : P0;
-const PA = P.address || {}; const AU = prev.author || null; const RV = prev.reviewer || null; const role = prev.page_role || 'standard';
+const PA = P.address || {}; const AU = prev.author ? { ...prev.author, job_title: JOBT.real(prev.author.job_title) } : null; const RV = prev.reviewer ? { ...prev.reviewer, job_title: JOBT.real(prev.reviewer.job_title) } : null;   /* F-29: no "User" in the schema */ const role = prev.page_role || 'standard';
 const nap_source = MNAP ? (P0.street_address || PA0.street || P0.phone ? 'profile' : (MNAP.source || '')) : (PA0.street || P0.phone ? 'profile' : '');
 const bizName = String(P.business_name || ((prev.site_description && prev.site_description.business_name) ? prev.site_description.business_name : '')).trim();
 const biz = bizName || '[Your Business Name]';
