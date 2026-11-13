@@ -25,6 +25,9 @@ for (const d of diag) {
   const imp = impactNew.filter(x => x.site_id === d.site_id).concat(impactOld.filter(x => x.site_id === d.site_id))
     .sort((a, b) => S(b.after_to).localeCompare(S(a.after_to)) || S(b.compared_at).localeCompare(S(a.compared_at)))[0] || null;
   const fr = d.freeze || {};
+  const w3 = IX.summaryWave3(d.all || [], { now: Date.now() });
+  const sj = (() => { try { return JSON.parse(S(run.sitemaps_json) || '{}') || {}; } catch (e) { return {}; } })();
+  const dates = sj.dates || null;
   const summary = { known: sum.known, indexed: sum.indexed, not_indexed: sum.not_indexed, excluded: sum.excluded, unknown: sum.unknown, backlog_left: sum.unknown,
     new_pages: sum.new_pages, new_indexed: sum.new_indexed, by_action: sum.by_action, by_cause: sum.by_cause, dropped: (d.dropped || []).slice(0, IX.CFG.dropped_max),
     freeze: !!fr.freeze, freeze_reason: S(fr.reason), events,
@@ -32,8 +35,12 @@ for (const d of diag) {
     // N12 (fix wave 2): a run that could not read the website says so in the summary itself - the figures are the LAST check's, never today's
     // R5 (fix wave 3): the reason in plain words only (IX.plainWhy); the raw error never reaches the note
     failed: !!d.failed, checked: !d.failed, note: d.failed ? ('We could not check this website today: ' + IX.plainWhy(d.why).replace(/[.:]+$/, '') + '.' + (sum.known ? ' The figures are from the last check.' : ' Nothing has been checked yet.')) : S(run.note).slice(0, 1500),
-    figures_from: d.failed ? 'last_check' : 'today' };
-  const md = IX.reportMarkdown({ domain: d.domain }, { ...sum, should_index: sum.should_index }, { ...run, quota_cap: d.cap }, { rows: d.all || [], dropped: d.dropped || [], events, freeze: fr, impact: imp, failed: !!d.failed, why: IX.plainWhy(d.why), submit_on: !!(d.submit && d.submit.on) });   // E14: a site not checked says so, never "0 of 0"
+    figures_from: d.failed ? 'last_check' : 'today',
+    // wave 3 (DESIGN_WAVE3.md §2.8): the to-do - pages Google has not visited yet, the ones waiting 3 weeks and more (Needs you), the asks
+    // Google has not answered, what it read after an ask in the last 7 days, what IndexNow took today, the 5 to do first, the sitemap's dates
+    ...w3, indexnow_sent: n0(run.indexnow_sent), do_first: (d.do_first || []).slice(0, IX.CFG.do_first), sitemap_dates: dates };
+  const md = IX.reportMarkdown({ domain: d.domain }, { ...sum, should_index: sum.should_index }, { ...run, quota_cap: d.cap }, { rows: d.all || [], dropped: d.dropped || [], events, freeze: fr, impact: imp, failed: !!d.failed, why: IX.plainWhy(d.why), submit_on: !!(d.submit && d.submit.on),
+    todo: { ...w3, indexnow_sent: n0(run.indexnow_sent), do_first: d.do_first || [], sitemap_dates: dates } });   // E14: a site not checked says so, never "0 of 0"
   out.push({ json: { stage: 'index_coverage', status: 'complete', domain: S(d.domain), site_id: d.site_id, request_id: S(d.request_id), summary, report_markdown: md,
     cost: { usd: 0 }, callback_url: S(d.callback_url) } });
 }

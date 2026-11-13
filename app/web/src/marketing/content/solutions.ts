@@ -167,7 +167,7 @@ export const solutions: Solution[] = [
     helps: [
       { feature: 'content', title: 'Local pages that hold up', body: 'Local (city or area) pages with a verified name, address and phone block, LocalBusiness schema and the areas you serve.' },
       { feature: 'technical-audits', title: 'Brand and entity check', body: 'Audits confirm your business listing matches your website before it is trusted.' },
-      { feature: 'index-coverage', title: 'Your older pages, back in view', body: 'Which of your pages Google never put in its index and why, in plain words, with what you can do about each one. Free, once Search Console is connected.' },
+      { feature: 'index-coverage', title: 'Your older pages, back in view', body: 'Which of your pages Google never put in its index and why, in plain words, with a daily to-do for the pages Google has not visited, most important first. Free, once Search Console is connected.' },
       { feature: 'site-tracking', title: 'Tracking per website', body: 'Search Console, GA4 and live rank checks for each website you run, including whether a local pack was on the page and whether your listing was in it.' },
       { feature: 'enterprise', title: 'One account for every brand', body: 'Separate companies for separate brands, with one team and one login.' },
       { feature: 'link-building', title: 'The local listings that matter', body: 'Google Business Profile, Bing Places, Apple Business and the directories in your country, checked for your listing, with a ready description to paste.' },

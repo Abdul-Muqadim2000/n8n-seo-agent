@@ -3632,6 +3632,28 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Fetch IndexNow Key (Index)",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 15000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Submit IndexNow (Index)",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 30000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "GSC Impact Query",
     "onError": "continueRegularOutput",
     "paid": false,

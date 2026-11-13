@@ -3,6 +3,7 @@
 Enterprise SEO automation built as n8n workflows: keyword research, keyword verdicts, long-form content with QA, technical site audits, full SEO reports, AI-visibility checks. Everything lives in `n8n/seo-agent/`; the stack runs locally with Docker Compose from `n8n/`.
 
 ## Read first
+- **`n8n/seo-agent/docs/readiness-2026-11-12/README.md` — readiness review 2026-11-12 (deployed fixes, writing slots not deployed, owner items).**
 - **`n8n/seo-agent/docs/indexing-2026-10-29/RESUME.md` — Index coverage (2026-10-30, branch `feature/indexing`, not deployed): finding clients' pages Google left out, why, and what to do.**
 - **`n8n/seo-agent/docs/system-review-2026-10-17/RESUME.md` — START HERE (2026-10-18): the fourth re-rating (6/10, market 4.2, enterprise 1.5), every fix and the five enterprise capabilities merged but NOT deployed, the deploy checklist (§9), the live checks (§5), owner decisions (§6) and launch blockers.**
 - `n8n/seo-agent/docs/system-review-2026-10-15/NEXT_WAVE_BENCHMARK_ROWS.md` — (previous) the 28 open benchmark rows of FIX_PLAN §3.16 that are in reach, grouped into 8 parallel agents (model per agent), the leftovers, the orchestration rules, numbers, deploy and live-check rules. Every R34–R119 defect is already fixed.**
@@ -63,7 +64,38 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-11-11 evening, second round of devaicon / techand client reports fixed + engine/API DEPLOYED - latest)
+## Status (2026-11-13, KI judge: Claude Opus 5.5 reads who is searching - DEPLOYED, still Trial - latest)
+Keyword research reads every kept search's results page (queue, up to 300) and a Claude Opus 5.5 judge labels each search with its top 5
+results; word rules are soft opinions, only market / AVOID / brand / government / job words are final. Live Trial (13297 / 13298): passing
+searches right 95.3% techand (words 73%, start 57%), 86.8% devaicon; groups 17 / 14; Claude ~$0.32 + search data ~$0.45 a run; 21 minutes
+(app says 25). Read **`n8n/seo-agent/docs/keyword-intel-2026-11-08/fixes/JUDGE.md`**. Switch: `seo_cache ki:kill` = `judge` turns only
+the judge off. Deployed 2026-11-12 (judge) + 2026-11-13 ~06:50 UTC (follow-ups; backup *T063542Z; prod == build, 0 nodes); web PR #67
+merged. Next: one-read day-cache load + batched keyword save (run time); owner decides switching techand On.
+
+## Status (2026-11-12 evening, readiness review for new clients: fixes DEPLOYED, writing slots built not deployed - previous)
+Read **`n8n/seo-agent/docs/readiness-2026-11-12/README.md`** (private findings / reviews / snapshot: `~/seo-agent-secrets/prod-review-2026-11-12/`,
+REGISTER.md). Six survey agents, coders on branches, an independent review per branch. Boot disk was 99% (gotenberg /tmp leak, build
+cache, rollback images) -> 74%; `deploy/gcp/hygiene.sh` daily timer + disk / backup alarm installs on the VM's next startup run. Deployed
+~16:00-16:20 UTC (backup pg/2026-11-12/*T154841Z): Caddy `/api/hooks/*` closed (F-01, verified 404); KI Trial runs not billed to clients;
+final version charged once; hook token stripped from payloads + rotation endpoint (migration 0027); plain run errors; never-finished pages
+not "to publish"; archived ladders cannot resume; services 120 chars; address searches / own brand / existing pages not recommended;
+placeholder job titles never printed; live grade checks the duplicate address; stale 404s re-read; rank report skips stopped / copy /
+paused; home page never a ladder page; brief parser auto-fix; robots.txt + sitemap.xml (web via PR #67). API at a4a04b0b (includes index
+wave 3; rollback image alaventra-app:rollback-073aac11); engine = a4a04b0b (KI + API deployed by the KI session 2026-11-13).
+Harness 19516 / 0; app shared 84 / server 103 / web 43 files. **Writing slots (P1, branch `fix/page-slots`, NOT deployed):** max 2 page
+runs at once; reviewed, harness 19542 / 0; needs the probe in `reviews/R_page_slots.md` first; needed before ~4-5 more clients.
+
+## Status (2026-11-12 evening, Index coverage wave 3: a to-do for every page Google has not visited - previous)
+Client document "Indexing Module Upgrade" (devaicon.com). Prod read first: about two thirds already existed; the client was right on six
+gaps (ask-Google cap 5 a week blocked the queue although 9 of 10 asked pages were indexed within hours, no 21-day escalation, no priority,
+no per-page "what we checked", no important / utility mark, the 13 waiting pages never sent to IndexNow) and missed one (sitemap without
+lastmod). Read **`n8n/seo-agent/docs/indexing-2026-10-29/DESIGN_WAVE3.md`** (verdict, contract) and RESUME.md "WAVE 3". Engine: ask-Google
+3 a day / 10 a week / 5 at once, escalation codes, priority, robots_ok / link_depth / linked_n, IndexNow from Index coverage (verified key,
+`SEO_INDEXNOW`, cap 500), type_override, sitemap dates, weekly summary; app: to-do card, Needs-you group, `indexing:sitemap_dates` step +
+guide, `POST .../data/indexing/page-type`, report block, marketing changelog 4.13. Review: no High; M1 M2 L1 L2 fixed (d90328f0); M3
+(override race) deferred. Harness 19221 / 0; app shared 1252, server green (load-timeouts re-run alone), web 381.
+
+## Status (2026-11-11 evening, second round of devaicon / techand client reports fixed + engine/API DEPLOYED - previous)
 Seven reports (`Alaventra issues.docx`), each verified on prod; read **`n8n/seo-agent/docs/client-reports-2026-11-11/README.md`**. Engine
 sections 185 (the Page Finalize grades the LIVE page: grade_only + grade_live, page reader + W07-A fallback, refused when unread), 186
 ("Write it anyway" passes an AVOID; backlinks watch settles on quiet weeks), 187 (audit indexing finding: utility / moved pages named not

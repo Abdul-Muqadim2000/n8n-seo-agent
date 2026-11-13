@@ -35,6 +35,21 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-11-12',
+    version: '4.13',
+    title: 'A daily to-do for pages Google has not visited',
+    summary: 'Pages Google has not visited yet are now a to-do, most important first, instead of a list to wait on. We tell Bing about them at once, and you can mark a page as important or as fine to leave out.',
+    highlights: [
+      'A daily to-do for pages Google has not visited: one sentence says what to do today (pages to ask Google about, dates for your sitemap, links from your home page), the five pages that matter most are marked Do first, and each page shows what we checked: that it opens, can be in search, is allowed by robots.txt, is in your sitemap, who links to it and how long it is. Anything we could not check says so',
+      'After 3 weeks without a visit from Google a page moves to Needs you, with the likely reasons as steps in order and a guide for each. A short page waits until a Google update has finished before we suggest changing it',
+      'We tell Bing and the other IndexNow search engines about your pages at once, and again when they change, once your IndexNow file is in place. Each page shows the day we did',
+      'Mark a page as important, and policy pages such as privacy or cookies are no longer filed as fine to leave out. Mark any other page as fine to leave out, and it stops counting as missing. Undo either at any time',
+      'A new step on your website when your sitemap gives no date for when each page last changed, with a guide for WordPress, website builders and Next.js, and our check that the dates are there',
+      'The weekly index report adds pages waiting for a first visit, pages that need you after 3 weeks, pages you asked Google to read and whether Google came, pages sent to Bing, and the five to do first',
+    ],
+    features: ['index-coverage'],
+  },
+  {
+    date: '2026-11-12',
     version: '4.12',
     title: 'Keyword ladders that climb the right way',
     summary: 'A keyword ladder now keeps one page for each search, steps from reading to choosing a provider, stays in your market, and stops a page our check advised against.',

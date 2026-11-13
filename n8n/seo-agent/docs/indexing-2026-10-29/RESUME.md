@@ -2,6 +2,25 @@
 
 Read this first if you are picking the work up. Owner's ask: OWNER_BRIEF.md. Contract: DESIGN.md + FIX_CONTRACT.md.
 
+## 2026-11-12: WAVE 3 (client document "Indexing Module Upgrade", devaicon.com) - see DESIGN_WAVE3.md
+Verdict and evidence: DESIGN_WAVE3.md §0-§1 (about two thirds of the client's 12 commands already existed; six real gaps + the sitemap
+without dates the client missed). Built in worktrees ix3/engine (e819f577) and ix3/app (c6bbdb84), merged into feature/seo-agent-v4.5
+with the other session's KI judge / AIR work; independent review: no High, M1 / M2 / L1 / L2 fixed in d90328f0 (with tests). Deferred:
+M3 (a mark or "I asked Google" pressed while that site's run is saving can be overwritten by the run; same race asked_google_at has had
+since wave 2; fix = leave app-written columns out of the update for stored rows, needs a check of n8n upsert semantics), L3 (an
+"important" mark on a policy page with no stored Google reading waits for the next inspection), L4 (daily ask window 20 h, documented).
+Builders' notes: ENGINE_BUILD.md / APP_BUILD.md "Wave 3". Owner decision open: Google Indexing API for the 6 job pages (§6).
+DEPLOYED 2026-11-12 ~15:25-15:40 UTC: backup pg/2026-11-12/*T151859Z; node diff prod == build before (only the alert URL); engine
+deployed from a scratch checkout of 073aac11 with SEO_Agent_API.json + SEO_Agent_Keyword_Intelligence.json held at 06332af3 (the other
+session's ad020665 KI nodes were committed but NOT yet deployed by them; left for them); 11 columns synced, 13 updated, 29 published;
+after: prod == that build (0 real differences). API on the VM 47562ddb -> 073aac11 (healthy, 0 restarts; rollback image
+alaventra-app:rollback-47562ddb). Web: rides PR #67 (with the KI judge web change) - merge refused to Claude as unreviewed: OWNER MERGES.
+5c247844 (web-only weak-links wording + test type) is after the API deploy; the API does not use it. CI on 5c247844: app job green; engine
+job 12 AIR failures identical to ad020665's (pre-existing, not this wave); real-Postgres suites pre-existing.
+First live run: the daily check 2026-11-13 10:15 UTC. Offline replay on devaicon's production rows: 3 pages marked a day (public-sector,
+agentic-ai, retail first), IndexNow sends 40 pages once, escalation from 2026-11-20. Check after it: seo_index_runs.indexnow_sent,
+seo_index_pages.ask_google / priority / indexnow_at for devaicon.com, the run note.
+
 ## 2026-11-05: improved pages (client report, devaicon.com) - built, NOT deployed
 Client: "I improved these pages with Alaventra, published them and reported them, but Indexing still lists them under 'Google read it
 and left it out' with 'Improve this page'". Half right: Google decides only after it reads the page again (RESEARCH §B), so the page must

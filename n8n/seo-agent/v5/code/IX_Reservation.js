@@ -19,7 +19,7 @@ for (const v of inv) {
     known: sum.known, indexed: sum.indexed, not_indexed: sum.not_indexed, excluded: sum.excluded, unknown: sum.unknown, errors: sum.errors,
     new_pages: sum.new_pages, new_indexed: sum.new_indexed, inspected: (v.take || []).length, reused: (v.reuse || []).length, fetched: 0,
     quota_cap: Number(s.cap) || 0, backlog_left: sum.unknown, by_cause_json: JSON.stringify(sum.by_cause), by_action_json: JSON.stringify(sum.by_action),
-    dropped_json: '[]', freeze: !!fr.freeze, freeze_reason: S(fr.reason),
+    dropped_json: '[]', freeze: !!fr.freeze, freeze_reason: S(fr.reason), escalated: 0, asked_waiting: 0, indexnow_sent: 0,   // wave 3: exact columns (the final row fills them)
     note: ('Today\'s check started at ' + at.slice(11, 16) + ' UTC and had not finished when this row was written; the figures are from before today\'s inspections. '
       + 'It holds today\'s ' + (v.take || []).length + ' planned inspection(s), so a repeat of the run stays inside the daily limit.').slice(0, 1500),
     // R2 (fix wave 3): Save Index Reservation UPSERTS on site_id + run_at, so this row replaces the run's attempt row (Index Attempt)

@@ -1090,6 +1090,48 @@ export const GUIDES = [
     keywords: ['sitemap', 'submit sitemap', 'search console sitemaps', 'sitemap errors'],
   },
   {
+    // wave 3 (DESIGN_WAVE3 §3.3): the step `indexing:sitemap_dates`
+    id: 'index-sitemap-dates',
+    area: 'website',
+    title: 'Add the date each page last changed to your sitemap',
+    why: 'Your sitemap can give each page the date it last changed (lastmod). Google uses that date to decide which pages to read again, but only when the dates are accurate.',
+    where: 'Your website\'s sitemap, usually made by your SEO plugin or website builder',
+    who: 'Whoever looks after your website',
+    minutes: 15,
+    vars: [V.domain],
+    steps: [
+      {
+        title: 'Open your sitemap',
+        body: 'Open your sitemap in a browser. Each page is listed inside a `<url>` entry with its address in `<loc>`. Look for a `<lastmod>` line in each entry.',
+        copy: [{ label: 'Usual address', value: 'https://{{domain}}/sitemap.xml' }],
+      },
+      {
+        title: 'Turn the dates on',
+        body: 'Most tools add the dates for you once they are switched on.',
+        choices: [
+          { label: 'WordPress', body: 'Yoast SEO, Rank Math and All in One SEO add the date to their sitemap by default. If it is missing, update the plugin and check its sitemap settings.' },
+          { label: 'Shopify, Wix, Squarespace, Webflow', body: 'Their own sitemaps carry the dates. If yours does not, check that you use the sitemap the platform makes rather than an older file you uploaded.' },
+          { label: 'Next.js', body: 'In `app/sitemap.ts`, give each entry a `lastModified` value: the date its content last changed, taken from your content source.' },
+          { label: 'A sitemap file you edit yourself', body: 'Add `<lastmod>2026-11-12</lastmod>` inside each `<url>` entry, with the day that page last changed.' },
+        ],
+      },
+      {
+        title: 'Use the real date of the last change',
+        body: 'Give each page the date its main content last changed. A change to the menu, the footer or the copyright year does not count.',
+        warn: 'Never set every page to today or to the time the site was built. Google learns that such dates are not accurate and then ignores them.',
+        link: { label: 'Google on sitemaps', href: 'https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap' },
+      },
+      { title: 'Press "I\'ve done it, check now"', body: 'We read the sitemap of {{domain}} and tick the step off once at least 9 in 10 pages carry a date and the dates differ from page to page.' },
+    ],
+    done: 'The step shows Done, and the daily index check keeps reading your sitemap. Dates help Google decide what to read again; Google still decides.',
+    trouble: [
+      { q: 'Every page shows the same date', a: 'Your tool writes the time the sitemap was made, not the time each page changed. Look for a setting such as "use the modified date", or ask whoever built the website.' },
+      { q: 'Your sitemap is split into several files', a: 'That is fine. We read the files your robots.txt and your sitemap index list, and count the dates in all of them.' },
+    ],
+    related: ['index-submit-sitemap', 'index-coverage'],
+    keywords: ['lastmod', 'sitemap dates', 'last modified', 'sitemap'],
+  },
+  {
     id: 'index-request-indexing',
     area: 'website',
     title: 'Ask Google to read a page again',
@@ -3680,6 +3722,8 @@ const GUIDE_FOR_RECOMMENDATION_PREFIX: [prefix: string, id: GuideId][] = [
   ['ix:site_fix:access_denied', 'index-fix-access-denied'],
   ['ix:site_fix:redirect_error', 'index-fix-redirect-error'],
   ['ix:site_fix:redirect', 'index-sitemap-redirects'],
+  // wave 3: before `ix:site_fix:sitemap`, which its id starts with
+  ['ix:site_fix:sitemap_dates', 'index-sitemap-dates'],
   ['ix:site_fix:sitemap', 'index-submit-sitemap'],
   ['ix:ask_google', 'index-request-indexing'],
   ['ix:links', 'index-add-internal-links'],

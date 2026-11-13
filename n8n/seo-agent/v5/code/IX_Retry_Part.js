@@ -17,7 +17,7 @@ if (plan.dispatch) {
   const n = (Number(plan.watch_n) || 0) + 1;
   if (n > IX.CFG.watch_max) return [{ json: { skip: true, reason: 'the dispatch was refused and the day was watched ' + IX.CFG.watch_max + ' times: tomorrow\'s dispatch takes the websites left first' } }];
   if (!capacity) return [{ json: { skip: true, reason: 'the dispatch was refused for ' + (S(g.reason) || 'an unknown reason') + ': not retried' } }];
-  return [{ json: { trigger: 'ix_watch', ix_watch: { date: S(plan.today) || new Date().toISOString().slice(0, 10), n, after: 'refused' }, wait_minutes: IX.CFG.watch_refused_minutes } }];
+  return [{ json: { trigger: 'ix_watch', ix_watch: { date: S(plan.today) || new Date().toISOString().slice(0, 10), n, after: 'refused', ...(plan.dry_run ? { dry_run: true } : {}) }, wait_minutes: IX.CFG.watch_refused_minutes } }];
 }
 const ch = t.ix_chain && typeof t.ix_chain === 'object' ? t.ix_chain : null;
 if (!ch || !S(t.site_id)) return [{ json: { skip: true, reason: 'not a chain part' } }];

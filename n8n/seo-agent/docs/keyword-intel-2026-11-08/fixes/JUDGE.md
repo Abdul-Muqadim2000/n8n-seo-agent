@@ -52,3 +52,10 @@ Run time 21 minutes (was 5.5): the queue used all five rounds, the per-search da
 parts (the judge's calls take seconds). Follow-ups shipped with this record: the app and the front door say 25 minutes; the run is no longer
 "partial" for a few pages without exact addresses (under 90% exact is). Still to do: load the day cache in one read and batch the keyword
 save.
+
+## Deploy of the follow-ups (2026-11-13 ~06:50 UTC)
+Built from a4a04b0b (feature, carries ad020665 and the readiness fixes of 2026-11-12). Before: production == build except Keyword
+Intelligence (38 nodes, the inlined kit) and the API front door (1 node, the 25-minute estimate). Backup pg/2026-11-13/*T063542Z;
+`deploy_engine.py --no-build --apply` (29 published, dispatcher start); after: 33 workflows, 0 nodes differ. API already at a4a04b0b
+(readiness session), web via PR #67 (merged 06:40 UTC). Keyword intelligence stays in Trial on both sites: switching techand On is the
+owner's decision.

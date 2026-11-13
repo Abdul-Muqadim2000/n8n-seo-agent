@@ -530,7 +530,16 @@ INDEX_PAGES_COLS = [('site_id', 'string'), ('domain', 'string'), ('url', 'string
                     # 2026-11-05 (production evidence, devaicon.com): the improvement was confirmed published at ANOTHER address (the
                     # content log's published_url when it differs from existing_page_url); '' = at this address. While this page still
                     # opens, the two compete: the step is a permanent redirect to it (IX.improveState 'moved', app site task indexing:merge)
-                    ('improved_to', 'string')]
+                    ('improved_to', 'string'),
+                    # wave 3 (docs/indexing-2026-10-29/DESIGN_WAVE3.md §2.1): the order of the work (1..N for pages that should be in Google and
+                    # are not, 0 = not ranked); 3 weeks with no visit from Google (escalated_at ISO, kept while it holds, '' as soon as it does not;
+                    # escalate_why a comma list of not_asked / asked_no_visit / weak_links / short_page / not_in_sitemap / sitemap_no_dates); the
+                    # client's own word on the page (type_override important | utility | '': written by the APP only, the engine reads it and
+                    # writes back what it read, like asked_google_at); our robots.txt verdict for Googlebot (robots_ok yes | no | '' = not read);
+                    # how deep the website links it (link_depth 1 = from the home page, 2 = from a page the home page links, 0 = unknown) and
+                    # from how many pages read (linked_n); when IndexNow last accepted it (indexnow_at ISO, '' = never)
+                    ('priority', 'number'), ('escalated_at', 'string'), ('escalate_why', 'string'), ('type_override', 'string'), ('robots_ok', 'string'),
+                    ('link_depth', 'number'), ('linked_n', 'number'), ('indexnow_at', 'string')]
 # seo_index_history: insert only, one row per state / cause change of a page
 INDEX_HISTORY_TABLE = 'seo_index_history'
 INDEX_HISTORY_COLS = [('site_id', 'string'), ('url', 'string'), ('at', 'string'), ('state', 'string'), ('cause', 'string'), ('evidence', 'string'), ('verdict', 'string'), ('coverage', 'string')]
@@ -543,7 +552,10 @@ INDEX_RUNS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_at', 'stri
                    # an addition to DESIGN §2.3 (docs/indexing-2026-10-29/ENGINE_BUILD.md "Contract changes"): what the sitemap reading found, so the app can
                    # raise its "no sitemap submitted" / "sitemap errors" step (DESIGN §8) from a field, not from the note's words. JSON:
                    # { submitted: n | null (not read), submitted_errors, submitted_warnings, pending, read, fetched, urls, capped, robots_status, errors: [{url, error}] }
-                   ('sitemaps_json', 'string')]
+                   ('sitemaps_json', 'string'),
+                   # wave 3 (DESIGN_WAVE3.md §2.1 / §2.8): pages escalated after 3 weeks with no visit, pages the client asked Google about that
+                   # Google has not read yet, pages IndexNow accepted in this run (sitemaps_json also gains `dates` and `indexnow`)
+                   ('escalated', 'number'), ('asked_waiting', 'number'), ('indexnow_sent', 'number')]
 # seo_google_events: global (not per website), upsert on event_id - Google's Search Status Dashboard incidents (`gssd:<id>`) and the spam-policies
 # page fingerprint (`spam_policies:<hash>`). kind core | spam | policy_doc | other; status rolling_out | complete | changed.
 GOOGLE_EVENTS_TABLE = 'seo_google_events'

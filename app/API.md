@@ -1003,6 +1003,33 @@ that fails answers `status: 'unreadable'` with a sentence, never an error, and n
     engine = off. With it on and Google reporting Full access (`siteOwner` / `siteFullUser`) there is no `indexing:sitemap` step for a
     missing sitemap (errors in a submitted one stay the client's). The report counts the pages that need a link from `by_action.links`.
   - Rollback: an API from before wave 2 ignores `site_tasks` rows with `kind = 'index_links'` (an unknown kind reads and records nothing).
+- **Wave 3** (2026-11-12, `n8n/seo-agent/docs/indexing-2026-10-29/DESIGN_WAVE3.md` §3). Engine columns read (all optional: a row without
+  them reads as before): `seo_index_pages.priority`, `escalated_at`, `escalate_why` (comma list of `not_asked`, `asked_no_visit`,
+  `weak_links`, `short_page`, `not_in_sitemap`, `sitemap_no_dates`), `type_override` (written by the APP, below), `robots_ok`, `link_depth`,
+  `linked_n`, `indexnow_at`; `seo_index_runs.sitemaps_json.dates` = `{ urls, with_lastmod, distinct }`; the callback summary's `waiting`,
+  `escalated`, `asked_waiting`, `read_after_ask_7d`, `indexnow_sent`, `do_first[{ url, why }]`, `sitemap_dates`.
+  - `IndexPage` adds `priority`, `doFirst` (1 to 5), `escalatedAt`, `escalateWhy`, `typeOverride`, `typePending`, `robotsOk`, `linkDepth`,
+    `linkedN`, `indexnowAt`, `inSitemapRead`. Pages are ordered by `priority` (rows without one by impressions, as before). An escalated page
+    is in `IndexingData.escalated` (by priority, 50 at most) and in no group, and counts in `needYou`. The `linked_waiting` group carries
+    `todo` (`{ total, matterMost, askToday, notFromHome, sitemapDates, text }`); group causes add `marked_utility` and `type_pending`.
+    `IndexingData.sitemapDates` = the newest run's date counts with `missing` (the engine's rule). Job postings may now carry the engine's
+    ask-Google mark (its last tier).
+  - `POST …/data/indexing/page-type` (member, 30 / 10 min per person) `{ url, type: 'important' | 'utility' | '' }` → `{ page }`: the
+    client's own mark ("This is an important page", "Fine to leave out", "Undo"). Writes ONLY `type_override` on that page's row (n8n Data
+    Table `rows/update`, filter `site_id` + `url`, the same write as `asked-google`), audit `indexing.page_type` (`{ url, type, was }`). 400
+    `bad_type`, 404 for an address of another website or a page the check does not know, 409 `already_in_search` for `utility` on a page in
+    search, 503 when the write fails (nothing saved). The same mark twice writes nothing. The page shows the new state at once from the row
+    itself: `utility` on a page not in search is left out on purpose (`marked_utility`, never asked about, ranked or escalated);
+    `important` on a policy page the engine still leaves out, and an undone mark on a page the engine left out because of it, wait for the
+    next daily check (`type_pending`); the engine files the page again on its next run.
+  - Step `indexing:sitemap_dates` (kind `indexing`, one per website): raised when the newest run's `sitemaps_json.dates` has no usable dates
+    (at least 5 addresses and under half dated, or 10 or more sharing one day); payload `{ cause: 'sitemap_dates', urls, withLastmod,
+    distinct }`. Its own check reads the sitemap tree (`sitemapOf`, which now counts each address's `<lastmod>` once): done when at least 90%
+    carry a date and (under 10 addresses, or more than one distinct day); no sitemap read is 503 / nothing daily; a tree read in part that
+    looks done is 409 `site_unsure`. The engine's newer reading with usable dates closes it. Guide `index-sitemap-dates`, recommendation
+    `ix:site_fix:sitemap_dates`.
+  - Rollback: an API from before wave 3 reads `indexing:sitemap_dates` rows as unknown (`siteTaskKindOfKey` null: nothing read or recorded);
+    the engine keeps `type_override` as written.
 
 ## Keyword intelligence: Competitors and Keyword research (KI, 2026-11-08; `shared/src/ki.ts`, `shared/src/ki-api.ts`, `server/src/services/kiData.ts`, `server/src/routes/ki.ts`, `n8n/seo-agent/docs/keyword-intel-2026-11-08/CONTRACTS.md`)
 

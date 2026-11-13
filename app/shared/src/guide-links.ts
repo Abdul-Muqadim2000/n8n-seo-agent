@@ -41,6 +41,8 @@ export const INDEXING_GUIDE: Record<string, GuideId> = {
   redirect: 'index-sitemap-redirects',
   redirect_error: 'index-fix-redirect-error',
   sitemap: 'index-submit-sitemap',
+  // wave 3 (DESIGN_WAVE3 §3.3): the step `indexing:sitemap_dates`
+  sitemap_dates: 'index-sitemap-dates',
   // wave 2 (DESIGN_WAVE2 §3.2): the step `indexing:links`
   links: 'index-add-internal-links',
 };
