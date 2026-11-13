@@ -40,7 +40,15 @@ The private working files (snapshot, findings with client data, reviews) are out
 | Reliability (S1-06) | the Strategy Brief parser repairs its own format (Haiku fixer) before a page run fails |
 | Web (F-42) | `robots.txt` + `sitemap.xml` (124 addresses) for the business site; `app.` host disallows crawling |
 
-## Built, reviewed, NOT deployed: writing slots (plan P1, branch `fix/page-slots`)
+## Writing slots (plan P1, branch `fix/page-slots`): DEPLOYED 2026-11-13 ~10:05-10:15 UTC
+Live probe on the isolated alvrun stack first (`reviews/A0_probe.md` in the private folder, $0): waits with two writers, survives an n8n
+restart, hands off after ~40 min keeping its place, admitted within one look when a slot frees, never more than 2 writing, dead waiters
+expire after ~50 min. Production: backup pg/2026-11-13/*T100145Z; API at b84591b8 (rollback image alaventra-app:rollback-a4a04b0b); engine
+23 updated, 4 ledger columns synced (page, request_id, keyword, queued_at), node diff prod == build; first runs after the deploy wrote
+the new columns and settled. `PAGE_IN_FLIGHT_HOURS` and `CADENCE_IN_FLIGHT_HOURS` are 8 with `Cadence_Plan.js`. Watch the next cadence
+day (techand.ai Thu 2026-11-19): at most 2 page rows `reserved` at once, no `canceled` page runs.
+
+### Original note (before the deploy)
 Nothing limits how many page runs write at once: on 2026-11-12 three cadence pages started together and all hit the 1 h limit at 90-100%
 (another session raised the limit to 2 h the same day). P1 gates every page run at 2 writing at once, the rest wait in order (n8n does not
 restart the time limit on resume, so a waiting run hands off to a new execution after 40 min). It touches every workflow and has not run

@@ -82,8 +82,8 @@ not "to publish"; archived ladders cannot resume; services 120 chars; address se
 placeholder job titles never printed; live grade checks the duplicate address; stale 404s re-read; rank report skips stopped / copy /
 paused; home page never a ladder page; brief parser auto-fix; robots.txt + sitemap.xml (web via PR #67). API at a4a04b0b (includes index
 wave 3; rollback image alaventra-app:rollback-073aac11); engine = a4a04b0b (KI + API deployed by the KI session 2026-11-13).
-Harness 19516 / 0; app shared 84 / server 103 / web 43 files. **Writing slots (P1, branch `fix/page-slots`, NOT deployed):** max 2 page
-runs at once; reviewed, harness 19542 / 0; needs the probe in `reviews/R_page_slots.md` first; needed before ~4-5 more clients.
+Harness 19516 / 0; app shared 84 / server 103 / web 43 files. **Writing slots (P1) DEPLOYED 2026-11-13 ~10:15 UTC** after a $0 live probe on alvrun:
+max 2 page runs write at once, the rest wait (hand-off after 40 min); API b84591b8, engine 23 updated + 4 ledger columns; harness 19620 / 0.
 
 ## Status (2026-11-12 evening, Index coverage wave 3: a to-do for every page Google has not visited - previous)
 Client document "Indexing Module Upgrade" (devaicon.com). Prod read first: about two thirds already existed; the client was right on six
