@@ -3,6 +3,7 @@
 Enterprise SEO automation built as n8n workflows: keyword research, keyword verdicts, long-form content with QA, technical site audits, full SEO reports, AI-visibility checks. Everything lives in `n8n/seo-agent/`; the stack runs locally with Docker Compose from `n8n/`.
 
 ## Read first
+- **`n8n/seo-agent/docs/readiness-2026-11-12/README.md` — readiness review 2026-11-12 (deployed fixes, writing slots not deployed, owner items).**
 - **`n8n/seo-agent/docs/indexing-2026-10-29/RESUME.md` — Index coverage (2026-10-30, branch `feature/indexing`, not deployed): finding clients' pages Google left out, why, and what to do.**
 - **`n8n/seo-agent/docs/system-review-2026-10-17/RESUME.md` — START HERE (2026-10-18): the fourth re-rating (6/10, market 4.2, enterprise 1.5), every fix and the five enterprise capabilities merged but NOT deployed, the deploy checklist (§9), the live checks (§5), owner decisions (§6) and launch blockers.**
 - `n8n/seo-agent/docs/system-review-2026-10-15/NEXT_WAVE_BENCHMARK_ROWS.md` — (previous) the 28 open benchmark rows of FIX_PLAN §3.16 that are in reach, grouped into 8 parallel agents (model per agent), the leftovers, the orchestration rules, numbers, deploy and live-check rules. Every R34–R119 defect is already fixed.**
@@ -70,6 +71,19 @@ searches right 95.3% techand (words 73%, start 57%), 86.8% devaicon; groups 17 /
 (app says 25). Read **`n8n/seo-agent/docs/keyword-intel-2026-11-08/fixes/JUDGE.md`**. Switch: `seo_cache ki:kill` = `judge` turns only
 the judge off. Deployed 2026-11-12 (judge) + 2026-11-13 ~06:50 UTC (follow-ups; backup *T063542Z; prod == build, 0 nodes); web PR #67
 merged. Next: one-read day-cache load + batched keyword save (run time); owner decides switching techand On.
+
+## Status (2026-11-12 evening, readiness review for new clients: fixes DEPLOYED, writing slots built not deployed - previous)
+Read **`n8n/seo-agent/docs/readiness-2026-11-12/README.md`** (private findings / reviews / snapshot: `~/seo-agent-secrets/prod-review-2026-11-12/`,
+REGISTER.md). Six survey agents, coders on branches, an independent review per branch. Boot disk was 99% (gotenberg /tmp leak, build
+cache, rollback images) -> 74%; `deploy/gcp/hygiene.sh` daily timer + disk / backup alarm installs on the VM's next startup run. Deployed
+~16:00-16:20 UTC (backup pg/2026-11-12/*T154841Z): Caddy `/api/hooks/*` closed (F-01, verified 404); KI Trial runs not billed to clients;
+final version charged once; hook token stripped from payloads + rotation endpoint (migration 0027); plain run errors; never-finished pages
+not "to publish"; archived ladders cannot resume; services 120 chars; address searches / own brand / existing pages not recommended;
+placeholder job titles never printed; live grade checks the duplicate address; stale 404s re-read; rank report skips stopped / copy /
+paused; home page never a ladder page; brief parser auto-fix; robots.txt + sitemap.xml (web via PR #67). API at a4a04b0b (includes index
+wave 3; rollback image alaventra-app:rollback-073aac11); engine = a4a04b0b (KI + API deployed by the KI session 2026-11-13).
+Harness 19516 / 0; app shared 84 / server 103 / web 43 files. **Writing slots (P1, branch `fix/page-slots`, NOT deployed):** max 2 page
+runs at once; reviewed, harness 19542 / 0; needs the probe in `reviews/R_page_slots.md` first; needed before ~4-5 more clients.
 
 ## Status (2026-11-12 evening, Index coverage wave 3: a to-do for every page Google has not visited - previous)
 Client document "Indexing Module Upgrade" (devaicon.com). Prod read first: about two thirds already existed; the client was right on six
