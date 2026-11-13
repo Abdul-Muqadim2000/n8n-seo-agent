@@ -3,6 +3,7 @@
 Enterprise SEO automation built as n8n workflows: keyword research, keyword verdicts, long-form content with QA, technical site audits, full SEO reports, AI-visibility checks. Everything lives in `n8n/seo-agent/`; the stack runs locally with Docker Compose from `n8n/`.
 
 ## Read first
+- **`n8n/seo-agent/docs/readiness-2026-11-12/README.md` — readiness review 2026-11-12 (deployed fixes, writing slots not deployed, owner items).**
 - **`n8n/seo-agent/docs/indexing-2026-10-29/RESUME.md` — Index coverage (2026-10-30, branch `feature/indexing`, not deployed): finding clients' pages Google left out, why, and what to do.**
 - **`n8n/seo-agent/docs/system-review-2026-10-17/RESUME.md` — START HERE (2026-10-18): the fourth re-rating (6/10, market 4.2, enterprise 1.5), every fix and the five enterprise capabilities merged but NOT deployed, the deploy checklist (§9), the live checks (§5), owner decisions (§6) and launch blockers.**
 - `n8n/seo-agent/docs/system-review-2026-10-15/NEXT_WAVE_BENCHMARK_ROWS.md` — (previous) the 28 open benchmark rows of FIX_PLAN §3.16 that are in reach, grouped into 8 parallel agents (model per agent), the leftovers, the orchestration rules, numbers, deploy and live-check rules. Every R34–R119 defect is already fixed.**
@@ -63,7 +64,20 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-11-12 evening, Index coverage wave 3: a to-do for every page Google has not visited - latest)
+## Status (2026-11-12 evening, readiness review for new clients: fixes DEPLOYED, writing slots built not deployed - latest)
+Read **`n8n/seo-agent/docs/readiness-2026-11-12/README.md`** (private findings / reviews / snapshot: `~/seo-agent-secrets/prod-review-2026-11-12/`,
+REGISTER.md). Six survey agents, coders on branches, an independent review per branch. Boot disk was 99% (gotenberg /tmp leak, build
+cache, rollback images) -> 74%; `deploy/gcp/hygiene.sh` daily timer + disk / backup alarm installs on the VM's next startup run. Deployed
+~16:00-16:20 UTC (backup pg/2026-11-12/*T154841Z): Caddy `/api/hooks/*` closed (F-01, verified 404); KI Trial runs not billed to clients;
+final version charged once; hook token stripped from payloads + rotation endpoint (migration 0027); plain run errors; never-finished pages
+not "to publish"; archived ladders cannot resume; services 120 chars; address searches / own brand / existing pages not recommended;
+placeholder job titles never printed; live grade checks the duplicate address; stale 404s re-read; rank report skips stopped / copy /
+paused; home page never a ladder page; brief parser auto-fix; robots.txt + sitemap.xml (web via PR #67). API at a4a04b0b (includes index
+wave 3; rollback image alaventra-app:rollback-073aac11); engine = a4a04b0b with SEO_Agent_API.json + KI held at 06332af3 for the KI session.
+Harness 19516 / 0; app shared 84 / server 103 / web 43 files. **Writing slots (P1, branch `fix/page-slots`, NOT deployed):** max 2 page
+runs at once; reviewed, harness 19542 / 0; needs the probe in `reviews/R_page_slots.md` first; needed before ~4-5 more clients.
+
+## Status (2026-11-12 evening, Index coverage wave 3: a to-do for every page Google has not visited - previous)
 Client document "Indexing Module Upgrade" (devaicon.com). Prod read first: about two thirds already existed; the client was right on six
 gaps (ask-Google cap 5 a week blocked the queue although 9 of 10 asked pages were indexed within hours, no 21-day escalation, no priority,
 no per-page "what we checked", no important / utility mark, the 13 waiting pages never sent to IndexNow) and missed one (sitemap without
