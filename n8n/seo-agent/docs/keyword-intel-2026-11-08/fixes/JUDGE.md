@@ -59,3 +59,11 @@ Intelligence (38 nodes, the inlined kit) and the API front door (1 node, the 25-
 `deploy_engine.py --no-build --apply` (29 published, dispatcher start); after: 33 workflows, 0 nodes differ. API already at a4a04b0b
 (readiness session), web via PR #67 (merged 06:40 UTC). Keyword intelligence stays in Trial on both sites: switching techand On is the
 owner's decision.
+
+## Switched On (2026-11-13 09:21 UTC, owner: "make it production, turn Trial off")
+Both techand.ai and devaicon.com: `seo_monitors.ki_mode` trial -> on through Site Admin `monitors` (only that field; read back: on / on,
+ai_rank_mode and ai_rank_brave unchanged, no `ki:kill` row). Sent from inside the API container, not through the app's switch, so the app's
+audit log has no `site.ki_mode` entry for it. What On does: clients see Competitors + Keyword research (the judged Trial runs 13297 / 13298
+are the latest finished research), recommendations / Needs you items, client-started runs billed in credits, and new ladders take their
+pool from the latest finished research of the market. Nothing runs on a schedule (`ki_refresh` is stored only). Back out: Site Admin
+`monitors` {ki_mode: 'trial'}, or `seo_cache ki:kill` = 1 for every website.
