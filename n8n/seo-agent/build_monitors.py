@@ -47,6 +47,9 @@ def src(p):   # a Code node source with the shared snippets inlined
     s = s.replace('/*__GONE__*/', rd('code/_gone.js').rstrip('\n'))   # RV-1 (2026-10-21): the pages that no longer answer, one message in every report
     s = s.replace('/*__SITE_MODEL__*/', rd('code/_site_model.js').rstrip('\n'))   # G19 (SITE_MODEL_SPEC.md): the one site model, one copy per node that asks for it
     s = s.replace('/*__FIT_GATE__*/', rd('code/_fit_gate.js').rstrip('\n'))   # B-G1 / B-G2 (2026-10-15): the fit gate, on the READ path too (FITR, INVARIANTS rule 2)
+    s = s.replace('/*__AI_QUESTION__*/', rd('code/_ai_question.js').rstrip('\n'))   # client reports 2026-11-16 (INV1): an AI question's page, its search and its plain reasons (AQ)
+    s = s.replace('/*__LADDER_RULES__*/', rd('code/_ladder_rules.js').rstrip('\n'))   # client reports 2026-11-16 (INV1 F7): LRU.sameQuestion / coversHead in AI Growth
+    s = s.replace('/*__DUP_TARGETS__*/', __import__('kit_src').dup_src(rd)) if '/*__DUP_TARGETS__*/' in s else s   # client reports 2026-11-16 (INV1 F2 / F5): the page that owns a question's search, by market
     s = s.replace('/*__AI_ACCESS_KIT__*/', rd('code/_ai_access_kit.js').rstrip('\n'))   # B9-9: the one robots.txt matcher (AI Access + Growth Robots)
     s = s.replace('/*__DRAFTS__*/', rd('code/_drafts.js').rstrip('\n'))   # P34-1: which stored outreach draft may still be offered
     s = s.replace('/*__PODCAST__*/', rd('code/_podcast.js').rstrip('\n'))   # L5: podcast guest opportunities (free directory, the show's own feed and site)
@@ -857,7 +860,8 @@ ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure AI Pag
 for i, (nm, t, c) in enumerate(ens): G.ensure(nm, t, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Visibility', AI_VIS_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE),
          ('Load Content Log', LOG_TABLE), ('Load Query History', QUERY_TABLE), ('Load AI Pages', AI_PAGES_TABLE), ('Load AI Targets', AI_TARGETS_TABLE), ('Load AI Growth', AI_GROWTH_TABLE), ('Load Link Prospects (Growth)', PROSPECT_TABLE),
-         ('Load Cycles', CYCLES_TABLE)]   # 2026-10-19: the website's time zone (seo_cycles) - the Wikidata check outside a cycle is monthly in ITS calendar
+         ('Load Cycles', CYCLES_TABLE),   # 2026-10-19: the website's time zone (seo_cycles) - the Wikidata check outside a cycle is monthly in ITS calendar
+         ('Load Pages (Growth)', __import__('ladder_common').PAGES_TABLE)]   # client reports 2026-11-16 (INV1 F2 / F5): the page inventory (address, title, H1), so a question is matched to a page of its own market and a page that owns its search is improved, never copied
 for i, (nm, t) in enumerate(loads): vis_scoped(G, nm, at(1 + i, 1), 70) if nm == 'Load AI Visibility' else G.load(nm, t, at(1 + i, 1))   # W2-E3: scoped (F2 'Not fixed'): six weekly runs
 G.node('Load AI Answers', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_ANSWERS_TABLE, [('checked_at', 'gte', SINCE(8))]), at(13, 1), **LOAD)
 G.node('Load Cache (Growth)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(14, 1), **LOAD)

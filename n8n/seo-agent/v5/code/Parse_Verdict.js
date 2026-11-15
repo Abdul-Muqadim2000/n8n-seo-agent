@@ -196,6 +196,7 @@ if (EPI) verdict_changes.unshift('Write this as a separate new page at its own a
 // cycles): `would_hold` and the reasons are logged in the run and reported in its callback, the page is written as before. Runs a person
 // started (the app, the form, the API) are asked ("Needs your OK"). A hold writes no brief, no copy and no edit: the run delivers the
 // verdict report with `hold: { score, reasons, alternatives }` on stage `content`, and its cost is what the verdict cost.
+const AIPV = !!(prev.ai_target && typeof prev.ai_target === 'object' && String(prev.ai_target.question || '').trim());   // INV1 F10: a page written for an AI question
 const HOLD = (() => {
   // W05-B (2026-10-30, BEFORE_AFTER "Holds"): the line at 50 sat inside the verdict's own noise (one keyword read 52, 42, then 46; K3 was held
   // at 42 and its page was the best of 31). A score is now held on its own only when it is clearly low (under 40); between 40 and 50 only when
@@ -224,13 +225,26 @@ const HOLD = (() => {
     : aiPage ? 'a page written to be cited in AI answers: chosen for the question, not for search volume'
     : refresh ? 'a refresh of a page your website already has'
     : ladderPage ? 'a page of your keyword ladder: the ladder checked its main keyword when it was planned' : '';
-  const exemptDup = caseStudy ? 'a case study' : aiPage ? 'a page written for an AI answer' : refresh ? 'a refresh of a page your website already has' : '';
+  // client reports 2026-11-16 (devaicon.com / techand.ai, INV1 F2 / F3): an AI answer page used to skip this check entirely (184B), which hid a
+  // real duplicate: techand.ai's AI guide for "crm service provider in uae" was written beside the ladder's own page for that search. One
+  // search, one page holds for AI pages too, on the QUESTION's own search (the run's keyword since INV1 F1): a page of the same market that
+  // owns it is improved for the question (the first alternative, `ai_refresh`), never copied; a page of another market is advice only.
+  const exemptDup = caseStudy ? 'a case study' : refresh ? 'a refresh of a page your website already has' : '';
   // ---- the duplicate gate (the late check's rule, before the brief) ----
   let MODEL = prev.site_model && typeof prev.site_model === 'object' ? prev.site_model : null;
   if (!MODEL) { try { MODEL = ($('Site Model').first().json || {}).site_model || null; } catch (e) { MODEL = null; } }
   const ownUrl = EXP ? EXP.url : '';
-  const dup = (MODEL && !exemptDup) ? DUP.targets(prev.keyword, SM.pages(MODEL), { skip: [ownUrl, S(prev.existing_page_url)], self: [S(prev.ladder_target_url)], self_aware: true, slug_self: true, ladder: ladderPage, market: S(prev.country) })
+  let dup = (MODEL && !exemptDup) ? DUP.targets(prev.keyword, SM.pages(MODEL), { skip: [ownUrl, S(prev.existing_page_url)], self: [S(prev.ladder_target_url)], self_aware: true, slug_self: true, ladder: ladderPage, market: S(prev.country) })
     : { targets: [], partial: [], self: [], basis: MODEL ? '' : 'no page inventory of the website was available, so a duplicate could not be checked' };
+  // INV1 F2 / F3 (techand.ai): the page that owns a question's search can be a keyword ladder's live page whose title says it in other words
+  // ("Dynamics 365 CRM in Dubai & UAE" is the ladder page for "crm service provider"): a ladder page of this site whose keyword IS the
+  // question's search, or the ladder's main page when the question carries every word of its main keyword, and whose address is live
+  if (aiPage && !refresh && !EXP && MODEL && !dup.targets.length) {
+    const liveK = new Set(SM.pages(MODEL).filter(p => !(SM.isGone && SM.isGone(p)) && !(SM.isMoved && SM.isMoved(p))).map(p => LRU.urlKey(p.url)));
+    const e = (((prev.own_coverage || {}).ladders) || []).find(x => x && x.target_url && liveK.has(LRU.urlKey(x.target_url)) && LRU.urlKey(x.target_url) !== LRU.urlKey(prev.ladder_target_url)
+      && (LRU.sameQuestion(prev.keyword, x.keyword) || (x.part === 'head' && LRU.coversHead(prev.keyword, x.keyword))));
+    if (e) dup = { ...dup, targets: [{ url: S(e.target_url), title: '', keyword_words_shared_pct: null, weighted_pct: null, via: 'ladder', ladder_keyword: S(e.keyword) }] };
+  }
   const dupHit = !EXP && dup.targets.length > 0;   // a page the verdict already redirected the run to (existing_page) is improved, not duplicated
   // W05-B (BEFORE_AFTER K1): the page this run found for the search (confirmed by its own title, heading or searches in Collect Client Pages)
   // used to be rewritten silently. A person who started the run is now asked first: improve that page, or write a separate new one.
@@ -285,9 +299,12 @@ const HOLD = (() => {
   if (writes && valueHit) reasons.push('Our verdict scored "' + kw + '" ' + score + ' out of 100' + (score < CFG.clear ? ', clearly under the ' + CFG.threshold + ' we write without asking'
     : ', under the ' + CFG.threshold + ' we write without asking, and ' + (lowDemand ? 'the search has ' + demandText : 'your website already has a page for it'))
     + ((verdict.reasons || [])[0] ? ': ' + String(verdict.reasons[0]).replace(/\s+/g, ' ').slice(0, 260) : '.'));
-  if (writes && dupHit) reasons.push('Your website already has a page aimed at this search: ' + dup.targets.map(t => t.url).join(', ')
+  const aiOwner = aiPage ? (existingHit ? EXP.url : dupHit ? dup.targets[0].url : '') : '';
+  if (writes && aiOwner) reasons.push('Your page ' + aiOwner + ' is already the page for "' + kw + '". To win this AI answer, improve that page for the question'
+    + ' (an answer in its first lines, the searches AI runs and the sources it cites) rather than writing a second page for the same search.');
+  if (writes && dupHit && !aiOwner) reasons.push('Your website already has a page aimed at this search: ' + dup.targets.map(t => t.url).join(', ')
     + '. A second page would compete with it for the same search; improving that page is usually the faster way up.');
-  if (writes && existingHit) reasons.push('Your website already has a page for this search: ' + EXP.url + (S(EXP.title) ? ' ("' + S(EXP.title).replace(/[“”"]/g, '') + '")' : '')
+  if (writes && existingHit && !aiOwner) reasons.push('Your website already has a page for this search: ' + EXP.url + (S(EXP.title) ? ' ("' + S(EXP.title).replace(/[“”"]/g, '') + '")' : '')
     + '. Choose "Improve the existing page" to rewrite that page at its own address (it keeps what it has already earned), or "Write it anyway" for a separate new page at a new address of its own; your existing page then stays as it is.');   // W06-B (WAVE05 3.3): the copy says exactly what each choice does
   const shown = gsc.pages.filter(p => !EXP || p.url.toLowerCase().replace(/\/+$/, '') !== String(EXP.url).toLowerCase().replace(/\/+$/, ''));
   if (writes && (dupHit || existingHit) && shown[0]) reasons.push('Google already shows ' + shown[0].url + ' for this search (' + shown[0].impressions + ' impressions in Search Console).');
@@ -312,7 +329,11 @@ const HOLD = (() => {
     return q;
   };
   const known = new Set([...(((prev.serp_features || {}).related_searches) || []), ...(((prev.serp_features || {}).people_also_ask) || []), ...(OWNV.secondary || [])].map(s => kwn(searchOf(s))).filter(Boolean));
-  if (writes && (valueHit || dupHit || existingHit)) {
+  // INV1 F2: an AI page's first alternative improves the page that owns the question's search FOR the question (the same AI target, kind refresh)
+  if (writes && aiOwner) addAlt({ kind: 'ai_refresh', label: 'Improve ' + LRU.pathOf(aiOwner) + ' for this question', url: aiOwner, keyword: kw, page_type: PT.of(prev.page_type, prev.page_type),
+    existing_page_url: aiOwner, ai_target: { ...prev.ai_target, kind: 'refresh' },
+    why: 'your page already answers searches like this one: improving it for the question keeps its address and what it has already earned' });
+  if (writes && (valueHit || dupHit || existingHit) && !aiOwner) {
     const improveUrl = existingHit ? EXP.url : ((dup.targets[0] || {}).url || ((OWNV.related || [])[0] || {}).url || '');
     if (improveUrl) addAlt({ kind: 'improve', label: 'Improve the existing page', url: improveUrl, keyword: kw,
       why: existingHit ? 'your website already has this page for the search: improving it keeps its address and what it has already earned'
@@ -357,8 +378,10 @@ return [{
     score_withheld_reason: EV56.reason,
     verdict_reasons: EV56.withheld ? [EV56.reason, ...(PU ? [] : (verdict.reasons || []))] : (verdict.reasons || []),   // W07-A: the model's reasons on pages nobody read are not shown
     verdict_risks: PU ? [] : (verdict.risks || []),
-    recommended_page: PT.of(verdict.recommended_page || prev.page_type, prev.page_type),
-    page_notes: PT.notes(verdict.recommended_page, PT.of(verdict.recommended_page || prev.page_type, prev.page_type)),
+    // client reports 2026-11-16 (INV1 F10): a page written for an AI question keeps the type it was asked for (devaicon's AI guide came out
+    // "Service Page" because the verdict on the broad topic recommended one); the verdict's suggestion is a note
+    recommended_page: AIPV ? PT.of(prev.page_type, prev.page_type) : PT.of(verdict.recommended_page || prev.page_type, prev.page_type),
+    page_notes: PT.notes(verdict.recommended_page, AIPV ? PT.of(prev.page_type, prev.page_type) : PT.of(verdict.recommended_page || prev.page_type, prev.page_type)),
     secondary_keywords: OWNV.secondary,
     secondary_covered: OWNV.covered,   // A-5: the searches the site already holds elsewhere, kept off this page and named
     existing_related: OWNV.related, sections_covered: OWNV.sections, already_on_page: OWNV.already_on_page, keyword_covered: OWNV.keyword_covered, own_coverage_checked: OWNV.checked,

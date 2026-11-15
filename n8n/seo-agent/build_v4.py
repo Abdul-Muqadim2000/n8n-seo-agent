@@ -12970,6 +12970,7 @@ patch('Build Webhook Response', "    qa_blocking: d.qa_blocking || [], qa_adviso
       "        site_urls: A(pb.site_urls).map(u => String(u || '')).filter(u => /^https?:\\/\\//i.test(u)).slice(0, 300),\n"
       "        serp_shapes: pb.serp_shapes || cq.serp_shapes || null,\n"
       "        regulatory_facts: regFacts.slice(0, 40), regulatory_topics: A((reg || {}).topics).map(t => ({ id: T((t || {}).id, 60), relevance: T((t || {}).relevance, 20) })).filter(t => t.id).slice(0, 12),\n"
+      "        ai_target: pb.ai_target && typeof pb.ai_target === 'object' && String(pb.ai_target.question || '').trim() ? pb.ai_target : null,\n"   # client reports 2026-11-16 (INV1 F2 / F10): the final version is judged as an AI page
       "        content_request_id: T(pb.content_request_id || d.request_id, 120) } }; })(),")
 _bwr155 = code('Build Webhook Response')
 for _k155 in ('page_run: { prc: 1,', 'length_band,', 'coverage_target:', 'terms:', 'facts:', 'sources_cited:', 'style_guide:', 'site_urls:', 'serp_shapes:', 'regulatory_facts:', 'content_request_id:',
@@ -14613,3 +14614,38 @@ _p1_starters()
 # P1 review B1 (2026-11-12): no executeOnce Code node may read its input as many items (n8n hands it the first one only)
 import execute_once_lint
 execute_once_lint.check()
+
+# =============================================================================
+# 192. AN AI QUESTION'S PAGE IS WRITTEN FOR ITS OWN SEARCH, ONE SEARCH ONE PAGE HOLDS FOR IT TOO, AND ITS STATE SAYS SO IN PLAIN WORDS
+#      (client reports 2026-11-16, devaicon.com / techand.ai; docs/client-reports-2026-11-16/AI_ANSWER_ENGINE.md; harness CQ1-CQ8).
+#      Checked on the GENERATED workflows (after the sub-builds): the kits are inlined where they are read, the blanket AI exemption is gone
+#      from both duplicate checks, the cadence settles AI targets on its idle branch too, and both new column pairs are in the tables.
+# =============================================================================
+def _cr16_checks():
+    import json as _j192
+    def _nodes(f):
+        d = _j192.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))
+        wf = d[0] if isinstance(d, list) else d
+        return {n['name']: n for n in wf['nodes']}, wf.get('connections') or {}
+    js = lambda nd, n: ((nd.get(n) or {}).get('parameters') or {}).get('jsCode') or ''
+    main, _ = _nodes('SEO_Agent_v4.json')
+    for n in ('Parse Verdict', 'Originality Check'):
+        assert "a page written for an AI answer'" not in js(main, n) and 'aiOC ? [] : DT.targets' not in js(main, n), 'INV1 F2: %s still exempts AI pages from the duplicate rule' % n
+    assert "kind: 'ai_refresh'" in js(main, 'Parse Verdict') and 'LRU.coversHead(prev.keyword' in js(main, 'Parse Verdict'), 'INV1 F2: Parse Verdict offers no "improve that page for the question"'
+    assert "/^ai_/.test(source0)" in js(main, 'Content Log Row') and 'planned_slug:' in js(main, 'Content Log Row'), 'INV1 F4 / F6: Content Log Row lost the AI source or the planned page'
+    assert 'ai_target: pb.ai_target' in js(main, 'Build Webhook Response'), 'INV1 F2 / F10: page_run no longer carries the AI target to the final version'
+    aiv, _ = _nodes('SEO_Agent_AI_Visibility.json')
+    gro, _ = _nodes('SEO_Agent_AI_Growth.json')
+    cad, cconn = _nodes('SEO_Agent_Content_Cadence.json')
+    for nd, n in [(aiv, 'AI Metrics'), (gro, 'Growth Plan'), (gro, 'AI Rank Plan'), (cad, 'AI Target Marks'), (cad, 'AI Target Settle'), (cad, 'AI Target Settle (Idle)')]:
+        c = js(nd, n)
+        assert c.count('const AQ = (() => {') == 1 and '/*__AI_QUESTION__*/' not in c, 'INV1 F11: the AQ kit is not inlined once in %s' % n
+    assert 'LRU.sameQuestion' in js(cad, 'Cadence Plan') and 'headWords' not in js(cad, 'Cadence Plan'), 'INV1 F7: Cadence Plan folds AI questions with the old head-word rule'
+    assert "'Load Pages (Growth)'" in js(gro, 'Growth Plan') and 'Load Pages (Growth)' in gro, 'INV1 F5: AI Growth does not read the page inventory'
+    idle = [t['node'] for o in ((cconn.get('Any Pages?') or {}).get('main') or [[], []])[1:2] for t in o]
+    assert 'Settle Idle?' in idle, 'INV1 F8: the cadence does not settle AI targets when it writes nothing'
+    from ladder_common import AI_TARGETS_COLS as _atc, LOG_COLS as _lc
+    assert [c for c, _ in _atc][-5:] == ['reason_code', 'reason_args', 'origin', 'action_id', 'live_at'], 'INV1 F11: seo_ai_targets.reason_code / reason_args missing (or the AIR block is no longer last)'
+    assert all((c, 'string') in _lc for c in ('planned_slug', 'planned_title', 'planned_h1')), 'INV1 F4: seo_content_log.planned_* missing (sync_tables.py adds them on deploy)'
+    print('INV1 (section 192): AI pages judged on their own search (no blanket exemption), AQ inlined in 6 nodes, idle settle wired, 5 new columns declared')
+_cr16_checks()

@@ -92,7 +92,10 @@ const AIF = (() => {
         why: 'your page "' + label + '"' }); }
     // declared services: the stable core (top 2 by Search Console impressions of matching searches, else the declared order)
     const gsc = (x.gsc || []).filter(q => q && S(q.query) && n0(q.impressions) > 0);
-    const svc = [...new Set((x.services || []).map(low).filter(Boolean))];
+    // client reports 2026-11-16 (devaicon.com, INV1 F12): a sentence split on its commas is not a service ("we provide custom ai solutions",
+    // "and ongoing managed it support. every solution is built around your business nee" became panel topics and a page keyword)
+    const prose = (l) => /^(we|our|i|you|and|or|but|plus|also|including|with|every|each)\b/.test(l) || l.split(/\s+/).filter(Boolean).length > 6 || /[.!?]\s/.test(l);
+    const svc = [...new Set((x.services || []).map(low).filter(Boolean).filter(l => !prose(l)))];
     const impOf = (label) => gsc.filter(q => carries(words(q.query), label) > 0).reduce((s, q) => s + n0(q.impressions), 0);
     const svcRank = svc.map((l, i) => ({ l, i, imp: impOf(l) })).sort((a, b) => b.imp - a.imp || a.i - b.i);
     for (const s of svcRank) { if (topics.some(z => sameTopic(z.label, s.l))) continue;

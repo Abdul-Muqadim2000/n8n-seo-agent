@@ -77,6 +77,8 @@ rd = lambda p: (seo_events.inline(_rdt(p)).replace('/*__SITE_MODEL__*/', SITE_MO
                 .replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__RANK_SERP__*/', RANK_SERP_SRC).replace('/*__SERP_URL__*/', SERP_URL_SRC).replace('/*__PAGE_WATCH__*/', PAGE_WATCH_SRC)
                 .replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__AI_PANEL__*/', AI_PANEL_SRC).replace('/*__WAITING__*/', WAITING_SRC).replace('/*__READINESS__*/', READINESS_SRC)
                 .replace('/*__SITE_TIME__*/', site_time_src()).replace('/*__GONE__*/', _rdt('code/_gone.js').rstrip('\n'))
+                .replace('/*__AI_QUESTION__*/', _rdt('code/_ai_question.js').rstrip('\n'))   # client reports 2026-11-16 (INV1): AQ, the plain reasons of an AI question's state
+                .replace('/*__DUP_TARGETS__*/', __import__('kit_src').dup_src(_rdt))   # client reports 2026-11-16 (INV1 F2): the page that owns an AI question's search, by market
                 .replace('/*__LADDER_RULES__*/', _rdt('code/_ladder_rules.js').rstrip('\n'))   # LADDER PACKAGE (2026-11-09, build_v4.py section 183): one search, one address at write and publish time
                 .replace('/*__AI_MEASURE__*/', _rdt('code/_ai_measure.js').rstrip('\n'))
                 .replace('/*__AI_RANK_FLAGS__*/', _rdt('code/_ai_rank_flags.js').rstrip('\n'))   # AIR (2026-11-06, CONTRACTS.md §2, P4): Site Admin validates the AI-ranking settings with the one rule (AIRF)
@@ -580,11 +582,18 @@ N.append(code('AI Target Marks', rd('code/AI_Target_Marks.js'), at(18, 1)))
 N.append(iff('Any AI Marks?', '{{ !$json.skip }}', at(18, 2)))
 # B9-6: the status and the reason come from the item now - a spawn that failed writes the row back to `queued` instead of
 # leaving it claiming work in progress, and the row that IS marked carries, in its own words, that nothing exists yet.
-N.append(node('Mark AI Target Writing', DT_TYPE, DT_VERSION, dt_update_params(AI_TARGETS_TABLE, AI_TARGETS_COLS, [('target_id', '={{ $json.target_id }}')], {'status': '={{ $json.status }}', 'request_id': '={{ $json.request_id }}', 'written_at': '={{ $json.written_at }}', 'updated_at': '={{ $json.at }}', 'reason': '={{ $json.reason }}'}), at(18, 3), alwaysOutputData=True, onError='continueRegularOutput'))
+N.append(node('Mark AI Target Writing', DT_TYPE, DT_VERSION, dt_update_params(AI_TARGETS_TABLE, AI_TARGETS_COLS, [('target_id', '={{ $json.target_id }}')], {'status': '={{ $json.status }}', 'request_id': '={{ $json.request_id }}', 'written_at': '={{ $json.written_at }}', 'updated_at': '={{ $json.at }}', 'reason': '={{ $json.reason }}', 'reason_code': '={{ $json.reason_code }}', 'reason_args': '={{ $json.reason_args }}'}), at(18, 3), alwaysOutputData=True, onError='continueRegularOutput'))
 # B9-6: and the exit from `writing` - `written`, only against the content-log row of the run that was supposed to write it
 N.append(code('AI Target Settle', rd('code/AI_Target_Settle.js'), at(18, 4)))
 N.append(iff('Any AI Settles?', '{{ !$json.skip }}', at(18, 5)))
-N.append(node('Settle AI Targets', DT_TYPE, DT_VERSION, dt_update_params(AI_TARGETS_TABLE, AI_TARGETS_COLS, [('target_id', '={{ $json.target_id }}')], {'status': '={{ $json.status }}', 'written_at': '={{ $json.written_at }}', 'updated_at': '={{ $json.at }}', 'reason': '={{ $json.reason }}'}), at(18, 6), alwaysOutputData=True, onError='continueRegularOutput'))
+_SETTLE_VALS = {'status': '={{ $json.status }}', 'written_at': '={{ $json.written_at }}', 'updated_at': '={{ $json.at }}', 'reason': '={{ $json.reason }}', 'reason_code': '={{ $json.reason_code }}', 'reason_args': '={{ $json.reason_args }}', 'request_id': '={{ $json.request_id }}'}   # INV1 F8 / F11
+N.append(node('Settle AI Targets', DT_TYPE, DT_VERSION, dt_update_params(AI_TARGETS_TABLE, AI_TARGETS_COLS, [('target_id', '={{ $json.target_id }}')], _SETTLE_VALS), at(18, 6), alwaysOutputData=True, onError='continueRegularOutput'))
+# client reports 2026-11-16 (INV1 F8): the exit from `writing` runs when the week writes nothing too (the idle branch: Any Pages? false). The
+# same code as *AI Target Settle*; a dry run or a preview settles nothing (the code reads Cadence Plan). Its chain ends at its own update.
+N.append(iff('Settle Idle?', '{{ !$json.dry_run && !$json.preview }}', at(12, 4)))   # a dry run or a preview settles nothing
+N.append(code('AI Target Settle (Idle)', rd('code/AI_Target_Settle.js'), at(13, 4)))
+N.append(iff('Any AI Settles (Idle)?', '{{ !$json.skip }}', at(14, 4)))
+N.append(node('Settle AI Targets (Idle)', DT_TYPE, DT_VERSION, dt_update_params(AI_TARGETS_TABLE, AI_TARGETS_COLS, [('target_id', '={{ $json.target_id }}')], _SETTLE_VALS), at(15, 4), alwaysOutputData=True, onError='continueRegularOutput'))
 N.append(code('Cadence Note', urls(rd('code/Cadence_Note.js')), at(19, 0)))
 N.append(iff('Has Email (Cadence)?', '{{ !!$json.email }}', at(20, -1)))
 N.append(node('Send Cadence Note', 'n8n-nodes-base.emailSend', 2.1, {'fromEmail': SENDER, 'toEmail': '={{ $json.email }}', 'subject': '={{ $json.subject }}', 'emailFormat': 'html', 'html': '={{ $json.html }}', 'options': {'appendAttribution': False}}, at(21, -1), credentials=SMTP, onError='continueRegularOutput'))
@@ -602,7 +611,8 @@ for a, b in [('Manual Run', 'Ensure Log Table'), ('Ensure Log Table', 'Ensure Ca
              ('Start Content Runs', 'Log Rows'), ('Log Rows', 'Save Content Log'), ('Save Content Log', 'Ladder Marks'), ('Ladder Marks', 'Any Ladder Marks?'), ('Mark Ladder Writing', 'AI Target Marks'), ('AI Target Marks', 'Any AI Marks?'), ('Mark AI Target Writing', 'AI Target Settle'), ('AI Target Settle', 'Any AI Settles?'), ('Settle AI Targets', 'Cadence Note'), ('Cadence Note', 'Has Email (Cadence)?'), ('Cadence Note', 'Has Callback (Cadence)?')]: link(C, a, b)
 link(C, 'Preview?', 'Cadence Preview', 0); link(C, 'Preview?', 'Any Pages?', 1)
 link(C, 'Cadence Preview', 'Has Email (Cadence)?'); link(C, 'Cadence Preview', 'Has Callback (Cadence)?')
-link(C, 'Any Pages?', 'Dry Run?', 0); link(C, 'Any Pages?', 'Site Notes?', 1)
+link(C, 'Any Pages?', 'Dry Run?', 0); link(C, 'Any Pages?', 'Site Notes?', 1); link(C, 'Any Pages?', 'Settle Idle?', 1); link(C, 'Settle Idle?', 'AI Target Settle (Idle)', 0)   # INV1 F8
+link(C, 'AI Target Settle (Idle)', 'Any AI Settles (Idle)?'); link(C, 'Any AI Settles (Idle)?', 'Settle AI Targets (Idle)', 0)
 link(C, 'Site Notes?', 'Cadence Status', 0); link(C, 'Site Notes?', 'Nothing To Write', 1)
 link(C, 'Cadence Status', 'Has Email (Cadence)?'); link(C, 'Cadence Status', 'Has Callback (Cadence)?')
 link(C, 'Dry Run?', 'Planned Only', 0); link(C, 'Dry Run?', 'Start Content Runs', 1)

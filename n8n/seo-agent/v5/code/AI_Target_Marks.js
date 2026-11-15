@@ -13,6 +13,7 @@
 // What this node CANNOT see: a run that starts and is then refused inside the main workflow (the budget guard, a failed step).
 // `Start Content Runs` is an Execute Workflow node with `waitForSubWorkflow: false`, so the outcome never comes back here. That
 // gap is exactly what the read half's evidence rule is for; it is not papered over with a guess.
+/*__AI_QUESTION__*/
 const now = new Date().toISOString();
 // the plan items that really went to *Start Content Runs*: `Any Pages?` drops `nothing_to_do` and `Dry Run?` drops a dry run,
 // in this order, so index i here is item i there (the node runs in `each` mode).
@@ -30,11 +31,13 @@ items.forEach((p, i) => {
   const rid = (p.body && p.body.request_id) || p.request_id || '';
   const err = aligned ? errOf(spawned[i]) : '';
   if (err) {
-    rows.push({ json: { target_id: p.target_id, status: 'queued', request_id: '', written_at: '', at: now,
-      reason: 'the page run could not be started on ' + now.slice(0, 10) + ' (' + err + '): the question is queued again rather than left saying "being written"' } });
+    // client reports 2026-11-16 (INV1 F11): the stored reason is plain words for the client; the error stays on this item for the run's log
+    rows.push({ json: { target_id: p.target_id, status: 'queued', request_id: '', written_at: '', at: now, error: err,
+      reason: 'The page run could not be started on ' + now.slice(0, 10) + ', so the question is queued again rather than left saying "being written".', reason_code: 'run_failed', reason_args: JSON.stringify({ date: now.slice(0, 10) }) } });
     return;
   }
+  // INV1 F11: no run id, no table name, no long dash in what the client reads; the run id is in request_id, where Settle and AI Growth read it
   rows.push({ json: { target_id: p.target_id, status: 'writing', request_id: rid, written_at: now, at: now,
-    reason: 'a page run (' + rid + ') was started on ' + now.slice(0, 10) + '; nothing has been written yet — this row moves to "written" only against a seo_content_log row for that run' } });
+    reason: AQ.reason('writing', { date: now }) + ' Nothing has been written yet: it counts as written once the page itself is on record.', reason_code: 'writing', reason_args: JSON.stringify({ date: now.slice(0, 10) }) } });
 });
 return rows.length ? rows : [{ json: { skip: true } }];

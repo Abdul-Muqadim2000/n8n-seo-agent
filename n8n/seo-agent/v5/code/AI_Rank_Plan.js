@@ -21,6 +21,7 @@
 /*__OUTREACH_KIT__*/
 /*__AI_RANK_DIAG__*/
 /*__AI_RANK_LEARN__*/
+/*__AI_QUESTION__*/
 const AIR_CFG = { H: 25, window_min_days: 28, expire_grace_days: 14, sources_max: 200, actions_max: 300, growth_add_max: 3, protect_days: 28,
   // capacities: ARL's own defaults (own_pages 1 a week, pitches 5, human_new 3, human_open_max 8) in shadow AND on, so the shadow plan is what on would do
   open: ['proposed', 'queued', 'in_progress', 'done'], json_max: 60000 };
@@ -326,7 +327,11 @@ for (const g of gateSites) {
         sinks.targets.push({ target_id: tid, site_id: sid, domain: dom, prompt_id: pid, question: S0(p.prompt), keyword: S0(p.keyword || p.topic), kind: a.lever === 'L06' ? 'refresh' : 'answer',
           page_url: a.lever === 'L06' ? pageUrl : S0(st.page_url), page_type: a.lever === 'L06' ? '' : (a.screen && a.screen.page_type ? a.screen.page_type : (S0(st.page_type) || 'Guide')), fanout: ARD.fanoutOf({ prompt_id: pid, answers8, evidence: evidenceOf.get(pid) || '' }).slice(0, 8).map(f => f.query).join(' | '),
           sources_json: J(qs.map(x => ({ u: x.url, t: '', n: Number(x.cites_28d) || 1 }))), competitors: [...new Set(qs.flatMap(x => x.rivals_named || []))].slice(0, 8).join(', '), engines: (a.engines || []).join(', '), stage: S0(p.stage),
-          value: Math.round(100 * (1 + 4 * Math.min(1, (Number(a.score) || 0) / maxScore))) / 100, status: 'queued', reason: ('AI ranking (' + a.lever + '): ' + (a.screen && a.screen.note ? a.screen.note + '. ' : '') + S0(a.why || (ARL.LEVERS.find(l => l.id === a.lever) || {}).label)).slice(0, 600),
+          value: Math.round(100 * (1 + 4 * Math.min(1, (Number(a.score) || 0) / maxScore))) / 100, status: 'queued',
+          // client reports 2026-11-16 (INV1 F11): the client read "AI ranking (L06): ... 5 cell(s), expected gain 0.0119 over $9.63 (client time at $25 an
+          // hour)". The stored reason is the plain sentence of its code; the lever, the gain and the cost stay on the AI-ranking action row (admin view)
+          reason: AQ.clean(AQ.reason('ai_rank', { page_url: a.lever === 'L06' ? pageUrl : '' }) + (a.screen && a.screen.note ? ' ' + a.screen.note + '.' : '')).slice(0, 600),
+          reason_code: 'ai_rank', reason_args: J({ ...(a.lever === 'L06' && pageUrl ? { page_url: pageUrl } : {}), keyword: S0(p.keyword || p.topic) }),
           created_at: S0(st.created_at) || nowIso, updated_at: nowIso, request_id: S0(st.request_id), written_at: S0(st.written_at), won_at: S0(st.won_at), origin: 'ai_rank', action_id: S0(a.action_id), live_at: S0(st.live_at) || null }); }
       for (const a of chosen.filter(x => x.sink === 'prospect')) { const url = S0((a.ref || {}).url); const pd = hostOf(url); if (!pd) continue; const src = srcByKey.get(AIRF.urlKey(url)) || {};
         const st = prospects.find(r => S0(r.prospect_domain) === pd && S0(r.type) === 'ai_source') || null;
