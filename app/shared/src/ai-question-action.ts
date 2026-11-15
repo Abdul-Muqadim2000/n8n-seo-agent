@@ -217,7 +217,7 @@ export function aiSearchOwner(keyword: string, pages: readonly AiWrittenPage[], 
     const url = S(p.publishedUrl).trim();
     if (!url) continue;
     const head = !!p.ladderHead || heads.has(low(p.keyword));
-    if (!(LRU.sameQuestion(keyword, S(p.keyword)) || (head && LRU.coversHead(keyword, S(p.keyword))))) continue;
+    if (!(LRU.sameQuestion(keyword, S(p.keyword)) || (head && LRU.coversHead(keyword, S(p.keyword), iso)))) continue;
     if (otherMarket(keyword, `${p.keyword} ${pathWords(url)}`, iso)) continue;
     return p;
   }
