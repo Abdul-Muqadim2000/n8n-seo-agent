@@ -54,3 +54,16 @@ No schema change in `shared/src/schemas.ts` or `payload.ts` (no `export:payloads
 See INV1 "Production data repairs" R1-R5: content log 60 (detected at the service page by mistake) and target 36 / 37 / 41 / techand 23.
 With this branch the app shows target 41 as Published already (from content log 66), target 37 as still planned (its page covers another
 search), and no longer offers row 60's topic keyword from any button; R1 still matters for the publish detection and the Content page.
+
+## Review fixes (REVIEW_issue1_app.md, on fix/cr16-integration)
+
+| Finding | Verdict | Fix | Test (fails before, passes after) |
+|---|---|---|---|
+| M1 the AI visibility REPORT's "Write this page" | Confirmed | `components/reports/actions.tsx`: an action whose `api_body` carries `ai_target.question` goes through the resolver with the website's AI data (the AI page's cached `data/ai`) and the report's own question grid; nothing shows until the data is read; "Write this page" / "Improve this page" / "I published it" / "See the page" / a sentence. `prefillFromApiBody` keeps `aiTarget` and maps the type with `aiFormPageType`; `runFromApiBody` maps an AI action's type too. Other entry points checked: `rank.tsx` (ladder next rung, no AI target), `tracker.tsx` (site tracker), `ladders.ts` (ladder plans) | `web/test/aiReportActions.test.tsx` |
+| M2 `aiSearchOwner` finds owners the engine would not | Confirmed | The owner is decided by the engine's own rule for AI pages (generated kit): `LRU.sameQuestion` (question scaffolding out, places as their market, "ai" counted) or `LRU.coversHead` for a ladder's main page (`ladderHeads` from the Pipeline's ladders / Rankings, or `ladderHead` on a rung 4 content-log row). Address words never make an owner. A stored target (the engine's decision) is never re-judged by the app | `ai-question-action.test.ts` "review fixes", `pipeline-notices.ai.test.ts` |
+| M3 services check refuses real names | Confirmed | Only clear sentences: "we / they / I" with a verb, 8 words or more, a full stop after a lower-case word that ends the entry or starts another sentence | `list-entries.test.ts` |
+| L1 failed / stalled `started` row blocks the question; `not_ready` wording | Confirmed | `aiWrittenPages` drops the started row of a failed app run and of a run older than PAGE_IN_FLIGHT_HOURS; resolver: `not_ready` reads "needs a fix", a stale started row is no page | `server/test/aiAnswerPages.test.ts`, `ai-question-action.test.ts` |
+| L2 "Write it anyway" of a held refresh run | Confirmed | `holdButtons` sends the run's target as kind `answer` | `web/test/holdLadder.test.tsx` |
+| L3 off-host refresh under "Write the answer page" | Confirmed | Rebuilt as a new answer page (Guide, target kind answer, no page) | `server/test/aiAnswerPages.test.ts` |
+| L4 not for this website / kept out | Confirmed | Resolver: no button, the target's plain sentence | `ai-question-action.test.ts` |
+| Nits | Confirmed | Titles cut at a word with no ellipsis (a cut quote is closed); recommendation ids back to the action's own keyword (tickets are deduplicated by id); notice says "a page for <search>" when the page was written for another question of the same search | `server/test/aiAnswerPages.test.ts`, `pipeline-notices.ai.test.ts` |

@@ -87,7 +87,7 @@ describe('serviceEntryError and the schemas', () => {
 // is built around your business nee" (a sentence split at its commas); the engine built AI questions and a page keyword from them.
 describe('a service entry that reads like a sentence', () => {
   it('is refused with a plain hint when it is added', () => {
-    for (const s of ['We provide custom AI solutions', 'and ongoing managed IT support. Every solution is built around your business nee', 'Our team builds apps', 'one two three four five six seven eight nine ten eleven twelve thirteen'])
+    for (const s of ['We provide custom AI solutions', 'and ongoing managed IT support. Every solution is built around your business nee', 'They build mobile apps for clinics', 'one two three four five six seven eight nine ten eleven twelve thirteen'])
       expect(serviceEntryError(s)).toBe(SERVICE_SENTENCE_HINT);
     expect(SERVICE_SENTENCE_HINT).not.toMatch(/—|\.\.\.|[‘’“”]/);
   });
@@ -97,5 +97,17 @@ describe('a service entry that reads like a sentence', () => {
   });
   it('a list saved before the check still passes the schema (only new entries are refused, in the form)', () => {
     expect(updateSiteSchema.safeParse({ services: ['We provide custom AI solutions', 'automation'] }).success).toBe(true);
+  });
+});
+
+// review 2026-11-16 (M3): only clear sentences are refused, never a service name
+describe('a real service name is never refused as a sentence', () => {
+  it('names with "US", abbreviations, "Plus" or "Our" pass', () => {
+    for (const s of ['US tax filing', 'US company formation', 'U.S. payroll services', 'Dr. Smith dental clinic', 'Plus-size clothing', 'Our brand', 'Acme Inc. consulting', 'IT support'])
+      expect([s, serviceEntryError(s)]).toEqual([s, null]);
+  });
+  it('a pronoun with its verb, eight words or more, or a full stop after a word refuses it', () => {
+    for (const s of ['we provide custom AI solutions', 'I offer bookkeeping', 'custom software for small and mid-sized companies everywhere', 'Bookkeeping for clinics.'])
+      expect(serviceLooksLikeSentence(s)).toBe(true);
   });
 });

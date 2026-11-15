@@ -16,7 +16,7 @@ vi.hoisted(() => {
 });
 vi.mock('../src/db', () => ({ db: {}, schema: new Proxy({}, { get: () => new Proxy({}, { get: (_t, k) => String(k) }) }) }));
 
-const { actionFromApiBody, recommend } = await import('../src/services/recommendations');
+const { actionFromApiBody, cutTitle, recommend } = await import('../src/services/recommendations');
 const { aiTargetWritingUpdate, pageSourceFor } = await import('../src/services/runs');
 const { aiWrittenPages, targetStat } = await import('../src/services/data');
 const { writtenPages } = await import('../src/services/pipeline');
@@ -71,6 +71,23 @@ describe('recommendations: the AI report\'s page action goes through the resolve
     expect(r.action!.prefill?.existingPageUrl).toBeUndefined();
   });
 
+  // review 2026-11-16 L3: a page to improve that is not on this website: a new answer page, label, page type and target all agreeing
+  it('an engine refresh of a page on another host becomes a new answer page, consistently', () => {
+    const body = { mode: 'keyword', keyword: 'best ai automation services dubai', page_type: 'Service Page', existing_page_url: 'https://blog.other-host.com/ai-automation', ai_target: { ...aiTarget, kind: 'refresh' } };
+    const r = recommend(site, bundle([action(body)])).find((x) => x.id.startsWith('engine:ai_visibility'))!;
+    expect(r.action!.label).toBe('Write the answer page');
+    expect(r.action!.prefill?.existingPageUrl).toBeUndefined();
+    expect(r.action!.prefill).toMatchObject({ pageType: 'Guide', aiTarget: { kind: 'answer' } });
+  });
+  it('keeps the id the item always had (the action\'s own keyword) and cuts a long title without an ellipsis', () => {
+    const long = { ...action({ mode: 'keyword', keyword: 'ai automation services', ai_target: aiTarget }), action: `Win the answer to "${'Which companies offer the best AI automation services for businesses and governments in Dubai, Abu Dhabi, Sharjah and the rest of the UAE today?'}"` };
+    const r = recommend(site, bundle([long])).find((x) => x.id.startsWith('engine:ai_visibility'))!;
+    expect(r.id).toBe('engine:ai_visibility:content:ai automation services');
+    expect(r.title.length).toBeLessThanOrEqual(140);
+    expect(r.title).not.toMatch(/\.\.\.|\u2026/);
+    expect(r.title.endsWith('"')).toBe(true);
+    expect(cutTitle('short')).toBe('short');
+  });
   it('a question whose page is already live (a stored target the server derived) is not recommended again', () => {
     const growth = { checkedAt: '', submitted: { bing: { enabled: true, inAccount: true, submitted: 0, quota: null, error: '' }, indexnow: { keyUrl: '', key: '', verified: true, submitted: 0, error: '' } }, pagesChecked: 0, avgScore: null, pages: [], earned: [], entity: null, actions: [], alerts: [], pagesPerMonth: 2, writtenThisMonth: 0, targets: [{ targetId: 'ait_devaicon-com_q_dubai', promptId: 'q_dubai', question: DUBAI, keyword: 'best ai automation services dubai', kind: 'answer', state: 'live', statePageUrl: 'https://devaicon.com/insights/x' }] };
     const recs = recommend(site, bundle([action({ mode: 'keyword', keyword: 'ai automation services', ai_target: aiTarget })], { growth }));
@@ -119,6 +136,18 @@ describe('the AI page\'s questions to win (F8 / F11)', () => {
     const t = targetStat(row({ status: 'set_aside', reason: 'not a search this website should target: 0% (25% is the bar) (off topic); set aside, so no page is written for it.' }), []);
     expect(t.badge).toBe('Not for this website');
     expect(clean(t.reason)).toEqual([]);
+  });
+  // review 2026-11-16 L1: the opening row of a run that failed, or of one that started long ago and never finished, is no page
+  it('the written pages leave out a failed run\'s row and a run that never finished; a ladder main page is marked', () => {
+    const rows = [
+      { keyword: 'best ai automation services dubai', request_id: '13001', status: 'started', started_at: '2026-11-16T08:00:00Z', source: 'ai_answer' },
+      { keyword: 'governed ai', request_id: '13002', status: 'started', started_at: '2026-11-01T08:00:00Z', source: 'ai_answer' },
+      { keyword: 'fresh ai page', request_id: '13003', status: 'started', started_at: '2026-11-16T08:30:00Z', source: 'ai_answer' },
+      { keyword: 'agentic ai development in uae', request_id: 'cad_1', status: 'published', published_url: 'https://devaicon.com/services/agentic', started_at: '2026-11-13T00:00:00Z', source: 'ladder', rung: 4 },
+    ] as unknown as ContentLogRow[];
+    const w = aiWrittenPages(rows, new Map(), new Set(['13001']), Date.parse('2026-11-16T09:00:00Z'));
+    expect(w.map((x) => x.keyword)).toEqual(['fresh ai page', 'agentic ai development in uae']);
+    expect(w[1].ladderHead).toBe(true);
   });
   it('the written pages carry the AI question the app\'s run carried', () => {
     const w = aiWrittenPages([{ keyword: 'ai automation services', request_id: '12467', status: 'published', published_url: 'https://devaicon.com/x', started_at: '2026-11-10T14:54:00Z', source: 'app' } as unknown as ContentLogRow], new Map([['12467', { targetId: '', question: DUBAI }]]));

@@ -62,20 +62,23 @@ export function pasteHasSeveral(raw: string, mode: ListSplit = 'items'): boolean
   return mode === 'items' ? /[,\n;]/.test(raw) : splitListEntries(raw, 'phrases').length > 1;
 }
 
-/** "What do you sell?": the most words a service name has (a longer entry is a sentence about the business, not a name). */
-export const SERVICE_MAX_WORDS = 12;
-/** the words a sentence about the business starts with, never a service name ("We provide ...", "and ongoing support") */
-const SENTENCE_START = /^(we|our|i|my|us|and|or|also|plus|including|with|which|that|who|every|each|then|so|but)\b/i;
+/** "What do you sell?": from this many words an entry is a sentence about the business, not a name. */
+export const SERVICE_MAX_WORDS = 8;
+/** a sentence about the business: a subject pronoun and its verb ("We provide ...", "They build ...", "I offer ...") */
+const SUBJECT_VERB = /^(?:we|they)\s+[a-z]{2,}|^I\s+[a-z]{2,}/i;
 
 /**
  * Client report 2026-11-16 (F12): an entry that reads like a sentence, not the name of something sold ("We provide custom AI solutions",
  * "and ongoing managed IT support. Every solution is built around your business nee"). The engine built AI questions and page keywords from
- * such fragments. True for an entry that starts like a sentence, holds a full stop between sentences, or runs past SERVICE_MAX_WORDS words.
+ * such fragments. Only clear sentences count (review 2026-11-16 M3: "US tax filing", "U.S. payroll services", "Dr. Smith dental clinic",
+ * "Plus-size clothing" and "Our brand" are names): a subject pronoun with its verb, SERVICE_MAX_WORDS words or more, or a full stop after a
+ * word of three lower-case letters that ends the entry or starts another sentence.
  */
 export function serviceLooksLikeSentence(s: string): boolean {
   const v = squash(s);
   if (!v) return false;
-  return SENTENCE_START.test(v) || /[.!?]\s+\S/.test(v) || v.split(' ').length > SERVICE_MAX_WORDS;
+  const words = v.split(' ').length;
+  return SUBJECT_VERB.test(v) || words >= SERVICE_MAX_WORDS || /[a-z]{3,}[.!?]\s+\S/.test(v) || (words >= 3 && /[a-z]{3,}[.!?]$/.test(v));
 }
 
 /** The plain hint for an entry that reads like a sentence (the form shows it; a saved list keeps working until it is edited). */

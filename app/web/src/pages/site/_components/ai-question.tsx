@@ -2,13 +2,13 @@
 // resolver (shared/src/ai-question-action.ts): the question's own search (never the panel topic), a page type the form accepts, the AI target,
 // "Improve <page>" when a page of the website owns the search, and no write button for a question whose page is written, being written or live.
 import { ArrowRight, ExternalLink as ExternalIcon } from 'lucide-react';
-import { aiQuestionAction, type AiData, type AiQuestionAction, type AiQuestionInputs, type AiQuestionRef, type EngineAction } from '@seo/shared';
+import { aiQuestionAction, aiQuestionInputsOf, type AiData, type AiQuestionAction, type AiQuestionInputs, type AiQuestionRef, type EngineAction } from '@seo/shared';
 import { ButtonLink } from '@/components/ui/button';
 import { useSitePage } from './kit';
 
 /** What the resolver reads from the AI page's data. */
 export function aiInputsOf(d: Pick<AiData, 'prompts' | 'report' | 'growth' | 'pagesWritten'>, market: string): AiQuestionInputs {
-  return { prompts: d.prompts, questions: d.report?.questions ?? [], targets: d.growth?.targets ?? [], written: d.pagesWritten ?? [], market };
+  return aiQuestionInputsOf(d, market);
 }
 
 /** An engine action that writes a page for an AI question (the AI report's content actions: an API body with the question's AI target). */

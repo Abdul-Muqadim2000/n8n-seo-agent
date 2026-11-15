@@ -82,6 +82,7 @@ describe('aiQuestionAction: one search, one page (F2, the techand case)', () => 
     prompts: [{ promptId: 'q_crm', prompt: crm, keyword: 'best crm service provider uae', topic: 'crm service provider in uae' }],
     written: [{ keyword: 'crm service provider', status: 'published', publishedUrl: 'https://www.techand.ai/dynamics-365-crm-uae', source: 'ladder' }],
     market: 'AE',
+    ladderHeads: ['crm service provider'],
   };
   it('the live ladder head owns the question\'s search: "Improve the page for this question", never a second page', () => {
     const a = aiQuestionAction({ promptId: 'q_crm' }, inputs);
@@ -112,5 +113,42 @@ describe('aiTargetInput', () => {
     const t = aiTargetInput({ question: 'What does an ERP cost in Dubai?', target_id: 'ait_9', fanout: 'a | b | c', sources: [{ u: 'not a link' }, { u: 'https://a.test/x', t: 'A' }], competitors: Array.from({ length: 12 }, (_, i) => `r${i}`) });
     expect(t).toEqual({ question: 'What does an ERP cost in Dubai?', kind: 'answer', targetId: 'ait_9', fanout: ['a', 'b', 'c'], sources: [{ url: 'https://a.test/x', title: 'A' }], competitors: ['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7'] });
     expect(aiTargetInput({ question: 'short' })).toBeNull();
+  });
+});
+
+// review 2026-11-16: M2 (the engine's owner rule), L1 (a page that needs a fix, a run that stopped), L4 (not for this website, kept out)
+describe('aiQuestionAction: review fixes', () => {
+  it('M2: "/services/automation-testing" is not the page for "ai automation services"; the address never makes an owner', () => {
+    const w = [{ keyword: 'automation testing services', status: 'published', publishedUrl: 'https://devaicon.com/services/automation-testing', source: 'app' }];
+    expect(aiSearchOwner('ai automation services', w, 'AE')).toBeNull();
+    expect(aiSearchOwner('ai agents development dubai', [{ keyword: 'agents development', status: 'published', publishedUrl: 'https://devaicon.com/services/agents-development-dubai' }], 'AE')).toBeNull();
+    const a = aiQuestionAction({ question: 'Which firms offer AI automation services?', keyword: 'ai automation services' }, { written: w, market: 'AE' });
+    expect(a.step).toBe('write');
+  });
+  it('M2: the engine\'s same-search rule ("best" and places read as their market) does find the owner, "ai" counted', () => {
+    const w = [{ keyword: 'ai automation services uae', status: 'published', publishedUrl: 'https://devaicon.com/ai-automation-services-uae', source: 'app' }];
+    expect(aiSearchOwner('best ai automation services dubai', w, 'AE')?.publishedUrl).toBe('https://devaicon.com/ai-automation-services-uae');
+    expect(aiSearchOwner('best automation services dubai', w, 'AE')).toBeNull();
+  });
+  it('M2: the engine\'s stored decision wins over the app\'s guess (a target planned as a new page stays a new page)', () => {
+    const w = [{ keyword: 'ai automation services uae', status: 'published', publishedUrl: 'https://devaicon.com/ai-automation-services-uae', source: 'app' }];
+    const targets = [{ targetId: 'ait_1', question: DUBAI, keyword: 'best ai automation services dubai', kind: 'answer', state: 'queued' as const }];
+    expect(aiQuestionAction({ targetId: 'ait_1' }, { targets, written: w, market: 'AE' }).step).toBe('write');
+    expect(aiQuestionAction({ question: DUBAI, keyword: 'best ai automation services dubai' }, { written: w, market: 'AE' }).step).toBe('improve');
+  });
+  it('L1: a page for the question that failed its quality check reads "needs a fix"; a run that stopped long ago is not a page', () => {
+    const nf = aiQuestionAction({ apiBody: oldBody }, { ...base, written: [{ keyword: 'best ai automation services dubai', status: 'not_ready', source: 'ai_answer' }] });
+    expect(nf.step).toBe('publish');
+    expect(nf.note).toContain('needs a fix');
+    const old = aiQuestionAction({ apiBody: oldBody }, { ...base, written: [{ keyword: 'best ai automation services dubai', status: 'started', startedAt: '2026-01-01T00:00:00Z', source: 'ai_answer' }] });
+    expect(old.step).toBe('write');
+  });
+  it('L4: a question not for this website, or kept out by the client, gets no write button: its plain reason instead', () => {
+    const t = (state: 'not_for_site' | 'kept_out', reason: string) => [{ targetId: 'ait_1', promptId: 'q_dubai', question: DUBAI, keyword: 'best ai automation services dubai', kind: 'answer', state, reason }];
+    const a = aiQuestionAction({ promptId: 'q_dubai' }, { ...base, targets: t('not_for_site', 'It asks about another company, so no page is written for it.') });
+    expect(a.step).toBe('none');
+    expect(a.run).toBeNull();
+    expect(a.note).toBe('It asks about another company, so no page is written for it.');
+    expect(aiQuestionAction({ promptId: 'q_dubai' }, { ...base, targets: t('kept_out', 'You chose not to write a page for it.') }).run).toBeNull();
   });
 });

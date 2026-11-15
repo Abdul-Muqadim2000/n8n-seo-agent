@@ -23,7 +23,7 @@ import {
   TrendingUp,
   UserCheck,
 } from 'lucide-react';
-import { COUNTRY_NAMES, MODE_IDS, MODES, PAGE_TYPE_VALUES, STAGE_LABELS, type CountryName, type ModeCategory, type ModeId, type PageType } from '@seo/shared';
+import { aiFormPageType, aiTargetInput, COUNTRY_NAMES, MODE_IDS, MODES, PAGE_TYPE_VALUES, STAGE_LABELS, type CountryName, type ModeCategory, type ModeId, type PageType } from '@seo/shared';
 import { IconTile } from '@/components/ui/icon-tile';
 
 const MODE_ICON: Record<ModeId, (cls?: string) => ReactNode> = {
@@ -166,6 +166,14 @@ export function prefillFromApiBody(body: Record<string, unknown>): { mode: ModeI
   const mode = String(body.mode ?? '');
   if (mode === 'keyword') {
     const prefill = keywordPrefill({ keyword: String(body.keyword ?? ''), pageType: body.page_type, country: body.country, existingPageUrl: body.existing_page_url });
+    // client report 2026-11-16 (review M1): a page for an AI question keeps its AI target and a page type the form accepts for it ("Comparison
+    // Page" is a guide, never a blog post). The question's own search and its state come from the shared resolver (reports/actions.tsx)
+    const aiTarget = aiTargetInput(body.ai_target ?? body.aiTarget);
+    if (aiTarget) {
+      const refresh = typeof prefill.existingPageUrl === 'string' && !!prefill.existingPageUrl;
+      prefill.pageType = aiFormPageType(body.page_type, { kind: refresh ? 'refresh' : 'answer', pageUrl: refresh ? String(prefill.existingPageUrl) : '' });
+      prefill.aiTarget = { ...aiTarget, kind: refresh ? 'refresh' : 'answer' };
+    }
     const receive = Array.isArray(body.receive) ? body.receive.map((x) => String(x).toLowerCase()) : null;
     if (receive?.length) {
       prefill.receiveReport = receive.some((r) => r.includes('report'));

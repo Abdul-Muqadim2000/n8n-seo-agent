@@ -361,6 +361,7 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
     targets: x.ai.growth?.targets ?? [],
     written: x.ai.pagesWritten ?? x.content.items.filter((c) => !['failed', 'held'].includes(c.status)).map((c) => ({ keyword: c.keyword, status: c.status, publishedUrl: c.publishedUrl, startedAt: c.startedAt, source: c.source })),
     market: site.country ?? undefined,
+    ladderHeads: x.rankings.ladders.map((l) => l.headKeyword).filter(Boolean),
   };
   for (const a of engine) {
     const ai = a.source === 'ai_visibility' && aiQuestionBody(a.apiBody) ? aiQuestionAction({ apiBody: a.apiBody }, aiInputs) : null;
@@ -368,18 +369,27 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
       // written, being written, live or won: the Content items ask for what is left (publish, fix), never a second paid page
       if (ai.step !== 'write' && ai.step !== 'improve') continue;
       if (!ai.run || !fits(ai.keyword)) continue;
-      const improve = ai.step === 'improve';
       const existing = ai.existingPageUrl && urlOnHost(ai.existingPageUrl, site.domain) ? ai.existingPageUrl : '';
-      const prefill = { ...ai.run.prefill };
-      if (!existing) delete prefill.existingPageUrl;
+      // review 2026-11-16 L3: a page to improve that is not on this website (the form refuses it) makes the item a new answer page, its
+      // label, page type and AI target all saying so
+      const improve = ai.step === 'improve' && !!existing;
+      const prefill: Record<string, unknown> = { ...ai.run.prefill };
+      if (!improve) {
+        delete prefill.existingPageUrl;
+        if (ai.step === 'improve') {
+          prefill.pageType = aiFormPageType('', { kind: 'answer' });
+          if (ai.aiTarget) prefill.aiTarget = { ...ai.aiTarget, kind: 'answer' };
+        }
+      }
       add({
-        id: `engine:${a.source}:${a.type}:${ai.keyword || a.action.slice(0, 60)}`,
+        // the id the item always had (the action's own keyword), so a ticket made from it is not made twice
+        id: `engine:${a.source}:${a.type}:${a.keyword ?? a.action.slice(0, 60)}`,
         category: 'ai',
         priority: a.priority <= 1 ? 'high' : a.priority === 2 ? 'medium' : 'low',
-        title: a.action.length > 140 ? a.action.slice(0, 137) + '...' : a.action,
-        detail: [a.why, ai.note].filter(Boolean).join(' '),
+        title: cutTitle(a.action),
+        detail: [a.why, improve || ai.step !== 'improve' ? ai.note : ''].filter(Boolean).join(' '),
         evidence: `from the ai visibility report`,
-        action: { label: improve && existing ? 'Improve the page for this question' : 'Write the answer page', mode: 'keyword', prefill },
+        action: { label: improve ? 'Improve the page for this question' : 'Write the answer page', mode: 'keyword', prefill },
       }, {
         impact: a.priority <= 1 ? 5 : a.priority === 2 ? 3.5 : 2,
         confidence: 'rule',
@@ -420,7 +430,7 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
       id: `engine:${a.source}:${a.type}:${a.keyword ?? a.action.slice(0, 60)}`,
       category: cat,
       priority: a.priority <= 1 ? 'high' : a.priority === 2 ? 'medium' : 'low',
-      title: ownTitle || (a.action.length > 140 ? a.action.slice(0, 137) + '...' : a.action),
+      title: ownTitle || cutTitle(a.action),
       detail: a.why + ownNote,
       evidence: `from the ${a.source.replace('_', ' ')} report`,
       action,
@@ -491,7 +501,7 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
       id: `ai:gap:${g.prompt.slice(0, 80)}`,
       category: 'ai',
       priority: 'medium',
-      title: `Win the AI answer: "${g.prompt.length > 110 ? g.prompt.slice(0, 107) + '...' : g.prompt}"`,
+      title: `Win the AI answer: "${cutTitle(g.prompt, 110)}"`,
       detail: g.competitors.length ? `AI names ${g.competitors.slice(0, 3).join(', ')} here and not you.` : 'AI answers this without naming you.',
       evidence: g.sources.length ? `sources AI relies on: ${g.sources.slice(0, 3).join(', ')}` : undefined,
       action: { label: 'See the answers', page: 'ai' },
@@ -805,4 +815,13 @@ function aiQuestionBody(body: Record<string, unknown> | null): boolean {
   if (!body || String(body.mode ?? '') !== 'keyword') return false;
   const t = (body.ai_target ?? body.aiTarget) as { question?: unknown } | undefined;
   return !!(t && typeof t === 'object' && String(t.question ?? '').trim());
+}
+
+/** A recommendation title of at most `max` characters, cut at a word and never with an ellipsis (copy rule). */
+export function cutTitle(t: string, max = 140): string {
+  const v = String(t ?? '').trim();
+  if (v.length <= max) return v;
+  const cut = v.slice(0, max - 1).replace(/\s+\S*$/, '').replace(/[\s,;:.-]+$/, '');
+  // a quoted question cut inside its quotes keeps its closing quote
+  return (cut.match(/"/g) ?? []).length % 2 ? `${cut}"` : cut;
 }

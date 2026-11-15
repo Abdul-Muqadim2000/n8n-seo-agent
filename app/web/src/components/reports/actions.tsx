@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { ArrowRight, Eye, Lightbulb, ListOrdered, Sparkles, Star } from 'lucide-react';
+import { aiQuestionAction, aiQuestionInputsOf, type AiPromptLike } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
+import { useSiteData } from '@/lib/queries';
 import { paths } from '@/lib/paths';
 import { Badge } from '@/components/ui/badge';
 import { ButtonLink } from '@/components/ui/button';
@@ -25,10 +27,41 @@ const TYPE_LABEL: Record<string, string> = {
 /** Recommended actions, most important first (priority 1 = most urgent). */
 export const sortActions = (actions: P[]) => [...actions].sort((a, b) => (num(a.priority) ?? 9) - (num(b.priority) ?? 9));
 
+/** An action whose run writes a page for an AI question (a keyword run carrying the question's AI target). */
+export const isAiPageBody = (body: P): boolean => str(body.mode) === 'keyword' && !!str(obj(body.ai_target ?? body.aiTarget).question);
+
+/**
+ * Client report 2026-11-16 (review M1): the AI visibility REPORT's "Write this page" goes through the same resolver as the AI page (the
+ * question's own search, never the panel topic an older report stored; the AI target; "Improve the page" when a page owns the search;
+ * "I published it" / "See the page" / a sentence when its page is written, live or won). It reads the website's AI data (one cached request,
+ * the AI page's own) and shows nothing until it has it, so a write button never appears for a question that has its page.
+ */
+function AiActionButton({ body, siteId, questions, variant }: { body: P; siteId: string | null; questions: readonly AiPromptLike[]; variant?: 'primary' | 'secondary' }) {
+  const { org, sites, can } = useOrgCtx();
+  const site = sites.find((x) => x.id === siteId) ?? null;
+  const on = !!site?.verifiedAt;
+  const q = useSiteData(org.id, siteId ?? '', 'ai', undefined, { enabled: on });
+  if (on && (q.isPending || q.isPlaceholderData) && !q.isError) return null;
+  const r = aiQuestionAction({ apiBody: body }, aiQuestionInputsOf(on && !q.isError ? q.data : null, site?.country ?? '', questions));
+  if (r.step === 'open' && r.pageUrl)
+    return (
+      <span className="inline-flex flex-col items-end gap-1">
+        <ExternalLink href={r.pageUrl}>{r.label}</ExternalLink>
+      </span>
+    );
+  if (!r.run || !can('member')) return r.note ? <span className="max-w-56 text-right text-xs leading-snug text-ink-3">{r.note}</span> : null;
+  return (
+    <ButtonLink to={paths.tool(org.id, r.run.mode, { siteId, prefill: r.run.prefill })} size="sm" variant={variant ?? (r.step === 'publish' ? 'secondary' : 'primary')} icon={<ArrowRight className="size-3.5" />}>
+      {r.step === 'improve' ? 'Improve this page' : r.step === 'publish' ? 'I published it' : 'Write this page'}
+    </ButtonLink>
+  );
+}
+
 /** The button of one recommended action: an `api_body` opens the matching tool pre-filled; publish / index actions open "I published it". */
-export function ActionRunButton({ action: a, siteId, variant }: { action: P; siteId: string | null; variant?: 'primary' | 'secondary' }) {
+export function ActionRunButton({ action: a, siteId, variant, aiQuestions }: { action: P; siteId: string | null; variant?: 'primary' | 'secondary'; aiQuestions?: readonly AiPromptLike[] }) {
   const { org, can } = useOrgCtx();
   const body = obj(a.api_body);
+  if (isAiPageBody(body)) return <AiActionButton body={body} siteId={siteId} questions={aiQuestions ?? []} variant={variant} />;
   const run = Object.keys(body).length ? prefillFromApiBody(body) : null;
   const type = str(a.type);
   const kw = str(a.keyword);
@@ -50,7 +83,7 @@ export function ActionRunButton({ action: a, siteId, variant }: { action: P; sit
 const priorityTone = (p: number | null) => (p === 1 ? 'serious' : p === 2 ? 'warning' : 'neutral');
 
 /** Actions the engine recommends; the ones with an `api_body` open the matching tool pre-filled. */
-export function ActionList({ actions, siteId, title = 'What to do next', description }: { actions: P[]; siteId: string | null; title?: string; description?: string }) {
+export function ActionList({ actions, siteId, title = 'What to do next', description, aiQuestions }: { actions: P[]; siteId: string | null; title?: string; description?: string; aiQuestions?: readonly AiPromptLike[] }) {
   if (!actions.length) return null;
   const sorted = sortActions(actions);
   return (
@@ -83,7 +116,7 @@ export function ActionList({ actions, siteId, title = 'What to do next', descrip
                   </>
                 ) : undefined
               }
-              action={<ActionRunButton action={a} siteId={siteId} />}
+              action={<ActionRunButton action={a} siteId={siteId} aiQuestions={aiQuestions} />}
               actionPosition="side"
             />
           );

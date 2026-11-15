@@ -321,33 +321,34 @@ function aiPageNotice(input: NoticeInput, data: PipelineData, f: NoticeFormat): 
   const keyword = String(input.keyword ?? '').trim();
   const kw = normKeyword(keyword);
   const existing = urlKey(input.existingPageUrl ?? '');
-  const mine = data.written.filter(
-    (w) => (!!t?.targetId && w.aiTargetId === t.targetId) || (!!w.aiQuestion && aiQuestionKey(w.aiQuestion) === q) || (/^ai_/.test(w.source) && normKeyword(w.keyword) === kw),
-  );
-  const own = mine.find((w) => w.publishedUrl) ?? mine[0];
+  const forThis = (w: PipelineData['written'][number]) => (!!t?.targetId && w.aiTargetId === t.targetId) || (!!w.aiQuestion && aiQuestionKey(w.aiQuestion) === q);
+  const mine = data.written.filter((w) => forThis(w) || (/^ai_/.test(w.source) && normKeyword(w.keyword) === kw));
+  const own = mine.find((w) => w.publishedUrl && forThis(w)) ?? mine.find((w) => w.publishedUrl) ?? mine.find(forThis) ?? mine[0];
+  // review 2026-11-16 (nit): an AI page of the same search written for ANOTHER question is "a page for this search", not "for this question"
+  const what = own && forThis(own) ? 'this question' : `"${own?.keyword ?? keyword}"`;
   if (own) {
     if (own.publishedUrl && existing && urlKey(own.publishedUrl) === existing) return null;   // this run improves that very page
     if (own.publishedUrl)
       return {
         id: `ai-written:${q.slice(0, 60)}`,
         tone: 'warning',
-        title: 'You already have a page for this question',
-        body: `It is live at ${shortUrl(own.publishedUrl)}${own.startedAt ? ` (written ${f.day(own.startedAt)})` : ''}. To win this AI answer, improve that page for the question rather than writing a second one: a second page for the same question competes with the first.`,
-        short: 'Page already written for this question',
+        title: `You already have a page for ${what}`,
+        body: `It is live at ${shortUrl(own.publishedUrl)}${own.startedAt ? ` (written ${f.day(own.startedAt)})` : ''}. To win this AI answer, improve that page for the question rather than writing a second one: a second page for the same ${what === 'this question' ? 'question' : 'search'} competes with the first.`,
+        short: `Page already written for ${what === 'this question' ? 'this question' : 'this search'}`,
         confirm: 'Write a second page anyway',
         usePlan: { label: `Improve ${shortUrl(own.publishedUrl)} for this question`, pageType: aiFormPageType('', { kind: 'refresh', pageUrl: own.publishedUrl }), existingPageUrl: own.publishedUrl, aiKind: 'refresh' },
       };
     return {
       id: `ai-written:${q.slice(0, 60)}`,
       tone: 'warning',
-      title: 'A page for this question was already written',
-      body: `It was written ${own.startedAt ? `on ${f.day(own.startedAt)}` : 'earlier'} and is waiting to be published: publish that one rather than writing it again.`,
-      short: 'Page already written for this question',
+      title: `A page for ${what} was already written`,
+      body: `It was written ${own.startedAt ? `on ${f.day(own.startedAt)}` : 'earlier'} and is not live yet: publish that one rather than writing it again.`,
+      short: `Page already written for ${what === 'this question' ? 'this question' : 'this search'}`,
       confirm: 'Write a second page anyway',
       link: { label: 'Open the pipeline', page: 'pipeline' },
     };
   }
-  const owner = aiSearchOwner(keyword, data.written, input.country);
+  const owner = aiSearchOwner(keyword, data.written, input.country, data.ladders.map((l) => l.head));
   if (owner?.publishedUrl && !(existing && urlKey(owner.publishedUrl) === existing))
     return {
       id: `ai-owner:${kw}`,

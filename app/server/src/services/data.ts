@@ -149,6 +149,7 @@ import {
   type AiScopeSummary,
   aiTargetView,
   type AiWrittenPage,
+  PAGE_IN_FLIGHT_HOURS,
 } from '@seo/shared';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db, schema } from '../db';
@@ -1355,7 +1356,7 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
     siteRows<ContentLogRow>('contentLog', d, { max: 500 }),
     siteRows<MonitorsRow>('monitors', d, { max: 5 }),
     // client report 2026-11-16 (issue 1): the AI question each of the app's page runs carried (a failed read: none known, never an error page)
-    aiRunQuestions(org.id, site.id).catch(() => new Map<string, { targetId: string; question: string }>()),
+    aiRunQuestions(org.id, site.id).catch(() => ({ questions: new Map<string, { targetId: string; question: string }>(), failed: new Set<string>() })),
   ]);
   const vis = [...visDesc].sort((a, b) => s(a.checked_at).localeCompare(s(b.checked_at)));
   const last = vis[vis.length - 1];
@@ -1476,7 +1477,7 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
     ...(opts.answers === 'summary' ? { answerResults: answerResultsOf(answers), answersStored: answers.length } : {}),
     scope: opts.filter ? aiScopeOf(opts.filter, vis, compared, answers, prompts, opts.answers !== false) : null,
     growth: toGrowth(growthRows[0], aiPages, aiTargets, aiProspects, logs, monitorsNow, opts.admin === true),
-    pagesWritten: aiWrittenPages(logs, aiRuns),
+    pagesWritten: aiWrittenPages(logs, aiRuns.questions, aiRuns.failed),
     // AIR (2026-11-06): the AI-ranking plan, read only for a website in `on` mode (off and the private trial show nothing new)
     // FX-C RC-1: in the client's words with credits; the raw memo and the provider cost for a platform admin only
     aiRank: await aiRankPlanFor(d, mons[0], { prompts, admin: opts.admin === true }),
@@ -1874,28 +1875,43 @@ export function targetStat(t: AiTargetRow, logs: readonly ContentLogRow[], admin
   };
 }
 
-/** Client report 2026-11-16 (issue 1): the AI question (target id and text) each of the website's page runs started in the app carried, by request id. */
-export async function aiRunQuestions(orgId: string, siteId: string): Promise<Map<string, { targetId: string; question: string }>> {
+/** Client report 2026-11-16 (issue 1): the website's page runs started in the app: the AI question (target id and text) each one carried, by
+ *  request id, and the request ids of the runs that failed (their opening content-log row is no page, review L1). */
+export async function aiRunQuestions(orgId: string, siteId: string): Promise<{ questions: Map<string, { targetId: string; question: string }>; failed: Set<string> }> {
   const rows = await db
-    .select({ requestId: schema.runs.requestId, targetId: sql<string | null>`${schema.runs.input}->'aiTarget'->>'targetId'`, question: sql<string | null>`${schema.runs.input}->'aiTarget'->>'question'` })
+    .select({ requestId: schema.runs.requestId, status: schema.runs.status, targetId: sql<string | null>`${schema.runs.input}->'aiTarget'->>'targetId'`, question: sql<string | null>`${schema.runs.input}->'aiTarget'->>'question'` })
     .from(schema.runs)
-    .where(and(eq(schema.runs.orgId, orgId), eq(schema.runs.siteId, siteId), eq(schema.runs.mode, 'keyword'), sql`${schema.runs.input} ? 'aiTarget'`))
+    .where(and(eq(schema.runs.orgId, orgId), eq(schema.runs.siteId, siteId), eq(schema.runs.mode, 'keyword')))
     .orderBy(desc(schema.runs.createdAt))
-    .limit(300);
-  const out = new Map<string, { targetId: string; question: string }>();
-  for (const r of rows) if (r.requestId && r.question && !out.has(r.requestId)) out.set(r.requestId, { targetId: s(r.targetId), question: s(r.question) });
-  return out;
+    .limit(500);
+  const questions = new Map<string, { targetId: string; question: string }>();
+  const failed = new Set<string>();
+  for (const r of rows) {
+    if (!r.requestId) continue;
+    if (r.status === 'failed') failed.add(r.requestId);
+    if (r.question && !questions.has(r.requestId)) questions.set(r.requestId, { targetId: s(r.targetId), question: s(r.question) });
+  }
+  return { questions, failed };
 }
 
 /** The website's written pages for the AI page's resolver (pure): one per content-log row with a page or a run behind it, with the AI question
- *  the app's run carried. A failed or held row wrote no page and is left out. */
-export function aiWrittenPages(logs: readonly ContentLogRow[], aiRuns: ReadonlyMap<string, { targetId: string; question: string }>): AiWrittenPage[] {
+ *  the app's run carried. A failed or held row wrote no page and is left out, and so is the `started` row of a run the app knows failed or
+ *  one that started more than PAGE_IN_FLIGHT_HOURS ago and never finished (as the Pipeline's writtenPages does, review L1). A ladder page of
+ *  the main keyword (rung 4) is marked: the engine's coversHead rule applies to it. */
+export function aiWrittenPages(
+  logs: readonly ContentLogRow[],
+  aiRuns: ReadonlyMap<string, { targetId: string; question: string }>,
+  failed: ReadonlySet<string> = new Set(),
+  now = Date.now(),
+): AiWrittenPage[] {
+  const stopped = (l: ContentLogRow) => s(l.status) === 'started' && (failed.has(s(l.request_id)) || !(now - Date.parse(s(l.started_at) || '1970-01-01') < PAGE_IN_FLIGHT_HOURS * 3600_000));
   return logs
-    .filter((l) => s(l.keyword) && !['failed', 'held', ''].includes(s(l.status)))
+    .filter((l) => s(l.keyword) && !['failed', 'held', ''].includes(s(l.status)) && !stopped(l))
     .map((l) => {
       const q = aiRuns.get(s(l.request_id));
       return {
         keyword: s(l.keyword), status: s(l.status), publishedUrl: s(l.published_url), startedAt: s(l.started_at), source: s(l.source),
+        ...(s(l.source) === 'ladder' && Number(l.rung) === 4 ? { ladderHead: true } : {}),
         ...(q ? { aiTargetId: q.targetId, aiQuestion: q.question } : {}),
       };
     })

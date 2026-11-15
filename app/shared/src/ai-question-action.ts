@@ -58,6 +58,8 @@ export interface AiTargetForAction {
   state?: AiTargetState;
   /** the page the state is about (the live page, the page to improve) */
   statePageUrl?: string;
+  /** the plain sentence of its state (ai-target-status.ts), shown when no page is offered (not for this website, kept out) */
+  reason?: string;
 }
 /** A page the website has from us (the content log / ladder pages: PipelineData.written, or the content items). */
 export interface AiWrittenPage {
@@ -69,6 +71,8 @@ export interface AiWrittenPage {
   /** the AI question the run that wrote it carried (the app's own runs), when known */
   aiTargetId?: string;
   aiQuestion?: string;
+  /** the page of a keyword ladder's main keyword (the engine's coversHead rule applies to it) */
+  ladderHead?: boolean;
 }
 export interface AiQuestionInputs {
   prompts?: readonly AiPromptLike[];
@@ -78,6 +82,17 @@ export interface AiQuestionInputs {
   written?: readonly AiWrittenPage[];
   /** the website's market (a country name or ISO-2), for the same-search check */
   market?: string;
+  /** the main keywords of the website's keyword ladders (their pages own every question that carries all their words) */
+  ladderHeads?: readonly string[];
+}
+
+/** What the resolver reads from the AI page's data (`GET .../data/ai`), plus the report's own question grid when there is one. */
+export function aiQuestionInputsOf(
+  d: { prompts?: readonly AiPromptLike[]; report?: { questions?: readonly AiPromptLike[] } | null; growth?: { targets?: readonly AiTargetForAction[] } | null; pagesWritten?: readonly AiWrittenPage[] } | null | undefined,
+  market: string,
+  extraQuestions: readonly AiPromptLike[] = [],
+): AiQuestionInputs {
+  return { prompts: d?.prompts ?? [], questions: [...extraQuestions, ...(d?.report?.questions ?? [])], targets: d?.growth?.targets ?? [], written: d?.pagesWritten ?? [], market };
 }
 /** What the button is about: a question (by id or text), a stored target, or a report action's API body. */
 export interface AiQuestionRef {
@@ -175,9 +190,8 @@ export function aiKeyword(v: unknown): string {
   return k;
 }
 
-// ---------------- one search, one page (the engine's DUP rule, with the data the app has) ----------------
+// ---------------- one search, one page (the engine's own rule, with the data the app has) ----------------
 
-const toks = (t: string) => new Set(low(t).replace(/[^a-z0-9؀-ۿ]+/g, ' ').split(' ').filter((w) => w.length > 2));
 const pathWords = (u: string) => S(u).replace(/^[a-z]+:\/\/[^/]+/i, '').replace(/[?#].*$/, '').replace(/[-_/.]+/g, ' ');
 /** the page names only places outside `iso` while the keyword names none outside it (the engine's DUP.otherMarket) */
 function otherMarket(keyword: string, pageText: string, iso: string): boolean {
@@ -188,28 +202,26 @@ function otherMarket(keyword: string, pageText: string, iso: string): boolean {
 }
 
 /**
- * The LIVE page of the website that already owns this search (CONTRACT_ISSUE1.md §4): a page whose keyword and address carry 75% or more of
- * the search's words of three letters or more (the engine's DUP share), in the same market. A page that names only another market's places
- * ("ai-automation-services-pakistan" for a UAE website) is advice, never the owner. Null when none.
+ * The LIVE page of the website that already owns this question's search (CONTRACT_ISSUE1.md §4), by the engine's own rule for AI pages
+ * (Parse_Verdict.js / Growth_Plan.js, the generated kit `LRU`): the page's keyword IS the question's search (`LRU.sameQuestion`: the
+ * question's scaffolding such as "best" and "which" out, plurals folded, places read as their market, "ai" counted), or the page is a keyword
+ * ladder's main page and the question carries every word of its main keyword (`LRU.coversHead`). Words of the page's ADDRESS never make an
+ * owner (review 2026-11-16 M2: "/services/automation-testing" is not the page for "ai automation services"). A page that names only another
+ * market's places ("ai-automation-services-pakistan" for a UAE website) is never the owner. Null when none.
  */
-export function aiSearchOwner(keyword: string, pages: readonly AiWrittenPage[], market?: string): AiWrittenPage | null {
-  const kw = toks(keyword);
-  if (!kw.size) return null;
+export function aiSearchOwner(keyword: string, pages: readonly AiWrittenPage[], market?: string, ladderHeads: readonly string[] = []): AiWrittenPage | null {
+  if (!low(keyword)) return null;
   const iso = isoOfCountry(market) || (/^[A-Za-z]{2}$/.test(S(market)) ? S(market).toUpperCase() : '');
-  let best: { p: AiWrittenPage; share: number } | null = null;
+  const heads = new Set(ladderHeads.map((h) => low(h)).filter(Boolean));
   for (const p of pages) {
     const url = S(p.publishedUrl).trim();
     if (!url) continue;
-    const text = `${p.keyword} ${pathWords(url)}`;
-    const set = toks(text);
-    let hit = 0;
-    for (const w of kw) if (set.has(w)) hit++;
-    const share = hit / kw.size;
-    if (share < 0.75 && !LRU.sameSearch(low(p.keyword), low(keyword))) continue;
-    if (otherMarket(keyword, text, iso)) continue;
-    if (!best || share > best.share) best = { p, share };
+    const head = !!p.ladderHead || heads.has(low(p.keyword));
+    if (!(LRU.sameQuestion(keyword, S(p.keyword)) || (head && LRU.coversHead(keyword, S(p.keyword))))) continue;
+    if (otherMarket(keyword, `${p.keyword} ${pathWords(url)}`, iso)) continue;
+    return p;
   }
-  return best?.p ?? null;
+  return null;
 }
 
 // ---------------- the resolver ----------------
@@ -280,6 +292,9 @@ export function aiQuestionAction(ref: AiQuestionRef, inputs: AiQuestionInputs = 
   if (st === 'writing') return out('none', { note: 'The page for this question is being written.' });
   if (st === 'written' || st === 'needs_fix') return out('publish', { note: st === 'needs_fix' ? 'The page for this question is written but needs a fix before it can be published.' : 'The page for this question is written and waiting to be published.' });
   if (st === 'held') return out('none', { note: 'The page for this question waits for your OK. Open its report to decide.' });
+  // review 2026-11-16 L4: a question this website does not target, or one the client kept out, gets no page (the plain reason instead)
+  if (st === 'not_for_site') return out('none', { note: S(target?.reason) || 'This question is not about what you sell, so no page is written for it.' });
+  if (st === 'kept_out') return out('none', { note: S(target?.reason) || 'You chose not to write a page for it.' });
 
   // 2. a page written for this very question (by any run: the app's, the weekly pages, an older engine)
   const written = inputs.written ?? [];
@@ -288,20 +303,25 @@ export function aiQuestionAction(ref: AiQuestionRef, inputs: AiQuestionInputs = 
     if (isLive(own)) return out('open', { note: `Your page ${aiPagePath(S(own.publishedUrl))} answers this question. AI answers usually take a few weeks to change.`, pageUrl: S(own.publishedUrl) });
     if (S(own.status) === 'writing' || (S(own.status) === 'started' && Date.now() - Date.parse(S(own.startedAt) || '1970-01-01') < 864e5))
       return out('none', { note: 'The page for this question is being written.' });
+    if (S(own.status) === 'not_ready') return out('publish', { note: 'The page for this question is written but needs a fix before it can be published.' });
+    if (S(own.status) === 'started') return out('write');   // a run that started more than a day ago and never wrote a page
     return out('publish', { note: 'The page for this question is written and waiting to be published.' });
   }
 
   // 3. a planned refresh of a page of the website
   if (refreshUrl) return out('improve', { note: `We improve ${aiPagePath(refreshUrl)} so it answers this question.` });
 
-  // 4. a live page of the website already owns the question's own search (same market): improve it, never a second page
-  const owner = aiSearchOwner(keyword, written, inputs.market);
+  // 4. a live page of the website already owns the question's own search (same market): improve it, never a second page. The engine's
+  // stored decision comes first (review M2): a question AI Growth already planned (a stored target, "new page" or "improve") is never re-judged here
+  const owner = target ? null : aiSearchOwner(keyword, written, inputs.market, inputs.ladderHeads);
   if (owner) {
     refreshUrl = S(owner.publishedUrl);
     return out('improve', { note: `Your page ${aiPagePath(refreshUrl)} is already the page for this search. Improve it so it answers this question.`, refresh: refreshUrl });
   }
   // 5. a page for the same search is being written or waits to be published: no second page
-  const pending = written.find((w) => !isLive(w) && keyword && LRU.sameSearch(low(w.keyword), keyword));
+  // (a `started` row older than a day is a run that stopped without a page, never a page on its way)
+  const stale = (w: AiWrittenPage) => S(w.status) === 'started' && Date.now() - Date.parse(S(w.startedAt) || '1970-01-01') >= 864e5;
+  const pending = written.find((w) => !isLive(w) && !stale(w) && keyword && LRU.sameSearch(low(w.keyword), keyword));
   if (pending) return out('none', { note: `A page for "${pending.keyword}" is already written or being written. Publish it first, then improve it for this question.` });
   return out('write');
 }

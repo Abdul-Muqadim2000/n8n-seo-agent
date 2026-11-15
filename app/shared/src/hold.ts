@@ -207,7 +207,7 @@ export function holdButtons(
       : h.kinds.includes('duplicate')
         ? 'a separate new page is written at a new address of its own and your existing page stays as it is; two pages for the same search compete with each other, so it is your call'
         : 'you know this keyword is worth a page',
-    prefill: { keyword: base.keyword, ...common(base.pageType), ...(ladder ? { ladder: { ...ladder, head: ladder.head || h.ladder?.head || '' } } : {}), ...(runTarget ? { aiTarget: { ...runTarget } } : {}), holdAck: { score: h.score } },
+    prefill: { keyword: base.keyword, ...common(base.pageType), ...(ladder ? { ladder: { ...ladder, head: ladder.head || h.ladder?.head || '' } } : {}), ...asKind(runTarget, 'answer'), holdAck: { score: h.score } },
   });
   return out;
 }

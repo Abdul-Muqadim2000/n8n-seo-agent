@@ -115,6 +115,13 @@ describe('a held AI answer page', () => {
     expect(p[0]).toMatchObject({ keyword: 'best crm service provider uae', existingPageUrl: OWNER, pageType: 'Service Page', aiTarget: { question: AIT.question, kind: 'refresh', targetId: AIT.target_id } });
     expect(p[1]).toMatchObject({ keyword: 'best crm service provider uae', aiTarget: { question: AIT.question, kind: 'answer' }, holdAck: { score: 48 } });
   });
+  // review 2026-11-16 L2: a held run that was an improvement of a page for the question: "Write it anyway" writes a NEW answer page
+  it('"Write it anyway" of a held refresh run sends the question as a new answer page, with no page to improve', () => {
+    const p = prefills(render(true, AI_PAYLOAD, { ...AI_RUN, existingPageUrl: OWNER, aiTarget: { ...AI_RUN.aiTarget, kind: 'refresh' } }));
+    const anyway = p[p.length - 1];
+    expect(anyway).toMatchObject({ aiTarget: { question: AIT.question, kind: 'answer' }, holdAck: { score: 48 } });
+    expect(anyway.existingPageUrl).toBeUndefined();
+  });
   it('before the run is loaded, the question comes from the alternative', () => {
     const p = prefills(render(false, AI_PAYLOAD, AI_RUN));
     expect(p[0]).toMatchObject({ aiTarget: { question: AIT.question, kind: 'refresh' } });
