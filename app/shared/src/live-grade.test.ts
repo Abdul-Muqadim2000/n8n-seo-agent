@@ -204,3 +204,24 @@ describe('client reports 2026-11-16: what the live grade says beside its number'
     expect(old.grade_live).toEqual({ url: 'https://novaand-demo.com/x', h1: 'X', title: 'X' });
   });
 });
+
+describe('review of 2026-11-16: the live description and the version compared', () => {
+  it('M3: the live page\'s own meta description goes with the request when the check read it (also an empty one), never when it did not', () => {
+    const base = { requestId: 'app-live-1', domain: 'novaand-demo.com', siteId: 'site_novaand-demo-com', payload: { markdown: '# x', keyword: 'k', meta: { meta_description: 'Ours, delivered.' } }, original: {}, businessFacts: '', facts: {} as never };
+    expect(liveGradeBody({ ...base, check: { url: 'https://novaand-demo.com/x', h1: 'X', title: 'X', metaDescription: 'Theirs &amp; live' } }).grade_live.meta_description).toBe('Theirs & live');
+    expect(liveGradeBody({ ...base, check: { url: 'https://novaand-demo.com/x', h1: 'X', title: 'X', metaDescription: '' } }).grade_live.meta_description).toBe('');
+    expect('meta_description' in liveGradeBody({ ...base, check: { url: 'https://novaand-demo.com/x', h1: 'X', title: 'X' } }).grade_live).toBe(false);
+  });
+  it('L10: the delivered grade compared is the version the card names now (passed in), else the one stored with the grade; read as the card reads it', () => {
+    const g = { score: 84, status: 'needs_work', label: 'Needs work: readability', blocking: [], advisory_count: 0, url: 'u', title: 't', words: 900, published_report_id: 'p', checked_at: '2026-11-13T09:32:00Z', delivered: { score: 97, breakdown: { readability: 10 }, images: 3 } } as PageLiveGrade;
+    expect(liveGradeView(g, null)!.delivered).toEqual({ score: 97, breakdown: { readability: 10 }, images: 3 });
+    expect(liveGradeView(g, null, { score: 91, breakdown: { readability: 8 }, images: 3 })!.delivered).toEqual({ score: 91, breakdown: { readability: 8 }, images: 3 });
+    // an older report keeps its grade under qa_quality: the same number as the card's "version we delivered"
+    expect(deliveredGradeOf({ qa_quality: { grade: { score: 88, breakdown: { structure: 16 } } } })).toEqual({ score: 88, breakdown: { structure: 16 }, images: 0 });
+  });
+  it('L6: a read that could not be compared keeps its reason', () => {
+    const o = interpretLiveGrade(answered(200, { ...LIVE_1116, live_read: { ...LIVE_1116.live_read, kept_pct: null, kept_sentences: 0, kept_note: 'the live page was read with too little text to compare it with the text we delivered' } }));
+    expect(o.kind === 'graded' && o.grade.kept_pct).toBeNull();
+    expect(o.kind === 'graded' && liveGradeView({ ...o.grade, published_report_id: 'p', checked_at: 'x' }, null)!.keptNote).toMatch(/too little text/);
+  });
+});

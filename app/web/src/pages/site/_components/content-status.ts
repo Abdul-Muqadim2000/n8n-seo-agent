@@ -138,9 +138,12 @@ export function liveGradeDetail(r: Pick<PageReviewSummary, 'liveGrade' | 'grade'
   if (!g || g.score == null || !g.checkedAt) return null;
   const kept = g.keptPct ?? null;
   const of = g.deliveredSentences ?? 0;
+  // review L6: said as what we found on the page as we read it, not as a fact about who wrote it; no share when the texts could not be compared
   const ownVersion = kept != null && kept < 50 && of > 0
-    ? `The live page is your own version: ${kept}% of the text we delivered is on it (${g.keptSentences ?? 0} of ${of} sentences), so this grade is of your text.`
-    : '';
+    ? `The live page reads as your own version: we found ${kept}% of the text we delivered on it as we read it (${g.keptSentences ?? 0} of ${of} sentences), so this grade is mostly of your text.`
+    : kept == null && g.keptNote
+      ? `We could not compare the live page with the text we delivered: ${g.keptNote.replace(/[.\s]+$/, '')}.`
+      : '';
   const del = g.delivered?.breakdown ?? {};
   const parts = (g.parts ?? [])
     .filter((p) => p.points < p.max)

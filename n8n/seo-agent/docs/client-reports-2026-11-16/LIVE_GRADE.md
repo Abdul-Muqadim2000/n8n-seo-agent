@@ -57,7 +57,8 @@ Request (`POST /webhook/seo-page-finalize`, live grade):
 grade_only: true
 grade_live: { url, h1, title,
               tables?: number,          // <table> elements in the live article (publish check page_signals.tables)
-              table_rows?: string[] }   // the text of each row, cells joined by spaces, at most 60 x 160 characters
+              table_rows?: string[],    // the text of each row, cells joined by spaces, at most 60 x 160 characters
+              meta_description?: string } // review M3: the live page's own description ('' = none)
 delivered_markdown                      // unchanged: the newest version's Markdown, now also used for kept_pct
 ```
 
@@ -66,17 +67,17 @@ Answer (200, `grade_only: true`), new fields beside the usual FinalizeResult:
 ```
 live_read: { ok, url, title, words, reason,
              kept_pct: number | null,      // % of the delivered sentences of 8+ words on the live page (null: nothing to compare)
-             kept_sentences, delivered_sentences, tables, table_rows_restored }
+             kept_sentences, delivered_sentences, kept_note?, tables, table_rows_restored, meta_read, meta_description }
 live_parts: [{ dim, label, points, max, reasons: string[] (<= 5, empty when no point lost), fix }]   // structure, coverage,
              // readability, specificity, clean_language, sources, fit
 readability: { flesch, avg_sentence_words, long_sentences, longest: [{ text (<= 200), words }] (<= 5) }
-live_adjustments: [{ code: direct_answer | faq_last | table | title_site_name, text }]
+live_adjustments: [{ code: direct_answer | faq_last | table | title_site_name | meta_description, text }]
 grade.basis           // "measured on the live page <url> as read on <day>, with the same check as the version we delivered (...)"
 delivery.next_step    // "... Change it on your website, then press Re-check."
 ```
 
 Publish check (`mode: published`): request `delivered_images: string[]` (file names); answer `images` gains `decorative`, `read_from`,
-`background`, `borrowed[]`, `delivered { sent, on_page, missing[] }`, `advice[]`; `page_signals` gains `article_words`, `tables`,
+`background`, `borrowed[]`, `delivered { sent, on_page, probably, missing[] }`, `advice[]`; `page_signals` gains `article_words`, `tables`,
 `table_rows`; checks "Images in the article" (no content image) and "Images hosted on your website" are new. Older stored checks keep
 their six image names; the app groups them.
 
@@ -105,13 +106,37 @@ readings: 1 content image, no width / height, not WebP, loaded from Google Image
   flattened table rows restored and no longer long sentences, site name out of the title length; the same texts as a final version are
   graded as before), LG2b (every run: "FAQ" inside a heading, image links), LG3 (publish check on two synthetic pages shaped like the live
   ones, and one with two of our images on a CDN). On the base commit 22 of the new assertions fail and two scenarios abort; after: all pass. `scenarios_w0c.js`' wiring check
-  accepts the `{ live }` option. Full harness **19742 passed, 0 failed** (base 19620).
+  accepts the `{ live }` option. Full harness **19742 passed, 0 failed** (base 19620); after the review fixes see section 6.
 * App: `live-grade.test.ts` (an engine answer shaped like execution 13659, synthetic text; old rows; delivered grade and image names; table
   rows in the request), `page-review.test.ts` (A1; the first final image is now eager, the preview unchanged), `contentRows.test.ts`
   (`imagesFound`), web `liveGrade.test.ts` (`liveGradeDetail`, the engine's label, the exact delivered grade, grouped image checks) and
   `liveReadings.test.ts` (grouped image checks).
 
-## 6. Production effect (after deploy)
+## 6. Independent review (2026-11-16): 0 High, 3 Medium, 10 Low, all fixed
+
+Each finding was reproduced first; harness LG4 (live grade) and LG5 (publish check) fail on the first version of this branch (15
+assertions) and pass now; app tests added in `live-grade.test.ts` and web `liveGrade.test.ts`.
+
+| Finding | Fix |
+|---|---|
+| M1 the first `<article>` (a card) was read | The region is the `<article>` holding the H1, else the longest article (150+ words) after the H1 read from the H1 (a hero between them counts), else the `<main>` holding the H1, else the page from the H1; articles under 150 words in it are cards and left out; a hero `<img>` in `<main>` just above the article is kept |
+| M2 "Quick answer is 0 words" beside an accepted live answer | The length advice reads the labelled block only; `answer_block_words` is the live answer's words |
+| M3 the live grade checked OUR meta description | The publish check's live description travels as `grade_live.meta_description` (`''` = the page has none) and is the one checked ("The meta description of the live page ..."); a check from before it was kept leaves the description unchecked with the line "We could not read the meta description of your live page". It stays advice, never a blocker |
+| L1 the FAQ rule moved delivered grades | Drafts and final versions keep the old FAQ-last rule; the heading rule (now also "## Topic FAQs", "## 7. Frequently asked questions") serves only the duplicate warning and the live set-aside |
+| L2 a linked image became a citation | `[![alt](img)](url)` is removed before links are counted |
+| L3 a content image linked to its file was decorative | Decorative only as a card / thumbnail (class, link class or file name, or a small width); a link to an image file or a lightbox keeps it a content image |
+| L4 any paragraph with "is" was an answer | 40-90 words and its first sentence names 60% of the search's words |
+| L5 live readings on `grade_only` alone | Only with `live_read.ok` |
+| L6 kept_pct edges and the claim | "Meta Title:" lines out, the sentence after our "Quick answer:" label kept; no share under 150 words read or 10 sentences of ours (`kept_note`, shown as "We could not compare ..."); the card says "reads as your own version: we found N% ... as we read it" |
+| L7 "make the final version again" on a live page | One next step per status, every one "on your website, then press Re-check" |
+| L8 our images matched by exact file name | Matched by stem (case, extension, `-1024x576`, `-scaled`, `-e123456`, `-1`, hash suffixes); a close name is "probably ours"; the text is "We could not find ..." |
+| L9 googleusercontent / licdn always "borrowed" | Google Images thumbnails (`encrypted-tbn*.gstatic.com`) always; any other service only when the site is not built there (generator, blogspot domain, most of its own images from it) |
+| L10 two sources for "the version we delivered" | One reading (`deliveryOf`) for the card's number and the parts; the screens compare with the newest version when they are built (`liveGradeView(..., current)`), the stored one only as a fallback |
+
+The production replay is unchanged by the review fixes: 88 / 88, the live descriptions read and passing.
+After the fixes: full harness **19860 passed, 0 failed**; app shared 1299, server 2153 (46 skipped, real-database suites), web 389; typecheck and web build pass.
+
+## 7. Production effect (after deploy)
 
 A live grade is free (no model call, no search data; one page-reader read). Pressing "Re-check page" on each of the two pages (a free
 publish check) re-grades them: expected 88 / 88 "Needs work: readability", the card naming the client's own version (0% / 6%), the parts

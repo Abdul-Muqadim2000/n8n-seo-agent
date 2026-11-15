@@ -9,7 +9,7 @@
 // This module is the contract between the job, the board and the card. Pure: no I/O, no clock unless passed.
 
 import { normKeyword } from './pipeline-notices';
-import { finalizeBody, plainWords, type DuplicateDecision, type FactAnswers, type FinalizeBody, type PageDeliveryStatus } from './page-review';
+import { deliveryOf, finalizeBody, plainWords, type DuplicateDecision, type FactAnswers, type FinalizeBody, type PageDeliveryStatus } from './page-review';
 
 type P = Record<string, unknown>;
 const obj = (v: unknown): P => (v && typeof v === 'object' && !Array.isArray(v) ? (v as P) : {});
@@ -56,6 +56,8 @@ export interface PageLiveGrade {
   kept_pct?: number | null;
   kept_sentences?: number;
   delivered_sentences?: number;
+  /** why no share was given (the read or our text too short to compare) */
+  kept_note?: string;
   /** what the check did not count against the live page because it measured our own reader or the site's template */
   adjustments?: { code: string; text: string }[];
   /** the version we delivered (the final version when there is one): its exact grade, its parts and how many images came with it */
@@ -112,6 +114,7 @@ export interface PageLiveGradeView {
   keptPct?: number | null;
   keptSentences?: number;
   deliveredSentences?: number;
+  keptNote?: string;
   adjustments?: { code: string; text: string }[];
   nextStep?: string;
   delivered?: LiveGradeDelivered | null;
@@ -132,6 +135,8 @@ export interface LiveGradeCheck {
    *  the page reader flattened into lines is put back as a table */
   tables?: number;
   tableRows?: string[];
+  /** review M3: the live page's own meta description as the check read it ('' = none on the page; undefined = a check from before) */
+  metaDescription?: string;
   receivedAt: string;
   keyword: string;
   /** the content run the check was for (`content_request_id`) */
@@ -180,7 +185,7 @@ export function liveGradePending(attemptedAt: string | Date | null | undefined, 
 /** The request the engine grades a live page from: the finalize body of the page's newest version with no answers, plus the live address. */
 export interface LiveGradeBody extends FinalizeBody {
   grade_only: true;
-  grade_live: { url: string; h1: string; title: string; tables?: number; table_rows?: string[] };
+  grade_live: { url: string; h1: string; title: string; tables?: number; table_rows?: string[]; meta_description?: string };
 }
 
 export function liveGradeBody(o: {
@@ -194,7 +199,7 @@ export function liveGradeBody(o: {
   businessFacts: string;
   facts: FactAnswers;
   duplicateDecision?: DuplicateDecision | null;
-  check: Pick<LiveGradeCheck, 'url' | 'h1' | 'title' | 'tables' | 'tableRows'>;
+  check: Pick<LiveGradeCheck, 'url' | 'h1' | 'title' | 'tables' | 'tableRows' | 'metaDescription'>;
 }): LiveGradeBody {
   const p = o.payload ?? {};
   return {
@@ -220,6 +225,8 @@ export function liveGradeBody(o: {
       // client reports 2026-11-16: the page's own tables, read from its HTML by the publish check (absent on checks made before)
       ...(num(o.check.tables) ? { tables: Math.max(0, Math.round(num(o.check.tables)!)) } : {}),
       ...(arr(o.check.tableRows).length ? { table_rows: arr(o.check.tableRows).map((x) => s(x).slice(0, 160)).filter(Boolean).slice(0, 60) } : {}),
+      // review M3: the live page's own description, so the live grade checks it and never ours
+      ...(typeof o.check.metaDescription === 'string' ? { meta_description: decodeEntities(o.check.metaDescription).slice(0, 400) } : {}),
     },
   };
 }
@@ -308,6 +315,7 @@ export function interpretLiveGrade(res: { kind: 'answered' | 'unreachable' | 'ti
       kept_pct: kept == null ? null : Math.max(0, Math.min(100, Math.round(kept))),
       kept_sentences: Math.max(0, Math.round(num(read.kept_sentences) ?? 0)),
       delivered_sentences: Math.max(0, Math.round(num(read.delivered_sentences) ?? 0)),
+      ...(s(read.kept_note) ? { kept_note: plainWords(s(read.kept_note)).slice(0, 200) } : {}),
       adjustments: arr(j.live_adjustments).map(obj).map((x) => ({ code: s(x.code).slice(0, 40), text: plainWords(s(x.text)).slice(0, 300) })).filter((x) => x.text).slice(0, 6),
     },
   };
@@ -342,8 +350,10 @@ const partsOf = (v: unknown): LiveGradePart[] =>
 export function deliveredGradeOf(payload: P | null | undefined): LiveGradeDelivered | null {
   const p = obj(payload);
   const meta = obj(p.meta);
-  const g = obj(p.qa_grade ?? meta.grade ?? obj(meta.quality).grade);
-  const score = num(g.score) ?? num(p.content_score) ?? num(meta.content_score);
+  // review L10: the same reading of the grade as the card's "version we delivered" (deliveryOf), so the two never disagree
+  const quality = obj(p.qa_quality ?? meta.quality);
+  const g = obj(p.qa_grade ?? meta.grade ?? quality.grade ?? obj(quality.delivery ?? obj(p.content_qa).delivery).grade);
+  const score = deliveryOf(p).grade;
   const breakdown = numbers(g.breakdown);
   const files = arr(p.images).length;
   const planned = arr(meta.images).map(obj).filter((x) => x.produced !== false && (s(x.path) || s(x.filename))).length;
@@ -371,7 +381,9 @@ export function nextLiveGrade(prev: PageLiveGrade | null | undefined, outcome: E
 }
 
 /** The stored grade as the screens see it. */
-export function liveGradeView(g: PageLiveGrade | null | undefined, attemptedAt: Date | string | null | undefined): PageLiveGradeView | null {
+/** `current`: the version we delivered as it is now (review L10: the newest final version, else the page run), read when the screens are
+ *  built, so a final version made after the live grade is the one compared; else the one stored with the grade. */
+export function liveGradeView(g: PageLiveGrade | null | undefined, attemptedAt: Date | string | null | undefined, current?: LiveGradeDelivered | null): PageLiveGradeView | null {
   if (!g || typeof g !== 'object') return null;
   const at = attemptedAt ? new Date(attemptedAt).toISOString() : null;
   const rf = g.read_failed && typeof g.read_failed === 'object' ? g.read_failed : null;
@@ -399,8 +411,9 @@ export function liveGradeView(g: PageLiveGrade | null | undefined, attemptedAt: 
     keptPct: num(g.kept_pct),
     keptSentences: num(g.kept_sentences) ?? 0,
     deliveredSentences: num(g.delivered_sentences) ?? 0,
+    keptNote: s(g.kept_note),
     adjustments: arr(g.adjustments).map(obj).map((x) => ({ code: s(x.code), text: s(x.text) })).filter((x) => x.text).slice(0, 6),
     nextStep: s(g.next_step),
-    delivered: g.delivered && typeof g.delivered === 'object' ? { score: num(g.delivered.score), breakdown: numbers(g.delivered.breakdown), images: num(g.delivered.images) ?? 0 } : null,
+    delivered: current ?? (g.delivered && typeof g.delivered === 'object' ? { score: num(g.delivered.score), breakdown: numbers(g.delivered.breakdown), images: num(g.delivered.images) ?? 0 } : null),
   };
 }

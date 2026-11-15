@@ -78,7 +78,7 @@ describe('why the live page grade differs from the version we delivered', () => 
   it('own version, the parts that lost points (most lost first, with the delivered points), the longest sentences and what was not counted', () => {
     const r = summary({ grade: 98, liveGrade: g1116() });
     const d = liveGradeDetail(r)!;
-    expect(d.ownVersion).toBe('The live page is your own version: 0% of the text we delivered is on it (0 of 161 sentences), so this grade is of your text.');
+    expect(d.ownVersion).toBe('The live page reads as your own version: we found 0% of the text we delivered on it as we read it (0 of 161 sentences), so this grade is mostly of your text.');
     expect(d.parts.map((p) => p.title)).toEqual(['Readability 3 of 10 (the version we delivered: 10)', 'Structure 14 of 20 (the version we delivered: 18)', 'Sources 12 of 15 (the version we delivered: 15)']);
     expect(d.parts[0]!.fix).toBe('Use shorter sentences and plainer words');
     expect(d.parts[2]!.why).toEqual(['The page cites no outside source']);
@@ -95,6 +95,9 @@ describe('why the live page grade differs from the version we delivered', () => 
   it('a page that keeps our text has no "own version" line; a grade stored before shows the grade line alone', () => {
     expect(liveGradeDetail(summary({ liveGrade: g1116({ keptPct: 94, keptSentences: 150 }) }))!.ownVersion).toBe('');
     expect(liveGradeDetail(summary({ liveGrade: lg() }))).toBeNull();
+    // review L6: no share when the texts could not be compared, and why
+    expect(liveGradeDetail(summary({ liveGrade: g1116({ keptPct: null, keptNote: 'the live page was read with too little text to compare it with the text we delivered' }) }))!.ownVersion)
+      .toBe('We could not compare the live page with the text we delivered: the live page was read with too little text to compare it with the text we delivered.');
     expect(liveGradeDetail(summary({ liveGrade: lg({ score: null, checkedAt: null }) }))).toBeNull();
   });
 

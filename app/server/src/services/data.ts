@@ -835,6 +835,8 @@ export interface PublishCheckRef {
   tables?: number;
   tableRows?: string[];
   imagesFound?: number | null;
+  /** review M3: the live page's own meta description (undefined: a check from before it was kept) */
+  metaDescription?: string;
 }
 
 /**
@@ -890,6 +892,7 @@ export async function publishChecks(orgId: string, siteId: string): Promise<Publ
       tables: sql<string | null>`${p}->'page_signals'->>'tables'`,
       tableRows: sql<unknown>`${p}->'page_signals'->'table_rows'`,
       imagesFound: sql<string | null>`${p}->'images'->>'count'`,
+      metaDescription: sql<string | null>`case when jsonb_typeof(${p}->'page') = 'object' then coalesce(${p}->'page'->>'meta_description', '') else null end`,
     })
     .from(R)
     .where(and(eq(R.orgId, orgId), eq(R.siteId, siteId), eq(R.stage, 'published')))
@@ -911,6 +914,7 @@ export async function publishChecks(orgId: string, siteId: string): Promise<Publ
     tables: n(r.tables),
     tableRows: Array.isArray(r.tableRows) ? r.tableRows.map(String).filter(Boolean).slice(0, 60) : [],
     imagesFound: r.imagesFound == null || s(r.imagesFound) === '' ? null : n(r.imagesFound),
+    ...(r.metaDescription == null ? {} : { metaDescription: s(r.metaDescription) }),
   }));
 }
 

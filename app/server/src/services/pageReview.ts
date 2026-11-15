@@ -20,6 +20,7 @@ import {
   finalReportPayload,
   keyCost,
   liveGradeView,
+  deliveredGradeOf,
   metaDescriptionView,
   cleanMetaDescription,
   checksImprovedRecheck,
@@ -894,7 +895,7 @@ export async function siteReviews(orgId: string, site: SiteRow): Promise<SiteRev
         publish: publish.status,
       });
       // client reports 2026-11-11: the grade of the live page (services/liveGrade.ts), when one was made or its read failed
-      const live = liveGradeView(row?.liveGrade ?? null, row?.liveGradedAt ?? null);
+      const live = liveGradeView(row?.liveGrade ?? null, row?.liveGradedAt ?? null, deliveredGradeOf(base.payload));   // review L10: compared with the newest version, the one the card names
       const recheck = recheckIds.has(original.id) && fin.status !== 'running';
       return { ...summary, ...(live ? { liveGrade: live } : {}), ...(recheck ? { recheck: true } : {}) };
     },
