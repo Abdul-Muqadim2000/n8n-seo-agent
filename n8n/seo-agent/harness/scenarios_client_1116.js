@@ -193,7 +193,7 @@ module.exports = async (ctx) => {
     const a = await pc(html({ bg: LICDN }), { delivered_images: ['governed-ai-agents-hero.webp', 'images/agent-autonomy-matrix.webp', 'approval-flow.webp'] });
     const imgChecks = (a.checks || []).filter(c => /image/i.test(c.name) && !/Open Graph/.test(c.name));
     check('no content image is ONE failed check (not six)', imgChecks.length === 1 && imgChecks[0].name === 'Images in the article' && imgChecks[0].ok === false, J(imgChecks));
-    check('it names the background hero (LinkedIn) and the 3 images we delivered that are not on the page', /background/.test(imgChecks[0].detail) && /LinkedIn/.test(imgChecks[0].detail) && /None of the 3 images we made/.test(imgChecks[0].detail)
+    check('it names the background hero (LinkedIn) and the 3 images we delivered that are not on the page', /background/.test(imgChecks[0].detail) && /LinkedIn/.test(imgChecks[0].detail) && /could not find any of the 3 images we made/.test(imgChecks[0].detail)
       && a.images.delivered.sent === 3 && a.images.delivered.on_page === 0 && a.images.background && a.images.background.source === 'LinkedIn', J({ d: imgChecks[0].detail, img: a.images }));
     check('the plain-text report has no em dash in what this check added', !/[—…]/.test(imgChecks[0].detail + J(a.images.advice)), imgChecks[0].detail);
     // our images on the page (by file name, wherever the CMS put them)
@@ -201,5 +201,95 @@ module.exports = async (ctx) => {
       { delivered_images: ['governed-ai-agents-hero.webp', 'agent-autonomy-matrix.webp', 'approval-flow.webp'] });
     check('two of our three images on the page: counted by file name, no borrowed image, image checks pass', ok.images.delivered.on_page === 2 && ok.images.count === 2 && !named(ok, 'Images hosted on your website')
       && named(ok, 'At least 2 content images').ok === true && named(ok, 'Images carry width and height').ok === true, J({ img: ok.images, failed: ok.failed }));
+  });
+
+  // ---------- LG4 the independent review (2026-11-16): the live grade's readings ----------
+  await guard('LG4 review live grade', async () => {
+    const SN = 'LG4 (review of section 191) the live grade: no "Quick answer is 0 words" beside an accepted answer (M2), the live page\'s own meta description or none (M3), the FAQ-last rule of delivered grades unchanged (L1), a linked image is no source (L2), an answer must name the search (L4), live readings only after a real read (L5), kept_pct without meta lines and the label, and only when comparable (L6), one live next step (L7)';
+    begin(SN); const check = mkCheck(SN);
+    const cq = (r) => (r.qa || {}).content_qa || {};
+    const sc = (r, code) => ((cq(r).structure_checks || []).find(c => c.code === code) || {}).ok;
+    const adj = (r) => (cq(r).live_adjustments || []).map(x => x.code);
+    // M2
+    const A = await chain(liveBody({ meta_description: META.meta_description }), reader(REWRITE));
+    check('M2: an accepted direct answer is never "Quick answer is 0 words", and its words are the answer block', !cq(A).warnings.some(w => /Quick answer is \d+ words/.test(w)) && cq(A).answer_block_words >= 40, J({ w: cq(A).warnings.filter(w => /Quick answer/.test(w)), n: cq(A).answer_block_words }));
+    // M3
+    check('M3: the live page\'s own description read by the check (a good one) passes, with no "not read" line', sc(A, 'meta_description') === true && !adj(A).includes('meta_description'), J(cq(A).structure_checks));
+    const noDesc = await chain(liveBody({ meta_description: '' }), reader(REWRITE));
+    check('M3: a live page with no description of its own fails the check with the live page named (our delivered one is never graded)', sc(noDesc, 'meta_description') === false
+      && cq(noDesc).warnings.includes('The meta description of your live page is missing') && /live page/.test(((cq(noDesc).structure_checks || []).find(c => c.code === 'meta_description') || {}).text), J(cq(noDesc).structure_checks.find(c => c.code === 'meta_description')));
+    const badOurs = await chain({ ...liveBody({}), meta: { ...META, meta_description: 'Too short.' } }, reader(REWRITE));
+    check('M3: when the check did not read the live description, ours is not graded (even a bad one) and the grade says so', sc(badOurs, 'meta_description') === true && adj(badOurs).includes('meta_description') && !cq(badOurs).warnings.some(w => /Meta description/.test(w)), J({ adj: adj(badOurs), w: cq(badOurs).warnings.filter(w => /escription/.test(w)) }));
+    // L1
+    const topicFaq = REWRITE.replace('## Frequently asked questions', '## MS 365 ERP FAQs');
+    const finF = await chain(finalBody(topicFaq), null);
+    check('L1: a final version ending on "## <topic> FAQs" still fails "FAQ last" (the delivered grade does not move)', sc(finF, 'faq_last') === false, J(cq(finF).structure_checks));
+    const liveF = await chain(liveBody({ meta_description: META.meta_description }), reader(REWRITE.replace('## Frequently asked questions', '## 7. Frequently asked questions')));
+    check('L1: on a live page a numbered "7. Frequently asked questions" section at the end is set aside too', sc(liveF, 'faq_last') === true && adj(liveF).includes('faq_last'), J(adj(liveF)));
+    // L2
+    const GR = new Function(require('fs').readFileSync(require('path').join(__dirname, '..', 'v5', 'code', '_grade.js'), 'utf8') + '\nreturn GR;')();
+    const tier = () => 'vendor';
+    const linked = GR.sources('Our team is a certified partner of the platform. [![Partner badge](https://cdn.example.org/badge.png)](https://partner.vendor.example/directory)\n', { domain: 'novaand.example' }, { tier });
+    const real = GR.sources('Our team is a certified partner of the platform, see [the vendor directory](https://partner.vendor.example/directory).\n', { domain: 'novaand.example' }, { tier });
+    check('L2: a linked image (a badge, a card) is no citation; a link with words is', linked.units === 0 && real.units === 1, J({ linked: linked.units, real: real.units }));
+    // L4
+    const vague = REWRITE.replace(/\*\*MS 365 ERP\*\* is the combination[^\n]*/, 'In 2026 many businesses across the Emirates are rethinking how they run finance, stock and reporting, and a growing number of teams are comparing platforms, partners and timelines before they commit budget to a project that will shape how they work for years to come in the region.');
+    const V = await chain(liveBody({ meta_description: META.meta_description }), reader(vague));
+    check('L4: a first paragraph that does not name the search is no direct answer (an "are" is not enough)', sc(V, 'direct_answer') === false && !adj(V).includes('direct_answer'), J(adj(V)));
+    // L5
+    const noLive = { ...clone(BODY0), meta: clone(META), markdown: REWRITE, grade_only: true, answers: [], page_run: clone(gating) };
+    const L5 = await chain(noLive, null);
+    check('L5: a grade_only request with no live read is never graded with the live readings', L5.qa && cq(L5).live === false && !adj(L5).length && sc(L5, 'direct_answer') === false, J({ live: cq(L5).live, adj: adj(L5) }));
+    // L6
+    const ours = 'Meta Title: MS 365 ERP for UAE Businesses and the partners who implement it well\n\n' + REWRITE.replace('**MS 365 ERP** is the combination', '**Quick answer:** MS 365 ERP is the combination');
+    const theirs = REWRITE.replace('**MS 365 ERP** is the combination', 'MS 365 ERP is the combination');
+    const K = await chain({ ...liveBody({ meta_description: META.meta_description }), delivered_markdown: ours }, reader(theirs));
+    check('L6: our "Meta Title:" line is no sentence, and the sentence after our "Quick answer:" label counts once the label is gone (100% kept)', K.v.live_read.kept_pct === 100, J(K.v.live_read));
+    const short = '# MS 365 ERP\n\n' + para(70, 1) + '\n\n## Contact\n\n' + para(30, 2);
+    const S2 = await chain(liveBody({ meta_description: META.meta_description }), reader(short));
+    check('L6: a read too short to compare gives no share, with the reason', S2.v && S2.v.live_read.kept_pct === null && /too little text/.test(S2.v.live_read.kept_note || ''), J(S2.v && S2.v.live_read));
+    // L7
+    const legacy = liveBody({ meta_description: META.meta_description }); delete legacy.page_run;
+    const L7 = await chain(legacy, reader(REWRITE));
+    check('L7: a live grade\'s next step is on the website, never "make the final version again"', L7.v && /on your website/.test(L7.v.delivery.next_step) && !/final version|content list|in the editor/.test(L7.v.delivery.next_step), J(L7.v && { st: L7.v.delivery.status, n: L7.v.delivery.next_step }));
+  });
+
+  // ---------- LG5 the independent review (2026-11-16): the publish check's article and images ----------
+  await guard('LG5 review publish check', async () => {
+    const SN = 'LG5 (review of section 191) the publish check: the article of a page whose content is in <main> with card <article>s (M1), a hero above the article, a content image linked to its own file (L3), our images under a CMS file name (L8), a Blogger site\'s own images (L9)';
+    begin(SN); const check = mkCheck(SN);
+    const DOM = 'brightlane-demo.com'; const URL1 = 'https://' + DOM + '/services/ai-consulting';
+    const ROW = { site_id: 'site_brightlane-demo-com', domain: DOM, keyword: 'ai consulting', source: 'manual', page_type: 'Service Page', existing_page_url: '', rung: 0, ladder_id: '', request_id: 'r-5', started_at: '2026-11-13T06:00:00.000Z', status: 'written', published_url: '', published_at: '', week: '' };
+    const words = (n) => Array.from({ length: n }, (_, i) => ['ai', 'consulting', 'helps', 'teams', 'plan', 'data', 'and', 'models', 'that', 'work.'][i % 10]).join(' ');
+    const shell = (inner, head) => '<!DOCTYPE html><html><head><title>AI Consulting Services | Brightlane</title>' + (head || '') + '<meta name="description" content="AI consulting for companies that want working models, clean data and a plan their teams can run, from a first workshop to production.">'
+      + '<link rel="canonical" href="' + URL1 + '"><script type="application/ld+json">{"@type":"Service"}</script><meta property="og:image" content="https://' + DOM + '/og.webp"></head><body><nav><a href="/"><img src="/logo.png" alt="Brightlane logo" width="120" height="40"></a></nav>' + inner + '<footer>Footer</footer></body></html>';
+    const pc = async (h, extra) => {
+      reset();
+      await run('Normalize Input', { body: { mode: 'published', domain: DOM, content_request_id: 'r-5', keyword: 'ai consulting', url: URL1, callback_url: 'https://hooks.example.com/x', request_id: 'pub-195', ...(extra || {}) } });
+      mock('Load Content Log (Published)', [{ json: ROW }]); mock('Load Ladders (Published)', [{ json: {} }]); mock('Load Query History (Published)', [{ json: {} }]);
+      mock('Fetch Published Page', { statusCode: 200, statusMessage: 'OK', headers: { 'content-type': 'text/html; charset=utf-8' }, data: h });
+      return (await run('Publish Check', [{ json: {} }]))[0].json;
+    };
+    const named = (c, n) => (c.checks || []).find(x => x.name === n) || null;
+    const cards = '<h2>Latest insights</h2>' + [1, 2, 3].map(i => '<article class="card"><a href="/insights/i' + i + '"><img src="/blog-' + i + '.webp" alt="Blog ' + i + '"><h3>Insight ' + i + '</h3></a></article>').join('');
+    // M1: content in <main>, cards built as <article>
+    const m1 = await pc(shell('<main><h1>AI consulting</h1><img src="/ai-consulting-hero.webp" alt="AI consulting workshop" width="1200" height="675"><p>' + words(400) + '</p><img src="/ai-consulting-flow.webp" alt="AI consulting delivery flow" width="1000" height="600"><table><tr><th>Stage</th><th>Weeks</th><th>Output</th></tr><tr><td>Discovery</td><td>2</td><td>A plan</td></tr></table>' + cards + '</main>'));
+    check('M1: a <main> page with card <article>s is read from its <main>: the 2 real images, its table and its words, never a card', m1.images.read_from === 'main' && m1.images.count === 2 && m1.page_signals.tables === 1 && m1.page_signals.article_words >= 400 && named(m1, 'At least 2 content images').ok === true,
+      J({ from: m1.images.read_from, n: m1.images.count, t: m1.page_signals.tables, w: m1.page_signals.article_words }));
+    // a hero <img> between the H1 and the article, cards after it
+    const hero = await pc(shell('<main><header><h1>AI consulting</h1><img src="/ai-consulting-hero.webp" alt="AI consulting workshop" width="1200" height="675"></header><article><p>' + words(300) + '</p><img src="/ai-consulting-flow.webp" alt="AI consulting flow" width="1000" height="600"></article>' + cards + '</main>'));
+    check('M1: a hero image between the H1 and the article is counted with the article; the cards are not', hero.images.read_from === 'article' && hero.images.count === 2, J(hero.images));
+    // L3
+    const l3 = await pc(shell('<article><h1>AI consulting</h1><p>' + words(300) + '</p><a href="/uploads/ai-consulting-chart.png"><img src="/uploads/ai-consulting-chart.png" alt=""></a><img src="/ai-consulting-flow.webp" alt="AI consulting flow" width="1000" height="600"></article>'));
+    check('L3: an empty-alt image linked to its own file is a content image without alt text, not decorative', l3.images.count === 2 && l3.images.decorative === 0 && named(l3, 'Every image has alt text').ok === false, J(l3.images));
+    // L8
+    const l8 = await pc(shell('<article><h1>AI consulting</h1><p>' + words(300) + '</p><img src="/wp-content/uploads/2026/11/ai-consulting-hero-1024x576.webp" alt="AI consulting" width="1024" height="576"><img src="/media/ai-consulting-flow-3f9a2c7d1e.webp" alt="AI consulting flow" width="1000" height="600"><img src="/media/ai-consulting-matrix-v2.webp" alt="AI consulting matrix" width="1000" height="600"></article>'),
+      { delivered_images: ['ai-consulting-hero.webp', 'ai-consulting-flow.webp', 'ai-consulting-matrix.webp'] });
+    check('L8: our images under a CMS file name are found (size and hash suffixes), a close name is "probably ours", nothing is called missing', l8.images.delivered.on_page === 2 && l8.images.delivered.probably === 1 && l8.images.delivered.missing.length === 0, J(l8.images.delivered));
+    // L9
+    const blog = await pc(shell('<article><h1>AI consulting</h1><p>' + words(300) + '</p>' + [1, 2].map(i => '<img src="https://blogger.googleusercontent.com/img/b/R29v/ai-consulting-' + i + '.webp" alt="AI consulting ' + i + '" width="800" height="450">').join('') + '</article>', '<meta name="generator" content="Blogger">'));
+    check('L9: a Blogger site\'s own images (googleusercontent) are not "loaded from another website"', blog.images.count === 2 && !named(blog, 'Images hosted on your website'), J({ img: blog.images.borrowed, failed: blog.failed }));
+    const thumb = await pc(shell('<article><h1>AI consulting</h1><p>' + words(300) + '</p><img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:x" alt="AI consulting" width="800" height="450"></article>', '<meta name="generator" content="Blogger">'));
+    check('L9: a Google Images thumbnail is always borrowed', named(thumb, 'Images hosted on your website') && /Google Images/.test(named(thumb, 'Images hosted on your website').detail), J(thumb.failed));
   });
 };

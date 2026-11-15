@@ -68,18 +68,40 @@ const checks = [
 //   * an image loaded from a service that serves other people's pictures (Google Images thumbnails, LinkedIn, Facebook, Instagram,
 //     Pinterest, X, Bing) fails "Images hosted on your website": the client may not have the right to it and it can disappear;
 //   * the images we delivered (request `delivered_images`, file names, sent by the app) are looked for on the page by file name.
-const regionOf = (h) => { const a = h.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i); if (a) return { html: a[1], from: 'article' };
-  const m = h.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i); if (m) return { html: m[1], from: 'main' };
-  const i = h.search(/<h1\b/i); const rest = i >= 0 ? h.slice(i) : h; const f = rest.search(/<footer\b|<h[23][^>]*>\s*(?:related (?:articles|posts|capabilities|guides|reading)|you may also like|read more)\b/i);
-  return { html: f > 0 ? rest.slice(0, f) : rest, from: i >= 0 ? 'h1' : 'body' }; };
+// Review M1 (2026-11-16): the FIRST <article> of a page is often a card (an insight, a testimonial) on a page whose content sits in <main>. The
+// region is the <article> that holds the page's H1, else the longest article (150+ words) that starts after the H1 (read from the H1, so a
+// hero image between the H1 and the article counts), else the <main> that holds the H1, else the page from its H1 to "Related ..." /
+// <footer>. Articles of under 150 words inside the region are cards and are left out. A hero <img> in <main> just above the article (6,000
+// characters at most) is kept.
+const tagWords = (x) => String(x || '').replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length;
+const articlesOf = (h) => { const out = [], st = []; for (const m of h.matchAll(/<\/?article\b[^>]*>/gi)) { if (m[0][1] !== '/') st.push(m.index); else if (st.length) { const a = st.pop(); out.push({ start: a, end: m.index + m[0].length, inner: h.slice(h.indexOf('>', a) + 1, m.index) }); } } return out; };
+const dropCards = (x) => { let y = x; for (const a of articlesOf(x).filter(a => tagWords(a.inner) < 150).sort((p, q) => q.start - p.start)) y = y.slice(0, a.start) + ' ' + y.slice(a.end); return y; };
+const regionOf = (h) => {
+  const h1At = h.search(/<h1\b/i); const arts = articlesOf(h);
+  const mainM = h.match(/<main\b[^>]*>/i); const mainAt = mainM ? mainM.index : -1; const mainEnd = mainAt >= 0 ? (h.indexOf('</main>', mainAt) >= 0 ? h.indexOf('</main>', mainAt) : h.length) : -1;
+  const lead = (at) => (mainAt >= 0 && mainAt < at && at - mainAt <= 6000 && at <= mainEnd ? mainAt + mainM[0].length : at);
+  const own = h1At >= 0 ? arts.filter(a => a.start < h1At && h1At < a.end).sort((p, q) => (p.end - p.start) - (q.end - q.start))[0] : null;
+  if (own) return { html: dropCards(h.slice(lead(own.start), own.end)), from: 'article' };
+  const big = arts.filter(a => (h1At < 0 || a.start > h1At) && tagWords(a.inner) >= 150).sort((p, q) => tagWords(q.inner) - tagWords(p.inner))[0];
+  if (big) return { html: dropCards(h.slice(h1At >= 0 ? lead(h1At) : lead(big.start), big.end)), from: 'article' };
+  if (mainAt >= 0 && (h1At < 0 || (h1At > mainAt && h1At < mainEnd))) return { html: dropCards(h.slice(mainAt + mainM[0].length, mainEnd)), from: 'main' };
+  const rest = h1At >= 0 ? h.slice(h1At) : h; const f = rest.search(/<footer\b|<h[23][^>]*>\s*(?:related (?:articles|posts|capabilities|guides|reading)|you may also like|read more)\b/i);
+  return { html: dropCards(f > 0 ? rest.slice(0, f) : rest), from: h1At >= 0 ? 'h1' : 'body' }; };
 const REG = regionOf(body);
 const articleHtml = REG.html.replace(/<(footer|aside|nav)\b[\s\S]*?<\/\1>/gi, ' ');
 const attrOf = (tag, a) => { const m = tag.match(new RegExp('\\s' + a + '\\s*=\\s*("([^"]*)"|\'([^\']*)\'|([^\\s>]+))', 'i')); return m ? (m[2] != null ? m[2] : (m[3] != null ? m[3] : (m[4] || ''))) : null; };
-const inLink = (h, at) => { const pre = h.slice(Math.max(0, at - 4000), at); const o = pre.toLowerCase().lastIndexOf('<a '); return o >= 0 && o > pre.toLowerCase().lastIndexOf('</a>'); };
+// the opening <a ...> tag an image sits in ('' when it is in no link)
+const linkOf = (h, at) => { const pre = h.slice(Math.max(0, at - 4000), at); const lo = pre.toLowerCase(); const o = lo.lastIndexOf('<a '); if (o < 0 || o < lo.lastIndexOf('</a>')) return ''; const e = pre.indexOf('>', o); return e > o ? pre.slice(o, e + 1) : pre.slice(o); };
+// review L3: an empty-alt image in a link is decorative only as a card or thumbnail (its class, the link's class or the file name say so, or it
+// is small); a content image linked to its own file or a lightbox (the link points at an image) is a content image without alt text
+const CARDISH = /card|thumb|teaser|related|tile|excerpt|post-?image|preview/i;
 const smallByClass = (cls) => { const sz = String(cls || '').split(/\s+/).map(t => (t.match(/^(?:w|h|size)-(\d+(?:\.5)?)$/) || [])[1]).filter(Boolean).map(Number); return sz.length > 0 && Math.max(...sz) <= 16; };
 const imgAll = [...articleHtml.matchAll(/<img\b[^>]*>/gi)].map(m => { const t = m[0]; return { src: decodeEnt(attrOf(t, 'src') || attrOf(t, 'data-src') || ''), alt: attrOf(t, 'alt'), w: attrOf(t, 'width'), h: attrOf(t, 'height'), loading: attrOf(t, 'loading'), cls: attrOf(t, 'class') || '', at: m.index }; })
   .filter(i => i.src && !/^data:/i.test(i.src) && !/\.svg(\?|$)/i.test(i.src) && !/logo|icon|avatar|sprite|pixel|tracking|badge|flag|emoji|author|headshot|gravatar/i.test(i.src + ' ' + (i.alt || '')) && !(i.w && Number(i.w) <= 64) && !(i.h && Number(i.h) <= 64));
-const decorative = imgAll.filter(i => smallByClass(i.cls) || (i.alt != null && !String(i.alt).trim() && inLink(articleHtml, i.at)));
+const decorative = imgAll.filter(i => { if (smallByClass(i.cls)) return true; if (i.alt == null || String(i.alt).trim()) return false;
+  const a = linkOf(articleHtml, i.at); if (!a) return false; const href = attrOf(a, 'href') || '';
+  if (/\.(?:jpe?g|png|webp|avif|gif)(?:[?#]|$)/i.test(href) || /lightbox|fancybox|data-lightbox|glightbox/i.test(a)) return false;
+  return CARDISH.test(i.cls + ' ' + (attrOf(a, 'class') || '') + ' ' + i.src) || (Number(i.w) > 0 && Number(i.w) <= 400) || (Number(i.h) > 0 && Number(i.h) <= 300); });
 const imgs = imgAll.filter(i => !decorative.includes(i));
 const kwTok = new Set(kw.split(' ').filter(t => t.length > 2));
 const noAlt = imgs.filter(i => !i.alt || !String(i.alt).trim());
@@ -90,7 +112,13 @@ const modern = imgs.filter(i => /\.(webp|avif)(\?|$)/i.test(i.src));
 const ogImage = pick1(/<meta[^>]+property=["']og:image["'][^>]*content=["']([^"']+)["']/i) || pick1(/<meta[^>]+content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
 const imgHost = (u) => (String(u || '').match(/^(?:https?:)?\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i) || [])[1] || '';
 const BORROWED = [[/(^|\.)(gstatic\.com|googleusercontent\.com|ggpht\.com)$/i, 'Google Images'], [/(^|\.)licdn\.com$/i, 'LinkedIn'], [/(^|\.)(fbcdn\.net|fbsbx\.com)$/i, 'Facebook'], [/(^|\.)cdninstagram\.com$/i, 'Instagram'], [/(^|\.)pinimg\.com$/i, 'Pinterest'], [/(^|\.)twimg\.com$/i, 'X (Twitter)'], [/(^|\.)(bing\.net|bing\.com)$/i, 'Bing images']];
-const borrowedOf = (u) => { const h = imgHost(u).toLowerCase(); if (!h || h === domain || h.endsWith('.' + domain)) return null; const b = BORROWED.find(([re]) => re.test(h)); return b ? { host: h, source: b[1] } : null; };
+// review L9: a website hosted on Blogger / Google Sites (or one that keeps its own pictures on LinkedIn) serves its own images from those hosts:
+// only a Google Images thumbnail (encrypted-tbn*.gstatic.com) is always someone else's; any other service is "borrowed" unless the site
+// itself is built there (its generator, its domain) or most of the page's own images, logo included, come from it
+const allHosts = [...body.matchAll(/<img[^>]*>/gi)].map(m => imgHost(decodeEnt(attrOf(m[0], 'src') || '')).toLowerCase()).filter(Boolean);
+const generator = pick1(/<meta[^>]+name=["']generator["'][^>]*content=["']([^"']+)["']/i);
+const hostedOn = (re) => /blogger|google sites/i.test(generator) && re.test('googleusercontent.com') || /\.blogspot\.com$/.test(domain) && re.test('googleusercontent.com') || (allHosts.length >= 3 && allHosts.filter(h => re.test(h)).length * 2 >= allHosts.length);
+const borrowedOf = (u) => { const h = imgHost(u).toLowerCase(); if (!h || h === domain || h.endsWith('.' + domain)) return null; if (/^encrypted-tbn\d*\.gstatic\.com$/.test(h)) return { host: h, source: 'Google Images' }; const b0 = BORROWED.find(([re]) => re.test(h)); if (b0 && hostedOn(b0[0])) return null; const b = BORROWED.find(([re]) => re.test(h)); return b ? { host: h, source: b[1] } : null; };
 const borrowed = imgs.map(i => ({ i, b: borrowedOf(i.src) })).filter(x => x.b);
 // the hero a theme paints as a CSS background (style="background-image:url(...)") in the page's main part, before the article text
 const bgZone = (() => { const h1At = body.search(/<h1\b/i); if (h1At < 0) return ''; const m0 = body.search(/<main\b/i); return body.slice(m0 >= 0 && m0 < h1At ? m0 : Math.max(0, h1At - 6000), h1At + 1500); })();
@@ -99,13 +127,18 @@ const bgBorrowed = bgUrl ? borrowedOf(bgUrl) : null;
 // the images we delivered with the page, by file name
 const fileOf = (u) => decodeEnt(String(u || '')).replace(/[?#].*$/, '').split('/').pop().toLowerCase();
 const sentImgs = (Array.isArray(d.delivered_images) ? d.delivered_images : []).map(x => fileOf(x)).filter(x => /\.[a-z0-9]{3,4}$/.test(x)).slice(0, 10);
-const pageFiles = new Set([...body.matchAll(/(?:src|srcset|data-src|href|content)\s*=\s*["']([^"']+)["']/gi)].flatMap(m => m[1].split(',').map(x => fileOf(x.trim().split(/\s+/)[0]))));
-const sentOnPage = sentImgs.filter(f => pageFiles.has(f) || body.toLowerCase().includes(f));
-const delivered = { sent: sentImgs.length, on_page: sentOnPage.length, missing: sentImgs.filter(f => !sentOnPage.includes(f)) };
+// review L8: a CMS renames uploads (WordPress "name-1024x576.webp", "-scaled", "-e1699999999", "-1"; hash suffixes), so a file is matched by
+// its stem: equal stems = on the page; one stem inside the other, or 80% of their words shared = "probably ours"
+const stemOf = (f) => String(f || '').toLowerCase().replace(/\.[a-z0-9]{2,5}$/, '').replace(/-\d{2,5}x\d{2,5}$/, '').replace(/-(?:scaled|e\d{6,}|\d{1,2})$/, '').replace(/[-_.][0-9a-f]{6,}$/, '').replace(/-\d{2,5}x\d{2,5}$/, '');
+const pageStems = [...new Set([...body.matchAll(/(?:src|srcset|data-src|href|content)\s*=\s*["']([^"']+)["']/gi)].flatMap(m => m[1].split(',').map(x => fileOf(x.trim().split(/\s+/)[0]))).filter(f => /\.(?:jpe?g|png|webp|avif|gif)$/.test(f)).map(stemOf).filter(x => x.length >= 4))];
+const near = (a, b) => { if (a.length >= 8 && b.length >= 8 && (a.includes(b) || b.includes(a))) return true; const A = a.split(/[-_]+/).filter(Boolean), B = new Set(b.split(/[-_]+/).filter(Boolean)); return A.length >= 3 && A.filter(w => B.has(w)).length / Math.max(A.length, B.size) >= 0.8; };
+const sentOnPage = sentImgs.filter(f => pageStems.includes(stemOf(f)));
+const sentProbably = sentImgs.filter(f => !sentOnPage.includes(f) && pageStems.some(p => near(stemOf(f), p)));
+const delivered = { sent: sentImgs.length, on_page: sentOnPage.length, probably: sentProbably.length, missing: sentImgs.filter(f => !sentOnPage.includes(f) && !sentProbably.includes(f)) };
 const advice = [];
 if (bgUrl) advice.push('The top picture of the page is a background set by the page style' + (bgBorrowed ? ', loaded from ' + bgBorrowed.source + ' (' + bgBorrowed.host + ')' : '') + ': search engines do not read it as an image and it cannot carry alt text');
-if (delivered.sent && !delivered.on_page) advice.push('None of the ' + delivered.sent + ' images we made for this page ' + (delivered.sent === 1 ? 'is' : 'are') + ' on it: they are ready to upload, with their alt text, in the page\'s report');
-else if (delivered.sent && delivered.missing.length) advice.push(delivered.on_page + ' of the ' + delivered.sent + ' images we made for this page ' + (delivered.on_page === 1 ? 'is' : 'are') + ' on it');
+if (delivered.sent && delivered.missing.length === delivered.sent) advice.push('We could not find any of the ' + delivered.sent + ' images we made for this page on it: they are ready to upload, with their alt text, in the page\'s report');
+else if (delivered.sent && delivered.missing.length) advice.push('We found ' + (delivered.sent - delivered.missing.length) + ' of the ' + delivered.sent + ' images we made for this page on it' + (delivered.probably ? ' (' + delivered.probably + ' under another file name, probably ours)' : ''));
 const images = { count: imgs.length, decorative: decorative.length, without_alt: noAlt.length, topic_in_alt: topicAlt, generic_names: generic.map(i => i.src.split('/').pop()).slice(0, 5), without_dimensions: noDims.length, modern_format: modern.length, og_image: ogImage || '',
   read_from: REG.from, background: bgUrl ? { url: bgUrl.slice(0, 300), ...(bgBorrowed || {}) } : null, borrowed: borrowed.map(x => ({ src: x.i.src.slice(0, 300), host: x.b.host, source: x.b.source })).slice(0, 5), delivered, advice };
 if (!imgs.length) {

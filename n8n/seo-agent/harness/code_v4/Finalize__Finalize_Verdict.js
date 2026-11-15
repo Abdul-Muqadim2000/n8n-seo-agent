@@ -1281,8 +1281,9 @@ const GR = (() => {
     const ownText = S(c.own_text).toLowerCase();
     const U = units(md).filter(u => u.kind !== 'heading' && !u.qa);
     const linkTier = (u) => { const h = hostOf(u); if (!h || own(h) || SOCIAL.test(h)) return null; return tier ? tier(u) : 'weak'; };
-    // section 191: an image ("![alt](url)") is never a citation: a live page's hero loaded from another website read as a weak source
-    const linksOf = (t) => [...S(t).replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').matchAll(/\[([^\[\]]*)\]\((https?:\/\/[^)\s]+)\)/g)].map(m => ({ url: m[2], tier: linkTier(m[2]) })).filter(x => x.tier);
+    // section 191: an image ("![alt](url)") is never a citation: a live page's hero loaded from another website read as a weak source; review L2:
+    // a linked image ("[![badge](img)](url)", a logo or a card) is no citation either: its link has no words
+    const linksOf = (t) => [...S(t).replace(/\[\s*!\[[^\]]*\]\([^)]*\)\s*\]\([^)]*\)/g, ' ').replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').matchAll(/\[([^\[\]]*)\]\((https?:\/\/[^)\s]+)\)/g)].map(m => ({ url: m[2], tier: linkTier(m[2]) })).filter(x => x.tier);
     const paraLinks = new Map(); for (const u of U) { const k = u.section + ':' + u.para; const ls = linksOf(u.text); if (ls.length) paraLinks.set(k, (paraLinks.get(k) || []).concat(ls)); }
     // H1: the client's own phone and address on file (own_text: Content QA adds the profile's and the site model's NAP) are theirs in any
     // spelling: the run of digits a figure sits in (spaces, dots, dashes and brackets between them) equals one on file, or the two share
@@ -2707,9 +2708,12 @@ let liveOut = null;
 if (F.grade_only) {
   const lr = F.live_read || {}; const day = new Date().toISOString().slice(0, 10);
   grade.basis = GR.clean('measured on the live page ' + (S(lr.url) || 'you published') + ' as read on ' + day + ', with the same check as the version we delivered (' + (GD ? GR.basis : 'structure, readability, specificity, plain language, length') + ')');
-  const acts = [...new Set(del.blocking.map(x => S(x.action)).filter(Boolean))];
-  if (del.status === 'not_ready') del.next_step = PF.clean('Change these on your website, then press Re-check: ' + (acts.join('; ') || 'the points listed') + '.');
-  else if (del.status === 'ready' || del.status === 'ready_with_questions') del.next_step = 'Your live page passes our check. If you change it, press Re-check.';
+  // review L7: one next step for a live page, whatever the status: never "make the final version again" or "in the editor" (the page is live)
+  const acts = [...new Set(del.blocking.map(x => S(x.action)).filter(a => a && !/final version|page run|in the editor|content list/i.test(a)))];
+  const failing = ((grade.floors || {}).failing || []);
+  if (del.status === 'not_ready') del.next_step = PF.clean('Change these on your website, then press Re-check: ' + (acts.join('; ') || 'the points listed above') + '.');
+  else if (del.status === 'needs_work') del.next_step = failing.length ? S(GR.deliver({ status: 'needs_work' }, grade, { live: true }).next_step) : 'Change the points listed above on your website, then press Re-check.';
+  else del.next_step = 'Your live page passes our check. If you change it, press Re-check.';
   const M0 = grade.max || {}; const B0 = grade.breakdown || {}; const IT = (GD && GD.items) || {}; const R = qa.readability || {};
   const n0 = (v) => Number(v) || 0;
   const missing = (qa.missing_terms || []).filter(Boolean).slice(0, 6);

@@ -14148,9 +14148,9 @@ log('Page runs take a writing slot (P1, section 190, prod review 2026-11-12 S1-0
 # The live page grade says whose text is live and why each part lost points, never takes points for our own reader or the site template,
 # and the publish check reads the article's images (docs/client-reports-2026-11-16/LIVE_GRADE.md, harness scenarios_client_1116.js LG1-LG3).
 _cq191 = code('Content QA'); _pc191 = code('Publish Check')
-for _k191 in ('const LIVE = !!(prev.finalize && prev.finalize.grade_only === true);', "if (off > 0 && whole[off - 1] === '!') return m;", 'const isFaqHead = ', 'structure_checks, live: LIVE, live_adjustments,', 'longest, passive_pct,'):
+for _k191 in ('const LIVE = !!(prev.finalize && prev.finalize.grade_only === true && prev.finalize.live_read && prev.finalize.live_read.ok === true);', 'const descCheck = ', 'const faqLastHit = ', "if (off > 0 && whole[off - 1] === '!') return m;", 'const isFaqHead = ', 'structure_checks, live: LIVE, live_adjustments,', 'longest, passive_pct,'):
     assert _k191 in _cq191, 'section 191: Content QA lacks ' + _k191
-for _k191 in ('const REG = regionOf(body);', "name: 'Images in the article'", "name: 'Images hosted on your website'", 'tables: tableHtml.length, table_rows: tableRows'):
+for _k191 in ('const REG = regionOf(body);', 'const dropCards = ', 'const stemOf = ', 'const hostedOn = ', "name: 'Images in the article'", "name: 'Images hosted on your website'", 'tables: tableHtml.length, table_rows: tableRows'):
     assert _k191 in _pc191, 'section 191: Publish Check lacks ' + _k191
 for _f191, _k191 in (('Finalize_Live_Body.js', 'kept_pct: Math.round('), ('Finalize_Verdict.js', 'liveOut = { live_parts: parts,'), ('_grade.js', "'. Change it on your website, then press Re-check.'")):
     assert _k191 in _rd0('code/' + _f191), 'section 191: ' + _f191 + ' lacks ' + _k191

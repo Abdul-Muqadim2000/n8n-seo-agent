@@ -236,9 +236,12 @@ let liveOut = null;
 if (F.grade_only) {
   const lr = F.live_read || {}; const day = new Date().toISOString().slice(0, 10);
   grade.basis = GR.clean('measured on the live page ' + (S(lr.url) || 'you published') + ' as read on ' + day + ', with the same check as the version we delivered (' + (GD ? GR.basis : 'structure, readability, specificity, plain language, length') + ')');
-  const acts = [...new Set(del.blocking.map(x => S(x.action)).filter(Boolean))];
-  if (del.status === 'not_ready') del.next_step = PF.clean('Change these on your website, then press Re-check: ' + (acts.join('; ') || 'the points listed') + '.');
-  else if (del.status === 'ready' || del.status === 'ready_with_questions') del.next_step = 'Your live page passes our check. If you change it, press Re-check.';
+  // review L7: one next step for a live page, whatever the status: never "make the final version again" or "in the editor" (the page is live)
+  const acts = [...new Set(del.blocking.map(x => S(x.action)).filter(a => a && !/final version|page run|in the editor|content list/i.test(a)))];
+  const failing = ((grade.floors || {}).failing || []);
+  if (del.status === 'not_ready') del.next_step = PF.clean('Change these on your website, then press Re-check: ' + (acts.join('; ') || 'the points listed above') + '.');
+  else if (del.status === 'needs_work') del.next_step = failing.length ? S(GR.deliver({ status: 'needs_work' }, grade, { live: true }).next_step) : 'Change the points listed above on your website, then press Re-check.';
+  else del.next_step = 'Your live page passes our check. If you change it, press Re-check.';
   const M0 = grade.max || {}; const B0 = grade.breakdown || {}; const IT = (GD && GD.items) || {}; const R = qa.readability || {};
   const n0 = (v) => Number(v) || 0;
   const missing = (qa.missing_terms || []).filter(Boolean).slice(0, 6);

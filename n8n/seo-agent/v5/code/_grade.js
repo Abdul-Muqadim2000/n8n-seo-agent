@@ -228,8 +228,9 @@ const GR = (() => {
     const ownText = S(c.own_text).toLowerCase();
     const U = units(md).filter(u => u.kind !== 'heading' && !u.qa);
     const linkTier = (u) => { const h = hostOf(u); if (!h || own(h) || SOCIAL.test(h)) return null; return tier ? tier(u) : 'weak'; };
-    // section 191: an image ("![alt](url)") is never a citation: a live page's hero loaded from another website read as a weak source
-    const linksOf = (t) => [...S(t).replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').matchAll(/\[([^\[\]]*)\]\((https?:\/\/[^)\s]+)\)/g)].map(m => ({ url: m[2], tier: linkTier(m[2]) })).filter(x => x.tier);
+    // section 191: an image ("![alt](url)") is never a citation: a live page's hero loaded from another website read as a weak source; review L2:
+    // a linked image ("[![badge](img)](url)", a logo or a card) is no citation either: its link has no words
+    const linksOf = (t) => [...S(t).replace(/\[\s*!\[[^\]]*\]\([^)]*\)\s*\]\([^)]*\)/g, ' ').replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').matchAll(/\[([^\[\]]*)\]\((https?:\/\/[^)\s]+)\)/g)].map(m => ({ url: m[2], tier: linkTier(m[2]) })).filter(x => x.tier);
     const paraLinks = new Map(); for (const u of U) { const k = u.section + ':' + u.para; const ls = linksOf(u.text); if (ls.length) paraLinks.set(k, (paraLinks.get(k) || []).concat(ls)); }
     // H1: the client's own phone and address on file (own_text: Content QA adds the profile's and the site model's NAP) are theirs in any
     // spelling: the run of digits a figure sits in (spaces, dots, dashes and brackets between them) equals one on file, or the two share

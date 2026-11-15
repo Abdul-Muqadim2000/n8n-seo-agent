@@ -44,7 +44,9 @@ const otherPage = !!(S(g.title).trim() && readerTitle && !near(readerTitle, g.ti
 // punctuation is put back as a table row, so it is a table again and is no sentence. grade_live.tables (how many <table> the page has)
 // travels to Content QA in live_read.
 const normS = (t) => S(t).replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').replace(/\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`>#|]+/g, ' ').toLowerCase().replace(/&[a-z#0-9]+;/g, ' ').replace(/[^a-z0-9%]+/g, ' ').replace(/\s+/g, ' ').trim();
-const sentencesOf = (t) => S(t).replace(/^(?:Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):.*$/gim, '').split(/\n+|(?<=[.!?])\s+/).map(normS).filter(x => x.split(' ').length >= 8);
+// review L6: every meta line out ("Meta Title:" too), and a sentence after our "Quick answer:" label counts without the label (a client who only removed
+// the label kept the sentence)
+const sentencesOf = (t) => S(t).replace(/^(?:Title|Meta Title|Meta Description|Slug|Primary Keyword|Secondary Keywords|URL)\s*:.*$/gim, '').replace(/^(\s*\**\s*)Quick answer:?\s*\**\s*/gim, '$1').split(/\n+|(?<=[.!?])\s+/).map(normS).filter(x => x.split(' ').length >= 8);
 const rowsIn = (Array.isArray(g.table_rows) ? g.table_rows : []).map(normS).filter(x => x.split(' ').length >= 3).slice(0, 80);
 let restored = 0;
 if (rowsIn.length) md = md.split('\n').map(l => { const t = l.trim(); if (!t || /^(?:#|\||!\[|[-*+]\s|\d{1,3}[.)]\s)/.test(t) || /[.!?:]\**\s*$/.test(t)) return l;
@@ -53,16 +55,23 @@ if (rowsIn.length) md = md.split('\n').map(l => { const t = l.trim(); if (!t || 
 const delivered = [...new Set(sentencesOf(b.delivered_markdown))];
 const liveNorm = ' ' + normS(md) + ' ';
 const keptN = delivered.filter(x => liveNorm.includes(' ' + x + ' ')).length;
-const kept = delivered.length ? { kept_pct: Math.round(100 * keptN / delivered.length), kept_sentences: keptN, delivered_sentences: delivered.length } : { kept_pct: null, kept_sentences: 0, delivered_sentences: 0 };
+// review L6: a share is only said when both texts are long enough to compare (the read: 150+ words; ours: 10+ sentences), else why not
+const comparable = delivered.length >= 10 && words >= 150;
+const kept = comparable ? { kept_pct: Math.round(100 * keptN / delivered.length), kept_sentences: keptN, delivered_sentences: delivered.length }
+  : { kept_pct: null, kept_sentences: 0, delivered_sentences: delivered.length, kept_note: !delivered.length ? 'the text we delivered was not sent, so the live page was not compared with it' : words < 150 ? 'the live page was read with too little text to compare it with the text we delivered' : 'the text we delivered is too short to compare' };
+// review M3: the live page's own meta description, as the publish check read it from its HTML (grade_live.meta_description; '' = none on the
+// page). Absent (a check from before): our delivered description stays in the head and the live grade does not check it (meta_read false)
+const metaRead = typeof g.meta_description === 'string';
+const liveDescription = metaRead ? S(g.meta_description).replace(/\s+/g, ' ').trim().slice(0, 400) : '';
 const okRead = !err && status === 200 && target < 400 && words >= 80 && !otherPage;
 const reason = err ? 'the page reader failed (' + err + ')' : status !== 200 ? 'the page reader answered ' + (status || 'nothing') : target >= 400 ? 'the live page answered ' + target : words < 80 ? 'the page reader returned only ' + words + ' words' : otherPage ? 'the page reader returned another page ("' + readerTitle.slice(0, 80) + '", not "' + S(g.title).trim().slice(0, 80) + '")' : '';
-const live_read = { ok: okRead, url: S((plan.live_plan || {}).url), title, words, reason, ...kept, tables: Math.max(0, Math.round(Number(g.tables) || 0)), table_rows_restored: restored };
+const live_read = { ok: okRead, url: S((plan.live_plan || {}).url), title, words, reason, ...kept, tables: Math.max(0, Math.round(Number(g.tables) || 0)), table_rows_restored: restored, meta_read: metaRead, meta_description: liveDescription };
 if (okRead) {
   b.markdown = md;
   b.client_edited = true;   // the live text is the client's own version: every sentence they wrote counts as theirs (Parse Brief)
   b.answers = [];
   b.grade_only = true;
-  b.meta = { ...((b.meta && typeof b.meta === 'object') ? b.meta : {}), ...(title ? { title } : {}), ...(h1 ? { h1 } : {}) };
+  b.meta = { ...((b.meta && typeof b.meta === 'object') ? b.meta : {}), ...(title ? { title } : {}), ...(h1 ? { h1 } : {}), ...(metaRead ? { meta_description: liveDescription } : {}) };
 }
 b.live_read = live_read;
 return [{ json: { ...plan, body: b } }];
