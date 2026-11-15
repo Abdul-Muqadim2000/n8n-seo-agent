@@ -94,6 +94,9 @@ export declare const LRU: {
   verdictStop(o: { verdict?: string; score?: number | null; ack?: boolean }): LadderVerdictStop;
   stuck(o: { status: string; since: string; eta_minutes?: number | null; live: boolean | null; now: string | number }): LadderStuck;
   rungState(row: Record<string, unknown>, o?: { next?: string; now?: string }): LadderRungState;
+  qWords(keyword: string): string[];
+  sameQuestion(a: string, b: string): boolean;
+  coversHead(question: string, head: string): boolean;
 };
 """
 

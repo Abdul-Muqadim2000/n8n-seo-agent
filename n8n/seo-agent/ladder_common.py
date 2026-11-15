@@ -122,7 +122,11 @@ LOG_COLS = [('site_id', 'string'), ('domain', 'string'), ('keyword', 'string'), 
             ('qa_reasons', 'string'),
             # 2026-10-27 (techand.ai on production): why a page was marked published although the live page did not match the draft (the
             # owner confirmed it after the warning of "I published it", Publish_Check.js / _publish_verify.js); '' on every verified row
-            ('publish_note', 'string')]
+            ('publish_note', 'string'),
+            # client reports 2026-11-16 (INV1 F4): the page as it was WRITTEN (Blog Package meta: slug, <title>, H1), so publish detection finds the
+            # page at its own address and compares a live title with the written one, never only with the keyword (devaicon.com's AI guide was
+            # recorded live at its service page, whose title carries every word of the broad keyword). '' on rows written before.
+            ('planned_slug', 'string'), ('planned_title', 'string'), ('planned_h1', 'string')]
 TRENDS_COLS = [('site_id', 'string'), ('domain', 'string'), ('keyword', 'string'), ('checked_at', 'string'), ('period_end', 'string'), ('direction', 'string'), ('change_pct', 'number'), ('peak_date', 'string'),
                ('latest', 'number'), ('average', 'number'), ('rising', 'string'), ('top', 'string')]
 CADENCE_COLS = [('site_id', 'string'), ('domain', 'string'), ('pages_per_week', 'number'), ('status', 'string'), ('updated_at', 'string'), ('request_id', 'string')]
@@ -317,6 +321,10 @@ AI_TARGETS_COLS = [('target_id', 'string'), ('site_id', 'string'), ('domain', 's
                    # AIR (2026-11-06, DESIGN.md §2.F / §4.3, CONTRACTS.md §2): who owns the row ('ai_rank' = an AIR action on an `on` site; null = the
                    # AI Growth plan, whose exact-column writer sets all three null, which is how Growth reclaims a row when a site leaves `on`), the
                    # AIR action id, and when the page went live AND indexed (AIR's clock starts there, not at written_at)
+                   # client reports 2026-11-16 (INV1 F11, CONTRACT_ISSUE1 item 3): what the state means, as a code the app turns into its own plain
+                   # sentence (v5/code/_ai_question.js AQ.CODES / AQ.reason), and its arguments as JSON (page_url, keyword, date, market: never an id,
+                   # a table name or money). `reason` stays for the admin view and the rows written before. Before the AIR block, which stays last.
+                   ('reason_code', 'string'), ('reason_args', 'string'),
                    ('origin', 'string'), ('action_id', 'string'), ('live_at', 'string')]
 # seo_ai_growth: one row per site and weekly run (what was done automatically, the plan, the earned-media list, the entity check)
 AI_GROWTH_TABLE = 'seo_ai_growth'
