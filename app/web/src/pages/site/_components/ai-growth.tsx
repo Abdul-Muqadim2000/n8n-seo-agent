@@ -8,7 +8,9 @@ import { CheckCircle2, ChevronDown, FileCheck2, Globe, Library, MailPlus, Megaph
 import { GuideButton } from '@/components/guide';
 import { SiteTaskRow, useSiteTasks } from '@/components/site/SiteTasks';
 import { fmtAgo, fmtDate } from '@/lib/utils';
-import type { AiEarnedPage, AiGrowth, AiPageStat, AiTargetStat, IndexNowCheck } from '@seo/shared';
+import type { AiEarnedPage, AiGrowth, AiPageStat, AiQuestionInputs, AiTargetStat, IndexNowCheck } from '@seo/shared';
+import { useOrgCtx } from '@/lib/context';
+import { AiQuestionButton, resolveAiQuestion } from './ai-question';
 import { api, toastError } from '@/lib/api';
 import { useSiteAdmin } from '@/lib/queries';
 import { useCycleDay } from '@/lib/cycle-day';
@@ -25,9 +27,7 @@ import { engineLabel } from './ai';
 const KIND: Record<string, string> = { list: '"Best of" list', article: 'Article', news: 'News', review: 'Review site', forum: 'Forum thread', video: 'Video', social: 'Social post', official: 'Official list', encyclopedia: 'Encyclopedia', competitor: 'Competitor page' };
 /** the prospect statuses of an earned page (seo_link_prospects), in the person's words */
 const EARNED_STATUS: Record<string, { label: string; tone: Tone }> = { new: { label: 'To send', tone: 'accent' }, contacted: { label: 'Sent', tone: 'neutral' }, replied: { label: 'Replied', tone: 'accent' }, won: { label: 'Names you', tone: 'good' }, rejected: { label: 'Declined', tone: 'neutral' }, ignored: { label: 'Not a fit', tone: 'neutral' } };
-const STATUS_TONE: Record<string, Tone> = { won: 'good', contacted: 'accent', new: 'neutral', declined: 'neutral', queued: 'accent', writing: 'accent', written: 'accent', skipped: 'neutral' };
-
-export function AiGrowthSection({ growth }: { growth: AiGrowth | null }) {
+export function AiGrowthSection({ growth, inputs }: { growth: AiGrowth | null; inputs?: AiQuestionInputs }) {
   const { can, page } = useSitePage();
   const day = useCycleDay();
   if (!growth)
@@ -80,7 +80,7 @@ export function AiGrowthSection({ growth }: { growth: AiGrowth | null }) {
       </div>
       {g.submitted.indexnow.key && <IndexNowStep keyUrl={g.submitted.indexnow.keyUrl} k={g.submitted.indexnow.key} weeklyFound={g.submitted.indexnow.verified} />}
       <EarnedPanel earned={g.earned} />
-      <TargetsPanel targets={g.targets} perMonth={g.pagesPerMonth} />
+      <TargetsPanel targets={g.targets} perMonth={g.pagesPerMonth} inputs={inputs ?? { targets: g.targets }} />
       <PagesPanel pages={g.pages} />
       {g.entity && (
         <Panel title="Entity" icon={<Globe />} description={`Wikidata · checked ${fmtDate(g.entity.checkedAt)}`}>
@@ -249,45 +249,61 @@ function EarnedPanel({ earned }: { earned: AiEarnedPage[] }) {
   );
 }
 
-function TargetsPanel({ targets, perMonth }: { targets: AiTargetStat[]; perMonth: number }) {
-  const { tool, can } = useSitePage();
-  const shown = targets.filter((t) => t.status !== 'skipped').slice(0, 10);
+/** The badge of a question to win (the server's plain state; an older server without it: the stored status in words). */
+const TARGET_BADGE: Record<string, { label: string; tone: Tone }> = { won: { label: 'Won', tone: 'good' }, writing: { label: 'Being written', tone: 'accent' }, written: { label: 'Written', tone: 'accent' }, queued: { label: 'Queued', tone: 'accent' }, set_aside: { label: 'Not for this website', tone: 'neutral' } };
+const badgeOf = (t: AiTargetStat): { label: string; tone: Tone } => (t.badge ? { label: t.badge, tone: (t.tone ?? 'neutral') as Tone } : (TARGET_BADGE[t.status] ?? { label: 'Queued', tone: 'neutral' }));
+/** states with a page to write or improve from here (never one written, being written, live or won) */
+const WRITABLE = new Set(['queued', 'later', 'retry']);
+
+/**
+ * Client report 2026-11-16 (issue 1, F8 / F11): each question in plain words. The state follows the page (a question whose page is live shows
+ * "Published"), the sentence comes from a fixed table on the server, never the engine's own text (a platform admin can open it), and "Write it
+ * now" goes through the shared resolver (the question's own search, the AI target, "Improve the page" when a page owns the search).
+ */
+function TargetsPanel({ targets, perMonth, inputs }: { targets: AiTargetStat[]; perMonth: number; inputs: AiQuestionInputs }) {
+  const { me } = useOrgCtx();
+  const shown = targets.filter((t) => t.status !== 'skipped' && !t.hidden).slice(0, 10);
   return (
     <Panel title="Questions to win" icon={<Target />} description={perMonth > 0 ? `The weekly content run picks the most valuable one (${perMonth} a month)` : 'AI pages are off: write them from here'}>
       {shown.length ? (
         <ul className="divide-y divide-line">
-          {shown.map((t) => (
-            <li key={t.targetId} className="flex flex-col gap-2 py-2.5 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-ink">{t.question}</p>
-                <p className="mt-0.5 text-xs text-ink-3">
-                  {t.kind === 'refresh' ? `Refresh ${urlPath(t.pageUrl)}` : /^written as the keyword ladder page/.test(t.reason) ? 'Keyword ladder page' : 'New answer page'} · {t.reason}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <Badge tone={STATUS_TONE[t.status] ?? 'neutral'} icon={t.status === 'won' ? <CheckCircle2 className="size-3" aria-hidden /> : undefined}>
-                  {t.status === 'won' ? 'Won' : t.status === 'writing' ? 'Being written' : t.status === 'queued' ? 'Queued' : t.status}
-                </Badge>
-                {/^written as the keyword ladder page/.test(t.reason) && t.status === 'queued' && <Badge>Via the ladder</Badge>}
-                {t.status === 'queued' && can('member') && !/^written as the keyword ladder page/.test(t.reason) && (
-                  <ButtonLink
-                    size="sm"
-                    variant="secondary"
-                    to={tool('keyword', {
-                      keyword: t.keyword,
-                      pageType: t.kind === 'refresh' ? 'Service Page' : t.pageType || 'Guide',
-                      existingPageUrl: t.kind === 'refresh' ? t.pageUrl : '',
-                      receiveReport: true,
-                      receiveContent: true,
-                      aiTarget: { question: t.question, kind: t.kind, targetId: t.targetId, fanout: t.fanout, sources: t.sources, competitors: t.competitors },
-                    })}
-                  >
-                    Write it now
-                  </ButtonLink>
-                )}
-              </div>
-            </li>
-          ))}
+          {shown.map((t) => {
+            const b = badgeOf(t);
+            const state = t.state ?? t.status;
+            const act = WRITABLE.has(state) && !t.viaLadder ? resolveAiQuestion({ targetId: t.targetId, question: t.question }, inputs) : null;
+            const pageUrl = t.statePageUrl || (t.kind === 'refresh' ? t.pageUrl : '');
+            return (
+              <li key={t.targetId} className="flex flex-col gap-2 py-2.5 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-ink">{t.question}</p>
+                  <p className="mt-0.5 text-xs text-ink-3">
+                    {t.reason}
+                    {state === 'live' && pageUrl && (
+                      <>
+                        {' '}
+                        <a href={pageUrl} target="_blank" rel="noopener noreferrer" className="text-accent-text hover:underline">
+                          Open {urlPath(pageUrl)}
+                        </a>
+                      </>
+                    )}
+                  </p>
+                  {act?.note && act.step !== 'write' && <p className="mt-0.5 text-xs text-ink-3">{act.note}</p>}
+                  {me.platformAdmin && t.adminReason && (
+                    <details className="mt-1">
+                      <summary className="cursor-pointer text-xs text-ink-3">Engine note (platform admins only)</summary>
+                      <p className="mt-1 text-xs text-ink-3 [overflow-wrap:anywhere]">{t.adminReason}</p>
+                    </details>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Badge tone={b.tone} icon={state === 'won' ? <CheckCircle2 className="size-3" aria-hidden /> : undefined}>
+                    {b.label}
+                  </Badge>
+                  {act && (act.step === 'write' || act.step === 'improve') && <AiQuestionButton action={{ ...act, label: act.step === 'improve' ? 'Improve the page' : 'Write it now' }} />}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <p className="text-[13px] text-ink-2">No lost questions this week. AI names you for every tracked question.</p>

@@ -5,7 +5,8 @@ import { useForm, type DefaultValues } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
 import { ChevronDown, ChevronRight, Video } from 'lucide-react';
-import { HOLD_COST_USD, HOLD_RULE, PAGE_TYPES, RUN_SCHEMAS, urlOnDomain } from '@seo/shared';
+import { HOLD_COST_USD, HOLD_RULE, PAGE_TYPES, RUN_SCHEMAS, pipelineNotices, urlOnDomain } from '@seo/shared';
+import { useSiteData } from '@/lib/queries';
 import { quoteLabel } from '@/lib/credits';
 import { useOrgCtx } from '@/lib/context';
 import { Checkbox, ChoiceCard } from '@/components/ui/field';
@@ -69,7 +70,7 @@ type KIn = z.input<typeof KS>;
 type KOut = z.output<typeof KS>;
 
 export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
-  const { sites } = useOrgCtx();
+  const { org, sites } = useOrgCtx();
   const sd = siteDefaults(sites.find((s) => s.id === initialSiteId) ?? null);
   const defaults = withPrefill<DefaultValues<KIn>>(
     {
@@ -126,6 +127,11 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
     } else form.setValue('business', ''); // with a website the engine uses the site's description (the field is hidden)
   });
   const extras = [v.receiveReport && 'Keyword report: competitors, verdict, keyword data', v.receiveContent && 'The finished page, QA-checked'].filter((x): x is string => !!x);
+  // client report 2026-11-16 (issue 1): the AI callout never contradicts the warning above it. While an AI page would be a second page for
+  // its question or its search (the shared rule, the same pipeline data the warnings read: one cached request), the callout is left out and
+  // the warning offers "Improve <page> for this question"
+  const pipe = useSiteData(org.id, site?.id ?? '', 'pipeline', undefined, { enabled: !!v.aiTarget && !!site?.verifiedAt, staleTime: 30_000 });
+  const aiConflict = !!v.aiTarget && !!pipe.data && !pipe.isPlaceholderData && pipelineNotices('keyword', v, pipe.data).some((n) => /^ai-/.test(n.id));
 
   return (
     <ToolShell onAccept={onAccept}
@@ -145,6 +151,8 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
         form.setValue('existingPageUrl', plan.existingPageUrl, { shouldDirty: true, shouldValidate: form.formState.isSubmitted });
         const type = PAGE_TYPES.find((t) => t.value === plan.pageType)?.value;
         if (type) form.setValue('pageType', type, { shouldDirty: true });
+        // an AI page becomes the refresh of that page for the same question (the brief adds the answer-first section to it)
+        if (plan.aiKind === 'refresh' && v.aiTarget) form.setValue('aiTarget', { ...v.aiTarget, kind: 'refresh' }, { shouldDirty: true });
       }}
     >
       <FormCard title="Keyword" description="Competitor research, a verdict, a brief, the copy, an editor pass and SEO QA, for one keyword.">
@@ -163,9 +171,9 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
         ) : (
           v.receiveContent && <p className="text-[13px] leading-relaxed text-ink-3">{HOLD_RULE}</p>
         )}
-        {v.aiTarget && (
-          <Callout tone="info" title="Written to be the page AI cites">
-            For "{v.aiTarget.question}": the answer comes first, each search the assistants run gets its own section{v.aiTarget.kind === 'refresh' ? ', and your existing page is refreshed with today\'s facts and date' : ''}.
+        {v.aiTarget && !aiConflict && (
+          <Callout tone="info" title={v.aiTarget.kind === 'refresh' || v.existingPageUrl ? 'Your page, improved so AI cites it' : 'Written to be the page AI cites'}>
+            For "{v.aiTarget.question}": the answer comes first, each search the assistants run gets its own section{v.aiTarget.kind === 'refresh' || v.existingPageUrl ? ', and your existing page is refreshed with today\'s facts and date' : ''}.
           </Callout>
         )}
         <CountryField reg={form.register('country')} error={errMsg(e.country)} />
