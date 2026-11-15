@@ -852,7 +852,7 @@ const FITR = {
   }
 };
 const WHICH = "targets";
-const COLS = ["target_id", "site_id", "domain", "prompt_id", "question", "keyword", "kind", "page_url", "page_type", "fanout", "sources_json", "competitors", "engines", "stage", "value", "status", "reason", "created_at", "updated_at", "request_id", "written_at", "won_at", "origin", "action_id", "live_at"];
+const COLS = ["target_id", "site_id", "domain", "prompt_id", "question", "keyword", "kind", "page_url", "page_type", "fanout", "sources_json", "competitors", "engines", "stage", "value", "status", "reason", "created_at", "updated_at", "request_id", "written_at", "won_at", "reason_code", "reason_args", "origin", "action_id", "live_at"];
 const SINKS = ['targets', 'prospects', 'proposed', 'core', 'cache', 'growth'];
 const JSON_MAX = 60000;
 const plans = (() => { try { return $('AI Rank Plan').all().map(i => i.json || {}); } catch (e) { return []; } })().filter(p => p && p.site_id && !p.skip);

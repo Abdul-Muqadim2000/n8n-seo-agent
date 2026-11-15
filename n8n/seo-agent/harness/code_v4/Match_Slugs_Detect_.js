@@ -8,6 +8,12 @@
 //       fetched next — at most 5 per candidate, 15 per site, 100 per run — and Detect Published accepts a <title> or first <h1> holding >= 80%.
 //   Never claimed: URLs of other pages of the site (published, or existing before), URLs last changed before the page was written (lastmod;
 //   one day of slack for time zones). One URL per candidate and one candidate per URL, best score first.
+// client reports 2026-11-16 (devaicon.com, INV1 F4): an AI guide written for "ai automation services" was recorded live at
+// /services/ai-automation-services-pakistan, the client's own service page MOVED from /ai-automation-services-pakistan, because its title holds
+// every word of the broad keyword. Now (1) a row that kept the page as it was written (planned_slug / planned_title / planned_h1) is looked for
+// at its own slug first (score 95) and its title check compares the live title with the WRITTEN one (Detect Published); (2) an address whose
+// last segment is the last segment of a page the site already has (published, existing before, or another search's page) is that page moved,
+// never a new page: it is not claimed, except at the row's own planned address.
 const CONFIG = { max_urls_per_site: 20000, max_body_chars: 5000000, title_candidates: 10, options_per_candidate: 5, max_fetches_per_site: 15, max_fetches_per_run: 100, slug_share: 0.6, max_inventory: 2000,
   title_fill_per_site: 40, title_fill_per_run: 120 };   // R34: the weekly read of the titles the inventory does not have (plain GETs of the site's own pages)
 // 2026-10-12 (FIX_PLAN D11): the same sitemap read also yields the week's page inventory (`inventory`), which Page Inventory (Site)
@@ -36,6 +42,7 @@ const day = (s) => String(s || '').slice(0, 10);
 const dayBefore = (s) => { const t = Date.parse(day(s)); return isNaN(t) ? '' : new Date(t - 864e5).toISOString().slice(0, 10); };
 const tokHit = (t, set) => set.some(x => x === t || (t.length >= 5 && x.length >= 5 && (x.startsWith(t) || t.startsWith(x))));
 const shareOf = (kwT, other) => kwT.length ? kwT.filter(t => tokHit(t, other)).length / kwT.length : 0;
+const LRU_MOVED = (u) => 'the address /' + u.path + ' is a page the site already has, moved to a new folder: it is not taken as this page';   // INV1 F4
 let runFetches = 0, runFills = 0;
 // R34: the inventory as stored (titles / H1s read before) and AI Growth's key pages (they carry their title already)
 const storedAll = grab('Load Pages (Site)').filter(r => r && r.url && !r.error);
@@ -62,6 +69,8 @@ const state = sites.map((s, i) => {
   const sitemap = { ok: read > 0, index, files_read: read, urls: urls.size, error: read ? '' : (errors[0] || (index ? 'the sitemap index lists no readable sitemap' : 'empty sitemap')) };
   // ---- (a) slug ----
   const known = new Set((s.known || []).map(keyOf).filter(Boolean));
+  const movedLast = new Set([...(s.known || []), ...((s.owners || []).map(o => o && o.url))].map(u => { const x = parseU(u); return x ? lastSeg(x.path) : ''; }).filter(Boolean));
+  const moved = (u) => movedLast.has(u.last) && !known.has(u.key);
   const list = [...urls.values()]; const byPath = new Map(), byLast = new Map();
   for (const u of list) { if (!byPath.has(u.path)) byPath.set(u.path, []); byPath.get(u.path).push(u); if (!byLast.has(u.last)) byLast.set(u.last, []); byLast.get(u.last).push(u); }
   const fresh = (u, c) => !u.lastmod || !c.written_at || day(u.lastmod) >= dayBefore(c.written_at);
@@ -74,10 +83,13 @@ const state = sites.map((s, i) => {
       continue;
     }
     const pl = c.planned_url ? parseU(c.planned_url) : null; const pPath = pl ? pl.path : '', pLast = pl ? lastSeg(pl.path) : '', kSlug = slugOf(c.keyword);
+    const wSlug = slugOf(c.planned_slug);   // INV1 F4: the slug the page was written with (Blog Package meta.slug)
     const seen = new Set();
-    const consider = (u, score) => { if (seen.has(u.key) || known.has(u.key) || !fresh(u, c)) return; seen.add(u.key); pairs.push({ key: c.key, url: u.url, ukey: u.key, score: score - (u.path.split('/').length - 1), matched_by: 'slug' }); };
+    const consider = (u, score) => { if (seen.has(u.key) || known.has(u.key) || !fresh(u, c)) return; if (score < 100 && moved(u)) { notes[c.key] = notes[c.key] || LRU_MOVED(u); return; }
+      seen.add(u.key); pairs.push({ key: c.key, url: u.url, ukey: u.key, score: score - (u.path.split('/').length - 1), matched_by: 'slug' }); };
     if (pPath) for (const u of byPath.get(pPath) || []) consider(u, 100);
     if (pLast) for (const u of byLast.get(pLast) || []) consider(u, 95);
+    if (wSlug && wSlug !== pLast) for (const u of byLast.get(wSlug) || []) consider(u, 95);
     if (kSlug) for (const u of byLast.get(kSlug) || []) consider(u, 90);
   }
   pairs.sort((a, b) => b.score - a.score);
@@ -85,10 +97,14 @@ const state = sites.map((s, i) => {
   for (const p of pairs) if (!matched.has(p.key) && !claimed.has(p.ukey)) { matched.set(p.key, p); claimed.add(p.ukey); }
   // ---- (b) the pages to read for the title check ----
   const slugTok = new Map(); const tokOf = (u) => { if (!slugTok.has(u.key)) slugTok.set(u.key, overlapTokens(u.last.replace(/[-_]+/g, ' '))); return slugTok.get(u.key); };
-  const title_checks = (s.candidates || []).filter(c => !c.existing_url && !matched.has(c.key)).map(c => ({ c, kwT: overlapTokens(c.keyword) })).filter(x => x.kwT.length >= 2).slice(0, CONFIG.title_candidates).map(({ c, kwT }) => {
-    const opts = list.filter(u => !claimed.has(u.key) && !known.has(u.key) && fresh(u, c)).map(u => ({ u, sh: shareOf(kwT, tokOf(u)), j: overlapScore(kwT, tokOf(u)) }))
+  // INV1 F4: a row that kept its written title is also looked for by the words of that title (the slug "ai-automation-services-uae" holds two of
+  // the four words of "best ai automation services dubai", all of "AI Automation Services in the UAE: A Buyer's Guide"), and it carries the
+  // written title / H1 to Detect Published, which compares the live page with THEM rather than with the keyword alone
+  const title_checks = (s.candidates || []).filter(c => !c.existing_url && !matched.has(c.key)).map(c => ({ c, kwT: overlapTokens(c.keyword), wT: overlapTokens(String(c.planned_title || '') + ' ' + String(c.planned_h1 || '')) }))
+    .filter(x => x.kwT.length >= 2 || x.wT.length >= 2).slice(0, CONFIG.title_candidates).map(({ c, kwT, wT }) => {
+    const opts = list.filter(u => !claimed.has(u.key) && !known.has(u.key) && !moved(u) && fresh(u, c)).map(u => ({ u, sh: Math.max(shareOf(kwT, tokOf(u)), wT.length ? shareOf(tokOf(u), wT) * (tokOf(u).length >= 2 ? 1 : 0) : 0), j: overlapScore(kwT.length ? kwT : wT, tokOf(u)) }))
       .filter(o => o.sh >= CONFIG.slug_share).sort((a, b) => (b.sh - a.sh) || (b.j - a.j) || (a.u.path.length - b.u.path.length)).slice(0, CONFIG.options_per_candidate);
-    return { key: c.key, keyword: c.keyword, tokens: kwT, options: opts.map(o => ({ url: o.u.url, ukey: o.u.key, slug_share: Math.round(o.sh * 100) / 100 })) };
+    return { key: c.key, keyword: c.keyword, tokens: kwT, written: [String(c.planned_title || ''), String(c.planned_h1 || '')].filter(x => x.trim()), options: opts.map(o => ({ url: o.u.url, ukey: o.u.key, slug_share: Math.round(o.sh * 100) / 100 })) };
   });
   const fetches = [], fset = new Set();   // round robin: every candidate gets its best page read before any gets a second one
   for (let round = 0; round < CONFIG.options_per_candidate; round++) for (const ch of title_checks) {

@@ -642,6 +642,25 @@ const LRU = (() => {
     + '. A ladder is measured in one market, so nothing was planned and nothing was charged: start it again in ' + m.country
     + (m.source === 'site' && !m.named.length ? ', or confirm that you want it measured in ' + (countryName(m.request_iso) || m.request_iso) + ' on purpose.' : '.');
 
+  // ---- an AI question beside a page planned for another keyword (client reports 2026-11-16, devaicon.com, INV1 F7) ----
+  // The cadence folded "agentic ai development companies uae" into the rung "ai app development companies": it stripped every word of every
+  // ladder head and then called one shared word ("companies") the same search, in either direction. Now a question is folded into a page only
+  // when it IS that page's search: the same words once the question's own scaffolding ("best", "top", "which") and joining words are out,
+  // plurals folded and places read as their market ("dubai" and "uae" are both the UAE). `coversHead`: the question carries every word of a
+  // ladder's main keyword (two words or more), so the main page is the page that answers it ("agentic ai development companies uae" and the
+  // main keyword "agentic ai development in uae"). Nothing is stripped because a ladder head holds it.
+  const Q_MOD = new Set(['best', 'top', 'leading', 'trusted', 'recommended', 'recommend', 'recommendation', 'recommendations', 'which', 'who', 'what', 'how', 'list', 'guide', 'is', 'are']);
+  const qWords = (kw) => {
+    let t = ' ' + low(kw).replace(/\./g, '').replace(/[^a-z0-9\u0600-\u06ff]+/g, ' ').trim() + ' '; const tags = [];
+    for (const p of placesOf(kw)) { const w = ' ' + low(p.word) + ' '; if (t.indexOf(w) >= 0) { t = t.split(w).join(' '); tags.push('in:' + [...(p.iso || [])].sort().join('+')); } }
+    const ws = t.split(' ').filter(x => x && !JOIN.has(x) && !Q_MOD.has(x)).map(x => x.length > 3 ? x.replace(/ies$/, 'y').replace(/([^s])s$/, '$1') : x);
+    return [...new Set([...ws, ...tags])].sort();
+  };
+  /** the same search for a question and a page keyword: the same words (scaffolding out, plurals folded, places as their market) */
+  const sameQuestion = (a, b) => { const A = qWords(a), B = qWords(b); return A.length > 0 && A.join(' ') === B.join(' '); };
+  /** the question carries every word of the ladder's main keyword (at least two words once places are read as their market) */
+  const coversHead = (q, head) => { const H = qWords(head), Q = new Set(qWords(q)); return H.length >= 2 && H.every(w => Q.has(w)); };
+
   // ---- verdicts (rule 4) ----
   /** o: { verdict: 'GO' | 'GO_WITH_CHANGES' | 'AVOID' | ..., score: 0-100 | null, ack: the client said "Write it anyway" } -> { stop, reason, band } */
   const verdictStop = (o) => {
@@ -715,7 +734,7 @@ const LRU = (() => {
   };
 
   return { CFG, STAGES, COMMERCIAL, kiPool, ranksFor, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, headTarget, oneUrl,
-    stageOf, isCommercial, isDefinitional, definitionalOk, stageText, countryName, market, marketRefusal, verdictStop, stuck, rungState };
+    stageOf, isCommercial, isDefinitional, definitionalOk, stageText, countryName, market, marketRefusal, verdictStop, stuck, rungState, qWords, sameQuestion, coversHead };
 })();
 // 2026-10-12 (FIX_PLAN D11): the sitemap is now read for EVERY tracked site, not only for the ones with a page waiting — the same one plain GET
 // also builds the week's page inventory (seo_pages), which is what stops the agent recommending a page the site already has. `detect` says
@@ -768,6 +787,8 @@ plan.forEach((s, idx) => {
     if (takenBy) existing = '';
     const planned = c.ladder && !isTrue(c.ladder.page_exists) ? String(c.ladder.target_url || '').trim() : '';
     return { ...c, existing_url: /^https?:\/\//i.test(existing) ? existing : '', planned_url: /^https?:\/\//i.test(planned) ? planned : '', ladder_id: (c.log && c.log.ladder_id) || (c.ladder && c.ladder.ladder_id) || '',
+      // client reports 2026-11-16 (INV1 F4): the page as it was written (slug, <title>, H1 of the delivered page), '' on older rows
+      planned_slug: String((c.log && c.log.planned_slug) || '').trim(), planned_title: String((c.log && c.log.planned_title) || '').trim(), planned_h1: String((c.log && c.log.planned_h1) || '').trim(),
       ...(takenBy ? { address_taken: { url: String(takenBy.url || ''), keyword: String(takenBy.keyword || '') } } : {}),
       qa_failed: !!(c.log && String(c.log.status || '') === 'not_ready') };
   }).sort((a, b) => String(b.written_at).localeCompare(String(a.written_at))).slice(0, CONFIG.max_candidates_per_site);

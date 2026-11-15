@@ -206,6 +206,25 @@ const LRU = (() => {
     + '. A ladder is measured in one market, so nothing was planned and nothing was charged: start it again in ' + m.country
     + (m.source === 'site' && !m.named.length ? ', or confirm that you want it measured in ' + (countryName(m.request_iso) || m.request_iso) + ' on purpose.' : '.');
 
+  // ---- an AI question beside a page planned for another keyword (client reports 2026-11-16, devaicon.com, INV1 F7) ----
+  // The cadence folded "agentic ai development companies uae" into the rung "ai app development companies": it stripped every word of every
+  // ladder head and then called one shared word ("companies") the same search, in either direction. Now a question is folded into a page only
+  // when it IS that page's search: the same words once the question's own scaffolding ("best", "top", "which") and joining words are out,
+  // plurals folded and places read as their market ("dubai" and "uae" are both the UAE). `coversHead`: the question carries every word of a
+  // ladder's main keyword (two words or more), so the main page is the page that answers it ("agentic ai development companies uae" and the
+  // main keyword "agentic ai development in uae"). Nothing is stripped because a ladder head holds it.
+  const Q_MOD = new Set(['best', 'top', 'leading', 'trusted', 'recommended', 'recommend', 'recommendation', 'recommendations', 'which', 'who', 'what', 'how', 'list', 'guide', 'is', 'are']);
+  const qWords = (kw) => {
+    let t = ' ' + low(kw).replace(/\./g, '').replace(/[^a-z0-9\u0600-\u06ff]+/g, ' ').trim() + ' '; const tags = [];
+    for (const p of placesOf(kw)) { const w = ' ' + low(p.word) + ' '; if (t.indexOf(w) >= 0) { t = t.split(w).join(' '); tags.push('in:' + [...(p.iso || [])].sort().join('+')); } }
+    const ws = t.split(' ').filter(x => x && !JOIN.has(x) && !Q_MOD.has(x)).map(x => x.length > 3 ? x.replace(/ies$/, 'y').replace(/([^s])s$/, '$1') : x);
+    return [...new Set([...ws, ...tags])].sort();
+  };
+  /** the same search for a question and a page keyword: the same words (scaffolding out, plurals folded, places as their market) */
+  const sameQuestion = (a, b) => { const A = qWords(a), B = qWords(b); return A.length > 0 && A.join(' ') === B.join(' '); };
+  /** the question carries every word of the ladder's main keyword (at least two words once places are read as their market) */
+  const coversHead = (q, head) => { const H = qWords(head), Q = new Set(qWords(q)); return H.length >= 2 && H.every(w => Q.has(w)); };
+
   // ---- verdicts (rule 4) ----
   /** o: { verdict: 'GO' | 'GO_WITH_CHANGES' | 'AVOID' | ..., score: 0-100 | null, ack: the client said "Write it anyway" } -> { stop, reason, band } */
   const verdictStop = (o) => {
@@ -279,7 +298,7 @@ const LRU = (() => {
   };
 
   return { CFG, STAGES, COMMERCIAL, kiPool, ranksFor, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, headTarget, oneUrl,
-    stageOf, isCommercial, isDefinitional, definitionalOk, stageText, countryName, market, marketRefusal, verdictStop, stuck, rungState };
+    stageOf, isCommercial, isDefinitional, definitionalOk, stageText, countryName, market, marketRefusal, verdictStop, stuck, rungState, qWords, sameQuestion, coversHead };
 })();
 // ---- the rows a published page leaves (v4.8, PIPELINE_FEATURE_SPEC §6.5). ONE copy, inlined by the build into Publish Check ("I published a
 // page", main workflow) and Detect Published (Site Tracker, publish detection), so a reported page and a detected page are stored identically.
@@ -341,6 +360,11 @@ const clean = (s) => String(s || '').replace(/<[^>]+>/g, ' ').replace(/&[a-z0-9#
 const pick1 = (b, re) => { const x = b.match(re); return x ? clean(x[1]) : ''; };
 const tokHit = (t, set) => set.some(x => x === t || (t.length >= 5 && x.length >= 5 && (x.startsWith(t) || t.startsWith(x))));
 const shareOf = (kwT, other) => kwT.length ? kwT.filter(t => tokHit(t, other)).length / kwT.length : 0;
+const titleOwn = (t) => String(t || '').split(/\s[|\u2013\u2014]\s|\s-\s/)[0];   // INV1 F4: the brand after "|" is not part of the page's title
+const writtenMatch = (written, pg) => { let best = 0;
+  for (const w of written) { const W = overlapTokens(titleOwn(w)); if (W.length < 2) continue;
+    for (const live of [titleOwn(pg.title), pg.h1]) { const L = overlapTokens(live); if (!L.length) continue; best = Math.max(best, Math.min(shareOf(W, L), shareOf(L, W))); } }
+  return best; };
 const pages = new Map();
 fetchReq.forEach((q, i) => { const r = fetchRes[i] || {}; const st = Number(r.statusCode) || (r.error ? 0 : (fetchRes[i] ? 200 : 0)); const b = st === 200 ? bodyOf(r).slice(0, CONFIG.max_html_chars) : '';
   pages.set(q.url, { ok: st === 200 && !r.error && !!b, status: st, title: pick1(b, /<title[^>]*>([\s\S]*?)<\/title>/i), h1: pick1(b, /<h1[^>]*>([\s\S]*?)<\/h1>/i) }); });
@@ -352,8 +376,11 @@ const out = state.map(st => {
     if (matched.has(ch.key)) continue;
     for (const o of ch.options || []) {
       const pg = pages.get(o.url); if (!pg || !pg.ok) continue;
-      const best = Math.max(shareOf(ch.tokens, overlapTokens(pg.title)), shareOf(ch.tokens, overlapTokens(pg.h1)));
-      if (best >= CONFIG.title_share) pairs.push({ key: ch.key, url: o.url, ukey: o.ukey, score: 50 + 20 * best + 10 * (Number(o.slug_share) || 0), matched_by: 'title' });
+      // client reports 2026-11-16 (INV1 F4): a row that kept the page as it was written is matched on THAT title / H1, both ways (the live
+      // title holds 80% of the written one's words and the written one 80% of the live title's, the brand after "|" left out): a broad keyword
+      // is carried whole by many titles of the site ("AI Automation Services in Pakistan | ISO 27001" holds all of "ai automation services")
+      const best = (ch.written || []).length ? writtenMatch(ch.written, pg) : Math.max(shareOf(ch.tokens, overlapTokens(pg.title)), shareOf(ch.tokens, overlapTokens(pg.h1)));
+      if (best >= CONFIG.title_share) pairs.push({ key: ch.key, url: o.url, ukey: o.ukey, score: 50 + 20 * best + 10 * (Number(o.slug_share) || 0), matched_by: 'title', ...((ch.written || []).length ? { title_basis: 'written' } : {}) });
     }
   }
   pairs.sort((a, b) => b.score - a.score);

@@ -13,8 +13,8 @@
    "subject": 31
   },
   "promise": {
-   "pass": 4,
-   "subject": 4
+   "pass": 6,
+   "subject": 6
   },
   "reversal": {
    "pass": 2,
@@ -73,6 +73,7 @@
      "SEO Agent \u2014 AI Growth / AI Rank Target Rows",
      "SEO Agent \u2014 AI Growth / Growth Plan",
      "SEO Agent \u2014 Content Cadence / AI Target Settle",
+     "SEO Agent \u2014 Content Cadence / AI Target Settle (Idle)",
      "SEO Agent \u2014 Content Cadence / Cadence Plan",
      "SEO Agent \u2014 Link Builder / LB Plan"
     ],
@@ -553,7 +554,49 @@
     ],
     "fail": "",
     "how": "read the artefact itself -- the page text from the node that produced it -- and emit no row when it is empty (*Content Log Row* does exactly this: no article_html and no page_markdown means 'report only')",
+    "node": "Growth Plan",
+    "ok": true,
+    "state": "written",
+    "tables": [
+     "seo_ai_growth",
+     "seo_ai_pages",
+     "seo_ai_prompts",
+     "seo_ai_rank_actions",
+     "seo_ai_rank_priors",
+     "seo_ai_rank_questions",
+     "seo_ai_rank_runs",
+     "seo_ai_rank_sources",
+     "seo_ai_targets",
+     "seo_cache",
+     "seo_link_prospects",
+     "seo_ops_alerts",
+     "seo_run_ledger"
+    ],
+    "why": "D10 / R1: a row saying a page was written while no page was written is read by the ladder plan, the Rank Tracker and the Content Cadence as a page that exists -- the cadence paused itself on pages nobody had",
+    "workflow": "SEO Agent \u2014 AI Growth"
+   },
+   {
+    "evidence_found": [
+     "$('Load Content Log')"
+    ],
+    "fail": "",
+    "how": "read the artefact itself -- the page text from the node that produced it -- and emit no row when it is empty (*Content Log Row* does exactly this: no article_html and no page_markdown means 'report only')",
     "node": "AI Target Settle",
+    "ok": true,
+    "state": "written",
+    "tables": [
+     "seo_ai_targets"
+    ],
+    "why": "D10 / R1: a row saying a page was written while no page was written is read by the ladder plan, the Rank Tracker and the Content Cadence as a page that exists -- the cadence paused itself on pages nobody had",
+    "workflow": "SEO Agent \u2014 Content Cadence"
+   },
+   {
+    "evidence_found": [
+     "$('Load Content Log')"
+    ],
+    "fail": "",
+    "how": "read the artefact itself -- the page text from the node that produced it -- and emit no row when it is empty (*Content Log Row* does exactly this: no article_html and no page_markdown means 'report only')",
+    "node": "AI Target Settle (Idle)",
     "ok": true,
     "state": "written",
     "tables": [
@@ -655,7 +698,9 @@
     "table": "seo_ai_targets",
     "why": "B9-6: the Content Cadence marked an AI target `writing` and stamped `written_at` the moment it STARTED a page run, and nothing ever wrote the row forward or back -- so a refused or failed run left the question claiming work in progress for ever and it was never queued again. R1's class, in the one table R1 did not cover.",
     "writers": [
-     "SEO Agent \u2014 Content Cadence / AI Target Marks"
+     "SEO Agent \u2014 Content Cadence / AI Target Marks",
+     "SEO Agent \u2014 Content Cadence / AI Target Settle",
+     "SEO Agent \u2014 Content Cadence / AI Target Settle (Idle)"
     ]
    }
   ],

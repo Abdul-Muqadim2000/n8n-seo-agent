@@ -973,6 +973,18 @@
               {
                 "name": "publish_note",
                 "type": "string"
+              },
+              {
+                "name": "planned_slug",
+                "type": "string"
+              },
+              {
+                "name": "planned_title",
+                "type": "string"
+              },
+              {
+                "name": "planned_h1",
+                "type": "string"
               }
             ]
           },

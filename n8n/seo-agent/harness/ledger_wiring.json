@@ -977,13 +977,15 @@
     "POST Cadence Note",
     "Planned Only",
     "Refuse Run Ledger (Cadence)",
-    "Send Cadence Note"
+    "Send Cadence Note",
+    "Settle AI Targets (Idle)"
    ],
    "settle_from_ends": [
     "Nothing To Write",
     "POST Cadence Note",
     "Planned Only",
-    "Send Cadence Note"
+    "Send Cadence Note",
+    "Settle AI Targets (Idle)"
    ]
   },
   "SEO Agent \u2014 Index Coverage": {

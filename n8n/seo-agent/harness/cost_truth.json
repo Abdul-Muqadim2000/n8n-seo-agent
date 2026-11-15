@@ -254,7 +254,8 @@
     "POST Cadence Note",
     "Planned Only",
     "Refuse Run Ledger (Cadence)",
-    "Send Cadence Note"
+    "Send Cadence Note",
+    "Settle AI Targets (Idle)"
    ],
    "settle_writes": [
     "ai_usd",

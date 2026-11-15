@@ -1346,16 +1346,20 @@ const GR = (() => {
     const exempt = ex0 ? ex0[1].trim() : caseStudy ? 'a case study: its keyword is the case name' : aiPage ? 'a page written to be cited in AI answers'
       : refresh ? 'a refresh of a page your website already has' : ladder ? 'a page of your keyword ladder: the ladder checked its main keyword when it was planned' : '';
     const automatic = /^(cadence|ladder|tracker|casestudy|audit):/i.test(S(p.client_ip));
-    return { verdict_score: score, withheld, acknowledged: ack, exempt, automatic };
+    return { verdict_score: score, withheld, acknowledged: ack, exempt, automatic, ai: aiPage };
   };
   const fit = (f0, dup, max) => {
     const f = f0 || {}; const sc = num(f.verdict_score); const D = dup || {}; const M = Number.isFinite(Number(max)) ? Number(max) : MAX.fit; const half = M / 2;
-    const vp = sc == null || sc >= CFG.verdict_bar ? half : sc >= 30 ? half * SHARE.verdict_partial : 0;
+    // client reports 2026-11-16 (INV1 F10): a page written for an AI question was chosen for the question, not for search volume, so a low
+    // verdict does not cut its fit (devaicon's AI guide sat at 59, its fit capped by the verdict on the broad topic). Only while no duplicate is
+    // open: an AI page beside the page that owns its search keeps both limits.
+    const aiFree = !!f.ai && !D.open && !D.differs;
+    const vp = sc == null || sc >= CFG.verdict_bar || aiFree ? half : sc >= 30 ? half * SHARE.verdict_partial : 0;
     const dp = D.open || D.differs ? 0 : half;
     let pts = vp + dp; const caps = [];
-    if (sc != null && sc < CFG.verdict_bar && pts > M * SHARE.fit_verdict) { pts = M * SHARE.fit_verdict; caps.push({ dim: 'fit', share: SHARE.fit_verdict, why: 'our verdict scored this search ' + sc + ' out of 100, under ' + CFG.verdict_bar }); }
+    if (sc != null && sc < CFG.verdict_bar && !aiFree && pts > M * SHARE.fit_verdict) { pts = M * SHARE.fit_verdict; caps.push({ dim: 'fit', share: SHARE.fit_verdict, why: 'our verdict scored this search ' + sc + ' out of 100, under ' + CFG.verdict_bar }); }
     if ((D.open || D.differs) && pts > M * SHARE.fit_duplicate) { pts = M * SHARE.fit_duplicate; caps.push({ dim: 'fit', share: SHARE.fit_duplicate, why: D.open ? 'your website already has a page for this search' : 'published beside the page your website has for this search' }); }
-    const band = sc == null ? 'not_checked' : sc >= CFG.verdict_bar ? 'full' : sc >= 30 ? 'partial' : 'none';
+    const band = sc == null ? 'not_checked' : sc >= CFG.verdict_bar || aiFree ? 'full' : sc >= 30 ? 'partial' : 'none';
     const note = sc == null ? 'Fit not checked: ' + (f.withheld ? 'the verdict could not score this search' : 'no verdict score was kept with this page') + ', so fit takes its full points'
       : 'Our verdict scored this search ' + sc + ' out of 100' + (sc < CFG.verdict_bar ? (f.acknowledged ? ', and you chose to write it anyway' : f.exempt ? ' (' + f.exempt + ')' : '') : '');
     return { points: r1(pts), verdict_points: r1(vp), duplicate_points: r1(dp), band, caps, note };
