@@ -543,11 +543,48 @@ export function reopenedRow(prior: Pick<ContentLogRow, 'status' | 'published_url
   return noPage ? opening : { request_id: opening.request_id };
 }
 
+/**
+ * The content log's `source` of a page run started in the app (pure). A ladder page is a ladder page. A run that carries an AI target is an
+ * AI page (client report 2026-11-16, issue 1, F6 / CONTRACT_ISSUE1.md §2): `ai_refresh` when it improves a page of the website, else
+ * `ai_answer`, so AI growth counts it among the month's AI pages and its question is never offered again as a page to write. Otherwise an
+ * approved suggestion keeps its kind (R-K5), and anything else is the app's own.
+ */
+export function pageSourceFor(input: Pick<Extract<RunInput, { mode: 'keyword' }>, 'ladder' | 'aiTarget' | 'existingPageUrl' | 'source'>): string {
+  if (input.ladder) return 'ladder';
+  if (input.aiTarget?.question) return input.aiTarget.kind === 'refresh' || !!input.existingPageUrl ? 'ai_refresh' : 'ai_answer';
+  return input.source && input.source !== 'ladder' ? input.source : 'app';
+}
+
+/**
+ * The stored question to win a page run writes for (pure): its target row moves to `writing` with the run's request id, as the engine's own
+ * marks do for the weekly AI page (CONTRACT_ISSUE1.md §3). Null when the run carries no target id. `core` is what every engine has;
+ * `extra` (the reason code and its values) is written separately, so an engine without those columns yet still takes the core update. A
+ * question AI already names the business for (`won`) is left as it is.
+ */
+export function aiTargetWritingUpdate(
+  input: Pick<Extract<RunInput, { mode: 'keyword' }>, 'aiTarget' | 'existingPageUrl'>,
+  requestId: string,
+  domain: string,
+  now: string,
+): { filters: { columnName: string; condition: 'eq' | 'neq'; value: string }[]; core: Record<string, unknown>; extra: Record<string, unknown> } | null {
+  const id = String(input.aiTarget?.targetId ?? '').trim();
+  if (!id || !requestId) return null;
+  return {
+    filters: [
+      { columnName: 'domain', condition: 'eq', value: domain },
+      { columnName: 'target_id', condition: 'eq', value: id },
+      { columnName: 'status', condition: 'neq', value: 'won' },
+    ],
+    core: { status: 'writing', request_id: requestId, updated_at: now, reason: `A page for this question is being written (started ${now.slice(0, 10)}).` },
+    extra: { reason_code: 'writing', reason_args: JSON.stringify({ date: now.slice(0, 10), ...(input.existingPageUrl ? { page_url: input.existingPageUrl } : {}) }) },
+  };
+}
+
 async function recordPageInEngine(site: SiteRow, input: Extract<RunInput, { mode: 'keyword' }>, requestId: string) {
   const now = new Date().toISOString();
   const opening = {
-    // R-K5: an approved suggestion keeps its kind (an AI answer page, a refresh...); a ladder page is a ladder page; else the app's own
-    source: input.ladder ? 'ladder' : input.source && input.source !== 'ladder' ? input.source : 'app',
+    // R-K5 + client report 2026-11-16: a ladder page, an AI page (ai_answer / ai_refresh), an approved suggestion's kind, else the app's own
+    source: pageSourceFor(input),
     page_type: input.pageType,
     existing_page_url: input.existingPageUrl,
     rung: input.ladder?.rung ?? 0,
@@ -571,6 +608,13 @@ async function recordPageInEngine(site: SiteRow, input: Extract<RunInput, { mode
     );
   } else {
     await insertRows('contentLog', [{ site_id: n8nSiteId(site.domain), domain: site.domain, keyword: input.keyword, ...opening, published_url: '', published_at: '' }]);
+  }
+  // client report 2026-11-16 (F6): the question's target is being written by this run (the core first; the reason code only where the
+  // engine has the column, never failing the run for it)
+  const mark = aiTargetWritingUpdate(input, requestId, site.domain, now);
+  if (mark) {
+    const ok = await updateRows('aiTargets', mark.filters, mark.core).catch(() => false);
+    if (ok) await updateRows('aiTargets', mark.filters, mark.extra).catch(() => false);
   }
   if (input.ladder)
     await updateRows(

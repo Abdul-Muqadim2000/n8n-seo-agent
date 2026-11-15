@@ -147,6 +147,8 @@ import {
   type AiFilter,
   type AiScope,
   type AiScopeSummary,
+  aiTargetView,
+  type AiWrittenPage,
 } from '@seo/shared';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db, schema } from '../db';
@@ -1323,7 +1325,7 @@ export const AI_READ_LIMITS = { runs: 300, prompts: 2500, daily: 120, answers: 6
 export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boolean | 'summary'; prompts?: boolean; filter?: AiFilter | null; admin?: boolean } = {}): Promise<AiData> {
   const d = site.domain;
   const since = new Date(Date.now() - 90 * 864e5).toISOString();
-  const [visDesc, prompts, report, days, growthRows, aiPages, aiTargets, aiProspects, logs, mons] = await Promise.all([
+  const [visDesc, prompts, report, days, growthRows, aiPages, aiTargets, aiProspects, logs, mons, aiRuns] = await Promise.all([
     // newest first, then put in date order: a domain with more than 300 runs shows its newest 300, never freezes on the oldest
     siteRows<AiVisibilityRow>('aiVisibility', d, { sortBy: 'checked_at:desc', max: AI_READ_LIMITS.runs }),
     // G6: up to 500 tracked + the switched-off and refused ones (every reword keeps the old row 'off'); stored order kept (the engine's cut)
@@ -1337,6 +1339,8 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
     siteRows<ProspectRow>('prospects', d, { max: 300, extra: [{ columnName: 'type', condition: 'eq', value: 'ai_source' }] }),
     siteRows<ContentLogRow>('contentLog', d, { max: 500 }),
     siteRows<MonitorsRow>('monitors', d, { max: 5 }),
+    // client report 2026-11-16 (issue 1): the AI question each of the app's page runs carried (a failed read: none known, never an error page)
+    aiRunQuestions(org.id, site.id).catch(() => new Map<string, { targetId: string; question: string }>()),
   ]);
   const vis = [...visDesc].sort((a, b) => s(a.checked_at).localeCompare(s(b.checked_at)));
   const last = vis[vis.length - 1];
@@ -1382,7 +1386,17 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
       // W2-E1: sources_json is {v: 2, types, domains, n, list} now (`list` = the old array); older rows hold the array
       sources: aiLegacySourcesList(last.sources_json).map((x) => ({ domain: s(x.domain), citations: n(x.citations), engines: arr<string>(x.engines).map(String), topics: arr<string>(x.topics).map(String), kind: s(x.kind) })),
       pages: arr(safeJson(last.pages_json, [])).map((x) => ({ url: s(x.url), citations: n(x.citations), engines: arr<string>(x.engines).map(String) })),
-      gaps: arr(safeJson(last.gaps_json, [])).map((g) => ({ prompt: s(g.prompt), competitors: arr<string>(g.competitors).map(String), sources: arr<string>(g.sources).map(String), volume: nn(g.volume), stage: s(g.stage), cluster: s(g.cluster), fanout: arr<string>(g.fanout).map(String) })),
+      // client report 2026-11-16 (issue 1): a newer engine adds the question's id, its own search, the topic, its kind and the stored target's
+      // status and page (CONTRACT_ISSUE1.md §1); each is left out when the row has none
+      gaps: arr(safeJson(last.gaps_json, [])).map((g) => ({
+        prompt: s(g.prompt), competitors: arr<string>(g.competitors).map(String), sources: arr<string>(g.sources).map(String), volume: nn(g.volume), stage: s(g.stage), cluster: s(g.cluster), fanout: arr<string>(g.fanout).map(String),
+        ...(s(g.prompt_id) ? { promptId: s(g.prompt_id) } : {}),
+        ...(s(g.keyword) ? { keyword: s(g.keyword) } : {}),
+        ...(s(g.topic) ? { topic: s(g.topic) } : {}),
+        ...(s(g.kind) ? { kind: s(g.kind) } : {}),
+        ...(s(g.target_status) ? { targetStatus: s(g.target_status) } : {}),
+        ...(s(g.page_url) ? { pageUrl: s(g.page_url) } : {}),
+      })),
       traffic: toTraffic(safeJson<P | null>(last.traffic_json, null)),
       access: toAccess(safeJson<P | null>(last.access_json, null)),
       perception: toPerception(safeJson<P | null>(last.perception_json, null)),
@@ -1446,7 +1460,8 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
     answers: opts.answers === 'summary' ? [] : answers.map((a) => toAiAnswer(a)),
     ...(opts.answers === 'summary' ? { answerResults: answerResultsOf(answers), answersStored: answers.length } : {}),
     scope: opts.filter ? aiScopeOf(opts.filter, vis, compared, answers, prompts, opts.answers !== false) : null,
-    growth: toGrowth(growthRows[0], aiPages, aiTargets, aiProspects, logs, monitorsNow),
+    growth: toGrowth(growthRows[0], aiPages, aiTargets, aiProspects, logs, monitorsNow, opts.admin === true),
+    pagesWritten: aiWrittenPages(logs, aiRuns),
     // AIR (2026-11-06): the AI-ranking plan, read only for a website in `on` mode (off and the private trial show nothing new)
     // FX-C RC-1: in the client's words with credits; the raw memo and the provider cost for a platform admin only
     aiRank: await aiRankPlanFor(d, mons[0], { prompts, admin: opts.admin === true }),
@@ -1461,6 +1476,7 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
             prompt: s(q.prompt),
             kind: s(q.kind),
             topic: s(q.topic),
+            keyword: s(q.keyword),
             won: b(q.won),
             engines: Object.fromEntries(Object.entries(o(q.engines)).map(([k, v]) => [k, s(v)])),
             competitors: arr<string>(q.competitors).map(String),
@@ -1824,7 +1840,54 @@ export async function alertsData(site: SiteRow): Promise<AlertsData> {
 
 /** v4.12: the AI growth loop's latest run with the current page / target / prospect rows (the rows change between runs: a target written by the
  *  Monday content run, a prospect marked contacted in the app). */
-function toGrowth(g: AiGrowthRow | undefined, pages: AiPageRow[], targets: AiTargetRow[], prospects: ProspectRow[], logs: ContentLogRow[], m: MonitorSettings | null): AiGrowth | null {
+/**
+ * Client report 2026-11-16 (issue 1, F8 / F11): one stored target as the AI page shows it. The state comes from the content log (a target
+ * still `writing` whose page is live is shown live), the sentence from a fixed table (ai-target-status.ts): never the engine's own reason,
+ * which a platform admin still gets as `adminReason`.
+ */
+export function targetStat(t: AiTargetRow, logs: readonly ContentLogRow[], admin = false): AiGrowth['targets'][number] {
+  const view = aiTargetView(
+    { status: s(t.status), kind: s(t.kind), keyword: s(t.keyword), question: s(t.question), pageUrl: s(t.page_url), reason: s(t.reason), reasonCode: s(t.reason_code), reasonArgs: t.reason_args, origin: s(t.origin), requestId: s(t.request_id), writtenAt: s(t.written_at), wonAt: s(t.won_at), updatedAt: s(t.updated_at), liveAt: s(t.live_at) },
+    logs,
+  );
+  return {
+    targetId: s(t.target_id), question: s(t.question), keyword: s(t.keyword), kind: s(t.kind) === 'refresh' ? ('refresh' as const) : ('answer' as const), pageUrl: s(t.page_url), pageType: s(t.page_type),
+    fanout: s(t.fanout).split(' | ').filter(Boolean), sources: arr(safeJson(s(t.sources_json), [])).map((x) => ({ url: s(x.u), title: s(x.t) })).filter((x) => x.url), competitors: splitList(t.competitors),
+    stage: s(t.stage), value: n(t.value), status: s(t.status), reason: view.sentence, writtenAt: s(t.written_at), wonAt: s(t.won_at), updatedAt: s(t.updated_at),
+    promptId: s(t.prompt_id), state: view.state, badge: view.badge, tone: view.tone, statePageUrl: view.pageUrl, viaLadder: view.viaLadder, hidden: view.hidden,
+    ...(admin ? { adminReason: s(t.reason) } : {}),
+  };
+}
+
+/** Client report 2026-11-16 (issue 1): the AI question (target id and text) each of the website's page runs started in the app carried, by request id. */
+export async function aiRunQuestions(orgId: string, siteId: string): Promise<Map<string, { targetId: string; question: string }>> {
+  const rows = await db
+    .select({ requestId: schema.runs.requestId, targetId: sql<string | null>`${schema.runs.input}->'aiTarget'->>'targetId'`, question: sql<string | null>`${schema.runs.input}->'aiTarget'->>'question'` })
+    .from(schema.runs)
+    .where(and(eq(schema.runs.orgId, orgId), eq(schema.runs.siteId, siteId), eq(schema.runs.mode, 'keyword'), sql`${schema.runs.input} ? 'aiTarget'`))
+    .orderBy(desc(schema.runs.createdAt))
+    .limit(300);
+  const out = new Map<string, { targetId: string; question: string }>();
+  for (const r of rows) if (r.requestId && r.question && !out.has(r.requestId)) out.set(r.requestId, { targetId: s(r.targetId), question: s(r.question) });
+  return out;
+}
+
+/** The website's written pages for the AI page's resolver (pure): one per content-log row with a page or a run behind it, with the AI question
+ *  the app's run carried. A failed or held row wrote no page and is left out. */
+export function aiWrittenPages(logs: readonly ContentLogRow[], aiRuns: ReadonlyMap<string, { targetId: string; question: string }>): AiWrittenPage[] {
+  return logs
+    .filter((l) => s(l.keyword) && !['failed', 'held', ''].includes(s(l.status)))
+    .map((l) => {
+      const q = aiRuns.get(s(l.request_id));
+      return {
+        keyword: s(l.keyword), status: s(l.status), publishedUrl: s(l.published_url), startedAt: s(l.started_at), source: s(l.source),
+        ...(q ? { aiTargetId: q.targetId, aiQuestion: q.question } : {}),
+      };
+    })
+    .slice(0, 500);
+}
+
+function toGrowth(g: AiGrowthRow | undefined, pages: AiPageRow[], targets: AiTargetRow[], prospects: ProspectRow[], logs: ContentLogRow[], m: MonitorSettings | null, admin = false): AiGrowth | null {
   if (!g) return null;
   const sub = safeJson<P>(g.submitted_json, {}); const bing = o(sub.bing); const inx = o(sub.indexnow);
   const keyUrl = s(inx.key_url); const key = (keyUrl.match(/\/([a-f0-9]{32})\.txt$/) || [])[1] || '';
@@ -1846,11 +1909,7 @@ function toGrowth(g: AiGrowthRow | undefined, pages: AiPageRow[], targets: AiTar
       checks: arr(safeJson(s(p.checks_json), [])).filter((c) => n(c.weight) > 0).map((c) => ({ key: s(c.key), ok: c.ok === 'partial' ? ('partial' as const) : b(c.ok), label: s(c.label) })),
       issues: s(p.issues).split(' | ').filter(Boolean), wordsRaw: n(p.words_raw), title: s(p.title), updatedOn: s(p.updated_on), bingCrawledAt: s(p.bing_crawled_at), submittedAt: s(p.submitted_at), submittedVia: s(p.submitted_via), citedBy: splitList(p.cited_by),
     })),
-    targets: targets.sort((a, z) => n(z.value) - n(a.value)).map((t) => ({
-      targetId: s(t.target_id), question: s(t.question), keyword: s(t.keyword), kind: s(t.kind) === 'refresh' ? ('refresh' as const) : ('answer' as const), pageUrl: s(t.page_url), pageType: s(t.page_type),
-      fanout: s(t.fanout).split(' | ').filter(Boolean), sources: arr(safeJson(s(t.sources_json), [])).map((x) => ({ url: s(x.u), title: s(x.t) })).filter((x) => x.url), competitors: splitList(t.competitors),
-      stage: s(t.stage), value: n(t.value), status: s(t.status), reason: s(t.reason), writtenAt: s(t.written_at), wonAt: s(t.won_at), updatedAt: s(t.updated_at),
-    })),
+    targets: targets.sort((a, z) => n(z.value) - n(a.value)).map((t) => targetStat(t, logs, admin)),
     earned,
     entity: ent ? { checkedAt: s(ent.checked_at), found: b(ent.found), qid: s(ent.qid), byName: arr(ent.by_name).map((x) => ({ id: s(x.id), label: s(x.label), description: s(x.description) })) } : null,
     actions: arr(safeJson(g.actions_json, [])).map((a) => ({ priority: n(a.priority), type: s(a.type), action: s(a.action), why: s(a.why) })),
