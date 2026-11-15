@@ -19812,5 +19812,6 @@ await require('./scenarios_client_1112')({ H, run, mock, store, guard, reset, be
 await require('./scenarios_client_1116_grade')({ H, run, mock, store, guard, reset, begin });   // LG1-LG3 (client reports 2026-11-16, section 191): the live page grade says whose text is live and why each part lost points, our own measuring costs a live page nothing, the publish check reads the article's images
 await require('./scenarios_pslot')({ H, run, mock, store, guard, reset, begin });   // PS1-PS9 (P1 2026-11-12, prod review S1-01 / S1-05 + its review B1 S1-S3 N1 N2): page runs take a writing slot; a page run that never wrote leaves no started page
 await require('./scenarios_client_1116')({ H, run, mock, store, guard, reset, begin });   // CQ1-CQ8 (client reports 2026-11-16, devaicon.com / techand.ai, INV1): an AI question's page is written for its own search, checked like any page for one search one page (another market is advice), never recorded at a moved service page, and its target's state and plain reason follow the content log
+await require('./scenarios_client_1116_integ')({ H, run, mock, store, guard, reset, begin });   // CQ9 (client reports 2026-11-16, integration): a target the app marked writing (numeric request id) settles from the content log in AI Target Settle and AI Growth, and is queued again when its run never wrote a page
 H.report();
 })();

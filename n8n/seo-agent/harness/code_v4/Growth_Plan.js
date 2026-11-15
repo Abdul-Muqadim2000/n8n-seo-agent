@@ -2195,7 +2195,9 @@ for (const s of sites) {
     const stalled = (() => { if (old.status !== 'writing' || draftFailed) return null;
       const l = logByReq.get(String(old.request_id || ''));
       if (l && ['written', 'published'].includes(String(l.status))) return null;
-      const since = old.written_at || old.updated_at || '';
+      // integration 2026-11-16: a row the app marked `writing` (an app-started AI page, request id = the n8n execution id) may carry no
+      // written_at; its start day is in reason_args.date. updated_at is no clock for it: this node rewrites it on every row every week.
+      const since = old.written_at || (() => { try { return String((JSON.parse(old.reason_args || '{}') || {}).date || ''); } catch (e) { return ''; } })() || old.updated_at || '';
       if (days(since) < CONFIG.stale_writing_days) return null;
       return { since: String(since).slice(0, 10), log: l ? 'the page run is still "' + l.status + '"' : 'no page run on record' }; })();
     const status0 = wasWon ? 'queued' : stalled ? 'queued' : ['writing', 'written'].includes(old.status) ? old.status : (kind === 'refresh' && ((!stale && !weak) || justPublished)) ? 'skipped' : (old.status === 'skipped' && old.reason === 'kept by you') ? 'skipped' : 'queued';
