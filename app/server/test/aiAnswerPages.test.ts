@@ -96,7 +96,8 @@ describe('a page run started in the app for an AI question (F6)', () => {
       { columnName: 'target_id', condition: 'eq', value: 'ait_1' },
       { columnName: 'status', condition: 'neq', value: 'won' },
     ]);
-    expect(u.core).toEqual({ status: 'writing', request_id: '12467', updated_at: '2026-11-16T10:00:00.000Z', reason: 'A page for this question is being written (started 2026-11-16).' });
+    // integration 2026-11-16: written_at too (the engine's AI Growth times a stalled run from it; updated_at it rewrites every week)
+    expect(u.core).toEqual({ status: 'writing', request_id: '12467', written_at: '2026-11-16T10:00:00.000Z', updated_at: '2026-11-16T10:00:00.000Z', reason: 'A page for this question is being written (started 2026-11-16).' });
     expect(u.extra).toEqual({ reason_code: 'writing', reason_args: '{"date":"2026-11-16"}' });
     expect(clean(String(u.core.reason))).toEqual([]);
     expect(aiTargetWritingUpdate({ aiTarget: { ...t, targetId: '' }, existingPageUrl: '' }, '12467', 'devaicon.com', '2026-11-16T10:00:00.000Z')).toBeNull();

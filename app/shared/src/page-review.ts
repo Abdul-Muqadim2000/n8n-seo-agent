@@ -517,7 +517,30 @@ export interface PageRunContext {
 // `sections_removed` (wave 0.6, W06-C, 2026-10-30): what the page run took out of the page (sections deleted as a topic the verdict said to
 // leave out, H2s lost in editing, their share of the words and why). The final version keeps the grade's cap on coverage and fit while those
 // sections are still missing, so a page that lost its core never reads "Ready" after Accept all; a report from before it is "not checked"
-const PRC_GRADING = ['length_band', 'coverage_target', 'terms', 'facts', 'sources_cited', 'style_guide', 'site_urls', 'serp_shapes', 'regulatory_facts', 'regulatory_topics', 'second_read', 'sections_removed'] as const;
+// `ai_target` (client reports 2026-11-16, issue 1, INV1 F2 / F10): the AI question the page was written for (the engine sends it as
+// `page_run.ai_target` with every content callback). The final version and the live grade of an AI answer page are judged as that page (its
+// question's own search, an AI page's fit, the duplicate rule on the question); without it they were judged as a plain page on the topic.
+const PRC_GRADING = ['length_band', 'coverage_target', 'terms', 'facts', 'sources_cited', 'style_guide', 'site_urls', 'serp_shapes', 'regulatory_facts', 'regulatory_topics', 'second_read', 'sections_removed', 'ai_target'] as const;
+
+/**
+ * The AI target of a page the app started (the run's stored form input `aiTarget`, camelCase) in the shape the engine reads on a finalize body
+ * (`page_run.ai_target`, as payload.ts sends it with the page run). For pages delivered before the engine returned `page_run.ai_target`
+ * (client reports 2026-11-16): their final version and live grade are still judged as an AI page. Null when the input carries no question.
+ */
+export function aiTargetForEngine(input: unknown): P | null {
+  const t = obj(obj(input).aiTarget);
+  const question = s(t.question).replace(/\s+/g, ' ').trim().slice(0, 300);
+  if (question.length < 8) return null;
+  const list = (v: unknown) => arr(v).map((x) => s(x).trim()).filter(Boolean);
+  return {
+    question,
+    kind: s(t.kind) === 'refresh' ? 'refresh' : 'answer',
+    target_id: s(t.targetId).slice(0, 120),
+    fanout: list(t.fanout).slice(0, 8),
+    sources: arr(t.sources).map(obj).map((x) => ({ u: s(x.url), t: s(x.title) })).filter((x) => /^https?:\/\//i.test(x.u)).slice(0, 6),
+    competitors: list(t.competitors).slice(0, 8),
+  };
+}
 
 /** W06-C: the page run's removals as the content callback sends them (`page_run.sections_removed`). */
 export interface SectionsRemoved {
@@ -647,6 +670,12 @@ export interface FinalizeBody {
   duplicate_decision?: DuplicateDecision;
 }
 
+/** The page run's context with the AI target the run carried, when the stored report has none (an older engine's report). */
+const withAiTarget = (pr: PageRunContext, aiTarget: P | null | undefined): PageRunContext => {
+  const has = pr.ai_target && typeof pr.ai_target === 'object' && s(obj(pr.ai_target).question).trim();
+  return has || !aiTarget || !s(aiTarget.question).trim() ? pr : { ...pr, ai_target: aiTarget };
+};
+
 export function finalizeBody(o: {
   requestId: string;
   domain: string;
@@ -662,6 +691,8 @@ export function finalizeBody(o: {
   original?: P;
   /** W0-B (D2): the client's decision on a duplicate-page blocker */
   duplicateDecision?: DuplicateDecision | null;
+  /** client reports 2026-11-16: the AI target of the page's run (aiTargetForEngine), used when the original report's page run has none */
+  aiTarget?: P | null;
 }): FinalizeBody {
   const p = o.payload ?? {};
   const meta = obj(p.meta);
@@ -692,7 +723,7 @@ export function finalizeBody(o: {
     business_facts_kv: f.business_facts_kv,
     stored_fact_keys: f.stored_fact_keys,
     content_request_id: s(obj(o.original ?? p).request_id) || s(p.request_id),
-    page_run: pageRunOf(o.original ?? p),
+    page_run: withAiTarget(pageRunOf(o.original ?? p), o.aiTarget),
     ...(o.duplicateDecision ? { duplicate_decision: o.duplicateDecision } : {}),
   };
 }

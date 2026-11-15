@@ -54,8 +54,28 @@ export const AI_TARGET_REASON_CODES = [
   'job',
   'navigational',
   'needs_fix',
+  // the engine's further codes (client reports 2026-11-16 integration; `_ai_question.js` AQ.CODES)
+  'unjudged',
+  'suggested',
+  'lost_again',
+  'not_asked',
+  'off_panel',
+  'too_few',
 ] as const;
 export type AiTargetReasonCode = (typeof AI_TARGET_REASON_CODES)[number];
+
+/**
+ * Every code the engine's kit writes (n8n/seo-agent/v5/code/_ai_question.js `AQ.CODES`). The shared test evaluates the kit and fails when a code
+ * is added there and not here, and every one of them must read as a plain sentence (aiTargetView).
+ */
+export const AI_TARGET_ENGINE_CODES = [
+  'new_page', 'refresh_page', 'writing', 'written', 'live', 'won', 'lower_value', 'fresh_page', 'no_longer_lost', 'off_topic', 'other_market',
+  'same_search_page', 'run_failed', 'ai_rank', 'not_for_site', 'unjudged', 'draft_failed', 'lost_again', 'ladder_page', 'not_asked', 'off_panel',
+  'kept_by_you', 'too_few', 'suggested',
+] as const;
+/** The engine's spelling -> the app's code where the two differ (not_for_site is read with its `reason_args.reason`). */
+const ENGINE_ALIAS: Record<string, AiTargetReasonCode> = { ladder_page: 'ladder', kept_by_you: 'kept', draft_failed: 'needs_fix' };
+const NOT_FOR_SITE_BY_REASON: Record<string, AiTargetReasonCode> = { brand: 'other_brand', other_brand: 'other_brand', own_brand: 'own_brand', government: 'government', portal: 'government', job: 'job', navigational: 'navigational' };
 
 /** A stored target as the app reads it (seo_ai_targets, camelCase). Every field may be empty on an older row. */
 export interface AiTargetLike {
@@ -147,8 +167,11 @@ const argsOf = (v: unknown): Record<string, unknown> => {
 };
 
 /** The code of a stored target: the engine's `reason_code` when it is one we know, else read from the older sentence ('' = none). */
-export function aiTargetCode(t: Pick<AiTargetLike, 'reason' | 'reasonCode' | 'origin' | 'kind' | 'status'>): AiTargetReasonCode | '' {
+export function aiTargetCode(t: Pick<AiTargetLike, 'reason' | 'reasonCode' | 'origin' | 'kind' | 'status'> & { reasonArgs?: unknown }): AiTargetReasonCode | '' {
   const c = low(t.reasonCode);
+  if (ENGINE_ALIAS[c]) return ENGINE_ALIAS[c];
+  // the engine writes one code for every class of question the website does not target, the class in its args (brand when none)
+  if (c === 'not_for_site') return NOT_FOR_SITE_BY_REASON[low(argsOf(t.reasonArgs).reason)] ?? 'other_brand';
   if ((AI_TARGET_REASON_CODES as readonly string[]).includes(c)) return c as AiTargetReasonCode;
   const r = low(t.reason);
   if (/kept by you/.test(r)) return 'kept';
@@ -169,6 +192,17 @@ export function aiTargetCode(t: Pick<AiTargetLike, 'reason' | 'reasonCode' | 'or
   if (/^refresh /.test(r) || (S(t.kind) === 'refresh' && /refresh/.test(r))) return 'refresh_page';
   if (/no page answers it yet/.test(r)) return 'new_page';
   return '';
+}
+
+/** A question set aside from writing for now by one of these codes: its state whatever the stored status (except a page being written). */
+function settledByCode(code: AiTargetReasonCode | '', path: string, hasPage: boolean): AiTargetView | null {
+  if (code === 'off_panel') return V('later', 'Off your questions', 'neutral', 'The question was taken off your AI questions, so no page is planned for it.', { hidden: true, code });
+  if (code === 'not_asked') return V('later', 'Waiting', 'neutral', 'This question was not asked in the last 8 days, so there is nothing to judge yet. It is checked again next week.', { code });
+  if (code === 'suggested')
+    return V('later', 'Suggested', 'neutral', hasPage ? `Your page ${path} answers it. It is listed as a suggestion and no page is written for it on its own.` : 'It is listed as a suggestion: no page is written for it on its own. You can write it from here.', { code });
+  if (code === 'unjudged')
+    return V('later', 'Suggested', 'neutral', 'We know too little about what you sell to tell whether this question is part of it, so it is only suggested and never written on its own. If you do sell it, add it to your services.', { code });
+  return null;
 }
 
 /** The plain sentence for a question this website does not target (set aside), by class. */
@@ -226,6 +260,9 @@ export function aiTargetView(t: AiTargetLike, logs: readonly AiLogLike[] = []): 
   const path = aiPagePath(pageUrl);
   const ladderKw = S(args.keyword);
   if (status === 'won') return V('won', 'Won', 'good', 'AI now names you for this question.', { date: S(t.wonAt), code });
+  // the codes that say the question is not to be written now, whatever the page record (client reports 2026-11-16 integration)
+  const settled = settledByCode(code, path, !!pageUrl);
+  if (settled && status !== 'writing' && status !== 'written') return settled;
 
   // a question this website does not target: never derived from a page (the engine keeps a question whose page exists, F-37)
   if (status === 'set_aside') {
@@ -260,6 +297,7 @@ export function aiTargetView(t: AiTargetLike, logs: readonly AiLogLike[] = []): 
     return V('queued', 'Queued', 'accent', 'The page written then covers another search, so a page for this question is still planned.', { code });
 
   if (status === 'writing') {
+    if (code === 'needs_fix') return V('needs_fix', 'Needs a fix', 'warning', 'The page written for it needs a fix before it can be published. Open it on the Content page.', { code });
     if (code === 'run_failed') return V('retry', 'Will be tried again', 'neutral', 'The page could not be finished. It will be written again.', { code });
     const day = aiDay(S(t.updatedAt) || S(t.writtenAt));
     return V('writing', 'Being written', 'accent', `The page is being written${day ? ` (started ${day})` : ''}.`, { code });
@@ -276,6 +314,8 @@ export function aiTargetView(t: AiTargetLike, logs: readonly AiLogLike[] = []): 
 
   // queued (and any status we do not know: the client is told what we plan, never the raw value)
   if (code === 'lower_value') return V('later', 'Later', 'neutral', 'Other questions are worth more this week. It is checked again next week.', { code });
+  if (code === 'lost_again') return V('queued', 'Queued', 'accent', 'AI named you for this question and then stopped, so a page for it is planned again.', { code });
+  if (code === 'too_few') return V('later', 'Not won yet', 'neutral', 'Too few AI answers name you yet to call this question won. It is checked again next week.', { code });
   if (code === 'run_failed') return V('retry', 'Will be tried again', 'neutral', 'The page could not be finished. It will be written again.', { code });
   if (code === 'needs_fix') return V('needs_fix', 'Needs a fix', 'warning', 'The page written for it needs a fix before it can be published. Open it on the Content page.', { code });
   if (code === 'ladder') return V('queued', 'Via the ladder', 'accent', `Your keyword ladder page${ladderKw ? ` for "${ladderKw}"` : ''} is written to answer it.`, { viaLadder: true, code });

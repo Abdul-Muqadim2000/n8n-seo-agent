@@ -16,6 +16,7 @@ import {
   FACT_DECISION_LABEL,
   FINALIZE_STALE_MINUTES,
   finalizeBody,
+  aiTargetForEngine,
   finalizeNeeded,
   finalReportPayload,
   keyCost,
@@ -637,11 +638,30 @@ export async function startFinalize(a: OrgAccess, req: FastifyRequest | null, re
     // W0-B (PLAN Fix 2): the page run's blockers and research come from the ORIGINAL report, never the final version being improved
     original: obj(l.original.payload),
     duplicateDecision: decision && duplicatePagesOf(obj(l.original.payload)).length ? duplicateDecisionBody(decision) : null,
+    // client reports 2026-11-16 (issue 1): a page written for an AI question is judged as one; for a report delivered before the engine sent
+    // page_run.ai_target, from the run the app started
+    aiTarget: await runAiTargetOf(org.id, l.original),
   }) };
   const work = runFinalize({ orgId: org.id, siteId: l.site.id, rowId: row.id, runId: run.id, base, original: l.original, requestId, body, log: req?.log ?? null });
   if (opts.wait) await work;
   else void work.catch(() => undefined);
   return getReview(a, l.report.id);
+}
+
+/**
+ * The AI target of the run that wrote a delivered page (client reports 2026-11-16, issue 1), for its final version and live grade: null when
+ * the report's own page run already carries one (the engine's, which wins), when the page was not started in the app, or when its run had no
+ * AI target. A read that fails is null: the page is then judged as before.
+ */
+export async function runAiTargetOf(orgId: string, original: Pick<ReportRow, 'runId' | 'payload'>): Promise<Record<string, unknown> | null> {
+  const pr = obj(obj(original.payload).page_run);
+  if (str(obj(pr.ai_target).question).trim() || !original.runId) return null;
+  try {
+    const run = await db.query.runs.findFirst({ where: and(eq(schema.runs.orgId, orgId), eq(schema.runs.id, original.runId)), columns: { input: true } });
+    return run ? aiTargetForEngine(run.input) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** The engine call and what follows it: the final version's report, the run settled, the review linked; or the run failed (not charged). */

@@ -199,6 +199,8 @@ export function liveGradeBody(o: {
   businessFacts: string;
   facts: FactAnswers;
   duplicateDecision?: DuplicateDecision | null;
+  /** client reports 2026-11-16: the AI target of the page's run, when the delivered report's page run has none (aiTargetForEngine) */
+  aiTarget?: Record<string, unknown> | null;
   check: Pick<LiveGradeCheck, 'url' | 'h1' | 'title' | 'tables' | 'tableRows' | 'metaDescription'>;
 }): LiveGradeBody {
   const p = o.payload ?? {};
@@ -216,6 +218,7 @@ export function liveGradeBody(o: {
       facts: o.facts,
       original: o.original,
       duplicateDecision: o.duplicateDecision ?? null,
+      aiTarget: o.aiTarget ?? null,
     }),
     grade_only: true,
     grade_live: {

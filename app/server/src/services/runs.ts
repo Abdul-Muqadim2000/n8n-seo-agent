@@ -579,7 +579,9 @@ export function aiTargetWritingUpdate(
       { columnName: 'target_id', condition: 'eq', value: id },
       { columnName: 'status', condition: 'neq', value: 'won' },
     ],
-    core: { status: 'writing', request_id: requestId, updated_at: now, reason: `A page for this question is being written (started ${now.slice(0, 10)}).` },
+    // written_at = when the run started, as the cadence's own mark (AI Target Marks) stamps it: the engine's AI Growth reads it to put a run that
+    // never produced a page back in the queue after 14 days (it rewrites updated_at every week, so a row without written_at never left `writing`)
+    core: { status: 'writing', request_id: requestId, written_at: now, updated_at: now, reason: `A page for this question is being written (started ${now.slice(0, 10)}).` },
     extra: { reason_code: 'writing', reason_args: JSON.stringify({ date: now.slice(0, 10), ...(input.existingPageUrl ? { page_url: input.existingPageUrl } : {}) }) },
   };
 }
