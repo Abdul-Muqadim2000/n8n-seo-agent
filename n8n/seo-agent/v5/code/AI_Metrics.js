@@ -23,6 +23,7 @@ const entRuleOf = () => (typeof AIE === 'object' && AIE && AIE.RULE) || 'f53';
 const w2read = (n) => { try { return $(n).all().map(i => i.json).filter(Boolean); } catch (e) { return []; } };   // W2-E2: the loads and the Sentiment Reader, read defensively
 /*__AI_ENTITIES__*/
 /*__AI_QUESTION__*/
+/*__LADDER_RULES__*/
 /*__AI_PANEL__*/
 /*__AI_FOCUS__*/
 /*__DRAFTS__*/
@@ -669,7 +670,7 @@ return plans.map(p => {
   const kwKey = (k) => String(k || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   const myLogs = logAll.filter(l => (l.site_id === p.site_id || normD(l.domain) === p.domain) && l.keyword && !['failed', 'held'].includes(String(l.status || '')));
   const LOG_RANK = { started: 1, not_ready: 2, written: 3, published: 4 };
-  const pageTypeOfUrl = (u) => /\/(blog|blogs|news|insights?|articles?|guides?|resources?|learn|knowledge)\//i.test(String(u || '')) ? 'Guide' : 'Service Page';
+  const pageTypeOfUrl = (u) => LRU.isBlog(String(u || '')) ? 'Guide' : 'Service Page';   // review 2026-11-16 (L6): the one blog-address rule (the cadence and the app use it)
   for (const g of gaps) { const t = myTargets.get(tidOf(g.prompt_id)) || null;
     const logs0 = myLogs.filter(l => (t && t.request_id && String(l.request_id) === String(t.request_id)) || kwKey(l.keyword) === kwKey(g.keyword)).sort((a, b) => (LOG_RANK[b.status] || 0) - (LOG_RANK[a.status] || 0));
     g.target_status = t ? String(t.status || '') : ''; g.target_kind = t ? String(t.kind || '') : ''; g.page_url = t && String(t.kind) === 'refresh' ? String(t.page_url || '') : '';

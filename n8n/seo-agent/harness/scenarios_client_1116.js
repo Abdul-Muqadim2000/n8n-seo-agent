@@ -289,10 +289,11 @@ module.exports = async (ctx) => {
     check('clean(): the production reason loses its lever id, money, run id, table name and long dash', !FORBIDDEN.test(cl) && /Refresh the ranking page/.test(cl), cl);
     check('page types: "Comparison Page" is a Guide; a form type is kept', AQ.pageType('Comparison Page') === 'Guide' && AQ.pageType('Service Page') === 'Service Page' && AQ.pageType('') === 'Guide', '');
     check('the question\'s own search first, then the topic', AQ.keywordOf({ keyword: 'Best AI automation services Dubai', topic: 'ai automation services' }) === 'best ai automation services dubai' && AQ.keywordOf({ topic: 'engagement models' }) === 'engagement models', '');
-    const LRU = kitFrom('Cadence_Plan.js', 'LRU');
+    const LRU = new Function(fs.readFileSync(path.join(__dirname, '..', 'v5', 'code', '_fit_gate.js'), 'utf8') + '\n' + fs.readFileSync(path.join(__dirname, '..', 'v5', 'code', '_ladder_rules.js'), 'utf8') + '\nreturn LRU;')();   // with the fit gate's places, as in the nodes
     const fold = [['agentic ai development companies uae', 'ai app development companies', false, false], ['agentic ai development companies uae', 'agentic ai development in uae', false, true],
       ['best e invoicing software uae', 'e invoicing software in uae', true, true], ['best crm service provider uae', 'crm service provider', false, true], ['best ai automation services dubai', 'ai automation services pakistan', false, false],
       ['best ai automation companies pakistan', 'ai development companies', false, false]];
-    for (const [q, k, same, covers] of fold) check('LRU "' + q + '" vs "' + k + '": same ' + same + ', covers ' + covers, LRU.sameQuestion(q, k) === same && LRU.coversHead(q, k) === covers, J({ s: LRU.sameQuestion(q, k), c: LRU.coversHead(q, k), q: LRU.qWords(q), k: LRU.qWords(k) }));
+    // review 2026-11-16 (L2): coversHead reads the website's market (a head with no place covers a question only in that market)
+    for (const [q, k, same, covers] of fold) check('LRU "' + q + '" vs "' + k + '": same ' + same + ', covers ' + covers + ' (UAE website)', LRU.sameQuestion(q, k) === same && LRU.coversHead(q, k, 'United Arab Emirates') === covers, J({ s: LRU.sameQuestion(q, k), c: LRU.coversHead(q, k, 'United Arab Emirates'), q: LRU.qWords(q), k: LRU.qWords(k) }));
   });
 };

@@ -303,6 +303,8 @@ export interface CadenceInput {
   pagesPerWeek: number | null;
   /** seo_sites.status: a paused website's cycle writes nothing */
   siteStatus?: string;
+  /** seo_sites.country: the website's market (review 2026-11-16 L2: an AI question is a ladder main page's search only in this market) */
+  country?: string;
   ladders: LadderRow[];
   queries: QueryRow[];
   trends: TrendRow[];
@@ -887,17 +889,21 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
 
   // ---- the AI page (v4.12): the most valuable queued AI target the gate lets through, within the month's allowance, one a week ----
   const isAi = (l: { source?: string }) => l.source === 'ai_answer' || l.source === 'ai_refresh';
-  const aiUsed = slog.filter((l) => isAi(l) && S(l.started_at).slice(0, 7) === atIso.slice(0, 7)).length;
-  const aiThisWeek = slog.some((l) => isAi(l) && at - ms(l.started_at) < 6 * 864e5);
+  // review 2026-11-16 (L1, the engine's rule): only the cadence's own AI pages (request ids cad_...) use the month's allowance; an AI page the
+  // client starts in the app is a page on top, as before the 2026-11-16 fix logged it ai_answer / ai_refresh
+  const isAutoAi = (l: ContentLogRow) => isAi(l) && (!S(l.request_id) || /^cad_/.test(S(l.request_id))); // a row with no run id is an older cadence row
+  const aiUsed = slog.filter((l) => isAutoAi(l) && S(l.started_at).slice(0, 7) === atIso.slice(0, 7)).length;
+  const aiThisWeek = slog.some((l) => isAutoAi(l) && at - ms(l.started_at) < 6 * 864e5);
   const refreshedRecently = new Set(slog.filter((l) => l.existing_page_url && at - ms(l.started_at) < 60 * 864e5).map((l) => pageKey(l.existing_page_url)));
   // F-38 (AIR P3, the engine's Cadence_Plan.js): a page the agent PUBLISHED in the same 60 days is as fresh as one it refreshed, so no AI refresh of it yet
   for (const l of slog) if (l.published_url && l.published_at && at - ms(l.published_at) < 60 * 864e5) refreshedRecently.add(pageKey(l.published_url));
   // client reports 2026-11-16 (devaicon.com, INV1 F7; the engine's Cadence_Plan.js): a question is a ladder page's search only when it IS the same
   // search (LRU.sameQuestion: scaffolding out, plurals folded, places as their market), or the ladder's main page when the question carries every
   // word of its main keyword (LRU.coversHead). The old rule stripped every head word and folded on one shared word ("companies").
-  const isHeadL = (l: LadderRow) => num(l.rung) === 4 || norm(l.keyword) === norm(l.head_keyword);
+  // review 2026-11-16 (L2 / L3 / L5): the one rule LRU.questionPage, in the website's market (the engine's Cadence_Plan.js)
+  const qMarket = S(input.country);
   const sameSearch = (a: string, b: string) => LRU.sameQuestion(a, b);
-  const ladderFor = (t: AiTargetRow) => lrows.find((l) => LRU.sameQuestion(t.keyword, l.keyword)) ?? lrows.find((l) => isHeadL(l) && LRU.coversHead(t.keyword, l.keyword)) ?? null;
+  const ladderFor = (t: AiTargetRow) => lrows.find((l) => LRU.sameQuestion(t.keyword, l.keyword)) ?? lrows.find((l) => LRU.questionPage(t.keyword, l, qMarket)) ?? null;
   // INV1 F13: a refresh of a guide (/insights/, /blog/ ...) stays a Guide; "Comparison Page" is written as a Guide (the form has no such type)
   const refreshType = (u: string) => (LRU.isBlog(S(u)) ? 'Guide' : 'Service Page');
   const answerType = (t: AiTargetRow) => (S(t.page_type) === 'Comparison Page' ? 'Guide' : t.page_type || 'Guide');
@@ -1141,7 +1147,7 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   for (let i = 0; i < picks.length; i++) {
     const p = picks[i];
     if (p.source !== 'ladder' || p.aiTarget) continue;
-    const t = aiTargets.find((x) => x.kind !== 'refresh' && (sameSearch(x.keyword, p.keyword) || (p.ladder?.rung === 4 && LRU.coversHead(x.keyword, p.keyword))));
+    const t = aiTargets.find((x) => x.kind !== 'refresh' && LRU.questionPage(x.keyword, { keyword: p.keyword, rung: p.ladder?.rung ?? null, head_keyword: p.ladder?.head ?? '' }, qMarket));
     if (t) picks[i] = { ...p, aiTarget: aiTargetOf(t), targetId: t.target_id, why: `${p.why}. Written to answer "${t.question}" in AI answers` };
   }
   const aiCand = aiCand0 && !picks.some((x) => norm(x.keyword) === norm(aiCand0.keyword)) ? aiCand0 : null;
@@ -1422,6 +1428,8 @@ export interface CadenceSiteRow {
   site_id?: string;
   domain: string;
   status?: string;
+  /** the website's market (country name or ISO-2) */
+  country?: string;
   services_json?: string;
   declared_services?: string;
   competitors?: string;
@@ -1521,6 +1529,7 @@ export function cadenceInputFromTables(t: CadenceTables, o: { siteId?: string; d
     domain,
     siteId,
     siteStatus: S(site.status) || 'active',
+    country: S(site.country),
     pagesPerWeek: pages,
     ladders: (t.ladders ?? []).filter((l) => normD(l.domain) === domain),
     queries: t.query_history ?? [],

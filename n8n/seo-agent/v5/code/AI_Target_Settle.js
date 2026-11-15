@@ -25,6 +25,7 @@ const now = new Date().toISOString();
 const itemsOf = (get) => { try { return get().all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error); } catch (e) { return []; } };
 const writing = itemsOf(() => $('Load AI Targets Writing (Cadence)')).filter(t => t.target_id && String(t.status || '') === 'writing');
 const logs = itemsOf(() => $('Load Content Log'));
+const siteRows = itemsOf(() => $('Load Sites'));   // L2: each website's market
 // the strongest evidence on record per run: published beats written beats started (a run can leave more than one row over time)
 // R111 (2026-10-16): `not_ready` is a draft whose last quality round failed — evidence that the run ended, never that a page exists
 const RANK = { started: 1, not_ready: 1.5, written: 2, published: 3 };
@@ -41,9 +42,17 @@ for (const t of writing) {
   const st = l ? String(l.status || '') : '';
   const tk = String(t.keyword || ''), lk = String((l && l.keyword) || '');
   // INV1 F7: a LADDER page of another search is not this question's page (the same search, or every word of that page's keyword in the question, is)
-  if (l && String(l.source || '') === 'ladder' && tk && lk && !LRU.sameQuestion(tk, lk) && !LRU.coversHead(tk, lk)) {
+  // review 2026-11-16 (L5 / L2): the one rule LRU.questionPage (the same search, or the ladder's MAIN page it covers), in the website's market
+  // a ladder page's log row carries its rung (4 = the ladder's main page), so no ladder row is read here
+  const mkt = String((siteRows.find(r => (t.site_id && r.site_id === t.site_id) || (t.domain && String(r.domain || '') === String(t.domain))) || {}).country || '');
+  if (l && String(l.source || '') === 'ladder' && tk && lk && !LRU.questionPage(tk, { keyword: lk, rung: l.rung }, mkt)) {
     out.push({ json: { target_id: t.target_id, status: 'queued', request_id: '', written_at: '', at: now, reason_code: 'new_page', reason_args: JSON.stringify({ keyword: lk }),
       reason: 'The page written last time was for another search ("' + lk + '"), so the question is queued for a page of its own.' } });
+    continue; }
+  if (st === 'held') {   // review 2026-11-16 (L4): held for the client's OK, nothing is being written: queued again, said in plain words
+    const hu = (String(l.qa_reasons || '').match(/https?:\/\/[^\s,;]+/) || [''])[0].replace(/[.)]+$/, '');
+    out.push({ json: { target_id: t.target_id, status: 'queued', request_id: '', written_at: '', at: now, reason_code: hu ? 'same_search_page' : 'new_page', reason_args: JSON.stringify(hu ? { page_url: hu, keyword: tk } : {}),
+      reason: 'The page run waits for your OK in the app' + (hu ? ': your page ' + hu + ' is already the page for this search' : '') + ', so nothing is being written for this question now.' } });
     continue; }
   if (st === 'failed') {   // INV1 F8: the run stopped (the app's failure watcher, a page reader that refused): queued again now, not after 14 days
     out.push({ json: { target_id: t.target_id, status: 'queued', request_id: '', written_at: '', at: now, reason_code: 'run_failed', reason_args: JSON.stringify({}), reason: AQ.reason('run_failed', {}) } });

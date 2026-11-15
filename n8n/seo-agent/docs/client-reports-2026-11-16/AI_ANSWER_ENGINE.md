@@ -96,3 +96,30 @@ Deploy note: run `sync_tables.py` (deploy_engine does) BEFORE the new AI Growth 
 - R4 old reasons: rows written before this release keep their raw `reason` until AI Growth rewrites them (weekly); the app should prefer
   `reason_code` and fall back on status. An optional one-off: blank `reason` on `writing` rows whose text contains "seo_content_log".
 - R5 devaicon services: ask the client for clean service names (F12); the engine now ignores the sentence fragments as topics.
+
+## 9. Independent engine review (2026-11-16) and the fixes
+
+The review (private, REVIEW_issue1_engine.md) ran on the integration branch. Every finding was checked against the code first, and then
+fixed. Each fix has a harness check that fails on the integration head 12bc7165 and passes now: `harness/scenarios_client_1116_review.js`
+CQR1-CQR5 (14 failures on 12bc7165, controls pass). The shared cadence case `app_ai_page_does_not_use_the_automatic_allowance` fails on
+12bc7165 in both the engine (KF2) and the app (`cadenceLevels.test.ts`, now 68 cases).
+
+| Finding | Verdict | Fix |
+|---|---|---|
+| M1: the wider AI Growth topics also lifted "other brand" refusals | Confirmed. `fitDeclared` puts the topics into the vendor's declared text, and the job rule reads the topics too. | `Growth_Plan.js` `gateG`: every question is judged on the BASE context first. Only a topic refusal ("off topic", "too broad") is judged again with the client's own topics. The vendor rule then runs once more against the base declared text: the gate checks vendors after the topic test, so the base run never reached that check. Brand, government, job, portal and market refusals are unchanged. The topic evidence still uses the wide list. CQR1: "best odoo partner uae" and "sap business one partners uae" stay `other brand` beside published comparison pages. CQ6 still passes devaicon's engagement-model questions. |
+| M2: a ladder rung that answers a question was held against its own ladder's main page | Confirmed. | `Parse_Verdict.js`: the ladder-owner block and the AI wording (`aiOwner`) apply only to a question written as a page of its own (`aiPage && !ladderPage`). An entry of the same ladder is never an owner. CQR2 covers the Pipeline "Write now" of rung 2 with the AI target, and the control case is still held. |
+| M3: shortened titles were never detected | Confirmed. The live H1 matched at 0.57 against the 0.8 bar. | `Detect_Published.js`: the written-title match stays first (score 50+). As a fallback, the old keyword rule or "the live title / H1 is held whole in the written one" is accepted at the same 80% strength, scored lower (40+). The addresses a fallback may claim are the same as before: never a known page, never a moved one. Covered by CQR3; CQ5 (a page that only carries the keyword loses to the written-title page) still passes. |
+| L1: app-started AI pages used up the cadence's AI allowance | Confirmed; the rule is restored. | Before the 2026-11-16 fix these rows were `app`, so they never counted. The cadence calls a client-started page one "on top", so the allowance and "one AI page a week" count only the cadence's own rows (`cad_...` run id, or no run id: older cadence rows). The same rule is in `Cadence_Plan.js` and `cadence.ts`. |
+| L2: `coversHead` ignored the market | Confirmed. | `LRU.coversHead(q, head, market)`: the question's places must be the head's own, or the website's market when the head names none. With no market given, a question that names a place is not covered. `cadence.ts` gets `country` from `seo_sites` (`CadenceInput.country`). Parse Verdict reads places through DUP's copy of the gazetteer (it has no fit gate). |
+| L3: a place tag counted as a topic word | Confirmed. | A head needs two topic words besides place tags, so "crm dubai" covers nothing. |
+| L4: a held AI run left its target "writing" | Confirmed. | `AI_Target_Settle.js` (both cadence branches) and `Growth_Plan.js` `settleOf`: a `held` log row puts the question back to `queued` with no run id. The code is `same_search_page`, with the page the hold named; without one it is `new_page` or `refresh_page`. The reason is plain: "The page run waits for your OK in the app ...". No new code, so the app's code list is unchanged. |
+| L5: two "ladder page of another search" rules | Confirmed. | One rule in the LRU kit, `LRU.questionPage(q, row, market)`: the same search, or a ladder MAIN page (`isHeadRow`: rung 4, part head, or the main keyword) that the question covers. It is used by Cadence Plan, cadence.ts, AI Growth (page match, ladder hand-off, settle), AI Target Settle (from the log row's rung and the site's market, read from `Load Sites`) and Parse Verdict. |
+| L6: two blog-address rules | Confirmed. | AI Metrics now types a refresh with `LRU.isBlog`, the rule the cadence and the app use. |
+| L7: the moved-page check compared only the last segment | Confirmed. | `Match_Slugs_Detect.js` `movedKey` compares the whole path, leaving out section folders that only file a page ("services", "solutions", "pages" ...) and a leading English locale. /services/x is /x moved; /blog/x and /ar/x are other pages. A candidate found later carries no "moved" note. |
+
+Build section 192 asserts the M1 / M2 / L1 / L4 / L5 wiring on the generated workflows.
+
+Checks after the fixes:
+- Build exit 0.
+- Harness **20016 passed, 0 failed**.
+- App typecheck clean; `@seo/shared` 1364 passed; `@seo/server` 2183 passed, 46 skipped. These ran with the whole repository mounted.

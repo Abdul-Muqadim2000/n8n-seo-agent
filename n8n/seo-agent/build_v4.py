@@ -14644,7 +14644,7 @@ def _cr16_checks():
     main, _ = _nodes('SEO_Agent_v4.json')
     for n in ('Parse Verdict', 'Originality Check'):
         assert "a page written for an AI answer'" not in js(main, n) and 'aiOC ? [] : DT.targets' not in js(main, n), 'INV1 F2: %s still exempts AI pages from the duplicate rule' % n
-    assert "kind: 'ai_refresh'" in js(main, 'Parse Verdict') and 'LRU.coversHead(prev.keyword' in js(main, 'Parse Verdict'), 'INV1 F2: Parse Verdict offers no "improve that page for the question"'
+    assert "kind: 'ai_refresh'" in js(main, 'Parse Verdict') and 'LRU.questionPage(prev.keyword' in js(main, 'Parse Verdict') and 'aiPage && !ladderPage' in js(main, 'Parse Verdict'), 'INV1 F2 / review M2: Parse Verdict offers no "improve that page for the question", or holds a ladder page against its own ladder'
     assert "/^ai_/.test(source0)" in js(main, 'Content Log Row') and 'planned_slug:' in js(main, 'Content Log Row'), 'INV1 F4 / F6: Content Log Row lost the AI source or the planned page'
     assert 'ai_target: pb.ai_target' in js(main, 'Build Webhook Response'), 'INV1 F2 / F10: page_run no longer carries the AI target to the final version'
     aiv, _ = _nodes('SEO_Agent_AI_Visibility.json')
@@ -14653,7 +14653,10 @@ def _cr16_checks():
     for nd, n in [(aiv, 'AI Metrics'), (gro, 'Growth Plan'), (gro, 'AI Rank Plan'), (cad, 'AI Target Marks'), (cad, 'AI Target Settle'), (cad, 'AI Target Settle (Idle)')]:
         c = js(nd, n)
         assert c.count('const AQ = (() => {') == 1 and '/*__AI_QUESTION__*/' not in c, 'INV1 F11: the AQ kit is not inlined once in %s' % n
-    assert 'LRU.sameQuestion' in js(cad, 'Cadence Plan') and 'headWords' not in js(cad, 'Cadence Plan'), 'INV1 F7: Cadence Plan folds AI questions with the old head-word rule'
+    assert 'LRU.questionPage(' in js(cad, 'Cadence Plan') and 'headWords' not in js(cad, 'Cadence Plan') and 'isAutoAi' in js(cad, 'Cadence Plan'), 'INV1 F7 / review L1 L5: Cadence Plan folds AI questions with another rule, or counts app-started AI pages against the automatic allowance'
+    assert 'const gateG = ' in js(gro, 'Growth Plan') and 'fitGate(keyword, targetCtx)' not in js(gro, 'Growth Plan'), 'review M1: AI Growth judges its targets with the widened topics beyond the topic test'
+    for _n192 in ('AI Target Settle', 'AI Target Settle (Idle)'):
+        assert "st === 'held'" in js(cad, _n192) and 'LRU.questionPage(' in js(cad, _n192), 'review L4 / L5: %s does not settle a held run or uses another ladder-page rule' % _n192
     assert "'Load Pages (Growth)'" in js(gro, 'Growth Plan') and 'Load Pages (Growth)' in gro, 'INV1 F5: AI Growth does not read the page inventory'
     idle = [t['node'] for o in ((cconn.get('Any Pages?') or {}).get('main') or [[], []])[1:2] for t in o]
     assert 'Settle Idle?' in idle, 'INV1 F8: the cadence does not settle AI targets when it writes nothing'

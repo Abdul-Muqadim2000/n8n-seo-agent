@@ -21,6 +21,9 @@ const writtenMatch = (written, pg) => { let best = 0;
   for (const w of written) { const W = overlapTokens(titleOwn(w)); if (W.length < 2) continue;
     for (const live of [titleOwn(pg.title), pg.h1]) { const L = overlapTokens(live); if (!L.length) continue; best = Math.max(best, Math.min(shareOf(W, L), shareOf(L, W))); } }
   return best; };
+const liveInWritten = (written, pg) => { const W = written.flatMap(w => overlapTokens(titleOwn(w))); let best = 0;
+  for (const live of [titleOwn(pg.title), pg.h1]) { const L = overlapTokens(live); if (L.length < 3) continue; best = Math.max(best, shareOf(L, W)); }
+  return best; };
 const pages = new Map();
 fetchReq.forEach((q, i) => { const r = fetchRes[i] || {}; const st = Number(r.statusCode) || (r.error ? 0 : (fetchRes[i] ? 200 : 0)); const b = st === 200 ? bodyOf(r).slice(0, CONFIG.max_html_chars) : '';
   pages.set(q.url, { ok: st === 200 && !r.error && !!b, status: st, title: pick1(b, /<title[^>]*>([\s\S]*?)<\/title>/i), h1: pick1(b, /<h1[^>]*>([\s\S]*?)<\/h1>/i) }); });
@@ -35,8 +38,15 @@ const out = state.map(st => {
       // client reports 2026-11-16 (INV1 F4): a row that kept the page as it was written is matched on THAT title / H1, both ways (the live
       // title holds 80% of the written one's words and the written one 80% of the live title's, the brand after "|" left out): a broad keyword
       // is carried whole by many titles of the site ("AI Automation Services in Pakistan | ISO 27001" holds all of "ai automation services")
-      const best = (ch.written || []).length ? writtenMatch(ch.written, pg) : Math.max(shareOf(ch.tokens, overlapTokens(pg.title)), shareOf(ch.tokens, overlapTokens(pg.h1)));
-      if (best >= CONFIG.title_share) pairs.push({ key: ch.key, url: o.url, ukey: o.ukey, score: 50 + 20 * best + 10 * (Number(o.slug_share) || 0), matched_by: 'title', ...((ch.written || []).length ? { title_basis: 'written' } : {}) });
+      const kwShare = Math.max(shareOf(ch.tokens, overlapTokens(pg.title)), shareOf(ch.tokens, overlapTokens(pg.h1)));
+      const wr = (ch.written || []).length ? writtenMatch(ch.written, pg) : 0;
+      if ((ch.written || []).length && wr >= CONFIG.title_share) { pairs.push({ key: ch.key, url: o.url, ukey: o.ukey, score: 50 + 20 * wr + 10 * (Number(o.slug_share) || 0), matched_by: 'title', title_basis: 'written' }); continue; }
+      // review 2026-11-16 (M3): a client who shortens the title and the H1 ("AI Automation Services in Dubai | Devaicon" for the written "Best AI
+      // Automation Services in Dubai: A 2026 Buyer's Guide") still published the page. The keyword rule of before, or the live title / H1 held
+      // whole in the written one, at the same strength (80%), ranks below a written-title match. The addresses it may claim are the same:
+      // never a page the site already has, never one of those moved (Match Slugs leaves them out of the options).
+      const fb = Math.max(kwShare, (ch.written || []).length ? liveInWritten(ch.written, pg) : 0);
+      if (fb >= CONFIG.title_share) pairs.push({ key: ch.key, url: o.url, ukey: o.ukey, score: ((ch.written || []).length ? 40 : 50) + 20 * fb + 10 * (Number(o.slug_share) || 0), matched_by: 'title', ...((ch.written || []).length ? { title_basis: 'fallback' } : {}) });
     }
   }
   pairs.sort((a, b) => b.score - a.score);

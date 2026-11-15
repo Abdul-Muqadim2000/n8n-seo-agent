@@ -239,10 +239,12 @@ const HOLD = (() => {
   // INV1 F2 / F3 (techand.ai): the page that owns a question's search can be a keyword ladder's live page whose title says it in other words
   // ("Dynamics 365 CRM in Dubai & UAE" is the ladder page for "crm service provider"): a ladder page of this site whose keyword IS the
   // question's search, or the ladder's main page when the question carries every word of its main keyword, and whose address is live
-  if (aiPage && !refresh && !EXP && MODEL && !dup.targets.length) {
+  // review 2026-11-16 (M2): a page of a keyword ladder (a rung that also answers a question, the Pipeline's "Write now" on a rung) is never held
+  // against its own ladder's pages: the ladder planned them together. Only a question written as a page of its own is checked here.
+  if (aiPage && !ladderPage && !refresh && !EXP && MODEL && !dup.targets.length) {
     const liveK = new Set(SM.pages(MODEL).filter(p => !(SM.isGone && SM.isGone(p)) && !(SM.isMoved && SM.isMoved(p))).map(p => LRU.urlKey(p.url)));
     const e = (((prev.own_coverage || {}).ladders) || []).find(x => x && x.target_url && liveK.has(LRU.urlKey(x.target_url)) && LRU.urlKey(x.target_url) !== LRU.urlKey(prev.ladder_target_url)
-      && (LRU.sameQuestion(prev.keyword, x.keyword) || (x.part === 'head' && LRU.coversHead(prev.keyword, x.keyword))));
+      && !(S(prev.ladder_id) && S(x.ladder_id) === S(prev.ladder_id)) && LRU.questionPage(prev.keyword, x, S(prev.country)));   // L5: the one rule, in the run's market (L2)
     if (e) dup = { ...dup, targets: [{ url: S(e.target_url), title: '', keyword_words_shared_pct: null, weighted_pct: null, via: 'ladder', ladder_keyword: S(e.keyword) }] };
   }
   const dupHit = !EXP && dup.targets.length > 0;   // a page the verdict already redirected the run to (existing_page) is improved, not duplicated
@@ -299,7 +301,7 @@ const HOLD = (() => {
   if (writes && valueHit) reasons.push('Our verdict scored "' + kw + '" ' + score + ' out of 100' + (score < CFG.clear ? ', clearly under the ' + CFG.threshold + ' we write without asking'
     : ', under the ' + CFG.threshold + ' we write without asking, and ' + (lowDemand ? 'the search has ' + demandText : 'your website already has a page for it'))
     + ((verdict.reasons || [])[0] ? ': ' + String(verdict.reasons[0]).replace(/\s+/g, ' ').slice(0, 260) : '.'));
-  const aiOwner = aiPage ? (existingHit ? EXP.url : dupHit ? dup.targets[0].url : '') : '';
+  const aiOwner = aiPage && !ladderPage ? (existingHit ? EXP.url : dupHit ? dup.targets[0].url : '') : '';   // M2: a ladder page keeps the ladder's own wording
   if (writes && aiOwner) reasons.push('Your page ' + aiOwner + ' is already the page for "' + kw + '". To win this AI answer, improve that page for the question'
     + ' (an answer in its first lines, the searches AI runs and the sources it cites) rather than writing a second page for the same search.');
   if (writes && dupHit && !aiOwner) reasons.push('Your website already has a page aimed at this search: ' + dup.targets.map(t => t.url).join(', ')
