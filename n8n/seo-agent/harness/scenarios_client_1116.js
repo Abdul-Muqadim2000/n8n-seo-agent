@@ -294,5 +294,3 @@ module.exports = async (ctx) => {
       ['best e invoicing software uae', 'e invoicing software in uae', true, true], ['best crm service provider uae', 'crm service provider', false, true], ['best ai automation services dubai', 'ai automation services pakistan', false, false],
       ['best ai automation companies pakistan', 'ai development companies', false, false]];
     for (const [q, k, same, covers] of fold) check('LRU "' + q + '" vs "' + k + '": same ' + same + ', covers ' + covers, LRU.sameQuestion(q, k) === same && LRU.coversHead(q, k) === covers, J({ s: LRU.sameQuestion(q, k), c: LRU.coversHead(q, k), q: LRU.qWords(q), k: LRU.qWords(k) }));
-  });
-};

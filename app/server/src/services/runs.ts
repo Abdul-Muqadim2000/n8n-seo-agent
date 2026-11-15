@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
 import {
+  deliveredImageNames,
   aiJoinedOf,
   isKiRunMode,
   ladderMarket,
@@ -109,7 +110,7 @@ export const etaFor = (input: RunInput): number => estimateRunMinutes(input.mode
  * 2026-10-27: the title and main heading of the page that was written, read from its report (the newest content report of this website
  * with the engine request id the person picked, else with the keyword typed), for "I published it". Null when no report carries them.
  */
-export async function draftMeta(orgId: string, siteId: string, requestId: string, keyword: string): Promise<{ title: string; h1: string } | null> {
+export async function draftMeta(orgId: string, siteId: string, requestId: string, keyword: string): Promise<{ title: string; h1: string; images: string[] } | null> {
   const R = schema.reports;
   const byId = /^[A-Za-z0-9:_.-]{1,120}$/.test(requestId || '')
     ? sql`(${R.requestId} = ${requestId} or ${R.payload}->>'request_id' = ${requestId})`
@@ -122,7 +123,9 @@ export async function draftMeta(orgId: string, siteId: string, requestId: string
   const meta = row?.payload && typeof row.payload.meta === 'object' && row.payload.meta ? (row.payload.meta as Record<string, unknown>) : {};
   const t = (v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, 300) : '');
   const title = t(meta.title), h1 = t(meta.h1);
-  return title || h1 ? { title, h1 } : null;
+  // client reports 2026-11-16: the file names of the images delivered with the page (the publish check says whether they are on it)
+  const images = deliveredImageNames((row?.payload ?? {}) as Record<string, unknown>);
+  return title || h1 || images.length ? { title, h1, images } : null;
 }
 
 export function runTitle(input: RunInput, site: SiteRow | null): string {
@@ -343,6 +346,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
     const dm = await draftMeta(org.id, site.id, input.contentRequestId, input.keyword).catch(() => null);
     if (dm?.title) body.draft_title = dm.title;
     if (dm?.h1) body.draft_h1 = dm.h1;
+    if (dm?.images.length) body.delivered_images = dm.images;
   }
   if (input.mode === 'keyword' && input.ladder && site) {
     // the ladder's links and, since P2-7, the word count its verdict set for this page (the engine clamps the brief to `ladder_words`)

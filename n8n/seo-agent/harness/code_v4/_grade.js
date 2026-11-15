@@ -384,7 +384,9 @@ const GR = (() => {
     const ownText = S(c.own_text).toLowerCase();
     const U = units(md).filter(u => u.kind !== 'heading' && !u.qa);
     const linkTier = (u) => { const h = hostOf(u); if (!h || own(h) || SOCIAL.test(h)) return null; return tier ? tier(u) : 'weak'; };
-    const linksOf = (t) => [...S(t).matchAll(/\[([^\[\]]*)\]\((https?:\/\/[^)\s]+)\)/g)].map(m => ({ url: m[2], tier: linkTier(m[2]) })).filter(x => x.tier);
+    // section 191: an image ("![alt](url)") is never a citation: a live page's hero loaded from another website read as a weak source; review L2:
+    // a linked image ("[![badge](img)](url)", a logo or a card) is no citation either: its link has no words
+    const linksOf = (t) => [...S(t).replace(/\[\s*!\[[^\]]*\]\([^)]*\)\s*\]\([^)]*\)/g, ' ').replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').matchAll(/\[([^\[\]]*)\]\((https?:\/\/[^)\s]+)\)/g)].map(m => ({ url: m[2], tier: linkTier(m[2]) })).filter(x => x.tier);
     const paraLinks = new Map(); for (const u of U) { const k = u.section + ':' + u.para; const ls = linksOf(u.text); if (ls.length) paraLinks.set(k, (paraLinks.get(k) || []).concat(ls)); }
     // H1: the client's own phone and address on file (own_text: Content QA adds the profile's and the site model's NAP) are theirs in any
     // spelling: the run of digits a figure sits in (spaces, dots, dashes and brackets between them) equals one on file, or the two share
@@ -594,17 +596,19 @@ const GR = (() => {
   };
   // the delivered status: a page with no blocker that fails a floor is "Needs work: <parts>", never "Ready to publish". It stays publishable
   // (nothing stops the client): the status and label change, the items say what to improve, and a not-ready page is left as it is.
-  const deliver = (del0, grade) => {
+  // section 191: o.live = the grade of the LIVE page (finalize `grade_only`): the client changes it on the website, there is no editor round
+  const deliver = (del0, grade, o) => {
+    const live = !!(o && o.live);
     const del = { ...(del0 || {}) }; const fl = (grade || {}).floors || null;
     if (!fl || fl.ok || del.status === 'not_ready') return del;
     const parts = fl.failing.map(x => x.label);
     return { ...del, status: 'needs_work', label: clean('Needs work: ' + parts.join(', ')),
       needs_work: fl.failing.map(x => ({ code: 'needs_work', dim: x.dim, text: clean(x.label.charAt(0).toUpperCase() + x.label.slice(1) + ' scored ' + x.points + ' of ' + x.max + ', under half its points'), action: x.fix })),
-      next_step: clean('Nothing stops you publishing this page, but ' + (parts.length === 1 ? 'one part is' : parts.length + ' parts are') + ' under half marks (' + parts.join(', ') + '). '
-        + fl.failing.map(x => x.fix.replace(/[.\s]+$/, '')).join('. ') + '. Change it in the editor and make the final version, or approve it as it is.') };
+      next_step: clean((live ? 'Your live page has ' : 'Nothing stops you publishing this page, but ') + (parts.length === 1 ? 'one part' + (live ? '' : ' is') : parts.length + ' parts' + (live ? '' : ' are')) + ' under half marks (' + parts.join(', ') + '). '
+        + fl.failing.map(x => x.fix.replace(/[.\s]+$/, '')).join('. ') + (live ? '. Change it on your website, then press Re-check.' : '. Change it in the editor and make the final version, or approve it as it is.')) };
   };
   const display = (n) => n == null || n === '' || !Number.isFinite(Number(n)) ? '' : Math.round(Number(n)) >= CFG.display_top ? CFG.display_top + '+' : String(Math.round(Number(n)));
   const basis = 'structure 20 (a statement made three or more times and one label for two lists cost points), topic coverage 15, readability 10, specificity 10, plain language 10, sources 15, fit with the search 20; length is advice only';
-  return { VERSION, MAX, DIMS, LABEL, SHARE, CFG, REVIEW_DIM, REVIEW_PTS, reviewCut, units, repetition, ideas, listLabels, sources, fitOf, fit, removedCap, local, cap, deliver, display, basis };
+  return { VERSION, MAX, DIMS, LABEL, SHARE, CFG, REVIEW_DIM, REVIEW_PTS, reviewCut, units, repetition, ideas, listLabels, sources, fitOf, fit, removedCap, local, cap, deliver, display, basis, FIX, clean };
 })();
 return $input.all().map(i => { const j = i.json || {}; const a = (j.args || []).map(x => x === '__SRC__' ? { tier: SRC.tier, figures: SRC.figures } : (x && typeof x === 'object' && x.__src__ ? { ...x, tier: SRC.tier, figures: SRC.figures, __src__: undefined } : x)); return { json: { r: GR[j.fn].apply(null, a) } }; });

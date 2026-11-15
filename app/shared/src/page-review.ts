@@ -928,7 +928,33 @@ function imagePlaceholder(url: string, alt: string): string {
   return `<span class="img-ph" role="img" aria-label="${esc(`${label}: ${alt || name}`)}"><span class="img-ph-label">${esc(label)}</span><span class="img-ph-name">${esc(name)}</span></span>`;
 }
 
-function inlineMd(t: string, preview = false): string {
+/**
+ * Client reports 2026-11-16 (devaicon.com): the final version's HTML dropped the width and height of our images (the first version had
+ * them), so a client pasting it failed "Images carry width and height" (layout shift). The page's own image list (`meta.images`: path,
+ * width, height, slot) gives every image its size by file name; the first image of the article is the hero, loaded at once with high
+ * priority, the others lazily. The in-app preview is unchanged.
+ */
+export interface ArticleImageSize {
+  width: number;
+  height: number;
+}
+export function articleImageSizes(images: unknown): Map<string, ArticleImageSize> {
+  const out = new Map<string, ArticleImageSize>();
+  for (const im of arr(images).map(obj)) {
+    const w = num(im.width);
+    const h = num(im.height);
+    const name = imageFileName(s(im.path) || s(im.filename));
+    if (name && w && h && w > 0 && h > 0 && !out.has(name)) out.set(name, { width: Math.round(w), height: Math.round(h) });
+  }
+  return out;
+}
+const imageFileName = (u: string): string => s(u).split(/[?#]/)[0]!.split('/').filter(Boolean).pop()?.toLowerCase() ?? '';
+interface ImageCtx {
+  sizes: Map<string, ArticleImageSize>;
+  seen: number;
+}
+
+function inlineMd(t: string, preview = false, img: ImageCtx | null = null): string {
   // links and images first (escaped pieces), then bold / italic / code on the escaped rest
   const parts: string[] = [];
   let rest = s(t);
@@ -940,7 +966,11 @@ function inlineMd(t: string, preview = false): string {
     const [, bang, text, url, title] = m;
     if (!safeUrl(url!)) parts.push(fmt(esc(text!)));
     else if (bang && preview && !previewableImage(url!)) parts.push(imagePlaceholder(url!, text!));
-    else if (bang) parts.push(`<img src="${esc(url!)}" alt="${esc(text!)}"${title ? ` title="${esc(title)}"` : ''} loading="lazy">`);
+    else if (bang && img && !preview) {
+      const size = img.sizes.get(imageFileName(url!));
+      const hero = img.seen++ === 0;
+      parts.push(`<img src="${esc(url!)}" alt="${esc(text!)}"${title ? ` title="${esc(title)}"` : ''}${size ? ` width="${size.width}" height="${size.height}"` : ''}${hero ? ' loading="eager" fetchpriority="high"' : ' loading="lazy" decoding="async"'}>`);
+    } else if (bang) parts.push(`<img src="${esc(url!)}" alt="${esc(text!)}"${title ? ` title="${esc(title)}"` : ''} loading="lazy">`);
     else parts.push(`<a href="${esc(url!)}"${/^https?:\/\//i.test(url!) ? ' rel="noopener noreferrer"' : ''}>${fmt(esc(text!))}</a>`);
     rest = rest.slice(m.index + m[0].length);
   }
@@ -960,9 +990,11 @@ const META_LINE = /^(Title|Meta Description|Meta Title|Slug|Primary Keyword|Seco
  * `preview`: for the in-app preview frame, images load only from https addresses; any other image is a labelled box (imagePlaceholder).
  * The final version's HTML keeps the page's own image paths.
  */
-export function renderMarkdown(md: string, opts: { skipMeta?: boolean; preview?: boolean } = {}): string {
+export function renderMarkdown(md: string, opts: { skipMeta?: boolean; preview?: boolean; images?: unknown } = {}): string {
   const preview = opts.preview === true;
-  const inline = (t: string) => inlineMd(t, preview);
+  // client reports 2026-11-16: the final version's images carry their size (opts.images = the page's meta.images) and the hero loads first
+  const img: ImageCtx | null = preview ? null : { sizes: articleImageSizes(opts.images), seen: 0 };
+  const inline = (t: string) => inlineMd(t, preview, img);
   const out: string[] = [];
   let list: 'ul' | 'ol' | null = null;
   let table = false;
@@ -1033,13 +1065,13 @@ export function renderMarkdown(md: string, opts: { skipMeta?: boolean; preview?:
 }
 
 /** The final version's HTML: the article and its JSON-LD blocks (a `</` inside JSON can never close the script). */
-export function renderArticleHtml(md: string, schemaBlocks: unknown[] = []): string {
+export function renderArticleHtml(md: string, schemaBlocks: unknown[] = [], images: unknown = []): string {
   const ld = arr(schemaBlocks)
     .map(obj)
     .map((b) => obj(b.json ?? b))
     .filter((b) => Object.keys(b).length)
     .map((b) => `<script type="application/ld+json">${JSON.stringify(b).replace(/</g, '\\u003c')}</script>`);
-  return `<article>\n${renderMarkdown(md)}${ld.length ? `\n${ld.join('\n')}` : ''}\n</article>`;
+  return `<article>\n${renderMarkdown(md, { images })}${ld.length ? `\n${ld.join('\n')}` : ''}\n</article>`;
 }
 
 export type BlockKind = 'meta' | 'heading' | 'paragraph' | 'list' | 'table' | 'quote' | 'image' | 'blank';
@@ -1363,7 +1395,7 @@ export function finalReportPayload(
     ...base,
     request_id: o.requestId,
     markdown: md,
-    html: renderArticleHtml(md, arr(meta.schema_blocks)),
+    html: renderArticleHtml(md, arr(meta.schema_blocks), arr(meta.images)),   // client reports 2026-11-16: images keep their width and height
     qa_delivery_status: status,
     qa_client_questions: questions,
     qa_grade: grade,

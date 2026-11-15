@@ -330,6 +330,6 @@ module.exports = async (ctx) => {
     }
     check('Content QA decides the editor round and "passed" on the copy check, never on the new grade', /copy_score >= 80 && lenOk/.test(M['Content QA']) && /!\(copy_score >= 90 && crit\.score/.test(M['Content QA']) && !/content_score >= 80 && lenOk/.test(M['Content QA']));
     check('Page Candidates and Finalize Verdict build the grade with GR.cap and the status with GR.deliver', /const grade = GR\.cap\(/.test(M['Page Candidates']) && /GR\.deliver\(del0, grade\)/.test(M['Page Candidates'])
-      && /const grade = GR\.cap\(/.test(FN['Finalize Verdict']) && /GR\.deliver\(del, grade\)/.test(FN['Finalize Verdict']));
+      && /const grade = GR\.cap\(/.test(FN['Finalize Verdict']) && /GR\.deliver\(del, grade[,)]/.test(FN['Finalize Verdict']));   // section 191: a live grade passes { live }
   });
 };

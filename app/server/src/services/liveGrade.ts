@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 import {
+  deliveredGradeOf,
   duplicatePagesOf,
   interpretLiveGrade,
   liveGradeBody,
@@ -229,6 +230,8 @@ async function gradeOne(orgId: string, site: SiteRow, t: LiveGradeTarget, deps: 
   const body = liveGradeRequest({ site, original, final, row, check: t.check, requestId: `app-live-${randomUUID()}` });
   const outcome = interpretLiveGrade(await deps.call(body, orgId));
   if (outcome.kind === 'skip') return outcome;
+  // client reports 2026-11-16: the version the live page is compared with (the newest one we delivered: its exact grade and parts)
+  if (outcome.kind === 'graded') outcome.grade.delivered = deliveredGradeOf(obj((final ?? original).payload));
   // live_graded_at = the time of the publish check this attempt covers (not the clock): a check that arrives while the engine grades is newer
   // and is graded next
   const covered = new Date(t.check.receivedAt);

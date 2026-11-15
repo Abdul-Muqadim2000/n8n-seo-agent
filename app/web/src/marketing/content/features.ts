@@ -409,7 +409,7 @@ export const features: Feature[] = [
       'Every figure looked up in the source the page cites, and a source without independent authority cited at most once; a market, cost or compliance figure that only a vendor or agency blog backs is rewritten without the number',
       'No padding: only the questions people ask about the same search are answered, and each point is explained once, in the section where it belongs',
       'A second read of every finished page by a reviewer that has not seen the earlier drafts: a wrong or unsupported fact, figure, claim or local rule it quotes keeps the page from being called ready until it is fixed',
-      'A live check of the published page: schema, images, links and metadata',
+      'A live check of the published page: schema, the images in your article, links and metadata, and a grade of the live page that says how much of the text we delivered is on it, which parts lost points against the version we delivered and what to change on your website',
       'One search, one page: a search a live page of yours already answers is written as a refresh of that page',
       'Check any page before you publish: paste a page (or send it from your build) and get the same quality verdict our own pages must pass (placeholders, invented prices, unsourced figures, coverage, readability, a direct answer first), with every reason named and what could not be checked. Free, and nothing is stored',
       'Refreshed pages re-check their facts: the cited sources are read again, and figures a source no longer states are flagged',
