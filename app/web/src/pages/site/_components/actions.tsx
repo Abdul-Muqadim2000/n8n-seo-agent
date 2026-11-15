@@ -87,15 +87,24 @@ export const RUN_LABEL: Partial<Record<ModeId, string>> = {
   checkin: 'Record the check-in',
 };
 
+/**
+ * What a page's own resolver makes of an action (client report 2026-11-16: an AI question's page goes through the shared resolver): its
+ * keyword, the run (null: no form), the button label, a link instead of a form, and a sentence when there is nothing to start.
+ * `undefined` keeps the action as the engine sent it.
+ */
+export type ResolvedAction = { keyword?: string; run: { mode: ModeId; prefill: Record<string, unknown> } | null; label?: string; href?: string; note?: string } | undefined;
+
 /** The engine's own to-do list, ordered by its priority. */
-export function EngineActionList({ actions, limit, showSource }: { actions: readonly EngineAction[]; limit?: number; showSource?: boolean }) {
+export function EngineActionList({ actions, limit, showSource, resolve }: { actions: readonly EngineAction[]; limit?: number; showSource?: boolean; resolve?: (a: EngineAction) => ResolvedAction }) {
   const { can, tool } = useSitePage();
   const rows = [...actions].sort((a, b) => a.priority - b.priority).slice(0, limit ?? actions.length);
   if (!rows.length) return null;
   return (
     <ol className="divide-y divide-line">
-      {rows.map((a, i) => {
-        const run = runFromApiBody(a.apiBody) ?? (a.type === 'publish' && a.keyword ? { mode: 'published' as ModeId, prefill: { keyword: a.keyword, ...(a.url ? { publishedUrl: a.url } : {}) } } : null);
+      {rows.map((a0, i) => {
+        const r = resolve?.(a0);
+        const a = r ? { ...a0, keyword: r.keyword ?? a0.keyword, why: [a0.why, r.note].filter(Boolean).join(' ') } : a0;
+        const run = r ? r.run : runFromApiBody(a.apiBody) ?? (a.type === 'publish' && a.keyword ? { mode: 'published' as ModeId, prefill: { keyword: a.keyword, ...(a.url ? { publishedUrl: a.url } : {}) } } : null);
         return (
           <InsightItem
             key={`${a.type}-${i}`}
@@ -135,9 +144,14 @@ export function EngineActionList({ actions, limit, showSource }: { actions: read
               ) : undefined
             }
             action={
-              run && can('member') ? (
+              r?.href ? (
+                <a href={r.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[13px] font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
+                  {r.label ?? 'Open'}
+                  <ExternalIcon className="size-3.5" aria-hidden />
+                </a>
+              ) : run && can('member') ? (
                 <ButtonLink to={tool(run.mode, run.prefill)} size="sm" variant={i === 0 ? 'primary' : 'secondary'} className="group/act">
-                  {RUN_LABEL[run.mode] ?? 'Start'}
+                  {r?.label || (RUN_LABEL[run.mode] ?? 'Start')}
                   <ArrowRight className="size-3.5 transition-transform duration-200 ease-brand group-hover/act:translate-x-0.5" aria-hidden />
                 </ButtonLink>
               ) : undefined

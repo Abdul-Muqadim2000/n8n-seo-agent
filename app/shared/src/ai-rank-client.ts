@@ -128,6 +128,17 @@ export function aiRankPlain(v: unknown): string {
     .trim();
 }
 
+/**
+ * Client report 2026-11-16 (issue 1, F11): an action's `why` for a customer. The engine's scoring line ("<lever label>: 5 cell(s), expected
+ * gain 0.0119 over $9.63 (client time at $25 an hour), typical 30 days") is the team's arithmetic, not a reason: the action's own label already
+ * says what it is, so the line is dropped whole (aiRankPlain only took the ids and money out of it). Any other sentence is kept, made plain.
+ */
+export function aiRankWhyPlain(v: unknown): string {
+  const t = S(v);
+  if (/\bcells?\b|cell\(s\)|expected gain|client time|\bprior\b|\bS[0-5]\s*(->|to)\s*S[0-5]\b/i.test(t)) return '';
+  return aiRankPlain(t.replace(/^AI ranking \(L\d{2}\):\s*/i, '').replace(/\bL\d{2}\b/g, ''));
+}
+
 export interface AiRankClientContext {
   question?: (promptId: string) => string;
   leverOf?: (actionId: string) => string;

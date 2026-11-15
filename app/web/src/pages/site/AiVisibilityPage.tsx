@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ArrowRight, BadgeCheck, CheckCircle2, OctagonAlert, Bot, LineChart as LineChartIcon, ExternalLink as ExternalIcon, FileText, Gauge, Globe, Grid3x3, Library, Lightbulb, ListChecks, MessageCircleQuestion, MessagesSquare, ScanSearch, ShieldAlert, ShieldCheck, Sparkles, Trophy } from 'lucide-react';
-import { AI_ENGINE_VALUES, aiCiMethodLabel, aiFilterQuery, aiInRange, aiTrendRows, aiWindowLabel, compactNumber, estimateAiVisibilityCost, titleCase, type AiData, type AiDay, type AiEngine, type AiEngineStat, type AiFilter, type AiRun } from '@seo/shared';
+import { AI_ENGINE_VALUES, type AiQuestionInputs, type EngineAction, aiCiMethodLabel, aiFilterQuery, aiInRange, aiTrendRows, aiWindowLabel, compactNumber, estimateAiVisibilityCost, titleCase, type AiData, type AiDay, type AiEngine, type AiEngineStat, type AiFilter, type AiRun } from '@seo/shared';
 import { formatCredits, quoteLabel } from '@/lib/credits';
 import { AiPrecisionTable } from '@/components/site/AiPrecision';
 import { useSiteData } from '@/lib/queries';
@@ -14,7 +14,8 @@ import { Callout, EmptyState } from '@/components/ui/feedback';
 import { Delta, Meter, PageHeader } from '@/components/ui/misc';
 import { CountUp, HeroNextStep, HeroStat, IconTile, MetricCard, ScoreRing, Stagger, SummaryHero } from '@/components/insight';
 import { DataTable, type Column } from '@/components/ui/table';
-import { EngineActionList, RUN_LABEL, runFromApiBody, typeLabel } from './_components/actions';
+import { EngineActionList, RUN_LABEL, runFromApiBody, typeLabel, type ResolvedAction } from './_components/actions';
+import { aiInputsOf, AiQuestionButton, resolveAiAction, resolveAiQuestion } from './_components/ai-question';
 import { QuestionGrid, engineLabel } from './_components/ai';
 import { AiFilterBar, ScopePanel, useAiFilter } from './_components/ai-filter';
 import { AnswersBrowser, QuestionDialog } from './_components/ai-answers';
@@ -152,7 +153,7 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
         }
         title={aiHeadline(L?.mentionRate ?? null, cmp, reportCurrent ? brief?.headline : undefined)}
         description={L ? ((reportCurrent ? brief?.headline : undefined) ?? runNote ?? undefined) : undefined}
-        aside={d.report && reportCurrent && d.report.actions.length > 0 ? <AiNextStep actions={d.report.actions} /> : undefined}
+        aside={d.report && reportCurrent && d.report.actions.length > 0 ? <AiNextStep actions={d.report.actions} inputs={aiInputsOf(d, site.country)} /> : undefined}
         stats={
           L ? (
             <>
@@ -333,11 +334,11 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
 
       {d.report && d.report.actions.length > 0 && (
         <Panel title="What to do next" description={reportCurrent ? "The engine's actions from the latest AI visibility report" : `${reportLabel}, an earlier run than the figures above`} icon={<Lightbulb />} flush>
-          <EngineActionList actions={d.report.actions} />
+          <EngineActionList actions={d.report.actions} resolve={aiResolver(aiInputsOf(d, site.country))} />
         </Panel>
       )}
 
-      <AiGrowthSection growth={d.growth} />
+      <AiGrowthSection growth={d.growth} inputs={aiInputsOf(d, site.country)} />
       {/* AIR (2026-11-06): the AI ranking plan of a website in `on` mode (nothing for off or the private trial); the trial view for platform admins */}
       <AiRankSection plan={d.aiRank} domain={site.domain} />
       {me.platformAdmin && <AiRankShadowPanel orgId={org.id} siteId={site.id} />}
@@ -403,11 +404,24 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
   );
 }
 
+/**
+ * Client report 2026-11-16 (issue 1): an AI question's page action, through the shared resolver (the question's own search, the AI target,
+ * "Improve <page>" or no write button when its page exists). Every other action keeps the engine's own run.
+ */
+function aiResolver(inputs: AiQuestionInputs) {
+  return (a: EngineAction): ResolvedAction => {
+    const r = resolveAiAction(a, inputs);
+    if (!r) return undefined;
+    return { keyword: r.keyword, run: r.run, label: r.label, ...(r.step === 'open' && r.pageUrl ? { href: r.pageUrl } : {}), note: r.note };
+  };
+}
+
 /** The engine's top action, as the hero's next step (same form and prefill as its button in "What to do next"). */
-function AiNextStep({ actions }: { actions: NonNullable<AiData['report']>['actions'] }) {
+function AiNextStep({ actions, inputs }: { actions: NonNullable<AiData['report']>['actions']; inputs: AiQuestionInputs }) {
   const { can, tool } = useSitePage();
   const a = [...actions].sort((x, y) => x.priority - y.priority)[0];
   if (!a) return null;
+  const ai = resolveAiAction(a, inputs);
   const run = runFromApiBody(a.apiBody) ?? (a.type === 'publish' && a.keyword ? { mode: 'published' as const, prefill: { keyword: a.keyword, ...(a.url ? { publishedUrl: a.url } : {}) } } : null);
   return (
     <HeroNextStep
@@ -415,7 +429,12 @@ function AiNextStep({ actions }: { actions: NonNullable<AiData['report']>['actio
       eyebrow={`Next step${a.type ? ` · ${typeLabel(a.type)}` : ''}`}
       title={a.action}
       actions={
-        run && can('member') ? (
+        ai ? (
+          <>
+            <AiQuestionButton action={ai} onDark />
+            {ai.note && <p className="w-full text-xs leading-snug text-on-ink/90">{ai.note}</p>}
+          </>
+        ) : run && can('member') ? (
           <ButtonLink to={tool(run.mode, run.prefill)} size="sm" variant="secondary">
             {RUN_LABEL[run.mode] ?? 'Start'}
             <ArrowRight className="size-3.5" aria-hidden />
@@ -579,13 +598,11 @@ function EngineTable({ engines }: { engines: AiEngineStat[] }) {
 }
 
 function Gaps({ d }: { d: AiData }) {
-  const { can, tool } = useSitePage();
-  const topicOf = (prompt: string) => {
-    const q = d.report?.questions.find((x) => x.prompt === prompt);
-    const p = d.prompts.find((x) => x.prompt === prompt);
-    return (q?.topic || p?.keyword || p?.topic || prompt).toLowerCase().slice(0, 80);
-  };
-  const kindOf = (prompt: string) => d.report?.questions.find((x) => x.prompt === prompt)?.kind ?? d.prompts.find((x) => x.prompt === prompt)?.kind ?? '';
+  const { site } = useSitePage();
+  // client report 2026-11-16 (issue 1): the question's own search (never the panel topic), its AI target, and no second page
+  const inputs = aiInputsOf(d, site.country);
+  const actionOf = (g: NonNullable<AiData['latest']>['gaps'][number]) =>
+    resolveAiQuestion({ question: g.prompt, promptId: g.promptId, keyword: g.keyword, topic: g.topic, kind: g.kind, fanout: g.fanout, competitors: g.competitors }, inputs);
   return (
     <section>
       <SectionHeading
@@ -631,13 +648,15 @@ function Gaps({ d }: { d: AiData }) {
                 </div>
               )}
             </dl>
-            {can('member') && (
-              <div className="mt-auto flex justify-end pt-3">
-                <ButtonLink to={tool('keyword', { keyword: topicOf(g.prompt), pageType: kindOf(g.prompt) === 'compare' ? 'Guide' : 'Service Page' })} size="sm" variant="secondary">
-                  Write the page
-                </ButtonLink>
-              </div>
-            )}
+            {(() => {
+              const act = actionOf(g);
+              return (
+                <div className="mt-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1.5 pt-3">
+                  {act.note && <p className="mr-auto min-w-0 text-xs leading-snug text-ink-3">{act.note}</p>}
+                  <AiQuestionButton action={act} />
+                </div>
+              );
+            })()}
           </Card>
         ))}
       </Stagger>

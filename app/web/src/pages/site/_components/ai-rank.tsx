@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { GuideButton } from '@/components/guide';
 import { useAiRankShadow } from '@/lib/queries';
+import { useOrgCtx } from '@/lib/context';
 import { fmtAgo, fmtDate } from '@/lib/utils';
 import { Panel, SectionHeading } from './kit';
 import { engineLabel } from './ai';
@@ -65,7 +66,11 @@ export function AiRankMemoView({ memo }: { memo: AiRankMemo }) {
   );
 }
 
-export function AiRankActionList({ actions }: { actions: AiRankActionView[] }) {
+/**
+ * `rawWhy`: the engine's own note (a platform admin's plan carries it unchanged) goes behind a disclosure, never in the client's line
+ * (client report 2026-11-16, F11: "AI ranking (L06): ... 5 cell(s), expected gain 0.0119 over $9.63 ..." was printed as the reason).
+ */
+export function AiRankActionList({ actions, rawWhy = false }: { actions: AiRankActionView[]; rawWhy?: boolean }) {
   if (!actions.length) return <p className="text-[13px] text-ink-3">No step chosen this week.</p>;
   // the engine's stored rows name questions by id; only question texts (the callback's) are shown
   const texts = (qs: string[]) => qs.filter((q) => /\s/.test(q));
@@ -78,7 +83,13 @@ export function AiRankActionList({ actions }: { actions: AiRankActionView[] }) {
             {a.url && <span className="block text-xs text-ink-3 [overflow-wrap:anywhere]">{urlPath(a.url)}</span>}
             {texts(a.questions).length > 0 && <span className="block text-ink-2 [overflow-wrap:anywhere]">For: {texts(a.questions).slice(0, 2).join('; ')}{texts(a.questions).length > 2 ? ` and ${texts(a.questions).length - 2} more` : ''}</span>}
             {a.engines.length > 0 && <span className="block text-xs text-ink-3">{a.engines.map((e) => engineLabel(e)).join(', ')}</span>}
-            {a.why && <span className="block text-xs text-ink-3 [overflow-wrap:anywhere]">{a.why}</span>}
+            {a.why && !rawWhy && <span className="block text-xs text-ink-3 [overflow-wrap:anywhere]">{a.why}</span>}
+            {a.why && rawWhy && (
+              <details className="mt-0.5">
+                <summary className="cursor-pointer text-xs text-ink-3">Engine note (platform admins only)</summary>
+                <span className="block text-xs text-ink-3 [overflow-wrap:anywhere]">{a.why}</span>
+              </details>
+            )}
           </span>
           <span className="flex shrink-0 flex-wrap gap-1.5">
             <Badge>{AI_RANK_EXECUTOR_TEXT[a.executor]}</Badge>
@@ -92,6 +103,7 @@ export function AiRankActionList({ actions }: { actions: AiRankActionView[] }) {
 
 /** The AI visibility page's AI ranking plan: rendered only for a website in `on` mode with a run on record. */
 export function AiRankSection({ plan, domain }: { plan: AiRankPlanData | null | undefined; domain: string }) {
+  const { me } = useOrgCtx();
   if (!plan) return null;
   // browser pass D4: on, but no plan yet
   if (plan.pending)
@@ -114,7 +126,7 @@ export function AiRankSection({ plan, domain }: { plan: AiRankPlanData | null | 
       />
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="This week's steps" description="Who does each one, and where it stands">
-          <AiRankActionList actions={plan.actions} />
+          <AiRankActionList actions={plan.actions} rawWhy={!!me.platformAdmin} />
         </Panel>
         <Panel title="What changed and why" description={plan.client ? 'Our weekly note' : 'The note appears after the next weekly run'}>
           {plan.client ? <AiRankClientNote note={plan.client} /> : <p className="text-[13px] text-ink-3">No note yet.</p>}

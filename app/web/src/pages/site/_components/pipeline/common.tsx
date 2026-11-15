@@ -79,7 +79,7 @@ export function asPageType(t: string): PageType {
   if (/pillar|hub/i.test(t)) return 'Pillar Page';
   if (/local/i.test(t)) return 'Local Page';
   if (/blog/i.test(t)) return 'Blog Post';
-  if (/guide/i.test(t)) return 'Guide';
+  if (/guide|compar/i.test(t)) return 'Guide';   // client report 2026-11-16: the engine's "Comparison Page" is a guide in the form
   if (/landing/i.test(t)) return 'Landing Page';
   if (/product/i.test(t)) return 'Product Page';
   return 'Service Page';

@@ -3,7 +3,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ChevronDown } from 'lucide-react';
-import { cleanDomain, COUNTRIES, createSiteSchema, GOALS, serviceEntryError, SERVICE_MAX_CHARS, SERVICES_MAX, siteBusinessSchema, TONES, type Site } from '@seo/shared';
+import { cleanDomain, COUNTRIES, createSiteSchema, GOALS, serviceEntryError, serviceLooksLikeSentence, SERVICE_MAX_CHARS, SERVICES_MAX, siteBusinessSchema, TONES, type Site } from '@seo/shared';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { ChoiceCard, Field, Input, Select, Textarea } from '@/components/ui/field';
@@ -157,6 +157,7 @@ export function SiteBusinessForm({
           control={control}
           name="services"
           render={({ field, fieldState }) => (
+            <div className="space-y-1.5">
             <Field
               label="What do you sell?"
               hint="Your main services or products. Press Enter after each one; a comma stays part of the name. We only suggest keywords and write pages that fit what you sell."
@@ -178,6 +179,13 @@ export function SiteBusinessForm({
                 />
               )}
             </Field>
+            {/* client report 2026-11-16 (F12): a list saved before the check keeps working; its sentence-like entries are named so they can be replaced */}
+            {(field.value ?? []).some((x: string) => serviceLooksLikeSentence(x)) && (
+              <p className="text-[13px] leading-relaxed text-warning-text">
+                Some entries read like sentences ({(field.value ?? []).filter((x: string) => serviceLooksLikeSentence(x)).map((x: string) => `"${x.length > 40 ? x.slice(0, 40).replace(/\s+\S*$/, '') : x}"`).join(', ')}). Replace them with the names of what you sell, one per entry: we suggest keywords and AI questions from this list.
+              </p>
+            )}
+            </div>
           )}
         />
 

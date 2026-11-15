@@ -34,6 +34,20 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-11-16',
+    version: '4.14',
+    title: 'AI answer pages written for the question itself',
+    summary: 'A page written to win an AI answer now targets the question\'s own search, never a second copy of a page you already have, and the AI visibility page says where each question stands in plain words.',
+    highlights: [
+      'Write the page, on any lost AI question, now uses the search behind that question, so the new page is an answer page for it and not another version of your service page',
+      'When a page of yours already owns that search in your market, we offer to improve it for the question instead of writing a second page that would compete with it',
+      'A question whose page is written, being written or live shows Report it published, See the page or nothing to do, never another Write the page',
+      'Questions to win show a plain status that follows your page: Queued, Being written, Published, Later or Not for this website, each with one sentence that says why',
+      'What do you sell? asks for the names of what you sell and turns away sentences, so questions and pages are built from real services',
+    ],
+    features: ['ai-visibility', 'ai-growth'],
+  },
+  {
     date: '2026-11-12',
     version: '4.13',
     title: 'A daily to-do for pages Google has not visited',

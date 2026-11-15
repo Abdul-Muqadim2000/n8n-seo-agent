@@ -153,6 +153,9 @@ export interface SiteRun {
   createdAt: string;
   /** W06-B: the engine's request id, which the content-log row the app opened for a page run carries (a failed run's row is no page) */
   requestId?: string | null;
+  /** client report 2026-11-16 (issue 1): the AI question a page run carried (its target id and question), '' / absent when none */
+  aiTargetId?: string;
+  aiQuestion?: string;
 }
 
 export interface LadderSources {
@@ -1047,6 +1050,8 @@ export async function ladderAppSources(org: OrgRow, site: SiteRow): Promise<Pick
         requestId: schema.runs.requestId,
         keyword: sql<string | null>`${schema.runs.input}->>'keyword'`,
         ladderId: sql<string | null>`${schema.runs.input}->'ladder'->>'id'`,
+        aiTargetId: sql<string | null>`${schema.runs.input}->'aiTarget'->>'targetId'`,
+        aiQuestion: sql<string | null>`${schema.runs.input}->'aiTarget'->>'question'`,
         est: schema.runs.estimatedCostUsd,
         act: schema.runs.actualCostUsd,
         createdAt: schema.runs.createdAt,
@@ -1109,6 +1114,7 @@ export async function ladderAppSources(org: OrgRow, site: SiteRow): Promise<Pick
       costUsd: r.act ?? r.est,
       createdAt: r.createdAt.toISOString(),
       requestId: r.requestId,
+      ...(r.aiQuestion ? { aiTargetId: s(r.aiTargetId), aiQuestion: s(r.aiQuestion) } : {}),
     })),
   };
 }
