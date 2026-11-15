@@ -265,6 +265,7 @@ const content_request_id = String(p2.content_request_id || '').trim();
 const confirm_mismatch = p2.confirm_mismatch === true || String(p2.confirm_mismatch || '').toLowerCase() === 'true';
 const draft_title = String(p2.draft_title || '').replace(/\s+/g, ' ').trim().slice(0, 300);
 const draft_h1 = String(p2.draft_h1 || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+const delivered_images = (Array.isArray(p2.delivered_images) ? p2.delivered_images : []).map(x => String(x || '').trim().replace(/^.*\//, '').slice(0, 200)).filter(Boolean).slice(0, 10);   // section 191: the file names of the images delivered with the page (the publish check looks for them)
 const blogs_per_week = Math.min(3, Math.max(0, parseInt(String(pick(p2, 'posts per week') || p2.blogs_per_week || '0'), 10) || 0));
 const yes = (v) => /^(y|true|1)/i.test(String(v == null ? '' : v).trim());
 const checkin_manual_action = yes(pick(p2, 'manual action') || p2.manual_action);
@@ -493,6 +494,7 @@ return [{
     confirm_mismatch,
     draft_title,
     draft_h1,
+    delivered_images,
     pipeline_source: String(p2.pipeline_source || ''),
     chosen_by: KF_CHOSEN,
     ladder_mode: KF_LADDER_MODE,

@@ -1366,8 +1366,8 @@ patch('Normalize Input', "if (mode === 'track' && !deliverable) throw new Error(
 patch('Normalize Input', "    track_keywords,\n    ga4_property_id,\n", "    track_keywords,\n    ga4_property_id,\n    blogs_per_week,\n    published_url,\n    content_request_id,\n")
 # 2026-10-27 (techand.ai on production): "I published it" checks that the live page IS the draft. The app sends the draft's own title and
 # main heading (from its report) and, after the owner read the warning, `confirm_mismatch: true`. Exact keys (no pick(): "title" is too common).
-patch('Normalize Input', "const content_request_id = String(p2.content_request_id || '').trim();\n", "const content_request_id = String(p2.content_request_id || '').trim();\nconst confirm_mismatch = p2.confirm_mismatch === true || String(p2.confirm_mismatch || '').toLowerCase() === 'true';\nconst draft_title = String(p2.draft_title || '').replace(/\\s+/g, ' ').trim().slice(0, 300);\nconst draft_h1 = String(p2.draft_h1 || '').replace(/\\s+/g, ' ').trim().slice(0, 300);\n")
-patch('Normalize Input', "    published_url,\n    content_request_id,\n", "    published_url,\n    content_request_id,\n    confirm_mismatch,\n    draft_title,\n    draft_h1,\n")
+patch('Normalize Input', "const content_request_id = String(p2.content_request_id || '').trim();\n", "const content_request_id = String(p2.content_request_id || '').trim();\nconst confirm_mismatch = p2.confirm_mismatch === true || String(p2.confirm_mismatch || '').toLowerCase() === 'true';\nconst draft_title = String(p2.draft_title || '').replace(/\\s+/g, ' ').trim().slice(0, 300);\nconst draft_h1 = String(p2.draft_h1 || '').replace(/\\s+/g, ' ').trim().slice(0, 300);\nconst delivered_images = (Array.isArray(p2.delivered_images) ? p2.delivered_images : []).map(x => String(x || '').trim().replace(/^.*\\//, '').slice(0, 200)).filter(Boolean).slice(0, 10);   // section 191: the file names of the images delivered with the page (the publish check looks for them)\n")
+patch('Normalize Input', "    published_url,\n    content_request_id,\n", "    published_url,\n    content_request_id,\n    confirm_mismatch,\n    draft_title,\n    draft_h1,\n    delivered_images,\n")
 nodes['Route Mode']['parameters']['rules']['values'].append({'conditions': {'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'loose', 'version': 3}, 'conditions': [{'id': nid('Route Mode:published'), 'leftValue': "={{ $json.mode === 'published' }}", 'rightValue': '', 'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}], 'combinator': 'and'}, 'renameOutput': True, 'outputKey': 'published'})
 conns['Route Mode']['main'].insert(6, [{'node': 'Ensure Log Table (Published)', 'type': 'main', 'index': 0}])
 PX, PY = TX, TY + 420
@@ -13171,7 +13171,7 @@ for _k159 in ("const copy_score = Math.round(structure_pts + coverage_pts + read
 assert 'content_score >= 80 && lenOk' not in _cq159, 'W0-C: the editor round must stay on the copy check, not on the new grade'
 for _n159, _k159 in (('Page Candidates', 'const grade = GR.cap('), ('Page Candidates', 'const del = GR.deliver(del0, grade);'), ('Apply Second Read', 'GR.cap(D.grade, D.blocking')):
     assert _k159 in code(_n159), 'W0-C: ' + _n159 + ' lacks ' + _k159
-for _k159 in ('const grade = GR.cap(', 'Object.assign(del, GR.deliver(del, grade));', '/*__GRADE__*/'):
+for _k159 in ('const grade = GR.cap(', 'Object.assign(del, GR.deliver(del, grade, { live: !!F.grade_only }));', '/*__GRADE__*/'):   # section 191: a live grade's next step is on the website
     assert _k159 in _rd0('code/Finalize_Verdict.js'), 'W0-C: Finalize_Verdict.js lacks ' + _k159
 # ---------- the results page's shapes, recorded (no points yet) ----------
 patch('Pick Top 6', "const items = task.result?.[0]?.items || [];\n",
@@ -14143,6 +14143,19 @@ Every page run takes one of **%d writing slots** before its first paid node (**P
     _PG190['limit'], _PG190['limit'], _PG190['poll_seconds'], _PG190['handoff_minutes'], _PG190['max_wait_hours']), _X190 - 40, _Y190 - 620, 1100, 260, 6)
 log('Page runs take a writing slot (P1, section 190, prod review 2026-11-12 S1-01 / S1-05): a page run\'s ledger row waits in line (`waiting`, page / request_id / keyword / queued_at), at most %d write at once (seo_cache slots:page overrides), a waiting run looks again every %d s on a saved Wait, hands its place to a new execution after %d min (n8n counts a resumed execution\'s time limit from its first start) and gives up after %d h with nothing charged; the app hears stage page_slot; Rate Limit counts a hand-off once; a refused or failed page run frees its started content-log row and its AI question' % (
     _PG190['limit'], _PG190['poll_seconds'], _PG190['handoff_minutes'], _PG190['max_wait_hours']))
+
+# ---------- section 191 (client reports 2026-11-16, devaicon.com: "delivered 95+/100, the live page 84") ----------
+# The live page grade says whose text is live and why each part lost points, never takes points for our own reader or the site template,
+# and the publish check reads the article's images (docs/client-reports-2026-11-16/LIVE_GRADE.md, harness scenarios_client_1116.js LG1-LG3).
+_cq191 = code('Content QA'); _pc191 = code('Publish Check')
+for _k191 in ('const LIVE = !!(prev.finalize && prev.finalize.grade_only === true);', "if (off > 0 && whole[off - 1] === '!') return m;", 'const isFaqHead = ', 'structure_checks, live: LIVE, live_adjustments,', 'longest, passive_pct,'):
+    assert _k191 in _cq191, 'section 191: Content QA lacks ' + _k191
+for _k191 in ('const REG = regionOf(body);', "name: 'Images in the article'", "name: 'Images hosted on your website'", 'tables: tableHtml.length, table_rows: tableRows'):
+    assert _k191 in _pc191, 'section 191: Publish Check lacks ' + _k191
+for _f191, _k191 in (('Finalize_Live_Body.js', 'kept_pct: Math.round('), ('Finalize_Verdict.js', 'liveOut = { live_parts: parts,'), ('_grade.js', "'. Change it on your website, then press Re-check.'")):
+    assert _k191 in _rd0('code/' + _f191), 'section 191: ' + _f191 + ' lacks ' + _k191
+assert 'delivered_images,' in code('Normalize Input'), 'section 191: Normalize Input does not pass delivered_images'
+log('Client reports 2026-11-16 (section 191): the live page grade says how much of the delivered text is on the live page (kept_pct), part by part why points were lost (live_parts, the longest sentences) and that the next step is on the website; on a live page a direct answer without the label, the template questions section, a flattened table and the site name in the title cost nothing; every run: an FAQ word inside a heading is no second FAQ, an image is no source; the publish check reads the article images (decorative apart, one "no images" check, borrowed images, a background hero, the images we delivered) and records the article tables')
 
 # =============================================================================
 # 9. WRITE

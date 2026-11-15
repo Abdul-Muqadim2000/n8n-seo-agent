@@ -35,9 +35,28 @@ const wordsOf = (t) => [...new Set(S(t).toLowerCase().replace(/&[a-z#0-9]+;/g, '
 const near = (a, b2) => { const A = wordsOf(a), B = new Set(wordsOf(b2)); if (!A.length || !B.size) return true; const sh = A.length <= B.size ? A : [...B]; const lg = A.length <= B.size ? B : new Set(A); return sh.filter(w => lg.has(w)).length >= Math.ceil(0.6 * sh.length); };
 const h1sRead = (md.match(/^#[ \t]+.+$/gm) || []).map(h => h.replace(/^#+\s*/, ''));
 const otherPage = !!(S(g.title).trim() && readerTitle && !near(readerTitle, g.title) && h1 && h1sRead.length && !h1sRead.some(h => near(h, h1)));
+// Section 191 (client reports 2026-11-16, devaicon.com: "delivered 95+/100, the live page 84"): the live page was the client's own rewrite (0 of
+// our 161 sentences on it) and nothing said so. (1) How much of the text we delivered is on the live page: the sentences of 8+ words of the
+// version the app sent (`delivered_markdown`, the newest version: the final version when there is one) found word for word, after the
+// normalisation below, in the text read; `kept_pct` null when there is nothing to compare. (2) A CMS that renders a table without header
+// cells reaches the reader as run-on lines with no full stop, which read as 28-word "sentences" and as "no table": a line that starts with
+// the words of one of the page's own table rows (grade_live.table_rows, read from the HTML by the publish check) and has no terminal
+// punctuation is put back as a table row, so it is a table again and is no sentence. grade_live.tables (how many <table> the page has)
+// travels to Content QA in live_read.
+const normS = (t) => S(t).replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').replace(/\[([^\[\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`>#|]+/g, ' ').toLowerCase().replace(/&[a-z#0-9]+;/g, ' ').replace(/[^a-z0-9%]+/g, ' ').replace(/\s+/g, ' ').trim();
+const sentencesOf = (t) => S(t).replace(/^(?:Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):.*$/gim, '').split(/\n+|(?<=[.!?])\s+/).map(normS).filter(x => x.split(' ').length >= 8);
+const rowsIn = (Array.isArray(g.table_rows) ? g.table_rows : []).map(normS).filter(x => x.split(' ').length >= 3).slice(0, 80);
+let restored = 0;
+if (rowsIn.length) md = md.split('\n').map(l => { const t = l.trim(); if (!t || /^(?:#|\||!\[|[-*+]\s|\d{1,3}[.)]\s)/.test(t) || /[.!?:]\**\s*$/.test(t)) return l;
+  const n = normS(t); const hit = rowsIn.some(r => { const w = r.split(' ').slice(0, 6).join(' '); return n === r || n.startsWith(w); });
+  if (!hit) return l; restored++; return '| ' + t.replace(/\|/g, '/') + ' |'; }).join('\n');
+const delivered = [...new Set(sentencesOf(b.delivered_markdown))];
+const liveNorm = ' ' + normS(md) + ' ';
+const keptN = delivered.filter(x => liveNorm.includes(' ' + x + ' ')).length;
+const kept = delivered.length ? { kept_pct: Math.round(100 * keptN / delivered.length), kept_sentences: keptN, delivered_sentences: delivered.length } : { kept_pct: null, kept_sentences: 0, delivered_sentences: 0 };
 const okRead = !err && status === 200 && target < 400 && words >= 80 && !otherPage;
 const reason = err ? 'the page reader failed (' + err + ')' : status !== 200 ? 'the page reader answered ' + (status || 'nothing') : target >= 400 ? 'the live page answered ' + target : words < 80 ? 'the page reader returned only ' + words + ' words' : otherPage ? 'the page reader returned another page ("' + readerTitle.slice(0, 80) + '", not "' + S(g.title).trim().slice(0, 80) + '")' : '';
-const live_read = { ok: okRead, url: S((plan.live_plan || {}).url), title, words, reason };
+const live_read = { ok: okRead, url: S((plan.live_plan || {}).url), title, words, reason, ...kept, tables: Math.max(0, Math.round(Number(g.tables) || 0)), table_rows_restored: restored };
 if (okRead) {
   b.markdown = md;
   b.client_edited = true;   // the live text is the client's own version: every sentence they wrote counts as theirs (Parse Brief)
