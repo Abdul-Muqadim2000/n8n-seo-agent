@@ -1109,7 +1109,9 @@ const LRU = (() => {
   const stageText = (stage) => STAGE_WORDS[low(stage)] || STAGE_WORDS.info;
 
   // ---- the market (rule 3) ----
-  const placesOf = (s) => { try { return typeof fitPlaces === 'function' ? fitPlaces(s) : []; } catch (e) { return []; } };
+  // review 2026-11-16 (L2): a node that inlines the duplicate rule (DUP) but not the fit gate (Parse Verdict) reads places through DUP's copy of
+  // the same gazetteer, so the market rules of an AI question hold there too
+  const placesOf = (s) => { try { return typeof fitPlaces === 'function' ? fitPlaces(s) : (typeof DUP === 'object' && DUP && typeof DUP.placesIn === 'function') ? DUP.placesIn(s) : []; } catch (e) { return []; } };
   const countryName = (iso) => CFG.countries[S(iso).toUpperCase()] || '';
   /** -> { iso, country, source: 'keyword' | 'site' | 'request', named: [place words], keyword_iso, ok (the request market is the lock), changed,
    *  measurable, note }. o: { keyword, site_iso (the website's market), request_iso (what the run was sent with) }.
@@ -1162,8 +1164,23 @@ const LRU = (() => {
   };
   /** the same search for a question and a page keyword: the same words (scaffolding out, plurals folded, places as their market) */
   const sameQuestion = (a, b) => { const A = qWords(a), B = qWords(b); return A.length > 0 && A.join(' ') === B.join(' '); };
-  /** the question carries every word of the ladder's main keyword (at least two words once places are read as their market) */
-  const coversHead = (q, head) => { const H = qWords(head), Q = new Set(qWords(q)); return H.length >= 2 && H.every(w => Q.has(w)); };
+  // review 2026-11-16 (L2 / L3): a place tag is not a topic word ("crm dubai" is ONE topic word, so it covers nothing), and a main keyword with no
+  // place covers a question only in the website's own market ("crm service provider" does not take "best crm service provider saudi arabia" for
+  // a UAE website). `market`: ISO-2 or a country name; with none given a question that names a place is not covered by a head that names none.
+  const isoOfM = (m) => { const x = S(m).trim(); if (/^[A-Za-z]{2}$/.test(x)) return x.toUpperCase(); const k = Object.keys(CFG.countries).find(c => low(CFG.countries[c]) === low(x)); return k || ''; };
+  const inMarket = (tags, market) => { const iso = isoOfM(market); return !!iso && tags.every(t => t.slice(3).split('+').includes(iso)); };
+  /** the question carries every word of the ladder's main keyword: at least two topic words (place tags do not count), and the question's
+   *  places are the head's own, or the website's market when the head names none */
+  const coversHead = (q, head, market) => { const H = qWords(head), Q = qWords(q), QS = new Set(Q);
+    if (H.filter(w => !/^in:/.test(w)).length < 2 || !H.every(w => QS.has(w))) return false;
+    const qTags = Q.filter(w => /^in:/.test(w)), hTags = H.filter(w => /^in:/.test(w));
+    return !qTags.length || qTags.every(t => hTags.includes(t)) || (!hTags.length && inMarket(qTags, market)); };
+  /** review 2026-11-16 (L5): ONE rule for "this ladder page is the question's page", shared by Cadence Plan, AI Growth, AI Target Settle,
+   *  Parse Verdict and the app's cadence.ts: the page's keyword IS the question's search, or the page is its ladder's MAIN page (rung 4, or
+   *  its keyword is the main keyword, or part 'head') and the question carries all of it (coversHead, in the market). row: { keyword,
+   *  head_keyword?, rung?, part? } (a ladder row, an own-coverage entry or a content-log row of a ladder page). */
+  const isHeadRow = (r) => { const x = r || {}; return S(x.part) === 'head' || Number(x.rung) === 4 || (!!S(x.head_keyword) && wordsKey(x.keyword) === wordsKey(x.head_keyword)); };
+  const questionPage = (q, row, market) => { const x = row || {}; return !!S(x.keyword) && (sameQuestion(q, x.keyword) || (isHeadRow(x) && coversHead(q, x.keyword, market))); };
 
   // ---- verdicts (rule 4) ----
   /** o: { verdict: 'GO' | 'GO_WITH_CHANGES' | 'AVOID' | ..., score: 0-100 | null, ack: the client said "Write it anyway" } -> { stop, reason, band } */
@@ -1238,7 +1255,7 @@ const LRU = (() => {
   };
 
   return { CFG, STAGES, COMMERCIAL, kiPool, ranksFor, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, headTarget, oneUrl,
-    stageOf, isCommercial, isDefinitional, definitionalOk, stageText, countryName, market, marketRefusal, verdictStop, stuck, rungState, qWords, sameQuestion, coversHead };
+    stageOf, isCommercial, isDefinitional, definitionalOk, stageText, countryName, market, marketRefusal, verdictStop, stuck, rungState, qWords, sameQuestion, coversHead, isHeadRow, questionPage };
 })();
 // Accepts an object (from the Structured Output Parser) or a string with/without code fences or surrounding text
 const parseAgentJson = (raw) => {
@@ -2501,10 +2518,12 @@ const HOLD = (() => {
   // INV1 F2 / F3 (techand.ai): the page that owns a question's search can be a keyword ladder's live page whose title says it in other words
   // ("Dynamics 365 CRM in Dubai & UAE" is the ladder page for "crm service provider"): a ladder page of this site whose keyword IS the
   // question's search, or the ladder's main page when the question carries every word of its main keyword, and whose address is live
-  if (aiPage && !refresh && !EXP && MODEL && !dup.targets.length) {
+  // review 2026-11-16 (M2): a page of a keyword ladder (a rung that also answers a question, the Pipeline's "Write now" on a rung) is never held
+  // against its own ladder's pages: the ladder planned them together. Only a question written as a page of its own is checked here.
+  if (aiPage && !ladderPage && !refresh && !EXP && MODEL && !dup.targets.length) {
     const liveK = new Set(SM.pages(MODEL).filter(p => !(SM.isGone && SM.isGone(p)) && !(SM.isMoved && SM.isMoved(p))).map(p => LRU.urlKey(p.url)));
     const e = (((prev.own_coverage || {}).ladders) || []).find(x => x && x.target_url && liveK.has(LRU.urlKey(x.target_url)) && LRU.urlKey(x.target_url) !== LRU.urlKey(prev.ladder_target_url)
-      && (LRU.sameQuestion(prev.keyword, x.keyword) || (x.part === 'head' && LRU.coversHead(prev.keyword, x.keyword))));
+      && !(S(prev.ladder_id) && S(x.ladder_id) === S(prev.ladder_id)) && LRU.questionPage(prev.keyword, x, S(prev.country)));   // L5: the one rule, in the run's market (L2)
     if (e) dup = { ...dup, targets: [{ url: S(e.target_url), title: '', keyword_words_shared_pct: null, weighted_pct: null, via: 'ladder', ladder_keyword: S(e.keyword) }] };
   }
   const dupHit = !EXP && dup.targets.length > 0;   // a page the verdict already redirected the run to (existing_page) is improved, not duplicated
@@ -2561,7 +2580,7 @@ const HOLD = (() => {
   if (writes && valueHit) reasons.push('Our verdict scored "' + kw + '" ' + score + ' out of 100' + (score < CFG.clear ? ', clearly under the ' + CFG.threshold + ' we write without asking'
     : ', under the ' + CFG.threshold + ' we write without asking, and ' + (lowDemand ? 'the search has ' + demandText : 'your website already has a page for it'))
     + ((verdict.reasons || [])[0] ? ': ' + String(verdict.reasons[0]).replace(/\s+/g, ' ').slice(0, 260) : '.'));
-  const aiOwner = aiPage ? (existingHit ? EXP.url : dupHit ? dup.targets[0].url : '') : '';
+  const aiOwner = aiPage && !ladderPage ? (existingHit ? EXP.url : dupHit ? dup.targets[0].url : '') : '';   // M2: a ladder page keeps the ladder's own wording
   if (writes && aiOwner) reasons.push('Your page ' + aiOwner + ' is already the page for "' + kw + '". To win this AI answer, improve that page for the question'
     + ' (an answer in its first lines, the searches AI runs and the sources it cites) rather than writing a second page for the same search.');
   if (writes && dupHit && !aiOwner) reasons.push('Your website already has a page aimed at this search: ' + dup.targets.map(t => t.url).join(', ')
