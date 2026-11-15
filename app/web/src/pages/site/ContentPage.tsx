@@ -22,7 +22,7 @@ import { DataTable, type Column } from '@/components/ui/table';
 import { CountUp, DistributionBar, HeroLink, HeroNextStep, HeroStat, IconTile, ScoreRing, SEQ, Stagger, SummaryHero, type IconTileTone } from '@/components/insight';
 import { DataGate, FilterChips, SrOnly, Kind, Panel, RunAnalysisMenu, SectionHeading, ToolButton, useSitePage } from './_components/kit';
 import { HeroMeter } from './_components/pipeline/home';
-import { contentGroups, isLiveItem, liveCheckText, liveGradeLines, liveLine, needsFixItem, publishNoteSettled, publishPrefill } from './_components/content-status';
+import { contentGroups, isLiveItem, liveCheckText, liveGradeDetail, liveGradeLines, liveLine, needsFixItem, publishNoteSettled, publishPrefill } from './_components/content-status';
 import { countBy, daysSince, plural, urlPath } from './_components/format';
 import { FileLinks } from './_components/reports';
 import { PublishCheckPanel } from './_components/publish-check';
@@ -376,10 +376,10 @@ function SourceLine({ item }: { item: ContentItem }) {
   );
 }
 
-function LiveCheckLine({ check, orgId }: { check: ContentLiveCheck; orgId: string }) {
+function LiveCheckLine({ check, orgId, deliveredImages }: { check: ContentLiveCheck; orgId: string; deliveredImages?: number }) {
   return (
     <p className="text-ink-2 [overflow-wrap:anywhere]">
-      {liveCheckText(check)}.{' '}
+      {liveCheckText(check, { deliveredImages })}.{' '}
       <Link to={paths.report(orgId, check.reportId)} className="font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
         See the check
       </Link>
@@ -409,6 +409,48 @@ function LiveGradeLine({ review, orgId }: { review: NonNullable<ContentItem['rev
         </p>
       )}
       {l.note && <p className="text-ink-3">{l.note}.</p>}
+      <LiveGradeWhy review={review} />
+    </div>
+  );
+}
+
+/**
+ * Client reports 2026-11-16 (devaicon.com: "the version we delivered 95+/100, the live page 84, why?"): whose text is live, where the live
+ * page lost points against the version we delivered and what to change on the website, the longest sentences behind a toggle, and what our
+ * check did not count against the page. Nothing for a grade stored before the engine said it.
+ */
+function LiveGradeWhy({ review }: { review: NonNullable<ContentItem['review']> }) {
+  const d = liveGradeDetail(review);
+  if (!d) return null;
+  return (
+    <div className="space-y-1 pt-0.5 text-ink-2" data-testid="live-grade-why">
+      {d.ownVersion && <p>{d.ownVersion}</p>}
+      {d.parts.length > 0 && (
+        <>
+          <p className="font-medium text-ink">Where the live page lost points (change these on your website, then press Re-check):</p>
+          <ul className="list-disc space-y-0.5 pl-4">
+            {d.parts.map((p) => (
+              <li key={p.key}>
+                <span className="font-medium text-ink">{p.title}</span>
+                {p.why.length > 0 && <>: {p.why.join('; ')}</>}.{p.fix && <> To fix: {p.fix.charAt(0).toLowerCase() + p.fix.slice(1)}.</>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {d.longest.length > 0 && (
+        <details className="group">
+          <summary className="cursor-pointer font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
+            Show the {d.longest.length === 1 ? 'longest sentence' : `${d.longest.length} longest sentences`}
+          </summary>
+          <ol className="mt-1 list-decimal space-y-0.5 pl-4 text-ink-2">
+            {d.longest.map((t, i) => (
+              <li key={i}>{t}</li>
+            ))}
+          </ol>
+        </details>
+      )}
+      {d.notCounted.length > 0 && <p className="text-ink-3">Not counted against your page: {d.notCounted.join('. ')}.</p>}
     </div>
   );
 }
@@ -439,7 +481,7 @@ function PipelineCard({ item, report, cms, onUnpublish }: { item: ContentItem; r
         {item.existingPageUrl && !liveNow && <p className="truncate">Improves {urlPath(item.existingPageUrl)}</p>}
         {liveNow && item.review && <LiveGradeLine review={item.review} orgId={org.id} />}
         {item.review && <ReviewLine review={item.review} orgId={org.id} live={liveNow} />}
-        {liveNow && item.liveCheck && <LiveCheckLine check={item.liveCheck} orgId={org.id} />}
+        {liveNow && item.liveCheck && <LiveCheckLine check={item.liveCheck} orgId={org.id} deliveredImages={item.review?.liveGrade?.delivered?.images} />}
         {fix && !item.review && (
           <p className="text-ink-2 [overflow-wrap:anywhere]">
             Did not pass the quality check, so it is not ready to publish{reasons.length ? `: ${reasons.slice(0, 2).join('; ')}` : ''}. {DRAFT_BY_HAND}.

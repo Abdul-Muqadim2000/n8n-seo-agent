@@ -19,7 +19,7 @@ describe('the Content card of a live page', () => {
 
   it('the live check: passed of total and at most 3 failed checks by name', () => {
     const c = { at: '2026-11-10T10:03:31Z', passed: 9, total: 16, failed: ['Title tag uses the keyword', 'At least 2 content images', 'Every image has alt text', 'Descriptive image file names'], url: 'https://novaand-demo.com/x', reportId: 'r', live: true };
-    expect(liveCheckText(c)).toBe(`Live page checked ${fmtDate(c.at)}: 9 of 16 checks passed. Not passed: Title tag uses the keyword; At least 2 content images; Every image has alt text and 1 more`);
+    expect(liveCheckText(c)).toBe(`Live page checked ${fmtDate(c.at)}: 9 of 16 checks passed. Not passed: Title tag uses the keyword; images (3 checks)`);   // client reports 2026-11-16: the image checks are one item
     expect(liveCheckText({ ...c, passed: 16, failed: [] })).toBe(`Live page checked ${fmtDate(c.at)}: 16 of 16 checks passed`);
     expect(liveCheckText({ ...c, live: false })).toBe(`Live page checked ${fmtDate(c.at)}: we could not open it`);
     expect(liveCheckText(c)).not.toMatch(tell);

@@ -37,6 +37,43 @@ export interface PageLiveGrade {
   checked_at: string;
   /** the newest attempt could not read the live page; the grade above, if any, is from before it */
   read_failed?: { at: string; published_report_id: string; error: string; attempts?: number } | null;
+  // Client reports 2026-11-16 (devaicon.com: "delivered 95+/100, the live page 84, why?"): what the grade says beside its number. All
+  // optional: a grade stored before has none of them and still renders (liveGradeView fills empty values).
+  /** the parts of the live grade (structure 20, coverage 15, readability 10, ...) and their maximum */
+  breakdown?: Record<string, number>;
+  max?: Record<string, number>;
+  /** part by part: points, maximum, why points were lost (plain words) and the fix */
+  parts?: LiveGradePart[];
+  /** the parts under half marks (the "needs work" reason), with the fix */
+  needs_work?: { dim: string; text: string; action: string }[];
+  /** the engine's advice texts (at most 8, plain words) */
+  advisory?: string[];
+  /** what to do next (on the website, then Re-check) */
+  next_step?: string;
+  /** reading ease, sentence length and the longest sentences (at most 5) of the live page */
+  readability?: { flesch: number | null; avg_sentence_words: number | null; long_sentences: number; longest: { text: string; words: number }[] } | null;
+  /** how much of the text we delivered is on the live page: sentences of 8+ words found word for word (null: nothing to compare) */
+  kept_pct?: number | null;
+  kept_sentences?: number;
+  delivered_sentences?: number;
+  /** what the check did not count against the live page because it measured our own reader or the site's template */
+  adjustments?: { code: string; text: string }[];
+  /** the version we delivered (the final version when there is one): its exact grade, its parts and how many images came with it */
+  delivered?: LiveGradeDelivered | null;
+}
+
+export interface LiveGradePart {
+  dim: string;
+  label: string;
+  points: number;
+  max: number;
+  reasons: string[];
+  fix: string;
+}
+export interface LiveGradeDelivered {
+  score: number | null;
+  breakdown: Record<string, number>;
+  images: number;
 }
 
 /** Review M1 (2026-11-11): a failed read is tried again, at most LIVE_READ_ATTEMPTS times for one publish check, LIVE_READ_RETRY_MS apart (a
@@ -68,6 +105,16 @@ export interface PageLiveGradeView {
   attemptedAt: string | null;
   /** the newest attempt could not read the live page */
   readFailed: { at: string; publishedReportId: string; error: string } | null;
+  /** client reports 2026-11-16 (empty on grades stored before): the parts, why each lost points, the longest sentences, how much of our
+   *  text is on the page, what was not counted against it and the version we delivered */
+  parts?: LiveGradePart[];
+  readability?: { flesch: number | null; avgSentenceWords: number | null; longSentences: number; longest: { text: string; words: number }[] } | null;
+  keptPct?: number | null;
+  keptSentences?: number;
+  deliveredSentences?: number;
+  adjustments?: { code: string; text: string }[];
+  nextStep?: string;
+  delivered?: LiveGradeDelivered | null;
 }
 
 export const LIVE_GRADE_STATUS_LABEL: Record<PageDeliveryStatus, string> = {
@@ -81,6 +128,10 @@ export const LIVE_GRADE_STATUS_LABEL: Record<PageDeliveryStatus, string> = {
 /** One publish check as the board and the job read it (the `published` report of "I published a page" / Re-check page). */
 export interface LiveGradeCheck {
   id: string;
+  /** client reports 2026-11-16: how many tables the live article has and the text of each row (the publish check's page_signals): a table
+   *  the page reader flattened into lines is put back as a table */
+  tables?: number;
+  tableRows?: string[];
   receivedAt: string;
   keyword: string;
   /** the content run the check was for (`content_request_id`) */
@@ -129,7 +180,7 @@ export function liveGradePending(attemptedAt: string | Date | null | undefined, 
 /** The request the engine grades a live page from: the finalize body of the page's newest version with no answers, plus the live address. */
 export interface LiveGradeBody extends FinalizeBody {
   grade_only: true;
-  grade_live: { url: string; h1: string; title: string };
+  grade_live: { url: string; h1: string; title: string; tables?: number; table_rows?: string[] };
 }
 
 export function liveGradeBody(o: {
@@ -143,7 +194,7 @@ export function liveGradeBody(o: {
   businessFacts: string;
   facts: FactAnswers;
   duplicateDecision?: DuplicateDecision | null;
-  check: Pick<LiveGradeCheck, 'url' | 'h1' | 'title'>;
+  check: Pick<LiveGradeCheck, 'url' | 'h1' | 'title' | 'tables' | 'tableRows'>;
 }): LiveGradeBody {
   const p = o.payload ?? {};
   return {
@@ -162,7 +213,14 @@ export function liveGradeBody(o: {
       duplicateDecision: o.duplicateDecision ?? null,
     }),
     grade_only: true,
-    grade_live: { url: o.check.url, h1: decodeEntities(s(o.check.h1)).slice(0, 300), title: decodeEntities(s(o.check.title)).slice(0, 300) },
+    grade_live: {
+      url: o.check.url,
+      h1: decodeEntities(s(o.check.h1)).slice(0, 300),
+      title: decodeEntities(s(o.check.title)).slice(0, 300),
+      // client reports 2026-11-16: the page's own tables, read from its HTML by the publish check (absent on checks made before)
+      ...(num(o.check.tables) ? { tables: Math.max(0, Math.round(num(o.check.tables)!)) } : {}),
+      ...(arr(o.check.tableRows).length ? { table_rows: arr(o.check.tableRows).map((x) => s(x).slice(0, 160)).filter(Boolean).slice(0, 60) } : {}),
+    },
   };
 }
 
@@ -219,6 +277,8 @@ export function interpretLiveGrade(res: { kind: 'answered' | 'unreachable' | 'ti
   const raw = s(j.delivery_status) || s(delivery.status);
   const status = (['ready', 'ready_with_questions', 'needs_work', 'not_ready'].includes(raw) ? raw : 'unknown') as PageDeliveryStatus;
   if (score == null) return { kind: 'skip', pause: 'page', why: 'the engine answered without a grade' };
+  const rd = obj(j.readability);
+  const kept = num(read.kept_pct);
   return {
     kind: 'graded',
     grade: {
@@ -230,8 +290,74 @@ export function interpretLiveGrade(res: { kind: 'answered' | 'unreachable' | 'ti
       url: s(read.url),
       title: decodeEntities(s(read.title)).slice(0, 300),
       words: Math.max(0, Math.round(num(read.words) ?? 0)),
+      // client reports 2026-11-16: what the grade says beside its number (an engine from before sends none of it: nothing is stored)
+      breakdown: numbers(grade.breakdown),
+      max: numbers(grade.max),
+      parts: partsOf(j.live_parts),
+      needs_work: arr(delivery.needs_work).map(obj).map((x) => ({ dim: s(x.dim).slice(0, 40), text: plainWords(s(x.text)).slice(0, 300), action: plainWords(s(x.action)).slice(0, 300) })).filter((x) => x.text).slice(0, 7),
+      advisory: arr(delivery.advisory).map(obj).map((x) => plainWords(s(x.text)).replace(/\s+/g, ' ').slice(0, 300)).filter(Boolean).slice(0, 8),
+      next_step: plainWords(s(delivery.next_step)).slice(0, 600),
+      readability: Object.keys(rd).length
+        ? {
+            flesch: num(rd.flesch),
+            avg_sentence_words: num(rd.avg_sentence_words),
+            long_sentences: Math.max(0, Math.round(num(rd.long_sentences) ?? 0)),
+            longest: arr(rd.longest).map(obj).map((x) => ({ text: plainWords(s(x.text)).slice(0, 200), words: Math.max(0, Math.round(num(x.words) ?? 0)) })).filter((x) => x.text).slice(0, 5),
+          }
+        : null,
+      kept_pct: kept == null ? null : Math.max(0, Math.min(100, Math.round(kept))),
+      kept_sentences: Math.max(0, Math.round(num(read.kept_sentences) ?? 0)),
+      delivered_sentences: Math.max(0, Math.round(num(read.delivered_sentences) ?? 0)),
+      adjustments: arr(j.live_adjustments).map(obj).map((x) => ({ code: s(x.code).slice(0, 40), text: plainWords(s(x.text)).slice(0, 300) })).filter((x) => x.text).slice(0, 6),
     },
   };
+}
+
+const numbers = (v: unknown): Record<string, number> => {
+  const out: Record<string, number> = {};
+  for (const [k, x] of Object.entries(obj(v))) {
+    const n = num(x);
+    if (n != null && /^[a-z_]{1,40}$/.test(k)) out[k] = n;
+  }
+  return out;
+};
+const partsOf = (v: unknown): LiveGradePart[] =>
+  arr(v)
+    .map(obj)
+    .map((x) => ({
+      dim: s(x.dim).slice(0, 40),
+      label: plainWords(s(x.label)).slice(0, 60),
+      points: num(x.points) ?? 0,
+      max: num(x.max) ?? 0,
+      reasons: arr(x.reasons).map((r) => plainWords(s(r)).slice(0, 400)).filter(Boolean).slice(0, 5),
+      fix: plainWords(s(x.fix)).slice(0, 300),
+    }))
+    .filter((x) => x.dim && x.max > 0)
+    .slice(0, 10);
+
+/**
+ * Client reports 2026-11-16: the version we delivered as the live grade is compared with it (pure): the newest version's payload (the final
+ * version when there is one, else the delivered page): its exact grade (not the "95+" label), its parts and how many images came with it.
+ */
+export function deliveredGradeOf(payload: P | null | undefined): LiveGradeDelivered | null {
+  const p = obj(payload);
+  const meta = obj(p.meta);
+  const g = obj(p.qa_grade ?? meta.grade ?? obj(meta.quality).grade);
+  const score = num(g.score) ?? num(p.content_score) ?? num(meta.content_score);
+  const breakdown = numbers(g.breakdown);
+  const files = arr(p.images).length;
+  const planned = arr(meta.images).map(obj).filter((x) => x.produced !== false && (s(x.path) || s(x.filename))).length;
+  if (score == null && !Object.keys(breakdown).length && !files && !planned) return null;
+  return { score: score == null ? null : Math.max(0, Math.min(100, Math.round(score))), breakdown, images: files || planned };
+}
+
+/** Client reports 2026-11-16: the file names of the images delivered with a page (the publish check looks for them on the live page). */
+export function deliveredImageNames(payload: P | null | undefined): string[] {
+  const p = obj(payload);
+  const names = [...arr(p.images).map(obj).map((x) => s(x.fileName)), ...arr(obj(p.meta).images).map(obj).map((x) => s(x.filename) || s(x.path))]
+    .map((x) => x.split(/[?#]/)[0]!.split('/').filter(Boolean).pop() ?? '')
+    .filter((x) => /^[\w.-]{1,200}\.(?:webp|avif|png|jpe?g|gif)$/i.test(x));
+  return [...new Set(names)].slice(0, 10);
 }
 
 /** What is stored after an attempt (pure): a new grade replaces the old one; a failed read keeps the old grade and says so. */
@@ -260,5 +386,21 @@ export function liveGradeView(g: PageLiveGrade | null | undefined, attemptedAt: 
     checkedAt: s(g.checked_at) || null,
     attemptedAt: at,
     readFailed: rf ? { at: s(rf.at), publishedReportId: s(rf.published_report_id), error: s(rf.error) } : null,
+    // client reports 2026-11-16: absent on grades stored before (they render as before)
+    parts: partsOf(g.parts),
+    readability: g.readability && typeof g.readability === 'object'
+      ? {
+          flesch: num(g.readability.flesch),
+          avgSentenceWords: num(g.readability.avg_sentence_words),
+          longSentences: num(g.readability.long_sentences) ?? 0,
+          longest: arr(g.readability.longest).map(obj).map((x) => ({ text: s(x.text), words: num(x.words) ?? 0 })).filter((x) => x.text).slice(0, 5),
+        }
+      : null,
+    keptPct: num(g.kept_pct),
+    keptSentences: num(g.kept_sentences) ?? 0,
+    deliveredSentences: num(g.delivered_sentences) ?? 0,
+    adjustments: arr(g.adjustments).map(obj).map((x) => ({ code: s(x.code), text: s(x.text) })).filter((x) => x.text).slice(0, 6),
+    nextStep: s(g.next_step),
+    delivered: g.delivered && typeof g.delivered === 'object' ? { score: num(g.delivered.score), breakdown: numbers(g.delivered.breakdown), images: num(g.delivered.images) ?? 0 } : null,
   };
 }

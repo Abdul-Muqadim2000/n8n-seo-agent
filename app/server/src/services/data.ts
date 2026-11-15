@@ -830,6 +830,11 @@ export interface PublishCheckRef {
   recorded?: boolean;
   h1?: string;
   title?: string;
+  /** client reports 2026-11-16: the article's tables and their rows (the live grade puts a flattened table back), and its content images
+   *  (null: a check made before these were read) */
+  tables?: number;
+  tableRows?: string[];
+  imagesFound?: number | null;
 }
 
 /**
@@ -852,7 +857,7 @@ export function liveCheckFor(row: Pick<ContentLogRow, 'request_id' | 'keyword'>,
   const kw = normKeyword(s(row.keyword));
   const c = (rid ? checks.find((x) => x.requestId === rid) : undefined) ?? (kw ? checks.find((x) => normKeyword(x.keyword) === kw) : undefined);
   if (!c || (!c.total && c.live)) return null;
-  return { at: c.receivedAt, passed: Math.min(c.passed, c.total), total: c.total, failed: c.failed.slice(0, 20), url: c.url, reportId: c.id, live: c.live };
+  return { at: c.receivedAt, passed: Math.min(c.passed, c.total), total: c.total, failed: c.failed.slice(0, 20), url: c.url, reportId: c.id, live: c.live, ...(c.imagesFound != null ? { imagesFound: c.imagesFound } : {}) };
 }
 
 /** prod 2026-11-10: the old address a live page improves, when our daily check of the website saw it redirect permanently to the page. Pure. */
@@ -882,6 +887,9 @@ export async function publishChecks(orgId: string, siteId: string): Promise<Publ
       recorded: sql<string | null>`${p}->>'recorded'`,
       h1: sql<string | null>`${p}->'verify_evidence'->>'h1'`,
       title: sql<string | null>`${p}->'verify_evidence'->>'title'`,
+      tables: sql<string | null>`${p}->'page_signals'->>'tables'`,
+      tableRows: sql<unknown>`${p}->'page_signals'->'table_rows'`,
+      imagesFound: sql<string | null>`${p}->'images'->>'count'`,
     })
     .from(R)
     .where(and(eq(R.orgId, orgId), eq(R.siteId, siteId), eq(R.stage, 'published')))
@@ -900,6 +908,9 @@ export async function publishChecks(orgId: string, siteId: string): Promise<Publ
     recorded: s(r.recorded) === 'true',
     h1: decodeEntities(s(r.h1)),
     title: decodeEntities(s(r.title)),
+    tables: n(r.tables),
+    tableRows: Array.isArray(r.tableRows) ? r.tableRows.map(String).filter(Boolean).slice(0, 60) : [],
+    imagesFound: r.imagesFound == null || s(r.imagesFound) === '' ? null : n(r.imagesFound),
   }));
 }
 

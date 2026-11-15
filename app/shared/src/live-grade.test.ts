@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cutLabel, decodeEntities, interpretLiveGrade, liveGradeBody, liveGradePending, liveGradeTarget, liveGradeView, nextLiveGrade, type LiveGradeCheck } from './live-grade';
+import { cutLabel, decodeEntities, deliveredGradeOf, deliveredImageNames, interpretLiveGrade, liveGradeBody, liveGradePending, liveGradeTarget, liveGradeView, nextLiveGrade, type LiveGradeCheck, type PageLiveGrade } from './live-grade';
 
 // Client reports 2026-11-11 (devaicon.com: "the card still shows the old score of the page instead of the updated one"): the grade of the
 // live page. Client text is anonymised (Nova&, novaand-demo.com).
@@ -125,5 +125,82 @@ describe('cutLabel', () => {
     const o = interpretLiveGrade(answered(200, { ...GRADED, delivery: { ...GRADED.delivery, status: 'not_ready', label: LONG } }));
     expect(o.kind).toBe('graded');
     if (o.kind === 'graded') expect(o.grade.label.endsWith('business-central-uae.')).toBe(true);
+  });
+});
+
+// Client reports 2026-11-16 (devaicon.com: "the version we delivered 95+/100, the live page 84, why?"). An engine answer shaped like the
+// production live grade of that day (execution 13659), with synthetic text: the client's own rewrite (0 of 161 of our sentences), readability
+// 3 of 10, structure 14 of 20, sources 12 of 15.
+const LIVE_1116 = {
+  ...GRADED,
+  delivery_status: 'needs_work',
+  delivery: {
+    status: 'needs_work', label: 'Needs work: readability', blocking: [],
+    advisory: [{ code: 'kw_count', text: 'Primary keyword used only 2 time(s)' }, { code: 'style', text: 'Hard to read (Flesch 22.9, average sentence 21.8 words): shorten sentences and use plainer words' }],
+    needs_work: [{ code: 'needs_work', dim: 'readability', text: 'Readability scored 3 of 10, under half its points', action: 'Use shorter sentences and plainer words' }],
+    next_step: 'Your live page has one part under half marks (readability). Use shorter sentences and plainer words. Change it on your website, then press Re-check.',
+    grade: { score: 84 },
+  },
+  grade: { score: 84, breakdown: { structure: 14, coverage: 15, readability: 3, specificity: 10, clean_language: 10, sources: 12, fit: 20, length: 0 }, max: { structure: 20, coverage: 15, readability: 10, specificity: 10, clean_language: 10, sources: 15, fit: 20, length: 0 } },
+  live_read: { ok: true, url: 'https://novaand-demo.com/services/agents-uae', title: 'Agents in the UAE', words: 1007, kept_pct: 0, kept_sentences: 0, delivered_sentences: 161, tables: 1, table_rows_restored: 0 },
+  live_parts: [
+    { dim: 'structure', label: 'structure', points: 14, max: 20, reasons: ['The main search phrase "agents uae" appears 2 times (3 or more)'], fix: '' },
+    { dim: 'readability', label: 'readability', points: 3, max: 10, reasons: ['Reading ease 22.9 out of 100 (40 or more, with sentences of 22 words or fewer, scores full marks); sentences average 21.8 words; 7 sentences are over 28 words'], fix: 'Use shorter sentences and plainer words' },
+    { dim: 'sources', label: 'sources', points: 12, max: 15, reasons: ['The page cites no outside source'], fix: 'Cite an official body, a research house, major press or vendor documentation' },
+    { dim: 'fit', label: 'fit with the search', points: 20, max: 20, reasons: [], fix: '' },
+  ],
+  readability: { flesch: 22.9, avg_sentence_words: 21.8, long_sentences: 7, longest: [{ text: 'Comprehensive operational visibility across distributed organisational entities necessitates considerable integration planning.', words: 41 }] },
+  live_adjustments: [{ code: 'direct_answer', text: 'Your page opens with a direct answer (66 words) without a "Quick answer" label: we count it as the direct answer' }],
+};
+
+describe('client reports 2026-11-16: what the live grade says beside its number', () => {
+  it('keeps the parts, why each lost points, the readability, how much of our text is on the page and what was not counted', () => {
+    const o = interpretLiveGrade(answered(200, LIVE_1116));
+    expect(o.kind).toBe('graded');
+    if (o.kind !== 'graded') return;
+    const g = o.grade;
+    expect(g).toMatchObject({ score: 84, label: 'Needs work: readability', kept_pct: 0, kept_sentences: 0, delivered_sentences: 161 });
+    expect(g.breakdown).toMatchObject({ readability: 3, structure: 14, sources: 12 });
+    expect(g.max).toMatchObject({ readability: 10, structure: 20 });
+    expect(g.parts!.map((p) => [p.dim, p.points, p.max])).toEqual([['structure', 14, 20], ['readability', 3, 10], ['sources', 12, 15], ['fit', 20, 20]]);
+    expect(g.parts![1]!.reasons[0]).toMatch(/^Reading ease 22\.9 out of 100/);
+    expect(g.readability).toEqual({ flesch: 22.9, avg_sentence_words: 21.8, long_sentences: 7, longest: [{ text: LIVE_1116.readability.longest[0]!.text, words: 41 }] });
+    expect(g.needs_work).toEqual([{ dim: 'readability', text: 'Readability scored 3 of 10, under half its points', action: 'Use shorter sentences and plainer words' }]);
+    expect(g.advisory).toHaveLength(2);
+    expect(g.next_step).toMatch(/on your website, then press Re-check/);
+    expect(g.adjustments).toEqual([{ code: 'direct_answer', text: LIVE_1116.live_adjustments[0]!.text }]);
+    expect(JSON.stringify(g)).not.toMatch(tell);
+    // the view the screens read
+    const v = liveGradeView({ ...g, published_report_id: 'pub1', checked_at: '2026-11-13T09:32:00Z', delivered: { score: 98, breakdown: { readability: 10, structure: 18, sources: 15 }, images: 3 } }, '2026-11-13T09:29:00Z')!;
+    expect(v).toMatchObject({ keptPct: 0, keptSentences: 0, deliveredSentences: 161, nextStep: LIVE_1116.delivery.next_step, delivered: { score: 98, images: 3 } });
+    expect(v.parts).toHaveLength(4);
+    expect(v.readability).toMatchObject({ flesch: 22.9, avgSentenceWords: 21.8, longSentences: 7 });
+    expect(v.adjustments).toHaveLength(1);
+  });
+
+  it('a grade stored before (no parts, no readability, no kept share) still renders, with empty values', () => {
+    const old = { score: 84, status: 'needs_work', label: 'Needs work: readability', blocking: [], advisory_count: 7, url: 'https://novaand-demo.com/x', title: 'X', words: 989, published_report_id: 'pub1', checked_at: '2026-11-13T09:32:00Z', read_failed: null } as PageLiveGrade;
+    const v = liveGradeView(old, '2026-11-13T09:29:00Z')!;
+    expect(v).toMatchObject({ score: 84, label: 'Needs work: readability', advisoryCount: 7, parts: [], readability: null, keptPct: null, adjustments: [], nextStep: '', delivered: null });
+    // an engine from before section 191 answers without the new fields: the grade is stored as before
+    const o = interpretLiveGrade(answered(200, GRADED));
+    expect(o.kind === 'graded' && o.grade.parts).toEqual([]);
+    expect(o.kind === 'graded' && o.grade.kept_pct).toBeNull();
+  });
+
+  it('the delivered version: its exact grade (98, not "95+"), its parts and its images; their file names for the publish check', () => {
+    const payload = { qa_grade: { score: 98, breakdown: { structure: 18, readability: 10 } }, images: [{ fileName: 'agents-hero.webp', $file: 'f1' }, { fileName: 'agents-matrix.webp' }, { fileName: 'notes.txt' }],
+      meta: { images: [{ path: 'images/agents-hero.webp', width: 1200, height: 675 }, { path: 'images/agents-flow.webp', width: 1000, height: 600 }] } };
+    expect(deliveredGradeOf(payload)).toEqual({ score: 98, breakdown: { structure: 18, readability: 10 }, images: 3 });
+    expect(deliveredGradeOf({})).toBeNull();
+    expect(deliveredImageNames(payload)).toEqual(['agents-hero.webp', 'agents-matrix.webp', 'agents-flow.webp']);
+  });
+
+  it('the request carries the page\'s tables and their rows from the publish check (a flattened table is put back), only when known', () => {
+    const base = { requestId: 'app-live-1', domain: 'novaand-demo.com', siteId: 'site_novaand-demo-com', payload: { markdown: '# x', keyword: 'k' }, original: {}, businessFacts: '', facts: {} as never };
+    const b = liveGradeBody({ ...base, check: { url: 'https://novaand-demo.com/x', h1: 'X', title: 'X | Nova&', tables: 2, tableRows: ['Criterion Weight What to ask for', 'Partner status High Their listing'] } });
+    expect(b.grade_live).toEqual({ url: 'https://novaand-demo.com/x', h1: 'X', title: 'X | Nova&', tables: 2, table_rows: ['Criterion Weight What to ask for', 'Partner status High Their listing'] });
+    const old = liveGradeBody({ ...base, check: { url: 'https://novaand-demo.com/x', h1: 'X', title: 'X' } });
+    expect(old.grade_live).toEqual({ url: 'https://novaand-demo.com/x', h1: 'X', title: 'X' });
   });
 });

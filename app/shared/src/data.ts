@@ -325,6 +325,8 @@ export interface ContentLiveCheck {
   reportId: string;
   /** false: the check could not open the live page */
   live: boolean;
+  /** client reports 2026-11-16: the content images the check found in the article (null: a check made before it read the article) */
+  imagesFound?: number | null;
 }
 
 export interface CaseStudy {

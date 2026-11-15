@@ -11,7 +11,8 @@ import { paths } from '@/lib/paths';
 export function reviewFacts(r: PageReviewSummary, opts: { live?: boolean } = {}): string[] {
   // client reports 2026-11-11: beside the live page's own grade, the delivered one is "version we delivered"
   const liveGraded = !!opts.live && r.liveGrade?.score != null && !!r.liveGrade?.checkedAt;
-  const grade = r.grade != null ? `${liveGraded ? 'version we delivered' : opts.live ? 'grade of the version we delivered' : 'grade'} ${gradeDisplay(r.grade)}/100` : '';
+  // client reports 2026-11-16: beside a live grade the delivered grade is its exact number ("98", not "95+"): two numbers are compared
+  const grade = r.grade != null ? `${liveGraded ? 'version we delivered' : opts.live ? 'grade of the version we delivered' : 'grade'} ${liveGraded ? Math.round(r.grade) : gradeDisplay(r.grade)}/100` : '';
   return [r.questions > 0 ? `${r.answered} of ${r.questions} ${r.questions === 1 ? 'question' : 'questions'} answered` : '', grade].filter(Boolean);
 }
 
