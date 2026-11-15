@@ -892,14 +892,15 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   const refreshedRecently = new Set(slog.filter((l) => l.existing_page_url && at - ms(l.started_at) < 60 * 864e5).map((l) => pageKey(l.existing_page_url)));
   // F-38 (AIR P3, the engine's Cadence_Plan.js): a page the agent PUBLISHED in the same 60 days is as fresh as one it refreshed, so no AI refresh of it yet
   for (const l of slog) if (l.published_url && l.published_at && at - ms(l.published_at) < 60 * 864e5) refreshedRecently.add(pageKey(l.published_url));
-  const STOPW = new Set(['the', 'and', 'for', 'with', 'what', 'how', 'which', 'are', 'can', 'does', 'your', 'you', 'that', 'this', 'from', 'into', 'best', 'top', 'list', 'guide']);
-  const headWords = new Set(lrows.flatMap((l) => norm(l.head_keyword).split(' ')).filter(Boolean));
-  const kwTok = (k: string) => [...new Set(norm(k).replace(/\b(e)\b/g, ' ').split(' ').filter((w) => w.length > 2 && !STOPW.has(w) && !headWords.has(w)))];
-  const sameSearch = (a: string, b: string) => {
-    const A = kwTok(a), B = new Set(kwTok(b));
-    return A.length > 0 && B.size > 0 && A.filter((w) => B.has(w)).length / A.length >= 0.6;
-  };
-  const ladderFor = (t: AiTargetRow) => lrows.find((l) => sameSearch(t.keyword, l.keyword) || sameSearch(l.keyword, t.keyword)) ?? null;
+  // client reports 2026-11-16 (devaicon.com, INV1 F7; the engine's Cadence_Plan.js): a question is a ladder page's search only when it IS the same
+  // search (LRU.sameQuestion: scaffolding out, plurals folded, places as their market), or the ladder's main page when the question carries every
+  // word of its main keyword (LRU.coversHead). The old rule stripped every head word and folded on one shared word ("companies").
+  const isHeadL = (l: LadderRow) => num(l.rung) === 4 || norm(l.keyword) === norm(l.head_keyword);
+  const sameSearch = (a: string, b: string) => LRU.sameQuestion(a, b);
+  const ladderFor = (t: AiTargetRow) => lrows.find((l) => LRU.sameQuestion(t.keyword, l.keyword)) ?? lrows.find((l) => isHeadL(l) && LRU.coversHead(t.keyword, l.keyword)) ?? null;
+  // INV1 F13: a refresh of a guide (/insights/, /blog/ ...) stays a Guide; "Comparison Page" is written as a Guide (the form has no such type)
+  const refreshType = (u: string) => (LRU.isBlog(S(u)) ? 'Guide' : 'Service Page');
+  const answerType = (t: AiTargetRow) => (S(t.page_type) === 'Comparison Page' ? 'Guide' : t.page_type || 'Guide');
   const aiTargetOf = (t: AiTargetRow): NonNullable<QueueItem['aiTarget']> => ({
     targetId: t.target_id,
     question: t.question,
@@ -916,7 +917,7 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
     item({
       keyword: t.keyword,
       source: t.kind === 'refresh' ? 'ai_refresh' : 'ai_answer',
-      pageType: t.kind === 'refresh' ? 'Service Page' : t.page_type || 'Guide',
+      pageType: t.kind === 'refresh' ? refreshType(t.page_url) : answerType(t),
       existingPageUrl: t.kind === 'refresh' ? t.page_url : '',
       targetId: t.target_id,
       why: `AI answers "${t.question}" without you${t.competitors ? ` (it names ${S(t.competitors).split(', ').slice(0, 3).join(', ')})` : ''}${t.kind === 'refresh' ? `: refresh ${t.page_url}` : ': a new answer page'}`,
@@ -929,7 +930,7 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
     const o = item({
       keyword: t.keyword,
       source: t.kind === 'refresh' ? 'ai_refresh' : 'ai_answer',
-      pageType: t.kind === 'refresh' ? 'Service Page' : t.page_type || 'Guide',
+      pageType: t.kind === 'refresh' ? refreshType(t.page_url) : answerType(t),
       existingPageUrl: t.kind === 'refresh' ? t.page_url : '',
       targetId: t.target_id,
       why: `AI answers "${t.question}" without you${t.competitors ? ` (it names ${S(t.competitors).split(', ').slice(0, 3).join(', ')})` : ''}${t.kind === 'refresh' ? `: refresh ${t.page_url}` : ': a new answer page'}`,
@@ -1140,7 +1141,7 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   for (let i = 0; i < picks.length; i++) {
     const p = picks[i];
     if (p.source !== 'ladder' || p.aiTarget) continue;
-    const t = aiTargets.find((x) => x.kind !== 'refresh' && (sameSearch(x.keyword, p.keyword) || sameSearch(p.keyword, x.keyword)));
+    const t = aiTargets.find((x) => x.kind !== 'refresh' && (sameSearch(x.keyword, p.keyword) || (p.ladder?.rung === 4 && LRU.coversHead(x.keyword, p.keyword))));
     if (t) picks[i] = { ...p, aiTarget: aiTargetOf(t), targetId: t.target_id, why: `${p.why}. Written to answer "${t.question}" in AI answers` };
   }
   const aiCand = aiCand0 && !picks.some((x) => norm(x.keyword) === norm(aiCand0.keyword)) ? aiCand0 : null;
@@ -1181,7 +1182,7 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   if (airClaims && pages > 0 && !blocked)
     for (const o of airQueue) {
       if (o.mainPage) continue;
-      const ss = picks.find((x) => norm(x.keyword) === norm(o.keyword) || sameSearch(x.keyword, o.keyword) || sameSearch(o.keyword, x.keyword));
+      const ss = picks.find((x) => norm(x.keyword) === norm(o.keyword) || sameSearch(x.keyword, o.keyword));
       const sp = !ss && pageOfPick(o) ? picks.find((x) => pageOfPick(x) === pageOfPick(o)) : undefined;
       const cv = !ss && !sp && o.source === 'ai_answer' ? coverOf(o) : null;
       if (!ss && !sp && !cv) {
