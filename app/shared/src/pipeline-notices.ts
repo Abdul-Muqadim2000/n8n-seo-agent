@@ -2,6 +2,7 @@ import { AUTOMATIONS, MODES, type AutomationId, type ModeId } from './constants'
 import type { PipelineData, QueueItem } from './data';
 import { keywordsOverlap } from './ladders';
 import { cycleNorm } from './cycles';
+import { aiFormPageType, aiQuestionKey, aiSearchOwner } from './ai-question-action';
 
 // What a manual run means for the website's automatic pipeline, shown on the tool forms before the run starts: nobody pays twice
 // for what the schedule already does, nobody writes a second page that competes with one already written, and everyone sees how
@@ -29,8 +30,9 @@ export interface PipelineNotice {
   /** warnings: the checkbox label the person ticks to start anyway */
   confirm?: string;
   link?: { label: string; reportId?: string; runId?: string; page?: 'pipeline'; ladderId?: string };
-  /** keyword pages: the pipeline's own plan for this keyword, to apply to the form */
-  usePlan?: { label: string; pageType: string; existingPageUrl: string };
+  /** keyword pages: the pipeline's own plan for this keyword, to apply to the form. `aiKind: 'refresh'`: an AI page becomes the refresh of
+   *  that page for the same question (client report 2026-11-16, issue 1) */
+  usePlan?: { label: string; pageType: string; existingPageUrl: string; aiKind?: 'refresh' };
 }
 
 /** The form values the notices look at. */
@@ -39,6 +41,10 @@ export interface NoticeInput {
   existingPageUrl?: string;
   receiveContent?: boolean;
   ladder?: unknown;
+  /** the run's market (the form's country): an AI page's same-search check leaves another market's page out */
+  country?: string;
+  /** client report 2026-11-16 (issue 1): a page written for an AI question (AI visibility "Write the page") */
+  aiTarget?: { question?: string; kind?: string; targetId?: string } | null;
 }
 
 export interface NoticeFormat {
@@ -154,8 +160,12 @@ export function pipelineNotices(
     }
   }
 
+  // ---- a page for an AI question (client report 2026-11-16, issue 1): one page per question, one page per search ----
+  const ai = mode === 'keyword' && kw && input.receiveContent !== false && !same ? aiPageNotice(input, data, f) : null;
+  if (ai) out.push(ai);
+
   // ---- a page for a keyword ----
-  if (mode === 'keyword' && kw && input.receiveContent !== false && !same) {
+  if (mode === 'keyword' && kw && input.receiveContent !== false && !same && !ai && !(input.aiTarget?.question && aiOwnsNothing(input, data))) {
     const done = data.written.find((w) => normKeyword(w.keyword) === kw);
     const rewrite = !!(done?.publishedUrl && input.existingPageUrl && urlKey(input.existingPageUrl) === urlKey(done.publishedUrl));
     if (done && !rewrite) {
@@ -291,4 +301,71 @@ function overlapping(data: PipelineData, keyword: string): { ladder: PipelineDat
 function queuePlan(q: QueueItem): PipelineNotice['usePlan'] | null {
   if (!q.existingPageUrl || q.ladder) return null;
   return { label: `Improve ${shortUrl(q.existingPageUrl)} instead`, pageType: q.pageType, existingPageUrl: q.existingPageUrl };
+}
+
+/**
+ * An AI page (the form carries `aiTarget`): the rule the engine applies to it (CONTRACT_ISSUE1.md §4), with the pages the app knows.
+ *  1. a page already written for THIS question (its run carried the same target or question): live -> improve it for the question (or write
+ *     a second one anyway); not live -> publish it first;
+ *  2. a LIVE page of the same market already owns the question's own search (75% of its words, the engine's share) -> "Improve <page> for this
+ *     question" first, "Write a second page anyway" last. A page of another market (devaicon's Pakistan page for a UAE question) is not it;
+ *  3. else nothing here, and never the topic's page: another question of the same topic has its own search, so no false "You already have a
+ *     page" (the client's screenshot).
+ * Null when nothing applies (the plain keyword notices then run only for an exact page of the same keyword).
+ */
+function aiPageNotice(input: NoticeInput, data: PipelineData, f: NoticeFormat): PipelineNotice | null {
+  const t = input.aiTarget;
+  const question = String(t?.question ?? '').trim();
+  if (!question) return null;
+  const q = aiQuestionKey(question);
+  const keyword = String(input.keyword ?? '').trim();
+  const kw = normKeyword(keyword);
+  const existing = urlKey(input.existingPageUrl ?? '');
+  const mine = data.written.filter(
+    (w) => (!!t?.targetId && w.aiTargetId === t.targetId) || (!!w.aiQuestion && aiQuestionKey(w.aiQuestion) === q) || (/^ai_/.test(w.source) && normKeyword(w.keyword) === kw),
+  );
+  const own = mine.find((w) => w.publishedUrl) ?? mine[0];
+  if (own) {
+    if (own.publishedUrl && existing && urlKey(own.publishedUrl) === existing) return null;   // this run improves that very page
+    if (own.publishedUrl)
+      return {
+        id: `ai-written:${q.slice(0, 60)}`,
+        tone: 'warning',
+        title: 'You already have a page for this question',
+        body: `It is live at ${shortUrl(own.publishedUrl)}${own.startedAt ? ` (written ${f.day(own.startedAt)})` : ''}. To win this AI answer, improve that page for the question rather than writing a second one: a second page for the same question competes with the first.`,
+        short: 'Page already written for this question',
+        confirm: 'Write a second page anyway',
+        usePlan: { label: `Improve ${shortUrl(own.publishedUrl)} for this question`, pageType: aiFormPageType('', { kind: 'refresh', pageUrl: own.publishedUrl }), existingPageUrl: own.publishedUrl, aiKind: 'refresh' },
+      };
+    return {
+      id: `ai-written:${q.slice(0, 60)}`,
+      tone: 'warning',
+      title: 'A page for this question was already written',
+      body: `It was written ${own.startedAt ? `on ${f.day(own.startedAt)}` : 'earlier'} and is waiting to be published: publish that one rather than writing it again.`,
+      short: 'Page already written for this question',
+      confirm: 'Write a second page anyway',
+      link: { label: 'Open the pipeline', page: 'pipeline' },
+    };
+  }
+  const owner = aiSearchOwner(keyword, data.written, input.country);
+  if (owner?.publishedUrl && !(existing && urlKey(owner.publishedUrl) === existing))
+    return {
+      id: `ai-owner:${kw}`,
+      tone: 'warning',
+      title: `Your page ${shortUrl(owner.publishedUrl)} already answers searches like this one`,
+      body: `It is already the page for "${owner.keyword}". To win this AI answer, improve that page for the question: an answer-first section, the searches AI runs and the sources it cites. A second page for the same search competes with the first in Google, and usually neither ranks well.`,
+      short: 'Improve your page for this question',
+      confirm: 'Write a second page anyway',
+      usePlan: { label: `Improve ${shortUrl(owner.publishedUrl)} for this question`, pageType: aiFormPageType('', { kind: 'refresh', pageUrl: owner.publishedUrl }), existingPageUrl: owner.publishedUrl, aiKind: 'refresh' },
+    };
+  return null;
+}
+
+/** An AI page whose keyword's only exact match is a page written for ANOTHER AI question (a stale topic keyword): that is not this
+ *  question's page, so the plain "You already have a page" is not shown for it. */
+function aiOwnsNothing(input: NoticeInput, data: PipelineData): boolean {
+  const kw = normKeyword(input.keyword ?? '');
+  const q = aiQuestionKey(input.aiTarget?.question ?? '');
+  const same = data.written.filter((w) => normKeyword(w.keyword) === kw);
+  return same.length > 0 && same.every((w) => !!w.aiQuestion && aiQuestionKey(w.aiQuestion) !== q);
 }
