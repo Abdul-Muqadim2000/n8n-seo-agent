@@ -83,8 +83,10 @@ module.exports = async (ctx) => {
     begin(SN); const check = mkCheck(SN);
     const cs = await pv({ page_type: 'Case Study', case_id: 'cs_anon1', case_study: { client_name: 'A client' }, client_ip: 'casestudy:site_novaand-example', force_content: true });
     check('a case study: not held, and says why', cs.would_hold === false && cs.verdict_hold === false && /case study/.test(cs.hold_exempt), J({ w: cs.would_hold, e: cs.hold_exempt }));
-    const ai = await pv({ ai_target: { question: 'Which Dynamics 365 partner helps UAE firms choose an ERP?', kind: 'answer', fanout: [], competitors: [], sources: [] } });
-    check('an AI answer page started from the app: not held', ai.would_hold === false && ai.verdict_hold === false && /AI answers/.test(ai.hold_exempt), J({ w: ai.would_hold, e: ai.hold_exempt }));
+    // client reports 2026-11-16 (INV1 F2): an AI answer page is exempt from the SCORE hold only; the duplicate rule applies to it on its question's own
+    // search (harness scenarios_client_1116.js CQ2). Here: a question no page of the site owns, scored 42, is not held
+    const ai = await pv({ keyword: 'which erp partner suits a uae trading company', ai_target: { question: 'Which Dynamics 365 partner helps UAE firms choose an ERP?', kind: 'answer', fanout: [], competitors: [], sources: [] } });
+    check('an AI answer page started from the app, on a search no page of the site owns: not held for its score', ai.would_hold === false && ai.verdict_hold === false && /AI answers/.test(ai.hold_exempt) && !/duplicate:/.test(ai.hold_exempt), J({ w: ai.would_hold, e: ai.hold_exempt, d: ai.duplicate_check }));
     const rf = await pv({ existing_page_url: BC });
     check('a refresh of an own page: not held', rf.would_hold === false && rf.verdict_hold === false && /refresh/.test(rf.hold_exempt), J({ w: rf.would_hold, e: rf.hold_exempt }));
     // a ladder rung the app's "Write now" started, scored 42: exempt from the score; its duplicate check asks for ALL of its words on one page

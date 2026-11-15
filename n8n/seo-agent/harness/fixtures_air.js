@@ -202,7 +202,7 @@ function make(opts) {
     const q0 = A.questions.find(q => q[2] === 'recommend');
     T.seo_ai_targets.push({ target_id: 'ait_' + sid.replace(/^site_/, '') + '_' + q0[0], site_id: sid, domain: A.domain, prompt_id: q0[0], question: q0[1], keyword: q0[3], kind: 'answer', page_url: '', page_type: 'Guide', fanout: q0[3],
       sources_json: '[]', competitors: A.rivals.map(r => r[0]).join(', '), engines: 'chatgpt', stage: q0[4], value: 1.2, status: 'queued', reason: 'not named in AI answers', created_at: ago(14), updated_at: ago(7), request_id: '',
-      written_at: '', won_at: '', origin: null, action_id: null, live_at: null });
+      written_at: '', won_at: '', reason_code: '', reason_args: '', origin: null, action_id: null, live_at: null });
     for (const q of A.questions) { if (q[2] === 'brand') continue;
       T.seo_query_history.push({ site_id: sid, domain: A.domain, period_end: ago(2).slice(0, 10), checked_at: ago(2), query: q[3], clicks: A === acme ? 3 : 0, impressions: A === acme ? 120 : 4, ctr: 0, position: A === acme ? 24 : 61,
         prev_clicks: 0, prev_impressions: 0, prev_position: 0, page: W + (A === acme && q[2] === 'learn' ? A.cited_page : '/'), tracked: false, serp_position: null }); }
