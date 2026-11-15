@@ -62,11 +62,31 @@ export function pasteHasSeveral(raw: string, mode: ListSplit = 'items'): boolean
   return mode === 'items' ? /[,\n;]/.test(raw) : splitListEntries(raw, 'phrases').length > 1;
 }
 
+/** "What do you sell?": the most words a service name has (a longer entry is a sentence about the business, not a name). */
+export const SERVICE_MAX_WORDS = 12;
+/** the words a sentence about the business starts with, never a service name ("We provide ...", "and ongoing support") */
+const SENTENCE_START = /^(we|our|i|my|us|and|or|also|plus|including|with|which|that|who|every|each|then|so|but)\b/i;
+
+/**
+ * Client report 2026-11-16 (F12): an entry that reads like a sentence, not the name of something sold ("We provide custom AI solutions",
+ * "and ongoing managed IT support. Every solution is built around your business nee"). The engine built AI questions and page keywords from
+ * such fragments. True for an entry that starts like a sentence, holds a full stop between sentences, or runs past SERVICE_MAX_WORDS words.
+ */
+export function serviceLooksLikeSentence(s: string): boolean {
+  const v = squash(s);
+  if (!v) return false;
+  return SENTENCE_START.test(v) || /[.!?]\s+\S/.test(v) || v.split(' ').length > SERVICE_MAX_WORDS;
+}
+
+/** The plain hint for an entry that reads like a sentence (the form shows it; a saved list keeps working until it is edited). */
+export const SERVICE_SENTENCE_HINT = 'This reads like a sentence. Enter the name of a service or product you sell, for example "AI chatbot development", then press Enter.';
+
 /** "What do you sell?": the message for an entry the list cannot keep, or null */
 export function serviceEntryError(s: string): string | null {
   const v = squash(s);
   if (v.length < 2) return 'Use at least 2 characters';
   if (v.length > SERVICE_MAX_CHARS)
     return `At most ${SERVICE_MAX_CHARS} characters (this one has ${v.length}). Shorten it, or press Enter between two services.`;
+  if (serviceLooksLikeSentence(v)) return SERVICE_SENTENCE_HINT;
   return null;
 }
