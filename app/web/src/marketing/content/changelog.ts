@@ -34,6 +34,19 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-11-16',
+    version: '4.14',
+    title: 'Live page grades that explain themselves',
+    summary: 'When a page you published grades lower than the version we delivered, the Content page now says why: how much of our text is on the live page, which parts lost points and what to change on your website.',
+    highlights: [
+      'Each live page grade says how much of the text we delivered is on the page, compares every part with the version we delivered (with its exact grade, not "95+"), says what to change on your website and lists the longest sentences to shorten',
+      'Our check no longer takes points from a live page for the way we read it: a direct answer at the top counts without a "Quick answer" label, a questions section your site template adds after the article is not counted as the last section, a table on your page counts as a table, and the site name your website adds to the title is not counted in its length. The card lists what was not counted',
+      'The live check reads the images in your article, not the related articles cards or small pictures around it: a page with no images gets one clear item instead of six, an image loaded from Google Images or another service is named, and the images we made for the page are looked for and pointed to when they are missing',
+      'The final version keeps the width and height of every image, and its top image loads first',
+    ],
+    features: ['content'],
+  },
+  {
     date: '2026-11-12',
     version: '4.13',
     title: 'A daily to-do for pages Google has not visited',
