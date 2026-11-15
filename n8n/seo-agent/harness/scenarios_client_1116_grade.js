@@ -291,3 +291,5 @@ module.exports = async (ctx) => {
     check('L9: a Blogger site\'s own images (googleusercontent) are not "loaded from another website"', blog.images.count === 2 && !named(blog, 'Images hosted on your website'), J({ img: blog.images.borrowed, failed: blog.failed }));
     const thumb = await pc(shell('<article><h1>AI consulting</h1><p>' + words(300) + '</p><img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:x" alt="AI consulting" width="800" height="450"></article>', '<meta name="generator" content="Blogger">'));
     check('L9: a Google Images thumbnail is always borrowed', named(thumb, 'Images hosted on your website') && /Google Images/.test(named(thumb, 'Images hosted on your website').detail), J(thumb.failed));
+  });
+};
