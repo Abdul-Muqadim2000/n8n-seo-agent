@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import {
   AUTOPILOT_LEVELS,
   SKIPS_COLUMNS,
@@ -20,6 +20,7 @@ import {
   type CycleJobRow,
   type CycleRow,
   type CyclePreview,
+  type ContentLogRow,
   type CyclePreviewItem,
   type Role,
   type SkipRow,
@@ -29,7 +30,7 @@ import { db, schema } from '../db';
 import type { CyclePreviewRow, OrgRow, SiteRow, UserRow } from '../db/schema';
 import { badRequest, HttpError, notFound } from '../lib/errors';
 import { sendMail } from '../lib/mailer';
-import { deleteRows, ensureTable, rows as n8nRows, upsertRow } from '../n8n/client';
+import { deleteRows, ensureTable, rows as n8nRows, siteRows, upsertRow } from '../n8n/client';
 import { wholeCreditsOfUsd as creditsOfUsd } from './admin/settings';
 import { billingContacts } from './invoices';
 import { baseUrlFor, senderFor } from './portalMail';
@@ -144,6 +145,12 @@ export function notWrittenMessage(x: { keyword: string; reason: string; detail?:
       return { keyword: x.keyword, reason: 'covered_by_live_page', message: `${q} is not written: a page of your website already answers this search.` };
     case 'budget':
       return { keyword: x.keyword, reason: 'budget', message: `${q} did not fit in this cycle: your pages a week are already used. Approve it again in a later plan.` };
+    case 'same_page': {
+      // client report 2026-11-16 b: the page this approval would change already has another change this week (another page of the plan, or a
+      // run of the last 7 days), and a page is changed once a week
+      const where = /^https?:\/\//i.test(S(x.detail)) ? ` (${S(x.detail).replace(/^https?:\/\/[^/]+/i, '') || '/'})` : '';
+      return { keyword: x.keyword, reason: 'same_page', message: `${q} waits: the page of your website it would change${where} already has another change this week, and we change a page only once a week. Approve it again in a later plan.` };
+    }
     case 'profile':
       return { keyword: x.keyword, reason: 'profile', message: `Your OK for ${q} waits: no page is written until your author profile and business facts are on file (Website settings).` };
     case 'no_longer_offered': {
@@ -261,6 +268,77 @@ export function runOutcome(run: Pick<PlanRun, 'job' | 'report' | 'pageReports'> 
   return { known: true, at: startedAt ?? isoOf(run?.job?.finished_at), pages, pausedReason: pr === 'pileup' || pr === 'site_paused' ? pr : '', waitingPublish: Number(p.waiting_publish) || 0, note };
 }
 
+/** client report 2026-11-16 b: the content-log fields Coming up reads to follow a page after the run (who wrote it, whether it is live) */
+export type PlanLogRow = Pick<ContentLogRow, 'keyword' | 'status' | 'published_url' | 'published_at' | 'started_at' | 'request_id'>;
+/** client report 2026-11-16 b: the website's pages, for following a plan's pages after its run */
+export interface PlanPages {
+  logs: readonly PlanLogRow[];
+  /** the app's report of a page run (its request id), when it arrived */
+  reportOf: (requestId: string) => string | null;
+}
+
+const tOf = (v: unknown): number => Date.parse(S(v));
+/**
+ * Live: published, or a published address dated on or after the row's start. The engine keeps one content-log row per search and keeps the old
+ * address when the page is written again, so a page rewritten and not yet republished is NOT live (review H1; the engine's _waiting.js agrees).
+ */
+const isLive = (l: PlanLogRow | null | undefined): boolean =>
+  !!l && (S(l.status) === 'published' || (!!S(l.published_url) && Number.isFinite(tOf(l.published_at)) && tOf(l.published_at) >= tOf(l.started_at)));
+const hasPage = (l: PlanLogRow): boolean => isLive(l) || ['written', 'not_ready'].includes(S(l.status));
+const newestFirst = (a: PlanLogRow, b: PlanLogRow): number => Number(isLive(b)) - Number(isLive(a)) || S(b.started_at).localeCompare(S(a.started_at));
+/** where a page is live and since when, and whether its draft needs a fix ({} for a written page that waits to be published) */
+const pageState = (l: PlanLogRow | null | undefined): { publishedUrl?: string; publishedAt?: string | null; needsFix?: boolean } =>
+  !l ? {} : isLive(l) ? { publishedUrl: S(l.published_url), publishedAt: isoOf(l.published_at) } : S(l.status) === 'not_ready' ? { needsFix: true } : {};
+/** who had a page written, from its run's request id: a person in the app or the form (the engine's execution id, or app-...), else a system run */
+export const byOfRequest = (id: string): 'you' | 'later' => (/^\d+$|^app-/.test(S(id)) ? 'you' : 'later');
+
+/**
+ * (pure) the content-log row of one page of the plan: the run's own row (its request id), else the newest live or written row of the same search
+ * that is this plan's (started since the plan was offered, or its page report arrived since: a row written again keeps its first start date)
+ */
+export function planPageLog(logs: readonly PlanLogRow[], keyword: string, requestId = '', sinceMs = -Infinity, reportOf?: (id: string) => string | null): PlanLogRow | null {
+  const rid = S(requestId);
+  if (rid) {
+    const own = logs.find((l) => S(l.request_id) === rid);
+    if (own) return own;
+  }
+  const k = itemKeyOf(keyword);
+  const fresh = (l: PlanLogRow) => tOf(l.started_at) >= sinceMs || !!reportOf?.(S(l.request_id));
+  return logs.filter((l) => itemKeyOf(S(l.keyword)) === k && hasPage(l) && fresh(l)).sort(newestFirst)[0] ?? null;
+}
+
+/**
+ * (pure) client report 2026-11-16 b (devaicon.com): a page for an approved item that the run did not write, written for the same search after the
+ * plan was offered: written or published (live first), or still being written. A row counts when it started since the plan was offered or its
+ * page report arrived since (the app reopens an existing row and keeps its start date: review M2). The plan's own runs are not one (`exclude`:
+ * their request ids; review M3). A failed or held row wrote nothing; a `started` row older than PAGE_IN_FLIGHT_HOURS never finished.
+ */
+export function laterPage(pages: PlanPages, keyword: string, sinceMs: number, now: number = Date.now(), exclude: ReadonlySet<string> = new Set()): { state: 'written' | 'started'; log: PlanLogRow } | null {
+  const k = itemKeyOf(keyword);
+  if (!k || !Number.isFinite(sinceMs)) return null;
+  const rows = pages.logs.filter((l) => itemKeyOf(S(l.keyword)) === k && !exclude.has(S(l.request_id)) && (tOf(l.started_at) >= sinceMs || !!pages.reportOf(S(l.request_id))));
+  const done = rows.filter(hasPage).sort(newestFirst)[0];
+  if (done) return { state: 'written', log: done };
+  const going = rows.filter((l) => S(l.status) === 'started' && now - tOf(l.started_at) < PAGE_IN_FLIGHT_HOURS * 3600_000).sort((a, b) => S(b.started_at).localeCompare(S(a.started_at)))[0];
+  return going ? { state: 'started', log: going } : null;
+}
+
+/**
+ * (pure) client report 2026-11-16 b: an approved item's result followed past its run. The run did not write it (or its page failed) and the same
+ * search was written since the plan was offered: that page (`by: 'you'` when a person started it, `later` for a system run). A page the run
+ * wrote: where it is live, or that its draft needs a fix. Anything else as it was.
+ */
+export function followResult(r: ComingUpItemResult | null, keyword: string, pages: PlanPages | null | undefined, sinceMs: number, requestId = '', now: number = Date.now(), exclude: ReadonlySet<string> = new Set()): ComingUpItemResult | null {
+  if (!r || !pages) return r;
+  if (r.state === 'not_written' || r.state === 'failed') {
+    const lp = laterPage(pages, keyword, sinceMs, now, exclude);
+    if (!lp) return r;
+    const rid = S(lp.log.request_id);
+    return { state: lp.state, at: isoOf(lp.log.started_at), reportId: pages.reportOf(rid), message: '', by: byOfRequest(rid), ...(lp.state === 'written' ? pageState(lp.log) : {}) };
+  }
+  return { ...r, by: r.by ?? 'run', ...(r.state === 'written' ? pageState(planPageLog(pages.logs, keyword, requestId, sinceMs, pages.reportOf)) : {}) };
+}
+
 /**
  * I3 (pure): what became of one approved item once its run is done. Written / started / failed from the run's pages; not written with the
  * reason the run gave (its content report), else the plan's own, else the pile-up the run reported, else no reason at all (none invented).
@@ -283,7 +361,7 @@ export function approvedResult(o: { keyword: string; outcome: ComingUpOutcome; r
 }
 
 /** The view of one plan (pure): items in credits, each with the client's decision on it. */
-export function comingUpView(o: { site: Pick<SiteRow, 'id' | 'domain'>; preview: CyclePreviewRow | null; skips: SkipRow[]; role: Role; now: number; credits: (usd: number) => number; run?: PlanRun | null }): ComingUpView {
+export function comingUpView(o: { site: Pick<SiteRow, 'id' | 'domain'>; preview: CyclePreviewRow | null; skips: SkipRow[]; role: Role; now: number; credits: (usd: number) => number; run?: PlanRun | null; pages?: PlanPages | null }): ComingUpView {
   const canDecide = roleAtLeast(o.role, 'member');
   const next = { nextPreviewAt: futureIso(o.run?.nextPreviewAt, o.now), nextDueAt: futureIso(o.run?.nextDueAt, o.now) };
   if (!o.preview)
@@ -293,7 +371,15 @@ export function comingUpView(o: { site: Pick<SiteRow, 'id' | 'domain'>; preview:
   const due = o.preview.scheduledFor?.getTime() ?? Date.parse(p.scheduled_for);
   const closed = Number.isFinite(due) && due <= o.now;
   const phase = planPhase({ due, now: o.now, cycleKey: p.cycle_key, run: o.run });
-  const outcome = phase === 'done' ? runOutcome(o.run, o.now) : null;
+  const outcome0 = phase === 'done' ? runOutcome(o.run, o.now) : null;
+  // client report 2026-11-16 b: the plan's pages are followed past the run (whether each one is live now, and an approval the client wrote since)
+  const since = o.preview.receivedAt.getTime();
+  const runReq = new Map(arrOf(o.run?.report?.payload.pages).map((x) => [itemKeyOf(S(x.keyword)), S(x.request_id)] as const));
+  const runIds = new Set([...runReq.values()].filter(Boolean));
+  const outcome =
+    outcome0 && o.pages
+      ? { ...outcome0, pages: outcome0.pages.map((pg) => (pg.state === 'written' ? { ...pg, ...pageState(planPageLog(o.pages!.logs, pg.keyword, runReq.get(itemKeyOf(pg.keyword)) ?? '', since, o.pages!.reportOf)) } : pg)) }
+      : outcome0;
   // the run's own word on approvals it did not write (its content report); an older engine sends none
   const reported = o.run?.report ? previewOf({ approved_not_written: o.run.report.payload.approved_not_written }).approved_not_written : [];
   const toItem = (x: CyclePreviewItem): ComingUpItem => {
@@ -328,7 +414,9 @@ export function comingUpView(o: { site: Pick<SiteRow, 'id' | 'domain'>; preview:
     };
   };
   const withResult = (i: ComingUpItem): ComingUpItem =>
-    outcome && i.decision?.decision === 'approve' ? { ...i, result: approvedResult({ keyword: i.keyword, outcome, reported, planned: p.approved_not_written }) } : i;
+    outcome && i.decision?.decision === 'approve'
+      ? { ...i, result: followResult(approvedResult({ keyword: i.keyword, outcome, reported, planned: p.approved_not_written }), i.keyword, o.pages, since, runReq.get(itemKeyOf(i.keyword)) ?? '', o.now, runIds) }
+      : i;
   const items = p.items.map(toItem).map(withResult);
   const suggestions = p.suggestions.map(toItem).map(withResult);
   // done: each approved row carries its own result; the list keeps only what no row of the plan shows
@@ -382,8 +470,30 @@ export async function loadComingUp(site: SiteRow, role: Role, now = Date.now()):
     skipsOf(site),
     loadCycleRows(site).catch(() => ({ row: null as CycleRow | null, jobs: [] as CycleJobRow[] })),
   ]);
-  const run = await planRun(site, preview, cyc, role, now).catch(() => null);
-  return comingUpView({ site, preview, skips, role, now, credits: creditsOfUsd, run });
+  const [run, pages] = await Promise.all([planRun(site, preview, cyc, role, now).catch(() => null), planPages(site, preview, now).catch(() => null)]);
+  return comingUpView({ site, preview, skips, role, now, credits: creditsOfUsd, run, pages });
+}
+
+/**
+ * client report 2026-11-16 b: the website's pages since the plan was offered, so a finished plan follows its pages (live or not) and an approval the
+ * client wrote meanwhile with "Write it now". Read only once the plan is due; a failed read follows nothing (the plan shows as before).
+ */
+async function planPages(site: SiteRow, preview: CyclePreviewRow | null, now: number): Promise<PlanPages | null> {
+  if (!preview) return null;
+  const due = preview.scheduledFor?.getTime() ?? Date.parse(S(preview.body.scheduled_for));
+  if (!Number.isFinite(due) || due > now) return null;
+  const [logs, reps] = await Promise.all([
+    siteRows<ContentLogRow>('contentLog', site.domain, { sortBy: 'started_at:desc', max: 1000 }),
+    db
+      .select({ id: schema.reports.id, requestId: schema.reports.requestId, status: schema.reports.status, receivedAt: schema.reports.receivedAt })
+      .from(schema.reports)
+      .where(and(eq(schema.reports.orgId, site.orgId), eq(schema.reports.siteId, site.id), eq(schema.reports.stage, 'content'), gte(schema.reports.receivedAt, preview.receivedAt)))
+      .orderBy(desc(schema.reports.receivedAt))
+      .limit(200),
+  ]);
+  const by = new Map<string, string>();
+  for (const r of reps) if (r.requestId && !by.has(r.requestId) && S(r.status) !== 'failed' && S(r.status) !== 'progress') by.set(r.requestId, r.id);
+  return { logs, reportOf: (id) => by.get(S(id)) ?? null };
 }
 
 /**

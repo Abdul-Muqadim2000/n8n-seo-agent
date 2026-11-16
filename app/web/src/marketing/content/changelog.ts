@@ -35,6 +35,19 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-11-16',
+    version: '4.16',
+    title: 'Coming up follows each page after the weekly run',
+    summary: 'Once a weekly run is done, Coming up now says what became of each page: written by the run or by you, and whether it is live on your website.',
+    highlights: [
+      'A page you approved and then had written yourself shows as yours, with its report, instead of "Not written in that run"',
+      'Every page of the plan says when it went live and at which address, once you report it published',
+      'When one page of the week is held because another page already changes the same page of your website, the next page in line takes its place, so the week keeps the pages it has room for',
+      'When an approved page waits for that reason, Coming up says so in plain words and names the page of your website it would change',
+    ],
+    features: ['autopilot'],
+  },
+  {
+    date: '2026-11-16',
     version: '4.15',
     title: 'AI answer pages written for the question itself',
     summary: 'A page written to win an AI answer now targets the question\'s own search, never a second copy of a page you already have, and the AI visibility page says where each question stands in plain words.',

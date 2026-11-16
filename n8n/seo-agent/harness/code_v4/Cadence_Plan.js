@@ -3712,25 +3712,28 @@ for (const s of list) {
   const uniqP = (airOn && airProtect.size) ? uniq.filter(x => { const pr = protOf(x); if (!pr) return true;
     air_protected.push({ keyword: x.keyword, source: x.source, url: pr.url, until: pr.until, why: pr.why }); protectedItems.push({ ...x, why: x.why + protWhy(pr) }); return false; }) : uniq;
   if (airOn && airProtect.size && aiCand0 && !aiCand0.air && airProtect.has(keyOfU(aiCand0.existing_page_url)) && !/AI answers cite this page/.test(aiCand0.why)) aiCand0.why += protWhy(airProtect.get(keyOfU(aiCand0.existing_page_url)));
+  // client report 2026-11-16 (devaicon.com, "custom ai solutions uae"): a slot freed by the one-page-one-rewrite hold below passes to the next item
+  // instead of being lost (the 13 Nov run held one of its two picks, wrote one ordinary page and left the client's approval, next in line, out).
+  // The order is unchanged: the ladder pages, then the client's approvals, then the other automatic items (cadence_levels.json approve_*)
   const pickable = paused_reason ? [] : waiting_for_keyword ? uniqP.filter(x => x.approved) : uniqP;
-  const picks = pickable.slice(0, room);
+  // FX-C RC-2: one page, one rewrite. A pick whose page another pick of this run already rewrites, or that another keyword's run started in the
+  // last 7 days (AI ranking `on`), waits as a suggestion with the reason (never two concurrent rewrites of one page)
+  const pageOfPick = (x) => keyOfU(x.existing_page_url || '');
+  const urlHeld = [];
+  const weekU = new Map(); if (airOn) for (const l of slog) if ((at - new Date(l.started_at || 0)) < 7 * 864e5) for (const u of [l.existing_page_url, l.published_url]) { const k = keyOfU(u); if (k && !weekU.has(k)) weekU.set(k, norm(l.keyword)); }
+  const seenU = new Set();
+  const pageHeld = (p) => { const u = pageOfPick(p); if (!u) return false; if (seenU.has(u) || (weekU.has(u) && weekU.get(u) !== norm(p.keyword))) return true; seenU.add(u); return false; };
+  const holdPage = (p) => urlHeld.push({ ...p, why: p.why + '; another page of this week\'s plan already rewrites ' + p.existing_page_url + ', so it waits' });
+  const picks = [];
+  for (const p of pickable) { if (picks.length >= room) break; if (pageHeld(p)) { holdPage(p); continue; } picks.push(p); }
   // v4.12: the AI page of the week ON TOP of the pages a week — level 3 only, within the month's allowance, one a week, never while the
   // pile-up guard holds, and never for a site set to 0 pages a week
   for (const p of picks) if (p.source === 'ladder' && !p.ai_target) { const t = aiTargets.find(x => x.site_id === s.site_id && x.status === 'queued' && x.kind !== 'refresh' && LRU.questionPage(x.keyword, { keyword: p.keyword, rung: p.rung, head_keyword: p.head }, qMarket)); if (t) { p.ai_target = aiTargetOf(t); p.target_id = t.target_id; p.why += '; written to answer "' + t.question + '" in AI answers'; } }
   const aiCand = aiCand0 && !picks.some(x => norm(x.keyword) === norm(aiCand0.keyword)) ? aiCand0 : null;
   const aiPick = level === 3 && pages > 0 && aiCand && aiCand === aiTop3 && aiDue && !blocked ? aiCand : null;
-  if (aiPick) picks.push(aiPick);
-  // FX-C RC-2 (on only): one page, one rewrite. A pick whose page another pick of this run already rewrites, or that another keyword's run
-  // started in the last 7 days, waits as a suggestion with the reason (never two concurrent rewrites of one page)
-  const pageOfPick = (x) => keyOfU(x.existing_page_url || '');
-  const urlHeld = [];
   // FX-C (owner 2026-11-06): the in-run rule holds for EVERY website (a decay refresh and the level-3 AI page rewrote one page twice); the 7-day
-  // rule across runs stays for websites in AI ranking `on`
-  { const weekU = new Map(); if (airOn) for (const l of slog) if ((at - new Date(l.started_at || 0)) < 7 * 864e5) for (const u of [l.existing_page_url, l.published_url]) { const k = keyOfU(u); if (k && !weekU.has(k)) weekU.set(k, norm(l.keyword)); }
-    const seenU = new Set();
-    for (let i = 0; i < picks.length; i++) { const p = picks[i]; const u = pageOfPick(p); if (!u) continue;
-      if (seenU.has(u) || (weekU.has(u) && weekU.get(u) !== norm(p.keyword))) { urlHeld.push({ ...p, why: p.why + '; another page of this week\'s plan already rewrites ' + p.existing_page_url + ', so it waits' }); picks.splice(i, 1); i--; continue; }
-      seenU.add(u); } }
+  // rule across runs stays for websites in AI ranking `on`. The level-3 AI page (on top) obeys it too.
+  if (aiPick) { if (pageHeld(aiPick)) holdPage(aiPick); else picks.push(aiPick); }
   // AIR RESERVE: the reserved AI ranking page of the week, on top of pages_per_week (never for 0 pages a week, never while blocked). RC-2: an AIR
   // target that a page of this run already covers (the same search or the same page) or that a live page already answers is held, and the slot
   // passes to the next one
@@ -3776,7 +3779,9 @@ for (const s of list) {
   const recheck_ladders = recheckL.map(x => ({ ladder_id: x.id, head: x.head, planned_at: x.start, reason: RECHECK_WHY }));
   // an approval that is not written this cycle, with the reason: the pile-up guard, the budget, or a live page already answering its search
   const approved_not_written = approved.filter(o => !picks.some(p => norm(p.keyword) === norm(o.keyword))).map(o => ({ keyword: o.keyword, source: o.source,
-    reason: paused_reason || (heldK.has(norm(o.keyword)) ? 'profile' : covered.some(c => norm(c.keyword) === norm(o.keyword)) ? 'covered_by_live_page' : 'budget') }))
+    reason: paused_reason || (heldK.has(norm(o.keyword)) ? 'profile' : urlHeld.some(u => norm(u.keyword) === norm(o.keyword)) ? 'same_page'   // client report 2026-11-16 b: held because its page already has a change this week
+      : covered.some(c => norm(c.keyword) === norm(o.keyword)) ? 'covered_by_live_page' : 'budget'),
+    ...(urlHeld.some(u => norm(u.keyword) === norm(o.keyword)) && o.existing_page_url ? { detail: o.existing_page_url } : {}) }))
     .concat(approval_ambiguous.map(a => ({ keyword: a.keyword, source: '', reason: 'ambiguous', detail: 'your approval names only the keyword, and ' + a.sources.length + ' different pages share it (' + a.sources.join(', ') + '): approve the one you want again' })))
     // client reports 2026-11-10 (devaicon.com, section 184D): an approval whose item was no longer offered when the run planned (an AI question
     // taken off the list of questions to win, a ladder page written or set aside meanwhile) vanished without a word: the client saw "Approved"
@@ -3803,7 +3808,7 @@ for (const s of list) {
     cycle_request_id, level, auto_sources: AUTO_SOURCES[level], waiting_for_keyword, client_ladders: clientLadders.length, cycle_key, cycle_date, scheduled_for, trigger: trigger_kind, budget,
     skipped, approved_items: approved.map(o => ({ keyword: o.keyword, source: o.source, item_key: cycleNorm(o.keyword) })), approved_not_written, est_page_usd: EST_PAGE_USD, est_basis,
     not_chosen_ladders: unchosenL.map(x => ({ ladder_id: x.id, head: x.head, chosen_by: x.chosen_by })), recheck_ladders,
-    ai_pages: { per_month: aiQuota, used_this_month: aiUsed, this_week: !!aiPick, next: aiCand ? { keyword: aiCand.keyword, source: aiCand.source, target_id: aiCand.target_id, why: aiCand.why } : null, queued: aiQueue.length, on_top: level === 3 },
+    ai_pages: { per_month: aiQuota, used_this_month: aiUsed, this_week: !!aiPick && picks.includes(aiPick), next: aiCand ? { keyword: aiCand.keyword, source: aiCand.source, target_id: aiCand.target_id, why: aiCand.why } : null, queued: aiQueue.length, on_top: level === 3 },
     queued_ladders: queued.map(x => ({ ladder_id: x.id, head: x.head, priority: Number.isFinite(x.priority) ? x.priority : null, reason: 'max_active' })),
     won_ladders: info.filter(x => x.won || x.status === 'won').map(x => ({ ladder_id: x.id, head: x.head, position: x.head_position, checks: x.won_checks })),
     waiting_for_support: info.filter(x => x.main_waiting && ['active', 'queued'].includes(x.status) && !x.won).map(x => ({ ladder_id: x.id, head: x.head, published: x.published, supporting: x.support, needed: Math.ceil(x.support / 2), head_position: x.head_position })),

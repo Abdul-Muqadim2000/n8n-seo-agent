@@ -161,6 +161,27 @@ describe('I3: the card of a run still to come', () => {
     expect(resultLine({ state: 'started', at: '', reportId: null, message: '' }, '')).toBe('Started in that run: the page arrives under Reports when it is ready.');
     expect(resultLine({ state: 'not_written', at: null, reportId: null, message: '' }, '')).toBe('Not written in that run.');
   });
+  // client report 2026-11-16 b (devaicon.com): a finished plan follows its pages, so the line says when a page went live, and an approval the client
+  // had written since is that page, never "Not written"
+  it('result lines follow the page past the run (live, or written by the client since)', () => {
+    const live = { publishedUrl: 'https://devaicon.com/insights/custom-ai-solutions-uae', publishedAt: '2026-11-16T11:40:00.000Z' };
+    expect(resultLine({ state: 'written', at: '', reportId: 'r', message: '', ...live }, 'Friday 13 November', 'Monday 16 November')).toBe('Written on Friday 13 November. It is live at /insights/custom-ai-solutions-uae since Monday 16 November.');
+    expect(resultLine({ state: 'written', at: '', reportId: 'r', message: '', by: 'you', ...live }, 'Monday 16 November', 'Monday 16 November')).toBe(
+      'Not written by that run. You had it written on Monday 16 November. It is live at /insights/custom-ai-solutions-uae since Monday 16 November.',
+    );
+    expect(resultLine({ state: 'written', at: '', reportId: 'r', message: '', by: 'you' }, 'Monday 16 November')).toBe(
+      'Not written by that run. You had it written on Monday 16 November. Publish it on your website, then press I published it on the Content page.',
+    );
+    expect(resultLine({ state: 'started', at: '', reportId: null, message: '', by: 'you' }, 'Monday 16 November')).toBe('Not written by that run. You had it written, started on Monday 16 November: the page arrives under Reports when it is ready.');
+    expect(resultLine({ state: 'written', at: '', reportId: 'r', message: '', by: 'you', needsFix: true }, 'Monday 16 November')).toBe(
+      'Not written by that run. You had it written on Monday 16 November. It needs a fix before it can be published: open it on the Content page.',
+    );
+    expect(resultLine({ state: 'written', at: '', reportId: 'r', message: '', by: 'later' }, 'Saturday 14 November')).toBe(
+      'Not written by that run. It was written later on Saturday 14 November. Publish it on your website, then press I published it on the Content page.',
+    );
+    expect(resultLine({ state: 'written', at: '', reportId: 'r', message: '', needsFix: true }, 'Friday 13 November')).toBe('Written on Friday 13 November. It needs a fix before it can be published: open it on the Content page.');
+    for (const l of [resultLine({ state: 'written', at: '', reportId: 'r', message: '', by: 'you', ...live }, 'x', 'y')]) expect(l).not.toMatch(/[—–…]|\.\.\./);
+  });
 });
 
 /** How many green ticks the done card draws (the tick is the only text-good-text icon sized size-4). */

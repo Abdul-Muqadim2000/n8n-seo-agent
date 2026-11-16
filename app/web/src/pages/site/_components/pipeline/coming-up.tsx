@@ -8,7 +8,7 @@ import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { Ban, CalendarClock, Check, CheckCircle2, ChevronDown, Hand, Info, PenSquare, SkipForward, Undo2, Zap } from 'lucide-react';
-import { WEEKDAY_NAMES, weekdayOfDate, type ComingUpItem, type ComingUpView, type PipelineData, type SiteCycleView } from '@seo/shared';
+import { WEEKDAY_NAMES, aiPagePath, weekdayOfDate, type ComingUpItem, type ComingUpView, type PipelineData, type SiteCycleView } from '@seo/shared';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout, ErrorState, Skeleton } from '@/components/ui/feedback';
@@ -317,6 +317,7 @@ function ComingUpPanel({ view, cycle, onWrite, live }: { view: ComingUpView; cyc
 function WrittenRow({ page, tz }: { page: NonNullable<ComingUpView['outcome']>['pages'][number]; tz: string }) {
   const { org } = useOrgCtx();
   const when = validDate(page.at) ? fmtDayHead(page.at, tz) : '';
+  const pubWhen = page.publishedAt && validDate(page.publishedAt) ? fmtDayHead(page.publishedAt, tz) : '';
   return (
     <li className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3">
       <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -328,8 +329,9 @@ function WrittenRow({ page, tz }: { page: NonNullable<ComingUpView['outcome']>['
             <span className="text-sm font-semibold text-ink">{page.keyword}</span>
             <Badge tone={SOURCE_TONE[page.source]}>{SOURCE_LABEL[page.source] ?? page.source}</Badge>
             {page.approved && <StatusBadge tone="good">Approved by you</StatusBadge>}
+            {page.publishedUrl ? <StatusBadge tone="good">Published</StatusBadge> : page.needsFix ? <Badge tone="warning">Needs a fix</Badge> : null}
           </div>
-          <p className="mt-1 text-[13px] leading-snug text-ink-2">{resultLine({ state: page.state, at: page.at, reportId: page.reportId, message: '' }, when)}</p>
+          <p className="mt-1 text-[13px] leading-snug text-ink-2">{resultLine({ state: page.state, at: page.at, reportId: page.reportId, message: '', publishedUrl: page.publishedUrl, publishedAt: page.publishedAt, needsFix: page.needsFix }, when, pubWhen)}</p>
         </div>
       </div>
       {page.reportId && (
@@ -342,12 +344,21 @@ function WrittenRow({ page, tz }: { page: NonNullable<ComingUpView['outcome']>['
   );
 }
 
-/** What became of a page, in one line (pure). */
-export function resultLine(r: NonNullable<ComingUpItem['result']>, when: string): string {
+/**
+ * What became of a page, in one line (pure). Client report 2026-11-16 b: a page is followed past the run, so the line says when it went live, and a
+ * page the run did not write but the client had written since (`by: 'you'`) is that page, never "Not written".
+ */
+export function resultLine(r: NonNullable<ComingUpItem['result']>, when: string, pubWhen = ''): string {
+  const live = r.publishedUrl ? ` It is live at ${aiPagePath(r.publishedUrl)}${pubWhen ? ` since ${pubWhen}` : ''}.` : '';
+  const fix = r.needsFix ? ' It needs a fix before it can be published: open it on the Content page.' : '';
+  const after = r.by === 'you' || r.by === 'later';
+  const head = r.by === 'you' ? `Not written by that run. You had it written` : `Not written by that run. It was written later`;
   switch (r.state) {
     case 'written':
-      return when ? `Written on ${when}.` : 'Written in that run.';
+      if (after) return `${head}${when ? ` on ${when}` : ''}.${live || fix || ' Publish it on your website, then press I published it on the Content page.'}`;
+      return (when ? `Written on ${when}.` : 'Written in that run.') + (live || fix);
     case 'started':
+      if (after) return `${head}${when ? `, started on ${when}` : ''}: the page arrives under Reports when it is ready.`;
       return when ? `Started on ${when}: the page arrives under Reports when it is ready.` : 'Started in that run: the page arrives under Reports when it is ready.';
     case 'failed':
       return r.message || 'Started in that run, but the page could not be finished.';
@@ -427,6 +438,7 @@ function ComingUpRow({ item, closed, onWrite, pileup = false, phase }: { item: C
   const canAct = can('member') && !closed;
   const r = item.result ?? null;
   const when = r && validDate(r.at) ? fmtDayHead(r.at, tz) : '';
+  const pubWhen = r?.publishedAt && validDate(r.publishedAt) ? fmtDayHead(r.publishedAt, tz) : '';
   const written = r?.state === 'written';
   return (
     <li className={cn('flex flex-wrap items-start justify-between gap-3 rounded-xl border px-4 py-3 transition-colors duration-200 ease-brand', skipped ? 'border-line bg-surface-2/50' : 'border-line bg-surface')}>
@@ -439,13 +451,13 @@ function ComingUpRow({ item, closed, onWrite, pileup = false, phase }: { item: C
             <span className={cn('text-sm font-semibold', skipped ? 'text-ink-3 line-through decoration-1' : 'text-ink')}>{item.keyword}</span>
             <Badge tone={SOURCE_TONE[item.source]}>{SOURCE_LABEL[item.source] ?? item.source}</Badge>
             {decisionBadge(item)}
-            {r && (written ? <StatusBadge tone="good">Written</StatusBadge> : r.state === 'started' ? <Badge>Being written</Badge> : <Badge tone="warning">Not written</Badge>)}
+            {r && (r.publishedUrl ? <StatusBadge tone="good">Published</StatusBadge> : written && r.needsFix ? <Badge tone="warning">Needs a fix</Badge> : written ? <StatusBadge tone="good">Written</StatusBadge> : r.state === 'started' ? <Badge>Being written</Badge> : <Badge tone="warning">Not written</Badge>)}
             {item.recheck && <Badge tone="warning">Checking again</Badge>}
             {item.held && <Badge tone="warning">Waits for your profile</Badge>}
           </div>
           {r ? (
             <p className={cn('mt-1 text-[13px] leading-snug', written || r.state === 'started' ? 'text-ink-2' : 'text-warning-text')}>
-              {resultLine(r, when)}
+              {resultLine(r, when, pubWhen)}
               {r.reportId && (
                 <>
                   {' '}

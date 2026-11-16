@@ -5273,7 +5273,7 @@
   },
   {
    "name": "air_on_url_once_level3",
-   "doc": "RC-2 (one page, one rewrite, every path): on, level 3, no reserve. The level-3 AI page of the week is a refresh of https://techand.ai/crm-implementation/, the page the decay refresh already rewrites, and https://techand.ai/crm-consulting/ was rewritten two days ago for another keyword (a page the client asked for in the app): each page is written at most once a week; the second rewrite of each waits as a suggestion with the reason.",
+   "doc": "RC-2 (one page, one rewrite, every path): on, level 3, no reserve. The level-3 AI page of the week is a refresh of https://techand.ai/crm-implementation/, the page the decay refresh already rewrites, and https://techand.ai/crm-consulting/ was rewritten two days ago for another keyword (a page the client asked for in the app): each page is written at most once a week; the second rewrite of each waits as a suggestion with the reason. Client report 2026-11-16 b: the slot the held rewrite frees passes to the next item (the striking page \"sales pipeline automation tips\", another address), so 3 pages are written as the budget allows; before, the freed slot was lost.",
    "level": 3,
    "now": "2026-10-21T10:00:00.000Z",
    "trigger": {},
@@ -5501,6 +5501,10 @@
      {
       "keyword": "crm implementation partner uae",
       "source": "decay"
+     },
+     {
+      "keyword": "sales pipeline automation tips",
+      "source": "striking"
      }
     ],
     "suggestions": [
