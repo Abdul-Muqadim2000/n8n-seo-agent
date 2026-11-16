@@ -4,7 +4,7 @@ import { renderToString } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
 import type { ComingUpItem, ComingUpView, Me, Org, Site } from '@seo/shared';
-import { approveToast, ComingUp, ComingUpSummary, comingUpHeading, pileupBanner, resultLine, type LiveQueue } from '@/pages/site/_components/pipeline/coming-up';
+import { approveToast, ComingUp, ComingUpSummary, comingUpHeading, pileupBanner, resultLine, slotLine, type LiveQueue } from '@/pages/site/_components/pipeline/coming-up';
 import { qk } from '@/lib/queries';
 import { makeCan, OrgContext, SiteContext } from '@/lib/context';
 import { GuideProvider } from '@/components/guide';
@@ -150,6 +150,16 @@ describe('I3: the card of a run still to come', () => {
     expect(approveToast('x', false)).toEqual({ title: '"x" will be written in this run' });
     expect(approveToast('x', true).title).toBe('"x" is approved: it is written once the pages that wait are published');
     expect(approveToast('x', true).description).toMatch(/approve it again in the next plan/);
+  });
+  it('approvals first (owner 2026-11-16): the toast and the row say what an approval moves, in plain words', () => {
+    expect(approveToast('x', false, { approveMoves: 'crm cost' })).toEqual({ title: '"x" will be written in this run', description: 'Approved pages come first, so "crm cost" moves to next week.' });
+    expect(approveToast('x', false, { approveOver: true }).title).toBe('"x" is approved for your next plan');
+    expect(slotLine({ slot: 'moved', decision: null })).toMatch(/^Moves to next week: your approved pages come first/);
+    expect(slotLine({ slot: 'over', decision: null })).toBe("This week's pages are already used, so we bring it back first in your next plan.");
+    expect(slotLine({ slot: 'this_week', decision: { decision: 'approve', scope: 'cycle', by: '', at: '', carried: true } })).toMatch(/earlier plan and it did not fit then/);
+    expect(slotLine({ slot: 'this_week', decision: null })).toBe('');
+    expect(slotLine({ approveMoves: 'crm cost', decision: null })).toBe('Approving it uses one of this week\'s pages: "crm cost" then moves to next week.');
+    for (const t of [slotLine({ slot: 'moved', decision: null }), slotLine({ approveOver: true, decision: null }), approveToast('x', false, { approveOver: true }).description ?? '']) expect(t).not.toMatch(/[\u2014\u2026\u201c\u201d]/);
   });
   it('an older server (no phase) keeps the old titles', () => {
     const old = upcoming({ phase: undefined });

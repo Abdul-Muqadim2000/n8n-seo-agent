@@ -56,7 +56,7 @@ import {
 // - R-K7, one cycle one budget: pages a ladder start wrote in the cycle, and pages an earlier run of this cycle's cadence started,
 //   count against `pages_per_week`.
 // - skips (seo_skips): `skip` (always, or this cycle) -> not written, not suggested; `approve` (this cycle) -> written within the
-//   budget, after the ladder pages and before the level's own automatic items. An approval is the client's own choice, so it is written
+//   budget, FIRST (earliest approval first; owner 2026-11-16), then the ladder pages and the level's own items. An approval is the client's choice, so it is written
 //   even while the website waits for its first keyword (E4, 2026-10-19); skips still win, the budget and the pile-up guard still apply.
 // - pile-up guard: max_waiting or more pages written and not published -> nothing is written (`pausedReason: 'pileup'`).
 // - D11, one search one page: a candidate a live page already answers is a refresh (ladder) or left out (anything else).
@@ -423,7 +423,7 @@ export interface CadencePlan {
   waitingForKeyword: boolean;
   /** the pages the run writes, in order (the AI page of the week last) */
   picks: CadenceItem[];
-  /** every candidate in order (ladder pages, approved items, the level's automatic items), each keyword once */
+  /** every candidate (ladder pages, approved items, the level's automatic items), each keyword once; picks take the approved ones first */
   candidates: CadenceItem[];
   /** what waits for the client's OK, with its price (max 5, AI first) */
   suggestions: CadenceItem[];
@@ -1142,8 +1142,11 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
       : uniq;
   if (airOn && airProtect.size && aiCand0 && !aiCand0.air && airProtect.has(urlKey(aiCand0.existingPageUrl)) && !/AI answers cite this page/.test(aiCand0.why)) aiCand0.why += protWhy(airProtect.get(urlKey(aiCand0.existingPageUrl))!);
   // client report 2026-11-16 (the engine's rule, Cadence_Plan.js): a slot freed by the one-page-one-rewrite hold passes to the next item instead of
-  // being lost; the order is unchanged (ladder pages, the client's approvals, the other automatic items)
-  const pickable = pausedReason ? [] : waitingForKeyword ? uniqP.filter((x) => x.approved) : uniqP;
+  // being lost. APPROVALS FIRST (owner 2026-11-16): the client's approvals for this cycle take the pages a week first, the earliest approval first,
+  // then the ladder pages, then the other automatic items; an approval never raises pages_per_week and every hold still applies to it
+  const approvedAt = (x: Cand): string => approveRows.filter((r) => rowFits(r, x)).map((r) => S(r.created_at)).filter(Boolean).sort()[0] || '~';
+  const ordered = [...uniqP.filter((x) => x.approved).sort((a, b) => { const ta = approvedAt(a), tb = approvedAt(b); return ta < tb ? -1 : ta > tb ? 1 : 0; }), ...uniqP.filter((x) => !x.approved)];
+  const pickable = pausedReason ? [] : waitingForKeyword ? ordered.filter((x) => x.approved) : ordered;
   // FX-C RC-2 (the engine's rule): one page, one rewrite. A pick whose page another pick of this run already rewrites, or that another keyword's
   // run started in the last 7 days (AI ranking `on`), waits as a suggestion with the reason. The in-run rule holds for EVERY website.
   const pageOfPick = (x: Cand) => urlKey(x.existingPageUrl || '');

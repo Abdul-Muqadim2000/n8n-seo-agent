@@ -47,7 +47,7 @@ const decisionBadge = (it: ComingUpItem): ReactNode => {
   if (d.decision === 'approve')
     return (
       <StatusBadge tone="good">
-        Approved{d.by ? ` by ${d.by}` : ''}
+        {d.carried ? 'Carried over from your last plan' : `Approved${d.by ? ` by ${d.by}` : ''}`}
       </StatusBadge>
     );
   return d.scope === 'always' ? (
@@ -117,10 +117,22 @@ export function pileupBanner(v: ComingUpView, live?: LiveQueue | null): { tone: 
 }
 
 /** The toast after an approval (pure): never "written in this run" while writing is paused for pages that wait. */
-export function approveToast(keyword: string, pileup: boolean): { title: string; description?: string } {
-  return pileup
-    ? { title: `"${keyword}" is approved: it is written once the pages that wait are published`, description: 'If they still wait when this run starts, approve it again in the next plan.' }
-    : { title: `"${keyword}" will be written in this run` };
+export function approveToast(keyword: string, pileup: boolean, plan: { approveMoves?: string; approveOver?: boolean } = {}): { title: string; description?: string } {
+  if (pileup) return { title: `"${keyword}" is approved: it is written once the pages that wait are published`, description: 'If they still wait when this run starts, approve it again in the next plan.' };
+  // APPROVALS FIRST (owner 2026-11-16): an approval takes one of this week's pages before the automatic ones, and one that does not fit moves on by itself
+  if (plan.approveOver) return { title: `"${keyword}" is approved for your next plan`, description: 'This week\'s pages are already used, so we bring it back first in your next plan.' };
+  if (plan.approveMoves) return { title: `"${keyword}" will be written in this run`, description: `Approved pages come first, so "${plan.approveMoves}" moves to next week.` };
+  return { title: `"${keyword}" will be written in this run` };
+}
+
+/** APPROVALS FIRST: the line a page carries about this week's pages before the run ('' when there is nothing to say). Pure. */
+export function slotLine(it: Pick<ComingUpItem, 'slot' | 'approveMoves' | 'approveOver' | 'decision'>): string {
+  if (it.slot === 'moved') return 'Moves to next week: your approved pages come first, and they use this week\'s pages.';
+  if (it.slot === 'over') return 'This week\'s pages are already used, so we bring it back first in your next plan.';
+  if (it.slot === 'this_week' && it.decision?.carried) return 'You approved it in an earlier plan and it did not fit then, so it comes first this week.';
+  if (it.approveOver) return 'This week\'s pages are already used: approving it puts it first in your next plan.';
+  if (it.approveMoves) return `Approving it uses one of this week's pages: "${it.approveMoves}" then moves to next week.`;
+  return '';
 }
 
 export function ComingUp({ cycle, onWrite, queue }: { cycle?: SiteCycleView; onWrite?: (it: ComingUpItem) => void; queue?: LiveQueue | null }) {
@@ -153,7 +165,7 @@ export function ComingUpSummary() {
   const q = useComingUp(org.id, site.id, !!site.verifiedAt);
   const v = q.data;
   if (!site.verifiedAt || !v?.available || v.closed) return null;
-  const auto = v.items.filter((i) => i.auto && i.decision?.decision !== 'skip').length;
+  const auto = v.items.filter((i) => i.auto && i.decision?.decision !== 'skip' && i.slot !== 'moved').length;
   const waiting = [...v.items.filter((i) => !i.auto), ...v.suggestions.filter((s) => !v.items.some((i) => i.itemKey === s.itemKey))].filter((i) => !i.decision).length;
   const day = v.cycleDate ? cycleDayWords(v.cycleDate) : '';
   const parts = [auto ? `${auto === 1 ? '1 page is' : `${auto} pages are`} written on its own` : 'nothing is written on its own', waiting ? `${waiting} ${waiting === 1 ? 'waits' : 'wait'} for your OK` : ''];
@@ -418,7 +430,7 @@ function ComingUpRow({ item, closed, onWrite, pileup = false, phase }: { item: C
       {
         onSuccess: () => {
           if (decision === 'approve') {
-            const t = approveToast(item.keyword, pileup);
+            const t = approveToast(item.keyword, pileup, item);
             return void toast.success(t.title, t.description ? { description: t.description } : undefined);
           }
           toast.success(scope === 'always' ? `We will not suggest "${item.keyword}" again` : `"${item.keyword}" is skipped this week`);
@@ -452,6 +464,8 @@ function ComingUpRow({ item, closed, onWrite, pileup = false, phase }: { item: C
             <Badge tone={SOURCE_TONE[item.source]}>{SOURCE_LABEL[item.source] ?? item.source}</Badge>
             {decisionBadge(item)}
             {r && (r.publishedUrl ? <StatusBadge tone="good">Published</StatusBadge> : written && r.needsFix ? <Badge tone="warning">Needs a fix</Badge> : written ? <StatusBadge tone="good">Written</StatusBadge> : r.state === 'started' ? <Badge>Being written</Badge> : <Badge tone="warning">Not written</Badge>)}
+            {!r && item.slot === 'moved' && <Badge tone="warning">Moves to next week</Badge>}
+            {!r && item.slot === 'over' && <Badge tone="warning">Next week</Badge>}
             {item.recheck && <Badge tone="warning">Checking again</Badge>}
             {item.held && <Badge tone="warning">Waits for your profile</Badge>}
           </div>
@@ -476,6 +490,7 @@ function ComingUpRow({ item, closed, onWrite, pileup = false, phase }: { item: C
           ) : (
             item.why && <p className="mt-1 text-[13px] leading-snug text-ink-2">{item.why}</p>
           )}
+          {!r && !closed && slotLine(item) && <p className={cn('mt-1 text-[13px] leading-snug', item.slot === 'moved' || item.slot === 'over' ? 'text-warning-text' : 'text-ink-2')}>{slotLine(item)}</p>}
           <p className="mt-0.5 text-xs text-ink-3">
             {asPageType(item.pageType)}
             {item.existingPageUrl ? ` · improves ${item.existingPageUrl.replace(/^https?:\/\/(www\.)?/, '')}` : ''}

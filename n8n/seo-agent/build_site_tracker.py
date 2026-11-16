@@ -656,7 +656,7 @@ assert 'const g = gateOf(o);' in _cp19 and _cp19.count('refuse(o, g)') >= 2, 'R-
 assert 'const room = Math.max(0, pages - spent);' in _cp19 and 'if (picks.length >= room) break;' in _cp19, 'R-K7: pages a ladder start wrote are not counted against the cycle'
 # E4 (2026-10-19): an approval is the client's choice - written while the site waits for its first keyword, never past the pile-up guard
 # AIR P6: uniqP = uniq unless the website is on and has protected pages
-assert 'const pickable = paused_reason ? [] : waiting_for_keyword ? uniqP.filter(x => x.approved) : uniqP;' in _cp19 and ') : uniq;\n' in _cp19, 'E4: an approval is not written while the site waits for its first keyword (or is written past the pile-up guard)'
+assert 'const pickable = paused_reason ? [] : waiting_for_keyword ? ordered.filter(x => x.approved) : ordered;' in _cp19 and 'const ordered = [...uniqP.filter(x => x.approved).sort(byApproval), ...uniqP.filter(x => !x.approved)];' in _cp19 and ') : uniq;\n' in _cp19, 'E4: an approval is not written while the site waits for its first keyword (or is written past the pile-up guard)'
 assert "rowsOf('Load Skips (Cadence)')" in _cp19 and 'approvedKeys' in _cp19, "keyword-first: the client's skips / approvals are not read"
 assert "const aiPick = level === 3 && pages > 0" in _cp19, 'keyword-first: the AI page on top is written below level 3 or with 0 pages a week'
 assert 'const CC = (() => {' in _cp19 and '/*__COST_CAL__*/' not in _cp19, "keyword-first: the price of a page is not the engine's own estimate"

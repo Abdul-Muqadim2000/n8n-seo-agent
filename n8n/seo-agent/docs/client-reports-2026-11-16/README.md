@@ -128,3 +128,30 @@ Deployed 2026-11-16 ~14:15-14:25 UTC (Monday; the deploy guard: nothing starting
 production == main except Cadence Plan and POST Cadence Note before, production == this build (0) after; engine 12 updated, 29 published;
 API on the VM 3b380c5c -> 0e2c522c (healthy, 0 restarts, /api/health 200; rollback image `alaventra-app:rollback-3b380c5c`). Web: PR #69
 (owner merges). Until then the current web shows the new results' text for the approval but not the Published badges (new optional fields).
+
+## Approvals first (owner decision 2026-11-16, after the second report)
+
+The owner asked for the enterprise-grade rule on the open decision "should the client's approvals come before the ladder pages?". The
+standard practice is that a customer's explicit, per-item decision outranks the system's own (delegated) choice, the outcome is shown at
+the moment of the decision (admission control), and an accepted request is never silently dropped. Built on both sides:
+
+- **Engine** (`Cadence_Plan.js`, mirror `cadence.ts`, decide identically): the items the client approved for the cycle are picked FIRST,
+  the earliest approval (`seo_skips.created_at`) first, then the ladder pages, then the level's other automatic items. An approval never
+  raises `pages_per_week`; every hold still applies (pile-up, profile, one page one rewrite). The level-3 AI page and the AIR reserved page
+  stay on top of the pages a week and are marked `on_top` in the plan. A suggestion an approval would not reach this week (an automatic page
+  held this week, the held AIR page) is marked `not_approvable`. Gap found and fixed: an approval whose OWN item (search + source + ladder)
+  was left out while another item of the same search was still offered vanished without a word; it is now reported `no_longer_offered`.
+  Fixtures `cadence_levels.json` (approve_in_cycle, approve_outside_budget, approval_by_source, approval_waits_for_profile) and
+  `air_cadence_cases.json` (air_on_protect_approved, _level2) now record approvals first; CA1 adds first-approved-first-written and
+  never-silent cases.
+- **App** (`comingUp.ts`): before the run each page says where it stands (`slot`: this_week / moved / over) and a page waiting for an OK
+  says what approving it moves (`approveMoves`) or that it would go first in the next plan (`approveOver`); `carryApprovals` (on every new
+  plan): an approval the previous run reported not written for `budget` / `same_page` is re-filed for the new cycle with its first approval
+  time and author (so it keeps its place), when the item is still one an approval reaches, the client has not decided on it again, pages a
+  week > 0, and the first approval is under 28 days old (`CARRY_APPROVAL_DAYS`). Shown as "Carried over from your last plan". A re-made plan
+  keeps its first arrival time. Plain reasons and the weekly e-mail updated. Web: badges "Moves to next week" / "Next week", hint lines,
+  approve toast. Marketing changelog 4.17, capability + pricing text; tutorials backlog row (video-skills 557693a).
+
+Independent review: no High; 6 fixed (carried flag after a re-made plan, the e-mail saying "nothing planned" beside a carried page, carry
+past the five visible suggestions, wording when the week was used by a ladder start or 0 pages a week, old level-3 plans' AI page, approvals
+of suggestions the engine would not reach). Checks: harness **20035 / 0**; app shared 1373, server 2218, web 402, typecheck, web build.

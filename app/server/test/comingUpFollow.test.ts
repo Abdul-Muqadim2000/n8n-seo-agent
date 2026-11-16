@@ -130,7 +130,7 @@ describe('client report 2026-11-16 b: a finished plan follows its pages', () => 
   it('a same-page hold has its own plain reason with the address (never "your pages a week are already used")', () => {
     const m = notWrittenMessage({ keyword: APPROVED, reason: 'same_page', detail: `${D}/services/ai-app-development-companies` });
     expect(m.reason).toBe('same_page');
-    expect(m.message).toBe(`"${APPROVED}" waits: the page of your website it would change (/services/ai-app-development-companies) already has another change this week, and we change a page only once a week. Approve it again in a later plan.`);
+    expect(m.message).toBe(`"${APPROVED}" waits: the page of your website it would change (/services/ai-app-development-companies) already has another change this week, and we change a page only once a week. We bring it back in your next plan by itself, as long as it is still a page we would write.`);
     expect(m.message).not.toMatch(/[—–…]|\$|seo_|cad_/);
   });
 });

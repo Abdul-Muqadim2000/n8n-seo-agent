@@ -29,6 +29,8 @@ export const REJECT_LIMIT = 2;
 export const REJECT_WINDOW = 5;
 /** Upgrade nudge: after this many approved or published pages at level 1, offer level 2 (never switched automatically). */
 export const NUDGE_AFTER_PAGES = 5;
+/** APPROVALS FIRST (owner 2026-11-16): an approval the pages a week could not fit is carried to the next plans for this long after it was given. */
+export const CARRY_APPROVAL_DAYS = 28;
 
 export type AutopilotLevel = 1 | 2 | 3;
 export const DEFAULT_AUTOPILOT_LEVEL: AutopilotLevel = 2;
@@ -126,6 +128,10 @@ export interface CyclePreviewItem {
   recheck?: boolean;
   /** P1 (2026-10-20): held until the website's author profile and business facts are on file (the reason is in `why`) */
   held?: 'profile';
+  /** 2026-11-16: written ON TOP of pages_per_week (the level-3 AI page, the reserved AI ranking page): approvals never move it */
+  on_top?: boolean;
+  /** 2026-11-16: a suggestion an approval would not reach this week (an automatic page held this week, the held AI ranking page) */
+  not_approvable?: boolean;
 }
 
 /** The `cycle_preview` callback body (beside the usual callback fields). */
@@ -263,8 +269,21 @@ export interface ComingUpItem {
   auto: boolean;
   credits: number;
   aiTarget: { targetId: string; question: string; kind: 'answer' | 'refresh'; fanout: string[]; sources: { url: string; title: string }[]; competitors: string[] } | null;
-  /** the client's decision on it, if any (the newest) */
-  decision: { decision: 'skip' | 'approve'; scope: 'cycle' | 'always'; by: string; at: string } | null;
+  /**
+   * the client's decision on it, if any (the newest). `carried`: an approval of an earlier plan the budget could not fit, carried to this plan
+   * by itself (it keeps its first approval time, so it comes before the approvals made since)
+   */
+  decision: { decision: 'skip' | 'approve'; scope: 'cycle' | 'always'; by: string; at: string; carried?: boolean } | null;
+  /**
+   * APPROVALS FIRST (owner 2026-11-16): where the page stands in this week's pages, before the run (phase `upcoming` only). Approved pages take
+   * the pages a week first (the earliest approval first), then the automatic ones. `this_week`: it uses one of them; `moved`: an automatic page
+   * the approvals move to the next week; `over`: an approval beyond this week's pages, carried to the next plan by itself.
+   */
+  slot?: 'this_week' | 'moved' | 'over';
+  /** for an item that waits for an OK: approving it moves this automatic page to the next week */
+  approveMoves?: string;
+  /** for an item that waits for an OK: this week's pages are taken by approvals, so an OK puts it first in the next plan */
+  approveOver?: boolean;
   /** Skip: every item; Approve: the items that wait for an OK */
   canSkip: boolean;
   canApprove: boolean;

@@ -41,8 +41,8 @@
 //   * R-K7, one cycle one budget: pages a ladder start wrote in this cycle, and pages an earlier run of this cycle's cadence started, count
 //     against `pages_per_week`. The cycle starts at the cycle run's `scheduled_for`; a run outside a cycle counts the last 6 days.
 //   * skips (seo_skips, written by the app): `skip` (scope `always`, or `cycle` for this cycle's key) -> not written, not suggested;
-//     `approve` for this cycle -> a needs-OK item is written in this cycle, within `pages_per_week`, after the ladder pages and before the
-//     other automatic items. item_key = cycleNorm(keyword), the same normalisation as cycles.ts. An approval is the CLIENT's choice, so it is
+//     `approve` for this cycle -> a needs-OK item is written in this cycle, within `pages_per_week`, BEFORE the ladder pages and the other
+//     automatic items (owner 2026-11-16: the client's explicit decision outranks the autopilot's; earliest approval first). item_key = cycleNorm(keyword), the same normalisation as cycles.ts. An approval is the CLIENT's choice, so it is
 //     written even while the site waits for its first keyword at levels 1-2 (2026-10-19, agent E4): R-K2 stops what the system would choose,
 //     not what the client asked for. Skips still beat approvals, the budget still applies, and the pile-up guard still holds everything.
 //   * `trigger: 'cycle'` (the Cycle Dispatcher, plan §14.2): one site, scheduled semantics (pauses and an `off` cadence honoured, no `pages`
@@ -3276,7 +3276,7 @@ const out = [];
 // the one shape a "Coming up" item and a suggestion take (CyclePreviewItem in cycles.ts)
 const itemOf = (p, auto) => ({ item_key: cycleNorm(p.keyword), keyword: p.keyword, source: p.source, page_type: p.page_type || '', existing_page_url: p.existing_page_url || '',
   ladder_id: p.ladder_id || '', rung: Number(p.rung) || 0, why: p.why || '', auto: !!auto, est_usd: EST_PAGE_USD, ai_target: p.ai_target || null,
-  ...(p.target_id ? { target_id: p.target_id } : {}), ...(p.approved ? { approved: true } : {}), ...(p.chosen_by != null && p.source === 'ladder' ? { chosen_by: p.chosen_by } : {}) });
+  ...(p.target_id ? { target_id: p.target_id } : {}), ...(p.approved ? { approved: true } : {}), ...(p.on_top ? { on_top: true } : {}), ...(p.chosen_by != null && p.source === 'ladder' ? { chosen_by: p.chosen_by } : {}) });
 for (const s of pausedSites) {
   if (preview) out.push({ json: { preview: true, dry_run: true, site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', country: s.country || '',
     request_id: cycle_request_id || 'prev_' + (cycle_date || week).replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), cycle_key, cycle_date, scheduled_for, trigger: trigger_kind,
@@ -3616,7 +3616,7 @@ for (const s of list) {
   // the reserved slot takes the AI page of the week when a written AIR page is possible at this level (2 and 3); the homepage / a main menu page never
   const airCand0 = airQueue.find(o => !o.main_page) || null;
   const airClaims = !!airCand0 && aiDue && level >= 2;
-  // ---- what is written: the ladder pages, then what the client approved for this cycle, then the level's own automatic items ----
+  // ---- what is written: what the client approved for this cycle (first, see APPROVALS FIRST below), the ladder pages, then the level's own automatic items ----
   const aiCand0 = aiQueue[0] || null;
   // level 2: an AI refresh of an existing page in topic is one of the level's refreshes (a slot of pages_per_week); level 3: the AI page on top
   const aiAuto2 = level === 2 && aiCand0 && aiDue && aiCand0.source === 'ai_refresh' && !!aiCand0.existing_page_url && aiCand0.in_topic === true && !aiCand0.main_page && !airClaims ? aiCand0 : null;
@@ -3714,8 +3714,15 @@ for (const s of list) {
   if (airOn && airProtect.size && aiCand0 && !aiCand0.air && airProtect.has(keyOfU(aiCand0.existing_page_url)) && !/AI answers cite this page/.test(aiCand0.why)) aiCand0.why += protWhy(airProtect.get(keyOfU(aiCand0.existing_page_url)));
   // client report 2026-11-16 (devaicon.com, "custom ai solutions uae"): a slot freed by the one-page-one-rewrite hold below passes to the next item
   // instead of being lost (the 13 Nov run held one of its two picks, wrote one ordinary page and left the client's approval, next in line, out).
-  // The order is unchanged: the ladder pages, then the client's approvals, then the other automatic items (cadence_levels.json approve_*)
-  const pickable = paused_reason ? [] : waiting_for_keyword ? uniqP.filter(x => x.approved) : uniqP;
+  // APPROVALS FIRST (owner 2026-11-16, the enterprise rule: the customer's explicit decision outranks the autopilot's own choice): the items the
+  // client approved for this cycle take the pages a week first, the earliest approval first, then the ladder pages, then the level's other
+  // automatic items. An approval never raises pages_per_week, and every hold below still applies to it (pile-up, profile, one page one rewrite).
+  // The app shows the client what an approval moves to the next week before the run (comingUp.ts planSlots) and carries an approval the budget
+  // could not fit to the next plan (carryApprovals).
+  const approvedAt = (x) => { const t = approveRows.filter(r => rowFits(r, x)).map(r => String(r.created_at || '')).filter(Boolean).sort()[0]; return t || '~'; };
+  const byApproval = (a, b) => { const ta = approvedAt(a), tb = approvedAt(b); return ta < tb ? -1 : ta > tb ? 1 : 0; };
+  const ordered = [...uniqP.filter(x => x.approved).sort(byApproval), ...uniqP.filter(x => !x.approved)];
+  const pickable = paused_reason ? [] : waiting_for_keyword ? ordered.filter(x => x.approved) : ordered;
   // FX-C RC-2: one page, one rewrite. A pick whose page another pick of this run already rewrites, or that another keyword's run started in the
   // last 7 days (AI ranking `on`), waits as a suggestion with the reason (never two concurrent rewrites of one page)
   const pageOfPick = (x) => keyOfU(x.existing_page_url || '');
@@ -3733,7 +3740,7 @@ for (const s of list) {
   const aiPick = level === 3 && pages > 0 && aiCand && aiCand === aiTop3 && aiDue && !blocked ? aiCand : null;
   // FX-C (owner 2026-11-06): the in-run rule holds for EVERY website (a decay refresh and the level-3 AI page rewrote one page twice); the 7-day
   // rule across runs stays for websites in AI ranking `on`. The level-3 AI page (on top) obeys it too.
-  if (aiPick) { if (pageHeld(aiPick)) holdPage(aiPick); else picks.push(aiPick); }
+  if (aiPick) { if (pageHeld(aiPick)) holdPage(aiPick); else picks.push(aiPick); aiPick.on_top = true; }   // on_top: the app's plan view does not count it against the pages a week
   // AIR RESERVE: the reserved AI ranking page of the week, on top of pages_per_week (never for 0 pages a week, never while blocked). RC-2: an AIR
   // target that a page of this run already covers (the same search or the same page) or that a live page already answers is held, and the slot
   // passes to the next one
@@ -3748,7 +3755,7 @@ for (const s of list) {
     air_held.push({ keyword: o.keyword, target_id: o.target_id || '', reason });
     if (cv) { if (!covered.some(c => norm(c.keyword) === norm(o.keyword))) covered.push({ keyword: o.keyword, source: o.source, url: cv.url, matched_by: cv.matched_by }); continue; }
     airHeldSug.push({ ...o, why: o.why + (ss ? '; a page of this week\'s plan already targets the same search ("' + ss.keyword + '"), so it waits' : '; another page of this week\'s plan already rewrites ' + o.existing_page_url + ', so it waits') }); }
-  const airPick = airCand ? { ...airCand, why: airCand.why + '; the reserved AI ranking page of the week (on top of your pages a week)' } : null;
+  const airPick = airCand ? { ...airCand, on_top: true, why: airCand.why + '; the reserved AI ranking page of the week (on top of your pages a week)' } : null;
   if (airPick) picks.push(airPick);
   // ---- suggestions: every needs-OK candidate the gate let through, not skipped, not written this run — with its price (max 5, AI first) ----
   const pickedK = new Set(picks.map(p => norm(p.keyword)));
@@ -3757,7 +3764,10 @@ for (const s of list) {
   const suggestions = sugPool.filter(o => { const k = norm(o.keyword); if (!k || sugSeen.has(k) || pickedK.has(k) || approvedSeen.has(k)) return false; sugSeen.add(k);   // an approved item is upcoming, not a suggestion
       if (coverOf(o)) { if (!covered.some(c => norm(c.keyword) === k)) { const c = coverOf(o); covered.push({ keyword: o.keyword, source: o.source, url: c.url, matched_by: c.matched_by }); } return false; }   // D11: never suggest a second page for a search a live page answers
       return true; })
-    .slice(0, CONFIG.suggestions).map(o => { const pr = protOf(o); return itemOf(pr && !/AI answers cite this page/.test(o.why) ? { ...o, why: o.why + protWhy(pr) } : o, false); });   // AIR P6: a suggestion that rewrites a protected page says so
+    .slice(0, CONFIG.suggestions).map(o => { const pr = protOf(o); const it = itemOf(pr && !/AI answers cite this page/.test(o.why) ? { ...o, why: o.why + protWhy(pr) } : o, false);
+      // review 2026-11-16 (approvals first): a suggestion an approval would not reach (it is not in `approvable`: an automatic item held this week, the
+      // reserved AI ranking page held) says so, so the app never offers Approve for it nor counts such an approval against the week
+      return approvable.some(a => cycleNorm(a.keyword) === cycleNorm(o.keyword) && lc(a.source) === lc(o.source) && String(a.ladder_id || '') === String(o.ladder_id || '')) ? it : { ...it, not_approvable: true }; });   // AIR P6: a suggestion that rewrites a protected page says so
   // P1: nothing is written before the author profile and the business facts are on file: what this run would write is HELD (listed, priced,
   // never started, never charged) and the first cycle after both exist writes it. Suggestions are computed above from the same picks, so a
   // held page is never offered a second time as a suggestion.
@@ -3786,8 +3796,10 @@ for (const s of list) {
     // client reports 2026-11-10 (devaicon.com, section 184D): an approval whose item was no longer offered when the run planned (an AI question
     // taken off the list of questions to win, a ladder page written or set aside meanwhile) vanished without a word: the client saw "Approved"
     // and a tick, and nothing was written. It is reported with the reason it is known by; an item still offered keeps its own reason above.
-    .concat((() => { const offered = new Set([...cands, ...approvable, ...suggestions, ...awaiting_approval].map(o => cycleNorm(o.keyword)).filter(Boolean)); const seen0 = new Set();
-      return approveRows.filter(r => { const k = cycleNorm(r.item_key); if (!k || seen0.has(k) || approvedSeen.has(k) || offered.has(k) || skipAlways.has(k) || skipCycle.has(k) || approval_ambiguous.some(a => a.item_key === k) || picks.some(p => cycleNorm(p.keyword) === k)) return false; seen0.add(k); return true; })
+    // (2026-11-16) "offered" is the approval's OWN item (rowFits: keyword + source + ladder), not any item sharing its keyword: an approved decay
+    // refresh left out (its page was refreshed recently) while a striking item of the same keyword was suggested vanished without a word
+    .concat((() => { const offeredL = [...cands, ...approvable, ...suggestions, ...awaiting_approval.map(a => ({ ...a, source: 'ladder' }))].filter(o => cycleNorm(o.keyword)); const offered = { has: (k, r) => offeredL.some(o => cycleNorm(o.keyword) === k && rowFits(r, { ...o, ladder_id: o.ladder_id || '' })) }; const seen0 = new Set();
+      return approveRows.filter(r => { const k = cycleNorm(r.item_key); if (!k || seen0.has(k) || approvedSeen.has(k) || offered.has(k, r) || skipAlways.has(k) || skipCycle.has(k) || approval_ambiguous.some(a => a.item_key === k) || picks.some(p => cycleNorm(p.keyword) === k)) return false; seen0.add(k); return true; })
         .map(r => { const k = cycleNorm(r.item_key); const src = lc(r.source); const rung = lrows.find(l => cycleNorm(l.keyword) === k && (!String(r.ladder_id || '').trim() || String(l.ladder_id) === String(r.ladder_id)));
           const st = rung ? lc(rung.status) : '';
           const detail = rung && ['published', 'merged'].includes(st) ? 'this ladder page is already ' + (st === 'merged' ? 'part of another page' : 'published')
