@@ -155,3 +155,9 @@ the moment of the decision (admission control), and an accepted request is never
 Independent review: no High; 6 fixed (carried flag after a re-made plan, the e-mail saying "nothing planned" beside a carried page, carry
 past the five visible suggestions, wording when the week was used by a ladder start or 0 pages a week, old level-3 plans' AI page, approvals
 of suggestions the engine would not reach). Checks: harness **20035 / 0**; app shared 1373, server 2218, web 402, typecheck, web build.
+
+Deployed 2026-11-16 ~17:18-17:40 UTC (deploy guard: nothing starting or due): backup `pg/2026-11-16/*T171831Z`; node diff production ==
+main (0) before, production == this build (0) after (only Cadence Plan changed); engine 12 updated, 29 published, dispatcher `start`; API on
+the VM 0e2c522c -> b4ae8c59 (healthy, 0 restarts, /api/health 200, no errors in the log; rollback image `alaventra-app:rollback-0e2c522c`).
+No migration, no Data Table column. Web: a new PR to `main` (PR #69 was already merged); until it merges, the current web shows the plan
+as before (the new fields are optional), and the API already refuses an approval the engine would not reach and carries approvals.
