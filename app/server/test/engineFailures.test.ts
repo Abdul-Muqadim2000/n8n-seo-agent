@@ -272,6 +272,21 @@ describe('runs that went quiet without a crash', () => {
     expect(st.started[0]!.input).toMatchObject({ mode: 'ai_visibility' });
   });
 
+  it('P1 (2026-11-12): follows a page run that waited for a writing slot through every execution it handed its wait to', async () => {
+    // 1001 waited 40 min and handed off to 1002, which handed off to 1003: the page is being written in 1003
+    st.active = [run('ps1', '1000', { etaMinutes: 20, createdAt: new Date(ago(130)) })];
+    st.work = { '1000': '1001' };
+    st.status = { '1001': 'success', '1002': 'success', '1003': 'running' };
+    st.stopped = { '1001': ago(90), '1002': ago(48) };
+    st.handoff = { '1001': ['1002'], '1002': ['1003'] };
+    expect(await checkEngineFailures()).toBe(0); // overdue on its first estimate, but its page is being written: left alone
+    expect(st.updates).toHaveLength(0);
+    st.status['1003'] = 'canceled'; // the end of the chain was cut off: closed, naming the execution that was
+    expect(await checkEngineFailures()).toBe(1);
+    expect(String(st.updates[0]!.error)).toContain(ENGINE_RESTART_ERROR);
+    expect(String(st.updates[0]!.error)).toContain('1003');
+  });
+
   it('an overdue run whose work ended in an error is closed with that error and not repeated', async () => {
     st.active = [pub('e1', '900')];
     st.work = { '900': '901' };

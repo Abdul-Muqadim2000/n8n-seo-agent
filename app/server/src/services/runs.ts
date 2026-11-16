@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
 import {
+  deliveredImageNames,
   aiJoinedOf,
   isKiRunMode,
   ladderMarket,
@@ -43,6 +44,9 @@ import {
   type RunInput,
   type SiteContext,
   holdOf,
+  PAGE_SLOT_STAGE,
+  PAGE_WAITING,
+  PAGE_WRITING,
   stripHookSecrets,
 } from '@seo/shared';
 import { requireVerified, type OrgAccess } from '../auth/access';
@@ -106,7 +110,7 @@ export const etaFor = (input: RunInput): number => estimateRunMinutes(input.mode
  * 2026-10-27: the title and main heading of the page that was written, read from its report (the newest content report of this website
  * with the engine request id the person picked, else with the keyword typed), for "I published it". Null when no report carries them.
  */
-export async function draftMeta(orgId: string, siteId: string, requestId: string, keyword: string): Promise<{ title: string; h1: string } | null> {
+export async function draftMeta(orgId: string, siteId: string, requestId: string, keyword: string): Promise<{ title: string; h1: string; images: string[] } | null> {
   const R = schema.reports;
   const byId = /^[A-Za-z0-9:_.-]{1,120}$/.test(requestId || '')
     ? sql`(${R.requestId} = ${requestId} or ${R.payload}->>'request_id' = ${requestId})`
@@ -119,7 +123,9 @@ export async function draftMeta(orgId: string, siteId: string, requestId: string
   const meta = row?.payload && typeof row.payload.meta === 'object' && row.payload.meta ? (row.payload.meta as Record<string, unknown>) : {};
   const t = (v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, 300) : '');
   const title = t(meta.title), h1 = t(meta.h1);
-  return title || h1 ? { title, h1 } : null;
+  // client reports 2026-11-16: the file names of the images delivered with the page (the publish check says whether they are on it)
+  const images = deliveredImageNames((row?.payload ?? {}) as Record<string, unknown>);
+  return title || h1 || images.length ? { title, h1, images } : null;
 }
 
 export function runTitle(input: RunInput, site: SiteRow | null): string {
@@ -340,6 +346,7 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
     const dm = await draftMeta(org.id, site.id, input.contentRequestId, input.keyword).catch(() => null);
     if (dm?.title) body.draft_title = dm.title;
     if (dm?.h1) body.draft_h1 = dm.h1;
+    if (dm?.images.length) body.delivered_images = dm.images;
   }
   if (input.mode === 'keyword' && input.ladder && site) {
     // the ladder's links and, since P2-7, the word count its verdict set for this page (the engine clamps the brief to `ladder_words`)
@@ -540,11 +547,50 @@ export function reopenedRow(prior: Pick<ContentLogRow, 'status' | 'published_url
   return noPage ? opening : { request_id: opening.request_id };
 }
 
+/**
+ * The content log's `source` of a page run started in the app (pure). A ladder page is a ladder page. A run that carries an AI target is an
+ * AI page (client report 2026-11-16, issue 1, F6 / CONTRACT_ISSUE1.md §2): `ai_refresh` when it improves a page of the website, else
+ * `ai_answer`, so AI growth counts it among the month's AI pages and its question is never offered again as a page to write. Otherwise an
+ * approved suggestion keeps its kind (R-K5), and anything else is the app's own.
+ */
+export function pageSourceFor(input: Pick<Extract<RunInput, { mode: 'keyword' }>, 'ladder' | 'aiTarget' | 'existingPageUrl' | 'source'>): string {
+  if (input.ladder) return 'ladder';
+  if (input.aiTarget?.question) return input.aiTarget.kind === 'refresh' || !!input.existingPageUrl ? 'ai_refresh' : 'ai_answer';
+  return input.source && input.source !== 'ladder' ? input.source : 'app';
+}
+
+/**
+ * The stored question to win a page run writes for (pure): its target row moves to `writing` with the run's request id, as the engine's own
+ * marks do for the weekly AI page (CONTRACT_ISSUE1.md §3). Null when the run carries no target id. `core` is what every engine has;
+ * `extra` (the reason code and its values) is written separately, so an engine without those columns yet still takes the core update. A
+ * question AI already names the business for (`won`) is left as it is.
+ */
+export function aiTargetWritingUpdate(
+  input: Pick<Extract<RunInput, { mode: 'keyword' }>, 'aiTarget' | 'existingPageUrl'>,
+  requestId: string,
+  domain: string,
+  now: string,
+): { filters: { columnName: string; condition: 'eq' | 'neq'; value: string }[]; core: Record<string, unknown>; extra: Record<string, unknown> } | null {
+  const id = String(input.aiTarget?.targetId ?? '').trim();
+  if (!id || !requestId) return null;
+  return {
+    filters: [
+      { columnName: 'domain', condition: 'eq', value: domain },
+      { columnName: 'target_id', condition: 'eq', value: id },
+      { columnName: 'status', condition: 'neq', value: 'won' },
+    ],
+    // written_at = when the run started, as the cadence's own mark (AI Target Marks) stamps it: the engine's AI Growth reads it to put a run that
+    // never produced a page back in the queue after 14 days (it rewrites updated_at every week, so a row without written_at never left `writing`)
+    core: { status: 'writing', request_id: requestId, written_at: now, updated_at: now, reason: `A page for this question is being written (started ${now.slice(0, 10)}).` },
+    extra: { reason_code: 'writing', reason_args: JSON.stringify({ date: now.slice(0, 10), ...(input.existingPageUrl ? { page_url: input.existingPageUrl } : {}) }) },
+  };
+}
+
 async function recordPageInEngine(site: SiteRow, input: Extract<RunInput, { mode: 'keyword' }>, requestId: string) {
   const now = new Date().toISOString();
   const opening = {
-    // R-K5: an approved suggestion keeps its kind (an AI answer page, a refresh...); a ladder page is a ladder page; else the app's own
-    source: input.ladder ? 'ladder' : input.source && input.source !== 'ladder' ? input.source : 'app',
+    // R-K5 + client report 2026-11-16: a ladder page, an AI page (ai_answer / ai_refresh), an approved suggestion's kind, else the app's own
+    source: pageSourceFor(input),
     page_type: input.pageType,
     existing_page_url: input.existingPageUrl,
     rung: input.ladder?.rung ?? 0,
@@ -568,6 +614,13 @@ async function recordPageInEngine(site: SiteRow, input: Extract<RunInput, { mode
     );
   } else {
     await insertRows('contentLog', [{ site_id: n8nSiteId(site.domain), domain: site.domain, keyword: input.keyword, ...opening, published_url: '', published_at: '' }]);
+  }
+  // client report 2026-11-16 (F6): the question's target is being written by this run (the core first; the reason code only where the
+  // engine has the column, never failing the run for it)
+  const mark = aiTargetWritingUpdate(input, requestId, site.domain, now);
+  if (mark) {
+    const ok = await updateRows('aiTargets', mark.filters, mark.core).catch(() => false);
+    if (ok) await updateRows('aiTargets', mark.filters, mark.extra).catch(() => false);
   }
   if (input.ladder)
     await updateRows(
@@ -918,6 +971,8 @@ export async function ingestCallback(
 ): Promise<{ reportId: string; runId: string | null; stage: string; ladderWon?: boolean; prefsApplied?: boolean }> {
   const stage = stageOf(body);
   const requestId = body.request_id != null && body.request_id !== '' ? String(body.request_id) : null;
+  // P1 (2026-11-12): a page run in line for a writing slot (or starting after it waited) is not a report: nothing is stored, delivered or announced
+  if (stage === PAGE_SLOT_STAGE) return ingestPageSlot(org, body, requestId);
   const { callback_url: _cb, ...rest } = body; // the callback URL carries the company's hook token: never stored
   const { payload: raw, files } = extractFiles(rest);
   // older n8n builds listed other customers' Search Console properties in "no access" errors: never stored
@@ -1026,6 +1081,35 @@ export async function ingestCallback(
   // site tasks (app/docs/SITE_TASKS.md): new engine readings of the website's steps (IndexNow file, AI crawlers, broken pages) are stored
   if (site?.verifiedAt) void import('./siteTasks').then((m) => (m.SITE_TASK_STAGES.has(stage) ? m.afterSiteTaskCallback(org, site, { warn: deliveryLog.error }) : undefined)).catch((err) => deliveryLog.error({ err: String(err), stage }, 'site tasks could not be stored'));
   return { reportId, runId: run?.id ?? null, stage, ...(ladderWon !== undefined ? { ladderWon } : {}), ...(prefsApplied !== undefined ? { prefsApplied } : {}) };
+}
+
+/** the run statuses a page-slot callback may still move (a finished or failed run keeps its stage) */
+const SLOT_ACTIVE = ['submitting', 'accepted', 'running'];
+
+/**
+ * P1 (2026-11-12, prod review S1-01): the engine writes at most two pages at once, and a page run that finds both slots taken waits in line
+ * (`stage: page_slot`, `slot: 'waiting'`, with the pages ahead and an estimate in minutes), then says `slot: 'started'` when it writes. The
+ * app's run (matched by request id, like every callback) shows "Waiting for a writing slot" and its expected time grows to the time already
+ * spent plus the engine's estimate, so the watcher never takes a run in line for an overdue one and the expiry never closes it. A cycle's or
+ * the cadence's page (no app run) changes nothing. No report row, no delivery, no event.
+ */
+export async function ingestPageSlot(org: OrgRow, body: Record<string, unknown>, requestId: string | null): Promise<{ reportId: string; runId: string | null; stage: string }> {
+  const none = { reportId: '', runId: null, stage: PAGE_SLOT_STAGE };
+  if (!requestId || isCycleRequestId(requestId)) return none;
+  const run = await db.query.runs.findFirst({ where: and(eq(schema.runs.orgId, org.id), eq(schema.runs.requestId, requestId)), orderBy: desc(schema.runs.createdAt) });
+  if (!run || !SLOT_ACTIVE.includes(run.status)) return { ...none, runId: run?.id ?? null };
+  const waiting = String(body.slot ?? '') !== 'started';
+  const patch: { lastStage: string; etaMinutes?: number } = { lastStage: waiting ? PAGE_WAITING : PAGE_WRITING };
+  const eta = Number(body.eta_minutes);
+  if (Number.isFinite(eta) && eta > 0) {
+    const since = Math.max(0, (Date.now() - (run.acceptedAt ?? run.createdAt).getTime()) / 60_000);
+    patch.etaMinutes = Math.max(run.etaMinutes ?? 0, Math.ceil(since + Math.min(eta, 24 * 60)));
+  }
+  await db
+    .update(schema.runs)
+    .set(patch)
+    .where(and(eq(schema.runs.id, run.id), inArray(schema.runs.status, SLOT_ACTIVE)));
+  return { ...none, runId: run.id };
 }
 
 /** The keyword-first follow-ups of a callback (services/autopilot.ts), loaded lazily: that module imports this one. */

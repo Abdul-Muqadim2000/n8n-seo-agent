@@ -55,6 +55,8 @@ plan.forEach((s, idx) => {
     if (takenBy) existing = '';
     const planned = c.ladder && !isTrue(c.ladder.page_exists) ? String(c.ladder.target_url || '').trim() : '';
     return { ...c, existing_url: /^https?:\/\//i.test(existing) ? existing : '', planned_url: /^https?:\/\//i.test(planned) ? planned : '', ladder_id: (c.log && c.log.ladder_id) || (c.ladder && c.ladder.ladder_id) || '',
+      // client reports 2026-11-16 (INV1 F4): the page as it was written (slug, <title>, H1 of the delivered page), '' on older rows
+      planned_slug: String((c.log && c.log.planned_slug) || '').trim(), planned_title: String((c.log && c.log.planned_title) || '').trim(), planned_h1: String((c.log && c.log.planned_h1) || '').trim(),
       ...(takenBy ? { address_taken: { url: String(takenBy.url || ''), keyword: String(takenBy.keyword || '') } } : {}),
       qa_failed: !!(c.log && String(c.log.status || '') === 'not_ready') };
   }).sort((a, b) => String(b.written_at).localeCompare(String(a.written_at))).slice(0, CONFIG.max_candidates_per_site);

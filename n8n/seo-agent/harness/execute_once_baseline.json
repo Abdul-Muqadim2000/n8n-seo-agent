@@ -1,0 +1,13 @@
+{
+ "note": "execute_once_lint.py (P1 review B1, 2026-11-12): executeOnce Code nodes that read their input as many items when the lint landed. n8n hands each only the FIRST input item. Each entry says why that is harmless today; fix one by reading its rows by name, then remove it here. A new entry needs the owner's look: it may be a real defect.",
+ "nodes": [
+  {"workflow": "SEO_Agent_AI_Pulse.json", "node": "Trimmed (Pulse)", "why": "counts the rows Trim Pulse Answer Text changed, for its log line only: it says 1 where several were trimmed (cosmetic)"},
+  {"workflow": "SEO_Agent_AI_Visibility.json", "node": "Trimmed (AI)", "why": "counts the rows Trim Old Answer Text changed, for its log line only (cosmetic)"},
+  {"workflow": "SEO_Agent_AI_Visibility.json", "node": "SERP Cache Pruned (AI)", "why": "counts the rows Prune Old SERP Cache (AI) deleted, for its log line only (cosmetic)"},
+  {"workflow": "SEO_Agent_AI_Visibility.json", "node": "Trimmed Units (AI)", "why": "counts the rows Trim Old Units changed, for its log line only (cosmetic)"},
+  {"workflow": "SEO_Agent_AI_Visibility.json", "node": "Reader Alert Plan", "why": "reads seo_ops_alerts rows of ONE alert_key (Load Ops Alerts (Reader) filters on it) and OA.plan takes the newest by last_seen_at; the save upserts one row per key, so the first item is normally that row. If a key ever had several rows, the dedupe could read an older one and send a repeat reader alert inside the 30-minute window (minor, not verified on production)"},
+  {"workflow": "SEO_Agent_Backlink_Monitor.json", "node": "Reader Alert Plan", "why": "as in AI Visibility: one row per alert_key"},
+  {"workflow": "SEO_Agent_Page_Finalize.json", "node": "Reader Alert Plan", "why": "as in AI Visibility: one row per alert_key"},
+  {"workflow": "SEO_Agent_v4.json", "node": "Reader Alert Plan", "why": "as in AI Visibility: one row per alert_key"}
+ ]
+}

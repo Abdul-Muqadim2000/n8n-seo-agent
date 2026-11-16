@@ -1109,7 +1109,9 @@ const LRU = (() => {
   const stageText = (stage) => STAGE_WORDS[low(stage)] || STAGE_WORDS.info;
 
   // ---- the market (rule 3) ----
-  const placesOf = (s) => { try { return typeof fitPlaces === 'function' ? fitPlaces(s) : []; } catch (e) { return []; } };
+  // review 2026-11-16 (L2): a node that inlines the duplicate rule (DUP) but not the fit gate (Parse Verdict) reads places through DUP's copy of
+  // the same gazetteer, so the market rules of an AI question hold there too
+  const placesOf = (s) => { try { return typeof fitPlaces === 'function' ? fitPlaces(s) : (typeof DUP === 'object' && DUP && typeof DUP.placesIn === 'function') ? DUP.placesIn(s) : []; } catch (e) { return []; } };
   const countryName = (iso) => CFG.countries[S(iso).toUpperCase()] || '';
   /** -> { iso, country, source: 'keyword' | 'site' | 'request', named: [place words], keyword_iso, ok (the request market is the lock), changed,
    *  measurable, note }. o: { keyword, site_iso (the website's market), request_iso (what the run was sent with) }.
@@ -1145,6 +1147,40 @@ const LRU = (() => {
     + (m.source === 'keyword' ? 'names ' + m.named.join(', ') + ' (' + m.country + ')' : 'names no place and your website\'s market is ' + m.country)
     + '. A ladder is measured in one market, so nothing was planned and nothing was charged: start it again in ' + m.country
     + (m.source === 'site' && !m.named.length ? ', or confirm that you want it measured in ' + (countryName(m.request_iso) || m.request_iso) + ' on purpose.' : '.');
+
+  // ---- an AI question beside a page planned for another keyword (client reports 2026-11-16, devaicon.com, INV1 F7) ----
+  // The cadence folded "agentic ai development companies uae" into the rung "ai app development companies": it stripped every word of every
+  // ladder head and then called one shared word ("companies") the same search, in either direction. Now a question is folded into a page only
+  // when it IS that page's search: the same words once the question's own scaffolding ("best", "top", "which") and joining words are out,
+  // plurals folded and places read as their market ("dubai" and "uae" are both the UAE). `coversHead`: the question carries every word of a
+  // ladder's main keyword (two words or more), so the main page is the page that answers it ("agentic ai development companies uae" and the
+  // main keyword "agentic ai development in uae"). Nothing is stripped because a ladder head holds it.
+  const Q_MOD = new Set(['best', 'top', 'leading', 'trusted', 'recommended', 'recommend', 'recommendation', 'recommendations', 'which', 'who', 'what', 'how', 'list', 'guide', 'is', 'are']);
+  const qWords = (kw) => {
+    let t = ' ' + low(kw).replace(/\./g, '').replace(/[^a-z0-9\u0600-\u06ff]+/g, ' ').trim() + ' '; const tags = [];
+    for (const p of placesOf(kw)) { const w = ' ' + low(p.word) + ' '; if (t.indexOf(w) >= 0) { t = t.split(w).join(' '); tags.push('in:' + [...(p.iso || [])].sort().join('+')); } }
+    const ws = t.split(' ').filter(x => x && !JOIN.has(x) && !Q_MOD.has(x)).map(x => x.length > 3 ? x.replace(/ies$/, 'y').replace(/([^s])s$/, '$1') : x);
+    return [...new Set([...ws, ...tags])].sort();
+  };
+  /** the same search for a question and a page keyword: the same words (scaffolding out, plurals folded, places as their market) */
+  const sameQuestion = (a, b) => { const A = qWords(a), B = qWords(b); return A.length > 0 && A.join(' ') === B.join(' '); };
+  // review 2026-11-16 (L2 / L3): a place tag is not a topic word ("crm dubai" is ONE topic word, so it covers nothing), and a main keyword with no
+  // place covers a question only in the website's own market ("crm service provider" does not take "best crm service provider saudi arabia" for
+  // a UAE website). `market`: ISO-2 or a country name; with none given a question that names a place is not covered by a head that names none.
+  const isoOfM = (m) => { const x = S(m).trim(); if (/^[A-Za-z]{2}$/.test(x)) return x.toUpperCase(); const k = Object.keys(CFG.countries).find(c => low(CFG.countries[c]) === low(x)); return k || ''; };
+  const inMarket = (tags, market) => { const iso = isoOfM(market); return !!iso && tags.every(t => t.slice(3).split('+').includes(iso)); };
+  /** the question carries every word of the ladder's main keyword: at least two topic words (place tags do not count), and the question's
+   *  places are the head's own, or the website's market when the head names none */
+  const coversHead = (q, head, market) => { const H = qWords(head), Q = qWords(q), QS = new Set(Q);
+    if (H.filter(w => !/^in:/.test(w)).length < 2 || !H.every(w => QS.has(w))) return false;
+    const qTags = Q.filter(w => /^in:/.test(w)), hTags = H.filter(w => /^in:/.test(w));
+    return !qTags.length || qTags.every(t => hTags.includes(t)) || (!hTags.length && inMarket(qTags, market)); };
+  /** review 2026-11-16 (L5): ONE rule for "this ladder page is the question's page", shared by Cadence Plan, AI Growth, AI Target Settle,
+   *  Parse Verdict and the app's cadence.ts: the page's keyword IS the question's search, or the page is its ladder's MAIN page (rung 4, or
+   *  its keyword is the main keyword, or part 'head') and the question carries all of it (coversHead, in the market). row: { keyword,
+   *  head_keyword?, rung?, part? } (a ladder row, an own-coverage entry or a content-log row of a ladder page). */
+  const isHeadRow = (r) => { const x = r || {}; return S(x.part) === 'head' || Number(x.rung) === 4 || (!!S(x.head_keyword) && wordsKey(x.keyword) === wordsKey(x.head_keyword)); };
+  const questionPage = (q, row, market) => { const x = row || {}; return !!S(x.keyword) && (sameQuestion(q, x.keyword) || (isHeadRow(x) && coversHead(q, x.keyword, market))); };
 
   // ---- verdicts (rule 4) ----
   /** o: { verdict: 'GO' | 'GO_WITH_CHANGES' | 'AVOID' | ..., score: 0-100 | null, ack: the client said "Write it anyway" } -> { stop, reason, band } */
@@ -1219,7 +1255,7 @@ const LRU = (() => {
   };
 
   return { CFG, STAGES, COMMERCIAL, kiPool, ranksFor, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, headTarget, oneUrl,
-    stageOf, isCommercial, isDefinitional, definitionalOk, stageText, countryName, market, marketRefusal, verdictStop, stuck, rungState };
+    stageOf, isCommercial, isDefinitional, definitionalOk, stageText, countryName, market, marketRefusal, verdictStop, stuck, rungState, qWords, sameQuestion, coversHead, isHeadRow, questionPage };
 })();
 // Accepts an object (from the Structured Output Parser) or a string with/without code fences or surrounding text
 const parseAgentJson = (raw) => {
@@ -2439,6 +2475,7 @@ const DUP = (() => {
 // cycles): `would_hold` and the reasons are logged in the run and reported in its callback, the page is written as before. Runs a person
 // started (the app, the form, the API) are asked ("Needs your OK"). A hold writes no brief, no copy and no edit: the run delivers the
 // verdict report with `hold: { score, reasons, alternatives }` on stage `content`, and its cost is what the verdict cost.
+const AIPV = !!(prev.ai_target && typeof prev.ai_target === 'object' && String(prev.ai_target.question || '').trim());   // INV1 F10: a page written for an AI question
 const HOLD = (() => {
   // W05-B (2026-10-30, BEFORE_AFTER "Holds"): the line at 50 sat inside the verdict's own noise (one keyword read 52, 42, then 46; K3 was held
   // at 42 and its page was the best of 31). A score is now held on its own only when it is clearly low (under 40); between 40 and 50 only when
@@ -2467,13 +2504,28 @@ const HOLD = (() => {
     : aiPage ? 'a page written to be cited in AI answers: chosen for the question, not for search volume'
     : refresh ? 'a refresh of a page your website already has'
     : ladderPage ? 'a page of your keyword ladder: the ladder checked its main keyword when it was planned' : '';
-  const exemptDup = caseStudy ? 'a case study' : aiPage ? 'a page written for an AI answer' : refresh ? 'a refresh of a page your website already has' : '';
+  // client reports 2026-11-16 (devaicon.com / techand.ai, INV1 F2 / F3): an AI answer page used to skip this check entirely (184B), which hid a
+  // real duplicate: techand.ai's AI guide for "crm service provider in uae" was written beside the ladder's own page for that search. One
+  // search, one page holds for AI pages too, on the QUESTION's own search (the run's keyword since INV1 F1): a page of the same market that
+  // owns it is improved for the question (the first alternative, `ai_refresh`), never copied; a page of another market is advice only.
+  const exemptDup = caseStudy ? 'a case study' : refresh ? 'a refresh of a page your website already has' : '';
   // ---- the duplicate gate (the late check's rule, before the brief) ----
   let MODEL = prev.site_model && typeof prev.site_model === 'object' ? prev.site_model : null;
   if (!MODEL) { try { MODEL = ($('Site Model').first().json || {}).site_model || null; } catch (e) { MODEL = null; } }
   const ownUrl = EXP ? EXP.url : '';
-  const dup = (MODEL && !exemptDup) ? DUP.targets(prev.keyword, SM.pages(MODEL), { skip: [ownUrl, S(prev.existing_page_url)], self: [S(prev.ladder_target_url)], self_aware: true, slug_self: true, ladder: ladderPage, market: S(prev.country) })
+  let dup = (MODEL && !exemptDup) ? DUP.targets(prev.keyword, SM.pages(MODEL), { skip: [ownUrl, S(prev.existing_page_url)], self: [S(prev.ladder_target_url)], self_aware: true, slug_self: true, ladder: ladderPage, market: S(prev.country) })
     : { targets: [], partial: [], self: [], basis: MODEL ? '' : 'no page inventory of the website was available, so a duplicate could not be checked' };
+  // INV1 F2 / F3 (techand.ai): the page that owns a question's search can be a keyword ladder's live page whose title says it in other words
+  // ("Dynamics 365 CRM in Dubai & UAE" is the ladder page for "crm service provider"): a ladder page of this site whose keyword IS the
+  // question's search, or the ladder's main page when the question carries every word of its main keyword, and whose address is live
+  // review 2026-11-16 (M2): a page of a keyword ladder (a rung that also answers a question, the Pipeline's "Write now" on a rung) is never held
+  // against its own ladder's pages: the ladder planned them together. Only a question written as a page of its own is checked here.
+  if (aiPage && !ladderPage && !refresh && !EXP && MODEL && !dup.targets.length) {
+    const liveK = new Set(SM.pages(MODEL).filter(p => !(SM.isGone && SM.isGone(p)) && !(SM.isMoved && SM.isMoved(p))).map(p => LRU.urlKey(p.url)));
+    const e = (((prev.own_coverage || {}).ladders) || []).find(x => x && x.target_url && liveK.has(LRU.urlKey(x.target_url)) && LRU.urlKey(x.target_url) !== LRU.urlKey(prev.ladder_target_url)
+      && !(S(prev.ladder_id) && S(x.ladder_id) === S(prev.ladder_id)) && LRU.questionPage(prev.keyword, x, S(prev.country)));   // L5: the one rule, in the run's market (L2)
+    if (e) dup = { ...dup, targets: [{ url: S(e.target_url), title: '', keyword_words_shared_pct: null, weighted_pct: null, via: 'ladder', ladder_keyword: S(e.keyword) }] };
+  }
   const dupHit = !EXP && dup.targets.length > 0;   // a page the verdict already redirected the run to (existing_page) is improved, not duplicated
   // W05-B (BEFORE_AFTER K1): the page this run found for the search (confirmed by its own title, heading or searches in Collect Client Pages)
   // used to be rewritten silently. A person who started the run is now asked first: improve that page, or write a separate new one.
@@ -2528,9 +2580,12 @@ const HOLD = (() => {
   if (writes && valueHit) reasons.push('Our verdict scored "' + kw + '" ' + score + ' out of 100' + (score < CFG.clear ? ', clearly under the ' + CFG.threshold + ' we write without asking'
     : ', under the ' + CFG.threshold + ' we write without asking, and ' + (lowDemand ? 'the search has ' + demandText : 'your website already has a page for it'))
     + ((verdict.reasons || [])[0] ? ': ' + String(verdict.reasons[0]).replace(/\s+/g, ' ').slice(0, 260) : '.'));
-  if (writes && dupHit) reasons.push('Your website already has a page aimed at this search: ' + dup.targets.map(t => t.url).join(', ')
+  const aiOwner = aiPage && !ladderPage ? (existingHit ? EXP.url : dupHit ? dup.targets[0].url : '') : '';   // M2: a ladder page keeps the ladder's own wording
+  if (writes && aiOwner) reasons.push('Your page ' + aiOwner + ' is already the page for "' + kw + '". To win this AI answer, improve that page for the question'
+    + ' (an answer in its first lines, the searches AI runs and the sources it cites) rather than writing a second page for the same search.');
+  if (writes && dupHit && !aiOwner) reasons.push('Your website already has a page aimed at this search: ' + dup.targets.map(t => t.url).join(', ')
     + '. A second page would compete with it for the same search; improving that page is usually the faster way up.');
-  if (writes && existingHit) reasons.push('Your website already has a page for this search: ' + EXP.url + (S(EXP.title) ? ' ("' + S(EXP.title).replace(/[“”"]/g, '') + '")' : '')
+  if (writes && existingHit && !aiOwner) reasons.push('Your website already has a page for this search: ' + EXP.url + (S(EXP.title) ? ' ("' + S(EXP.title).replace(/[“”"]/g, '') + '")' : '')
     + '. Choose "Improve the existing page" to rewrite that page at its own address (it keeps what it has already earned), or "Write it anyway" for a separate new page at a new address of its own; your existing page then stays as it is.');   // W06-B (WAVE05 3.3): the copy says exactly what each choice does
   const shown = gsc.pages.filter(p => !EXP || p.url.toLowerCase().replace(/\/+$/, '') !== String(EXP.url).toLowerCase().replace(/\/+$/, ''));
   if (writes && (dupHit || existingHit) && shown[0]) reasons.push('Google already shows ' + shown[0].url + ' for this search (' + shown[0].impressions + ' impressions in Search Console).');
@@ -2555,7 +2610,11 @@ const HOLD = (() => {
     return q;
   };
   const known = new Set([...(((prev.serp_features || {}).related_searches) || []), ...(((prev.serp_features || {}).people_also_ask) || []), ...(OWNV.secondary || [])].map(s => kwn(searchOf(s))).filter(Boolean));
-  if (writes && (valueHit || dupHit || existingHit)) {
+  // INV1 F2: an AI page's first alternative improves the page that owns the question's search FOR the question (the same AI target, kind refresh)
+  if (writes && aiOwner) addAlt({ kind: 'ai_refresh', label: 'Improve ' + LRU.pathOf(aiOwner) + ' for this question', url: aiOwner, keyword: kw, page_type: PT.of(prev.page_type, prev.page_type),
+    existing_page_url: aiOwner, ai_target: { ...prev.ai_target, kind: 'refresh' },
+    why: 'your page already answers searches like this one: improving it for the question keeps its address and what it has already earned' });
+  if (writes && (valueHit || dupHit || existingHit) && !aiOwner) {
     const improveUrl = existingHit ? EXP.url : ((dup.targets[0] || {}).url || ((OWNV.related || [])[0] || {}).url || '');
     if (improveUrl) addAlt({ kind: 'improve', label: 'Improve the existing page', url: improveUrl, keyword: kw,
       why: existingHit ? 'your website already has this page for the search: improving it keeps its address and what it has already earned'
@@ -2600,8 +2659,10 @@ return [{
     score_withheld_reason: EV56.reason,
     verdict_reasons: EV56.withheld ? [EV56.reason, ...(PU ? [] : (verdict.reasons || []))] : (verdict.reasons || []),   // W07-A: the model's reasons on pages nobody read are not shown
     verdict_risks: PU ? [] : (verdict.risks || []),
-    recommended_page: PT.of(verdict.recommended_page || prev.page_type, prev.page_type),
-    page_notes: PT.notes(verdict.recommended_page, PT.of(verdict.recommended_page || prev.page_type, prev.page_type)),
+    // client reports 2026-11-16 (INV1 F10): a page written for an AI question keeps the type it was asked for (devaicon's AI guide came out
+    // "Service Page" because the verdict on the broad topic recommended one); the verdict's suggestion is a note
+    recommended_page: AIPV ? PT.of(prev.page_type, prev.page_type) : PT.of(verdict.recommended_page || prev.page_type, prev.page_type),
+    page_notes: PT.notes(verdict.recommended_page, AIPV ? PT.of(prev.page_type, prev.page_type) : PT.of(verdict.recommended_page || prev.page_type, prev.page_type)),
     secondary_keywords: OWNV.secondary,
     secondary_covered: OWNV.covered,   // A-5: the searches the site already holds elsewhere, kept off this page and named
     existing_related: OWNV.related, sections_covered: OWNV.sections, already_on_page: OWNV.already_on_page, keyword_covered: OWNV.keyword_covered, own_coverage_checked: OWNV.checked,

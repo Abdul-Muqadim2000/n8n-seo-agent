@@ -73,6 +73,7 @@ return [{
         site_urls: A(pb.site_urls).map(u => String(u || '')).filter(u => /^https?:\/\//i.test(u)).slice(0, 300),
         serp_shapes: pb.serp_shapes || cq.serp_shapes || null,
         regulatory_facts: regFacts.slice(0, 40), regulatory_topics: A((reg || {}).topics).map(t => ({ id: T((t || {}).id, 60), relevance: T((t || {}).relevance, 20) })).filter(t => t.id).slice(0, 12),
+        ai_target: pb.ai_target && typeof pb.ai_target === 'object' && String(pb.ai_target.question || '').trim() ? pb.ai_target : null,
         // W06-C (section 178): what the run took out of the page (the counts the delivered grade capped on, the share of the words and why), so
         // the final version keeps the cap while those sections are missing; null from a check before W06-C (the final version says "not checked")
         sections_removed: (() => { const dl = cq.delivery || {}; const ch = dl.changes || {}; const rr = ch.removed_run; if (!rr || typeof rr !== 'object') return null;

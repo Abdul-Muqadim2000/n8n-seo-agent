@@ -22,6 +22,8 @@ const HEAD_RULE = 'f08';
 const entRuleOf = () => (typeof AIE === 'object' && AIE && AIE.RULE) || 'f53';
 const w2read = (n) => { try { return $(n).all().map(i => i.json).filter(Boolean); } catch (e) { return []; } };   // W2-E2: the loads and the Sentiment Reader, read defensively
 /*__AI_ENTITIES__*/
+/*__AI_QUESTION__*/
+/*__LADDER_RULES__*/
 /*__AI_PANEL__*/
 /*__AI_FOCUS__*/
 /*__DRAFTS__*/
@@ -32,6 +34,7 @@ const w2read = (n) => { try { return $(n).all().map(i => i.json).filter(Boolean)
 // cited pages" while they answer 404. The page inventory says what each address answered (seo_pages.http_status, the Site Tracker): a cited
 // page that no longer answers is flagged, kept out of the brief's pages to build on, and turned into the one redirect action (_gone.js).
 /*__GONE__*/
+const tgtAll = w2read('Load AI Targets (AI)').filter(t => t && t.site_id), logAll = w2read('Load Content Log (AI)').filter(l => l && l.domain);   // INV1 F5: what is already decided about each question
 const pageInv = (() => { try { return $('Load Pages (AI)').all().map(i => i.json).filter(r => r && r.site_id && r.url && !r.error); } catch (e) { return []; } })();
 // G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): a weekly run split across executions is measured ONCE, in its last execution, over every answer
 // of the run — this execution's and the ones earlier executions stored (seo_ai_answers, same run_id). A site whose run continues in another
@@ -279,7 +282,9 @@ return plans.map(p => {
       for (const c of citedOf(r)) { const x = q.urls.get(c.u) || { u: c.u, t: c.t || '', n: 0, engines: new Set() }; x.n++; x.engines.add(r.engine); if (!x.t && c.t) x.t = c.t; q.urls.set(c.u, x); } } byQ.set(r.prompt_id, q); }
   for (const u of unitsAll) { if (!u.pulse) continue; const q = byQ.get(u.prompt_id); if (!q) continue; q.n++; if (u.named) q.m++; }   // F1b: the pulse answers by their own reading (named, not "named or cited")
   for (const e of p.engines) if (MONTHLY.includes(e) && !Rall.some(r => r.engine === e)) for (const q0 of byQ.values()) if (!(e in q0.engines)) q0.engines[e] = 'monthly';   // asked on the month's full run
-  const questions = [...byQ.entries()].map(([id, q]) => { const m0 = meta.get(id) || {}; return { prompt_id: id, prompt: q.prompt, kind: q.kind, topic: q.topic, stage: m0.stage || '', cluster: m0.cluster || q.topic || '', volume: m0.volume == null ? null : Number(m0.volume), engines: q.engines,
+  // client reports 2026-11-16 (INV1 F1): every question carries its OWN search (the prompt row's keyword: "best ai automation services dubai"),
+  // beside the panel topic it was built around ("ai automation services", usually the search of a page the client already has)
+  const questions = [...byQ.entries()].map(([id, q]) => { const m0 = meta.get(id) || {}; return { prompt_id: id, prompt: q.prompt, kind: q.kind, topic: q.topic, keyword: AQ.keywordOf({ keyword: m0.keyword, topic: q.topic, prompt: q.prompt }), stage: m0.stage || '', cluster: m0.cluster || q.topic || '', volume: m0.volume == null ? null : Number(m0.volume), engines: q.engines,
     won: !!q.named_run, win_rate: q.n ? pct(q.m, q.n) : 0, samples: q.n, competitors: [...q.competitors].slice(0, 6), sources: [...q.sources].filter(h => h !== p.domain).slice(0, 5), fanout: [...q.fanout].slice(0, 6),
     // B8-4 (2026-10-15, benchmark area 8, INVARIANTS rule 1): a per-question rate off one or two answers is not a rate. With an
     // 8-question panel on the weekly engines a question can carry a single answer, and "0%" read exactly like a question the
@@ -655,9 +660,42 @@ return plans.map(p => {
   if (acc) for (const it of acc.issues.filter(x => x.level === 'critical' || x.level === 'high').slice(0, 2)) actions.push({ priority: 1, type: 'access', action: it.fix, why: it.text });
   { const ga = GONE.action(gone_cited); if (ga) actions.push({ ...ga, why: 'AI answers cite ' + gone_cited.length + ' of your old addresses that now answer ' + [...new Set(gone_cited.map(r => r.status || 404))].join(' / ') + ' (' + gone_cited.reduce((t, r) => t + (r.citations || 0), 0) + ' citations), so every reader who follows them lands on an error page. Do not build on these pages: they no longer exist.' }); }
   for (const it of issues.slice(0, 2)) actions.push({ priority: 1, type: 'accuracy', action: 'Correct what AI says: ' + it.text.split(' → ')[0].slice(0, 120), why: (it.engines.join(', ') + ' state this; the fact on file is "' + (it.text.split(' → ')[1] || 'different') + '". State the right fact plainly on the About and service pages, in the Organization schema and on the profiles AI reads (Google Business Profile, LinkedIn, directories).').slice(0, 400) });
-  for (const g of gaps.slice(0, 3)) actions.push({ priority: 1, type: 'content', action: 'Win the answer to "' + g.prompt + '"', why: 'AI recommends ' + g.competitors.slice(0, 3).join(', ') + ' here and not you' + (g.volume ? ' (' + g.volume.toLocaleString('en-GB') + ' AI searches a month)' : '') + (g.sources.length ? '; it relies on ' + g.sources.slice(0, 3).join(', ') : '') + (g.fanout.length ? '; to answer it searched "' + g.fanout[0] + '"' : '') + '.', keyword: g.topic || g.prompt,
-    api_body: { mode: 'keyword', keyword: (g.topic || g.prompt).toLowerCase().slice(0, 80), country: p.country, domain: p.domain, page_type: g.kind === 'compare' ? 'Comparison Page' : 'Guide', receive: ['Keyword Report', 'Page Content'],
-      ai_target: { question: g.prompt, kind: 'answer', target_id: 'ait_' + p.site_id.replace(/^site_/, '') + '_' + g.prompt_id, fanout: g.fanout || [], sources: (g.cited_urls || []).slice(0, 6).map(c => ({ u: c.u, t: c.t || '' })), competitors: (g.competitors || []).slice(0, 8) } } });   // v4.12: the page is written to be the one AI cites
+  // client reports 2026-11-16 (INV1 F1 / F5 / F13): the action for a lost question is the RIGHT kind, decided with what the system already knows
+  // about it (AI Growth's stored target and the pages written): its page is being written or written (publish it, or nothing), AI Growth plans
+  // to improve a page of the site for it (improve that page, for the question), it was set aside or kept out (no page), else a new answer page
+  // on the question's OWN search with a page type the form accepts. devaicon.com was offered a new "Service Page" on the panel topic every
+  // week, for a question a page had already been written for.
+  const tidOf = (pid) => 'ait_' + String(p.site_id || '').replace(/^site_/, '') + '_' + pid;
+  const myTargets = new Map(tgtAll.filter(t => t.site_id === p.site_id && t.target_id).map(t => [String(t.target_id), t]));
+  const kwKey = (k) => String(k || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const myLogs = logAll.filter(l => (l.site_id === p.site_id || normD(l.domain) === p.domain) && l.keyword && !['failed', 'held'].includes(String(l.status || '')));
+  const LOG_RANK = { started: 1, not_ready: 2, written: 3, published: 4 };
+  const pageTypeOfUrl = (u) => LRU.isBlog(String(u || '')) ? 'Guide' : 'Service Page';   // review 2026-11-16 (L6): the one blog-address rule (the cadence and the app use it)
+  for (const g of gaps) { const t = myTargets.get(tidOf(g.prompt_id)) || null;
+    const logs0 = myLogs.filter(l => (t && t.request_id && String(l.request_id) === String(t.request_id)) || kwKey(l.keyword) === kwKey(g.keyword)).sort((a, b) => (LOG_RANK[b.status] || 0) - (LOG_RANK[a.status] || 0));
+    g.target_status = t ? String(t.status || '') : ''; g.target_kind = t ? String(t.kind || '') : ''; g.page_url = t && String(t.kind) === 'refresh' ? String(t.page_url || '') : '';
+    g.page_log = logs0[0] ? { status: String(logs0[0].status || ''), url: String(logs0[0].published_url || ''), at: String(logs0[0].published_at || logs0[0].started_at || '').slice(0, 10) } : null; }
+  const why0 = (g) => 'AI recommends ' + g.competitors.slice(0, 3).join(', ') + ' here and not you' + (g.volume ? ' (' + g.volume.toLocaleString('en-GB') + ' AI searches a month)' : '') + (g.sources.length ? '; it relies on ' + g.sources.slice(0, 3).join(', ') : '') + (g.fanout.length ? '; to answer it searched "' + g.fanout[0] + '"' : '') + '.';
+  const aiT = (g, kind) => ({ question: g.prompt, kind, target_id: tidOf(g.prompt_id), fanout: g.fanout || [], sources: (g.cited_urls || []).slice(0, 6).map(c => ({ u: c.u, t: c.t || '' })), competitors: (g.competitors || []).slice(0, 8) });
+  let contentN = 0;
+  for (const g of gaps) { if (contentN >= 3) break;
+    const t = myTargets.get(tidOf(g.prompt_id)) || null; const st = String((t || {}).status || ''); const lg = g.page_log;
+    const keptOut = st === 'set_aside' || (st === 'skipped' && /kept by you/i.test(String((t || {}).reason || '')) ) || String((t || {}).reason_code || '') === 'kept_by_you';
+    if (keptOut || st === 'won') continue;   // set aside (not a search for this website) or kept out by the client: no page; won: nothing to do
+    if (lg && lg.status === 'published') continue;   // its page is live: AI answers take weeks to change, and the AI growth loop follows it
+    if (AQ.done(st) || lg) {   // a page run started or a page written: publish it, never a second page
+      if (lg && (lg.status === 'written' || lg.status === 'not_ready')) { contentN++; actions.push({ priority: 1, type: 'publish', action: (lg.status === 'not_ready' ? 'Finish and publish your page for "' : 'Publish your page for "') + g.prompt + '"',
+        why: (lg.status === 'not_ready' ? 'A page was written for this question but did not pass the quality check: fix the draft and publish it.' : 'A page was written for this question' + (lg.at ? ' on ' + lg.at : '') + ' and is waiting to be published.') + ' AI can only cite a page it can read.', keyword: g.keyword }); }
+      continue; }
+    contentN++;
+    const refreshUrl = t && String(t.kind) === 'refresh' && /^https?:\/\//i.test(String(t.page_url || '')) ? String(t.page_url) : '';
+    if (refreshUrl) { actions.push({ priority: 1, type: 'content', action: 'Improve ' + AQ.pathOf(refreshUrl) + ' to win the answer to "' + g.prompt + '"', why: why0(g) + ' Your page ' + AQ.pathOf(refreshUrl) + ' is the page for this search, so it is improved for the question rather than a second page written.', keyword: g.keyword,
+      api_body: { mode: 'keyword', keyword: String((t && t.keyword) || g.keyword).toLowerCase().slice(0, 80), country: p.country, domain: p.domain, page_type: pageTypeOfUrl(refreshUrl), existing_page_url: refreshUrl, receive: ['Keyword Report', 'Page Content'], ai_target: aiT(g, 'refresh') } });
+      continue; }
+    actions.push({ priority: 1, type: 'content', action: 'Win the answer to "' + g.prompt + '"', why: why0(g), keyword: g.keyword,
+      api_body: { mode: 'keyword', keyword: String(g.keyword || g.prompt).toLowerCase().slice(0, 80), country: p.country, domain: p.domain, page_type: AQ.pageType(g.kind === 'compare' ? 'Comparison Page' : 'Guide'), receive: ['Keyword Report', 'Page Content'],
+        ai_target: aiT(g, 'answer') } });   // v4.12: the page is written to be the one AI cites
+  }
   const VERB = { site: 'Get featured on ', media: 'Pitch an expert comment to ', directory: 'Get listed (with reviews) on ' };
   for (const s of sources.filter(s => VERB[s.kind] && s.citations >= 2).slice(0, 4)) actions.push({ priority: 2, type: s.kind === 'site' ? 'pr' : s.kind, action: VERB[s.kind] + s.domain, why: 'AI answers cite it ' + s.citations + ' times (' + (s.engines.join(', ') || 'daily checks') + ')' + (s.topics.length ? ' for ' + s.topics.join(', ') : '') + (s.kind === 'site' ? '. A guest article, a comparison mention or a quote there feeds the answers directly.' : s.kind === 'media' ? '. Assistants quote news coverage: offer data, a deadline explainer or a client story.' : '. Assistants lean on these lists when they recommend providers.') });
   const plat = sources.filter(s => s.kind === 'platform').slice(0, 2);
@@ -728,7 +766,7 @@ return plans.map(p => {
   // R-E12 (2026-10-23, REVIEW_ENGINE.md): a figure that could not be measured is stored as null, never 0 (share of voice when no business was named
   // in any answer, the named rate when no answer came back): the contract says an absent figure must not read as 0, and 0 would be compared next week
   const vis_row = { site_id: p.site_id, domain: p.domain, run_id: p.run_id, checked_at: p.checked_at, prompts: byQ.size, answers: samples, mention_rate, citation_rate, share_of_voice: H.sov == null ? null : share_of_voice, avg_rank: H.avg_position || 0,
-    aio_presence, aio_citation_rate, engines_json: J(engines), competitors_json: J(comp), sources_json: J(sources), pages_json: J(our_pages), gaps_json: J(gaps.map(g => ({ prompt_id: g.prompt_id, prompt: g.prompt, kind: g.kind, topic: g.topic, competitors: g.competitors, sources: g.sources, volume: g.volume, stage: g.stage, cluster: g.cluster, fanout: g.fanout, cited_urls: g.cited_urls, engines: g.engines }))), market_json: market ? J(market) : '',
+    aio_presence, aio_citation_rate, engines_json: J(engines), competitors_json: J(comp), sources_json: J(sources), pages_json: J(our_pages), gaps_json: J(gaps.map(g => ({ prompt_id: g.prompt_id, prompt: g.prompt, kind: g.kind, topic: g.topic, keyword: g.keyword, target_status: g.target_status || '', page_url: g.page_url || '', competitors: g.competitors, sources: g.sources, volume: g.volume, stage: g.stage, cluster: g.cluster, fanout: g.fanout, cited_urls: g.cited_urls, engines: g.engines }))), market_json: market ? J(market) : '',
     market_month: market && !market.carried && !market.error ? p.checked_at.slice(0, 7) : ((prev && prev.market_month) || ''), cost_usd: +(exec_cost + ((p.chunk && p.chunk.going && p.spent_before) ? Number(p.spent_before.dfs) || 0 : 0)).toFixed(4),   // G6: the whole run, every execution of it
     alerts: alerts.map(a => a.level + ': ' + a.text).join(' | '),
     run_kind: p.run_kind || 'weekly', samples, visibility_score, mention_lo, mention_hi, sentiment_score, accuracy_issues: fact_check === 'checked' ? issues.length : null, ai_sessions: traffic && traffic.connected ? traffic.sessions || 0 : null, ai_conversions: traffic && traffic.connected ? traffic.key_events || 0 : null, ai_revenue: traffic && traffic.connected ? Math.round(100 * (traffic.revenue || 0)) / 100 : null,

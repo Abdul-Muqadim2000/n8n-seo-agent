@@ -19,7 +19,11 @@
   "cost_basis",
   "settled_at",
   "dfs_balance_end",
-  "dfs_source"
+  "dfs_source",
+  "page",
+  "request_id",
+  "keyword",
+  "queued_at"
  ],
  "AI_PAGES": [
   "site_id",
@@ -64,6 +68,8 @@
   "request_id",
   "written_at",
   "won_at",
+  "reason_code",
+  "reason_args",
   "origin",
   "action_id",
   "live_at"
@@ -508,7 +514,10 @@
   "published_at",
   "week",
   "qa_reasons",
-  "publish_note"
+  "publish_note",
+  "planned_slug",
+  "planned_title",
+  "planned_h1"
  ],
  "LADDER": [
   "ladder_id",

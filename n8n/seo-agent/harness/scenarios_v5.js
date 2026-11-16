@@ -14210,10 +14210,10 @@ await guard('B6-9 / B9-6 — one measured AI Overview figure, and a page counted
   check('B9-6 (INVARIANTS rule 4): the target whose page run started is `writing`; the one whose spawn FAILED goes back to `queued` with the error, so the question is picked again instead of claiming work in progress for ever',
     marks95.length === 2 && marks95[0].status === 'writing' && marks95[0].request_id === 'cad_1'
     && marks95[1].status === 'queued' && marks95[1].request_id === '' && marks95[1].written_at === ''
-    && /could not be started/.test(marks95[1].reason) && /Workflow is not active/.test(marks95[1].reason),
+    && /could not be started/.test(marks95[1].reason) && /Workflow is not active/.test(marks95[1].error) && marks95[1].reason_code === 'run_failed',   // client reports 2026-11-16 (INV1 F11): the error stays on the item, the stored reason is plain words
     JSON.stringify(marks95));
-  check('B9-6: the row that IS marked says in its own words that nothing has been written yet, and names what would prove it',
-    /nothing has been written yet/.test(marks95[0].reason) && /seo_content_log/.test(marks95[0].reason) && marks95[0].written_at,
+  check('B9-6: the row that IS marked says in its own words that nothing has been written yet, and what would prove it (INV1 F11: in plain words, no table name)',
+    /Nothing has been written yet/.test(marks95[0].reason) && /page itself is on record/.test(marks95[0].reason) && !/seo_content_log|cad_1/.test(marks95[0].reason) && marks95[0].reason_code === 'writing' && marks95[0].written_at,
     marks95[0].reason);
   delete store['Start Content Runs'];
   const marksNo95 = (await run('AI Target Marks', [{ json: {} }])).map(r => r.json);
@@ -14234,9 +14234,9 @@ await guard('B6-9 / B9-6 — one measured AI Overview figure, and a page counted
     && settle95.every(s => s.status === 'written'),
     JSON.stringify(settle95.map(s => [s.target_id, s.status])));
   check('B9-6: each advanced row names the evidence and the run it came from, and takes the date the page run was logged rather than the date we read it back',
-    /seo_content_log row for run cad_1/.test(settle95[0].reason) && /says "written"/.test(settle95[0].reason)
+    settle95[0].reason_code === 'written' && /written and waiting to be published/.test(settle95[0].reason) && settle95[0].request_id === 'cad_1'   // INV1 F11: the run id travels in request_id, not in the reason
     && settle95[0].written_at === '2026-09-20T10:00:00.000Z'
-    && /peppol-uae/.test(settle95[1].reason) && /says "published"/.test(settle95[1].reason),
+    && /peppol-uae/.test(settle95[1].reason) && settle95[1].reason_code === 'live' && /peppol-uae/.test(settle95[1].reason_args),
     JSON.stringify(settle95.map(s => s.reason)));
   mock('Load AI Targets Writing (Cadence)', [{ json: {} }]);
   check('B9-6: nothing waiting, nothing written', (await run('AI Target Settle', [{ json: {} }]))[0].json.skip === true, 'the settle invented a row');
@@ -19809,5 +19809,10 @@ await require('./scenarios_ki_e2')({ H, run, mock, store, guard, reset, begin })
 await require('./scenarios_ladder_pkg')({ H, run, mock, store, guard, reset, begin });
 await require('./scenarios_client_1110')({ H, run, mock, store, guard, reset, begin });   // CR1-CR4 (client reports 2026-11-10, devaicon.com): the move behind a 301, entities in the title, duplicates by market, second-read claims   // LPK1-LPK8 (LADDER PACKAGE 2026-11-09, fixes/LADDER.md): one search one address, steps to the head, market lock, AVOID stops a rung, stuck rungs, KI as the pool
 await require('./scenarios_client_1112')({ H, run, mock, store, guard, reset, begin });   // PR1-PR4 (production review 2026-11-12, section 189): no duplicate that moved, live title, stale 404s re-read, finalize re-make, rank report advice, brief parser
+await require('./scenarios_client_1116_grade')({ H, run, mock, store, guard, reset, begin });   // LG1-LG3 (client reports 2026-11-16, section 191): the live page grade says whose text is live and why each part lost points, our own measuring costs a live page nothing, the publish check reads the article's images
+await require('./scenarios_pslot')({ H, run, mock, store, guard, reset, begin });   // PS1-PS9 (P1 2026-11-12, prod review S1-01 / S1-05 + its review B1 S1-S3 N1 N2): page runs take a writing slot; a page run that never wrote leaves no started page
+await require('./scenarios_client_1116')({ H, run, mock, store, guard, reset, begin });   // CQ1-CQ8 (client reports 2026-11-16, devaicon.com / techand.ai, INV1): an AI question's page is written for its own search, checked like any page for one search one page (another market is advice), never recorded at a moved service page, and its target's state and plain reason follow the content log
+await require('./scenarios_client_1116_integ')({ H, run, mock, store, guard, reset, begin });   // CQ9 (client reports 2026-11-16, integration): a target the app marked writing (numeric request id) settles from the content log in AI Target Settle and AI Growth, and is queued again when its run never wrote a page
+await require('./scenarios_client_1116_review')({ H, run, mock, store, guard, reset, begin });   // CQR1-CQR5 (the engine review of the 2026-11-16 AI page fix, M1-M3 L2-L7): widened topics for the topic test only, a ladder page never held against its own ladder, a shortened title still found, held runs queued, one ladder-page / market / blog rule
 H.report();
 })();

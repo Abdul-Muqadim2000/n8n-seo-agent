@@ -1,7 +1,7 @@
 import { useEffect, useMemo, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, Check, CheckCircle2, CircleDot, ClipboardList, Clock, Coins, ExternalLink as ExternalIcon, FileText, Flag, GitCommitVertical, Inbox, Loader2, Play, RotateCcw, Send, XCircle } from 'lucide-react';
-import { AI_ALREADY_MEASURED, AI_ALREADY_MEASURED_TITLE, formatCredits, MODES, runIsJoined, type Report, type Run, type RunCredits } from '@seo/shared';
+import { AI_ALREADY_MEASURED, AI_ALREADY_MEASURED_TITLE, formatCredits, MODES, PAGE_WAITING, PAGE_WAITING_NOTE, runIsJoined, type Report, type Run, type RunCredits } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useReport, useRun } from '@/lib/queries';
@@ -184,6 +184,13 @@ export default function RunDetailPage() {
           >
             {run.error || 'The SEO engine rejected the request without a reason.'}
             <span className="mt-1 block text-xs text-ink-3">"Try again" opens the form with the same values so you can adjust them first.</span>
+          </Callout>
+        )}
+
+        {/* P1 (2026-11-12): the engine writes two pages at a time; this one is in line for a writing slot */}
+        {active && run.lastStage === PAGE_WAITING && (
+          <Callout tone="info" title="Waiting for a writing slot">
+            {PAGE_WAITING_NOTE}
           </Callout>
         )}
 
@@ -375,7 +382,7 @@ function RunStages({ run, reports, active, duration }: { run: Run; reports: numb
     {
       key: 'reports',
       label: reports ? `${reports} report${reports === 1 ? '' : 's'}` : 'Reports',
-      sub: reports ? 'received' : active ? 'working on it' : failed ? 'none received' : 'none yet',
+      sub: reports ? 'received' : active ? (run.lastStage === PAGE_WAITING ? 'waiting for a writing slot' : 'working on it') : failed ? 'none received' : 'none yet',
       state: reports && !active ? 'done' : active && run.acceptedAt ? 'now' : failed && !reports ? 'failed' : reports ? 'now' : 'todo',
       icon: <FileText />,
     },

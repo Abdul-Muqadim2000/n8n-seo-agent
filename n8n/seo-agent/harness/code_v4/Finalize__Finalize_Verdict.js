@@ -1281,7 +1281,9 @@ const GR = (() => {
     const ownText = S(c.own_text).toLowerCase();
     const U = units(md).filter(u => u.kind !== 'heading' && !u.qa);
     const linkTier = (u) => { const h = hostOf(u); if (!h || own(h) || SOCIAL.test(h)) return null; return tier ? tier(u) : 'weak'; };
-    const linksOf = (t) => [...S(t).matchAll(/\[([^\[\]]*)\]\((https?:\/\/[^)\s]+)\)/g)].map(m => ({ url: m[2], tier: linkTier(m[2]) })).filter(x => x.tier);
+    // section 191: an image ("![alt](url)") is never a citation: a live page's hero loaded from another website read as a weak source; review L2:
+    // a linked image ("[![badge](img)](url)", a logo or a card) is no citation either: its link has no words
+    const linksOf = (t) => [...S(t).replace(/\[\s*!\[[^\]]*\]\([^)]*\)\s*\]\([^)]*\)/g, ' ').replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').matchAll(/\[([^\[\]]*)\]\((https?:\/\/[^)\s]+)\)/g)].map(m => ({ url: m[2], tier: linkTier(m[2]) })).filter(x => x.tier);
     const paraLinks = new Map(); for (const u of U) { const k = u.section + ':' + u.para; const ls = linksOf(u.text); if (ls.length) paraLinks.set(k, (paraLinks.get(k) || []).concat(ls)); }
     // H1: the client's own phone and address on file (own_text: Content QA adds the profile's and the site model's NAP) are theirs in any
     // spelling: the run of digits a figure sits in (spaces, dots, dashes and brackets between them) equals one on file, or the two share
@@ -1346,16 +1348,20 @@ const GR = (() => {
     const exempt = ex0 ? ex0[1].trim() : caseStudy ? 'a case study: its keyword is the case name' : aiPage ? 'a page written to be cited in AI answers'
       : refresh ? 'a refresh of a page your website already has' : ladder ? 'a page of your keyword ladder: the ladder checked its main keyword when it was planned' : '';
     const automatic = /^(cadence|ladder|tracker|casestudy|audit):/i.test(S(p.client_ip));
-    return { verdict_score: score, withheld, acknowledged: ack, exempt, automatic };
+    return { verdict_score: score, withheld, acknowledged: ack, exempt, automatic, ai: aiPage };
   };
   const fit = (f0, dup, max) => {
     const f = f0 || {}; const sc = num(f.verdict_score); const D = dup || {}; const M = Number.isFinite(Number(max)) ? Number(max) : MAX.fit; const half = M / 2;
-    const vp = sc == null || sc >= CFG.verdict_bar ? half : sc >= 30 ? half * SHARE.verdict_partial : 0;
+    // client reports 2026-11-16 (INV1 F10): a page written for an AI question was chosen for the question, not for search volume, so a low
+    // verdict does not cut its fit (devaicon's AI guide sat at 59, its fit capped by the verdict on the broad topic). Only while no duplicate is
+    // open: an AI page beside the page that owns its search keeps both limits.
+    const aiFree = !!f.ai && !D.open && !D.differs;
+    const vp = sc == null || sc >= CFG.verdict_bar || aiFree ? half : sc >= 30 ? half * SHARE.verdict_partial : 0;
     const dp = D.open || D.differs ? 0 : half;
     let pts = vp + dp; const caps = [];
-    if (sc != null && sc < CFG.verdict_bar && pts > M * SHARE.fit_verdict) { pts = M * SHARE.fit_verdict; caps.push({ dim: 'fit', share: SHARE.fit_verdict, why: 'our verdict scored this search ' + sc + ' out of 100, under ' + CFG.verdict_bar }); }
+    if (sc != null && sc < CFG.verdict_bar && !aiFree && pts > M * SHARE.fit_verdict) { pts = M * SHARE.fit_verdict; caps.push({ dim: 'fit', share: SHARE.fit_verdict, why: 'our verdict scored this search ' + sc + ' out of 100, under ' + CFG.verdict_bar }); }
     if ((D.open || D.differs) && pts > M * SHARE.fit_duplicate) { pts = M * SHARE.fit_duplicate; caps.push({ dim: 'fit', share: SHARE.fit_duplicate, why: D.open ? 'your website already has a page for this search' : 'published beside the page your website has for this search' }); }
-    const band = sc == null ? 'not_checked' : sc >= CFG.verdict_bar ? 'full' : sc >= 30 ? 'partial' : 'none';
+    const band = sc == null ? 'not_checked' : sc >= CFG.verdict_bar || aiFree ? 'full' : sc >= 30 ? 'partial' : 'none';
     const note = sc == null ? 'Fit not checked: ' + (f.withheld ? 'the verdict could not score this search' : 'no verdict score was kept with this page') + ', so fit takes its full points'
       : 'Our verdict scored this search ' + sc + ' out of 100' + (sc < CFG.verdict_bar ? (f.acknowledged ? ', and you chose to write it anyway' : f.exempt ? ' (' + f.exempt + ')' : '') : '');
     return { points: r1(pts), verdict_points: r1(vp), duplicate_points: r1(dp), band, caps, note };
@@ -1487,18 +1493,20 @@ const GR = (() => {
   };
   // the delivered status: a page with no blocker that fails a floor is "Needs work: <parts>", never "Ready to publish". It stays publishable
   // (nothing stops the client): the status and label change, the items say what to improve, and a not-ready page is left as it is.
-  const deliver = (del0, grade) => {
+  // section 191: o.live = the grade of the LIVE page (finalize `grade_only`): the client changes it on the website, there is no editor round
+  const deliver = (del0, grade, o) => {
+    const live = !!(o && o.live);
     const del = { ...(del0 || {}) }; const fl = (grade || {}).floors || null;
     if (!fl || fl.ok || del.status === 'not_ready') return del;
     const parts = fl.failing.map(x => x.label);
     return { ...del, status: 'needs_work', label: clean('Needs work: ' + parts.join(', ')),
       needs_work: fl.failing.map(x => ({ code: 'needs_work', dim: x.dim, text: clean(x.label.charAt(0).toUpperCase() + x.label.slice(1) + ' scored ' + x.points + ' of ' + x.max + ', under half its points'), action: x.fix })),
-      next_step: clean('Nothing stops you publishing this page, but ' + (parts.length === 1 ? 'one part is' : parts.length + ' parts are') + ' under half marks (' + parts.join(', ') + '). '
-        + fl.failing.map(x => x.fix.replace(/[.\s]+$/, '')).join('. ') + '. Change it in the editor and make the final version, or approve it as it is.') };
+      next_step: clean((live ? 'Your live page has ' : 'Nothing stops you publishing this page, but ') + (parts.length === 1 ? 'one part' + (live ? '' : ' is') : parts.length + ' parts' + (live ? '' : ' are')) + ' under half marks (' + parts.join(', ') + '). '
+        + fl.failing.map(x => x.fix.replace(/[.\s]+$/, '')).join('. ') + (live ? '. Change it on your website, then press Re-check.' : '. Change it in the editor and make the final version, or approve it as it is.')) };
   };
   const display = (n) => n == null || n === '' || !Number.isFinite(Number(n)) ? '' : Math.round(Number(n)) >= CFG.display_top ? CFG.display_top + '+' : String(Math.round(Number(n)));
   const basis = 'structure 20 (a statement made three or more times and one label for two lists cost points), topic coverage 15, readability 10, specificity 10, plain language 10, sources 15, fit with the search 20; length is advice only';
-  return { VERSION, MAX, DIMS, LABEL, SHARE, CFG, REVIEW_DIM, REVIEW_PTS, reviewCut, units, repetition, ideas, listLabels, sources, fitOf, fit, removedCap, local, cap, deliver, display, basis };
+  return { VERSION, MAX, DIMS, LABEL, SHARE, CFG, REVIEW_DIM, REVIEW_PTS, reviewCut, units, repetition, ideas, listLabels, sources, fitOf, fit, removedCap, local, cap, deliver, display, basis, FIX, clean };
 })();
 // Shared cost kit (G23 + the estimate recalibration, 2026-10-13; FIX_PLAN G23, RESULTS §0b / §2.10).
 //
@@ -2063,6 +2071,7 @@ const CC = (() => {
       const c = String(r.created_at || '');
       if (!c || (to && c >= to)) return false;                       // reserved after this run had already settled
       const st = String(r.status || '');
+      if (st === 'waiting' || st === 'handed_off') return false;     // P1: a page run waiting for a writing slot spends nothing
       if (st === 'reserved' || st === '') return true;               // still reserved: it was open the whole time
       const s = closedAt(r);
       return !from || s > from;                                      // closed, but only after this run reserved: it overlapped
@@ -2680,7 +2689,7 @@ const grade = GR.cap({ score: score0, of: 100, breakdown: breakdown0,
     // W05-A (wave 0.5): the page run's second-read advice still costs its points while its quoted words are on this version (the grade does
     // not rise at Finalize for nothing); advice the client has edited away costs nothing
     review: Array.isArray(PR.second_read) ? { mode: 'enforce', status: 'checked', advice: PR.second_read.filter(a => a && a.location && PF.onPage(a.location, md)) } : null });
-Object.assign(del, GR.deliver(del, grade));
+Object.assign(del, GR.deliver(del, grade, { live: !!F.grade_only }));   // section 191: a live page is changed on the website, not in the editor
 // W06-C: the reason in the advice too (the parts under half say what to write back; this says what the run took out)
 if (removedNow && grade.removed && grade.removed.capped && GD) { const RMn = GR.removedCap(removedNow, GD.max); if (RMn) del.advisory.unshift({ code: 'sections_removed', text: RMn.note }); }
 // M3: the version of a legacy request is never "Ready to publish" (what only the first check could see is unknown), but it is not held back
@@ -2693,6 +2702,43 @@ if (PR.legacy && !PR.blocks_known && del.status !== 'not_ready') {
   del.status = 'needs_work'; del.label = PF.clean(was ? S(del.label) + ', first check not read' : 'Needs work: first check not read');
   del.next_step = PF.clean((was ? S(del.next_step).replace(/[.\s]+$/, '') + '. ' : 'Nothing stops you publishing this page, but ') + 'we could not read the first check of this page, so this version is not called ready. Make the final version again from the page in your content list, so its first check travels with it.');
   grade.ready = false; grade.first_check = { read: false, unknown: PR.legacy_unknown || [] };
+}
+// Section 191 (client reports 2026-11-16, devaicon.com: "delivered 95+, live 84, why?"): a LIVE grade says what it measured (the live page,
+// read on this day, with the check of the version we delivered), what to do (change it on the website, then Re-check, never the editor) and,
+// part by part, why points were lost, in plain words: the structure checks that failed, the topic coverage and its target, the reading
+// ease with the longest sentences, the sources note, the filler phrases. `live_adjustments` = what the check did not count against the page
+// because it measured our own reader or the site's template (Content QA). The app shows these beside the grade of the version we delivered.
+let liveOut = null;
+if (F.grade_only) {
+  const lr = F.live_read || {}; const day = new Date().toISOString().slice(0, 10);
+  grade.basis = GR.clean('measured on the live page ' + (S(lr.url) || 'you published') + ' as read on ' + day + ', with the same check as the version we delivered (' + (GD ? GR.basis : 'structure, readability, specificity, plain language, length') + ')');
+  // review L7: one next step for a live page, whatever the status: never "make the final version again" or "in the editor" (the page is live)
+  const acts = [...new Set(del.blocking.map(x => S(x.action)).filter(a => a && !/final version|page run|in the editor|content list/i.test(a)))];
+  const failing = ((grade.floors || {}).failing || []);
+  if (del.status === 'not_ready') del.next_step = PF.clean('Change these on your website, then press Re-check: ' + (acts.join('; ') || 'the points listed above') + '.');
+  else if (del.status === 'needs_work') del.next_step = failing.length ? S(GR.deliver({ status: 'needs_work' }, grade, { live: true }).next_step) : 'Change the points listed above on your website, then press Re-check.';
+  else del.next_step = 'Your live page passes our check. If you change it, press Re-check.';
+  const M0 = grade.max || {}; const B0 = grade.breakdown || {}; const IT = (GD && GD.items) || {}; const R = qa.readability || {};
+  const n0 = (v) => Number(v) || 0;
+  const missing = (qa.missing_terms || []).filter(Boolean).slice(0, 6);
+  const ideas = IT.ideas && IT.ideas.count ? ['An idea is restated ' + (((IT.ideas.ideas || [])[0] || {}).size || 4) + ' times in different places: "' + S(((IT.ideas.ideas || [])[0] || {}).sample).slice(0, 90) + '"'] : [];
+  const reps = IT.repetition && IT.repetition.count ? ['A statement is made ' + IT.repetition.worst + ' times: "' + S(((IT.repetition.clusters || [])[0] || {}).sample).slice(0, 90) + '"'] : [];
+  const srcI = IT.sources || {};
+  const why = {
+    structure: (qa.structure_checks || []).filter(c => c && c.ok === false && c.text).map(c => S(c.text)).concat(reps, ideas, (IT.list_labels || []).length ? ['The same label introduces two different lists'] : []),
+    coverage: qa.coverage_pct != null ? ['The page uses ' + qa.coverage_pct + '% of the topic terms the pages that rank use' + (qa.coverage_target_pct ? ' (the target is ' + qa.coverage_target_pct + '%)' : '') + (missing.length ? '; not on the page: ' + missing.join(', ') : '')] : [],
+    readability: R.flesch != null ? ['Reading ease ' + R.flesch + ' out of 100 (' + (R.band_source === 'competitor_pages' && R.band ? 'the pages that rank read ' + R.band.low + ' to ' + R.band.high : '40 or more, with sentences of 22 words or fewer, scores full marks') + '); sentences average ' + R.avg_sentence_words + ' words' + (n0(R.long_sentences) ? '; ' + R.long_sentences + ' sentence' + (n0(R.long_sentences) === 1 ? ' is' : 's are') + ' over 28 words' : '')] : [],
+    specificity: ['Few concrete examples, steps, figures or decision rules for the length of the page'],
+    clean_language: (qa.banned_phrases || []).length ? ['Filler phrases: ' + qa.banned_phrases.slice(0, 5).map(x => '"' + S(x.phrase) + '"' + (n0(x.count) > 1 ? ' (' + x.count + ' times)' : '')).join(', ')] : [],
+    sources: srcI.not_checked ? ['The page cites no outside source'] : [n0(srcI.unsourced) ? srcI.unsourced + ' figure' + (n0(srcI.unsourced) === 1 ? ' has' : 's have') + ' no source' : '', n0(srcI.weak_only) ? srcI.weak_only + ' figure' + (n0(srcI.weak_only) === 1 ? ' rests' : 's rest') + ' only on a source with no independent authority' : ''].filter(Boolean),
+    fit: (GD && Array.isArray(GD.notes) && GD.notes[0]) ? [S(GD.notes[0])] : []
+  };
+  const parts = GR.DIMS.filter(k => n0(M0[k]) > 0).map(k => { const lost = n0(M0[k]) - n0(B0[k]);
+    let fix = ''; try { fix = lost > 0 && k !== 'structure' ? S(GR.FIX[k](GD || {})) : (lost > 0 && (reps.length || ideas.length) ? S(GR.FIX.structure(GD || {})) : ''); } catch (e) { fix = ''; }
+    return { dim: k, label: GR.LABEL[k], points: n0(B0[k]), max: n0(M0[k]), reasons: lost > 0 ? why[k].filter(Boolean).slice(0, 5).map(t => GR.clean(t)) : [], fix: GR.clean(fix) }; });
+  liveOut = { live_parts: parts,
+    readability: { flesch: R.flesch == null ? null : R.flesch, avg_sentence_words: R.avg_sentence_words == null ? null : R.avg_sentence_words, long_sentences: n0(R.long_sentences), longest: (R.longest || []).slice(0, 5).map(x => ({ text: GR.clean(S(x.text)).slice(0, 200), words: n0(x.words) })) },
+    live_adjustments: (qa.live_adjustments || []).slice(0, 6).map(x => ({ code: S(x.code), text: GR.clean(S(x.text)) })) };
 }
 // the answer: the Markdown the caller sent, without the meta lines it did not send
 let out = md;
@@ -2716,7 +2762,7 @@ const body = {
   delivery: { status: del.status, label: del.label, blocking: del.blocking, advisory: del.advisory, next_step: del.next_step, grade, ...(del.needs_work ? { needs_work: del.needs_work } : {}) },
   client_questions, grade, cost, notes: (FM.notes || []).slice(0, 10), content_score: grade.score,
   // client reports 2026-11-11 (185): a live-page grade says so, with what was read; the app stores it and never treats it as a final version
-  ...(F.grade_only ? { grade_only: true, live_read: F.live_read || null } : {}),
+  ...(F.grade_only ? { grade_only: true, live_read: F.live_read || null, ...(liveOut || {}) } : {}),   // section 191: live_parts, readability, live_adjustments
   basis: 'the content gate of a content run (Content QA + Originality Check, the same node code) over the final version, with your answers and the sentences you wrote counted as on file; no research, no new page',
   writes: 'none'
 };

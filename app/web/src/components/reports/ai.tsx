@@ -313,7 +313,8 @@ export function AiVisibilityReport({ report }: { report: ReportDetail }) {
         </Block>
       )}
 
-      <ActionList actions={objs(p.actions)} siteId={report.siteId} />
+      {/* client report 2026-11-16 (review M1): the report's own question grid lets an older report's action find the question's own search */}
+      <ActionList actions={objs(p.actions)} siteId={report.siteId} aiQuestions={objs(p.questions).map((q) => ({ promptId: str(q.prompt_id), prompt: str(q.prompt), keyword: str(q.keyword), topic: str(q.topic), kind: str(q.kind) }))} />
 
       {has(market) && !str(market.error) && objs(market.top).length > 0 && (
         <Block

@@ -11,12 +11,21 @@
 // What it deliberately does NOT do: time out a row. A `writing` row with no content-log row is left exactly as it is, and the
 // read half (`Growth_Plan.js`, build section 82) queues the question again after 14 days with its reason and a medium alert.
 // One rule, one place: a second timeout here would be a second answer to the same question.
+/*__FIT_GATE__*/
+/*__LADDER_RULES__*/
+/*__AI_QUESTION__*/
+// client reports 2026-11-16 (devaicon.com, INV1 F7 / F8 / F11): this node now also runs when the week writes nothing (the cadence's idle branch,
+// *AI Target Settle (Idle)*): devaicon's question 41 said "being written" for days after its page went live because the only exit ran only on
+// the branch that starts pages. A run that FAILED puts its question back in the queue at once; a ladder page of ANOTHER search that the
+// question had been folded into (question 37: "agentic ai development companies uae" written as "ai app development companies") is not its
+// page, so the question is queued again for a page of its own. The stored reason is plain words, with a reason code for the app.
 const now = new Date().toISOString();
 // Each node is read by name and not through a helper that hides it: `state_lint.py` asks of a node's OWN code which other node
 // it took its evidence from, and a `$(name)` behind a variable is evidence nothing can see (INVARIANTS rule 4, check A).
 const itemsOf = (get) => { try { return get().all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error); } catch (e) { return []; } };
 const writing = itemsOf(() => $('Load AI Targets Writing (Cadence)')).filter(t => t.target_id && String(t.status || '') === 'writing');
 const logs = itemsOf(() => $('Load Content Log'));
+const siteRows = itemsOf(() => $('Load Sites'));   // L2: each website's market
 // the strongest evidence on record per run: published beats written beats started (a run can leave more than one row over time)
 // R111 (2026-10-16): `not_ready` is a draft whose last quality round failed — evidence that the run ended, never that a page exists
 const RANK = { started: 1, not_ready: 1.5, written: 2, published: 3 };
@@ -31,11 +40,29 @@ for (const t of writing) {
   const rid = String(t.request_id || '');
   const l = rid ? byReq.get(rid) : null;
   const st = l ? String(l.status || '') : '';
+  const tk = String(t.keyword || ''), lk = String((l && l.keyword) || '');
+  // INV1 F7: a LADDER page of another search is not this question's page (the same search, or every word of that page's keyword in the question, is)
+  // review 2026-11-16 (L5 / L2): the one rule LRU.questionPage (the same search, or the ladder's MAIN page it covers), in the website's market
+  // a ladder page's log row carries its rung (4 = the ladder's main page), so no ladder row is read here
+  const mkt = String((siteRows.find(r => (t.site_id && r.site_id === t.site_id) || (t.domain && String(r.domain || '') === String(t.domain))) || {}).country || '');
+  if (l && String(l.source || '') === 'ladder' && tk && lk && !LRU.questionPage(tk, { keyword: lk, rung: l.rung }, mkt)) {
+    out.push({ json: { target_id: t.target_id, status: 'queued', request_id: '', written_at: '', at: now, reason_code: 'new_page', reason_args: JSON.stringify({ keyword: lk }),
+      reason: 'The page written last time was for another search ("' + lk + '"), so the question is queued for a page of its own.' } });
+    continue; }
+  if (st === 'held') {   // review 2026-11-16 (L4): held for the client's OK, nothing is being written: queued again, said in plain words
+    const hu = (String(l.qa_reasons || '').match(/https?:\/\/[^\s,;]+/) || [''])[0].replace(/[.)]+$/, '');
+    out.push({ json: { target_id: t.target_id, status: 'queued', request_id: '', written_at: '', at: now, reason_code: hu ? 'same_search_page' : 'new_page', reason_args: JSON.stringify(hu ? { page_url: hu, keyword: tk } : {}),
+      reason: 'The page run waits for your OK in the app' + (hu ? ': your page ' + hu + ' is already the page for this search' : '') + ', so nothing is being written for this question now.' } });
+    continue; }
+  if (st === 'failed') {   // INV1 F8: the run stopped (the app's failure watcher, a page reader that refused): queued again now, not after 14 days
+    out.push({ json: { target_id: t.target_id, status: 'queued', request_id: '', written_at: '', at: now, reason_code: 'run_failed', reason_args: JSON.stringify({}), reason: AQ.reason('run_failed', {}) } });
+    continue; }
   if (st !== 'written' && st !== 'published') continue;   // no page on record (or R111: only a draft that failed its quality check): the row stays `writing`
-  out.push({ json: { target_id: t.target_id, status: 'written', at: now,
+  const args = st === 'published' ? { page_url: String(l.published_url || ''), date: String(l.published_at || '').slice(0, 10) } : {};
+  out.push({ json: { target_id: t.target_id, status: 'written', at: now, request_id: rid,
     // the moment the page existed is the moment its run was logged, not the moment we read the row back
     written_at: String(l.started_at || t.written_at || now),
-    reason: 'the page exists: the seo_content_log row for run ' + rid + ' says "' + st + '"'
-      + (l.published_url ? ' (' + String(l.published_url).slice(0, 120) + ')' : '') + ', read on ' + now.slice(0, 10) } });
+    reason_code: st === 'published' ? 'live' : 'written', reason_args: JSON.stringify(args),
+    reason: AQ.reason(st === 'published' ? 'live' : 'written', args) + ' Checked against the page on record on ' + now.slice(0, 10) + '.' } });
 }
 return out.length ? out : [{ json: { skip: true } }];

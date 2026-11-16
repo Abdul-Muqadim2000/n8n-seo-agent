@@ -227,6 +227,15 @@ const LEN = (() => {
 const G = prc.grading;
 const siteUrls = [...new Set(ownLinks.concat(G.site_urls || []))];
 
+// client reports 2026-11-16 (INV1 F2 / F10): the final version of a page written for an AI question is judged as that page (its own question's
+// search, an AI page's fit, the duplicate rule on the question), so the AI target travels with the page-run context (Build Webhook Response
+// page_run.ai_target, from the page run's Parse Brief). Without it the final version was judged as a plain page on the verdict of the topic.
+const AIF = (() => { const a = pr && isObj(pr.ai_target) ? pr.ai_target : isObj(b.ai_target) ? b.ai_target : null; if (!a || !clean(a.question)) return null;
+  const A = (v) => (Array.isArray(v) ? v : []);
+  return { question: clean(a.question).slice(0, 300), kind: S(a.kind) === 'refresh' ? 'refresh' : 'answer', target_id: clean(a.target_id).slice(0, 120),
+    fanout: A(a.fanout).map(x => clean(x).slice(0, 200)).filter(Boolean).slice(0, 8),
+    sources: A(a.sources).filter(isObj).map(x => ({ u: httpUrl(x.u || x.url), t: clean(x.t || x.title).slice(0, 200) })).filter(x => x.u).slice(0, 6),
+    competitors: A(a.competitors).map(x => clean(x).slice(0, 120)).filter(Boolean).slice(0, 8) }; })();
 const ok = errors.length === 0;
 return [{ json: {
   ok, errors, error: errors.join('; '),
@@ -241,7 +250,7 @@ return [{ json: {
   internal_link_candidates: ownLinks.map(u => ({ url: u })), site_urls: siteUrls, planned_link_targets: [], hub_pages: [],
   existing_page: null, existing_page_ours: false, ladder_id: '', author: null, reviewer: null, site_profile: null, site_description: null, video: null, style_guide: G.style_guide || null,
   serp_shapes: G.serp_shapes || null, regulatory: G.regulatory_facts ? { topics: G.regulatory_topics || [...new Set(G.regulatory_facts.map(f => S(f.topic)).filter(Boolean))].map(id => ({ id, relevance: 'core' })), facts: G.regulatory_facts } : null,
-  ai_target: null, qa_max_rounds: 1, originality_max_overlap_pct: 15, client_pages: [],
+  ai_target: AIF, qa_max_rounds: 1, originality_max_overlap_pct: 15, client_pages: [],
   request_id: S(b.request_id).slice(0, 120), content_request_id: S(prc.content_request_id || b.content_request_id).slice(0, 120), site_id: S(b.site_id).slice(0, 120),
   prc: { received: prc.received, legacy: prc.legacy, legacy_unknown: prc.legacy_unknown, gating: prc.gating, gating_missing: prc.gating_missing, blocks_known: prc.blocks_known, grading_missing: prc.grading_missing, length_from: LEN.from,
     length_points: LEN.points == null ? null : LEN.points,

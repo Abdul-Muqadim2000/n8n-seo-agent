@@ -13,6 +13,8 @@ export * from './profile';
 export * from './cost';
 export * from './estimate';
 export * from './pipeline-notices';
+export * from './ai-target-status';   // client report 2026-11-16 (issue 1): a question to win in plain words, its state from the content log
+export * from './ai-question-action';   // client report 2026-11-16 (issue 1): every "write a page for this AI question" button, one resolver
 export * from './publish-verify';
 export * from './meta-description';   // W0-A (2026-10-29): the meta description's field rule, the same as the engine's PF.meta
 export * from './live-grade';   // client reports 2026-11-11: the grade of the live page (Page Finalize grade_only), stored by the app's job

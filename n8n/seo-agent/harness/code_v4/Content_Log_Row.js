@@ -40,7 +40,15 @@ const rid = String(d.request_id || '');
 const prior = (rid ? logs.find(r => String(r.request_id) === rid && norm(r.keyword) === norm(keyword)) : null) ||
   logs.filter(r => norm(r.keyword) === norm(keyword)).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] || null;
 const ip = String(d.client_ip || '');
-const source = (prior && prior.source) || (/^cadence:/i.test(ip) ? 'cadence' : /^app:/i.test(ip) ? 'app' : (/^ladder:/i.test(ip) || d.ladder_id) ? 'ladder' : 'manual');
+const source0 = (prior && prior.source) || (/^cadence:/i.test(ip) ? 'cadence' : /^app:/i.test(ip) ? 'app' : (/^ladder:/i.test(ip) || d.ladder_id) ? 'ladder' : 'manual');
+// client reports 2026-11-16 (INV1 F6, CONTRACT_ISSUE1 item 2): a page written for an AI question is an AI page wherever it was started. The app
+// opened its rows as `app` (devaicon.com content log 60, techand.ai 64), so AI Growth never counted them and nothing linked the page to its
+// question. A run with an ai_target is `ai_refresh` when it improves a page the site has, else `ai_answer`; a ladder page that also answers a
+// question stays `ladder` (it is the ladder's page first), and a source the cadence already set to ai_* is kept.
+let AIT = d.ai_target && typeof d.ai_target === 'object' && String(d.ai_target.question || '').trim() ? d.ai_target : null;
+if (!AIT) { try { const pb = ($('Parse Brief').first().json || {}).ai_target; AIT = pb && typeof pb === 'object' && String(pb.question || '').trim() ? pb : null; } catch (e) { AIT = null; } }
+const aiSource = AIT ? ((String(d.existing_page_url || '').trim() || String(AIT.kind || '') === 'refresh') ? 'ai_refresh' : 'ai_answer') : '';
+const source = aiSource && !/^ai_/.test(source0) && source0 !== 'ladder' && !d.ladder_id ? aiSource : source0;
 const sameRun = !!prior && !!rid && String(prior.request_id) === rid;   // the run that opened the row: keep when it started
 const rung = Number(d.ladder_rung != null && d.ladder_rung !== '' ? d.ladder_rung : (prior && prior.rung)) || 0;
 // R111 (2026-10-16, re-rating 2026-10-15): the row used to say `written` whenever the package held article text, whatever the page's
@@ -80,7 +88,11 @@ const row = {
   published_at: String((prior && prior.published_at) || ''),
   week: sameRun ? String(prior.week || now.slice(0, 10)) : now.slice(0, 10),
   qa_reasons: notReady ? reasons.join('; ').slice(0, 1500) : '',
-  publish_note: ''   // 2026-10-27: a page written again waits again, so a note about how its earlier version was marked published no longer applies
+  publish_note: '',   // 2026-10-27: a page written again waits again, so a note about how its earlier version was marked published no longer applies
+  // client reports 2026-11-16 (INV1 F4): the page as written, so publish detection looks for it at its own address and by its own title
+  planned_slug: String(meta.slug || page.article_slug || (prior && prior.planned_slug) || '').slice(0, 200),
+  planned_title: String(meta.title || page.article_title || (prior && prior.planned_title) || '').replace(/\s+/g, ' ').trim().slice(0, 300),
+  planned_h1: String(meta.h1 || (prior && prior.planned_h1) || '').replace(/\s+/g, ' ').trim().slice(0, 300)
 };
 if (held) { row.status = 'held'; row.qa_reasons = reasons.join('; ').slice(0, 1500); }   // W0-D: what was held and why, for the cadence and the app
 if (unread) { row.status = 'failed'; row.qa_reasons = ('page run failed: the pages it needs could not be read, so nothing was written: ' + String(PVH.pages_unread.client_reason || 'the service we use to read web pages did not answer')).slice(0, 1500); }   // W07-A

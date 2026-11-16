@@ -169,7 +169,9 @@ const LRU = (() => {
   const stageText = (stage) => STAGE_WORDS[low(stage)] || STAGE_WORDS.info;
 
   // ---- the market (rule 3) ----
-  const placesOf = (s) => { try { return typeof fitPlaces === 'function' ? fitPlaces(s) : []; } catch (e) { return []; } };
+  // review 2026-11-16 (L2): a node that inlines the duplicate rule (DUP) but not the fit gate (Parse Verdict) reads places through DUP's copy of
+  // the same gazetteer, so the market rules of an AI question hold there too
+  const placesOf = (s) => { try { return typeof fitPlaces === 'function' ? fitPlaces(s) : (typeof DUP === 'object' && DUP && typeof DUP.placesIn === 'function') ? DUP.placesIn(s) : []; } catch (e) { return []; } };
   const countryName = (iso) => CFG.countries[S(iso).toUpperCase()] || '';
   /** -> { iso, country, source: 'keyword' | 'site' | 'request', named: [place words], keyword_iso, ok (the request market is the lock), changed,
    *  measurable, note }. o: { keyword, site_iso (the website's market), request_iso (what the run was sent with) }.
@@ -205,6 +207,40 @@ const LRU = (() => {
     + (m.source === 'keyword' ? 'names ' + m.named.join(', ') + ' (' + m.country + ')' : 'names no place and your website\'s market is ' + m.country)
     + '. A ladder is measured in one market, so nothing was planned and nothing was charged: start it again in ' + m.country
     + (m.source === 'site' && !m.named.length ? ', or confirm that you want it measured in ' + (countryName(m.request_iso) || m.request_iso) + ' on purpose.' : '.');
+
+  // ---- an AI question beside a page planned for another keyword (client reports 2026-11-16, devaicon.com, INV1 F7) ----
+  // The cadence folded "agentic ai development companies uae" into the rung "ai app development companies": it stripped every word of every
+  // ladder head and then called one shared word ("companies") the same search, in either direction. Now a question is folded into a page only
+  // when it IS that page's search: the same words once the question's own scaffolding ("best", "top", "which") and joining words are out,
+  // plurals folded and places read as their market ("dubai" and "uae" are both the UAE). `coversHead`: the question carries every word of a
+  // ladder's main keyword (two words or more), so the main page is the page that answers it ("agentic ai development companies uae" and the
+  // main keyword "agentic ai development in uae"). Nothing is stripped because a ladder head holds it.
+  const Q_MOD = new Set(['best', 'top', 'leading', 'trusted', 'recommended', 'recommend', 'recommendation', 'recommendations', 'which', 'who', 'what', 'how', 'list', 'guide', 'is', 'are']);
+  const qWords = (kw) => {
+    let t = ' ' + low(kw).replace(/\./g, '').replace(/[^a-z0-9\u0600-\u06ff]+/g, ' ').trim() + ' '; const tags = [];
+    for (const p of placesOf(kw)) { const w = ' ' + low(p.word) + ' '; if (t.indexOf(w) >= 0) { t = t.split(w).join(' '); tags.push('in:' + [...(p.iso || [])].sort().join('+')); } }
+    const ws = t.split(' ').filter(x => x && !JOIN.has(x) && !Q_MOD.has(x)).map(x => x.length > 3 ? x.replace(/ies$/, 'y').replace(/([^s])s$/, '$1') : x);
+    return [...new Set([...ws, ...tags])].sort();
+  };
+  /** the same search for a question and a page keyword: the same words (scaffolding out, plurals folded, places as their market) */
+  const sameQuestion = (a, b) => { const A = qWords(a), B = qWords(b); return A.length > 0 && A.join(' ') === B.join(' '); };
+  // review 2026-11-16 (L2 / L3): a place tag is not a topic word ("crm dubai" is ONE topic word, so it covers nothing), and a main keyword with no
+  // place covers a question only in the website's own market ("crm service provider" does not take "best crm service provider saudi arabia" for
+  // a UAE website). `market`: ISO-2 or a country name; with none given a question that names a place is not covered by a head that names none.
+  const isoOfM = (m) => { const x = S(m).trim(); if (/^[A-Za-z]{2}$/.test(x)) return x.toUpperCase(); const k = Object.keys(CFG.countries).find(c => low(CFG.countries[c]) === low(x)); return k || ''; };
+  const inMarket = (tags, market) => { const iso = isoOfM(market); return !!iso && tags.every(t => t.slice(3).split('+').includes(iso)); };
+  /** the question carries every word of the ladder's main keyword: at least two topic words (place tags do not count), and the question's
+   *  places are the head's own, or the website's market when the head names none */
+  const coversHead = (q, head, market) => { const H = qWords(head), Q = qWords(q), QS = new Set(Q);
+    if (H.filter(w => !/^in:/.test(w)).length < 2 || !H.every(w => QS.has(w))) return false;
+    const qTags = Q.filter(w => /^in:/.test(w)), hTags = H.filter(w => /^in:/.test(w));
+    return !qTags.length || qTags.every(t => hTags.includes(t)) || (!hTags.length && inMarket(qTags, market)); };
+  /** review 2026-11-16 (L5): ONE rule for "this ladder page is the question's page", shared by Cadence Plan, AI Growth, AI Target Settle,
+   *  Parse Verdict and the app's cadence.ts: the page's keyword IS the question's search, or the page is its ladder's MAIN page (rung 4, or
+   *  its keyword is the main keyword, or part 'head') and the question carries all of it (coversHead, in the market). row: { keyword,
+   *  head_keyword?, rung?, part? } (a ladder row, an own-coverage entry or a content-log row of a ladder page). */
+  const isHeadRow = (r) => { const x = r || {}; return S(x.part) === 'head' || Number(x.rung) === 4 || (!!S(x.head_keyword) && wordsKey(x.keyword) === wordsKey(x.head_keyword)); };
+  const questionPage = (q, row, market) => { const x = row || {}; return !!S(x.keyword) && (sameQuestion(q, x.keyword) || (isHeadRow(x) && coversHead(q, x.keyword, market))); };
 
   // ---- verdicts (rule 4) ----
   /** o: { verdict: 'GO' | 'GO_WITH_CHANGES' | 'AVOID' | ..., score: 0-100 | null, ack: the client said "Write it anyway" } -> { stop, reason, band } */
@@ -279,7 +315,7 @@ const LRU = (() => {
   };
 
   return { CFG, STAGES, COMMERCIAL, kiPool, ranksFor, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, headTarget, oneUrl,
-    stageOf, isCommercial, isDefinitional, definitionalOk, stageText, countryName, market, marketRefusal, verdictStop, stuck, rungState };
+    stageOf, isCommercial, isDefinitional, definitionalOk, stageText, countryName, market, marketRefusal, verdictStop, stuck, rungState, qWords, sameQuestion, coversHead, isHeadRow, questionPage };
 })();
 // ---- the rows a published page leaves (v4.8, PIPELINE_FEATURE_SPEC §6.5). ONE copy, inlined by the build into Publish Check ("I published a
 // page", main workflow) and Detect Published (Site Tracker, publish detection), so a reported page and a detected page are stored identically.
@@ -341,6 +377,14 @@ const clean = (s) => String(s || '').replace(/<[^>]+>/g, ' ').replace(/&[a-z0-9#
 const pick1 = (b, re) => { const x = b.match(re); return x ? clean(x[1]) : ''; };
 const tokHit = (t, set) => set.some(x => x === t || (t.length >= 5 && x.length >= 5 && (x.startsWith(t) || t.startsWith(x))));
 const shareOf = (kwT, other) => kwT.length ? kwT.filter(t => tokHit(t, other)).length / kwT.length : 0;
+const titleOwn = (t) => String(t || '').split(/\s[|\u2013\u2014]\s|\s-\s/)[0];   // INV1 F4: the brand after "|" is not part of the page's title
+const writtenMatch = (written, pg) => { let best = 0;
+  for (const w of written) { const W = overlapTokens(titleOwn(w)); if (W.length < 2) continue;
+    for (const live of [titleOwn(pg.title), pg.h1]) { const L = overlapTokens(live); if (!L.length) continue; best = Math.max(best, Math.min(shareOf(W, L), shareOf(L, W))); } }
+  return best; };
+const liveInWritten = (written, pg) => { const W = written.flatMap(w => overlapTokens(titleOwn(w))); let best = 0;
+  for (const live of [titleOwn(pg.title), pg.h1]) { const L = overlapTokens(live); if (L.length < 3) continue; best = Math.max(best, shareOf(L, W)); }
+  return best; };
 const pages = new Map();
 fetchReq.forEach((q, i) => { const r = fetchRes[i] || {}; const st = Number(r.statusCode) || (r.error ? 0 : (fetchRes[i] ? 200 : 0)); const b = st === 200 ? bodyOf(r).slice(0, CONFIG.max_html_chars) : '';
   pages.set(q.url, { ok: st === 200 && !r.error && !!b, status: st, title: pick1(b, /<title[^>]*>([\s\S]*?)<\/title>/i), h1: pick1(b, /<h1[^>]*>([\s\S]*?)<\/h1>/i) }); });
@@ -352,8 +396,18 @@ const out = state.map(st => {
     if (matched.has(ch.key)) continue;
     for (const o of ch.options || []) {
       const pg = pages.get(o.url); if (!pg || !pg.ok) continue;
-      const best = Math.max(shareOf(ch.tokens, overlapTokens(pg.title)), shareOf(ch.tokens, overlapTokens(pg.h1)));
-      if (best >= CONFIG.title_share) pairs.push({ key: ch.key, url: o.url, ukey: o.ukey, score: 50 + 20 * best + 10 * (Number(o.slug_share) || 0), matched_by: 'title' });
+      // client reports 2026-11-16 (INV1 F4): a row that kept the page as it was written is matched on THAT title / H1, both ways (the live
+      // title holds 80% of the written one's words and the written one 80% of the live title's, the brand after "|" left out): a broad keyword
+      // is carried whole by many titles of the site ("AI Automation Services in Pakistan | ISO 27001" holds all of "ai automation services")
+      const kwShare = Math.max(shareOf(ch.tokens, overlapTokens(pg.title)), shareOf(ch.tokens, overlapTokens(pg.h1)));
+      const wr = (ch.written || []).length ? writtenMatch(ch.written, pg) : 0;
+      if ((ch.written || []).length && wr >= CONFIG.title_share) { pairs.push({ key: ch.key, url: o.url, ukey: o.ukey, score: 50 + 20 * wr + 10 * (Number(o.slug_share) || 0), matched_by: 'title', title_basis: 'written' }); continue; }
+      // review 2026-11-16 (M3): a client who shortens the title and the H1 ("AI Automation Services in Dubai | Devaicon" for the written "Best AI
+      // Automation Services in Dubai: A 2026 Buyer's Guide") still published the page. The keyword rule of before, or the live title / H1 held
+      // whole in the written one, at the same strength (80%), ranks below a written-title match. The addresses it may claim are the same:
+      // never a page the site already has, never one of those moved (Match Slugs leaves them out of the options).
+      const fb = Math.max(kwShare, (ch.written || []).length ? liveInWritten(ch.written, pg) : 0);
+      if (fb >= CONFIG.title_share) pairs.push({ key: ch.key, url: o.url, ukey: o.ukey, score: ((ch.written || []).length ? 40 : 50) + 20 * fb + 10 * (Number(o.slug_share) || 0), matched_by: 'title', ...((ch.written || []).length ? { title_basis: 'fallback' } : {}) });
     }
   }
   pairs.sort((a, b) => b.score - a.score);

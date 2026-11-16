@@ -14,7 +14,7 @@ import { ChartCard, TimeSeriesChart } from '@/components/charts';
 import { CountUp, HeroStat, Stagger } from '@/components/insight';
 import { absolutePageUrl, ArticleViewer, findPlaceholders } from './article';
 import { CmsPublishPanel } from './CmsPublish';
-import { cleanMetaDescription, deliveryOf, draftNextStep, gradeDisplay, holdButtons, holdLadderLine, holdOf, holdTitle, ladderInputOf, ownerEdits, PAGE_TYPE_VALUES, type HoldInfo } from '@seo/shared';
+import { aiTargetInput, cleanMetaDescription, deliveryOf, draftNextStep, gradeDisplay, holdButtons, holdLadderLine, holdOf, holdTitle, ladderInputOf, ownerEdits, PAGE_TYPE_VALUES, type AiTargetInput, type HoldInfo } from '@seo/shared';
 import { DeliveryCallout, PageReview } from './review/ReviewPanels';
 import { Block, Bullets, Chips, Facts, has, CreditsCard, n, num, obj, objs, str, strs, usd, verdictLabel, type P } from './kit';
 import { keywordPrefill } from './meta';
@@ -531,22 +531,25 @@ export function holdFormBase(
   hold: HoldInfo,
   report: { keyword: string; pageType: string; country: string },
   runInput: unknown,
-): { keyword: string; pageType: string; country: string; ladder: ReturnType<typeof ladderInputOf> } {
-  if (!hold.ladder) return { ...report, ladder: null };
+): { keyword: string; pageType: string; country: string; ladder: ReturnType<typeof ladderInputOf>; aiTarget: AiTargetInput | null } {
   const input = runInput && typeof runInput === 'object' ? (runInput as Record<string, unknown>) : {};
+  // client reports 2026-11-16 (issue 1): a page held while written for an AI question keeps its question on the buttons
+  const aiTarget = input.mode === 'keyword' ? aiTargetInput(input.aiTarget) : null;
+  if (!hold.ladder) return { ...report, ladder: null, aiTarget };
   const own = input.mode === 'keyword' ? ladderInputOf(input) : null;
   const ladder = own && own.id === hold.ladder.id ? own : null;
   const ownType = typeof input.pageType === 'string' && (PAGE_TYPE_VALUES as readonly string[]).includes(input.pageType) ? input.pageType : '';
-  return { ...report, pageType: (ladder && ownType) || report.pageType, ladder };
+  return { ...report, pageType: (ladder && ownType) || report.pageType, ladder, aiTarget };
 }
 
 function HoldPanel({ hold, keyword, pageType, country, siteId, runId }: { hold: HoldInfo; keyword: string; pageType: string; country: string; siteId: string | null; runId: string | null }) {
   const { org, can } = useOrgCtx();
-  // the held run's own form input (the same query as the run page): only for a ladder page, whose button must carry the run's ladder fields
+  // the held run's own form input (the same query as the run page): a ladder page's buttons carry the run's ladder fields, and (client
+  // reports 2026-11-16) an AI answer page's buttons its AI question
   const run = useQuery({
     queryKey: qk.run(org.id, runId ?? ''),
     queryFn: () => api<{ run: Run }>(`/api/orgs/${org.id}/runs/${runId}`),
-    enabled: !!runId && !!hold.ladder && can('member'),
+    enabled: !!runId && can('member'),
     retry: noRetryOn4xx,
   });
   const buttons = holdButtons(hold, holdFormBase(hold, { keyword, pageType, country }, run.data?.run.input));

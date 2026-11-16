@@ -100,7 +100,9 @@ const CONFIG = { default_pages_per_week: 1, max_pages_per_week: 3, skip_recent_d
   // months before judging a refresh: https://www.semrush.com/blog/content-audit/)
   decay_per_week: 2, decay_refresh_days: 60,
   // R-K7: a run outside a cycle (on demand, the old weekly schedule) counts the pages started in the last 6 days as this week's
-  cycle_window_days: 6, in_flight_hours: 2,
+  // P1 (2026-11-12): a page run may wait up to 6 h for a writing slot and then write for up to 2 h, so a `started` row is in flight for 8 h
+  // (app/server/src/services/cadence.ts CADENCE.inFlightHours, shared PAGE_IN_FLIGHT_HOURS)
+  cycle_window_days: 6, in_flight_hours: 8,
   // F-KW: a ladder planned longer ago than this is checked again before its first page (cycles.ts QUEUED_RECHECK_DAYS); a cycle is 7 days
   recheck_days: 60, cycle_days: 7 };
 // ---- the contract (app/shared/src/cycles.ts): levels, the sources each level writes on its own, the item key ----
@@ -487,22 +489,30 @@ for (const s of list) {
   for (const o of opps) { const g = gateOf(o); if (!g.ok) { refuse(o, g); continue; } if (isSkipped(o.keyword)) { noteSkip(o); continue; } okOpps.push(markTopic(o)); }
   // ---- the AI page (v4.12): the most valuable queued AI target the gate lets through, within the month's allowance, one a week ----
   const isAi = (l) => l.source === 'ai_answer' || l.source === 'ai_refresh';
-  const aiUsed = slog.filter(l => isAi(l) && String(l.started_at || '').slice(0, 7) === atIso.slice(0, 7)).length;
-  const aiThisWeek = slog.some(l => isAi(l) && (at - new Date(l.started_at || 0)) < 6 * 864e5);
+  // review 2026-11-16 (L1): the month's automatic AI pages are the cadence's own runs (request ids cad_...). Since the 2026-11-16 fix an AI page
+  // the client starts in the app is logged ai_answer / ai_refresh too; it is a page the client asked for ON TOP (as "Write it" is below), so it
+  // never uses up the automatic allowance nor cancels the week's automatic AI page. This is the rule from before that fix, kept on purpose.
+  const isAutoAi = (l) => isAi(l) && (!String(l.request_id || '') || /^cad_/.test(String(l.request_id)));   // a row with no run id is an older cadence row
+  const aiUsed = slog.filter(l => isAutoAi(l) && String(l.started_at || '').slice(0, 7) === atIso.slice(0, 7)).length;
+  const aiThisWeek = slog.some(l => isAutoAi(l) && (at - new Date(l.started_at || 0)) < 6 * 864e5);
   const keyOfU = (u) => String(u || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
   const refreshedRecently = new Set(slog.filter(l => l.existing_page_url && (at - new Date(l.started_at || 0)) < 60 * 864e5).map(l => keyOfU(l.existing_page_url)));
   // F-38 (AIR P3, 2026-11-06, prod review 2026-10-31): a page the agent PUBLISHED in the same 60 days is as fresh as one it refreshed (the content
   // log's published_at is its date), so an AI refresh of it waits too; it was offered for a refresh ten days after it went live.
   for (const l of slog) if (l.published_url && l.published_at && (at - new Date(l.published_at)) < 60 * 864e5) refreshedRecently.add(keyOfU(l.published_url));
   // one search, one page: an AI question that a keyword-ladder page already targets is written AS that ladder page (with the AI target), never twice.
-  // Words of the site's ladder heads ("e invoicing in uae") appear everywhere and do not count.
-  const STOPW = new Set(['the', 'and', 'for', 'with', 'what', 'how', 'which', 'are', 'can', 'does', 'your', 'you', 'that', 'this', 'from', 'into', 'best', 'top', 'list', 'guide']);
-  const headWords = new Set(lrows.flatMap(l => norm(l.head_keyword).split(' ')).filter(Boolean));
-  const kwTok = (k) => [...new Set(norm(k).replace(/\b(e)\b/g, ' ').split(' ').filter(w => w.length > 2 && !STOPW.has(w) && !headWords.has(w)))];
-  const sameSearch = (a, b) => { const A = kwTok(a), B = new Set(kwTok(b)); if (!A.length || !B.size) return false; return A.filter(w => B.has(w)).length / A.length >= 0.6; };
-  const ladderFor = (t) => lrows.find(l => sameSearch(t.keyword, l.keyword) || sameSearch(l.keyword, t.keyword)) || null;
+  // client reports 2026-11-16 (devaicon.com, INV1 F7): the old rule stripped every word of every ladder head and then called one shared word the
+  // same search in either direction, so "agentic ai development companies uae" was written as the rung "ai app development companies". Now a
+  // question is that page's search only when it IS the same search (LRU.sameQuestion: scaffolding out, plurals folded, places as their market),
+  // or the ladder's main page when the question carries every word of its main keyword (LRU.coversHead). The app's cadence.ts runs the same rule.
+  // review 2026-11-16 (L2 / L3 / L5): the one rule LRU.questionPage, in the website's market (shared with AI Growth, AI Target Settle, Parse Verdict)
+  const qMarket = s.country || '';
+  const sameSearch = (a, b) => LRU.sameQuestion(a, b);
+  const ladderFor = (t) => lrows.find(l => LRU.sameQuestion(t.keyword, l.keyword)) || lrows.find(l => LRU.questionPage(t.keyword, l, qMarket)) || null;
   const aiTargetOf = (t) => { const parseS = (v) => { try { const x = JSON.parse(v || '[]'); return Array.isArray(x) ? x : []; } catch (e) { return []; } }; return { question: t.question, kind: t.kind, target_id: t.target_id, fanout: String(t.fanout || '').split(' | ').filter(Boolean), sources: parseS(t.sources_json), competitors: String(t.competitors || '').split(', ').filter(Boolean) }; };
-  const aiCandOf = (t) => ({ keyword: t.keyword, page_type: t.kind === 'refresh' ? 'Service Page' : (t.page_type || 'Guide'), existing_page_url: t.kind === 'refresh' ? t.page_url : '', source: t.kind === 'refresh' ? 'ai_refresh' : 'ai_answer', target_id: t.target_id,
+  // INV1 F13: a refresh of a guide (/insights/, /blog/ ...) stays a Guide; "Comparison Page" is written as a Guide (the form has no such type)
+  const refreshType = (u) => LRU.isBlog(u) ? 'Guide' : 'Service Page';
+  const aiCandOf = (t) => ({ keyword: t.keyword, page_type: t.kind === 'refresh' ? refreshType(t.page_url) : (String(t.page_type || '') === 'Comparison Page' ? 'Guide' : (t.page_type || 'Guide')), existing_page_url: t.kind === 'refresh' ? t.page_url : '', source: t.kind === 'refresh' ? 'ai_refresh' : 'ai_answer', target_id: t.target_id,
     why: 'AI answers "' + t.question + '" without you' + (t.competitors ? ' (it names ' + String(t.competitors).split(', ').slice(0, 3).join(', ') + ')' : '') + (t.kind === 'refresh' ? ': refresh ' + t.page_url : ': a new answer page'),
     ai_target: aiTargetOf(t) });
   const aiQueue = [];
@@ -640,7 +650,7 @@ for (const s of list) {
   const picks = pickable.slice(0, room);
   // v4.12: the AI page of the week ON TOP of the pages a week — level 3 only, within the month's allowance, one a week, never while the
   // pile-up guard holds, and never for a site set to 0 pages a week
-  for (const p of picks) if (p.source === 'ladder' && !p.ai_target) { const t = aiTargets.find(x => x.site_id === s.site_id && x.status === 'queued' && x.kind !== 'refresh' && (sameSearch(x.keyword, p.keyword) || sameSearch(p.keyword, x.keyword))); if (t) { p.ai_target = aiTargetOf(t); p.target_id = t.target_id; p.why += '; written to answer "' + t.question + '" in AI answers'; } }
+  for (const p of picks) if (p.source === 'ladder' && !p.ai_target) { const t = aiTargets.find(x => x.site_id === s.site_id && x.status === 'queued' && x.kind !== 'refresh' && LRU.questionPage(x.keyword, { keyword: p.keyword, rung: p.rung, head_keyword: p.head }, qMarket)); if (t) { p.ai_target = aiTargetOf(t); p.target_id = t.target_id; p.why += '; written to answer "' + t.question + '" in AI answers'; } }
   const aiCand = aiCand0 && !picks.some(x => norm(x.keyword) === norm(aiCand0.keyword)) ? aiCand0 : null;
   const aiPick = level === 3 && pages > 0 && aiCand && aiCand === aiTop3 && aiDue && !blocked ? aiCand : null;
   if (aiPick) picks.push(aiPick);
@@ -661,7 +671,7 @@ for (const s of list) {
   const air_held = []; const airHeldSug = [];
   let airCand = null;
   if (airClaims && pages > 0 && !blocked) for (const o of airQueue) { if (o.main_page) continue;
-    const ss = picks.find(x => norm(x.keyword) === norm(o.keyword) || sameSearch(x.keyword, o.keyword) || sameSearch(o.keyword, x.keyword));
+    const ss = picks.find(x => norm(x.keyword) === norm(o.keyword) || sameSearch(x.keyword, o.keyword));
     const sp = !ss && pageOfPick(o) ? picks.find(x => pageOfPick(x) === pageOfPick(o)) : null;
     const cv = !ss && !sp && o.source === 'ai_answer' ? coverOf(o) : null;
     if (!ss && !sp && !cv) { airCand = o; break; }

@@ -47,6 +47,10 @@ import {
   type IndexingForRecs,
   searchAdviceGate,
   LRU,
+  aiFormPageType,
+  aiQuestionAction,
+  aiTargetInput,
+  type AiQuestionInputs,
 } from '@seo/shared';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { aiData, alertsData, backlinksData, contentData, ga4Now, gscNow, previousOfType, rankingsData, searchData, settingsData, technicalData } from './data';
@@ -128,10 +132,16 @@ export function actionFromApiBody(body: Record<string, unknown> | null, label: s
   const prefill: Record<string, unknown> = {};
   if (body.keyword) prefill.keyword = String(body.keyword);
   if (body.country) prefill.country = String(body.country);
-  if (body.page_type) {
-    const pt = String(body.page_type);
-    prefill.pageType = PAGE_TYPES.has(pt) ? pt : /pillar|hub/i.test(pt) ? 'Pillar Page' : /local/i.test(pt) ? 'Local Page' : /blog/i.test(pt) ? 'Blog Post' : /guide/i.test(pt) ? 'Guide' : 'Service Page';
+  // client report 2026-11-16 (issue 1, F1 / F13): the AI target travels with the run (it was dropped, so "Write the answer page" started a plain
+  // page), and an AI page's type is one the form accepts ("Comparison Page" was silently replaced by "Service Page")
+  const aiTarget = mode === 'keyword' ? aiTargetInput(body.ai_target ?? body.aiTarget) : null;
+  if (body.page_type || aiTarget) {
+    const pt = String(body.page_type ?? '');
+    prefill.pageType = aiTarget
+      ? aiFormPageType(pt, { kind: body.existing_page_url ? 'refresh' : aiTarget.kind, pageUrl: String(body.existing_page_url ?? '') })
+      : PAGE_TYPES.has(pt) ? pt : /pillar|hub/i.test(pt) ? 'Pillar Page' : /local/i.test(pt) ? 'Local Page' : /blog/i.test(pt) ? 'Blog Post' : /guide|compar/i.test(pt) ? 'Guide' : 'Service Page';
   }
+  if (aiTarget) prefill.aiTarget = body.existing_page_url ? { ...aiTarget, kind: 'refresh' } : aiTarget;
   if (body.existing_page_url) prefill.existingPageUrl = String(body.existing_page_url);
   // a ladder page keeps its ladder (links to the top page and a sibling; the ladder marks it written)
   if (body.ladder_id && body.ladder_rung != null) prefill.ladder = { id: String(body.ladder_id), rung: Number(body.ladder_rung) || 0, head: String(body.ladder_head ?? ''), pageNo: Number(body.ladder_page_no) || 0 };
@@ -343,7 +353,51 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
 
   // ---------- engine actions (weekly reports) ----------
   const engine = [...(snap?.actions ?? []), ...(x.ai.report?.actions ?? []), ...(x.rankNext ? [x.rankNext] : [])];
+  // client report 2026-11-16 (issue 1): an AI question's page goes through the shared resolver, as on the AI visibility page (the question's
+  // own search, never the panel topic; the AI target; "Improve <page>" when a page owns the search; nothing when its page exists)
+  const aiInputs: AiQuestionInputs = {
+    prompts: x.ai.prompts,
+    questions: x.ai.report?.questions ?? [],
+    targets: x.ai.growth?.targets ?? [],
+    written: x.ai.pagesWritten ?? x.content.items.filter((c) => !['failed', 'held'].includes(c.status)).map((c) => ({ keyword: c.keyword, status: c.status, publishedUrl: c.publishedUrl, startedAt: c.startedAt, source: c.source })),
+    market: site.country ?? undefined,
+    ladderHeads: x.rankings.ladders.map((l) => l.headKeyword).filter(Boolean),
+  };
   for (const a of engine) {
+    const ai = a.source === 'ai_visibility' && aiQuestionBody(a.apiBody) ? aiQuestionAction({ apiBody: a.apiBody }, aiInputs) : null;
+    if (ai) {
+      // written, being written, live or won: the Content items ask for what is left (publish, fix), never a second paid page
+      if (ai.step !== 'write' && ai.step !== 'improve') continue;
+      if (!ai.run || !fits(ai.keyword)) continue;
+      const existing = ai.existingPageUrl && urlOnHost(ai.existingPageUrl, site.domain) ? ai.existingPageUrl : '';
+      // review 2026-11-16 L3: a page to improve that is not on this website (the form refuses it) makes the item a new answer page, its
+      // label, page type and AI target all saying so
+      const improve = ai.step === 'improve' && !!existing;
+      const prefill: Record<string, unknown> = { ...ai.run.prefill };
+      if (!improve) {
+        delete prefill.existingPageUrl;
+        if (ai.step === 'improve') {
+          prefill.pageType = aiFormPageType('', { kind: 'answer' });
+          if (ai.aiTarget) prefill.aiTarget = { ...ai.aiTarget, kind: 'answer' };
+        }
+      }
+      add({
+        // the id the item always had (the action's own keyword), so a ticket made from it is not made twice
+        id: `engine:${a.source}:${a.type}:${a.keyword ?? a.action.slice(0, 60)}`,
+        category: 'ai',
+        priority: a.priority <= 1 ? 'high' : a.priority === 2 ? 'medium' : 'low',
+        title: cutTitle(a.action),
+        detail: [a.why, improve || ai.step !== 'improve' ? ai.note : ''].filter(Boolean).join(' '),
+        evidence: `from the ai visibility report`,
+        action: { label: improve ? 'Improve the page for this question' : 'Write the answer page', mode: 'keyword', prefill },
+      }, {
+        impact: a.priority <= 1 ? 5 : a.priority === 2 ? 3.5 : 2,
+        confidence: 'rule',
+        effort: 'session',
+        basis: `the ai visibility report put this ${a.priority <= 1 ? 'first' : `${a.priority}${a.priority === 2 ? 'nd' : a.priority === 3 ? 'rd' : 'th'}`} in its own list`,
+      });
+      continue;
+    }
     const fixDraft = a.type === 'fix_draft';   // R111: the engine's action for a page whose last quality round failed
     const cat: RecommendationCategory = a.source === 'ai_visibility' ? 'ai' : a.source === 'rank_tracker' ? 'rankings' : a.type === 'publish' || fixDraft ? 'content' : 'search';
     // never "Report the published URL" for a draft that failed its quality check, and never a fresh (paid) run of it either (E-QA,
@@ -376,7 +430,7 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
       id: `engine:${a.source}:${a.type}:${a.keyword ?? a.action.slice(0, 60)}`,
       category: cat,
       priority: a.priority <= 1 ? 'high' : a.priority === 2 ? 'medium' : 'low',
-      title: ownTitle || (a.action.length > 140 ? a.action.slice(0, 137) + '...' : a.action),
+      title: ownTitle || cutTitle(a.action),
       detail: a.why + ownNote,
       evidence: `from the ${a.source.replace('_', ' ')} report`,
       action,
@@ -447,7 +501,7 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
       id: `ai:gap:${g.prompt.slice(0, 80)}`,
       category: 'ai',
       priority: 'medium',
-      title: `Win the AI answer: "${g.prompt.length > 110 ? g.prompt.slice(0, 107) + '...' : g.prompt}"`,
+      title: `Win the AI answer: "${cutTitle(g.prompt, 110)}"`,
       detail: g.competitors.length ? `AI names ${g.competitors.slice(0, 3).join(', ')} here and not you.` : 'AI answers this without naming you.',
       evidence: g.sources.length ? `sources AI relies on: ${g.sources.slice(0, 3).join(', ')}` : undefined,
       action: { label: 'See the answers', page: 'ai' },
@@ -754,4 +808,20 @@ export async function overviewData(org: OrgRow, site: SiteRow): Promise<Overview
     recommendations: recommend(site, x, tasks).slice(0, 6),
     reports,
   };
+}
+
+/** An engine action whose run writes a page for an AI question (a keyword run that carries the question's AI target). */
+function aiQuestionBody(body: Record<string, unknown> | null): boolean {
+  if (!body || String(body.mode ?? '') !== 'keyword') return false;
+  const t = (body.ai_target ?? body.aiTarget) as { question?: unknown } | undefined;
+  return !!(t && typeof t === 'object' && String(t.question ?? '').trim());
+}
+
+/** A recommendation title of at most `max` characters, cut at a word and never with an ellipsis (copy rule). */
+export function cutTitle(t: string, max = 140): string {
+  const v = String(t ?? '').trim();
+  if (v.length <= max) return v;
+  const cut = v.slice(0, max - 1).replace(/\s+\S*$/, '').replace(/[\s,;:.-]+$/, '');
+  // a quoted question cut inside its quotes keeps its closing quote
+  return (cut.match(/"/g) ?? []).length % 2 ? `${cut}"` : cut;
 }

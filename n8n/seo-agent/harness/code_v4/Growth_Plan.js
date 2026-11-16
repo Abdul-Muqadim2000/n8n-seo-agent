@@ -1457,6 +1457,524 @@ const FITR = {
       + '. A page that is already written is kept and only flagged.';
   }
 };
+// ---- LADDER PACKAGE (2026-11-09, docs/keyword-intel-2026-11-08/fixes/LADDER.md): the five ladder rules, ONE copy ----
+// Production (2026-10-22 .. 11-08, R3_PROD_OUTPUTS.md F1 F6 F7 F9): three rungs of techand.ai's ERP ladder, the main page included, were written onto
+// ONE blog address (/insights/is-microsoft-dynamics-365-an-erp-system); the CRM ladder's main page pointed at "/dynamics-365-crm-uae-2", a copy
+// of the live CRM page; a rung the verdict called AVOID was written and published because ladder page runs carry force_content; a rung sat
+// in "writing" for days after its run died; devaicon.com's "ai automation solutions gcc" was measured in Pakistan. The rules:
+//   1. one search, one address: two rungs never share a target, a rung whose address already answers its search improves that page, and the
+//      main page is never a blog / insights address or a "-2" / "-copy" variant of a live page (addresses compared without scheme / www);
+//   2. the rungs step towards the main keyword (stage: problem, solution, compare, hire); a plan with no compare / hire rung before the main
+//      page is re-planned from its own pool, and a pure definition ("what is a crm company") is a rung only when its results page is
+//      informational (guides) and it links to the main page;
+//   3. the market is the website's market, or the market the keyword names ("gcc", "uae", "dubai" -> AE); never another country;
+//   4. an AVOID verdict, or a score clearly under the line (40), stops the rung: no page is written until the client says "Write it anyway";
+//   5. a rung "writing" for longer than three times its expected time (at least 60 minutes) with nothing of its run still alive is closed as
+//      failed with its reason, so the next rung can go.
+// Inlined into Ladder Plan, Ladder Duplicate (Words), Parse Verdict's ladder stop (Ladder Row Written), Cadence Plan, Publish Candidates and
+// Publish Check (through _publish_rows.js); the app runs the same source (app/shared/src/ladder-rules.generated.js, ladder_rules_app.py) for
+// its warnings, its rung reasons and its stuck-rung watcher. Pure: no clock (pass `now`), no table, no network. Needs fitPlaces
+// (_fit_gate.js) only for the market rule; everything else stands alone.
+const LRU = (() => {
+  const S = (v) => String(v == null ? '' : v).trim();
+  const low = (v) => S(v).toLowerCase();
+  const CFG = {
+    stuck_min_minutes: 60, stuck_eta_factor: 3, page_eta_minutes: 20,   // page runs take 15-19 minutes on production (2026-11-08)
+    clear_score: 40,                                                    // Parse Verdict's "clearly low" line (HOLD CFG.clear)
+    rank_keep_position: 30, rank_keep_impressions: 10,                  // review H5: a page that ranks for the main keyword keeps it
+    blog_dirs: ['blog', 'blogs', 'insights', 'insight', 'articles', 'article', 'news', 'resources', 'resource', 'posts', 'post', 'learn', 'guides', 'guide', 'knowledge', 'academy', 'stories', 'magazine'],
+    // the measurable markets (Normalize Input COUNTRIES): ISO-2 -> the country name the engine and the app use
+    countries: { US: 'United States', GB: 'United Kingdom', CA: 'Canada', AU: 'Australia', NZ: 'New Zealand', IE: 'Ireland', PK: 'Pakistan', IN: 'India',
+      AE: 'United Arab Emirates', SA: 'Saudi Arabia', SG: 'Singapore', ZA: 'South Africa', DE: 'Germany', FR: 'France', ES: 'Spain', IT: 'Italy',
+      NL: 'Netherlands', BR: 'Brazil', MX: 'Mexico' },
+  };
+  const STAGES = ['problem', 'solution', 'compare', 'hire', 'info'];
+  const COMMERCIAL = ['compare', 'hire'];
+
+  // ---- addresses (rule 1) ----
+  /** the comparable form of an address: no scheme, no www., no query / fragment, no trailing slash, lower case ('' for nothing) */
+  const urlKey = (u) => low(u).replace(/^[a-z]+:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const pathOf = (u) => { const k = urlKey(u); const i = k.indexOf('/'); return i < 0 ? '' : k.slice(i); };
+  const segs = (u) => pathOf(u).split('/').filter(Boolean);
+  // a language prefix (/en/, /ar-ae/) is not the first folder that says what the page is
+  const LOCALE = /^[a-z]{2}(?:-[a-z]{2})?$/;
+  /** a blog / insights / news ... address: its first folder (after a language prefix) is one of CFG.blog_dirs */
+  const isBlog = (u) => { let s = segs(u); if (s.length > 2 && LOCALE.test(s[0])) s = s.slice(1); return s.length > 1 && CFG.blog_dirs.includes(s[0]); };
+  // review L1 (2026-11-10): only suffixes that mean "another copy of the same page"; -new, -v9, a bare word like /windows-11 are not copies
+  const COPY_RE = /^(.+?)-(copy(?:-\d+)?|\d|old|draft|backup|bak)$/;
+  // a page title's own words: the brand after "|" / " - " dropped, joining words out, plurals folded (re-review N3: production's "-2" copy of
+  // "Dynamics 365 CRM in Dubai & UAE: Sales and Service | Tech&" is titled "Dynamics 365 CRM Services UAE | Tech")
+  const titleWords = (t) => { const x = low(t).split(/\s[|\u2013\u2014]\s|\s-\s/)[0] || ''; return wordsKey(x).split(' ').filter(Boolean); };
+  const sameTitle = (a, b) => { const A = titleWords(a), Bw = new Set(titleWords(b)); if (!A.length || !Bw.size) return true;
+    const short = A.length <= Bw.size ? A : [...Bw]; const long = A.length <= Bw.size ? Bw : new Set(A); return short.filter(w => long.has(w)).length >= Math.ceil(0.6 * short.length); };
+  /** a "-2" / "-copy" / "-old" variant of another address of the site: -> the original's address, or ''. `known`: the site's pages, as
+   *  addresses or { url, title }. A one-digit suffix counts only when the address without it is a page the site has AND, when both titles
+   *  are known, they are the same page title (so /step-2 beside a different /step is not a copy); "-copy" always counts. */
+  const copyOf = (u, known) => {
+    const s = segs(u); if (!s.length) return '';
+    const m = s[s.length - 1].match(COPY_RE); if (!m) return '';
+    const base = urlKey(u).replace(/[^/]+$/, m[1]);
+    const list = (Array.isArray(known) ? known : []).map(x => x && typeof x === 'object' ? { k: urlKey(x.url), url: S(x.url), title: S(x.title) } : { k: urlKey(x), url: S(x), title: '' }).filter(x => x.k);
+    const orig = list.find(x => x.k === base), self = list.find(x => x.k === urlKey(u));
+    // a one-digit suffix is a copy unless both titles are known and share under 60% of the shorter title's words (a different page)
+    if (orig) { if (/^\d$/.test(m[2]) && orig.title && self && self.title && !sameTitle(orig.title, self.title)) return ''; return orig.url || base; }
+    return /^copy/.test(m[2]) ? base : '';
+  };
+  // the same search in other words: every word kept, joining words dropped, a plural folded (the H2 target_guard rule of Ladder_Plan.js)
+  const JOIN = new Set(['in', 'the', 'a', 'an', 'of', 'for', 'to', 'on', 'at', 'and', 'with', 'by', 'from']);
+  const wordsKey = (kw) => [...new Set(low(kw).split(/[^a-z0-9؀-ۿ]+/).filter(t => t && !JOIN.has(t)).map(t => t.length > 3 ? t.replace(/ies$/, 'y').replace(/([^s])s$/, '$1') : t))].sort().join(' ');
+  const sameSearch = (a, b) => { const x = low(a), y = low(b); if (!x || !y) return false; if (x === y) return true; const wa = wordsKey(x); return !!wa && wa === wordsKey(y); };
+  /** who already holds an address: owners [{ url, keyword, supporting?: [..], ladder_id?, by? }] -> the owner of `url` whose search is NOT
+   *  `keyword` (nor one of its supporting keywords), or null. The same search may always improve its own page. */
+  const ownerOf = (url, keyword, owners, mine) => {
+    const k = urlKey(url); if (!k) return null;
+    const kws = [keyword, ...(Array.isArray(mine) ? mine : [])].map(low).filter(Boolean);
+    for (const o of (Array.isArray(owners) ? owners : [])) {
+      if (!o || urlKey(o.url) !== k || !S(o.keyword)) continue;
+      const theirs = [o.keyword, ...(Array.isArray(o.supporting) ? o.supporting : String(o.supporting || '').split(','))].map(low).filter(Boolean);
+      if (kws.some(a => theirs.some(b => sameSearch(a, b)))) continue;   // the same search: its own page (another owner may still hold it)
+      return o;
+    }
+    return null;
+  };
+  /** the address a new page gets on the site: home + slug(keyword), with the site's trailing-slash form */
+  const plannedUrl = (home, keyword, slash) => { const h = S(home).replace(/\/+$/, ''); const sl = low(keyword).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return h && sl ? h + '/' + sl + (slash ? '/' : '') : ''; };
+  /** review H5: does this address already rank for the main keyword? o: { rank: { position, url } (the rank check or the ranked pull),
+   *  pages: [{ url, queries: [{ query, impressions, position }] }] (Search Console per page) } -> true when the rank reading puts this
+   *  address at position <= 30, or Search Console shows it for a search holding every word of the keyword at position <= 30 or with
+   *  10+ impressions. A page that ranks is improved, never left for a competing new page. */
+  const ranksFor = (url, keyword, o) => {
+    const x = o || {}; const k = urlKey(url); if (!k) return false;
+    const r = x.rank || null; const rp = r ? Number(r.position) : NaN;
+    if (r && Number.isFinite(rp) && rp >= 1 && rp <= CFG.rank_keep_position && (!S(r.url) || urlKey(r.url) === k)) return true;
+    const want = wordsKey(keyword).split(' ').filter(Boolean); if (!want.length) return false;
+    for (const p of (Array.isArray(x.pages) ? x.pages : [])) {
+      if (!p || urlKey(p.url) !== k) continue;
+      for (const q of (Array.isArray(p.queries) ? p.queries : [])) {
+        const have = new Set(wordsKey((q || {}).query || (q || {}).keyword).split(' '));
+        if (!want.every(w => have.has(w))) continue;
+        const pos = Number((q || {}).position), imp = Number((q || {}).impressions) || 0;
+        if ((Number.isFinite(pos) && pos >= 1 && pos <= CFG.rank_keep_position) || imp >= CFG.rank_keep_impressions) return true;
+      }
+    }
+    return false;
+  };
+  /** rule 1 for the MAIN page: a blog address, or a copy of a live page, is never its target. -> null (fine) or { reason, was, to, exists }:
+   *  a copy points back to the original page (improve it); a blog address gets the commercial page the site has (`commercial`, a URL
+   *  found by the caller among non-blog pages), else a new page at `planned`. */
+  const headTarget = (url, o) => {
+    const opt = o || {}; const u = S(url); if (!u) return null;
+    // production review 2026-11-12 (F-05): the home page is never a ladder's main page (it would be rewritten): a new page at `planned`
+    if (/^(?:\/[a-z]{2}(?:-[a-z]{2})?)?$/.test(pathOf(u))) return { reason: 'home', was: u, to: S(opt.planned), exists: false, text: 'the home page is never rewritten as the main page of a ladder: it gets its own page at ' + S(opt.planned).replace(/^https?:\/\/[^\/]+/i, '') };
+    const orig = copyOf(u, opt.known || []);
+    if (orig) return { reason: 'copy', was: u, to: S(orig).startsWith('http') ? S(orig) : (S(opt.home).replace(/\/+$/, '') + pathOf(orig)), exists: true,
+      text: u.replace(/^https?:\/\/[^\/]+/i, '') + ' is a copy of ' + pathOf(orig) + ', a page your website already has: the main page improves that page instead of a second copy' };
+    if (isBlog(u)) { const c = S(opt.commercial);
+      return c ? { reason: 'blog', was: u, to: c, exists: true, text: 'the main page is a page people choose a provider on, not a blog post: ' + c.replace(/^https?:\/\/[^\/]+/i, '') + ' improves instead of ' + u.replace(/^https?:\/\/[^\/]+/i, '') }
+        : { reason: 'blog', was: u, to: S(opt.planned), exists: false, text: 'the main page is a page people choose a provider on, not a blog post (' + u.replace(/^https?:\/\/[^\/]+/i, '') + '): it gets its own page at ' + S(opt.planned).replace(/^https?:\/\/[^\/]+/i, '') }; }
+    return null;
+  };
+  /** rule 1 inside one plan: pages [{ keyword, target_url, exists, rung, supporting }] in plan order (the main page first) -> { pages, moved }.
+   *  Two pages on one address: the first keeps it; a later page of the SAME search joins it as a supporting keyword, any other gets its own
+   *  new address (`planned(keyword)`). */
+  const oneUrl = (pages, planned) => {
+    const seen = new Map(); const out = []; const moved = [];
+    for (const p of (Array.isArray(pages) ? pages : [])) {
+      const k = urlKey(p && p.target_url); if (!p || !k) { out.push(p); continue; }
+      const o = seen.get(k);
+      if (!o) { seen.set(k, p); out.push(p); continue; }
+      if (sameSearch(o.keyword, p.keyword)) { o.supporting = [...new Set([...(o.supporting || []), p.keyword, ...(p.supporting || [])])]; moved.push({ keyword: p.keyword, to: o.keyword, url: o.target_url, how: 'joined', text: '"' + p.keyword + '" is the same search as "' + o.keyword + '", so it is a supporting keyword of that page' }); continue; }
+      const nu = typeof planned === 'function' ? S(planned(p.keyword)) : '';
+      if (!nu || seen.has(urlKey(nu))) { moved.push({ keyword: p.keyword, to: o.keyword, url: o.target_url, how: 'dropped', text: '"' + p.keyword + '" had the same address as "' + o.keyword + '" and no address of its own could be made, so it waits' }); continue; }
+      moved.push({ keyword: p.keyword, from: p.target_url, url: nu, how: 'own address', text: '"' + p.keyword + '" had the same address as "' + o.keyword + '" (' + pathOf(p.target_url) + '): one search, one page, so it gets its own page at ' + pathOf(nu) });
+      Object.assign(p, { target_url: nu, exists: false, status: 'new', existing_source: null, existing_confidence: null, existing_evidence: '' });
+      seen.set(urlKey(nu), p); out.push(p);
+    }
+    return { pages: out, moved };
+  };
+
+  // ---- the buyer's stage (rule 2) ----
+  const Q_START = /^(?:what|who|why|when|where|which|is|are|does|do|can|should|will|how)\b/;
+  const W_COMPARE = /\b(?:best|top|vs|versus|alternatives?|compare|comparison|comparing|pricing|prices?|costs?|fees?|quotes?|reviews?|rated|cheapest|affordable|rankings?|list of)\b/;
+  const W_HIRE = /\b(?:compan(?:y|ies)|agenc(?:y|ies)|firms?|providers?|partners?|consultants?|consultanc(?:y|ies)|contractors?|developers?|vendors?|integrators?|resellers?|specialists?|experts?|freelancers?|hire|hiring|near me|services|consulting)\b|\b(?:consulting|implementation|development|support|migration|integration|outsourcing) services?\b/;
+  const W_PROBLEM = /\b(?:deadlines?|penalt(?:y|ies)|fines?|mandate|mandatory|requirements?|compliance|compliant|regulations?|law|laws|problems?|issues?|errors?|not working|fix|risks?|challenges?|obligations?)\b/;
+  const W_SOLUTION = /\b(?:software|system|systems|platform|platforms|tools?|solutions?|apps?|applications?|modules?|features?|implementation|migration|integration|upgrade|automation|development|hosting|cloud|erp|crm|hrms|lms|setup|service)\b/;
+  const W_DEFINE = /^(?:what (?:is|are|does)|what's|whats|define|definition of|meaning of)\b/;
+  const W_SELLER_NOUN = /\b(?:compan(?:y|ies)|agenc(?:y|ies)|firms?|providers?|partners?|consultants?|consultanc(?:y|ies)|vendors?|integrators?|specialists?)\b/;
+  /** the stage of a search: a stored KI stage when there is one, else the words, else the intent the research gave -> one of STAGES */
+  const stageOf = (keyword, intent, stored) => {
+    const st = low(stored); if (STAGES.includes(st)) return st;
+    const k = low(keyword).replace(/[^a-z0-9؀-ۿ&]+/g, ' ').trim();
+    if (!k) return 'info';
+    if (W_COMPARE.test(k)) return 'compare';
+    if (Q_START.test(k)) return W_PROBLEM.test(k) ? 'problem' : 'info';
+    if (W_HIRE.test(k)) return 'hire';
+    if (W_PROBLEM.test(k)) return 'problem';
+    if (W_SOLUTION.test(k)) return 'solution';
+    const i = low(intent);
+    return i === 'commercial' || i === 'transactional' ? 'solution' : 'info';
+  };
+  const isCommercial = (stage) => COMMERCIAL.includes(low(stage));
+  /** a pure definition of a seller ("what is a crm company", "meaning of erp partner"): a page for people learning a word, not buyers */
+  const isDefinitional = (keyword) => { const k = low(keyword); return W_DEFINE.test(k) && W_SELLER_NOUN.test(k); };
+  /** rule 2: may a definitional rung stay? only when its results page was read and is informational (guides lead) and it links to the main page */
+  const definitionalOk = (o) => { const x = o || {}; return !!x.serp_informational && !!x.links_up; };
+  const STAGE_WORDS = { problem: 'people with a problem to solve', solution: 'people looking for a solution', compare: 'people comparing providers or options', hire: 'people ready to choose a provider', info: 'people learning about the topic' };
+  const stageText = (stage) => STAGE_WORDS[low(stage)] || STAGE_WORDS.info;
+
+  // ---- the market (rule 3) ----
+  // review 2026-11-16 (L2): a node that inlines the duplicate rule (DUP) but not the fit gate (Parse Verdict) reads places through DUP's copy of
+  // the same gazetteer, so the market rules of an AI question hold there too
+  const placesOf = (s) => { try { return typeof fitPlaces === 'function' ? fitPlaces(s) : (typeof DUP === 'object' && DUP && typeof DUP.placesIn === 'function') ? DUP.placesIn(s) : []; } catch (e) { return []; } };
+  const countryName = (iso) => CFG.countries[S(iso).toUpperCase()] || '';
+  /** -> { iso, country, source: 'keyword' | 'site' | 'request', named: [place words], keyword_iso, ok (the request market is the lock), changed,
+   *  measurable, note }. o: { keyword, site_iso (the website's market), request_iso (what the run was sent with) }.
+   *  A keyword that names places stands for those places: the website's market when it is among them ("gcc" for a UAE website), else the
+   *  first measurable country it names (a region: its first country, "gcc" -> AE); a keyword that names no place is the website's market.
+   *  Never a third country: the request's market is used only when there is neither a place in the keyword nor a website market. */
+  const market = (o) => {
+    const x = o || {}; const site = S(x.site_iso).toUpperCase(), req = S(x.request_iso).toUpperCase();
+    const places = placesOf(x.keyword); const named = places.map(p => p.word);
+    let iso = '', source = '', keyword_iso = '';
+    if (places.length) {
+      const isos = [...new Set(places.flatMap(p => p.iso || []))];
+      keyword_iso = site && isos.includes(site) ? site : (isos.find(i => CFG.countries[i]) || isos[0] || '');
+      iso = keyword_iso; source = site && iso === site ? 'site' : 'keyword';
+    } else if (site) { iso = site; source = 'site'; }
+    else { iso = req; source = 'request'; }
+    const unmeasured = !CFG.countries[iso] && !!site;
+    if (unmeasured) { iso = site; source = 'site'; }   // a named market we cannot measure (Qatar): the website's own, said so
+    // review M1: a request for a measurable country INSIDE the places the keyword names is that market ("erp software gcc" sent with Saudi Arabia)
+    const namedIsos = [...new Set(places.flatMap(p => p.iso || []))];
+    if (req && req !== iso && namedIsos.includes(req) && CFG.countries[req]) { iso = req; source = 'keyword'; }
+    const ok = !req || req === iso;
+    const nm = (i) => countryName(i) || i;
+    const note = !iso ? '' : source === 'keyword'
+      ? 'The keyword names ' + named.join(', ') + ', so this ladder is measured in ' + nm(iso) + (site ? ', not in your website\'s market (' + nm(site) + ')' : '') + '.'
+      : places.length && keyword_iso && keyword_iso !== iso ? 'The keyword names ' + named.join(', ') + ', which we cannot measure, so this ladder is measured in your website\'s market (' + nm(iso) + ').'
+      : places.length ? 'The keyword names ' + named.join(', ') + ', which includes your website\'s market (' + nm(iso) + '), so it is measured there.'
+      : source === 'site' ? 'Measured in your website\'s market (' + nm(iso) + ').' : '';
+    return { iso, country: nm(iso), source, named, keyword_iso, request_iso: req, ok, changed: !!req && req !== iso, measurable: !!CFG.countries[iso], note };
+  };
+  /** the sentence a refused run carries when its market contradicts the lock (Ladder Duplicate (Words), before anything is paid) */
+  const marketRefusal = (m, keyword) => !m || m.ok ? '' : 'This ladder was sent to be measured in ' + (countryName(m.request_iso) || m.request_iso) + ', but "' + S(keyword) + '" '
+    + (m.source === 'keyword' ? 'names ' + m.named.join(', ') + ' (' + m.country + ')' : 'names no place and your website\'s market is ' + m.country)
+    + '. A ladder is measured in one market, so nothing was planned and nothing was charged: start it again in ' + m.country
+    + (m.source === 'site' && !m.named.length ? ', or confirm that you want it measured in ' + (countryName(m.request_iso) || m.request_iso) + ' on purpose.' : '.');
+
+  // ---- an AI question beside a page planned for another keyword (client reports 2026-11-16, devaicon.com, INV1 F7) ----
+  // The cadence folded "agentic ai development companies uae" into the rung "ai app development companies": it stripped every word of every
+  // ladder head and then called one shared word ("companies") the same search, in either direction. Now a question is folded into a page only
+  // when it IS that page's search: the same words once the question's own scaffolding ("best", "top", "which") and joining words are out,
+  // plurals folded and places read as their market ("dubai" and "uae" are both the UAE). `coversHead`: the question carries every word of a
+  // ladder's main keyword (two words or more), so the main page is the page that answers it ("agentic ai development companies uae" and the
+  // main keyword "agentic ai development in uae"). Nothing is stripped because a ladder head holds it.
+  const Q_MOD = new Set(['best', 'top', 'leading', 'trusted', 'recommended', 'recommend', 'recommendation', 'recommendations', 'which', 'who', 'what', 'how', 'list', 'guide', 'is', 'are']);
+  const qWords = (kw) => {
+    let t = ' ' + low(kw).replace(/\./g, '').replace(/[^a-z0-9\u0600-\u06ff]+/g, ' ').trim() + ' '; const tags = [];
+    for (const p of placesOf(kw)) { const w = ' ' + low(p.word) + ' '; if (t.indexOf(w) >= 0) { t = t.split(w).join(' '); tags.push('in:' + [...(p.iso || [])].sort().join('+')); } }
+    const ws = t.split(' ').filter(x => x && !JOIN.has(x) && !Q_MOD.has(x)).map(x => x.length > 3 ? x.replace(/ies$/, 'y').replace(/([^s])s$/, '$1') : x);
+    return [...new Set([...ws, ...tags])].sort();
+  };
+  /** the same search for a question and a page keyword: the same words (scaffolding out, plurals folded, places as their market) */
+  const sameQuestion = (a, b) => { const A = qWords(a), B = qWords(b); return A.length > 0 && A.join(' ') === B.join(' '); };
+  // review 2026-11-16 (L2 / L3): a place tag is not a topic word ("crm dubai" is ONE topic word, so it covers nothing), and a main keyword with no
+  // place covers a question only in the website's own market ("crm service provider" does not take "best crm service provider saudi arabia" for
+  // a UAE website). `market`: ISO-2 or a country name; with none given a question that names a place is not covered by a head that names none.
+  const isoOfM = (m) => { const x = S(m).trim(); if (/^[A-Za-z]{2}$/.test(x)) return x.toUpperCase(); const k = Object.keys(CFG.countries).find(c => low(CFG.countries[c]) === low(x)); return k || ''; };
+  const inMarket = (tags, market) => { const iso = isoOfM(market); return !!iso && tags.every(t => t.slice(3).split('+').includes(iso)); };
+  /** the question carries every word of the ladder's main keyword: at least two topic words (place tags do not count), and the question's
+   *  places are the head's own, or the website's market when the head names none */
+  const coversHead = (q, head, market) => { const H = qWords(head), Q = qWords(q), QS = new Set(Q);
+    if (H.filter(w => !/^in:/.test(w)).length < 2 || !H.every(w => QS.has(w))) return false;
+    const qTags = Q.filter(w => /^in:/.test(w)), hTags = H.filter(w => /^in:/.test(w));
+    return !qTags.length || qTags.every(t => hTags.includes(t)) || (!hTags.length && inMarket(qTags, market)); };
+  /** review 2026-11-16 (L5): ONE rule for "this ladder page is the question's page", shared by Cadence Plan, AI Growth, AI Target Settle,
+   *  Parse Verdict and the app's cadence.ts: the page's keyword IS the question's search, or the page is its ladder's MAIN page (rung 4, or
+   *  its keyword is the main keyword, or part 'head') and the question carries all of it (coversHead, in the market). row: { keyword,
+   *  head_keyword?, rung?, part? } (a ladder row, an own-coverage entry or a content-log row of a ladder page). */
+  const isHeadRow = (r) => { const x = r || {}; return S(x.part) === 'head' || Number(x.rung) === 4 || (!!S(x.head_keyword) && wordsKey(x.keyword) === wordsKey(x.head_keyword)); };
+  const questionPage = (q, row, market) => { const x = row || {}; return !!S(x.keyword) && (sameQuestion(q, x.keyword) || (isHeadRow(x) && coversHead(q, x.keyword, market))); };
+
+  // ---- verdicts (rule 4) ----
+  /** o: { verdict: 'GO' | 'GO_WITH_CHANGES' | 'AVOID' | ..., score: 0-100 | null, ack: the client said "Write it anyway" } -> { stop, reason, band } */
+  const verdictStop = (o) => {
+    const x = o || {}; const v = S(x.verdict).toUpperCase(); const sc = x.score === '' || x.score == null || !Number.isFinite(Number(x.score)) ? null : Math.round(Number(x.score));
+    const band = v === 'AVOID' ? 'avoid' : sc != null && sc < CFG.clear_score ? 'clearly_low' : '';
+    if (!band) return { stop: false, reason: '', band: '' };
+    if (x.ack) return { stop: false, reason: 'you chose to write it anyway', band, overridden: true };
+    return { stop: true, band, score: sc,
+      reason: band === 'avoid' ? 'our check advised against this page (AVOID' + (sc != null ? ', score ' + sc : '') + ')' : 'our check scored it ' + sc + ' out of 100, clearly under the ' + CFG.clear_score + ' we write without asking' };
+  };
+
+  // ---- stuck rungs (rule 5) ----
+  /** o: { status, since (ISO: when it went to writing / was started), eta_minutes, live: true | false | null (null = could not be asked), now (ISO or ms) }
+   *  -> { stuck, minutes, limit, reason } */
+  const stuck = (o) => {
+    const x = o || {}; const st = low(x.status);
+    const eta = Number.isFinite(Number(x.eta_minutes)) && Number(x.eta_minutes) > 0 ? Number(x.eta_minutes) : CFG.page_eta_minutes;
+    const limit = Math.max(CFG.stuck_min_minutes, CFG.stuck_eta_factor * eta);
+    const t = Date.parse(S(x.since)); const now = typeof x.now === 'number' ? x.now : Date.parse(S(x.now));
+    if (!['writing', 'started'].includes(st) || !Number.isFinite(t) || !Number.isFinite(now)) return { stuck: false, minutes: null, limit, reason: '' };
+    const minutes = Math.max(0, Math.round((now - t) / 60000));
+    if (minutes < limit) return { stuck: false, minutes, limit, reason: '' };
+    if (x.live !== false) return { stuck: false, minutes, limit, reason: x.live === true ? 'still running' : 'the engine could not be asked whether it is still running' };
+    return { stuck: true, minutes, limit, reason: 'the page run stopped without a result: it was being written for ' + minutes + ' minutes (more than ' + limit + ') and nothing of it is still running' };
+  };
+
+  // ---- what a rung row tells the client (the app's ladder page) ----
+  /** row: a seo_ladders row; o: { next: the keyword the ladder writes next, now } -> { state, label, why, url } */
+  const rungState = (row, o) => {
+    const r = row || {}; const st = low(r.status || 'planned'); const url = S(r.target_url); const note = S(r.status_note);
+    const exists = r.page_exists === true || r.page_exists === 'true';
+    const path = url.replace(/^https?:\/\/[^\/]+/i, '') || '/';
+    const tw = S(r.target_why);
+    if (st === 'stopped') return { state: 'stopped', label: 'Stopped', why: note.replace(/^stopped:\s*/i, '') || 'our check advised against this page', url };
+    if (st === 'failed') return { state: 'failed', label: 'Stopped without a result', why: note.replace(/^failed:\s*/i, '') || 'the page run stopped without a result', url };
+    if (st === 'merged') return { state: 'merged', label: 'Part of another page', why: note.replace(/^merged:\s*/i, '') || 'it is a section of another page of this ladder', url };
+    if (st === 'set_aside') return { state: 'set_aside', label: 'Set aside', why: note || 'it is not a search for this website', url };
+    if (st === 'published') return { state: 'published', label: 'Live', why: 'published at ' + path, url };
+    if (st === 'written' || st === 'not_ready') return { state: st, label: st === 'written' ? 'Written, waiting to be published' : 'Written, needs a fix', why: note || (exists ? 'improves ' + path : 'a new page at ' + path), url };
+    if (st === 'writing') return { state: 'writing', label: 'Being written', why: exists ? 'improves ' + path : 'a new page at ' + path, url };
+    const nxt = (o || {}).next ? sameSearch((o || {}).next, r.keyword) : false;
+    return { state: exists ? 'improve' : 'new', label: exists ? 'Improves an existing page' : 'New page', why: (tw || (exists ? 'your page ' + path + ' already answers this search, so it is improved, not written twice' : 'a page you do not have yet, at ' + path))
+      + (nxt ? '' : note ? ' (' + note + ')' : ''), url, waiting: !nxt };
+  };
+
+  // ---- rule 6: keyword intelligence as the ladder's pool ----
+  /** o: { mode (seo_monitors.ki_mode), killed (true | false | null = unread: counts as killed), rows (seo_ki_keywords of the site), runs
+   *  (seo_ki_runs of the site), market ('AE-en'), min (default 3) } -> { used, reason, run_id, rows (one head per cluster, gate pass, not
+   *  gated), avoid (keywords the client's checks advised against), note }. Read only when the site's mode is exactly 'on' and the kill
+   *  switch reads off (fails closed, KI.readable's rule); only the rows of the latest finished keyword-research run of this market
+   *  (CONTRACTS KI_ROW_CURRENT). Fewer than `min` usable heads: not used, and the ladder keeps its own research, said so. */
+  const kiPool = (o) => {
+    const x = o || {}; const mode = low(x.mode); const mk = S(x.market);
+    const off = (reason, note) => ({ used: false, reason, run_id: '', rows: [], avoid: [], note: note || '' });
+    if (mode !== 'on') return off(mode ? 'ki_' + mode : 'ki_off');
+    if (x.killed !== false) return off('killed', 'Keyword intelligence is paused for every website, so this ladder used its own keyword research.');
+    const runs = (Array.isArray(x.runs) ? x.runs : []).filter(r => r && low(r.kind) === 'keyword_research' && ['ok', 'partial'].includes(low(r.status)) && (!mk || S(r.market) === mk))
+      .sort((a, b) => S(b.finished_at || b.started_at).localeCompare(S(a.finished_at || a.started_at)));
+    const cur = runs[0] ? S(runs[0].run_id) : '';
+    if (!cur) return off('no_run', 'Keyword intelligence is on, but no finished keyword research is on file for ' + (mk || 'this market') + ', so this ladder used its own keyword research.');
+    const all = (Array.isArray(x.rows) ? x.rows : []).filter(r => r && S(r.keyword) && S(r.run_id) === cur && (!mk || S(r.market) === mk));
+    const yes = (v) => v === true || v === 'true';
+    const pass = all.filter(r => low(r.gate) === 'pass' && low(r.verdict) !== 'gated');
+    const anyHead = pass.some(r => yes(r.is_head));
+    const heads = pass.filter(r => !anyHead || yes(r.is_head));
+    const avoid = all.filter(r => low(r.gate_reason) === 'avoid').map(r => S(r.keyword));
+    const min = Number(x.min) > 0 ? Number(x.min) : 3;
+    if (heads.length < min) return { ...off('too_few', 'Keyword intelligence holds only ' + heads.length + ' usable search' + (heads.length === 1 ? '' : 'es') + ' for ' + (mk || 'this market') + ' (at least ' + min + ' are needed), so this ladder used its own keyword research.'), run_id: cur, avoid };
+    return { used: true, reason: '', run_id: cur, rows: heads, avoid,
+      note: 'The supporting pages come from keyword intelligence: ' + heads.length + ' search groups of its last keyword research (' + cur + '), one search per group, with its verdict, page action and Search Console position.' };
+  };
+
+  return { CFG, STAGES, COMMERCIAL, kiPool, ranksFor, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, headTarget, oneUrl,
+    stageOf, isCommercial, isDefinitional, definitionalOk, stageText, countryName, market, marketRefusal, verdictStop, stuck, rungState, qWords, sameQuestion, coversHead, isHeadRow, questionPage };
+})();
+// ---- DUP: "the site already has a page aimed at this search", one rule (page-quality W0-D, 2026-10-29; PLAN §2.1, RE M7, R4 G4) ----
+// Inlined by build_v4.py into *Parse Verdict* (before the brief: a hit asks the client first) and *Originality Check* (after the copy:
+// the safety net it always was; the Page Finalize and the Publish Check copy that node's code). Before this the rule lived only in the
+// late check, so run 3299 paid for a brief, a copy and three editor rounds before it learned the site already had a page for the search.
+// The rule: the keyword's words (3+ characters) against each inventory page's title, H1 and address. A page carrying 75% or more of them
+// is a duplicate target. Since W0-D the share must ALSO hold WEIGHTED by how rare each word is on this site (a word every page carries, "dynamics"
+// or "365" on a Dynamics partner's site, says less than one only a page or two carry, "system" or "erp"), so a guide asking "is
+// microsoft dynamics 365 an erp system" is not the duplicate of a Business Central service page that shares the site's own product words
+// (owner priority 2026-10-29: the ranking guide of exec 949 must never be held or flagged by this rule), while "microsoft dynamics erp"
+// and "dynamics 365 erp system" are recognised as the guide's own searches. With every word equally rare (a small site) it is the old
+// unweighted share. No URL constructor (n8n sandbox), no defineProperty.
+//   targets(keyword, pages, opts) -> { targets, partial, self, keyword_words, basis }
+//     opts.skip   URLs never compared (the pages this run read and compares by text, the page being improved)
+//     opts.self   URLs of this run's own page (the ladder's planned address); with opts.self_aware a page at one of them is this run's own
+//                 page: listed in `self`, never a duplicate of itself
+//     opts.slug_self  (before the brief only) a page whose last address segment is the keyword's own slug is the keyword's own page too:
+//                 the run improves it (the verdict's existing page) rather than duplicating it. Not in the late check: there, an unread
+//                 page at the keyword's own address IS the clearest duplicate (harness CTF5)
+//     opts.ladder a page of a keyword ladder: a page that carries only PART of the keyword's weight is the ladder's planned neighbour
+//                 (the rung links up to it), listed in `partial` as advice; only a page carrying all of it is a duplicate target
+//     opts.max    targets kept (3)
+//     opts.market the run's market (ISO-2 or the country name, e.g. "United Arab Emirates"): a page whose title / heading / address names only
+//                 places OUTSIDE that market, for a keyword that names none, is aimed at another market's search: listed in `other_market`, never
+//                 a duplicate target (client report 2026-11-10: "ai automation services" for the UAE was held as the duplicate of devaicon's
+//                 "AI Automation Services in Pakistan" page; "ai" has 2 letters, so the rule compared only "automation services")
+const DUP = (() => {
+  const S = (v) => String(v == null ? '' : v);
+  // the fit gate's gazetteer (FIT_PLACES_SRC in _fit_gate.js), put here by the build (kit_src.py) so the two never drift; [] = no market check
+  const PLACES_SRC = [
+  ['AE', 'uae|united arab emirates|emirates|emirati|dubai|abu dhabi|sharjah|ajman|fujairah|ras al khaimah|umm al quwain|al ain'],
+  ['SA', 'saudi|saudi arabia|ksa|riyadh|jeddah|dammam|khobar|al khobar|mecca|makkah|medina|madinah'],
+  ['PK', 'pakistan|pakistani|lahore|karachi|islamabad|rawalpindi|faisalabad|multan|peshawar|quetta|sialkot|gujranwala'],
+  ['IN', 'india|indian|delhi|new delhi|mumbai|bangalore|bengaluru|chennai|pune|kolkata|ahmedabad|noida|gurgaon|gurugram'],
+  ['IN PK', 'hyderabad'],
+  ['GB', 'uk|united kingdom|britain|great britain|british|england|scotland|wales|london|manchester|birmingham|leeds|glasgow|edinburgh'],
+  ['US', 'usa|united states|united states of america|new york|nyc|california|texas|florida|chicago|los angeles|san francisco|houston|seattle|boston'],
+  ['CA', 'canada|canadian|ottawa|toronto|montreal|vancouver|calgary'],
+  ['AU', 'australia|australian|canberra|sydney|melbourne|brisbane'],
+  ['NZ', 'new zealand|wellington|auckland|christchurch'],
+  ['IE', 'ireland|irish|dublin|galway|limerick'],
+  ['SG', 'singapore|singaporean'],
+  ['ZA', 'south africa|south african|pretoria|johannesburg|cape town|durban'],
+  ['DE', 'germany|deutschland|berlin|hamburg|munich|cologne|frankfurt'],
+  ['FR', 'france|paris|marseille|lyon'],
+  ['ES', 'spain|madrid|barcelona|valencia|seville'],
+  ['IT', 'italy|rome|milan|naples|turin'],
+  ['NL', 'netherlands|holland|amsterdam|rotterdam|the hague|utrecht'],
+  ['BR', 'brazil|brazilian|brasilia|sao paulo|rio de janeiro'],
+  ['MX', 'mexico|mexican|mexico city|guadalajara|monterrey'],
+  // markets the product cannot measure (not in the COUNTRIES table): a keyword about them is flagged, and their rankings cannot be tracked
+  ['QA', 'qatar|qatari|doha'], ['OM', 'oman|omani|muscat'], ['BH', 'bahrain|bahraini|manama'], ['KW', 'kuwait|kuwaiti'],
+  ['EG', 'egypt|egyptian|cairo|alexandria'], ['JO', 'jordan|amman'], ['LB', 'lebanon|beirut'], ['TR', 'turkiye|istanbul|ankara'],
+  ['CN', 'china|beijing|shanghai|shenzhen'], ['JP', 'japan|tokyo|osaka'], ['MY', 'malaysia|kuala lumpur'], ['ID', 'indonesia|jakarta'],
+  ['PH', 'philippines|manila'], ['NG', 'nigeria|lagos|abuja'], ['KE', 'kenya|nairobi'], ['BD', 'bangladesh|dhaka'], ['LK', 'sri lanka|colombo'],
+  ['NP', 'nepal|kathmandu'], ['AF', 'afghanistan|kabul'],
+  // regions: the set of their countries ("gcc" is fine for a UAE website, not for a Pakistan one)
+  ['AE SA QA OM BH KW', 'gcc|gcc countries|gulf|gulf countries|gulf region|arabian gulf|persian gulf|khaleej'],
+  ['AE SA QA OM BH KW EG JO LB', 'middle east|mena|arab world|arab countries'],
+  ['DE FR ES IT NL IE GB', 'europe|european|eu|european union'],
+  ['US CA', 'north america'], ['BR MX', 'latin america|latam'], ['IN PK BD LK NP', 'south asia']];
+  const PL = PLACES_SRC.flatMap(([iso, ws]) => S(ws).split('|').map(w => ({ w, iso: S(iso).split(' ') }))).sort((a, b) => b.w.split(' ').length - a.w.split(' ').length || b.w.length - a.w.length);
+  const placeText = (t) => ' ' + S(t).toLowerCase().replace(/\./g, '').replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+  const placesIn = (t) => { let x = placeText(t); const out = [];
+    for (const p of PL) { const k = ' ' + p.w + ' '; let i = x.indexOf(k); while (i >= 0) { out.push({ word: p.w, iso: p.iso }); x = x.slice(0, i) + ' | ' + x.slice(i + k.length - 1); i = x.indexOf(k); } }
+    return out; };
+  const marketOf = (m) => { const s0 = S(m).trim(); if (/^[A-Za-z]{2}$/.test(s0)) return s0.toUpperCase(); const ps = placesIn(s0); return ps.length && ps.every(p => p.iso.length === 1 && p.iso[0] === ps[0].iso[0]) ? ps[0].iso[0] : ''; };
+  // the place words that put a page in ANOTHER market than `market` (null: same market, no place named, or the keyword itself names elsewhere)
+  const otherMarket = (keyword, page, market) => { const m = marketOf(market); if (!m || !PL.length) return null;
+    if (placesIn(keyword).some(p => !p.iso.includes(m))) return null;
+    const pp = placesIn(S(page && page.title) + ' ' + S(page && page.h1) + ' ' + S(page && page.url).replace(/^https?:\/\/[^\/]+/i, '').replace(/[-_\/]+/g, ' '));
+    if (!pp.length || pp.some(p => p.iso.includes(m))) return null;
+    return [...new Set(pp.map(p => p.word))]; };
+  const SHARE = 75, MAX = 3, FRESH_DAYS = 14;
+  const fresh = (at) => { const t = Date.parse(S(at)); return Number.isFinite(t) && (Date.now() - t) / 864e5 <= FRESH_DAYS; };
+  // the tokenizer of SHG (_shingle.js), character for character, so the late check finds what it always found
+  const norm = (t) => S(t)
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/https?:\/\/\S+|www\.\S+/g, ' ')
+    .replace(/[‘’ʼ]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-')
+    .toLowerCase().replace(/[^a-z0-9'\s]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const words = (t) => { const s = norm(t); return s ? s.split(' ') : []; };
+  const toks = (t) => new Set(words(t).filter(w => w.length > 2));
+  const keyOf = (u) => S(u).toLowerCase().replace(/[#?].*$/, '').replace(/\/+$/, '');
+  const pathKey = (u) => keyOf(u).replace(/^https?:\/\/[^\/]+/, '');
+  const slugOf = (u) => { const p = pathKey(u).split('/').filter(Boolean); return p.length ? p[p.length - 1].replace(/\.[a-z]{2,5}$/, '') : ''; };
+  const slugify = (k) => S(k).toLowerCase().replace(/[‘’ʼ']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  // the page's words: title + H1 + address (the address with its separators as spaces, exactly as the late check always read it)
+  const pageToks = (p) => toks(S(p && p.title) + ' ' + S(p && p.h1) + ' ' + S(p && p.url).replace(/[-_/]+/g, ' '));
+  const targets = (keyword, pages, opts) => {
+    const o = opts || {};
+    const kw = toks(keyword);
+    const out = { targets: [], partial: [], self: [], other_market: [], not_live: [], keyword_words: kw.size, basis: '' };
+    if (!kw.size) { out.basis = 'the keyword has no word of 3 letters or more to compare'; return out; }
+    const list = (Array.isArray(pages) ? pages : []).filter(p => p && S(p.url));
+    const sets = list.map(pageToks);
+    // how many of the site's pages carry each keyword word: the rarer, the more it says about a page
+    const N = sets.length;
+    const w = {};
+    for (const t of kw) { let df = 0; for (const s of sets) if (s.has(t)) df++; w[t] = Math.log((N + 1) / (df + 1)) + 1; }
+    const total = [...kw].reduce((a, t) => a + w[t], 0);
+    const skip = new Set([...(o.skip || [])].map(keyOf).filter(Boolean));
+    const selfP = new Set([...(o.self || [])].map(pathKey).filter(Boolean));
+    const kslug = slugify(keyword);
+    const max = Number(o.max) > 0 ? Number(o.max) : MAX;
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i]; const k = keyOf(p.url);
+      if (!k || skip.has(k)) continue;
+      // production review 2026-11-12 (S3-05, section 189): an address that redirects (3xx) or is gone (404 / 410), as the page inventory read
+      // it in the last FRESH_DAYS, is not a page of the site: never "the page for the same search" (/dynamics-365-business-central-uae had
+      // answered 308 for days). An older reading is not trusted either way (a stored 404 from weeks ago answered 200 again: F-03)
+      const st = Number(p.http_status) || 0;
+      if (((st >= 300 && st < 400) || st === 404 || st === 410) && fresh(p.status_at)) { out.not_live.push({ url: S(p.url), http_status: st }); continue; }
+      const set = sets[i]; if (!set.size) continue;
+      let hit = 0, hw = 0;
+      for (const t of kw) if (set.has(t)) { hit++; hw += w[t]; }
+      const plain = Math.round((hit / kw.size) * 100);
+      const share = Math.round((hw / total) * 100);
+      // both measures must reach the bar: the weighting only ever REMOVES a match the plain share made (a page that shares only the site's
+      // common words), it never adds one the late check did not make before
+      if (plain < SHARE || share < SHARE) continue;
+      const row = { url: S(p.url), title: S(p.title), keyword_words_shared_pct: plain, weighted_pct: share };
+      const om = o.market ? otherMarket(keyword, p, o.market) : null;
+      if (om) { out.other_market.push({ ...row, places: om }); continue; }
+      if (o.self_aware && ((selfP.size && selfP.has(pathKey(p.url))) || (o.slug_self && kslug && slugOf(p.url) === kslug))) { out.self.push(row); continue; }
+      if (o.ladder && hit < kw.size) { out.partial.push(row); continue; }
+      out.targets.push(row);
+      if (out.targets.length >= max) break;
+    }
+    out.basis = 'the keyword\'s ' + kw.size + ' word(s) of 3+ letters against the title, main heading and address of ' + N + ' page(s) of the site, '
+      + 'a page carrying ' + SHARE + '% or more of those words, and of their weight when each word counts by how few of the site\'s pages carry it, is aimed at the same search';
+    return out;
+  };
+  return { targets, words, slugify, slugOf, otherMarket, marketOf, placesIn, SHARE, MAX };
+})();
+// ---- AQ: the page for an AI question, one rule everywhere (client reports 2026-11-16, devaicon.com; INV1 F1 F5 F8 F11 F13) ----
+// devaicon.com was told "Win the answer to 'Which companies offer the best AI automation services for businesses in Dubai?'", clicked
+// "Write the page", and the page was written for the panel TOPIC "ai automation services" (the search of its own service page), typed
+// "Service Page", and then recorded as published at that service page. One AI question is its own search: the prompt row's `keyword`
+// ("best ai automation services dubai"), never the topic the panel was built around. This kit holds what every path needs to say so:
+//   AQ.keywordOf(q)         the question's own search (its keyword, else its topic, else the question's words), lower case, at most 80 chars
+//   AQ.pageType(t)          a page type the content form accepts ("Comparison Page" is written as a Guide: the form has no comparison type)
+//   AQ.done(status)         a target whose page is being written, written or won: no "write a page" action for it
+//   AQ.reason(code, args)   the plain sentence for a target's state (the contract's reason codes); args { page_url, keyword, date, market }
+//   AQ.clean(text)          a reason a client may read: no run / target ids, no table names, no lever ids, no dollar figures, no long dashes
+//   AQ.CODES                the reason codes (the app falls back on the status for a code it does not know)
+// Pure: no clock, no table, no network, no URL constructor (n8n sandbox).
+const AQ = (() => {
+  const S = (v) => String(v == null ? '' : v);
+  const FORM_TYPES = ['Service Page', 'Product Page', 'Blog Post', 'Landing Page', 'Guide', 'Pillar Page', 'Local Page'];
+  const pageType = (t) => { const x = S(t).trim(); return FORM_TYPES.includes(x) ? x : 'Guide'; };
+  const QSTOP = new Set(['which', 'who', 'what', 'how', 'why', 'is', 'are', 'the', 'a', 'an', 'for', 'of', 'in', 'to', 'do', 'does', 'can', 'should', 'i', 'we', 'our', 'my', 'your', 'you']);
+  const keywordOf = (q) => { const x = q || {};
+    const k = S(x.keyword).toLowerCase().replace(/\s+/g, ' ').trim() || S(x.topic).toLowerCase().replace(/\s+/g, ' ').trim()
+      || S(x.prompt || x.question).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(w => w && !QSTOP.has(w)).slice(0, 6).join(' ');
+    return k.slice(0, 80); };
+  const DONE = ['writing', 'written', 'won'];
+  const done = (status) => DONE.includes(S(status));
+  const pathOf = (u) => { const m = S(u).match(/^https?:\/\/[^\/?#]+([^?#]*)/i); return m ? (m[1] || '/') : S(u); };
+  const day = (d) => S(d).slice(0, 10);
+  const CODES = ['new_page', 'refresh_page', 'writing', 'written', 'live', 'won', 'lower_value', 'fresh_page', 'no_longer_lost', 'off_topic', 'other_market',
+    'same_search_page', 'run_failed', 'ai_rank', 'not_for_site', 'unjudged', 'draft_failed', 'lost_again', 'ladder_page', 'not_asked', 'off_panel', 'kept_by_you', 'too_few', 'suggested'];
+  const reason = (code, args) => { const a = args || {}; const p = a.page_url ? pathOf(a.page_url) : 'your page';
+    switch (code) {
+      case 'new_page': return 'No page on your website answers this question yet, so a new answer page is planned.';
+      case 'refresh_page': return 'Your page ' + p + ' is the closest answer, so it is planned to be improved for this question.';
+      case 'same_search_page': return 'Your page ' + p + ' is already the page for "' + S(a.keyword) + '". To win this AI answer it is improved for the question, rather than a second page written for the same search.';
+      case 'writing': return 'The page for this question is being written' + (a.date ? ' (started ' + day(a.date) + ')' : '') + '.';
+      case 'written': return 'The page for this question is written and waiting to be published.';
+      case 'live': return (a.page_url ? 'Your page ' + p + ' answers this question' : 'The page for this question is published') + (a.date ? ' (published ' + day(a.date) + ')' : '') + '. AI answers usually take a few weeks to change.';
+      case 'won': return 'AI now names you for this question.';
+      case 'lower_value': return 'Other questions are worth more this week; this one is checked again next week.';
+      case 'fresh_page': return 'Your page ' + p + ' already answers it and is up to date.';
+      case 'no_longer_lost': return 'AI already names you here.';
+      case 'off_panel': return 'The question was taken off your AI questions.';
+      case 'not_asked': return 'This question was not asked in the last 8 days, so there is nothing to judge yet.';
+      case 'too_few': return 'Too few answers named you yet to call this question won.';
+      case 'off_topic': return 'This question is not about what you sell (we look at your services, your keywords and your pages). If you do sell it, add it to your services.';
+      case 'other_market': return 'This question is about another market than your website\'s.';
+      case 'not_for_site': return a.reason === 'job' ? 'It is a search for jobs, not for what you sell.' : a.reason === 'government' ? 'It asks about a government body or service.' : a.reason === 'navigational' ? 'People asking it look for one particular website.' : 'It asks about another company.';
+      case 'unjudged': return 'Too little is known about what you sell to tell whether this question is part of it, so it is only suggested, never written on its own.';
+      case 'run_failed': return 'The page could not be finished, so it is queued to be written again.';
+      case 'draft_failed': return 'The page written for this question did not pass the quality check: fix the draft and run it again.';
+      case 'lost_again': return 'AI named you for this question and has stopped, so it is queued again.';
+      case 'ladder_page': return 'It is written as the keyword ladder page "' + S(a.keyword) + '" (one search, one page).';
+      case 'ai_rank': return 'Chosen by AI ranking: ' + (a.page_url ? 'improving ' + p : 'a page that answers it') + ' is the step most likely to get you named here.';
+      case 'kept_by_you': return 'You chose not to write a page for it.';
+      case 'suggested': return 'It is listed as a suggestion' + (a.page_url ? ': your page ' + p + ' answers it' : '') + ', and no page is written for it on its own.';
+      default: return '';
+    } };
+  // the ids the engine uses (cad_20261113_devaicon-com_2, ait_..., lad_...), the table names, the AI-ranking lever ids, money, long dashes
+  const clean = (t) => S(t)
+    .replace(/\b(?:cad|ait|lad|act|air|pub|req)_[A-Za-z0-9_.-]+/g, '')
+    .replace(/\bseo_[a-z_]+\b(?:\s+row)?/g, 'record')
+    .replace(/\s*\(L\d{2}\)/g, '').replace(/\bL\d{2}\b:?\s*/g, '')
+    .replace(/,?\s*expected gain [0-9.]+/gi, '').replace(/\s*\(?client time at \$?[0-9.,]+ an hour\)?/gi, '')
+    .replace(/\s*(?:over|at|for|costs?)?\s*(?:US)?\$\s?[0-9][0-9,.]*/g, '')
+    .replace(/[—–]/g, ',').replace(/…/g, '.').replace(/[“”]/g, '"').replace(/[‘’]/g, '\'')
+    .replace(/\(\s*\)/g, '').replace(/\s+([,.;:])/g, '$1').replace(/,\s*,/g, ',').replace(/\s{2,}/g, ' ').trim();
+  return { FORM_TYPES, pageType, keywordOf, done, DONE, reason, clean, CODES, pathOf };
+})();
 const CONFIG = { audit_per_week: 12, recheck_days: 25, max_key_pages: 40, submit_max: 50, resubmit_days: 30, recent_days: 8, earned_fetch: 10, max_targets: 6, refresh_after_days: 90,
   win_min_answers: 2, follow_up_days: 45, follow_up_max: 15, decay_runs: 3, stale_writing_days: 14,   // B9-2 / B9-4 / B9-5 / B9-6 (benchmark area 9): what became of a submission, what a win needs, a page AI has stopped citing, and a page run that never produced a page
   stage_weight: { decision: 1, consideration: 0.8, awareness: 0.6 } };
@@ -1467,8 +1985,8 @@ const { list, on_demand, want, total, cycle, cycle_why } = monitorSites('ai');
 const sites = on_demand ? list : list.filter(s => s.settings.ai_visibility && s.settings.growth);
 if (!sites.length) return [{ json: { nothing_to_do: true, cycle, reason: cycle ? (cycle_why || (list.length ? 'the AI growth loop is switched off for ' + list[0].domain + ', so this cycle job runs nothing' : 'nothing to run for this cycle')) : on_demand ? 'no site matches "' + want + '"' : (total ? 'the AI growth loop is off for every site' : 'no sites yet') } }];
 const cycleRows = rowsOf('Load Cycles');   // 2026-10-19: each website's time zone
-const vis = rowsOf('Load AI Visibility'), answers = rowsOf('Load AI Answers'), prompts = rowsOf('Load AI Prompts'), logs = rowsOf('Load Content Log'), qh = rowsOf('Load Query History'),
-  pagesStored = rowsOf('Load AI Pages'), targetsStored = rowsOf('Load AI Targets'), growthRows = rowsOf('Load AI Growth'), cache = rowsOf('Load Cache (Growth)'), ladders = rowsOf('Load Ladders');
+const vis = rowsOf('Load AI Visibility'), answers = rowsOf('Load AI Answers'), prompts = rowsOf('Load AI Prompts'), logs = (() => { try { return $('Load Content Log').all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } })(),   /* INV1 F8 (INVARIANTS rule 4): the content log is the evidence a target is written, read by name */ qh = rowsOf('Load Query History'),
+  pagesStored = rowsOf('Load AI Pages'), targetsStored = rowsOf('Load AI Targets'), invAll = rowsOf('Load Pages (Growth)'), growthRows = rowsOf('Load AI Growth'), cache = rowsOf('Load Cache (Growth)'), ladders = rowsOf('Load Ladders');
 const now = new Date(); const iso = now.toISOString(); const month = iso.slice(0, 7);
 const parse = (t, d) => { try { const v = JSON.parse(t || ''); return v == null ? d : v; } catch (e) { return d; } };
 const days = (d) => d ? (now - new Date(d)) / 864e5 : Infinity;
@@ -1503,7 +2021,7 @@ const QSTOP = new Set(('is are am was were be an a the or and but do does did i 
   + 'should can could would will who what which how why when where whom whose really actually still also else just even ever very much many more most best top good right way ways '
   + 'vs versus compare compared than then into from with without about of to in on at by for one ones other another separate own').split(/\s+/).filter(Boolean));
 const questionSearch = (q) => [...new Set(growthSyn(q).replace(/[^a-z0-9&+ ]+/g, ' ').split(/\s+/).filter(w => w && !QSTOP.has(w)))].join(' ');
-const OWN_PAGE = ['cited', 'ladder', 'written'];   // pageFor's sources that are the client's own answer to the question (not a page that merely ranks)
+const OWN_PAGE = ['cited', 'ladder', 'written', 'same_search'];   // INV1 F2: a page that owns the question's own search is the client's own answer too   // pageFor's sources that are the client's own answer to the question (not a page that merely ranks)
 const out = [];
 for (const s of sites) {
   const dom = s.domain; const ours = (u) => { const h = hostOf(u); return h === dom || h.endsWith('.' + dom); };
@@ -1552,9 +2070,34 @@ for (const s of sites) {
   const targetSvc = [...new Set([...SM.services(site_model), ...SM.services(SM.from(s, {}))].map(x => String(x || '').trim()).filter(Boolean))];
   // F-REH (2026-10-20): the services the client DECLARED, apart: a product category they named (crm, erp, payroll...) is positive topic evidence
   const targetDeclared = [...new Set([...((site_model || {}).declared_services || []), ...((SM.from(s, {}) || {}).declared_services || [])].map(x => String(x || '').trim()).filter(Boolean))];
+  // client reports 2026-11-16 (devaicon.com, INV1 F9): "ai project engagement models" was set aside as "0% of its own words match" while the
+  // client has /services/engagement-models, wrote it through the app and the AI panel itself chose that topic. The topics a question is judged
+  // against now also hold what the client works on: the focus topics of its ACTIVE questions that come from a ladder, its own pages or itself
+  // (never a market or a discovery topic), the searches of the pages it published with us, and the titles of its main menu pages (not the
+  // utility ones). Only the TOPIC reasons can change ("off topic", "too broad"): another company's brand, a government body, a job search, a
+  // portal and another market do not read the topics, so they are refused exactly as before.
+  const UTIL_NAV = /^(home|about|about us|contact|contact us|blog|news|careers?|jobs|privacy|terms|faq|faqs|login|sign in|team|our team|pricing)$/i;
+  const titleOwnG = (t) => String(t || '').split(/\s[|\u2013\u2014]\s|\s-\s/)[0].trim();
+  const ownTopics = [...new Set([
+    ...myPrompts.filter(p => String(p.status || 'active') !== 'retired' && ['active', 'core'].includes(String(p.focus_state || ''))
+      && (/^ladder:/.test(String(p.focus_source || '')) || ['page', 'client', 'custom', 'owner'].includes(String(p.focus_source || '')) || p.pinned === true || p.pinned === 'true')).map(p => String(p.focus_topic || '')),
+    ...slog.filter(l => String(l.published_url || '').trim() && String(l.status || '') === 'published').map(l => String(l.keyword || '')),
+    ...(((site_model || {}).nav_pages) || []).map(n => titleOwnG(n && n.title)).filter(t => t && !UTIL_NAV.test(t))].map(x => String(x || '').toLowerCase().trim()).filter(Boolean))];
   const targetCtx = FITR.ctx({ own_domain: dom, competitors: comps, heads: lrowsAll.map(l => l.head_keyword), services: targetSvc,
     topics: [...new Set([...lrowsAll.map(l => String(l.head_keyword || '')), ...lrows.map(l => String(l.keyword || '')), ...targetSvc].map(x => String(x || '').trim()).filter(Boolean))],
     topic_label: 'what this website sells and the keywords you chose' });
+  // review 2026-11-16 (M1): the client's own topics widen the TOPIC test only. The gate reads its topics for more than that (a vendor named in
+  // them counts as the client's own, and the job rule asks what the topics sell), so one published "dynamics 365 vs odoo" page let "best odoo
+  // partner uae" through. Every question is judged on the base context first; only a refusal for its topic is judged again with the wider
+  // topics, and then the vendor rule is asked once more with the base context's declared side, exactly as the base gate would have.
+  const targetCtxWide = { ...targetCtx, topics: [...new Set([...(targetCtx.topics || []), ...ownTopics])] };
+  const baseDecl = fitDeclared(targetCtx);
+  const gateG = (kw) => { const g0 = fitGate(kw, targetCtx); if (g0.ok || !TOPIC_REASONS.includes(g0.reason) || !ownTopics.length) return g0;
+    const gw = fitGate(kw, targetCtxWide); if (!gw.ok) return g0;
+    const low0 = ' ' + String(kw || '').toLowerCase() + ' ';
+    const v = FIT_COMPARE.test(low0) ? null : fitVendor(fitTokens(kw), baseDecl, fitLabels(dom, []));
+    if (v) return { ok: false, reason: 'other brand', detail: 'names ' + v.name + ', another company\'s product or firm, which is not among what you sell' };
+    return { ...gw, own_topics: true }; };
   const targets_set_aside = [];
   // F-KW (2026-10-20, finding 2): with fewer than 12 topic words on file the gate refuses nothing ("no evidence, no refusal"), so a site that
   // lists two services passed every question. Such a target is not called on topic: it says there is not enough information to judge, it is
@@ -1573,13 +2116,29 @@ for (const s of sites) {
   [...byPage.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).forEach(([u, imp]) => addPage(u, 'search', imp.toLocaleString('en-GB') + ' Google impressions'));
   addPage(SM.siteUrl(site_model, '/'), 'home', 'homepage');
   // ---- the questions to win (targets) ----
+  // client reports 2026-11-16 (INV1 F5 / F2): the site's page inventory (seo_pages: address, title, H1) with its pages from the menu, the ladders
+  // and the content log, so a page is judged by what it is about. A page aimed at another market's search never answers this market's question
+  // (the Dubai question was matched to the Pakistan page), and a question whose own search a page of this market already owns is a refresh of
+  // that page, never a second page (DUP, the rule of Parse Verdict).
+  const market = String(s.country || (site_model || {}).country || '');
+  const invMine = (() => { const m = new Map(); const add = (u, title, h1) => { const k = keyOf(u); if (!k || !ours(u)) return; const x = m.get(k) || { url: normU(u), title: '', h1: '' }; if (!x.title && title) x.title = String(title); if (!x.h1 && h1) x.h1 = String(h1); m.set(k, x); };
+    for (const r of invAll) if ((r.site_id === s.site_id || normD(hostOf(r.url)) === dom) && !((Number(r.http_status) >= 300 && Number(r.http_status) < 400) || Number(r.http_status) === 404 || Number(r.http_status) === 410)) add(r.url, r.title, r.h1);
+    for (const r of pagesStored.filter(p => p.site_id === s.site_id)) add(r.url, r.title, '');
+    for (const n of ((site_model || {}).nav_pages || [])) add(n && n.url, n && n.title, '');
+    return [...m.values()]; })();
+  const invTitle = new Map(invMine.map(x => [keyOf(x.url), x]));
+  const farMarket = (keyword, u, alsoTitle) => { const x = invTitle.get(keyOf(u)) || { url: u, title: '', h1: '' }; return market ? DUP.otherMarket(keyword, { url: u, title: [x.title, alsoTitle || ''].filter(Boolean).join(' '), h1: x.h1 }, market) : null; };
+  const isHeadRow = (l) => LRU.isHeadRow(l);   // review 2026-11-16 (L5): the one rule
   const pageFor = (keyword, question, pid) => {
-    const fromAi = cited.find(c => answers.some(a => a.site_id === s.site_id && a.prompt_id === pid && String(a.our_urls || '').includes(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))));
+    const fromAi = cited.find(c => answers.some(a => a.site_id === s.site_id && a.prompt_id === pid && String(a.our_urls || '').includes(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))) && !farMarket(keyword, c.url, c.title));
     if (fromAi) return { url: normU(fromAi.url), how: 'AI cited it for this question', src: 'cited' };
-    let best = null; for (const [u, imp] of byPage) { if (usedPages.has(keyOf(u))) continue; const qs = sq.filter(q => keyOf(q.page) === keyOf(u)); const o = Math.max(0, ...qs.map(q => wcover(keyword, q.query))); if (o >= 0.7 && (!best || o * Math.log10(10 + imp) > best.s)) best = { url: u, s: o * Math.log10(10 + imp), how: 'ranks on Google for related searches', src: 'search' }; }
+    let best = null; for (const [u, imp] of byPage) { if (usedPages.has(keyOf(u)) || farMarket(keyword, u)) continue; const qs = sq.filter(q => keyOf(q.page) === keyOf(u)); const o = Math.max(0, ...qs.map(q => wcover(keyword, q.query))); if (o >= 0.7 && (!best || o * Math.log10(10 + imp) > best.s)) best = { url: u, s: o * Math.log10(10 + imp), how: 'ranks on Google for related searches', src: 'search' }; }
     if (best) return best;
-    const lr = lrows.find(l => l.target_url && !usedPages.has(keyOf(l.target_url)) && (l.status === 'published' || l.page_exists === true || l.page_exists === 'true') && wcover(keyword, l.keyword) >= 0.6); if (lr) return { url: normU(lr.target_url), how: 'keyword ladder page', src: 'ladder' };
-    const lg = slog.find(l => l.published_url && !usedPages.has(keyOf(l.published_url)) && wcover(keyword, l.keyword) >= 0.6); if (lg) return { url: normU(lg.published_url), how: 'page written earlier', src: 'written' };
+    const lr = lrows.find(l => l.target_url && !usedPages.has(keyOf(l.target_url)) && (l.status === 'published' || l.page_exists === true || l.page_exists === 'true') && (wcover(keyword, l.keyword) >= 0.6 || LRU.questionPage(keyword, l, market)) && !farMarket(keyword, l.target_url, l.keyword)); if (lr) return { url: normU(lr.target_url), how: 'keyword ladder page', src: 'ladder' };
+    const lg = slog.find(l => l.published_url && !usedPages.has(keyOf(l.published_url)) && wcover(keyword, l.keyword) >= 0.6 && !farMarket(keyword, l.published_url, l.keyword)); if (lg) return { url: normU(lg.published_url), how: 'page written earlier', src: 'written' };
+    // INV1 F2: a page of this market whose title, heading or address carries the question's own search is the page for it
+    const own = invMine.length ? DUP.targets(keyword, invMine, { market }).targets.find(t => !usedPages.has(keyOf(t.url))) : null;
+    if (own) return { url: normU(own.url), how: 'it is already the page for this search, so it is improved for the question rather than a second page written', src: 'same_search' };
     return null;
   };
   // the site's own topic words appear in most of its queries: weight each word by how rare it is (IDF), so a page matches a question by its distinctive words
@@ -1597,19 +2156,46 @@ for (const s of sites) {
   const pubAt = (url) => { const k = keyOf(url); let d = ''; for (const l of slog) if (l.published_url && l.published_at && keyOf(l.published_url) === k && String(l.published_at) > d) d = String(l.published_at); return d; };
   const pageDate = (url, pr) => { const lg = url ? pubAt(url) : ''; const pg = pr && pr.updated_on ? String(pr.updated_on) : ''; const d = lg > pg ? lg : pg; return { date: d, from: !d ? '' : d === lg ? 'published' : 'page' }; };
   const logByReq = new Map(slog.filter(l => l.request_id).map(l => [String(l.request_id), l]));   // B9-6: the run a target claims to be written by
+  // client reports 2026-11-16 (INV1 F8): a target's state follows the evidence every week, not only when the Content Cadence happens to start
+  // a page. devaicon's question 41 still said "being written" days after its page was published; question 37 said "written" for a ladder page
+  // of ANOTHER search; app-started AI pages never moved their question at all. settleOf(row, keyword) -> the row as the content log says:
+  //   writing + the run's page written / published   -> written (published: `live`, with its address and date)
+  //   writing + the run failed                        -> queued again at once (`run_failed`), not after 14 days
+  //   writing / written + the page is a LADDER page of another search (the cadence folded the question into it) -> queued again
+  //   queued / skipped + a page already written for the question's own search (an app run, no row marked) -> written / live
+  const kwKeyG = (k) => String(k || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const heldUrl = (l) => { const m = String((l || {}).qa_reasons || '').match(/https?:\/\/[^\s,;]+/); return m ? m[0].replace(/[.)]+$/, '') : ''; };   // L4: the page a hold named
+  const LOG_RANK = { started: 1, not_ready: 2, written: 3, published: 4 };
+  const settleOf = (row, keyword) => { const t = { ...row }; const st = String(t.status || ''); if (!st || st === 'won' || st === 'set_aside') return t;
+    const kw = keyword || t.keyword || '';
+    const lr = t.request_id ? logByReq.get(String(t.request_id)) : null;
+    const headOf = (l) => String((lrowsAll.find(r => String(r.ladder_id || '') === String(l.ladder_id || '') && r.head_keyword) || {}).head_keyword || '');
+    const otherSearch = (l) => !!l && String(l.source || '') === 'ladder' && !!kw && !!l.keyword && !LRU.questionPage(kw, { keyword: l.keyword, rung: l.rung, head_keyword: headOf(l) }, market);
+    if ((st === 'writing' || st === 'written') && otherSearch(lr)) return { ...t, status: 'queued', request_id: '', written_at: '', _settled: 'other_search', _log: lr };
+    if (st === 'writing' && lr) { const ls = String(lr.status || '');
+      if (ls === 'published' || ls === 'written') return { ...t, status: 'written', written_at: String(lr.started_at || t.written_at || iso), _settled: ls, _log: lr };
+      if (ls === 'failed') return { ...t, status: 'queued', request_id: '', written_at: '', _settled: 'failed', _log: lr };
+      // review 2026-11-16 (L4): a run HELD for the client's OK wrote no page: the question is not "being written" (and not a run that failed)
+      if (ls === 'held') return { ...t, status: 'queued', request_id: '', written_at: '', _settled: 'held', _log: lr }; }
+    if (st === 'written' && lr && String(lr.status || '') === 'published') return { ...t, _settled: 'published', _log: lr };
+    if (st === 'queued' && kw && String(t.kind || 'answer') !== 'refresh') {   // only a page written FOR an AI question, after the question existed
+      const own = slog.filter(l => kwKeyG(l.keyword) === kwKeyG(kw) && /^ai_/.test(String(l.source || '')) && ['written', 'published', 'not_ready'].includes(String(l.status || ''))
+        && (!t.created_at || !l.started_at || String(l.started_at) >= String(t.created_at).slice(0, 10))).sort((a, b) => (LOG_RANK[b.status] || 0) - (LOG_RANK[a.status] || 0))[0];
+      if (own) return { ...t, status: String(own.status) === 'not_ready' ? 'writing' : 'written', request_id: String(own.request_id || t.request_id || ''), written_at: String(own.started_at || iso), _settled: String(own.status), _log: own }; }
+    return t; };
   const targets = []; const won_lost = []; const won_now = []; const stalled_targets = [];   // B9-4: what was won this run, with its evidence, and what was won before and is lost again
   for (const g of gaps.filter(g => g && g.prompt && g.kind !== 'brand').slice(0, 10)) {
     const p0 = promptOf.get(g.prompt_id || '') || myPrompts.find(x => String(x.prompt || '').trim() === String(g.prompt).trim()) || {}; const pid = g.prompt_id || p0.prompt_id || qid(g.prompt); const keyword = String(p0.keyword || g.topic || '').toLowerCase().trim() || toks(g.prompt).slice(0, 5).join(' ');
-    const target_id = 'ait_' + s.site_id.replace(/^site_/, '') + '_' + pid; const old = existing.get(target_id) || {};
+    const target_id = 'ait_' + s.site_id.replace(/^site_/, '') + '_' + pid; const old = settleOf(existing.get(target_id) || {}, keyword);
     if (airOn && old.origin === 'ai_rank') continue;   // AIR guard: AIR owns this question's row while the site is on
-    const tg0 = fitGate(keyword, targetCtx);   // R-K4: judged before it may claim a page, so a refused question never takes another one's refresh
+    const tg0 = gateG(keyword);   // R-K4: judged before it may claim a page, so a refused question never takes another one's refresh
     // F-37: a topic refusal is judged again with the buyers' spellings written out, then on the full question
     const rescue = (() => { if (tg0.ok || !TOPIC_REASONS.includes(tg0.reason)) return null;
       for (const [alt, via] of [[growthSyn(keyword), 'the same search with its abbreviation written out'], [questionSearch(g.prompt), 'the full question']]) {
-        if (!alt || alt === keyword) continue; const g1 = fitGate(alt, targetCtx); if (g1.ok) return { g: g1, text: alt, via }; }
+        if (!alt || alt === keyword) continue; const g1 = gateG(alt); if (g1.ok) return { g: g1, text: alt, via }; }
       return null; })();
     const tg = rescue ? rescue.g : tg0;
-    const tev = tg.ok ? fitEvidence(rescue ? rescue.text : keyword, targetCtx.topics || [], { topic_label: 'what this website sells and the keywords you chose', services: targetDeclared }) : null;
+    const tev = tg.ok ? fitEvidence(rescue ? rescue.text : keyword, targetCtxWide.topics || [], { topic_label: 'what this website sells and the keywords you chose', services: targetDeclared }) : null;
     const unjudged = !!tev && tev.verdict === 'unknown';
     const page = pageFor(keyword, g.prompt, pid); const ownPage0 = !!(page && OWN_PAGE.includes(page.src));
     // FX-B RB-2 (2026-11-06, REVIEW_B_SAFETY.md): the own-page rule keeps a question refused for its TOPIC only ("too broad", "off topic"), as the
@@ -1618,9 +2204,9 @@ for (const s of sites) {
     const ownPage = ownPage0 && !tg0.ok && TOPIC_REASONS.includes(tg0.reason);
     if (page && (tg.ok || ownPage || ['writing', 'written'].includes(old.status))) usedPages.add(keyOf(page.url)); const pr = page ? stored.get(keyOf(page.url)) : null;
     // a planned keyword-ladder page for the same search: the Content Cadence writes it with this AI target (one search, one page)
-    const hw = new Set(lrows.flatMap(l => String(l.head_keyword || '').toLowerCase().split(/[^a-z0-9]+/)).filter(Boolean)); const kt = (k) => [...new Set(toks(k).filter(w => !hw.has(w)))];
-    const same = (a, b) => { const A = kt(a), B = new Set(kt(b)); return A.length > 0 && A.filter(w => B.has(w)).length / A.length >= 0.6; };
-    const ladderPage = !page ? lrows.find(l => !['published'].includes(String(l.status)) && (same(keyword, l.keyword) || same(l.keyword, keyword))) : null;
+    // client reports 2026-11-16 (INV1 F7): only a ladder page for the SAME search (or the ladder's main page when the question carries all of its
+    // words) takes the question; the old rule stripped every word of every ladder head and called one shared word ("companies") the same search
+    const ladderPage = !page ? lrows.find(l => !['published'].includes(String(l.status)) && LRU.questionPage(keyword, l, market)) : null;
     const pd = page ? pageDate(page.url, pr) : { date: '', from: '' };   // F-38
     const stale = !pd.date || days(pd.date) > CONFIG.refresh_after_days; const weak = !pr || (Number(pr.score) || 0) < 70;
     const justPublished = !!page && !pr && pd.from === 'published' && !stale;   // F-38: published recently and not read yet: its readiness check comes first
@@ -1642,7 +2228,9 @@ for (const s of sites) {
     const stalled = (() => { if (old.status !== 'writing' || draftFailed) return null;
       const l = logByReq.get(String(old.request_id || ''));
       if (l && ['written', 'published'].includes(String(l.status))) return null;
-      const since = old.written_at || old.updated_at || '';
+      // integration 2026-11-16: a row the app marked `writing` (an app-started AI page, request id = the n8n execution id) may carry no
+      // written_at; its start day is in reason_args.date. updated_at is no clock for it: this node rewrites it on every row every week.
+      const since = old.written_at || (() => { try { return String((JSON.parse(old.reason_args || '{}') || {}).date || ''); } catch (e) { return ''; } })() || old.updated_at || '';
       if (days(since) < CONFIG.stale_writing_days) return null;
       return { since: String(since).slice(0, 10), log: l ? 'the page run is still "' + l.status + '"' : 'no page run on record' }; })();
     const status0 = wasWon ? 'queued' : stalled ? 'queued' : ['writing', 'written'].includes(old.status) ? old.status : (kind === 'refresh' && ((!stale && !weak) || justPublished)) ? 'skipped' : (old.status === 'skipped' && old.reason === 'kept by you') ? 'skipped' : 'queued';
@@ -1666,21 +2254,43 @@ for (const s of sites) {
       : 'the full question is on your topic, but its search "' + storedKw + '" is not one the page writer takes on its own: it is listed, not queued for an automatic page. ') : '';
     const judgeNote = unjudged ? 'Too little is known about what you sell to tell whether this question is part of it, so it is only suggested, never written on its own. ' : '';   // F-REH: one plain sentence (it used to wrap the gate\'s own detail and say the same thing twice)
     if (unjudged) targets_unjudged.push({ target_id, question: g.prompt, keyword, kind, detail: tev.detail });
-    if (!tg.ok) targets_set_aside.push({ target_id, question: g.prompt, keyword, kind, reason: tg.reason, detail: tg.detail, kept: tLive || ownPage, note: '"' + keyword + '" ' + gateNote.trim() });
+    // INV1 F9, in SHADOW for one cycle (recorded, the status unchanged): a question the panel generated for one of the client's own active topics,
+    // refused only for its topic, that shares a word with that topic ("governed ai vs autonomous ai" for the topic "ai automation services") would
+    // be "on your topic" under the provenance rule. The owner reviews these before the rule may change a status.
+    const provTopic = String(p0.focus_topic || p0.topic || '').toLowerCase().trim();
+    const provenance = !tg.ok && TOPIC_REASONS.includes(tg.reason) && provTopic && ownTopics.includes(provTopic) && String(p0.status || 'active') !== 'retired'
+      && provTopic.split(/[^a-z0-9]+/).filter(Boolean).some(w => keyword.split(/[^a-z0-9]+/).includes(w)) ? 'asked about your topic "' + provTopic + '"' : '';
+    if (!tg.ok) targets_set_aside.push({ target_id, question: g.prompt, keyword, kind, reason: tg.reason, detail: tg.detail, kept: tLive || ownPage, note: '"' + keyword + '" ' + gateNote.trim(), ...(provenance ? { shadow_rescue: provenance } : {}) });
     if (stalled) stalled_targets.push({ target_id, question: g.prompt, since: stalled.since, detail: stalled.log });
     const lostAgain = wasWon ? { target_id, question: g.prompt, won_at: String(old.won_at || '').slice(0, 10), lost_at: String((v && v.checked_at) || iso).slice(0, 10), observed: obsLine(obsOf(pid)) } : null;
     if (lostAgain) won_lost.push(lostAgain);
     // F-37: a keyword passed with its abbreviation written out is stored written out, so the page the Content Cadence writes uses the buyers' full name
+    // INV1 F11 (CONTRACT_ISSUE1 item 3): the state as a code the app words itself, with its arguments; the stored reason in plain words too
+    const GATE_CODE = { 'off topic': 'off_topic', 'too broad': 'off_topic', empty: 'off_topic', 'other market': 'other_market' };
+    const GATE_ARG = { 'job search': 'job', government: 'government', portal: 'government', navigational: 'navigational', 'own brand': 'navigational', 'other brand': 'brand' };
+    const lgS = old._log || (old.request_id ? logByReq.get(String(old.request_id)) : null);
+    const liveUrl = lgS && String(lgS.status || '') === 'published' ? String(lgS.published_url || '') : '';
+    const rc = keptByYou ? { code: 'kept_by_you' }
+      : status === 'set_aside' ? { code: GATE_CODE[tg.reason] || 'not_for_site', args: GATE_CODE[tg.reason] ? {} : { reason: GATE_ARG[tg.reason] || 'brand' } }
+      : status === 'written' ? (liveUrl ? { code: 'live', args: { page_url: liveUrl, date: String(lgS.published_at || '').slice(0, 10) } } : { code: 'written' })
+      : status === 'writing' ? (draftFailed ? { code: 'draft_failed' } : { code: 'writing', args: { date: String(old.written_at || '').slice(0, 10) } })
+      : status === 'skipped' ? (keptNotWritten ? { code: 'suggested', args: page ? { page_url: page.url } : {} } : kind === 'refresh' && page ? { code: 'fresh_page', args: { page_url: page.url, date: pd.date ? pd.date.slice(0, 10) : '' } } : { code: 'unjudged' })
+      : old._settled === 'held' ? (heldUrl(old._log) ? { code: 'same_search_page', args: { page_url: heldUrl(old._log), keyword: storedKw } } : { code: kind === 'refresh' && page ? 'refresh_page' : 'new_page', args: page ? { page_url: page.url } : {} })
+      : stalled || old._settled === 'failed' ? { code: 'run_failed' } : lostAgain ? { code: 'lost_again' } : ladderPage ? { code: 'ladder_page', args: { keyword: ladderPage.keyword } }
+      : unjudged ? { code: 'unjudged' } : kind === 'refresh' ? { code: page.src === 'same_search' ? 'same_search_page' : 'refresh_page', args: { page_url: page.url, keyword: storedKw } } : { code: 'new_page' };
+    const settledNote = old._settled === 'held' ? 'the page run waits for your OK in the app (it was held' + (heldUrl(old._log) ? ': your page ' + heldUrl(old._log) + ' is already the page for this search' : '') + '), so nothing is being written for it. ' : old._settled === 'other_search' ? 'the page written last time was for another search ("' + String((old._log || {}).keyword || '') + '"), so the question is queued for a page of its own. ' : '';
     targets.push({ target_id, site_id: s.site_id, domain: dom, prompt_id: pid, question: g.prompt, keyword: storedKw, kind, page_url: page ? page.url : '', page_type: kind === 'refresh' ? '' : (PT[g.kind] || 'Guide'),
+      reason_code: rc.code, reason_args: JSON.stringify({ ...(rc.args || {}), ...(market ? { market } : {}) }),
       fanout: (g.fanout || []).slice(0, 8).join(' | '), sources_json: JSON.stringify((g.cited_urls || []).slice(0, 6).map(c => ({ u: c.u, t: c.t || '', n: c.n || 1 }))), competitors: (g.competitors || []).slice(0, 8).join(', '),
       engines: engines.join(', '), stage: g.stage || '', value, status,
-      reason: keptByYou ? 'kept by you' : gateNote + keptNote + judgeNote + (draftFailed ? 'the page written for this question did not pass the quality check: fix the draft and run it again (it is not offered as a page that answers the question until it passes). ' : '') + (stalled ? 'the page run started on ' + stalled.since + ' never produced a page (' + stalled.log + '): queued again. ' : '') + (lostAgain ? 'AI named you for this question and has stopped (won ' + (lostAgain.won_at || 'earlier') + ', lost again in the check of ' + lostAgain.lost_at + '; ' + lostAgain.observed + '). ' : '') + (status === 'set_aside' ? '' : ladderPage ? 'written as the keyword ladder page "' + ladderPage.keyword + '" (one search, one page)' : status1 === 'skipped' && kind === 'refresh' && justPublished ? 'the page was published on ' + pd.date.slice(0, 10) + ': its AI readiness is checked before any refresh is planned' : status1 === 'skipped' && kind === 'refresh' ? 'the page is fresh (' + (pd.from === 'published' ? 'published ' : 'updated ') + pd.date.slice(0, 10) + ') and AI-ready (' + (pr && pr.score) + '/100)' : page ? 'refresh ' + page.url + ' (' + page.how + (stale ? (pd.date ? '; not updated in 90+ days (last date ' + pd.date.slice(0, 10) + ')' : pr ? '; no visible update date on the page' : '') : '') + (weak ? '; AI-readiness ' + (pr ? pr.score + '/100' : 'not checked yet') : '') + ')' : 'no page answers it yet'),
+      reason: keptByYou ? 'kept by you' : ['writing', 'written'].includes(status) && !draftFailed ? AQ.clean(gateNote + AQ.reason(rc.code, rc.args)) : AQ.clean(settledNote + gateNote + keptNote + judgeNote + (draftFailed ? 'the page written for this question did not pass the quality check: fix the draft and run it again (it is not offered as a page that answers the question until it passes). ' : '') + (stalled ? 'the page run started on ' + stalled.since + ' never produced a page (' + stalled.log + '): queued again. ' : '') + (lostAgain ? 'AI named you for this question and has stopped (won ' + (lostAgain.won_at || 'earlier') + ', lost again in the check of ' + lostAgain.lost_at + '; ' + lostAgain.observed + '). ' : '') + (status === 'set_aside' ? '' : ladderPage ? 'written as the keyword ladder page "' + ladderPage.keyword + '" (one search, one page)' : status1 === 'skipped' && kind === 'refresh' && justPublished ? 'the page was published on ' + pd.date.slice(0, 10) + ': its AI readiness is checked before any refresh is planned' : status1 === 'skipped' && kind === 'refresh' ? 'the page is fresh (' + (pd.from === 'published' ? 'published ' : 'updated ') + pd.date.slice(0, 10) + ') and AI-ready (' + (pr && pr.score) + '/100)' : page ? 'refresh ' + page.url + ' (' + page.how + (stale ? (pd.date ? '; not updated in 90+ days (last date ' + pd.date.slice(0, 10) + ')' : pr ? '; no visible update date on the page' : '') : '') + (weak ? '; AI-readiness ' + (pr ? pr.score + '/100' : 'not checked yet') : '') + ')' : 'no page answers it yet')),
       created_at: old.created_at || iso, updated_at: iso, request_id: old.request_id || '', written_at: old.written_at || '', won_at: old.won_at || '' });
     if (page) addPage(page.url, 'target', 'answers "' + g.prompt.slice(0, 80) + '"', { question: g.prompt });
   }
   // targets no longer lost: won (if written) or no longer needed
   const lostIds = new Set(targets.map(t => t.target_id));
-  for (const [id, t] of existing) if (!lostIds.has(id) && !['won', 'skipped', 'set_aside'].includes(t.status) && v && !(airOn && t.origin === 'ai_rank')) {
+  for (const [id, t0] of existing) if (!lostIds.has(id) && !['won', 'skipped', 'set_aside'].includes(t0.status) && v && !(airOn && t0.origin === 'ai_rank')) {
+    const t = settleOf(t0, t0.keyword || '');   // INV1 F8: the row as its content-log row says (written / live / failed / another search)
     // B9-4: absent from the gap list is not the same as named. It can also mean the question was not asked this run (the panel
     // rotates, a request can fail), so the answers of the window decide: at least win_min_answers of them must name the business.
     const o = obsOf(t.prompt_id || ''); const written = ['writing', 'written'].includes(t.status);
@@ -1693,12 +2303,17 @@ for (const s of sites) {
       : (() => { const pr = promptOf.get(String(t.prompt_id || '')) || null; const rr = pr ? String(pr.retire_reason || '').trim() : '';
           if (pr && (rr || String(pr.retired_at || '').trim() || String(pr.status || '').toLowerCase() === 'retired')) return 'the question was taken off your AI panel' + (rr ? ': ' + rr : '');
           return 'no longer lost in the latest AI check'; })();
+    const st1 = won ? 'won' : keep ? t.status : 'skipped';
+    const lg1 = t._log || (t.request_id ? logByReq.get(String(t.request_id)) : null); const live1 = lg1 && String(lg1.status || '') === 'published' ? String(lg1.published_url || '') : '';
+    const rc1 = won ? { code: 'won' } : o.answers === 0 && !written ? { code: 'not_asked' } : st1 === 'written' ? (live1 ? { code: 'live', args: { page_url: live1, date: String(lg1.published_at || '').slice(0, 10) } } : { code: 'written' })
+      : st1 === 'writing' ? { code: 'writing', args: { date: String(t.written_at || '').slice(0, 10) } } : st1 === 'queued' ? { code: t._settled === 'failed' ? 'run_failed' : 'new_page' } : /taken off your AI panel/.test(why) ? { code: 'off_panel' } : { code: 'no_longer_lost' };
     targets.push({ target_id: id, site_id: s.site_id, domain: dom, prompt_id: t.prompt_id || '', question: t.question || '', keyword: t.keyword || '', kind: t.kind || 'answer', page_url: t.page_url || '', page_type: t.page_type || '', fanout: t.fanout || '', sources_json: t.sources_json || '[]',
-      competitors: t.competitors || '', engines: t.engines || '', stage: t.stage || '', value: Number(t.value) || 0, status: won ? 'won' : keep ? t.status : 'skipped', reason: why,
+      competitors: t.competitors || '', engines: t.engines || '', stage: t.stage || '', value: Number(t.value) || 0, status: st1, reason: AQ.clean(['written', 'writing'].includes(st1) && !won ? AQ.reason(rc1.code, rc1.args) + ' ' + why + '.' : why),
+      reason_code: rc1.code, reason_args: JSON.stringify(rc1.args || {}),
       created_at: t.created_at || iso, updated_at: iso, request_id: t.request_id || '', written_at: t.written_at || '', won_at: won ? iso : (t.won_at || '') });
     if (won) won_now.push({ target_id: id, question: t.question || '', observed: obsLine(o) }); }
   const queued = targets.filter(t => t.status === 'queued').sort((a, b) => b.value - a.value);
-  queued.slice(CONFIG.max_targets).forEach(t => { t.status = 'skipped'; t.reason = 'lower value than the ' + CONFIG.max_targets + ' queued questions (checked again next week)'; });
+  queued.slice(CONFIG.max_targets).forEach(t => { t.status = 'skipped'; t.reason = 'lower value than the ' + CONFIG.max_targets + ' queued questions (checked again next week)'; t.reason_code = 'lower_value'; t.reason_args = JSON.stringify({}); });
   // AIR guard (on only): the pages of the questions AIR works on are key pages too (readiness, Bing / IndexNow), as AI Growth's own targets' pages are
   for (const t of airRows) if (t.page_url) addPage(t.page_url, 'target', 'AI ranking target: "' + String(t.question || t.keyword || '').slice(0, 80) + '"', t.question ? { question: String(t.question) } : {});
   // ---- pages to audit this week (rotating) ----

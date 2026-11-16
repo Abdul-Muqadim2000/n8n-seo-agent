@@ -100,6 +100,8 @@ module.exports = async (ctx) => {
     const ex = [['ladder page', { verdict_score: 30, ladder_id: 'lad_x', ladder_rung: 2 }], ['case study', { verdict_score: 30, case_id: 'cs1' }], ['AI answer page', { verdict_score: 30, ai_target: { question: 'what is erp' } }],
       ['refresh', { verdict_score: 30, existing_page_url: 'https://www.novaand.example/erp' }], ['W0-D exemption text', { verdict_score: 30, hold_exempt: 'score: a page of your keyword ladder' }]];
     for (const [n, p] of ex) { const g = await gr('local', [PARTS, CLEAN, { ...CTX, prev: p }, SRC]); const c = await gr('cap', [{ score: g.score, breakdown: g.breakdown }, [], { w0c: g }]);
+      // client reports 2026-11-16 (INV1 F10): an AI answer page was chosen for its question, not for search volume: no verdict cap on its fit at all
+      if (n === 'AI answer page') { check(n + ': fit not cut by the verdict (' + g.breakdown.fit + ' of 20, INV1 F10), Ready', g.breakdown.fit === 20 && c.ready && c.floors.ok, J({ fit: g.breakdown.fit, f: c.floors })); continue; }
       check(n + ': fit capped (' + g.breakdown.fit + ' of 20) but its floor waived as the plan\'s choice: Ready', g.breakdown.fit <= 8 && c.ready && c.floors.waived.some(w => w.dim === 'fit' && /chosen by your plan/.test(w.why)), J(c.floors)); }
     const gA = await gr('local', [PARTS, CLEAN, { ...CTX, prev: { verdict_score: 30, client_ip: 'cadence:site_x' } }, SRC]); const cA = await gr('cap', [{ score: gA.score, breakdown: gA.breakdown }, [], { w0c: gA }]);
     check('a run the system started (cadence): the fit floor is recorded only (shadow, D17), the page is not held at "Needs work" for it', cA.ready && cA.floors.shadow.some(s => s.dim === 'fit'), J(cA.floors));
@@ -328,6 +330,6 @@ module.exports = async (ctx) => {
     }
     check('Content QA decides the editor round and "passed" on the copy check, never on the new grade', /copy_score >= 80 && lenOk/.test(M['Content QA']) && /!\(copy_score >= 90 && crit\.score/.test(M['Content QA']) && !/content_score >= 80 && lenOk/.test(M['Content QA']));
     check('Page Candidates and Finalize Verdict build the grade with GR.cap and the status with GR.deliver', /const grade = GR\.cap\(/.test(M['Page Candidates']) && /GR\.deliver\(del0, grade\)/.test(M['Page Candidates'])
-      && /const grade = GR\.cap\(/.test(FN['Finalize Verdict']) && /GR\.deliver\(del, grade\)/.test(FN['Finalize Verdict']));
+      && /const grade = GR\.cap\(/.test(FN['Finalize Verdict']) && /GR\.deliver\(del, grade[,)]/.test(FN['Finalize Verdict']));   // section 191: a live grade passes { live }
   });
 };

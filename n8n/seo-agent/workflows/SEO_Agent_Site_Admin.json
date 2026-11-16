@@ -142,6 +142,18 @@
               {
                 "name": "publish_note",
                 "type": "string"
+              },
+              {
+                "name": "planned_slug",
+                "type": "string"
+              },
+              {
+                "name": "planned_title",
+                "type": "string"
+              },
+              {
+                "name": "planned_h1",
+                "type": "string"
               }
             ]
           },
@@ -3983,6 +3995,36 @@
               {
                 "id": "publish_note",
                 "displayName": "publish_note",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "planned_slug",
+                "displayName": "planned_slug",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "planned_title",
+                "displayName": "planned_title",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "planned_h1",
+                "displayName": "planned_h1",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,

@@ -13,6 +13,16 @@
 // term coverage against the competitor term model / brief, specificity, section-length checks, the editor's critique,
 // and a 0-100 CONTENT SCORE. Schema is generated here (page-type aware), never by the model.
 const prev = $('Parse Brief').first().json;
+// Section 191 (client reports 2026-11-16, devaicon.com: "delivered 95+, live page 84"): a LIVE page (the finalize webhook's `grade_only`, the
+// page the client published, read back by the page reader) is graded with the rules of a final version, but four checks measured our own
+// reader and the site's template instead of the page: the literal "Quick answer:" label, a questions section the template puts after the
+// article, a table the reader flattened into lines and the site name a CMS appends to the title tag. On a live page only, those four read
+// the page as it is (each relaxation is listed in `live_adjustments`, so the client sees what was not counted against the page). Drafts and
+// final versions are graded exactly as before.
+// review L5: only a live page the reader really read (live_read.ok) is graded with the live readings, never a grade_only body of our own text
+const LIVE = !!(prev.finalize && prev.finalize.grade_only === true && prev.finalize.live_read && prev.finalize.live_read.ok === true);
+const LIVE_READ = LIVE ? prev.finalize.live_read : {};
+const live_adjustments = [];
 // CT-FIX2 (2026-10-22): the draft comes through *Promise Candidates* (stage 1 of the promise check), and this node's own input is then the
 // second reader's answer (*Promise Judge*) or, when nothing was sent, the candidates item itself. A run without those nodes reads its input.
 const PCJ = (() => { try { const j = $('Promise Candidates').first().json; return j && j.promise_judge && j.output !== undefined ? j : null; } catch (e) { return null; } })();
@@ -168,6 +178,13 @@ const META_FIELD_LABEL = /^(?:Title|Meta Description|Meta Title|Slug|Primary Key
 const metaDescProblem = !metaDesc ? 'is missing' : META_FIELD_LABEL.test(metaDesc) ? 'starts with a field label instead of a description' : /[\[\]]/.test(metaDesc) ? 'holds a bracket'
   : metaDesc.length < 70 ? 'is under 70 characters' : metaDesc.length > 155 ? 'is over 155 characters' : '';
 const meta_error = metaDescProblem ? 'The meta description ' + metaDescProblem : '';
+// review M3: the description a LIVE grade checks is the live page's own (read by the publish check, grade_live.meta_description), as the page
+// has it (before the meta rule rewrote a broken one for the head); when the check did not read it, the description is not checked and the
+// grade says so. meta_error (a publish error) stays on the head as before: a live page's description is advice, never a blocker.
+const descProblemOf = (d) => !d ? 'is missing' : META_FIELD_LABEL.test(d) ? 'starts with a field label instead of a description' : /[\[\]]/.test(d) ? 'holds a bracket' : d.length < 70 ? 'is under 70 characters' : d.length > 155 ? 'is over 155 characters' : '';
+const liveDesc = LIVE ? (LIVE_READ.meta_read === true ? { read: true, text: String(LIVE_READ.meta_description || '').replace(/\s+/g, ' ').trim() } : { read: false, text: '' }) : null;
+const descCheck = liveDesc ? (liveDesc.read ? descProblemOf(liveDesc.text) : '') : metaDescProblem;
+if (liveDesc && !liveDesc.read) live_adjustments.push({ code: 'meta_description', text: 'We could not read the meta description of your live page, so it is not checked here' });
 // R15 (2026-10-13, re-rating §3.11): a ladder page keeps the URL its ladder row planned. Live, the row said
 // `…/service-industry-erp-software/` (the ladder's link map, the siblings' up-links and the Rank Tracker all use it) while the page was
 // delivered as `service-industry-erp-software-uae`, so publishing it would have left every stored link pointing at a URL that never exists.
@@ -272,7 +289,8 @@ let internalLinks = 0, externalLinks = 0, cleanedLinks = 0;
 // target; an opaque one (google.com/goto?url=<token>, the Vertex AI grounding redirect) loses its link and keeps its words, so the
 // attribution stays and the figure it carried is checked like any other uncited figure (§9).
 const redirectsResolved = [], redirectsDropped = [];
-md = md.replace(/\[([^\[\]]+)\]\(([^)\s]+)\)/g, (m, text, url) => {
+md = md.replace(/\[([^\[\]]+)\]\(([^)\s]+)\)/g, (m, text, url, off, whole) => {
+  if (off > 0 && whole[off - 1] === '!') return m;   // section 191: an image is neither a link nor a source (its file was listed as a "weak source", and a second untitled image was unlinked as a repeat of it)
   // fu-finalize-toc (2026-10-30, BASELINE "Finalize strips table-of-contents links", 3 of 3): a link to a heading of this page (the contents
   // list's "#anchor") is no citation and no page of the site; read as a weak source with no host, entries 2-8 were unlinked as "repeats"
   if (/^#[^\s#]*$/.test(url.trim())) return m;
@@ -335,15 +353,51 @@ const mainPart = withoutMeta.replace(faqPart, '');
 const totalWords = countWords(withoutMeta), mainWords = countWords(mainPart), faqWords = countWords(faqPart);
 const h1 = (md.match(/^# .+$/m) || [''])[0];
 const h2s = md.match(/^## .+$/gm) || [];
-const faqHeadings = h2s.filter(h => /faq|frequently asked/i.test(h)).length;
+// section 191: an FAQ heading is one that IS the questions section ("## Frequently asked questions", "## FAQ", "## FAQs about ..."); "Comparing
+// FAQ chatbots, workflow automation and agentic AI" is a normal section and was read as a second FAQ ("Duplicate FAQ sections found")
+const isFaqHead = (h) => { const t = String(h || '').trim(); return /^#{2}\s+\**\s*(?:\d{1,2}[.)]\s*)?(?:frequently asked questions|faqs?)\b/i.test(t) || /^#{2}\s.*\b(?:faqs?|frequently asked questions)\s*\**\s*$/i.test(t); };
+// review L1: the FAQ-last check of drafts and final versions keeps its rule (any heading naming an FAQ), so no delivered grade moves; only the
+// duplicate-FAQ warning and the live page's template set-aside use the heading rule above
+const faqLastHit = (h) => LIVE ? isFaqHead(h) : /faq|frequently asked/i.test(String(h || ''));
+const faqHeadings = h2s.filter(isFaqHead).length;
 const lastH2 = h2s[h2s.length - 1] || '';
+// section 191: on a LIVE page a questions section after the article is usually the site template's accordion, and the closing call to action
+// the template shows is not in what the reader keeps: it is set aside before the "the call to action should be the last section" check
+let lastH2Eff = lastH2;
+if (LIVE && h2s.length > 1 && isFaqHead(lastH2)) {
+  lastH2Eff = h2s[h2s.length - 2];
+  live_adjustments.push({ code: 'faq_last', text: 'The questions and answers at the end of your page are not counted as the last section: on a live page the closing call to action usually comes from the site template, which our reader does not keep' });
+}
 // 2026-10-11 (FIX_PLAN G2): Google stopped showing FAQ rich results on 2026-05-07, so no FAQ block is required or scored any more. What AI
 // answers still quote is a question used as a heading with a short, direct answer under it — that is what is counted and scored instead.
 const headingTexts = (md.match(/^#{2,4} .+$/gm) || []).map(h => plain(h.replace(/^#+\s*/, '')));
 const questionHeadings = headingTexts.filter(h => /\?\s*$/.test(h) || /^(how|what|which|why|when|where|who|is|are|can|does|do|should|will)\b/i.test(h)).length;
 const answeredQuestions = questionHeadings + validFaqs.length;
 const qaMatch = withoutMeta.match(/^\**\s*Quick answer:?\**\s*(.+)$/im);
+const kwForAnswer = String(prev.keyword || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 const answerWords = qaMatch ? countWords(plain(qaMatch[1])) : 0;
+// section 191: a LIVE page that opens with a direct answer has one, with or without our "Quick answer:" label. The answer is the first
+// paragraph of prose after the H1 (headings, images, bylines and short list items before it are passed over, within the first 200 words): 35-90
+// words that open by answering, i.e. they name most of the search's own words or define something ("X is ...", "X means ...").
+const liveAnswer = (() => {
+  if (!LIVE || qaMatch || !kwForAnswer) return null;
+  const h1i = withoutMeta.search(/^# .+$/m); if (h1i < 0) return null;
+  let seen = 0;
+  for (const raw of withoutMeta.slice(h1i).split('\n').slice(1)) {
+    const l = raw.trim(); if (!l) continue;
+    if (/^(?:#|!\[|\||>)/.test(l)) continue;
+    const w = countWords(plain(l));
+    if (/^(?:[-*+]|\d{1,3}[.)])\s+/.test(l) || w < 25) { seen += w; if (seen > 200) return null; continue; }
+    if (w < 40 || w > 90) return null;
+    // review L4: it answers when its FIRST sentence names the search's own head words (60% of them); a paragraph that only contains "is" is no answer
+    const p = plain(l).toLowerCase(); const first = p.split(/(?<=[.!?])\s+/)[0] || p;
+    const tok = kwForAnswer.split(/\s+/).filter(t => t.length > 2 && !/^(the|and|for|with|what|how|which|are|best|vs|from|your|you|top|why|who)$/.test(t));
+    const named = tok.length > 0 && tok.filter(t => new RegExp('\\b' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(first)).length >= Math.ceil(tok.length * 0.6);
+    return named ? { words: w, text: plain(l).slice(0, 200) } : null;
+  }
+  return null;
+})();
+if (liveAnswer) live_adjustments.push({ code: 'direct_answer', text: 'Your page opens with a direct answer (' + liveAnswer.words + ' words) without a "Quick answer" label: we count it as the direct answer' });
 // per-section word counts vs the outline
 const sections = []; { const parts = mainPart.split(/^## /m).slice(1); for (const p of parts) { const nl = p.indexOf('\n'); sections.push({ h2: plain(p.slice(0, nl)), words: countWords(p.slice(nl + 1)) }); } }
 const outline = brief.outline || [];
@@ -551,6 +605,9 @@ const RD = CVG.readability(bodyPlain);
 const sentences = RD.sentences;
 const avgSentence = RD.avg_sentence_words;
 const longSentences = RD.long_sentences;
+// section 191: the longest sentences by name (the live grade shows the client which ones to shorten): the 5 longest of more than 22 words
+const longest = RD.sentences.map((t, i) => ({ text: t.length > 200 ? t.slice(0, 200).replace(/\s+\S*$/, '') : t, words: RD.sent_words[i] }))   // cut at a word, with no ellipsis (the word count says it is longer)
+  .filter(x => x.words > 22).sort((a, b) => b.words - a.words).slice(0, 5);
 const wordsArr = bodyPlain.split(/\s+/).filter(Boolean);
 const flesch = RD.flesch;
 const passive = sentences.filter(s => /\b(is|are|was|were|been|being|be)\s+(\w+ed|built|made|done|seen|known|given|taken|chosen|written)\b/i.test(s)).length;
@@ -694,9 +751,23 @@ const lenOk = lenBand ? (mainWords >= lenLow && mainWords <= lenHigh) : Math.abs
 if (mainWords < lenLow) warnings.push(`Main content is short: ${mainWords} words vs target ${lenBand ? lenLow + '-' + lenHigh : target}` + lenBasis);
 if (mainWords > lenHigh) warnings.push(`Main content is too long: ${mainWords} words vs target ${lenBand ? lenLow + '-' + lenHigh : target}` + lenBasis + '. Cut repetition and secondary detail, and do not add anything');
 if (thinSections.length) warnings.push('Sections far below their target length: ' + thinSections.slice(0, 4).join('; '));
+// section 191: a LIVE page's title tag often ends with the site name the CMS appends to every page (" | Tech&", " - Devaicon"); the
+// 60-character check reads the title without it (search results show the site name on their own line anyway)
+const titleLen = (() => {
+  if (!LIVE || !metaTitle) return metaTitle.length;
+  const nm = (t) => String(t || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '');
+  const names = [...new Set([...bizNames, String(domain || '').replace(/^www\./, '').split('.')[0]].map(nm).filter(x => x.length >= 3))];
+  const m = metaTitle.match(/^(.{10,}?)\s+[|\-\u2013\u2014\u00b7:]\s+([^|\u2013\u2014\u00b7]{2,40})$/);
+  if (!m) return metaTitle.length;
+  const suf = nm(m[2]);
+  if (suf.length < 3 || !names.some(n => suf === n || suf.startsWith(n) || n.startsWith(suf))) return metaTitle.length;
+  if (metaTitle.length > 60 && m[1].trim().length <= 60) live_adjustments.push({ code: 'title_site_name', text: 'Your title tag ends with your site name ("' + m[2].trim() + '"): the 60-character check reads the title without it' });
+  return m[1].trim().length;
+})();
 if (!metaTitle) warnings.push('Meta title line missing');
-else { if (metaTitle.length > 60) warnings.push(`Meta title is ${metaTitle.length} characters (max 60)`); if (metaTitle.length < 30) warnings.push(`Meta title is only ${metaTitle.length} characters (aim for 50-60)`); if (kw && !flexRe(kw, 'i').test(metaTitle)) warnings.push('Primary keyword missing from the meta title'); }
-if (!metaDesc) warnings.push('Meta description line missing');
+else { if (titleLen > 60) warnings.push(`Meta title is ${titleLen} characters (max 60)`); if (metaTitle.length < 30) warnings.push(`Meta title is only ${metaTitle.length} characters (aim for 50-60)`); if (kw && !flexRe(kw, 'i').test(metaTitle)) warnings.push('Primary keyword missing from the meta title'); }
+if (liveDesc) { if (liveDesc.read && descCheck) warnings.push('The meta description of your live page ' + descCheck); }
+else if (!metaDesc) warnings.push('Meta description line missing');
 else { if (metaDesc.length > 155) warnings.push(`Meta description is ${metaDesc.length} characters (max 155)`); if (metaDesc.length < 70) warnings.push(`Meta description is only ${metaDesc.length} characters (aim for 120-155)`); }
 if (slug && !/^\/?[a-z0-9]+(-[a-z0-9]+)*\/?$/.test(slug)) warnings.push('Slug should be lowercase words joined by hyphens');
 if (!h1) warnings.push('H1 missing'); else if (kw && !flexRe(kw, 'i').test(h1)) warnings.push('Primary keyword missing from H1');
@@ -708,12 +779,17 @@ if (kw && !flexRe(kw, 'i').test(first100)) warnings.push('Primary keyword not in
 if (kwCount < 3) warnings.push(`Primary keyword used only ${kwCount} time(s)`);
 if (density > 2) warnings.push(`Keyword density is high (${density}%), a risk of keyword stuffing`);
 if (h2s.length < 4) warnings.push(`Only ${h2s.length} H2 sections (brief expects ${outline.length || 'more'})`);
-if (!qaMatch) warnings.push('Quick answer block missing (a 40-70 word direct answer right after the introduction)');
-else if (answerWords < 35 || answerWords > 90) warnings.push(`Quick answer is ${answerWords} words (aim for 40-70)`);
+if (!qaMatch && !liveAnswer) warnings.push('Quick answer block missing (a 40-70 word direct answer right after the introduction)');
+else if (qaMatch && (answerWords < 35 || answerWords > 90)) warnings.push(`Quick answer is ${answerWords} words (aim for 40-70)`);   // review M2: never "0 words" for a live answer without the label
 if (answeredQuestions < 3) warnings.push(`Only ${answeredQuestions} question(s) answered as a heading (aim for 3+ question-style headings with a direct 40-60 word answer under each: that is what AI answers quote)`);
 if (faqHeadings > 1) warnings.push('Duplicate FAQ sections found');
-if (/faq|frequently asked/i.test(lastH2)) warnings.push('The call to action should be the last section');
-if (!/\|.*\|/.test(md)) warnings.push('Comparison table missing');
+if (faqLastHit(lastH2Eff)) warnings.push('The call to action should be the last section');
+// section 191: a LIVE page whose table the reader flattened into lines (a CMS that renders tables without header cells) has its table:
+// the publish check counted the page's own <table> elements (grade_live.tables)
+const liveTables = LIVE ? Math.max(0, Number(LIVE_READ.tables) || 0) : 0;
+const tableOk = /\|.*\|/.test(md) || liveTables > 0;
+if (liveTables > 0 && (!/\|.*\|/.test(md) || Number(LIVE_READ.table_rows_restored) > 0)) live_adjustments.push({ code: 'table', text: 'Your page has ' + (liveTables === 1 ? 'a table' : liveTables + ' tables') + ' that our reader could not keep as a table: counted as a comparison table' });
+if (!tableOk) warnings.push('Comparison table missing');
 // v4.12: an AI answer target — the answer sits where an assistant reads first, and every search the assistants run before answering has a section
 const AT = prev.ai_target && prev.ai_target.question ? prev.ai_target : null;
 let ai_ready = null;
@@ -814,7 +890,22 @@ if (placeholder_count > PH_MAX) warnings.push(`Too many placeholders to publish 
 
 // 15. Content score (0-100)
 // FIX_PLAN G2: an FAQ block is no longer one of the checks (no FAQ rich results since 2026-05-07); question headings answered directly are.
-const structuralChecks = [!!metaTitle && metaTitle.length <= 60, !metaDescProblem, !!h1, h2s.length >= 4, !!qaMatch, answeredQuestions >= 3, /\|.*\|/.test(md), !/faq|frequently asked/i.test(lastH2), internalLinks > 0 || (prev.internal_link_candidates || []).filter(c => c && !c.planned).length <= 1, kwCount >= 3 && density <= 2];
+// section 191: each check with what it says when it fails (structure_checks, the live grade's per-part reasons); the booleans are the ones
+// scored before, except the four live-page readings above (LIVE only) and the FAQ heading rule (every run)
+const STRUCT = [
+  { code: 'meta_title', ok: !!metaTitle && titleLen <= 60, text: !metaTitle ? 'The page has no title tag' : 'The title tag is ' + titleLen + ' characters (60 or fewer)' },
+  { code: 'meta_description', ok: !descCheck, text: (liveDesc ? 'The meta description of the live page ' : 'The meta description ') + (descCheck || 'is fine') },
+  { code: 'h1', ok: !!h1, text: 'The page has no main heading (H1)' },
+  { code: 'sections', ok: h2s.length >= 4, text: 'The page has ' + h2s.length + ' section heading' + (h2s.length === 1 ? '' : 's') + ' (4 or more)' },
+  { code: 'direct_answer', ok: !!qaMatch || !!liveAnswer, text: 'No short direct answer (40 to 70 words) right at the start of the page' },
+  { code: 'question_headings', ok: answeredQuestions >= 3, text: answeredQuestions + ' heading' + (answeredQuestions === 1 ? '' : 's') + ' phrased as the questions readers ask (3 or more)' },
+  { code: 'table', ok: tableOk, text: 'No comparison table' },
+  { code: 'faq_last', ok: !faqLastHit(lastH2Eff), text: 'The questions section is the last section: end the page with the call to action' },
+  { code: 'internal_links', ok: internalLinks > 0 || (prev.internal_link_candidates || []).filter(c => c && !c.planned).length <= 1, text: 'No links to other pages of your website' },
+  { code: 'keyword', ok: kwCount >= 3 && density <= 2, text: kwCount < 3 ? 'The main search phrase "' + kw + '" appears ' + kwCount + ' time' + (kwCount === 1 ? '' : 's') + ' (3 or more)' : 'The main search phrase is ' + density + '% of the words (2% or less)' }
+];
+const structuralChecks = STRUCT.map(c => c.ok);
+const structure_checks = STRUCT.map(c => ({ code: c.code, ok: c.ok, ...(c.ok ? {} : { text: c.text }) }));
 const structure_pts = 25 * structuralChecks.filter(Boolean).length / structuralChecks.length;
 // FIX_PLAN G33: the 25 coverage points are measured against the best competitor's coverage (clamped 60-90%), not against a silent 100%.
 // With no competitor page read, coverage_ratio is the plain share, exactly as before.
@@ -1144,12 +1235,13 @@ return [{ json: { ...prev, output: md, qa_round: round, editor_rounds, meta: { t
     passed_copy, profile_placeholders, profile_placeholder_fields: PROFILE_PH, placeholders_total: placeholder_count + profile_placeholders,
     keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, question_headings: questionHeadings, answered_questions: answeredQuestions, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),
     source_quality: externalUrls.reduce((m, e) => ({ ...m, [e.tier]: (m[e.tier] || 0) + 1 }), {}), weak_sources_unlinked: [...new Set(weakRepeats)], links_to_add_when_published: plannedLinksQA.map(p => ({ keyword: p.keyword || '', url: p.url, role: p.role, anchor: anchorText(p) })),
-    answer_block_words: answerWords, meta_title_length: metaTitle.length, meta_description_length: metaDesc.length, meta_error, unverified_statistics: stats, unverified_figures, verified_figures,
-    trusted_sources, banned_phrases: banned_found, readability: { flesch, avg_sentence_words: avgSentence, long_sentences: longSentences, passive_pct, position: read_position, basis: read_basis, band_line: read_band_line, note: read_note,
+    answer_block_words: liveAnswer ? liveAnswer.words : answerWords, meta_title_length: metaTitle.length, meta_description_length: metaDesc.length, meta_error, unverified_statistics: stats, unverified_figures, verified_figures,
+    trusted_sources, banned_phrases: banned_found, readability: { flesch, avg_sentence_words: avgSentence, long_sentences: longSentences, longest, passive_pct, position: read_position, basis: read_basis, band_line: read_band_line, note: read_note,
       band: RBAND.ok ? { low: RBAND.low, high: RBAND.high, median: RBAND.median, p25: RBAND.p25, p75: RBAND.p75, pages_measured: RBAND.pages_measured, pages: RBAND.pages, clamped: RBAND.clamped } : null,
       band_source: RBAND.ok ? 'competitor_pages' : 'fixed', advice_only: true },   // B3-4: the band and its basis; advice, never in `warnings`
     ...(page_identity ? { page_identity } : {}),   // W07-B: the new page's title and H1 against the page the client kept, and its link to it
     intent, refresh_check,   // B3-6 (every draft) / B3-8 (a refresh: the live page against its re-read sources)
     term_coverage: termCoverage, coverage_pct, coverage: coverage_report, coverage_target_pct, missing_terms: missingTerms, missing_subtopics: missingSubtopics, specificity_per_100_words: specificity,
     critic_score: (critique || lastCritique || {}).score ?? null, critic_verdict: (critique || lastCritique || {}).verdict || null,
+    structure_checks, live: LIVE, live_adjustments,   // section 191: every structure check with its reason, and what a live page's grade did not count against it
     schema_types: blocks.map(b => b.type), eeat_notes, page_role: role, auto_fixes: fixes, warnings } } }];

@@ -706,8 +706,11 @@ let marketOC = S(d.country); if (!marketOC) { try { marketOC = S(($('Normalize I
 let aiOC = d.ai_target && typeof d.ai_target === 'object' && S(d.ai_target.question) ? d.ai_target : null;
 if (!aiOC) { try { const at0 = ($('Parse Brief').first().json || {}).ai_target; aiOC = at0 && typeof at0 === 'object' && S(at0.question) ? at0 : null; } catch (e) { aiOC = null; } }
 const DT = MODEL ? DUP.targets(d.keyword, SM.pages(MODEL), { skip: [...readKeys, improving], self: [d.ladder_target_url || ''], self_aware: true, market: marketOC }) : { targets: [], other_market: [] };
-const duplicate_targets = aiOC ? [] : DT.targets;
-const duplicate_advice = (aiOC ? DT.targets : []).map(x => ({ ...x, why: 'ai_page' })).concat((DT.other_market || []).map(x => ({ ...x, why: 'other_market' })));
+// client reports 2026-11-16 (INV1 F2 / F3): the blanket exemption of AI pages (184B) is gone. An AI page is checked on its own question's
+// search (the run's keyword) like any page, so a page of the same market that owns that search is a duplicate (techand.ai's AI guide beside
+// the ladder's page for "crm service provider in uae"); a page of another market stays advice (devaicon's UAE question beside its Pakistan page).
+const duplicate_targets = DT.targets;
+const duplicate_advice = (DT.other_market || []).map(x => ({ ...x, why: 'other_market' }));
 
 const worst = measured.filter(m => m.kind !== 'improved')[0] || null;
 const failing = worst && worst.overlap_pct > THRESHOLD ? worst : null;
@@ -749,13 +752,12 @@ for (const m of measured.filter(x => x.kind !== 'improved' && x !== failing && x
   warnings.push('Originality: ' + m.overlap_pct + '% of this draft also appears on ' + m.source + ' (under the ' + THRESHOLD + '% limit, worth a read before publishing)');
 }
 if (duplicate_targets.length) {
-  warnings.push('This site already has a page aimed at the same search: ' + duplicate_targets.map(x => x.url).join(', ')
+  warnings.push(aiOC ? 'Your page ' + duplicate_targets[0].url + ' is already the page for "' + S(d.keyword) + '". To win this AI answer, publish this text as an improvement of that page for the question rather than as a second page for the same search'
+    : 'This site already has a page aimed at the same search: ' + duplicate_targets.map(x => x.url).join(', ')
     + '. Improve that page instead of publishing a second one, or make clear in the brief how this page is different (its text could not be compared: it was not read in this run)');
 }
 
-for (const x of duplicate_advice.slice(0, 2)) warnings.push(x.why === 'ai_page'
-  ? 'Your website also has ' + x.url + ' on a close search. This page answers a question asked in AI answers, so it can stand beside it: link the two pages to each other'
-  : 'Your website also has ' + x.url + ', aimed at searches in ' + (x.places || []).join(', ') + '. This page is for another market, so it is not the same search: link the two pages to each other');
+for (const x of duplicate_advice.slice(0, 2)) warnings.push('Your website also has ' + x.url + ', aimed at searches in ' + (x.places || []).join(', ') + '. This page is for another market, so it is not the same search: link the two pages to each other');
 qa.originality = originality;
 qa.warnings = warnings;
 // CT-FIX (review item 14): the next step said "Then publish it." beside the warning that the site already has a page for this search.

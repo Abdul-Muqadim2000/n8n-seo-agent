@@ -10946,6 +10946,287 @@
      "author_bio"
     ]
    }
+  },
+  {
+   "name": "ai_question_not_folded_into_other_search",
+   "doc": "client reports 2026-11-16 (devaicon.com, INV1 F7): the AI question \"agentic ai development companies uae\" was folded into the ladder rung \"ai development companies\" (the old rule stripped every word of every ladder head and called two shared words the same search). A question is a ladder page's search only when it IS the same search, or the ladder's main page when it carries every word of the main keyword: here neither, so the AI answer page is written on top at level 3, and the rung is written as itself.",
+   "level": 3,
+   "now": "2026-10-21T10:00:00.000Z",
+   "trigger": {},
+   "tables": {
+    "sites": [
+     {
+      "site_id": "site_northwind-ai-example",
+      "domain": "northwind-ai.example",
+      "country": "United Arab Emirates",
+      "status": "active",
+      "email": "",
+      "callback_url": "https://hooks.example.com/cb",
+      "services_json": "[\"Agentic AI development\", \"AI automation services\", \"Custom AI solutions\", \"AI app development\", \"AI development for businesses\"]",
+      "declared_services": "",
+      "competitors": "",
+      "brand_names": "",
+      "business_facts": "Founded in 2018; 40 engineers; offices in Sharjah and Multan; ISO 27001 certified; AWS partner since 2021."
+     }
+    ],
+    "cadence": [
+     {
+      "site_id": "site_northwind-ai-example",
+      "domain": "northwind-ai.example",
+      "pages_per_week": 1,
+      "status": "active"
+     }
+    ],
+    "ladders": [
+     {
+      "ladder_id": "lad_aiauto",
+      "domain": "northwind-ai.example",
+      "head_keyword": "ai automation services pakistan",
+      "rung": 1,
+      "page_no": 1,
+      "keyword": "ai development companies",
+      "supporting": "",
+      "page_type": "Service Page",
+      "target_url": "https://northwind-ai.example/ai-development-companies/",
+      "page_exists": false,
+      "status": "planned",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_aiauto"
+     },
+     {
+      "ladder_id": "lad_aiauto",
+      "domain": "northwind-ai.example",
+      "head_keyword": "ai automation services pakistan",
+      "rung": 4,
+      "page_no": 0,
+      "keyword": "ai automation services pakistan",
+      "supporting": "",
+      "page_type": "Service Page",
+      "target_url": "https://northwind-ai.example/ai-automation-services-pakistan/",
+      "page_exists": true,
+      "status": "published",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_aiauto"
+     }
+    ],
+    "ladder_settings": [
+     {
+      "ladder_id": "_site",
+      "site_id": "site_northwind-ai-example",
+      "domain": "northwind-ai.example",
+      "mode": "auto",
+      "opportunities": "",
+      "max_active": 2,
+      "max_waiting": 3,
+      "autopilot_level": 3
+     }
+    ],
+    "content_log": [],
+    "query_history": [],
+    "trends": [],
+    "pages": [],
+    "ai_targets": [
+     {
+      "target_id": "ait_northwind-ai-example_q37",
+      "site_id": "site_northwind-ai-example",
+      "domain": "northwind-ai.example",
+      "question": "Who are the top agentic AI development companies in the UAE for building autonomous business agents?",
+      "keyword": "agentic ai development companies uae",
+      "kind": "answer",
+      "page_url": "",
+      "page_type": "Guide",
+      "fanout": "agentic ai companies uae",
+      "sources_json": "[]",
+      "competitors": "rival-ai.example",
+      "value": 4,
+      "status": "queued"
+     }
+    ],
+    "skips": [],
+    "monitors": [
+     {
+      "site_id": "site_northwind-ai-example",
+      "domain": "northwind-ai.example",
+      "ai_visibility": true,
+      "ai_growth": true,
+      "ai_pages_month": ""
+     }
+    ],
+    "profiles": [
+     {
+      "site_id": "site_northwind-ai-example",
+      "domain": "northwind-ai.example",
+      "author_name": "Omar Siddiqui",
+      "author_job_title": "Head of AI delivery",
+      "author_bio": "Omar leads the AI delivery team and has shipped more than 30 AI automation projects for companies in the Gulf and Pakistan."
+     }
+    ]
+   },
+   "expect": {
+    "picks": [
+     {
+      "keyword": "ai development companies",
+      "source": "ladder"
+     },
+     {
+      "keyword": "agentic ai development companies uae",
+      "source": "ai_answer"
+     }
+    ],
+    "suggestions": [],
+    "waiting_for_keyword": false,
+    "refused": []
+   }
+  },
+  {
+   "name": "app_ai_page_does_not_use_the_automatic_allowance",
+   "doc": "review 2026-11-16 (L1): since the 2026-11-16 fix an AI page the client starts in the app is logged ai_answer (request id = the app run). It is a page the client asked for on top, so it neither uses up the month's automatic AI pages nor cancels this week's automatic AI page; only the cadence's own runs (request ids cad_...) count, as before that fix.",
+   "level": 3,
+   "now": "2026-10-21T10:00:00.000Z",
+   "trigger": {},
+   "tables": {
+    "sites": [
+     {
+      "site_id": "site_northwind-ai-example",
+      "domain": "northwind-ai.example",
+      "country": "United Arab Emirates",
+      "status": "active",
+      "email": "",
+      "callback_url": "https://hooks.example.com/cb",
+      "services_json": "[\"Agentic AI development\", \"AI automation services\", \"Custom AI solutions\", \"AI app development\", \"AI development for businesses\"]",
+      "declared_services": "",
+      "competitors": "",
+      "brand_names": "",
+      "business_facts": "Founded in 2018; 40 engineers; offices in Sharjah and Multan; ISO 27001 certified; AWS partner since 2021."
+     }
+    ],
+    "cadence": [
+     {
+      "site_id": "site_northwind-ai-example",
+      "domain": "northwind-ai.example",
+      "pages_per_week": 1,
+      "status": "active"
+     }
+    ],
+    "ladders": [
+     {
+      "ladder_id": "lad_aiauto",
+      "domain": "northwind-ai.example",
+      "head_keyword": "ai automation services pakistan",
+      "rung": 1,
+      "page_no": 1,
+      "keyword": "ai development companies",
+      "supporting": "",
+      "page_type": "Service Page",
+      "target_url": "https://northwind-ai.example/ai-development-companies/",
+      "page_exists": false,
+      "status": "planned",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_aiauto"
+     },
+     {
+      "ladder_id": "lad_aiauto",
+      "domain": "northwind-ai.example",
+      "head_keyword": "ai automation services pakistan",
+      "rung": 4,
+      "page_no": 0,
+      "keyword": "ai automation services pakistan",
+      "supporting": "",
+      "page_type": "Service Page",
+      "target_url": "https://northwind-ai.example/ai-automation-services-pakistan/",
+      "page_exists": true,
+      "status": "published",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_aiauto"
+     }
+    ],
+    "ladder_settings": [
+     {
+      "ladder_id": "_site",
+      "site_id": "site_northwind-ai-example",
+      "domain": "northwind-ai.example",
+      "mode": "auto",
+      "opportunities": "",
+      "max_active": 2,
+      "max_waiting": 3,
+      "autopilot_level": 3
+     }
+    ],
+    "content_log": [
+     {
+      "site_id": "site_northwind-ai-example",
+      "domain": "northwind-ai.example",
+      "keyword": "best ai automation services dubai",
+      "source": "ai_answer",
+      "page_type": "Guide",
+      "existing_page_url": "",
+      "rung": 0,
+      "ladder_id": "",
+      "request_id": "13215",
+      "started_at": "2026-10-20T09:00:00.000Z",
+      "status": "written",
+      "published_url": "",
+      "published_at": "",
+      "week": "2026-10-20",
+      "qa_reasons": "",
+      "publish_note": ""
+     }
+    ],
+    "query_history": [],
+    "trends": [],
+    "pages": [],
+    "ai_targets": [
+     {
+      "target_id": "ait_northwind-ai-example_q37",
+      "site_id": "site_northwind-ai-example",
+      "domain": "northwind-ai.example",
+      "question": "Who are the top agentic AI development companies in the UAE for building autonomous business agents?",
+      "keyword": "agentic ai development companies uae",
+      "kind": "answer",
+      "page_url": "",
+      "page_type": "Guide",
+      "fanout": "agentic ai companies uae",
+      "sources_json": "[]",
+      "competitors": "rival-ai.example",
+      "value": 4,
+      "status": "queued"
+     }
+    ],
+    "skips": [],
+    "monitors": [
+     {
+      "site_id": "site_northwind-ai-example",
+      "domain": "northwind-ai.example",
+      "ai_visibility": true,
+      "ai_growth": true,
+      "ai_pages_month": ""
+     }
+    ],
+    "profiles": [
+     {
+      "site_id": "site_northwind-ai-example",
+      "domain": "northwind-ai.example",
+      "author_name": "Omar Siddiqui",
+      "author_job_title": "Head of AI delivery",
+      "author_bio": "Omar leads the AI delivery team and has shipped more than 30 AI automation projects for companies in the Gulf and Pakistan."
+     }
+    ]
+   },
+   "expect": {
+    "picks": [
+     {
+      "keyword": "ai development companies",
+      "source": "ladder"
+     },
+     {
+      "keyword": "agentic ai development companies uae",
+      "source": "ai_answer"
+     }
+    ],
+    "suggestions": [],
+    "waiting_for_keyword": false,
+    "refused": []
+   }
   }
  ]
 }

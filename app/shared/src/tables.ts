@@ -206,6 +206,9 @@ export interface AiTargetRow extends DtRow {
   /** AIR (2026-11-06, CONTRACTS.md §2.1; absent before the engine adds them): 'ai_rank' for a row AI ranking wrote (null = an AI growth row), the action
    *  it came from, and when its page went live (the clock of the action's test) */
   origin?: string | null; action_id?: string | null; live_at?: string | null;
+  /** client report 2026-11-16 (CONTRACT_ISSUE1.md §3; absent before the engine adds them): why the row is in its state, as a code, and the
+   *  values its sentence names ({ page_url, keyword, date, score, value_rank, market }, JSON text). `reason` stays for older rows */
+  reason_code?: string | null; reason_args?: string | null;
 }
 /** v4.12: one row per site and weekly AI growth run */
 export interface AiGrowthRow extends DtRow {

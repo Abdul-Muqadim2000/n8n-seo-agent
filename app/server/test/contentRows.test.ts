@@ -82,6 +82,8 @@ describe('a live page on the Content page', () => {
     expect(liveCheckFor({ request_id: '6661', keyword: 'Banking & Financial Services Technology' }, checks)).toEqual({ at: '2026-11-10T10:03:31Z', passed: 9, total: 16, failed: ['Title tag uses the keyword', 'At least 2 content images'], url: `${D}/services/industries-bfsi`, reportId: 'newest', live: true });
     // a row whose request id has no check: its keyword (a re-check started from the board sends the keyword only)
     expect(liveCheckFor({ request_id: 'cad_x', keyword: 'engagement models' }, checks)?.reportId).toBe('other');
+    // client reports 2026-11-16: the content images the check found in the article travel with it when the check read them
+    expect(liveCheckFor({ request_id: '6661', keyword: '' }, [check({ imagesFound: 0 })])).toMatchObject({ imagesFound: 0 });
     expect(liveCheckFor({ request_id: '', keyword: 'cloud migration' }, checks)).toBeNull();
     // a check that measured nothing (no checks, page opened) is no reading; one that could not open the page says so
     expect(liveCheckFor({ request_id: '6661', keyword: '' }, [check({ total: 0, passed: 0 })])).toBeNull();

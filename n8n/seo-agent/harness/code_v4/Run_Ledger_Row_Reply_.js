@@ -77,4 +77,6 @@ return [{ json: { run_id: String($execution.id), key: __key, mode: MODE, est_usd
     ) + (freeRows ? '; ' + freeRows + ' free-only site(s) reserve nothing (no paid API, no model call)' : ''),
   // B-A5 (2026-10-15, build section 62): filled in by the settle — when it settled, what the account read then, and whether the figure
   // the row carries is the account's ('account') or the run's own tasks' ('tasks').
-  settled_at: '', dfs_balance_end: 0, dfs_source: 'tasks' } }];
+  settled_at: '', dfs_balance_end: 0, dfs_source: 'tasks',
+  // P1 (2026-11-12): only a page run of the main workflow takes a writing slot; this row is never one
+  page: false, request_id: '', keyword: '', queued_at: '' } }];

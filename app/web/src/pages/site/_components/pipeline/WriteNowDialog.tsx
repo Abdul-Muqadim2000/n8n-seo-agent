@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { PenSquare } from 'lucide-react';
-import { contentReadiness, readinessPage, urlOnHost, type QueueItem, type Site } from '@seo/shared';
+import { aiFormPageType, aiTargetInput, contentReadiness, readinessPage, urlOnHost, type QueueItem, type Site } from '@seo/shared';
 import { PRICES } from '@/lib/prices';
 import { formatCredits } from '@/lib/credits';
 import { Button, ButtonLink } from '@/components/ui/button';
@@ -46,25 +46,15 @@ const SOURCE_WHAT: Record<QueueItem['source'], string> = {
  */
 export function writeNowRequest(item: WriteNowItem, site: Pick<Site, 'id' | 'domain' | 'country' | 'tone' | 'goal'>) {
   const existing = item.existingPageUrl && urlOnHost(item.existingPageUrl, site.domain) ? item.existingPageUrl : '';
-  const t = item.aiTarget;
-  // the run's AI target takes the schema's shape (the server checks the lengths again)
-  const aiTarget =
-    t && t.question && t.question.trim().length >= 8
-      ? {
-          question: t.question.trim().slice(0, 300),
-          kind: t.kind === 'refresh' ? ('refresh' as const) : ('answer' as const),
-          targetId: (t.targetId ?? '').slice(0, 120),
-          fanout: (t.fanout ?? []).filter(Boolean).slice(0, 8),
-          sources: (t.sources ?? []).filter((x) => /^https?:\/\//.test(x.url)).slice(0, 6).map((x) => ({ url: x.url.slice(0, 300), title: (x.title ?? '').slice(0, 140) })),
-          competitors: (t.competitors ?? []).filter(Boolean).slice(0, 8),
-        }
-      : null;
+  // the run's AI target takes the schema's shape (the shared resolver's rule; the server checks the lengths again). Client report 2026-11-16:
+  // an AI page's type is one the form accepts ("Comparison Page" is a guide, never the service-page default)
+  const aiTarget = aiTargetInput(item.aiTarget ?? null);
   return {
     mode: 'keyword' as const,
     siteId: site.id,
     keyword: item.keyword,
     country: site.country,
-    pageType: asPageType(item.pageType),
+    pageType: aiTarget ? aiFormPageType(item.pageType, { kind: existing || aiTarget.kind === 'refresh' ? 'refresh' : 'answer', pageUrl: existing }) : asPageType(item.pageType),
     existingPageUrl: existing,
     tone: site.tone,
     goal: site.goal,

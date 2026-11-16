@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 import {
+  deliveredGradeOf,
   duplicatePagesOf,
   interpretLiveGrade,
   liveGradeBody,
@@ -21,7 +22,7 @@ import { db, schema } from '../db';
 import type { PageReviewRow, ReportRow, SiteRow } from '../db/schema';
 import { finalizeCall, siteRows, type AssessCallResult } from '../n8n/client';
 import { liveTargetFor, publishChecks, writtenPageRows, type PublishCheckRef } from './data';
-import { duplicateDecisionBody, duplicateDecisionOf, siteReviews, type PageRef, type SiteReviews } from './pageReview';
+import { duplicateDecisionBody, duplicateDecisionOf, runAiTargetOf, siteReviews, type PageRef, type SiteReviews } from './pageReview';
 
 // Client reports 2026-11-11 (devaicon.com: "I published the pages after fixing every issue the tool listed, but the card still shows the
 // old score of the page: the page check does not check the score of the page"). The card's grade was the grade of the version WE delivered;
@@ -79,7 +80,7 @@ export function pagesToGrade(o: { logs: ContentLogRow[]; reviews: Pick<SiteRevie
 }
 
 /** The request for one page (pure): the finalize body of its newest version with no answers, plus the live address. */
-export function liveGradeRequest(o: { site: Pick<SiteRow, 'domain' | 'businessFacts' | 'factAnswers'>; original: Pick<ReportRow, 'payload'>; final: Pick<ReportRow, 'payload'> | null; row: Pick<PageReviewRow, 'answers'> | null; check: PublishCheckRef; requestId: string }): LiveGradeBody {
+export function liveGradeRequest(o: { site: Pick<SiteRow, 'domain' | 'businessFacts' | 'factAnswers'>; original: Pick<ReportRow, 'payload'>; final: Pick<ReportRow, 'payload'> | null; row: Pick<PageReviewRow, 'answers'> | null; check: PublishCheckRef; requestId: string; aiTarget?: Record<string, unknown> | null }): LiveGradeBody {
   const original = obj(o.original.payload);
   const decision = duplicateDecisionOf(o.row?.answers ?? null);
   return liveGradeBody({
@@ -91,6 +92,7 @@ export function liveGradeRequest(o: { site: Pick<SiteRow, 'domain' | 'businessFa
     businessFacts: o.site.businessFacts ?? '',
     facts: (o.site.factAnswers ?? {}) as FactAnswers,
     duplicateDecision: decision && duplicatePagesOf(original).length ? duplicateDecisionBody(decision) : null,
+    aiTarget: o.aiTarget ?? null,
     check: o.check,
   });
 }
@@ -103,6 +105,8 @@ export interface LiveGradeDeps {
   reviews: (orgId: string, site: SiteRow) => Promise<Pick<SiteReviews, 'pageFor' | 'rowOf'>>;
   checks: (orgId: string, siteId: string) => Promise<PublishCheckRef[]>;
   report: (orgId: string, id: string) => Promise<ReportRow | null>;
+  /** client reports 2026-11-16: the AI target of the run that wrote the page, when its report's page run has none (optional in tests) */
+  aiTarget?: (orgId: string, original: ReportRow) => Promise<Record<string, unknown> | null>;
   /** the page's review row, created when nobody opened the review yet */
   ensureRow: (orgId: string, siteId: string, originalId: string) => Promise<PageReviewRow | null>;
   call: (body: LiveGradeBody, orgId: string) => Promise<AssessCallResult>;
@@ -133,6 +137,7 @@ const defaultDeps: LiveGradeDeps = {
     await db.insert(schema.pageReviews).values({ orgId, siteId, reportId: originalId }).onConflictDoNothing({ target: schema.pageReviews.reportId });
     return (await db.query.pageReviews.findFirst({ where: and(eq(schema.pageReviews.orgId, orgId), eq(schema.pageReviews.reportId, originalId)) })) ?? null;
   },
+  aiTarget: (orgId, original) => runAiTargetOf(orgId, original),
   call: (body, orgId) => finalizeCall(body as unknown as P, orgId, LIVE_GRADE_TIMEOUT_MS),
   // the review's own activity time (updated_at) is left as it is: grading the live page is not something the client did
   store: async (rowId, grade, at) => {
@@ -226,9 +231,12 @@ async function gradeOne(orgId: string, site: SiteRow, t: LiveGradeTarget, deps: 
   const row = t.row ?? (await deps.ensureRow(orgId, site.id, original.id));
   if (!row) return { kind: 'skip', pause: 'page', why: 'the review row could not be made' };
   const final = row.finalReportId ? await deps.report(orgId, row.finalReportId) : null;
-  const body = liveGradeRequest({ site, original, final, row, check: t.check, requestId: `app-live-${randomUUID()}` });
+  const aiTarget = deps.aiTarget ? await deps.aiTarget(orgId, original).catch(() => null) : null;
+  const body = liveGradeRequest({ site, original, final, row, check: t.check, requestId: `app-live-${randomUUID()}`, aiTarget });
   const outcome = interpretLiveGrade(await deps.call(body, orgId));
   if (outcome.kind === 'skip') return outcome;
+  // client reports 2026-11-16: the version the live page is compared with (the newest one we delivered: its exact grade and parts)
+  if (outcome.kind === 'graded') outcome.grade.delivered = deliveredGradeOf(obj((final ?? original).payload));
   // live_graded_at = the time of the publish check this attempt covers (not the clock): a check that arrives while the engine grades is newer
   // and is graded next
   const covered = new Date(t.check.receivedAt);

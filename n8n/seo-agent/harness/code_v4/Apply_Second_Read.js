@@ -1682,7 +1682,9 @@ const GR = (() => {
     const ownText = S(c.own_text).toLowerCase();
     const U = units(md).filter(u => u.kind !== 'heading' && !u.qa);
     const linkTier = (u) => { const h = hostOf(u); if (!h || own(h) || SOCIAL.test(h)) return null; return tier ? tier(u) : 'weak'; };
-    const linksOf = (t) => [...S(t).matchAll(/\[([^\[\]]*)\]\((https?:\/\/[^)\s]+)\)/g)].map(m => ({ url: m[2], tier: linkTier(m[2]) })).filter(x => x.tier);
+    // section 191: an image ("![alt](url)") is never a citation: a live page's hero loaded from another website read as a weak source; review L2:
+    // a linked image ("[![badge](img)](url)", a logo or a card) is no citation either: its link has no words
+    const linksOf = (t) => [...S(t).replace(/\[\s*!\[[^\]]*\]\([^)]*\)\s*\]\([^)]*\)/g, ' ').replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').matchAll(/\[([^\[\]]*)\]\((https?:\/\/[^)\s]+)\)/g)].map(m => ({ url: m[2], tier: linkTier(m[2]) })).filter(x => x.tier);
     const paraLinks = new Map(); for (const u of U) { const k = u.section + ':' + u.para; const ls = linksOf(u.text); if (ls.length) paraLinks.set(k, (paraLinks.get(k) || []).concat(ls)); }
     // H1: the client's own phone and address on file (own_text: Content QA adds the profile's and the site model's NAP) are theirs in any
     // spelling: the run of digits a figure sits in (spaces, dots, dashes and brackets between them) equals one on file, or the two share
@@ -1747,16 +1749,20 @@ const GR = (() => {
     const exempt = ex0 ? ex0[1].trim() : caseStudy ? 'a case study: its keyword is the case name' : aiPage ? 'a page written to be cited in AI answers'
       : refresh ? 'a refresh of a page your website already has' : ladder ? 'a page of your keyword ladder: the ladder checked its main keyword when it was planned' : '';
     const automatic = /^(cadence|ladder|tracker|casestudy|audit):/i.test(S(p.client_ip));
-    return { verdict_score: score, withheld, acknowledged: ack, exempt, automatic };
+    return { verdict_score: score, withheld, acknowledged: ack, exempt, automatic, ai: aiPage };
   };
   const fit = (f0, dup, max) => {
     const f = f0 || {}; const sc = num(f.verdict_score); const D = dup || {}; const M = Number.isFinite(Number(max)) ? Number(max) : MAX.fit; const half = M / 2;
-    const vp = sc == null || sc >= CFG.verdict_bar ? half : sc >= 30 ? half * SHARE.verdict_partial : 0;
+    // client reports 2026-11-16 (INV1 F10): a page written for an AI question was chosen for the question, not for search volume, so a low
+    // verdict does not cut its fit (devaicon's AI guide sat at 59, its fit capped by the verdict on the broad topic). Only while no duplicate is
+    // open: an AI page beside the page that owns its search keeps both limits.
+    const aiFree = !!f.ai && !D.open && !D.differs;
+    const vp = sc == null || sc >= CFG.verdict_bar || aiFree ? half : sc >= 30 ? half * SHARE.verdict_partial : 0;
     const dp = D.open || D.differs ? 0 : half;
     let pts = vp + dp; const caps = [];
-    if (sc != null && sc < CFG.verdict_bar && pts > M * SHARE.fit_verdict) { pts = M * SHARE.fit_verdict; caps.push({ dim: 'fit', share: SHARE.fit_verdict, why: 'our verdict scored this search ' + sc + ' out of 100, under ' + CFG.verdict_bar }); }
+    if (sc != null && sc < CFG.verdict_bar && !aiFree && pts > M * SHARE.fit_verdict) { pts = M * SHARE.fit_verdict; caps.push({ dim: 'fit', share: SHARE.fit_verdict, why: 'our verdict scored this search ' + sc + ' out of 100, under ' + CFG.verdict_bar }); }
     if ((D.open || D.differs) && pts > M * SHARE.fit_duplicate) { pts = M * SHARE.fit_duplicate; caps.push({ dim: 'fit', share: SHARE.fit_duplicate, why: D.open ? 'your website already has a page for this search' : 'published beside the page your website has for this search' }); }
-    const band = sc == null ? 'not_checked' : sc >= CFG.verdict_bar ? 'full' : sc >= 30 ? 'partial' : 'none';
+    const band = sc == null ? 'not_checked' : sc >= CFG.verdict_bar || aiFree ? 'full' : sc >= 30 ? 'partial' : 'none';
     const note = sc == null ? 'Fit not checked: ' + (f.withheld ? 'the verdict could not score this search' : 'no verdict score was kept with this page') + ', so fit takes its full points'
       : 'Our verdict scored this search ' + sc + ' out of 100' + (sc < CFG.verdict_bar ? (f.acknowledged ? ', and you chose to write it anyway' : f.exempt ? ' (' + f.exempt + ')' : '') : '');
     return { points: r1(pts), verdict_points: r1(vp), duplicate_points: r1(dp), band, caps, note };
@@ -1888,18 +1894,20 @@ const GR = (() => {
   };
   // the delivered status: a page with no blocker that fails a floor is "Needs work: <parts>", never "Ready to publish". It stays publishable
   // (nothing stops the client): the status and label change, the items say what to improve, and a not-ready page is left as it is.
-  const deliver = (del0, grade) => {
+  // section 191: o.live = the grade of the LIVE page (finalize `grade_only`): the client changes it on the website, there is no editor round
+  const deliver = (del0, grade, o) => {
+    const live = !!(o && o.live);
     const del = { ...(del0 || {}) }; const fl = (grade || {}).floors || null;
     if (!fl || fl.ok || del.status === 'not_ready') return del;
     const parts = fl.failing.map(x => x.label);
     return { ...del, status: 'needs_work', label: clean('Needs work: ' + parts.join(', ')),
       needs_work: fl.failing.map(x => ({ code: 'needs_work', dim: x.dim, text: clean(x.label.charAt(0).toUpperCase() + x.label.slice(1) + ' scored ' + x.points + ' of ' + x.max + ', under half its points'), action: x.fix })),
-      next_step: clean('Nothing stops you publishing this page, but ' + (parts.length === 1 ? 'one part is' : parts.length + ' parts are') + ' under half marks (' + parts.join(', ') + '). '
-        + fl.failing.map(x => x.fix.replace(/[.\s]+$/, '')).join('. ') + '. Change it in the editor and make the final version, or approve it as it is.') };
+      next_step: clean((live ? 'Your live page has ' : 'Nothing stops you publishing this page, but ') + (parts.length === 1 ? 'one part' + (live ? '' : ' is') : parts.length + ' parts' + (live ? '' : ' are')) + ' under half marks (' + parts.join(', ') + '). '
+        + fl.failing.map(x => x.fix.replace(/[.\s]+$/, '')).join('. ') + (live ? '. Change it on your website, then press Re-check.' : '. Change it in the editor and make the final version, or approve it as it is.')) };
   };
   const display = (n) => n == null || n === '' || !Number.isFinite(Number(n)) ? '' : Math.round(Number(n)) >= CFG.display_top ? CFG.display_top + '+' : String(Math.round(Number(n)));
   const basis = 'structure 20 (a statement made three or more times and one label for two lists cost points), topic coverage 15, readability 10, specificity 10, plain language 10, sources 15, fit with the search 20; length is advice only';
-  return { VERSION, MAX, DIMS, LABEL, SHARE, CFG, REVIEW_DIM, REVIEW_PTS, reviewCut, units, repetition, ideas, listLabels, sources, fitOf, fit, removedCap, local, cap, deliver, display, basis };
+  return { VERSION, MAX, DIMS, LABEL, SHARE, CFG, REVIEW_DIM, REVIEW_PTS, reviewCut, units, repetition, ideas, listLabels, sources, fitOf, fit, removedCap, local, cap, deliver, display, basis, FIX, clean };
 })();
 // W0-H (2026-10-29, page-quality PLAN Fix 3b; build section 158): what the blind second read found, on the delivered page. A high-severity
 // problem whose quoted words are on the page and that is a factual error the page states (W05-A, wave 0.5: a count that does not match its

@@ -325,6 +325,8 @@ export interface ContentLiveCheck {
   reportId: string;
   /** false: the check could not open the live page */
   live: boolean;
+  /** client reports 2026-11-16: the content images the check found in the article (null: a check made before it read the article) */
+  imagesFound?: number | null;
 }
 
 export interface CaseStudy {
@@ -653,10 +655,24 @@ export interface AiTargetStat {
   stage: string;
   value: number;
   status: string;
+  /** client report 2026-11-16 (issue 1, F11): the plain sentence for the client (ai-target-status.ts), never the engine's own text */
   reason: string;
   writtenAt: string;
   wonAt: string;
   updatedAt: string;
+  /** the panel question it is for (seo_ai_targets.prompt_id) */
+  promptId?: string;
+  /** F8 / F11: the state derived with the content log (a published page shows as live), its badge and tone, the page it is about */
+  state?: import('./ai-target-status').AiTargetState;
+  badge?: string;
+  tone?: import('./ai-target-status').AiTargetTone;
+  statePageUrl?: string;
+  /** answered by a keyword ladder page (one search, one page) */
+  viaLadder?: boolean;
+  /** listed nowhere as a question to win (AI already names the business for it) */
+  hidden?: boolean;
+  /** the engine's own reason, for platform admins only (absent for everyone else) */
+  adminReason?: string;
 }
 /** v4.12: a third-party page AI cites without naming the business (earned media) */
 export interface AiEarnedPage {
@@ -708,7 +724,9 @@ export interface AiData {
     competitors: { domain: string; mentions: number; share: number; auto: boolean }[];
     sources: { domain: string; citations: number; engines: string[]; topics: string[]; kind: string }[];
     pages: { url: string; citations: number; engines: string[] }[];
-    gaps: { prompt: string; competitors: string[]; sources: string[]; volume: number | null; stage: string; cluster: string; fanout: string[] }[];
+    gaps: { prompt: string; competitors: string[]; sources: string[]; volume: number | null; stage: string; cluster: string; fanout: string[];
+      /** client report 2026-11-16 (issue 1): the question's id and own search, its topic, kind, the stored target's status and page (a newer engine; absent before) */
+      promptId?: string; keyword?: string; topic?: string; kind?: string; targetStatus?: string; pageUrl?: string }[];
     traffic: AiTraffic | null;
     access: AiAccess | null;
     perception: AiPerception | null;
@@ -783,6 +801,9 @@ export interface AiData {
   alertRules?: import('./ai-trends').AiAlertRule[];
   /** v4.12 (n8n/seo-agent/AI_GROWTH_SPEC.md): the weekly AI growth loop, null until its first run */
   growth: AiGrowth | null;
+  /** client report 2026-11-16 (issue 1): the pages the website has from us (content log), with the AI question the app's run carried, so every
+   *  "write a page for this question" button knows a page already written for it (ai-question-action.ts) */
+  pagesWritten?: import('./ai-question-action').AiWrittenPage[];
   /** AIR (2026-11-06): the AI-ranking plan of a website in `on` mode (its newest on-mode run and open actions). Absent or null: the website is
    *  off or in its private trial, or the engine has no run yet; the page then shows nothing new */
   aiRank?: AiRankPlanData | null;
@@ -791,7 +812,9 @@ export interface AiData {
     receivedAt: string;
     brief: { headline?: string; summary?: string } | null;
     /** question x engine grid: engine key -> 'mentioned' | 'cited' | 'absent' | 'none' | 'error' | 'monthly' */
-    questions: { promptId: string; prompt: string; kind: string; topic: string; won: boolean; engines: Record<string, string>; competitors: string[]; sources: string[]; stage: string; volume: number | null; winRate: number | null; samples: number;
+    questions: { promptId: string; prompt: string; kind: string; topic: string; won: boolean;
+      /** client report 2026-11-16 (issue 1): the question's own search (a newer engine; '' before) */
+      keyword?: string; engines: Record<string, string>; competitors: string[]; sources: string[]; stage: string; volume: number | null; winRate: number | null; samples: number;
       /** A15: the engine's own verdict on the question's rate (range, floor, why), passed through */
       win?: { ci: [number, number] | null; enough: boolean | null; why: string } | null }[];
     actions: EngineAction[];
@@ -1227,7 +1250,11 @@ export interface PipelineData {
   /** this website's runs started in the app that have not finished */
   activeRuns: { id: string; mode: import('./constants').ModeId; keyword: string; createdAt: string }[];
   /** pages written for this website (content log + ladder pages being written or published), newest first */
-  written: { keyword: string; status: 'started' | 'writing' | 'published'; startedAt: string; publishedUrl: string; source: string }[];
+  written: {
+    keyword: string; status: 'started' | 'writing' | 'published'; startedAt: string; publishedUrl: string; source: string;
+    /** client report 2026-11-16 (issue 1): the AI question the app's run that wrote it carried (its target id and question), when known */
+    aiTargetId?: string; aiQuestion?: string;
+  }[];
   /** keyword ladders with the pages still to write */
   ladders: {
     id: string;

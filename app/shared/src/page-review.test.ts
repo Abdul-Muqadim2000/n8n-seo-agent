@@ -383,7 +383,7 @@ describe('the editor: sanitising and safe HTML', () => {
     expect(pre).toContain('<span class="img-ph-name">hero.webp</span>');
     expect(pre).toContain('<span class="img-ph-name">o.png</span>');
     expect(pre).toContain('Image not shown (not a secure https address)');
-    expect(renderMarkdown(md)).toContain('<img src="images/hero.webp" alt="Hero" title="Hero" loading="lazy">');
+    expect(renderMarkdown(md)).toContain('<img src="images/hero.webp" alt="Hero" title="Hero" loading="eager" fetchpriority="high">');   // client reports 2026-11-16: the hero loads first
     expect(previewableImage('https://a.example/x.png')).toBe(true);
     expect(previewableImage('https:///x.png')).toBe(false);
     expect(previewableImage('//a.example/x.png')).toBe(false);
@@ -420,6 +420,19 @@ describe('the editor: sanitising and safe HTML', () => {
     expect(html).toContain('<blockquote><p>quoted</p></blockquote>');
     expect(renderMarkdown('a <img src=x onerror=alert(1)> & b')).toBe('<p>a  &amp; b</p>');
     expect(renderMarkdown('[x](javascript:alert(1))')).toBe('<p>x</p>');
+  });
+  it('client reports 2026-11-16: the final HTML keeps every image\'s width and height from the page\'s image list; the hero loads first, the others lazily; the preview is unchanged', () => {
+    const md = '# Agents\n\n![Hero](images/agents-hero.webp)\n\nText.\n\n![Matrix](images/agents-matrix.webp "Where to start")\n\n![Flow](images/agents-flow.webp)\n\n![Other](https://cdn.novaand-demo.com/other.png)';
+    const images = [{ path: 'images/agents-hero.webp', width: 1200, height: 675, slot: 1 }, { path: 'images/agents-matrix.webp', width: 1000, height: 600, slot: 2 }, { filename: 'agents-flow.webp', width: '1000', height: '600', slot: 3 }];
+    const html = renderArticleHtml(md, [], images);
+    expect(html).toContain('<img src="images/agents-hero.webp" alt="Hero" width="1200" height="675" loading="eager" fetchpriority="high">');
+    expect(html).toContain('<img src="images/agents-matrix.webp" alt="Matrix" title="Where to start" width="1000" height="600" loading="lazy" decoding="async">');
+    expect(html).toContain('<img src="images/agents-flow.webp" alt="Flow" width="1000" height="600" loading="lazy" decoding="async">');
+    expect(html).toContain('<img src="https://cdn.novaand-demo.com/other.png" alt="Other" loading="lazy" decoding="async">');   // no size known: none invented
+    expect(html.match(/fetchpriority/g)).toHaveLength(1);
+    const pre = renderMarkdown(md, { preview: true, images });
+    expect(pre).not.toMatch(/width=|fetchpriority|decoding/);
+    expect(pre).toContain('<img src="https://cdn.novaand-demo.com/other.png" alt="Other" loading="lazy">');
   });
   it('the final HTML carries the JSON-LD with no way to close its script', () => {
     const html = renderArticleHtml('# H', PAYLOAD_READY_Q.meta.schema_blocks);

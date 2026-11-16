@@ -490,7 +490,15 @@ export function cadenceDetail(next: QueueItem[], plan: CadenceWeek, build: Pick<
 }
 
 /** Pages already written for the website: published ones at any age, the others for 180 days (newest first, one per keyword). */
-export function writtenPages(logs: ContentLogRow[], ladders: LadderRow[], now = Date.now(), failedRequests?: ReadonlySet<string>): PipelineData['written'] {
+export function writtenPages(
+  logs: ContentLogRow[],
+  ladders: LadderRow[],
+  now = Date.now(),
+  failedRequests?: ReadonlySet<string>,
+  /** client report 2026-11-16 (issue 1): the app's page runs that carried an AI question, so a page written for that question is known as its page */
+  aiRuns?: readonly { requestId?: string | null; aiTargetId?: string; aiQuestion?: string }[],
+): PipelineData['written'] {
+  const aiOf = new Map((aiRuns ?? []).filter((r) => r.requestId && r.aiQuestion).map((r) => [String(r.requestId), { aiTargetId: r.aiTargetId ?? '', aiQuestion: r.aiQuestion ?? '' }]));
   // W06-B (WAVE05 3.2, K4): a page run that failed wrote no page. On "Start it again" the app said "A page for ... was already written ...
   // waiting to be published" about the run that had just failed. Its row is left out, and so is a ladder row the app moved to `writing` for
   // that run while no other row of the keyword says a page exists or is on its way.
@@ -505,7 +513,9 @@ export function writtenPages(logs: ContentLogRow[], ladders: LadderRow[], now = 
         status: (l.status === 'published' ? 'published' : 'started') as 'published' | 'started',
         startedAt: l.started_at || '',
         publishedUrl: l.published_url || '',
-        source: String(l.request_id || '').startsWith('cad_') ? 'cadence' : l.source || 'app',
+        // an AI page keeps its kind (ai_answer / ai_refresh) even when the weekly pages wrote it: the form's notice reads it
+        source: /^ai_/.test(String(l.source || '')) ? String(l.source) : String(l.request_id || '').startsWith('cad_') ? 'cadence' : l.source || 'app',
+        ...(aiOf.get(String(l.request_id || '')) ?? {}),
       })),
     ...ladders
       // A-20 (F-A1): `written` / `not_ready` are a ladder row whose page run finished; here they are a page that exists and is not live
@@ -1051,7 +1061,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     // a schedule run covers this website only while its automation is on for it
     running: runningHere,
     activeRuns: ownRuns,
-    written: writtenPages(logs, ladders, Date.now(), failedReq),
+    written: writtenPages(logs, ladders, Date.now(), failedReq, app.runs),
     ladders: ladderSummaries(ladders),
     ladderCards: build.cards,
     needsYou,

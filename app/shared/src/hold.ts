@@ -4,6 +4,7 @@
 // `hold: { score, threshold, kinds, reasons, alternatives, duplicates, rule, next, mode }`. A run the cadence or a ladder started is only
 // checked in trial ("shadow") mode for now (owner decision D17): its page is written and the report carries `hold_shadow`.
 // This file reads both for every screen (the report, Needs you, the summaries) and builds the three buttons' form values.
+import { aiTargetInput, type AiTargetInput } from './ai-question-action';
 import { HOLD_CHECK_USD } from './cost';
 
 export const HOLD_THRESHOLD = 50;
@@ -38,13 +39,17 @@ export interface HoldLadderInput {
   pageNo: number;
 }
 export interface HoldAlternative {
-  kind: 'improve' | 'retarget' | 'rung';
+  /** `ai_refresh` (client reports 2026-11-16, issue 1): a page written for an AI question whose search a page of the same market already owns;
+   *  the engine proposes improving that page FOR the question (the same AI target, kind refresh), first */
+  kind: 'ai_refresh' | 'improve' | 'retarget' | 'rung';
   label: string;
   keyword: string;
   url: string;
   pageType: string;
   ladderId: string;
   why: string;
+  /** ai_refresh: the AI target the improved page is written for (kind refresh); null otherwise */
+  aiTarget?: AiTargetInput | null;
 }
 export interface HoldInfo {
   /** true: nothing was written, the client decides; false: trial mode, the page was written and this only says what would have been asked */
@@ -115,17 +120,23 @@ export function holdOf(payload: P | null | undefined): HoldInfo | null {
     reasons: arr(h.reasons).map(str).filter(Boolean).slice(0, 4),
     alternatives: arr(h.alternatives)
       .map(obj)
-      .filter((a) => a.kind === 'improve' || a.kind === 'retarget' || a.kind === 'rung')
-      .map((a) => ({
-        kind: a.kind as HoldAlternative['kind'],
-        label: str(a.label),
-        keyword: str(a.keyword),
-        url: /^https?:\/\//i.test(str(a.url)) ? str(a.url) : '',
-        pageType: str(a.page_type),
-        ladderId: str(a.ladder_id),
-        why: str(a.why),
-      }))
-      .filter((a) => (a.kind === 'improve' ? !!a.url : !!a.keyword))
+      .filter((a) => a.kind === 'ai_refresh' || a.kind === 'improve' || a.kind === 'retarget' || a.kind === 'rung')
+      .map((a): HoldAlternative => {
+        const url = /^https?:\/\//i.test(str(a.url)) ? str(a.url) : /^https?:\/\//i.test(str(a.existing_page_url)) ? str(a.existing_page_url) : '';
+        return {
+          kind: a.kind as HoldAlternative['kind'],
+          label: str(a.label),
+          keyword: str(a.keyword),
+          url,
+          pageType: str(a.page_type),
+          ladderId: str(a.ladder_id),
+          why: str(a.why),
+          ...(a.kind === 'ai_refresh' ? { aiTarget: aiTargetInput(a.ai_target, { kind: 'refresh' }) } : {}),
+        };
+      })
+      .filter((a) => (a.kind === 'improve' || a.kind === 'ai_refresh' ? !!a.url : !!a.keyword))
+      // the improvement of the page that owns the question's search comes first, whatever order an engine sent
+      .sort((a, b) => Number(b.kind === 'ai_refresh') - Number(a.kind === 'ai_refresh'))
       .slice(0, 3),
     duplicates: arr(h.duplicates).map(obj).map((d) => ({ url: str(d.url), title: str(d.title) })).filter((d) => /^https?:\/\//i.test(d.url)).slice(0, 3),
     rule: str(h.rule) || HOLD_RULE,
@@ -145,7 +156,7 @@ export function holdTitle(keyword: string, h: Pick<HoldInfo, 'score' | 'kinds'> 
 }
 
 export interface HoldButton {
-  id: 'write_anyway' | 'improve' | 'retarget' | 'rung';
+  id: 'write_anyway' | 'ai_refresh' | 'improve' | 'retarget' | 'rung';
   label: string;
   why: string;
   /** the Write a page form's values (app/web tools/forms/research.tsx KeywordForm) */
@@ -159,13 +170,29 @@ export interface HoldButton {
  * ladder the report names with page number 0): the run then carries force_content and the ladder fields (payload.ts), the server adds the
  * planned address and the links (runs.ts ladderPageContext) and the ladder row and content log follow the page.
  */
-export function holdButtons(h: HoldInfo, base: { keyword: string; pageType?: string; country?: string; ladder?: HoldLadderInput | null }): HoldButton[] {
+export function holdButtons(
+  h: HoldInfo,
+  base: { keyword: string; pageType?: string; country?: string; ladder?: HoldLadderInput | null; aiTarget?: AiTargetInput | null },
+): HoldButton[] {
   const common = (pageType?: string) => ({ ...(base.country ? { country: base.country } : {}), ...(pageType ? { pageType } : {}) });
   const out: HoldButton[] = [];
+  // client reports 2026-11-16 (issue 1): a page held while it was written for an AI question keeps that question on every button that writes
+  // for it (the held run's own target when the app has it, else the one the engine put on its `ai_refresh` alternative). Improving a page
+  // for the question is a refresh; "Write it anyway" writes the new answer page the run asked for.
+  const refreshAlt = h.alternatives.find((a) => a.kind === 'ai_refresh' && a.aiTarget);
+  const runTarget: AiTargetInput | null = base.aiTarget ?? (refreshAlt?.aiTarget ? { ...refreshAlt.aiTarget, kind: 'answer' } : null);
+  const asKind = (t: AiTargetInput | null | undefined, kind: AiTargetInput['kind']) => (t ? { aiTarget: { ...t, kind } } : {});
   for (const a of h.alternatives) {
-    if (a.kind === 'improve')
+    if (a.kind === 'ai_refresh')
+      out.push({
+        id: 'ai_refresh',
+        label: a.label || 'Improve the existing page for this question',
+        why: a.why,
+        prefill: { keyword: a.keyword || base.keyword, existingPageUrl: a.url, ...common(a.pageType || base.pageType), ...asKind(a.aiTarget ?? runTarget, 'refresh') },
+      });
+    else if (a.kind === 'improve')
       // W05-B: the engine may offer the page Google shows for the search beside the page the website has for it, each with its own label
-      out.push({ id: 'improve', label: a.label || 'Improve the existing page', why: a.why, prefill: { keyword: base.keyword, existingPageUrl: a.url, ...common(base.pageType) } });
+      out.push({ id: 'improve', label: a.label || 'Improve the existing page', why: a.why, prefill: { keyword: base.keyword, existingPageUrl: a.url, ...common(base.pageType), ...asKind(runTarget, 'refresh') } });
     else if (a.kind === 'retarget')
       out.push({ id: 'retarget', label: 'Use the recommended target', why: a.why, prefill: { keyword: a.keyword, ...common(a.pageType || base.pageType) } });
     else out.push({ id: 'rung', label: 'Write the planned page', why: a.why, prefill: { keyword: a.keyword, ...common(base.pageType) } });
@@ -180,7 +207,7 @@ export function holdButtons(h: HoldInfo, base: { keyword: string; pageType?: str
       : h.kinds.includes('duplicate')
         ? 'a separate new page is written at a new address of its own and your existing page stays as it is; two pages for the same search compete with each other, so it is your call'
         : 'you know this keyword is worth a page',
-    prefill: { keyword: base.keyword, ...common(base.pageType), ...(ladder ? { ladder: { ...ladder, head: ladder.head || h.ladder?.head || '' } } : {}), holdAck: { score: h.score } },
+    prefill: { keyword: base.keyword, ...common(base.pageType), ...(ladder ? { ladder: { ...ladder, head: ladder.head || h.ladder?.head || '' } } : {}), ...asKind(runTarget, 'answer'), holdAck: { score: h.score } },
   });
   return out;
 }

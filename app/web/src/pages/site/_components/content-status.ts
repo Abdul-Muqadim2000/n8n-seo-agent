@@ -52,12 +52,24 @@ export function publishNoteSettled(item: Pick<ContentItem, 'publishNote' | 'move
   return addressOnly && (!!item.moved || !!item.ownPageFromHome);
 }
 
-/** prod 2026-11-10: what the newest publish check measured on the live page (at most 3 failed checks named), with its report. */
-export function liveCheckText(c: ContentLiveCheck): string {
+/**
+ * prod 2026-11-10: what the newest publish check measured on the live page (at most 3 failed checks named), with its report.
+ * Client reports 2026-11-16: the image checks are one item ("images (6 checks)": a check made before the engine said "no images" once
+ * listed six image checks for one cause), and a page with no image in its article says the images we made are ready.
+ */
+export function liveCheckText(c: ContentLiveCheck, o: { deliveredImages?: number } = {}): string {
   if (!c.live) return `Live page checked ${fmtDate(c.at)}: we could not open it`;
-  const failed = c.failed.slice(0, 3);
-  const more = c.failed.length - failed.length;
-  return `Live page checked ${fmtDate(c.at)}: ${c.passed} of ${c.total} checks passed${failed.length ? `. Not passed: ${failed.join('; ')}${more > 0 ? ` and ${more} more` : ''}` : ''}`;
+  const isImage = (n: string) => /image/i.test(n) && !/open graph/i.test(n);
+  const images = c.failed.filter(isImage);
+  const named: string[] = [];
+  for (const n of c.failed) {
+    if (!isImage(n)) named.push(n);
+    else if (n === images[0]) named.push(/^Images in the article$/i.test(n) ? 'no images in the article' : images.length > 1 ? `images (${images.length} checks)` : n);
+  }
+  const failed = named.slice(0, 3);
+  const more = named.length - failed.length;
+  const made = o.deliveredImages && c.imagesFound === 0 ? `. The ${o.deliveredImages === 1 ? 'image' : `${o.deliveredImages} images`} we made for this page ${o.deliveredImages === 1 ? 'is' : 'are'} ready in its report, with ${o.deliveredImages === 1 ? 'its' : 'their'} alt text` : '';
+  return `Live page checked ${fmtDate(c.at)}: ${c.passed} of ${c.total} checks passed${failed.length ? `. Not passed: ${failed.join('; ')}${more > 0 ? ` and ${more} more` : ''}` : ''}${made}`;
 }
 
 /** What the Content card says about the grade of the live page (client reports 2026-11-11). */
@@ -91,7 +103,8 @@ export function liveGradeLines(r: Pick<PageReviewSummary, 'liveGrade' | 'liveGra
     if (failed) return { grade: '', tone: 'neutral', blockers: [], checkReportId: null, note: failed };
     return null;
   }
-  const label = g!.status ? LIVE_GRADE_STATUS_LABEL[g!.status as PageDeliveryStatus] ?? '' : '';
+  // client reports 2026-11-16: the engine's own reading ("needs work: readability"), not only "needs work"
+  const label = g!.status === 'needs_work' && /^needs work:\s*\S/i.test(g!.label) ? `needs work: ${g!.label.replace(/^needs work:\s*/i, '')}` : g!.status ? LIVE_GRADE_STATUS_LABEL[g!.status as PageDeliveryStatus] ?? '' : '';
   return {
     grade: [`Live page grade ${gradeDisplay(g!.score)}/100`, label, `checked ${fmtDay(g!.checkedAt)}`].filter(Boolean).join(' · '),
     tone: toneOf(g!.status),
@@ -99,4 +112,52 @@ export function liveGradeLines(r: Pick<PageReviewSummary, 'liveGrade' | 'liveGra
     checkReportId: g!.publishedReportId || null,
     note: pending ? 'Checking the newest version of the live page' : failed,
   };
+}
+
+/**
+ * Client reports 2026-11-16 (devaicon.com: "the version we delivered 95+/100, the live page 84, why?"): what the live grade says beside its
+ * number, in plain words. Null for a grade stored before the engine said it (the card shows the grade line alone, as before).
+ */
+export interface LiveGradeDetail {
+  /** the live page is the client's own version (under half of our sentences on it); '' otherwise */
+  ownVersion: string;
+  /** the parts that lost points, most points lost against the version we delivered first */
+  parts: { key: string; title: string; why: string[]; fix: string }[];
+  /** the longest sentences of the live page, with their length */
+  longest: string[];
+  /** what our check did not count against the live page (our own reader or the site template) */
+  notCounted: string[];
+  /** what to do next (on the website, then Re-check) */
+  nextStep: string;
+}
+
+const cap1 = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+export function liveGradeDetail(r: Pick<PageReviewSummary, 'liveGrade' | 'grade'>): LiveGradeDetail | null {
+  const g = r.liveGrade ?? null;
+  if (!g || g.score == null || !g.checkedAt) return null;
+  const kept = g.keptPct ?? null;
+  const of = g.deliveredSentences ?? 0;
+  // review L6: said as what we found on the page as we read it, not as a fact about who wrote it; no share when the texts could not be compared
+  const ownVersion = kept != null && kept < 50 && of > 0
+    ? `The live page reads as your own version: we found ${kept}% of the text we delivered on it as we read it (${g.keptSentences ?? 0} of ${of} sentences), so this grade is mostly of your text.`
+    : kept == null && g.keptNote
+      ? `We could not compare the live page with the text we delivered: ${g.keptNote.replace(/[.\s]+$/, '')}.`
+      : '';
+  const del = g.delivered?.breakdown ?? {};
+  const parts = (g.parts ?? [])
+    .filter((p) => p.points < p.max)
+    .map((p) => ({ p, was: typeof del[p.dim] === 'number' ? del[p.dim]! : null }))
+    .sort((a, b) => (b.was ?? b.p.max) - b.p.points - ((a.was ?? a.p.max) - a.p.points) || b.p.max - b.p.points - (a.p.max - a.p.points))
+    .map(({ p, was }) => ({
+      key: p.dim,
+      title: `${cap1(p.label || p.dim)} ${p.points} of ${p.max}${was != null && was !== p.points ? ` (the version we delivered: ${was})` : ''}`,
+      why: p.reasons.map((x) => x.replace(/[.\s]+$/, '')).filter(Boolean),
+      fix: p.fix.replace(/[.\s]+$/, ''),
+    }));
+  const longest = (g.readability?.longest ?? []).map((x) => `${x.text.replace(/\s+/g, ' ').trim()} (${x.words} words)`);
+  const notCounted = (g.adjustments ?? []).map((x) => x.text.replace(/[.\s]+$/, '')).filter(Boolean);
+  const nextStep = (g.nextStep ?? '').trim();
+  if (!ownVersion && !parts.length && !longest.length && !notCounted.length) return null;
+  return { ownVersion, parts, longest, notCounted, nextStep };
 }

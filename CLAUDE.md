@@ -3,6 +3,7 @@
 Enterprise SEO automation built as n8n workflows: keyword research, keyword verdicts, long-form content with QA, technical site audits, full SEO reports, AI-visibility checks. Everything lives in `n8n/seo-agent/`; the stack runs locally with Docker Compose from `n8n/`.
 
 ## Read first
+- **`n8n/seo-agent/docs/client-reports-2026-11-16/README.md` - devaicon reports 2026-11-16: AI answer pages for the question's own search, live page grades that explain themselves (API + engine DEPLOYED, web on PR #68).**
 - **`n8n/seo-agent/docs/readiness-2026-11-12/README.md` — readiness review 2026-11-12 (deployed fixes, writing slots not deployed, owner items).**
 - **`n8n/seo-agent/docs/indexing-2026-10-29/RESUME.md` — Index coverage (2026-10-30, branch `feature/indexing`, not deployed): finding clients' pages Google left out, why, and what to do.**
 - **`n8n/seo-agent/docs/system-review-2026-10-17/RESUME.md` — START HERE (2026-10-18): the fourth re-rating (6/10, market 4.2, enterprise 1.5), every fix and the five enterprise capabilities merged but NOT deployed, the deploy checklist (§9), the live checks (§5), owner decisions (§6) and launch blockers.**
@@ -64,7 +65,27 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-11-12 evening, readiness review for new clients: fixes DEPLOYED, writing slots built not deployed - latest)
+## Status (2026-11-16, devaicon client reports: AI answer pages + live page grades - API + engine DEPLOYED, web PR #68 - latest)
+Read **`n8n/seo-agent/docs/client-reports-2026-11-16/README.md`** (private: `~/seo-agent-secrets/client-reports-2026-11-16/`). (1) "Write the
+page" for an AI question sent the panel TOPIC (= the service page's keyword): now the question's own search everywhere (shared resolver
+`app/shared/src/ai-question-action.ts`, engine kit `v5/code/_ai_question.js`, build section 192), one search one page checked on that
+search ("Improve <page> for this question"), publish detection never claims an existing / moved page, targets settle weekly, plain
+reason codes (`seo_ai_targets.reason_code` / `reason_args`, `seo_content_log.planned_*`). (2) Delivered 97/98, live 84 = the client's own
+rewrite (0% / 7% of our text) + 4 points of our own measuring: live grade now says whose text is live, part by part, next step on the
+website; our reader / template cost nothing; publish check reads article images only (section 191). Deployed ~00:10 UTC: backup
+pg/2026-11-15/*T235338Z, prod == build (0) before and after, 17 workflows, API 3b380c5c (rollback image alaventra-app:rollback-b84591b8).
+Repairs: content log 60, target 36. Harness 20016 / 0; app 1373 / 2186 / 400. Owner: merge PR #68; techand duplicate CRM guide; clean
+devaicon service names.
+
+## Status (2026-11-13, KI judge: Claude Opus 5.5 reads who is searching - DEPLOYED, KI ON for both sites - previous)
+Keyword research reads every kept search's results page (queue, up to 300) and a Claude Opus 5.5 judge labels each search with its top 5
+results; word rules are soft opinions, only market / AVOID / brand / government / job words are final. Live Trial (13297 / 13298): passing
+searches right 95.3% techand (words 73%, start 57%), 86.8% devaicon; groups 17 / 14; Claude ~$0.32 + search data ~$0.45 a run; 21 minutes
+(app says 25). Read **`n8n/seo-agent/docs/keyword-intel-2026-11-08/fixes/JUDGE.md`**. Switch: `seo_cache ki:kill` = `judge` turns only
+the judge off. Deployed 2026-11-12 (judge) + 2026-11-13 ~06:50 UTC (follow-ups; backup *T063542Z; prod == build, 0 nodes); web PR #67
+merged. **Switched ON for techand.ai and devaicon.com 2026-11-13 09:21 UTC** (owner). Next: one-read day-cache load + batched keyword save.
+
+## Status (2026-11-12 evening, readiness review for new clients: fixes DEPLOYED, writing slots built not deployed - previous)
 Read **`n8n/seo-agent/docs/readiness-2026-11-12/README.md`** (private findings / reviews / snapshot: `~/seo-agent-secrets/prod-review-2026-11-12/`,
 REGISTER.md). Six survey agents, coders on branches, an independent review per branch. Boot disk was 99% (gotenberg /tmp leak, build
 cache, rollback images) -> 74%; `deploy/gcp/hygiene.sh` daily timer + disk / backup alarm installs on the VM's next startup run. Deployed
@@ -73,9 +94,9 @@ final version charged once; hook token stripped from payloads + rotation endpoin
 not "to publish"; archived ladders cannot resume; services 120 chars; address searches / own brand / existing pages not recommended;
 placeholder job titles never printed; live grade checks the duplicate address; stale 404s re-read; rank report skips stopped / copy /
 paused; home page never a ladder page; brief parser auto-fix; robots.txt + sitemap.xml (web via PR #67). API at a4a04b0b (includes index
-wave 3; rollback image alaventra-app:rollback-073aac11); engine = a4a04b0b with SEO_Agent_API.json + KI held at 06332af3 for the KI session.
-Harness 19516 / 0; app shared 84 / server 103 / web 43 files. **Writing slots (P1, branch `fix/page-slots`, NOT deployed):** max 2 page
-runs at once; reviewed, harness 19542 / 0; needs the probe in `reviews/R_page_slots.md` first; needed before ~4-5 more clients.
+wave 3; rollback image alaventra-app:rollback-073aac11); engine = a4a04b0b (KI + API deployed by the KI session 2026-11-13).
+Harness 19516 / 0; app shared 84 / server 103 / web 43 files. **Writing slots (P1) DEPLOYED 2026-11-13 ~10:15 UTC** after a $0 live probe on alvrun:
+max 2 page runs write at once, the rest wait (hand-off after 40 min); API b84591b8, engine 23 updated + 4 ledger columns; harness 19620 / 0.
 
 ## Status (2026-11-12 evening, Index coverage wave 3: a to-do for every page Google has not visited - previous)
 Client document "Indexing Module Upgrade" (devaicon.com). Prod read first: about two thirds already existed; the client was right on six

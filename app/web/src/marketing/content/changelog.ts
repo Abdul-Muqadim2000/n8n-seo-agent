@@ -34,6 +34,33 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-11-16',
+    version: '4.15',
+    title: 'AI answer pages written for the question itself',
+    summary: 'A page written to win an AI answer now targets the question\'s own search, never a second copy of a page you already have, and the AI visibility page says where each question stands in plain words.',
+    highlights: [
+      'Write the page, on any lost AI question, now uses the search behind that question, so the new page is an answer page for it and not another version of your service page',
+      'When a page of yours already owns that search in your market, we offer to improve it for the question instead of writing a second page that would compete with it',
+      'A question whose page is written, being written or live shows Report it published, See the page or nothing to do, never another Write the page',
+      'Questions to win show a plain status that follows your page: Queued, Being written, Published, Later or Not for this website, each with one sentence that says why',
+      'What do you sell? asks for the names of what you sell and turns away sentences, so questions and pages are built from real services',
+    ],
+    features: ['ai-visibility', 'ai-growth'],
+  },
+  {
+    date: '2026-11-16',
+    version: '4.14',
+    title: 'Live page grades that explain themselves',
+    summary: 'When a page you published grades lower than the version we delivered, the Content page now says why: how much of our text is on the live page, which parts lost points and what to change on your website.',
+    highlights: [
+      'Each live page grade says how much of the text we delivered is on the page, compares every part with the version we delivered (with its exact grade, not "95+"), says what to change on your website and lists the longest sentences to shorten',
+      'Our check no longer takes points from a live page for the way we read it: a direct answer at the top counts without a "Quick answer" label, a questions section your site template adds after the article is not counted as the last section, a table on your page counts as a table, and the site name your website adds to the title is not counted in its length. The card lists what was not counted',
+      'The live check reads the images in your article, not the related articles cards or small pictures around it: a page with no images gets one clear item instead of six, an image loaded from Google Images or another service is named, and the images we made for the page are looked for and pointed to when they are missing',
+      'The final version keeps the width and height of every image, and its top image loads first',
+    ],
+    features: ['content'],
+  },
+  {
     date: '2026-11-12',
     version: '4.13',
     title: 'A daily to-do for pages Google has not visited',
@@ -59,6 +86,7 @@ export const changelog: ChangelogEntry[] = [
       'A ladder is measured in your website\'s market, or in the market your keyword names (GCC or Dubai means the UAE), and the New keyword ladder screen says so before it starts',
       'A page our check advises against is stopped, with the reason, and is written only when you choose Write it anyway',
       'A page whose writing stopped without a result is closed with the reason and nothing is charged, so the next page goes on',
+      'Pages are written two at a time, so each one has the time it needs to finish: a page started while two others are being written waits its turn, the run page says "Waiting for a writing slot" with about how long, and nothing is charged while it waits',
       'Each page of a ladder shows its address, why it sits there and who searches it',
       'Clearer readings once a page is live: the Content page shows what our check found on your live page beside the grade of the version we delivered and says "Moved" once the old address redirects to the new one, Steps on your website never ask you to redirect your home page and count a page that redirects to its main version as fixed, and a ladder says how we check its main keyword, shows each live page\'s own Search Console figures and leaves out checks taken before the page went live',
       'More of what you see now follows your live website: each content card grades the page as it is live, the indexing finding on the Technical page follows the daily index check, the Backlinks page says what each linking site is, explains the spam score and checks Bing for you at once (also from the Bing step on your website), a ladder page shows what Google showed for its search with a link to open that search on Google, "Write it anyway" works on a ladder page, a final version is marked as one in your list of pages, and a final version graded before our checks improved can be made again once for free',

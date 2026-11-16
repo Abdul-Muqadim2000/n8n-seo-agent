@@ -517,7 +517,30 @@ export interface PageRunContext {
 // `sections_removed` (wave 0.6, W06-C, 2026-10-30): what the page run took out of the page (sections deleted as a topic the verdict said to
 // leave out, H2s lost in editing, their share of the words and why). The final version keeps the grade's cap on coverage and fit while those
 // sections are still missing, so a page that lost its core never reads "Ready" after Accept all; a report from before it is "not checked"
-const PRC_GRADING = ['length_band', 'coverage_target', 'terms', 'facts', 'sources_cited', 'style_guide', 'site_urls', 'serp_shapes', 'regulatory_facts', 'regulatory_topics', 'second_read', 'sections_removed'] as const;
+// `ai_target` (client reports 2026-11-16, issue 1, INV1 F2 / F10): the AI question the page was written for (the engine sends it as
+// `page_run.ai_target` with every content callback). The final version and the live grade of an AI answer page are judged as that page (its
+// question's own search, an AI page's fit, the duplicate rule on the question); without it they were judged as a plain page on the topic.
+const PRC_GRADING = ['length_band', 'coverage_target', 'terms', 'facts', 'sources_cited', 'style_guide', 'site_urls', 'serp_shapes', 'regulatory_facts', 'regulatory_topics', 'second_read', 'sections_removed', 'ai_target'] as const;
+
+/**
+ * The AI target of a page the app started (the run's stored form input `aiTarget`, camelCase) in the shape the engine reads on a finalize body
+ * (`page_run.ai_target`, as payload.ts sends it with the page run). For pages delivered before the engine returned `page_run.ai_target`
+ * (client reports 2026-11-16): their final version and live grade are still judged as an AI page. Null when the input carries no question.
+ */
+export function aiTargetForEngine(input: unknown): P | null {
+  const t = obj(obj(input).aiTarget);
+  const question = s(t.question).replace(/\s+/g, ' ').trim().slice(0, 300);
+  if (question.length < 8) return null;
+  const list = (v: unknown) => arr(v).map((x) => s(x).trim()).filter(Boolean);
+  return {
+    question,
+    kind: s(t.kind) === 'refresh' ? 'refresh' : 'answer',
+    target_id: s(t.targetId).slice(0, 120),
+    fanout: list(t.fanout).slice(0, 8),
+    sources: arr(t.sources).map(obj).map((x) => ({ u: s(x.url), t: s(x.title) })).filter((x) => /^https?:\/\//i.test(x.u)).slice(0, 6),
+    competitors: list(t.competitors).slice(0, 8),
+  };
+}
 
 /** W06-C: the page run's removals as the content callback sends them (`page_run.sections_removed`). */
 export interface SectionsRemoved {
@@ -647,6 +670,12 @@ export interface FinalizeBody {
   duplicate_decision?: DuplicateDecision;
 }
 
+/** The page run's context with the AI target the run carried, when the stored report has none (an older engine's report). */
+const withAiTarget = (pr: PageRunContext, aiTarget: P | null | undefined): PageRunContext => {
+  const has = pr.ai_target && typeof pr.ai_target === 'object' && s(obj(pr.ai_target).question).trim();
+  return has || !aiTarget || !s(aiTarget.question).trim() ? pr : { ...pr, ai_target: aiTarget };
+};
+
 export function finalizeBody(o: {
   requestId: string;
   domain: string;
@@ -662,6 +691,8 @@ export function finalizeBody(o: {
   original?: P;
   /** W0-B (D2): the client's decision on a duplicate-page blocker */
   duplicateDecision?: DuplicateDecision | null;
+  /** client reports 2026-11-16: the AI target of the page's run (aiTargetForEngine), used when the original report's page run has none */
+  aiTarget?: P | null;
 }): FinalizeBody {
   const p = o.payload ?? {};
   const meta = obj(p.meta);
@@ -692,7 +723,7 @@ export function finalizeBody(o: {
     business_facts_kv: f.business_facts_kv,
     stored_fact_keys: f.stored_fact_keys,
     content_request_id: s(obj(o.original ?? p).request_id) || s(p.request_id),
-    page_run: pageRunOf(o.original ?? p),
+    page_run: withAiTarget(pageRunOf(o.original ?? p), o.aiTarget),
     ...(o.duplicateDecision ? { duplicate_decision: o.duplicateDecision } : {}),
   };
 }
@@ -928,7 +959,33 @@ function imagePlaceholder(url: string, alt: string): string {
   return `<span class="img-ph" role="img" aria-label="${esc(`${label}: ${alt || name}`)}"><span class="img-ph-label">${esc(label)}</span><span class="img-ph-name">${esc(name)}</span></span>`;
 }
 
-function inlineMd(t: string, preview = false): string {
+/**
+ * Client reports 2026-11-16 (devaicon.com): the final version's HTML dropped the width and height of our images (the first version had
+ * them), so a client pasting it failed "Images carry width and height" (layout shift). The page's own image list (`meta.images`: path,
+ * width, height, slot) gives every image its size by file name; the first image of the article is the hero, loaded at once with high
+ * priority, the others lazily. The in-app preview is unchanged.
+ */
+export interface ArticleImageSize {
+  width: number;
+  height: number;
+}
+export function articleImageSizes(images: unknown): Map<string, ArticleImageSize> {
+  const out = new Map<string, ArticleImageSize>();
+  for (const im of arr(images).map(obj)) {
+    const w = num(im.width);
+    const h = num(im.height);
+    const name = imageFileName(s(im.path) || s(im.filename));
+    if (name && w && h && w > 0 && h > 0 && !out.has(name)) out.set(name, { width: Math.round(w), height: Math.round(h) });
+  }
+  return out;
+}
+const imageFileName = (u: string): string => s(u).split(/[?#]/)[0]!.split('/').filter(Boolean).pop()?.toLowerCase() ?? '';
+interface ImageCtx {
+  sizes: Map<string, ArticleImageSize>;
+  seen: number;
+}
+
+function inlineMd(t: string, preview = false, img: ImageCtx | null = null): string {
   // links and images first (escaped pieces), then bold / italic / code on the escaped rest
   const parts: string[] = [];
   let rest = s(t);
@@ -940,7 +997,11 @@ function inlineMd(t: string, preview = false): string {
     const [, bang, text, url, title] = m;
     if (!safeUrl(url!)) parts.push(fmt(esc(text!)));
     else if (bang && preview && !previewableImage(url!)) parts.push(imagePlaceholder(url!, text!));
-    else if (bang) parts.push(`<img src="${esc(url!)}" alt="${esc(text!)}"${title ? ` title="${esc(title)}"` : ''} loading="lazy">`);
+    else if (bang && img && !preview) {
+      const size = img.sizes.get(imageFileName(url!));
+      const hero = img.seen++ === 0;
+      parts.push(`<img src="${esc(url!)}" alt="${esc(text!)}"${title ? ` title="${esc(title)}"` : ''}${size ? ` width="${size.width}" height="${size.height}"` : ''}${hero ? ' loading="eager" fetchpriority="high"' : ' loading="lazy" decoding="async"'}>`);
+    } else if (bang) parts.push(`<img src="${esc(url!)}" alt="${esc(text!)}"${title ? ` title="${esc(title)}"` : ''} loading="lazy">`);
     else parts.push(`<a href="${esc(url!)}"${/^https?:\/\//i.test(url!) ? ' rel="noopener noreferrer"' : ''}>${fmt(esc(text!))}</a>`);
     rest = rest.slice(m.index + m[0].length);
   }
@@ -960,9 +1021,11 @@ const META_LINE = /^(Title|Meta Description|Meta Title|Slug|Primary Keyword|Seco
  * `preview`: for the in-app preview frame, images load only from https addresses; any other image is a labelled box (imagePlaceholder).
  * The final version's HTML keeps the page's own image paths.
  */
-export function renderMarkdown(md: string, opts: { skipMeta?: boolean; preview?: boolean } = {}): string {
+export function renderMarkdown(md: string, opts: { skipMeta?: boolean; preview?: boolean; images?: unknown } = {}): string {
   const preview = opts.preview === true;
-  const inline = (t: string) => inlineMd(t, preview);
+  // client reports 2026-11-16: the final version's images carry their size (opts.images = the page's meta.images) and the hero loads first
+  const img: ImageCtx | null = preview ? null : { sizes: articleImageSizes(opts.images), seen: 0 };
+  const inline = (t: string) => inlineMd(t, preview, img);
   const out: string[] = [];
   let list: 'ul' | 'ol' | null = null;
   let table = false;
@@ -1033,13 +1096,13 @@ export function renderMarkdown(md: string, opts: { skipMeta?: boolean; preview?:
 }
 
 /** The final version's HTML: the article and its JSON-LD blocks (a `</` inside JSON can never close the script). */
-export function renderArticleHtml(md: string, schemaBlocks: unknown[] = []): string {
+export function renderArticleHtml(md: string, schemaBlocks: unknown[] = [], images: unknown = []): string {
   const ld = arr(schemaBlocks)
     .map(obj)
     .map((b) => obj(b.json ?? b))
     .filter((b) => Object.keys(b).length)
     .map((b) => `<script type="application/ld+json">${JSON.stringify(b).replace(/</g, '\\u003c')}</script>`);
-  return `<article>\n${renderMarkdown(md)}${ld.length ? `\n${ld.join('\n')}` : ''}\n</article>`;
+  return `<article>\n${renderMarkdown(md, { images })}${ld.length ? `\n${ld.join('\n')}` : ''}\n</article>`;
 }
 
 export type BlockKind = 'meta' | 'heading' | 'paragraph' | 'list' | 'table' | 'quote' | 'image' | 'blank';
@@ -1363,7 +1426,7 @@ export function finalReportPayload(
     ...base,
     request_id: o.requestId,
     markdown: md,
-    html: renderArticleHtml(md, arr(meta.schema_blocks)),
+    html: renderArticleHtml(md, arr(meta.schema_blocks), arr(meta.images)),   // client reports 2026-11-16: images keep their width and height
     qa_delivery_status: status,
     qa_client_questions: questions,
     qa_grade: grade,
