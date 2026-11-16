@@ -3,6 +3,7 @@
 Enterprise SEO automation built as n8n workflows: keyword research, keyword verdicts, long-form content with QA, technical site audits, full SEO reports, AI-visibility checks. Everything lives in `n8n/seo-agent/`; the stack runs locally with Docker Compose from `n8n/`.
 
 ## Read first
+- **`n8n/seo-agent/docs/client-reports-2026-11-16/README.md` - devaicon reports 2026-11-16: AI answer pages for the question's own search, live page grades that explain themselves (API + engine DEPLOYED, web on PR #68).**
 - **`n8n/seo-agent/docs/readiness-2026-11-12/README.md` — readiness review 2026-11-12 (deployed fixes, writing slots not deployed, owner items).**
 - **`n8n/seo-agent/docs/indexing-2026-10-29/RESUME.md` — Index coverage (2026-10-30, branch `feature/indexing`, not deployed): finding clients' pages Google left out, why, and what to do.**
 - **`n8n/seo-agent/docs/system-review-2026-10-17/RESUME.md` — START HERE (2026-10-18): the fourth re-rating (6/10, market 4.2, enterprise 1.5), every fix and the five enterprise capabilities merged but NOT deployed, the deploy checklist (§9), the live checks (§5), owner decisions (§6) and launch blockers.**
@@ -64,7 +65,19 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-11-13, KI judge: Claude Opus 5.5 reads who is searching - DEPLOYED, KI ON for both sites - latest)
+## Status (2026-11-16, devaicon client reports: AI answer pages + live page grades - API + engine DEPLOYED, web PR #68 - latest)
+Read **`n8n/seo-agent/docs/client-reports-2026-11-16/README.md`** (private: `~/seo-agent-secrets/client-reports-2026-11-16/`). (1) "Write the
+page" for an AI question sent the panel TOPIC (= the service page's keyword): now the question's own search everywhere (shared resolver
+`app/shared/src/ai-question-action.ts`, engine kit `v5/code/_ai_question.js`, build section 192), one search one page checked on that
+search ("Improve <page> for this question"), publish detection never claims an existing / moved page, targets settle weekly, plain
+reason codes (`seo_ai_targets.reason_code` / `reason_args`, `seo_content_log.planned_*`). (2) Delivered 97/98, live 84 = the client's own
+rewrite (0% / 7% of our text) + 4 points of our own measuring: live grade now says whose text is live, part by part, next step on the
+website; our reader / template cost nothing; publish check reads article images only (section 191). Deployed ~00:10 UTC: backup
+pg/2026-11-15/*T235338Z, prod == build (0) before and after, 17 workflows, API 3b380c5c (rollback image alaventra-app:rollback-b84591b8).
+Repairs: content log 60, target 36. Harness 20016 / 0; app 1373 / 2186 / 400. Owner: merge PR #68; techand duplicate CRM guide; clean
+devaicon service names.
+
+## Status (2026-11-13, KI judge: Claude Opus 5.5 reads who is searching - DEPLOYED, KI ON for both sites - previous)
 Keyword research reads every kept search's results page (queue, up to 300) and a Claude Opus 5.5 judge labels each search with its top 5
 results; word rules are soft opinions, only market / AVOID / brand / government / job words are final. Live Trial (13297 / 13298): passing
 searches right 95.3% techand (words 73%, start 57%), 86.8% devaicon; groups 17 / 14; Claude ~$0.32 + search data ~$0.45 a run; 21 minutes
