@@ -285,6 +285,16 @@ export interface ComingUpItemResult {
   reportId: string | null;
   /** for `not_written`: why, in the customer's words */
   message: string;
+  /**
+   * client report 2026-11-16 b: who wrote the page. `you`: the run did not write it, the client wrote the same search afterwards (Write it now,
+   * a form run); `at` / `reportId` are that page's. Absent on older servers (= the run).
+   */
+  by?: 'run' | 'you' | 'later';
+  /** where the page is live and since when (the content log), '' / null while it is not published */
+  publishedUrl?: string;
+  publishedAt?: string | null;
+  /** the page is written but its draft did not pass the quality check (never "publish it") */
+  needsFix?: boolean;
 }
 
 /** I3: one page the finished run started, and where it stands now. */
@@ -295,6 +305,11 @@ export interface ComingUpOutcomePage {
   state: 'written' | 'started' | 'failed';
   at: string | null;
   reportId: string | null;
+  /** client report 2026-11-16 b: where the page is live and since when (the content log), '' / null while it is not published */
+  publishedUrl?: string;
+  publishedAt?: string | null;
+  /** the draft did not pass the quality check */
+  needsFix?: boolean;
 }
 
 /** I3: what a finished weekly run wrote, from the run's own content report of the same cycle. */
@@ -314,7 +329,7 @@ export interface ComingUpOutcome {
 /** An approval the cycle did not write, in the customer's words. */
 export interface ComingUpNotWritten {
   keyword: string;
-  reason: 'pileup' | 'budget' | 'covered_by_live_page' | 'ambiguous' | 'profile' | 'no_longer_offered' | 'other';
+  reason: 'pileup' | 'budget' | 'covered_by_live_page' | 'ambiguous' | 'profile' | 'no_longer_offered' | 'same_page' | 'other';
   message: string;
 }
 

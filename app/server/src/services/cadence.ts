@@ -441,7 +441,7 @@ export interface CadencePlan {
   /** what the client approved for this cycle */
   approvedItems: { keyword: string; source: TopicSource; itemKey: string }[];
   /** approvals not written this cycle, with the reason */
-  approvedNotWritten: { keyword: string; source: TopicSource | ''; reason: 'pileup' | 'budget' | 'covered_by_live_page' | 'ambiguous' | 'profile'; detail?: string }[];
+  approvedNotWritten: { keyword: string; source: TopicSource | ''; reason: 'pileup' | 'budget' | 'covered_by_live_page' | 'ambiguous' | 'profile' | 'same_page'; detail?: string }[];
   /** P1: the website's readiness for a written page (null = not judged) */
   readiness: ContentReadiness | null;
   /** P1: the author profile or the business facts are missing, so nothing is written */
@@ -1141,8 +1141,38 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
         })
       : uniq;
   if (airOn && airProtect.size && aiCand0 && !aiCand0.air && airProtect.has(urlKey(aiCand0.existingPageUrl)) && !/AI answers cite this page/.test(aiCand0.why)) aiCand0.why += protWhy(airProtect.get(urlKey(aiCand0.existingPageUrl))!);
+  // client report 2026-11-16 (the engine's rule, Cadence_Plan.js): a slot freed by the one-page-one-rewrite hold passes to the next item instead of
+  // being lost; the order is unchanged (ladder pages, the client's approvals, the other automatic items)
   const pickable = pausedReason ? [] : waitingForKeyword ? uniqP.filter((x) => x.approved) : uniqP;
-  const picks: Cand[] = pickable.slice(0, room);
+  // FX-C RC-2 (the engine's rule): one page, one rewrite. A pick whose page another pick of this run already rewrites, or that another keyword's
+  // run started in the last 7 days (AI ranking `on`), waits as a suggestion with the reason. The in-run rule holds for EVERY website.
+  const pageOfPick = (x: Cand) => urlKey(x.existingPageUrl || '');
+  const urlHeld: Cand[] = [];
+  const weekU = new Map<string, string>();
+  for (const l of airOn ? slog : [])
+    if (at - ms(l.started_at) < 7 * 864e5)
+      for (const u of [l.existing_page_url, l.published_url]) {
+        const k = urlKey(u);
+        if (k && !weekU.has(k)) weekU.set(k, norm(l.keyword));
+      }
+  const seenU = new Set<string>();
+  const pageHeld = (p: Cand): boolean => {
+    const u = pageOfPick(p);
+    if (!u) return false;
+    if (seenU.has(u) || (weekU.has(u) && weekU.get(u) !== norm(p.keyword))) return true;
+    seenU.add(u);
+    return false;
+  };
+  const holdPage = (p: Cand) => urlHeld.push({ ...p, auto: false, why: `${p.why}; another page of this week's plan already rewrites ${p.existingPageUrl}, so it waits` });
+  const picks: Cand[] = [];
+  for (const p of pickable) {
+    if (picks.length >= room) break;
+    if (pageHeld(p)) {
+      holdPage(p);
+      continue;
+    }
+    picks.push(p);
+  }
   // a ladder page that answers a queued AI question is written for it (one search, one page)
   for (let i = 0; i < picks.length; i++) {
     const p = picks[i];
@@ -1152,33 +1182,10 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   }
   const aiCand = aiCand0 && !picks.some((x) => norm(x.keyword) === norm(aiCand0.keyword)) ? aiCand0 : null;
   const aiPick = level === 3 && pages > 0 && aiCand && aiCand === aiTop3 && aiDue && !blocked ? { ...aiCand, auto: true } : null;
-  if (aiPick) picks.push(aiPick);
-  // FX-C RC-2 (on only, the engine's rule): one page, one rewrite. A pick whose page another pick of this run already rewrites, or that another
-  // keyword's run started in the last 7 days, waits as a suggestion with the reason
-  const pageOfPick = (x: Cand) => urlKey(x.existingPageUrl || '');
-  const urlHeld: Cand[] = [];
-  // FX-C (owner 2026-11-06): the in-run rule holds for EVERY website; the 7-day rule across runs stays for websites in AI ranking `on`
-  {
-    const weekU = new Map<string, string>();
-    for (const l of airOn ? slog : [])
-      if (at - ms(l.started_at) < 7 * 864e5)
-        for (const u of [l.existing_page_url, l.published_url]) {
-          const k = urlKey(u);
-          if (k && !weekU.has(k)) weekU.set(k, norm(l.keyword));
-        }
-    const seenU = new Set<string>();
-    for (let i = 0; i < picks.length; i++) {
-      const p = picks[i];
-      const u = pageOfPick(p);
-      if (!u) continue;
-      if (seenU.has(u) || (weekU.has(u) && weekU.get(u) !== norm(p.keyword))) {
-        urlHeld.push({ ...p, auto: false, why: `${p.why}; another page of this week's plan already rewrites ${p.existingPageUrl}, so it waits` });
-        picks.splice(i, 1);
-        i--;
-        continue;
-      }
-      seenU.add(u);
-    }
+  // the level-3 AI page (on top) obeys the one-page-one-rewrite rule too
+  if (aiPick) {
+    if (pageHeld(aiPick)) holdPage(aiPick);
+    else picks.push(aiPick);
   }
   // AIR RESERVE: the reserved AI ranking page of the week, on top of pages_per_week (never for 0 pages a week, never while blocked). RC-2: an AIR
   // target a page of this run already covers (the same search or the same page), or that a live page answers, is held; the slot passes on
@@ -1255,7 +1262,12 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   const approvedNotWritten: CadencePlan['approvedNotWritten'] = [
     ...approved
       .filter((o) => !pickedNow.has(norm(o.keyword)))
-      .map((o) => ({ keyword: o.keyword, source: o.source as TopicSource | '', reason: (pausedReason || (heldK.has(norm(o.keyword)) ? 'profile' : covered.some((c) => norm(c.keyword) === norm(o.keyword)) ? 'covered_by_live_page' : 'budget')) as 'pileup' | 'budget' | 'covered_by_live_page' | 'profile' })),
+      .map((o) => {
+        // client report 2026-11-16 b (the engine's rule): held because another page of this run rewrites its address
+        const samePage = urlHeld.some((u) => norm(u.keyword) === norm(o.keyword));
+        const reason = (pausedReason || (heldK.has(norm(o.keyword)) ? 'profile' : samePage ? 'same_page' : covered.some((c) => norm(c.keyword) === norm(o.keyword)) ? 'covered_by_live_page' : 'budget')) as 'pileup' | 'budget' | 'covered_by_live_page' | 'profile' | 'same_page';
+        return { keyword: o.keyword, source: o.source as TopicSource | '', reason, ...(samePage && o.existingPageUrl ? { detail: o.existingPageUrl } : {}) };
+      }),
     ...approvalAmbiguous.map((a) => ({
       keyword: a.keyword,
       source: '' as const,
@@ -1360,7 +1372,7 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
     waitingKeywords: W.list.map((w) => w.keyword),
     needsFix: W.list.filter((w) => w.needsFix).map((w) => w.keyword),
     coveredByLivePages: covered,
-    aiPages: { perMonth: aiQuota, usedThisMonth: aiUsed, thisWeek: !!aiPick, onTop: level === 3 },
+    aiPages: { perMonth: aiQuota, usedThisMonth: aiUsed, thisWeek: !!aiPick && picks.includes(aiPick), onTop: level === 3 },
     ...(airOn
       ? {
           air: {

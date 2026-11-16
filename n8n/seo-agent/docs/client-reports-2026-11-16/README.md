@@ -91,3 +91,35 @@ to a live grade.
   Google Images thumbnail they may not have the right to use. The Dubai guide of 10 Nov was never published: re-make it from AI
   visibility (it now targets the question's own search) or finish the old draft.
 - Not added: the devaicon questions to `harness/accuracy/keywords.json` (re-baselines KWACC: owner call).
+
+## Second report of 2026-11-16 (devaicon.com): "I have written this page but it still says not written; published, but the pipeline shows not published"
+
+Checked on production first (read-only snapshot 2026-11-16 13:31 UTC, private: `~/seo-agent-secrets/client-reports-2026-11-16b/`).
+The page is "custom ai solutions uae": approved by the client for the 13 Nov cycle (11 Nov 11:53), not written by that run, written by
+the client with Write it now (16 Nov 09:20, run 14845), final version 10:21, marked published 11:40 (`seo_content_log` 67, live at
+/insights/custom-ai-solutions-uae). The Pipeline's Coming up still showed the finished 13 Nov plan, and that plan judged the approval by
+the run's own pages only: **"Approved by you · Not written · Not written in that run."**; the two pages the run did write (both live
+since 13 Nov) read only "Written on ...", never published. Reproduced with the real `comingUpView` on the snapshot. The AI visibility
+page was already right (its state follows the content log: "Published").
+
+**Verdict: right, ours, three causes.**
+1. App: a finished plan never followed its pages. Now (`comingUp.ts` `planPages` / `followResult` / `laterPage` / `planPageLog`) an approval
+   the run did not write but the client had written for the same search since the plan was offered is that page (`by: 'you'`, its report,
+   "Not written by that run. You had it written on ..."), and every page of the plan carries where and since when it is live (Published
+   badge, "It is live at /path since ..."). On the production snapshot: the approval now reads Published with its report, the two run pages
+   Published.
+2. Engine (`Cadence_Plan.js`, mirror `cadence.ts`): the run had room for 2, took the first two candidates (ladder pages), then held one of
+   them by the one-page-one-rewrite rule; the freed slot was lost, so the approval next in line was not written. Picks now fill greedily to
+   the budget and a held candidate does not use a slot. Order unchanged (ladder pages, approvals, other automatic items: the
+   `approve_outside_budget` rule). An approval held by that rule is reported as `same_page` with the address, not `budget`.
+   `air_cadence_cases.json` `air_on_url_once_level3` now expects the third page that takes the freed slot (it recorded the lost slot).
+3. Engine: the content_cadence callback (POST Cadence Note) dropped `approved_not_written` although Cadence Note computed it, so a finished
+   plan never had the run's reason (184D's reasons never reached the app).
+
+Independent review (no engine finding; app: 1 High, 2 Medium, 6 Low, all fixed): a page written again keeps its old address on the row, so it
+is live only when published or published after its start (H1); the client's page is also found through its report when the app reopened an
+older row (M2); the plan's own runs are never credited to the client, a later system run reads "written later" (M3); the run-page fallback
+is bounded by the plan (L4); `same_page` is checked before `covered_by_live_page` and worded for both holds (L5); `ai_pages.this_week` is
+false when the AI page is held (L6); the page read runs alongside the run read (L7); a failed draft reads "needs a fix" (L8).
+Checks: harness **20028 passed, 0 failed** (CA1-CA2 `scenarios_client_1116b.js`, AIR P6 AE1/AE2 and KF on both sides); app shared 1373,
+server 2199 (`comingUpFollow.test.ts` 13), web 401, typecheck, web build. No data repair needed: the plan's view is derived. Marketing changelog 4.16; tutorials backlog row (video-skills 2f2c602).
