@@ -3,7 +3,7 @@
 Enterprise SEO automation built as n8n workflows: keyword research, keyword verdicts, long-form content with QA, technical site audits, full SEO reports, AI-visibility checks. Everything lives in `n8n/seo-agent/`; the stack runs locally with Docker Compose from `n8n/`.
 
 ## Read first
-- **`n8n/seo-agent/docs/client-reports-2026-11-16/README.md` - devaicon reports 2026-11-16: AI answer pages for the question's own search, live page grades that explain themselves (API + engine + web DEPLOYED; PR #68 merged 2026-11-16 05:16 UTC).**
+- **`n8n/seo-agent/docs/client-reports-2026-11-16/README.md` - devaicon reports 2026-11-16: AI answer pages for the question's own search, live page grades that explain themselves (PR #68 merged); second report: Coming up follows each page after the weekly run (API + engine DEPLOYED, web PR #69).**
 - **`n8n/seo-agent/docs/readiness-2026-11-12/README.md` — readiness review 2026-11-12 (deployed fixes, writing slots not deployed, owner items).**
 - **`n8n/seo-agent/docs/indexing-2026-10-29/RESUME.md` — Index coverage (2026-10-30, branch `feature/indexing`, not deployed): finding clients' pages Google left out, why, and what to do.**
 - **`n8n/seo-agent/docs/system-review-2026-10-17/RESUME.md` — START HERE (2026-10-18): the fourth re-rating (6/10, market 4.2, enterprise 1.5), every fix and the five enterprise capabilities merged but NOT deployed, the deploy checklist (§9), the live checks (§5), owner decisions (§6) and launch blockers.**
@@ -65,7 +65,14 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-11-16, devaicon client reports: AI answer pages + live page grades - ALL DEPLOYED (web: PR #68 merged, main 5e533221) - latest)
+## Status (2026-11-16 afternoon, devaicon report b: Coming up follows each page after the weekly run - API + engine DEPLOYED, web PR #69 - latest)
+"I wrote and published the page but the pipeline says not written / not published": the finished 13 Nov plan judged the client's approved
+"custom ai solutions uae" by that run's pages only. App `comingUp.ts` now follows a finished plan's pages (written by the run / by you /
+later, live, needs a fix); engine + mirror: a slot freed by the one-page-one-rewrite hold goes to the next page (order unchanged), held
+approvals say `same_page`; the cadence callback carries `approved_not_written`. Record: client-reports-2026-11-16/README.md "Second
+report". Backup *T141242Z, prod == build, API 0e2c522c (rollback alaventra-app:rollback-3b380c5c). Harness 20028 / 0; app 1373 / 2199 / 401.
+
+## Status (2026-11-16, devaicon client reports: AI answer pages + live page grades - ALL DEPLOYED (web: PR #68 merged, main 5e533221) - previous)
 Read **`n8n/seo-agent/docs/client-reports-2026-11-16/README.md`** (private: `~/seo-agent-secrets/client-reports-2026-11-16/`). (1) "Write the
 page" for an AI question sent the panel TOPIC (= the service page's keyword): now the question's own search everywhere (shared resolver
 `app/shared/src/ai-question-action.ts`, engine kit `v5/code/_ai_question.js`, build section 192), one search one page checked on that

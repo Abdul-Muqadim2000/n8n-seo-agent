@@ -123,3 +123,8 @@ is bounded by the plan (L4); `same_page` is checked before `covered_by_live_page
 false when the AI page is held (L6); the page read runs alongside the run read (L7); a failed draft reads "needs a fix" (L8).
 Checks: harness **20028 passed, 0 failed** (CA1-CA2 `scenarios_client_1116b.js`, AIR P6 AE1/AE2 and KF on both sides); app shared 1373,
 server 2199 (`comingUpFollow.test.ts` 13), web 401, typecheck, web build. No data repair needed: the plan's view is derived. Marketing changelog 4.16; tutorials backlog row (video-skills 2f2c602).
+
+Deployed 2026-11-16 ~14:15-14:25 UTC (Monday; the deploy guard: nothing starting or due): backup `pg/2026-11-16/*T141242Z`; node diff
+production == main except Cadence Plan and POST Cadence Note before, production == this build (0) after; engine 12 updated, 29 published;
+API on the VM 3b380c5c -> 0e2c522c (healthy, 0 restarts, /api/health 200; rollback image `alaventra-app:rollback-3b380c5c`). Web: PR #69
+(owner merges). Until then the current web shows the new results' text for the approval but not the Published badges (new optional fields).
