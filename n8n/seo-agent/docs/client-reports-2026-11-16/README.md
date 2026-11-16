@@ -36,7 +36,8 @@ REVIEW_issue1_app, LIVE_VERIFY, tools/). Built by parallel agents in worktrees (
 
 ## App
 
-API deployed; the web rides PR #68 (the owner merges main; Vercel deploys it). The current web works with the new API (every response
+API deployed; the web went live when the owner merged PR #68 (2026-11-16 05:16 UTC, main 5e533221; Vercel deploy succeeded, the new
+AI page buttons, live-grade card and changelog 4.14 / 4.15 verified in the live bundle). The current web works with the new API (every response
 change is additive), and the engine's hero action already carries the question's own search.
 - Issue 1: one resolver `shared/src/ai-question-action.ts` for every "write a page for this AI question" (hero, Questions you lose, What
   to do next, the AI visibility report, Questions to win, Recommendations, Pipeline Write now); the page owner decided with the engine's
@@ -82,7 +83,6 @@ to a live grade.
 
 ## Owner items
 
-- Merge PR #68 (web; refused to Claude as unreviewed).
 - techand.ai: the AI guide `/insights/dynamics-365-crm-uae` competes with the CRM ladder head `/dynamics-365-crm-uae`: client chooses
   (301 into the head page after merging its answer section, or retarget the guide to the question's own search).
 - devaicon.com: ask for clean service names (one service entry is a prose sentence).
