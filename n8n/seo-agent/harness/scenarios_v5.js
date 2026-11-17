@@ -19815,5 +19815,6 @@ await require('./scenarios_client_1116')({ H, run, mock, store, guard, reset, be
 await require('./scenarios_client_1116_integ')({ H, run, mock, store, guard, reset, begin });   // CQ9 (client reports 2026-11-16, integration): a target the app marked writing (numeric request id) settles from the content log in AI Target Settle and AI Growth, and is queued again when its run never wrote a page
 await require('./scenarios_client_1116_review')({ H, run, mock, store, guard, reset, begin });   // CQR1-CQR5 (the engine review of the 2026-11-16 AI page fix, M1-M3 L2-L7): widened topics for the topic test only, a ladder page never held against its own ladder, a shortened title still found, held runs queued, one ladder-page / market / blog rule
 await require('./scenarios_client_1116b')({ H, run, mock, store, guard, reset, begin });   // CA1-CA2 (client report 2026-11-16 b, devaicon.com): a slot freed by the one-page-one-rewrite hold is refilled, an approval it holds says same_page, and the callback carries approved_not_written
+await require('./scenarios_cr17_b')({ H, run, mock, store, guard, reset, begin });   // CR17B1-CR17B4 (client report 2026-11-17, C1, build section 200): a deleted website takes its whole engine history with it (exact domain / www. / site id, never a look-alike domain), and the app's list is the engine's
 H.report();
 })();

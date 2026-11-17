@@ -1388,3 +1388,85 @@ def serp_cache_wrap(wf, http, label, body_js, sc_src, rt_src, what, unit='search
     assert plan['jsCode'].count(old) == 1, 'KW-SERP: %s does not read its requests from %s' % (plan_node, parent)
     plan['jsCode'] = plan['jsCode'].replace(old, "(() => { try { return $('" + SP + "').all(); } catch (e) { return " + old + "; } })()")   # a run with no split (an older caller) pairs as before
     return {'keys': K, 'load': LD, 'split': SP, 'if': IF_, 'with_cache': WC, 'rows': RW, 'new': NR, 'save': SV, 'restore': RS, 'dsts': [t['node'] for t in dsts]}
+
+
+# =============================================================================
+# CR17-B (client report 2026-11-17, C1; build section 200): ONE list of the engine tables that hold a website's history, and how a row
+# is known to be that website's. Read by the Site Admin `delete` chain (build_site_tracker.py), by the app's backstop (generated into
+# app/shared/src/engine-purge.generated.ts by build_v4.py section 200; app/server/src/services/enginePurge.ts) and by the private
+# backfill script (tools/repair_b_purge.py). Every table of this file is either purged with the website or kept with a reason
+# (purge_registry_check() fails the build otherwise), so a new table cannot be forgotten.
+# How a row is matched, always by EXACT equality (never a prefix or a substring: devaicon.com never touches mydevaicon.com):
+#   'domain'  the column equals the website's domain or its www. form
+#   'id'      the column equals the engine's site id ('site_' + domain with every non [a-z0-9] run as '-'); used only for tables without a
+#             domain column. Two domains can share an id (foo.co.uk / foo-co.uk): the app refuses the second one when it is verified
+#             (services/engineSite.ts), and its backstop skips the 'id' keys while another domain holds the id.
+# =============================================================================
+import re as _re
+_PD = [('domain', 'domain')]
+SITE_PURGE = [
+    (LADDER_TABLE, _PD), (LADDER_SETTINGS_TABLE, _PD),
+    (HISTORY_TABLE, [('domain', 'domain'), ('ladder_id', 'id')]),          # ladder checks carry the domain; the Site Tracker's live checks use the site id as ladder_id
+    (SITES_TABLE, _PD), (METRICS_TABLE, _PD), (QUERY_TABLE, _PD), (PAGES_TABLE, [('site_id', 'id')]),
+    (LOG_TABLE, _PD), (TRENDS_TABLE, _PD), (CADENCE_TABLE, _PD),
+    (ALERTS_TABLE, _PD), (CHECKIN_TABLE, _PD), (PROFILE_TABLE, _PD), (CASE_TABLE, _PD),
+    (MONITORS_TABLE, _PD), (AI_PROMPTS_TABLE, _PD), (AI_ANSWERS_TABLE, _PD), (AI_VIS_TABLE, _PD), (AI_DAILY_TABLE, _PD), (AI_IMPORTS_TABLE, _PD),
+    (AI_PAGES_TABLE, _PD), (AI_TARGETS_TABLE, _PD), (AI_GROWTH_TABLE, _PD),
+    (AI_RANK_RUNS_TABLE, _PD), (AI_RANK_QUESTIONS_TABLE, _PD), (AI_RANK_ACTIONS_TABLE, _PD), (AI_RANK_SOURCES_TABLE, _PD),
+    (BL_SNAP_TABLE, _PD), (PROSPECT_TABLE, _PD), (LINKS_TABLE, _PD), (LINK_OUTREACH_TABLE, _PD), (LISTINGS_TABLE, _PD), (LINK_IMPACT_TABLE, _PD),
+    (LINK_GRAPH_TABLE, _PD), (LINK_IMPORTS_TABLE, _PD),
+    (AUDITS_TABLE, _PD), (AUDIT_FINDINGS_TABLE, _PD), (PAGE_WATCH_TABLE, _PD),
+    (INDEX_PAGES_TABLE, _PD), (INDEX_HISTORY_TABLE, [('site_id', 'id')]), (INDEX_RUNS_TABLE, _PD), (UPDATE_IMPACT_TABLE, _PD),
+    (CACHE_TABLE, [('site_id', 'id'), ('site_id', 'domain')]),              # the website's own keys (site id) and its publish / keyword idempotency keys (domain)
+    (CYCLES_TABLE, _PD), (CYCLE_JOBS_TABLE, [('site_id', 'id')]), (SKIPS_TABLE, [('site_id', 'id')]),
+    (KI_RUNS_TABLE, _PD), (KI_COMP_TABLE, _PD), (KI_KW_TABLE, _PD), (KI_GAPS_TABLE, _PD),
+]
+# kept on purpose (the retention facts say so): nothing in them is one website's history
+SITE_KEEP = {
+    RUN_LEDGER_TABLE: 'cost record of each run (date, kind of run, money); kept for accounting, like the app keeps its cost history after a company is deleted',
+    OPS_ALERTS_TABLE: 'the platform\'s own operations alerts (failed workflow steps); no website column',
+    GOOGLE_EVENTS_TABLE: 'Google\'s public update announcements, the same for every website',
+    AI_RANK_PRIORS_TABLE: 'pooled learning across websites (lever x stage counts), names no website',
+}
+
+
+def purge_values(kind, domain):
+    """-> the exact values a column must equal for a row to be this website's ('domain': bare and www.; 'id': the engine site id)."""
+    d = str(domain or '').strip().lower()
+    d = _re.sub(r'^https?://', '', d)
+    d = _re.sub(r'^www\.', '', d)
+    d = _re.sub(r'[/?#].*$', '', d)
+    d = _re.sub(r':\d+$', '', d)
+    if not d:
+        return []
+    if kind == 'domain':
+        return [d, 'www.' + d]
+    if kind == 'id':
+        return ['site_' + _re.sub(r'[^a-z0-9]+', '-', d)]
+    raise ValueError('unknown purge key kind %r' % kind)
+
+
+def all_engine_tables():
+    """-> every Data Table name this file defines (a module-level *_TABLE string starting seo_)."""
+    return sorted({v for k, v in globals().items() if k.endswith('_TABLE') and isinstance(v, str) and v.startswith('seo_')})
+
+
+def purge_registry_check():
+    """Every table is purged or kept, never both, never twice; every key column is a column of its table."""
+    purged = [t for t, _ in SITE_PURGE]
+    assert len(purged) == len(set(purged)), 'CR17-B: a table is listed twice in SITE_PURGE: %s' % sorted({t for t in purged if purged.count(t) > 1})
+    both = set(purged) & set(SITE_KEEP)
+    assert not both, 'CR17-B: a table is both purged and kept: %s' % sorted(both)
+    missing = sorted(set(all_engine_tables()) - set(purged) - set(SITE_KEEP))
+    assert not missing, 'CR17-B: engine table(s) neither purged with a website nor kept with a reason (add to SITE_PURGE or SITE_KEEP): %s' % missing
+    extra = sorted((set(purged) | set(SITE_KEEP)) - set(all_engine_tables()))
+    assert not extra, 'CR17-B: SITE_PURGE / SITE_KEEP names unknown tables: %s' % extra
+    cols_of = {v: [c for c, _ in globals()[k[:-6] + '_COLS']] for k, v in globals().items() if k.endswith('_TABLE') and isinstance(v, str) and (k[:-6] + '_COLS') in globals()}
+    for t, keys in SITE_PURGE:
+        assert keys, 'CR17-B: %s has no key' % t
+        for col, kind in keys:
+            assert kind in ('domain', 'id'), 'CR17-B: %s key kind %r' % (t, kind)
+            assert col in cols_of.get(t, []), 'CR17-B: %s has no column %r to purge by' % (t, col)
+            if kind == 'id':
+                assert 'domain' not in cols_of[t] or t in (HISTORY_TABLE, CACHE_TABLE), 'CR17-B: %s has a domain column: purge it by domain, not by the shared site id' % t
+    return {'purged': len(purged), 'kept': len(SITE_KEEP)}
