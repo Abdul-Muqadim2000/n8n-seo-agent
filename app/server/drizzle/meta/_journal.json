@@ -197,6 +197,13 @@
       "when": 1794493718268,
       "tag": "0027_hook_token_rotation",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1794944641534,
+      "tag": "0028_cr17_client_report",
+      "breakpoints": true
     }
   ]
 }
