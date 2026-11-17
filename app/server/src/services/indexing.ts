@@ -17,6 +17,7 @@ import {
   INDEX_ASK_QUIET_DAYS,
   INDEX_ASKED_SHOWN_DAYS,
   INDEX_DAILY_CAP,
+  INDEX_RESOLVED_DAYS,
   n8nSiteId,
   urlOnHost,
   type GoogleEventRow,
@@ -149,18 +150,40 @@ async function askedByApp(orgId: string, siteId: string): Promise<Record<string,
   return out;
 }
 
+/**
+ * CR17-C (client report 2026-11-17 Q1): "Resolved recently" reads the website's index history of the last 60 days (a page that went into
+ * Google in the last 28 days needs the reading before it) and its finished indexing steps. Extras: a failure leaves the list empty.
+ */
+const RESOLVED_HISTORY_DAYS = 60;
+const RESOLVED_HISTORY_MAX = 2000;
+const recentHistory = (d: string) =>
+  rows<IndexHistoryRow>('indexHistory', { filters: [bySite(d), { columnName: 'at', condition: 'gte', value: new Date(Date.now() - RESOLVED_HISTORY_DAYS * 864e5).toISOString() }], sortBy: 'at:desc', max: RESOLVED_HISTORY_MAX });
+async function finishedIndexSteps(orgId: string, siteId: string): Promise<{ key: string; doneAt: string | null; notNeeded: boolean; message: string }[]> {
+  const xs = await db
+    .select({ key: schema.siteTasks.taskKey, doneAt: schema.siteTasks.doneAt, lastCheck: schema.siteTasks.lastCheck, skippedAt: schema.siteTasks.skippedAt })
+    .from(schema.siteTasks)
+    .where(and(eq(schema.siteTasks.orgId, orgId), eq(schema.siteTasks.siteId, siteId), gte(schema.siteTasks.doneAt, new Date(Date.now() - INDEX_RESOLVED_DAYS * 864e5))))
+    .limit(100);
+  // a done step that a later reading reopened is not finished (its last reading says not done)
+  return xs
+    .filter((x) => !x.skippedAt && x.key.startsWith('indexing:') && (!x.lastCheck || x.lastCheck.ok))
+    .map((x) => ({ key: x.key, doneAt: x.doneAt ? x.doneAt.toISOString() : null, notNeeded: !!x.lastCheck?.notNeeded, message: x.lastCheck?.notNeeded ? String(x.lastCheck.message ?? '').slice(0, 300) : '' }));
+}
+
 export async function indexingData(site: Pick<SiteRow, 'domain'> & Partial<Pick<SiteRow, 'id' | 'orgId'>>, log: Logger = quiet): Promise<IndexingData> {
   const d = site.domain;
   const mon = await indexMonitor(d).catch(() => ({ settings: { on: true, dailyCap: INDEX_DAILY_CAP.default }, sitemapSubmit: false }));
   const settings = mon.settings;
   const runsP = runsOf(d);
-  const [view, runs, events, impacts, asked, byApp] = await Promise.allSettled([
+  const [view, runs, events, impacts, asked, byApp, history, steps] = await Promise.allSettled([
     runsP.then((r) => pageView(d, r)),
     runsP,
     rows<GoogleEventRow>('googleEvents', { sortBy: 'started_at:desc', max: 12 }),
     rows<UpdateImpactRow>('updateImpact', { filters: [bySite(d)], sortBy: 'compared_at:desc', max: 3 }),
     askedRows(d),
     site.id && site.orgId ? askedByApp(site.orgId, site.id) : Promise.resolve({}),
+    recentHistory(d),
+    site.id && site.orgId ? finishedIndexSteps(site.orgId, site.id) : Promise.resolve([]),
   ]);
   if (view.status === 'rejected' || runs.status === 'rejected') {
     const err = view.status === 'rejected' ? view.reason : (runs as PromiseRejectedResult).reason;
@@ -180,6 +203,8 @@ export async function indexingData(site: Pick<SiteRow, 'domain'> & Partial<Pick<
     settings,
     capped: view.value.capped,
     indexedCounts: view.value.indexedCounts,
+    history: history.status === 'fulfilled' ? history.value : [],
+    finishedSteps: steps.status === 'fulfilled' ? steps.value : [],
   });
 }
 

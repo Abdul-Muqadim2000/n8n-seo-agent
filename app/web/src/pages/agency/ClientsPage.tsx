@@ -108,7 +108,7 @@ function AgencyClients() {
     },
     {
       key: 'health',
-      header: 'Health',
+      header: 'Technical health',   // CR17-C (client report 2026-11-17 C3): the audit score's name everywhere
       align: 'right',
       sortValue: (r) => r.healthScore ?? -1,
       cell: (r) =>

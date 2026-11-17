@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { Activity, BellRing, Bot, CalendarDays, CheckCircle2, Clock, FileText, Gauge, LayoutDashboard, Lightbulb, Link2, MousePointerClick, PenSquare, TrendingUp } from 'lucide-react';
-import { compactNumber, DRAFT_BY_HAND, type OverviewData } from '@seo/shared';
+import { compactNumber, DRAFT_BY_HAND, healthLabelFor, pagesInGoogleLead, technicalGrade, TECHNICAL_HEALTH_LINE, type OverviewData } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { useSiteData } from '@/lib/queries';
 import { useCycleDay } from '@/lib/cycle-day';
@@ -23,6 +23,7 @@ import { CATEGORY_META, RecommendationButton, sortRecommendations } from './_com
 import { ReportList } from './_components/reports';
 
 import { ComingUpSummary } from './_components/pipeline/coming-up';
+import { PagesInGoogleCard, usePagesInGoogle } from './_components/pages-in-google';
 import { SiteWarnings } from '@/components/warnings/SiteWarnings';
 
 export default function OverviewPage() {
@@ -51,8 +52,8 @@ function OverviewSkeleton() {
   return (
     <div className="space-y-6" aria-busy="true" aria-label="Loading">
       <Skeleton className="h-[300px] rounded-xl" />
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        {Array.from({ length: 4 }, (_, i) => (
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
+        {Array.from({ length: 5 }, (_, i) => (
           <Skeleton key={i} className="h-[168px] rounded-xl" />
         ))}
       </div>
@@ -66,7 +67,9 @@ function OverviewSkeleton() {
 }
 
 function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
-  const { org, page } = useSitePage();
+  const { org, site, page } = useSitePage();
+  // CR17-C (client report 2026-11-17 C3 / F6): Pages in Google, from the Indexing page's own data and rule (pagesInGoogle)
+  const { p: pig, loading: pigLoading } = usePagesInGoogle(org.id, site.id, d.site.domain);
   const navigate = useNavigate();
   const search = useMemo(() => sortByDate(d.search.series, (r) => r.periodEnd), [d.search.series]);
   const health = useMemo(() => sortByDate(d.health.series, (r) => r.auditedAt), [d.health.series]);
@@ -81,6 +84,8 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
   const recs = sortRecommendations(d.recommendations).slice(0, 5);
   const posDelta = L && L.position > 0 && L.prevPosition > 0 ? L.prevPosition - L.position : null;
   const r = d.rankings;
+  // CR17-C (C3): when Pages in Google is critical the hero leads with it, never a lone "Excellent"
+  const lead = pagesInGoogleLead(pig, H?.healthScore);
 
   return (
     <Stagger className="space-y-6">
@@ -103,8 +108,8 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
             <span className="font-mono tracking-[0.02em] uppercase">Google search</span>
           )
         }
-        title={searchHeadline(L)}
-        description={recsLine(d)}
+        title={lead ?? searchHeadline(L)}
+        description={lead ? `${searchHeadline(L)}. ${recsLine(d)}` : recsLine(d)}
         aside={recs[0] ? <NextStep d={d} /> : undefined}
         stats={
           <>
@@ -148,18 +153,20 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
       <ComingUpSummary />
 
       {/* site health, AI answers, links and rankings: one card each */}
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
         <MetricCard
-          label="Health score"
+          label={healthLabelFor(H?.reportType)}
           icon={<Gauge />}
+          info={TECHNICAL_HEALTH_LINE}
           tone={H && scoreTone(H.healthScore) !== 'accent' ? (scoreTone(H.healthScore) as 'good' | 'warning' | 'critical') : 'blue'}
-          visual={H ? <ScoreRing label="Health score" value={H.healthScore} display={<CountUp value={H.healthScore} />} suffix="/100" size={68} /> : undefined}
+          visual={H ? <ScoreRing label={healthLabelFor(H.reportType)} value={H.healthScore} display={<CountUp value={H.healthScore} />} suffix="/100" size={68} /> : undefined}
           value="-"
           delta={H ? <Delta value={diff(H.healthScore, prevHealth?.healthScore)} suffix=" pts" digits={0} /> : undefined}
           sparkline={<Sparkline data={health} dataKey="healthScore" />}
           meta={H ? <HealthHint grade={H.grade} score={H.healthScore} critical={H.critical} high={H.high} at={H.auditedAt} /> : 'Run a technical audit to score the site'}
           onClick={() => navigate(page('technical'))}
         />
+        <PagesInGoogleCard p={pig} loading={pigLoading} onClick={() => navigate(page('indexing'))} />
         <MetricCard
           label="Named in AI answers"
           icon={<Bot />}
@@ -252,13 +259,13 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <MiniTrend
-          title="Health score"
+          title={healthLabelFor(H?.reportType)}
           icon={<Gauge />}
           empty={!health.length}
           emptyText="No audit yet"
           emptyAction={<ToolButton mode="audit" size="sm">Run a technical audit</ToolButton>}
           more={<MoreLink to={page('technical')}>Technical health</MoreLink>}
-          series={[{ key: 'healthScore', label: 'Health score', format: (v) => `${v}/100` }]}
+          series={[{ key: 'healthScore', label: healthLabelFor(H?.reportType), format: (v) => `${v}/100` }]}
           data={health}
           xKey="auditedAt"
           xFormat={timeAxisFormat(health.map((h) => h.auditedAt))}
@@ -373,9 +380,11 @@ function NextStep({ d }: { d: OverviewData }) {
 
 function HealthHint({ grade, score, critical, high, at }: { grade: string; score: number; critical: number; high: number; at: string }) {
   const t = scoreTone(score);
+  // CR17-C (C3): the grade is always "(technical)", so "Excellent" is never read as "Google shows my pages"
+  const g = technicalGrade(score)?.label ?? grade;
   return (
     <span className="flex flex-wrap items-center gap-1.5">
-      {grade && <StatusBadge tone={t === 'accent' ? 'neutral' : t}>{grade}</StatusBadge>}
+      {g && <StatusBadge tone={t === 'accent' ? 'neutral' : t}>{g}</StatusBadge>}
       {critical > 0 && <StatusBadge tone="critical">{critical} critical</StatusBadge>}
       <StatusBadge tone={high > 0 ? 'serious' : 'neutral'}>{high} high-severity</StatusBadge>
       <span>{fmtDate(at)}</span>
@@ -445,7 +454,7 @@ function SetupChecklist({ d }: { d: OverviewData }) {
       done: !!d.health.latest,
       title: 'Technical audit',
       icon: <Gauge />,
-      detail: d.autopilot?.audit ? 'Crawl, health score and a fix pack. Your autopilot runs it on its own; the result lands here.' : 'Crawl, health score and a fix pack.',
+      detail: d.autopilot?.audit ? 'Crawl, technical health score and a fix pack. Your autopilot runs it on its own; the result lands here.' : 'Crawl, technical health score and a fix pack.',
       action: d.autopilot?.audit ? <AutopilotLink /> : <ToolButton mode="audit" size="sm">Run a technical audit</ToolButton>,
     },
     {

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { compactNumber, type Report } from '@seo/shared';
+import { compactNumber, healthLabelFor, technicalGrade, type Report } from '@seo/shared';
 import { cn } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/badge';
 import { VerdictBadge } from './kit';
@@ -41,7 +41,8 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
     case 'site_audit':
     case 'full_report': {
       const score = nm(s, 'healthScore');
-      if (score != null) badge = <StatusBadge tone={score >= 80 ? 'good' : score >= 60 ? 'warning' : 'critical'}>{`Health ${score}${tx(s, 'grade') ? ` · ${tx(s, 'grade')}` : ''}`}</StatusBadge>;
+      // CR17-C (client report 2026-11-17 C3): the audit score is Technical health (a full report's is SEO health), the grade "(technical)"
+      if (score != null) badge = <StatusBadge tone={score >= 80 ? 'good' : score >= 60 ? 'warning' : 'critical'}>{`${healthLabelFor(report.stage)} ${score}${tx(s, 'grade') ? ` · ${technicalGrade(score)?.label ?? tx(s, 'grade')}` : ''}`}</StatusBadge>;
       parts.push(
         nm(s, 'critical') != null && `${nm(s, 'critical')} critical`,
         nm(s, 'high') != null && `${nm(s, 'high')} high`,

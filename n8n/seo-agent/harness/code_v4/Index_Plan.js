@@ -1484,12 +1484,15 @@ const IX = (() => {
     const opts = o || {}; const now = n0(opts.now); const nowIso = new Date(now).toISOString(); const home = opts.home_keys || new Set(); const frz = !!(opts.freeze && opts.freeze.freeze);
     // wave 2 (DESIGN_WAVE2.md §2.3): never a utility page; a page the client already asked Google about waits ask_reoffer_days;
     // important existing pages are the ones in the sitemap OR linked from the website (linked_by)
+    // CR17-C (build section 193, client report 2026-11-17 Q1): the pages an old address now redirects to (a move we saw) are asked first, at the
+    // "fix we saw" tier: they carry the old page's history and the client is waiting for them; a policy page marked important comes after
+    const movedTargets = new Set((rows || []).filter(r => S(r.cause) === 'redirect' && S(r.final_url) && !same(r.final_url, r.url)).map(r => key(r.final_url)));
     const eligible = (r) => {
       if (S(r.state) === 'indexed' || S(r.action) === 'leave_out' || S(r.action) === 'none' && !S(r.fix_seen_at)) return 0;
       if (frz && S(r.action) === 'quality') return 0;
       if (isUtilityRow(r)) return 0;
       const ak = ts(r.asked_google_at); if (ak && now - ak < CFG.ask_reoffer_days * DAY) return 0;
-      if (S(r.fix_seen_at) || improveState(r) === 'waiting') return 3;   // a fix we saw, or an improved version Google has not read yet
+      if (S(r.fix_seen_at) || improveState(r) === 'waiting' || movedTargets.has(key(r.url))) return 3;   // a fix we saw, an improved version Google has not read yet, or where an old address now goes
       const pub = ts(r.published_at);
       if (S(r.sources).split(',').includes('ours') && pub && now - pub >= CFG.ask_ours_days * DAY) return 2;
       if ((r.in_sitemap || linkedList(r.linked_by).length || home.has(key(r.url)) || typeOverride(r) === 'important') && UNSEEN.includes(S(r.cause))) return 1;
@@ -1719,6 +1722,15 @@ const IX = (() => {
   const changed = (prev, row) => !prev || (prev.sig ? prev.sig !== rowSig(row) : PAGE_COLS.some(k => k !== 'updated_at' && colVal(prev, k) !== colVal(row, k)));
 
   // ---- the run: the site's figures, the client's report ----
+  /**
+   * CR17-C (build section 193, client report 2026-11-17 F6): "pages that should be in Google" - THE SHARED RULE with the app
+   * (app/shared/src/indexing.ts inGooglePopulation): a page Google gave a reading of, not left out on purpose, not an address that is not a
+   * page of its own (moved, gone, another page's copy), and not an address our newest read saw redirect to another page. A moved address
+   * counts once, through the page it moved to.
+   */
+  const NOT_A_PAGE = ['redirect', 'redirect_error', 'not_found', 'canonical_elsewhere', 'alternate'];
+  const inPopulation = (r) => ['indexed', 'not_indexed', 'excluded'].includes(S(r.state)) && S(r.action) !== 'leave_out' && !NOT_A_PAGE.includes(S(r.cause))
+    && !(S(r.final_url) && !same(r.final_url, r.url));
   const summarize = (rows, run) => {
     const R = rows || []; const cnt = (f) => R.filter(f).length;
     const by_cause = {}, by_action = {};
@@ -1726,6 +1738,7 @@ const IX = (() => {
     return { known: R.length, indexed: cnt(r => r.state === 'indexed'), not_indexed: cnt(r => r.state === 'not_indexed'), excluded: cnt(r => r.state === 'excluded'),
       unknown: cnt(r => r.state === 'unknown'), errors: cnt(r => r.state === 'error'), new_pages: cnt(r => r.lane === 'new'), new_indexed: cnt(r => r.lane === 'new' && r.state === 'indexed'),
       needs_person: cnt(r => r.needs_person === true), should_index: cnt(r => r.action !== 'leave_out'), by_cause, by_action,
+      should_be: cnt(inPopulation), in_google: cnt(r => inPopulation(r) && r.state === 'indexed'),   // CR17-C (F6): the app's population
       backlog_left: n0((run || {}).backlog_left) };
   };
   const ACTION_LABEL = { fixed: 'Fixed on your site, waiting for Google', improved: 'Improved by you, waiting for Google', moved: 'Improved version published at another address', site_fix: 'Steps on your website', links: 'Help Google find these pages (internal links and sitemap)', quality: 'Pages Google read and left out',
@@ -1760,7 +1773,10 @@ const IX = (() => {
     L.push('');
     // E14: a website that could not be checked is said to be not checked - never "0 of 0", never a measured zero
     if (opts.failed) L.push('**We could not check this website today: ' + S(opts.why || 'not checked').replace(/[.:]+$/, '') + '.**' + (sum.known ? ' The figures below are from the last check.' : ' Nothing has been checked yet.'));
-    if (sum.known) L.push('Google has **' + sum.indexed + ' of ' + sum.known + '** known pages in its index' + (should && should !== sum.known ? ' (' + sum.indexed + ' of the ' + should + ' that should be there)' : '') + '.');
+    // CR17-C (F6): the headline counts the pages that should be in Google (one population with the app); the known-pages figure stays as context
+    const sb = sum.should_be != null ? n0(sum.should_be) : should; const ig = sum.in_google != null ? n0(sum.in_google) : sum.indexed;
+    if (sum.known) L.push(sb ? 'Google has **' + ig + ' of the ' + sb + '** pages that should be in Google (' + sum.known + ' addresses known, old addresses that redirect and pages left out on purpose not counted).'
+      : 'Google has **' + sum.indexed + ' of ' + sum.known + '** known pages in its index.');
     if (sum.unknown) L.push(sum.unknown + ' page(s) are not checked yet; at up to ' + n0(run.quota_cap) + ' checks a day that takes about ' + Math.max(1, Math.ceil(sum.unknown / Math.max(1, n0(run.quota_cap)))) + ' more day(s).');
     if (sum.errors) L.push(sum.errors + ' page(s) could not be checked on the last try; they are tried again, never counted as missing.');
     if (S(run.note) && !opts.failed) L.push(S(run.note));
@@ -2317,7 +2333,7 @@ const IX = (() => {
   return { CFG, key, same, norm, own, safe, parseUrl, siteHost, hostOf, bare, pathOf, depth, isLowValue, LOW_VALUE, robotsSitemaps, parseSitemap, sitemapRoots, sitemapAccept,
     sitemapQueue, sitemapComplete, searchEvidence, saWindows, readInspection, readingsOf, reuseOf, storedReading, readFetch, hopOf, robotsAllows, mainWords, diagnose, direct200, movedByUs, PERMANENT, fixSeen, covCause,
     stateOf, ACTION, CAUSES, laneOf, anchorOf, noteOf, plan, inProperty, nextCheck, capOf, isGone, askGoogle, homeLinks, linkSuggestions, topicOf, kindOf, parseEvents,
-    eventRows, policyText, policyEvent, POLICY_URL, freeze, impactWindows, impactDue, impactCompare, impactNote, PAGE_COLS, rowOut, rowSig, changed, summarize,
+    eventRows, policyText, policyEvent, POLICY_URL, freeze, impactWindows, impactDue, impactCompare, impactNote, PAGE_COLS, rowOut, rowSig, changed, summarize, inPopulation,
     reportMarkdown, groupNote, isoDay, DAY, merge, ts,
     fixState, xRobotsNoindex, metaNoindex, sitemapBatch, answerText, sizeOf, plainWhy, PLAIN_FAIL,
     UTILITY, isUtility, isJobPosting, resolveHref, pageLinks, linkIndex, linkedOf, linkedList, parentOf, parentPlan, titleOf, titleCore, canonicalOwn,

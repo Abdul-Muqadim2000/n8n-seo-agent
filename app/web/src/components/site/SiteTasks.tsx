@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { CheckCircle2, CircleDashed, ListChecks, RotateCcw, SkipForward, TriangleAlert } from 'lucide-react';
-import { aiRankAddressCheck, siteTaskCheckLine, type SiteTask } from '@seo/shared';
+import { aiRankAddressCheck, SITE_TASK_NOT_NEEDED_LABEL, siteTaskCheckLine, type SiteTask } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { InsightItem } from '@/components/insight';
 import { Badge, StatusBadge } from '@/components/ui/badge';
@@ -48,7 +48,7 @@ function useTaskAction() {
       api<{ task: SiteTask }>(`/api/orgs/${org.id}/sites/${site.id}/tasks/${action}`, { method: 'POST', body: { key, ...(clientUrl ? { clientUrl } : {}) } }).then((r) => ({ action, task: r.task })),
     onSuccess: ({ action, task }) => {
       if (action === 'check') {
-        if (task.state === 'done') toast.success(`Done: ${task.title}`);
+        if (task.state === 'done') toast.success(task.notNeeded ? `${SITE_TASK_NOT_NEEDED_LABEL}: ${task.title}` : `Done: ${task.title}`);
         else toast.warning(task.lastCheck?.message ?? 'Not done yet');
       } else toast.success(action === 'skip' ? 'Skipped. You can bring it back below.' : 'Back on your to-do list');
       void qc.invalidateQueries({ queryKey: ['site', site.id] });
@@ -70,6 +70,8 @@ export function SiteTaskCheckButton({ taskKey, label = "I've done it, check now"
 }
 
 function stateMeta(t: SiteTask) {
+  // CR17-C (client report 2026-11-17 F3): a step closed because the address now redirects was not needed, it was not done
+  if (t.state === 'done' && t.notNeeded) return <Badge>{SITE_TASK_NOT_NEEDED_LABEL}</Badge>;
   if (t.state === 'done') return <StatusBadge tone="good">Done</StatusBadge>;
   if (t.state === 'skipped') return <Badge>Skipped</Badge>;
   if (t.reopened) return <StatusBadge tone="warning">Needed again</StatusBadge>;

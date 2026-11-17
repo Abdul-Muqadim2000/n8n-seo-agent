@@ -52,6 +52,8 @@ import {
   type TrendRow,
   contentReadiness,
   READINESS_REASON,
+  healthLabelFor,
+  technicalGrade,
 } from '@seo/shared';
 import { config } from '../config';
 import { db } from '../db';
@@ -840,7 +842,8 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     }),
     base('audit', m?.auditMonthly ?? true, 'Switched off in the monitor settings', {
       lastRunAt: lastIso(lastAudit?.auditedAt, auReport?.receivedAt),
-      lastResult: lastAudit ? `Health ${lastAudit.healthScore}/100 (${lastAudit.grade}) · ${lastAudit.findings} findings` : null,
+      // CR17-C (client report 2026-11-17 C3): the audit score is Technical health, its grade always "(technical)"
+      lastResult: lastAudit ? `${healthLabelFor(lastAudit.reportType)} ${lastAudit.healthScore}/100 (${technicalGrade(lastAudit.healthScore)?.label ?? lastAudit.grade}) · ${lastAudit.findings} findings` : null,
       lastReportId: auReport?.id ?? null,
       monthlyUsd: rowUsd('audit'),
       detail: m ? `up to ${m.auditPages} pages${m.auditJs ? ' · JavaScript' : ''}` : 'up to 200 pages',
@@ -977,7 +980,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       id: 'monitor',
       title: 'Monitor',
       state: active ? 'active' : 'waiting',
-      headline: lastAudit ? `Health ${lastAudit.healthScore}/100` : 'No audit yet',
+      headline: lastAudit ? `${healthLabelFor(lastAudit.reportType)} ${lastAudit.healthScore}/100` : 'No audit yet',
       detail: [lastAi ? `AI named ${formatPercent(lastAi.mentionRate, 0)}` : null, lastBl ? `${lastBl.unionDomains ?? lastBl.referringDomains} linking sites` : null].filter(Boolean).join(' · ') || 'AI answers, backlinks and technical health',
       action: { label: 'Technical health', page: 'technical' },
     },

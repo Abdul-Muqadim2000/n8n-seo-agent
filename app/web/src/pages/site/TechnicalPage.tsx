@@ -1,9 +1,9 @@
 import { useId, useMemo, useState, type ReactNode } from 'react';
-import { useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { BarChart3, BellRing, CheckCircle2, Circle, Eye, FileArchive, FileSearch, FileText, Gauge, ListChecks, Siren, Sparkles, TrendingUp } from 'lucide-react';
-import { effectiveSeverity, foldMinor, liveResolved, minorFoldNote, titleCase, type AuditPoint, type Finding, type FindingLive, type FindingStatus, type IndexCoverage, type PageWatch, type RecheckRequest, type TechnicalData } from '@seo/shared';
+import { effectiveSeverity, foldMinor, healthLabelFor, liveResolved, minorFoldNote, pagesInGoogleLead, technicalGrade, TECHNICAL_HEALTH_LINE, titleCase, type AuditPoint, type Finding, type FindingLive, type FindingStatus, type IndexCoverage, type PageWatch, type RecheckRequest, type TechnicalData } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { api, fileUrl, toastError } from '@/lib/api';
 import { qk, useSiteData } from '@/lib/queries';
@@ -22,6 +22,7 @@ import { DataGate, FillHeight, FilterChips, Panel, SectionHeading, ToolButton, u
 import { countBy, dateLabelFormat, diff, plural, sortByDate, timeAxisFormat } from './_components/format';
 import { FileChip, ReportList, isFixPackFile } from './_components/reports';
 import { ChartTitle, DashSkeleton, HeroEyebrow } from './_components/visuals';
+import { PagesInGoogleCard, usePagesInGoogle } from './_components/pages-in-google';
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'] as const;
 type Sev = (typeof SEVERITIES)[number];
@@ -45,7 +46,7 @@ export default function TechnicalPage() {
       <PageHeader
         icon={<Gauge />}
         title="Technical health"
-        description="Crawl results, health score and every issue the audits found: what is new, what is still open and what you fixed."
+        description="Crawl results, the technical health score and every issue the audits found: what is new, what is still open and what you fixed."
         actions={
           <>
             {audits.length > 1 && (
@@ -84,6 +85,9 @@ export default function TechnicalPage() {
 function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean }) {
   const { org, site, page, can } = useSitePage();
   const audits = useMemo(() => sortByDate(d.audits, (a) => a.auditedAt), [d.audits]);
+  // CR17-C (client report 2026-11-17 C3): Pages in Google beside Technical health (the Indexing page's own figure)
+  const { p: pig, loading: pigLoading } = usePagesInGoogle(org.id, site.id, site.domain);
+  const navigateTo = useNavigate();
 
   if (!audits.length)
     return (
@@ -118,7 +122,11 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
   const fixReport = sortByDate(d.reports, (r) => r.receivedAt, 'desc').find((r) => r.files.some(isFixPackFile));
   const fixZip = fixReport?.files.find((f) => f.kind === 'zip' && isFixPackFile(f));
   const fixLoose = fixReport?.files.filter((f) => f.kind !== 'zip' && isFixPackFile(f)) ?? [];
-  const grade = sel.grade || (tone === 'good' ? 'Good' : tone === 'warning' ? 'Needs work' : 'Poor');
+  // CR17-C (C3): the grade is always "(technical)"
+  const grade = technicalGrade(sel.healthScore)?.label ?? (sel.grade || (tone === 'good' ? 'Good' : tone === 'warning' ? 'Needs work' : 'Poor'));
+  const label = healthLabelFor(sel.reportType);
+  // the newest audit's hero says it when Google shows few of the pages (a technical score never stands alone)
+  const lead = sel === audits[audits.length - 1] ? pagesInGoogleLead(pig, sel.healthScore) : null;
   const scoreDelta = diff(sel.healthScore, prev?.healthScore);
 
   return (
@@ -130,14 +138,14 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
         title={healthHeadline(sel)}
         description={
           prev
-            ? `Since the ${reportTypeLabel(prev.reportType).toLowerCase()} of ${fmtDate(prev.auditedAt)}: ${plural(st.fixed ?? 0, 'issue')} fixed, ${plural(st.new ?? 0, 'new issue')}, ${st.open ?? 0} still open. Health score ${sel.healthScore >= prev.healthScore ? 'up' : 'down'} from ${prev.healthScore} to ${sel.healthScore}.`
+            ? `${lead ? `${lead}: see Indexing. ` : ''}Since the ${reportTypeLabel(prev.reportType).toLowerCase()} of ${fmtDate(prev.auditedAt)}: ${plural(st.fixed ?? 0, 'issue')} fixed, ${plural(st.new ?? 0, 'new issue')}, ${st.open ?? 0} still open. ${label} ${sel.healthScore >= prev.healthScore ? 'up' : 'down'} from ${prev.healthScore} to ${sel.healthScore}.`
             : audits.some((a) => a !== sel && a.reportType !== sel.reportType)
               ? `The first ${reportTypeLabel(sel.reportType).toLowerCase()} of this website. It is not compared with the ${/full/i.test(sel.reportType) ? 'technical audits' : 'full SEO reports'}: they check different things and score on different weights.`
-              : 'The first audit of this website. The next one shows what you fixed.'
+              : `${lead ? `${lead}: see Indexing. ` : ''}The first audit of this website. The next one shows what you fixed.`
         }
         aside={
           <div className="flex items-center gap-4 md:flex-col md:gap-2">
-            <ScoreRing label="Health score" value={sel.healthScore} display={<CountUp value={sel.healthScore} />} suffix="/100" size={112} />
+            <ScoreRing label={label} value={sel.healthScore} display={<CountUp value={sel.healthScore} />} suffix="/100" size={112} />
             <span className="text-sm font-medium text-on-ink">{grade}</span>
           </div>
         }
@@ -147,15 +155,15 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
               <HeroStat label="Fixed since the last audit" value={<CountUp value={st.fixed ?? 0} />} hint={`audit of ${fmtDate(prev.auditedAt)}`} />
               <HeroStat label="New issues" value={<CountUp value={st.new ?? 0} />} hint="found for the first time" />
               <HeroStat label="Still open" value={<CountUp value={st.open ?? 0} />} hint="found by both audits" />
-              <HeroStat label="Health score change" value={scoreDelta != null ? `${scoreDelta > 0 ? '+' : ''}${scoreDelta} pts` : '-'} hint={`${prev.healthScore} to ${sel.healthScore} of 100`} />
+              <HeroStat label={`${label} change`} value={scoreDelta != null ? `${scoreDelta > 0 ? '+' : ''}${scoreDelta} pts` : '-'} hint={`${prev.healthScore} to ${sel.healthScore} of 100`} />
             </>
           ) : undefined
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
         <MetricCard
-          label="Health score"
+          label={label}
           icon={<Gauge />}
           tone={tone === 'accent' ? 'blue' : tone}
           value={
@@ -167,7 +175,7 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
           delta={<Delta value={scoreDelta} suffix=" pts" digits={0} />}
           deltaLabel={prev ? `vs ${fmtDate(prev.auditedAt)}` : 'first audit'}
           sparkline={<Sparkline data={trend.map((a) => ({ healthScore: a.healthScore }))} dataKey="healthScore" />}
-          info="80 and above is good, 60-79 needs work, below 60 is poor"
+          info={`${TECHNICAL_HEALTH_LINE} 90 and above is excellent, 75 good, 60 needs improvement, below 60 poor.`}
           meta={
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <StatusBadge tone={tone === 'accent' ? 'neutral' : tone}>{grade}</StatusBadge>
@@ -211,6 +219,7 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
           sparkline={trend.length > 1 ? <Sparkline data={trend.map((a) => ({ pagesCrawled: a.pagesCrawled }))} dataKey="pagesCrawled" /> : undefined}
           meta={`${reportTypeLabel(sel.reportType)} · ${sel.scheduled ? 'monthly schedule' : 'run on demand'} · ${fmtDate(sel.auditedAt)}`}
         />
+        <PagesInGoogleCard p={pig} loading={pigLoading} onClick={() => navigateTo(page('indexing'))} />
       </div>
 
       {fixReport && (
@@ -254,7 +263,7 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard
-          title={<ChartTitle icon={<TrendingUp />}>Health score over time</ChartTitle>}
+          title={<ChartTitle icon={<TrendingUp />}>{label} over time</ChartTitle>}
           description={`${plural(trend.length, reportTypeLabel(sel.reportType).toLowerCase())} · 80 and above is good${trend.length < audits.length ? ' · other report types score on other weights and are left out' : ''}`}
           loading={refetching}
           table={{
@@ -269,7 +278,7 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
           }}
         >
           <FillHeight min={240}>
-            {(h) => <TimeSeriesChart data={trend.map((a) => ({ auditedAt: a.auditedAt, healthScore: a.healthScore }))} xKey="auditedAt" xFormat={timeAxisFormat(trend.map((a) => a.auditedAt))} series={[{ key: 'healthScore', label: 'Health score', format: (v) => `${v}/100` }]} yDomain={[0, 100]} reference={{ y: 80, label: 'Good' }} area height={h} />}
+            {(h) => <TimeSeriesChart data={trend.map((a) => ({ auditedAt: a.auditedAt, healthScore: a.healthScore }))} xKey="auditedAt" xFormat={timeAxisFormat(trend.map((a) => a.auditedAt))} series={[{ key: 'healthScore', label, format: (v) => `${v}/100` }]} yDomain={[0, 100]} reference={{ y: 80, label: 'Good' }} area height={h} />}
           </FillHeight>
         </ChartCard>
         <CategoryChart rows={d.byCategory} loading={refetching} />
@@ -296,7 +305,7 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
 
 /** The hero's headline: the score and what needs fixing first. */
 function healthHeadline(a: AuditPoint): string {
-  const head = `Health ${a.healthScore}/100`;
+  const head = `${healthLabelFor(a.reportType)} ${a.healthScore}/100`;
   if (a.critical) return `${head}: ${plural(a.critical, 'critical issue')}${a.high ? ` and ${a.high} high` : ''} to fix`;
   if (a.high) return `${head}: ${plural(a.high, 'high-severity issue')} to fix`;
   if (a.medium) return `${head}: no critical issues, ${plural(a.medium, 'medium issue')} left`;

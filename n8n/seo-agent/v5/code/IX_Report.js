@@ -30,6 +30,7 @@ for (const d of diag) {
   const dates = sj.dates || null;
   const summary = { known: sum.known, indexed: sum.indexed, not_indexed: sum.not_indexed, excluded: sum.excluded, unknown: sum.unknown, backlog_left: sum.unknown,
     new_pages: sum.new_pages, new_indexed: sum.new_indexed, by_action: sum.by_action, by_cause: sum.by_cause, dropped: (d.dropped || []).slice(0, IX.CFG.dropped_max),
+    should_be: sum.should_be, in_google: sum.in_google,   // CR17-C (build section 193, F6): the pages that should be in Google, the app's one population
     freeze: !!fr.freeze, freeze_reason: S(fr.reason), events,
     impact: imp ? { event_title: S(imp.event_title), dropped: n0(imp.dropped), stable: n0(imp.stable), gained: n0(imp.gained) } : { event_title: '', dropped: 0, stable: 0, gained: 0 },
     // N12 (fix wave 2): a run that could not read the website says so in the summary itself - the figures are the LAST check's, never today's

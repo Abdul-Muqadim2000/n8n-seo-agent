@@ -1,4 +1,4 @@
-// CR17C1-CR17C12 (client report 2026-11-17, devaicon.com, package CR17-C "index", build section 193). Synthetic .example rows shaped like the
+// CR17C1-CR17C19 (client report 2026-11-17, devaicon.com, package CR17-C "index", build section 193). Synthetic .example rows shaped like the
 // production ones (no client data). Runs the GENERATED Index coverage kit (harness/code_v4/Index_Diagnose.js), the AI ranking kits from v5 and
 // the generated Build Site Issues through the S6 technical-audit fixtures.
 //   F3  the freshness guard both ways: a permanent redirect our read saw after Google's last visit makes the address "moved" (never "indexed,
@@ -77,6 +77,23 @@ module.exports = async (ctx) => {
     const d6n = T(() => IX.diagnose(page(), R(), null, ctxOf()));
     check('CR17C10 F3: "indexed, missing from the sitemap" only for an address our read saw answer 200 directly and name itself; never for one we did not read',
       d6 && d6.cause === 'indexed_not_in_sitemap' && d6.action === 'site_fix' && d6n && d6n.cause === '', J({ d6, d6n }));
+
+    // ---- Q1: the page an old address moved to is asked first; F6: the report counts the app's population ----
+    const tgt = { url: NEW, state: 'not_indexed', cause: 'wait_new', action: 'wait', lane: 'new', in_sitemap: true, sources: 'sitemap', impressions_28d: 0 };
+    const pol = { url: 'https://dev.example/cookies', state: 'not_indexed', cause: 'unknown_to_google', action: 'links', in_sitemap: true, sources: 'sitemap', type_override: 'important', impressions_28d: 0 };
+    const others = Array.from({ length: 6 }, (_, i) => ({ url: 'https://dev.example/industries/p' + i, state: 'not_indexed', cause: 'discovered_not_crawled', action: 'links', in_sitemap: true, sources: 'sitemap', impressions_28d: 50 - i }));
+    const movedRow = { url: OLD, state: 'excluded', cause: 'redirect', action: 'leave_out', final_url: NEW, in_sitemap: false };
+    const askRows = [movedRow, pol, ...others, tgt].map(r => ({ ...r }));
+    T(() => IX.askGoogle(askRows, { now: NOW, home_keys: new Set(), freeze: { freeze: false }, reselect: true }));
+    const askRows0 = [pol, ...others, tgt].map(r => ({ ...r }));
+    T(() => IX.askGoogle(askRows0, { now: NOW, home_keys: new Set(), freeze: { freeze: false }, reselect: true }));
+    check('CR17C18 Q1: the page an old address now redirects to is asked first (the "fix we saw" tier), ahead of a policy page marked important',
+      askRows.find(r => r.url === NEW).ask_google === true && !askRows0.find(r => r.url === NEW).ask_google, J(askRows.map(r => [r.url, r.ask_google])));
+    const sm = T(() => IX.summarize([movedRow, { url: 'https://dev.example/x', state: 'indexed', cause: 'indexed_not_in_sitemap', action: 'site_fix', final_url: 'https://dev.example/y' }, tgt,
+      { url: 'https://dev.example/in', state: 'indexed', cause: '', action: 'none' }, { url: 'https://dev.example/tag/a', state: 'excluded', cause: 'low_value', action: 'leave_out' }], {}));
+    const md = T(() => IX.reportMarkdown({ domain: 'dev.example' }, sm, {}, { rows: [] }));
+    check('CR17C19 F6: the engine report counts the pages that should be in Google like the app (moved / left out not counted, a pre-fix moved row not "in Google")',
+      sm && sm.should_be === 2 && sm.in_google === 1 && sm.indexed === 2 && /Google has \*\*1 of the 2\*\* pages that should be in Google/.test(String(md)), J({ sm, md: String(md).slice(0, 300) }));
 
     // ---- F2: AI ranking on a moved page ----
     const rd = (f) => fs.readFileSync(path.join(V5, f), 'utf8');

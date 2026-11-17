@@ -85,8 +85,8 @@ describe('the technical page\'s "not indexed by Google" finding follows the dail
 
   it('gives the website-wide figure in the Indexing page\'s own sentence, with the new pages that are still waiting', () => {
     const live = liveIndexFinding({ finding, inspected: 23, auditedAt: AUDIT_AT, auditPages, sampleUrls: [], indexPages: today, site })!;
-    expect(live.site?.line).toBe('Google has 18 of the 40 pages we checked that should be in search');
-    expect(live.lines).toContain('Across the website: Google has 18 of the 40 pages we checked that should be in search. 9 of the 22 still out are new pages: Google usually takes a few days to a few weeks to index a new page.');
+    expect(live.site?.line).toBe('Google has 18 of the 40 pages that should be in Google');
+    expect(live.lines).toContain('Across the website: Google has 18 of the 40 pages that should be in Google. 9 of the 22 still out are new pages: Google usually takes a few days to a few weeks to index a new page.');
   });
 
   it('is resolved when every page of the audit\'s list is in Google or left out on purpose, and is then not open any more', () => {

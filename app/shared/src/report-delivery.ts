@@ -396,7 +396,7 @@ const FIGURE_LABELS: Record<string, string> = {
   qa: 'Quality check',
   volume: 'Monthly searches',
   difficulty: 'Difficulty',
-  healthScore: 'Health score',
+  healthScore: 'Technical health',   // CR17-C (client report 2026-11-17 C3): the audit score is Technical health everywhere
   grade: 'Grade',
   critical: 'Critical issues',
   high: 'High issues',
