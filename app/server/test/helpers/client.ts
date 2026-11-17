@@ -60,7 +60,7 @@ export class Client {
 /** signs a new person up (open sign-up) and returns their client and /api/me answer */
 export async function signUp(app: FastifyInstance, email: string, name = email.split('@')[0], password = 'correct horse battery staple') {
   const c = new Client(app);
-  const r = await c.post('/api/auth/signup', { name, email, password });
+  const r = await c.post('/api/auth/signup', { acceptTerms: true, name, email, password });
   if (r.status !== 200) throw new Error(`signup ${email}: ${r.status} ${r.text}`);
   return { c, me: r.body, password };
 }

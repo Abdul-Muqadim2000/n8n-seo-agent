@@ -31,8 +31,12 @@ describe('account e-mail layout', () => {
     expect(html).toContain('https://app.alaventra.test/contact?topic=support');
     expect(html).toContain('mailto:help@alaventra.test');
     expect(html.match(/<img /g)).toHaveLength(1);
-    // the links: the button, the same link written out, the help page, the support address; nothing else
-    expect(html.match(/href="/g)).toHaveLength(4);
+    // the links: the button, the same link written out, the help page, the support address, and (CR17-B, 2026-11-17) the Privacy
+    // Policy and the Terms in the footer; nothing else
+    expect(html.match(/href="/g)).toHaveLength(6);
+    expect(html).toContain('href="https://app.alaventra.test/privacy"');
+    expect(html).toContain('href="https://app.alaventra.test/terms"');
+    expect(text).toContain('Privacy Policy: https://app.alaventra.test/privacy | Terms: https://app.alaventra.test/terms');
     expect(html).not.toMatch(/\/pricing|\/platform|unsubscribe/i);
     expect(text).toContain('Accept the invitation: https://app.alaventra.test/invite/abc');
     expect(text).toContain('Your role: Member');

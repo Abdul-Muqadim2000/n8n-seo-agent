@@ -35,7 +35,8 @@ vi.mock('../src/services/runCredits', async (orig) => ({ ...(await orig<typeof i
 const { aiData, reportIsFor, toAiAnswer } = await import('../src/services/data');
 const { bucketAiCharges } = await import('../src/services/runCredits');
 const { attributeLedgerRow } = await import('../src/services/admin/costSync');
-const { clearAiInEngine, adminAuditDetails, AI_TABLES_CLEARED_ON_DELETE } = await import('../src/routes/sites');
+const { adminAuditDetails } = await import('../src/routes/sites');
+const { purgeEngineHistory } = await import('../src/services/enginePurge');
 
 const org = { id: '00000000-0000-0000-0000-000000000001' } as never;
 const site = { id: 'site-1', domain: 'techand.ai' } as never;
@@ -151,17 +152,22 @@ describe('A9: credits per run are what the ledger charged', () => {
   });
 });
 
+// CR17-B (2026-11-17): A12's own list (AI_TABLES_CLEARED_ON_DELETE) became part of the one engine-history list (ladder_common.SITE_PURGE)
 describe('A12: a deleted website takes its AI inputs and history with it', () => {
   const log = { warn: vi.fn() } as never;
+  const del = vi.fn(async (table: string) => {
+    if (table === st.failDelete) throw new Error('n8n down');
+    st.deleted.push(table);
+    return true;
+  });
   it('deletes the monitors, the panel and the AI history of the domain, table by table', async () => {
-    expect(await clearAiInEngine('techand.ai', log)).toEqual([]);
-    expect(st.deleted).toEqual([...AI_TABLES_CLEARED_ON_DELETE]);
-    expect(st.deleted).toEqual(expect.arrayContaining(['monitors', 'aiPrompts', 'aiVisibility', 'aiAnswers', 'aiDaily', 'aiImports']));
+    expect((await purgeEngineHistory('techand.ai', log, { idSafe: true, del })).failed).toEqual([]);
+    expect(st.deleted).toEqual(expect.arrayContaining(['seo_monitors', 'seo_ai_prompts', 'seo_ai_visibility', 'seo_ai_answers', 'seo_ai_daily', 'seo_ai_imports']));
   });
   it('one table failing does not stop the others', async () => {
-    st.failDelete = 'aiPrompts';
-    expect(await clearAiInEngine('techand.ai', log)).toEqual(['aiPrompts']);
-    expect(st.deleted).toContain('aiDaily');
+    st.failDelete = 'seo_ai_prompts';
+    expect((await purgeEngineHistory('techand.ai', log, { idSafe: true, del })).failed).toEqual(['seo_ai_prompts.domain']);
+    expect(st.deleted).toContain('seo_ai_daily');
   });
 });
 

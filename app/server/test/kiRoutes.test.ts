@@ -91,7 +91,7 @@ vi.mock('../src/services/runs', () => ({ estimateCost: vi.fn(async (input: { mod
 const { kiRoutes } = await import('../src/routes/ki');
 const { kiCache } = await import('../src/services/ki');
 const kiData = await import('../src/services/kiData');
-const { kiCsvLine, KI_VERDICT_IDS, KI_KEYWORD_CSV_COLUMNS } = await import('@seo/shared');
+const { kiCsvLine, KI_VERDICT_IDS, KI_KEYWORD_CSV_COLUMNS, enginePurgePlan } = await import('@seo/shared');
 
 let app: FastifyInstance;
 beforeAll(async () => {
@@ -526,8 +526,11 @@ describe('KI A1: recommendations, Needs you and API v1 follow the switch', () =>
     expect(v1).toMatch(/enum: \['rank_history', 'site_metrics', 'audit_findings', 'ai_visibility', 'backlinks', 'runs', 'ki_competitors', 'ki_keywords', 'ki_gaps', 'ki_runs'\]/);
     const sites = readFileSync(join(__dirname, '../src/routes/sites.ts'), 'utf8');
     const stop = sites.slice(sites.indexOf('async function stopInEngine'), sites.indexOf('async function stopInEngine') + 1200);
-    expect(stop).toMatch(/await clearKiInEngine\(site\.domain, log\);/);
-    expect(sites).toMatch(/KI_TABLES_CLEARED_ON_DELETE = \['kiCompetitors', 'kiKeywords', 'kiGaps', 'kiRuns'\]/);
+    // CR17-B (2026-11-17): the KI tables are in the one engine-history list every website delete runs (was its own KI list)
+    expect(stop).toMatch(/await purgeEngineHistory\(site\.domain, log, \{ idSafe \}\);/);
+    expect(stop).toMatch(/invalidateKi\(site\.domain\);/);
+    const planned = new Set(enginePurgePlan('devaicon.com', { idSafe: true }).map((p) => p.table));
+    for (const t of ['seo_ki_competitors', 'seo_ki_keywords', 'seo_ki_gaps', 'seo_ki_runs']) expect(planned.has(t)).toBe(true);
   });
 });
 

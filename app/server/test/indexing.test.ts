@@ -502,14 +502,14 @@ describe('fix wave 1: the engine reading behind the steps', () => {
 });
 
 describe('fix wave 1: the rest of the app', () => {
+  // CR17-B (2026-11-17): X16's own list is part of the one engine-history list now (ladder_common.SITE_PURGE, run on every website delete)
   it('X16: deleting a website removes its rows in the index tables (history by the engine id; Google events stay)', async () => {
-    const client = await import('../src/n8n/client');
-    const del = client.deleteRows as unknown as { mock: { calls: [string, { columnName: string; value: string }[]][] }; mockClear: () => void };
-    del.mockClear();
-    const { clearIndexInEngine } = await import('../src/routes/sites');
-    expect(await clearIndexInEngine('novaand-demo.com', { warn: () => undefined } as never)).toEqual([]);
-    const calls = del.mock.calls.map(([table, f]) => `${table}:${f[0].columnName}=${f[0].value}`);
-    expect(calls).toEqual(['indexPages:domain=novaand-demo.com', 'indexRuns:domain=novaand-demo.com', 'updateImpact:domain=novaand-demo.com', 'indexHistory:site_id=site_novaand-demo-com']);
+    const { enginePurgePlan, ENGINE_SITE_KEEP } = await import('@seo/shared');
+    const calls = enginePurgePlan('novaand-demo.com', { idSafe: true })
+      .filter((s) => /^seo_(index|update_impact)/.test(s.table))
+      .map((s) => `${s.table}:${s.column}=${s.values.join('|')}`);
+    expect(calls).toEqual(['seo_index_pages:domain=novaand-demo.com|www.novaand-demo.com', 'seo_index_history:site_id=site_novaand-demo-com', 'seo_index_runs:domain=novaand-demo.com|www.novaand-demo.com', 'seo_update_impact:domain=novaand-demo.com|www.novaand-demo.com']);
+    expect(Object.keys(ENGINE_SITE_KEEP)).toContain('seo_google_events');
   });
 
   it('A24: "Fix redirect chains" does not hide "Replace redirecting addresses in your sitemap"; a sitemap redirect finding does', () => {

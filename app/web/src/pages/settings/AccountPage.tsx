@@ -4,18 +4,21 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Building2, ChevronRight, KeyRound, Lock, LogIn, LogOut, Mail, Plus, ShieldCheck, UserRound } from 'lucide-react';
-import { changePasswordSchema, updateMeSchema, type Me } from '@seo/shared';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Building2, ChevronRight, KeyRound, Lock, LogIn, LogOut, Mail, Plus, ShieldCheck, Trash2, UserRound } from 'lucide-react';
+import { changePasswordSchema, updateMeSchema, type AccountDeletionPlan, type Me } from '@seo/shared';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { IconTile, Stagger } from '@/components/insight';
 import { Callout, PageLoader } from '@/components/ui/feedback';
+import { CardBody, CardFooter } from '@/components/ui/card';
+import { Dialog } from '@/components/ui/overlay';
 import { Field, Input } from '@/components/ui/field';
 import { Avatar } from '@/components/ui/misc';
 import { applyServerErrors } from '@/components/site/helpers';
-import { errorMessage, toastError } from '@/lib/api';
+import { api, ApiRequestError, errorMessage, toastError } from '@/lib/api';
 import { paths } from '@/lib/paths';
-import { useLogout, useMe, usePost, useProviders, useUpdateMe } from '@/lib/queries';
+import { qk, useLogout, useMe, usePost, useProviders, useUpdateMe } from '@/lib/queries';
 import { fmtDate } from '@/lib/utils';
 import { StandaloneShell } from './_components/StandaloneShell';
 import { RoleChip, SettingsCard } from './_components/SettingsCard';
@@ -36,6 +39,7 @@ export default function AccountPage() {
         <SessionsSection />
         <CompaniesSection me={me.data} />
         <SignOutSection />
+        <DeleteAccountSection me={me.data} />
       </Stagger>
     </StandaloneShell>
   );
@@ -284,6 +288,129 @@ function SignOutSection() {
         </Button>
       }
     />
+  );
+}
+
+/**
+ * CR17-B (client report 2026-11-17, C1): "Delete my account". The dialog first reads what it would do (GET /api/me/deletion): the
+ * companies only this person belongs to go with the account, the others are left; the only owner of a company with other members is
+ * told to hand it over first. The person types their e-mail to confirm; the server may ask them to confirm it is them (step-up).
+ */
+function DeleteAccountSection({ me }: { me: Me }) {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [fieldError, setFieldError] = useState<string | undefined>();
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const plan = useQuery({ queryKey: ['me', 'deletion'], queryFn: () => api<AccountDeletionPlan>('/api/me/deletion'), enabled: open, staleTime: 0 });
+  const remove = useMutation({ mutationFn: (confirm: string) => api<{ ok: boolean }>('/api/me', { method: 'DELETE', body: { confirm } }) });
+  const matches = typed.trim().toLowerCase() === me.user.email.toLowerCase();
+  const p = plan.data;
+  const confirm = () => {
+    setFieldError(undefined);
+    remove.mutate(typed.trim(), {
+      onSuccess: () => {
+        setOpen(false);
+        qc.clear();
+        qc.setQueryData(qk.me, null);
+        toast.success('Your account was deleted');
+        navigate('/', { replace: true });
+      },
+      onError: (e) => {
+        if (e instanceof ApiRequestError && e.fields.confirm) setFieldError(e.fields.confirm);
+      },
+    });
+  };
+  return (
+    <SettingsCard danger className="mt-5" icon={<Trash2 />} title="Delete my account" description="Deletes your sign-in and removes you from every company.">
+      <CardBody className="space-y-2 text-sm leading-relaxed text-ink-2">
+        <p>
+          Your account is deleted for good. A company only you belong to is deleted with it: its websites, runs, reports and files in this app, and the history the SEO
+          engine kept for its websites. Companies with other members keep their data, and you leave them.
+        </p>
+      </CardBody>
+      <CardFooter className="rounded-b-xl border-critical/25 bg-critical-soft/40">
+        <Button variant="danger" icon={<Trash2 className="size-4" />} onClick={() => setOpen(true)}>
+          Delete my account
+        </Button>
+      </CardFooter>
+      <Dialog
+        open={open}
+        onOpenChange={(o) => {
+          setOpen(o);
+          if (!o) {
+            setTyped('');
+            setFieldError(undefined);
+            remove.reset();
+          }
+        }}
+        title="Delete your account?"
+        description="This cannot be undone."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={confirm} loading={remove.isPending} disabled={!matches || !p?.canDelete}>
+              Delete my account
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4 text-sm leading-relaxed text-ink-2">
+          {plan.isLoading && <p>Checking what would be deleted.</p>}
+          {plan.isError && <Callout tone="critical">{errorMessage(plan.error)}</Callout>}
+          {p && p.platformAdmin && <Callout tone="warning">You are a platform administrator. Another administrator removes your address from the administrator list first.</Callout>}
+          {p && p.soleOwnerOf.length > 0 && (
+            <Callout tone="warning">
+              You are the only owner of {p.soleOwnerOf.map((c) => c.name).join(', ')}, which {p.soleOwnerOf.length > 1 ? 'have' : 'has'} other members. Make another member owner, or
+              delete the company, first.{' '}
+              {p.soleOwnerOf.map((c) => (
+                <Link key={c.id} to={paths.settings(c.id, 'team')} className="font-medium text-accent-text hover:underline">
+                  Open the team of {c.name}.{' '}
+                </Link>
+              ))}
+            </Callout>
+          )}
+          {p && p.agencyWithClients.length > 0 && (
+            <Callout tone="warning">
+              {p.agencyWithClients.map((c) => c.name).join(', ')} still {p.agencyWithClients.length > 1 ? 'have' : 'has'} client workspaces. Delete those first.
+            </Callout>
+          )}
+          {p?.canDelete && (
+            <>
+              {p.deletes.length > 0 && (
+                <div>
+                  <p className="font-medium text-ink">Deleted with your account</p>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                    {p.deletes.map((c) => (
+                      <li key={c.id}>
+                        {c.name}
+                        {c.websites ? ` and its ${c.websites === 1 ? 'website' : `${c.websites} websites`}` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {p.leaves.length > 0 && (
+                <div>
+                  <p className="font-medium text-ink">You leave</p>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                    {p.leaves.map((c) => (
+                      <li key={c.id}>{c.name}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <Field label={<>Type your e-mail address, <span className="font-semibold">{me.user.email}</span>, to confirm</>} error={fieldError}>
+                {(f) => <Input {...f} value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" autoCapitalize="off" spellCheck={false} placeholder={me.user.email} />}
+              </Field>
+            </>
+          )}
+          {remove.isError && !fieldError && <Callout tone="critical">{errorMessage(remove.error)}</Callout>}
+        </div>
+      </Dialog>
+    </SettingsCard>
   );
 }
 

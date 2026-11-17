@@ -60,7 +60,7 @@ describe('settings', () => {
 describe('the session cookie across app.<domain> and api.<domain>', () => {
   it('signing in on app.<domain> sets the cookie on the parent domain (Lax, Secure), and api.<domain> reads it', async () => {
     const c = new Client(app);
-    const r = await c.post('/api/auth/signup', { name: 'Split', email: 'split@alaventra.test', password: 'correct horse battery staple' }, { host: 'app.alaventra.test' });
+    const r = await c.post('/api/auth/signup', { acceptTerms: true, name: 'Split', email: 'split@alaventra.test', password: 'correct horse battery staple' }, { host: 'app.alaventra.test' });
     expect(r.status, r.text).toBe(200);
     const raw = await app.inject({ method: 'POST', url: '/api/auth/login', headers: { host: 'app.alaventra.test', 'x-requested-with': 'fetch', 'content-type': 'application/json' }, payload: { email: 'split@alaventra.test', password: 'correct horse battery staple' } });
     const s = sid(raw.cookies);
@@ -82,7 +82,7 @@ describe('the session cookie across app.<domain> and api.<domain>', () => {
 
   it('on a host outside the domain (an agency portal, localhost) the cookie stays host-only', async () => {
     const c = new Client(app);
-    await c.post('/api/auth/signup', { name: 'Portal', email: 'portal@north-agency.com', password: 'correct horse battery staple' }, { host: 'seo.north-agency.com' });
+    await c.post('/api/auth/signup', { acceptTerms: true, name: 'Portal', email: 'portal@north-agency.com', password: 'correct horse battery staple' }, { host: 'seo.north-agency.com' });
     const raw = await app.inject({ method: 'POST', url: '/api/auth/login', headers: { host: 'seo.north-agency.com', 'x-requested-with': 'fetch', 'content-type': 'application/json' }, payload: { email: 'portal@north-agency.com', password: 'correct horse battery staple' } });
     const s = sid(raw.cookies);
     expect(s?.value).toBeTruthy();

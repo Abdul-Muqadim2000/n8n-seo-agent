@@ -231,7 +231,7 @@ describe('company policy: require two-step verification', () => {
     const inv = await owner.c.post(`/api/orgs/${org.id}/invitations`, { email: 'viewer@acme.test', role: 'viewer' });
     const token = inv.body.inviteUrl.split('/invite/')[1];
     const viewer = new Client(app);
-    expect((await viewer.post('/api/auth/signup', { name: 'Vee', email: 'viewer@acme.test', password: 'correct horse battery staple', inviteToken: token })).status).toBe(200);
+    expect((await viewer.post('/api/auth/signup', { acceptTerms: true, name: 'Vee', email: 'viewer@acme.test', password: 'correct horse battery staple', inviteToken: token })).status).toBe(200);
     expect((await viewer.get(`/api/orgs/${org.id}`)).status).toBe(200);
 
     expect((await owner.c.put(`/api/orgs/${org.id}/security`, policy)).status).toBe(200);

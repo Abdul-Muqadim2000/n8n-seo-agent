@@ -285,8 +285,8 @@ function DeleteCompanyCard() {
       <CardBody className="space-y-2 text-sm leading-relaxed text-ink-2">
         <p>
           Deleting <strong className="font-medium text-ink">{org.name}</strong> stops the weekly tracking, monitors and blog posts of its{' '}
-          {sites.length === 1 ? 'website' : `${sites.length} websites`} and deletes every run, report and file in this app, along with the team's access. The SEO engine's
-          own history of the websites stays.
+          {sites.length === 1 ? 'website' : `${sites.length} websites`} and deletes every run, report and file in this app, along with the team's access. The history the SEO
+          engine kept for its websites is deleted too: rankings, Search Console data, AI answers, link prospects and contacts, audits.
         </p>
       </CardBody>
       <CardFooter className="rounded-b-xl border-critical/25 bg-critical-soft/40">

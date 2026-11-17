@@ -24,7 +24,7 @@ def sql(q):
 
 def user(name):
     a = Api(args.base); email = f'{name}-{TAG}@example.org'
-    s, me = a.post('/api/auth/signup', {'name': name.title(), 'email': email, 'password': 'smoke-test-pass-1'})
+    s, me = a.post('/api/auth/signup', {'acceptTerms': True, 'name': name.title(), 'email': email, 'password': 'smoke-test-pass-1'})
     check(f'signup {name}', s == 200 and me['user']['email'] == email, me)
     return a, email
 

@@ -11,17 +11,19 @@ Roles: `viewer` (read) < `member` (start runs) < `admin` (sites, team, site sett
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | GET | /api/auth/providers | | `AuthProviders` |
-| POST | /api/auth/signup | `signupSchema` | `Me` (signed in) |
+| POST | /api/auth/signup | `signupSchema` (CR17-B: `acceptTerms: true` required, else 400 with the field `acceptTerms`) | `Me` (signed in); stores `users.terms_version` = `LEGAL_VERSION` and `terms_accepted_at` |
 | POST | /api/auth/login | `loginSchema` | `Me`, or `MfaChallenge` (`{ mfaRequired: true, methods, emailHint }`, no session yet) when two-step verification is on |
 | POST | /api/auth/logout | | `{ ok }` |
 | POST | /api/auth/forgot | `forgotSchema` | `{ ok }` (always, no account enumeration) |
 | POST | /api/auth/reset | `resetSchema` | `{ ok }` (signs out every session) |
 | POST | /api/auth/verify-email | `{ token }` | `{ ok }` |
 | POST | /api/auth/resend-verification | | `{ ok, sent }` |
-| GET | /api/auth/google?next=/path | | 302 to Google, back to `/api/auth/google/callback`, then to `next` (or `/login?error=`; `/login/mfa?next=` when a second step is due) |
-| GET | /api/me | | `Me`, or `null` when signed out |
+| GET | /api/auth/google?next=/path&terms=<LEGAL_VERSION> | | 302 to Google, back to `/api/auth/google/callback`, then to `next` (or `/login?error=`; `/login/mfa?next=` when a second step is due). CR17-B: a NEW account is created only when `terms` was the current `LEGAL_VERSION` (the sign-up page's tick, cookie `g_terms`); without it the callback answers 302 `/signup?error=terms_required&next=`. Existing accounts sign in without it |
+| GET | /api/me | | `Me`, or `null` when signed out. CR17-B: `user.termsAccepted` (agreed to the current `LEGAL_VERSION`), `user.termsVersion`, `user.termsAcceptedAt` (null for accounts from before 2026-11-17 and SSO / SCIM / admin-created people; nothing is forced yet) |
 | PATCH | /api/me | `updateMeSchema` | `Me` |
 | POST | /api/me/password | `changePasswordSchema` | `{ ok }` |
+| GET | /api/me/deletion | | `AccountDeletionPlan` (CR17-B): `canDelete`, `soleOwnerOf` (the only owner of a company with other members), `agencyWithClients`, `deletes` (companies only this person owns and belongs to, with `websites`), `leaves`, `platformAdmin` |
+| DELETE | /api/me | `deleteAccountSchema` `{ confirm: <own e-mail> }` (step-up; 5 / min) | `{ ok, deletedCompanies, leftCompanies }`; clears the session cookie. 400 `confirm`; 409 `sole_owner` / `agency_has_clients` / `platform_admin` (with `companies`); 403 `reauth_required`. A company only this person owns and belongs to is deleted with the account (`deleteCompany`: its verified websites stop in the engine and their engine history is purged); other memberships end with `team.left` `{ accountDeleted: true }` in that company's log; the platform's `admin_audit` gets `user.self_deleted`; a goodbye e-mail is sent. The platform admin's `DELETE /api/admin/users/:id` uses the same deletion (`services/accountDelete.ts`) |
 
 ### Two-step verification and step-up (G1, `app/docs/IDENTITY.md`, `shared/src/identity.ts`)
 A sign-in with a second factor is two requests: the password (or Google) answers `MfaChallenge` and sets the http-only cookie
@@ -141,7 +143,7 @@ cost or a dollar budget in them (`customerAuditDetails`: keys ending in `Usd` or
 | POST | /api/orgs | `createOrgSchema` | `Org` (caller becomes owner) |
 | GET | /api/orgs/:orgId | | `Org` |
 | PATCH | /api/orgs/:orgId | `updateOrgSchema` (admin) | `Org` |
-| DELETE | /api/orgs/:orgId | `{ confirm: <company name> }` (owner) | `{ ok }` (stops tracking of its sites in n8n, deletes the company's data in the app) |
+| DELETE | /api/orgs/:orgId | `{ confirm: <company name> }` (owner) | `{ ok }` (stops tracking of its sites in n8n and deletes their engine history, as a website delete does; deletes the company's data in the app) |
 | PATCH | /api/orgs/:orgId/onboarding | `{ step, done? }` (admin); `step` is one of `ONBOARDING_STEPS` (shared/src/constants.ts: the wizard's steps in order, `keyword` included, then `done`) | `Org` |
 | PATCH | /api/orgs/:orgId/budget | `{ monthlyBudgetUsd }` (**platform admin only**; anyone else 403 "Limits are in Settings → Credits.") | `Org` |
 | POST | /api/orgs/:orgId/hook-token/rotate | (owner / admin; 5 an hour) a new address for the SEO engine's reports: every verified website's engine rows are pointed at it, the old one still delivers for 48 h (a report still arriving on it re-routes its website); the token is never returned. 409 `hook_rotation_settling` inside the previous renewal's 48 h, 409 `hook_rotation_in_progress` when another renewal won the race | `{ rotatedAt, sitesUpdated, sitesFailed: string[], oldAddressWorksUntil }` |
@@ -169,7 +171,7 @@ Keyword-first (2026-10-19): `Site` also carries `timezone` (IANA, `''` = the eng
 up to 30 × 2-80 characters), `cycleWeekday` (0 Sunday - 6, `null` = the weekday tracking started on) and `autopilotLevel` (1 | 2 | 3).
 `createSiteSchema` / `updateSiteSchema` accept `timezone` (an unknown zone is a 400) and `services`; both reach the engine with the next
 "Track my site" (`mode: 'track'`), which sends them with `tracking_started_at`.
-| DELETE | /api/orgs/:orgId/sites/:siteId | (admin) | `{ ok }` (also stops tracking in n8n) |
+| DELETE | /api/orgs/:orgId/sites/:siteId | (admin) | `{ ok }` (also stops tracking in n8n). CR17-B: a verified website's engine history is deleted: Site Admin `delete` with the domain, then the app's own pass (`services/enginePurge.ts`) over the one list `ladder_common.SITE_PURGE` (app copy `shared/src/engine-purge.generated.ts`: 50 tables, exact matches on the domain, its www. form or the engine site id; the site-id-only tables are skipped while another domain holds the id). Kept with a reason (`ENGINE_SITE_KEEP`): `seo_run_ledger` (cost records), `seo_ops_alerts`, `seo_google_events`, `seo_ai_rank_priors`. The app's own runs and reports of the website stay in the company (`site_id` set null) |
 | GET | /api/orgs/:orgId/sites/:siteId/verification | | `SiteVerificationInfo` |
 | POST | /api/orgs/:orgId/sites/:siteId/verify | `verifySiteSchema` (admin) | `VerifyResult`; 409 `engine_id_taken` (as above; a unique index on verified websites settles two verifications at the same moment) |
 | GET | /api/orgs/:orgId/sites/:siteId/google | | `GoogleConnection` |
@@ -969,7 +971,8 @@ that fails answers `status: 'unreadable'` with a sentence, never an error, and n
   first `seo_index_runs` row of any website (before that it is not measured). Only the schedule's own fires count (mode `trigger`), and the
   execution history is paged by n8n's cursor back to the oldest week shown (fix wave 2), so one execution per website a day no longer hides
   older fires. Deleting a website deletes its rows in `seo_index_pages`,
-  `seo_index_runs`, `seo_update_impact` and (by the engine site id) `seo_index_history`; `seo_google_events` is global and stays.
+  `seo_index_runs`, `seo_update_impact` and (by the engine site id) `seo_index_history`; `seo_google_events` is global and stays (CR17-B: part of
+  the one engine-history list every website delete runs).
 - Rollback (X11): before reverting the API to a build without this feature, delete or skip the `site_tasks` rows with `kind = 'indexing'`
   (an older build reads an unknown kind as a redirect step).
 - **Wave 2 (2026-10-30, `n8n/seo-agent/docs/indexing-2026-10-29/DESIGN_WAVE2.md` §3).** Engine columns read (all optional; an engine without

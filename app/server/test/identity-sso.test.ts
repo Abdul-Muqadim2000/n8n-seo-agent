@@ -306,7 +306,7 @@ describe('enforcement', () => {
     // a member on the domain with a password, signed in before enforcement
     const inv = await co.owner.post(`/api/orgs/${co.org.id}/invitations`, { email: 'pat@enforce.test', role: 'admin' });
     const pat = new Client(app);
-    await pat.post('/api/auth/signup', { name: 'Pat', email: 'pat@enforce.test', password: PW, inviteToken: inv.body.inviteUrl.split('/invite/')[1] });
+    await pat.post('/api/auth/signup', { acceptTerms: true, name: 'Pat', email: 'pat@enforce.test', password: PW, inviteToken: inv.body.inviteUrl.split('/invite/')[1] });
     expect((await pat.get('/api/me')).body.user.email).toBe('pat@enforce.test');
     // an admin cannot enforce
     expect((await pat.patch(`/api/orgs/${co.org.id}/sso/connection`, { enforced: true })).status).toBe(403);
@@ -321,7 +321,7 @@ describe('enforcement', () => {
     // a wrong password says the same (no password oracle)
     expect((await new Client(app).post('/api/auth/login', { email: 'pat@enforce.test', password: 'wrong wrong 1' })).body.code).toBe('sso_required');
     // nobody signs up on the domain with a password
-    expect((await new Client(app).post('/api/auth/signup', { name: 'Z', email: 'zed@enforce.test', password: PW })).body.code).toBe('sso_required');
+    expect((await new Client(app).post('/api/auth/signup', { acceptTerms: true, name: 'Z', email: 'zed@enforce.test', password: PW })).body.code).toBe('sso_required');
     // the owner (break-glass) still signs in with the password (+ their second step)
     const o = await new Client(app).post('/api/auth/login', { email: 'owner@enforce.test', password: PW });
     expect(o.body.mfaRequired).toBe(true);
@@ -340,7 +340,7 @@ describe('enforcement', () => {
     const co = await oidcCompany('owner@roles-sso.test', 'Roles SSO', 'roles-sso.test');
     const inv = await co.owner.post(`/api/orgs/${co.org.id}/invitations`, { email: 'mem@else.test', role: 'member' });
     const mem = new Client(app);
-    await mem.post('/api/auth/signup', { name: 'Mem', email: 'mem@else.test', password: PW, inviteToken: inv.body.inviteUrl.split('/invite/')[1] });
+    await mem.post('/api/auth/signup', { acceptTerms: true, name: 'Mem', email: 'mem@else.test', password: PW, inviteToken: inv.body.inviteUrl.split('/invite/')[1] });
     for (const r of [
       await mem.get(`/api/orgs/${co.org.id}/sso`),
       await mem.put(`/api/orgs/${co.org.id}/sso/connection`, oidcSettings()),

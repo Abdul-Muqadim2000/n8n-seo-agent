@@ -43,7 +43,7 @@ const money = (cost: CostSplit, revenue: number, creditsUsed: number) => ({
 
 export const ADMIN_ID = '0b8f3a52-6f0e-4c5e-9a43-1d2f6a7b8c01';
 export const me: Me = {
-  user: { id: ADMIN_ID, email: 'ops@alaventra.com', name: 'Abdul Muqadim', avatarUrl: null, emailVerified: true, hasPassword: true, googleLinked: true, createdAt: '2026-10-01T08:00:00Z', mfaEnabled: true },
+  user: { id: ADMIN_ID, email: 'ops@alaventra.com', name: 'Abdul Muqadim', avatarUrl: null, emailVerified: true, hasPassword: true, googleLinked: true, createdAt: '2026-10-01T08:00:00Z', mfaEnabled: true, termsAccepted: true, termsVersion: '2026-10-08', termsAcceptedAt: '2026-10-01T08:00:00Z' },
   orgs: [{ id: '5f1c2d3e-4b5a-4c6d-8e7f-9a0b1c2d3e01', name: 'Techand', slug: 'techand', role: 'owner', onboardingStep: 'done', onboardedAt: '2026-10-01T09:00:00Z' }],
   platformAdmin: true,
 };

@@ -21,6 +21,11 @@ export interface User {
   createdAt: string;
   /** G1: at least one second factor (authenticator app or passkey) is set up */
   mfaEnabled: boolean;
+  /** CR17-B (2026-11-17): agreed to the CURRENT Terms and Privacy Policy (LEGAL_VERSION); false for accounts from before sign-up asked */
+  termsAccepted: boolean;
+  /** the version agreed to and when (null: never asked, e.g. accounts from before 2026-11-17, SSO / SCIM / admin-created people) */
+  termsVersion: string | null;
+  termsAcceptedAt: string | null;
 }
 
 export interface OrgSummary {

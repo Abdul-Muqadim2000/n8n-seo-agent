@@ -400,17 +400,25 @@ export async function insertRows(table: TableKey, data: Record<string, unknown>[
 
 /** Deletes every row matching all filters (n8n public API, DELETE rows/delete). */
 export async function deleteRows(table: TableKey, filters: Filter[]): Promise<boolean> {
+  return deleteRowsByName(TABLES[table], filters);
+}
+
+/**
+ * CR17-B: the same by Data Table name (the engine-history purge walks ladder_common's list of names); `match: 'or'` deletes a row
+ * matching ANY filter. false when the table does not exist (nothing to delete).
+ */
+export async function deleteRowsByName(name: string, filters: Filter[], match: 'and' | 'or' = 'and'): Promise<boolean> {
   if (!config.n8n.apiKey) throw new HttpError(503, 'N8N_API_KEY is not configured');
   if (!filters.length) throw new Error('deleteRows needs a filter');
-  const id = await tableId(TABLES[table]);
+  const id = await tableId(name);
   if (!id) return false;
-  const res = await fetch(`${config.n8n.baseUrl}/api/v1/data-tables/${id}/rows/delete?filter=${encodeURIComponent(JSON.stringify({ type: 'and', filters }))}`, {
+  const res = await fetch(`${config.n8n.baseUrl}/api/v1/data-tables/${id}/rows/delete?filter=${encodeURIComponent(JSON.stringify({ type: match, filters }))}`, {
     method: 'DELETE',
     headers: { 'x-n8n-api-key': config.n8n.apiKey },
     signal: AbortSignal.timeout(20000),
   });
-  if (!res.ok) throw new HttpError(502, `n8n rows delete on ${TABLES[table]} answered ${res.status}`);
-  forgetTable(TABLES[table]);
+  if (!res.ok) throw new HttpError(502, `n8n rows delete on ${name} answered ${res.status}`);
+  forgetTable(name);
   return true;
 }
 

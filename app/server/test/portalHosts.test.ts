@@ -169,7 +169,7 @@ describe('serving the portal host', () => {
     // the invitation link points at the agency's portal address
     expect(inv.body.inviteUrl.startsWith(`http://${HOST}/invite/`)).toBe(true);
     person = new Client(app);
-    const s = await person.post('/api/auth/signup', { name: 'Ceo', email: 'ceo@acme.example.com', password: PW, inviteToken: inv.body.inviteUrl.split('/invite/')[1] }, on(HOST));
+    const s = await person.post('/api/auth/signup', { acceptTerms: true, name: 'Ceo', email: 'ceo@acme.example.com', password: PW, inviteToken: inv.body.inviteUrl.split('/invite/')[1] }, on(HOST));
     expect(s.status, s.text).toBe(200);
     const cookie = String((s.headers['set-cookie'] as string[] | string) ?? '');
     expect(cookie).toMatch(/sid=/);

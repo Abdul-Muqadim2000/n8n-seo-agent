@@ -110,7 +110,7 @@ const api = async (page, base, method, path, data, headers = {}) => {
 async function setup() {
   const browser = await launch();
   const page = await (await browser.newContext()).newPage();
-  await api(page, APP, 'POST', '/api/auth/signup', { name: 'Nora Lindqvist', email: 'nora@northagency.com', password: PW });
+  await api(page, APP, 'POST', '/api/auth/signup', { acceptTerms: true, name: 'Nora Lindqvist', email: 'nora@northagency.com', password: PW });
   const agency = await api(page, APP, 'POST', '/api/orgs', { name: 'North Agency', industry: 'Marketing' });
   await api(page, APP, 'PATCH', `/api/orgs/${agency.id}/onboarding`, { step: 'done', done: true });
   await api(page, APP, 'POST', `/api/orgs/${agency.id}/agency`);
@@ -131,9 +131,9 @@ async function setup() {
   // a member of the agency with access to Acme only
   const memInv = await api(page, APP, 'POST', `/api/orgs/${agency.id}/invitations`, { email: 'sam@northagency.com', role: 'member' });
   const cp = await (await browser.newContext()).newPage();
-  await api(cp, APP, 'POST', '/api/auth/signup', { name: 'Claire Dubois', email: 'claire@acme-trading-demo.com', password: PW, inviteToken: inv.inviteUrl.split('/invite/')[1] });
+  await api(cp, APP, 'POST', '/api/auth/signup', { acceptTerms: true, name: 'Claire Dubois', email: 'claire@acme-trading-demo.com', password: PW, inviteToken: inv.inviteUrl.split('/invite/')[1] });
   const mp = await (await browser.newContext()).newPage();
-  const sam = await api(mp, APP, 'POST', '/api/auth/signup', { name: 'Sam Patel', email: 'sam@northagency.com', password: PW, inviteToken: memInv.inviteUrl.split('/invite/')[1] });
+  const sam = await api(mp, APP, 'POST', '/api/auth/signup', { acceptTerms: true, name: 'Sam Patel', email: 'sam@northagency.com', password: PW, inviteToken: memInv.inviteUrl.split('/invite/')[1] });
   await api(page, APP, 'PUT', `/api/orgs/${agency.id}/clients/${acme.id}/staff/${sam.user.id}`, { role: 'member' });
   save({ agency: agency.id, acme: acme.id, beta: beta.id, site: site.id, domainId: domain.id, inviteUrl: inv.inviteUrl, results: [] });
   console.log(JSON.stringify({ agency: agency.id, acme: acme.id, site: site.id, domain: domain.id, inviteUrl: inv.inviteUrl }));

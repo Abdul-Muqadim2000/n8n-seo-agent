@@ -89,7 +89,7 @@ async function setup() {
   const page = await ctx.newPage();
   page.on('dialog', (d) => d.accept(d.type() === 'prompt' ? 'MacBook Touch ID' : undefined));
   const owner = { email: 'dana@northwind-demo.example', name: 'Dana Okafor' };
-  await api(page, 'POST', '/api/auth/signup', { name: owner.name, email: owner.email, password: PW });
+  await api(page, 'POST', '/api/auth/signup', { acceptTerms: true, name: owner.name, email: owner.email, password: PW });
   const org = await api(page, 'POST', '/api/orgs', { name: 'Northwind Trading', industry: 'Wholesale' });
   await api(page, 'PATCH', `/api/orgs/${org.id}/onboarding`, { step: 'done', done: true });
 
@@ -130,7 +130,7 @@ async function setup() {
   const inv = await api(page, 'POST', `/api/orgs/${org.id}/invitations`, { email: 'pat@northwind-demo.example', role: 'member' });
   const mctx = await browser.newContext();
   const mpage = await mctx.newPage();
-  await api(mpage, 'POST', '/api/auth/signup', { name: 'Pat Reyes', email: 'pat@northwind-demo.example', password: PW, inviteToken: inv.inviteUrl.split('/invite/')[1] });
+  await api(mpage, 'POST', '/api/auth/signup', { acceptTerms: true, name: 'Pat Reyes', email: 'pat@northwind-demo.example', password: PW, inviteToken: inv.inviteUrl.split('/invite/')[1] });
   await mctx.storageState({ path: '/bp/member.json' });
   const phone = await browser.newContext({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' });
   const ppage = await phone.newPage();
@@ -212,7 +212,7 @@ async function shots() {
       // a new person sets up an authenticator app: the QR dialog and the recovery codes
       const fresh = await browser.newContext({ viewport: SIZES[size], colorScheme: theme });
       const f = await fresh.newPage();
-      await api(f, 'POST', '/api/auth/signup', { name: 'Sam Fresh', email: `sam${++n}@fresh-demo.example`, password: PW });
+      await api(f, 'POST', '/api/auth/signup', { acceptTerms: true, name: 'Sam Fresh', email: `sam${++n}@fresh-demo.example`, password: PW });
       let secret = '';
       await visit(f, {
         name: 'g1-04-totp-setup', path: '/account', size, theme,

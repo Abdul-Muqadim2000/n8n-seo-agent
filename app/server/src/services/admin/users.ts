@@ -9,7 +9,7 @@ import type { OrgRow, UserRow } from '../../db/schema';
 import { randomToken, slugify } from '../../lib/crypto';
 import { badRequest, conflict, HttpError, notFound } from '../../lib/errors';
 import { audit } from '../audit';
-import { deleteCompany } from '../companyDelete';
+import { deleteAccount, planAccountDeletion } from '../accountDelete';
 import { dropAssignments } from '../agency';
 import { applyNewCompanyCredits } from './credits';
 
@@ -150,21 +150,9 @@ export async function deleteUser(
   soleChoice?: 'delete' | 'keep',
 ): Promise<{ deletedCompanies: SoleCompany[]; keptCompanies: SoleCompany[] }> {
   await guardAdminAccess(req, target, 'delete');
-  const owned = await db
-    .select({ org: schema.organizations })
-    .from(schema.memberships)
-    .innerJoin(schema.organizations, eq(schema.memberships.orgId, schema.organizations.id))
-    .where(and(eq(schema.memberships.userId, target.id), eq(schema.memberships.role, 'owner')));
-  const blocking: SoleCompany[] = [];
-  const sole: { org: OrgRow }[] = [];
-  for (const { org } of owned) {
-    const [c] = await db
-      .select({ members: sql<number>`count(*)::int`, owners: sql<number>`count(*) filter (where ${schema.memberships.role} = 'owner')::int` })
-      .from(schema.memberships)
-      .where(eq(schema.memberships.orgId, org.id));
-    if (Number(c.members) <= 1) sole.push({ org });
-    else if (Number(c.owners) <= 1) blocking.push({ id: org.id, name: org.name, slug: org.slug });
-  }
+  // CR17-B (2026-11-17): one deletion for the admin and the person themselves (services/accountDelete.ts); the admin chooses for the sole companies
+  const { plan, sole } = await planAccountDeletion(target);
+  const blocking = plan.soleOwnerOf;
   if (blocking.length)
     throw new HttpError(
       409,
@@ -173,7 +161,7 @@ export async function deleteUser(
       undefined,
       { companies: blocking },
     );
-  const soleList = sole.map(({ org }) => ({ id: org.id, name: org.name, slug: org.slug }));
+  const soleList = sole.map((org) => ({ id: org.id, name: org.name, slug: org.slug }));
   if (sole.length && !soleChoice)
     throw new HttpError(
       409,
@@ -182,19 +170,12 @@ export async function deleteUser(
       undefined,
       { companies: soleList },
     );
-  if (soleChoice === 'delete') {
-    for (const { org } of sole) {
-      if (org.kind === 'agency' && (await db.query.organizations.findFirst({ where: eq(schema.organizations.parentOrgId, org.id) })))
-        throw conflict(`${org.name} is an agency with client workspaces: delete those first.`, 'agency_has_clients');
-    }
-    for (const { org } of sole) await deleteCompany(org, req.log);
-  }
-  // the person's memberships elsewhere go with the account (cascade); their audit history in each company stays
-  const others = await db.select({ orgId: schema.memberships.orgId }).from(schema.memberships).where(eq(schema.memberships.userId, target.id));
-  for (const o of others) await audit(req, o.orgId, { action: 'team.removed', actor: adminActor(req), target: { type: 'user', id: target.id, label: target.email }, details: { by: 'platform administrator', accountDeleted: true } });
-  await db.delete(schema.users).where(eq(schema.users.id, target.id));
+  if (soleChoice === 'delete' && plan.agencyWithClients.length)
+    throw conflict(`${plan.agencyWithClients[0].name} is an agency with client workspaces: delete those first.`, 'agency_has_clients');
+  await deleteAccount(req, target, sole, { soleCompanies: soleChoice ?? 'keep', actor: adminActor(req), by: 'admin' });
   return { deletedCompanies: soleChoice === 'delete' ? soleList : [], keptCompanies: soleChoice === 'keep' ? soleList : [] };
 }
+
 
 /** add the person to a company or change their role there; a company's last owner keeps the owner role */
 export async function setMembership(req: FastifyRequest, target: UserRow, orgId: string, role: string): Promise<{ added: boolean; before: string | null }> {

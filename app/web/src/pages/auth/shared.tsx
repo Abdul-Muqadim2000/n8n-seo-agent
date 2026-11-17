@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ACCOUNT_SUSPENDED } from '@seo/shared';
+import { ACCOUNT_SUSPENDED, LEGAL_PATHS, LEGAL_VERSION } from '@seo/shared';
 import { pageTitle } from '@/components/layout/Brand';
 import { useDocumentTitle } from '@/components/layout/useDocumentTitle';
 import { Card } from '@/components/ui/card';
@@ -29,14 +29,33 @@ function GoogleIcon() {
 }
 
 /** "Continue with Google", a full-page navigation to the server, which redirects to Google and back. */
-export function GoogleButton({ next, label = 'Continue with Google' }: { next?: string; label?: string }) {
+export function GoogleButton({
+  next,
+  label = 'Continue with Google',
+  terms,
+}: {
+  next?: string;
+  label?: string;
+  /** CR17-B: on the sign-up page, the person's tick of the Terms and Privacy Policy; without it the click asks for the tick instead */
+  terms?: { accepted: boolean; onMissing: () => void };
+}) {
   const providers = useProviders();
   if (!providers.data?.google) return null;
-  const href = `/api/auth/google${next ? `?next=${encodeURIComponent(next)}` : ''}`;
+  const q = new URLSearchParams();
+  if (next) q.set('next', next);
+  if (terms?.accepted) q.set('terms', LEGAL_VERSION);
+  const qs = q.toString();
+  const href = `/api/auth/google${qs ? `?${qs}` : ''}`;
   return (
     <>
       <a
         href={href}
+        onClick={(e) => {
+          if (terms && !terms.accepted) {
+            e.preventDefault();
+            terms.onMissing();
+          }
+        }}
         className="flex h-11 w-full items-center justify-center gap-3 rounded-lg border border-line-strong bg-surface text-[15px] font-medium text-ink shadow-card transition-[background-color,border-color,box-shadow] duration-150 ease-brand hover:border-ink-3 hover:bg-surface-2 active:bg-surface-3"
       >
         <GoogleIcon />
@@ -55,6 +74,8 @@ export const GOOGLE_ERRORS: Record<string, string> = {
   // a suspended account signing in with Google (the password sign-in answers the same text as an error)
   [ACCOUNT_SUSPENDED.code]: ACCOUNT_SUSPENDED.message,
   google_state: 'The Google sign-in expired. Please try again.',
+  // CR17-B: a Google account with no account here yet, from "Sign in with Google": sign-up asks for the tick first
+  terms_required: 'To create your account with Google, tick that you agree to the Terms and the Privacy Policy, then continue with Google.',
   google_failed: 'Google sign-in did not complete. Please try again.',
   google_unverified: 'Your Google account e-mail is not verified.',
   signup_closed: 'Sign-up is by invitation only. Ask your company admin for an invite.',
@@ -79,4 +100,21 @@ export function safeNext(v: string | null): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** CR17-B (2026-11-17): the sign-up page's agreement line; the pages open in a new tab so the form keeps what was typed */
+export function TermsLabel() {
+  return (
+    <>
+      I agree to the{' '}
+      <a href={LEGAL_PATHS.terms} target="_blank" rel="noreferrer" className="font-medium text-accent-text hover:underline">
+        Terms
+      </a>{' '}
+      and the{' '}
+      <a href={LEGAL_PATHS.privacy} target="_blank" rel="noreferrer" className="font-medium text-accent-text hover:underline">
+        Privacy Policy
+      </a>
+      .
+    </>
+  );
 }

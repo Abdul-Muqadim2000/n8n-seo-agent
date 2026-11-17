@@ -19,6 +19,7 @@ import { TOPIC_SOURCES } from './cycles';
 import { aiAlertRulesSchema } from './ai-trends';
 import { SERVICE_MAX_CHARS, SERVICES_MAX } from './list-entries';
 import { isPlaceholderJobTitle, PLACEHOLDER_JOB_TITLE_MESSAGE } from './profile';
+import { TERMS_REQUIRED_MESSAGE } from './legal';
 
 // ---------- building blocks ----------
 const opt = (max: number) => z.string().trim().max(max, `At most ${max} characters`).default('');
@@ -85,7 +86,11 @@ export const signupSchema = z.object({
   email: emailField,
   password: passwordField,
   inviteToken: z.string().max(200).optional(),
+  // CR17-B (2026-11-17): the person agrees to the Terms and the Privacy Policy (the server records LEGAL_VERSION and the time)
+  acceptTerms: z.boolean().refine((v) => v === true, TERMS_REQUIRED_MESSAGE),
 });
+/** CR17-B: deleting one's own account: the person types their e-mail address to confirm */
+export const deleteAccountSchema = z.object({ confirm: z.string().max(300) });
 export const loginSchema = z.object({ email: emailField, password: z.string().min(1, 'Enter your password').max(200) });
 export const forgotSchema = z.object({ email: emailField });
 export const resetSchema = z.object({ token: z.string().min(10).max(200), password: passwordField });

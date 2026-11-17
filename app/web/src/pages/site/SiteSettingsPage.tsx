@@ -747,8 +747,9 @@ function DangerTab() {
       <CardHeader title="Delete this website" icon={<HeaderTile icon={<Trash2 />} tone="critical" />} />
       <CardBody className="space-y-3 text-sm leading-relaxed text-ink-2">
         <p>
-          This removes <strong className="font-medium text-ink">{site.domain}</strong> from {org.name} and stops its weekly tracking, monitors and pages in the SEO
-          engine. To add it again later you would need to verify it again.
+          This removes <strong className="font-medium text-ink">{site.domain}</strong> from {org.name}, stops its weekly tracking, monitors and pages in the SEO engine,
+          and deletes the history the engine kept for it: rankings, Search Console data, AI answers, link prospects and contacts, audits. Reports already in this app
+          stay with the company. To add it again later you would need to verify it again.
         </p>
         <Note>
           Only want a break? <ButtonLink to={paths.site(org.id, site.id, 'settings/tracking')} variant="link">Pause tracking instead</ButtonLink>.

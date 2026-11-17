@@ -43,6 +43,9 @@ export const users = pgTable(
     mfaTotpLastStep: integer('mfa_totp_last_step'),
     /** admin panel (0014): a platform administrator suspended the account, no sign-in by any method, every session refused */
     suspendedAt: ts('suspended_at'),
+    /** CR17-B (2026-11-17): the Terms / Privacy version agreed at sign-up (shared LEGAL_VERSION) and when; null = never asked */
+    termsVersion: text('terms_version'),
+    termsAcceptedAt: ts('terms_accepted_at'),
   },
   (t) => [uniqueIndex('users_email_idx').on(t.email), uniqueIndex('users_google_sub_idx').on(t.googleSub)],
 );
