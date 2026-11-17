@@ -120,6 +120,10 @@ const ARL = (() => {
     { id: 'L16', label: 'Protect a cited page; refresh it when citations decay', from: ['S5'], to: 'S5', next: { S5: 'S5' }, sub: [], mult: { '*': 1 }, prior: { mean: 0.50, n0: 4 }, days: null, usd: 0, effort_min: 0, executor: 'auto', scope: 'page', sink: 'protect', sink_wave2: 'protect', evidence: ['E33'] },
     { id: 'L17', label: 'Wikidata / Wikipedia entity', from: ['S1', 'S2', 'S3', 'S4'], to: 'S4', next: {}, sub: [], mult: { '*': 0, chatgpt: 1, chatgpt_api: 1, claude: 1 }, prior: null, gate: 'three independent earned mentions on file (notability, E36)', days: null, usd: 0, effort_min: 0, executor: 'human', scope: 'site', sink: 'growth_action', sink_wave2: 'site_task', evidence: ['E36', 'E35'] }
   ];
+  // CR17-H (client report 2026-11-17, F1): each lever's reason in the client's words (equal to AIRC.WHY and the app's AI_RANK_CLIENT_WHY; the
+  // app's parity test and harness CR17H hold them equal). score() returns it as `why`; the arithmetic is `score_note`, for the team only.
+  const CLIENT_WHY = { L01: "Your robots.txt keeps the AI assistants' search tools out, so they cannot read or cite your pages.", L02: "This page shows little text until its scripts run, and several AI assistants read only the text sent with the page.", L03: "Your website is not in Bing yet, and Copilot and other assistants look answers up in Bing.", L04: "Google has not put this page in its search results yet, and AI answers that search Google cannot use a page it has not indexed.", L05: "No page of yours answers the searches the AI assistants run for this question.", L06: "Your page for this question can answer it more directly, so AI assistants can quote it.", L07: "AI answers quote this page of yours but do not say your business name.", L08: "AI answers cite this list for your questions, and it does not name your business yet.", L09: "AI answers cite this directory for your questions, and your business has no profile there yet.", L10: "AI answers cite this official list of providers, and your business may qualify to be on it.", L11: "Being mentioned by independent websites is what most often gets a business named in AI answers.", L12: "AI answers to business questions often cite LinkedIn articles written by named people.", L13: "AI answers cite community threads for these questions, and an open answer from your business can be cited too.", L14: "AI answers cite videos for these questions.", L15: "AI answers say something about your business that is not right.", L16: "AI answers cite this page today, and keeping it current keeps it cited.", L17: "Your business has enough independent mentions for a Wikidata entry, which AI assistants read." };
+  for (const L of LEVERS) L.client = CLIENT_WHY[L.id] || '';
   const LV = new Map(LEVERS.map(l => [l.id, l]));
   // the refused tactics: never chosen whatever their score (weight 0); `match` finds them in the old logic's plan (compareOld) so the reason is printed
   const REFUSED = [
@@ -319,7 +323,7 @@ const ARL = (() => {
   /** gain(a) = sum over cells w_e V F p (U(next) - U(s)); cost = usd + effort / 60 * H + 0.5; score = gain / cost / (1 + days_typ / 60). Protect (L16): the loss
    *  avoided, U(S5) - U(S2). p = prior mean x engine multiplier x the candidate's factor (placeability, list-dominated own page), at most 0.95 */
   const score = (candidate, { priors, values, feas, weights, H } = {}) => { const c = candidate || {}; const L = LV.get(S(c.lever));
-    if (!L) return { gain: 0, cost: 0, score: 0, p_by_cell: [], days: 0, why: 'unknown lever' };
+    if (!L) return { gain: 0, cost: 0, score: 0, p_by_cell: [], days: 0, why: '', score_note: 'unknown lever' };
     const W = Object.assign({}, ENGINE_W, weights || {}); const hh = H == null ? COST.H : N(H, COST.H); const costRaw = N(L.usd, 0) + N(L.effort_min, 0) / 60 * hh + COST.overhead_usd; const cost = costOf(L, hh); const days = L.days ? L.days[1] : 0;
     const fac = N(c.factor, 1); let gain = 0; const pc = []; const memo = new Map();
     for (const cell of (c.cells || [])) { const s0 = S(cell.stage); const e = S(cell.engine); const grp = AIRF.GROUP_OF[e]; if (!grp || !(s0 in U)) continue;
@@ -335,7 +339,7 @@ const ARL = (() => {
       const ns = cell.no_search === true && LONG_RUN.includes(L.id) ? NO_SEARCH_DISCOUNT : 1;   // RA-15: an answer from memory moves only after the next training release
       const g = w * V * F * p * rk * ns * du; gain += g; pc.push({ prompt_id: cell.prompt_id, engine: e, stage: s0, to: t, p: rd(p * rk, 4), gain: rd(g), head: rd(w * V * F * (U.S5 - U[s0])) }); }   // head: what the cell still has to win
     const sc = costRaw > 0 ? gain / costRaw / (1 + days / 60) : 0; const head = pc.reduce((a, x) => a + x.head, 0);
-    return { gain: rd(gain, 8), cost, score: rd(sc, 12), head: rd(head, 8), efficiency: head > 0 ? rd(gain / head, 6) : gain > 0 ? 1 : 0, p_by_cell: pc, days, why: L.label + ': ' + pc.length + ' cell(s), expected gain ' + rd(gain, 4) + ' over $' + rd(cost, 2) + ' (client time at $' + hh + ' an hour), typical ' + days + ' days' }; };
+    return { gain: rd(gain, 8), cost, score: rd(sc, 12), head: rd(head, 8), efficiency: head > 0 ? rd(gain / head, 6) : gain > 0 ? 1 : 0, p_by_cell: pc, days, why: L.client, score_note: L.label + ': ' + pc.length + ' cell(s), expected gain ' + rd(gain, 4) + ' over $' + rd(cost, 2) + ' (client time at $' + hh + ' an hour), typical ' + days + ' days' }; };
   /** an own page helps only if it ranks for the searches the engines run (R1 lever 2, E24): its chance scales with the site's reach against the keyword,
    *  reach_w / 0.5 within [0.2, 1.5] (the median site keeps the prior). Unknown reach: 1. Other levers do not depend on the client's own ranking. */
   const rankChance = (feas, q) => { const f = mget(feas, q); const r = f && typeof f === 'object' && !/reach not stored/.test(S(f.basis)) ? N(f.reach_w, null) : null; return r == null ? 1 : clamp(r / 0.5, 0.2, 1.5); };
@@ -378,7 +382,7 @@ const ARL = (() => {
       if (OWN_PAGE.includes(L.id)) { own++; ownNow.add(S(c.questions[0])); } if (L.id === 'L08') pitches++; if (HUMAN_NEW.includes(L.id)) human++; if (L.id === 'L16') protect++;
       const a = { action_id: c.action_id, site_id: c.site_id, lever: L.id, executor: L.executor, scope: L.scope, ref: c.ref || {}, questions: (c.questions || []).slice(), engines: (c.engines || []).slice(), target_stage: L.to,
         expected: { p: meanP(s.p_by_cell), gain: rd(N(s.gain, 0)), cost: N(s.cost, 0), score: N(s.score, 0), days: N(s.days, 0) }, prereg: null, sink: L.sink, sink_ref: '',
-        label: L.label, intent: c.intent || 'mixed', keyword: S(c.keyword), page_url: S(c.page_url), why: S(c.why) };
+        label: L.label, intent: c.intent || 'mixed', keyword: S(c.keyword), page_url: S(c.page_url), why: S(c.why) || L.client, score_note: S(s.score_note), reason_note: S(c.reason_note) };
       if (now != null) a.prereg = prereg(a, { arms, units60, now, exposure: (exposure || []).concat(expNow) });
       if (!UNIFORM.includes(L.id)) expNow.push({ action_id: a.action_id, lever: L.id, questions: a.questions, from: now == null ? '' : isoOf(now), to: '' });   // this week's other steps are exposure too (RA-4)
       res.chosen.push(a); }

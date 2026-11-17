@@ -1149,6 +1149,52 @@ export interface Recommendation {
   /** REP 3.3 (benchmark pass 2026-10-14): what this is worth and why it sits where it does in the one queue (`queue.ts`).
    * Absent only on rows written before the queue existed; a reader must treat a missing score as "not ranked". */
   score?: RecommendationScore;
+  // ---- CR17-H (client report 2026-11-17, Q4): one card per issue, a rule per family, a state with its date and evidence.
+  // All optional: an older server sends none of them, and a reader then shows the item as it did before.
+  /** what the item is about, so two sources asking about one page / AI question / link are one card (`recommendation-rules.ts`) */
+  issueKey?: string;
+  /** the other sources that reported the same issue, in plain words ("the weekly site report", "the technical audit") */
+  alsoFrom?: string[];
+  /** the pages (or questions, links) the card covers, for its check (the folded "not in Google yet" card lists its pages here) */
+  subjects?: string[];
+  /** the family's rule: why it matters, how to do it (with its guide), how we check it is done and when */
+  rule?: RecommendationRuleView;
+  /** where it stands (absent: not tracked yet) */
+  state?: import('./recommendation-rules').RecommendationState;
+  /** when it entered that state, and the line that says why ("Google indexed /about on 20 Nov") */
+  stateAt?: string;
+  stateEvidence?: string;
+  /** when we first recommended it */
+  firstSeenAt?: string;
+  /** dismissed by the client: the reason and who */
+  dismissed?: { reason: string; note: string; at: string };
+}
+
+/** CR17-H: the parts of a family rule a card shows (the full registry is `REC_RULES` in recommendation-rules.ts). */
+export interface RecommendationRuleView {
+  why: string;
+  how: string;
+  /** the "Show me how" guide ('' = the button on the card does it) */
+  guide: string;
+  /** how we check it is done ('' = nothing checks it: it can be dismissed, never resolved) */
+  check: string;
+  /** when that check runs */
+  checkWhen: string;
+  /** "Check now" re-reads it at once */
+  canCheckNow: boolean;
+}
+
+/** CR17-H: the Recommendations page's four tabs, read from the same states as the Overview and the Pipeline. */
+export interface RecommendationBoard {
+  todo: Recommendation[];
+  waiting: Recommendation[];
+  /** resolved in the last 90 days, newest first */
+  resolved: Recommendation[];
+  /** no longer reported by their source and not confirmed fixed by a check (never called resolved), last 90 days */
+  expired: Recommendation[];
+  dismissed: Recommendation[];
+  /** the dismiss reasons the API accepts, with their words */
+  dismissReasons: { id: string; label: string }[];
 }
 
 export interface OverviewData {

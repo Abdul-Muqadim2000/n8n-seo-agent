@@ -39,6 +39,7 @@ import type {
   PipelineData,
   RankingsData,
   Recommendation,
+  RecommendationBoard,
   RecommendedKeywords,
   Report,
   ReportDetail,
@@ -771,6 +772,23 @@ export const useRecommendations = (orgId: string, siteId: string) =>
     retry: noRetryOn4xx,
     staleTime: 60_000,
   });
+/** CR17-H (client report 2026-11-17, Q4): the four tabs (To do, Waiting for Google, Resolved, Dismissed), from the same states as the Overview */
+export const useRecommendationBoard = (orgId: string, siteId: string) =>
+  useQuery({
+    queryKey: qk.siteData(siteId, 'recommendations-board'),
+    queryFn: () => api<RecommendationBoard>(`/api/orgs/${orgId}/sites/${siteId}/recommendations/board`),
+    retry: noRetryOn4xx,
+    staleTime: 60_000,
+  });
+/** CR17-H: dismiss with a reason, bring back, or check one recommendation now (members and above) */
+export function useRecommendationAction(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ key, action, reason, note }: { key: string; action: 'dismiss' | 'restore' | 'check'; reason?: string; note?: string }) =>
+      api<{ recommendation: Recommendation }>(`/api/orgs/${orgId}/sites/${siteId}/recommendations/${action}`, { method: 'POST', body: { key, ...(reason ? { reason } : {}), ...(note ? { note } : {}) } }).then((r) => ({ action, rec: r.recommendation })),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['site', siteId] }),
+  });
+}
 
 // ---------- link building (v4.13, n8n/seo-agent/LINK_BUILDER_SPEC.md) ----------
 /** A company opt-out (the address itself is not kept: `hint` is masked). */

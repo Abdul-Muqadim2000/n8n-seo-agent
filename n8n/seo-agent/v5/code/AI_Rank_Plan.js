@@ -223,7 +223,9 @@ for (const g of gateSites) {
       if (v.contact === 'email') return { ...c, contact: 'email', contact_email: v.email };
       if (v.contact === 'form') return { ...c, contact: 'form', contact_url: v.form, manual: true, factor: Math.round(1e4 * (Number(c.factor) || 1) * 0.7) / 1e4, why: S0(c.why) + '; a contact form only: a manual step (send it yourself through ' + v.form + ')' };
       return { ...c, contact: '', factor: Math.round(1e4 * (Number(c.factor) || 1) * 0.85) / 1e4 }; });
-    const scored = vetted.map(c => { const sc = un('ARL.score', ARL.score(c, { priors: rpAll, values, feas, weights: null, H: AIR_CFG.H })); return sc.unavailable ? null : { ...c, ...sc }; }).filter(Boolean);
+    // CR17-H (F1): the score's `why` is the lever's sentence for the client; the candidate's own reason stays for the team as reason_note, the
+    // arithmetic as score_note (it was written into `why` and reached devaicon.com's Pipeline as "6 cell(s), expected gain 0.0082 ...")
+    const scored = vetted.map(c => { const sc = un('ARL.score', ARL.score(c, { priors: rpAll, values, feas, weights: null, H: AIR_CFG.H })); return sc.unavailable ? null : { ...c, ...sc, reason_note: S0(c.why) }; }).filter(Boolean);
     const openStored = storedA.filter(a => AIR_CFG.open.includes(S0(a.status)));
     const choice = ARL.choose(scored, { capacities: {}, arms, mode, open_actions: storedA.filter(a => ['shadow', ...AIR_CFG.open].includes(S0(a.status))), now: nowMs, units60, exposure }) || { chosen: [], deferred: [], refused: [] };
     // the gate on the way out: a placement pitch to a competitor's own page is refused here, whatever the kit chose (rival lists: learn only)
@@ -340,7 +342,7 @@ for (const g of gateSites) {
         sinks.prospects.push({ site_id: sid, domain: dom, prospect_domain: pd, type: 'ai_source', rank: Number(o.rank) || 0, spam_score: Number(o.spam_score) || 0,
           detail: ('cited for ' + (src.questions || []).length + ' question(s) on ' + (src.engines || []).length + ' engine(s)' + ((src.rivals_named || []).length ? '; names ' + src.rivals_named.slice(0, 3).join(', ') : '')).slice(0, 500),
           source_url: url, target_url: S0(o.target_url), status: S0(o.status) || 'new', first_seen: S0(o.first_seen) || nowIso, last_seen: nowIso, won_at: S0(o.won_at), outreach_subject: S0(o.outreach_subject), outreach_body: S0(o.outreach_body),
-          note: S0(o.note) || ('AI ranking placement (' + a.lever + ')' + (a.manual ? ': a contact form only, a manual step' : '')), score: Math.max(0, Math.min(100, Math.round(100 * (Number((a.expected || {}).p) || Number(a.p_hat) || 0)))), origin: 'ai_rank',
+          note: (S0(o.note) && !/^AI ranking placement \(L\d{2}\)/.test(S0(o.note)) ? S0(o.note) : 'Found by AI ranking: AI answers cite this page' + (a.manual ? '. A contact form only, a manual step: you send it yourself' : '')),   /* CR17-H (F1): no lever code in a note the client reads (an old note is rewritten) */ score: Math.max(0, Math.min(100, Math.round(100 * (Number((a.expected || {}).p) || Number(a.p_hat) || 0)))), origin: 'ai_rank',
           contact_email: S0(o.contact_email) || S0(src.contact_email) || S0(a.contact_email), contact_url: S0(o.contact_url) || S0(src.contact_url) || S0(a.contact_url), contacted_at: S0(o.contacted_at), followup_step: Number(o.followup_step) || 0,
           followup_subject: S0(o.followup_subject), followup_body: S0(o.followup_body), verified_at: S0(o.verified_at), drafted_at: S0(o.drafted_at) }); }
       const fitCtxQ = { ...fitCtx, topics: null };
@@ -358,7 +360,7 @@ for (const g of gateSites) {
       const gr = gm.growth_row || null;
       if (human.length && gr && gr.run_id) { const had = P(gr.actions_json, []); const list = Array.isArray(had) ? had.slice() : [];
         const lab = (a) => S0((ARL.LEVERS.find(l => l.id === a.lever) || {}).label) || a.lever;
-        for (const a of human) { const item = { priority: 2, type: 'ai_rank', action: (lab(a) + (S0((a.ref || {}).url) ? ': ' + a.ref.url : '')).slice(0, 200), why: S0(a.why || 'chosen by AI ranking (' + a.lever + ')').slice(0, 300) };
+        for (const a of human) { const item = { priority: 2, type: 'ai_rank', action: (lab(a) + (S0((a.ref || {}).url) ? ': ' + a.ref.url : '')).slice(0, 200), why: S0(a.why || 'Chosen by AI ranking for the questions your buyers ask.').slice(0, 300), score_note: S0(a.score_note).slice(0, 300) };   // CR17-H (F1): the client's sentence, the arithmetic apart
           if (!list.some(x => x && x.action === item.action)) list.push(item); }
         sinks.growth = { site_id: sid, run_id: S0(gr.run_id), actions_json: J(list) }; }
     }

@@ -10,6 +10,7 @@ import { requestRecheck } from '../services/pageWatch';
 import { markAlertSeen } from '../services/alerts';
 import { ladderDetailData, pipelineData } from '../services/pipeline';
 import { loadBundle, overviewData, recommend } from '../services/recommendations';
+import { checkRecommendation, dismissRecommendation, recommendationBoard, restoreRecommendation, todoRecommendations } from '../services/recommendationStates';
 
 type P = { orgId: string; siteId: string };
 
@@ -142,11 +143,40 @@ export async function dataRoutes(app: FastifyInstance) {
     if (!ladderId || ladderId.length > 80) throw notFound('Keyword ladder not found');
     return ladderDetailData(a.org, a.site, ladderId);
   });
-  app.get('/api/orgs/:orgId/sites/:siteId/recommendations', async (req) => {
-    const a = await portal(req);
+  // CR17-H (client report 2026-11-17, Q4): the list is the To do tab of the board below (what is not waiting for Google, resolved or
+  // dismissed), each item with its state, the date it was first recommended, its rule (why / how / how we check it) and its issue
+  const recInputs = async (req: Parameters<typeof siteAccess>[0], a: Awaited<ReturnType<typeof portal>>) => {
     const x = await loadBundle(a.org, a.site);
     // site tasks: a step done or skipped on the website is not recommended again; open ones carry their check button
     const tasks = a.site.verifiedAt ? await import('../services/siteTasks').then((m) => m.siteTasksOf(a.org, a.site, req.log)).catch(() => undefined) : undefined;
-    return shown(a.role, recommend(a.site, x, tasks));
+    return { x, tasks, recs: recommend(a.site, x, tasks) };
+  };
+  app.get('/api/orgs/:orgId/sites/:siteId/recommendations', async (req) => {
+    const a = await portal(req);
+    const { x, tasks, recs } = await recInputs(req, a);
+    return shown(a.role, await todoRecommendations(a.org, a.site, x, tasks, recs));
+  });
+  app.get('/api/orgs/:orgId/sites/:siteId/recommendations/board', async (req) => {
+    const a = await portal(req);
+    const { x, tasks, recs } = await recInputs(req, a);
+    return shown(a.role, await recommendationBoard(a.org, a.site, x, tasks, recs));
+  });
+  const member = async (req: Parameters<typeof siteAccess>[0]) => {
+    const p = req.params as P;
+    const a = await siteAccess(req, p.orgId, p.siteId, 'member');
+    requireVerified(a.site);
+    return a;
+  };
+  app.post('/api/orgs/:orgId/sites/:siteId/recommendations/dismiss', { config: { rateLimit: { max: 120, timeWindow: '10 minutes' } } }, async (req) => {
+    const a = await member(req);
+    return { recommendation: await dismissRecommendation(a, req, req.body) };
+  });
+  app.post('/api/orgs/:orgId/sites/:siteId/recommendations/restore', { config: { rateLimit: { max: 120, timeWindow: '10 minutes' } } }, async (req) => {
+    const a = await member(req);
+    return { recommendation: await restoreRecommendation(a, req, req.body) };
+  });
+  app.post('/api/orgs/:orgId/sites/:siteId/recommendations/check', { config: { rateLimit: { max: 30, timeWindow: '10 minutes' } } }, async (req) => {
+    const a = await member(req);
+    return { recommendation: await checkRecommendation(a, req, req.body) };
   });
 }

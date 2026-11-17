@@ -1323,8 +1323,9 @@ const candidates = all.filter(e => e.intent !== 'navigational' && !sameAsHead(e.
 }).slice(0, 160);
 const other_brands = fitBrandList(fitCtx, fitCtx.protect);
 const bySource = {}; for (const e of all) for (const s of e.sources) bySource[s] = (bySource[s] || 0) + 1;
+const providerError = (raw) => { const t = String(raw == null ? '' : raw).trim(); return t.search(/\b\d{3}\s+-\s+["'{\\]|\{\s*\\?"[A-Za-z_]+\\?"\s*:|\bstatus_code\b|\btasks_error\b/) < 0 ? t : 'could not be read this time (the data provider had an error), so the research used the other sources'; };   // CR17-H (client report 2026-11-17, F1): a provider's raw answer never reaches the report (app: providerErrorText; harness CR17H holds the copies equal)
 const failures = reqs.map((r, i) => [r, res[i]]).filter(([r, x]) => !x || x.error || ((x.tasks || [])[0] || {}).status_code >= 40000)
-  .map(([r, x]) => r.label + ': ' + ((x && ((x.error && x.error.message) || ((x.tasks || [])[0] || {}).status_message)) || 'no response'));
+  .map(([r, x]) => r.label + ': ' + providerError((x && ((x.error && x.error.message) || ((x.tasks || [])[0] || {}).status_message)) || 'no response'));
 if (!ki_pool.used && failures.length === reqs.length) throw new Error('Keyword ladder: every research pull failed (' + failures.join('; ') + '). Check the DataForSEO credential on "Run Ladder Research" and the account balance.');
 if (!all.length && !ki_pool.used) throw new Error('Keyword ladder: no keywords with search volume were found around "' + head + '" in ' + (base.country || 'this market') + '. Try a broader destination keyword.');
 const headRank = rankings[head] || null;

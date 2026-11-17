@@ -29,6 +29,8 @@ import {
   type IndexSiteFixCause,
 } from './indexing';
 import { aiExportTaskKey, aiRankAddressLabel, aiRankAddressNeed, aiRankGuideOf, aiRankLeverLabel, type AiRankStep } from './ai-rank';
+import { aiRankWhyPlain } from './ai-rank-client';
+import { clientText } from './client-copy';
 
 /** `index_links` (wave 2, DESIGN_WAVE2 §3.2): the one step `indexing:links`, pages that need a link from another page of the website */
 /** AIR (2026-11-06, docs/ai-ranking-2026-11-05/DESIGN.md §6.7): `ai_rank` = a step the AI-ranking plan needs from the client on their website or
@@ -98,6 +100,9 @@ export interface SiteTask {
   /** RC-3 (AIR): a step checked on an address the client pastes on it (an article, a post, a profile). `required`: the step cannot be
    *  checked without it; `value`: the address given last ('' = none yet). Absent for every other step. */
   address?: { required: boolean; label: string; value: string };
+  /** CR17-H (Q4): done on the website, Google has not read the pages again yet (an indexing step our fetch saw fixed): Recommendations
+   *  shows it under "Waiting for Google", not "Resolved". Absent on every other step. */
+  waitingForGoogle?: boolean;
 }
 
 /** The engine's readings of one website, as the app's data layer already has them. */
@@ -732,7 +737,9 @@ function presentMerge(p: Record<string, unknown>): Pick<SiteTask, 'title' | 'det
 function presentAiRank(p: Record<string, unknown>): Pick<SiteTask, 'title' | 'detail' | 'values' | 'guide' | 'guideVars'> {
   const lever = str(p.lever);
   const url = str(p.url);
-  const why = str(p.why);
+  // CR17-H (client report 2026-11-17, F1): the stored why may be the engine's scoring line ("6 cell(s), expected gain 0.0082 over (client time
+  // at an hour)"): it becomes the lever's own sentence here, at render time, so the stored rows need no repair
+  const why = clientText(aiRankWhyPlain(str(p.why), lever), { lever });
   const need = aiRankAddressNeed(lever);
   // RC-3: a step checked on an address says how, in the words of the field the client fills in
   const check =
@@ -840,6 +847,7 @@ export function deriveSiteTasks(inputs: SiteTaskInputs, stored: StoredSiteTask[]
       guideVars: { domain: inputs.domain, ...shown.guideVars },
       skipped: s?.skippedAt ? { at: s.skippedAt, who: s.skippedBy ?? '' } : null,
       ...addressOf(d),
+      ...(state === 'done' && d.pendingGoogle ? { waitingForGoogle: true } : {}),
     };
   });
   const rank = (t: SiteTask) => (t.state === 'todo' ? (t.severity === 'warning' ? 0 : 1) : t.state === 'done' ? 2 : 3);

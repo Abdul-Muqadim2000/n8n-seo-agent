@@ -75,6 +75,7 @@ import { profileNeedsYou } from './readiness';
 import { aiPanelNeedsYou } from '@seo/shared';
 import { buildLadders, draftQa, failedPageRow, failedPageRequests, noPageRow, ladderAppSources, ladderNeedsYou, ladderReports, sortNeedsYou, type LadderBuild, type LadderSchedule, type SiteRun, type WaitingPage } from './ladders';
 import { loadBundle, recommend, type SiteBundle } from './recommendations';
+import { todoRecommendations } from './recommendationStates';
 import { siteTasksOf } from './siteTasks';
 import { kiForRecs, kiNeedsYou } from './kiData';   // KI (2026-11-08, A1): its Needs-you items, On websites only
 import type { SiteTask } from '@seo/shared';
@@ -927,7 +928,8 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   const cp = cadenceReport?.payload as { upcoming?: { keyword: string; source: string; why: string }[]; paused_reason?: string; waiting_publish?: number; max_waiting?: number } | undefined;
 
   // ---------- the growth loop ----------
-  const recs = recommend(site, x, siteTasks);
+  // CR17-H (Q4): the Improve stage counts the To do tab (what is waiting for Google, resolved or dismissed is not to do)
+  const recs = await todoRecommendations(org, site, x, siteTasks, recommend(site, x, siteTasks));
   const high = recs.filter((r) => r.priority === 'high').length;
   const ladderPages = x.rankings.ladders.reduce((t, l) => t + l.pages, 0);
   const ladderPublished = x.rankings.ladders.reduce((t, l) => t + l.published, 0);

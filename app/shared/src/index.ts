@@ -76,3 +76,5 @@ export * from './alerts';   // CR17-D (2026-11-17, build section 194): alert sta
 export * from './draft-fix';   // 2026-10-21: a not-ready draft is finished by hand (the engine's qa_next_step / qa_owner_edits), never re-run
 export * from './legal';   // CR17-B (2026-11-17): the Terms / Privacy version agreed at sign-up, their links, what deleting one's account does
 export * from './engine-purge';   // CR17-B (2026-11-17): the engine tables a deleted website's history is purged from (one list, ladder_common.SITE_PURGE)
+export * from './client-copy';   // CR17-H (client report 2026-11-17, F1): what a client may read, one guard for every screen and report
+export * from './recommendation-rules';   // CR17-H (Q4): a rule per recommendation family, one card per issue, the state machine

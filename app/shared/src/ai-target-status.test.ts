@@ -85,8 +85,10 @@ describe('aiTargetView', () => {
 });
 
 describe('aiRankWhyPlain', () => {
-  it('drops the engine\'s scoring line whole and keeps a real sentence, made plain', () => {
-    expect(aiRankWhyPlain(AIR.reason)).toBe('');
+  // CR17-H (client report 2026-11-17, F1): the scoring line is still never shown; it now becomes its lever's own sentence (L06 here) instead of
+  // nothing, so the client reads why the step matters
+  it('replaces the engine\'s scoring line whole with the lever\'s sentence and keeps a real sentence, made plain', () => {
+    expect(aiRankWhyPlain(AIR.reason)).toBe('Your page for this question can answer it more directly, so AI assistants can quote it.');
     expect(aiRankWhyPlain('Refresh the page for the searches the engines run: 5 cells, expected gain 0.01')).toBe('');
     expect(aiRankWhyPlain('AI ranking (L08): AI answers cite a list that does not name you yet.')).toBe('AI answers cite a list that does not name you yet.');
   });

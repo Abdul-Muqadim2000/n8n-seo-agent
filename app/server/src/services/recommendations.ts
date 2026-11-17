@@ -51,6 +51,13 @@ import {
   aiQuestionAction,
   aiTargetInput,
   type AiQuestionInputs,
+  clientText,
+  foldByIssue,
+  isIndexFinding,
+  pageKey,
+  recSourceOf,
+  splitTitle,
+  withRule,
 } from '@seo/shared';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { aiData, alertsData, backlinksData, contentData, ga4Now, gscNow, previousOfType, rankingsData, searchData, settingsData, technicalData } from './data';
@@ -386,8 +393,9 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
         id: `engine:${a.source}:${a.type}:${a.keyword ?? a.action.slice(0, 60)}`,
         category: 'ai',
         priority: a.priority <= 1 ? 'high' : a.priority === 2 ? 'medium' : 'low',
-        title: cutTitle(a.action),
-        detail: [a.why, improve || ai.step !== 'improve' ? ai.note : ''].filter(Boolean).join(' '),
+        // CR17-H (F1): a title never ends mid-sentence; what does not fit opens the detail
+        title: splitTitle(a.action).title,
+        detail: [splitTitle(a.action).rest, a.why, improve || ai.step !== 'improve' ? ai.note : ''].filter(Boolean).join(' '),
         evidence: `from the ai visibility report`,
         action: { label: improve ? 'Improve the page for this question' : 'Write the answer page', mode: 'keyword', prefill },
       }, {
@@ -430,8 +438,8 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
       id: `engine:${a.source}:${a.type}:${a.keyword ?? a.action.slice(0, 60)}`,
       category: cat,
       priority: a.priority <= 1 ? 'high' : a.priority === 2 ? 'medium' : 'low',
-      title: ownTitle || cutTitle(a.action),
-      detail: a.why + ownNote,
+      title: ownTitle || splitTitle(a.action).title,
+      detail: [ownTitle ? '' : splitTitle(a.action).rest, a.why + ownNote].filter(Boolean).join(' '),
       evidence: `from the ${a.source.replace('_', ' ')} report`,
       action,
     }, {
@@ -577,7 +585,98 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
   for (const { rec, score } of kiRecommendations(x.ki)) add(rec, score);
 
   // One queue: blocking setup first, then by impact x confidence / effort, then the items nothing measured yet (`queue.ts`).
-  return queueOrder(out).slice(0, 60);
+  return finishQueue(out, x);
+}
+
+/**
+ * CR17-H (client report 2026-11-17, Q4 + F1): the last pass every list goes through, so the Recommendations page, the Overview, the Pipeline
+ * and the issue trackers read one list.
+ * 1. Pages Google has not put in search are ONE card when Index coverage runs (it owns indexing): the weekly report's "Request indexing for
+ *    <page>", the audit's "A large share of important pages is not indexed" and "Ask Google to read these pages again" were three asks in
+ *    three wordings for the same pages (`foldNotIndexed`).
+ * 2. Each item gets its family rule (why, how with its guide, how we check it) and its badge from the queue score, capped by how sure we are;
+ *    a measure that is not a task (AI names you in N%, spammy links) leaves the list for its page's KPI (`withRule`).
+ * 3. Every client-facing string goes through the one client-copy guard (`clientText`).
+ * 4. One card per issue (a page, an AI question, a link, a search): the others become "Also reported by" (`foldByIssue`).
+ */
+export function finishQueue(out: readonly Recommendation[], x: Pick<SiteBundle, 'indexing' | 'technical'>): Recommendation[] {
+  const folded = foldNotIndexed(out, x);
+  const ruled = folded.map(withRule).filter((r): r is Recommendation => !!r).map(cleanCopy);
+  return foldByIssue(queueOrder(ruled)).slice(0, 60);
+}
+
+/** Every string a client reads on a card, through the client-copy guard (shared/src/client-copy.ts). */
+function cleanCopy(r: Recommendation): Recommendation {
+  return {
+    ...r,
+    title: clientText(r.title) || r.title,
+    detail: clientText(r.detail),
+    ...(r.evidence ? { evidence: clientText(r.evidence) } : {}),
+  };
+}
+
+/** The members of the one "not in Google yet" card: the weekly report's index action per page, the audit's indexing finding, ask-Google. */
+const isNotIndexedAsk = (r: Recommendation, findings: SiteBundle['technical']['findings']): boolean =>
+  /^engine:[a-z_]+:index:/.test(r.id) || r.id === 'ix:ask_google' || (r.id.startsWith('tech:') && isIndexFinding(findings.find((f) => `tech:${f.key}` === r.id) ?? { key: r.id.slice(5) }));
+
+/**
+ * CR17-H (Q1 + Q4): with Index coverage running for the website, every "this page is not in Google" ask becomes one card that opens the
+ * Indexing page, where each page has Google's own reason and the one next step. Nothing is folded while Index coverage is off or has not
+ * run (the weekly report's and the audit's items then stay, as before). The card lists the pages it covers (`subjects`), which is what
+ * its check reads: it is resolved when the daily index check finds them in Google.
+ * Adapter (package C, Index coverage): `notIndexedCard` may be replaced by `setNotIndexedCard` with Index coverage's own summary.
+ */
+export function foldNotIndexed(out: readonly Recommendation[], x: Pick<SiteBundle, 'indexing' | 'technical'>): Recommendation[] {
+  const ix = x.indexing;
+  if (!ix || !ix.on || !ix.runAt) return [...out];
+  const members = out.filter((r) => isNotIndexedAsk(r, x.technical.findings));
+  if (!members.length) return [...out];
+  const card = notIndexedCard(members, ix);
+  const first = out.findIndex((r) => members.includes(r));
+  const rest = out.filter((r) => !members.includes(r));
+  return card ? [...rest.slice(0, first), card, ...rest.slice(first)] : rest;
+}
+
+/** The pages a member is about (its button's page, the address in its text, the ask-Google list). */
+function memberPages(r: Recommendation, ix: IndexingForRecs): string[] {
+  if (r.id === 'ix:ask_google') return ix.askGoogle.map((p) => p.url);
+  const own = r.action?.href ?? (r.action?.prefill?.existingPageUrl as string | undefined) ?? '';
+  const inText = [r.title, r.detail, r.evidence ?? ''].join(' ').match(/https?:\/\/[^\s)]+/g) ?? [];
+  return [own, ...inText].map((u) => u.replace(/[.,;:]+$/, '')).filter(Boolean);
+}
+
+export type NotIndexedCard = (members: readonly Recommendation[], ix: IndexingForRecs) => Recommendation | null;
+let notIndexedCardImpl: NotIndexedCard = defaultNotIndexedCard;
+/** Index coverage (package C) may hand its own summary card here; the default below builds it from the members. */
+export function setNotIndexedCard(fn: NotIndexedCard | null): void {
+  notIndexedCardImpl = fn ?? defaultNotIndexedCard;
+}
+const notIndexedCard: NotIndexedCard = (members, ix) => notIndexedCardImpl(members, ix);
+
+function defaultNotIndexedCard(members: readonly Recommendation[], ix: IndexingForRecs): Recommendation | null {
+  const seen = new Map<string, string>();
+  for (const m of members) for (const u of memberPages(m, ix)) if (pageKey(u) && !seen.has(pageKey(u))) seen.set(pageKey(u), u);
+  const pages = [...seen.values()];
+  const ask = ix.askGoogle.length;
+  const sources = [...new Set(members.map((m) => recSourceOf(m.id)))];
+  return {
+    id: 'ix:not_indexed',
+    category: 'technical',
+    priority: 'medium',
+    title: pages.length === 1 ? 'A page of yours is not in Google yet' : 'Some of your pages are not in Google yet',
+    detail: [
+      'The daily index check reads Google\'s own view of each page and the Indexing page gives each one its next step.',
+      'A new page Google has not visited needs a link from a page that is already in Google, and time: rewriting it does not help a page Google has not read.',
+      'A page Google read and left out is improved at its own address. A page you moved to a new address needs nothing more than its permanent redirect.',
+      ask ? `For ${ask === 1 ? 'one page' : `${ask} pages`}, asking Google to read ${ask === 1 ? 'it' : 'them'} again in Search Console is the right next step.` : '',
+    ].filter(Boolean).join(' '),
+    ...(pages.length ? { evidence: pages.slice(0, 5).map((u) => indexPath(u)).join(' · ') + (pages.length > 5 ? ` and ${pages.length - 5} more` : '') } : {}),
+    action: { label: 'See the pages', page: 'indexing' },
+    ...(ask ? { guideVars: { pageUrl: ix.askGoogle[0].url } } : {}),
+    subjects: pages,
+    alsoFrom: sources.filter((s) => s !== 'Index coverage'),
+    score: scoreOf(ruleScoreFor('ix:not_indexed')!),
+  };
 }
 
 /**
@@ -776,6 +875,8 @@ export async function overviewData(org: OrgRow, site: SiteRow): Promise<Overview
   // a free-sources-only check (v4.10, mode 'free') has no DataForSEO figures: the overview shows the latest check that used DataForSEO
   const lastBl = [...bl].reverse().find((b) => b.mode !== 'free') ?? bl[bl.length - 1] ?? null;
   const ga4 = ga4Now(snap, x.settings.tracking);
+  // CR17-H (Q4): the Overview's top recommendations are the To do tab's (a dismissed, resolved or waiting item leaves both at once)
+  const todo = await import('./recommendationStates').then((m) => m.todoRecommendations(org, site, x, tasks, recommend(site, x, tasks)));
   return {
     site: { domain: site.domain, trackingStatus: site.trackingStatus, verified: !!site.verifiedAt },
     // 2026-10-28: what the weekly cycle runs on its own (the checklist offers it as scheduled, not as a manual run) and GA4 by the shared rule
@@ -805,7 +906,7 @@ export async function overviewData(org: OrgRow, site: SiteRow): Promise<Overview
       caseStudies: x.content.caseStudies.length,
     }),
     alerts: { open: x.alerts.alerts.filter((a) => a.status !== 'resolved' && a.status !== 'closed').length, checkinDue: x.alerts.checkinDue },
-    recommendations: recommend(site, x, tasks).slice(0, 6),
+    recommendations: todo.slice(0, 6),
     reports,
   };
 }

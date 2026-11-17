@@ -33,9 +33,9 @@ const airReportOf = (sid, checkedAt) => { const A = AIR_ON.find(x => x.site_id =
   const qText = (ids) => (Array.isArray(ids) ? ids : P_(ids, [])).map(id => AIR_PROMPTS.get(S_(id)) || '').filter(Boolean).slice(0, 4);
   const actions = (air.chosen || []).slice(0, 20).map(a => { const ref = P_(a.ref, {}) || {}; const pageUrl = S_(ref.url) || S_(a.page_url);   // FX-C: L07's ref names the question only; the page it fixes is on the chosen action
     return { action_id: S_(a.action_id), lever: S_(a.lever), label: labelOf(a), executor: S_(a.executor), status: statusById.get(S_(a.action_id)) || 'proposed', sink: S_(a.sink), scope: S_(a.scope),
-      questions: qText(a.questions), engines: (Array.isArray(a.engines) ? a.engines : P_(a.engines, [])).map(S_).slice(0, 8), target_stage: '', why: AIRC.plain(a.why).slice(0, 300), url: pageUrl }; });
+      questions: qText(a.questions), engines: (Array.isArray(a.engines) ? a.engines : P_(a.engines, [])).map(S_).slice(0, 8), target_stage: '', why: AIRC.whyPlain(a.why, a.lever).slice(0, 300), url: pageUrl }; });   // CR17-H (F1): the lever's sentence, never the scoring line
   const steps = (air.chosen || []).filter(a => a.executor === 'human' || ['growth_action', 'site_task', 'listing'].includes(S_(a.sink))).slice(0, 8).map(a => { const ref = P_(a.ref, {}) || {}; const pageUrl = S_(ref.url) || S_(a.page_url);   // FX-C: L07's ref names the question only; the page it fixes is on the chosen action
-    return { key: 'ai_rank:' + S_(a.lever) + ':' + AIRF.refKey(ref), lever: S_(a.lever), label: labelOf(a), what: (labelOf(a) + (pageUrl ? ': ' + pageUrl : '')).slice(0, 200), why: AIRC.plain(a.why).slice(0, 300),
+    return { key: 'ai_rank:' + S_(a.lever) + ':' + AIRF.refKey(ref), lever: S_(a.lever), label: labelOf(a), what: (labelOf(a) + (pageUrl ? ': ' + pageUrl : '')).slice(0, 200), why: AIRC.whyPlain(a.why, a.lever).slice(0, 300),
       check: AIR_CHECK[S_(a.lever)] || 'our weekly check reads it again', url: pageUrl, action_id: S_(a.action_id), status: statusById.get(S_(a.action_id)) || 'queued' }; });
   const open = ((air.rows || {}).actions || []).filter(r => ['proposed', 'queued', 'in_progress'].includes(S_(r.status))).length;
   const mon = AIR_MONS.find(m => m.site_id === sid) || {};
@@ -64,7 +64,10 @@ const DRY_OF = (sid) => { const pick = (nm) => { try { return $(nm).all().map(i 
   const b = pick('Bing Submit Requests'), x = pick('IndexNow Requests');
   return (on || b || x) ? { bing: b ? (b.would_submit || []).length : 0, indexnow: x ? (x.would_submit || []).length : 0 } : null; };
 // reads Growth Metrics explicitly: the node before it saves a Data Table row and outputs that row, not the summary
-return $('Growth Metrics').all().map(i => i.json).filter(m => !m.skip).map(m => {
+return $('Growth Metrics').all().map(i => i.json).filter(m => !m.skip).map(m0 => {
+  // CR17-H (F1): an AI-ranking action stored in an earlier week carries the scoring line as its why: the report, its e-mail and the callback
+  // say the lever's sentence instead (AIRC.whyPlain; nothing else in the action list is touched)
+  const m = { ...m0, actions: (m0.actions || []).map(a => (a && a.type === 'ai_rank' ? { ...a, why: AIRC.whyPlain(a.why) || 'Chosen by AI ranking for the questions your buyers ask.' } : a)) };
   const B = m.submitted.bing, X = m.submitted.indexnow;
   const EB = m.earned_basis || {};   // C-3: what the earned-media counts are counted over
   // B9-1 (2026-10-15, benchmark area 9): what a submission actually reaches, said the way the sources say it. Bing's index is read

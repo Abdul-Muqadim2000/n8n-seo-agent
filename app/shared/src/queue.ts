@@ -161,6 +161,8 @@ export const RULE_SCORES: Record<string, { impact: number; effort: EffortBand; b
   'ix:duplicate': { impact: 3, effort: 'session', basis: 'pages Google sees as copies of others' },
   'ix:links': { impact: 2.5, effort: 'hour', basis: 'pages Google has not found or read yet; links from your pages in search help it find them' },
   'ix:ask_google': { impact: 1.5, effort: 'minutes', basis: 'a few important pages where asking Google to read them again in Search Console is the right next step' },
+  // CR17-H: the one card for pages Google has not put in search (the weekly report's, the audit's and the ask-Google items folded together)
+  'ix:not_indexed': { impact: 4, effort: 'hour', basis: 'pages Google has not put in search yet; the daily index check follows each one' },
   // rankings
   'rank:next': { impact: 4, effort: 'session', basis: 'the next rung of a ladder that is already climbing' },
   'rank:drop': { impact: 4, effort: 'session', basis: 'a keyword that was ranking and no longer is' },
@@ -233,4 +235,31 @@ export function queueBands<T extends { id: string; score?: RecommendationScore }
     if (got.length) out.push({ band, note: BAND_NOTE[band], items: got });
   }
   return out;
+}
+
+// ---- CR17-H (client report 2026-11-17, Q4): the badge comes from the queue score ----
+// Before, each source set its own badge (the engine's "priority 1", an audit severity, a hand-set 'high'), so ten items were High while the
+// queue ranked most of them low, and the badge and the order disagreed. Now one rule: the score decides, and how sure we are caps it.
+
+/** A ranked item at or above this value is High, at or above MEDIUM_AT Medium (the value is impact x confidence / effort, `scoreOf`). */
+export const PRIORITY_HIGH_AT = 1.0;
+export const PRIORITY_MEDIUM_AT = 0.35;
+
+/**
+ * The badge of one item from its queue score.
+ * - blocking (nothing below can be measured until it is done): High.
+ * - ranked: by value; an item with only a general rule behind it (no quantity of this site) is at most Medium, unless its family is one
+ *   where a fact makes it urgent (someone is waiting for an answer, a written page is not live) and its source said so (`urgent`).
+ * - not ranked: Medium when something checks it, Low otherwise.
+ * - nothing checks it (`checked: false`): at most Low, it can be dismissed but never confirmed done.
+ */
+export function priorityFromScore(score: RecommendationScore | undefined, opts: { checked: boolean; urgent?: boolean }): 'high' | 'medium' | 'low' {
+  const cap = (p: 'high' | 'medium' | 'low') => (!opts.checked ? 'low' : p);
+  if (!score) return cap(opts.urgent ? 'high' : 'medium');
+  if (score.blocking) return 'high';
+  if (opts.urgent) return cap('high');
+  if (!score.ranked) return cap('medium');
+  const p = score.value >= PRIORITY_HIGH_AT ? 'high' : score.value >= PRIORITY_MEDIUM_AT ? 'medium' : 'low';
+  const ruleOnly = score.confidenceLabel === CONFIDENCE.rule.label;
+  return cap(ruleOnly && p === 'high' ? 'medium' : p);
 }
