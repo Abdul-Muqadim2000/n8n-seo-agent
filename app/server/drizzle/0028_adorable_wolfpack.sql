@@ -1,0 +1,1 @@
+ALTER TABLE "outreach_sequences" ADD COLUMN "manual" boolean DEFAULT false NOT NULL;

@@ -204,6 +204,9 @@ async function handleIncoming(mb: MailboxRow, m: Incoming, log: Log): Promise<vo
     await db.update(schema.outreachSequences).set({ oooUntil: back ?? next, nextAt: q.status === 'active' && q.nextAt && q.nextAt.getTime() > next.getTime() ? q.nextAt : (q.status === 'active' ? next : q.nextAt), updatedAt: now }).where(eq(schema.outreachSequences.id, q.id));
     return;
   }
+  // CR17-E (2026-11-17): the one won rule (engine LK.wonCheck, shared link-status.ts): we wrote to them (this conversation) and the Reply
+  // Reader's own reading found the link on a page that passes the junk gates (Reply Classify Input: a job listing, a profile or a farm page
+  // is "found, low value", never link_found). "They say it is live" without that reading stays a reply until the weekly check finds it.
   const won = cls === 'says_linked' && !!reading?.link_found;
   await db.update(schema.outreachSequences).set({ status: won ? 'won' : 'replied', replyAt: now, replyFrom: m.from, replyClass: cls, replySummary: reading?.summary ?? '', suggestedReply: reading?.suggested_reply ?? '', nextAt: null, ...(won ? { wonAt: now } : {}), updatedAt: now }).where(eq(schema.outreachSequences.id, q.id));
   // a reply from anyone at that site stops every other open sequence to it (they have heard from us)

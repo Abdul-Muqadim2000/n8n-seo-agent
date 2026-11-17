@@ -8574,8 +8574,8 @@ def _b83_checks():
             if (_n83.get('parameters') or {}).get('jsCode'):
                 _code83[_n83['name']] = _n83['parameters']['jsCode']
     _want83 = {
-        'LB Page Requests': ('B11-2', ("const wonQueue = [];", "String(y.status || '') === 'won'", "if (!key || linking.has(key)) continue;",
-                                       "wonQueue.sort((a, b) => (b.misses - a.misses) || (b.age - a.age));", "LB_WON_MAX")),
+        'LB Page Requests': ('B11-2', ("const wonQueue = [];", "String(x.status || '') === 'won'", "if (!key || (linking.has(key) && ledgerPages.has(LK.normUrl(url)))) continue;",   # CR17-E (section 195): only the page the ledger carries is skipped
+                                       "(b.misses - a.misses) || (b.age - a.age)", "LB_WON_MAX")),
         'LB Assemble': ('B11-2', ("const won_checks = [];", "o.r.kind === 'won'", "LK.verify(x, p.domain", "won_live:", "won_unchecked:")),
         'LB Report': ('B11-2', ("const WON_STATE = {", 'Links you won', 'missing twice running', '865,000 links tracked by Linkody',
                                 "Whether the links you won are still on the page", 'won_checks: wonChecks.map')),

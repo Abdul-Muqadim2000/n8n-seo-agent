@@ -25,6 +25,7 @@ export * from './keywords';
 export * from './link-import';
 export * from './backlinks';   // client report 2026-11-11 (N45): what each referring site is (real, listing, automatic report page, farm), Bing check
 export * from './outreach';
+export * from './link-status';   // CR17-E (client report 2026-11-17, F9 + C4): one link-building status model (linkStates / linkStatusCounts), the won rule, the link text
 export * from './draft-qa';
 export * from './placeholders';
 export * from './findings';

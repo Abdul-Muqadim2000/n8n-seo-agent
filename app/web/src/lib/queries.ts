@@ -852,6 +852,14 @@ export function useDismissOutreach(orgId: string, siteId: string) {
   });
 }
 
+/** CR17-E (C4a): "I sent it myself" - the person sent the pitch from their own mail: the app records it, the follow-ups become reminders, the won check reads their page. 409 codes: not_written, suppressed, weekly_limit. */
+export const useManualSent = (orgId: string, siteId: string) =>
+  useLinkMutation<{ prospectDomain: string; type: string; toEmail: string }, { ok: boolean; id: string }>(orgId, siteId, (body) => ({ method: 'POST', path: '/manual-sent', body }));
+
+/** CR17-E: the next follow-up of a pitch the person sends themselves went out. */
+export const useManualFollowupSent = (orgId: string, siteId: string) =>
+  useLinkMutation<{ id: string }>(orgId, siteId, ({ id }) => ({ method: 'POST', path: `/sequences/${id}/followup-sent` }));
+
 /** Edits the unsent steps (or the address before the first e-mail) of a sequence. */
 export const useUpdateSequence = (orgId: string, siteId: string) =>
   useLinkMutation<{ id: string; steps?: OutreachStep[]; toEmail?: string }>(orgId, siteId, ({ id, ...body }) => ({ method: 'PATCH', path: `/sequences/${id}`, body }));
@@ -864,7 +872,7 @@ export const useSequenceAction = (orgId: string, siteId: string) =>
 export const useSequenceReply = (orgId: string, siteId: string) =>
   useLinkMutation<{ id: string; body: string }>(orgId, siteId, ({ id, body }) => ({ method: 'POST', path: `/sequences/${id}/reply`, body: { body } }));
 
-/** Won (the link check confirms it) or not a fit. */
+/** "They linked" (a claim: our check counts it won once it finds the link on their page) or not a fit. */
 export const useSequenceOutcome = (orgId: string, siteId: string) =>
   useLinkMutation<{ id: string; status: 'won' | 'rejected' }>(orgId, siteId, ({ id, status }) => ({ method: 'POST', path: `/sequences/${id}/outcome`, body: { status } }));
 

@@ -97,6 +97,7 @@ import {
   type ProfileReadiness,
   type ProfileRow,
   type ProspectRow,
+  type LinkOutreachRow,
   type QueryChange,
   type QueryPoint,
   type QueryRow,
@@ -118,6 +119,8 @@ import {
   type TrendRow,
   type MonitorSettings,
   prospectDraft,
+  prospectLinkState,
+  linkStatusCounts,
   draftSuperseded,
   // G12 / G29 (2026-10-13, FIX_PLAN): the chart marks, the control-group change test and the lineage every figure carries
   buildAnnotations,
@@ -162,6 +165,7 @@ import { liveTechnical } from './technicalLive';
 import { aiChargeEntries, bucketAiCharges } from './runCredits';
 import { callbackUrl, latestReport, reportsList } from './runs';
 import { healGa4 } from './engineSite';
+import { linkStatusOf } from './linkBuilder';   // CR17-E (F9): the one link-building status model
 
 // Dashboards: the n8n Data Tables of one domain (filtered server-side by `domain`), shaped for the client. JSON columns are parsed
 // here; the richer weekly reports (daily series, the question grid, the engine's own actions) come from the latest callback stored
@@ -1733,14 +1737,21 @@ const toCoverage = (c: P | null): BacklinkCoverage | null => {
 
 export async function backlinksData(org: OrgRow, site: SiteRow): Promise<BacklinksData> {
   const d = site.domain;
-  const [snaps, prospects, report, refs, imports, graphSummary] = await Promise.all([
+  const [snaps, prospects, report, refs, imports, graphSummary, outreach, seqs] = await Promise.all([
     siteRows<BacklinkSnapshotRow>('backlinkSnapshots', d, { sortBy: 'checked_at:asc', max: 300 }),
     siteRows<ProspectRow>('prospects', d, { max: 1000 }),
     latestReport(org.id, site.id, ['backlinks']),
     siteRows<BacklinkRow>('backlinks', d, { max: 3000 }),
     siteRows<LinkImportRow>('linkImports', d, { max: 20000 }),
     siteRows<LinkGraphRow>('linkGraph', d, { extra: [{ columnName: 'kind', condition: 'eq', value: 'summary' }], max: 20 }),
+    // CR17-E (F9): the Link Builder's verdicts and the app's conversations, so "prospects to contact" is the one link status, not prospect status `new`
+    siteRows<LinkOutreachRow>('linkOutreach', d, { max: 1500 }).catch(() => [] as LinkOutreachRow[]),
+    db.select({ prospectDomain: schema.outreachSequences.prospectDomain, type: schema.outreachSequences.prospectType, status: schema.outreachSequences.status, startedAt: schema.outreachSequences.startedAt, approvedAt: schema.outreachSequences.approvedAt,
+      replyAt: schema.outreachSequences.replyAt, replyClass: schema.outreachSequences.replyClass, wonAt: schema.outreachSequences.wonAt }).from(schema.outreachSequences).where(eq(schema.outreachSequences.siteId, site.id)).catch(() => []),
   ]);
+  const iso0 = (x: Date | null) => (x ? x.toISOString() : null);
+  const linkRows = linkStatusOf(outreach, prospects, seqs.map((q) => ({ ...q, startedAt: iso0(q.startedAt), approvedAt: iso0(q.approvedAt), replyAt: iso0(q.replyAt), wonAt: iso0(q.wonAt) })));
+  const linkStateBy = new Map(linkRows.map((r) => [r.key, r.state]));
   const last = snaps[snaps.length - 1];
   const rp = report?.payload;
   const fileId = (needle: string) => report?.report.files.find((f) => f.field.includes(needle) || f.fileName.includes(needle))?.id ?? null;
@@ -1807,8 +1818,10 @@ export async function backlinksData(org: OrgRow, site: SiteRow): Promise<Backlin
         followupSubject: s(p.followup_subject),
         followupBody: s(p.followup_body),
         verifiedAt: s(p.verified_at),
+        linkState: linkStateBy.get(`${s(p.prospect_domain).toLowerCase()}|${s(p.type)}`) ?? prospectLinkState({ prospect_domain: s(p.prospect_domain), type: s(p.type), status: s(p.status), contacted_at: s(p.contacted_at), won_at: s(p.won_at), verified_at: s(p.verified_at) }),
       }))
       .sort((a, c) => c.score - a.score || c.rank - a.rank),
+    linkCounts: linkStatusCounts(linkRows),
     report: rp
       ? {
           receivedAt: report!.report.receivedAt,
@@ -1918,6 +1931,13 @@ export function aiWrittenPages(
     .slice(0, 500);
 }
 
+/** CR17-E (F9): the AI growth list's status through the one link status (a "won" nobody wrote to, or with no link our check found, is not won) */
+function earnedStatus(pr: ProspectRow | null, fallback: string): string {
+  if (!pr) return fallback.replace(/^drafted$/, 'new') || 'new';
+  const st = prospectLinkState({ prospect_domain: s(pr.prospect_domain), type: s(pr.type), status: s(pr.status), contacted_at: s(pr.contacted_at), won_at: s(pr.won_at), verified_at: s(pr.verified_at) });
+  return st === 'won' ? 'won' : st === 'sent' ? 'contacted' : st === 'replied' ? 'replied' : st === 'declined' ? (s(pr.status) === 'ignored' ? 'ignored' : 'rejected') : 'new';
+}
+
 function toGrowth(g: AiGrowthRow | undefined, pages: AiPageRow[], targets: AiTargetRow[], prospects: ProspectRow[], logs: ContentLogRow[], m: MonitorSettings | null, admin = false): AiGrowth | null {
   if (!g) return null;
   const sub = safeJson<P>(g.submitted_json, {}); const bing = o(sub.bing); const inx = o(sub.indexnow);
@@ -1925,7 +1945,7 @@ function toGrowth(g: AiGrowthRow | undefined, pages: AiPageRow[], targets: AiTar
   const earned = arr(safeJson(g.earned_json, [])).map((e) => {
     const pr = prospects.find((x) => s(x.prospect_domain) === s(e.host)) ?? null;
     return { url: s(e.url), title: s(e.title), host: s(e.host), kind: s(e.kind), citations: n(e.citations), engines: arr<string>(e.engines).map(String), questions: arr<string>(e.questions).map(String),
-      mentionsUs: e.mentions_us == null ? null : b(e.mentions_us), competitorsNamed: arr<string>(e.competitors_named).map(String), action: s(e.action), status: (s(pr?.status) || s(e.status)).replace(/^drafted$/, 'new'),
+      mentionsUs: e.mentions_us == null ? null : b(e.mentions_us), competitorsNamed: arr<string>(e.competitors_named).map(String), action: s(e.action), status: earnedStatus(pr, s(e.status)),
       drafted: !!prospectDraft(pr), contactEmail: s(pr?.contact_email), draft: prospectDraft(pr) };   // P34-1: the stale pre-gate drafts are not this week's work and are not offered
   });
   const ent = safeJson<P | null>(g.entity_json, null);

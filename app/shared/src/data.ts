@@ -10,6 +10,7 @@ import type { Lineage } from './lineage';
 import type { RecommendationScore } from './queue';
 import type { AiPanelInfo, AiSegments } from './ai-panel';
 import type { AiRankPlanData, AiRankSettings } from './ai-rank';
+import type { LinkState, LinkStatusCounts } from './link-status';
 import type { AiAnswerDetail, AiEngineRate, AiLatestExtras, AiSovPoint } from './ai-detail';
 import type { AiFilter, AiFilterDim } from './ai-trends';
 import type { FindingLive } from './technical-live';
@@ -1018,6 +1019,8 @@ export interface Prospect {
   followupSubject: string;
   followupBody: string;
   verifiedAt: string;
+  /** CR17-E: the one link-building state of this prospect (shared link-status.ts) */
+  linkState?: LinkState;
 }
 
 export interface BacklinksData {
@@ -1045,6 +1048,8 @@ export interface BacklinksData {
   /** v4.10: the Common Crawl graph rows written for this site (monthly job) */
   linkGraph: { release: string; checkedAt: string; counts: Record<string, number> } | null;
   prospects: Prospect[];
+  /** CR17-E (F9): the link-building counts from the one status model (shared link-status.ts): the Backlinks page and the Pipeline read these */
+  linkCounts?: LinkStatusCounts;
   /** from the latest backlink report delivered to the app */
   report: {
     receivedAt: string;

@@ -128,7 +128,10 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
   const atRiskRefs = d.refs.filter((x) => x.status === 'at_risk' && linkCounts(x)).length;
   const droppedJunk = d.refs.filter((x) => (x.status === 'lost' || x.status === 'at_risk') && !linkCounts(x)).length;
   const spamRead = D ? spamScoreReading(D.spamScore, d.refs.length ? breakdown : null) : null;
-  const openProspects = d.prospects.filter((p) => statusOf(p) === 'new').length;
+  // CR17-E (F9): the one link status (shared link-status.ts): a site the Link Builder left out, a pitch already sent or a site that already
+  // links to you is not "to contact"
+  const lc = d.linkCounts;
+  const openProspects = lc ? lc.found + lc.noPage + lc.needsContact + lc.toWrite + lc.needsEdit + lc.toReview : d.prospects.filter((p) => statusOf(p) === 'new').length;
   const perSource = d.latest?.coverage?.perSource ?? {};
 
   return (
@@ -269,7 +272,7 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
           icon={<Send />}
           title="Outreach pipeline"
           description="Prospects scored by value × likelihood, with the contact found on their site and a drafted e-mail"
-          info="An unlinked mention converts far more often than a cold site. Contacted prospects get follow-up drafts after 7 and 14 days. Won is set when the link is found on the page."
+          info="An unlinked mention converts far more often than a cold site. Contacted prospects get follow-up drafts after 7 and 14 days. Won only when you wrote to the site and our own check then found your link on their page; a site that links to you without a pitch is listed as already linking, never as won."
         />
         <Card className="px-4 pb-4">
           <Pipeline prospects={d.prospects} />
@@ -913,8 +916,14 @@ function CompetitorList({ rows, graph }: { rows: NonNullable<BacklinksData['late
 
 const TYPE_LABEL: Record<string, string> = { lost: 'Lost link', reclaim: 'Broken-link reclaim', mention: 'Unlinked mention', gap: 'Link gap', list: '"Best of" list', comp_new: 'Linked a competitor', ai_source: 'Cited by AI' };
 const typeLabel = (t: string) => TYPE_LABEL[t] ?? (t ? titleCase(t) : 'Prospect');
-const STATUS_LABEL: Record<ProspectStatus, string> = { new: 'New', contacted: 'Contacted', replied: 'Replied', won: 'Won', rejected: 'Rejected', ignored: 'Ignored' };
-const statusOf = (p: Prospect): ProspectStatus => ((PROSPECT_STATUSES as readonly string[]).includes(p.status) ? (p.status as ProspectStatus) : 'new');
+const STATUS_LABEL: Record<ProspectStatus, string> = { new: 'New', contacted: 'Contacted', replied: 'Replied', won: 'Won', rejected: 'Rejected', ignored: 'Set aside' };   // CR17-E: left out, already linking and low-value sites sit here too
+// CR17-E (F9): the board's column follows the one link status (a "won" nobody wrote to, or with no link our check found, is not won;
+// a website the Link Builder left out is "not a fit"); rows without it keep their stored status
+const statusOf = (p: Prospect): ProspectStatus => {
+  const ls = p.linkState;
+  if (ls) return ls === 'won' ? 'won' : ls === 'sent' || ls === 'approved' ? 'contacted' : ls === 'replied' ? 'replied' : ls === 'declined' ? (p.status === 'ignored' ? 'ignored' : 'rejected') : ls === 'left_out' || ls === 'already_links' || ls === 'low_value' || ls === 'lost' ? 'ignored' : 'new';
+  return (PROSPECT_STATUSES as readonly string[]).includes(p.status) ? (p.status as ProspectStatus) : 'new';
+};
 
 /** Prospect cards shown before "Show more" (the rest stay in the page, folded). */
 const PROSPECTS_SHOWN = 8;

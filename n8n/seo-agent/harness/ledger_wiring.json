@@ -1085,7 +1085,7 @@
      "node": "Outreach Sequence Writer",
      "ref": "$('Any LB Writing?').item.json",
      "streaming": true,
-     "template_chars": 6595,
+     "template_chars": 6568,
      "think_model": "seen"
     }
    ],

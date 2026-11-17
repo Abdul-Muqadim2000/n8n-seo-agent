@@ -5232,6 +5232,12 @@
     "operation": "get",
     "table": "seo_cycles"
    },
+   "Load Index Pages (LB)": {
+    "filters": null,
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_index_pages"
+   },
    "Load Ladders": {
     "filters": null,
     "mapping": null,
