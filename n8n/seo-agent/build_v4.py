@@ -14159,6 +14159,43 @@ assert 'delivered_images,' in code('Normalize Input'), 'section 191: Normalize I
 log('Client reports 2026-11-16 (section 191): the live page grade says how much of the delivered text is on the live page (kept_pct), part by part why points were lost (live_parts, the longest sentences) and that the next step is on the website; on a live page a direct answer without the label, the template questions section, a flattened table and the site name in the title cost nothing; every run: an FAQ word inside a heading is no second FAQ, an image is no source; the publish check reads the article images (decorative apart, one "no images" check, borrowed images, a background hero, the images we delivered) and records the article tables')
 
 # =============================================================================
+# 197. CLIENT REPORT 2026-11-17 (devaicon.com, package G "ladder": F4 / Q2 / Q3; private: ~/seo-agent-secrets/client-reports-2026-11-17/INV_7_ladder_ai.md).
+#      F4: every address our ladders planned for devaicon.com was at the root while its service pages live under /services/ and its articles
+#      under /insights/ (the client published 5 of 6 elsewhere and moved its own pages with 301s). One rule, LRU.folderFor (_ladder_rules.js,
+#      shared with the app's cadence mirror): a new page goes where the site puts that kind of page (where the client published our pages,
+#      where it moved its own, else its live inventory; >= 3 pages and 60%, else the root as before). Ladder Plan, Cadence Plan (addressOf, and a
+#      rung planned at the root before this rule), Content QA's page address (a page no ladder placed) and the package's "publish it at" line.
+#      Q2: the package says which questions the page was written to answer (meta.questions_answered: the AI question the run carried and the
+#      page's own question headings), shown in the app's content report.
+# =============================================================================
+patch('Build Word File', "qa_page_url: qa.page_url || '', ladder_links: d.ladder_links || [],\n",
+      "qa_page_url: qa.page_url || '', ladder_links: d.ladder_links || [],\n"
+      "    qa_page_url_why: qa.page_url_why || '',   // F4 (section 197): why the page's address sits in the site's folder\n")
+patch('Blog Package', "if (plannedPageUrl) extra.push('Publish it at ' + plannedPageUrl + ': that is the URL this keyword ladder planned'",
+      "if (!plannedPageUrl && d.qa_page_url && d.qa_page_url_why) extra.push('Publish it at ' + ownUrl(d.qa_page_url) + ': ' + d.qa_page_url_why);   // F4 (section 197)\n"
+      "if (plannedPageUrl) extra.push('Publish it at ' + plannedPageUrl + ': that is the URL this keyword ladder planned'")
+assert 'LRU.folderFor(' in code('Ladder Plan') and "plannedUrl(p.keyword, ptype)" in code('Ladder Plan') and 'folders: planned ?' in code('Ladder Plan'), 'F4: Ladder Plan does not plan addresses in the site\'s folder'
+assert code('Content QA').count('const LRU = (() => {') == 1 and 'LRU.folderFor(prev.page_type' in code('Content QA') and 'page_url_why: pageUrlWhy' in code('Content QA'), 'F4: Content QA does not place a new page in the site\'s folder'
+assert 'questions_answered' in code('Blog Package') and "qa_page_url_why" in code('Blog Package'), 'Q2 / F4: the package does not say which questions the page answers or why its address'
+assert 'folderFor' in _rd0('code/_ladder_rules.js') and 'folderC(' in _rd0('code/Cadence_Plan.js'), 'F4: the folder rule is missing from the kit or the cadence'
+# Q3: "I published a page" settles the AI questions the page answers at once ($0, AQ.settleOnPublish; publish detection does the same in the
+# Site Tracker): a branch after the delivery chain of Publish Check (n8n runs the first connection's chain first)
+from ladder_common import AI_TARGETS_TABLE as _AIT197, AI_TARGETS_COLS as _AITC197
+_pc197 = pos('Publish Check')
+add_node('Load AI Targets (Publish)', DT_TYPE, DT_VERSION, dt_get_all_params(_AIT197), [_pc197[0] + 220, _pc197[1] + 520], LOAD13)
+add_node('AI Target Settle (Publish)', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/AI_Target_Publish_Settle.js').replace('/*__AI_QUESTION__*/', _rd0('code/_ai_question.js').rstrip('\n'))}, [_pc197[0] + 440, _pc197[1] + 520], {'onError': 'continueRegularOutput'})
+if_node('Any AI Settles (Publish)?', "{{ !$json.skip && !!$json.target_id }}", [_pc197[0] + 660, _pc197[1] + 520])
+add_node('Settle AI Targets (Publish)', DT_TYPE, DT_VERSION, dt_update_params(_AIT197, _AITC197, [('target_id', '={{ $json.target_id }}')],
+    {'status': '={{ $json.status }}', 'written_at': '={{ $json.written_at }}', 'updated_at': '={{ $json.at }}', 'reason': '={{ $json.reason }}', 'reason_code': '={{ $json.reason_code }}', 'reason_args': '={{ $json.reason_args }}', 'request_id': '={{ $json.request_id }}'}),
+    [_pc197[0] + 880, _pc197[1] + 520], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+for _a197, _b197 in [('Publish Check', 'Load AI Targets (Publish)'), ('Load AI Targets (Publish)', 'AI Target Settle (Publish)'), ('AI Target Settle (Publish)', 'Any AI Settles (Publish)?')]:
+    connect(_a197, _b197)
+connect('Any AI Settles (Publish)?', 'Settle AI Targets (Publish)', 0)
+assert [t['node'] for t in conns['Publish Check']['main'][0]] == ['Published Log Row', 'Load AI Targets (Publish)'], 'CR17 Q3: the publish settle must hang after the delivery chain'
+assert code('AI Target Settle (Publish)').count('const AQ = (() => {') == 1 and code('AI Target Settle (Publish)').count('const LRU = (() => {') == 1, 'CR17 Q3: the publish settle lacks its kits'
+log('Client report 2026-11-17 (section 197, package G): a new page is planned in the folder where the website keeps that kind of page (LRU.folderFor: where the client published our pages and moved its own, else its live inventory; at least 3 pages and 60%, else the root as before) in Ladder Plan, Cadence Plan and Content QA, with the reason said; a rung planned at the root before this rule is written at the folder address; the package lists the questions the page was written to answer (meta.questions_answered)')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;

@@ -109,8 +109,11 @@ PROMISES = [
      # only on a `written` content-log row" -- is proof one hop away, and the nodes that follow it (the cadence's AI-target
      # settle) must be allowed to say so. The limit is stated rather than implied: this token says the node READ the log, not
      # that it required the row's status to be `written`; the harness scenario is what proves that half.
+     # CR17 Q3 (2026-11-17, build_v4.py section 197): a page proved LIVE is a written page too. *AI Target Settle (Publish)* settles an AI
+     # question to `written` from the row *Publish Check* recorded live (its own fetch, recorded_live) or *Detect Published* recorded
+     # (an answer of 200, or the site's sitemap) -- the same proof the `published` state below asks for, one hop away.
      'evidence': ('article_html', 'page_markdown', "$('Blog Package')", "$('Build Word File')",
-                  "$('Load Content Log')", "$('Load Content Log (Run)')"),
+                  "$('Load Content Log')", "$('Load Content Log (Run)')", "$('Publish Check')", "$('Detect Published')"),
      'why': 'D10 / R1: a row saying a page was written while no page was written is read by the ladder plan, the Rank Tracker and '
             "the Content Cadence as a page that exists -- the cadence paused itself on pages nobody had",
      'how': "read the artefact itself -- the page text from the node that produced it -- and emit no row when it is empty "

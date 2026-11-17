@@ -412,6 +412,19 @@ for _n in ('Inspect Requests', 'Parse Inspection', 'Inspect Rows (Site)', 'Site 
 assert not any('/*__PAGE_WATCH__*/' in c_ for c_ in _code.values()), 'page-watch placeholder left in the Site Tracker'
 assert 'PW.inspectBudget(' in _code['Inspect Requests'] and 'inspect_at' in _code['Inspect Requests'], 'G25: the inspections do not rotate within the quota'
 assert 'index_coverage' in _code['Site Metrics'] and 'page_watch: watch' in _code['Site Metrics'], 'G11 / G25: the weekly item carries neither the index view nor the watch'
+# ---- client report 2026-11-17 (CR17 Q3, build_v4.py section 197): a page publish detection records live settles the AI questions it answers
+# at once ($0, AQ.settleOnPublish): a branch beside the detection chain (after it, in n8n's order), reading what Detect Published recorded ----
+N.append(node('Load AI Targets (Publish)', DT_TYPE, DT_VERSION, dt_get_all_params(AI_TARGETS_TABLE), at(22, -7), **LOAD))
+N.append(code('AI Target Settle (Publish)', rd('code/AI_Target_Publish_Settle.js'), at(23, -7), **SAFE))
+N.append(iff('Any AI Settles (Publish)?', '{{ !$json.skip && !!$json.target_id }}', at(24, -7)))
+N.append(node('Settle AI Targets (Publish)', DT_TYPE, DT_VERSION, dt_update_params(AI_TARGETS_TABLE, AI_TARGETS_COLS, [('target_id', '={{ $json.target_id }}')],
+    {'status': '={{ $json.status }}', 'written_at': '={{ $json.written_at }}', 'updated_at': '={{ $json.at }}', 'reason': '={{ $json.reason }}', 'reason_code': '={{ $json.reason_code }}', 'reason_args': '={{ $json.reason_args }}', 'request_id': '={{ $json.request_id }}'}),
+    at(25, -7), alwaysOutputData=True, onError='continueRegularOutput'))
+link(C, 'Detect Published', 'Load AI Targets (Publish)'); link(C, 'Load AI Targets (Publish)', 'AI Target Settle (Publish)'); link(C, 'AI Target Settle (Publish)', 'Any AI Settles (Publish)?')
+link(C, 'Any AI Settles (Publish)?', 'Settle AI Targets (Publish)', 0)
+assert [t['node'] for t in C['Detect Published']['main'][0]] == ['Detected Log Rows', 'Load AI Targets (Publish)'], 'CR17 Q3: the publish settle must hang after the detection chain'
+_cpub = next(n for n in N if n['name'] == 'AI Target Settle (Publish)')['parameters']['jsCode']
+assert _cpub.count('const AQ = (() => {') == 1 and _cpub.count('const LRU = (() => {') == 1 and 'AQ.settleOnPublish(' in _cpub, 'CR17 Q3: the publish settle lacks its kits'
 LEDGER_WIRING['SEO Agent — Site Tracker'] = ledger_nodes(N, C, 'site_tracker', 'Site', 'Site Plan', ['Site Report'], at(11, 9),
                                                          measured='!SERP Check (Site) Answers|Google Trends Answers')
 # ---- B-A10 (2026-10-15, INVARIANTS rule 3): the two paid DataForSEO calls of the week go through the in-200 retry gate ----

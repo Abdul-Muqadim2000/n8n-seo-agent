@@ -64,6 +64,22 @@ export interface LadderRungState {
   waiting?: boolean;
 }
 
+/** client report 2026-11-17 (F4): where the site keeps one kind of page (LRU.folderFor) */
+export interface LadderFolder {
+  folder: string;
+  kind: 'service' | 'article';
+  basis: 'published' | 'inventory' | 'default';
+  votes: number;
+  of: number;
+  why: string;
+}
+
+export interface LadderFolderEvidence {
+  published?: readonly { url: string; page_type?: string }[];
+  moves?: readonly { from: string; to: string }[];
+  pages?: readonly ({ url: string; http_status?: number | string | null } | string)[];
+}
+
 export interface LadderOwner {
   url: string;
   keyword: string;
@@ -72,7 +88,7 @@ export interface LadderOwner {
 }
 
 export declare const LRU: {
-  CFG: { stuck_min_minutes: number; stuck_eta_factor: number; page_eta_minutes: number; clear_score: number; blog_dirs: string[]; countries: Record<string, string> };
+  CFG: { stuck_min_minutes: number; stuck_eta_factor: number; page_eta_minutes: number; clear_score: number; blog_dirs: string[]; countries: Record<string, string>; folder_min: number; folder_share: number; company_segs: string[] };
   STAGES: LadderStage[];
   COMMERCIAL: LadderStage[];
   urlKey(u: string): string;
@@ -82,7 +98,10 @@ export declare const LRU: {
   wordsKey(keyword: string): string;
   sameSearch(a: string, b: string): boolean;
   ownerOf(url: string, keyword: string, owners: readonly LadderOwner[], mine?: readonly string[]): LadderOwner | null;
-  plannedUrl(home: string, keyword: string, slash?: boolean): string;
+  plannedUrl(home: string, keyword: string, slash?: boolean, folder?: string | { folder: string } | null): string;
+  classOf(pageType: string): 'service' | 'article';
+  folderOf(u: string): string;
+  folderFor(pageType: string, ev: LadderFolderEvidence): LadderFolder;
   ranksFor(url: string, keyword: string, o: { rank?: { position: number | null; url?: string } | null; pages?: readonly { url: string; queries?: readonly unknown[] }[] }): boolean;
   stageOf(keyword: string, intent?: string, stored?: string): LadderStage;
   isCommercial(stage: string): boolean;

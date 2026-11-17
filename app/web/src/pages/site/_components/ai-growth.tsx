@@ -287,7 +287,7 @@ function TargetsPanel({ targets, perMonth, inputs }: { targets: AiTargetStat[]; 
                       </>
                     )}
                   </p>
-                  {act?.note && act.step !== 'write' && <p className="mt-0.5 text-xs text-ink-3">{act.note}</p>}
+                  {act?.note && act.step !== 'write' && act.note !== t.reason && <p className="mt-0.5 text-xs text-ink-3">{act.note}</p>}
                   {me.platformAdmin && t.adminReason && (
                     <details className="mt-1">
                       <summary className="cursor-pointer text-xs text-ink-3">Engine note (platform admins only)</summary>
@@ -308,6 +308,12 @@ function TargetsPanel({ targets, perMonth, inputs }: { targets: AiTargetStat[]; 
       ) : (
         <p className="text-[13px] text-ink-2">No lost questions this week. AI names you for every tracked question.</p>
       )}
+      {/* CR17 (Q2, client report 2026-11-17): why a service or ladder page carries an AI question, and when a separate answer page is written */}
+      <p className="mt-3 border-t border-line pt-3 text-xs text-ink-3">
+        One page can answer several related questions. When a question is the same search as one of your pages, or holds every word of a keyword
+        ladder&apos;s main search, that page is written to answer it too. A separate answer page is written only for a question none of your pages
+        covers. When a page that answers a question goes live, the question shows it at once.
+      </p>
     </Panel>
   );
 }

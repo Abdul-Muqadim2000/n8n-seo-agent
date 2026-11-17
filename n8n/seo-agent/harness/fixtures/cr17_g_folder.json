@@ -1,0 +1,345 @@
+{
+ "_doc": "CR17-G (client report 2026-11-17, F4, build section 197): a ladder rung planned at the root of a website that keeps its service pages in a folder is written at the folder address. Run through the engine (harness/scenarios_cr17_g.js, the real Cadence Plan) and the app mirror (app/server/test/cadenceFolder.test.ts, server/src/services/cadence.ts): both must give the same address.",
+ "cases": [
+  {
+   "name": "folder_from_published_pages",
+   "doc": "Three service pages we wrote were published under /services/ (and the inventory agrees): the root rung is written at /services/.",
+   "level": 1,
+   "now": "2026-10-21T10:00:00.000Z",
+   "trigger": {},
+   "tables": {
+    "sites": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "country": "United Arab Emirates",
+      "status": "active",
+      "email": "",
+      "callback_url": "https://hooks.example.com/cb",
+      "services_json": "[\"CRM implementation services\", \"CRM consulting for sales teams\", \"CRM data migration\", \"Customer support desk setup\", \"Sales pipeline automation\", \"CRM training and adoption\"]",
+      "declared_services": "",
+      "competitors": "",
+      "brand_names": "",
+      "business_facts": "Founded in 2015; 25 CRM consultants; certified partner since 2017; fixed-price CRM implementation packages from 10 weeks; offices in Dubai and Abu Dhabi."
+     }
+    ],
+    "cadence": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "pages_per_week": 3,
+      "status": "active"
+     }
+    ],
+    "ladders": [
+     {
+      "ladder_id": "lad_crm",
+      "domain": "techand.ai",
+      "head_keyword": "crm service provider uae",
+      "rung": 1,
+      "page_no": 1,
+      "keyword": "crm implementation cost uae",
+      "supporting": "",
+      "page_type": "Service Page",
+      "target_url": "https://techand.ai/crm-implementation-cost-uae/",
+      "page_exists": false,
+      "status": "planned",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_crm"
+     },
+     {
+      "ladder_id": "lad_crm",
+      "domain": "techand.ai",
+      "head_keyword": "crm service provider uae",
+      "rung": 4,
+      "page_no": 0,
+      "keyword": "crm service provider uae",
+      "supporting": "",
+      "page_type": "Pillar Page",
+      "target_url": "https://techand.ai/crm-service-provider-uae/",
+      "page_exists": false,
+      "status": "published",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_crm"
+     }
+    ],
+    "ladder_settings": [
+     {
+      "ladder_id": "_site",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "mode": "auto",
+      "opportunities": "",
+      "max_active": 2,
+      "max_waiting": 3,
+      "autopilot_level": 1
+     }
+    ],
+    "content_log": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "keyword": "crm consulting",
+      "source": "app",
+      "page_type": "Service Page",
+      "existing_page_url": "",
+      "rung": 0,
+      "ladder_id": "",
+      "request_id": "r0",
+      "started_at": "2026-10-01T00:00:00.000Z",
+      "status": "published",
+      "published_url": "https://techand.ai/services/crm-consulting/",
+      "published_at": "2026-10-02T00:00:00.000Z",
+      "week": "2026-10-02"
+     },
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "keyword": "crm data migration",
+      "source": "app",
+      "page_type": "Service Page",
+      "existing_page_url": "",
+      "rung": 0,
+      "ladder_id": "",
+      "request_id": "r1",
+      "started_at": "2026-10-01T00:00:00.000Z",
+      "status": "published",
+      "published_url": "https://techand.ai/services/crm-data-migration/",
+      "published_at": "2026-10-02T00:00:00.000Z",
+      "week": "2026-10-02"
+     },
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "keyword": "crm training",
+      "source": "app",
+      "page_type": "Service Page",
+      "existing_page_url": "",
+      "rung": 0,
+      "ladder_id": "",
+      "request_id": "r2",
+      "started_at": "2026-10-01T00:00:00.000Z",
+      "status": "published",
+      "published_url": "https://techand.ai/services/crm-training/",
+      "published_at": "2026-10-02T00:00:00.000Z",
+      "week": "2026-10-02"
+     }
+    ],
+    "query_history": [],
+    "trends": [],
+    "pages": [
+     {
+      "site_id": "site_techand-ai",
+      "url": "https://techand.ai/services/crm-consulting/",
+      "title": "",
+      "h1": "",
+      "source": "sitemap",
+      "queries_json": "[]",
+      "http_status": 200
+     },
+     {
+      "site_id": "site_techand-ai",
+      "url": "https://techand.ai/services/crm-data-migration/",
+      "title": "",
+      "h1": "",
+      "source": "sitemap",
+      "queries_json": "[]",
+      "http_status": 200
+     },
+     {
+      "site_id": "site_techand-ai",
+      "url": "https://techand.ai/services/crm-training/",
+      "title": "",
+      "h1": "",
+      "source": "sitemap",
+      "queries_json": "[]",
+      "http_status": 200
+     },
+     {
+      "site_id": "site_techand-ai",
+      "url": "https://techand.ai/insights/crm-guide/",
+      "title": "",
+      "h1": "",
+      "source": "sitemap",
+      "queries_json": "[]",
+      "http_status": 200
+     },
+     {
+      "site_id": "site_techand-ai",
+      "url": "https://techand.ai/about-us/",
+      "title": "",
+      "h1": "",
+      "source": "sitemap",
+      "queries_json": "[]",
+      "http_status": 200
+     },
+     {
+      "site_id": "site_techand-ai",
+      "url": "https://techand.ai/contact/",
+      "title": "",
+      "h1": "",
+      "source": "sitemap",
+      "queries_json": "[]",
+      "http_status": 200
+     },
+     {
+      "site_id": "site_techand-ai",
+      "url": "https://techand.ai/crm-old/",
+      "title": "",
+      "h1": "",
+      "source": "sitemap",
+      "queries_json": "[]",
+      "http_status": 301
+     }
+    ],
+    "ai_targets": [],
+    "skips": [],
+    "monitors": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "ai_visibility": true,
+      "ai_growth": true,
+      "ai_pages_month": ""
+     }
+    ],
+    "profiles": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "author_name": "Sara Haddad",
+      "author_job_title": "Head of CRM delivery",
+      "author_bio": "Sara leads the CRM delivery team and has run more than 60 CRM rollouts for sales and service teams in the Gulf."
+     }
+    ]
+   },
+   "expect": {
+    "pick_keyword": "crm implementation cost uae",
+    "target_url": "https://techand.ai/services/crm-implementation-cost-uae/"
+   }
+  },
+  {
+   "name": "no_folder_evidence",
+   "doc": "Nothing says where service pages live: the stored root address stays (as before).",
+   "level": 1,
+   "now": "2026-10-21T10:00:00.000Z",
+   "trigger": {},
+   "tables": {
+    "sites": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "country": "United Arab Emirates",
+      "status": "active",
+      "email": "",
+      "callback_url": "https://hooks.example.com/cb",
+      "services_json": "[\"CRM implementation services\", \"CRM consulting for sales teams\", \"CRM data migration\", \"Customer support desk setup\", \"Sales pipeline automation\", \"CRM training and adoption\"]",
+      "declared_services": "",
+      "competitors": "",
+      "brand_names": "",
+      "business_facts": "Founded in 2015; 25 CRM consultants; certified partner since 2017; fixed-price CRM implementation packages from 10 weeks; offices in Dubai and Abu Dhabi."
+     }
+    ],
+    "cadence": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "pages_per_week": 3,
+      "status": "active"
+     }
+    ],
+    "ladders": [
+     {
+      "ladder_id": "lad_crm",
+      "domain": "techand.ai",
+      "head_keyword": "crm service provider uae",
+      "rung": 1,
+      "page_no": 1,
+      "keyword": "crm implementation cost uae",
+      "supporting": "",
+      "page_type": "Service Page",
+      "target_url": "https://techand.ai/crm-implementation-cost-uae/",
+      "page_exists": false,
+      "status": "planned",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_crm"
+     },
+     {
+      "ladder_id": "lad_crm",
+      "domain": "techand.ai",
+      "head_keyword": "crm service provider uae",
+      "rung": 4,
+      "page_no": 0,
+      "keyword": "crm service provider uae",
+      "supporting": "",
+      "page_type": "Pillar Page",
+      "target_url": "https://techand.ai/crm-service-provider-uae/",
+      "page_exists": false,
+      "status": "published",
+      "start_date": "2026-09-01T00:00:00.000Z",
+      "request_id": "r-lad_crm"
+     }
+    ],
+    "ladder_settings": [
+     {
+      "ladder_id": "_site",
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "mode": "auto",
+      "opportunities": "",
+      "max_active": 2,
+      "max_waiting": 3,
+      "autopilot_level": 1
+     }
+    ],
+    "content_log": [],
+    "query_history": [],
+    "trends": [],
+    "pages": [
+     {
+      "site_id": "site_techand-ai",
+      "url": "https://techand.ai/crm-consulting/",
+      "title": "",
+      "h1": "",
+      "source": "sitemap",
+      "queries_json": "[]",
+      "http_status": 200
+     },
+     {
+      "site_id": "site_techand-ai",
+      "url": "https://techand.ai/about-us/",
+      "title": "",
+      "h1": "",
+      "source": "sitemap",
+      "queries_json": "[]",
+      "http_status": 200
+     }
+    ],
+    "ai_targets": [],
+    "skips": [],
+    "monitors": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "ai_visibility": true,
+      "ai_growth": true,
+      "ai_pages_month": ""
+     }
+    ],
+    "profiles": [
+     {
+      "site_id": "site_techand-ai",
+      "domain": "techand.ai",
+      "author_name": "Sara Haddad",
+      "author_job_title": "Head of CRM delivery",
+      "author_bio": "Sara leads the CRM delivery team and has run more than 60 CRM rollouts for sales and service teams in the Gulf."
+     }
+    ]
+   },
+   "expect": {
+    "pick_keyword": "crm implementation cost uae",
+    "target_url": "https://techand.ai/crm-implementation-cost-uae/"
+   }
+  }
+ ]
+}

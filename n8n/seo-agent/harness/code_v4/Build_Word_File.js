@@ -1287,6 +1287,7 @@ return [{
     ladder_target_url: d.ladder_target_url || '',
     // 2026-10-21 (E-QA): what to do with a draft (by hand, never a re-run), the one URL the page is published at, and the ladder's links
     qa_next_step: (qa.quality || {}).next_step || '', qa_owner_edits: (qa.quality || {}).owner_edits || [], qa_page_url: qa.page_url || '', ladder_links: d.ladder_links || [],
+    qa_page_url_why: qa.page_url_why || '',   // F4 (section 197): why the page's address sits in the site's folder
     // H1 (2026-10-27): ready | ready_with_questions | not_ready, the optional client questions and the grade of THIS page (not of the first draft)
     qa_delivery_status: qa.delivery_status || (qa.passed == null ? '' : qa.passed ? 'ready' : 'not_ready'), qa_client_questions: qa.client_questions || [], qa_grade: (qa.delivery || {}).grade || null,
     qa_blocking: (qa.delivery || {}).blocking || [], qa_advisory: (qa.delivery || {}).advisory || [],

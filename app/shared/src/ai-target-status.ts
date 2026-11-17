@@ -175,6 +175,9 @@ export function aiTargetCode(t: Pick<AiTargetLike, 'reason' | 'reasonCode' | 'or
   if ((AI_TARGET_REASON_CODES as readonly string[]).includes(c)) return c as AiTargetReasonCode;
   const r = low(t.reason);
   if (/kept by you/.test(r)) return 'kept';
+  // CR17 (Q3, devaicon.com question 42): "... (off topic); but your own page ... answers it, so it is kept. the page is fresh ..." is a
+  // question the client's page answers and that page is up to date: the page decides, not the off-topic marker in front of it
+  if (/the page is fresh|was published on .*ai readiness is checked/.test(r)) return 'fresh_page';
   if (/\((off topic|too broad)\)/.test(r)) return 'off_topic';
   if (/\(other brand\)/.test(r)) return 'other_brand';
   if (/\(own brand\)/.test(r)) return 'own_brand';

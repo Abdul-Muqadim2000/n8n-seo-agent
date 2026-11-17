@@ -464,6 +464,7 @@
    "settle_from": [
     "Nothing To Track (Site)",
     "Refuse Run Ledger (Site)",
+    "Settle AI Targets (Publish)",
     "Site Report"
    ],
    "settle_writes": [

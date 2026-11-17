@@ -2,7 +2,7 @@ import { AUTOMATIONS, MODES, type AutomationId, type ModeId } from './constants'
 import type { PipelineData, QueueItem } from './data';
 import { keywordsOverlap } from './ladders';
 import { cycleNorm } from './cycles';
-import { aiFormPageType, aiQuestionKey, aiSearchOwner } from './ai-question-action';
+import { aiAnsweredSentence, aiFormPageType, aiQuestionAction, aiQuestionKey } from './ai-question-action';
 
 // What a manual run means for the website's automatic pipeline, shown on the tool forms before the run starts: nobody pays twice
 // for what the schedule already does, nobody writes a second page that competes with one already written, and everyone sees how
@@ -321,45 +321,60 @@ function aiPageNotice(input: NoticeInput, data: PipelineData, f: NoticeFormat): 
   const keyword = String(input.keyword ?? '').trim();
   const kw = normKeyword(keyword);
   const existing = urlKey(input.existingPageUrl ?? '');
-  const forThis = (w: PipelineData['written'][number]) => (!!t?.targetId && w.aiTargetId === t.targetId) || (!!w.aiQuestion && aiQuestionKey(w.aiQuestion) === q);
-  const mine = data.written.filter((w) => forThis(w) || (/^ai_/.test(w.source) && normKeyword(w.keyword) === kw));
-  const own = mine.find((w) => w.publishedUrl && forThis(w)) ?? mine.find((w) => w.publishedUrl) ?? mine.find(forThis) ?? mine[0];
-  // review 2026-11-16 (nit): an AI page of the same search written for ANOTHER question is "a page for this search", not "for this question"
-  const what = own && forThis(own) ? 'this question' : `"${own?.keyword ?? keyword}"`;
-  if (own) {
-    if (own.publishedUrl && existing && urlKey(own.publishedUrl) === existing) return null;   // this run improves that very page
-    if (own.publishedUrl)
-      return {
-        id: `ai-written:${q.slice(0, 60)}`,
-        tone: 'warning',
-        title: `You already have a page for ${what}`,
-        body: `It is live at ${shortUrl(own.publishedUrl)}${own.startedAt ? ` (written ${f.day(own.startedAt)})` : ''}. To win this AI answer, improve that page for the question rather than writing a second one: a second page for the same ${what === 'this question' ? 'question' : 'search'} competes with the first.`,
-        short: `Page already written for ${what === 'this question' ? 'this question' : 'this search'}`,
-        confirm: 'Write a second page anyway',
-        usePlan: { label: `Improve ${shortUrl(own.publishedUrl)} for this question`, pageType: aiFormPageType('', { kind: 'refresh', pageUrl: own.publishedUrl }), existingPageUrl: own.publishedUrl, aiKind: 'refresh' },
-      };
+  // CR17 (Q3): the same page list and the same stored decisions as the AI visibility page (the server builds both once); an older server
+  // that sends neither keeps the written pages
+  const pages = data.aiPages ?? data.written;
+  const forThis = (w: { aiTargetId?: string; aiQuestion?: string }) => (!!t?.targetId && w.aiTargetId === t.targetId) || (!!w.aiQuestion && aiQuestionKey(w.aiQuestion) === q);
+  const mine = pages.filter((w) => forThis(w) || (/^ai_/.test(String(w.source ?? '')) && normKeyword(w.keyword) === kw));
+  const ownPending = mine.find((w) => !w.publishedUrl && forThis(w)) ?? mine.find((w) => !w.publishedUrl);
+  const anyLive = mine.some((w) => !!w.publishedUrl);
+  // 1. a page written for this question (or an AI page of its search) that is not live yet: publish that one first
+  if (ownPending && !anyLive) {
+    const what = forThis(ownPending) ? 'this question' : `"${ownPending.keyword}"`;
     return {
       id: `ai-written:${q.slice(0, 60)}`,
       tone: 'warning',
       title: `A page for ${what} was already written`,
-      body: `It was written ${own.startedAt ? `on ${f.day(own.startedAt)}` : 'earlier'} and is not live yet: publish that one rather than writing it again.`,
+      body: `It was written ${ownPending.startedAt ? `on ${f.day(ownPending.startedAt)}` : 'earlier'} and is not live yet: publish that one rather than writing it again.`,
       short: `Page already written for ${what === 'this question' ? 'this question' : 'this search'}`,
       confirm: 'Write a second page anyway',
       link: { label: 'Open the pipeline', page: 'pipeline' },
     };
   }
-  const owner = aiSearchOwner(keyword, data.written, input.country, data.ladders.map((l) => l.head));
-  if (owner?.publishedUrl && !(existing && urlKey(owner.publishedUrl) === existing))
+  // 2. the one decision for the question (shared/src/ai-question-action.ts): the page that answers it, or the page to improve for it
+  const act = aiQuestionAction(
+    { question, targetId: t?.targetId, keyword },
+    { targets: data.aiTargets ?? [], written: pages, market: input.country, ladderHeads: data.ladders.map((l) => l.head), nextAiCheck: data.nextAiCheck ?? '' },
+  );
+  const page = act.step === 'open' ? act.pageUrl : act.step === 'improve' ? act.existingPageUrl : '';
+  if (!page || (existing && urlKey(page) === existing)) return null;   // nothing answers it yet, or this run improves that very page
+  const entry = pages.find((w) => urlKey(w.publishedUrl ?? '') === urlKey(page));
+  const writtenFor = !!entry && (forThis(entry) || (/^ai_/.test(String(entry.source ?? '')) && normKeyword(entry.keyword) === kw));
+  const since = act.since || entry?.publishedAt || '';
+  const first = aiAnsweredSentence(page, since, data.nextAiCheck ?? '');
+  const usePlan = { label: `Improve ${shortUrl(page)} for this question`, pageType: aiFormPageType('', { kind: 'refresh', pageUrl: page }), existingPageUrl: page, aiKind: 'refresh' as const };
+  if (writtenFor && entry) {
+    // review 2026-11-16 (nit): an AI page of the same search written for ANOTHER question is "a page for this search", not "for this question"
+    const what = forThis(entry) ? 'this question' : `"${entry.keyword}"`;
     return {
-      id: `ai-owner:${kw}`,
+      id: `ai-written:${q.slice(0, 60)}`,
       tone: 'warning',
-      title: `Your page ${shortUrl(owner.publishedUrl)} already answers searches like this one`,
-      body: `It is already the page for "${owner.keyword}". To win this AI answer, improve that page for the question: an answer-first section, the searches AI runs and the sources it cites. A second page for the same search competes with the first in Google, and usually neither ranks well.`,
-      short: 'Improve your page for this question',
+      title: `You already have a page for ${what}`,
+      body: `${first} Improve that page for this question instead of writing a second one: a second page for the same ${what === 'this question' ? 'question' : 'search'} competes with the first.`,
+      short: `Page already written for ${what === 'this question' ? 'this question' : 'this search'}`,
       confirm: 'Write a second page anyway',
-      usePlan: { label: `Improve ${shortUrl(owner.publishedUrl)} for this question`, pageType: aiFormPageType('', { kind: 'refresh', pageUrl: owner.publishedUrl }), existingPageUrl: owner.publishedUrl, aiKind: 'refresh' },
+      usePlan,
     };
-  return null;
+  }
+  return {
+    id: `ai-owner:${kw}`,
+    tone: 'warning',
+    title: `Your page ${shortUrl(page)} already answers searches like this one`,
+    body: `${act.step === 'open' ? first : `Your page ${shortUrl(page)} is already the page for "${entry?.keyword ?? keyword}".`} Improve that page for this question instead of writing a second one: an answer-first section, the searches AI runs and the sources it cites. A second page for the same search competes with the first in Google, and usually neither ranks well.`,
+    short: 'Improve your page for this question',
+    confirm: 'Write a second page anyway',
+    usePlan,
+  };
 }
 
 /** An AI page whose keyword's only exact match is a page written for ANOTHER AI question (a stale topic keyword): that is not this

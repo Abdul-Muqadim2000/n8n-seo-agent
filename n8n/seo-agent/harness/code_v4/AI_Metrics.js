@@ -1332,7 +1332,39 @@ const AQ = (() => {
     .replace(/\s*(?:over|at|for|costs?)?\s*(?:US)?\$\s?[0-9][0-9,.]*/g, '')
     .replace(/[—–]/g, ',').replace(/…/g, '.').replace(/[“”]/g, '"').replace(/[‘’]/g, '\'')
     .replace(/\(\s*\)/g, '').replace(/\s+([,.;:])/g, '$1').replace(/,\s*,/g, ',').replace(/\s{2,}/g, ' ').trim();
-  return { FORM_TYPES, pageType, keywordOf, done, DONE, reason, clean, CODES, pathOf };
+  // CR17 (client report 2026-11-17, Q2 / Q3): the LIVE page that answers a question, one rule for every settle (AI Target Settle, AI Growth's
+  // settleOf, the settle at publish time): among the website's published content-log rows, the page whose keyword IS the question's search, or a
+  // ladder's MAIN page whose words the question carries (LRU.questionPage, in the website's market), newest first. o: { domain, market, except
+  // (an address to leave out) }. Needs LRU inlined beside it (null without it).
+  const normD = (d) => S(d).toLowerCase().replace(/^www\./, '');
+  const answeredBy = (kw, logs, o) => { const x = o || {}; if (typeof LRU === 'undefined' || !S(kw).trim()) return null;
+    return (Array.isArray(logs) ? logs : []).filter(l => l && S(l.status) === 'published' && S(l.published_url).trim() && (!x.domain || normD(l.domain) === normD(x.domain))
+      && (!x.except || LRU.urlKey(l.published_url) !== LRU.urlKey(x.except)) && LRU.questionPage(kw, { keyword: l.keyword, rung: l.rung }, x.market || ''))
+      .sort((a, b) => S(b.published_at).localeCompare(S(a.published_at)))[0] || null; };
+  // CR17 (Q3): when a page goes live ("I published a page", publish detection) the questions it answers settle at once ($0), not on the next
+  // weekly settle: devaicon.com's question 37 said "a page is planned" for days after its ladder's main page went live. rows: the content-log rows
+  // just recorded live (log_row: keyword, rung, request_id, published_url, published_at, started_at, domain); targets: the website's stored
+  // questions; o: { market, now }. A question settles to the page when the run that wrote the page carried it (the same request id), or when the
+  // page answers it by the one rule (LRU.questionPage). Only a question waiting for a page (queued), or one whose own run's page this is; a
+  // question being written by another run, won, kept out, skipped or set aside is left alone. -> rows for the settle update (the cadence's
+  // *Settle AI Targets* columns).
+  const settleOnPublish = (rows, targets, o) => { const x = o || {}; const now = S(x.now) || new Date().toISOString(); const out = []; const done0 = new Set();
+    if (typeof LRU === 'undefined') return out;
+    for (const r of (Array.isArray(rows) ? rows : [])) {
+      if (!r || S(r.status) !== 'published' || !S(r.published_url).trim()) continue;
+      for (const t of (Array.isArray(targets) ? targets : [])) {
+        if (!t || !S(t.target_id) || done0.has(S(t.target_id)) || (r.domain && t.domain && normD(r.domain) !== normD(t.domain))) continue;
+        const st = S(t.status); const own = !!S(r.request_id) && S(t.request_id) === S(r.request_id);
+        if (!(st === 'queued' || (own && (st === 'writing' || st === 'written')))) continue;
+        if (!own && !LRU.questionPage(S(t.keyword) || keywordOf(t), { keyword: r.keyword, rung: r.rung }, x.market || '')) continue;
+        const args = { page_url: S(r.published_url), date: day(r.published_at || now) };
+        done0.add(S(t.target_id));
+        out.push({ target_id: S(t.target_id), status: 'written', request_id: S(r.request_id), written_at: S(r.started_at || t.written_at || now), at: now,
+          reason_code: 'live', reason_args: JSON.stringify(args), reason: reason('live', args) + ' Settled when the page was recorded live on ' + day(now) + '.' });
+      }
+    }
+    return out; };
+  return { FORM_TYPES, pageType, keywordOf, done, DONE, reason, clean, CODES, pathOf, answeredBy, settleOnPublish };
 })();
 // ---- LADDER PACKAGE (2026-11-09, docs/keyword-intel-2026-11-08/fixes/LADDER.md): the five ladder rules, ONE copy ----
 // Production (2026-10-22 .. 11-08, R3_PROD_OUTPUTS.md F1 F6 F7 F9): three rungs of techand.ai's ERP ladder, the main page included, were written onto
@@ -1414,9 +1446,77 @@ const LRU = (() => {
     }
     return null;
   };
-  /** the address a new page gets on the site: home + slug(keyword), with the site's trailing-slash form */
-  const plannedUrl = (home, keyword, slash) => { const h = S(home).replace(/\/+$/, ''); const sl = low(keyword).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    return h && sl ? h + '/' + sl + (slash ? '/' : '') : ''; };
+  /** the address a new page gets on the site: home + folder + slug(keyword), with the site's trailing-slash form. `folder` (client report
+   *  2026-11-17 F4): the site's folder for this kind of page (folderFor(...).folder, e.g. '/services/'); none or '/' = the root, as before */
+  const plannedUrl = (home, keyword, slash, folder) => { const h = S(home).replace(/\/+$/, ''); const sl = low(keyword).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const f = S(folder && typeof folder === 'object' ? folder.folder : folder).replace(/^\/*/, '/').replace(/\/+$/, '');
+    return h && sl ? h + (f && f !== '/' ? f : '') + '/' + sl + (slash ? '/' : '') : ''; };
+
+  // ---- client report 2026-11-17 (F4, devaicon.com): the address of a new page follows the site ----
+  // Every address our ladders planned for devaicon.com was at the root (/ai-app-development) while its service pages live under /services/ and
+  // its articles under /insights/: the client published five of six elsewhere and moved its own pages into /services/ with 301s. A new page
+  // now goes where the site puts that kind of page. Two kinds: `service` (service, product, landing, local, category and pillar pages, the
+  // main page of a ladder) and `article` (guides, blog posts, comparisons, case studies, FAQ and AI answer pages). Evidence, newest habit first:
+  //   1. where the client published the pages WE wrote of that kind (the content log's live address, after a permanent redirect the client
+  //      made) and where it moved its own pages (its 301s, the target's folder): the client's own choice;
+  //   2. else the live inventory (sitemap / seo_pages, pages answering): articles = the blog folder holding most of them, services = the
+  //      folder (or the root) holding most pages that are neither articles nor company pages (about, contact, careers, legal ...).
+  // A folder is used only with at least 3 pages behind it and 60% of them; else the root, as before (no change for a site we cannot read).
+  // A service page is never planned in a blog folder (rule 1). Pure: callers pass what they have read.
+  CFG.folder_min = 3; CFG.folder_share = 0.6;
+  CFG.company_segs = ['about', 'about-us', 'company', 'contact', 'contact-us', 'careers', 'career', 'jobs', 'team', 'people', 'privacy', 'privacy-policy', 'cookies',
+    'cookie-policy', 'terms', 'terms-of-service', 'terms-and-conditions', 'legal', 'policies', 'imprint', 'impressum', 'disclaimer', 'accessibility', 'sitemap',
+    'login', 'signin', 'sign-in', 'register', 'signup', 'account', 'cart', 'checkout', 'search', 'thank-you', 'thanks', 'security', 'author', 'authors', 'tag', 'tags', 'category'];
+  const ARTICLE_TYPE = /guide|blog|post|article|compar|case stud|faq|answer|news|how.?to|review/;
+  /** the kind of a page type: 'article' (guides, posts, comparisons, case studies, FAQ, AI answers) or 'service' (everything else) */
+  const classOf = (pageType) => (ARTICLE_TYPE.test(low(pageType)) ? 'article' : 'service');
+  /** the folder of an address: '/services/' for /services/x, '/' for /x ('' for no address or the home page) */
+  const folderOf = (u) => { const s = segs(u); if (!s.length) return ''; return '/' + s.slice(0, -1).map(x => x + '/').join(''); };
+  const blogFolder = (f) => { let s = S(f).split('/').filter(Boolean); if (s.length > 1 && LOCALE.test(s[0])) s = s.slice(1); return s.length > 0 && CFG.blog_dirs.includes(s[0]); };
+  const companyPage = (u) => { const s = segs(u); if (!s.length) return true; let a = s; if (a.length > 1 && LOCALE.test(a[0])) a = a.slice(1);
+    return CFG.company_segs.includes(a[0]) || /^(?:about|contact)-/.test(a[0]); };
+  const gone = (st) => Number(st) >= 300;   // 0 / empty = never read (a sitemap page): it counts as live
+  /** pageType: the new page's type; ev: { published: [{ url, page_type }] (our pages the client published: content log / published ladder rows),
+   *  moves: [{ from, to }] (the client's permanent redirects), pages: [{ url, http_status? } | url] (the live inventory) }
+   *  -> { folder ('/' = the root), kind ('service' | 'article'), basis ('published' | 'inventory' | 'default'), votes, of, why ('' at the root) } */
+  const folderFor = (pageType, ev) => {
+    const x = ev || {}; const kind = classOf(pageType);
+    const pages = (Array.isArray(x.pages) ? x.pages : []).map(p => p && typeof p === 'object' ? { url: S(p.url), st: p.http_status } : { url: S(p), st: null }).filter(p => p.url);
+    const bad = new Set(pages.filter(p => gone(p.st)).map(p => urlKey(p.url)));
+    const moveTo = new Map();
+    for (const m of (Array.isArray(x.moves) ? x.moves : [])) { const a = urlKey(m && m.from), b = urlKey(m && m.to); if (a && b && pathOf(a) !== pathOf(b) && pathOf(b)) moveTo.set(a, S(m.to)); }
+    const fits = (f) => kind === 'article' || !blogFolder(f);
+    const pick = (votes, basis) => {   // votes: Map(url key -> folder)
+      const by = new Map(); for (const f of votes.values()) by.set(f, (by.get(f) || 0) + 1);
+      const of = votes.size; const top = [...by.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+      if (!top || of < CFG.folder_min || top[1] < CFG.folder_share * of) return null;
+      const what = kind === 'article' ? 'guides and articles' : 'service pages';
+      const where = top[0] === '/' ? 'at the top level of the site' : 'under ' + top[0];
+      return { folder: top[0], kind, basis, votes: top[1], of,
+        why: top[0] === '/' ? '' : 'your ' + what + ' live ' + where + ' (' + top[1] + ' of the ' + of + (basis === 'published' ? ' you published or moved recently' : ' on your website') + ')' };
+    };
+    // 1. the client's own choices: our pages it published (at the address they answer now) and its own moves
+    const direct = new Map();
+    for (const p of (Array.isArray(x.published) ? x.published : [])) {
+      if (!p || classOf(p.page_type) !== kind) continue;
+      const k0 = urlKey(p.url); if (!k0) continue;
+      const u = moveTo.get(k0) || S(p.url); const k = urlKey(u);
+      if (!pathOf(u) || (bad.has(k) && !moveTo.has(k0))) continue;   // a page that no longer answers (and was not moved) says nothing
+      const f = folderOf(u); if (f && fits(f)) direct.set(k, f);
+    }
+    for (const [from, to] of moveTo) { const f = folderOf(to); if (!f || companyPage(to) || folderOf(from) === f) continue;
+      if ((blogFolder(f) ? 'article' : 'service') !== kind) continue; direct.set(urlKey(to), f); }
+    const d = pick(direct, 'published'); if (d) return d;
+    // 2. the live inventory: a folder index page (/insights beside /insights/x) and company pages are not pages of either kind
+    const live = pages.filter(p => !gone(p.st) && pathOf(p.url));
+    const dirs = new Set(live.map(p => folderOf(p.url)).filter(f => f && f !== '/'));
+    const inv = new Map();
+    for (const p of live) { const k = urlKey(p.url); if (inv.has(k) || companyPage(p.url) || dirs.has(pathOf(p.url) + '/')) continue;
+      const f = folderOf(p.url); if (!f) continue; const b = blogFolder(f);
+      if (kind === 'article' ? !b : b) continue; inv.set(k, f); }
+    const i = pick(inv, 'inventory'); if (i) return i;
+    return { folder: '/', kind, basis: 'default', votes: 0, of: direct.size || inv.size, why: '' };
+  };
   /** review H5: does this address already rank for the main keyword? o: { rank: { position, url } (the rank check or the ranked pull),
    *  pages: [{ url, queries: [{ query, impressions, position }] }] (Search Console per page) } -> true when the rank reading puts this
    *  address at position <= 30, or Search Console shows it for a search holding every word of the keyword at position <= 30 or with
@@ -1646,7 +1746,7 @@ const LRU = (() => {
       note: 'The supporting pages come from keyword intelligence: ' + heads.length + ' search groups of its last keyword research (' + cur + '), one search per group, with its verdict, page action and Search Console position.' };
   };
 
-  return { CFG, STAGES, COMMERCIAL, kiPool, ranksFor, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, headTarget, oneUrl,
+  return { CFG, STAGES, COMMERCIAL, kiPool, ranksFor, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, classOf, folderOf, folderFor, headTarget, oneUrl,
     stageOf, isCommercial, isDefinitional, definitionalOk, stageText, countryName, market, marketRefusal, verdictStop, stuck, rungState, qWords, sameQuestion, coversHead, isHeadRow, questionPage };
 })();
 // ---- G6 (2026-10-18, AI_VISIBILITY_SPEC.md §10): the AI question panel at enterprise scale — shared by AI Plan, AI Requests, Prompt Jobs,
