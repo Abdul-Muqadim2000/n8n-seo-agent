@@ -714,7 +714,7 @@ function AlertsCard({ d }: { d: OverviewData }) {
     <Panel
       title="Alerts & check-ins"
       icon={<BellRing />}
-      info="Search Console notification mails (manual actions, security issues, indexing) are read and raised here automatically."
+      info="Changes on your key pages found by the daily page watch, and Search Console notices (manual actions, security issues, indexing). An alert closes by itself when the problem is gone."
       footer={<MoreLink to={page('alerts')}>Alerts & check-ins</MoreLink>}
     >
       <div className={cn('flex items-center gap-4 rounded-lg p-4', a.open > 0 ? 'bg-warning-soft' : 'bg-good-soft')}>
@@ -722,7 +722,7 @@ function AlertsCard({ d }: { d: OverviewData }) {
           <CountUp value={a.open} />
         </span>
         <div className="min-w-0">
-          {a.open > 0 ? <StatusBadge tone="warning">Open Search Console {a.open === 1 ? 'alert' : 'alerts'}</StatusBadge> : <StatusBadge tone="good">No open alerts</StatusBadge>}
+          {a.open > 0 ? <StatusBadge tone="warning">Open {a.open === 1 ? 'alert' : 'alerts'}</StatusBadge> : <StatusBadge tone="good">No open alerts</StatusBadge>}
         </div>
       </div>
       {a.checkinDue ? (

@@ -1062,6 +1062,8 @@ export interface BacklinksData {
 }
 
 export interface ConsoleAlert {
+  /** the engine's message id: what "Mark as seen" names (never shown) */
+  id: string;
   kind: string;
   severity: string;
   subject: string;
@@ -1069,6 +1071,15 @@ export interface ConsoleAlert {
   receivedAt: string;
   status: string;
   source: string;
+  /** CR17-D (build section 194): the condition seen again (same alert, not a new one) */
+  lastSeenAt: string;
+  count: number;
+  /** when and why the condition went away ('' while it lasts) */
+  resolvedAt: string;
+  resolution: string;
+  /** "Mark as seen" (the alert stays listed, it leaves the open count) */
+  ackAt: string;
+  ackBy: string;
 }
 
 export interface Checkin {
@@ -1076,7 +1087,8 @@ export interface Checkin {
   manualAction: boolean;
   securityIssue: boolean;
   notes: string;
-  notIndexedTotal: number;
+  /** CR17-D (F6): null when the check-in has no Pages export (the engine stores -1 as "not recorded"): never a count */
+  notIndexedTotal: number | null;
   indexedTotal: number | null;
   csvKind: string;
   submittedAt: string;

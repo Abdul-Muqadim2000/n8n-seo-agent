@@ -625,6 +625,7 @@ export const AUDIT_ACTIONS = {
   // Index coverage wave 2 (DESIGN_WAVE2 §3.2): the client says they asked Google (in Search Console) to read a page again
   'indexing.asked_google': { label: 'Said Google was asked to read a page again', category: 'websites' },
   'indexing.page_type': { label: 'Marked a page as important or as fine to leave out of Google', category: 'websites' },
+  'alerts.seen': { label: 'Marked an alert as seen', category: 'websites' },   // CR17-D (2026-11-17): the alert stays listed, it leaves the open count
   'crawler.push_key_created': { label: 'Made a crawler log push key', category: 'integrations' },
   'crawler.push_key_revoked': { label: 'Switched crawler log pushes off', category: 'integrations' },
   'crawler.log_uploaded': { label: 'Uploaded a server log', category: 'integrations' },
