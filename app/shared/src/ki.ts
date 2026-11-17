@@ -382,6 +382,8 @@ export interface KiKeywordRow extends DtRow {
   /** [{domain, position, url}] */
   competitors_json: string | null;
   striking: boolean | null; run_id: string; fetched_at: string; updated_at: string;
+  /** CR17-F (absent before the engine adds it): the client service the search belongs to, '' = none of them (a generic search) */
+  service?: string | null;
 }
 
 /** seo_ki_gaps: one row per gap against the chosen competitor set. */
@@ -444,6 +446,8 @@ export interface KiQuestionOut { question: string; cluster_id: string | null; so
 export interface KiPlanAction {
   action_id: string; kind: KiGapAction | 'ladder' | 'write'; title: string; why: string; target: string; credits: number;
   gap_id?: string; cluster_id?: string;
+  /** CR17-F: the client service the action is for ('' or absent = none) */
+  service?: string;
 }
 
 export interface KiResearchCallback extends KiCallbackBase {

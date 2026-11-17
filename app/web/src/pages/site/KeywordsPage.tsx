@@ -7,7 +7,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ArrowRight, Check, ChevronLeft, ChevronRight, Download, Filter, Layers, ListOrdered, MessageCircleQuestion, Search, Telescope, TrendingUp } from 'lucide-react';
-import { compactNumber, KI_KEYWORD_GAP_TYPES, KI_SOURCE_LABELS, KI_STAGES, KI_STRIKING_WORDS, KI_VERDICT_IDS, KI_VERDICTS, type KiKeywordGapType, type KiPlanAction, type KiSource, type KiStage, type KiVerdict as Verdict } from '@seo/shared';
+import { compactNumber, KI_NO_SERVICE, KI_KEYWORD_GAP_TYPES, KI_SOURCE_LABELS, KI_STAGES, KI_STRIKING_WORDS, KI_VERDICT_IDS, KI_VERDICTS, type KiKeywordGapType, type KiPlanAction, type KiSource, type KiStage, type KiVerdict as Verdict } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { CountUp, HeroNextStep, HeroStat, InsightItem, Stagger, SummaryHero } from '@/components/insight';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +34,7 @@ import {
   kiStopNote,
   kiStrikingOf,
   kiMarketName,
+  kiServiceLabel,
   planOf,
   type KiGap,
   type KiKeywords,
@@ -455,7 +456,7 @@ const VOLUME_STEPS = ['10', '50', '100', '500', '1000'];
 /** review UX L4: short gap labels, so the select is not cut ("Competitors rank, yo") */
 const GAP_FILTER_LABELS: Record<KiKeywordGapType, string> = { missing: 'You are missing', untapped: 'One competitor only', weak: 'You rank low', striking: 'Just off page one', strong: 'You lead' };
 
-export function KiFilterFields({ f, set, clusters, stack }: { f: KiKwFilter; set: (p: Partial<KiKwFilter>) => void; clusters: KiKw[]; stack?: boolean }) {
+export function KiFilterFields({ f, set, clusters, stack, services = [] }: { f: KiKwFilter; set: (p: Partial<KiKwFilter>) => void; clusters: KiKw[]; stack?: boolean; services?: KiKeywords['byService'] }) {
   const field = (label: string, value: string, onChange: (v: string) => void, options: { value: string; label: string }[], all = 'All') => (
     <label key={label} className={cn('flex min-w-0 flex-col gap-1 text-xs font-medium text-ink-3', stack ? 'w-full' : 'w-[11.5rem]')}>
       {label}
@@ -476,6 +477,8 @@ export function KiFilterFields({ f, set, clusters, stack }: { f: KiKwFilter; set
       {field('Verdict', f.verdict, (v) => set({ verdict: v as KiKwFilter['verdict'] }), KI_VERDICT_IDS.map((v) => ({ value: v, label: KI_VERDICTS[v] })))}
       {field('Buyer stage', f.stage, (v) => set({ stage: v as KiKwFilter['stage'] }), (Object.keys(KI_STAGES) as KiStage[]).map((v) => ({ value: v, label: KI_STAGES[v] })))}
       {field('Topic', f.cluster, (v) => set({ cluster: v }), topics.map((c) => ({ value: c.clusterId, label: c.keyword })))}
+      {/* CR17-F: the client service each search belongs to (a run from before the engine sent it has none: no field) */}
+      {services.some((x) => x.service) && field('Service', f.service, (v) => set({ service: v }), services.map((x) => ({ value: x.service ?? KI_NO_SERVICE, label: `${kiServiceLabel(x.service)} (${n0(x.count)})` })))}
       {field('Where from', f.source, (v) => set({ source: v as KiKwFilter['source'] }), (Object.keys(KI_SOURCE_LABELS) as KiSource[]).map((v) => ({ value: v, label: KI_SOURCE_LABELS[v] })), 'Any source')}
       {field('Searches a month', f.minVolume, (v) => set({ minVolume: v }), VOLUME_STEPS.map((v) => ({ value: v, label: `At least ${n0(Number(v))}` })), 'Any number')}
       {field('Against competitors', f.gapType, (v) => set({ gapType: v as KiKwFilter['gapType'] }), KI_KEYWORD_GAP_TYPES.map((v) => ({ value: v, label: GAP_FILTER_LABELS[v] })), 'Any')}
@@ -501,6 +504,9 @@ function AllSearches({ o, clusters, table, loading, error, filter, onFilter, dom
   // review UX L15: no wall of filters above a handful of rows
   const showFilters = active > 0 || total >= 20;
   const open = phoneOpen || active > 0;
+  // CR17-F: the searches grouped by the client's services (none of them = "Not one of your services"); only when the run said which is which
+  const byService = table?.byService ?? [];
+  const withServices = byService.some((x) => x.service);
 
   const cols: Column<KiKw>[] = [
     {
@@ -516,6 +522,7 @@ function AllSearches({ o, clusters, table, loading, error, filter, onFilter, dom
     { key: 'verdict', header: 'For you', cell: (r) => <KiVerdict verdict={r.verdict} reason={r.verdict === 'gated' ? r.gateReason : null} size="sm" /> },
     { key: 'volume', header: 'Searches a month', align: 'right', cell: (r) => <VolumeFigure r={r} /> },
     { key: 'stage', header: 'Buyer stage', hideOnMobile: true, cell: (r) => <span className="whitespace-nowrap text-ink-2">{r.stage ? KI_STAGES[r.stage] : '-'}</span> },
+    ...(withServices ? [{ key: 'service', header: 'Service', hideOnMobile: true, cell: (r: KiKw) => <span className={cn('block max-w-[12rem] truncate text-xs', r.service ? 'text-ink-2' : 'text-ink-3')} title={kiServiceLabel(r.service)}>{kiServiceLabel(r.service)}</span> }] : []),
     { key: 'score', header: 'Score', align: 'right', cell: (r) => <KiScore r={r} /> },
     { key: 'sources', header: 'Where from', hideOnMobile: true, cell: (r) => <span className="text-xs text-ink-3"><SourcesFigure sources={r.sources.map((x) => x.source)} /></span> },
     { key: 'page', header: 'Your page', hideOnMobile: true, cell: (r) => <span className="block max-w-[16rem] truncate text-xs text-ink-3" title={r.pageUrl || r.gscPage || undefined}>{pageLine(r)}</span> },
@@ -543,12 +550,35 @@ function AllSearches({ o, clusters, table, loading, error, filter, onFilter, dom
         <div className={cn(!open && 'max-md:hidden')}>
           {showFilters && (
             <div className="mb-3 hidden flex-wrap items-end gap-3 md:flex" data-ki-filters>
-              <KiFilterFields f={filter} set={set} clusters={clusters} />
+              <KiFilterFields f={filter} set={set} clusters={clusters} services={table?.byService} />
               {active > 0 && (
                 <Button variant="ghost" size="sm" onClick={() => onFilter(KI_KW_FILTER_EMPTY)}>
                   Clear filters
                 </Button>
               )}
+            </div>
+          )}
+          {withServices && (
+            <div className="mb-3" data-ki-services>
+              <p className="mb-1.5 text-xs font-medium text-ink-3">By service</p>
+              <div className="flex flex-wrap gap-1.5">
+                {byService.map((x) => {
+                  const value = x.service ?? KI_NO_SERVICE;
+                  const on = filter.service === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => set({ service: on ? '' : value })}
+                      className={cn('inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[13px] transition-colors duration-150 ease-brand', on ? 'border-accent bg-accent-soft text-ink' : 'border-line-strong bg-surface text-ink-2 hover:bg-surface-2')}
+                    >
+                      <span className="max-w-[14rem] truncate">{kiServiceLabel(x.service)}</span>
+                      <span className="tabular text-ink-3">{n0(x.count)}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
           {filter.striking && <p className="mb-2 text-xs text-ink-3">Showing the searches just off page one. <button type="button" className="font-medium text-accent-text hover:underline" onClick={() => set({ striking: false })}>Show every search</button></p>}
@@ -585,7 +615,7 @@ function AllSearches({ o, clusters, table, loading, error, filter, onFilter, dom
               }
             >
               <div className="space-y-4">
-                <KiFilterFields f={filter} set={set} clusters={clusters} stack />
+                <KiFilterFields f={filter} set={set} clusters={clusters} services={table?.byService} stack />
               </div>
             </Sheet>
           </div>

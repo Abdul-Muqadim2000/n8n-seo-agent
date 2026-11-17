@@ -132,7 +132,8 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const prev = mineVis[0] || null;
   // brand names AI uses for competitors (learned by the Answer Analyst: "ClearTax" -> cleartax.in), so a competitor named without its website still counts
   const aliasRow = cache.find(c => c.key === 'ai_brands:' + s.site_id); const aliases = aliasRow ? parse(aliasRow.value, {}) : {};
-  const autoRivals = prev ? (parse(prev.competitors_json, []) || []).filter(c => c && c.domain && c.auto && (c.mentions || 0) >= 2 && /\./.test(c.domain)).map(c => c.domain) : [];
+  const SM_SVC = (x) => { try { return (typeof SM === 'object' && SM && SM.stored) ? SM.services(SM.stored(x) || { domain: x.domain, canonical_host: x.domain }) : (typeof AIE === 'object' ? AIE.servicesOf(x) : []); } catch (e) { return []; } };   // CR17-F
+    const autoRivals = (prev ? (parse(prev.competitors_json, []) || []).filter(c => c && c.domain && c.auto && (c.mentions || 0) >= 2 && /\./.test(c.domain)).map(c => c.domain) : []).filter(d => CMP.role(d, { own_domain: s.domain, services: SM_SVC(s), not_competitors: s.settings.not_competitors || [] }).role === 'competitor');   // CR17-F (section 196): last week's auto competitors pass the one role classifier (SAP, Salesforce, Oracle are software makers)
   const competitors = [...new Set([...s.settings.competitors, ...autoRivals])].slice(0, 8);
   // B-G1: the read-path gate, before a single stored rung can become a topic, a question or a page we check for AI readiness.
   // Protected so the ladder's own subject can never read as somebody's brand: the head terms, the site's services and its own keywords.
@@ -308,7 +309,7 @@ const planned = list.slice(0, CONFIG.max_sites_per_run).map(s => {
     // services, business facts and accreditation status travel with the profile (SITE_MODEL_SPEC.md; with no sheet the analyst
     // reports "not checked", never "no wrong claims")
     services: SM.services(site_model).slice(0, 20), business_facts: SM.facts(site_model).business_facts, accreditation: SM.facts(site_model).accreditation,
-    brand_names, competitors, configured_competitors: s.settings.competitors, aliases, topics, engines: s.settings.engines, prompts_max: s.settings.prompts_max, pulse: s.settings.pulse,
+    brand_names, competitors, configured_competitors: s.settings.competitors, ...(s.settings.not_competitors ? { not_competitors: s.settings.not_competitors } : {}), aliases, topics, engines: s.settings.engines, prompts_max: s.settings.prompts_max, pulse: s.settings.pulse,
     prompts: stop ? [] : prompts, full_due, run_kind: runKind, monthly_engines: MONTHLY.filter(e => s.settings.engines.includes(e)), carried,
     // W2-E3: the owner's coverage options (the run's last part asks the fan-out check, the persona test and the demand trend with them)
     options: AIX.optionsOf(s.settings), persona_roles: personas, cost_options: costNow.options,

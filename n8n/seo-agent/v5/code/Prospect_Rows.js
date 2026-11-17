@@ -31,7 +31,7 @@ for (const s of sites) {
       drafted_at: d ? now : kept.drafted_at, note: kept.superseded ? DRAFTS.reason.slice(0, 300) : (old.note || ''),
       score: Number(c.score ?? old.score) || 0, origin: c.origin || old.origin || '', contact_email: old.contact_email || ct.contact_email || '', contact_url: old.contact_url || ct.contact_url || '', contacted_at: old.contacted_at || '',
       followup_step: f ? Number(f.followup) : (Number(old.followup_step) || 0), followup_subject: f ? String(f.subject || '').slice(0, 120) : (old.followup_subject || ''), followup_body: f ? String(f.body || '').slice(0, 1200) : (old.followup_body || ''),
-      verified_at: won && lr && lr.verify === 'found' ? now : (old.verified_at || '') }); };
+      verified_at: won && lr && lr.verify === 'found' ? now : (old.verified_at || ''), retired_at: old.retired_at || '' }); };   // CR17-F: kept as stored
   for (const c of s.candidates) { const k = key(c); if (seen.has(k)) continue; seen.add(k); emit({ ...c, fresh: true }, mine.get(k) || {}); }
   // stored prospects not seen this run: only touched when they now link (won), or a draft / follow-up / contact was written for them
   for (const [k, old] of mine) { if (seen.has(k)) continue; const won = old.type !== 'reclaim' && linking.has(old.prospect_domain) && old.status !== 'won';

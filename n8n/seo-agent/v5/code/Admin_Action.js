@@ -128,9 +128,9 @@ const kiComp = normD(t.comp_domain);
 const kiStatus = String(t.status == null ? '' : t.status).trim().toLowerCase();
 const kiGap = String(t.gap_id == null ? '' : t.gap_id).trim();
 if (action === 'ki_competitor') {
-  if (!/^[A-Z]{2}-[a-z]{2,3}$/.test(kiMarket)) throw new Error('market (the KI market key, e.g. AE-en) is required for action ki_competitor');
+  if (kiMarket && !/^[A-Z]{2}-[a-z]{2,3}$/.test(kiMarket)) throw new Error('market (the KI market key, e.g. AE-en) must look like AE-en for action ki_competitor');   // CR17-F: optional, a domain outside the KI set has no market
   if (!/^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$/.test(kiComp)) throw new Error('comp_domain (a competitor host, e.g. example.com) is required for action ki_competitor');
-  if (!['chosen', 'watch', 'dismissed'].includes(kiStatus)) throw new Error('status must be chosen, watch or dismissed');
+  if (!['chosen', 'watch', 'dismissed', 'not_competitor'].includes(kiStatus)) throw new Error('status must be chosen, watch, dismissed or not_competitor');   // CR17-F (section 196): not_competitor works for any domain, KI on or off
 }
 if (action === 'ki_gap') {
   if (!/^g_[a-z0-9]{6,40}$/.test(kiGap)) throw new Error('gap_id is required for action ki_gap');

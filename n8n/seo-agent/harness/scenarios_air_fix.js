@@ -232,18 +232,18 @@ module.exports = async (ctx) => {
     const ar = (A.metrics.alert_rules || A.alert_rules || (A.metrics.w2 || {}).alert_rules || []);
     const arAll = JSON.stringify(A).match(/"rule_id":"(sov_drop|rival_rise)"[^}]*"fired":(true|false)/g) || [];
     check('neither alert rule (share of voice, competitor share) fires, both say they were not evaluated', !/"rule_id":"(sov_drop|rival_rise)"[^}]*"fired":true/.test(JSON.stringify(A)) && /not evaluated: this run is not comparable/.test(JSON.stringify(A)) && !(A.alerts || []).some(x => /alert rule/.test(String(x.text || x))), JSON.stringify(arAll).slice(0, 300));
-    check('the stored week records the entity rule it was counted under', JSON.parse(A.vis_row.metrics_json).entity_rule === 'f53', A.vis_row.metrics_json.slice(0, 160));
-    const B = await drive({ prompts: P4, rows: weekRows(), pulse_rows: pulses(false), previous: (() => { const r = prevRow({ marker: true }); r.stats = { ...r.stats, entity_rule: 'f53' }; return r; })() });
+    check('the stored week records the entity rule it was counted under', JSON.parse(A.vis_row.metrics_json).entity_rule === 'c17f'   /* CR17-F: the current entity rule (was f53) */, A.vis_row.metrics_json.slice(0, 160));
+    const B = await drive({ prompts: P4, rows: weekRows(), pulse_rows: pulses(false), previous: (() => { const r = prevRow({ marker: true }); r.stats = { ...r.stats, entity_rule: 'c17f' }; return r; })() });
     check('the next week (its earlier row counted under F-53) is compared again', B.metrics.delta && B.metrics.delta.mention_rate != null, String(B.metrics.delta_not_compared || ''));
     // a pulse morning counted under the earlier entity rule: named / cited count, its competitors do not
     const oldMorning = pulseRow(day(2).slice(0, 10), [0, 1, 2, 3].map(q => ({ pid: 'q' + q, named: false, rivals: ['oldrule-rival.com'] }))); oldMorning.detail.entity_rule = '';
-    const newMornings = [1, 3].map(d => { const r = pulseRow(day(d).slice(0, 10), [0, 1, 2, 3].map(q => ({ pid: 'q' + q, named: false, rivals: ['rival.com'] }))); r.detail.entity_rule = 'f53'; return r; });
+    const newMornings = [1, 3].map(d => { const r = pulseRow(day(d).slice(0, 10), [0, 1, 2, 3].map(q => ({ pid: 'q' + q, named: false, rivals: ['rival.com'] }))); r.detail.entity_rule = 'c17f'; return r; });
     const C = await drive({ prompts: P4, rows: weekRows(), pulse_rows: [oldMorning, ...newMornings] });
     check('the old-rule morning still counts for "named in" (12 pulse answers)', C.metrics.pulse_samples === 12, JSON.stringify({ pulse: C.metrics.pulse_samples }));
     check('its competitors are left out of the share of voice and the competitor table, and the note says so', !(C.competitors || []).some(c => /oldrule-rival/.test(c.domain)) && (C.metrics.pulse_basis || {}).entity_old && C.metrics.pulse_basis.entity_old.answers === 4 && /earlier rule/.test(C.metrics.pulse_basis.note), JSON.stringify({ comps: (C.competitors || []).map(c => c.domain), pb: C.metrics.pulse_basis }));
     // the open platforms (OPEN_PLAT): right for an Open edX shop AND for a client that competes with Moodle
     const AIE = kitFrom('Parse_AI_Answers.js', 'AIE');
-    check('AIE.RULE is the F-53 entity rule', AIE.RULE === 'f53', AIE.RULE);
+    check('AIE.RULE is the current entity rule (F-53, bumped to c17f by CR17-F: software makers are never competitors)', AIE.RULE === 'c17f', AIE.RULE);
     const txt = 'A few options in the market:\n- **Moodle** (moodle.com) - an open-source LMS used by universities.\n- **Brightwave Learning** (brightwave.example) - a corporate LMS.';
     const roleOf = (site, id) => { const D = AIE.dir(site, {}); const e = AIE.read({ text: txt, cites: [], entities: [] }, D).entities.find(x => x.id === id); return e ? e.role : 'absent'; };
     const lms = { site_id: 'site_lmsco', domain: 'lmsco.example', business_name: 'LMSCo', brand_names: ['LMSCo'], competitors: [], configured_competitors: [], aliases: {}, services: ['Corporate learning management system', 'Course authoring tools'], topics: ['lms for companies'] };

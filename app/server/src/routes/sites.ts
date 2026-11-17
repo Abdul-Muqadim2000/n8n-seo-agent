@@ -56,6 +56,7 @@ import { routeSiteToApp } from '../services/runs';
 import { fetchPublicText, verify } from '../services/verify';
 import { checkIndexnowStep } from '../services/siteTasks';
 import { invalidateKi } from '../services/ki';
+import { syncSettingsCompetitors } from '../services/kiData';
 import { deleteAiPrompts, importAiReport } from '../services/aiWave2';
 import { aiPilotState, startAiPilot } from '../services/aiPilot';
 import { checkBingAccess } from '../services/bingCheck';
@@ -723,6 +724,9 @@ export async function siteRoutes(app: FastifyInstance) {
     }
     const r = await siteAdmin(body);
     if (!r.ok) throw new HttpError(502, r.error || 'The SEO engine could not apply the change.', 'admin_failed');
+    // CR17-F: Site settings shows THE one competitor list; a Competitors page choice taken off it goes to the watchlist (or the union brings it
+    // back), and a domain typed in that was marked not a competitor is chosen again
+    if (a.action === 'monitors' && a.competitors) await syncSettingsCompetitors(site, a.competitors);
     // A13: who changed the panel or the monitors, and what in numbers (ids and counts, never the question texts)
     await audit(req, site.orgId, { action: `site.admin.${a.action}` as AuditAction, target: { type: 'site', id: site.id, label: site.domain }, details: adminAuditDetails(a, r.affected) });
     if (r.affected === 0 && (a.action === 'pause' || a.action === 'resume')) throw new HttpError(409, 'The SEO engine does not track this website yet: start weekly tracking first.', 'not_tracked');

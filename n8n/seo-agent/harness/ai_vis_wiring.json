@@ -1491,6 +1491,17 @@
     ]
    ]
   },
+  "Load KI Competitors (Mon)": {
+   "main": [
+    [
+     {
+      "index": 0,
+      "node": "Load AI Daily",
+      "type": "main"
+     }
+    ]
+   ]
+  },
   "Load Ladder Settings (AI)": {
    "main": [
     [
@@ -1518,7 +1529,7 @@
     [
      {
       "index": 0,
-      "node": "Load AI Daily",
+      "node": "Load KI Competitors (Mon)",
       "type": "main"
      }
     ]
@@ -2792,6 +2803,7 @@
     }
    ]
   },
+  "Load KI Competitors (Mon)": null,
   "Load Ladder Settings (AI)": {
    "conditions": [
     {

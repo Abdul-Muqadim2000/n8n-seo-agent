@@ -66,8 +66,9 @@ export function HeroChip({ icon, children, to, title, className }: { icon?: Reac
  * Ranked share rows (share of voice, competitors): rank number, name, a blue bar and the value. "You" gets the solid brand bar and a
  * chip; everyone else the lighter ramp step, so the eye lands on your own row.
  */
-export function RankedBars({ items, you, valueFormat = (v: number) => `${v.toFixed(1)}%`, max, youLabel = 'You' }: { items: { label: string; value: number; sub?: ReactNode }[]; you?: string; valueFormat?: (v: number) => string; max?: number; youLabel?: string }) {
+export function RankedBars({ items, you, valueFormat = (v: number) => `${v.toFixed(1)}%`, max, youLabel = 'You' }: { items: { label: string; value: number; sub?: ReactNode; /** CR17-F: an action at the end of the row (e.g. "Not a competitor") */ action?: ReactNode }[]; you?: string; valueFormat?: (v: number) => string; max?: number; youLabel?: string }) {
   const top = max ?? Math.max(1, ...items.map((i) => i.value));
+  const withAction = items.some((i) => i.action != null);
   return (
     <ol className="space-y-1">
       {items.map((it, i) => {
@@ -76,7 +77,8 @@ export function RankedBars({ items, you, valueFormat = (v: number) => `${v.toFix
           <li
             key={it.label}
             className={cn(
-              'grid grid-cols-[1.5rem_minmax(0,9.5rem)_1fr_auto] items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition-colors duration-150 ease-brand hover:bg-surface-2/60 sm:gap-3',
+              'grid items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition-colors duration-150 ease-brand hover:bg-surface-2/60 sm:gap-3',
+              withAction ? 'grid-cols-[1.5rem_minmax(0,9.5rem)_1fr_auto_2.25rem]' : 'grid-cols-[1.5rem_minmax(0,9.5rem)_1fr_auto]',
               mine && 'bg-accent-soft hover:bg-accent-soft',
             )}
           >
@@ -92,6 +94,7 @@ export function RankedBars({ items, you, valueFormat = (v: number) => `${v.toFix
               {valueFormat(it.value)}
               {it.sub != null && it.sub !== '' && <span className="ml-1 text-xs text-ink-3">{it.sub}</span>}
             </span>
+            {withAction && <span className="flex justify-end">{it.action ?? null}</span>}
           </li>
         );
       })}

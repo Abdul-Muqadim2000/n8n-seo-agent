@@ -1679,6 +1679,19 @@ export function useKiCompetitorStatus(orgId: string, siteId: string) {
   });
 }
 
+/**
+ * CR17-F: "Not a competitor" / "Mark as competitor" on any page (AI visibility, Rankings), for any domain, keyword intelligence on or off.
+ * Every page of the website reads the one competitor list, so the whole website's data is read again.
+ */
+export function useCompetitorStatus(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ domain, status }: { domain: string; status: 'chosen' | 'not_competitor' | 'watch' }) =>
+      api<{ ok: true; compDomain: string; status: string; chosen: number; maxCompetitors: number }>(`/api/orgs/${orgId}/sites/${siteId}/competitors/${encodeURIComponent(domain)}`, { method: 'PATCH', body: { status } }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.site(siteId) }),
+  });
+}
+
 export function useKiGapStatus(orgId: string, siteId: string) {
   const qc = useQueryClient();
   return useMutation({

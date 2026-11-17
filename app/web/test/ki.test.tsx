@@ -289,6 +289,27 @@ describe('the Competitors page', () => {
   });
 });
 
+describe('CR17-F: keyword research by client service', () => {
+  it('reads each search\'s service and the per-service counts; the filter goes to the server; none = "Not one of your services"', () => {
+    const k = kiKeywordsOf({ rows: [{ ...KWS[0], service: 'ERP implementation' }, { ...KWS[1], service: '' }], total: 2, by_service: [{ service: 'ERP implementation', count: 1 }, { service: '', count: 1 }] });
+    expect(k.rows.map((r) => r.service)).toEqual(['ERP implementation', null]);
+    expect(k.byService).toEqual([{ service: 'ERP implementation', count: 1 }, { service: null, count: 1 }]);
+    expect(kiKwParams({ ...KI_KW_FILTER_EMPTY, service: '_none' })).toMatchObject({ service: '_none' });
+    expect('service' in kiKwParams(KI_KW_FILTER_EMPTY)).toBe(false);
+    const t = text(wrap(<Keywords o={overview()} summary={k} table={k} tableLoading={false} tableError={null} gaps={GAPS} filter={KI_KW_FILTER_EMPTY} onFilter={() => {}} />));
+    expect(t).toContain('By service');
+    expect(t).toContain('ERP implementation');
+    expect(t).toContain('Not one of your services');
+    // a run from before the engine sent services: no service grouping at all
+    const old = kiKeywordsOf({ rows: KWS, total: KWS.length });
+    expect(old.byService).toEqual([]);
+    expect(text(wrap(<Keywords o={overview()} summary={old} table={old} tableLoading={false} tableError={null} gaps={GAPS} filter={KI_KW_FILTER_EMPTY} onFilter={() => {}} />))).not.toContain('By service');
+  });
+  it('a plan step keeps its service', () => {
+    expect(kiKeywordsOf({ rows: [], plan: [{ action_id: 'a1', kind: 'refresh', title: 'T', why: 'w', target: '', credits: 1, service: 'AI consulting' }] }).plan[0].service).toBe('AI consulting');
+  });
+});
+
 describe('the Keyword research page', () => {
   const summary = kiKeywordsOf({ rows: KWS, total: 4, plan: [{ action_id: 'a1', kind: 'refresh', title: 'Improve your ERP page', why: 'You are #14 and 2 competitors rank on page one', target: `https://${D}/erp`, credits: 40 }] });
   const page = (f = KI_KW_FILTER_EMPTY, o = overview()) => text(wrap(<Keywords o={o} summary={summary} table={summary} tableLoading={false} tableError={null} gaps={GAPS} filter={f} onFilter={() => {}} />));

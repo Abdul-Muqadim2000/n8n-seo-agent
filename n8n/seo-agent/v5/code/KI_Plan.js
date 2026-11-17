@@ -99,7 +99,8 @@ if (g.kind === 'competitors') {
 const est = KIW.r6(Math.min(quote || Infinity, base + (g.kind === 'competitors' ? profileCap : compRkCap) * rkCost));
 return [{ json: { kind: g.kind, stage: g.stage, site_id: g.site_id, domain: g.domain, canonical_host: S(site.canonical_host) || g.domain, ...m, client_key: g.client_key || '',
   request_id: g.request_id, run_id: g.run_id, callback_url: g.callback_url, ki_mode: g.ki_mode, ki_force: !!g.ki_force, started_at: g.started_at || now, now,
-  services, seed_services: seedSvc, products, brand_words: brandWords, declared, chosen, dismissed, max_chosen: maxChosen, seeds: sd.seeds, seeds_refused: sd.refused, seeds_dropped: sd.dropped,
+  services, lead_services: (() => { const d = KI.services(site.declared_services); return (d.length ? d : KI.services(site.services_json)).slice(0, 2); })(),   // CR17-F (section 196): the services the client names first lead the balance
+  seed_services: seedSvc, products, brand_words: brandWords, declared, chosen, dismissed, max_chosen: maxChosen, seeds: sd.seeds, seeds_refused: sd.refused, seeds_dropped: sd.dropped,
   gsc: gsc.slice(0, 500), gsc_period_end: lastPeriod, site_impressions: siteImpr, site_impressions_basis: siteImprBasis, seed_key: seedKey, avoid, known_rivals: knownRivals, tracked, ladders, ladders_set_aside: fr.set_aside, ladder_owners: ladderOwners, country_name: g.country_name || '', business_facts: S(site.business_facts).slice(0, 600), ki_judge: !(g.ki_judge === false || g.judge_off === true), fit_ctx: fitCtx,
   profile_cap: profileCap, comp_rk_cap: compRkCap, quote, notes, business: g.business || '',
   est_dfs_usd: est, est_ai_usd: 0,

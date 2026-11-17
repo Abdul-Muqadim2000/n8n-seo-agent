@@ -66,5 +66,6 @@ describe.skipIf(!existsSync(LC))('KI tables (ladder_common.py)', () => {
     expect(cols('KI_KW')).toEqual(expect.arrayContaining(['kw_key', 'verdict', 'score_low', 'score_high', 'cluster_id', 'gate']));
     expect(cols('KI_GAPS')).toEqual(expect.arrayContaining(['gap_id', 'type', 'action', 'credits', 'status']));
     expect(src).toMatch(/\('ki_mode', 'string'\), \('ki_refresh', 'boolean'\), \('ki_max_competitors', 'number'\)\]/);
+    expect(cols('KI_KW')).toContain('service');   // CR17-F (2026-11-17): the client service of a kept search
   });
 });

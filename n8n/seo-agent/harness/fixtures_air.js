@@ -193,7 +193,7 @@ function make(opts) {
       submit_url: 'https://clutch.co/get-listed', priority: 1, why: 'cited in AI answers for this market', checked_at: ago(7), submitted_at: '', note: '' });
     T.seo_link_prospects.push({ site_id: sid, domain: A.domain, prospect_domain: host(A.sources.listicle), type: 'ai_source', rank: 0, spam_score: 0, detail: 'cited by AI answers', source_url: A.sources.listicle, target_url: W + '/', status: 'new',
       first_seen: ago(21), last_seen: ago(7), won_at: '', outreach_subject: '', outreach_body: '', note: '', score: 40, origin: 'ai_growth', contact_email: 'editor@' + host(A.sources.listicle), contact_url: '', contacted_at: '', followup_step: 0,
-      followup_subject: '', followup_body: '', verified_at: '', drafted_at: '' });
+      followup_subject: '', followup_body: '', verified_at: '', drafted_at: '', retired_at: '' });   // retired_at: CR17-F (2026-11-17)
     T.seo_link_outreach.push({ site_id: sid, domain: A.domain, prospect_domain: host(A.sources.listicle), type: 'ai_source', status: 'drafted', score: 40, fit: 'ok', fit_reason: '', checks_json: '{}', page_url: A.sources.listicle, page_title: 'Top 10',
       evidence: '', contacts_json: '[]', contact_email: 'editor@' + host(A.sources.listicle), contact_form_url: '', country: A.cc, language: 'en', target_url: W + '/', target_reason: '', anchor_hint: A.name, sequence_json: '[]', deadline: '', drafted_at: ago(7), checked_at: ago(7), request_id: '' });
     // what the site published and what AI Growth queued before AIR (the old logic)

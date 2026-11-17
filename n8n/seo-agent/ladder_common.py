@@ -287,7 +287,9 @@ AI_VIS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string')
                ('fanout_gap_json', 'string'), ('demand_json', 'string'), ('imports_json', 'string'), ('exec_ids', 'string'), ('notes_json', 'string'),
                # W2-E3 + W2-A contract addition (2026-10-23): the persona effect on API answers, [{role, with:{rate, n}, without:{rate, n}, delta, lo, hi,
                # significant}] (rates and the 95% interval of the difference in points 0-100; the 28-day pooled figures)
-               ('persona_effect_json', 'string')]
+               ('persona_effect_json', 'string'),
+    # CR17-F (2026-11-17, section 196): the software makers and platforms AI names (CMP.role software / your_platform), kept apart from the competitors
+    ('software_json', 'string')]
 # W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §5): the owner's AI reports, uploaded in the app (W2-A writes, upsert by site_id + source + day + url +
 # query): Bing Webmaster "AI Performance" (source bing_ai: citations per page and query across Copilot) and the Search Console performance
 # export filtered to AI Mode / AI Overviews (source gsc_ai: impressions and clicks). The AI Visibility Tracker reads the period's rows.
@@ -404,7 +406,9 @@ KI_KW_COLS = [('site_id', 'string'), ('domain', 'string'), ('market', 'string'),
               ('score', 'number'), ('score_low', 'number'), ('score_high', 'number'), ('low_confidence', 'boolean'), ('verdict', 'string'),
               ('cluster_id', 'string'), ('is_head', 'boolean'), ('cluster_size', 'number'), ('cluster_demand', 'number'), ('serp_read_at', 'string'),
               ('top10_json', 'string'), ('page_action', 'string'), ('page_url', 'string'), ('cannibal_json', 'string'), ('competitors_json', 'string'),
-              ('striking', 'boolean'), ('run_id', 'string'), ('fetched_at', 'string'), ('updated_at', 'string')]
+              ('striking', 'boolean'), ('run_id', 'string'), ('fetched_at', 'string'), ('updated_at', 'string'),
+    # CR17-F (2026-11-17, section 196): the client service a kept search belongs to ('' = matches none: generic), for the per-service balance
+    ('service', 'string')]
 # seo_ki_gaps: one row per gap against the chosen competitor set (upsert gap_id): its type, the evidence, the action and its credits, its status
 KI_GAPS_TABLE = 'seo_ki_gaps'
 KI_GAPS_COLS = [('gap_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('market', 'string'), ('type', 'string'), ('keyword', 'string'),
@@ -420,7 +424,9 @@ PROSPECT_COLS = [('site_id', 'string'), ('domain', 'string'), ('prospect_domain'
                  ('status', 'string'), ('first_seen', 'string'), ('last_seen', 'string'), ('won_at', 'string'), ('outreach_subject', 'string'), ('outreach_body', 'string'), ('note', 'string'),
                  ('score', 'number'), ('origin', 'string'), ('contact_email', 'string'), ('contact_url', 'string'), ('contacted_at', 'string'), ('followup_step', 'number'),
                  ('followup_subject', 'string'), ('followup_body', 'string'), ('verified_at', 'string'),   # v4.10: value x likelihood score, where it came from, a contact found on the site, follow-up drafts (1 + 2), won only after the link is verified
-                 ('drafted_at', 'string')]   # P34-1 (2026-10-12): when the stored draft was written. Empty, or before the D12 / D13 gates = superseded: cleared, never counted, never offered (v5/code/_drafts.js, app/shared/src/outreach.ts)
+                 ('drafted_at', 'string'),
+    # CR17-F (2026-11-17, section 196): set when the AI question a prospect came from was retired (never pitched since); the row and its status stay
+    ('retired_at', 'string')]   # P34-1 (2026-10-12): when the stored draft was written. Empty, or before the D12 / D13 gates = superseded: cleared, never counted, never offered (v5/code/_drafts.js, app/shared/src/outreach.ts)
 # v4.10: the link ledger — one row per site and referring domain, merged from every source (DataForSEO, Bing Webmaster Tools, the Search Console
 # links export, GA4 referrals, Wikipedia / Hacker News / news / web mentions) and verified by fetching the linking page (BACKLINKS_SPEC.md).
 LINKS_TABLE = 'seo_backlinks'

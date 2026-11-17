@@ -1,5 +1,6 @@
 // Dashboard payloads: what GET /api/orgs/:org/sites/:site/data/<page> returns. The server reads the n8n Data Tables
 // (filtered to the site's domain), parses the JSON columns and shapes them here; the client only renders.
+import type { CompetitorRole } from './competitor-roles';
 import type { ModeId } from './constants';
 import type { MonitorSettings, ProfileFields } from './schemas';
 import type { Report } from './api';
@@ -208,6 +209,8 @@ export interface SerpCompetitor {
   position: number | null;
   /** on the website's own competitor list (seo_monitors / the site model), not just a domain that happens to rank */
   tracked: boolean;
+  /** CR17-F: the one role rule's answer for this website (competitor, listing, software maker...); absent where it was not worked out */
+  role?: CompetitorRole;
 }
 
 /** G6: the whole results-page reading of the latest check of one keyword */
@@ -721,7 +724,11 @@ export interface AiData {
   latest: {
     runId: string;
     engines: AiEngineStat[];
+    /** CR17-F: the businesses AI names instead of you, by the one role rule (competitorRole); a name with no website stays here */
     competitors: { domain: string; mentions: number; share: number; auto: boolean }[];
+    /** CR17-F: the software makers and platforms AI names (software_json, or an older row's names of that role): never competitors, never in
+     *  the share of voice */
+    softwareNamed: { domain: string; name: string; answers: number; role: 'software' | 'your_platform' }[];
     sources: { domain: string; citations: number; engines: string[]; topics: string[]; kind: string }[];
     pages: { url: string; citations: number; engines: string[] }[];
     gaps: { prompt: string; competitors: string[]; sources: string[]; volume: number | null; stage: string; cluster: string; fanout: string[];
@@ -1090,7 +1097,9 @@ export interface AlertsData {
 
 export interface SiteSettingsData {
   tracking: TrackingConnection;
-  monitors: (MonitorSettings & { competitors: string[]; updatedAt: string }) | null;
+  /** CR17-F: `competitors` is THE competitor list (Site settings + the Competitors page choices - not a competitor), the same list the
+   *  Competitors page and every monitor read; `declaredCompetitors` the Site settings list alone; `notCompetitors` the domains marked not one */
+  monitors: (MonitorSettings & { competitors: string[]; declaredCompetitors?: string[]; notCompetitors?: string[]; updatedAt: string }) | null;
   cadence: { pagesPerWeek: number; status: string } | null;
   profile: ProfileFields | null;
   readiness: ProfileReadiness;

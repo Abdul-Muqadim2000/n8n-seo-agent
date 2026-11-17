@@ -39,6 +39,7 @@ FORM_URL, API_URL = BASE_URL + '/form/' + FORM_PATH, BASE_URL + '/webhook/seo-ke
 _NI = next(n for n in MAIN_WF['nodes'] if n['name'] == 'Normalize Input')['parameters']['jsCode']
 _COUNTRIES = re.search(r"\nconst COUNTRIES = \{.*?\n\};", _NI, re.S); assert _COUNTRIES, 'Normalize Input: COUNTRIES not found'
 import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits
+from ladder_common import KI_COMP_TABLE   # CR17-F (section 196): every monitor reads the Competitors page's choices (CMP.oneList in _monitor_sites.js)
 def src(p):   # a Code node source with the shared snippets inlined
     s = seo_events.inline(rd('code/' + p))
     s = s.replace('/*__MONITOR_SITES__*/', rd('code/_monitor_sites.js')).replace('/*__REPORT_KIT__*/', rd('code/_report_kit.js')).replace('/*__AI_STATS__*/', rd('code/_ai_stats.js'))
@@ -71,6 +72,12 @@ def src(p):   # a Code node source with the shared snippets inlined
     s = s.replace('/*__AI_RANK_CLIENT__*/', rd('code/_ai_rank_client.js').rstrip('\n'))   # FX-C RC-1 (2026-11-06): the AI ranking plan in the client's words (AIRC), inlined into Growth Report
     s = s.replace('/*__RIVALS__*/', rd('code/_rivals.js').rstrip('\n'))   # C-2 / C-8 (2026-10-17): the one rival set and the category-provider rule (inside the outreach kit, and in AI Metrics)
     s = s.replace('/*__COUNTRIES__*/', "// ---- countries: copied from the main workflow's Normalize Input by build_monitors.py (DataForSEO location code = 2000 + ISO numeric) ----" + _COUNTRIES.group(0))
+    # CR17-F (2026-11-17, client report C5, build section 196): the one role classifier (CMP, v5/code/_competitors.js) travels with every kit that
+    # asks "is this a competitor?" (_rivals.js, _ai_entities.js, _monitor_sites.js): the FIRST placeholder in the node gets the kit, the others
+    # a comment, so a node holds exactly one `const CMP`
+    if '/*__COMPETITORS__*/' in s:
+        s = s.replace('/*__COMPETITORS__*/', rd('code/_competitors.js').rstrip('\n'), 1).replace('/*__COMPETITORS__*/', '// CMP: inlined once above (section 196)')
+        assert s.count('const CMP = (() => {') == 1, p + ': the competitor kit must be inlined exactly once (section 196)'
     assert '/*__' not in s and '_ENABLED__' not in s, p + ': placeholder left'
     return s.replace('__FORM_URL__', FORM_URL).replace('__API_URL__', API_URL)
 LEDGER_WIRING = {}   # R9: workflow name -> its ledger nodes; merged into harness/ledger_wiring.json at the end (S57)
@@ -357,7 +364,7 @@ ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure AI Pro
        ('Ensure Prospects Table', PROSPECT_TABLE, PROSPECT_COLS), ('Ensure Sites Table', SITES_TABLE, SITES_COLS), ('Ensure Profiles Table', PROFILE_TABLE, PROFILE_COLS), ('Ensure AI Daily Table', AI_DAILY_TABLE, AI_DAILY_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS),
        ('Ensure AI Imports Table', AI_IMPORTS_TABLE, AI_IMPORTS_COLS)]   # W2-E3 (2026-10-23): the app writes it; created here too so the tracker's load never fails on a new instance
 for i, (nm, t, c) in enumerate(ens): A.ensure(nm, t, c, at(1 + i, 0))
-loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE), ('Load AI Visibility', AI_VIS_TABLE), ('Load Link Prospects', PROSPECT_TABLE)]
+loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE), ('Load AI Visibility', AI_VIS_TABLE), ('Load Link Prospects', PROSPECT_TABLE), ('Load KI Competitors (Mon)', KI_COMP_TABLE)]
 from ladder_common import OPS_ALERTS_TABLE, OPS_ALERTS_COLS   # F2 (2026-10-23): a stopped split run's ops alerts
 SINCE = lambda days: '={{ new Date(Date.now() - ' + str(days) + ' * 864e5).toISOString() }}'
 # F2 (2026-10-23, ENGINE_AUDIT.md E12): every execution used to load the answers of EVERY site for 6.2 days and the whole prompt / visibility
@@ -611,7 +618,7 @@ Q.node('Daily Schedule', 'n8n-nodes-base.scheduleTrigger', 1.2, {'rule': {'inter
 Q.node('Manual Run', 'n8n-nodes-base.executeWorkflowTrigger', 1.2, {'inputSource': 'passthrough'}, at(0, 1))
 ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure AI Answers Table', AI_ANSWERS_TABLE, AI_ANSWERS_COLS), ('Ensure AI Daily Table', AI_DAILY_TABLE, AI_DAILY_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS)]
 for i, (nm, t, c) in enumerate(ens): Q.ensure(nm, t, c, at(1 + i, 0))
-loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE), ('Load AI Visibility', AI_VIS_TABLE)]
+loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE), ('Load AI Visibility', AI_VIS_TABLE), ('Load KI Competitors (Mon)', KI_COMP_TABLE)]
 for i, (nm, t) in enumerate(loads): vis_scoped(Q, nm, at(1 + i, 1), PULSE_VIS_DAYS, PULSE_SCOPE) if nm == 'Load AI Visibility' else Q.load(nm, t, at(1 + i, 1))   # W2-E3: scoped (F2 'Not fixed')
 Q.node('Load AI Daily', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_DAILY_TABLE, [('checked_at', 'gte', SINCE(15))]), at(7, 1), **LOAD)
 Q.node('Load Cache (AI)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(8, 1), **LOAD)
@@ -680,7 +687,7 @@ X = WF('SEOagentAIPilot1', 'SEO Agent — AI Repeat Pilot', 'aipilot', 1800, cod
 X.node('Manual Run', 'n8n-nodes-base.executeWorkflowTrigger', 1.2, {'inputSource': 'passthrough'}, at(0, 1))
 ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure AI Prompts Table', AI_PROMPTS_TABLE, AI_PROMPTS_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS)]
 for i, (nm, t, c) in enumerate(ens): X.ensure(nm, t, c, at(1 + i, 0))
-loads = [('Load Sites', SITES_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE), ('Load AI Visibility', AI_VIS_TABLE)]   # no ladders: a pilot is for a tracked website, and its questions passed the fit gate when they were stored
+loads = [('Load Sites', SITES_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE), ('Load AI Visibility', AI_VIS_TABLE), ('Load KI Competitors (Mon)', KI_COMP_TABLE)]   # no ladders: a pilot is for a tracked website, and its questions passed the fit gate when they were stored
 for i, (nm, t) in enumerate(loads): X.load(nm, t, at(1 + i, 1))
 X.node('Load Cache (AI)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(7, 1), **LOAD)
 X.code('AI Plan', 'Pilot_Plan.js', at(8, 1)); X.iff('Pilot Confirmed?', '{{ !$json.nothing_to_do }}', at(9, 1))
@@ -709,7 +716,7 @@ ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure Snapsh
        ('Ensure Backlinks Table', LINKS_TABLE, LINKS_COLS), ('Ensure Link Imports Table', LINK_IMPORTS_TABLE, LINK_IMPORTS_COLS), ('Ensure Link Graph Table', LINK_GRAPH_TABLE, LINK_GRAPH_COLS)]
 for i, (nm, t, c) in enumerate(ens): B.ensure(nm, t, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load Backlink Snapshots', BL_SNAP_TABLE), ('Load Link Prospects', PROSPECT_TABLE), ('Load Content Log', LOG_TABLE), ('Load Case Studies', CASE_TABLE),
-         ('Load Backlinks', LINKS_TABLE), ('Load Link Imports', LINK_IMPORTS_TABLE), ('Load Link Graph', LINK_GRAPH_TABLE), ('Load AI Visibility (BL)', AI_VIS_TABLE)]   # C-2 (2026-10-17): the AI-named rivals
+         ('Load Backlinks', LINKS_TABLE), ('Load Link Imports', LINK_IMPORTS_TABLE), ('Load Link Graph', LINK_GRAPH_TABLE), ('Load AI Visibility (BL)', AI_VIS_TABLE), ('Load KI Competitors (Mon)', KI_COMP_TABLE)]   # C-2 (2026-10-17): the AI-named rivals
 for i, (nm, t) in enumerate(loads): vis_scoped(B, nm, at(1 + i, 1), 60) if nm == 'Load AI Visibility (BL)' else B.load(nm, t, at(1 + i, 1))   # W2-E3: scoped (F2 'Not fixed')
 B.node('Load Cache (BL Rivals)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(12, 2), **LOAD)   # C-2: the Answer Analyst's learned names (ai_brands:)
 B.code('BL Plan', 'BL_Plan.js', at(12, 1)); B.iff('Any Sites (BL)?', '{{ !$json.nothing_to_do }}', at(13, 1)); B.node('Nothing To Do (BL)', 'n8n-nodes-base.noOp', 1, {}, at(14, 2))
@@ -819,7 +826,7 @@ S = WF('SEOagentAuditSc1', 'SEO Agent — Audit Scheduler', 'audsc', 900)
 S.node('Manual Run', 'n8n-nodes-base.executeWorkflowTrigger', 1.2, {'inputSource': 'passthrough'}, at(0, 1))
 ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure Audits Table', AUDITS_TABLE, AUDITS_COLS), ('Ensure Sites Table', SITES_TABLE, SITES_COLS), ('Ensure Profiles Table', PROFILE_TABLE, PROFILE_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS)]
 for i, (nm, t_, c) in enumerate(ens): S.ensure(nm, t_, c, at(1 + i, 0))
-loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load Audits', AUDITS_TABLE)]
+loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load Audits', AUDITS_TABLE), ('Load KI Competitors (Mon)', KI_COMP_TABLE)]
 for i, (nm, t_) in enumerate(loads): S.load(nm, t_, at(1 + i, 1))
 S.node('Load Cache (Audit)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'sitemap'), at(6, 1), **LOAD)
 S.code('Audit Candidates', 'Audit_Candidates.js', at(7, 1)); S.iff('Any Candidates?', '{{ !$json.nothing_to_do }}', at(8, 1))
@@ -861,7 +868,7 @@ for i, (nm, t, c) in enumerate(ens): G.ensure(nm, t, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Visibility', AI_VIS_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE),
          ('Load Content Log', LOG_TABLE), ('Load Query History', QUERY_TABLE), ('Load AI Pages', AI_PAGES_TABLE), ('Load AI Targets', AI_TARGETS_TABLE), ('Load AI Growth', AI_GROWTH_TABLE), ('Load Link Prospects (Growth)', PROSPECT_TABLE),
          ('Load Cycles', CYCLES_TABLE),   # 2026-10-19: the website's time zone (seo_cycles) - the Wikidata check outside a cycle is monthly in ITS calendar
-         ('Load Pages (Growth)', __import__('ladder_common').PAGES_TABLE)]   # client reports 2026-11-16 (INV1 F2 / F5): the page inventory (address, title, H1), so a question is matched to a page of its own market and a page that owns its search is improved, never copied
+         ('Load Pages (Growth)', __import__('ladder_common').PAGES_TABLE), ('Load KI Competitors (Mon)', KI_COMP_TABLE)]   # client reports 2026-11-16 (INV1 F2 / F5): the page inventory (address, title, H1), so a question is matched to a page of its own market and a page that owns its search is improved, never copied
 for i, (nm, t) in enumerate(loads): vis_scoped(G, nm, at(1 + i, 1), 70) if nm == 'Load AI Visibility' else G.load(nm, t, at(1 + i, 1))   # W2-E3: scoped (F2 'Not fixed'): six weekly runs
 G.node('Load AI Answers', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_ANSWERS_TABLE, [('checked_at', 'gte', SINCE(8))]), at(13, 1), **LOAD)
 G.node('Load Cache (Growth)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(14, 1), **LOAD)
@@ -988,7 +995,7 @@ ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure Prospe
 for i, (nm, t, c) in enumerate(ens): L.ensure(nm, t, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load Link Prospects', PROSPECT_TABLE), ('Load Link Outreach', LINK_OUTREACH_TABLE),
          ('Load Listings', LISTINGS_TABLE), ('Load Link Impact', LINK_IMPACT_TABLE), ('Load Backlinks', LINKS_TABLE), ('Load Backlink Snapshots', BL_SNAP_TABLE), ('Load Content Log', LOG_TABLE), ('Load AI Targets', AI_TARGETS_TABLE),
-         ('Load Pages (LB)', PAGES_TABLE), ('Load AI Visibility (LB)', AI_VIS_TABLE), ('Load Cycles', CYCLES_TABLE)]   # 2026-10-19: the website's time zone (pitches per page per month). C-2 (2026-10-17): the AI-named rivals. R93 (2026-10-16): our pages' real titles (seo_pages), so a target page is never named by a search query
+         ('Load Pages (LB)', PAGES_TABLE), ('Load AI Visibility (LB)', AI_VIS_TABLE), ('Load Cycles', CYCLES_TABLE), ('Load KI Competitors (Mon)', KI_COMP_TABLE)]   # 2026-10-19: the website's time zone (pitches per page per month). C-2 (2026-10-17): the AI-named rivals. R93 (2026-10-16): our pages' real titles (seo_pages), so a target page is never named by a search query
 for i, (nm, t) in enumerate(loads): vis_scoped(L, nm, at(1 + i, 1), 60) if nm == 'Load AI Visibility (LB)' else L.load(nm, t, at(1 + i, 1))   # W2-E3: scoped (F2 'Not fixed')
 L.node('Load Query History', DT_TYPE, DT_VERSION, dt_get_all_where_params(QUERY_TABLE, [('period_end', 'gte', SINCE(200))]), at(13, 1), **LOAD)
 L.node('Load Rank History', DT_TYPE, DT_VERSION, dt_get_all_where_params(HISTORY_TABLE, [('checked_at', 'gte', SINCE(60))]), at(14, 1), **LOAD)

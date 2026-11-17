@@ -454,7 +454,7 @@ module.exports = async (ctx) => {
     const ok1 = await aa({ action: 'ki_competitor', market: 'AE-en', comp_domain: 'www.Intwo.cloud', status: 'chosen' });
     const ok2 = await aa({ action: 'ki_gap', gap_id: 'g_abc123def456', status: 'dismissed' });
     const bad = [];
-    for (const [b, re] of [[{ action: 'ki_competitor', market: 'uae', comp_domain: 'intwo.cloud', status: 'chosen' }, /market/], [{ action: 'ki_competitor', market: 'AE-en', comp_domain: 'intwo.cloud', status: 'won' }, /chosen, watch or dismissed/],
+    for (const [b, re] of [[{ action: 'ki_competitor', market: 'uae', comp_domain: 'intwo.cloud', status: 'chosen' }, /market/], [{ action: 'ki_competitor', market: 'AE-en', comp_domain: 'intwo.cloud', status: 'won' }, /chosen, watch, dismissed or not_competitor/],
       [{ action: 'ki_gap', gap_id: 'nope', status: 'done' }, /gap_id/], [{ action: 'ki_gap', gap_id: 'g_abc123def456', status: 'closed' }, /open, started/]]) { reset(); bad.push((await H.expectError('Admin Action', { body: { domain: D, ...b } }, re)).ok); }
     check('KIE2-13 Site Admin validates the two KI actions (market key, host, the status words) and refuses a bad value with its reason',
       ok1.ki_market === 'AE-en' && ok1.ki_comp_domain === 'intwo.cloud' && ok1.ki_status === 'chosen' && ok2.ki_gap_id === 'g_abc123def456' && ok2.ki_status === 'dismissed' && bad.every(Boolean), J({ ok1: [ok1.ki_market, ok1.ki_comp_domain], bad }));

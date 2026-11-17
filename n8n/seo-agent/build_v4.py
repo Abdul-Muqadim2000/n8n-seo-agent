@@ -14665,3 +14665,38 @@ def _cr16_checks():
     assert all((c, 'string') in _lc for c in ('planned_slug', 'planned_title', 'planned_h1')), 'INV1 F4: seo_content_log.planned_* missing (sync_tables.py adds them on deploy)'
     print('INV1 (section 192): AI pages judged on their own search (no blanket exemption), AQ inlined in 6 nodes, idle settle wired, 5 new columns declared')
 _cr16_checks()
+
+
+# =============================================================================
+# CR17-F (2026-11-17, client report C5, build section 196): ONE role per site (CMP.role, v5/code/_competitors.js) for every path that says
+# "competitor": the Link Builder's gate (rivalOf / competitorCheck, serp_rivals), RV (set / aiRivals / providerOf), AI visibility (AIE's entity
+# role, rule c17f; AI Metrics' rival sources and its "software and platforms AI names" list), AI Plan's auto competitors, Earned Media, and ONE
+# competitor list per site (CMP.oneList: Site settings + the Competitors page - not a competitor) read by every monitor. The app runs the same kit
+# (competitor_roles_app.py -> app/shared/src/competitor-roles.generated.js, parity test). Keyword research tags each kept search with its service.
+# =============================================================================
+def _cr17f_checks():
+    import json as _j196
+    import competitor_roles_app
+    competitor_roles_app.write_app_files(_rd0('code/_competitors.js'))
+    def _nodes(f):
+        d = _j196.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))
+        wf = d[0] if isinstance(d, list) else d
+        return {n['name']: n for n in wf['nodes']}, wf.get('connections') or {}
+    js = lambda nd, n: ((nd.get(n) or {}).get('parameters') or {}).get('jsCode') or ''
+    want = {'SEO_Agent_Link_Builder.json': ['LB Plan', 'LB Assemble'], 'SEO_Agent_AI_Visibility.json': ['AI Plan', 'AI Metrics', 'Parse AI Answers'],
+            'SEO_Agent_AI_Growth.json': ['Growth Plan', 'Earned Media'], 'SEO_Agent_Backlink_Monitor.json': ['BL Plan'], 'SEO_Agent_AI_Pulse.json': ['AI Plan']}
+    for f, names in want.items():
+        nd, _ = _nodes(f)
+        for n in names:
+            c = js(nd, n)
+            assert c, 'section 196: %s has no node %s' % (f, n)
+            assert c.count('const CMP = (() => {') == 1 and '/*__COMPETITORS__*/' not in c, 'section 196: CMP must be inlined exactly once in %s / %s' % (f, n)
+        assert 'Load KI Competitors (Mon)' in nd, 'section 196: %s does not read the Competitors page choices' % f
+    lb, _ = _nodes('SEO_Agent_Link_Builder.json')
+    assert "CMP.role(host, roleCtx).role !== 'competitor'" in js(lb, 'LB Plan') and 'function competitorCheck(' in js(lb, 'LB Assemble'), 'section 196: the Link Builder gate does not use the one role'
+    adm, aconn = _nodes('SEO_Agent_Site_Admin.json')
+    assert 'Save KI Choice (Admin)' in adm and "'not_competitor'" in js(adm, 'Admin Action') and '__KI_COMP_COLS__' not in js(adm, 'KI Competitor (Admin)'), 'section 196: Site Admin cannot store a choice outside the KI set'
+    from ladder_common import MONITORS_COLS as _mc, KI_KW_COLS as _kk, PROSPECT_COLS as _pc, AI_VIS_COLS as _av
+    assert ('not_competitors', 'string') not in _mc and ('service', 'string') in _kk and ('retired_at', 'string') in _pc and ('software_json', 'string') in _av, 'section 196: columns missing (sync_tables.py adds them on deploy)'
+    print('CR17-F (section 196): one competitor role (CMP.role) in the Link Builder, AI visibility, AI Growth, backlinks and the pulse; one competitor list (KI choices + Site settings - not a competitor); app copy written; 3 new columns declared')
+_cr17f_checks()

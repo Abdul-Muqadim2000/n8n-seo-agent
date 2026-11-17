@@ -504,6 +504,22 @@ link(C, 'Admin Route', 'Set Site Status', 1); link(C, 'Admin Route', 'Cadence Ro
 _adm_chain = [t['node'] for t in C['Admin Route']['main'][0]] + [t['node'] for t in C['Delete Cycle (Admin)']['main'][0]] + [t['node'] for t in C['Delete Cycle Jobs (Admin)']['main'][0]] + [t['node'] for _k in _ADM_KI for t in C[_k[0]]['main'][0]] + [t['node'] for t in C['Delete Site']['main'][0]]
 assert _adm_chain == ['Delete Cycle (Admin)', 'Delete Cycle Jobs (Admin)', 'Delete KI Runs (Admin)', 'Delete KI Competitors (Admin)', 'Delete KI Keywords (Admin)', 'Delete KI Gaps (Admin)', 'Delete KI Cache (Admin)', 'Delete Site', 'Admin Result'], 'Site Admin delete: the cycle and KI rows must go before the site row, then Admin Result: ' + str(_adm_chain)
 for a, b in [('Load Monitors (Admin)', 'Monitor Row (Admin)'), ('Monitor Row (Admin)', 'Set Monitors'), ('Set Monitors', 'Admin Result'), ('Load Link Prospects (Admin)', 'Prospect Rows (Admin)'), ('Prospect Rows (Admin)', 'Set Prospects'), ('Set Prospects', 'Admin Result'), ('Load AI Prompts (Admin)', 'AI Prompt Rows (Admin)'), ('AI Prompt Rows (Admin)', 'Set AI Prompts'), ('Set AI Prompts', 'Admin Result')]: link(C, a, b)
+# ---- CR17-F (2026-11-17, client report C5, build section 196): ONE competitor list per site. "Not a competitor" / "Mark as competitor" work for any
+# domain, KI on or off: the KI set's row takes the status when there is one; a domain outside the set gets its own market-less row (status_by user).
+# Site settings (seo_monitors.competitors), the Competitors page and every monitor (CMP.oneList in _monitor_sites.js) read the same list.
+def _unlink196(src, dst):
+    for _o in C.get(src, {}).get('main', []): _o[:] = [t for t in _o if t['node'] != dst]
+_unlink196('KI Competitor OK? (Admin)', 'Set KI Competitor')
+for _n196 in N:
+    if _n196['name'] == 'KI Competitor (Admin)': _n196['parameters']['jsCode'] = _n196['parameters']['jsCode'].replace('__KI_COMP_COLS__', json.dumps([c for c, _ in KI_COMP_COLS]))
+assert all('__KI_COMP_COLS__' not in _n['parameters'].get('jsCode', '') for _n in N if _n.get('type') == 'n8n-nodes-base.code'), 'section 196: KI_COMP_COLS not baked'
+N.append(iff('KI Row? (Admin)', '{{ $json.ki_row === true }}', [1180, 1360]))
+N.append(code('KI Choice Row (Admin)', "// CR17-F: the market-less row of a domain outside the KI set (exact seo_ki_competitors columns)\nreturn [{ json: $('KI Competitor (Admin)').first().json.own_row }];", [1240, 1440]))
+N.append(node('Save KI Choice (Admin)', DT_TYPE, DT_VERSION, dt_upsert_params_keys(KI_COMP_TABLE, KI_COMP_COLS, ['site_id', 'market', 'comp_domain']), [1360, 1440], alwaysOutputData=True, onError='continueRegularOutput'))
+link(C, 'KI Competitor OK? (Admin)', 'KI Row? (Admin)', 0); link(C, 'KI Row? (Admin)', 'Set KI Competitor', 0); link(C, 'KI Row? (Admin)', 'KI Choice Row (Admin)', 1)
+link(C, 'KI Choice Row (Admin)', 'Save KI Choice (Admin)'); link(C, 'Save KI Choice (Admin)', 'Admin Result')
+assert [t['node'] for t in C['KI Competitor OK? (Admin)']['main'][0]] == ['KI Row? (Admin)'], 'section 196: the KI choice must go through the one-list chain'
+print('section 196 (CR17-F): Site Admin ki_competitor works for any domain, KI on or off (a market-less seo_ki_competitors row outside the KI set)')
 write(wf('SEOagentSiteAdm1', 'SEO Agent — Site Admin', N, C), 'SEO_Agent_Site_Admin.json')
 
 # =============================================================================
