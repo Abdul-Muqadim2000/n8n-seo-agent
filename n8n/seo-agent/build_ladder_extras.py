@@ -21,6 +21,7 @@ V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.
 _rd0 = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
 # shared kits, one copy each, inlined where a node asks for them (2026-10-11, FIX_PLAN D9: the anchor words a link to our own page uses;
 # G6: _serp_obs.js carries the observation rules a results-page reading must be worded with, _rank_serp.js reads the page itself)
+from ladder_common import PAGE_WATCH_TABLE   # build section 194 (F10): the watch's moves, read by the Rank Tracker report
 import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits
 rd = lambda p: (seo_events.inline(_rd0(p)).replace('/*__ANCHOR__*/', _rd0('code/_anchor.js').rstrip('\n'))
                 .replace('/*__SITE_MODEL__*/', _rd0('code/_site_model.js').rstrip('\n'))
@@ -28,6 +29,7 @@ rd = lambda p: (seo_events.inline(_rd0(p)).replace('/*__ANCHOR__*/', _rd0('code/
                 .replace('/*__FIT_GATE__*/', _rd0('code/_fit_gate.js').rstrip('\n'))   # R16 (build_v4.py section 53): the gate also reads the rungs stored before it existed
                 .replace('/*__RANK_SERP__*/', _rd0('code/_serp_url.js').rstrip('\n') + '\n' + _rd0('code/_rank_serp.js').rstrip('\n'))   # SERP-GOTO (2026-11-08): RS reads hosts through SU
                 .replace('/*__REPLAN__*/', _rd0('code/_replan.js').rstrip('\n'))   # G32: the re-plan proposal for a stuck ladder
+                .replace('/*__MOVES__*/', _rd0('code/_moves.js').rstrip('\n'))   # build section 194 (client report 2026-11-17, F10): an address and its permanent move are one page
                 .replace('/*__LADDER_RULES__*/', _rd0('code/_ladder_rules.js').rstrip('\n'))   # section 189 (S2-07): a "-2" copy is never the page to refresh (LRU.copyOf)
                 .replace('/*__SITE_TIME__*/', site_time_src()))   # 2026-10-19: the cycle run (ST.cycleOf) for the Rank Tracker's one-site input
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
@@ -142,6 +144,9 @@ N.append(node('Load AI Brands (Tracker)', DT_TYPE, DT_VERSION, dt_get_where_para
 # report of a ladder the owner paused gives no "write this" advice
 N.append(node('Ensure Ladder Settings Table (Tracker)', DT_TYPE, DT_VERSION, dt_create_params(LADDER_SETTINGS_TABLE, LADDER_SETTINGS_COLS), [1010, 960], executeOnce=True, onError='continueRegularOutput'))
 N.append(node('Load Ladder Settings (Tracker)', DT_TYPE, DT_VERSION, dt_get_all_params(LADDER_SETTINGS_TABLE), [1120, 960], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
+# build section 194 (client report 2026-11-17, F10): the daily watch's redirects and confirmed moves, so the report treats an address and the
+# address it moved to permanently as one page (no false "Google ranks a different page of yours")
+N.append(node('Load Page Watch (Tracker)', DT_TYPE, DT_VERSION, dt_get_all_params(PAGE_WATCH_TABLE), [1120, 1100], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
 N.append(code('Tracker Plan', rd('code/Tracker_Plan.js'), [1120, 100]))
 N.append(iff('Any Checks?', '{{ !$json.nothing_to_do }}', [1340, 100]))
 N.append(node('SERP Check', 'n8n-nodes-base.httpRequest', 4.5, DFS_HTTP, [1560, 0], credentials=DFS, onError='continueRegularOutput', **retry_lint.RETRY))
@@ -174,7 +179,7 @@ for a, b in [('Manual Run', 'Ensure Ladder Table'), ('Ensure Ladder Table', 'Ens
                  ('Load Pages (Tracker)', 'Ensure Sites Table (Tracker)'), ('Ensure Sites Table (Tracker)', 'Load Sites (Tracker)'),
                  ('Load Sites (Tracker)', 'Ensure Query Table (Tracker)'), ('Ensure Query Table (Tracker)', 'Load Query History (Tracker)'),   # B6-14
                  ('Load Query History (Tracker)', 'Ensure Monitors Table (Tracker)'), ('Ensure Monitors Table (Tracker)', 'Load Monitors (Tracker)'),
-                 ('Load Monitors (Tracker)', 'Load AI Brands (Tracker)'), ('Load AI Brands (Tracker)', 'Ensure Ladder Settings Table (Tracker)'), ('Ensure Ladder Settings Table (Tracker)', 'Load Ladder Settings (Tracker)'), ('Load Ladder Settings (Tracker)', 'Tracker Plan'), ('Tracker Plan', 'Any Checks?'),
+                 ('Load Monitors (Tracker)', 'Load AI Brands (Tracker)'), ('Load AI Brands (Tracker)', 'Ensure Ladder Settings Table (Tracker)'), ('Ensure Ladder Settings Table (Tracker)', 'Load Page Watch (Tracker)'), ('Load Page Watch (Tracker)', 'Load Ladder Settings (Tracker)'), ('Load Ladder Settings (Tracker)', 'Tracker Plan'), ('Tracker Plan', 'Any Checks?'),
                  ('Tracker Report', 'Tracker Ladder Marks'), ('Tracker Ladder Marks', 'Any Tracker Marks?'), ('SERP Check', 'Parse Positions'), ('Parse Positions', 'Save History'), ('Save History', 'Tracker Report'), ('Tracker Report', 'Has Report?')]:
     link(C, a, b)
 link(C, 'Any Checks?', 'SERP Check', 0); link(C, 'Any Checks?', 'Nothing To Track', 1)
@@ -188,7 +193,8 @@ for _n in ('Parse Positions', 'Tracker Report'):
     assert 'const RS = (() => {' in _tracker_nodes[_n], _n + ': the results-page kit (_rank_serp.js) is not inlined'
     assert 'const aioObserved' in _tracker_nodes[_n], _n + ': the observation rules (_serp_obs.js) are not inlined'
 assert 'const SM = (() => {' in _tracker_nodes['Tracker Plan'], 'Tracker Plan: the site model kit is not inlined (needed for the competitor list)'
-assert not any(m in src for src in _tracker_nodes.values() for m in ('/*__RANK_SERP__*/', '/*__SERP_OBS__*/', '/*__SITE_MODEL__*/', '/*__ANCHOR__*/', '/*__REPLAN__*/', '/*__FIT_GATE__*/')), 'kit placeholder left in the Rank Tracker'
+assert _tracker_nodes['Tracker Report'].count('const MV = (() => {') == 1 and 'MV.samePage(ru' in _tracker_nodes['Tracker Report'], 'section 194: the Rank Tracker report does not treat a page and its permanent move as one page'
+assert not any(m in src for src in _tracker_nodes.values() for m in ('/*__MOVES__*/', '/*__RANK_SERP__*/', '/*__SERP_OBS__*/', '/*__SITE_MODEL__*/', '/*__ANCHOR__*/', '/*__REPLAN__*/', '/*__FIT_GATE__*/')), 'kit placeholder left in the Rank Tracker'
 # G32 (2026-10-13, FIX_PLAN): the stuck ladder's re-plan proposal, and the proof that it only proposes
 assert 'const RP = (() => {' in _tracker_nodes['Tracker Report'], 'Tracker Report: the re-plan kit (_replan.js) is not inlined'
 assert 'RP.propose(' in _tracker_nodes['Tracker Report'] and 'RP.block(replan)' in _tracker_nodes['Tracker Report'], 'Tracker Report: the re-plan proposal is not built or not shown'
