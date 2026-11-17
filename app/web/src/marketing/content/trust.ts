@@ -123,7 +123,7 @@ export interface RetentionRow {
 
 /** How long each kind of data is kept (app/server, app/shared and deploy/gcp; see the comments). Written as it is after the
  *  2026-11-17 release, which also deletes a website's history in the automation engine with the website and adds "Delete my
- *  account" (package B of that release: the two rows marked below must match what it ships). */
+ *  account" (package B of that release; the rows marked CR17-B below are what it ships). */
 export const retention: RetentionRow[] = [
   // app/server/src/auth/session.ts SESSION_DAYS 30, refreshed while in use; only a hash is stored
   { data: 'Sign-in sessions', kept: 'Up to 30 days, renewed while you use the app. Only a hash of each session is stored.' },
@@ -145,14 +145,19 @@ export const retention: RetentionRow[] = [
   { data: 'Backups', kept: 'Database backups every night, kept 14 days and then removed within 7 more days. Disk snapshots every day, kept 7 days.' },
   // app/server/src/db/schema.ts: cascade on company delete; reports and runs keep site_id null when only the website is deleted
   { data: 'Websites, runs, reports, files and settings', kept: 'Until you delete the company. Reports and runs of a deleted website stay in the company until then.' },
-  // PACKAGE B (2026-11-17 release): engine history purged on website and company delete. Before it, these tables stayed.
-  { data: 'Rankings, page history, AI answers, links and drafted e-mails of a website', kept: 'Until you delete the website or the company.' },
+  // CR17-B (2026-11-17 release, build section 200): one purge list in n8n/seo-agent/ladder_common.py SITE_PURGE, run by Site Admin's delete
+  // and app/server/src/services/enginePurge.ts on website and company delete
+  { data: 'The history our SEO engine keeps for a website: rankings, Search Console and Analytics data, AI answers, link prospects and the contacts found for them, audits, page checks and keyword research', kept: 'Until you delete the website or the company: it is deleted at the same time.' },
   // app/server/src/lib/secretBox.ts AES-256-GCM; rows cascade with the company
   { data: 'Mailbox passwords and sign-in grants, CMS and tracker tokens, and webhook secrets', kept: 'Encrypted, until you remove the connection or delete the company.' },
-  // app/server/src/services/companyDelete.ts: credit entries and invoices keep org_id null
-  { data: 'Credit history and invoices', kept: 'Kept after a company is deleted, as accounting records.' },
-  // PACKAGE B (2026-11-17 release): DELETE /api/me ("Delete my account" in Account settings)
-  { data: 'Your user account', kept: 'Until you delete it in your account settings, or your company\'s sign-in provider removes it.' },
+  // app/server/src/services/companyDelete.ts: credit entries and invoices keep org_id null; ladder_common.py SITE_KEEP keeps seo_run_ledger
+  { data: 'Credit history, records of what runs cost, and invoices', kept: 'Kept after a website or company is deleted, as accounting records. They show the date, the kind of run and the amount.' },
+  // CR17-B (2026-11-17 release): DELETE /api/me ("Delete my account" on the Account page, app/server/src/services/accountDelete.ts)
+  { data: 'Your user account', kept: 'Until you delete it yourself on your Account page with Delete my account, or your company\'s sign-in provider removes it. A company that only you belong to is deleted with it.' },
+  // CR17-B: users.terms_version / terms_accepted_at (app/shared/src/legal.ts LEGAL_VERSION)
+  { data: 'Your agreement to the Terms and the Privacy Policy', kept: 'The version you agreed to and when, for as long as your account exists.' },
+  // CR17-B: admin_audit user.self_deleted
+  { data: 'A record that an account was deleted', kept: 'Our administrators\' log keeps the e-mail address, the time and the companies deleted with it.' },
 ];
 
 /** /security "Where your data lives": only what deploy/gcp and app/vercel.json show */

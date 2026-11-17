@@ -1,5 +1,6 @@
 // Draft text for /privacy and /terms. PLACEHOLDER: every section is to be reviewed (and largely rewritten) by counsel before
 // launch. The structure is generic; the few facts about how the product works are true today, and nothing here is a legal promise.
+import { LEGAL_VERSION } from '@seo/shared/legal';   // a subpath: the public pages never load the whole shared package
 
 export interface LegalSection {
   id: string;
@@ -24,7 +25,7 @@ export const privacyDoc: LegalDoc = {
   description: 'How Alaventra collects, uses and protects personal data. Draft, to be reviewed by counsel before launch.',
   intro:
     'This policy explains what personal data Alaventra handles when you visit this website or use the Alaventra app, why we handle it and the choices you have. It is a draft: the structure is in place and the details are still to be written and reviewed.',
-  updated: '2026-10-08',
+  updated: LEGAL_VERSION,   // CR17-B: the version sign-up records (app/shared/src/legal.ts): bump it there when counsel's text lands
   sections: [
     {
       id: 'who-we-are',
@@ -130,7 +131,7 @@ export const termsDoc: LegalDoc = {
   description: 'The terms that govern the use of Alaventra. Draft, to be reviewed by counsel before launch.',
   intro:
     'These terms will govern the use of the Alaventra website and app. They are a draft: the structure is in place and the details are still to be written and reviewed.',
-  updated: '2026-10-08',
+  updated: LEGAL_VERSION,   // CR17-B: the version sign-up records (app/shared/src/legal.ts): bump it there when counsel's text lands
   sections: [
     {
       id: 'agreement',

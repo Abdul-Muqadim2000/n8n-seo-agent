@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./guides": "./src/guides.ts",
-    "./guide-links": "./src/guide-links.ts"
+    "./guide-links": "./src/guide-links.ts",
+    "./legal": "./src/legal.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

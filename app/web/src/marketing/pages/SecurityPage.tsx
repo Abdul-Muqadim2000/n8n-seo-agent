@@ -70,7 +70,7 @@ const GROUPS: { icon: LucideIcon; title: string; items: string[] }[] = [
     items: [
       'Each company\'s websites, runs, reports and files are kept apart',
       'Website data appears only after ownership is verified',
-      'Deleting a website or company also removes its plans from the automation engine',
+      'Deleting a website or company also deletes the history our SEO engine kept for it',
       'Server logs you send keep crawler requests only: visits by people are dropped as the file is read, no address is stored, and the file is deleted once read',
     ],
   },
@@ -152,7 +152,7 @@ const FAQS: FaqItem[] = [
   },
   {
     q: 'How do we remove a person or a website?',
-    a: 'Admins remove people and revoke open invitations from the team settings, and remove websites from the website settings. Deleting a website also removes its plans from the automation engine.',
+    a: 'Admins remove people and revoke open invitations from the team settings, and remove websites from the website settings. Deleting a website also deletes the history our SEO engine kept for it, and any person can delete their own account from the Account page.',
   },
   {
     q: 'Do you support single sign-on and SCIM?',

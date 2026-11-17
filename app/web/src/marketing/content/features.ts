@@ -265,6 +265,7 @@ export const features: Feature[] = [
       'A profile of each competitor you follow: its size, the pages that bring it the most visits and the searches it ranks for, with a CSV',
       'Gaps against the competitors you follow: the searches they rank for and you do not, each with the step that would close it (gaps in kinds of pages, lists, AI answers and links come later)',
       'Who AI answers name for your buyers\' questions, next to your own share',
+      'One competitor list used everywhere, and a Not a competitor button on AI visibility and Rankings for any site that is not one',
     ],
     steps: [
       { title: 'Read the results', body: 'We read Google\'s results for each of your services in your market and note every website that shows up.' },
@@ -425,6 +426,7 @@ export const features: Feature[] = [
       'One click to approve, then send it to your website or publish it yourself and we check it live',
       'A final version is checked with the same research as the first draft, and stays not ready while a problem from the first check is open, such as a page your website already has for the same search',
       'Your final version comes with its own downloads: the page as a Word file and a PDF, as HTML and Markdown with its meta.json, and the images',
+      'New pages are suggested in the folder where your website keeps that kind of page, such as /services/ or /insights/',
     ],
     steps: [
       { title: 'Decide', body: 'Before anything is written we check the keyword. If our verdict scores it under 40 out of 100, or under 50 when few people search for it, or your website already has a page for the same search, the page waits for your OK: write it anyway, use the search we recommend, or improve the page you have.' },
@@ -520,6 +522,7 @@ export const features: Feature[] = [
       'A fix pack: robots.txt, llms.txt, redirects, schema and an internal-links CSV',
       'Monthly scheduled audits with what changed since the last audit',
       'Skipped automatically when nothing on the site has changed',
+      'A Technical health score for what our crawl can verify on your site, kept apart from Pages in Google, so a page Google has not indexed yet never hides inside the audit score',
     ],
     steps: [
       { title: 'Crawl', body: 'Up to 1,000 pages, rendered with JavaScript where the content needs it.' },
@@ -613,6 +616,8 @@ export const features: Feature[] = [
       'New pages and existing pages on their own tabs, each page with its last check and its history, and how long the rest of your site will take to check',
       'A page we could not check is shown as not checked, never as fine and never as left out',
       'Free to run: it reads your connected Search Console and uses no credits',
+      'Pages in Google: how many of the pages that should be in Google are in it, the same number on the Overview, Technical health and Indexing pages',
+      'Validation like Search Console: why Google left each page out, what to do now, waiting for Google, passed or failed, and a list of what got resolved',
     ],
     steps: [
       { title: 'Connect Search Console', body: 'Index coverage reads the Search Console you already connected. Nothing to install, and it uses no credits.' },
@@ -678,6 +683,8 @@ export const features: Feature[] = [
       'Your own dated notes as marks on the charts',
       'Dashboards per website for search, traffic, rankings and content',
       'Every connection has a guide: Search Console, Analytics and the property ID, step by step, with your own values ready to copy',
+      'Alerts close themselves when the problem is fixed, with the reason, and moved pages are followed to their new address',
+      'Tracked keywords counted the same way everywhere: your keyword ladders\' searches plus your own list, each once',
     ],
     steps: [
       { title: 'Connect', body: 'Add Alaventra\'s service account to Search Console and choose your GA4 property.' },
@@ -768,6 +775,8 @@ export const features: Feature[] = [
       'Optional checks, each priced in credits before you switch it on: Claude every week, more assistants in the daily check, and whether you rank on Google for the searches assistants run before they answer',
       'A one-off repeat test measures how much each assistant\'s answer changes when the same question is asked again, and how many asks a week each question needs. It is priced first and runs only when you confirm',
       'A check you start yourself is quoted for your whole question panel with the options you switched on, and that quote is what your credits are checked against',
+      'AI visibility separates the businesses AI recommends instead of you from the software and platforms it mentions',
+      'One decision per AI question, updated the moment a page that answers it goes live',
     ],
     steps: [
       { title: 'Build the panel', body: 'Up to 500 questions your buyers ask, by topic, buyer role, market and stage.' },
@@ -1018,6 +1027,9 @@ export const features: Feature[] = [
       'What kind of page earns links in your market (a data study, a free tool, a template or a guide), with the competitor pages that prove it',
       'A checklist of the directories and marketplaces worth being on, what we found on each and a ready description to paste. You submit, we check',
       'What each won link did: the page compared with your other pages over the same weeks ("likely helped", never "caused"), and the whole week as one PDF',
+      'A link counts as won only when you wrote to the site and our own check finds your link on their page',
+      'No mailbox needed: copy a pitch or open it in your own e-mail, press I sent it myself, and we remind you of the follow-ups',
+      'Sites left out once stay left out for every kind of pitch; government portals, job boards and platforms are never pitched, and every count on every page comes from one place',
     ],
     steps: [
       { title: 'Find', body: 'Every week, new openings from journalists, resource and list pages, broken links, podcasts and directories, each fetched and checked on its own page.' },
@@ -1096,6 +1108,7 @@ export const features: Feature[] = [
       'Every run kept with its report and files',
       'Your data through a read-only API: websites, audits and findings, runs and reports, each report marked finished or held back with the reason',
       'Connect an AI assistant that speaks MCP and ask it about your own SEO data, with the same read-only key',
+      'Recommendations you can finish: each says why it matters, how to do it and how we check it, and moves to Resolved with the date and what we saw, or to Waiting for Google',
     ],
     steps: [
       { title: 'Collect', body: 'Search, traffic, AI answers, links and audits feed one picture of each website.' },
@@ -1169,7 +1182,7 @@ export const features: Feature[] = [
       { title: 'Alaventra checks the result', body: 'The button at the end runs the check (verified, connected, file found), so nobody is left guessing whether it worked.' },
     ],
     facts: [
-      { value: 98, label: 'guides, one for each thing we ask of you' },
+      { value: 103, label: 'guides, one for each thing we ask of you' },
       { value: 'Your values', label: 'in every copy box, not an example' },
       { value: 'One e-mail', label: 'hands a guide to the person who can do it' },
     ],
@@ -1329,6 +1342,7 @@ export const features: Feature[] = [
       'Data isolation per company',
       'API keys per company: shown once, with an expiry, revocable at any time, read-only unless you allow a key to start analyses, and never able to reach another company\'s data',
       'No repeated work: results are reused where nothing changed',
+      'You control your data: delete a website, a company or your whole account yourself, and the history we kept for it goes with it',
     ],
     steps: [
       { title: 'Create a workspace', body: 'One company per brand or client, each with its own websites and data.' },
