@@ -14722,3 +14722,66 @@ def _cr17b_purge():
     print('CR17-B (section 200): a deleted website takes %d engine tables of history with it (%d kept with a reason), %d purge nodes in Site Admin behind the vouched-domain gate; app list %s' % (
         counts['purged'], counts['kept'], len(chain), 'written' if old != src else 'current'))
 _cr17b_purge()
+# 194. PAGE WATCH SEVERITY FOLLOWS WHAT GOOGLE DOES, ONE ALERT PER CONDITION, AND OUR ROWS FOLLOW A PAGE THAT MOVED
+#      (client report 2026-11-17, devaicon.com F5 / F10; package CR17-D). robots.txt is a state (ok / missing / unreachable / a web page)
+#      compared as parsed rules (v5/code/_page_watch.js robotsRead / robotsChange); a redirect is judged by where it lands (Watch Hop Plan +
+#      Fetch Watch Hop, PW.redirectVerdict): a permanent move to a working page of the site is Info and, seen on two reads, a confirmed move
+#      (seo_page_watch.moved_to; the watch reads the new address next, and the ladder / content log / AI question / AI readiness rows follow
+#      it: v5/code/_moves.js MV.plan, Watch Moves); one open alert per condition with last_seen_at / count, resolved with the reason when the
+#      condition is gone (PW.lifecycle), "Mark as seen" kept (ack_by / ack_at); the Rank Tracker treats an address and its permanent move as one
+#      page; the publish check names the live address when the reported one differs only in capital letters. Checked on the GENERATED files.
+# =============================================================================
+def _cr17d_checks():
+    import json as _j194
+    def _wf(f):
+        d = _j194.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))
+        w = d[0] if isinstance(d, list) else d
+        return {n['name']: n for n in w['nodes']}, w.get('connections') or {}
+    js = lambda nd, n: ((nd.get(n) or {}).get('parameters') or {}).get('jsCode') or ''
+    nxt = lambda cn, a, i=0: [t['node'] for t in (((cn.get(a) or {}).get('main') or [[]] * (i + 1))[i] or [])]
+    pw, pwc = _wf('SEO_Agent_Page_Watch.json')
+    for n in ('Watch Hop Plan', 'Any Watch Hops?', 'Fetch Watch Hop', 'Load Console Alerts (Watch)', 'Load Index Pages (Watch)', 'Load Content Log (Watch)', 'Load AI Targets (Watch)',
+              'Load AI Pages (Watch)', 'Watch Moves', 'Save Ladder Moves', 'Save Content Log Moves', 'Save AI Target Moves', 'Save AI Page Moves', 'Delete Old AI Page Moves'):
+        assert n in pw, 'section 194: Page Watch lacks ' + n
+    hop = pw['Fetch Watch Hop']['parameters']['options']['redirect']['redirect']
+    assert hop == {'followRedirects': True, 'maxRedirects': 5}, 'section 194: the hop must follow redirects as Google does (5 hops)'
+    assert pw['Fetch Watch Page']['parameters']['options']['redirect']['redirect'] == {'followRedirects': False}, 'section 194: the key-page fetch must NOT follow redirects'
+    assert nxt(pwc, 'Watch Read') == ['Watch Hop Plan'] and nxt(pwc, 'Any Watch Hops?', 0) == ['Fetch Watch Hop'] and nxt(pwc, 'Any Watch Hops?', 1) == ['Watch Compare'] and nxt(pwc, 'Fetch Watch Hop') == ['Watch Compare'], 'section 194: the hop is not between Watch Read and Watch Compare'
+    assert nxt(pwc, 'Save Watch Cache') == ['Watch Moves'] and 'Watch Recheck Rows' in nxt(pwc, 'Save Old AI Page Moves') + nxt(pwc, 'Delete Old AI Page Moves') + nxt(pwc, 'Any Moves (Old AI Page)?', 1), 'section 194: the moves chain does not end in Watch Recheck Rows'
+    assert "$('Watch Read')" in js(pw, 'Watch Compare') and "$('Fetch Watch Hop')" in js(pw, 'Watch Compare') and 'MV.confirm(' in js(pw, 'Watch Compare') and 'PW.redirectVerdict(' in js(pw, 'Watch Compare'), 'section 194: Watch Compare does not judge redirects or confirm moves'
+    assert 'PW.lifecycle(' in js(pw, 'Watch Alerts') and 'ack_by' in js(pw, 'Watch Alerts'), 'section 194: Watch Alerts does not run the alert lifecycle'
+    assert 'MV.plan(' in js(pw, 'Watch Moves') and 'open_alerts' in js(pw, 'Watch Plan') and 'MV.finalOf(' in js(pw, 'Watch Plan'), 'section 194: the moves are not planned, or the watch keeps reading a moved address'
+    for n in ('Watch Plan', 'Watch Compare', 'Watch Moves'):
+        assert js(pw, n).count('const MV = (() => {') == 1, 'section 194: MV not inlined once in ' + n
+    upd = pw['Save Ladder Moves']['parameters']
+    assert [c['keyName'] for c in upd['filters']['conditions']] == ['ladder_id', 'keyword', 'target_url'] and list(upd['columns']['value']) == ['target_url'], 'section 194: a ladder move must match the old address and write only target_url'
+    assert list(pw['Save Content Log Moves']['parameters']['columns']['value']) == ['published_url'], 'section 194: a content-log move writes only published_url (publish_note stays)'
+    from ladder_common import PAGE_WATCH_COLS as _pwc194, ALERTS_COLS as _alc194
+    assert ('moved_to', 'string') in _pwc194, 'section 194: seo_page_watch.moved_to missing'
+    assert [c for c, _ in _alc194][-7:] == ['condition_key', 'last_seen_at', 'count', 'resolved_at', 'resolution', 'ack_by', 'ack_at'], 'section 194: seo_console_alerts lifecycle columns missing'
+    rt, _ = _wf('SEO_Agent_Rank_Tracker.json')
+    assert 'MV.samePage(ru' in js(rt, 'Tracker Report') and 'Load Page Watch (Tracker)' in rt, 'section 194: the Rank Tracker report reads no moves'
+    main, _ = _wf('SEO_Agent_v4.json')
+    assert 'const caseHint = ' in js(main, 'Publish Check') and 'treats capital letters as different' in js(main, 'Publish Check'), 'section 194: the publish check does not name the live address of a case-variant 404'
+    # harness shims: the moves kit and the new page-watch rules, one item in, one answer out
+    open(os.path.join(OUT_CODE, '_moves.js'), 'w').write(
+        "// harness shim (written by build_v4.py section 194): the moves kit - { fn: 'confirm' | 'plan' | 'abs', args } or { fn: 'samePage' | 'finalOf', a, b, watch } -> { r }\n"
+        + rd('code/_moves.js').rstrip('\n') +
+        "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+        "  const moves = MV.fromWatch(j.watch || []);\n"
+        "  const r = j.fn === 'samePage' ? MV.samePage(j.a, j.b, moves) : j.fn === 'finalOf' ? MV.finalOf(j.a, moves) : MV[j.fn](...(j.args || []));\n"
+        "  return { json: { r } }; });\n")
+    open(os.path.join(OUT_CODE, '_pw194.js'), 'w').write(
+        "// harness shim (written by build_v4.py section 194): the page-watch rules of section 194 - { robots_res?, prev?, newly_blocked?, redirect?, lifecycle?, compare? }\n"
+        + rd('code/_page_watch.js').rstrip('\n') +
+        "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+        "  const rb = j.robots_res === undefined ? null : PW.robotsRead(j.robots_res);\n"
+        "  const plain = rb ? (({ blocks, ...x }) => x)(rb) : null;\n"
+        "  return { json: { robots: plain ? { ...plain, blocked: (j.block_urls || []).map(u => rb.blocks(u)) } : null,\n"
+        "    robots_change: j.prev === undefined ? null : PW.robotsChange(j.prev, rb, { newly_blocked: j.newly_blocked || [] }),\n"
+        "    verdict: j.redirect === undefined ? null : PW.redirectVerdict(j.redirect),\n"
+        "    changes: j.compare === undefined ? null : PW.compare(j.compare.prev, j.compare.now, j.compare.opts || {}),\n"
+        "    lifecycle: j.lifecycle === undefined ? null : PW.lifecycle(j.lifecycle),\n"
+        "    condition: j.condition_of === undefined ? null : PW.conditionOf(j.condition_of) } }; });\n")
+    print('CR17-D (section 194): Page Watch judges robots.txt as a state and a redirect by where it lands, keeps one alert per condition and resolves it, follows confirmed moves into 4 tables; the Rank Tracker and the publish check know a moved / case-variant address')
+_cr17d_checks()

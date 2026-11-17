@@ -7,6 +7,7 @@
 /*__REPLAN__*/
 /*__LADDER_RULES__*/
 /*__FIT_GATE__*/
+/*__MOVES__*/
 // Rank tracker report: per ladder, positions vs the previous check, rungs reached, drops and the recommended next step.
 // G32 (2026-10-13, FIX_PLAN): a ladder that has not moved for the configured number of weeks (`seo_monitors.stuck_weeks`, empty = 8)
 // no longer only says "stuck": RP (v5/code/_replan.js) turns the same facts into a re-plan PROPOSAL — a different rung order, an easier
@@ -20,6 +21,10 @@ const plan = $('Tracker Plan').all().map(i => i.json).filter(p => p && !p.nothin
 const pos = $('Parse Positions').all().map(i => i.json);
 let history = []; try { history = $('Load History').all().map(i => i.json).filter(r => r && r.ladder_id); } catch (e) {}
 // v4.8 display-only flags for the app (nothing in the e-mail changes): won / stuck per ladder; published dates from the content log, page facts from the ladder rows
+// build section 194 (client report 2026-11-17, F10): an address and the address it moved to permanently are ONE page (MV.samePage), so a moved
+// page Google ranks at its new address (or still at its old one) is never "a different page of yours" for its own search
+let watchRowsT = []; try { watchRowsT = $('Load Page Watch (Tracker)').all().map(i => i.json).filter(r => r && r.url && !r.error); } catch (e) {}
+const movesT = MV.fromWatch(watchRowsT);
 let logRows = []; try { logRows = $('Load Content Log (Tracker)').all().map(i => i.json).filter(r => r && r.keyword && !r.error); } catch (e) {}
 const pubLog = logRows.filter(r => r.published_url);
 // R1 (2026-10-13, re-rating): a ladder row saying `writing` is a promise, not a page. Live, 90 seconds after the budget guard refused the page
@@ -197,7 +202,7 @@ for (const [id, items] of byLadder) {
   const invKnown = invModel ? SM.pages(invModel).map(p => ({ url: p.url, title: p.title })) : [];
   const coveredBy = (r) => { if (!invModel) return null; let m = SM.matchPage(invModel, r.keyword); if (!m) return null;
     const orig = LRU.copyOf(m.url, invKnown); if (orig) { const o = SM.pages(invModel).find(p => ukeyT(p.url) === ukeyT(orig) && !SM.isGone(p) && !SM.isMoved(p)); m = o ? { ...m, url: o.url, title: o.title, copy_of: m.url } : null; }
-    return (m && ukeyT(m.url) !== ukeyT(r.target_url)) ? m : null; };
+    return (m && ukeyT(m.url) !== ukeyT(r.target_url) && !MV.samePage(m.url, r.target_url, movesT)) ? m : null; };
   const liveOf = (r) => { const lr = rowOf(r.keyword); return r.status === 'published' || !!logOf(r.keyword) || lr.page_exists === true || lr.page_exists === 'true' || r.current > 0 || !!coveredBy(r); };
   const writtenOf = (kw) => writtenLog.some(l => normK(l.keyword) === normK(kw) && (!l.domain || normD(l.domain) === normD(head.domain)));   // R1
   const notReadyOf = (kw) => (writtenOf(kw) ? null : notReadyLog.filter(l => normK(l.keyword) === normK(kw) && (!l.domain || normD(l.domain) === normD(head.domain))).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0]) || null;   // R111
@@ -237,7 +242,7 @@ for (const [id, items] of byLadder) {
   } else { const cTop = topRow ? coveredBy(topRow) : null;   // D11: the page that answers the main keyword may be one the site already had
     next = { action: 'improve_top', rung: 4, main_page: 'live',
       text: (allIn ? 'Every rung is in the top 10 and the main page is live' : 'The main page is live') + ': improve the main page "' + head.keyword + '"' + (cTop ? ' — it is ' + cTop.url + ', the page the site already has for this search' : '') + (() => { const ru = String((topRow && topRow.url) || ''), rp = topRow ? Number(topRow.current) : 0;   // C-13: the page Google ranks, when it is another one
-        return ru && rp > 0 && ukeyT(ru) !== ukeyT(cTop ? cTop.url : (topRow.target_url || '')) ? '. Google ranks a different page of yours for this search: ' + ru + ' (#' + rp + '). Decide which of the two answers it, improve that one and link the other to it (one search, one page)' : ''; })() + ' (depth, internal links from the rung pages, links from other sites) and keep it fresh.',
+        return ru && rp > 0 && ukeyT(ru) !== ukeyT(cTop ? cTop.url : (topRow.target_url || '')) && !MV.samePage(ru, cTop ? cTop.url : (topRow.target_url || ''), movesT) ? '. Google ranks a different page of yours for this search: ' + ru + ' (#' + rp + '). Decide which of the two answers it, improve that one and link the other to it (one search, one page)' : ''; })() + ' (depth, internal links from the rung pages, links from other sites) and keep it fresh.',
       pages: topRow ? [cTop ? { ...pageOf(topRow), status: 'improve', target_url: cTop.url, covered_by: cTop.url } : pageOf(topRow)] : [] }; }
   // won: the main keyword in the top 3 in each of the last 4 checks, this one included (failed checks skipped)
   const histOf = (kw) => deskHist.filter(x => x.ladder_id === id && x.keyword === kw && String(x.checked_at) < nowCheck && validPos(x.position)).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));

@@ -7,6 +7,7 @@ import { HttpError, notFound } from '../lib/errors';
 import { aiAnswersPage, aiCsvStream, aiImportsOverview, aiQuestionHistory } from '../services/aiWave2';
 import { aiData, aiRankShadowData, alertsData, backlinksData, contentData, rankingsData, searchData, settingsData, technicalData } from '../services/data';
 import { requestRecheck } from '../services/pageWatch';
+import { markAlertSeen } from '../services/alerts';
 import { ladderDetailData, pipelineData } from '../services/pipeline';
 import { loadBundle, overviewData, recommend } from '../services/recommendations';
 
@@ -120,6 +121,12 @@ export async function dataRoutes(app: FastifyInstance) {
   app.get('/api/orgs/:orgId/sites/:siteId/data/alerts', async (req) => {
     const a = await guard(req);
     return alertsData(a.site);
+  });
+  // CR17-D (client report 2026-11-17, F5): "Mark as seen" on one alert ({ id }). Members and above; written to the audit log. Only ack_by /
+  // ack_at are written on that alert's row; the engine's daily watch keeps the mark and resolves the alert when its condition is gone.
+  app.post('/api/orgs/:orgId/sites/:siteId/data/alerts/seen', { config: { rateLimit: { max: 60, timeWindow: '10 minutes' } } }, async (req) => {
+    const a = await guard(req, 'member');
+    return markAlertSeen(a, req, req.body);
   });
   app.get('/api/orgs/:orgId/sites/:siteId/data/settings', async (req) => {
     const a = await guard(req);

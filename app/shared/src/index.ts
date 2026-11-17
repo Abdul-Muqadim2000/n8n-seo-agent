@@ -72,6 +72,7 @@ export * from './hold';   // W0-D (2026-10-29): a page held for the client's OK 
 export * from './run-watch';   // 2026-11-05: when a run with no result is overdue (the watcher and the run page share it)
 export * from './ki-api';   // KI A1 (2026-11-08): the KI routes' response shapes and readers (fixes/A1_ROUTES.md)
 export * from './ki';   // KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md): keyword intelligence rows, callbacks, words, the per-site switch
+export * from './alerts';   // CR17-D (2026-11-17, build section 194): alert states (open / seen / resolved), the open count, check-in numbers that were not recorded
 export * from './draft-fix';   // 2026-10-21: a not-ready draft is finished by hand (the engine's qa_next_step / qa_owner_edits), never re-run
 export * from './legal';   // CR17-B (2026-11-17): the Terms / Privacy version agreed at sign-up, their links, what deleting one's account does
 export * from './engine-purge';   // CR17-B (2026-11-17): the engine tables a deleted website's history is purged from (one list, ladder_common.SITE_PURGE)

@@ -74,58 +74,197 @@ const PW = (() => {
     };
   };
 
-  // ---- robots.txt: the fingerprint (seo_cache) plus the rules that decide whether a key page is crawlable ----
+  // ---- robots.txt: a state machine that follows what Google does (client report 2026-11-17, devaicon.com F5; build section 194) ----
+  // Google's robots.txt rules (developers.google.com/search/docs/crawling-indexing/robots/robots_txt): 2xx is read as served; 3xx is followed
+  // up to five hops and an unresolved chain counts as a 404; 4xx (except 429) means "no robots.txt": Google crawls everything; 5xx and 429
+  // mean Google stops crawling for 12 hours, then uses its last copy for up to 30 days; an HTML page served as robots.txt is parsed for rules
+  // and the rest ignored. The watch used to hash whatever came back: devaicon's 404 page (20 KB of Next.js HTML) became "2,085 characters of
+  // rules" and a High alert, and every new deploy id in that page raised it again. Now: a state (ok / missing / unreachable / html), the
+  // PARSED rules (groups, allow / disallow lines, sitemap lines) compared as rules, and a severity that says what Google will do.
+  const ROBOTS_V = 2;   // the fingerprint below is of the parsed rules; a stored fingerprint of another version is a baseline, never a change
+  const robotsParse = (text) => {
+    const groups = []; const sitemaps = []; let cur = null; let lastUA = false;
+    for (const raw of S(text).replace(/\r/g, '').split('\n')) {
+      const line = raw.replace(/#.*$/, '').trim(); if (!line) continue;
+      const m = line.match(/^([A-Za-z-]+)\s*:\s*(.*)$/); if (!m) { lastUA = false; continue; }
+      const field = m[1].toLowerCase(), value = S(m[2]);
+      if (field === 'user-agent') { if (!cur || !lastUA) { cur = { agents: [], lines: [] }; groups.push(cur); } cur.agents.push(value.toLowerCase()); lastUA = true; continue; }
+      lastUA = false;
+      if (field === 'sitemap') { if (value) sitemaps.push(value); continue; }
+      if (field !== 'disallow' && field !== 'allow') continue;
+      if (!cur) { cur = { agents: ['*'], lines: [] }; groups.push(cur); }
+      cur.lines.push({ allow: field === 'allow', path: value });
+    }
+    // which groups apply to Googlebot: its own group wins over `*`, and groups naming the same agent are merged (as Google's parser does)
+    const forGoogle = groups.filter(g => g.agents.includes('googlebot'));
+    const applies = (forGoogle.length ? forGoogle : groups.filter(g => g.agents.includes('*'))).flatMap(g => g.lines);
+    const text2 = groups.map(g => 'user-agent: ' + g.agents.join(', ') + (g.lines.length ? '\n' + g.lines.map(l => (l.allow ? 'allow: ' : 'disallow: ') + l.path).join('\n') : '')).join('\n')
+      + (sitemaps.length ? (groups.length ? '\n' : '') + sitemaps.map(x => 'sitemap: ' + x).join('\n') : '');
+    // one line per rule, with the agents it is for: what a diff compares (a reordered file or a comment changes nothing)
+    const facts = [...new Set(groups.flatMap(g => g.lines.map(l => (l.allow ? 'Allow: ' : 'Disallow: ') + (l.path || '(empty)') + ' for ' + g.agents.map(a => a === '*' ? 'every crawler' : a === 'googlebot' ? 'Googlebot' : a).join(', ')))
+      .concat(sitemaps.map(x => 'Sitemap: ' + x)))];
+    return { groups, sitemaps, applies, text: text2, facts, google_group: forGoogle.length ? 'googlebot' : '*' };
+  };
+  const isHtml = (ctype, text) => /text\/html|application\/xhtml/i.test(S(ctype)) || /^\s*(?:<!doctype html|<html[\s>]|<head[\s>])/i.test(S(text).slice(0, 400));
   const robotsRead = (res) => {
     const r = res || {}; const status = n0(r.statusCode ?? r.status); const text = S(r.body ?? r.data);
-    if (!status) return { ok: false, status: 0, error: S((r.error && (r.error.message || r.error.description)) || r.error || 'no answer').slice(0, 200), hash: '', rules: [] };
-    const clean = text.replace(/\r/g, '').split('\n').map(l => l.replace(/#.*$/, '').trim()).filter(Boolean).join('\n');
-    const rules = []; let groups = [];
-    for (const line of clean.split('\n')) {
-      const m = line.match(/^([A-Za-z-]+)\s*:\s*(.*)$/); if (!m) continue;
-      const field = m[1].toLowerCase(), value = S(m[2]);
-      if (field === 'user-agent') { if (rules.length && rules[rules.length - 1].touched) { groups = []; } groups.push(value.toLowerCase()); rules.push({ agents: groups.slice(), touched: false }); continue; }
-      if (field !== 'disallow' && field !== 'allow') continue;
-      if (!rules.length) { groups = ['*']; rules.push({ agents: ['*'], touched: false }); }
-      const g = rules[rules.length - 1]; g.touched = true; g.agents = groups.slice();
-      (g.lines = g.lines || []).push({ allow: field === 'allow', path: value });
+    const headers = r.headers || {};
+    const ctype = S((Object.keys(headers).find(k => k.toLowerCase() === 'content-type') && headers[Object.keys(headers).find(k => k.toLowerCase() === 'content-type')]) || '');
+    const errText = S((r.error && (r.error.message || r.error.description)) || r.error || '');
+    const none = { groups: [], sitemaps: [], applies: [], text: '', facts: [] };
+    const out = (state, p, extra) => ({ ok: true, state, status, hash: state === 'ok' || state === 'html' ? hash(p.text) : '', v: ROBOTS_V, length: p.text.length,
+      rules: p.applies, groups: p.groups.slice(0, 30), sitemaps: p.sitemaps.slice(0, 20), text: p.text.slice(0, 1500), facts: p.facts.slice(0, 60), content_type: ctype.slice(0, 80),
+      blocks: (url) => {
+        if ((state !== 'ok' && state !== 'html') || !p.applies.length) return null;   // no file, or nothing that applies: nothing is blocked by it
+        const path = pathOf(url);
+        let best = null;
+        for (const l of p.applies) {
+          if (!l.path) continue;                                              // `Disallow:` with no path allows everything
+          const pat = l.path.replace(/\*+/g, '*');
+          const rx = new RegExp('^' + pat.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\\\$$/, '$'));
+          if (!rx.test(path)) continue;
+          if (!best || l.path.length > best.path.length || (l.path.length === best.path.length && l.allow)) best = l;   // longest rule wins, Allow wins a tie
+        }
+        return best ? !best.allow : false;
+      }, error: '', ...(extra || {}) });
+    if (!status) {
+      // a chain longer than Google's five hops is treated as a 404 by Google: "missing", not "could not be read"
+      if (/redirect/i.test(errText)) return out('missing', none, { reason: 'redirect_chain', status: 0 });
+      return { ok: false, state: 'not_read', status: 0, error: (errText || 'no answer').slice(0, 200), hash: '', rules: [], groups: [], sitemaps: [], text: '', facts: [], v: ROBOTS_V };
     }
-    // which groups apply to Googlebot (its own group wins over `*`, as Google's parser does)
-    const forGoogle = rules.filter(g => g.agents.some(a => a === 'googlebot'));
-    const applies = (forGoogle.length ? forGoogle : rules.filter(g => g.agents.includes('*'))).flatMap(g => g.lines || []);
-    const blocks = (url) => {
-      if (status === 404 || status >= 500 || !applies.length) return null;   // no file, or nothing that applies: nothing is blocked by it
-      const p = pathOf(url);
-      let best = null;
-      for (const l of applies) {
-        if (!l.path) continue;                                              // `Disallow:` with no path allows everything
-        const pat = l.path.replace(/\*+/g, '*');
-        const rx = new RegExp('^' + pat.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\\\$$/, '$'));
-        if (!rx.test(p)) continue;
-        if (!best || l.path.length > best.path.length) best = l;
-      }
-      return best ? !best.allow : false;
-    };
-    return { ok: true, status, hash: hash(clean), length: clean.length, rules: applies, blocks, error: '' };
+    if (status >= 300 && status < 400) return { ...out('unresolved', none), ok: false, location: S((Object.keys(headers).find(k => k.toLowerCase() === 'location') && headers[Object.keys(headers).find(k => k.toLowerCase() === 'location')]) || ''), error: 'robots.txt redirects (' + status + ')' };
+    if (status === 429 || status >= 500) return out('unreachable', none);
+    if (status >= 400) return out('missing', none);
+    if (isHtml(ctype, text)) return out('html', robotsParse(text));
+    return out('ok', robotsParse(text));
+  };
+  const BAD_ROBOTS = ['missing', 'unreachable', 'html'];
+  const prevRobots = (prev) => {
+    if (typeof prev === 'string') return prev ? { v: ROBOTS_V, hash: prev, state: 'ok', text: '', facts: null } : {};
+    const p = prev || {};
+    const st = S(p.state) || (n0(p.status) >= 200 && n0(p.status) < 300 ? 'ok' : n0(p.status) === 429 || n0(p.status) >= 500 ? 'unreachable' : n0(p.status) >= 400 ? 'missing' : '');
+    return { v: n0(p.v), hash: S(p.hash), state: st, text: S(p.text), facts: Array.isArray(p.facts) ? p.facts : null, last_good_hash: S(p.last_good_hash), last_good_at: S(p.last_good_at),
+      last_good_text: S(p.last_good_text), bad_runs: n0(p.bad_runs) };
+  };
+  const disallowsOf = (text) => [...new Set(S(text).split('\n').filter(l => /^disallow: \S/.test(l)).map(l => l.slice(10).trim()))];
+  // the whole site closed to Google, or to every crawler (`*` covers Bing and the AI search fetchers too)
+  const rootBlock = (robots) => (robots.groups || []).some(g => (g.agents || []).some(a => a === '*' || a === 'googlebot') && (g.lines || []).some(l => !l.allow && l.path === '/'))
+    || (robots.rules || []).some(l => !l.allow && l.path === '/');
+  /**
+   * The site's robots.txt as a change of its own. prev: the stored reading (seo_cache `watch:<site>`: v, hash, state, text, facts, last good
+   * copy, bad_runs) or, in the older form, only a fingerprint string; robots: robotsRead() of today; o.newly_blocked: key pages the new rules
+   * block that were crawlable before. -> null (nothing to say) or { code, severity, label, text, from, to, state }
+   */
+  const robotsChange = (prev, robots, o) => {
+    const opts = o || {};
+    if (!robots || robots.ok === false) return null;                       // not read, or a redirect we could not follow: no claim at all
+    const P = prevRobots(prev); const now = S(robots.state) || 'ok';
+    const mk = (code, severity, text) => ({ code, severity, label: CODES[code].label, text, from: P.hash || P.state, to: S(robots.hash) || now, state: now });
+    if (!P.state && !P.hash) return null;                                   // the first reading is a baseline
+    const legacy = P.v !== ROBOTS_V;                                          // a fingerprint of the old kind: the state compares, the rules do not
+    const rulesLine = (txt) => { const d = disallowsOf(txt); return d.length ? ' (' + d.slice(0, 4).map(x => 'Disallow ' + x).join(', ') + (d.length > 4 ? ', and ' + (d.length - 4) + ' more' : '') + ')' : ''; };
+    const prevText = P.text || P.last_good_text;
+    if (now === 'missing') {
+      if (P.state === 'missing') return null;
+      const blockedNothing = !legacy && P.state === 'ok' && !disallowsOf(prevText).length;
+      return mk('robots_missing', blockedNothing ? 'low' : 'medium', 'robots.txt is missing' + (robots.reason === 'redirect_chain' ? ' (it redirects more than five times, which Google treats as missing)' : ' (it answers ' + robots.status + ')')
+        + '. Google then crawls everything: nothing is blocked, but your rules' + rulesLine(prevText) + ' and the Sitemap line no longer apply. Put the file back if this was not on purpose.');
+    }
+    if (now === 'unreachable') {
+      if (P.state === 'unreachable') return P.bad_runs === 1
+        ? mk('robots_unreachable', 'critical', 'robots.txt still answers ' + robots.status + ' (second check in a row). Google has paused crawling your site and uses its last copy of the file; fix the server so robots.txt answers again.')
+        : null;
+      return mk('robots_unreachable', 'high', 'robots.txt answers ' + robots.status + ' (a server error). While this lasts Google stops crawling your site for up to 12 hours, then uses its last copy of the file for up to 30 days. Check the server or the CDN in front of it.');
+    }
+    if (now === 'html') {
+      if (P.state === 'html') return null;
+      return mk('robots_html', 'medium', 'robots.txt answers a web page instead of a rules file. Google tries to read rules from it and ignores the rest, so your rules' + rulesLine(prevText) + ' may no longer apply. Serve the plain text file at /robots.txt.');
+    }
+    // now === 'ok'
+    if (BAD_ROBOTS.includes(P.state)) {
+      const same = P.last_good_hash && P.last_good_hash === S(robots.hash);
+      if (!same && P.last_good_hash && rootBlock(robots)) return mk('robots_changed', 'high', 'robots.txt is back, but it now closes the whole site to crawlers (Disallow: /). Remove that line unless you mean to leave search.');
+      return mk('robots_back', 'info', 'robots.txt is back' + (same ? ' with the same rules as on ' + (S(P.last_good_at).slice(0, 10) || 'the last good check') + '.' : P.last_good_hash ? ' with rules that differ from the last good copy: read it once.' : '.'));
+    }
+    if (legacy || !P.hash || P.hash === S(robots.hash)) return null;
+    // a real change of the rules: say which rules, and how much it matters for Google
+    const was = P.facts ? new Set(P.facts) : null; const isNow = new Set(robots.facts || []);
+    const added = was ? [...isNow].filter(x => !was.has(x)) : []; const removed = was ? [...was].filter(x => !isNow.has(x)) : [];
+    const blocked = (opts.newly_blocked || []).filter(Boolean);
+    const severity = (blocked.length || rootBlock(robots)) ? 'high' : 'medium';
+    const diff = (added.length ? ' Added: ' + added.slice(0, 5).join('; ') + (added.length > 5 ? '; and ' + (added.length - 5) + ' more' : '') + '.' : '')
+      + (removed.length ? ' Removed: ' + removed.slice(0, 5).join('; ') + (removed.length > 5 ? '; and ' + (removed.length - 5) + ' more' : '') + '.' : '');
+    return mk('robots_changed', severity, 'robots.txt changed.' + (diff || ' Its rules are different from the last check.')
+      + (blocked.length ? ' It now stops Google crawling ' + blocked.length + ' of your key pages: ' + blocked.slice(0, 3).map(pathOf).join(', ') + (blocked.length > 3 ? ', and more' : '') + '.' : '')
+      + (rootBlock(robots) && !blocked.length ? ' It closes the whole site to crawlers (Disallow: /), so Google and the AI search tools stop reading it.' : ''));
+  };
+
+  // ---- a page that started redirecting: where does it land? (build section 194) ----
+  // Google: a 301 / 308 tells the indexing pipeline the target should be canonical (the old address's place moves to the new one); a 302 / 307
+  // does not, and keeps the old address in search (developers.google.com/search/docs/crawling-indexing/301-redirects). So a permanent move to
+  // a working page of the same site is good news (Info), a temporary one is Medium, and a redirect to a broken, unindexable or foreign page,
+  // or a deep page sent to the home page (a soft 404 for Google), is High or Critical. `hop` is the target read with the redirect followed.
+  const absUrl = (location, base) => {
+    const l = S(location); if (!l) return '';
+    if (/^https?:\/\//i.test(l)) return l;
+    const origin = (S(base).match(/^(https?:\/\/[^\/?#]+)/i) || [])[1] || ''; if (!origin) return '';
+    if (/^\/\//.test(l)) return (S(base).match(/^(https?:)/i) || ['', 'https:'])[1] + l;
+    if (l.charAt(0) === '/') return origin + l;
+    return origin + (pathOf(base).replace(/[^\/]*$/, '') || '/') + l;
+  };
+  const redirectVerdict = (x) => {
+    const o = x || {}; const status = n0(o.status); const from = S(o.url); const to = absUrl(o.location, from);
+    const hop = o.hop || null; const permanent = status === 301 || status === 308;
+    const where = to ? pathOf(to) : '';
+    const v = (verdict, code, severity, text) => ({ verdict, code, severity, label: CODES[code].label, text, to });
+    if (!to) return v('broken', 'page_redirect_bad', 'high', 'The page now redirects (' + status + ') but does not say where to, so visitors and Google land nowhere.');
+    if (bare(hostOf(to)) !== bare(hostOf(from))) return v('offsite', 'page_redirect_bad', 'high', 'The page now sends visitors to another website (' + to + '). Google drops it from your site\'s results; if this is not on purpose, remove the redirect.');
+    if (pathOf(from).replace(/\/+$/, '') !== '' && where.replace(/\/+$/, '') === '') return v('home', 'page_redirect_bad', 'high', 'The page now sends visitors to your home page. Google treats a page sent to the home page like a page that is gone, so its place in search is lost. Redirect it to the page that replaced it, or keep it.');
+    const hostOnly = ukey(to) === ukey(from);
+    if (!hop || hop.ok === false) {
+      if (hop && /redirect/i.test(S(hop.error))) return v('loop', 'page_redirect_bad', 'high', 'The page now redirects (' + status + ' to ' + where + ') and the redirects never end in a page (more than five hops or a loop).');
+      return v('unread', 'page_redirects', 'medium', 'The page now redirects (' + status + ' to ' + where + '). The new address could not be read today; we check it again with the next watch.');
+    }
+    const hs = n0(hop.status);
+    if (hs >= 400 && hs < 500) return v('gone', 'page_redirect_bad', 'critical', 'The page now redirects to ' + where + ', which is gone (' + hs + '): visitors and Google land on an error page.');
+    if (hs >= 500) return v('error', 'page_redirect_bad', 'high', 'The page now redirects to ' + where + ', which answers a server error (' + hs + ').');
+    if (hs >= 300) return v('loop', 'page_redirect_bad', 'high', 'The page now redirects to ' + where + ', which redirects again too many times.');
+    if (hop.noindex) return v('noindex', 'page_redirect_bad', 'high', 'The page now redirects to ' + where + ', which asks search engines not to index it, so neither address can be found in Google.');
+    const canonOk = !S(hop.canonical) || ukey(hop.canonical) === ukey(to);
+    if (!permanent) return v('temporary', 'page_redirects', 'medium', 'The page now redirects temporarily (' + status + ') to ' + where + '. Google keeps the old address in search while a redirect is temporary; use a permanent (301) redirect if the move is final.');
+    if (!canonOk) return v('canonical_elsewhere', 'page_redirects', 'medium', 'The page moved permanently to ' + where + ', but that page names ' + S(hop.canonical) + ' as its main version, so Google may show neither. Point the redirect at the main version.');
+    if (hostOnly) return v('moved', 'page_moved', 'info', 'The page now opens at ' + to + ', the same page on your main address. Nothing to do.');
+    return v('moved', 'page_moved', 'info', 'The page moved permanently to ' + where + ', which works' + (o.expected ? '. This is the redirect your Steps on your website asked for' : '')
+      + '. Google moves the old address\'s place in search to the new one. We watch the new address from now on.');
   };
 
   // ---- what changed since the stored reading, and how loudly to say it ----
   // `prev` is the stored seo_page_watch row (or null for a page nobody has watched yet), `now` the signals of this run.
+  // Build section 194: the severity is what Google does with the change, not the fact that something changed - a permanent move to a working
+  // page and a canonical that now names the page itself are fixes (Info), a changed title is Low (Info when it is a page we just published).
   const CODES = {
     page_gone: { severity: 'critical', label: 'page gone' },
     page_error: { severity: 'critical', label: 'server error' },
     noindex_added: { severity: 'critical', label: 'noindex added' },
     robots_blocked: { severity: 'critical', label: 'blocked by robots.txt' },
-    page_redirects: { severity: 'high', label: 'page now redirects' },
+    page_redirects: { severity: 'medium', label: 'page now redirects' },
+    page_redirect_bad: { severity: 'high', label: 'redirects to a page that does not work' },
+    page_moved: { severity: 'info', label: 'page moved' },
     canonical_moved: { severity: 'high', label: 'canonical moved' },
-    canonical_removed: { severity: 'high', label: 'canonical removed' },
-    robots_changed: { severity: 'high', label: 'robots.txt changed' },
-    title_changed: { severity: 'medium', label: 'title changed' },
+    canonical_removed: { severity: 'low', label: 'canonical removed' },
+    canonical_fixed: { severity: 'info', label: 'canonical points at the page itself' },
+    robots_changed: { severity: 'medium', label: 'robots.txt changed' },
+    robots_missing: { severity: 'medium', label: 'robots.txt missing' },
+    robots_unreachable: { severity: 'high', label: 'robots.txt unreachable' },
+    robots_html: { severity: 'medium', label: 'robots.txt is a web page' },
+    robots_back: { severity: 'info', label: 'robots.txt is back' },
+    title_changed: { severity: 'low', label: 'title changed' },
     page_back: { severity: 'info', label: 'page answers again' },
     noindex_removed: { severity: 'info', label: 'noindex gone' },
   };
   const compare = (prev, now, o) => {
     const opts = o || {}; const out = [];
-    const add = (code, text, from, to) => out.push({ code, severity: CODES[code].severity, label: CODES[code].label, text, from: S(from), to: S(to) });
+    const add = (code, text, from, to, sev) => out.push({ code, severity: sev || CODES[code].severity, label: CODES[code].label, text, from: S(from), to: S(to) });
     if (!now || now.ok === false) return out;                                 // a failed fetch is "not checked", never a change
     const first = !prev || !S(prev.checked_at);
     const was = prev || {};
@@ -135,33 +274,155 @@ const PW = (() => {
       if (wasStatus >= 200 && wasStatus < 400 && nowStatus >= 500) add('page_error', 'The page answers ' + nowStatus + ' (it answered ' + wasStatus + ' before)', wasStatus, nowStatus);
       else if (wasStatus >= 200 && wasStatus < 400 && nowStatus >= 400) add('page_gone', 'The page is gone: it answers ' + nowStatus + ' (it answered ' + wasStatus + ' before)', wasStatus, nowStatus);
       else if (wasStatus >= 400 && nowStatus >= 200 && nowStatus < 300) add('page_back', 'The page answers ' + nowStatus + ' again (it answered ' + wasStatus + ' before)', wasStatus, nowStatus);
-      if (nowStatus >= 300 && nowStatus < 400 && !(wasStatus >= 300 && wasStatus < 400)) add('page_redirects', 'The page now redirects (' + nowStatus + ' to ' + (S(now.location) || 'an address it does not name') + ')', wasStatus, nowStatus + ' ' + S(now.location));
+      if (nowStatus >= 300 && nowStatus < 400 && !(wasStatus >= 300 && wasStatus < 400)) {
+        const rv = opts.redirect || null;   // the verdict on where it lands (Watch Compare reads the target); without it: Medium, said as such
+        if (rv) add(rv.code, rv.text, wasStatus, nowStatus + ' ' + S(now.location), rv.severity);
+        else add('page_redirects', 'The page now redirects (' + nowStatus + ' to ' + (S(now.location) || 'an address it does not name') + '). Where it lands was not checked in this run.', wasStatus, nowStatus + ' ' + S(now.location));
+      }
       if (now.noindex && !was.noindex) add('noindex_added', 'The page tells search engines not to index it (' + S(now.noindex_source) + ': "' + S(now.robots_meta || 'noindex') + '")', '', S(now.noindex_source));
       if (!now.noindex && was.noindex) add('noindex_removed', 'The page no longer tells search engines to leave it out', S(was.noindex_source), '');
       // the title and the canonical are only compared between two readings of a page that was answering: the title of yesterday's 404
       // ("Not found") is not a baseline, so a page that comes back is "answers again", never "the title changed".
       const wasOk = wasStatus >= 200 && wasStatus < 300;
       if (wasOk && nowStatus >= 200 && nowStatus < 300) {
-        if (S(was.canonical) && !S(now.canonical)) add('canonical_removed', 'The canonical tag is gone (it pointed at ' + S(was.canonical) + ')', S(was.canonical), '');
-        else if (S(now.canonical) && S(was.canonical) && !same(now.canonical, was.canonical)) add('canonical_moved', 'The canonical now points at ' + S(now.canonical) + ' (it pointed at ' + S(was.canonical) + ')', S(was.canonical), S(now.canonical));
-        if (S(was.title) && S(now.title) && S(was.title) !== S(now.title)) add('title_changed', 'The title changed to "' + S(now.title) + '" (it was "' + S(was.title) + '")', S(was.title), S(now.title));
+        const selfNow = S(now.canonical) && same(now.canonical, url || now.url || '');
+        const selfWas = S(was.canonical) && same(was.canonical, url || was.url || '');
+        if (S(was.canonical) && !S(now.canonical)) {
+          if (selfWas) add('canonical_removed', 'The canonical tag is gone (it pointed at the page itself). Google usually still treats the page as its own main version; put the tag back to be sure.', S(was.canonical), '');
+          else add('canonical_fixed', 'The canonical tag that pointed at ' + S(was.canonical) + ' is gone, so Google can index this page under its own address again.', S(was.canonical), '');
+        } else if (S(now.canonical) && S(was.canonical) && !same(now.canonical, was.canonical)) {
+          if (selfNow) add('canonical_fixed', 'The canonical now points at the page itself (it pointed at ' + S(was.canonical) + '). That is right: Google can index this page under its own address.', S(was.canonical), S(now.canonical));
+          else add('canonical_moved', 'The canonical now points at ' + S(now.canonical) + ' (it pointed at ' + S(was.canonical) + '), so Google is asked to show that page instead of this one.', S(was.canonical), S(now.canonical));
+        }
+        if (S(was.title) && S(now.title) && S(was.title) !== S(now.title)) {
+          if (opts.own_title) add('title_changed', 'Your new title is live: "' + S(now.title) + '" (it was "' + S(was.title) + '").', S(was.title), S(now.title), 'info');
+          else add('title_changed', 'The title changed to "' + S(now.title) + '" (it was "' + S(was.title) + '").', S(was.title), S(now.title));
+        }
       }
     }
     // a page we are seeing for the first time is a baseline, never a change — that includes one robots.txt already blocked before we looked
     if (!first && opts.robots_blocked === true && opts.robots_blocked_before !== true) add('robots_blocked', 'robots.txt now stops Google crawling ' + (url || 'this page'), '', 'disallowed');
     return out;
   };
-  // the site's robots.txt as a change of its own (one per site, compared with the stored seo_cache fingerprint)
-  const robotsChange = (prevHash, robots) => {
-    if (!robots || robots.ok === false) return null;
-    const before = S(prevHash);
-    if (!before || before === S(robots.hash)) return null;
-    return { code: 'robots_changed', severity: CODES.robots_changed.severity, label: CODES.robots_changed.label,
-      text: 'robots.txt changed (' + robots.status + ', ' + n0(robots.length) + ' characters of rules). Read it before the next crawl: one wrong Disallow line can take the whole site out of Google.',
-      from: before, to: S(robots.hash) };
-  };
   const state = (changes, now) => (!now || now.ok === false) ? 'not_checked' : ((changes || []).some(c => c.severity !== 'info') ? 'changed' : 'ok');
-  const worst = (changes) => { const order = ['critical', 'high', 'medium', 'info']; return (changes || []).map(c => c.severity).sort((a, b) => order.indexOf(a) - order.indexOf(b))[0] || ''; };
+  const worst = (changes) => { const order = ['critical', 'high', 'medium', 'low', 'info']; return (changes || []).map(c => c.severity).sort((a, b) => order.indexOf(a) - order.indexOf(b))[0] || ''; };
+
+  // ---- the alert lifecycle (build section 194; Conductor's model: one incident per condition, closed when the condition is gone) ----
+  // Every alert names its condition: the site, the page (or robots.txt) and the family of the change. While the condition lasts there is ONE
+  // open alert (last_seen_at, count), never a new row a day; when the watch reads the page and the condition is gone the alert is resolved
+  // with the sentence that says why (resolved_at, resolution). A change that is good news (a page moved to a working address, a canonical
+  // that now names the page) is recorded resolved at once: nothing is left for the client to do. Rows written before section 194 carry no
+  // condition key; it is read back from their message id (watch:<site>:<code>:<page hash>:<day>).
+  const FAMILY = { page_gone: 'status', page_error: 'status', page_back: 'status', noindex_added: 'noindex', noindex_removed: 'noindex', robots_blocked: 'robots_blocked',
+    page_redirects: 'redirect', page_redirect_bad: 'redirect', page_moved: 'redirect', canonical_moved: 'canonical', canonical_removed: 'canonical', canonical_fixed: 'canonical',
+    title_changed: 'title', robots_missing: 'robots_state', robots_unreachable: 'robots_state', robots_html: 'robots_state', robots_back: 'robots_state', robots_changed: 'robots_rules' };
+  // the codes that close their family's open alert instead of opening one
+  const CLOSES = { page_back: true, noindex_removed: true, page_moved: true, canonical_fixed: true, robots_back: true };
+  const conditionKey = (site_id, code, page) => 'watch:' + S(site_id) + ':' + (FAMILY[code] || code) + ':' + hash(ukey(page));
+  /** The condition of a stored alert row: its own key, or read back from a message id written before section 194. */
+  const conditionOf = (row) => {
+    const r = row || {};
+    if (S(r.condition_key)) { const m = S(r.condition_key).match(/^watch:(.+):([a-z_]+):([0-9a-f]{8})$/); return m ? { key: S(r.condition_key), site_id: m[1], family: m[2], page_hash: m[3] } : null; }
+    const m = S(r.message_id).match(/^watch:(.+):([a-z_]+):([0-9a-f]{8}):\d{4}-\d\d-\d\d$/);
+    if (!m || m[2] === 'recheck') return null;
+    const family = FAMILY[m[2]] || m[2];
+    return { key: 'watch:' + m[1] + ':' + family + ':' + m[3], site_id: m[1], family, page_hash: m[3], legacy: true, code: m[2] };
+  };
+  const isOpenRow = (r) => S((r || {}).status || 'new') !== 'resolved' && !S((r || {}).resolved_at);
+  /** Is the condition of `family` still true of a page read today? null = this family cannot be judged from one reading (an event). */
+  const present = (family, p, ctx) => {
+    if (!p || p.ok === false) return null;
+    const st = n0(p.status);
+    if (family === 'status') return st >= 400;
+    if (family === 'noindex') return !!p.noindex;
+    if (family === 'robots_blocked') return p.robots_blocked === true;
+    if (family === 'redirect') return st >= 300 && st < 400 && S((ctx || {}).verdict) !== 'moved';
+    if (family === 'canonical') return st >= 200 && st < 300 && !!S(p.canonical) && !same(p.canonical, p.url);
+    return null;   // title / robots rules: events, open until somebody marks them seen
+  };
+  const RESOLVED_TEXT = {
+    status: (p) => n0(p.status) >= 300 && n0(p.status) < 400 ? 'The address no longer answers with an error: it now redirects (' + n0(p.status) + ').' : 'The page answers ' + n0(p.status) + ' again.',
+    noindex: () => 'The page no longer asks search engines to leave it out.',
+    robots_blocked: () => 'robots.txt no longer blocks this page.',
+    redirect: (p, ctx) => n0(p.status) >= 200 && n0(p.status) < 300 ? 'The page answers at its own address again.' : 'The page now moves permanently to ' + pathOf((ctx || {}).to || p.location) + ', which works.',
+    canonical: () => 'The canonical now points at the page itself.',
+  };
+  /**
+   * One run's alert rows for one site. o: { site_id, domain, now, changes, pages (Watch Compare page states with `verdict` / `moved_to`),
+   * robots (today's robots state), open (stored alert rows of this site), moved ([{ from, to }] addresses the watch stopped reading because
+   * they moved), ran_late (sentence or '') }. -> { rows (exact seo_console_alerts columns), resolved, updated, opened }
+   */
+  const lifecycle = (o) => {
+    const x = o || {}; const nowIso = S(x.now) || new Date().toISOString(); const day = nowIso.slice(0, 10);
+    const site_id = S(x.site_id), domain = S(x.domain);
+    const openRows = (x.open || []).filter(r => r && isOpenRow(r) && S(r.source || 'page_watch') === 'page_watch');
+    const byKey = new Map();
+    for (const r of openRows) { const c = conditionOf(r); if (!c || c.site_id !== site_id) continue; if (!byKey.has(c.key)) byKey.set(c.key, { row: r, c }); }
+    const pageByHash = new Map((x.pages || []).filter(p => p && p.ok !== false && S(p.url)).map(p => [hash(ukey(p.url)), p]));
+    const movedByHash = new Map((x.moved || []).filter(m => m && S(m.from)).map(m => [hash(ukey(m.from)), m]));
+    const rows = []; const out = { rows, resolved: 0, updated: 0, opened: 0 };
+    const late = S(x.ran_late) ? ' Ran late: ' + S(x.ran_late) : '';
+    const base = (r) => ({ site_id, domain, kind: 'page_watch', source: 'page_watch', severity: S(r.severity), subject: S(r.subject).slice(0, 200), summary: S(r.summary).slice(0, 1000),
+      received_at: S(r.received_at) || nowIso, message_id: S(r.message_id).slice(0, 200), status: S(r.status) || 'new', condition_key: S(r.condition_key), last_seen_at: S(r.last_seen_at) || S(r.received_at) || nowIso,
+      count: n0(r.count) || 1, resolved_at: S(r.resolved_at), resolution: S(r.resolution).slice(0, 500), ack_by: S(r.ack_by), ack_at: S(r.ack_at) });
+    const done = new Set();
+    const resolve = (k, sentence) => { const e = byKey.get(k); if (!e || done.has(k)) return; done.add(k);
+      rows.push({ ...base(e.row), condition_key: k, status: 'resolved', resolved_at: nowIso, resolution: S(sentence).slice(0, 500), last_seen_at: S(e.row.last_seen_at) || S(e.row.received_at) || nowIso });
+      out.resolved += 1; };
+    const subjectOf = (c, page) => (S(c.label).charAt(0).toUpperCase() + S(c.label).slice(1) + ': ' + (S(page).replace(/^https?:\/\//, '') || domain)).slice(0, 200);
+    const order = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+    // 1. today's changes: open, update or resolve
+    for (const c of (x.changes || [])) {
+      const page = S(c.url); const k = conditionKey(site_id, c.code, page);
+      if (done.has(k)) continue;   // one condition, one row per run
+      const text = (S(c.text) + (/^robots_/.test(c.code) ? '' : ' Checked ' + nowIso.slice(0, 16).replace('T', ' ') + ' UTC by the daily key-page watch.') + late).slice(0, 1000);
+      if (CLOSES[c.code] || c.severity === 'info') {
+        if (byKey.has(k)) { resolve(k, S(c.text)); continue; }
+        // good news with nothing open: recorded as a resolved notice, so the history shows it and nobody has to act on it
+        rows.push({ ...base({}), severity: 'info', subject: subjectOf(c, page), summary: text, received_at: nowIso, message_id: ('watch:' + site_id + ':' + S(c.code) + ':' + hash(ukey(page)) + ':' + day).slice(0, 200),
+          status: 'resolved', condition_key: k, last_seen_at: nowIso, count: 1, resolved_at: nowIso, resolution: 'Nothing to do.' });
+        out.opened += 1; continue;
+      }
+      if (byKey.has(k) && !done.has(k)) {
+        const e = byKey.get(k); done.add(k);
+        // a condition only grows louder in place; robots.txt's state is replaced by its new state (missing after unreachable is Medium again)
+        const sev = FAMILY[c.code] === 'robots_state' || (order[c.severity] ?? 5) < (order[S(e.row.severity)] ?? 5) ? c.severity : S(e.row.severity);
+        rows.push({ ...base(e.row), condition_key: k, severity: sev, subject: subjectOf(c, page), summary: text, last_seen_at: nowIso, count: (n0(e.row.count) || 1) + 1, status: 'new' });
+        out.updated += 1; continue;
+      }
+      rows.push({ ...base({}), severity: S(c.severity), subject: subjectOf(c, page), summary: text, received_at: nowIso,
+        message_id: ('watch:' + site_id + ':' + S(c.code) + ':' + hash(ukey(page)) + ':' + day).slice(0, 200), status: 'new', condition_key: k, last_seen_at: nowIso, count: 1 });
+      done.add(k); byKey.set(k, { row: rows[rows.length - 1], c: { key: k } }); out.opened += 1;
+    }
+    // 2. the open alerts nobody touched today: still true (seen again) or gone (resolved)
+    for (const [k, e] of byKey) {
+      if (done.has(k)) continue;
+      const fam = e.c.family;
+      if (fam === 'robots_state') {
+        const rs = x.robots || null; if (!rs || rs.ok === false) continue;
+        if (S(rs.state) === 'ok') { resolve(k, 'robots.txt answers again.'); continue; }
+        done.add(k); rows.push({ ...base(e.row), condition_key: k, last_seen_at: nowIso, count: (n0(e.row.count) || 1) + 1, status: 'new' }); out.updated += 1; continue;
+      }
+      const p = pageByHash.get(e.c.page_hash);
+      if (!p) {
+        const mv = movedByHash.get(e.c.page_hash);
+        if (mv && ['status', 'redirect', 'canonical', 'noindex', 'robots_blocked', 'title'].includes(fam)) resolve(k, 'This address now moves permanently to ' + pathOf(mv.to) + ', which works. We watch the new address.');
+        continue;   // not read today: nothing is claimed
+      }
+      const st3 = n0(p.status) >= 300 && n0(p.status) < 400;
+      if (st3 && S(p.verdict) === 'moved' && fam !== 'redirect') { resolve(k, 'This address now moves permanently to ' + pathOf(p.moved_to || p.redirect_to) + ', which works. We watch the new address.'); continue; }
+      const isNow = present(fam, p, { verdict: p.verdict, to: p.moved_to || p.redirect_to });
+      if (isNow === null) {
+        // an event (title, robots rules) that started before section 194: it stays open until marked seen, but a title alert on a page that
+        // moved away is closed with the move
+        if (fam === 'title' && n0(p.status) >= 300 && n0(p.status) < 400 && S(p.verdict) === 'moved') resolve(k, 'This address now moves permanently to ' + pathOf(p.moved_to || p.redirect_to) + ', which works.');
+        continue;
+      }
+      if (!isNow) resolve(k, (RESOLVED_TEXT[fam] || (() => 'The condition is gone.'))(p, { to: p.moved_to || p.redirect_to }));
+      else { done.add(k); rows.push({ ...base(e.row), condition_key: k, last_seen_at: nowIso, count: (n0(e.row.count) || 1) + 1, status: 'new' }); out.updated += 1; }
+    }
+    return out;
+  };
 
   // ---- "I fixed this": one audit finding, re-checked on the key pages we just fetched ----
   // Only what a raw fetch of the key pages can honestly answer is answered. Anything else (a crawl of the whole site, Search Console,
@@ -375,10 +636,10 @@ const PW = (() => {
         : 'No page could be inspected in Search Console' + (notChecked ? ' (' + notChecked + ' not checked: ' + (S(opts.not_checked_reason) || (failed[0] && failed[0].not_checked) || 'no access') + ')' : '') };
   };
 
-  return { signals, robotsRead, compare, robotsChange, state, worst, recheck, recheckRule, inspectBudget, inspection, coverage, hash,
-    changedPages, changeOf, freshFirst,
-    CODES, RULES, QUOTA_PER_DAY, QUOTA_PER_MINUTE, PER_RUN, PER_AUDIT, FRESH_DAYS,
-    helpers: { hostOf, bare, pathOf, ukey, same, strip, S, n0 } };
+  return { signals, robotsRead, robotsParse, compare, robotsChange, redirectVerdict, state, worst, recheck, recheckRule, inspectBudget, inspection, coverage, hash,
+    changedPages, changeOf, freshFirst, conditionKey, conditionOf, lifecycle, present,
+    CODES, FAMILY, RULES, QUOTA_PER_DAY, QUOTA_PER_MINUTE, PER_RUN, PER_AUDIT, FRESH_DAYS, ROBOTS_V,
+    helpers: { hostOf, bare, pathOf, ukey, same, strip, S, n0, absUrl } };
 })();
 return $input.all().map(i => { const j = i.json || {};
   const rb = j.robots_res === undefined ? null : PW.robotsRead(j.robots_res);

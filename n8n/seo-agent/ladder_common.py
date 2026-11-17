@@ -152,7 +152,14 @@ def dt_update_where_params(table, cols, conditions, values):
 # ---- Search Console notices (mail watcher) and monthly check-ins (v4.3) ----
 ALERTS_TABLE = 'seo_console_alerts'
 CHECKIN_TABLE = 'seo_console_checkins'
-ALERTS_COLS = [('site_id', 'string'), ('domain', 'string'), ('kind', 'string'), ('severity', 'string'), ('subject', 'string'), ('summary', 'string'), ('received_at', 'string'), ('message_id', 'string'), ('status', 'string'), ('source', 'string')]
+ALERTS_COLS = [('site_id', 'string'), ('domain', 'string'), ('kind', 'string'), ('severity', 'string'), ('subject', 'string'), ('summary', 'string'), ('received_at', 'string'), ('message_id', 'string'), ('status', 'string'), ('source', 'string'),
+               # client report 2026-11-17 (devaicon.com F5, build section 194): one open alert per condition, closed when the condition is gone.
+               # condition_key = watch:<site_id>:<family>:<page hash> (Page Watch; '' on mail / check-in alerts), last_seen_at / count = the
+               # condition seen again (never a new row a day), resolved_at / resolution = when and why it closed (status 'resolved'), ack_by /
+               # ack_at = "Mark as seen" in the app (the alert stays listed, it leaves the open count). New columns reach the live table only
+               # through sync_tables.py.
+               ('condition_key', 'string'), ('last_seen_at', 'string'), ('count', 'number'), ('resolved_at', 'string'), ('resolution', 'string'),
+               ('ack_by', 'string'), ('ack_at', 'string')]
 CHECKIN_COLS = [('site_id', 'string'), ('domain', 'string'), ('month', 'string'), ('manual_action', 'boolean'), ('security_issue', 'boolean'), ('notes', 'string'), ('coverage_json', 'string'), ('not_indexed_total', 'number'), ('csv_kind', 'string'), ('submitted_at', 'string'), ('source', 'string'), ('request_id', 'string'),
                 # D25c (2026-10-12, FIX_PLAN): a test check-in is stored like any other but never counts as the month's answer
                 # (v5/code/_checkin_test.js: the form's "test" answer, the API's is_test, a test caller, or a note that marks it)
@@ -499,7 +506,11 @@ PAGE_WATCH_COLS = [('site_id', 'string'), ('domain', 'string'), ('url', 'string'
                    ('robots_blocked', 'boolean'), ('robots_hash', 'string'), ('state', 'string'), ('changes', 'string'), ('last_change_at', 'string'),
                    ('changed_count', 'number'), ('error', 'string'),
                    ('inspect_at', 'string'), ('index_state', 'string'), ('indexed', 'string'), ('coverage', 'string'), ('google_canonical', 'string'),
-                   ('last_crawl', 'string'), ('mobile', 'string'), ('rich_results', 'string'), ('inspect_error', 'string')]
+                   ('last_crawl', 'string'), ('mobile', 'string'), ('rich_results', 'string'), ('inspect_error', 'string'),
+                   # build section 194 (client report 2026-11-17, F5 / F10): the address this page moved to, a permanent redirect to a working page
+                   # of the same site seen on two reads (v5/code/_moves.js MV.confirm). The watch then reads the new address instead, and the
+                   # ladder / content log / AI question / AI readiness rows follow it. '' = it did not move.
+                   ('moved_to', 'string')]
 
 # ---- Index coverage (2026-10-29, docs/indexing-2026-10-29/DESIGN.md §2): which pages Google left out, why, and what to do. Written ONLY by
 # SEO Agent - Index Coverage (build_index_coverage.py, SEOagentIndexCv1, daily), read by the web app's Indexing page. It reads the Site Tracker's

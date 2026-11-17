@@ -150,6 +150,7 @@ import {
   aiTargetView,
   type AiWrittenPage,
   PAGE_IN_FLIGHT_HOURS,
+  checkinNotIndexed,
 } from '@seo/shared';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db, schema } from '../db';
@@ -1836,7 +1837,11 @@ export async function alertsData(site: SiteRow): Promise<AlertsData> {
   ]);
   const month = new Date().toISOString().slice(0, 7);
   return {
-    alerts: alerts.map((a) => ({ kind: s(a.kind), severity: s(a.severity), subject: s(a.subject), summary: s(a.summary), receivedAt: s(a.received_at), status: s(a.status), source: s(a.source) })),
+    // CR17-D (build section 194): the lifecycle fields; the -1 "not recorded" marker of a check-in is null (checkinNotIndexed), never a count
+    alerts: alerts.map((a) => ({
+      id: s(a.message_id), kind: s(a.kind), severity: s(a.severity), subject: s(a.subject), summary: s(a.summary), receivedAt: s(a.received_at), status: s(a.status), source: s(a.source),
+      lastSeenAt: s(a.last_seen_at) || s(a.received_at), count: Math.max(1, n(a.count)), resolvedAt: s(a.resolved_at), resolution: s(a.resolution), ackAt: s(a.ack_at), ackBy: s(a.ack_by),
+    })),
     checkins: checkins.map((c) => {
       const cov = safeJson<P>(c.coverage_json, {});
       return {
@@ -1844,7 +1849,7 @@ export async function alertsData(site: SiteRow): Promise<AlertsData> {
         manualAction: b(c.manual_action),
         securityIssue: b(c.security_issue),
         notes: s(c.notes),
-        notIndexedTotal: n(c.not_indexed_total),
+        notIndexedTotal: checkinNotIndexed(c.not_indexed_total),
         indexedTotal: nn(cov.indexed_total),
         csvKind: s(c.csv_kind),
         submittedAt: s(c.submitted_at),

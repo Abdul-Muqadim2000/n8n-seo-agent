@@ -18,6 +18,7 @@ from ladder_common import RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, m
 from ladder_common import ledger_mainline, ALERT_WEBHOOK_PLACEHOLDER   # R17 / R29 (2026-10-14)
 from ladder_common import site_time_src, CYCLES_TABLE, CYCLE_JOBS_TABLE   # 2026-10-19: the website's calendar (ST) and its cycle row (seo_cycles)
 from ladder_common import KI_RUNS_TABLE, KI_COMP_TABLE, KI_COMP_COLS, KI_KW_TABLE, KI_GAPS_TABLE, KI_GAPS_COLS   # KI E2 (2026-11-08, CONTRACTS.md §5): Site Admin's KI actions
+from ladder_common import INDEX_PAGES_TABLE, dt_delete_where_params   # build section 194 (client report 2026-11-17, F5 / F10): moves Steps on your website asked for; rows that follow a move
 from ladder_common import SKIPS_TABLE, SKIPS_COLS   # keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.7): the client's skips / approvals on the "Coming up" plan
 
 # R9 (2026-10-13, re-rating): the reserve / settle side branch, the same one build_monitors.py's WF.run_ledger builds. It hangs BESIDE the plan
@@ -68,13 +69,14 @@ GSC_QUERIES_SRC = _rdt('code/_gsc_queries.js').rstrip('\n')   # G9 / D24: scrape
 SERP_OBS_SRC = _rdt('code/_serp_obs.js').rstrip('\n')        # D26: a results-page feature is one observation at one moment, never a fact about the query
 SERP_URL_SRC = _rdt('code/_serp_url.js').rstrip('\n')   # SERP-GOTO (2026-11-08): the real host behind a Google redirect, and the unread-reading rules (SU)
 RANK_SERP_SRC = SERP_URL_SRC + '\n' + _rdt('code/_rank_serp.js').rstrip('\n')   # SERP-GOTO (2026-11-08): RS reads hosts through SU      # G6 (FIX_PLAN 2026-10-12): the whole results page of one rank check (features, page 1, share of voice, snapshot)
+MOVES_SRC = _rdt('code/_moves.js').rstrip('\n')    # build section 194 (client report 2026-11-17, F10): a page that moved permanently, and the rows that follow it (MV)
 PAGE_WATCH_SRC = _rdt('code/_page_watch.js').rstrip('\n')    # G11 + G25 (FIX_PLAN 2026-10-13): the daily key-page watch and URL Inspection within Google's quota
 WAITING_SRC = _rdt('code/_waiting.js').rstrip('\n')          # F-A1 / A-12 (2026-10-17): the pile-up count and the ladders being written, one rule shared with the ladder mode
 READINESS_SRC = _rdt('code/_readiness.js').rstrip('\n')     # P1 (2026-10-20): author profile + business facts before a written page, one rule with Ladder Plan and the app
 AI_PANEL_SRC = _rdt('code/_ai_panel.js').rstrip('\n')     # F2 (2026-10-23): the question ids and search phrases of the AI panel (AIP.promptId / keywordOf), one rule with the Prompt Writer's path
 FIT_GATE_SRC = _rdt('code/_fit_gate.js').rstrip('\n')        # R16 (build_v4.py section 53): the fit gate, also over the rungs stored before it existed (fitStored)
 rd = lambda p: (seo_events.inline(_rdt(p)).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SITE_STATS__*/', SITE_STATS_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC)
-                .replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__RANK_SERP__*/', RANK_SERP_SRC).replace('/*__SERP_URL__*/', SERP_URL_SRC).replace('/*__PAGE_WATCH__*/', PAGE_WATCH_SRC)
+                .replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__RANK_SERP__*/', RANK_SERP_SRC).replace('/*__SERP_URL__*/', SERP_URL_SRC).replace('/*__PAGE_WATCH__*/', PAGE_WATCH_SRC).replace('/*__MOVES__*/', MOVES_SRC)
                 .replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__AI_PANEL__*/', AI_PANEL_SRC).replace('/*__WAITING__*/', WAITING_SRC).replace('/*__READINESS__*/', READINESS_SRC)
                 .replace('/*__SITE_TIME__*/', site_time_src()).replace('/*__GONE__*/', _rdt('code/_gone.js').rstrip('\n'))
                 .replace('/*__AI_QUESTION__*/', _rdt('code/_ai_question.js').rstrip('\n'))   # client reports 2026-11-16 (INV1): AQ, the plain reasons of an AI question's state
@@ -813,17 +815,47 @@ N.append(node('Load Watch Cache', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE
 # only the findings somebody asked about: the filter runs in n8n, so a big findings table costs nothing here
 N.append(node('Load Recheck Requests', DT_TYPE, DT_VERSION, dt_get_where_params(AUDIT_FINDINGS_TABLE, 'recheck_state', 'eq', 'requested'), at(13, 0), **WLOAD))
 N.append(node('Load Ops Alerts (Watch)', DT_TYPE, DT_VERSION, dt_get_all_params(OPS_ALERTS_TABLE), at(14, 0), **WLOAD))
+# build section 194 (client report 2026-11-17, devaicon.com F5 / F10): what the alert lifecycle, the redirect verdict and the moves read. All
+# small, all read once: the moves Steps on your website asked for (Index coverage's improved_to / merge_into), the pages we published (a new
+# title of ours is Info), the rows that follow a page that moved, and the site's open Page Watch alerts (one alert per condition).
+N.append(node('Load Index Pages (Watch)', DT_TYPE, DT_VERSION, dt_get_all_params(INDEX_PAGES_TABLE), at(14, 2), **WLOAD))
+N.append(node('Load Content Log (Watch)', DT_TYPE, DT_VERSION, dt_get_all_params(LOG_TABLE), at(15, 2), **WLOAD))
+N.append(node('Load AI Targets (Watch)', DT_TYPE, DT_VERSION, dt_get_all_params(AI_TARGETS_TABLE), at(16, 2), **WLOAD))
+N.append(node('Load AI Pages (Watch)', DT_TYPE, DT_VERSION, dt_get_all_params(AI_PAGES_TABLE), at(17, 2), **WLOAD))
+N.append(node('Load Console Alerts (Watch)', DT_TYPE, DT_VERSION, dt_get_where_params(ALERTS_TABLE, 'source', 'eq', 'page_watch'), at(18, 2), **WLOAD))
 N.append(code('Watch Plan', rd('code/Watch_Plan.js'), at(15, 0)))
 N.append(iff('Any Watch Targets?', '{{ !$json.skip }}', at(16, 0)))
 N.append(node('Nothing To Watch', 'n8n-nodes-base.noOp', 1, {}, at(17, 1)))
 N.append(node('Fetch Watch Page', 'n8n-nodes-base.httpRequest', 4.5, WATCH_GET, at(17, 0), alwaysOutputData=True, onError='continueRegularOutput', **retry_lint.RETRY))
 N.append(code('Watch Read', rd('code/Watch_Read.js'), at(18, 0)))
+# build section 194 (F5): where a redirecting key page (or robots.txt) lands, one plain GET per redirect with the redirects followed (up to
+# five, as Google follows them). Only same-site targets; the verdict and the confirmed move are decided in Watch Compare.
+N.append(code('Watch Hop Plan', rd('code/Watch_Hop_Plan.js'), at(18, 1)))
+N.append(iff('Any Watch Hops?', '{{ !$json.skip }}', at(19, 1)))
+WATCH_HOP_GET = {'method': 'GET', 'url': '={{ $json.url }}', 'sendHeaders': True, 'headerParameters': WATCH_GET['headerParameters'],
+                 'options': {'batching': {'batch': {'batchSize': 5, 'batchInterval': 250}}, 'timeout': 20000,
+                             'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 5}}, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}}
+N.append(node('Fetch Watch Hop', 'n8n-nodes-base.httpRequest', 4.5, WATCH_HOP_GET, at(20, 1), alwaysOutputData=True, onError='continueRegularOutput', **retry_lint.RETRY))
 N.append(code('Watch Compare', rd('code/Watch_Compare.js'), at(19, 0)))
 N.append(code('Watch Rows', rd('code/Watch_Rows.js'), at(20, 0), **SAFE))
 N.append(iff('Any Watch Rows?', '{{ !$json.skip }}', at(21, 0)))
 N.append(node('Save Page Watch', DT_TYPE, DT_VERSION, dt_upsert_params_keys(PAGE_WATCH_TABLE, PAGE_WATCH_COLS, ['site_id', 'url']), at(22, 0), onError='continueRegularOutput', alwaysOutputData=True))
 N.append(code('Watch Cache Rows', rd('code/Watch_Cache_Rows.js'), at(23, 0), **SAFE))
 N.append(node('Save Watch Cache', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(24, 0), onError='continueRegularOutput', alwaysOutputData=True))
+# build section 194 (client report 2026-11-17, F10): the stored rows follow a confirmed move (Watch Moves, MV.plan), table by table. Each update
+# matches the row AND its old address, so a row somebody changed in between is left alone; the AI readiness row of the old address is dropped
+# when the new address already has its own.
+N.append(code('Watch Moves', rd('code/Watch_Moves.js'), at(24, 2), **SAFE))
+_MOVE194 = [('ladders', 'Ladder', dt_update_params(LADDER_TABLE, LADDER_COLS, [('ladder_id', '={{ $json.ladder_id }}'), ('keyword', '={{ $json.keyword }}'), ('target_url', '={{ $json.from }}')], {'target_url': '={{ $json.target_url }}'})),
+            ('logs', 'Content Log', dt_update_params(LOG_TABLE, LOG_COLS, [('site_id', '={{ $json.site_id }}'), ('keyword', '={{ $json.keyword }}'), ('published_url', '={{ $json.from }}')], {'published_url': '={{ $json.published_url }}'})),
+            ('targets', 'AI Target', dt_update_params(AI_TARGETS_TABLE, AI_TARGETS_COLS, [('target_id', '={{ $json.target_id }}'), ('page_url', '={{ $json.from }}')], {'page_url': '={{ $json.page_url }}'})),
+            ('ai_pages_update', 'AI Page', dt_update_params(AI_PAGES_TABLE, AI_PAGES_COLS, [('site_id', '={{ $json.site_id }}'), ('url', '={{ $json.from }}')], {'url': '={{ $json.url }}'})),
+            ('ai_pages_delete', 'Old AI Page', dt_delete_where_params(AI_PAGES_TABLE, [('site_id', 'eq', '={{ $json.site_id }}'), ('url', 'eq', '={{ $json.url }}')]))]
+for _i194, (_k194, _t194, _p194) in enumerate(_MOVE194):
+    _rows194, _if194, _save194 = 'Move Rows (' + _t194 + ')', 'Any Moves (' + _t194 + ')?', ('Delete ' if _k194 == 'ai_pages_delete' else 'Save ') + _t194 + ' Moves'
+    N.append(code(_rows194, rd('code/Watch_Move_Rows.js').replace('__MOVE_KIND__', _k194), at(25 + 3 * _i194, 2), **SAFE))
+    N.append(iff(_if194, '{{ !$json.skip }}', at(26 + 3 * _i194, 2)))
+    N.append(node(_save194, DT_TYPE, DT_VERSION, _p194, at(27 + 3 * _i194, 2), onError='continueRegularOutput', alwaysOutputData=True))
 N.append(code('Watch Recheck Rows', rd('code/Watch_Recheck_Rows.js'), at(25, 0), **SAFE))
 N.append(iff('Any Rechecks?', '{{ !$json.skip }}', at(26, 0)))
 N.append(node('Save Finding Recheck', DT_TYPE, DT_VERSION, dt_update_params(AUDIT_FINDINGS_TABLE, AUDIT_FINDINGS_COLS,
@@ -863,15 +895,24 @@ for a, b in [('Daily Schedule', 'Ensure Sites Table (Watch)'), ('Watch Run', 'En
              ('Ensure Alerts Table (Watch)', 'Ensure Findings Table (Watch)'), ('Ensure Findings Table (Watch)', 'Ensure Ops Alerts Table (Watch)'),
              ('Ensure Ops Alerts Table (Watch)', 'Load Sites (Watch)'), ('Load Sites (Watch)', 'Load Ladders (Watch)'), ('Load Ladders (Watch)', 'Load Pages (Watch)'),
              ('Load Pages (Watch)', 'Load Page Watch'), ('Load Page Watch', 'Load Watch Cache'), ('Load Watch Cache', 'Load Recheck Requests'),
-             ('Load Recheck Requests', 'Load Ops Alerts (Watch)'), ('Load Ops Alerts (Watch)', 'Watch Plan'), ('Watch Plan', 'Any Watch Targets?'),
-             ('Fetch Watch Page', 'Watch Read'), ('Watch Read', 'Watch Compare'), ('Watch Compare', 'Watch Rows'), ('Watch Rows', 'Any Watch Rows?'),
-             ('Save Page Watch', 'Watch Cache Rows'), ('Watch Cache Rows', 'Save Watch Cache'), ('Save Watch Cache', 'Watch Recheck Rows'),
+             ('Load Recheck Requests', 'Load Ops Alerts (Watch)'), ('Load Ops Alerts (Watch)', 'Load Index Pages (Watch)'), ('Load Index Pages (Watch)', 'Load Content Log (Watch)'),
+             ('Load Content Log (Watch)', 'Load AI Targets (Watch)'), ('Load AI Targets (Watch)', 'Load AI Pages (Watch)'), ('Load AI Pages (Watch)', 'Load Console Alerts (Watch)'),
+             ('Load Console Alerts (Watch)', 'Watch Plan'), ('Watch Plan', 'Any Watch Targets?'),
+             ('Fetch Watch Page', 'Watch Read'), ('Watch Read', 'Watch Hop Plan'), ('Watch Hop Plan', 'Any Watch Hops?'), ('Fetch Watch Hop', 'Watch Compare'),
+             ('Watch Compare', 'Watch Rows'), ('Watch Rows', 'Any Watch Rows?'),
+             ('Save Page Watch', 'Watch Cache Rows'), ('Watch Cache Rows', 'Save Watch Cache'), ('Save Watch Cache', 'Watch Moves'),
              ('Watch Recheck Rows', 'Any Rechecks?'), ('Save Finding Recheck', 'Watch Alerts'), ('Watch Alerts', 'Any Watch Alerts?'),
              ('Save Watch Alerts', 'Watch Ops Alert'), ('Watch Ops Alert', 'Any Ops Alerts (Watch)?'), ('Save Watch Ops Alert', 'Watch Ops Channels'),
              ('Watch Ops Channels', 'Send Watch Webhook?'), ('Post Watch Alert', 'Watch Ops Delivery'), ('Watch Ops Delivery', 'Save Watch Ops Delivery')]:
     link(C, a, b)
 link(C, 'Any Watch Targets?', 'Fetch Watch Page', 0); link(C, 'Any Watch Targets?', 'Nothing To Watch', 1)
 link(C, 'Any Watch Rows?', 'Save Page Watch', 0); link(C, 'Any Watch Rows?', 'Watch Cache Rows', 1)
+link(C, 'Any Watch Hops?', 'Fetch Watch Hop', 0); link(C, 'Any Watch Hops?', 'Watch Compare', 1)   # build section 194
+for _i194, (_k194, _t194, _p194) in enumerate(_MOVE194):   # build section 194: Watch Moves -> each table in turn -> Watch Recheck Rows
+    _rows194, _if194, _save194 = 'Move Rows (' + _t194 + ')', 'Any Moves (' + _t194 + ')?', ('Delete ' if _k194 == 'ai_pages_delete' else 'Save ') + _t194 + ' Moves'
+    _next194 = ('Move Rows (' + _MOVE194[_i194 + 1][1] + ')') if _i194 + 1 < len(_MOVE194) else 'Watch Recheck Rows'
+    if _i194 == 0: link(C, 'Watch Moves', _rows194)   # the later ones are reached from the one before (its IF's false branch and its save)
+    link(C, _rows194, _if194); link(C, _if194, _save194, 0); link(C, _if194, _next194, 1); link(C, _save194, _next194)
 link(C, 'Any Rechecks?', 'Save Finding Recheck', 0); link(C, 'Any Rechecks?', 'Watch Alerts', 1)
 link(C, 'Any Watch Alerts?', 'Save Watch Alerts', 0); link(C, 'Any Watch Alerts?', 'Watch Ops Alert', 1)
 link(C, 'Any Ops Alerts (Watch)?', 'Save Watch Ops Alert', 0); link(C, 'Any Ops Alerts (Watch)?', 'Watched', 1)
@@ -883,8 +924,11 @@ link(C, 'Send Watch Webhook?', 'Post Watch Alert', 0); link(C, 'Send Watch Webho
 LEDGER_WIRING['SEO Agent — Page Watch'] = ledger_nodes(N, C, 'page_watch', 'Watch', 'Watch Plan',
                                                        ['Watched', 'Nothing To Watch', 'Save Watch Ops Delivery'], at(15, 4))
 _wcode = {n['name']: n['parameters'].get('jsCode', '') for n in N if n['type'] == 'n8n-nodes-base.code'}
-for _n in ('Watch Plan', 'Watch Read', 'Watch Compare', 'Watch Rows', 'Watch Alerts'):
+for _n in ('Watch Plan', 'Watch Read', 'Watch Compare', 'Watch Rows', 'Watch Alerts', 'Watch Hop Plan'):
     assert 'const PW = (() => {' in _wcode[_n], _n + ': the page-watch kit is not inlined'
+for _n in ('Watch Plan', 'Watch Compare', 'Watch Moves'):   # build section 194
+    assert _wcode[_n].count('const MV = (() => {') == 1 and '/*__MOVES__*/' not in _wcode[_n], _n + ': the moves kit is not inlined once'
+assert all('__MOVE_KIND__' not in c_ for c_ in _wcode.values()), 'section 194: a Move Rows node kept its placeholder'
 assert 'const SM = (() => {' in _wcode['Watch Plan'], 'Watch Plan: the site model kit is not inlined'
 for _n in ('Watch Ops Alert', 'Watch Ops Channels', 'Watch Ops Delivery'):
     assert 'const OA = (() => {' in _wcode[_n], _n + ': the ops-alert kit is not inlined'
@@ -899,6 +943,7 @@ json.dump({'workflow': 'SEOagentPageWch1', 'table': PAGE_WATCH_TABLE, 'cache_kin
            'nodes': [n['name'] for n in N if n['type'] != 'n8n-nodes-base.stickyNote'],
            'connections': {s_: [[t_['node'] for t_ in l_] for l_ in o_.get('main', [])] for s_, o_ in C.items()},
            'fetch': {'name': 'Fetch Watch Page', 'follows_redirects': False, 'response_format': 'text', 'retries': retry_lint.RETRY['maxTries']},
+           'hop': {'name': 'Fetch Watch Hop', 'follows_redirects': True, 'max_redirects': 5, 'response_format': 'text'},   # build section 194
            'site_tracker_inspections': {'cap': 150, 'quota_per_day': 2000, 'rotation': 'oldest inspection first'}},
           open(os.path.join(HERE, 'harness', 'page_watch_wiring.json'), 'w'), indent=1, sort_keys=True)
 

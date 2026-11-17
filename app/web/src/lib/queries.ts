@@ -1558,6 +1558,19 @@ export function useAskedGoogle(orgId: string, siteId: string) {
   });
 }
 
+/** CR17-D (2026-11-17): "Mark as seen" on one alert ({ id }, members and up). The alert stays listed, it leaves the open count. */
+export function useMarkAlertSeen(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api<{ id: string; ackAt: string; ackBy: string }>(`/api/orgs/${orgId}/sites/${siteId}/data/alerts/seen`, { method: 'POST', body: { id } }),
+    onSuccess: () => {
+      // a prefix (the stored key ends with the query string, '' here): every read of the alerts and the overview of this website
+      void qc.invalidateQueries({ queryKey: ['site', siteId, 'data', 'alerts'] });
+      void qc.invalidateQueries({ queryKey: ['site', siteId, 'data', 'overview'] });
+    },
+  });
+}
+
 /** wave 3 (DESIGN_WAVE3 §3.4): the client's own mark on a page ('important', 'utility' = fine to leave out, '' = undo). The page reads the
  *  index check again at once: the row holds the mark, so the page shows the new state before the engine's next run. */
 export function usePageType(orgId: string, siteId: string) {

@@ -21,6 +21,8 @@ for (const s of sites) {
       changed_count: Number((p.prev || {}).changed_count || 0) + (real.length ? 1 : 0), error: '',
       inspect_at: S(ins.inspect_at), index_state: S(ins.index_state), indexed: S(ins.indexed), coverage: S(ins.coverage),
       google_canonical: S(ins.google_canonical), last_crawl: S(ins.last_crawl), mobile: S(ins.mobile), rich_results: S(ins.rich_results), inspect_error: S(ins.inspect_error),
+      // build section 194: a permanent move to a working page seen on two reads; from the next run the watch reads the new address instead
+      moved_to: S(p.moved_to).slice(0, 500),
     });
   }
 }

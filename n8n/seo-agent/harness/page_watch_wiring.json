@@ -22,6 +22,46 @@
    ],
    []
   ],
+  "Any Moves (AI Page)?": [
+   [
+    "Save AI Page Moves"
+   ],
+   [
+    "Move Rows (Old AI Page)"
+   ]
+  ],
+  "Any Moves (AI Target)?": [
+   [
+    "Save AI Target Moves"
+   ],
+   [
+    "Move Rows (AI Page)"
+   ]
+  ],
+  "Any Moves (Content Log)?": [
+   [
+    "Save Content Log Moves"
+   ],
+   [
+    "Move Rows (AI Target)"
+   ]
+  ],
+  "Any Moves (Ladder)?": [
+   [
+    "Save Ladder Moves"
+   ],
+   [
+    "Move Rows (Content Log)"
+   ]
+  ],
+  "Any Moves (Old AI Page)?": [
+   [
+    "Delete Old AI Page Moves"
+   ],
+   [
+    "Watch Recheck Rows"
+   ]
+  ],
   "Any Ops Alerts (Watch)?": [
    [
     "Save Watch Ops Alert"
@@ -44,6 +84,14 @@
    ],
    [
     "Watch Ops Alert"
+   ]
+  ],
+  "Any Watch Hops?": [
+   [
+    "Fetch Watch Hop"
+   ],
+   [
+    "Watch Compare"
    ]
   ],
   "Any Watch Rows?": [
@@ -75,6 +123,11 @@
   "Daily Schedule": [
    [
     "Ensure Sites Table (Watch)"
+   ]
+  ],
+  "Delete Old AI Page Moves": [
+   [
+    "Watch Recheck Rows"
    ]
   ],
   "Ensure Alerts Table (Watch)": [
@@ -122,6 +175,11 @@
     "Ensure Pages Table (Watch)"
    ]
   ],
+  "Fetch Watch Hop": [
+   [
+    "Watch Compare"
+   ]
+  ],
   "Fetch Watch Page": [
    [
     "Watch Read"
@@ -132,9 +190,34 @@
     "Settle Run Ledger (Watch)"
    ]
   ],
+  "Load AI Pages (Watch)": [
+   [
+    "Load Console Alerts (Watch)"
+   ]
+  ],
+  "Load AI Targets (Watch)": [
+   [
+    "Load AI Pages (Watch)"
+   ]
+  ],
   "Load Catch-up Records (Watch)": [
    [
     "Run Ledger Row (Watch)"
+   ]
+  ],
+  "Load Console Alerts (Watch)": [
+   [
+    "Watch Plan"
+   ]
+  ],
+  "Load Content Log (Watch)": [
+   [
+    "Load AI Targets (Watch)"
+   ]
+  ],
+  "Load Index Pages (Watch)": [
+   [
+    "Load Content Log (Watch)"
    ]
   ],
   "Load Ladders (Watch)": [
@@ -154,7 +237,7 @@
   ],
   "Load Ops Alerts (Watch)": [
    [
-    "Watch Plan"
+    "Load Index Pages (Watch)"
    ]
   ],
   "Load Page Watch": [
@@ -185,6 +268,31 @@
   "Load Watch Cache": [
    [
     "Load Recheck Requests"
+   ]
+  ],
+  "Move Rows (AI Page)": [
+   [
+    "Any Moves (AI Page)?"
+   ]
+  ],
+  "Move Rows (AI Target)": [
+   [
+    "Any Moves (AI Target)?"
+   ]
+  ],
+  "Move Rows (Content Log)": [
+   [
+    "Any Moves (Content Log)?"
+   ]
+  ],
+  "Move Rows (Ladder)": [
+   [
+    "Any Moves (Ladder)?"
+   ]
+  ],
+  "Move Rows (Old AI Page)": [
+   [
+    "Any Moves (Old AI Page)?"
    ]
   ],
   "Nothing To Watch": [
@@ -230,9 +338,29 @@
     "Reserve Run Ledger (Watch)"
    ]
   ],
+  "Save AI Page Moves": [
+   [
+    "Move Rows (Old AI Page)"
+   ]
+  ],
+  "Save AI Target Moves": [
+   [
+    "Move Rows (AI Page)"
+   ]
+  ],
+  "Save Content Log Moves": [
+   [
+    "Move Rows (AI Target)"
+   ]
+  ],
   "Save Finding Recheck": [
    [
     "Watch Alerts"
+   ]
+  ],
+  "Save Ladder Moves": [
+   [
+    "Move Rows (Content Log)"
    ]
   ],
   "Save Page Watch": [
@@ -247,7 +375,7 @@
   ],
   "Save Watch Cache": [
    [
-    "Watch Recheck Rows"
+    "Watch Moves"
    ]
   ],
   "Save Watch Ops Alert": [
@@ -294,6 +422,16 @@
     "Watch Rows"
    ]
   ],
+  "Watch Hop Plan": [
+   [
+    "Any Watch Hops?"
+   ]
+  ],
+  "Watch Moves": [
+   [
+    "Move Rows (Ladder)"
+   ]
+  ],
   "Watch Ops Alert": [
    [
     "Any Ops Alerts (Watch)?"
@@ -316,7 +454,7 @@
   ],
   "Watch Read": [
    [
-    "Watch Compare"
+    "Watch Hop Plan"
    ]
   ],
   "Watch Recheck Rows": [
@@ -346,6 +484,12 @@
   "response_format": "text",
   "retries": 3
  },
+ "hop": {
+  "follows_redirects": true,
+  "max_redirects": 5,
+  "name": "Fetch Watch Hop",
+  "response_format": "text"
+ },
  "nodes": [
   "Daily Schedule",
   "Watch Run",
@@ -363,17 +507,41 @@
   "Load Watch Cache",
   "Load Recheck Requests",
   "Load Ops Alerts (Watch)",
+  "Load Index Pages (Watch)",
+  "Load Content Log (Watch)",
+  "Load AI Targets (Watch)",
+  "Load AI Pages (Watch)",
+  "Load Console Alerts (Watch)",
   "Watch Plan",
   "Any Watch Targets?",
   "Nothing To Watch",
   "Fetch Watch Page",
   "Watch Read",
+  "Watch Hop Plan",
+  "Any Watch Hops?",
+  "Fetch Watch Hop",
   "Watch Compare",
   "Watch Rows",
   "Any Watch Rows?",
   "Save Page Watch",
   "Watch Cache Rows",
   "Save Watch Cache",
+  "Watch Moves",
+  "Move Rows (Ladder)",
+  "Any Moves (Ladder)?",
+  "Save Ladder Moves",
+  "Move Rows (Content Log)",
+  "Any Moves (Content Log)?",
+  "Save Content Log Moves",
+  "Move Rows (AI Target)",
+  "Any Moves (AI Target)?",
+  "Save AI Target Moves",
+  "Move Rows (AI Page)",
+  "Any Moves (AI Page)?",
+  "Save AI Page Moves",
+  "Move Rows (Old AI Page)",
+  "Any Moves (Old AI Page)?",
+  "Delete Old AI Page Moves",
   "Watch Recheck Rows",
   "Any Rechecks?",
   "Save Finding Recheck",

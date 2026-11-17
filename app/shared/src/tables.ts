@@ -88,6 +88,8 @@ export interface CadenceRow extends DtRow {
 export interface ConsoleAlertRow extends DtRow {
   site_id: string; domain: string; kind: string; severity: string; subject: string; summary: string; received_at: string;
   message_id: string; status: string; source: string;
+  // CR17-D (build section 194): the alert lifecycle; absent on rows written before it and on an engine whose table was not synced yet
+  condition_key?: string; last_seen_at?: string; count?: number; resolved_at?: string; resolution?: string; ack_by?: string; ack_at?: string;
 }
 export interface CheckinRow extends DtRow {
   site_id: string; domain: string; month: string; manual_action: boolean; security_issue: boolean; notes: string;
@@ -367,6 +369,8 @@ export interface PageWatchRow extends DtRow {
   robots_blocked: boolean; robots_hash: string; state: string; changes: string; last_change_at: string; changed_count: number; error: string;
   inspect_at: string; index_state: string; indexed: string; coverage: string; google_canonical: string; last_crawl: string;
   mobile: string; rich_results: string; inspect_error: string;
+  /** CR17-D (build section 194): the address this page moved to permanently ('' = it did not move) */
+  moved_to?: string;
 }
 
 /** Index coverage (2026-10-29, n8n/seo-agent/docs/indexing-2026-10-29/DESIGN.md §2): written by the engine's daily `SEOagentIndexCv1`,

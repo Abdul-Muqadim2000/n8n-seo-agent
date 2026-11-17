@@ -576,6 +576,13 @@ const CHANGE_LABEL: Record<string, string> = {
   robots_changed: 'robots.txt changed',
   title_changed: 'title changed',
   page_back: 'answers again',
+  // CR17-D (build section 194): where a redirect lands, and robots.txt as a state
+  page_redirect_bad: 'redirects to a page that does not work',
+  page_moved: 'moved',
+  canonical_fixed: 'canonical points at the page itself',
+  robots_missing: 'robots.txt missing',
+  robots_unreachable: 'robots.txt unreachable',
+  robots_html: 'robots.txt is a web page',
 };
 const pathOnly = (u: string) => u.replace(/^https?:\/\/[^/]+/, '') || '/';
 

@@ -765,7 +765,20 @@ if (recorded_live && (V.publish_note || (log && log.publish_note))) log_row.publ
 const checksFinal = checksOut; const passed = checksFinal.filter(c => c.ok === true).length; const failed = checksFinal.filter(c => c.ok === false);
 const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const path = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
-const summary = (live && !recorded_live) ? ('Not marked published. ' + V.message) : live ? ((V.confirmed ? 'Marked published as you confirmed (the page did not match the draft). ' : 'Recorded. ') + passed + ' of ' + checksFinal.length + ' checks passed' + (failed.length ? '. Fix: ' + failed.map(c => c.name.toLowerCase()).join('; ') : '') + '.' + (V.note ? ' ' + V.note : '')) : ('Recorded, but the page could not be fetched (' + (fetchErr || 'HTTP ' + status) + '). Make sure it is public; the Site Tracker checks it again in this website\'s next weekly report.');
+// build section 194 (client report 2026-11-17, devaicon.com F10): the client typed /services/ai-automation-services-Pakistan; the server treats
+// capital letters as different and answered 404 while /services/ai-automation-services-pakistan is live. When the address that failed has a
+// twin among the site's known pages that differs only in capital letters, say so and give the live address; else, an address with capital
+// letters that answers 404 gets the plain hint to check them.
+const caseHint = (() => {
+  if (live || status !== 404 || !url) return '';
+  const known = [...logs.map(l => l.published_url), ...ladders.map(l => l.target_url), ...qh.map(q => q.page)].map(u => String(u || '').trim()).filter(u => /^https?:\/\//i.test(u) && normD(u) === domain);
+  const exact = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/i, '').replace(/[?#].*$/, '').replace(/\/$/, '');
+  const mine = exact(url);
+  const twin = known.find(u => exact(u).toLowerCase() === mine.toLowerCase() && exact(u) !== mine);
+  if (twin) return ' The address ' + (mine || '/') + ' does not exist: your server treats capital letters as different. Your live page is ' + (exact(twin) || '/') + ', so report that address.';
+  return /[A-Z]/.test(mine) ? ' Check the capital letters in ' + mine + ': your server treats them as different, so the same address in lower case may be the live one.' : '';
+})();
+const summary = (live && !recorded_live) ? ('Not marked published. ' + V.message) : live ? ((V.confirmed ? 'Marked published as you confirmed (the page did not match the draft). ' : 'Recorded. ') + passed + ' of ' + checksFinal.length + ' checks passed' + (failed.length ? '. Fix: ' + failed.map(c => c.name.toLowerCase()).join('; ') : '') + '.' + (V.note ? ' ' + V.note : '')) : ('Recorded, but the page could not be fetched (' + (fetchErr || 'HTTP ' + status) + ').' + (caseHint || ' Make sure it is public; the Site Tracker checks it again in this website\'s next weekly report.'));
 const mark = (c) => c.ok === true ? 'OK' : c.ok === false ? 'FIX' : '--';
 const plain = summary + '\n\n' + checksFinal.map(c => '[' + mark(c) + '] ' + c.name + ': ' + c.detail).join('\n') + (live && !recorded_live ? '' : (link_from.length ? '\n\nAdd a link to the new page from: ' + link_from.map(l => path(l.page)).join(', ') : '') + '\n\nNext: the Site Tracker\'s next weekly report says whether Google indexed the page, with its first impressions and positions' + (ladder ? '; the Rank Tracker follows its ladder position' : '') + '.');
 const html = '<p><b>' + esc(keyword) + '</b> → <a href="' + esc(url) + '">' + esc(url) + '</a></p><p>' + esc(summary) + '</p><ul>' + checksFinal.map(c => '<li>' + (c.ok === true ? '✅' : c.ok === false ? '❌' : '⏸') + ' ' + esc(c.name) + ' — ' + esc(c.detail) + '</li>').join('') + '</ul>' +

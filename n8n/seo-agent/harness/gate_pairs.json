@@ -83,6 +83,7 @@
     "SEO Agent \u2014 Cycle Dispatcher / Cycle Plan": true,
     "SEO Agent \u2014 Keyword Check / Assess Response": true,
     "SEO Agent \u2014 Link Builder / LB Plan": false,
+    "SEO Agent \u2014 Page Watch / Watch Moves": false,
     "SEO Agent \u2014 Page Watch / Watch Plan": false,
     "SEO Agent \u2014 Rank Tracker / Tracker Plan": true,
     "SEO Agent \u2014 Rank Tracker / Tracker Report": true,
@@ -182,6 +183,7 @@
    "SEO Agent \u2014 Backlink Monitor / BL Plan",
    "SEO Agent \u2014 Console Alerts / Alert Target",
    "SEO Agent \u2014 Link Builder / LB Plan",
+   "SEO Agent \u2014 Page Watch / Watch Moves",
    "SEO Agent \u2014 Page Watch / Watch Plan",
    "SEO Agent \u2014 Site Tracker / Publish Candidates"
   ],
