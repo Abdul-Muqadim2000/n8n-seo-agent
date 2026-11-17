@@ -209,7 +209,175 @@ const CMP = (() => {
         + (exText ? '. Passed over: ' + exText : '') + '.';
     return { picked, excluded: excluded.slice(0, 20), too_few: too_few.slice(0, 10), serps_read: read, min_serps: minSerps, note };
   };
-  return { kindOf, kindOfHost, kindOfResult, govSignal, select, weight, host, reg, LABEL };
+  // ---- CR17-F (2026-11-17, client report C5, build section 196): ONE role per site, for every screen and every engine path ----
+  // devaicon.com saw LinkedIn, Clutch and edX called "a competing site of yours" (the Link Builder), and SAP, Salesforce and Oracle as the
+  // businesses AI recommends instead of it (AI visibility), while the keyword research labelled the same hosts a platform, a directory and an
+  // education site. Five kits held five host lists (_ki.js, _rivals.js, _ai_entities.js, _link_kit.js and this one) and the consumers that put
+  // the word "competitor" on screen used the weakest. CMP.role is the one answer; every list below is the union of theirs (the harness holds
+  // each kit's list to it, scenarios_cr17_f.js CR17F1).
+  //  * CMP.role(host, ctx) -> { role, class, by, reason, words }
+  //    role: competitor (sells a comparable service, or chosen by the client), listing (directories, review sites, marketplaces: a place to be
+  //    listed, never a rival), also_ranks (platforms, social networks, publishers, education portals, Q&A, code hosts: they rank, they compete
+  //    for no customer), authority (government, regulators, standards bodies), software (a maker of software the buyer may consider, named by
+  //    AI or ranking: SAP, Salesforce, Zapier), your_platform (the maker of the platform the client builds on, named by its own services:
+  //    Microsoft for a Dynamics partner, openedx.org for an Open edX shop), not_competitor (the client said so), you, unknown.
+  //    ctx: { own_domain, services, topics, principals, chosen, declared, not_competitors, overrides: { host: 'chosen' | 'not_competitor' },
+  //           ki: { host: KI class }, url }. The client's word wins (chosen, then not_competitor), then the platform the client builds on,
+  //    then the host lists, then the KI class read from evidence, then the host's own name; a host nothing rules out is a business: competitor.
+  //  * CMP.partnerDirectory(url) - a principal's partner / marketplace directory (openedx.org/partners, microsoftpartners.microsoft.com,
+  //    appsource.microsoft.com): a place to be listed, whoever's site it is on.
+  //  * CMP.listPage(title, url) - a page that lists companies ("AI / Automation Agencies in Pakistan", "/agencies/..."), beyond "best" / "top".
+  //  * CMP.oneList({ declared, ki_rows, not_competitors, own_domain, max }) - THE competitor list of a site: what the client declared in Site
+  //    settings, plus what it chose on the Competitors page, minus what it marked not a competitor (or dismissed there). Monitors and the app
+  //    read this one list.
+  //  * CMP.LEFT_OUT - the reason codes (and plain words) of a prospect the competitor gate leaves out; the Link Builder stores the code.
+  const RX = (names) => new RegExp('(^|\\.)(' + names.map(n => n.replace(/\./g, '\\.')).join('|') + ')\\.' + SUF + '$');
+  const ROLE_LISTS = {
+    // makers of software a buyer may consider (KI PLATFORM_HOSTS / PRINCIPALS, AIE PLATFORMS, CMP platform): never a competitor of a services firm
+    software: RX(['microsoft', 'dynamics', 'office', 'azure', 'sap', 'oracle', 'netsuite', 'salesforce', 'hubspot', 'zoho', 'odoo', 'infor', 'epicor', 'ifs', 'unit4', 'sage', 'acumatica',
+      'syspro', 'xero', 'quickbooks', 'intuit', 'freshbooks', 'tally', 'tallysolutions', 'workday', 'servicenow', 'shopify', 'magento', 'adobe', 'atlassian', 'notion', 'slack', 'zapier', 'make',
+      'monday', 'asana', 'trello', 'clickup', 'airtable', 'freshworks', 'freshdesk', 'zendesk', 'pipedrive', 'intercom', 'mailchimp', 'dropbox', 'box', 'docusign', 'stripe', 'paypal',
+      'twilio', 'okta', 'bitrix24', 'insightly', 'keap', 'sugarcrm', 'vtiger', 'creatio', 'openai', 'anthropic', 'nvidia', 'ibm', 'aws', 'apple', 'meta', 'canva', 'figma', 'uipath',
+      'automationanywhere', 'blueprism', 'n8n', 'moodle', 'openedx', 'axim', 'totara', 'docebo', 'talentlms', 'cornerstoneondemand', 'wave', 'cloudflare', 'mulesoft', 'tableau', 'qlik',
+      'snowflake', 'databricks', 'elastic', 'mongodb', 'redhat', 'vmware', 'cisco', 'google']),
+    // places to be listed (CMP directory / review / marketplace, KI DIRECTORY_HOSTS, AIE DIRECTORY, RV NOT_RIVAL directories)
+    listing: RX(['clutch', 'themanifest', 'goodfirms', 'sortlist', 'designrush', 'techbehemoths', 'topdevelopers', 'itfirms', 'appfutura', 'f6s', 'g2', 'capterra', 'getapp', 'softwareadvice',
+      'trustradius', 'trustpilot', 'peerspot', 'softwaresuggest', 'gartner', 'saashub', 'alternativeto', 'producthunt', 'selecthub', 'financesonline', 'softwareworld', 'crozdesk',
+      'technologyadvice', 'appvizer', 'softwarefinder', 'softwareconnect', 'top10erp', 'erpfocus', 'upcity', 'agencyspotter', 'expertise', 'yelp', 'yell', 'yellowpages', '2gis', 'crunchbase',
+      'zoominfo', 'dnb', 'kompass', 'hidubai', 'uaeyp', 'serchen', 'bark', 'thumbtack', 'rightfirms', 'techreviewer', 'vendorland', 'builtin', 'zoftwarehub', 'sitejabber', 'comparably',
+      'reviews', 'owler', 'cbinsights', 'tracxn', 'pitchbook', 'dubaidirectory', 'uaecompanies', 'yello', 'cybo', 'tradeindia', 'europages', 'expertmarket', 'emiratesyellowpages',
+      'selectedfirms', 'featuredcustomers', 'justdial', 'sulekha', 'businesslist', 'ensun', 'wadline', 'softwarereviews', 'sourceforge', 'dubizzle', 'upwork', 'fiverr', 'freelancer',
+      'toptal', 'peopleperhour', 'guru', 'appsource.microsoft', 'marketplace.microsoft', 'microsoftpartners.microsoft', 'apps.shopify', 'apps.odoo', 'itprofiles', 'brandmentions', 'connect', 'expatwoman']),
+    // they rank, they compete for no customer (CMP social / qa / reference / education / media / search / job, KI PLATFORM_HOSTS publishers and
+    // code hosts, KI MEDIA_HOSTS, AIE MEDIA / SOCIAL / RESEARCH, LK social, RV NOT_RIVAL social / news)
+    also_ranks: RX(['linkedin', 'lnkd', 'facebook', 'fb', 'instagram', 'twitter', 'x', 'tiktok', 'youtube', 'youtu', 'pinterest', 'threads', 'snapchat', 'vimeo', 'telegram', 'whatsapp',
+      'slideshare', 'scribd', 'issuu', 'reddit', 'quora', 'stackoverflow', 'stackexchange', 'superuser', 'serverfault', 'discord', 'spiceworks', 'tumblr', 'medium', 'substack',
+      'github', 'gitlab', 'bitbucket', 'npmjs', 'readthedocs', 'wordpress', 'blogspot', 'wix', 'weebly', 'squarespace', 'fandom', 'wikipedia', 'wikimedia', 'wikihow', 'wikidata',
+      'britannica', 'investopedia', 'merriam-webster', 'dictionary', 'statista', 'researchgate', 'academia', 'sciencedirect', 'springer', 'ieee', 'arxiv', 'mdpi', 'ncbi',
+      'forrester', 'idc', 'mckinsey', 'bcg', 'bain', 'business', 'khaleej', 'marketsandmarkets', 'mordorintelligence', 'grandviewresearch', 'frost',
+      'coursera', 'udemy', 'edx', 'simplilearn', 'greatlearning', 'mygreatlearning', 'upgrad', 'udacity', 'datacamp', 'skillshare', 'pluralsight', 'edureka', 'intellipaat',
+      'futurelearn', 'khanacademy', 'classcentral', 'w3schools', 'emeritus', 'knowledgehut',
+      'google', 'bing', 'yahoo', 'duckduckgo', 'baidu', 'yandex', 'ecosia', 'brave', 'chatgpt', 'perplexity', 'gemini', 'claude',
+      'indeed', 'glassdoor', 'naukri', 'naukrigulf', 'bayt', 'monster', 'gulftalent', 'rozee', 'mustakbil', 'wuzzuf', 'bebee', 'ziprecruiter', 'jooble',
+      'gulfnews', 'khaleejtimes', 'thenationalnews', 'thenational', 'zawya', 'arabianbusiness', 'gulfbusiness', 'reuters', 'bloomberg', 'forbes', 'forbesmiddleeast', 'cnbc', 'bbc', 'cnn',
+      'ft', 'wsj', 'techcrunch', 'entrepreneur', 'economist', 'businessinsider', 'arabnews', 'timesofindia', 'dawn', 'tribune', 'propakistani', 'techjuice', 'techradar', 'pcmag', 'zdnet',
+      'cio', 'computerweekly', 'itpro', 'techtarget', 'wired', 'theverge', 'engadget', 'mashable', 'venturebeat', 'inc', 'fastcompany', 'hbr', 'nytimes', 'theguardian', 'itp',
+      'economymiddleeast', 'wamda', 'magnitt', 'cxotoday', 'tahawultech', 'menabytes', 'analyticsinsight', 'towardsdatascience', 'kdnuggets', 'marktechpost', 'erpresearch',
+      'erpsoftwareblog', 'msdynamicsworld', 'dynamicscommunity', 'technologyevaluation', 'panorama-consulting', 'erpnews', 'tradearabia', 'emirates247', 'wam', 'albayan', 'alkhaleej',
+      'argaam', 'saudigazette', 'nerdwallet', 'aljazeera', 'alarabiya', 'about', 'linktr', 'carrd', 'bio', 'beacons']),
+    // regulators and public bodies whose addresses do not end in .gov (KI GOV_HOSTS, AIE GOV, CMP gov)
+    authority: RX(['centralbank', 'cbuae', 'ico', 'fca', 'cma', 'sbp', 'secp', 'pta', 'fbr', 'sama', 'zatca', 'rbi', 'sebi', 'ecb', 'europa', 'edpb', 'vara', 'dfsa', 'fsra',
+      'tdra', 'citra', 'qcb', 'cbb', 'cbo', 'cbk', 'mas', 'bnm', 'bis', 'imf', 'worldbank', 'oecd', 'who', 'difc', 'adgm', 'dmcc', 'dafz', 'dafza', 'jafza', 'rakez', 'dso', 'ifza', 'shams',
+      'kezad', 'dwtc', 'dubaichamber', 'abudhabichamber', 'dubaided', 'saifzone', 'ajmanfreezone', 'fujairahfreezone', 'hamriyahfz', 'mof', 'mohre', 'u', 'ai.gov', 'peppol', 'openpeppol', 'w3', 'iso']),
+    // global consultancies and the Big Four: they sell IT and AI consulting, so they compete (class enterprise; owner decision, HANDOFF_F.md)
+    enterprise: RX(['deloitte', 'pwc', 'kpmg', 'ey', 'accenture', 'capgemini', 'cognizant', 'infosys', 'wipro', 'tcs', 'hcltech', 'kearney', 'protiviti', 'grantthornton', 'bdo'])
+  };
+  // the platform a client builds on, named by its own services (the KI table of principals, kept in step by CR17F1)
+  const PRINCIPALS = [
+    { re: /\b(microsoft|dynamics|d365|business central|power platform|power bi|power apps|power automate|fabric|copilot|azure|sharepoint|office 365|microsoft 365|m365|navision|nav|great plains|dynamics gp|dynamics ax)\b/i,
+      hosts: ['microsoft.com', 'dynamics.com', 'microsoft.ae', 'azure.com', 'powerbi.com', 'powerplatform.com', 'office.com', 'microsoftonline.com', 'windows.net', 'sharepoint.com'] },
+    { re: /\bopen ?edx\b/i, hosts: ['openedx.org', 'axim.org', 'edx.readthedocs.io', 'openedx.atlassian.net'] },
+    { re: /\bodoo\b/i, hosts: ['odoo.com'] }, { re: /\bsap\b|s\/?4 ?hana/i, hosts: ['sap.com'] }, { re: /\bsalesforce\b/i, hosts: ['salesforce.com'] },
+    { re: /\bhubspot\b/i, hosts: ['hubspot.com'] }, { re: /\bzoho\b/i, hosts: ['zoho.com'] }, { re: /\bnetsuite\b/i, hosts: ['netsuite.com', 'oracle.com'] },
+    { re: /\boracle\b/i, hosts: ['oracle.com'] }, { re: /\bsage\b/i, hosts: ['sage.com'] }, { re: /\bshopify\b/i, hosts: ['shopify.com'] },
+    { re: /\baws\b|amazon web services/i, hosts: ['aws.amazon.com', 'amazonaws.com'] }, { re: /\bgoogle cloud\b|\bgcp\b/i, hosts: ['cloud.google.com'] },
+    { re: /\bgoogle workspace\b/i, hosts: ['workspace.google.com'] }, { re: /\bpeppol\b/i, hosts: ['peppol.org', 'peppol.eu'] },
+    { re: /\bmoodle\b/i, hosts: ['moodle.org', 'moodle.com'] }, { re: /\bservicenow\b/i, hosts: ['servicenow.com'] }, { re: /\bacumatica\b/i, hosts: ['acumatica.com'] },
+    { re: /\bwordpress\b/i, hosts: ['wordpress.org', 'wordpress.com'] }, { re: /\bmagento\b|adobe commerce/i, hosts: ['magento.com', 'adobe.com'] }
+  ];
+  // a software maker COMPETES with a client that sells the same kind of software (Odoo for a Dynamics 365 ERP partner, SAP and Oracle for an
+  // Odoo partner, Zoho Payroll for a payroll firm: harness accuracy set ai_entities.json T06 T13 T30); for anyone else (an AI or software
+  // services firm named next to SAP and Salesforce in an AI-automation answer) it is a software maker. A client "sells" a category when two of
+  // its services name it (or one of three or fewer); with no services known nothing can be judged and the maker stays a competitor, as before.
+  const SOFT_CAT = {
+    erp: { client: /\b(?:erp|dynamics 365|d365|business central|navision|nav|great plains|dynamics (?:gp|ax|nav)|finance (?:&|and) operations|odoo|netsuite|sap|acumatica|sage|syspro|epicor|infor|tally|zoho books|erpnext)\b/i,
+      makers: RX(['sap', 'oracle', 'netsuite', 'odoo', 'sage', 'xero', 'quickbooks', 'intuit', 'tally', 'tallysolutions', 'infor', 'epicor', 'ifs', 'unit4', 'acumatica', 'syspro', 'workday', 'microsoft', 'dynamics', 'zoho', 'freshbooks']) },
+    crm: { client: /\b(?:crm|salesforce|hubspot|customer engagement|dynamics 365 sales|pipedrive|zoho crm|sugarcrm)\b/i,
+      makers: RX(['salesforce', 'hubspot', 'pipedrive', 'freshworks', 'zendesk', 'sugarcrm', 'vtiger', 'creatio', 'bitrix24', 'insightly', 'keap', 'zoho', 'microsoft', 'dynamics', 'oracle', 'sap']) },
+    lms: { client: /\b(?:lms|open ?edx|moodle|learning management|e-?learning platform|docebo|totara)\b/i,
+      makers: RX(['moodle', 'openedx', 'axim', 'docebo', 'totara', 'talentlms', 'cornerstoneondemand']) },
+    payroll: { client: /\b(?:payroll|wps|hr software|hrms|hcm)\b/i, makers: RX(['zoho', 'sage', 'xero', 'quickbooks', 'intuit', 'workday', 'sap', 'oracle']) },
+    ecommerce: { client: /\b(?:shopify|magento|woocommerce|e-?commerce platform)\b/i, makers: RX(['shopify', 'magento', 'adobe', 'wix', 'squarespace', 'bigcommerce']) }
+  };
+  const clientCats = (ctx) => { const o = ctx || {}; const sv = [].concat(o.services || []).map(x => S(x && typeof x === 'object' ? (x.name || x.label || '') : x)).filter(Boolean);
+    if (!sv.length) return null; const out = new Set();
+    for (const [k, c] of Object.entries(SOFT_CAT)) { const n = sv.filter(x => c.client.test(x)).length; if (n >= 2 || (n >= 1 && sv.length <= 3)) out.add(k); }
+    return out; };
+  const sellsSameSoftware = (h, ctx) => { const cats = clientCats(ctx); if (cats === null) return true; for (const k of cats) if (SOFT_CAT[k].makers.test(h)) return true; return false; };
+  const ROLES = ['competitor', 'listing', 'also_ranks', 'authority', 'software', 'your_platform', 'not_competitor', 'you', 'unknown'];
+  // the words a client reads for each role (Rankings "Above you", AI visibility, the Link Builder's left-out list)
+  const ROLE_WORDS = { competitor: 'a competitor', listing: 'a directory or list where companies are listed', also_ranks: 'a platform or publisher that also ranks',
+    authority: 'a government or public body', software: 'a software maker', your_platform: 'the maker of the platform you work with', not_competitor: 'not a competitor (your choice)',
+    you: 'your own site', unknown: 'not a web address' };
+  // KI classes -> roles (the KI page's evidence, when the caller has it)
+  const KI_ROLE = { direct: 'competitor', adjacent: 'competitor', principal: 'your_platform', directory: 'listing', publisher_list: 'listing', platform: 'also_ranks', media: 'also_ranks',
+    education: 'also_ranks', job_board: 'also_ranks', government: 'authority' };
+  // CMP host kinds -> roles
+  const KIND_ROLE = { job: 'also_ranks', directory: 'listing', review: 'listing', marketplace: 'listing', media: 'also_ranks', gov: 'authority', search: 'also_ranks', social: 'also_ranks',
+    qa: 'also_ranks', reference: 'also_ranks', education: 'also_ranks', help: 'also_ranks', platform: 'software' };
+  const listOfH = (v) => (Array.isArray(v) ? v : S(v).split(/[,;\n]+/)).map(x => host(x && typeof x === 'object' ? (x.domain || x.host || x.comp_domain) : x)).filter(Boolean);
+  const sameOrSub = (h, d) => !!d && (h === d || h.endsWith('.' + d) || reg(h) === reg(d));
+  const principalHosts = (ctx) => { const o = ctx || {}; const txt = [].concat(o.services || [], o.topics || []).map(x => S(x && typeof x === 'object' ? (x.name || x.label || '') : x)).join(' | ');
+    const out = new Set(listOfH(o.principals)); for (const p of PRINCIPALS) if (p.re.test(txt)) p.hosts.forEach(x => out.add(x)); return [...out]; };
+  // a principal's partner / app directory: a place to be listed, whoever's site it is on
+  const PARTNER_HOST = /^(microsoftpartners\.microsoft\.com|appsource\.microsoft\.com|marketplace\.microsoft\.com|partner\.microsoft\.com|partners\.salesforce\.com|appexchange\.salesforce\.com|ecosystem\.hubspot\.com|apps\.odoo\.com|apps\.shopify\.com|partnerfinder\.sap\.com|aws\.amazon\.com\/partners|marketplace\.zoho\.com)/;
+  const PARTNER_PATH = /^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?(?:partners?|partner-directory|find-a-partner|partner-finder|service-providers|providers|marketplace|solution-providers)(?:\/|$|\?)/i;
+  const partnerDirectory = (url) => { const u = S(url).toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/^www\./, ''); if (!u) return false;
+    if (PARTNER_HOST.test(u)) return true; const p = u.replace(/^[^\/?#]+/, '') || '/'; return PARTNER_PATH.test(p); };
+  // a page that lists companies: CMP's list rule, or a plural seller noun as its head ("AI / Automation Agencies in Pakistan"), or an address
+  // made for listings (/agencies/..., /companies/..., /directory/...)
+  const SELLERS_HEAD = /(?:^|[|\-:]\s*)(?:[\w&\/.+-]+\s+){0,5}(?:companies|firms|agencies|providers|consultants|consultancies|vendors|partners|developers|integrators|specialists|studios)(?:\s+(?:in|for|near|across)\s+[\w\s,&-]{2,40})?\s*(?:$|[|\-:(])/i;
+  const LISTING_PATH = /\/(?:agencies|companies|firms|vendors|providers|directory|directories|listings?|rankings?|top-[\w-]+)\//i;
+  const listPage = (title, url) => { const t = S(title); const p = S(url).replace(/^[a-z]+:\/\/[^\/]+/i, '');
+    return kindOfResult(url, title, '') === 'list' || SELLERS_HEAD.test(t) || LISTING_PATH.test(p + '/'); };
+  /** CMP.role(host, ctx) -> { role, class, by, reason, words } (see above) */
+  const role = (h0, ctx) => {
+    const o = ctx || {}; const h = host(h0 && typeof h0 === 'object' ? (h0.domain || h0.host) : h0);
+    const out = (r, cls, by, reason) => ({ role: r, class: cls, by, reason, words: ROLE_WORDS[r] || r, host: h, reg: h ? reg(h) : '' });
+    if (!h || !/\./.test(h)) return out('unknown', '', 'rule', 'not a web address');
+    const own = host(o.own_domain); if (own && sameOrSub(h, own)) return out('you', '', 'rule', 'your own site');
+    const R = reg(h);
+    const ov = o.overrides && typeof o.overrides === 'object' ? (o.overrides[h] || o.overrides[R] || '') : '';
+    const inL = (v) => listOfH(v).some(d => sameOrSub(h, d) || reg(d) === R);
+    if (ov === 'not_competitor' || inL(o.not_competitors)) return out('not_competitor', 'user', 'user', 'you marked it as not a competitor');
+    if (ov === 'chosen' || inL(o.chosen) || inL(o.declared)) return out('competitor', 'user', 'user', 'you chose it as a competitor');
+    const pr = principalHosts(o);
+    if (pr.some(d => sameOrSub(h, d))) return out('your_platform', 'principal', 'rule', 'the maker of a platform your services are built on');
+    if (/(^|\.)(gov|mil|int|gob|gouv|govt|government)(\.[a-z]{2})?$/.test(h) || /\.(gov|mil)\.[a-z]{2}$/.test(h)) return out('authority', 'government', 'rule', 'a government or public body');
+    if (/(^|\.)(edu|ac)\.[a-z]{2}$/.test(h) || /\.edu$/.test(h)) return out('also_ranks', 'education', 'rule', 'a school or university');
+    if (ROLE_LISTS.authority.test(h)) return out('authority', 'government', 'rule', 'a government, regulator or standards body');
+    if (ROLE_LISTS.listing.test(h)) return out('listing', 'directory', 'rule', 'a directory, review site or marketplace where companies are listed');
+    if (ROLE_LISTS.software.test(h)) return sellsSameSoftware(h, o) ? out('competitor', 'software_vendor', 'rule', 'it makes software of a kind you sell') : out('software', 'software', 'rule', 'a maker of software buyers may consider');
+    if (ROLE_LISTS.also_ranks.test(h)) return out('also_ranks', 'platform', 'rule', 'a platform, network, publisher or course site that ranks for searches but sells no comparable service');
+    if (ROLE_LISTS.enterprise.test(h)) return out('competitor', 'enterprise', 'rule', 'a global consultancy that sells IT and AI services');
+    const kc = o.ki && typeof o.ki === 'object' ? (o.ki[h] || o.ki[R] || '') : '';
+    if (KI_ROLE[kc]) return out(KI_ROLE[kc], kc, 'ki', 'read from its own pages on the Competitors page');
+    const k = kindOfHost(h, own);
+    if (k === 'you') return out('you', '', 'rule', 'your own site');
+    if (KIND_ROLE[k]) return out(KIND_ROLE[k], k, 'rule', LABEL[k] || k);
+    return out('competitor', 'business', 'rule', 'a business site');
+  };
+  const isCompetitor = (h, ctx) => role(h, ctx).role === 'competitor';
+  // the left-out reasons of the competitor gate (the Link Builder stores the code in seo_link_outreach.reason_code; the app reads the words)
+  const LEFT_OUT = {
+    competitor: 'a competitor of yours: it does not link to a competitor',
+    competitor_list: 'a competitor of yours: its own list ranks itself, not you',
+    listing: 'a directory or list where companies are listed: add yourself to it instead (see Listings)',
+    your_platform: 'the maker of the platform you work with, not a competitor: get listed in its partner directory instead',
+    software: 'a software maker, not a competitor: its pages link to its own product, not to service providers'
+  };
+  /** CMP.oneList({ declared, ki_rows, not_competitors, own_domain, max }) -> { list, chosen, declared, removed } - THE competitor list of a site */
+  const oneList = (o0) => {
+    const o = o0 || {}; const own = host(o.own_domain); const max = Math.max(1, Number(o.max) || 5);
+    const rows = (Array.isArray(o.ki_rows) ? o.ki_rows : []).filter(r => r && r.comp_domain && (!o.site_id || !r.site_id || S(r.site_id) === S(o.site_id)));
+    const st = (r) => S(r.status).toLowerCase();
+    const chosen = [...new Set(rows.filter(r => st(r) === 'chosen').map(r => host(r.comp_domain)))];
+    const off = new Set([...listOfH(o.not_competitors), ...rows.filter(r => st(r) === 'not_competitor' || (st(r) === 'dismissed' && S(r.status_by) === 'user')).map(r => host(r.comp_domain))]);
+    const declared = listOfH(o.declared);
+    const list = []; for (const d of [...declared, ...chosen]) { if (!d || (own && sameOrSub(d, own)) || off.has(d) || [...off].some(x => reg(x) === reg(d)) || list.includes(d)) continue; list.push(d); }
+    return { list: list.slice(0, max), chosen, declared, removed: [...off] };
+  };
+  return { kindOf, kindOfHost, kindOfResult, govSignal, select, weight, host, reg, LABEL, role, isCompetitor, oneList, partnerDirectory, listPage, principalHosts, ROLES, ROLE_WORDS, LEFT_OUT, ROLE_LISTS, PRINCIPALS, KI_ROLE, SOFT_CAT };
 })();
 // KW-COMP (2026-10-21, RV-6): the same competitor rule as research and the ladder (CMP): a domain whose ADDRESS is a job board, directory,
 // review or media site, authority, search engine, social network, Q&A site, help / docs subdomain, course provider or platform is never a

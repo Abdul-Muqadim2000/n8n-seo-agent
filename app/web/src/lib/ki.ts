@@ -84,7 +84,7 @@ export function planOf(v: unknown): KiPlanAction[] {
   return (Array.isArray(v) ? v : [])
     .filter(isObj)
     .slice(0, 10)
-    .map((a) => ({ action_id: str(pick(a, 'action_id') || a.id), kind: str(a.kind) as KiPlanAction['kind'], title: str(a.title), why: str(a.why), target: str(a.target), credits: num(a.credits) ?? 0, gap_id: str(pick(a, 'gap_id')) || undefined, cluster_id: str(pick(a, 'cluster_id')) || undefined }))
+    .map((a) => ({ action_id: str(pick(a, 'action_id') || a.id), kind: str(a.kind) as KiPlanAction['kind'], title: str(a.title), why: str(a.why), target: str(a.target), credits: num(a.credits) ?? 0, gap_id: str(pick(a, 'gap_id')) || undefined, cluster_id: str(pick(a, 'cluster_id')) || undefined, service: str(a.service) || undefined }))
     .filter((a) => a.action_id && a.title);
 }
 
@@ -318,6 +318,8 @@ export interface KiKw {
   clusterDemand: number | null;
   pageAction: string;
   pageUrl: string;
+  /** CR17-F: the client service the search belongs to; null = none of them ("Not one of your services") */
+  service: string | null;
   cannibal: boolean;
   competitors: { domain: string; position: number; url: string }[];
   striking: boolean;
@@ -371,6 +373,7 @@ export function kiKwOf(o: Obj): KiKw {
     clusterDemand: num(pick(o, 'cluster_demand')),
     pageAction: str(pick(o, 'page_action')),
     pageUrl: str(pick(o, 'page_url')),
+    service: str(pick(o, 'service')).trim() || null,
     cannibal: Array.isArray(cannibal) ? cannibal.length > 1 : !!cannibal,
     competitors: kiJson<unknown[]>(pick(o, 'competitors') ?? pick(o, 'competitors_json'), []).filter(isObj).map((c) => ({ domain: str(c.domain), position: num(c.position) ?? 0, url: str(c.url) })),
     striking: bool(pick(o, 'striking')),
@@ -388,6 +391,8 @@ export interface KiKeywords {
   pages: number | null;
   plan: KiPlanAction[];
   questions: { key: string; question: string; sources: KiSource[] }[] | null;
+  /** CR17-F: searches per client service over the whole market (`service: null` = none of them); [] from a server that does not send it */
+  byService: { service: string | null; count: number }[];
 }
 export function kiKeywordsOf(raw: unknown): KiKeywords {
   const o = isObj(raw) ? raw : {};
@@ -401,6 +406,7 @@ export function kiKeywordsOf(raw: unknown): KiKeywords {
     pages: num(o.pages),
     plan: planOf(o.plan),
     questions: qs,
+    byService: (Array.isArray(pick(o, 'by_service')) ? (pick(o, 'by_service') as unknown[]) : []).filter(isObj).map((x) => ({ service: str(x.service).trim() || null, count: num(x.count) ?? 0 })),
   };
 }
 
@@ -415,10 +421,12 @@ export interface KiKwFilter {
   brand: '' | 'brand' | 'non_brand';
   /** only the searches just off page one (the "See all" of that section) */
   striking: boolean;
+  /** CR17-F: one client service, or KI_NO_SERVICE for the searches that match none ('' = all) */
+  service: string;
   sort: 'score' | 'volume' | 'keyword';
   page: number;
 }
-export const KI_KW_FILTER_EMPTY: KiKwFilter = { stage: '', verdict: '', source: '', cluster: '', minVolume: '', gapType: '', brand: '', striking: false, sort: 'score', page: 1 };
+export const KI_KW_FILTER_EMPTY: KiKwFilter = { stage: '', verdict: '', source: '', cluster: '', minVolume: '', gapType: '', brand: '', striking: false, service: '', sort: 'score', page: 1 };
 export const KI_PAGE_SIZE = 50;
 /** review UX N9 (pass 2): a phone gets 20 search cards a page, not 50 */
 export const KI_PAGE_SIZE_PHONE = 20;
@@ -436,9 +444,12 @@ export function kiKwParams(f: KiKwFilter, pageSize: number = KI_PAGE_SIZE): Reco
   // FX-A (review UX H2): filtered on the server like every other filter, so the count, the pager and the empty state agree
   if (f.gapType) p.gap_type = f.gapType;
   if (f.striking) p.striking = '1';
+  if (f.service) p.service = f.service;
   return p;
 }
-export const kiActiveFilters = (f: KiKwFilter): number => (['stage', 'verdict', 'source', 'cluster', 'minVolume', 'gapType', 'brand', 'striking'] as const).filter((k) => !!f[k]).length;
+export const kiActiveFilters = (f: KiKwFilter): number => (['stage', 'verdict', 'source', 'cluster', 'minVolume', 'gapType', 'brand', 'striking', 'service'] as const).filter((k) => !!f[k]).length;
+/** CR17-F: a search's service in the client's words */
+export const kiServiceLabel = (service: string | null | undefined): string => (service ? service : 'Not one of your services');
 
 /** The groups (one head each), by score; members counted from the rows or the stored group size. */
 export function kiClustersOf(rows: readonly KiKw[]) {

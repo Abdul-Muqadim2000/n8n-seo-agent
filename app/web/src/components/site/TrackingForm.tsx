@@ -169,7 +169,7 @@ export function TrackingForm({
             <Field
               label="Competitors"
               optional
-              hint="Up to 3. Compared in AI answers, backlinks and the monthly report."
+              hint="Up to 5. Compared in AI answers, backlinks and the monthly report."
               labelAction={<GuideButton id="competitors" vars={{ domain: site.domain }} variant="link" label="Who counts as a competitor?" />}
               error={errorText(fieldState.error)}
             >
@@ -180,7 +180,7 @@ export function TrackingForm({
                   describedBy={p['aria-describedby']}
                   value={field.value ?? []}
                   onChange={field.onChange}
-                  max={3}
+                  max={5}
                   normalize={cleanDomain}
                   validate={competitorValidator(site.domain)}
                   placeholder="competitor.com, then Enter"

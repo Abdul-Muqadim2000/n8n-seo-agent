@@ -16,7 +16,7 @@ const { exec } = require('./air_graph_exec');
 const FX = require('./fixtures_air');
 const SNAP = path.join(__dirname, 'air_golden', 'ai_growth_off.json');
 const AIR_TARGET_COLS = ['origin', 'action_id', 'live_at'];
-const ALLOWED_NEW = ['AI Rank Gate', 'Any AI Rank?'];
+const ALLOWED_NEW = ['AI Rank Gate', 'Any AI Rank?', 'Load KI Competitors (Mon)'];   // CR17-F (2026-11-17, section 196): every monitor reads the Competitors page's choices (one load, no write)
 
 async function runGolden(wfFile, opts) {
   const o = opts || {};
@@ -47,9 +47,12 @@ async function runGolden(wfFile, opts) {
   const last = (n) => { const x = r.runs[n]; return x && x.length ? x[x.length - 1][0] || [] : null; };
   const counts = {}; for (const n of r.order) counts[n] = (counts[n] || 0) + 1;
   const writes = r.writes.map(w => ({ node: w.node, table: w.table, op: w.op, rows: w.rows.map(row => {
+    if (w.table === 'seo_link_prospects' && (row.retired_at === null || row.retired_at === '')) { const c = { ...row }; delete c.retired_at; return c; }   // CR17-F: the new column, written null by the exact-column writer
     if (w.table !== 'seo_ai_targets') return row; const c = { ...row }; for (const k of AIR_TARGET_COLS) if (c[k] === null) delete c[k]; return c; }) }));
   const airNonNull = r.writes.filter(w => w.table === 'seo_ai_targets').flatMap(w => w.rows).filter(row => AIR_TARGET_COLS.some(k => row[k] !== undefined && row[k] !== null));
-  return { counts, report: last('Growth Report'), callback: last('Callback Ledger (Growth)'), posted: r.posts.filter(p => p.node === 'POST Growth Report').map(p => p.body),
+  // CR17-F (2026-11-17): the new prospect column retired_at ('' or null on a live row) is not part of the pre-AIR picture
+  const noRet = (x) => Array.isArray(x) ? x.map(noRet) : x && typeof x === 'object' ? Object.fromEntries(Object.entries(x).filter(([k, v]) => !(k === 'retired_at' && (v === '' || v === null))).map(([k, v]) => [k, noRet(v)])) : x;
+  return { counts, report: noRet(last('Growth Report')), callback: last('Callback Ledger (Growth)'), posted: r.posts.filter(p => p.node === 'POST Growth Report').map(p => p.body),
     writes, errors: r.errors, airNonNull, order: r.order };
 }
 

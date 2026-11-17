@@ -4,6 +4,7 @@ import { AI_ENGINE_VALUES, type AiQuestionInputs, type EngineAction, aiCiMethodL
 import { formatCredits, quoteLabel } from '@/lib/credits';
 import { AiPrecisionTable } from '@/components/site/AiPrecision';
 import { useSiteData } from '@/lib/queries';
+import { NotCompetitorButton } from './_components/not-competitor';
 import { useCycleDay } from '@/lib/cycle-day';
 import { cn, fmtAgo, fmtDate } from '@/lib/utils';
 import { AnnotationLegend, ChartCard, Sparkline, TimeSeriesChart, type Series } from '@/components/charts';
@@ -248,12 +249,17 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
         <RunsTrend runs={shownRuns} daily={shownDays} loading={refetching} className="xl:col-span-3" />
-        <Panel title="Share of voice" icon={<Trophy />} description="Brands named across all answers in the latest run" info="Share of all brand mentions; the number is mentions. ★ = a competitor you set; others were found in the answers." className="xl:col-span-2">
+        <Panel title="Share of voice" icon={<Trophy />} description="Competitors named across all answers in the latest run" info="Share of all brand mentions; the number is mentions. ★ = a competitor you set; others were found in the answers." className="xl:col-span-2">
           {d.latest?.competitors.length || L ? (
             <>
               <RankedBars
                 you={site.domain}
-                items={[...(d.latest?.competitors ?? []).filter((c) => c.domain !== site.domain).map((c) => ({ label: c.domain, value: c.share, sub: `${c.mentions}${c.auto ? '' : ' ★'}` })), ...(L && L.shareOfVoice != null ? [{ label: site.domain, value: L.shareOfVoice, sub: '' }] : [])]
+                items={[
+                  ...(d.latest?.competitors ?? [])
+                    .filter((c) => c.domain !== site.domain)
+                    .map((c) => ({ label: c.domain, value: c.share, sub: `${c.mentions}${c.auto ? '' : ' ★'}`, action: can('member') && c.domain.includes('.') ? <NotCompetitorButton domain={c.domain} /> : undefined })),
+                  ...(L && L.shareOfVoice != null ? [{ label: site.domain, value: L.shareOfVoice, sub: '' }] : []),
+                ]
                   .sort((a, b) => b.value - a.value)
                   .slice(0, 9)}
               />
@@ -261,6 +267,21 @@ function AiBody({ d, refetching, filter, setFilter, clearFilter }: { d: AiData; 
             </>
           ) : (
             <EmptyState className="py-6" icon={<Trophy className="size-5" />} title="No brands named yet." />
+          )}
+          {/* CR17-F (client report C5): software makers and platforms AI names are products, never competitors, never in the share of voice */}
+          {(d.latest?.softwareNamed?.length ?? 0) > 0 && (
+            <div className="mt-4 border-t border-line pt-3">
+              <h3 className="text-sm font-medium text-ink">Software and platforms AI names</h3>
+              <p className="mt-0.5 text-xs text-ink-3">These are products AI mentions, not businesses competing with you. They are not in the share of voice.</p>
+              <ul className="mt-2 flex flex-wrap gap-1.5">
+                {d.latest!.softwareNamed.slice(0, 12).map((x) => (
+                  <li key={x.domain || x.name} className="inline-flex h-6 items-center gap-1 rounded-md bg-surface-2 px-2 text-xs text-ink-2" title={x.domain || x.name}>
+                    <span className="max-w-[12rem] truncate">{x.name || x.domain}</span>
+                    <span className="tabular text-ink-3">{x.answers}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </Panel>
       </div>

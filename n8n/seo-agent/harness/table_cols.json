@@ -118,7 +118,8 @@
   "followup_subject",
   "followup_body",
   "verified_at",
-  "drafted_at"
+  "drafted_at",
+  "retired_at"
  ],
  "CACHE": [
   "key",
@@ -308,7 +309,8 @@
   "imports_json",
   "exec_ids",
   "notes_json",
-  "persona_effect_json"
+  "persona_effect_json",
+  "software_json"
  ],
  "AI_IMPORTS": [
   "site_id",
@@ -941,7 +943,8 @@
   "striking",
   "run_id",
   "fetched_at",
-  "updated_at"
+  "updated_at",
+  "service"
  ],
  "KI_GAPS": [
   "gap_id",

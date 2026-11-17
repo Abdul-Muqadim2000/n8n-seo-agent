@@ -76,8 +76,9 @@ export const KI_NEEDS_YOU_GUIDES: Record<string, KiGuideId> = {
 export const KI_PAGE_SIZE = { default: 50, max: 200 } as const;
 /** At most this many questions approved into the AI panel in one request. */
 export const KI_APPROVE_MAX = 30;
-/** The status a person may give a competitor (CONTRACTS §5) and a gap. */
-export const KI_COMP_USER_STATUSES = ['chosen', 'watch', 'dismissed'] as const;
+/** The status a person may give a competitor (CONTRACTS §5) and a gap. CR17-F: `not_competitor` is the "Not a competitor" button anywhere in
+ *  the app (Site Admin ki_competitor takes it for any domain; the KI set stores it as `dismissed`, a domain outside the set in a market-less row). */
+export const KI_COMP_USER_STATUSES = ['chosen', 'watch', 'dismissed', 'not_competitor'] as const;
 export type KiCompUserStatus = (typeof KI_COMP_USER_STATUSES)[number];
 export const KI_GAP_USER_STATUSES = KI_GAP_STATUSES;
 
@@ -216,6 +217,8 @@ export interface KiKeywordView {
   clusterDemand: number | null;
   pageAction: KiPageAction | null;
   pageUrl: string | null;
+  /** CR17-F: the client service this search belongs to (seo_ki_keywords.service); null = none of the services (a generic search) */
+  service: string | null;
   competitors: { domain: string; position: number; url: string }[];
   striking: boolean;
   /** names the website's brand (its brand names or its domain's name) */
@@ -252,6 +255,8 @@ export interface KiKeywordQuery {
   heads?: boolean;
   questions?: boolean;
   market?: string;
+  /** CR17-F: one client service (`service=<name>`), or the searches that match none (`service=_none`, null here) */
+  service?: string | null;
   /** a sort key, `-` in front = descending (default `-score`) */
   sort: string;
   page: number;
@@ -269,6 +274,8 @@ export interface KiKeywordsResponse {
   items: KiKeywordView[];
   /** counts over every row of the market (before the filters), for the filter chips */
   facets: { verdict: Record<KiVerdict, number>; stage: Partial<Record<KiStage, number>>; source: Partial<Record<KiSource, number>> };
+  /** CR17-F: searches per client service over every row of the market (before the filters), most first; `service: null` = none of the services */
+  byService: { service: string | null; count: number }[];
 }
 
 export interface KiGapView {
@@ -460,6 +467,7 @@ export function kiKeywordView(r: KiKeywordRow, brandTokens: readonly string[], i
     clusterDemand: N(r.cluster_demand),
     pageAction: (['new', 'refresh', 'list', 'none'] as const).includes(S(r.page_action) as KiPageAction) ? (S(r.page_action) as KiPageAction) : null,
     pageUrl: S(r.page_url) || null,
+    service: S(r.service) || null,
     competitors: arrOf<{ domain?: unknown; position?: unknown; url?: unknown }>(r.competitors_json).map((c) => ({ domain: S(c?.domain), position: N(c?.position) ?? 0, url: S(c?.url) })).filter((c) => c.domain),
     striking: B(r.striking),
     brand: kiIsBrand(keyword, brandTokens),
@@ -518,6 +526,9 @@ export function kiRunView(r: KiRunRow): KiRunView {
 // the keyword query (parsed from the URL, then applied server side)
 // ---------------------------------------------------------------------------------------------------------------------------
 
+/** CR17-F: the `service` filter value of the searches that match none of the client's services. */
+export const KI_NO_SERVICE = '_none';
+
 const MARKET_RE = /^[A-Z]{2}-[a-z]{2,3}$/;
 export const kiMarketOf = (v: unknown): string | undefined => (MARKET_RE.test(S(v)) ? S(v) : undefined);
 
@@ -548,6 +559,7 @@ export function kiKeywordQueryOf(q: Record<string, unknown>): KiKeywordQuery {
     ...(bool('heads') ? { heads: true } : {}),
     ...(bool('questions') ? { questions: true } : {}),
     ...(kiMarketOf(one('market')) ? { market: kiMarketOf(one('market')) } : {}),
+    ...(S(one('service')) && S(one('service')).length <= 120 ? { service: S(one('service')) === KI_NO_SERVICE ? null : S(one('service')).toLowerCase() } : {}),
     sort: KI_KEYWORD_SORTS.includes(sortKey) ? sortRaw : '-score',
     page,
     pageSize: Math.min(KI_PAGE_SIZE.max, Math.max(1, size || KI_PAGE_SIZE.default)),
@@ -573,6 +585,7 @@ export function kiKeywordMatches(
   if (q.striking && !kiQuickWin(v)) return false;
   if (q.heads && !v.isHead) return false;
   if (q.questions && !v.question) return false;
+  if (q.service !== undefined && (q.service === null ? v.service !== null : (v.service ?? '').toLowerCase() !== q.service)) return false;
   return true;
 }
 
@@ -667,6 +680,15 @@ export function kiSummaryOf(market: string | null, comps: readonly KiCompetitorV
     gaps: { open, byType },
     fetchedAt: newest || null,
   };
+}
+
+/** CR17-F: searches per client service (most first, the searches of none of the services last). */
+export function kiByServiceOf(kws: readonly Pick<KiKeywordView, 'service'>[]): KiKeywordsResponse['byService'] {
+  const m = new Map<string | null, number>();
+  for (const k of kws) m.set(k.service, (m.get(k.service) ?? 0) + 1);
+  return [...m.entries()]
+    .map(([service, count]) => ({ service, count }))
+    .sort((a, b) => (a.service === null ? 1 : 0) - (b.service === null ? 1 : 0) || b.count - a.count || String(a.service).localeCompare(String(b.service)));
 }
 
 export function kiFacetsOf(kws: readonly KiKeywordView[]): KiKeywordsResponse['facets'] {

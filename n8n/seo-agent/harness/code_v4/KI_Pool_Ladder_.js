@@ -1947,7 +1947,7 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
   /** KI.plan(clusters, gaps, cfg) -> <= 10 actions { action_id, kind, title, why, target, credits, cluster_id | gap_id, ev }, ranked by expected value
    *  clusters: head rows { keyword, cluster_id, score (number or KI.score object), verdict, stage, page_action, page_url, gsc_position,
    *  gsc_impressions, striking, cluster_size, demand_note }; gaps: KI.gaps rows. Plain ASCII words. */
-  const plan = (clusters, gapRows, c0) => {
+  const plan = (clusters, gapRows, c0, bal) => {
     const c = C(c0); const P = c.plan; const acts = []; const byCluster = new Set();
     for (const h of (Array.isArray(clusters) ? clusters : [])) {
       if (!h || S(h.gate) === 'fail' || S(h.verdict) === 'gated') continue;
@@ -1984,9 +1984,65 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
         target: ascii(S(g.action_target)), credits: credits(kind, c), gap_id: S(g.gap_id), ev: r1(ev) });
     }
     const seenT = new Set();
-    return acts.sort((a, b) => b.ev - a.ev || a.title.localeCompare(b.title) || a.action_id.localeCompare(b.action_id))
+    const ranked = acts.sort((a, b) => b.ev - a.ev || a.title.localeCompare(b.title) || a.action_id.localeCompare(b.action_id))
       .filter(a => !(a.kind === 'refresh' && !S(a.target)))   // FX-L L6: an "Improve your page" with no page is not an action
-      .filter(a => { const k = a.kind === 'refresh' ? 'refresh|' + (urlKey(S(a.target)) || S(a.target)) : a.kind + '|' + a.title; if (seenT.has(k)) return false; seenT.add(k); return true; }).slice(0, c.caps.plan);
+      .filter(a => { const k = a.kind === 'refresh' ? 'refresh|' + (urlKey(S(a.target)) || S(a.target)) : a.kind + '|' + a.title; if (seenT.has(k)) return false; seenT.add(k); return true; });
+    // CR17-F (section 196): with the client's services, the picks keep a balance between them (KI.balance); without, the order of value as before
+    if (bal && Array.isArray(bal.services) && bal.services.length) {
+      const subj = (a) => { const h = (Array.isArray(clusters) ? clusters : []).find(x => x && a.cluster_id && S(x.cluster_id) === a.cluster_id); const g = (Array.isArray(gapRows) ? gapRows : []).find(x => x && a.gap_id && S(x.gap_id) === a.gap_id);
+        return h ? S(h.keyword) : g ? S(g.keyword) || S(g.action_target) : S(a.target); };
+      for (const a of ranked) a.service = serviceOf(subj(a), bal.services);
+      return balance(ranked, { services: bal.services, lead: bal.lead, n: c.caps.plan, get: (a) => a.service }).picked;
+    }
+    return ranked.slice(0, c.caps.plan);
+  };
+
+  // ---- CR17-F (2026-11-17, client report C5, section 196): which of the client's services a search belongs to, and a balanced pick ----
+  // devaicon.com's research kept 129 searches: 90 generic software development, 12 AI / automation (its lead services), 5 Open edX (a real, smaller
+  // service); its top 45 by score held no Open edX search and few AI ones. Each kept search now carries the service it belongs to, and the
+  // recommended picks keep a balance: the lead services (the ones the client names first) take at least half, no one service more than 40%
+  // (unless it is the only one), every service with a passing search at least one place, and a search that matches no service ("generic") at
+  // most a fifth.
+  //  * KI.serviceOf(keyword, services) -> the service family it belongs to ('' = none): the service whose words it holds most of (service and
+  //    seller words aside), folded into the most general service it contains ("custom software development" -> "software development")
+  //  * KI.balance(items, { services, lead, n, get }) -> { picked, shares } (items in value order; get(item) = its service)
+  const svcToks = (x) => uniq(ownToks(x).filter(t => !SELLER_S.has(t)));
+  const serviceOf = (keyword, svcs) => {
+    const list = services(svcs); if (!list.length) return '';
+    const kw = new Set(ownToks(keyword).flatMap(t => [t, stem1(t)]));
+    let best = null;
+    list.forEach((sv, i) => { const t = svcToks(sv); if (!t.length) return; const hit = t.filter(w => kw.has(w)).length;
+      if (hit < t.length) return;   // every word of the service is in the search ("open edx services company" -> Open edX Services)
+      if (!best || hit > best.hit || (hit === best.hit && t.length < best.n)) best = { sv, hit, n: t.length, i }; });
+    if (!best) return '';
+    // the family: the most general service whose words are all in this one ("Custom Software Development" -> "software development")
+    const bt = svcToks(best.sv); let fam = best;
+    list.forEach((sv, i) => { const t = svcToks(sv); if (t.length && t.length < fam.n && t.every(w => bt.includes(w))) fam = { sv, hit: t.length, n: t.length, i }; });
+    return S(fam.sv);
+  };
+  const balance = (items, o) => {
+    const arr = (Array.isArray(items) ? items : []).filter(Boolean); const n = Math.max(1, Math.min(Number(o && o.n) || 10, arr.length)); const get = (o && o.get) || ((x) => S(x.service));
+    const leadSet = new Set(services((o && o.lead) || []).map(x => key(x)));
+    const fam = new Map(); for (const x of arr) { const k = S(get(x)); fam.set(k, (fam.get(k) || 0) + 1); }
+    const real = [...fam.keys()].filter(k => k);
+    const isLead = (k) => !!k && (leadSet.has(key(k)) || [...leadSet].some(l => l && (key(k).includes(l) || l.includes(key(k)))));
+    const cap = real.length <= 1 ? n : Math.max(1, Math.floor(n * 0.4)); const capGeneric = real.length ? Math.max(1, Math.floor(n * 0.2)) : n;
+    const picked = []; const cnt = new Map(); const take = (x) => { picked.push(x); const k = S(get(x)); cnt.set(k, (cnt.get(k) || 0) + 1); };
+    const roomFor = (k) => (cnt.get(k) || 0) < (k ? cap : capGeneric);
+    // 1. every real service with a passing search: its best item (lead services first)
+    for (const k of real.slice().sort((a, b) => (isLead(b) ? 1 : 0) - (isLead(a) ? 1 : 0))) { if (picked.length >= n) break; const x = arr.find(y => S(get(y)) === k); if (x) take(x); }
+    // 2. the lead services up to half, best value first
+    const leadWant = Math.ceil(n * 0.5);
+    for (const x of arr) { if (picked.length >= n) break; if (picked.includes(x)) continue; const k = S(get(x)); if (!isLead(k)) continue;
+      if (picked.filter(y => isLead(S(get(y)))).length >= leadWant) break; if (roomFor(k)) take(x); }
+    // 3. the rest in value order, within the caps
+    for (const x of arr) { if (picked.length >= n) break; if (picked.includes(x)) continue; if (roomFor(S(get(x)))) take(x); }
+    // 4. still short (every service at its cap): value order
+    for (const x of arr) { if (picked.length >= n) break; if (!picked.includes(x)) take(x); }
+    const order = new Map(arr.map((x, i) => [x, i]));
+    const out = picked.sort((a, b) => order.get(a) - order.get(b));
+    const shares = {}; for (const x of out) { const k = S(get(x)) || 'generic'; shares[k] = (shares[k] || 0) + 1; }
+    return { picked: out, shares };
   };
 
   // ---------------------------------------------------------------------------------------------------------------------------------
@@ -2015,7 +2071,7 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
 
   return { VERSION, CONFIG, cfg, norm, key, services, validHost, reg, hostOf, urlKey, classifyDomain, CLASS_IDS, PAGE_TYPES, pageType, top10, stage,
     gate, fit, GATE_TEXT, mergeCandidates, families, prescore, cluster, demand, win, value, gap: gapFactor, score, verdict, VERDICT_WORDS, sizeTag,
-    scoreCompetitors, striking, strikingBar, pageAction, gaps, gapsUnread, plan, readable, label, ascii, hash, topicSim, brandDomains };
+    scoreCompetitors, striking, strikingBar, pageAction, gaps, gapsUnread, plan, readable, label, ascii, hash, topicSim, brandDomains, serviceOf, balance };
 })();
 // ---- LADDER PACKAGE (2026-11-09, docs/keyword-intel-2026-11-08/fixes/LADDER.md): the five ladder rules, ONE copy ----
 // Production (2026-10-22 .. 11-08, R3_PROD_OUTPUTS.md F1 F6 F7 F9): three rungs of techand.ai's ERP ladder, the main page included, were written onto

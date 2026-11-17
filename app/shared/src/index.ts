@@ -59,6 +59,7 @@ export * from './credit-forecast';   // CR17-I (2026-11-17, M2): the credit fore
 export * from './tracked-keywords';   // CR17-I (2026-11-17, F8): what "tracked keywords" means, one definition for every screen
 export * from './cycle-clock'; // the per-website cycle's clock (v5/code/_cycle.js mirrored): due times, monthly cycles, previews
 export * from './ladder-rules';   // LADDER PACKAGE (2026-11-09): the engine's ladder rules (v5/code/_ladder_rules.js), generated: market lock, rung reasons, stuck rungs
+export * from './competitor-roles';   // CR17-F (2026-11-17): the engine's one competitor role classifier (v5/code/_competitors.js), generated: roles, one list, AI named split
 export * from './fit-gate';  // the engine's fit gate (v5/code/_fit_gate.js), generated from the kit by build_v4.py (KW-PARITY), the same code
 export * from './search-advice';   // F-10 (2026-11-12): the fit gate + address searches + the client's brand names, for every keyword list Recommendations shows
 export * from './cycles';    // the per-website 7-day cycle and keyword-first autopilot contract (SCHEDULING_KEYWORDS_PLAN.md §14)

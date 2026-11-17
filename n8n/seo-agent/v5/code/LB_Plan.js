@@ -50,6 +50,10 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
     return [...String(raw || '').matchAll(/"(?:d|domain)"\s*:\s*"([^"]+)"(?:\s*,\s*"(?:p|position)"\s*:\s*(\d+))?/g)]
       .map(m => ({ host: m[1], position: Number(m[2]) || 0 }));
   };
+  // CR17-F (2026-11-17, client report C5, section 196): a site that outranks the client is a rival only when its ONE role (CMP.role, with the
+  // client's own services and choices) is `competitor`: clutch.co, edx.org, github.com, linkedin.com and the platform the client builds on rank
+  // for its searches and compete for none of its customers. The rows keep their role, so the reason a prospect is left out names it.
+  const roleCtx = { own_domain: s.domain, services: SM.services(SM.stored(s) || { domain: s.domain, canonical_host: s.domain }), not_competitors: s.settings.not_competitors || [], declared: s.settings.competitors || [] };
   const serp_rivals = (() => {
     const cut = new Date(Date.now() - 90 * 864e5).toISOString(); const byDom = new Map();
     for (const h of ranks.filter(r => normD(r.domain) === s.domain && String(r.checked_at || '') >= cut)) {
@@ -57,6 +61,7 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
         const host = String(x.host || '').toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
         const dom = LK.regDomain(host); const pos = Number(x.position) || 0;
         if (!host || !dom || dom === LK.regDomain(s.domain) || !/\./.test(dom)) continue;
+        if (CMP.role(host, roleCtx).role !== 'competitor') continue;   // CR17-F: never a directory, a platform, a software maker or the platform you build on
         const was = byDom.get(dom);
         if (!was || (pos > 0 && (!was.position || pos < was.position))) byDom.set(dom, { domain: dom, host, position: pos || (was && was.position) || 0, keyword: String(h.keyword || '') });
       }
@@ -67,7 +72,7 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // Answer Analyst's learned names) are rivals here too - pactsoft.ae ("PACT REVENU") and the vendors AI cited were qualified as prospects
   const ai_rivals = (() => { let vis = [], cacheAi = []; try { vis = $('Load AI Visibility (LB)').all().map(i => i.json).filter(r => r && r.site_id); } catch (e) {}
     try { cacheAi = $('Load Cache (LB Rivals)').all().map(i => i.json).filter(r => r && r.key); } catch (e) {}
-    return RV.aiRivals({ site_id: s.site_id, own: s.domain, vis_rows: vis, cache_rows: cacheAi }); })();
+    return RV.aiRivals({ site_id: s.site_id, own: s.domain, vis_rows: vis, cache_rows: cacheAi, services: roleCtx.services, not_competitors: roleCtx.not_competitors }); })();   // CR17-F: the one role
   const pr = profiles.find(x => x.site_id === s.site_id) || {};
   const lad = ladders.filter(l => normD(l.domain) === s.domain);
   const topics = [...new Set([...lad.map(l => l.head_keyword || l.keyword), ...(s.keywords || []), pr.business_type].map(x => String(x || '').trim().toLowerCase()).filter(x => x && x.split(/\s+/).some(w => !STOP.test(w))))].slice(0, 4);

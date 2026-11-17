@@ -21,6 +21,7 @@ import {
   kiCompetitorView,
   kiCsvLine,
   kiFacetsOf,
+  kiByServiceOf,
   kiGapTypesIndex,
   kiGapView,
   kiKeywordComparator,
@@ -63,6 +64,8 @@ import {
   type Role,
   type RunInput,
   type ScoreInput,
+  competitorList,
+  splitList,
 } from '@seo/shared';
 import { isPlatformAdmin } from '../auth/access';
 import type { SiteRow, UserRow } from '../db/schema';
@@ -276,7 +279,7 @@ export function kiKeywordsOf(data: KiData, q: KiKeywordQuery): KiKeywordsRespons
         return raw ? { ...v, top10: kiKeywordView(raw, [], true).top10 } : v;
       })
     : page.items;
-  return { market, total: page.total, page: page.page, pageSize: page.pageSize, pages: page.pages, sort: q.sort, items, facets: kiFacetsOf(all) };
+  return { market, total: page.total, page: page.page, pageSize: page.pageSize, pages: page.pages, sort: q.sort, items, facets: kiFacetsOf(all), byService: kiByServiceOf(all) };
 }
 
 export function kiGapList(data: KiData, q: { market?: string; type?: string; status?: string }): { market: string | null; all: KiGapView[]; list: KiGapView[] } {
@@ -314,23 +317,76 @@ const done = (site: Pick<SiteRow, 'domain'>) => {
   invalidateSite(site.domain);
 };
 
-export async function setCompetitorStatus(site: SiteRow, st: KiState, compDomain: string, status: KiCompUserStatus): Promise<{ ok: true; compDomain: string; status: KiCompUserStatus; chosen: number; maxCompetitors: number }> {
+const COMP_MAX_TEXT = (max: number) => `You can choose up to ${max} competitors. Move one to your watchlist or mark it as not a competitor first.`;
+const hostOf = (d: unknown) => String(d ?? '').trim().toLowerCase().replace(/^www\./, '');
+
+/**
+ * CR17-F (2026-11-17): THE competitor list of a website (Site settings + the Competitors page choices - not a competitor), from the monitors
+ * row and the KI set's rows (KI on or off: the engine's monitors read the same rule, CMP.oneList). `max` is not applied (the caller checks it).
+ */
+export function oneCompetitorList(site: Pick<SiteRow, 'domain'>, monitors: Pick<MonitorsRow, 'competitors' | 'not_competitors'> | null | undefined, kiRows: readonly Pick<KiCompetitorView, 'compDomain' | 'status' | 'statusBy'>[]): string[] {
+  return competitorList({ domain: site.domain, declared: splitList(monitors?.competitors), kiRows, notCompetitors: splitList(monitors?.not_competitors), max: 1000 }).list;
+}
+
+/**
+ * A person's choice on one competitor: chosen / watch / not a competitor (or `dismissed`, the Competitors page's word for it). CR17-F: it works
+ * for ANY domain, KI on or off: Site Admin ki_competitor sets the KI row when there is one and keeps seo_monitors (competitors / not_competitors)
+ * in step, so the one list changes in one call. `requireKiRow` (the Competitors page's own route) keeps its 404 for a domain not in the KI set.
+ * The limit counts THE one list, as the engine does.
+ */
+export async function setCompetitorStatus(
+  site: SiteRow,
+  st: KiState,
+  compDomain: string,
+  status: KiCompUserStatus,
+  opts: { requireKiRow?: boolean } = {},
+): Promise<{ ok: true; compDomain: string; status: KiCompUserStatus; chosen: number; maxCompetitors: number }> {
+  const dom = hostOf(compDomain);
+  if (dom === hostOf(site.domain)) throw new HttpError(400, 'This is your own website.', 'own_domain');
   const data = await kiData(site);
-  const rowsOf = data.competitors.filter((c) => c.compDomain === compDomain);
-  if (!rowsOf.length) throw notFound(`${compDomain} is not in your competitor list.`);
-  const row = rowsOf[0];
-  const market = row.market;
-  const chosenNow = data.competitors.filter((c) => c.status === 'chosen' && c.market === market && c.compDomain !== compDomain).length;
-  if (status === 'chosen' && chosenNow >= st.maxCompetitors)
-    throw new HttpError(409, `You can choose up to ${st.maxCompetitors} competitors. Move one to your watchlist or mark it as not a competitor first.`, 'ki_max_competitors', undefined, { max: st.maxCompetitors });
-  const r = await siteAdmin({ ...base(site, 'ki_competitor'), action: 'ki_competitor', market, comp_domain: compDomain, status });
+  const row = data.competitors.find((c) => c.compDomain === dom) ?? null;
+  if (opts.requireKiRow && !row) throw notFound(`${dom} is not in your competitor list.`);
+  const listNow = oneCompetitorList(site, st.monitors, data.competitors);
+  const others = listNow.filter((d) => d !== dom).length;
+  if (status === 'chosen' && others >= st.maxCompetitors)
+    throw new HttpError(409, COMP_MAX_TEXT(st.maxCompetitors), 'ki_max_competitors', undefined, { max: st.maxCompetitors });
+  // the market only when the KI row has one (the engine refuses `watch` for a market the KI set does not hold the domain in)
+  const r = await siteAdmin({ ...base(site, 'ki_competitor'), action: 'ki_competitor', comp_domain: dom, status, ...(row?.market ? { market: row.market } : {}) });
   done(site);
   if (!r.ok) {
-    if (/max|limit|up to/i.test(String(r.error ?? ''))) throw new HttpError(409, `You can choose up to ${st.maxCompetitors} competitors. Move one to your watchlist or mark it as not a competitor first.`, 'ki_max_competitors', undefined, { max: st.maxCompetitors });
+    if (/max|limit|up to|at most/i.test(String(r.error ?? ''))) throw new HttpError(409, COMP_MAX_TEXT(st.maxCompetitors), 'ki_max_competitors', undefined, { max: st.maxCompetitors });
     throw new HttpError(502, r.error || 'The SEO engine could not save the change.', 'admin_failed');
   }
-  if (r.affected === 0) throw notFound(`${compDomain} is not in your competitor list.`);
-  return { ok: true, compDomain, status, chosen: chosenNow + (status === 'chosen' ? 1 : 0), maxCompetitors: st.maxCompetitors };
+  if (r.affected === 0 && row) throw notFound(`${dom} is not in your competitor list.`);
+  return { ok: true, compDomain: dom, status, chosen: others + (status === 'chosen' ? 1 : 0), maxCompetitors: st.maxCompetitors };
+}
+
+/**
+ * CR17-F: after Site settings saved its competitor list (the one list, as shown there): a domain the KI set holds as chosen that the person took
+ * off the list is set to `watch` (or it would come back through the union), and a domain the person typed in that was marked not a competitor
+ * is chosen again (or the one list would leave it out). One Site Admin call each; a refusal of one is skipped. Returns what changed.
+ */
+export async function syncSettingsCompetitors(site: SiteRow, kept: readonly string[]): Promise<{ watched: string[]; chosen: string[] }> {
+  const own = sameDomain(site.domain.toLowerCase());
+  const [kiRows, mons] = await Promise.all([
+    siteRows<KiCompetitorRow>('kiCompetitors', site.domain, { max: KI_READ_MAX.competitors, fresh: true }).then((x) => (Array.isArray(x) ? x.filter(own) : [])).catch(() => [] as KiCompetitorRow[]),
+    siteRows<MonitorsRow>('monitors', site.domain, { max: 5, fresh: true }).then((x) => (Array.isArray(x) ? x.filter(own) : [])).catch(() => [] as MonitorsRow[]),
+  ]);
+  const keep = new Set(kept.map(hostOf));
+  const chosenKi = [...new Set(kiRows.filter((r) => String(r.status ?? '') === 'chosen').map((r) => hostOf(r.comp_domain)))];
+  const off = new Set([...splitList(mons[0]?.not_competitors).map(hostOf), ...kiRows.filter((r) => String(r.status ?? '') === 'dismissed' && String(r.status_by ?? '') === 'user').map((r) => hostOf(r.comp_domain))]);
+  const watched = chosenKi.filter((d) => d && !keep.has(d));
+  const chosen = [...keep].filter((d) => d && off.has(d));
+  const marketOf = (d: string) => String(kiRows.find((r) => hostOf(r.comp_domain) === d)?.market ?? '');
+  const out = { watched: [] as string[], chosen: [] as string[] };
+  for (const [list, status] of [[watched, 'watch'], [chosen, 'chosen']] as const)
+    for (const d of list) {
+      const m = marketOf(d);
+      const r = await siteAdmin({ ...base(site, 'ki_competitor'), action: 'ki_competitor', comp_domain: d, status, ...(m ? { market: m } : {}) });
+      if (r.ok) (status === 'watch' ? out.watched : out.chosen).push(d);
+    }
+  if (watched.length || chosen.length) done(site);
+  return out;
 }
 
 export async function setGapStatus(site: SiteRow, gapId: string, status: KiGapStatus): Promise<{ ok: true; gapId: string; status: KiGapStatus }> {

@@ -21,6 +21,7 @@ import {
   kiKeywordCsvRow,
   kiKeywordQueryOf,
   kiMarketOf,
+  isClientRole,
   type KiOverview,
   type Role,
 } from '@seo/shared';
@@ -59,7 +60,10 @@ const writes = { config: { rateLimit: { max: 60, timeWindow: '10 minutes' } } };
 
 const DOMAIN_RE = /^(?=.{3,253}$)[a-z0-9-]+(\.[a-z0-9-]+)+$/;
 const GAP_ID_RE = /^[A-Za-z0-9_:.\-]{1,120}$/;
-const competitorPatch = z.object({ status: z.enum(KI_COMP_USER_STATUSES, { message: 'Choose chosen, watch or dismissed' }) }).strict();
+const competitorPatch = z.object({ status: z.enum(KI_COMP_USER_STATUSES, { message: 'Choose a competitor, watch, or not a competitor' }) }).strict();
+/** CR17-F: the one competitor list, from any page (AI visibility, Rankings, Site settings): KI on or off */
+const COMP_LIST_STATUSES = ['chosen', 'not_competitor', 'watch'] as const;
+const competitorListPatch = z.object({ status: z.enum(COMP_LIST_STATUSES, { message: 'Choose a competitor, watch, or not a competitor' }) }).strict();
 const gapPatch = z.object({ status: z.enum(KI_GAP_STATUSES, { message: 'Choose open, started, dismissed or done' }) }).strict();
 const approveBody = z.object({ keys: z.array(z.string().trim().min(1).max(200)).min(1, 'Choose at least one question').max(KI_APPROVE_MAX, `At most ${KI_APPROVE_MAX} questions at once`) }).strict();
 const modeBody = z.object({ mode: z.enum(KI_MODES, { message: 'Choose Off, Trial or On' }) }).strict();
@@ -112,6 +116,18 @@ export async function kiRoutes(app: FastifyInstance) {
     const dom = S((req.params as { compDomain?: string }).compDomain).toLowerCase().replace(/^www\./, '');
     if (!DOMAIN_RE.test(dom)) throw notFound(`${dom || 'This domain'} is not in your competitor list.`);
     const { status } = parse(competitorPatch, req.body ?? {});
+    const r = await setCompetitorStatus(a.site, a.st, dom, status, { requireKiRow: true });
+    await audit(req, a.site.orgId, { action: 'site.ki_competitor', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { competitor: dom, status } });
+    return r;
+  });
+  // CR17-F (client report C5): "Not a competitor" / "Mark as competitor" on any page, for any domain, whether keyword intelligence is on or
+  // off (not gated by its visibility): the one competitor list (Site settings + the Competitors page choices - not a competitor)
+  app.patch('/api/orgs/:orgId/sites/:siteId/competitors/:compDomain', writes, async (req) => {
+    const a = await access(req, 'member');
+    if (isClientRole(a.role)) throw new HttpError(403, 'Not allowed', 'forbidden');
+    const dom = S((req.params as { compDomain?: string }).compDomain).toLowerCase().replace(/^www\./, '');
+    if (!DOMAIN_RE.test(dom)) throw new HttpError(400, 'Enter a web address, like competitor.com.', 'bad_domain');
+    const { status } = parse(competitorListPatch, req.body ?? {});
     const r = await setCompetitorStatus(a.site, a.st, dom, status);
     await audit(req, a.site.orgId, { action: 'site.ki_competitor', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { competitor: dom, status } });
     return r;

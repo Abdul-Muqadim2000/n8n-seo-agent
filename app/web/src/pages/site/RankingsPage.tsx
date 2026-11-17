@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Activity, ArrowDownRight, ArrowRight, ArrowUpDown, ArrowUpRight, BarChart3, Check, Circle, ExternalLink as ExternalIcon, Flag, History, Hourglass, Info, LineChart, ListOrdered, Loader, PenSquare, Plus, Send, TrendingUp, X } from 'lucide-react';
-import { PAGE_TYPE_VALUES, compactNumber, type Ladder, type LadderRung, type RankPoint, type RankingsData, type SerpReading, type TrackedKeyword } from '@seo/shared';
+import { COMPETITOR_ROLE_LABELS, PAGE_TYPE_VALUES, compactNumber, type Ladder, type LadderRung, type RankPoint, type RankingsData, type SerpReading, type TrackedKeyword } from '@seo/shared';
 import { paths } from '@/lib/paths';
 import { useSiteData } from '@/lib/queries';
 import { useCycleDay } from '@/lib/cycle-day';
@@ -22,6 +22,7 @@ import { BUCKETS, bucketOf, moveOf, plotPos, posSort, posText, PositionMove, Pos
 import { PositionHistoryCard, type HistoryLine } from './_components/history';
 import { ladderShape, MAIN_RUNG, rungName, rungView, type RungView } from './_components/rungs';
 import { ChartTitle, DashSkeleton, HeroEyebrow } from './_components/visuals';
+import { NotCompetitorButton } from './_components/not-competitor';
 
 export default function RankingsPage() {
   const { org, site } = useSitePage();
@@ -644,6 +645,8 @@ function ShareOfVoice({ value }: { value: number | null }) {
  */
 function SerpPanel({ serp }: { serp: SerpReading | null }) {
   const day = useCycleDay();
+  const { can } = useSitePage();
+  const member = can('member');
   if (!serp) return null;
   const f = serp.features;
   if (f.unavailable)
@@ -675,13 +678,18 @@ function SerpPanel({ serp }: { serp: SerpReading | null }) {
         <div>
           <p className="text-[13px] font-medium text-ink-2">Above you on page 1</p>
           <ul className="mt-1.5 flex flex-wrap gap-1.5">
-            {serp.above.slice(0, 8).map((c) => (
-              <li key={c.domain} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-2 py-1 text-[13px] text-ink-2">
-                <span className="tabular text-ink-3">#{c.position}</span>
-                {c.domain}
-                {c.tracked && <Badge tone="accent">competitor</Badge>}
-              </li>
-            ))}
+            {serp.above.slice(0, 8).map((c) => {
+              // CR17-F: a site that is not a business like yours (a directory, a software maker, a publisher) says what it is
+              const other = !!c.role && c.role !== 'competitor' && c.role !== 'unknown';
+              return (
+                <li key={c.domain} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-2 py-1 text-[13px] text-ink-2">
+                  <span className="tabular text-ink-3">#{c.position}</span>
+                  {c.domain}
+                  {other ? <Badge tone="neutral">{COMPETITOR_ROLE_LABELS[c.role!]}</Badge> : c.tracked && <Badge tone="accent">competitor</Badge>}
+                  {!other && member && c.domain.includes('.') && <NotCompetitorButton domain={c.domain} />}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

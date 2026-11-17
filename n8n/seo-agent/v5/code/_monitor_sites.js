@@ -11,6 +11,8 @@
 // AIR (2026-11-06, docs/ai-ranking-2026-11-05/CONTRACTS.md §4, package P4): the AI-ranking flags kit (AIRF) comes with this file, so every node that
 // inlines it reads `s.settings.rank` the one way. A node that inlines this file must NOT add the AIRF marker again (one const AIRF).
 /*__AI_RANK_FLAGS__*/
+// CR17-F (2026-11-17, client report C5, section 196): the one competitor list (CMP.oneList) comes with this file; the build inlines CMP once per node.
+/*__COMPETITORS__*/
 let trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}
 if (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };
 const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };
@@ -37,6 +39,7 @@ const nameOf = (row, prof) => {
 };
 function monitorSites(kind) {   // kind: 'ai' | 'backlinks' | 'audit' | 'links' (v4.13 Link Builder)
   const sites = rowsOf('Load Sites').filter(r => r.site_id && r.domain), ladders = rowsOf('Load Ladders').filter(r => r.domain), mons = rowsOf('Load Monitors'), profiles = rowsOf('Load Profiles');
+  const kiComps = rowsOf('Load KI Competitors (Mon)').filter(r => r.comp_domain && ['chosen', 'dismissed', 'not_competitor'].includes(String(r.status || '')));   // CR17-F: the Competitors page's choices
   const byDomain = new Map();
   for (const s of sites) { const d = normD(s.domain); if (d && !byDomain.has(d)) byDomain.set(d, { ...s, domain: d, keywords: listOf(s.keywords).map(k => k.toLowerCase()), virtual: false }); }
   for (const l of ladders) { const d = normD(l.domain); if (d && !byDomain.has(d)) byDomain.set(d, { site_id: siteIdFor(d), domain: d, country: l.country || '', location_code: Number(l.location_code) || 0, language_code: l.language_code || 'en', email: l.email || '', callback_url: l.callback_url || '', keywords: [], status: 'active', source: 'ladder', virtual: true }); }
@@ -66,7 +69,10 @@ function monitorSites(kind) {   // kind: 'ai' | 'backlinks' | 'audit' | 'links' 
       personas: listOf(m.ai_personas).slice(0, 6), markets: listOf(m.ai_markets).slice(0, 5), pulse_mode: String(m.ai_pulse_mode || '').toLowerCase().trim(),
       pulse_per_week: Number.isFinite(Number(m.ai_pulse_per_week)) && Number(m.ai_pulse_per_week) >= 1 ? Math.min(6, Math.round(Number(m.ai_pulse_per_week))) : 0, growth: flag(m.ai_growth, true), link_builder: flag(m.link_builder, true),
       ai_pages_month: m.ai_pages_month === '' || m.ai_pages_month == null || !Number.isFinite(Number(m.ai_pages_month)) ? 2 : Math.min(8, Math.max(0, Math.round(Number(m.ai_pages_month)))), audit_pages: Math.min(1000, Math.max(50, Number(m.audit_pages) || 200)), audit_js: flag(m.audit_js, false),
-      competitors: [...new Set([...listOf(m.competitors), ...listOf(trigger.competitors)].map(normD).filter(d => d && d !== s.domain))].slice(0, 5),
+      // CR17-F: ONE competitor list per site - what the client declared in Site settings (and the start named), plus what it chose (the
+      // Competitors page, or "Mark as competitor" anywhere: seo_ki_competitors status chosen, KI on or off), minus what it marked not a
+      // competitor (status dismissed, status_by user). devaicon chose 5 competitors there and every monitor said "no competitor set is declared".
+      competitors: CMP.oneList({ site_id: s.site_id, own_domain: s.domain, declared: [...listOf(m.competitors), ...listOf(trigger.competitors)].map(normD), ki_rows: kiComps, max: 5 }).list,
       brand_names: [...new Set([...listOf(m.brand_names), ...listOf(trigger.brand_names), p.business_name || '', nameOf(s, p)].map(x => String(x).trim()).filter(Boolean))], stored: !!m.site_id };
     // W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §4): the owner's engine and coverage options, every one off / empty by default (cost and behaviour unchanged)
     Object.assign(settings, { claude_weekly: flag(m.ai_claude_weekly, false), pulse_engines_raw: String(m.ai_pulse_engines || '').trim(), persona_context: flag(m.ai_persona_context, false),
@@ -79,6 +85,8 @@ function monitorSites(kind) {   // kind: 'ai' | 'backlinks' | 'audit' | 'links' 
     // AIR (2026-11-06, CONTRACTS.md §2 / §4): the AI-ranking mode and its flags, every one OFF when empty ({ mode, reserve, fanout_n, mentions, brave }).
     // Read as `s.settings.rank.mode`; no plan, report or callback copies `settings` whole, so this field never reaches a client.
     settings.rank = AIRF.settingsOf(m);
+    // CR17-F: the domains the client marked not a competitor (only when there are some: a site with none keeps its settings as before)
+    { const nots = CMP.oneList({ site_id: s.site_id, own_domain: s.domain, ki_rows: kiComps }).removed; if (nots.length) settings.not_competitors = nots; }
     const o = { ...s, business_name: nameOf(s, p), settings, profile: { business_name: p.business_name || '', business_type: p.business_type || '', city: p.city || '', phone: p.phone || '', street_address: p.street_address || '', author_name: p.author_name || '',
       region: p.region || '', country_code: p.country_code || '', public_email: p.public_email || '', price_range: p.price_range || '', service_areas: p.service_areas || '', opening_hours: p.opening_hours || '' } };
     if (on_demand) { if (trigger.email) o.email = trigger.email; if (trigger.callback_url) o.callback_url = trigger.callback_url; if (trigger.country) o.country = trigger.country; if (Number(trigger.location_code)) o.location_code = Number(trigger.location_code); if (trigger.language_code) o.language_code = trigger.language_code; }

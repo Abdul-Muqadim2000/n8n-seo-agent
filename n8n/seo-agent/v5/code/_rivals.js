@@ -16,6 +16,8 @@
 //                         why the service-overlap rule never matched an ERP or e-invoicing implementer that names other products.
 //                         A roundup ("Top 10 …", "Best …") and a directory of providers (plural: "Service Providers", "Partners") is
 //                         not a provider claim.
+/*__COMPETITORS__*/
+// CR17-F (2026-11-17, section 196): the one role classifier (CMP.role, v5/code/_competitors.js) comes with this kit; the build inlines it once per node.
 const RV = (() => {
   const S = (v) => String(v == null ? '' : v);
   const norm = (h) => S(h).toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#:].*$/, '').replace(/\.$/, '');
@@ -59,7 +61,10 @@ const RV = (() => {
       if (m) { out.push({ family: f, label: FAMILIES[f].label, phrase: m[0].replace(/\s+/g, ' ').trim().slice(0, 80) }); break; } }
     return out; };
   const slugWords = (u) => S(u).replace(/^https?:\/\/[^\/]+/i, '').replace(/[\/_?.&=#-]+/g, ' ').trim();
-  const NOT_RIVAL_HOST = (d) => NOT_RIVAL.test(reg(d)) || NOT_RIVAL.test(norm(d));
+  // CR17-F: a host whose ONE role (CMP.role) is not `competitor` is never a rival or a provider of your category; NOT_RIVAL stays the floor
+  const roleCtx = (c) => ({ own_domain: c.own || c.own_domain || '', services: [...(c.services || []), ...(c.terms || [])], topics: c.topics || [], principals: c.principals || [], not_competitors: c.not_competitors || [], declared: c.declared_ctx || [] });
+  const nonCompetitor = (d, c) => typeof CMP === 'object' && CMP && CMP.role ? CMP.role(d, roleCtx(c || {})).role !== 'competitor' : false;
+  const NOT_RIVAL_HOST = (d, c) => NOT_RIVAL.test(reg(d)) || NOT_RIVAL.test(norm(d)) || nonCompetitor(d, c);
   // ---- C-8 leftover (F-L, 2026-10-18): the STOREFRONT of the page itself. halsimplify.com (HAL ERP) and tradeshift.com (an e-invoicing
   // network) were qualified from an article and a buyer's guide whose titles and addresses claim nothing - but the same page's own menu sells
   // the category ("Conversational ERP", "E-invoicing (VAT CARE)", "HAL vs Odoo / SAP B1 / Microsoft Dynamics"; "Compliance for e-Invoicing
@@ -91,7 +96,7 @@ const RV = (() => {
   // o: { title, url, site_text, page_html, topics, services, domain } -> '' or the reason it is a competing provider of your category
   const providerOf = (o) => {
     const c = o || {}, fams = families(c); if (!fams.length) return '';
-    if (c.domain && NOT_RIVAL_HOST(c.domain)) return '';   // a platform, an official body, a news site, a directory or a consultancy is never a provider of your category
+    if (c.domain && NOT_RIVAL_HOST(c.domain, c)) return '';   // a platform, an official body, a news site, a directory or a consultancy is never a provider of your category
     const title = S(c.title);
     // a question ("Which e-invoicing provider are you using?" on a forum) asks about providers; it does not claim to be one
     const question = /\?\s*$/.test(title) || /^(which|what|who|how|where|why|is|are|do|does|can|should|best)\b/i.test(title);
@@ -113,8 +118,10 @@ const RV = (() => {
     const add = (d, kind, why) => { const x = reg(d && typeof d === 'object' ? (d.domain || d.host) : d); if (!x || !/\./.test(x) || x === own) return;
       const old = m.get(x); if (old && old.kind === 'business') return; m.set(x, { domain: x, kind, why: S(why || (d && d.why)) }); };
     for (const d of (c.declared || [])) add(d, 'business', 'a competitor you declared');
-    for (const d of (c.ai || [])) add(d, 'business', 'a business AI recommends instead of you');
-    for (const d of (c.serp || [])) add(d, 'serp', 'a site that outranks you for one of your own keywords');
+    // CR17-F: a directory, a platform, a software maker, an authority or the platform you build on is never a rival, however it was met
+    const biz = (d) => !nonCompetitor(d && typeof d === 'object' ? (d.domain || d.host) : d, c);
+    for (const d of (c.ai || [])) if (biz(d)) add(d, 'business', 'a business AI recommends instead of you');
+    for (const d of (c.serp || [])) if (biz(d)) add(d, 'serp', 'a site that outranks you for one of your own keywords');
     const of = (h) => m.get(reg(h)) || null;
     return { of, has: (h) => !!of(h), business: (h) => { const e = of(h); return !!e && e.kind === 'business'; }, size: m.size, entries: () => [...m.values()] };
   };
@@ -126,7 +133,7 @@ const RV = (() => {
   const parseJ = (v, d) => { if (v && typeof v === 'object') return v; try { return JSON.parse(S(v) || ''); } catch (e) { return d; } };
   const aiRivals = (o) => {
     const c = o || {}, sid = S(c.site_id), own = reg(c.own), out = new Map();
-    const add = (d, why) => { const x = reg(d); if (!x || !/\./.test(x) || x === own || NOT_RIVAL.test(x) || out.has(x)) return; out.set(x, { domain: x, why }); };
+    const add = (d, why) => { const x = reg(d); if (!x || !/\./.test(x) || x === own || NOT_RIVAL.test(x) || nonCompetitor(x, c) || out.has(x)) return; out.set(x, { domain: x, why }); };   // CR17-F: CMP.role, with the client's services and its not-a-competitor list
     const rows = (c.vis_rows || []).filter(r => r && S(r.site_id) === sid && S(r.checked_at)).sort((a, b) => S(b.checked_at).localeCompare(S(a.checked_at)));
     const v = rows[0];
     if (v) {
@@ -144,5 +151,20 @@ const RV = (() => {
     SA: /(^|\.)(arabnews|saudigazette|argaam|okaz|aleqt|spa)\.[a-z.]+$/i, QA: /(^|\.)(gulf-times|thepeninsulaqatar|qna|alraya)\.[a-z.]+$/i,
     GB: /(^|\.)(bbc|theguardian|telegraph|thetimes|ft|independent|cityam)\.[a-z.]+$/i, IN: /(^|\.)(timesofindia|economictimes|livemint|thehindu|business-standard|moneycontrol)\.[a-z.]+$/i };
   const marketMedia = (d, iso) => { const re = MARKET_MEDIA[S(iso).toUpperCase()]; return !!re && re.test(norm(d)); };
-  return { set, providerOf, storefront, menuOf, families, reg, aiRivals, marketMedia, ROUNDUP, FAMILIES, NOT_RIVAL };
+  // CR17-F (2026-11-17, client report C5, section 196): a link prospect found through an AI question keeps that question's topic after the panel
+  // retired it (AI-FOCUS retired devaicon's 12 Open edX questions on 2026-10-27; 25 of its 54 prospects still came from them). RV.retiredSource
+  // (prospect, prompts) -> the retired question it came from, or null: its question (the quoted text of `detail`, "for \"...\"") or its topics
+  // ("about a, b") match stored questions, and every one of them is retired. A prospect already pitched, replied or won is never retired.
+  const PITCHED = /^(contacted|replied|won|sent|followup|follow_up|in_progress|approved|scheduled)$/;
+  const retiredSource = (pr, prompts) => {
+    const r = pr || {}; if (S(r.retired_at) || PITCHED.test(S(r.status).toLowerCase()) || S(r.contacted_at)) return null;
+    const lo = (x) => S(x).toLowerCase().replace(/\s+/g, ' ').trim();
+    const det = S(r.detail); const q = lo((det.match(/for "([^"]{12,})"/) || [])[1] || '');
+    const about = lo((det.match(/\babout ([^—"]+?)(?: — |$)/) || [])[1] || '').split(/\s*,\s*/).filter(x => x.length >= 3);
+    const mine = (prompts || []).filter(x => x && S(x.site_id) === S(r.site_id) && S(x.prompt));
+    const hits = mine.filter(x => (q && lo(x.prompt).startsWith(q.replace(/\s*$/, ''))) || (about.length && about.some(t => t === lo(x.keyword) || t === lo(x.topic))));
+    if (!hits.length || hits.some(x => S(x.status || 'active') !== 'retired')) return null;
+    return hits.sort((a, b) => S(b.retired_at).localeCompare(S(a.retired_at)))[0];
+  };
+  return { set, providerOf, storefront, menuOf, families, reg, aiRivals, marketMedia, ROUNDUP, FAMILIES, NOT_RIVAL, nonCompetitor, retiredSource };
 })();

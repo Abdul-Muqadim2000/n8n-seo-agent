@@ -39,7 +39,10 @@ for (const p of plans) {
   const airOn = p.air_on === true;
   const airHosts = new Set(airOn ? prospects.filter(x => x.site_id === p.site_id && x.type === 'ai_source' && x.origin === 'ai_rank').map(x => x.prospect_domain) : []);
   const ownReg = LK.regDomain(p.domain) || p.domain;
-  const rivals = new Set([...(p.competitors || []), ...(p.rival_sources || []), ...aliasDomains(p.site_id)].map(d => LK.regDomain(String(d || '').toLowerCase().replace(/^www\./, '')) || '').filter(d => d && /\./.test(d) && d !== ownReg && !OK.isGov(d)));
+  // CR17-F (2026-11-17, client report C5, section 196): a rival is a COMPETITOR by the one classifier (CMP.role): openedx.org for an Open edX shop,
+  // Microsoft for a Microsoft partner, SAP or Salesforce named by AI, a directory or a platform are never "a business AI recommends instead of you"
+  const roleCtx = { own_domain: p.domain, services: p.services || [], topics: p.topics || [], declared: p.competitors || [], not_competitors: p.not_competitors || [] };
+  const rivals = new Set([...(p.competitors || []), ...(p.rival_sources || []), ...aliasDomains(p.site_id)].map(d => LK.regDomain(String(d || '').toLowerCase().replace(/^www\./, '')) || '').filter(d => d && /\./.test(d) && d !== ownReg && !OK.isGov(d) && CMP.role(d, roleCtx).role === 'competitor'));
   const rivalOf = (h) => rivals.has(LK.regDomain(String(h || '').toLowerCase().replace(/^www\./, '')) || '');   // D12: never the domain label ("techand" for Tech&) — the site model's name, else the domain
   const ourRes = p.brand_names.map(wordRe);
   const sellTerms = ((p.services || []).length ? p.services : [p.profile && p.profile.business_type]).filter(Boolean);
@@ -80,7 +83,7 @@ for (const p of plans) {
       status: old.status || 'new', first_seen: old.first_seen || p.checked_at, last_seen: p.checked_at, won_at: old.won_at || '',
       outreach_subject: kept.outreach_subject, outreach_body: kept.outreach_body, drafted_at: kept.drafted_at,   // P34-1: a draft written before the D12 / D13 gates, or one handed to the Link Builder, is withdrawn — never offered again
       note: e.action.slice(0, 300), score: Math.min(100, Math.round(e.value * 8)), origin: 'ai_growth', contact_email: old.contact_email || e.contact_email, contact_url: old.contact_url || e.contact_url, contacted_at: old.contacted_at || '',
-      followup_step: Number(old.followup_step) || 0, followup_subject: old.followup_subject || '', followup_body: old.followup_body || '', verified_at: old.verified_at || '' };
+      followup_step: Number(old.followup_step) || 0, followup_subject: old.followup_subject || '', followup_body: old.followup_body || '', verified_at: old.verified_at || '', retired_at: '' };   // CR17-F: cited again this week, so not retired
     rows.push(row);
     // ---- D12: one writer, and the Link Builder's gates ----
     // With the Link Builder on, nothing is drafted here: the row above is the hand-over (its detail names the question AI cites them for),
@@ -131,7 +134,7 @@ for (const p of plans) {
           rows.push({ site_id: p.site_id, domain: p.domain, prospect_domain: target.host, type: 'ai_source', rank: Number(old.rank) || 0, spam_score: Number(old.spam_score) || 0, detail: line.slice(0, 500), source_url: target.url, target_url: old.target_url || '',
             status: old.status || 'new', first_seen: old.first_seen || p.checked_at, last_seen: p.checked_at, won_at: old.won_at || '', outreach_subject: old.outreach_subject || '', outreach_body: old.outreach_body || '', drafted_at: old.drafted_at || '',
             note: line.slice(0, 300), score: 40, origin: 'ai_growth', contact_email: old.contact_email || target.contact_email || '', contact_url: old.contact_url || '', contacted_at: old.contacted_at || '',
-            followup_step: Number(old.followup_step) || 0, followup_subject: old.followup_subject || '', followup_body: old.followup_body || '', verified_at: old.verified_at || '' }); } }
+            followup_step: Number(old.followup_step) || 0, followup_subject: old.followup_subject || '', followup_body: old.followup_body || '', verified_at: old.verified_at || '', retired_at: old.retired_at || '' }); } }
       else if (jobs.length < 5) { status = 'draft_requested'; note = 'Drafted for you to review (never sent): ' + target.url;
         draft_job = { n: jobs.length + 1, prospect_domain: target.host, kind: 'correction', action_type: 'correction', url: target.url, title: target.title, question: '', claim: c.claim, true_fact: c.true_fact, competitors_named: [], engines: c.engines || [] };
         jobs.push(draft_job); }

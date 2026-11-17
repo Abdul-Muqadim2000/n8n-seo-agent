@@ -344,7 +344,8 @@ export const trackInput = z.object({
   keywords: stringList(20, 100),
   ga4PropertyId: z.string().trim().regex(/^\d{0,16}$/, 'Digits only').default(''),
   blogsPerWeek: z.number().int().min(0).max(3).default(0),
-  competitors: domainList(3),
+  // CR17-F: up to 5, as the one competitor list (Site settings saves up to 5; the engine keeps 5)
+  competitors: domainList(5),
   monitors: monitorSettingsSchema.default(monitorSettingsSchema.parse({})),
   /** keyword-first (§5.2 / §14.5): the website's IANA time zone (the owner's browser zone; its cycles run at 06:00 there). '' = keep the
    * website's stored zone (or the engine's) */
@@ -643,7 +644,8 @@ export const adminActionSchema = z.discriminatedUnion('action', [
     action: z.literal('monitors'),
     // D1: patchOf: a setting left out stays as it is (with .partial() zod 4 sent every default, and no competitors cleared the engine's)
     monitors: patchOf(monitorSettingsSchema),
-    competitors: z.array(domainField).max(3, 'Up to 3 domains').optional(),
+    // CR17-F: up to 5, the one competitor list's limit (KI_MAX_COMPETITORS): Site settings shows that list, the Competitors page choices included
+    competitors: z.array(domainField).max(5, 'Up to 5 competitors').optional(),
     /** AIR (2026-11-06): the AI-ranking settings, sent only when the person changed one (never with an ordinary monitors save) */
     aiRank: aiRankSettingsSchema.optional(),
   }),

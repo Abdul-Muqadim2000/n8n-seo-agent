@@ -574,3 +574,94 @@ describe('KI A1: performance with 5,000 keywords', () => {
 describe('KI A1: the verdict words are the shared ones', () => {
   it('five verdicts (FX-L: unknown = not judged yet)', () => expect([...KI_VERDICT_IDS]).toEqual(['go', 'months', 'hard', 'gated', 'unknown']));
 });
+
+// ---------------- CR17-F (2026-11-17, client report C5): the one competitor list, from any page, KI on or off ----------------
+const CU = (dom: string, org = ORG_A, site = SITE_A) => `/api/orgs/${org}/sites/${site}/competitors/${dom}`;
+const cpatch = (dom: string, payload: unknown, org?: string, site?: string) => app.inject({ method: 'PATCH', url: CU(dom, org, site), payload: payload as object });
+
+describe('CR17-F: PATCH .../competitors/:compDomain (not gated by keyword intelligence)', () => {
+  it('KI Off and no KI row: "Not a competitor" goes to Site Admin ki_competitor with no market, and is audited', async () => {
+    seed('off');
+    st.tables.kiCompetitors = [];
+    const r = await cpatch('sap-like.example', { status: 'not_competitor' });
+    expect(r.statusCode).toBe(200);
+    expect(json(r)).toMatchObject({ ok: true, compDomain: 'sap-like.example', status: 'not_competitor', chosen: 0, maxCompetitors: 5 });
+    expect(st.sent).toHaveLength(1);
+    expect(st.sent[0]).toMatchObject({ action: 'ki_competitor', domain: 'nova-a.example', comp_domain: 'sap-like.example', status: 'not_competitor' });
+    expect('market' in st.sent[0]).toBe(false);
+    // the KI pages stay hidden for an Off website: only this route works
+    expect((await patch('/competitors/rival-one.example', { status: 'dismissed' })).statusCode).toBe(404);
+  });
+  it('KI On, a domain the KI set does not hold: chosen works here (the KI page\'s own route still answers 404)', async () => {
+    expect((await patch('/competitors/nobody.example', { status: 'chosen' })).statusCode).toBe(404);
+    const r = await cpatch('nobody.example', { status: 'chosen' });
+    expect(r.statusCode).toBe(200);
+    expect(json(r)).toMatchObject({ ok: true, status: 'chosen', chosen: 1 });
+    expect(st.sent.at(-1)).toMatchObject({ action: 'ki_competitor', comp_domain: 'nobody.example', status: 'chosen' });
+    expect('market' in st.sent.at(-1)!).toBe(false);
+  });
+  it('a KI row: the market is sent, a www. address is the bare host', async () => {
+    expect((await cpatch('www.rival-one.example', { status: 'watch' })).statusCode).toBe(200);
+    expect(st.sent.at(-1)).toMatchObject({ comp_domain: 'rival-one.example', status: 'watch', market: 'AE-en' });
+  });
+  it('the limit counts THE one list: Site settings + KI chosen, minus not a competitor', async () => {
+    seed('off');
+    st.tables.monitors[0] = { ...st.tables.monitors[0], competitors: 'd1.example, d2.example, gone.example', not_competitors: 'gone.example' };
+    st.tables.kiCompetitors = ['k1', 'k2', 'k3'].map((k) => comp('nova-a.example', `${k}.example`, { status: 'chosen', status_by: 'user' }));
+    const r = await cpatch('sixth.example', { status: 'chosen' });
+    expect(r.statusCode).toBe(409);
+    expect(json(r)).toMatchObject({ code: 'ki_max_competitors' });
+    expect(st.sent).toEqual([]);
+    // one already on the list is not "one more"; a domain marked not a competitor does not count
+    expect((await cpatch('d1.example', { status: 'chosen' })).statusCode).toBe(200);
+    kiCache.clear();
+    st.tables.monitors[0] = { ...st.tables.monitors[0], not_competitors: 'gone.example, d2.example' };
+    expect((await cpatch('sixth.example', { status: 'chosen' })).statusCode).toBe(200);
+  });
+  it('an engine refusal "at most N competitors" is the same 409; another refusal is 502', async () => {
+    st.adminOk = false;
+    const r = await cpatch('rival-one.example', { status: 'not_competitor' });
+    expect(r.statusCode).toBe(502);
+    const siteAdmin = vi.mocked((await import('../src/n8n/client')).siteAdmin);
+    siteAdmin.mockResolvedValueOnce({ ok: false, action: 'ki_competitor', affected: 0, error: 'at most 5 competitors can be chosen; set another one to watch first' });
+    expect((await cpatch('rival-two.example', { status: 'chosen' })).statusCode).toBe(409);
+  });
+  it('validation: the status words, a web address, not your own website; a viewer is refused', async () => {
+    expect((await cpatch('rival-one.example', { status: 'dismissed' })).statusCode).toBe(400);
+    expect((await cpatch('rival-one.example', { status: 'mine' })).statusCode).toBe(400);
+    expect((await cpatch('rival-one.example', {})).statusCode).toBe(400);
+    expect((await cpatch('not_a_domain', { status: 'not_competitor' })).statusCode).toBe(400);
+    expect((await cpatch('nova-a.example', { status: 'not_competitor' })).statusCode).toBe(400);
+    st.member = { [ORG_A]: 'viewer' };
+    expect((await cpatch('rival-one.example', { status: 'not_competitor' })).statusCode).toBe(403);
+    expect((await cpatch('rival-one.example', { status: 'not_competitor' }, ORG_B, SITE_B)).statusCode).toBe(404);
+    expect(st.sent).toEqual([]);
+  });
+  it('the KI page\'s route takes not_competitor too (stored as dismissed by the engine)', async () => {
+    expect(json(await patch('/competitors/rival-one.example', { status: 'not_competitor' }))).toMatchObject({ ok: true, status: 'not_competitor' });
+    expect(st.sent.at(-1)).toMatchObject({ action: 'ki_competitor', status: 'not_competitor', market: 'AE-en' });
+  });
+});
+
+describe('CR17-F: Site settings saves the one list', () => {
+  it('a KI-chosen domain taken off the list goes to watch; a domain typed in that was marked not a competitor is chosen again', async () => {
+    st.tables.monitors[0] = { ...st.tables.monitors[0], competitors: 'd1.example', not_competitors: 'back.example' };
+    st.tables.kiCompetitors = [
+      comp('nova-a.example', 'kept.example', { status: 'chosen', status_by: 'user' }),
+      comp('nova-a.example', 'removed.example', { status: 'chosen', status_by: 'user', market: 'SA-en' }),
+      comp('nova-a.example', 'other.example', { status: 'watch', status_by: 'user' }),
+    ];
+    const r = await kiData.syncSettingsCompetitors(SITES[SITE_A] as never, ['d1.example', 'kept.example', 'back.example']);
+    expect(r).toEqual({ watched: ['removed.example'], chosen: ['back.example'] });
+    expect(st.sent).toEqual([
+      expect.objectContaining({ action: 'ki_competitor', comp_domain: 'removed.example', status: 'watch', market: 'SA-en' }),
+      expect.objectContaining({ action: 'ki_competitor', comp_domain: 'back.example', status: 'chosen' }),
+    ]);
+    expect('market' in st.sent[1]).toBe(false);
+  });
+  it('nothing to change: no call', async () => {
+    st.tables.kiCompetitors = [comp('nova-a.example', 'kept.example', { status: 'chosen', status_by: 'user' })];
+    expect(await kiData.syncSettingsCompetitors(SITES[SITE_A] as never, ['kept.example'])).toEqual({ watched: [], chosen: [] });
+    expect(st.sent).toEqual([]);
+  });
+});

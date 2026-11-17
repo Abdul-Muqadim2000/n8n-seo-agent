@@ -1107,6 +1107,10 @@
               {
                 "name": "persona_effect_json",
                 "type": "string"
+              },
+              {
+                "name": "software_json",
+                "type": "string"
               }
             ]
           },

@@ -94,6 +94,12 @@ import {
   type LadderRow,
   type MetricsPoint,
   type MonitorsRow,
+  type KiCompetitorRow,
+  type CompetitorSiteContext,
+  competitorList,
+  competitorRole,
+  splitAiNamed,
+  isRetiredProspect,
   type ProfileFields,
   type ProfileReadiness,
   type ProfileRow,
@@ -587,7 +593,7 @@ function featureLabels(f: SerpFeatures): string[] {
 }
 
 /** G6: the results page of the latest desktop check of one keyword, plus the latest mobile reading when one was bought */
-export function serpReading(rows: RankHistoryRow[]): SerpReading | null {
+export function serpReading(rows: RankHistoryRow[], ctx?: CompetitorSiteContext): SerpReading | null {
   const desk = desktopRows(rows).slice().sort(byDate((r) => s(r.checked_at)));
   const last = desk[desk.length - 1];
   const raw = last?.features_json ? safeJson<FeatJson | null>(last.features_json, null) : null;
@@ -612,14 +618,18 @@ export function serpReading(rows: RankHistoryRow[]): SerpReading | null {
     features,
     shareOfVoice: sov(last),
     method: s(c.method),
-    above: comps(c.above),
-    competitors: comps(c.competitors),
+    // CR17-F: with the website's context, each domain carries the one role rule's answer (a directory or a software maker is not a rival)
+    above: withRoles(comps(c.above), ctx),
+    competitors: withRoles(comps(c.competitors), ctx),
     // SERP-GOTO (2026-11-08): an approximate address (x: 1, recovered from Google's breadcrumb) is shown as its site with no link; a reading
     // stored with bare Google redirect links shows none of them
     snapshot: { at: snap.at ?? null, device: s(snap.device) || 'desktop', top: snapTop(snap.top ?? []) },
     mobile,
   };
 }
+
+const withRoles = (list: SerpReading['above'], ctx?: CompetitorSiteContext): SerpReading['above'] =>
+  ctx ? list.map((x) => (x.domain.includes('.') ? { ...x, role: competitorRole(x.domain, ctx).role } : x)) : list;
 
 function emptyFeatures(): SerpFeatures {
   return {
@@ -657,12 +667,16 @@ export function rankSeries(rows: RankHistoryRow[]): { history: RankPoint[]; late
 
 export async function rankingsData(site: SiteRow): Promise<RankingsData> {
   const d = site.domain;
-  const [ladderRows, history, profiles] = await Promise.all([
+  const [ladderRows, history, profiles, rkMons, kiComps] = await Promise.all([
     siteRows<LadderRow>('ladders', d, { max: 1000 }),
     siteRows<RankHistoryRow>('rankHistory', d, { sortBy: 'checked_at:asc', max: 5000 }),
     // B6 (pre-launch run 2026-10-21): the rungs the profile hold keeps from being written say so, as the Pipeline does
     siteRows<ProfileRow>('profiles', d, { max: 5 }).catch(() => [] as ProfileRow[]),
+    // CR17-F: the client's competitor choices, for the role of each site above you
+    siteRows<MonitorsRow>('monitors', d, { max: 5 }).catch(() => [] as MonitorsRow[]),
+    kiCompetitorRows(d),
   ]);
+  const rkCtx = competitorSiteOf(site, Array.isArray(rkMons) ? rkMons[0] : undefined, kiComps);
   const histBy = new Map<string, RankHistoryRow[]>();
   for (const h of history) {
     const k = `${h.ladder_id}|${s(h.keyword).toLowerCase()}`;
@@ -684,7 +698,7 @@ export async function rankingsData(site: SiteRow): Promise<RankingsData> {
         const hist = histBy.get(`${id}|${s(r.keyword).toLowerCase()}`) ?? [];
         const series = rankSeries(hist);
         return {
-          serp: serpReading(hist),
+          serp: serpReading(hist, rkCtx),
           rung: n(r.rung),
           pageNo: n(r.page_no),
           keyword: s(r.keyword),
@@ -736,7 +750,7 @@ export async function rankingsData(site: SiteRow): Promise<RankingsData> {
       keyword: kw,
       url: s(last?.url),
       serpFeatures: splitList(last?.serp_features),
-      serp: serpReading(rs),
+      serp: serpReading(rs, rkCtx),
       latestPosition: series.latest,
       latestNote: series.latestNote,
       previousPosition: series.previous,
@@ -1356,10 +1370,85 @@ function toIndex(x: P | null): AiIndex | null {
  */
 export const AI_READ_LIMITS = { runs: 300, prompts: 2500, daily: 120, answers: 6000 } as const;
 
+// ---------------- CR17-F: one competitor role rule (client report C5) ----------------
+
+/** The KI set's rows of a website (the KI pages' own cached read; a failed read, or no table yet, = none). Read KI on or off: the one list is. */
+export async function kiCompetitorRows(domain: string): Promise<KiCompetitorRow[]> {
+  try {
+    const r = await siteRows<KiCompetitorRow>('kiCompetitors', domain, { max: 2000 });
+    const d = domain.toLowerCase();
+    return Array.isArray(r) ? r.filter((x) => s(x?.domain).toLowerCase() === d) : [];
+  } catch {
+    return [];
+  }
+}
+
+const compHost = (d: unknown) => s(d).trim().toLowerCase().replace(/^www\./, '');
+
+/** What the role classifier knows of a website: its domain, its services, and the client's own choices (Site settings, the Competitors page). */
+export function competitorSiteOf(
+  site: Pick<SiteRow, 'domain'> & { services?: string[] | null },
+  mon: Pick<MonitorsRow, 'competitors' | 'not_competitors'> | null | undefined,
+  ki: readonly Pick<KiCompetitorRow, 'comp_domain' | 'status' | 'status_by'>[],
+): CompetitorSiteContext {
+  return {
+    domain: site.domain,
+    services: site.services ?? [],
+    declared: splitList(mon?.competitors).map(compHost),
+    chosen: ki.filter((r) => s(r.status) === 'chosen').map((r) => compHost(r.comp_domain)),
+    notCompetitors: [...splitList(mon?.not_competitors).map(compHost), ...ki.filter((r) => s(r.status) === 'dismissed' && s(r.status_by) === 'user').map((r) => compHost(r.comp_domain))],
+  };
+}
+
+/** THE competitor list of a website (Site settings + the Competitors page choices - not a competitor), as every monitor reads it. */
+export function oneCompetitorListOf(
+  site: Pick<SiteRow, 'domain'>,
+  mon: Pick<MonitorsRow, 'competitors' | 'not_competitors'> | null | undefined,
+  ki: readonly Pick<KiCompetitorRow, 'comp_domain' | 'status' | 'status_by'>[],
+): string[] {
+  return competitorList({
+    domain: site.domain,
+    declared: splitList(mon?.competitors).map(compHost),
+    kiRows: ki.map((r) => ({ compDomain: compHost(r.comp_domain), status: s(r.status), statusBy: s(r.status_by) })),
+    notCompetitors: splitList(mon?.not_competitors).map(compHost),
+    max: 1000,
+  }).list;
+}
+
+type AiLatest = NonNullable<AiData['latest']>;
+/**
+ * AI visibility: who one stored row names, by the one role rule. `competitors` keeps the businesses (role competitor, or a name with no
+ * website); `softwareNamed` = the row's software_json (a newer engine) plus an older row's names of a software maker or a platform you work
+ * with; directories, platforms, publishers and public bodies are left out. Rows stored before the rule still hold sap.com and the like.
+ */
+export function aiNamedOf(row: Pick<AiVisibilityRow, 'competitors_json'> & { software_json?: string | null }, ctx: CompetitorSiteContext): Pick<AiLatest, 'competitors' | 'softwareNamed'> {
+  const all = arr(safeJson(row.competitors_json, [])).map((c) => ({ domain: s(c.domain), mentions: n(c.mentions), share: n(c.share), auto: b(c.auto) }));
+  const split = splitAiNamed(all, ctx);
+  const softwareNamed: AiLatest['softwareNamed'] = [];
+  const seen = new Set<string>();
+  const add = (x: AiLatest['softwareNamed'][number]) => {
+    const k = (x.domain || x.name).toLowerCase();
+    if (!k || seen.has(k)) return;
+    seen.add(k);
+    softwareNamed.push(x);
+  };
+  for (const x of arr(safeJson(s(row.software_json), [])))
+    add({ domain: s(x.domain), name: s(x.name) || s(x.domain), answers: n(x.answers), role: s(x.role) === 'your_platform' ? 'your_platform' : 'software' });
+  for (const c of split.software) add({ domain: c.domain, name: c.domain, answers: c.mentions, role: c.role === 'your_platform' ? 'your_platform' : 'software' });
+  return { competitors: split.competitors, softwareNamed: softwareNamed.sort((a, c) => c.answers - a.answers) };
+}
+
+/** A run's share-of-voice brands (every brand named, basis `all`): only the businesses and you; software makers and listings are not rivals. */
+function sovBusinessesOnly(run: AiRun, ctx: CompetitorSiteContext): AiRun {
+  if (!run.sov || run.sov.basis !== 'all') return run;
+  const keep = (id: string) => !/\./.test(id) || ['competitor', 'you'].includes(competitorRole(id, ctx).role);
+  return { ...run, sov: { ...run.sov, brands: run.sov.brands.filter((x) => keep(x.id)) } };
+}
+
 export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boolean | 'summary'; prompts?: boolean; filter?: AiFilter | null; admin?: boolean } = {}): Promise<AiData> {
   const d = site.domain;
   const since = new Date(Date.now() - 90 * 864e5).toISOString();
-  const [visDesc, prompts, report, days, growthRows, aiPages, aiTargets, aiProspects, logs, mons, aiRuns, ladderRows, watchRows] = await Promise.all([
+  const [visDesc, prompts, report, days, growthRows, aiPages, aiTargets, aiProspectsAll, logs, mons, aiRuns, ladderRows, watchRows, kiComps] = await Promise.all([
     // newest first, then put in date order: a domain with more than 300 runs shows its newest 300, never freezes on the oldest
     siteRows<AiVisibilityRow>('aiVisibility', d, { sortBy: 'checked_at:desc', max: AI_READ_LIMITS.runs }),
     // G6: up to 500 tracked + the switched-off and refused ones (every reword keeps the old row 'off'); stored order kept (the engine's cut)
@@ -1379,7 +1468,12 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
     // list as the write form (a failed read: the content log alone, as before)
     siteRows<LadderRow>('ladders', d, { max: 1000 }).catch(() => [] as LadderRow[]),
     siteRows<PageWatchRow>('pageWatch', d, { max: 200 }).catch(() => [] as PageWatchRow[]),
+    // CR17-F: the client's choices on the Competitors page (the one role rule reads them)
+    kiCompetitorRows(d),
   ]);
+  // CR17-F: a prospect retired with its AI question is kept for the record, never offered
+  const aiProspects = aiProspectsAll.filter((p) => !isRetiredProspect(p));
+  const compCtx = competitorSiteOf(site, mons[0], kiComps);
   const vis = [...visDesc].sort((a, b) => s(a.checked_at).localeCompare(s(b.checked_at)));
   const last = vis[vis.length - 1];
   // n8n's run id is per day (ai_YYYYMMDD_domain): a second run that day shares it, so only the answers of the latest run count.
@@ -1423,7 +1517,8 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
           sentiment: nn(e.sentiment),
         }),
       ),
-      competitors: arr(safeJson(last.competitors_json, [])).map((c) => ({ domain: s(c.domain), mentions: n(c.mentions), share: n(c.share), auto: b(c.auto) })),
+      // CR17-F: the businesses AI names instead of you, and apart the software makers / platforms it names (never competitors)
+      ...aiNamedOf(last, compCtx),
       // W2-E1: sources_json is {v: 2, types, domains, n, list} now (`list` = the old array); older rows hold the array
       sources: aiLegacySourcesList(last.sources_json).map((x) => ({ domain: s(x.domain), citations: n(x.citations), engines: arr<string>(x.engines).map(String), topics: arr<string>(x.topics).map(String), kind: s(x.kind) })),
       pages: arr(safeJson(last.pages_json, [])).map((x) => ({ url: s(x.url), citations: n(x.citations), engines: arr<string>(x.engines).map(String) })),
@@ -1463,7 +1558,7 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
   // A6 (2026-10-23): the report's prose, grid and actions belong beside the latest run only when they were written for it
   const reportCurrent = !!(rp && last && reportIsFor(s(rp.run_id), report!.report.receivedAt, s(last.run_id), s(last.checked_at)));
   return {
-    runs: vis.map((r, i) => toAiRun(r, compared[i], credits[i])),
+    runs: vis.map((r, i) => sovBusinessesOnly(toAiRun(r, compared[i], credits[i]), compCtx)),
     latest,
     daily: aiDailySeries(days),
     promptsMax: monitorsNow ? monitorsNow.aiPromptsMax : null,
@@ -1760,7 +1855,7 @@ const toCoverage = (c: P | null): BacklinkCoverage | null => {
 
 export async function backlinksData(org: OrgRow, site: SiteRow): Promise<BacklinksData> {
   const d = site.domain;
-  const [snaps, prospects, report, refs, imports, graphSummary, outreach, seqs] = await Promise.all([
+  const [snaps, prospectsAll, report, refs, imports, graphSummary, outreach, seqs, blMons, kiComps] = await Promise.all([
     siteRows<BacklinkSnapshotRow>('backlinkSnapshots', d, { sortBy: 'checked_at:asc', max: 300 }),
     siteRows<ProspectRow>('prospects', d, { max: 1000 }),
     latestReport(org.id, site.id, ['backlinks']),
@@ -1771,7 +1866,13 @@ export async function backlinksData(org: OrgRow, site: SiteRow): Promise<Backlin
     siteRows<LinkOutreachRow>('linkOutreach', d, { max: 1500 }).catch(() => [] as LinkOutreachRow[]),
     db.select({ prospectDomain: schema.outreachSequences.prospectDomain, type: schema.outreachSequences.prospectType, status: schema.outreachSequences.status, startedAt: schema.outreachSequences.startedAt, approvedAt: schema.outreachSequences.approvedAt,
       replyAt: schema.outreachSequences.replyAt, replyClass: schema.outreachSequences.replyClass, wonAt: schema.outreachSequences.wonAt }).from(schema.outreachSequences).where(eq(schema.outreachSequences.siteId, site.id)).catch(() => []),
+    // CR17-F: the one role rule for the competitors of the link gap (a failed read: no choices known)
+    siteRows<MonitorsRow>('monitors', d, { max: 5 }).catch(() => [] as MonitorsRow[]),
+    kiCompetitorRows(d),
   ]);
+  // CR17-F: a prospect retired with its AI question is kept for the record, never offered
+  const prospects = prospectsAll.filter((p) => !isRetiredProspect(p));
+  const blCtx = competitorSiteOf(site, Array.isArray(blMons) ? blMons[0] : undefined, kiComps);
   const iso0 = (x: Date | null) => (x ? x.toISOString() : null);
   const linkRows = linkStatusOf(outreach, prospects, seqs.map((q) => ({ ...q, startedAt: iso0(q.startedAt), approvedAt: iso0(q.approvedAt), replyAt: iso0(q.replyAt), wonAt: iso0(q.wonAt) })));
   const linkStateBy = new Map(linkRows.map((r) => [r.key, r.state]));
@@ -1791,7 +1892,8 @@ export async function backlinksData(org: OrgRow, site: SiteRow): Promise<Backlin
       ? {
           lost: arr(safeJson(last.lost_json, [])).map((l) => ({ ...toLink(l), reason: s(l.reason) || undefined, pending: l.pending === true ? true : undefined })),
           new: arr(safeJson(last.new_json, [])).map(toLink),
-          competitors: arr(safeJson(last.competitors_json, [])).map((c) => ({ ...c, domain: s(c.domain) })),
+          // CR17-F: only businesses (a software maker, a directory or a publisher is not a competitor's link profile to chase)
+          competitors: arr(safeJson(last.competitors_json, [])).map((c) => ({ ...c, domain: s(c.domain) })).filter((c) => !/\./.test(c.domain) || competitorRole(c.domain, blCtx).role === 'competitor'),
           timeseries: arr(safeJson(last.timeseries_json, [])).map((t) => ({ month: s(t.month), backlinks: n(t.backlinks), referringDomains: n(t.referring_domains), rank: n(t.rank) })),
           coverage: toCoverage(safeJson<P | null>(last.coverage_json, null)),
           anchors: anchors
@@ -2013,7 +2115,7 @@ function toGrowth(g: AiGrowthRow | undefined, pages: AiPageRow[], targets: AiTar
 
 // ---------------- settings ----------------
 
-export function monitorsFromRow(r: MonitorsRow | undefined): (MonitorSettings & { competitors: string[]; updatedAt: string }) | null {
+export function monitorsFromRow(r: MonitorsRow | undefined): (MonitorSettings & { competitors: string[]; notCompetitors: string[]; updatedAt: string }) | null {
   if (!r) return null;
   const engines = splitList(r.ai_engines) as MonitorSettings['aiEngines'];
   return {
@@ -2050,25 +2152,30 @@ export function monitorsFromRow(r: MonitorsRow | undefined): (MonitorSettings & 
     // wave 2 (DESIGN_WAVE2 §2.5): read back only when stored (empty = off)
     ...(r.index_sitemap_submit != null && (r.index_sitemap_submit as unknown) !== '' ? { indexSitemapSubmit: indexSitemapSubmitOn(r.index_sitemap_submit) } : {}),
     competitors: splitList(r.competitors),
+    // CR17-F: the domains the client marked "Not a competitor" (absent before the engine adds the column)
+    notCompetitors: splitList(r.not_competitors),
     updatedAt: s(r.updated_at),
   };
 }
 
 export async function settingsData(org: OrgRow, site: SiteRow): Promise<SiteSettingsData> {
   const d = site.domain;
-  const [siteRow, monitors, cadence, profiles] = await Promise.all([
+  const [siteRow, monitors, cadence, profiles, kiComps] = await Promise.all([
     n8nSite(site),
     siteRows<MonitorsRow>('monitors', d, { max: 5 }),
     siteRows<CadenceRow>('cadence', d, { max: 5 }),
     siteRows<ProfileRow>('profiles', d, { max: 5 }),
+    kiCompetitorRows(d),
   ]);
+  const mon = monitorsFromRow(monitors[0]);
   const profile = profileFromRow(profiles[0]);
   // browser pass D1 (2026-11-06): a website with no monitors row yet (not tracked) still gets the AI ranking card when the engine's table has the
   // column: any one row of the table says so (the Data Tables API returns every column on every row); the setting then reads as off
   const aiRankColumn = monitors[0] ? 'ai_rank_mode' in (monitors[0] as object) : await tableRows<MonitorsRow>('monitors', { max: 1 }).then((r) => !!r[0] && 'ai_rank_mode' in (r[0] as object)).catch(() => false);
   return {
     tracking: connection(siteRow, org, site, await ladderCallbacks(site)),
-    monitors: monitorsFromRow(monitors[0]),
+    // CR17-F: THE competitor list (the Competitors page shows the same); the Site settings list alone stays as declaredCompetitors
+    monitors: mon ? { ...mon, declaredCompetitors: mon.competitors, competitors: oneCompetitorListOf(site, monitors[0], kiComps) } : null,
     cadence: cadence[0] ? { pagesPerWeek: n(cadence[0].pages_per_week), status: s(cadence[0].status) } : null,
     profile,
     readiness: readiness(profile),

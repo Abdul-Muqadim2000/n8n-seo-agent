@@ -38,7 +38,7 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // C-2 (re-rating 2026-10-17): the businesses AI recommends instead of the site, as the AI Visibility Tracker stored them - never a prospect
   const ai_rivals = (() => { let vis = [], cacheAi = []; try { vis = $('Load AI Visibility (BL)').all().map(i => i.json).filter(r => r && r.site_id); } catch (e) {}
     try { cacheAi = $('Load Cache (BL Rivals)').all().map(i => i.json).filter(r => r && r.key); } catch (e) {}
-    return RV.aiRivals({ site_id: s.site_id, own: s.domain, vis_rows: vis, cache_rows: cacheAi }); })();
+    return RV.aiRivals({ site_id: s.site_id, own: s.domain, vis_rows: vis, cache_rows: cacheAi, services: (typeof SM === 'object' && SM.stored) ? SM.services(SM.stored(s) || { domain: s.domain, canonical_host: s.domain }) : [], not_competitors: s.settings.not_competitors || [] }); })();   // CR17-F: the one role (CMP.role)
   const lad = ladders.filter(l => normD(l.domain) === s.domain && l.target_url && (l.status === 'published' || l.page_exists === true || l.page_exists === 'true'));
   const assets = [...lad.sort((a, b) => (Number(b.rung) || 0) - (Number(a.rung) || 0)).map(l => ({ url: l.target_url, title: l.keyword, kind: Number(l.rung) === 4 ? 'hub page' : 'guide' })),
     ...cases.filter(c => c.site_id === s.site_id && c.page_url).map(c => ({ url: c.page_url, title: c.title, kind: 'case study' })),
