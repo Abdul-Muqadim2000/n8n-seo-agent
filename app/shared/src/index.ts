@@ -73,3 +73,5 @@ export * from './run-watch';   // 2026-11-05: when a run with no result is overd
 export * from './ki-api';   // KI A1 (2026-11-08): the KI routes' response shapes and readers (fixes/A1_ROUTES.md)
 export * from './ki';   // KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md): keyword intelligence rows, callbacks, words, the per-site switch
 export * from './draft-fix';   // 2026-10-21: a not-ready draft is finished by hand (the engine's qa_next_step / qa_owner_edits), never re-run
+export * from './client-copy';   // CR17-H (client report 2026-11-17, F1): what a client may read, one guard for every screen and report
+export * from './recommendation-rules';   // CR17-H (Q4): a rule per recommendation family, one card per issue, the state machine

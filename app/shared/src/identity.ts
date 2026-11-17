@@ -622,6 +622,10 @@ export const AUDIT_ACTIONS = {
   'site_task.checked': { label: 'Checked a step on the website', category: 'websites' },
   'site_task.skipped': { label: 'Skipped a step on the website', category: 'websites' },
   'site_task.restored': { label: 'Brought back a skipped step on the website', category: 'websites' },
+  // CR17-H (client report 2026-11-17, Q4): recommendations you can finish
+  'recommendation.dismissed': { label: 'Dismissed a recommendation', category: 'websites' },
+  'recommendation.restored': { label: 'Brought back a dismissed recommendation', category: 'websites' },
+  'recommendation.checked': { label: 'Checked a recommendation now', category: 'websites' },
   // Index coverage wave 2 (DESIGN_WAVE2 §3.2): the client says they asked Google (in Search Console) to read a page again
   'indexing.asked_google': { label: 'Said Google was asked to read a page again', category: 'websites' },
   'indexing.page_type': { label: 'Marked a page as important or as fine to leave out of Google', category: 'websites' },

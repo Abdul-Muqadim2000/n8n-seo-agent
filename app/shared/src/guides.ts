@@ -3543,6 +3543,140 @@ export const GUIDES = [
     related: ['autopilot-levels', 'coming-up-plan'],
     keywords: ['reject', 'not what i wanted', 'feedback', 'thumbs down', 'auto pause', 'level'],
   },
+  // CR17-H (client report 2026-11-17, Q4): every recommendation says how to do it. These five cover the families that had no guide.
+  {
+    id: 'improve-ranking-page',
+    area: 'website',
+    title: 'Improve a page that already shows in Google',
+    why: 'A page that already earns impressions is the shortest way to more clicks: Google already shows it, so making it answer the search better moves it up faster than a new page would.',
+    where: 'Alaventra, then your website',
+    minutes: 30,
+    steps: [
+      {
+        title: 'Press the button on the recommendation',
+        body: 'It opens **Write a page** with the search and your page filled in. We rewrite that page for the search: the same address, nothing removed that already ranks.',
+      },
+      {
+        title: 'Read the new version and publish it at the same address',
+        body: 'Replace the text of the page on your website with the new version. Keep the address: a new address starts from zero with Google.',
+        warn: 'Do not publish it as a second page. Two pages for one search compete with each other.',
+      },
+      {
+        title: 'Tell us it is live',
+        body: 'Press **I published it** on the page in Alaventra. Tracking follows the page from then on.',
+      },
+    ],
+    done: 'The recommendation moves to **Resolved** once Search Console shows the page higher for the search, usually within a few weeks of Google reading the new version.',
+    trouble: [{ q: 'The page did not move after a month', a: 'Google may not have read it again yet. Open the Indexing page: it shows when Google last read the page. If it read it and the page did not move, the next weekly report says what ranks above it.' }],
+    related: ['publish-page', 'index-request-indexing'],
+    keywords: ['improve page', 'striking distance', 'page two', 'refresh', 'rewrite', 'clicks fell'],
+  },
+  {
+    id: 'rewrite-title-description',
+    area: 'website',
+    title: 'Rewrite a title and description so more people click',
+    why: 'When a page shows near the top but few people click it, the title and the description in Google are usually the reason. They are the only part of the page a searcher reads before choosing.',
+    where: 'Your CMS',
+    minutes: 15,
+    steps: [
+      {
+        title: 'Search for it the way your buyers do',
+        body: 'Look at the results page for the search in the recommendation. Note what the titles above yours promise.',
+      },
+      {
+        title: 'Write a title that answers the search',
+        body: 'Put the words of the search early, say what the reader gets, and keep it under about 60 characters so Google does not cut it.',
+      },
+      {
+        title: 'Write the description',
+        body: 'One or two sentences under about 155 characters: what the page answers, and one reason to choose you. Save both in your CMS.',
+      },
+    ],
+    done: 'The recommendation moves to **Resolved** when Search Console shows more clicks for the same number of impressions, usually two to four weeks after Google reads the page again.',
+    trouble: [{ q: 'Google shows another title than the one I wrote', a: 'Google sometimes rewrites titles that do not match the page. Make the title match the main heading of the page.' }],
+    related: ['improve-ranking-page'],
+    keywords: ['title', 'meta description', 'ctr', 'click-through', 'snippet'],
+  },
+  {
+    id: 'win-back-link',
+    area: 'website',
+    title: 'Win back a link you lost',
+    why: 'A link from a trusted website helps your pages rank. When it disappears, a short, friendly note to the person who runs that page often brings it back.',
+    where: 'Your e-mail and the Backlinks page',
+    minutes: 15,
+    steps: [
+      {
+        title: 'Open the link on the Backlinks page',
+        body: 'It shows which page linked to you, the page it linked to and what our check found: the link removed, the page gone or the site gone.',
+      },
+      {
+        title: 'Send the drafted note',
+        body: 'If the page still exists, send the drafted e-mail from your own mailbox: thank them for the earlier mention and give the address to link to. If your own page moved, give its new address.',
+        note: 'If the whole site is gone there is nothing to ask for. Press **Not relevant** on the recommendation.',
+      },
+      {
+        title: 'Or redirect your old address',
+        body: 'If the link still points at a page of yours that moved or no longer opens, a permanent (301) redirect from that address to the page that replaced it keeps the link working without asking anyone.',
+      },
+    ],
+    done: 'Our link check reads the page every week. When it finds your link again, the recommendation moves to **Resolved** with the date it was found.',
+    trouble: [{ q: 'They did not answer', a: 'One short follow-up after a week is fine. After that, let it go: a link nobody wants to give is worth little.' }],
+    related: ['link-pitches', 'redirect-broken-page'],
+    keywords: ['lost link', 'backlink', 'reclaim', 'win back'],
+  },
+  {
+    id: 'link-pitches',
+    area: 'mailbox',
+    title: 'Review, send and follow up link pitches',
+    why: 'Each pitch is written for one website that could link to you: a list that leaves you out, a dead link to replace, a mention without a link. A pitch only helps once a person reads it and sends it.',
+    where: 'The Link building page',
+    minutes: 20,
+    steps: [
+      {
+        title: 'Read each pitch',
+        body: 'Open the **Link building** page. Each pitch shows the website, why it fits, the page of yours it offers and the person it goes to.',
+      },
+      {
+        title: 'Edit, then approve or skip',
+        body: 'Change anything that does not sound like you. **Approve** sends it from your own mailbox, a few a day. **Skip** drops it.',
+        note: 'Pitches go out only from a mailbox you connected in company settings, never from ours.',
+      },
+      {
+        title: 'Answer replies the same day',
+        body: 'A reply stops the follow-ups. A suggested answer is ready under **Replies**: edit it and send it in the same thread.',
+      },
+    ],
+    done: 'The recommendation moves to **Resolved** when the pitches are sent and, for a reply, when you answered it. A link counts as won only when our check finds it on their page.',
+    trouble: [{ q: 'Nothing is sent after I approve', a: 'Connect a mailbox first (company settings, Mailboxes). Pitches wait until one is connected.' }],
+    related: ['mailbox-connect', 'win-back-link'],
+    keywords: ['outreach', 'pitch', 'link building', 'follow-up', 'reply', 'guest post', 'list'],
+  },
+  {
+    id: 'ai-answer-page',
+    area: 'website',
+    title: 'Get a page of yours into an AI answer',
+    why: 'AI assistants build their answers from pages that answer the question plainly. A page of yours that does, for the searches the assistants run, is how your business gets named.',
+    where: 'Alaventra, then your website',
+    minutes: 30,
+    steps: [
+      {
+        title: 'Press the button on the recommendation',
+        body: 'It opens **Write a page** with the question and its searches filled in. When a page of yours already covers the search, the button improves that page instead of writing a second one.',
+      },
+      {
+        title: 'Publish it and tell us',
+        body: 'Publish the page on your website and press **I published it**. A page Google has not indexed cannot be used by the assistants that search Google, so the Indexing page follows it too.',
+      },
+      {
+        title: 'Get it mentioned where the answers look',
+        body: 'The AI visibility page lists the pages the assistants cite for the question. A mention of your business on one of them helps the new page get named.',
+      },
+    ],
+    done: 'The recommendation moves to **Resolved** when the page is live. Whether the assistants then name you is measured every week on the AI visibility page, against questions we did not work on.',
+    trouble: [{ q: 'The assistants still do not name us', a: 'It often takes a few weeks after Google indexes the page. Being mentioned on the pages the answers cite helps too: see the AI visibility page.' }],
+    related: ['ai-rank-earned-mention', 'publish-page'],
+    keywords: ['ai answer', 'chatgpt', 'perplexity', 'gemini', 'answer page', 'question'],
+  },
 ] as const satisfies readonly Guide[];
 
 export type GuideId = (typeof GUIDES)[number]['id'];

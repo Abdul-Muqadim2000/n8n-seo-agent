@@ -359,7 +359,7 @@ export function aiRankPlanOf(runs: AiRankRunRow[], actions: AiRankActionRow[], s
     ...a,
     // FX-C RC-1: the stored rows name questions by id; a customer reads the question text or nothing, and a why without ids or figures
     questions: a.questions.map((x) => (/\s/.test(x) ? x : q(x))).filter(Boolean),
-    why: opts.admin ? a.why : aiRankWhyPlain(a.why),   // client report 2026-11-16: the engine's scoring line never reaches a customer
+    why: opts.admin ? a.why : aiRankWhyPlain(a.why, a.lever),   // client report 2026-11-16: the engine's scoring line never reaches a customer (CR17-H: the lever's own sentence instead)
   }));
   const shownToViewer = opts.admin ? listed : listed.map((a) => ({ ...a, actionId: '', targetStage: '' }));   // no internal id or stage code for a customer
   const leverOf = new Map([...chosen, ...actions.map((a) => aiRankActionOf(a as P))].map((a) => [a.actionId, a.lever]));

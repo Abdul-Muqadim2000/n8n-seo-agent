@@ -1,9 +1,17 @@
 // Recommendations: the category of each, the order, the button that carries one out, and the list row (InsightItem) used on the
 // Recommendations page; the Overview builds its top-5 rows from the same parts.
 import { SiteTaskCheckButton } from '@/components/site/SiteTasks';
-import type { ReactNode } from 'react';
-import { Activity, ArrowRight, Bot, ExternalLink as ExternalIcon, Gauge, Link2, PenSquare, Settings, TrendingUp } from 'lucide-react';
-import { MODES, queueOrder, scoreNote, type Priority, type Recommendation, type RecommendationAction, type RecommendationCategory } from '@seo/shared';
+import { useState, type ReactNode } from 'react';
+import { toast } from 'sonner';
+import { Activity, ArrowRight, Bot, CheckCircle2, ExternalLink as ExternalIcon, Gauge, Link2, PenSquare, RotateCcw, Settings, TrendingUp, XCircle } from 'lucide-react';
+import { DISMISS_REASONS, MODES, queueOrder, scoreNote, type Priority, type Recommendation, type RecommendationAction, type RecommendationCategory, type RecommendationState } from '@seo/shared';
+import { Badge, StatusBadge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Field, Select, Textarea } from '@/components/ui/field';
+import { Dialog, DialogClose } from '@/components/ui/overlay';
+import { toastError } from '@/lib/api';
+import { useRecommendationAction } from '@/lib/queries';
+import { fmtDate } from '@/lib/utils';
 import { guideForRecommendation } from '@seo/shared/guides';
 import { autopilotGuideVars } from '@/lib/guide-vars';
 import { paths } from '@/lib/paths';
@@ -118,7 +126,9 @@ function CategoryIcon({ category, className }: { category: RecommendationCategor
  */
 export function RecommendationItem({ rec, siteId }: { rec: Recommendation; siteId?: string }) {
   const meta = CATEGORY_META[rec.category] ?? CATEGORY_META.setup;
-  const guide = guideForRecommendation(rec.id);
+  // CR17-H: the family's guide (the registry) first, then the older id map
+  const guide = rec.rule?.guide || guideForRecommendation(rec.id);
+  const open = !rec.state || rec.state === 'open' || rec.state === 'in_progress' || rec.state === 'failed';
   return (
     <InsightItem
       icon={meta.icon}
@@ -126,27 +136,198 @@ export function RecommendationItem({ rec, siteId }: { rec: Recommendation; siteI
         <>
           <PriorityBadge priority={rec.priority} />
           <span className="text-xs text-ink-3">{meta.label}</span>
+          <RecStateChip rec={rec} />
           <WorthChip rec={rec} />
         </>
       }
       title={<span className="text-[15px] leading-snug">{rec.title}</span>}
-      description={rec.evidence ? <span className="tabular [overflow-wrap:anywhere]">{rec.evidence}</span> : <span className="text-[13px] leading-relaxed text-ink-2 [overflow-wrap:anywhere]">{rec.detail}</span>}
-      detail={rec.evidence ? <span className="text-[13px] leading-relaxed [overflow-wrap:anywhere]">{rec.detail}</span> : undefined}
-      detailLabel="Why it matters"
+      description={
+        <span className="flex flex-col gap-1">
+          {rec.evidence ? <span className="tabular [overflow-wrap:anywhere]">{rec.evidence}</span> : <span className="text-[13px] leading-relaxed text-ink-2 [overflow-wrap:anywhere]">{rec.detail}</span>}
+          <RecStateLine rec={rec} />
+        </span>
+      }
+      detail={<RecRuleBlock rec={rec} />}
+      detailLabel="Why, how, and how we check it"
       action={
-        rec.action || guide || siteId || rec.taskKey ? (
-          <div className="flex flex-col items-stretch gap-1.5">
-            {/* site tasks: a step on the website is checked here as on the Pipeline */}
-            {rec.taskKey && <SiteTaskCheckButton taskKey={rec.taskKey} />}
-            {rec.action && <RecommendationButton action={rec.action} />}
-            {guide && <GuideHelp id={guide} extra={rec.guideVars} />}
-            {/* G4: the work item in the company's tracker (only once one is connected; setup items are ours to finish, not a ticket) */}
-            {siteId && rec.category !== 'setup' && <TicketButton siteId={siteId} source={{ type: 'recommendation', id: rec.id }} />}
-          </div>
-        ) : undefined
+        <div className="flex flex-col items-stretch gap-1.5">
+          {/* site tasks: a step on the website is checked here as on the Pipeline */}
+          {open && rec.taskKey && <SiteTaskCheckButton taskKey={rec.taskKey} />}
+          {open && rec.action && <RecommendationButton action={rec.action} />}
+          {open && !rec.taskKey && rec.rule?.canCheckNow && rec.state && <RecCheckButton rec={rec} />}
+          {open && guide && <GuideHelp id={guide} extra={rec.guideVars} />}
+          {/* G4: the work item in the company's tracker (only once one is connected; setup items are ours to finish, not a ticket) */}
+          {open && siteId && rec.category !== 'setup' && <TicketButton siteId={siteId} source={{ type: 'recommendation', id: rec.id }} />}
+          {rec.state && (rec.state === 'dismissed' ? <RecRestoreButton rec={rec} /> : open || rec.state === 'waiting_for_google' ? <RecDismissButton rec={rec} /> : null)}
+        </div>
       }
       actionPosition="side"
     />
+  );
+}
+
+// ---- CR17-H (client report 2026-11-17, Q4): where an item stands, why, how to do it, how we check it, and the client's buttons ----
+
+const STATE_META: Record<RecommendationState, { label: string; tone: 'good' | 'warning' | 'accent' | 'neutral' | 'serious' }> = {
+  open: { label: 'To do', tone: 'accent' },
+  in_progress: { label: 'In progress', tone: 'accent' },
+  failed: { label: 'Still there', tone: 'warning' },
+  waiting_for_google: { label: 'Waiting for Google', tone: 'neutral' },
+  resolved: { label: 'Resolved', tone: 'good' },
+  expired: { label: 'No longer reported', tone: 'neutral' },
+  dismissed: { label: 'Dismissed', tone: 'neutral' },
+};
+
+/** The state as a chip (absent on an older server: nothing). */
+function RecStateChip({ rec }: { rec: Recommendation }) {
+  if (!rec.state || rec.state === 'open') return null;
+  const m = STATE_META[rec.state];
+  return m.tone === 'neutral' ? <Badge>{m.label}</Badge> : <StatusBadge tone={m.tone}>{m.label}</StatusBadge>;
+}
+
+/** One line: since when, and the evidence that set the state ("Resolved on 20 Nov: /about is in Google since 18 Nov"). */
+export function RecStateLine({ rec }: { rec: Recommendation }) {
+  if (!rec.state) return null;
+  const on = (iso?: string) => (iso ? fmtDate(iso) : '');
+  const line =
+    rec.state === 'resolved'
+      ? `Resolved on ${on(rec.stateAt)}${rec.stateEvidence ? `: ${rec.stateEvidence}` : ''}`
+      : rec.state === 'waiting_for_google'
+        ? `Waiting for Google since ${on(rec.stateAt)}${rec.stateEvidence ? `: ${rec.stateEvidence}` : ''}`
+        : rec.state === 'dismissed'
+          ? `Dismissed on ${on(rec.stateAt)}: ${rec.dismissed?.reason ?? ''}${rec.dismissed?.note ? `. ${rec.dismissed.note}` : ''}`
+          : rec.state === 'expired'
+            ? `No longer reported since ${on(rec.stateAt)}, and no check of ours confirmed it fixed.`
+            : `Recommended since ${on(rec.firstSeenAt)}${rec.stateEvidence ? `. ${rec.stateEvidence}` : ''}`;
+  return <span className="text-xs text-ink-3 [overflow-wrap:anywhere]">{line}</span>;
+}
+
+/** Why it matters, how to do it, how we check it, who else reported it. */
+function RecRuleBlock({ rec }: { rec: Recommendation }) {
+  const r = rec.rule;
+  return (
+    <span className="flex flex-col gap-1.5 text-[13px] leading-relaxed [overflow-wrap:anywhere]">
+      {rec.evidence && rec.detail ? <span>{rec.detail}</span> : null}
+      {r && (
+        <>
+          <span>
+            <b className="font-medium text-ink">Why: </b>
+            {r.why}
+          </span>
+          <span>
+            <b className="font-medium text-ink">How to do it: </b>
+            {r.how}
+          </span>
+          <span>
+            <b className="font-medium text-ink">How we check it: </b>
+            {r.check ? `${r.check} (${r.checkWhen}).` : 'Nothing checks this one, so it is never marked resolved: dismiss it once it no longer applies.'}
+          </span>
+        </>
+      )}
+      {rec.alsoFrom?.length ? <span className="text-ink-3">Also reported by {rec.alsoFrom.join(', ')}.</span> : null}
+    </span>
+  );
+}
+
+function RecCheckButton({ rec }: { rec: Recommendation }) {
+  const { org, site, can } = useSitePage();
+  const act = useRecommendationAction(org.id, site.id);
+  if (!can('member')) return null;
+  return (
+    <Button
+      size="sm"
+      variant="secondary"
+      loading={act.isPending}
+      icon={<CheckCircle2 className="size-4" />}
+      onClick={() =>
+        act.mutate(
+          { key: rec.id, action: 'check' },
+          {
+            onSuccess: ({ rec: r }) => (r.state === 'resolved' ? toast.success(`Resolved: ${r.title}`) : toast.message(r.stateEvidence || 'Checked: nothing has changed yet.')),
+            onError: (e) => toastError(e),
+          },
+        )
+      }
+    >
+      Check now
+    </Button>
+  );
+}
+
+function RecRestoreButton({ rec }: { rec: Recommendation }) {
+  const { org, site, can } = useSitePage();
+  const act = useRecommendationAction(org.id, site.id);
+  if (!can('member')) return null;
+  return (
+    <Button size="sm" variant="ghost" loading={act.isPending} icon={<RotateCcw className="size-4" />} onClick={() => act.mutate({ key: rec.id, action: 'restore' }, { onSuccess: () => toast.success('Back on your to-do list'), onError: (e) => toastError(e) })}>
+      Bring it back
+    </Button>
+  );
+}
+
+/** "Not relevant": dismiss with a reason (and a line for another reason). A step on the website is skipped with it. */
+function RecDismissButton({ rec }: { rec: Recommendation }) {
+  const { org, site, can } = useSitePage();
+  const act = useRecommendationAction(org.id, site.id);
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState(DISMISS_REASONS[0].id);
+  const [note, setNote] = useState('');
+  if (!can('member')) return null;
+  return (
+    <>
+      <Button size="sm" variant="ghost" icon={<XCircle className="size-4" />} onClick={() => setOpen(true)}>
+        Not relevant
+      </Button>
+      <Dialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Dismiss this recommendation?"
+        description="It moves to the Dismissed tab and stops counting as a step to do. You can bring it back at any time; if it is still reported in 90 days it comes back by itself."
+        footer={
+          <>
+            <DialogClose asChild>
+              <Button variant="secondary">Cancel</Button>
+            </DialogClose>
+            <Button
+              loading={act.isPending}
+              disabled={reason === 'other' && !note.trim()}
+              onClick={() =>
+                act.mutate(
+                  { key: rec.id, action: 'dismiss', reason, note: note.trim() },
+                  {
+                    onSuccess: () => {
+                      toast.success('Dismissed. It is on the Dismissed tab.');
+                      setOpen(false);
+                    },
+                    onError: (e) => toastError(e),
+                  },
+                )
+              }
+            >
+              Dismiss
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-ink-2">{rec.title}</p>
+          <Field label="Why does it not apply?">
+            {(p) => (
+              <Select {...p} value={reason} onChange={(e) => setReason(e.target.value)}>
+                {DISMISS_REASONS.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.label}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <Field label={reason === 'other' ? 'In a few words' : 'A note for your team'} optional={reason !== 'other'}>
+            {(p) => <Textarea {...p} rows={2} maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} />}
+          </Field>
+        </div>
+      </Dialog>
+    </>
   );
 }
 

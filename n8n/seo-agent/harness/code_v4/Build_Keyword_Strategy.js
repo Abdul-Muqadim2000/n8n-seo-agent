@@ -1693,6 +1693,7 @@ const normD = (d) => String(d || '').toLowerCase().replace(/^www\./, '');
 // unchecked (live: null, "not checked") and is listed under research_failures; it used to read as "no AI Overview, nobody ranks".
 const serpErr = (s) => { s = s || {}; const t = (Array.isArray(s.tasks) ? s.tasks[0] : null) || {};
   return (s.error || Number(s.status_code) >= 40000 || !Array.isArray(s.tasks) || Number(t.status_code) >= 40000) ? String((s.error && (s.error.message || s.error)) || t.status_message || s.status_message || 'no answer').slice(0, 120) : ''; };
+const providerError = (raw) => { const t = String(raw == null ? '' : raw).trim(); return t.search(/\b\d{3}\s+-\s+["'{\\]|\{\s*\\?"[A-Za-z_]+\\?"\s*:|\bstatus_code\b|\btasks_error\b/) < 0 ? t : 'could not be read this time (the data provider had an error), so the research used the other sources'; };   // CR17-H (client report 2026-11-17, F1): a provider's raw answer never reaches the report (app: providerErrorText; harness CR17H holds the copies equal)
 const liveFailures = [];
 // E-GATE (2026-10-21, pre-launch run RV-11): "ai consultant" was labelled commercial, "buyers comparing providers" and Easy while its live results
 // page was a job board and a certification course and the questions people also ask were about salary and becoming one. Each live check is now
@@ -1704,7 +1705,7 @@ const goneKeysB = new Set((ks.gone_pages || []).map(u => GONE.keyOf(u)));   // K
 const liveUrlsBy = new Map();   // G8 / K7: the full top 10 of every keyword this run checked live
 prio.forEach((p, i) => {
   const err = serpErr(serps[i]);
-  if (err) { const k0 = ks.priority.find(x => x.keyword === p.keyword); if (k0) { k0.live = null; liveFailures.push('Live Google check for "' + p.keyword + '": ' + err); } return; }
+  if (err) { const k0 = ks.priority.find(x => x.keyword === p.keyword); if (k0) { k0.live = null; liveFailures.push('Live Google check for "' + p.keyword + '": ' + providerError(err)); } return; }
   const res = serps[i]?.tasks?.[0]?.result?.[0] || {};
   const items = res.items || [];
   const organic = items.filter(x => x.type === 'organic');

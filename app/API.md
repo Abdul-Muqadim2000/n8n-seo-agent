@@ -267,7 +267,11 @@ Verified sites only (403 `forbidden` otherwise); another company's website is a 
 | GET | …/data/settings | `SiteSettingsData` |
 | GET | …/data/pipeline | `PipelineData` (automations with next/last run, the page queue, growth loop, 4-week calendar, recent automatic runs; for the tool-form notices: `running` schedule executions and cycle jobs, this site's `activeRuns`, `written` pages, `ladders` with their planned pages; keyword-first: `cycle`, `autopilot`) |
 | GET | …/data/ladders/:ladderId | `LadderDetail` (one keyword ladder: its card plus every page with its state, position history, run / report, volume / difficulty; the timeline with the coming Mondays; clicks and impressions of its published pages by Search Console period; its plan, rank and page reports; cost so far; 404 when the ladder is not one of this domain's). LADDER PACKAGE (2026-11-09): each page also carries `action` (`new` / `improve`), `why` (its address and why), `stage` (problem / solution / compare / hire / info) and, for the states `stopped` / `failed` / `merged`, `reason`; the detail carries `market` (`{ country, iso, siteCountry, note }`, note only when measured outside the website's market) |
-| GET | …/recommendations | `Recommendation[]` |
+| GET | …/recommendations | `Recommendation[]`: the To do tab (CR17-H: what is not waiting for Google, resolved, expired or dismissed), each with `state`, `stateAt`, `stateEvidence`, `firstSeenAt`, `issueKey`, `alsoFrom`, `subjects`, `rule` (`why`, `how`, `guide`, `check`, `checkWhen`, `canCheckNow`) |
+| GET | …/recommendations/board | `RecommendationBoard` `{ todo, waiting, resolved, expired, dismissed, dismissReasons }` (CR17-H): the Recommendations page's tabs. Reading it brings `recommendation_states` up to date (inserts new items, settles gone ones through their check); resolved and expired items are listed 90 days |
+| POST | …/recommendations/dismiss | `{ key, reason, note? }` (member+; `reason` one of `not_relevant`, `done_elsewhere`, `not_possible`, `disagree`, `other`; `other` needs a note, 300 chars max) → `{ recommendation }`. A step on the website (`taskKey`) is skipped with it. Audit `recommendation.dismissed`. 120 / 10 min |
+| POST | …/recommendations/restore | `{ key }` (member+) → `{ recommendation }` open again (its step unskipped). Audit `recommendation.restored` |
+| POST | …/recommendations/check | `{ key }` (member+) → `{ recommendation }` as it stands after its own check: a step on the website runs its check (as `…/tasks/check`, same errors), an audit finding asks the daily page watch to read it again, any other family re-reads our newest data. Audit `recommendation.checked`. 30 / 10 min |
 
 `PipelineData` fields for the Pipeline home (v4.8, `PIPELINE_FEATURE_SPEC.md` §4.1; rules in `server/src/services/ladders.ts` and `shared/src/ladders.ts`):
 
@@ -1336,3 +1340,30 @@ whose estimated credits exceed the balance minus what in-flight work holds is re
 left for this run …". A **suspended** account gets **403 `account_suspended`** ("This account is suspended. Contact support.") on every
 sign-in (password, Google → `/login?error=account_suspended`, SSO, the second step, portal hand-off) and **401 `account_suspended`** on a
 leftover session.
+
+## Recommendations you can finish (CR17-H, client report 2026-11-17 Q4)
+
+The list is still computed from the website's data on every read (`server/src/services/recommendations.ts` `recommend()`); its last pass
+(`finishQueue`) and a small table make each item answerable:
+
+- **One card per issue** (`issueKey`: `page:<host/path>`, `aiq:<search>`, `link:<domain>`, `kw:<search>`, else the id; `shared/src/recommendation-rules.ts`
+  `foldByIssue`). With Index coverage running, every "this page is not in Google" ask (the weekly site report's `engine:*:index:*`, the audit's
+  "not indexed by Google" finding, `ix:ask_google`) is ONE card `ix:not_indexed` listing its pages in `subjects`, opening the Indexing page.
+- **A rule per family** (`REC_RULES`, matched on the id prefix): why, how (its guide), how we check it (`check.kind`: `index`, `site_task`,
+  `finding`, `ai_target`, `link`, `content`, `ladder`, `search`, `rank`, `pitches`, `connection`, `schedule`) and when. A family nothing checks
+  is at most Low and never resolved. `ai:low` and `bl:spam` are measures, not tasks: they are left out (the AI visibility and Backlinks pages
+  show them).
+- **The badge comes from the queue score** (`shared/src/queue.ts` `priorityFromScore`: High from value 1.0, Medium from 0.35; rule-only at
+  most Medium unless an urgent family's source said High; the source's own priority can only lower it).
+- **States** (`recommendation_states`, migration 0028; one row per website and `rec_key`): `open`, `in_progress`, `waiting_for_google`,
+  `resolved`, `failed`, `dismissed`, `expired` (`nextRecState`). An item is resolved only when a check confirms it (`stateEvidence` + the date
+  of what the check saw: Google's `indexed_since`, a step's `done_at`, the audit date); one its source stops reporting that no check confirms
+  is `expired`, never resolved; a resolved item reported again is open ("It came back on ..."); a dismissed one comes back after 90 days if
+  still reported. The Overview's top six and the Pipeline's Improve stage read the To do tab (`todoRecommendations`); Needs you reads the
+  website steps, which a dismissal skips.
+- **Adapters** (`server/src/services/recommendationStates.ts`): `registerRecVerifier(kind, fn)` replaces the check of one kind
+  (`fn({ rec, present }, ctx) => { outcome, evidence?, at? }`); `setNotIndexedCard(fn)` replaces the folded index card;
+  `setIndexPageReader(fn)` the page reader the index check uses.
+- **Client copy** (`shared/src/client-copy.ts`): every title, detail and evidence passes `clientText` (no AI-ranking scoring line, lever
+  code, run id, table name, raw provider JSON, dollar figure, arrow, em dash, curly quote or ellipsis); titles never end mid-sentence
+  (`splitTitle`, the rest opens the detail).

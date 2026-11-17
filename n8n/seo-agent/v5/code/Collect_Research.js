@@ -104,8 +104,9 @@ const candidates = all.filter(e => e.intent !== 'navigational').slice(0, 240);
 const bySource = {};
 for (const e of all) for (const s of e.sources) bySource[s] = (bySource[s] || 0) + 1;
 const pairs = [...reqA.map((r, i) => [r, resA[i]]), ...reqB.map((r, i) => [r, resB[i]])];
+const providerError = (raw) => { const t = String(raw == null ? '' : raw).trim(); return t.search(/\b\d{3}\s+-\s+["'{\\]|\{\s*\\?"[A-Za-z_]+\\?"\s*:|\bstatus_code\b|\btasks_error\b/) < 0 ? t : 'could not be read this time (the data provider had an error), so the research used the other sources'; };   // CR17-H (client report 2026-11-17, F1): a provider's raw answer never reaches the report (app: providerErrorText; harness CR17H holds the copies equal)
 const failures = pairs.filter(([r, res]) => !res || res.error || Number(res.status_code) >= 40000 || ((res.tasks || [])[0] || {}).status_code >= 40000)   // + a top-level DataForSEO error (50000 with tasks: null, HTTP 200)
-  .map(([r, res]) => r.label + ': ' + ((res && ((res.error && res.error.message) || ((res.tasks || [])[0] || {}).status_message || res.status_message)) || 'no response'));
+  .map(([r, res]) => r.label + ': ' + providerError((res && ((res.error && res.error.message) || ((res.tasks || [])[0] || {}).status_message || res.status_message)) || 'no response'));
 return [{ json: { ...base, research: {
   pool_size: all.length, candidates, long_tail_pool: all.filter(e => e.words >= 4 && e.intent !== 'navigational').slice(0, 300),
   competitor_domains: [...new Set(reqB.filter(r => r.kind === 'competitor').map(r => r.domain))], by_source: bySource, failures, requests: pairs.length,

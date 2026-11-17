@@ -1,4 +1,4 @@
-import type { CreditPack, FactAnswers, PageAnswer, PageCheck, PageLiveGrade, SiteTaskCheck, SiteTaskKind } from '@seo/shared';
+import type { CreditPack, FactAnswers, PageAnswer, PageCheck, PageLiveGrade, RecommendationState, SiteTaskCheck, SiteTaskKind } from '@seo/shared';
 import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
@@ -1676,6 +1676,44 @@ export const siteTasks = pgTable(
   },
   (t) => [uniqueIndex('site_tasks_site_key_idx').on(t.siteId, t.taskKey), index('site_tasks_org_idx').on(t.orgId), index('site_tasks_due_idx').on(t.lastCheckAt)],
 );
+
+/**
+ * CR17-H (client report 2026-11-17, Q4): where each recommendation stands. One row per website and recommendation id (`rec_key`, the id
+ * recommend() always gave it), with the issue it is about (one card per page / AI question / link), its state and the evidence that set it
+ * (a check of ours: "Google indexed /about on 20 Nov"), when it was first and last reported, and a dismissal with its reason. The list
+ * itself is still computed from the website's data on every read; this table only remembers what happened to each item, so a fixed item
+ * moves to Resolved with its proof instead of vanishing. Additive: nothing else reads or writes it.
+ */
+export const recommendationStates = pgTable(
+  'recommendation_states',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    recKey: text('rec_key').notNull(),
+    issueKey: text('issue_key').notNull().default(''),
+    /** open | in_progress | waiting_for_google | resolved | failed | dismissed | expired (shared/src/recommendation-rules.ts) */
+    state: text('state').$type<RecommendationState>().notNull().default('open'),
+    /** the item as last shown (title, detail, action...), so a resolved or dismissed item can still be listed after its source drops it */
+    snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull().default({}),
+    /** the line that set the state, in plain words ('' = none) */
+    evidence: text('evidence').notNull().default(''),
+    firstSeenAt: ts('first_seen_at').defaultNow().notNull(),
+    lastSeenAt: ts('last_seen_at').defaultNow().notNull(),
+    stateAt: ts('state_at').defaultNow().notNull(),
+    dismissedReason: text('dismissed_reason').notNull().default(''),
+    dismissedNote: text('dismissed_note').notNull().default(''),
+    /** the person who dismissed or restored it (null: set by a check) */
+    byUser: uuid('by_user').references(() => users.id, { onDelete: 'set null' }),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex('recommendation_states_site_key_idx').on(t.siteId, t.recKey), index('recommendation_states_org_idx').on(t.orgId), index('recommendation_states_state_idx').on(t.siteId, t.state)],
+);
+export type RecommendationStateRow = typeof recommendationStates.$inferSelect;
 
 /**
  * D3: the one free keyword research of a website at setup. Keyed by the DOMAIN, not the website row: deleting a website and adding it

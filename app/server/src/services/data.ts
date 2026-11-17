@@ -1,4 +1,5 @@
 import {
+  clientText,   // CR17-H (F1): the client-copy guard
   INDEXING_MERGE_KEY,
   effectiveSeverity,
   liveResolved,
@@ -1943,7 +1944,8 @@ function toGrowth(g: AiGrowthRow | undefined, pages: AiPageRow[], targets: AiTar
     targets: targets.sort((a, z) => n(z.value) - n(a.value)).map((t) => targetStat(t, logs, admin)),
     earned,
     entity: ent ? { checkedAt: s(ent.checked_at), found: b(ent.found), qid: s(ent.qid), byName: arr(ent.by_name).map((x) => ({ id: s(x.id), label: s(x.label), description: s(x.description) })) } : null,
-    actions: arr(safeJson(g.actions_json, [])).map((a) => ({ priority: n(a.priority), type: s(a.type), action: s(a.action), why: s(a.why) })),
+    // CR17-H (F1): an AI-ranking action's why was the engine's scoring line; a customer reads the client-copy guard's words (admins the raw)
+    actions: arr(safeJson(g.actions_json, [])).map((a) => ({ priority: n(a.priority), type: s(a.type), action: admin ? s(a.action) : clientText(s(a.action)), why: admin ? s(a.why) : clientText(s(a.why)) })),
     alerts: s(g.alerts).split(' | ').filter(Boolean).map((t) => { const i = t.indexOf(': '); return i > 0 ? { level: t.slice(0, i), text: t.slice(i + 2) } : { level: 'info', text: t }; }),
     pagesPerMonth: m ? m.aiPagesPerMonth : AI_PAGES_DEFAULT,
     writtenThisMonth: logs.filter((l) => /^ai_/.test(s(l.source)) && s(l.started_at).slice(0, 7) === month).length,

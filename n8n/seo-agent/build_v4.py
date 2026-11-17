@@ -14665,3 +14665,45 @@ def _cr16_checks():
     assert all((c, 'string') in _lc for c in ('planned_slug', 'planned_title', 'planned_h1')), 'INV1 F4: seo_content_log.planned_* missing (sync_tables.py adds them on deploy)'
     print('INV1 (section 192): AI pages judged on their own search (no blanket exemption), AQ inlined in 6 nodes, idle settle wired, 5 new columns declared')
 _cr16_checks()
+
+# =============================================================================
+# 198. WHAT A CLIENT READS FROM THE ENGINE (CR17-H, client report 2026-11-17 F1, devaicon.com; harness CR17H1-CR17H5).
+#      devaicon.com's Pipeline, Steps on your website and the AI growth report read "Get the page indexed in Google: 6 cell(s), expected gain
+#      0.0082 over (client time at an hour), typical 21 days": ARL.score wrote its arithmetic into `why`, AI Rank Plan merged the score over the
+#      candidate, and every reader took `why` as the client's reason. Now: ARL.score's `why` is the lever's sentence (ARL.LEVERS[].client =
+#      AIRC.WHY = the app's AI_RANK_CLIENT_WHY), the arithmetic travels as `score_note`, the candidate's own reason as `reason_note`; Growth
+#      Report reads AIRC.whyPlain (older stored lines become the sentence); a prospect note names no lever code; the research nodes write a
+#      sentence for a provider's raw answer; the site report's index action is a sentence that fits a title, with no arrow. The app renders
+#      everything through the same guard (app/shared/src/client-copy.ts). This lint fails the build if any of it comes back.
+#      Checked on the GENERATED workflows (after the sub-builds), so a kit that was not inlined fails here too.
+# =============================================================================
+def _cr17h_checks():
+    import json as _j198
+    import re as _re198
+    def _nodes(f):
+        d = _j198.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))
+        wf = d[0] if isinstance(d, list) else d
+        return {n['name']: n for n in wf['nodes']}
+    js = lambda nd, n: ((nd.get(n) or {}).get('parameters') or {}).get('jsCode') or ''
+    bad = []
+    for f in sorted(os.listdir(os.path.join(HERE0, 'workflows'))):
+        if not f.endswith('.json') or 'v3_original' in f:
+            continue
+        for name, nd in _nodes(f).items():
+            c = ((nd.get('parameters') or {}).get('jsCode')) or ''
+            # the arithmetic may exist only as score_note; written into `why` it is what the client read
+            if _re198.search(r"why: L\.label \+ ': ' \+ pc\.length \+ ' cell\(s\)", c):
+                bad.append('%s / %s: the AI-ranking scoring line is written into why' % (f, name))
+            if "'AI ranking placement (' + a.lever" in c:
+                bad.append('%s / %s: a prospect note carries the lever code' % (f, name))
+            if 'URL inspection → Request indexing' in c:
+                bad.append('%s / %s: an arrow in an action title' % (f, name))
+    assert not bad, 'CR17-H (section 198): ' + '; '.join(bad)
+    gro = _nodes('SEO_Agent_AI_Growth.json')
+    assert 'AIRC.whyPlain(a.why, a.lever)' in js(gro, 'Growth Report') and 'const whyPlain = ' in js(gro, 'Growth Report'), 'CR17-H (section 198): Growth Report does not read the AI-ranking reason through AIRC.whyPlain'
+    assert 'reason_note: S0(c.why)' in js(gro, 'AI Rank Plan') and 'score_note: L.label' in js(gro, 'AI Rank Plan'), 'CR17-H (section 198): AI Rank Plan lost score_note / reason_note (the arithmetic would become the reason again)'
+    main = _nodes('SEO_Agent_v4.json')
+    for n in ('Collect Research', 'Ladder Pool', 'Build Keyword Strategy'):
+        assert 'const providerError = ' in js(main, n), 'CR17-H (section 198): %s writes a provider\'s raw answer into research_failures' % n
+    print('CR17-H (section 198): AI-ranking reasons in the client\'s words (score_note apart), no lever-coded note, no provider dump, no arrow in the index action')
+_cr17h_checks()

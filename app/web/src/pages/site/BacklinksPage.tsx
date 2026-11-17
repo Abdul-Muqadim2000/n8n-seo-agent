@@ -3,7 +3,7 @@ import { PRICES } from '@/lib/prices';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { ArrowUpDown, AtSign, BarChart3, BellRing, Bot, CalendarRange, CheckCircle2, Clock, Download, ExternalLink as ExternalIcon, FileText, FileUp, Globe, Link2, ListOrdered, Mail, Network, Plug, Quote, Send, ShieldAlert, Sparkles, Swords, Target, TriangleAlert, Trophy, Unlink, Wrench } from 'lucide-react';
-import { LINK_KINDS, LINK_KIND_ORDER, PROSPECT_STATUSES, bingSourceText, checkNote, compactNumber, linkBreakdown, linkCounts, linkKindOf, sourcesFromLedger, spamScoreReading, titleCase, type BacklinkLink, type BacklinkRef, type BacklinksData, type BingCheck, type LinkBreakdown, type LinkKind, type Prospect, type ProspectStatus } from '@seo/shared';
+import { LINK_KINDS, LINK_KIND_ORDER, PROSPECT_STATUSES, bingSourceText, checkNote, clientText, compactNumber, linkBreakdown, linkCounts, linkKindOf, sourcesFromLedger, spamScoreReading, titleCase, type BacklinkLink, type BacklinkRef, type BacklinksData, type BingCheck, type LinkBreakdown, type LinkKind, type Prospect, type ProspectStatus } from '@seo/shared';
 import { useMutation } from '@tanstack/react-query';
 import { GuideButton } from '@/components/guide';
 import { api, fileUrl, toastError } from '@/lib/api';
@@ -1009,7 +1009,8 @@ function ProspectCard({ p, onOpen }: { p: Prospect; onOpen: () => void }) {
       {p.detail && <p className="mt-2.5 text-[13px] leading-relaxed text-ink-2">{p.detail}</p>}
       {p.contactEmail && <p className="mt-2 text-xs text-ink-3">Contact: {p.contactEmail}</p>}
       {st === 'contacted' && p.followupBody && <p className="mt-2 text-xs font-medium text-warning-text">Follow-up {p.followupStep} is drafted</p>}
-      {p.note && <p className="mt-2 rounded-md bg-surface-2 px-2 py-1 text-xs text-ink-2">Note: {p.note}</p>}
+      {/* CR17-H (F1): an older note named a lever code ("AI ranking placement (L08)"): the client-copy guard rewrites it */}
+      {p.note && clientText(p.note) && <p className="mt-2 rounded-md bg-surface-2 px-2 py-1 text-xs text-ink-2">Note: {clientText(p.note)}</p>}
       <div className="mt-auto flex items-center justify-between gap-2 pt-3">
         <span className="text-xs text-ink-3">since {fmtDate(p.firstSeen)}</span>
         <Button size="sm" variant={p.outreachBody ? 'secondary' : 'ghost'} icon={<Mail className="size-3.5" />} onClick={onOpen}>
