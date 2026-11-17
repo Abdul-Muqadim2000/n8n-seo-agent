@@ -161,3 +161,5 @@ main (0) before, production == this build (0) after (only Cadence Plan changed);
 the VM 0e2c522c -> b4ae8c59 (healthy, 0 restarts, /api/health 200, no errors in the log; rollback image `alaventra-app:rollback-0e2c522c`).
 No migration, no Data Table column. Web: a new PR to `main` (PR #69 was already merged); until it merges, the current web shows the plan
 as before (the new fields are optional), and the API already refuses an approval the engine would not reach and carries approvals.
+Web: PR #70 merged 2026-11-17 09:28 UTC (main c6155e9f); live on app.alaventra.com, the new text ("Moves to next week", "Carried over from
+your last plan", changelog "Pages you approve come first") verified in the deployed bundle.

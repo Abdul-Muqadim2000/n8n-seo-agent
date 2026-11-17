@@ -3,7 +3,7 @@
 Enterprise SEO automation built as n8n workflows: keyword research, keyword verdicts, long-form content with QA, technical site audits, full SEO reports, AI-visibility checks. Everything lives in `n8n/seo-agent/`; the stack runs locally with Docker Compose from `n8n/`.
 
 ## Read first
-- **`n8n/seo-agent/docs/client-reports-2026-11-16/README.md` - devaicon reports 2026-11-16: AI answer pages for the question's own search, live page grades that explain themselves (PR #68 merged); second report: Coming up follows each page after the weekly run (PR #69 merged); APPROVALS FIRST (owner decision: approvals before the autopilot's picks, carry-over; API + engine DEPLOYED, web PR pending).**
+- **`n8n/seo-agent/docs/client-reports-2026-11-16/README.md` - devaicon reports 2026-11-16: AI answer pages for the question's own search, live page grades that explain themselves (PR #68 merged); second report: Coming up follows each page after the weekly run (PR #69 merged); APPROVALS FIRST (owner decision: approvals before the autopilot's picks, carry-over; ALL DEPLOYED, web PR #70 merged).**
 - **`n8n/seo-agent/docs/readiness-2026-11-12/README.md` — readiness review 2026-11-12 (deployed fixes, writing slots not deployed, owner items).**
 - **`n8n/seo-agent/docs/indexing-2026-10-29/RESUME.md` — Index coverage (2026-10-30, branch `feature/indexing`, not deployed): finding clients' pages Google left out, why, and what to do.**
 - **`n8n/seo-agent/docs/system-review-2026-10-17/RESUME.md` — START HERE (2026-10-18): the fourth re-rating (6/10, market 4.2, enterprise 1.5), every fix and the five enterprise capabilities merged but NOT deployed, the deploy checklist (§9), the live checks (§5), owner decisions (§6) and launch blockers.**
@@ -65,7 +65,7 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-11-16 evening, APPROVALS FIRST (owner: enterprise rule) - API + engine DEPLOYED, web PR pending - latest)
+## Status (2026-11-16 evening, APPROVALS FIRST (owner: enterprise rule) - ALL DEPLOYED (web: PR #70 merged 2026-11-17, main c6155e9f) - latest)
 A client's approved page is now written before the autopilot's own picks (earliest approval first; ladder pages, then other automatic
 items), within pages a week, every hold kept. Before the run Coming up says what an approval moves (slots this_week / moved / over,
 approveMoves / approveOver); an approval not written for budget / same_page is carried to the next plan by itself (first approval time
