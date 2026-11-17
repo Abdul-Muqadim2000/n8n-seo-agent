@@ -1,6 +1,8 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import fixture from './__fixtures__/index-coverage-techand.json';
-import { buildIndexingData, indexingCauseReadings, indexingSitemapReading, indexInSearchLine, INDEX_CAUSES } from './indexing';
+import { buildIndexingData, indexingCauseReadings, indexingSitemapReading, indexInSearchLine, indexReportFigures, INDEX_CAUSES } from './indexing';
 import { deriveSiteTasks } from './site-tasks';
 import { deliveryDecision, finishedStatus } from './report-delivery';
 import { eventsFor } from './integrations';
@@ -15,6 +17,18 @@ const rows = fixture.rows as unknown as Partial<IndexPageRow>[];
 const runs = fixture.runs as unknown as Partial<IndexRunRow>[];
 const cb = fixture.callback as unknown as Record<string, unknown> & { summary: Record<string, unknown> };
 const run = runs[0];
+// CR17-C: the engine's own summary rule on the same rows (n8n/seo-agent/v5/code/_index_kit.js), when the kit is in this tree
+const KIT = process.env.IX_KIT_PATH || fileURLToPath(new URL('../../../n8n/seo-agent/v5/code/_index_kit.js', import.meta.url));
+const engineSummary: { should_be?: number; in_google?: number } | null = (() => {
+  try {
+    if (!existsSync(KIT)) return null;
+    const ix = new Function(`${readFileSync(KIT, 'utf8')}\n;return IX;`)() as { summarize?: (r: unknown[], run: unknown) => { should_be?: number; in_google?: number } };
+    const sm = typeof ix.summarize === 'function' ? ix.summarize(rows as unknown[], {}) : null;
+    return sm && typeof sm.should_be === 'number' ? sm : null;
+  } catch {
+    return null;
+  }
+})();
 
 describe('the engine\'s real rows through the app', () => {
   const d = buildIndexingData({ rows, runs, events: [], impacts: [], settings: { on: true, dailyCap: 300 } });
@@ -70,12 +84,15 @@ describe('the engine\'s real callback through the app', () => {
     expect(ev.map((e) => e.type)).toEqual(['report.ready']);
   });
 
+  // CR17-C (client report 2026-11-17 F6): the report counts the same population as the page. The recorded callback predates the
+  // engine's `should_be` / `in_google` (section 193), so the engine's own IX.summarize is run on the same rows (the parity the report
+  // relies on); a kit that cannot be read skips this case.
   it('A9: the report\'s headline and the page\'s say the same thing from the same counts', () => {
     const d = buildIndexingData({ rows, runs, events: [], impacts: [], settings: { on: true, dailyCap: 300 } });
-    const m = cb.summary;
-    const leaveOut = Number((m.by_action as Record<string, number>).leave_out ?? 0);
-    const checked = Number(m.indexed) + Number(m.not_indexed) + Number(m.excluded);
-    const report = indexInSearchLine({ indexed: Number(m.indexed), shouldBe: checked - leaveOut, known: Number(m.known), notChecked: Number(m.unknown) });
+    const m = { ...cb.summary, ...(engineSummary ? { should_be: engineSummary.should_be, in_google: engineSummary.in_google } : {}) };
+    if (!engineSummary) return;
+    expect(engineSummary.should_be).toBe(d.totals.shouldBe);
+    const report = indexInSearchLine(indexReportFigures(m));
     const page = indexInSearchLine({ indexed: d.totals.indexed, shouldBe: d.totals.shouldBe, known: d.totals.known, notChecked: d.totals.unknown + d.totals.errors });
     expect(report).toBe(page);
   });

@@ -42,7 +42,10 @@ module.exports = async (ctx) => {
     const one = (label, p, r, f, want, c) => { const d = dx(page(p), r, f, c); cases.push([label, d, want]); return d; };
     const [kIdx, aIdx] = [...ANS.entries()].find(([, a]) => a.inspectionResult.indexStatusResult.verdict === 'PASS');
     one('indexed (a real PASS answer)', { url: W + '/capabilities/business-applications' }, IX.readInspection(aIdx), null, ['', 'none', 'indexed']);
-    one('indexed, not in the sitemap', { url: W + '/about', in_sitemap: false, sources: 'search' }, IX.readInspection(aIdx), null, ['indexed_not_in_sitemap', 'site_fix', 'indexed']);
+    // CR17-C (section 193, F3): "add it to the sitemap" only after our read saw the address answer 200 directly and name itself; unread -> indexed, no advice
+    one('indexed, not in the sitemap (our read: a direct 200)', { url: W + '/about', in_sitemap: false, sources: 'search' }, IX.readInspection(aIdx),
+      IX.readFetch(W + '/about', { statusCode: 200, headers: {}, body: '<html><head><title>About</title></head><body><main>' + 'words '.repeat(300) + '</main></body></html>' }, null), ['indexed_not_in_sitemap', 'site_fix', 'indexed']);
+    one('indexed, not in the sitemap, not read by us yet (CR17-C: no advice until our read)', { url: W + '/about', in_sitemap: false, sources: 'search' }, IX.readInspection(aIdx), null, ['', 'none', 'indexed']);
     one('wait_new: a page we published 5 days ago, unknown to Google', { url: W + '/new', lane: 'new', sources: 'sitemap,ours', published_at: iso(NOW - 5 * DAY) }, R({ coverageState: 'URL is unknown to Google', pageFetchState: 'PAGE_FETCH_STATE_UNSPECIFIED', indexingState: 'INDEXING_STATE_UNSPECIFIED', robotsTxtState: 'ROBOTS_TXT_STATE_UNSPECIFIED' }), null, ['wait_new', 'wait', 'not_indexed']);
     const unk = ansBy('URL is unknown to Google');
     one('unknown_to_google (a real answer, page in the sitemap)', { url: W + '/u' }, IX.readInspection(unk[1]), null, ['unknown_to_google', 'links', 'not_indexed']);
@@ -433,11 +436,12 @@ module.exports = async (ctx) => {
     const SHAPE = ['stage', 'status', 'domain', 'site_id', 'request_id', 'summary', 'report_markdown', 'cost', 'callback_url'];
     const SUM = ['known', 'indexed', 'not_indexed', 'excluded', 'unknown', 'backlog_left', 'new_pages', 'new_indexed', 'by_action', 'by_cause', 'dropped', 'freeze', 'freeze_reason', 'events', 'impact',
       'failed', 'checked', 'note', 'figures_from',   // fix wave 2 (N12): a run that could not read the site says so in the summary
-      'waiting', 'escalated', 'asked_waiting', 'read_after_ask_7d', 'indexnow_sent', 'do_first', 'sitemap_dates'];   // wave 3 (DESIGN_WAVE3.md §2.8)
+      'waiting', 'escalated', 'asked_waiting', 'read_after_ask_7d', 'indexnow_sent', 'do_first', 'sitemap_dates',   // wave 3 (DESIGN_WAVE3.md §2.8)
+      'should_be', 'in_google'];   // CR17-C (section 193, F6): the pages that should be in Google, the app's population
     check('the callback on a Monday: stage index_coverage, the §5 shape, cost $0, the summary keys', X.rep.length === 1 && rep.stage === 'index_coverage' && rep.status === 'complete' && J(Object.keys(rep).sort()) === J(SHAPE.slice().sort())
       && J(Object.keys(rep.summary).sort()) === J(SUM.slice().sort()) && rep.cost.usd === 0 && rep.request_id === 'req-ix' && J(Object.keys(rep.summary.impact).sort()) === J(['dropped', 'event_title', 'gained', 'stable'])
       && rep.summary.events.every(e => J(Object.keys(e).sort()) === J(['ended_at', 'kind', 'started_at', 'status', 'title'])), J(rep));
-    check('the report says what Google has, groups by action, and never promises', /^# Index coverage: techand\.ai/.test(rep.report_markdown) && /known pages in its index/.test(rep.report_markdown) && !PROMISE.test(rep.report_markdown.replace(/nothing here is submitted/, '')) && !TELL.test(rep.report_markdown), rep.report_markdown.slice(0, 600));
+    check('the report says what Google has, groups by action, and never promises', /^# Index coverage: techand\.ai/.test(rep.report_markdown) && /(known pages in its index|pages that should be in Google)/.test(rep.report_markdown) && !PROMISE.test(rep.report_markdown.replace(/nothing here is submitted/, '')) && !TELL.test(rep.report_markdown), rep.report_markdown.slice(0, 600));
     const body = WIRE.callback.body;
     check('the POST body carries the §5 fields and the settled run ledger, nothing else', ["stage: 'index_coverage'", 'summary: $json.summary', 'report_markdown: $json.report_markdown', 'cost: $json.cost', 'run_ledger: $json.run_ledger', 'request_id: $json.request_id']
       .every(t => body.includes(t)) && !/callback_url/.test(body.replace('$json.callback_url', '')), body);

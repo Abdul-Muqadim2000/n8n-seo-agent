@@ -1,7 +1,7 @@
 // Index coverage (2026-10-29, n8n/seo-agent/docs/indexing-2026-10-29/DESIGN.md §5): the daily index check's report. Weekly on Mondays,
 // and the same day when a page drops out of Google search or a Google update starts or ends. Free (Google data only).
 import { ArrowRight, CalendarClock, CircleDashed, FileSearch, ListChecks, TrendingDown } from 'lucide-react';
-import { INDEX_ACTION_INFO, INDEX_ACTIONS_NEED_YOU, INDEX_CAUSE_INFO, INDEX_CAUSES, indexDayText, indexInSearchLine, indexingNoteText, indexingReportFailed, indexPath, sitemapDatesLine, sitemapDatesMissing, type IndexAction, type IndexCause, type ReportDetail } from '@seo/shared';
+import { INDEX_ACTION_INFO, INDEX_ACTIONS_NEED_YOU, INDEX_CAUSE_INFO, INDEX_CAUSES, INDEX_POPULATION_LINE, indexDayText, indexInSearchLine, indexReportFigures, indexingNoteText, indexingReportFailed, indexPath, sitemapDatesLine, sitemapDatesMissing, type IndexAction, type IndexCause, type ReportDetail } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { ButtonLink } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
@@ -37,10 +37,7 @@ export function IndexCoverageReport({ report }: { report: ReportDetail }) {
   const byAction = obj(m.by_action);
   const byCause = obj(m.by_cause);
   const needYou = (['site_fix', 'quality', 'duplicate', 'links'] as const).reduce((s, a) => s + (num(byAction[a]) ?? 0), 0) + (num(byCause.unclassified) ?? 0);
-  // A9: the same headline as the Indexing page, from the pages Google gave a reading of (not every page we know)
-  const checked = indexed + (num(m.not_indexed) ?? 0) + (num(m.excluded) ?? 0);
-  const leftOut = Math.min(num(byAction.leave_out) ?? 0, Math.max(0, checked - indexed));
-  const notChecked = num(m.unknown) ?? num(m.backlog_left) ?? 0;
+  // A9 / CR17-C: the same headline as the Indexing page, from the same population (indexReportFigures)
   const dropped = objs(m.dropped);
   const events = objs(m.events);
   const rolling = events.find((e) => str(e.status) === 'rolling_out');
@@ -76,13 +73,19 @@ export function IndexCoverageReport({ report }: { report: ReportDetail }) {
     <Stagger className="space-y-5">
       <ReportHero
         report={report}
-        title={failed ? `We could not check ${domain} this time` : known ? indexInSearchLine({ indexed, shouldBe: checked - leftOut, known, notChecked }, domain) : 'Your index check has started'}
+        // CR17-C (client report 2026-11-17 F6): the Indexing page's population (indexReportFigures), named under the figures
+        title={failed ? `We could not check ${domain} this time` : known ? indexInSearchLine(indexReportFigures(m), domain) : 'Your index check has started'}
         description={
-          failed
-            ? `${note}${known ? ' The figures below are from the last check that read your website.' : ''}`
-            : needYou
-              ? `${fmt(needYou)} page${needYou === 1 ? '' : 's'} need you. The Indexing page groups them by reason, with what to do for each.`
-              : 'Nothing needs you this time. We check again every day which pages Google left out.'
+          failed ? (
+            `${note}${known ? ' The figures below are from the last check that read your website.' : ''}`
+          ) : (
+            <>
+              {needYou
+                ? `${fmt(needYou)} page${needYou === 1 ? '' : 's'} need you. The Indexing page groups them by reason, with what to do for each.`
+                : 'Nothing needs you this time. We check again every day which pages Google left out.'}
+              <span className="mt-1 block text-[13px] opacity-80">{INDEX_POPULATION_LINE}</span>
+            </>
+          )
         }
         aside={
           failed ? (

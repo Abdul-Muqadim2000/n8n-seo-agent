@@ -60,6 +60,9 @@ export interface SiteTaskCheck {
   /** prod 2026-11-10 (`index_merge` only): what the check found for each old address, so a page that is already one page again can say so
    *  while the step waits for the others (absent on readings from before) */
   pairs?: SiteTaskPairCheck[];
+  /** CR17-C (client report 2026-11-17 F3): with ok, the step closed because it is not needed any more (the address now redirects
+   *  permanently to another page of the website), not because it was done: the step reads "Not needed any more" with `message` */
+  notNeeded?: boolean;
 }
 export interface SiteTaskPairCheck {
   from: string;
@@ -103,7 +106,12 @@ export interface SiteTask {
   /** CR17-H (Q4): done on the website, Google has not read the pages again yet (an indexing step our fetch saw fixed): Recommendations
    *  shows it under "Waiting for Google", not "Resolved". Absent on every other step. */
   waitingForGoogle?: boolean;
+  /** CR17-C (client report 2026-11-17 F3): a done step that closed because it was not needed any more (distinct from "done by you") */
+  notNeeded?: boolean;
 }
+
+/** CR17-C: the label of a step closed because it was not needed any more (the web shows it instead of "Done"). */
+export const SITE_TASK_NOT_NEEDED_LABEL = 'Not needed any more';
 
 /** The engine's readings of one website, as the app's data layer already has them. */
 export interface SiteTaskInputs {
@@ -843,7 +851,9 @@ export function deriveSiteTasks(inputs: SiteTaskInputs, stored: StoredSiteTask[]
       lastCheck: decided,
       severity: state === 'todo' && (reopened || searchBlocked || googleSees) ? 'warning' : 'info',
       ...shown,
-      detail: state === 'done' ? doneDetail(d, inputs.domain) : shown.detail,
+      // CR17-C (F3): a step closed as not needed says why (the address now redirects), never "your sitemap lists these pages"
+      detail: state === 'done' ? (decided?.notNeeded && decided.message ? decided.message : doneDetail(d, inputs.domain)) : shown.detail,
+      ...(state === 'done' && decided?.notNeeded ? { notNeeded: true } : {}),
       guideVars: { domain: inputs.domain, ...shown.guideVars },
       skipped: s?.skippedAt ? { at: s.skippedAt, who: s.skippedBy ?? '' } : null,
       ...addressOf(d),

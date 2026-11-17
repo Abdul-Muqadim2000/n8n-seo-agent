@@ -14,6 +14,10 @@ import {
   improveKeywordOf,
   indexEscalationSteps,
   indexInSearchLine,
+  INDEX_POPULATION_LINE,
+  INDEX_RESOLVED_DAYS,
+  indexValidationLine,
+  indexValidationOf,
   indexPageChecks,
   indexPageTypeAction,
   indexPath,
@@ -24,6 +28,9 @@ import {
   type IndexingData,
   type IndexLane,
   type IndexPage,
+  type IndexReasonGroup,
+  type IndexResolved,
+  type IndexResolvedStep,
   type UpdateImpact,
 } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
@@ -151,7 +158,13 @@ function IndexingBody({ d, orgId, siteId, domain, member }: { d: IndexingData; o
         tone="blue"
         eyebrow={<HeroEyebrow tag="Index coverage">{d.notice?.failed ? `Could not check ${fmtDay(d.notice.at)}${d.checkedAt ? `, last check ${fmtDay(d.checkedAt)}` : ''}` : d.checkedAt ? `Checked ${fmtDay(d.checkedAt)}` : 'Not checked yet'}</HeroEyebrow>}
         title={title}
-        description={`${needLine} Existing pages checked: ${n(existing.checked)} of ${n(existing.known)}${rest}.`}
+        description={
+          <>
+            {`${needLine} Existing pages checked: ${n(existing.checked)} of ${n(existing.known)}${rest}.`}
+            {/* CR17-C (client report 2026-11-17 F6): which pages the figure counts, in one sentence, on every screen that shows it */}
+            <span className="mt-1 block text-[13px] opacity-80">{INDEX_POPULATION_LINE}</span>
+          </>
+        }
         aside={
           firstFix ? (
             <HeroNextStep title={firstFix.label} actions={<HeroLink to={`${paths.site(orgId, siteId, 'pipeline')}#site-tasks`}>Steps on your website</HeroLink>} />
@@ -159,13 +172,17 @@ function IndexingBody({ d, orgId, siteId, domain, member }: { d: IndexingData; o
         }
         stats={
           <>
-            <HeroStat label="In Google search" value={<CountUp value={t.indexed} format={n} />} info="Pages Google has and can show in search: its own inspection said so, or the page had search impressions in the last 28 days." />
+            <HeroStat label="In Google search" value={<CountUp value={t.indexed} format={n} />} hint={`of ${n(t.shouldBe)} that should be`} info={`Pages Google has and can show in search: its own inspection said so, or the page had search impressions in the last 28 days. ${INDEX_POPULATION_LINE}`} />
             <HeroStat label="Need you" value={<CountUp value={t.needYou} format={n} />} info="Pages to fix on your website, to improve, to merge, or to link to, and pages Google has not visited after 3 weeks." />
             <HeroStat label="Not checked yet" value={<CountUp value={t.unknown} format={n} />} info="Google lets each website be checked a limited number of times a day, shared with every tool you use. We check new pages first, then work through the rest." />
             <HeroStat label="Dropped out" value={<CountUp value={d.dropped.length} format={n} />} info="Pages that were in Google search and are not any more." />
           </>
         }
       />
+
+      {(d.reasons?.length ?? 0) > 0 && <ReasonsPanel groups={d.reasons ?? []} orgId={orgId} siteId={siteId} />}
+
+      {((d.resolved?.length ?? 0) > 0 || (d.resolvedSteps?.length ?? 0) > 0) && <ResolvedPanel pages={d.resolved ?? []} steps={d.resolvedSteps ?? []} />}
 
       {(d.escalated?.length ?? 0) > 0 && <EscalatedPanel items={d.escalated} orgId={orgId} siteId={siteId} domain={domain} member={member} freeze={d.freeze.on} />}
 
@@ -206,6 +223,61 @@ function IndexingBody({ d, orgId, siteId, domain, member }: { d: IndexingData; o
       <UpdatesPanel events={d.events} impacts={d.impacts} rolling={d.rollingOut} />
       <SettingsCard d={d} orgId={orgId} siteId={siteId} />
     </Stagger>
+  );
+}
+
+const VALIDATION_TONE: Record<ReturnType<typeof indexValidationOf>['state'], Tone> = { passed: 'good', waiting: 'accent', failed: 'warning', not_started: 'neutral' };
+
+/**
+ * CR17-C (client report 2026-11-17 Q1): the pages Google does not have, grouped by Google's reason as Search Console does, each with what to
+ * do now and its validation (passed in the last 28 days, waiting for Google, failed, not started), the pages old addresses moved to first.
+ */
+function ReasonsPanel({ groups, orgId, siteId }: { groups: IndexReasonGroup[]; orgId: string; siteId: string }) {
+  return (
+    <Panel icon={<ListChecks />} iconTone="blue" title="Why Google left pages out, and what to do now" description="Grouped by the reason Google gives, like Search Console's Page indexing report." flush>
+      <ul className="divide-y divide-line border-t border-line">
+        {groups.map((g) => (
+          <li key={g.reason} className="space-y-1.5 px-5 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium text-ink">{g.label}</span>
+              <StatusBadge tone="neutral">{pages(g.count)}</StatusBadge>
+              {g.validation.waiting > 0 && <StatusBadge tone="accent">{`${n(g.validation.waiting)} waiting for Google`}</StatusBadge>}
+              {g.validation.failed > 0 && <StatusBadge tone="warning">{`${n(g.validation.failed)} failed`}</StatusBadge>}
+              {g.validation.passed > 0 && <StatusBadge tone="good">{`${n(g.validation.passed)} passed`}</StatusBadge>}
+            </div>
+            <p className="text-[13px] text-ink-2">{g.doNow}</p>
+            {indexValidationLine(g.validation) && <p className="text-xs text-ink-3">{indexValidationLine(g.validation)}</p>}
+            {g.reason === 'fault' && (
+              <ButtonLink size="sm" variant="ghost" to={`${paths.site(orgId, siteId, 'pipeline')}#site-tasks`}>
+                Steps on your website
+              </ButtonLink>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
+
+/** CR17-C (Q1): what got resolved lately: the pages that went into Google (and when the client asked), and the steps that finished. */
+function ResolvedPanel({ pages: xs, steps }: { pages: IndexResolved[]; steps: IndexResolvedStep[] }) {
+  return (
+    <Panel
+      icon={<CheckCircle2 />}
+      iconTone="good"
+      title="Resolved recently"
+      description={`In the last ${INDEX_RESOLVED_DAYS} days: ${pages(xs.length)} went into Google${steps.length ? `, ${steps.length} step${steps.length === 1 ? '' : 's'} on your website finished` : ''}.`}
+      flush
+    >
+      <ul className="divide-y divide-line border-t border-line">
+        {xs.slice(0, 20).map((r) => (
+          <InsightItem key={r.url} tone="good" icon={<CheckCircle2 className="size-4" />} meta={<StatusBadge tone="good">Passed</StatusBadge>} title={<span className="break-all">{r.line}</span>} titleAttr={r.url} />
+        ))}
+        {steps.map((x) => (
+          <InsightItem key={x.key} tone={x.notNeeded ? 'blue' : 'good'} icon={<ListChecks className="size-4" />} meta={<StatusBadge tone={x.notNeeded ? 'neutral' : 'good'}>{x.notNeeded ? 'Not needed any more' : 'Done'}</StatusBadge>} title={x.line} />
+        ))}
+      </ul>
+    </Panel>
   );
 }
 
@@ -516,13 +588,20 @@ function PageRow({ p, orgId, siteId, member, freeze, checks = false }: { p: Inde
     askGoogleStatus(p).text || null,
     p.needsPerson ? 'unchanged after 4 checks: worth a closer look' : null,
   ].filter(Boolean);
+  // CR17-C (Q1): the page's validation, like Search Console's (waiting for Google / passed / failed); nothing shown before anything was done
+  const val = indexValidationOf(p);
   const improve = p.action === 'quality' && !freeze && member && !p.utility;
   const mark = indexPageTypeAction(p);
   return (
     <InsightItem
       tone={p.state === 'indexed' ? 'good' : p.action === 'site_fix' ? 'warning' : 'blue'}
       icon={<FileSearch className="size-4" />}
-      meta={<PageBadges st={st} p={p} />}
+      meta={
+        <span className="inline-flex flex-wrap items-center gap-1">
+          <PageBadges st={st} p={p} />
+          {val.state !== 'not_started' && p.state !== 'indexed' && <StatusBadge tone={VALIDATION_TONE[val.state]}>{`Validation: ${val.label.toLowerCase()}`}</StatusBadge>}
+        </span>
+      }
       title={<span className="break-all">{p.path}</span>}
       titleAttr={p.title || p.url}
       description={

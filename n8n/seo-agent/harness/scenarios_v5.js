@@ -19822,5 +19822,6 @@ await require('./scenarios_cr17_d')({ H, run, mock, store, guard, reset, begin }
 await require('./scenarios_cr17_h')({ H, run, mock, store, guard, reset, begin });   // CR17H1-CR17H5 (client report 2026-11-17, F1; package CR17-H, build section 198): the AI-ranking reason in the client's words (arithmetic as score_note), no lever-coded note, no provider dump, no arrow in the site report's index action
 await require('./scenarios_cr17_e')({ H, run, mock, store, guard, reset, begin });   // CR17E1-CR17E5 (client report 2026-11-17, C4 + F9, section 195): the won rule, one verdict per website, our page by topic, real link text, the signer
 await require('./scenarios_cr17_g')({ H, run, mock, store, guard, reset, begin });   // CR17G1-CR17G6 (client report 2026-11-17, package G, section 197): new pages in the site's own folder (LRU.folderFor), the questions a page answers, AI questions settled when a page goes live
+await require('./scenarios_cr17_c')({ H, run, mock, store, guard, reset, begin });   // CR17C1-CR17C17 (client report 2026-11-17, CR17-C, section 193): a move our read saw after Google's last visit is a redirect (freshness guard both ways, two reads for a 404), sitemap advice only on a direct 200, AI ranking follows a moved page and refuses its L04 step, Google-state audit findings do not change Technical health
 H.report();
 })();

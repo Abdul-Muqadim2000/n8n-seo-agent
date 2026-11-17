@@ -3,7 +3,7 @@
 // tables; this file is the one place the app reads their codes: what each cause means in plain words, what we do about it, what the
 // client does, which steps become "Steps on your website", and the page's figures built from the rows (pure, so it is tested without
 // a server). The engine's contract is DESIGN.md §2 / §4; a code the app does not know is shown as "Other", never dropped.
-import type { GoogleEventRow, IndexPageRow, IndexRunRow, UpdateImpactRow } from './tables';
+import type { GoogleEventRow, IndexHistoryRow, IndexPageRow, IndexRunRow, UpdateImpactRow } from './tables';
 
 /** The engine's action classes (DESIGN §4) plus two the app derives for pages the engine files under `none` without being in search
  *  (fix wave 1, A3): `retry` (Google's inspection did not answer: never "in search", never "left out") and `review` (Google left the page
@@ -578,13 +578,62 @@ export interface IndexLaneSummary {
   errors: number;
 }
 
-/** The one sentence for "how many of your pages are in Google" (A9: the page and the report say the same thing from the same counts). */
+/** The one sentence for "how many of your pages are in Google" (A9: the page and the report say the same thing from the same counts).
+ *  CR17-C (client report 2026-11-17 F6): the population is "pages that should be in Google" (inGooglePopulation), named in
+ *  INDEX_POPULATION_LINE on every screen that shows the figure. */
 export function indexInSearchLine(c: { indexed: number; shouldBe: number; known: number; notChecked: number }, domain = 'your website'): string {
   const pg = (x: number) => `${x.toLocaleString('en-US')} page${x === 1 ? '' : 's'}`;
   const tail = c.notChecked > 0 ? ` (${c.notChecked.toLocaleString('en-US')} not checked yet)` : '';
-  if (c.shouldBe > 0) return `Google has ${c.indexed.toLocaleString('en-US')} of the ${pg(c.shouldBe)} we checked that should be in search${tail}`;
+  if (c.shouldBe > 0) return `Google has ${c.indexed.toLocaleString('en-US')} of the ${pg(c.shouldBe)} that should be in Google${tail}`;
   return `We know ${pg(c.known)} of ${domain}${tail}`;
 }
+
+/**
+ * CR17-C (client report 2026-11-17 F6): the one definition of "pages that should be in Google", in one sentence. Every screen that shows a
+ * "N of M in Google" figure shows this line beside it (Indexing, Overview, Technical health, the report), so the client always knows which
+ * pages are counted.
+ */
+export const INDEX_POPULATION_LINE =
+  'Pages that should be in Google: the pages of your sitemap and the other pages we know that open directly, name themselves as the main version and are not left out on purpose (policy pages, pages you marked as fine to leave out, old addresses that now redirect). Checked daily.';
+
+/**
+ * CR17-C (F6): the headline figures of an index coverage REPORT (the engine's callback summary) in the population of the Indexing page:
+ * the engine's `in_google` / `should_be` (the same rule, `IX.inPopulation`) when the report carries them; an older report falls back to
+ * "checked minus left out on purpose" (it cannot tell moved addresses apart).
+ */
+export function indexReportFigures(m: Record<string, unknown>): { indexed: number; shouldBe: number; known: number; notChecked: number } {
+  const nn = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : typeof v === 'string' && v.trim() && Number.isFinite(Number(v)) ? Number(v) : null);
+  const indexed = nn(m.indexed) ?? 0;
+  const known = nn(m.known) ?? 0;
+  const notChecked = nn(m.unknown) ?? nn(m.backlog_left) ?? 0;
+  const sb = nn(m.should_be);
+  const ig = nn(m.in_google);
+  if (sb != null && ig != null) return { indexed: ig, shouldBe: sb, known, notChecked };
+  const byAction = (m.by_action && typeof m.by_action === 'object' ? m.by_action : {}) as Record<string, unknown>;
+  const checked = indexed + (nn(m.not_indexed) ?? 0) + (nn(m.excluded) ?? 0);
+  const leftOut = Math.min(nn(byAction.leave_out) ?? 0, Math.max(0, checked - indexed));
+  return { indexed, shouldBe: checked - leftOut, known, notChecked };
+}
+
+/** CR17-C: causes of an ADDRESS that is not a page of its own: it moved (a redirect), it is gone, or another page is its main version. */
+export const INDEX_NOT_A_PAGE_CAUSES: ReadonlySet<string> = new Set(['redirect', 'redirect_error', 'not_found', 'canonical_elsewhere', 'alternate']);
+
+/**
+ * CR17-C (client report 2026-11-17 F6, THE SHARED RULE): is this address one of the "pages that should be in Google"? A page Google gave a
+ * reading of (in search, left out or excluded) that answers directly (our newest read saw no redirect to another page), is its own main
+ * version, and is not left out on purpose (policy / utility pages, pages the client marked, intended noindex / robots blocks, moved or gone
+ * addresses). A moved address counts once, through the page it moved to (its own row). A page blocked by accident (an unintended noindex,
+ * robots.txt, a server error) IS counted, as out of Google: that is the truth the client must see, never "0 of 0".
+ */
+export function inGooglePopulation(p: Pick<IndexPage, 'state' | 'action' | 'cause' | 'url' | 'finalUrl'>): boolean {
+  if (p.state !== 'indexed' && p.state !== 'not_indexed' && p.state !== 'excluded') return false;
+  if (p.action === 'leave_out') return false;
+  if (INDEX_NOT_A_PAGE_CAUSES.has(p.cause)) return false;
+  return !indexMovedAway(p);
+}
+
+/** CR17-C: our newest read of the address ended on ANOTHER page (it redirects there): a moved address, whatever Google's older reading. */
+export const indexMovedAway = (p: Pick<IndexPage, 'url' | 'finalUrl' | 'cause'>): boolean => p.cause === 'redirect' || (!!p.finalUrl && !samePageUrl(p.finalUrl, p.url));
 
 export interface IndexRun {
   runAt: string;
@@ -745,6 +794,12 @@ export interface IndexingData {
   escalated: IndexPage[];
   /** wave 3 (§2.5): the newest sitemap date reading (null: no run sent one) */
   sitemapDates: (IndexSitemapDates & { at: string; missing: boolean }) | null;
+  /** CR17-C (client report 2026-11-17 Q1): the pages Google does not have, by Google's reason, with what to do now and their validation
+   *  (older servers: absent) */
+  reasons?: IndexReasonGroup[];
+  /** CR17-C (Q1): pages that went into Google in the last 28 days, and the indexing steps on the website that finished (older servers: absent) */
+  resolved?: IndexResolved[];
+  resolvedSteps?: IndexResolvedStep[];
 }
 
 /** One page of a group's URLs (…/data/indexing/pages). */
@@ -1438,6 +1493,10 @@ export function buildIndexingData(input: {
   askedByApp?: Readonly<Record<string, string>>;
   /** for tests: the time "now" is (the 14-day note, the asked list) */
   now?: number;
+  /** CR17-C (Q1): the website's index history of the last weeks (seo_index_history), for "Resolved recently" */
+  history?: readonly Partial<IndexHistoryRow>[];
+  /** CR17-C (Q1): the website's indexing steps (site_tasks) with their done time, for "Resolved recently" */
+  finishedSteps?: readonly { key: string; doneAt: string | null; notNeeded?: boolean; message?: string }[];
 }): IndexingData {
   const pages = input.rows.map(indexPageOf).filter((p) => p.url);
   // ENGINE_BUILD wave 2 contract 6: a page the client said they asked about whose row does not hold it (or holds an older ask, by more than
@@ -1472,10 +1531,13 @@ export function buildIndexingData(input: {
     const xs = which ? pages.filter((p) => p.lane === which) : pages;
     const more = extra(which);
     const checked = xs.filter((p) => p.state === 'indexed' || p.state === 'not_indexed' || p.state === 'excluded');
+    // CR17-C (F6): "in Google" is counted among the pages that should be in Google only (inGooglePopulation): a moved address Google still
+    // shows is not a second page, and the page it moved to is counted once
+    const pop = checked.filter(inGooglePopulation);
     return {
       known: xs.length + more,
-      indexed: xs.filter((p) => p.state === 'indexed').length + more,
-      shouldBe: checked.filter((p) => p.action !== 'leave_out').length + more,
+      indexed: pop.filter((p) => p.state === 'indexed').length + more,
+      shouldBe: pop.length + more,
       // wave 3 (§3.2): a page Google has not visited after 3 weeks needs the client, whatever its action
       needYou: xs.filter((p) => INDEX_ACTIONS_NEED_YOU.has(p.action) || isEscalated(p)).length,
       checked: checked.length + more,
@@ -1581,6 +1643,14 @@ export function buildIndexingData(input: {
     pagesRead: pages.length,
     escalated: pages.filter(isEscalated).sort(byPriority).slice(0, 50),
     sitemapDates,
+    ...(() => {
+      // CR17-C (Q1): the asks we know of (the page rows and the app's own log), the pages that went in, the reason groups with their validation
+      const now = input.now ?? Date.now();
+      const asked: Record<string, string> = { ...(input.askedByApp ?? {}) };
+      for (const p of pages) if (p.askedGoogleAt && (!asked[p.url] || asked[p.url] < p.askedGoogleAt)) asked[p.url] = p.askedGoogleAt;
+      const resolved = indexResolvedPages(input.history ?? [], asked, now);
+      return { reasons: indexReasonGroups(pages, resolved, now), resolved, resolvedSteps: indexResolvedSteps(input.finishedSteps ?? [], now) };
+    })(),
   };
 }
 
@@ -2076,6 +2146,9 @@ export interface IndexingFetch {
 export interface IndexingPageVerdict {
   fixed: boolean;
   unknown?: boolean;
+  /** CR17-C (client report 2026-11-17 F3): the step is not needed any more (the address now redirects permanently to another page of the
+   *  website, so it does not belong in a sitemap): closed with this, never called "fixed" */
+  notNeeded?: boolean;
   why: string;
 }
 
@@ -2186,6 +2259,10 @@ export function indexingPageFixed(cause: IndexSiteFixCause, f: IndexingFetch, in
     }
     case 'not_in_sitemap':
     case 'indexed_not_in_sitemap':
+      // CR17-C (client report 2026-11-17 F3): an address that now redirects permanently to another page of the website does not belong in a
+      // sitemap: the step is not needed any more (never "add it", never "fixed"); the page it redirects to is the one to list
+      if ((f.redirectStatus === 301 || f.redirectStatus === 308) && !!f.finalUrl && !offSite && !samePageUrl(f.finalUrl, f.url))
+        return { fixed: true, notNeeded: true, why: indexingNotNeededLine(f.url, f.finalUrl) };
       if (inSitemap === true) return { fixed: true, why: `${p} is in your sitemap.` };
       if (inSitemap === null) return unknown(`${p} was not in the part of your sitemap we could read; ${notListed}.`);
       return { fixed: false, why: `${p} is not in your sitemap yet.` };
@@ -2217,7 +2294,13 @@ export function robotsFileState(status: number, text: string, contentType = ''):
 /** Whether a cause's check needs the website's sitemap (read once per check). */
 export const INDEXING_NEEDS_SITEMAP: ReadonlySet<IndexSiteFixCause> = new Set(['not_in_sitemap', 'indexed_not_in_sitemap', 'canonical_elsewhere', 'redirect']);
 /** Whether a cause's check opens the pages themselves (the sitemap causes only read the sitemap). */
-export const INDEXING_FETCHES_PAGES: ReadonlySet<IndexSiteFixCause> = new Set(['noindex', 'server_error', 'access_denied', 'not_found', 'soft_404', 'redirect', 'redirect_error', 'canonical_elsewhere']);
+// CR17-C (F3): the two "add it to your sitemap" causes open the page too: an address that now redirects is closed as not needed
+export const INDEXING_FETCHES_PAGES: ReadonlySet<IndexSiteFixCause> = new Set(['noindex', 'server_error', 'access_denied', 'not_found', 'soft_404', 'redirect', 'redirect_error', 'canonical_elsewhere', 'not_in_sitemap', 'indexed_not_in_sitemap']);
+
+/** CR17-C (F3): the sentence of a sitemap step closed because its address now redirects (shown on the done step: "Not needed any more"). */
+export function indexingNotNeededLine(url: string, target: string): string {
+  return `${indexPath(url)} now redirects to ${indexPath(target)}, so it does not belong in your sitemap. Nothing to do.`;
+}
 
 // ---------------------------------------------------------------- recommendations
 
@@ -2294,3 +2377,275 @@ export const INDEX_CAUSE_FINDING_RULES: Record<IndexSiteFixCause, readonly RegEx
   indexed_not_in_sitemap: [/(not|missing) (in|from) (the |your )?(xml )?sitemap|absent from (the |your )?sitemap/i],
 };
 export const findingAsksSameFix = (cause: IndexSiteFixCause, findingKey: string): boolean => INDEX_CAUSE_FINDING_RULES[cause].every((r) => r.test(findingKey));
+
+// ---------------------------------------------------------------- CR17-C (client report 2026-11-17 Q1): the indexing flow
+
+/**
+ * Google's reasons, in the five families the client acts on (Search Console's Page indexing report groups by Google's reason the same way).
+ * `not_visited`: Google has not read the page yet (unknown, discovered, new); `read_left_out`: Google read it and left it out (a judgement
+ * about the page); `fault`: something on the website keeps it out (the step is on "Steps on your website"); `moved`: an old address that
+ * now redirects; `left_out`: left out on purpose (policy pages, marked pages, intended blocks).
+ */
+export type IndexReason = 'not_visited' | 'read_left_out' | 'fault' | 'moved' | 'left_out';
+export const INDEX_REASONS: readonly IndexReason[] = ['fault', 'read_left_out', 'not_visited', 'moved', 'left_out'];
+export const INDEX_REASON_INFO: Record<IndexReason, { label: string; doNow: string }> = {
+  not_visited: {
+    label: 'Google has not visited these pages yet',
+    doNow:
+      'Nothing is wrong on these pages. New pages usually take a few days to a few weeks. Link each one from a strong page Google already shows, keep it in your sitemap, and ask Google to read the most important ones. Rewriting a page Google has not read does not help.',
+  },
+  read_left_out: {
+    label: 'Google read these pages and left them out for now',
+    doNow:
+      'Improve each page at its own address, or merge thin pages that cover the same thing into one page. Do not move it to a new address: a new address starts again from zero. Then ask Google to read it again.',
+  },
+  fault: {
+    label: 'Something on your website keeps these pages out',
+    doNow: 'Fix the step shown under Steps on your website. We check it on your website every day and tell you when Google has read the fix.',
+  },
+  moved: {
+    label: 'Old addresses that now redirect',
+    doNow: 'Nothing to do. Keep the redirects for at least a year. Google moves to the new addresses after its next visit, and we ask about the new addresses first.',
+  },
+  left_out: {
+    label: 'Left out on purpose',
+    doNow: 'Nothing to do. Policy, legal and job pages, and pages you marked as fine to leave out, do not need to be in Google.',
+  },
+};
+
+const REASON_OF: Partial<Record<string, IndexReason>> = {
+  unknown_to_google: 'not_visited', discovered_not_crawled: 'not_visited', wait_new: 'not_visited', not_in_sitemap: 'not_visited',
+  crawled_not_indexed: 'read_left_out', google_chose_other: 'read_left_out', duplicate_no_canonical: 'read_left_out', soft_404: 'read_left_out',
+  low_value: 'left_out', noindex_intended: 'left_out', robots_intended: 'left_out', alternate: 'left_out',
+};
+
+/** The family of one page Google does not have (null: in search, or not checked yet). */
+export function indexReasonOf(p: Pick<IndexPage, 'state' | 'cause' | 'action' | 'url' | 'finalUrl'>): IndexReason | null {
+  if (p.state === 'indexed' || p.state === 'unknown' || p.state === 'error') return null;
+  if (p.cause === 'redirect' && p.action !== 'site_fix') return 'moved';
+  if (indexMovedAway(p) && p.action === 'leave_out') return 'moved';
+  if (p.action === 'leave_out') return 'left_out';
+  return REASON_OF[p.cause] ?? 'fault';
+}
+
+/** Validation, as Search Console's "Validate fix": not started -> waiting for Google -> passed or failed. From the fields we store. */
+export type IndexValidationState = 'not_started' | 'waiting' | 'passed' | 'failed';
+export const INDEX_VALIDATION_LABEL: Record<IndexValidationState, string> = {
+  not_started: 'Not started',
+  waiting: 'Waiting for Google',
+  passed: 'Passed',
+  failed: 'Failed',
+};
+export interface IndexValidation {
+  state: IndexValidationState;
+  label: string;
+  /** when it reached this state ('' = not known) */
+  at: string;
+  /** one plain sentence: what happened and what comes next */
+  why: string;
+}
+
+/**
+ * One page's validation: `passed` = in Google; `failed` = Google read it after the fix we saw, after your improvement or after you asked, and
+ * still leaves it out; `waiting` = we saw the fix on your website, you published an improvement, or you asked Google, and Google has not read
+ * it since; `not_started` = nothing done on it yet.
+ */
+export function indexValidationOf(p: Pick<IndexPage, 'state' | 'indexedSince' | 'fixSeenAt' | 'fixFailedAt' | 'improvedWaiting' | 'improvedAt' | 'improvedReadAt' | 'askedGoogleAt' | 'googleReadAfterAskAt'>, now = Date.now()): IndexValidation {
+  const v = (state: IndexValidationState, at: string, why: string): IndexValidation => ({ state, label: INDEX_VALIDATION_LABEL[state], at, why });
+  if (p.state === 'indexed') return v('passed', p.indexedSince, p.indexedSince ? `In Google since ${indexDayText(p.indexedSince)}.` : 'In Google.');
+  if (p.fixFailedAt) return v('failed', p.fixFailedAt, `Google read it again on ${indexDayText(p.fixFailedAt)}, after the change we saw, and still sees the problem.`);
+  if (p.improvedReadAt) return v('failed', p.improvedReadAt, `Google read your improved version on ${indexDayText(p.improvedReadAt)} and still left it out for now.`);
+  const asked = p.askedGoogleAt && now - Date.parse(p.askedGoogleAt) <= INDEX_ASKED_SHOWN_DAYS * 864e5 ? p.askedGoogleAt : '';
+  if (asked && p.googleReadAfterAskAt && p.googleReadAfterAskAt >= asked)
+    return v('failed', p.googleReadAfterAskAt, `Google read it on ${indexDayText(p.googleReadAfterAskAt)} after you asked, and left it out for now.`);
+  if (p.fixSeenAt) return v('waiting', p.fixSeenAt, `We saw it fixed on your website on ${indexDayText(p.fixSeenAt)}. Google usually reads it again within a few days to two weeks.`);
+  if (p.improvedWaiting) return v('waiting', p.improvedAt, `You published an improved version on ${indexDayText(p.improvedAt)}. Google has not read it yet.`);
+  if (asked) return v('waiting', asked, `You asked Google on ${indexDayText(asked)}. Google has not read it since; that usually takes a few days.`);
+  return v('not_started', '', '');
+}
+
+/** A page that went into Google lately, and how (Search Console's "Passed" for one page). */
+export interface IndexResolved {
+  url: string;
+  path: string;
+  /** when our daily check first saw it in Google */
+  inGoogleAt: string;
+  /** what Google said before ('' = not recorded) */
+  fromCause: string;
+  fromLabel: string;
+  reason: IndexReason | null;
+  /** the client asked Google about it before it went in ('' = no) */
+  askedAt: string;
+  /** one plain line, e.g. "/industries: asked 2 Nov, in Google 3 Nov" */
+  line: string;
+}
+/** A step on the website that finished lately (done or not needed any more). */
+export interface IndexResolvedStep {
+  key: string;
+  label: string;
+  doneAt: string;
+  notNeeded: boolean;
+  line: string;
+}
+/** How far back "Resolved recently" looks. */
+export const INDEX_RESOLVED_DAYS = 28;
+
+/**
+ * "Resolved recently": the pages that went into Google in the last 28 days (the history's change to indexed from another reading, the page
+ * still in Google at its newest entry), newest first, with the day the client asked Google when they did. history: seo_index_history rows of
+ * the website (any order); askedByUrl: the client's "I asked Google" per address (the app's audit log and the page rows).
+ */
+export function indexResolvedPages(history: readonly Partial<IndexHistoryRow>[], askedByUrl: Readonly<Record<string, string>> = {}, now = Date.now()): IndexResolved[] {
+  const since = now - INDEX_RESOLVED_DAYS * 864e5;
+  const byUrl = new Map<string, { at: string; state: string; cause: string }[]>();
+  for (const h of history) {
+    const url = s(h.url);
+    const at = s(h.at);
+    if (!url || !Number.isFinite(Date.parse(at))) continue;
+    const xs = byUrl.get(url) ?? [];
+    xs.push({ at, state: s(h.state), cause: s(h.cause) });
+    byUrl.set(url, xs);
+  }
+  const out: IndexResolved[] = [];
+  for (const [url, xs] of byUrl) {
+    xs.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+    const last = xs[xs.length - 1];
+    if (last.state !== 'indexed') continue;
+    // the newest change to indexed from another reading, inside the window
+    let i = xs.length - 1;
+    while (i > 0 && xs[i - 1].state === 'indexed') i--;
+    if (i === 0 || Date.parse(xs[i].at) < since) continue;
+    const prev = xs[i - 1];
+    if (prev.state === 'unknown' || prev.state === 'error') continue;
+    const at = xs[i].at;
+    const asked = askedByUrl[url] && askedByUrl[url] <= at && Date.parse(askedByUrl[url]) >= Date.parse(at) - INDEX_ASKED_SHOWN_DAYS * 864e5 ? askedByUrl[url] : '';
+    const fromLabel = isCause(prev.cause) ? INDEX_CAUSE_INFO[prev.cause].label : '';
+    const reason = isCause(prev.cause) ? indexReasonOf({ state: 'not_indexed', cause: prev.cause, action: INDEX_CAUSE_INFO[prev.cause].action, url, finalUrl: '' }) : null;
+    const path = indexPath(url);
+    out.push({
+      url,
+      path,
+      inGoogleAt: at,
+      fromCause: prev.cause,
+      fromLabel,
+      reason,
+      askedAt: asked,
+      line: asked ? `${path}: asked ${indexDayText(asked)}, in Google ${indexDayText(at)}` : `${path}: in Google ${indexDayText(at)}${fromLabel ? ` (before: ${fromLabel.charAt(0).toLowerCase()}${fromLabel.slice(1)})` : ''}`,
+    });
+  }
+  return out.sort((a, b) => (b.inGoogleAt > a.inGoogleAt ? 1 : b.inGoogleAt < a.inGoogleAt ? -1 : a.path.localeCompare(b.path))).slice(0, 50);
+}
+
+/** The indexing steps on the website that finished in the last 28 days (site_tasks done_at), newest first. */
+export function indexResolvedSteps(steps: readonly { key: string; doneAt: string | null; notNeeded?: boolean; message?: string }[], now = Date.now()): IndexResolvedStep[] {
+  const since = now - INDEX_RESOLVED_DAYS * 864e5;
+  return steps
+    .filter((x) => x.key.startsWith(INDEXING_TASK_PREFIX) && !!x.doneAt && Date.parse(x.doneAt) >= since)
+    .map((x) => {
+      const cause = indexingCauseOfKey(x.key);
+      const label = cause ? INDEX_CAUSE_INFO[cause].label : x.key === INDEXING_MERGE_KEY ? 'Improved pages redirected to their new address' : x.key === INDEXING_LINKS_KEY ? 'Links to pages Google had not found' : x.key === INDEXING_SITEMAP_DATES_KEY ? 'Sitemap dates' : x.key === INDEXING_SITEMAP_KEY ? 'Your sitemap in Search Console' : 'A step on your website';
+      const when = indexDayText(x.doneAt!);
+      return { key: x.key, label, doneAt: x.doneAt!, notNeeded: !!x.notNeeded, line: x.notNeeded ? `${label}: not needed any more (${when}).${x.message ? ` ${x.message}` : ''}` : `${label}: done ${when}.` };
+    })
+    .sort((a, b) => (b.doneAt > a.doneAt ? 1 : -1))
+    .slice(0, 20);
+}
+
+/** One reason family on the Indexing page: what Google says, what to do now, and its validation like Search Console. */
+export interface IndexReasonGroup {
+  reason: IndexReason;
+  label: string;
+  doNow: string;
+  count: number;
+  /** the first pages, the pages old addresses now redirect to first, then by priority */
+  pages: IndexPage[];
+  validation: { waiting: number; failed: number; notStarted: number; passed: number };
+}
+
+/** The reason groups of the pages Google does not have (families with no page are left out), in INDEX_REASONS order. */
+export function indexReasonGroups(pages: readonly IndexPage[], resolved: readonly IndexResolved[] = [], now = Date.now()): IndexReasonGroup[] {
+  const targets = new Set(pages.filter((p) => indexMovedAway(p) && p.finalUrl).map((p) => indexIssueKey(p.finalUrl)));
+  const rank = (p: IndexPage) => (targets.has(indexIssueKey(p.url)) ? 0 : 1);
+  const out: IndexReasonGroup[] = [];
+  for (const reason of INDEX_REASONS) {
+    const xs = pages.filter((p) => indexReasonOf(p) === reason);
+    const passed = resolved.filter((r) => r.reason === reason).length;
+    if (!xs.length && !passed) continue;
+    const val = { waiting: 0, failed: 0, notStarted: 0, passed };
+    for (const p of xs) {
+      const st = indexValidationOf(p, now).state;
+      if (st === 'waiting') val.waiting++;
+      else if (st === 'failed') val.failed++;
+      else if (st === 'not_started') val.notStarted++;
+    }
+    out.push({ reason, ...INDEX_REASON_INFO[reason], count: xs.length, pages: [...xs].sort((a, b) => rank(a) - rank(b) || byPriority(a, b)).slice(0, INDEX_GROUP_PREVIEW), validation: val });
+  }
+  return out;
+}
+
+/** "3 passed this month, 2 waiting for Google, 1 needs you": a reason group's validation in one line. */
+export function indexValidationLine(v: IndexReasonGroup['validation']): string {
+  const parts = [
+    v.passed ? `${v.passed} passed in the last ${INDEX_RESOLVED_DAYS} days` : '',
+    v.waiting ? `${v.waiting} waiting for Google` : '',
+    v.failed ? `${v.failed} failed (Google read ${v.failed === 1 ? 'it' : 'them'} and still left ${v.failed === 1 ? 'it' : 'them'} out)` : '',
+    v.notStarted ? `${v.notStarted} not started` : '',
+  ].filter(Boolean);
+  return parts.length ? `${parts.join(', ')}.` : '';
+}
+
+/** The key one address is matched on across the app's indexing items (scheme, www., trailing slash and case aside). */
+export const indexIssueKey = (url: string): string => s(url).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+
+/**
+ * For the recommendations (package H wiring, HANDOFF_C.md): Index coverage is the single owner of indexing asks. True when the daily index
+ * check has a reading for the website: the audit's "not indexed by Google" finding and the site report's "request indexing" items are then
+ * folded into the Index coverage item instead of being a recommendation of their own. Takes the Indexing page's data or the recommendations'
+ * smaller read (IndexingForRecs).
+ */
+export function indexingSupersedesAudit(x: Pick<IndexingData, 'status' | 'checkedAt' | 'settings'> | Pick<IndexingForRecs, 'on' | 'runAt'> | null | undefined): boolean {
+  if (!x) return false;
+  if ('runAt' in x) return !!x.on && !!x.runAt;
+  return x.status === 'ok' && !!x.checkedAt && x.settings.on;
+}
+
+/** One indexing issue of one address (what Google says, what to do now, its validation), for the recommendations and the reports. */
+export interface IndexingIssueItem {
+  url: string;
+  path: string;
+  reason: IndexReason;
+  cause: string;
+  label: string;
+  doNow: string;
+  validation: IndexValidationState;
+  validationLabel: string;
+  validationWhy: string;
+  priority: number;
+}
+
+/** The indexing issues of the website keyed by indexIssueKey(url): every page that should be in Google and is not (never a page left out on
+ *  purpose, never a moved address). */
+export function indexingIssueItems(d: Pick<IndexingData, 'reasons'> | readonly IndexPage[] | null | undefined, now = Date.now()): Map<string, IndexingIssueItem> {
+  const out = new Map<string, IndexingIssueItem>();
+  // the Indexing page's groups carry the first pages of each family; a full page list gives every page
+  const groups = Array.isArray(d) ? indexReasonGroups(d as readonly IndexPage[], [], now).map((g) => ({ ...g, pages: (d as readonly IndexPage[]).filter((p) => indexReasonOf(p) === g.reason) })) : ((d as Pick<IndexingData, 'reasons'> | null | undefined)?.reasons ?? []);
+  for (const g of groups) {
+    if (g.reason === 'moved' || g.reason === 'left_out') continue;
+    for (const p of g.pages) {
+      const v = indexValidationOf(p, now);
+      out.set(indexIssueKey(p.url), {
+        url: p.url,
+        path: p.path,
+        reason: g.reason,
+        cause: p.cause,
+        label: isCause(p.cause) ? INDEX_CAUSE_INFO[p.cause].label : g.label,
+        doNow: g.doNow,
+        validation: v.state,
+        validationLabel: v.label,
+        validationWhy: v.why,
+        priority: p.priority,
+      });
+    }
+  }
+  return out;
+}
