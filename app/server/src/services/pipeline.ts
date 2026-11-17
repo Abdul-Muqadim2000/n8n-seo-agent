@@ -797,7 +797,9 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     }),
     base('link_builder', m?.linkBuilder ?? true, 'The Link Builder is switched off in the monitor settings', {
       lastRunAt: reportOf(['link_builder'])?.receivedAt ?? null,
-      lastResult: (() => { const r = reportOf(['link_builder']); const sm = (r?.summary ?? {}) as Record<string, unknown>; return r ? `${Number(sm.drafted) || 0} pitch(es) drafted · ${Number(sm.press) || 0} journalist request(s) · ${Number(sm.listingsMissing) || 0} listing(s) missing` : null; })(),
+      // CR17-E (F9): "written this run" from the run's report, "waiting for you" from the one link status (shared link-status.ts), the same
+      // number the Links page and the recommendations show; a draft nobody has sent is never called progress
+      lastResult: (() => { const r = reportOf(['link_builder']); const sm = (r?.summary ?? {}) as Record<string, unknown>; const lc = x.backlinks.linkCounts; return r ? `This run: ${Number(sm.drafted) || 0} pitch(es) written · ${lc ? `${lc.waitingForYou} waiting for you · ${lc.won} won (link checked)` : `${Number(sm.press) || 0} journalist request(s)`} · ${Number(sm.listingsMissing) || 0} listing(s) missing` : null; })(),
       lastReportId: reportOf(['link_builder'])?.id ?? null,
       monthlyUsd: rowUsd('link_builder'),
       detail: 'Up to 10 drafted sequences a week · sent from your mailbox after approval',
@@ -808,7 +810,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       lastResult: lastBl ? `${lastBl.unionDomains ?? lastBl.referringDomains} ${lastBl.unionDomains != null ? 'linking sites (all sources)' : 'referring domains (DataForSEO)'} · ${lastBl.lostLinks} lost · ${lastBl.newLinks} new` : null,
       lastReportId: blReport?.id ?? null,
       monthlyUsd: rowUsd('backlinks'),
-      detail: x.backlinks.prospects.length ? `${x.backlinks.prospects.filter((p) => p.status === 'new').length} new link prospects` : null,
+      detail: x.backlinks.prospects.length ? `${x.backlinks.linkCounts ? x.backlinks.linkCounts.found + x.backlinks.linkCounts.inQueue : x.backlinks.prospects.filter((p) => p.status === 'new').length} open link prospects` : null,   // CR17-E (F9): the one link status
     }),
     base('rank_tracker', x.rankings.ladders.length > 0, 'No keyword ladder yet: plan one with "Rank my site for a keyword"', {
       lastRunAt: lastIso(...rungChecks, rtReport?.receivedAt),

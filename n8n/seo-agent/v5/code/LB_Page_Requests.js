@@ -20,7 +20,7 @@ const out = [];
 for (const p of plans) {
   const add = (kind, url, extra = {}) => { if (!/^https?:\/\//i.test(url || '') || out.some(o => o.json.site_id === p.site_id && o.json.url === url && o.json.kind === kind)) return; /* one fetch per purpose */ out.push({ json: { site_id: p.site_id, kind, url: String(url).slice(0, 500), ...extra } }); };
   const linking = new Set(ledger.filter(l => l.site_id === p.site_id && l.status !== 'lost').map(l => l.ref_domain));
-  const known = new Set([...outreach.filter(o => o.site_id === p.site_id).map(o => o.prospect_domain + '|' + o.type)]);
+  const known = new Set([...outreach.filter(o => o.site_id === p.site_id && o.status !== 'recheck').map(o => o.prospect_domain + '|' + o.type)]);   // CR17-E: a stored verdict whose rule no longer holds is read again
   const comp = new Set([...p.competitors, ...(p.ai_rivals || []).map(r => r.domain)].map(c => LK.regDomain(c)));   // C-2: the businesses AI recommends instead of you are not read either - LB Assemble refuses them with the reason (2b)
   const skipD = (d) => !d || LK.sameSite(d, p.domain) || comp.has(LK.regDomain(d)) || BIG.test(d) || LK.isWire(d) || !!OK.badHost(d) || linking.has(LK.refKey(d));   // D13: badHost covers infrastructure, statistics pages, mailbox providers and contact databases (outlook.com, zoominfo.com were read and pitched live)
   // 1. prospects to qualify: new, not yet qualified, best score first (reclaims are fixed on our own site)
@@ -36,20 +36,26 @@ for (const p of plans) {
   // Only the links the ledger does NOT carry are queued here: the ones it does carry are already re-fetched by the Backlink Monitor,
   // and two workflows fetching the same page every Monday is a cost to them, not to us. Oldest reading first, a row already missing
   // once always first, at most LB_WON_MAX a run — all free GETs.
+  // CR17-E (client report 2026-11-17, build section 195): the ledger is skipped only when it carries THIS page (the Backlink Monitor reads
+  // it); a won link on a page the ledger does not carry is read here even when the domain has other ledger rows (bebee.com was in the
+  // ledger through a Search Console sample, so its "won" page was never read). And the sites we wrote to (contacted / replied: our sender
+  // or "I sent it myself") are read too, as `claim`: the won check (LK.wonCheck) needs our own reading of their page.
+  const ledgerPages = new Set(ledger.filter(l => l.site_id === p.site_id && l.status !== 'lost' && l.from_url).map(l => LK.normUrl(l.from_url)));
   const wonQueue = [];
-  for (const x of prospects.filter(y => y.site_id === p.site_id && String(y.status || '') === 'won')) {
+  for (const x of prospects.filter(y => y.site_id === p.site_id && ['won', 'contacted', 'replied'].includes(String(y.status || '')))) {
+    const won = String(x.status || '') === 'won'; if (!won && !String(x.contacted_at || '')) continue;
     const key = LK.refKey(x.prospect_domain);
-    if (!key || linking.has(key)) continue;   // in the ledger: the Backlink Monitor reads that page itself
     const row = outreach.find(o => o.site_id === p.site_id && o.prospect_domain === x.prospect_domain && o.type === x.type) || {};
     let ck = {}; try { ck = JSON.parse(row.checks_json || '{}') || {}; } catch (e) { ck = {}; }
     const w = ck.won || {};
     const url = /^https?:\/\//i.test(w.url || '') ? w.url
-      : (/^https?:\/\//i.test(x.source_url || '') && !DOC.test(x.source_url)) ? x.source_url : 'https://' + x.prospect_domain + '/';
+      : (/^https?:\/\//i.test(x.source_url || '') && !DOC.test(x.source_url)) ? x.source_url : (/^https?:\/\//i.test(row.page_url || '') && !DOC.test(row.page_url)) ? row.page_url : 'https://' + x.prospect_domain + '/';
+    if (!key || (linking.has(key) && ledgerPages.has(LK.normUrl(url)))) continue;   // in the ledger: the Backlink Monitor reads that page itself
     const at = Date.parse(w.at || '');
-    wonQueue.push({ x, url, age: Number.isFinite(at) ? (Date.now() - at) / 864e5 : 9999, misses: Number(w.misses) || 0 });
+    wonQueue.push({ x, url, won, age: Number.isFinite(at) ? (Date.now() - at) / 864e5 : 9999, misses: Number(w.misses) || 0 });
   }
-  wonQueue.sort((a, b) => (b.misses - a.misses) || (b.age - a.age));
-  for (const w of wonQueue.slice(0, LB_WON_MAX)) add('won', w.url, { prospect_domain: w.x.prospect_domain, type: w.x.type, won_at: String(w.x.won_at || ''), url_source: /^https?:\/\//i.test(String(w.x.source_url || '')) && w.age > 9000 ? 'the page we pitched' : 'where the link was last found' });
+  wonQueue.sort((a, b) => (b.won - a.won) || (b.misses - a.misses) || (b.age - a.age));
+  for (const w of wonQueue.slice(0, LB_WON_MAX)) add(w.won ? 'won' : 'claim', w.url, { prospect_domain: w.x.prospect_domain, type: w.x.type, won_at: String(w.x.won_at || ''), contacted_at: String(w.x.contacted_at || ''), url_source: /^https?:\/\//i.test(String(w.x.source_url || '')) && w.age > 9000 ? 'the page we pitched' : 'where the link was last found' });
   // 2. resource pages found by search (monthly)
   let nRes = 0;
   sreqs.forEach((r, i) => { if (r.site_id !== p.site_id || r.kind !== 'resource_search') return; const j = body(sresps[i]) || {};

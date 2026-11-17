@@ -113,7 +113,9 @@ function LinkBuilding({ d, onRun }: { d: LinkBuildingData; onRun?: () => void })
             : `Your first link opportunities arrive ${day.on}`;
 
   const next =
-    !d.canSend.ok && can('admin')
+    !d.canSend.ok && can('admin') && counts.drafted + counts.needsEdit > 0
+      ? { title: 'Connect a mailbox, or send the pitches yourself', action: <HeroJump to="ready">See the pitches</HeroJump> }
+      : !d.canSend.ok && can('admin')
       ? { title: 'Connect your mailbox so approved pitches can go out', action: <HeroLink to={paths.settings(org.id, 'mailboxes')}>Open Mailboxes</HeroLink> }
       : toAnswer
         ? { title: `Answer ${plural(toAnswer, 'reply', 'replies')} while the conversation is fresh`, action: <HeroJump to="replies">Go to the replies</HeroJump> }
@@ -138,9 +140,10 @@ function LinkBuilding({ d, onRun }: { d: LinkBuildingData; onRun?: () => void })
         (role === 'viewer' ? (
           <Callout tone="info">You can see everything here. Members and admins approve pitches and answer replies.</Callout>
         ) : (
+          // CR17-E (C4a): the first step names both ways out, a connected mailbox or sending the pitches by hand
           <Callout
             tone="warning"
-            title="Pitches cannot go out yet"
+            title={d.mailboxes.length ? 'Pitches cannot go out from the app yet' : 'Connect a mailbox or send these yourself'}
             action={
               can('admin') ? (
                 <>
@@ -154,6 +157,8 @@ function LinkBuilding({ d, onRun }: { d: LinkBuildingData; onRun?: () => void })
           >
             {d.canSend.why}
             {!can('admin') && ' Ask an admin of your company.'}
+            {can('member') && ' Or send a pitch yourself: copy it, send it from your own e-mail and press "I sent it myself". We remind you of the follow-ups and check their page for your link.'}
+            {d.manualWeek.sent > 0 && ` First e-mails this week: ${d.manualWeek.sent} of ${d.manualWeek.limit}.`}
           </Callout>
         ))}
 
@@ -168,7 +173,7 @@ function LinkBuilding({ d, onRun }: { d: LinkBuildingData; onRun?: () => void })
             <HeroStat
               label="Pitches to review"
               value={<CountUp value={counts.drafted} />}
-              hint={counts.live > counts.drafted ? `${counts.live - counts.drafted} more ${counts.live - counts.drafted === 1 ? 'site' : 'sites'} found` : 'drafted for your approval'}
+              hint={counts.needsEdit ? `${counts.needsEdit} more ${counts.needsEdit === 1 ? 'needs' : 'need'} your edit` : counts.live > counts.drafted ? `${counts.live - counts.drafted} more ${counts.live - counts.drafted === 1 ? 'site' : 'sites'} found` : 'drafted for your approval'}
               onClick={() => jumpTo('ready')}
             />
             <HeroStat label="In progress" value={<CountUp value={running.length} />} hint="going out or waiting for a reply" onClick={() => jumpTo('progress')} />
@@ -185,7 +190,7 @@ function LinkBuilding({ d, onRun }: { d: LinkBuildingData; onRun?: () => void })
             icon={<Trophy />}
             tone={k.wonMonth ? 'good' : 'blue'}
             label="Links won"
-            info="Counted when our link check finds your link live on their page. A link you mark won counts once the check confirms it."
+            info="Counted only when you wrote to the site and our own check then found your link on their page. A site that links to you without a pitch is listed on the Backlinks page, not here. A link you mark won counts once the check confirms it."
             value={<CountUp value={k.wonMonth} />}
             deltaLabel="this month"
             meta={`${k.wonAll} in all`}

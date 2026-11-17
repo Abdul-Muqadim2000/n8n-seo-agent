@@ -449,7 +449,13 @@ LINK_OUTREACH_COLS = [('site_id', 'string'), ('domain', 'string'), ('prospect_do
                       ('fit', 'number'), ('fit_reason', 'string'), ('checks_json', 'string'), ('page_url', 'string'), ('page_title', 'string'), ('evidence', 'string'),
                       ('contacts_json', 'string'), ('contact_email', 'string'), ('contact_form_url', 'string'), ('country', 'string'), ('language', 'string'),
                       ('target_url', 'string'), ('target_reason', 'string'), ('anchor_hint', 'string'), ('sequence_json', 'string'), ('deadline', 'string'),
-                      ('drafted_at', 'string'), ('checked_at', 'string'), ('request_id', 'string')]
+                      ('drafted_at', 'string'), ('checked_at', 'string'), ('request_id', 'string'),
+                      # CR17-E (client report 2026-11-17, C4; build section 195): the link text itself (the business name, our page's own
+                      # title without the brand suffix, or the bare address; never a keyword) beside its kind `anchor_hint`, and a code for
+                      # the verdict (`reason_code`: competitor | government | platform | job_board | sells_links | low_authority | off_topic |
+                      # no_matching_page | ...; OK.reasonCode), so a website-level verdict reaches every row of that website and the app
+                      # never parses a sentence. Package F (C5) proposes the same `reason_code` column: one column, both packages.
+                      ('anchor_text', 'string'), ('reason_code', 'string')]
 LISTINGS_TABLE = 'seo_listings'
 LISTINGS_COLS = [('site_id', 'string'), ('domain', 'string'), ('listing_id', 'string'), ('name', 'string'), ('category', 'string'), ('status', 'string'),
                  ('profile_url', 'string'), ('rel', 'string'), ('competitors', 'string'), ('submit_url', 'string'), ('priority', 'number'), ('why', 'string'),

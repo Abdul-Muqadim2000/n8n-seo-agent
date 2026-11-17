@@ -277,7 +277,78 @@ const LK = (() => {
     let src = r.sources; if (typeof src === 'string') { try { src = JSON.parse(src); } catch (e) { src = src.split(/[,\s]+/); } }
     const onlyIndex = Array.isArray(src) && src.length > 0 && src.every(x => String(x) === 'dfs');
     return AR_CHEAP_TLD.has(d.slice(dot + 1)) && AR_TOOL_WORD.test(d.slice(0, dot)) && onlyIndex && r.verify !== 'found' && !(Number(r.visits) > 0); };
-  return { text, attr, hostOf, regDomain, isSuffix, refKey, sameSite, isInfra, isScraper, isAutoReport, isSearchPage, isWire, normUrl, cleanUrl, placementAt, anchorPlacements, linksTo, pageFacts, contextAt, challenge, emailsIn, verify, mention, domainKind, quality, values, anchorKind, SPAM_RE, isGambling, footPath, footprints };
+  // ---- CR17-E (client report 2026-11-17, devaicon.com C4; build section 195): what a WON link is ----
+  // Live, three "links won this month" were domain collisions: a bebee.com job listing that names the client (a Search Console sample row,
+  // no address of ours, never read by us), another bebee page, and github.com/hassan1818 (a developer's profile, nofollow) matched to a
+  // github.com prospect about an Open edX theme. Nobody had been written to. The rule now, one for every path (Backlink Monitor, Link
+  // Builder, Reply Reader, the app): a link counts as WON only when (1) we contacted that site (contacted_at: our sender, or "I sent it
+  // myself" in the app), (2) our own reading found a link to the client's host on a page of that site, and (3) that page passes the junk
+  // gates below. A clean link nobody asked for is "already links to you" (the Backlinks page's business, never a link-building result);
+  // a link on a junk page is "found, low value". A won link turns lost when its ledger row is lost (two misses).
+  // Job boards and job pages: a scraped listing names the employer, nobody there adds a link (bebee "Machine Learning Engineer - DEVAICON").
+  const JOB_HOST = /(^|\.)(bebee|indeed|glassdoor|rozee|naukri|naukrigulf|bayt|monster|ziprecruiter|jooble|careerjet|simplyhired|wuzzuf|gulftalent|mustakbil|jobstreet|seek|reed|totaljobs|stepstone|dice|jobrapido|adzuna|neuvoo|careerbuilder|jobsdb|laimoon|workable|recruitee|smartrecruiters|greenhouse|lever|wellfound)\.[a-z.]+$|^(jobs|careers)\.[a-z0-9-]+\.[a-z.]+$/;
+  const JOB_PATH = /(^|\/)(jobs?|job-listings?|vacanc(?:y|ies)|careers?\/jobs?)(\/|$)/i;
+  const JOB_TITLE = /\b\d+\+?\s+[^|]{0,60}\bjobs?\b|\bjobs? in\b|\bhiring\b|\bvacanc(?:y|ies)\b|\bapply now\b|\|\s*bebee\b/i;
+  const pathOf = (u) => String(u || '').replace(/^[a-z][a-z0-9+.-]*:\/\/[^\/?#]*/i, '').replace(/[?#].*$/, '');
+  const isJobBoard = (u, title) => { const h = hostOf(u) || String(u || '').toLowerCase().replace(/^www\./, '').replace(/[\/?#].*$/, ''); if (!h) return false;
+    if (JOB_HOST.test(h)) return true;
+    const path = /^[a-z][a-z0-9+.-]*:\/\//i.test(String(u || '')) ? pathOf(u) : '';
+    return (/(^|\.)linkedin\.[a-z.]+$/.test(h) && /^\/jobs(\/|$)/i.test(path)) || (JOB_PATH.test(path) && JOB_TITLE.test(String(title || ''))); };
+  // A profile on a platform (a person's or a company's own page there) or anything on a code host: the page belongs to whoever posted it,
+  // so a link there is theirs to keep, not a placement anyone won (github.com/hassan1818, linkedin.com/in/..., medium.com/@...).
+  const PROFILE = [
+    [/(^|\.)(github\.com|gitlab\.com|bitbucket\.org|sourceforge\.net)$/, /./, 'a code host'],
+    [/(^|\.)linkedin\.[a-z.]+$/, /^\/(in|pub|company|school|showcase)\//i, 'a profile'],
+    [/(^|\.)(x\.com|twitter\.com|facebook\.com|instagram\.com|tiktok\.com|threads\.net|pinterest\.[a-z.]+|behance\.net|dribbble\.com|about\.me|linktr\.ee|producthunt\.com)$/, /^\/[^\/]+\/?$|^\/@/, 'a profile'],
+    [/(^|\.)medium\.com$/, /^\/@/, 'a profile'], [/(^|\.)youtube\.com$/, /^\/(@|channel\/|c\/|user\/)/i, 'a channel page'],
+    [/(^|\.)reddit\.com$/, /^\/(u|user)\//i, 'a profile'], [/(^|\.)quora\.com$/, /^\/profile\//i, 'a profile'], [/(^|\.)stackoverflow\.com$/, /^\/users\//i, 'a profile'],
+    [/(^|\.)crunchbase\.com$/, /^\/person\//i, 'a profile'], [/(^|\.)dev\.to$/, /^\/[^\/]+\/?$/, 'a profile'],
+  ];
+  const profilePage = (u) => { const h = hostOf(u); if (!h) return ''; const path = pathOf(u) || '/';
+    for (const [hr, pr, what] of PROFILE) if (hr.test(h) && pr.test(path)) return what + ' on ' + regDomain(h);
+    return ''; };
+  // the one junk gate for a page that links to the client (o: a ledger row or a fresh reading: ref_domain, from_url, page_title, link_type,
+  // noindex, canonical_elsewhere, sources, verify, visits; opts.farms: LK.footprints' map) -> '' or the reason in plain words
+  function junkLink(o, opts = {}) {
+    const r = o || {}; const url = String(r.from_url || r.url || ''); const d = String(r.ref_domain || refKey(hostOf(url)) || '').toLowerCase();
+    if (r.link_type === 'spam' || (opts.farms && opts.farms.has && opts.farms.has(d))) return 'a link-farm or spam page';
+    if (r.link_type === 'scraper' || isScraper(d) || isAutoReport(d, r)) return 'an automatic report page';
+    if (isGambling(d)) return 'a gambling site';
+    if (isWire(d)) return 'a press-release wire';
+    if (isInfra(d)) return 'a hosting or link-shortener page';
+    const kind = domainKind(d); if (['search', 'ai', 'mail', 'tool'].includes(kind)) return 'not a website page';
+    if (isJobBoard(url || d, r.page_title || r.title)) return 'a job listing';
+    const prof = profilePage(url); if (prof) return prof;
+    if (isSearchPage(url)) return "a search-results page of someone else's site";
+    if (r.noindex === true || r.noindex === 'true') return 'a page search engines are told not to index';
+    if (r.canonical_elsewhere === true || r.canonical_elsewhere === 'true') return 'a page that points search engines to another address';
+    return '';
+  }
+  // o: { prospect: { prospect_domain, status, contacted_at }, rows: ledger rows (any site; filtered here), site: the client's domain,
+  //      reading: a fresh LK.verify result with its url (optional), contacted: true when the caller knows we wrote (optional), farms, now,
+  //      max_age_days (a ledger reading older than this is not evidence, default 35) }
+  // -> { state: won | already_links | low_value | lost | not_found, won, contacted, reason, url, rel }
+  function wonCheck(o) {
+    const x = o || {}; const p = x.prospect || {}; const site = String(x.site || '').toLowerCase().replace(/^www\./, '');
+    const pd = String(p.prospect_domain || '').toLowerCase().replace(/^www\./, ''); const key = refKey(pd), reg = regDomain(pd);
+    const contacted = !!x.contacted || !!String(p.contacted_at || '').trim();
+    const now = x.now ? new Date(x.now).getTime() : Date.now(); const maxAge = (Number(x.max_age_days) || 35) * 864e5;
+    const ofSite = (r) => { const rd = String(r.ref_domain || '').toLowerCase(); const h = hostOf(r.from_url || r.url); return !!pd && (rd === key || (!!reg && regDomain(rd) === reg) || (!!h && (sameSite(h, reg) || refKey(h) === key))); };
+    const mine = (x.rows || []).filter(r => r && ofSite(r));
+    const toUs = (u) => !!site && sameSite(hostOf(u), site);
+    const fresh = (r) => { const t = Date.parse(r.verified_at || r.last_seen || ''); return !Number.isFinite(t) || now - t <= maxAge; };
+    const ev = [];
+    if (x.reading && x.reading.verify === 'found') ev.push({ ...x.reading, from_url: x.reading.url || x.reading.from_url || '', ref_domain: key, page_title: x.reading.title || x.reading.page_title || '' });
+    for (const r of mine) if (r.status !== 'lost' && r.verify === 'found' && toUs(r.to_url) && fresh(r)) ev.push(r);
+    const judged = ev.map(e => ({ e, junk: junkLink(e, { farms: x.farms }) }));
+    const clean = judged.find(j => !j.junk);
+    if (clean) return { state: contacted ? 'won' : 'already_links', won: contacted, contacted, reason: contacted ? 'our check found your link on their page' : 'they link to you, but nobody was written to: not a link-building result', url: String(clean.e.from_url || ''), rel: String(clean.e.rel || '') };
+    if (judged.length) return { state: 'low_value', won: false, contacted, reason: 'a link to you is there, but on ' + judged[0].junk + ': it does not count', url: String(judged[0].e.from_url || ''), rel: String(judged[0].e.rel || '') };
+    const lost = mine.find(r => r.status === 'lost');
+    if (String(p.status || '') === 'won' && lost) return { state: 'lost', won: false, contacted, reason: 'the link is gone (' + String(lost.lost_reason || 'missing twice').replace(/_/g, ' ') + ')', url: String(lost.from_url || ''), rel: '' };
+    return { state: 'not_found', won: false, contacted, reason: 'no link to you was found on their pages', url: '', rel: '' };
+  }
+  return { isJobBoard, profilePage, junkLink, wonCheck, text, attr, hostOf, regDomain, isSuffix, refKey, sameSite, isInfra, isScraper, isAutoReport, isSearchPage, isWire, normUrl, cleanUrl, placementAt, anchorPlacements, linksTo, pageFacts, contextAt, challenge, emailsIn, verify, mention, domainKind, quality, values, anchorKind, SPAM_RE, isGambling, footPath, footprints };
 })();
 
 // ---- outreach kit (v4.13 Link Builder, LINK_BUILDER_SPEC.md; inlined after the link kit): contacts, qualification, topic fit, our page and
@@ -480,24 +551,72 @@ const OK = (() => {
   // our page to point to and the link text to ask for (LINK_BUILDER_SPEC.md §5). pages: [{ url, title, keyword, kind, page_type, position,
   // rds, kw_share, pitched }] (kind: home | hub | guide | answer | article | case | money); p: the prospect { type, text, dead_text, to_url }
   const HOME_TYPES = new Set(['mention', 'list', 'listing', 'press', 'digest', 'podcast', 'ai_list']);   // L5: an answer in the press and a guest appearance name the business, so they point at the homepage
-  function pickTarget(p, pages, df, nDocs, home) {
-    if (p.type === 'lost' && p.to_url) return { url: p.to_url, reason: 'the page it used to link to', anchor: 'as before', fit: 1 };
-    if (HOME_TYPES.has(p.type)) return { url: home, reason: p.type === 'list' || p.type === 'ai_list' ? 'lists link to the homepage' : 'a mention or a listing names the business: the homepage', anchor: 'brand', fit: 1 };
+  // CR17-E (client report 2026-11-17, C4; build section 195): the link text is REAL text, never a kind. Live every card read "Link text: Your
+  // brand name" (a label for the kind `brand`) although "Devaicon" was on file. Brand = the business name; title = our page's own title
+  // without the brand suffixes ("Open edX Services | Devaicon" -> "Open edX Services"); url = the bare address. Never a search keyword.
+  const normName = (s) => String(s || '').toLowerCase().replace(/&amp;/g, '&').replace(/[^a-z0-9&]+/g, '');
+  function stripBrand(title, brand, domain) {
+    const segs = String(title || '').replace(/\s+/g, ' ').trim().split(/\s+[|–—-]\s+|\s*\|\s*/).map(x => x.trim()).filter(Boolean);
+    const b = normName(brand), lab = normName(String(domain || '').replace(/^www\./, '').split('.')[0]);
+    const keep = segs.filter(x => { const n = normName(x); return n && n !== b && n !== lab && n !== normName(domain); });
+    return (keep[0] || '').slice(0, 90);
+  }
+  const bareUrl = (u) => String(u || '').replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '');
+  // -> { kind: brand | title | url | as before, text }: the text an editor would write anyway (Google's link spam policy names optimised
+  // anchor text in requested links); with no title on record the brand stands in, with no brand on file the bare address does
+  function anchorText(kind, page, brand, domain) {
+    const k = String(kind || 'brand');
+    if (k === 'as before') return { kind: k, text: '' };
+    if (k === 'url') return { kind: 'url', text: bareUrl((page && page.url) || '') || bareUrl(domain) };
+    if (k === 'title') { const t = stripBrand(page && page.title, brand, domain); if (t) return { kind: 'title', text: t }; }
+    const b = String(brand || '').trim();
+    return b && normName(b) !== normName(domain) ? { kind: 'brand', text: b.slice(0, 80) } : { kind: 'url', text: bareUrl((page && page.url) || '') || bareUrl(domain) };
+  }
+  // an editorial "top / best X companies" article (an ai_source or list page) asks for the page that sells X; a directory profile, a mention
+  // or a journalist answer names the business (the homepage)
+  const EDITORIAL_LIST = /\b(top\s*\d+|top ten|best|leading|companies|firms|agencies|providers|vendors|alternatives?|vs\.?|versus|compar(?:e|ed|ison))\b/i;
+  const NO_PAGE = 'no_matching_page';
+  // a page of ours aimed at ANOTHER market than their page (a Pakistan list pitched our UAE page): half the score
+  const PLACES = /\b(uae|u\.a\.e|dubai|abu dhabi|sharjah|emirates|pakistan|lahore|karachi|islamabad|saudi|ksa|riyadh|jeddah|qatar|doha|kuwait|bahrain|oman|egypt|cairo|india|uk|london|usa|canada|australia|singapore|gcc)\b/gi;
+  const placesOf = (t) => new Set((String(t || '').toLowerCase().match(PLACES) || []).map(x => x.replace(/\./g, '')));
+  const otherMarket = (probe, x) => { const a = placesOf(probe), b = placesOf([x.title, String(x.url || '').replace(/[\/_.-]+/g, ' ')].join(' ')); return a.size > 0 && b.size > 0 && ![...b].some(w => a.has(w)); };
+  function pickTarget(p, pages, df, nDocs, home, brand, domain) {
+    const done = (r) => { const pg = r.url ? (pages.find(x => x.url === r.url) || { url: r.url, title: r.title || '' }) : null; const a = r.url ? anchorText(r.anchor, pg, brand, domain || '') : { kind: '', text: '' }; return { ...r, anchor: a.kind || r.anchor, anchor_text: a.text }; };
+    if (p.type === 'lost' && p.to_url) return done({ url: p.to_url, reason: 'the page it used to link to', anchor: 'as before', fit: 1 });
+    const inner = (pages || []).filter(x => x.url && x.kind !== 'home');
+    const fitOf = (probe, x) => fit(probe, [x.title, x.keyword, String(x.url || '').replace(/^https?:\/\/[^\/]+/, '').replace(/[\/_.-]+/g, ' ')].join(' '), df, nDocs);   // the URL's words too: titles come from Search Console queries (live 2026-10-11)
+    if ((p.type === 'list' || p.type === 'ai_list') && EDITORIAL_LIST.test(String(p.text || ''))) {
+      const best = inner.filter(x => (x.kind === 'money' || x.kind === 'service') && !otherMarket(p.text, x)).map(x => ({ x, f: fitOf(p.text, x) })).filter(s => s.f >= 0.4).sort((a, b) => b.f - a.f)[0];
+      if (best) return done({ url: best.x.url, reason: 'their article lists providers of what this page sells (topic match ' + Math.round(best.f * 100) + '%)', anchor: 'brand', fit: best.f, title: best.x.title });
+    }
+    if (HOME_TYPES.has(p.type)) return done({ url: home, reason: p.type === 'list' || p.type === 'ai_list' ? 'lists link to the homepage' : 'a mention or a listing names the business: the homepage', anchor: 'brand', fit: 1 });
     const probe = p.type === 'broken' ? (p.dead_text || p.text) : ['gap', 'comp_new'].includes(p.type) ? p.text + ' ' + (p.topics || '') : p.text;   // they link to competitors for OUR topics: aim at our page on them
-    const scored = pages.filter(x => x.url && x.kind !== 'home').map(x => {
+    const scored = inner.map(x => {
       const f = fit(probe, [x.title, x.keyword, String(x.url || '').replace(/^https?:\/\/[^\/]+/, '').replace(/[\/_.-]+/g, ' ')].join(' '), df, nDocs);   // the URL's words too: titles come from Search Console queries (live 2026-10-11)
       const pos = Number(x.position) || 0; const band = pos >= 4 && pos <= 15 ? 1 : pos >= 16 && pos <= 30 ? 0.6 : pos >= 1 && pos <= 3 ? 0.3 : 0.4;
       const rds = Number(x.rds) || 0; const need = rds === 0 ? 1 : rds <= 5 ? 0.9 : rds <= 20 ? 0.7 : 0.5;
       const type = x.kind === 'money' ? 0.6 : 1;   // publishers link to guides; the guide links on to the service page
       const paced = (Number(x.pitched) || 0) >= (rds < 20 ? 4 : Math.max(4, Math.round(rds * 0.2)));
-      return { x, f, score: paced ? 0 : f * band * need * type, band, pos, rds, paced };
+      return { x, f, score: paced ? 0 : f * band * need * type * (otherMarket(probe, x) ? 0.5 : 1), band, pos, rds, paced };
     }).filter(s => s.f >= 0.2 && s.score > 0).sort((a, b) => b.score - a.score);
-    if (!scored.length) return { url: home, reason: 'no page of ours matches their topic closely: the homepage', anchor: 'brand', fit: 0 };
+    if (!scored.length) {
+      // CR17-E: no silent homepage. Live 7 of devaicon's 20 open pitches went to the homepage "because no page matched" (an "Open edX vs
+      // Moodle" article while /capabilities/open-edx-services exists). The homepage stays only when it really is about their topic.
+      const hp = (pages || []).find(x => x.kind === 'home') || { url: home, title: '' };
+      const hf = fit(probe, [hp.title, brand, ...(pages || []).filter(x => x.kind === 'home').map(x => x.keyword)].join(' '), df, nDocs);
+      if (hf >= 0.4) return done({ url: home, reason: 'your homepage is about their topic (topic match ' + Math.round(hf * 100) + '%)', anchor: 'brand', fit: hf });
+      const topic = String(probe || '').replace(/\s+/g, ' ').trim().slice(0, 70);
+      return { url: '', hold: NO_PAGE, reason: 'no page of yours covers their topic' + (topic ? ' ("' + topic + '")' : '') + ': publish one first, then this pitch can go out', anchor: '', anchor_text: '', fit: 0 };
+    }
     const s = scored[0]; const why = [s.pos >= 4 && s.pos <= 15 ? 'ranks #' + s.pos + ' (close to the top)' : s.pos ? 'ranks #' + s.pos : 'not ranking yet', s.rds ? s.rds + ' linking sites' : 'no links yet', 'topic match ' + Math.round(s.f * 100) + '%'];
-    return { url: s.x.url, reason: why.join(' · '), anchor: (Number(s.x.kw_share) || 0) > 0.15 ? 'brand' : 'title', fit: s.f, title: s.x.title };
+    return done({ url: s.x.url, reason: why.join(' · '), anchor: (Number(s.x.kw_share) || 0) > 0.15 ? 'brand' : 'title', fit: s.f, title: s.x.title });
   }
-  // government sites list providers through accreditation or an application, never through a pitch (the listings checklist covers them)
-  const isGov = (d) => /(^|\.)(gov|gouv|gob|govt|mil)(\.[a-z]{2})?$/i.test(String(d || '').toLowerCase());
+  // government sites list providers through accreditation or an application, never through a pitch (the listings checklist covers them).
+  // CR17-E (195): the fit gate's own government list (v5/code/_fit_gate.js fitGovHost; build section 195 asserts these four patterns are
+  // the fit gate's, character for character). This kit had a shorter rule of its own, so u.ae (the UAE government portal) was a pitch.
+  const GOV_RE = [/(^|\.)gov(\.[a-z]{2,3})?$/, /(^|\.)(gouv|gob|go|gv)\.[a-z]{2}$/, /(^|\.)mil(\.[a-z]{2})?$/, /(^|\.)(u\.ae|government\.ae|dubai\.ae|abudhabi\.ae|sharjah\.ae|ajman\.ae|rak\.ae|tax\.gov\.ae|europa\.eu)$/];
+  const isGov = (d) => { const h = String(d || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '').replace(/^(www|m|app|en|ar)\./, '');
+    return GOV_RE.some(re => re.test(h)) || /(^|\.)govt(\.[a-z]{2})?$/.test(h); };
   // ---- who is never worth a pitch (D13, live 2026-10-11) ----
   // a mailbox provider, a generated contact / company database, a CDN or a statistics page: they turn up in link data as hosts, but there is
   // nobody there who could add a link (outlook.com and zoominfo.com were listed as broken-link prospects)
@@ -510,6 +629,7 @@ const OK = (() => {
     if (DATABROKER.test(d)) return 'a contact / company database (' + d + '): its pages are generated, nobody there edits them';
     if (LK.isInfra(d)) return 'infrastructure (' + d + ': a CDN, a hosting platform or a link shortener), not a site to write to';
     if (LK.isScraper(d)) return 'an automatically generated statistics page (' + d + '), not a site to write to';
+    if (LK.isJobBoard(d, '')) return 'a job board (' + d + '): its pages are job listings, nobody there adds a link';   // CR17-E: bebee.com was drafted a pitch
     return '';
   }
   // a bare homepage is no place for a link to add: only a listing, a list, a mention or a journalist request is pitched on the front page
@@ -718,7 +838,64 @@ const OK = (() => {
     const form = email ? '' : (String(x.contact_url || '').trim() || outs.map(r => String(r.contact_form_url || '')).find(Boolean) || pros.map(r => String(r.contact_url || '')).find(Boolean) || '');
     return { refused: '', contact: email ? 'email' : form ? 'form' : '', email, form };
   }
-  return { OFF_TOPIC, isGov, words, stem, fit, contactsIn, placementVet, PLATFORM, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf,
+  // ---- CR17-E (client report 2026-11-17, C4e; build section 195): one verdict per WEBSITE, kept across runs ----
+  // Live, abstract-technology.de was "Ready to send" (its blog post, type ai_source) and "Checked and left out: a competing provider" (its
+  // free-trial page, type resource) on the same screen: each (site, type) row was judged alone. A reason that is about the WEBSITE (a
+  // competitor, a government portal, a platform, a job board, a site that sells links, too little authority) now applies to every row and
+  // type of that registrable domain, this run and every later run (stored verdicts are re-read each run with a code), and stored rows are
+  // re-judged under the current rules without fetching anything, so a row qualified before a rule existed heals by itself.
+  const REASON_CODES = [
+    ['client_declined', /marked (in the app|not a fit)|not a fit \(marked/i],
+    ['government', /government site/i],
+    ['platform', /a platform page|a code host on|a profile on|a channel page on/i],
+    ['job_board', /job board|job listing/i],
+    ['not_a_site', /mailbox provider|contact \/ company database|infrastructure \(|statistics page|not a website/i],
+    ['competitor', /competing (site|provider)|competitor of yours|recommends instead of you/i],
+    ['sells_links', /sells posts or links|paid guest posts|offers links|link-farm|spam score|gambling|essay-mill|press-release wire|different sites linked from one page/i],
+    ['low_authority', /too little authority/i],
+    ['accreditation', /accredited \/ approved providers/i],
+    ['no_matching_page', /no page of yours covers their topic/i],
+    ['off_topic', /off topic|off your topics/i],
+    ['language', /another language/i],
+    ['page_gone', /answers 4\d\d|does not answer|page itself is gone/i],
+    ['homepage_only', /only their homepage/i],
+    ['page_changed', /no longer carr|dead link is no longer/i],
+    ['writer_skip', /^writer:/i],
+  ];
+  const reasonCode = (why) => { const t = String(why || ''); if (!t.trim()) return ''; for (const [c, re] of REASON_CODES) if (re.test(t)) return c; return 'other'; };
+  const DOMAIN_CODES = new Set(['government', 'platform', 'job_board', 'not_a_site', 'competitor', 'sells_links', 'low_authority']);
+  // the topic floor for pitches that ask "link to our page" (0.25 let course listings, a stock exchange and accounting bodies through at 30-33%)
+  const TOPIC_FLOOR = 0.4, TOPIC_FLOOR_TYPES = new Set(['resource', 'ai_source', 'gap', 'comp_new']);
+  // the link index's own authority (DataForSEO domain rank 0-1000; 0 = unknown, never a refusal)
+  const MIN_RANK = 40;
+  const lowAuthority = (rank) => { const r = Number(rank) || 0; return r > 0 && r < MIN_RANK ? 'too little authority to pass anything on (rank ' + Math.round(r) + ' of 1,000 in the link index)' : ''; };
+  const PLATFORM_WHY = (d) => 'a platform page (' + d + '): a post there belongs to whoever wrote it, nobody edits it for a pitch';
+  // a stored row judged again under today's rules, with nothing fetched: '' when it still passes. row: { prospect_domain, type, page_url,
+  // page_title }; c: { competitors, serp_rivals, ai_rivals, topics, terms, accredited, spam, rank }
+  const NO_REQUALIFY = new Set(['press', 'digest', 'podcast', 'redirect', 'reclaim']);
+  function requalify(row, c) {
+    const x = row || {}; const o = c || {}; const d = domOf(x.prospect_domain); const type = String(x.type || '');
+    if (!d || !/\./.test(d) || NO_REQUALIFY.has(type)) return '';
+    if (isGov(d)) return 'government site: you get on its lists by applying or being accredited, not by a pitch (see the listings checklist)';
+    const bad = badHost(d); if (bad) return bad;
+    const host = LK.hostOf(x.page_url) || d;
+    if (PLATFORM.test(d) || PLATFORM.test(host)) return PLATFORM_WHY(LK.regDomain(d) || d);
+    if (LK.isJobBoard(x.page_url || d, x.page_title)) return 'a job listing (' + d + '): nobody there adds a link';
+    const np = noPitch(d, { title: x.page_title, spam: o.spam, accredited: !!o.accredited }); if (np) return np;
+    const la = lowAuthority(o.rank); if (la) return la;
+    return sellsSame({ type, domain: d, competitors: o.competitors || [], serp_rivals: o.serp_rivals || [], ai_rivals: o.ai_rivals || [], topics: o.topics || [], title: x.page_title || '', url: x.page_url || '', terms: o.terms || [] });
+  }
+  // rows: every outreach row of a site (this run's and the stored ones) -> Map registrable domain -> { why, code, type } for the domain-level
+  // verdicts; the newest verdict wins, a verdict the client gave on one pitch stays on that pitch
+  function domainVerdicts(rows) {
+    const m = new Map();
+    for (const r of [...(rows || [])].sort((a, b) => String(a.checked_at || '').localeCompare(String(b.checked_at || '')))) {
+      if (String(r.status || '') !== 'not_fit') continue; const code = String(r.reason_code || '') || reasonCode(r.fit_reason); if (!DOMAIN_CODES.has(code)) continue;
+      const d = LK.regDomain(domOf(r.prospect_domain)); if (d) m.set(d, { why: String(r.fit_reason || ''), code, type: String(r.type || '') });
+    }
+    return m;
+  }
+  return { OFF_TOPIC, TOPIC_FLOOR, TOPIC_FLOOR_TYPES, MIN_RANK, lowAuthority, reasonCode, DOMAIN_CODES, requalify, domainVerdicts, PLATFORM_WHY, NO_PAGE, anchorText, stripBrand, isGov, words, stem, fit, contactsIn, placementVet, PLATFORM, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf,
     badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, siteOffer, rivalOf, isRoundup, LIST_TYPES, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
 })();
 
@@ -1099,10 +1276,17 @@ for (const p of plans) {
   // that decide whether a prospect is a competitor and whether an accredited-provider list may be asked to add us
   const sellTerms = (p.services && p.services.length ? p.services : [...p.topics, p.profile.business_type]).filter(Boolean);
   const weAreAccredited = OK.accredited(p.accreditation);
+  // CR17-E (195): a page's topic match against the site's own services too (each service of two words or more), for the topic floor only:
+  // an "Open edX cost" article is on topic for a business that sells Open edX services even when the ladders are about AI
+  const svcTerms = (p.services || []).filter(x => OK.words(x).length >= 2).slice(0, 40);
+  const svcFit = (txt) => svcTerms.reduce((m, sv) => Math.max(m, OK.fit(txt, sv, df, docs.length)), 0);
+  const brandText = p.brand_known ? p.brand : '';
   const outreach_rows = [], prospect_rows = [], listing_rows = [], fixes = [];
   const base = (o) => ({ site_id: sid, domain: p.domain, prospect_domain: o.prospect_domain, type: o.type, status: o.status, score: o.score || 0, fit: o.fit || 0, fit_reason: o.fit_reason || '', checks_json: JSON.stringify(o.checks || {}),
     page_url: o.page_url || '', page_title: o.page_title || '', evidence: String(o.evidence || '').slice(0, 600), contacts_json: JSON.stringify(o.contacts || []), contact_email: (o.contacts || [])[0] ? o.contacts[0].email : '', contact_form_url: o.contact_form_url || '',
-    country: o.country || '', language: o.language || '', target_url: o.target_url || '', target_reason: o.target_reason || '', anchor_hint: o.anchor_hint || '', sequence_json: o.sequence_json || '', deadline: o.deadline || '', drafted_at: o.drafted_at || '', checked_at: iso, request_id: p.request_id || '' });
+    country: o.country || '', language: o.language || '', target_url: o.target_url || '', target_reason: o.target_reason || '', anchor_hint: o.anchor_hint || '', sequence_json: o.sequence_json || '', deadline: o.deadline || '', drafted_at: o.drafted_at || '', checked_at: iso, request_id: p.request_id || '',
+    // CR17-E (195): the link text itself and the verdict's code (OK.reasonCode), on every row
+    anchor_text: o.anchor_text != null ? String(o.anchor_text) : (o.anchor_hint === 'brand' && p.brand_known ? p.brand : ''), reason_code: o.reason_code != null ? String(o.reason_code) : (o.status === 'not_fit' ? OK.reasonCode(o.fit_reason) : o.status === 'held' ? OK.NO_PAGE : '') });
   const newProspect = (o) => ({ site_id: sid, domain: p.domain, prospect_domain: o.prospect_domain, type: o.type, rank: o.rank || 0, spam_score: 0, detail: String(o.detail || '').slice(0, 300), source_url: o.page_url || '', target_url: o.target_url || '',
     status: 'new', first_seen: iso, last_seen: iso, won_at: '', outreach_subject: '', outreach_body: '', note: '', score: o.score || 0, origin: o.origin || 'link_builder', contact_email: (o.contacts || [])[0] ? o.contacts[0].email : '', contact_url: (o.contacts || [])[0] ? o.contacts[0].source_url || '' : '',
     contacted_at: '', followup_step: 0, followup_subject: '', followup_body: '', verified_at: '', drafted_at: '' });   // the Link Builder's own sequence lives in seo_link_outreach; this row never carries a draft
@@ -1182,10 +1366,15 @@ for (const p of plans) {
     o.evidence = evidence;
     // topic fit (their page vs our topics); a low match is a note, not a refusal — the writer decides with the evidence
     o.fit = t ? OK.fit(o.page_title + ' ' + t.slice(0, 4000), topicText, df, docs.length) : (blocked ? 0.3 : 0);
+    const siteFit = t ? Math.max(o.fit, svcFit(o.page_title + ' ' + t.slice(0, 4000))) : o.fit; o.checks.site_fit = siteFit;
     o.fit_reason = blocked ? 'their page blocks automated reading: check it yourself' : 'topic match ' + Math.round(o.fit * 100) + '%' + (facts.noindex ? ' · page is noindex (no search value)' : '');
     o.language = String(facts.lang || '').slice(0, 5);
     // ---- D13: who is never pitched (live 2026-10-11: competitors, bare homepages, mailbox providers and contact databases were) ----
     const bad = OK.badHost(r.prospect_domain); if (bad) reasons.push(bad);
+    // CR17-E (195): a job listing, too little authority, the index's spam score (the data the run already has; nothing new is bought)
+    if (!bad && LK.isJobBoard(r.url, o.page_title)) reasons.push('a job listing (' + r.prospect_domain + '): nobody there adds a link');
+    const weak = OK.lowAuthority(r.rank || stored.rank); if (weak) reasons.push(weak);
+    if (Number(stored.spam_score) >= 30) reasons.push('a spam score of ' + Math.round(Number(stored.spam_score)) + ' of 100 in the link index');
     const onlyHome = OK.homepageOnly(r.type, r.url); if (onlyHome) reasons.push(onlyHome);
     const competing = OK.sellsSame({ type: r.type, domain: r.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, ai_rivals: p.ai_rivals || [], topics: p.topics || [], title: o.page_title, text: t, terms: sellTerms, url: r.url, fit: o.fit, page_html: html && !blocked ? html : '', ...siteOf(r.prospect_domain) });   /* C-8 leftover (F-L): the page itself, for its own menu and sales buttons */   // R4: a SERP rival counts as a competitor; R21: the page's URL and the topic match it just measured
     if (competing) reasons.push(competing);
@@ -1198,15 +1387,19 @@ for (const p of plans) {
     // our page and the link text
     const lostRow = r.type === 'lost' ? myLedger.find(l => l.ref_domain === r.prospect_domain) : null;
     const toCanon = (u) => { const hit = (p.pages || []).find(x => pathKey(x.url) === pathKey(u)); return hit ? hit.url : u; };   // D13 / D15: the page we ask them to link to is the one on our canonical host, not the host an old ledger row stored
-    const tg = OK.pickTarget({ type: r.type === 'ai_source' && /list|best|top/i.test(o.page_title) ? 'ai_list' : (o.checks.angle === 'broken' ? 'broken' : r.type), text: o.page_title + ' ' + evidence, topics: p.topics.slice(0, 2).join(' '), dead_text: o.checks.dead ? [o.checks.dead.anchor, String(o.checks.dead.url).replace(/[\/_.-]+/g, ' ')].join(' ') : '', to_url: lostRow ? toCanon(lostRow.to_url) : '' }, p.pages, df, docs.length, p.home);
-    o.target_url = tg.url; o.target_reason = tg.reason; o.anchor_hint = tg.anchor;
-    if (!blocked && t && ['gap', 'comp_new', 'resource', 'broken'].includes(r.type) && o.fit < (r.type === 'broken' ? 0.15 : OK.OFF_TOPIC)) reasons.push('off topic for you (' + Math.round(o.fit * 100) + '% match)');
+    const tg = OK.pickTarget({ type: r.type === 'ai_source' && /list|best|top/i.test(o.page_title) ? 'ai_list' : (o.checks.angle === 'broken' ? 'broken' : r.type), text: o.page_title + ' ' + evidence, topics: p.topics.slice(0, 2).join(' '), dead_text: o.checks.dead ? [o.checks.dead.anchor, String(o.checks.dead.url).replace(/[\/_.-]+/g, ' ')].join(' ') : '', to_url: lostRow ? toCanon(lostRow.to_url) : '' }, p.pages, df, docs.length, p.home, brandText, p.domain);
+    o.target_url = tg.url; o.target_reason = tg.reason; o.anchor_hint = tg.anchor; o.anchor_text = tg.anchor_text || '';
+    // CR17-E (195): the topic floor for "link to our page" pitches is 40% of the site's topics or one of its services (a list page asks
+    // "add us", so it keeps no floor); a dead-link pitch keeps 15%
+    const floor = r.type === 'broken' ? 0.15 : (OK.TOPIC_FLOOR_TYPES.has(r.type) && !(r.type === 'ai_source' && OK.isRoundup({ title: o.page_title, url: r.url }))) ? OK.TOPIC_FLOOR : 0;
+    if (!blocked && t && floor && siteFit < floor) reasons.push('off topic for you (' + Math.round(siteFit * 100) + '% match with your topics and services, ' + Math.round(floor * 100) + '% needed)');
     if (isNew) o.score = Math.round(100 * (LIKELY[r.type] || 0.3) * (0.4 + 0.6 * Math.min(1, o.fit + 0.2)) * (r.rank ? Math.min(1.2, 0.6 + Number(r.rank) / 600) : 1));
     else if (airOn && r.type === 'ai_source' && String(stored.origin || '') === 'ai_rank') { const pAir = Math.min(0.95, Math.max(0.01, (Number(stored.score) || 0) / 100));   // AIR P6: AI ranking's probability, not the flat 0.35
       o.score = Math.round(100 * pAir * (0.4 + 0.6 * Math.min(1, o.fit + 0.2))); o.checks.air = { p: pAir, basis: 'AI ranking\'s estimate that this placement gets you named (its stored score)' }; }
-    o.status = reasons.length ? 'not_fit' : (o.contacts.length ? 'ready' : 'needs_contact');
+    o.status = reasons.length ? 'not_fit' : tg.hold ? 'held' : (o.contacts.length ? 'ready' : 'needs_contact');   // CR17-E: no page of ours on their topic -> held, never the homepage
     o.checks.reasons = reasons; o.checks.page_status = st || (e ? 'error' : ''); o.checks.blocked = blocked; o.checks.noindex = !!facts.noindex;
     if (o.status === 'not_fit') o.fit_reason = reasons.join('; ');
+    if (o.status === 'held') { o.fit_reason = tg.reason; o.checks.held = tg.hold; }
     outreach_rows.push(base(o));
     if (isNew && o.status !== 'not_fit') prospect_rows.push(newProspect({ ...o, rank: r.rank || 0, detail: r.type === 'broken' ? 'Links to ' + (r.competitor || 'a competitor') + "'s dead page " + r.dead_url : r.type === 'resource' ? 'Resource page on "' + (r.topic || p.topics[0] || '') + '": ' + o.page_title : o.page_title, origin: r.type === 'broken' ? 'dfs' : 'web' }));
   }
@@ -1217,6 +1410,10 @@ for (const p of plans) {
       && !myOutreach.some(o => o.prospect_domain === x.prospect_domain && o.type === x.type && o.status === 'drafted'))) {
     const why = OK.badHost(x.prospect_domain)
       || (OK.isGov(x.prospect_domain) ? 'government site: you get on its lists by applying or being accredited, not by a pitch (see the listings checklist)' : '')
+      // CR17-E (195): a platform (a post there belongs to whoever wrote it: never "a competitor"), a job listing, too little authority, the index's spam score
+      || (OK.PLATFORM.test(x.prospect_domain) ? OK.PLATFORM_WHY(LK.regDomain(x.prospect_domain) || x.prospect_domain) : '')
+      || (LK.isJobBoard(x.source_url || x.prospect_domain, x.detail) ? 'a job listing (' + x.prospect_domain + '): nobody there adds a link' : '')
+      || OK.lowAuthority(x.rank) || (Number(x.spam_score) >= 30 ? 'a spam score of ' + Math.round(Number(x.spam_score)) + ' of 100 in the link index' : '')
       || OK.sellsSame({ type: x.type, domain: x.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, ai_rivals: p.ai_rivals || [], topics: p.topics || [], title: x.detail || '', url: x.page_url || '', terms: sellTerms, ...siteOf(x.prospect_domain) });   // R4 / R21; R86: their own site, when this run read it
     if (!why) continue;
     outreach_rows.push(base({ prospect_domain: x.prospect_domain, type: x.type, status: 'not_fit', score: Number(x.score) || 0, fit: 0, fit_reason: why,
@@ -1289,12 +1486,31 @@ for (const p of plans) {
   //                                 evidence we do not have, and nothing may be concluded from it — a bot wall is not a removed link)
   // Only a confirmed loss moves the prospect off `won`, and it carries the date it was won and the reason it is no longer there.
   const won_checks = [];
-  for (const { r, x } of pagesRead.filter(o => o.r.site_id === sid && o.r.kind === 'won')) {
+  // CR17-E (client report 2026-11-17, build section 195): every reading goes through the one won rule (LK.wonCheck): a site we wrote to
+  // (`claim`) becomes won when our reading finds a link on a page that passes the junk gates; a stored "won" whose page is a job listing,
+  // a profile or a farm, or that nobody was written to, is taken off won with the reason (it was a domain collision, not a win)
+  const farmMap = LK.footprints(myLedger, { domain: p.domain, brands: p.brand_names || [] });
+  for (const { r, x } of pagesRead.filter(o => o.r.site_id === sid && (o.r.kind === 'won' || o.r.kind === 'claim'))) {
     if (outreach_rows.some(o => o.prospect_domain === r.prospect_domain && o.type === r.type)) continue;
     const stored = myOutreach.find(o => o.prospect_domain === r.prospect_domain && o.type === r.type) || {};
     let ck = {}; try { ck = JSON.parse(stored.checks_json || '{}') || {}; } catch (e) { ck = {}; }
     const before = ck.won || {};
     const v = LK.verify(x, p.domain, { url: r.url });
+    const prow = myProspects.find(y => y.prospect_domain === r.prospect_domain && y.type === r.type) || {};
+    const wc = LK.wonCheck({ prospect: { ...prow, prospect_domain: r.prospect_domain, contacted_at: prow.contacted_at || r.contacted_at || '' }, reading: { ...v, url: r.url }, site: p.domain, farms: farmMap, now: iso });
+    if (r.kind === 'claim') {   // not won yet: only a found, clean link on a site we wrote to changes anything
+      if (!wc.won) continue;
+      won_checks.push({ prospect_domain: r.prospect_domain, type: r.type, url: r.url, at: iso, state: 'live', misses: 0, verify: v.verify, rel: v.rel || '', placement: v.placement || '', anchor: String(v.anchor || '').slice(0, 120), why: 'our check found your link on their page', won_at: iso, was: 'contacted', new_win: true });
+      outreach_rows.push(base({ ...stored, contacts: (() => { try { return JSON.parse(stored.contacts_json || '[]'); } catch (e) { return []; } })(), status: stored.status || 'drafted', checks: { ...ck, won: { url: r.url, at: iso, state: 'live', misses: 0, verify: v.verify, rel: v.rel || '', placement: v.placement || '', anchor: String(v.anchor || '').slice(0, 120), why: 'our check found your link on their page', won_at: iso, was: 'contacted' } } }));
+      if (prow.prospect_domain) prospect_rows.push({ ...prow, status: 'won', won_at: iso, verified_at: iso, last_seen: iso, note: String('won ' + day + ': our check found your link on ' + r.url).slice(0, 300) });
+      continue;
+    }
+    if (v.verify === 'found' && !wc.won) {   // a "won" that is not one: a junk page, or nobody was written to
+      const status = wc.state === 'already_links' ? 'linked' : 'low_value';
+      won_checks.push({ prospect_domain: r.prospect_domain, type: r.type, url: r.url, at: iso, state: 'not_won', misses: 0, verify: v.verify, rel: v.rel || '', placement: v.placement || '', anchor: '', why: wc.reason, won_at: String(r.won_at || ''), was: before.state || '' });
+      if (prow.prospect_domain) prospect_rows.push({ ...prow, status, won_at: '', verified_at: '', last_seen: iso, note: String('not a won link: ' + wc.reason + ' (corrected ' + day + ')').slice(0, 300) });
+      continue;
+    }
     const readable = ['found', 'missing', 'gone'].includes(v.verify);
     const misses = v.verify === 'found' ? 0 : readable ? (Number(before.misses) || 0) + 1 : (Number(before.misses) || 0);
     const state = v.verify === 'found' ? 'live' : !readable ? 'not_checked' : misses >= 2 ? 'lost' : 'at_risk';
@@ -1438,6 +1654,62 @@ for (const p of plans) {
     let ck = {}; try { ck = JSON.parse(o.checks_json || '{}') || {}; } catch (e) { ck = {}; }
     outreach_rows.push(base({ ...o, status: 'not_fit', fit_reason: why, contacts: (() => { try { return JSON.parse(o.contacts_json || '[]'); } catch (e) { return []; } })(), checks: { ...ck, reasons: [why] } }));
   }
+  // ---- 6b. CR17-E (client report 2026-11-17, C4e; build section 195): stored rows judged again under today's rules, then ONE verdict per
+  // website. Nothing is fetched here: the rules that need no page (a government portal, a platform, a job board, a mailbox / database / CDN
+  // host, a link seller, too little authority, a declared or ranking competitor) run on every open stored row; a website-level verdict on
+  // any row of a registrable domain (this run's or stored) takes every open row of that domain off the queue with the same reason; a stored
+  // verdict whose rule no longer holds (a domain list that changed) is read again next run (`recheck`); a pitch held for want of a page of
+  // ours is re-aimed when one now matches; an open pitch aimed at a page that is no longer one of ours (a redirect) is re-aimed; and every
+  // open row gets its link text. A conversation in progress (contacted / replied / won) is never touched.
+  const jlq = (v, d) => { try { const x = JSON.parse(v || ''); return x == null ? d : x; } catch (e) { return d; } };
+  const rv = p.serp_rivals;   // the SERP rivals under their own name (build section 58 counts the first-pass gate calls)
+  const ctxQ = { competitors: p.competitors, serp_rivals: rv, ai_rivals: p.ai_rivals || [], topics: p.topics || [], terms: sellTerms, accredited: weAreAccredited };
+  const OPEN = new Set(['ready', 'needs_contact', 'drafted', 'needs_edit', 'held']);
+  const SKIP_TYPES = new Set(['press', 'digest', 'redirect', 'reclaim']);
+  const IN_TALKS = new Set(['contacted', 'replied', 'won', 'lost', 'rejected', 'ignored']);
+  const kOf = (o) => o.prospect_domain + '|' + o.type;
+  const prospectOf = (o) => myProspects.find(y => y.prospect_domain === o.prospect_domain && y.type === o.type) || {};
+  const put = (row) => { const i = outreach_rows.findIndex(n => kOf(n) === kOf(row)); if (i >= 0) outreach_rows[i] = row; else outreach_rows.push(row); };
+  const again = (o, patch) => { const { checks, ...rest } = patch; return base({ ...o, contacts: jlq(o.contacts_json, []), ...rest, checks: { ...jlq(o.checks_json, {}), ...(checks || {}) } }); };
+  const pageKeys = new Set((p.pages || []).map(x => pathKey(x.url)));
+  const pageOf = (u) => (p.pages || []).find(x => pathKey(x.url) === pathKey(u)) || null;
+  const RULE_ONLY = /^(a competing site of yours|government site|a platform page|a job board|a job listing|a mailbox provider|a contact \/ company database|infrastructure \(|an automatically generated statistics page)/i;
+  for (const o of myOutreach.filter(o => !outreach_rows.some(n => kOf(n) === kOf(o)) && !SKIP_TYPES.has(o.type))) {
+    const pr = prospectOf(o); if (IN_TALKS.has(String(pr.status || ''))) continue;
+    const st = String(o.status || ''); const qctx = { ...ctxQ, spam: pr.spam_score, rank: pr.rank };
+    if (OPEN.has(st)) {
+      const why = OK.requalify(o, qctx);
+      if (why) { put(again(o, { status: 'not_fit', fit_reason: why, reason_code: OK.reasonCode(why), checks: { reasons: [why], requalified: day } })); continue; }
+      const stale = st === 'held' || (!['drafted', 'needs_edit'].includes(st) && o.target_url && pathKey(o.target_url) !== pathKey(p.home) && !pageKeys.has(pathKey(o.target_url)));
+      if (stale) {
+        const tg = OK.pickTarget({ type: o.type === 'ai_source' && /list|best|top/i.test(o.page_title || '') ? 'ai_list' : o.type, text: (o.page_title || '') + ' ' + (o.evidence || ''), topics: p.topics.slice(0, 2).join(' ') }, p.pages, df, docs.length, p.home, brandText, p.domain);
+        const contacts = jlq(o.contacts_json, []);
+        if (tg.hold) { if (st !== 'held') put(again(o, { status: 'held', target_url: '', target_reason: tg.reason, anchor_hint: '', anchor_text: '', fit_reason: tg.reason, reason_code: OK.NO_PAGE, checks: { held: tg.hold } })); }
+        else put(again(o, { status: st === 'held' ? (contacts.length ? 'ready' : 'needs_contact') : st, target_url: tg.url, target_reason: tg.reason, anchor_hint: tg.anchor, anchor_text: tg.anchor_text || '', fit_reason: st === 'held' ? 'a page of yours now covers their topic' : o.fit_reason, reason_code: '' }));
+        continue;
+      }
+      if (!String(o.anchor_text || '') && o.target_url) { const a = OK.anchorText(o.anchor_hint || 'brand', pageOf(o.target_url) || { url: o.target_url, title: '' }, brandText, p.domain); put(again(o, { anchor_hint: a.kind, anchor_text: a.text })); }
+      continue;
+    }
+    if (st === 'not_fit') {
+      const code = String(o.reason_code || '') || OK.reasonCode(o.fit_reason);
+      if (OK.DOMAIN_CODES.has(code) && RULE_ONLY.test(String(o.fit_reason || '').replace(/^the same website is left out: /, ''))) {
+        const still = OK.requalify(o, qctx);
+        if (!still) { put(again(o, { status: 'recheck', fit_reason: 'checked again under the current rules: it is read again in the next run', reason_code: '', checks: { requalified: day, was: String(o.fit_reason || '').slice(0, 200) } })); continue; }
+        if (OK.reasonCode(still) !== code || !o.reason_code) { put(again(o, { fit_reason: still, reason_code: OK.reasonCode(still), checks: { reasons: [still], requalified: day } })); continue; }
+      }
+      if (!o.reason_code && code) put(again(o, { reason_code: code }));
+    }
+  }
+  const finalRows = () => { const m = new Map(); for (const o of myOutreach) m.set(kOf(o), o); for (const o of outreach_rows) m.set(kOf(o), o); return [...m.values()]; };
+  const verdicts = OK.domainVerdicts(finalRows());
+  for (const o of finalRows()) {
+    if (!OPEN.has(String(o.status || '')) || SKIP_TYPES.has(o.type) || IN_TALKS.has(String(prospectOf(o).status || ''))) continue;
+    const v = verdicts.get(LK.regDomain(String(o.prospect_domain || '').toLowerCase().replace(/^www\./, '')));
+    if (!v) continue;
+    const why = ('the same website is left out: ' + v.why.replace(/^the same website is left out: /, '')).slice(0, 600);
+    put(again(o, { status: 'not_fit', fit_reason: why, reason_code: v.code, checks: { reasons: [why], domain_verdict: v.type } }));
+  }
   const ready = [...outreach_rows.filter(o => o.status === 'ready'), ...myOutreach.filter(o => o.status === 'ready' && !o.sequence_json && !outreach_rows.some(n => n.prospect_domain === o.prospect_domain && n.type === o.type))]
     .map(o => ({ ...o, rankv: (Number(o.score) || 0) * (0.5 + Number(o.fit || 0)) })).sort((a, b) => b.rankv - a.rankv);
   // AIR (on only, RC-7): every ready row by expected value (rankv), AI ranking's placements included; at most AIR_PITCH_MAX of them a week, the
@@ -1459,6 +1731,8 @@ for (const p of plans) {
       change_reads: impact_rows.filter(r => r.kind === 'page_change' && !['too_early', 'cant_tell'].includes(r.verdict)).length,
       // B11-2: what our own re-read of the won links found. `won_unchecked` is deliberately its own number: a bot wall is not a lost link.
       won_checked: won_checks.length, won_live: won_checks.filter(w => w.state === 'live').length, won_at_risk: won_checks.filter(w => w.state === 'at_risk').length,
-      won_lost: won_checks.filter(w => w.state === 'lost').length, won_unchecked: won_checks.filter(w => w.state === 'not_checked').length } } });
+      won_lost: won_checks.filter(w => w.state === 'lost').length, won_unchecked: won_checks.filter(w => w.state === 'not_checked').length,
+      // CR17-E (195): new wins (a site we wrote to now links), "won" rows that were not wins, pitches waiting for a page of yours
+      won_new: won_checks.filter(w => w.new_win).length, won_corrected: won_checks.filter(w => w.state === 'not_won').length, no_page: outreach_rows.filter(o => o.status === 'held').length } } });
 }
 return out.length ? out : [{ json: { skip: true } }];

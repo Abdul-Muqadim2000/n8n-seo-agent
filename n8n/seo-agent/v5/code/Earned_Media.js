@@ -67,15 +67,17 @@ for (const p of plans) {
     return { ...e, title, mentions_us, competitors_named: named, contact_email, contact_url, fetch_status, action, action_type: type, value };
   }).sort((a, b) => b.value - a.value);
   // prospects (type ai_source, one row per site + domain): the exact page, what it names, the action; drafts for the 3 most valuable new ones
-  const rows = []; const jobs = [];
+  const rows = []; const jobs = []; const named_now = [];   // CR17-E: pages that name you since this run (an AI-visibility result, never a won link)
   for (const e of items.filter(x => x.kind !== 'competitor').slice(0, 12)) {
     if (rows.some(r => r.prospect_domain === e.host) || airHosts.has(e.host)) continue;   // AIR guard: on only
     const old0 = prospects.find(x => x.site_id === p.site_id && x.prospect_domain === e.host && x.type === 'ai_source') || {}; const old = old0.status === 'drafted' ? { ...old0, status: 'new' } : old0;   // 'drafted' (2026-10-10 runs) is not an app status
     const won = e.mentions_us === true;
+    if (won && !/it names you now/.test(String(old0.detail || ''))) named_now.push({ prospect_domain: e.host, source_url: e.url });
     const kept = DRAFTS.carry(old, { handover: !!p.link_builder });
     const detail = 'AI cites this ' + e.kind + ' ' + e.citations + 'x (' + e.engines.join(', ') + ') for "' + (e.questions[0] || '').slice(0, 90) + '"' + (e.title ? ' — "' + e.title.slice(0, 80) + '"' : '') + (e.competitors_named.length ? '; it names ' + e.competitors_named.join(', ') : '') + (e.mentions_us === false ? ', not you' : won ? '; it names you now' : '');
     const row = { site_id: p.site_id, domain: p.domain, prospect_domain: e.host, type: 'ai_source', rank: Number(old.rank) || 0, spam_score: Number(old.spam_score) || 0, detail: detail.slice(0, 500), source_url: e.url, target_url: old.target_url || '',
-      status: won ? 'won' : (old.status || 'new'), first_seen: old.first_seen || p.checked_at, last_seen: p.checked_at, won_at: won ? (old.won_at || p.checked_at) : (old.won_at || ''),
+      // CR17-E (195): a page that names you is not a WON link (LK.wonCheck: contacted + a link our check found); the mention rides the detail and the app's "names you" mark
+      status: old.status || 'new', first_seen: old.first_seen || p.checked_at, last_seen: p.checked_at, won_at: old.won_at || '',
       outreach_subject: kept.outreach_subject, outreach_body: kept.outreach_body, drafted_at: kept.drafted_at,   // P34-1: a draft written before the D12 / D13 gates, or one handed to the Link Builder, is withdrawn — never offered again
       note: e.action.slice(0, 300), score: Math.min(100, Math.round(e.value * 8)), origin: 'ai_growth', contact_email: old.contact_email || e.contact_email, contact_url: old.contact_url || e.contact_url, contacted_at: old.contacted_at || '',
       followup_step: Number(old.followup_step) || 0, followup_subject: old.followup_subject || '', followup_body: old.followup_body || '', verified_at: old.verified_at || '' };
@@ -137,6 +139,6 @@ for (const p of plans) {
     }
     corrections.push({ claim: c.claim, true_fact: c.true_fact, fact_on_file: c.fact_on_file, status, note, engines: c.engines, is_new: c.is_new, pages, job_n: draft_job ? draft_job.n : null });
   }
-  out.push({ json: { site_id: p.site_id, domain: p.domain, business, earned: items, prospect_rows: rows, outreach_jobs: jobs, corrections } });
+  out.push({ json: { site_id: p.site_id, domain: p.domain, business, earned: items, prospect_rows: rows, outreach_jobs: jobs, corrections, named_now } });
 }
 return out.length ? out : [{ json: { skip: true } }];

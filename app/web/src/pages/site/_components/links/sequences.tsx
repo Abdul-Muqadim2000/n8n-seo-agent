@@ -2,10 +2,10 @@
 // thread) and the replies (class, summary, the reply, the suggested answer sent in the same thread, won / not a fit).
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowDownLeft, ArrowUpRight, CircleSlash, MessageSquareReply, Pause, Pencil, Play, Reply, Send, Square, Trophy } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, CircleSlash, Copy, MailCheck, MessageSquareReply, Pause, Pencil, Play, Reply, Send, Square, Trophy } from 'lucide-react';
 import { replySubject, type LinkBuildingData, type OutreachMessageView, type OutreachSequence, type OutreachStep } from '@seo/shared';
 import { errorMessage, toastError } from '@/lib/api';
-import { useSequenceAction, useSequenceOutcome, useSequenceReply, useUpdateSequence } from '@/lib/queries';
+import { useManualFollowupSent, useSequenceAction, useSequenceOutcome, useSequenceReply, useUpdateSequence } from '@/lib/queries';
 import { cn, fmtAgo, fmtDate, fmtDateTime } from '@/lib/utils';
 import { Collapsible, IconTile } from '@/components/insight';
 import { StatusBadge } from '@/components/ui/badge';
@@ -33,6 +33,8 @@ function nextLine(q: OutreachSequence): string {
   if (q.status === 'paused') return q.error ? `Paused: ${q.error}` : 'Paused: nothing goes out until it is resumed';
   if (q.status === 'scheduled') return `First e-mail goes out in the next sending window${q.nextAt ? ` (from ${fmtDateTime(q.nextAt)})` : ''}`;
   if (q.oooUntil) return `Out of office until ${fmtDate(q.oooUntil)}: the next e-mail waits until then`;
+  // CR17-E (C4a): a pitch the person sends themselves: the follow-up is a reminder, nothing goes out from the app
+  if (q.manual && q.step < n) return q.nextAt && Date.parse(q.nextAt) <= Date.now() ? `Follow-up ${q.step} is due now: send it yourself if there is no reply` : `Follow-up ${q.step} is due ${fmtDate(q.nextAt)}: send it yourself if there is no reply`;
   if (q.step < n) return `Follow-up ${q.step} on ${fmtDate(q.nextAt)} if there is no reply`;
   return `Last e-mail sent: closes without a reply on ${fmtDate(q.nextAt)}`;
 }
@@ -100,9 +102,12 @@ export function InProgress({ d }: { d: LinkBuildingData }) {
 function SequenceRow({ q, onEdit, onStop }: { q: OutreachSequence; onEdit: () => void; onStop: () => void }) {
   const { org, site, can } = useSitePage();
   const act = useSequenceAction(org.id, site.id);
+  const fu = useManualFollowupSent(org.id, site.id);
   const member = can('member');
   const n = q.steps.length;
   const sent = Math.min(q.step, n);
+  const due = q.manual && q.step < n ? q.steps[q.step] : null;
+  const copyFollowup = async () => { try { await navigator.clipboard.writeText(due?.body ?? ''); toast.success('Follow-up copied: send it as a reply in the same thread'); } catch { toast.error('Copying is blocked in this browser'); } };
   const run = (action: 'pause' | 'resume') =>
     act.mutate(
       { id: q.id, action },
@@ -123,7 +128,8 @@ function SequenceRow({ q, onEdit, onStop }: { q: OutreachSequence; onEdit: () =>
             <Kind>{typeLabel(q.type)}</Kind>
           </div>
           <p className="mt-1 text-[13px] text-ink-2 [overflow-wrap:anywhere]">
-            To {q.toEmail}
+            {q.toEmail ? `To ${q.toEmail}` : 'Sent through their contact form'}
+            {q.manual && ' · sent by you from your own e-mail'}
             {q.targetUrl && (
               <>
                 {' · your page '}
@@ -157,7 +163,18 @@ function SequenceRow({ q, onEdit, onStop }: { q: OutreachSequence; onEdit: () =>
               Pause
             </Button>
           )}
-          {q.step < n && (
+          {due && (
+            <>
+              <Button size="sm" variant="secondary" icon={<Copy className="size-3.5" />} onClick={copyFollowup}>
+                Copy follow-up {q.step}
+              </Button>
+              <Button size="sm" variant="ghost" icon={<MailCheck className="size-3.5" />} loading={fu.isPending}
+                onClick={() => fu.mutate({ id: q.id }, { onSuccess: () => toast.success(`${q.prospectDomain}: follow-up ${q.step} recorded`), onError: (e) => toastError(e) })}>
+                I sent follow-up {q.step}
+              </Button>
+            </>
+          )}
+          {q.step < n && !q.manual && (
             <Button size="sm" variant="ghost" icon={<Pencil className="size-3.5" />} onClick={onEdit}>
               Edit the unsent {n - q.step === 1 ? 'e-mail' : 'e-mails'}
             </Button>

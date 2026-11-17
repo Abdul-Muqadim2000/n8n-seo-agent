@@ -777,6 +777,8 @@ export const outreachSequences = pgTable(
     oooUntil: ts('ooo_until'),
     wonAt: ts('won_at'),
     error: text('error').notNull().default(''),
+    /** CR17-E (2026-11-17): sent by a person from their own mail ("I sent it myself"; no mailbox): the sender never sends in it */
+    manual: boolean('manual').notNull().default(false),
     createdAt: created(),
     updatedAt: ts('updated_at').defaultNow().notNull(),
   },
