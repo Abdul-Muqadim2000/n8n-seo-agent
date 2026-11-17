@@ -42,7 +42,10 @@ module.exports = async (ctx) => {
     const one = (label, p, r, f, want, c) => { const d = dx(page(p), r, f, c); cases.push([label, d, want]); return d; };
     const [kIdx, aIdx] = [...ANS.entries()].find(([, a]) => a.inspectionResult.indexStatusResult.verdict === 'PASS');
     one('indexed (a real PASS answer)', { url: W + '/capabilities/business-applications' }, IX.readInspection(aIdx), null, ['', 'none', 'indexed']);
-    one('indexed, not in the sitemap', { url: W + '/about', in_sitemap: false, sources: 'search' }, IX.readInspection(aIdx), null, ['indexed_not_in_sitemap', 'site_fix', 'indexed']);
+    // CR17-C (section 193, F3): "add it to the sitemap" only after our read saw the address answer 200 directly and name itself; unread -> indexed, no advice
+    one('indexed, not in the sitemap (our read: a direct 200)', { url: W + '/about', in_sitemap: false, sources: 'search' }, IX.readInspection(aIdx),
+      IX.readFetch(W + '/about', { statusCode: 200, headers: {}, body: '<html><head><title>About</title></head><body><main>' + 'words '.repeat(300) + '</main></body></html>' }, null), ['indexed_not_in_sitemap', 'site_fix', 'indexed']);
+    one('indexed, not in the sitemap, not read by us yet (CR17-C: no advice until our read)', { url: W + '/about', in_sitemap: false, sources: 'search' }, IX.readInspection(aIdx), null, ['', 'none', 'indexed']);
     one('wait_new: a page we published 5 days ago, unknown to Google', { url: W + '/new', lane: 'new', sources: 'sitemap,ours', published_at: iso(NOW - 5 * DAY) }, R({ coverageState: 'URL is unknown to Google', pageFetchState: 'PAGE_FETCH_STATE_UNSPECIFIED', indexingState: 'INDEXING_STATE_UNSPECIFIED', robotsTxtState: 'ROBOTS_TXT_STATE_UNSPECIFIED' }), null, ['wait_new', 'wait', 'not_indexed']);
     const unk = ansBy('URL is unknown to Google');
     one('unknown_to_google (a real answer, page in the sitemap)', { url: W + '/u' }, IX.readInspection(unk[1]), null, ['unknown_to_google', 'links', 'not_indexed']);

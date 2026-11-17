@@ -430,7 +430,9 @@ const ARL = (() => {
     const after = (t) => !isFinite(reg) || msOf(t) >= reg - DAY;
     const srcRow = (k) => (sources || []).find(s => s && AIRF.urlKey(s.url) === k);
     const pageRow = (k) => (pages || []).find(p => p && AIRF.urlKey(p.url) === k);
-    const gIdx = (k) => S(mget(index && index.google, k)); const bCrawl = (k) => S(mget(((index && index.bing) || bing || {}).crawled, k));
+    // CR17-C (build section 193): an Index coverage value is a state string or { state, cause, action, final_url }
+    const gRow = (k) => { const v = mget(index && index.google, k); return v && typeof v === 'object' ? v : { state: S(v) }; };
+    const gIdx = (k) => S(gRow(k).state); const bCrawl = (k) => S(mget(((index && index.bing) || bing || {}).crawled, k));
     if (L.id === 'L01') { const bl = ((robots || {}).blocked_engines || []).map(S); const at = (robots || {}).read_at;
       if (!robots || !at || !after(at)) return notYet('robots.txt not read since the step was asked');
       const still = (a.engines || []).filter(e => bl.includes(S(e))); return still.length ? notYet('robots.txt still blocks ' + still.join(', ')) : res(true, at, ['robots.txt read ' + isoOf(at).slice(0, 10) + ' allows the AI search bots']); }
@@ -439,7 +441,18 @@ const ARL = (() => {
     if (L.id === 'L03') { const b = (index && index.bing) || bing || {}; if (b.in_account !== true) return notYet('the site is not in the Bing Webmaster account yet');
       const crawled = [...(b.crawled && typeof b.crawled.entries === 'function' ? b.crawled.entries() : Object.entries(b.crawled || {}))].filter(([, t]) => after(t)).sort((x, y) => (x[1] < y[1] ? -1 : 1));
       return crawled.length ? res(true, crawled[0][1], ['in the Bing account; ' + crawled[0][0] + ' crawled ' + S(crawled[0][1]).slice(0, 10)]) : notYet('in the Bing account, no page crawled since'); }
-    if (L.id === 'L04') { const st = gIdx(key); return st === 'indexed' ? res(true, nowMs, ['Google index state of ' + key + ': indexed']) : notYet('Google index state: ' + (st || 'not read')); }
+    // CR17-C (F2): the page moved (Index coverage saw a permanent redirect to a page of the site): the step is refused as "moved", never judged
+    // (learning stays honest); the diagnosis maps the question to the new address, which gets its own step when it needs one
+    if (L.id === 'L04') { const g0 = gRow(key); const to = S(g0.final_url);
+      const pathOf = (u) => S(u).replace(/^[a-z]+:\/\/[^\/?#]+/i, '') || '/';
+      if (S(g0.cause) === 'redirect' && to && AIRF.urlKey(to) !== key && hostOf(to) === hostOf(url)) {
+        const tk = AIRF.urlKey(to); const ts0 = gIdx(tk);
+        return res(null, '', ['moved: ' + key + ' now redirects to ' + tk + (ts0 ? ' (Google index state there: ' + ts0 + ')' : '')],
+          { refused: 'moved: ' + pathOf(url) + ' now redirects to ' + pathOf(to) + '; the new address is what Google should have', moved_to: to, expired: false }); }
+      // a page Index coverage leaves out on purpose (a policy / utility page, an alternate, an intended block, a removed page nothing points to)
+      if (S(g0.action) === 'leave_out' && S(g0.state) !== 'indexed') return res(null, '', ['left out on purpose: ' + key + ' (' + (S(g0.cause) || 'leave_out') + ')'],
+        { refused: 'left out on purpose: ' + pathOf(url) + ' is not a page Google needs (' + (S(g0.cause) || 'left out') + ')', expired: false });
+      const st = gIdx(key); return st === 'indexed' ? res(true, nowMs, ['Google index state of ' + key + ': indexed']) : notYet('Google index state: ' + (st || 'not read')); }
     if (OWN_PAGE.includes(L.id)) { const kw = kwNorm(a.keyword); const rows = (contentLog || []).filter(r => r && S(r.status) === 'published' && S(r.published_url) && (['ai_answer', 'ai_refresh'].includes(S(r.source)) || L.id === 'L06')
         && ((kw && kwNorm(r.keyword) === kw) || (url && AIRF.urlKey(r.published_url) === key)) && after(r.published_at || r.started_at)).sort((x, y) => (S(x.published_at) < S(y.published_at) ? -1 : 1));
       if (!rows.length) return notYet('no published page for this question yet');

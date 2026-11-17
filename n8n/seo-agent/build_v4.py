@@ -14158,6 +14158,34 @@ for _f191, _k191 in (('Finalize_Live_Body.js', 'kept_pct: Math.round('), ('Final
 assert 'delivered_images,' in code('Normalize Input'), 'section 191: Normalize Input does not pass delivered_images'
 log('Client reports 2026-11-16 (section 191): the live page grade says how much of the delivered text is on the live page (kept_pct), part by part why points were lost (live_parts, the longest sentences) and that the next step is on the website; on a live page a direct answer without the label, the template questions section, a flattened table and the site name in the title cost nothing; every run: an FAQ word inside a heading is no second FAQ, an image is no source; the publish check reads the article images (decorative apart, one "no images" check, borrowed images, a background hero, the images we delivered) and records the article tables')
 
+# ---------- section 193 (client report 2026-11-17, CR17-C C3: the audit score is Technical health) ----------
+# The score answered "can our crawl find faults on the site" while the app called it "Health score" and the client read it as "is the site
+# healthy in Google" (90/100 Excellent beside 15 of 23 inspected pages out of Google). Two honest numbers, as Semrush / Ahrefs / Screaming
+# Frog do: Technical health (this score) and Pages in Google (the daily Index coverage, app/shared/src/site-health.ts). The findings that
+# measure Google's decision (GSC_Audit_Findings.js marks them google_state) stay listed and ranked but no longer deduct (no double count),
+# and "All crawled pages are indexable" says what it means.
+patch('Build Site Issues', "// ===== 7. Scoring =====\n", """// CR17-C (build section 193, client report 2026-11-17 C3): a finding that measures Google's decision (google_state: not indexed, a canonical
+// Google chose, rare crawls, impressions without clicks) is listed and ranked but does not change Technical health: it is counted under Pages in
+// Google (the daily Index coverage), once. Marked here, after the merge of duplicate findings, so it also leaves the caps.
+for (const f of findings) if (f && f.google_state === true && f.scoring !== false) { f.scoring = false; f.score_note = 'Google\\'s view, counted under Pages in Google'; }
+// ===== 7. Scoring =====
+""")
+patch('Build Site Issues', "ok(pm.non_indexable === 0, 'All crawled pages are indexable');",
+      "const __gsOut193 = (((input.search_console || {}).not_indexed) || []).length; const __gsOk193 = (((input.search_console || {}).inspections) || []).filter(i => i && !i.error).length;   // CR17-C (section 193)\n"
+      "ok(pm.non_indexable === 0, 'No crawled page blocks indexing (no noindex, no canonical to another page)' + (__gsOut193 ? '. Google has still left ' + __gsOut193 + ' of the ' + __gsOk193 + ' pages it was asked about out of its index: see Indexing' : ''));")
+patch('Build Site Issues', "(isFull ? 'Full SEO health. ' : 'Technical site health only. ') + 'Each category starts at 100. ",
+      "(isFull ? 'Full SEO health. ' : 'Technical health: what our crawl can verify on the site. ') + 'Each category starts at 100. Findings that measure Google\\'s own decision (pages left out of its index, a canonical Google chose, rare crawls, impressions without clicks) are listed but counted under Pages in Google, not in this score. ")
+assert "f.google_state === true && f.scoring !== false" in code('Build Site Issues'), 'section 193: Build Site Issues does not unscore the Google-state findings'
+assert 'f.google_state = true' in code('GSC Audit Findings'), 'section 193: GSC Audit Findings does not mark the Google-state findings'
+_bsi193 = code('Build Site Issues')
+assert _bsi193.index('f.google_state === true && f.scoring !== false') < _bsi193.index('// ===== 7. Scoring ====='), 'section 193: the Google-state findings are unscored after the scoring'
+# F3 / F2: the index kit and the AI ranking kits carry the moved-page rules (inlined by build_index_coverage.py / build_monitors.py; checked here at the source)
+for _f193, _k193 in (('code/_index_kit.js', 'const direct200 = '), ('code/_index_kit.js', 'movedByUs(p, r.last_crawl, c.site)'), ('code/_index_kit.js', 'redirect_status: rs1'),
+                     ('code/Not_Crawled_Check.js', 'const movedKeys = '), ('code/_ai_rank_diag.js', 'const movedTo = '), ('code/_ai_rank_learn.js', "refused: 'moved: '"),
+                     ('code/AI_Rank_Plan.js', "v.refused ? 'refused'"), ('code/IX_Page_Fetch_Requests.js', 'const outside = ')):
+    assert _k193 in _rd0(_f193), 'section 193: ' + _f193 + ' lacks ' + _k193
+log('Client report 2026-11-17 (section 193, CR17-C): the audit score is Technical health (Google-state findings listed, not scored; "No crawled page blocks indexing"); Index coverage files an address our read saw redirect permanently after Google\'s last visit as moved (never "add it to the sitemap"), a 404 / noindex over Google\'s word needs two reads, "missing from the sitemap" only for a direct 200 that names itself; the audit sends redirected addresses out of the sitemap finding; AI ranking follows a moved page and never counts a page left out on purpose as not in Google, and refuses an index step whose page moved')
+
 # =============================================================================
 # 9. WRITE
 # =============================================================================

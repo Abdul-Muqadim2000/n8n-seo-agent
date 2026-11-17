@@ -3637,6 +3637,11 @@ const ARD = (() => {
   const W_ENGINE = { chatgpt: 0.30, ai_overview: 0.15, ai_mode: 0.15, gemini: 0.10, perplexity: 0.12, copilot: 0.10, claude: 0.08, chatgpt_api: 0.05 };
   const ORDER = { unmeasured: -1, S0: 0, S1: 1, S2: 2, S3: 3, S4: 4, S5: 5 };
   const NOT_INDEXED = /^(not_indexed|excluded)$/; const INDEXED = /^(indexed)$/;
+  // CR17-C (build section 193, client report 2026-11-17 F2): an Index coverage row may carry { state, cause, action, final_url }. An address left
+  // out on purpose (moved by a redirect, a policy / utility page, an alternate, an intended noindex / robots block) is never "not in Google":
+  // its state reads 'left_out'. A moved address is followed to where it went (mapped() below).
+  const LEFT_OUT = /^(redirect|low_value|alternate|noindex_intended|robots_intended)$/;
+  const ixState = (v) => { if (v == null) return ''; if (typeof v !== 'object') return lc(v); return LEFT_OUT.test(lc(v.cause)) || lc(v.action) === 'leave_out' ? 'left_out' : lc(v.state); };
   const robotsVerdict = (access, bot) => { const R = (access && access.robots) || {}; const k = Object.keys(R).find(x => lc(x) === lc(bot)); if (!k) return null; const v = R[k] || {};
     const a = v.allowed_root != null ? v.allowed_root : v.allowed; return a === false || /^false$/i.test(S(a)) ? { ok: false, rule: S(v.rule || v.root_rule) } : a === true || /^true$/i.test(S(a)) ? { ok: true, rule: S(v.rule) } : null; };
   const jsOnly = (pg) => { if (!pg) return false; const wr = num(pg.words_raw, null); if (wr == null || wr >= 150) return false;
@@ -3668,16 +3673,22 @@ const ARD = (() => {
     // the client page AIR maps to the question
     const PG = (Array.isArray(pages) ? pages : []).filter(g => g && ours(g.url));
     const G = index && index.google ? asMap(index.google) : new Map();
-    const mapped = (() => {
+    // CR17-C (F2): the address an Index coverage row says this one permanently redirects to, on the site itself ('' = not moved)
+    const movedTo = (u) => { const v = G.get(AIRF.urlKey(u)); if (!v || typeof v !== 'object' || lc(v.cause) !== 'redirect') return ''; const t = S(v.final_url);
+      return t && ours(t) && AIRF.urlKey(t) !== AIRF.urlKey(u) ? t : ''; };
+    const mapped0 = (() => {
       const byQ = PG.find(g => S(g.questions).split(/[\s,|]+/).includes(pid)); if (byQ) return { ...byQ, how: 'question' };
       const tu = S(p.page_url || p.target_url); if (tu && ours(tu)) return { ...(PG.find(g => AIRF.urlKey(g.url) === AIRF.urlKey(tu)) || { url: tu }), how: 'target' };
       const cnt = new Map(); for (const r of rows) for (const c of answerFacts(r, OH).cl) { const u = S(c.url); if (u && hostIn(c.host || u, OH)) cnt.set(AIRF.urlKey(u), [(cnt.get(AIRF.urlKey(u)) || [0])[0] + 1, u]); }
       const top = [...cnt.values()].sort((a, b) => b[0] - a[0])[0]; if (top) return { ...(PG.find(g => AIRF.urlKey(g.url) === AIRF.urlKey(top[1])) || { url: top[1] }), how: 'cited' };
       const kw = S(p.keyword) || S(p.prompt); const pool = PG.map(g => ({ g, text: pathOf(g.url) + ' ' + S(g.title) }));
-      for (const k of G.keys()) if (hostIn('https://' + k, OH) && !pool.some(x => AIRF.urlKey(x.g.url) === k)) pool.push({ g: { url: 'https://' + k }, text: k.replace(/^[^\/]+/, '') });
+      for (const [k, v] of G.entries()) if (hostIn('https://' + k, OH) && (ixState(v) !== 'left_out' || movedTo(k)) && !pool.some(x => AIRF.urlKey(x.g.url) === k)) pool.push({ g: { url: 'https://' + k }, text: k.replace(/^[^\/]+/, '') });
       let best = null; for (const x of pool) { if (pathOf(x.g.url) === '/' ) continue; const s = cover(kw, x.text); if (s >= 0.5 && (!best || s > best.s || (s === best.s && pathOf(x.g.url).length < pathOf(best.g.url).length))) best = { s, g: x.g }; }
       return best ? { ...best.g, how: 'words' } : null; })();
-    const gState = (u) => { const v = G.get(AIRF.urlKey(u)); return v && typeof v === 'object' ? lc(v.state) : lc(v); };
+    // CR17-C (F2): a question mapped to an address that moved follows it to the page it went to (one hop): every step is about the live page
+    const mapped = (() => { if (!mapped0) return null; const t = movedTo(mapped0.url); if (!t) return mapped0;
+      return { ...(PG.find(g => AIRF.urlKey(g.url) === AIRF.urlKey(t)) || { url: t }), how: mapped0.how, moved_from: S(mapped0.url) }; })();
+    const gState = (u) => ixState(G.get(AIRF.urlKey(u)));
     const serpM = serp ? asMap(serp) : new Map(); const braveM = brave ? asMap(brave) : index && index.brave ? asMap(index.brave) : null;
     const bingPos = bingStats && bingStats.positions ? asMap(bingStats.positions) : null;
     const gsc = index && index.gsc ? asMap(index.gsc) : null;
@@ -3715,7 +3726,7 @@ const ARD = (() => {
       if (!read && JS_BLIND.has(e) && jsOnly(mapped)) return { sub: 'js_only', ev: { kind: 'page', url: S(mapped.url), words_raw: num(mapped.words_raw, 0), what: 'little text without JavaScript', at: S(mapped.checked_at) } };
       if (!proof && ix === 'google' && e !== 'perplexity' && G.size) {
         const gscHit = gsc && queries.some(q => num(look(gsc, q), 0) > 0);
-        const siteIdx = [...G.entries()].filter(([k]) => hostIn('https://' + k, OH)); const anyIdx = siteIdx.some(([, v]) => INDEXED.test(v && typeof v === 'object' ? lc(v.state) : lc(v)));
+        const siteIdx = [...G.entries()].filter(([k, v]) => hostIn('https://' + k, OH) && ixState(v) !== 'left_out'); const anyIdx = siteIdx.some(([, v]) => INDEXED.test(ixState(v)));
         const ms = mapped ? gState(mapped.url) : ''; const notIdx = mapped ? NOT_INDEXED.test(ms) || (!ms && siteIdx.length > 0 && !anyIdx) : siteIdx.length > 0 && !anyIdx;
         if (!gscHit && notIdx) return { sub: 'not_indexed', ev: { kind: 'index', url: mapped ? S(mapped.url) : '', state: ms || 'no page of the site indexed', what: mapped ? 'the page for this question is not in Google' : 'no page of the site is in Google' } }; }
       if (!proof && ix === 'bing') { const B = (index && index.bing) || {}; const inAcc = B.in_account; const crawled = B.crawled ? asMap(B.crawled) : new Map();
@@ -4282,7 +4293,9 @@ const ARL = (() => {
     const after = (t) => !isFinite(reg) || msOf(t) >= reg - DAY;
     const srcRow = (k) => (sources || []).find(s => s && AIRF.urlKey(s.url) === k);
     const pageRow = (k) => (pages || []).find(p => p && AIRF.urlKey(p.url) === k);
-    const gIdx = (k) => S(mget(index && index.google, k)); const bCrawl = (k) => S(mget(((index && index.bing) || bing || {}).crawled, k));
+    // CR17-C (build section 193): an Index coverage value is a state string or { state, cause, action, final_url }
+    const gRow = (k) => { const v = mget(index && index.google, k); return v && typeof v === 'object' ? v : { state: S(v) }; };
+    const gIdx = (k) => S(gRow(k).state); const bCrawl = (k) => S(mget(((index && index.bing) || bing || {}).crawled, k));
     if (L.id === 'L01') { const bl = ((robots || {}).blocked_engines || []).map(S); const at = (robots || {}).read_at;
       if (!robots || !at || !after(at)) return notYet('robots.txt not read since the step was asked');
       const still = (a.engines || []).filter(e => bl.includes(S(e))); return still.length ? notYet('robots.txt still blocks ' + still.join(', ')) : res(true, at, ['robots.txt read ' + isoOf(at).slice(0, 10) + ' allows the AI search bots']); }
@@ -4291,7 +4304,18 @@ const ARL = (() => {
     if (L.id === 'L03') { const b = (index && index.bing) || bing || {}; if (b.in_account !== true) return notYet('the site is not in the Bing Webmaster account yet');
       const crawled = [...(b.crawled && typeof b.crawled.entries === 'function' ? b.crawled.entries() : Object.entries(b.crawled || {}))].filter(([, t]) => after(t)).sort((x, y) => (x[1] < y[1] ? -1 : 1));
       return crawled.length ? res(true, crawled[0][1], ['in the Bing account; ' + crawled[0][0] + ' crawled ' + S(crawled[0][1]).slice(0, 10)]) : notYet('in the Bing account, no page crawled since'); }
-    if (L.id === 'L04') { const st = gIdx(key); return st === 'indexed' ? res(true, nowMs, ['Google index state of ' + key + ': indexed']) : notYet('Google index state: ' + (st || 'not read')); }
+    // CR17-C (F2): the page moved (Index coverage saw a permanent redirect to a page of the site): the step is refused as "moved", never judged
+    // (learning stays honest); the diagnosis maps the question to the new address, which gets its own step when it needs one
+    if (L.id === 'L04') { const g0 = gRow(key); const to = S(g0.final_url);
+      const pathOf = (u) => S(u).replace(/^[a-z]+:\/\/[^\/?#]+/i, '') || '/';
+      if (S(g0.cause) === 'redirect' && to && AIRF.urlKey(to) !== key && hostOf(to) === hostOf(url)) {
+        const tk = AIRF.urlKey(to); const ts0 = gIdx(tk);
+        return res(null, '', ['moved: ' + key + ' now redirects to ' + tk + (ts0 ? ' (Google index state there: ' + ts0 + ')' : '')],
+          { refused: 'moved: ' + pathOf(url) + ' now redirects to ' + pathOf(to) + '; the new address is what Google should have', moved_to: to, expired: false }); }
+      // a page Index coverage leaves out on purpose (a policy / utility page, an alternate, an intended block, a removed page nothing points to)
+      if (S(g0.action) === 'leave_out' && S(g0.state) !== 'indexed') return res(null, '', ['left out on purpose: ' + key + ' (' + (S(g0.cause) || 'leave_out') + ')'],
+        { refused: 'left out on purpose: ' + pathOf(url) + ' is not a page Google needs (' + (S(g0.cause) || 'left out') + ')', expired: false });
+      const st = gIdx(key); return st === 'indexed' ? res(true, nowMs, ['Google index state of ' + key + ': indexed']) : notYet('Google index state: ' + (st || 'not read')); }
     if (OWN_PAGE.includes(L.id)) { const kw = kwNorm(a.keyword); const rows = (contentLog || []).filter(r => r && S(r.status) === 'published' && S(r.published_url) && (['ai_answer', 'ai_refresh'].includes(S(r.source)) || L.id === 'L06')
         && ((kw && kwNorm(r.keyword) === kw) || (url && AIRF.urlKey(r.published_url) === key)) && after(r.published_at || r.started_at)).sort((x, y) => (S(x.published_at) < S(y.published_at) ? -1 : 1));
       if (!rows.length) return notYet('no published page for this question yet');
@@ -4889,7 +4913,9 @@ for (const g of gateSites) {
     const prevRun = latest(runsPrev, 'checked_at');
     const access = accessOf(robotsG.find(r => r.site_id === sid));
     const bingIn = bingList === null ? null : bingList.some(x => { const h = rawHost(x.Url); return (h && h === S0(gp.site_host).toLowerCase()) || h.replace(/^www\./, '') === dom; });   // the list read: in it or not; not read: null
-    const index = { google: new Map(bySite(indexAll, sid, dom).map(r => [AIRF.urlKey(r.url), S0(r.state || r.coverage)])),
+    // CR17-C (build section 193, F2): each Index coverage row carries its cause, action and final address, so the diagnosis follows a moved page
+    // and never counts a page left out on purpose as "not in Google"; the L04 check closes a step whose page moved
+    const index = { google: new Map(bySite(indexAll, sid, dom).map(r => [AIRF.urlKey(r.url), { state: S0(r.state || r.coverage), cause: S0(r.cause), action: S0(r.action), final_url: S0(r.final_url) }])),
       bing: { in_account: bingIn, crawled: new Map(aiPages.filter(p => S0(p.bing_crawled_at)).map(p => [AIRF.urlKey(p.url), S0(p.bing_crawled_at)])) },
       brave: fetched && fetched.brave ? new Map(Object.entries(fetched.brave)) : null, cc_captures: fetched && fetched.cc_captures != null ? Number(fetched.cc_captures) : null, gsc };
     const brandKnown = visLast.perception_json ? !!(P(visLast.perception_json, {}) || {}).known : null;
@@ -5043,7 +5069,8 @@ for (const g of gateSites) {
     // every stored action has an exit (INVARIANTS rule 4): verified / not happened from its outcome, `expired` once its window + 14 days passed
     const chosenIds = new Set(a_rows.map(r => r.action_id)); const pendingOc = [];
     for (const o of outcomes) { const a = storedById.get(S0(o.action_id)); if (!a || chosenIds.has(S0(a.action_id))) continue; const v = o.verify || {}; const oc = o.outcome || {};
-      const status = v.happened === true ? (oc.due && oc.verdict && oc.verdict !== 'not_due' ? 'verified' : 'done') : v.happened === false && oc.due ? 'not_happened' : S0(a.status);
+      // CR17-C (F2): verify refuses a step whose page moved (its own reason in verify_json): the step leaves the client's list, never "did not work"
+      const status = v.refused ? 'refused' : v.happened === true ? (oc.due && oc.verdict && oc.verdict !== 'not_due' ? 'verified' : 'done') : v.happened === false && oc.due ? 'not_happened' : S0(a.status);
       if (status === S0(a.status) && !(v.happened === true && !S0(a.happened_at))) continue;
       const row = { ...a, status, happened_at: v.happened === true ? (S0(a.happened_at) || S0(v.at) || nowIso) : S0(a.happened_at), verify_json: J(v), outcome_json: oc.due ? J(oc) : S0(a.outcome_json),
         learned_at: !S0(a.learned_at) && typeof ARL.learnable === 'function' && ARL.learnable(o) ? nowIso : S0(a.learned_at), updated_at: nowIso };

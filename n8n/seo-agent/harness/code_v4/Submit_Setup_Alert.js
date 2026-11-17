@@ -794,7 +794,9 @@ const IX = (() => {
    */
   const readFetch = (url, first, final) => {
     const f = first || {}; const st1 = n0(f.statusCode ?? f.status);
-    const none = { ok: false, blocked: false, block_reason: '', http_status: 0, final_url: '', moved_to: '', noindex: '', page_canonical: '', words: 0, title: '' };
+    const none = { ok: false, blocked: false, block_reason: '', http_status: 0, final_url: '', moved_to: '', noindex: '', page_canonical: '', words: 0, title: '', redirect_status: 0 };
+    // CR17-C (build section 193): the status of the FIRST answer when it redirected (301 / 308 = permanent), so a move is told from a detour
+    const rs1 = st1 >= 300 && st1 < 400 ? st1 : 0;
     if (!st1) return { ...none, error: S((f.error && (f.error.message || f.error)) || 'no answer').slice(0, 160) };
     const hdr = (r, name) => { const h = (r && r.headers) || {}; const k = Object.keys(h).find(x => x.toLowerCase() === name); return k ? S(Array.isArray(h[k]) ? h[k].join(', ') : h[k]) : ''; };
     const blocked = (why) => ({ ...none, ok: true, blocked: true, block_reason: why, http_status: st1, error: '' });
@@ -821,12 +823,12 @@ const IX = (() => {
     }
     const fin = final && n0(final.statusCode ?? final.status) ? final : null;
     const use = (st1 >= 300 && st1 < 400) ? fin : f;
-    if (st1 >= 300 && st1 < 400 && !use) return { ...none, ok: true, http_status: st1, final_url, moved_to, error: '' };   // the hop was not read (off site, or not asked)
+    if (st1 >= 300 && st1 < 400 && !use) return { ...none, ok: true, http_status: st1, final_url, moved_to, redirect_status: rs1, error: '' };   // the hop was not read (off site, or not asked)
     const st2 = n0(use.statusCode ?? use.status);
     if (use !== f) { const w2 = wall(use, st2); if (w2) return blocked(w2); }
     if (use !== f && st2 >= 300 && st2 < 400) {   // a second redirect: we do not follow it; the page redirects (to where the chain points next)
       const loc2 = hdr(use, 'location'); const p2 = parseUrl(/^\//.test(loc2) && !/^\/\//.test(loc2) ? 'https://' + hostOf(final_url || moved_to || url) + loc2 : loc2);
-      return { ...none, ok: true, http_status: st2, final_url: p2 ? 'https://' + p2.host + p2.path + p2.query : (final_url || moved_to), moved_to: '', error: '' };
+      return { ...none, ok: true, http_status: st2, final_url: p2 ? 'https://' + p2.host + p2.path + p2.query : (final_url || moved_to), moved_to: '', redirect_status: rs1, error: '' };
     }
     const sig = (typeof PW !== 'undefined') ? PW.signals(use) : { ok: false };
     const body = S(use.body ?? use.data);
@@ -834,7 +836,7 @@ const IX = (() => {
     const xrRaw = (() => { const h = (use && use.headers) || {}; const k = Object.keys(h).find(x => x.toLowerCase() === 'x-robots-tag'); return k ? h[k] : ''; })();
     const noindex = !sig.ok ? '' : metaNoindex(body) ? 'meta' : xRobotsNoindex(xrRaw) ? 'header' : '';
     return { ok: true, blocked: false, block_reason: '', http_status: st2, final_url, moved_to, noindex,
-      page_canonical: S(sig.canonical).slice(0, 500), words: st2 >= 200 && st2 < 300 ? mainWords(body) : 0, title: S(sig.title).slice(0, 300), error: '' };
+      page_canonical: S(sig.canonical).slice(0, 500), words: st2 >= 200 && st2 < 300 ? mainWords(body) : 0, title: S(sig.title).slice(0, 300), redirect_status: rs1, error: '' };
   };
   /** The next hop of a page read that answered a redirect: only to the site's own domain, rebuilt (E11). '' = not followed. */
   const hopOf = (url, first, site) => {
@@ -981,6 +983,28 @@ const IX = (() => {
    * reading: readInspection / reuseOf / storedReading (or null); fetch: readFetch (or null); p: the merged page (in_sitemap, sources, lane, ...).
    * ctx.sitemap_complete: the sitemap tree was read completely today (E1) - only then is "not in the sitemap" said.
    */
+  /**
+   * CR17-C (build section 193, client report 2026-11-17 F3): the only address that belongs in a sitemap is one whose newest read by us answers
+   * 200 directly (no redirect), carries no noindex and names itself (or nothing) as its canonical. f: today's readFetch (or null: the stored
+   * read on the row). An address we never read is not one (it is read first: IX_Page_Fetch_Requests).
+   */
+  const direct200 = (p, f) => {
+    const x = f ? { fetch_at: 'today', http_status: f.http_status, final_url: f.final_url, noindex: f.noindex, page_canonical: f.page_canonical } : (p || {});
+    const st = n0(x.http_status);
+    return !!S(x.fetch_at) && st >= 200 && st < 300 && !S(x.final_url) && !S(x.noindex) && (!S(x.page_canonical) || same(x.page_canonical, (p || {}).url));
+  };
+  /** CR17-C: a permanent redirect is 301 or 308 (a 302 / 307 is a detour, the address stays). */
+  const PERMANENT = [301, 308];
+  /**
+   * CR17-C: the stored row says WE saw the address move (cause redirect, a final address on the site itself) after Google's last visit
+   * (lastCrawl): until Google reads it again, the move stands over Google's older word (and over impressions of the old address).
+   */
+  const movedByUs = (p, lastCrawl, site) => {
+    const x = p || {}; const fu = S(x.final_url);
+    if (S(x.cause) !== 'redirect' || !fu || same(fu, x.url)) return false;
+    const sameSite = site && S(site.domain) ? own(fu, site) : bare(hostOf(fu)) === bare(hostOf(x.url));
+    return sameSite && ts(x.fetch_at) > 0 && ts(x.fetch_at) > ts(lastCrawl);
+  };
   const diagnose = (p, reading, fetch, ctx) => {
     const c = ctx || {}; const now = n0(c.now);
     const srcs = S(p.sources); const ours = srcs.split(',').includes('ours');
@@ -1021,11 +1045,34 @@ const IX = (() => {
         : S(f.final_url) ? 'redirect' : f.noindex ? 'noindex' : (S(f.page_canonical) && !same(f.page_canonical, p.url) && !same(f.page_canonical, f.moved_to)) ? (p.in_sitemap ? 'canonical_elsewhere' : 'alternate') : '';
       if (hard) cause = hard;
     }
+    // CR17-C (build section 193, F3): Google's reading is only as new as Google's last visit (last_crawl). A permanent redirect (301 / 308) to
+    // a page of the same site that our read saw AFTER that visit is the truth today: the address moved (cause redirect, whatever Google's
+    // older reading said: never "indexed, add it to your sitemap", never a drop-out). A 404 / 410 or a noindex over Google's word needs two
+    // reads on two days, both after Google's visit (one flaky answer must not move an indexed page). The freshness guard: Google's word wins
+    // whenever Google read the page after us. With no read today, a move we stored stands until Google visits again.
+    if (r && cause) {
+      const gLast = ts(r.last_crawl);
+      const sameSite = (u) => !!S(u) && (c.site && S(c.site.domain) ? own(u, c.site) : bare(hostOf(u)) === bare(hostOf(p.url)));
+      if (f) {
+        const fAt = ts(c.fetch_at) || now;
+        if (gLast < fAt && cause !== 'redirect' && cause !== 'redirect_error') {
+          const st = n0(f.http_status); const pv = p._prev || {};
+          if (S(f.final_url) && PERMANENT.includes(n0(f.redirect_status)) && sameSite(f.final_url)) cause = 'redirect';
+          else if (!SOFT.includes(cause) && cause !== 'not_found' && cause !== 'noindex') {
+            const hard2 = (st === 404 || st === 410) ? 'not_found' : f.noindex ? 'noindex' : '';
+            const pAt = ts(pv.fetch_at);
+            const before = hard2 === 'not_found' ? (n0(pv.http_status) === 404 || n0(pv.http_status) === 410) : hard2 === 'noindex' ? !!S(pv.noindex) : false;
+            if (hard2 && before && pAt > gLast && fAt - pAt >= 20 * 3600e3) cause = hard2;
+          }
+        }
+      } else if (cause !== 'redirect' && cause !== 'redirect_error' && movedByUs(p, r.last_crawl, c.site)) cause = 'redirect';
+    }
     if (!cause) return null;   // nothing read: the caller keeps what was stored
     // what the client meant: a block on a page nobody lists, links to or found in Google is intended
     if (cause === 'noindex' && !important) cause = 'noindex_intended';
     if (cause === 'robots') cause = important ? 'robots_blocked' : 'robots_intended';
-    if (cause === 'indexed' && !p.in_sitemap && !isLowValue(p.url, p) && smKnown && c.has_sitemap) cause = 'indexed_not_in_sitemap';
+    // CR17-C (F3): "add it to your sitemap" only for an address that answers 200 directly and names itself (direct200)
+    if (cause === 'indexed' && !p.in_sitemap && !isLowValue(p.url, p) && smKnown && c.has_sitemap && direct200(p, f)) cause = 'indexed_not_in_sitemap';
     // wave 3 (§2.4): a page the client marked important is never a low-value listing either
     if (stateOf(cause) !== 'indexed' && typeOverride(p) !== 'important' && isLowValue(p.url, p) && (SOFT.includes(cause) || cause === 'duplicate_no_canonical' || cause === 'google_chose_other')) cause = 'low_value';
     if ((cause === 'unknown_to_google' || cause === 'discovered_not_crawled') && p.lane === 'new') {
@@ -1140,9 +1187,13 @@ const IX = (() => {
       soft_404: 'Google thinks this page looks empty or like an error page. Add real content, or answer "not found" if the page is gone.',
       server_error: 'Your server answered with an error when this page was read' + (st >= 500 ? ' (' + st + ')' : '') + '. Check the server or the hosting.',
       access_denied: 'This page asks for a login or turns visitors away' + (st === 401 || st === 403 ? ' (' + st + ')' : '') + ', so Google cannot read it. Open it to everyone if you want it in Google.',
+      // CR17-C (F3): a redirect in the sitemap is the one step (take the old address out, list where it goes); an address that moved while
+      // Google still lists it is waiting for Google, never "add it to the sitemap"
       redirect: S(row.action) === 'site_fix'
-        ? 'This address redirects' + (S(row.final_url) ? ' to ' + pathLabel(row.final_url) : '') + '. List the final address in your sitemap instead.'
-        : 'This address redirects to another page. That is normal. Nothing to do.',
+        ? 'This address redirects' + (S(row.final_url) ? ' to ' + pathLabel(row.final_url) : '') + ', so it does not belong in your sitemap. Take it out and list ' + (S(row.final_url) ? pathLabel(row.final_url) : 'the address it redirects to') + ' instead.'
+        : (S(row.verdict) === 'PASS' || covCause(row.coverage) === 'indexed') && S(row.final_url)
+          ? 'Google still shows this old address. It now redirects permanently to ' + pathLabel(row.final_url) + ', and Google swaps the two after its next visit (usually a few days to a few weeks). Nothing to do. Keep the redirect for at least a year.'
+          : 'This address redirects to another page. That is normal. Nothing to do.',
       redirect_error: 'Google could not follow the redirect on this address (a loop, a chain that is too long, or a redirect to a broken address). Fix the redirect so it goes straight to a working page, or answer "not found" if the page is gone.',
       low_value: 'This is a listing, filter, search or account page that does not need to be in Google. Nothing to do.',
       not_checked: 'We could not check this page today' + (S(row._why) ? ' (' + S(row._why).replace(/[.:]+$/, '') + ')' : '') + '. We try again on the next run.',
@@ -1200,7 +1251,8 @@ const IX = (() => {
     fix_seen_at: S(r.fix_seen_at), ask_google: yes(r.ask_google), next_check_at: S(r.next_check_at), sig: rowSig(r), improved_at: S(r.improved_at),
     fix_failed_at: S(r.fix_failed_at), ask_google_at: S(r.ask_google_at), sources: S(r.sources),
     linked_by: S(r.linked_by), asked_google_at: S(r.asked_google_at), google_read_after_ask_at: S(r.google_read_after_ask_at),
-    escalated_at: S(r.escalated_at), indexnow_at: S(r.indexnow_at), type_override: S(r.type_override), link_depth: n0(r.link_depth), linked_n: n0(r.linked_n) });
+    escalated_at: S(r.escalated_at), indexnow_at: S(r.indexnow_at), type_override: S(r.type_override), link_depth: n0(r.link_depth), linked_n: n0(r.linked_n),
+    fetch_at: S(r.fetch_at), http_status: n0(r.http_status), noindex: S(r.noindex), final_url: S(r.final_url) });   // CR17-C: the previous read (two-reads rule)
   /**
    * c: { site, now, stored (seo_index_pages rows), inventory (seo_pages rows), sitemap: { read, complete, urls: [{loc, lastmod, gsc}] },
    * ours: [{url, published_at}], search: searchEvidence() result + { read }, watch: seo_page_watch rows, prev_complete, prev_complete_at }.
@@ -1302,9 +1354,11 @@ const IX = (() => {
       if (smComplete && row.in_sitemap && S(row.cause) === 'indexed_not_in_sitemap') Object.assign(row, { cause: '', action: 'none' });
       if (smComplete && row.in_sitemap && S(row.cause) === 'not_in_sitemap') Object.assign(row, { cause: 'unknown_to_google', action: 'links' });
       // evidence without quota: impressions in the last 28 days of data and no newer inspection saying otherwise
-      if (ev && n0(ev.impr28) > 0 && (row.state === 'unknown' || row.state === 'error' || (row.state !== 'indexed' && S(ev.last_at) > S(row.inspect_at).slice(0, 10)))) {
+      // CR17-C (F3): impressions of an address we saw move after Google's last visit say Google still lists the OLD address, not that it is a
+      // page to keep: the move stands (movedByUs), and only an address that answers 200 directly may be "missing from the sitemap"
+      if (ev && n0(ev.impr28) > 0 && !movedByUs(row, row.last_crawl, site) && (row.state === 'unknown' || row.state === 'error' || (row.state !== 'indexed' && S(ev.last_at) > S(row.inspect_at).slice(0, 10)))) {
         row._search_flip = row.state !== 'unknown';
-        Object.assign(row, { state: 'indexed', evidence: 'search', cause: (!row.in_sitemap && smComplete && smUrls && !isLowValue(row.url, row)) ? 'indexed_not_in_sitemap' : '', action: '', dropped_at: S(pv.dropped_at), fix_seen_at: '', fix_failed_at: '' });
+        Object.assign(row, { state: 'indexed', evidence: 'search', cause: (!row.in_sitemap && smComplete && smUrls && !isLowValue(row.url, row) && direct200(row, null)) ? 'indexed_not_in_sitemap' : '', action: '', dropped_at: S(pv.dropped_at), fix_seen_at: '', fix_failed_at: '' });
         row.action = ACTION[row.cause] || 'none';
         row.indexed_since = S(pv.state) === 'indexed' ? (S(pv.indexed_since) || nowIso) : nowIso;
         row.next_check_at = nextCheck(row, ctx);
@@ -2240,7 +2294,7 @@ const IX = (() => {
   };
 
   return { CFG, key, same, norm, own, safe, parseUrl, siteHost, hostOf, bare, pathOf, depth, isLowValue, LOW_VALUE, robotsSitemaps, parseSitemap, sitemapRoots, sitemapAccept,
-    sitemapQueue, sitemapComplete, searchEvidence, saWindows, readInspection, readingsOf, reuseOf, storedReading, readFetch, hopOf, robotsAllows, mainWords, diagnose, fixSeen, covCause,
+    sitemapQueue, sitemapComplete, searchEvidence, saWindows, readInspection, readingsOf, reuseOf, storedReading, readFetch, hopOf, robotsAllows, mainWords, diagnose, direct200, movedByUs, PERMANENT, fixSeen, covCause,
     stateOf, ACTION, CAUSES, laneOf, anchorOf, noteOf, plan, inProperty, nextCheck, capOf, isGone, askGoogle, homeLinks, linkSuggestions, topicOf, kindOf, parseEvents,
     eventRows, policyText, policyEvent, POLICY_URL, freeze, impactWindows, impactDue, impactCompare, impactNote, PAGE_COLS, rowOut, rowSig, changed, summarize,
     reportMarkdown, groupNote, isoDay, DAY, merge, ts,

@@ -140,7 +140,8 @@ for (const v of inv) {
       else if (imp === 'moved' && !moved) row.action = 'site_fix';
       else if ((row.action === 'wait' || row.action === 'site_fix') && IX.IMPROVABLE.includes(S(row.cause)) && row.state !== 'indexed' && !S(row.fix_seen_at)) row.action = IX.ACTION[S(row.cause)] || 'none';
       // X4: a drop-out is an indexed page Google now leaves out with something to do (never one left out on purpose, a move, or a wait)
-      if (d && !moved && prevState === 'indexed' && (row.state === 'not_indexed' || row.state === 'excluded') && reading && !['leave_out', 'wait'].includes(row.action)) {
+      // CR17-C (build section 193, F3): a permanent move is never a drop-out, also when the sitemap still lists the old address (site_fix)
+      if (d && !moved && prevState === 'indexed' && (row.state === 'not_indexed' || row.state === 'excluded') && reading && !['leave_out', 'wait'].includes(row.action) && S(row.cause) !== 'redirect') {
         row.dropped_at = nowIso; dropped.push({ url: row.url, at: nowIso, cause: row.cause });
       }
       // N2: the next inspection moves only after a GOOGLE reading (an inspection, or the Site Tracker's reused one) - never on a day our own

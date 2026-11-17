@@ -139,7 +139,9 @@ for (const g of gateSites) {
     const prevRun = latest(runsPrev, 'checked_at');
     const access = accessOf(robotsG.find(r => r.site_id === sid));
     const bingIn = bingList === null ? null : bingList.some(x => { const h = rawHost(x.Url); return (h && h === S0(gp.site_host).toLowerCase()) || h.replace(/^www\./, '') === dom; });   // the list read: in it or not; not read: null
-    const index = { google: new Map(bySite(indexAll, sid, dom).map(r => [AIRF.urlKey(r.url), S0(r.state || r.coverage)])),
+    // CR17-C (build section 193, F2): each Index coverage row carries its cause, action and final address, so the diagnosis follows a moved page
+    // and never counts a page left out on purpose as "not in Google"; the L04 check closes a step whose page moved
+    const index = { google: new Map(bySite(indexAll, sid, dom).map(r => [AIRF.urlKey(r.url), { state: S0(r.state || r.coverage), cause: S0(r.cause), action: S0(r.action), final_url: S0(r.final_url) }])),
       bing: { in_account: bingIn, crawled: new Map(aiPages.filter(p => S0(p.bing_crawled_at)).map(p => [AIRF.urlKey(p.url), S0(p.bing_crawled_at)])) },
       brave: fetched && fetched.brave ? new Map(Object.entries(fetched.brave)) : null, cc_captures: fetched && fetched.cc_captures != null ? Number(fetched.cc_captures) : null, gsc };
     const brandKnown = visLast.perception_json ? !!(P(visLast.perception_json, {}) || {}).known : null;
@@ -293,7 +295,8 @@ for (const g of gateSites) {
     // every stored action has an exit (INVARIANTS rule 4): verified / not happened from its outcome, `expired` once its window + 14 days passed
     const chosenIds = new Set(a_rows.map(r => r.action_id)); const pendingOc = [];
     for (const o of outcomes) { const a = storedById.get(S0(o.action_id)); if (!a || chosenIds.has(S0(a.action_id))) continue; const v = o.verify || {}; const oc = o.outcome || {};
-      const status = v.happened === true ? (oc.due && oc.verdict && oc.verdict !== 'not_due' ? 'verified' : 'done') : v.happened === false && oc.due ? 'not_happened' : S0(a.status);
+      // CR17-C (F2): verify refuses a step whose page moved (its own reason in verify_json): the step leaves the client's list, never "did not work"
+      const status = v.refused ? 'refused' : v.happened === true ? (oc.due && oc.verdict && oc.verdict !== 'not_due' ? 'verified' : 'done') : v.happened === false && oc.due ? 'not_happened' : S0(a.status);
       if (status === S0(a.status) && !(v.happened === true && !S0(a.happened_at))) continue;
       const row = { ...a, status, happened_at: v.happened === true ? (S0(a.happened_at) || S0(v.at) || nowIso) : S0(a.happened_at), verify_json: J(v), outcome_json: oc.due ? J(oc) : S0(a.outcome_json),
         learned_at: !S0(a.learned_at) && typeof ARL.learnable === 'function' && ARL.learnable(o) ? nowIso : S0(a.learned_at), updated_at: nowIso };

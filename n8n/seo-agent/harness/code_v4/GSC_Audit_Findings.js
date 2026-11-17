@@ -965,6 +965,13 @@ if (knownUrls.length >= 10 && coveragePct != null && coveragePct < 90) F('Medium
   crawl_coverage.text + '; ' + notCrawled.length + ' known URLs were not reached' + (plan.crawl_limit ? (crawlComplete ? ', although the crawl finished under its limit of ' + plan.crawl_limit + ' pages: no internal link leads to them' : ' (crawl limit ' + plan.crawl_limit + ' pages, the crawl did not finish)') : ''), crawl_coverage.sample_not_crawled, notCrawled.length, 100 - coveragePct);
 else if (knownUrls.length >= 10 && coveragePct != null) works.push(crawl_coverage.text);
 const site_structure = { crawl_coverage, crawled_pages: pages.length, indexable_pages: indexablePages.length, depth_buckets: depthBuckets, within_3_clicks_pct: withDepth ? Math.round(within3 / withDepth * 100) : null, sections: topSections, sitemap: { url: plan.sitemap_url, status: smStatus, urls: sitemapUrls.length, is_index: isIndex, children: childCount }, indexable_not_in_sitemap: notInSitemap.length, sitemap_only: sitemapOnly.length, sitemap_broken: sitemapBroken.length, crawl_complete: crawlComplete };
+// CR17-C (build section 193, client report 2026-11-17 C3): these findings measure GOOGLE's decision about the pages (left out of its index, a
+// canonical Google chose, rare crawls, impressions without clicks), not a fault our crawl can see on the site. They stay listed and ranked;
+// Build Site Issues does not deduct them from Technical health (they are counted under Pages in Google, the daily Index coverage, once).
+const GOOGLE_STATE = new Set(['A large share of important pages is not indexed by Google', 'Some sampled pages are not indexed by Google',
+  'Google chose a different canonical URL than the page itself', 'Google crawls important pages rarely', 'Pages shown in Google but never clicked',
+  'Very low click-through rate for a site ranking on page 1']);
+for (const f of findings) if (f && GOOGLE_STATE.has(f.title)) f.google_state = true;
 // ---- R61 (2026-10-16): the ranking statements built before Search Console was read (Competitor Analysis, Analyze Keywords) said
 // "does not rank in Google's top 10 for any keyword" from DataForSEO's database alone while Google's own data, read here, showed 15
 // queries in the top 10. They now name both sources; the competitor comparison stays provider against provider.
