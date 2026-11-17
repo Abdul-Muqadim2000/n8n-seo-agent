@@ -2666,7 +2666,7 @@
   },
   {
    "name": "approve_in_cycle",
-   "doc": "An item the client approved for this cycle is written in it, after the ladder pages and before any other automatic item, within pages_per_week.",
+   "doc": "An item the client approved for this cycle is written in it, FIRST (before the ladder pages and any other automatic item), within pages_per_week.",
    "level": 1,
    "now": "2026-10-21T10:00:00.000Z",
    "trigger": {
@@ -2811,12 +2811,12 @@
    "expect": {
     "picks": [
      {
-      "keyword": "crm implementation cost uae",
-      "source": "ladder"
-     },
-     {
       "keyword": "crm implementation partner uae",
       "source": "decay"
+     },
+     {
+      "keyword": "crm implementation cost uae",
+      "source": "ladder"
      }
     ],
     "suggestions": [
@@ -2831,7 +2831,7 @@
   },
   {
    "name": "approve_outside_budget",
-   "doc": "An approval does not raise pages_per_week: with one page a week the ladder page comes first.",
+   "doc": "An approval does not raise pages_per_week: with one page a week the client's approval takes the page (approvals first, owner 2026-11-16) and the automatic ladder page waits for the next week.",
    "level": 1,
    "now": "2026-10-21T10:00:00.000Z",
    "trigger": {
@@ -2965,8 +2965,8 @@
    "expect": {
     "picks": [
      {
-      "keyword": "crm implementation cost uae",
-      "source": "ladder"
+      "keyword": "crm implementation partner uae",
+      "source": "decay"
      }
     ],
     "suggestions": [],
@@ -8681,7 +8681,7 @@
   },
   {
    "name": "approval_by_source",
-   "doc": "The same with the approval naming its item (source decay): exactly the decay refresh is written.",
+   "doc": "The same with the approval naming its item (source decay): exactly the decay refresh is written. APPROVALS FIRST (owner 2026-11-16): the client's approval for this cycle is written before the ladder pages and the level's own items (earliest approval first), within pages_per_week.",
    "level": 1,
    "now": "2026-10-21T10:00:00.000Z",
    "trigger": {
@@ -8827,12 +8827,12 @@
    "expect": {
     "picks": [
      {
-      "keyword": "crm implementation cost uae",
-      "source": "ladder"
-     },
-     {
       "keyword": "crm implementation partner uae",
       "source": "decay"
+     },
+     {
+      "keyword": "crm implementation cost uae",
+      "source": "ladder"
      }
     ],
     "suggestions": [],
@@ -10354,7 +10354,7 @@
   },
   {
    "name": "approval_waits_for_profile",
-   "doc": "P1: an approval does not bypass the rule. The approved refresh and the ladder page are both held; the approval is listed as not written with the reason profile.",
+   "doc": "P1: an approval does not bypass the rule. The approved refresh and the ladder page are both held; the approval is listed as not written with the reason profile. The held list keeps the order the run would write them in (approvals first, owner 2026-11-16).",
    "level": 1,
    "now": "2026-10-21T10:00:00.000Z",
    "trigger": {
@@ -10500,12 +10500,12 @@
     "refused": [],
     "held": [
      {
-      "keyword": "crm implementation cost uae",
-      "source": "ladder"
-     },
-     {
       "keyword": "crm implementation partner uae",
       "source": "decay"
+     },
+     {
+      "keyword": "crm implementation cost uae",
+      "source": "ladder"
      }
     ],
     "waiting_for_profile": true,

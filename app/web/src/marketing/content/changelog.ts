@@ -35,6 +35,20 @@ function grouped(sections: ChangelogSection[]): Pick<ChangelogEntry, 'sections' 
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-11-16',
+    version: '4.17',
+    title: 'Pages you approve come first',
+    summary: 'A page you approve in Coming up is now written before the pages the autopilot picks on its own, within your pages a week, and one that does not fit moves to your next plan by itself.',
+    highlights: [
+      'Approved pages take the week first, in the order you approved them, then your keyword ladders and the other automatic pages',
+      'Before the run, Coming up says what an approval moves: "Approving it uses one of this week\'s pages" and which automatic page then moves to next week',
+      'An approved page that does not fit this week is carried to your next plan by itself and written there first, for up to four weeks; you never approve it twice',
+      'Approving never raises your pages a week or your credits for the week, and every safety rule still applies: a page of your website is changed only once a week',
+      'The weekly Coming up e-mail lists the pages carried over and the pages moved to next week',
+    ],
+    features: ['autopilot'],
+  },
+  {
+    date: '2026-11-16',
     version: '4.16',
     title: 'Coming up follows each page after the weekly run',
     summary: 'Once a weekly run is done, Coming up now says what became of each page: written by the run or by you, and whether it is live on your website.',

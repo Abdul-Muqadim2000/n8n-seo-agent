@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import {
   AUTOPILOT_LEVELS,
+  CARRY_APPROVAL_DAYS,
   SKIPS_COLUMNS,
   cycleDateOf,
   engineRowIsDomain,
@@ -74,6 +75,11 @@ export function previewOf(body: Record<string, unknown>): CyclePreview {
         recheck: x.recheck === true || recheckIds.has(S(x.ladder_id)),
         // P1: held until the author profile and the business facts are on file
         ...(x.held === 'profile' ? { held: 'profile' as const } : {}),
+        ...(x.approved === true ? { approved: true } : {}),
+        // an approval would not reach this suggestion (the engine says so; an older engine never marks it)
+        ...(x.not_approvable === true ? { not_approvable: true } : {}),
+        // written on top of the pages a week (an older engine does not mark it: its reason says so)
+        ...(x.on_top === true || /on top of your pages a week/i.test(S(x.why)) ? { on_top: true } : {}),
       }));
   const recheck_ladders = (Array.isArray(body.recheck_ladders) ? body.recheck_ladders : [])
     .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object' && !!S((x as Record<string, unknown>).ladder_id))
@@ -132,7 +138,7 @@ export function plainDetail(v: unknown): string {
 }
 
 /** Why an approval is not written this cycle, in the customer's words (the engine's reason codes and details never reach the page). */
-export function notWrittenMessage(x: { keyword: string; reason: string; detail?: string }): ComingUpNotWritten {
+export function notWrittenMessage(x: { keyword: string; reason: string; detail?: string }, ctx: { pagesPerWeek?: number } = {}): ComingUpNotWritten {
   const q = `"${x.keyword}"`;
   switch (x.reason) {
     case 'ambiguous': {
@@ -144,12 +150,14 @@ export function notWrittenMessage(x: { keyword: string; reason: string; detail?:
     case 'covered_by_live_page':
       return { keyword: x.keyword, reason: 'covered_by_live_page', message: `${q} is not written: a page of your website already answers this search.` };
     case 'budget':
-      return { keyword: x.keyword, reason: 'budget', message: `${q} did not fit in this cycle: your pages a week are already used. Approve it again in a later plan.` };
+      // APPROVALS FIRST (owner 2026-11-16): it is carried to the next plan by itself (carryApprovals), ahead of the automatic pages
+      if (ctx.pagesPerWeek === 0) return { keyword: x.keyword, reason: 'budget', message: `${q} is not written: no pages a week are set for this website. Set them in the website's settings to have pages written.` };
+      return { keyword: x.keyword, reason: 'budget', message: `${q} did not fit in this cycle: this week's pages were already used. We bring it back in your next plan by itself and write it there before the automatic pages, as long as it is still a page we would write.` };
     case 'same_page': {
       // client report 2026-11-16 b: the page this approval would change already has another change this week (another page of the plan, or a
       // run of the last 7 days), and a page is changed once a week
       const where = /^https?:\/\//i.test(S(x.detail)) ? ` (${S(x.detail).replace(/^https?:\/\/[^/]+/i, '') || '/'})` : '';
-      return { keyword: x.keyword, reason: 'same_page', message: `${q} waits: the page of your website it would change${where} already has another change this week, and we change a page only once a week. Approve it again in a later plan.` };
+      return { keyword: x.keyword, reason: 'same_page', message: `${q} waits: the page of your website it would change${where} already has another change this week, and we change a page only once a week. We bring it back in your next plan by itself, as long as it is still a page we would write.` };
     }
     case 'profile':
       return { keyword: x.keyword, reason: 'profile', message: `Your OK for ${q} waits: no page is written until your author profile and business facts are on file (Website settings).` };
@@ -185,7 +193,9 @@ export async function storePreview(org: OrgRow, site: SiteRow, body: Record<stri
   const [row] = await db
     .insert(schema.cyclePreviews)
     .values(values)
-    .onConflictDoUpdate({ target: [schema.cyclePreviews.siteId, schema.cyclePreviews.cycleKey], set: { body, reportId, scheduledFor: values.scheduledFor, receivedAt: values.receivedAt } })
+    // review 2026-11-16: a re-made or re-delivered plan of the same cycle keeps its FIRST arrival time: an approval is "carried" only when it is older
+    // than the plan was first offered, and the pages since the plan are counted from then
+    .onConflictDoUpdate({ target: [schema.cyclePreviews.siteId, schema.cyclePreviews.cycleKey], set: { body, reportId, scheduledFor: values.scheduledFor } })
     .returning();
   return row ?? null;
 }
@@ -196,14 +206,47 @@ export async function latestPreview(siteId: string): Promise<CyclePreviewRow | n
   return (await db.query.cyclePreviews.findFirst({ where: eq(schema.cyclePreviews.siteId, siteId), orderBy: [sql`${schema.cyclePreviews.scheduledFor} desc nulls last`, desc(schema.cyclePreviews.receivedAt)] })) ?? null;
 }
 
-const decisionOf = (skips: SkipRow[], siteId: string, cycleKey: string, key: string): ComingUpItem['decision'] => {
+const decisionOf = (skips: SkipRow[], siteId: string, cycleKey: string, key: string, planAt = Infinity): ComingUpItem['decision'] => {
   const mine = skips
     .filter((r) => S(r.site_id) === siteId && itemKeyOf(S(r.item_key)) === key && (S(r.scope) === 'always' || S(r.cycle_key) === cycleKey))
     .sort((a, b) => S(b.created_at).localeCompare(S(a.created_at)));
   // the engine's rule: a skip beats an approval, whatever the order
   const r = mine.find((x) => S(x.decision) === 'skip') ?? mine[0];
-  return r ? { decision: S(r.decision) === 'approve' ? 'approve' : 'skip', scope: S(r.scope) === 'always' ? 'always' : 'cycle', by: S(r.by), at: S(r.created_at) } : null;
+  if (!r) return null;
+  const approve = S(r.decision) === 'approve';
+  // an approval older than the plan itself was carried to it (carryApprovals keeps the first approval time): nobody can approve a plan before it arrives
+  const carried = approve && S(r.scope) !== 'always' && Date.parse(S(r.created_at)) < planAt;
+  return { decision: approve ? 'approve' : 'skip', scope: S(r.scope) === 'always' ? 'always' : 'cycle', by: S(r.by), at: S(r.created_at), ...(carried ? { carried: true } : {}) };
 };
+
+/**
+ * APPROVALS FIRST (owner 2026-11-16, pure; the engine's order in Cadence_Plan.js): where each page of an upcoming plan stands in this week's pages.
+ * The client's approvals take the pages a week first, the earliest approval first, then the automatic pages in the plan's order; a page written on
+ * top of the pages a week, a skipped one and one held for the profile take none. An approval past the pages is `over` (carried to the next plan);
+ * an automatic page past them is `moved`. An item still waiting for an OK says what approving it would move (`approveMoves`) or that it would wait
+ * (`approveOver`). The run can still hold a page for a reason the plan cannot know (a page changed twice in a week); its report then says why.
+ */
+export function planSlots(o: { items: ComingUpItem[]; suggestions: ComingUpItem[]; room: number; onTop: ReadonlySet<string>; noApprove?: ReadonlySet<string> }): { items: ComingUpItem[]; suggestions: ComingUpItem[] } {
+  const room = Math.max(0, Math.floor(Number(o.room) || 0));
+  const all = [...o.items, ...o.suggestions.filter((s) => !o.items.some((i) => i.itemKey === s.itemKey))];
+  // an approval the engine would not reach (a suggestion marked not approvable) takes no page: the run ignores it
+  const counts = (i: ComingUpItem) => !i.held && i.decision?.decision !== 'skip' && !o.onTop.has(i.itemKey) && !(i.decision?.decision === 'approve' && !i.auto && o.noApprove?.has(i.itemKey));
+  const approved = all.filter((i) => counts(i) && i.decision?.decision === 'approve').sort((a, b) => S(a.decision?.at).localeCompare(S(b.decision?.at)));
+  const autos = o.items.filter((i) => counts(i) && i.auto && i.decision?.decision !== 'approve');
+  const slot = new Map<string, ComingUpItem['slot']>();
+  approved.forEach((i, n) => slot.set(i.itemKey, n < room ? 'this_week' : 'over'));
+  autos.forEach((i, n) => slot.set(i.itemKey, approved.length + n < room ? 'this_week' : 'moved'));
+  const next = room - approved.length - 1;
+  const mark = (i: ComingUpItem): ComingUpItem => {
+    const s = slot.get(i.itemKey);
+    if (s) return { ...i, slot: s };
+    if (!i.canApprove || i.held || i.decision) return i;
+    if (approved.length >= room) return { ...i, approveOver: true };
+    const moved = next >= 0 && next < autos.length ? autos[next] : null;
+    return moved ? { ...i, approveMoves: moved.keyword } : i;
+  };
+  return { items: o.items.map(mark), suggestions: o.suggestions.map(mark) };
+}
 
 /** I3: what the app knows of the plan's run: its writing job, the cycle being worked on, the run's content report and its pages' reports. */
 export interface PlanRun {
@@ -405,10 +448,10 @@ export function comingUpView(o: { site: Pick<SiteRow, 'id' | 'domain'>; preview:
             competitors: Array.isArray(t.competitors) ? t.competitors.map(String) : [],
           }
         : null,
-      decision: decisionOf(o.skips, siteId, p.cycle_key, x.item_key),
+      decision: decisionOf(o.skips, siteId, p.cycle_key, x.item_key, o.preview!.receivedAt.getTime()),
       canSkip: canDecide && !closed,
       // a page waiting for its fresh keyword check is not approvable: the check decides first
-      canApprove: canDecide && !closed && !x.auto && !x.recheck,
+      canApprove: canDecide && !closed && !x.auto && !x.recheck && !x.not_approvable,
       recheck: x.recheck === true,
       held: x.held === 'profile',
     };
@@ -417,8 +460,23 @@ export function comingUpView(o: { site: Pick<SiteRow, 'id' | 'domain'>; preview:
     outcome && i.decision?.decision === 'approve'
       ? { ...i, result: followResult(approvedResult({ keyword: i.keyword, outcome, reported, planned: p.approved_not_written }), i.keyword, o.pages, since, runReq.get(itemKeyOf(i.keyword)) ?? '', o.now, runIds) }
       : i;
-  const items = p.items.map(toItem).map(withResult);
-  const suggestions = p.suggestions.map(toItem).map(withResult);
+  const items0 = p.items.map(toItem).map(withResult);
+  const suggestions0 = p.suggestions.map(toItem).map(withResult);
+  // APPROVALS FIRST: before the run, each page says whether it uses this week's pages (not while nothing is written: pile-up, profile, paused)
+  // the pages written on top of the pages a week: marked by the engine; a plan stored before the mark keeps its level-3 AI page (the last AI pick)
+  // out of the count when the plan says the AI page of the week is on top
+  const onTop = new Set([...p.items, ...p.suggestions].filter((x) => x.on_top).map((x) => x.item_key));
+  const aiPages = o.preview.body.ai_pages && typeof o.preview.body.ai_pages === 'object' ? (o.preview.body.ai_pages as Record<string, unknown>) : null;
+  if (!onTop.size && aiPages?.this_week === true && aiPages?.on_top === true) {
+    const lastAi = [...p.items].reverse().find((x) => x.auto && (x.source === 'ai_answer' || x.source === 'ai_refresh'));
+    if (lastAi) onTop.add(lastAi.item_key);
+  }
+  const slotted =
+    phase === 'upcoming' && !closed && !p.paused_reason && p.waiting_for_profile !== true && p.pages_per_week > 0
+      ? planSlots({ items: items0, suggestions: suggestions0, room: p.budget ? p.budget.room : p.pages_per_week, onTop, noApprove: new Set(p.suggestions.filter((x) => x.not_approvable).map((x) => x.item_key)) })
+      : { items: items0, suggestions: suggestions0 };
+  const items = slotted.items;
+  const suggestions = slotted.suggestions;
   // done: each approved row carries its own result; the list keeps only what no row of the plan shows
   const rowKeys = new Set([...items, ...suggestions].filter((i) => i.result).map((i) => i.itemKey));
   const notWritten = outcome ? [...(reported ?? []), ...(p.approved_not_written ?? [])].filter((x, n, all) => !rowKeys.has(itemKeyOf(x.keyword)) && all.findIndex((y) => itemKeyOf(y.keyword) === itemKeyOf(x.keyword)) === n) : (p.approved_not_written ?? []);
@@ -437,13 +495,13 @@ export function comingUpView(o: { site: Pick<SiteRow, 'id' | 'domain'>; preview:
     suggestions,
     refused: (p.refused ?? []).map((r) => ({ keyword: r.keyword, source: r.source, reason: r.reason, detail: r.detail })),
     // P1: a page held for the author profile and the business facts uses no credits in this cycle
-    autoCredits: items.filter((i) => i.auto && !i.held && i.decision?.decision !== 'skip').reduce((t, i) => t + i.credits, 0),
+    autoCredits: items.filter((i) => i.auto && !i.held && i.decision?.decision !== 'skip' && i.slot !== 'moved').reduce((t, i) => t + i.credits, 0),
     canDecide,
     closed,
     phase,
     outcome,
     ...next,
-    approvedNotWritten: notWritten.map(notWrittenMessage),
+    approvedNotWritten: notWritten.map((x) => notWrittenMessage(x, { pagesPerWeek: p.pages_per_week })),
     recheckLadders: (p.recheck_ladders ?? []).map((r) => ({ ladderId: r.ladder_id, head: r.head, plannedAt: r.planned_at })),
     budget: p.budget ? { pagesPerWeek: p.budget.pages_per_week, spent: p.budget.spent, room: p.budget.room, ladderStartWindow: p.budget.ladder_start_window || null } : null,
     waitingForProfile: p.waiting_for_profile === true,
@@ -541,6 +599,7 @@ export function decisionRow(o: { site: Pick<SiteRow, 'domain'>; preview: CyclePr
   const item = [...p.items, ...p.suggestions].find((x) => x.item_key === key);
   if (!item) throw badRequest('That item is not in the coming plan', { itemKey: 'Not in the plan' });
   if (o.input.decision === 'approve' && item.auto) throw badRequest('This page is written on its own in this cycle already. Skip it if you do not want it.', { decision: 'Already automatic' });
+  if (o.input.decision === 'approve' && item.not_approvable) throw badRequest('This page waits for a later week on its own, so it cannot be approved for this one. Use Write it now if you want it sooner.', { decision: 'Not approvable this week' });
   if (o.input.decision === 'approve' && o.input.scope === 'always') throw badRequest('An approval counts for one cycle. Approve it again in a later plan, or choose a keyword for it.', { scope: 'Approvals are for this cycle' });
   const siteId = n8nSiteId(o.site.domain);
   const row: SkipRow = {
@@ -580,16 +639,21 @@ export async function decideComingUp(site: SiteRow, user: Pick<UserRow, 'email'>
 export function comingUpMail(o: { site: Pick<SiteRow, 'domain' | 'timezone'>; view: ComingUpView; url: string }): { subject: string; title: string; lines: string[]; details: { label: string; value: string }[] } {
   const v = o.view;
   const day = v.scheduledFor ? localDayName(siteTimezone(o.site), v.scheduledFor) : '';
-  const autos = v.items.filter((i) => i.auto);
-  const waits = [...v.items.filter((i) => !i.auto), ...v.suggestions];
+  const autos = v.items.filter((i) => i.auto && i.slot !== 'moved' && i.decision?.decision !== 'skip' && !i.decision?.carried);
+  const moved = v.items.filter((i) => i.auto && i.slot === 'moved');
+  const all = [...v.items, ...v.suggestions.filter((s) => !v.items.some((i) => i.itemKey === s.itemKey))];
+  const carried = all.filter((i) => i.decision?.decision === 'approve' && i.decision.carried);
+  const waits = [...v.items.filter((i) => !i.auto), ...v.suggestions].filter((i) => !i.decision);
   const level = AUTOPILOT_LEVELS.find((l) => l.level === v.level);
   const lines: string[] = [];
   if (v.waitingForKeyword) lines.push('We write nothing for this website until you choose the keyword you want to be found for. Choose it in the app and its first page is written in the next cycle.');
   else if (v.pausedReason === 'pileup') lines.push('Nothing new is written this week: pages we already wrote are waiting for you to publish them. Publish them and the next cycle continues.');
   else if (v.pausedReason === 'site_paused') lines.push('The website is paused, so this cycle writes nothing. Resume it in the app to continue.');
   if (autos.length) lines.push(`Written on their own${day ? ` on ${day}` : ''}: ${autos.map((i) => `"${i.keyword}" (about ${i.credits} credits)`).join(', ')}. Skip any of them in the app if you do not want it.`);
-  if (waits.length) lines.push(`Waiting for your OK: ${waits.slice(0, 6).map((i) => `"${i.keyword}" (about ${i.credits} credits)`).join(', ')}${waits.length > 6 ? ` and ${waits.length - 6} more` : ''}. Approve the ones you want and they are written in this cycle.`);
-  if (!autos.length && !waits.length && !v.waitingForKeyword && !v.pausedReason) lines.push('Nothing is planned to be written this week. Your checks and reports run as usual.');
+  if (carried.length) lines.push(`Carried over from your last plan, and written first${carried.some((i) => i.slot === 'over') ? ' as far as this week\'s pages allow' : ''}: ${carried.map((i) => `"${i.keyword}"`).join(', ')}. You approved ${carried.length === 1 ? 'it' : 'them'} before and ${carried.length === 1 ? 'it' : 'they'} did not fit then. Skip ${carried.length === 1 ? 'it' : 'any of them'} in the app if you no longer want ${carried.length === 1 ? 'it' : 'them'}.`);
+  if (moved.length) lines.push(`Moved to next week because your approved pages come first: ${moved.map((i) => `"${i.keyword}"`).join(', ')}.`);
+  if (waits.length) lines.push(`Waiting for your OK: ${waits.slice(0, 6).map((i) => `"${i.keyword}" (about ${i.credits} credits)`).join(', ')}${waits.length > 6 ? ` and ${waits.length - 6} more` : ''}. Approve the ones you want: approved pages are written first, within your pages a week, and one that does not fit moves to your next plan by itself.`);
+  if (!autos.length && !waits.length && !carried.length && !v.waitingForKeyword && !v.pausedReason) lines.push('Nothing is planned to be written this week. Your checks and reports run as usual.');
   lines.push(`Your autopilot level: ${level ? `${v.level}, ${level.label.toLowerCase()}` : v.level}. You can change it in the website's settings at any time.`);
   return {
     subject: `Coming up${day ? ` on ${day}` : ' this week'} for ${o.site.domain}`,
@@ -598,6 +662,7 @@ export function comingUpMail(o: { site: Pick<SiteRow, 'domain' | 'timezone'>; vi
     details: [
       { label: 'Website', value: o.site.domain },
       { label: 'Written on their own', value: `${autos.length} (about ${v.autoCredits} credits)` },
+      ...(carried.length ? [{ label: 'Carried over and written first', value: String(carried.length) }] : []),
       { label: 'Waiting for your OK', value: String(waits.length) },
     ],
   };
@@ -627,7 +692,95 @@ export async function emailComingUp(org: OrgRow, site: SiteRow, preview: CyclePr
   return sent;
 }
 
-/** A plan just arrived: keep it and e-mail it (the first plan of a cycle only). */
+/** The reasons an approval moves to the next plan by itself: the pages a week were used, or its page already had a change that week. */
+const CARRY_REASONS = new Set(['budget', 'same_page']);
+
+/**
+ * APPROVALS FIRST (owner 2026-11-16, pure): the approvals the previous run reported not written for the pages a week or the one-change-a-week rule,
+ * re-filed for the new plan, so the client never has to approve the same page twice. Each new row keeps the FIRST approval's time and author
+ * (the engine writes the earliest approval first, so a carried page comes before the approvals given since) and is written only when:
+ * the new plan offers the same item (same search, source and ladder) for an OK; the client has decided nothing on it in the new cycle and has
+ * not skipped it for good; and the first approval is younger than CARRY_APPROVAL_DAYS (after that it is the client's to give again).
+ */
+export function carriedApprovals(o: { siteId: string; prevCycleKey: string; reported: CyclePreview['approved_not_written']; skips: SkipRow[]; next: CyclePreview; now: number }): SkipRow[] {
+  const out: SkipRow[] = [];
+  // no pages a week: an approval could never be written, so nothing is carried (the plan says why)
+  if (!(o.next.pages_per_week > 0)) return out;
+  const offered = [...o.next.items, ...o.next.suggestions];
+  const mine = o.skips.filter((r) => S(r.site_id) === o.siteId);
+  for (const x of o.reported ?? []) {
+    if (!CARRY_REASONS.has(S(x.reason))) continue;
+    const key = itemKeyOf(x.keyword);
+    const first = mine
+      .filter((r) => S(r.decision) === 'approve' && S(r.scope) !== 'always' && S(r.cycle_key) === o.prevCycleKey && itemKeyOf(S(r.item_key)) === key && (!S(x.source) || !S(r.source) || S(r.source) === S(x.source)))
+      .sort((a, b) => S(a.created_at).localeCompare(S(b.created_at)))[0];
+    if (!first) continue;
+    const t = Date.parse(S(first.created_at));
+    if (!Number.isFinite(t) || o.now - t > CARRY_APPROVAL_DAYS * 864e5) continue;
+    const item = offered.find((i) => i.item_key === key && (!S(first.source) || S(i.source) === S(first.source)) && (!S(first.ladder_id) || S(i.ladder_id) === S(first.ladder_id)));
+    // written on its own in the new plan already (nothing to approve), waiting for its keyword check first, or out of an approval's reach
+    if (item && (item.auto || item.recheck || item.not_approvable)) continue;
+    // not among the plan's items or its five suggestions: the engine still honours an approval of an item it would offer, so it is carried by the
+    // first approval's own item (it needs its source; the run reports it with its reason when it is no longer offered, and that is never carried)
+    if (!item && !S(first.source)) continue;
+    if (mine.some((r) => itemKeyOf(S(r.item_key)) === key && (S(r.scope) === 'always' ? S(r.decision) === 'skip' : S(r.cycle_key) === o.next.cycle_key))) continue;
+    if (out.some((r) => r.item_key === key)) continue;
+    out.push({
+      key: skipKey(o.siteId, 'cycle', o.next.cycle_key, key),
+      site_id: o.siteId,
+      cycle_key: o.next.cycle_key,
+      item_key: key,
+      decision: 'approve',
+      scope: 'cycle',
+      by: S(first.by).slice(0, 200),
+      created_at: S(first.created_at),
+      source: item ? item.source : S(first.source),
+      ladder_id: item ? item.ladder_id : S(first.ladder_id),
+    });
+  }
+  return out;
+}
+
+/**
+ * The previous cycle's word on the approvals it did not write: the newest content_cadence reports of the newest cycle before `cycleKey`
+ * (their approved_not_written lists, merged).
+ */
+async function previousNotWritten(site: SiteRow, cycleKey: string): Promise<{ prevCycleKey: string; reported: CyclePreview['approved_not_written'] }> {
+  const reps = await db
+    .select({ payload: schema.reports.payload })
+    .from(schema.reports)
+    .where(and(eq(schema.reports.orgId, site.orgId), eq(schema.reports.siteId, site.id), eq(schema.reports.stage, 'content_cadence')))
+    .orderBy(desc(schema.reports.receivedAt))
+    .limit(20);
+  const day = cycleDateOf(cycleKey);
+  const prior = reps.map((r) => S(r.payload.cycle_key)).filter((k) => k && k !== cycleKey && cycleDateOf(k) && cycleDateOf(k) < day);
+  const prevCycleKey = prior.sort((a, b) => cycleDateOf(b).localeCompare(cycleDateOf(a)))[0] ?? '';
+  if (!prevCycleKey) return { prevCycleKey: '', reported: [] };
+  const reported = reps.filter((r) => S(r.payload.cycle_key) === prevCycleKey).flatMap((r) => previewOf({ approved_not_written: r.payload.approved_not_written }).approved_not_written ?? []);
+  return { prevCycleKey, reported };
+}
+
+/** Writes the carried approvals of a plan that just arrived (carriedApprovals). Never throws: a failure leaves the plan as the engine sent it. */
+export async function carryApprovals(site: SiteRow, row: CyclePreviewRow, log: Log, now = Date.now()): Promise<number> {
+  try {
+    const next = previewOf(row.body);
+    if (!next.cycle_key) return 0;
+    const { prevCycleKey, reported } = await previousNotWritten(site, next.cycle_key);
+    if (!prevCycleKey || !(reported ?? []).some((x) => CARRY_REASONS.has(S(x.reason)))) return 0;
+    if (await foreignEngineDomain(site, { fresh: true }).catch(() => 'unknown')) return 0;
+    const rows = carriedApprovals({ siteId: n8nSiteId(site.domain), prevCycleKey, reported, skips: await skipsOf(site, true), next, now });
+    if (!rows.length) return 0;
+    await ensureTable('skips', SKIPS_COLUMNS);
+    for (const r of rows) await upsertRow('skips', [{ columnName: 'key', condition: 'eq', value: r.key }], r as unknown as Record<string, unknown>);
+    log.info({ site: site.domain, cycleKey: next.cycle_key, from: prevCycleKey, carried: rows.map((r) => r.item_key) }, '"Coming up": approvals carried to the new plan');
+    return rows.length;
+  } catch (e) {
+    log.error({ site: site.domain, err: String((e as Error)?.message ?? e) }, '"Coming up": approvals could not be carried to the new plan');
+    return 0;
+  }
+}
+
+/** A plan just arrived: keep it, carry the approvals the last run could not fit, and e-mail it (the first plan of a cycle only). */
 export async function onPreview(org: OrgRow, site: SiteRow, body: Record<string, unknown>, reportId: string, log: Log): Promise<void> {
   const refused = previewRefusal(site, body);
   if (refused) {
@@ -635,5 +788,6 @@ export async function onPreview(org: OrgRow, site: SiteRow, body: Record<string,
     return;
   }
   const row = await storePreview(org, site, body, reportId);
+  if (row) await carryApprovals(site, row, log);
   if (row && !row.emailedAt) await emailComingUp(org, site, row, log);
 }

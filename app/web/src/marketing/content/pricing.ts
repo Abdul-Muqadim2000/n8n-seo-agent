@@ -312,7 +312,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Weekly content cadence', hint: 'Pages for the keywords you choose, written, checked and ready to publish', values: ['1 a week', 'Up to 3 a week', 'Custom'] },
       { label: 'Pages only for keywords you choose', hint: 'Typed by you or picked from suggestions with your chances, searches a month and credits a page; nothing is written until you choose', values: [true, true, true] },
       { label: 'Three autopilot levels', hint: 'Only my keywords; My keywords and keep my pages healthy; Full autopilot', values: [true, true, true] },
-      { label: '"Coming up" before every week', hint: 'Two days ahead: every page that will be written, why and its credits, with Skip or Approve; in the app and by e-mail', values: [true, true, true] },
+      { label: '"Coming up" before every week', hint: 'Two days ahead: every page that will be written, why and its credits, with Skip or Approve (approved pages are written first); in the app and by e-mail', values: [true, true, true] },
       { label: 'New keywords announced two days ahead', hint: 'On Full autopilot; change or skip a keyword before it starts', values: [true, true, true] },
       { label: 'Your own weekly cycle', hint: 'Starts the day you sign up, then every 7 days on that weekday in your time zone; you can move the weekday', values: [true, true, true] },
       { label: 'Autopilot pipeline (Auto / Manual)', hint: 'Several ladders, "Needs you" queue, 4-week calendar', values: [false, true, true] }, // PLACEHOLDER, confirm
