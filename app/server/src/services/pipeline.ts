@@ -33,6 +33,7 @@ import {
   type MonitorsRow,
   type AutomationStatus,
   type AiTargetRow,
+  type PageWatchRow,
   type ContentLogRow,
   type DetectedPage,
   type LadderCard,
@@ -79,7 +80,7 @@ import { todoRecommendations } from './recommendationStates';
 import { siteTasksOf } from './siteTasks';
 import { kiForRecs, kiNeedsYou } from './kiData';   // KI (2026-11-08, A1): its Needs-you items, On websites only
 import type { SiteTask } from '@seo/shared';
-import { ga4Now, gscNow } from './data';
+import { aiDecisionInputs, ga4Now, gscNow, targetStat } from './data';
 import { latestReport, monthSpend, reportsList } from './runs';
 
 // The pipeline of one website: every automation the engine runs for it (in the website's own weekly cycle since 2026-10-19, the daily
@@ -659,7 +660,7 @@ export async function airCacheRowsFor(mode: unknown, siteId: string, read: (key:
 async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: PipelineData; ladders: LadderBuild; rows: { logs: ContentLogRow[]; queries: QueryRow[]; audits: AuditPoint[] } }> {
   const d = site.domain;
   const sid = n8nSiteId(d);
-  const [x, ladders, queries, trends, logs, history, settingsRows, app, , cadenceReport, recentReports, running, aiTargets, sitePages, cyc, engineSite, skips, aiBrands, costTable, monRows, proposals, rechecks, published] = await Promise.all([
+  const [x, ladders, queries, trends, logs, history, settingsRows, app, , cadenceReport, recentReports, running, aiTargets, sitePages, cyc, engineSite, skips, aiBrands, costTable, monRows, proposals, rechecks, published, watchRows] = await Promise.all([
     loadBundle(org, site),
     siteRows<LadderRow>('ladders', d, { max: 1000 }),
     siteRows<QueryRow>('queryHistory', d, { sortBy: 'period_end:desc', max: 4000 }),
@@ -688,6 +689,8 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     db.select().from(schema.keywordProposals).where(and(eq(schema.keywordProposals.siteId, site.id), inArray(schema.keywordProposals.status, ['pending', 'starting']))).orderBy(desc(schema.keywordProposals.createdAt)).catch(() => []),
     db.select().from(schema.ladderRechecks).where(and(eq(schema.ladderRechecks.siteId, site.id), eq(schema.ladderRechecks.paused, true))).catch(() => []),
     siteRows<ContentLogRow>('contentLog', d, { extra: [{ columnName: 'status', condition: 'eq', value: 'published' }], max: 200 }).catch(() => [] as ContentLogRow[]),
+    // CR17 (Q3): the client's own permanent redirects, for the AI-question page list (the same list as the AI visibility page's)
+    siteRows<PageWatchRow>('pageWatch', d, { max: 200 }).catch(() => [] as PageWatchRow[]),
   ]);
   // AIR (2026-11-06, P6): a website whose AI ranking is `on` has the kind-'air' cache rows (kill switch, protect list) read for the cadence mirror;
   // any other website reads nothing more and plans exactly as before
@@ -1066,6 +1069,13 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     running: runningHere,
     activeRuns: ownRuns,
     written: writtenPages(logs, ladders, Date.now(), failedReq, app.runs),
+    // CR17 (Q3, client report 2026-11-17): the write form's AI notice decides on the AI visibility page's own pages and stored questions
+    ...(() => {
+      const aiNext = (automations.find((a) => a.id === 'ai_pulse' && a.state === 'on') ?? automations.find((a) => a.id === 'ai_visibility' && a.state === 'on'))?.nextRunAt ?? '';
+      const aiQ = new Map(app.runs.filter((r) => r.requestId && r.aiQuestion).map((r) => [String(r.requestId), { targetId: r.aiTargetId ?? '', question: r.aiQuestion ?? '' }]));
+      const dec = { ...aiDecisionInputs({ logs, ladders, aiRuns: { questions: aiQ, failed: failedReq }, moves: watchRows, market: site.country ?? '' }), nextAiCheck: aiNext };
+      return { aiPages: dec.written, aiTargets: aiTargets.map((t) => targetStat(t, logs, false, dec)), ...(aiNext ? { nextAiCheck: aiNext } : {}) };
+    })(),
     ladders: ladderSummaries(ladders),
     ladderCards: build.cards,
     needsYou,

@@ -19821,5 +19821,6 @@ await require('./scenarios_cr17_b')({ H, run, mock, store, guard, reset, begin }
 await require('./scenarios_cr17_d')({ H, run, mock, store, guard, reset, begin });   // CR17D1-CR17D8 (client report 2026-11-17, devaicon.com F5 / F10, build section 194): robots.txt as a state, redirects judged by where they land, one alert per condition resolved when it is gone, our rows follow a confirmed move, the Rank Tracker and the publish check know a moved / case-variant address
 await require('./scenarios_cr17_h')({ H, run, mock, store, guard, reset, begin });   // CR17H1-CR17H5 (client report 2026-11-17, F1; package CR17-H, build section 198): the AI-ranking reason in the client's words (arithmetic as score_note), no lever-coded note, no provider dump, no arrow in the site report's index action
 await require('./scenarios_cr17_e')({ H, run, mock, store, guard, reset, begin });   // CR17E1-CR17E5 (client report 2026-11-17, C4 + F9, section 195): the won rule, one verdict per website, our page by topic, real link text, the signer
+await require('./scenarios_cr17_g')({ H, run, mock, store, guard, reset, begin });   // CR17G1-CR17G6 (client report 2026-11-17, package G, section 197): new pages in the site's own folder (LRU.folderFor), the questions a page answers, AI questions settled when a page goes live
 H.report();
 })();

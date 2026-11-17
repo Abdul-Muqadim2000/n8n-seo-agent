@@ -4951,7 +4951,39 @@ const AQ = (() => {
     .replace(/\s*(?:over|at|for|costs?)?\s*(?:US)?\$\s?[0-9][0-9,.]*/g, '')
     .replace(/[—–]/g, ',').replace(/…/g, '.').replace(/[“”]/g, '"').replace(/[‘’]/g, '\'')
     .replace(/\(\s*\)/g, '').replace(/\s+([,.;:])/g, '$1').replace(/,\s*,/g, ',').replace(/\s{2,}/g, ' ').trim();
-  return { FORM_TYPES, pageType, keywordOf, done, DONE, reason, clean, CODES, pathOf };
+  // CR17 (client report 2026-11-17, Q2 / Q3): the LIVE page that answers a question, one rule for every settle (AI Target Settle, AI Growth's
+  // settleOf, the settle at publish time): among the website's published content-log rows, the page whose keyword IS the question's search, or a
+  // ladder's MAIN page whose words the question carries (LRU.questionPage, in the website's market), newest first. o: { domain, market, except
+  // (an address to leave out) }. Needs LRU inlined beside it (null without it).
+  const normD = (d) => S(d).toLowerCase().replace(/^www\./, '');
+  const answeredBy = (kw, logs, o) => { const x = o || {}; if (typeof LRU === 'undefined' || !S(kw).trim()) return null;
+    return (Array.isArray(logs) ? logs : []).filter(l => l && S(l.status) === 'published' && S(l.published_url).trim() && (!x.domain || normD(l.domain) === normD(x.domain))
+      && (!x.except || LRU.urlKey(l.published_url) !== LRU.urlKey(x.except)) && LRU.questionPage(kw, { keyword: l.keyword, rung: l.rung }, x.market || ''))
+      .sort((a, b) => S(b.published_at).localeCompare(S(a.published_at)))[0] || null; };
+  // CR17 (Q3): when a page goes live ("I published a page", publish detection) the questions it answers settle at once ($0), not on the next
+  // weekly settle: devaicon.com's question 37 said "a page is planned" for days after its ladder's main page went live. rows: the content-log rows
+  // just recorded live (log_row: keyword, rung, request_id, published_url, published_at, started_at, domain); targets: the website's stored
+  // questions; o: { market, now }. A question settles to the page when the run that wrote the page carried it (the same request id), or when the
+  // page answers it by the one rule (LRU.questionPage). Only a question waiting for a page (queued), or one whose own run's page this is; a
+  // question being written by another run, won, kept out, skipped or set aside is left alone. -> rows for the settle update (the cadence's
+  // *Settle AI Targets* columns).
+  const settleOnPublish = (rows, targets, o) => { const x = o || {}; const now = S(x.now) || new Date().toISOString(); const out = []; const done0 = new Set();
+    if (typeof LRU === 'undefined') return out;
+    for (const r of (Array.isArray(rows) ? rows : [])) {
+      if (!r || S(r.status) !== 'published' || !S(r.published_url).trim()) continue;
+      for (const t of (Array.isArray(targets) ? targets : [])) {
+        if (!t || !S(t.target_id) || done0.has(S(t.target_id)) || (r.domain && t.domain && normD(r.domain) !== normD(t.domain))) continue;
+        const st = S(t.status); const own = !!S(r.request_id) && S(t.request_id) === S(r.request_id);
+        if (!(st === 'queued' || (own && (st === 'writing' || st === 'written')))) continue;
+        if (!own && !LRU.questionPage(S(t.keyword) || keywordOf(t), { keyword: r.keyword, rung: r.rung }, x.market || '')) continue;
+        const args = { page_url: S(r.published_url), date: day(r.published_at || now) };
+        done0.add(S(t.target_id));
+        out.push({ target_id: S(t.target_id), status: 'written', request_id: S(r.request_id), written_at: S(r.started_at || t.written_at || now), at: now,
+          reason_code: 'live', reason_args: JSON.stringify(args), reason: reason('live', args) + ' Settled when the page was recorded live on ' + day(now) + '.' });
+      }
+    }
+    return out; };
+  return { FORM_TYPES, pageType, keywordOf, done, DONE, reason, clean, CODES, pathOf, answeredBy, settleOnPublish };
 })();
 const AIR_CFG = { H: 25, window_min_days: 28, expire_grace_days: 14, sources_max: 200, actions_max: 300, growth_add_max: 3, protect_days: 28,
   // capacities: ARL's own defaults (own_pages 1 a week, pitches 5, human_new 3, human_open_max 8) in shadow AND on, so the shadow plan is what on would do

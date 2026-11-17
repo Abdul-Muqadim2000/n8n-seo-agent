@@ -9,6 +9,7 @@
 /*__PROMISE_JUDGE__*/
 /*__EXCLUSIONS__*/
 /*__FIT_GATE__*/
+/*__LADDER_RULES__*/
 // Deterministic quality gate for the generated page. v5 adds: banned-phrase (AI cliché) detection, readability (Flesch),
 // term coverage against the competitor term model / brief, specificity, section-length checks, the editor's critique,
 // and a 0-100 CONTENT SCORE. Schema is generated here (page-type aware), never by the model.
@@ -968,7 +969,21 @@ const slashForm = (() => { const ps = (prev.site_urls || []).map(u => String(u |
 const inSiteForm = (u) => { const raw = String(u || ''); if (!/^https?:\/\/[^\/?#]+\/./.test(raw) || /[?#]/.test(raw) || /\.[a-z0-9]{2,5}$/i.test(raw)) return raw;
   return slashForm === true ? raw.replace(/\/*$/, '/') : slashForm === false ? raw.replace(/\/+$/, '') : raw; };
 const ladderPageUrl = (prev.ladder_id && String(prev.ladder_target_url || '').trim() && domain) ? siteUrlOf(domain, String(prev.ladder_target_url).trim().replace(/^https?:\/\/[^\/?#]*/i, '').replace(/^\/+/, '')) : '';   // the stored slash is kept when the site's form is unknown
-const pageUrl = (prev.existing_page && prev.existing_page.url) || inSiteForm(ladderPageUrl || (domain ? siteUrlOf(domain, String(slug || '').replace(/^\/|\/$/g, '')) : '[Page URL]'));
+// client report 2026-11-17 (F4, section 197): a new page that no ladder placed goes into the site's folder for its kind (LRU.folderFor: where the
+// client published the pages we wrote, read by the keyword path's own load of the content log (Load Drafts (Run)), else the site's live
+// page inventory; devaicon.com keeps its service pages under /services/ and its guides under /insights/), the root when nothing says so
+const folderQA = (() => { try {
+  const rowsQA = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error); } catch (e) { return []; } };
+  const domQA = SM.helpers.bare(domain);
+  const mineQA = (r) => !domQA || SM.helpers.bare(String(r.domain || '')) === domQA;
+  // only the content log: a published ladder page has its content-log row too, and a stored rung is read through the fit gate elsewhere
+  const published = rowsQA('Load Drafts (Run)').filter(r => mineQA(r) && String(r.status || '') === 'published' && r.published_url).map(r => ({ url: r.published_url, page_type: r.page_type }));
+  return LRU.folderFor(prev.page_type || 'Service Page', { published, pages: [...((SITE_MODEL && Array.isArray(SITE_MODEL.pages)) ? SITE_MODEL.pages : []).map(p => ({ url: p.url, http_status: p.http_status })), ...(prev.site_urls || []).map(u => ({ url: u }))] });
+} catch (e) { return { folder: '/', why: '' }; } })();
+const slugPathQA = String(slug || '').replace(/^\/|\/$/g, '');
+const ownPathQA = slugPathQA && !slugPathQA.includes('/') && folderQA.folder && folderQA.folder !== '/' ? folderQA.folder.replace(/^\/+/, '') + slugPathQA : slugPathQA;
+const pageUrl = (prev.existing_page && prev.existing_page.url) || inSiteForm(ladderPageUrl || (domain ? siteUrlOf(domain, ownPathQA) : '[Page URL]'));
+const pageUrlWhy = !(prev.existing_page && prev.existing_page.url) && !ladderPageUrl && ownPathQA !== slugPathQA ? folderQA.why : '';
 const h1Text = plain(h1.replace(/^#\s*/, '')) || metaTitle;
 const home = domain ? siteUrlOf(domain, '/') : '[Website URL]';
 const slugId = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -1231,7 +1246,7 @@ return [{ json: { ...prev, output: md, qa_round: round, editor_rounds, meta: { t
     outbound_links: externalUrls.map(e => ({ url: e.url, anchor: e.anchor, host: e.host, tier: e.tier })),   // A-14: every outbound link, for Outbound Link Check
     business_claims, business_promises, promise_check, carried_promises, claims_open, business_names: bizNames, unverified_statistics_own: stats_own,   // A-15 / A-19 / E-CLAIM
     verdict_exclusions, excluded_sections, excluded_sections_kept, protected_restored,   // A-18 / A-17
-    coverage_advice, subtopics_dropped, owner_edits, next_step, body_brackets, page_url: pageUrl,   // D5 / owner edits / placeholder gate (2026-10-21)
+    coverage_advice, subtopics_dropped, owner_edits, next_step, body_brackets, page_url: pageUrl, page_url_why: pageUrlWhy,   // D5 / owner edits / placeholder gate (2026-10-21)
     passed_copy, profile_placeholders, profile_placeholder_fields: PROFILE_PH, placeholders_total: placeholder_count + profile_placeholders,
     keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, question_headings: questionHeadings, answered_questions: answeredQuestions, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),
     source_quality: externalUrls.reduce((m, e) => ({ ...m, [e.tier]: (m[e.tier] || 0) + 1 }), {}), weak_sources_unlinked: [...new Set(weakRepeats)], links_to_add_when_published: plannedLinksQA.map(p => ({ keyword: p.keyword || '', url: p.url, role: p.role, anchor: anchorText(p) })),

@@ -81,6 +81,8 @@ export interface SitePageRow extends DtRow {
    */
   clicks?: number; impressions?: number; position?: number; prev_clicks?: number; yoy_clicks?: number;
   decay_state?: string; decay_pct?: number; decay_lost?: number; decay_kind?: string; decay_basis?: string; measured_at?: string;
+  /** RV-1: what the address answered when last read (0 = never read); CR17 F4 reads it for the site's folders (LRU.folderFor) */
+  http_status?: number; status_at?: string;
 }
 export interface CadenceRow extends DtRow {
   site_id: string; domain: string; pages_per_week: number; status: string; updated_at: string; request_id: string;

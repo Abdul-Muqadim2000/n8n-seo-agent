@@ -2549,9 +2549,77 @@ const LRU = (() => {
     }
     return null;
   };
-  /** the address a new page gets on the site: home + slug(keyword), with the site's trailing-slash form */
-  const plannedUrl = (home, keyword, slash) => { const h = S(home).replace(/\/+$/, ''); const sl = low(keyword).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    return h && sl ? h + '/' + sl + (slash ? '/' : '') : ''; };
+  /** the address a new page gets on the site: home + folder + slug(keyword), with the site's trailing-slash form. `folder` (client report
+   *  2026-11-17 F4): the site's folder for this kind of page (folderFor(...).folder, e.g. '/services/'); none or '/' = the root, as before */
+  const plannedUrl = (home, keyword, slash, folder) => { const h = S(home).replace(/\/+$/, ''); const sl = low(keyword).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const f = S(folder && typeof folder === 'object' ? folder.folder : folder).replace(/^\/*/, '/').replace(/\/+$/, '');
+    return h && sl ? h + (f && f !== '/' ? f : '') + '/' + sl + (slash ? '/' : '') : ''; };
+
+  // ---- client report 2026-11-17 (F4, devaicon.com): the address of a new page follows the site ----
+  // Every address our ladders planned for devaicon.com was at the root (/ai-app-development) while its service pages live under /services/ and
+  // its articles under /insights/: the client published five of six elsewhere and moved its own pages into /services/ with 301s. A new page
+  // now goes where the site puts that kind of page. Two kinds: `service` (service, product, landing, local, category and pillar pages, the
+  // main page of a ladder) and `article` (guides, blog posts, comparisons, case studies, FAQ and AI answer pages). Evidence, newest habit first:
+  //   1. where the client published the pages WE wrote of that kind (the content log's live address, after a permanent redirect the client
+  //      made) and where it moved its own pages (its 301s, the target's folder): the client's own choice;
+  //   2. else the live inventory (sitemap / seo_pages, pages answering): articles = the blog folder holding most of them, services = the
+  //      folder (or the root) holding most pages that are neither articles nor company pages (about, contact, careers, legal ...).
+  // A folder is used only with at least 3 pages behind it and 60% of them; else the root, as before (no change for a site we cannot read).
+  // A service page is never planned in a blog folder (rule 1). Pure: callers pass what they have read.
+  CFG.folder_min = 3; CFG.folder_share = 0.6;
+  CFG.company_segs = ['about', 'about-us', 'company', 'contact', 'contact-us', 'careers', 'career', 'jobs', 'team', 'people', 'privacy', 'privacy-policy', 'cookies',
+    'cookie-policy', 'terms', 'terms-of-service', 'terms-and-conditions', 'legal', 'policies', 'imprint', 'impressum', 'disclaimer', 'accessibility', 'sitemap',
+    'login', 'signin', 'sign-in', 'register', 'signup', 'account', 'cart', 'checkout', 'search', 'thank-you', 'thanks', 'security', 'author', 'authors', 'tag', 'tags', 'category'];
+  const ARTICLE_TYPE = /guide|blog|post|article|compar|case stud|faq|answer|news|how.?to|review/;
+  /** the kind of a page type: 'article' (guides, posts, comparisons, case studies, FAQ, AI answers) or 'service' (everything else) */
+  const classOf = (pageType) => (ARTICLE_TYPE.test(low(pageType)) ? 'article' : 'service');
+  /** the folder of an address: '/services/' for /services/x, '/' for /x ('' for no address or the home page) */
+  const folderOf = (u) => { const s = segs(u); if (!s.length) return ''; return '/' + s.slice(0, -1).map(x => x + '/').join(''); };
+  const blogFolder = (f) => { let s = S(f).split('/').filter(Boolean); if (s.length > 1 && LOCALE.test(s[0])) s = s.slice(1); return s.length > 0 && CFG.blog_dirs.includes(s[0]); };
+  const companyPage = (u) => { const s = segs(u); if (!s.length) return true; let a = s; if (a.length > 1 && LOCALE.test(a[0])) a = a.slice(1);
+    return CFG.company_segs.includes(a[0]) || /^(?:about|contact)-/.test(a[0]); };
+  const gone = (st) => Number(st) >= 300;   // 0 / empty = never read (a sitemap page): it counts as live
+  /** pageType: the new page's type; ev: { published: [{ url, page_type }] (our pages the client published: content log / published ladder rows),
+   *  moves: [{ from, to }] (the client's permanent redirects), pages: [{ url, http_status? } | url] (the live inventory) }
+   *  -> { folder ('/' = the root), kind ('service' | 'article'), basis ('published' | 'inventory' | 'default'), votes, of, why ('' at the root) } */
+  const folderFor = (pageType, ev) => {
+    const x = ev || {}; const kind = classOf(pageType);
+    const pages = (Array.isArray(x.pages) ? x.pages : []).map(p => p && typeof p === 'object' ? { url: S(p.url), st: p.http_status } : { url: S(p), st: null }).filter(p => p.url);
+    const bad = new Set(pages.filter(p => gone(p.st)).map(p => urlKey(p.url)));
+    const moveTo = new Map();
+    for (const m of (Array.isArray(x.moves) ? x.moves : [])) { const a = urlKey(m && m.from), b = urlKey(m && m.to); if (a && b && pathOf(a) !== pathOf(b) && pathOf(b)) moveTo.set(a, S(m.to)); }
+    const fits = (f) => kind === 'article' || !blogFolder(f);
+    const pick = (votes, basis) => {   // votes: Map(url key -> folder)
+      const by = new Map(); for (const f of votes.values()) by.set(f, (by.get(f) || 0) + 1);
+      const of = votes.size; const top = [...by.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+      if (!top || of < CFG.folder_min || top[1] < CFG.folder_share * of) return null;
+      const what = kind === 'article' ? 'guides and articles' : 'service pages';
+      const where = top[0] === '/' ? 'at the top level of the site' : 'under ' + top[0];
+      return { folder: top[0], kind, basis, votes: top[1], of,
+        why: top[0] === '/' ? '' : 'your ' + what + ' live ' + where + ' (' + top[1] + ' of the ' + of + (basis === 'published' ? ' you published or moved recently' : ' on your website') + ')' };
+    };
+    // 1. the client's own choices: our pages it published (at the address they answer now) and its own moves
+    const direct = new Map();
+    for (const p of (Array.isArray(x.published) ? x.published : [])) {
+      if (!p || classOf(p.page_type) !== kind) continue;
+      const k0 = urlKey(p.url); if (!k0) continue;
+      const u = moveTo.get(k0) || S(p.url); const k = urlKey(u);
+      if (!pathOf(u) || (bad.has(k) && !moveTo.has(k0))) continue;   // a page that no longer answers (and was not moved) says nothing
+      const f = folderOf(u); if (f && fits(f)) direct.set(k, f);
+    }
+    for (const [from, to] of moveTo) { const f = folderOf(to); if (!f || companyPage(to) || folderOf(from) === f) continue;
+      if ((blogFolder(f) ? 'article' : 'service') !== kind) continue; direct.set(urlKey(to), f); }
+    const d = pick(direct, 'published'); if (d) return d;
+    // 2. the live inventory: a folder index page (/insights beside /insights/x) and company pages are not pages of either kind
+    const live = pages.filter(p => !gone(p.st) && pathOf(p.url));
+    const dirs = new Set(live.map(p => folderOf(p.url)).filter(f => f && f !== '/'));
+    const inv = new Map();
+    for (const p of live) { const k = urlKey(p.url); if (inv.has(k) || companyPage(p.url) || dirs.has(pathOf(p.url) + '/')) continue;
+      const f = folderOf(p.url); if (!f) continue; const b = blogFolder(f);
+      if (kind === 'article' ? !b : b) continue; inv.set(k, f); }
+    const i = pick(inv, 'inventory'); if (i) return i;
+    return { folder: '/', kind, basis: 'default', votes: 0, of: direct.size || inv.size, why: '' };
+  };
   /** review H5: does this address already rank for the main keyword? o: { rank: { position, url } (the rank check or the ranked pull),
    *  pages: [{ url, queries: [{ query, impressions, position }] }] (Search Console per page) } -> true when the rank reading puts this
    *  address at position <= 30, or Search Console shows it for a search holding every word of the keyword at position <= 30 or with
@@ -2781,7 +2849,7 @@ const LRU = (() => {
       note: 'The supporting pages come from keyword intelligence: ' + heads.length + ' search groups of its last keyword research (' + cur + '), one search per group, with its verdict, page action and Search Console position.' };
   };
 
-  return { CFG, STAGES, COMMERCIAL, kiPool, ranksFor, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, headTarget, oneUrl,
+  return { CFG, STAGES, COMMERCIAL, kiPool, ranksFor, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, classOf, folderOf, folderFor, headTarget, oneUrl,
     stageOf, isCommercial, isDefinitional, definitionalOk, stageText, countryName, market, marketRefusal, verdictStop, stuck, rungState, qWords, sameQuestion, coversHead, isHeadRow, questionPage };
 })();
 // Ladder mode: applies the AI relevance screen, assigns keywords to rungs by difficulty, builds one page per topic
@@ -3366,7 +3434,19 @@ const homeUrl = domain ? siteUrlOf(domain, '/') : '';
 // when there are too few pages to tell).
 const slashFormLP = (() => { const ps = (base.site_urls || []).map(u => String(u || '').replace(/^https?:\/\/[^\/?#]+/i, '').replace(/[?#].*$/, '')).filter(x => x && x !== '/');
   if (ps.length < 3) return true; return ps.filter(x => /\/$/.test(x)).length * 2 > ps.length; })();
-const plannedUrl = (kw) => homeUrl + slug(kw) + (slashFormLP ? '/' : '');
+// client report 2026-11-17 (F4, section 197): a new page goes into the folder where the site puts that kind of page (LRU.folderFor): where the
+// client published the pages we wrote (content log, published ladder rows), where it moved its own pages (the redirects the title read saw),
+// else its live page inventory; the root when nothing says so (as before). Every address devaicon.com's ladders planned was at the root while
+// its service pages live under /services/ and its articles under /insights/.
+const folderEvLP = (() => { const dom = reachDomain(domain);
+  const published = [...rowsOf('Load Content Log (Ladder)').filter(r => reachDomain(r.domain) === dom && String(r.status || '') === 'published' && r.published_url).map(r => ({ url: r.published_url, page_type: r.page_type })),
+    ...rowsOf('Load Domain Ladders').filter(r => reachDomain(r.domain) === dom && String(r.status || '') === 'published' && r.target_url).map(r => ({ url: r.target_url, page_type: r.page_type }))];
+  const moves = (((PAGE_TITLES || {}).redirected) || []).filter(r => r && r.url && r.to).map(r => ({ from: r.url, to: r.to }));
+  const pages = [...(SM.pages(pageModel) || []).map(p => ({ url: p.url, http_status: p.http_status })), ...(base.site_urls || []).map(u => ({ url: u }))];
+  return { published, moves, pages }; })();
+const folderMemoLP = new Map();
+const folderLP = (type) => { const k = LRU.classOf(type); if (!folderMemoLP.has(k)) folderMemoLP.set(k, LRU.folderFor(type, folderEvLP)); return folderMemoLP.get(k); };
+const plannedUrl = (kw, type) => LRU.plannedUrl(homeUrl, kw, slashFormLP, folderLP(type || 'Service Page').folder) || (homeUrl + slug(kw) + (slashFormLP ? '/' : ''));
 
 // ---- one page per topic cluster inside each rung ----
 const LIMIT = { 1: 4, 2: 4, 3: 3 };
@@ -3421,7 +3501,7 @@ const makePages = (list, rung) => {
       supporting: ks.slice(1, 7).map(k => k.keyword),
       keywords: ks.slice(0, 8).map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, intent: k.intent, your_position: k.your_position })),
       total_volume: ks.reduce((s, k) => s + k.volume, 0), traffic_potential: ks.reduce((s, k) => s + (k.traffic_potential || 0), 0),
-      your_position: pos.length ? Math.min(...pos) : null, exists: !!ex, target_url: ex ? ex.url : plannedUrl(p.keyword), existing_source: ex ? ex.source : null, status: ex ? 'improve' : 'new' };
+      your_position: pos.length ? Math.min(...pos) : null, exists: !!ex, target_url: ex ? ex.url : plannedUrl(p.keyword, ptype), existing_source: ex ? ex.source : null, status: ex ? 'improve' : 'new' };
   });
 };
 const bandLabel = (r) => r === 1 ? 'Rung 1: long-tail pages (difficulty up to ' + BAND[1] + ')' : r === 2 ? 'Rung 2: mid-difficulty pages (' + (BAND[1] + 1) + '-' + BAND[2] + ')' : 'Rung 3: strong pages (' + (BAND[2] + 1) + '-' + BAND[3] + ')';
@@ -3508,7 +3588,7 @@ const headExisting = (() => {
     || ('handed in as the page for "' + head + '"' + (ep.matched_by ? ' (matched by its ' + ep.matched_by + ')' : '') + (ep.title ? ': "' + String(ep.title).slice(0, 100) + '"' : ''));
   return { url: ep.url, source: ep.source || 'sitemap', matched_by: ep.matched_by || (same ? pm.matched_by : '') || '', title: ep.title || (same ? pm.title || '' : ''), confidence: conf, evidence: ev };
 })();
-Object.assign(top, { exists: !!headExisting, target_url: headExisting ? headExisting.url : plannedUrl(head), existing_source: headExisting ? headExisting.source : null, status: headExisting ? 'improve' : 'new',
+Object.assign(top, { exists: !!headExisting, target_url: headExisting ? headExisting.url : plannedUrl(head, 'Service Page'), existing_source: headExisting ? headExisting.source : null, status: headExisting ? 'improve' : 'new',
   existing_confidence: headExisting && headExisting.confidence != null ? headExisting.confidence : null, existing_evidence: headExisting ? (headExisting.evidence || '') : '',
   may_overlap: !headExisting && mayOverlapLP.has(head) ? mayOverlapLP.get(head) : null });   // K8: a weak candidate is named, never planned over
 
@@ -3532,7 +3612,7 @@ const target_guard = [];
     if (r.published_url) own(r.published_url, r.keyword, 'a page published for it'); else if (r.existing_page_url) own(r.existing_page_url, r.keyword, 'a page written for it'); }
   const guardT = (p, label) => { if (!p || !p.exists || !p.target_url) return; const os = owned.get(ukeyT(p.target_url)); if (!os) return;
     const mine = [p.keyword, ...(p.supporting || [])]; if (os.some(o => mine.some(k => sameT(k, o.keyword)))) return;
-    const o = os[0]; const was = p.target_url; const nu = plannedUrl(p.keyword);
+    const o = os[0]; const was = p.target_url; const nu = plannedUrl(p.keyword, p === top ? 'Service Page' : p.page_type);
     if (ukeyT(nu) === ukeyT(was)) return;
     Object.assign(p, { exists: false, target_url: nu, existing_source: null, status: 'new', existing_confidence: null, existing_evidence: '',
       not_overwritten: { url: was, keyword: o.keyword, owner: o.by } });
@@ -3839,7 +3919,7 @@ const head_guard = (() => { if (!planned) return null;
     Object.assign(top, { target_url: homeUrl, exists: true, status: 'improve', existing_source: 'ranking', existing_confidence: null, existing_evidence: 'it ranks #' + homeRankLP, status_override: 'published', manual_only: true, note: text });
     return { reason: 'home_ranks', was: was || homeUrl, to: homeUrl, exists: true, kept: true, manual: true, position: homeRankLP, text }; }
   if (!top.target_url) return null;
-  if (isHomeLP(top.target_url)) { const to = plannedUrl(head); Object.assign(top, { target_url: to, exists: false, status: 'new', existing_source: null, existing_confidence: null, existing_evidence: '' });
+  if (isHomeLP(top.target_url)) { const to = plannedUrl(head, 'Service Page'); Object.assign(top, { target_url: to, exists: false, status: 'new', existing_source: null, existing_confidence: null, existing_evidence: '' });
     return { reason: 'home', was: homeUrl || '/', to, exists: false, text: 'the home page is never rewritten as the main page of a ladder: the main page gets its own address, ' + LRU.pathOf(to) }; }   // F-05
   const headStage = LRU.stageOf(head, top.intent || '', kiStageOf.get(head) || '');
   if (LRU.isBlog(top.target_url) && !['solution', 'compare', 'hire'].includes(headStage)) return null;
@@ -3850,7 +3930,7 @@ const head_guard = (() => { if (!planned) return null;
       text: LRU.pathOf(top.target_url) + ' already ranks for "' + head + '", so the main page improves it (retitled towards the buying search) instead of a second page that would compete with it' }; }
   const nonBlog = { ...pageModel, pages: SM.pages(pageModel).filter(p => p && p.url && !LRU.isBlog(p.url) && !LRU.copyOf(p.url, knownLP)) };
   let com = null; try { com = SM.matchPage(nonBlog, head); } catch (e) { com = null; }
-  const g = LRU.headTarget(top.target_url, { known: knownLP, home: homeUrl, planned: plannedUrl(head), commercial: com && com.url ? com.url : '' });
+  const g = LRU.headTarget(top.target_url, { known: knownLP, home: homeUrl, planned: plannedUrl(head, 'Service Page'), commercial: com && com.url ? com.url : '' });
   if (!g || !g.to) return null;
   // re-review N1: only a "-2" / "-copy" copy of the original is a redirect step for the client once the main page is live (Ladder Rows
   // stores "moved from <old>" in the main page's target_why; the app turns it into the site task indexing:merge), and never when the old
@@ -3863,7 +3943,7 @@ const head_guard = (() => { if (!planned) return null;
   Object.assign(top, { target_url: g.to, exists: !!g.exists, status: g.exists ? 'improve' : 'new', existing_source: g.exists ? 'sitemap' : null,
     existing_confidence: g.exists && com && LRU.urlKey(com.url) === LRU.urlKey(g.to) ? (com.confidence ?? null) : null, existing_evidence: g.exists ? (com && LRU.urlKey(com.url) === LRU.urlKey(g.to) ? com.evidence || '' : 'the original of ' + LRU.pathOf(g.was)) : '' });
   return g; })();
-const one_url = planned ? LRU.oneUrl([top, ...rungPages], (kw) => plannedUrl(kw)) : { pages: [], moved: [] };
+const one_url = planned ? LRU.oneUrl([top, ...rungPages], (kw) => plannedUrl(kw, kw === top.keyword ? 'Service Page' : ((rungPages.find(x => x && x.keyword === kw) || {}).page_type || 'Service Page'))) : { pages: [], moved: [] };
 if (planned) { const keepK = new Set(one_url.pages.filter(Boolean).map(p => p.keyword)); for (const r of rungs) r.pages = r.pages.filter(p => keepK.has(p.keyword)); rungPages = rungs.flatMap(r => r.pages); }
 // what each page is and why it sits at its address, in the client's words (the app's ladder page shows it per rung)
 for (const p of (planned ? [...rungPages, top] : [])) {
@@ -3873,13 +3953,16 @@ for (const p of (planned ? [...rungPages, top] : [])) {
     : p.not_overwritten ? 'a new page at ' + path + ': ' + LRU.pathOf(p.not_overwritten.url) + ' is already the page for "' + p.not_overwritten.keyword + '"'
     : (p === top && head_guard) ? head_guard.text
     : 'a page you do not have yet, at ' + path;
+  // F4 (section 197): a new page in the site's own folder says why it sits there
+  const fw = !p.exists ? folderLP(p === top ? 'Service Page' : p.page_type) : null;
+  if (fw && fw.why && fw.folder !== '/' && path.indexOf(fw.folder) === 0 && !/^stopped:/.test(String(p.target_why || ''))) p.target_why += ': ' + fw.why;
   p.action = p.exists ? 'improve' : 'new';
 }
 // rule 3: the market this ladder is measured in (Ladder Duplicate (Words) refused a run whose market contradicts it before anything was paid)
 const marketLP = (() => { let site = {}; try { site = ($('Load Site (Market Check)').all().map(i => i.json || {}).find(r => r && !r.error && r.site_id) || {}); } catch (e) { site = {}; }
   const siteIso = String(site.country_iso || '') || ((LRU.CFG.countries && Object.keys(LRU.CFG.countries).find(k => LRU.CFG.countries[k] === String(site.country || ''))) || '');
   return LRU.market({ keyword: head, site_iso: siteIso, request_iso: String(base.country_iso || '') }); })();
-const ladder_rules = { version: 'ladder-1', market: marketLP, head_guard, one_url: one_url.moved, steps: { ...replanLP, stages: planned ? [...rungPages, top].map(p => ({ keyword: p.keyword, rung: p.rung, stage: p.stage })) : [] },
+const ladder_rules = { version: 'ladder-1', market: marketLP, head_guard, folders: planned ? { service: folderLP('Service Page'), article: folderLP('Guide') } : null, one_url: one_url.moved, steps: { ...replanLP, stages: planned ? [...rungPages, top].map(p => ({ keyword: p.keyword, rung: p.rung, stage: p.stage })) : [] },
   definitional: definitionalLP, stopped: stoppedLP.map(p => ({ keyword: p.keyword, rung: p.rung, reason: p.stop.reason, source: p.stop.source })), ki_pool: KI_LP ? { used: !!KI_LP.used, reason: KI_LP.reason || '', rows: (KI_LP.rows || []).length, run_id: KI_LP.run_id || '' } : null };
 // ---- R22 (2026-10-14, FIX_PLAN.md §3.12): a rung page may never carry a word target of 0 ----
 // The rung rows of exec 549 carried `target_words: 0`, so *Spawn Page Runs* passed `ladder_words: 0` and the clamp protected only the

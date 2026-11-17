@@ -412,9 +412,21 @@ for (const s of list) {
   const knownC = (() => { const m = new Map(); for (const r of pageRows.filter(r => r.site_id === s.site_id)) if (r.url && !m.has(LRU.urlKey(r.url))) m.set(LRU.urlKey(r.url), { url: String(r.url), title: String(r.title || r.h1 || '') });
     for (const o of ownersC) if (o.url && !m.has(LRU.urlKey(o.url))) m.set(LRU.urlKey(o.url), { url: String(o.url), title: '' }); return [...m.values()]; })();
   const pagesQ = pageRows.filter(r => r.site_id === s.site_id).map(r => ({ url: r.url, queries: (() => { try { const q = JSON.parse(r.queries_json || '[]'); return Array.isArray(q) ? q : []; } catch (e) { return []; } })() }));
+  // client report 2026-11-17 (F4, section 197): a page that gets its own address gets it in the site's folder for its kind (LRU.folderFor: where the
+  // client published our pages, else its live inventory; the root when nothing says so). A rung planned before that rule at the root of a
+  // site that keeps that kind of page in a folder (devaicon.com: /ai-app-development, its service pages live under /services/) is written at
+  // the folder address; the Rank Tracker and publish detection follow the row as before. Mirror: app/server/src/services/cadence.ts.
+  const folderEvC = { published: [...slog.filter(l => String(l.status || '') === 'published' && l.published_url).map(l => ({ url: l.published_url, page_type: l.page_type })),
+      ...lrows.filter(r => String(r.status || '') === 'published' && r.target_url).map(r => ({ url: r.target_url, page_type: r.page_type }))],
+    pages: pageRows.filter(r => r.site_id === s.site_id).map(r => ({ url: r.url, http_status: r.http_status })) };
+  const folderMemoC = new Map();
+  const folderC = (type) => { const k = LRU.classOf(type); if (!folderMemoC.has(k)) folderMemoC.set(k, LRU.folderFor(type, folderEvC)); return folderMemoC.get(k); };
   const addressOf = (l, x) => { const was = String(l.target_url || ''); const exists = l.page_exists === true || l.page_exists === 'true';
     const home = (was.match(/^https?:\/\/[^\/?#]+/i) || [''])[0] || ''; const slash = /\/$/.test(was);
-    const own = (u) => LRU.plannedUrl(home, l.keyword, slash) || u;
+    const fo = folderC(isTop(l) ? 'Service Page' : (l.page_type || 'Service Page'));
+    const own = (u) => LRU.plannedUrl(home, l.keyword, slash, fo.folder) || u;
+    if (!exists && was && fo.folder !== '/' && !['published', 'merged'].includes(String(l.status || '')) && LRU.urlKey(was) === LRU.urlKey(LRU.plannedUrl(home, l.keyword, slash))) {
+      const nu = own(was); if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu, note: 'a new page at ' + LRU.pathOf(nu) + ', not ' + LRU.pathOf(was) + ': ' + fo.why }; }
     if (isTop(l)) { const orig = exists ? LRU.copyOf(was, knownC) : '';
       if (orig) return { existing: orig, target: orig, note: LRU.pathOf(was) + ' is a copy of ' + LRU.pathOf(orig) + ': the main page improves the original' };
       // review H5: a blog address that ranks for the main keyword (the Rank Tracker's last readable position, or Search Console) keeps it

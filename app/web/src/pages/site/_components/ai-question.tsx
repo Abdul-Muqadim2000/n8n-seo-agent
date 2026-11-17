@@ -7,7 +7,7 @@ import { ButtonLink } from '@/components/ui/button';
 import { useSitePage } from './kit';
 
 /** What the resolver reads from the AI page's data. */
-export function aiInputsOf(d: Pick<AiData, 'prompts' | 'report' | 'growth' | 'pagesWritten'>, market: string): AiQuestionInputs {
+export function aiInputsOf(d: Pick<AiData, 'prompts' | 'report' | 'growth' | 'pagesWritten' | 'ladderHeads' | 'nextAiCheck'>, market: string): AiQuestionInputs {
   return aiQuestionInputsOf(d, market);
 }
 

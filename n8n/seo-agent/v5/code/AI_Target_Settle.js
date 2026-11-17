@@ -46,9 +46,18 @@ for (const t of writing) {
   // a ladder page's log row carries its rung (4 = the ladder's main page), so no ladder row is read here
   const mkt = String((siteRows.find(r => (t.site_id && r.site_id === t.site_id) || (t.domain && String(r.domain || '') === String(t.domain))) || {}).country || '');
   if (l && String(l.source || '') === 'ladder' && tk && lk && !LRU.questionPage(tk, { keyword: lk, rung: l.rung }, mkt)) {
-    out.push({ json: { target_id: t.target_id, status: 'queued', request_id: '', written_at: '', at: now, reason_code: 'new_page', reason_args: JSON.stringify({ keyword: lk }),
-      reason: 'The page written last time was for another search ("' + lk + '"), so the question is queued for a page of its own.' } });
-    continue; }
+    // client report 2026-11-17 (CR17 Q2, section 197): the page the question was folded into was written to answer it (it carries the question's
+    // section). A live page that owns the question's own search (the same search, or its ladder's main page) answers it now; else the page
+    // written for it keeps it once it is live; a page not live yet puts the question back in the queue (as before)
+    const owner = AQ.answeredBy(tk, logs, { domain: t.domain, market: mkt, except: l.published_url });
+    if (owner) { const oa = { page_url: String(owner.published_url || ''), date: String(owner.published_at || '').slice(0, 10) };
+      out.push({ json: { target_id: t.target_id, status: 'written', at: now, request_id: String(owner.request_id || ''), written_at: String(owner.started_at || t.written_at || now),
+        reason_code: 'live', reason_args: JSON.stringify(oa), reason: AQ.reason('live', oa) + ' Checked against the page on record on ' + now.slice(0, 10) + '.' } });
+      continue; }
+    if (st !== 'published') {   // only a LIVE page written for the question keeps it (a draft waits for AI Growth's plan, which may give it a ladder page)
+      out.push({ json: { target_id: t.target_id, status: 'queued', request_id: '', written_at: '', at: now, reason_code: 'new_page', reason_args: JSON.stringify({ keyword: lk }),
+        reason: 'The page written last time was for another search ("' + lk + '"), so the question is queued for a page of its own.' } });
+      continue; } }
   if (st === 'held') {   // review 2026-11-16 (L4): held for the client's OK, nothing is being written: queued again, said in plain words
     const hu = (String(l.qa_reasons || '').match(/https?:\/\/[^\s,;]+/) || [''])[0].replace(/[.)]+$/, '');
     out.push({ json: { target_id: t.target_id, status: 'queued', request_id: '', written_at: '', at: now, reason_code: hu ? 'same_search_page' : 'new_page', reason_args: JSON.stringify(hu ? { page_url: hu, keyword: tk } : {}),

@@ -214,7 +214,12 @@ for (const s of sites) {
     const lr = t.request_id ? logByReq.get(String(t.request_id)) : null;
     const headOf = (l) => String((lrowsAll.find(r => String(r.ladder_id || '') === String(l.ladder_id || '') && r.head_keyword) || {}).head_keyword || '');
     const otherSearch = (l) => !!l && String(l.source || '') === 'ladder' && !!kw && !!l.keyword && !LRU.questionPage(kw, { keyword: l.keyword, rung: l.rung, head_keyword: headOf(l) }, market);
-    if ((st === 'writing' || st === 'written') && otherSearch(lr)) return { ...t, status: 'queued', request_id: '', written_at: '', _settled: 'other_search', _log: lr };
+    // client report 2026-11-17 (CR17 Q2, section 197): a question folded into another search's ladder page: the live page that owns the question's
+    // search answers it (AQ.answeredBy, the same rule as AI Target Settle); else the page written for it keeps it once it exists; else queued again
+    if ((st === 'writing' || st === 'written') && otherSearch(lr)) {
+      const ow = AQ.answeredBy(kw, slog, { market, except: lr.published_url });
+      if (ow) return { ...t, status: 'written', request_id: String(ow.request_id || ''), written_at: String(ow.started_at || t.written_at || iso), _settled: 'published', _log: ow };
+      if (String(lr.status || '') !== 'published') return { ...t, status: 'queued', request_id: '', written_at: '', _settled: 'other_search', _log: lr }; }
     if (st === 'writing' && lr) { const ls = String(lr.status || '');
       if (ls === 'published' || ls === 'written') return { ...t, status: 'written', written_at: String(lr.started_at || t.written_at || iso), _settled: ls, _log: lr };
       if (ls === 'failed') return { ...t, status: 'queued', request_id: '', written_at: '', _settled: 'failed', _log: lr };

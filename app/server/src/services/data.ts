@@ -152,6 +152,11 @@ import {
   type AiScope,
   type AiScopeSummary,
   aiTargetView,
+  aiAnsweredView,
+  aiNextCheck,
+  aiPermanentMoves,
+  aiQuestionPages,
+  type AiQuestionInputs,
   type AiWrittenPage,
   PAGE_IN_FLIGHT_HOURS,
   checkinNotIndexed,
@@ -1347,7 +1352,7 @@ export const AI_READ_LIMITS = { runs: 300, prompts: 2500, daily: 120, answers: 6
 export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boolean | 'summary'; prompts?: boolean; filter?: AiFilter | null; admin?: boolean } = {}): Promise<AiData> {
   const d = site.domain;
   const since = new Date(Date.now() - 90 * 864e5).toISOString();
-  const [visDesc, prompts, report, days, growthRows, aiPages, aiTargets, aiProspects, logs, mons, aiRuns] = await Promise.all([
+  const [visDesc, prompts, report, days, growthRows, aiPages, aiTargets, aiProspects, logs, mons, aiRuns, ladderRows, watchRows] = await Promise.all([
     // newest first, then put in date order: a domain with more than 300 runs shows its newest 300, never freezes on the oldest
     siteRows<AiVisibilityRow>('aiVisibility', d, { sortBy: 'checked_at:desc', max: AI_READ_LIMITS.runs }),
     // G6: up to 500 tracked + the switched-off and refused ones (every reword keeps the old row 'off'); stored order kept (the engine's cut)
@@ -1363,6 +1368,10 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
     siteRows<MonitorsRow>('monitors', d, { max: 5 }),
     // client report 2026-11-16 (issue 1): the AI question each of the app's page runs carried (a failed read: none known, never an error page)
     aiRunQuestions(org.id, site.id).catch(() => ({ questions: new Map<string, { targetId: string; question: string }>(), failed: new Set<string>() })),
+    // CR17 (Q3, client report 2026-11-17): the ladder pages and the client's own permanent redirects, so the AI page decides on the same page
+    // list as the write form (a failed read: the content log alone, as before)
+    siteRows<LadderRow>('ladders', d, { max: 1000 }).catch(() => [] as LadderRow[]),
+    siteRows<PageWatchRow>('pageWatch', d, { max: 200 }).catch(() => [] as PageWatchRow[]),
   ]);
   const vis = [...visDesc].sort((a, b) => s(a.checked_at).localeCompare(s(b.checked_at)));
   const last = vis[vis.length - 1];
@@ -1374,6 +1383,9 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
   const credits = charges ? bucketAiCharges(vis.map((r) => ({ checkedAt: s(r.checked_at) })), charges) : vis.map(() => null);
   const compared = aiRunsCompared(vis);
   const monitorsNow = monitorsFromRow(mons[0]);
+  // CR17 (Q3): ONE page list and one market for every AI-question decision of this page (badge, button, Recommendations), the list the
+  // write form gets too (pipeline.ts aiPages)
+  const aiDecision = aiDecisionInputs({ logs, ladders: ladderRows, aiRuns, moves: watchRows, market: site.country ?? '', lastWeekly: s(last?.checked_at), lastDaily: s(days[0]?.checked_at), daily: monitorsNow?.aiPulse !== false });
   let latest: AiData['latest'] = null;
   if (last) {
     const engines = safeJson<Record<string, P>>(last.engines_json, {});
@@ -1482,8 +1494,10 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
     answers: opts.answers === 'summary' ? [] : answers.map((a) => toAiAnswer(a)),
     ...(opts.answers === 'summary' ? { answerResults: answerResultsOf(answers), answersStored: answers.length } : {}),
     scope: opts.filter ? aiScopeOf(opts.filter, vis, compared, answers, prompts, opts.answers !== false) : null,
-    growth: toGrowth(growthRows[0], aiPages, aiTargets, aiProspects, logs, monitorsNow, opts.admin === true),
-    pagesWritten: aiWrittenPages(logs, aiRuns.questions, aiRuns.failed),
+    growth: toGrowth(growthRows[0], aiPages, aiTargets, aiProspects, logs, monitorsNow, opts.admin === true, aiDecision),
+    pagesWritten: aiDecision.written as AiWrittenPage[],
+    ladderHeads: [...aiDecision.ladderHeads!],
+    ...(aiDecision.nextAiCheck ? { nextAiCheck: aiDecision.nextAiCheck } : {}),
     // AIR (2026-11-06): the AI-ranking plan, read only for a website in `on` mode (off and the private trial show nothing new)
     // FX-C RC-1: in the client's words with credits; the raw memo and the provider cost for a platform admin only
     aiRank: await aiRankPlanFor(d, mons[0], { prompts, admin: opts.admin === true }),
@@ -1880,11 +1894,14 @@ export async function alertsData(site: SiteRow): Promise<AlertsData> {
  * still `writing` whose page is live is shown live), the sentence from a fixed table (ai-target-status.ts): never the engine's own reason,
  * which a platform admin still gets as `adminReason`.
  */
-export function targetStat(t: AiTargetRow, logs: readonly ContentLogRow[], admin = false): AiGrowth['targets'][number] {
-  const view = aiTargetView(
+export function targetStat(t: AiTargetRow, logs: readonly ContentLogRow[], admin = false, decision?: AiQuestionInputs): AiGrowth['targets'][number] {
+  const view0 = aiTargetView(
     { status: s(t.status), kind: s(t.kind), keyword: s(t.keyword), question: s(t.question), pageUrl: s(t.page_url), reason: s(t.reason), reasonCode: s(t.reason_code), reasonArgs: t.reason_args, origin: s(t.origin), requestId: s(t.request_id), writtenAt: s(t.written_at), wonAt: s(t.won_at), updatedAt: s(t.updated_at), liveAt: s(t.live_at) },
     logs,
   );
+  // CR17 (Q3): a live page that answers the question since the engine last weighed it decides the badge, as it decides the button
+  const answered = decision ? aiAnsweredView({ targetId: s(t.target_id), question: s(t.question), keyword: s(t.keyword), state: view0.state, updatedAt: s(t.updated_at), hidden: view0.hidden }, decision) : null;
+  const view = answered ? { ...view0, state: answered.state, badge: answered.badge, tone: answered.tone, sentence: answered.sentence, pageUrl: answered.pageUrl, date: answered.date } : view0;
   return {
     targetId: s(t.target_id), question: s(t.question), keyword: s(t.keyword), kind: s(t.kind) === 'refresh' ? ('refresh' as const) : ('answer' as const), pageUrl: s(t.page_url), pageType: s(t.page_type),
     fanout: s(t.fanout).split(' | ').filter(Boolean), sources: arr(safeJson(s(t.sources_json), [])).map((x) => ({ url: s(x.u), title: s(x.t) })).filter((x) => x.url), competitors: splitList(t.competitors),
@@ -1923,18 +1940,7 @@ export function aiWrittenPages(
   failed: ReadonlySet<string> = new Set(),
   now = Date.now(),
 ): AiWrittenPage[] {
-  const stopped = (l: ContentLogRow) => s(l.status) === 'started' && (failed.has(s(l.request_id)) || !(now - Date.parse(s(l.started_at) || '1970-01-01') < PAGE_IN_FLIGHT_HOURS * 3600_000));
-  return logs
-    .filter((l) => s(l.keyword) && !['failed', 'held', ''].includes(s(l.status)) && !stopped(l))
-    .map((l) => {
-      const q = aiRuns.get(s(l.request_id));
-      return {
-        keyword: s(l.keyword), status: s(l.status), publishedUrl: s(l.published_url), startedAt: s(l.started_at), source: s(l.source),
-        ...(s(l.source) === 'ladder' && Number(l.rung) === 4 ? { ladderHead: true } : {}),
-        ...(q ? { aiTargetId: q.targetId, aiQuestion: q.question } : {}),
-      };
-    })
-    .slice(0, 500);
+  return aiQuestionPages({ logs, aiRuns, failed, now, inFlightHours: PAGE_IN_FLIGHT_HOURS }).slice(0, 500);
 }
 
 /** CR17-E (F9): the AI growth list's status through the one link status (a "won" nobody wrote to, or with no link our check found, is not won) */
@@ -1944,7 +1950,28 @@ function earnedStatus(pr: ProspectRow | null, fallback: string): string {
   return st === 'won' ? 'won' : st === 'sent' ? 'contacted' : st === 'replied' ? 'replied' : st === 'declined' ? (s(pr.status) === 'ignored' ? 'ignored' : 'rejected') : 'new';
 }
 
-function toGrowth(g: AiGrowthRow | undefined, pages: AiPageRow[], targets: AiTargetRow[], prospects: ProspectRow[], logs: ContentLogRow[], m: MonitorSettings | null, admin = false): AiGrowth | null {
+/** CR17 (Q3, client report 2026-11-17): what every AI-question decision of a website reads, built once (pure): the page list (content log,
+ *  ladder pages, the client's permanent redirects followed), the ladder heads, the market and when AI answers are next checked. The AI
+ *  visibility page (aiData) and the Pipeline's write form (pipeline.ts aiPages) both use it, so they decide on the same pages. */
+export function aiDecisionInputs(o: {
+  logs: readonly ContentLogRow[];
+  ladders?: readonly LadderRow[];
+  aiRuns?: { questions: ReadonlyMap<string, { targetId: string; question: string }>; failed: ReadonlySet<string> };
+  moves?: readonly PageWatchRow[];
+  market: string;
+  lastWeekly?: string;
+  lastDaily?: string;
+  daily?: boolean;
+  now?: number;
+}): AiQuestionInputs & { written: AiWrittenPage[]; ladderHeads: string[]; nextAiCheck: string } {
+  const now = o.now ?? Date.now();
+  const ladders = (o.ladders ?? []).filter((l) => !['archived', 'deleted', 'removed'].includes(s(l.status)));
+  const written = aiQuestionPages({ logs: o.logs, ladders, aiRuns: o.aiRuns?.questions, failed: o.aiRuns?.failed, moves: aiPermanentMoves(o.moves ?? []), now, inFlightHours: PAGE_IN_FLIGHT_HOURS });
+  const ladderHeads = [...new Set(ladders.map((l) => s(l.head_keyword).toLowerCase().trim()).filter(Boolean))];
+  return { written, ladderHeads, market: o.market, nextAiCheck: aiNextCheck({ lastWeekly: o.lastWeekly, lastDaily: o.lastDaily, daily: o.daily, now }) };
+}
+
+function toGrowth(g: AiGrowthRow | undefined, pages: AiPageRow[], targets: AiTargetRow[], prospects: ProspectRow[], logs: ContentLogRow[], m: MonitorSettings | null, admin = false, decision?: AiQuestionInputs): AiGrowth | null {
   if (!g) return null;
   const sub = safeJson<P>(g.submitted_json, {}); const bing = o(sub.bing); const inx = o(sub.indexnow);
   const keyUrl = s(inx.key_url); const key = (keyUrl.match(/\/([a-f0-9]{32})\.txt$/) || [])[1] || '';
@@ -1966,7 +1993,7 @@ function toGrowth(g: AiGrowthRow | undefined, pages: AiPageRow[], targets: AiTar
       checks: arr(safeJson(s(p.checks_json), [])).filter((c) => n(c.weight) > 0).map((c) => ({ key: s(c.key), ok: c.ok === 'partial' ? ('partial' as const) : b(c.ok), label: s(c.label) })),
       issues: s(p.issues).split(' | ').filter(Boolean), wordsRaw: n(p.words_raw), title: s(p.title), updatedOn: s(p.updated_on), bingCrawledAt: s(p.bing_crawled_at), submittedAt: s(p.submitted_at), submittedVia: s(p.submitted_via), citedBy: splitList(p.cited_by),
     })),
-    targets: targets.sort((a, z) => n(z.value) - n(a.value)).map((t) => targetStat(t, logs, admin)),
+    targets: targets.sort((a, z) => n(z.value) - n(a.value)).map((t) => targetStat(t, logs, admin, decision)),
     earned,
     entity: ent ? { checkedAt: s(ent.checked_at), found: b(ent.found), qid: s(ent.qid), byName: arr(ent.by_name).map((x) => ({ id: s(x.id), label: s(x.label), description: s(x.description) })) } : null,
     // CR17-H (F1): an AI-ranking action's why was the engine's scoring line; a customer reads the client-copy guard's words (admins the raw)

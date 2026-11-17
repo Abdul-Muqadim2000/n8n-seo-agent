@@ -410,6 +410,8 @@ export interface CadenceItem extends QueueItem {
   mainPage?: boolean;
   /** P1: written once the author profile and the business facts are on file */
   held?: 'profile';
+  /** CR17 (F4): a ladder page written as a new page: the address it is written at (in the website's own folder for its kind) */
+  plannedUrl?: string;
 }
 
 export interface CadenceRefusal { keyword: string; source: TopicSource; reason: string; detail: string; note: string; targetId?: string }
@@ -747,11 +749,32 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
     return [...m.values()];
   })();
   const pagesQ = (input.pages ?? []).filter((p) => p && p.url && (!p.site_id || p.site_id === siteId)).map((p) => ({ url: S(p.url), queries: (() => { try { const q = JSON.parse(S(p.queries_json) || '[]'); return Array.isArray(q) ? q : []; } catch { return []; } })() }));
+  // client report 2026-11-17 (F4, mirror of Cadence_Plan.js): a page that gets its own address gets it in the site's folder for its kind
+  // (LRU.folderFor), and a rung planned at the root of a site that keeps that kind of page in a folder is written at the folder address
+  const folderEvC = {
+    published: [
+      ...slog.filter((l) => S(l.status) === 'published' && S(l.published_url)).map((l) => ({ url: S(l.published_url), page_type: S(l.page_type) })),
+      ...lrows.filter((r) => S(r.status) === 'published' && S(r.target_url)).map((r) => ({ url: S(r.target_url), page_type: S(r.page_type) })),
+    ],
+    pages: (input.pages ?? []).filter((p) => p && p.url && (!p.site_id || p.site_id === siteId)).map((p) => ({ url: S(p.url), http_status: p.http_status })),
+  };
+  const folderMemoC = new Map<string, ReturnType<typeof LRU.folderFor>>();
+  const folderC = (type: string) => {
+    const k = LRU.classOf(type);
+    if (!folderMemoC.has(k)) folderMemoC.set(k, LRU.folderFor(type, folderEvC));
+    return folderMemoC.get(k)!;
+  };
   const addressOf = (l: LadderRow, x?: Info): { existing: string; target: string } => {
     const was = S(l.target_url);
     const exists = l.page_exists === true || String(l.page_exists) === 'true';
     const home = (was.match(/^https?:\/\/[^/?#]+/i) || [''])[0];
-    const own = (u: string) => LRU.plannedUrl(home, l.keyword, /\/$/.test(was)) || u;
+    const slash = /\/$/.test(was);
+    const fo = folderC(num(l.rung) === 4 ? 'Service Page' : S(l.page_type) || 'Service Page');
+    const own = (u: string) => LRU.plannedUrl(home, l.keyword, slash, fo.folder) || u;
+    if (!exists && was && fo.folder !== '/' && !['published', 'merged'].includes(S(l.status)) && LRU.urlKey(was) === LRU.urlKey(LRU.plannedUrl(home, l.keyword, slash))) {
+      const nu = own(was);
+      if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu };
+    }
     if (num(l.rung) === 4) {
       const orig = exists ? LRU.copyOf(was, knownC) : '';
       if (orig) return { existing: orig, target: orig };
@@ -1335,8 +1358,9 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
     headSetAside: x.headSetAside,
   }));
   const clean = (c: Cand): CadenceItem => {
-    const { targetId: _t, head: _h, targetUrl: _u, air: _a, airHonoured: _ah, ...rest } = c;
-    return rest;
+    const { targetId: _t, head: _h, targetUrl, air: _a, airHonoured: _ah, ...rest } = c;
+    // CR17 (F4): a ladder page written as a new page says the address it is written at (the site's folder, LRU.folderFor)
+    return { ...rest, ...(rest.source === 'ladder' && targetUrl && !rest.existingPageUrl ? { plannedUrl: targetUrl } : {}) };
   };
   const items = preview
     ? [

@@ -805,6 +805,10 @@ export interface AiData {
   /** client report 2026-11-16 (issue 1): the pages the website has from us (content log), with the AI question the app's run carried, so every
    *  "write a page for this question" button knows a page already written for it (ai-question-action.ts) */
   pagesWritten?: import('./ai-question-action').AiWrittenPage[];
+  /** CR17 (Q3): the main keywords of the website's keyword ladders (their main pages answer every question that carries all their words) */
+  ladderHeads?: string[];
+  /** CR17 (Q3): when AI answers are next checked for the website (ISO), absent when unknown */
+  nextAiCheck?: string;
   /** AIR (2026-11-06): the AI-ranking plan of a website in `on` mode (its newest on-mode run and open actions). Absent or null: the website is
    *  off or in its private trial, or the engine has no run yet; the page then shows nothing new */
   aiRank?: AiRankPlanData | null;
@@ -1317,7 +1321,16 @@ export interface PipelineData {
     keyword: string; status: 'started' | 'writing' | 'published'; startedAt: string; publishedUrl: string; source: string;
     /** client report 2026-11-16 (issue 1): the AI question the app's run that wrote it carried (its target id and question), when known */
     aiTargetId?: string; aiQuestion?: string;
+    /** CR17 (Q3): when the page went live, when known */
+    publishedAt?: string;
   }[];
+  /** CR17 (Q3, client report 2026-11-17): the pages and the stored AI questions every AI-question decision reads, the same lists the AI
+   *  visibility page gets (shared/src/ai-question-action.ts aiQuestionPages / aiAnsweredView), so the write form never contradicts it;
+   *  absent from an older server */
+  aiPages?: import('./ai-question-action').AiWrittenPage[];
+  aiTargets?: AiTargetStat[];
+  /** CR17 (Q3): when AI answers are next checked for the website (ISO), absent when unknown */
+  nextAiCheck?: string;
   /** keyword ladders with the pages still to write */
   ladders: {
     id: string;
