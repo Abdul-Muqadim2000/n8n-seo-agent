@@ -108,6 +108,7 @@ import type {
   adminMembershipSchema,
   adminUpdateUserSchema,
   platformSettingsSchema,
+  AutoTopUpView,
   BillingOverview,
   CreditActivityPage,
   CreditLimits,
@@ -268,6 +269,15 @@ export function useRequestCredits(orgId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: { packId: string; note?: string }) => api<CreditPurchaseRequest>(`/api/orgs/${orgId}/billing/requests`, { method: 'POST', body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'billing'] }),
+  });
+}
+
+// CR17-I (2026-11-17): "when credits run low, ask for a top-up of this pack" (null = off)
+export function useSetAutoTopUp(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (packId: string | null) => api<{ autoTopUp: AutoTopUpView | null }>(`/api/orgs/${orgId}/billing/auto-top-up`, { method: 'PUT', body: { packId } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'billing'] }),
   });
 }

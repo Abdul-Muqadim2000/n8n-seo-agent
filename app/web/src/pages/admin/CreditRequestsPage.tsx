@@ -61,6 +61,8 @@ export default function AdminCreditRequestsPage() {
         <span className="inline-flex flex-col items-end leading-tight">
           <Num>{credits(r.credits)} credits</Num>
           <span className="mt-0.5 font-mono text-[11px] text-ink-3">{r.packId}</span>
+          {/* CR17-I: what the confirming grant really added, when it differs from the pack asked for */}
+          {r.granted && r.granted.credits !== r.credits && <span className="mt-0.5 text-[11px] text-warning-text">added {credits(r.granted.credits)}</span>}
         </span>
       ),
     },
@@ -72,7 +74,7 @@ export default function AdminCreditRequestsPage() {
       sortValue: (r) => r.requestedBy ?? '',
       cell: (r) => (
         <span className="block min-w-[150px] max-w-[260px] text-[13px] text-ink-2">
-          {r.requestedBy ?? '-'}
+          {r.auto ? `Automatic top-up${r.requestedBy ? ` (set by ${r.requestedBy})` : ''}` : (r.requestedBy ?? '-')}
           {r.note && <span className="block text-xs text-ink-3">{r.note}</span>}
         </span>
       ),

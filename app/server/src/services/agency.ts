@@ -29,7 +29,7 @@ import { badRequest, conflict, forbidden, notFound } from '../lib/errors';
 import { audit } from './audit';
 import { agencyOf, brandForOrg } from './brandOf';
 import { applyNewCompanyCredits, creditBalance } from './admin/credits';
-import { monthStartUtc, usageSince } from './billing';
+import { creditUsage, monthStartUtc } from './billing';
 
 /**
  * G5 (app/docs/WHITE_LABEL.md): agencies and their client workspaces. A client workspace is an ordinary company with a parent; the
@@ -143,8 +143,9 @@ async function roleIn(a: OrgAccess, client: OrgRow): Promise<Role> {
 
 /** credits (app/docs/CREDITS.md): a client workspace's balance and what it used this calendar month (autopilot + on-demand) */
 async function creditsOf(orgId: string, now = new Date()): Promise<{ creditBalance: number; creditsUsedThisMonth: number }> {
-  const [balance, used] = await Promise.all([creditBalance(db, orgId), usageSince(db, orgId, monthStartUtc(now))]);
-  return { creditBalance: balance, creditsUsedThisMonth: Math.round((used.autopilot + used.onDemand) * 100) / 100 };
+  // CR17-I (F7): the one usage computation, the figure the client workspace's own Credits page shows
+  const [balance, used] = await Promise.all([creditBalance(db, orgId), creditUsage(db, orgId, { from: monthStartUtc(now) })]);
+  return { creditBalance: balance, creditsUsedThisMonth: used.total };
 }
 
 export async function listClients(a: OrgAccess): Promise<AgencyClient[]> {

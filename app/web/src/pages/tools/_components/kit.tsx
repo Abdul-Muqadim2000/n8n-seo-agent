@@ -12,6 +12,8 @@ import {
   GOALS,
   MODES,
   NOTICE_MODES,
+  outcomeCostText,
+  outcomeKindOfMode,
   PAGE_TYPES,
   consistencyWarnings,
   TONES,
@@ -374,7 +376,7 @@ export function PipelineNotices({
 /** "12 credits" (the quote) / "Free"; counts between amounts (never through "Free") when the options change the estimate. */
 function CostValue({ usd }: { usd: number }) {
   if (usd <= 0) return <>{costLabel(usd)}</>;
-  return <CountUp value={usd} format={(n) => costLabel(Math.max(0.01, n))} />;
+  return <CountUp value={usd} format={(n) => costLabel(Math.max(0.01, n))} animate={false} />;
 }
 
 /** The blue intro above the form: what the run delivers, the extras chosen below, its price in credits and the time. */
@@ -424,12 +426,15 @@ function ToolIntro({ mode, cost, eta, extras }: { mode: ModeId; cost: number; et
  * (the server refuses such runs; this only says so in advance). A company whose credits are not enforced and that set no on-demand
  * limit has nothing to meter: it sees what it used this month.
  */
-function CreditsMeter({ cost }: { cost: number }) {
+function CreditsMeter({ cost, mode }: { cost: number; mode: ModeId }) {
   const { org } = useOrgCtx();
   const billing = useBilling(org.id);
   const b = billing.data;
   if (!b) return null;
-  const used = b.month.autopilotUsed + b.month.onDemandUsed;
+  // CR17-I (F7): the one usage figure; (M2) what this kind of work has really cost this company, beside the quote
+  const used = b.usage?.total ?? b.month.autopilotUsed + b.month.onDemandUsed;
+  const kind = outcomeKindOfMode(mode);
+  const past = kind === 'other' ? null : outcomeCostText((b.costPerOutcome ?? []).find((c) => c.kind === kind));
   if (!b.enforced && b.limits.onDemandMonthly == null)
     return (
       <p className="mt-5 rounded-lg border border-line bg-surface-2/40 p-3.5 text-xs text-ink-3">
@@ -473,6 +478,7 @@ function CreditsMeter({ cost }: { cost: number }) {
         </li>
         <li className="ml-auto tabular">{over ? 'Not enough' : `${formatCredits(left)} left after it`}</li>
       </ul>
+      {past && <p className="mt-2 text-xs text-ink-3">Work like this has used {past}.</p>}
       {over && (
         <p className="mt-2.5 flex items-start gap-1.5 text-xs leading-snug text-warning-text">
           <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
@@ -554,7 +560,7 @@ export function ToolShell({ mode, site, cost, eta, emailCopy, extras = [], onSub
             </SummaryRow>
           )}
         </dl>
-        <CreditsMeter cost={cost} />
+        <CreditsMeter cost={cost} mode={mode} />
         {withButton && (
           <Button type="submit" size="lg" className="mt-5 w-full" loading={pending} disabled={disabled} icon={<Play className="size-4" />}>
             {submitLabel}

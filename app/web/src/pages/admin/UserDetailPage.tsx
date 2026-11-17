@@ -158,7 +158,7 @@ export default function AdminUserDetailPage() {
             <MetricCard
               label="Cost of their runs"
               icon={<Wallet />}
-              value={<CountUp value={user.cost.totalUsd} format={(v) => money(v)} />}
+              value={<CountUp value={user.cost.totalUsd} format={(v) => money(v)} animate={false} />}
               info="Runs this person started in the app. Runs started by schedules belong to the company."
               meta={<SplitLine items={[{ label: 'Claude', value: money(user.cost.claudeUsd) }, { label: 'DFS', value: money(user.cost.dataforseoUsd) }]} />}
             />

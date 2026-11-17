@@ -275,6 +275,9 @@ export interface TrackedKeyword {
 export interface RankingsData {
   ladders: Ladder[];
   keywords: TrackedKeyword[];
+  /** CR17-I (F8): the searches checked on Google every week, by the one definition (shared/src/tracked-keywords.ts): ladder keywords +
+   *  your own list, each once. The Overview's "of N keywords tracked" and Settings read this count. Absent from older servers. */
+  tracked?: { total: number; fromLadders: number; fromYourList: number; line: string };
   /** G29: where the positions and the share of voice come from */
   lineage: Lineage[];
   /** P1 / B6 (2026-10-21): no page is written on its own before the author profile and the business facts are on file (readiness.ts);

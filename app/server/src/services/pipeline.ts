@@ -55,7 +55,7 @@ import {
 } from '@seo/shared';
 import { config } from '../config';
 import { db } from '../db';
-import { monthStartUtc, siteAutopilotRows, usageSince } from './billing';
+import { creditUsage, monthStartUtc, siteAutopilotRows } from './billing';
 import { creditsOfUsd, settingsRow, wholeCreditsOfUsd } from './admin/settings';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { customerError } from '../lib/customerError';
@@ -692,8 +692,9 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   // any other website reads nothing more and plans exactly as before
   // FX-C RC-10: read by key (this website's protect list and the kill switch), never the first 50 kind-'air' rows of every website
   const airCache = await airCacheRowsFor(monRows[0]?.ai_rank_mode, sid, (key) => n8nRows<AirCacheRow>('cache', { filters: [{ columnName: 'key', condition: 'eq', value: key }], max: 3 }));
-  const used = await usageSince(db, org.id, monthStartUtc()).catch(() => null);
-  const creditsUsed = used ? Math.round((used.autopilot + used.onDemand) * 100) / 100 : 0;
+  // CR17-I (F7): the month's credits used from the one usage computation (services/billing.ts creditUsage), the figure the Credits page shows
+  const used = await creditUsage(db, org.id, { from: monthStartUtc() }).catch(() => null);
+  const creditsUsed = used ? used.total : 0;
   const ownRuns = activeRuns(app.runs);
   const failedReq = failedPageRequests(app.runs); // W06-B: a page run that failed wrote no page (its opening content-log row is not one)
   const verified = !!site.verifiedAt;

@@ -1,11 +1,11 @@
 import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
-import { creditActivityQuerySchema, creditLimitsSchema, creditPurchaseSchema, type BillingOverview, type CreditActivityPage, type CreditLimits, type CreditPurchaseRequest } from '@seo/shared';
+import { autoTopUpSchema, creditActivityQuerySchema, creditLimitsSchema, creditPurchaseSchema, type AutoTopUpView, type BillingOverview, type CreditActivityPage, type CreditLimits, type CreditPurchaseRequest } from '@seo/shared';
 import { isUuid, orgAccess } from '../auth/access';
 import { db, schema } from '../db';
 import { notFound, parse } from '../lib/errors';
 import { audit } from '../services/audit';
-import { activityCsv, billingOverview, creditActivity, invalidateForecast, requestPack, requestView } from '../services/billing';
+import { activityCsv, billingOverview, creditActivity, invalidateForecast, requestPack, requestView, setAutoTopUp } from '../services/billing';
 import { invoicePdf } from '../services/invoices';
 
 // Credits, as the customer reads and controls them (app/docs/CREDITS.md). Reading needs membership (a viewer sees the balance its
@@ -65,6 +65,16 @@ export async function billingRoutes(app: FastifyInstance) {
     const r = await requestPack(a.org, a.user, body.packId, body.note, req.log);
     await audit(req, a.org.id, { action: 'company.credits_requested', target: { type: 'company', id: a.org.id, label: a.org.name }, details: { packId: r.packId, credits: r.credits } });
     return r;
+  });
+
+  // CR17-I (2026-11-17): "when credits run low, ask for a top-up of this pack" (owner / admin, as Buy credits); null switches it off
+  app.put('/api/orgs/:orgId/billing/auto-top-up', async (req): Promise<{ autoTopUp: AutoTopUpView | null }> => {
+    const a = await orgAccess(req, (req.params as { orgId: string }).orgId, 'admin');
+    const body = parse(autoTopUpSchema, req.body ?? {});
+    const before = a.org.autoTopUpPackId ?? null;
+    const view = await setAutoTopUp(a.org, a.user, body.packId);
+    await audit(req, a.org.id, { action: 'company.auto_top_up_changed', target: { type: 'company', id: a.org.id, label: a.org.name }, details: { before, after: body.packId } });
+    return { autoTopUp: view };
   });
 
   app.delete('/api/orgs/:orgId/billing/requests/:requestId', async (req): Promise<CreditPurchaseRequest> => {

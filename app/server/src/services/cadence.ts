@@ -1602,3 +1602,23 @@ export function chosenLadderWriting(ladders: LadderRow[], settings: LadderSettin
   }
   return false;
 }
+
+/**
+ * CR17-I (client report 2026-11-17, M2): how many pages the keyword ladders the autopilot writes on its own (the ones chosenLadderWriting
+ * counts) still have to write: their planned rungs. The credit forecast never forecasts more pages than this from the ladders (it was two a
+ * week whatever was left). Pure.
+ */
+export function chosenLadderPagesLeft(ladders: LadderRow[], settings: LadderSettingsRow[], level: AutopilotLevel): number {
+  const cfg = cadenceSiteConfig(settings);
+  const settingOf = new Map(settings.filter((r) => r.ladder_id && String(r.ladder_id) !== LADDER_SITE_ROW).map((r) => [String(r.ladder_id), r]));
+  let left = 0;
+  for (const id of new Set(ladders.filter((l) => l && l.ladder_id && l.keyword).map((l) => String(l.ladder_id)))) {
+    const st = settingOf.get(id);
+    const mode = st && (lc(st.mode) === 'auto' || lc(st.mode) === 'manual') ? lc(st.mode) : cfg.mode;
+    const status = st && (STATUSES as readonly string[]).includes(lc(st.status)) ? lc(st.status) : 'active';
+    const chosen = lc(st?.chosen_by) || (ladders.filter((l) => l && String(l.ladder_id) === id).map((l) => lc(l.chosen_by)).find(Boolean) ?? '');
+    if (!(mode === 'auto' && (status === 'active' || status === 'queued') && (CLIENT_CHOSEN.has(chosen) || (chosen === 'system_announced' && level === 3)))) continue;
+    left += ladders.filter((l) => l && String(l.ladder_id) === id && l.keyword && S(l.status || 'planned') === 'planned').length;
+  }
+  return left;
+}

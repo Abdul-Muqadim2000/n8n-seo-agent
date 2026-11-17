@@ -342,8 +342,18 @@ return metrics.map((m, i) => {
     for (const pr of auPairs) { const au = pr.cur; rows.push(['<b>' + esc(AUDIT_LABEL[pr.t] || 'Audit') + '</b> (' + esc(String(au.audited_at).slice(0, 10)) + ')', 'health ' + n(au.health_score) + '/100' + dp(Number(au.health_score), pr.prev ? Number(pr.prev.health_score) : null) + ' (' + esc(au.grade) + ') · ' + n(au.critical) + ' critical, ' + n(au.high) + ' high, ' + n(au.medium) + ' medium · ' + n(au.pages_crawled) + ' pages crawled']); }
     html += h3('AI search, backlinks and technical health') + table(['Monitor', 'Latest'], rows) + '<p style="font-size:12px;color:#64748b">Details in the AI-visibility, backlink and audit reports (separate e-mails).</p>';
   }
-  if (m.tracked.length) html += h3('Tracked keywords') + table(['Keyword', 'Source', 'Search Console avg', 'Before', 'Live Google check', 'Clicks', 'Impr.', 'Ranking page'], m.tracked.map(t => [esc(t.keyword), esc(t.source === 'ladder' ? (t.rung === 4 ? 'ladder top' : 'ladder rung ' + t.rung) : t.source === 'blog' ? 'blog page' : 'your list'),
-    G.connected ? posS(t.gsc_position) : '<span style="color:#94a3b8">connect GSC</span>', G.connected ? posS(t.gsc_prev_position) : '—', t.serp_position == null ? '—' : (t.serp_position > 0 ? '#' + t.serp_position : t.serp_position === 0 ? 'not in top 50' : esc(t.serp_note || 'check failed')) + (t.serp_checked_at ? '<br><span style="color:#94a3b8;font-size:11px">' + esc(String(t.serp_checked_at).slice(0, 10)) + '</span>' : ''), n(t.clicks), n(t.impressions), link(t.page || t.serp_url)]));
+  // CR17-I (client report 2026-11-17, F8, build section 199): one definition of "tracked keywords" (the app's shared/src/tracked-keywords.ts):
+  // the searches we check on Google every week = the keyword ladders' keywords + your own list, each search once. Written pages that are not
+  // ladder pages are followed in Search Console and counted apart (the table used to call all of them "Tracked keywords": 12 rows for 6).
+  const kwKey = (k) => String(k || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const checkedKw = [], otherPages = [], seenKw = new Set(), seenPg = new Set();
+  for (const t of (m.tracked || [])) { const k = kwKey(t.keyword); if (!k || t.source === 'blog') continue; if (seenKw.has(k)) continue; seenKw.add(k); checkedKw.push(t); }
+  for (const t of (m.tracked || [])) { const k = kwKey(t.keyword); if (!k || t.source !== 'blog' || seenKw.has(k) || seenPg.has(k)) continue; seenPg.add(k); otherPages.push(t); }
+  const trRow = (t) => [esc(t.keyword), esc(t.source === 'ladder' ? (t.rung === 4 ? 'ladder top' : 'ladder rung ' + t.rung) : t.source === 'blog' ? 'blog page' : 'your list'),
+    G.connected ? posS(t.gsc_position) : '<span style="color:#94a3b8">connect GSC</span>', G.connected ? posS(t.gsc_prev_position) : '—', t.serp_position == null ? '—' : (t.serp_position > 0 ? '#' + t.serp_position : t.serp_position === 0 ? 'not in top 50' : esc(t.serp_note || 'check failed')) + (t.serp_checked_at ? '<br><span style="color:#94a3b8;font-size:11px">' + esc(String(t.serp_checked_at).slice(0, 10)) + '</span>' : ''), n(t.clicks), n(t.impressions), link(t.page || t.serp_url)];
+  const trCols = ['Keyword', 'Source', 'Search Console avg', 'Before', 'Live Google check', 'Clicks', 'Impr.', 'Ranking page'];
+  if (checkedKw.length) html += h3('Tracked keywords: ' + checkedKw.length + (checkedKw.length === 1 ? ' search' : ' searches') + ' we check on Google') + table(trCols, checkedKw.map(trRow));
+  if (otherPages.length) html += h3('Your other pages: ' + otherPages.length + ' followed in Search Console') + table(trCols, otherPages.map(trRow));
   // B-G3 (2026-10-15, INVARIANTS rule 1 + 2): a rung the read-path fit gate set aside bought no rank check and is not in the table
   // above — so it is named here, with its reason, rather than leaving a shorter list nobody can explain.
   if ((m.set_aside || []).length) html += '<p style="margin:2px 0 8px;font-size:12px;color:#b45309"><b>Set aside</b> (planned before the keyword rule existed): '

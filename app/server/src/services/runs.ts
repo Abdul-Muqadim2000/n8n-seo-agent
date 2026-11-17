@@ -476,11 +476,13 @@ export async function createRunWithMeta(a: OrgAccess, input: RunInput, opts: Cre
         trackingStartedAt: trackingStartedAt ?? site.trackingStartedAt ?? new Date(),
         ...(input.timezone ? { timezone: input.timezone } : {}),
         ...(input.services !== undefined ? { services: input.services } : {}),
-        keywords: input.keywords.length ? input.keywords : site.keywords,
+        // CR17-I (client report 2026-11-17, F8): the lists are what the form sent, an empty list clears them, as the engine stores them
+        // (an empty list used to keep the old one here while the engine cleared its own: the app kept counting a keyword the client deleted)
+        keywords: input.keywords,
         blogsPerWeek: input.blogsPerWeek,
         ga4PropertyId: input.ga4PropertyId || site.ga4PropertyId,
-        competitors: input.competitors.length ? input.competitors : site.competitors,
-        brandNames: input.monitors.brandNames.length ? input.monitors.brandNames : site.brandNames,
+        competitors: input.competitors,
+        brandNames: input.monitors.brandNames,
         updatedAt: new Date(),
       })
       .where(eq(schema.sites.id, site.id));
