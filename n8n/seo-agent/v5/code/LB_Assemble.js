@@ -86,7 +86,7 @@ for (const p of plans) {
     anchor_text: o.anchor_text != null ? String(o.anchor_text) : (o.anchor_hint === 'brand' && p.brand_known ? p.brand : ''), reason_code: o.reason_code != null ? String(o.reason_code) : (o.status === 'not_fit' ? OK.reasonCode(o.fit_reason) : o.status === 'held' ? OK.NO_PAGE : '') });
   const newProspect = (o) => ({ site_id: sid, domain: p.domain, prospect_domain: o.prospect_domain, type: o.type, rank: o.rank || 0, spam_score: 0, detail: String(o.detail || '').slice(0, 300), source_url: o.page_url || '', target_url: o.target_url || '',
     status: 'new', first_seen: iso, last_seen: iso, won_at: '', outreach_subject: '', outreach_body: '', note: '', score: o.score || 0, origin: o.origin || 'link_builder', contact_email: (o.contacts || [])[0] ? o.contacts[0].email : '', contact_url: (o.contacts || [])[0] ? o.contacts[0].source_url || '' : '',
-    contacted_at: '', followup_step: 0, followup_subject: '', followup_body: '', verified_at: '', drafted_at: '' });   // the Link Builder's own sequence lives in seo_link_outreach; this row never carries a draft
+    contacted_at: '', followup_step: 0, followup_subject: '', followup_body: '', verified_at: '', drafted_at: '', retired_at: '' });   // CR17-F: a new prospect is not retired   // the Link Builder's own sequence lives in seo_link_outreach; this row never carries a draft
   // ---- 1. journalist requests (Bluesky #journorequest): recent, on our topics, deadline not obviously past ----
   const press = [...posts.values()].filter(x => (!x.site_id || x.site_id === sid) && (now.getTime() - new Date(x.at).getTime()) / 864e5 <= 10)
     .map(x => ({ ...x, f: OK.fit(x.text, topicText + ' ' + p.topics.join(' '), df, docs.length) })).filter(x => x.f >= 0.34).sort((a, b) => b.f - a.f).slice(0, 3);
@@ -101,7 +101,7 @@ for (const p of plans) {
   // quote, the deadline is kept, and the reply goes to the address the digest gives (an anonymised address on the service's own domain is
   // how these are answered — the own-domain contact rule is for sites we found ourselves). Off-topic requests, outlets nobody may pitch and
   // competitors are refused with the reason, exactly as for every other kind.
-  const digests = myProspects.filter(x => x.type === 'digest' && (x.status || 'new') === 'new' && !myOutreach.some(o => o.prospect_domain === x.prospect_domain && o.type === 'digest'));
+  const digests = myProspects.filter(x => x.type === 'digest' && (x.status || 'new') === 'new' && !String(x.retired_at || '').trim() && !myOutreach.some(o => o.prospect_domain === x.prospect_domain && o.type === 'digest'));
   for (const x of digests) {
     const text = String(x.detail || ''); const noteOf = String(x.note || '');
     const f = OK.fit(text + ' ' + noteOf, topicText + ' ' + p.topics.join(' '), df, docs.length);
@@ -202,7 +202,7 @@ for (const p of plans) {
   }
   // ---- 2b. prospects nobody can be written to, refused without reading their site (D13): a mailbox provider, a contact database, a CDN,
   //      a statistics page, a government portal or a declared competitor. The Backlink Monitor and AI Growth keep finding them. ----
-  for (const x of myProspects.filter(x => (x.status || 'new') === 'new' && x.type !== 'reclaim'
+  for (const x of myProspects.filter(x => (x.status || 'new') === 'new' && x.type !== 'reclaim' && !String(x.retired_at || '').trim()   // CR17-F: a prospect retired with its AI question is never offered
       && !outreach_rows.some(o => o.prospect_domain === x.prospect_domain && o.type === x.type)
       && !myOutreach.some(o => o.prospect_domain === x.prospect_domain && o.type === x.type && o.status === 'drafted'))) {
     const why = OK.badHost(x.prospect_domain)
@@ -446,10 +446,11 @@ for (const p of plans) {
   // provider qualified before the rule existed is refused now instead of being drafted
   const storedRivals = p.serp_rivals;
   for (const o of myOutreach.filter(o => o.status === 'ready' && !o.sequence_json && siteBy.has(o.prospect_domain) && !outreach_rows.some(n => n.prospect_domain === o.prospect_domain && n.type === o.type))) {
-    const why = OK.sellsSame({ type: o.type, domain: o.prospect_domain, competitors: p.competitors, serp_rivals: storedRivals, ai_rivals: p.ai_rivals || [], topics: p.topics || [], title: o.page_title || '', url: o.page_url || '', terms: sellTerms, ...siteOf(o.prospect_domain) });   // R21's SERP rivals too (build section 58 counts the four first-pass calls)
+    const cc = OK.competitorCheck({ type: o.type, domain: o.prospect_domain, competitors: p.competitors, serp_rivals: storedRivals, ai_rivals: p.ai_rivals || [], topics: p.topics || [], title: o.page_title || '', url: o.page_url || '', terms: sellTerms, ...siteOf(o.prospect_domain) });   // R21's SERP rivals too (build section 58 counts the four first-pass calls); CR17 integration: the gate's own code, not a regex over its words
+    const why = cc.reason;
     if (!why) continue;
     let ck = {}; try { ck = JSON.parse(o.checks_json || '{}') || {}; } catch (e) { ck = {}; }
-    outreach_rows.push(base({ ...o, status: 'not_fit', fit_reason: why, contacts: (() => { try { return JSON.parse(o.contacts_json || '[]'); } catch (e) { return []; } })(), checks: { ...ck, reasons: [why] } }));
+    outreach_rows.push(base({ ...o, status: 'not_fit', fit_reason: why, reason_code: cc.code || OK.reasonCode(why), contacts: (() => { try { return JSON.parse(o.contacts_json || '[]'); } catch (e) { return []; } })(), checks: { ...ck, reasons: [why] } }));
   }
   // ---- 6b. CR17-E (client report 2026-11-17, C4e; build section 195): stored rows judged again under today's rules, then ONE verdict per
   // website. Nothing is fetched here: the rules that need no page (a government portal, a platform, a job board, a mailbox / database / CDN

@@ -11,6 +11,8 @@
  * `checkinNotIndexed` turns it (and anything negative or missing) into null, and a month-to-month change exists only between two real numbers.
  */
 
+import { GOOGLE_ALL_ADDRESSES_LABEL, GOOGLE_ALL_ADDRESSES_LINE } from './site-health';
+
 export type AlertState = 'open' | 'seen' | 'resolved';
 
 /** The fields of one alert the rule reads (shared ConsoleAlert has them all). */
@@ -90,9 +92,11 @@ export function checkinDelta(now: number | null | undefined, before: number | nu
   return typeof now === 'number' && typeof before === 'number' ? now - before : null;
 }
 
-/** What the check-in's Pages report counts: Google's own figure, over every address it knows. Shown with every such number. */
-export const GOOGLE_PAGES_COUNT_NOTE =
-  "Google's count of every address it knows for your website, from the Pages report you uploaded. It includes old, redirected and duplicate addresses, so it is larger than the pages you want in search.";
+/** What the check-in's Pages report counts: Google's own figure, over every address it knows. Shown with every such number. CR17
+ *  integration: ONE wording with Index coverage (site-health.ts GOOGLE_ALL_ADDRESSES_LINE / _LABEL, package C), never a second sentence. */
+export const GOOGLE_PAGES_COUNT_NOTE = GOOGLE_ALL_ADDRESSES_LINE;
+/** The check-in's "not indexed" figure, named as Google's count (its -1 "no export" is shown as NO_PAGES_EXPORT, checkinNotIndexed) */
+export const CHECKIN_NOT_INDEXED_LABEL = `Not indexed: ${GOOGLE_ALL_ADDRESSES_LABEL}`;
 
 /** Said where a check-in has no Pages export. */
 export const NO_PAGES_EXPORT = 'No Pages export in this check-in';

@@ -36,7 +36,11 @@ const REASON_CODES: [string, RegExp][] = [
   ['platform', /a platform page|a code host on|a profile on|a channel page on/i],
   ['job_board', /job board|job listing/i],
   ['not_a_site', /mailbox provider|contact \/ company database|infrastructure \(|statistics page|not a website/i],
+  ['competitor_list', /its own list ranks itself/i],
   ['competitor', /competing (site|provider)|competitor of yours|recommends instead of you/i],
+  ['listing', /a directory or list where companies are listed/i],
+  ['your_platform', /the maker of the platform you work with/i],
+  ['software', /a software maker, not a competitor/i],
   ['sells_links', /sells posts or links|paid guest posts|offers links|link-farm|spam score|gambling|essay-mill|press-release wire|different sites linked from one page/i],
   ['low_authority', /too little authority/i],
   ['accreditation', /accredited \/ approved providers/i],
@@ -55,7 +59,7 @@ export function linkReasonCode(why: string | null | undefined): string {
   return 'other';
 }
 /** verdicts about the WEBSITE, not one page: they leave every row of that registrable domain out */
-export const DOMAIN_REASON_CODES: ReadonlySet<string> = new Set(['government', 'platform', 'job_board', 'not_a_site', 'competitor', 'sells_links', 'low_authority']);
+export const DOMAIN_REASON_CODES: ReadonlySet<string> = new Set(['government', 'platform', 'job_board', 'not_a_site', 'competitor', 'competitor_list', 'sells_links', 'low_authority']);
 
 export interface LinkStatusOutreach {
   prospect_domain: string; type: string; status: string; fit_reason?: string | null; reason_code?: string | null; sequence_json?: string | null; checked_at?: string | null;
@@ -211,4 +215,36 @@ export function anchorDisplay(o: { anchorText?: string | null; anchorHint?: stri
   if (kind === 'url') return { text: bare(s(o.targetUrl)) || bare(domain), kind, kindLabel: ANCHOR_KIND_LABEL.url! };
   const b = brand.trim();
   return b ? { text: b, kind: 'brand', kindLabel: ANCHOR_KIND_LABEL.brand! } : { text: bare(s(o.targetUrl)) || bare(domain), kind: 'url', kindLabel: ANCHOR_KIND_LABEL.url! };
+}
+
+// ---- the junk gate for a page that links to the client (integration of CR17-E into the recommendations) ----
+// The engine's LK.junkLink (v5/code/_link_kit.js) decides won links; the app needs the same answer for a LOST link: a job listing, a profile,
+// a code host, a link farm or a scraper page is never worth a "win back the link" step. The job-board host list is the engine's, character
+// for character (link-status.test.ts compares them).
+const JOB_HOST = /(^|\.)(bebee|indeed|glassdoor|rozee|naukri|naukrigulf|bayt|monster|ziprecruiter|jooble|careerjet|simplyhired|wuzzuf|gulftalent|mustakbil|jobstreet|seek|reed|totaljobs|stepstone|dice|jobrapido|adzuna|neuvoo|careerbuilder|jobsdb|laimoon|workable|recruitee|smartrecruiters|greenhouse|lever|wellfound)\.[a-z.]+$|^(jobs|careers)\.[a-z0-9-]+\.[a-z.]+$/;
+const JOB_PATH = /(^|\/)(jobs?|job-listings?|vacanc(?:y|ies)|careers?\/jobs?)(\/|$)/i;
+const JOB_TITLE = /\b\d+\+?\s+[^|]{0,60}\bjobs?\b|\bjobs? in\b|\bhiring\b|\bvacanc(?:y|ies)\b|\bapply now\b|\|\s*bebee\b/i;
+const CODE_HOST = /(^|\.)(github\.com|gitlab\.com|bitbucket\.org|sourceforge\.net)$/;
+const PROFILE_PATH: [RegExp, RegExp][] = [
+  [/(^|\.)linkedin\.[a-z.]+$/, /^\/(in|pub|company|school|showcase)\//i],
+  [/(^|\.)(x\.com|twitter\.com|facebook\.com|instagram\.com|tiktok\.com|threads\.net|pinterest\.[a-z.]+|behance\.net|dribbble\.com|about\.me|linktr\.ee|producthunt\.com)$/, /^\/[^/]+\/?$|^\/@/],
+  [/(^|\.)medium\.com$/, /^\/@/],
+  [/(^|\.)youtube\.com$/, /^\/(@|channel\/|c\/|user\/)/i],
+];
+const hostOfUrl = (u: string) => s(u).toLowerCase().replace(/^[a-z][a-z0-9+.-]*:\/\//, '').replace(/[/?#].*$/, '').replace(/:\d+$/, '').replace(/^www\./, '');
+const pathOfUrl = (u: string) => (/^[a-z][a-z0-9+.-]*:\/\//i.test(s(u)) ? s(u).replace(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i, '').replace(/[?#].*$/, '') || '/' : '');
+/** '' when the linking page is a real page, else the plain reason it is not worth a link-building step (lost or won). */
+export function junkLinkSite(o: { domain?: string | null; url?: string | null; title?: string | null; linkType?: string | null; spam?: number | null }): string {
+  const url = s(o.url);
+  const h = hostOfUrl(url) || hostOfUrl(s(o.domain));
+  const path = pathOfUrl(url);
+  const lt = s(o.linkType).toLowerCase();
+  if (lt === 'spam') return 'a link-farm or spam page';
+  if (lt === 'scraper') return 'an automatic report page';
+  if ((Number(o.spam) || 0) >= 30) return 'a page with a high spam score';
+  if (h && (JOB_HOST.test(h) || (/(^|\.)linkedin\.[a-z.]+$/.test(h) && /^\/jobs(\/|$)/i.test(path)) || (JOB_PATH.test(path) && JOB_TITLE.test(s(o.title))))) return 'a job listing';
+  if (h && CODE_HOST.test(h)) return 'a code host';
+  if (h && path && PROFILE_PATH.some(([hr, pr]) => hr.test(h) && pr.test(path))) return 'a profile';
+  if (lt === 'profile') return 'a profile';
+  return '';
 }

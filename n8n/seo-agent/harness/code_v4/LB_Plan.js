@@ -1713,5 +1713,5 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
     pages, home, canonical_host: site_model.canonical_host || s.domain, budget: CONFIG.sequences_per_week, qualify_max: CONFIG.qualify_per_week,
     due: { listings: due('listings_at'), resources: due('resources_at'), wayback: due('wayback_at'), broken: due('broken_at') && !free_only, press: true,
       podcasts: due('podcasts_at'), assets: due('assets_at') && !free_only },   // L5: podcast shows (free, monthly). L6: the asset ideas read from the competitors' most-linked pages (DataForSEO domain_pages, monthly, ~$0.02 a competitor)
-    state: st, prospects_open: mineP.filter(p => (p.status || 'new') === 'new').length, outreach_rows: mineO.length, checked_at: iso, cycle, tz, month } };
+    state: st, prospects_open: mineP.filter(p => (p.status || 'new') === 'new' && !String(p.retired_at || '').trim()).length, outreach_rows: mineO.length, checked_at: iso, cycle, tz, month } };
 });

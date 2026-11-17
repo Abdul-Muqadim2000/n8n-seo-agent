@@ -1243,7 +1243,11 @@ const OK = (() => {
     ['platform', /a platform page|a code host on|a profile on|a channel page on/i],
     ['job_board', /job board|job listing/i],
     ['not_a_site', /mailbox provider|contact \/ company database|infrastructure \(|statistics page|not a website/i],
+    ['competitor_list', /its own list ranks itself/i],
     ['competitor', /competing (site|provider)|competitor of yours|recommends instead of you/i],
+    ['listing', /a directory or list where companies are listed/i],
+    ['your_platform', /the maker of the platform you work with/i],
+    ['software', /a software maker, not a competitor/i],
     ['sells_links', /sells posts or links|paid guest posts|offers links|link-farm|spam score|gambling|essay-mill|press-release wire|different sites linked from one page/i],
     ['low_authority', /too little authority/i],
     ['accreditation', /accredited \/ approved providers/i],
@@ -1256,7 +1260,7 @@ const OK = (() => {
     ['writer_skip', /^writer:/i],
   ];
   const reasonCode = (why) => { const t = String(why || ''); if (!t.trim()) return ''; for (const [c, re] of REASON_CODES) if (re.test(t)) return c; return 'other'; };
-  const DOMAIN_CODES = new Set(['government', 'platform', 'job_board', 'not_a_site', 'competitor', 'sells_links', 'low_authority']);
+  const DOMAIN_CODES = new Set(['government', 'platform', 'job_board', 'not_a_site', 'competitor', 'competitor_list', 'sells_links', 'low_authority']);
   // the topic floor for pitches that ask "link to our page" (0.25 let course listings, a stock exchange and accounting bodies through at 30-33%)
   const TOPIC_FLOOR = 0.4, TOPIC_FLOOR_TYPES = new Set(['resource', 'ai_source', 'gap', 'comp_new']);
   // the link index's own authority (DataForSEO domain rank 0-1000; 0 = unknown, never a refusal)

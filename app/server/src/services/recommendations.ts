@@ -58,6 +58,12 @@ import {
   recSourceOf,
   splitTitle,
   withRule,
+  openAlertCount,
+  indexingSupersedesAudit,
+  healthLabelFor,
+  aiQuestionInputsOf,
+  junkLinkSite,
+  type LinkStatusCounts,
 } from '@seo/shared';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { aiData, alertsData, backlinksData, contentData, ga4Now, gscNow, previousOfType, rankingsData, searchData, settingsData, technicalData } from './data';
@@ -82,7 +88,7 @@ export interface SiteBundle {
   /** the engine tracks the site but its weekly reports go to another address (an older setup): they never reach this app */
   reportsElsewhere: boolean;
   /** v4.13 Link Builder: pitches waiting, a mailbox, replies waiting, listings competitors have */
-  links?: { drafted: number; mailbox: boolean; repliesWaiting: number; listingsMissing: { name: string; competitors: string[] }[] };
+  links?: { drafted: number; mailbox: boolean; repliesWaiting: number; listingsMissing: { name: string; competitors: string[] }[]; counts: LinkStatusCounts | null };
   /** keyword-first: when the website's latest keyword research arrived (null: none yet) */
   researchAt?: string | null;
   /** Index coverage (2026-10-29): the daily index check's newest counts (null: not run yet, or it could not be read) */
@@ -264,8 +270,13 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
   const L = x.links;
   if (L && L.repliesWaiting)
     add({ id: 'links:replies', category: 'backlinks', priority: 'high', title: `${L.repliesWaiting} link-building repl${L.repliesWaiting === 1 ? 'y' : 'ies'} waiting for your answer`, detail: 'Someone answered your pitch. A suggested answer is ready: edit it and send it in the same thread. A quick answer is what turns a reply into a link.', action: { label: 'Answer', page: 'links' } });
-  if (L && L.drafted && !L.mailbox)
-    add({ id: 'links:mailbox', category: 'backlinks', priority: 'high', title: 'Connect your mailbox to send the link pitches', detail: `${L.drafted} pitch${L.drafted === 1 ? ' is' : 'es are'} drafted. They go out from your own address (company settings > Mailboxes) after you approve them, never from ours.`, action: { label: 'See the pitches', page: 'links' } });
+  // CR17-E (F9, wired by the integrator): the pitches waiting for the client come from the one link status model (shared link-status.ts);
+  // with no mailbox they can still be sent by hand ("I sent it myself"), so this is a medium step, not a blocker
+  const waitingPitches = L?.counts ? L.counts.waitingForYou : L?.drafted ?? 0;
+  if (L && waitingPitches && !L.mailbox)
+    add({ id: 'links:mailbox', category: 'backlinks', priority: 'medium', title: 'Connect a mailbox, or send the link pitches yourself',
+      detail: `${waitingPitches} pitch${waitingPitches === 1 ? ' is' : 'es are'} written and waiting for you. Connect your mailbox (company settings > Mailboxes) and approve them, or copy each one, send it from your own e-mail and press "I sent it myself". Nothing is sent for you.`,
+      action: { label: 'See the pitches', page: 'links' } });
   else if (L && L.drafted)
     add({ id: 'links:approve', category: 'backlinks', priority: 'high', title: `${L.drafted} link-building pitch${L.drafted === 1 ? '' : 'es'} ready for your approval`, detail: 'Each one is written for one site (a dead link to replace, a list that leaves you out, a mention without a link) with the right page of yours and the right person. Read, edit and approve: they go out from your mailbox, a few a day.', action: { label: 'Review the pitches', page: 'links' } });
   for (const l of (L?.listingsMissing ?? []).slice(0, 2))
@@ -362,13 +373,11 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
   const engine = [...(snap?.actions ?? []), ...(x.ai.report?.actions ?? []), ...(x.rankNext ? [x.rankNext] : [])];
   // client report 2026-11-16 (issue 1): an AI question's page goes through the shared resolver, as on the AI visibility page (the question's
   // own search, never the panel topic; the AI target; "Improve <page>" when a page owns the search; nothing when its page exists)
+  // CR17-G (Q3, wired by the integrator): the same inputs the AI visibility page decides with (the server's page list with moves followed,
+  // the targets with the answered override, the next AI check); the ladder heads fall back to the rankings' ladders
   const aiInputs: AiQuestionInputs = {
-    prompts: x.ai.prompts,
-    questions: x.ai.report?.questions ?? [],
-    targets: x.ai.growth?.targets ?? [],
-    written: x.ai.pagesWritten ?? x.content.items.filter((c) => !['failed', 'held'].includes(c.status)).map((c) => ({ keyword: c.keyword, status: c.status, publishedUrl: c.publishedUrl, startedAt: c.startedAt, source: c.source })),
-    market: site.country ?? undefined,
-    ladderHeads: x.rankings.ladders.map((l) => l.headKeyword).filter(Boolean),
+    ...aiQuestionInputsOf(x.ai, site.country ?? ''),
+    ladderHeads: x.ai.ladderHeads?.length ? x.ai.ladderHeads : x.rankings.ladders.map((l) => l.headKeyword).filter(Boolean),
   };
   for (const a of engine) {
     const ai = a.source === 'ai_visibility' && aiQuestionBody(a.apiBody) ? aiQuestionAction({ apiBody: a.apiBody }, aiInputs) : null;
@@ -457,7 +466,7 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
   // R66: a score drop only within one report type, a full report after a technical audit is a different scale, not a fall
   const prevAudit = previousOfType(t.audits, t.audits.length - 1);
   if (latestAudit && prevAudit && latestAudit.healthScore < prevAudit.healthScore - 2)
-    add({ id: 'tech:score-drop', category: 'technical', priority: 'high', title: `Health score fell from ${prevAudit.healthScore} to ${latestAudit.healthScore}`, detail: 'New issues appeared since the previous audit. Start with the new critical and high findings.', action: { label: 'See what changed', page: 'technical' } });
+    add({ id: 'tech:score-drop', category: 'technical', priority: 'high', title: `${healthLabelFor(latestAudit.reportType)} fell from ${prevAudit.healthScore} to ${latestAudit.healthScore}`, detail: 'New issues appeared since the previous audit. Start with the new critical and high findings.', action: { label: 'See what changed', page: 'technical' } });
   // G26 (2026-10-12, FIX_PLAN): the findings arrive in the audit's own impact order (services/data.ts), so these are the six that matter most,
   // and each one carries the line the audit used to rank it. Where the audit weighted them, its three highest-impact findings are the "high"
   // ones here too, otherwise a Critical on a page nobody visits would be pushed above the index blocker on the pages that earn the traffic,
@@ -520,7 +529,9 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
   const lastBl = bl.snapshots[bl.snapshots.length - 1];
   const REASON: Record<string, string> = { link_removed: 'the link was removed from the page', page_gone: 'the linking page is gone', domain_gone: 'the linking site no longer exists', not_seen: 'no source has seen it for 4 months' };
   const confirmed = (bl.latest?.lost ?? []).filter((l) => !l.pending && l.reason !== 'domain_gone' && (l.domainRank >= 100 || l.reason));
-  for (const l of confirmed.filter((l) => l.domainRank >= 100 || bl.refs.find((r) => r.refDomain === l.fromDomain && r.seoValue >= 35)).slice(0, 3))
+  // CR17-E (C4, wired by the integrator): a link from a junk page (a job listing, a profile, a code host, a link farm) is not worth winning back
+  const junkLost = (l: (typeof confirmed)[number]) => { const ref = bl.refs.find((r) => r.refDomain === l.fromDomain); return !!junkLinkSite({ domain: l.fromDomain, url: l.fromUrl || ref?.fromUrl, title: l.title || ref?.pageTitle, linkType: ref?.linkType, spam: Math.max(l.spam ?? 0, ref?.spamScore ?? 0) }); };
+  for (const l of confirmed.filter((l) => !junkLost(l) && (l.domainRank >= 100 || bl.refs.find((r) => r.refDomain === l.fromDomain && r.seoValue >= 35))).slice(0, 3))
     add({ id: `bl:lost:${l.fromDomain}`, category: 'backlinks', priority: 'high', title: `Win back the link from ${l.fromDomain}`, detail: `Checked twice on the page: ${REASON[l.reason ?? ''] ?? 'the link is gone'}. The outreach pipeline has a draft asking to restore it.`, evidence: `authority ${l.domainRank}${l.lastSeen ? ` · last seen ${l.lastSeen}` : ''}`, action: { label: 'Open backlinks', page: 'backlinks' } }, {
       impact: impactFromPoints(Math.min(20, l.domainRank / 30)),
       confidence: 'modelled',
@@ -628,7 +639,7 @@ const isNotIndexedAsk = (r: Recommendation, findings: SiteBundle['technical']['f
  */
 export function foldNotIndexed(out: readonly Recommendation[], x: Pick<SiteBundle, 'indexing' | 'technical'>): Recommendation[] {
   const ix = x.indexing;
-  if (!ix || !ix.on || !ix.runAt) return [...out];
+  if (!ix || !indexingSupersedesAudit(ix)) return [...out];   // CR17-C: Index coverage owns indexing asks once it has a reading
   const members = out.filter((r) => isNotIndexedAsk(r, x.technical.findings));
   if (!members.length) return [...out];
   const card = notIndexedCard(members, ix);
@@ -895,7 +906,7 @@ export async function overviewData(org: OrgRow, site: SiteRow): Promise<Overview
     },
     rankings: {
       ladders: x.rankings.ladders.length,
-      keywords: kw.length + ladderRungs.length,
+      keywords: x.rankings.tracked?.total ?? kw.length + ladderRungs.length,   // CR17-I (F8): the one tracked-keyword count
       top3: positions.filter((p) => p <= 3).length,
       top10: positions.filter((p) => p <= 10).length,
       top50: positions.filter((p) => p <= 50).length,
@@ -905,7 +916,7 @@ export async function overviewData(org: OrgRow, site: SiteRow): Promise<Overview
       pagesPerWeek: x.content.cadence?.pagesPerWeek ?? 0,
       caseStudies: x.content.caseStudies.length,
     }),
-    alerts: { open: x.alerts.alerts.filter((a) => a.status !== 'resolved' && a.status !== 'closed').length, checkinDue: x.alerts.checkinDue },
+    alerts: { open: openAlertCount(x.alerts.alerts), checkinDue: x.alerts.checkinDue },   // CR17-D: not resolved, not seen, not an Info notice
     recommendations: todo.slice(0, 6),
     reports,
   };

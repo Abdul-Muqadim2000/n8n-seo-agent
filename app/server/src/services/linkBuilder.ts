@@ -6,6 +6,7 @@ import {
   DEFAULT_LINK_SETTINGS,
   draftGate,
   emailDomain,
+  isRetiredProspect,
   linkStates,
   linkStatusCounts,
   n8nSiteId,
@@ -166,7 +167,12 @@ async function brandOf(domain: string): Promise<string> {
 }
 const DRAFT_ORDER: Record<string, number> = { to_review: 0, needs_edit: 1, to_write: 2, needs_contact: 3, no_page: 4, left_out: 5 };
 /** CR17-E (F9): the one population behind every link-building count (the Links page, the Backlinks page, the Pipeline row, the recommendations) */
-export function linkStatusOf(outreach: readonly LinkOutreachRow[], prospects: readonly ProspectRow[], seqs: readonly LinkStatusSequence[]): LinkStatusRow[] {
+export function linkStatusOf(outreach0: readonly LinkOutreachRow[], prospects0: readonly ProspectRow[], seqs: readonly LinkStatusSequence[]): LinkStatusRow[] {
+  // CR17-F (C5, wired by the integrator): a prospect retired with the AI question it came from (never pitched) is kept for the record and
+  // never offered: neither it nor its pitch row is counted or listed (the engine skips it the same way, LB Plan / LB Page Requests / LB Assemble)
+  const retired = new Set(prospects0.filter(isRetiredProspect).map((p) => `${s(p.prospect_domain).toLowerCase()}|${s(p.type)}`));
+  const prospects = prospects0.filter((p) => !isRetiredProspect(p));
+  const outreach = outreach0.filter((r) => !retired.has(`${s(r.prospect_domain).toLowerCase()}|${s(r.type)}`));
   return linkStates({
     outreach: outreach.map((r) => ({ prospect_domain: s(r.prospect_domain), type: s(r.type), status: s(r.status), fit_reason: s(r.fit_reason), reason_code: s(r.reason_code), sequence_json: s(r.sequence_json), checked_at: s(r.checked_at) })),
     prospects: prospects.map((p) => ({ prospect_domain: s(p.prospect_domain), type: s(p.type), status: s(p.status), contacted_at: s(p.contacted_at), won_at: s(p.won_at), verified_at: s(p.verified_at) })),

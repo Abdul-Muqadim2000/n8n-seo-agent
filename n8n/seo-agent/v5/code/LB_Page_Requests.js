@@ -24,7 +24,7 @@ for (const p of plans) {
   const comp = new Set([...p.competitors, ...(p.ai_rivals || []).map(r => r.domain)].map(c => LK.regDomain(c)));   // C-2: the businesses AI recommends instead of you are not read either - LB Assemble refuses them with the reason (2b)
   const skipD = (d) => !d || LK.sameSite(d, p.domain) || comp.has(LK.regDomain(d)) || BIG.test(d) || LK.isWire(d) || !!OK.badHost(d) || linking.has(LK.refKey(d));   // D13: badHost covers infrastructure, statistics pages, mailbox providers and contact databases (outlook.com, zoominfo.com were read and pitched live)
   // 1. prospects to qualify: new, not yet qualified, best score first (reclaims are fixed on our own site)
-  const todo = prospects.filter(x => x.site_id === p.site_id && (x.status || 'new') === 'new' && !['reclaim', 'digest'].includes(x.type) && !known.has(x.prospect_domain + '|' + x.type) && !skipD(x.prospect_domain))
+  const todo = prospects.filter(x => x.site_id === p.site_id && (x.status || 'new') === 'new' && !String(x.retired_at || '').trim() && !['reclaim', 'digest'].includes(x.type) && !known.has(x.prospect_domain + '|' + x.type) && !skipD(x.prospect_domain))
     .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0)).slice(0, p.qualify_max);
   for (const x of todo) add('prospect', (x.source_url && !DOC.test(x.source_url)) ? x.source_url : 'https://' + x.prospect_domain + '/', { prospect_domain: x.prospect_domain, type: x.type });
   // 1b. B11-2 (2026-10-15, benchmark area 11): the links we have already won, read again on their own page.

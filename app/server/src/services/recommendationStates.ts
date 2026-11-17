@@ -17,7 +17,6 @@ import {
   RESOLVED_SHOWN_DAYS,
   TODO_STATES,
   dismissReasonLabel,
-  indexPath,
   nextRecState,
   normKeyword,
   pageKey,
@@ -37,9 +36,10 @@ import { badRequest, notFound } from '../lib/errors';
 import type { SiteAccess } from '../auth/access';
 import { audit } from './audit';
 import type { SiteBundle } from './recommendations';
+import { aiTargetVerifier, indexVerifier, linkVerifier, pitchesVerifier } from './recommendationVerifiers';
 
 export interface RecVerifyContext {
-  site: Pick<SiteRow, 'id' | 'domain'>;
+  site: Pick<SiteRow, 'id' | 'domain'> & Partial<Pick<SiteRow, 'country'>>;
   x: SiteBundle;
   /** the website's steps (undefined: they could not be read; a step-backed item is then "unknown", never resolved) */
   tasks?: readonly SiteTask[];
@@ -75,32 +75,10 @@ function siteTaskVerdict(taskKey: string, ctx: RecVerifyContext): RecVerdict {
   return { outcome: 'open' };
 }
 
-const isIndexed = (p: IndexPageRow) => String(p.state) === 'indexed';
-const movedTo = (p: IndexPageRow): string => {
-  const f = String(p.final_url ?? '');
-  return f && pageKey(f) && pageKey(f) !== pageKey(String(p.url)) ? f : '';
-};
-
 const VERIFIERS: Record<RecCheckKind, RecVerifier> = {
   site_task: () => UNKNOWN, // every step-backed item goes through siteTaskVerdict (by its taskKey) before the kind is asked
-  // the daily index check: every page of the card in Google (or moved away for good) -> resolved; some asked about / fixed and not read yet -> waiting
-  index: async ({ rec }, ctx) => {
-    const pages = (rec.subjects?.length ? rec.subjects : [rec.action?.href ?? '']).filter(Boolean);
-    if (!pages.length) return UNKNOWN;
-    const rows = await ctx.indexPages();
-    const read = pages.map((u) => rows.get(pageKey(u))).filter((r): r is IndexPageRow => !!r);
-    if (read.length < pages.length) return UNKNOWN;
-    const done = read.filter((r) => isIndexed(r) || movedTo(r));
-    if (done.length === read.length) {
-      const lines = read.slice(0, 3).map((r) => (movedTo(r) ? `${indexPath(r.url)} moved to ${indexPath(movedTo(r))}` : `${indexPath(r.url)} is in Google${r.indexed_since ? ` since ${day(r.indexed_since)}` : ''}`));
-      const at = read.map((r) => String(r.indexed_since || r.updated_at || '')).filter(Boolean).sort().pop();
-      return { outcome: 'resolved', evidence: `${lines.join(', ')}${read.length > 3 ? ` and ${read.length - 3} more` : ''}.`, at };
-    }
-    const waiting = read.filter((r) => !isIndexed(r) && !movedTo(r) && ((r.asked_google_at && !r.google_read_after_ask_at) || r.fix_seen_at));
-    if (waiting.length && waiting.length + done.length === read.length)
-      return { outcome: 'waiting', evidence: `${done.length} of ${read.length} in Google; Google has not read ${waiting.length === 1 ? indexPath(waiting[0].url) : `${waiting.length} of them`} again since the change.` };
-    return { outcome: 'open', evidence: done.length ? `${done.length} of ${read.length} pages are in Google now.` : '' };
-  },
+  // CR17 integration: Index coverage's own reading (package C: moved = done, Search Console's validation = waiting / failed)
+  index: indexVerifier,
   // the audit finding: fixed in a newer audit, no longer seen by our live check, or a re-check you asked for
   finding: ({ rec }, ctx) => {
     const key = rec.id.slice('tech:'.length);
@@ -114,25 +92,10 @@ const VERIFIERS: Record<RecCheckKind, RecVerifier> = {
     if (f.recheck?.state === 'still_open') return { outcome: 'failed', evidence: `Checked again on ${day(f.recheck.checkedAt)}: still there. ${f.recheck.note}`.trim(), at: f.recheck.checkedAt };
     return { outcome: 'open' };
   },
-  // the AI question's page: live or won -> resolved; being written or written -> in progress
-  ai_target: ({ rec }, ctx) => {
-    const q = rec.issueKey?.startsWith('aiq:') ? rec.issueKey.slice(4) : '';
-    if (!q) return UNKNOWN;
-    const t = (ctx.x.ai.growth?.targets ?? []).find((x) => normKeyword(x.keyword) === normKeyword(q) || normKeyword(x.question) === normKeyword(q));
-    if (!t) return UNKNOWN;
-    const st = String(t.state ?? t.status);
-    if (st === 'won') return { outcome: 'resolved', evidence: 'AI answers name you for this question now.', at: t.wonAt || undefined };
-    if (st === 'live' || st === 'named' || st === 'covered') return { outcome: 'resolved', evidence: t.statePageUrl ? `Your page for it is live: ${t.statePageUrl}` : 'Your page for it is live.', at: t.writtenAt || undefined };
-    if (st === 'writing' || st === 'written' || st === 'needs_fix') return { outcome: 'in_progress', evidence: st === 'writing' ? 'The page for it is being written.' : 'The page for it is written and waits to be published.' };
-    return { outcome: 'open' };
-  },
-  // our own link check: the linking site shows the link again
-  link: ({ rec }, ctx) => {
-    const d = (rec.issueKey ?? '').startsWith('link:') ? rec.issueKey!.slice(5) : tailOf(rec.id, 2);
-    const ref = ctx.x.backlinks.refs.find((r) => r.refDomain.replace(/^www\./, '') === d);
-    if (ref && ref.status === 'live') return { outcome: 'resolved', evidence: `Our link check found your link on ${d} again${ref.lastSeen ? ` on ${day(ref.lastSeen)}` : ''}.`, at: ref.lastSeen || undefined };
-    return UNKNOWN;
-  },
+  // CR17 integration: the stored target overtaken by a live answering page, else the shared question resolver (package G)
+  ai_target: aiTargetVerifier,
+  // CR17 integration: our own link check finds the link again (package E's rule: never an index's word)
+  link: linkVerifier,
   // the content log: published, or the draft finished
   content: ({ rec }, ctx) => {
     const kw = tailOf(rec.id, 2);
@@ -163,7 +126,7 @@ const VERIFIERS: Record<RecCheckKind, RecVerifier> = {
   },
   rank: () => UNKNOWN,
   connection: () => UNKNOWN,
-  pitches: () => UNKNOWN,
+  pitches: pitchesVerifier,   // CR17 integration: the one link status model's numbers (package E)
   schedule: () => UNKNOWN,
 };
 

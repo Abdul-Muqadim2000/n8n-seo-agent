@@ -1242,7 +1242,11 @@ const OK = (() => {
     ['platform', /a platform page|a code host on|a profile on|a channel page on/i],
     ['job_board', /job board|job listing/i],
     ['not_a_site', /mailbox provider|contact \/ company database|infrastructure \(|statistics page|not a website/i],
+    ['competitor_list', /its own list ranks itself/i],
     ['competitor', /competing (site|provider)|competitor of yours|recommends instead of you/i],
+    ['listing', /a directory or list where companies are listed/i],
+    ['your_platform', /the maker of the platform you work with/i],
+    ['software', /a software maker, not a competitor/i],
     ['sells_links', /sells posts or links|paid guest posts|offers links|link-farm|spam score|gambling|essay-mill|press-release wire|different sites linked from one page/i],
     ['low_authority', /too little authority/i],
     ['accreditation', /accredited \/ approved providers/i],
@@ -1255,7 +1259,7 @@ const OK = (() => {
     ['writer_skip', /^writer:/i],
   ];
   const reasonCode = (why) => { const t = String(why || ''); if (!t.trim()) return ''; for (const [c, re] of REASON_CODES) if (re.test(t)) return c; return 'other'; };
-  const DOMAIN_CODES = new Set(['government', 'platform', 'job_board', 'not_a_site', 'competitor', 'sells_links', 'low_authority']);
+  const DOMAIN_CODES = new Set(['government', 'platform', 'job_board', 'not_a_site', 'competitor', 'competitor_list', 'sells_links', 'low_authority']);
   // the topic floor for pitches that ask "link to our page" (0.25 let course listings, a stock exchange and accounting bodies through at 30-33%)
   const TOPIC_FLOOR = 0.4, TOPIC_FLOOR_TYPES = new Set(['resource', 'ai_source', 'gap', 'comp_new']);
   // the link index's own authority (DataForSEO domain rank 0-1000; 0 = unknown, never a refusal)
@@ -1510,7 +1514,7 @@ for (const p of plans) {
   const comp = new Set([...p.competitors, ...(p.ai_rivals || []).map(r => r.domain)].map(c => LK.regDomain(c)));   // C-2: the businesses AI recommends instead of you are not read either - LB Assemble refuses them with the reason (2b)
   const skipD = (d) => !d || LK.sameSite(d, p.domain) || comp.has(LK.regDomain(d)) || BIG.test(d) || LK.isWire(d) || !!OK.badHost(d) || linking.has(LK.refKey(d));   // D13: badHost covers infrastructure, statistics pages, mailbox providers and contact databases (outlook.com, zoominfo.com were read and pitched live)
   // 1. prospects to qualify: new, not yet qualified, best score first (reclaims are fixed on our own site)
-  const todo = prospects.filter(x => x.site_id === p.site_id && (x.status || 'new') === 'new' && !['reclaim', 'digest'].includes(x.type) && !known.has(x.prospect_domain + '|' + x.type) && !skipD(x.prospect_domain))
+  const todo = prospects.filter(x => x.site_id === p.site_id && (x.status || 'new') === 'new' && !String(x.retired_at || '').trim() && !['reclaim', 'digest'].includes(x.type) && !known.has(x.prospect_domain + '|' + x.type) && !skipD(x.prospect_domain))
     .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0)).slice(0, p.qualify_max);
   for (const x of todo) add('prospect', (x.source_url && !DOC.test(x.source_url)) ? x.source_url : 'https://' + x.prospect_domain + '/', { prospect_domain: x.prospect_domain, type: x.type });
   // 1b. B11-2 (2026-10-15, benchmark area 11): the links we have already won, read again on their own page.

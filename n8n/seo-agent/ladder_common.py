@@ -431,9 +431,9 @@ PROSPECT_COLS = [('site_id', 'string'), ('domain', 'string'), ('prospect_domain'
                  ('status', 'string'), ('first_seen', 'string'), ('last_seen', 'string'), ('won_at', 'string'), ('outreach_subject', 'string'), ('outreach_body', 'string'), ('note', 'string'),
                  ('score', 'number'), ('origin', 'string'), ('contact_email', 'string'), ('contact_url', 'string'), ('contacted_at', 'string'), ('followup_step', 'number'),
                  ('followup_subject', 'string'), ('followup_body', 'string'), ('verified_at', 'string'),   # v4.10: value x likelihood score, where it came from, a contact found on the site, follow-up drafts (1 + 2), won only after the link is verified
-                 ('drafted_at', 'string'),
+                 ('drafted_at', 'string'),   # P34-1 (2026-10-12): when the stored draft was written. Empty, or before the D12 / D13 gates = superseded: cleared, never counted, never offered (v5/code/_drafts.js, app/shared/src/outreach.ts)
     # CR17-F (2026-11-17, section 196): set when the AI question a prospect came from was retired (never pitched since); the row and its status stay
-    ('retired_at', 'string')]   # P34-1 (2026-10-12): when the stored draft was written. Empty, or before the D12 / D13 gates = superseded: cleared, never counted, never offered (v5/code/_drafts.js, app/shared/src/outreach.ts)
+    ('retired_at', 'string')]
 # v4.10: the link ledger — one row per site and referring domain, merged from every source (DataForSEO, Bing Webmaster Tools, the Search Console
 # links export, GA4 referrals, Wikipedia / Hacker News / news / web mentions) and verified by fetching the linking page (BACKLINKS_SPEC.md).
 LINKS_TABLE = 'seo_backlinks'

@@ -129,12 +129,12 @@ describe('R66: an audit is compared only with the previous audit of the same rep
     expect(previousOfType([pt('o1', '2026-09-01', '', 64), pt('o2', '2026-09-20', '', 72)], 1)).toBeNull();
   });
 
-  it('no "Health score fell from 83 to 70" recommendation when a full report follows a technical audit', () => {
+  it('no "Technical health fell from 83 to 70" recommendation when a full report follows a technical audit', () => {
     const b = bundleWith({ audits: points });
     expect(recommend(SITE, b).some((r) => r.id === 'tech:score-drop')).toBe(false);
     // a real fall within one type still fires
     const fell = bundleWith({ audits: [...points, pt('aud_next', '2026-10-16T08:00:00Z', 'site_audit', 70)] });
-    expect(recommend(SITE, fell).find((r) => r.id === 'tech:score-drop')?.title).toBe('Health score fell from 83 to 70');
+    expect(recommend(SITE, fell).find((r) => r.id === 'tech:score-drop')?.title).toBe('Technical health fell from 83 to 70');
   });
 });
 

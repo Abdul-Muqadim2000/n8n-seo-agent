@@ -133,7 +133,8 @@ describe('our checks decide the state (the verifiers)', () => {
     const card = { id: 'ix:not_indexed', category: 'technical' as const, priority: 'medium' as const, title: 't', detail: 'd', subjects: [P('/a'), P('/b')] };
     const v = await verdictFor({ rec: card, present: false }, ctx([]));
     expect(v.outcome).toBe('resolved');
-    expect(v.evidence).toBe('/a is in Google since 2026-11-18, /b moved to /services/b.');
+    // CR17 integration: the verifier is Index coverage's own rule (package C), its words and day format
+    expect(v.evidence).toBe('/a is in Google since 18 Nov, /b now redirects to /services/b.');
     const waiting = await verdictFor({ rec: { ...card, subjects: [P('/a'), P('/c')] }, present: true }, ctx([]));
     expect(waiting.outcome).toBe('waiting');
   });
@@ -174,5 +175,73 @@ describe('the board: To do / Waiting for Google / Resolved / Dismissed from the 
     expect(b.waiting.map((r) => r.id)).toEqual(['e']);
     expect(b.expired.map((r) => r.id)).toEqual(['f']);
     expect(b.dismissReasons.length).toBeGreaterThan(2);
+  });
+});
+
+// CR17 integration (client report 2026-11-17): the verifiers of the packages that own a source (C index, E links, G AI questions), and the
+// seams wired into recommend() (D alert count, E mailbox wording + junk lost links, I tracked keywords, C health label).
+describe('CR17 integration: package checks behind the recommendation states', () => {
+  const ctx = (x = bundle()) => verifyContext({ ...site, country: 'United Arab Emirates' } as SiteRow, x, [], new Date('2026-11-20T10:00:00.000Z'));
+  const row = (path: string, over: Partial<IndexPageRow>) => ({ url: P(path), state: 'not_indexed', final_url: '', indexed_since: '', ...over }) as unknown as IndexPageRow;
+  const card = (subjects: string[]) => ({ id: 'ix:not_indexed', category: 'technical' as const, priority: 'medium' as const, title: 't', detail: 'd', subjects });
+  it('index (C): left out on purpose is done; Google read it after the fix and still left it out is failed; nothing done is open', async () => {
+    setIndexPageReader(async () => [
+      row('/a', { state: 'indexed', indexed_since: '2026-11-18T00:00:00.000Z' }),
+      row('/privacy', { state: 'excluded', cause: 'low_value', action: 'leave_out' } as Partial<IndexPageRow>),
+      row('/thin', { state: 'not_indexed', cause: 'crawled_not_indexed', action: 'improve', fix_failed_at: '2026-11-19T06:00:00.000Z' } as Partial<IndexPageRow>),
+      row('/new', { state: 'not_indexed', cause: 'discovered_not_crawled', action: 'wait' } as Partial<IndexPageRow>),
+    ]);
+    const done = await verdictFor({ rec: card([P('/a'), P('/privacy')]), present: true }, ctx());
+    expect(done.outcome).toBe('resolved');
+    expect(done.evidence).toContain('/privacy is left out on purpose');
+    const failed = await verdictFor({ rec: card([P('/a'), P('/thin')]), present: true }, ctx());
+    expect(failed.outcome).toBe('failed');
+    expect(failed.evidence).toContain('/thin:');
+    expect((await verdictFor({ rec: card([P('/new')]), present: true }, ctx())).outcome).toBe('open');
+  });
+  it('link (E): a lost link is won back only when our own check finds it again, never on an index\'s word', async () => {
+    const lost = { id: 'bl:lost:peppol.org', category: 'backlinks' as const, priority: 'high' as const, title: 't', detail: 'd', issueKey: 'link:peppol.org' };
+    const ref = (verify: string) => ({ refDomain: 'peppol.org', status: 'live', verify, verifiedAt: '2026-11-19T00:00:00.000Z', lastSeen: '2026-11-19' });
+    const withRef = (verify: string) => bundle({ backlinks: { ...bundle().backlinks, refs: [ref(verify)] as unknown as SiteBundle['backlinks']['refs'] } });
+    expect((await verdictFor({ rec: lost, present: false }, ctx(withRef('found')))).outcome).toBe('resolved');
+    expect((await verdictFor({ rec: lost, present: false }, ctx(withRef('unchecked')))).outcome).toBe('unknown');
+  });
+  it('pitches (E): the open card names the one link status model\'s numbers', async () => {
+    const counts = { waitingForYou: 3, sent: 2, replied: 1, won: 0 } as unknown as NonNullable<SiteBundle['links']>['counts'];
+    const x = bundle({ links: { drafted: 3, mailbox: false, repliesWaiting: 0, listingsMissing: [], counts } });
+    const v = await verdictFor({ rec: { id: 'links:approve', category: 'backlinks', priority: 'high', title: 't', detail: 'd' }, present: true }, ctx(x));
+    expect(v).toEqual({ outcome: 'open', evidence: 'Pitches: 3 waiting for you, 2 sent, 1 replied.' });
+  });
+  it('ai_target (G): a question whose stored target is still queued is answered by a live page written for it', async () => {
+    const q = 'best ai development company in uae';
+    const x = bundle({
+      ai: {
+        ...bundle().ai,
+        growth: { targets: [{ targetId: 't37', question: q, keyword: q, kind: 'new', state: 'queued', updatedAt: '2026-11-10T00:00:00.000Z' }] } as unknown as SiteBundle['ai']['growth'],
+        pagesWritten: [{ keyword: q, status: 'published', publishedUrl: P('/services/ai-development-uae'), publishedAt: '2026-11-15T00:00:00.000Z', startedAt: '2026-11-13T00:00:00.000Z', source: 'ai_answer', aiTargetId: 't37' }],
+      } as unknown as SiteBundle['ai'],
+    });
+    const rec = { id: `ai:gap:${q}`, category: 'ai' as const, priority: 'medium' as const, title: 't', detail: 'd', issueKey: `aiq:${q}` };
+    const v = await verdictFor({ rec, present: false }, ctx(x));
+    expect(v.outcome).toBe('resolved');
+    expect(v.evidence).toContain('/services/ai-development-uae');
+  });
+});
+
+describe('CR17 integration: seams in recommend()', () => {
+  it('a lost link on a job board is never a "win back" step; a real one still is', () => {
+    const b = bundle();
+    const lost = (d: string, url: string) => ({ fromDomain: d, fromUrl: url, toUrl: P('/'), anchor: '', dofollow: true, domainRank: 300, spam: 0, firstSeen: '', lastSeen: '2026-11-01', title: '', reason: 'link_removed' });
+    const x = bundle({ backlinks: { ...b.backlinks, latest: { lost: [lost('bebee.com', 'https://bebee.com/ae/jobs/ml-engineer-devaicon'), lost('peppol.org', 'https://peppol.org/members/')] } as unknown as SiteBundle['backlinks']['latest'] } });
+    const ids = recommend(site, x).map((r) => r.id);
+    expect(ids).toContain('bl:lost:peppol.org');
+    expect(ids).not.toContain('bl:lost:bebee.com');
+  });
+  it('no mailbox: the pitches waiting for you can be sent by hand, a medium step', () => {
+    const counts = { waitingForYou: 2 } as unknown as NonNullable<SiteBundle['links']>['counts'];
+    const r = recommend(site, bundle({ links: { drafted: 2, mailbox: false, repliesWaiting: 0, listingsMissing: [], counts } })).find((x) => x.id === 'links:mailbox')!;
+    expect(r.title).toBe('Connect a mailbox, or send the link pitches yourself');
+    expect(r.detail).toContain('I sent it myself');
+    expect(r.priority).toBe('medium');
   });
 });

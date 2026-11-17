@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { CircleSlash, Clock, Copy, ExternalLink as ExternalIcon, FileText, Mail, MailCheck, Send, ShieldCheck, UserRound } from 'lucide-react';
-import { addWorkingDays, consentGate, footerLines, replySubject, type LinkBuildingData, type MailboxView, type OutreachDraft, type OutreachStep } from '@seo/shared';
+import { addWorkingDays, consentGate, footerLines, leftOutWords, replySubject, type LinkBuildingData, type MailboxView, type OutreachDraft, type OutreachStep } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { errorMessage, toastError } from '@/lib/api';
 import { paths } from '@/lib/paths';
@@ -20,6 +20,12 @@ import { Dialog } from '@/components/ui/overlay';
 import { Kind, SectionHeading, useSitePage } from '../kit';
 import { urlPath } from '../format';
 import { anchorLabel, ANCHOR_INFO, CONTACT_KIND, sendingMailbox, typeIcon, typeLabel, windowText, words } from './common';
+
+
+/** CR17-F (C5): why a site was left out, in one wording for every page (the competitor gate's words by its code: a directory, the platform
+ *  you build on, a software maker); a competitor keeps its own sentence because it names what their site sells */
+const leftOutLine = (x: Pick<OutreachDraft, 'reasonCode' | 'fitReason'>): string =>
+  (x.reasonCode && x.reasonCode !== 'competitor' ? leftOutWords(x.reasonCode) : '') || x.fitReason;
 
 /** Cards shown before "Show more". */
 const SHOWN = 6;
@@ -82,7 +88,7 @@ export function ReadyToSend({ d, onRun }: { d: LinkBuildingData; onRun?: () => v
               <li key={`${x.prospectDomain}|${x.type}|${i}`} className="flex flex-col gap-0.5 px-4 py-2.5 sm:flex-row sm:items-baseline sm:gap-3">
                 <span className="shrink-0 font-medium text-ink">{x.prospectDomain}</span>
                 <span className="min-w-0 text-ink-3 [overflow-wrap:anywhere]">
-                  {typeLabel(x.type)} · {x.fitReason || 'not a fit'}
+                  {typeLabel(x.type)} · {leftOutLine(x) || 'not a fit'}
                 </span>
               </li>
             ))}

@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { BarChart3, BellRing, CalendarCheck, CheckCircle2, ClipboardCheck, Eye, FileSearch, Info, Mail, OctagonAlert, ShieldAlert, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import {
+  CHECKIN_NOT_INDEXED_LABEL,
   GOOGLE_PAGES_COUNT_NOTE,
   NO_PAGES_EXPORT,
   alertCounts,
@@ -129,7 +130,7 @@ function Alerts({ d, refetching }: { d: AlertsData; refetching: boolean }) {
             />
             <HeroStat label="Last check-in" value={last ? fmtMonth(last.month) : '-'} hint={last ? `Recorded ${fmtAgo(last.submittedAt)}` : 'Not recorded yet'} />
             <HeroStat
-              label="Not indexed (Google's count)"
+              label={CHECKIN_NOT_INDEXED_LABEL}
               value={last ? notIndexedText(last.notIndexedTotal) : '-'}
               delta={delta != null && prev ? <Delta value={delta} suffix="" digits={0} upIsGood={false} label={`vs ${fmtMonth(prev.month)}`} /> : undefined}
               hint={
@@ -176,7 +177,7 @@ function Alerts({ d, refetching }: { d: AlertsData; refetching: boolean }) {
                     <IconTile size="sm">
                       <BarChart3 />
                     </IconTile>
-                    Not indexed (Google's count)
+                    {CHECKIN_NOT_INDEXED_LABEL}
                   </span>
                 }
                 description={GOOGLE_PAGES_COUNT_NOTE}
@@ -191,7 +192,7 @@ function Alerts({ d, refetching }: { d: AlertsData; refetching: boolean }) {
                 }}
               >
                 {/* a month without a Pages export has no bar (never a 0 or a -1) */}
-                <BarsChart data={checkins.filter((c) => c.notIndexedTotal != null).map((c) => ({ month: c.month, notIndexed: c.notIndexedTotal }))} categoryKey="month" series={[{ key: 'notIndexed', label: 'Not indexed (Google\'s count)' }]} categoryFormat={(v) => fmtMonthShort(String(v))} height={220} />
+                <BarsChart data={checkins.filter((c) => c.notIndexedTotal != null).map((c) => ({ month: c.month, notIndexed: c.notIndexedTotal }))} categoryKey="month" series={[{ key: 'notIndexed', label: CHECKIN_NOT_INDEXED_LABEL }]} categoryFormat={(v) => fmtMonthShort(String(v))} height={220} />
               </ChartCard>
               {last && <LatestCheckin c={last} />}
             </div>
@@ -407,7 +408,7 @@ function LatestCheckin({ c }: { c: Checkin }) {
           </div>
         </dl>
       </div>
-      {c.notIndexedTotal != null && <p className="mt-3 text-xs leading-relaxed text-ink-3">{GOOGLE_PAGES_COUNT_NOTE} The pages you want in search are counted on the Indexing page.</p>}
+      {c.notIndexedTotal != null && <p className="mt-3 text-xs leading-relaxed text-ink-3">{GOOGLE_PAGES_COUNT_NOTE}</p>}
       {c.notes && <p className="mt-4 rounded-lg bg-surface-2 px-3 py-2 text-[13px] leading-relaxed text-ink-2">{c.notes}</p>}
       {(c.manualAction || c.securityIssue) && (
         <p className="mt-3 text-[13px] text-critical-text">Fix the issue in Search Console and request a review: rankings stay suppressed until Google lifts it.</p>
