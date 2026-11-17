@@ -5,7 +5,10 @@
 //   /api/*                        -> API_ORIGIN (every host)
 //   any path on an agency portal  -> API_ORIGIN: the server builds the portal's page shell (title, icon) from the host, and must
 //                                    never answer with our own (app/docs/WHITE_LABEL.md §2), so a portal host is proxied whole
-//   everything else               -> the static build (vercel.json turns unknown paths into index.html)
+//   "/" on app.<domain>           -> the plain app shell (app.html): signed-in people open the app there every day and must not
+//                                    see the prerendered marketing home first (www keeps it)
+//   everything else               -> the static build: a prerendered public page (cleanUrls), the app shell for the app's own
+//                                    paths (vercel.json rewrites), or 404.html with status 404
 //
 // Settings (Vercel → Project → Settings → Environment Variables, per environment):
 //   API_ORIGIN     https origin of the API server, e.g. https://api.alaventra.com (no path). Unset: /api answers 503.
@@ -63,7 +66,11 @@ export default function middleware(request: Request): Response {
   if (url.pathname === '/robots.txt' && host.startsWith('app.')) {
     return new Response('User-agent: *\nDisallow: /\n', { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
   }
-  if (!isApi && ours) return next({ headers: { 'content-security-policy': csp(origin, process.env.VITE_TUTORIALS_VIDEO_BASE ?? '') } });
+  if (!isApi && ours) {
+    const headers = { 'content-security-policy': csp(origin, process.env.VITE_TUTORIALS_VIDEO_BASE ?? '') };
+    if (url.pathname === '/' && host.startsWith('app.')) return rewrite(new URL('/app.html', url), { headers });
+    return next({ headers });
+  }
 
   if (!/^https?:\/\/[^/]+$/.test(origin)) {
     return new Response(JSON.stringify({ error: 'The API is not configured for this deployment.', code: 'api_unconfigured' }), {

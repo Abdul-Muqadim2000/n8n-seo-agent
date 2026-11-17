@@ -1,0 +1,163 @@
+// The route table, shared by the browser router (router.tsx, main.tsx) and the build-time prerender of the public pages
+// (entry-server.tsx). Keep it free of browser-only code at module level: the prerender imports it in Node.
+import { isRouteErrorResponse, Navigate, useRouteError, type LoaderFunctionArgs, type RouteObject } from 'react-router';
+import { pageTitle } from '@/components/layout/Brand';
+import { useDocumentTitle } from '@/components/layout/useDocumentTitle';
+import { RouteError } from '@/components/layout/RouteError';
+import { PageLoader } from '@/components/ui/feedback';
+import { AuthLayout, PublicOnly, RequireAuth } from '@/components/layout/AuthGate';
+import { RootRoute } from '@/marketing/RootRoute';
+import { OrgLayout, OrgIndex } from '@/components/layout/OrgLayout';
+import { SiteLayout } from '@/components/layout/SiteLayout';
+
+// Pages are loaded on demand (one chunk per page). Every page module default-exports its component.
+const page = (load: () => Promise<{ default: React.ComponentType }>) => async () => ({ Component: (await load()).default });
+
+const siteDataPages: RouteObject[] = [
+  { index: true, element: <Navigate to="overview" replace /> },
+  { path: 'overview', lazy: page(() => import('@/pages/site/OverviewPage')) },
+  { path: 'pipeline', lazy: page(() => import('@/pages/site/PipelinePage')) },
+  { path: 'pipeline/new', lazy: page(() => import('@/pages/site/NewLadderPage')) },
+  { path: 'pipeline/ladders/:ladderId', lazy: page(() => import('@/pages/site/LadderPage')) },
+  { path: 'recommendations', lazy: page(() => import('@/pages/site/RecommendationsPage')) },
+  { path: 'search', lazy: page(() => import('@/pages/site/SearchPage')) },
+  { path: 'rankings', lazy: page(() => import('@/pages/site/RankingsPage')) },
+  // KI (2026-11-08): shown in the sidebar only where the website's KI is visible (On, or Trial for platform admins); the pages say so otherwise
+  { path: 'competitors', lazy: page(() => import('@/pages/site/CompetitorsPage')) },
+  { path: 'keywords', lazy: page(() => import('@/pages/site/KeywordsPage')) },
+  { path: 'content', lazy: page(() => import('@/pages/site/ContentPage')) },
+  { path: 'technical', lazy: page(() => import('@/pages/site/TechnicalPage')) },
+  { path: 'indexing', lazy: page(() => import('@/pages/site/IndexingPage')) },
+  { path: 'ai', lazy: page(() => import('@/pages/site/AiVisibilityPage')) },
+  { path: 'crawlers', lazy: page(() => import('@/pages/site/CrawlersPage')) },
+  { path: 'backlinks', lazy: page(() => import('@/pages/site/BacklinksPage')) },
+  { path: 'links', lazy: page(() => import('@/pages/site/LinkBuildingPage')) },
+  { path: 'alerts', lazy: page(() => import('@/pages/site/AlertsPage')) },
+  { path: 'settings', element: <Navigate to="business" replace /> },
+  { path: 'settings/:tab', lazy: page(() => import('@/pages/site/SiteSettingsPage')) },
+];
+
+// An unknown /platform/:slug, /solutions/:slug or /tutorials/:slug is a 404 (shown by RouteError), checked against the content registry first.
+const slugGuard = (exists: (slug: string | undefined) => Promise<boolean>) => async ({ params }: LoaderFunctionArgs) => {
+  if (!(await exists(params.slug))) throw new Response('Not found', { status: 404 });
+  return null;
+};
+
+// A slug page with its own error boundary, both loaded on demand (app pages never load marketing code): an unknown slug's 404 renders
+// inside the marketing layout (header and footer stay); any other error goes on to the app's error page.
+const slugPage = (load: () => Promise<{ default: React.ComponentType }>) => async () => {
+  const [{ default: Component }, { MarketingNotFound }] = await Promise.all([load(), import('@/marketing/components')]);
+  function ErrorBoundary() {
+    const err = useRouteError();
+    const notFound = isRouteErrorResponse(err) && err.status === 404;
+    useDocumentTitle(notFound ? pageTitle('Page not found') : null);
+    if (!notFound) throw err;
+    return <MarketingNotFound />;
+  }
+  return { Component, ErrorBoundary };
+};
+
+// Public marketing pages (no sign-in), inside the marketing layout. Content lives in src/marketing/content.
+export const marketingPages: RouteObject[] = [
+  { path: '/platform', lazy: page(() => import('@/marketing/pages/PlatformPage')) },
+  { id: 'platform-slug', path: '/platform/:slug', loader: slugGuard(async (slug) => !!(await import('@/marketing/content/features')).featureBySlug(slug)), lazy: slugPage(() => import('@/marketing/pages/FeaturePage')) },
+  { path: '/how-it-works', lazy: page(() => import('@/marketing/pages/HowItWorksPage')) },
+  { path: '/tutorials', lazy: page(() => import('@/marketing/pages/TutorialsPage')) },
+  { id: 'tutorial-slug', path: '/tutorials/:slug', loader: slugGuard(async (slug) => !!(await import('@/marketing/content/tutorials')).tutorialBySlug(slug)), lazy: slugPage(() => import('@/marketing/pages/TutorialPage')) },
+  { path: '/solutions', lazy: page(() => import('@/marketing/pages/SolutionsPage')) },
+  { id: 'solution-slug', path: '/solutions/:slug', loader: slugGuard(async (slug) => !!(await import('@/marketing/content/solutions')).solutionBySlug(slug)), lazy: slugPage(() => import('@/marketing/pages/SolutionPage')) },
+  { path: '/pricing', lazy: page(() => import('@/marketing/pages/PricingPage')) },
+  { path: '/security', lazy: page(() => import('@/marketing/pages/SecurityPage')) },
+  { path: '/about', lazy: page(() => import('@/marketing/pages/AboutPage')) },
+  { path: '/contact', lazy: page(() => import('@/marketing/pages/ContactPage')) },
+  { path: '/changelog', lazy: page(() => import('@/marketing/pages/ChangelogPage')) },
+  { path: '/privacy', lazy: page(() => import('@/marketing/pages/LegalPage')) },
+  { path: '/terms', lazy: page(() => import('@/marketing/pages/LegalPage')) },
+  // C1 (2026-11-17): dated facts from the code, beside the counsel's drafts
+  { path: '/subprocessors', lazy: page(() => import('@/marketing/pages/DataFactsPage')) },
+  { path: '/data-retention', lazy: page(() => import('@/marketing/pages/DataFactsPage')) },
+];
+
+export const routes: RouteObject[] = [
+  {
+    errorElement: <RouteError />,
+    // shown while the first lazy page module loads
+    hydrateFallbackElement: <PageLoader fullPage />,
+    children: [
+      // G15: a report shared through an expiring link, no account, no layout of the app, read-only
+      { path: '/share/:token', lazy: page(() => import('@/pages/share/SharedReportPage')) },
+      {
+        element: <PublicOnly />,
+        children: [
+          {
+            element: <AuthLayout />,
+            children: [
+              { path: '/login', lazy: page(() => import('@/pages/auth/LoginPage')) },
+              { path: '/login/mfa', lazy: page(() => import('@/pages/auth/MfaPage')) },
+              { path: '/login/sso', lazy: page(() => import('@/pages/auth/SsoLoginPage')) },
+              { path: '/signup', lazy: page(() => import('@/pages/auth/SignupPage')) },
+              { path: '/forgot-password', lazy: page(() => import('@/pages/auth/ForgotPasswordPage')) },
+            ],
+          },
+        ],
+      },
+      {
+        element: <AuthLayout />,
+        children: [
+          { path: '/reset-password', lazy: page(() => import('@/pages/auth/ResetPasswordPage')) },
+          { path: '/verify-email', lazy: page(() => import('@/pages/auth/VerifyEmailPage')) },
+          { path: '/invite/:token', lazy: page(() => import('@/pages/auth/AcceptInvitePage')) },
+        ],
+      },
+      {
+        element: <RequireAuth />,
+        children: [
+          { path: '/onboarding', lazy: page(() => import('@/pages/onboarding/OnboardingPage')) },
+          { path: '/onboarding/:orgId/:step?', lazy: page(() => import('@/pages/onboarding/OnboardingPage')) },
+          { path: '/account', lazy: page(() => import('@/pages/settings/AccountPage')) },
+          {
+            path: '/admin',
+            lazy: page(() => import('@/pages/admin/AdminLayout')),
+            children: [
+              { index: true, lazy: page(() => import('@/pages/admin/OverviewPage')) },
+              { path: 'companies', lazy: page(() => import('@/pages/admin/CompaniesPage')) },
+              { path: 'companies/:companyId', lazy: page(() => import('@/pages/admin/CompanyDetailPage')) },
+              { path: 'users', lazy: page(() => import('@/pages/admin/UsersPage')) },
+              { path: 'users/:userId', lazy: page(() => import('@/pages/admin/UserDetailPage')) },
+              { path: 'runs', lazy: page(() => import('@/pages/admin/RunsPage')) },
+              { path: 'costs', lazy: page(() => import('@/pages/admin/CostsPage')) },
+              { path: 'activity', lazy: page(() => import('@/pages/admin/ActivityPage')) },
+              { path: 'settings', lazy: page(() => import('@/pages/admin/SettingsPage')) },
+              { path: 'credit-requests', lazy: page(() => import('@/pages/admin/CreditRequestsPage')) },
+            ],
+          },
+          // G5: after Google / single sign-on on the app's own address, back to an agency's portal address
+          { path: '/portal-handoff', lazy: page(() => import('@/pages/auth/PortalHandoffPage')) },
+          {
+            path: '/o/:orgId',
+            element: <OrgLayout />,
+            children: [
+              { index: true, element: <OrgIndex /> },
+              { path: 'sites/new', lazy: page(() => import('@/pages/settings/AddSitePage')) },
+              { path: 'sites/:siteId', element: <SiteLayout />, children: siteDataPages },
+              { path: 'tools', lazy: page(() => import('@/pages/tools/ToolsPage')) },
+              { path: 'tools/:mode', lazy: page(() => import('@/pages/tools/ToolFormPage')) },
+              { path: 'runs', lazy: page(() => import('@/pages/runs/RunsPage')) },
+              { path: 'runs/:runId', lazy: page(() => import('@/pages/runs/RunDetailPage')) },
+              { path: 'reports', lazy: page(() => import('@/pages/runs/ReportsPage')) },
+              { path: 'reports/:reportId', lazy: page(() => import('@/pages/runs/ReportPage')) },
+              { path: 'clients', lazy: page(() => import('@/pages/agency/ClientsPage')) },
+              { path: 'approvals', lazy: page(() => import('@/pages/portal/ApprovalsPage')) },
+              { path: 'settings', element: <Navigate to="company" replace /> },
+              { path: 'settings/:tab', lazy: page(() => import('@/pages/settings/OrgSettingsPage')) },
+            ],
+          },
+        ],
+      },
+      // public website: "/" is the marketing home for visitors and the app (HomeRedirect) for signed-in users
+      { path: '/', element: <RootRoute /> },
+      { lazy: page(() => import('@/marketing/MarketingLayout')), children: marketingPages },
+      { path: '*', lazy: page(() => import('@/pages/NotFoundPage')) },
+    ],
+  },
+];

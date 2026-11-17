@@ -1,5 +1,6 @@
 Contact: mailto:security@alaventra.com
-Expires: 2027-10-19T00:00:00.000Z
+Expires: 2027-11-16T00:00:00.000Z
 Preferred-Languages: en
+Canonical: https://www.alaventra.com/.well-known/security.txt
 Canonical: https://app.alaventra.com/.well-known/security.txt
-Policy: https://app.alaventra.com/security
+Policy: https://www.alaventra.com/security

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
 import { ListOrdered, Play, RotateCcw } from 'lucide-react';
+import { SITE_ORIGIN } from '@/lib/siteOrigin';
 import { cn } from '@/lib/utils';
 import { clock, coverSet, videoUrl, webmUrl, type Tutorial, type TutorialChapter } from '../../content/tutorials';
 import { isYouTubeId, youtubeEmbedUrl, YouTubeBridge } from './youtube';
@@ -99,6 +100,12 @@ function YouTubePlayer({ tutorial: t, youtubeId, controls, onTime, startAt = 0, 
   const [from, setFrom] = useState<number | null>(eager ? startAt : null);
   const bridge = useMemo(() => new YouTubeBridge(() => frame.current?.contentWindow), []);
   const started = from !== null;
+  // the embed names the page's origin (YouTube answers the chapter buttons only to it). The prerendered page and its hydration use the
+  // public origin, so the frame is in the raw HTML and hydrates unchanged on www; once mounted it is the real one (the same on www;
+  // on another host, e.g. app.<domain> or a preview, the frame reloads once with that host's origin) (CR17, 2026-11-17)
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const origin = mounted ? window.location.origin : SITE_ORIGIN;
 
   const seek = useCallback(
     (s: number) => {
@@ -134,7 +141,7 @@ function YouTubePlayer({ tutorial: t, youtubeId, controls, onTime, startAt = 0, 
   return (
     <div className={frameClass(className)}>
       {started ? (
-        <YouTubeFrame youtubeId={youtubeId} title={labelOf(t)} start={from} origin={typeof window === 'undefined' ? '' : window.location.origin} frameRef={frame} autoplay={!eager} />
+        <YouTubeFrame youtubeId={youtubeId} title={labelOf(t)} start={from} origin={origin} frameRef={frame} autoplay={!eager} />
       ) : (
         <PlayCover tutorial={t} startAt={startAt} priority={priority} onPlay={() => seek(startAt)} />
       )}

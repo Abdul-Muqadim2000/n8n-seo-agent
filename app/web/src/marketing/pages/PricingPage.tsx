@@ -49,6 +49,8 @@ import {
   type ServicePackage,
 } from '../content/pricing';
 import { useSeo } from '../useSeo';
+import { JsonLd } from '../seo/JsonLd';
+import { softwareApplicationJsonLd } from '../seo/schema';
 
 type Billing = 'monthly' | 'annual';
 
@@ -668,6 +670,7 @@ export default function PricingPage() {
           </Link>
         </p>
       </CtaBand>
+      <JsonLd data={softwareApplicationJsonLd()} />
     </>
   );
 }
