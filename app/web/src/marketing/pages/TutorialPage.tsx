@@ -30,11 +30,12 @@ import {
   type Tutorial,
 } from '../content/tutorials';
 import { useSeo } from '../useSeo';
+import { SITE_ORIGIN } from '@/lib/siteOrigin';
 
 /** schema.org VideoObject for a finished film, with a Clip per chapter (search engines show them as key moments) */
 function videoSchema(t: Tutorial) {
   const film = t.film!;
-  const origin = typeof window === 'undefined' ? '' : window.location.origin;
+  const origin = SITE_ORIGIN;
   const page = `${origin}/tutorials/${t.slug}`;
   const base = tutorialVideoBase.startsWith('/') ? origin + tutorialVideoBase : tutorialVideoBase;
   const yt = isYouTubeId(film.youtubeId) ? film.youtubeId : '';

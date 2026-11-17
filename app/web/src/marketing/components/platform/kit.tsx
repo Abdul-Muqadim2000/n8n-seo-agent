@@ -2,6 +2,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { ArrowLeft, ArrowRight, Check, ChevronRight } from 'lucide-react';
+import { SITE_ORIGIN } from '@/lib/siteOrigin';
+import { JsonLd } from '../../seo/JsonLd';
 import { cn } from '@/lib/utils';
 import { Reveal, useInView } from '../Reveal';
 import { useSectionTone } from '../Section';
@@ -10,10 +12,8 @@ import './platform.css';
 /** "Keyword ladders" to "keyword ladders" for use mid-sentence; acronyms stay ("AI visibility", "B2B and SaaS"). */
 export const lowerFirst = (s: string) => (/^[A-Z][A-Z0-9]/.test(s) ? s : s.charAt(0).toLowerCase() + s.slice(1));
 
-/** A JSON-LD data block (allowed by the CSP: `type="application/ld+json"` is data, not a script). */
-export function JsonLd({ data }: { data: unknown }) {
-  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data).replace(/</g, '\\u003c') }} />;
-}
+/** A JSON-LD data block (one component for the whole site: seo/JsonLd.tsx). */
+export { JsonLd };
 
 /** Text link with an arrow that nudges on hover (follows the Section tone). */
 export function ArrowLink({ to, children, className }: { to: string; children: ReactNode; className?: string }) {
@@ -52,7 +52,8 @@ export function CheckList({ items, className }: { items: string[]; className?: s
 
 /** Breadcrumb trail ("Platform › AI visibility") with BreadcrumbList structured data. The last item is the current page. */
 export function Breadcrumbs({ items, className }: { items: { label: string; to: string }[]; className?: string }) {
-  const origin = typeof window === 'undefined' ? '' : window.location.origin;
+  // the public origin, not window.location: the same on every host and in the prerendered HTML (no hydration difference)
+  const origin = SITE_ORIGIN;
   return (
     <nav aria-label="Breadcrumb" className={cn('animate-fade-up', className)}>
       <ol className="flex flex-wrap items-center gap-1.5 text-[13px] text-ink-3">

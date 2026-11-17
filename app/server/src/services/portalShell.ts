@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { effectiveBrand } from '@seo/shared';
@@ -26,8 +27,16 @@ export function rewriteShell(html: string, brand: { name: string; logoUrl: strin
   return out;
 }
 
+/**
+ * The app's plain shell in a web build: `app.html` since the public pages are prerendered (CR17, 2026-11-17: index.html is then the
+ * marketing home's own HTML, which must never reach a portal host or an app route), `index.html` in an older build without it.
+ */
+export function appShellFile(dist: string): 'app.html' | 'index.html' {
+  return existsSync(resolve(dist, 'app.html')) ? 'app.html' : 'index.html';
+}
+
 export async function portalIndexHtml(dist: string, agencyId: string): Promise<string> {
-  const path = resolve(dist, 'index.html');
+  const path = resolve(dist, appShellFile(dist));
   if (!cached || cached.path !== path) cached = { path, html: await readFile(path, 'utf8') };
   const agency = await orgById(agencyId);
   const brand = agency ? effectiveBrand({ name: agency.name, branding: agency.branding }) : null;

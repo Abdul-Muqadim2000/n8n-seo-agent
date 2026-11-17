@@ -58,6 +58,19 @@ api.{$DOMAIN} {
 
 hooks.{$DOMAIN} {
 	encode zstd gzip
+	# M1 (2026-11-17): the security headers the API sends (helmet in app/server/src/app.ts, HSTS as app/vercel.json); a machine host
+	# answers JSON, so its CSP allows nothing and no page may frame it
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
+		Cross-Origin-Resource-Policy "same-origin"
+		Cross-Origin-Opener-Policy "same-origin"
+		X-Permitted-Cross-Domain-Policies "none"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+	}
 	@public path /webhook/* /healthz
 	handle @public {
 		reverse_proxy n8n:5678

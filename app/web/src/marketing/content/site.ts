@@ -62,6 +62,8 @@ export const footerNav: { title: string; links: NavLink[] }[] = [
     links: [
       { label: 'Privacy', to: '/privacy' },
       { label: 'Terms', to: '/terms' },
+      { label: 'Subprocessors', to: '/subprocessors' },
+      { label: 'Data retention', to: '/data-retention' },
     ],
   },
 ];

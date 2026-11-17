@@ -130,7 +130,7 @@ Full guide: `brand/BRAND.md`; the app's tokens are in `src/index.css` (light + d
 - Copy: plain, specific, calm; no exclamation marks; capability facts only (no invented customers, logos, ratings or results).
 
 ## Business site (`src/marketing/`)
-- Routes: public pages in `src/router.tsx` (`marketingPages`, under the lazy `MarketingLayout`, which also loads `marketing.css`); `/`
+- Routes: public pages in `src/routes.tsx` (`marketingPages`, under the lazy `MarketingLayout`, which also loads `marketing.css`); `/`
   is `marketing/RootRoute.tsx` (visitors get the marketing home as its own lazy chunk, signed-in users `HomeRedirect`). Slug pages
   (`/platform/:slug`, `/solutions/:slug`) have a `slugGuard` loader, so an unknown slug is the 404 page. App pages never load the
   marketing chunks — keep marketing code out of `src/components` and `src/pages`.
@@ -144,7 +144,16 @@ Full guide: `brand/BRAND.md`; the app's tokens are in `src/index.css` (light + d
   `FeatureVisual kind=…` renders the mockup or diagram a registry entry names (`visual` / `diagram`); the platform pages use
   `platform/CapabilityScreen` (adds `screen` and the browser frame). Mockups must fit their card at 375px — reduce columns with
   container queries (`@container`, `@min-[24rem]:…`) instead of a fixed `min-w` that clips.
-- `useSeo({ title, description, path })` on every page: title "<title> — Alaventra", meta description, Open Graph and canonical.
+- `useSeo({ title, description, path })` on every page: title "<title> | Alaventra", meta description, Open Graph and canonical, always
+  on `SITE_ORIGIN` (`src/lib/siteOrigin.ts`, https://www.alaventra.com; never `window.location`). Structured data uses `seo/JsonLd`.
+- **Prerendered (CR17, 2026-11-17).** `npm run build` writes every public page as static HTML (`scripts/prerender.mjs` runs
+  `src/entry-server.tsx`: React Router's static handler + `react-dom/static`, the same `routes.tsx` and `AppProviders` as the browser)
+  and the browser hydrates it (`main.tsx`). So a public page must render the same on the server and on the first browser render: no
+  `window` / `localStorage` / `matchMedia` / dates read during render or in `useState` initialisers (read them in an effect, as
+  `useInView` and `ThemeProvider` do). A new public route goes in `routes.tsx` `marketingPages` AND `seo/paths.ts` `STATIC_PATHS`
+  (with its lastmod rule); a new app route prefix needs a rewrite to `/app.html` in `app/vercel.json` and a robots `Disallow`
+  (`test/routeCoverage.test.ts` fails otherwise). Unknown paths are a real 404 (`404.html`). sitemap.xml, robots.txt and llms.txt
+  come from `seo/files.ts`.
 - Motion: `marketing.css` / `platform/platform.css` hold the reveal, draw-in and marquee classes (`mk-*`); each has a static
   `prefers-reduced-motion: reduce` rule — add one for every new animation.
 - **Adding a capability** (every new product functionality gets one, see the root `CLAUDE.md`):

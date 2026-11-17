@@ -24,14 +24,23 @@ function applyThemeColor(theme: ThemeChoice) {
   });
 }
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, set] = useState<ThemeChoice>(read);
+/** `hydrating`: the page is prerendered HTML being hydrated (main.tsx). The first render then uses "system", exactly as the build
+ *  rendered it, so the theme switch's markup matches; the saved choice is read right after (theme-init.js already applied it to the
+ *  page before the first paint, so nothing changes on screen and nothing is applied until it is read). */
+export function ThemeProvider({ children, hydrating = false }: { children: ReactNode; hydrating?: boolean }) {
+  const [theme, set] = useState<ThemeChoice>(() => (hydrating ? 'system' : read()));
+  const [synced, setSynced] = useState(!hydrating);
   useEffect(() => {
+    if (!synced) {
+      set(read());
+      setSynced(true);
+      return;
+    }
     const el = document.documentElement;
     if (theme === 'system') el.removeAttribute('data-theme');
     else el.setAttribute('data-theme', theme);
     applyThemeColor(theme);
-  }, [theme]);
+  }, [theme, synced]);
   const setTheme = useCallback((t: ThemeChoice) => {
     set(t);
     try {

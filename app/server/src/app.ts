@@ -19,7 +19,7 @@ import { siteTaskRoutes } from './routes/siteTasks';
 import { indexingRoutes } from './routes/indexing';
 import { agencyRoutes } from './routes/agency';
 import { hostGate } from './services/portalHosts';
-import { portalIndexHtml } from './services/portalShell';
+import { appShellFile, portalIndexHtml } from './services/portalShell';
 import { triesBearer } from '@seo/shared';
 import { adminRoutes } from './routes/admin';
 import { billingRoutes } from './routes/billing';
@@ -42,6 +42,11 @@ import { siteRoutes } from './routes/sites';
 import { sqlClient } from './db';
 import { n8nHealth } from './n8n/client';
 
+/** HSTS for every host we serve (two years, subdomains; preload is the owner's decision, it is hard to undo) */
+export const HSTS_MAX_AGE = 63072000;
+/** the browser features no page of ours uses (same value as app/vercel.json and the Caddyfile) */
+export const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()';
+
 export async function buildApp(): Promise<FastifyInstance> {
   // the callback URL carries the company's token: never in the logs
   const redact = (url: string) => url.replace(/(\/api\/hooks\/n8n\/)[^/?#]+/, '$1***');
@@ -57,7 +62,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   // on plain http (local or LAN use) the https-only headers would break the page: browsers would rewrite every asset to https
   const https = config.appUrl.startsWith('https://');
   await app.register(helmet, {
-    hsts: https ? { maxAge: 15552000, includeSubDomains: false } : false,
+    // M1 (2026-11-17): two years with subdomains, as app/vercel.json and the hooks host (deploy/gcp/caddy/Caddyfile); no preload (owner)
+    hsts: https ? { maxAge: HSTS_MAX_AGE, includeSubDomains: true, preload: false } : false,
     crossOriginOpenerPolicy: https,
     originAgentCluster: https,
     contentSecurityPolicy: {
@@ -74,6 +80,10 @@ export async function buildApp(): Promise<FastifyInstance> {
       },
     },
     crossOriginEmbedderPolicy: false,
+  });
+  // helmet sends no Permissions-Policy: the same one as the web pages (app/vercel.json)
+  app.addHook('onSend', async (_req, reply) => {
+    reply.header('permissions-policy', PERMISSIONS_POLICY);
   });
   await app.register(cookie);
   await app.register(rateLimit, { global: false });
@@ -186,6 +196,9 @@ export async function buildApp(): Promise<FastifyInstance> {
     await app.register(fastifyStatic, {
       root: dist,
       wildcard: false,
+      // with prerendered public pages, index.html is the marketing home: "/" here gets the plain app shell instead (not-found below),
+      // as before; the public pages are served by the web host (app/vercel.json)
+      index: appShellFile(dist) === 'app.html' ? false : undefined,
       cacheControl: false,
       // hashed bundles never change; everything else (index.html, favicon, theme-init.js) is revalidated
       setHeaders: (reply, path) => void reply.header('cache-control', path.includes('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache'),
@@ -194,7 +207,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       if (req.url.startsWith('/api/') || req.method !== 'GET') return reply.status(404).send({ error: 'Not found', code: 'not_found' });
       // G5: on a portal host the page shell names the agency from the first byte (title, icon), never us
       if (req.portal) return reply.header('cache-control', 'no-cache').header('content-type', 'text/html; charset=utf-8').send(await portalIndexHtml(dist, req.portal.orgId));
-      return reply.header('cache-control', 'no-cache').sendFile('index.html');
+      return reply.header('cache-control', 'no-cache').sendFile(appShellFile(dist));
     });
   } else {
     app.setNotFoundHandler((_req, reply) => reply.status(404).send({ error: 'Not found', code: 'not_found' }));

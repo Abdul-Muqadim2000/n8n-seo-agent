@@ -28,6 +28,8 @@ import { pricingTiers } from '../content/pricing';
 import { integrations } from '../content/site';
 import { solutions } from '../content/solutions';
 import { useSeo } from '../useSeo';
+import { JsonLd } from '../seo/JsonLd';
+import { softwareApplicationJsonLd } from '../seo/schema';
 
 // next to the main CTA: what removes the risk of trying it (facts from pricing.ts and the product)
 const HERO_FACTS = ['Free to set up', 'First site check on day one', 'Price shown before every run', 'Nothing goes live without your OK'];
@@ -764,6 +766,7 @@ export default function HomePage() {
       <PricingTeaser />
       <FaqSection />
       <CtaBand />
+      <JsonLd data={softwareApplicationJsonLd()} />
     </>
   );
 }
