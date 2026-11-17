@@ -16,6 +16,7 @@ import { fmtDate, fmtDay } from '@/lib/utils';
 import { SettingsCard } from '../SettingsCard';
 import { ActivityCard } from './ActivityCard';
 import { BuyCreditsCard } from './BuyCredits';
+import { ForecastCard, OutcomeCostCard, runwayLine } from './ForecastCard';
 import { InvoicesCard } from './InvoicesCard';
 import { LimitsCard } from './LimitsCard';
 import { daysText, featureTotals, lotTerms, pausedByLimit, statusLabel, statusTone } from './status';
@@ -64,6 +65,10 @@ export function CreditsTab() {
         <MonthCard b={b} />
         <SitesCard sites={b.sites} />
       </div>
+      <div className="grid gap-5 lg:grid-cols-2">
+        <ForecastCard b={b} />
+        <OutcomeCostCard b={b} />
+      </div>
       <UsageCharts b={b} loading={billing.isFetching} />
       <div className="grid gap-5 lg:grid-cols-2">
         <LotsCard lots={b.lots} />
@@ -81,12 +86,16 @@ export function CreditsTab() {
 
 function CreditsHero({ b }: { b: BillingOverview }) {
   const { can } = useOrgCtx();
-  const used = b.month.autopilotUsed + b.month.onDemandUsed;
+  // CR17-I (F7): the one usage figure; (M2) two runways from what the work really used
+  const used = b.usage?.total ?? b.month.autopilotUsed + b.month.onDemandUsed;
+  const twoRunways = runwayLine(b);
   const description = !b.enforced
     ? 'Credits are counted for your company but do not stop anything: analyses and your websites\' automatic work run whatever the balance.'
-    : b.runwayDays != null
-      ? `Lasts ${daysText(b.runwayDays)} at your current use${b.runsOutOn ? ` · runs out on ${fmtDate(b.runsOutOn)}` : ''}.`
-      : 'Nothing is using credits at the moment, so the balance stays as it is.';
+    : twoRunways
+      ? `${twoRunways}${b.runsOutOn ? ` At that pace they run out on ${fmtDate(b.runsOutOn)}.` : ''}`
+      : b.runwayDays != null
+        ? `Lasts ${daysText(b.runwayDays)} at your current use${b.runsOutOn ? ` · runs out on ${fmtDate(b.runsOutOn)}` : ''}.`
+        : 'Nothing is using credits at the moment, so the balance stays as it is.';
   return (
     <SummaryHero
       eyebrow={
@@ -95,7 +104,7 @@ function CreditsHero({ b }: { b: BillingOverview }) {
           <span>Your balance · {monthLabel(b.month.month)}</span>
         </>
       }
-      title={<CountUp value={b.balance} format={credits} />}
+      title={<CountUp value={b.balance} format={credits} animate={false} />}
       description={description}
       aside={
         can('admin') ? (
@@ -106,14 +115,14 @@ function CreditsHero({ b }: { b: BillingOverview }) {
       }
       stats={
         <>
-          <HeroStat label="Available now" value={<CountUp value={b.available} format={credits} />} hint="The balance less what running analyses hold." />
-          <HeroStat label="Held by running analyses" value={<CountUp value={b.held} format={credits} />} hint="Each held at its price until it finishes." />
+          <HeroStat label="Available now" value={<CountUp value={b.available} format={credits} animate={false} />} hint="The balance less what running analyses hold." />
+          <HeroStat label="Held by running analyses" value={<CountUp value={b.held} format={credits} animate={false} />} hint="Each held at its price until it finishes." />
           <HeroStat
             label="Kept for autopilot"
-            value={<CountUp value={b.reservedForAutopilot} format={credits} />}
+            value={<CountUp value={b.reservedForAutopilot} format={credits} animate={false} />}
             hint={b.limits.reserveForAutopilot ? 'What your websites\' schedules still need this month.' : 'Off: on-demand analyses may use every credit.'}
           />
-          <HeroStat label="Used this month" value={<CountUp value={used} format={credits} />} hint={`${credits(b.month.autopilotUsed)} autopilot · ${credits(b.month.onDemandUsed)} on-demand`} />
+          <HeroStat label="Used this month" value={<CountUp value={used} format={credits} animate={false} />} hint={`${credits(b.month.autopilotUsed)} autopilot · ${credits(b.month.onDemandUsed)} on-demand`} />
         </>
       }
     />
@@ -220,7 +229,7 @@ function siteState(s: BillingSiteRow): ReactNode {
 function SitesCard({ sites }: { sites: BillingSiteRow[] }) {
   const { org } = useOrgCtx();
   return (
-    <SettingsCard icon={<Globe />} title="Autopilot by website" description="What each website's schedules are forecast to use a month, from its settings, and what they used this month.">
+    <SettingsCard icon={<Globe />} title="Autopilot by website" description="What each website's schedules are forecast to use in the next 30 days, from what they really used, and what they used this month.">
       <CardBody>
         {sites.length ? (
           <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line">

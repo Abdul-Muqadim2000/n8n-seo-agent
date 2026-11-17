@@ -160,6 +160,8 @@ import {
   type AiWrittenPage,
   PAGE_IN_FLIGHT_HOURS,
   checkinNotIndexed,
+  trackedKeywordsLine,
+  trackedKeywordsOf,
 } from '@seo/shared';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db, schema } from '../db';
@@ -714,16 +716,18 @@ export async function rankingsData(site: SiteRow): Promise<RankingsData> {
   out.sort((a, c) => c.startDate.localeCompare(a.startDate));
 
   // Site Tracker live checks are stored with the site id as ladder_id
+  // CR17-I (F8): the website's own keywords are its list (Settings > Tracking), nothing else: a keyword the client removed keeps its old
+  // checks in the history, but it is no longer tracked, so it is not listed (it was, for ever, with its last position)
+  const own = new Set(site.keywords.map((k) => k.trim().toLowerCase()).filter(Boolean));
   const ladderIds = new Set(ladders.keys());
   const siteKw = new Map<string, RankHistoryRow[]>();
+  for (const k of own) siteKw.set(k, []);
   for (const h of history) {
     if (ladderIds.has(h.ladder_id)) continue;
     const k = s(h.keyword).toLowerCase();
-    const l = siteKw.get(k) ?? [];
-    l.push(h);
-    siteKw.set(k, l);
+    if (!own.has(k)) continue;
+    siteKw.get(k)!.push(h);
   }
-  for (const k of site.keywords) if (!siteKw.has(k.toLowerCase())) siteKw.set(k.toLowerCase(), []);
   const keywords: TrackedKeyword[] = [...siteKw.entries()].map(([kw, rs]) => {
     const series = rankSeries(rs);
     const desk = rs.filter((r) => s(r.device) !== 'mobile');
@@ -764,7 +768,10 @@ export async function rankingsData(site: SiteRow): Promise<RankingsData> {
       : lineageUnknown('Mobile position', 'no mobile check was bought for this website yet'),
   ];
   const r = contentReadiness({ profile: profiles[0] ?? null, businessFacts: site.businessFacts });
-  return { ladders: out, keywords, lineage: lineageList, readiness: { ready: r.ready, missingText: r.missingText, page: readinessPage(r) } };
+  // CR17-I (F8): the one count of "tracked keywords" (ladder keywords + the own list, each search once)
+  const t = trackedKeywordsOf({ own: site.keywords, ladder: out.flatMap((l) => l.rungs.map((x) => ({ keyword: x.keyword, status: x.status }))) });
+  const tracked = { total: t.total, fromLadders: t.fromLadders, fromYourList: t.fromYourList, line: trackedKeywordsLine(t) };
+  return { ladders: out, keywords, tracked, lineage: lineageList, readiness: { ready: r.ready, missingText: r.missingText, page: readinessPage(r) } };
 }
 
 // ---------------- content & profile ----------------

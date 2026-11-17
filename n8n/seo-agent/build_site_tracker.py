@@ -439,6 +439,11 @@ for _h10, _w10, _u10 in (('Google Trends', 'the 12-month search interest for thi
     _gs10 = dfs_gate.splice(_wf_site, _h10, V5, what=_w10, unit=_u10, code_dir=CODE)
     retry_lint.record_gate('SEO Agent — Site Tracker', _gs10['chain'])
 retry_lint.check_in200(_wf_site)
+# CR17-I (section 199, client report 2026-11-17, F8): the weekly report counts tracked keywords by the app's one definition (ladder keywords + the
+# client's own list, each search once) and the other written pages apart (app/shared/src/tracked-keywords.ts; harness CR17I1)
+_sr199 = next(n_['parameters']['jsCode'] for n_ in _wf_site['nodes'] if n_['name'] == 'Site Report')
+assert "'Tracked keywords: '" in _sr199 and "'Your other pages: '" in _sr199 and "h3('Tracked keywords')" not in _sr199, 'section 199: the Site Report still mixes ladder keywords and written pages in one "Tracked keywords" table'
+print('CR17-I (section 199): the weekly report counts the searches checked on Google once and the other written pages apart')
 write(_wf_site, 'SEO_Agent_Site_Tracker.json')
 
 # =============================================================================

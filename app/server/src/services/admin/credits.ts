@@ -14,6 +14,12 @@ type Q = typeof db | Tx;
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+/**
+ * CR17-I (F7): the one rule of which kind of spending a usage entry was: its own `ref.origin`; an older entry with an app run behind it is
+ * on-demand, else autopilot. The customer's figures (services/billing.ts creditUsage) and the admin's credit book read the same expression.
+ */
+export const USAGE_ORIGIN_SQL = `coalesce(ref->>'origin', case when ref->>'runId' is not null then 'on_demand' else 'autopilot' end)`;
+
 export async function creditBalance(q: Q, orgId: string): Promise<number> {
   const [r] = await q.select({ b: sql<number>`coalesce(sum(${schema.creditLedger.credits}), 0)::float` }).from(schema.creditLedger).where(eq(schema.creditLedger.orgId, orgId));
   return r2(Number(r?.b ?? 0));
@@ -229,7 +235,7 @@ export async function creditBooks(from: Date | null, to: Date, s: { creditValueU
   const win = sql`created_at < ${tsv(to)} ${from ? sql`and created_at >= ${tsv(from)}` : sql``}`;
   const rows = await execRows<Record<string, number | string | null>>(db, sql`
     with l as (select org_id, kind, credits, paid_usd, ref, coalesce((ref->>'creditValueUsd')::float, ${cv}::float) as cv,
-                 coalesce(ref->>'origin', case when ref->>'runId' is not null then 'on_demand' else 'autopilot' end) as origin
+                 ${sql.raw(USAGE_ORIGIN_SQL)} as origin
                from ${schema.creditLedger} where ${win})
     select org_id,
       coalesce(sum(credits) filter (where kind = 'grant' and paid_usd > 0), 0)::float as bought,

@@ -393,7 +393,8 @@ export function PipelineHero({ data, needs, cards, onWrite }: { data: PipelineDa
             {b && (
               <HeroStat
                 label="Credits used this month"
-                value={<CountUp value={b.month.autopilotUsed + b.month.onDemandUsed} format={(n) => formatCredits(n, { unit: false })} />}
+                // CR17-I (F7): the one usage figure (the Credits page's), never animated: the tile and its parts below always agree
+                value={<CountUp value={b.usage?.total ?? b.month.autopilotUsed + b.month.onDemandUsed} format={(n) => formatCredits(n, { unit: false })} animate={false} />}
                 hint={
                   <span className="flex flex-wrap items-center gap-1">
                     {['low', 'critical', 'empty', 'paused'].includes(b.status) && <AlertTriangle className="size-3 shrink-0" aria-hidden />}

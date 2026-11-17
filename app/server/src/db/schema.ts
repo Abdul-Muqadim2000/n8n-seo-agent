@@ -345,6 +345,11 @@ export const organizations = pgTable(
     /** the last low-balance notice sent (ok | low | critical | empty | paused) and when, so a level is announced once */
     creditAlertLevel: text('credit_alert_level').notNull().default('ok'),
     creditAlertAt: ts('credit_alert_at'),
+    /** CR17-I (2026-11-17): "when credits run low, ask for a top-up": the pack the guard asks for by itself (null = off), who switched it on,
+     *  and whether this low-balance episode may still file one (set false when it files, true again once the balance is back to ok) */
+    autoTopUpPackId: text('auto_top_up_pack_id'),
+    autoTopUpBy: uuid('auto_top_up_by').references(() => users.id, { onDelete: 'set null' }),
+    autoTopUpArmed: boolean('auto_top_up_armed').notNull().default(true),
   },
   (t) => [uniqueIndex('organizations_slug_idx').on(t.slug), uniqueIndex('organizations_hook_idx').on(t.hookToken), index('organizations_parent_idx').on(t.parentOrgId)],
 );
@@ -1449,6 +1454,8 @@ export const creditPurchaseRequests = pgTable(
     resolvedAt: ts('resolved_at'),
     resolvedBy: text('resolved_by'),
     ledgerId: uuid('ledger_id'),
+    /** CR17-I: filed by the company's automatic top-up setting (the credit guard), not by a person */
+    auto: boolean('auto').notNull().default(false),
     createdAt: created(),
   },
   (t) => [index('credit_purchase_requests_org_idx').on(t.orgId, t.createdAt), index('credit_purchase_requests_status_idx').on(t.status)],

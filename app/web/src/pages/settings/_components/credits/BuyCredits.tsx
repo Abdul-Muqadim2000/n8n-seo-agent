@@ -6,12 +6,12 @@ import { Badge, StatusBadge, type Tone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CardBody } from '@/components/ui/card';
 import { Callout } from '@/components/ui/feedback';
-import { Field, Input } from '@/components/ui/field';
+import { Field, Input, Select } from '@/components/ui/field';
 import { Dialog } from '@/components/ui/overlay';
 import { IconTile } from '@/components/insight';
 import { errorMessage, toastError } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
-import { useCancelCreditRequest, useRequestCredits } from '@/lib/queries';
+import { useCancelCreditRequest, useRequestCredits, useSetAutoTopUp } from '@/lib/queries';
 import { fmtAgo, fmtDate } from '@/lib/utils';
 import { SettingsCard } from '../SettingsCard';
 
@@ -76,6 +76,8 @@ export function BuyCreditsCard({ b, id }: { b: BillingOverview; id?: string }) {
         </div>
         {admin && waiting.length >= 3 && <Callout tone="info">You have three requests waiting. Cancel one, or wait until the Alaventra team confirms them, to ask for another pack.</Callout>}
 
+        <AutoTopUp b={b} admin={admin} />
+
         {b.requests.length > 0 && (
           <div>
             <h3 className="mb-2 text-xs font-medium text-ink-3">Your requests</h3>
@@ -88,10 +90,21 @@ export function BuyCreditsCard({ b, id }: { b: BillingOverview; id?: string }) {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-ink">
                       {formatCredits(r.credits)} · <span className="font-mono tabular">{price(r.priceUsd)}</span>
+                      {r.auto && (
+                        <Badge tone="neutral" className="ml-2">
+                          Automatic
+                        </Badge>
+                      )}
                     </p>
+                    {/* CR17-I: what the confirmation really added, when it differs from the pack asked for */}
+                    {r.status === 'fulfilled' && r.granted && (r.granted.credits !== r.credits || r.granted.paidUsd !== r.priceUsd) && (
+                      <p className="text-xs text-ink-2">
+                        Added: {formatCredits(r.granted.credits)} for <span className="font-mono tabular">{price(r.granted.paidUsd)}</span>
+                      </p>
+                    )}
                     <p className="truncate text-xs text-ink-3">
                       Asked {fmtAgo(r.createdAt)}
-                      {r.requestedBy ? ` by ${r.requestedBy}` : ''}
+                      {r.auto ? ' automatically, as your top-up setting says' : r.requestedBy ? ` by ${r.requestedBy}` : ''}
                       {r.resolvedAt && r.status !== 'pending' ? ` · ${r.status === 'fulfilled' ? 'added' : 'cancelled'} ${fmtDate(r.resolvedAt)}` : ''}
                       {r.note ? ` · ${r.note}` : ''}
                     </p>
@@ -174,5 +187,50 @@ function BuyDialog({ pack, onClose }: { pack: PricedPack | null; onClose: () => 
         {request.isError && <Callout tone="critical">{errorMessage(request.error)}</Callout>}
       </form>
     </Dialog>
+  );
+}
+
+/**
+ * CR17-I (client report 2026-11-17, M2): "When credits run low, ask for a top-up". No card payment exists yet, so it files the same request
+ * a person would (one per low spell: under two weeks of credits left), tells your owners and admins and the Alaventra team, and the team
+ * confirms it. Off by default; owners and admins choose the pack.
+ */
+function AutoTopUp({ b, admin }: { b: BillingOverview; admin: boolean }) {
+  const { org } = useOrgCtx();
+  const save = useSetAutoTopUp(org.id);
+  const current = b.autoTopUp ?? null;
+  if (!admin && !current) return null;
+  return (
+    <div className="rounded-xl border border-line p-4">
+      <div className="flex flex-wrap items-end gap-3">
+        <Field
+          label="When credits run low, ask for a top-up"
+          hint="When less than two weeks of credits are left, we send a request for this pack for you, once, and tell your owners and admins. The Alaventra team confirms it as usual; you can cancel it until then."
+          className="min-w-0 flex-1"
+        >
+          {(p) => (
+            <Select
+              {...p}
+              value={current?.packId ?? ''}
+              disabled={!admin || save.isPending}
+              onChange={(e) =>
+                save.mutate(e.target.value || null, {
+                  onSuccess: (r) => toast.success(r.autoTopUp ? `We will ask for ${formatCredits(r.autoTopUp.credits)} when credits run low` : 'Automatic top-up switched off'),
+                  onError: (err) => toastError(err),
+                })
+              }
+            >
+              <option value="">Off: I buy credits myself</option>
+              {b.packs.map((p2) => (
+                <option key={p2.id} value={p2.id}>
+                  {formatCredits(p2.credits)} for {price(p2.priceUsd)}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+      </div>
+      {current && !current.armed && <p className="mt-2 text-xs text-ink-3">A request was sent for this low spell. The next one is sent after your balance has recovered.</p>}
+    </div>
   );
 }

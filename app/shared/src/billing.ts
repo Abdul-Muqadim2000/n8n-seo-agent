@@ -108,9 +108,11 @@ export function creditLimitsOf(v: unknown): CreditLimits {
 }
 
 // ---------- status ----------
-/** ok · low (lasts under a week) · critical (under 3 days) · empty (nothing left) · paused (schedules paused for credits) */
+/** ok · low (lasts under two weeks) · critical (under 3 days) · empty (nothing left) · paused (schedules paused for credits) */
 export type CreditStatus = 'ok' | 'low' | 'critical' | 'empty' | 'paused';
-export const LOW_RUNWAY_DAYS = 7;
+/** CR17-I (client report 2026-11-17, M2): a low-balance warning two weeks ahead (it was one week): a top-up request then has time to be
+ *  paid and confirmed before the schedules pause */
+export const LOW_RUNWAY_DAYS = 14;
 export const CRITICAL_RUNWAY_DAYS = 3;
 
 /** How a balance stands, from what is available and the daily burn (credits a day). */
@@ -155,6 +157,7 @@ export interface BillingFeatureRow {
 export interface CreditPurchaseRequest {
   id: string;
   packId: string;
+  /** the pack asked for */
   credits: number;
   priceUsd: number;
   status: 'pending' | 'fulfilled' | 'cancelled';
@@ -162,6 +165,10 @@ export interface CreditPurchaseRequest {
   requestedBy: string | null;
   createdAt: string;
   resolvedAt: string | null;
+  /** CR17-I: filed by the automatic top-up (the company's "when credits run low, ask for a pack" setting), not by a person */
+  auto?: boolean;
+  /** CR17-I: what the confirming grant really added and recorded as paid (it can differ from the pack asked for); null while waiting */
+  granted?: { credits: number; paidUsd: number } | null;
 }
 
 /**
@@ -183,6 +190,14 @@ export interface InvoiceView {
 
 export interface BillingOverview {
   enforced: boolean;
+  /** CR17-I (F7): this calendar month's use, the one computation every screen reads (Pipeline tile, its breakdown, this page, admin) */
+  usage?: CreditUsage;
+  /** CR17-I (M2): the forecast built from what the work really charged, the two runways and what each kind of work costs */
+  forecast?: CreditForecast;
+  runways?: CreditRunways;
+  costPerOutcome?: OutcomeCost[];
+  /** CR17-I: "when credits run low, ask for a top-up" (off = null) */
+  autoTopUp?: AutoTopUpView | null;
   /** all lots together, minus anything used beyond them */
   balance: number;
   /** held by analyses still running (at their quote) */
@@ -307,3 +322,120 @@ export interface CreditRefusal {
   /** which rule refused it */
   reason: 'balance' | 'reserve' | 'on_demand_limit';
 }
+
+// ---------- CR17-I (client report 2026-11-17, F7 + M2): one usage figure, a forecast from the ledger, two runways, cost per outcome ----------
+
+/**
+ * A company's credit use over a period, from the ledger's usage entries (`kind = 'usage'`: debits negative, returns and re-pricing
+ * positive), the ONE computation behind the Pipeline's "credits used" tile, its breakdown, the Credits page and the admin's company view.
+ * `autopilot + onDemand = total`, and the feature rows add up to the total (no row is filtered out of the sum).
+ */
+export interface CreditUsage {
+  /** ISO, inclusive */
+  from: string;
+  /** ISO, exclusive */
+  to: string;
+  autopilot: number;
+  onDemand: number;
+  total: number;
+  byFeature: BillingFeatureRow[];
+  bySite: { domain: string; autopilot: number; onDemand: number }[];
+  /** credits charged in the period for our own team's test runs (keyword research Trial runs before 2026-11-13); part of the total until
+   *  they are returned, never part of a forecast's pace */
+  ourTests: number;
+}
+
+/** What kind of finished work a charge was, for "cost per outcome" and the forecast's rows (credit-forecast.ts `outcomeKindOfMode`). */
+export type OutcomeKind =
+  | 'page'
+  | 'ai_check'
+  | 'ai_pulse'
+  | 'ai_growth'
+  | 'site_report'
+  | 'backlinks'
+  | 'link_builder'
+  | 'rank_check'
+  | 'audit'
+  | 'report'
+  | 'research'
+  | 'competitors'
+  | 'ladder_plan'
+  | 'keyword_check'
+  | 'verdict'
+  | 'final_version'
+  | 'other';
+
+/** What one kind of work has really cost this company (the ledger, the last 60 days): the median and the usual range, never a quote. */
+export interface OutcomeCost {
+  kind: OutcomeKind;
+  label: string;
+  median: number;
+  /** the usual range: the 20th to 80th percentile from 5 runs on, else the lowest and highest */
+  low: number;
+  high: number;
+  count: number;
+}
+
+export type ForecastBasis = 'measured' | 'per_run' | 'estimate' | 'off';
+
+export interface ForecastRow {
+  /** an autopilot row id (shared/src/autopilot.ts), or 'other' for automatic work no row names */
+  id: string;
+  label: string;
+  /** credits for the next 30 days */
+  credits: number;
+  /** measured = the last weeks' charges; per_run = the typical charge × the runs still due; estimate = the price list (no history yet) */
+  basis: ForecastBasis;
+  /** one plain line: where the figure comes from */
+  detail: string;
+}
+
+export interface SiteCreditForecast {
+  domain: string;
+  monthly: number;
+  rows: ForecastRow[];
+}
+
+export interface CreditForecast {
+  /** the websites' schedules, credits for the next 30 days */
+  autopilotMonthly: number;
+  /** the company's own analyses at the pace of the last 30 days (our test runs and returned charges left out) */
+  onDemandMonthly: number;
+  sites: SiteCreditForecast[];
+  /** the plain basis line the Credits page shows under the forecast */
+  basis: string;
+}
+
+/** How long the credits last: the schedules alone, and with the company's own analyses at last month's pace. null = nothing is used. */
+export interface CreditRunways {
+  autopilotAlone: number | null;
+  withOwn: number | null;
+  dailyAutopilot: number;
+  dailyWithOwn: number;
+}
+
+/** The company's automatic top-up request (no card payment: it files an ordinary "Buy credits" request the Alaventra team confirms). */
+export interface AutoTopUpView {
+  packId: string;
+  credits: number;
+  priceUsd: number;
+  /** a request is filed once per low-balance episode; false while this episode's request was already filed */
+  armed: boolean;
+}
+
+export const autoTopUpSchema = z.object({
+  /** the pack to ask for when credits run low; null switches it off */
+  packId: z.string().trim().min(1).max(40).nullable(),
+});
+
+/**
+ * The daily AI pulse asks every website's questions in ONE engine execution; the cost sync splits that execution's cost per website
+ * (from the pulse's own per-website rows), so cost and forecasts are right. Whether a website's share is CHARGED in credits is the owner's
+ * decision, kept here as one constant (CR17-I, client report 2026-11-17):
+ *   single_site  (today's behaviour, the default) a pulse execution that covered one website is charged to it; the shares of a shared
+ *                execution are recorded as each website's cost and written to its ledger at 0 credits ("included")
+ *   all          every share is charged
+ *   none         the pulse is never charged
+ */
+export type PulseBilling = 'single_site' | 'all' | 'none';
+export const PULSE_BILLING: PulseBilling = 'single_site';

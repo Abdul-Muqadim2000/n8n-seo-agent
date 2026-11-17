@@ -38,7 +38,7 @@ import { syncCosts } from '../services/admin/costSync';
 import { periodRange } from '../services/admin/period';
 import { activity, companiesCsv, companyAbsorbed, companyDetail, companyRows, overview, runsPage, userRows } from '../services/admin/reports';
 import { getSettings, saveSettings, settingsRow } from '../services/admin/settings';
-import { alignExistingCompanies, creditGuardTick, grantPlanCredits, requestView } from '../services/billing';
+import { alignExistingCompanies, creditGuardTick, grantPlanCredits, grantsOf, requestView } from '../services/billing';
 import { billingContacts, emailInvoice, invoicePdf, invoiceView, issueInvoice, listInvoices, notifyCredits, notifySkipped } from '../services/invoices';
 import { createUser, deleteUser, removeMembership, SET_PASSWORD_HOURS, setMembership, updateUser, userOrThrow } from '../services/admin/users';
 import { deleteCompany } from '../services/companyDelete';
@@ -480,7 +480,9 @@ export async function adminRoutes(app: FastifyInstance) {
       orderBy: desc(schema.creditPurchaseRequests.createdAt),
       limit: 200,
     });
-    return rows.map((r) => ({ ...requestView(r), orgId: r.orgId, orgName: r.orgName }));
+    // CR17-I: what each confirming grant really added (it can differ from the pack asked for)
+    const granted = await grantsOf(rows.map((r) => r.ledgerId).filter((x): x is string => !!x));
+    return rows.map((r) => ({ ...requestView(r, r.ledgerId ? (granted.get(r.ledgerId) ?? null) : null), orgId: r.orgId, orgName: r.orgName }));
   });
 
   app.post('/api/admin/credit-requests/:id/cancel', async (req): Promise<AdminPurchaseRequest> => {

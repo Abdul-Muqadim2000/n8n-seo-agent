@@ -1,5 +1,5 @@
-import { eq, sql } from 'drizzle-orm';
-import { COST_TABLE, costKeys, creditsFor, estOf, isKiRunMode, ledgerBreakdown, n8nSiteId, type CostCertainty, type CostKey, type ModeId } from '@seo/shared';
+import { and, eq, isNull, sql } from 'drizzle-orm';
+import { COST_TABLE, costKeys, creditsFor, estOf, isKiRunMode, ledgerBreakdown, n8nSiteId, PULSE_BILLING, type CostCertainty, type CostKey, type ModeId, type PulseBilling } from '@seo/shared';
 import { db, schema } from '../../db';
 import { rows as n8nRows } from '../../n8n/client';
 import { cachedCalibration } from '../engineCost';
@@ -265,6 +265,62 @@ export function engineCost(row: LedgerRow): { claudeUsd: number; claudeEstimated
 /** the engine's own rows of the app's keyword checks (counted from keyword_checks instead) */
 export const isAppKeywordCheckRow = (row: LedgerRow) => str(row.mode) === 'assess' && /^app:/i.test(str(row.key));
 
+// ---------------------------------------------------------------------------------------------------------------------------------
+// CR17-I (client report 2026-11-17, M2): the daily AI pulse asks every website's panel in ONE execution, whose ledger row (key
+// `schedule:ai_pulse`) carries no domain, so its cost was tied to nobody: the websites' cost and forecast missed it on every day the pulse
+// covered two websites (it was tied only on days it covered one). The pulse writes one `seo_ai_daily` row per website with that website's
+// own cost (`cost_usd`, run_id `pulse_<date>_<host>`, checked_at = the execution's start), so the execution's cost is split by those rows:
+// one cost event per website (`engine:<execution>#<host>`), each tied to its website like a single-site pulse. Whether a share is CHARGED in
+// credits stays the owner's decision (shared/src/billing.ts PULSE_BILLING; default: as before, a shared run is not charged).
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+/** a `seo_ai_daily` row as the split reads it */
+export interface PulseDayRow {
+  domain?: unknown;
+  run_id?: unknown;
+  checked_at?: unknown;
+  cost_usd?: unknown;
+  createdAt?: unknown;
+}
+
+/** a scheduled pulse execution that covered several websites (no domain on its ledger row) */
+export const isSharedPulseRow = (row: LedgerRow) => str(row.mode) === 'ai_pulse' && !str(row.domain) && !/^(parent|app):/i.test(str(row.key));
+
+/** the separator of a share's id: `<execution id>#<host>` (an execution id never carries one) */
+export const SHARE_SEP = '#';
+
+const PULSE_WINDOW_MS = 10 * 60_000;
+
+/**
+ * Each website's share of one shared pulse execution, from the pulse's own per-website rows of that run (their checked_at within ten
+ * minutes of the execution, run_id `pulse_...`): its cost over the rows' total, or an equal share when no row carries a cost. [] when no row
+ * matches (the execution then stays as it was: unattributed). Pure.
+ */
+export function pulseShares(row: LedgerRow, days: readonly PulseDayRow[]): { domain: string; share: number }[] {
+  const start = date(row.created_at, row.createdAt);
+  const end = date(row.settled_at, row.updatedAt) ?? start;
+  if (!start || !end) return [];
+  const by = new Map<string, number>();
+  for (const d of days) {
+    const host = bareHost(d.domain);
+    const at = date(d.checked_at, d.createdAt);
+    if (!host || !at || !/^pulse_/i.test(str(d.run_id))) continue;
+    if (at.getTime() < start.getTime() - PULSE_WINDOW_MS || at.getTime() > end.getTime() + PULSE_WINDOW_MS) continue;
+    by.set(host, (by.get(host) ?? 0) + Math.max(0, num(d.cost_usd) ?? 0));
+  }
+  const total = [...by.values()].reduce((t, v) => t + v, 0);
+  return [...by.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([domain, c]) => ({ domain, share: total > 0 ? c / total : 1 / by.size }));
+}
+
+/** whether a pulse cost event is charged in credits (PULSE_BILLING): `share` = it is a website's share of a shared execution */
+export function pulseCharged(share: boolean, billing: PulseBilling = PULSE_BILLING): boolean {
+  return billing === 'all' || (billing === 'single_site' && !share);
+}
+
+async function readPulseDays(sinceIso: string): Promise<PulseDayRow[]> {
+  return n8nRows<PulseDayRow>('aiDaily', { filters: [{ columnName: 'checked_at', condition: 'gte', value: sinceIso }], max: 20_000, fresh: true });
+}
+
 
 /** The Claude / DataForSEO split of an app run's settled cost (see the header for the rule). */
 export function splitAppRun(
@@ -353,6 +409,8 @@ export interface SyncOptions {
   full?: boolean;
   /** an app run is written from its own figure once it finished this long ago and no engine row can be tied to it (ledger readable) */
   appGraceMinutes?: number;
+  /** CR17-I: replaces the read of the pulse's per-website rows (`seo_ai_daily`, tests) */
+  readPulseDays?: (sinceIso: string) => Promise<PulseDayRow[]>;
 }
 
 const INCREMENTAL_MAX = 50_000;
@@ -400,6 +458,14 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
     note = `The engine's run ledger could not be read (${String((err as Error)?.message ?? err).slice(0, 120)}), so costs come from the app's own runs and keyword checks only; schedule costs are missing until it can be read.`;
   }
 
+  // CR17-I: the per-website rows of the shared pulse executions in this read (a failed read leaves them as they were: unattributed)
+  const shared = ledger.filter(isSharedPulseRow);
+  let pulseDays: PulseDayRow[] = [];
+  if (shared.length) {
+    const first = Math.min(...shared.map((r) => date(r.created_at, r.createdAt)?.getTime() ?? Date.now()));
+    pulseDays = await (opts.readPulseDays ?? readPulseDays)(new Date(first - 2 * PULSE_WINDOW_MS).toISOString()).catch(() => [] as PulseDayRow[]);
+  }
+
   const result = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext('alaventra.admin_cost_sync'))`);
     const res = { engineEvents: 0, appEvents: 0, keywordEvents: 0, superseded: 0, debits: 0 };
@@ -424,6 +490,9 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
         { orgId: r.org_id, siteId: r.site_id, userId: r.user_id, runId: r.run_id, origin: r.origin === 'app' ? 'app' : 'schedule', eventKey: r.event_key, settledAt: r.engine_settled_at, total: Number(r.total), detached: r.detached_from != null, occurredAt: new Date(r.occurred_at) },
       ]),
     );
+
+    // CR17-I: shared pulse executions already split into per-website shares (`<execution>#<host>`)
+    const splitDone = new Set(storedRows.filter((r) => r.engine_run_id.includes(SHARE_SEP)).map((r) => r.engine_run_id.split(SHARE_SEP)[0]));
 
     // engine execution ids -> app runs: what the callbacks name (execution_id, run_ledger.run_id), then the runs' own request ids. Asked
     // for the ids of this read AND of the stored events not yet tied to a run (the back-fill).
@@ -530,6 +599,54 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
     for (const row of ledger) {
       if (isAppKeywordCheckRow(row)) continue;
       const engineRunId = str(row.run_id);
+      // CR17-I: a shared pulse execution becomes one cost event per website (its share), once
+      if (isSharedPulseRow(row)) {
+        const shares = pulseShares(row, pulseDays);
+        if (shares.length && !splitDone.has(engineRunId)) {
+          const parent = stored.get(engineRunId);
+          if (parent && (parent.detached || parent.orgId)) continue; // tied by hand or detached: left as it is
+          if (parent) {
+            // the unattributed whole is replaced by its shares (it was never charged: no company)
+            await tx.delete(schema.costEvents).where(and(eq(schema.costEvents.engineRunId, engineRunId), isNull(schema.costEvents.orgId)));
+            stored.delete(engineRunId);
+          }
+          const c = engineCost(row);
+          for (const sh of shares) {
+            const shareId = `${engineRunId}${SHARE_SEP}${sh.domain}`;
+            const sa = attributeLedgerRow({ ...row, domain: sh.domain, run_id: shareId }, lk, batch);
+            const ins = await tx
+              .insert(schema.costEvents)
+              .values({
+                eventKey: `engine:${shareId}`,
+                source: 'engine',
+                engineRunId: shareId,
+                runId: null,
+                orgId: sa.orgId,
+                siteId: sa.siteId,
+                userId: null,
+                domain: sh.domain,
+                mode: 'ai_pulse',
+                origin: 'schedule',
+                engineKey: str(row.key).slice(0, 200),
+                claudeUsd: r6(c.claudeUsd * sh.share),
+                claudeEstimatedUsd: r6(c.claudeEstimatedUsd * sh.share),
+                dataforseoUsd: r6(c.dataforseoUsd * sh.share),
+                certainty: c.certainty,
+                balanceBefore: 0,
+                balanceAfter: 0,
+                startedAt: date(row.created_at, row.createdAt),
+                occurredAt: occurredOf(row),
+                engineSettledAt: str(row.settled_at),
+              })
+              .onConflictDoNothing()
+              .returning({ id: schema.costEvents.id });
+            if (ins.length) res.engineEvents++;
+          }
+          splitDone.add(engineRunId);
+          continue;
+        }
+        if (splitDone.has(engineRunId)) continue;
+      }
       const a = attributeLedgerRow(row, lk, batch);
       const c = engineCost(row);
       const settledAt = str(row.settled_at);
@@ -726,6 +843,20 @@ async function doSync(opts: SyncOptions): Promise<SyncResult> {
     for (const e of toDebit) {
       const raw = creditsFor(Number(e.total), s);
       if (raw <= 0) continue;
+      // CR17-I: the pulse's charge follows the owner's PULSE_BILLING (default: a shared execution's shares are recorded, not charged)
+      if (e.mode === 'ai_pulse' && !pulseCharged(e.event_key.includes(SHARE_SEP))) {
+        const row = await addCreditEntry(tx, {
+          orgId: e.org_id,
+          kind: 'usage',
+          credits: 0,
+          note: `Not charged: the daily AI pulse${e.domain ? ` · ${e.domain}` : ''} is included`,
+          ref: { runId: null, engineRunId: e.engine_run_id, mode: 'ai_pulse', domain: e.domain || null, creditValueUsd: s.creditValueUsd, origin: 'autopilot', included: raw },
+          refKey: `cost:${e.event_key}`,
+          at: date(e.occurred_at) ?? undefined,
+        });
+        if (row) res.debits++;
+        continue;
+      }
       const c = await runCharge(e.event_key, e.run_id, raw);
       const absorbed = Math.round((raw - c.credits) * 100) / 100;
       const what = e.mode ? `${e.mode.replace(/_/g, ' ')}${e.domain ? ` · ${e.domain}` : ''}` : '';

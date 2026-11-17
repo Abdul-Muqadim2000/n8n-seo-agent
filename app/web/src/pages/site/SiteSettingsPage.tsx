@@ -233,7 +233,8 @@ function TrackingSettings({ data, admin }: { data: SiteSettingsData; admin: bool
   const defaults = trackDefaults(site, {
     monitors: data.monitors ?? undefined,
     blogsPerWeek: data.cadence?.pagesPerWeek,
-    keywords: t.keywords.length ? t.keywords : undefined,
+    // CR17-I (F8): the website's own list is the app's (pushed to the engine on every save): a keyword the client deleted is never re-filled
+    keywords: site.keywords ?? [],
     ga4PropertyId: site.ga4PropertyId || t.ga4PropertyId || undefined,
     competitors: data.monitors?.competitors.length ? data.monitors.competitors : undefined,
   });
@@ -340,6 +341,9 @@ function TrackingStatusCard({ data, paused, admin }: { data: SiteSettingsData; p
   const day = useCycleDay();
   const action = useSiteAdmin(org.id, site.id);
   const t = data.tracking;
+  // CR17-I (F8): "tracked keywords" by the one definition (ladder keywords + your list, each once), as the Overview counts them
+  const rankings = useSiteData(org.id, site.id, 'rankings');
+  const tracked = rankings.data?.tracked;
   // no weekly report here: the engine row against the live check on Verification & Google, the newer wins
   const gsc = gscConnectionState({ tracking: t });
   const toggle = () =>
@@ -371,7 +375,16 @@ function TrackingStatusCard({ data, paused, admin }: { data: SiteSettingsData; p
             { label: 'Last report', value: t.lastRunAt ? fmtAgo(t.lastRunAt) : 'None yet' },
             { label: 'Search Console', value: gsc.connected ? (gsc.property ?? 'connected') : <span className="text-warning-text">not connected</span> },
             { label: 'GA4 property', value: t.ga4PropertyId || site.ga4PropertyId || <span className="text-ink-3">detected automatically</span> },
-            { label: 'Keywords', value: t.keywords.length ? `${t.keywords.length} tracked` : <span className="text-ink-3">Search Console queries only</span> },
+            {
+              label: 'Keywords',
+              value: tracked ? (
+                tracked.total ? tracked.line : <span className="text-ink-3">{tracked.line}</span>
+              ) : site.keywords?.length ? (
+                `${site.keywords.length} of your own`
+              ) : (
+                <span className="text-ink-3">Search Console queries only</span>
+              ),
+            },
           ]}
         />
       </CardBody>

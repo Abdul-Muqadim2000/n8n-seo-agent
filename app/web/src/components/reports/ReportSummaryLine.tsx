@@ -82,7 +82,12 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
       );
       break;
     case 'site_tracker_setup':
-      parts.push(nm(s, 'keywords') != null && `${nm(s, 'keywords')} keywords tracked`, 'first report in a few minutes');
+      // CR17-I (F8): this callback carries the website's OWN list only; "tracked keywords" also counts the keyword ladders (Settings and the
+      // Overview, shared/src/tracked-keywords.ts), so the line names what it counts instead of reading "0 keywords tracked"
+      parts.push(
+        nm(s, 'keywords') != null && (nm(s, 'keywords') ? `${nm(s, 'keywords')} of your own keyword${nm(s, 'keywords') === 1 ? '' : 's'} added` : 'no keyword of your own: your keyword ladders are checked'),
+        'first report in a few minutes',
+      );
       break;
     case 'ai_visibility':
       parts.push(
