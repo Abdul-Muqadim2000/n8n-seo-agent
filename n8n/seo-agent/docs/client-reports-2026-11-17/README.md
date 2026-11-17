@@ -114,8 +114,10 @@ combined app migration, marketing, docs, full tests). **Not deployed** (deploy s
 
 ## Checks (integration branch)
 
-See `INTEGRATION.md` (private) for the exact numbers of the final run: engine build exit 0, full harness, app typecheck, shared / server /
-web tests, web build with the prerender.
+Engine build exit 0 (every lint enforcing). Harness **20403 passed, 0 failed** (AD10 speed passes on the quiet host: 215 ms cold, 128 ms
+steady). App typecheck clean (shared, server, web); shared **1709** passed (99 files); server **2284** passed, 46 skipped (the real-Postgres
+suites), 114 files + 3 skipped; web **437** passed (48 files); web build with the prerender: 126 pages + 404. `smoke.py` not run (the dev
+stack was not started). Exact commands and the two tests updated for new wording: `INTEGRATION.md` (private).
 
 ## Data repairs (scripts ready, NOT run; dry run by default, each refuses on drift)
 
@@ -155,7 +157,7 @@ Owner decisions, not run: `repair_i_refunds.py` (our KI Trial runs: Devaicon 118
 Engine first, then the API, then the web; never on a Monday 07:00-16:00 UTC. The exact commands are in `INTEGRATION.md`:
 1. Backup (`deploy/gcp/backup.sh` on the VM).
 2. Merge `origin/main` into the branch, rebuild, node-diff production against main (production == main before the deploy).
-3. `deploy_engine.py --apply` (sync_tables adds the 12 columns above; Page Watch, Rank Tracker, Site Tracker, Site Admin, Link Builder,
+3. `deploy_engine.py --apply` (sync_tables adds the 13 columns above; Page Watch, Rank Tracker, Site Tracker, Site Admin, Link Builder,
    AI Visibility, Pulse, Pilot, Backlinks, Audit, Growth, KI, Index coverage, Prerelease and the main workflow change).
 4. API on the VM: checkout + `up -d --build app` (migration 0028 runs at start); Caddy reload for the hooks host headers.
 5. Web: PR to main (Vercel); then the public-site curl checks of HANDOFF_A.
