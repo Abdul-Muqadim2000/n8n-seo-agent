@@ -520,6 +520,10 @@ const OK = (() => {
     // LIVE1 (2026-11-07): a social or professional network is never a competitor (linkedin.com, where any author posts, was refused as "a site
     // that outranks you" because a LinkedIn article ranked #3 for one of the client's keywords); what its pages say is judged by the other rules
     if (d && LK.domainKind(d) === 'social') return null;
+    // CR17-F (2026-11-17, client report C5, section 196): only a COMPETITOR (CMP.role, the one classifier) is a rival. clutch.co, edx.org,
+    // github.com, brandmentions.pk's agency list, openedx.org and Microsoft (for a Microsoft partner) outranked the client or were named by
+    // AI, and were left out as "a competing site of yours". What they really are is said by competitorCheck below.
+    if (d && !isRivalRole(o, d)) return null;
     const hit = (list, label, kind) => {
       for (const c of (list || [])) { const x = domOf(c); if (!x || !d) continue;
         if (LK.sameSite(d, x) || LK.sameSite(x, d) || (dr && dr === LK.regDomain(x))) { const e = rivalEntry(c, (c && typeof c === 'object' && c.why) || label); return e ? { ...e, kind } : null; }
@@ -532,7 +536,8 @@ const OK = (() => {
   // a rival's "best X" list is still fair game - but only when the page really IS such a list. A mention, a resource page or the rival's
   // own front page is not: "add us to your list" has somewhere to go, "link to our guide" has not.
   const ROUNDUP_RE = /\b(best|top\s*\d+|top ten|alternatives?|round-?up|shortlist|directory|listing|list of|compar(?:e|ed|ison)|vs)\b/i;
-  const isRoundup = (o) => ROUNDUP_RE.test(String(o.title || '')) || ROUNDUP_RE.test(String(o.url || o.page_url || '').replace(/[\/_?.&=-]+/g, ' '));
+  const isRoundup = (o) => ROUNDUP_RE.test(String(o.title || '')) || ROUNDUP_RE.test(String(o.url || o.page_url || '').replace(/[\/_?.&=-]+/g, ' '))
+    || (typeof CMP === 'object' && !!CMP && !!CMP.listPage && CMP.listPage(o.title, o.url || o.page_url));   // CR17-F: "AI / Automation Agencies in Pakistan", /agencies/...
   // ---- R86 (2026-10-16, re-rating defect C-10): the competitor test judged only the prospect PAGE. daxin-global.ae (whose own pages
   // sell Odoo, Dynamics 365, Business Central and e-invoicing in Dubai) and qzinfomatics.com ("Microsoft Dynamics 365 Partner in Dubai")
   // reached `ready` because their blog article named too few of the customer's 30 services to reach the 45% bar — a bar over a
@@ -559,7 +564,34 @@ const OK = (() => {
     const local = !re ? true : re.test(text) || (TLD_OF[iso] ? d.endsWith('.' + TLD_OF[iso]) : false);
     return { offered, signals, local, pages: (o.site_pages || []).slice(0, 3) };
   }
-  function sellsSame(o) {
+  // CR17-F: the one role of a prospect's site, with the client's own services (the platform it builds on) and choices
+  const roleCtxOf = (o) => ({ services: [...(o.terms || []), ...(o.services || [])], topics: o.topics || [], declared: (o.competitors || []).map(domOf).filter(Boolean),
+    not_competitors: o.not_competitors || [], principals: o.principals || [], url: o.url || o.page_url || '' });
+  const roleOfSite = (o, d) => (typeof CMP === 'object' && CMP && CMP.role) ? CMP.role(d, roleCtxOf(o)) : null;
+  const isRivalRole = (o, d) => { const r = roleOfSite(o, d); return !r || r.role === 'competitor'; };
+  /** OK.competitorCheck(o) -> { code, role, reason }: why the competitor gate leaves a prospect out ('' when it does not). `code` is one of
+   *  CMP.LEFT_OUT's keys (competitor, competitor_list, listing, your_platform, software), stored by the Link Builder as reason_code; `reason` is
+   *  the sentence sellsSame always returned (a competitor's wording is unchanged). */
+  function competitorCheck(o) {
+    const type = String(o.type || '');
+    const d = String(o.domain || '').toLowerCase().replace(/^www\./, '');
+    const r = d ? roleOfSite(o, d) : null;
+    const LO = (typeof CMP === 'object' && CMP && CMP.LEFT_OUT) || {};
+    // a directory, the partner directory of the platform you build on, that platform's maker or a software maker: never "a competing site";
+    // a list, a mention, a journalist request, a show or a lost link on them is still asked (the ask there is "add us" / "put it back")
+    if (r && !SELL_EXEMPT.has(type)) {
+      const pd = typeof CMP === 'object' && CMP.partnerDirectory && CMP.partnerDirectory(o.url || o.page_url || '');
+      if (r.role === 'listing' || (pd && ['your_platform', 'software'].includes(r.role))) return { code: 'listing', role: r.role, reason: LO.listing || 'a directory: add yourself to it instead' };
+      if (r.role === 'your_platform') return { code: 'your_platform', role: r.role, reason: LO.your_platform || 'the platform you work with, not a competitor' };
+      if (r.role === 'software') return { code: 'software', role: r.role, reason: LO.software || 'a software maker, not a competitor' };
+    }
+    // a platform, a publisher, an authority or a site the client marked not a competitor: the other rules judge its page, never this one
+    if (r && r.role !== 'competitor') return { code: '', role: r.role, reason: '' };
+    const why = sellsSameBiz(o);
+    return { code: why ? (/its own list ranks itself/.test(why) ? 'competitor_list' : 'competitor') : '', role: r ? r.role : '', reason: why };
+  }
+  function sellsSame(o) { return competitorCheck(o).reason; }
+  function sellsSameBiz(o) {
     const type = String(o.type || '');
     const rival = rivalOf(o);
     // a SERP rival's "best X" list is fair game (a publisher that outranks you); a business rival's own list is not - it ranks itself first
@@ -734,6 +766,6 @@ const OK = (() => {
     return m;
   }
   return { OFF_TOPIC, TOPIC_FLOOR, TOPIC_FLOOR_TYPES, MIN_RANK, lowAuthority, reasonCode, DOMAIN_CODES, requalify, domainVerdicts, PLATFORM_WHY, NO_PAGE, anchorText, stripBrand, isGov, words, stem, fit, contactsIn, placementVet, PLATFORM, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf,
-    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, siteOffer, rivalOf, isRoundup, LIST_TYPES, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
+    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, competitorCheck, siteOffer, rivalOf, isRoundup, LIST_TYPES, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
 })();
 return $input.all().map(i => { const j = i.json || {}; return { json: { refusal: OK.sellsSame(j), rival: OK.rivalOf(j) } }; });

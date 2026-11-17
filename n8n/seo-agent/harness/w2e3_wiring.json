@@ -337,6 +337,12 @@
     "operation": "get",
     "table": "seo_index_pages"
    },
+   "Load KI Competitors (Mon)": {
+    "filters": null,
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_ki_competitors"
+   },
    "Load Ladders": {
     "filters": null,
     "mapping": null,
@@ -1013,6 +1019,12 @@
     "mapping": null,
     "operation": "get",
     "table": "seo_cycles"
+   },
+   "Load KI Competitors (Mon)": {
+    "filters": null,
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_ki_competitors"
    },
    "Load Ladders": {
     "filters": null,
@@ -2712,6 +2724,17 @@
      ]
     ]
    },
+   "Load KI Competitors (Mon)": {
+    "main": [
+     [
+      {
+       "index": 0,
+       "node": "Load AI Daily",
+       "type": "main"
+      }
+     ]
+    ]
+   },
    "Load Ladder Settings (AI)": {
     "main": [
      [
@@ -2739,7 +2762,7 @@
      [
       {
        "index": 0,
-       "node": "Load AI Daily",
+       "node": "Load KI Competitors (Mon)",
        "type": "main"
       }
      ]
@@ -4123,6 +4146,12 @@
     "operation": "get",
     "table": "seo_cache"
    },
+   "Load KI Competitors (Mon)": {
+    "filters": null,
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_ki_competitors"
+   },
    "Load Ladder Settings (AI)": {
     "filters": {
      "conditions": [
@@ -4840,6 +4869,12 @@
     "operation": "get",
     "table": "seo_cache"
    },
+   "Load KI Competitors (Mon)": {
+    "filters": null,
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_ki_competitors"
+   },
    "Load Ladders": {
     "filters": null,
     "mapping": null,
@@ -5237,6 +5272,12 @@
     "mapping": null,
     "operation": "get",
     "table": "seo_index_pages"
+   },
+   "Load KI Competitors (Mon)": {
+    "filters": null,
+    "mapping": null,
+    "operation": "get",
+    "table": "seo_ki_competitors"
    },
    "Load Ladders": {
     "filters": null,
