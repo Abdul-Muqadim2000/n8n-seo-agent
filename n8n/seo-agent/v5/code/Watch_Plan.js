@@ -29,6 +29,11 @@ const indexRows = rowsOf('Load Index Pages (Watch)').filter(r => r.site_id && r.
 const logRows = rowsOf('Load Content Log (Watch)').filter(r => r.keyword);
 const alertRows = rowsOf('Load Console Alerts (Watch)').filter(r => r.message_id && S(r.source || 'page_watch') === 'page_watch' && S(r.status) !== 'resolved' && !S(r.resolved_at));
 const OWN_TITLE_DAYS = 14;
+// CR17-FX-INDEX (review R1 L2 / L3): the pages read beside the key pages, outside the cap of 25. TARGETS: the address a stored permanent redirect
+// points at (not confirmed yet), read without following, so the move is confirmed only where the redirects end (a chain /a -> /b -> /c never
+// moves our rows onto /b). MOVE_CHECKS: an address that moved, read again once a week, so a redirect the client removed is noticed and the
+// address is watched again (our rows stay where they are: the watch says so, a person decides).
+const EXTRA = { targets_per_site: 5, move_checks_per_site: 3, move_check_days: 7 };
 
 // ---- the sites: registered ones plus every domain that has a keyword ladder (as the weekly Site Tracker counts them) ----
 const byDomain = new Map();
@@ -74,6 +79,23 @@ list.forEach((s, site_idx) => {
     pages.push({ url: u, kind: c.kind, weight: c.weight });
     if (pages.length >= CONFIG.max_watch_pages) break;
   }
+  // CR17-FX-INDEX (L2): the target of a permanent redirect we saw yesterday, read today without following (is it the end of the redirects?)
+  // (the list grows as it is walked, so the next link of a chain is read too; a target already confirmed as moved is read at its end)
+  let nT = 0;
+  for (let i = 0; i < pages.length && nT < EXTRA.targets_per_site; i++) {
+    const p = pages[i];
+    const r = watchRows.find(w => w.site_id === s.site_id && ukey(w.url) === ukey(p.url));
+    if (!r || S(r.moved_to) || !MV.PERMANENT.includes(Number(r.status) || 0)) continue;
+    const to0 = MV.abs(r.location, p.url); const to = (to0 && MV.finalOf(to0, moves)) || to0;
+    if (!to || !MV.helpers.sameSite(to, p.url) || MV.helpers.isHome(to) || MV.localeRedirect(p.url, to) || seen.has(ukey(to))) continue;
+    seen.add(ukey(to)); pages.push({ url: to, kind: 'page', weight: 5 }); nT += 1;
+  }
+  // CR17-FX-INDEX (L3): a moved address read again once a week (oldest first)
+  const dueMs = Date.now() - EXTRA.move_check_days * 864e5;
+  for (const r of movedRows.filter(r => !(Date.parse(S(r.checked_at)) > dueMs)).sort((a, b) => S(a.checked_at).localeCompare(S(b.checked_at))).slice(0, EXTRA.move_checks_per_site)) {
+    const u = S(r.url); if (!/^https?:\/\//i.test(u) || seen.has(ukey(u))) continue;
+    seen.add(ukey(u)); pages.push({ url: u, kind: S(r.kind) || 'page', weight: Number(r.weight) || 0, move_check: true });
+  }
   const cache = (() => { try { return JSON.parse(S((cacheRows.find(c => S(c.key) === 'watch:' + s.site_id) || {}).value) || 'null') || {}; } catch (e) { return {}; } })();
   const rechecks = findingRows.filter(f => f.site_id === s.site_id && (!S(trigger.finding_key) || S(f.finding_key) === S(trigger.finding_key)))
     .slice(0, CONFIG.max_rechecks_per_site)
@@ -94,9 +116,11 @@ list.forEach((s, site_idx) => {
   const site = { site_id: s.site_id, domain: s.domain, canonical_host: S(model.canonical_host) || s.domain, email: S(s.email), callback_url: S(s.callback_url),
     on_demand, pages_watched: pages.length, pages_known: SM.pages(model).length, rechecks, robots_hash_prev: S(cache.robots_hash), robots_status_prev: Number(cache.robots_status) || 0,
     robots_prev, expected_moves, own_titles, open_alerts, moved,
+    // CR17-FX-INDEX (L2): the confirmed moves of this site, so a move is confirmed at the end of a known chain
+    moves_known: movedRows.map(r => ({ from: S(r.url), to: S(r.moved_to) })).slice(0, 200),
     last_checked_at: S(cache.checked_at), max_watch_pages: CONFIG.max_watch_pages };
   const prevOf = (u) => watchRows.find(r => r.site_id === s.site_id && ukey(r.url) === ukey(u)) || null;
   out.push({ json: { site_idx, site_id: s.site_id, domain: s.domain, url: SM.siteUrl(model, '/robots.txt'), kind: 'robots', weight: 0, site, prev: null } });
-  for (const p of pages) out.push({ json: { site_idx, site_id: s.site_id, domain: s.domain, url: p.url, kind: p.kind, weight: p.weight, site, prev: prevOf(p.url) } });
+  for (const p of pages) out.push({ json: { site_idx, site_id: s.site_id, domain: s.domain, url: p.url, kind: p.kind, weight: p.weight, site, prev: prevOf(p.url), ...(p.move_check ? { move_check: true } : {}) } });
 });
 return out.length ? out : [{ json: { skip: true, reason: 'no key page to watch (the page inventory is empty and no site model is stored yet)' } }];

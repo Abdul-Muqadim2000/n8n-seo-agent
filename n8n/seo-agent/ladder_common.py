@@ -522,7 +522,11 @@ PAGE_WATCH_COLS = [('site_id', 'string'), ('domain', 'string'), ('url', 'string'
                    # build section 194 (client report 2026-11-17, F5 / F10): the address this page moved to, a permanent redirect to a working page
                    # of the same site seen on two reads (v5/code/_moves.js MV.confirm). The watch then reads the new address instead, and the
                    # ladder / content log / AI question / AI readiness rows follow it. '' = it did not move.
-                   ('moved_to', 'string')]
+                   ('moved_to', 'string'),
+                   # CR17-FX-INDEX (review R1 M1): the verdict on where this page's redirect landed at its last read (moved / temporary / gone / error /
+                   # home / noindex / loop / offsite / canonical_elsewhere / locale / broken; '' = no redirect, or a row before this fix). A page that
+                   # keeps redirecting is judged again every day; a verdict that changed (a target that broke after the move) raises an alert.
+                   ('redirect_verdict', 'string')]
 
 # ---- Index coverage (2026-10-29, docs/indexing-2026-10-29/DESIGN.md §2): which pages Google left out, why, and what to do. Written ONLY by
 # SEO Agent - Index Coverage (build_index_coverage.py, SEOagentIndexCv1, daily), read by the web app's Indexing page. It reads the Site Tracker's

@@ -45,6 +45,9 @@ for (const [site_idx, items] of bySite) {
   const notChecked = pages.filter(p => p.ok === false);
   const changes = [];
   const newly_blocked = [];
+  // CR17-FX-INDEX (review R1 L2): today's own reads (no redirect followed) and the site's confirmed moves: a move is confirmed where the redirects end
+  const readsByKey = new Map(pages.filter(p => p.ok !== false).map(p => [ukey(p.url), p]));
+  const knownMoves = MV.fromWatch((site.moves_known || []).map(m => ({ url: S(m.from), moved_to: S(m.to) })));
   const pageStates = pages.map(p => {
     const prev = p.prev || null;
     const st = Number(p.status) || 0;
@@ -58,23 +61,35 @@ for (const [site_idx, items] of bySite) {
       const hop = h ? PW.signals(h.res) : null;
       const exp = expected.some(e => ukey(e.from) === ukey(p.url) && ukey(e.to) === ukey(redirect_to));
       verdict = PW.redirectVerdict({ url: p.url, status: st, location: p.location, hop, expected: exp });
-      const cf = MV.confirm({ url: p.url, status: st, location: p.location }, prev, verdict.verdict);
+      const cf = MV.confirm({ url: p.url, status: st, location: p.location }, prev, verdict.verdict, { reads: readsByKey, moves: knownMoves });
       if (cf.ok) moved_to = cf.to;
     }
-    const ch = PW.compare(prev, { ...p, robots_blocked: blockedNow }, { url: p.url, robots_blocked: blockedNow, robots_blocked_before: prev ? prev.robots_blocked === true : false,
+    // CR17-FX-INDEX (review R1 L3): a stored move stands while the address still redirects permanently to the same page (a target we could not
+    // read today changes nothing); when the redirect is gone or points elsewhere, the move is cleared (the address is watched again from the next
+    // run) and said once. Our ladder / content log / AI rows stay where they are: undoing a move is a person's decision.
+    const storedMove = S((prev || {}).moved_to);
+    let undone = false;
+    if (p.ok !== false && storedMove && !moved_to) {
+      if (MV.PERMANENT.includes(st) && (ukey(redirect_to) === ukey(storedMove) || ukey(MV.finalOf(redirect_to, knownMoves) || '') === ukey(storedMove))) moved_to = storedMove;
+      else undone = true;
+    }
+    const ch = p.move_check ? [] : PW.compare(prev, { ...p, robots_blocked: blockedNow }, { url: p.url, robots_blocked: blockedNow, robots_blocked_before: prev ? prev.robots_blocked === true : false,
       redirect: verdict, own_title: own.has(ukey(p.url)) });
+    if (undone) ch.push(PW.moveUndone(p.url, storedMove, st, redirect_to));
     for (const c of ch) changes.push({ ...c, url: p.url, kind: p.kind });
     const first = !prev || !S(prev.checked_at);
     return { url: p.url, kind: p.kind, weight: p.weight, ok: p.ok !== false, status: p.status, location: S(p.location), noindex: !!p.noindex, noindex_source: S(p.noindex_source),
       canonical: S(p.canonical), canonical_ok: p.ok === false ? null : (!S(p.canonical) ? null : PW.helpers.same(p.canonical, p.url)),
       title: S(p.title), titles: p.titles || 0, description: S(p.description), h1: S(p.h1), h1s: p.h1s || 0, robots_blocked: blockedNow,
       error: S(p.error), first_seen: first, state: PW.state(ch, p), changes: ch,
-      verdict: verdict ? verdict.verdict : '', redirect_to, moved_to, redirect_text: verdict ? verdict.text : '',
+      verdict: verdict ? verdict.verdict : '', redirect_to, moved_to, redirect_text: verdict ? verdict.text : '', move_check: !!p.move_check, move_undone: undone,
       // the Google view of this page as it was stored (written by the weekly URL Inspection, G25): carried, never re-claimed here
       inspect: prev ? { inspect_at: S(prev.inspect_at), index_state: S(prev.index_state), indexed: S(prev.indexed), coverage: S(prev.coverage),
         google_canonical: S(prev.google_canonical), last_crawl: S(prev.last_crawl), mobile: S(prev.mobile), rich_results: S(prev.rich_results), inspect_error: S(prev.inspect_error) } : null,
       prev: prev ? { checked_at: S(prev.checked_at), status: Number(prev.status) || 0, noindex: prev.noindex === true, canonical: S(prev.canonical), title: S(prev.title),
-        state: S(prev.state), last_change_at: S(prev.last_change_at), changed_count: Number(prev.changed_count) || 0, robots_hash: S(prev.robots_hash) } : null };
+        state: S(prev.state), last_change_at: S(prev.last_change_at), changed_count: Number(prev.changed_count) || 0, robots_hash: S(prev.robots_hash),
+        // CR17-FX-INDEX: what Watch Rows carries when today cannot judge it (M1 redirect verdict, M2 robots.txt block)
+        redirect_verdict: S(prev.redirect_verdict), robots_blocked: prev.robots_blocked === true } : null };
   });
   // robots.txt as a state of its own, compared with the last reading (and the key pages it newly blocks)
   const robotsChange = PW.robotsChange(site.robots_prev || site.robots_hash_prev, robots, { newly_blocked });
@@ -83,7 +98,7 @@ for (const [site_idx, items] of bySite) {
   const rechecks = (site.rechecks || []).map(f => { const r = PW.recheck(f, pageStates.filter(p => p.ok).map(p => ({ ...p, url: p.url }))); return { ...f, ...r, checked_at: nowIso }; });
   const real = changes.filter(c => c.severity !== 'info');
   const indexable = pageStates.filter(p => p.ok && Number(p.status) >= 200 && Number(p.status) < 300 && !p.noindex && p.robots_blocked !== true).length;
-  const movesToday = pageStates.filter(p => S(p.moved_to) && ukey(p.moved_to) !== ukey(p.url)).map(p => ({ from: p.url, to: p.moved_to }));
+  const movesToday = pageStates.filter(p => S(p.moved_to) && ukey(p.moved_to) !== ukey(p.url) && !p.move_check).map(p => ({ from: p.url, to: p.moved_to }));
   const hopsHere = [...hops.values()].filter(h => h.plan.site_idx === site_idx).length;
   out.push({ json: {
     site_idx, site_id: site.site_id || items[0].site_id, domain: site.domain || items[0].domain, checked_at: nowIso, on_demand: !!site.on_demand,

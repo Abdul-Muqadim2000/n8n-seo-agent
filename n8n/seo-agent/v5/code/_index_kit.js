@@ -396,8 +396,18 @@ const IX = (() => {
   // E2: what a bot wall or a challenge looks like from our side. Google's own crawler is not served these, so they say nothing about the page.
   const CHALLENGE = /cf-chl|challenge-platform|cf_chl_opt|<title>\s*(?:just a moment|attention required|access denied|pardon our interruption|please wait|ddos-guard|security check)|_incapsula_resource|request unsuccessful\. incapsula|px-captcha|perimeterx|sucuri website firewall/i;
   const CHALLENGE_WEAK = /captcha|are you a robot|verify you are (?:a )?human|akamai.{0,40}reference #/i;   // only on an error status (a contact form has a captcha too)
-  // a same-site redirect that only adds a language / country prefix (/ar/..., /en-us/...) answers where our server sits, not what Google sees
-  const LOCALE = /^\/[a-z]{2}(?:[-_][a-z]{2,4})?(?=\/|$)/i;
+  // >>> LOCALE RULE (CR17-FX-INDEX, review R1 M4): ONE text in _index_kit.js, _page_watch.js and _moves.js (build_v4.py section 194 checks they are the
+  // same). A same-site redirect that only adds a language / country prefix (/x -> /ae/x, / -> /en/), or sends a deep page to a bare locale root,
+  // answers where OUR server sits (Doha), not what Google's crawler sees: never a move, never a cause.
+  const localeRedirect = (from, to) => {
+    const LOC = /^\/[a-z]{2}(?:[-_][a-z]{2,4})?(?=\/|$)/i;
+    const pa = (u) => String(u == null ? '' : u).trim().replace(/^https?:\/\/[^\/?#]*/i, '').replace(/[?#].*$/, '') || '/';
+    const f = pa(from), t = pa(to);
+    if (!LOC.test(t) || LOC.test(f)) return false;
+    if ((t.replace(LOC, '') || '/').replace(/\/+$/, '').toLowerCase() === f.replace(/\/+$/, '').toLowerCase()) return true;
+    return /^\/[a-z]{2}(?:[-_][a-z]{2,4})?\/?$/i.test(t) && f !== '/';
+  };
+  // <<< LOCALE RULE
   /**
    * first: the answer of a GET that did NOT follow redirects; final: the answer of the one hop we follow ourselves (only asked when `first` was
    * a 3xx to the site's own domain; E11: every hop is re-checked). -> { ok, blocked, block_reason, http_status, final_url, moved_to, noindex
@@ -430,8 +440,7 @@ const IX = (() => {
       const pa = parseUrl(abs), pu = parseUrl(url);
       if (pa && pu && bare(pa.host) === bare(pu.host)) {
         if (same(abs, url)) moved_to = 'https://' + pa.host + pa.path + pa.query;   // slash / case / www only: the same page
-        else if (LOCALE.test(pa.path) && !LOCALE.test(pu.path) && (pa.path.replace(LOCALE, '') || '/').replace(/\/+$/, '').toLowerCase() === pu.path.replace(/\/+$/, '').toLowerCase()) return blocked('a language or country redirect for our location');
-        else if (LOCALE.test(pa.path) && !LOCALE.test(pu.path) && /^\/[a-z]{2}(?:[-_][a-z]{2,4})?\/?$/i.test(pa.path) && pu.path !== '/') return blocked('a language or country redirect for our location');
+        else if (localeRedirect(url, abs)) return blocked('a language or country redirect for our location');   // CR17-FX-INDEX (M4): the shared LOCALE RULE
         else final_url = 'https://' + pa.host + pa.path + pa.query;
       } else if (abs) final_url = pa ? 'https://' + pa.host + pa.path + pa.query : S(abs).slice(0, 500);
     }
@@ -613,9 +622,17 @@ const IX = (() => {
    * CR17-C: the stored row says WE saw the address move (cause redirect, a final address on the site itself) after Google's last visit
    * (lastCrawl): until Google reads it again, the move stands over Google's older word (and over impressions of the old address).
    */
+  /**
+   * CR17-FX-INDEX (review R1 H1): a redirect is a MOVE only when the page it lands on works: it answers 2xx (our read of the hop, http_status),
+   * carries no noindex, and a deep address is not sent to the home page. A 301 into a 404 / 5xx / noindex page is a broken page, never
+   * "moved, nothing to do". f: a readFetch result or a stored row (same field names). THE SHARED RULE (app twin: indexing.ts permanentMoveLands).
+   */
+  const rootPath = (u) => { const x = parseUrl(u); return !!x && /^\/?$/.test(x.path); };
+  const landsWell = (url, f) => { const x = f || {}; const st = n0(x.http_status); return !!S(x.final_url) && st >= 200 && st < 300 && !S(x.noindex) && !(rootPath(x.final_url) && !rootPath(url)); };
   const movedByUs = (p, lastCrawl, site) => {
     const x = p || {}; const fu = S(x.final_url);
     if (S(x.cause) !== 'redirect' || !fu || same(fu, x.url)) return false;
+    if (!landsWell(x.url, x)) return false;   // CR17-FX-INDEX H1: a stored move whose target did not work is no move
     const sameSite = site && S(site.domain) ? own(fu, site) : bare(hostOf(fu)) === bare(hostOf(x.url));
     return sameSite && ts(x.fetch_at) > 0 && ts(x.fetch_at) > ts(lastCrawl);
   };
@@ -671,7 +688,7 @@ const IX = (() => {
         const fAt = ts(c.fetch_at) || now;
         if (gLast < fAt && cause !== 'redirect' && cause !== 'redirect_error') {
           const st = n0(f.http_status); const pv = p._prev || {};
-          if (S(f.final_url) && PERMANENT.includes(n0(f.redirect_status)) && sameSite(f.final_url)) cause = 'redirect';
+          if (S(f.final_url) && PERMANENT.includes(n0(f.redirect_status)) && sameSite(f.final_url) && landsWell(p.url, f)) cause = 'redirect';
           else if (!SOFT.includes(cause) && cause !== 'not_found' && cause !== 'noindex') {
             const hard2 = (st === 404 || st === 410) ? 'not_found' : f.noindex ? 'noindex' : '';
             const pAt = ts(pv.fetch_at);
@@ -1924,7 +1941,7 @@ const IX = (() => {
   };
 
   return { CFG, key, same, norm, own, safe, parseUrl, siteHost, hostOf, bare, pathOf, depth, isLowValue, LOW_VALUE, robotsSitemaps, parseSitemap, sitemapRoots, sitemapAccept,
-    sitemapQueue, sitemapComplete, searchEvidence, saWindows, readInspection, readingsOf, reuseOf, storedReading, readFetch, hopOf, robotsAllows, mainWords, diagnose, direct200, movedByUs, PERMANENT, fixSeen, covCause,
+    sitemapQueue, sitemapComplete, searchEvidence, saWindows, readInspection, readingsOf, reuseOf, storedReading, readFetch, hopOf, robotsAllows, mainWords, diagnose, direct200, movedByUs, landsWell, PERMANENT, fixSeen, covCause,
     stateOf, ACTION, CAUSES, laneOf, anchorOf, noteOf, plan, inProperty, nextCheck, capOf, isGone, askGoogle, homeLinks, linkSuggestions, topicOf, kindOf, parseEvents,
     eventRows, policyText, policyEvent, POLICY_URL, freeze, impactWindows, impactDue, impactCompare, impactNote, PAGE_COLS, rowOut, rowSig, changed, summarize, inPopulation,
     reportMarkdown, groupNote, isoDay, DAY, merge, ts,

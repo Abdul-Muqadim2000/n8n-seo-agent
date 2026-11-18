@@ -118,7 +118,8 @@ module.exports = async (ctx) => {
     check('day 1: one open Critical alert with its condition key, count 1, and exactly the seo_console_alerts columns', l0.rows.length === 1 && row0.status === 'new' && row0.count === 1 && /^watch:site_example-agency-com:status:[0-9a-f]{8}$/.test(row0.condition_key) && J(Object.keys(row0).sort()) === J([...COLS].sort()), J(row0));
     const seen = { ...row0, ack_by: 'owner@example.com', ack_at: '2026-11-10T09:00:00.000Z' };
     const l1 = (await pw({ lifecycle: { site_id: SITE, domain: D, now: T1, changes: [], pages: [{ url: P, ok: true, status: 404 }], open: [seen] } })).lifecycle;
-    check('day 2, still 404: the SAME row (same message id) with last_seen_at and count 2, and the "Mark as seen" kept', l1.rows.length === 1 && l1.rows[0].message_id === row0.message_id && l1.rows[0].count === 2 && l1.rows[0].last_seen_at === T1 && l1.rows[0].ack_by === 'owner@example.com' && l1.rows[0].status === 'new', J(l1.rows));
+    // CR17-FX-INDEX (review R1 L6): an updated row carries no ack_by / ack_at at all, so the partial upsert never overwrites a mark the app saved
+    check('day 2, still 404: the SAME row (same message id) with last_seen_at and count 2, and the "Mark as seen" never written by the engine (kept as stored)', l1.rows.length === 1 && l1.rows[0].message_id === row0.message_id && l1.rows[0].count === 2 && l1.rows[0].last_seen_at === T1 && !('ack_by' in l1.rows[0]) && !('ack_at' in l1.rows[0]) && l1.rows[0].status === 'new', J(l1.rows));
     const back = { code: 'page_back', severity: 'info', label: 'page answers again', text: 'The page answers 200 again (it answered 404 before)', url: P, kind: 'nav' };
     const l2 = (await pw({ lifecycle: { site_id: SITE, domain: D, now: T2, changes: [back], pages: [{ url: P, ok: true, status: 200 }], open: [l1.rows[0]] } })).lifecycle;
     check('day 3, the page answers again: that row is resolved (resolved_at, resolution) and no extra notice row is written', l2.rows.length === 1 && l2.rows[0].message_id === row0.message_id && l2.rows[0].status === 'resolved' && l2.rows[0].resolved_at === T2 && /answers 200 again/.test(l2.rows[0].resolution), J(l2.rows));
@@ -242,7 +243,7 @@ module.exports = async (ctx) => {
     check('the three open alerts of the old watch are resolved on their own rows, each with the reason (two moves, one page that answers again)',
       byId(OPEN[0].message_id).status === 'resolved' && /moves permanently to \/services\/engagement-models/.test(byId(OPEN[0].message_id).resolution)
       && byId(OPEN[1].message_id).status === 'resolved' && byId(OPEN[2].message_id).status === 'resolved' && /answers 200 again/.test(byId(OPEN[2].message_id).resolution)
-      && alerts.every(a => J(Object.keys(a).sort()) === J([...TC.CONSOLE_ALERTS].sort())), J(alerts.map(a => [a.message_id.slice(-24), a.status, a.resolution])));
+      && alerts.every(a => J(Object.keys(a).sort()) === J([...TC.CONSOLE_ALERTS].filter(c => (c !== 'ack_by' && c !== 'ack_at') || (c in a)).sort()) && Object.keys(a).length >= TC.CONSOLE_ALERTS.length - 2), J(alerts.map(a => [a.message_id.slice(-24), a.status, a.resolution])));
     const moves = (await run('Watch Moves', [{ json: {} }]))[0].json;
     check('Watch Moves: the ladder rung, the content log row and the AI question follow /ai-automation-services-pakistan to /services/...; its AI readiness row is dropped (the new address has one), the other renamed',
       moves.ladders.length === 1 && moves.ladders[0].target_url === NEW2 && moves.logs.length === 1 && moves.logs[0].published_url === NEW2 && moves.targets.length === 1 && moves.targets[0].target_id === 'ait_36'
@@ -301,5 +302,115 @@ module.exports = async (ctx) => {
     const WIRE = require('./page_watch_wiring.json');
     check('wiring: Watch Read -> Watch Hop Plan -> (hop) -> Watch Compare, and Save Watch Cache -> Watch Moves', J(WIRE.connections['Watch Read']) === J([['Watch Hop Plan']]) && J(WIRE.connections['Any Watch Hops?']) === J([['Fetch Watch Hop'], ['Watch Compare']])
       && J(WIRE.connections['Save Watch Cache']) === J([['Watch Moves']]) && WIRE.fetch.follows_redirects === false && WIRE.hop.follows_redirects === true && WIRE.hop.max_redirects === 5, J(WIRE.hop));
+  });
+
+  // ======================================================================================================================
+  // CR17-FX-INDEX (review R1 of the CR17 integration: M1 M2 M3 M4 L1 L2 L3 L6), on the same made-up site
+  await guard('CR17FXD1 kits: verdicts, lifecycle, moves', async () => {
+    reset(); const SN = 'CR17FXD1 (review R1) Page Watch re-judges a standing redirect, keeps a robots.txt block it could not read, "canonical removed" lasts while the tag is missing, a country redirect is no move, two searches never move onto one page, a chain moves to its end'; begin(SN); const check = mkCheck(SN);
+    const A = W + '/a', B = W + '/b', C = W + '/c', T0 = '2026-11-10T05:45:00.000Z', T1 = '2026-11-11T05:45:00.000Z', T2 = '2026-11-12T05:45:00.000Z';
+    // M1: the target breaks after the move (or under a temporary redirect)
+    const gone = (await pw({ redirect: { url: A, status: 301, location: '/b', hop: { ok: true, status: 404 } } })).verdict;
+    const cmp = async (pv, v) => (await pw({ compare: { prev: { checked_at: 'x', status: 301, location: '/b', redirect_verdict: pv }, now: { ok: true, status: 301, location: '/b' }, opts: { url: A, redirect: v } } })).changes;
+    const m1a = await cmp('moved', gone), m1b = await cmp('', gone), m1c = await cmp('gone', gone), m1d = await cmp('moved', { ...gone, verdict: 'unread' });
+    check('CR17FXD1-M1 a page that keeps redirecting is judged again: moved -> gone raises the Critical "redirects to a page that is gone"; the same verdict, a first verdict (baseline) or an unread target say nothing',
+      m1a.length === 1 && m1a[0].code === 'page_redirect_bad' && m1a[0].severity === 'critical' && m1b.length === 0 && m1c.length === 0 && m1d.length === 0, J([m1a, m1b, m1c, m1d]));
+    const tmp = { code: 'page_redirects', severity: 'medium', label: 'page now redirects', text: 'The page now redirects temporarily (302) to /b.', url: A, kind: 'nav' };
+    const o0 = (await pw({ lifecycle: { site_id: SITE, domain: D, now: T0, changes: [tmp], pages: [{ url: A, ok: true, status: 302, verdict: 'temporary' }], open: [] } })).lifecycle.rows[0];
+    const o1 = (await pw({ lifecycle: { site_id: SITE, domain: D, now: T1, changes: [{ ...m1a[0], url: A, kind: 'nav' }], pages: [{ url: A, ok: true, status: 302, verdict: 'gone' }], open: [o0] } })).lifecycle.rows[0];
+    const o2 = (await pw({ lifecycle: { site_id: SITE, domain: D, now: T2, changes: [{ ...tmp, text: 'again temporary' }], pages: [{ url: A, ok: true, status: 302, verdict: 'temporary' }], open: [o1] } })).lifecycle.rows[0];
+    check('CR17FXD1-M1 the open "temporary" alert takes the Critical "gone" verdict in place (same row), and falls back to Medium when the target works again',
+      o1.message_id === o0.message_id && o1.severity === 'critical' && /gone/.test(o1.summary) && o2.message_id === o0.message_id && o2.severity === 'medium', J([o0.severity, o1.severity, o2.severity]));
+    // M2: robots.txt not read today never resolves a real block
+    const rbOpen = (await pw({ lifecycle: { site_id: SITE, domain: D, now: T0, changes: [{ code: 'robots_blocked', severity: 'critical', label: 'blocked by robots.txt', text: 'robots.txt now stops Google crawling /a', url: A, kind: 'nav' }], pages: [{ url: A, ok: true, status: 200, robots_blocked: true }], open: [] } })).lifecycle.rows[0];
+    const rbNull = (await pw({ lifecycle: { site_id: SITE, domain: D, now: T1, changes: [], pages: [{ url: A, ok: true, status: 200, robots_blocked: null }], open: [rbOpen] } })).lifecycle.rows;
+    const rbFalse = (await pw({ lifecycle: { site_id: SITE, domain: D, now: T2, changes: [], pages: [{ url: A, ok: true, status: 200, robots_blocked: false }], open: [rbOpen] } })).lifecycle.rows;
+    check('CR17FXD1-M2 a day robots.txt could not be read (null) leaves the Critical block open (nothing claimed); a real read without the block resolves it',
+      rbOpen.status === 'new' && rbNull.length === 0 && rbFalse.length === 1 && rbFalse[0].status === 'resolved' && /no longer blocks/.test(rbFalse[0].resolution), J([rbNull, rbFalse]));
+    // L1: canonical removed
+    const crm = { code: 'canonical_removed', severity: 'low', label: 'canonical removed', text: 'The canonical tag is gone (it pointed at the page itself).', url: A, kind: 'nav' };
+    const c0 = (await pw({ lifecycle: { site_id: SITE, domain: D, now: T0, changes: [crm], pages: [{ url: A, ok: true, status: 200, canonical: '' }], open: [] } })).lifecycle.rows[0];
+    const c1 = (await pw({ lifecycle: { site_id: SITE, domain: D, now: T1, changes: [], pages: [{ url: A, ok: true, status: 200, canonical: '' }], open: [c0] } })).lifecycle.rows[0];
+    const c2 = (await pw({ lifecycle: { site_id: SITE, domain: D, now: T2, changes: [], pages: [{ url: A, ok: true, status: 200, canonical: A }], open: [c1] } })).lifecycle.rows[0];
+    const ha = await hashOf('example-agency.com/a');
+    const legacyC = { ...c0, condition_key: 'watch:' + SITE + ':canonical:' + ha };
+    const c3 = (await pw({ lifecycle: { site_id: SITE, domain: D, now: T1, changes: [], pages: [{ url: A, ok: true, status: 200, canonical: '' }], open: [legacyC] } })).lifecycle.rows[0];
+    check('CR17FXD1-L1 "canonical removed" stays open while the tag is missing (never "now points at the page itself"), and resolves with "The canonical tag is back" (also a row stored under the old shared key)',
+      /:canonical_tag:/.test(c0.condition_key) && c1.status === 'new' && c1.count === 2 && c2.status === 'resolved' && /^The canonical tag is back, pointing at the page itself/.test(c2.resolution)
+      && c3.status === 'new' && /:canonical_tag:/.test(c3.condition_key), J([c1, c2.resolution, c3]));
+    // L6: a new row starts with empty marks; an updated / resolved row carries none
+    check('CR17FXD1-L6 the engine writes ack_by / ack_at only on a row it creates (empty); on updates and resolves it leaves them to the app',
+      c0.ack_by === '' && c0.ack_at === '' && !('ack_by' in c1) && !('ack_by' in c2) && !('ack_at' in rbFalse[0]), J([Object.keys(c1)]));
+    // M4: a country / language redirect
+    const lv = (await pw({ redirect: { url: W + '/services/a', status: 301, location: '/ae/services/a', hop: { ok: true, status: 200 } } })).verdict;
+    const lv2 = (await pw({ redirect: { url: W + '/services/a', status: 301, location: '/en/', hop: { ok: true, status: 200 } } })).verdict;
+    const lc = await mv({ fn: 'confirm', args: [{ url: W + '/services/a', status: 301, location: '/ae/services/a' }, { url: W + '/services/a', status: 301, location: '/ae/services/a' }, 'moved'] });
+    const lfin = await mv({ fn: 'finalOf', a: W + '/services/a', watch: [{ url: W + '/services/a', status: 301, location: '/ae/services/a' }] });
+    check('CR17FXD1-M4 a redirect that only adds a country prefix (or sends a deep page to a bare locale root) is Info "a language or country version for where our server is", never a confirmed move or a known move',
+      lv.verdict === 'locale' && lv.severity === 'info' && lv2.verdict === 'locale' && !lc.ok && /language or country/.test(lc.reason) && lfin === '', J([lv, lc, lfin]));
+    // M3: two searches onto one address in one run
+    const T = W + '/services/ai-consulting';
+    const ladders = [{ ladder_id: 'lad_d', domain: D, keyword: 'ai consulting dubai', target_url: W + '/ai-consulting-dubai', status: 'published', page_exists: true },
+      { ladder_id: 'lad_u', domain: D, keyword: 'ai consulting uae', target_url: W + '/ai-consulting-uae', status: 'published', page_exists: true }];
+    const logs = [{ site_id: SITE, domain: D, keyword: 'ai consulting uae', published_url: W + '/ai-consulting-uae', status: 'published' }];
+    const p3 = await mv({ fn: 'plan', args: [[{ from: W + '/ai-consulting-dubai', to: T }, { from: W + '/ai-consulting-uae', to: T }], { ladders, logs, targets: [], aiPages: [] }, { domain: D, site_id: SITE }] });
+    check('CR17FXD1-M3 two searches\' pages moved onto ONE address the same day: the first follows, the second (ladder and content log) is refused and names the first search',
+      p3.ladders.length === 1 && p3.ladders[0].ladder_id === 'lad_d' && p3.logs.length === 0 && p3.refused.filter(r => /ai consulting dubai/.test(r.reason)).length === 2, J(p3));
+    // L2: a chain moves to its end, never onto an address that redirects
+    const chainNow = { url: A, status: 301, location: '/b' };
+    const l2a = await mv({ fn: 'confirm', args: [chainNow, chainNow, 'moved', { reads: [{ url: B, ok: true, status: 301, location: '/c' }] }] });
+    const l2b = await mv({ fn: 'confirm', args: [chainNow, chainNow, 'moved', { moves: [{ url: B, moved_to: C }], reads: [{ url: C, ok: true, status: 200 }] }] });
+    const l2c = await mv({ fn: 'confirm', args: [chainNow, chainNow, 'moved', { reads: [{ url: B, ok: true, status: 200 }] }] });
+    check('CR17FXD1-L2 a target that redirects again is a chain not ended (refused); a target confirmed as moved is followed to its end (/c); a target that answers 200 is the move',
+      !l2a.ok && /redirects again/.test(l2a.reason) && l2b.ok && l2b.to === C && l2c.ok && l2c.to === B, J([l2a, l2b, l2c]));
+  });
+
+  await guard('CR17FXD2 the watch end to end: chains, weekly move checks, carried readings', async () => {
+    reset(); const SN = 'CR17FXD2 (review R1 L2 / L3 / M1 / M2) the daily watch: the target of a standing 301 is read too and a chain is not confirmed, a moved address is read again weekly and a removed redirect clears the move (rows stay), the redirect verdict and a robots.txt block are carried on a day they cannot be judged'; begin(SN); const check = mkCheck(SN);
+    const HOME = W + '/', A = W + '/a', B = W + '/b', C = W + '/c', OLD = W + '/old', NEW = W + '/services/new', ROB = W + '/robots.txt';
+    const ago = (d) => new Date(Date.now() - d * 864e5).toISOString();
+    const row = (url, o) => ({ id: 1, site_id: SITE, domain: D, url, kind: 'page', weight: 10, checked_at: ago(1), status: 200, location: '', noindex: false, noindex_source: '', canonical: url, canonical_ok: true,
+      title: 'T', title_hash: '', titles: 1, description: '', h1: '', h1s: 1, robots_blocked: false, robots_hash: '', state: 'ok', changes: '', last_change_at: '', changed_count: 0, error: '',
+      inspect_at: '', index_state: '', indexed: '', coverage: '', google_canonical: '', last_crawl: '', mobile: '', rich_results: '', inspect_error: '', moved_to: '', redirect_verdict: '', ...(o || {}) });
+    const siteRow = { site_id: SITE, domain: D, canonical_host: D, model_updated_at: ago(1), status: 'active', nav_pages_json: J([{ url: A, title: 'A' }, { url: OLD, title: 'Old' }]) };
+    const loads = (watch) => {
+      mock('Load Sites (Watch)', [{ json: siteRow }]); mock('Load Ladders (Watch)', [{ json: {} }]); mock('Load Pages (Watch)', [{ json: {} }]);
+      mock('Load Page Watch', watch.map(json => ({ json }))); mock('Load Watch Cache', [{ json: {} }]); mock('Load Recheck Requests', [{ json: {} }]); mock('Load Ops Alerts (Watch)', [{ json: {} }]);
+      mock('Load Index Pages (Watch)', [{ json: {} }]); mock('Load Content Log (Watch)', [{ json: {} }]); mock('Load AI Targets (Watch)', [{ json: {} }]); mock('Load AI Pages (Watch)', [{ json: {} }]);
+      mock('Load Console Alerts (Watch)', [{ json: {} }]); delete store['Watch Run']; };
+    const page = (u, canon) => ({ statusCode: 200, headers: { 'content-type': 'text/html' }, data: '<html><head><title>T</title>' + (canon ? '<link rel="canonical" href="' + canon + '"/>' : '') + '</head><body><h1>x</h1></body></html>' });
+    const day = async (watch, answer, hopAnswer) => {
+      loads(watch);
+      const plan = (await run('Watch Plan', [{ json: {} }])).map(x => x.json);
+      mock('Fetch Watch Page', plan.map(p => answer(p)));
+      await run('Watch Read', store['Fetch Watch Page']);
+      const hops = (await run('Watch Hop Plan', store['Watch Read'])).map(x => x.json);
+      if (hops[0] && !hops[0].skip) mock('Fetch Watch Hop', hops.map(h => hopAnswer(h))); else delete store['Fetch Watch Hop'];
+      const cmp = (await run('Watch Compare', store['Watch Read']))[0].json;
+      const rows = (await run('Watch Rows', store['Watch Compare'])).map(x => x.json);
+      return { plan, cmp, rows, st: (u) => cmp.pages.find(p => p.url === u) || {}, rw: (u) => rows.find(r => r.url === u) || {} };
+    };
+    const robotsOk = { statusCode: 200, headers: { 'content-type': 'text/plain' }, data: 'User-agent: *\nDisallow: /private/\n' };
+    // L2: /a 301 -> /b (seen yesterday), /b 301 -> /c, /c answers 200 with no canonical
+    const d1 = await day([row(HOME), row(A, { status: 301, location: '/b', canonical: '', redirect_verdict: 'moved' }), row(OLD)],
+      (p) => p.kind === 'robots' ? robotsOk : p.url === A ? { statusCode: 301, headers: { location: '/b' }, data: '' } : p.url === B ? { statusCode: 301, headers: { location: '/c' }, data: '' } : page(p.url, p.url),
+      () => page(C, ''));
+    check('CR17FXD2-L2 the target of yesterday\'s 301 is read too (without following), and the chain /a -> /b -> /c is not confirmed onto /b', d1.plan.some(p => p.url === B) && d1.st(A).verdict === 'moved' && d1.st(A).moved_to === '' && d1.rw(A).redirect_verdict === 'moved', J(d1.cmp.pages.map(p => [p.url.replace(W, ''), p.status, p.verdict, p.moved_to])));
+    // L3: a confirmed move read again after a week; the redirect is gone
+    const movedRow = row(OLD, { status: 301, location: '/services/new', canonical: '', moved_to: NEW, redirect_verdict: 'moved', checked_at: ago(8) });
+    const d2 = await day([row(HOME), movedRow, row(NEW, { checked_at: ago(1) })], (p) => p.kind === 'robots' ? robotsOk : page(p.url, p.url), () => page(NEW, NEW));
+    const undone = d2.cmp.changes.find(c => c.code === 'move_undone');
+    check('CR17FXD2-L3 a moved address is read again once a week; when it no longer redirects the move is cleared (watched again) and one Low notice says our rows still use the new page',
+      d2.plan.some(p => p.url === OLD && p.move_check === true) && d2.plan.some(p => p.url === NEW) && d2.rw(OLD).moved_to === '' && !!undone && undone.severity === 'low' && /still use \/services\/new/.test(undone.text) && d2.cmp.moves_today.length === 0, J({ ch: d2.cmp.changes, row: d2.rw(OLD) }));
+    const d3 = await day([row(HOME), movedRow, row(NEW)], (p) => p.kind === 'robots' ? robotsOk : p.url === OLD ? { statusCode: 301, headers: { location: '/services/new' }, data: '' } : page(p.url, p.url), () => ({ error: { message: 'timeout' } }));
+    check('CR17FXD2-L3 still redirecting to the same page (its target unread today): the move stands, nothing is said, and the old address is not read again for a week',
+      d3.rw(OLD).moved_to === NEW && !d3.cmp.changes.some(c => c.url === OLD) && d3.rw(OLD).redirect_verdict === 'moved', J({ ch: d3.cmp.changes, row: d3.rw(OLD) }));
+    const recent = row(OLD, { status: 301, location: '/services/new', canonical: '', moved_to: NEW, checked_at: ago(2) });
+    loads([row(HOME), recent, row(NEW)]);
+    const plan4 = (await run('Watch Plan', [{ json: {} }])).map(x => x.json);
+    check('CR17FXD2-L3 a move checked two days ago is not read again yet (weekly)', !plan4.some(p => p.url === OLD) && plan4.some(p => p.url === NEW), J(plan4.map(p => p.url)));
+    // M2: robots.txt unreadable today: the stored block is carried
+    const d5 = await day([row(HOME), row(A, { robots_blocked: true })], (p) => p.kind === 'robots' ? { error: { message: 'timeout' } } : page(p.url, p.url), () => page(A, A));
+    check('CR17FXD2-M2 robots.txt not read today: the key page keeps its stored block (robots_blocked true), so tomorrow\'s good read is no "newly blocked"', d5.rw(A).robots_blocked === true && d5.st(A).robots_blocked == null, J(d5.rw(A)));
   });
 };

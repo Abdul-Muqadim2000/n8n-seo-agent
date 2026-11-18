@@ -31,6 +31,7 @@ const rows = insp.map(x => {
     rich_results: failed ? S(prev.rich_results) : (x.rich_results || []).join(', ').slice(0, 300),
     inspect_error: failed ? S(x.not_checked || x.inspect_error).slice(0, 300) : '',
     moved_to: S(prev.moved_to),   // build section 194: the daily watch's confirmed move, carried (this weekly writer never decides it)
+    redirect_verdict: S(prev.redirect_verdict),   // CR17-FX-INDEX (M1): where the daily watch saw the redirect land, carried the same way
   };
 }).filter(r => r.site_id && r.url);
 return rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true, reason: 'no inspection to store' } }];

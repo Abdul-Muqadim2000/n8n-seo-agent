@@ -15,7 +15,8 @@ for (const s of sites) {
       status: Number(p.status) || 0, location: S(p.location).slice(0, 500), noindex: !!p.noindex, noindex_source: S(p.noindex_source),
       canonical: S(p.canonical).slice(0, 500), canonical_ok: p.canonical_ok === true, title: S(p.title).slice(0, 300), title_hash: PW.hash(S(p.title)),
       titles: Number(p.titles) || 0, description: S(p.description).slice(0, 400), h1: S(p.h1).slice(0, 300), h1s: Number(p.h1s) || 0,
-      robots_blocked: p.robots_blocked === true, robots_hash: S(s.robots.hash) || S((p.prev || {}).robots_hash),
+      // CR17-FX-INDEX (review R1 M2): robots.txt not read today (null) keeps the stored block, so tomorrow's good read is no "newly blocked"
+      robots_blocked: p.robots_blocked === true || (p.robots_blocked == null && (p.prev || {}).robots_blocked === true), robots_hash: S(s.robots.hash) || S((p.prev || {}).robots_hash),
       state: S(p.state), changes: real.map(c => c.code).join(','),
       last_change_at: real.length ? s.checked_at : S((p.prev || {}).last_change_at),
       changed_count: Number((p.prev || {}).changed_count || 0) + (real.length ? 1 : 0), error: '',
@@ -23,6 +24,8 @@ for (const s of sites) {
       google_canonical: S(ins.google_canonical), last_crawl: S(ins.last_crawl), mobile: S(ins.mobile), rich_results: S(ins.rich_results), inspect_error: S(ins.inspect_error),
       // build section 194: a permanent move to a working page seen on two reads; from the next run the watch reads the new address instead
       moved_to: S(p.moved_to).slice(0, 500),
+      // CR17-FX-INDEX (review R1 M1): where the redirect landed, judged today; an unread target keeps the stored verdict while it still redirects
+      redirect_verdict: (S(p.verdict) && S(p.verdict) !== 'unread') ? S(p.verdict) : (Number(p.status) >= 300 && Number(p.status) < 400 ? S((p.prev || {}).redirect_verdict) : ''),
     });
   }
 }

@@ -14,6 +14,7 @@ import {
   indexValidationLine,
   indexValidationOf,
   INDEXING_FETCHES_PAGES,
+  permanentMoveLands,
 } from './indexing';
 import { deriveSiteTasks, SITE_TASK_NOT_NEEDED_LABEL, type SiteTaskInputs, type StoredSiteTask } from './site-tasks';
 import type { IndexPageRow } from './tables';
@@ -40,6 +41,18 @@ describe('F3: a sitemap step on an address that now redirects', () => {
     expect(indexingPageFixed('indexed_not_in_sitemap', fetch301(`${W}/a`, `${W}/b`, 302), false)).toEqual({ fixed: false, why: '/a is not in your sitemap yet.' });
     expect(indexingPageFixed('indexed_not_in_sitemap', fetch301(`${W}/a`, 'https://other.example/b'), false).notNeeded).toBeUndefined();
     expect(indexingPageFixed('indexed_not_in_sitemap', { url: `${W}/a`, status: 200, finalUrl: `${W}/a`, redirectStatus: 0, text: '<html><head></head></html>' }, true)).toEqual({ fixed: true, why: '/a is in your sitemap.' });
+  });
+  it('CR17-FX-INDEX H1: a permanent redirect into a broken page is never "not needed" (404, 5xx, noindex, home page)', () => {
+    const to404 = { ...fetch301(`${W}/a`, `${W}/b`), status: 404 };
+    expect(indexingPageFixed('indexed_not_in_sitemap', to404, false)).toEqual({ fixed: false, why: '/a redirects to /b, which answers 404. Point the redirect at a page that opens.' });
+    expect(indexingPageFixed('not_in_sitemap', { ...to404, status: 500 }, false).fixed).toBe(false);
+    const noidx = { ...fetch301(`${W}/a`, `${W}/b`), text: '<html><head><meta name="robots" content="noindex"></head><body>x</body></html>' };
+    expect(indexingPageFixed('indexed_not_in_sitemap', noidx, false)).toEqual({ fixed: false, why: '/a redirects to /b, which tells Google not to index it. Point the redirect at a page Google may index.' });
+    expect(indexingPageFixed('indexed_not_in_sitemap', { ...fetch301(`${W}/a`, `${W}/b`), xRobotsTag: 'noindex' }, false).notNeeded).toBeUndefined();
+    expect(indexingPageFixed('indexed_not_in_sitemap', fetch301(`${W}/services/a`, `${W}/`), false)).toEqual({ fixed: false, why: '/services/a redirects to your home page. Point it at the page that replaced it.' });
+    expect(permanentMoveLands(fetch301(`${W}/a`, `${W}/b`))).toBe(true);
+    expect(permanentMoveLands(fetch301(`${W}/a`, `${W}/b`, 302))).toBe(false);
+    expect(permanentMoveLands(to404)).toBe(false);
   });
   it('the step reads "Not needed any more" with the reason, not "Your sitemap lists these pages"', () => {
     const msg = indexingNotNeededLine(`${W}/a`, `${W}/b`);

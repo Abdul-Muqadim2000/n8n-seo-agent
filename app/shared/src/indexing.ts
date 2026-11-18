@@ -2187,6 +2187,21 @@ export function canonicalMergedByRedirect(f: IndexingFetch): IndexingPageVerdict
   return { fixed: true, why: `${indexPath(f.url)} now redirects permanently to ${indexPath(f.finalUrl)}, the main version, so the two are one page.` };
 }
 
+/**
+ * CR17-FX-INDEX (review R1 H1): THE SHARED RULE of a move (engine twin: `_index_kit.js` landsWell). An address moved when its own first
+ * answer is a permanent redirect (301 / 308) to ANOTHER page of the same website and the page it lands on works: it opens (200, a readable
+ * page, not a firewall), carries no noindex, and a deep address is not sent to the home page. A redirect into a 404, a 5xx, a noindex page
+ * or the home page is a broken page, never "moved, nothing to do".
+ */
+export function permanentMoveLands(f: IndexingFetch): boolean {
+  if (f.redirectStatus !== 301 && f.redirectStatus !== 308) return false;
+  if (!f.finalUrl || hostOfUrl(f.finalUrl) !== hostOfUrl(f.url) || samePageUrl(f.finalUrl, f.url)) return false;
+  if ((f.status ?? 0) !== 200 || wall(f) || !realPage(f)) return false;
+  if (headerNoindex(f.xRobotsTag) || metaNoindex(f.text)) return false;
+  const root = (u: string) => indexPath(u).replace(/[?#].*$/, '') === '/';
+  return !(root(f.finalUrl) && !root(f.url));
+}
+
 export function indexingPageFixed(cause: IndexSiteFixCause, f: IndexingFetch, inSitemap: boolean | null, opts: { ownTitle?: boolean } = {}): IndexingPageVerdict {
   const p = indexPath(f.url);
   const status = f.status ?? 0;
@@ -2261,8 +2276,16 @@ export function indexingPageFixed(cause: IndexSiteFixCause, f: IndexingFetch, in
     case 'indexed_not_in_sitemap':
       // CR17-C (client report 2026-11-17 F3): an address that now redirects permanently to another page of the website does not belong in a
       // sitemap: the step is not needed any more (never "add it", never "fixed"); the page it redirects to is the one to list
-      if ((f.redirectStatus === 301 || f.redirectStatus === 308) && !!f.finalUrl && !offSite && !samePageUrl(f.finalUrl, f.url))
-        return { fixed: true, notNeeded: true, why: indexingNotNeededLine(f.url, f.finalUrl) };
+      // CR17-FX-INDEX (H1): only when the page it lands on works (permanentMoveLands); a redirect into a broken page keeps the step open
+      if ((f.redirectStatus === 301 || f.redirectStatus === 308) && !!f.finalUrl && !offSite && !samePageUrl(f.finalUrl, f.url)) {
+        if (permanentMoveLands(f)) return { fixed: true, notNeeded: true, why: indexingNotNeededLine(f.url, f.finalUrl) };
+        if (wall(f)) return walled();
+        const t = indexPath(f.finalUrl);
+        if (status !== 200) return { fixed: false, why: `${p} redirects to ${t}, which answers ${status || 'nothing'}. Point the redirect at a page that opens.` };
+        if (!realPage(f)) return unknown(`${p} redirects to ${t}, which did not send us a readable page, so we could not tell.`);
+        if (headerNoindex(f.xRobotsTag) || metaNoindex(f.text)) return { fixed: false, why: `${p} redirects to ${t}, which tells Google not to index it. Point the redirect at a page Google may index.` };
+        return { fixed: false, why: `${p} redirects to your home page. Point it at the page that replaced it.` };
+      }
       if (inSitemap === true) return { fixed: true, why: `${p} is in your sitemap.` };
       if (inSitemap === null) return unknown(`${p} was not in the part of your sitemap we could read; ${notListed}.`);
       return { fixed: false, why: `${p} is not in your sitemap yet.` };
