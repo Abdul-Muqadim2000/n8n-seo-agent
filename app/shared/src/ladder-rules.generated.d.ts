@@ -52,8 +52,21 @@ export interface LadderFolder {
 
 export interface LadderFolderEvidence {
   published?: readonly { url: string; page_type?: string }[];
-  moves?: readonly { from: string; to: string }[];
+  moves?: readonly { from: string; to: string; status?: number | string | null }[];
   pages?: readonly ({ url: string; http_status?: number | string | null } | string)[];
+}
+
+/** CR17 review R5 (M1): the rows folderEvidence and folderAddress read (a content-log row, a ladder row, a page inventory row) */
+export interface LadderFolderRow {
+  status?: string | null;
+  published_url?: string | null;
+  target_url?: string | null;
+  page_type?: string | null;
+  url?: string | null;
+  http_status?: number | string | null;
+  keyword?: string | null;
+  rung?: number | string | null;
+  page_exists?: boolean | string | null;
 }
 
 export interface LadderOwner {
@@ -64,7 +77,7 @@ export interface LadderOwner {
 }
 
 export declare const LRU: {
-  CFG: { stuck_min_minutes: number; stuck_eta_factor: number; page_eta_minutes: number; clear_score: number; blog_dirs: string[]; countries: Record<string, string>; folder_min: number; folder_share: number; company_segs: string[] };
+  CFG: { stuck_min_minutes: number; stuck_eta_factor: number; page_eta_minutes: number; clear_score: number; blog_dirs: string[]; countries: Record<string, string>; folder_min: number; folder_share: number; company_segs: string[]; service_dirs: string[] };
   STAGES: LadderStage[];
   COMMERCIAL: LadderStage[];
   urlKey(u: string): string;
@@ -78,6 +91,10 @@ export declare const LRU: {
   classOf(pageType: string): 'service' | 'article';
   folderOf(u: string): string;
   folderFor(pageType: string, ev: LadderFolderEvidence): LadderFolder;
+  folderKind(folder: string): 'service' | 'article' | '';
+  folderEvidence(logs: readonly LadderFolderRow[], ladders: readonly LadderFolderRow[], pages: readonly LadderFolderRow[]): LadderFolderEvidence;
+  rowType(row: LadderFolderRow): string;
+  folderAddress(row: LadderFolderRow, fo: LadderFolder | string | null | undefined): string;
   ranksFor(url: string, keyword: string, o: { rank?: { position: number | null; url?: string } | null; pages?: readonly { url: string; queries?: readonly unknown[] }[] }): boolean;
   stageOf(keyword: string, intent?: string, stored?: string): LadderStage;
   isCommercial(stage: string): boolean;

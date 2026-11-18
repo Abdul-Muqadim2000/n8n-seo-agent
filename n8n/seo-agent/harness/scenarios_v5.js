@@ -7698,7 +7698,7 @@ await guard('stored rungs, statistical alerts, pre-release check', async () => {
   check('R16: the ladder row is marked `set_aside` on the same run, so the next cadence, the tracker and the app all stop calling it planned',
     marks62.some(m => m.keyword === 'facts erp' && m.status === 'set_aside' && m.ladder_id === 'lad_R16')
     && marks62.filter(m => m.status === 'writing').length === 2
-    && marks62.every(m => Object.keys(m).length === 4 && 'status_note' in m)   // R1: the mark clears or carries the row's note
+    && marks62.every(m => Object.keys(m).length === 6 && 'status_note' in m && 'target_url' in m && 'page_exists' in m)   // R1: the mark clears or carries the row's note; CR17 review R5 (M1): and the address the page is written at
     && marks62.some(m => m.status === 'set_aside' && /facts\.ae|another company|competitor/i.test(m.status_note || '')), JSON.stringify(marks62));
   const CWritten = await cadence62({ ladders: [lrow62(1, 1, 'best erp software in dubai'), lrow62(2, 3, 'facts erp', 'writing'), lrow62(4, 0, HEAD62)] });
   const asideW = (CWritten.first.set_aside || []).find(x => x.keyword === 'facts erp') || {};

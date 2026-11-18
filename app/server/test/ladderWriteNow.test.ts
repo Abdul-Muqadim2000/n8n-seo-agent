@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { LadderRow } from '@seo/shared';
-import { ladderPageContext } from '../src/services/runs';
+import type { ContentLogRow, LadderRow } from '@seo/shared';
+import { ladderAddressOf, ladderPageContext } from '../src/services/runs';
 
 // P2-7 (Phase 2 live check, 2026-10-12): "Write now" for the main page of the "erp software uae" ladder wrote 3,864 words although the
 // ladder's verdict had asked for a service page of about 2,100, the run has no competitor analysis and no verdict of its own, so nothing
@@ -57,5 +57,31 @@ describe('the "Write now" body of a ladder page', () => {
       const rows = ROWS.map((r) => (Number(r.rung) === 4 ? { ...r, target_words: bad } : { ...r, target_words: 0 }));
       expect(ladderPageContext(rows, 4, 'erp software uae').targetWords).toBe(0);
     }
+  });
+});
+
+// CR17 review R5 (M1, 2026-11-18): "Write now" writes a rung at the address the weekly pages would (the Content Cadence's folder rule,
+// LRU.folderAddress), and its links point at the addresses the other rungs get, so one rung never has two addresses.
+describe('"Write now" follows the site\'s folder (review R5 M1)', () => {
+  const D = 'https://devaicon.com';
+  const rows: LadderRow[] = [
+    lad({ domain: 'devaicon.com', rung: 4, page_no: 4, keyword: 'ai app development', target_url: `${D}/ai-app-development`, head_keyword: 'ai app development' }),
+    lad({ domain: 'devaicon.com', rung: 1, page_no: 1, keyword: 'ai app development cost', target_url: `${D}/ai-app-development-cost`, head_keyword: 'ai app development' }),
+    lad({ domain: 'devaicon.com', rung: 1, page_no: 2, keyword: 'ai app development companies', target_url: `${D}/services/ai-app-development-companies`, status: 'published', page_exists: true, head_keyword: 'ai app development' }),
+  ];
+  const logs = ['a', 'b', 'c'].map((k) => ({ domain: 'devaicon.com', keyword: k, status: 'published', published_url: `${D}/services/${k}`, page_type: 'Service Page' })) as unknown as ContentLogRow[];
+  const addressOf = ladderAddressOf(logs, rows, []);
+  it('a root-planned rung is written in /services/, its links too; a published page keeps its own address', () => {
+    const ctx = ladderPageContext(rows, 1, 'ai app development cost', addressOf);
+    expect(ctx.targetUrl).toBe(`${D}/services/ai-app-development-cost`);
+    expect(ctx.links.map((l) => [l.role, l.url])).toEqual([
+      ['top', `${D}/services/ai-app-development`],
+      ['sibling', `${D}/services/ai-app-development-companies`],
+    ]);
+    expect(ladderPageContext(rows, 4, 'ai app development', addressOf).targetUrl).toBe(`${D}/services/ai-app-development`);
+  });
+  it('a site that keeps its pages at the root (nothing says otherwise): the row\'s address, as before', () => {
+    const ctx = ladderPageContext(rows, 1, 'ai app development cost', ladderAddressOf([], rows.filter((r) => r.status !== 'published'), []));
+    expect(ctx.targetUrl).toBe(`${D}/ai-app-development-cost`);
   });
 });

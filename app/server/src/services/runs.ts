@@ -36,6 +36,8 @@ import {
   type LadderRow,
   type JoinedRunResult,
   type LadderSettingsRow,
+  type SitePageRow,
+  LRU,
   type Report,
   type ReportFile,
   type Role,
@@ -55,7 +57,7 @@ import { db, schema } from '../db';
 import type { OrgRow, ReportRow, RunRow, SiteRow, UserRow } from '../db/schema';
 import { safeEqual } from '../lib/crypto';
 import { badRequest, conflict, forbidden, HttpError, notFound } from '../lib/errors';
-import { insertRows, invalidateSite, siteRows, startRun, updateRows } from '../n8n/client';
+import { insertRows, invalidateSite, rows as n8nRows, siteRows, startRun, updateRows } from '../n8n/client';
 import { assertGa4ForDomain } from './google';
 import { extractFiles, shownFileKind } from './files';
 import { applyLadderPrefs, markLadderWon } from './ladderSettings';
@@ -756,14 +758,20 @@ export interface LadderPageLink {
  * `seo_ladders.target_words` stores it; the engine clamps the brief to it (`ladder_words` -> *Parse Brief*).
  * Pure, so the harness-style situations are unit-tested; `ladderLinks` only fetches the rows.
  */
-export function ladderPageContext(rows: LadderRow[], rung: number, keyword: string): { links: LadderPageLink[]; targetWords: number; targetUrl: string } {
+export function ladderPageContext(
+  rows: LadderRow[],
+  rung: number,
+  keyword: string,
+  addressOf: (r: LadderRow) => string = (r) => r.target_url,
+): { links: LadderPageLink[]; targetWords: number; targetUrl: string } {
   const top = rows.find((r) => Number(r.rung) === 4);
   const links: { url: string; role: string; keyword: string }[] = [];
-  if (rung === 4) for (const r of rows.filter((x) => Number(x.rung) !== 4 && x.target_url).slice(0, 12)) links.push({ url: r.target_url, role: 'down', keyword: r.keyword });
+  // CR17 review R5 (M1): every address is the one the page is (or will be) written at, as the Content Cadence writes it (ladderAddressOf)
+  if (rung === 4) for (const r of rows.filter((x) => Number(x.rung) !== 4 && x.target_url).slice(0, 12)) links.push({ url: addressOf(r), role: 'down', keyword: r.keyword });
   else {
-    if (top?.target_url && top.keyword !== keyword) links.push({ url: top.target_url, role: 'top', keyword: top.keyword });
+    if (top?.target_url && top.keyword !== keyword) links.push({ url: addressOf(top), role: 'top', keyword: top.keyword });
     const sib = rows.find((x) => Number(x.rung) === rung && x.keyword !== keyword && x.target_url);
-    if (sib) links.push({ url: sib.target_url, role: 'sibling', keyword: sib.keyword });
+    if (sib) links.push({ url: addressOf(sib), role: 'sibling', keyword: sib.keyword });
   }
   // this page's own row first (its keyword, else its rung), then the ladder's main page: the verdict's target belongs to the main page
   const k = normKeyword(keyword);
@@ -772,7 +780,7 @@ export function ladderPageContext(rows: LadderRow[], rung: number, keyword: stri
   // R15 (re-rating, 2026-10-13): the URL this ladder planned for the page. Exec 521 delivered `service-industry-erp-software-uae` while
   // the row said `/service-industry-erp-software/`, the row's own link map, the siblings' up-links and the Rank Tracker all use the row,
   // so the engine keeps the planned slug (`ladder_target_url` -> *Parse Brief*) instead of publishing at a URL nothing points at.
-  const planned = String(mine?.target_url ?? '').trim();
+  const planned = String(mine ? addressOf(mine) : '').trim();
   return {
     links: links.map((l) => ({ ...l, path: l.url.replace(/^https?:\/\/[^/]+/i, '') || '/', planned: true })),
     targetWords: words >= 300 && words <= 6000 ? Math.round(words) : 0,
@@ -780,9 +788,35 @@ export function ladderPageContext(rows: LadderRow[], rung: number, keyword: stri
   };
 }
 
+/**
+ * CR17 review R5 (M1): the address a ladder row's page is written at, by the Content Cadence's own rule (the engine kit's LRU.folderAddress):
+ * a rung planned at the ROOT of a site that keeps that kind of page in a folder goes into the folder (devaicon.com: /ai-app-development is
+ * written at /services/ai-app-development). `logs`, `ladders`, `pages`: the website's content log, ladder rows and page inventory (the
+ * evidence of LRU.folderFor, built by LRU.folderEvidence as Cadence Plan builds it). Pure: "Write now" and its links use it, so "Write now",
+ * the weekly pages and Coming up give one address for one rung.
+ */
+export function ladderAddressOf(logs: readonly ContentLogRow[], ladders: readonly LadderRow[], pages: readonly SitePageRow[]): (r: LadderRow) => string {
+  const ev = LRU.folderEvidence(logs, ladders, pages);
+  const memo = new Map<string, ReturnType<typeof LRU.folderFor>>();
+  const fo = (r: LadderRow) => {
+    const type = LRU.rowType(r);
+    const k = LRU.classOf(type);
+    if (!memo.has(k)) memo.set(k, LRU.folderFor(type, ev));
+    return memo.get(k)!;
+  };
+  return (r) => LRU.folderAddress(r, fo(r)) || r.target_url;
+}
+
 async function ladderLinks(domain: string, ladderId: string, rung: number, keyword: string): Promise<{ links: LadderPageLink[]; targetWords: number; targetUrl: string }> {
   const rowsOf = await siteRows<LadderRow>('ladders', domain, { extra: [{ columnName: 'ladder_id', condition: 'eq', value: ladderId }], max: 100, fresh: true }).catch(() => [] as LadderRow[]);
-  return ladderPageContext(rowsOf, rung, keyword);
+  // the folder evidence: a failed read leaves the address the row holds (the old behaviour), never a guess
+  const [allLadders, logs, pages] = await Promise.all([
+    siteRows<LadderRow>('ladders', domain, { max: 1000 }).catch(() => null),
+    siteRows<ContentLogRow>('contentLog', domain, { max: 1000 }).catch(() => null),
+    n8nRows<SitePageRow>('pages', { filters: [{ columnName: 'site_id', condition: 'eq', value: n8nSiteId(domain) }], max: 3000 }).catch(() => null),
+  ]);
+  const addressOf = allLadders && logs && pages ? ladderAddressOf(logs, allLadders, pages) : undefined;
+  return ladderPageContext(rowsOf, rung, keyword, addressOf);
 }
 
 /** Points every stored delivery address of the site in n8n (site row, ladders) at this company's callback; clears stored e-mails while engine e-mails are off. */

@@ -7,6 +7,10 @@
 //   CR17G5  Blog Package: the questions the page was written to answer (the AI question the run carried, its question headings)
 //   CR17G6  AI questions settle when a page goes live ($0): Publish Check / Detect Published re-settle the questions the page answers, and a
 //           page written for a question keeps it (AI Target Settle, AI Growth)
+//   CR17G7  review R5 fixes (FX-LADDER): folderFor counts only service-like folders (M2), same-host 301 / 308 moves only (L4), dated blog
+//           paths vote for the blog folder (L5); the cadence writes the folder address back to the ladder row and links to folder
+//           addresses (M1); the publish settle never settles a planned refresh on another run's page nor across websites (L2); AI Growth
+//           keeps a question settled on a page with no run of ours live (L3, CR17G8)
 // Called from scenarios_v5.js (one appended line).
 const fs = require('fs'); const path = require('path'); const zlib = require('zlib');
 module.exports = async (ctx) => {
@@ -37,7 +41,7 @@ module.exports = async (ctx) => {
     console.log('   devaicon ->', J({ svc, art }));
     check('devaicon service pages -> /services/ from the pages the client published (the root page it moved counts at its new address)', svc.folder === '/services/' && svc.basis === 'published' && svc.votes === svc.of && svc.of >= 6, J(svc));
     check('devaicon guides -> /insights/', art.folder === '/insights/' && art.kind === 'article', J(art));
-    check('the reason is plain words, no em dash', /^your service pages live under \/services\/ \(\d+ of the \d+ you published or moved recently\)$/.test(svc.why) && !TELL.test(svc.why + art.why), svc.why);
+    check('the reason is plain words, no em dash', /^your service pages live under \/services\/ \(\d+ of the \d+ you published or moved\)$/.test(svc.why) && !TELL.test(svc.why + art.why), svc.why);
     check('AI answer, comparison, FAQ and case-study pages are articles; service, local, pillar and landing pages are services',
       ['Guide', 'Blog Post', 'Comparison Page', 'FAQ Page', 'Case Study', 'AI answer page'].every(t => LRU.classOf(t) === 'article') && ['Service Page', 'Local Page', 'Pillar Page', 'Landing Page', 'Product Page', ''].every(t => LRU.classOf(t) === 'service'), 'class');
     const two = LRU.folderFor('Service Page', { published: devPublished.slice(0, 2), pages: [] });
@@ -117,7 +121,7 @@ module.exports = async (ctx) => {
     const lad = (await qa({ page_type: 'Service Page', site_urls: [], ladder_id: 'lad_x', ladder_target_url: W + '/ai-consultant' }, { 'Load Drafts (Run)': logsSvc })).content_qa;
     console.log('   page_url ->', J({ guide: a.page_url, service: s.page_url, none: none.page_url, ladder: lad.page_url, why: a.page_url_why }));
     check('a guide goes under /insights/, a service page under /services/ (where the client published ours)', /^https:\/\/www\.techand\.ai\/insights\/[a-z0-9-]+$/.test(a.page_url) && /^https:\/\/www\.techand\.ai\/services\/[a-z0-9-]+$/.test(s.page_url), J([a.page_url, s.page_url]));
-    check('the reason travels with it, in plain words', /^your guides and articles live under \/insights\/ \(3 of the 3 you published or moved recently\)$/.test(a.page_url_why) && !TELL.test(a.page_url_why), a.page_url_why);
+    check('the reason travels with it, in plain words', /^your guides and articles live under \/insights\/ \(3 of the 3 you published or moved\)$/.test(a.page_url_why) && !TELL.test(a.page_url_why), a.page_url_why);
     check('nothing published and no folder in the inventory: the address the slug gave before (no reason)', !/\/(services|insights)\//.test(none.page_url) && !none.page_url_why, J([none.page_url, none.page_url_why]));
     check('a ladder page keeps the address its ladder planned (R15)', lad.page_url === W + '/ai-consultant' && !lad.page_url_why, lad.page_url);
     const bw = { ...clone(FX42.build_word_file), ladder_id: '', ladder_target_url: '', ladder_links: [], qa_page_url: a.page_url, qa_page_url_why: a.page_url_why };
@@ -197,5 +201,104 @@ module.exports = async (ctx) => {
     reset(); mock('Detect Published', [{ json: { site_id: SID, domain: DOM, log_rows: [head] } }]); mock('Load AI Targets (Publish)', targets); mock('Load Sites', [{ json: { site_id: SID, domain: DOM, country: 'United Arab Emirates' } }]);
     const dd = (await run('AI Target Settle (Publish)', [{ json: {} }])).map(i => i.json);
     check('publish detection (Site Tracker): the same questions settle', J(dd.map(x => x.target_id).sort()) === J(['ait_own', 'ait_q37']), J(dd));
+  });
+  await guard('CR17G7 review R5 fixes (FX-LADDER)', async () => {
+    const SN = 'CR17G7 review R5 (FX-LADDER) — service folders by name, permanent same-host moves, one address for a rung (row, links, Write now), the publish settle and AI Growth keep the engine\'s answer'; reset(); begin(SN); const check = mkCheck(SN);
+    const X = 'https://x.example';
+    const live = (ps) => ps.map(p => ({ url: X + p, http_status: 200 }));
+    const nine = (dir) => Array.from({ length: 9 }, (_, i) => '/' + dir + '/p' + i);
+    // M2: a large non-service folder never decides where a new service page goes
+    for (const dir of ['case-studies', 'portfolio', 'work', 'projects', 'industries', 'docs', 'locations', 'events', 'careers']) {
+      const f = LRU.folderFor('Service Page', { pages: live(['/services/a', '/services/b', '/services/c', ...nine(dir)]) });
+      check('M2 9 /' + dir + '/ pages beside 3 /services/ pages: /services/, never /' + dir + '/', f.folder === '/services/', J(f));
+    }
+    const caseOnly = LRU.folderFor('Service Page', { pages: live(['/a', '/b', ...nine('case-studies')]) });
+    check('M2 a site whose only folder is case studies: the root, as before', caseOnly.folder === '/' && caseOnly.basis === 'default', J(caseOnly));
+    const moveCase = LRU.folderFor('Service Page', { moves: ['a', 'b', 'c'].map(k => ({ from: X + '/' + k, to: X + '/case-studies/' + k, status: 301 })) });
+    check('M2 the client moving pages into /case-studies/ says nothing about service pages', moveCase.folder === '/', J(moveCase));
+    check('M2 the service folders by name (devaicon /services/ /capabilities/, techand /whatwedo/), a language root, and the neither kind',
+      ['/services/', '/capabilities/', '/whatwedo/', '/solutions/', '/en/services/', '/', '/en/'].every(f => LRU.folderKind(f) === 'service')
+      && ['/industries/', '/case-studies/', '/portfolio/', '/docs/', '/ai/'].every(f => LRU.folderKind(f) === '') && ['/insights/', '/en/blog/'].every(f => LRU.folderKind(f) === 'article'), 'kinds');
+    const dev = LRU.folderFor('Service Page', { pages: devPages });
+    check('M2 devaicon\'s inventory: /industries/ (industry pages) no longer votes as service pages', !/industries/.test(dev.folder) && dev.of < devPages.length, J(dev));
+    // L4: only the site's own permanent moves
+    const other = LRU.folderFor('Service Page', { moves: ['a', 'b', 'c'].map(k => ({ from: X + '/' + k, to: 'https://group.example/solutions/' + k, status: 301 })) });
+    const temp = LRU.folderFor('Service Page', { moves: ['a', 'b', 'c'].map(k => ({ from: X + '/' + k, to: X + '/solutions/' + k, status: 302 })) });
+    const perm = LRU.folderFor('Service Page', { moves: ['a', 'b', 'c'].map((k, i) => ({ from: X + '/' + k, to: X + '/solutions/' + k, status: [301, 308, ''][i] })) });
+    check('L4 redirects to another website or temporary ones do not vote; 301 / 308 (or no status known) do', other.folder === '/' && temp.folder === '/' && perm.folder === '/solutions/', J([other, temp, perm]));
+    const lt = fs.readFileSync(path.join(CD, 'Ladder_Titles.js'), 'utf8'), lp = fs.readFileSync(path.join(CD, 'Ladder_Plan.js'), 'utf8');
+    check('L4 the title read keeps the redirect status and Ladder Plan hands it to folderFor', (lt.match(/status: j\.code \|\| 0/g) || []).length === 3 && /to: r\.to, status: Number\(r\.status\) \|\| 0/.test(lp), 'wiring');
+    // L5: dated / category blog paths
+    const dated = LRU.folderFor('Guide', { pages: live(['/blog/2024/05/a', '/blog/2024/06/b', '/blog/news/c', '/blog/d']) });
+    check('L5 /blog/2024/05/x and /blog/news/x vote for /blog/', dated.folder === '/blog/' && dated.votes === 4, J(dated));
+    check('L6 the reason claims no time window', !/recently/.test(LRU.folderFor('Service Page', { published: devPublished, moves: devMoves, pages: devPages }).why), 'why');
+    // M1: one address for a rung: the kit's folderAddress, the evidence builder
+    check('M1 folderAddress: a root-planned rung moves into the folder; a page that exists, a published / merged row, an address that is not the keyword\'s root address stay',
+      LRU.folderAddress({ target_url: D + '/ai-app-development', keyword: 'ai app development', status: 'planned' }, '/services/') === D + '/services/ai-app-development'
+      && LRU.folderAddress({ target_url: D + '/ai-app-development/', keyword: 'ai app development' }, { folder: '/services/' }) === D + '/services/ai-app-development/'
+      && LRU.folderAddress({ target_url: D + '/ai-app-development', keyword: 'ai app development', page_exists: 'true' }, '/services/') === ''
+      && LRU.folderAddress({ target_url: D + '/ai-app-development', keyword: 'ai app development', status: 'published' }, '/services/') === ''
+      && LRU.folderAddress({ target_url: D + '/other-slug', keyword: 'ai app development' }, '/services/') === ''
+      && LRU.folderAddress({ target_url: D + '/ai-app-development', keyword: 'ai app development' }, '/') === '', 'folderAddress');
+    const ev = LRU.folderEvidence([{ status: 'published', published_url: D + '/services/x', page_type: 'Service Page' }, { status: 'written', published_url: '' }],
+      [{ status: 'published', target_url: D + '/services/y', page_type: 'Service Page' }, { status: 'planned', target_url: D + '/z' }], [{ url: D + '/services/q', http_status: 200 }, { url: '' }]);
+    check('M1 folderEvidence: published content-log and ladder pages, the inventory', ev.published.length === 2 && ev.pages.length === 1, J(ev));
+    // M1: the cadence run: the rung is written in the folder, its links point at the addresses the other rungs will be written at, and the
+    // ladder row takes the address (Ladder Marks -> Mark Ladder Writing)
+    const FX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'cr17_g_folder.json'), 'utf8'));
+    const c0 = JSON.parse(J(FX.cases[0])); const t = c0.tables;
+    const top = t.ladders.find(l => Number(l.rung) === 4);
+    Object.assign(top, { status: 'planned', page_type: 'Service Page' });
+    t.ladders.push({ ...t.ladders.find(l => Number(l.rung) === 1), page_no: 2, keyword: 'crm implementation timeline uae', target_url: 'https://techand.ai/crm-implementation-timeline-uae/' });
+    const items = (arr) => (arr && arr.length ? arr : [{}]).map(j => ({ json: j }));
+    reset(); mock('Manual Run', [{ json: c0.trigger || {} }]);
+    for (const [n, k] of [['Load Sites', 'sites'], ['Load Cadence', 'cadence'], ['Load Ladders', 'ladders'], ['Load Query History', 'query_history'], ['Load Trends', 'trends'], ['Load Content Log', 'content_log'],
+      ['Load Ladder Settings', 'ladder_settings'], ['Load Main Keyword Ranks', 'ranks'], ['Load AI Targets (Cadence)', 'ai_targets'], ['Load Monitors (Cadence)', 'monitors'], ['Load Pages (Cadence)', 'pages'],
+      ['Load AI Brands (Cadence)', 'ai_brands'], ['Load Skips (Cadence)', 'skips'], ['Load Cost (Cadence)', 'cost'], ['Load Cycle Jobs (Cadence)', 'cycle_jobs'], ['Load Profiles (Cadence)', 'profiles']]) mock(n, items(t[k]));
+    mock('Load AI Targets Writing (Cadence)', items([]));
+    const RealDate = Date; const T0 = RealDate.parse(c0.now); class FD extends RealDate { constructor(...a) { if (a.length) super(...a); else super(T0); } static now() { return T0; } }
+    global.Date = FD; let out; try { out = (await run('Cadence Plan', [{ json: {} }])).map(i => i.json); } finally { global.Date = RealDate; }
+    const pick = out.find(j => j.keyword === 'crm implementation cost uae' && j.body) || {};
+    const links = (pick.body || {}).ladder_links || [];
+    console.log('   rung ->', J({ target: (pick.body || {}).ladder_target_url, links: links.map(l => [l.role, l.url]) }));
+    check('M1 the rung is written in /services/ and its top and sibling links point at the /services/ addresses those pages get, never the root',
+      /\/services\/crm-implementation-cost-uae\/$/.test((pick.body || {}).ladder_target_url || '') && links.length >= 1 && links.every(l => /techand\.ai\/services\//.test(l.url)), J(links));
+    const marks = (await run('Ladder Marks', [{ json: {} }])).map(i => i.json);
+    const mk = marks.find(m => m.keyword === 'crm implementation cost uae') || {};
+    check('M1 Ladder Marks writes the folder address back to the ladder row (no page there yet)', mk.status === 'writing' && mk.target_url === pick.body.ladder_target_url && mk.page_exists === false, J(mk));
+    check('M1 every mark carries the address columns the update writes (a row\'s own address is written back unchanged)', marks.filter(m => !m.skip).every(m => 'target_url' in m && 'page_exists' in m), J(marks));
+    // L2: the publish settle never settles a planned refresh on another run's page, nor a question of another website
+    const SID = 'site_devaicon-com', DOM = 'devaicon.com';
+    const headLog = { site_id: SID, domain: DOM, keyword: 'agentic ai development in uae', source: 'ladder', rung: 4, request_id: 'cad_head', status: 'published', published_url: D + '/services/agentic-ai-development-in-uae', published_at: new Date().toISOString(), started_at: new Date().toISOString() };
+    const QT = (id, over) => ({ json: { target_id: id, site_id: SID, domain: DOM, question: 'Which agentic AI development companies in the UAE?', keyword: 'agentic ai development companies uae', kind: 'answer', status: 'queued', request_id: '', ...(over || {}) } });
+    reset(); mock('Publish Check', [{ json: { recorded_live: true, country: 'United Arab Emirates', log_row: headLog } }]);
+    mock('Load AI Targets (Publish)', [QT('ait_answer'), QT('ait_refresh', { kind: 'refresh', page_url: D + '/insights/agentic-ai' }), QT('ait_other_site', { domain: 'other.example' }), QT('ait_no_domain', { domain: '' }),
+      QT('ait_refresh_own', { kind: 'refresh', status: 'writing', request_id: 'cad_head' })]);
+    const st = (await run('AI Target Settle (Publish)', [{ json: {} }])).map(i => i.json);
+    check('L2 settles the answer question and the refresh whose own run this is; never another run\'s refresh, another website\'s question or one with no website',
+      J(st.map(x => x.target_id).sort()) === J(['ait_answer', 'ait_refresh_own']), J(st.map(x => x.target_id)));
+  });
+  await guard('CR17G8 AI Growth keeps a page with no run of ours live (L3)', async () => {
+    const SN = 'CR17G8 review R5 (L3) — a question settled at publish time on a page the client wrote itself (no run id) stays live in the next AI Growth run'; reset(); begin(SN); const check = mkCheck(SN);
+    const SID = 'site_devaicon-com', DOM = 'devaicon.com';
+    const day = (n) => new Date(Date.now() - n * 864e5).toISOString();
+    const Q37 = 'Who are the top agentic AI development companies in the UAE for building autonomous business agents?';
+    const head = { site_id: SID, domain: DOM, keyword: 'agentic ai development in uae', source: 'ladder', rung: 4, page_type: 'Service Page', request_id: '', status: 'published', published_url: D + '/services/agentic-ai-development-in-uae', published_at: day(4), started_at: day(4) };
+    const SVC = ['Agentic AI development', 'AI app development'];
+    const G = [{ prompt_id: 'q37', prompt: Q37, kind: 'recommend', topic: 'agentic ai development in uae', competitors: ['rival-ai.example'], sources: [], volume: 40, stage: 'decision', cluster: 'agentic ai development in uae', fanout: [], cited_urls: [], engines: { chatgpt: 'absent' } }];
+    mock('Load Sites', [{ json: { site_id: SID, domain: DOM, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: '', callback_url: 'https://hooks.example.com/cb', status: 'active', canonical_host: DOM, declared_services: J(SVC), services_json: J(SVC) } }]);
+    mock('Load Ladders', [{ json: { ladder_id: 'lad_a', domain: DOM, head_keyword: 'agentic ai development in uae', keyword: 'agentic ai development in uae', rung: 4, status: 'published', target_url: head.published_url, page_exists: true } }]);
+    mock('Load Monitors', [{ json: { site_id: SID, domain: DOM, ai_visibility: true, ai_growth: true } }]); mock('Load Profiles', [{ json: {} }]); mock('Load Cycles', [{ json: {} }]);
+    mock('Load AI Visibility', [{ json: { site_id: SID, domain: DOM, run_id: 'ai_cr17', checked_at: day(1), gaps_json: J(G), pages_json: '[]', competitors_json: '[]' } }]);
+    mock('Load AI Prompts', [{ json: { site_id: SID, status: 'active', prompt_id: 'q37', prompt: Q37, keyword: 'agentic ai development companies uae', topic: 'agentic ai development in uae', focus_topic: 'agentic ai development in uae', focus_source: 'client', focus_state: 'active', kind: 'recommend' } }]);
+    mock('Load Content Log', [{ json: head }]); mock('Load Query History', [{ json: {} }]); mock('Load AI Pages', [{ json: {} }]);
+    mock('Load AI Targets', [{ json: { target_id: 'ait_devaicon-com_q37', site_id: SID, domain: DOM, prompt_id: 'q37', question: Q37, keyword: 'agentic ai development companies uae', kind: 'answer', status: 'written', request_id: '',
+      written_at: day(4), created_at: day(40), updated_at: day(4), reason_code: 'live', reason_args: J({ page_url: head.published_url, date: day(4).slice(0, 10) }) } }]);
+    mock('Load AI Growth', [{ json: {} }]); mock('Load AI Answers', [{ json: {} }]);
+    mock('Load Cache (Growth)', [{ json: {} }]); mock('Load Link Prospects (Growth)', [{ json: {} }]); mock('Load Pages (Growth)', [{ json: {} }]);
+    const GP = (await run('Growth Plan', store['Load Cache (Growth)']))[0].json;
+    const g = (GP.targets || []).find(x => x.prompt_id === 'q37') || {};
+    console.log('   AI Growth q37 (no run id) ->', J([g.status, g.reason_code, g.reason_args]));
+    check('L3 the question stays written and live at the page, never "written, waiting to be published"', g.status === 'written' && g.reason_code === 'live' && /agentic-ai-development-in-uae/.test(g.reason_args), J(g));
   });
 };

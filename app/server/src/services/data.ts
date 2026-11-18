@@ -2007,9 +2007,13 @@ export function targetStat(t: AiTargetRow, logs: readonly ContentLogRow[], admin
   const view0 = aiTargetView(
     { status: s(t.status), kind: s(t.kind), keyword: s(t.keyword), question: s(t.question), pageUrl: s(t.page_url), reason: s(t.reason), reasonCode: s(t.reason_code), reasonArgs: t.reason_args, origin: s(t.origin), requestId: s(t.request_id), writtenAt: s(t.written_at), wonAt: s(t.won_at), updatedAt: s(t.updated_at), liveAt: s(t.live_at) },
     logs,
+    { market: decision?.market ?? '' },   // review R5 (H1): the engine's question-page rule reads the website's market
   );
-  // CR17 (Q3): a live page that answers the question since the engine last weighed it decides the badge, as it decides the button
-  const answered = decision ? aiAnsweredView({ targetId: s(t.target_id), question: s(t.question), keyword: s(t.keyword), state: view0.state, updatedAt: s(t.updated_at), hidden: view0.hidden }, decision) : null;
+  // CR17 (Q3): a live page that answers the question since the engine last weighed it decides the badge, as it decides the button (never over a
+  // refresh AI Growth planned for that very page, review R5 M3)
+  const answered = decision
+    ? aiAnsweredView({ targetId: s(t.target_id), question: s(t.question), keyword: s(t.keyword), state: view0.state, updatedAt: s(t.updated_at), hidden: view0.hidden, kind: s(t.kind), pageUrl: s(t.page_url), statePageUrl: view0.pageUrl }, decision)
+    : null;
   const view = answered ? { ...view0, state: answered.state, badge: answered.badge, tone: answered.tone, sentence: answered.sentence, pageUrl: answered.pageUrl, date: answered.date } : view0;
   return {
     targetId: s(t.target_id), question: s(t.question), keyword: s(t.keyword), kind: s(t.kind) === 'refresh' ? ('refresh' as const) : ('answer' as const), pageUrl: s(t.page_url), pageType: s(t.page_type),

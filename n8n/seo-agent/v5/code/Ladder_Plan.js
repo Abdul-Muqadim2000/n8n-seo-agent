@@ -262,7 +262,7 @@ const slashFormLP = (() => { const ps = (base.site_urls || []).map(u => String(u
 const folderEvLP = (() => { const dom = reachDomain(domain);
   const published = [...rowsOf('Load Content Log (Ladder)').filter(r => reachDomain(r.domain) === dom && String(r.status || '') === 'published' && r.published_url).map(r => ({ url: r.published_url, page_type: r.page_type })),
     ...rowsOf('Load Domain Ladders').filter(r => reachDomain(r.domain) === dom && String(r.status || '') === 'published' && r.target_url).map(r => ({ url: r.target_url, page_type: r.page_type }))];
-  const moves = (((PAGE_TITLES || {}).redirected) || []).filter(r => r && r.url && r.to).map(r => ({ from: r.url, to: r.to }));
+  const moves = (((PAGE_TITLES || {}).redirected) || []).filter(r => r && r.url && r.to).map(r => ({ from: r.url, to: r.to, status: Number(r.status) || 0 }));   // review R5 (L4): folderFor keeps the same-host 301 / 308 moves only
   const pages = [...(SM.pages(pageModel) || []).map(p => ({ url: p.url, http_status: p.http_status })), ...(base.site_urls || []).map(u => ({ url: u }))];
   return { published, moves, pages }; })();
 const folderMemoLP = new Map();

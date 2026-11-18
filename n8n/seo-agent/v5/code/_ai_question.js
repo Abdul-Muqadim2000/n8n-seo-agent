@@ -83,9 +83,12 @@ const AQ = (() => {
     for (const r of (Array.isArray(rows) ? rows : [])) {
       if (!r || S(r.status) !== 'published' || !S(r.published_url).trim()) continue;
       for (const t of (Array.isArray(targets) ? targets : [])) {
-        if (!t || !S(t.target_id) || done0.has(S(t.target_id)) || (r.domain && t.domain && normD(r.domain) !== normD(t.domain))) continue;
+        // review R5 (L2): the page and the question are of the SAME website (a row or a target with no domain matches nothing), and a planned
+        // REFRESH of a page settles only against its own run: another new page of the same search does not do that refresh (AI Growth's rule)
+        if (!t || !S(t.target_id) || done0.has(S(t.target_id)) || !normD(r.domain) || normD(r.domain) !== normD(t.domain)) continue;
         const st = S(t.status); const own = !!S(r.request_id) && S(t.request_id) === S(r.request_id);
         if (!(st === 'queued' || (own && (st === 'writing' || st === 'written')))) continue;
+        if (S(t.kind) === 'refresh' && !own) continue;
         if (!own && !LRU.questionPage(S(t.keyword) || keywordOf(t), { keyword: r.keyword, rung: r.rung }, x.market || '')) continue;
         const args = { page_url: S(r.published_url), date: day(r.published_at || now) };
         done0.add(S(t.target_id));

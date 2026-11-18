@@ -66,7 +66,8 @@ const devaicon = {
     { prompt_id: 'q37', prompt: Q37, keyword: 'agentic ai development companies uae', topic: 'agentic ai development in uae', kind: 'recommend' },
     { prompt_id: 'q42', prompt: 'Fixed-price vs dedicated team vs time-and-material: which engagement model suits an AI software project?', keyword: 'ai project engagement models', topic: 'engagement models', kind: 'compare' },
   ],
-  moves: [{ url: 'https://devaicon.com/ai-automation-services-pakistan', status: 301, location: '/services/ai-automation-services-pakistan' }],
+  // CR17 review R1 (L5): a move is the one the engine's Page Watch confirmed (moved_to), as on production once read twice
+  moves: [{ url: 'https://devaicon.com/ai-automation-services-pakistan', status: 301, location: '/services/ai-automation-services-pakistan', moved_to: 'https://devaicon.com/services/ai-automation-services-pakistan' }],
 };
 
 // ---- techand.ai (17 Nov): "crm service provider dubai", its CRM guide live since 12 Nov 13:25, the CRM ladder's main page written only ----
@@ -169,6 +170,14 @@ describe('CR17 Q3: the one page list', () => {
   });
   it('only same-site permanent redirects are moves', () => {
     expect(aiPermanentMoves([{ url: 'https://a.test/x', status: 302, location: '/y' }, { url: 'https://a.test/x', status: 301, location: 'https://b.test/y' }, { url: 'https://a.test/x', status: 308, location: '/' }])).toEqual([]);
+  });
+  it('review R1 L5: only the moves the engine confirmed (two reads, a working target, never the home page) are followed', () => {
+    // a 301 seen once (no moved_to yet) is not a move, nor a confirmed address on another site or the home page
+    expect(aiPermanentMoves([{ url: 'https://a.test/x', status: 301, location: '/y' }])).toEqual([]);
+    expect(aiPermanentMoves([{ url: 'https://a.test/x', status: 301, location: '/y', moved_to: 'https://b.test/y' }, { url: 'https://a.test/x', status: 301, location: '/', moved_to: 'https://a.test/' }])).toEqual([]);
+    expect(aiPermanentMoves([{ url: 'https://a.test/x', status: 301, location: '/y', moved_to: 'https://a.test/y' }])).toEqual([{ from: 'https://a.test/x', to: 'https://a.test/y' }]);
+    // a stored 404 / 5xx target never becomes a move: the engine writes moved_to only for a target that answers as a page of its own
+    expect(aiPermanentMoves([{ url: 'https://a.test/x', status: 301, location: '/gone' }])).toEqual([]);
   });
   it('the next AI check: the day after the last daily check, else a week after the weekly one, never in the past', () => {
     expect(aiNextCheck({ lastWeekly: '2026-11-13T01:00:00Z', lastDaily: '2026-11-17T06:30:00Z', daily: true, now: NOW })).toBe('2026-11-18T06:30:00.000Z');

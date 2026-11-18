@@ -226,6 +226,10 @@ for (const s of sites) {
       // review 2026-11-16 (L4): a run HELD for the client's OK wrote no page: the question is not "being written" (and not a run that failed)
       if (ls === 'held') return { ...t, status: 'queued', request_id: '', written_at: '', _settled: 'held', _log: lr }; }
     if (st === 'written' && lr && String(lr.status || '') === 'published') return { ...t, _settled: 'published', _log: lr };
+    // review R5 (L3): a question settled at publish time against a page with no run of ours (a rung the client wrote itself, recorded live by
+    // publish detection with no request id) has no log row by request id: the live page that answers it (the same rule as the settle) keeps it
+    // live, never "written, waiting to be published"
+    if (st === 'written' && !lr) { const ow = AQ.answeredBy(kw, slog, { market }); if (ow) return { ...t, _settled: 'published', _log: ow }; }
     if (st === 'queued' && kw && String(t.kind || 'answer') !== 'refresh') {   // only a page written FOR an AI question, after the question existed
       const own = slog.filter(l => kwKeyG(l.keyword) === kwKeyG(kw) && /^ai_/.test(String(l.source || '')) && ['written', 'published', 'not_ready'].includes(String(l.status || ''))
         && (!t.created_at || !l.started_at || String(l.started_at) >= String(t.created_at).slice(0, 10))).sort((a, b) => (LOG_RANK[b.status] || 0) - (LOG_RANK[a.status] || 0))[0];

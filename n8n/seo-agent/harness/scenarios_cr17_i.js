@@ -3,6 +3,7 @@
 // search once; written pages that are not ladder pages are followed in Search Console and counted apart. The client's report called 6 ladder
 // keywords and 6 written pages "Tracked keywords" (12 rows) while the app said 0 and 7.
 // Synthetic data: the Site Metrics item of the harness' own "site tracker" scenario (northwind-erp.com), saved as a fixture.
+// CR17I2 (review R5 M4 / L8, FX-LADDER): Site Plan builds that list by the app's own definition (rung states, one search, written pages only).
 const fs = require('fs');
 const path = require('path');
 module.exports = async (ctx) => {
@@ -40,5 +41,33 @@ module.exports = async (ctx) => {
     mock('Site Metrics', [{ json: noPages }]);
     const rep2 = (await run('Site Report', [{ json: {} }]))[0].json;
     check('no written page outside the ladders: no second table', !/Your other pages/.test(rep2.html || '') && new RegExp('Tracked keywords: ' + searches + ' ').test(rep2.html || ''), '');
+  });
+  await guard('CR17I2 Site Plan tracks by the app definition (review R5 M4 / L8)', async () => {
+    reset(); const SN = 'CR17I2 (review R5 M4 / L8) Site Plan: stopped, merged, archived and set-aside rungs are not tracked, two spellings of one search are one, only written pages are followed (the app\'s tracked-keywords.ts)'; begin(SN); const check = mkCheck(SN);
+    const SID = 'site_northwind-erp-com', DOM = 'northwind-erp.com';
+    const items = (arr) => (arr && arr.length ? arr : [{}]).map(j => ({ json: j }));
+    const L = (kw, status, rung) => ({ ladder_id: 'lad_n', domain: DOM, head_keyword: 'erp software uae', keyword: kw, rung: rung || 1, status, target_url: 'https://' + DOM + '/' + kw.replace(/\s+/g, '-') });
+    mock('Load Sites', items([{ site_id: SID, domain: DOM, status: 'active', keywords: 'erp uae, cloud erp', country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: '', callback_url: 'https://hooks.example.test/s' }]));
+    mock('Load Ladders', items([L('erp software uae', 'planned', 4), L('erp implementation cost', 'published'), L('erp for distributors', 'stopped'), L('erp for retailers', 'merged'), L('erp for clinics', 'archived'),
+      L('erp for schools', 'set_aside'), L('erp implementations costs', 'planned'), L('ERP UAE', 'planned')]));
+    mock('Load Content Log', items([
+      { domain: DOM, keyword: 'wms uae', status: 'published', published_url: 'https://' + DOM + '/wms-uae' },
+      { domain: DOM, keyword: 'inventory software', status: 'written' },
+      { domain: DOM, keyword: 'held page', status: 'held' }, { domain: DOM, keyword: 'failed page', status: 'failed' }, { domain: DOM, keyword: 'started page', status: 'started' }]));
+    for (const n of ['Load Rank History', 'Load Site Metrics', 'Load Query History', 'Load Console Alerts', 'Load Monitors (Site)', 'Load Check-ins', 'Load Cycles']) mock(n, items([]));
+    mock('Manual Run', [{ json: { domain: DOM } }]);
+    const p = (await run('Site Plan', [{ json: {} }]))[0].json;
+    const tr = (p.tracked || []);
+    const kw = (src) => tr.filter(t => t.source === src).map(t => t.keyword).sort();
+    console.log('   tracked ->', J(tr.map(t => [t.source, t.keyword])));
+    check('M4 your list + the rungs still in play, each search once ("ERP UAE" is "erp uae", "erp implementations costs" is "erp implementation cost")',
+      J(kw('site')) === J(['cloud erp', 'erp uae']) && J(kw('ladder')) === J(['erp implementation cost', 'erp software uae']), J(tr));
+    check('M4 stopped, merged, archived and set-aside rungs are not tracked', !tr.some(t => /distributors|retailers|clinics|schools/.test(t.keyword)), J(tr));
+    check('L8 only written or live pages are followed: a held, failed or started run wrote no page', J(kw('blog')) === J(['inventory software', 'wms uae']), J(kw('blog')));
+    const app = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'app', 'shared', 'src', 'tracked-keywords.ts'), 'utf8');
+    const appList = ((app.match(/UNTRACKED_RUNG_STATUSES: readonly string\[\] = \[([^\]]*)\]/) || [])[1] || '').replace(/\s/g, '');
+    const code = fs.readFileSync(path.join(process.env.CODE_DIR || path.join(__dirname, 'code_v4'), 'Site_Plan.js'), 'utf8');
+    const engList = ((code.match(/const UNTRACKED = \[([^\]]*)\]/) || [])[1] || '').replace(/\s/g, '');
+    check('M4 the engine and the app leave out the same rung states (one list)', !!appList && appList === engList, J({ appList, engList }));
   });
 };

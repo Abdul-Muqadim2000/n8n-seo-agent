@@ -109,6 +109,8 @@ export interface AiLogLike {
   started_at?: string;
   startedAt?: string;
   source?: string;
+  /** the ladder rung of a ladder page (4 = the main page): the engine's LRU.questionPage reads it */
+  rung?: number | string | null;
 }
 
 export interface AiTargetView {
@@ -137,6 +139,13 @@ const startedOf = (l: AiLogLike) => S(l.started_at ?? l.startedAt);
 const publishedOf = (l: AiLogLike) => S(l.published_at ?? l.publishedAt);
 const low = (v: unknown) => S(v).toLowerCase().replace(/\s+/g, ' ').trim();
 const sameKw = (a: unknown, b: unknown) => !!low(a) && !!low(b) && (low(a) === low(b) || LRU.sameSearch(low(a), low(b)));
+/**
+ * CR17 review R5 (H1): the page of a content-log row is the question's page by the ENGINE's one rule (LRU.questionPage, shared with the settle
+ * at publish time, AI Growth and AI Target Settle): the same search, or a ladder's MAIN page whose words the question carries, in the website's
+ * market. The app used to accept the same search only, so a question the engine had settled on its ladder's main page went back to "Write the page".
+ */
+const pageOfQuestion = (t: AiTargetLike, l: AiLogLike, market?: string) =>
+  sameKw(l.keyword, t.keyword) || (!!S(t.keyword) && !!S(l.keyword) && LRU.questionPage(S(t.keyword), { keyword: S(l.keyword), rung: l.rung ?? null }, S(market)));
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 /** "13 Nov 2026" (UTC), '' for no date */
@@ -233,12 +242,13 @@ const V = (state: AiTargetState, badge: string, tone: AiTargetTone, sentence: st
 });
 
 /** The page the content log holds for this question: the run's own row (by request id), else a row for the question's own search. */
-export function aiTargetLog(t: AiTargetLike, logs: readonly AiLogLike[] = []): AiLogLike | null {
+export function aiTargetLog(t: AiTargetLike, logs: readonly AiLogLike[] = [], market?: string): AiLogLike | null {
   const req = S(t.requestId).trim();
   if (req) {
     const own = logs.find((l) => reqOf(l) === req);
-    // the engine's own link, unless it points at a page for ANOTHER search (a question folded into an unrelated ladder page, F7)
-    if (own && (/^ai_/.test(S(own.source)) || sameKw(own.keyword, t.keyword) || S(t.kind) === 'refresh')) return own;
+    // the engine's own link, unless it points at a page for ANOTHER search (a question folded into an unrelated ladder page, F7); a ladder's
+    // main page the question carries every word of is its page (the engine's rule, review R5 H1)
+    if (own && (/^ai_/.test(S(own.source)) || pageOfQuestion(t, own, market) || S(t.kind) === 'refresh')) return own;
   }
   const kw = S(t.keyword);
   if (!kw) return null;
@@ -255,7 +265,7 @@ export function aiTargetLog(t: AiTargetLike, logs: readonly AiLogLike[] = []): A
  * A stored target -> what the client sees: badge, tone and one plain sentence. `logs`: the website's content-log rows (any order).
  * The state follows the page when the content log knows it (published wins over a stale `writing`), else the stored status and its code.
  */
-export function aiTargetView(t: AiTargetLike, logs: readonly AiLogLike[] = []): AiTargetView {
+export function aiTargetView(t: AiTargetLike, logs: readonly AiLogLike[] = [], opts: { market?: string } = {}): AiTargetView {
   const status = S(t.status);
   const code = aiTargetCode(t);
   const args = argsOf(t.reasonArgs);
@@ -274,7 +284,15 @@ export function aiTargetView(t: AiTargetLike, logs: readonly AiLogLike[] = []): 
   }
   if (code === 'kept') return V('kept_out', 'Kept out by you', 'neutral', 'You chose not to write a page for it.', { code });
 
-  const log = aiTargetLog(t, logs);
+  // review R5 (H1): the engine settled the question on a LIVE page (the settle at publish time, or AI Growth: status written, code live, the
+  // page in its args). That is the engine's decision on evidence (a fetch of the page or the site's sitemap): the page answers it, whatever
+  // run wrote it (a rung the client wrote itself has no run of ours)
+  if (status === 'written' && code === 'live' && S(args.page_url)) {
+    const day = aiDay(S(args.date) || S(t.liveAt));
+    return V('live', 'Published', 'good', `Your page ${aiPagePath(S(args.page_url))} answers it${day ? `, published ${day}` : ''}. AI answers usually take a few weeks to change.`, { pageUrl: S(args.page_url), date: S(args.date), code });
+  }
+
+  const log = aiTargetLog(t, logs, opts.market);
   if (log) {
     const ls = S(log.status);
     const url = urlOfLog(log);
@@ -296,7 +314,7 @@ export function aiTargetView(t: AiTargetLike, logs: readonly AiLogLike[] = []): 
   // the engine linked the question to a page run that wrote a page for ANOTHER search (folded into an unrelated ladder page, F7)
   const req = S(t.requestId).trim();
   const foreign = !log && !!req && (status === 'writing' || status === 'written') ? logs.find((l) => reqOf(l) === req) : undefined;
-  if (foreign && !sameKw(foreign.keyword, t.keyword))
+  if (foreign && !pageOfQuestion(t, foreign, opts.market))
     return V('queued', 'Queued', 'accent', 'The page written then covers another search, so a page for this question is still planned.', { code });
 
   if (status === 'writing') {
