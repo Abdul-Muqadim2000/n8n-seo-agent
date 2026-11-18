@@ -265,7 +265,7 @@ export const features: Feature[] = [
       'A profile of each competitor you follow: its size, the pages that bring it the most visits and the searches it ranks for, with a CSV',
       'Gaps against the competitors you follow: the searches they rank for and you do not, each with the step that would close it (gaps in kinds of pages, lists, AI answers and links come later)',
       'Who AI answers name for your buyers\' questions, next to your own share',
-      'One competitor list used everywhere, and a Not a competitor button on AI visibility and Rankings for any site that is not one',
+      'One competitor list used everywhere, and a Not a competitor button on AI visibility and Rankings for any site that is not one. Your choice on a competitor is one decision: the latest choice wins on every page and in every report',
     ],
     steps: [
       { title: 'Read the results', body: 'We read Google\'s results for each of your services in your market and note every website that shows up.' },

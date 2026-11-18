@@ -211,6 +211,10 @@ describe('CR17 integration: package checks behind the recommendation states', ()
     const x = bundle({ links: { drafted: 3, mailbox: false, repliesWaiting: 0, listingsMissing: [], counts } });
     const v = await verdictFor({ rec: { id: 'links:approve', category: 'backlinks', priority: 'high', title: 't', detail: 'd' }, present: true }, ctx(x));
     expect(v).toEqual({ outcome: 'open', evidence: 'Pitches: 3 waiting for you, 2 sent, 1 replied.' });
+    // integration seam (FX-LINKS claimed vs H's verifier): a link the person marked won is named as claimed, never counted as won
+    const claimed = { ...counts, claimed: 2 } as typeof counts;
+    const v2 = await verdictFor({ rec: { id: 'links:approve', category: 'backlinks', priority: 'high', title: 't', detail: 'd' }, present: true }, ctx(bundle({ links: { drafted: 3, mailbox: false, repliesWaiting: 0, listingsMissing: [], counts: claimed } })));
+    expect(v2).toEqual({ outcome: 'open', evidence: 'Pitches: 3 waiting for you, 2 sent, 1 replied, 2 you marked won (we are checking their page).' });
   });
   it('ai_target (G): a question whose stored target is still queued is answered by a live page written for it', async () => {
     const q = 'best ai development company in uae';

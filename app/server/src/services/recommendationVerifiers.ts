@@ -6,7 +6,8 @@
 //   failed when Google read it after that and still left it out (indexing.ts indexValidationOf / indexReasonOf).
 // - link (package E): a lost link is won back only when OUR check finds it on their page again (ledger row live + found), never on an
 //   index's word.
-// - pitches (package E): the pitch numbers of the one link status model (link-status.ts), as evidence while the card stands.
+// - pitches (package E): the pitch numbers of the one link status model (link-status.ts), as evidence while the card stands; a link the
+//   person marked won is named as claimed until our check finds it (FX-LINKS M2 / M5), never counted as won.
 // - ai_target (package G): the AI question's stored target, overtaken by a live page that answers it (aiAnsweredView); a question with no
 //   target goes through the shared resolver (aiQuestionAction), the same decision the AI visibility page and the write form make.
 // Only type imports from recommendationStates.ts (it imports these functions: no import cycle at run time).
@@ -88,7 +89,7 @@ export const linkVerifier: RecVerifier = ({ rec }: RecItem, ctx: RecVerifyContex
 export const pitchesVerifier: RecVerifier = ({ rec, present }: RecItem, ctx: RecVerifyContext): RecVerdict => {
   const c = ctx.x.links?.counts;
   if (!present || !c || !rec.id.startsWith('links:')) return UNKNOWN;
-  const parts = [c.waitingForYou ? `${c.waitingForYou} waiting for you` : '', c.sent ? `${c.sent} sent` : '', c.replied ? `${c.replied} replied` : '', c.won ? `${c.won} won (link checked)` : ''].filter(Boolean);
+  const parts = [c.waitingForYou ? `${c.waitingForYou} waiting for you` : '', c.sent ? `${c.sent} sent` : '', c.replied ? `${c.replied} replied` : '', c.claimed ? `${c.claimed} you marked won (we are checking their page)` : '', c.won ? `${c.won} won (link checked)` : ''].filter(Boolean);
   return { outcome: 'open', ...(parts.length ? { evidence: `Pitches: ${parts.join(', ')}.` } : {}) };
 };
 

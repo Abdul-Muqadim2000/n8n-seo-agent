@@ -70,9 +70,15 @@ combined app migration, marketing, docs, full tests). **Not deployed** (deploy s
 - **Integration**: `OK.reasonCode` / `linkReasonCode` know the competitor gate's codes (`competitor_list`, `listing`, `your_platform`,
   `software`; `competitor_list` is a website-level verdict); the Link Builder stores `competitorCheck(o).code` where it re-judges a stored
   ready row; retired prospects are skipped in LB Plan, LB Page Requests and LB Assemble, and a new prospect row carries `retired_at: ''`.
-- Data Table columns (reach production through `sync_tables.py` at deploy): `seo_console_alerts` condition_key, last_seen_at, count,
-  resolved_at, resolution, ack_by, ack_at; `seo_page_watch` moved_to; `seo_link_outreach` anchor_text, reason_code;
-  `seo_ai_visibility` software_json; `seo_ki_keywords` service; `seo_link_prospects` retired_at.
+- **201 (FX-SERVER: review R3 M2, R5 M5)**: Normalize Input carries `clear_lists` (only `competitors` / `brand_names`), so a list the
+  client emptied in Track my site is cleared in the engine too (`Monitor_Row_Track.js` stores '' and never a blank brand name); Admin Action
+  reads `purge_ids` (absent = true) and every id-keyed delete of Site Admin's delete route (Delete Cycle, Cycle Jobs, the KI deletes, Delete
+  Site, the section 200 purge chain) matches `purge_id`, a value no row holds when another website shares the engine id; Delete Site also
+  matches the vouched domain. Section 200 asserts no purge node names the bare site id.
+- Data Table columns (reach production through `sync_tables.py` at deploy, 14): `seo_console_alerts` condition_key, last_seen_at, count,
+  resolved_at, resolution, ack_by, ack_at; `seo_page_watch` moved_to, **redirect_verdict** (FX-INDEX: a standing redirect is re-judged
+  every day); `seo_link_outreach` anchor_text, reason_code; `seo_ai_visibility` software_json; `seo_ki_keywords` service;
+  `seo_link_prospects` retired_at.
 
 ## App (built, not deployed)
 
@@ -109,15 +115,75 @@ combined app migration, marketing, docs, full tests). **Not deployed** (deploy s
   the check-in figure uses Index coverage's one wording; the retention facts and the Security page match what B shipped.
 - **Migration** `0028_cr17_client_report.sql` (additive only: `recommendation_states`, `users.terms_version` / `terms_accepted_at`,
   `outreach_sequences.manual`, `organizations.auto_top_up_*`, `credit_purchase_requests.auto`).
-- Marketing: changelog 4.18, benefit lines on technical audits, index coverage, site tracking, link building, AI visibility,
-  competitors, content, reports and enterprise, a credit rule on /pricing. Tutorials backlog rows (video-skills c99484a).
+- Marketing: changelog 4.18 (with the review fixes' lines: page watch re-checks redirects, link claims and manual sends, ladder-page
+  answers and one next AI check, emptied lists clear, the agency's dismissal note), benefit lines on technical audits, index coverage,
+  site tracking, link building, AI visibility, competitors (one decision per competitor), content, reports and enterprise, a credit rule
+  on /pricing. Tutorials backlog rows (video-skills c99484a, 3339b8b).
+
+## Review and fixes (2026-11-18)
+
+Five independent reviews of the integrated branch (264f3a6d), read-only, each in its own area, then one fixer per area on its own branch
+(merged at c374c610, rebuilt at 741a443c). Every finding is fixed; the one Low a fixer deferred (R5 L7) was fixed in the integration.
+
+| Review | Area | Found | Fixer |
+|---|---|---|---|
+| R1 | Index coverage, audit scoring, AI-ranking diagnosis, Page Watch, moves | 1 High, 4 Medium, 6 Low | FX-INDEX (L5 by FX-LADDER) |
+| R2 | Link building and competitor roles | 0 High, 5 Medium, 6 Low | FX-LINKS |
+| R3 | App server: money, recommendations, deletion, security | 0 High, 2 Medium, 7 Low | FX-SERVER |
+| R4 | Web app and public site delivery | 1 High, 0 Medium, 2 Low | FX-WEB |
+| R5 | Page addresses, AI questions, client copy, report counts, purge | 1 High, 5 Medium, 8 Low | FX-LADDER (M5 by FX-SERVER, L7 integration) |
+
+High:
+- R1 H1: Index coverage filed a 301 into a 404 / 5xx / noindex page (or the home page) as a healthy move. One rule each side
+  (`IX.landsWell` in the engine, `permanentMoveLands` in the app): a move counts only when it lands on a working page of the site.
+- R4 H1: every app deep link answered 404 on Vercel (rewrites pointed at `/app.html`, which `cleanUrls` serves as `/app`). Rewrites and the
+  app-host middleware now target `/app`; verified on an offline `vercel build` of the real output.
+- R5 H1: the app said "Write the page" for a question the engine had settled on a ladder's main page. The app reads the engine's rule
+  (`LRU.questionPage`: same search, or a ladder main page that covers it in the market) and shows an engine-live target with its page.
+
+Medium:
+- R1 M1: a redirect that kept redirecting was never re-judged; Page Watch now stores `redirect_verdict` and raises the change (a target
+  that breaks is Critical the same day).
+- R1 M2: a robots.txt block alert was resolved on a day robots.txt could not be read; an unreadable day now keeps it open.
+- R1 M3: two searches could move onto one address in one run; the second is refused and named.
+- R1 M4: a country / language redirect could be confirmed as a move; one locale rule in three kits (the build fails if they differ).
+- R2 M1: a won link was turned lost by an old or other-page lost ledger row and never won again; only the won page's row, lost after the
+  win and confirmed by our check, counts, and a link that comes back is won again.
+- R2 M2: a client's manual Won reverted to new and their note was overwritten; a person's Won is a claim until our check finds the link,
+  and a person's note is never overwritten (our line goes after it).
+- R2 M3: a stale market-less "Not a competitor" outvoted a later choice; one decision per domain written to every row, latest wins.
+- R2 M4: "I sent it myself" skipped consent, the 90-day rest and domain opt-outs, and the weekly limit was racy; the same gates as approve,
+  under one company lock.
+- R2 M5: "Mark won" left a reply waiting for ever; new sequence status `claimed`, settled to won when our check confirms.
+- R3 M1: switching a monitor on for an established website forecast 0 credits; a row is measured only on its own history.
+- R3 M2: an emptied competitor / brand list was cleared in the app only; engine section 201 (`clear_lists`), API bodies that leave a list
+  out keep it.
+- R5 M1: a rung moved into a folder kept its root address on the row; links and Write now used the root. The folder address is written
+  back and every reader computes it until then.
+- R5 M2: folderFor counted any large non-blog folder as service pages; an allowlist of service folder names.
+- R5 M3: "Answered" hid a refresh the engine planned for that page; the queued refresh shows "Improve the page".
+- R5 M4: the weekly report and the app counted tracked keywords differently; the engine builds the app's list (untracked rung states out,
+  each search once).
+- R5 M5: the engine purge deleted another website's rows that share the engine site id; the app sends `purge_ids` and Site Admin honours it.
+
+Low (all fixed, details in the private FIX_*.md): R1 L1-L6, R2 L1-L6, R3 L1-L7 (recommendation state races and pruning, folded items,
+auto top-up in one transaction, the agency's dismissal note kept from client roles, newest usage rows, no e-mail in `ack_by`), R4 L1
+(portal hosts no longer serve our public site; L2 HSTS checked, kept), R5 L1-L8 (L7: one next AI check, read from the schedule the Pipeline
+works out, `app/server/src/services/aiSchedule.ts`, for the AI visibility page and the write form).
+
+**Engine and API deploy together**: the app now sends `clear_lists`, `purge_ids` and `note_mode`, and labels the engine's new Page Watch
+changes (`page_locale`, `move_undone`). An older engine ignores the new keys (lists keep their old engine copy, the old purge
+behaviour), so deploy the engine first and the API right after, the same session.
 
 ## Checks (integration branch)
 
-Engine build exit 0 (every lint enforcing). Harness **20403 passed, 0 failed** (AD10 speed passes on the quiet host: 215 ms cold, 128 ms
-steady). App typecheck clean (shared, server, web); shared **1709** passed (99 files); server **2284** passed, 46 skipped (the real-Postgres
-suites), 114 files + 3 skipped; web **437** passed (48 files); web build with the prerender: 126 pages + 404. `smoke.py` not run (the dev
-stack was not started). Exact commands and the two tests updated for new wording: `INTEGRATION.md` (private).
+Final, 2026-11-18, after the five review-fix branches and the integration pass (rebuild 741a443c, R5 L7 3c0a6824): engine build exit 0
+(every lint enforcing, sections 193-201). Harness **20574 passed, 0 failed** (AD10 speed: 110 ms steady, 219 ms cold; S53, S62, FXB6 green).
+App typecheck clean (shared, server, web); shared **1732** passed (101 files); server **2314** passed, 46 skipped (the real-Postgres
+suites), whole worktree mounted: the one failure of the parallel run, kiRoutes "p95 under 50 ms", passes alone three times (p95 13.4 /
+10.8 / 9.8 ms; the Mac's own processes held a load average of ~23, no other container running; limit unchanged); web **438** passed (48
+files); web build with the prerender: 126 pages + 404. `smoke.py` not run (the dev stack was not started). Exact commands: `INTEGRATION.md`
+(private).
 
 ## Data repairs (scripts ready, NOT run; dry run by default, each refuses on drift)
 
@@ -157,8 +223,11 @@ Owner decisions, not run: `repair_i_refunds.py` (our KI Trial runs: Devaicon 118
 Engine first, then the API, then the web; never on a Monday 07:00-16:00 UTC. The exact commands are in `INTEGRATION.md`:
 1. Backup (`deploy/gcp/backup.sh` on the VM).
 2. Merge `origin/main` into the branch, rebuild, node-diff production against main (production == main before the deploy).
-3. `deploy_engine.py --apply` (sync_tables adds the 13 columns above; Page Watch, Rank Tracker, Site Tracker, Site Admin, Link Builder,
+3. `deploy_engine.py --apply` (sync_tables adds the 14 columns above, `seo_page_watch.redirect_verdict` included; Page Watch, Rank Tracker, Site Tracker, Site Admin, Link Builder,
    AI Visibility, Pulse, Pilot, Backlinks, Audit, Growth, KI, Index coverage, Prerelease and the main workflow change).
-4. API on the VM: checkout + `up -d --build app` (migration 0028 runs at start); Caddy reload for the hooks host headers.
-5. Web: PR to main (Vercel); then the public-site curl checks of HANDOFF_A.
+4. API on the VM right after the engine, the same session: checkout + `up -d --build app` (migration 0028 runs at start); Caddy reload
+   for the hooks host headers.
+5. Web: PR to main (Vercel); curl the preview first (app deep links such as `/o/x`, `/reset-password`, `/share/t` answer the app
+   shell, `/app.html` 308 to `/app`, `/nope` 404, `/llms.txt` text/plain), then the public-site checks of HANDOFF_A and the app-host root on
+   app.alaventra.com after the merge.
 6. Repairs in the order above (dry run, then `--apply`).
