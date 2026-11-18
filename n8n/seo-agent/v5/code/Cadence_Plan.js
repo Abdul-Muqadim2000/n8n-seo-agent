@@ -279,7 +279,8 @@ for (const s of list) {
     const g = fitStored(l, { ...fitCtx, serp, serp_domains: [...new Set([...serp, ...(ladderDoms.get(l.ladder_id) || [])])].filter(h => normD(h) !== s.domain) }); fitOf.set(l, g);
     if (!g.flagged) continue;
     set_aside.push({ ladder_id: l.ladder_id, keyword: l.keyword, rung: Number(l.rung) || 0, page_no: Number(l.page_no) || 0, head: l.head_keyword || '',
-      reason: g.reason, detail: g.detail, note: g.note, written: !!g.live, dropped: !g.ok });
+      reason: g.reason, detail: g.detail, note: g.note, written: !!g.live, dropped: !g.ok,
+      target_url: String(l.target_url || ''), page_exists: l.page_exists === true || l.page_exists === 'true' });   // review R5 (M1): Ladder Marks writes the row's own address back unchanged
   }
   const fitOk = (l) => (fitOf.get(l) || { ok: true }).ok;
   // ---- F-KW (finding 9): who chose each ladder. The seo_ladder_settings row says it (the app and the ladder run write it); when it is empty
@@ -416,17 +417,16 @@ for (const s of list) {
   // client published our pages, else its live inventory; the root when nothing says so). A rung planned before that rule at the root of a
   // site that keeps that kind of page in a folder (devaicon.com: /ai-app-development, its service pages live under /services/) is written at
   // the folder address; the Rank Tracker and publish detection follow the row as before. Mirror: app/server/src/services/cadence.ts.
-  const folderEvC = { published: [...slog.filter(l => String(l.status || '') === 'published' && l.published_url).map(l => ({ url: l.published_url, page_type: l.page_type })),
-      ...lrows.filter(r => String(r.status || '') === 'published' && r.target_url).map(r => ({ url: r.target_url, page_type: r.page_type }))],
-    pages: pageRows.filter(r => r.site_id === s.site_id).map(r => ({ url: r.url, http_status: r.http_status })) };
+  // review R5 (M1): the evidence and the folder move are the kit's (LRU.folderEvidence / LRU.folderAddress), one rule with the app's mirror and its Write now
+  const folderEvC = LRU.folderEvidence(slog, lrows, pageRows.filter(r => r.site_id === s.site_id));
   const folderMemoC = new Map();
   const folderC = (type) => { const k = LRU.classOf(type); if (!folderMemoC.has(k)) folderMemoC.set(k, LRU.folderFor(type, folderEvC)); return folderMemoC.get(k); };
   const addressOf = (l, x) => { const was = String(l.target_url || ''); const exists = l.page_exists === true || l.page_exists === 'true';
     const home = (was.match(/^https?:\/\/[^\/?#]+/i) || [''])[0] || ''; const slash = /\/$/.test(was);
-    const fo = folderC(isTop(l) ? 'Service Page' : (l.page_type || 'Service Page'));
+    const fo = folderC(LRU.rowType(l));
     const own = (u) => LRU.plannedUrl(home, l.keyword, slash, fo.folder) || u;
-    if (!exists && was && fo.folder !== '/' && !['published', 'merged'].includes(String(l.status || '')) && LRU.urlKey(was) === LRU.urlKey(LRU.plannedUrl(home, l.keyword, slash))) {
-      const nu = own(was); if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu, note: 'a new page at ' + LRU.pathOf(nu) + ', not ' + LRU.pathOf(was) + ': ' + fo.why }; }
+    const moved = LRU.folderAddress(l, fo);
+    if (moved) return { existing: '', target: moved, note: 'a new page at ' + LRU.pathOf(moved) + ', not ' + LRU.pathOf(was) + ': ' + fo.why };
     if (isTop(l)) { const orig = exists ? LRU.copyOf(was, knownC) : '';
       if (orig) return { existing: orig, target: orig, note: LRU.pathOf(was) + ' is a copy of ' + LRU.pathOf(orig) + ': the main page improves the original' };
       // review H5: a blog address that ranks for the main keyword (the Rank Tracker's last readable position, or Search Console) keeps it
@@ -438,8 +438,11 @@ for (const s of list) {
   const ladderCand = (x, l) => {
     const rows = x.rows, top = x.top; const links = [];
     const addr = addressOf(l, x);
-    if (isTop(l)) { for (const r of rows.filter(r => !isTop(r) && r.target_url).slice(0, 12)) links.push({ url: r.target_url, role: 'down', keyword: r.keyword }); }   // the top page is the hub: it lists the whole cluster (12, was 6; v4.4)
-    else { if (top && top.target_url && top.keyword !== l.keyword) links.push({ url: top.target_url, role: 'top', keyword: top.keyword }); const sib = rows.find(r => Number(r.rung) === Number(l.rung) && r.keyword !== l.keyword && r.target_url); if (sib) links.push({ url: sib.target_url, role: 'sibling', keyword: sib.keyword }); }
+    // review R5 (M1): every link goes to the address that page is (or will be) written at (addressOf), never the root address a rung was
+    // planned at before the folder rule, so a hub written in /services/ never links to /x while /x is itself written at /services/x
+    const addrOfR = (r) => (r === l ? addr.target : ['published', 'merged'].includes(String(r.status || '')) ? '' : addressOf(r, x).target) || r.target_url;   // a live page links where it is
+    if (isTop(l)) { for (const r of rows.filter(r => !isTop(r) && r.target_url).slice(0, 12)) links.push({ url: addrOfR(r), role: 'down', keyword: r.keyword }); }   // the top page is the hub: it lists the whole cluster (12, was 6; v4.4)
+    else { if (top && top.target_url && top.keyword !== l.keyword) links.push({ url: addrOfR(top), role: 'top', keyword: top.keyword }); const sib = rows.find(r => Number(r.rung) === Number(l.rung) && r.keyword !== l.keyword && r.target_url); if (sib) links.push({ url: addrOfR(sib), role: 'sibling', keyword: sib.keyword }); }
     // R15 (2026-10-13): `target_url` is the URL this ladder planned for the page — the run keeps it as the page's slug, so the ladder's
     // link map, the other rung pages' links and the rank tracking never point at a URL that will not exist
     return { keyword: l.keyword, page_type: l.page_type || 'Service Page', existing_page_url: addr.existing, target_url: addr.target, ...(addr.note ? { address_note: addr.note } : {}), source: 'ladder', ladder_id: l.ladder_id, rung: Number(l.rung) || 0, page_no: Number(l.page_no) || 0, head: l.head_keyword || '', links, chosen_by: x.chosen_by, why: 'keyword ladder, rung ' + (isTop(l) ? 'top' : l.rung) + ' towards "' + (l.head_keyword || '') + '"' };

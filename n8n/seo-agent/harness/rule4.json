@@ -893,7 +893,7 @@
   },
   "a_written_row_that_read_nothing": {
    "caught": true,
-   "fail": "mints status \"written\" into seo_content_log and reads none of the evidence for it (article_html, page_markdown, $('Blog Package'), $('Build Word File'), $('Load Content Log'), $('Load Content Log (Run)'), $('Publish Check'), $('Detect Published'))",
+   "fail": "mints status \"written\" into seo_content_log and reads none of the evidence for it (article_html, page_markdown, $('Blog Package'), $('Build Word File'), $('Load Content Log'), $('Load Content Log (Run)'))",
    "ok": false
   },
   "a_written_row_that_read_the_page": {
@@ -928,6 +928,9 @@
    "caught": true,
    "fail": "",
    "ok": true
+  },
+  "the_settle_kit_drops_its_proof": {
+   "caught": true
   },
   "the_verdict_field_list_goes_stale": {
    "caught": true

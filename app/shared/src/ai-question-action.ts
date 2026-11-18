@@ -317,15 +317,16 @@ export function aiQuestionPages(o: {
   return out.slice(0, 600);
 }
 
-/** The client's own permanent redirects (seo_page_watch rows answering 301 / 308 with a Location on the same website, never to the home page)
- *  as { from, to } with absolute addresses, for aiQuestionPages' `moves`. */
-export function aiPermanentMoves(rows: readonly { url?: unknown; status?: unknown; location?: unknown }[]): { from: string; to: string }[] {
+/** The client's own permanent moves as { from, to } with absolute addresses, for aiQuestionPages' `moves`: only the moves the engine's Page
+ *  Watch CONFIRMED (seo_page_watch.moved_to, written by MV.confirm: a 301 / 308 read twice, its target working as a page of its own, on the
+ *  same website, never a deep page sent to the home page). CR17 review R1 (L5): a redirect seen once, or one to the home page or to a broken
+ *  page, is not a move, so the AI page and the write form never call the home page (or a 404) the page that answers a question. */
+export function aiPermanentMoves(rows: readonly { url?: unknown; status?: unknown; location?: unknown; moved_to?: unknown }[]): { from: string; to: string }[] {
   const out: { from: string; to: string }[] = [];
   for (const r of rows) {
     const from = S(r.url).trim();
-    const st = Number(r.status);
-    const loc = S(r.location).trim();
-    if (!from || !loc || (st !== 301 && st !== 308)) continue;
+    const loc = S(r.moved_to).trim();
+    if (!from || !loc) continue;
     const origin = (from.match(/^https?:\/\/[^/?#]+/i) || [''])[0];
     const to = /^https?:\/\//i.test(loc) ? loc : loc.startsWith('/') && origin ? origin + loc : '';
     const host = (u: string) => LRU.urlKey(u).split('/')[0];
@@ -393,12 +394,16 @@ const OVERRIDABLE = new Set<AiTargetState | ''>(['queued', 'later', 'retry']);
  * resolver for the button, so the two never name two different pages.
  */
 export function aiAnsweredView(
-  t: Pick<AiTargetForAction, 'targetId' | 'question' | 'keyword' | 'state' | 'updatedAt' | 'hidden'>,
+  t: Pick<AiTargetForAction, 'targetId' | 'question' | 'keyword' | 'state' | 'updatedAt' | 'hidden'> & Partial<Pick<AiTargetForAction, 'kind' | 'pageUrl' | 'statePageUrl'>>,
   inputs: Pick<AiQuestionInputs, 'written' | 'market' | 'ladderHeads' | 'nextAiCheck'>,
 ): { state: 'live'; badge: string; tone: 'good'; sentence: string; pageUrl: string; date: string; how: 'written_for' | 'owner' } | null {
   if (!OVERRIDABLE.has(t.state ?? '') || t.hidden) return null;
   const a = aiAnswerPage({ targetId: t.targetId, question: t.question, keyword: S(t.keyword) || t.question }, inputs.written ?? [], inputs.market, inputs.ladderHeads ?? []);
   if (!a) return null;
+  // review R5 (M3): AI Growth planned to IMPROVE this very page for the question (a refresh: stale or weak for it). The page being live is why
+  // the refresh exists, so it never overrides that plan ("Answered" beside a refresh the weekly pages still write); the engine's plan stands
+  const planned = S(t.statePageUrl) || (S(t.kind) === 'refresh' ? S(t.pageUrl) : '');
+  if (t.state === 'queued' && planned && urlKeyQ(planned) === urlKeyQ(a.page.publishedUrl)) return null;
   if (a.how === 'owner') {
     const pub = Date.parse(S(a.page.publishedAt));
     const settled = Date.parse(S(t.updatedAt));
@@ -494,6 +499,10 @@ export function aiQuestionAction(ref: AiQuestionRef, inputs: AiQuestionInputs = 
   // review 2026-11-16 L4: a question this website does not target, or one the client kept out, gets no page (the plain reason instead)
   if (st === 'not_for_site') return out('none', { note: S(target?.reason) || 'This question is not about what you sell, so no page is written for it.' });
   if (st === 'kept_out') return out('none', { note: S(target?.reason) || 'You chose not to write a page for it.' });
+
+  // review R5 (M3): AI Growth planned to improve a page for this question (it is stale or weak for it): that plan stands, also beside the
+  // page written for the question (which is usually the page to improve), so the button is the engine's "Improve", never "See the page"
+  if (target && st === 'queued' && S(target.kind) === 'refresh' && refreshUrl) return out('improve', { note: `We improve ${aiPagePath(refreshUrl)} so it answers this question.`, basis: 'target' });
 
   // 2. a page written for this very question (by any run: the app's, the weekly pages, an older engine)
   const written = inputs.written ?? [];

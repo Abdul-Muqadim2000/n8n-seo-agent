@@ -631,7 +631,9 @@ N.append(code('Log Rows', rd('code/Log_Rows.js'), at(14, 0)))
 N.append(node('Save Content Log', DT_TYPE, DT_VERSION, dt_insert_params(LOG_TABLE, LOG_COLS), at(15, 0), onError='continueRegularOutput'))
 N.append(code('Ladder Marks', rd('code/Ladder_Marks.js'), at(16, 0)))
 N.append(iff('Any Ladder Marks?', '{{ !$json.skip }}', at(17, 0)))
-N.append(node('Mark Ladder Writing', DT_TYPE, DT_VERSION, dt_update_params(LADDER_TABLE, LADDER_COLS, [('ladder_id', '={{ $json.ladder_id }}'), ('keyword', '={{ $json.keyword }}')], {'status': '={{ $json.status }}'}), at(18, 0), alwaysOutputData=True, onError='continueRegularOutput'))
+# CR17 review R5 (M1): the row also takes the address its page is written at (Ladder Marks: the folder address of a rung planned at the root, or
+# the row's own address unchanged) and whether a page lives there, so the hub's links, the app's Write now and Coming up read one address
+N.append(node('Mark Ladder Writing', DT_TYPE, DT_VERSION, dt_update_params(LADDER_TABLE, LADDER_COLS, [('ladder_id', '={{ $json.ladder_id }}'), ('keyword', '={{ $json.keyword }}')], {'status': '={{ $json.status }}', 'target_url': '={{ $json.target_url }}', 'page_exists': '={{ $json.page_exists }}'}), at(18, 0), alwaysOutputData=True, onError='continueRegularOutput'))
 N.append(code('AI Target Marks', rd('code/AI_Target_Marks.js'), at(18, 1)))
 N.append(iff('Any AI Marks?', '{{ !$json.skip }}', at(18, 2)))
 # B9-6: the status and the reason come from the item now - a spawn that failed writes the row back to `queued` instead of

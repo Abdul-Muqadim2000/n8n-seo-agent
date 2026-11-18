@@ -312,7 +312,8 @@ function TargetsPanel({ targets, perMonth, inputs }: { targets: AiTargetStat[]; 
       <p className="mt-3 border-t border-line pt-3 text-xs text-ink-3">
         One page can answer several related questions. When a question is the same search as one of your pages, or holds every word of a keyword
         ladder&apos;s main search, that page is written to answer it too. A separate answer page is written only for a question none of your pages
-        covers. When a page that answers a question goes live, the question shows it at once.
+        covers. When a page that answers a question goes live, the question shows it as soon as we see the page live: at once when you report it
+        published, otherwise after our weekly check of your website.
       </p>
     </Panel>
   );

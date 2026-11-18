@@ -751,13 +751,8 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
   const pagesQ = (input.pages ?? []).filter((p) => p && p.url && (!p.site_id || p.site_id === siteId)).map((p) => ({ url: S(p.url), queries: (() => { try { const q = JSON.parse(S(p.queries_json) || '[]'); return Array.isArray(q) ? q : []; } catch { return []; } })() }));
   // client report 2026-11-17 (F4, mirror of Cadence_Plan.js): a page that gets its own address gets it in the site's folder for its kind
   // (LRU.folderFor), and a rung planned at the root of a site that keeps that kind of page in a folder is written at the folder address
-  const folderEvC = {
-    published: [
-      ...slog.filter((l) => S(l.status) === 'published' && S(l.published_url)).map((l) => ({ url: S(l.published_url), page_type: S(l.page_type) })),
-      ...lrows.filter((r) => S(r.status) === 'published' && S(r.target_url)).map((r) => ({ url: S(r.target_url), page_type: S(r.page_type) })),
-    ],
-    pages: (input.pages ?? []).filter((p) => p && p.url && (!p.site_id || p.site_id === siteId)).map((p) => ({ url: S(p.url), http_status: p.http_status })),
-  };
+  // review R5 (M1): the evidence and the folder move are the kit's (LRU.folderEvidence / LRU.folderAddress), as in Cadence Plan and Write now
+  const folderEvC = LRU.folderEvidence(slog, lrows, (input.pages ?? []).filter((p) => p && p.url && (!p.site_id || p.site_id === siteId)));
   const folderMemoC = new Map<string, ReturnType<typeof LRU.folderFor>>();
   const folderC = (type: string) => {
     const k = LRU.classOf(type);
@@ -769,12 +764,10 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
     const exists = l.page_exists === true || String(l.page_exists) === 'true';
     const home = (was.match(/^https?:\/\/[^/?#]+/i) || [''])[0];
     const slash = /\/$/.test(was);
-    const fo = folderC(num(l.rung) === 4 ? 'Service Page' : S(l.page_type) || 'Service Page');
+    const fo = folderC(LRU.rowType(l));
     const own = (u: string) => LRU.plannedUrl(home, l.keyword, slash, fo.folder) || u;
-    if (!exists && was && fo.folder !== '/' && !['published', 'merged'].includes(S(l.status)) && LRU.urlKey(was) === LRU.urlKey(LRU.plannedUrl(home, l.keyword, slash))) {
-      const nu = own(was);
-      if (LRU.urlKey(nu) !== LRU.urlKey(was)) return { existing: '', target: nu };
-    }
+    const moved = LRU.folderAddress(l, fo);
+    if (moved) return { existing: '', target: moved };
     if (num(l.rung) === 4) {
       const orig = exists ? LRU.copyOf(was, knownC) : '';
       if (orig) return { existing: orig, target: orig };
