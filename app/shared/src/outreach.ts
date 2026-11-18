@@ -42,9 +42,13 @@ export type ReplyClass = (typeof REPLY_CLASSES)[number];
 export const REPLY_LABEL: Record<ReplyClass, string> = { says_linked: 'Says the link is live', interested: 'Interested', question: 'Has a question', wants_payment: 'Asks for payment', link_swap: 'Asks for a link swap',
   not_now: 'Not now', declined: 'Declined', unsubscribe: 'Asked not to be contacted', wrong_person: 'Wrong person', out_of_office: 'Out of office', other: 'Replied' };
 /** scheduled (approved, waiting for the window) -> active (sent, waiting for the next step) -> replied | bounced | stopped | won | finished (no reply) | failed */
-export const SEQUENCE_STATUSES = ['scheduled', 'active', 'paused', 'replied', 'bounced', 'stopped', 'won', 'finished', 'failed'] as const;
+/** FX-LINKS (review R2 M5): claimed = a person marked it won ("they linked"); it waits for our check of their page, which makes it won. Nothing
+ *  is sent in it and it is not a reply waiting for an answer. */
+export const SEQUENCE_STATUSES = ['scheduled', 'active', 'paused', 'replied', 'claimed', 'bounced', 'stopped', 'won', 'finished', 'failed'] as const;
 export type SequenceStatus = (typeof SEQUENCE_STATUSES)[number];
-export const SEQUENCE_LABEL: Record<SequenceStatus, string> = { scheduled: 'Scheduled', active: 'Sent, waiting', paused: 'Paused', replied: 'Replied', bounced: 'Bounced', stopped: 'Stopped', won: 'Won', finished: 'No reply', failed: 'Failed' };
+export const SEQUENCE_LABEL: Record<SequenceStatus, string> = { scheduled: 'Scheduled', active: 'Sent, waiting', paused: 'Paused', replied: 'Replied', claimed: 'Link claimed, checking', bounced: 'Bounced', stopped: 'Stopped', won: 'Won', finished: 'No reply', failed: 'Failed' };
+/** an open conversation with a site: no second pitch to it while one of these is going on */
+export const OPEN_SEQUENCE_STATUSES: readonly SequenceStatus[] = ['scheduled', 'active', 'paused', 'replied', 'claimed'];
 
 // ---- API shapes ----
 export interface OutreachStep {
@@ -216,6 +220,9 @@ export function consentGate(country: string, email: string): ConsentGate {
   if (c === 'AE' && !role) return { needed: true, why: "The UAE's data law is consent-based: write to a named person only with their consent or an existing relationship (editor@ or info@ inboxes are fine)." };
   return { needed: false, why: '' };
 }
+/** FX-LINKS (review R2 M4): the consent rule for a pitch a person sends by hand ("I sent it myself"): by the address, or for a contact form
+ *  (no address) by the country alone, since a form is not a named person */
+export const manualConsentGate = (country: string, to: string): ConsentGate => consentGate(country, String(to || '').trim() || 'info@contact-form.invalid');
 /** the lines every e-mail ends with: who is writing, from where, and how to stop it (CAN-SPAM, GDPR Art. 14, PECR)
  *
  *  **B11-3 (2026-10-15, benchmark area 11).** The postal address used to go out on the FIRST e-mail only, and the two follow-ups

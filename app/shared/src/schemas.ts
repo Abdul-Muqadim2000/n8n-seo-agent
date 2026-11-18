@@ -861,7 +861,9 @@ export const sequenceOutcomeSchema = z.object({ status: z.enum(['won', 'rejected
 export const draftDismissSchema = z.object({ prospectDomain: z.string().trim().min(3).max(200), type: z.string().trim().min(2).max(30) });
 // CR17-E (client report 2026-11-17, C4a): "I sent it myself" - a pitch a person sent from their own mail (no mailbox connected). The address is
 // optional (a contact form has none); nothing is sent by the app, the follow-ups become reminders and the won check reads their page.
-export const manualSentSchema = z.object({ prospectDomain: z.string().trim().min(3).max(200), type: z.string().trim().min(2).max(30), toEmail: z.union([z.literal(''), z.string().trim().toLowerCase().email().max(200)]).default('') });
+export const manualSentSchema = z.object({ prospectDomain: z.string().trim().min(3).max(200), type: z.string().trim().min(2).max(30), toEmail: z.union([z.literal(''), z.string().trim().toLowerCase().email().max(200)]).default(''),
+  /** FX-LINKS (review R2 M4): the same consent tick as approve (Germany, Austria, Saudi Arabia, a named person in the UAE) */
+  consent: z.boolean().optional() });
 export const listingStatusSchema = z.object({ status: z.enum(['submitted', 'listed', 'ignored', 'missing']), note: z.string().trim().max(300).optional() });
 export const suppressionSchema = z.object({ value: z.string().trim().toLowerCase().min(3).max(200), kind: z.enum(['email', 'domain']).default('email') });
 export const linkBuilderRunSchema = z.object({ freeOnly: z.boolean().default(false) });

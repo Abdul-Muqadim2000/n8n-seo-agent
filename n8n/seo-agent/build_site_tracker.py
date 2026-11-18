@@ -466,7 +466,7 @@ N.append(node('Load Monitors (Admin)', DT_TYPE, DT_VERSION, dt_get_where_params(
 N.append(code('Monitor Row (Admin)', rd('code/Monitor_Row_Admin.js'), [1000, 400]))
 N.append(node('Set Monitors', DT_TYPE, DT_VERSION, dt_upsert_params(MONITORS_TABLE, MONITORS_COLS, 'site_id'), [1240, 400], alwaysOutputData=True, onError='continueRegularOutput'))
 N.append(node('Load Link Prospects (Admin)', DT_TYPE, DT_VERSION, dt_get_where_params(PROSPECT_TABLE, 'site_id', 'eq', '={{ $json.site_id }}'), [760, 560], **ALOAD))
-N.append(code('Prospect Rows (Admin)', rd('code/Prospect_Rows_Admin.js'), [1000, 560]))
+N.append(code('Prospect Rows (Admin)', rd('code/Prospect_Rows_Admin.js').replace('/*__LINK_KIT__*/', rd('code/_link_kit.js')), [1000, 560]))   # FX-LINKS: LK.noteWith (a person's note is never overwritten)
 N.append(node('Set Prospects', DT_TYPE, DT_VERSION, dt_upsert_params_keys(PROSPECT_TABLE, PROSPECT_COLS, ['site_id', 'prospect_domain', 'type']), [1240, 560], alwaysOutputData=True, onError='continueRegularOutput'))
 N.append(node('Load AI Prompts (Admin)', DT_TYPE, DT_VERSION, dt_get_where_params(AI_PROMPTS_TABLE, 'site_id', 'eq', '={{ $json.site_id }}'), [760, 720], **ALOAD))
 N.append(code('AI Prompt Rows (Admin)', rd('code/AI_Prompt_Rows_Admin.js'), [1000, 720]))
@@ -551,6 +551,13 @@ _unlink196('KI Competitor OK? (Admin)', 'Set KI Competitor')
 for _n196 in N:
     if _n196['name'] == 'KI Competitor (Admin)': _n196['parameters']['jsCode'] = _n196['parameters']['jsCode'].replace('__KI_COMP_COLS__', json.dumps([c for c, _ in KI_COMP_COLS]))
 assert all('__KI_COMP_COLS__' not in _n['parameters'].get('jsCode', '') for _n in N if _n.get('type') == 'n8n-nodes-base.code'), 'section 196: KI_COMP_COLS not baked'
+# FX-LINKS (review R2 M3, 2026-11-18): the client's choice is one decision per domain: Set KI Competitor updates EVERY row of the domain for the
+# site (every market and the market-less row), so an older "not a competitor" stored on another row can never outvote a later choice
+for _n196 in N:
+    if _n196['name'] == 'Set KI Competitor':
+        _n196['parameters'] = dt_update_params(KI_COMP_TABLE, KI_COMP_COLS, [('site_id', '={{ $json.site_id }}'), ('comp_domain', '={{ $json.comp_domain }}')],
+            {'status': '={{ $json.status }}', 'status_by': 'user', 'updated_at': '={{ $json.updated_at }}'})
+assert [c.get('keyName') for c in next(_n for _n in N if _n['name'] == 'Set KI Competitor')['parameters']['filters']['conditions']] == ['site_id', 'comp_domain'], 'FX-LINKS M3: the KI choice must update every row of the domain'
 N.append(iff('KI Row? (Admin)', '{{ $json.ki_row === true }}', [1180, 1360]))
 N.append(code('KI Choice Row (Admin)', "// CR17-F: the market-less row of a domain outside the KI set (exact seo_ki_competitors columns)\nreturn [{ json: $('KI Competitor (Admin)').first().json.own_row }];", [1240, 1440]))
 N.append(node('Save KI Choice (Admin)', DT_TYPE, DT_VERSION, dt_upsert_params_keys(KI_COMP_TABLE, KI_COMP_COLS, ['site_id', 'market', 'comp_domain']), [1360, 1440], alwaysOutputData=True, onError='continueRegularOutput'))

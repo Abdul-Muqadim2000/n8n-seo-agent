@@ -47,7 +47,9 @@ module.exports = async (ctx) => {
     check('contacted + our check found it on a clean page -> won', LK.wonCheck({ prospect: pc, rows: [clean], site: DOM, now: NOW }).state === 'won', '');
     check('the same link, nobody written to -> already links to you (not a result)', LK.wonCheck({ prospect: { ...pc, status: 'new', contacted_at: '' }, rows: [clean], site: DOM, now: NOW }).state === 'already_links', '');
     check('a fresh reading of a contacted site counts the same way (LB claims, Reply Reader)', LK.wonCheck({ prospect: pc, rows: [], site: DOM, reading: { verify: 'found', url: clean.from_url, to_url: clean.to_url, rel: 'follow', title: 'Open edX hosting guide' }, now: NOW }).won === true, '');
-    check('a won link whose ledger row went lost (two misses) -> lost', LK.wonCheck({ prospect: { ...pc, status: 'won' }, rows: [{ ...clean, status: 'lost', verify: 'missing', lost_reason: 'link_removed' }], site: DOM, now: NOW }).state === 'lost', '');
+    // FX-LINKS (review R2 M1): the old check encoded the defect (any lost row of the domain, at any time, made a won link lost); a loss now
+    // needs the ledger row of the won page, lost after the win, on a link our check had confirmed
+    check('a confirmed won link whose own page\'s ledger row went lost (two misses) after the win -> lost', LK.wonCheck({ prospect: { ...pc, status: 'won', won_at: '2026-11-05T00:00:00.000Z', verified_at: '2026-11-05T00:00:00.000Z', source_url: clean.from_url }, rows: [{ ...clean, status: 'lost', verify: 'missing', lost_reason: 'link_removed', lost_at: '2026-11-15T00:00:00.000Z' }], site: DOM, now: NOW }).state === 'lost', '');
     check('a reading older than 35 days is not evidence', LK.wonCheck({ prospect: pc, rows: [{ ...clean, verified_at: '2026-09-01T00:00:00.000Z' }], site: DOM, now: NOW }).state === 'not_found', '');
     check('the Reply Reader applies the same junk gate before it believes "it is live"', /LK\.junkLink\(/.test(fs.readFileSync(path.join(CODE, 'Reply_Classify_Input.js'), 'utf8')), '');
   });
@@ -181,5 +183,134 @@ module.exports = async (ctx) => {
     check('the ladder\'s 301 address is followed to the page it lands on; the old address is never a target', urls.includes('/services/ai-automation-services-pakistan') && !urls.includes('/ai-automation-services-pakistan'), J(urls));
     check('a 301 whose landing page is not on record is never a target (its live twin is offered on its own)', urls.includes('/services/industries-bfsi') && !urls.includes('/industries/bfsi'), J(urls));
     check('careers, privacy and a 404 are never targets', !urls.some(u => /careers|privacy|gone-page/.test(u)), J(urls));
+  });
+
+  // ---- FX-LINKS (review R2 M1 M2 L1 L2 L3, 2026-11-18) ----
+  const WON_PAGE = 'https://partner-blog.example/open-edx-hosting-guide';
+  const LROW = (o) => ({ site_id: SID, domain: DOM, ref_domain: 'partner-blog.example', kind: 'web', from_url: WON_PAGE, to_url: D + '/capabilities/open-edx-services', rel: 'follow', link_type: 'editorial', status: 'live', verify: 'found', verified_at: '2026-11-15T00:00:00.000Z', last_seen: '2026-11-15T00:00:00.000Z', first_seen: '2026-11-08T00:00:00.000Z', page_title: 'Open edX hosting guide', ...o });
+  const PW = (o) => P({ prospect_domain: 'partner-blog.example', type: 'lost', status: 'won', contacted_at: '2026-11-03T09:00:00.000Z', won_at: '2026-11-10T00:00:00.000Z', verified_at: '2026-11-10T00:00:00.000Z', source_url: WON_PAGE, ...o });
+
+  await guard('CR17E6 won rule (FX-LINKS)', async () => {
+    reset(); const SN = 'CR17E6 (FX-LINKS) lost only from the won page after the win; a link there before the pitch is not won; a stale reading is not gone; a person\'s note is kept'; begin(SN); const check = mkCheck(SN);
+    const { LK } = kits();
+    const oldLoss = LROW({ status: 'lost', verify: 'missing', lost_reason: 'link_removed', lost_at: '2026-11-01T00:00:00.000Z' });   // the loss we pitched to restore
+    const r1 = LK.wonCheck({ prospect: PW(), rows: [oldLoss], site: DOM, now: NOW });
+    check('M1: a "link to restore" win whose ledger row was lost BEFORE the win stays won (not lost)', r1.state !== 'lost', J(r1));
+    const otherPage = LROW({ from_url: 'https://partner-blog.example/old-list', status: 'lost', verify: 'missing', lost_reason: 'link_removed', lost_at: '2026-11-16T00:00:00.000Z' });
+    const r2 = LK.wonCheck({ prospect: PW(), rows: [otherPage], site: DOM, now: NOW });
+    check('M1: a lost row of ANOTHER page of the domain never makes the won link lost', r2.state !== 'lost', J(r2));
+    const r3 = LK.wonCheck({ prospect: PW(), rows: [LROW({ status: 'lost', verify: 'missing', lost_reason: 'link_removed', lost_at: '2026-11-16T00:00:00.000Z' })], site: DOM, now: NOW });
+    check('M1: the won page\'s own row lost after the win -> lost', r3.state === 'lost', J(r3));
+    const r3b = LK.wonCheck({ prospect: PW(), rows: [LROW({ status: 'lost', verify: 'missing', lost_at: '2026-11-16T00:00:00.000Z' })], site: DOM, won_url: 'https://partner-blog.example/another-page', now: NOW });
+    check('M1: the won page is the Link Builder\'s own (won_url) when it is known', r3b.state !== 'lost', J(r3b));
+    const r4 = LK.wonCheck({ prospect: PW({ verified_at: '' }), rows: [LROW({ status: 'lost', verify: 'missing', lost_at: '2026-11-16T00:00:00.000Z' })], site: DOM, now: NOW });
+    check('M2: a claim our check never confirmed cannot be "lost"', r4.state === 'not_found', J(r4));
+    const pc = P({ prospect_domain: 'partner-blog.example', type: 'resource', status: 'contacted', contacted_at: '2026-11-03T09:00:00.000Z' });
+    const r5 = LK.wonCheck({ prospect: pc, rows: [LROW({ first_seen: '2026-09-20T00:00:00.000Z' })], site: DOM, now: NOW });
+    check('L3: a link the ledger saw before anyone wrote to them is "already links to you", not won', r5.state === 'already_links' && r5.before_contact === true && !r5.won, J(r5));
+    const r5b = LK.wonCheck({ prospect: pc, rows: [LROW({ first_seen: '2026-09-20T00:00:00.000Z' })], reading: { verify: 'found', url: WON_PAGE, to_url: D + '/', rel: 'follow', title: 'Open edX hosting guide' }, site: DOM, now: NOW });
+    check('L3: our own reading of that same page counts the same way (the ledger dates the link)', r5b.state === 'already_links', J(r5b));
+    check('L3: a pitch to RESTORE a link, and a prospect already won, keep their win', LK.wonCheck({ prospect: { ...pc, type: 'lost' }, rows: [LROW({ first_seen: '2026-09-20T00:00:00.000Z' })], site: DOM, now: NOW }).state === 'won'
+      && LK.wonCheck({ prospect: PW({ type: 'resource' }), rows: [LROW({ first_seen: '2026-09-20T00:00:00.000Z' })], site: DOM, now: NOW }).state === 'won', '');
+    check('L3: a link first seen after the pitch is won', LK.wonCheck({ prospect: pc, rows: [LROW()], site: DOM, now: NOW }).state === 'won', '');
+    const stale = LK.wonCheck({ prospect: P({ prospect_domain: 'partner-blog.example', type: 'resource', status: 'linked' }), rows: [LROW({ verified_at: '2026-10-01T00:00:00.000Z', last_seen: '2026-11-16T00:00:00.000Z' })], site: DOM, now: NOW });
+    check('L1: an old reading of a live row is not evidence, but it is not "gone" either', stale.state === 'not_found' && stale.gone === false, J(stale));
+    check('L1: every row lost -> gone', LK.wonCheck({ prospect: P({ prospect_domain: 'partner-blog.example', type: 'resource', status: 'linked' }), rows: [LROW({ status: 'lost', verify: 'missing' })], site: DOM, now: NOW }).gone === true, '');
+    const person = 'Wrote to Ana (editor) on 3 Nov from my Gmail, she said it is up';
+    const n1 = LK.noteWith(person, 'won 2026-11-17: our check found your link on ' + WON_PAGE);
+    const n2 = LK.noteWith(n1, 'won 2026-11-24: our check found your link on ' + WON_PAGE);
+    check('M2: a person\'s note is never overwritten; our line goes after it and replaces only our earlier line', n1.startsWith(person) && /\nOur check: won 2026-11-17/.test(n1) && n2.startsWith(person) && !/2026-11-17/.test(n2) && /2026-11-24/.test(n2), J([n1, n2]));
+    check('M2: an engine / app note is replaced as before', LK.noteWith('sent by you from your own e-mail (marked in the app)', 'won 2026-11-17: x') === 'won 2026-11-17: x' && LK.noteWith('', 'not a won link: y') === 'not a won link: y', '');
+    const long = 'x'.repeat(295);
+    check('M2: a person\'s long note is never cut to fit ours', LK.noteWith(long, 'not a won link: nobody was written to') === long, '');
+  });
+
+  await guard('CR17E7 Prospect Rows (FX-LINKS)', async () => {
+    reset(); const SN = 'CR17E7 (FX-LINKS) Backlink Monitor: a won link stays won past an old loss, a lost one is won again, a person\'s Won is a claim with its note, linked does not flap'; begin(SN); const check = mkCheck(SN);
+    const person = 'Wrote to Ana on 3 Nov from my own mail';
+    const rows = [
+      PW({ prospect_domain: 'restore.example', type: 'lost', source_url: 'https://restore.example/tools' }),
+      P({ prospect_domain: 'back.example', type: 'resource', status: 'lost', contacted_at: '2026-10-01T00:00:00.000Z', won_at: '2026-10-10T00:00:00.000Z', verified_at: '2026-11-01T00:00:00.000Z', note: 'won 2026-10-10, gone by 2026-11-01: their page no longer carries a link to you' }),
+      P({ prospect_domain: 'claim.example', type: 'resource', status: 'won', contacted_at: '2026-11-12T00:00:00.000Z', won_at: '2026-11-12T00:00:00.000Z', verified_at: '', note: person }),
+      P({ prospect_domain: 'claimfound.example', type: 'resource', status: 'won', contacted_at: '2026-11-12T00:00:00.000Z', won_at: '2026-11-12T00:00:00.000Z', verified_at: '', note: person }),
+      P({ prospect_domain: 'legacy.example', type: 'mention', status: 'won', won_at: '2026-10-20T00:00:00.000Z', note: person }),
+      P({ prospect_domain: 'stale.example', type: 'resource', status: 'linked', note: 'they link to you, but nobody was written to: not a link-building result' }),
+      P({ prospect_domain: 'goneaway.example', type: 'resource', status: 'linked' }),
+    ];
+    const led = (d, o) => LROW({ ref_domain: d, from_url: 'https://' + d + '/page', ...o });
+    const ledger = [
+      led('restore.example', { from_url: 'https://restore.example/tools', status: 'lost', verify: 'missing', lost_reason: 'link_removed', lost_at: '2026-11-01T00:00:00.000Z' }),
+      led('back.example', {}),
+      led('claimfound.example', {}),
+      led('stale.example', { verified_at: '2026-10-01T00:00:00.000Z', last_seen: '2026-11-16T00:00:00.000Z' }),
+      led('goneaway.example', { status: 'lost', verify: 'missing', lost_reason: 'link_removed' }),
+    ];
+    mock('Parse Backlinks', [{ json: { site_id: SID, domain: DOM, checked_at: NOW, link_builder: true, candidates: [], ledger_rows: ledger, refdomains: [] } }]);
+    mock('Load Link Prospects', items(rows));
+    mock('Outreach Input', [{ json: { skip: true } }]); mock('Outreach Writer', [{ json: {} }]);
+    const out = (await run('Prospect Rows', [{ json: {} }])).map(i => i.json);
+    const by = (d) => out.find(r => r.prospect_domain === d) || rows.find(r => r.prospect_domain === d);
+    console.log('   CR17E7 ->', J(out.map(r => [r.prospect_domain, r.status, r.verified_at, r.note.slice(0, 50)])));
+    check('M1: a restored link (won 10 Nov) is not lost by the loss we pitched about (1 Nov)', by('restore.example').status === 'won', J(by('restore.example')));
+    check('M1: a lost link our check finds again is won again', by('back.example').status === 'won' && /^won again/.test(by('back.example').note) && by('back.example').verified_at === NOW, J(by('back.example')));
+    check('M2: a person\'s Won with nothing found yet stays won (a claim), their note intact', by('claim.example').status === 'won' && by('claim.example').note === person && by('claim.example').verified_at === '', J(by('claim.example')));
+    const cf = by('claimfound.example');
+    check('M2: a claim our check confirms gets verified_at; the person\'s note kept, our line after it', cf.status === 'won' && cf.verified_at === NOW && cf.won_at === '2026-11-12T00:00:00.000Z' && cf.note.startsWith(person) && /Our check: won/.test(cf.note), J(cf));
+    const lg = by('legacy.example');
+    check('M2: a Won a person set before contacted_at was stamped, with their own note, is kept as their claim (never sent back to new)', lg.status === 'won' && lg.note === person && !!lg.contacted_at, J(lg));
+    check('L1: a site that links, read 48 days ago, stays "already links to you"', by('stale.example').status === 'linked', J(by('stale.example')));
+    check('L1: a site whose every ledger row is lost goes back to new', by('goneaway.example').status === 'new', J(by('goneaway.example')));
+  });
+
+  await guard('CR17E8 Site Admin prospect (FX-LINKS)', async () => {
+    reset(); const SN = 'CR17E8 (FX-LINKS) a person\'s Won / Replied stamps contacted_at; the app\'s own note goes after the person\'s'; begin(SN); const check = mkCheck(SN);
+    const person = 'Called them twice, Ana promised the link';
+    const stored = P({ prospect_domain: 'claim.example', type: 'resource', status: 'new', note: person });
+    const go = async (a) => { mock('Admin Action', [{ json: { site_id: SID, domain: DOM, prospect_domain: 'claim.example', prospect_type: 'resource', updated_at: NOW, note: null, ...a } }]); mock('Load Link Prospects (Admin)', items([stored])); return (await run('Prospect Rows (Admin)', [{ json: {} }]))[0].json; };
+    const w = await go({ prospect_status: 'won' });
+    check('Won from the Backlinks page: contacted_at stamped (their claim), won_at set, the note untouched', w.status === 'won' && w.contacted_at === NOW && w.won_at === NOW && w.note === person, J(w));
+    const r = await go({ prospect_status: 'replied', note: 'you said the link is live: our check reads their page in the next weekly run and counts it won when it finds it', note_mode: 'system' });
+    check('the app\'s line (note_mode system) goes after the person\'s note, never over it', r.note.startsWith(person) && /Our check: you said the link is live/.test(r.note) && r.contacted_at === NOW, J(r));
+    const t = await go({ prospect_status: 'contacted', note: 'New note typed by the person' });
+    check('a note the person types replaces the note (their own edit)', t.note === 'New note typed by the person', J(t));
+  });
+
+  await guard('CR17E9 LB re-checks claims and lost links (FX-LINKS)', async () => {
+    reset(); const SN = 'CR17E9 (FX-LINKS) the Link Builder reads unconfirmed claims and lost links as claims, within its budget; a lost link found again is won again; the outreach row keeps its keys'; begin(SN); const check = mkCheck(SN);
+    const plan = { site_id: SID, domain: DOM, competitors: [], ai_rivals: [], qualify_max: 0, home: D + '/', topics: [], profile: {}, due: {}, brand: 'Devaicon', country_iso: 'PK' };
+    const pr = [
+      P({ prospect_domain: 'verified.example', type: 'resource', status: 'won', contacted_at: '2026-10-01T00:00:00.000Z', won_at: '2026-10-10T00:00:00.000Z', verified_at: '2026-10-10T00:00:00.000Z' }),
+      P({ prospect_domain: 'claim.example', type: 'resource', status: 'won', contacted_at: '2026-11-12T00:00:00.000Z', won_at: '2026-11-12T00:00:00.000Z', verified_at: '' }),
+      P({ prospect_domain: 'lostone.example', type: 'resource', status: 'lost', contacted_at: '2026-09-01T00:00:00.000Z', won_at: '2026-09-10T00:00:00.000Z', verified_at: '2026-11-01T00:00:00.000Z' }),
+      ...Array.from({ length: 7 }, (_, i) => P({ prospect_domain: 'lost' + i + '.example', type: 'resource', status: 'lost', contacted_at: '2026-09-01T00:00:00.000Z', won_at: '2026-09-10T00:00:00.000Z', verified_at: '2026-11-01T00:00:00.000Z' })),
+    ];
+    mock('LB Plan', [{ json: plan }]); mock('Load Link Prospects', items(pr)); mock('Load Link Outreach', items([])); mock('Load Backlinks', items([]));
+    for (const n of ['LB Source Requests', 'Fetch LB Sources', 'LB DFS Requests', 'Run LB DFS']) mock(n, items([]));
+    const q = (await run('LB Page Requests', [{ json: {} }])).map(i => i.json).filter(x => x.kind === 'won' || x.kind === 'claim');
+    const k = (d) => (q.find(x => x.prospect_domain === d) || {}).kind;
+    console.log('   CR17E9 queue ->', J(q.map(x => [x.prospect_domain, x.kind])));
+    check('a confirmed win is read as won; a claim and a lost link we wrote to are read as claims', k('verified.example') === 'won' && k('claim.example') === 'claim', J(q));
+    check('lost links are read within the budget: at most 4 a run, after the wins and claims', q.filter(x => /^lost/.test(x.prospect_domain)).length === 4 && q.length <= 12, J(q.map(x => x.prospect_domain)));
+    // LB Assemble: the lost link is found again on a page with no stored outreach row (a site contacted outside the Link Builder)
+    const lp = { site_id: SID, domain: DOM, email: '', callback_url: '', request_id: 'fx', on_demand: true, free_only: false, competitors: [], serp_rivals: [], ai_rivals: [], topics: ['open edx'], services: ['Open edX Services'], pages: [{ url: D + '/', title: 'Devaicon', keyword: 'Devaicon', kind: 'home' }], home: D + '/',
+      profile: { business_type: 'software' }, brand: 'Devaicon', brand_known: true, brand_names: ['Devaicon'], country: 'Pakistan', country_iso: 'PK', language_code: 'en', accreditation: '', budget: 10, due: { listings: false }, state: {} };
+    const person = 'Their editor Omar said he will put it back';
+    const lostP = { ...pr[2], note: person };
+    mock('LB Plan', [{ json: lp }]);
+    mock('Load Link Prospects', items([lostP, pr[1]])); mock('Load Link Outreach', items([])); mock('Load AIR Kill (LB)', items([])); mock('Load Monitors', items([{ site_id: SID, domain: DOM }]));
+    for (const n of ['Load Listings', 'Load Backlinks', 'Load Link Impact', 'Load Query History', 'Load Content Log', 'LB Source Requests', 'Fetch LB Sources', 'LB Second Requests', 'Fetch LB Second', 'LB DFS Requests', 'Run LB DFS']) mock(n, items([]));
+    const html = (u) => ({ statusCode: 200, headers: { 'content-type': 'text/html' }, data: '<html lang="en"><head><title>Open edX hosting guide</title></head><body><main><h1>Open edX hosting guide</h1><p>Good Open edX hosting firms: <a href="' + u + '">Devaicon</a> runs Open edX for universities.</p></main></body></html>' });
+    mock('LB Page Requests', [{ json: { site_id: SID, kind: 'claim', url: 'https://lostone.example/guide', prospect_domain: 'lostone.example', type: 'resource', won_at: '2026-09-10T00:00:00.000Z', contacted_at: '2026-09-01T00:00:00.000Z' } }, { json: { site_id: SID, kind: 'claim', url: 'https://claim.example/list', prospect_domain: 'claim.example', type: 'resource', won_at: '2026-11-12T00:00:00.000Z', contacted_at: '2026-11-12T00:00:00.000Z' } }]);
+    mock('Fetch LB Pages', [html(D + '/capabilities/open-edx-services'), html(D + '/')]);
+    const A = (await run('LB Assemble', [{ json: {} }]))[0].json;
+    const po = (A.prospect_rows || []); const oo = (A.outreach_rows || []);
+    const lo = po.find(r => r.prospect_domain === 'lostone.example') || {}; const cl = po.find(r => r.prospect_domain === 'claim.example') || {};
+    console.log('   CR17E9 assemble ->', J(po.map(r => [r.prospect_domain, r.status, r.won_at, r.verified_at, String(r.note).slice(0, 60)])), J(oo.map(o => [o.prospect_domain, o.type])));
+    check('M1: a lost link found again on their page is won again; the person\'s note kept', lo.status === 'won' && !!lo.verified_at && lo.note.startsWith(person) && /won again/.test(lo.note), J(lo));
+    check('M2: a claim our reading confirms keeps the date the person marked it won, and gets verified_at', cl.status === 'won' && cl.won_at === '2026-11-12T00:00:00.000Z' && !!cl.verified_at, J(cl));
+    check('L2: the outreach row of a win with no stored row carries its own site / prospect / type keys', oo.length >= 2 && oo.every(o => o.site_id && o.prospect_domain && o.type), J(oo.map(o => [o.site_id, o.prospect_domain, o.type])));
+    const W = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'workflows', 'SEO_Agent_Link_Builder.json'), 'utf8')); const wf = Array.isArray(W) ? W[0] : W;
+    const oc = ((wf.nodes.find(n => n.name === 'Outreach Rows') || {}).parameters || {}).jsCode || '';
+    check('L2: the outreach sink never writes a row without its upsert keys', /String\(r\.prospect_domain \?\? ''\)\.trim\(\) !== ''/.test(oc) && /String\(r\.type \?\? ''\)\.trim\(\) !== ''/.test(oc), oc.slice(0, 300));
   });
 };

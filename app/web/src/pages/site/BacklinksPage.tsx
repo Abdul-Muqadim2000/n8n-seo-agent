@@ -921,7 +921,7 @@ const STATUS_LABEL: Record<ProspectStatus, string> = { new: 'New', contacted: 'C
 // a website the Link Builder left out is "not a fit"); rows without it keep their stored status
 const statusOf = (p: Prospect): ProspectStatus => {
   const ls = p.linkState;
-  if (ls) return ls === 'won' ? 'won' : ls === 'sent' || ls === 'approved' ? 'contacted' : ls === 'replied' ? 'replied' : ls === 'declined' ? (p.status === 'ignored' ? 'ignored' : 'rejected') : ls === 'left_out' || ls === 'already_links' || ls === 'low_value' || ls === 'lost' ? 'ignored' : 'new';
+  if (ls) return ls === 'won' || ls === 'claimed' ? 'won' : ls === 'sent' || ls === 'approved' ? 'contacted' : ls === 'replied' ? 'replied' : ls === 'declined' ? (p.status === 'ignored' ? 'ignored' : 'rejected') : ls === 'left_out' || ls === 'already_links' || ls === 'low_value' || ls === 'lost' ? 'ignored' : 'new';
   return (PROSPECT_STATUSES as readonly string[]).includes(p.status) ? (p.status as ProspectStatus) : 'new';
 };
 
@@ -998,7 +998,7 @@ function ProspectCard({ p, onOpen }: { p: Prospect; onOpen: () => void }) {
             <ExternalLink href={`https://${p.prospectDomain}`} className="text-sm font-semibold text-ink">
               {p.prospectDomain}
             </ExternalLink>
-            {st === 'won' ? <StatusBadge tone="good">Won{p.wonAt ? ` ${fmtDate(p.wonAt)}` : ''}</StatusBadge> : st !== 'new' ? <Badge>{STATUS_LABEL[st]}</Badge> : null}
+            {st === 'won' && p.linkState === 'claimed' ? <StatusBadge tone="accent">You marked it won: checking</StatusBadge> : st === 'won' ? <StatusBadge tone="good">Won{p.wonAt ? ` ${fmtDate(p.wonAt)}` : ''}</StatusBadge> : st !== 'new' ? <Badge>{STATUS_LABEL[st]}</Badge> : null}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             <Kind>{typeLabel(p.type)}</Kind>

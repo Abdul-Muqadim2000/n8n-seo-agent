@@ -35,7 +35,7 @@ export const ANCHOR_INFO =
   'We never ask for a keyword as the link text: Google names optimised link text in requested links as link spam. Your brand or the page\'s title is what an editor would write anyway.';
 
 export function SequenceBadge({ status }: { status: SequenceStatus }) {
-  const tone: Tone = status === 'won' ? 'good' : status === 'replied' ? 'accent' : status === 'paused' ? 'warning' : status === 'bounced' || status === 'failed' ? 'critical' : 'neutral';
+  const tone: Tone = status === 'won' ? 'good' : status === 'replied' || status === 'claimed' ? 'accent' : status === 'paused' ? 'warning' : status === 'bounced' || status === 'failed' ? 'critical' : 'neutral';
   return tone === 'neutral' ? <Badge>{SEQUENCE_LABEL[status] ?? titleCase(status)}</Badge> : <StatusBadge tone={tone}>{SEQUENCE_LABEL[status] ?? titleCase(status)}</StatusBadge>;
 }
 

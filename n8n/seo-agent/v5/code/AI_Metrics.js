@@ -20,6 +20,12 @@ const HEAD_RULE = 'f08';
 // alert rule. A pulse morning stored under another entity rule still counts for "named in" and "cited", but its competitors are left out (the
 // share of voice counts only answers whose businesses were recorded under this rule). Read after the AI_ENTITIES kit is inlined (AIE.RULE).
 const entRuleOf = () => (typeof AIE === 'object' && AIE && AIE.RULE) || 'f53';
+// FX-LINKS (review R2 L6, 2026-11-18): the "new baseline" sentence says what changed between the earlier week's rule and this one, rule by rule
+// (F-53, then CR17-F's c17f); a rule this file does not know yet keeps the latest sentence
+const ENT_RULES = [['f53', 'a competitor is now a business an answer names, not a heading, a price, a place or a regulator'], ['c17f', 'software makers and the platform you build on are no longer counted as competitors']];
+const entRuleWhy = (prevRule) => { const ids = ENT_RULES.map(r => r[0]); const now = ids.indexOf(entRuleOf()); const was = ids.indexOf(String(prevRule || ''));
+  const upto = now < 0 ? ENT_RULES.length - 1 : now; const from = was < 0 || was > upto ? 0 : was + 1;
+  const said = ENT_RULES.slice(from, upto + 1).map(r => r[1]); return (said.length ? said : [ENT_RULES[upto][1]]).join('; '); };
 const w2read = (n) => { try { return $(n).all().map(i => i.json).filter(Boolean); } catch (e) { return []; } };   // W2-E2: the loads and the Sentiment Reader, read defensively
 /*__AI_ENTITIES__*/
 /*__AI_QUESTION__*/
@@ -476,7 +482,7 @@ return plans.map(p => {
   const same_rule = prev ? (String(prev.rule_version || '') === AVM.RULE_VERSION ? (pulse_off_panel && !(prev.stats && prev.stats.headline_rule === HEAD_RULE)
       ? { comparable: false, why: 'measurement rule changed: this week starts a new baseline (the headline now counts the daily pulse answers to this week\'s questions only; ' + pulse_off_panel.answers + ' answer(s) to questions no longer on the panel were left out, and the earlier week counted such answers)' }
       : !(prev.stats && prev.stats.entity_rule === entRuleOf())   // FX-B RB-1: F-53's entity rule
-        ? { comparable: false, why: 'measurement rule changed: this week starts a new baseline (a competitor is now a business an answer names, not a heading, a price, a place or a regulator, so share of voice, your place among the businesses named and the competitor table are counted afresh)' }
+        ? { comparable: false, why: 'measurement rule changed: this week starts a new baseline (' + entRuleWhy(prev.stats && prev.stats.entity_rule) + ', so share of voice, your place among the businesses named and the competitor table are counted afresh)' }
       : { comparable: true, why: '' })
     : { comparable: false, why: 'measurement rule changed: this week starts a new baseline (from ' + AVM.RULE_VERSION.replace(/^aivis-/, '') + ' "named in" counts the answers that name you, not the ones that only cite a page, and share of voice counts every competitor named)' }) : null;
   // R-E6 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): the daily pulse's answers join the headline, so the engines the pulse asks

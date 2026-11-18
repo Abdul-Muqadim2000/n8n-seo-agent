@@ -15,6 +15,7 @@ import {
   mailboxPatchSchema,
   mailboxSchema,
   n8nSiteId,
+  OPEN_SEQUENCE_STATUSES,
   sequenceOutcomeSchema,
   sequencePatchSchema,
   sequenceReplySchema,
@@ -296,8 +297,13 @@ export async function linkBuilderRoutes(app: FastifyInstance) {
     const p = req.params as P; const { org, site } = await siteAccess(req, p.orgId, p.siteId, 'member');
     const q = await sequenceFor(org, site, p.id); const b = parse(sequenceOutcomeSchema, req.body);
     // CR17-E (195): "they linked" is a claim until our own check finds the link on their page (LK.wonCheck, the engine's weekly read of
-    // the sites we wrote to): the conversation becomes "says the link is live" and the prospect "replied"; the engine marks it won
-    if (b.status === 'won') await updateSequence(q, { status: 'replied', replyClass: q.replyClass ?? 'says_linked', replyAt: q.replyAt ?? new Date(), nextAt: null });
+    // the sites we wrote to): the prospect becomes "replied" (a site we wrote to: read every week) and the engine marks it won.
+    // FX-LINKS (review R2 M5): the conversation is CLAIMED, not a reply waiting for an answer (that left a high-priority "reply waiting" for
+    // ever); it becomes won when our check finds the link (settleWonSequences)
+    if (b.status === 'won') {
+      if (!(OPEN_SEQUENCE_STATUSES as readonly string[]).includes(q.status)) throw new HttpError(409, 'This conversation has ended.');
+      await updateSequence(q, { status: 'claimed', replyClass: q.replyClass ?? 'says_linked', nextAt: null });
+    }
     else await updateSequence(q, { status: 'stopped', error: 'Marked not a fit', nextAt: null });
     await setProspectStatus(site.domain, q.prospectDomain, q.prospectType, b.status === 'won' ? 'replied' : b.status, b.status === 'won' ? 'you said the link is live: our check reads their page in the next weekly run and counts it won when it finds it' : 'not a fit (marked in the app)', req.log);
     return { ok: true };

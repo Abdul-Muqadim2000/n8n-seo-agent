@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { CircleSlash, Clock, Copy, ExternalLink as ExternalIcon, FileText, Mail, MailCheck, Send, ShieldCheck, UserRound } from 'lucide-react';
-import { addWorkingDays, consentGate, footerLines, leftOutWords, replySubject, type LinkBuildingData, type MailboxView, type OutreachDraft, type OutreachStep } from '@seo/shared';
+import { addWorkingDays, consentGate, footerLines, leftOutWords, manualConsentGate, replySubject, type LinkBuildingData, type MailboxView, type OutreachDraft, type OutreachStep } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { errorMessage, toastError } from '@/lib/api';
 import { paths } from '@/lib/paths';
@@ -116,11 +116,16 @@ export function manualText(x: OutreachDraft, d: Pick<LinkBuildingData, 'brand'>)
   return { subject: first?.subject ?? '', body: [(first?.body ?? '').trim(), ...lines].join('\n') };
 }
 
-/** CR17-E (C4a): Copy, Open in your e-mail, I sent it myself - every written pitch can be used without a connected mailbox */
+/** CR17-E (C4a): Copy, Open in your e-mail, I sent it myself - every written pitch can be used without a connected mailbox.
+ *  FX-LINKS (review R2 M4): the same rules as approve: a pitch held for an edit is not recorded as sent, and a recipient the law protects
+ *  (Germany, Austria, Saudi Arabia, a named person in the UAE) needs the consent tick first. */
 function ManualSend({ x, d }: { x: OutreachDraft; d: LinkBuildingData }) {
   const { org, site } = useSitePage();
   const sent = useManualSent(org.id, site.id);
+  const [consent, setConsent] = useState(false);
   const to = x.contacts[0]?.email ?? '';
+  const gate = manualConsentGate(x.country, to);
+  const held = x.status === 'needs_edit';
   const t = manualText(x, d);
   const copy = async () => {
     try { await navigator.clipboard.writeText(`Subject: ${t.subject}\n\n${t.body}`); toast.success('Pitch copied: fill in the [brackets] before you send it'); } catch { toast.error('Copying is blocked in this browser: open it in your e-mail instead'); }
@@ -128,7 +133,7 @@ function ManualSend({ x, d }: { x: OutreachDraft; d: LinkBuildingData }) {
   const mailto = `mailto:${to}?subject=${encodeURIComponent(t.subject)}&body=${encodeURIComponent(t.body)}`;
   const mark = () =>
     sent.mutate(
-      { prospectDomain: x.prospectDomain, type: x.type, toEmail: to },
+      { prospectDomain: x.prospectDomain, type: x.type, toEmail: to, ...(gate.needed ? { consent } : {}) },
       {
         onSuccess: () => {
           const wait = x.steps[1]?.waitDays;
@@ -148,9 +153,16 @@ function ManualSend({ x, d }: { x: OutreachDraft; d: LinkBuildingData }) {
           Open in your e-mail
         </a>
       )}
-      <Button size="sm" variant="ghost" icon={<MailCheck className="size-3.5" />} loading={sent.isPending} onClick={mark}>
-        I sent it myself
-      </Button>
+      {!held && gate.needed && (
+        <Checkbox className="basis-full" checked={consent} onChange={(e) => setConsent(e.target.checked)} label="I have their consent or we already work together" />
+      )}
+      {held ? (
+        <span className="basis-full text-xs text-ink-3">Fix what this pitch says before you send it.</span>
+      ) : (
+        <Button size="sm" variant="ghost" icon={<MailCheck className="size-3.5" />} loading={sent.isPending} disabled={gate.needed && !consent} onClick={mark}>
+          I sent it myself
+        </Button>
+      )}
     </>
   );
 }

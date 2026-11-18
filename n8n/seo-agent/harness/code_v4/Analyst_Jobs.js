@@ -367,8 +367,18 @@ const CMP = (() => {
     const o = o0 || {}; const own = host(o.own_domain); const max = Math.max(1, Number(o.max) || 5);
     const rows = (Array.isArray(o.ki_rows) ? o.ki_rows : []).filter(r => r && r.comp_domain && (!o.site_id || !r.site_id || S(r.site_id) === S(o.site_id)));
     const st = (r) => S(r.status).toLowerCase();
-    const chosen = [...new Set(rows.filter(r => st(r) === 'chosen').map(r => host(r.comp_domain)))];
-    const off = new Set([...listOfH(o.not_competitors), ...rows.filter(r => st(r) === 'not_competitor' || (st(r) === 'dismissed' && S(r.status_by) === 'user')).map(r => host(r.comp_domain))]);
+    // FX-LINKS (review R2 M3, 2026-11-18): the client's LATEST decision on a domain wins, whichever row holds it (the market-less row of
+    // "Not a competitor" on AI visibility, or a market row of the Competitors page). Site Admin now writes every row of the domain at once;
+    // this keeps rows written before that consistent too. A domain with no decision of the client keeps the old rule.
+    const at = (r) => { const t = Date.parse(S(r.updated_at)); return Number.isFinite(t) ? t : 0; };
+    const latest = new Map();
+    for (const r of rows) { if (S(r.status_by) !== 'user' || !['chosen', 'watch', 'dismissed', 'not_competitor'].includes(st(r))) continue;
+      const d = host(r.comp_domain); const was = latest.get(d); const offR = ['dismissed', 'not_competitor'].includes(st(r));
+      if (!was || at(r) > at(was) || (at(r) === at(was) && offR && !['dismissed', 'not_competitor'].includes(st(was)))) latest.set(d, r); }   // same time (or none): "not a competitor" wins, as before
+    const decided = (d) => latest.has(d) ? st(latest.get(d)) : '';
+    const chosen = [...new Set(rows.filter(r => st(r) === 'chosen').map(r => host(r.comp_domain)))].filter(d => !decided(d) || decided(d) === 'chosen');
+    const offOf = (d) => decided(d) ? ['dismissed', 'not_competitor'].includes(decided(d)) : rows.some(r => host(r.comp_domain) === d && st(r) === 'not_competitor');
+    const off = new Set([...listOfH(o.not_competitors), ...[...new Set(rows.map(r => host(r.comp_domain)))].filter(offOf)]);   // the undated list (seo_monitors.not_competitors) has no time to compare: it stays off, as before
     const declared = listOfH(o.declared);
     const list = []; for (const d of [...declared, ...chosen]) { if (!d || (own && sameOrSub(d, own)) || off.has(d) || [...off].some(x => reg(x) === reg(d)) || list.includes(d)) continue; list.push(d); }
     return { list: list.slice(0, max), chosen, declared, removed: [...off] };

@@ -9,7 +9,9 @@ import {
   isRetiredProspect,
   linkStates,
   linkStatusCounts,
+  manualConsentGate,
   n8nSiteId,
+  OPEN_SEQUENCE_STATUSES,
   outreachRate,
   subjectAbStats,
   warmupCap,
@@ -58,6 +60,25 @@ export async function isSuppressed(orgId: string, email: string): Promise<string
     .where(and(eq(schema.suppressions.orgId, orgId), inArray(schema.suppressions.valueHash, [hashOf(orgId, e), hashOf(orgId, d)]))).limit(1);
   return hit[0] ? (hit[0].kind === 'domain' ? `${d} asked not to be contacted` : `this address asked not to be contacted (${hit[0].reason})`) : null;
 }
+/** FX-LINKS (review R2 M4): a website the company asked never to contact (a domain-level opt-out), whatever address or contact form is used */
+export async function isDomainSuppressed(orgId: string, domain: string): Promise<string | null> {
+  const d = domain.trim().toLowerCase().replace(/^www\./, '');
+  if (!d) return null;
+  const hit = await db.select({ kind: schema.suppressions.kind }).from(schema.suppressions)
+    .where(and(eq(schema.suppressions.orgId, orgId), eq(schema.suppressions.kind, 'domain'), eq(schema.suppressions.valueHash, hashOf(orgId, d)))).limit(1);
+  return hit[0] ? `${d} asked not to be contacted` : null;
+}
+/** FX-LINKS (review R2 M4): one lock per company around "may a new conversation start?" and its insert (two clicks, two tabs, the sender) */
+const outreachLock = (tx: { execute: (q: ReturnType<typeof sql>) => Promise<unknown> }, orgId: string) => tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'alaventra.outreach:' + orgId}))`);
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+/** the rules every new conversation with a site follows (approve and "I sent it myself" alike): one at a time, and a rest after one that
+ *  ended without a reply. Runs inside the company's lock. */
+async function conversationRules(tx: Tx, orgId: string, prospectDomain: string): Promise<void> {
+  const others = await tx.select().from(schema.outreachSequences).where(and(eq(schema.outreachSequences.orgId, orgId), eq(schema.outreachSequences.prospectDomain, prospectDomain)));
+  if (others.some((q) => (OPEN_SEQUENCE_STATUSES as readonly string[]).includes(q.status))) throw conflict(`A conversation with ${prospectDomain} is already going on.`);
+  const recent = others.find((q) => q.status === 'finished' && q.lastSentAt && Date.now() - q.lastSentAt.getTime() < 90 * 864e5);
+  if (recent) throw conflict(`${prospectDomain} got a sequence without a reply in the last 90 days: give it a rest.`);
+}
 export async function suppress(orgId: string, kind: 'email' | 'domain', value: string, reason: string) {
   const v = value.trim().toLowerCase(); if (!v) return;
   await db.insert(schema.suppressions).values({ orgId, kind, valueHash: hashOf(orgId, v), hint: kind === 'email' ? maskEmail(v) : v, reason: reason.slice(0, 120) }).onConflictDoNothing();
@@ -66,7 +87,8 @@ export async function suppress(orgId: string, kind: 'email' | 'domain', value: s
 /** The prospect's status in the SEO engine follows the conversation (contacted / replied / won / rejected); a failure is logged, never fatal. */
 export async function setProspectStatus(domain: string, prospectDomain: string, type: string, status: 'contacted' | 'replied' | 'won' | 'rejected', note?: string, log?: { warn: (o: object, m: string) => void }) {
   try {
-    await siteAdmin({ action: 'prospect', domain, site_id: n8nSiteId(domain), prospect_domain: prospectDomain, type, status, ...(note ? { note } : {}), request_id: `app-outreach-${Date.now().toString(36)}` });
+    // FX-LINKS (review R2 M2): the app's own line goes after a note the person wrote (note_mode system), never over it
+    await siteAdmin({ action: 'prospect', domain, site_id: n8nSiteId(domain), prospect_domain: prospectDomain, type, status, ...(note ? { note, note_mode: 'system' } : {}), request_id: `app-outreach-${Date.now().toString(36)}` });
   } catch (err) {
     log?.warn({ err: String(err), prospectDomain, status }, 'prospect status not updated in n8n');
   }
@@ -105,6 +127,26 @@ export async function sequencesOf(siteId: string): Promise<OutreachSequence[]> {
     approvedAt: iso(q.approvedAt), startedAt: iso(q.startedAt), lastSentAt: iso(q.lastSentAt), targetUrl: q.targetUrl, pageUrl: q.pageUrl, replyAt: iso(q.replyAt), replyClass: (q.replyClass as ReplyClass | null) ?? null,
     replySummary: q.replySummary, suggestedReply: q.suggestedReply, replyFrom: q.replyFrom, oooUntil: iso(q.oooUntil), wonAt: iso(q.wonAt), error: q.error, manual: q.manual,
     messages: msgs.filter((m) => m.sequenceId === q.id).map((m) => ({ id: m.id, direction: m.direction as 'out' | 'in', step: m.step, kind: m.kind, subject: m.subject, body: m.body.slice(0, 6000), from: m.fromEmail, to: m.toEmail, at: m.at.toISOString(), error: m.error })) }));
+}
+
+/**
+ * FX-LINKS (review R2 M5): a conversation ends as WON when our check has found the link on their page (the engine's prospect row: won, with
+ * verified_at, and we wrote to them). A "Mark won" (claimed), a reply saying it is live, or a pitch still sending its follow-ups all close here,
+ * so no reply waits for ever and no follow-up goes to a site that already links. Idempotent; returns the sequences as they are now.
+ */
+export async function settleWonSequences(seqs: OutreachSequence[], prospects: readonly ProspectRow[]): Promise<OutreachSequence[]> {
+  const key = (d: string, t: string) => `${d.toLowerCase()}|${t}`;
+  const won = new Map(prospects.filter((p) => s(p.status) === 'won' && s(p.verified_at) && s(p.contacted_at)).map((p) => [key(s(p.prospect_domain), s(p.type)), s(p.verified_at)] as const));
+  const open = seqs.filter((q) => (OPEN_SEQUENCE_STATUSES as readonly string[]).includes(q.status) && won.has(key(q.prospectDomain, q.type)));
+  if (!open.length) return seqs;
+  const at = new Map<string, Date>();
+  for (const q of open) {
+    const t = Date.parse(won.get(key(q.prospectDomain, q.type))!); const wonAt = Number.isFinite(t) ? new Date(t) : new Date();
+    at.set(q.id, wonAt);
+    await db.update(schema.outreachSequences).set({ status: 'won', wonAt, nextAt: null, updatedAt: new Date() })
+      .where(and(eq(schema.outreachSequences.id, q.id), inArray(schema.outreachSequences.status, [...OPEN_SEQUENCE_STATUSES])));
+  }
+  return seqs.map((q) => (at.has(q.id) ? { ...q, status: 'won' as SequenceStatus, wonAt: at.get(q.id)!.toISOString(), nextAt: null } : q));
 }
 
 function kpisOf(seqs: OutreachSequence[], counts: LinkStatusCounts): LinkBuildingKpis {
@@ -155,9 +197,9 @@ export const firstOf = <T,>(key: (x: T) => string) => {
  *  warm-up start (5 a working day): 25 first e-mails a week per company, app and by hand together. */
 export const MANUAL_WEEKLY_LIMIT = 25;
 /** first e-mails of the company in the last 7 days (the app's sender and "I sent it myself" together) */
-export async function firstEmailsThisWeek(orgId: string, now = new Date()): Promise<number> {
+export async function firstEmailsThisWeek(orgId: string, now = new Date(), tx?: Tx): Promise<number> {
   const since = new Date(now.getTime() - 7 * 864e5);
-  const r = await db.select({ c: sql<number>`count(*)::int` }).from(schema.outreachMessages)
+  const r = await (tx ?? db).select({ c: sql<number>`count(*)::int` }).from(schema.outreachMessages)
     .where(and(eq(schema.outreachMessages.orgId, orgId), eq(schema.outreachMessages.direction, 'out'), eq(schema.outreachMessages.step, 0), eq(schema.outreachMessages.kind, 'step'), gte(schema.outreachMessages.at, since), sql`${schema.outreachMessages.error} is null`));
   return r[0]?.c ?? 0;
 }
@@ -182,12 +224,13 @@ export function linkStatusOf(outreach0: readonly LinkOutreachRow[], prospects0: 
 
 export async function linkBuildingData(org: OrgRow, site: SiteRow, role: Role): Promise<LinkBuildingData> {
   const d = site.domain;
-  const [outreach, prospects, listings, impact, mbs, seqs, supp, brand, weekFirst] = await Promise.all([
+  const [outreach, prospects, listings, impact, mbs, seqs0, supp, brand, weekFirst] = await Promise.all([
     siteRows<LinkOutreachRow>('linkOutreach', d, { max: 1500 }), siteRows<ProspectRow>('prospects', d, { max: 1500 }), siteRows<ListingRow>('listings', d, { max: 200 }), siteRows<LinkImpactRow>('linkImpact', d, { max: 300 }),
     db.select().from(schema.mailboxes).where(eq(schema.mailboxes.orgId, org.id)), sequencesOf(site.id),
     db.select({ c: sql<number>`count(*)::int` }).from(schema.suppressions).where(eq(schema.suppressions.orgId, org.id)),
     brandOf(d), firstEmailsThisWeek(org.id),
   ]);
+  const seqs = await settleWonSequences(seqs0, prospects).catch(() => seqs0);
   const settings = linkSettingsOf(site);
   const statusOf = new Map(prospects.map((p) => [s(p.prospect_domain) + '|' + s(p.type), s(p.status) || 'new']));
   // CR17-E (F9): one state per pitch (shared link-status.ts); the cards are the pitches before the first e-mail, and the sites left out
@@ -245,7 +288,7 @@ export async function approve(org: OrgRow, site: SiteRow, userId: string | null,
   if (!mb.postalAddress.trim()) throw new HttpError(409, 'Add your postal address to the mailbox first: every pitch must carry it.', 'no_address');
   const to = a.toEmail.trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(to)) throw badRequest('Choose a valid e-mail address.');
-  const supp = await isSuppressed(org.id, to); if (supp) throw new HttpError(409, `Not sent: ${supp}.`, 'suppressed');
+  const supp = (await isSuppressed(org.id, to)) ?? (await isDomainSuppressed(org.id, a.prospectDomain)); if (supp) throw new HttpError(409, `Not sent: ${supp}.`, 'suppressed');
   const rows = await siteRows<LinkOutreachRow>('linkOutreach', site.domain, { extra: [{ columnName: 'prospect_domain', condition: 'eq', value: a.prospectDomain }], fresh: true });
   const row = rows.find((r) => s(r.type) === a.type);
   if (!row) throw notFound(`${a.prospectDomain} is not in the link-building list.`);
@@ -265,16 +308,16 @@ export async function approve(org: OrgRow, site: SiteRow, userId: string | null,
   // L1: an address whose domain has no mail server would only bounce, and bounces cost the mailbox its reputation
   const mx = await mxCheck(to);
   if (!mx.ok) { await suppress(org.id, 'email', to, mx.via === 'none' ? 'no mail server for the domain (MX)' : 'not a valid address'); throw new HttpError(409, `Not sent: ${mx.reason}.`, 'no_mx'); }
-  // one conversation per site at a time, and a rest after one that ended without a reply
-  const others = await db.select().from(schema.outreachSequences).where(and(eq(schema.outreachSequences.orgId, org.id), eq(schema.outreachSequences.prospectDomain, a.prospectDomain)));
-  if (others.some((q) => ['scheduled', 'active', 'paused', 'replied'].includes(q.status))) throw conflict(`A conversation with ${a.prospectDomain} is already going on.`);
-  const recent = others.find((q) => q.status === 'finished' && q.lastSentAt && Date.now() - q.lastSentAt.getTime() < 90 * 864e5);
-  if (recent) throw conflict(`${a.prospectDomain} got a sequence without a reply in the last 90 days: give it a rest.`);
-  const [q] = await db.insert(schema.outreachSequences).values({ orgId: org.id, siteId: site.id, mailboxId: mb.id, prospectDomain: a.prospectDomain, prospectType: a.type, toEmail: to,
-    contactUrl: contactsOf(row).find((c) => c.email === to)?.sourceUrl ?? '', pageUrl: s(row.page_url), targetUrl: s(row.target_url), country: s(row.country), status: 'scheduled', step: 0, steps, nextAt: new Date(),
-    consent: !!a.consent, approvedBy: userId, approvedAt: new Date(),
-    subjectVariant: ['A', 'B'].includes(String(steps[0]?.variant ?? '').toUpperCase()) ? String(steps[0]!.variant).toUpperCase() : '' }).returning();   // L7: which subject style went out
-  return q!;
+  // one conversation per site at a time, and a rest after one that ended without a reply (FX-LINKS: checked and inserted under one lock)
+  return db.transaction(async (tx) => {
+    await outreachLock(tx, org.id);
+    await conversationRules(tx, org.id, a.prospectDomain);
+    const [q] = await tx.insert(schema.outreachSequences).values({ orgId: org.id, siteId: site.id, mailboxId: mb.id, prospectDomain: a.prospectDomain, prospectType: a.type, toEmail: to,
+      contactUrl: contactsOf(row).find((c) => c.email === to)?.sourceUrl ?? '', pageUrl: s(row.page_url), targetUrl: s(row.target_url), country: s(row.country), status: 'scheduled', step: 0, steps, nextAt: new Date(),
+      consent: !!a.consent, approvedBy: userId, approvedAt: new Date(),
+      subjectVariant: ['A', 'B'].includes(String(steps[0]?.variant ?? '').toUpperCase()) ? String(steps[0]!.variant).toUpperCase() : '' }).returning();   // L7: which subject style went out
+    return q!;
+  });
 }
 
 export async function sequenceFor(org: OrgRow, site: SiteRow, id: string): Promise<OutreachSequenceRow> {
@@ -315,28 +358,46 @@ export async function linkSummary(org: OrgRow, site: SiteRow): Promise<{ drafted
 // send it, and tell us: the sequence is recorded as MANUAL (the sender never sends in it), the follow-ups become reminders on the page on
 // the days the app would have sent them, the prospect is marked contacted (contacted_at), and the engine's won check reads their page
 // every week from then on (LK.wonCheck). It counts against the same weekly limit as the app's sender (MANUAL_WEEKLY_LIMIT).
-export interface ManualSentInput { prospectDomain: string; type: string; toEmail: string }
+export interface ManualSentInput { prospectDomain: string; type: string; toEmail: string; consent?: boolean }
+// FX-LINKS (review R2 M4, 2026-11-18): "I sent it myself" follows every rule the app's own sender follows: the consent rule (Germany,
+// Austria, Saudi Arabia, a named person in the UAE), the website's opt-out (by address and by domain, so a contact-form pitch is covered too),
+// one conversation per site and the 90-day rest, the draft gate (a pitch held for an edit is not recorded as sent), and the weekly limit,
+// counted and recorded under one lock per company so two clicks cannot both pass.
 export async function manualSent(org: OrgRow, site: SiteRow, userId: string | null, a: ManualSentInput, log?: { warn: (o: object, m: string) => void }): Promise<OutreachSequenceRow> {
   const rows = await siteRows<LinkOutreachRow>('linkOutreach', site.domain, { extra: [{ columnName: 'prospect_domain', condition: 'eq', value: a.prospectDomain }], fresh: true });
   const row = rows.find((r) => s(r.type) === a.type);
   if (!row) throw notFound(`${a.prospectDomain} is not in the link-building list.`);
-  if (!['drafted', 'needs_edit'].includes(s(row.status))) throw new HttpError(409, s(row.status) === 'not_fit' ? 'This site was left out: there is nothing to send.' : 'The pitch for this site is not written yet.', 'not_written');
+  if (s(row.status) === 'needs_edit') throw new HttpError(409, 'This pitch is held for your edit: fix what it says first, then send it.', 'draft_held');
+  if (s(row.status) !== 'drafted') throw new HttpError(409, s(row.status) === 'not_fit' ? 'This site was left out: there is nothing to send.' : 'The pitch for this site is not written yet.', 'not_written');
   const steps = stepsOf(row).slice(0, 3);
   if (!steps.length) throw new HttpError(409, 'The pitch for this site is not written yet.', 'not_written');
   const to = a.toEmail.trim().toLowerCase();
-  if (to) { const supp = await isSuppressed(org.id, to); if (supp) throw new HttpError(409, `Not recorded: ${supp}.`, 'suppressed'); }
-  const others = await db.select().from(schema.outreachSequences).where(and(eq(schema.outreachSequences.orgId, org.id), eq(schema.outreachSequences.prospectDomain, a.prospectDomain)));
-  if (others.some((q) => ['scheduled', 'active', 'paused', 'replied'].includes(q.status))) throw conflict(`A conversation with ${a.prospectDomain} is already going on.`);
-  const week = await firstEmailsThisWeek(org.id);
-  if (week >= MANUAL_WEEKLY_LIMIT) throw new HttpError(409, `${week} first e-mails went out this week, the weekly limit is ${MANUAL_WEEKLY_LIMIT}: send this one next week.`, 'weekly_limit');
-  const now = new Date();
-  const next = steps.length > 1 ? addWorkingDays(now, Math.max(2, steps[1]!.waitDays || 4)) : addWorkingDays(now, 7);
-  const [q] = await db.insert(schema.outreachSequences).values({ orgId: org.id, siteId: site.id, mailboxId: null, prospectDomain: a.prospectDomain, prospectType: a.type, toEmail: to || '',
-    contactUrl: to ? (contactsOf(row).find((c) => c.email === to)?.sourceUrl ?? '') : s(row.contact_form_url), pageUrl: s(row.page_url), targetUrl: s(row.target_url), country: s(row.country), status: 'active', step: 1, steps,
-    nextAt: next, approvedBy: userId, approvedAt: now, startedAt: now, lastSentAt: now, manual: true }).returning();
-  await db.insert(schema.outreachMessages).values({ sequenceId: q!.id, orgId: org.id, mailboxId: null, direction: 'out', step: 0, kind: 'step', subject: steps[0]!.subject.slice(0, 300), body: steps[0]!.body, toEmail: to, at: now });
+  const gate = manualConsentGate(s(row.country), to);
+  if (gate.needed && !a.consent) throw new HttpError(409, gate.why + ' Tick "I have their consent or we already work together" to record it.', 'consent_needed');
+  const supp = (to ? await isSuppressed(org.id, to) : null) ?? (await isDomainSuppressed(org.id, a.prospectDomain));
+  if (supp) throw new HttpError(409, `Not recorded: ${supp}.`, 'suppressed');
+  const ck = json<{ dead?: { url?: string; anchor?: string } }>(row.checks_json, {}) || {};
+  // the draft gate on the text as written (a contact form has no address: the address checks are the form's, on their own site)
+  const qa = draftGate(
+    { type: a.type, steps: steps.map((x) => ({ subject: x.subject, body: x.body })), to: to || `editor@${a.prospectDomain}`, prospectDomain: a.prospectDomain, pageUrl: s(row.page_url), pageTitle: s(row.page_title), evidence: s(row.evidence), deadAnchor: s(ck.dead?.anchor), deadUrl: s(ck.dead?.url) },
+    { domain: site.domain, targetUrl: s(row.target_url) },
+  );
+  if (!qa.ok) throw new HttpError(409, `This pitch is held: ${qa.held.join('; ')}.`, 'draft_held');
+  const q = await db.transaction(async (tx) => {
+    await outreachLock(tx, org.id);
+    await conversationRules(tx, org.id, a.prospectDomain);
+    const week = await firstEmailsThisWeek(org.id, new Date(), tx);
+    if (week >= MANUAL_WEEKLY_LIMIT) throw new HttpError(409, `${week} first e-mails went out this week, the weekly limit is ${MANUAL_WEEKLY_LIMIT}: send this one next week.`, 'weekly_limit');
+    const now = new Date();
+    const next = steps.length > 1 ? addWorkingDays(now, Math.max(2, steps[1]!.waitDays || 4)) : addWorkingDays(now, 7);
+    const [ins] = await tx.insert(schema.outreachSequences).values({ orgId: org.id, siteId: site.id, mailboxId: null, prospectDomain: a.prospectDomain, prospectType: a.type, toEmail: to || '',
+      contactUrl: to ? (contactsOf(row).find((c) => c.email === to)?.sourceUrl ?? '') : s(row.contact_form_url), pageUrl: s(row.page_url), targetUrl: s(row.target_url), country: s(row.country), status: 'active', step: 1, steps,
+      nextAt: next, consent: !!a.consent, approvedBy: userId, approvedAt: now, startedAt: now, lastSentAt: now, manual: true }).returning();
+    await tx.insert(schema.outreachMessages).values({ sequenceId: ins!.id, orgId: org.id, mailboxId: null, direction: 'out', step: 0, kind: 'step', subject: steps[0]!.subject.slice(0, 300), body: steps[0]!.body, toEmail: to, at: now });
+    return ins!;
+  });
   await setProspectStatus(site.domain, a.prospectDomain, a.type, 'contacted', 'sent by you from your own e-mail (marked in the app)', log);
-  return q!;
+  return q;
 }
 /** a follow-up of a manual sequence that the person sent themselves: the next reminder, or the end of the sequence */
 export async function manualFollowupSent(q: OutreachSequenceRow): Promise<void> {

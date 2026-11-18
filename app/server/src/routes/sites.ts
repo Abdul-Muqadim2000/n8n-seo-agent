@@ -57,7 +57,7 @@ import { fetchPublicText, verify } from '../services/verify';
 import { checkIndexnowStep } from '../services/siteTasks';
 import { invalidateKi } from '../services/ki';
 import { engineIdIsOwn, purgeEngineHistory } from '../services/enginePurge';
-import { syncSettingsCompetitors } from '../services/kiData';
+import { settingsDeclaredPart, syncSettingsCompetitors } from '../services/kiData';
 import { deleteAiPrompts, importAiReport } from '../services/aiWave2';
 import { aiPilotState, startAiPilot } from '../services/aiPilot';
 import { checkBingAccess } from '../services/bingCheck';
@@ -645,7 +645,8 @@ export async function siteRoutes(app: FastifyInstance) {
         // RC-4 (review C, 2026-11-06): until the owner opens AI ranking to clients (AI_RANK_OPEN_TO_CLIENTS), only a platform admin sets the
         // mode (Trial / On) and the reserved slot; a company owner or admin sees it read-only
         if (a.aiRank && Object.keys(a.aiRank).length && !aiRankMayChange(a.aiRank, isPlatformAdmin(user))) throw new HttpError(403, `${AI_RANK_ROLLOUT_NOTE} Until then only our team can switch it on.`, 'forbidden');
-        body = { ...base, action: 'monitors', monitors: { ...siteAdminMonitorsBody(a.monitors, a.competitors), ...aiRankBody(a.aiRank) } };
+        // FX-LINKS (review R2 L4): only the declared part of the one list is stored as the website's own list (Competitors page choices stay there)
+        body = { ...base, action: 'monitors', monitors: { ...siteAdminMonitorsBody(a.monitors, a.competitors ? await settingsDeclaredPart(site, a.competitors) : a.competitors), ...aiRankBody(a.aiRank) } };
         break;
       }
       case 'prospect':

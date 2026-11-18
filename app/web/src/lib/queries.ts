@@ -880,9 +880,9 @@ export function useDismissOutreach(orgId: string, siteId: string) {
   });
 }
 
-/** CR17-E (C4a): "I sent it myself" - the person sent the pitch from their own mail: the app records it, the follow-ups become reminders, the won check reads their page. 409 codes: not_written, suppressed, weekly_limit. */
+/** CR17-E (C4a): "I sent it myself" - the person sent the pitch from their own mail: the app records it, the follow-ups become reminders, the won check reads their page. 409 codes: not_written, draft_held, consent_needed, suppressed, weekly_limit (FX-LINKS: the same rules as approve). */
 export const useManualSent = (orgId: string, siteId: string) =>
-  useLinkMutation<{ prospectDomain: string; type: string; toEmail: string }, { ok: boolean; id: string }>(orgId, siteId, (body) => ({ method: 'POST', path: '/manual-sent', body }));
+  useLinkMutation<{ prospectDomain: string; type: string; toEmail: string; consent?: boolean }, { ok: boolean; id: string }>(orgId, siteId, (body) => ({ method: 'POST', path: '/manual-sent', body }));
 
 /** CR17-E: the next follow-up of a pitch the person sends themselves went out. */
 export const useManualFollowupSent = (orgId: string, siteId: string) =>

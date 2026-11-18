@@ -54,18 +54,19 @@ export const COMPETITOR_ROLE_LABELS: Record<CompetitorRole, string> = {
 export function competitorList(o: {
   domain: string;
   declared: readonly string[];
-  kiRows: readonly { compDomain: string; status: string; statusBy?: string }[];
+  /** FX-LINKS (review R2 M3): `market` and `updatedAt` let the client's latest decision on a domain win, whichever row holds it */
+  kiRows: readonly { compDomain: string; status: string; statusBy?: string; market?: string; updatedAt?: string }[];
   notCompetitors: readonly string[];
   max?: number;
-}): { list: string[]; removed: string[] } {
+}): { list: string[]; removed: string[]; chosen: string[] } {
   const r = CMP.oneList({
     own_domain: o.domain,
     declared: [...o.declared],
-    ki_rows: o.kiRows.map((k) => ({ comp_domain: k.compDomain, status: k.status, status_by: k.statusBy ?? '' })),
+    ki_rows: o.kiRows.map((k) => ({ comp_domain: k.compDomain, status: k.status, status_by: k.statusBy ?? '', market: k.market ?? '', updated_at: k.updatedAt ?? '' })),
     not_competitors: [...o.notCompetitors],
     max: o.max ?? 5,
   });
-  return { list: r.list, removed: r.removed };
+  return { list: r.list, removed: r.removed, chosen: r.chosen };
 }
 
 /** AI visibility: who AI names, split into competitors and the software makers / platforms / other sites (never in the share of voice). */
