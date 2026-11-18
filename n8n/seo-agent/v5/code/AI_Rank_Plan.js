@@ -298,7 +298,8 @@ for (const g of gateSites) {
     const chosenIds = new Set(a_rows.map(r => r.action_id)); const pendingOc = [];
     for (const o of outcomes) { const a = storedById.get(S0(o.action_id)); if (!a || chosenIds.has(S0(a.action_id))) continue; const v = o.verify || {}; const oc = o.outcome || {};
       // CR17-C (F2): verify refuses a step whose page moved (its own reason in verify_json): the step leaves the client's list, never "did not work"
-      const status = v.refused ? 'refused' : v.happened === true ? (oc.due && oc.verdict && oc.verdict !== 'not_due' ? 'verified' : 'done') : v.happened === false && oc.due ? 'not_happened' : S0(a.status);
+      // CR17-FX-INDEX (review R1 L4): only a step that has not happened leaves as refused; one that happened (done, its page got indexed) keeps its result
+      const status = (v.refused && !S0(a.happened_at) && S0(a.status) !== 'done' && S0(a.status) !== 'verified') ? 'refused' : v.happened === true ? (oc.due && oc.verdict && oc.verdict !== 'not_due' ? 'verified' : 'done') : v.happened === false && oc.due ? 'not_happened' : S0(a.status);
       if (status === S0(a.status) && !(v.happened === true && !S0(a.happened_at))) continue;
       const row = { ...a, status, happened_at: v.happened === true ? (S0(a.happened_at) || S0(v.at) || nowIso) : S0(a.happened_at), verify_json: J(v), outcome_json: oc.due ? J(oc) : S0(a.outcome_json),
         learned_at: !S0(a.learned_at) && typeof ARL.learnable === 'function' && ARL.learnable(o) ? nowIso : S0(a.learned_at), updated_at: nowIso };

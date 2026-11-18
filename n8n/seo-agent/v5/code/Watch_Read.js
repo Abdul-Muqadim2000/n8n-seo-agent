@@ -20,5 +20,5 @@ return plan.map((p, i) => {
   const sig = PW.signals(r);
   const blocked = (rb && rb.ok && typeof rb.blocks === 'function') ? rb.blocks(p.url) : null;
   return { json: { site_idx: p.site_idx, site_id: p.site_id, domain: p.domain, url: p.url, kind: p.kind, weight: p.weight, site: p.site, prev: p.prev,
-    robots_blocked: blocked, ...sig } };
+    robots_blocked: blocked, ...sig, ...(p.move_check ? { move_check: true } : {}) } };   // CR17-FX-INDEX (L3): a moved address read again
 });

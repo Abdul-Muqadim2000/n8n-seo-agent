@@ -27,6 +27,18 @@ const PW = (() => {
   // host-agnostic identity of a URL: crawls, sitemaps and canonicals disagree about www and the trailing slash
   const ukey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '') || S(u).toLowerCase();
   const same = (a, b) => !!a && !!b && ukey(a) === ukey(b);
+  // >>> LOCALE RULE (CR17-FX-INDEX, review R1 M4): ONE text in _index_kit.js, _page_watch.js and _moves.js (build_v4.py section 194 checks they are the
+  // same). A same-site redirect that only adds a language / country prefix (/x -> /ae/x, / -> /en/), or sends a deep page to a bare locale root,
+  // answers where OUR server sits (Doha), not what Google's crawler sees: never a move, never a cause.
+  const localeRedirect = (from, to) => {
+    const LOC = /^\/[a-z]{2}(?:[-_][a-z]{2,4})?(?=\/|$)/i;
+    const pa = (u) => String(u == null ? '' : u).trim().replace(/^https?:\/\/[^\/?#]*/i, '').replace(/[?#].*$/, '') || '/';
+    const f = pa(from), t = pa(to);
+    if (!LOC.test(t) || LOC.test(f)) return false;
+    if ((t.replace(LOC, '') || '/').replace(/\/+$/, '').toLowerCase() === f.replace(/\/+$/, '').toLowerCase()) return true;
+    return /^\/[a-z]{2}(?:[-_][a-z]{2,4})?\/?$/i.test(t) && f !== '/';
+  };
+  // <<< LOCALE RULE
   // the shared entity decoder, inlined (v5/code/_entities.js; build section 122 asserts the two stay identical): named, decimal and hex, one pass
   const entDecode = /*__ENT_BEGIN__*/(() => {
   const N = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', ndash: '–', mdash: '—', hellip: '…', copy: '©', reg: '®', trade: '™', bull: '•', middot: '·', laquo: '«', raquo: '»', euro: '€', pound: '£', deg: '°' };
@@ -227,6 +239,8 @@ const PW = (() => {
     const v = (verdict, code, severity, text) => ({ verdict, code, severity, label: CODES[code].label, text, to });
     if (!to) return v('broken', 'page_redirect_bad', 'high', 'The page now redirects (' + status + ') but does not say where to, so visitors and Google land nowhere.');
     if (bare(hostOf(to)) !== bare(hostOf(from))) return v('offsite', 'page_redirect_bad', 'high', 'The page now sends visitors to another website (' + to + '). Google drops it from your site\'s results; if this is not on purpose, remove the redirect.');
+    // CR17-FX-INDEX (M4): a language / country redirect for our server's location is not a move and not a problem we can judge
+    if (localeRedirect(from, to)) return v('locale', 'page_locale', 'info', 'The page sends our reader to ' + where + ', a language or country version for where our server is. Google crawls from elsewhere and may not get this redirect, so the page is not treated as moved.');
     if (pathOf(from).replace(/\/+$/, '') !== '' && where.replace(/\/+$/, '') === '') return v('home', 'page_redirect_bad', 'high', 'The page now sends visitors to your home page. Google treats a page sent to the home page like a page that is gone, so its place in search is lost. Redirect it to the page that replaced it, or keep it.');
     const hostOnly = ukey(to) === ukey(from);
     if (!hop || hop.ok === false) {
@@ -246,6 +260,17 @@ const PW = (() => {
       + '. Google moves the old address\'s place in search to the new one. We watch the new address from now on.');
   };
 
+  /**
+   * CR17-FX-INDEX (review R1 L3): a moved address read again (once a week) no longer redirects permanently to the page it moved to. The move is
+   * cleared (the address is watched again); our rows stay on the new address, said here so a person decides. -> one change (Low).
+   */
+  const moveUndone = (url, movedTo, status, redirectTo) => {
+    const st = n0(status); const now = (st === 301 || st === 308) && S(redirectTo) ? 'it now redirects to ' + pathOf(redirectTo)
+      : st >= 300 && st < 400 ? 'it now redirects temporarily (' + st + ')' + (S(redirectTo) ? ' to ' + pathOf(redirectTo) : '') : 'it answers ' + st;
+    return { code: 'move_undone', severity: 'low', label: CODES.move_undone.label, from: S(movedTo), to: st + (S(redirectTo) ? ' ' + S(redirectTo) : ''),
+      text: 'This address no longer redirects permanently to ' + pathOf(movedTo) + ': ' + now + '. We watch it again from the next check. Your keyword ladder, published pages and AI questions still use ' + pathOf(movedTo) + '.' };
+  };
+
   // ---- what changed since the stored reading, and how loudly to say it ----
   // `prev` is the stored seo_page_watch row (or null for a page nobody has watched yet), `now` the signals of this run.
   // Build section 194: the severity is what Google does with the change, not the fact that something changed - a permanent move to a working
@@ -258,6 +283,8 @@ const PW = (() => {
     page_redirects: { severity: 'medium', label: 'page now redirects' },
     page_redirect_bad: { severity: 'high', label: 'redirects to a page that does not work' },
     page_moved: { severity: 'info', label: 'page moved' },
+    page_locale: { severity: 'info', label: 'language or country redirect' },
+    move_undone: { severity: 'low', label: 'redirect removed' },
     canonical_moved: { severity: 'high', label: 'canonical moved' },
     canonical_removed: { severity: 'low', label: 'canonical removed' },
     canonical_fixed: { severity: 'info', label: 'canonical points at the page itself' },
@@ -286,6 +313,13 @@ const PW = (() => {
         const rv = opts.redirect || null;   // the verdict on where it lands (Watch Compare reads the target); without it: Medium, said as such
         if (rv) add(rv.code, rv.text, wasStatus, nowStatus + ' ' + S(now.location), rv.severity);
         else add('page_redirects', 'The page now redirects (' + nowStatus + ' to ' + (S(now.location) || 'an address it does not name') + '). Where it lands was not checked in this run.', wasStatus, nowStatus + ' ' + S(now.location));
+      } else if (nowStatus >= 300 && nowStatus < 400 && opts.redirect) {
+        // CR17-FX-INDEX (review R1 M1): a page that keeps redirecting is judged again every day by where it lands. When today's verdict differs
+        // from the stored one (seo_page_watch.redirect_verdict; '' on rows before this fix = a baseline, nothing said), the change is raised:
+        // a target that broke after a move (moved -> gone) is Critical the same day, a temporary redirect whose target is gone gets louder.
+        // An unread target ('unread') says nothing; a target that works again closes the open alert in the lifecycle (present() is false).
+        const rv = opts.redirect; const pv = S(was.redirect_verdict);
+        if (pv && rv.verdict !== 'unread' && rv.verdict !== pv && rv.verdict !== 'moved' && rv.verdict !== 'locale') add(rv.code, rv.text, wasStatus + ' ' + pv, nowStatus + ' ' + S(now.location), rv.severity);
       }
       if (now.noindex && !was.noindex) add('noindex_added', 'The page tells search engines not to index it (' + S(now.noindex_source) + ': "' + S(now.robots_meta || 'noindex') + '")', '', S(now.noindex_source));
       if (!now.noindex && was.noindex) add('noindex_removed', 'The page no longer tells search engines to leave it out', S(was.noindex_source), '');
@@ -322,15 +356,20 @@ const PW = (() => {
   // that now names the page) is recorded resolved at once: nothing is left for the client to do. Rows written before section 194 carry no
   // condition key; it is read back from their message id (watch:<site>:<code>:<page hash>:<day>).
   const FAMILY = { page_gone: 'status', page_error: 'status', page_back: 'status', noindex_added: 'noindex', noindex_removed: 'noindex', robots_blocked: 'robots_blocked',
-    page_redirects: 'redirect', page_redirect_bad: 'redirect', page_moved: 'redirect', canonical_moved: 'canonical', canonical_removed: 'canonical', canonical_fixed: 'canonical',
-    title_changed: 'title', robots_missing: 'robots_state', robots_unreachable: 'robots_state', robots_html: 'robots_state', robots_back: 'robots_state', robots_changed: 'robots_rules' };
+    page_redirects: 'redirect', page_redirect_bad: 'redirect', page_moved: 'redirect', page_locale: 'redirect', canonical_moved: 'canonical', canonical_removed: 'canonical_tag', canonical_fixed: 'canonical',
+    title_changed: 'title', move_undone: 'move', robots_missing: 'robots_state', robots_unreachable: 'robots_state', robots_html: 'robots_state', robots_back: 'robots_state', robots_changed: 'robots_rules' };
   // the codes that close their family's open alert instead of opening one
   const CLOSES = { page_back: true, noindex_removed: true, page_moved: true, canonical_fixed: true, robots_back: true };
   const conditionKey = (site_id, code, page) => 'watch:' + S(site_id) + ':' + (FAMILY[code] || code) + ':' + hash(ukey(page));
   /** The condition of a stored alert row: its own key, or read back from a message id written before section 194. */
   const conditionOf = (row) => {
     const r = row || {};
-    if (S(r.condition_key)) { const m = S(r.condition_key).match(/^watch:(.+):([a-z_]+):([0-9a-f]{8})$/); return m ? { key: S(r.condition_key), site_id: m[1], family: m[2], page_hash: m[3] } : null; }
+    if (S(r.condition_key)) {
+      const m = S(r.condition_key).match(/^watch:(.+):([a-z_]+):([0-9a-f]{8})$/); if (!m) return null;
+      // CR17-FX-INDEX (L1): a "canonical removed" row stored under the shared canonical family (its message id names the code) is its own condition
+      if (m[2] === 'canonical' && /^watch:.+:canonical_removed:[0-9a-f]{8}:/.test(S(r.message_id))) return { key: 'watch:' + m[1] + ':canonical_tag:' + m[3], site_id: m[1], family: 'canonical_tag', page_hash: m[3] };
+      return { key: S(r.condition_key), site_id: m[1], family: m[2], page_hash: m[3] };
+    }
     const m = S(r.message_id).match(/^watch:(.+):([a-z_]+):([0-9a-f]{8}):\d{4}-\d\d-\d\d$/);
     if (!m || m[2] === 'recheck') return null;
     const family = FAMILY[m[2]] || m[2];
@@ -343,17 +382,26 @@ const PW = (() => {
     const st = n0(p.status);
     if (family === 'status') return st >= 400;
     if (family === 'noindex') return !!p.noindex;
-    if (family === 'robots_blocked') return p.robots_blocked === true;
-    if (family === 'redirect') return st >= 300 && st < 400 && S((ctx || {}).verdict) !== 'moved';
+    // CR17-FX-INDEX (review R1 M2): robots.txt not read today or unreachable (Google keeps its last copy) cannot judge a block: unknown, kept open
+    if (family === 'robots_blocked') return p.robots_blocked === true ? true : p.robots_blocked === false ? false : null;
+    if (family === 'redirect') return st >= 300 && st < 400 && S((ctx || {}).verdict) !== 'moved' && S((ctx || {}).verdict) !== 'locale';
     if (family === 'canonical') return st >= 200 && st < 300 && !!S(p.canonical) && !same(p.canonical, p.url);
+    // CR17-FX-INDEX (review R1 L1): "canonical removed" lasts while the page has no canonical tag
+    if (family === 'canonical_tag') return st >= 200 && st < 300 ? !S(p.canonical) : null;
+    // CR17-FX-INDEX (L3): a removed redirect is a notice until the address redirects permanently again
+    if (family === 'move') return (st === 301 || st === 308) ? false : null;
     return null;   // title / robots rules: events, open until somebody marks them seen
   };
   const RESOLVED_TEXT = {
     status: (p) => n0(p.status) >= 300 && n0(p.status) < 400 ? 'The address no longer answers with an error: it now redirects (' + n0(p.status) + ').' : 'The page answers ' + n0(p.status) + ' again.',
     noindex: () => 'The page no longer asks search engines to leave it out.',
     robots_blocked: () => 'robots.txt no longer blocks this page.',
-    redirect: (p, ctx) => n0(p.status) >= 200 && n0(p.status) < 300 ? 'The page answers at its own address again.' : 'The page now moves permanently to ' + pathOf((ctx || {}).to || p.location) + ', which works.',
+    redirect: (p, ctx) => n0(p.status) >= 200 && n0(p.status) < 300 ? 'The page answers at its own address again.'
+      : S((ctx || {}).verdict) === 'locale' ? 'The redirect is a language or country version for where our server is, not a move.'
+      : 'The page now moves permanently to ' + pathOf((ctx || {}).to || p.location) + ', which works.',
     canonical: () => 'The canonical now points at the page itself.',
+    move: () => 'The address redirects permanently again.',
+    canonical_tag: (p) => 'The canonical tag is back' + (same(p.canonical, p.url) ? ', pointing at the page itself.' : ', and it names ' + S(p.canonical) + ' as the main version.'),
   };
   /**
    * One run's alert rows for one site. o: { site_id, domain, now, changes, pages (Watch Compare page states with `verdict` / `moved_to`),
@@ -372,7 +420,11 @@ const PW = (() => {
     const late = S(x.ran_late) ? ' Ran late: ' + S(x.ran_late) : '';
     const base = (r) => ({ site_id, domain, kind: 'page_watch', source: 'page_watch', severity: S(r.severity), subject: S(r.subject).slice(0, 200), summary: S(r.summary).slice(0, 1000),
       received_at: S(r.received_at) || nowIso, message_id: S(r.message_id).slice(0, 200), status: S(r.status) || 'new', condition_key: S(r.condition_key), last_seen_at: S(r.last_seen_at) || S(r.received_at) || nowIso,
-      count: n0(r.count) || 1, resolved_at: S(r.resolved_at), resolution: S(r.resolution).slice(0, 500), ack_by: S(r.ack_by), ack_at: S(r.ack_at) });
+      count: n0(r.count) || 1, resolved_at: S(r.resolved_at), resolution: S(r.resolution).slice(0, 500) });
+    // CR17-FX-INDEX (review R1 L6): "Mark as seen" (ack_by / ack_at) is written by the app only. A row this run creates starts with both empty; a
+    // row it updates or resolves carries neither field, so the upsert (auto-mapped, partial on update) never overwrites a mark saved while the
+    // watch ran. FRESH = the columns of a new row.
+    const FRESH = { ack_by: '', ack_at: '' };
     const done = new Set();
     const resolve = (k, sentence) => { const e = byKey.get(k); if (!e || done.has(k)) return; done.add(k);
       rows.push({ ...base(e.row), condition_key: k, status: 'resolved', resolved_at: nowIso, resolution: S(sentence).slice(0, 500), last_seen_at: S(e.row.last_seen_at) || S(e.row.received_at) || nowIso });
@@ -387,18 +439,19 @@ const PW = (() => {
       if (CLOSES[c.code] || c.severity === 'info') {
         if (byKey.has(k)) { resolve(k, S(c.text)); continue; }
         // good news with nothing open: recorded as a resolved notice, so the history shows it and nobody has to act on it
-        rows.push({ ...base({}), severity: 'info', subject: subjectOf(c, page), summary: text, received_at: nowIso, message_id: ('watch:' + site_id + ':' + S(c.code) + ':' + hash(ukey(page)) + ':' + day).slice(0, 200),
+        rows.push({ ...base({}), ...FRESH, severity: 'info', subject: subjectOf(c, page), summary: text, received_at: nowIso, message_id: ('watch:' + site_id + ':' + S(c.code) + ':' + hash(ukey(page)) + ':' + day).slice(0, 200),
           status: 'resolved', condition_key: k, last_seen_at: nowIso, count: 1, resolved_at: nowIso, resolution: 'Nothing to do.' });
         out.opened += 1; continue;
       }
       if (byKey.has(k) && !done.has(k)) {
         const e = byKey.get(k); done.add(k);
-        // a condition only grows louder in place; robots.txt's state is replaced by its new state (missing after unreachable is Medium again)
-        const sev = FAMILY[c.code] === 'robots_state' || (order[c.severity] ?? 5) < (order[S(e.row.severity)] ?? 5) ? c.severity : S(e.row.severity);
+        // a condition only grows louder in place; robots.txt's state is replaced by its new state (missing after unreachable is Medium again), and so
+        // is where a redirect lands (CR17-FX-INDEX M1: a gone target fixed back to a temporary redirect is Medium again, never a stale Critical)
+        const sev = FAMILY[c.code] === 'robots_state' || FAMILY[c.code] === 'redirect' || (order[c.severity] ?? 5) < (order[S(e.row.severity)] ?? 5) ? c.severity : S(e.row.severity);
         rows.push({ ...base(e.row), condition_key: k, severity: sev, subject: subjectOf(c, page), summary: text, last_seen_at: nowIso, count: (n0(e.row.count) || 1) + 1, status: 'new' });
         out.updated += 1; continue;
       }
-      rows.push({ ...base({}), severity: S(c.severity), subject: subjectOf(c, page), summary: text, received_at: nowIso,
+      rows.push({ ...base({}), ...FRESH, severity: S(c.severity), subject: subjectOf(c, page), summary: text, received_at: nowIso,
         message_id: ('watch:' + site_id + ':' + S(c.code) + ':' + hash(ukey(page)) + ':' + day).slice(0, 200), status: 'new', condition_key: k, last_seen_at: nowIso, count: 1 });
       done.add(k); byKey.set(k, { row: rows[rows.length - 1], c: { key: k } }); out.opened += 1;
     }
@@ -414,19 +467,19 @@ const PW = (() => {
       const p = pageByHash.get(e.c.page_hash);
       if (!p) {
         const mv = movedByHash.get(e.c.page_hash);
-        if (mv && ['status', 'redirect', 'canonical', 'noindex', 'robots_blocked', 'title'].includes(fam)) resolve(k, 'This address now moves permanently to ' + pathOf(mv.to) + ', which works. We watch the new address.');
+        if (mv && ['status', 'redirect', 'canonical', 'canonical_tag', 'noindex', 'robots_blocked', 'title'].includes(fam)) resolve(k, 'This address now moves permanently to ' + pathOf(mv.to) + ', which works. We watch the new address.');
         continue;   // not read today: nothing is claimed
       }
       const st3 = n0(p.status) >= 300 && n0(p.status) < 400;
       if (st3 && S(p.verdict) === 'moved' && fam !== 'redirect') { resolve(k, 'This address now moves permanently to ' + pathOf(p.moved_to || p.redirect_to) + ', which works. We watch the new address.'); continue; }
-      const isNow = present(fam, p, { verdict: p.verdict, to: p.moved_to || p.redirect_to });
+      const isNow = present(fam, p, { verdict: p.verdict, to: p.moved_to || p.redirect_to });   // null: cannot be judged today (kept open, nothing claimed)
       if (isNow === null) {
         // an event (title, robots rules) that started before section 194: it stays open until marked seen, but a title alert on a page that
         // moved away is closed with the move
         if (fam === 'title' && n0(p.status) >= 300 && n0(p.status) < 400 && S(p.verdict) === 'moved') resolve(k, 'This address now moves permanently to ' + pathOf(p.moved_to || p.redirect_to) + ', which works.');
         continue;
       }
-      if (!isNow) resolve(k, (RESOLVED_TEXT[fam] || (() => 'The condition is gone.'))(p, { to: p.moved_to || p.redirect_to }));
+      if (!isNow) resolve(k, (RESOLVED_TEXT[fam] || (() => 'The condition is gone.'))(p, { to: p.moved_to || p.redirect_to, verdict: p.verdict }));
       else { done.add(k); rows.push({ ...base(e.row), condition_key: k, last_seen_at: nowIso, count: (n0(e.row.count) || 1) + 1, status: 'new' }); out.updated += 1; }
     }
     return out;
@@ -644,10 +697,10 @@ const PW = (() => {
         : 'No page could be inspected in Search Console' + (notChecked ? ' (' + notChecked + ' not checked: ' + (S(opts.not_checked_reason) || (failed[0] && failed[0].not_checked) || 'no access') + ')' : '') };
   };
 
-  return { signals, robotsRead, robotsParse, compare, robotsChange, redirectVerdict, state, worst, recheck, recheckRule, inspectBudget, inspection, coverage, hash,
+  return { signals, robotsRead, robotsParse, compare, robotsChange, redirectVerdict, moveUndone, state, worst, recheck, recheckRule, inspectBudget, inspection, coverage, hash,
     changedPages, changeOf, freshFirst, conditionKey, conditionOf, lifecycle, present,
     CODES, FAMILY, RULES, QUOTA_PER_DAY, QUOTA_PER_MINUTE, PER_RUN, PER_AUDIT, FRESH_DAYS, ROBOTS_V,
-    helpers: { hostOf, bare, pathOf, ukey, same, strip, S, n0, absUrl } };
+    helpers: { hostOf, bare, pathOf, ukey, same, strip, S, n0, absUrl, localeRedirect } };
 })();
 // ---- a page that moved permanently: our own rows follow it (client report 2026-11-17, devaicon.com F10; build section 194) ----
 // The client moved its service pages to /services/... with permanent (301) redirects. Page Watch, Index coverage and the page inventory all
@@ -682,12 +735,28 @@ const MV = (() => {
   };
   const sameSite = (a, b) => !!hostOf(a) && bare(hostOf(a)) === bare(hostOf(b));
   const isHome = (u) => pathOf(u).replace(/\/+$/, '') === '';
+  // >>> LOCALE RULE (CR17-FX-INDEX, review R1 M4): ONE text in _index_kit.js, _page_watch.js and _moves.js (build_v4.py section 194 checks they are the
+  // same). A same-site redirect that only adds a language / country prefix (/x -> /ae/x, / -> /en/), or sends a deep page to a bare locale root,
+  // answers where OUR server sits (Doha), not what Google's crawler sees: never a move, never a cause.
+  const localeRedirect = (from, to) => {
+    const LOC = /^\/[a-z]{2}(?:[-_][a-z]{2,4})?(?=\/|$)/i;
+    const pa = (u) => String(u == null ? '' : u).trim().replace(/^https?:\/\/[^\/?#]*/i, '').replace(/[?#].*$/, '') || '/';
+    const f = pa(from), t = pa(to);
+    if (!LOC.test(t) || LOC.test(f)) return false;
+    if ((t.replace(LOC, '') || '/').replace(/\/+$/, '').toLowerCase() === f.replace(/\/+$/, '').toLowerCase()) return true;
+    return /^\/[a-z]{2}(?:[-_][a-z]{2,4})?\/?$/i.test(t) && f !== '/';
+  };
+  // <<< LOCALE RULE
   /**
    * Is this redirect a confirmed move? `now` / `prev`: { url, status, location } (prev = the stored reading), `verdict`: the watch's redirect
    * verdict of today's target ('moved' = answers 200, indexable, its own main version). -> { ok, to, host_only, reason }
+   * CR17-FX-INDEX (review R1 L2): ctx { reads: Map ukey(url) -> today's own read (no redirect followed), moves: confirmed moves (fromWatch) }:
+   * the move goes to where the redirects END. A target that is itself confirmed as moved is followed to its end; a target whose own read today
+   * is another redirect is a chain not yet ended: refused until that hop is confirmed too (our rows never land on an address that redirects).
+   * M4: a language / country redirect for our server's location is never a move.
    */
-  const confirm = (now, prev, verdict) => {
-    const n = now || {}, p = prev || {};
+  const confirm = (now, prev, verdict, ctx) => {
+    const n = now || {}, p = prev || {}; const c = ctx || {};
     const st = Number(n.status) || 0, pst = Number(p.status) || 0;
     const to = abs(n.location, n.url);
     const no = (reason) => ({ ok: false, to, host_only: false, reason });
@@ -695,9 +764,17 @@ const MV = (() => {
     if (!to) return no('the redirect names no address');
     if (!sameSite(to, n.url)) return no('the redirect leaves the site');
     if (isHome(to) && !isHome(n.url)) return no('a deep page sent to the home page is not a move');
+    if (localeRedirect(n.url, to)) return no('a language or country redirect for where our server is, not a move');
     if (S(verdict) !== 'moved') return no('the new address does not work as a page of its own yet');
     if (!PERMANENT.includes(pst) || ukey(abs(p.location, p.url || n.url)) !== ukey(to)) return no('seen once so far; a move is confirmed on the second read');
-    return { ok: true, to, host_only: ukey(to) === ukey(n.url), reason: '' };
+    // ctx values may be Maps (Watch Compare) or plain lists (rows: { url, moved_to } / reads: { url, status, location })
+    const mvs = c.moves && typeof c.moves.get === 'function' ? c.moves : Array.isArray(c.moves) ? fromWatch(c.moves) : null;
+    const end = (mvs && finalOf(to, mvs)) || to;
+    if (!sameSite(end, n.url) || (isHome(end) && !isHome(n.url))) return no('the redirects end on a page that is not a move');
+    const tr = !c.reads ? null : typeof c.reads.get === 'function' ? c.reads.get(ukey(end)) : (Array.isArray(c.reads) ? c.reads : []).find(x => x && ukey(x.url) === ukey(end)) || null;
+    const ts = tr && tr.ok !== false ? Number(tr.status) || 0 : 0;
+    if (ts >= 300 && ts < 400 && ukey(abs(tr.location, end)) !== ukey(end)) return no('the new address redirects again (to ' + pathOf(abs(tr.location, end)) + '); a move is confirmed where the redirects end');
+    return { ok: true, to: end, host_only: ukey(end) === ukey(n.url), reason: '' };
   };
   /**
    * The moves known from the watch's stored rows: a confirmed `moved_to`, or a permanent redirect with its target (enough to say two
@@ -711,6 +788,7 @@ const MV = (() => {
       const to = confirmed || (PERMANENT.includes(Number(r.status) || 0) ? abs(r.location, from) : '');
       if (!to || !sameSite(to, from) || ukey(to) === ukey(from)) continue;
       if (isHome(to) && !isHome(from)) continue;
+      if (!confirmed && localeRedirect(from, to)) continue;   // CR17-FX-INDEX (M4): a language / country redirect is not a move
       m.set(ukey(from), { from, to, confirmed: !!confirmed });
     }
     return m;
@@ -746,8 +824,12 @@ const MV = (() => {
     const logs = (R.logs || []).filter(r => r && onSite(r));
     const out = { ladders: [], logs: [], targets: [], ai_pages_update: [], ai_pages_delete: [], refused: [] };
     // who owns an address today: the keyword of every ladder page and published content-log page there
+    // CR17-FX-INDEX (review R1 M3): plus every keyword this run already moved onto it (`claimed`), so two searches' pages moved onto ONE new
+    // address the same day are treated like two days apart: the first follows, the second is refused and named
+    const claimed = new Map();
+    const claim = (url, kw) => { const k = ukey(url); if (!claimed.has(k)) claimed.set(k, new Set()); claimed.get(k).add(norm(kw)); };
     const owners = (url) => {
-      const k = ukey(url); const set = new Set();
+      const k = ukey(url); const set = new Set(claimed.get(k) || []);
       for (const l of ladders) if (S(l.target_url) && ukey(l.target_url) === k) set.add(norm(l.keyword));
       for (const l of logs) if (S(l.published_url) && ukey(l.published_url) === k) set.add(norm(l.keyword));
       return set;
@@ -756,20 +838,19 @@ const MV = (() => {
       const from = S(mv.from), to = S(mv.to);
       if (!from || !to || ukey(from) === ukey(to)) continue;
       if (!sameSite(to, from) || (isHome(to) && !isHome(from))) { out.refused.push({ table: 'all', key: from, from, to, reason: 'not a move we follow' }); continue; }
-      const there = owners(to);
-      const otherOwner = (kw) => [...there].find(x => x && x !== norm(kw)) || '';
+      const otherOwner = (kw) => [...owners(to)].find(x => x && x !== norm(kw)) || '';
       for (const l of ladders) {
         if (!S(l.target_url) || ukey(l.target_url) !== ukey(from)) continue;
         if (!(S(l.status) === 'published' || l.page_exists === true || l.page_exists === 'true')) continue;
         const other = otherOwner(l.keyword);
         if (other) { out.refused.push({ table: 'seo_ladders', key: S(l.ladder_id) + ' / ' + S(l.keyword), from, to, reason: 'the new address is already the page of "' + other + '"' }); continue; }
-        out.ladders.push({ ladder_id: S(l.ladder_id), keyword: S(l.keyword), from: S(l.target_url), target_url: to });
+        out.ladders.push({ ladder_id: S(l.ladder_id), keyword: S(l.keyword), from: S(l.target_url), target_url: to }); claim(to, l.keyword);
       }
       for (const l of logs) {
         if (!S(l.published_url) || ukey(l.published_url) !== ukey(from)) continue;
         const other = otherOwner(l.keyword);
         if (other) { out.refused.push({ table: 'seo_content_log', key: S(l.site_id) + ' / ' + S(l.keyword), from, to, reason: 'the new address is already the page of "' + other + '"' }); continue; }
-        out.logs.push({ site_id: S(l.site_id), keyword: S(l.keyword), from: S(l.published_url), published_url: to });
+        out.logs.push({ site_id: S(l.site_id), keyword: S(l.keyword), from: S(l.published_url), published_url: to }); claim(to, l.keyword);
       }
       for (const t of (R.targets || [])) {
         if (!t || !onSite(t) || !S(t.page_url) || ukey(t.page_url) !== ukey(from)) continue;
@@ -785,7 +866,7 @@ const MV = (() => {
     }
     return out;
   };
-  return { abs, confirm, fromWatch, finalOf, samePage, plan, helpers: { ukey, hostOf, bare, pathOf, sameSite, isHome, norm }, PERMANENT };
+  return { abs, confirm, fromWatch, finalOf, samePage, plan, localeRedirect, helpers: { ukey, hostOf, bare, pathOf, sameSite, isHome, norm }, PERMANENT };
 })();
 const reads = (() => { try { return $('Watch Read').all().map(i => i.json); } catch (e) { return $input.all().map(i => i.json); } })().filter(r => r && r.site_id);
 const S = (v) => String(v == null ? '' : v).trim();
@@ -822,6 +903,9 @@ for (const [site_idx, items] of bySite) {
   const notChecked = pages.filter(p => p.ok === false);
   const changes = [];
   const newly_blocked = [];
+  // CR17-FX-INDEX (review R1 L2): today's own reads (no redirect followed) and the site's confirmed moves: a move is confirmed where the redirects end
+  const readsByKey = new Map(pages.filter(p => p.ok !== false).map(p => [ukey(p.url), p]));
+  const knownMoves = MV.fromWatch((site.moves_known || []).map(m => ({ url: S(m.from), moved_to: S(m.to) })));
   const pageStates = pages.map(p => {
     const prev = p.prev || null;
     const st = Number(p.status) || 0;
@@ -835,23 +919,35 @@ for (const [site_idx, items] of bySite) {
       const hop = h ? PW.signals(h.res) : null;
       const exp = expected.some(e => ukey(e.from) === ukey(p.url) && ukey(e.to) === ukey(redirect_to));
       verdict = PW.redirectVerdict({ url: p.url, status: st, location: p.location, hop, expected: exp });
-      const cf = MV.confirm({ url: p.url, status: st, location: p.location }, prev, verdict.verdict);
+      const cf = MV.confirm({ url: p.url, status: st, location: p.location }, prev, verdict.verdict, { reads: readsByKey, moves: knownMoves });
       if (cf.ok) moved_to = cf.to;
     }
-    const ch = PW.compare(prev, { ...p, robots_blocked: blockedNow }, { url: p.url, robots_blocked: blockedNow, robots_blocked_before: prev ? prev.robots_blocked === true : false,
+    // CR17-FX-INDEX (review R1 L3): a stored move stands while the address still redirects permanently to the same page (a target we could not
+    // read today changes nothing); when the redirect is gone or points elsewhere, the move is cleared (the address is watched again from the next
+    // run) and said once. Our ladder / content log / AI rows stay where they are: undoing a move is a person's decision.
+    const storedMove = S((prev || {}).moved_to);
+    let undone = false;
+    if (p.ok !== false && storedMove && !moved_to) {
+      if (MV.PERMANENT.includes(st) && (ukey(redirect_to) === ukey(storedMove) || ukey(MV.finalOf(redirect_to, knownMoves) || '') === ukey(storedMove))) moved_to = storedMove;
+      else undone = true;
+    }
+    const ch = p.move_check ? [] : PW.compare(prev, { ...p, robots_blocked: blockedNow }, { url: p.url, robots_blocked: blockedNow, robots_blocked_before: prev ? prev.robots_blocked === true : false,
       redirect: verdict, own_title: own.has(ukey(p.url)) });
+    if (undone) ch.push(PW.moveUndone(p.url, storedMove, st, redirect_to));
     for (const c of ch) changes.push({ ...c, url: p.url, kind: p.kind });
     const first = !prev || !S(prev.checked_at);
     return { url: p.url, kind: p.kind, weight: p.weight, ok: p.ok !== false, status: p.status, location: S(p.location), noindex: !!p.noindex, noindex_source: S(p.noindex_source),
       canonical: S(p.canonical), canonical_ok: p.ok === false ? null : (!S(p.canonical) ? null : PW.helpers.same(p.canonical, p.url)),
       title: S(p.title), titles: p.titles || 0, description: S(p.description), h1: S(p.h1), h1s: p.h1s || 0, robots_blocked: blockedNow,
       error: S(p.error), first_seen: first, state: PW.state(ch, p), changes: ch,
-      verdict: verdict ? verdict.verdict : '', redirect_to, moved_to, redirect_text: verdict ? verdict.text : '',
+      verdict: verdict ? verdict.verdict : '', redirect_to, moved_to, redirect_text: verdict ? verdict.text : '', move_check: !!p.move_check, move_undone: undone,
       // the Google view of this page as it was stored (written by the weekly URL Inspection, G25): carried, never re-claimed here
       inspect: prev ? { inspect_at: S(prev.inspect_at), index_state: S(prev.index_state), indexed: S(prev.indexed), coverage: S(prev.coverage),
         google_canonical: S(prev.google_canonical), last_crawl: S(prev.last_crawl), mobile: S(prev.mobile), rich_results: S(prev.rich_results), inspect_error: S(prev.inspect_error) } : null,
       prev: prev ? { checked_at: S(prev.checked_at), status: Number(prev.status) || 0, noindex: prev.noindex === true, canonical: S(prev.canonical), title: S(prev.title),
-        state: S(prev.state), last_change_at: S(prev.last_change_at), changed_count: Number(prev.changed_count) || 0, robots_hash: S(prev.robots_hash) } : null };
+        state: S(prev.state), last_change_at: S(prev.last_change_at), changed_count: Number(prev.changed_count) || 0, robots_hash: S(prev.robots_hash),
+        // CR17-FX-INDEX: what Watch Rows carries when today cannot judge it (M1 redirect verdict, M2 robots.txt block)
+        redirect_verdict: S(prev.redirect_verdict), robots_blocked: prev.robots_blocked === true } : null };
   });
   // robots.txt as a state of its own, compared with the last reading (and the key pages it newly blocks)
   const robotsChange = PW.robotsChange(site.robots_prev || site.robots_hash_prev, robots, { newly_blocked });
@@ -860,7 +956,7 @@ for (const [site_idx, items] of bySite) {
   const rechecks = (site.rechecks || []).map(f => { const r = PW.recheck(f, pageStates.filter(p => p.ok).map(p => ({ ...p, url: p.url }))); return { ...f, ...r, checked_at: nowIso }; });
   const real = changes.filter(c => c.severity !== 'info');
   const indexable = pageStates.filter(p => p.ok && Number(p.status) >= 200 && Number(p.status) < 300 && !p.noindex && p.robots_blocked !== true).length;
-  const movesToday = pageStates.filter(p => S(p.moved_to) && ukey(p.moved_to) !== ukey(p.url)).map(p => ({ from: p.url, to: p.moved_to }));
+  const movesToday = pageStates.filter(p => S(p.moved_to) && ukey(p.moved_to) !== ukey(p.url) && !p.move_check).map(p => ({ from: p.url, to: p.moved_to }));
   const hopsHere = [...hops.values()].filter(h => h.plan.site_idx === site_idx).length;
   out.push({ json: {
     site_idx, site_id: site.site_id || items[0].site_id, domain: site.domain || items[0].domain, checked_at: nowIso, on_demand: !!site.on_demand,

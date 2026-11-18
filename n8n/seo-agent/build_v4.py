@@ -14182,7 +14182,7 @@ assert _bsi193.index('f.google_state === true && f.scoring !== false') < _bsi193
 # F3 / F2: the index kit and the AI ranking kits carry the moved-page rules (inlined by build_index_coverage.py / build_monitors.py; checked here at the source)
 for _f193, _k193 in (('code/_index_kit.js', 'const direct200 = '), ('code/_index_kit.js', 'movedByUs(p, r.last_crawl, c.site)'), ('code/_index_kit.js', 'redirect_status: rs1'),
                      ('code/Not_Crawled_Check.js', 'const movedKeys = '), ('code/_ai_rank_diag.js', 'const movedTo = '), ('code/_ai_rank_learn.js', "refused: 'moved: '"),
-                     ('code/AI_Rank_Plan.js', "v.refused ? 'refused'"), ('code/IX_Page_Fetch_Requests.js', 'const outside = ')):
+                     ('code/AI_Rank_Plan.js', "S0(a.status) !== 'verified') ? 'refused'"), ('code/IX_Page_Fetch_Requests.js', 'const outside = ')):
     assert _k193 in _rd0(_f193), 'section 193: ' + _f193 + ' lacks ' + _k193
 log('Client report 2026-11-17 (section 193, CR17-C): the audit score is Technical health (Google-state findings listed, not scored; "No crawled page blocks indexing"); Index coverage files an address our read saw redirect permanently after Google\'s last visit as moved (never "add it to the sitemap"), a 404 / noindex over Google\'s word needs two reads, "missing from the sitemap" only for a direct 200 that names itself; the audit sends redirected addresses out of the sitemap finding; AI ranking follows a moved page and never counts a page left out on purpose as not in Google, and refuses an index step whose page moved')
 
@@ -14872,6 +14872,25 @@ def _cr17d_checks():
         "    condition: j.condition_of === undefined ? null : PW.conditionOf(j.condition_of) } }; });\n")
     print('CR17-D (section 194): Page Watch judges robots.txt as a state and a redirect by where it lands, keeps one alert per condition and resolves it, follows confirmed moves into 4 tables; the Rank Tracker and the publish check know a moved / case-variant address')
 _cr17d_checks()
+# CR17-FX-INDEX (review R1 of the CR17 integration; sections 193 / 194): ONE locale rule in three kits (a language / country redirect for our
+# server's location is never a move: Index coverage's readFetch, Page Watch's redirect verdict, the moves kit's confirm), checked byte for byte;
+# Index coverage counts a redirect as a move only when its target works (landsWell); the alert lifecycle never writes "Mark as seen".
+def _fx_index_checks():
+    import re as _re_fx
+    def _loc(f):
+        t = _rd0('code/' + f); m = _re_fx.search(r'  // >>> LOCALE RULE.*?  // <<< LOCALE RULE\n', t, _re_fx.S)
+        assert m, 'CR17-FX-INDEX: ' + f + ' lacks the LOCALE RULE block'
+        return m.group(0)
+    _l = [_loc(f) for f in ('_index_kit.js', '_page_watch.js', '_moves.js')]
+    assert _l[0] == _l[1] == _l[2], 'CR17-FX-INDEX: the LOCALE RULE differs between _index_kit.js, _page_watch.js and _moves.js (one rule, three copies: keep them identical)'
+    _ix = _rd0('code/_index_kit.js')
+    assert "sameSite(f.final_url) && landsWell(p.url, f)" in _ix and 'if (!landsWell(x.url, x)) return false;' in _ix, 'CR17-FX-INDEX (H1): a redirect into a broken page would be filed as a move'
+    _pwk = _rd0('code/_page_watch.js')
+    assert "ack_by: S(r.ack_by)" not in _pwk, 'CR17-FX-INDEX (L6): the alert lifecycle must not write ack_by / ack_at on rows it updates'
+    from ladder_common import PAGE_WATCH_COLS as _pwc_fx
+    assert ('redirect_verdict', 'string') in _pwc_fx, 'CR17-FX-INDEX (M1): seo_page_watch.redirect_verdict missing'
+    print('CR17-FX-INDEX: one locale rule in three kits; Index coverage files a move only onto a working page; Page Watch re-judges standing redirects, keeps a robots.txt block it could not read, re-checks moves weekly; "Mark as seen" is never overwritten')
+_fx_index_checks()
 # 198. WHAT A CLIENT READS FROM THE ENGINE (CR17-H, client report 2026-11-17 F1, devaicon.com; harness CR17H1-CR17H5).
 #      devaicon.com's Pipeline, Steps on your website and the AI growth report read "Get the page indexed in Google: 6 cell(s), expected gain
 #      0.0082 over (client time at an hour), typical 21 days": ARL.score wrote its arithmetic into `why`, AI Rank Plan merged the score over the

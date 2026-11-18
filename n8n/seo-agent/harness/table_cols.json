@@ -656,7 +656,8 @@
   "mobile",
   "rich_results",
   "inspect_error",
-  "moved_to"
+  "moved_to",
+  "redirect_verdict"
  ],
  "CONSOLE_ALERTS": [
   "site_id",

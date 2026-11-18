@@ -592,6 +592,9 @@ const CHANGE_LABEL: Record<string, string> = {
   robots_missing: 'robots.txt missing',
   robots_unreachable: 'robots.txt unreachable',
   robots_html: 'robots.txt is a web page',
+  // CR17-FX-INDEX: a language or country redirect for our server's location (not a move), and a move whose redirect was removed
+  page_locale: 'language or country redirect',
+  move_undone: 'redirect removed',
 };
 const pathOnly = (u: string) => u.replace(/^https?:\/\/[^/]+/, '') || '/';
 

@@ -78,6 +78,31 @@ module.exports = async (ctx) => {
     check('CR17C10 F3: "indexed, missing from the sitemap" only for an address our read saw answer 200 directly and name itself; never for one we did not read',
       d6 && d6.cause === 'indexed_not_in_sitemap' && d6.action === 'site_fix' && d6n && d6n.cause === '', J({ d6, d6n }));
 
+    // ---- CR17-FX-INDEX (review R1 H1): a permanent redirect into a broken page is a broken page, never a move ----
+    const to = (st, body, hdrs) => IX.readFetch(OLD, { statusCode: 301, headers: { location: '/services/capabilities-consulting-transformation' } }, { statusCode: st, headers: hdrs || {}, body: body || HTML() });
+    const r404 = to(404, '<html><body>Not found</body></html>'), r500 = to(500, 'oops'), rNoidx = to(200, HTML('<title>x</title><meta name="robots" content="noindex">'));
+    const rHome = IX.readFetch(OLD, { statusCode: 301, headers: { location: '/' } }, { statusCode: 200, headers: {}, body: HTML() });
+    const CNI = { verdict: 'NEUTRAL', coverageState: 'Crawled - currently not indexed', lastCrawlTime: '2026-10-01T08:00:00Z' };
+    const h1a = T(() => IX.diagnose(page({ in_sitemap: true, sources: 'sitemap' }), R(CNI), r404, ctxOf()));
+    const h1b = T(() => IX.diagnose(page({ in_sitemap: true, sources: 'sitemap' }), R(CNI), r500, ctxOf()));
+    const h1c = T(() => IX.diagnose(page(), R(), r404, ctxOf()));
+    const h1d = T(() => IX.diagnose(page(), R(), rNoidx, ctxOf()));
+    const h1e = T(() => IX.diagnose(page(), R(), rHome, ctxOf()));
+    check('CR17FXI1 H1: a 301 into a 404 / 500 is the broken page it lands on (not_found / server_error, a step on the site), never "moved, nothing to do"',
+      h1a && h1a.cause === 'not_found' && h1a.action === 'site_fix' && h1b && h1b.cause === 'server_error', J({ h1a, h1b }));
+    check('CR17FXI2 H1: over Google\'s indexed reading, a 301 into a 404, a noindex page or the home page is no move (one read: Google\'s word stands)',
+      h1c && h1c.cause !== 'redirect' && h1d && h1d.cause !== 'redirect' && h1e && h1e.cause !== 'redirect', J({ h1c, h1d, h1e }));
+    check('CR17FXI3 H1: a stored move whose target answered 404, carried a noindex or is the home page does not stand (movedByUs); one onto a working page does',
+      IX.movedByUs({ ...stored, http_status: 404 }, '2026-11-10T08:00:00Z', SITE) === false && IX.movedByUs({ ...stored, noindex: 'meta' }, '2026-11-10T08:00:00Z', SITE) === false
+      && IX.movedByUs({ ...stored, final_url: 'https://dev.example/' }, '2026-11-10T08:00:00Z', SITE) === false && IX.movedByUs(stored, '2026-11-10T08:00:00Z', SITE) === true
+      && IX.landsWell(OLD, moved301) === true && IX.landsWell(OLD, r404) === false, '');
+    // M4: one locale rule: our read of a country redirect is "blocked" (unchanged), the same rule the moves kit and the redirect verdict use
+    const loc = IX.readFetch('https://dev.example/services/a', { statusCode: 301, headers: { location: '/ae/services/a' } }, { statusCode: 200, headers: {}, body: HTML() });
+    const loc2 = IX.readFetch('https://dev.example/services/a', { statusCode: 301, headers: { location: '/en/' } }, { statusCode: 200, headers: {}, body: HTML() });
+    const loc3 = IX.readFetch('https://dev.example/services/a', { statusCode: 301, headers: { location: '/services/b' } }, { statusCode: 200, headers: {}, body: HTML() });
+    check('CR17FXI4 M4: the shared locale rule keeps Index coverage\'s reading: a country prefix or a bare locale root is "a language or country redirect for our location"; a real move is not',
+      loc.blocked === true && /language or country/.test(loc.block_reason) && loc2.blocked === true && loc3.blocked === false && loc3.final_url === 'https://dev.example/services/b', J({ loc, loc2, loc3 }));
+
     // ---- Q1: the page an old address moved to is asked first; F6: the report counts the app's population ----
     const tgt = { url: NEW, state: 'not_indexed', cause: 'wait_new', action: 'wait', lane: 'new', in_sitemap: true, sources: 'sitemap', impressions_28d: 0 };
     const pol = { url: 'https://dev.example/cookies', state: 'not_indexed', cause: 'unknown_to_google', action: 'links', in_sitemap: true, sources: 'sitemap', type_override: 'important', impressions_28d: 0 };
@@ -128,7 +153,12 @@ module.exports = async (ctx) => {
       && v3 && v3.happened === null && /left out on purpose/.test(v3.refused || ''), J({ v1, v2, v3, v4 }));
     const pl = fs.readFileSync(path.join(V5, 'AI_Rank_Plan.js'), 'utf8');
     check('CR17C14 F2: AI_Rank_Plan passes cause, action and final address to the diagnosis and stores a refused verify as status refused',
-      /final_url: S0\(r\.final_url\) \}\]/.test(pl) && /v\.refused \? 'refused'/.test(pl), '');
+      /final_url: S0\(r\.final_url\) \}\]/.test(pl) && /\(v\.refused && !S0\(a\.happened_at\)/.test(pl), '');
+    // CR17-FX-INDEX (review R1 L4): the stored status of a step is re-derived exactly as AI_Rank_Plan does it; a step already done stays done
+    const exitOf = (a, v, oc) => { const m = pl.match(/const status = (\(v\.refused[^;]+);/); return m ? new Function('v', 'a', 'oc', 'S0', 'return ' + m[1] + ';')(v, a, oc || {}, (x) => (x == null ? '' : String(x)).trim()) : '__no_rule'; };
+    check('CR17FXI5 L4: a refused verify (the page moved later) leaves a step that has not happened as refused, but a done step keeps "done" (never "Not done")',
+      exitOf({ status: 'queued', happened_at: '' }, v1) === 'refused' && exitOf({ status: 'done', happened_at: iso(NOW - 5 * DAY) }, v1) === 'done'
+      && exitOf({ status: 'verified', happened_at: iso(NOW - 40 * DAY) }, v1) === 'verified', J([exitOf({ status: 'queued' }, v1), exitOf({ status: 'done', happened_at: 'x' }, v1)]));
   });
 
   await guard('cr17 c technical health', async () => {
