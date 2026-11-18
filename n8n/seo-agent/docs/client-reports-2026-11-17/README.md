@@ -78,7 +78,7 @@ combined app migration, marketing, docs, full tests). **Not deployed** (deploy s
 
 - **A (C2, M1, C1 facts)**: the public site is prerendered at build time (`react-dom/static`, hydration guarded by an exact-path marker),
   Organization / WebSite / SoftwareApplication JSON-LD, sitemap lastmod, a real `/llms.txt`, real 404s (Vercel `cleanUrls`, app prefixes
-  rewritten to `app.html`), HSTS on www / api / hooks, Permissions-Policy on the API, security.txt; new `/subprocessors` and
+  rewritten to `/app`, never `/app.html`), HSTS on www / api / hooks, Permissions-Policy on the API, security.txt; new `/subprocessors` and
   `/data-retention`; the Security page's "Where your data lives" and "Not yet", dated.
 - **B (C1)**: terms acceptance at sign-up (e-mail and Google; `LEGAL_VERSION` in `@seo/shared`, the legal pages read it), "Delete my
   account" (plan first, refusals, step-up, the person's own companies deleted, the others left), engine history purged on website and
