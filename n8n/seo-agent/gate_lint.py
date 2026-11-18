@@ -26,6 +26,8 @@ Tracker and the Content Cadence only.
 import json
 import os
 
+import kit_inline
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 WF_DIR = os.path.join(HERE, 'workflows')
 V5_CODE = os.path.join(HERE, 'v5', 'code')
@@ -71,7 +73,7 @@ def _kit_src(pair):
     """The kit text as the builders inline it — with and without the trailing newline, because build_v4.py rstrips it and
     build_monitors.py does not."""
     s = open(os.path.join(V5_CODE, pair['kit']), encoding='utf-8').read()
-    return [s, s.rstrip('\n')]
+    return kit_inline.forms(s)   # CR17 (2026-11-18): build_ki.py inlines kits without their comment lines; that form is cut too
 
 
 def _own(js, pair):

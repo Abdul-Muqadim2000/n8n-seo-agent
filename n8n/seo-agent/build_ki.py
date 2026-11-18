@@ -83,6 +83,17 @@ KIT_SRC = {
     'KIW': read_v5('code/_ki_io.js').rstrip('\n').replace('__KI_QUOTE__', json.dumps(QUOTE, sort_keys=True)).replace('__KI_COLS__', json.dumps(KI_COLS)),
 }
 assert '__KI_' not in KIT_SRC['KIW'], 'a placeholder is left in _ki_io.js'
+
+
+# CR17 deploy (2026-11-18): the KI workflow inlines these kits into ~38 Code nodes each; with the CR17 competitor roles it reached
+# 17.5 MB and production's n8n refused the PUT (413 Payload Too Large, limit 16 MiB). Whole-line // comments carry no code, so they are
+# dropped from the INLINED copies here (the kit files keep them), by the one rule in kit_inline.py that gate_lint / state_lint also know.
+import kit_inline
+for _k in ('FIT', 'CMP', 'KWI', 'RT', 'SC', 'SU', 'KI'):
+    _code = kit_inline.code_lines(KIT_SRC[_k])
+    if _code:
+        KIT_SRC[_k] = _code
+    print('KI kits (CR17 size): %s %s' % (_k, 'comment lines dropped' if _code else 'kept as is (an open template literal)'))
 KI_KIT = '_ki.js'
 BASE_KITS = ['FIT', 'CMP', 'KWI', 'RT', 'SC', 'SU', 'KI', 'KIW']
 def kits_for(names):
